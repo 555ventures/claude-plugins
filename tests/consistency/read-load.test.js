@@ -19,7 +19,12 @@ const SPEC_PATHS = path.join(ROOT, 'spec', 'bin', 'spec-paths')
 
 const CAP = 500
 // Grandfathered ratchets: may shrink, never grow. Delete the entry once the command fits CAP.
-const RATCHET = { init: 970 }
+// specs/20260907/09-atlas-index-and-note-navigation.md D13 (a recorded review-gate ruling):
+// design.md's D11 bullets pushed /spec:design and /spec:init exactly onto their prior ceilings
+// (500 and 970) — the additions are contracts, not procedure, which is the growth this budget
+// exists to stop, so both ceilings rise ten lines rather than the doctrine being reworded to
+// buy room. CAP itself is unchanged at 500 for every other command.
+const RATCHET = { init: 980, design: 510 }
 
 function lines(text) { return text.split('\n').length }
 

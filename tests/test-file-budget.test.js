@@ -133,7 +133,7 @@ test('AC-20260903-07-5: a failing test under budget still exits 1 while the repo
     'the budget reporter must still print exactly one OK line — it never masks a runner failure by omitting its own output: ' + JSON.stringify(okLines))
 })
 
-test('AC-20260903-07-6: package.json scripts.test and .claude/spec.config.json testCommand carry the identical budget-reporter wiring, and gateCommand is unchanged', () => {
+test('AC-20260903-07-6: package.json scripts.test and .claude/spec.config.json testCommand carry the identical budget-reporter wiring, and gateCommand keeps the scoped-run form (now also concurrency-capped per specs/20260907/09 D15)', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
   const config = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude/spec.config.json'), 'utf8'))
   assert.strictEqual(pkg.scripts.test, config.testCommand + " 'tests/**/*.test.js'",
@@ -143,6 +143,9 @@ test('AC-20260903-07-6: package.json scripts.test and .claude/spec.config.json t
   const wiring = '--test-reporter=spec --test-reporter-destination=stdout --test-reporter=./scripts/test-file-budget-reporter.js --test-reporter-destination=stdout'
   assert.ok(config.testCommand.includes(wiring),
     'testCommand must wire both reporters (spec then budget), each destined to stdout, in this exact order: ' + config.testCommand)
-  assert.strictEqual(config.gateCommand, 'node --test {testDirs}',
-    'gateCommand SHALL CONTINUE TO be the scoped-run form — scoped gate runs need no whole-suite budget')
+  // specs/20260907/09-atlas-index-and-note-navigation.md D15: both commands cap test-file
+  // parallelism at --test-concurrency=3 — the scoped-run form otherwise stays exactly
+  // "node --test {testDirs}" (scoped gate runs still need no whole-suite budget reporter).
+  assert.strictEqual(config.gateCommand, 'node --test --test-concurrency=3 {testDirs}',
+    'gateCommand must stay the scoped-run form (no budget reporter) while carrying D15\'s concurrency cap — losing either half here means either the reporter wiring silently reappears on the gate leg or the concurrency cap silently drops from it')
 })

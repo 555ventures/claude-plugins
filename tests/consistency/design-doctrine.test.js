@@ -29,13 +29,17 @@ test('AC-20260824-05-1: spec/doctrine/design.md contains exactly the five D1 hea
     JSON.stringify(headings))
 })
 
-test('AC-20260824-05-2: spec/doctrine/design.md is at most 160 lines and names none of the retired mechanism/seat literals', () => {
+// specs/20260907/09-atlas-index-and-note-navigation.md D13 (a recorded review-gate ruling):
+// this cap rises 160 -> 170 to admit D11's two new § Design Atlas bullets — the additions are
+// contracts, not procedure, which is the growth this cap exists to stop, so the ceiling moves
+// rather than the contract. No other prose was rewritten to buy room.
+test('AC-20260824-05-2: spec/doctrine/design.md is at most 170 lines and names none of the retired mechanism/seat literals', () => {
   const src = read('spec/doctrine/design.md')
   const lineCount = src.split('\n').length
-  assert.ok(lineCount <= 160,
-    'D1/D2 caps the rewritten doctrine at 160 lines — the cap IS the enforcement (a doctrine ' +
-    'this short cannot also carry a retired mechanism\'s history or rationale): got ' +
-    lineCount + ' lines')
+  assert.ok(lineCount <= 170,
+    'D1/D2 caps the rewritten doctrine at 170 lines (raised from 160 by specs/20260907/09 D13) ' +
+    '— the cap IS the enforcement (a doctrine this short cannot also carry a retired ' +
+    'mechanism\'s history or rationale): got ' + lineCount + ' lines')
   for (const literal of ['dc-extract', 'fidelity-check', 'skeletons', 'deltas.json', 'retainer',
     'vision consult', 'FIDELITY_REVIEW', 'ITERATE', 'wf-design']) {
     assert.ok(!src.includes(literal),

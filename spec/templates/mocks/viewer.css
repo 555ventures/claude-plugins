@@ -235,6 +235,44 @@ body {
   color: var(--v-primary-fg);
 }
 
+/* Note-anchor chrome (.nl-anchor/.nl-up) — specs/20260907/09-atlas-index-and-note-navigation.md
+   D7/D9/D10. A mock-scope note in the project panel replaces its plain `<b>` id badge with
+   this pill: a `button.nl-anchor` when the note's screen is drawn on the served atlas and
+   `window.__lbOpen` exists (activating it opens that screen's lightbox), or an inert
+   `span.nl-anchor.plain` when the screen has no card. `.nl-up` is the strip heading's link
+   back to the atlas's project panel. Every color is an existing --v-* role — no new token, no
+   literal. */
+.nl-anchor {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--v-border);
+  border-radius: 999px;
+  padding: 1px var(--v-space-2);
+  font-size: 11px;
+  color: var(--v-primary);
+  background: var(--v-bg);
+  cursor: pointer;
+}
+.nl-anchor:hover {
+  background: var(--v-muted-bg);
+}
+.nl-anchor.plain {
+  color: var(--v-muted);
+  cursor: default;
+}
+.nl-anchor.plain:hover {
+  background: var(--v-bg);
+}
+.nl-up {
+  font-size: 12px;
+  color: var(--v-muted);
+  text-decoration: none;
+}
+.nl-up:hover {
+  color: var(--v-fg);
+  text-decoration: underline;
+}
+
 /* Journey review page (.rv-*) — specs/20260906/04-journey-review-page.md D4/D5, chrome rule in
    spec/doctrine/design.md § Design Canon. Three panes on a 48px bar: rail · dotted canvas of
    artboards · inspector; the inspector folds to a 44px strip. Every color is an existing --v-*

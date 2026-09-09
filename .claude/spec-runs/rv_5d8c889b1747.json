@@ -1,0 +1,159 @@
+{
+  "runId": "rv_5d8c889b1747",
+  "ts": "2026-09-09T02:12:42.858Z",
+  "spec": "specs/20260907/09-atlas-index-and-note-navigation.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "UNVERIFIED",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1548,
+    "base": "01f7fe5c7c49623140087b244851bbf0550e9b3b",
+    "head": "fb43aee8da0f324fa343ee3b3992b63ad623e125",
+    "dirty": false
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "reviewerCount": 1,
+    "tokens": 185000,
+    "survivors": [
+      {
+        "severity": "medium",
+        "claim": "Two files the D7′ fix commit created/modified are outside the File Plan: tests/mocks/chrome-harness.js (CREATE) and tests/mocks/notes-layer-isolation.test.js (MODIFY). The D15 commit added its collateral files as File Plan rows; the D7′ extraction did not, and the fix-delta manifest-2 carries no reconcile leg, so verdict.js never observes the red.",
+        "file": "specs/20260907/09-atlas-index-and-note-navigation.md",
+        "line": 57,
+        "impact": "The spec's stated change set no longer describes what the branch changes, and the check that would normally catch that was not run on this pass.",
+        "evidence": "Executed: node spec/scripts/scope-reconcile.js --root <wt> --base 01f7fe5c7c49623140087b244851bbf0550e9b3b --spec specs/20260907/09-atlas-index-and-note-navigation.md --json → exit=3, outOfPlan [tests/mocks/chrome-harness.js, tests/mocks/notes-layer-isolation.test.js]. manifest-2.jsonl legs: ci, gate, suite, smoke, ac-matrix, skip-reconcile, promise-sweep — no reconcile row. File Plan rows 60-74 name neither path; commit 09b726c's message for D15 says 'Two collateral files, both now File Plan rows' while 9e01ee9 added none for the extraction."
+      },
+      {
+        "severity": "medium",
+        "claim": "The strip-badge regression test is tagged AC-20260907-09-12 but tests none of AC-12's behavior (the a.nl-up link / #nl-notes mount); it pins D7′(a)'s strip <b> badge, which no AC names. Rated medium rather than hard because the sibling test at line 184 genuinely covers AC-12, so the matrix's AC-12 coverage is not laundered — but the matrix now counts a hit for AC-12 that would survive deletion of the real one.",
+        "file": "tests/mocks/notes-layer-navigation.test.js",
+        "line": 159,
+        "impact": "A coverage count for one acceptance criterion is inflated by a test that checks something else, so losing the real test would go unnoticed.",
+        "evidence": "AC-20260907-09-12 promises exactly one a.nl-up in the strip heading with a derived href, and the project-scope mount immediately after #nl-notes. The test at line 159 asserts only a B element with text N9 and the absence of .nl-anchor (lines 169-174) — no a.nl-up, no href, no mount. Remedy is a rename to the repo's D-only name form (as tests/consistency/test-concurrency-cap.test.js does), not a new AC."
+      },
+      {
+        "severity": "soft",
+        "claim": "The UI section's overlay-open state names #tocbtn.on; the fix landed and paints correctly, but no test asserts the class or its paint — AC-4's test checks #toc geometry and #tocscrim only.",
+        "file": "tests/design-atlas-index.test.js",
+        "line": 234,
+        "impact": "The pressed state on the Index button could silently regress and the suite would stay green.",
+        "evidence": "grep -rn 'tocbtn' tests/ yields only AC-4's display/click uses and AC-14's selector-presence check; no classList or computed-style assertion on #tocbtn anywhere. Executed repro shows open:{on:true,bg:'rgb(24, 24, 27)'} matching --v-primary #18181b."
+      },
+      {
+        "severity": "soft",
+        "claim": "AC-13's pin checks only the literal '?state=' while the AC also promises 'no state-scoped deep link anywhere in the layer's source'; a state-carrying hash or path form would pass.",
+        "file": "tests/mocks/notes-layer-navigation.test.js",
+        "line": 206,
+        "impact": "Half of a continuity promise is unpinned.",
+        "evidence": "The test body's sole assertion is assert.doesNotMatch(src, /\\?state=/, …). AC-20260907-09-13 text: 'no ?state= href and no state-scoped deep link anywhere in the layer's source'. The AC itself sanctions a source-regex form, so this is partial coverage, not a mode violation."
+      },
+      {
+        "severity": "soft",
+        "claim": "tests/mocks/chrome-harness.js's header names its three consumers and 'the host rules' but no owner id (spec path / D-number / AC-ID) as the tests convention requires of header comments.",
+        "file": "tests/mocks/chrome-harness.js",
+        "line": 2,
+        "impact": "A future reader cannot trace why this helper exists to a ruling.",
+        "evidence": "The tests convention requires a header comment citing the owner id the test pins — spec path, AC-ID, or escape row id. Lines 2-7 cite none; the extraction was ruled at this spec's review (prior return, soft finding on the triplicated harness) and could cite specs/20260907/09 plus A5."
+      },
+      {
+        "severity": "soft",
+        "claim": "The deviations sidecar's D7′(b) paragraph still ends 'Needs the tests worker to give the elementIds stub a querySelector … Not touched here per instruction', but 9e01ee9 did exactly that (frameElementIds stub, AC-9 three-state pin) — the sidecar now records an open ask that is closed.",
+        "file": "specs/20260907/09-atlas-index-and-note-navigation.deviations.md",
+        "line": 80,
+        "impact": "The record the closer reads says a fix is still owed when it has already landed.",
+        "evidence": "deviations.md lines 80-82 state the ask as open; tests/mocks/notes-layer-navigation.test.js lines 31-60 define frameElementIds and card.querySelector('iframe.frame'), and AC-9 at line 108 exercises drawn / card-no-frame / no-card, all passing."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "Fix (1): the .nl-anchor swap still leaks into a served mock page's notes strip.",
+        "file": "spec/scripts/lib/notes-layer.browser.js",
+        "line": 393,
+        "evidence": "Real serve plus Chromium on /mocks/session-live.html with one open mock note: strip rows [{tag:'B',text:'N1'}], .nl-anchor count 0, a.nl-up present with href /atlas/index.html#nl-notes. Strip call site is noteRow(n, false); the vm pin also passes."
+      },
+      {
+        "claim": "Fix (2): #tocbtn.on is not toggled or not painted.",
+        "file": "spec/scripts/design-atlas.js",
+        "line": 1520,
+        "evidence": "Viewport 800x900: before {on:false,bg:'rgb(255, 255, 255)'} → click {on:true,bg:'rgb(24, 24, 27)'} where --v-primary resolves to #18181b → Escape {on:false,bg:'rgb(255, 255, 255)'}. The rule uses only var(--v-*) roles."
+      },
+      {
+        "claim": "Fix (3): a gap chip (which carries id=\"s-<label>\") still renders a live button.",
+        "file": "spec/scripts/lib/notes-layer.browser.js",
+        "line": 178,
+        "evidence": "Real DOM: #s-gap-one exists (class gapchip) with hasFrame:false → row is SPAN.nl-anchor.plain 'gap-one · not drawn', click leaves #lb closed, onclick null. Drawn card (hasFrame:true) → BUTTON, click opens #lb.on with lbframe src ../mocks/session-live.html."
+      },
+      {
+        "claim": "Fix (4): the chrome-harness extraction weakened one of its three consumers.",
+        "file": "tests/mocks/notes-layer-isolation.test.js",
+        "line": 74,
+        "evidence": "diff of grep 'assert\\.' between the base and HEAD of notes-layer-isolation.test.js is identical (12 asserts each). The shared evalJs adds a throw on exceptionDetails the old local evalAt lacked, which is stricter. All three consumers executed under CHROME_BIN: 133/133 pass."
+      },
+      {
+        "claim": "Pre-existing pins (<h2>j1, screen=*, gateCommand literal, design.md 160-line cap, RATCHET init 970) were weakened to pass.",
+        "file": "tests/design-atlas.test.js",
+        "line": 42,
+        "evidence": "<h2>j1 → /<h2[^>]*>j1/ still requires a j1 heading; screen=* → screen=** keeps the 'never fetch a per-screen list' negative; the gateCommand pin is now the exact new literal, not a looser match; the caps moved per D13 with the ruling cited in both files; D15's regex pin bounds n≤3. All executed green, matching § Gotchas' 'updated in place and retagged, never weakened'."
+      },
+      {
+        "claim": "A SHALL CONTINUE TO pin's covering test was deleted by the range.",
+        "file": null,
+        "line": null,
+        "evidence": "git diff --stat shows no deleted test files; the AC-5, AC-8 and AC-13 continuity tests exist and pass; the range removes only the duplicated harness bodies, whose assertions remain identical."
+      },
+      {
+        "claim": "Behavior change without a plugin.json bump, or a stale version literal.",
+        "file": "spec/.claude-plugin/plugin.json",
+        "line": 3,
+        "evidence": "node scripts/plugin-bump.js --check reports spec 7.107.0 → 7.108.0; D12 records the build-time resolution; the changelog is rotated to three entries."
+      },
+      {
+        "claim": "D11's § Design Canon citation mismatches a heading, or the Canonical Delta landed off-content.",
+        "file": "spec/doctrine/design.md",
+        "line": 131,
+        "evidence": "grep '^## ' design.md yields '## Design Canon (mocks, tokens, harness)' (prefix match). Both Delta bullets are present after 'Built surfaces join the atlas'; the closing 'Chrome for all of it follows § Design Canon' sentence folded into bullet two — content, not bytes. The design-doctrine and read-load caps are green at D13's numbers."
+      },
+      {
+        "claim": "AC-9's literal text now contradicts D7′(b) for a gap chip.",
+        "file": "specs/20260907/09-atlas-index-and-note-navigation.md",
+        "line": 201,
+        "evidence": "D7′ explicitly rules that AC-20260907-09-9's two cases are unchanged in substance, and § Gotchas forbids prime-amending AC bullets; the AC's 'holding #s-session-live' presumes a card, which the test's drawn case supplies with a frame. A disposer-ruled Decision, not a defect."
+      },
+      {
+        "claim": "typeof document.getElementById === 'function' in the D8 mount is a defensive fallback masking a shape bug.",
+        "file": "spec/scripts/lib/notes-layer.browser.js",
+        "line": 151,
+        "evidence": "It guards only design-atlas.test.js's pre-existing stub DOM (no getElementById), which the build worker was forbidden to edit; a real document always has the method, so no runtime shape is hidden. Recorded in the deviations sidecar."
+      },
+      {
+        "claim": "Hand-edit to a generated surface (.claude/spec.config.json) or a non-builtin import in the new test/helper files.",
+        "file": ".claude/spec.config.json",
+        "line": 4,
+        "evidence": "The config edit is D15's locked instruction with a consistency pin against regeneration drift; chrome-harness.js and test-concurrency-cap.test.js require only node:fs/path/child_process and ../helpers. The full suite including dependency-free.test.js is 1344/1344 green."
+      },
+      {
+        "claim": "Inherited red in the range needing provenance dismissal.",
+        "file": null,
+        "line": null,
+        "evidence": "No red observed: the full capped suite exits 0 with 0 fail and 0 skip; the touched-file run is 133/133."
+      }
+    ]
+  }
+}

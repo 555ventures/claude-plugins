@@ -798,6 +798,53 @@ function page(title, bodyHtml, extraHead = '') {
     '.bar button .dot.gap{background:var(--v-danger)}.bar button .dot.sketch{background:var(--v-warn)}\n' +
     '.bar button .dot.approved,.bar button .dot.ratified,.bar button .dot.built{background:var(--v-ok)}\n' +
     '.bar .sep{width:1px;height:1.2em;background:var(--v-border);margin:0 .35em}\n' +
+    // specs/20260907/09-atlas-index-and-note-navigation.md D1/D2/D10: the persistent screen
+    // index — shipped in this shared stylesheet on every page (AC-14), emitted for pages that
+    // never use it (AC-5: cmdGallery renders none of the #shell/#toc/.tocrow markup below). D1:
+    // #toc is a sticky grid column at min-width:1200px and a fixed off-canvas overlay below it;
+    // the breakpoint lives ONLY here — the script reads #tocbtn's computed display instead of
+    // repeating it (A4: a duplicated breakpoint left the overlay open after a jump).
+    '#shell{display:flex;align-items:flex-start}\n' +
+    '#toc{--toc-w:264px;width:var(--toc-w);flex:none;box-sizing:border-box;background:var(--v-bg);' +
+    'border-right:1px solid var(--v-border);padding:1rem .75rem;overflow:auto}\n' +
+    '#main{flex:1;min-width:0}\n' +
+    '.tochdr{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--v-muted);margin:0 0 .5rem}\n' +
+    '#tocsearch{width:100%;box-sizing:border-box;font:inherit;padding:.35em .6em;border:1px solid var(--v-border);' +
+    'border-radius:var(--v-radius);background:var(--v-bg);color:var(--v-fg);margin:0 0 .75rem}\n' +
+    '.tocgroup{margin:0 0 1rem}\n' +
+    // D2: the heading is a jump target too, so it reads as clickable like a .tocrow does.
+    '.tochead{display:flex;align-items:baseline;gap:.4em;font-size:11px;text-transform:uppercase;letter-spacing:.06em;' +
+    'color:var(--v-muted);border-left:4px solid transparent;padding:.1rem 0 .1rem .5rem;margin:0 0 .3rem;cursor:pointer}\n' +
+    '.tochead.here{border-left-color:var(--v-primary);color:var(--v-fg)}\n' +
+    '.tochead .count{margin-left:auto;color:var(--v-muted);font-size:11px;border:1px solid var(--v-border);' +
+    'border-radius:99px;padding:0 .5em;background:var(--v-bg)}\n' +
+    '.tocrow{display:flex;align-items:center;gap:.5em;width:100%;box-sizing:border-box;background:none;border:0;' +
+    'border-radius:var(--v-radius);padding:.3em .5em;color:var(--v-fg);cursor:pointer;font:inherit;font-size:13px;text-align:left}\n' +
+    '.tocrow:hover{background:var(--v-muted-bg)}\n' +
+    '.tocrow .dot{width:.55em;height:.55em;border-radius:99px;background:var(--v-muted);display:inline-block;flex:none}\n' +
+    // UI section's dot register, verbatim: danger gap, warn sketch, ok approved/built, ring
+    // bound, muted otherwise (ratified rides the same ok tint the .bar chips already give it).
+    '.tocrow .dot.gap{background:var(--v-danger)}.tocrow .dot.sketch{background:var(--v-warn)}\n' +
+    '.tocrow .dot.approved,.tocrow .dot.ratified,.tocrow .dot.built{background:var(--v-ok)}\n' +
+    '.tocrow .dot.bound{background:var(--v-ring)}\n' +
+    '.tocrow .lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n' +
+    '.tocempty{color:var(--v-muted);font-size:12px;margin:.5rem 0}\n' +
+    '#tocbtn{display:none}\n' +
+    // UI section, verbatim: "overlay open" is #toc at translateX(0), the scrim painted, and
+    // #tocbtn.on — the same pressed treatment the .bar status chips already give `.on`, pinned
+    // explicitly here (higher specificity than the shared `.bar button.on` rule) so the pressed
+    // state never depends on rule order.
+    '#tocbtn.on{border-color:var(--v-primary);background:var(--v-primary);color:var(--v-primary-fg)}\n' +
+    '#tocscrim{display:none;position:fixed;inset:0;z-index:8;background:color-mix(in srgb, var(--v-fg) 40%, transparent)}\n' +
+    '#tocscrim.on{display:block}\n' +
+    '.flash{outline:2px solid var(--v-primary);outline-offset:2px}\n' +
+    '@media(max-width:1199px){#toc{position:fixed;top:0;left:0;height:100vh;z-index:9;' +
+    'transform:translateX(-100%);transition:transform .18s ease;box-shadow:var(--v-shadow)}' +
+    '#toc.open{transform:translateX(0)}#tocbtn{display:inline-flex}}\n' +
+    '@media(min-width:1200px){#toc{position:sticky;top:0;height:100vh}}\n' +
+    // UI section: the transition is suppressed under prefers-reduced-motion — the page already
+    // honours that media feature elsewhere.
+    '@media(prefers-reduced-motion:reduce){#toc{transition:none}}\n' +
     '#journey{height:280px;border:1px solid var(--v-border);border-radius:var(--v-radius);margin-bottom:1rem;background:var(--v-bg);box-shadow:var(--v-shadow)}\n' +
     '#lb{position:fixed;inset:0;z-index:10;background:color-mix(in srgb, var(--v-fg) 85%, transparent);display:none;overflow:auto;padding:3.2rem 1rem 1rem}\n' +
     '#lb.on{display:block}\n' +
@@ -1338,7 +1385,9 @@ function buildAtlas(root, out) {
     // D6: every journey section's heading links to its review page — the journey look now
     // happens there, never inline on the atlas index.
     const reviewLink = isSeed ? '<a class="rv-review" href="/review/' + esc(title) + '.html">Review →</a>' : ''
-    return '<section class="sect"><h2>' + esc(title) + '<span class="count">' + count + '</span>' + reviewLink + '</h2>\n' +
+    // D2: the section heading is the toc's jump target — id="j-<title>" is new, everything else
+    // on this line is unchanged.
+    return '<section class="sect"><h2 id="j-' + esc(title) + '">' + esc(title) + '<span class="count">' + count + '</span>' + reviewLink + '</h2>\n' +
       (subtitle ? '<p class="meta">' + esc(subtitle) + '</p>\n' : '') +
       stopsHtml +
       (cards.length ? '<div class="grid">\n' + cards.map(r => r.html).join('\n') + '\n</div>' : '') +
@@ -1346,10 +1395,28 @@ function buildAtlas(root, out) {
       '</section>'
   }).join('\n')
 
+  // D2: one .tocgroup per rendered journey/brief section, in the same sorted order sectionHtml
+  // itself renders — a heading jumps to the id above, a row to #s-<label> the card/gap chip
+  // already carries. Mirrors the loop above exactly so the two never disagree on title or order.
+  const journeyTocGroupsHtml = [...sections.keys()].sort().map(key => {
+    const { cards, chips } = sections.get(key)
+    const isSeed = key.startsWith('seed:')
+    const title = key === '~no declaring brief' ? 'no declaring brief' : isSeed ? key.slice(5) : key.replace(/\.md$/, '')
+    const allRows = cards.concat(chips)
+    if (!allRows.length) return ''
+    const rowsHtml = allRows.map(r =>
+      '<button class="tocrow" data-label="' + esc(r.label) + '" data-st="' + esc(r.primary) + '">' +
+      '<span class="dot ' + esc(r.primary) + '"></span><span class="lbl">' + esc(r.label) + '</span></button>').join('')
+    return '<div class="tocgroup" data-group="' + esc(title) + '">' +
+      '<div class="tochead" id="th-' + esc(title) + '">' + esc(title) + '<span class="count">' + allRows.length + '</span></div>' +
+      rowsHtml + '</div>'
+  }).join('')
+
   // D15: design/shapes/*.html render under their own "shapes" section keyed by shape file (a
   // candidate register, not a screen — never merged into the labels/journeys sections above).
   const shapesDir = path.join(root, 'design/shapes')
   let shapesSectionHtml = ''
+  let shapesTocGroupHtml = ''
   if (fs.existsSync(shapesDir)) {
     const shapeFiles = fs.readdirSync(shapesDir).filter(f => f.endsWith('.html')).sort()
     if (shapeFiles.length) {
@@ -1364,10 +1431,16 @@ function buildAtlas(root, out) {
           '<span class="badge candidate">candidate</span>' +
           frameTag(path.relative(outDir, filePath), vp.width, vp.height) + '</div>'
       }).join('\n')
-      shapesSectionHtml = '<section class="sect" id="shapes"><h2>shapes<span class="count">' + shapeFiles.length + ' candidates</span></h2>\n' +
+      // D2: "shapes" is first in the toc's render order. id="j-shapes" gives the heading a jump
+      // target/current-section marker exactly like a journey section's <h2> does; the group
+      // carries no .tocrow — a layout candidate is not a "surface" (mocked card/gap chip) in
+      // D2's sense, and none carries an id="s-<label>" to jump to.
+      shapesSectionHtml = '<section class="sect" id="shapes"><h2 id="j-shapes">shapes<span class="count">' + shapeFiles.length + ' candidates</span></h2>\n' +
         '<p class="meta">Each card is one way to lay out the whole product. Click a card to see it at full size, ' +
         'use the width buttons above to compare on phone and desktop, then reply <b>approve &lt;name&gt;</b> in the session.</p>\n' +
         (shapeStopsHtml || ('<div class="grid">\n' + shapeCards + '\n</div>')) + '</section>'
+      shapesTocGroupHtml = '<div class="tocgroup" data-group="shapes">' +
+        '<div class="tochead" id="th-shapes">shapes<span class="count">' + shapeFiles.length + '</span></div></div>'
     }
   }
 
@@ -1375,7 +1448,15 @@ function buildAtlas(root, out) {
   // "theme" derivation elsewhere in the atlas to replace, the compare table is the whole section.
   const themeStopsHtml = stopsByHome.theme.map((s) => renderStop(s, root, outDir, vp0)).join('\n')
   const themeSectionHtml = themeStopsHtml
-    ? '<section class="sect" id="theme"><h2>theme</h2>\n' + themeStopsHtml + '</section>'
+    ? '<section class="sect" id="theme"><h2 id="j-theme">theme</h2>\n' + themeStopsHtml + '</section>'
+    : ''
+  // D2: "theme" is second in the toc's render order, right after shapes — same no-.tocrow
+  // reasoning as shapes (a theme stop's compare table carries no id="s-<label>" surface either),
+  // but D2 still requires the .tochead's .count pill regardless — the count here is the number
+  // of live theme stops (open/decided) the section renders.
+  const themeTocGroupHtml = themeStopsHtml
+    ? '<div class="tocgroup" data-group="theme"><div class="tochead" id="th-theme">theme' +
+      '<span class="count">' + stopsByHome.theme.length + '</span></div></div>'
     : ''
 
   // specs/20260907/04-kit-canon-family.md D7/D14: a kit-signed stop gets its own #kit section —
@@ -1385,6 +1466,11 @@ function buildAtlas(root, out) {
   const kitSectionHtml = kitStopsHtml
     ? '<section class="sect" id="kit"><h2>kit</h2>\n' + kitStopsHtml + '</section>'
     : ''
+  // D2's render-order parenthetical ("shapes, theme, then the sorted journey/brief sections")
+  // names only those three — kit is specs/20260907/04's own concurrent, disjoint section (A6)
+  // and is deliberately left out of both the toc tree and the id="j-*" heading register; see the
+  // deviations sidecar.
+  const tocGroupsHtml = shapesTocGroupHtml + themeTocGroupHtml + journeyTocGroupsHtml
 
   // D3(a): the #stops index — links and text only, before every other section.
   const openLines = openStops.map((s) =>
@@ -1414,11 +1500,136 @@ function buildAtlas(root, out) {
     '<button data-f class="on" onclick="__filter(\'all\',this)">all ' + rows.length + '</button>' +
     Object.keys(counts).sort().map(k =>
       '<button data-f onclick="__filter(\'' + k + '\',this)"><span class="dot ' + k + '"></span>' + k + ' ' + counts[k] + '</button>').join('')
+  // D4: one filter model — the status chips narrow the index as well as the cards, so the two
+  // can never disagree. __tocApply (TOC_SCRIPT) ANDs this status with the search query itself;
+  // __filter only has to record the active status and ask it to recompute.
   const filterScript = '<script>\n' +
-    'function __filter(st,btn){__sel(btn,"data-f");' +
+    'function __filter(st,btn){__sel(btn,"data-f");__tocStatus=st;' +
     'document.querySelectorAll("[data-st]").forEach(function(el){el.hidden=st!=="all"&&el.dataset.st!==st});' +
     'document.querySelectorAll(".sect").forEach(function(s){s.hidden=!s.querySelector("[data-st]:not([hidden])")});' +
+    '__tocApply();' +
     '__fitAll()}\n</script>'
+
+  // D1-D5: the persistent screen index's behavior. D5's current-section marker is a threshold
+  // rule, not an IntersectionObserver (A3: a `rootMargin:'-10% 0px -80% 0px'` band marked NOTHING
+  // at four scroll positions in the executed prototype — a heading jumped to lands above the
+  // band's top edge and never intersects it). D1/A4: overlay mode is read from #tocbtn's computed
+  // display, never a breakpoint literal repeated here — the executed prototype left the overlay
+  // open after a jump the one time the breakpoint was duplicated.
+  const TOC_SCRIPT = '<script>\n' +
+    'var __tocStatus="all";\n' +
+    // UI section, verbatim: "overlay open" is #toc at translateX(0), the scrim painted, AND
+    // #tocbtn.on — all three toggle together.
+    'function __tocOpen(){document.getElementById("toc").classList.add("open");' +
+    'var s=document.getElementById("tocscrim");if(s)s.classList.add("on");' +
+    'var b=document.getElementById("tocbtn");if(b)b.classList.add("on")}\n' +
+    'function __tocClose(){document.getElementById("toc").classList.remove("open");' +
+    'var s=document.getElementById("tocscrim");if(s)s.classList.remove("on");' +
+    'var b=document.getElementById("tocbtn");if(b)b.classList.remove("on")}\n' +
+    'function __tocToggle(){var toc=document.getElementById("toc");' +
+    'if(toc.classList.contains("open"))__tocClose();else __tocOpen()}\n' +
+    'function __tocIsOverlay(){var btn=document.getElementById("tocbtn");' +
+    'return !!btn&&getComputedStyle(btn).display!=="none"}\n' +
+    'function __tocApply(){\n' +
+    '  var q=((document.getElementById("tocsearch")||{}).value||"").toLowerCase();\n' +
+    '  var any=false;\n' +
+    '  document.querySelectorAll(".tocgroup").forEach(function(g){\n' +
+    '    var groupMatch=(g.dataset.group||"").toLowerCase().indexOf(q)!==-1;\n' +
+    '    var visible=false;\n' +
+    '    g.querySelectorAll(".tocrow").forEach(function(row){\n' +
+    '      var labelMatch=(row.dataset.label||"").toLowerCase().indexOf(q)!==-1;\n' +
+    '      var statusOk=__tocStatus==="all"||row.dataset.st===__tocStatus;\n' +
+    '      var show=(labelMatch||groupMatch)&&statusOk;\n' +
+    '      row.hidden=!show;\n' +
+    '      if(show)visible=true;\n' +
+    '    });\n' +
+    // D2/D4: a row-less group (shapes/theme carry a heading and no surfaces at all) has no
+    // per-row status to filter, so the query alone governs its own title match (D3) — but D4
+    // forbids the index disagreeing with the page, and the page's own inherited .sect-hiding
+    // rule (pre-dates this spec, not rewritten here) hides a section with no visible [data-st]
+    // descendant, which shapes/theme always are. Track that section's OWN .hidden — data-group
+    // equals the section's own id ("shapes"/"theme") — so the two sides move together instead of
+    // this group ignoring status outright.
+    '    if(!g.querySelector(".tocrow")){\n' +
+    '      var sect=document.getElementById(g.dataset.group);\n' +
+    '      visible=groupMatch&&!(sect&&sect.hidden);\n' +
+    '    }\n' +
+    '    g.hidden=!visible;\n' +
+    '    if(visible)any=true;\n' +
+    '  });\n' +
+    // D3: .tocempty is a class ("<p class=\"tocempty\" hidden>"), never an id.
+    '  var empty=document.querySelector(".tocempty");if(empty)empty.hidden=any;\n' +
+    '}\n' +
+    'function __tocActivate(row){\n' +
+    '  var label=row.getAttribute("data-label");\n' +
+    '  var target=label?document.getElementById("s-"+label):null;\n' +
+    '  if(target){target.scrollIntoView({block:"start"});target.classList.add("flash");' +
+    'setTimeout(function(){target.classList.remove("flash")},1200)}\n' +
+    '  if(__tocIsOverlay())__tocClose();\n' +
+    '}\n' +
+    // D2: "a heading jumps to #j-<title>" — a .tochead is also an activation, and closes the
+    // overlay just like a row does. No .flash here: D2 pairs .flash with the row clause only,
+    // and AC-3 (the sole flash-testing AC) exercises row activation exclusively — a heading's own
+    // `.here` marker (a persistent 4px border, not a transient flash) is already this element's
+    // arrival feedback, and a large section heading has no "which one did I land on" ambiguity
+    // the way a dense grid of small tocrows does.
+    'function __tocActivateHeading(head){\n' +
+    '  var title=head.id.indexOf("th-")===0?head.id.slice(3):null;\n' +
+    '  var target=title?document.getElementById("j-"+title):null;\n' +
+    '  if(target)target.scrollIntoView({block:"start"});\n' +
+    '  if(__tocIsOverlay())__tocClose();\n' +
+    '}\n' +
+    'function __tocMark(){\n' +
+    // D4: a hidden section's heading (e.g. status-filtered out entirely — .sect.hidden) must
+    // never win "current" — a display:none element's getBoundingClientRect().top is 0, which is
+    // always at-or-above the threshold, so a later hidden heading would otherwise beat a real,
+    // visible one.
+    '  var heads=[].slice.call(document.querySelectorAll(".sect>h2")).filter(function(h){\n' +
+    '    var sect=h.closest(".sect");return !(sect&&sect.hidden)\n' +
+    '  });\n' +
+    '  if(!heads.length)return;\n' +
+    '  var thresh=Math.max(80,window.innerHeight*0.25);\n' +
+    '  var current=heads[0];\n' +
+    '  for(var i=0;i<heads.length;i++){if(heads[i].getBoundingClientRect().top<=thresh)current=heads[i]}\n' +
+    '  document.querySelectorAll(".tochead.here").forEach(function(h){h.classList.remove("here")});\n' +
+    '  var title=current.id.indexOf("j-")===0?current.id.slice(2):null;\n' +
+    '  var th=title?document.getElementById("th-"+title):null;\n' +
+    '  if(th)th.classList.add("here");\n' +
+    '}\n' +
+    'var __tocRaf=null;\n' +
+    'function __tocOnScroll(){if(__tocRaf)return;' +
+    '__tocRaf=requestAnimationFrame(function(){__tocRaf=null;__tocMark()})}\n' +
+    'window.addEventListener("scroll",__tocOnScroll);\n' +
+    '(function(){\n' +
+    // #tocbtn's own onclick="__tocToggle()" attribute already wires the toggle — a second
+    // "click" listener here would fire on the same event and double the toggle (open then
+    // immediately re-close on one click), so none is added.
+    '  var scrim=document.getElementById("tocscrim");if(scrim)scrim.addEventListener("click",__tocClose);\n' +
+    '  var tree=document.getElementById("toctree");\n' +
+    '  if(tree)tree.addEventListener("click",function(e){\n' +
+    '    var row=e.target.closest?e.target.closest(".tocrow"):null;\n' +
+    '    if(row){__tocActivate(row);return}\n' +
+    '    var head=e.target.closest?e.target.closest(".tochead"):null;\n' +
+    '    if(head)__tocActivateHeading(head)\n' +
+    '  });\n' +
+    '  var search=document.getElementById("tocsearch");\n' +
+    '  if(search){\n' +
+    '    search.addEventListener("input",__tocApply);\n' +
+    '    search.addEventListener("keydown",function(e){\n' +
+    '      if(e.key==="Enter"){var first=document.querySelector(".tocrow:not([hidden])");if(first)first.click()}\n' +
+    '    });\n' +
+    '  }\n' +
+    '  document.addEventListener("keydown",function(e){\n' +
+    '    if(e.key==="Escape")__tocClose();\n' +
+    '    var tag=(document.activeElement&&document.activeElement.tagName)||"";\n' +
+    '    if(e.key==="/"&&document.activeElement!==search&&tag!=="INPUT"&&tag!=="TEXTAREA"){\n' +
+    '      e.preventDefault();if(__tocIsOverlay())__tocOpen();if(search)search.focus()\n' +
+    '    }\n' +
+    '  });\n' +
+    '  __tocApply();\n' +
+    '  __tocMark();\n' +
+    '})();\n' +
+    '</script>'
 
   const graphData = {
     nodes: labels.map(l => ({ data: { id: l, status: (rows.find(r => r.label === l) || {}).primary || 'gap' } })),
@@ -1472,11 +1683,27 @@ function buildAtlas(root, out) {
   const emptyHtml = (!rows.length && !shapesSectionHtml)
     ? '<div class="empty">Nothing drawn yet. Shapes appear here after the SHAPES step, screens after the first journey is drawn.</div>'
     : ''
-  const html = page('Design atlas',
+  // D1: the Index toggle lives in the existing .bar, right beside the status chips it shares one
+  // filter model with (D4).
+  const tocBtnHtml = '<button id="tocbtn" onclick="__tocToggle()">Index</button>'
+  // D1/D2/D8: buildAtlas alone wraps its composed body in #shell/#toc/#main — cmdGallery (which
+  // never calls this code path) keeps emitting none of it (AC-5). #nl-notes is the LAST element
+  // of #main: the one anchor both the notes layer's project-panel mount and a served mock's
+  // strip link (D8) target.
+  const mainBodyHtml =
     header + headerStopsHtml + stopsIndexHtml + standaloneHtml + (rows.length ? graph : '') +
-    '\n<div class="bar">' + filterBar + (bar.buttons ? '<span class="sep"></span>' + bar.buttons : '') + '</div>' +
+    '\n<div class="bar">' + tocBtnHtml + filterBar + (bar.buttons ? '<span class="sep"></span>' + bar.buttons : '') + '</div>' +
     '\n' + shapesSectionHtml + '\n' + themeSectionHtml + '\n' + kitSectionHtml + '\n' + sectionHtml + '\n' + emptyHtml + '\n' +
-    LIGHTBOX + '\n' + UI_SCRIPT + bar.style + bar.script + filterScript + PICKS_SCRIPT)
+    '<div id="nl-notes"></div>'
+  const shellHtml =
+    '<div id="shell"><aside id="toc"><p class="tochdr">Index</p>' +
+    '<input id="tocsearch" type="search" placeholder="Search screens   /">' +
+    '<nav id="toctree">' + tocGroupsHtml + '<p class="tocempty" hidden>No screen matches.</p></nav></aside>' +
+    '<div id="tocscrim"></div>' +
+    '<div id="main">' + mainBodyHtml + '</div></div>'
+  const html = page('Design atlas',
+    shellHtml + '\n' +
+    LIGHTBOX + '\n' + UI_SCRIPT + bar.style + bar.script + filterScript + TOC_SCRIPT + PICKS_SCRIPT)
   fs.mkdirSync(outDir, { recursive: true })
   fs.writeFileSync(out, html)
   return { html, out, count: labels.length, summary }
@@ -1608,9 +1835,15 @@ function createRequestHandler(root, opts = {}) {
       const screen = urlObj.searchParams.get('screen')
       let notes = []
       try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
-      const out = screen === '*'
-        ? notes.filter((n) => n.scope === 'project')
-        : notes.filter((n) => n.scope === 'mock' && n.screen === screen)
+      // D6: screen=** is a NEW token returning every note regardless of scope (the atlas
+      // project panel's D7 flat listing needs to reach a mock-scope note screen=* never could);
+      // screen=* and screen=<label> keep their present meaning byte-for-byte
+      // (specs/20260906/03 D3's scope contract).
+      const out = screen === '**'
+        ? notes
+        : screen === '*'
+          ? notes.filter((n) => n.scope === 'project')
+          : notes.filter((n) => n.scope === 'mock' && n.screen === screen)
       // specs/20260906/03 D3: a question note is joined against its ledger row on every request
       // (never cached) — claim/rejected/tag/status come from the row, ledgerMissing:true when the
       // row is gone. Parsed at most once per request, lazily (most lists carry no question).

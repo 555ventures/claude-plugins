@@ -3,8 +3,8 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { spawn, spawnSync } = require('node:child_process')
 const { SPEC, tmpdir } = require('../helpers')
+const { findChrome, serve, withChrome } = require('./chrome-harness')
 
 // Chrome isolation of the served notes layer (spec/scripts/lib/notes-layer.browser.js), the
 // invariant behind specs/20260902/10-page-notes-review-loop.md D3's "touches no mock markup":
@@ -46,20 +46,6 @@ test('notes layer: viewer.css is linked only inside shadow roots, tokens resolve
   assert.match(src, /root\.appendChild\(link\)/, 'the viewer.css <link> must be appended to the shadow root')
 })
 
-function findChrome() {
-  const candidates = [
-    process.env.CHROME_BIN,
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/Applications/Chromium.app/Contents/MacOS/Chromium',
-  ].filter(Boolean)
-  for (const c of candidates) if (fs.existsSync(c)) return c
-  for (const name of ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser']) {
-    const r = spawnSync('which', [name], { encoding: 'utf8' })
-    if (r.status === 0 && r.stdout.trim()) return r.stdout.trim()
-  }
-  return null
-}
-
 // The probe mock: dark by default, with a content-box element — the two things viewer.css's
 // chrome rules (`body{background;color}`, `*{box-sizing}`) would repaint if they reached the
 // document. Computed styles are read over the DevTools Protocol (Node's built-in WebSocket, no
@@ -74,83 +60,6 @@ const PROBE = '(function(){var b=getComputedStyle(document.body),x=getComputedSt
   'return {bodyBg:b.backgroundColor,bodyColor:b.color,boxSizing:x.boxSizing,boxWidth:x.width,' +
   'headLinks:document.querySelectorAll("head link").length,hosts:document.querySelectorAll(".nl-host").length}})()'
 
-function serve(dir, port) {
-  const child = spawn(process.execPath, [path.join(SPEC, 'scripts/design-atlas.js'), 'serve', '--root', dir, '--port', String(port)])
-  const ready = new Promise((resolve, reject) => {
-    let out = ''
-    child.stdout.on('data', (c) => { out += c; if (out.includes('\n')) resolve() })
-    child.stderr.on('data', (c) => { out += c })
-    setTimeout(() => reject(new Error('serve did not start: ' + out)), 5000)
-  })
-  return { child, ready }
-}
-
-// A minimal DevTools client: launch Chrome with a debugging port, attach one page session, and
-// expose `evalAt(url)` = navigate, wait for load plus a settle tick, evaluate PROBE by value.
-async function withChrome(chrome, fn) {
-  const child = spawn(chrome, [
-    '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
-    '--user-data-dir=' + tmpdir('chrome-profile'), '--remote-debugging-port=0', 'about:blank',
-  ], { stdio: ['ignore', 'ignore', 'pipe'] })
-  const wsUrl = await new Promise((resolve, reject) => {
-    let err = ''
-    child.stderr.on('data', (c) => {
-      err += c
-      const m = err.match(/DevTools listening on (ws:\/\/\S+)/)
-      if (m) resolve(m[1])
-    })
-    child.on('exit', () => reject(new Error('chrome exited before announcing its DevTools endpoint: ' + err.slice(-400))))
-    setTimeout(() => reject(new Error('chrome announced no DevTools endpoint within 15s: ' + err.slice(-400))), 15000)
-  })
-  const ws = new WebSocket(wsUrl)
-  await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = () => reject(new Error('DevTools socket failed to open')) })
-  let seq = 0
-  const pending = new Map()
-  const listeners = []
-  ws.onmessage = (ev) => {
-    const msg = JSON.parse(ev.data)
-    if (msg.id && pending.has(msg.id)) {
-      const { resolve, reject } = pending.get(msg.id)
-      pending.delete(msg.id)
-      if (msg.error) reject(new Error('DevTools ' + msg.error.message)); else resolve(msg.result)
-    } else if (msg.method) listeners.forEach((l) => l(msg))
-  }
-  const send = (method, params, sessionId) => new Promise((resolve, reject) => {
-    const id = ++seq
-    pending.set(id, { resolve, reject })
-    ws.send(JSON.stringify(Object.assign({ id, method, params: params || {} }, sessionId ? { sessionId } : {})))
-  })
-  const waitFor = (method, sessionId) => new Promise((resolve) => {
-    listeners.push(function l(msg) { if (msg.method === method && msg.sessionId === sessionId) { listeners.splice(listeners.indexOf(l), 1); resolve(msg.params) } })
-  })
-  try {
-    const { targetId } = await send('Target.createTarget', { url: 'about:blank' })
-    const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true })
-    await send('Page.enable', {}, sessionId)
-    await send('Runtime.enable', {}, sessionId)
-    // The layer asks the reviewer's name through window.prompt on a fresh profile (A3); a
-    // pending dialog holds the load event, so every dialog is answered as it opens.
-    listeners.push((msg) => {
-      if (msg.method === 'Page.javascriptDialogOpening' && msg.sessionId === sessionId) {
-        send('Page.handleJavaScriptDialog', { accept: true, promptText: 'probe' }, sessionId).catch(() => {})
-      }
-    })
-    const evalAt = async (url) => {
-      const loaded = waitFor('Page.loadEventFired', sessionId)
-      await send('Page.navigate', { url }, sessionId)
-      await loaded
-      await new Promise((r) => setTimeout(r, 300))
-      const { result } = await send('Runtime.evaluate', { expression: PROBE, returnByValue: true }, sessionId)
-      return result.value
-    }
-    return await fn({ evalAt })
-  } finally {
-    try { await Promise.race([send('Browser.close'), new Promise((r) => setTimeout(r, 2000))]) } catch (e) { /* closing anyway */ }
-    try { ws.close() } catch (e) { /* closed */ }
-    try { child.kill('SIGKILL') } catch (e) { /* gone */ }
-  }
-}
-
 test('notes layer (executed, headless Chrome): a served dark mock computes identical body/box styles with and without the layer', { timeout: 60000 }, async (t) => {
   const chrome = findChrome()
   if (!chrome) return t.skip('no Chrome binary (set CHROME_BIN) — the static pin above still runs')
@@ -162,7 +71,9 @@ test('notes layer (executed, headless Chrome): a served dark mock computes ident
   try {
     await ready
     const base = 'http://127.0.0.1:' + port + '/mocks/m.html'
-    await withChrome(chrome, async ({ evalAt }) => {
+    await withChrome(chrome, async ({ navigate, evalJs }) => {
+      // evalAt(url) = navigate, wait for load plus withChrome's own settle tick, evaluate PROBE.
+      const evalAt = async (url) => { await navigate(url); return evalJs(PROBE) }
       const clean = await evalAt(base + '?clean')
       const injected = await evalAt(base)
       assert.strictEqual(clean.hosts, 0, '?clean must carry no layer at all: ' + JSON.stringify(clean))

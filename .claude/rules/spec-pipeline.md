@@ -156,9 +156,15 @@ upstream bug list. -->
   blocking — every hit enters the File Plan as fix or recorded waive); spec 03 D10's blocking
   whole-suite check at build Phase 4 catches the behavioral variant a naming closure cannot
   reach. A colliding test pin is updated in place and retagged with the new AC-ID, never
-  weakened, never left red.
+  weakened, never left red. Third and widest trigger: the collision need not involve a *retired*
+  literal at all — **adding** an attribute, a query token, or a config flag breaks any pin that
+  spelled the old shape exactly. One spec broke four in one build: a new `id` on a section's
+  `<h2>` (two dense `/<h2>j1/` pins), a new `screen=**` request token (a `screen=*` pin), and a
+  new `--test-concurrency` flag (a literal `gateCommand` pin plus a `package.json` `scripts.test`
+  byte-equality pin). Grep the literal you are about to change across `tests/` before the build
+  starts, not after the gate reds; each hit enters the File Plan.
   (specs/20260813/07-command-report-conformance.md D8; specs/20260813/09-model-placement-mechanics.md D4;
-  specs/20260814/01-ac-matrix-script.md)
+  specs/20260814/01-ac-matrix-script.md; specs/20260907/09-atlas-index-and-note-navigation.md)
 - `[plugin]` `ac-matrix.js` parses AC bullets as `^- \*\*(token)\*\*` and requires the token to
   fully match `AC-\d{8}-\d{2}[a-z]?-\d+`. A build-time amendment written the way the Decisions
   table writes one — a prime-suffixed successor (`AC-…-3′`) plus the superseded original left as
@@ -183,7 +189,14 @@ upstream bug list. -->
   `pre-image is not pure` naming the sibling's files. Correct the base at build Phase 0 to the
   sibling's review-close commit (the true pre-image) and record the departure;
   `merge-back.sh branch-for` derives the merge target independently, so merge-back is
-  unaffected. (specs/20260816/03-file-plan-table-scoped-parsing.md; specs/20260901/02-run-provenance.md D10)
+  unaffected. Third trigger, same class from the other direction: a sibling landing on `main`
+  mid-build forces a **rebase** to get `red-check.js`'s pre-image purity check to pass, and the
+  rebase silently makes the stamped base name a commit two ancestors back — review then judged
+  15 files where the spec had changed 13, and the reconcile leg reported the sibling's two as
+  out-of-plan. Correct the base to the rebase target (an exact sha narrows the range rather than
+  emptying it) and record it; the leg finding is then a reject on executed evidence, not a waive.
+  (specs/20260816/03-file-plan-table-scoped-parsing.md; specs/20260901/02-run-provenance.md D10;
+  specs/20260907/09-atlas-index-and-note-navigation.md)
 - `[plugin]` **`orchestrator-compensation-during-live-worker`** (grep this
   slug to count recurrences). The harness fired completion notifications for `/spec:build`
   workers still executing; the orchestrator read those as returns-with-no-work and began

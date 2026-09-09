@@ -1,8 +1,8 @@
 {
   "generatedBy": "spec@7.102.0",
   "contractHash": "d84ad1eb648e",
-  "gateCommand": "node --test {testDirs}",
-  "testCommand": "node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=./scripts/test-file-budget-reporter.js --test-reporter-destination=stdout",
+  "gateCommand": "node --test --test-concurrency=3 {testDirs}",
+  "testCommand": "node --test --test-concurrency=3 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=./scripts/test-file-budget-reporter.js --test-reporter-destination=stdout",
   "setupCommand": "npm install",
   "runtime": {
     "inert": "marketplace of CLI plugins and dependency-free scripts — no bootable app; the autopilot daemon is parked (JJ 2026-08-18, confirmed 2026-08-20)"

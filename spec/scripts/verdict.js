@@ -73,7 +73,7 @@
 // kept truncated observations and counts, nothing repro-able. --retain <dir> is now REQUIRED on
 // the review profile whenever both --ledger and --workflow are present (absent -> exit 2 naming
 // --retain .claude/spec-runs as the remedy, before any verdict word prints, D1) and writes
-// <dir>/<runId>.json atomically (temp file + rename) — the manifest legs with `observed`
+// <dir>/<runId>.jsonl atomically (temp file + rename, single line) — the manifest legs with `observed`
 // verbatim plus the --workflow file's parsed JSON verbatim (survivors/killed with their
 // executed repro evidence intact). A no-workflow --ledger row (the Phase 0 hard-stop)
 // stays retain-optional; passed anyway, the artifact's `reviewer` is null (D2). --retain on
@@ -667,12 +667,14 @@ function deriveTestsSkipped(gateRow, skipReconcileRow) {
 // ---- retention artifact (D1/D2, specs/20260819/01-review-evidence-retention.md): the full-
 // ---- fidelity home for a review run, written atomically (temp file + rename) so a reader never
 // ---- observes a partial file. Never called on the release profile (rejected above, D3).
+//
+// Single-line `.jsonl` — a tracked host path carries no bytes a source formatter rewrites.
 
 function writeRetainedArtifact(dir, artifactRunId, data) {
   fs.mkdirSync(dir, { recursive: true })
-  const finalPath = path.join(dir, `${artifactRunId}.json`)
+  const finalPath = path.join(dir, `${artifactRunId}.jsonl`)
   const tmpPath = path.join(dir, `.${artifactRunId}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`)
-  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2) + '\n')
+  fs.writeFileSync(tmpPath, JSON.stringify(data) + '\n')
   fs.renameSync(tmpPath, finalPath)
   return finalPath
 }

@@ -44,7 +44,7 @@ test('AC-20260903-01-10: --record --via driver appends via:"driver" on the row a
   const rowDriver = JSON.parse(fs.readFileSync(path.join(rootDriver, '.claude/spec-runs.jsonl'), 'utf8').trim())
   assert.strictEqual(rowDriver.via, 'driver',
     'D8: --via driver must stamp exactly "driver" on the appended ledger row, never left absent or coerced: ' + JSON.stringify(rowDriver))
-  const artifactDriver = JSON.parse(fs.readFileSync(path.join(rootDriver, '.claude/spec-runs', rowDriver.runId + '.json'), 'utf8'))
+  const artifactDriver = JSON.parse(fs.readFileSync(path.join(rootDriver, '.claude/spec-runs', rowDriver.runId + '.jsonl'), 'utf8'))
   assert.strictEqual(artifactDriver.via, 'driver',
     'D8: the retained evidence artifact must carry the same via field as the ledger row — a diverging artifact would let /spec:escape-style provenance work read a stale value: ' + JSON.stringify(artifactDriver))
 

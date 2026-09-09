@@ -224,7 +224,13 @@ test('a subdirectory under .claude/spec-runs/ is promoted and cleared instead of
   const renderDir = path.join(wt, '.claude/spec-runs/render/99-acdir')
   fs.mkdirSync(renderDir, { recursive: true })
   fs.writeFileSync(path.join(renderDir, 'frame.png'), 'not really a png\n')
+  // Both artifact extensions, deliberately: current runs retain `<runId>.jsonl` (the
+  // formatter-inert shape), while every artifact retained before that change is still on disk as
+  // `.json`. Promotion walks the directory and must stay extension-blind — a promotion that
+  // learned to match `.jsonl` would silently strand the fleet's existing evidence in a worktree
+  // that is then removed.
   fs.writeFileSync(path.join(wt, '.claude/spec-runs/plain.json'), '{"kind":"file entry"}\n')
+  fs.writeFileSync(path.join(wt, '.claude/spec-runs/rv_currentshape.jsonl'), '{"kind":"current artifact"}\n')
 
   const merged = run(root, spec, '--mark', 'merge-strategy', 'ff-only')
   assert.strictEqual(merged.status, 0,
@@ -236,6 +242,8 @@ test('a subdirectory under .claude/spec-runs/ is promoted and cleared instead of
     'the subdirectory\'s contents must be promoted into the main root, not skipped — evidence that is dropped instead of copied is evidence this review can never produce again')
   assert.ok(fs.existsSync(path.join(root, '.claude/spec-runs/plain.json')),
     'promoting a directory entry must not stop the plain file entries beside it from being promoted')
+  assert.ok(fs.existsSync(path.join(root, '.claude/spec-runs/rv_currentshape.jsonl')),
+    'the current `.jsonl` artifact shape must promote exactly like the legacy `.json` one — promotion is extension-blind by design, so both the evidence this run retained and the evidence earlier runs left behind survive the merge')
   assert.ok(!fs.existsSync(wt),
     'the worktree must be gone: `git worktree remove` (never --force) refuses on ANY leftover untracked file, so its removal is proof the promoted subdirectory was actually cleared rather than left behind')
 })

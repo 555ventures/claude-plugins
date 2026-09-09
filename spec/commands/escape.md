@@ -59,9 +59,10 @@ defective file — that is the only unrecoverable input.
    `stage:"review"` and this spec path (jq/grep — never read the ledger into context):
    `reviewRunId` = that row's `runId`; `null` if no review row exists or it predates the
    `runId` field. Note the row's `verdict` and `findings.killed` for steps 4–5. When
-   `reviewRunId` is set, check for `.claude/spec-runs/<reviewRunId>.json` — if it exists,
-   read its `killed[]` claims (evidence strings intact); step 4 derives `killedMatch` from
-   them. When the correlated row carries `diff.base`/`diff.head` (specs/20260824/06-review-range-identity.md
+   `reviewRunId` is set, check for `.claude/spec-runs/<reviewRunId>.jsonl`, then the same
+   stem with the legacy `.json` extension earlier runs wrote — either is the same object,
+   whichever exists — read its `killed[]` claims (evidence strings intact); step 4 derives
+   `killedMatch` from them. When the correlated row carries `diff.base`/`diff.head` (specs/20260824/06-review-range-identity.md
    D4), those name the reviewed range and `diff.dirty: true` means the close commit that
    follows the row completes it; older rows carry neither, and this step proceeds exactly
    as today.
@@ -213,7 +214,8 @@ written for the planning-seat session, never a per-repo build.
    replay-corpus`'s class headings.
 3. Per row, dispatch one Sonnet agent with paths only — the row's repo dir, spec path,
    defect file, `escapeTs`, the retained artifact at
-   `<repo>/.claude/spec-runs/<reviewRunId>.json` when it exists, the shas of
+   `<repo>/.claude/spec-runs/<reviewRunId>.jsonl` (or its legacy `.json` stem) when it
+   exists, the shas of
    `git -C <repo> log --format=%H --since=<escapeTs date> -- <file>`, and the repo's
    pipeline-rules path. The agent returns `{class, unclassedReason, evidence}` — an existing
    registry id whenever the shape matches, a new id only when none fits, `no-fix-diff` when

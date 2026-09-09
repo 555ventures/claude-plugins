@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 29937,
-    "spec/scripts": 1248306,
+    "spec/scripts": 1248772,
     "spec/scripts/lib": 231235,
-    "tests": 3455513
+    "tests": 3459222
   },
   "files": {
     "scripts/plugin-bump.js": 8564,
@@ -70,18 +70,18 @@
     "spec/scripts/render-gate.js": 30243,
     "spec/scripts/render-inventory.browser.js": 14416,
     "spec/scripts/render-rules.js": 19776,
-    "spec/scripts/replay.js": 68870,
+    "spec/scripts/replay.js": 69031,
     "spec/scripts/report-render.js": 7899,
     "spec/scripts/review-legs.js": 27558,
     "spec/scripts/scope-reconcile.js": 16902,
     "spec/scripts/smoke.sh": 8134,
     "spec/scripts/spec-build-driver.js": 49555,
     "spec/scripts/spec-queue.js": 25130,
-    "spec/scripts/spec-review-driver.js": 125803,
+    "spec/scripts/spec-review-driver.js": 126005,
     "spec/scripts/spec-session-stamp.sh": 2680,
     "spec/scripts/spec-state-gate.sh": 4846,
     "spec/scripts/spec-status.js": 52471,
-    "spec/scripts/verdict.js": 49794,
+    "spec/scripts/verdict.js": 49897,
     "spec/scripts/worktree-include.sh": 3277,
     "tests/ac-matrix-coverage-holes.test.js": 12430,
     "tests/ac-matrix/ac-matrix.fixtures.js": 2238,
@@ -209,10 +209,10 @@
     "tests/render/render-gate.test.js": 43533,
     "tests/render/render-inventory.test.js": 17530,
     "tests/render/render-rules.test.js": 33656,
-    "tests/replay/record-via.test.js": 7610,
+    "tests/replay/record-via.test.js": 7611,
     "tests/replay/replay-corpus.test.js": 7478,
     "tests/replay/replay.fixtures.js": 1919,
-    "tests/replay/replay.test.js": 200911,
+    "tests/replay/replay.test.js": 201519,
     "tests/report/report-render.test.js": 14403,
     "tests/review/ci-query.test.js": 17510,
     "tests/review/deviations-backstop.test.js": 18269,
@@ -224,12 +224,12 @@
     "tests/review/escalate-row.fixtures.js": 11192,
     "tests/review/escalate-row.test.js": 18049,
     "tests/review/legs-verdict-pair.test.js": 31714,
-    "tests/review/merge-reentry.test.js": 17983,
+    "tests/review/merge-reentry.test.js": 18818,
     "tests/review/promise-sweep.test.js": 21909,
     "tests/review/review-base-derivation.test.js": 7117,
     "tests/review/review-driver-close-drift-line.test.js": 9702,
     "tests/review/review-driver-close-refusals.test.js": 23221,
-    "tests/review/review-driver-close-row.test.js": 25726,
+    "tests/review/review-driver-close-row.test.js": 25731,
     "tests/review/review-driver-fix-cycle.test.js": 19323,
     "tests/review/review-driver-replay-entry.test.js": 13485,
     "tests/review/review-driver-replay-record.test.js": 14277,
@@ -244,7 +244,7 @@
     "tests/review/reviewer-seat.test.js": 1771,
     "tests/review/scope-reconcile.test.js": 9687,
     "tests/review/stopped-row-durability.test.js": 30391,
-    "tests/review/verdict.test.js": 120304,
+    "tests/review/verdict.test.js": 122564,
     "tests/review/workflow-scripts-in-scope.test.js": 6856,
     "tests/run-ledger.test.js": 10704,
     "tests/scope-reconcile-at-risk.test.js": 25346,
@@ -393,6 +393,72 @@
       "from": 3448157,
       "to": 3455513,
       "cite": "specs/20260908/03-test-fixture-dedupe.md"
+    },
+    {
+      "path": "spec/scripts/verdict.js",
+      "from": 49794,
+      "to": 49897,
+      "cite": "specs/20260819/01-review-evidence-retention.md"
+    },
+    {
+      "path": "spec/scripts/replay.js",
+      "from": 68870,
+      "to": 69031,
+      "cite": "specs/20260819/02-mutation-replay.md"
+    },
+    {
+      "path": "spec/scripts/spec-review-driver.js",
+      "from": 125803,
+      "to": 126005,
+      "cite": "specs/20260819/01-review-evidence-retention.md"
+    },
+    {
+      "path": "tests/review/verdict.test.js",
+      "from": 120304,
+      "to": 122564,
+      "cite": "specs/20260819/01-review-evidence-retention.md"
+    },
+    {
+      "path": "tests/review/merge-reentry.test.js",
+      "from": 17983,
+      "to": 18818,
+      "cite": "specs/20260819/01-review-evidence-retention.md"
+    },
+    {
+      "path": "tests/review/review-driver-close-row.test.js",
+      "from": 25726,
+      "to": 25731,
+      "cite": "specs/20260819/01-review-evidence-retention.md"
+    },
+    {
+      "path": "tests/replay/replay.test.js",
+      "from": 202065,
+      "to": 202673,
+      "cite": "specs/20260819/02-mutation-replay.md"
+    },
+    {
+      "path": "tests/replay/record-via.test.js",
+      "from": 7610,
+      "to": 7611,
+      "cite": "specs/20260819/02-mutation-replay.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1255214,
+      "to": 1255680,
+      "cite": "specs/20260819/01-review-evidence-retention.md"
+    },
+    {
+      "path": "tests",
+      "from": 3440148,
+      "to": 3443857,
+      "cite": "specs/20260819/01-review-evidence-retention.md"
+    },
+    {
+      "path": "tests",
+      "from": 3455513,
+      "to": 3459222,
+      "cite": "specs/20260819/01-review-evidence-retention.md"
     }
   ]
 }

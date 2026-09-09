@@ -61,7 +61,7 @@ const { tmpdir, runNode } = require('../helpers')
 // specs/20260819/01-review-evidence-retention.md (D1-D4, D9, brief 14 — the
 // reviewer's return lived only in a mktemp file the Phase 3 hygiene sweep deleted): verdict.js
 // gains --retain <dir>, REQUIRED on the review profile whenever both --ledger and --workflow are
-// passed, writing <dir>/<runId>.json with the manifest legs' observed UNTRUNCATED and the
+// passed, writing <dir>/<runId>.jsonl with the manifest legs' observed UNTRUNCATED and the
 // workflow's reviewer return verbatim — the full-fidelity home the ledger row's 120-char slice
 // only summarizes. No-workflow --ledger rows (Phase 0 hard-stops) stay retain-optional
 // (reviewer: null when passed); --profile release rejects the flag as a usage error (no runId to
@@ -872,7 +872,7 @@ test('AC-20260902-05-9 (--retain): WHEN verdict.js writes a retained artifact fr
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const lines = r.stdout.trim().split('\n')
   const row = JSON.parse(lines[1])
-  const artifact = JSON.parse(fs.readFileSync(path.join(dir, row.runId + '.json'), 'utf8'))
+  const artifact = JSON.parse(fs.readFileSync(path.join(dir, row.runId + '.jsonl'), 'utf8'))
   assert.strictEqual(artifact.scope, row.scope,
     `D4: the retained artifact's scope must equal the printed ledger row's scope, both manifest-derived, even ` +
     `though the workflow return carries no scope key at all: row=${JSON.stringify(row)} artifact=${JSON.stringify(artifact)}`)
@@ -1227,7 +1227,7 @@ function retentionFixture(dir) {
   return { manifest, workflow, rows, workflowObj }
 }
 
-test('AC-20260819-01-1: the review profile with --ledger, --workflow, and --retain <dir> writes <dir>/<runId>.json carrying the derived verdict, dispositions, every manifest leg row with observed untruncated, and the workflow return verbatim', () => {
+test('AC-20260819-01-1: the review profile with --ledger, --workflow, and --retain <dir> writes <dir>/<runId>.jsonl carrying the derived verdict, dispositions, every manifest leg row with observed untruncated, and the workflow return verbatim', () => {
   const dir = tmpdir('verdict-retain')
   const retainDir = path.join(dir, 'spec-runs')
   const { manifest, workflow, rows, workflowObj } = retentionFixture(dir)
@@ -1238,9 +1238,9 @@ test('AC-20260819-01-1: the review profile with --ledger, --workflow, and --reta
     'D1: a fully-dispositioned retained review run must exit 0, not fail merely because --retain is now the ' +
     'required flag: ' + r.stdout + ' / ' + r.stderr)
   const row = JSON.parse(r.stdout.trim().split('\n')[1])
-  const artifactPath = path.join(retainDir, row.runId + '.json')
+  const artifactPath = path.join(retainDir, row.runId + '.jsonl')
   assert.ok(fs.existsSync(artifactPath),
-    'D1: a --retain invocation must write <dir>/<runId>.json keyed by the ledger row\'s own runId — no ' +
+    'D1: a --retain invocation must write <dir>/<runId>.jsonl keyed by the ledger row\'s own runId — no ' +
     'artifact at that path means /spec:escape has nothing to read: ' + artifactPath)
   const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'))
   assert.strictEqual(artifact.verdict, row.verdict,
@@ -1257,6 +1257,39 @@ test('AC-20260819-01-1: the review profile with --ledger, --workflow, and --reta
     'the artifact\'s reviewer block must carry the workflow file\'s survivors verbatim, including the ' +
     'evidence string byte-for-byte — a lossy copy here defeats /spec:escape\'s derivation of killedMatch ' +
     'from the retained artifact: ' + JSON.stringify(artifact.reviewer))
+})
+
+// Both halves of the retained artifact's shape are pinned here: the `.jsonl` extension (no
+// source formatter claims a parser for it, so none rewrites the bytes /spec:escape reads) and
+// the SINGLE line (a pretty-printed body is exactly what a formatter reflows, reddening a host
+// gate that formats `.claude/` over a file no session wrote). A "make it readable again" edit
+// to writeRetainedArtifact reddens this.
+test('the retained artifact is written as a single-line .jsonl file — the shape no source formatter reflows', () => {
+  const dir = tmpdir('verdict-retain-format')
+  const retainDir = path.join(dir, 'spec-runs')
+  const { manifest, workflow } = retentionFixture(dir)
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', retainDir,
+    '--waived', '1', '--spec', 'specs/20260819/01-review-evidence-retention.md', '--tier', 'critical',
+    '--diff-loc', '10', '--iteration', '1'])
+  assert.strictEqual(r.status, 0, 'the retained run must exit 0: ' + r.stdout + ' / ' + r.stderr)
+  const row = JSON.parse(r.stdout.trim().split('\n')[1])
+
+  const written = fs.readdirSync(retainDir)
+  assert.deepStrictEqual(written, [row.runId + '.jsonl'],
+    'the retention directory must hold exactly one file, named <runId>.jsonl — a `.json` artifact sits in a ' +
+    'tracked host path that the host gateCommand formats, and the first non-empty evidence array reddens ' +
+    'the close gate on a file the session never wrote: ' + JSON.stringify(written))
+
+  const raw = fs.readFileSync(path.join(retainDir, row.runId + '.jsonl'), 'utf8')
+  assert.ok(raw.endsWith('\n') && !raw.slice(0, -1).includes('\n'),
+    'the artifact must be exactly ONE line plus a trailing newline — a pretty-printed body breaks every ' +
+    'array across lines, which is precisely what a formatter collapses back and what made the close gate ' +
+    'red: ' + JSON.stringify(raw.slice(0, 200)))
+
+  const artifact = JSON.parse(raw)
+  assert.ok(Array.isArray(artifact.legs) && artifact.legs.length > 0,
+    'the single-line file must still parse to the full artifact with its non-empty legs array — the format ' +
+    'change must not have cost any fidelity: ' + JSON.stringify(artifact).slice(0, 200))
 })
 
 test('AC-20260819-01-2: the review profile with --ledger and --workflow but no --retain exits 2 naming --retain .claude/spec-runs as the remedy and prints no verdict word', () => {
@@ -1288,8 +1321,8 @@ test('AC-20260819-01-3: retention names the artifact by the row\'s runId — a p
   assert.strictEqual(withRunId.status, 0,
     'D1/D3: a fully-dispositioned retained run against a not-yet-existing --retain directory must still ' +
     'exit 0: ' + withRunId.stdout + ' / ' + withRunId.stderr)
-  assert.ok(fs.existsSync(path.join(retainDir, 'wf_abc123.json')),
-    'D1: a passed --run-id must name the artifact <dir>/wf_abc123.json, and the directory must have been ' +
+  assert.ok(fs.existsSync(path.join(retainDir, 'wf_abc123.jsonl')),
+    'D1: a passed --run-id must name the artifact <dir>/wf_abc123.jsonl, and the directory must have been ' +
     'created since it did not exist before this run: ' + retainDir)
 
   const generated = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger',
@@ -1297,9 +1330,9 @@ test('AC-20260819-01-3: retention names the artifact by the row\'s runId — a p
   const row = JSON.parse(generated.stdout.trim().split('\n')[1])
   assert.match(row.runId, /^rv_[0-9a-f]{12}$/,
     'without --run-id the row\'s runId must still be the D5-generated rv_ id: ' + JSON.stringify(row))
-  assert.ok(fs.existsSync(path.join(retainDir, row.runId + '.json')),
+  assert.ok(fs.existsSync(path.join(retainDir, row.runId + '.jsonl')),
     'D1: the generated-runId case must name the artifact by the row\'s OWN generated runId, equal to the ' +
-    'filename actually written — a mismatch breaks the derivable <dir>/<runId>.json path the Contracts ' +
+    'filename actually written — a mismatch breaks the derivable <dir>/<runId>.jsonl path the Contracts ' +
     'block documents: ' + retainDir)
 })
 
@@ -1321,7 +1354,7 @@ test('AC-20260819-01-4: --ledger without --workflow (the hard-stop row) does not
   const withRetain = runNode(SCRIPT, ['--manifest', manifest, '--ledger', '--retain', retainDir])
   assert.strictEqual(withRetain.status, 1, 'GATE_RED with --retain passed anyway must still exit 1: ' + withRetain.stderr)
   const row = JSON.parse(withRetain.stdout.trim().split('\n')[1])
-  const artifactPath = path.join(retainDir, row.runId + '.json')
+  const artifactPath = path.join(retainDir, row.runId + '.jsonl')
   assert.ok(fs.existsSync(artifactPath),
     'D2: --retain passed on a no-workflow invocation must still write the artifact — manifest-only legs are ' +
     'worth retaining too: ' + artifactPath)
@@ -1425,7 +1458,7 @@ test('AC-20260824-06-1: WHEN verdict.js --ledger --retain runs with --base-sha/-
   assert.deepStrictEqual(Object.keys(rowWithLoc.diff), ['loc', 'base', 'head', 'dirty'],
     'D1: diff\'s key order is fixed as loc, base, head, dirty — a reordering here is a silent contract change ' +
     'even though deepStrictEqual on the values alone would not catch it: ' + JSON.stringify(Object.keys(rowWithLoc.diff)))
-  const artifactWithLoc = JSON.parse(fs.readFileSync(path.join(dir, rowWithLoc.runId + '.json'), 'utf8'))
+  const artifactWithLoc = JSON.parse(fs.readFileSync(path.join(dir, rowWithLoc.runId + '.jsonl'), 'utf8'))
   assert.deepStrictEqual(artifactWithLoc.diff, rowWithLoc.diff,
     'D3: the retained artifact\'s top-level diff must equal the printed row\'s diff object verbatim: ' +
     JSON.stringify({ row: rowWithLoc.diff, artifact: artifactWithLoc.diff }))
@@ -1482,7 +1515,7 @@ test('AC-20260824-06-3: WHEN the retained artifact is written with the sha pair 
   const withPair = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir,
     '--base-sha', BASE_40, '--head-sha', HEAD_40])
   const rowWithPair = JSON.parse(withPair.stdout.trim().split('\n')[1])
-  const artifactWithPair = JSON.parse(fs.readFileSync(path.join(dir, rowWithPair.runId + '.json'), 'utf8'))
+  const artifactWithPair = JSON.parse(fs.readFileSync(path.join(dir, rowWithPair.runId + '.jsonl'), 'utf8'))
   const keysWithPair = Object.keys(artifactWithPair)
   const dispositionsIdx = keysWithPair.indexOf('dispositions')
   assert.notStrictEqual(dispositionsIdx, -1,
@@ -1493,7 +1526,7 @@ test('AC-20260824-06-3: WHEN the retained artifact is written with the sha pair 
 
   const withoutPair = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const rowWithoutPair = JSON.parse(withoutPair.stdout.trim().split('\n')[1])
-  const artifactWithoutPair = JSON.parse(fs.readFileSync(path.join(dir, rowWithoutPair.runId + '.json'), 'utf8'))
+  const artifactWithoutPair = JSON.parse(fs.readFileSync(path.join(dir, rowWithoutPair.runId + '.jsonl'), 'utf8'))
   assert.deepStrictEqual(Object.keys(artifactWithoutPair),
     ['runId', 'ts', 'spec', 'tier', 'iteration', 'scope', 'verdict', 'dispositions', 'legs', 'reviewer'],
     'D9: without the sha pair and without --diff-loc, the artifact must carry exactly today\'s ten keys in ' +
@@ -1510,7 +1543,7 @@ test('AC-20260824-06-4: WHEN verdict.js --ledger runs with neither --base-sha no
   assert.deepStrictEqual(rowWithLoc.diff, { loc: 3166 },
     'D9 (e.g. today\'s rv_441558867ece flag set): with no sha pair, --diff-loc 3166 must still derive diff ' +
     'exactly {"loc":3166}, byte-identical to today\'s shape: ' + JSON.stringify(rowWithLoc))
-  const artifactWithLoc = JSON.parse(fs.readFileSync(path.join(dir, rowWithLoc.runId + '.json'), 'utf8'))
+  const artifactWithLoc = JSON.parse(fs.readFileSync(path.join(dir, rowWithLoc.runId + '.jsonl'), 'utf8'))
   assert.ok(!('diff' in artifactWithLoc),
     'D9: the retained artifact must carry no diff key at all when the sha pair is absent, even though the row ' +
     'itself carries diff.loc — diff.loc alone is a ledger-row-only field, never promoted onto the artifact: ' +
@@ -1520,7 +1553,7 @@ test('AC-20260824-06-4: WHEN verdict.js --ledger runs with neither --base-sha no
   const rowNoLoc = JSON.parse(noLoc.stdout.trim().split('\n')[1])
   assert.ok(!('diff' in rowNoLoc),
     'D9: with neither the sha pair nor --diff-loc, the row must carry no diff key at all: ' + JSON.stringify(rowNoLoc))
-  const artifactNoLoc = JSON.parse(fs.readFileSync(path.join(dir, rowNoLoc.runId + '.json'), 'utf8'))
+  const artifactNoLoc = JSON.parse(fs.readFileSync(path.join(dir, rowNoLoc.runId + '.jsonl'), 'utf8'))
   assert.ok(!('diff' in artifactNoLoc),
     'D9: the retained artifact must likewise carry no diff key: ' + JSON.stringify(artifactNoLoc))
 })

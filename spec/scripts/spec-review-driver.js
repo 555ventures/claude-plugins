@@ -1397,9 +1397,11 @@ function runCloseTimeGate() {
   if (r.status !== 0) {
     const output = (r.stdout || '') + (r.stderr || '')
     die('gate red at close — ' + resolved.gate + ' exited ' + r.status + ' over the committed ' +
-      'close tree.\nThe files written at CLOSE (canonical doc, rules fold) are inside the host\'s ' +
-      'rule surface; fix them, commit the fix, then re-run `node ' + __filename + ' ' + specPath +
-      ' --mark closed`.\n--- last 40 lines of gate output ---\n' + tailLines(output, 40))
+      'close tree.\nCheck WHICH path the gate names first: the pipeline\'s own artifacts under ' +
+      '.claude/ (ledger, retained evidence, config) are in the rule surface but this driver ' +
+      'wrote them — a finding against one is a plugin defect to report, never a file to edit.\n' +
+      'Fix the session-written files, commit the fix, then re-run `node ' + __filename + ' ' +
+      specPath + ' --mark closed`.\n--- last 40 lines of gate output ---\n' + tailLines(output, 40))
   }
   // specs/20260903/02-whole-suite-review-leg.md D4: additive to the resolved-gate re-run above —
   // a host's gateCommand may carry typecheck/lint the testCommand lacks, so the scoped re-run
@@ -2015,7 +2017,7 @@ const STEPS = {
         `now; this is the close commit.\n` + gateRerunNote
     return `## Step: close (the driver has already run the authoritative verdict and flipped status: done)\n` +
       `verdict: ${marks.dispositions.word}   runId: ${marks.closeRunId}   ` +
-      `retained: .claude/spec-runs/${marks.closeRunId}.json\n` +
+      `retained: .claude/spec-runs/${marks.closeRunId}.jsonl\n` +
       waivedWarn +
       `1. Apply the spec's Canonical Delta to ${canonicalTarget}.\n` +
       `2. Fold the deviations sidecar if one exists (recurring -> Gotchas [host]/[plugin]; one-offs ` +
@@ -2024,7 +2026,7 @@ const STEPS = {
       gotchasCapLine() +
       `3. Hygiene listing — everything not marked EXPECTED below is a stray to explain or clean:\n` +
       `   EXPECTED   ${sidecarRel}/            (never committed — deleted at DONE)\n` +
-      `   EXPECTED   .claude/spec-runs/*.json  (retained review evidence)\n` +
+      `   EXPECTED   .claude/spec-runs/*.jsonl (retained review evidence)\n` +
       `   EXPECTED   .claude/spec-runs.jsonl   (the run ledger)\n` +
       acPinDriftLine() +
       closeCommitLine +

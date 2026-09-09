@@ -1013,7 +1013,9 @@ function cmdRecord() {
   const artifactDir = path.join(claudeDir, 'spec-runs')
   fs.mkdirSync(artifactDir, { recursive: true })
   const artifact = { ...row, patch: patchContent, reviewer }
-  fs.writeFileSync(path.join(artifactDir, runId + '.json'), JSON.stringify(artifact, null, 2) + '\n')
+  // One-line `.jsonl`, same shape as verdict.js's writeRetainedArtifact and for the same
+  // reason: a tracked host path carries no bytes a source formatter rewrites.
+  fs.writeFileSync(path.join(artifactDir, runId + '.jsonl'), JSON.stringify(artifact) + '\n')
   console.log(`recorded runId=${runId} via=${via}`)
   process.exit(0)
 }

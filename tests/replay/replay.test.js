@@ -1759,11 +1759,19 @@ test('AC-20260819-02-6 / AC-20260823-09-11 / AC-20260903-01-15 / AC-20260903-01-
     'D8: the tokens field must be recorded as a NUMBER, not the raw CLI string — a string here silently ' +
     'breaks --stats\' arithmetic (string concatenation instead of addition): ' + JSON.stringify(row.tokens))
 
-  const artifactPath = path.join(root, '.claude/spec-runs', row.runId + '.json')
+  const artifactPath = path.join(root, '.claude/spec-runs', row.runId + '.jsonl')
   assert.ok(fs.existsSync(artifactPath),
-    'D8: --record must write .claude/spec-runs/<rp_id>.json — without it there is no full-fidelity evidence ' +
+    'D8: --record must write .claude/spec-runs/<rp_id>.jsonl — without it there is no full-fidelity evidence ' +
     'for this replay run and /spec:escape-style provenance work has nothing to read: ' + artifactPath)
-  const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'))
+  // A replay artifact lands in the same tracked host directory as verdict.js's retained review
+  // artifact, so it carries the same formatter-inert shape — the `.jsonl` extension asserted
+  // above plus the single line asserted here.
+  const raw = fs.readFileSync(artifactPath, 'utf8')
+  assert.ok(raw.endsWith('\n') && !raw.slice(0, -1).includes('\n'),
+    'the replay artifact must be exactly ONE line plus a trailing newline — a pretty-printed body in a ' +
+    'tracked host path is what a host gateCommand\'s formatter reflows, reddening a gate on a file no ' +
+    'session wrote: ' + JSON.stringify(raw.slice(0, 200)))
+  const artifact = JSON.parse(raw)
   assert.strictEqual(artifact.patch, fs.readFileSync(patchFile, 'utf8'),
     'D8: the artifact must hold the patch VERBATIM — a normalized or truncated copy defeats the entire ' +
     'point of retaining it: ' + JSON.stringify(artifact.patch))
@@ -1793,7 +1801,7 @@ test('AC-20260819-02-6 / AC-20260823-09-11 (pre-existing matrix continuity: red:
   assert.deepStrictEqual(row.files, ['lib/y.js'],
     'D7: files must be derived from --patch on a leg-caught row too, even though no reviewer was dispatched ' +
     'and no --workflow was passed: ' + JSON.stringify(row.files))
-  const artifact = JSON.parse(fs.readFileSync(path.join(root, '.claude/spec-runs', row.runId + '.json'), 'utf8'))
+  const artifact = JSON.parse(fs.readFileSync(path.join(root, '.claude/spec-runs', row.runId + '.jsonl'), 'utf8'))
   assert.strictEqual(artifact.reviewer, null,
     'D8: leg-caught means the reviewer was never dispatched — the artifact must record reviewer: null, ' +
     'never an omitted key or a stale value, or --stats/escape-style tooling would misread this row as ' +
@@ -1881,7 +1889,7 @@ test('AC-20260819-03-5 / AC-20260823-09-11 (pre-existing matrix continuity: gree
     'D7: files must be DERIVED from the patch\'s own mutated-file headers, not hand-passed — a mismatched ' +
     'hand-passed file could contradict the patch it rides with: ' + JSON.stringify(row.files))
 
-  const artifact = JSON.parse(fs.readFileSync(path.join(root, '.claude/spec-runs', row.runId + '.json'), 'utf8'))
+  const artifact = JSON.parse(fs.readFileSync(path.join(root, '.claude/spec-runs', row.runId + '.jsonl'), 'utf8'))
   assert.deepStrictEqual(artifact.reviewer, workflowObj,
     'D3: an unresolved row must keep the reviewer return VERBATIM in the artifact — this is the retained ' +
     'evidence for later human adjudication that discard-on-dismiss used to destroy: ' + JSON.stringify(artifact.reviewer))
@@ -1905,7 +1913,7 @@ test('AC-20260819-03-6 / AC-20260823-09-11 (pre-existing matrix continuity: none
   assert.strictEqual(row.legs, 'none', 'D4: legs must record "none" verbatim: ' + JSON.stringify(row))
   assert.strictEqual(row.outcome, 'setup-failed', 'D4: outcome must record "setup-failed" verbatim: ' + JSON.stringify(row))
 
-  const artifact = JSON.parse(fs.readFileSync(path.join(root, '.claude/spec-runs', row.runId + '.json'), 'utf8'))
+  const artifact = JSON.parse(fs.readFileSync(path.join(root, '.claude/spec-runs', row.runId + '.jsonl'), 'utf8'))
   assert.strictEqual(artifact.patch, null,
     'D4: the artifact\'s patch must be null — a stale or fabricated patch here would misrepresent a run ' +
     'where the scratch copy was never even prepared: ' + JSON.stringify(artifact.patch))
@@ -1956,7 +1964,7 @@ test('AC-20260823-09-4: --record --outcome caught --legs baseline-red:reconcile 
     JSON.stringify(row))
   assert.strictEqual(row.outcome, 'caught', 'D2: outcome must record verbatim: ' + JSON.stringify(row))
 
-  const artifactPath = path.join(root, '.claude/spec-runs', row.runId + '.json')
+  const artifactPath = path.join(root, '.claude/spec-runs', row.runId + '.jsonl')
   assert.ok(fs.existsSync(artifactPath),
     'D2: a baseline-red record must write the same evidence artifact a green record does — this outcome is a ' +
     'truthful VARIANT of a measured run, not a degraded one: ' + artifactPath)
@@ -2021,7 +2029,7 @@ test('AC-20260823-09-6: --record --outcome unresolved --legs red:reconcile --pat
   const row = JSON.parse(fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8').trim())
   assert.strictEqual(row.legs, 'red:reconcile', 'D3: legs must record the red:<leg> value verbatim: ' + JSON.stringify(row))
   assert.strictEqual(row.outcome, 'unresolved', 'D3: outcome must record unresolved verbatim: ' + JSON.stringify(row))
-  const artifact = JSON.parse(fs.readFileSync(path.join(root, '.claude/spec-runs', row.runId + '.json'), 'utf8'))
+  const artifact = JSON.parse(fs.readFileSync(path.join(root, '.claude/spec-runs', row.runId + '.jsonl'), 'utf8'))
   assert.strictEqual(artifact.reviewer, null,
     'D3: a step-7 dismissal never dispatched a reviewer — the artifact must record reviewer: null, never a ' +
     'stale or fabricated value: ' + JSON.stringify(artifact.reviewer))
@@ -2706,7 +2714,7 @@ test('direct fix: --setup --overlay materializes .claude/agent-memory/ rows whil
     '.claude/agent-memory/tests/note.md': 'corrected note\n',
     '.claude/agent-memory/scripts/new-note.md': 'new note\n',
     '.claude/spec-runs.jsonl': '{"line":1}\n{"line":2}\n',
-    '.claude/spec-runs/rv_deadbeefcafe.json': '{"evidence":true}\n',
+    '.claude/spec-runs/rv_deadbeefcafe.jsonl': '{"evidence":true}\n',
   }, 'close commit')
 
   const dir = path.join(fs.realpathSync(tmpdir('replay-overlay-agent-memory-wt')), 'wt')
@@ -2721,7 +2729,7 @@ test('direct fix: --setup --overlay materializes .claude/agent-memory/ rows whil
     'a note the build added must reach the scratch tree')
   assert.strictEqual(fs.readFileSync(path.join(dir, '.claude/spec-runs.jsonl'), 'utf8'), '{"line":1}\n',
     'the ledger stays at the --commit version — the carve-out is agent-memory only')
-  assert.ok(!fs.existsSync(path.join(dir, '.claude/spec-runs/rv_deadbeefcafe.json')),
+  assert.ok(!fs.existsSync(path.join(dir, '.claude/spec-runs/rv_deadbeefcafe.jsonl')),
     'the evidence file stays withheld — the carve-out must never widen to .claude/spec-runs/')
   const teardown = runNode(SCRIPT, ['--teardown', '--dir', dir], { cwd: root })
   assert.strictEqual(teardown.status, 0, 'teardown must still remove the overlay worktree: ' + teardown.stderr)

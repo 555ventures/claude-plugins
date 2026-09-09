@@ -25,8 +25,15 @@
 //       when branchConclusion is red — specs/20260830/03-ci-leg-honest-absence.md D4, the identical mapping
 //       review-legs.js's ci leg uses, copied verbatim so the two consumers never drift apart)
 //   {"leg":"e2e","exit":E,"observed":{"passed":N|{"unavailable":R},"failed":M|{"unavailable":R},
-//       "skipped":K|{"unavailable":R}}}   where R = "no-format-declared"|"pattern-no-match"
-//   {"leg":"journeys","exit":0|1,"observed":{"walked":N,"failed":M}}      (append-only)
+//       "skipped":K|{"unavailable":R},"executed":N|{"unavailable":R}}}   where R =
+//       "no-format-declared"|"pattern-no-match" — executed is always present (specs/20260908/05-
+//       release-e2e-unobserved-count.md D3), and on a child exit of 0 this leg's `exit` is forced
+//       to 1 when isUnobserved(executed) (imported from spec/scripts/lib/count-observation.js,
+//       the same predicate review's at-risk/suite legs apply — never a second copy); a non-zero
+//       child exit is recorded as-is. no-format-declared never forces (D4).
+//   {"leg":"journeys","exit":0|1,"observed":{"walked":N,"failed":M}}      (append-only; exit is
+//       forced to 1 when walked is 0 — release.md requires every release to walk at least one
+//       journey — specs/20260908/05-release-e2e-unobserved-count.md D5)
 //   {"leg":"production","exit":0|1,"observed":{"result":"verified"|"skipped"|"failed"}}  (append-only)
 //
 // `stage` runs the deterministic pre-promote legs in dependency order (D2): wave 1 in parallel =
@@ -72,6 +79,7 @@ const path = require('path')
 const os = require('os')
 const { spawn, spawnSync } = require('child_process')
 const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
+const { computeTestsExecuted, computeSkips, isUnobserved } = require('./lib/count-observation')
 
 function usage() {
   console.error('usage: release-legs.js stage  --root <dir> --manifest <path> [--out-dir <dir>]')
@@ -111,19 +119,11 @@ function sh(cmd, opts = {}) {
   })
 }
 
-// ---- D5: skip/test-count tri-state routes, copied verbatim from review-legs.js so the two ------
-// ---- consumers of these two declared capabilities never read them differently. -----------------
-function computeTestsExecuted(output, pattern) {
-  if (!pattern || pattern === 'none') return { unavailable: 'no-format-declared' }
-  const m = new RegExp(pattern).exec(output)
-  return m ? (Number(m[1]) || 0) : { unavailable: 'pattern-no-match' }
-}
-
-function computeSkips(output, pattern) {
-  if (!pattern || pattern === 'none') return { unavailable: 'no-format-declared' }
-  const m = new RegExp(pattern).exec(output)
-  return m ? (Number(m[1]) || 0) : { unavailable: 'pattern-no-match' }
-}
+// D2 (specs/20260908/05-release-e2e-unobserved-count.md): computeTestsExecuted/computeSkips/
+// isUnobserved now live in ./lib/count-observation.js, the sole home this script and
+// review-legs.js both import — the local copy here previously used a first-match regex
+// (`new RegExp(pattern).exec`) that had already drifted from review's last-match `lastMatch`
+// (measured A1); the lib require fixes the drift as a byte-for-byte move, never a second copy.
 
 function readManifestRows(manifestPath) {
   if (!fs.existsSync(manifestPath)) return []
@@ -258,16 +258,22 @@ async function runMigrationsLeg(root, migrationsCheck, outDir) {
 
 // D5: BASE_URL={stagingUrl} is a shell env-var prefix on the whole e2eCommand, never an option
 // passed to spawn — a multi-statement e2eCommand script must see it too.
+// D3 (specs/20260908/05-release-e2e-unobserved-count.md): `executed` is derived on EVERY run,
+// red or green, through the lib's last-match parser, and recorded as a new LAST key on
+// `observed`. The existing branch on the child's exit code runs unchanged to produce
+// passed/failed; `exit` is then forced to 1 when the child exited 0 but isUnobserved(executed) —
+// an observed zero or a declared testCountPattern that never matched is the unsupported "the
+// suite ran" promise this leg exists to catch. A non-zero child exit is recorded as-is.
 async function runE2eLeg(root, release, capabilities, outDir) {
   const cmd = `BASE_URL=${q(release.stagingUrl)} ${release.e2eCommand}`
   const r = await sh(cmd, { cwd: root })
   fs.writeFileSync(path.join(outDir, 'e2e.txt'), r.out + r.err)
   const output = r.out + r.err
-  const skipped = computeSkips(output, capabilities.skipReportPattern)
+  const skipped = computeSkips(output, capabilities.skipReportPattern).skips
+  const executed = computeTestsExecuted(output, capabilities.testCountPattern)
   let passed, failed
   if (r.code === 0) {
     failed = 0
-    const executed = computeTestsExecuted(output, capabilities.testCountPattern)
     if (typeof executed === 'number' && typeof skipped === 'number') passed = executed - skipped
     else if (typeof executed !== 'number') passed = executed // testCountPattern's own unavailability reason
     else passed = skipped // executed known, skipped unavailable — carry skipped's own reason
@@ -277,7 +283,8 @@ async function runE2eLeg(root, release, capabilities, outDir) {
     passed = { unavailable: 'no-format-declared' }
     failed = { unavailable: 'no-format-declared' }
   }
-  return { leg: 'e2e', exit: r.code, observed: { passed, failed, skipped } }
+  const exit = r.code === 0 && isUnobserved(executed) ? 1 : r.code
+  return { leg: 'e2e', exit, observed: { passed, failed, skipped, executed } }
 }
 
 async function cmdStage(argv) {
@@ -394,7 +401,10 @@ function cmdAppend(argv) {
         'non-negative integers')
       process.exit(2)
     }
-    row = { leg: 'journeys', exit: f === 0 ? 0 : 1, observed: { walked: w, failed: f } }
+    // D5: exit is forced to 1 when walked is 0 (with failed 0) — release.md requires every
+    // release to walk at least one journey, so a zero walk contradicts doctrine the same way an
+    // observed zero contradicts a declared count. --walked 0 --failed 0 stays well-formed input.
+    row = { leg: 'journeys', exit: (w === 0 || f !== 0) ? 1 : 0, observed: { walked: w, failed: f } }
   } else {
     if (result !== 'verified' && result !== 'skipped' && result !== 'failed') {
       console.error(`release-legs.js append --leg production: --result must be one of ` +

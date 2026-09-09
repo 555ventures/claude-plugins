@@ -121,6 +121,7 @@ const path = require('path')
 const { spawn, spawnSync } = require('child_process')
 const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
+const { lastMatch, computeTestsExecuted, computeSkips, isUnobserved } = require('./lib/count-observation')
 
 function usage() {
   console.error('usage: review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path> [--skips <file>] [--fix-delta] [--out-dir <dir>]')
@@ -189,39 +190,10 @@ function appendRow(leg, exit, observed) {
 // D5: testCountPattern is read/handled exactly like skipReportPattern below — absent or "none"
 // means the host declares no format (sanctioned, never a finding); declared but unmatched means
 // drift (pages via verdict.js's gate-skips finding for skips specifically; at-risk's contradiction
-// rule for testsExecuted). Never assumed zero either way.
-// LAST match, never first: every runner prints its summary line after the per-test lines, and a
-// test NAME that quotes the summary phrase (a test pinning the pattern itself) precedes it in
-// the same output — a first match would read the quoted decoy as the count and, on a quoted
-// zero, force a false red suite row (specs/20260903/02-whole-suite-review-leg.md, close record).
-function lastMatch(output, pattern) {
-  let last = null
-  for (const m of output.matchAll(new RegExp(pattern, 'g'))) last = m
-  return last
-}
-
-function computeTestsExecuted(output, pattern) {
-  if (!pattern || pattern === 'none') return { unavailable: 'no-format-declared' }
-  const m = lastMatch(output, pattern)
-  return m ? (Number(m[1]) || 0) : { unavailable: 'pattern-no-match' }
-}
-
-// D4/D5 (specs/20260907/03-ignored-paths-and-unobserved-count.md): the at-risk and suite legs
-// share this one predicate (the sole-derivation rule) — an observed 0 and a declared format that
-// never matched are the identical unsupported promise ("these files were exercised"/"the suite
-// ran"). "no-format-declared" is a host that never promised an observation, so it never forces.
-function isUnobserved(testsExecuted) {
-  return testsExecuted === 0 ||
-    (testsExecuted && typeof testsExecuted === 'object' && testsExecuted.unavailable === 'pattern-no-match')
-}
-
-function computeSkips(output, pattern) {
-  if (!pattern || pattern === 'none') return { skips: { unavailable: 'no-format-declared' } }
-  const m = lastMatch(output, pattern)
-  if (!m) return { skips: { unavailable: 'pattern-no-match' } }
-  return { skips: Number(m[1]) || 0, todos: m[2] !== undefined ? Number(m[2]) || 0 : 0 }
-}
-
+// rule for testsExecuted). Never assumed zero either way. lastMatch/computeTestsExecuted/
+// computeSkips/isUnobserved now live in ./lib/count-observation.js (specs/20260908/05-release-
+// e2e-unobserved-count.md D1) — the sole home both this script and release-legs.js import, so the
+// predicate and its two parsers can never drift apart the way release-legs.js's local copy once did.
 function sh(cmd, opts = {}) {
   return new Promise((resolve) => {
     // Scrub the test-runner context vars: a gate that itself runs `node --test` must behave as

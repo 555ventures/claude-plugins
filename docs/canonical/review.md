@@ -247,8 +247,10 @@
   the pattern never matched, since a format that was promised and produced nothing is the same
   unsupported claim as a counted zero; `{"unavailable":"no-format-declared"}` never forces,
   because a host that promised no observation is contradicted by nothing. The at-risk leg carries
-  the identical rule. A host with no `testCommand` gets a red `{"unavailable":"no-test-command"}`
-  row, never a silent skip. The close-time re-run runs the same command after the resolved gate.
+  the identical rule. The predicate and both count parsers live in
+  `spec/scripts/lib/count-observation.js`; release's e2e leg imports the same functions
+  (specs/20260908/05-release-e2e-unobserved-count.md D1). A host with no `testCommand` gets a
+  red `{"unavailable":"no-test-command"}` row, never a silent skip. The close-time re-run runs the same command after the resolved gate.
   (specs/20260903/02-whole-suite-review-leg.md; the unobserved-count extension
   specs/20260907/03-ignored-paths-and-unobserved-count.md D4/D5)
 

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-08
-status: implementing
+status: done
 build_base: main
 tier: critical
 area: release-evidence

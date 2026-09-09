@@ -121,7 +121,7 @@ const path = require('path')
 const { spawn, spawnSync } = require('child_process')
 const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
-const { lastMatch, computeTestsExecuted, computeSkips, isUnobserved } = require('./lib/count-observation')
+const { computeTestsExecuted, computeSkips, isUnobserved } = require('./lib/count-observation')
 
 function usage() {
   console.error('usage: review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path> [--skips <file>] [--fix-delta] [--out-dir <dir>]')

@@ -303,12 +303,14 @@ test('AC-20260908-05-3 (retag of AC-20260823-01-9): stage CONTINUES TO append pa
 test('AC-20260908-05-9 (retag of AC-20260823-01-10): append --leg journeys CONTINUES TO derive exit from --failed (0 -> exit 0, nonzero -> exit 1) and exits with the row\'s own exit code', () => {
   const dir = fs.realpathSync(tmpdir('rl-ac10'))
   const manifestGreen = path.join(dir, 'green.jsonl')
-  const rGreen = runNode(SCRIPT, ['append', '--manifest', manifestGreen, '--leg', 'journeys', '--walked', '2', '--failed', '0'])
+  const rGreen = runNode(SCRIPT, ['append', '--manifest', manifestGreen, '--leg', 'journeys', '--walked', '1', '--failed', '0'])
   assert.strictEqual(rGreen.status, 0,
     'D7: a journeys append with --failed 0 must exit 0 — the appended row is green: ' + rGreen.stdout + ' / ' + rGreen.stderr)
-  assert.deepStrictEqual(readRows(manifestGreen), [{ leg: 'journeys', exit: 0, observed: { walked: 2, failed: 0 } }],
-    'D7: the appended row must carry the exact journeys grammar with exit 0 when failed is 0: ' +
-    JSON.stringify(readRows(manifestGreen)))
+  assert.deepStrictEqual(readRows(manifestGreen), [{ leg: 'journeys', exit: 0, observed: { walked: 1, failed: 0 } }],
+    'AC-20260908-05-9\'s own example: --walked 1 --failed 0 is the value immediately adjacent to ' +
+    'D5\'s new forcing boundary (exit forced to 1 only when walked is 0) — the appended row must ' +
+    'carry the exact journeys grammar with exit 0 at walked:1, proving the boundary is not ' +
+    'over-forced onto a nonzero-but-small walk: ' + JSON.stringify(readRows(manifestGreen)))
 
   const manifestRed = path.join(dir, 'red.jsonl')
   const rRed = runNode(SCRIPT, ['append', '--manifest', manifestRed, '--leg', 'journeys', '--walked', '2', '--failed', '1'])

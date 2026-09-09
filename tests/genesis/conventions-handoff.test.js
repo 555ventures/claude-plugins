@@ -4,6 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { SPEC, tmpdir, runNode, gitRepo } = require('../helpers')
+const { writeBrief } = require('./tournament.fixtures.js')
 
 // specs/20260827/04-genesis-conventions-handoff.md D1/D2/D3/D4: a machine-readable
 // ops-conventions ledger (`.claude/genesis/conventions.json`) that `--mark decided` validates;
@@ -26,10 +27,6 @@ const { SPEC, tmpdir, runNode, gitRepo } = require('../helpers')
 
 const SCRIPT = 'scripts/genesis-driver.js'
 const DIM = 'hosting'
-const COVERAGE_KEYS = [
-  'payer', 'tenancy', 'data-sensitivity', 'residency', 'ai-use', 'unattended',
-  'integrations', 'scale-outage', 'vendor-budget', 'offline-mobile',
-]
 
 function bare(dir) {
   return runNode(SCRIPT, ['--root', dir])
@@ -72,32 +69,10 @@ function newHost(prefix) {
   return dir
 }
 
-// Same shape as genesis-driver.test.js's own writeBrief (file-local duplication is deliberate —
-// this file cannot require() another test file's helpers).
-function writeBrief(dir, { coverage = {}, dims = { [DIM]: 'open' }, picks = [] } = {}) {
-  const cov = COVERAGE_KEYS.map((k) => `- ${k}: ${coverage[k] || 'covered — synthetic test value'}`).join('\n')
-  const dimLines = Object.entries(dims).map(([k, v]) => `- ${k}: ${v}`).join('\n')
-  writeFile(path.join(dir, '.claude/genesis/brief.md'), `# Discovery brief — test project
-
-## What I think you're building
-A synthetic project for conventions-handoff.test.js.
-
-## Coverage
-${cov}
-
-## Non-goals
-none
-
-## Open Dimensions
-${dimLines}
-
-## Research Angles
-none — synthetic host, no research needed.
-
-## Picks
-${picks.join('\n')}
-`)
-}
+// specs/20260908/03-test-fixture-dedupe.md D2: writeBrief is now shared from
+// tournament.fixtures.js — byte-identical to this file's old local copy (same default dims
+// `{ [DIM]: 'open' }`) save the project sentence, which the shared function's `label` param
+// now fills.
 
 function writeHostingMenu(dir) {
   writeJSON(path.join(dir, '.claude/genesis/interview-research', DIM + '.json'), {
@@ -279,7 +254,7 @@ function validProfile() {
 // DESIGN_SKIPPED_ARCHETYPES that owe nothing beyond DISCOVERY.
 function advanceToDecide(dir) {
   bare(dir)
-  writeBrief(dir, { picks: ['- archetype: data-ml'] })
+  writeBrief(dir, { label: 'conventions-handoff.test.js', picks: ['- archetype: data-ml'] })
   const disco = mark(dir, 'discovery-done')
   assert.strictEqual(disco.status, 0, 'test setup requires discovery-done to be accepted on a fully-covered brief naming archetype data-ml: ' + disco.stderr)
   const briefWritten = mark(dir, 'brief-written')
@@ -287,7 +262,7 @@ function advanceToDecide(dir) {
   writeHostingMenu(dir)
   const written = mark(dir, 'menu-written', 'interview-research/' + DIM + '.json')
   assert.strictEqual(written.status, 0, 'test setup requires menu-written to be accepted on a zero-package menu: ' + written.stderr)
-  writeBrief(dir, { picks: ['- archetype: data-ml', '- ' + DIM + ': AWS'] })
+  writeBrief(dir, { label: 'conventions-handoff.test.js', picks: ['- archetype: data-ml', '- ' + DIM + ': AWS'] })
   const done = mark(dir, 'menus-done')
   assert.strictEqual(done.status, 0, 'test setup requires menus-done to be accepted for archetype data-ml: ' + done.stderr)
   return done

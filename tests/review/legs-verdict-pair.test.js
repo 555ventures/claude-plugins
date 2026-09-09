@@ -4,6 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
+const { makeReviewLegsHost } = require('./review-legs.fixtures')
 
 // specs/20260820/03-review-observation-truth.md D6 (AC-20260820-03-10, AC-20260820-03-11):
 // the 11 hand-written "skips=" fixtures in verdict.test.js
@@ -40,30 +41,6 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // pre-image. AC-20260907-03-7 retags the existing no-testCountPattern-declared test below in
 // place (D6: that branch's contract is unchanged) — never weakened.
 
-const SPEC_BODY = `---
-status: implementing
-tier: standard
----
-# Test Spec
-
-## Decisions
-
-| ID | Decision | One-line rationale |
-|----|----------|--------------------|
-| D1 | foo() returns 42 (AC-20260820-98-1) | why |
-
-## File Plan
-
-| File | Action | Layer |
-|---|---|---|
-| src/foo.js | edit | scripts |
-| tests/foo.test.js | create | tests |
-
-## Acceptance Criteria
-
-- **AC-20260820-98-1**: foo() returns 42.
-`
-
 const TEST_BODY = `'use strict'
 const { test } = require('node:test')
 const assert = require('node:assert')
@@ -75,28 +52,18 @@ test('AC-20260820-98-1: foo() returns 42', () => { assert.strictEqual(foo(), 42)
 // a literal shell script (no {testDirs} placeholder) so this file controls the gate's stdout
 // precisely — the one axis under test — while every other leg stays green exactly as there.
 function makeHost({ skipReportPattern, gateCommand, testCountPattern }) {
-  const dir = tmpdir('legs-verdict-pair')
-  const g = gitRepo(dir)
-  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
-  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
-  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
   const capabilities = { forge: 'none', skipReportPattern }
   if (testCountPattern) capabilities.testCountPattern = testCountPattern
-  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({
-    gateCommand,
-    testCommand: 'node --test',
-    runtime: { inert: 'plugin repo — nothing boots' },
-    capabilities,
-  }))
-  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
-  g('add', '-A'); g('commit', '-q', '-m', 'base')
-  const base = g('rev-parse', 'HEAD').trim()
-  fs.mkdirSync(path.join(dir, 'specs/20260820'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'specs/20260820/98-test.md'), SPEC_BODY)
-  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 42\n')
-  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), TEST_BODY)
-  g('add', '-A'); g('commit', '-q', '-m', 'implement')
-  return { dir, base }
+  return makeReviewLegsHost('legs-verdict-pair', {
+    specDate: '20260820', ordinal: '98', acId: 'AC-20260820-98-1',
+    config: {
+      gateCommand,
+      testCommand: 'node --test',
+      runtime: { inert: 'plugin repo — nothing boots' },
+      capabilities,
+    },
+    testBody: TEST_BODY,
+  })
 }
 
 function runLegs(dir, base) {

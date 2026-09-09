@@ -4,6 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
+const { makeReviewLegsHost, reviewLegsSpecBody } = require('./review-legs.fixtures')
 
 // review-legs.js replaces /spec:review's hand-performed Phase 0 — it runs every deterministic
 // review leg (reconcile, gate w/ resolved {testDirs}, smoke, ci, at-risk, ac-matrix +
@@ -63,36 +64,11 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 
 const SCRIPT = 'scripts/review-legs.js'
 
-const SPEC_BODY = `---
-status: implementing
-tier: standard
----
-# Test Spec
-
-## Decisions
-
-| ID | Decision | One-line rationale |
-|----|----------|--------------------|
-| D1 | foo() returns 42 (AC-20260817-99-1) | why |
-
-## File Plan
-
-| File | Action | Layer |
-|---|---|---|
-| src/foo.js | edit | scripts |
-| tests/foo.test.js | create | tests |
-
-## Acceptance Criteria
-
-- **AC-20260817-99-1**: foo() returns 42.
-`
+// Byte-identical to reviewLegsSpecBody()'s defaults (title 'Test Spec', acId
+// 'AC-20260817-99-1'), so the literal is the shared builder's own output (D1).
+const SPEC_BODY = reviewLegsSpecBody()
 
 function makeHost({ testBody, testEnv }) {
-  const dir = tmpdir('review-legs')
-  const g = gitRepo(dir)
-  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
-  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
-  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
   const config = {
     gateCommand: 'node --test {testDirs}',
     testCommand: 'node --test',
@@ -102,16 +78,9 @@ function makeHost({ testBody, testEnv }) {
   // AC-20260820-03-1: only set when a test explicitly opts in — every other fixture in this file
   // omits `testEnv` and must see byte-identical config JSON to before this param existed (AC-2).
   if (testEnv) config.testEnv = testEnv
-  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify(config))
-  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
-  g('add', '-A'); g('commit', '-q', '-m', 'base')
-  const base = g('rev-parse', 'HEAD').trim()
-  fs.mkdirSync(path.join(dir, 'specs/20260817'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'specs/20260817/99-test.md'), SPEC_BODY)
-  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 42\n')
-  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), testBody)
-  g('add', '-A'); g('commit', '-q', '-m', 'implement')
-  return { dir, base }
+  return makeReviewLegsHost('review-legs', {
+    specDate: '20260817', ordinal: '99', acId: 'AC-20260817-99-1', config, testBody,
+  })
 }
 
 const GREEN_TEST = `'use strict'
@@ -252,30 +221,19 @@ test('--fix-delta skips reconcile/at-risk and still records the re-executed legs
 // mirrors `makeHost` but adds N stray committed files outside the File Plan, isolating the
 // reconcile row's own out-of-plan shape from the green-host fixture above.
 function makeHostWithOutOfPlan(strayFiles) {
-  const dir = tmpdir('review-legs-oop')
-  const g = gitRepo(dir)
-  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
-  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
-  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
-  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({
-    gateCommand: 'node --test {testDirs}',
-    testCommand: 'node --test',
-    runtime: { inert: 'plugin repo — nothing boots' },
-    capabilities: { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' },
-  }))
-  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
-  g('add', '-A'); g('commit', '-q', '-m', 'base')
-  const base = g('rev-parse', 'HEAD').trim()
-  fs.mkdirSync(path.join(dir, 'specs/20260817'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'specs/20260817/99-test.md'), SPEC_BODY)
-  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 42\n')
-  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), GREEN_TEST)
-  for (const f of strayFiles) {
-    fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true })
-    fs.writeFileSync(path.join(dir, f), '// out of plan\n')
-  }
-  g('add', '-A'); g('commit', '-q', '-m', 'implement')
-  return { dir, base }
+  const extraFiles = {}
+  for (const f of strayFiles) extraFiles[f] = '// out of plan\n'
+  return makeReviewLegsHost('review-legs-oop', {
+    specDate: '20260817', ordinal: '99', acId: 'AC-20260817-99-1',
+    config: {
+      gateCommand: 'node --test {testDirs}',
+      testCommand: 'node --test',
+      runtime: { inert: 'plugin repo — nothing boots' },
+      capabilities: { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' },
+    },
+    testBody: GREEN_TEST,
+    extraFiles,
+  })
 }
 
 test('AC-20260824-06-8: WHEN review-legs.js runs full scope against a host where one changed file src/stray.js is outside the File Plan THE SYSTEM appends {"leg":"reconcile","exit":3,"observed":{"outOfPlan":1,"files":["src/stray.js"]}}', () => {
@@ -334,26 +292,16 @@ test('a missing spec or config is a precondition failure: exit 2, no manifest ro
 // the ci leg actually shells to `gh`, and the fixture repo carries no remote at all — HEAD is
 // unpushed by construction, matching an unpushed-HEAD host shape.
 function makeHostForCiLeg() {
-  const dir = tmpdir('review-legs-ci-shaunseen')
-  const g = gitRepo(dir)
-  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
-  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
-  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
-  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({
-    gateCommand: 'node --test {testDirs}',
-    testCommand: 'node --test',
-    runtime: { inert: 'plugin repo — nothing boots' },
-    capabilities: { skipReportPattern: 'ℹ skipped (\\d+)' },
-  }))
-  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
-  g('add', '-A'); g('commit', '-q', '-m', 'base')
-  const base = g('rev-parse', 'HEAD').trim()
-  fs.mkdirSync(path.join(dir, 'specs/20260817'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'specs/20260817/99-test.md'), SPEC_BODY)
-  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 42\n')
-  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), GREEN_TEST)
-  g('add', '-A'); g('commit', '-q', '-m', 'implement')
-  return { dir, base }
+  return makeReviewLegsHost('review-legs-ci-shaunseen', {
+    specDate: '20260817', ordinal: '99', acId: 'AC-20260817-99-1',
+    config: {
+      gateCommand: 'node --test {testDirs}',
+      testCommand: 'node --test',
+      runtime: { inert: 'plugin repo — nothing boots' },
+      capabilities: { skipReportPattern: 'ℹ skipped (\\d+)' },
+    },
+    testBody: GREEN_TEST,
+  })
 }
 
 // A5's branching shim, local to this file (the ci-query.test.js pattern this AC's fallback
@@ -608,25 +556,15 @@ test('AC-20260903-02-3: WHEN review-legs.js runs with --fix-delta THE SYSTEM SHA
 })
 
 function makeHostNoTestCommand() {
-  const dir = tmpdir('review-legs-no-testcmd')
-  const g = gitRepo(dir)
-  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
-  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
-  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
-  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({
-    gateCommand: 'node --test {testDirs}',
-    runtime: { inert: 'plugin repo — nothing boots' },
-    capabilities: { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' },
-  }))
-  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
-  g('add', '-A'); g('commit', '-q', '-m', 'base')
-  const base = g('rev-parse', 'HEAD').trim()
-  fs.mkdirSync(path.join(dir, 'specs/20260817'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'specs/20260817/99-test.md'), SPEC_BODY)
-  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 42\n')
-  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), GREEN_TEST)
-  g('add', '-A'); g('commit', '-q', '-m', 'implement')
-  return { dir, base }
+  return makeReviewLegsHost('review-legs-no-testcmd', {
+    specDate: '20260817', ordinal: '99', acId: 'AC-20260817-99-1',
+    config: {
+      gateCommand: 'node --test {testDirs}',
+      runtime: { inert: 'plugin repo — nothing boots' },
+      capabilities: { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' },
+    },
+    testBody: GREEN_TEST,
+  })
 }
 
 test('AC-20260903-02-4: WHEN the host config declares gateCommand but no testCommand THE SYSTEM SHALL append {"leg":"suite","exit":1,"observed":{"unavailable":"no-test-command"},"scope":"full"}, print RED_BLOCKING: suite, and exit 1', () => {
@@ -642,26 +580,17 @@ test('AC-20260903-02-4: WHEN the host config declares gateCommand but no testCom
 })
 
 function makeSuiteCountHost(printLine) {
-  const dir = tmpdir('review-legs-suite-count')
-  const g = gitRepo(dir)
-  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
-  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
-  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
-  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({
-    gateCommand: 'node --test {testDirs}',
-    testCommand: `bash -c "echo '${printLine}'"`,
-    runtime: { inert: 'plugin repo — nothing boots' },
-    capabilities: { forge: 'none', skipReportPattern: 'none', testCountPattern: 'ℹ tests (\\d+)' },
-  }))
-  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
-  g('add', '-A'); g('commit', '-q', '-m', 'base')
-  const base = g('rev-parse', 'HEAD').trim()
-  fs.mkdirSync(path.join(dir, 'specs/20260817'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'specs/20260817/99-test.md'), SPEC_BODY)
-  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 42\n')
-  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), GREEN_TEST)
-  g('add', '-A'); g('commit', '-q', '-m', 'implement')
-  return { dir, base }
+  return makeReviewLegsHost('review-legs-suite-count', {
+    specDate: '20260817',
+    ordinal: '99',
+    testBody: GREEN_TEST,
+    config: {
+      gateCommand: 'node --test {testDirs}',
+      testCommand: `bash -c "echo '${printLine}'"`,
+      runtime: { inert: 'plugin repo — nothing boots' },
+      capabilities: { forge: 'none', skipReportPattern: 'none', testCountPattern: 'ℹ tests (\\d+)' },
+    },
+  })
 }
 
 test('AC-20260903-02-5: WHEN the host declares testCountPattern and its bare testCommand exits 0 printing "ℹ tests 0" THE SYSTEM SHALL append the suite row with exit:1 and observed.testsExecuted 0; WHEN the same shape prints "ℹ tests 3" THE SYSTEM SHALL keep exit:0 with testsExecuted 3', () => {

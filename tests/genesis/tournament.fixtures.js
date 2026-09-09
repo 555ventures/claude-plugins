@@ -44,15 +44,22 @@ function statusOf(dir) {
   return JSON.parse(fs.readFileSync(path.join(dir, '.claude/genesis/status.json'), 'utf8'))
 }
 
-// Same shape as tests/genesis/genesis-driver.test.js's own writeBrief — this file cannot require
-// that one (workflow-script-style file-local helpers, no shared module beyond tests/helpers.js).
-function writeBrief(dir, { coverage = {}, dims = { [DIM]: 'open' }, picks = [] } = {}) {
+// specs/20260908/03-test-fixture-dedupe.md D2: the shared brief writer used by every genesis
+// test file. `label` fills the "for <file>" project sentence; `extraSections` is a raw string
+// inserted between "## Research Angles" and "## Picks" — AC-20260908-03-3 requires it land
+// BEFORE ## Picks, and omitting it must CONTINUE to write today's template byte-for-byte
+// (AC-20260908-03-7).
+// scripts/genesis-driver.js's own `section()` parser locates a heading by scanning for the next
+// `## ` line (or end of string), so this reordering is invisible to every check that reads
+// ## Journeys/## Non-UI Coverage/## Picks — order among sections was never part of the grammar.
+function writeBrief(dir, { coverage = {}, dims = { [DIM]: 'open' }, picks = [], label = 'tournament.test.js', extraSections = '' } = {}) {
   const cov = COVERAGE_KEYS.map((k) => `- ${k}: ${coverage[k] || 'covered — synthetic test value'}`).join('\n')
   const dimLines = Object.entries(dims).map(([k, v]) => `- ${k}: ${v}`).join('\n')
+  const extra = extraSections ? extraSections + '\n\n' : ''
   writeFile(path.join(dir, '.claude/genesis/brief.md'), `# Discovery brief — test project
 
 ## What I think you're building
-A synthetic project for tournament.test.js.
+A synthetic project for ${label}.
 
 ## Coverage
 ${cov}
@@ -66,7 +73,7 @@ ${dimLines}
 ## Research Angles
 none — synthetic host, no research needed.
 
-## Picks
+${extra}## Picks
 ${picks.join('\n')}
 `)
 }

@@ -3,7 +3,8 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runNode } = require('../helpers')
+const { tmpdir } = require('../helpers')
+const { specMd, writeManifest, run, findings, baseHost } = require('./ac-matrix.fixtures.js')
 
 // specs/20260815/03-ac-matrix-fail-closed.md D2: ac-matrix.js's skipped-test reconciliation
 // resolves an AC's [env:] sanction from the spec under review first; on an acById MISS it
@@ -20,46 +21,9 @@ const { tmpdir, runNode } = require('../helpers')
 // specs/20260820/06-typed-evidence-manifest.md D2: ac-matrix.js's `--json`
 // observed.skipReconcile field is the typed object {"skipped":N,"sanctioned":S}.
 
-function specMd(acLines, filePlanRows) {
-  return '# Test Spec\n\n## Acceptance Criteria\n\n' + acLines.join('\n') + '\n\n' +
-    '## File Plan\n\n| Path | Action | Layer | Summary |\n|------|--------|-------|---------|\n' +
-    filePlanRows.join('\n') + '\n'
-}
-
-function writeManifest(dir, lines) {
-  const p = path.join(dir, 'manifest.jsonl')
-  fs.writeFileSync(p, lines.map(l => JSON.stringify(l)).join('\n') + (lines.length ? '\n' : ''))
-  return p
-}
-
-function run(specPath, root, manifestPath, extraArgs = []) {
-  return runNode('scripts/ac-matrix.js',
-    ['--spec', specPath, '--root', root, '--manifest', manifestPath, ...extraArgs])
-}
-
-function findings(res) {
-  let parsed
-  try { parsed = JSON.parse(res.stdout) } catch (e) {
-    assert.fail(`--json output did not parse as JSON (status ${res.status}, stderr: ${res.stderr}): ${e.message}`)
-  }
-  return parsed
-}
-
-// A minimal spec-under-review host: one well-formed, covered AC unrelated to the case under
-// test, so the run has valid AC/File Plan sections without affecting skip reconciliation.
-function baseHost(dir) {
-  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), '// covers AC-20260814-01-1\n')
-  const spec = path.join(dir, 'spec.md')
-  fs.writeFileSync(spec, specMd(
-    ['- **AC-20260814-01-1**: WHEN X THE SYSTEM SHALL Y → tests/foo.test.js'],
-    ['| tests/foo.test.js | CREATE | tests | covers AC |']))
-  return spec
-}
-
 test('AC-20260815-03-3: a skip mapped to an AC-ID whose owning spec date directory is absent fails closed as unsanctioned-skip naming the owning-spec lookup', () => {
   const dir = tmpdir('acm-owner-missing-dir')
-  const spec = baseHost(dir)
+  const { specPath: spec } = baseHost(dir)
   const manifest = writeManifest(dir, [])
   const skips = path.join(dir, 'skips.txt')
   fs.writeFileSync(skips, 'skipped test for AC-20260101-99-1 with no specs/20260101 directory on disk\n')
@@ -80,7 +44,7 @@ test('AC-20260815-03-3: a skip mapped to an AC-ID whose owning spec date directo
 
 test('AC-20260815-03-4: a skip mapped to an AC-ID whose owner filename pattern matches two files fails closed as unsanctioned-skip naming the ambiguity', () => {
   const dir = tmpdir('acm-owner-ambiguous')
-  const spec = baseHost(dir)
+  const { specPath: spec } = baseHost(dir)
   fs.mkdirSync(path.join(dir, 'specs', '20260201'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'specs', '20260201', '99-first.md'), specMd(
     ['- **AC-20260201-99-1** `[env: SOME_VAR]`: WHEN X THE SYSTEM SHALL Y → tests/owner.test.js'],
@@ -106,7 +70,7 @@ test('AC-20260815-03-4: a skip mapped to an AC-ID whose owner filename pattern m
 
 test('AC-20260815-03-5: a skip mapped to an AC whose (unambiguous, readable) owning spec bullet carries no [env:] fails closed as unsanctioned-skip naming the owning spec it consulted', () => {
   const dir = tmpdir('acm-owner-noenv')
-  const spec = baseHost(dir)
+  const { specPath: spec } = baseHost(dir)
   fs.mkdirSync(path.join(dir, 'specs', '20260301'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'specs', '20260301', '07-owner.md'), specMd(
     ['- **AC-20260301-07-1**: WHEN X THE SYSTEM SHALL Y → tests/owner.test.js'],
@@ -191,7 +155,7 @@ test('AC-20260815-03-6: a current-spec re-declaration without [env:] wins over a
 // order-independence is what a correct per-AC cache must give.
 
 function twoAcOwnerHost(dir) {
-  const spec = baseHost(dir)
+  const { specPath: spec } = baseHost(dir)
   fs.mkdirSync(path.join(dir, 'specs', '20260601'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'specs', '20260601', '04-shared-owner.md'), specMd(
     ['- **AC-20260601-04-1** `[env: SOME_VAR]`: WHEN X THE SYSTEM SHALL Y → tests/gated.test.js',

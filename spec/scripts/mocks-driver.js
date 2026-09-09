@@ -16,6 +16,23 @@
 // mocks-driver.js --root <dir> look-probe | look-via <playwright|browser>
 // mocks-driver.js --root <dir> stop open <step> [--port <n>]   shapes | kit | journey:<j> | theme | signoff
 // mocks-driver.js --root <dir> stop decide <P…> --verdict pick|approve|change [--pick <g>] [--note <n>] --by <who>
+// mocks-driver.js --root <dir> theme state
+// mocks-driver.js --root <dir> theme compose --direction <kebab>
+// mocks-driver.js --root <dir> theme open [--port <n>]
+// mocks-driver.js --root <dir> theme adopt [--direction <kebab>]
+//
+// specs/20260907/06-theme-pick-moves-to-sketch.md: `theme state|compose|open|adopt` is a SECOND
+// theme producer that lives entirely outside the mocks state machine above — `/spec:sketch`'s
+// own first run, not a mocks stage. `state` derives absent/picked from design/tokens.css alone
+// (refusing outright when it is the wireframe gray register byte-for-byte) and writes nothing,
+// not even status.json; `compose` validates one design/theme/<kebab>/ candidate (the signed-off
+// kit re-rendered at production fidelity) against design/kit/'s own primitive set; `open` opens
+// the existing `theme-picked` pick stop over every valid candidate on disk; `adopt` writes
+// design/tokens.css from the picked candidate, appends the `theme: <kebab>` ledger row and
+// consumes the stop, leaving status.marks/status.theme exactly as found (D5) — there is no
+// `--reopen theme` equivalent on this path. `/spec:mocks` THEME (direction-composed,
+// theme-picked, `--reopen theme`, status.directions/status.theme/status.marks.themePicked) is
+// untouched and keeps working byte-identically; retiring it is specs/20260907/07.
 //
 // WHY: specs/20260902/07-mocks-command-driver.md — `/spec:mocks` is the standalone design
 // stage; this driver derives SEED -> SHAPES -> KIT -> WIREFRAMES -> THEME -> SIGNOFF -> APPROVED on
@@ -215,6 +232,27 @@ function saveStatus() {
   status.lastUpdated = nowIso()
   fs.writeFileSync(statusPath, JSON.stringify(status, null, 2) + '\n')
 }
+
+// specs/20260907/06-theme-pick-moves-to-sketch.md D1: `theme state` is a read-only derivation
+// over design/tokens.css alone — it must write nothing at all, not even design/mocks/status.json
+// (loadStatus() below creates that file, plus ledger.md/seed.md, the instant it runs on a cold
+// root). So this one subcommand is dispatched HERE, before `let status = loadStatus()` ever
+// executes, and never touches mocksDir/ledgerPath/statusPath itself. `compose`/`open`/`adopt`
+// need no such guarantee (their own Contracts name only tokens.css/ledger.md/picks.json as
+// writes) and are dispatched normally, after status is loaded, alongside every other subcommand.
+function cmdThemeState() {
+  const tokensCssPath = path.join(root, 'design/tokens.css')
+  if (!fs.existsSync(tokensCssPath)) { writeOut(1, 'absent\n'); process.exit(0) }
+  let written
+  try { written = fs.readFileSync(tokensCssPath) } catch (e) { die('design/tokens.css could not be read: ' + e.message) }
+  const template = fs.readFileSync(path.join(templatesDir, 'mocks', 'wire-tokens.css'))
+  if (Buffer.compare(written, template) === 0) {
+    die('design/tokens.css is the wireframe gray register byte-for-byte — no theme was ever picked; compose candidate directions, then run: theme open')
+  }
+  writeOut(1, 'picked\n')
+  process.exit(0)
+}
+if (rest[0] === 'theme' && rest[1] === 'state') cmdThemeState()
 
 let status = loadStatus()
 
@@ -1066,6 +1104,126 @@ function handleThemePicked(directionArg) {
   consumeStopAndSave(stop.id)
 }
 
+// ---------------------------------------------------------------------------
+// specs/20260907/06-theme-pick-moves-to-sketch.md: the `theme` subcommand family
+// (state|compose|open|adopt) — a SECOND theme producer that lives entirely outside the mocks
+// state machine above. `theme state` is dispatched earlier, before `status` is even loaded
+// (cmdThemeState). `compose`/`open`/`adopt` below never read or write `status.directions`,
+// `status.theme` or `status.marks.themePicked` — a composed direction is discovered fresh from
+// design/theme/*/ on disk every time, D5's "design/tokens.css on disk is the sole signal".
+// Deliberately NOT done here: no state-machine step, no mark, no `--reopen theme` equivalent —
+// specs/20260907/07 is the pure deletion of the state-machine's own THEME step, untouched by
+// this family.
+// ---------------------------------------------------------------------------
+
+// D2: the one shared validator `compose`/`open`/`adopt` all run over a single candidate
+// directory, in the Contracts block's exact refusal order. Returns `{ ok: true, count }` on
+// success or `{ message }` (the exact refusal text, sans the `mocks-driver: ` prefix `die()`
+// adds) on the first violation found.
+function composeViolations(kebab) {
+  const kitDir = shellLib.resolveCanonDir(root, 'kit')
+  if (!kitDir) return { message: 'design/kit/ does not exist — run /spec:mocks to KIT and sign the kit off first' }
+  const dir = path.join(root, 'design/theme', kebab)
+  if (!fs.existsSync(path.join(dir, 'tokens.css'))) return { message: 'design/theme/' + kebab + '/tokens.css does not exist' }
+  const kitHtmlPath = path.join(dir, 'kit.html')
+  if (!fs.existsSync(kitHtmlPath)) return { message: 'design/theme/' + kebab + '/kit.html does not exist — re-render the kit in this direction\'s tokens' }
+  const html = fs.readFileSync(kitHtmlPath, 'utf8')
+  if (!shellLib.isKitCanonFile(html)) {
+    return { message: 'design/theme/' + kebab + '/kit.html is not a kit canon page — its root must carry data-kit-canon before any data-screen-label' }
+  }
+  if (/\bwire\//.test(html)) {
+    return { message: 'design/theme/' + kebab + '/kit.html links the wireframe register (wire/) — a candidate direction is the kit at production fidelity' }
+  }
+  const kitPrimitives = shellLib.kitPrimitivesInDir(kitDir)
+  const themePrimitives = shellLib.kitPrimitivesInDir(dir)
+  const missing = [...kitPrimitives.keys()].filter((k) => !themePrimitives.has(k))
+  if (missing.length) {
+    return { message: 'design/theme/' + kebab + '/kit.html omits primitive(s) ' + missing.join(', ') + ' — every primitive the kit names is re-rendered in every candidate direction' }
+  }
+  const r = runDesignAtlasCheck([dir])
+  if (r.status !== 0) return { message: 'design-atlas.js check design/theme/' + kebab + ' failed: ' + childOutput(r) }
+  const row = findAssumption((a) => a.kind === 'product' && a.tag === 'said-by-user' && a.status === 'confirmed' && a.claim === 'theme-directions: ' + kebab)
+  if (!row) {
+    return { message: 'design/mocks/ledger.md has no confirmed said-by-user product row with claim "theme-directions: ' + kebab + '" — record the direction interview pick first' }
+  }
+  return { ok: true, count: kitPrimitives.size }
+}
+
+// Every design/theme/<kebab>/ directory on disk, sorted — the discovery this whole family uses
+// instead of status.directions (which belongs to the retired mocks THEME step alone).
+function themeDirsOnDisk() {
+  try {
+    return fs.readdirSync(path.join(root, 'design/theme'), { withFileTypes: true })
+      .filter((e) => e.isDirectory()).map((e) => e.name).sort()
+  } catch { return [] }
+}
+
+function cmdThemeCompose(args) {
+  const kebab = flagArg(args, '--direction')
+  if (!kebab) die('theme compose: --direction <kebab> is required')
+  const v = composeViolations(kebab)
+  if (v.message) die(v.message)
+  writeOut(1, '✅ direction "' + kebab + '" composes — ' + v.count + ' primitive(s) re-rendered\n')
+  process.exit(0)
+}
+
+// D3: validates every candidate directory on disk (any D2 violation refuses verbatim), THEN
+// applies the composed-direction floor — so a bad candidate is always named over the floor
+// message once two-or-more directories exist at all.
+function cmdThemeOpen(args) {
+  const dirs = themeDirsOnDisk()
+  for (const kebab of dirs) {
+    const v = composeViolations(kebab)
+    if (v.message) die(v.message)
+  }
+  if (dirs.length < 2) {
+    die('theme open: only ' + dirs.length + ' direction(s) composed — at least 2 are required before opening a look stop')
+  }
+  const spec = {
+    kind: 'pick', key: 'theme-picked', title: 'pick the theme',
+    candidates: dirs.map((k) => ({ group: k, label: 'kit', path: 'theme/' + k + '/kit.html' })),
+  }
+  const port = flagArg(args, '--port')
+  const url = runDesignAtlasStopOpen(spec, port)
+  writeOut(1, '🎨 ready for review — ' + url + '\nReply  ✅ pick <name>  — or —  ✏️ change <what looks wrong>\n')
+  process.exit(0)
+}
+
+// D4/D5: today's handleThemePicked body minus the state writes — the ledger discipline, the
+// rejected-cell completeness check and the byte-for-byte token copy are reused verbatim; adopt
+// leaves status.marks and status.theme exactly as it found them (D5) and records no mark.
+function cmdThemeAdopt(args) {
+  const directionArg = flagArg(args, '--direction')
+  const stop = requireStopDecision('theme-picked', 'theme open')
+  const pick = stop.decision.pick
+  if (directionArg && directionArg !== pick) die('--direction ' + directionArg + ' disagrees with the page pick "' + pick + '" (stop ' + stop.id + ')')
+  const kebab = pick
+  const v = composeViolations(kebab)
+  if (v.message) die(v.message)
+  const others = themeDirsOnDisk().filter((k) => k !== kebab)
+  const row = findAssumption((a) => a.kind === 'product' && a.tag === 'said-by-user' && a.status === 'confirmed' && a.claim === 'theme: ' + kebab)
+  if (!row) {
+    let out
+    try {
+      out = appendAssumption(ledgerTextOrDie(), {
+        id: nextLedgerId(parseLedger(ledgerTextOrDie())), step: 'SKETCH', kind: 'product',
+        claim: 'theme: ' + kebab, tag: 'said-by-user', status: 'confirmed ' + todayIso(),
+        rejected: others.join(', '), note: stop.decision.note || 'picked on the page',
+      })
+    } catch (e) { die('could not append the theme ledger row: ' + e.message) }
+    fs.writeFileSync(ledgerPath, out)
+  } else {
+    const rejectedTokens = (row.rejected || '').split(/[,\s]+/).filter(Boolean)
+    const missing = others.filter((o) => !rejectedTokens.includes(o))
+    if (missing.length) die('the "theme: ' + kebab + '" ledger row\'s rejected cell does not name every other composed direction — missing: ' + missing.join(', '))
+  }
+
+  fs.copyFileSync(path.join(root, 'design/theme', kebab, 'tokens.css'), path.join(root, 'design/tokens.css'))
+  consumeStopAndSave(stop.id)
+  writeOut(1, '✅ theme "' + kebab + '" adopted — design/tokens.css written · fidelity reference: design/theme/' + kebab + '/kit.html\n')
+  process.exit(0)
+}
+
 // D5: `approved` is the one sign-off — SKIN and REVIEW (and the journey-skinned/review-opened/
 // journey-reviewed marks that gated them) are retired. `approved` requires the theme picked,
 // every declared journey approved, notes resolved, a decided `approved` stop, and the existing
@@ -1613,6 +1771,14 @@ if (rest[0] === 'skill-check') {
   cmdStopDecide(rest[2], rest.slice(3))
 } else if (rest[0] === 'stop') {
   die('stop: unknown subcommand "' + rest[1] + '" — one of: open, decide')
+} else if (rest[0] === 'theme' && rest[1] === 'compose') {
+  cmdThemeCompose(rest.slice(2))
+} else if (rest[0] === 'theme' && rest[1] === 'open') {
+  cmdThemeOpen(rest.slice(2))
+} else if (rest[0] === 'theme' && rest[1] === 'adopt') {
+  cmdThemeAdopt(rest.slice(2))
+} else if (rest[0] === 'theme') {
+  die('theme: unknown subcommand "' + rest[1] + '" — one of: state, compose, open, adopt')
 } else {
   const REOPEN = flagArg(rest, '--reopen')
   const MARK = flagArg(rest, '--mark')

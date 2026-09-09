@@ -289,3 +289,68 @@ test('AC-20260907-04-14: spec/doctrine/mocks.md names SEED, SHAPES, KIT, WIREFRA
   assert.match(authoringSection, /data-bespoke\b/,
     'D11: § Mocks: Authoring Rules must name data-bespoke — the deliberate non-instance escape and its required difference')
 })
+
+// specs/20260907/06-theme-pick-moves-to-sketch.md D7, AC-20260907-06-8: `/spec:sketch` gains the
+// theme pick as its own first run — a new step under § The run, before the Critique and Exit
+// steps, replacing the "no theme picked yet, sketching gray" branch's `/spec:mocks THEME`
+// hand-off with the driver's own `theme` subcommand family and a reworded gray-floor warning.
+// TDD red: today's sketch.md has no step naming "Theme" at all (the theme run lives entirely
+// inside step 3's "Scoped sweep" absent-tokens clause), and that clause still names both
+// "/spec:mocks THEME" and "no theme picked yet" — so every assertion below is false against the
+// pre-image, including the two literals this AC requires to be absent everywhere in the file.
+test('AC-20260907-06-8: spec/commands/sketch.md carries a step under § The run, positioned before both the Critique and Exit steps, whose heading names Theme and whose body names theme state/compose/open/adopt, the no-kit gray-floor warning literal, and "end the turn"; the file names neither "/spec:mocks THEME" nor "no theme picked yet" anywhere', () => {
+  const src = read('spec/commands/sketch.md')
+
+  assert.ok(!src.includes('/spec:mocks THEME'),
+    'D7 retires the mocks-THEME hand-off from sketch.md outright — "/spec:mocks THEME" must not appear anywhere in the file: ' + JSON.stringify(src.match(/.{0,40}\/spec:mocks THEME.{0,40}/)))
+  assert.ok(!src.includes('no theme picked yet'),
+    'D7 rewords the absent-theme branch — the retired "no theme picked yet" phrasing must not appear anywhere in the file: ' + JSON.stringify(src.match(/.{0,40}no theme picked yet.{0,40}/)))
+
+  const runIdx = src.indexOf('## The run')
+  assert.ok(runIdx !== -1, 'sketch.md must still carry a "## The run" heading to anchor the Theme step search')
+  const nextHeadingIdx = src.indexOf('\n## ', runIdx + 1)
+  const runSection = src.slice(runIdx, nextHeadingIdx === -1 ? src.length : nextHeadingIdx)
+
+  const themeIdx = runSection.search(/\*\*[^*]*Theme[^*]*\*\*/)
+  assert.ok(themeIdx !== -1,
+    'D7: § The run must carry a step whose heading contains "Theme" — the new first-run theme pick, replacing step 3\'s old absent-tokens clause')
+  const critiqueIdx = runSection.search(/\*\*[^*]*Critique[^*]*\*\*/)
+  assert.ok(critiqueIdx !== -1, 'sketch.md § The run must still carry the Critique step to compare the Theme step\'s position against')
+  const exitIdx = runSection.search(/\*\*[^*]*Exit[^*]*\*\*/)
+  assert.ok(exitIdx !== -1, 'sketch.md § The run must still carry the Exit step to compare the Theme step\'s position against')
+  assert.ok(themeIdx < critiqueIdx,
+    'D7: the Theme step must run before the Critique step: theme@' + themeIdx + ' critique@' + critiqueIdx)
+  assert.ok(themeIdx < exitIdx,
+    'D7: the Theme step must run before the Exit step: theme@' + themeIdx + ' exit@' + exitIdx)
+
+  for (const literal of [
+    'theme state', 'theme compose', 'theme open', 'theme adopt',
+    '⚠️ no design/kit/ and no theme — sketching gray, structure only (run /spec:mocks to KIT first)',
+    'end the turn',
+  ]) {
+    assert.ok(runSection.includes(literal),
+      'D7: § The run must name "' + literal + '" — the Theme step wires the driver\'s theme subcommand family, the no-kit gray floor, and the turn-ending look-stop hand-off')
+  }
+})
+
+// specs/20260907/06-theme-pick-moves-to-sketch.md D8, AC-20260907-06-9: § Design Canon's
+// "Fidelity lives in sketch" sentence gains that the theme itself is picked on sketch's first
+// run, that candidates are the signed-off gray kit re-rendered per direction at
+// design/theme/<kebab>/kit.html, and that the picked direction's kit page is the fidelity
+// reference every later sketch surface is built from. TDD red: today's sentence names none of
+// this — no "design/theme/", no "fidelity reference", and no mention that the theme is picked
+// on sketch's first run.
+test('AC-20260907-06-9: spec/doctrine/design.md § Design Canon names design/theme/<kebab>/kit.html, the phrase "fidelity reference", and that the theme is picked on /spec:sketch\'s first run', () => {
+  const src = read('spec/doctrine/design.md')
+  const canonIdx = src.indexOf('## Design Canon')
+  assert.ok(canonIdx !== -1, 'spec/doctrine/design.md must still carry a "## Design Canon" heading to anchor this search')
+  const nextHeadingIdx = src.indexOf('\n## ', canonIdx + 1)
+  const canonSection = src.slice(canonIdx, nextHeadingIdx === -1 ? src.length : nextHeadingIdx)
+
+  assert.match(canonSection, /design\/theme\/<kebab>\/kit\.html/,
+    'D8: § Design Canon must name design/theme/<kebab>/kit.html — the candidate direction path every later sketch surface is built from: ' + canonSection)
+  assert.ok(canonSection.includes('fidelity reference'),
+    'D8: § Design Canon must name the phrase "fidelity reference" — the picked direction\'s kit page is the fidelity reference: ' + canonSection)
+  assert.match(canonSection, /theme[^.]*picked[^.]*(?:\/spec:sketch|sketch)[^.]*first run|(?:\/spec:sketch|sketch)[^.]*first run[^.]*theme[^.]*picked/,
+    'D8: § Design Canon must say the theme itself is picked on /spec:sketch\'s first run: ' + canonSection)
+})

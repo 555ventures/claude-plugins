@@ -1,6 +1,7 @@
 ---
 date: 2026-09-07
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: design-sketch
 design: false
@@ -10,6 +11,7 @@ depended_on_by: [specs/20260907/07-mocks-retires-theme.md]
 brief: 22a
 spiked: 2026-09-07
 open_markers: 0
+diff_base: df8d1d942c5b6e8f10f82856409a4582898bc192
 ---
 
 # The theme is picked in sketch: the signed-off gray kit is re-rendered per candidate direction, and the picked page becomes the fidelity reference

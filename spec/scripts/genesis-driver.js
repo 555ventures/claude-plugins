@@ -124,7 +124,7 @@
 // DESIGN_SKIPPED_ARCHETYPES (backend-api/data-ml) it is a pass-through (D4); every other
 // archetype ratifies a design canon there — doctrine + category-only design-rules for every
 // archetype, plus (visual only) `design/mocks/status.json` APPROVED with an open provenance
-// ledger (D3, spec 06's lib) and `design/tokens.css` (written by THEME). The pick record lives
+// ledger (D3, spec 06's lib). The pick record lives
 // in the mocks status (`status.brief`) — RETIRED_MARKS (below) all refuse with exit 2 naming
 // `/spec:mocks` as the remedy. A legacy `status.json` past MENUS with no `marks.briefWritten`
 // resumes at BRIEF and accepts `--mark brief-written --legacy`, which skips the mocks
@@ -687,7 +687,7 @@ function handleMenusDone() {
 // (backend-api/data-ml) it is a pass-through: nothing beyond DISCOVERY is owed. Every other
 // archetype ratifies doctrine + category-only design-rules; a VISUAL archetype additionally
 // requires an APPROVED `design/mocks/status.json` with an open provenance ledger (D3, spec 06's
-// `lib/mocks-ledger.js`) and `design/tokens.css` (written by THEME). `--legacy` skips D3's mocks
+// `lib/mocks-ledger.js`). `--legacy` skips D3's mocks
 // precondition (never D4's ratification artifacts) for a status.json that resumed at BRIEF with
 // pre-existing explore/design artifacts (D6).
 // ---------------------------------------------------------------------------
@@ -781,7 +781,7 @@ function handleBriefWritten() {
   const p = doctrinePath()
   if (!fs.existsSync(p)) {
     die('docs/design/doctrine.md does not exist — draft the one-page doctrine with a ## Dissents ' +
-      'section naming every rejected direction, then re-mark brief-written')
+      'section recording the minority positions it rejects, then re-mark brief-written')
   }
   const text = fs.readFileSync(p, 'utf8')
   const lineCount = text.split('\n').length
@@ -790,25 +790,8 @@ function handleBriefWritten() {
       ' lines — trim it, then re-mark brief-written')
   }
   if (!dissentsNonEmpty(text)) {
-    die('docs/design/doctrine.md ## Dissents has no non-blank line — record every rejected ' +
-      'direction there, then re-mark brief-written')
-  }
-
-  // D4/D6: ## Dissents must name every composed-but-unpicked direction from the mocks status —
-  // the pick record lives there now, never in a per-candidate file. A `--legacy` ratification has
-  // no mocks status to read directions from, so D4's non-empty-Dissents check above is the whole
-  // requirement for it; there is no pick record left to name candidates from.
-  if (!legacy && isVisualArchetype(archetype)) {
-    const directions = (mocksStatus && mocksStatus.directions) || {}
-    const theme = mocksStatus && mocksStatus.theme
-    const body = dissentsBody(text) || ''
-    for (const key of Object.keys(directions)) {
-      if (key === theme) continue
-      if (!body.includes(key)) {
-        die('docs/design/doctrine.md ## Dissents does not name composed direction "' + key +
-          '" — add it, then re-mark brief-written')
-      }
-    }
+    die('docs/design/doctrine.md ## Dissents has no non-blank line — record the minority ' +
+      'positions this doctrine rejects, then re-mark brief-written')
   }
 
   const rulesCheck = designRulesCheck()
@@ -840,10 +823,6 @@ function handleBriefWritten() {
     if (rulesCheck.reason === 'bad-appliesto') {
       die('.claude/genesis/design-rules.json rule "' + rulesCheck.rule.id + '" has no "appliesTo" array — fix it, then re-mark brief-written')
     }
-  }
-
-  if (isVisualArchetype(archetype) && !fs.existsSync(tokensCssPath())) {
-    die('design/tokens.css does not exist — ratify THEME\'s tokens.css, then re-mark brief-written')
   }
 
   status.marks.briefWritten = true
@@ -1744,7 +1723,6 @@ const DOCTRINE_LINE_CAP = 120
 const DESIGN_RULE_CATEGORIES = ['color', 'typography', 'i18n', 'structure', 'a11y', 'density', 'layout']
 
 function doctrinePath() { return path.join(root, 'docs/design/doctrine.md') }
-function tokensCssPath() { return path.join(root, 'design/tokens.css') }
 function componentsJsonPath() { return path.join(root, 'design/components.json') }
 function designRulesPath() { return path.join(genesisDir, 'design-rules.json') }
 
@@ -2020,8 +1998,7 @@ const STEPS = {
     if (legacyResume) {
       return [
         '## Step: brief — ratify the approved set into the design canon',
-        'Read only: docs/design/doctrine.md, .claude/genesis/design-rules.json' +
-          (isVisualArchetype(archetype) ? ', design/tokens.css' : ''),
+        'Read only: docs/design/doctrine.md, .claude/genesis/design-rules.json',
         doctrineLine,
         'legacy: explore/design artifacts accepted in place of a mocks set (explore: ' +
           (status.explore || 'n/a') + ', design: ' + (status.design || 'pending') + ')',
@@ -2048,28 +2025,21 @@ const STEPS = {
         'Read only: design/mocks/seed.md, design/mocks/ledger.md, design/mocks/status.json',
         doctrineLine,
         mocksStatus ? ('mocks: ' + mocksStatus.state + ' — not yet approved') : 'no design/mocks/status.json yet',
-        'next: run /spec:mocks in this repo (seed → shapes → wireframes → theme → skin → review → ' +
-          'approved), then --mark brief-written',
+        'next: run /spec:mocks in this repo until it reports APPROVED, then --mark brief-written',
       ].join('\n')
     }
 
-    const directions = visual ? Object.keys((mocksStatus && mocksStatus.directions) || {}) : []
-    const theme = visual ? (mocksStatus && mocksStatus.theme) : null
     const journeys = (visual && mocksStatus && mocksStatus.journeys) ? Object.keys(mocksStatus.journeys).length : 0
     const readFiles = visual
-      ? ['design/mocks/seed.md', 'design/mocks/ledger.md', 'design/mocks/status.json', 'design/tokens.css', genesisRel('brief.md')]
+      ? ['design/mocks/seed.md', 'design/mocks/ledger.md', 'design/mocks/status.json', genesisRel('brief.md')]
       : [genesisRel('brief.md')]
-    const dissentsClause = visual
-      ? (directions.filter((d) => d !== theme).join(', ') || 'none')
-      : 'none — no directions composed'
     const lines = [
       '## Step: brief — ratify the approved set into the design canon',
       'Read only: ' + readFiles.join(', '),
       doctrineLine,
     ]
     if (visual) {
-      lines.push('mocks: APPROVED · journeys: ' + journeys + ' · directions composed: ' +
-        (directions.join(', ') || 'none') + ' (picked: ' + (theme || 'none') + ') · open product rows: 0')
+      lines.push('mocks: APPROVED · journeys: ' + journeys + ' · open product rows: 0')
       // D2: the derivation sources for `## What I think you're building` and the two new
       // sections — every confirmed product ledger row by id, and the seed's own journey count —
       // read from the seed and the ledger, never from the discovery interview alone.
@@ -2084,8 +2054,7 @@ const STEPS = {
         ' · seed journeys: ' + seedCount + ' · notes unresolved: ' + notesUnresolved +
         ' — write ## What I think you\'re building, ## Journeys, and ## Non-UI Coverage from these, never from the interview alone')
     }
-    lines.push('Write docs/design/doctrine.md (one page, ## Dissents naming: ' + dissentsClause +
-      ') and .claude/genesis/design-rules.json, then:')
+    lines.push('Write docs/design/doctrine.md (one page, ## Dissents) and .claude/genesis/design-rules.json, then:')
     lines.push('  node ' + __filename + ' --root ' + root + ' --mark brief-written')
     return lines.join('\n')
   },

@@ -1,0 +1,141 @@
+{
+  "runId": "rv_0ac68b1d344d",
+  "ts": "2026-09-08T23:45:14.019Z",
+  "spec": "specs/20260907/05-genesis-drops-the-theme-gates.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 368,
+    "base": "a607cf6a543ad20c94f953b4d32cf8588c2588e8",
+    "head": "056ecdceb9576626701ba40dbcc917fcb2f4886f",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 196
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1315
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 9,
+        "carried": 8,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "The driver's file-preamble history paragraph (lines 107-112) still asserts that BRIEF runs a tokens.css check, so D1/D6 left a live two-homes residue; the spec's new 'Review ruling' paragraph misrecords the prior passes.",
+        "file": "spec/scripts/genesis-driver.js",
+        "line": 111,
+        "evidence": "Read lines 100-118: the paragraph opens '// specs/20260901/04-shell-composed-mocks.md D7: --mark tokens-landed (visual archetypes) additionally requires design/shell/app.html...' and is immediately followed by '// NOTE: this paragraph describes a mark (tokens-landed) retired by specs/20260902/08-genesis-shrink-brief-state.md D1 — kept here only as history for the shell-canon fact it recorded'. Its subject is the retired mark, not BRIEF. grep -n \"tokens.css\" spec/scripts/genesis-driver.js -> only 111 and 112 (both inside that labelled history block); every live occurrence D6 named (lines 127 and 690 '(written by THEME)') is gone in the diff. Cross-checked the record against the review sidecar: reviewer-return-1.json lists the identical claim under killed (line 111, same NOTE-line grounds); reviewer-return-2.json raised it as soft at line 112; disposer-return-2.json final=reject with reason 'Demonstrated miscitation'. The spec paragraph is therefore accurate, and leaving the paragraph is defensible: D6's preamble scope is the verbatim '(written by THEME)' clause and A1 counts the block as narrative, not a gate. The pre-existing 'prior behavior in a header comment' smell is outside this range's File Plan and predates the base."
+      },
+      {
+        "claim": "The AC-20260907-05-8 assert message 'names SKIN and REVIEW, both retired states (D5)' misstates D5's rationale.",
+        "file": "tests/consistency/genesis-doctrine.test.js",
+        "line": 1266,
+        "evidence": "Spec D5 rationale: 'it is already wrong — it names SKIN and REVIEW, retired 2026-09-06'. The message asserts only that both are retired states and attributes that to D5 — no claim that this spec retired them, no relative date. grep -n \"retired the day before|retired by this spec\" tests/consistency/genesis-doctrine.test.js -> no hits. Accurate."
+      },
+      {
+        "claim": "Behavior changed without a plugin.json version bump / bump collides with a sibling.",
+        "file": "spec/.claude-plugin/plugin.json",
+        "line": 3,
+        "evidence": "Executed node scripts/plugin-bump.js --check (Node v26.8.1) -> 'spec 7.104.0 -> 7.105.0', 'git 1.3.0 (no change under git/)', 'style 1.6.0 (no change under style/)', exit 0. Changelog entry carries the [no-ac: review's version-bump check is the oracle] tag D7 names."
+      },
+      {
+        "claim": "Carried ACs are cited but not actually asserted (AC<->test semantic backstop) or a SHALL CONTINUE TO pin was weakened/deleted.",
+        "file": "tests/genesis/brief-state.test.js",
+        "line": 457,
+        "evidence": "Read each new test against its AC: -1 asserts exit 0 + marks.briefWritten + design:'ratified' + '(BRIEF -> MENUS)' with no writeTokens; -2 uses directions {quiet,warm}/theme quiet, Dissents 'Nothing else was considered.', no tokens.css, asserts exit 0; -3 asserts exit 2 + /minority positions/ + doesNotMatch /rejected direction/ and /composed direction/ for both missing-doctrine and empty-Dissents; -4 asserts the exact progress line under ^...$/m, Read-only line free of design/tokens.css in both branches, the D8 write-line literal in both branches, and no '## Dissents naming:'; -5 asserts the exact next: literal and doesNotMatch /skin/ and /review/; -6 asserts all four CONTINUE TO refusals (121-line count, ## Dissents, 'tailwind', not-APPROVED); -7 asserts --legacy exit 0 + brief.legacy true with no tokens.css; -8/-9 slice the Brief State and On-disk Handoff sections and assert the named literals. The AC-20260902-08-5 supersession removes the two dying arms outright (hunks 416-443) with no inverted 'status, 0' added; AC-20260902-11-10 drops only the word 'tokens' from a message. Executed node --test 'tests/genesis/*.test.js' 'tests/consistency/*.test.js' -> tests 196, pass 196, fail 0, skipped 0."
+      },
+      {
+        "claim": "D3's refusal literals in the driver diverge from the Decision text.",
+        "file": "spec/scripts/genesis-driver.js",
+        "line": 783,
+        "evidence": "Diff hunk is byte-identical to D3 / Contracts after string concatenation."
+      },
+      {
+        "claim": "D2's block deletion left dissentsBody() as a dead helper.",
+        "file": "spec/scripts/genesis-driver.js",
+        "line": 1220,
+        "evidence": "sed -n 1215,1235p: dissentsBody defined at 1220 and called at 1229 inside dissentsNonEmpty(), which the surviving empty-Dissents refusal uses. tokensCssPath() is gone (grep -> no hits), matching D1."
+      },
+      {
+        "claim": "Retired literals survive outside the File Plan (collision-closure retired-name gotcha).",
+        "file": "spec/doctrine/genesis.md",
+        "line": 651,
+        "evidence": "grep across spec/, tests/, docs/canonical/, README.md for 'directions composed|Dissents naming|seed -> shapes|composed-but-unpicked|tokensCssPath|ratify THEME': hits are (a) spec/scripts/mocks-driver.js:1520 and spec/doctrine/mocks.md:68 — the still-live mocks-side THEME the spec's Sequencing paragraph and Collision closure explicitly leave standing; (b) test assert messages quoting the retired strings as negative expectations; (c) docs/canonical/genesis.md:84 — the Canonical Delta, applied by a stage after this verdict; (d) README.md:40,107 — waived in the spec's Collision closure as a separately queued correction. genesis.md:651's tokens.css sits in the On-disk Handoff file roster D6 says to keep. grep -in skin spec/doctrine/genesis.md -> no hits."
+      },
+      {
+        "claim": "The range contains foreign or implausible work.",
+        "file": null,
+        "line": null,
+        "evidence": "git log a607cf6..HEAD -> two commits (8773675 test(genesis), 056ecdc feat(genesis)); git status -> four dirty files (.claude/spec-runs.jsonl build row append, the spec, the two test files). git diff --stat -> 6 files, all in the File Plan plus the spec and runs ledger. Every hunk was read."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 62000
+  }
+}

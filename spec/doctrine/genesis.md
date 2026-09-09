@@ -42,8 +42,8 @@ sign-off would only repeat.
 `## Picks` (§ Genesis: Archetype Registry) — the seed's primary-surface answer already settles
 it, so it is recorded here rather than re-asked at `MENUS`. The DISCOVERY step's closing text
 hands off accordingly: an archetype whose registry row owes a mocks set is told `next: run
-/spec:mocks in this repo (seed → shapes → wireframes → theme → skin → review → approved), then
---mark brief-written` — or, when `design/mocks/status.json` is already `APPROVED`, `an approved
+/spec:mocks in this repo until it reports APPROVED, then --mark brief-written` — or, when
+`design/mocks/status.json` is already `APPROVED`, `an approved
 set exists — --mark brief-written`; an archetype that owes no set is told `--mark
 brief-written` directly. There is no throwaway sketch step — the first rendered artifact this
 pipeline produces is a real mock (or, for a non-visual archetype, none at all), never a
@@ -134,10 +134,8 @@ and tells the session to `run /spec:mocks`. `backend-api`, `data-ml`, `conversat
   TUI doctrine, `## Dissents` non-empty) plus `.claude/genesis/design-rules.json` passing the
   retained `designRulesCheck` (rules array, category enum, grounding enum — an empty array is
   allowed).
-- `web-app` / `mobile-app` / `realtime-trading` / `desktop-app` — both of the above, plus a
-  `## Dissents` naming every composed-but-unpicked direction from
-  `design/mocks/status.json.directions`, and `design/tokens.css` present (THEME already wrote
-  it — BRIEF checks presence only, never re-authors it).
+- `web-app` / `mobile-app` / `realtime-trading` / `desktop-app` — both of the above; no
+  additional precondition.
 
 **Doctrine (never values).** `docs/design/doctrine.md` carries taste-only rulings — postures,
 habits, judgments that genuinely resist encoding — plus a required `## Dissents` section. Any
@@ -146,11 +144,8 @@ token, not doctrine — a value living only in prose is the defect this state gu
 Tag every ruling's grounding (shared § Design Authoring Contracts, its "Grounded vs taste"
 rule): `grounded` (binds even against an explicit mock) or `taste` (yields to one); default to
 `taste` unless the ruling names an external anchor. The driver checks: the file exists, is
-≤120 lines, carries `## Dissents` followed by ≥1 non-blank line, and — for archetypes that owe
-a mocks set — that every key of `design/mocks/status.json.directions` other than `status.theme`
-appears as a substring in the Dissents body (a legacy run with no mocks status falls back to
-whatever rejected-direction record its existing design artifacts still carry, when one exists,
-else no name is required).
+≤120 lines, and carries `## Dissents` followed by ≥1 non-blank line — required, non-empty, no
+further reading of its contents.
 
 **Design rules.** `.claude/genesis/design-rules.json` (template via `spec-paths templates`):
 each rule carries a `targetCategory` **enum only** (§ Genesis: Enforcement Handoff),
@@ -654,8 +649,7 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
 - **`design/mocks/`** (durable, authored by `/spec:mocks`, spec 07's `mocks-driver.js`) — the
   approved-set workspace BRIEF reads directly: `seed.md`, `canon.md`, `status.json`,
   `ledger.md`, `tokens.css`, and the approved journeys' screens. BRIEF never writes here — it
-  only reads `status.json`/`ledger.md` for the precondition and checks `tokens.css` for
-  presence (§ Genesis: Brief State).
+  only reads `status.json`/`ledger.md` for the precondition.
 - **`design/components.json`** (durable) — the component manifest, seeded by BRIEF's
   ratification with the base primitives, extended by every `/spec:design` reconcile (shared §
   Design Authoring Contracts, component manifest).

@@ -80,14 +80,18 @@
   HANDOFF → GROUNDED (`status.json` schemaVersion 3, `brief` record, no `explore`).
   `discovery-done` requires `- archetype: <registry key>` in `## Picks` and hands off to
   `/spec:mocks` for visual archetypes. BRIEF requires `design/mocks/status.json` APPROVED with
-  an open ledger gate and `--mark brief-written` ratifies the one-page doctrine (Dissents
-  naming every composed-but-unpicked direction), the category-only `design-rules.json`, and
-  THEME's `design/tokens.css` (`design: "ratified"`; `backend-api`/`data-ml` record
-  `skipped`). The tournament's tile probe task and the discovery sketch are retired; the
+  an open ledger gate, and `--mark brief-written` ratifies the one-page doctrine (`## Dissents`
+  present and non-empty, recording the minority positions the doctrine rejects) plus
+  category-only design-rules (`design: "ratified"`; `backend-api`/`data-ml` record
+  `design: "skipped"`). BRIEF has no theme precondition: the theme is picked in `/spec:sketch`,
+  which runs after genesis, so `design/tokens.css` does not exist while genesis runs and is
+  never checked here. The tournament's tile probe task and the discovery sketch are retired; the
   `design/components.json` check moves to `skeleton-landed`. A legacy status past MENUS
   resumes at BRIEF via `--mark brief-written --legacy` (no re-run forced); the init hook
   accepts `design: ratified` and still blocks on a partial legacy canon.
-  (specs/20260902/08-genesis-shrink-brief-state.md, done 2026-09-03)
+  (specs/20260902/08-genesis-shrink-brief-state.md, done 2026-09-03;
+  BRIEF's theme preconditions dropped by
+  specs/20260907/05-genesis-drops-the-theme-gates.md, done 2026-09-08)
 
 - Since specs/20260827/04 `decided` also validates `.claude/genesis/conventions.json` (the nine
   ops floor rows DECIDED or DEFERRED-with-reason; enforceable rows name a probe under

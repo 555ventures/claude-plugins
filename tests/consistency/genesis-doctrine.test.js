@@ -1229,3 +1229,64 @@ test('AC-20260902-11-8: spec/commands/status.md names the 🧭 misunderstandings
     'must not orphan any "§ Genesis: ..." citation elsewhere in spec/ — a nonzero MISS here means ' +
     'some command or doctrine file points at a heading this spec\'s edits broke: ' + check.stdout)
 })
+
+// specs/20260907/05-genesis-drops-the-theme-gates.md D6: § Genesis: Brief State and the
+// § Genesis: Discovery Interview `next:` prose twin drop the same `design/tokens.css` /
+// composed-but-unpicked-direction / retired-SKIN-REVIEW claims removed from the driver.
+// AC-20260907-05-8, AC-20260907-05-9.
+
+// ---------------------------------------------------------------------------
+// AC-20260907-05-8
+// ---------------------------------------------------------------------------
+
+test('AC-20260907-05-8: spec/doctrine/genesis.md\'s § Genesis: Brief State section names no brief-written precondition on design/tokens.css or composed-but-unpicked directions, and the file carries the literal "skin" nowhere', () => {
+  const src = read('spec/doctrine/genesis.md')
+
+  const headingMatch = src.match(/^## Genesis: Brief State$/m)
+  assert.ok(headingMatch,
+    'the "## Genesis: Brief State" heading (migrated by specs/20260825/04, D9-renamed by ' +
+    'specs/20260902/08) must still exist — without it there is no section boundary to check ' +
+    'D6\'s removed preconditions from')
+  const afterHeading = src.slice(headingMatch.index + headingMatch[0].length)
+  const nextHeading = afterHeading.match(/^## /m)
+  const briefStateSection = nextHeading ? afterHeading.slice(0, nextHeading.index) : afterHeading
+
+  assert.ok(!briefStateSection.includes('design/tokens.css'),
+    'D6: § Genesis: Brief State must name no `brief-written` precondition on `design/tokens.css` ' +
+    '— the theme pick moved to /spec:sketch, which runs after genesis, so this file no longer ' +
+    'exists when BRIEF runs and a surviving mention here documents a precondition the driver no ' +
+    'longer enforces (D1)')
+  assert.ok(!briefStateSection.includes('composed-but-unpicked'),
+    'D6: § Genesis: Brief State must not require "## Dissents" to name every composed-but-' +
+    'unpicked direction — that check reads design/mocks/status.json.directions, an artifact ' +
+    'BRIEF can no longer see, and the driver deletes it outright (D2); a surviving requirement ' +
+    'here documents a check the driver no longer runs')
+
+  assert.ok(!src.includes('skin'),
+    'D6: spec/doctrine/genesis.md must carry the literal "skin" nowhere in the file — the one ' +
+    'surviving prose twin of the driver\'s retired mocks-chain enumeration ("seed → shapes → ' +
+    'wireframes → theme → skin → review → approved") names SKIN and REVIEW, both retired ' +
+    'states (D5), and a surviving mention here re-documents a chain the driver itself ' +
+    'no longer prints')
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260907-05-9 (regression pin — SHALL CONTINUE TO, sanctioned green pre-change)
+// ---------------------------------------------------------------------------
+
+test('AC-20260907-05-9: spec/doctrine/genesis.md\'s § Genesis: On-disk Handoff section CONTINUES TO list the design/mocks/ workspace', () => {
+  const src = read('spec/doctrine/genesis.md')
+
+  const handoffHeadingMatch = src.match(/^## Genesis: On-disk Handoff.*$/m)
+  assert.ok(handoffHeadingMatch,
+    'the "## Genesis: On-disk Handoff" heading must still exist — without it there is no section ' +
+    'boundary to check the design/mocks/ roster bullet from')
+  const afterHandoffHeading = src.slice(handoffHeadingMatch.index + handoffHeadingMatch[0].length)
+  const nextHandoffHeading = afterHandoffHeading.match(/^## /m)
+  const handoffSection = nextHandoffHeading ? afterHandoffHeading.slice(0, nextHandoffHeading.index) : afterHandoffHeading
+  assert.match(handoffSection, /design\/mocks\//,
+    'D6 (SHALL CONTINUE TO): § Genesis: On-disk Handoff must keep listing the design/mocks/ ' +
+    'workspace BRIEF reads — D6 only drops the bullet\'s trailing "and checks tokens.css for ' +
+    'presence" clause, never the file roster itself; its absence would mean the roster lost the ' +
+    'workspace pointer, not just the retired clause')
+})

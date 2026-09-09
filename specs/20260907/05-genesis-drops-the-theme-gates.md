@@ -1,6 +1,7 @@
 ---
 date: 2026-09-07
-status: hardened
+build_base: main
+status: done
 tier: standard
 area: genesis
 design: false
@@ -10,6 +11,7 @@ depended_on_by: []
 brief: 22a
 spiked: 2026-09-07
 open_markers: 0
+diff_base: a607cf6a543ad20c94f953b4d32cf8588c2588e8
 ---
 
 # Genesis stops requiring a theme: BRIEF ratifies the design canon without `tokens.css` or direction dissents
@@ -40,6 +42,8 @@ refuse exactly as they do today.
 | D5 | The not-yet-approved branch's `next:` line stops enumerating the mocks chain: `next: run /spec:mocks in this repo (seed → shapes → wireframes → theme → skin → review → approved), then --mark brief-written` becomes `next: run /spec:mocks in this repo until it reports APPROVED, then --mark brief-written` (AC-20260907-05-5) | That parenthetical is a second home for a sequence whose one home is `spec/doctrine/mocks.md § Mocks: State Machine`, and it is already wrong — it names SKIN and REVIEW, retired 2026-09-06. Deleting the enumeration fixes it once instead of re-editing it on every chain change. |
 | D6 | Doctrine, one home each: `spec/doctrine/genesis.md` § Genesis: Brief State's visual-archetype ratification bullet drops both `a ## Dissents naming every composed-but-unpicked direction from design/mocks/status.json.directions` and `and design/tokens.css present (THEME already wrote it — BRIEF checks presence only, never re-authors it)`, keeping the bullet's doctrine + design-rules requirements; the Doctrine paragraph's `## Dissents` sentence keeps "required, non-empty" and drops the rejected-direction reading; § On-disk Handoff's `design/mocks/` bullet drops the trailing `and checks tokens.css for presence (§ Genesis: Brief State)` clause while keeping the file roster; the header comment blocks at the BRIEF function and in the file preamble drop `and design/tokens.css (written by THEME)`; and the one prose twin of D5's string — `next: run /spec:mocks in this repo (seed → shapes → wireframes → theme → skin → review → approved), then --mark brief-written` — becomes `next: run /spec:mocks in this repo until it reports APPROVED, then --mark brief-written`, matching the driver byte for byte (AC-20260907-05-8) | § Doctrine Authoring: the driver is the mechanism, prose points at it — a precondition deleted in code and left standing in doctrine is the two-homes defect this repo audits for. |
 | D7 | Bump `spec/.claude-plugin/plugin.json` to the next free minor — target **7.104.0** (7.99.0 and 7.100.0 shipped on 2026-09-08 in sibling work; 7.101.0/7.102.0/7.103.0 are claimed by `07`/`08`/`09`), resolved to whatever is actually free at build time — with a changelog entry `[no-ac: review's version-bump check is the oracle]` | § Planning version discipline; hardened-but-unbuilt siblings hold the numbers they claim, and a shipped sibling spends them. |
+| D8 | The write line that consumed `dissentsClause` converges on the legacy-resume branch's existing literal: `Write docs/design/doctrine.md (one page, ## Dissents) and .claude/genesis/design-rules.json, then:` — byte-identical in both ratification branches (AC-20260907-05-4) | Orchestrator ruling, build 2026-09-08: D4 deletes the `dissentsClause` local but the spec named no fate for its one consumer, which would have been a `ReferenceError` on every BRIEF step. The legacy branch's string is the only candidate that names no theme artifact and introduces no new copy, so the two branches converge instead of diverging. |
+| D9 | AC-20260907-05-8's two promises are split into separate bullets: AC-20260907-05-8 keeps the new requirement (§ Genesis: Brief State names no `design/tokens.css` and no `composed-but-unpicked`; `skin` nowhere in the file) and a new AC-20260907-05-9 carries the regression pin (§ On-disk Handoff still lists `design/mocks/`). Both cite `tests/consistency/genesis-doctrine.test.js` | Orchestrator ruling, build 2026-09-08: `red-check.js` sanctions a file green-expected only when EVERY carried AC is a `SHALL CONTINUE TO` pin, and the merged bullet's trailing pin clause sanctioned the whole file — the genuinely-red new requirement reported as a `broken-pin` HARD finding. Split, the file carries one unsanctioned AC and classifies red-expected, which is what it is. |
 
 **Orchestrator duty (outside the File Plan table):** `tests/genesis/brief-state.test.js` carries
 the change's whole weight and must be edited first — `AC-20260902-08-5` is a five-arm compound
@@ -67,7 +71,7 @@ below except the plugin version.
 | spec/doctrine/genesis.md | MODIFY | doctrine | D6: § Genesis: Brief State's visual bullet, the Doctrine paragraph's Dissents sentence, § On-disk Handoff's `design/mocks/` bullet |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D7: version bump + changelog entry |
 | tests/genesis/brief-state.test.js | MODIFY | tests | AC-20260907-05-1, AC-20260907-05-2, AC-20260907-05-3, AC-20260907-05-4, AC-20260907-05-5, AC-20260907-05-6, AC-20260907-05-7; plus the orchestrator duty's two supersessions |
-| tests/consistency/genesis-doctrine.test.js | MODIFY | tests | AC-20260907-05-8 |
+| tests/consistency/genesis-doctrine.test.js | MODIFY | tests | AC-20260907-05-8, AC-20260907-05-9 |
 
 ## Contracts
 
@@ -141,7 +145,10 @@ one-shot mark and nothing re-reads `design/tokens.css` later in the chain.
   set is APPROVED THE SYSTEM SHALL print a progress line matching
   `mocks: APPROVED · journeys: 1 · open product rows: 0` exactly, and a `Read only:` line that
   does not contain `design/tokens.css`; and WHEN it prints the legacy-resume BRIEF step THE
-  SYSTEM SHALL print a `Read only:` line that does not contain `design/tokens.css` →
+  SYSTEM SHALL print a `Read only:` line that does not contain `design/tokens.css`; and in BOTH the
+  visual-ratification and the legacy-resume BRIEF steps THE SYSTEM SHALL print the literal
+  `Write docs/design/doctrine.md (one page, ## Dissents) and .claude/genesis/design-rules.json,`
+  and SHALL print no line containing `## Dissents naming:` →
   `tests/genesis/brief-state.test.js`
 - **AC-20260907-05-5**: WHEN the bare driver prints the BRIEF step for a visual run whose
   `design/mocks/status.json` is present but not `APPROVED` THE SYSTEM SHALL print the literal
@@ -164,8 +171,11 @@ one-shot mark and nothing re-reads `design/tokens.css` later in the chain.
   `## Genesis: Brief State` section that names `design/tokens.css` in no `brief-written`
   precondition and requires no `## Dissents` naming of composed directions — the section
   contains neither the literal `design/tokens.css` nor the literal `composed-but-unpicked` —
-  and SHALL carry the literal `skin` nowhere in the file, while § On-disk Handoff SHALL CONTINUE
-  TO list the `design/mocks/` workspace → `tests/consistency/genesis-doctrine.test.js`
+  and SHALL carry the literal `skin` nowhere in the file →
+  `tests/consistency/genesis-doctrine.test.js`
+- **AC-20260907-05-9**: WHEN `spec/doctrine/genesis.md` is read THE SYSTEM SHALL CONTINUE TO
+  list the `design/mocks/` workspace under § On-disk Handoff →
+  `tests/consistency/genesis-doctrine.test.js`
 
 ## Assumptions (escalation triggers)
 
@@ -241,6 +251,30 @@ be to invert its two dying arms into "accepts now" assertions inside it. Do not 
 superseded, the new acceptance behaviour is pinned by AC-20260907-05-1 and AC-20260907-05-2 as
 their own tests, and an inverted arm inside a test named for the old contract is how a spec's
 intent gets lost two specs later.
+
+**Merge-back deviation — version target, 2026-09-08.** D7 named 7.104.0 as its target; the
+build resolved to 7.105.0 because 7.104.0 was already spent at the base. Between that bump and
+merge-back, a sibling landed 7.105.0 on `main` for unrelated work, so the merge conflicted on
+`spec/.claude-plugin/plugin.json`. Resolved by intent per § Gotchas ("the spec's literal number
+is a target, not a pin"): main's changelog was taken whole and this spec re-bumped on top of it
+via `node scripts/plugin-bump.js --bump --plugin spec`, landing 7.106.0 with both entries
+preserved in the last-three rotation. The same race then repeated at push: `origin/main` had
+meanwhile taken 7.106.0 and 7.107.0 for unrelated sibling work, so the integration merge
+conflicted on the same file and was resolved the same way, landing **7.108.0**. No behavior,
+doctrine, or test text changed in either resolution — only the version line and the changelog
+rotation.
+
+**Review ruling — rejected finding, 2026-09-08.** The second review pass raised the driver's
+file-preamble history paragraph (`spec/scripts/genesis-driver.js` ~111-112) as still asserting
+that BRIEF runs a `tokens.css` check. Rejected on demonstrated miscitation, twice over: the
+paragraph's subject is the retired `--mark tokens-landed`, not BRIEF — the `// NOTE:` line
+immediately below it says so and marks the whole paragraph as history kept only for the
+shell-canon fact it recorded — and A1 is an assumption about the driver's *gates*, not a
+promise to edit all three narrative comments, so D6's verbatim preamble scope (the
+`and design/tokens.css (written by THEME)` clause) is closed and was fully applied. Executed:
+`grep -n "tokens.css" spec/scripts/genesis-driver.js` returns only those two history lines —
+every live occurrence is gone. The first review pass killed the same claim on the same grounds.
+User ruled to leave the paragraph unedited rather than widen this spec past its own contract.
 
 ## Canonical Delta
 

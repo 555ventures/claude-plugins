@@ -3,7 +3,8 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runNode } = require('../helpers')
+const { tmpdir } = require('../helpers')
+const { specMd, writeManifest, run, findings, baseHost } = require('./ac-matrix.fixtures.js')
 
 // specs/20260821/03-cross-spec-skip-mapping.md D1/D2: the
 // owning-spec `[env:]` sanction specs/20260815/03 shipped is reachable only via routes 1
@@ -18,44 +19,6 @@ const { tmpdir, runNode } = require('../helpers')
 // already-resolved or bare (no `::`) line. Sibling of owning-spec-env.test.js (same idiom).
 // AC-1/4/7 are red-first (route 3 does not exist at HEAD); AC-2/3/5/6 pin CONTINUE-TO edges.
 
-function specMd(acLines, filePlanRows) {
-  return '# Test Spec\n\n## Acceptance Criteria\n\n' + acLines.join('\n') + '\n\n' +
-    '## File Plan\n\n| Path | Action | Layer | Summary |\n|------|--------|-------|---------|\n' +
-    filePlanRows.join('\n') + '\n'
-}
-
-function writeManifest(dir, lines) {
-  const p = path.join(dir, 'manifest.jsonl')
-  fs.writeFileSync(p, lines.map(l => JSON.stringify(l)).join('\n') + (lines.length ? '\n' : ''))
-  return p
-}
-
-function run(specPath, root, manifestPath, extraArgs = []) {
-  return runNode('scripts/ac-matrix.js',
-    ['--spec', specPath, '--root', root, '--manifest', manifestPath, ...extraArgs])
-}
-
-function findings(res) {
-  let parsed
-  try { parsed = JSON.parse(res.stdout) } catch (e) {
-    assert.fail(`--json output did not parse as JSON (status ${res.status}, stderr: ${res.stderr}): ${e.message}`)
-  }
-  return parsed
-}
-
-// A minimal spec-under-review host: one well-formed, covered, env-less AC unrelated to the case
-// under test, so every fixture has valid AC/File Plan sections without interfering with the skip
-// case. Matches tests/ac-matrix/owning-spec-env.test.js's baseHost exactly.
-function baseHost(dir) {
-  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), '// covers AC-20260814-01-1\n')
-  const spec = path.join(dir, 'spec.md')
-  fs.writeFileSync(spec, specMd(
-    ['- **AC-20260814-01-1**: WHEN X THE SYSTEM SHALL Y → tests/foo.test.js'],
-    ['| tests/foo.test.js | CREATE | tests | covers AC |']))
-  return spec
-}
-
 function skipReconcileOf(res) {
   const out = findings(res)
   return { out, row: out.observed.skipReconcile }
@@ -63,7 +26,7 @@ function skipReconcileOf(res) {
 
 test('AC-20260821-03-1: a runner-qualified skip line unmapped by routes 1-2, whose resolved file cites an AC declared [env:] in ITS OWNING spec, is sanctioned via the existing owning-spec lookup — red-first, since route 3 does not exist at HEAD', () => {
   const dir = tmpdir('acm-qual-1')
-  const spec = baseHost(dir)
+  const { specPath: spec } = baseHost(dir)
   fs.mkdirSync(path.join(dir, 'specs', '20260810'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'specs', '20260810', '01-owner.md'), specMd(
     ['- **AC-20260810-01-1** `[env: E2B_LIVE_API_KEY]`: WHEN the live gate vars are set THE ' +
@@ -94,7 +57,7 @@ test('AC-20260821-03-1: a runner-qualified skip line unmapped by routes 1-2, who
 
 test('AC-20260821-03-2: a runner-qualified skip line whose resolved file cites no AC-ID at all SHALL CONTINUE TO report unmapped-skip, both before and after route 3 lands', () => {
   const dir = tmpdir('acm-qual-2')
-  const spec = baseHost(dir)
+  const { specPath: spec } = baseHost(dir)
   fs.mkdirSync(path.join(dir, 'dataplane', 'tests'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'dataplane', 'tests', 'test_noac.py'),
     '"""No AC citation anywhere in this docstring."""\ndef test_something(): pass\n')
@@ -115,7 +78,7 @@ test('AC-20260821-03-3: a qualifier whose path is absent under --root, or resolv
   const outer = tmpdir('acm-qual-3')
   const root = path.join(outer, 'root')
   fs.mkdirSync(root, { recursive: true })
-  const spec = baseHost(root)
+  const { specPath: spec } = baseHost(root)
 
   // The qualifier resolves OUTSIDE --root, to a real file that (if wrongly read) would sanction:
   // it cites an AC declared [env:] in its own owning spec, one directory up from root.
@@ -149,7 +112,7 @@ test('AC-20260821-03-3: a qualifier whose path is absent under --root, or resolv
 
 test('AC-20260821-03-4: a runner-qualified skip line whose resolved file cites only a spec-under-review AC with no [env:] reports unsanctioned-skip naming that AC — red-first, since route 3 does not exist at HEAD', () => {
   const dir = tmpdir('acm-qual-4')
-  const spec = baseHost(dir) // AC-20260814-01-1 declared here, WITHOUT [env:]
+  const { specPath: spec } = baseHost(dir) // AC-20260814-01-1 declared here, WITHOUT [env:]
   fs.mkdirSync(path.join(dir, 'dataplane', 'tests'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'dataplane', 'tests', 'test_y.py'),
     '"""Cites AC-20260814-01-1, a same-spec AC with no [env:] declared."""\ndef test_local(): pass\n')
@@ -200,7 +163,7 @@ test('AC-20260821-03-5: a skip line with no "::" at all SHALL CONTINUE TO map on
 
 test('AC-20260821-03-6: a qualified line that itself embeds an AC-ID SHALL CONTINUE TO map via the embedded route without reading the file — disposition follows the embedded ID even when the file cites a different, sanctionable AC', () => {
   const dir = tmpdir('acm-qual-6')
-  const spec = baseHost(dir) // AC-20260814-01-1, no [env:] — the embedded ID below
+  const { specPath: spec } = baseHost(dir) // AC-20260814-01-1, no [env:] — the embedded ID below
   fs.mkdirSync(path.join(dir, 'specs', '20260810'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'specs', '20260810', '01-owner.md'), specMd(
     ['- **AC-20260810-01-1** `[env: SOME_VAR]`: WHEN X THE SYSTEM SHALL Y → tests/owner.test.js'],
@@ -227,7 +190,7 @@ test('AC-20260821-03-6: a qualified line that itself embeds an AC-ID SHALL CONTI
 
 test('AC-20260821-03-7: a qualified line\'s resolved file citing several ACs takes the FIRST citation in file order as primary, with repeats deduped — red-first, since route 3 does not exist at HEAD', () => {
   const dir = tmpdir('acm-qual-7')
-  const spec = baseHost(dir)
+  const { specPath: spec } = baseHost(dir)
   fs.mkdirSync(path.join(dir, 'specs', '20260810'), { recursive: true })
   // Both ACs share one owning file; only the FIRST-cited one (…-14) carries [env:].
   fs.writeFileSync(path.join(dir, 'specs', '20260810', '01-owner.md'), specMd(

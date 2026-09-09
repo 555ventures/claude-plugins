@@ -4,6 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
+const { writeBrief } = require('./tournament.fixtures.js')
 
 // specs/20260902/08-genesis-shrink-brief-state.md: the new BRIEF state sits between DISCOVERY
 // and MENUS. discovery-done now requires an `- archetype: <key>` ## Picks line (D2);
@@ -14,10 +15,6 @@ const { tmpdir, runNode } = require('../helpers')
 
 const SCRIPT = 'scripts/genesis-driver.js'
 const DIM = 'hosting'
-const COVERAGE_KEYS = [
-  'payer', 'tenancy', 'data-sensitivity', 'residency', 'ai-use', 'unattended',
-  'integrations', 'scale-outage', 'vendor-budget', 'offline-mobile',
-]
 const REGISTRY_KEYS = [
   'web-app', 'realtime-trading', 'backend-api', 'mobile-app', 'desktop-app',
   'data-ml', 'conversational-bot', 'cli-devtool',
@@ -44,32 +41,11 @@ function statusOf(dir) {
   return JSON.parse(fs.readFileSync(path.join(dir, '.claude/genesis/status.json'), 'utf8'))
 }
 
-// Same shape as genesis-driver.test.js's own writeBrief (files cannot share fixture helpers
-// beyond tests/helpers.js).
-function writeBrief(dir, { coverage = {}, dims = {}, picks = [] } = {}) {
-  const cov = COVERAGE_KEYS.map((k) => `- ${k}: ${coverage[k] || 'covered — synthetic test value'}`).join('\n')
-  const dimLines = Object.entries(dims).map(([k, v]) => `- ${k}: ${v}`).join('\n')
-  writeFile(path.join(dir, '.claude/genesis/brief.md'), `# Discovery brief — test project
-
-## What I think you're building
-A synthetic project for brief-state.test.js.
-
-## Coverage
-${cov}
-
-## Non-goals
-none
-
-## Open Dimensions
-${dimLines}
-
-## Research Angles
-none — synthetic host, no research needed.
-
-## Picks
-${picks.join('\n')}
-`)
-}
+// specs/20260908/03-test-fixture-dedupe.md D2: writeBrief is now shared from
+// tournament.fixtures.js (byte-identical to this file's old local copy save the project
+// sentence, which the shared function's `label` param now fills). Every call below that used to
+// rely on this file's own `dims = {}` default now passes `dims: {}` explicitly, since the
+// shared function's default is `{ [DIM]: 'open' }` (tournament.test.js's own need).
 
 // Empty ledger.md (D2/D3's grammar, matching spec/scripts/lib/mocks-ledger.js's own committed
 // template) — zero rows parses to errors: [] and gateVerdict open: true, blocking: [].
@@ -121,7 +97,7 @@ function writeDesignRules(dir, rules = []) {
 // sees.
 function advanceToDiscoveryDone(dir, archetype) {
   bare(dir)
-  writeBrief(dir, { picks: ['- archetype: ' + archetype] })
+  writeBrief(dir, { label: 'brief-state.test.js', dims: {}, picks: ['- archetype: ' + archetype] })
   const r = mark(dir, 'discovery-done')
   assert.strictEqual(r.status, 0, 'test setup requires discovery-done to be accepted on a fully-covered brief naming archetype ' + archetype + ': ' + r.stderr)
   return r
@@ -274,37 +250,18 @@ function briefNonUiSection(overrides = {}) {
   return NON_UI_KEYS.map((k) => `- ${k}: ${overrides[k] || 'covered — synthetic test note'}`).join('\n')
 }
 
-// Full brief.md for a fresh visual run: the six D3 sections plus D1's two new ones, so a
-// caller only has to say what varies (the ## Journeys body, or a Non-UI override).
+// Full brief.md for a fresh visual run: the six D3 sections (via the shared writeBrief) plus
+// D1's two new ones, so a caller only has to say what varies (the ## Journeys body, or a Non-UI
+// override). D2: extraSections lands before ## Picks instead of after — harmless, since
+// scripts/genesis-driver.js's own section() reader locates a heading by scanning to the next
+// `## ` line regardless of what precedes or follows it.
 function writeBriefWithSections(dir, { archetype, journeysBody, nonUiBody, dims = {}, extraPicks = [] }) {
-  const dimLines = Object.entries(dims).map(([k, v]) => `- ${k}: ${v}`).join('\n')
-  writeFile(path.join(dir, '.claude/genesis/brief.md'), `# Discovery brief — test project
-
-## What I think you're building
-A synthetic project for brief-state.test.js.
-
-## Coverage
-${COVERAGE_KEYS.map((k) => `- ${k}: covered — synthetic test value`).join('\n')}
-
-## Non-goals
-none
-
-## Open Dimensions
-${dimLines || 'none'}
-
-## Research Angles
-none — synthetic host, no research needed.
-
-## Picks
-- archetype: ${archetype}
-${extraPicks.join('\n')}
-
-## Journeys
-${journeysBody}
-
-## Non-UI Coverage
-${nonUiBody}
-`)
+  writeBrief(dir, {
+    label: 'brief-state.test.js',
+    dims,
+    picks: ['- archetype: ' + archetype, ...extraPicks],
+    extraSections: '## Journeys\n' + journeysBody + '\n\n## Non-UI Coverage\n' + nonUiBody,
+  })
 }
 
 test('AC-20260902-11-1, AC-20260902-11-2: WHEN --mark brief-written runs on a fresh visual run whose brief.md lacks ## Journeys THE SYSTEM exits 2 naming ## Journeys and the first missing journey; omitting a seed label from ## Journeys exits 2 naming the label and its journey; a dark ## Non-UI Coverage key exits 2 naming it; and the BRIEF step text lists every confirmed product ledger row id and the journey count', () => {
@@ -368,7 +325,7 @@ test('AC-20260902-11-1, AC-20260902-11-2: WHEN --mark brief-written runs on a fr
 test('AC-20260902-08-3: WHEN --mark discovery-done runs with every coverage key covered but no `- archetype:` line THE SYSTEM exits 2 naming archetype and the eight registry keys; with `- archetype: web-app` it records status.archetype and prints a DISCOVERY→BRIEF checkpoint whose step text names /spec:mocks; with `- archetype: backend-api` the step text names --mark brief-written and not /spec:mocks', () => {
   const noArchetype = tmpdir('brief-ac3-none')
   bare(noArchetype)
-  writeBrief(noArchetype, { picks: [] })
+  writeBrief(noArchetype, { label: 'brief-state.test.js', dims: {}, picks: [] })
   const refused = mark(noArchetype, 'discovery-done')
   assert.strictEqual(refused.status, 2, 'D2: a brief with no `- archetype:` line has never named which registry key genesis is building — the mark must refuse it, not silently proceed with archetype: null')
   assert.match(refused.stderr, /archetype/, 'the refusal must name "archetype" so the session knows exactly what is missing from ## Picks')
@@ -528,7 +485,7 @@ test('AC-20260907-05-4: WHEN the bare driver prints the BRIEF step for a visual 
 
   const legacyDir = tmpdir('brief-ac05-4-legacy')
   bare(legacyDir)
-  writeBrief(legacyDir, { picks: ['- archetype: web-app'] })
+  writeBrief(legacyDir, { label: 'brief-state.test.js', dims: {}, picks: ['- archetype: web-app'] })
   const statusPath = path.join(legacyDir, '.claude/genesis/status.json')
   const raw = JSON.parse(fs.readFileSync(statusPath, 'utf8'))
   raw.schemaVersion = 2
@@ -606,7 +563,7 @@ test('AC-20260907-05-6: WHEN --mark brief-written runs on a visual run with no d
 test('AC-20260907-05-7: WHEN --mark brief-written --legacy runs on a legacy resume with a non-empty ## Dissents, a valid design-rules.json, and no design/tokens.css THE SYSTEM ratifies', () => {
   const dir = tmpdir('brief-ac05-7-legacynotokens')
   bare(dir)
-  writeBrief(dir, { picks: ['- archetype: web-app'] })
+  writeBrief(dir, { label: 'brief-state.test.js', dims: {}, picks: ['- archetype: web-app'] })
   const statusPath = path.join(dir, '.claude/genesis/status.json')
   const raw = JSON.parse(fs.readFileSync(statusPath, 'utf8'))
   raw.schemaVersion = 2
@@ -706,7 +663,7 @@ None recorded — synthetic fixture.
 test('AC-20260902-08-7: WHEN a v2 status.json is past ROADMAP with explore: "picked", design: "rules-locked", and no marks.briefWritten THE SYSTEM derives BRIEF with step text naming "legacy:" and "--legacy"; brief-written without --legacy exits 2 naming design/mocks/status.json; with --legacy and D4\'s artifacts it accepts, records brief.legacy: true, and the next bare run derives HANDOFF', () => {
   const dir = tmpdir('brief-ac7-legacy')
   bare(dir)
-  writeBrief(dir, { picks: ['- archetype: web-app', '- ' + DIM + ': AWS'] })
+  writeBrief(dir, { label: 'brief-state.test.js', dims: {}, picks: ['- archetype: web-app', '- ' + DIM + ': AWS'] })
   const statusPath = path.join(dir, '.claude/genesis/status.json')
   const raw = JSON.parse(fs.readFileSync(statusPath, 'utf8'))
   raw.schemaVersion = 2

@@ -1,0 +1,84 @@
+# Deviations — 03-test-fixture-dedupe
+
+- tests/ac-matrix/ac-matrix.fixtures.js: `findings(res)` is lifted byte-identical from the two
+  owning files (returns the whole parsed `{findings, warnings, observed}` object, as every one
+  of the 13 existing call sites in owning-spec-env.test.js/qualified-skip-mapping.test.js relies
+  on via `out.findings`/`out.warnings`/`out.observed`); the spec's Contracts line `findings(res):
+  object[]` was a mis-transcription of that byte-identical shape, not a design change (the array
+  promise lands on `.findings`, not on `findings()`'s own return). Flagged this instead of
+  rewriting 13 assertions to satisfy a literal `Array.isArray` reading (D6 forbids assertion
+  changes); tests/fixtures-modules.test.js's AC-20260908-03-4 was subsequently corrected
+  elsewhere to assert on `parsed.findings` instead, and now passes. `node --test
+  'tests/ac-matrix/**/*.test.js'` is 54/54 green; `node --test tests/fixtures-modules.test.js`
+  is 5/5 green.
+- tests/fixtures-modules.test.js's AC-20260908-03-6 (D5 "registers zero tests") spawns
+  `node --test <fixtures-file>` via `spawnSync` with no `env` override, inheriting the CURRENT
+  process's environment. When fixtures-modules.test.js itself runs under `node --test` (its own
+  invocation, or as part of the `tests/**/*.test.js` glob `npm test` uses), Node has already set
+  `NODE_TEST_CONTEXT=child-v8`/`NODE_TEST_WORKER_ID` on that process; the inherited grandchild
+  then prints "node:test run() is being called recursively within a test file. skipping running
+  files." instead of the real TAP subtest line, for EVERY fixtures module regardless of content
+  — verified empirically both for tests/review/review-legs.fixtures.js (this batch's file, zero
+  test() calls, passes cleanly at `node --test tests/review/review-legs.fixtures.js` in isolation)
+  and for the pre-existing tests/genesis/tournament.fixtures.js under the same
+  `NODE_TEST_CONTEXT=child-v8` env forced manually. This is an environment-inheritance bug in the
+  guard test's own spawnSync call (needs `env: {...process.env, NODE_TEST_CONTEXT: undefined}` or
+  similar), not a defect in any fixtures module's shape; tests/fixtures-modules.test.js is out of
+  this batch's scope to edit.
+- tests/genesis/tournament.fixtures.js exceeded its size ceiling once it absorbed the five
+  `writeBrief` copies' parameterization (11447 > 10688). Raised via the ratchet's own sanctioned
+  route, `node scripts/size-ratchet.js --root . --raise tests/genesis/tournament.fixtures.js
+  --to 11447 --cite specs/20260908/03-test-fixture-dedupe.md`, rather than shrinking the shared
+  module back toward the duplication this spec exists to remove. Whole-tree ratchet is green
+  ("255 files, 4 trees, all tight") and size-baseline.json is updated per D7.
+- D2 says brief-state.test.js / genesis-driver.test.js "drop" their local `writeBriefWithSections`
+  and `writeVisualBrief`. Both survive as thin wrappers that build an `extraSections` string and
+  delegate to the shared `writeBrief`, because each has a bespoke parameter shape
+  (`{archetype, journeysBody, nonUiBody, extraPicks}` / the `briefJourneysSectionFor` +
+  `briefNonUiSectionFor` pair) used only by its own file. Dropping them outright would have
+  required rewriting their call sites' arguments, which D6 forbids. The duplicated template body
+  — the part this spec targets — is gone from both.
+- tests/ac-matrix/ac-matrix.fixtures.js's `baseHost` is the one non-byte-identical lift: it
+  returns `{specPath, root, manifestPath}` (and writes an empty manifest) where both originals
+  returned a bare spec-path string. The spec's own Contracts block specifies that shape, so this
+  is the spec's instruction rather than worker invention; the 10 call sites adapted by
+  destructuring, with no assertion changed.
+- tests/fixtures-modules.test.js needed two orchestrator repairs after its authoring dispatch,
+  both bugs in the guard test itself rather than in any fixtures module: (1) its AC-6 child run
+  inherited `NODE_TEST_CONTEXT`, so under `node --test` Node refused to recurse and the check
+  reported on its own recursion guard for every module — fixed by stripping the variable from the
+  child env; (2) its AC-4 run omitted `--json`, so `findings` could not parse stdout — fixed by
+  passing `--json` the way all 13 existing call sites do.
+
+## D10 red evidence — the pre-extraction run, transcribed
+
+`specs/20260908/03-test-fixture-dedupe.build/` is gitignored, so the live log D10 names does not
+survive the merge. The run is transcribed here, in a committed file, so D10's claim stays
+falsifiable afterwards.
+
+Command, executed in the spec worktree with `tests/fixtures-modules.test.js` authored and NO
+fixtures module created or modified (the untouched pre-image):
+
+    node --test tests/fixtures-modules.test.js
+
+Result: `tests 5 · pass 0 · fail 5 · skipped 0`. Every one of the five failed:
+
+    ✖ AC-20260908-03-2: makeReviewLegsHost writes extraFiles only into the HEAD commit, leaving
+      the base commit without them, alongside the shared src/foo.js and spec skeleton
+    ✖ AC-20260908-03-3: writeBrief writes extraSections before ## Picks, and keeps writing
+      today's template with no ## Journeys section when extraSections is omitted
+    ✖ AC-20260908-03-4: baseHost(tmpdir()) returns a spec file that exists and a manifest
+      run(...) can read, with findings(...) yielding an array
+    ✖ AC-20260908-03-5: setupOverlayHost returns two distinct commit shas whose close sha's
+      git show --name-only lists exactly the closeFiles keys
+    ✖ AC-20260908-03-6: none of the four fixtures modules register a test() when node --test
+      loads them directly, and none is named *.test.js so the suite glob never executes them
+
+Failure causes at that point: review-legs.fixtures.js, ac-matrix.fixtures.js and
+replay.fixtures.js did not exist (AC-2, -4, -5); `writeBrief` had no `extraSections` parameter,
+so the assertion failed on content rather than on a missing module (AC-3); AC-6 asserts every
+one of the four modules exists before checking its test registrations, and three did not.
+
+Two of these test names differ from their final form: AC-3 was later split into AC-3 and AC-7
+(D9), and AC-4's wording was corrected to the real `findings` return shape (D8). Both edits
+came after this run and neither weakened an assertion.

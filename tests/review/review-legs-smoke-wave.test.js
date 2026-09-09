@@ -4,6 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
+const { reviewLegsSpecBody } = require('./review-legs.fixtures')
 
 // Incident (field report, 3/3 runs): review-legs.js wave 2 ran smoke.sh
 // concurrently with the at-risk test dispatch. A host's at-risk set can include a test that
@@ -40,29 +41,7 @@ const SCRIPT = 'scripts/review-legs.js'
 // tests/atrisk.test.js is deliberately outside the File Plan while referencing the `foo` stem —
 // that is what puts it in scope-reconcile's atRisk set (same construction as
 // review-legs-at-risk-argv.test.js).
-const SPEC_BODY = `---
-status: implementing
-tier: standard
----
-# Smoke-wave ordering fixture
-
-## Decisions
-
-| ID | Decision | One-line rationale |
-|----|----------|--------------------|
-| D1 | foo() returns 42 (AC-20260821-99-1) | why |
-
-## File Plan
-
-| File | Action | Layer |
-|---|---|---|
-| src/foo.js | edit | scripts |
-| tests/foo.test.js | create | tests |
-
-## Acceptance Criteria
-
-- **AC-20260821-99-1**: foo() returns 42.
-`
+const SPEC_BODY = reviewLegsSpecBody({ title: 'Smoke-wave ordering fixture', acId: 'AC-20260821-99-1' })
 
 const GREEN_TEST = `'use strict'
 const { test } = require('node:test')

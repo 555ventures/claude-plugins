@@ -1,14 +1,16 @@
 ---
 date: 2026-09-08
-status: hardened
+status: implementing
 tier: standard
 area: tests
 design: false
 breaking: false
 depends_on: [specs/20260908/01-size-ratchet.md]
+build_base: main
 depended_on_by: [specs/20260908/04-duplicate-window-ratchet.md]
 brief: n/a
 open_markers: 0
+diff_base: 1aa5915554c1ad9417c7d016d8f8e300a62d438e
 ---
 
 # Test fixture dedupe — four repeated host builders become fixtures modules
@@ -34,6 +36,9 @@ shrink.
 | D5 | Fixtures modules are plain CommonJS with no test registration: `require('../helpers')`, functions, one `module.exports`; consumers `require('./<name>.fixtures')`. They are never named `*.test.js`, so the suite glob never executes them. (AC-20260908-03-6) | Matches the two existing modules; a fixtures file that registers tests would double-count. |
 | D6 | No test name, assertion, or assert message changes; the count of `test(` registrations per touched file is identical before and after. (AC-20260908-03-1) | Host rules: a weakened assertion is hard; this spec is setup-only. |
 | D7 | After all rows land, the orchestrator runs `node scripts/size-ratchet.js --root . --update`. `[no-ac: spec 01's live ratchet test is the oracle]` | Records the shrink; an unrecorded shrink is a stale ceiling. |
+| D10 | AC-20260908-03-2..-6 carry `[pre-green: predicate-in-test]`. This spec's whole File Plan is tests-layer, so the deliverable (the four fixtures modules) and its guard test land in the same build step — red-check runs after that step and can only ever observe the guard green, for every tests-only spec. The genuine red run was captured BEFORE any fixtures module existed and is transcribed in the deviations sidecar under `## D10 red evidence` (tests 5 · pass 0 · fail 5, each failing for its own reason; the live log sits at `specs/20260908/03-test-fixture-dedupe.build/pre-extraction-red.log`, which is gitignored and does not outlive the merge). User ruled on this at build time. (AC-20260908-03-2..-6) | The ACs are not vacuous — they are unobservable-red by the spec's own layer assignment; the sanctioned reason plus pinned red evidence keeps the pass falsifiable instead of laundering it. |
+| D9 | AC-20260908-03-3 as authored mixed a new `SHALL` promise (`extraSections` lands before `## Picks`) with a `SHALL CONTINUE TO` regression pin (the no-arg template is unchanged) — red-check's `mixed-pin` hard finding. Split: AC-20260908-03-3 keeps the new promise, AC-20260908-03-7 carries the pin. Both halves keep their assertions; the guard test splits into one test per AC. (AC-20260908-03-3, -7) | Mechanical remedy named by red-check itself and by build.md's `mixed-pin` rule; splitting an AC changes no observable promise. |
+| D8 | `findings(res)` returns the whole parsed `--json` payload (`{findings, warnings, observed}`), NOT a bare array — the Contracts line and AC-20260908-03-4 above mis-transcribed the helper this spec lifts byte-identically. Both corrected to the real shape; the 13 existing call sites and their assertions are untouched. (AC-20260908-03-4) | Build-time correction: D3 (byte-identical lift) and D6 (no assertion changes) outrank a mis-transcribed signature; the alternative was rewriting 13 assertions, which D6 forbids. |
 
 ## File Plan
 
@@ -68,7 +73,7 @@ makeReviewLegsHost(prefix, { specDate, ordinal, acId, config, testBody, extraFil
 // tests/genesis/tournament.fixtures.js (extended)
 writeBrief(dir, { coverage, dims, picks, label, extraSections }): string /* path */
 // tests/ac-matrix/ac-matrix.fixtures.js
-specMd(acLines, filePlanRows): string; writeManifest(dir, lines): string; run(specPath, root, manifestPath, extraArgs): result; findings(res): object[]; baseHost(dir): { specPath, root, manifestPath }
+specMd(acLines, filePlanRows): string; writeManifest(dir, lines): string; run(specPath, root, manifestPath, extraArgs): result; findings(res): { findings: object[], warnings: object[], observed: object } /* the parsed --json payload, byte-identical to the lifted helper */; baseHost(dir): { specPath, root, manifestPath }
 // tests/replay/replay.fixtures.js
 setupOverlayHost(root, { parentFiles, closeFiles }): { parent: sha, close: sha, dir: worktreePath }
 ```
@@ -77,24 +82,27 @@ setupOverlayHost(root, { parentFiles, closeFiles }): { parent: sha, close: sha, 
 
 - **AC-20260908-03-1** `[oracle: gate]`: WHEN the gate runs after the extraction THE SYSTEM
   SHALL CONTINUE TO pass every test in the ten modified test files with the same test names
-- **AC-20260908-03-2**: WHEN `makeReviewLegsHost` is called with a `config` carrying
+- **AC-20260908-03-2** `[pre-green: predicate-in-test]`: WHEN `makeReviewLegsHost` is called with a `config` carrying
   `gateCommand: "node --test tests"` and `extraFiles: {'bin/x.js': '…'}` THE SYSTEM SHALL
   produce a git repo whose base commit lacks `bin/x.js` and whose HEAD carries it, `src/foo.js`
   returning 42, and the spec under `specs/<specDate>/<ordinal>-*.md` → test in
   tests/fixtures-modules.test.js
-- **AC-20260908-03-3**: WHEN `writeBrief` is called with `extraSections: '## Journeys\n\n- x'`
-  THE SYSTEM SHALL write a brief whose `## Journeys` section sits before `## Picks`, and WHEN
-  called without it THE SYSTEM SHALL CONTINUE TO write the template the tournament tests use
-  today → test in tests/fixtures-modules.test.js
-- **AC-20260908-03-4**: WHEN `baseHost(tmpdir())` runs THE SYSTEM SHALL return paths whose spec
-  file exists and whose manifest is readable by `run(...)` with `findings(...)` yielding an
-  array → test in tests/fixtures-modules.test.js
-- **AC-20260908-03-5**: WHEN `setupOverlayHost` is given `parentFiles` and `closeFiles` THE
+- **AC-20260908-03-3** `[pre-green: predicate-in-test]`: WHEN `writeBrief` is called with `extraSections: '## Journeys\n\n- x'`
+  THE SYSTEM SHALL write a brief whose `## Journeys` section sits before `## Picks` → test in
+  tests/fixtures-modules.test.js
+- **AC-20260908-03-4** `[pre-green: predicate-in-test]`: WHEN `baseHost(tmpdir())` runs THE SYSTEM SHALL return paths whose spec
+  file exists and whose manifest is readable by `run(...)` with `findings(...)` yielding the
+  parsed `--json` payload whose `findings` key is an array (D8) → test in
+  tests/fixtures-modules.test.js
+- **AC-20260908-03-5** `[pre-green: predicate-in-test]`: WHEN `setupOverlayHost` is given `parentFiles` and `closeFiles` THE
   SYSTEM SHALL return two distinct commit shas where `git show --name-only close` lists exactly
   the `closeFiles` keys → test in tests/fixtures-modules.test.js
-- **AC-20260908-03-6**: WHEN `node --test 'tests/**/*.test.js'` runs THE SYSTEM SHALL execute
+- **AC-20260908-03-6** `[pre-green: predicate-in-test]`: WHEN `node --test 'tests/**/*.test.js'` runs THE SYSTEM SHALL execute
   no `*.fixtures.js` file as a test file (requiring each fixtures module registers zero tests)
   → test in tests/fixtures-modules.test.js
+- **AC-20260908-03-7**: WHEN `writeBrief` is called WITHOUT `extraSections` THE SYSTEM SHALL
+  CONTINUE TO write the template the tournament tests use today (D9, the pin half split out of
+  AC-20260908-03-3) → test in tests/fixtures-modules.test.js
 
 ## Assumptions (escalation triggers)
 

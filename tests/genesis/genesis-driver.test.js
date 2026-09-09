@@ -4,6 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
+const { writeBrief } = require('./tournament.fixtures.js')
 
 // specs/20260825/04-genesis-driver.md (TDD red): the architect stage becomes
 // driver-stepped — one script, spec/scripts/genesis-driver.js, derives state from
@@ -23,10 +24,6 @@ const { tmpdir, runNode } = require('../helpers')
 
 const SCRIPT = 'scripts/genesis-driver.js'
 const DIM = 'hosting'
-const COVERAGE_KEYS = [
-  'payer', 'tenancy', 'data-sensitivity', 'residency', 'ai-use', 'unattended',
-  'integrations', 'scale-outage', 'vendor-budget', 'offline-mobile',
-]
 
 function bare(dir) {
   return runNode(SCRIPT, ['--root', dir])
@@ -55,33 +52,10 @@ function statusOf(dir) {
   return JSON.parse(fs.readFileSync(path.join(dir, '.claude/genesis/status.json'), 'utf8'))
 }
 
-// Writes .claude/genesis/brief.md with all ten coverage keys defaulted to `covered`, one open
-// dimension (`hosting`), and whatever pick lines the caller supplies — the one artifact every
-// DISCOVERY/MENUS-stage test needs, built once here instead of six times inline.
-function writeBrief(dir, { coverage = {}, dims = { [DIM]: 'open' }, picks = [] } = {}) {
-  const cov = COVERAGE_KEYS.map((k) => `- ${k}: ${coverage[k] || 'covered — synthetic test value'}`).join('\n')
-  const dimLines = Object.entries(dims).map(([k, v]) => `- ${k}: ${v}`).join('\n')
-  writeFile(path.join(dir, '.claude/genesis/brief.md'), `# Discovery brief — test project
-
-## What I think you're building
-A synthetic project for genesis-driver.test.js.
-
-## Coverage
-${cov}
-
-## Non-goals
-none
-
-## Open Dimensions
-${dimLines}
-
-## Research Angles
-none — synthetic host, no research needed.
-
-## Picks
-${picks.join('\n')}
-`)
-}
+// specs/20260908/03-test-fixture-dedupe.md D2: writeBrief is now shared from
+// tournament.fixtures.js — byte-identical to this file's old local copy (same default dims
+// `{ [DIM]: 'open' }`) save the project sentence, which the shared function's `label` param
+// now fills.
 
 // Drives the real binary from an empty root through the coverage-audit gate, the new BRIEF
 // state, and to MENUS. specs/20260902/08-genesis-shrink-brief-state.md D2: `discovery-done` now
@@ -315,33 +289,20 @@ function briefNonUiSectionFor() {
   return NON_UI_KEYS_GD.map((k) => `- ${k}: covered — synthetic test note`).join('\n')
 }
 
+// specs/20260908/03-test-fixture-dedupe.md D2: the six D3 sections now come from the shared
+// writeBrief (tournament.fixtures.js), with the ## Journeys/## Non-UI Coverage pair passed as
+// extraSections — D2 places extraSections before ## Picks instead of after, which is harmless
+// here since scripts/genesis-driver.js's own section() reader locates a heading by scanning to
+// the next `## ` line regardless of what precedes or follows it. `dims: {}` matches this
+// function's own prior "## Open Dimensions\nnone" literal (an empty dims object renders no
+// dimension lines either way).
 function writeVisualBrief(dir, { journeys }) {
-  writeFile(path.join(dir, '.claude/genesis/brief.md'), `# Discovery brief — test project
-
-## What I think you're building
-A synthetic project for genesis-driver.test.js.
-
-## Coverage
-${COVERAGE_KEYS.map((k) => `- ${k}: covered — synthetic test value`).join('\n')}
-
-## Non-goals
-none
-
-## Open Dimensions
-none
-
-## Research Angles
-none — synthetic host, no research needed.
-
-## Picks
-- archetype: web-app
-
-## Journeys
-${briefJourneysSectionFor(journeys)}
-
-## Non-UI Coverage
-${briefNonUiSectionFor()}
-`)
+  writeBrief(dir, {
+    label: 'genesis-driver.test.js',
+    dims: {},
+    picks: ['- archetype: web-app'],
+    extraSections: '## Journeys\n' + briefJourneysSectionFor(journeys) + '\n\n## Non-UI Coverage\n' + briefNonUiSectionFor(),
+  })
 }
 
 // Drives a fresh visual (web-app) run through DISCOVERY/BRIEF/MENUS/DECIDE/SCAFFOLD, stopping

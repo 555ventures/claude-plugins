@@ -1,6 +1,6 @@
 ---
 date: 2026-09-08
-status: hardened
+status: implementing
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +10,8 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-08
 open_markers: 0
+build_base: main
+diff_base: 62dc04594e3265fdd9a85be1617161a588389d7c
 ---
 
 # One wire-register predicate

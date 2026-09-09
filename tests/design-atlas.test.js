@@ -1125,7 +1125,7 @@ function wireAfterThemeMock(status) {
 // warn/violation stamp split and the no-tokens.css absence invariant (below) are untouched;
 // only the literal changes. TDD red: mocks-driver.js's pre-image text still reads "after THEME",
 // so this test's asserted literal and its "no `after THEME` anywhere" check are both false today.
-test('AC-20260907-06-7 (retag of AC-20260906-06-1): check flags a mock linking wire/wire.css once design/tokens.css exists above it — violation at ratified, ⚠️ warn at sketch, exempt at approved with and without --matrix, a wire-free mock always passes, and the message never says "after THEME"', () => {
+test('AC-20260908-07-10 (retag of AC-20260907-06-7): check flags a mock linking wire/wire.css once design/tokens.css exists above it — violation at ratified, ⚠️ warn at sketch, exempt at approved with and without --matrix, a wire-free mock always passes, and the message never says "after THEME"', () => {
   const dir = tmpdir('atlas-wire-after-theme')
   fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'design/tokens.css'), ':root{--text-body:#111}\n')
@@ -1173,7 +1173,7 @@ test('AC-20260907-06-7 (retag of AC-20260906-06-1): check flags a mock linking w
 // so this assertion already holds against the pre-image and must keep holding once D1's literal
 // changes (D6) and once the theme is picked in sketch instead of mocks THEME; it is authored now
 // so a future change that lets D1 leak onto a theme-less root is caught. Assertion unweakened.
-test('AC-20260907-06-11 (retag of AC-20260906-06-2): check over a ratified mock linking wire/wire.css in a root with no design/tokens.css SHALL CONTINUE TO exit 0 with output byte-identical to today', () => {
+test('AC-20260908-07-9 (retag of AC-20260907-06-11): check over a ratified mock linking wire/wire.css in a root with no design/tokens.css SHALL CONTINUE TO exit 0 with output byte-identical to today', () => {
   const dir = tmpdir('atlas-wire-no-theme')
   const mockPath = writeMock(dir, wireAfterThemeMock('ratified'))
   const first = atlas(['check', mockPath])
@@ -1184,6 +1184,96 @@ test('AC-20260907-06-11 (retag of AC-20260906-06-2): check over a ratified mock 
   const second = atlas(['check', mockPath])
   assert.strictEqual(second.stdout, first.stdout,
     'the output must stay reproducible byte-for-byte across runs, exactly like every other check output')
+})
+
+// specs/20260908/07-one-wire-register-predicate.md D4/D8: register-after-theme (D1's rule,
+// unmoved) reads its wire-link candidate from the shared authority's linksWireRegister(html) —
+// every href-quoting form and @import, gated on a stylesheet `rel`, with "wire" required as a
+// whole path segment (AC-3, AC-4).
+test('AC-20260908-07-3: check flags a ratified mock applying the wireframe register via a single-quoted href, an unquoted href, a CSS @import, or an uppercase <LINK> tag, once design/tokens.css resolves above it', () => {
+  const dir = tmpdir('atlas-wire-forms-pos')
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/tokens.css'), ':root{--text-body:#111}\n')
+  const violationMsg = 'links the wireframe register (wire/) after the theme pick — skin it in the picked theme (design/tokens.css)'
+
+  const forms = [
+    ['a single-quoted href', "<link rel='stylesheet' href='../wire/wire.css'>\n"],
+    ['an unquoted href', '<link rel=stylesheet href=../wire/wire.css>\n'],
+    ['a CSS @import', '<style>@import "../wire/wire.css";</style>\n'],
+    ['an uppercase <LINK> tag', '<LINK REL="STYLESHEET" HREF="../wire/wire.css">\n'],
+  ]
+  for (const [label, beforeRoot] of forms) {
+    const mockPath = writeMock(dir, mockHtml({
+      status: 'ratified',
+      style: '* { box-sizing: border-box; }\n.screen { color: var(--text-body); }',
+      beforeRoot,
+    }))
+    const r = atlas(['check', mockPath])
+    assert.strictEqual(r.status, 1,
+      'a ratified mock applying the wireframe register via ' + label + ' must fail check once design/tokens.css resolves above it — the shared authority reads every quoting form and @import, not only a double-quoted <link> href: ' + r.stdout + r.stderr)
+    assert.ok(r.stdout.includes('  - ' + mockPath + ': ' + violationMsg),
+      'the D1 violation line must fire byte-identically for a register application via ' + label + ': ' + r.stdout)
+  }
+})
+
+test('AC-20260908-07-4: check prints no wireframe-register line for a ratified mock whose only wire-shaped links are unrelated segments, a non-stylesheet rel, or a rel-less link, with design/tokens.css above it', () => {
+  const dir = tmpdir('atlas-wire-forms-neg')
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/tokens.css'), ':root{--text-body:#111}\n')
+
+  const forms = [
+    ['a stylesheet link into "../my-wire/"', '<link rel="stylesheet" href="../my-wire/x.css">\n'],
+    ['a stylesheet link into "../v.wire/"', '<link rel="stylesheet" href="../v.wire/x.css">\n'],
+    ['a non-stylesheet icon link into "../wire/"', '<link rel="icon" href="../wire/favicon.png">\n'],
+    ['a rel-less link into "../wire/"', '<link href="../wire/tokens.css">\n'],
+  ]
+  for (const [label, beforeRoot] of forms) {
+    const mockPath = writeMock(dir, mockHtml({
+      status: 'ratified',
+      style: '* { box-sizing: border-box; }\n.screen { color: var(--text-body); }',
+      beforeRoot,
+    }))
+    const r = atlas(['check', mockPath])
+    assert.doesNotMatch(r.stdout, /wireframe register/,
+      'a ratified mock whose only wire-shaped link is ' + label + ' must print no wireframe-register line, warn or violation, with design/tokens.css above it — D8: a link the browser never applies as a stylesheet, or a path merely named like the register, is not the register: ' + r.stdout + r.stderr)
+  }
+})
+
+// specs/20260908/07-one-wire-register-predicate.md D7: the "does not link a tokens.css" rule
+// now requires a stylesheetTargets(html) member whose final path segment is tokens.css, instead
+// of design-atlas.js's own `/<link[^>]+tokens\.css/` — a regex with no `rel` gate at all (so a
+// non-stylesheet `<link>` satisfies it, AC-13) and blind to @import (so a page styled only
+// through @import fails it, AC-6, the executed A5 defect).
+function tokensViaImportMock(status = 'ratified') {
+  return '<style>@import "../wire/tokens.css";</style>\n' +
+    '<style>\n* { box-sizing: border-box; }\n.screen { color: var(--text-body); }\n</style>\n' +
+    '<main class="screen" data-screen-label="lobby" data-status="' + status + '">\n' +
+    '<div data-contract="none"><button data-state-btn="empty">Empty</button></div>\nLobby\n</main>\n'
+}
+
+test('AC-20260908-07-6: check does not report "does not link a tokens.css" for a labeled mock whose only token stylesheet is applied through a CSS @import', () => {
+  const dir = tmpdir('atlas-tokens-import')
+  const mockPath = writeMock(dir, tokensViaImportMock())
+  const r = atlas(['check', mockPath])
+  assert.doesNotMatch(r.stdout, /does not link a tokens\.css/,
+    'a mock whose only tokens.css application is a CSS @import must not be refused as missing a tokens.css link — stylesheetTargets(html) must read @import targets too: ' + r.stdout + r.stderr)
+})
+
+function tokensIconOnlyMock(status = 'ratified') {
+  return '<link rel="icon" href="tokens.css">\n' +
+    '<style>* { box-sizing: border-box; }\n.screen { color: var(--text-body); }</style>\n' +
+    '<main class="screen" data-screen-label="lobby" data-status="' + status + '">\n' +
+    '<div data-contract="none"><button data-state-btn="empty">Empty</button></div>\nLobby\n</main>\n'
+}
+
+test('AC-20260908-07-13: check reports "does not link a tokens.css" for a labeled mock whose only link to a tokens.css is a non-stylesheet rel="icon" link', () => {
+  const dir = tmpdir('atlas-tokens-icon-only')
+  const mockPath = writeMock(dir, tokensIconOnlyMock())
+  const r = atlas(['check', mockPath])
+  assert.strictEqual(r.status, 1,
+    'a labeled mock whose only link to a tokens.css is a non-stylesheet rel="icon" link must fail check — an icon link is never applied as a stylesheet: ' + r.stdout + r.stderr)
+  assert.ok(r.stdout.includes('  - ' + mockPath + ': does not link a tokens.css'),
+    'the exact "does not link a tokens.css" violation line must be printed, naming the file: ' + r.stdout)
 })
 
 // specs/20260906/06-sketch-high-fidelity-and-critique.md D3, AC-20260906-06-5: `check` flags a

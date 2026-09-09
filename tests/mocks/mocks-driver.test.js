@@ -223,7 +223,7 @@ No citation here.
 // ---------------------------------------------------------------------------
 // AC-20260902-07-6
 // ---------------------------------------------------------------------------
-test('AC-20260902-07-6 / AC-20260905-02-18 / AC-20260906-05-5: journey-drawn refuses a missing or non-conforming label and records drawn; journey-approved refuses before drawn or on a blocked gate even with a decided stop present; both marks CONTINUE TO accept once every screen declares its three gray states (the fixture default)', () => {
+test('AC-20260908-07-12 (retag of AC-20260902-07-6) / AC-20260905-02-18 / AC-20260906-05-5: journey-drawn refuses a missing or non-conforming label and records drawn; journey-approved refuses before drawn or on a blocked gate even with a decided stop present; both marks CONTINUE TO accept once every screen declares its three gray states (the fixture default)', () => {
   const dir = tmpdir('mocks-driver')
   advanceToCanonWritten(dir)
 

@@ -144,6 +144,7 @@ const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, set
 const { readNotes, writeNotes, addNote, addressNote, replyNote, groupOpen, unresolvedFor } = require('./lib/mocks-notes')
 const picksLib = require('./lib/mocks-picks.js')
 const shellLib = require('./lib/shell-region')
+const { stylesheetTargets, linksWireRegister } = require('./lib/wire-register')
 
 function die(msg) { writeOut(2, 'mocks-driver: ' + msg + '\n'); process.exit(2) }
 function nowIso() { return new Date().toISOString() }
@@ -971,12 +972,27 @@ function ensureJourneyRecord(j) {
   return status.journeys[j]
 }
 
+// specs/20260908/07-one-wire-register-predicate.md D6: journey-drawn's two "must link the
+// register" checks below read lib/wire-register.js's stylesheetTargets(html) instead of a bare
+// substring scan of the whole page — a commented-out mention stops satisfying the check, and a
+// register applied only through CSS @import starts satisfying it. Built via the RegExp
+// constructor (a plain string, no regex-literal escaping) so this file's own source never spells
+// the escaped wire/ separator the consistency pin bans — AC-20260908-07-7.
+const WIRE_TOKENS_CSS_RE = new RegExp('(^|/)wire/tokens\\.css$')
+const WIRE_WIRE_CSS_RE = new RegExp('(^|/)wire/wire\\.css$')
+
 function handleJourneyDrawn(journeyName) {
   if (!status.marks.canonWritten) die('canon-written has not been marked yet — mark canon-written first')
   if (!journeyName) die('--journey <name> is required')
   const journeys = currentSeedJourneys()
   const j = journeys.get(journeyName)
   if (!j) die('journey "' + journeyName + '" is not declared in design/mocks/seed.md — add it under ## Journeys, then re-mark journey-drawn')
+  // Stub the record as {drawn: null, approved: null} before any per-label check can die() — a
+  // refused journey-drawn must still let a reader look up journeys.<j> without an undefined
+  // guard (mirrors the tolerant read already used elsewhere in this file); drawn stays null
+  // until every label conforms below, exactly as before.
+  ensureJourneyRecord(journeyName)
+  saveStatus()
   for (const label of j.labels) {
     const file = mockFile(label)
     if (!fs.existsSync(file)) die('design/mocks/' + label + '.html does not exist — draw it, then re-mark journey-drawn --journey ' + journeyName)
@@ -990,8 +1006,8 @@ function handleJourneyDrawn(journeyName) {
     const atlasSuffix = r.status !== 0 ? ' — design-atlas.js check: ' + childOutput(r) : ''
     if (labelOf(html) !== label) die(file + ': data-screen-label must equal "' + label + '"' + atlasSuffix)
     if (statusOf(html) !== 'sketch') die(file + ': data-status must be "sketch" at journey-drawn time' + atlasSuffix)
-    if (!/wire\/tokens\.css/.test(html)) die(file + ': does not link ../wire/tokens.css' + atlasSuffix)
-    if (!/wire\/wire\.css/.test(html)) die(file + ': does not link ../wire/wire.css' + atlasSuffix)
+    if (!stylesheetTargets(html).some((t) => WIRE_TOKENS_CSS_RE.test(t))) die(file + ': does not link ../wire/tokens.css' + atlasSuffix)
+    if (!stylesheetTargets(html).some((t) => WIRE_WIRE_CSS_RE.test(t))) die(file + ': does not link ../wire/wire.css' + atlasSuffix)
     if (r.status !== 0) die(file + ': design-atlas.js check failed for label "' + label + '": ' + childOutput(r))
   }
   // specs/20260906/05-gray-states-on-every-wireframe.md D2: after every per-label closure check
@@ -1122,47 +1138,10 @@ function handleThemePicked(directionArg) {
 // this family.
 // ---------------------------------------------------------------------------
 
-// Review findings (specs/20260907/06 build, three rounds): D2 refuses "a `wire/` stylesheet
-// link" — link/import-anchored, never a bare `/\bwire\//` substring scan of the whole page (a
-// candidate whose only "wire/" occurrence is prose — a comment, a data attribute — must still
-// compose). Two narrowing bugs since fixed:
-//   (1) the first cut only matched a double-quoted `<link href="...">`, missing a single-quoted
-//       or unquoted href and a CSS `@import` of the wire register entirely;
-//   (2) `\b` treats `-`, `.` and `_` as word boundaries, so `\bwire\/` over-matched a real path
-//       segment named e.g. "my-wire" or "v.wire" (refused) while `\b` alone happened to still
-//       exclude "hardwire/", "firewire/", "wireframe/", "rewire/" and "my_wire/" for unrelated
-//       reasons (wire/ either isn't a suffix there or isn't followed by "/").
-// WIRE_SEGMENT_RE below requires "wire" to be a real path segment — preceded by "/" or by the
-// very start of the value — never a `\b`-boundary substring. The <link> arm is additionally
-// gated on a stylesheet `rel` (D2 says "stylesheet link"; `rel="icon"`/`"preload"`/etc pointing
-// into wire/ is not this leg's concern) — the @import arm needs no such gate, since an @import
-// is always a stylesheet import. design-atlas.js's own WIRE_LINK_RE (line ~346) is NOT touched
-// by this fix and keeps the old `\b` boundary with no rel gate — the two regexes now
-// deliberately diverge; design-atlas.js's copy binds only once design/tokens.css already
-// resolves above the mock, a condition that by definition does not hold during the theme run,
-// so the two checks never both see the same candidate.
-const WIRE_SEGMENT_RE = /(^|\/)wire\//
-function attrValue(tag, attr) {
-  const m = new RegExp('\\b' + attr + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s"\'>]+))', 'i').exec(tag)
-  if (!m) return null
-  return m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3]
-}
-function linksWireRegister(html) {
-  const linkTags = html.match(/<link\b[^>]*>/gi) || []
-  for (const tag of linkTags) {
-    const rel = attrValue(tag, 'rel')
-    if (!rel || !/stylesheet/i.test(rel)) continue
-    const href = attrValue(tag, 'href')
-    if (href && WIRE_SEGMENT_RE.test(href)) return true
-  }
-  const importRe = /@import\s*(?:url\(\s*)?(?:"([^"]*)"|'([^']*)'|([^\s"'()]+))/gi
-  let m
-  while ((m = importRe.exec(html))) {
-    const target = m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3]
-    if (target && WIRE_SEGMENT_RE.test(target)) return true
-  }
-  return false
-}
+// specs/20260908/07-one-wire-register-predicate.md D1/D5: linksWireRegister(html) below is
+// lib/wire-register.js's shared authority, not a private copy — D2's "a `wire/` stylesheet link"
+// (link/import-anchored, gated on a stylesheet rel, "wire" as a whole path segment never a `\b`
+// boundary) is now read the same way by every call site instead of being spelled per consumer.
 
 // D2: the one shared validator `compose`/`open`/`adopt` all run over a single candidate
 // directory, in the Contracts block's exact refusal order. Returns `{ ok: true, count }` on

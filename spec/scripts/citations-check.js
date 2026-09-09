@@ -90,6 +90,16 @@ function walkAll(dir) {
 walkAll(root)
 
 function resolveMdFile(nameLower, citingDir) {
+  // A lookback token may be a repo-relative PATH, not a bare basename
+  // ("spec/doctrine/mocks.md § Mocks: Page Notes"), and repoIndex is keyed by basename alone.
+  // cleanTok has already stripped surrounding punctuation, so a path token arrives plain:
+  // resolve it against `root` first, then fall back to the basename index — a path that no
+  // longer exists may still name a file that merely moved.
+  if (nameLower.includes('/')) {
+    const asPath = path.join(root, nameLower)
+    if (fs.existsSync(asPath)) return asPath
+    nameLower = path.basename(nameLower)
+  }
   const candidates = repoIndex.get(nameLower)
   if (!candidates || candidates.length === 0) return null
   const sameDir = candidates.find(c => path.dirname(c) === citingDir)
@@ -227,6 +237,12 @@ for (const file of scannedFiles) {
 
       checked++
       const targets = Array.isArray(resolution.target) ? resolution.target : [resolution.target]
+      // genesis.md self-namespaces every heading with a "Genesis: " lead (see the match step
+      // below), so a `§ Genesis: ...` citation names genesis.md no matter which file the
+      // two-word lookback happened to land on — a sentence may name a template path and then
+      // cite the doctrine section describing it ("... genesis-brief.md, § Genesis: Discovery
+      // Interview"). Union genesis.md in rather than trusting the nearest `.md` token alone.
+      if (/^Genesis\b/.test(heading) && !targets.includes(GENESIS_PATH)) targets.push(GENESIS_PATH)
       const heads = targets.flatMap(headingsOf)
       // Untruncated text following `§` (joined across the wrap window, same as `heading`'s
       // source) — checks the OTHER direction: a heading with no parenthetical whose

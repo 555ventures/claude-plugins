@@ -1,0 +1,17 @@
+{
+  "ts": "2026-09-09T20:08:12.575Z",
+  "stage": "replay",
+  "spec": "specs/20260907/07-mocks-retires-theme.md",
+  "runId": "rp_f9655d530378",
+  "reviewRunId": "rv_971882bad003",
+  "class": "prefix-collision-coverage-fail-open",
+  "files": [
+    "spec/scripts/mocks-driver.js"
+  ],
+  "legs": "red:gate,suite",
+  "outcome": "unresolved",
+  "tokens": 60000,
+  "via": "driver",
+  "patch": "diff --git a/spec/scripts/mocks-driver.js b/spec/scripts/mocks-driver.js\nindex a418eb5..16ba6ba 100644\n--- a/spec/scripts/mocks-driver.js\n+++ b/spec/scripts/mocks-driver.js\n@@ -1668,7 +1668,7 @@ function probeSkill() {\n   let rows\n   try { rows = JSON.parse(r.stdout) } catch { return { unavailable: 'unparseable-plugin-list' } }\n   if (!Array.isArray(rows)) return { unavailable: 'unparseable-plugin-list' }\n-  const row = rows.find((x) => x && typeof x.id === 'string' && x.id.split('@')[0] === 'frontend-design')\n+  const row = rows.find((x) => x && typeof x.id === 'string' && x.id.includes('frontend-design'))\n   if (!row) return { installed: false }\n   return { installed: true, enabled: row.enabled !== false }\n }\n",
+  "reviewer": null
+}

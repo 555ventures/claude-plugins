@@ -255,6 +255,7 @@ Look: `npx --no-install playwright screenshot --viewport-size=<w>,<h> file://<ab
   exit 2 when the `theme` row's `rejected` cell omits a composed direction (`warm`), and on
   acceptance SHALL write `design/tokens.css` byte-equal to `design/theme/quiet/tokens.css`
   and advance to SKIN → `tests/mocks/mocks-driver.test.js`
+  [retired: specs/20260907/07-mocks-retires-theme.md]
 - **AC-20260902-07-8**: WHEN `--mark journey-skinned --journey j1` runs before `theme-picked`
   THE SYSTEM SHALL exit 2; when `a.html` still links `../wire/wire.css` it SHALL exit 2 naming
   `a` and `wire/`; when every screen links `../tokens.css` and no `wire/` file it SHALL record

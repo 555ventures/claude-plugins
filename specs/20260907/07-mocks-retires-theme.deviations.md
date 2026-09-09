@@ -66,3 +66,18 @@
   the same test's literal loop and test name for the identical reason D13(a) gives for
   `recompose` — its subject retires with the same deleted bullet — leaving `never a half-styled
   middle` and `gray until confirmed` as the two remaining checked literals.
+- `size-ratchet-live.test.js` reddened after this batch's edits grew `tests/consistency/design-
+  doctrine.test.js` (the AC-20260907-07-10/-07-11 additions) past its tracked baseline. Raised it
+  myself, citing this spec: `node scripts/size-ratchet.js --root . --raise
+  tests/consistency/design-doctrine.test.js --to 33846 --cite
+  specs/20260907/07-mocks-retires-theme.md` — `node scripts/size-ratchet.js --root .` now reports
+  "253 files, 4 trees, all tight".
+- `tests/doctor/ac-drift-clean.test.js` (`AC-20260907-02-1`) reddens on
+  `specs/20260902/07-mocks-command-driver.md AC-20260902-07-7 — no test cites it`. This is the
+  expected, spec-narrated consequence of deleting the dual-tagged `AC-20260906-02-4 /
+  AC-20260902-07-7` test whole (this spec's own Rationale: "AC-20260902-07-7's coverage dies
+  with the behaviour it described, which is the honest outcome for a retired promise"). The
+  remedy ac-drift.js itself names is `[retired: specs/20260907/07-mocks-retires-theme.md]` on
+  that bullet in `specs/20260902/07-mocks-command-driver.md` — a historical spec doc, not a
+  `tests/` file, so it is outside a test-author's file set. Left unfixed and flagged here for a
+  doctrine-author/build-driver pass.

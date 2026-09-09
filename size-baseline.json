@@ -411,6 +411,12 @@
       "from": 3430721,
       "to": 3430982,
       "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/consistency/design-doctrine.test.js",
+      "from": 33846,
+      "to": 33846,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
     }
   ]
 }

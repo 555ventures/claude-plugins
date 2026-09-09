@@ -65,26 +65,44 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    If the requested change targets one, STOP with the shared shape (shared § Console Output
    Style): `🚫 **{surface} is bound — sketch is pre-plan only.**` then `Next: /spec:design —
    reopen the spec that bound this surface.`
-3. **Scoped sweep — single pass, over this brief's gap surfaces and its existing gray mocks.**
+3. **Theme (first run only).** Run `node {driver} theme state`. A refusal (exit code 2) → STOP,
+   printing the driver's stderr verbatim. `picked` → skip straight to the sweep. `absent` with **no**
+   `design/kit/` resolving → print
+   `⚠️ no design/kit/ and no theme — sketching gray, structure only (run /spec:mocks to KIT first)`
+   and continue gray. `absent` **with** a kit family → run
+   the theme interview: read the gray kit, the seed, `design/mocks/references/`, and
+   `docs/design/research-brief.md`; derive 2–3 candidate directions from the brief's product,
+   audience, and references and `AskUserQuestion` which to compose — never a stock pair (warm/
+   cool, playful/serious). Record each picked direction as a confirmed `theme-directions: <k>`
+   row via `node {driver} ledger add --step SKETCH`. Per direction, author
+   `design/theme/<k>/tokens.css` (light plus a `[data-theme="dark"]` block whenever
+   `design/targets.json` declares `dark`) and re-render every kit primitive at production
+   fidelity into `design/theme/<k>/kit.html`, primitive keys and structure kept, under the
+   `frontend-design` skill, verifying each with `node {driver} theme compose --direction <k>`.
+   Start the served atlas as a tracked background task, run `node {driver} theme open`, print
+   its two lines, and **end the turn** — never `AskUserQuestion`. On the next invocation, run
+   `node {driver} theme adopt`; a `decided change` is one more compose round then a fresh
+   `theme open`. After adopt, when no shell canon exists, `design/shell/app.html` is extracted
+   from the picked direction's kit page rather than authored freehand.
+4. **Scoped sweep — single pass, over this brief's gap surfaces and its existing gray mocks.**
    Every gap surface of this brief is authored in-session by one hand, following the shared
    authorship + grounding rule in full (shared § Design Atlas's authorship paragraph) — no
    `Agent` dispatch ever writes a mock. When `design/tokens.css` exists, every mock this step
    touches is authored at production fidelity in the picked theme — links `../tokens.css` and
    the shell canon, never `wire/` — and the brief's existing gray mocks are reworked into it:
    the only time an existing mock is re-authored, structure and facts kept, only the fidelity
-   changes. No shell canon yet → author `design/shell/app.html` in-session first. When
-   `design/tokens.css` is absent, this step prints `⚠️ no theme picked yet (/spec:mocks
-   THEME) — sketching gray, structure only` and continues, authoring gap surfaces gray as
-   before and leaving existing gray mocks untouched. When a surface carries capability an
-   out-of-scope brief owns, give that capability its own region rather than folding it into a
-   region the current brief must bind — an unbound region is inherited for free, while
-   future-brief content entangled inside a bound region costs an evidence-gated delta row.
-4. **Build & report.** `node {atlas} build`, then report the output path
+   changes. No shell canon yet → author `design/shell/app.html` in-session first. After step 3,
+   `design/tokens.css` can only be absent on the no-kit gray floor. When a surface carries
+   capability an out-of-scope brief owns, give that capability its own region rather than
+   folding it into a region the current brief must bind — an unbound region is inherited for
+   free, while future-brief content entangled inside a bound region costs an evidence-gated
+   delta row.
+5. **Build & report.** `node {atlas} build`, then report the output path
    (`design/atlas/index.html`); this session never opens a browser itself — the served atlas
-   page (§ 7's look stop starts it as a tracked background task) is the one viewer, for the
+   page (§ 8's look stop starts it as a tracked background task) is the one viewer, for the
    atlas and for leaving notes alike. The map shows everything, but this session's iteration
    scope stays the one brief.
-5. **The loop.** Take changes in chat against screen labels, or read them back from the served
+6. **The loop.** Take changes in chat against screen labels, or read them back from the served
    page with `node {driver} notes open` (spec/doctrine/mocks.md § Mocks: Page Notes owns the
    note shape and mark refusals). Group notes by surface, present the plan, then **triage every
    change by root cause before touching anything** — the shared triage (shared § Design Atlas)
@@ -120,7 +138,7 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    Every applied round hits disk immediately — brief edit first, mock second — so stopping
    mid-session (or losing the window) loses nothing. This detection is judgment, not a grep:
    the per-change ADR question plus the exit readout is what makes it reliably *asked*.
-6. **Critique (fixed) — before the exit stop, every round.** Run `node {atlas} check --states`
+7. **Critique (fixed) — before the exit stop, every round.** Run `node {atlas} check --states`
    over the brief's mocks — the states-presence check (spec/doctrine/mocks.md § Mocks:
    Authoring Rules). Then run `node "$(spec-paths render-gate)" --mocks <the brief's sketch
    mocks>` (spec/doctrine/design.md § Design Render Gate). Then dispatch `Agent {subagent_type:
@@ -129,11 +147,11 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    `{screen, state, blindspot, finding, severity}` and edits nothing. Record every returned
    finding as a page note: `node {driver} notes add --scope mock --screen <label> [--state <s>]
    --by critic --reason <blindspot> --text "<finding>"`; an empty findings list is recorded as
-   nothing — the critic found no real gap. Fix what the session can (step 5's triage) and leave
+   nothing — the critic found no real gap. Fix what the session can (step 6's triage) and leave
    the rest open for the user — the look stop below is where any note still open surfaces to
    them. This pass runs on every exit, never skipped for a small brief, and never run by the
    session standing in for the critic — the fresh-context dispatch is the whole point (Rules).
-7. **Exit — ratification.** When the user says done (or asks "where are we"): produce the
+8. **Exit — ratification.** When the user says done (or asks "where are we"): produce the
    **coherence readout** — one line per declared surface: what the mock shows vs what
    Scope/`surfaces` claim, plus any unresolved architecture flags. Fix what the readout catches
    (same triage). The marks a mock declares — `data-screen-label`, `data-status`,
@@ -169,9 +187,9 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    atlas. **Ratified = approved, one stamp:** direction confirmed at roadmap level, brief and
    mocks agree, matrix already confirmed in this step — `ratified` carries the same check
    enforcement `approved` does from here on (shared § Design Canon). `decided change` is one
-   more round of step 5's triage, then a fresh `stop open` for the same key. No decision yet —
+   more round of step 6's triage, then a fresh `stop open` for the same key. No decision yet —
    end the turn again; re-run to re-read `stop list`.
-8. **Report.** Assemble the slots (rationale: shared § Console Output Style) — `outcome`:
+9. **Report.** Assemble the slots (rationale: shared § Console Output Style) — `outcome`:
    ✅ `ratified {N} of {M} surfaces — {brief}`; `bullets`: the `🎨 authored {N} in-session · {K}
    check-only dispatches` line (shared § Design Atlas) when this round authored any mocks; `warns`: one line per un-ratified surface
    or open question written (drop when none); `artifacts`: the brief path (edited-section
@@ -198,6 +216,8 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
 - Never edits `specs/**`, the coverage ledger, or `design/atlas/` (derived); never touches
   surfaces another brief owns (Out of scope fences are binding here too).
 - Bound mocks are contracts; the fork ruling lives in `/spec:design`, not here.
+- Theme direction authoring (step 3) follows the same in-session authorship + grounding rule as
+  the sweep — no `Agent` dispatch ever writes a candidate direction's tokens or kit page.
 - The critique pass is never skipped and never self-run — a small brief still gets the states
   check, the render rules, and the fresh-context critic before its exit stop.
 - `AskUserQuestion` dismissed → STOP.

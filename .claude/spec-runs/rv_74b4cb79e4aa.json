@@ -1,0 +1,138 @@
+{
+  "runId": "rv_74b4cb79e4aa",
+  "ts": "2026-09-09T17:47:39.450Z",
+  "spec": "specs/20260908/02-driver-dedupe-onto-lib.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 1,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 467,
+    "base": "ba8b5ae5cf11fed2829cefa6a72dda8893373afe",
+    "head": "838e936f752286839d7ee89898f0a40d0852efad",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 390
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1431
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 8,
+        "carried": 6,
+        "sanctioned": 2,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "soft",
+        "claim": "spec/scripts/lib/driver-io.js's writeOut comment still lists genesis-driver.js among the scripts that 'already carry' their own synchronous writer; after D3 genesis-driver.js is a consumer of this very function, so the sentence is a stale narration of the pre-image (driver-io.js is outside the File Plan, so the build never touched it).",
+        "file": "spec/scripts/lib/driver-io.js",
+        "line": 55,
+        "impact": "A reader of the shared writer's comment is told the genesis driver has its own copy when it no longer does, which is exactly the duplication story this spec retired.",
+        "evidence": "grep -n genesis-driver spec/scripts/lib/driver-io.js -> 55:// (spec-status.js, red-check.js, fleet-reader.js, genesis-driver.js, registry-check.js, ; grep -n writeOut spec/scripts/genesis-driver.js -> line 195 function writeOut(fd, str) delegating to driverIo.writeOut(fd, str + newline) (range diff, commit 55cf312)."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "The dead-child refusal's stderr prefix changed from 'genesis-driver: ' to 'driver-io: ' and its remedy lost the copy-pastable re-run command line - a behavior change.",
+        "file": "spec/scripts/genesis-driver.js",
+        "line": 203,
+        "evidence": "Sanctioned verbatim by D3 (the dead-child remedy text becomes lib's generic 'fix the cause and re-run the driver') and A2 (executed grep: no test pins the genesis-specific remedy). AC-20260908-02-5 pins only exit 2 + 'died without an exit code' + the signal name; node --test --test-name-pattern=AC-20260908-02 tests/genesis/genesis-driver.test.js tests/design-atlas.test.js -> 5 tests, 5 pass, 0 fail."
+      },
+      {
+        "claim": "size-baseline.json raises might cite a spec other than the one under review (hard per Review Checks).",
+        "file": "size-baseline.json",
+        "line": 351,
+        "evidence": "git diff ba8b5ae..HEAD -- size-baseline.json: five new raises entries, every one with cite specs/20260908/02-driver-dedupe-onto-lib.md; node scripts/size-ratchet.js --root . -> 'size-ratchet: 255 files, 4 trees, all tight', exit 0."
+      },
+      {
+        "claim": "The shipped-script change lacks the plugin.json version bump.",
+        "file": "spec/.claude-plugin/plugin.json",
+        "line": 3,
+        "evidence": "node scripts/plugin-bump.js --check -> 'spec 7.117.0 -> 7.118.0', exit 0; the deviations sidecar records that D7's 7.106.0 target was spent and the D7-authorised next-free bump landed."
+      },
+      {
+        "claim": "genesis-driver.js still narrates the deleted Assumption A1 or the *Local parsers outside the deleted hunks (D4 requires deletion, not rewrite).",
+        "file": "spec/scripts/genesis-driver.js",
+        "line": 762,
+        "evidence": "grep -n for A1, Local, spawnSync, parseSeedJourneys, parseSurfaces in spec/scripts/genesis-driver.js: the only A1 hit (line 762) is smoke.sh's unrelated assumption; no *Local symbol remains; lines 353 and 435 call surfacesLib.* directly."
+      },
+      {
+        "claim": "The lib extraction is not behavior-neutral for the drivers (AC-6/AC-7 regression pins).",
+        "file": "spec/scripts/lib/surfaces.js",
+        "line": 29,
+        "evidence": "manifest-3 suite leg: 1431 tests, 1431 pass, 0 fail, 0 skipped; gate leg 390/390; re-executed node --test tests/surfaces-lib.test.js -> 3/3 pass and the five AC-20260908-02-tagged pins -> 5/5 pass. Old and new bodies compared hunk-by-hunk in the range diff: identical label regex, edge split, and the first-wins vs every-brief folds preserved."
+      },
+      {
+        "claim": "The AC-20260908-02-4 tag names the AC without testing the exactly-one-newline behavior (semantic backstop).",
+        "file": "tests/genesis/genesis-driver.test.js",
+        "line": 448,
+        "evidence": "Range diff adds two asserts at lines 448-449: a match on /^genesis-driver: / and a strictEqual on the count of newline characters in stderr being 1 - both assert the promised behavior; the test passes in the targeted run above."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 60000
+  }
+}

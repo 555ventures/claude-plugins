@@ -48,6 +48,15 @@ const SCANNED_DIRS = ['spec/commands', 'spec/doctrine', 'spec/agents', 'git/comm
 // heading in either, so shared idioms resolve to BOTH files and the heading check unions.
 const SHARED_PATHS = [path.join(root, 'spec/doctrine/core.md'), path.join(root, 'spec/doctrine/design.md')]
 const GENESIS_PATH = path.join(root, 'spec/doctrine/genesis.md')
+// Every doctrine file, for the weak fallback below: a prose lookback names no file, and the
+// section it cites is nearly always in the doctrine family the citing command already reads.
+// Derived from the directory rather than listed, so a new doctrine file joins without an edit.
+const DOCTRINE_PATHS = (() => {
+  const dir = path.join(root, 'spec/doctrine')
+  try {
+    return fs.readdirSync(dir).filter(f => f.endsWith('.md')).sort().map(f => path.join(dir, f))
+  } catch { return [] }
+})()
 const SKIP_HOST_DIRS = new Set(['node_modules', '.git'])
 
 // ---- gather the scanned corpus -----------------------------------------------------------
@@ -170,7 +179,15 @@ function resolveTarget(farWord, nearWord, citingFile, citingDir) {
   }
 
   if (!nearWord && !farWord) return { kind: 'match', target: citingFile } // bare § → the citing file itself
-  return { kind: 'skip', reason: 'unresolvable file reference' }
+
+  // Prose lookback naming no file at all ("authored against § Design Canon"). In this corpus
+  // that overwhelmingly means a section of the citing file itself or of the doctrine family
+  // every command already reads, so the heading is checked against that union — but the
+  // resolution is WEAK: a heading matching nothing there stays a SKIP and never becomes a
+  // MISS. That asymmetry is the whole guard rail. Ordinary English before `§` cannot be told
+  // apart from a real file reference, so a strong resolution here would turn correct doctrine
+  // into false misses (the AC-20260810-09-2 defect); a weak one can only ever add coverage.
+  return { kind: 'weak', target: [citingFile, ...DOCTRINE_PATHS] }
 }
 
 // ---- scan -----------------------------------------------------------------------------------
@@ -273,6 +290,14 @@ for (const file of scannedFiles) {
           (hNoParen.length > 0 && windowText.startsWith(hNoParen))
       })
       if (!matched) {
+        // A weak resolution never accuses: the lookback named no file, so a non-match means
+        // the checker could not find the target, not that the citation is broken.
+        if (resolution.kind === 'weak') {
+          checked--
+          skip++
+          skipLines.push(`SKIP ${file}:${lineNo} § ${heading} — unresolvable file reference`)
+          continue
+        }
         miss++
         missLines.push(`MISS ${file}:${lineNo} § ${heading} → ${targets.join(' + ')}`)
       }

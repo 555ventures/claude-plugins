@@ -163,6 +163,35 @@ test('AC-20260810-09-2: citations-check.js still matches when the citing sentenc
     'it, or every colon-continued citation in the corpus turns into a false MISS: ' + (r.stdout || ''))
 })
 
+test('AC-20260810-09-2: citations-check.js checks a prose-lookback citation against the citing file and the doctrine family', () => {
+  const root = tmpdir('citations-weak-match')
+  writeFixture(root, {
+    'spec/doctrine/mocks.md': '## Mocks: Authoring Rules\n\nbody\n',
+    'spec/commands/a.md':
+      'Authored against § Local Canon, and the marks in § Mocks: Authoring Rules.\n' +
+      '\n## Local Canon\n\nbody\n'
+  })
+  const r = runNode('scripts/citations-check.js', ['--root', root])
+  assert.match(r.stdout, /TOTAL=2 CHECKED=2 SKIP=0 MISS=0/,
+    'a lookback of ordinary prose ("against §", "in §") names no file, but in this corpus such ' +
+    'a citation means a section of the citing file itself or of the doctrine family the file ' +
+    'already reads — leaving both unresolved hides most of the corpus from the check: ' + (r.stdout || ''))
+})
+
+test('AC-20260810-09-2: a prose-lookback citation matching no heading stays SKIP and never becomes a MISS', () => {
+  const root = tmpdir('citations-weak-nomatch')
+  writeFixture(root, {
+    'spec/doctrine/core.md': '## Tiers\n\nbody\n',
+    'spec/commands/a.md': 'Graded by the host rules § Review Checks severity row.\n'
+  })
+  const r = runNode('scripts/citations-check.js', ['--root', root])
+  assert.match(r.stdout, /TOTAL=1 CHECKED=0 SKIP=1 MISS=0/,
+    'the weak fallback must never accuse: ordinary English before `§` cannot be told apart ' +
+    'from a real file reference, so a heading found nowhere in the fallback union means the ' +
+    'checker could not locate the target, not that the citation is broken — reporting it as a ' +
+    'MISS would turn correct doctrine red (the AC-20260810-09-2 defect): ' + (r.stdout || ''))
+})
+
 // ---------------------------------------------------------------------------
 // AC-20260810-09-3
 // ---------------------------------------------------------------------------

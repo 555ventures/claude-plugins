@@ -120,7 +120,15 @@ function briefOrd(num) {
   return m ? Number(m[1]) + (m[2] ? (m[2].charCodeAt(0) - 96) / 100 : 0) : NaN
 }
 
-let root = '.'
+// Default root: the repository toplevel, NOT the shell's CWD — every roadmap brief and spec
+// path below is resolved against it, so a run from a subdirectory would otherwise report an
+// empty roadmap rather than an error. Falls back to '.' outside a git repo (the pre-existing
+// behavior, which the fixture-directory callers that pass no --root rely on). An explicit
+// --root still wins.
+let root = (() => {
+  const r = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' })
+  return r.error || r.status !== 0 ? '.' : (r.stdout.trim() || '.')
+})()
 let json = false
 let briefFilter = null
 let nextMode = false

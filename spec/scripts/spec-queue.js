@@ -81,7 +81,20 @@ if (Object.prototype.hasOwnProperty.call(REMOVED_SUBS, sub)) {
 const SUBS = ['next', 'list', 'add', 'move', 'done']
 if (!SUBS.includes(sub)) { usage(); process.exit(2) }
 
-const root = process.cwd()
+// The repository root, NOT the shell's CWD: every brief/spec state below is derived by
+// `spec-status.js --root <root>` and by `specRoot`-relative existsSync, so a run from a
+// subdirectory would otherwise resolve every `docs/roadmap/*` and `specs/*` path against that
+// subdirectory — reporting every finished item as pending and every gate target as missing,
+// with no error. Same `git rev-parse --show-toplevel` idiom the build and review drivers use;
+// falls back to the CWD so the not-a-git-repository exit below stays the one repo gate (and a
+// bare repo, which has a common dir but no toplevel, behaves exactly as before).
+function resolveToplevel(dir) {
+  const r = spawnSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' })
+  if (r.error || r.status !== 0) return null
+  return r.stdout.trim() || null
+}
+
+const root = resolveToplevel(process.cwd()) || process.cwd()
 
 function resolveCommonDir(dir) {
   const r = spawnSync('git', ['-C', dir, 'rev-parse', '--git-common-dir'], { encoding: 'utf8' })

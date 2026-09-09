@@ -4,7 +4,7 @@
     "scripts": 29937,
     "spec/scripts": 1255214,
     "spec/scripts/lib": 231235,
-    "tests": 3432195
+    "tests": 3448737
   },
   "files": {
     "scripts/plugin-bump.js": 8564,
@@ -84,6 +84,7 @@
     "spec/scripts/verdict.js": 49794,
     "spec/scripts/worktree-include.sh": 3277,
     "tests/ac-matrix-coverage-holes.test.js": 12430,
+    "tests/ac-matrix/ac-matrix.fixtures.js": 2238,
     "tests/ac-matrix/ac-matrix.test.js": 48959,
     "tests/ac-matrix/lint-mode.test.js": 10887,
     "tests/ac-matrix/owning-spec-env.test.js": 15146,
@@ -132,6 +133,7 @@
     "tests/env-preflight.test.js": 11643,
     "tests/escape/escape-row.test.js": 24093,
     "tests/file-plan/multi-table.test.js": 11943,
+    "tests/fixtures-modules.test.js": 10488,
     "tests/fixtures/minimal-host/.claude/rules/spec-pipeline.md": 749,
     "tests/fixtures/minimal-host/.claude/spec-runs.jsonl": 549,
     "tests/fixtures/minimal-host/.claude/spec.config.json": 415,
@@ -149,7 +151,7 @@
     "tests/frontmatter.test.js": 4254,
     "tests/frontmatter/frontmatter.test.js": 16719,
     "tests/genesis-gate.test.js": 14633,
-    "tests/genesis/brief-state.test.js": 61929,
+    "tests/genesis/brief-state.test.js": 61798,
     "tests/genesis/conventions-handoff.test.js": 28971,
     "tests/genesis/genesis-driver.test.js": 75630,
     "tests/genesis/registry-check.test.js": 23113,
@@ -209,6 +211,7 @@
     "tests/render/render-rules.test.js": 33656,
     "tests/replay/record-via.test.js": 7610,
     "tests/replay/replay-corpus.test.js": 7478,
+    "tests/replay/replay.fixtures.js": 2010,
     "tests/replay/replay.test.js": 201793,
     "tests/report/report-render.test.js": 14403,
     "tests/review/ci-query.test.js": 17510,
@@ -234,7 +237,8 @@
     "tests/review/review-driver.test.js": 51071,
     "tests/review/review-legs-at-risk-argv.test.js": 15160,
     "tests/review/review-legs-smoke-wave.test.js": 10397,
-    "tests/review/review-legs.test.js": 41618,
+    "tests/review/review-legs.fixtures.js": 2860,
+    "tests/review/review-legs.test.js": 40695,
     "tests/review/reviewer-return-killed.test.js": 11061,
     "tests/review/reviewer-scope-identity.test.js": 2982,
     "tests/review/reviewer-seat.test.js": 1771,
@@ -292,6 +296,12 @@
       "path": "tests/genesis/tournament.fixtures.js",
       "from": 10688,
       "to": 11447,
+      "cite": "specs/20260908/03-test-fixture-dedupe.md"
+    },
+    {
+      "path": "tests",
+      "from": 3432195,
+      "to": 3448737,
       "cite": "specs/20260908/03-test-fixture-dedupe.md"
     }
   ]

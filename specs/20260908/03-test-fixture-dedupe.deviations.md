@@ -29,8 +29,7 @@
   `writeBrief` copies' parameterization (11447 > 10688). Raised via the ratchet's own sanctioned
   route, `node scripts/size-ratchet.js --root . --raise tests/genesis/tournament.fixtures.js
   --to 11447 --cite specs/20260908/03-test-fixture-dedupe.md`, rather than shrinking the shared
-  module back toward the duplication this spec exists to remove. Whole-tree ratchet is green
-  ("255 files, 4 trees, all tight") and size-baseline.json is updated per D7.
+  module back toward the duplication this spec exists to remove.
 - D2 says brief-state.test.js / genesis-driver.test.js "drop" their local `writeBriefWithSections`
   and `writeVisualBrief`. Both survive as thin wrappers that build an `extraSections` string and
   delegate to the shared `writeBrief`, because each has a bespoke parameter shape
@@ -49,6 +48,38 @@
   reported on its own recursion guard for every module — fixed by stripping the variable from the
   child env; (2) its AC-4 run omitted `--json`, so `findings` could not parse stdout — fixed by
   passing `--json` the way all 13 existing call sites do.
+- D7's ordering produces a FALSE baseline, and the "all tight" line this log first recorded was
+  that false green. `size-ratchet.js` inventories the tracked-file list, so the four files this
+  spec CREATES (three fixtures modules + the guard test, 17,596 bytes) were invisible to the
+  `--update` D7 schedules "after the last worker returns, before the final gate" — they were not
+  staged yet. The recorded `tests` tree total came out 17,596 bytes too low and the ratchet
+  reported the tree tight when it was not. The build gate did not catch it either, because
+  `gateCommand` is `{testDirs}`-scoped and the live ratchet check lives in `tests/consistency/`,
+  outside the changed directories. Review's full-suite leg caught it (tree-over by 17,465 after
+  a later 131-byte edit). A `--update` scheduled before the CREATE rows are tracked can only
+  ever record a too-low tree ceiling — for any spec with a CREATE row, not just this one.
+- The spec's Goal says "the size baseline records the shrink". It records a GROWTH. Measured
+  against this spec's own `diff_base` (1aa5915, `tests` = 3,440,148), the final tree is
+  3,448,737: net +8,589 bytes. Decomposed: the ten consumer files shrank 9,766; the three new
+  fixtures modules cost 7,108; tournament.fixtures.js grew 759; the guard test
+  tests/fixtures-modules.test.js, which the spec's own AC-2..-7 require, costs 10,488. The
+  extraction alone is therefore a real but modest shrink (-1,899 bytes); the guard test is the
+  whole of the growth. Recorded as a cited tree raise to 3,448,737 (user ruled at review time,
+  with a second opinion confirming the raise is unavoidable — a full trim of the guard test's
+  comments wins only ~3,000 bytes and still lands over the old ceiling).
+- D1's File Plan row for tests/review/review-legs.test.js reads "four `makeHost*` + `SPEC_BODY`
+  -> fixtures calls", and A1 cites four copy sites in that file including pre-image lines
+  610-629. The build left two of them behind: `SPEC_BODY` stayed a hand literal byte-identical
+  to `reviewLegsSpecBody()`'s defaults, and `makeSuiteCountHost` (pre-image 610-629) stayed a
+  fifth full copy of the skeleton differing only in config. Both were converted at review time,
+  recovering 923 bytes; tests/review/*.test.js is 239/239 green and all 21 test names in the
+  file are byte-identical to the pre-image. The remaining local builders
+  (`makeSuiteBlindSpotHost`, `makeAtRiskHost`, `makeVerdictCapableAtRiskHost`, and the
+  smoke-wave / at-risk-argv pair) genuinely need a file committed in the BASE commit, which the
+  shared builder's `extraFiles` writes only into the implement commit — correctly kept under A1.
+  Three of them share that exact need, so a `baseFiles` parameter would clear A1's "never a
+  parameter nobody else uses" bar and win roughly 1.7 KB more; that changes D1's published
+  contract, so it belongs to a follow-up rather than this spec.
 
 ## D10 red evidence — the pre-extraction run, transcribed
 

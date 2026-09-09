@@ -4,7 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
-const { makeReviewLegsHost } = require('./review-legs.fixtures')
+const { makeReviewLegsHost, reviewLegsSpecBody } = require('./review-legs.fixtures')
 
 // review-legs.js replaces /spec:review's hand-performed Phase 0 — it runs every deterministic
 // review leg (reconcile, gate w/ resolved {testDirs}, smoke, ci, at-risk, ac-matrix +
@@ -64,29 +64,9 @@ const { makeReviewLegsHost } = require('./review-legs.fixtures')
 
 const SCRIPT = 'scripts/review-legs.js'
 
-const SPEC_BODY = `---
-status: implementing
-tier: standard
----
-# Test Spec
-
-## Decisions
-
-| ID | Decision | One-line rationale |
-|----|----------|--------------------|
-| D1 | foo() returns 42 (AC-20260817-99-1) | why |
-
-## File Plan
-
-| File | Action | Layer |
-|---|---|---|
-| src/foo.js | edit | scripts |
-| tests/foo.test.js | create | tests |
-
-## Acceptance Criteria
-
-- **AC-20260817-99-1**: foo() returns 42.
-`
+// Byte-identical to reviewLegsSpecBody()'s defaults (title 'Test Spec', acId
+// 'AC-20260817-99-1'), so the literal is the shared builder's own output (D1).
+const SPEC_BODY = reviewLegsSpecBody()
 
 function makeHost({ testBody, testEnv }) {
   const config = {
@@ -600,26 +580,17 @@ test('AC-20260903-02-4: WHEN the host config declares gateCommand but no testCom
 })
 
 function makeSuiteCountHost(printLine) {
-  const dir = tmpdir('review-legs-suite-count')
-  const g = gitRepo(dir)
-  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
-  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
-  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
-  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({
-    gateCommand: 'node --test {testDirs}',
-    testCommand: `bash -c "echo '${printLine}'"`,
-    runtime: { inert: 'plugin repo — nothing boots' },
-    capabilities: { forge: 'none', skipReportPattern: 'none', testCountPattern: 'ℹ tests (\\d+)' },
-  }))
-  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
-  g('add', '-A'); g('commit', '-q', '-m', 'base')
-  const base = g('rev-parse', 'HEAD').trim()
-  fs.mkdirSync(path.join(dir, 'specs/20260817'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'specs/20260817/99-test.md'), SPEC_BODY)
-  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 42\n')
-  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), GREEN_TEST)
-  g('add', '-A'); g('commit', '-q', '-m', 'implement')
-  return { dir, base }
+  return makeReviewLegsHost('review-legs-suite-count', {
+    specDate: '20260817',
+    ordinal: '99',
+    testBody: GREEN_TEST,
+    config: {
+      gateCommand: 'node --test {testDirs}',
+      testCommand: `bash -c "echo '${printLine}'"`,
+      runtime: { inert: 'plugin repo — nothing boots' },
+      capabilities: { forge: 'none', skipReportPattern: 'none', testCountPattern: 'ℹ tests (\\d+)' },
+    },
+  })
 }
 
 test('AC-20260903-02-5: WHEN the host declares testCountPattern and its bare testCommand exits 0 printing "ℹ tests 0" THE SYSTEM SHALL append the suite row with exit:1 and observed.testsExecuted 0; WHEN the same shape prints "ℹ tests 3" THE SYSTEM SHALL keep exit:0 with testsExecuted 3', () => {

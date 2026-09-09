@@ -41,11 +41,10 @@ function statusOf(dir) {
   return JSON.parse(fs.readFileSync(path.join(dir, '.claude/genesis/status.json'), 'utf8'))
 }
 
-// specs/20260908/03-test-fixture-dedupe.md D2: writeBrief is now shared from
-// tournament.fixtures.js (byte-identical to this file's old local copy save the project
-// sentence, which the shared function's `label` param now fills). Every call below that used to
-// rely on this file's own `dims = {}` default now passes `dims: {}` explicitly, since the
-// shared function's default is `{ [DIM]: 'open' }` (tournament.test.js's own need).
+// specs/20260908/03-test-fixture-dedupe.md D2: writeBrief is shared from
+// tournament.fixtures.js. Its `label` param fills the project sentence, and its `dims` default
+// is `{ [DIM]: 'open' }` (tournament.test.js's need), so a call in this file that wants no
+// dimensions must pass `dims: {}` explicitly.
 
 // Empty ledger.md (D2/D3's grammar, matching spec/scripts/lib/mocks-ledger.js's own committed
 // template) — zero rows parses to errors: [] and gateVerdict open: true, blocking: [].

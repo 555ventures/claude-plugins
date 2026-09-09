@@ -1,0 +1,137 @@
+{
+  "runId": "rv_82d880516438",
+  "ts": "2026-09-09T05:04:54.935Z",
+  "spec": "specs/20260907/06-theme-pick-moves-to-sketch.md",
+  "tier": "standard",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1195,
+    "base": "df8d1d942c5b6e8f10f82856409a4582898bc192",
+    "head": "6870f13882dafcc5b6f8c43f86200195cc8fe4c3",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 0,
+      "observed": {
+        "outOfPlan": 0,
+        "files": []
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 536
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1355
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 10
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 17,
+        "testsExecuted": 148
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 13,
+        "carried": 10,
+        "sanctioned": 3,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "The writes: sentence 'one fresh theme: <kebab> row whenever a same-kebab row was superseded or none existed' might mischaracterise needsFreshRow.",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1284,
+        "evidence": "needsFreshRow = sameRowsNeedSupersede = (sameRows.length !== 1 || missing.length > 0). Same-kebab rows are superseded exactly when sameRowsNeedSupersede (line 1288), so fresh row <=> (a same-kebab row was superseded) OR (sameRows.length === 0). Executed: complete-row re-adopt with a cross row present left row count unchanged (BEFORE 2 theme rows / AFTER 2 theme rows), P92 'theme: a' still 'confirmed 2026-09-09'; no-cross re-adopt left ledger bytes and mtime identical."
+      },
+      {
+        "claim": "'written whenever any row changes, never when nothing does' might be wrong for crossRows non-empty with no same-kebab supersede (write skipped) or for the true no-op shape (spurious write).",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1298,
+        "evidence": "Gate is needsFreshRow || crossRows.length. Executed probe case1 (one complete 'theme: a' row P92 + added confirmed 'theme: b' row P95, re-pick a): adopt exit 0, ledger content changed, P95 'confirmed' -> 'overridden 2026-09-09', no fresh row. Probe case2 (one complete row, no cross rows, re-pick a): adopt exit 0, ledger bytes strictEqual before/after and statSync mtimeMs identical. tests/mocks/mocks-driver-theme.test.js: tests 15, pass 15, fail 0."
+      },
+      {
+        "claim": "The four same-kebab shapes do not all satisfy the stated fresh-row rule.",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1285,
+        "evidence": "Enumerated and executed: zero same-kebab rows -> fresh ('none existed'); one complete row -> no fresh, no supersede; one incomplete row -> superseded and fresh; two or more rows -> all superseded and fresh. In every branch a fresh row is appended if and only if a same-kebab row was superseded or none existed."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 32000
+  }
+}

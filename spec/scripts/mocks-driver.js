@@ -121,13 +121,19 @@
 //   0  a bare invocation printed the current step (or `--state` printed the state name), an
 //      accepted `--mark` recorded its result and printed the checkpoint line, a `--reopen`
 //      printed what it invalidated, a ledger/look subcommand succeeded, `stop open` printed the
-//      link + reply line, or `stop decide` recorded a decision.
+//      link + reply line, `stop decide` recorded a decision, `theme state` printed `absent` or
+//      `picked`, or `theme compose`/`theme open`/`theme adopt` accepted its candidate(s).
 //   1  `ledger check` found a blocked gate (rows printed).
 //   2  a refused mark (an unknown mark or the retired `--decider` flag included), a failed
 //      precondition (missing artifact, blocked gate, unreachable look probe, undeclared/undrawn
 //      journey for `stop open`, a `look --state` value the mock does not declare), a usage error,
-//      `ledger check` grammar errors, or a dead child process (runChild's fail-closed refusal).
-//   3  `stop open`/`stop decide` failed inside design-atlas.js itself (its own stderr forwarded).
+//      `ledger check` grammar errors, a dead child process (runChild's fail-closed refusal),
+//      `theme state` naming design/tokens.css as the wireframe gray register byte-for-byte, or
+//      `theme compose`/`theme open`/`theme adopt` refusing a candidate direction (a D2 violation,
+//      the composed-direction floor, a missing/disagreeing theme-picked stop, or an incomplete
+//      ledger row with no remedy left to supersede).
+//   3  `stop open`/`stop decide`/`theme open` failed inside design-atlas.js itself (its own
+//      stderr forwarded).
 
 'use strict'
 const fs = require('fs')
@@ -1116,6 +1122,48 @@ function handleThemePicked(directionArg) {
 // this family.
 // ---------------------------------------------------------------------------
 
+// Review findings (specs/20260907/06 build, three rounds): D2 refuses "a `wire/` stylesheet
+// link" — link/import-anchored, never a bare `/\bwire\//` substring scan of the whole page (a
+// candidate whose only "wire/" occurrence is prose — a comment, a data attribute — must still
+// compose). Two narrowing bugs since fixed:
+//   (1) the first cut only matched a double-quoted `<link href="...">`, missing a single-quoted
+//       or unquoted href and a CSS `@import` of the wire register entirely;
+//   (2) `\b` treats `-`, `.` and `_` as word boundaries, so `\bwire\/` over-matched a real path
+//       segment named e.g. "my-wire" or "v.wire" (refused) while `\b` alone happened to still
+//       exclude "hardwire/", "firewire/", "wireframe/", "rewire/" and "my_wire/" for unrelated
+//       reasons (wire/ either isn't a suffix there or isn't followed by "/").
+// WIRE_SEGMENT_RE below requires "wire" to be a real path segment — preceded by "/" or by the
+// very start of the value — never a `\b`-boundary substring. The <link> arm is additionally
+// gated on a stylesheet `rel` (D2 says "stylesheet link"; `rel="icon"`/`"preload"`/etc pointing
+// into wire/ is not this leg's concern) — the @import arm needs no such gate, since an @import
+// is always a stylesheet import. design-atlas.js's own WIRE_LINK_RE (line ~346) is NOT touched
+// by this fix and keeps the old `\b` boundary with no rel gate — the two regexes now
+// deliberately diverge; design-atlas.js's copy binds only once design/tokens.css already
+// resolves above the mock, a condition that by definition does not hold during the theme run,
+// so the two checks never both see the same candidate.
+const WIRE_SEGMENT_RE = /(^|\/)wire\//
+function attrValue(tag, attr) {
+  const m = new RegExp('\\b' + attr + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s"\'>]+))', 'i').exec(tag)
+  if (!m) return null
+  return m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3]
+}
+function linksWireRegister(html) {
+  const linkTags = html.match(/<link\b[^>]*>/gi) || []
+  for (const tag of linkTags) {
+    const rel = attrValue(tag, 'rel')
+    if (!rel || !/stylesheet/i.test(rel)) continue
+    const href = attrValue(tag, 'href')
+    if (href && WIRE_SEGMENT_RE.test(href)) return true
+  }
+  const importRe = /@import\s*(?:url\(\s*)?(?:"([^"]*)"|'([^']*)'|([^\s"'()]+))/gi
+  let m
+  while ((m = importRe.exec(html))) {
+    const target = m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3]
+    if (target && WIRE_SEGMENT_RE.test(target)) return true
+  }
+  return false
+}
+
 // D2: the one shared validator `compose`/`open`/`adopt` all run over a single candidate
 // directory, in the Contracts block's exact refusal order. Returns `{ ok: true, count }` on
 // success or `{ message }` (the exact refusal text, sans the `mocks-driver: ` prefix `die()`
@@ -1131,7 +1179,7 @@ function composeViolations(kebab) {
   if (!shellLib.isKitCanonFile(html)) {
     return { message: 'design/theme/' + kebab + '/kit.html is not a kit canon page — its root must carry data-kit-canon before any data-screen-label' }
   }
-  if (/\bwire\//.test(html)) {
+  if (linksWireRegister(html)) {
     return { message: 'design/theme/' + kebab + '/kit.html links the wireframe register (wire/) — a candidate direction is the kit at production fidelity' }
   }
   const kitPrimitives = shellLib.kitPrimitivesInDir(kitDir)
@@ -1200,23 +1248,54 @@ function cmdThemeAdopt(args) {
   const kebab = pick
   const v = composeViolations(kebab)
   if (v.message) die(v.message)
-  const others = themeDirsOnDisk().filter((k) => k !== kebab)
-  const row = findAssumption((a) => a.kind === 'product' && a.tag === 'said-by-user' && a.status === 'confirmed' && a.claim === 'theme: ' + kebab)
-  if (!row) {
-    let out
-    try {
-      out = appendAssumption(ledgerTextOrDie(), {
-        id: nextLedgerId(parseLedger(ledgerTextOrDie())), step: 'SKETCH', kind: 'product',
+  // Review finding (specs/20260907/06 build): "every other composed direction" (D4) means
+  // every sibling that itself composes, not every directory merely present on disk — a stale
+  // or half-authored design/theme/<k>/ that never passed D2 must not be recorded as rejected.
+  const others = themeDirsOnDisk().filter((k) => k !== kebab).filter((k) => composeViolations(k).ok)
+
+  // D10/D12 (review rulings, overriding D4's "reuse verbatim" for this one branch): the whole
+  // ledger update below is a sequence of pure string transforms on one in-memory `text`,
+  // followed by a single fs.writeFileSync — a throw partway through leaves the file untouched.
+  // D10: an incomplete/stale "theme: <kebab>" row is superseded, never a dead end — D5 promises
+  // re-picking is a fresh `theme open` + `theme adopt`, and this repo's own rules make an error
+  // path with no remedy hard. D12: adopting <kebab> ALSO supersedes every OTHER confirmed
+  // "theme: <other>" row — exactly one confirmed theme: row must exist across all directions at
+  // any time, since genesis-driver.js's confirmedProductRows() hands every confirmed
+  // said-by-user product row to a later BRIEF step as binding grounding, generically, and no
+  // gate (ledger check blocks only invented/inferred) would otherwise catch two contradictory
+  // confirmed theme: claims. Review finding (specs/20260907/06 build): `appendAssumption`
+  // performs no duplicate-claim check, so `ledger add` (a sanctioned, documented writer) can
+  // leave TWO confirmed "theme: <kebab>" rows for the SAME kebab — a first-match `find()` would
+  // supersede only one, leaving the other confirmed and undetected by any gate. `sameRows`
+  // below is every confirmed same-kebab row, not just the first, so re-adopting `<kebab>`
+  // collapses all of them. The fresh row's id is computed AFTER every supersede write, so ids
+  // never collide.
+  let text = ledgerTextOrDie()
+  const parsed = parseLedger(text)
+  const isConfirmedThemeRow = (a) => a.kind === 'product' && a.tag === 'said-by-user' && a.status === 'confirmed' && a.claim.startsWith('theme: ')
+  const confirmedThemeRows = parsed.assumptions.filter(isConfirmedThemeRow)
+  const sameRows = confirmedThemeRows.filter((a) => a.claim === 'theme: ' + kebab)
+  const crossRows = confirmedThemeRows.filter((a) => a.claim !== 'theme: ' + kebab)
+  const rejectedTokens = sameRows.length === 1 ? (sameRows[0].rejected || '').split(/[,\s]+/).filter(Boolean) : []
+  const missing = sameRows.length === 1 ? others.filter((o) => !rejectedTokens.includes(o)) : []
+  // Exactly one same-kebab row, and it already names every composed sibling as rejected, is the
+  // only shape that needs no change at all — zero, or more than one, same-kebab row is itself
+  // the invariant violation this fix exists to collapse, regardless of what any one of them says.
+  const sameRowsNeedSupersede = sameRows.length !== 1 || missing.length > 0
+  const needsFreshRow = sameRowsNeedSupersede
+
+  try {
+    if (sameRowsNeedSupersede) for (const same of sameRows) text = setStatus(text, same.id, 'overridden ' + todayIso())
+    for (const cross of crossRows) text = setStatus(text, cross.id, 'overridden ' + todayIso())
+    if (needsFreshRow) {
+      text = appendAssumption(text, {
+        id: nextLedgerId(parseLedger(text)), step: 'SKETCH', kind: 'product',
         claim: 'theme: ' + kebab, tag: 'said-by-user', status: 'confirmed ' + todayIso(),
         rejected: others.join(', '), note: stop.decision.note || 'picked on the page',
       })
-    } catch (e) { die('could not append the theme ledger row: ' + e.message) }
-    fs.writeFileSync(ledgerPath, out)
-  } else {
-    const rejectedTokens = (row.rejected || '').split(/[,\s]+/).filter(Boolean)
-    const missing = others.filter((o) => !rejectedTokens.includes(o))
-    if (missing.length) die('the "theme: ' + kebab + '" ledger row\'s rejected cell does not name every other composed direction — missing: ' + missing.join(', '))
-  }
+    }
+  } catch (e) { die('could not update the theme ledger row(s): ' + e.message) }
+  if (needsFreshRow || crossRows.length) fs.writeFileSync(ledgerPath, text)
 
   fs.copyFileSync(path.join(root, 'design/theme', kebab, 'tokens.css'), path.join(root, 'design/tokens.css'))
   consumeStopAndSave(stop.id)

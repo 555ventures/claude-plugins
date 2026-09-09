@@ -1,6 +1,6 @@
 ---
 date: 2026-09-07
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: design-sketch
@@ -42,6 +42,10 @@ while `/spec:mocks` THEME keeps working byte-identically — retiring it is spec
 | D7 | `spec/commands/sketch.md` § The run gains **step 3, `Theme (first run only)`**, before the scoped sweep, renumbering today's steps 3–8 to 4–9. It runs `node {driver} theme state`: exit 2 → STOP, printing the driver's stderr verbatim; `picked` → skip to the sweep; `absent` with **no** `design/kit/` resolving → print `⚠️ no design/kit/ and no theme — sketching gray, structure only (run /spec:mocks to KIT first)` and continue gray, which is today's branch reworded; `absent` **with** a kit family → the theme run: read the gray kit + seed + `design/mocks/references/` + `docs/design/research-brief.md`; derive 2–3 candidate directions from the brief's product, audience and references and `AskUserQuestion` which to compose, never a stock pair (warm/cool, playful/serious); record each as a confirmed `theme-directions: <k>` row via `node {driver} ledger add --step SKETCH`; per direction author `design/theme/<k>/tokens.css` (light plus a `[data-theme="dark"]` block whenever `design/targets.json` declares `dark`) and re-render every kit primitive at production fidelity into `design/theme/<k>/kit.html`, primitive keys and structure kept, under the `frontend-design` skill, verifying each with `node {driver} theme compose --direction <k>`; start the served atlas as a tracked background task, run `node {driver} theme open`, print its two lines and **end the turn**, never `AskUserQuestion`; on the next invocation `node {driver} theme adopt`, and a `decided change` is one more compose round then a fresh `theme open`. After adopt, when no shell canon exists, `design/shell/app.html` is extracted from the picked direction's kit page rather than authored freehand. The sweep step's `When design/tokens.css is absent…` clause is deleted — after step 3 it can only be absent on the no-kit floor (AC-20260907-06-8) | One binding home: the interview, the composition rule and the look hand-off are the same three things `spec/commands/mocks.md` § THEME interview rule owns today, moved whole rather than re-derived. The dark-block requirement is not new taste — executed 2026-09-07, `design-atlas.js check` already refuses a themed page whose linked `tokens.css` carries no dark block when `targets.json` declares `dark`, so a candidate that omits it fails D2. |
 | D8 | Doctrine, one home: `spec/doctrine/design.md` § Design Canon's **Fidelity lives in sketch** sentence gains that the theme itself is picked on sketch's first run, that candidates are the signed-off gray kit re-rendered per direction at `design/theme/<kebab>/kit.html`, and that the picked direction's kit page is the fidelity reference every later sketch surface is built from. `spec/doctrine/mocks.md` is **not touched** — its § Mocks: Authoring Rules "Theme = recompose, never repaint" bullet still describes the live mocks THEME state and becomes wrong only when specs/20260907/07 retires it (AC-20260907-06-9) | § Doctrine Authoring: the script is the mechanism, prose points at it — and a bullet that is still true is never edited early just because a successor spec will change it. |
 | D9 | Bump `spec/.claude-plugin/plugin.json` to the next free minor — target **7.105.0** (7.99.0 and 7.100.0 shipped on 2026-09-08 in sibling work; 7.101.0/7.102.0/7.103.0 are claimed by `07`/`08`/`09` and 7.104.0 by `05`), resolved to whatever is actually free at build time — with a changelog entry `[no-ac: review's version-bump check is the oracle]` | § Planning version discipline; hardened-but-unbuilt siblings hold the numbers they claim, and a shipped sibling spends them. |
+| D10 | **Review ruling (JJ 2026-09-08), overriding the disposer's `reject`:** the re-pick dead end is fixed in `cmdThemeAdopt` rather than inherited. When a confirmed `theme: <kebab>` row already exists and its `rejected` cell does not name every composed direction, `adopt` no longer refuses — it supersedes that row (marking the stale one `overridden <today>` via the existing `setStatus`) and appends a fresh complete row, so D5's "re-picking is opening a fresh `theme open` stop and adopting again" is literally self-service. The refusal survives only where no supersede is possible, and then names its remedy command. D4's "reuse verbatim" yields to this ruling for this one branch; the byte-for-byte token copy and the completeness check itself are unchanged (AC-20260907-06-12) | Host rules § Review Checks: "an error path that doesn't name its remedy command … is **hard**" — the executed repro reached a state whose only escape was an undocumented `ledger set` incantation. Recorded as this session's Decision because only the user overrides a disposition (core § Decisions). |
+| D11 | **Review ruling (JJ 2026-09-08):** `spec/scripts/mocks-driver.js`'s header `Exit codes:` list gains the `theme` family — `theme state`'s gray-register refusal and `theme compose`'s design-atlas check leg under exit 2, and `theme open`'s `runDesignAtlasStopOpen` path under exit 3 `[no-ac: comment-only header text; review's own § Review Checks header rule is the oracle]` | Host rules § Worker Rules require "an explicit `Exit codes:` list", and § Review Checks makes an undocumented exit path **hard**; `theme open` reaches exit 3 through the same helper `stop open` does, which the header names and the theme family does not. |
+| D12 | **Review ruling (JJ 2026-09-08), overriding the disposer's `waive`:** `theme adopt` supersedes the previously-adopted direction's row too, not only a stale row for the same kebab. Adopting `<k>` marks every OTHER confirmed `said-by-user` `product` row whose claim matches `theme: <other>` as `overridden <today>`, so exactly one confirmed `theme:` row exists across all directions at any time. D5's "`design/tokens.css` on disk is the sole signal" is unchanged — this is about the provenance rows, not the pick signal (AC-20260907-06-13) | `genesis-driver.js`'s `confirmedProductRows()` filters generically (every confirmed `said-by-user` `product` row), and its BRIEF step prints `derived from: product ledger row(s) <ids>` instructing the session to write the brief "from these, never from the interview alone" — so two contradictory confirmed `theme:` claims become binding grounding for a later genesis run. Executed: `ledger check` keeps the gate open on such a ledger (`gateVerdict` blocks only invented/inferred), so no deterministic leg would ever catch it. |
+| D13 | **Review ruling (JJ 2026-09-08):** the Contracts block's `writes:` lists name `design/mocks/status.json` wherever the driver touches it — for `theme adopt` (via `consumeStopAndSave` → `saveStatus`, refreshing `lastUpdated`) and for `theme compose`/`theme open`, which create it through the module-level `loadStatus()` on a cold root. D1's `theme state` carve-out ("writes nothing, not even `status.json`") is the sole exception and stays exactly as written `[no-ac: Contracts prose only; the executed writes-list check is the oracle]` | Executed: `theme state` on an empty root leaves it empty, while `theme compose` on an identical empty root leaves `design/mocks/{status.json,ledger.md,seed.md}`. The silence was an omission, not a deliberate contrast — D1 is a carve-out from a driver-wide behavior the other Contracts blocks never enumerated. |
 
 **Orchestrator duty (outside the File Plan table):** `tests/mocks/mocks-driver-fixtures.js` is edited
 first — it gains `writeThemeKit(dir, kebab, primitives)` (a `design/theme/<kebab>/` holding a
@@ -101,6 +105,9 @@ mocks-driver.js --root <dir> theme compose --direction <kebab>
     "design-atlas.js check design/theme/<k> failed: <child output>"
     "design/mocks/ledger.md has no confirmed said-by-user product row with claim
      \"theme-directions: <k>\" — record the direction interview pick first"
+  writes (D13): design/mocks/status.json — plus ledger.md and seed.md on a cold root — created
+          by the module-level loadStatus() every subcommand but `theme state` runs through;
+          the validation itself is read-only
 
 mocks-driver.js --root <dir> theme open [--port <n>]
   -> design-atlas.js stop open, kind "pick", key "theme-picked", title "pick the theme",
@@ -109,18 +116,33 @@ mocks-driver.js --root <dir> theme open [--port <n>]
   refuses: "theme open: only <n> direction(s) composed — at least 2 are required before
             opening a look stop"
   refuses: any D2 violation on any candidate directory, verbatim
+  writes (D13): design/mocks/status.json — same loadStatus() path as `theme compose`; the stop
+          itself is written by design-atlas.js into design/mocks/picks.json
 
 mocks-driver.js --root <dir> theme adopt [--direction <kebab>]
   -> "✅ theme \"<kebab>\" adopted — design/tokens.css written · fidelity reference:
       design/theme/<kebab>/kit.html"
   writes: design/tokens.css (byte-for-byte copy of design/theme/<kebab>/tokens.css)
-          design/mocks/ledger.md  (the theme: <kebab> row, only when absent)
+          design/mocks/ledger.md  (the D10/D12 supersedes below, plus one fresh theme: <kebab>
+            row whenever a same-kebab row was superseded or none existed — written whenever any
+            row changes, never when nothing does)
           design/mocks/picks.json (the stop consumed)
+          design/mocks/status.json (D13: consumeStopAndSave → saveStatus refreshes
+            lastUpdated; no other field moves)
   leaves: status.marks and status.theme exactly as found
   refuses: "no look stop for theme-picked — run `theme open` first"
   refuses: "--direction <x> disagrees with the page pick \"<pick>\" (stop <id>)"
-  refuses: "the \"theme: <k>\" ledger row's rejected cell does not name every other composed
-            direction — missing: <list>"
+  supersedes (D10): a confirmed "theme: <k>" row whose rejected cell does not name every
+            composed direction is marked "overridden <today>" and a fresh complete row is
+            appended in the same write — adopt does NOT refuse on this path
+  supersedes (D12): every OTHER confirmed said-by-user product row whose claim is
+            "theme: <other>" is marked "overridden <today>" in the same write, so exactly one
+            confirmed "theme:" row exists across all directions at any time
+  refuses: "could not update the theme ledger row(s): <reason>" — one message for the whole
+            ledger sequence (D10's same-kebab supersede, D12's cross-direction supersedes and
+            the fresh row append); unreachable through any file state that passes
+            composeViolations, since every input the sequence validates was parsed from the
+            same ledger text it writes back
 
 design/theme/<kebab>/            (a candidate direction, authored by /spec:sketch)
   kit.html      root data-kit-canon="<name>", every data-kit-primitive key design/kit/ declares,
@@ -165,6 +187,8 @@ re-pick is: compose more directions, `theme open`, decide on the page, `theme ad
 - **AC-20260907-06-9**: WHEN `spec/doctrine/design.md` § Design Canon is read THE SYSTEM SHALL name `design/theme/<kebab>/kit.html`, the phrase `fidelity reference`, and that the theme is picked on `/spec:sketch`'s first run → `tests/consistency/design-doctrine.test.js`
 - **AC-20260907-06-10**: WHEN `--mark direction-composed --direction <k>`, `--mark theme-picked` and `--reopen theme` run on a root advanced through the existing fixture chain THE SYSTEM SHALL CONTINUE TO accept each one and SHALL CONTINUE TO derive `THEME` from a journey-approved root whose `status.theme` is null — this spec adds a second theme producer and retires none → `tests/mocks/mocks-driver-theme.test.js`
 - **AC-20260907-06-11**: WHEN `design-atlas.js check` runs over a mock tree with no `design/tokens.css` anywhere above it THE SYSTEM SHALL CONTINUE TO print no wire-register line, warn or violation, and exit 0 → the existing no-`tokens.css` absence test in `tests/design-atlas.test.js`, retagged with this AC-ID
+- **AC-20260907-06-12**: WHEN `theme adopt` runs on a pick of `<k>` for which a confirmed `said-by-user` `product` row `theme: <k>` already exists whose `rejected` cell does not name every currently-composing direction, THE SYSTEM SHALL exit 0, SHALL mark that stale row `overridden <today>`, and SHALL append one fresh `theme: <k>` row whose `rejected` cell names every other composed direction; WHEN the same direction is re-adopted twice more, each time after a further direction composes, the ledger SHALL hold exactly one `confirmed` `theme: <k>` row and one `overridden` row per supersede, and the fresh row's id SHALL never collide with a superseded one; WHEN the existing row's `rejected` cell is already complete THE SYSTEM SHALL leave it untouched at its original id and status and append no row → `tests/mocks/mocks-driver-theme.test.js`
+- **AC-20260907-06-13**: WHEN `theme adopt` runs on a pick of `<k>` while a confirmed `said-by-user` `product` row for a DIFFERENT direction (`theme: <other>`) exists, THE SYSTEM SHALL mark that other row `overridden <today>` and SHALL leave exactly one `confirmed` `theme:` row — the one naming `<k>` — across every direction; WHEN three directions are adopted in turn THE SYSTEM SHALL leave exactly one `confirmed` `theme:` row and one `overridden` row per superseded pick, all with distinct ids → `tests/mocks/mocks-driver-theme.test.js`
 
 ## Assumptions (escalation triggers)
 

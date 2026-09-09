@@ -99,7 +99,7 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    delta row.
 5. **Build & report.** `node {atlas} build`, then report the output path
    (`design/atlas/index.html`); this session never opens a browser itself — the served atlas
-   page (§ 7's look stop starts it as a tracked background task) is the one viewer, for the
+   page (§ 8's look stop starts it as a tracked background task) is the one viewer, for the
    atlas and for leaving notes alike. The map shows everything, but this session's iteration
    scope stays the one brief.
 6. **The loop.** Take changes in chat against screen labels, or read them back from the served
@@ -147,7 +147,7 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    `{screen, state, blindspot, finding, severity}` and edits nothing. Record every returned
    finding as a page note: `node {driver} notes add --scope mock --screen <label> [--state <s>]
    --by critic --reason <blindspot> --text "<finding>"`; an empty findings list is recorded as
-   nothing — the critic found no real gap. Fix what the session can (step 5's triage) and leave
+   nothing — the critic found no real gap. Fix what the session can (step 6's triage) and leave
    the rest open for the user — the look stop below is where any note still open surfaces to
    them. This pass runs on every exit, never skipped for a small brief, and never run by the
    session standing in for the critic — the fresh-context dispatch is the whole point (Rules).
@@ -187,7 +187,7 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    atlas. **Ratified = approved, one stamp:** direction confirmed at roadmap level, brief and
    mocks agree, matrix already confirmed in this step — `ratified` carries the same check
    enforcement `approved` does from here on (shared § Design Canon). `decided change` is one
-   more round of step 5's triage, then a fresh `stop open` for the same key. No decision yet —
+   more round of step 6's triage, then a fresh `stop open` for the same key. No decision yet —
    end the turn again; re-run to re-read `stop list`.
 9. **Report.** Assemble the slots (rationale: shared § Console Output Style) — `outcome`:
    ✅ `ratified {N} of {M} surfaces — {brief}`; `bullets`: the `🎨 authored {N} in-session · {K}

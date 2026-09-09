@@ -3,6 +3,7 @@ name: write-free-subcommand-before-module-load-status
 description: how to add a zero-write CLI subcommand to a driver whose module-level `let status = loadStatus()` unconditionally creates status.json/ledger.md/seed.md on a cold root
 metadata:
   type: feedback
+  reviewed: 2026-09-08
 ---
 
 When a driver script (e.g. `mocks-driver.js`) does `let status = loadStatus()` at module top

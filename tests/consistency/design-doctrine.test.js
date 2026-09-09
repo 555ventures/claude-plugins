@@ -323,13 +323,25 @@ test('AC-20260907-06-8: spec/commands/sketch.md carries a step under § The run,
   assert.ok(themeIdx < exitIdx,
     'D7: the Theme step must run before the Exit step: theme@' + themeIdx + ' exit@' + exitIdx)
 
+  // The AC's six literals must live in the THEME STEP'S OWN body, not merely somewhere in
+  // "## The run" — a literal that drifted into a sibling step (e.g. the old step 3's leftover
+  // gray-floor line) would still pass a whole-section check. Anchor on heading TEXT, never on
+  // line numbers or step numerals, so a concurrent renumbering of the surrounding steps
+  // (doctrine worker, same spec) cannot desync this slice.
+  const stepStarts = [...runSection.matchAll(/\n\d+\.\s+\*\*/g)].map((m) => m.index)
+  const themeStepStart = stepStarts.filter((i) => i <= themeIdx).pop()
+  assert.ok(themeStepStart !== undefined,
+    'could not find the numbered-list-item start ("N. **") the Theme heading belongs to — the step list shape may have changed: ' + JSON.stringify({ themeIdx, stepStarts }))
+  const themeStepEnd = stepStarts.find((i) => i > themeIdx)
+  const themeStep = runSection.slice(themeStepStart, themeStepEnd === undefined ? runSection.length : themeStepEnd)
+
   for (const literal of [
     'theme state', 'theme compose', 'theme open', 'theme adopt',
     '⚠️ no design/kit/ and no theme — sketching gray, structure only (run /spec:mocks to KIT first)',
     'end the turn',
   ]) {
-    assert.ok(runSection.includes(literal),
-      'D7: § The run must name "' + literal + '" — the Theme step wires the driver\'s theme subcommand family, the no-kit gray floor, and the turn-ending look-stop hand-off')
+    assert.ok(themeStep.includes(literal),
+      'D7: the Theme step\'s OWN body must name "' + literal + '" — the Theme step wires the driver\'s theme subcommand family, the no-kit gray floor, and the turn-ending look-stop hand-off; a literal sitting in a sibling step does not satisfy this AC: ' + themeStep)
   }
 })
 

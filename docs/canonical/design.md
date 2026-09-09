@@ -77,6 +77,22 @@ whose findings are page notes by `critic` resolved through the existing loop.
 exempt — and flags a `ratified` mock with unresolved notes on its label (critic or human) the
 same way.
 
+The theme itself is picked in sketch (specs/20260907/06). `mocks-driver.js` carries a `theme`
+subcommand family outside the mocks state machine — `theme state` derives `absent`/`picked`
+from `design/tokens.css` and refuses outright when that file is the wireframe gray register
+byte-for-byte; `theme compose --direction <k>` validates one candidate directory; `theme open`
+opens the `theme-picked` pick stop over every valid candidate; `theme adopt` writes
+`design/tokens.css`, appends the `theme: <k>` provenance row at step `SKETCH` and consumes the
+stop. Candidates are the signed-off gray kit re-rendered at production fidelity per direction
+at `design/theme/<kebab>/kit.html`; the picked direction's kit page is the fidelity reference
+every later sketch surface is built from. `adopt` writes no mark — `design/tokens.css` on disk
+is the sole "a theme is picked" signal, and a re-pick is a fresh stop, never a reopen. Adopting
+supersedes rather than refuses: every other confirmed `theme:` row, same direction or not, is
+marked `overridden <today>` in the same write, so exactly one confirmed `theme:` row survives
+across all directions and a later genesis brief is never grounded on two contradictory picks.
+Sketch's first run is the theme run whenever a kit family resolves and no theme is picked; with
+no kit family it prints one gray-floor warning and sketches gray as before.
+
 ## One token set (2026-09-03, specs/20260902/09)
 
 `spec/templates/mocks/viewer.css` is the one token set: shadcn's default zinc values as plain

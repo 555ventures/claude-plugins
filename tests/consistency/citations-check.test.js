@@ -136,6 +136,33 @@ test('AC-20260810-09-2: citations-check.js unions genesis.md into the targets fo
     'doctrine: ' + (r.stdout || ''))
 })
 
+test('AC-20260810-09-2: citations-check.js compares the whole colon-bearing heading, so a stale sub-heading name is a MISS', () => {
+  const root = tmpdir('citations-subheading-miss')
+  writeFixture(root, {
+    'spec/doctrine/b.md': '## Mocks: Page Notes\n\nbody\n',
+    'spec/commands/a.md': 'See b.md § Mocks: Nothing Here for the rule.\n'
+  })
+  const r = runNode('scripts/citations-check.js', ['--root', root])
+  assert.match(r.stdout, /MISS=1/,
+    'this corpus self-namespaces nearly every heading ("Mocks: ...", "Genesis: ..."), so ' +
+    'truncating the captured name at the first colon would verify the namespace prefix alone ' +
+    'and count a citation naming a section that no longer exists as CHECKED — the sub-heading ' +
+    'name after the colon must take part in the comparison: ' + (r.stdout || ''))
+})
+
+test('AC-20260810-09-2: citations-check.js still matches when the citing sentence runs a colon on past a real heading name', () => {
+  const root = tmpdir('citations-subheading-overrun')
+  writeFixture(root, {
+    'spec/doctrine/b.md': '## Review Checks\n\nbody\n',
+    'spec/commands/a.md': 'Per b.md § Review Checks: the reviewer owns the residue.\n'
+  })
+  const r = runNode('scripts/citations-check.js', ['--root', root])
+  assert.match(r.stdout, /MISS=0/,
+    'because a colon does not terminate the capture, ordinary prose that continues after a ' +
+    'real heading name over-runs it — the untruncated-window prefix check must still resolve ' +
+    'it, or every colon-continued citation in the corpus turns into a false MISS: ' + (r.stdout || ''))
+})
+
 // ---------------------------------------------------------------------------
 // AC-20260810-09-3
 // ---------------------------------------------------------------------------

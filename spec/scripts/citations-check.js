@@ -203,8 +203,14 @@ for (const file of scannedFiles) {
       // terminator was found before this line ran out. `(` and `**` terminate too — a
       // citation's own trailing annotation ("§ Design Canon (rule checklist)") or bold-close
       // ("§ Review Checks**") is not part of the heading name being cited.
+      // `:` is deliberately NOT a terminator: this corpus self-namespaces nearly every heading
+      // ("Genesis: ...", "Mocks: ...", "Design ..."), so truncating at the first colon would
+      // verify the namespace prefix alone and leave every sub-heading name unchecked — a
+      // citation naming a section absent from the target file would still count as CHECKED. Prose
+      // that runs a colon on past a real heading name is caught by the `windowText` prefix
+      // check below, the same way an over-run without a colon already is.
       let afterSrc = line.slice(idx + 1)
-      const TERM = /[.,;:)(]|—|\*\*/
+      const TERM = /[.,;)(]|—|\*\*/
       let termIdx = afterSrc.replace(/^\s+/, '').search(TERM)
       let stripped = afterSrc.replace(/^\s+/, '')
       if (termIdx === -1 && L + 1 < lines.length) {
@@ -248,7 +254,11 @@ for (const file of scannedFiles) {
       // source) — checks the OTHER direction: a heading with no parenthetical whose
       // name the citation's own sentence over-runs ("§ Risk Tiers makes it universal") still
       // matches because the real heading is a prefix of the full trailing text, even though
-      // `heading`'s terminator-bounded capture over-ran the actual name.
+      // `heading`'s terminator-bounded capture over-ran the actual name. Because `:` does not
+      // terminate the capture, the over-run is compared against the FULL heading too, not just its
+      // namespace-stripped core — "§ Genesis: Discovery Interview names the grammar" reaches
+      // the end of the sentence and only the whole "Genesis: Discovery Interview" is a prefix
+      // of it.
       const windowText = stripped.trim().replace(/\s+/g, ' ')
       // genesis.md self-namespaces every heading with a "Genesis: " lead (there is no
       // spec/commands/genesis.md to disambiguate against) — the live corpus cites some of
@@ -257,8 +267,10 @@ for (const file of scannedFiles) {
       const matched = heads.some(h => {
         const core = h.replace(/^Genesis:\s*/, '').trim()
         const coreNoParen = core.replace(/\s*\([^)]*\)\s*$/, '').trim()
+        const hNoParen = h.replace(/\s*\([^)]*\)\s*$/, '').trim()
         return h.startsWith(heading) || core.startsWith(heading) ||
-          (coreNoParen.length > 0 && windowText.startsWith(coreNoParen))
+          (coreNoParen.length > 0 && windowText.startsWith(coreNoParen)) ||
+          (hNoParen.length > 0 && windowText.startsWith(hNoParen))
       })
       if (!matched) {
         miss++

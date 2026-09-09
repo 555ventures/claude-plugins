@@ -8,8 +8,8 @@ const { ROOT, tmpdir, gitRepo } = require('./helpers')
 
 // specs/20260908/03-test-fixture-dedupe.md D1-D5: pins the four fixtures modules' own
 // Contracts (review-legs, tournament's new params, ac-matrix, replay) plus D5's "registers zero
-// tests" invariant. Authored against the untouched pre-image: three modules don't exist yet and
-// writeBrief has no extraSections, so every test below is genuinely red at HEAD.
+// tests" invariant. One test per AC-20260908-03-2..-7; each fails if its module stops meeting
+// the Contracts block, and AC-7 fails on any drift in the default brief template.
 
 test('AC-20260908-03-2: makeReviewLegsHost writes extraFiles only into the HEAD commit, leaving the base commit without them, alongside the shared src/foo.js and spec skeleton', () => {
   let mod

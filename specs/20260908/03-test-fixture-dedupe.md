@@ -1,6 +1,6 @@
 ---
 date: 2026-09-08
-status: implementing
+status: done
 tier: standard
 area: tests
 design: false
@@ -133,6 +133,96 @@ This spec touches no script and changes no assertion, which is why it is tests-o
 no version bump. Fragile: `review-legs.test.js` carries four variants in one file, so the
 worker must keep each test's config literal rather than "simplifying" toward one config — the
 variants exist to pin different `capabilities` and `runtime` shapes.
+
+### Folded from the deviations sidecar
+
+**The Goal's shrink did not happen.** Measured against `diff_base` 1aa5915 (`tests` tree =
+3,440,148), the tree closed at 3,447,504. The ten consumer files shrank 9,766 bytes and the
+three new fixtures modules cost 7,108, so the extraction itself is a real but modest ~1.9 KB
+shrink; `tests/fixtures-modules.test.js`, the guard test AC-2..-7 themselves require, costs
+10,419 and is the whole of the net growth. Recorded as a cited tree raise, user-ruled at review
+time with a second opinion confirming the raise was unavoidable (trimming the guard test's
+comments wins ~3 KB and still lands over the old ceiling). `tournament.fixtures.js` also took a
+cited per-file raise for absorbing five copies' parameterization. A third raise, on
+`brief-state.test.js`, loosens nothing: its pre-image ceiling was 62,262 and the file closed at
+61,918, so the raise only restored headroom this spec created and then partly spent.
+
+**D7's ordering records a false baseline.** `size-ratchet.js` inventories the tracked-file list,
+so the `--update` D7 schedules "after the last worker returns, before the final gate" cannot see
+a spec's own CREATE rows — they are not staged yet. The `tests` tree total came out 17,596 bytes
+low (exactly the four new files) and the ratchet reported the tree tight when it was not. The
+build gate missed it too: `gateCommand` is `{testDirs}`-scoped and the live ratchet check lives
+in `tests/consistency/`, outside the changed directories. Review's full-suite leg caught it.
+This bites any spec with a CREATE row, not just this one — queued as a follow-up.
+
+**D1's row was not finished by the build.** The File Plan row for `review-legs.test.js` names
+"four `makeHost*` + `SPEC_BODY` → fixtures calls" and A1 cites pre-image lines 610-629, but
+`SPEC_BODY` stayed a hand literal byte-identical to `reviewLegsSpecBody()`'s defaults and
+`makeSuiteCountHost` stayed a fifth full copy. Both converted at review time, recovering 923
+bytes. The remaining local builders (`makeSuiteBlindSpotHost`, `makeAtRiskHost`,
+`makeVerdictCapableAtRiskHost`, and the smoke-wave / at-risk-argv pair) each need a file
+committed in the BASE commit, which `extraFiles` writes only into the implement commit — kept
+under A1. Three share that exact need, so a `baseFiles` parameter would clear A1's "never a
+parameter nobody else uses" bar and win ~1.7 KB more; that changes D1's published contract, so
+it is follow-up work.
+
+**The dedupe spec created a duplicate.** `commitFiles` landed byte-identically in both
+`replay.fixtures.js` and `replay.test.js`, justified by a header claiming the module "cannot
+require a `*.test.js` file for it" — backwards under D5, and forbidden verbatim by this spec's
+own Canonical Delta. The reviewer caught it; it is now defined and exported once from the
+fixtures module.
+
+**AC-7's pin did not pin.** As first authored it asserted only that the no-`extraSections` brief
+lacked `## Journeys` and contained `## Picks` — two membership checks that pass through drift
+anywhere else in the template the AC promises to hold. Replaced with byte-equality against the
+full expected brief, and proven to bite twice by perturbing one heading and watching it fail
+before reverting.
+
+**Departures kept as-is.** D2 says `brief-state.test.js` and `genesis-driver.test.js` "drop"
+their local `writeBriefWithSections` / `writeVisualBrief`; both survive as thin wrappers over
+their own bespoke parameter shapes, because dropping them outright means rewriting call-site
+arguments that D6 forbids — the duplicated template body, the actual target, is gone from both.
+`ac-matrix.fixtures.js`'s `baseHost` is the one non-byte-identical lift, returning
+`{specPath, root, manifestPath}` where both originals returned a bare string: the Contracts
+block specifies that shape, so it is instruction rather than invention, and the 10 call sites
+adapted by destructuring with no assertion changed. `findings(res)` returns the whole parsed
+`--json` payload, not the bare array the Contracts line claimed — a mis-transcription of the
+byte-identical helper, corrected by D8 rather than by rewriting 13 assertions.
+
+**Repairs to the guard test itself.** Three, none in any fixtures module: its AC-6 child run
+inherited `NODE_TEST_CONTEXT`, so under `node --test` Node refused to recurse and the check
+reported on its own recursion guard for every module; its AC-4 run omitted `--json`, so
+`findings` could not parse stdout; and its header asserted every test below was "genuinely red
+at HEAD", false once the modules landed.
+
+### Waived at review close (2026-09-09)
+
+- **The guard test's stale header sentence** — dispositioned `fix` on grounded evidence (the host
+  tests convention bans prior behavior in a header, and the claim was false at HEAD). The
+  sentence was corrected in the close commit rather than in a third fix round, because a third
+  `fix-applied` mark is a terminal escalation, not a re-review. Recorded as a waive because no
+  fix worker was dispatched and no fix-delta pass re-reviewed it: the skipped re-review is the
+  real concession, acceptable only because the change is comment-only and cannot alter behavior.
+  User-ruled.
+- **An unattributed transient failure** — one combined run of the guard test plus
+  `tests/genesis/*.test.js` plus `tests/consistency/*.test.js` reported 223 tests / 222 pass /
+  1 fail immediately after a perturb/restore cycle; the failing TAP block was never captured and
+  seven subsequent identical runs were green. No file, no line, no reproduction, and no code to
+  change — the only available "fix" would be capture instrumentation for a flake unattributable
+  to this range. Queued as a follow-up. User-ruled.
+
+### D10's red evidence — the pre-extraction run
+
+The build sidecar is gitignored, so D10's live log does not outlive the merge; the run is
+recorded here instead so the `[pre-green: predicate-in-test]` sanction stays falsifiable. With
+`tests/fixtures-modules.test.js` authored and no fixtures module created or modified,
+`node --test tests/fixtures-modules.test.js` gave `tests 5 · pass 0 · fail 5 · skipped 0` — every
+test failing, each for its own reason: `review-legs.fixtures.js`, `ac-matrix.fixtures.js` and
+`replay.fixtures.js` did not exist (AC-2, -4, -5); `writeBrief` had no `extraSections`, so AC-3
+failed on content rather than on a missing module; and AC-6 asserts all four modules exist before
+checking their test registrations. Two of those test names later changed — AC-3 split into AC-3
+and AC-7 (D9), and AC-4's wording corrected to the real `findings` shape (D8) — both after this
+run, neither weakening an assertion.
 
 ## Canonical Delta
 

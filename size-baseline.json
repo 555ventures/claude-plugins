@@ -4,7 +4,7 @@
     "scripts": 29937,
     "spec/scripts": 1255214,
     "spec/scripts/lib": 231235,
-    "tests": 3447505
+    "tests": 3447504
   },
   "files": {
     "scripts/plugin-bump.js": 8564,
@@ -133,7 +133,7 @@
     "tests/env-preflight.test.js": 11643,
     "tests/escape/escape-row.test.js": 24093,
     "tests/file-plan/multi-table.test.js": 11943,
-    "tests/fixtures-modules.test.js": 10420,
+    "tests/fixtures-modules.test.js": 10419,
     "tests/fixtures/minimal-host/.claude/rules/spec-pipeline.md": 749,
     "tests/fixtures/minimal-host/.claude/spec-runs.jsonl": 549,
     "tests/fixtures/minimal-host/.claude/spec.config.json": 415,

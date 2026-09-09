@@ -1,6 +1,7 @@
 ---
 date: 2026-09-08
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: gate-integrity
 design: false
@@ -10,6 +11,7 @@ depended_on_by: [specs/20260908/02-driver-dedupe-onto-lib.md, specs/20260908/03-
 brief: n/a
 open_markers: 0
 spiked: 2026-09-08
+diff_base: 54b398a3b942ca3410fc4db01fcf26e3645d13e3
 ---
 
 # Size ratchet — a tight, cited-raise byte budget over scripts and tests
@@ -40,6 +42,8 @@ one-line duty.
 | D10 | Delete the notes-layer spike prototype `docs/spikes/22-notes-layer/` (three tracked files) and rewrite the two citing lines in `docs/roadmap/22-mocks-first-genesis.md` to say the prototype was folded into `spec/scripts/lib/notes-layer.browser.js` and deleted. `docs/audit/*` stays. `[no-ac: one-time deletion; review's scope-reconcile leg observes the removed paths]` | The plan doctrine already says a spike is run, observed, and deleted; the prototype shipped as lib code. Every audit report is cited by two to eight roadmap briefs or ADRs as evidence, so deleting them creates dead citations for no read-load gain (nothing under `spec/` loads `docs/`). Rejected: an orphan-docs sweep — measured zero orphans today. |
 | D11 | The atlas-index spike `docs/spikes/23-atlas-index-nav/` is **not** deleted here: it is the executed A2 evidence of the still-unbuilt `specs/20260907/09-atlas-index-and-note-navigation.md`; its deletion is queued to run after that spec lands. `[no-ac: deferred by spec-queue]` | Deleting a prototype its builder may still read is rework risk for zero gain. |
 | D12 | No plugin file changes: no `plugin.json` bump, no `spec-paths` key, no `spec/entrypoints.json` row. `[no-ac: absence of change]` | The script is repo tooling like `scripts/test-file-budget-reporter.js`; it sits outside the entrypoint-conformance inventory (`spec/scripts` minus `lib`, `spec/workflows`), so it needs no activating command. |
+| D13 | A **from-scratch seed** (`--update` with no baseline file present) writes every tracked file at its actual size and exits 0; `new-over-cap` cannot arise there, because "new" means *absent from an existing baseline*. The D3 `new-over-cap` refusal applies to `--update` against a baseline that already exists. (AC-20260908-01-5, -6) | Ruling by the orchestrator, 2026-09-08, resolving a build-time fork: 26 tracked files already exceed `newFileCap`, so a literal reading made D8's seeding run impossible. The spec's own Contracts example settles the intent — it records `genesis-driver.js` at 124092 and `replay.test.js` at 202065 as plain `files` entries with no matching `raises[]` — and AC-20260908-01-6 names only `over` and `tree-over` as refusal triggers. D6's rationale grandfathers the same way: it refuses "a fourth 120 KB driver", not the three already here. |
+| D14 | `--raise --to <n>` where `<n>` equals the ceiling already recorded is **accepted** and appends its `{path, from, to, cite}` row to `raises[]` like any other raise; a no-op raise is not refused. `[no-ac: absence of a refusal; D4's lowering refusal is pinned by AC-20260908-01-7]` | Ruling by JJ, 2026-09-09, on a review finding. D4 forbids lowering only and D5's exit-2 alphabet admits no no-op-raise case, so refusing it would change a locked decision rather than fix a defect. Cost accepted: the raise log may carry occasional rows recording no growth. |
 
 ## File Plan
 

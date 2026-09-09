@@ -474,10 +474,11 @@ async function main() {
   const usingDefaultRules = !rulesManifestRel && mode === 'mocks'
   const rulesManifestAbs = rulesManifestRel ? path.join(root, rulesManifestRel)
     : (usingDefaultRules ? ADAPTATION_RULES : null)
-  // D5's own driver call (specs/20260905/06) reaches --mocks mode at journey-approved, before
-  // /spec:mocks's THEME stage copies a chosen tokens.css into design/ — so design/tokens.css can
-  // be absent under the plugin's own default adaptation manifest specifically (none of its three
-  // rules — no-overflow/desktop-fill/line-length — read a token color), and an empty scratch file
+  // D5's own driver call (specs/20260905/06) reaches --mocks mode at journey-approved, before any
+  // theme has been picked at all (the pick moved to /spec:sketch, which runs after mocks sign-off)
+  // — so design/tokens.css can be absent under the plugin's own default adaptation manifest
+  // specifically (none of its three rules — no-overflow/desktop-fill/line-length — read a token
+  // color), and an empty scratch file
   // keeps render-rules.js's own --tokens precondition satisfied without inventing a real palette.
   // Scoped to that one case only: a host-declared design.rulesManifest (which may carry a genuine
   // palette/contrast rule) always gets the real design/tokens.css, or render-rules.js's own exit 2

@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, tmpdir, runNode } = require('../helpers')
 const picksLib = require('../../spec/scripts/lib/mocks-picks')
-const { writeWireframe, writeKitCanon } = require('./mocks-driver-fixtures')
+const { writeWireframe, writeKitCanon, advanceToJourneyApproved } = require('./mocks-driver-fixtures')
 
 // specs/20260902/10-page-notes-review-loop.md D1/D4/D5, AC-20260902-10-1/-5/-6/-10.
 // spec/scripts/lib/mocks-notes.js and the driver's `notes` subcommands + mark gates do not
@@ -101,15 +101,6 @@ none
 This canon is binding: see docs/design/research-brief.md for the research basis.
 `)
 }
-// D3: at most 2 screens per direction, the dense screen first.
-function writeThemeDirection(dir, kebab, labels) {
-  writeFile(path.join(dir, 'design/theme', kebab, 'tokens.css'), ':root{--text-body:#111}\n')
-  for (const label of labels) {
-    writeFile(path.join(dir, 'design/theme', kebab, label + '.html'),
-      '<link rel="stylesheet" href="tokens.css">\n' +
-      '<main data-screen-label="' + label + '" data-status="sketch">' + label + '</main>\n')
-  }
-}
 // specs/20260905/06-plugin-owned-capture-at-approval.md (D5, Rationale "Executes leg"): once
 // journey-approved/approved run render-gate --mocks internally, a fixture host with no declared
 // capture command falls through to render-gate's real-Chrome --which fallback — a fixture
@@ -204,29 +195,6 @@ function advanceToJourneyDrawn(dir) {
   for (const label of LABELS) writeWireframe(dir, label)
   const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
   assert.strictEqual(drawn.status, 0, 'test setup requires journey-drawn to be accepted: ' + drawn.stderr)
-}
-
-function advanceToThemePicked(dir) {
-  const composeDirection = (kebab, ledgerId) => {
-    const ledgerR = ledgerCmd(dir, 'add', [
-      '--id', ledgerId, '--step', 'THEME', '--kind', 'product',
-      '--claim', 'theme-directions: ' + kebab, '--tag', 'said-by-user', '--status', 'confirmed',
-    ])
-    assert.strictEqual(ledgerR.status, 0, 'test setup requires the theme-directions ledger row to be accepted: ' + ledgerR.stderr)
-    writeThemeDirection(dir, kebab, [DENSE, LABELS[0]])
-    const r = mark(dir, 'direction-composed', ['--direction', kebab])
-    assert.strictEqual(r.status, 0, 'test setup requires direction-composed to be accepted for "' + kebab + '": ' + r.stderr)
-  }
-  composeDirection('quiet', 'P15')
-  composeDirection('warm', 'P16')
-  const themeLedger = ledgerCmd(dir, 'add', [
-    '--id', 'P17', '--step', 'THEME', '--kind', 'product', '--claim', 'theme: quiet',
-    '--tag', 'said-by-user', '--status', 'confirmed', '--rejected', 'warm',
-  ])
-  assert.strictEqual(themeLedger.status, 0, 'test setup requires the theme-pick ledger row to be accepted: ' + themeLedger.stderr)
-  decideLook(dir, 'theme-picked', 'pick', { pick: 'quiet', others: ['warm'], by: 'jj' })
-  const themePicked = mark(dir, 'theme-picked', ['--direction', 'quiet'])
-  assert.strictEqual(themePicked.status, 0, 'test setup requires theme-picked to be accepted: ' + themePicked.stderr)
 }
 
 function nowIso() { return new Date().toISOString() }
@@ -327,9 +295,13 @@ test('AC-20260902-10-5: `notes open` prints the project note first, groups N004 
 })
 
 // ---------------------------------------------------------------------------
-// AC-20260902-10-6
+// AC-20260902-10-6 / AC-20260907-07-12
 // ---------------------------------------------------------------------------
-test('AC-20260902-10-6: journey-approved and approved both refuse on an open project note or an unresolved journey note, naming the note ids', () => {
+// specs/20260907/07-mocks-retires-theme.md AC-20260907-07-12 (retag): the approved-scope
+// assertions below are this AC's own "unresolved project or journey note" clause of the CONTINUE
+// TO pin that `--mark approved` still refuses on an unresolved note, a missing decided `approved`
+// stop, or an unapproved declared journey — the theme precondition's removal narrows nothing else.
+test('AC-20260902-10-6 / AC-20260907-07-12: journey-approved and approved both refuse on an open project note or an unresolved journey note, naming the note ids', () => {
   const dir = tmpdir('mocks-notes-gate')
   advanceToJourneyDrawn(dir)
   writeCaptureConfig(dir, writeFixtureCapture(dir))
@@ -355,7 +327,12 @@ test('AC-20260902-10-6: journey-approved and approved both refuse on an open pro
   const approvedNow = mark(dir, 'journey-approved', ['--journey', JOURNEY])
   assert.strictEqual(approvedNow.status, 0, 'journey-approved must be accepted once every project and journey note is resolved: ' + approvedNow.stdout + approvedNow.stderr)
 
-  advanceToThemePicked(dir)
+  // specs/20260907/07-mocks-retires-theme.md orchestrator duty: THEME is retired from the mocks
+  // state machine — journey-approved having already been recorded above, this is a no-op
+  // (advanceToJourneyApproved's own early-return guard sees journeys[JOURNEY].approved already
+  // set and returns immediately); no explicit action item advances a theme-less root any further
+  // toward SIGNOFF, so nothing replaces the deleted advanceToThemePicked() call's real work.
+  advanceToJourneyApproved(dir, JOURNEY, LABELS)
   decideLook(dir, 'approved', 'approve', { by: 'jj' })
 
   // approved: any unresolved note anywhere blocks it (project scope again, this time — SKIN and

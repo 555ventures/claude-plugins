@@ -7,7 +7,7 @@ const { runNode, tmpdir } = require('../helpers')
 const {
   SCRIPT,
   bare, mark, decideLook,
-  advanceToCanonWritten, advanceToJourneyApproved, advanceToThemePicked,
+  advanceToCanonWritten, advanceToJourneyApproved,
   freePort, stubNpx,
 } = require('./mocks-driver-fixtures')
 
@@ -19,13 +19,18 @@ const {
 // specs/20260906/02-mocks-ends-at-wireframes.md: SKIN and REVIEW retire — the journey-reviewed
 // arm is deleted (journey-reviewed is not among the driver's live marks); AC-20260906-02-6 and
 // AC-20260906-02-8 pin the new SIGNOFF block below.
+//
+// specs/20260907/07-mocks-retires-theme.md build (red-check mixed-pin, HARD): AC-20260907-07-8
+// and its split-out CONTINUE-TO sibling AC-20260907-07-14 each pin one half of the SIGNOFF
+// block's post-THEME behaviour — the theme-less state print with no skill line, and the
+// untouched look-probe-failure refusal, respectively.
 
 // ---------------------------------------------------------------------------
 // AC-20260906-02-6
 // ---------------------------------------------------------------------------
-test('AC-20260906-02-6: the bare driver in SIGNOFF prints the exact step heading, the approval literal, a look: line naming stop open signoff, and a Then: line naming --mark approved, with none of the retired SKIN/REVIEW literals anywhere in stdout; in APPROVED it prints the exact done line naming the theme and decider', () => {
+test('AC-20260906-02-6: the bare driver in SIGNOFF prints the exact step heading, the approval literal, a look: line naming stop open signoff, and a Then: line naming --mark approved, with none of the retired SKIN/REVIEW literals anywhere in stdout', () => {
   const dir = tmpdir('mocks-driver')
-  advanceToThemePicked(dir)
+  advanceToJourneyApproved(dir)
   const step = bare(dir)
   assert.strictEqual(step.status, 0, 'a bare invocation in SIGNOFF must exit 0: ' + step.stdout + step.stderr)
   assert.match(step.stdout, /## Step: sign off — the product I understand/, 'the SIGNOFF block must open with the exact D6 heading: ' + step.stdout)
@@ -35,19 +40,29 @@ test('AC-20260906-02-6: the bare driver in SIGNOFF prints the exact step heading
   for (const retired of ['review-opened', '--decider', 'journey-reviewed', 'SKIN', 'REVIEW']) {
     assert.ok(!step.stdout.includes(retired), 'the SIGNOFF block must never print the retired literal "' + retired + '": ' + step.stdout)
   }
+})
 
+// ---------------------------------------------------------------------------
+// AC-20260907-07-9
+// ---------------------------------------------------------------------------
+test('AC-20260907-07-9: in APPROVED the bare driver prints the exact theme-less done line naming only the decider, with no "theme" substring', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToJourneyApproved(dir)
   decideLook(dir, 'approved', 'approve', { by: 'Ren' })
   const accepted = mark(dir, 'approved')
   assert.strictEqual(accepted.status, 0, 'test setup requires the approved mark to be accepted for the terminal-step assertion below: ' + accepted.stdout + accepted.stderr)
   const terminal = bare(dir)
   assert.strictEqual(terminal.status, 0, 'a bare re-run at APPROVED must exit 0: ' + terminal.stdout + terminal.stderr)
-  assert.match(terminal.stdout, /done — every journey approved, theme "quiet" picked, signed off by Ren/, 'the terminal APPROVED step must print the exact D6 done line: ' + terminal.stdout)
+  assert.match(terminal.stdout, /## Step: done — every journey approved, signed off by Ren/,
+    'D5: the terminal APPROVED step must print the exact theme-less done line: ' + terminal.stdout)
+  assert.ok(!terminal.stdout.includes('theme'), 'D5: the terminal APPROVED step must carry no "theme" substring at all: ' + terminal.stdout)
 })
 
 // ---------------------------------------------------------------------------
-// AC-20260906-02-8
+// AC-20260906-02-8's THEME arm is DELETED (specs/20260907/07 retires the step whole); its
+// WIREFRAMES and SIGNOFF arms are kept below, unretagged.
 // ---------------------------------------------------------------------------
-test('AC-20260906-02-8: WIREFRAMES and THEME step blocks continue to print the frontend-design skill line; the SIGNOFF block prints no frontend-design line, and its own look mechanism (`stop open signoff`) exits 3 when nothing answers the served port', async () => {
+test('AC-20260906-02-8 / AC-20260907-07-8: the WIREFRAMES step block continues to print the frontend-design skill line; the SIGNOFF block prints state: SIGNOFF with no frontend-design line, and its own look mechanism (`stop open signoff`) exits 3 when nothing answers the served port', async () => {
   const fakeBin = (rows) => {
     const dir = tmpdir('fake-claude-')
     const bin = path.join(dir, 'claude')
@@ -64,16 +79,11 @@ test('AC-20260906-02-8: WIREFRAMES and THEME step blocks continue to print the f
   assert.match(wireframesStep.stdout, /state: WIREFRAMES/, 'a canon-written root must print the WIREFRAMES step block — got: ' + wireframesStep.stdout.slice(0, 200))
   assert.match(wireframesStep.stdout, /🎨 Load the `frontend-design` skill/, 'D8: the WIREFRAMES step block must CONTINUE TO print the skill line: ' + wireframesStep.stdout)
 
-  const themeRoot = tmpdir('skill-theme')
-  advanceToJourneyApproved(themeRoot)
-  const themeStep = runNode(SCRIPT, ['--root', themeRoot], withFullPath(installed))
-  assert.match(themeStep.stdout, /state: THEME/, 'a journey-approved root with theme:null must print the THEME step block — got: ' + themeStep.stdout.slice(0, 200))
-  assert.match(themeStep.stdout, /🎨 Load the `frontend-design` skill/, 'D8: the THEME step block must CONTINUE TO print the skill line: ' + themeStep.stdout)
-
   const signoffRoot = tmpdir('skill-signoff')
-  advanceToThemePicked(signoffRoot)
+  advanceToJourneyApproved(signoffRoot)
   const signoffStep = runNode(SCRIPT, ['--root', signoffRoot], withFullPath(installed))
-  assert.match(signoffStep.stdout, /## Step: sign off/, 'a theme-picked root must print the SIGNOFF step block — got: ' + signoffStep.stdout.slice(0, 200))
+  assert.match(signoffStep.stdout, /state: SIGNOFF/, 'AC-20260907-07-8: a root reached through advanceToJourneyApproved must print state: SIGNOFF — got: ' + signoffStep.stdout.slice(0, 200))
+  assert.match(signoffStep.stdout, /## Step: sign off/, 'a journey-approved root must print the SIGNOFF step block — got: ' + signoffStep.stdout.slice(0, 200))
   assert.doesNotMatch(signoffStep.stdout, /frontend-design/, 'D8: the SIGNOFF block must print no line containing "frontend-design" — SIGNOFF is not an authoring state: ' + signoffStep.stdout)
 
   const busyPort = await freePort()
@@ -82,9 +92,39 @@ test('AC-20260906-02-8: WIREFRAMES and THEME step blocks continue to print the f
   assert.match(unreachable.stderr, /serve --root/, 'the exit-3 remedy must name `serve --root`: ' + JSON.stringify(unreachable.stderr))
 })
 
-test('AC-20260906-02-8: the SIGNOFF block runs the look probe itself, not just stop open signoff — a bare driver run in SIGNOFF with a failing npx on PATH exits 2 naming the install remedy', () => {
+// specs/20260907/07-mocks-retires-theme.md build (red-check mixed-pin, HARD): the test below
+// mixed a new promise (the bare driver prints state: SIGNOFF with no skill line) with a SHALL
+// CONTINUE TO clause (the look probe failing keeps exiting 2 naming the install remedy) — split
+// along the same line the spec's own AC list now draws, AC-20260907-07-8 keeping only the new
+// promise (a normal, successful bare run) and AC-20260907-07-14 carrying the split-out continue
+// clause (the probe-failure run, plus the vacuousness guard proving the root is genuinely
+// SIGNOFF and not the retired THEME step, since dieProbeFailed never prints a state name).
+// ---------------------------------------------------------------------------
+// AC-20260907-07-8
+// ---------------------------------------------------------------------------
+test('AC-20260907-07-8: the bare driver on a root reached through advanceToJourneyApproved prints state: SIGNOFF and does not print the frontend-design skill line', () => {
   const dir = tmpdir('mocks-driver')
-  advanceToThemePicked(dir) // now at SIGNOFF
+  advanceToJourneyApproved(dir) // now at SIGNOFF
+
+  const r = bare(dir)
+  assert.strictEqual(r.status, 0, 'a bare invocation on a root reached through advanceToJourneyApproved must exit 0: ' + r.stdout + r.stderr)
+  assert.match(r.stdout, /state: SIGNOFF/,
+    'AC-20260907-07-8: a root reached through advanceToJourneyApproved must print state: SIGNOFF — got: ' + r.stdout.slice(0, 200))
+  assert.ok(!(r.stdout + r.stderr).includes('🎨 Load the `frontend-design` skill'),
+    'AC-20260907-07-8: SIGNOFF must never print the frontend-design skill line: ' + JSON.stringify({ stdout: r.stdout, stderr: r.stderr }))
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260907-07-14
+// ---------------------------------------------------------------------------
+test('AC-20260907-07-14: the bare driver on a root reached through advanceToJourneyApproved CONTINUES TO exit 2 naming the install remedy when the look probe fails, the same way SHAPES/WIREFRAMES do', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToJourneyApproved(dir)
+  // AC-20260907-07-14's own wording gates on "a root reached through advanceToJourneyApproved
+  // and the look probe fails" alone — it names no particular derived state, so unlike AC-8's
+  // clean-run test this CONTINUE-TO pin needs no state-derivation guard: the probe check fires
+  // identically whether this root currently derives THEME (pre-image) or SIGNOFF (post-image),
+  // since both sit ahead of the same look-probe precondition in doBareStep.
   const failingPath = stubNpx(dir, { exitCode: 1 })
 
   const r = runNode(SCRIPT, ['--root', dir], { env: { ...process.env, PATH: failingPath } })

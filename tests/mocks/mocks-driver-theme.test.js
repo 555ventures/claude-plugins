@@ -9,7 +9,7 @@ const {
   mark, ledgerCmd, statusPath, statusJson,
   writeKitCanon, writeThemeKit,
   decideLook, freePort, startServe, stopServe,
-  advanceToJourneyApproved, advanceToDirectionComposed, advanceToShapePicked,
+  advanceToJourneyApproved, advanceToShapePicked,
 } = require('./mocks-driver-fixtures')
 
 // specs/20260907/06-theme-pick-moves-to-sketch.md — the mocks driver's new `theme`
@@ -213,35 +213,6 @@ test('AC-20260907-06-6: theme adopt --direction <x> disagreeing with a decided t
   assert.strictEqual(r.status, 2, '--direction warm must refuse against a page pick of "quiet": ' + r.stdout + r.stderr)
   assert.match(r.stderr, /disagrees with the page pick "quiet"/, 'the refusal must name the page\'s actual pick "quiet": ' + JSON.stringify(r.stderr))
   assert.ok(!fs.existsSync(path.join(dir, 'design/tokens.css')), 'a disagreeing --direction must never write design/tokens.css: ' + JSON.stringify(fs.existsSync(path.join(dir, 'design/tokens.css'))))
-})
-
-// AC-20260907-06-10: this spec adds a second theme producer (the `theme` subcommand family) and
-// retires none of the mocks state machine's own THEME step — `--mark direction-composed`,
-// `--mark theme-picked` and `--reopen theme` (all still routed through the pre-existing
-// `--mark`/`--reopen` flag parsing, never through the new bare `theme <sub>` positional) must
-// keep being accepted exactly as tests/mocks/mocks-driver-2.test.js and mocks-driver-3.test.js
-// already pin, and a journey-approved root with status.theme null must keep deriving THEME. This
-// is a CONTINUE-TO pin: it is green against today's pre-image (the new `theme` family does not
-// exist yet, so it cannot have broken anything) and must stay green once it lands.
-test('AC-20260907-06-10: THE SYSTEM SHALL CONTINUE TO accept --mark direction-composed/--mark theme-picked/--reopen theme unaffected by the new theme subcommand family, and SHALL CONTINUE TO derive THEME from a journey-approved root whose status.theme is null', () => {
-  const dir = tmpdir('mocks-driver-theme')
-  advanceToJourneyApproved(dir)
-  const beforeState = runNode(SCRIPT, ['--root', dir, '--state'])
-  assert.strictEqual(beforeState.stdout.trim(), 'THEME', 'a journey-approved root with status.theme null must still derive THEME: ' + beforeState.stdout + beforeState.stderr)
-  assert.strictEqual(statusJson(dir).theme, null, 'the fixture root must genuinely have status.theme null before the marks below: ' + JSON.stringify(statusJson(dir)))
-
-  advanceToDirectionComposed(dir, 'quiet', [DENSE, LABELS[0]], 'P15')
-  advanceToDirectionComposed(dir, 'warm', [DENSE, LABELS[1]], 'P16')
-  const themeRow = ledgerCmd(dir, 'add', ['--id', 'P17', '--step', 'THEME', '--kind', 'product', '--claim', 'theme: quiet', '--tag', 'said-by-user', '--status', 'confirmed', '--rejected', 'warm'])
-  assert.strictEqual(themeRow.status, 0, 'test setup requires the theme-pick ledger row to be accepted: ' + themeRow.stderr)
-  decideLook(dir, 'theme-picked', 'pick', { pick: 'quiet', others: ['warm'], by: 'jj' })
-  const themePicked = mark(dir, 'theme-picked', ['--direction', 'quiet'])
-  assert.strictEqual(themePicked.status, 0, '--mark theme-picked must still be accepted once 2+ directions are composed and the theme row rejects every other one: ' + themePicked.stderr)
-
-  const reopened = runNode(SCRIPT, ['--root', dir, '--reopen', 'theme'])
-  assert.strictEqual(reopened.status, 0, '--reopen theme must still be accepted: ' + reopened.stdout + reopened.stderr)
-  const derived = runNode(SCRIPT, ['--root', dir, '--state'])
-  assert.strictEqual(derived.stdout.trim(), 'THEME', 'after --reopen theme the next derivation must still land on THEME: ' + derived.stdout + derived.stderr)
 })
 
 // Review finding (specs/20260907/06-theme-pick-moves-to-sketch.md build, medium, three rounds): a

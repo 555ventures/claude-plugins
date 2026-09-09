@@ -5,10 +5,10 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { runNode, tmpdir } = require('../helpers')
 const {
-  SCRIPT, LABELS, DENSE,
+  SCRIPT,
   writeWireframe,
   freePort, startServe, stopServe,
-  advanceToJourneyApproved, advanceToDirectionComposed, advanceToShortJourneyDrawn,
+  advanceToJourneyApproved, advanceToShortJourneyDrawn,
   stubNpx,
 } = require('./mocks-driver-fixtures')
 
@@ -19,10 +19,16 @@ const {
 // verbatim, test logic and AC tags unchanged.
 //
 // specs/20260906/04-journey-review-page.md D6: a journey stop's link is the review page, never
-// the atlas (AC-20260906-04-8); `stop open theme` SHALL CONTINUE TO write the atlas URL
-// (AC-20260906-04-9). Review fix round F4/F9 (AC-20260906-04-3): `look --port` prefers
+// the atlas (AC-20260906-04-8). Review fix round F4/F9 (AC-20260906-04-3): `look --port` prefers
 // design-atlas.js's own `?state=` injection over the file:// sibling path, and an undeclared or
 // invalid `--state` refuses before any screenshot CLI invocation.
+//
+// AC-20260906-04-9's own `stop open theme` test is DELETED whole (specs/20260907/07-mocks-
+// retires-theme.md Rationale) — the mocks-driver `theme` step it pinned is retired outright.
+// Its intent — a non-journey stop keeps the atlas URL, never the review page — is carried
+// forward by spec 06's AC-20260907-06-4, which pins exactly that for the new `theme open`
+// subcommand (tests/mocks/mocks-driver-theme.test.js), a mechanism entirely outside the mocks
+// state machine this spec retires from.
 
 // ---------------------------------------------------------------------------
 // AC-20260906-04-8 / AC-20260906-04-9
@@ -53,27 +59,6 @@ test('AC-20260906-04-8: stop open journey:<j> --port <free> writes/prints the st
     assert.match(openStop.url, /^http:\/\/localhost:\d+\/review\/onboarding\.html#stop-P\d+$/,
       'AC-8: the stop\'s recorded url must be the review-page URL, not the atlas URL: got ' + JSON.stringify(openStop.url))
     assert.strictEqual(openStop.url, lines[0].replace('🎨 ready for review — ', ''), 'the stop\'s recorded url must equal the printed link')
-  } finally {
-    if (serveChild) await stopServe(serveChild)
-  }
-})
-
-test('AC-20260906-04-9: stop open theme SHALL CONTINUE TO write the atlas URL (never the review page) once 2+ directions are composed', async () => {
-  const dir = tmpdir('mocks-driver-review-stop-theme')
-  advanceToJourneyApproved(dir)
-  advanceToDirectionComposed(dir, 'ocean', [DENSE, LABELS[0]], 'P15')
-  advanceToDirectionComposed(dir, 'ember', [DENSE, LABELS[1]], 'P16')
-  const port = await freePort()
-  let serveChild = null
-  try {
-    serveChild = await startServe(dir, port)
-    const r = runNode(SCRIPT, ['--root', dir, 'stop', 'open', 'theme', '--port', String(port)])
-    assert.strictEqual(r.status, 0, 'AC-9: stop open theme must exit 0 once 2+ directions are composed: ' + r.stdout + r.stderr)
-    const lines = r.stdout.split('\n').filter((l) => l.trim() !== '')
-    assert.match(lines[0], /atlas\/index\.html#stop-P\d+$/, 'AC-9: stop open theme must CONTINUE TO write/print the atlas URL, never a review-page URL: got ' + JSON.stringify(lines[0]))
-    const stops = JSON.parse(fs.readFileSync(path.join(dir, 'design/mocks/picks.json'), 'utf8'))
-    const themeStop = stops.find((s) => s.key === 'theme-picked')
-    assert.match(themeStop.url, /atlas\/index\.html#stop-/, 'AC-9: the theme stop\'s recorded url must CONTINUE TO be the atlas URL: got ' + JSON.stringify(themeStop.url))
   } finally {
     if (serveChild) await stopServe(serveChild)
   }

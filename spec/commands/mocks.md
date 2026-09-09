@@ -34,6 +34,9 @@ A dismissed `AskUserQuestion` STOPS the run; state is already safe on disk. Ever
 ends with the ledger's counts line and the driver's own checkpoint line — `/clear` any time
 after; re-invoking cold re-derives everything from disk, never chat context.
 
+Every authoring step block the driver prints carries the frontend-design skill line; act on it
+before the first edit (§ Mocks: Authoring Rules — the one binding home).
+
 ## Kit (KIT state)
 
 Before any screen: name the shared parts once, with a when-to-use line each. Copy the driver's
@@ -47,18 +50,9 @@ exits 0. After, every wireframe region instantiates a primitive (`data-kit="<key
 prints the running kit/bespoke count, and `--mark journey-approved` refuses any region carrying
 neither mark.
 
-## THEME interview rule
-
-The THEME step's own printed instruction is the interview — never anchor on a stock pair.
-Record the picks as the `theme-directions` row it names, then `--mark direction-composed
---direction <k>` per direction once its tokens and dense screen exist. The winner is picked
-on the served atlas page, not a second question (§ Look rule): once ≥2 composed, `stop open
-theme` opens a pick stop and `--mark theme-picked` accepts once decided (`rejected` = the
-others).
-
 ## Look rule
 
-Before SHAPES, KIT, WIREFRAMES, THEME, or SIGNOFF the driver runs the look-reachability probe;
+Before SHAPES, KIT, WIREFRAMES, or SIGNOFF the driver runs the look-reachability probe;
 if it refuses, either fix the remedy (`npx playwright install chromium`) or, when a browser MCP
 is the real look path, `ToolSearch` for `claude-in-chrome` and record `mocks-driver.js look-via
 browser` before re-running. Look with `mocks-driver.js look <label> [--state <s>] [--port <n>]`
@@ -68,14 +62,14 @@ or the declared browser MCP — never approve on the HTML source alone.
 `node "$(spec-paths design-atlas)" serve --root . [--port <n>]` as a **tracked background task**
 (`already serving` means reuse it); leave it running across this run's look stops and
 stop it at sign-off or session end. Every step waiting on a human verdict runs `node {driver}
-stop open <step>` (`shapes`|`journey:<j>`|`theme`|`signoff`); its stdout is the whole hand-off
+stop open <step>` (`shapes`|`kit`|`journey:<j>`|`signoff`); its stdout is the whole hand-off
 — exactly two lines — then **end the turn** (shared § Design Atlas: look stops are never
 questions):
 
     🎨 ready for review — <url>
     Reply  ✅ approve  — or —  ✏️ change <what looks wrong>
 
-(a pick stop — SHAPES, THEME — prints `Reply  ✅ pick <name>  — or —  ✏️ change <what looks
+(a pick stop — SHAPES — prints `Reply  ✅ pick <name>  — or —  ✏️ change <what looks
 wrong>` instead). Decided on the served atlas page or, from chat, `node {driver} stop decide
 <P…> --verdict approve|pick|change [--pick <group>] [--note <n>] --by chat` — never interpreted
 directly. Next bare run reads the decided stop: `approve`/`pick` advances via its `--mark`
@@ -83,8 +77,7 @@ line; `change` starts a fresh round.
 
 ## Sign-off (SIGNOFF state)
 
-The terminal look: one pass over `design/atlas/index.html`, every journey, gray, theme tokens
-in place. No separate review loop — run `node {driver} notes open` on go and triage every note
+The terminal look: one pass over `design/atlas/index.html`, every journey, gray. No separate review loop — run `node {driver} notes open` on go and triage every note
 into one bin: **mock detail** (`notes address --id <id> --change "<what changed>"`), **product understanding**
 (a ledger row first, same call plus `--ledger <rowId>`), **question back**
 (`notes reply --id <id> --text "<question>"`), or **propose to decline** (never decided here).
@@ -95,8 +88,8 @@ page. The step prints its sign-off line, then `stop open signoff`; `decided appr
 ## Report
 
 Printed once the driver reaches `APPROVED`. Assemble the slots (shared § Console Output Style):
-`outcome` (`✅ mocks approved — {N} journeys, theme "{direction}", signed off by {name}`),
-`bullets` (`{journey}: {M} screens` per journey; `theme: {direction} — rejected {others}`;
+`outcome` (`✅ mocks approved — {N} journeys, signed off by {name}`),
+`bullets` (`{journey}: {M} screens` per journey;
 `Chain: /spec:mocks → /spec:genesis → /spec:enforce → /spec:plan`), `warns` (one `catch:
 {what}` per ledger misunderstanding row, dropped if none), `next` (`{kind: 'command', text:
 '/spec:genesis'}`). Run `node "$(spec-paths report-render)" --slots <file>`; print it verbatim.

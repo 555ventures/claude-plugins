@@ -163,6 +163,7 @@ const notesLib = require('./lib/mocks-notes')
 const { parseLedger, setStatus } = require('./lib/mocks-ledger')
 const picksLib = require('./lib/mocks-picks.js')
 const { stylesheetTargets, linksWireRegister } = require('./lib/wire-register')
+const surfacesLib = require('./lib/surfaces')
 // specs/20260906/04-journey-review-page.md D1: the pure journey-review builder — the served
 // GET /review/<j>.html route below adapts parseSeedJourneys()/loadTargets() into its input shape
 // and calls it fresh on every request (never cached, never storing derived state).
@@ -1029,72 +1030,20 @@ function cmdGallery(argv) {
 }
 
 // ---- roadmap `surfaces` blocks --------------------------------------------------------------------
-// Fenced ```surfaces blocks in docs/roadmap/**.md. Line grammar (deliberately tiny):
-//   label            declare a surface
-//   a -> b           journey edge (declares both ends)
-//   # comment        ignored
-function parseSurfaces(roadmapDir) {
-  const nodes = new Map()   // label -> {brief}
-  const edges = []          // [from, to]
-  if (!fs.existsSync(roadmapDir)) return { nodes, edges }
-  const mds = fs.readdirSync(roadmapDir).sort().filter(f => f.endsWith('.md')).map(f => path.join(roadmapDir, f))
-  for (const md of mds) {
-    const text = fs.readFileSync(md, 'utf8')
-    for (const m of text.matchAll(/```surfaces\n([\s\S]*?)```/g)) {
-      for (const raw of m[1].split('\n')) {
-        const line = raw.trim()
-        if (!line || line.startsWith('#')) continue
-        const edge = line.split('->').map(s => s.trim())
-        if (edge.length === 2 && edge[0] && edge[1]) {
-          for (const l of edge) if (!nodes.has(l)) nodes.set(l, { brief: md })
-          edges.push(edge)
-        } else if (/^[\w][\w-]*$/.test(line)) {
-          if (!nodes.has(line)) nodes.set(line, { brief: md })
-        }
-      }
-    }
-  }
-  return { nodes, edges }
-}
+// Fenced ```surfaces blocks in docs/roadmap/**.md, parsed by lib/surfaces.js (the one grammar
+// shared with genesis-driver.js's own fold — specs/20260908/02-driver-dedupe-onto-lib.md D1, D5).
+const parseSurfaces = surfacesLib.parseSurfaces
 
 // specs/20260902/07-mocks-command-driver.md D15: design/mocks/seed.md's `### <journey-kebab>`
-// blocks (D4's grammar) are a second surfaces source — journeys exist before any roadmap does.
-// Owner = `seed:<journey>` (never a roadmap file path) so cmdBuild can section and title these
-// labels by journey instead of by declaring brief; the persona line rides along for the section
-// subtitle. Comments are stripped once so the template's own instructional `<!-- -->` blocks
-// never get misread as journey content.
+// blocks are a second surfaces source — journeys exist before any roadmap does. Owner =
+// `seed:<journey>` (never a roadmap file path) so cmdBuild can section and title these labels by
+// journey instead of by declaring brief; the persona line rides along for the section subtitle.
+// lib/surfaces.js's parseSeedJourneys takes the seed text directly (specs/20260908/02 D2); this
+// wrapper owns the read.
 function parseSeedJourneys(root) {
-  const journeys = new Map() // kebab -> {persona, labels, edges}
   let text
-  try { text = fs.readFileSync(path.join(root, 'design/mocks/seed.md'), 'utf8') } catch { return journeys }
-  text = text.replace(/<!--[\s\S]*?-->/g, '')
-  const starts = []
-  const re = /^### ([a-z0-9-]+)\s*$/gm
-  let m
-  while ((m = re.exec(text))) starts.push({ name: m[1], index: m.index, headerEnd: m.index + m[0].length })
-  for (let i = 0; i < starts.length; i++) {
-    const body = text.slice(starts[i].headerEnd, i + 1 < starts.length ? starts[i + 1].index : text.length)
-    let persona = ''
-    for (const l of body.split('\n')) { if (l.trim()) { persona = l.trim(); break } }
-    const surf = body.match(/```surfaces\n([\s\S]*?)```/)
-    const labels = []
-    const edges = []
-    if (surf) {
-      for (const raw of surf[1].split('\n')) {
-        const line = raw.trim()
-        if (!line || line.startsWith('#')) continue
-        const edge = line.split('->').map(s => s.trim())
-        if (edge.length === 2 && edge[0] && edge[1]) {
-          for (const l of edge) if (!labels.includes(l)) labels.push(l)
-          edges.push(edge)
-        } else if (/^[\w][\w-]*$/.test(line) && !labels.includes(line)) {
-          labels.push(line)
-        }
-      }
-    }
-    journeys.set(starts[i].name, { persona, labels, edges })
-  }
-  return journeys
+  try { text = fs.readFileSync(path.join(root, 'design/mocks/seed.md'), 'utf8') } catch { text = null }
+  return surfacesLib.parseSeedJourneys(text)
 }
 
 // specs/20260906/04-journey-review-page.md D1: adapts parseSeedJourneys()/loadTargets() into

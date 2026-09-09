@@ -181,46 +181,27 @@
 'use strict'
 const fs = require('fs')
 const path = require('path')
-const { spawnSync } = require('child_process')
 const { CONFIG_RELPATH } = require('./lib/host-config')
 const mocksLedgerLib = require('./lib/mocks-ledger')
 // specs/20260902/11-brief-from-approved-set.md D2: the BRIEF step text's "notes unresolved"
 // derivation source reads design/mocks/notes.json through the same validated reader
 // design-atlas.js's serve endpoints and mocks-driver.js's `notes` subcommands share.
 const mocksNotesLib = require('./lib/mocks-notes')
+const surfacesLib = require('./lib/surfaces')
+const driverIo = require('./lib/driver-io')
 
 // The 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in full
-// at spec/scripts/lib/driver-io.js's writeOut.
-function writeOut(fd, str) {
-  const buf = Buffer.from(str + '\n', 'utf8')
-  let off = 0
-  while (off < buf.length) {
-    try {
-      off += fs.writeSync(fd, buf, off, buf.length - off)
-    } catch (e) {
-      if (e.code === 'EAGAIN') continue
-      throw e
-    }
-  }
-}
+// at spec/scripts/lib/driver-io.js's writeOut. Callers here pass unterminated lines.
+function writeOut(fd, str) { driverIo.writeOut(fd, str + '\n') }
 
 function die(msg) { writeOut(2, 'genesis-driver: ' + msg); process.exit(2) }
 
 // spawnSync's `status` is null when the child dies by signal, fails to spawn, or overflows
-// maxBuffer — the ONE place that death is handled; every spawnSync call in this file routes
-// through here. A legitimate non-zero exit (a failing gateCommand, a dropped registry option)
-// still comes back as a normal result for the caller's own branch to read.
-function runChild(cmd, args, opts, what) {
-  const r = spawnSync(cmd, args, opts)
-  if (r.error || r.status === null) {
-    const reason = r.error ? r.error.message
-      : r.signal ? 'killed by signal ' + r.signal
-      : 'exited with no status (spawn failure)'
-    die(what + ' died without an exit code (' + reason + ') — nothing it was meant to produce ' +
-      'can be trusted; fix the cause and re-run `node ' + __filename + ' --root ' + root + '`')
-  }
-  return r
-}
+// maxBuffer — driver-io.js's runChild is the ONE place that death is handled; every spawnSync
+// call in this file routes through it. A legitimate non-zero exit (a failing gateCommand, a
+// dropped registry option) still comes back as a normal result for the caller's own branch to
+// read.
+const runChild = driverIo.runChild
 
 // ---------------------------------------------------------------------------
 // Arg parsing — hand-rolled, no library.
@@ -369,42 +350,7 @@ function hasMenuFile(key) { return fs.existsSync(path.join(genesisDir, 'intervie
 function seedPath() { return path.join(root, 'design/mocks/seed.md') }
 function seedText() { try { return fs.readFileSync(seedPath(), 'utf8') } catch (e) { return null } }
 
-// Assumption A1: design-atlas.js's own `parseSeedJourneys` is not exported (a plain CLI
-// entrypoint, no module.exports) — duplicated here rather than adding a require-time coupling
-// to a script this file's own conventions forbid importing as a library. Same tiny grammar:
-// `### <journey-kebab>` header, first non-blank line is the persona, a ```surfaces fenced block
-// whose lines are a bare label or an `a -> b` edge (both ends declare a label).
-function parseSeedJourneysLocal(text) {
-  const journeys = new Map() // kebab -> {persona, labels}
-  if (text === null) return journeys
-  const stripped = text.replace(/<!--[\s\S]*?-->/g, '')
-  const starts = []
-  const re = /^### ([a-z0-9-]+)\s*$/gm
-  let m
-  while ((m = re.exec(stripped))) starts.push({ name: m[1], index: m.index, headerEnd: m.index + m[0].length })
-  for (let i = 0; i < starts.length; i++) {
-    const body = stripped.slice(starts[i].headerEnd, i + 1 < starts.length ? starts[i + 1].index : stripped.length)
-    let persona = ''
-    for (const l of body.split('\n')) { if (l.trim()) { persona = l.trim(); break } }
-    const surf = body.match(/```surfaces\n([\s\S]*?)```/)
-    const labels = []
-    if (surf) {
-      for (const raw of surf[1].split('\n')) {
-        const line = raw.trim()
-        if (!line || line.startsWith('#')) continue
-        const edge = line.split('->').map((s) => s.trim())
-        if (edge.length === 2 && edge[0] && edge[1]) {
-          for (const l of edge) if (!labels.includes(l)) labels.push(l)
-        } else if (/^[\w][\w-]*$/.test(line) && !labels.includes(line)) {
-          labels.push(line)
-        }
-      }
-    }
-    journeys.set(starts[i].name, { persona, labels })
-  }
-  return journeys
-}
-function seedJourneysMap() { return parseSeedJourneysLocal(seedText()) }
+function seedJourneysMap() { return surfacesLib.parseSeedJourneys(seedText()) }
 
 // design/mocks/seed.md's `## Facts` section: `- <key>: <value>` lines (D3 reads
 // `primary-surface`/`platforms-horizon`, whose value is a product ledger row id).
@@ -475,37 +421,10 @@ function briefNonUiCheck(text) {
   return { missing }
 }
 
-// D4: every seed-declared label placed in exactly one brief's ```surfaces block. A local
-// duplicate of design-atlas.js's `parseSurfaces` grammar (Assumption A1 — same reasoning as
-// parseSeedJourneysLocal above: no module.exports to import), extended to track EVERY brief
-// declaring a label (design-atlas.js's own version keeps only the first) since D4 must also
-// catch a double-placement, not just an absence.
-function parseSurfacesPlacementLocal(roadmapDir) {
-  const byLabel = new Map() // label -> [brief file name, ...]
-  let files = []
-  try { files = fs.readdirSync(roadmapDir).sort().filter((f) => f.endsWith('.md')) } catch (e) { files = [] }
-  for (const f of files) {
-    const text = fs.readFileSync(path.join(roadmapDir, f), 'utf8')
-    const seenInFile = new Set()
-    for (const m of text.matchAll(/```surfaces\n([\s\S]*?)```/g)) {
-      for (const raw of m[1].split('\n')) {
-        const line = raw.trim()
-        if (!line || line.startsWith('#')) continue
-        const edge = line.split('->').map((s) => s.trim())
-        const labels = (edge.length === 2 && edge[0] && edge[1]) ? edge
-          : (/^[\w][\w-]*$/.test(line) ? [line] : [])
-        for (const l of labels) {
-          if (seenInFile.has(l)) continue
-          seenInFile.add(l)
-          if (!byLabel.has(l)) byLabel.set(l, [])
-          byLabel.get(l).push(f)
-        }
-      }
-    }
-  }
-  return byLabel
-}
-
+// D4: every seed-declared label placed in exactly one brief's ```surfaces block.
+// surfacesLib.parseSurfacesPlacement tracks EVERY brief declaring a label (design-atlas.js's own
+// parseSurfaces keeps only the first) since D4 must also catch a double-placement, not just an
+// absence.
 function journeyPlacementCheck() {
   const seedJourneys = seedJourneysMap()
   const seedLabels = []
@@ -513,7 +432,7 @@ function journeyPlacementCheck() {
   for (const [, j] of seedJourneys) {
     for (const l of j.labels) { if (!seen.has(l)) { seen.add(l); seedLabels.push(l) } }
   }
-  const byLabel = parseSurfacesPlacementLocal(path.join(root, 'docs/roadmap'))
+  const byLabel = surfacesLib.parseSurfacesPlacement(path.join(root, 'docs/roadmap'))
   const unplaced = seedLabels.filter((l) => !byLabel.has(l) || byLabel.get(l).length === 0)
   if (unplaced.length) return { ok: false, reason: 'unplaced', labels: unplaced }
   for (const l of seedLabels) {

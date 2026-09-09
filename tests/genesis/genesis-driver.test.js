@@ -536,7 +536,7 @@ test('AC-20260825-04-3, AC-20260827-01-9: MENUS lists an undiscovered open dimen
   assert.strictEqual(state(dir).stdout, 'DECIDE\n', 'AC-20260827-01-9/D15: a completed menus-done for the non-tournament archetype data-ml must CONTINUE TO advance the derived state straight to DECIDE, exactly as before this spec — a state other than DECIDE here means D1\'s tournament routing wrongly caught a non-tournament archetype')
 })
 
-test('AC-20260825-04-4, AC-20260827-04-6: --mark decided refuses each of a missing scaffoldCommand, an empty Dissents section, and an unnamed open dimension by name, and accepts once all three hold; D8 pins that the empty-Dissents refusal SHALL CONTINUE TO fire ahead of D2\'s new conventions.json checks', () => {
+test('AC-20260825-04-4, AC-20260827-04-6, AC-20260908-02-4: --mark decided refuses each of a missing scaffoldCommand, an empty Dissents section, and an unnamed open dimension by name, and accepts once all three hold; D8 pins that the empty-Dissents refusal SHALL CONTINUE TO fire ahead of D2\'s new conventions.json checks', () => {
   const missingScaffold = tmpdir('gdrv-ac4a')
   advanceToDecide(missingScaffold)
   writeValidDecideArtifacts(missingScaffold)
@@ -547,6 +547,8 @@ test('AC-20260825-04-4, AC-20260827-04-6: --mark decided refuses each of a missi
   const r1 = mark(missingScaffold, 'decided')
   assert.strictEqual(r1.status, 2, 'a descriptor missing scaffoldCommand can never run the scaffold step, so decided must refuse it')
   assert.match(r1.stderr, /scaffoldCommand/, 'the refusal must name the missing key, not a generic "descriptor invalid" message')
+  assert.match(r1.stderr, /^genesis-driver: /, 'AC-20260908-02-4: die() must CONTINUE TO prefix every refusal with "genesis-driver: " even once it is routed through lib/driver-io.js\'s writeOut wrapper instead of a local implementation')
+  assert.strictEqual((r1.stderr.match(/\n/g) || []).length, 1, 'AC-20260908-02-4: die() must CONTINUE TO terminate stderr with exactly one newline, not the zero or two a paraphrased writeOut wrapper could silently introduce')
 
   // AC-20260827-04-6/D8: this sub-case is the regression pin — specs/20260827/04's D2 adds a
   // NEW conventions.json validation gate to decided, but the pre-existing empty-Dissents refusal
@@ -615,6 +617,28 @@ test('AC-20260825-04-5, AC-20260827-01-9: SCAFFOLD executes scaffoldCommand exac
   fs.unlinkSync(scaffoldedFile)
   bare(dir)
   assert.strictEqual(fs.existsSync(scaffoldedFile), false, 'AC-20260827-01-9: a second bare invocation must CONTINUE TO NOT re-execute scaffoldCommand once scaffold.exit === 0 is already recorded — idempotence is what makes /clear safe here, and the tournament\'s new FINALISTS/RACE states must not have disturbed it')
+})
+
+// specs/20260908/02-driver-dedupe-onto-lib.md D3, AC-20260908-02-5: no existing test in this
+// file ever spawns a scaffoldCommand child that dies by signal (only the F6 maxBuffer tests
+// exercise a child that runs to completion), so genesis-driver.js's move onto lib/driver-io.js's
+// runChild for the fail-closed "died without an exit code" refusal needs its own pin here.
+test('AC-20260908-02-5: WHEN scaffoldCommand kills itself by signal THE SYSTEM CONTINUES TO exit 2 with stderr containing "died without an exit code" and naming the signal, instead of trusting the child\'s (nonexistent) exit code', () => {
+  const dir = tmpdir('gdrv-ac5-signal')
+  advanceToDecide(dir)
+  // `bash -c 'kill -9 $$'` signal-kills the very process spawnSync is watching (bash itself,
+  // not some further exec'd grandchild) — spawnSync reports `status: null, signal: 'SIGKILL'`
+  // for exactly the reason runChild's fail-closed branch exists.
+  writeValidDecideArtifacts(dir, { scaffoldCommand: 'kill -9 $$' })
+  writeConventionsArtifacts(dir)
+  const decided = mark(dir, 'decided')
+  assert.strictEqual(decided.status, 0, 'test setup requires decided to be accepted with a complete descriptor and ADR: ' + decided.stderr)
+
+  const scaffoldRun = bare(dir)
+  assert.strictEqual(scaffoldRun.status, 2, 'a scaffoldCommand that dies by signal must CONTINUE TO refuse (exit 2), never advance to SKELETON on a trusted-but-nonexistent exit code: ' + scaffoldRun.stdout + scaffoldRun.stderr)
+  assert.match(scaffoldRun.stderr, /died without an exit code/, 'the refusal must CONTINUE TO say "died without an exit code" — the exact fail-closed wording runChild owns whether it lives in genesis-driver.js itself or is delegated to lib/driver-io.js')
+  assert.match(scaffoldRun.stderr, /SIGKILL/, 'the refusal must CONTINUE TO name the signal that killed the child, not just that it died')
+  assert.doesNotMatch(scaffoldRun.stdout, /SKELETON/, 'a dead scaffoldCommand child must never be mistaken for a green scaffold')
 })
 
 test('AC-20260825-04-6, AC-20260827-04-6: skeleton-landed runs the zero-day gate, recording GATE_RED on a failing command and scaffold-complete plus a copied gateCommand on a green one, and (D8) SHALL CONTINUE TO refuse when called before the scaffold has recorded exit: 0', () => {
@@ -874,7 +898,7 @@ test('a gate log that fits inside both the byte window and the line bound render
 
 const ONBOARDING_JOURNEY = [{ name: 'onboarding', persona: 'Priya (owner) signs in and invites staff to a live session.', labels: ['signin', 'invite', 'session-live'] }]
 
-test('AC-20260902-11-4: WHEN --mark roadmap-written runs on a fresh visual run with seed labels signin/invite/session-live and briefs whose surfaces blocks declare only signin/invite THE SYSTEM exits 2 naming session-live; with signin placed in two briefs it exits 2 naming signin and both files; AC-20260902-11-12: with every seed label placed in exactly one brief THE SYSTEM CONTINUES TO run the cycle check and accept', () => {
+test('AC-20260902-11-4, AC-20260908-02-6: WHEN --mark roadmap-written runs on a fresh visual run with seed labels signin/invite/session-live and briefs whose surfaces blocks declare only signin/invite THE SYSTEM exits 2 naming session-live; with signin placed in two briefs it exits 2 naming signin and both files; AC-20260902-11-12: with every seed label placed in exactly one brief THE SYSTEM CONTINUES TO run the cycle check and accept', () => {
   const unplaced = tmpdir('gdrv-11-4-unplaced')
   advanceToRoadmapVisual(unplaced, ONBOARDING_JOURNEY)
   writeRoadmap(unplaced, [{ name: '01-onboarding.md', dependsOn: '—', surfaces: ['signin', 'invite'] }])

@@ -829,7 +829,7 @@ test('gallery: one card per candidate subdir, lazy iframes, deterministic output
   assert.match(out, /loading="lazy"/)
 })
 
-test('build: statuses derive from mocks × surfaces × ledger × spec stamps — never declared by hand', () => {
+test('AC-20260908-02-7: build: statuses derive from mocks × surfaces × ledger × spec stamps — never declared by hand', () => {
   const dir = fixture()
   const res = atlas(['build'], { cwd: dir })
   assert.strictEqual(res.status, 0, res.stdout + res.stderr)
@@ -1854,7 +1854,7 @@ test('AC-20260902-10-4: lib/notes-layer.browser.js reads data-screen-label/data-
 // (used by cmdBuild) does not yet read design/mocks/seed.md's per-journey ```surfaces blocks, does
 // not render one frame per data-state-btn state, does not emit a shapes section for
 // design/shapes/*.html, and the html walk does not yet skip design/mocks/references/.
-test('AC-20260902-07-14: build reads seed.md journeys (owner seed:<journey>, persona line), renders one frame per data-state-btn state, a shapes section, and skips references/', () => {
+test('AC-20260902-07-14, AC-20260908-02-7: build reads seed.md journeys (owner seed:<journey>, persona line), renders one frame per data-state-btn state, a shapes section, and skips references/', () => {
   const dir = tmpdir('atlas-seed')
   fs.mkdirSync(path.join(dir, 'design/mocks/references'), { recursive: true })
   fs.mkdirSync(path.join(dir, 'design/shapes'), { recursive: true })

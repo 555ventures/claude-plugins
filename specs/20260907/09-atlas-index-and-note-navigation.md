@@ -1,6 +1,6 @@
 ---
 date: 2026-09-07
-status: hardened
+status: done
 tier: standard
 area: design-atlas
 design: false
@@ -10,6 +10,8 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-07
 open_markers: 0
+build_base: main
+diff_base: 01f7fe5c7c49623140087b244851bbf0550e9b3b
 ---
 
 # The atlas gains an index, and a note names the screen it belongs to
@@ -37,11 +39,14 @@ host that renders a gallery or a journey review page sees no sidebar at all.
 | D5 | The current section is the **last `.sect > h2` whose top is at or above `max(80, innerHeight * 0.25)`**, defaulting to the first heading when none is, recomputed on `scroll` (coalesced through one `requestAnimationFrame`) and once at load; the matching `.tochead` carries `.here`, which paints the same 4px `--v-primary` left border the section's own `h2` uses. Never per-screen (AC-20260907-09-6) | Executed 2026-09-07: an `IntersectionObserver` band (`rootMargin:'-10% 0px -80% 0px'`) marked **nothing** at four scroll positions — a heading jumped to lands above the band's top edge and never intersects — while the threshold rule marked correctly at all four plus the top of the page. Per-screen tracking over sixty cards flickers and answers a question ("where am I") the journey level already answers. |
 | D6 | `/__notes/list` gains exactly one new value: **`screen=**` returns every note regardless of scope**, ledger-joined for question rows identically to the existing branches. `screen=*` and `screen=<label>` keep their present meaning byte-for-byte. The notes layer's `refresh()` requests `screen=**` when its declared scope is `project` (AC-20260907-09-7, AC-20260907-09-8) | Executed 2026-09-07 against a root holding one project note and one mock note: `screen=*` returned only the project note, so the panel genuinely cannot reach a mock note today. A new token rather than a redefinition keeps specs/20260906/03 D3's scope contract intact for every other caller. |
 | D7 | The project panel lists **every open note, flat** (JJ 2026-09-07). A project-scope row renders exactly as today. A mock-scope row replaces the plain `<b>` id badge with a `.nl-anchor` control: a `<button>` labelled `<screen> · <state>` when the host document holds `#s-<screen>` **and** exposes `window.__lbOpen`, and an inert `<span class="nl-anchor plain">` labelled `<screen> · not drawn` otherwise. Activating the button calls `__lbOpen` on that card's `iframe.frame` — the atlas lightbox, never a navigation (AC-20260907-09-9, AC-20260907-09-10) | JJ's pick over a collapsed group: one place to see everything still open. Fable's pick for the target: the reviewer is already on the atlas, `Escape` returns them to the exact scroll position with the panel still open, and the lightbox's existing `open ↗` still reaches the served page. The inert form is what keeps a gap screen from rendering a dead control. |
+| D7′ | **Amends D7's button criterion, and scopes the whole swap to the project panel** (this session, 2026-09-08, at review dispositions). Two corrections, both grounded in D7's own rationale rather than overriding it: (a) the `.nl-anchor` swap applies **only when rendering the project panel** — a served mock page's own notes strip keeps its plain `<b>` id badge, since D8 gives the strip one thing and one thing only, the `Project notes ↗` link; (b) the button form requires the card's **`iframe.frame`**, not merely `#s-<screen>` plus `window.__lbOpen`, and falls back to the inert `span.nl-anchor.plain` otherwise. AC-20260907-09-9's two cases are unchanged in substance | (a) Executed 2026-09-08 by the reviewer against the real `design-atlas.js serve` in headless Chromium: on `/mocks/session-live.html` every strip row rendered `span.nl-anchor.plain` reading `session-live · not drawn` and lost its note id, because `noteRow()` branched on scope with no panel check and the strip reuses it. D7's sentence scopes the swap to the project panel; the leak was a defect, and no test pinned the strip badge. (b) D7's literal criterion contradicted D7's own closing clause ("the inert form is what keeps a gap screen from rendering a dead control") and § Behavior ("a gap … the pill is plain grey text … and clicks nothing"), because a gap chip **does** carry `id="s-<label>"` — so the literal test admitted a live button with nothing to open. Requiring the frame is the criterion that makes the rationale true. |
 | D8 | `buildAtlas` emits `<div id="nl-notes"></div>` as the **last element of `#main`**, and the notes layer mounts its project panel immediately after `#nl-notes` when that element exists (today's `rootEl || document.body` fallback is unchanged for every other project-scope page). The mock page's strip heading gains one right-aligned link, text `Project notes ↗`, `href` = `<base>/atlas/index.html#nl-notes`, which navigates in the same tab (AC-20260907-09-11, AC-20260907-09-12) | Without an explicit anchor the panel mounts after `<body>` and lands outside the two-column grid, full-width under both columns. One element serves as both the mount point and the hash target. Opening project notes *in place* on a mock would make the strip render a second scope and break the layer's one-panel-per-scope rule. |
 | D9 | No custom "back" affordance in either direction, and **no deep link into a state** on the served mock page: browser back is the return path from the mock page, `Escape` from the lightbox (AC-20260907-09-13) | Fable's refusal: state-level deep linking couples the notes layer to mock internals it is deliberately isolated from, and the label-level jump already lands within one scroll of the state. |
 | D10 | New chrome class names live in their existing homes: the `#shell`/`#toc`/`.tocgroup`/`.tochead`/`.tocrow`/`.tocempty`/`#tocbtn`/`#tocscrim` register is authored in `design-atlas.js`'s `page()` (where every other atlas-chrome rule already lives, emitted for pages that never use it); `.nl-anchor`, `.nl-anchor.plain` and `.nl-up` are authored in `spec/templates/mocks/viewer.css`, and `notes-layer.browser.js` emits only those names, never an invented sibling. No color literal anywhere — every value resolves to a `--v-*` role (AC-20260907-09-14) | The two-register split is the rule specs/20260902/09 D4 already set and specs/20260906/03 D5 already followed; this spec adds names to it rather than a third home. |
 | D11 | Doctrine, one home each: `spec/doctrine/design.md` § Design Atlas gains one bullet for the index (`persistent at wide widths, an overlay below 1200px, search filters the index only, the status chips filter both`) and one for note navigation (`the project panel lists every open note; a screen note names its screen and opens it in the lightbox; the strip links back`), and points at § Design Canon for the chrome rule rather than restating it `[no-ac: prose contract; review's citations-check and doctrine legs are the oracle, the mechanisms are AC-20260907-09-1 and AC-20260907-09-9]` | § Doctrine Authoring: the page builder and the layer are the mechanism; prose points at them. The queue item's tool-surface rule names § Design Canon as the chrome rule's one binding home — pointing, never a second copy. |
-| D12 | Bump `spec/.claude-plugin/plugin.json` to the next free minor — target **7.103.0**, because `specs/20260907/04` claims 7.98.0, `05-genesis-drops-the-theme-gates` claims 7.99.0, `06` claims 7.100.0, `07` claims 7.101.0 and `08` claims 7.102.0 — with the last-3-versions changelog entry `[no-ac: review's version-bump check is the oracle]` | § Planning version discipline; hardened-but-unbuilt siblings hold the numbers they claim. |
+| D12 | Bump `spec/.claude-plugin/plugin.json` to the next free minor — **resolved at push time to 7.114.0** (resolved three times on 2026-09-08: the build took 7.108.0 when `main` read 7.107.0; the merge-back re-resolved to 7.113.0 after four siblings landed and `main` reached 7.112.0; and the push re-resolved again to 7.114.0 when a sibling had already claimed 7.113.0 on `origin`. Every minor from the plan-time target 7.103.0 through 7.113.0 was spent by sibling work) — with the last-3-versions changelog entry `[no-ac: review's version-bump check is the oracle]` | § Planning version discipline; hardened-but-unbuilt siblings hold the numbers they claim, and a shipped sibling spends them, so the build resolves the minor rather than replaying the pin (the rule `specs/20260907/04,08` set on 2026-09-08). |
+| D13 | **Three prose-size caps rise by ten lines each to admit D11's bullets** (JJ 2026-09-08, asked at the review gate): `tests/consistency/design-doctrine.test.js`'s AC-20260824-05-2 cap 160 → 170, and `tests/consistency/read-load.test.js` gains `design: 510` to its `RATCHET` map with `init: 970 → 980`. `CAP` stays 500 for every other command. Both files carry a comment naming this spec as the authorizing ruling. No other prose is rewritten to buy room, and D11's bullets ship at the Canonical Delta's full wording `[no-ac: the caps are themselves the oracle — AC-20260824-05-2 and AC-20260902-03-4 red on the old numbers and green on the new ones, so a carrier AC in this spec would only restate the assertion they already make]` | Executed 2026-09-08 at the review gate: `design.md` sat at 157/160 and `/spec:design` and `/spec:init` sat exactly on their read-load ceilings, so D11's two bullets reddened all three blocking legs at once. JJ's ruling over the two alternatives put to them: squeezing neighbouring § Design Atlas prose would reword design contracts this spec never planned to touch (and that prose is already at its density floor), and dropping D11 would leave the index and note navigation documented only by their tests. The additions are contracts, not procedure — which is the growth the caps exist to stop — so the ceiling moves rather than the contract. |
+| D15 | **The gate caps test-file parallelism at `--test-concurrency=3`** (JJ 2026-09-08, asked at the review gate), on both `gateCommand` and `testCommand` in `.claude/spec.config.json`. A consistency test pins the flag on both, so a later regeneration cannot drop it silently `[no-ac: host-grounding value; the consistency pin is the oracle]` | Executed 2026-09-08, two consecutive full-suite legs on a 6-core machine, each red differently and neither in this spec's files: run A passed all 1344 tests but pushed seven pre-existing files past the 45 s per-file budget (`mocks-driver-3` 90 s, `mocks-driver-look-stops` 83 s, five more), run B failed `tests/genesis/tournament-probe-pick.test.js` on `bootPost` exit 7 — which passes in isolation, and no genesis file is in this spec's range. `node --test` fans out to one worker per core, and this spec's five Chrome-driving ACs each launch a real browser, so files were starved of CPU and the suite became a coin flip. JJ's ruling over the three alternatives: reworking only this spec's browser tests to share one browser would shave this spec's contribution and leave the coin flip (the same budget guard tripped for a sibling session on 2026-09-07, before these tests existed); re-running until green fixes nothing and leaves every future run unable to prove anything; splitting the seven files restructures other specs' tests and does not address run B's outright failure at all. Capping parallelism makes every run reproducible for the whole repo, at the cost of a longer wall clock. |
 
 **Orchestrator duty (outside the File Plan table):** `page()`'s style string and `buildAtlas`'s
 body composition are edited by the same worker in one pass — a sidebar emitted without its CSS
@@ -57,10 +62,18 @@ the `viewer.css` row are likewise one pair: the layer must not emit `.nl-anchor`
 | spec/scripts/lib/notes-layer.browser.js | MODIFY | scripts | D6: `refresh()` requests `screen=**` on project scope; D7: `.nl-anchor` row control (button vs inert span) calling `window.__lbOpen`; D8: mount after `#nl-notes` when present, and the `Project notes ↗` link in the strip heading |
 | spec/templates/mocks/viewer.css | MODIFY | doctrine | D10: `.nl-anchor`, `.nl-anchor.plain`, `.nl-up` on `--v-*` roles only |
 | spec/doctrine/design.md | MODIFY | doctrine | D11: two bullets in § Design Atlas, pointing at § Design Canon for the chrome rule |
-| spec/.claude-plugin/plugin.json | MODIFY | doctrine | D12: version → 7.103.0 + changelog entry |
+| spec/.claude-plugin/plugin.json | MODIFY | doctrine | D12: version → 7.114.0 (resolved at push time) + changelog entry |
 | tests/design-atlas.test.js | MODIFY | tests | AC-20260907-09-1, AC-20260907-09-5, AC-20260907-09-7, AC-20260907-09-8, AC-20260907-09-11, AC-20260907-09-14 |
 | tests/design-atlas-index.test.js | CREATE | tests | AC-20260907-09-2, AC-20260907-09-3, AC-20260907-09-4, AC-20260907-09-6 |
 | tests/mocks/notes-layer-navigation.test.js | CREATE | tests | AC-20260907-09-9, AC-20260907-09-10, AC-20260907-09-12, AC-20260907-09-13 |
+| .claude/spec.config.json | MODIFY | doctrine | D15: `--test-concurrency=3` on `gateCommand` and `testCommand` |
+| package.json | MODIFY | doctrine | D15: `scripts.test` carries the same flag — AC-20260903-07-6 pins it byte-identical to `testCommand` modulo the trailing glob |
+| tests/test-file-budget.test.js | MODIFY | tests | D15: AC-20260903-07-6's literal `gateCommand` pin updated in place, re-scoped to name both halves (no budget reporter on the gate leg, concurrency cap present) |
+| tests/consistency/test-concurrency-cap.test.js | CREATE | tests | D15: pins `--test-concurrency=<n≤3>` on both commands so a regeneration cannot drop the cap silently |
+| tests/mocks/chrome-harness.js | CREATE | tests | D7′/A5 review fix: the one home for `findChrome`/`serve`/`withChrome`, extracted when the harness reached three near-identical copies |
+| tests/mocks/notes-layer-isolation.test.js | MODIFY | tests | D7′/A5 review fix: imports the extracted harness in place of its own copy; its twelve assertions are byte-identical to the pre-image |
+| tests/consistency/design-doctrine.test.js | MODIFY | tests | D13: AC-20260824-05-2's design.md cap 160 → 170 |
+| tests/consistency/read-load.test.js | MODIFY | tests | D13: `RATCHET` gains `design: 510`, `init: 970 → 980`; `CAP` unchanged at 500 |
 
 ## Contracts
 
@@ -284,6 +297,67 @@ review page, so the sidebar's CSS ships everywhere while only `buildAtlas` emits
 AC-20260907-09-5 is the pin that keeps that true. And the project panel mounts after an
 explicit anchor now; a worker who drops `#nl-notes` will produce a panel that renders
 full-width beneath both columns and a strip link that lands nowhere.
+
+### What execution taught this spec (folded from the deviations sidecar at close)
+
+**Five review rounds, and four of them found real defects.** The pattern is worth recording
+because it is the spec's main lesson: every round's fixtures reached a path the previous round's
+did not. Round 1 caught the `.nl-anchor` pill leaking onto a served mock page's own notes strip,
+where every row lost its id and read `<screen> · not drawn`. Round 3 caught a question note
+reaching the project panel with no screen name at all — questions render through `questionRow`,
+a second builder nobody had thought to give the anchor branch — and caught the current-section
+marker landing on a section a status filter had hidden, because a hidden element's bounding rect
+is all zeros and therefore always satisfies D5's threshold. Round 4 caught D2's heading jump
+never having been implemented: the `<h2>` carried its `id`, and nothing was ever wired to click
+it. Only round 5 came back with no hard or medium finding.
+
+**Two pins shipped that could not fail.** AC-6's hidden-section pin read `.tochead.here`
+synchronously after a chip click, but `__filter` never calls `__tocMark` and the marker is
+recomputed only inside a `requestAnimationFrame` — so it read the marker an earlier settle step
+had left behind, on the very section it asserted, and passed with the pre-fix body substituted
+byte-for-byte. AC-1's ordering clause was pinned against a fixture with one journey section,
+where a sequence comparison proves nothing. The lesson is a method, not a rule: a pin for a
+behaviour that only appears under a state change must demonstrate that it *fails* when the fix is
+reverted, and a pin over an ordering must have at least three elements to order. Both were
+demonstrated rather than argued before close — the AC-1 pin catches all five of reorder, removal,
+addition and rename. Two occurrences in one spec is not yet the third recurrence the Incident
+Policy requires for a standing guard; the reopen condition is a third pin, in any repo, found to
+pass with its own fix reverted.
+
+**A Decision clause with no AC behind it is where work goes missing.** D2's heading jump, D1's
+wide-width layout, D3's `/` shortcut and its never-filter-the-cards clause, D8's mount point —
+none had an AC. Three of those were implemented correctly and one was not implemented at all, and
+nothing distinguished them until a reviewer executed each clause by hand. AC coverage measured by
+ID says nothing about clause depth.
+
+**One fix created the next defect.** Keeping the row-less `shapes` and `theme` groups visible
+under every status chip was right for the index alone, but the page's own inherited `.sect` rule
+hides any section with no visible `[data-st]`, and those two have none — so the index listed two
+sections the page had removed, which is exactly the disagreement D4 forbids. A row-less group now
+tracks its own section's visibility. The inherited rule was deliberately left alone: it pre-dates
+this spec and no Decision here claims it. Note for a future reader that the page-side hide never
+reverses, not even by clicking `all` again, which is why the index test's query assertions must
+run before any chip is clicked.
+
+**Departures recorded rather than amended.** D2's heading jump ships without `.flash`: D2 pairs
+that treatment with the row-jump clause specifically, and a heading's persistent `.here` border
+already answers "did my click land" in a way a small row inside a dense grid cannot. `#kit` gets
+no index entry — D2's render order names shapes, theme and the journeys, and inventing a fourth
+would be an override. `shapes` and `theme` carry a heading and no rows, because neither emits the
+`id="s-<label>"`/`data-st` pair a row represents and jumps to. A note carrying no state labels its
+pill with the screen alone, since `mocks-driver.js` documents `--state` as optional and the
+verbatim label form rendered the literal word `null`. And the D8 mount anchor is feature-detected
+because one pre-existing vm stub has no `getElementById`; a real document always does.
+
+**Two host-level rulings came out of this build.** D13 raised three prose-size caps by ten lines
+each, because the design doctrine sat at 157 of 160 and two commands sat exactly on their
+read-load ceilings, so two contract bullets reddened three blocking legs at once. D15 capped
+test-file parallelism at three, because two consecutive full-suite legs went red differently and
+neither failure was in this spec's files — one pushed seven pre-existing files past the per-file
+time budget, the other failed an unrelated genesis test that passes in isolation. Both are
+recorded as Decisions with the executed evidence; D12's and D13's version literals sit against
+§ Planning's "Decisions name no version literal" rule, and were left as recorded rather than
+corrected mid-build because the gate's `plugin-bump.js --check` is the oracle and is green.
 
 ## Canonical Delta
 

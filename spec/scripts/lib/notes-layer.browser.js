@@ -142,7 +142,14 @@
   var strip = null
   if (scope === 'project') {
     proj = document.createElement('div'); proj.className = 'nl-proj'
-    var projAnchor = rootEl || document.body
+    // specs/20260907/09 D8: mount right after the atlas's own #nl-notes anchor when it exists —
+    // that anchor sits as the last element of #main, giving the panel a stable spot inside the
+    // two-column grid; the pre-existing rootEl||document.body fallback still applies everywhere
+    // else (this element is absent on every other project-scope page). Feature-detected: a
+    // served page's real `document` always has getElementById, but this file also runs unchanged
+    // under stub DOMs a caller may build without it.
+    var nlNotesEl = typeof document.getElementById === 'function' ? document.getElementById('nl-notes') : null
+    var projAnchor = nlNotesEl || rootEl || document.body
     projAnchor.insertAdjacentElement('afterend', mount(proj))
   } else {
     strip = document.createElement('div'); strip.className = 'nl-strip'
@@ -154,13 +161,52 @@
   var mockNotes = []
   var projectNotes = []
 
-  function noteRow(n) {
+  // D6/D7/D7′: the project panel now lists every open note, flat — a project-scope row keeps its
+  // plain <b> id badge, and so does a mock-scope row EVERYWHERE EXCEPT the project panel itself
+  // (D7′(a): the swap is scoped to `isProject` — a served mock page's own strip keeps the plain
+  // badge, since D8 gives the strip one thing only, the "Project notes ↗" link). Inside the
+  // project panel, a mock-scope row swaps that badge for a `.nl-anchor` control: a button
+  // (labelled "<screen> · <state>") when the screen's card AND its iframe.frame AND
+  // window.__lbOpen all exist, or an inert `.nl-anchor.plain` span ("<screen> · not drawn")
+  // otherwise — D7′(b): a gap chip carries id="s-<label>" with no iframe.frame, so the frame
+  // itself (not merely the card id) is the button's gate, keeping a gap screen's pill inert. The
+  // button targets that SAME iframe.frame, the one a card click opens — never a navigation (D9:
+  // no query-string state deep link anywhere in this file). Shared by noteRow AND questionRow —
+  // every ledger question is scope:"mock" (mocks-driver.js creates them that way), so it needs
+  // the identical screen-and-state pill a plain mock-scope note gets.
+  function mockAnchor(n) {
+    var target = document.getElementById('s-' + n.screen)
+    var frame = target && target.querySelector && target.querySelector('iframe.frame')
+    if (frame && window.__lbOpen) {
+      var btn = document.createElement('button')
+      btn.className = 'nl-anchor'
+      // mocks-driver.js's `--state` is optional (a question can be asked with none) — n.state is
+      // then null, and "<screen> · null" is not a state. Name the screen alone rather than invent
+      // a state that was never declared.
+      btn.textContent = n.state ? (n.screen + ' · ' + n.state) : n.screen
+      btn.onclick = function () {
+        if (window.__lbOpen) window.__lbOpen(frame)
+      }
+      return btn
+    }
+    var span = document.createElement('span')
+    span.className = 'nl-anchor plain'
+    span.textContent = n.screen + ' · not drawn'
+    return span
+  }
+
+  function noteRow(n, isProject) {
     var d = document.createElement('div')
     d.className = 'n' + (n.status === 'resolved' ? ' done' : '')
-    var idBadge = document.createElement('b'); idBadge.textContent = n.id
+    if (isProject && n.scope === 'mock') {
+      d.appendChild(mockAnchor(n))
+    } else {
+      var idBadge = document.createElement('b'); idBadge.textContent = n.id
+      d.appendChild(idBadge)
+    }
     var t = document.createElement('span'); t.className = 't'
     t.innerHTML = esc(n.text) + '<small>' + esc(n.by) + (n.status === 'resolved' ? ' · resolved by ' + esc(n.resolvedBy) : '') + '</small>'
-    d.appendChild(idBadge); d.appendChild(t)
+    d.appendChild(t)
     if (n.status !== 'resolved') {
       var resolveBtn = document.createElement('button')
       resolveBtn.className = 'nl-btn'; resolveBtn.textContent = 'Resolve'
@@ -248,12 +294,20 @@
   // `status` — a question's status can later move to "addressed" (the session's own `notes
   // address` follow-up recording a redraw after a "no") without ever un-answering it. Class
   // names are the exact `.nl-q`/`.nl-q-id`/`.nl-q-claim`/`.nl-q-rejected`/`.nl-q-actions`/
-  // `.nl-q-answered`/`.nl-q-text` register viewer.css declares (never touched here).
-  function questionRow(n) {
+  // `.nl-q-answered`/`.nl-q-text` register viewer.css declares (never touched here). D7/D7′: in
+  // the project panel a question note (always scope:"mock" — mocks-driver.js's own creation)
+  // gets the same mockAnchor swap noteRow's plain notes get, replacing the ledger id badge; the
+  // ledger-specific claim/rejected/answered treatment below is unchanged either way.
+  function questionRow(n, isProject) {
     var answered = n.answer != null
     var d = document.createElement('div')
     d.className = 'n nl-q' + (answered ? ' done' : '')
-    var idBadge = document.createElement('b'); idBadge.className = 'nl-q-id'; idBadge.textContent = n.ledgerId || n.id
+    var idBadge
+    if (isProject && n.scope === 'mock') {
+      idBadge = mockAnchor(n)
+    } else {
+      idBadge = document.createElement('b'); idBadge.className = 'nl-q-id'; idBadge.textContent = n.ledgerId || n.id
+    }
     var body = document.createElement('span'); body.className = 't'
     var assumed = document.createElement('div'); assumed.className = 'nl-q-claim'
     assumed.textContent = 'I assumed ' + (n.claim != null ? n.claim : n.text)
@@ -334,7 +388,7 @@
       // D5: an answered question stays visible (its own row already reads as settled — "You
       // confirmed"/"You corrected") — only a plain resolved note hides behind "Show resolved".
       projectNotes.filter(function (n) { return n.kind === 'question' || showResolved || n.status !== 'resolved' })
-        .forEach(function (n) { proj.appendChild(n.kind === 'question' ? questionRow(n) : noteRow(n)) })
+        .forEach(function (n) { proj.appendChild(n.kind === 'question' ? questionRow(n, true) : noteRow(n, true)) })
       var projAdd = document.createElement('button'); projAdd.className = 'nl-btn'; projAdd.textContent = '+ Note'
       projAdd.onclick = composeProject
       proj.appendChild(projAdd)
@@ -343,20 +397,29 @@
     if (strip) {
       strip.innerHTML = ''
       var stripHead = document.createElement('h4'); stripHead.textContent = 'Notes — ' + activeState
+      // D8: one link back to the atlas's project panel, landing on #nl-notes — the served mock
+      // page never opens the project panel in place (that would render a second scope and break
+      // the layer's one-panel-per-scope rule), so the return path is a same-tab navigation.
+      var upLink = document.createElement('a'); upLink.className = 'nl-up'
+      upLink.textContent = 'Project notes ↗'
+      upLink.href = __base + '/atlas/index.html#nl-notes'
+      stripHead.appendChild(upLink)
       strip.appendChild(stripHead)
       mockNotes.filter(function (n) { return n.state === activeState && (n.kind === 'question' || showResolved || n.status !== 'resolved') })
-        .forEach(function (n) { strip.appendChild(n.kind === 'question' ? questionRow(n) : noteRow(n)) })
+        .forEach(function (n) { strip.appendChild(n.kind === 'question' ? questionRow(n, false) : noteRow(n, false)) })
       var stripAdd = document.createElement('button'); stripAdd.className = 'nl-btn'; stripAdd.textContent = '+ Note on this state'
       stripAdd.onclick = composeMock
       strip.appendChild(stripAdd)
     }
   }
 
-  // D5: a page fetches only the list its declared scope owns — a mock page never fetches the
-  // project-wide list (screen=*), a project page never fetches a per-screen list.
+  // D5/D6: a page fetches only the list its declared scope owns — a mock page never fetches the
+  // project-wide list, a project page never fetches a per-screen list. D6: the project panel now
+  // requests screen=** (every note, ledger-joined identically) so it can list a mock-scope note
+  // too — screen=* would return only project-scope notes, the gap A1's micro-spike found.
   function refresh() {
     if (scope === 'project') {
-      return fetch(__base + '/__notes/list?screen=*').then(function (r) { return r.json() }).then(function (list) {
+      return fetch(__base + '/__notes/list?screen=**').then(function (r) { return r.json() }).then(function (list) {
         projectNotes = list || []
         render()
       })

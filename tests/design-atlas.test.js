@@ -311,7 +311,11 @@ a -> b
   assert.ok(!out.includes("querySelectorAll('.chead')["),
     'the lightbox wiring must never fall back to a positional .chead index — that breaks as soon as columns are reordered or filtered')
 
-  const j1Idx = out.indexOf('<h2>j1')
+  // specs/20260907/09-atlas-index-and-note-navigation.md D2 adds id="j-<title>" to every journey
+  // section's <h2> — this probe pins that the section exists and is headed "j1", not the tag's
+  // incidental attribute shape, so it tolerates whatever attributes ride along on <h2>.
+  const j1Match = out.match(/<h2[^>]*>j1/)
+  const j1Idx = j1Match ? j1Match.index : -1
   assert.ok(j1Idx !== -1, 'a section headed "j1" must exist for the seed journey')
   const stopBlock = sliceElement(out, '<div class="stop" id="stop-P002" data-kind="approve"')
   assert.ok(stopBlock, 'the j1 section must render stop P002 as a class="stop" approve control')
@@ -604,9 +608,12 @@ test('AC-20260905-01-10: notes-layer.browser.js under vm shows only the mock str
 
 test('AC-20260905-01-10: notes-layer.browser.js under vm shows only the project panel and its bar for the atlas index (notes-scope project) even though the index carries a data-screen-label root (A6)', () => {
   const { fetchCalls, created } = evalNotesLayer({ pathname: '/atlas/index.html', metaContent: 'project', screenLabel: 'some-frame-wrapper-label' })
-  assert.ok(fetchCalls.includes('/__notes/list?screen=*'),
-    'a project-scope page must fetch the project-wide notes list under the empty base: got ' + JSON.stringify(fetchCalls))
-  assert.ok(!fetchCalls.some((u) => u.includes('screen=') && !u.includes('screen=*')),
+  // specs/20260907/09-atlas-index-and-note-navigation.md D6: refresh() requests screen=** (every
+  // note, no scope filter) when its declared scope is project — screen=*'s own meaning is
+  // unchanged and separately pinned by AC-20260907-09-8.
+  assert.ok(fetchCalls.includes('/__notes/list?screen=**'),
+    'D6: a project-scope page must fetch every note (screen=**) under the empty base: got ' + JSON.stringify(fetchCalls))
+  assert.ok(!fetchCalls.some((u) => u.includes('screen=') && !u.includes('screen=*') && !u.includes('screen=**')),
     'a project-scope page must never fetch a per-screen notes list, even though a [data-screen-label] root exists: got ' + JSON.stringify(fetchCalls))
   assert.ok(!created.some((el) => el.className === 'nl-strip'),
     'a project-scope page must create no nl-strip element — the declared meta scope must win over A6\'s inference trap')
@@ -1802,7 +1809,10 @@ a -> b
   assert.strictEqual(res.status, 0, res.stdout + res.stderr)
   const out = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')
 
-  assert.match(out, /<h2>j1/, 'a section headed by the journey key "j1" must be emitted for the seed journey')
+  // specs/20260907/09-atlas-index-and-note-navigation.md D2 adds id="j-<title>" to every journey
+  // section's <h2> — tolerate whatever attributes ride along on the tag, pinning only that the
+  // section exists and is headed by the journey key.
+  assert.match(out, /<h2[^>]*>j1/, 'a section headed by the journey key "j1" must be emitted for the seed journey')
   assert.match(out, /Mika \(dispatch lead\) draws two screens/, 'the journey\'s persona line from seed.md must appear in the rendered section')
 
   const frameCount = (out.match(/data-screen-label="a"/g) || []).length
@@ -3037,4 +3047,191 @@ test('AC-20260907-04-17: the atlas emits a #kit section framing every candidate 
   const out2 = fs.readFileSync(path.join(dir2, 'design/atlas/index.html'), 'utf8')
   assert.ok(!out2.includes('id="kit"'),
     'with no kit-signed stop live, the atlas must emit no id="kit" section')
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260907/09-atlas-index-and-note-navigation.md — TDD red: buildAtlas emits no
+// #shell/#toc/#main/#nl-notes wrapper at all today, GET /__notes/list has no screen=** branch,
+// and page()'s/viewer.css's stylesheets carry none of the toc/nl-anchor chrome selectors yet.
+// ---------------------------------------------------------------------------
+
+test('AC-20260907-09-1: buildAtlas wraps its composed body in #shell/#toc/#main, emits one .tocgroup[data-group] per rendered section holding one .tocrow[data-label][data-st] per surface (mocked and gap alike), and stamps id="j-<section title>" on each section heading', () => {
+  const dir = fixture()
+  const res = atlas(['build'], { cwd: dir })
+  assert.strictEqual(res.status, 0, res.stdout + res.stderr)
+  const out = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')
+
+  const shellIdx = out.indexOf('<div id="shell">')
+  assert.ok(shellIdx !== -1, 'D1: buildAtlas must wrap the composed body in <div id="shell">: got none in ' + out.slice(0, 200))
+  const tocIdx = out.indexOf('<aside id="toc">', shellIdx)
+  assert.ok(tocIdx !== -1 && tocIdx > shellIdx, 'D1: #shell must contain an <aside id="toc"> — the persistent screen index')
+  const mainIdx = out.indexOf('<div id="main">', shellIdx)
+  assert.ok(mainIdx !== -1 && mainIdx > tocIdx, 'D1: #shell must contain a <div id="main"> after #toc, wrapping the page body buildAtlas already composes')
+
+  // The section heading now carries its own id="j-<title>" (D2, pinned separately below) —
+  // tolerate whatever attributes ride along on <h2> rather than requiring the bare pre-image tag.
+  const titleMatch = out.match(/<section class="sect"><h2[^>]*>([^<]*)<span class="count">/)
+  assert.ok(titleMatch, 'test setup: the fixture must render at least one plain journey section to key the toc/heading-id checks against')
+  const sectionTitle = titleMatch[1]
+  assert.ok(out.includes('<div class="tocgroup" data-group="' + sectionTitle + '">'),
+    'D2: one .tocgroup[data-group] must render per rendered section, in the page\'s own render order, matching that section\'s title: got no matching .tocgroup in ' + out.slice(tocIdx, tocIdx + 600))
+  assert.ok(out.includes('<h2 id="j-' + sectionTitle + '">') || new RegExp('<h2 id="j-' + sectionTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"').test(out),
+    'D2: the section\'s own <h2> must carry id="j-<section title>" so a .tochead can jump to it: got no matching id in ' + out)
+
+  const rowLabels = [...out.matchAll(/<button class="tocrow" data-label="([^"]*)" data-st="([^"]*)">/g)].map((m) => m[1])
+  for (const label of ['account', 'lobby', 'signin', 'thread']) {
+    assert.ok(rowLabels.includes(label),
+      'D2: a .tocrow must render for surface "' + label + '" — mocked and gap surfaces alike: got ' + JSON.stringify(rowLabels))
+  }
+
+  // AC-20260907-09-1's own wording ("in the same order the sections are emitted") and D2
+  // ("in the page's own render order") are both ordering claims — nothing above compares a
+  // SEQUENCE of anything, only presence of one group. The shared fixture() above has exactly one
+  // plain journey section, over which order is never meaningful — the exact failure mode this
+  // spec has already hit twice (AC-20260907-09-6's first hidden-section pin, and the row-less
+  // shapes/theme pin, both needed a second real fixture to become non-vacuous). A dedicated tree
+  // with shapes plus two alphabetically-distinct journeys gives order something real to prove:
+  // the same shape the reviewer executed against the real served atlas (shapes, then the sorted
+  // journey sections).
+  const orderDir = tmpdir('atlas-toc-order')
+  const mkOrder = (rel, c) => { const p = path.join(orderDir, rel); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, c) }
+  mkOrder('design/shapes/one.html', '<main data-screen-label="one">one</main>\n')
+  mkOrder('docs/roadmap/alpha-area.md', '# alpha\n```surfaces\nscreen-a\n```\n')
+  mkOrder('docs/roadmap/zeta-area.md', '# zeta\n```surfaces\nscreen-z\n```\n')
+  mkOrder('design/mocks/screen-a.html', '<main data-screen-label="screen-a">a</main>\n')
+  const orderRes = atlas(['build'], { cwd: orderDir })
+  assert.strictEqual(orderRes.status, 0, orderRes.stdout + orderRes.stderr)
+  const orderOut = fs.readFileSync(path.join(orderDir, 'design/atlas/index.html'), 'utf8')
+
+  // Every rendered section's own <h2> carries id="j-<title>" (D2) — reading those ids in
+  // document order gives the exact sequence buildAtlas emitted the sections in.
+  const sectionIds = [...orderOut.matchAll(/<h2[^>]*\sid="j-([^"]+)"/g)].map((m) => m[1])
+  const tocGroupIds = [...orderOut.matchAll(/<div class="tocgroup" data-group="([^"]+)">/g)].map((m) => m[1])
+  assert.ok(sectionIds.length >= 3,
+    'test setup: the order-check fixture must render at least three sections (shapes plus two journeys) — with fewer than two, a sequence comparison proves nothing about order: got ' + JSON.stringify(sectionIds))
+  assert.strictEqual(tocGroupIds.length, sectionIds.length,
+    'AC-1/D2: exactly one .tocgroup must render per rendered section — a missing or extra .tocgroup means the index lists a different set of sections than the page actually renders: got sections ' +
+    JSON.stringify(sectionIds) + ' vs .tocgroup ' + JSON.stringify(tocGroupIds))
+  assert.deepStrictEqual(tocGroupIds, sectionIds,
+    'AC-1/D2: .tocgroup[data-group] values must appear in the SAME ORDER the page\'s own .sect>h2 headings are emitted — an order drift here means the index no longer matches the page it indexes, even though every section is individually still present: got sections ' +
+    JSON.stringify(sectionIds) + ' vs .tocgroup ' + JSON.stringify(tocGroupIds))
+})
+
+// AC-5 is a "SHALL CONTINUE TO" continuity pin (core § Incident Policy's "absence of a
+// not-yet-built mechanism" — matching the AC-20260906-05-2/AC-20260906-06-2 pattern already used
+// in this file): page()'s shared stylesheet gains the toc CSS register everywhere (AC-14), but
+// only buildAtlas ever composes the #shell/#toc/.tocrow markup — cmdGallery must keep emitting
+// none of it, before and after this spec lands.
+test('AC-20260907-09-5: cmdGallery SHALL CONTINUE TO emit no #shell, no #toc, and no .tocrow — the index markup is buildAtlas-only', () => {
+  const dir = fixture()
+  fs.mkdirSync(path.join(dir, 'design/explore/r0-instrument'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/explore/r0-instrument/tile.html'),
+    '<link rel="stylesheet" href="./tokens.css">\n<main data-screen-label="signin">t</main>\n')
+  const res = atlas(['gallery', path.join(dir, 'design/explore')])
+  assert.strictEqual(res.status, 0, res.stdout + res.stderr)
+  const out = fs.readFileSync(path.join(dir, 'design/explore/gallery.html'), 'utf8')
+  assert.doesNotMatch(out, /id="shell"/, 'AC-5: cmdGallery must never emit #shell — only buildAtlas composes the index chrome')
+  assert.doesNotMatch(out, /id="toc"/, 'AC-5: cmdGallery must never emit #toc')
+  assert.doesNotMatch(out, /class="tocrow"/, 'AC-5: cmdGallery must never emit a .tocrow')
+})
+
+test('AC-20260907-09-11: buildAtlas emits <div id="nl-notes"></div> as the last element inside #main', () => {
+  const dir = fixture()
+  const res = atlas(['build'], { cwd: dir })
+  assert.strictEqual(res.status, 0, res.stdout + res.stderr)
+  const out = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')
+  const mainStart = out.indexOf('<div id="main">')
+  assert.ok(mainStart !== -1, 'D1: buildAtlas must emit <div id="main"> to anchor this check: got none in ' + out.slice(0, 200))
+  const mainHtml = sliceElement(out, '<div id="main">')
+  assert.ok(mainHtml, 'D1: the #main div must close with a balanced </div>')
+  const withoutOwnClose = mainHtml.slice(0, mainHtml.lastIndexOf('</div>'))
+  assert.match(withoutOwnClose.replace(/\s+$/, ''), /<div id="nl-notes"><\/div>$/,
+    'D8: <div id="nl-notes"></div> must be the LAST element inside #main, giving the notes layer\'s project panel and a served mock\'s strip link a stable mount/target anchor: got tail ' +
+    JSON.stringify(withoutOwnClose.slice(-200)))
+})
+
+test('AC-20260907-09-7: GET /__notes/list?screen=** returns every note regardless of scope, ledger-joining a question row exactly as the other branches do', async () => {
+  const dir = tmpdir('atlas-notes-screen-all')
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/mocks/session-live.html'), '<main data-screen-label="session-live">s</main>\n')
+  writeQuestionLedger(dir, [{ id: 'W7', step: 'WIREFRAMES', kind: 'product', claim: 'single-use link', tag: 'inferred', status: 'open', rejected: 'durable link' }])
+  const n1 = {
+    id: 'N1', scope: 'project', screen: null, state: null, kind: 'note', text: 'project-wide', by: 'jj',
+    at: new Date().toISOString(), status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null,
+  }
+  const n2 = baseQuestion('N2', 'session-live', 'W7')
+  fs.writeFileSync(path.join(dir, 'design/mocks/notes.json'), JSON.stringify([n1, n2], null, 2) + '\n')
+
+  await withHandler(dir, '', async ({ get }) => {
+    const all = await get('/__notes/list?screen=**')
+    assert.strictEqual(all.status, 200, 'GET /__notes/list?screen=** must respond 200: ' + all.body)
+    const allNotes = JSON.parse(all.body)
+    assert.deepStrictEqual(allNotes.map((n) => n.id).sort(), ['N1', 'N2'],
+      'D6: screen=** must return every note regardless of scope: got ' + JSON.stringify(allNotes.map((n) => n.id)))
+    const joined = allNotes.find((n) => n.id === 'N2')
+    assert.strictEqual(joined.claim, 'single-use link',
+      'D6: a question row returned under screen=** must still be ledger-joined exactly as the * and <label> branches already are: got ' + JSON.stringify(joined))
+  })
+})
+
+// AC-8 is a "SHALL CONTINUE TO" continuity pin: D6 adds screen=** as a NEW value without
+// redefining screen=* or screen=<label> byte-for-byte (specs/20260906/03 D3's scope contract).
+test('AC-20260907-09-8: GET /__notes/list?screen=* and ?screen=session-live SHALL CONTINUE TO return exactly [N1] and [N2] respectively once screen=** exists', async () => {
+  const dir = tmpdir('atlas-notes-screen-continuity')
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/mocks/session-live.html'), '<main data-screen-label="session-live">s</main>\n')
+  const n1 = {
+    id: 'N1', scope: 'project', screen: null, state: null, kind: 'note', text: 'project-wide', by: 'jj',
+    at: new Date().toISOString(), status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null,
+  }
+  const n2 = {
+    id: 'N2', scope: 'mock', screen: 'session-live', state: 'listening', kind: 'note', text: 'screen note', by: 'jj',
+    at: new Date().toISOString(), status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null,
+  }
+  fs.writeFileSync(path.join(dir, 'design/mocks/notes.json'), JSON.stringify([n1, n2], null, 2) + '\n')
+
+  await withHandler(dir, '', async ({ get }) => {
+    const proj = await get('/__notes/list?screen=*')
+    assert.deepStrictEqual(JSON.parse(proj.body).map((n) => n.id), ['N1'], 'screen=* must keep returning only the project note: got ' + proj.body)
+    const mock = await get('/__notes/list?screen=session-live')
+    assert.deepStrictEqual(JSON.parse(mock.body).map((n) => n.id), ['N2'], 'screen=<label> must keep returning only that screen\'s note: got ' + mock.body)
+  })
+})
+
+// A brace-depth CSS-rule extractor mirroring sliceElement's balanced-<div> approach above — finds
+// `selector` followed (possibly with whitespace, either chrome convention: page()'s no-space
+// `.sel{` or viewer.css's spaced `.sel {`) by its `{…}` body, brace-depth matched so a rule
+// containing its own nested braces (none of these do, but @media wrapping might) still resolves.
+function cssRuleBody(css, selector) {
+  const re = new RegExp(selector.replace(/[.#[\]]/g, '\\$&') + '\\s*\\{')
+  const m = re.exec(css)
+  if (!m) return null
+  let depth = 0
+  let i = m.index + m[0].length - 1
+  for (; i < css.length; i++) {
+    if (css[i] === '{') depth++
+    else if (css[i] === '}') { depth--; if (depth === 0) break }
+  }
+  return css.slice(m.index + m[0].length, i)
+}
+
+test("AC-20260907-09-14: page()'s emitted stylesheet declares the #shell/#toc/.tocgroup/.tochead/.tocrow/.tocempty/#tocbtn/#tocscrim register and viewer.css declares .nl-anchor/.nl-anchor.plain/.nl-up, with no color literal in any rule this spec adds", () => {
+  const mod = loadDesignAtlas()
+  const pageHtml = mod.page('t', '')
+  const styleMatch = pageHtml.match(/<style>([\s\S]*?)<\/style>/)
+  assert.ok(styleMatch, 'page() must still emit a <style> block')
+  const style = styleMatch[1]
+  const viewer = fs.readFileSync(path.join(SPEC, 'templates/mocks/viewer.css'), 'utf8')
+  const colorLiteral = /#[0-9a-f]{3,8}\b|rgb\(|hsl\(/i
+
+  for (const sel of ['#shell', '#toc', '.tocgroup', '.tochead', '.tocrow', '.tocempty', '#tocbtn', '#tocscrim']) {
+    const body = cssRuleBody(style, sel)
+    assert.ok(body !== null, 'D1/D2/D10: page()\'s stylesheet must declare a "' + sel + '" rule for the persistent index chrome: none found')
+    assert.doesNotMatch(body, colorLiteral, 'D10: the "' + sel + '" rule must resolve every color through a var(--v-*) role, never a literal: got ' + JSON.stringify(body))
+  }
+  for (const sel of ['.nl-anchor', '.nl-anchor.plain', '.nl-up']) {
+    const body = cssRuleBody(viewer, sel)
+    assert.ok(body !== null, 'D7/D9/D10: viewer.css must declare a "' + sel + '" rule for the note-anchor chrome: none found')
+    assert.doesNotMatch(body, colorLiteral, 'D10: the "' + sel + '" rule must resolve every color through a var(--v-*) role, never a literal: got ' + JSON.stringify(body))
+  }
 })

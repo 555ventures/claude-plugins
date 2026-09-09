@@ -176,6 +176,54 @@ test('AC-20260820-05-7: cleanContradicted joins an escape\'s reviewRunId to a CL
   assert.strictEqual(entry.escapesUnjoined, 1, 'the escape with reviewRunId:null must count as unjoined — it must NEVER be folded into contradicted (a false miscalibration signal) or silently dropped (a lost escape)')
 })
 
+// Direct fix, no spec: query 5 already carried both halves of the fleet's
+// false-CLEAN rate and every reader was dividing them by eye. The division is a render/field
+// addition to the FIFTH question, never a tenth question, so D5's fixed question set holds.
+test('cleanContradicted carries falseCleanRate per repo and a fleet roll-up, renders it as a percent, and reports n/a — never 0% — for a repo with no CLEAN rows', () => {
+  const root = tmpdir('fleet-falseclean')
+  mkRepo(root, 'repo-a', {
+    rows: [
+      { ts: '2026-08-01T00:00:00Z', stage: 'review', spec: 'specs/1.md', verdict: 'CLEAN', runId: 'wf_a1' },
+      { ts: '2026-08-02T00:00:00Z', stage: 'escape', spec: 'specs/1.md', file: 'x.js', reviewRunId: 'wf_a1', foundBy: 'user', severity: 'hard', killedMatch: null, preventedBy: 'none', via: 'manual' },
+      { ts: '2026-08-03T00:00:00Z', stage: 'escape', spec: 'specs/2.md', file: 'y.js', reviewRunId: null, foundBy: 'user', severity: 'soft', killedMatch: null, preventedBy: 'none', via: 'manual' },
+    ],
+  })
+  mkRepo(root, 'repo-b', {
+    rows: [
+      { ts: '2026-08-01T00:00:00Z', stage: 'review', spec: 'specs/1.md', verdict: 'CLEAN', runId: 'wf_b1' },
+      { ts: '2026-08-02T00:00:00Z', stage: 'review', spec: 'specs/2.md', verdict: 'CLEAN', runId: 'wf_b2' },
+      { ts: '2026-08-03T00:00:00Z', stage: 'review', spec: 'specs/3.md', verdict: 'CLEAN', runId: 'wf_b3' },
+      { ts: '2026-08-04T00:00:00Z', stage: 'review', spec: 'specs/4.md', verdict: 'CLEAN', runId: 'wf_b4' },
+      { ts: '2026-08-05T00:00:00Z', stage: 'escape', spec: 'specs/1.md', file: 'z.js', reviewRunId: 'wf_b1', foundBy: 'user', severity: 'hard', killedMatch: null, preventedBy: 'none', via: 'manual' },
+    ],
+  })
+  mkRepo(root, 'no-cleans-repo', {
+    rows: [
+      { ts: '2026-08-01T00:00:00Z', stage: 'review', spec: 'specs/1.md', verdict: 'ESCALATED', runId: 'wf_c1' },
+    ],
+  })
+
+  const out = runJson(root)
+  const byName = Object.fromEntries(out.cleanContradicted.byRepo.map(r => [r.name, r]))
+  assert.strictEqual(byName['repo-a'].falseCleanRate, 1, 'repo-a: 1 contradicted / 1 CLEAN is a rate of 1 — the unjoined escape must stay OUT of the numerator, so the rate is a floor, not an exact figure')
+  assert.strictEqual(byName['repo-b'].falseCleanRate, 0.25, 'repo-b: 1 contradicted / 4 CLEANs is 0.25')
+  assert.strictEqual(byName['no-cleans-repo'].falseCleanRate, null, 'a repo with no CLEAN rows has NO rate — 0 would read as "never wrong" when the truth is "never measured"')
+
+  assert.deepStrictEqual(
+    out.cleanContradicted.fleet,
+    { cleans: 5, contradicted: 2, escapesUnjoined: 1, falseCleanRate: 0.4 },
+    'the fleet roll-up sums the per-repo counts and divides once — the single number the scoreboard exists to print'
+  )
+
+  const human = runNode(SCRIPT, ['--repos-root', root])
+  assert.strictEqual(human.status, 0, human.stderr)
+  assert.match(human.stdout, /repo-a: cleans=1 contradicted=1 escapesUnjoined=1 falseClean=100\.0%/, 'the per-repo line carries the percent alongside the counts it was already printing')
+  assert.match(human.stdout, /repo-b: cleans=4 contradicted=1 escapesUnjoined=0 falseClean=25\.0%/)
+  assert.match(human.stdout, /no-cleans-repo: cleans=0 contradicted=0 escapesUnjoined=0 falseClean=n\/a/, 'no denominator renders n/a, never 0%')
+  assert.match(human.stdout, /fleet: cleans=5 contradicted=2 escapesUnjoined=1 falseClean=40\.0%/, 'query 5 ends with one fleet line — the number a reader quotes')
+  assert.doesNotMatch(human.stdout, /NaN|Infinity/, 'no divide-by-zero artefact ever reaches the render')
+})
+
 // specs/20260901/03-unified-build-loop.md D9: the seventh fixed query, cleanByVia, buckets
 // CLEAN review rows by their via field (loop/direct/unknown for rows carrying no via at all —
 // pre-sibling-02 rows) and joins escape.reviewRunId to a bucket's CLEAN runIds using the EXACT

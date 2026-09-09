@@ -32,10 +32,13 @@ decision amends: `NN-{name} — {one line: what changes there}`. The propagation
 the effects are edited into every listed brief **in the same session that writes this ADR**
 — never left as a pointer for later. An unplanned brief is edited in place (Scope /
 Out of scope / Open questions), gets an `Amended by ADR-{NNNN} — {one line}` line in its
-Grounding, and superseded lines are ~~struck~~ `(superseded by ADR-{NNNN})`, not deleted. A
-brief whose specs are already planned or shipped is never edited: mint a letter-suffixed
-successor brief (`NNa-{name}.md`, `Depends on: NN`) carrying the change, and list the
-successor here. /spec:doctor audits both link directions.}
+Grounding, and superseded lines are ~~struck~~ `(superseded by ADR-{NNNN})`, not deleted.
+Edit-in-place is the default for every brief, planned or shipped. A letter-suffixed successor
+brief (`NNa-{name}.md`, `Depends on: NN`) is minted only when the brief's PREMISE changed —
+a reader of the old brief's Context would now draw the wrong PRODUCT conclusion, not merely
+find its mechanics out of date — and the successor is listed here. This section is the only
+amendment record: an ADR carries no backward `Amended by:` line of its own, and /spec:doctor
+audits the forward direction only.}
 
 ## Dissents
 

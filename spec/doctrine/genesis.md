@@ -40,12 +40,14 @@ sign-off would only repeat.
 
 **Archetype and hand-off.** `discovery-done` requires a `- archetype: <registry key>` line in
 `## Picks` (§ Genesis: Archetype Registry) — the seed's primary-surface answer already settles
-it, so it is recorded here rather than re-asked at `MENUS`. The DISCOVERY step's closing text
-hands off accordingly: an archetype whose registry row owes a mocks set is told `next: run
-/spec:mocks in this repo until it reports APPROVED, then --mark brief-written` — or, when
-`design/mocks/status.json` is already `APPROVED`, `an approved
-set exists — --mark brief-written`; an archetype that owes no set is told `--mark
-brief-written` directly. There is no throwaway sketch step — the first rendered artifact this
+it, so it is recorded here rather than re-asked at `MENUS`. DISCOVERY itself closes with
+`--mark discovery-done` and nothing else; the archetype hand-off is rendered one state later,
+by BRIEF (§ Genesis: Brief State), which branches on the registry row: an archetype whose row
+owes a mocks set that is not yet approved is told `next: run /spec:mocks in this repo until it
+reports APPROVED, then --mark brief-written`; once `design/mocks/status.json` is `APPROVED`,
+BRIEF instead renders the ratification step over the approved set; an archetype that owes no
+set is told it owes nothing beyond DISCOVERY and goes straight to `--mark brief-written`.
+There is no throwaway sketch step — the first rendered artifact this
 pipeline produces is a real mock (or, for a non-visual archetype, none at all), never a
 disposable HTML round.
 

@@ -37,7 +37,7 @@ build resumes instead of restarting.
 **Brand-new project** (no code yet) — mock the product first, then run genesis and enforce:
 
 ```
-/spec:mocks                                                               # seed → shapes → wireframes → theme → skin → review → approved mocks
+/spec:mocks                                                               # driver-stepped to an approved mock set (stages: docs/canonical/design.md)
 /spec:genesis         "a trading simulator for retail traders in Japan"  # stack + scaffold + roadmap briefs, grounded in the approved mocks
 /spec:enforce
 ```
@@ -104,7 +104,7 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 
 | Command | What it does | When |
 |---|---|---|
-| `/spec:mocks` | Driver-stepped design entry point: seed → shapes → wireframes → theme → skin → review → approved mocks | Greenfield only, before genesis |
+| `/spec:mocks` | Driver-stepped design entry point, run to an approved mock set — the current stage chain lives in [`docs/canonical/design.md`](docs/canonical/design.md) | Greenfield only, before genesis |
 | `/spec:genesis` / `-design` | Stack + scaffold + roadmap + rendered design candidates in your browser; ratify the pick | Greenfield only, before init |
 | `/spec:init` | Profile the repo, generate the grounding layer, run enforce | Once per repo |
 | `/spec:sketch` | Mock + brainstorm one roadmap brief; ratify mock↔brief agreement | Before planning a UI-bearing brief |

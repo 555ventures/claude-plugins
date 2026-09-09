@@ -209,7 +209,13 @@ realtime ai-in-loop residency payer day-one-integrations scale-outage vendor-lim
 legal-floor`), each mapped in `seed.md ## Facts` to a confirmed `product` ledger row. Registers
 are link signatures: a wireframe links `design/wire/tokens.css` + `wire.css` (copied from
 `spec/templates/mocks/` at `canon-written`), a composed direction screen links its
-direction's `tokens.css` and no `wire/` stylesheet.
+direction's `tokens.css` and no `wire/` stylesheet. "Links" is one derivation for every
+check that asks — `spec/scripts/lib/wire-register.js` reads the stylesheets a page actually
+applies (`<link>` with a stylesheet `rel` in any quoting form or attribute order, plus CSS
+`@import`, comments stripped) and answers whether any of them has `wire` as a whole path
+segment. A `<link>` the browser does not apply as a stylesheet, and a path merely named like
+the register (`my-wire/`, `v.wire/`), are not the register; a register applied through
+`@import` is. No script outside that module spells the rule itself.
 THEME opens with a direction interview — 2–3 candidate directions derived from the seed and
 asked, never fixed anchors — recorded as the `theme-directions` product row. The driver's
 `ledger add|set|catch|check|counts` subcommands are the only writers of `design/mocks/ledger.md`.

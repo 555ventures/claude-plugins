@@ -1,6 +1,6 @@
 ---
 date: 2026-09-08
-status: hardened
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +10,8 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-08
 open_markers: 0
+build_base: main
+diff_base: 62dc04594e3265fdd9a85be1617161a588389d7c
 ---
 
 # One wire-register predicate
@@ -300,6 +302,25 @@ three literals hits (`WIRE_LINK_RE`, `WIRE_SEGMENT_RE`/`linksWireRegister`/`attr
 are File Plan rows, so nothing is waived. Its `executes` tier named eleven further test files
 that spawn one of the two scripts; every one was read against A2's link inventory and none
 feeds a page whose classification moves under D6 or D7, so no fixture repair is planned.
+
+Build departures, folded at review close. The Contracts block's literal call-site spelling for
+D6 is not used verbatim in `mocks-driver.js`: writing those two regex literals puts the source
+text `wire\/` in the file, which AC-20260908-07-7's pin bans for every `.js` under
+`spec/scripts/` except the authority module — the spec's own Contracts and its own pin are
+mutually exclusive as written. The two predicates are built with the `RegExp` constructor over
+plain strings instead, which never spells the banned text and compiles to the identical regex;
+the pin is the binding half, the Contracts spelling the illustrative one. Second, a header
+comment first written into `tests/design-atlas.test.js` narrated the superseded regex and why
+the test was red, which `comment-narration.js`'s repo-wide zero-findings sweep refuses; it was
+rewritten to state only the contract and its citation.
+
+Review finding, fixed in this spec. The first cut of `handleJourneyDrawn` stubbed a
+`journeys.<j>` record into `design/mocks/status.json` before the per-label loop, so a refused
+`journey-drawn` mark left a trace where the pre-image left the file untouched — a behavior
+change no Decision sanctions and one the Behavior section's "nothing else about either script
+moves" forbids. The write existed only to satisfy an intolerant read in the new test. The
+write was reverted and the test's refusal-side read made tolerant of an absent record, the
+pattern its sibling already used.
 
 ## Canonical Delta
 

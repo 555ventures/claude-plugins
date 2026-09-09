@@ -254,15 +254,21 @@ test('AC-20260907-06-10: THE SYSTEM SHALL CONTINUE TO accept --mark direction-co
 // NAMED like the wire register — "my-wire/", "v.wire/" — as if it linked the wire register
 // itself, and carries no gate on the <link>'s own `rel`, so a non-stylesheet link (an icon
 // pointing into a genuine wire/ path) is wrongly treated the same as a stylesheet link.
-// spec/scripts/mocks-driver.js's linksWireRegister(html) fixes all three: WIRE_SEGMENT_RE
-// requires "wire" to sit as a real path segment (preceded by "/" or the start of the value,
-// never a `\b`-boundary substring), and the <link> arm is gated on the tag's own `rel`
-// containing "stylesheet" before it ever looks at `href` (the @import arm needs no such gate —
-// an @import is always a stylesheet import). Each REFUSING sub-case below reddens under a
-// double-quote-only predicate (round two) by returning status 0 (a wrongly accepted compose)
-// instead of 2 — each one's own `assert.strictEqual(r.status, 2, ...)` is the assertion that
-// regression would trip; the prose leg is unchanged. Each COMPOSING sub-case reddens under the
-// PREVIOUS `\b`-boundary, no-rel-gate predicate
+//
+// Retagged AC-20260908-07-11 (specs/20260908/07-one-wire-register-predicate.md D5): the three
+// symbols that fixed all this — WIRE_SEGMENT_RE, attrValue, linksWireRegister — moved out of
+// mocks-driver.js entirely into the shared authority spec/scripts/lib/wire-register.js
+// (stylesheetTargets/linksWireRegister). `composeViolations` now calls the shared
+// `linksWireRegister(html)`, requiring "wire" to sit as a real path segment (preceded by "/" or
+// the start of the value, never a `\b`-boundary substring), gating the <link> arm on the tag's
+// own `rel` containing "stylesheet" before it ever looks at `href` (the @import arm needs no
+// such gate — an @import is always a stylesheet import). This is a no-op for this call site
+// (D5's own rationale): every assertion below is unchanged and must stay green throughout the
+// move. Each REFUSING sub-case below reddens under a double-quote-only predicate (round two) by
+// returning status 0 (a wrongly accepted compose) instead of 2 — each one's own
+// `assert.strictEqual(r.status, 2, ...)` is the assertion that regression would trip; the prose
+// leg is unchanged. Each COMPOSING sub-case reddens under the PREVIOUS `\b`-boundary, no-rel-gate
+// predicate
 // (`/<link\b[^>]*\bhref\s*=\s*(?:"[^"]*\bwire\/[^"]*"|'[^']*\bwire\/[^']*'|[^\s"'>]*\bwire\/[^\s"'>]*)/i`)
 // by returning status 2 (a wrongly refused compose) instead of 0 — verified directly against
 // that exact regex: it flags "../my-wire/x.css", "../v.wire/x.css" and the icon-rel case as
@@ -280,7 +286,7 @@ function composeAgainstMutatedKit(mutate) {
   return runNode(SCRIPT, ['--root', dir, 'theme', 'compose', '--direction', 'quiet'])
 }
 
-test('review finding (specs/20260907/06-theme-pick-moves-to-sketch.md build): theme compose composes cleanly when the only "wire/" text in a candidate page is prose or a genuinely unrelated path segment or a non-stylesheet link into wire/, and refuses byte-identically for every href-quoting form, tag shape, and CSS @import form that genuinely links the wire register as a stylesheet', () => {
+test('AC-20260908-07-11 (retag of the review-finding table, specs/20260907/06-theme-pick-moves-to-sketch.md build): theme compose composes cleanly when the only "wire/" text in a candidate page is prose or a genuinely unrelated path segment or a non-stylesheet link into wire/, and refuses byte-identically for every href-quoting form, tag shape, and CSS @import form that genuinely links the wire register as a stylesheet', () => {
   const prose = composeAgainstMutatedKit((html) => '<!-- re-rendered from the gray wire/ register -->\n' + html)
   assert.strictEqual(prose.status, 0,
     'a candidate whose only "wire/" occurrence is an HTML comment (prose, not a stylesheet link) must compose cleanly, not be refused as linking the wireframe register: ' + prose.stdout + prose.stderr)

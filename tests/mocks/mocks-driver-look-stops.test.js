@@ -9,7 +9,7 @@ const {
   mark, writeFile, writeWireframe, statusJson,
   decideLook, openLook, freePort, startServe, stopServe,
   advanceToSeedDone, advanceToCanonWritten, advanceToJourneyApproved,
-  advanceToDirectionComposed, advanceToShortJourneyDrawn,
+  advanceToShortJourneyDrawn,
   writeFixtureCapture, writeCaptureConfig,
 } = require('./mocks-driver-fixtures')
 
@@ -29,6 +29,10 @@ const {
 // Split again under specs/20260906/05-gray-states-on-every-wireframe.md D7 (per-file 45 s budget,
 // specs/20260903/07-test-file-budget-guard.md): the AC-20260906-04-8/-9/-3 tests below moved
 // verbatim to mocks-driver-look-stops-3.test.js; test logic unchanged.
+//
+// specs/20260907/07-mocks-retires-theme.md build (red-check mixed-pin, HARD): AC-20260907-07-3
+// and its split-out CONTINUE-TO sibling AC-20260907-07-13 each pin one half of stop open's THEME
+// retirement — the unknown-step refusal and the untouched shapes stop, respectively.
 
 test('AC-20260905-04-5/AC-20260906-04-8: mocks-driver.js stop open journey:<j> --port <free> prints the D4 hand-off link off that project\'s own serve child (never a `/p/<name>/` hub mount) pointing at the journey review page, exits 3 naming the serve remedy when nothing answers --port, and stop decide keeps passing straight through', async () => {
   const dir = tmpdir('mocks-driver')
@@ -78,9 +82,8 @@ test('AC-20260905-04-5/AC-20260906-04-8: mocks-driver.js stop open journey:<j> -
 // ---------------------------------------------------------------------------
 // AC-20260905-02-10, AC-20260905-04-9
 // ---------------------------------------------------------------------------
-test('AC-20260905-02-10/AC-20260905-04-9: stop open shapes/theme write pick stops grouped by candidate, and unknown/too-few-candidate steps refuse naming the remedy', async () => {
+test('AC-20260905-02-10/AC-20260905-04-9: stop open shapes writes a pick stop grouped by candidate, and unknown/too-few-candidate steps refuse naming the remedy', async () => {
   let serveChild = null
-  let serveChild2 = null
   try {
     const dir = tmpdir('mocks-driver')
     advanceToSeedDone(dir) // now at SHAPES
@@ -98,20 +101,6 @@ test('AC-20260905-02-10/AC-20260905-04-9: stop open shapes/theme write pick stop
     assert.strictEqual(shapeStop.kind, 'pick', 'the shapes stop must be a pick stop: ' + JSON.stringify(shapeStop))
     assert.deepStrictEqual(shapeStop.candidates.map((c) => c.group).sort(), ['card-first', 'orb-hero'], 'the shapes stop\'s candidates must be grouped by shape kebab: ' + JSON.stringify(shapeStop.candidates))
 
-    const dir2 = tmpdir('mocks-driver')
-    advanceToJourneyApproved(dir2)
-    advanceToDirectionComposed(dir2, 'ocean', [DENSE, LABELS[0]], 'P15')
-    advanceToDirectionComposed(dir2, 'ember', [DENSE, LABELS[1]], 'P16')
-    const port2 = await freePort()
-    serveChild2 = await startServe(dir2, port2)
-    const themeR = runNode(SCRIPT, ['--root', dir2, 'stop', 'open', 'theme', '--port', String(port2)])
-    assert.strictEqual(themeR.status, 0, 'stop open theme must exit 0 once 2+ directions are composed: ' + themeR.stdout + themeR.stderr)
-    const stops2 = JSON.parse(fs.readFileSync(path.join(dir2, 'design/mocks/picks.json'), 'utf8'))
-    const themeStop = stops2.find((s) => s.key === 'theme-picked')
-    assert.strictEqual(themeStop.kind, 'pick', 'the theme stop must be a pick stop: ' + JSON.stringify(themeStop))
-    const groups = [...new Set(themeStop.candidates.map((c) => c.group))].sort()
-    assert.deepStrictEqual(groups, ['ember', 'ocean'], 'stop open theme must group candidates by composed direction: ' + JSON.stringify(themeStop.candidates))
-
     const dir3 = tmpdir('mocks-driver')
     advanceToSeedDone(dir3)
     writeFile(path.join(dir3, 'design/shapes/only-one.html'), '<main data-screen-label="' + DENSE + '" data-shape="only-one">x</main>\n')
@@ -121,12 +110,75 @@ test('AC-20260905-02-10/AC-20260905-04-9: stop open shapes/theme write pick stop
 
     const unknown = runNode(SCRIPT, ['--root', dir3, 'stop', 'open', 'nope'])
     assert.strictEqual(unknown.status, 2, 'stop open nope must refuse an unknown step: ' + unknown.stdout + unknown.stderr)
-    for (const step of ['shapes', 'theme', 'signoff']) {
+    // specs/20260907/07-mocks-retires-theme.md D4: "theme" drops out of the live-step list —
+    // AC-20260907-07-3 below pins the exact narrowed literal directly.
+    for (const step of ['shapes', 'kit', 'signoff']) {
       assert.match(unknown.stderr + unknown.stdout, new RegExp(step), 'the unknown-step refusal must name the valid steps, including "' + step + '": ' + unknown.stdout + unknown.stderr)
     }
+    assert.ok(!(unknown.stderr + unknown.stdout).includes('theme'), 'the unknown-step refusal must never name the retired step "theme": ' + unknown.stdout + unknown.stderr)
   } finally {
     if (serveChild) await stopServe(serveChild)
-    if (serveChild2) await stopServe(serveChild2)
+  }
+})
+
+// specs/20260907/07-mocks-retires-theme.md build (red-check mixed-pin, HARD): AC-20260907-07-3
+// mixed a new promise (stop open theme becomes an unknown step) with a SHALL CONTINUE TO clause
+// (stop open shapes keeps working) in one test — split along the same line the spec's own AC
+// list now draws, AC-20260907-07-3 keeping only the new promise and AC-20260907-07-13 carrying
+// the split-out continue clause. Both tests share the same fixture shape ("a root with two
+// composed directions on disk") the spec's own AC wording sets for each.
+function writeTwoComposedDirections(dir) {
+  // Two composed directions on disk — the mocks driver has no mark that composes a direction, so
+  // this fixture writes design/theme/<kebab>/ directly: one tokens.css and one HTML file per
+  // direction, naming the dense screen.
+  for (const kebab of ['ocean', 'ember']) {
+    writeFile(path.join(dir, 'design/theme', kebab, 'tokens.css'), ':root{--text-body:#111}\n')
+    writeFile(path.join(dir, 'design/theme', kebab, DENSE + '.html'),
+      '<link rel="stylesheet" href="tokens.css">\n<main data-screen-label="' + DENSE + '" data-status="sketch">' + DENSE + '</main>\n')
+  }
+}
+
+// ---------------------------------------------------------------------------
+// AC-20260907-07-3
+// ---------------------------------------------------------------------------
+test('AC-20260907-07-3: stop open theme exits 2 as an unknown step naming the exact live list even with two composed directions on disk, and writes no stop', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToSeedDone(dir) // now at SHAPES
+  writeTwoComposedDirections(dir)
+
+  const themeR = runNode(SCRIPT, ['--root', dir, 'stop', 'open', 'theme'])
+  assert.strictEqual(themeR.status, 2, 'AC-20260907-07-3: stop open theme must exit 2 even with two composed directions on disk — the step itself is retired, not merely under-provisioned: ' + themeR.stdout + themeR.stderr)
+  assert.match(themeR.stderr + themeR.stdout, /unknown step "theme"/, 'the refusal must name the exact unknown-step message for "theme": ' + themeR.stdout + themeR.stderr)
+  assert.match(themeR.stderr + themeR.stdout, /one of: shapes, kit, journey:<j>, signoff/,
+    'the refusal must carry the exact D4 live step list with theme dropped: ' + themeR.stdout + themeR.stderr)
+  const stopsAfterTheme = fs.existsSync(path.join(dir, 'design/mocks/picks.json'))
+    ? JSON.parse(fs.readFileSync(path.join(dir, 'design/mocks/picks.json'), 'utf8')) : []
+  assert.strictEqual(stopsAfterTheme.length, 0, 'stop open theme must write no stop at all: ' + JSON.stringify(stopsAfterTheme))
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260907-07-13
+// ---------------------------------------------------------------------------
+test('AC-20260907-07-13: stop open shapes on a root with two composed directions on disk CONTINUES TO write one pick stop keyed shape-picked with one candidate group per shape', async () => {
+  let serveChild = null
+  try {
+    const dir = tmpdir('mocks-driver')
+    advanceToSeedDone(dir) // now at SHAPES
+    writeFile(path.join(dir, 'design/shapes/card-first.html'), '<main data-screen-label="' + DENSE + '" data-shape="card-first">card-first</main>\n')
+    writeFile(path.join(dir, 'design/shapes/orb-hero.html'), '<main data-screen-label="' + DENSE + '" data-shape="orb-hero">orb-hero</main>\n')
+    writeTwoComposedDirections(dir)
+
+    const port = await freePort()
+    serveChild = await startServe(dir, port)
+    const shapesR = runNode(SCRIPT, ['--root', dir, 'stop', 'open', 'shapes', '--port', String(port)])
+    assert.strictEqual(shapesR.status, 0, 'AC-20260907-07-13: stop open shapes must CONTINUE TO exit 0 on a root with two composed directions on disk: ' + shapesR.stdout + shapesR.stderr)
+    const stops = JSON.parse(fs.readFileSync(path.join(dir, 'design/mocks/picks.json'), 'utf8'))
+    const shapeStop = stops.find((s) => s.key === 'shape-picked')
+    assert.strictEqual(shapeStop.kind, 'pick', 'the shapes stop must CONTINUE TO be a pick stop: ' + JSON.stringify(shapeStop))
+    assert.deepStrictEqual(shapeStop.candidates.map((c) => c.group).sort(), ['card-first', 'orb-hero'],
+      'the shapes stop must CONTINUE TO group one candidate per shape: ' + JSON.stringify(shapeStop.candidates))
+  } finally {
+    if (serveChild) await stopServe(serveChild)
   }
 })
 
@@ -192,7 +244,7 @@ test('AC-20260905-02-12/AC-20260905-04-9: journey-approved accepts a decided-app
 // ---------------------------------------------------------------------------
 // AC-20260905-02-13
 // ---------------------------------------------------------------------------
-test('AC-20260905-02-13/AC-20260905-04-9: a decided shape/theme pick accepts without the flag, appends the ledger row when absent, and refuses a flag that disagrees with the pick', () => {
+test('AC-20260905-02-13/AC-20260905-04-9: a decided shape pick accepts without the flag, appends the ledger row when absent, and refuses a flag that disagrees with the pick', () => {
   const dir = tmpdir('mocks-driver')
   advanceToSeedDone(dir)
   writeFile(path.join(dir, 'design/shapes/card-first.html'), '<main data-screen-label="' + DENSE + '" data-shape="card-first">card-first</main>\n')
@@ -213,24 +265,4 @@ test('AC-20260905-02-13/AC-20260905-04-9: a decided shape/theme pick accepts wit
   const disagree = mark(dir2, 'shape-picked', ['--shape', 'orb-hero'])
   assert.strictEqual(disagree.status, 2, 'a --shape flag disagreeing with the page\'s pick must be refused: ' + disagree.stdout + disagree.stderr)
   assert.match(disagree.stderr + disagree.stdout, /disagrees with the page pick "card-first"/, 'the refusal must name the page\'s actual pick: ' + disagree.stdout + disagree.stderr)
-
-  const dir3 = tmpdir('mocks-driver')
-  advanceToJourneyApproved(dir3)
-  advanceToDirectionComposed(dir3, 'ocean', [DENSE, LABELS[0]], 'P15')
-  advanceToDirectionComposed(dir3, 'ember', [DENSE, LABELS[1]], 'P16')
-  decideLook(dir3, 'theme-picked', 'pick', { pick: 'ocean', others: ['ember'], by: 'jj' })
-  const themeAccepted = mark(dir3, 'theme-picked')
-  assert.strictEqual(themeAccepted.status, 0, 'theme-picked must accept with no --direction flag once the page decided a pick: ' + themeAccepted.stdout + themeAccepted.stderr)
-  const themeLedger = fs.readFileSync(path.join(dir3, 'design/mocks/ledger.md'), 'utf8')
-  assert.match(themeLedger, /\| product \| theme: ocean \| said-by-user \| confirmed \d{4}-\d{2}-\d{2} \| ember \|/,
-    'the driver must append the theme ledger row when absent: ' + themeLedger)
-
-  const dir4 = tmpdir('mocks-driver')
-  advanceToJourneyApproved(dir4)
-  advanceToDirectionComposed(dir4, 'ocean', [DENSE, LABELS[0]], 'P15')
-  advanceToDirectionComposed(dir4, 'ember', [DENSE, LABELS[1]], 'P16')
-  decideLook(dir4, 'theme-picked', 'pick', { pick: 'ocean', others: ['ember'], by: 'jj' })
-  const themeDisagree = mark(dir4, 'theme-picked', ['--direction', 'ember'])
-  assert.strictEqual(themeDisagree.status, 2, 'a --direction flag disagreeing with the page\'s pick must be refused: ' + themeDisagree.stdout + themeDisagree.stderr)
-  assert.match(themeDisagree.stderr + themeDisagree.stdout, /disagrees with the page pick "ocean"/, 'the refusal must name the page\'s actual pick: ' + themeDisagree.stdout + themeDisagree.stderr)
 })

@@ -4,6 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
+const { reviewLegsSpecBody } = require('./review-legs.fixtures')
 
 // Escape (found while reviewing a host spec's sandbox-safety-activation work): the at-risk leg
 // never ran a single at-risk test since its mechanization.
@@ -50,29 +51,7 @@ const SCRIPT = 'scripts/review-legs.js'
 // The File Plan covers src/foo.js and tests/foo.test.js. `tests/atrisk.test.js` is deliberately
 // absent from it while referencing the `foo` stem, which is what puts it in scope-reconcile's
 // atRisk set (a test file outside the plan that references a changed in-plan file).
-const SPEC_BODY = `---
-status: implementing
-tier: standard
----
-# At-risk argv fixture
-
-## Decisions
-
-| ID | Decision | One-line rationale |
-|----|----------|--------------------|
-| D1 | foo() returns 42 (AC-20260820-99-1) | why |
-
-## File Plan
-
-| File | Action | Layer |
-|---|---|---|
-| src/foo.js | edit | scripts |
-| tests/foo.test.js | create | tests |
-
-## Acceptance Criteria
-
-- **AC-20260820-99-1**: foo() returns 42.
-`
+const SPEC_BODY = reviewLegsSpecBody({ title: 'At-risk argv fixture', acId: 'AC-20260820-99-1' })
 
 const GREEN_TEST = `'use strict'
 const { test } = require('node:test')

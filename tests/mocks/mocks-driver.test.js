@@ -10,7 +10,7 @@ const {
   writeFile, statusJson, statusPath,
   writeTargets, writeResearchBrief, writeSeed, confirmFacts, writeCanon, writeWireframe,
   decideLook,
-  advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToThemePicked, advanceToApproved,
+  advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToJourneyApproved, advanceToApproved,
   writeFixtureCapture, writeCaptureConfig,
 } = require('./mocks-driver-fixtures')
 
@@ -43,7 +43,10 @@ test('AC-20260902-07-1: WHEN the driver runs on a cold --root THE SYSTEM creates
   assert.strictEqual(status.schemaVersion, 1, 'a cold status.json must be created with schemaVersion 1')
   assert.strictEqual(status.state, 'SEED', 'a cold status.json must record state SEED')
   assert.strictEqual(status.look, 'playwright', 'a cold status.json must default look to "playwright"')
-  for (const key of ['seedDone', 'shapePicked', 'canonWritten', 'themePicked', 'approved']) {
+  // specs/20260907/07-mocks-retires-theme.md D7 fixture repair: marks.themePicked is retired
+  // from freshStatus outright (never null, simply absent) — kitSignedOff (specs/20260907/04 D1)
+  // joins the checked set here for the first time too.
+  for (const key of ['seedDone', 'shapePicked', 'canonWritten', 'kitSignedOff', 'approved']) {
     assert.strictEqual(status.marks[key], null, 'mark "' + key + '" must be null on a cold status.json, never a stale value from a template default')
   }
 
@@ -386,6 +389,41 @@ test('AC-20260906-05-4: the bare driver\'s "draw journey <j>" step Then: block g
 })
 
 // ---------------------------------------------------------------------------
+// AC-20260907-07-7
+// ---------------------------------------------------------------------------
+test('AC-20260907-07-7: a cold --root creates a status.json whose marks object has exactly seedDone/shapePicked/canonWritten/kitSignedOff/approved (each null) and carries no top-level theme or directions key; a pre-existing status.json carrying theme/marks.themePicked/directions writes none of those three keys on its next save', () => {
+  const dir = tmpdir('mocks-driver')
+  bare(dir)
+  const cold = statusJson(dir)
+  assert.deepStrictEqual(Object.keys(cold.marks).sort(),
+    ['approved', 'canonWritten', 'kitSignedOff', 'seedDone', 'shapePicked'].sort(),
+    'D7: a cold status.json\'s marks object must carry exactly these five keys, themePicked dropped outright: ' + JSON.stringify(cold.marks))
+  for (const key of Object.keys(cold.marks)) {
+    assert.strictEqual(cold.marks[key], null, 'mark "' + key + '" must be null on a cold status.json: ' + JSON.stringify(cold.marks))
+  }
+  assert.strictEqual('theme' in cold, false, 'D7: a cold status.json must carry no top-level "theme" key at all: ' + JSON.stringify(cold))
+  assert.strictEqual('directions' in cold, false, 'D7: a cold status.json must carry no top-level "directions" key at all: ' + JSON.stringify(cold))
+
+  const dir2 = tmpdir('mocks-driver')
+  advanceToShapePicked(dir2)
+  const legacy = statusJson(dir2)
+  legacy.theme = 'quiet'
+  legacy.marks.themePicked = '2026-09-01T00:00:00Z'
+  legacy.directions = { quiet: { composed: '2026-09-01T00:00:00Z' } }
+  fs.writeFileSync(statusPath(dir2), JSON.stringify(legacy, null, 2) + '\n')
+
+  advanceToKitSigned(dir2)
+  writeCanon(dir2)
+  const canonWritten = mark(dir2, 'canon-written')
+  assert.strictEqual(canonWritten.status, 0, 'test setup requires canon-written to be accepted so a real save happens after the legacy fields are hand-written: ' + canonWritten.stdout + canonWritten.stderr)
+
+  const written = statusJson(dir2)
+  assert.strictEqual('theme' in written, false, 'D7: the next save after a legacy status.json carrying "theme" must drop that key entirely, never null it: ' + JSON.stringify(written))
+  assert.strictEqual(written.marks.themePicked, undefined, 'D7: the next save must drop marks.themePicked entirely: ' + JSON.stringify(written.marks))
+  assert.strictEqual('directions' in written, false, 'D7: the next save must drop the top-level "directions" key entirely: ' + JSON.stringify(written))
+})
+
+// ---------------------------------------------------------------------------
 // specs/20260907/04-kit-canon-family.md D1: KIT sits between SHAPES and WIREFRAMES.
 // ---------------------------------------------------------------------------
 test('AC-20260907-04-1: WHEN the driver derives state on a root whose marks.shapePicked is set with a valid shape file and marks.kitSignedOff is null THE SYSTEM SHALL print KIT, and once marks.kitSignedOff is set with marks.canonWritten null it SHALL print WIREFRAMES', () => {
@@ -430,8 +468,10 @@ test('AC-20260907-04-13: --reopen kit on an APPROVED root prints the exact D10 i
 
   const bogus = runNode(SCRIPT, ['--root', dir, '--reopen', 'bogus'])
   assert.notStrictEqual(bogus.status, 0, '--reopen bogus must exit non-zero: ' + bogus.stdout + bogus.stderr)
-  assert.match(bogus.stderr + bogus.stdout, /--reopen must be journey:<j>, shapes, kit, or theme/,
-    'the refusal must name the exact D10 widened target list — an unknown --reopen target must still name every live target, kit included: ' + bogus.stdout + bogus.stderr)
+  // specs/20260907/07-mocks-retires-theme.md D6/AC-20260907-07-4 narrows this literal: "theme"
+  // drops out of the --reopen target list entirely (there is no mark left for it to clear).
+  assert.match(bogus.stderr + bogus.stdout, /--reopen must be journey:<j>, shapes, or kit/,
+    'the refusal must name the exact D6-narrowed target list — an unknown --reopen target must still name every live target, kit included and theme dropped: ' + bogus.stdout + bogus.stderr)
 })
 
 // ---------------------------------------------------------------------------
@@ -439,9 +479,11 @@ test('AC-20260907-04-13: --reopen kit on an APPROVED root prints the exact D10 i
 // marks.kitSignedOff key at all — the migration hazard is a state derivation that traps
 // instead of advancing.
 // ---------------------------------------------------------------------------
-test('AC-20260907-04-15: WHEN the driver derives state on a root checkpointed under the pre-spec shape (shapePicked/canonWritten set, every journey approved, theme set, marks.approved null, and no kitSignedOff key at all) THE SYSTEM SHALL CONTINUE TO advance rather than trap — it SHALL print KIT and SHALL NOT throw', () => {
+test('AC-20260907-04-15: WHEN the driver derives state on a root checkpointed under the pre-spec shape (shapePicked/canonWritten set, every journey approved, marks.approved null, and no kitSignedOff key at all) THE SYSTEM SHALL CONTINUE TO advance rather than trap — it SHALL print KIT and SHALL NOT throw', () => {
   const dir = tmpdir('mocks-driver')
-  advanceToThemePicked(dir) // canonWritten + every journey approved + theme set, marks.approved still null
+  // specs/20260907/07-mocks-retires-theme.md: the mocks state machine has no theme pick, so
+  // canonWritten + every journey approved is reached directly via advanceToJourneyApproved.
+  advanceToJourneyApproved(dir) // canonWritten + every journey approved, marks.approved still null
 
   const raw = fs.readFileSync(statusPath(dir), 'utf8')
   const status = JSON.parse(raw)

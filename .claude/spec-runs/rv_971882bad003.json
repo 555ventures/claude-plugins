@@ -1,0 +1,117 @@
+{
+  "runId": "rv_971882bad003",
+  "ts": "2026-09-09T19:32:35.468Z",
+  "spec": "specs/20260907/07-mocks-retires-theme.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1371,
+    "base": "ba8b5ae5cf11fed2829cefa6a72dda8893373afe",
+    "head": "3634701e5647bf33d2b718b024c65589d2bd4577",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 260
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1434
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 14,
+        "carried": 10,
+        "sanctioned": 4,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "File Plan row for tests/mocks/mocks-notes.test.js still contradicts AC-20260907-07-12 (round-two soft finding not fixed)",
+        "file": "specs/20260907/07-mocks-retires-theme.md",
+        "line": 81,
+        "evidence": "grep -n 'mocks-notes.test.js' spec -> line 81 now names AC-20260907-07-12 with the retag rationale and no '- no AC'; line 194 cites the file under AC-12; grep -n AC-20260907-07-12 tests/mocks/mocks-notes.test.js -> 298, 300, 304"
+      },
+      {
+        "claim": "the row's description ('open-project-note refusal') does not match what the tagged test asserts",
+        "file": "tests/mocks/mocks-notes.test.js",
+        "line": 340,
+        "evidence": "sed -n 335,350p: writeNotes(projectNote('N006','open')) then mark(dir,'approved') asserted status 2 and stdout+stderr matching /unresolved note|N006/; node --test tests/mocks/mocks-notes.test.js -> 9 pass, 0 fail"
+      },
+      {
+        "claim": "the cell fix broke the promise sweep or AC matrix",
+        "file": "specs/20260907/07-mocks-retires-theme.review/legs-3/promise-sweep.txt",
+        "line": null,
+        "evidence": "manifest-3: ac-matrix uncovered=0 oracle=0; promise-sweep rows=14 carried=10 sanctioned=4 orphans=0, 0 findings (re-executed: same)"
+      },
+      {
+        "claim": "the dirty-tree delta contains changes beyond the one-cell fix and round-two's already-cleared fix delta",
+        "file": null,
+        "line": null,
+        "evidence": "git diff (working tree vs HEAD): size-baseline.json, mocks-driver.js dead --direction field removal, spec rows 81/83 and D13 text, mocks-driver-4 import trim, fixtures comment, mocks-notes retag - every hunk except line 81 was investigated and killed in reviewer-return-2.json; size-ratchet 'all tight', comment-narration 0 findings in 293 files, ac-drift clean 101 specs / 1055 criteria"
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 24000
+  }
+}

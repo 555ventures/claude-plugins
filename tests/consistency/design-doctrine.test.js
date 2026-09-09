@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { ROOT, SPEC, read, runNode, tmpdir } = require('../helpers')
-const { bare, advanceToThemePicked } = require('../mocks/mocks-driver-fixtures')
+const { bare, advanceToJourneyApproved } = require('../mocks/mocks-driver-fixtures')
 
 // specs/20260824/05-design-doctrine-cut.md D1/D2/D5: spec/doctrine/design.md holds five
 // sections (contracts a script enforces or a worker applies only) capped at 160 lines;
@@ -156,12 +156,13 @@ test('AC-20260902-10-7: spec/commands/mocks.md names the four D6 triage bins and
 })
 
 // specs/20260906/02-mocks-ends-at-wireframes.md D11: setup now goes through the shared
-// mocks-driver-fixtures.js `advanceToThemePicked` helper (SKIN and REVIEW are retired — the
-// sign-off step is SIGNOFF, reached straight from theme-picked, with no skin/review marks in
-// between).
-test('AC-20260902-10-8: WHEN the driver prints the SIGNOFF step with the theme picked THE SYSTEM includes the D7 sign-off literal', () => {
+// mocks-driver-fixtures.js `advanceToJourneyApproved` helper (SKIN and REVIEW are retired — the
+// sign-off step is SIGNOFF, reached straight from journey-approved, with no skin/review marks in
+// between). Fixture repair (specs/20260907/07-mocks-retires-theme.md): THEME is retired too, so
+// this test's name drops "with the theme picked" — SIGNOFF is now reached with no theme anywhere.
+test('AC-20260902-10-8: WHEN the driver prints the SIGNOFF step THE SYSTEM includes the D7 sign-off literal', () => {
   const dir = tmpdir('mocks-review-signoff')
-  advanceToThemePicked(dir)
+  advanceToJourneyApproved(dir)
   const step = bare(dir)
   assert.strictEqual(step.status, 0, 'a bare invocation at the SIGNOFF sign-off step must exit 0: ' + step.stderr)
   assert.ok(step.stdout.includes('the written brief, not these screens, holds scope'),
@@ -369,4 +370,94 @@ test('AC-20260907-06-9: spec/doctrine/design.md § Design Canon names design/the
     'D8: § Design Canon must name the phrase "fidelity reference" — the picked direction\'s kit page is the fidelity reference: ' + canonSection)
   assert.match(canonSection, /theme[^.]*picked[^.]*(?:\/spec:sketch|sketch)[^.]*first run|(?:\/spec:sketch|sketch)[^.]*first run[^.]*theme[^.]*picked/,
     'D8: § Design Canon must say the theme itself is picked on /spec:sketch\'s first run: ' + canonSection)
+})
+
+// specs/20260907/07-mocks-retires-theme.md D8, AC-20260907-07-10: the mocks driver's state
+// machine is SEED -> SHAPES -> KIT -> WIREFRAMES -> SIGNOFF -> APPROVED, with no THEME step —
+// composing candidate directions and picking one is /spec:sketch's own job now. Accordingly,
+// spec/doctrine/mocks.md describes no THEME state anywhere, except § Provenance Ledger's own
+// "retired step names still parse" clause, which deliberately names THEME (alongside SKIN and
+// REVIEW) as one such retired-but-still-parsing step name.
+test('AC-20260907-07-10: spec/doctrine/mocks.md carries no THEME occurrence outside § Provenance Ledger\'s retired-step-names clause, no theme-picked/direction-composed/--reopen theme, no "Theme = recompose, never repaint" bullet, and names SEED, SHAPES, KIT, WIREFRAMES, SIGNOFF, APPROVED in that order within its § Mocks: State Machine order sentence', () => {
+  const p = 'spec/doctrine/mocks.md'
+  assert.ok(fs.existsSync(path.join(ROOT, p)), p + ' must exist for this doctrine pin to be meaningful')
+  const src = read(p)
+
+  const ledgerIdx = src.indexOf('## Provenance Ledger')
+  assert.ok(ledgerIdx !== -1, p + ' must carry a "## Provenance Ledger" heading to anchor the retired-step-names clause search')
+  const ledgerNextIdx = src.indexOf('\n## ', ledgerIdx + 1)
+  const ledgerEnd = ledgerNextIdx === -1 ? src.length : ledgerNextIdx
+  const ledgerSection = src.slice(ledgerIdx, ledgerEnd)
+  const withoutLedger = src.slice(0, ledgerIdx) + src.slice(ledgerEnd)
+
+  assert.ok(!withoutLedger.includes('THEME'),
+    'D8: no occurrence of "THEME" may remain outside § Provenance Ledger\'s retired-step-names clause — the state is fully retired: ' + JSON.stringify(withoutLedger.match(/.{0,40}THEME.{0,40}/)))
+  assert.match(ledgerSection, /THEME/,
+    'D8: § Provenance Ledger must still name THEME beside SKIN and REVIEW in its retired-but-still-parsing clause: ' + ledgerSection)
+  assert.match(ledgerSection, /SKIN/, 'D8: § Provenance Ledger\'s retired-but-still-parsing clause must still name SKIN alongside THEME: ' + ledgerSection)
+  assert.match(ledgerSection, /REVIEW/, 'D8: § Provenance Ledger\'s retired-but-still-parsing clause must still name REVIEW alongside THEME: ' + ledgerSection)
+  assert.match(ledgerSection, /SKETCH/, 'D8: § Provenance Ledger\'s live step-vocabulary examples must add SKETCH in THEME\'s place: ' + ledgerSection)
+
+  for (const literal of ['theme-picked', 'direction-composed', '--reopen theme', 'Theme = recompose, never repaint']) {
+    assert.ok(!src.includes(literal),
+      'D8: spec/doctrine/mocks.md must name none of the retired literal "' + literal + '" — its presence means a retired THEME-era mark, reopen target, or authoring rule is still documented: ' +
+      JSON.stringify(src.match(new RegExp('.{0,40}' + literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '.{0,40}'))))
+  }
+
+  const stateMachineIdx = src.indexOf('## Mocks: State Machine')
+  assert.ok(stateMachineIdx !== -1, p + ' must carry a "## Mocks: State Machine" heading to anchor the order-sentence search')
+  const smNextIdx = src.indexOf('\n## ', stateMachineIdx + 1)
+  const stateMachineSection = src.slice(stateMachineIdx, smNextIdx === -1 ? src.length : smNextIdx)
+  const orderTokens = ['SEED', 'SHAPES', 'KIT', 'WIREFRAMES', 'SIGNOFF', 'APPROVED']
+  const positions = orderTokens.map((tok) => stateMachineSection.indexOf('**' + tok + '**'))
+  assert.ok(positions.every((pos) => pos !== -1),
+    'D8: § Mocks: State Machine must name every live state SEED, SHAPES, KIT, WIREFRAMES, SIGNOFF, APPROVED (each bold) — got positions ' + JSON.stringify(positions) + ' in:\n' + stateMachineSection)
+  for (let i = 1; i < positions.length; i++) {
+    assert.ok(positions[i] > positions[i - 1],
+      'D8: the order sentence must name ' + orderTokens.join(' -> ') + ' in that order, with THEME deleted from between WIREFRAMES and SIGNOFF: got positions ' + JSON.stringify(positions))
+  }
+})
+
+// specs/20260907/07-mocks-retires-theme.md D9, AC-20260907-07-11: spec/commands/mocks.md's own
+// "## THEME interview rule" section is deleted whole (successor: spec/commands/sketch.md § The
+// run's Theme step, specs/20260907/06 D7); its generic skill-line closing paragraph re-homes
+// under "## The driver loop".
+//
+// Deviation (recorded in specs/20260907/07-mocks-retires-theme.deviations.md): D9's premise that
+// spec/commands/mocks.md ALREADY carries the paragraph "Every authoring step block the driver
+// prints carries the frontend-design skill line; act on it before the first edit (§ Mocks:
+// Authoring Rules — the one binding home)." — as prose merely being relocated — is false against
+// HEAD: `grep -rn "frontend-design skill line" spec/` finds this literal nowhere in the repo. The
+// AC's own requirement is still fully testable and left as an executable pin below; the doctrine
+// worker authors the paragraph net-new under "## The driver loop" rather than moving one.
+test('AC-20260907-07-11: spec/commands/mocks.md carries no "## THEME interview rule" heading and no THEME occurrence anywhere, carries the frontend-design skill-line paragraph under "## The driver loop", names the step enumeration shapes/kit/journey:<j>/signoff and the pick-stop parenthetical "a pick stop — SHAPES —", drops the sign-off "theme tokens" clause, and its Report section names the theme-less outcome with no "theme: {direction}" bullet', () => {
+  const p = 'spec/commands/mocks.md'
+  const src = read(p)
+
+  assert.ok(!src.includes('## THEME interview rule'),
+    'D9: "## THEME interview rule" must be deleted whole — its successor lives in sketch.md § The run\'s Theme step (specs/20260907/06 D7): ' + JSON.stringify(src.match(/.{0,40}THEME interview rule.{0,40}/)))
+  assert.ok(!src.includes('THEME'),
+    'D9: spec/commands/mocks.md must name no "THEME" occurrence anywhere — every step it narrates must be one the driver can still print: ' + JSON.stringify(src.match(/.{0,40}THEME.{0,40}/)))
+
+  const skillLine = 'Every authoring step block the driver prints carries the frontend-design skill line'
+  assert.ok(src.includes(skillLine), 'D9: the generic skill-line paragraph must be present verbatim: ' + skillLine)
+  const runLoopIdx = src.indexOf('## The driver loop')
+  assert.ok(runLoopIdx !== -1, p + ' must still carry a "## The driver loop" heading')
+  const runLoopNextIdx = src.indexOf('\n## ', runLoopIdx + 1)
+  const runLoopSection = src.slice(runLoopIdx, runLoopNextIdx === -1 ? src.length : runLoopNextIdx)
+  assert.ok(runLoopSection.includes(skillLine),
+    'D9: the skill-line paragraph must specifically live as the closing paragraph of "## The driver loop", not merely appear elsewhere in the file: ' + runLoopSection)
+
+  assert.match(src, /`shapes`\s*\|\s*`kit`\s*\|\s*`journey:<j>`\s*\|\s*`signoff`/,
+    'D9: § Look rule\'s <step> enumeration must read "shapes | kit | journey:<j> | signoff" once THEME is dropped: ' + JSON.stringify(src.match(/`shapes`[^)]*`signoff`/)))
+  assert.ok(src.includes('a pick stop — SHAPES —'),
+    'D9: § Look rule\'s pick-stop parenthetical must read exactly "a pick stop — SHAPES —" once THEME is dropped: ' + JSON.stringify(src.match(/a pick stop.{0,20}/)))
+
+  assert.ok(!src.includes('theme tokens'),
+    'D9: § Sign-off\'s "theme tokens … in place" clause must be dropped — the theme is no longer picked before sign-off: ' + JSON.stringify(src.match(/.{0,40}theme tokens.{0,40}/)))
+
+  assert.ok(src.includes('✅ mocks approved — {N} journeys, signed off by {name}'),
+    'D9: § Report\'s outcome slot must read the exact theme-less literal "✅ mocks approved — {N} journeys, signed off by {name}": ' + JSON.stringify(src.match(/✅ mocks approved.{0,60}/)))
+  assert.ok(!src.includes('theme: {direction}'),
+    'D9: § Report\'s "theme: {direction} — rejected {others}" bullet must be deleted: ' + JSON.stringify(src.match(/.{0,40}theme: \{direction\}.{0,40}/)))
 })

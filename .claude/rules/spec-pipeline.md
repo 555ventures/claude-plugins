@@ -166,9 +166,17 @@ upstream bug list. -->
   `<h2>` (two dense `/<h2>j1/` pins), a new `screen=**` request token (a `screen=*` pin), and a
   new `--test-concurrency` flag (a literal `gateCommand` pin plus a `package.json` `scripts.test`
   byte-equality pin). Grep the literal you are about to change across `tests/` before the build
-  starts, not after the gate reds; each hit enters the File Plan.
+  starts, not after the gate reds; each hit enters the File Plan. Fourth trigger, the one a
+  literal grep cannot reach: a **predecessor spec's CONTINUE-TO pin**. A staged pair where the
+  first spec adds a replacement and deliberately leaves the old surface working writes a test
+  asserting the old surface keeps working — so the spec that retires that surface inherits a
+  live assertion whose whole subject it deletes, and no literal it retires appears in the pin's
+  own File Plan. Read every predecessor named in `depends_on` for CONTINUE-TO pins on the
+  surface being retired, and enter each one as a deletion row; a pin whose subject is gone is
+  retired, never weakened into passing.
   (specs/20260813/07-command-report-conformance.md D8; specs/20260813/09-model-placement-mechanics.md D4;
-  specs/20260814/01-ac-matrix-script.md; specs/20260907/09-atlas-index-and-note-navigation.md)
+  specs/20260814/01-ac-matrix-script.md; specs/20260907/09-atlas-index-and-note-navigation.md;
+  specs/20260907/07-mocks-retires-theme.md D12)
 - `[plugin]` `ac-matrix.js` parses AC bullets as `^- \*\*(token)\*\*` and requires the token to
   fully match `AC-\d{8}-\d{2}[a-z]?-\d+`. A build-time amendment written the way the Decisions
   table writes one — a prime-suffixed successor (`AC-…-3′`) plus the superseded original left as

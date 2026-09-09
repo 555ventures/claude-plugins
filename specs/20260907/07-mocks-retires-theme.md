@@ -1,6 +1,6 @@
 ---
 date: 2026-09-07
-status: hardened
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +10,8 @@ depended_on_by: [specs/20260907/08-walk-critic.md]
 brief: 22a
 spiked: 2026-09-07
 open_markers: 0
+build_base: main
+diff_base: ba8b5ae5cf11fed2829cefa6a72dda8893373afe
 ---
 
 # `/spec:mocks` retires THEME: the state, its two marks, its stop and its reopen are deleted, and the chain ends `WIREFRAMES → SIGNOFF → APPROVED`
@@ -34,9 +36,9 @@ reopen, look stop and report line of `/spec:mocks` behaves exactly as it does to
 | ID | Decision | One-line rationale |
 |----|----------|--------------------|
 | D1 | Delete `deriveState()`'s `if (!status.theme) return 'THEME'` line. The derived chain becomes `SEED → SHAPES → KIT → WIREFRAMES → SIGNOFF → APPROVED` (KIT from `specs/20260907/04`), and the file-header comment's chain enumerations and the SKIN/REVIEW migration note are re-pointed at it. A root that derives `THEME` today derives `SIGNOFF` on its very next invocation, and a root that already picked a theme derives `SIGNOFF` exactly as it does today — nothing is migrated and nothing on disk is touched (AC-20260907-07-1) | The state's whole job was to produce `design/tokens.css`, and spec 06 moved that producer to `/spec:sketch`. Rejected: keeping `THEME` as a skippable state that passes when `design/tokens.css` happens to exist — a state that always passes reads as a gate and is not one, and it would re-couple sketch's output to the mocks state file. |
-| D2 | `AUTHORING_STATES` becomes `new Set(['SHAPES', 'KIT', 'WIREFRAMES'])`; `doBareStep`'s `if (state === 'THEME') return printThemeStep()` line and the whole `printThemeStep()` function are deleted. `SIGNOFF`'s separate look-probe disjunct in `doBareStep` and its no-skill-line behaviour are byte-identical (AC-20260907-07-8) | One constant feeds both the skill line and the look probe (spec 20260906/02 D8); a retired state must leave that set or the probe fires for a step nobody can reach. |
+| D2 | `AUTHORING_STATES` becomes `new Set(['SHAPES', 'KIT', 'WIREFRAMES'])`; `doBareStep`'s `if (state === 'THEME') return printThemeStep()` line and the whole `printThemeStep()` function are deleted. `SIGNOFF`'s separate look-probe disjunct in `doBareStep` and its no-skill-line behaviour are byte-identical (AC-20260907-07-8, AC-20260907-07-14) | One constant feeds both the skill line and the look probe (spec 20260906/02 D8); a retired state must leave that set or the probe fires for a step nobody can reach. |
 | D3 | Delete `handleDirectionComposed()` and `handleThemePicked()` whole, together with their two `doMark` switch cases. The unknown-mark refusal drops both names, going from nine live marks to seven: `unknown mark "<m>" — one of: seed-done, shape-picked, canon-written, kit-signed, journey-drawn, journey-approved, approved` (AC-20260907-07-2) | Both handlers exist only to serve the retired state; `handleThemePicked`'s body — the ledger discipline, the rejected-cell completeness check, the byte-for-byte token copy — was carried into `theme adopt` verbatim by spec 06 D4, so nothing is lost here. |
-| D4 | Delete `buildThemeStopSpec()` and `buildStopSpec`'s `if (step === 'theme')` branch; the unknown-step refusal becomes `stop open: unknown step "<s>" — one of: shapes, kit, journey:<j>, signoff`. The stop **key** `theme-picked` is NOT retired: `design-atlas.js`'s `stopHome('theme-picked') → {type:'theme'}` route and its `#theme` compare-table section stay exactly as they are, because spec 06's `theme open` writes stops under that same key. `spec/scripts/design-atlas.js` is not touched by this spec (AC-20260907-07-3) | The atlas never knew about the mocks state machine — it knows stop keys. Executed 2026-09-07 on a scratch copy with `THEME` fully removed from the driver: `tests/design-atlas.test.js` is 60/60 green, unmodified. |
+| D4 | Delete `buildThemeStopSpec()` and `buildStopSpec`'s `if (step === 'theme')` branch; the unknown-step refusal becomes `stop open: unknown step "<s>" — one of: shapes, kit, journey:<j>, signoff`. The stop **key** `theme-picked` is NOT retired: `design-atlas.js`'s `stopHome('theme-picked') → {type:'theme'}` route and its `#theme` compare-table section stay exactly as they are, because spec 06's `theme open` writes stops under that same key. `spec/scripts/design-atlas.js` is not touched by this spec (AC-20260907-07-3, AC-20260907-07-13) | The atlas never knew about the mocks state machine — it knows stop keys. Executed 2026-09-07 on a scratch copy with `THEME` fully removed from the driver: `tests/design-atlas.test.js` is 60/60 green, unmodified. |
 | D5 | Delete `handleApproved()`'s opening precondition `if (!status.marks.themePicked) die('theme-picked first')`. Every other `approved` precondition is byte-identical — each declared seed journey approved, notes and questions resolved, the provenance gate open, a decided `approved` stop, and the render/matrix checks — and it is still the `approved` mark's own write that stamps every top-level mock `data-status="approved"` and records the decider from the stop's `by`. `printApprovedTerminal`'s heading loses its theme clause: `## Step: done — every journey approved, signed off by <decider>` (AC-20260907-07-5, AC-20260907-07-9, AC-20260907-07-12) | Sign-off is now the last gate of a wholly gray stage: `APPROVED` means "this is the product I understand", and the theme is a taste decision the next command makes. `SIGNOFF` itself survives untouched until `specs/20260907/09` replaces it with `CLIENT` — retiring it here would leave no human gate between wireframes and approval. |
 | D6 | Delete the `--reopen theme` branch whole. `--reopen shapes` stops clearing `status.directions`, `status.theme` and `marks.themePicked`; its invalidated list becomes `['shape', 'canon', 'kit', 'journeys(all)', 'approved(all)']` (the `kit` entry is `specs/20260907/04` D10's, not this spec's). The refusal literal narrows from `--reopen must be journey:<j>, shapes, kit, or theme` to `--reopen must be journey:<j>, shapes, or kit` (AC-20260907-07-4, AC-20260907-07-6) | Re-picking a theme is now opening a fresh `theme open` stop and adopting again (spec 06 D5) — there is no mark to clear, so a reopen verb for it would clear nothing and lie about it. |
 | D7 | `freshStatus()` drops `marks.themePicked` and the top-level `theme` and `directions` keys — a cold `status.json` carries `marks: { seedDone, shapePicked, canonWritten, kitSignedOff, approved }` and no theme field at all. `dropLegacyFields(merged)` gains `delete merged.marks.themePicked`, `delete merged.theme` and `delete merged.directions` beside the existing `reviewOpened` / `journeys[j].skinned` / `journeys[j].reviewed` deletions, so a host checkpointed under the old chain reads clean, derives clean, and stops writing the dead keys back on its next save (AC-20260907-07-7) | The file's own established migration idiom (spec 20260906/02 D1) applied to three more retired fields: read, discard in memory, never write back — no migration step, no version bump of `schemaVersion`, nothing deleted on disk. |
@@ -44,6 +46,9 @@ reopen, look stop and report line of `/spec:mocks` behaves exactly as it does to
 | D9 | Doctrine, one home — `spec/commands/mocks.md`: the `## THEME interview rule` **section heading and its interview paragraph are deleted whole** (successor: `spec/commands/sketch.md` § The run's Theme step, written by spec 06 D7), while that section's trailing generic paragraph — `Every authoring step block the driver prints carries the frontend-design skill line; act on it before the first edit (§ Mocks: Authoring Rules — the one binding home).` — survives verbatim, re-homed as the closing paragraph of `## The driver loop`; the opening blurb's `runs the THEME interview, the look rule, and the sign-off step below` becomes `runs the look rule and the sign-off step below`; § Look rule drops `THEME` from its probe-state list, from its `<step>` enumeration (leaving `shapes` \| `kit` \| `journey:<j>` \| `signoff`), from its human-verdict step list, and from its pick-stop parenthetical (leaving `a pick stop — SHAPES —`); § Sign-off's `every journey, gray, theme tokens already in place` becomes `every journey, gray`; § Report's `outcome` becomes `✅ mocks approved — {N} journeys, signed off by {name}` and its `theme: {direction} — rejected {others}` bullet is deleted. The Rules line is untouched — `specs/20260907/04` D11 already rewrites it to `canon before screens, kit before wireframes, screens before sign-off` (AC-20260907-07-11) | The command file is the session's read-once contract; a step it still narrates but the driver can never print is how a correct run gets talked into a wrong one. |
 | D10 | `spec/scripts/render-gate.js`'s `--mocks` comment stops naming a stage that no longer exists: `before /spec:mocks's THEME stage copies a chosen tokens.css into design/ — so design/tokens.css can be absent` becomes `before any theme has been picked at all (the pick moved to /spec:sketch, which runs after mocks sign-off) — so design/tokens.css can be absent`. No code changes: the empty-tokens substitution, its default-manifest scoping and its host-manifest exclusion are byte-identical `[no-ac: comment-only edit with no observable surface; the file's existing tests are the regression oracle]` | The comment answers "why can tokens be missing here?", and after this spec the honest answer is stronger, not weaker — tokens are absent for the whole mocks stage, not just its first half. |
 | D11 | Bump `spec/.claude-plugin/plugin.json` to the next free minor — target **7.101.0**, because `specs/20260907/04` claims 7.98.0, both hardened specs numbered `05` claim 7.99.0, and `specs/20260907/06` claims 7.100.0 — with the last-3-versions changelog entry `[no-ac: review's version-bump check is the oracle]` | § Planning version discipline; hardened-but-unbuilt siblings hold the numbers they claim. |
+| D12 | **Build-time ruling (user, this build).** `tests/mocks/mocks-driver-theme.test.js` joins the File Plan for the single purpose of deleting `AC-20260907-06-10` whole — spec 06's CONTINUE-TO pin asserting `--mark direction-composed`, `--mark theme-picked`, `--reopen theme` and the derived `THEME` state all keep working. Every other test in that file is untouched, and the file's `advanceToDirectionComposed` import is dropped with the test that used it. No AC: the pin's subject is exactly what D1–D6 delete, so this spec's own AC-20260907-07-1/-2/-3/-6 are its successors `[no-ac: deletion of a superseded pin; the deleting spec's own ACs are the oracle]` | This is the pipeline-rules § Gotchas retired-literal class from the CONTINUE-TO direction: spec 06 deliberately pinned the behaviour it left standing, and the spec that retires that behaviour is the one that must retire its pin. Leaving it is a permanently red suite (§ Test Rules: gates are plainly green, no standing red pins); weakening it instead of deleting it would be the banned repair. |
+| D13 | **Build-time ruling (extends D12's class, same build).** Two more live surfaces outside the File Plan assert literals D8 retires; both are updated in place, never weakened, never left red (pipeline rules § Gotchas, retired-literal class). (a) `tests/consistency/genesis-doctrine.test.js`'s `AC-20260902-09-3` drops **both** `recompose` and `dense screen first` from its four-literal list and from its test name — both phrases lived only inside the deleted `Theme = recompose, never repaint` bullet (`grep -n 'dense screen first\|recompose' spec/doctrine/mocks.md spec/doctrine/design.md` at this spec's close: no hits), so the two rules they checked retire with the theme; the surviving two literals (`never a half-styled middle`, `gray until confirmed`), the heading assertion and the `shared-mocks` resolution assertion are byte-identical. (b) The six `[prior]` findings `comment-narration.js` reports against this build's own test-file comments are reworded to state the contract instead of what the code used to do `[no-ac: (a) narrows a superseded pin whose subject D8 deletes; (b) comment prose with no observable surface — comment-narration.js's standing zero-finding scan is the oracle]` | § Test Rules: gates are plainly green, no standing red pins. § Worker Rules bans prior-behaviour narration in comments outright, so a comment that explains a deletion by naming what used to be there is a defect the standing scan is built to catch. |
+| D14 | **Build-time ruling (same class, review legs).** `specs/20260902/07-mocks-command-driver.md`'s `AC-20260902-07-7` loses its covering test with the `direction-composed` / `theme-picked` marks D3 deletes, so `ac-drift.js` reports it uncited. Its bullet gains `[retired: specs/20260907/07-mocks-retires-theme.md]` — the remedy `ac-drift.js` itself names — and nothing else in that spec is touched `[no-ac: retirement annotation on a superseded criterion; ac-drift.js's clean run is the oracle]` | A criterion whose subject a later spec deletes is retired, not uncovered; tagging some surviving test with the id would be the false-coverage repair the retired-marker exists to prevent. |
 
 **Orchestrator duty (outside the File Plan table):** `tests/mocks/mocks-driver-fixtures.js` is the
 single highest-leverage edit and must land first. Delete `advanceToDirectionComposed()` and
@@ -69,11 +74,14 @@ expected — if one crosses the budget anyway, split it rather than trimming an 
 | tests/mocks/mocks-driver.test.js | MODIFY | tests | AC-20260907-07-7 |
 | tests/mocks/mocks-driver-2.test.js | MODIFY | tests | AC-20260907-07-4, AC-20260907-07-5, AC-20260907-07-6, AC-20260907-07-9, AC-20260907-07-12; AC-20260906-02-7's `--reopen theme` test DELETED |
 | tests/mocks/mocks-driver-3.test.js | MODIFY | tests | AC-20260907-07-1, AC-20260907-07-2; AC-20260906-02-3's and AC-20260906-02-4's tests DELETED |
-| tests/mocks/mocks-driver-look-stops.test.js | MODIFY | tests | AC-20260907-07-3; the theme halves of AC-20260905-02-10 and AC-20260905-02-13 deleted, their shapes halves kept |
+| tests/mocks/mocks-driver-look-stops.test.js | MODIFY | tests | AC-20260907-07-3, AC-20260907-07-13; the theme halves of AC-20260905-02-10 and AC-20260905-02-13 deleted, their shapes halves kept |
 | tests/mocks/mocks-driver-look-stops-2.test.js | MODIFY | tests | Fixture repair only (collision-closure `executes` hit): `advanceToThemePicked` → `advanceToJourneyApproved` — no AC |
 | tests/mocks/mocks-driver-look-stops-3.test.js | MODIFY | tests | AC-20260906-04-9's `stop open theme` test DELETED and its file-header comment re-pointed — no AC |
-| tests/mocks/mocks-driver-look-stops-4.test.js | MODIFY | tests | AC-20260907-07-8; AC-20260906-02-8's THEME arm deleted, its WIREFRAMES and SIGNOFF arms kept |
-| tests/mocks/mocks-notes.test.js | MODIFY | tests | Fixture repair only (collision-closure `executes` hit): the file-local `advanceToThemePicked()` deleted, AC-20260902-10-6 re-chained onto `advanceToJourneyApproved` — no AC |
+| tests/mocks/mocks-driver-look-stops-4.test.js | MODIFY | tests | AC-20260907-07-8, AC-20260907-07-14; AC-20260906-02-8's THEME arm deleted, its WIREFRAMES and SIGNOFF arms kept |
+| tests/mocks/mocks-notes.test.js | MODIFY | tests | Fixture repair only (collision-closure `executes` hit): the file-local `advanceToThemePicked()` deleted, AC-20260902-10-6 re-chained onto `advanceToJourneyApproved`; plus AC-20260907-07-12, retagged onto that same test's open-project-note refusal (review disposition s5, user override) |
+| specs/20260902/07-mocks-command-driver.md | MODIFY | doctrine | D14: `AC-20260902-07-7`'s bullet gains a `[retired: ...]` marker; nothing else in that spec touched — no AC |
+| tests/consistency/genesis-doctrine.test.js | MODIFY | tests | D13(a): `AC-20260902-09-3` drops the `recompose` and `dense screen first` literals from its list and its test name; every other assertion byte-identical — no AC |
+| tests/mocks/mocks-driver-theme.test.js | MODIFY | tests | D12: `AC-20260907-06-10`'s test DELETED whole with its `advanceToDirectionComposed` import; every other test in the file untouched — no AC |
 | tests/consistency/design-doctrine.test.js | MODIFY | tests | AC-20260907-07-10, AC-20260907-07-11; plus fixture repair on AC-20260902-10-8 (`advanceToThemePicked` → `advanceToJourneyApproved`, and its name drops "with the theme picked") |
 
 ## Contracts
@@ -139,9 +147,8 @@ on the last journey now advances to `SIGNOFF` instead of `THEME`, and the checkp
   `tests/mocks/mocks-driver-3.test.js`
 - **AC-20260907-07-3**: WHEN `stop open theme` runs on a root with two composed directions on disk
   THE SYSTEM SHALL exit 2 naming `unknown step "theme"` and the exact live list
-  `shapes, kit, journey:<j>, signoff`, and SHALL NOT write a stop; WHEN `stop open shapes` runs on
-  the same root it SHALL CONTINUE TO write one `pick` stop keyed `shape-picked` with one candidate
-  group per shape → `tests/mocks/mocks-driver-look-stops.test.js`
+  `shapes, kit, journey:<j>, signoff`, and SHALL NOT write a stop →
+  `tests/mocks/mocks-driver-look-stops.test.js`
 - **AC-20260907-07-4**: WHEN `--reopen theme` runs THE SYSTEM SHALL exit 2 with the exact literal
   `--reopen must be journey:<j>, shapes, or kit`, SHALL write nothing to `status.json`, and SHALL
   append no row to `status.reopens` → `tests/mocks/mocks-driver-2.test.js`
@@ -162,8 +169,7 @@ on the last journey now advances to `SIGNOFF` instead of `THEME`, and the checkp
   next save SHALL write a `status.json` carrying none of those three keys → `tests/mocks/mocks-driver.test.js`
 - **AC-20260907-07-8**: WHEN the bare driver runs on a root reached through `advanceToJourneyApproved`
   with a fake `claude` on PATH reporting the `frontend-design` skill installed THE SYSTEM SHALL
-  print `state: SIGNOFF`, SHALL NOT print `🎨 Load the \`frontend-design\` skill`, and SHALL
-  CONTINUE TO exit 2 naming `npx playwright install chromium` when the look probe fails →
+  print `state: SIGNOFF` and SHALL NOT print `🎨 Load the \`frontend-design\` skill` →
   `tests/mocks/mocks-driver-look-stops-4.test.js`
 - **AC-20260907-07-9**: WHEN the bare driver runs on an `APPROVED` root THE SYSTEM SHALL print a
   step heading matching `## Step: done — every journey approved, signed off by <decider>` that
@@ -186,6 +192,12 @@ on the last journey now advances to `SIGNOFF` instead of `THEME`, and the checkp
   SHALL CONTINUE TO refuse with exit 2 naming the stop remedy, the offending note ids, or the
   unapproved journey respectively — the theme precondition's removal narrows nothing else →
   `tests/mocks/mocks-driver-2.test.js` and `tests/mocks/mocks-notes.test.js`
+- **AC-20260907-07-13**: WHEN `stop open shapes` runs on a root with two composed directions on
+  disk THE SYSTEM SHALL CONTINUE TO write one `pick` stop keyed `shape-picked` with one candidate
+  group per shape → `tests/mocks/mocks-driver-look-stops.test.js`
+- **AC-20260907-07-14**: WHEN the bare driver runs on a root reached through
+  `advanceToJourneyApproved` and the look probe fails THE SYSTEM SHALL CONTINUE TO exit 2 naming
+  `npx playwright install chromium` → `tests/mocks/mocks-driver-look-stops-4.test.js`
 
 ## Assumptions (escalation triggers)
 
@@ -269,6 +281,40 @@ What to watch during execution: the fixture chain. Nine of the ten test-layer ro
 because `advanceToThemePicked` disappears, so proving the fixture edit alone before touching
 anything else is the difference between one mechanical pass and nine independent debugging
 sessions.
+
+### What the build actually hit (folded from the deviations sidecar at review close)
+
+The plan's own warning about the fixture chain held, but it under-counted the collision surface.
+Six departures, none of which changed a promise:
+
+- **The predecessor's CONTINUE-TO pin was the one the closure sweep could not see.**
+  `tests/mocks/mocks-driver-theme.test.js`'s `AC-20260907-06-10` asserted that
+  `--mark direction-composed`, `--mark theme-picked`, `--reopen theme` and the derived `THEME`
+  state all keep working — spec 06 pinning exactly what it deliberately left standing for this
+  spec to remove. It reddened with `advanceToDirectionComposed is not a function` the moment the
+  mandatory fixtures edit landed, and would have been behaviourally false even with a stub.
+  D12 records the user's ruling to delete it; the class is now the fourth trigger on the
+  pipeline rules' retired-literal Gotcha.
+- **Two more live pins asserted literals D8 retires.** `AC-20260902-09-3` checked the
+  § Mocks: Authoring Rules body for `recompose` and for `dense screen first` — both phrases
+  lived only inside the deleted `Theme = recompose, never repaint` bullet, so both retire with
+  it (D13(a); the Decision's first draft named only `recompose` and was corrected at review).
+  `AC-20260902-07-7`'s covering test died with the marks it exercised, so its bullet carries a
+  `[retired: ...]` marker rather than a retagged stand-in that would have been false coverage
+  (D14).
+- **Two plan-time ACs mixed a new promise with a CONTINUE-TO pin** and were split at red-check
+  into `AC-20260907-07-13` and `AC-20260907-07-14`; nothing was loosened, and the CONTINUE-TO
+  halves are green against the pre-image, which is what makes them honest.
+- **D9's two premises about `spec/commands/mocks.md` were both false against HEAD.** The
+  frontend-design skill-line paragraph it described as merely relocated did not exist in the
+  file, and the Look rule's step enumeration read `shapes|journey:<j>|theme|signoff` — it never
+  named `kit`. The paragraph was authored net-new and `kit` was added, both to satisfy
+  AC-20260907-07-11's exact-match assertion and the driver's own executed `stop open` refusal.
+- **D11's version literal was stale, as its own Gotcha predicts.** Siblings had already pushed
+  `spec/.claude-plugin/plugin.json` past 7.101.0; `plugin-bump.js` derived the next free minor.
+- **Edited files outgrew their size baselines**, so raises citing this spec landed in
+  `size-baseline.json` — the one out-of-plan file at review, waived with the user's agreement
+  because the baseline is the size mechanism's own ledger rather than product surface.
 
 ## Canonical Delta
 

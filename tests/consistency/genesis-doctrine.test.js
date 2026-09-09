@@ -1122,7 +1122,14 @@ test('AC-20260902-08-12: the retired-literal sweep for design-pick.json, positio
 // specs/20260902/09-one-hand-wireframes-one-token-set.md D3, AC-20260902-09-3: mocks.md gains
 // a `## Mocks: Authoring Rules` heading carrying the six dry-run-converged wireframe/theme
 // rules as contract prose. The heading does not exist pre-D3, so this test is red until it lands.
-test('AC-20260902-09-3: mocks.md carries a "## Mocks: Authoring Rules" heading whose body names the half-styled-middle ban, recompose, dense-screen-first, and gray-until-confirmed rules, and spec-paths shared-mocks still resolves', () => {
+// Narrowed by specs/20260907/07-mocks-retires-theme.md D8/D13(a): the `recompose` literal lived
+// only inside the "Theme = recompose, never repaint" bullet, which D8 deletes whole along with
+// the retired THEME state it described — the rule it checked retires with the theme. The same
+// deleted bullet's own closing clause ("every direction is judged on the dense screen first")
+// was this section's only home for "dense screen first" too, so it retires for the identical
+// reason (D13(a)'s premise that this literal survives byte-identical does not hold against the
+// landed doctrine — recorded as a departure in the deviations sidecar).
+test('AC-20260902-09-3: mocks.md carries a "## Mocks: Authoring Rules" heading whose body names the half-styled-middle ban and gray-until-confirmed rules, and spec-paths shared-mocks still resolves', () => {
   const src = read('spec/doctrine/mocks.md')
   const headingMatch = src.match(/^## Mocks: Authoring Rules$/m)
   assert.ok(headingMatch,
@@ -1134,12 +1141,11 @@ test('AC-20260902-09-3: mocks.md carries a "## Mocks: Authoring Rules" heading w
   const nextHeading = src.slice(bodyStart).search(/^## /m)
   const body = nextHeading === -1 ? src.slice(bodyStart) : src.slice(bodyStart, bodyStart + nextHeading)
 
-  for (const literal of ['never a half-styled middle', 'recompose', 'dense screen first', 'gray until confirmed']) {
+  for (const literal of ['never a half-styled middle', 'gray until confirmed']) {
     assert.ok(body.includes(literal),
       'D3: the "## Mocks: Authoring Rules" section body must contain the literal "' + literal +
-      '" — its absence means one of the four checkable rules (one honest wireframe or the ' +
-      'full theme, theme = recomposing on structure and facts, judged on the dense screen ' +
-      'first, AI-reworded text stays gray until confirmed) is missing from the section')
+      '" — its absence means one of the two remaining checkable rules (one honest wireframe or ' +
+      'the full theme, AI-reworded text stays gray until confirmed) is missing from the section')
   }
 
   const shared = runBash('bin/spec-paths', ['shared-mocks'])

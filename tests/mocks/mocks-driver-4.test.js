@@ -11,7 +11,7 @@ const {
   writeCanon, writeWireframe, writeKitCanon,
   decideLook,
   advanceToSeedDone, advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToJourneyApproved,
-  advanceToDirectionComposed, advanceToThemePicked, advanceToApproved,
+  advanceToApproved,
   ledgerCmd,
   writeFixtureCapture, writeCaptureConfig,
   stubNpx, freePort, startServe, stopServe,

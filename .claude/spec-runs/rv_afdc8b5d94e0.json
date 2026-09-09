@@ -1,0 +1,152 @@
+{
+  "runId": "rv_afdc8b5d94e0",
+  "ts": "2026-09-09T21:57:09.548Z",
+  "spec": "specs/20260908/03-test-fixture-dedupe.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 2,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1295,
+    "base": "1aa5915554c1ad9417c7d016d8f8e300a62d438e",
+    "head": "a77d6850ff1a30999aeeb934493bf78ea565a0b9",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 766
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1444
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 1,
+        "preGreen": 5
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 10,
+        "carried": 9,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "soft",
+        "claim": "The guard file header comment (lines 9-12) still says every test below is genuinely red at HEAD, which was true only at the pre-extraction authoring moment. At HEAD all six tests are green (observed 6/6 pass). The comment narrates a prior state rather than the current contract, and a reader taking it literally would conclude the file is broken.",
+        "file": "tests/fixtures-modules.test.js",
+        "line": 12,
+        "impact": "A misleading header that tells a future reader the guard test is expected to fail, when it is expected to pass.",
+        "evidence": "grep for the phrase on both the pre-a77d685 file (extracted from the parent of a77d685) and HEAD returns line 12 in each: pre-existing in the range since the guard authoring commit, not introduced by a77d685. TAP run of tests/fixtures-modules.test.js at HEAD: ok 1 through 6, tests 6 pass 6 fail 0. The red run the comment describes is transcribed in the deviations sidecar under the D10 red evidence heading, which is the correct home for that narration."
+      },
+      {
+        "severity": "soft",
+        "claim": "One transient failure was observed in a combined TAP run of tests/fixtures-modules.test.js plus tests/genesis/*.test.js plus tests/consistency/*.test.js (tests 223, pass 222, fail 1) immediately after the perturb/restore cycle. Four consecutive reruns of the identical command were 223/223 and the failing subtest TAP block was not captured, so the flake is unidentified and unattributed to this range.",
+        "file": null,
+        "line": null,
+        "impact": "A test in the genesis or consistency shard may be timing- or tmpdir-sensitive. It did not reproduce and cannot be pinned to this diff.",
+        "evidence": "Run 1 summary: tests 223, pass 222, fail 1 (no top-level not-ok line matched by grep). Runs 2 to 5 of the same command: pass 223, fail 0 each, grep for any-depth not-ok empty. The review manifest suite leg (manifest-3.jsonl) shows exit 0, testsExecuted 1444, skips 0."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "The AC-20260908-03-7 pin does not actually fail on default-template drift (the pass-2 soft survivor was not really fixed)",
+        "file": "tests/fixtures-modules.test.js",
+        "line": 106,
+        "evidence": "Perturbation 1: in-place edit replaced the Non-goals heading with Non-goalz in tests/genesis/tournament.fixtures.js line 67, then TAP run of tests/fixtures-modules.test.js: not ok 3 AC-20260908-03-7 with the diff lines plus Non-goalz / minus Non-goals, the other 5 ok. Perturbation 2 (whitespace-only, invisible to the old includes() checks): trailing space appended to the Research Angles body line, then same run: tests 6 pass 5 fail 1, only test 3 not ok. After each, restored from a pre-perturbation byte copy, cmp reports identical (sha256 592c50b8), working tree status empty. Unperturbed run: 6/6 pass."
+      },
+      {
+        "claim": "EXPECTED_DEFAULT_BRIEF pins today output rather than the pre-image template the spec SHALL CONTINUE TO clause refers to",
+        "file": "tests/fixtures-modules.test.js",
+        "line": 76,
+        "evidence": "e.js required the base-tree (archive of 1aa5915) tests/genesis/tournament.fixtures.js and the HEAD copy, called writeBrief(dir, {}) on each: base writeBrief === head writeBrief: true 706 706. Extracted the EXPECTED_DEFAULT_BRIEF template literal from the HEAD guard test: EXPECTED_DEFAULT_BRIEF === base pre-image template: true."
+      },
+      {
+        "claim": "The AC-6 rationale-comment condensation in a77d685 touched or weakened an assertion, the helper, or the test body",
+        "file": "tests/fixtures-modules.test.js",
+        "line": 179,
+        "evidence": "a.js on the a77d685-parent file vs HEAD: slice from function fixturesModuleSubtestLine to EOF is byte-identical (A1 true). All non-comment non-blank lines outside the AC-7 test block are identical (A2 true). test( count 6/6 with identical names. assert. count 20 to 19, the delta being exactly the two AC-7 assert.ok calls folded into one assert.strictEqual (subsuming both predicates, which the new message still names). Sizes 10488 to 10420, consistent with the commit message."
+      },
+      {
+        "claim": "D6 is violated in one of the ten MODIFY test files after the fix-delta (test name, test( count, or assertion changed)",
+        "file": "tests/genesis/brief-state.test.js",
+        "line": 1,
+        "evidence": "c.js, base (archived 1aa5915) vs HEAD for all ten files: top-level test( counts identical (review-legs 21/21, smoke-wave 4/4, legs-verdict-pair 9/9, at-risk-argv 6/6, brief-state 18/18, conventions-handoff 4/4, genesis-driver 19/19, owning-spec-env 6/6, qualified-skip-mapping 7/7, replay 65/65). Ordered test-name lists identical in all ten. Raw test( occurrence counts identical. Sorted assert-line multisets identical except one assert.fail line removed from each ac-matrix file, which is the lifted findings() helper now at tests/ac-matrix/ac-matrix.fixtures.js:30 (grep confirms the identical line there). a77d685 itself touches no file among the ten."
+      },
+      {
+        "claim": "A baseline raise in the range cites a spec other than the one under review, or the ratchet is left loose",
+        "file": "size-baseline.json",
+        "line": 294,
+        "evidence": "Diff of size-baseline.json between 1aa5915 and HEAD: three raise rows added (tests/genesis/tournament.fixtures.js 10688 to 11447, tests 3432195 to 3448737, tests/genesis/brief-state.test.js 61798 to 61918), each with cite specs/20260908/03-test-fixture-dedupe.md. Every per-file ceiling for a pre-existing file is at or below its base value except tournament.fixtures.js (the cited raise). The tests tree ceiling is 3447505, below the raise target 3448737 (re-tightened by update after the raise). size-ratchet.js run: 259 files, 4 trees, all tight, exit 0. a77d685 lowered tests/fixtures-modules.test.js 10488 to 10420 and tests 3447573 to 3447505, no raise."
+      },
+      {
+        "claim": "The D8/D9/D10 build-time Decisions or the AC-7 split left the spec AC list or Contracts inconsistent with the guard test",
+        "file": "specs/20260908/03-test-fixture-dedupe.md",
+        "line": 102,
+        "evidence": "Diff of the spec between 1aa5915 and HEAD: AC-3 narrowed to the new promise, AC-7 added as the SHALL CONTINUE TO pin citing D9, AC-4 and the Contracts findings() line corrected to the parsed-payload shape (D8), AC-2 through AC-6 tagged pre-green with D10 naming the transcribed red run. Guard test has exactly one test per AC-2 through AC-7 with matching AC-IDs. manifest-3.jsonl ac-matrix leg uncovered 0, oracle 1, preGreen 5. promise-sweep rows 10 carried 9 sanctioned 1 orphans 0."
+      },
+      {
+        "claim": "The range contains foreign work or non-test surfaces requiring a plugin.json bump",
+        "file": null,
+        "line": null,
+        "evidence": "Diffstat 1aa5915 to HEAD: 19 files, all under tests/, specs/20260908/, size-baseline.json, .claude/spec-runs.jsonl (one build-run row for this spec). Four commits 198b6b7, 75e44f2, 89e3df6, a77d685, all test(fixtures) subjects for this spec. Manifest gate leg exit 0 (766 tests), suite leg exit 0 (1444 tests), skips 0."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 70000
+  }
+}

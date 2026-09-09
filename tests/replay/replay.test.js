@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync, spawnSync } = require('node:child_process')
 const { SPEC, read, tmpdir, runNode, gitRepo } = require('../helpers')
+const { setupOverlayHost, commitFiles } = require('./replay.fixtures')
 
 // specs/20260819/02-mutation-replay.md (brief 14): the ad-hoc consult
 // injection (specs/20260819/01-review-evidence-retention.md's Fable retainer pass) proved a
@@ -131,25 +132,6 @@ function commitReal(root, relFile, content, msg) {
   const full = path.join(root, relFile)
   fs.mkdirSync(path.dirname(full), { recursive: true })
   fs.writeFileSync(full, content)
-  execFileSync('git', ['-C', root, 'add', '-A'])
-  execFileSync('git', ['-C', root, 'commit', '-q', '-m', msg])
-  return execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
-}
-
-// specs/20260831/01: build a commit whose content is exactly the given {path: content|null} map
-// (null = delete a path that must already exist) — used by the --overlay fixtures below to build
-// a parent/close commit pair with a precise, individually-named non-meta/meta delta shape, rather
-// than the two-content-versions-of-one-file shape commitSpecFlow was built for.
-function commitFiles(root, files, msg) {
-  for (const [rel, content] of Object.entries(files)) {
-    const full = path.join(root, rel)
-    if (content === null) {
-      fs.unlinkSync(full)
-    } else {
-      fs.mkdirSync(path.dirname(full), { recursive: true })
-      fs.writeFileSync(full, content)
-    }
-  }
   execFileSync('git', ['-C', root, 'add', '-A'])
   execFileSync('git', ['-C', root, 'commit', '-q', '-m', msg])
   return execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
@@ -947,24 +929,24 @@ test('AC-20260826-01-4: --setup plants exactly scratch-worktree (never replay-wo
 
 test('AC-20260831-01-1: --setup --overlay materializes exactly the close commit\'s non-meta modify/add/delete as one commit with the default subject, leaving the worktree clean with the marker intact', () => {
   const root = fs.realpathSync(tmpdir('replay-overlay-materialize'))
-  gitRepo(root)
-  const parent = commitFiles(root, {
-    'lib/a.js': 'a\n',
-    'lib/dead.js': 'dead\n',
-    'specs/01-x.md': '---\nstatus: implementing\n---\n# x\n',
-    '.claude/spec-runs.jsonl': '{"line":1}\n',
-  }, 'parent commit')
-  const close = commitFiles(root, {
-    'lib/a.js': 'A\n',
-    'tests/new.test.js': 'new\n',
-    'lib/dead.js': null,
-    'specs/01-x.md': '---\nstatus: done\n---\n# x\n',
-    '.claude/spec-runs.jsonl': '{"line":1}\n{"line":2}\n',
-  }, 'close commit')
+  const { parent, close, dir } = setupOverlayHost(root, {
+    parentFiles: {
+      'lib/a.js': 'a\n',
+      'lib/dead.js': 'dead\n',
+      'specs/01-x.md': '---\nstatus: implementing\n---\n# x\n',
+      '.claude/spec-runs.jsonl': '{"line":1}\n',
+    },
+    closeFiles: {
+      'lib/a.js': 'A\n',
+      'tests/new.test.js': 'new\n',
+      'lib/dead.js': null,
+      'specs/01-x.md': '---\nstatus: done\n---\n# x\n',
+      '.claude/spec-runs.jsonl': '{"line":1}\n{"line":2}\n',
+    },
+  })
 
   const statusBeforeMain = execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' })
 
-  const dir = path.join(fs.realpathSync(tmpdir('replay-overlay-materialize-wt')), 'wt')
   const r = runNode(SCRIPT, ['--setup', '--commit', parent, '--overlay', close, '--dir', dir], { cwd: root })
   assert.strictEqual(r.status, 0,
     'D1: a --setup --overlay call whose close commit modifies/adds/deletes non-meta files alongside meta ' +
@@ -1012,22 +994,22 @@ test('AC-20260831-01-1: --setup --overlay materializes exactly the close commit\
 
 test('AC-20260831-01-2: --setup --overlay leaves every meta-prefix path (specs/, .claude/, docs/canonical/) at the --commit version, never materializing a close-added evidence file under .claude/spec-runs/', () => {
   const root = fs.realpathSync(tmpdir('replay-overlay-meta'))
-  gitRepo(root)
-  const parent = commitFiles(root, {
-    'lib/a.js': 'a\n',
-    'specs/02-y.md': '---\nstatus: implementing\n---\n# y\n',
-    '.claude/spec-runs.jsonl': '{"line":1}\n',
-    'docs/canonical/review.md': 'parent doc\n',
-  }, 'parent commit')
-  const close = commitFiles(root, {
-    'lib/a.js': 'A\n',
-    'specs/02-y.md': '---\nstatus: done\n---\n# y\n',
-    '.claude/spec-runs.jsonl': '{"line":1}\n{"line":2}\n',
-    'docs/canonical/review.md': 'close doc\n',
-    '.claude/spec-runs/rv_deadbeefcafe.json': '{"evidence":true}\n',
-  }, 'close commit')
+  const { parent, close, dir } = setupOverlayHost(root, {
+    parentFiles: {
+      'lib/a.js': 'a\n',
+      'specs/02-y.md': '---\nstatus: implementing\n---\n# y\n',
+      '.claude/spec-runs.jsonl': '{"line":1}\n',
+      'docs/canonical/review.md': 'parent doc\n',
+    },
+    closeFiles: {
+      'lib/a.js': 'A\n',
+      'specs/02-y.md': '---\nstatus: done\n---\n# y\n',
+      '.claude/spec-runs.jsonl': '{"line":1}\n{"line":2}\n',
+      'docs/canonical/review.md': 'close doc\n',
+      '.claude/spec-runs/rv_deadbeefcafe.json': '{"evidence":true}\n',
+    },
+  })
 
-  const dir = path.join(fs.realpathSync(tmpdir('replay-overlay-meta-wt')), 'wt')
   const r = runNode(SCRIPT, ['--setup', '--commit', parent, '--overlay', close, '--dir', dir], { cwd: root })
   assert.strictEqual(r.status, 0,
     'D2: a close commit carrying one non-meta row alongside four meta rows across all three meta prefixes ' +
@@ -1061,17 +1043,17 @@ test('AC-20260831-01-2: --setup --overlay leaves every meta-prefix path (specs/,
 
 test('AC-20260831-01-3: --setup --overlay whose close commit changes only meta-prefix paths creates no overlay commit, leaves the worktree HEAD at --commit, and prints overlaid=0', () => {
   const root = fs.realpathSync(tmpdir('replay-overlay-metaonly'))
-  gitRepo(root)
-  const parent = commitFiles(root, {
-    'lib/a.js': 'a\n',
-    'specs/03-z.md': '---\nstatus: implementing\n---\n# z\n',
-  }, 'parent commit')
-  const close = commitFiles(root, {
-    'specs/03-z.md': '---\nstatus: done\n---\n# z\n',
-    '.claude/spec-runs.jsonl': '{"line":1}\n',
-  }, 'close commit (meta-only)')
+  const { parent, close, dir } = setupOverlayHost(root, {
+    parentFiles: {
+      'lib/a.js': 'a\n',
+      'specs/03-z.md': '---\nstatus: implementing\n---\n# z\n',
+    },
+    closeFiles: {
+      'specs/03-z.md': '---\nstatus: done\n---\n# z\n',
+      '.claude/spec-runs.jsonl': '{"line":1}\n',
+    },
+  })
 
-  const dir = path.join(fs.realpathSync(tmpdir('replay-overlay-metaonly-wt')), 'wt')
   const r = runNode(SCRIPT, ['--setup', '--commit', parent, '--overlay', close, '--dir', dir], { cwd: root })
   assert.strictEqual(r.status, 0,
     'D1: a meta-only close (the clean-close degenerate case) must still exit 0 — the uniform overlay rule ' +
@@ -1088,9 +1070,10 @@ test('AC-20260831-01-3: --setup --overlay whose close commit changes only meta-p
 
 test('AC-20260831-01-4: --setup refuses an --overlay that is not a strict descendant of --commit — an ancestor or an equal sha — with exit 4 before creating any worktree, naming the --select remedy', () => {
   const root = fs.realpathSync(tmpdir('replay-overlay-nondescendant'))
-  gitRepo(root)
-  const parent = commitFiles(root, { 'lib/a.js': 'a\n' }, 'parent commit')
-  const close = commitFiles(root, { 'lib/a.js': 'A\n' }, 'close commit')
+  const { parent, close } = setupOverlayHost(root, {
+    parentFiles: { 'lib/a.js': 'a\n' },
+    closeFiles: { 'lib/a.js': 'A\n' },
+  })
 
   const listBefore = execFileSync('git', ['-C', root, 'worktree', 'list'], { encoding: 'utf8' })
 
@@ -1119,9 +1102,10 @@ test('AC-20260831-01-4: --setup refuses an --overlay that is not a strict descen
 
 test('AC-20260831-01-5: --setup --overlay refuses a --subject that opens with "replay" (case-insensitive) with exit 2 naming the constraint, and accepts a build-shaped subject verbatim as the overlay commit\'s own subject', () => {
   const root = fs.realpathSync(tmpdir('replay-overlay-subject'))
-  gitRepo(root)
-  const parent = commitFiles(root, { 'lib/a.js': 'a\n' }, 'parent commit')
-  const close = commitFiles(root, { 'lib/a.js': 'A\n' }, 'close commit')
+  const { parent, close } = setupOverlayHost(root, {
+    parentFiles: { 'lib/a.js': 'a\n' },
+    closeFiles: { 'lib/a.js': 'A\n' },
+  })
 
   const refusedDir = path.join(fs.realpathSync(tmpdir('replay-overlay-subject-refused-wt')), 'wt')
   const refused = runNode(SCRIPT, ['--setup', '--commit', parent, '--overlay', close, '--dir', refusedDir,

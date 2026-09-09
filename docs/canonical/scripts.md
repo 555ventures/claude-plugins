@@ -61,7 +61,9 @@ or mechanize. Agent-memory notes are disposed when a spec's diff touches what th
 (memory-sweep `diff-hit`) or after 10 undisposed review closes (`ttl-expired`); a carry
 disposition records `reviewed: YYYY-MM-DD` in the note's metadata. Comment narration is capped
 per file by `.claude/comment-narration.baseline.json` while the sweep runs, and at zero once it
-is deleted.
+is deleted. Test setup that a second file needs lives in a sibling `*.fixtures.js` module
+(`review-legs`, `tournament`, `ac-matrix`, `replay`), never as a second copy; the
+duplicate-window ratchet prices the third repetition.
 
 The plugin's own code-group comments — everything under `spec/scripts`, `spec/bin`, `scripts`,
 and `tests` — are at zero narration. A new comment there states the current invariant plus one

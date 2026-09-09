@@ -105,7 +105,7 @@ literal color outside the inlined `:root{…}` block, output byte-stable across 
 (`--bg --fg --muted --muted-bg --border --primary --primary-fg --ring --radius --font`), and
 `wire.css` is the flat register on those roles (dashed `--border` placeholders, `--muted-bg`
 fills, no shadow, no filled button but `.btn.primary`); a test pins the two files value-equal
-per role. Product tokens exist only from THEME and chrome never adopts them.
+per role. Product tokens exist only from the sketch theme pick and chrome never adopts them.
 
 ## Render gate (2026-08-24, specs/20260824/01)
 
@@ -189,7 +189,7 @@ identical; a literal pipe inside a cell is written `\|`.
 ## The mocks command (2026-09-02, specs/20260902/07)
 
 `/spec:mocks` is the standalone design stage. `spec/scripts/mocks-driver.js` (`spec-paths
-mocks-driver`) derives `SEED → SHAPES → KIT → WIREFRAMES → THEME → SIGNOFF → APPROVED`
+mocks-driver`) derives `SEED → SHAPES → KIT → WIREFRAMES → SIGNOFF → APPROVED`
 (specs/20260907/04, ADR-0010 amending ADR-0008) from `design/mocks/status.json`
 (schemaVersion 1) plus the artifacts on disk: the skin and review states are retired; a
 wireframe is never skinned inside mocks — `/spec:sketch` owns fidelity per brief. The driver
@@ -198,12 +198,14 @@ prints exactly one step
 saved (<prev> → <next>); safe to /clear and re-run /spec:mocks`, preceded by the `📒 ledger:`
 counts line), gates every advance on the provenance ledger (`gateVerdict`, refusing on
 `open:false` and naming the rows), and records a sub-mark per journey (`journey-drawn`,
-`journey-approved`, and `variant-picked` when candidate flows are used), per theme direction
-(`direction-composed`), and `--reopen journey:<j>|shapes|theme` (recorded, printed, nothing
-deleted). THEME composes each direction on the seed's dense screen, a second screen at most,
-and `theme-picked` copies the winner's `tokens.css` into place. SIGNOFF is one look over the
-atlas; `--mark approved` stamps every top-level mock `data-status="approved"` and records the
-stop's decider. `--reopen theme` clears the theme pick and the sign-off only;
+`journey-approved`, and `variant-picked` when candidate flows are used), and
+`--reopen journey:<j>|shapes|kit` (recorded, printed, nothing deleted). The whole mocks stage
+is gray (specs/20260907/07): the taste decision is picked on `/spec:sketch`'s first run against
+the signed-off kit (specs/20260907/06), and `design/tokens.css` on disk — never a mark and never
+a status field — is the one signal that a theme exists. SIGNOFF is one look over the
+atlas and the stage's single human gate; `--mark approved` stamps every top-level mock
+`data-status="approved"` and records the stop's decider, so a mock approved by `/spec:mocks` is
+always a gray wireframe and the atlas's wire-register rule exempts it by design.
 `--reopen journey:<j>` clears that journey's approval and the sign-off. The 13 seed fact keys are closed (`primary-surface platforms-horizon tenancy offline
 realtime ai-in-loop residency payer day-one-integrations scale-outage vendor-limits retention
 legal-floor`), each mapped in `seed.md ## Facts` to a confirmed `product` ledger row. Registers
@@ -216,8 +218,7 @@ applies (`<link>` with a stylesheet `rel` in any quoting form or attribute order
 segment. A `<link>` the browser does not apply as a stylesheet, and a path merely named like
 the register (`my-wire/`, `v.wire/`), are not the register; a register applied through
 `@import` is. No script outside that module spells the rule itself.
-THEME opens with a direction interview — 2–3 candidate directions derived from the seed and
-asked, never fixed anchors — recorded as the `theme-directions` product row. The driver's
+The driver's
 `ledger add|set|catch|check|counts` subcommands are the only writers of `design/mocks/ledger.md`.
 SSH rule: `design-atlas.js serve` serves `design/` statically and prints
 `serving http://localhost:<port>/atlas/index.html — remote: ssh -L <port>:localhost:<port> <host>`;

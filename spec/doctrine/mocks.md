@@ -19,9 +19,9 @@ identical.
 note`:
 
 - `id` — `^[A-Z]+\d+[a-z]?$`, unique across the table.
-- `step` — `^[A-Z][A-Z-]*$` (`SEED`, `SHAPES`, `KIT`, `WIREFRAMES`, `THEME`, `SIGNOFF`,
-  `GENESIS`, …); rows written under retired step names (`SKIN`, `REVIEW`) still match the
-  pattern and keep parsing.
+- `step` — `^[A-Z][A-Z-]*$` (`SEED`, `SHAPES`, `KIT`, `WIREFRAMES`, `SKETCH`, `SIGNOFF`,
+  `GENESIS`, …); rows written under retired step names (`SKIN`, `REVIEW`, `THEME`) still match
+  the pattern and keep parsing.
 - `kind` — one fixed word: `product` or `process`.
 - `claim` — free text; the assumption itself.
 - `tag` — one fixed word: `said-by-user`, `ratified-doc`, `inferred`, or `invented`.
@@ -65,27 +65,27 @@ removed) the derivation lands earlier and demands the mark again. The order is f
 (the 13 facts, journeys, dense screen, research brief) → **SHAPES** (one shape kebab picked
 from 2–3 candidates) → **KIT** (the shared-primitive canon named and signed off, before any
 screen) → **WIREFRAMES** (canon written, then every seed journey drawn and
-approved) → **THEME** (≥2 directions composed, one picked) → **SIGNOFF** (one look over the
-whole approved set) → **APPROVED** (terminal). WIREFRAMES and THEME each carry a sub-mark per
-journey or direction so no single conversation ever has to hold more than one journey's state —
+approved) → **SIGNOFF** (one look over the
+whole approved set) → **APPROVED** (terminal). WIREFRAMES carries a sub-mark per
+journey so no single conversation ever has to hold more than one journey's state —
 a seed journey added mid-WIREFRAMES reappears as `0/N drawn` and reopens the state rather than
 silently completing.
 
 **The gate rides every advancing mark.** `seed-done`, `shape-picked`, `kit-signed`,
-`canon-written`, `journey-approved`, `theme-picked`, and `approved` each
+`canon-written`, `journey-approved`, and `approved` each
 run the provenance ledger's `gateVerdict` (§ Provenance Ledger) before recording; a blocked
 gate refuses (exit 2) naming the offending rows and the remedy (`ledger set --id <id> --status
 confirmed --tag said-by-user`, or `--status overridden`). `journey-approved` and `approved`
 additionally run the rendered adaptation gate (§ Design Render Gate, `render-gate --mocks`),
 falling back to the plugin's own capture when the host declares none, and refuse the mark on
-any finding or on a machine with no browser. `journey-drawn` and
-`direction-composed` run no gate — drawing and composing are how open questions get found, not
+any finding or on a machine with no browser. `journey-drawn`
+runs no gate — drawing is how open questions get found, not
 resolved. Process rows never surface as something to resolve; they are counted, not asked.
 
 **Reopening never deletes.** `--reopen journey:<j>` clears that journey's `approved` mark
 (and the terminal `approved`); `--reopen shapes` clears the shape pick and every downstream
-mark; `--reopen kit` clears the kit sign-off and `approved`, never a journey's own approval;
-`--reopen theme` clears the theme pick and `approved`. Every reopen appends one row to
+mark; `--reopen kit` clears the kit sign-off and `approved`, never a journey's own approval.
+Every reopen appends one row to
 `status.reopens` naming what it invalidated and leaves every file on disk byte-identical — the
 next derivation lands on the earliest state whose marks are now missing.
 
@@ -169,7 +169,7 @@ CLI at the first declared viewport in `design/targets.json`, and deletes the sib
 `require.resolve('playwright')` does not resolve from a host repo even when the CLI works.
 
 **Reachability is a precondition, not an afterthought.** Before printing SHAPES, WIREFRAMES,
-THEME, or SIGNOFF — every state that asks the session to look at a screen — the driver runs the
+or SIGNOFF — every state that asks the session to look at a screen — the driver runs the
 look probe unless `status.look` is already `"browser"`; a failed probe refuses (exit 2) naming
 `npx playwright install chromium` rather than silently proceeding into a state no one can
 verify. `mocks-driver.js look-via <playwright|browser>` records the session's declared path:
@@ -275,13 +275,9 @@ half the driver cannot check, carried here as contract prose the authoring sessi
   (`spec-paths design-atlas`) makes this mechanical at the stamp that matters: a labeled mock
   still linking `wire/` once `design/tokens.css` exists above it is a violation at
   `data-status="ratified"`, a `⚠️` warn at `sketch` — `approved` wireframes from `/spec:mocks`
-  sign-off are exempt by design, since THEME already precedes SIGNOFF (specs/20260906/06 D1).
-- **Theme = recompose, never repaint.** A theme direction is composed to recompose the seed's
-  dense screen at production fidelity on that screen's own structure and facts, never freehand
-  — one screen per direction, a second at most, and ≥2 directions; every direction is judged on
-  the dense screen first, because a direction that only survives on a simple screen has not
-  been tested. Recomposing the rest of the product is `/spec:sketch`'s per-brief work, not
-  THEME's.
+  sign-off are exempt by design, because the theme is picked after sign-off now, in
+  `/spec:sketch`: an approved gray wireframe is the mocks stage's finished artifact, never a
+  half-dressed screen (specs/20260907/07).
 - **Mocks are authored under the `frontend-design` skill.** Every mock — shape, wireframe,
   theme direction, and every `/spec:sketch` draft or rework — is authored with the skill
   loaded (Skill tool) before the first edit; the pipeline never composes a screen or a token from

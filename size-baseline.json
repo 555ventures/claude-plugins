@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 29937,
-    "spec/scripts": 1255680,
+    "spec/scripts": 1248772,
     "spec/scripts/lib": 231235,
-    "tests": 3443857
+    "tests": 3459222
   },
   "files": {
     "scripts/plugin-bump.js": 8564,
@@ -58,7 +58,7 @@
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
     "spec/scripts/merge-back.sh": 17514,
-    "spec/scripts/mocks-driver.js": 100719,
+    "spec/scripts/mocks-driver.js": 93773,
     "spec/scripts/promise-sweep.js": 10409,
     "spec/scripts/prose-cap.js": 6271,
     "spec/scripts/question-style-gate.js": 10712,
@@ -67,7 +67,7 @@
     "spec/scripts/release-legs.js": 25332,
     "spec/scripts/render-capture.js": 11937,
     "spec/scripts/render-compare.js": 13664,
-    "spec/scripts/render-gate.js": 30205,
+    "spec/scripts/render-gate.js": 30243,
     "spec/scripts/render-inventory.browser.js": 14416,
     "spec/scripts/render-rules.js": 19776,
     "spec/scripts/replay.js": 69031,
@@ -84,10 +84,11 @@
     "spec/scripts/verdict.js": 49897,
     "spec/scripts/worktree-include.sh": 3277,
     "tests/ac-matrix-coverage-holes.test.js": 12430,
+    "tests/ac-matrix/ac-matrix.fixtures.js": 2238,
     "tests/ac-matrix/ac-matrix.test.js": 48959,
     "tests/ac-matrix/lint-mode.test.js": 10887,
-    "tests/ac-matrix/owning-spec-env.test.js": 16471,
-    "tests/ac-matrix/qualified-skip-mapping.test.js": 17169,
+    "tests/ac-matrix/owning-spec-env.test.js": 15146,
+    "tests/ac-matrix/qualified-skip-mapping.test.js": 15784,
     "tests/ac-matrix/rejected-trailing-tag.test.js": 24021,
     "tests/build/build-driver-base.test.js": 7604,
     "tests/build/build-driver-commit.test.js": 22102,
@@ -106,9 +107,9 @@
     "tests/consistency/citations-check.test.js": 16363,
     "tests/consistency/comment-narration-live.test.js": 3527,
     "tests/consistency/dependency-free.test.js": 8614,
-    "tests/consistency/design-doctrine.test.js": 25745,
+    "tests/consistency/design-doctrine.test.js": 33846,
     "tests/consistency/entrypoints.test.js": 70405,
-    "tests/consistency/genesis-doctrine.test.js": 86404,
+    "tests/consistency/genesis-doctrine.test.js": 86907,
     "tests/consistency/observed-grammar-purity.test.js": 3560,
     "tests/consistency/plugin-bump.test.js": 12177,
     "tests/consistency/plugin-version.test.js": 5267,
@@ -132,6 +133,7 @@
     "tests/env-preflight.test.js": 11643,
     "tests/escape/escape-row.test.js": 24093,
     "tests/file-plan/multi-table.test.js": 11943,
+    "tests/fixtures-modules.test.js": 10419,
     "tests/fixtures/minimal-host/.claude/rules/spec-pipeline.md": 749,
     "tests/fixtures/minimal-host/.claude/spec-runs.jsonl": 549,
     "tests/fixtures/minimal-host/.claude/spec.config.json": 415,
@@ -149,14 +151,14 @@
     "tests/frontmatter.test.js": 4254,
     "tests/frontmatter/frontmatter.test.js": 16719,
     "tests/genesis-gate.test.js": 14633,
-    "tests/genesis/brief-state.test.js": 62262,
-    "tests/genesis/conventions-handoff.test.js": 29525,
-    "tests/genesis/genesis-driver.test.js": 76044,
+    "tests/genesis/brief-state.test.js": 61918,
+    "tests/genesis/conventions-handoff.test.js": 28971,
+    "tests/genesis/genesis-driver.test.js": 75630,
     "tests/genesis/registry-check.test.js": 23113,
     "tests/genesis/research-menu.test.js": 14506,
     "tests/genesis/tournament-decided.test.js": 7534,
     "tests/genesis/tournament-probe-pick.test.js": 20367,
-    "tests/genesis/tournament.fixtures.js": 10688,
+    "tests/genesis/tournament.fixtures.js": 11282,
     "tests/genesis/tournament.test.js": 15077,
     "tests/git/commit-escape-check.test.js": 5426,
     "tests/helpers.js": 6671,
@@ -168,20 +170,20 @@
     "tests/init-gen/probes.test.js": 6550,
     "tests/merge-back.test.js": 15683,
     "tests/mocks/chrome-harness.js": 6375,
-    "tests/mocks/mocks-driver-2.test.js": 13908,
-    "tests/mocks/mocks-driver-3.test.js": 20832,
-    "tests/mocks/mocks-driver-4.test.js": 16815,
-    "tests/mocks/mocks-driver-fixtures.js": 27411,
+    "tests/mocks/mocks-driver-2.test.js": 16258,
+    "tests/mocks/mocks-driver-3.test.js": 16740,
+    "tests/mocks/mocks-driver-4.test.js": 16765,
+    "tests/mocks/mocks-driver-fixtures.js": 24866,
     "tests/mocks/mocks-driver-kit-gate.test.js": 2879,
-    "tests/mocks/mocks-driver-look-stops-2.test.js": 12874,
-    "tests/mocks/mocks-driver-look-stops-3.test.js": 10336,
-    "tests/mocks/mocks-driver-look-stops-4.test.js": 6975,
-    "tests/mocks/mocks-driver-look-stops.test.js": 19181,
-    "tests/mocks/mocks-driver-theme.test.js": 54571,
+    "tests/mocks/mocks-driver-look-stops-2.test.js": 12882,
+    "tests/mocks/mocks-driver-look-stops-3.test.js": 9355,
+    "tests/mocks/mocks-driver-look-stops-4.test.js": 9944,
+    "tests/mocks/mocks-driver-look-stops.test.js": 21448,
+    "tests/mocks/mocks-driver-theme.test.js": 51812,
     "tests/mocks/mocks-driver-wire.test.js": 4300,
-    "tests/mocks/mocks-driver.test.js": 31925,
+    "tests/mocks/mocks-driver.test.js": 35057,
     "tests/mocks/mocks-ledger.test.js": 12490,
-    "tests/mocks/mocks-notes.test.js": 45728,
+    "tests/mocks/mocks-notes.test.js": 44834,
     "tests/mocks/mocks-picks.test.js": 11563,
     "tests/mocks/notes-layer-isolation.test.js": 6464,
     "tests/mocks/notes-layer-navigation.test.js": 27426,
@@ -209,7 +211,8 @@
     "tests/render/render-rules.test.js": 33656,
     "tests/replay/record-via.test.js": 7611,
     "tests/replay/replay-corpus.test.js": 7478,
-    "tests/replay/replay.test.js": 202673,
+    "tests/replay/replay.fixtures.js": 1919,
+    "tests/replay/replay.test.js": 201519,
     "tests/report/report-render.test.js": 14403,
     "tests/review/ci-query.test.js": 17510,
     "tests/review/deviations-backstop.test.js": 18269,
@@ -220,7 +223,7 @@
     "tests/review/escalate-row-step.test.js": 12621,
     "tests/review/escalate-row.fixtures.js": 11192,
     "tests/review/escalate-row.test.js": 18049,
-    "tests/review/legs-verdict-pair.test.js": 32768,
+    "tests/review/legs-verdict-pair.test.js": 31714,
     "tests/review/merge-reentry.test.js": 18818,
     "tests/review/promise-sweep.test.js": 21909,
     "tests/review/review-base-derivation.test.js": 7117,
@@ -232,9 +235,10 @@
     "tests/review/review-driver-replay-record.test.js": 14277,
     "tests/review/review-driver.fixtures.js": 12355,
     "tests/review/review-driver.test.js": 51071,
-    "tests/review/review-legs-at-risk-argv.test.js": 15422,
-    "tests/review/review-legs-smoke-wave.test.js": 10659,
-    "tests/review/review-legs.test.js": 44469,
+    "tests/review/review-legs-at-risk-argv.test.js": 15160,
+    "tests/review/review-legs-smoke-wave.test.js": 10397,
+    "tests/review/review-legs.fixtures.js": 2714,
+    "tests/review/review-legs.test.js": 40695,
     "tests/review/reviewer-return-killed.test.js": 11061,
     "tests/review/reviewer-scope-identity.test.js": 2982,
     "tests/review/reviewer-seat.test.js": 1771,
@@ -284,9 +288,111 @@
     },
     {
       "path": "tests",
+      "from": 3402477,
+      "to": 3423338,
+      "cite": "specs/20260908/07-one-wire-register-predicate.md"
+    },
+    {
+      "path": "spec/scripts/render-gate.js",
+      "from": 30205,
+      "to": 30243,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/consistency/design-doctrine.test.js",
+      "from": 25745,
+      "to": 33736,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-2.test.js",
+      "from": 13908,
+      "to": 16258,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-look-stops-2.test.js",
+      "from": 12874,
+      "to": 12882,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-look-stops-4.test.js",
+      "from": 6975,
+      "to": 9944,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-look-stops.test.js",
+      "from": 19181,
+      "to": 21449,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver.test.js",
+      "from": 31925,
+      "to": 35121,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests",
+      "from": 3423338,
+      "to": 3430721,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/consistency/design-doctrine.test.js",
+      "from": 33736,
+      "to": 33846,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/consistency/genesis-doctrine.test.js",
+      "from": 86404,
+      "to": 86907,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests",
+      "from": 3430721,
+      "to": 3430982,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/mocks/mocks-notes.test.js",
+      "from": 44405,
+      "to": 44834,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests",
+      "from": 3430982,
+      "to": 3431347,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests",
       "from": 3433035,
       "to": 3440148,
       "cite": "specs/20260908/02-driver-dedupe-onto-lib.md"
+    },
+    {
+      "path": "tests",
+      "from": 3440148,
+      "to": 3448157,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/genesis/tournament.fixtures.js",
+      "from": 10688,
+      "to": 11282,
+      "cite": "specs/20260908/03-test-fixture-dedupe.md"
+    },
+    {
+      "path": "tests",
+      "from": 3448157,
+      "to": 3455513,
+      "cite": "specs/20260908/03-test-fixture-dedupe.md"
     },
     {
       "path": "spec/scripts/verdict.js",
@@ -346,6 +452,12 @@
       "path": "tests",
       "from": 3440148,
       "to": 3443857,
+      "cite": "specs/20260819/01-review-evidence-retention.md"
+    },
+    {
+      "path": "tests",
+      "from": 3455513,
+      "to": 3459222,
       "cite": "specs/20260819/01-review-evidence-retention.md"
     }
   ]

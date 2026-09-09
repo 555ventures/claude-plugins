@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 29937,
-    "spec/scripts": 1261095,
-    "spec/scripts/lib": 225608,
-    "tests": 3436744
+    "spec/scripts": 1255680,
+    "spec/scripts/lib": 231235,
+    "tests": 3443857
   },
   "files": {
     "scripts/plugin-bump.js": 8564,
@@ -22,16 +22,16 @@
     "spec/scripts/commit-coverage.js": 16400,
     "spec/scripts/components-check.js": 4708,
     "spec/scripts/design-ac-reconcile.js": 6011,
-    "spec/scripts/design-atlas.js": 140188,
+    "spec/scripts/design-atlas.js": 138125,
     "spec/scripts/env-preflight.js": 8794,
     "spec/scripts/escape-row.js": 10045,
     "spec/scripts/fleet-reader.js": 47448,
-    "spec/scripts/genesis-driver.js": 123132,
+    "spec/scripts/genesis-driver.js": 119780,
     "spec/scripts/genesis-state-gate.sh": 2979,
     "spec/scripts/init-gen.js": 35902,
     "spec/scripts/lib/base-derivation.js": 3145,
     "spec/scripts/lib/count-observation.js": 2294,
-    "spec/scripts/lib/driver-io.js": 6218,
+    "spec/scripts/lib/driver-io.js": 6199,
     "spec/scripts/lib/escape-row.js": 4940,
     "spec/scripts/lib/file-plan.js": 6292,
     "spec/scripts/lib/frontmatter.js": 6122,
@@ -53,6 +53,7 @@
     "spec/scripts/lib/shell-region.js": 24925,
     "spec/scripts/lib/spec-sections.js": 24006,
     "spec/scripts/lib/stop-block.js": 9749,
+    "spec/scripts/lib/surfaces.js": 5646,
     "spec/scripts/lib/wire-register.js": 2871,
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
@@ -120,7 +121,7 @@
     "tests/count-observation.test.js": 4209,
     "tests/design-ac-reconcile.test.js": 5161,
     "tests/design-atlas-index.test.js": 35132,
-    "tests/design-atlas.test.js": 217100,
+    "tests/design-atlas.test.js": 217136,
     "tests/design-look-handoff.test.js": 11626,
     "tests/design-shell.test.js": 17216,
     "tests/design-template.test.js": 2207,
@@ -150,7 +151,7 @@
     "tests/genesis-gate.test.js": 14633,
     "tests/genesis/brief-state.test.js": 62262,
     "tests/genesis/conventions-handoff.test.js": 29525,
-    "tests/genesis/genesis-driver.test.js": 73536,
+    "tests/genesis/genesis-driver.test.js": 76044,
     "tests/genesis/registry-check.test.js": 23113,
     "tests/genesis/research-menu.test.js": 14506,
     "tests/genesis/tournament-decided.test.js": 7534,
@@ -254,6 +255,7 @@
     "tests/state-gates.test.js": 8821,
     "tests/status/red-alarm.test.js": 11155,
     "tests/status/status-diet.test.js": 12626,
+    "tests/surfaces-lib.test.js": 4569,
     "tests/test-file-budget.test.js": 9042,
     "tests/tracked-text-purity.test.js": 4265,
     "tests/verdict-gatered-no-workflow.test.js": 8762,
@@ -262,6 +264,30 @@
     "tests/worktree-include.test.js": 9754
   },
   "raises": [
+    {
+      "path": "tests/design-atlas.test.js",
+      "from": 217100,
+      "to": 217136,
+      "cite": "specs/20260908/02-driver-dedupe-onto-lib.md"
+    },
+    {
+      "path": "tests/genesis/genesis-driver.test.js",
+      "from": 73536,
+      "to": 76044,
+      "cite": "specs/20260908/02-driver-dedupe-onto-lib.md"
+    },
+    {
+      "path": "spec/scripts/lib",
+      "from": 225608,
+      "to": 231235,
+      "cite": "specs/20260908/02-driver-dedupe-onto-lib.md"
+    },
+    {
+      "path": "tests",
+      "from": 3433035,
+      "to": 3440148,
+      "cite": "specs/20260908/02-driver-dedupe-onto-lib.md"
+    },
     {
       "path": "spec/scripts/verdict.js",
       "from": 49794,
@@ -312,14 +338,14 @@
     },
     {
       "path": "spec/scripts",
-      "from": 1260629,
-      "to": 1261095,
+      "from": 1255214,
+      "to": 1255680,
       "cite": "specs/20260819/01-review-evidence-retention.md"
     },
     {
       "path": "tests",
-      "from": 3433035,
-      "to": 3436744,
+      "from": 3440148,
+      "to": 3443857,
       "cite": "specs/20260819/01-review-evidence-retention.md"
     }
   ]

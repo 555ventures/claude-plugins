@@ -1,6 +1,7 @@
 ---
 date: 2026-09-08
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: scripts
 design: false
@@ -10,6 +11,7 @@ depended_on_by: [specs/20260908/04-duplicate-window-ratchet.md]
 brief: n/a
 open_markers: 0
 spiked: 2026-09-08
+diff_base: ba8b5ae5cf11fed2829cefa6a72dda8893373afe
 ---
 
 # Driver dedupe — one surfaces grammar in lib, genesis-driver on driver-io
@@ -36,6 +38,7 @@ records.
 | D6 | Regression pins: the existing genesis placement tests and atlas surfaces tests are tagged with this spec's AC-IDs rather than duplicated; new tests cover only the lib contract (AC-1..3). (AC-20260908-02-6, -7) | Template rule: tag the covering test over duplicating it. |
 | D7 | `spec/.claude-plugin/plugin.json` bumps to **7.106.0** (target, not pin — bump to the next free number if a sibling spent it) and its `description` changelog names the lib. `[no-ac: version metadata; review's bump check is the oracle]` | Shipped script content changes; the host rules make the bump a hard review check. |
 | D8 | After all rows land, the orchestrator runs `node scripts/size-ratchet.js --root . --update` so the baseline records the shrink (`genesis-driver.js` −~105 lines, `design-atlas.js` −~70 lines, new `lib/surfaces.js` ~3.7 KB under the 40 KB cap). `[no-ac: the live ratchet test from spec 01 is the oracle]` | A shrink that is not recorded is a stale ceiling and the live check goes red. |
+| D9 | Review closed at the driver's iteration cap with the third-iteration survivor (the stale `genesis-driver.js` mention in `lib/driver-io.js`'s writeOut comment) recorded as waived rather than fix-dispatched: the fix itself already landed in commit 838e936. User ruling, 2026-09-09. | Three consecutive reviewer passes returned CLEAN; the only edit left un-re-reviewed is one identifier removed from a comment, which cannot change behavior. Restarting cold would not reset the cap. |
 
 ## File Plan
 
@@ -44,6 +47,7 @@ records.
 | spec/scripts/lib/surfaces.js | CREATE | scripts | D1, D2: the one grammar and its three folds; header cites this spec |
 | spec/scripts/genesis-driver.js | MODIFY | scripts | D3, D4: driver-io wrappers, lib folds, two local parsers and the A1 paragraph deleted |
 | spec/scripts/design-atlas.js | MODIFY | scripts | D5: lib folds, seed-read wrapper |
+| spec/scripts/lib/driver-io.js | MODIFY | scripts | Collision closure (review it-3): drop `genesis-driver.js` from the writeOut comment's list of scripts carrying their own writer — D3 makes it a consumer |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D7: version + description changelog |
 | tests/surfaces-lib.test.js | CREATE | tests | AC-20260908-02-1, AC-20260908-02-2, AC-20260908-02-3 |
 | tests/genesis/genesis-driver.test.js | MODIFY | tests | AC-20260908-02-4, AC-20260908-02-5, AC-20260908-02-6 (tag existing placement tests; add the dead-child pin if absent) |
@@ -145,6 +149,17 @@ hits — both in `spec/scripts/genesis-driver.js` (a File Plan row) and their mi
 `executes` hits (the genesis and atlas tests plus `tests/consistency/genesis-doctrine.test.js`,
 `retired-flags.test.js`, `design-shell.test.js`, the mocks fixtures) are the tests that spawn the
 two drivers; the spike ran that whole set green on the same edit, so no fixture repair is planned.
+
+Build departures (folded from the deviations sidecar at close, both one-offs). D7's version
+target 7.106.0 was already spent by sibling specs — the repo base was 7.117.0 — so the bump
+landed on 7.118.0, the next free number D7's own fallback authorises. D8 expected a net shrink,
+but the tests layer grew (the AC-20260908-02-5 signal-killed-child pin plus the AC tags), so
+`size-ratchet.js --update` refused until ceilings were raised through the script's own
+`--raise ... --cite` route; five raises landed across the range, all citing this spec, because
+the ratchet counts tracked files only and the two new files were still untracked when the
+build's `--update` ran — `tests/design-atlas.test.js`, `tests/genesis/genesis-driver.test.js`
+and the `tests` tree in the checkpoint commit, then the `spec/scripts/lib` tree and the `tests`
+tree again once the checkpoint tracked them. No baseline file was ever hand-edited.
 
 ## Canonical Delta
 

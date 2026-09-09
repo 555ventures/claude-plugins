@@ -52,7 +52,7 @@ function runChild(cmd, args, opts, what) {
 }
 
 // The synchronous, EAGAIN-retrying writer this repo's other large-payload scripts already carry
-// (spec-status.js, red-check.js, fleet-reader.js, genesis-driver.js, registry-check.js,
+// (spec-status.js, red-check.js, fleet-reader.js, registry-check.js,
 // render-*.js): `console.log(...)` immediately followed by `process.exit(0)` silently truncates at
 // the 64 KiB pipe buffer while still exiting 0 — stdout's write to a pipe is async, and
 // process.exit tears the process down mid-flush (.claude/rules/spec-pipeline.md [plugin] gotcha,

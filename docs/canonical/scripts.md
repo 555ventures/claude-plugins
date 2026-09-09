@@ -44,6 +44,15 @@ fuller incident write-ups live in each cited spec's history.
   `tests/<topic>/<family>.fixtures.js` module (never executed as a test by either the bare or
   the glob form). (specs/20260903/06-test-suite-critical-path.md)
 
+- **`spec/scripts/lib/surfaces.js` is the one parser of the ```surfaces grammar** (a bare
+  label, an `a -> b` edge, a `#` comment); `design-atlas.js` and `genesis-driver.js` are folds
+  over it and never re-implement it. The two folds are deliberately different and both are
+  exported: `parseSurfaces` keeps the first declaring brief and returns edges (atlas renders a
+  journey graph), `parseSurfacesPlacement` returns every declaring brief and no edges (genesis
+  must catch a double-placement). `genesis-driver.js` takes its synchronous writer and
+  fail-closed child runner from `lib/driver-io.js`, like every other driver.
+  (specs/20260908/02-driver-dedupe-onto-lib.md)
+
 ## Prose budgets
 
 The host rules' § Gotchas section is capped at 15 entries, enforced by `prose-cap.js` (review

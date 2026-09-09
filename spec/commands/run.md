@@ -45,7 +45,10 @@ skip a rung or guess ahead of what step 1 finds on disk.
 
 ## Design stage
 
-Execute `spec/commands/design.md`'s steps unchanged in this session. Its look (Step 5) is a
+Execute `spec/commands/design.md`'s steps unchanged in this session, with one substitution:
+in place of its Setup's `spec-paths shared-for design` run `spec-paths shared-for run-design`
+— the design-only sections; everything else it lists is already in `shared-for run`'s output
+above, and re-emitting it doubles this session's doctrine load. Its look (Step 5) is a
 printed stop that ends the turn — the user's `approve` reply continues design.md's Step 6 in
 the next turn, and only then re-derive from Routing step 1.
 
@@ -53,7 +56,9 @@ the next turn, and only then re-derive from Routing step 1.
 
 Run `node {driver} <spec> --via loop` per `spec/commands/build.md`'s Build stage Protocol,
 Worker Contract, and `blocked` rules, which this loop follows unchanged — step, execute, mark,
-re-run, dispatching workers exactly as that section describes. When the driver prints `DONE`,
+re-run, dispatching workers exactly as that section describes. Skip build.md's own
+`spec-paths shared-for build` line: `shared-for run` already carries every section it lists.
+When the driver prints `DONE`,
 print the advisory checkpoint —
 `✅ checkpoint — build complete; safe to /clear and re-run /spec:run <spec>` — and continue
 straight into the review stage below in this same invocation; legs and the reviewer dispatch
@@ -63,7 +68,8 @@ need no memory of the build's trade-offs, so clearing here is optional, never re
 
 Run `node {review-driver} <spec> --via loop` the same way, per `spec/commands/review.md`'s own
 Protocol and Rules, which this loop follows unchanged for every judgment step (reviewer
-dispatch, dispositions, close, merge strategy, replay). One place the loop stops that is
+dispatch, dispositions, close, merge strategy, replay). Skip review.md's own `spec-paths
+shared-for review` line for the same reason as build's. One place the loop stops that is
 specific to `--via loop`:
 
 - **No stop between the reviewer's return and dispositions.** Independence is the disposer —

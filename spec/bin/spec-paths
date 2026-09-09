@@ -57,8 +57,22 @@ case "${1:-root}" in
   comment-narration) echo "$ROOT/scripts/comment-narration.js" ;;
   shared)         echo "$ROOT/doctrine/core.md" ;;
   shared-design)  echo "$ROOT/doctrine/design.md" ;;
-  shared-genesis) echo "$ROOT/doctrine/genesis.md" ;;
-  shared-mocks)   echo "$ROOT/doctrine/mocks.md" ;;
+  shared-genesis|shared-mocks)
+    # Bare: print the supplement's path. `--section "A|B"`: print only those `## ` sections'
+    # CONTENT (the stage prefix `Genesis: ` / `Mocks: ` is optional in the names), so a driver
+    # step loads the one section it names instead of the whole supplement. An unknown section
+    # prints nothing but the header comment — the step's Doctrine: line is the oracle.
+    case "$1" in shared-genesis) FILE="$ROOT/doctrine/genesis.md"; PREFIX="Genesis: " ;;
+                 *)              FILE="$ROOT/doctrine/mocks.md";   PREFIX="Mocks: " ;; esac
+    if [ "${2:-}" != "--section" ]; then echo "$FILE"; exit 0; fi
+    NAMES="${3:-}"
+    [ -n "$NAMES" ] || { echo "usage: spec-paths $1 --section \"<Heading>|<Heading>\"" >&2; exit 1; }
+    echo "<!-- $(basename "$FILE") § ${NAMES} — full supplement: $FILE -->"
+    awk -v re="^## (${PREFIX})?(${NAMES})" '
+      /^## / { keep = ($0 ~ re) }
+      keep { print }
+    ' "$FILE"
+    ;;
   replay-corpus)  echo "$ROOT/doctrine/replay-corpus.md" ;;
   shared-for)
     # Print the shared-invariants CONTENT scoped to one command — only the `## ` sections that
@@ -71,30 +85,34 @@ case "${1:-root}" in
     CORE="$ROOT/doctrine/core.md"
     DESIGN="$ROOT/doctrine/design.md"
     case "$CMD" in
-      plan)    SECTIONS="Host Grounding|Pipeline Entry|Tiers|Decomposition|State Machine|Model Placement|Decisions|Question Style|Console Output Style|MCP Policy|Canonical Docs Loop" ;;
-      design)  SECTIONS="Host Grounding|State Machine|Design Canon|Design Authoring Contracts|Design Render Gate|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|MCP Policy" ;;
-      atlas)   SECTIONS="Host Grounding|Design Canon|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style" ;;
-      sketch)  SECTIONS="Host Grounding|State Machine|Design Canon|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style" ;;
-      build)   SECTIONS="Host Grounding|Tiers|State Machine|Model Placement|Incident Policy|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|MCP Policy|On-Disk Handoff" ;;
-      run)     SECTIONS="Host Grounding|Tiers|State Machine|Runtime Verification|Model Placement|Incident Policy|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|MCP Policy|On-Disk Handoff|Canonical Docs Loop" ;;
-      review)  SECTIONS="Host Grounding|Tiers|State Machine|Runtime Verification|Model Placement|Incident Policy|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|Canonical Docs Loop" ;;
-      release) SECTIONS="Host Grounding|Runtime Verification|Release Stage|Model Placement|Decisions|Question Style|Console Output Style|Canonical Docs Loop" ;;
-      enforce) SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Model Placement|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment" ;;
-      genesis)           SECTIONS="Host Grounding|Pipeline Entry|Design Canon|Design Authoring Contracts|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|MCP Policy" ;;
-      mocks)   SECTIONS="Host Grounding|Model Placement|Decisions|Question Style|Console Output Style|MCP Policy|Design Canon|Design Atlas" ;;
-      status)  SECTIONS="Host Grounding|State Machine|Question Style|Console Output Style" ;;
-      queue)   SECTIONS="Host Grounding|State Machine|Question Style|Console Output Style" ;;
-      escape)  SECTIONS="Host Grounding|Feedback Loop|Incident Policy|Question Style|Console Output Style" ;;
-      doctor)  SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Runtime Verification|Feedback Loop|Tiers|State Machine|Question Style|Console Output Style" ;;
-      replay)  SECTIONS="Host Grounding|Tiers|Model Placement|Decisions|Question Style|Console Output Style|Feedback Loop" ;;
+      plan)    SECTIONS="Host Grounding|Pipeline Entry|Tiers|Decomposition|State Machine|Model Placement|Decisions|Question Style|Console Output Style|MCP Policy|Canonical Docs Loop|Session Execution" ;;
+      design)  SECTIONS="Host Grounding|State Machine|Design Canon|Design Authoring Contracts|Design Render Gate|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|MCP Policy|Session Execution" ;;
+      atlas)   SECTIONS="Host Grounding|Design Canon|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Session Execution" ;;
+      sketch)  SECTIONS="Host Grounding|State Machine|Design Canon|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Session Execution" ;;
+      build)   SECTIONS="Host Grounding|Tiers|State Machine|Model Placement|Incident Policy|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|MCP Policy|On-Disk Handoff|Session Execution" ;;
+      run)     SECTIONS="Host Grounding|Tiers|State Machine|Runtime Verification|Model Placement|Incident Policy|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|MCP Policy|On-Disk Handoff|Canonical Docs Loop|Session Execution" ;;
+      review)  SECTIONS="Host Grounding|Tiers|State Machine|Runtime Verification|Model Placement|Incident Policy|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|Canonical Docs Loop|Session Execution" ;;
+      release) SECTIONS="Host Grounding|Runtime Verification|Release Stage|Model Placement|Decisions|Question Style|Console Output Style|Canonical Docs Loop|Session Execution" ;;
+      enforce) SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Model Placement|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Session Execution" ;;
+      genesis)           SECTIONS="Host Grounding|Pipeline Entry|Design Canon|Design Authoring Contracts|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|MCP Policy|Session Execution" ;;
+      mocks)   SECTIONS="Host Grounding|Model Placement|Decisions|Question Style|Console Output Style|MCP Policy|Design Canon|Design Atlas|Session Execution" ;;
+      status)  SECTIONS="Host Grounding|State Machine|Question Style|Console Output Style|Session Execution" ;;
+      queue)   SECTIONS="Host Grounding|State Machine|Question Style|Console Output Style|Session Execution" ;;
+      escape)  SECTIONS="Host Grounding|Feedback Loop|Incident Policy|Question Style|Console Output Style|Session Execution" ;;
+      doctor)  SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Runtime Verification|Feedback Loop|Tiers|State Machine|Question Style|Console Output Style|Session Execution" ;;
+      replay)  SECTIONS="Host Grounding|Tiers|Model Placement|Decisions|Question Style|Console Output Style|Feedback Loop|Session Execution" ;;
+      init)    SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Pipeline Entry|Tiers|Runtime Verification|Release Stage|Model Placement|Question Style|Console Output Style|Canonical Docs Loop|Design Canon|Session Execution" ;;
+      # run-design: the design-only delta /spec:run's Design stage loads on top of `shared-for run`
+      # (design.md's own Setup line is skipped inside the loop — never re-emit run's sections).
+      run-design) SECTIONS="Design Canon|Design Authoring Contracts|Design Render Gate|Design Atlas" ;;
       *) cat "$CORE" "$DESIGN"; exit 0 ;;
     esac
     echo "<!-- shared invariants scoped to /spec:${CMD} — full doctrine: $CORE + $DESIGN -->"
     # Prefix match on the heading (some headings carry a parenthetical suffix). keep resets at
-    # each file boundary so the second file's frontmatter never rides a kept tail section.
+    # each file boundary so the second file's frontmatter never rides a kept tail section. The
+    # files' own frontmatter is never echoed — it describes the file, not the command.
     awk -v re="^## (${SECTIONS})" '
       FNR == 1 { keep = 0 }
-      FNR <= 4 && NR <= 4 { print; next }
       /^## / { keep = ($0 ~ re) }
       keep { print }
     ' "$CORE" "$DESIGN"
@@ -111,7 +129,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|design-atlas|components-check|render-gate|render-capture|render-compare|render-inventory|render-rules|registry-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|design-ac-reconcile|promise-sweep|collision-closure|ci-query|ci-gate-parity|ac-drift|replay|escape-row|fleet-reader|comment-narration|shared|shared-design|shared-for <command>|shared-genesis|shared-mocks|replay-corpus|template|templates|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|design-atlas|components-check|render-gate|render-capture|render-compare|render-inventory|render-rules|registry-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|design-ac-reconcile|promise-sweep|collision-closure|ci-query|ci-gate-parity|ac-drift|replay|escape-row|fleet-reader|comment-narration|shared|shared-design|shared-for <command>|shared-genesis [--section <names>]|shared-mocks [--section <names>]|replay-corpus|template|templates|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

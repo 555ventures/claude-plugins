@@ -308,6 +308,22 @@ before amending anything.
 spec's Canonical Delta on `done`. Every landed spec makes more future work spec-free — this
 loop is what shrinks pipeline spend over time.
 
+## Session Execution
+
+How the session spends tokens — the seat reading this is the expensive one.
+
+- **Edit, never rewrite.** When it will not change the result, surgically edit a file rather
+  than rewriting it whole; a `Write` over an existing file needs a reason the step names.
+- **Act on enough information.** Never re-derive facts already established in the session or
+  re-litigate a decision the user made; when weighing a choice, give one recommendation.
+- **No extras.** Only what the step or spec asks — no unrequested refactors, features, or
+  tests; a pre-existing bug found on the way is reported, not fixed. Scratch checks run once
+  and are discarded, never promoted to permanent test files.
+- **Batch independent calls.** Before each tool turn, list what is needed next and request
+  every item that does not depend on another's result in that one response.
+- **Load doctrine by section.** `spec-paths shared-for <cmd>` and the supplements' `--section`
+  slices are the read surface; a whole doctrine file is read only when a step names it.
+
 ## Doctrine Authoring
 
 One binding home per rule. When editing any plugin doctrine/command file, prose that restates

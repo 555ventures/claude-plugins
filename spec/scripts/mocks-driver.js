@@ -1415,6 +1415,7 @@ function printStepBlock(state, title, readOnlyList, doctrineSection, progressLin
   lines.push('## Step: ' + title)
   lines.push('Read only: ' + readOnlyList.join(', '))
   lines.push('Doctrine: spec/doctrine/mocks.md § ' + doctrineSection)
+  lines.push('print: spec-paths shared-mocks --section "' + doctrineSection.replace(/^Mocks: /, '') + '"')
   if (AUTHORING_STATES.has(state)) lines.push(skillLine())
   if (progressLine) lines.push(progressLine)
   lines.push('Then:')

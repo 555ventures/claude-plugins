@@ -12,9 +12,8 @@ runs it when due. Six steps, in order:
 is derived from disk on every invocation (Resume, below), never from a state file or a driver.
 Build treats the landed components as done inputs.
 
-**Setup:** run `spec-paths shared-for design` and read its output (the shared invariants scoped
-to this command). Read the host's `.claude/spec.config.json` and its pipeline rules file. Either
-missing → STOP: run `/spec:init` first.
+**Setup:** run `spec-paths shared-for design` and read its output. Read the host's
+`.claude/spec.config.json` and its pipeline rules file. Either missing → STOP: run `/spec:init` first.
 
 ## Input
 
@@ -29,10 +28,8 @@ missing → STOP: run `/spec:init` first.
 | ledger claim present, some state without a story id, or components absent | Step 2 — author |
 | no ledger claim for a surface | Step 1 — preflight → Step 2 — author |
 
-A session that dies mid-round re-derives its step from this table on the next invocation —
-never from conversation memory. Everything the next step needs is already on disk: components,
-story ids, the coverage-ledger claim, and gate reports (the scratchpad or
-`.claude/spec-runs/render/`).
+A session that dies mid-round re-derives its step from this table, never from conversation
+memory — components, story ids, the ledger claim, and gate reports are all on disk.
 
 ## Step 1 — Preflight
 
@@ -52,10 +49,8 @@ In order:
    }
    ```
 2. `node "$(spec-paths env-preflight)" --root .` — exit 1 is a provisioning STOP: print its
-   output verbatim and STOP. This precedes every author dispatch (Step 2) and carries
-   AC-20260815-05-8's incident forward — an unprovisioned environment must never enter a
-   gate-repair loop, because the gate cannot distinguish wrong code from a missing variable,
-   and a repair dispatch structurally cannot fix the second.
+   output verbatim and STOP before any author dispatch (AC-20260815-05-8: a gate cannot tell
+   wrong code from a missing variable, and no repair dispatch can fix the second).
 3. Spec `status: hardened` (hook-enforced).
 4. `design_source` resolves to mock file(s) whose `data-status` is `ratified` or `approved` —
    else STOP naming the exact next command: `/spec:sketch <brief>` for a roadmap brief's
@@ -212,17 +207,10 @@ Next: /spec:run specs/20260824/02-example.md
 
 - **Decisions table is authoritative** — apply it verbatim, never override, never invent
   entries; an unlocked fork is a `blocked` return, not a guess.
-- **Workers never run git and never query MCPs**; read-only and generated surfaces change only
-  via their declared tools.
-- **Component manifest discipline** (shared § Design Authoring Contracts) — every `author` decision
-  records the nearest existing manifest entry and one line on why it fails; a missing
-  justification is a gate failure. Commitment entries bind exactly like token roles.
-- **Tokens and the design doctrine are binding canon** (shared § Design Canon) — extending is normal,
-  contradicting is a fork, never silently overridden.
+- **Shared canon applies verbatim** — § Design Canon (tokens and doctrine bind; contradiction
+  is a fork), § Design Authoring Contracts (manifest discipline on every `author` decision;
+  mock supremacy; a `built` surface re-entering design re-syncs its mock first), § Worker Git
+  Ban, § MCP Policy, § Read-Only Surfaces.
 - **Components built here are real and kept** — `/spec:build` wires them, never rebuilds them.
-- **Mock supremacy** (shared § Design Authoring Contracts) governs every authoring dispatch; **a
-  `built` surface re-entering design re-syncs its mock first** (screenshot the live screen,
-  update the file) before designing the change on top — post-`built` staleness discovered here
-  was permitted, never a defect.
 - The `.design/` sidecar is **never created, read, or audited** (D13); a leftover on a host is inert.
 - `AskUserQuestion` dismissed → STOP.

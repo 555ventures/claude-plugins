@@ -16,9 +16,11 @@ the driver's own choreography.
 **Intended model: Opus** (the genesis judgment concentration point).
 
 **Setup:** run `spec-paths shared-for genesis` and read its output (the shared invariants
-scoped to this command); run `spec-paths shared-genesis` and Read it too — the genesis-stage
-supplement covers the archetype registry, the decision-record doctrine, discovery interview,
-the state machine, and the on-disk handoff. Run `spec-paths genesis-driver` once and keep the
+scoped to this command); run `spec-paths shared-genesis --section "State Machine|On-disk
+Handoff"` and read that too — the loop contract and the artifact layout. Every other
+supplement section is loaded one step at a time: each driver step's `Doctrine:` line names its
+section, and the step's `print:` command slices exactly that section — never read the whole
+supplement. Run `spec-paths genesis-driver` once and keep the
 printed absolute path as `{driver}`; run `spec-paths wf-research` once and keep its path as
 `{scriptPath}` — it is what the MENUS step's research call is invoked by.
 

@@ -19,8 +19,8 @@ stamped-but-unverified config. Session flow: Phase 1 profiling → Phase 1.5 sub
 authoring → `init-gen probe` → interview → author the profile JSON in your scratchpad →
 `init-gen generate` → Phase 6 design foundation → report → Phase 8 `/spec:enforce` handoff.
 
-**Intended model: Fable or Opus.** Run `spec-paths shared` and Read that file first to
-understand what the process layer expects from the grounding layer.
+**Intended model: Fable or Opus.** Run `spec-paths shared-for init` and read its output —
+the core sections the grounding layer must satisfy (never the whole doctrine file).
 
 ## Deliverables (all in the host repo)
 

@@ -17,9 +17,12 @@ genuinely hard-to-reverse product-facts fork).
 
 **Setup:** run `spec-paths shared-for mocks` and read its output (Host Grounding, Model
 Placement, Decisions, Question Style, Console Output Style, MCP Policy, Design Canon, Design
-Atlas); run `spec-paths shared-mocks` and read it too — the ledger, the state machine, the seed
-grammar, the checkpoint contract, the look rule, and page notes. Run `spec-paths
-mocks-driver` once and keep the printed path as `{driver}`.
+Atlas); run `spec-paths shared-mocks --section "Provenance Ledger|State Machine|Checkpoint
+contract"` and read that too — the ledger, the loop, and the checkpoint contract. Every other
+supplement section (seed grammar, look rule, page notes, authoring rules) is loaded one step
+at a time: each driver step's `Doctrine:` line names its section and its `print:` command
+slices exactly that section — never read the whole supplement. Run `spec-paths mocks-driver`
+once and keep the printed path as `{driver}`.
 
 ## Input
 

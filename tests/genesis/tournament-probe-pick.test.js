@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir } = require('../helpers')
+const { tmpdir, runBash } = require('../helpers')
 const {
   DIM, bare, mark, writeFile, writeJSON, statusOf, writeBrief, writeHostingMenu,
   writeConventionsArtifacts, writeBindingSubset, ratifyBriefArtifacts, advanceToFinalists,
@@ -267,4 +267,21 @@ GCP was considered and rejected — no other minority option surfaced.
   assert.strictEqual(gateStep.status, 0, 'test setup requires skeleton-landed to be accepted: ' + gateStep.stderr)
   assert.match(gateStep.stdout, /ROADMAP/, 'test setup requires a green zero-day gate to reach ROADMAP: ' + gateStep.stdout)
   assert.match(gateStep.stdout, DOCTRINE_LINE, 'D10: ROADMAP must print a Doctrine: line')
+})
+
+// Direct fix (core § Session Execution): every Doctrine: line is followed by a `print:` line
+// whose spec-paths slice serves exactly the named section — the session loads one section per
+// step, never the 50 KB supplement. The parenthetical in "Decision Record (one proposer)" must
+// be dropped from the slice name (spec-paths prefix-matches; parentheses would be regex).
+test('every Doctrine: § Genesis: line is paired with a print: spec-paths shared-genesis --section line naming that section', () => {
+  const dir = tmpdir('tourn-print')
+  const out = bare(dir).stdout
+  const pairs = [...out.matchAll(/^Doctrine: spec\/doctrine\/genesis\.md § Genesis: (.+)\nprint: spec-paths shared-genesis --section "([^"]+)"$/gm)]
+  assert.ok(pairs.length >= 1, 'DISCOVERY must print a Doctrine:/print: pair, got:\n' + out)
+  for (const [, doctrine, slice] of pairs) {
+    assert.ok(doctrine.startsWith(slice), `print: slice "${slice}" must be a prefix of the Doctrine: section "${doctrine}"`)
+    assert.ok(!/[()]/.test(slice), 'slice names never carry parentheticals')
+    const sliced = runBash('bin/spec-paths', ['shared-genesis', '--section', slice]).stdout
+    assert.match(sliced, new RegExp('^## Genesis: ' + slice.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'm'), `spec-paths must resolve the slice "${slice}" to a real heading`)
+  }
 })

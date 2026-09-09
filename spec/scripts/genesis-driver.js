@@ -2254,7 +2254,12 @@ function renderFull(state) {
   const note = TERMINAL_STATES.has(state)
     ? ''
     : '\n(re-run this driver after completing the step; it verifies artifacts and prints the next one)'
-  return header + note + '\n\n' + STEPS[state]()
+  // Every `Doctrine: … § Genesis: <section>` line gains a `print:` line naming the spec-paths
+  // slice of exactly that section, so the session loads one section per step instead of the
+  // whole supplement (core § Session Execution). Parentheticals drop: the slice prefix-matches.
+  const body = STEPS[state]().replace(/^(Doctrine: spec\/doctrine\/genesis\.md § Genesis: ([^\n(]+?))\s*(\([^)]*\))?$/gm,
+    (m, line, name) => line + '\nprint: spec-paths shared-genesis --section "' + name + '"')
+  return header + note + '\n\n' + body
 }
 
 function acceptedOutput(prevNext) {

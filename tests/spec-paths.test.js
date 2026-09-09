@@ -504,3 +504,57 @@ test('AC-20260902-07-15: spec-paths shared-for mocks serves exactly the D16 sect
   assert.ok(!/## Design Render Gate/.test(out),
     'mocks must NOT be served § Design Render Gate — the driver authors and approves screens, it never binds a spec against one, so paying for the render-gate doctrine would be dead weight')
 })
+
+// Direct fix (no spec): Fable 5.1 token-cost trims — the session's doctrine read surface is
+// sliced, never whole-file. Owner: core § Session Execution. Four pins: (1) `init` has its own
+// shared-for list instead of falling open to core.md + design.md whole; (2) every scoped list
+// serves § Session Execution — the one place the edit-don't-rewrite / no-extras / batch-calls
+// rules live; (3) `run-design` is the design-only delta /spec:run's Design stage loads on top of
+// `shared-for run`, disjoint from it; (4) `shared-genesis|shared-mocks --section` print one
+// named supplement section's content, bare invocation still prints the path.
+test('shared-for init: scoped (not fail-open) and strictly smaller than the whole-doctrine fallback', () => {
+  const out = run('shared-for', 'init')
+  const full = run('shared-for', 'no-such-command')
+  assert.ok(out.length < full.length, 'init must be a scoped list — the fail-open arm cats core.md + design.md whole')
+  assert.match(out, /## Host Grounding/)
+  assert.match(out, /## Rule Enforcement/)
+  assert.match(out, /## Design Canon/, 'init Phase 6 authors the design foundation — it needs Design Canon')
+  assert.ok(!/## Design Render Gate/.test(out), 'init never renders — Design Render Gate is /spec:design doctrine')
+})
+
+test('shared-for: every scoped command serves § Session Execution', () => {
+  const src = read('spec/bin/spec-paths')
+  const cmds = [...src.matchAll(/^\s+([a-z-]+)\)\s+SECTIONS="/gm)].map(m => m[1]).filter(c => c !== 'run-design')
+  assert.ok(cmds.length >= 16, 'expected the scoped command roster, got ' + cmds.join(','))
+  for (const cmd of cmds) {
+    assert.match(run('shared-for', cmd), /## Session Execution/,
+      `/spec:${cmd} must load § Session Execution — without it the session has no edit-don't-rewrite / no-extras / batch-calls contract`)
+  }
+})
+
+test('shared-for run-design: the design-only delta, disjoint from shared-for run', () => {
+  const delta = run('shared-for', 'run-design')
+  const runOut = run('shared-for', 'run')
+  const headings = (s) => [...s.matchAll(/^## (.+)$/gm)].map(m => m[1])
+  const d = headings(delta)
+  assert.deepStrictEqual(d.map(h => h.replace(/ \(.*$/, '')), ['Design Canon', 'Design Authoring Contracts', 'Design Render Gate', 'Design Atlas'])
+  for (const h of d) assert.ok(!headings(runOut).includes(h), `run-design re-emits "${h}", which shared-for run already serves — the delta exists to avoid exactly that`)
+  const designOut = headings(run('shared-for', 'design'))
+  for (const h of d) assert.ok(designOut.includes(h), `run-design serves "${h}" but /spec:design does not — the delta drifted from design's own list`)
+})
+
+test('shared-genesis / shared-mocks --section: one named supplement section, bare call still prints the path', () => {
+  assert.match(run('shared-genesis').trim(), /\/doctrine\/genesis\.md$/)
+  assert.match(run('shared-mocks').trim(), /\/doctrine\/mocks\.md$/)
+  const g = run('shared-genesis', '--section', 'Discovery Interview')
+  assert.match(g, /^## Genesis: Discovery Interview/m)
+  assert.ok(!/^## Genesis: Brief State/m.test(g), 'a --section slice must not carry the next section')
+  const g2 = run('shared-genesis', '--section', 'Decision Record')
+  assert.match(g2, /^## Genesis: Decision Record/m, 'prefix match: a parenthetical heading suffix must not defeat the slice')
+  const m = run('shared-mocks', '--section', 'State Machine|Checkpoint contract')
+  assert.match(m, /^## Mocks: State Machine/m)
+  assert.match(m, /^## Mocks: Checkpoint contract/m)
+  assert.ok(!/^## Mocks: Seed/m.test(m))
+  const full = read('spec/doctrine/genesis.md')
+  assert.ok(g.length < full.length / 4, 'a single-section slice must be a fraction of the supplement — that is the whole point')
+})

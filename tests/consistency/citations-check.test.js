@@ -101,6 +101,41 @@ test('AC-20260810-09-2: citations-check.js counts an unresolvable file reference
     '"skips are loud, never silent" contract: ' + (r.stdout || ''))
 })
 
+test('AC-20260810-09-2: citations-check.js resolves a path-form lookback token ("spec/doctrine/x.md §") instead of skipping it as not-found', () => {
+  const root = tmpdir('citations-pathform')
+  writeFixture(root, {
+    'spec/doctrine/mocks.md': '## Mocks: Page Notes\n\nbody\n',
+    'spec/commands/a.md':
+      'The notes layer (spec/doctrine/mocks.md § Mocks: Page Notes owns the grammar).\n' +
+      'The ghost (spec/doctrine/mocks.md § Nothing Here At All).\n'
+  })
+  const r = runNode('scripts/citations-check.js', ['--root', root])
+  assert.match(r.stdout, /CHECKED=2/,
+    'a lookback token naming a real repo-relative PATH must be resolved and CHECKED — ' +
+    'basename-only resolution skips it as "named .md file not found on disk", so a citation ' +
+    'written the way doctrine actually writes it is never verified at all: ' + (r.stdout || ''))
+  assert.match(r.stdout, /MISS=1/,
+    'the ghost heading behind a path-form token must surface as a MISS — a path-form ' +
+    'citation that resolves but is never compared is a broken reference the scan reports clean: ' +
+    (r.stdout || ''))
+})
+
+test('AC-20260810-09-2: citations-check.js unions genesis.md into the targets for a "§ Genesis:" heading whose lookback names another file', () => {
+  const root = tmpdir('citations-genesis-union')
+  writeFixture(root, {
+    'spec/doctrine/genesis.md': '## Genesis: Discovery Interview\n\nbody\n',
+    'spec/templates/genesis-brief.md': '## Coverage\n\nbody\n',
+    'spec/commands/a.md':
+      'Authored from genesis-brief.md, § Genesis: Discovery Interview names the grammar.\n'
+  })
+  const r = runNode('scripts/citations-check.js', ['--root', root])
+  assert.match(r.stdout, /MISS=0/,
+    'genesis.md self-namespaces its headings with a "Genesis: " lead, so a "§ Genesis: ..." ' +
+    'citation names genesis.md even when the nearest .md token is the template the sentence ' +
+    'also mentions — resolving to the nearest token alone forces a false MISS on correct ' +
+    'doctrine: ' + (r.stdout || ''))
+})
+
 // ---------------------------------------------------------------------------
 // AC-20260810-09-3
 // ---------------------------------------------------------------------------

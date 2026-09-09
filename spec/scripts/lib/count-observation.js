@@ -2,13 +2,10 @@
 'use strict'
 // spec/scripts/lib/count-observation.js — required by review-legs.js and release-legs.js. No CLI.
 //
-// Why (specs/20260908/05-release-e2e-unobserved-count.md D1): review-legs.js defined
-// lastMatch/computeTestsExecuted/computeSkips/isUnobserved locally (specs/20260907/03 D4/D5);
-// release-legs.js then copied computeTestsExecuted/computeSkips by hand, and that copy had
-// already drifted — it read the FIRST regex match instead of the LAST (measured A1). This
-// module is the one binding home for all four functions so the two consumers can never read a
-// runner's output differently again; each importer requires this file instead of re-defining
-// any of them.
+// Why (specs/20260908/05-release-e2e-unobserved-count.md D1, specs/20260907/03 D4/D5): this
+// module is the one binding home for lastMatch/computeTestsExecuted/computeSkips/isUnobserved
+// so review-legs.js and release-legs.js read a runner's output identically; each importer
+// requires this file instead of defining any of the four itself.
 //
 // What this deliberately does NOT do: parse a runner's exit code, decide what forces a leg red
 // (that stays in each leg script, which owns its own row grammar), or provide a CLI.

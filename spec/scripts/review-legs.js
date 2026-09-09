@@ -191,9 +191,8 @@ function appendRow(leg, exit, observed) {
 // means the host declares no format (sanctioned, never a finding); declared but unmatched means
 // drift (pages via verdict.js's gate-skips finding for skips specifically; at-risk's contradiction
 // rule for testsExecuted). Never assumed zero either way. lastMatch/computeTestsExecuted/
-// computeSkips/isUnobserved now live in ./lib/count-observation.js (specs/20260908/05-release-
-// e2e-unobserved-count.md D1) — the sole home both this script and release-legs.js import, so the
-// predicate and its two parsers can never drift apart the way release-legs.js's local copy once did.
+// computeSkips/isUnobserved live in ./lib/count-observation.js (specs/20260908/05-release-e2e-
+// unobserved-count.md D1) — the sole home both this script and release-legs.js import.
 function sh(cmd, opts = {}) {
   return new Promise((resolve) => {
     // Scrub the test-runner context vars: a gate that itself runs `node --test` must behave as

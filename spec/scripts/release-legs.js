@@ -119,11 +119,10 @@ function sh(cmd, opts = {}) {
   })
 }
 
-// D2 (specs/20260908/05-release-e2e-unobserved-count.md): computeTestsExecuted/computeSkips/
-// isUnobserved now live in ./lib/count-observation.js, the sole home this script and
-// review-legs.js both import — the local copy here previously used a first-match regex
-// (`new RegExp(pattern).exec`) that had already drifted from review's last-match `lastMatch`
-// (measured A1); the lib require fixes the drift as a byte-for-byte move, never a second copy.
+// D1/D2 (specs/20260908/05-release-e2e-unobserved-count.md): computeTestsExecuted/computeSkips/
+// isUnobserved live in ./lib/count-observation.js, the sole home this script and review-legs.js
+// both import — each read against the LAST regex match over the runner's output, never the
+// first, so a decoy line quoting the summary phrase can never be misread as the count.
 
 function readManifestRows(manifestPath) {
   if (!fs.existsSync(manifestPath)) return []

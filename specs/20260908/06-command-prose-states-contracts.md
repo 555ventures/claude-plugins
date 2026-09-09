@@ -1,7 +1,7 @@
 ---
 date: 2026-09-08
 build_base: main
-status: implementing
+status: done
 tier: standard
 area: doctrine-governance
 design: false
@@ -196,6 +196,25 @@ dismissed` hit is a File Plan row except doctor.md, escape.md and init.md, whose
 keeps on purpose (their lists do not serve § Decisions) — waived; `rewrites the file` in
 `tests/genesis/genesis-driver.test.js` is the status.json v2→v3 sentence, unrelated to the
 brief — waived. No `executes` hits.
+
+Build departures, folded from the deviations sidecar at review close (both one-offs, neither a
+recurring class): **the `shared-for` pin covers 18 keys, not the 17 D6 names** — `spec/commands`
+holds 17 files and `spec-paths`'s `shared-for` case names all 17 plus `run-design`; the table
+was derived by running the command, since pinning 17 would leave one command's list unguarded,
+the exact hole D6 closes. **`design`'s budget is 510, not D7's 490** — A4's 500 was already
+stale at lock (HEAD's `RATCHET` carried `design: 510` from
+specs/20260907/09-atlas-index-and-note-navigation.md D13, a recorded ruling that those lines
+are contracts), design.md's rows net to zero lines, and A4's escalation clause fired:
+re-measured at build, restated count 0, budget set to the true ceiling. D12 records the user
+ruling. Rejected alternatives: cutting ~20 lines of design.md prose no File Plan row names, and
+trimming design's `shared-for` list — the latter changes which doctrine binds the design stage,
+which AC-3 now pins deliberately.
+
+Review waived one finding: the build-stage ledger row carries `deviations: 0` because it was
+appended while the sidecar still used `## ` headings the `^- ` count cannot see. The row is not
+corrected — ledger rows are append-only fleet-wide (specs/20260901/07-escape-class-contract.md
+D3) and the build driver is the row's sole writer — and the true count of two reaches the
+record through this fold. User ruled to leave it.
 
 ## Canonical Delta
 

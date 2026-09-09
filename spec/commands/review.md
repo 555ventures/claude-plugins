@@ -43,8 +43,10 @@ appended by the driver, never hand-appended. A CLEAN close whose replay window i
 `REPLAY` until a measurement lands (the due-replay Rules bullet below).
 
 When the driver prints `DONE`, report (core § Console Output Style) from slots it captured —
-`outcome` (✅ `CLEAN — merged`, or its one-line MERGE-skip note), `warns` (its CI-unseen line
-when present, dropped otherwise — report-only, never a finding), `queued` (one line per queued
+`outcome` (✅ `CLEAN — merged`, or its one-line MERGE-skip note), `warns` (derived by this
+session from the ci leg's manifest row — `unavailable: sha-unseen` with a `branchConclusion`
+of `failure`, `timed_out` or `cancelled` — dropped otherwise; report-only, never a finding,
+and never a driver slot), `queued` (one line per queued
 follow-up, omitted when none), `next` (its captured `node "$(spec-paths spec-status)" --next`,
 verbatim, never hand-applied). Run `node "$(spec-paths report-render)" --slots <file>` and
 print it verbatim.

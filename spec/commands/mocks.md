@@ -49,12 +49,12 @@ neither mark.
 
 ## THEME interview rule
 
-The THEME step's own printed instruction is the interview: derive 2–3 candidate directions and
-`AskUserQuestion` which to compose — never anchor on a stock pair. Record the picks as the
-`theme-directions` row it names, then `--mark direction-composed --direction <k>` per direction
-once its tokens and dense screen exist. The winner is picked on the served atlas page, not a
-second question (§ Look rule): once ≥2 composed, `stop open theme` opens a pick stop and
-`--mark theme-picked` accepts once decided (`rejected` = the others).
+The THEME step's own printed instruction is the interview — never anchor on a stock pair.
+Record the picks as the `theme-directions` row it names, then `--mark direction-composed
+--direction <k>` per direction once its tokens and dense screen exist. The winner is picked
+on the served atlas page, not a second question (§ Look rule): once ≥2 composed, `stop open
+theme` opens a pick stop and `--mark theme-picked` accepts once decided (`rejected` = the
+others).
 
 ## Look rule
 

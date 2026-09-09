@@ -2,7 +2,7 @@
 'use strict'
 // fleet-reader.js [--repos-root <dir>] [--json] [--owed] — read every spec-run ledger this
 // machine can see and answer nine fixed questions: leg red-recency, the brief-08 adoption gate,
-// escape aggregates, replay debt, CLEAN-contradicted-by-escape, a schema-drift census,
+// escape aggregates, replay debt, CLEAN-contradicted-by-escape (with its false-CLEAN rate), a schema-drift census,
 // escapes-per-CLEAN by via (loop vs. direct vs. unknown), and — the ninth,
 // specs/20260903/01-owed-query-and-row-handoff.md D1 — `owed`: every plugin-blaming row across
 // this machine's checkouts (escape rows whose preventedBy is review-check|runtime-leg, missed
@@ -423,9 +423,22 @@ function computeReplayDebt(reposList) {
 // Per repo: CLEAN review-row count; escapes whose reviewRunId equals the runId of a CLEAN
 // review row in the same repo -> contradicted; escapes with reviewRunId null or matching
 // nothing -> escapesUnjoined (counted, never folded into either side).
+//
+// falseCleanRate (contradicted / cleans, null when a repo has no CLEAN rows at all) and the
+// `fleet` roll-up are the DIVISION of the two counts this query already derives, not a tenth
+// question — the reader's fixed question set stays at nine (D5). Why the division belongs
+// here: the per-repo counts were already the catch-rate scoreboard, and every reader was
+// doing the arithmetic by eye. The rate is a FLOOR, never an exact miscalibration figure:
+// escapesUnjoined stays out of the numerator by D11's rule that an unjoined escape is never
+// folded into either side, so a repo carrying unjoined escapes is at least this miscalibrated
+// and possibly more. Deliberately NOT here: any trend, history, or per-window bucketing of
+// this rate — the fleet carries ~25 contradicted rows in total, so a weekly line moves several
+// points on a single escape, and storing a number between runs would break D12's stateless
+// contract outright. A trend needs its own spec, and enough rows to survive one escape.
 
 function computeCleanContradicted(reposList) {
   const byRepo = []
+  const fleet = { cleans: 0, contradicted: 0, escapesUnjoined: 0, falseCleanRate: null }
   for (const repo of reposList) {
     const cleanRows = repo.rawRows.filter(r => r.stage === 'review' && r.verdict === 'CLEAN')
     const cleanRunIds = new Set(cleanRows.filter(r => typeof r.runId === 'string').map(r => r.runId))
@@ -436,9 +449,20 @@ function computeCleanContradicted(reposList) {
       if (typeof r.reviewRunId === 'string' && cleanRunIds.has(r.reviewRunId)) contradicted++
       else escapesUnjoined++
     }
-    byRepo.push({ name: repo.name, cleans: cleanRows.length, contradicted, escapesUnjoined })
+    const cleans = cleanRows.length
+    byRepo.push({ name: repo.name, cleans, contradicted, escapesUnjoined, falseCleanRate: falseCleanRate(contradicted, cleans) })
+    fleet.cleans += cleans
+    fleet.contradicted += contradicted
+    fleet.escapesUnjoined += escapesUnjoined
   }
-  return { byRepo }
+  fleet.falseCleanRate = falseCleanRate(fleet.contradicted, fleet.cleans)
+  return { byRepo, fleet }
+}
+
+// A repo with no CLEAN rows has no rate at all — 0 would read as "never wrong" when the truth
+// is "never measured", the exact confusion query 4's neverReplayed flag exists to prevent.
+function falseCleanRate(contradicted, cleans) {
+  return cleans === 0 ? null : contradicted / cleans
 }
 
 // ---- query 7: cleanByVia ---------------------------------------------------------------------
@@ -891,9 +915,15 @@ function renderReplayDebt(rd) {
 }
 
 function renderCleanContradicted(cc) {
-  const lines = ['5. CLEAN-contradicted-by-escape — CLEAN verdicts a later escape disproves']
-  for (const r of cc.byRepo) lines.push(`  ${r.name}: cleans=${r.cleans} contradicted=${r.contradicted} escapesUnjoined=${r.escapesUnjoined}`)
+  const lines = ['5. CLEAN-contradicted-by-escape — CLEAN verdicts a later escape disproves (falseClean is a floor: unjoined escapes are excluded)']
+  for (const r of cc.byRepo) lines.push(`  ${r.name}: cleans=${r.cleans} contradicted=${r.contradicted} escapesUnjoined=${r.escapesUnjoined} falseClean=${renderRate(r.falseCleanRate)}`)
+  lines.push(`  fleet: cleans=${cc.fleet.cleans} contradicted=${cc.fleet.contradicted} escapesUnjoined=${cc.fleet.escapesUnjoined} falseClean=${renderRate(cc.fleet.falseCleanRate)}`)
   return lines.join('\n')
+}
+
+// n/a, never 0%, when there is no denominator — see falseCleanRate's own note.
+function renderRate(rate) {
+  return rate === null ? 'n/a' : `${(rate * 100).toFixed(1)}%`
 }
 
 // specs/20260901/03-unified-build-loop.md D9/Contracts: one line, exact wording and middle-dot

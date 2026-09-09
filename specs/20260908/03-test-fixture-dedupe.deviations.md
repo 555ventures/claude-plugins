@@ -113,3 +113,24 @@ one of the four modules exists before checking its test registrations, and three
 Two of these test names differ from their final form: AC-3 was later split into AC-3 and AC-7
 (D9), and AC-4's wording was corrected to the real `findings` return shape (D8). Both edits
 came after this run and neither weakened an assertion.
+
+## Review-finding pass (three `fix`-dispositioned findings)
+
+- Fix 1 (commitFiles dedupe) and Fix 3 (header rewrites) applied cleanly. Fix 2 (`label:
+  'brief-state.test.js'` added to the four `writeBrief` call sites at brief-state.test.js:597,
+  714, 730, 836) grew `tests/genesis/brief-state.test.js` from 61798 to 61918 bytes, which
+  `node scripts/size-ratchet.js --root .` now reports as `over` (61918 > 61798) rather than
+  `stale`. An `over` finding blocks `--update` outright (it refuses to write while any tracked
+  path is over its ceiling) and this worker's contract forbids raising a ceiling on its own
+  judgment. Left unresolved for the orchestrator: either cite this spec (or the finding pass)
+  in `node scripts/size-ratchet.js --root . --raise tests/genesis/brief-state.test.js --to
+  61918 --cite specs/20260908/03-test-fixture-dedupe.md`, then run `--update` for the five
+  now-stale paths it also reported (`tournament.fixtures.js`, `replay.fixtures.js`,
+  `replay.test.js`, `review-legs.fixtures.js`, and the `tests` tree total).
+- The review-finding pass's `label:` additions pushed tests/genesis/brief-state.test.js 120 bytes
+  over the ceiling THIS spec's own earlier `--update` had set (61,798). That ceiling was
+  over-tight: the pre-spec ceiling at diff_base 1aa5915 was 62,262, and the file's final size is
+  61,918 — 344 bytes BELOW where it started. The cited raise to 61,918 therefore restores
+  headroom this spec created and then partially spent; it loosens nothing relative to the
+  pre-image. Recorded rather than left implicit because a raise row reads as a loosening unless
+  the pre-image number sits beside it. Whole-tree ratchet: 259 files, 4 trees, all tight.

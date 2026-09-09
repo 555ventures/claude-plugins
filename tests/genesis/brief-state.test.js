@@ -594,7 +594,7 @@ test('AC-20260902-08-6: WHEN --mark skeleton-landed runs for web-app with the pr
     })
     const written = mark(dir, 'menu-written', ['--file', 'interview-research/' + DIM + '.json'])
     assert.strictEqual(written.status, 0, 'test setup requires menu-written to be accepted: ' + written.stderr)
-    writeBrief(dir, { dims: { [DIM]: 'open' }, picks: ['- archetype: web-app', '- ' + DIM + ': AWS'] })
+    writeBrief(dir, { label: 'brief-state.test.js', dims: { [DIM]: 'open' }, picks: ['- archetype: web-app', '- ' + DIM + ': AWS'] })
     const menusDone = mark(dir, 'menus-done')
     assert.strictEqual(menusDone.status, 0, 'test setup requires menus-done to be accepted: ' + menusDone.stderr)
 
@@ -711,7 +711,7 @@ test('AC-20260902-08-13: WHEN --mark menus-done runs on a brief whose archetype 
   // D2: the archetype line still sits under ## Picks (carried over from discovery-done's own
   // brief.md, never removed) — menus-done must still accept it, not reject a now-familiar line
   // as unexpected.
-  writeBrief(dir, { dims: { [DIM]: 'open' }, picks: ['- archetype: data-ml', '- ' + DIM + ': AWS'] })
+  writeBrief(dir, { label: 'brief-state.test.js', dims: { [DIM]: 'open' }, picks: ['- archetype: data-ml', '- ' + DIM + ': AWS'] })
   const done = mark(dir, 'menus-done')
   assert.strictEqual(done.status, 0, 'D2: menus-done must CONTINUE TO accept a ## Picks archetype line that is already present (moved to discovery-done, not removed from the grammar) — refusing it here would break every legacy brief.md that still carries the line: ' + done.stderr)
 })
@@ -727,7 +727,7 @@ test('AC-20260902-08-14: WHEN --mark skeleton-landed runs for web-app with a val
   })
   const written = mark(dir, 'menu-written', ['--file', 'interview-research/' + DIM + '.json'])
   assert.strictEqual(written.status, 0, 'test setup requires menu-written to be accepted: ' + written.stderr)
-  writeBrief(dir, { dims: { [DIM]: 'open' }, picks: ['- archetype: web-app', '- ' + DIM + ': AWS'] })
+  writeBrief(dir, { label: 'brief-state.test.js', dims: { [DIM]: 'open' }, picks: ['- archetype: web-app', '- ' + DIM + ': AWS'] })
   const menusDone = mark(dir, 'menus-done')
   assert.strictEqual(menusDone.status, 0, 'test setup requires menus-done to be accepted: ' + menusDone.stderr)
   const skip = mark(dir, 'finalists-skipped')
@@ -833,7 +833,7 @@ test('AC-20260902-11-10: WHEN --mark brief-written runs on a fresh visual run wh
 test('AC-20260902-11-11: WHEN the MENUS step prints for a legacy run THE SYSTEM CONTINUES TO print the unchanged MENUS text — no primary-surface/platforms-horizon lines, since a legacy run\'s status.brief.mocks is never set', () => {
   const dir = tmpdir('brief-11-11-legacy')
   bare(dir)
-  writeBrief(dir, { dims: { framework: 'open' }, picks: ['- archetype: web-app'] })
+  writeBrief(dir, { label: 'brief-state.test.js', dims: { framework: 'open' }, picks: ['- archetype: web-app'] })
   const statusPath = path.join(dir, '.claude/genesis/status.json')
   const raw = JSON.parse(fs.readFileSync(statusPath, 'utf8'))
   raw.schemaVersion = 2

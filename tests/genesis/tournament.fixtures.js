@@ -44,12 +44,11 @@ function statusOf(dir) {
   return JSON.parse(fs.readFileSync(path.join(dir, '.claude/genesis/status.json'), 'utf8'))
 }
 
-// specs/20260908/03-test-fixture-dedupe.md D2: shared by every genesis test file (tournament
-// family here, plus brief-state.test.js/conventions-handoff.test.js/genesis-driver.test.js,
-// which drop their own byte-identical copies). `label` fills the "for <file>" project sentence
-// (default preserves this file's own prior text unchanged); `extraSections` is a raw string
+// specs/20260908/03-test-fixture-dedupe.md D2: the shared brief writer used by every genesis
+// test file. `label` fills the "for <file>" project sentence; `extraSections` is a raw string
 // inserted between "## Research Angles" and "## Picks" — AC-20260908-03-3 requires it land
-// BEFORE ## Picks, and omitting it must CONTINUE to write today's template byte-for-byte.
+// BEFORE ## Picks, and omitting it must CONTINUE to write today's template byte-for-byte
+// (AC-20260908-03-7).
 // scripts/genesis-driver.js's own `section()` parser locates a heading by scanning for the next
 // `## ` line (or end of string), so this reordering is invisible to every check that reads
 // ## Journeys/## Non-UI Coverage/## Picks — order among sections was never part of the grammar.

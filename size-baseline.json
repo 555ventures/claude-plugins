@@ -4,7 +4,7 @@
     "scripts": 29937,
     "spec/scripts": 1255214,
     "spec/scripts/lib": 231235,
-    "tests": 3448737
+    "tests": 3447573
   },
   "files": {
     "scripts/plugin-bump.js": 8564,
@@ -151,14 +151,14 @@
     "tests/frontmatter.test.js": 4254,
     "tests/frontmatter/frontmatter.test.js": 16719,
     "tests/genesis-gate.test.js": 14633,
-    "tests/genesis/brief-state.test.js": 61798,
+    "tests/genesis/brief-state.test.js": 61918,
     "tests/genesis/conventions-handoff.test.js": 28971,
     "tests/genesis/genesis-driver.test.js": 75630,
     "tests/genesis/registry-check.test.js": 23113,
     "tests/genesis/research-menu.test.js": 14506,
     "tests/genesis/tournament-decided.test.js": 7534,
     "tests/genesis/tournament-probe-pick.test.js": 20367,
-    "tests/genesis/tournament.fixtures.js": 11447,
+    "tests/genesis/tournament.fixtures.js": 11282,
     "tests/genesis/tournament.test.js": 15077,
     "tests/git/commit-escape-check.test.js": 5426,
     "tests/helpers.js": 6671,
@@ -211,8 +211,8 @@
     "tests/render/render-rules.test.js": 33656,
     "tests/replay/record-via.test.js": 7610,
     "tests/replay/replay-corpus.test.js": 7478,
-    "tests/replay/replay.fixtures.js": 2010,
-    "tests/replay/replay.test.js": 201793,
+    "tests/replay/replay.fixtures.js": 1919,
+    "tests/replay/replay.test.js": 200911,
     "tests/report/report-render.test.js": 14403,
     "tests/review/ci-query.test.js": 17510,
     "tests/review/deviations-backstop.test.js": 18269,
@@ -237,7 +237,7 @@
     "tests/review/review-driver.test.js": 51071,
     "tests/review/review-legs-at-risk-argv.test.js": 15160,
     "tests/review/review-legs-smoke-wave.test.js": 10397,
-    "tests/review/review-legs.fixtures.js": 2860,
+    "tests/review/review-legs.fixtures.js": 2714,
     "tests/review/review-legs.test.js": 40695,
     "tests/review/reviewer-return-killed.test.js": 11061,
     "tests/review/reviewer-scope-identity.test.js": 2982,
@@ -302,6 +302,12 @@
       "path": "tests",
       "from": 3432195,
       "to": 3448737,
+      "cite": "specs/20260908/03-test-fixture-dedupe.md"
+    },
+    {
+      "path": "tests/genesis/brief-state.test.js",
+      "from": 61798,
+      "to": 61918,
       "cite": "specs/20260908/03-test-fixture-dedupe.md"
     }
   ]

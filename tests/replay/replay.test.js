@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync, spawnSync } = require('node:child_process')
 const { SPEC, read, tmpdir, runNode, gitRepo } = require('../helpers')
-const { setupOverlayHost } = require('./replay.fixtures')
+const { setupOverlayHost, commitFiles } = require('./replay.fixtures')
 
 // specs/20260819/02-mutation-replay.md (brief 14): the ad-hoc consult
 // injection (specs/20260819/01-review-evidence-retention.md's Fable retainer pass) proved a
@@ -132,25 +132,6 @@ function commitReal(root, relFile, content, msg) {
   const full = path.join(root, relFile)
   fs.mkdirSync(path.dirname(full), { recursive: true })
   fs.writeFileSync(full, content)
-  execFileSync('git', ['-C', root, 'add', '-A'])
-  execFileSync('git', ['-C', root, 'commit', '-q', '-m', msg])
-  return execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
-}
-
-// specs/20260831/01: build a commit whose content is exactly the given {path: content|null} map
-// (null = delete a path that must already exist) — used by the --overlay fixtures below to build
-// a parent/close commit pair with a precise, individually-named non-meta/meta delta shape, rather
-// than the two-content-versions-of-one-file shape commitSpecFlow was built for.
-function commitFiles(root, files, msg) {
-  for (const [rel, content] of Object.entries(files)) {
-    const full = path.join(root, rel)
-    if (content === null) {
-      fs.unlinkSync(full)
-    } else {
-      fs.mkdirSync(path.dirname(full), { recursive: true })
-      fs.writeFileSync(full, content)
-    }
-  }
   execFileSync('git', ['-C', root, 'add', '-A'])
   execFileSync('git', ['-C', root, 'commit', '-q', '-m', msg])
   return execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()

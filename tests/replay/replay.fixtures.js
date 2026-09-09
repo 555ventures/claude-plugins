@@ -10,8 +10,7 @@ const { tmpdir, gitRepo } = require('../helpers')
 // worktree dir path. Each caller keeps its own runNode call and assertions; only this setup moves.
 
 // Build a commit whose content is exactly the given {path: content|null} map (null deletes a
-// path that must already exist). Copied from replay.test.js's own commitFiles — this module
-// cannot require a *.test.js file for it.
+// path that must already exist).
 function commitFiles(root, files, msg) {
   for (const [rel, content] of Object.entries(files)) {
     const full = path.join(root, rel)
@@ -38,4 +37,4 @@ function setupOverlayHost(root, { parentFiles, closeFiles }) {
   return { parent, close, dir }
 }
 
-module.exports = { setupOverlayHost }
+module.exports = { setupOverlayHost, commitFiles }

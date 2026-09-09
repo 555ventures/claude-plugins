@@ -3,11 +3,10 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, gitRepo } = require('../helpers')
 
-// specs/20260908/03-test-fixture-dedupe.md D1: the review-legs host builder, copied seven times
-// across review-legs.test.js (4), review-legs-smoke-wave.test.js, legs-verdict-pair.test.js, and
-// review-legs-at-risk-argv.test.js, differing only in config content, extra scaffold files, and
-// return shape (A1). One parameterized builder here; callers with a genuinely bespoke need
-// (a base-committed file, a non-{dir,base} return) keep a thin local wrapper instead (A1).
+// specs/20260908/03-test-fixture-dedupe.md D1: the shared review-legs host builder, used by
+// every review-legs test file via `config`, `extraFiles`, and `testBody` parameters. Callers
+// with a genuinely bespoke need (a base-committed file, a non-{dir,base} return) keep a thin
+// local wrapper over this builder instead (A1).
 
 function reviewLegsSpecBody({ title = 'Test Spec', acId = 'AC-20260817-99-1', specDate = '20260824', ordinal = '06' } = {}) {
   return `---

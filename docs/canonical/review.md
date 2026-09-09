@@ -46,7 +46,7 @@
 
   Every authoritative review verdict also retains its evidence: verdict.js requires
   `--retain .claude/spec-runs` alongside `--ledger --workflow` and writes
-  `.claude/spec-runs/<runId>.json` — the manifest legs untruncated plus the reviewer's
+  `.claude/spec-runs/<runId>.jsonl` — the manifest legs untruncated plus the reviewer's
   survivors/killed with their executed repro evidence verbatim. The artifact rides the close commit in an
   in-place review; in a linked-worktree review the ledger and retained evidence are written
   under the worktree, EXCLUDED from the close commit, and promoted (deduped) into the main root

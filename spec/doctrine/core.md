@@ -116,7 +116,7 @@ territory — per-spec CLEANs do not compose. Production actions are never auton
 The pipeline improves on evidence, through artifacts — never through anyone's memory.
 Carriers, all side effects of normal runs: the **run ledger** (`.claude/spec-runs.jsonl` —
 stage-tagged rows: `plan` records a lock's executed facts, `review` and `escape` as below),
-its **retained evidence artifacts** (`.claude/spec-runs/<runId>.json` — a review row's
+its **retained evidence artifacts** (`.claude/spec-runs/<runId>.jsonl` — a review row's
 full-fidelity manifest legs and reviewer return, `runId`-keyed), and **Gotchas** entries in
 the host's pipeline rules (tagged `[host]` or `[plugin]` by provenance, folded from
 deviations sidecars at review close). `/spec:escape` records a defect that got past a

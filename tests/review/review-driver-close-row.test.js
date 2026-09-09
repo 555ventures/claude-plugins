@@ -47,15 +47,15 @@ test('AC-20260820-07-6 / AC-20260901-03-5 / AC-20260901-09-5 (SHALL CONTINUE TO)
   assert.strictEqual(row.verdict, 'CLEAN', 'the authoritative pass must derive CLEAN for a zero-survivor, zero-leg-finding run: ' + JSON.stringify(row))
 
   const retainDir = path.join(host.root, '.claude/spec-runs')
-  assert.ok(fs.existsSync(retainDir) && fs.readdirSync(retainDir).includes(row.runId + '.json'),
-    'the authoritative verdict must run with --retain .claude/spec-runs, writing <runId>.json — without it the reviewer\'s full-fidelity evidence is never durable: ' + retainDir)
+  assert.ok(fs.existsSync(retainDir) && fs.readdirSync(retainDir).includes(row.runId + '.jsonl'),
+    'the authoritative verdict must run with --retain .claude/spec-runs, writing <runId>.jsonl — without it the reviewer\'s full-fidelity evidence is never durable: ' + retainDir)
 
   assert.match(fs.readFileSync(host.spec, 'utf8'), /status:\s*done/,
     'CLOSE must flip the spec\'s frontmatter status from implementing to done')
 
   assert.match(r.stdout, /Canonical Delta/, 'the CLOSE step must print the Canonical Delta instruction: ' + r.stdout)
-  assert.match(r.stdout, /\.claude\/spec-runs\/\*\.json/,
-    'the CLOSE step\'s hygiene listing must name .claude/spec-runs/*.json as an EXPECTED artifact — omitting it invites deleting durable evidence as reviewer scratch: ' + r.stdout)
+  assert.match(r.stdout, /\.claude\/spec-runs\/\*\.jsonl/,
+    'the CLOSE step\'s hygiene listing must name .claude/spec-runs/*.jsonl as an EXPECTED artifact — omitting it invites deleting durable evidence as reviewer scratch: ' + r.stdout)
   assert.match(r.stdout, /EXPECTED/, 'the hygiene listing must mark expected artifacts (retained evidence + sidecar) as EXPECTED, not stray paths to clean up: ' + r.stdout)
   assert.match(r.stdout, /close[- ]commit/i, 'the CLOSE step must print the close-commit instruction: ' + r.stdout)
 })
@@ -82,7 +82,7 @@ test('AC-20260824-06-6: WHEN a clean run reaches CLOSE with one uncommitted trac
   assert.strictEqual(rowDirty.diff.head, expectedHeadDirty,
     'AC-20260824-06-6: diff.head must equal the fixture\'s HEAD BEFORE the close commit (the driver never ' +
     'commits itself) — the close row\'s head is the tree the authoritative pass actually judged: ' + JSON.stringify(rowDirty))
-  const artifactDirty = JSON.parse(fs.readFileSync(path.join(dirtyHost.root, '.claude/spec-runs', rowDirty.runId + '.json'), 'utf8'))
+  const artifactDirty = JSON.parse(fs.readFileSync(path.join(dirtyHost.root, '.claude/spec-runs', rowDirty.runId + '.jsonl'), 'utf8'))
   assert.deepStrictEqual(artifactDirty.diff, rowDirty.diff,
     'AC-20260824-06-6: the retained artifact\'s diff must deep-equal the close row\'s diff object: ' +
     JSON.stringify({ row: rowDirty.diff, artifact: artifactDirty.diff }))

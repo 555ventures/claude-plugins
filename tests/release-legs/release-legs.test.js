@@ -3,8 +3,11 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { spawn } = require('node:child_process')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
+const {
+  writeConfig, writeReleaseManifest, GREEN_RELEASE_MANIFEST_CHECKS, readRows, rowFor,
+  writeExecutable, makeStubBin, withStubPath, startStagingServer, waitForPort, setupWorkingHost,
+} = require('./release-legs.fixtures')
 
 // specs/20260823/01-release-legs.md: /spec:release's ~10-step prose checklist becomes one
 // script, spec/scripts/release-legs.js (stage/append/record), so a red leg or an abandoned
@@ -32,91 +35,6 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // review-legs.test.js use to pin the fallback that produces this shape in the first place.
 
 const SCRIPT = 'scripts/release-legs.js'
-
-function writeConfig(dir, config) {
-  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
-  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify(config, null, 2))
-}
-
-function writeReleaseManifest(dir, checks) {
-  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
-  fs.writeFileSync(path.join(dir, '.claude/release-manifest.json'), JSON.stringify({ checks }))
-}
-
-// TOTAL=2 FAILS=0 INERT=1 — the exact sentinel AC-20260823-01-4 spikes verbatim.
-const GREEN_RELEASE_MANIFEST_CHECKS = [
-  { claim: 'a verifiable production check', kind: 'exec', target: 'true' },
-  { claim: 'an unverifiable-from-this-host check', kind: 'inert', target: 'declared: nothing to verify from here' },
-]
-
-function readRows(p) {
-  if (!fs.existsSync(p)) return []
-  return fs.readFileSync(p, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
-}
-
-function rowFor(rows, leg) {
-  return rows.find(r => r.leg === leg)
-}
-
-function writeExecutable(p, content) {
-  fs.writeFileSync(p, content)
-  fs.chmodSync(p, 0o755)
-}
-
-// A directory holding one PATH-stubbed binary named `name` — prepended onto PATH so bash -c
-// resolves it before the real one.
-function makeStubBin(dir, name, script) {
-  const binDir = path.join(dir, '_stubbin')
-  fs.mkdirSync(binDir, { recursive: true })
-  writeExecutable(path.join(binDir, name), script)
-  return binDir
-}
-
-function withStubPath(binDir) {
-  return { ...process.env, PATH: binDir + path.delimiter + process.env.PATH }
-}
-
-// A REAL child-process HTTP server (never in-process — spawnSync-ing release-legs.js against an
-// in-process stub would deadlock the parent event loop for the child's whole lifetime). Binds an
-// OS-assigned ephemeral port and writes it to portFile once listening, so the test can poll for
-// readiness without guessing a fixed port.
-function startStagingServer(dir) {
-  const serverFile = path.join(dir, '_stub-server.js')
-  fs.writeFileSync(serverFile,
-    'const http = require("http")\n' +
-    'const fs = require("fs")\n' +
-    'const server = http.createServer((req, res) => { res.statusCode = 200; res.end("ok") })\n' +
-    'server.listen(0, "127.0.0.1", () => { fs.writeFileSync(process.argv[2], String(server.address().port)) })\n')
-  const portFile = path.join(dir, '_stub-port')
-  const child = spawn(process.execPath, [serverFile, portFile], { stdio: 'ignore' })
-  return { child, portFile }
-}
-
-async function waitForPort(portFile, timeoutMs = 5000) {
-  const start = Date.now()
-  while (!fs.existsSync(portFile)) {
-    if (Date.now() - start > timeoutMs) throw new Error('staging stub server never became ready: ' + portFile)
-    await new Promise(r => setTimeout(r, 20))
-  }
-  return Number(fs.readFileSync(portFile, 'utf8').trim())
-}
-
-// A working synthetic host: git repo (release-legs' ci leg shells `git rev-parse HEAD`), a
-// reachable staging server, a green release-manifest, and a release/capabilities config a caller
-// can override piecewise. Returns dir/stagingUrl/kill — callers MUST call kill() when done.
-async function setupWorkingHost(prefix, { release = {}, capabilities = {}, checks = GREEN_RELEASE_MANIFEST_CHECKS, e2eCommand = 'true' } = {}) {
-  const dir = fs.realpathSync(tmpdir(prefix))
-  gitRepo(dir)
-  const { child, portFile } = startStagingServer(dir)
-  const port = await waitForPort(portFile)
-  const stagingUrl = `http://127.0.0.1:${port}`
-  writeConfig(dir, {
-    release: { deployCommand: 'true', stagingUrl, e2eCommand, ...release },
-    capabilities: { forge: 'none', ...capabilities },
-  })
-  writeReleaseManifest(dir, checks)
-  return { dir, stagingUrl, kill: () => child.kill() }
-}
 
 test('AC-20260823-01-1: stage appends substrate, ci, deploy, ready, and e2e rows and exits 0 against a fully green host with no declared migrationsCheck', async () => {
   const host = await setupWorkingHost('rl-ac1')
@@ -321,7 +239,7 @@ test('AC-20260823-01-7: stage appends exactly ONE ci row with conclusion success
   }
 })
 
-test('AC-20260823-01-8: stage appends the e2e row with passed = executed - skipped (never the raw executed count) and exports BASE_URL into the child env', async () => {
+test('AC-20260908-05-6 (retag of AC-20260823-01-8): stage appends the e2e row with passed = executed - skipped (never the raw executed count), the row additionally carrying executed:5 (AC-20260908-05-5\'s rule), and exports BASE_URL into the child env', async () => {
   const host = await setupWorkingHost('rl-ac8')
   try {
     const e2eScript = path.join(host.dir, 'e2e-stub.sh')
@@ -347,10 +265,12 @@ test('AC-20260823-01-8: stage appends the e2e row with passed = executed - skipp
     const outDir = path.join(host.dir, 'out')
     runNode(SCRIPT, ['stage', '--root', host.dir, '--manifest', runManifest, '--out-dir', outDir])
     const rows = readRows(runManifest)
-    assert.deepStrictEqual(rowFor(rows, 'e2e'), { leg: 'e2e', exit: 0, observed: { passed: 4, failed: 0, skipped: 1 } },
+    assert.deepStrictEqual(rowFor(rows, 'e2e'), { leg: 'e2e', exit: 0, observed: { passed: 4, failed: 0, skipped: 1, executed: 5 } },
       'D5 (literal): executed=5, skipped=1 must derive passed=4 (5-1), never the raw executed ' +
-      'count — reporting passed=5 here would silently count a known-skipped test as a pass: ' +
-      JSON.stringify(rowFor(rows, 'e2e')))
+      'count — reporting passed=5 here would silently count a known-skipped test as a pass; ' +
+      'D3/AC-20260908-05-5 additionally requires the row to carry the observed executed count ' +
+      '(5) as its last key — an observed non-zero count is never reddened and the key must ' +
+      'never be omitted: ' + JSON.stringify(rowFor(rows, 'e2e')))
     const e2eOutput = fs.readFileSync(path.join(outDir, 'e2e.txt'), 'utf8')
     assert.match(e2eOutput, new RegExp('BASE_URL=' + host.stagingUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
       'the e2e leg must export BASE_URL={stagingUrl} into the child\'s environment — without it ' +
@@ -360,7 +280,7 @@ test('AC-20260823-01-8: stage appends the e2e row with passed = executed - skipp
   }
 })
 
-test('AC-20260823-01-9: stage appends passed as a typed no-format-declared unavailability, never an assumed number, when no testCountPattern is declared', async () => {
+test('AC-20260908-05-3 (retag of AC-20260823-01-9): stage CONTINUES TO append passed as a typed no-format-declared unavailability, never an assumed number, when no testCountPattern is declared — a host that declared no format is never forced', async () => {
   const host = await setupWorkingHost('rl-ac9')
   try {
     const runManifest = path.join(host.dir, 'run-manifest.jsonl')
@@ -380,15 +300,17 @@ test('AC-20260823-01-9: stage appends passed as a typed no-format-declared unava
   }
 })
 
-test('AC-20260823-01-10: append --leg journeys derives exit from --failed (0 -> exit 0, nonzero -> exit 1) and exits with the row\'s own exit code', () => {
+test('AC-20260908-05-9 (retag of AC-20260823-01-10): append --leg journeys CONTINUES TO derive exit from --failed (0 -> exit 0, nonzero -> exit 1) and exits with the row\'s own exit code', () => {
   const dir = fs.realpathSync(tmpdir('rl-ac10'))
   const manifestGreen = path.join(dir, 'green.jsonl')
-  const rGreen = runNode(SCRIPT, ['append', '--manifest', manifestGreen, '--leg', 'journeys', '--walked', '2', '--failed', '0'])
+  const rGreen = runNode(SCRIPT, ['append', '--manifest', manifestGreen, '--leg', 'journeys', '--walked', '1', '--failed', '0'])
   assert.strictEqual(rGreen.status, 0,
     'D7: a journeys append with --failed 0 must exit 0 — the appended row is green: ' + rGreen.stdout + ' / ' + rGreen.stderr)
-  assert.deepStrictEqual(readRows(manifestGreen), [{ leg: 'journeys', exit: 0, observed: { walked: 2, failed: 0 } }],
-    'D7: the appended row must carry the exact journeys grammar with exit 0 when failed is 0: ' +
-    JSON.stringify(readRows(manifestGreen)))
+  assert.deepStrictEqual(readRows(manifestGreen), [{ leg: 'journeys', exit: 0, observed: { walked: 1, failed: 0 } }],
+    'AC-20260908-05-9\'s own example: --walked 1 --failed 0 is the value immediately adjacent to ' +
+    'D5\'s new forcing boundary (exit forced to 1 only when walked is 0) — the appended row must ' +
+    'carry the exact journeys grammar with exit 0 at walked:1, proving the boundary is not ' +
+    'over-forced onto a nonzero-but-small walk: ' + JSON.stringify(readRows(manifestGreen)))
 
   const manifestRed = path.join(dir, 'red.jsonl')
   const rRed = runNode(SCRIPT, ['append', '--manifest', manifestRed, '--leg', 'journeys', '--walked', '2', '--failed', '1'])

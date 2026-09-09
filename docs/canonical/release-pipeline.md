@@ -50,6 +50,17 @@ is retained for the report. This is the assumed-count rule (UPWELL-20260716-02) 
 every count slot: a model reading runner output to produce integers against no declared format
 is not an observation.
 
+The e2e row also carries `executed` (the raw count, or the same typed unavailability). On a
+child exit of 0 the leg's `exit` is forced to 1 when `executed` is an observed `0` or a
+`{"unavailable":"pattern-no-match"}` — the same predicate review's at-risk and suite legs
+apply, imported from `spec/scripts/lib/count-observation.js`, never a second copy.
+`no-format-declared` never forces, and an all-skipped run (executed N, skipped N) never
+forces: skips reach the promote question by name. `append --leg journeys` forces exit 1 on
+`walked: 0`, because every release walks at least one journey by doctrine; the substrate leg
+needs no rule — an empty manifest is refused before any row exists and `inert` rows are a
+declared state, never an unobserved one (specs/20260908/05-release-e2e-unobserved-count.md
+D3–D6).
+
 ## The ready check probes the deployment, not the boot
 
 `ready` is a plain `curl -fsS --max-time 10 {stagingUrl}{healthPath}`, retried 3 times 5s

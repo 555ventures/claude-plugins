@@ -1,6 +1,7 @@
 ---
 date: 2026-09-08
-status: hardened
+status: done
+build_base: main
 tier: critical
 area: release-evidence
 design: false
@@ -10,6 +11,7 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-08
 open_markers: 0
+diff_base: bace2b7b7493fd3ff268b97c148d153f59a15dd4
 ---
 
 # Release e2e and journeys legs red on an unobserved run; one predicate, one home

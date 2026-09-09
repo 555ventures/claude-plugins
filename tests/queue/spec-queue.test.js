@@ -535,3 +535,43 @@ test('AC-20260823-08-review-concurrent-writer-safety: N concurrent spec-queue in
       `trial ${t}: concurrent done-ticks must never drop or duplicate items — only mark them (last-writer-safe, not last-writer-lossy): ${raw}`)
   }
 })
+
+// The queue derives every brief and spec state against a root it resolves itself. That root was
+// `process.cwd()`, so a run from any subdirectory of the checkout resolved `docs/roadmap/*` and
+// `specs/*` against the subdirectory: gate targets read "missing", done items reappeared as
+// pending, and `next` handed back a pick derived from an empty roadmap — silently, with a zero
+// exit: `list` run from `docs/adr` printed 18 pending / 95 done against the same queue file that
+// prints 6 pending / 107 done from the checkout root. The root is now the repository toplevel,
+// so every subcommand answers identically from anywhere inside the tree.
+test('spec-queue resolves brief/spec state against the repository toplevel, not the shell CWD, so list and next answer identically from a subdirectory', () => {
+  const dir = host({
+    briefs: {
+      '05-x.md': '# 05 — X\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
+      '06-y.md': '# 06 — Y\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
+    },
+    specs: { '20260701/01-gate.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 05' },
+    queue: [
+      { id: 'q1', kind: 'brief', brief: '06', added: '2026-07-01T10:00:00Z' },
+      {
+        id: 'q2', kind: 'prompt', payload: 'gated note', added: '2026-07-01T10:01:00Z',
+        after: { kind: 'spec', spec: 'specs/20260701/01-gate.md' },
+      },
+    ],
+  })
+  const sub = path.join(dir, 'docs/roadmap')
+
+  const fromRoot = runNode(SCRIPT, ['list'], { cwd: dir })
+  assert.strictEqual(fromRoot.status, 0, 'list from the repository root must succeed: ' + fromRoot.stdout + fromRoot.stderr)
+  assert.match(fromRoot.stdout, /after specs\/20260701\/01-gate\.md \(hardened\)/,
+    'arm: from the root the gate target must resolve to its real derived status, so the subdirectory run below has something to disagree with: ' + fromRoot.stdout)
+
+  const fromSub = runNode(SCRIPT, ['list'], { cwd: sub })
+  assert.strictEqual(fromSub.status, 0, 'list from a subdirectory must succeed: ' + fromSub.stdout + fromSub.stderr)
+  assert.strictEqual(fromSub.stdout, fromRoot.stdout,
+    'a queue command must render identically from anywhere inside the checkout — a CWD-relative root silently reports resolvable gate targets as "missing" and finished items as pending, with a zero exit and no anomaly line:\n--- from root ---\n' + fromRoot.stdout + '--- from ' + path.relative(dir, sub) + ' ---\n' + fromSub.stdout)
+
+  const nextRoot = runNode(SCRIPT, ['next'], { cwd: dir })
+  const nextSub = runNode(SCRIPT, ['next'], { cwd: sub })
+  assert.strictEqual(nextSub.stdout, nextRoot.stdout,
+    '`next` is the paste-ready pick — it must not depend on which directory the shell happens to sit in:\n--- from root ---\n' + nextRoot.stdout + '--- from subdirectory ---\n' + nextSub.stdout)
+})

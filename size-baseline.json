@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 29937,
-    "spec/scripts": 1253386,
-    "spec/scripts/lib": 222737,
-    "tests": 3402477
+    "spec/scripts": 1253798,
+    "spec/scripts/lib": 225608,
+    "tests": 3423338
   },
   "files": {
     "scripts/plugin-bump.js": 8564,
@@ -16,13 +16,13 @@
     "spec/scripts/block-cross-worktree-writes.sh": 9703,
     "spec/scripts/ci-gate-parity.js": 3486,
     "spec/scripts/ci-query.js": 8464,
-    "spec/scripts/citations-check.js": 12905,
+    "spec/scripts/citations-check.js": 14056,
     "spec/scripts/collision-closure.js": 14335,
     "spec/scripts/comment-narration.js": 16102,
     "spec/scripts/commit-coverage.js": 16400,
     "spec/scripts/components-check.js": 4708,
     "spec/scripts/design-ac-reconcile.js": 6011,
-    "spec/scripts/design-atlas.js": 139575,
+    "spec/scripts/design-atlas.js": 140188,
     "spec/scripts/env-preflight.js": 8794,
     "spec/scripts/escape-row.js": 10045,
     "spec/scripts/fleet-reader.js": 47448,
@@ -53,10 +53,11 @@
     "spec/scripts/lib/shell-region.js": 24925,
     "spec/scripts/lib/spec-sections.js": 24006,
     "spec/scripts/lib/stop-block.js": 9749,
+    "spec/scripts/lib/wire-register.js": 2871,
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
     "spec/scripts/merge-back.sh": 17514,
-    "spec/scripts/mocks-driver.js": 102071,
+    "spec/scripts/mocks-driver.js": 100719,
     "spec/scripts/promise-sweep.js": 10409,
     "spec/scripts/prose-cap.js": 6271,
     "spec/scripts/question-style-gate.js": 10712,
@@ -101,7 +102,7 @@
     "tests/commit-coverage/window-mode.test.js": 5805,
     "tests/components-check.test.js": 4988,
     "tests/consistency/base-derivation.test.js": 5513,
-    "tests/consistency/citations-check.test.js": 11021,
+    "tests/consistency/citations-check.test.js": 13057,
     "tests/consistency/comment-narration-live.test.js": 3527,
     "tests/consistency/dependency-free.test.js": 8614,
     "tests/consistency/design-doctrine.test.js": 25745,
@@ -115,10 +116,11 @@
     "tests/consistency/retired-flags.test.js": 11314,
     "tests/consistency/size-ratchet-live.test.js": 1865,
     "tests/consistency/test-concurrency-cap.test.js": 2499,
+    "tests/consistency/wire-register.test.js": 8079,
     "tests/count-observation.test.js": 4209,
     "tests/design-ac-reconcile.test.js": 5161,
     "tests/design-atlas-index.test.js": 35132,
-    "tests/design-atlas.test.js": 211158,
+    "tests/design-atlas.test.js": 217100,
     "tests/design-look-handoff.test.js": 11626,
     "tests/design-shell.test.js": 17216,
     "tests/design-template.test.js": 2207,
@@ -174,8 +176,9 @@
     "tests/mocks/mocks-driver-look-stops-3.test.js": 10336,
     "tests/mocks/mocks-driver-look-stops-4.test.js": 6975,
     "tests/mocks/mocks-driver-look-stops.test.js": 19181,
-    "tests/mocks/mocks-driver-theme.test.js": 54096,
-    "tests/mocks/mocks-driver.test.js": 31896,
+    "tests/mocks/mocks-driver-theme.test.js": 54571,
+    "tests/mocks/mocks-driver-wire.test.js": 4300,
+    "tests/mocks/mocks-driver.test.js": 31925,
     "tests/mocks/mocks-ledger.test.js": 12490,
     "tests/mocks/mocks-notes.test.js": 45728,
     "tests/mocks/mocks-picks.test.js": 11563,
@@ -288,6 +291,60 @@
       "from": 3394611,
       "to": 3402477,
       "cite": "specs/20260908/06-command-prose-states-contracts.md"
+    },
+    {
+      "path": "spec/scripts/citations-check.js",
+      "from": 12905,
+      "to": 14056,
+      "cite": "specs/20260907/09-atlas-index-and-note-navigation.md"
+    },
+    {
+      "path": "tests/consistency/citations-check.test.js",
+      "from": 11021,
+      "to": 13057,
+      "cite": "specs/20260907/09-atlas-index-and-note-navigation.md"
+    },
+    {
+      "path": "spec/scripts/design-atlas.js",
+      "from": 139575,
+      "to": 140188,
+      "cite": "specs/20260908/07-one-wire-register-predicate.md"
+    },
+    {
+      "path": "tests/design-atlas.test.js",
+      "from": 211158,
+      "to": 217100,
+      "cite": "specs/20260908/07-one-wire-register-predicate.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-theme.test.js",
+      "from": 54096,
+      "to": 54571,
+      "cite": "specs/20260908/07-one-wire-register-predicate.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver.test.js",
+      "from": 31896,
+      "to": 31925,
+      "cite": "specs/20260908/07-one-wire-register-predicate.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1253386,
+      "to": 1253798,
+      "cite": "specs/20260908/07-one-wire-register-predicate.md"
+    },
+    {
+      "path": "spec/scripts/lib",
+      "from": 222737,
+      "to": 225608,
+      "cite": "specs/20260908/07-one-wire-register-predicate.md"
+    },
+    {
+      "path": "tests",
+      "from": 3402477,
+      "to": 3423338,
+      "cite": "specs/20260908/07-one-wire-register-predicate.md"
     }
   ]
 }

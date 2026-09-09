@@ -1,0 +1,129 @@
+{
+  "runId": "rv_424c02573548",
+  "ts": "2026-09-09T06:46:30.544Z",
+  "spec": "specs/20260908/07-one-wire-register-predicate.md",
+  "tier": "standard",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 476,
+    "base": "62dc04594e3265fdd9a85be1617161a588389d7c",
+    "head": "8d886919d6c89fe41099e4acc1c084fb3d680ae3",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 552
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1381
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 1,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 11,
+        "carried": 11,
+        "sanctioned": 0,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "A refused `--mark journey-drawn` still writes a stub journeys.<j> record into design/mocks/status.json (the prior pass's medium finding).",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 990,
+        "evidence": "Working-tree diff vs HEAD removes ensureJourneyRecord(journeyName) + saveStatus() and their comment from before the per-label loop. Executed through the real entrypoint (base driver materialized via git archive 62dc045 spec; fixture: canon-written, target mock with a commented-out register mention plus a real wire.css link): BASE exit=2 journeys before={} after={}; WORKTREE exit=2 journeys before={} after={}. grep now shows the journey-drawn ensureJourneyRecord call only on the success path; no stub write remains on the refusal path."
+      },
+      {
+        "claim": "The fix introduced other behaviour into handleJourneyDrawn beyond the reverted write.",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 981,
+        "evidence": "diff of the handleJourneyDrawn body extracted from git show 62dc045:spec/scripts/mocks-driver.js against the working tree yields exactly two changed lines: the D6 substring scans replaced by stylesheetTargets(html).some(...) against WIRE_TOKENS_CSS_RE / WIRE_WIRE_CSS_RE. Nothing else in the function differs from base."
+      },
+      {
+        "claim": "The tolerant refusal-side assertion no longer fails on a genuinely recorded drawn.",
+        "file": "tests/mocks/mocks-driver-wire.test.js",
+        "line": 49,
+        "evidence": "Executed: undefined => true, {drawn:null,approved:null} => true, {drawn:'2026-09-08T00:00:00Z',approved:null} => false — a real timestamp fails the strictEqual(..., true). The {drawn:null} tolerance is unreachable through the real script and mirrors the sibling pattern already used in tests/mocks/mocks-driver.test.js. The accept-side assertion is unchanged."
+      },
+      {
+        "claim": "The deviations file still records the now-reverted stub-write departure, or the fix left a stale deviation with a changed basis.",
+        "file": "specs/20260908/07-one-wire-register-predicate.deviations.md",
+        "line": 3,
+        "evidence": "Working-tree diff removes the entire handleJourneyDrawn bullet. The two remaining bullets (RegExp-constructor spelling; comment-narration [prior] class) were killed on executed evidence in reviewer-return-1 and their basis is unchanged — tests/consistency/comment-narration-live.test.js and tests/consistency/wire-register.test.js both pass in this run."
+      },
+      {
+        "claim": "The fix reddened a touched test file or a regression pin.",
+        "file": "tests/mocks/mocks-driver-wire.test.js",
+        "line": 31,
+        "evidence": "Node 26 run of mocks-driver-wire, mocks-driver, mocks-driver-theme, wire-register, plugin-bump, comment-narration-live and design-atlas tests: tests 119, pass 119, fail 0, skipped 0, todo 0, exit 0, with named passes for AC-20260908-07-1 through -13. manifest-2 legs: suite exit 0 (1381 tests, 0 skips), gate exit 0 (552), ac-matrix uncovered 0, promise-sweep orphans 0."
+      },
+      {
+        "claim": "In-range working-tree changes to .claude/spec-runs.jsonl and the spec's frontmatter are unsanctioned edits.",
+        "file": "specs/20260908/07-one-wire-register-predicate.md",
+        "line": 3,
+        "evidence": "Spec diff vs base is status hardened -> implementing plus the build_base/diff_base frontmatter lines the build stage writes; spec-runs.jsonl is a single appended build-provenance line (runId bd_887fbdd982ad). Both are pipeline-managed bookkeeping owned by stages that run outside this review."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 52000
+  }
+}

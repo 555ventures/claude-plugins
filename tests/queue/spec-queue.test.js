@@ -261,11 +261,11 @@ test('AC-20260903-03-8: spec-queue list renders exactly the numbered pending for
   const rPending = runNode(SCRIPT, ['list'], { cwd: dirPending })
   assert.strictEqual(rPending.status, 0, rPending.stderr)
   assert.strictEqual(rPending.stdout.trim(),
-    '1  brief 24 (status-and-queue-diet)\n' +
-    '2  /spec:plan @docs/roadmap/26-x.md  ⏳ after specs/20260903/04-reports-write-the-queue.md (hardened)\n' +
-    '3  spec specs/20260903/06-hotfix.md\n' +
-    '— 2 done · move: spec-queue move <ref> <n>',
-    'D8: `list` must render exactly this literal — numbered pending items only, the gated prompt carrying its ⏳ blocker marker, and a footer naming the done count and the move remedy: ' + rPending.stdout)
+    '1  q1  brief 24 (status-and-queue-diet)\n' +
+    '2  q2  /spec:plan @docs/roadmap/26-x.md  ⏳ after 04-reports-write-the-queue (hardened)\n' +
+    '3  q3  spec specs/20260903/06-hotfix.md\n' +
+    '— 2 done · move: spec-queue move <ref> <n> · full text: spec-queue show <ref>',
+    'D8: `list` must render exactly this literal — numbered pending items only, each carrying its own id as a `<ref>` column, the gated prompt carrying its ⏳ blocker marker, and a footer naming the done count and the move remedy: ' + rPending.stdout)
 
   const dirEmpty = listHost(false)
   const rEmpty = runNode(SCRIPT, ['list'], { cwd: dirEmpty })
@@ -287,9 +287,9 @@ test('AC-20260903-03-8: spec-queue list virtually reconciles an unqueued, non-do
   const r = runNode(SCRIPT, ['list'], { cwd: dir })
   assert.strictEqual(r.status, 0, r.stderr)
   assert.strictEqual(r.stdout.trim(),
-    '1  brief 05 (a)\n' +
-    '2  brief 08 (b)\n' +
-    '— 0 done · move: spec-queue move <ref> <n>',
+    '1  q1  brief 05 (a)\n' +
+    '2  —   brief 08 (b)\n' +
+    '— 0 done · move: spec-queue move <ref> <n> · full text: spec-queue show <ref>',
     "D8: `list` must virtually reconcile brief 08 — never queued, still on-disk and not done — into the numbered pending output at its append-last position, exactly as a write subcommand's own reconcile would place it: " + r.stdout)
 
   const after = fs.readFileSync(path.join(dir, '.git/spec-queue.json'), 'utf8')
@@ -446,7 +446,7 @@ test('AC-20260903-03-7: spec-queue move <ref> <n> counts pending positions as `l
   assert.strictEqual(rFront.status, 0, 'D7: `move <ref> 1` must succeed for a pending item: ' + rFront.stdout + rFront.stderr)
   const listFront = runNode(SCRIPT, ['list'], { cwd: dirFront })
   assert.strictEqual(listFront.stdout.split('\n').filter((l) => l.trim()).slice(0, 3).join('\n'),
-    '1  task C\n2  task A\n3  task B',
+    '1  q4  task C\n2  q1  task A\n3  q3  task B',
     "D7: after `move C 1`, `list` must number pending items exactly [C, A, B] — the done item sinks out of the pending numbering entirely: " + listFront.stdout)
 
   // move C 9 (beyond the pending count) appends last.
@@ -455,7 +455,7 @@ test('AC-20260903-03-7: spec-queue move <ref> <n> counts pending positions as `l
   assert.strictEqual(rLast.status, 0, 'D7: `move <ref> <n>` with n beyond the pending count must succeed by appending last, never refuse: ' + rLast.stdout + rLast.stderr)
   const listLast = runNode(SCRIPT, ['list'], { cwd: dirLast })
   assert.strictEqual(listLast.stdout.split('\n').filter((l) => l.trim()).slice(0, 3).join('\n'),
-    '1  task A\n2  task B\n3  task C',
+    '1  q1  task A\n2  q3  task B\n3  q4  task C',
     'D7: `move C 9` (n >= pending count) must place C LAST among pending items, never error and never leave it where it was: ' + listLast.stdout)
 
   // move C 0 is out of range (< 1) — exit 2, write nothing.
@@ -562,7 +562,7 @@ test('spec-queue resolves brief/spec state against the repository toplevel, not 
 
   const fromRoot = runNode(SCRIPT, ['list'], { cwd: dir })
   assert.strictEqual(fromRoot.status, 0, 'list from the repository root must succeed: ' + fromRoot.stdout + fromRoot.stderr)
-  assert.match(fromRoot.stdout, /after specs\/20260701\/01-gate\.md \(hardened\)/,
+  assert.match(fromRoot.stdout, /after 01-gate \(hardened\)/,
     'arm: from the root the gate target must resolve to its real derived status, so the subdirectory run below has something to disagree with: ' + fromRoot.stdout)
 
   const fromSub = runNode(SCRIPT, ['list'], { cwd: sub })
@@ -574,4 +574,44 @@ test('spec-queue resolves brief/spec state against the repository toplevel, not 
   const nextSub = runNode(SCRIPT, ['next'], { cwd: sub })
   assert.strictEqual(nextSub.stdout, nextRoot.stdout,
     '`next` is the paste-ready pick — it must not depend on which directory the shell happens to sit in:\n--- from root ---\n' + nextRoot.stdout + '--- from subdirectory ---\n' + nextSub.stdout)
+})
+
+// `list` rows are one line each for the same reason the status screen's are: an unbounded
+// payload turns a list into a wall of wrapped text. `show <ref>` is the way back to the full
+// text — truncation is only honest if something can expand it.
+test('spec-queue list cuts every row to one line, and show <ref> prints the untruncated payload', () => {
+  const payload = 'Escape-annotated release report: ' + 'promised ACs plus executed evidence per AC '.repeat(20)
+  const dir = host({
+    specs: { '20260701/01-gate.md': 'date: 2026-07-01\nstatus: hardened' },
+    queue: [
+      { id: 'q1', kind: 'prompt', payload, added: '2026-07-01T10:00:00Z' },
+      { id: 'q2', kind: 'prompt', payload: 'gated note', after: { spec: 'specs/20260701/01-gate.md' }, added: '2026-07-01T10:01:00Z' },
+    ],
+  })
+
+  const rList = runNode(SCRIPT, ['list'], { cwd: dir })
+  assert.strictEqual(rList.status, 0, rList.stderr)
+  const rows = rList.stdout.split('\n').filter((l) => l.trim())
+  const long = rows.filter((l) => l.includes('Escape-annotated release report'))
+  assert.strictEqual(long.length, 1,
+    'the long payload must render as exactly ONE row, never wrapped across many: ' + JSON.stringify(long))
+  assert.ok(long[0].length <= 100 && long[0].endsWith('…'),
+    'the row is cut at the 100-column off-TTY fallback and says so with an ellipsis, so a cut payload is never mistaken for a short one: ' + long[0])
+  assert.match(rList.stdout, /full text: spec-queue show <ref>/,
+    'the footer must name the verb that reverses the truncation — a cut with no stated way back is a data loss, not a render: ' + rList.stdout)
+
+  const rShow = runNode(SCRIPT, ['show', 'q1'], { cwd: dir })
+  assert.strictEqual(rShow.status, 0, rShow.stderr)
+  assert.ok(rShow.stdout.includes(payload),
+    'show must print the payload in full, byte-for-byte — it is the only surface that does: ' + rShow.stdout)
+  assert.match(rShow.stdout, /^q1 {2}prompt/,
+    'show heads with the id and kind so the output stands alone without the list next to it: ' + rShow.stdout)
+
+  const rGated = runNode(SCRIPT, ['show', 'q2'], { cwd: dir })
+  assert.strictEqual(rGated.status, 0, rGated.stderr)
+  assert.match(rGated.stdout, /⏳ after specs\/20260701\/01-gate\.md \(hardened\)/,
+    "show states an unmet gate with its FULL target path — unlike the one-line list it has room, and the full path is what the caller needs to act: " + rGated.stdout)
+
+  const rMissing = runNode(SCRIPT, ['show'], { cwd: dir })
+  assert.strictEqual(rMissing.status, 2, 'show without a <ref> is a usage error, never a silent no-op: ' + rMissing.stdout)
 })

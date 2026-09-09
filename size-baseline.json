@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 29937,
-    "spec/scripts": 1253798,
+    "spec/scripts": 1260629,
     "spec/scripts/lib": 225608,
-    "tests": 3423338
+    "tests": 3433035
   },
   "files": {
     "scripts/plugin-bump.js": 8564,
@@ -16,7 +16,7 @@
     "spec/scripts/block-cross-worktree-writes.sh": 9703,
     "spec/scripts/ci-gate-parity.js": 3486,
     "spec/scripts/ci-query.js": 8464,
-    "spec/scripts/citations-check.js": 14056,
+    "spec/scripts/citations-check.js": 16601,
     "spec/scripts/collision-closure.js": 14335,
     "spec/scripts/comment-narration.js": 16102,
     "spec/scripts/commit-coverage.js": 16400,
@@ -75,11 +75,11 @@
     "spec/scripts/scope-reconcile.js": 16902,
     "spec/scripts/smoke.sh": 8134,
     "spec/scripts/spec-build-driver.js": 49555,
-    "spec/scripts/spec-queue.js": 22417,
+    "spec/scripts/spec-queue.js": 25130,
     "spec/scripts/spec-review-driver.js": 125803,
     "spec/scripts/spec-session-stamp.sh": 2680,
     "spec/scripts/spec-state-gate.sh": 4846,
-    "spec/scripts/spec-status.js": 50898,
+    "spec/scripts/spec-status.js": 52471,
     "spec/scripts/verdict.js": 49794,
     "spec/scripts/worktree-include.sh": 3277,
     "tests/ac-matrix-coverage-holes.test.js": 12430,
@@ -102,7 +102,7 @@
     "tests/commit-coverage/window-mode.test.js": 5805,
     "tests/components-check.test.js": 4988,
     "tests/consistency/base-derivation.test.js": 5513,
-    "tests/consistency/citations-check.test.js": 13057,
+    "tests/consistency/citations-check.test.js": 16363,
     "tests/consistency/comment-narration-live.test.js": 3527,
     "tests/consistency/dependency-free.test.js": 8614,
     "tests/consistency/design-doctrine.test.js": 25745,
@@ -192,8 +192,8 @@
     "tests/prose-debt/prose-cap.test.js": 11612,
     "tests/provenance/provenance.test.js": 30412,
     "tests/question-style-gate.test.js": 12330,
-    "tests/queue/queue-overlay.test.js": 25077,
-    "tests/queue/spec-queue.test.js": 38134,
+    "tests/queue/queue-overlay.test.js": 28730,
+    "tests/queue/spec-queue.test.js": 40872,
     "tests/red-check/mixed-pin.test.js": 9223,
     "tests/red-check/red-check-watchdog.test.js": 1866,
     "tests/red-check/red-check.test.js": 51574,
@@ -261,90 +261,5 @@
     "tests/worktree-hook.test.js": 13397,
     "tests/worktree-include.test.js": 9754
   },
-  "raises": [
-    {
-      "path": "spec/scripts/genesis-driver.js",
-      "from": 122791,
-      "to": 123132,
-      "cite": "specs/20260908/06-command-prose-states-contracts.md"
-    },
-    {
-      "path": "tests/consistency/read-load.test.js",
-      "from": 3429,
-      "to": 9559,
-      "cite": "specs/20260908/06-command-prose-states-contracts.md"
-    },
-    {
-      "path": "tests/genesis/genesis-driver.test.js",
-      "from": 71800,
-      "to": 73536,
-      "cite": "specs/20260908/06-command-prose-states-contracts.md"
-    },
-    {
-      "path": "spec/scripts",
-      "from": 1253045,
-      "to": 1253386,
-      "cite": "specs/20260908/06-command-prose-states-contracts.md"
-    },
-    {
-      "path": "tests",
-      "from": 3394611,
-      "to": 3402477,
-      "cite": "specs/20260908/06-command-prose-states-contracts.md"
-    },
-    {
-      "path": "spec/scripts/citations-check.js",
-      "from": 12905,
-      "to": 14056,
-      "cite": "specs/20260907/09-atlas-index-and-note-navigation.md"
-    },
-    {
-      "path": "tests/consistency/citations-check.test.js",
-      "from": 11021,
-      "to": 13057,
-      "cite": "specs/20260907/09-atlas-index-and-note-navigation.md"
-    },
-    {
-      "path": "spec/scripts/design-atlas.js",
-      "from": 139575,
-      "to": 140188,
-      "cite": "specs/20260908/07-one-wire-register-predicate.md"
-    },
-    {
-      "path": "tests/design-atlas.test.js",
-      "from": 211158,
-      "to": 217100,
-      "cite": "specs/20260908/07-one-wire-register-predicate.md"
-    },
-    {
-      "path": "tests/mocks/mocks-driver-theme.test.js",
-      "from": 54096,
-      "to": 54571,
-      "cite": "specs/20260908/07-one-wire-register-predicate.md"
-    },
-    {
-      "path": "tests/mocks/mocks-driver.test.js",
-      "from": 31896,
-      "to": 31925,
-      "cite": "specs/20260908/07-one-wire-register-predicate.md"
-    },
-    {
-      "path": "spec/scripts",
-      "from": 1253386,
-      "to": 1253798,
-      "cite": "specs/20260908/07-one-wire-register-predicate.md"
-    },
-    {
-      "path": "spec/scripts/lib",
-      "from": 222737,
-      "to": 225608,
-      "cite": "specs/20260908/07-one-wire-register-predicate.md"
-    },
-    {
-      "path": "tests",
-      "from": 3402477,
-      "to": 3423338,
-      "cite": "specs/20260908/07-one-wire-register-predicate.md"
-    }
-  ]
+  "raises": []
 }

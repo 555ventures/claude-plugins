@@ -102,7 +102,10 @@ sections the default screen never shows, then the same footer:
 
 - **`📋 All open work`** — today's lane render, unchanged: `⚡ N parallel lanes…` / `🚦 solo`
   for the top tier, `🕓 after that:` for serial runner-ups, `⛔ blocked:` for entries with
-  unmet dependencies, each with its branch lines. This is where the parallel-fan-out option
+  unmet dependencies, each with its branch lines. Every row is one terminal line: a free-text
+  queue item leads with its queue id — the handle `spec-queue move|done|show` takes — and is
+  cut with a trailing `…` (`spec-queue show <ref>` prints it whole), while a row that is a
+  command stays bare and id-free so it survives a copy. This is where the parallel-fan-out option
   and the full blocked list live now — narrate them exactly as before when the user asks "what
   else could I run."
 - **`🧹 Hygiene ({h}) — /spec:doctor`** — one `[kind] {detail}` line per hygiene-audience

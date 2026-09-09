@@ -35,13 +35,16 @@ judgment happens here — the script derives and writes, you render its output.
 - `move <ref> <n>` — reorder: `<n>` counts pending positions the way `list` prints them;
   `<n>` at or past the end places last.
 - `done <ref>` — manual tick.
+- `show <ref>` — the item's full, untruncated payload plus its id, kind and gate. `list` and
+  `/spec:status` cut every row to one line, so this is the only surface that prints a long
+  payload whole; reach for it whenever a row ends in `…`.
 
 `<ref>` resolves against a brief number, a spec path (exact or unique basename substring), a
 unique prompt-payload substring, or an item id. Pass everything after the subcommand straight
 through — never reparse or validate `<ref>`/`--when`/`--after-*` shapes yourself; the
 script's usage/ambiguity errors already name the fix.
 
-The verb set is exactly `next`, `list`, `add`, `move`, `done`. Anything outside it — `bump`,
+The verb set is exactly `next`, `list`, `add`, `move`, `done`, `show`. Anything outside it — `bump`,
 `defer`, `ok`, `add --after <ref>`, `add --brief` — exits 2 naming the replacement (`move`, or `--at`/`--top` at add time); relay that message
 verbatim rather than translating it.
 
@@ -63,8 +66,12 @@ successful mutation and "nothing to say."
 ## Render (Console Output Style — the script output IS the render)
 
 Print the script's stdout **verbatim**. `list` renders one line per pending item —
-`{n}  {desc}`, with a trailing `  ⏳ after <target> (<state>)` on a gated, not-ready item —
-followed by a footer `— {d} done · move: spec-queue move <ref> <n>`, or `✨ nothing pending ·
+`{n}  {id}  {desc}` — the id column being the item's own `<ref>` for `move`/`done`/`show`, `—`
+on a virtually reconciled item that has none yet — with a trailing `  ⏳ after <target>
+(<state>)` on a gated, not-ready item, the whole row cut to one terminal line (a trailing `…`
+marks a cut payload; `show <ref>` prints it whole) —
+followed by a footer `— {d} done · move: spec-queue move <ref> <n> · full text: spec-queue
+show <ref>`, or `✨ nothing pending ·
 {d} done` when nothing is pending; reproduce it as printed, never rebuilt as a markdown table
 or re-sorted by hand. For `next`, the top line is the paste-ready pick — a brief's derived
 `/spec:plan`/`/spec:run` line, or a prompt item's payload verbatim with no `@path` suffix.

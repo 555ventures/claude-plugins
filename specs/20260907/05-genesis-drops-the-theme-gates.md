@@ -257,9 +257,12 @@ build resolved to 7.105.0 because 7.104.0 was already spent at the base. Between
 merge-back, a sibling landed 7.105.0 on `main` for unrelated work, so the merge conflicted on
 `spec/.claude-plugin/plugin.json`. Resolved by intent per § Gotchas ("the spec's literal number
 is a target, not a pin"): main's changelog was taken whole and this spec re-bumped on top of it
-via `node scripts/plugin-bump.js --bump --plugin spec`, landing **7.106.0** with both entries
-preserved in the last-three rotation. No behavior, doctrine, or test text changed in the
-resolution.
+via `node scripts/plugin-bump.js --bump --plugin spec`, landing 7.106.0 with both entries
+preserved in the last-three rotation. The same race then repeated at push: `origin/main` had
+meanwhile taken 7.106.0 and 7.107.0 for unrelated sibling work, so the integration merge
+conflicted on the same file and was resolved the same way, landing **7.108.0**. No behavior,
+doctrine, or test text changed in either resolution — only the version line and the changelog
+rotation.
 
 **Review ruling — rejected finding, 2026-09-08.** The second review pass raised the driver's
 file-preamble history paragraph (`spec/scripts/genesis-driver.js` ~111-112) as still asserting

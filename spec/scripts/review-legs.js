@@ -36,17 +36,24 @@
 //   at-risk        {"leg":"at-risk","exit":<code>,"observed":{"files":N,"testsExecuted":N|
 //                  {"unavailable":"pattern-no-match"|"no-format-declared"}}} |
 //                  {"unavailable":"no-test-command"} | {"malformed":{"entries":N,"of":M}} — exit is
-//                  FORCED to 1 when files>0 and testsExecuted===0 strictly (D5, emitter-side
-//                  contradiction; an unavailability object is not a zero)
+//                  FORCED to 1 when files>0 and testsExecuted is the number 0 OR the object
+//                  {"unavailable":"pattern-no-match"} (D4, specs/20260907/03-ignored-paths-and-
+//                  unobserved-count.md; emitter-side contradiction — a declared format that never
+//                  matched observed nothing executing, the same unsupported promise as an observed
+//                  zero; "no-format-declared" never forces — that host never promised an
+//                  observation)
 //   suite          {"leg":"suite","exit":<code>,"observed":{"skips":N|{"unavailable":...},
 //                  "todos":N?,"testsExecuted":N|{"unavailable":"pattern-no-match"|
 //                  "no-format-declared"}}} | {"unavailable":"no-test-command"} — its own wave,
 //                  1b, after wave 1 (reconcile/gate/ci) and before wave 2 (at-risk/patterns);
 //                  runs config.testCommand BARE (no file args) through sh(), typed exactly like
 //                  the gate row; exit is FORCED to 1 when a declared testCountPattern observes
-//                  exactly 0 executed tests on an exit-0 run (the at-risk contradiction rule,
-//                  D5, applied to the whole suite); runs in EVERY scope including --fix-delta;
-//                  BLOCKING (specs/20260903/02-whole-suite-review-leg.md D1-D3)
+//                  exactly 0 executed tests OR never matches at all on an exit-0 run (D5,
+//                  specs/20260907/03-ignored-paths-and-unobserved-count.md, the identical
+//                  extension applied to the whole suite — the blocking leg, so a vacuous whole-
+//                  suite run is the wider-blast-radius half of the same escape); runs in EVERY
+//                  scope including --fix-delta; BLOCKING (specs/20260903/02-whole-suite-review-
+//                  leg.md D1-D3)
 //   ac-matrix / skip-reconcile — appended by ac-matrix.js itself (same manifest)
 //   promise-sweep  {"leg":"promise-sweep","exit":<0|1>,"observed":{"rows":N,"carried":C,
 //                  "sanctioned":S,"orphans":O}} — appended by promise-sweep.js itself (same
@@ -66,9 +73,10 @@
 // applied to the gate and at-risk legs' child output, writing `testsExecuted` as a number or a
 // typed `{"unavailable":...}` — absent/"none"/no-match is never assumed zero (the
 // never-assumed-zero rule, extended). The at-risk leg's exit is forced to 1 when it captured
-// files>0 but a declared testCountPattern observed exactly 0 executed tests — the vacuous-green
-// escape
-// (files=N, exit=0, runner executed nothing) becomes a same-run red instead of silent decay.
+// files>0 and testsExecuted is the number 0 OR the object {"unavailable":"pattern-no-match"}
+// (D4, specs/20260907/03-ignored-paths-and-unobserved-count.md) — the vacuous-green escape
+// (files=N, exit=0, runner executed nothing OR a declared format that never matched) becomes a
+// same-run red instead of silent decay; {"unavailable":"no-format-declared"} never forces.
 // --fix-delta skips reconcile/at-risk/patterns (the fix diff is a response to findings) and
 // re-runs everything else in full — a fix-delta pass must re-assert executed state, never
 // inherit it (CROSS-20260727-01).
@@ -198,6 +206,15 @@ function computeTestsExecuted(output, pattern) {
   return m ? (Number(m[1]) || 0) : { unavailable: 'pattern-no-match' }
 }
 
+// D4/D5 (specs/20260907/03-ignored-paths-and-unobserved-count.md): the at-risk and suite legs
+// share this one predicate (the sole-derivation rule) — an observed 0 and a declared format that
+// never matched are the identical unsupported promise ("these files were exercised"/"the suite
+// ran"). "no-format-declared" is a host that never promised an observation, so it never forces.
+function isUnobserved(testsExecuted) {
+  return testsExecuted === 0 ||
+    (testsExecuted && typeof testsExecuted === 'object' && testsExecuted.unavailable === 'pattern-no-match')
+}
+
 function computeSkips(output, pattern) {
   if (!pattern || pattern === 'none') return { skips: { unavailable: 'no-format-declared' } }
   const m = lastMatch(output, pattern)
@@ -320,10 +337,11 @@ async function main() {
     const skipPat = config.capabilities && config.capabilities.skipReportPattern
     const countPat = config.capabilities && config.capabilities.testCountPattern
     const testsExecuted = computeTestsExecuted(output, countPat)
-    // D2: exit is FORCED to 1 when a declared testCountPattern observes exactly 0 executed tests
-    // on an exit-0 run — the at-risk emitter-side contradiction rule (D5, specs/20260820/06),
-    // applied to the whole suite: a vacuous-green whole run is the same escape at a wider scope.
-    const exit = (testsExecuted === 0) ? 1 : sr.code
+    // D2/D5: exit is FORCED to 1 when a declared testCountPattern observes exactly 0 executed
+    // tests OR never matches at all on an exit-0 run — the at-risk emitter-side contradiction
+    // rule (D4, specs/20260907/03-ignored-paths-and-unobserved-count.md), applied to the whole
+    // suite: a vacuous-green whole run is the same escape at a wider scope.
+    const exit = isUnobserved(testsExecuted) ? 1 : sr.code
     appendRow('suite', exit, { ...computeSkips(output, skipPat), testsExecuted })
   }
 
@@ -356,9 +374,11 @@ async function main() {
           fs.writeFileSync(atRiskPath, `$ ${config.testCommand} ${atRiskFiles.map(q).join(' ')}\n\n${r.out}${r.err}`)
           wroteAtRisk = true
           const testsExecuted = computeTestsExecuted(r.out + r.err, config.capabilities && config.capabilities.testCountPattern)
-          // D5: exit is FORCED to 1 when files>0 and testsExecuted===0 STRICTLY (an unavailability
-          // object is not a zero) — the vacuous-green escape becomes a same-run red.
-          const exit = (testsExecuted === 0) ? 1 : r.code
+          // D4 (specs/20260907/03-ignored-paths-and-unobserved-count.md): exit is FORCED to 1
+          // when files>0 and testsExecuted is the number 0 OR the object
+          // {"unavailable":"pattern-no-match"} — the vacuous-green escape becomes a same-run red;
+          // {"unavailable":"no-format-declared"} never forces.
+          const exit = isUnobserved(testsExecuted) ? 1 : r.code
           appendRow('at-risk', exit, { files: atRisk.length, testsExecuted })
         }))
       }

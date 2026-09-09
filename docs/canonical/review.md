@@ -229,15 +229,28 @@
   string (a root dotfile strips to `''` and matches every candidate) and never a bare
   single-segment basename; the full repo-relative path always survives so a root-level file
   stays matchable. (specs/20260815/02-at-risk-pins.md, done 2026-08-16; the stem-degeneracy
-  clause added by that spec's own review, AC-20260815-02-15)
+  clause added by that spec's own review, AC-20260815-02-15). The walk classifies by what the
+  repository considers its own, not by directory name: it prunes every git-ignored path
+  (derived once per run from `git ls-files -o -i --exclude-standard --directory`), so an
+  ignored working copy — a `.claude/worktrees/**` checkout, a `*.build/` scratch dir — is never
+  handed to the host's test command as if it were a real test file. The prune is active only
+  when `--root` is the repository top level and both git calls succeed; any other outcome
+  filters nothing and leaves the pre-existing walk exactly as it was, because a wrongly pruned
+  set is silently too narrow while an unpruned one is merely too wide.
+  (specs/20260907/03-ignored-paths-and-unobserved-count.md D1/D2/D3)
 
 - The Phase 0 leg inventory carries **`suite`**: required in both scopes, blocking. It runs the
   host's bare `testCommand` from the repo root in its own wave after gate/reconcile/ci and before
   at-risk and smoke, writes `<out-dir>/suite-output.txt`, and types its row like the gate's
-  (`skips`, `todos`, `testsExecuted`); a declared `testCountPattern` observing zero executed tests
-  forces exit 1, and a host with no `testCommand` gets a red `{"unavailable":"no-test-command"}`
+  (`skips`, `todos`, `testsExecuted`); a declared `testCountPattern` forces exit 1 whenever the
+  run observed no test executing — either an observed `0` or a `{"unavailable":"pattern-no-match"}`
+  the pattern never matched, since a format that was promised and produced nothing is the same
+  unsupported claim as a counted zero; `{"unavailable":"no-format-declared"}` never forces,
+  because a host that promised no observation is contradicted by nothing. The at-risk leg carries
+  the identical rule. A host with no `testCommand` gets a red `{"unavailable":"no-test-command"}`
   row, never a silent skip. The close-time re-run runs the same command after the resolved gate.
-  (specs/20260903/02-whole-suite-review-leg.md)
+  (specs/20260903/02-whole-suite-review-leg.md; the unobserved-count extension
+  specs/20260907/03-ignored-paths-and-unobserved-count.md D4/D5)
 
 - The promise sweep's **deterministic half** lives in `promise-sweep.js` — run manifest-less at
   plan lock and in every review scope (full AND fix-delta) by `review-legs.js`. It reads only

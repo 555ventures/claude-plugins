@@ -30,6 +30,15 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // the at-risk row keeps the child's real exit code, no contradiction possible without an
 // observation). Every row asserted below is the ACTUAL manifest row review-legs.js appended,
 // never hand-written, per D10's own standing rule.
+//
+// specs/20260907/03-ignored-paths-and-unobserved-count.md D4/D5 (AC-20260907-03-5,
+// AC-20260907-03-6, AC-20260907-03-8): the at-risk and suite contradiction rules above widen
+// from "testsExecuted === 0 STRICTLY" to "0 OR {"unavailable":"pattern-no-match"}" — a declared
+// pattern that never matches is the same unsupported "these files were exercised" promise as an
+// observed zero. AC-5/AC-6 fail on current code, which never forces the exit on an unavailable
+// object; AC-8 (an observed non-zero count on both legs) is a CONTINUE-TO pin already green
+// pre-image. AC-20260907-03-7 retags the existing no-testCountPattern-declared test below in
+// place (D6: that branch's contract is unchanged) — never weakened.
 
 const SPEC_BODY = `---
 status: implementing
@@ -271,7 +280,7 @@ test('AC-20260820-06-6 (also AC-20260903-02-16, SHALL CONTINUE TO): a synthetic 
     `no new rule for this, per D5\'s rationale ("a red non-blocking row already pools"): ${JSON.stringify(ledgerRow.findings)}`)
 })
 
-test('AC-20260820-06-7 (also AC-20260903-02-16, SHALL CONTINUE TO): a synthetic host declaring no testCountPattern gives the at-risk row the child\'s real exit code (1) with observed {"files":1,"testsExecuted":{"unavailable":"no-format-declared"}} — no contradiction check is possible without an observation — and the same recorder invoked bare (the suite leg) still exits 0', () => {
+test('AC-20260820-06-7 (also AC-20260903-02-16 and AC-20260907-03-7, SHALL CONTINUE TO): a synthetic host declaring no testCountPattern gives the at-risk row the child\'s real exit code (1) with observed {"files":1,"testsExecuted":{"unavailable":"no-format-declared"}} — no contradiction check is possible without an observation — and the same recorder invoked bare (the suite leg) still exits 0', () => {
   const { dir, base } = makeAtRiskHost({
     testCountPattern: null,
     recorderBody: 'const args = process.argv.slice(2)\n' +
@@ -287,7 +296,7 @@ test('AC-20260820-06-7 (also AC-20260903-02-16, SHALL CONTINUE TO): a synthetic 
   assert.deepStrictEqual(row, {
     leg: 'at-risk', exit: 1, observed: { files: 1, testsExecuted: { unavailable: 'no-format-declared' } },
     scope: 'full',
-  }, 'AC-20260820-06-7 (literal, also AC-20260902-05-1): with no declared testCountPattern, the row must carry ' +
+  }, 'AC-20260820-06-7 (literal, also AC-20260902-05-1 and AC-20260907-03-7): with no declared testCountPattern, the row must carry ' +
     'the CHILD\'s real exit code (1, from the recorder\'s own process.exit(1)) unmodified — D5\'s emitter-side ' +
     'contradiction only applies when an executed-count observation actually exists; with none, there is nothing ' +
     'to contradict, so the exit must never be forced; D1: a full-scope run must stamp scope:"full" as this ' +
@@ -302,6 +311,155 @@ test('AC-20260820-06-7 (also AC-20260903-02-16, SHALL CONTINUE TO): a synthetic 
       'AC-20260903-02-16: the bare (suite) invocation of the identical recorder must exit 0 (its own branch ' +
       `never runs the at-risk-only process.exit(1) path) — the at-risk row's red exit must never leak onto it: ${JSON.stringify(suiteRow)}`)
   }
+})
+
+test('AC-20260907-03-5: a synthetic host declaring testCountPattern whose at-risk testCommand exits 0 printing no matching count line forces the at-risk row to exit 1, and that row still pools >= 1 leg finding under verdict.js --ledger', () => {
+  const { dir, base } = makeAtRiskHost({
+    testCountPattern: 'ℹ tests (\\d+)',
+    // With file args (the at-risk leg) the runner exits 0 while printing no line the declared
+    // pattern matches; bare (the suite leg) it prints a matching count and stays green, isolating
+    // this test's assertion to the at-risk row alone.
+    recorderBody: 'const args = process.argv.slice(2)\n' +
+      'if (args.length > 0) { process.stdout.write("tests ran, no summary line here\\n"); process.exit(0) }\n' +
+      'else { process.stdout.write("ℹ tests 3\\n"); process.exit(0) }\n',
+  })
+  const { r, manifest } = runLegsAtRisk(dir, base)
+  const rows = fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
+  const row = rows.find(x => x.leg === 'at-risk')
+  assert.ok(row,
+    'review-legs.js must append an "at-risk" manifest row when scope-reconcile.js finds an at-risk file: ' +
+    r.stdout + r.stderr)
+  assert.deepStrictEqual(row,
+    { leg: 'at-risk', exit: 1, observed: { files: 1, testsExecuted: { unavailable: 'pattern-no-match' } }, scope: 'full' },
+    'D4: the recorder exits 0 and files>0, but its declared testCountPattern matches no line in the output — ' +
+    'a declared-and-unmatched pattern is the same unsupported "these files were exercised" promise as an ' +
+    'observed zero, so the emitter must force exit to 1 here too, never the pre-image\'s exit:0 vacuous green: ' +
+    JSON.stringify(row))
+
+  const workflow = path.join(dir, 'workflow.json')
+  fs.writeFileSync(workflow, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: 0, reviewerCount: 1, scope: 'full' }))
+  const v = runNode('scripts/verdict.js', ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
+  const lines = v.stdout.trim().split('\n')
+  let ledgerRow
+  assert.doesNotThrow(() => { ledgerRow = JSON.parse(lines[1]) },
+    'verdict.js --ledger must print a parseable row even with an undispositioned leg finding: ' +
+    v.stdout + ' / ' + v.stderr)
+  assert.ok(ledgerRow.findings && ledgerRow.findings.legFindings >= 1,
+    'AC-20260907-03-5: the forced-red at-risk row must pool at least 1 leg finding into the undispositioned ' +
+    'pool — at-risk stays non-blocking, so a silent pattern-no-match escape must still page the same run it ' +
+    `occurs on: ${JSON.stringify(ledgerRow.findings)}`)
+})
+
+// AC-20260907-03-6 needs verdict.js to actually REACH its red-blocking-leg check rather than
+// fail closed earlier on missing required legs — makeAtRiskHost's minimal spec (no ## Decisions,
+// no ## Acceptance Criteria) makes ac-matrix.js and promise-sweep.js refuse without writing a
+// row (own scoped fixture, verified empirically), which review-legs.js's own wave-3 gating skips
+// entirely once a blocking leg (suite) is already red — so verdict.js would derive UNVERIFIED
+// regardless of whether D5's forcing rule fired at all, proving nothing. This dedicated builder
+// (not the shared makeAtRiskHost, to avoid perturbing its other callers above) gives both
+// scripts exactly enough to succeed green: one real Decision/AC pair genuinely covered by a
+// passing test.
+function makeVerdictCapableAtRiskHost({ testCountPattern, recorderBody }) {
+  const dir = tmpdir('legs-verdict-pair-atrisk-verdict')
+  const g = gitRepo(dir)
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'tests/inplan'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'bin'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'bin/recorder.js'), recorderBody)
+  const capabilities = { forge: 'none', skipReportPattern: 'none' }
+  if (testCountPattern) capabilities.testCountPattern = testCountPattern
+  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'node --test {testDirs}',
+    testCommand: `node ${JSON.stringify(path.join(dir, 'bin/recorder.js'))}`,
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities,
+  }))
+  fs.writeFileSync(path.join(dir, 'src/riskyfoo.js'), 'module.exports = () => 1\n')
+  fs.writeFileSync(path.join(dir, 'tests/inplan/covers.test.js'),
+    "const { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260820-99-1: foo returns 2', () => { assert.ok(true) })\n")
+  fs.mkdirSync(path.join(dir, 'tests/outofplan'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/outofplan/atrisk.test.js'),
+    "'use strict'\nrequire('../../src/riskyfoo.js')\n")
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const base = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(dir, 'specs/20260820'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'specs/20260820/99-verdict-test.md'),
+    '---\nstatus: implementing\ntier: standard\n---\n# Verdict-capable at-risk contradiction fixture\n\n' +
+    '## Decisions\n\n| ID | Decision | One-line rationale |\n|----|----------|--------------------|\n' +
+    '| D1 | foo (AC-20260820-99-1) | why |\n\n' +
+    '## File Plan\n\n| Path | Action | Layer | Summary |\n|---|---|---|---|\n' +
+    '| `src/riskyfoo.js` | MODIFY | scripts | x |\n| `tests/inplan/covers.test.js` | CREATE | tests | x |\n\n' +
+    '## Acceptance Criteria\n\n- **AC-20260820-99-1**: foo returns 2.\n')
+  fs.writeFileSync(path.join(dir, 'src/riskyfoo.js'), 'module.exports = () => 2\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'work')
+  return { dir, base }
+}
+
+test('AC-20260907-03-6: a synthetic host declaring testCountPattern whose bare testCommand (the suite leg) exits 0 printing no matching count line forces the suite row to exit 1, and verdict.js derives a blocking-red word, never CLEAN', () => {
+  const { dir, base } = makeVerdictCapableAtRiskHost({
+    testCountPattern: 'ℹ tests (\\d+)',
+    // Bare (the suite leg) the runner exits 0 while printing no matching line; with file args (the
+    // at-risk leg) it prints a matching count and stays green, isolating this test's assertion to
+    // the suite row alone.
+    recorderBody: 'const args = process.argv.slice(2)\n' +
+      'if (args.length > 0) { process.stdout.write("ℹ tests 3\\n"); process.exit(0) }\n' +
+      'else { process.stdout.write("tests ran, no summary line here\\n"); process.exit(0) }\n',
+  })
+  const manifest = path.join(tmpdir('legs-verdict-pair-atrisk-verdict-out'), 'manifest.jsonl')
+  const r = runNode('scripts/review-legs.js', ['--root', dir, '--spec', 'specs/20260820/99-verdict-test.md',
+    '--base', base, '--manifest', manifest])
+  const rows = fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
+  const suiteRow = rows.find(x => x.leg === 'suite')
+  assert.ok(suiteRow,
+    'review-legs.js must append a "suite" manifest row on every run of a host declaring a testCommand: ' +
+    r.stdout + r.stderr)
+  assert.deepStrictEqual(suiteRow,
+    { leg: 'suite', exit: 1, observed: { skips: { unavailable: 'no-format-declared' }, testsExecuted: { unavailable: 'pattern-no-match' } }, scope: 'full' },
+    'D5: the identical extension applied to the blocking suite leg — the bare run exits 0 and prints no line ' +
+    'the declared testCountPattern matches, so the emitter must force exit to 1 here too: a whole-suite run ' +
+    'that executed nothing must never pass a review, the wider-blast-radius half of this same escape: ' +
+    JSON.stringify(suiteRow))
+
+  // This host's spec is deliberately complete enough (a Decision + a genuinely-covered AC) that
+  // ac-matrix.js and promise-sweep.js both succeed green — verified empirically pre-image: with
+  // D5's forcing reverted, this exact fixture derives CLEAN (the vacuous-green escape itself);
+  // post-image it must derive GATE_RED, never CLEAN.
+  const workflow = path.join(dir, 'workflow.json')
+  fs.writeFileSync(workflow, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: 0, reviewerCount: 1, scope: 'full' }))
+  const v = runNode('scripts/verdict.js', ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
+  const lines = v.stdout.trim().split('\n')
+  let ledgerRow
+  assert.doesNotThrow(() => { ledgerRow = JSON.parse(lines[1]) },
+    'verdict.js --ledger must print a parseable row even with a blocking-red leg: ' + v.stdout + ' / ' + v.stderr)
+  assert.strictEqual(ledgerRow.verdict, 'GATE_RED',
+    'AC-20260907-03-6: suite is a BLOCKING leg (verdict.js\'s REVIEW_BLOCKING set) — a red suite row must ' +
+    'derive GATE_RED, never CLEAN, or a vacuous whole-suite run that executed nothing would still pass ' +
+    `review: ${JSON.stringify(ledgerRow)}`)
+})
+
+test('AC-20260907-03-8 (SHALL CONTINUE TO): a synthetic host declaring testCountPattern whose testCommand exits 0 printing "ℹ tests 3" leaves both the at-risk row and the suite row green — the widened pattern-no-match predicate never reddens an observed non-zero count', () => {
+  const { dir, base } = makeAtRiskHost({
+    testCountPattern: 'ℹ tests (\\d+)',
+    // Identical output regardless of argv — both the at-risk (with args) and the suite (bare)
+    // invocations of this recorder observe the same non-zero executed count.
+    recorderBody: 'process.stdout.write("ℹ tests 3\\n")\nprocess.exit(0)\n',
+  })
+  const { r, manifest } = runLegsAtRisk(dir, base)
+  const rows = fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
+  const atRiskRow = rows.find(x => x.leg === 'at-risk')
+  const suiteRow = rows.find(x => x.leg === 'suite')
+  assert.ok(atRiskRow && suiteRow,
+    'review-legs.js must append both an "at-risk" and a "suite" manifest row for this host: ' + r.stdout + r.stderr)
+  assert.deepStrictEqual(atRiskRow,
+    { leg: 'at-risk', exit: 0, observed: { files: 1, testsExecuted: 3 }, scope: 'full' },
+    'AC-20260907-03-8: an observed non-zero executed count must never be forced red by the widened predicate ' +
+    `— {"unavailable":"pattern-no-match"} is not what was captured here, a real count of 3 was: ${JSON.stringify(atRiskRow)}`)
+  assert.deepStrictEqual(suiteRow,
+    { leg: 'suite', exit: 0, observed: { skips: { unavailable: 'no-format-declared' }, testsExecuted: 3 }, scope: 'full' },
+    'AC-20260907-03-8: the identical extension on the suite leg must likewise never redden an observed ' +
+    `non-zero count: ${JSON.stringify(suiteRow)}`)
 })
 
 // D2 (AC-20260902-05-2): end-to-end, the whole point of the manifest-derived scope — a real

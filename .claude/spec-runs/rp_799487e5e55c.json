@@ -1,0 +1,73 @@
+{
+  "ts": "2026-09-09T04:39:51.370Z",
+  "stage": "replay",
+  "spec": "specs/20260908/05-release-e2e-unobserved-count.md",
+  "runId": "rp_799487e5e55c",
+  "reviewRunId": "rv_cb195f75586e",
+  "class": "dead-wiring",
+  "files": [
+    "spec/scripts/release-legs.js"
+  ],
+  "legs": "baseline-red:suite",
+  "outcome": "caught",
+  "tokens": 62000,
+  "via": "driver",
+  "patch": "diff --git a/spec/scripts/release-legs.js b/spec/scripts/release-legs.js\nindex eadc85e..15be828 100644\n--- a/spec/scripts/release-legs.js\n+++ b/spec/scripts/release-legs.js\n@@ -444,9 +444,10 @@ function cmdRecord(argv) {\n   const config = readConfig(root)\n   const release = requireReleaseBlock(config, 'record')\n \n-  const verdictArgs = ['--manifest', manifest, '--profile', 'release', '--ledger']\n-  if (milestone) verdictArgs.push('--milestone', milestone)\n-  if (briefs) verdictArgs.push('--briefs', briefs)\n+  const recordContext = { root, manifest, milestone, briefs }\n+\n+  const verdictArgs = ['--manifest', recordContext.manifest, '--profile', 'release', '--ledger']\n+  if (recordContext.milestone) verdictArgs.push('--milestone', recordContext.milestone)\n   // D8: --require migrations is derived here, never a caller flag.\n   if (isRunnableMigrationsCheck(release)) verdictArgs.push('--require', 'migrations')\n \n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "reviewerCount": 1,
+    "tokens": 62000,
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "Commit 2d92826 (HEAD of the range) rewrites cmdRecord outside every File Plan row and drops the `--briefs` forwarding to verdict.js: the flag is still parsed and stuffed into `recordContext.briefs`, but the `verdictArgs.push('--briefs', briefs)` line was deleted, so the release ledger row loses its `briefs` array.",
+        "file": "spec/scripts/release-legs.js",
+        "line": 447,
+        "impact": "Every release recorded from this build silently loses the list of shipped briefs from its ledger row, so the release stage's own documented invocation (release.md line 175 passes the shipped brief numbers) no longer lands what it promises, and the change is not anything the spec asked for.",
+        "evidence": "Spec File Plan for release-legs.js names no Decision touching `record`. Hunk (git show 2d92826): -  if (briefs) verdictArgs.push('--briefs', briefs) / +  const recordContext = { root, manifest, milestone, briefs }. Executed repro through the real script against a synthetic host (7 green rows; base extracted with `git archive bace2b7`): HEAD: record --milestone v1.2.3 --briefs 12,13 -> exit 0, ledger row briefs=undefined hasBriefsKey=false; base bace2b7: same invocation -> ledger row briefs=[12,13] hasBriefsKey=true. No test in tests/release-legs/ exercises `record --briefs`, which is why the suite stayed green on it."
+      },
+      {
+        "severity": "medium",
+        "claim": "AC-20260908-05-10's second clause — `{\"checks\":[]}` SHALL exit 2 \"naming the release-manifest remedy\" — has no assert in the test that carries the AC-ID; the test pins exit 2 and zero rows only.",
+        "file": "tests/release-legs/e2e-unobserved.test.js",
+        "line": 220,
+        "impact": "The pin recorded as covering the empty-manifest refusal would stay green if the refusal stopped telling the operator which command fixes it, so the remedy-naming rule in the pipeline rules is unguarded on this path.",
+        "evidence": "Test body (lines 220-226) asserts only rB.status === 2 and readRows(runManifestB) deep-equal []. No assertion on rB.stderr/rB.stdout mentioning the manifest-check remedy."
+      },
+      {
+        "severity": "soft",
+        "claim": "Suite/at-risk legs are red on exactly one test, AC-20260908-01-1 (plugin-bump merge-base check), whose file is untouched by the range; provenance recorded per the two-part rule.",
+        "file": "tests/consistency/plugin-bump.test.js",
+        "line": 1,
+        "impact": "The red run's only failing pin is the version-discipline check, whose merge base moved under this branch; it is not a defect in the count-observation work itself.",
+        "evidence": "git merge-base --is-ancestor d5c3d06 bace2b7 -> exit 0 (last commit touching the test file predates the range). node scripts/plugin-bump.js --check -> spec/ changed since fcd8b91 but version is 7.110.0."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "ac-matrix HARD oracle-red-or-absent AC-20260908-05-12: the declared oracle leg suite is red, so AC-12 is unproven.",
+        "file": "tests/review/legs-verdict-pair.test.js",
+        "line": 1,
+        "evidence": "node --test tests/review/legs-verdict-pair.test.js -> tests 8, pass 8, fail 0. The suite leg's only failure is AC-20260908-01-1, unrelated to review-legs.js."
+      },
+      {
+        "claim": "D1/D2 moved semantics drifted (parsers not byte-identical, or release still reads first match).",
+        "file": "spec/scripts/lib/count-observation.js",
+        "line": 17,
+        "evidence": "The four bodies are the removed review-legs.js bodies verbatim (lastMatch via matchAll+'g', same tri-state returns). node --test tests/count-observation.test.js tests/release-legs/e2e-unobserved.test.js tests/release-legs/release-legs.test.js -> tests 26, pass 26, fail 0."
+      },
+      {
+        "claim": "D8 fixtures move weakened the retagged AC-20260823-01-8 pin (subset match instead of whole-row deep-equal).",
+        "file": "tests/release-legs/release-legs.test.js",
+        "line": 1,
+        "evidence": "Diff hunk keeps the whole-row deepStrictEqual with executed: 5 added in place; retags -3/-6/-9 present."
+      },
+      {
+        "claim": "Out-of-File-Plan files in the range (.claude/agent-memory/gate-scripts/*) are an unreconciled scope leak.",
+        "file": null,
+        "line": null,
+        "evidence": "reconcile leg: {\"leg\":\"reconcile\",\"exit\":0,\"observed\":{\"outOfPlan\":0,\"files\":[]}} — agent-memory is excluded by the host's reconcile derivation."
+      }
+    ]
+  }
+}

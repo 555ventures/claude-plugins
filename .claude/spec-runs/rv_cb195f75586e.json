@@ -1,0 +1,129 @@
+{
+  "runId": "rv_cb195f75586e",
+  "ts": "2026-09-09T04:00:33.110Z",
+  "spec": "specs/20260908/05-release-e2e-unobserved-count.md",
+  "tier": "critical",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 668,
+    "base": "bace2b7b7493fd3ff268b97c148d153f59a15dd4",
+    "head": "fcd8b915bf794ef7de402c6a06f747bd176b8c66",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 331
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1349
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 1,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 10,
+        "carried": 8,
+        "sanctioned": 2,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "reviewerCount": 1,
+    "tokens": 48000,
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "Fix (1) did not land: the AC-20260908-05-9 pin in the named file still exercises --walked 2 --failed 0 rather than the AC's literal --walked 1 --failed 0 input and row.",
+        "file": "tests/release-legs/release-legs.test.js",
+        "line": 306,
+        "evidence": "git diff (working tree vs HEAD) shows line 306 now runs ['append', ..., '--walked', '1', '--failed', '0'] and line 309 deep-equals [{ leg: 'journeys', exit: 0, observed: { walked: 1, failed: 0 } }] with a consequence-of-failure message naming D5's boundary. Executed: node --test 'tests/release-legs/*.test.js' tests/count-observation.test.js tests/review/legs-verdict-pair.test.js -> tests 37, pass 37, fail 0."
+      },
+      {
+        "claim": "Fix (2) did not land: review-legs.js still destructures the unused lastMatch binding from the lib require.",
+        "file": "spec/scripts/review-legs.js",
+        "line": 124,
+        "evidence": "git diff (working tree vs HEAD) shows line 124 is now `const { computeTestsExecuted, computeSkips, isUnobserved } = require('./lib/count-observation')`. grep -n lastMatch spec/scripts/review-legs.js -> only line 193 (the comment pointing at the lib); no binding, no call site. Fix-delta manifest-2: suite leg exit 0 testsExecuted 1349, gate leg exit 0 testsExecuted 331 — review-legs.js behaviour byte-identical after the edit (AC-20260908-05-12 oracle)."
+      },
+      {
+        "claim": "The fix edits pushed the review-legs.js diff past the Rationale's 'deletion plus one require' bound.",
+        "file": "spec/scripts/review-legs.js",
+        "line": 124,
+        "evidence": "Range diff bace2b7..HEAD plus working tree: one require line added (now three symbols), four local definitions and their comment deleted, three comment lines pointing at the lib (sanctioned by D10 'header keeps its rule text and points at the lib'). Narrowing the destructure changes no diff hunk count."
+      },
+      {
+        "claim": "The dirty .claude/spec-runs.jsonl line is out-of-File-Plan work landed by the fix pass.",
+        "file": ".claude/spec-runs.jsonl",
+        "line": null,
+        "evidence": "Executed: node spec/scripts/scope-reconcile.js --root . --spec specs/20260908/05-release-e2e-unobserved-count.md --base bace2b7b7493fd3ff268b97c148d153f59a15dd4 --json -> outOfPlan: [], with .claude/spec-runs.jsonl listed under excluded (pipeline provenance ledger, written by the build stage per release-legs.js:59 / escape-row.js:112). The one added line is a build-stage runId record (bd_b64fb1e2763a), not a shipped surface."
+      },
+      {
+        "claim": "The second behaviour-change edit (fix pass) needs a second plugin.json bump, the residue a branch-level check cannot see.",
+        "file": "spec/.claude-plugin/plugin.json",
+        "line": 3,
+        "evidence": "The two fixes change no plugin behaviour: (1) is a test-only input change under tests/, (2) removes an unused binding with no call site. Executed: node scripts/plugin-bump.js --check -> `spec 7.109.0 -> 7.110.0`, exit 0; the single bump already covers the range's one behaviour change."
+      },
+      {
+        "claim": "The smoke leg's exit 4 in manifest-2 is a red signal inside the range.",
+        "file": "specs/20260908/05-release-e2e-unobserved-count.review/manifest-2.jsonl",
+        "line": 4,
+        "evidence": "manifest-1 (full scope, prior CLEAN iteration) carries the identical row {\"leg\":\"smoke\",\"exit\":4,\"observed\":{\"result\":\"inert\"}}; inert is this repo's declared smoke state (no host smoke command), not a failure, and verdict.js derived CLEAN from it on iteration 1."
+      }
+    ]
+  }
+}

@@ -15,6 +15,11 @@ const { writeWireframe, writeKitCanon, advanceToJourneyApproved } = require('./m
 // and falls through to its ordinary bare-step/mark output) once the lib exists but D4/D5 don't.
 const { validateNotes, answerQuestion, resolveNote, unresolvedFor } = require('../../spec/scripts/lib/mocks-notes')
 
+// specs/20260907/08-walk-critic.md D3's six flow-break reasons — the enum
+// `KINDS`/`WALK_REASONS` do not exist yet on spec/scripts/lib/mocks-notes.js, so every
+// AC-20260907-08-4..7 test below is red until D3/D4/D5 land.
+const WALK_REASONS = ['no-path-back', 'no-path-forward', 'dead-end-state', 'missing-data', 'ambiguous-control', 'unrecoverable-error']
+
 const SCRIPT = 'scripts/mocks-driver.js'
 const FIXTURE = path.join(ROOT, 'tests/fixtures/mocks-notes/notes.sample.json')
 
@@ -648,4 +653,140 @@ test('AC-20260906-06-3: `notes add` appends a well-formed critic note and exits 
   const withEfficiency = validateNotes([Object.assign({}, onDisk[0], { reason: 'efficiency' })])
   assert.deepStrictEqual(withEfficiency.errors, [],
     'D4: validateNotes must accept reason "efficiency" with zero errors — the reason enum must gain all four blind-spot values: got ' + JSON.stringify(withEfficiency.errors))
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260907/08-walk-critic.md D3/D4/D5, AC-20260907-08-4/-5/-6/-7. spec/scripts/lib/mocks-notes.js
+// carries no "walk" kind yet (KINDS is still ['note', 'question'], REASONS the eight-item plain
+// enum with no WALK_REASONS appended), and mocks-driver.js's `notes add` accepts no --kind flag
+// at all yet — every test below is red until D3/D4/D5 land.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// AC-20260907-08-4
+// ---------------------------------------------------------------------------
+test('AC-20260907-08-4: validateNotes accepts a well-formed walk note (scope mock, a screen, a state, a reason from the six flow breaks) with zero errors, reports one error per missing piece on an incomplete one (a wrong-words reason naming the exact six-item enum), and rejects a plain note carrying a walk reason', () => {
+  const base = {
+    id: 'N001', scope: 'mock', screen: 'invite-code', state: 'error', text: 'no way back to the invite step',
+    by: 'walk-critic', at: new Date().toISOString(), status: 'open',
+    addressed: null, reply: null, resolvedBy: null, resolvedAt: null,
+  }
+
+  const goodWalk = Object.assign({}, base, { kind: 'walk', reason: 'no-path-back' })
+  const clean = validateNotes([goodWalk])
+  assert.deepStrictEqual(clean.errors, [],
+    'D3: a well-formed walk note ({kind:"walk", scope:"mock", screen, state, reason:"no-path-back"}) must validate with zero errors: got ' + JSON.stringify(clean.errors))
+
+  const wrongReason = Object.assign({}, base, { id: 'N002', kind: 'walk', reason: 'wrong-words' })
+  const r1 = validateNotes([wrongReason])
+  assert.strictEqual(r1.errors.length, 1,
+    'D3: a walk note with an unknown reason "wrong-words" must produce exactly one error: ' + JSON.stringify(r1.errors))
+  assert.match(r1.errors.join(' '), /reason must be one of no-path-back\|no-path-forward\|dead-end-state\|missing-data\|ambiguous-control\|unrecoverable-error/,
+    'the AC\'s own worked example ({kind:"walk", reason:"wrong-words"}) must produce this exact "reason must be one of …" enum text: ' + JSON.stringify(r1.errors))
+
+  const noState = Object.assign({}, base, { id: 'N003', kind: 'walk', reason: 'no-path-back', state: null })
+  const r2 = validateNotes([noState])
+  assert.strictEqual(r2.errors.length, 1, 'D3: a walk note with no state must produce exactly one error naming the missing piece: ' + JSON.stringify(r2.errors))
+  assert.match(r2.errors.join(' '), /state/, 'the missing-state error must name the field "state": ' + JSON.stringify(r2.errors))
+
+  const noScreen = Object.assign({}, base, { id: 'N004', kind: 'walk', reason: 'no-path-back', screen: null })
+  const r3 = validateNotes([noScreen])
+  assert.ok(r3.errors.length >= 1, 'D3: a walk note with no screen must produce at least one error naming the missing piece: ' + JSON.stringify(r3.errors))
+  assert.match(r3.errors.join(' '), /screen/, 'the missing-screen error must name the field "screen": ' + JSON.stringify(r3.errors))
+
+  const plainWithWalkReason = Object.assign({}, base, { id: 'N005', reason: 'no-path-back' })
+  const r4 = validateNotes([plainWithWalkReason])
+  assert.strictEqual(r4.errors.length, 1,
+    'D3: a plain note (no kind) carrying a walk-only reason "no-path-back" must be an error — the reason belongs to the walk kind, not a plain note: ' + JSON.stringify(r4.errors))
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260907-08-5 / AC-20260907-08-6
+// ---------------------------------------------------------------------------
+test('AC-20260907-08-5 / AC-20260907-08-6: `notes add --kind walk` against a screen whose mock declares the given state appends a note with kind "walk" and status "open" and exits 0; `--kind question`/`--ledger-id` exit 2 naming `ledger add --screen`; an undeclared screen, an undeclared state, and a missing --state/--reason each exit 2, the undeclared-state case naming the states the screen does declare', () => {
+  const dir = tmpdir('mocks-notes-walk-add')
+  bare(dir) // cold-root scaffold
+  writeSeed(dir) // declares JOURNEY -> signin -> invite -> session-live
+  writeWireframe(dir, LABELS[0]) // design/mocks/signin.html, default states: empty, loading, error
+
+  const added = bare(dir, [
+    'notes', 'add', '--scope', 'mock', '--screen', LABELS[0], '--state', 'error',
+    '--kind', 'walk', '--reason', 'no-path-back', '--by', 'walk-critic', '--text', 'the wrong-code state offers no way back',
+  ])
+  assert.strictEqual(added.status, 0,
+    'AC-5: `notes add --kind walk` against a screen that declares the given state must exit 0: ' + added.stdout + added.stderr)
+  const onDisk = readNotesOnDisk(dir)
+  assert.strictEqual(onDisk.length, 1, '`notes add --kind walk` must append exactly one note: got ' + JSON.stringify(onDisk))
+  assert.deepStrictEqual(
+    { kind: onDisk[0].kind, status: onDisk[0].status, scope: onDisk[0].scope, screen: onDisk[0].screen, state: onDisk[0].state, reason: onDisk[0].reason, by: onDisk[0].by },
+    { kind: 'walk', status: 'open', scope: 'mock', screen: LABELS[0], state: 'error', reason: 'no-path-back', by: 'walk-critic' },
+    'AC-5: the appended note must carry kind:"walk" and status:"open" plus the CLI args verbatim: got ' + JSON.stringify(onDisk[0]))
+
+  const withQuestion = bare(dir, [
+    'notes', 'add', '--scope', 'mock', '--screen', LABELS[0], '--state', 'error',
+    '--kind', 'question', '--by', 'walk-critic', '--text', 'x',
+  ])
+  assert.strictEqual(withQuestion.status, 2,
+    'AC-5: `notes add --kind question` must exit 2 — the only accepted --kind value is "walk": ' + withQuestion.stdout + withQuestion.stderr)
+  assert.match(withQuestion.stdout + withQuestion.stderr, /ledger add --screen/,
+    'D4: the --kind question refusal must name "ledger add --screen" as the remedy: ' + withQuestion.stdout + withQuestion.stderr)
+
+  const withLedgerId = bare(dir, [
+    'notes', 'add', '--scope', 'mock', '--screen', LABELS[0], '--kind', 'walk', '--reason', 'no-path-back',
+    '--state', 'error', '--ledger-id', 'W7', '--by', 'walk-critic', '--text', 'x',
+  ])
+  assert.strictEqual(withLedgerId.status, 2, 'AC-5: `--ledger-id` stays refused outright even alongside --kind walk: ' + withLedgerId.stdout + withLedgerId.stderr)
+  assert.match(withLedgerId.stdout + withLedgerId.stderr, /ledger add --screen/,
+    'D4: the --ledger-id refusal must also name "ledger add --screen": ' + withLedgerId.stdout + withLedgerId.stderr)
+
+  const undeclaredScreen = bare(dir, [
+    'notes', 'add', '--scope', 'mock', '--screen', 'nowhere', '--state', 'error',
+    '--kind', 'walk', '--reason', 'no-path-back', '--by', 'walk-critic', '--text', 'x',
+  ])
+  assert.strictEqual(undeclaredScreen.status, 2,
+    'AC-6: a walk add naming a screen with no design/mocks/<label>.html on disk must exit 2: ' + undeclaredScreen.stdout + undeclaredScreen.stderr)
+
+  const undeclaredState = bare(dir, [
+    'notes', 'add', '--scope', 'mock', '--screen', LABELS[0], '--state', 'hover',
+    '--kind', 'walk', '--reason', 'no-path-back', '--by', 'walk-critic', '--text', 'x',
+  ])
+  assert.strictEqual(undeclaredState.status, 2,
+    'AC-6: `--state hover` on a screen declaring empty/loading/error must exit 2: ' + undeclaredState.stdout + undeclaredState.stderr)
+  for (const declared of ['default', 'empty', 'loading', 'error']) {
+    assert.match(undeclaredState.stdout + undeclaredState.stderr, new RegExp(declared),
+      'AC-6: the undeclared-state refusal must list the states the screen does declare, including "' + declared + '": ' + undeclaredState.stdout + undeclaredState.stderr)
+  }
+
+  const noState = bare(dir, [
+    'notes', 'add', '--scope', 'mock', '--screen', LABELS[0],
+    '--kind', 'walk', '--reason', 'no-path-back', '--by', 'walk-critic', '--text', 'x',
+  ])
+  assert.strictEqual(noState.status, 2, 'AC-6: a walk add with no --state must exit 2: ' + noState.stdout + noState.stderr)
+
+  const noReason = bare(dir, [
+    'notes', 'add', '--scope', 'mock', '--screen', LABELS[0], '--state', 'error',
+    '--kind', 'walk', '--by', 'walk-critic', '--text', 'x',
+  ])
+  assert.strictEqual(noReason.status, 2, 'AC-6: a walk add with no --reason must exit 2: ' + noReason.stdout + noReason.stderr)
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260907-08-7
+// ---------------------------------------------------------------------------
+test('AC-20260907-08-7: `notes open` renders a walk finding as "<id> [<status>] [walk: <reason>] <by> · <text>", keeping the status tag beside the walk tag, never instead of it', () => {
+  const dir = tmpdir('mocks-notes-walk-render')
+  bare(dir)
+  writeSeed(dir)
+
+  const walkNote = {
+    id: 'N001', scope: 'mock', screen: LABELS[0], state: 'error', text: 'the wrong-code state offers no way back',
+    by: 'walk-critic', at: nowIso(), status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null,
+    kind: 'walk', reason: 'no-path-back',
+  }
+  writeNotes(dir, [walkNote])
+
+  const opened = bare(dir, ['notes', 'open'])
+  assert.strictEqual(opened.status, 0, '`notes open` must exit 0 over a valid seed.md + a walk-kind note: ' + opened.stderr)
+  assert.match(opened.stdout, /N001 \[open\] \[walk: no-path-back\] walk-critic · the wrong-code state offers no way back/,
+    'D5: `notes open` must render the walk finding as exactly "N001 [open] [walk: no-path-back] walk-critic · the wrong-code state offers no way back", the walk tag riding beside the status tag: got ' + JSON.stringify(opened.stdout))
 })

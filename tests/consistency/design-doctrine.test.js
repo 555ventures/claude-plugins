@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { ROOT, SPEC, read, runNode, tmpdir } = require('../helpers')
-const { bare, advanceToJourneyApproved } = require('../mocks/mocks-driver-fixtures')
+const { bare, advanceToJourneyApproved, advanceToJourneyWalked } = require('../mocks/mocks-driver-fixtures')
 
 // specs/20260824/05-design-doctrine-cut.md D1/D2/D5: spec/doctrine/design.md holds five
 // sections (contracts a script enforces or a worker applies only) capped at 160 lines;
@@ -162,7 +162,10 @@ test('AC-20260902-10-7: spec/commands/mocks.md names the four D6 triage bins and
 // this test's name drops "with the theme picked" — SIGNOFF is now reached with no theme anywhere.
 test('AC-20260902-10-8: WHEN the driver prints the SIGNOFF step THE SYSTEM includes the D7 sign-off literal', () => {
   const dir = tmpdir('mocks-review-signoff')
-  advanceToJourneyApproved(dir)
+  // specs/20260907/08-walk-critic.md AC-20260907-08-1/D1 fixture repair: WALK now sits between
+  // WIREFRAMES and SIGNOFF — the journey must be walked, or the driver prints the WALK block
+  // instead of the SIGNOFF sign-off literal this AC pins.
+  advanceToJourneyWalked(dir)
   const step = bare(dir)
   assert.strictEqual(step.status, 0, 'a bare invocation at the SIGNOFF sign-off step must exit 0: ' + step.stderr)
   assert.ok(step.stdout.includes('the written brief, not these screens, holds scope'),
@@ -217,30 +220,45 @@ function frontmatterWithLists(src) {
   return out
 }
 
-test('AC-20260906-06-4: spec/agents/design-critic.md parses as model opus, effort medium, tools exactly Read/Grep/Glob/Bash, and a body naming the four blind-spot questions in order plus "empty list is a valid return"; spec/commands/sketch.md carries a Critique step under § The run naming check --states, render-gate, design-critic and notes add, positioned before the exit step', () => {
+// specs/20260907/08-walk-critic.md D8, AC-20260907-08-10: design-critic.md is rewritten in
+// place as the journey walk — the four fixed blind-spot questions (prevent/recover/help/faster)
+// and the eight-item plain-note reason vocabulary they fed are retired from this file along with
+// them; the AC-20260906-06-4 arm pinning that shape is replaced whole, never inverted (a
+// pass-on-absence flip would prove nothing about the NEW return contract this AC exists to pin).
+test('AC-20260907-08-10: spec/agents/design-critic.md parses as model opus, effort medium, tools exactly Read/Grep/Glob/Bash, and its body names the six flow-break keys and the four forbidden words plus "an empty list is a valid return", with none of error-prevention, error-recovery or blindspot', () => {
   const criticPath = path.join(SPEC, 'agents/design-critic.md')
-  assert.ok(fs.existsSync(criticPath), 'D5: spec/agents/design-critic.md must exist — the critic agent file has not been created yet')
+  assert.ok(fs.existsSync(criticPath), 'D8: spec/agents/design-critic.md must exist')
   const criticSrc = fs.readFileSync(criticPath, 'utf8')
   const fm = frontmatterWithLists(criticSrc)
   assert.strictEqual(fm.model, 'opus',
-    'D5: design-critic.md frontmatter must declare model: opus — judgment seats run Opus per core § Model Placement: got ' + JSON.stringify(fm))
+    'D8: design-critic.md frontmatter must CONTINUE TO declare model: opus — judgment seats run Opus per core § Model Placement: got ' + JSON.stringify(fm))
   assert.strictEqual(fm.effort, 'medium',
-    'D5: design-critic.md frontmatter must declare effort: medium: got ' + JSON.stringify(fm))
+    'D8: design-critic.md frontmatter must CONTINUE TO declare effort: medium: got ' + JSON.stringify(fm))
   assert.deepStrictEqual(fm.tools, ['Read', 'Grep', 'Glob', 'Bash'],
-    'D5: design-critic.md frontmatter must declare tools exactly Read, Grep, Glob, Bash (inspection only, read-only so it cannot "fix" its way past the session): got ' + JSON.stringify(fm.tools))
+    'D8: design-critic.md frontmatter must CONTINUE TO declare tools exactly Read, Grep, Glob, Bash (read-only, inspection only): got ' + JSON.stringify(fm.tools))
 
   const closeIdx = criticSrc.indexOf('---', 3)
   const body = criticSrc.slice(closeIdx + 3)
-  for (const literal of ['prevent', 'recover', 'help', 'faster']) {
-    assert.ok(body.includes(literal),
-      'D5: design-critic.md\'s body must contain the four blind-spot questions — missing "' + literal + '"')
-  }
-  const positions = ['prevent', 'recover', 'help', 'faster'].map((w) => body.indexOf(w))
-  assert.ok(positions.every((v, i) => i === 0 || v > positions[i - 1]),
-    'D5: the four questions must appear in the fixed order prevent, recover, help, faster (CHI 2026\'s measured heuristics, in the order the spec fixes them): got positions ' + JSON.stringify(positions))
-  assert.ok(body.includes('empty list is a valid return'),
-    'D5: design-critic.md must contain the exact phrase "empty list is a valid return" — an empty findings list is a valid, honest return, never a failure to invent a gap')
 
+  for (const key of ['no-path-back', 'no-path-forward', 'dead-end-state', 'missing-data', 'ambiguous-control', 'unrecoverable-error']) {
+    assert.ok(body.includes(key),
+      'D8: design-critic.md\'s body must name the flow-break key "' + key + '" — the six allowed findings the journey walk replaces the four blind-spot questions with')
+  }
+  for (const word of ['naming', 'hierarchy', 'density', 'consider']) {
+    assert.ok(body.includes(word),
+      'D8: design-critic.md\'s body must name the forbidden word "' + word + '" — naming, hierarchy, density and any "consider…" suggestion are refused, not just the four fixed questions this file used to carry')
+  }
+  assert.ok(body.includes('an empty list is a valid return'),
+    'D8: design-critic.md must contain the exact sentence "an empty list is a valid return", kept verbatim from the prior critique-pass prompt')
+
+  for (const retired of ['error-prevention', 'error-recovery', 'blindspot']) {
+    assert.ok(!body.includes(retired),
+      'D8: design-critic.md\'s body must name none of the retired blind-spot literal "' + retired + '" — the four fixed usability questions have no producer left once this lands: ' + JSON.stringify(body.match(new RegExp('.{0,40}' + retired + '.{0,40}'))))
+  }
+})
+
+// specs/20260907/08-walk-critic.md D9, AC-20260907-08-11.
+test('AC-20260907-08-11: spec/commands/sketch.md § The run carries a critique step before the exit step naming check --states, render-gate, design-critic and --kind walk, and spec/doctrine/design.md no longer contains "four blind spots"', () => {
   const sketchSrc = read('spec/commands/sketch.md')
   const runIdx = sketchSrc.indexOf('## The run')
   assert.ok(runIdx !== -1, 'sketch.md must still carry a "## The run" heading to anchor the Critique step search')
@@ -249,15 +267,19 @@ test('AC-20260906-06-4: spec/agents/design-critic.md parses as model opus, effor
 
   const critiqueIdx = runSection.search(/\*\*[^*]*Critique[^*]*\*\*/)
   assert.ok(critiqueIdx !== -1,
-    'D3: spec/commands/sketch.md § The run must carry a step whose heading contains "Critique" — the fixed critique pass (states check · render rules · one fresh-context critic) before the exit stop')
+    'D9: spec/commands/sketch.md § The run must CONTINUE TO carry a step whose heading contains "Critique" — the walk over the brief\'s surfaces in declared order, before the exit stop')
   const exitIdx = runSection.search(/\*\*[^*]*Exit[^*]*\*\*/)
   assert.ok(exitIdx !== -1, 'sketch.md § The run must still carry an exit step to compare the Critique step\'s position against')
   assert.ok(critiqueIdx < exitIdx,
-    'D3: the Critique step must be positioned before the exit step, never after — ratification must never be reachable without running the critique pass: critique@' + critiqueIdx + ' exit@' + exitIdx)
-  for (const literal of ['check --states', 'render-gate', 'design-critic', 'notes add']) {
+    'D9: the Critique step must be positioned before the exit step, never after — ratification must never be reachable without running the critique pass: critique@' + critiqueIdx + ' exit@' + exitIdx)
+  for (const literal of ['check --states', 'render-gate', 'design-critic', '--kind walk']) {
     assert.ok(runSection.includes(literal),
-      'D3: § The run must name "' + literal + '" — the Critique step wires the states check, the render rules, the critic dispatch, and the note-writing verb the session records findings through')
+      'D9: § The run\'s Critique step must name "' + literal + '" — the states check, the render rules, the critic dispatch, and the walk-kind note-writing verb the session records findings through')
   }
+
+  const designDoctrine = read('spec/doctrine/design.md')
+  assert.ok(!designDoctrine.includes('four blind spots'),
+    'D9: spec/doctrine/design.md must no longer contain "four blind spots" — the one-line critique-pass summary is re-pointed at the journey walk: ' + JSON.stringify(designDoctrine.match(/.{0,60}four blind spots.{0,60}/)))
 })
 
 // specs/20260907/04-kit-canon-family.md D11: KIT is a new state inserted between SHAPES and

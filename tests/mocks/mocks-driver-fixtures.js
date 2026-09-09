@@ -387,6 +387,20 @@ function advanceToJourneyApproved(dir, journeyName = JOURNEY, labels = LABELS) {
   return approved
 }
 
+// specs/20260907/08-walk-critic.md orchestrator duty: WALK sits between WIREFRAMES and
+// SIGNOFF — advanceToJourneyWalked runs advanceToJourneyApproved (idempotent, per the
+// readStatusOrEmpty guard above) then records the real `--mark journey-walked --journey <j>`,
+// so every fixture that reaches SIGNOFF or APPROVED walks first, through the real binary, the
+// same executed-proof discipline every other advanceTo* helper in this file already carries.
+function advanceToJourneyWalked(dir, journeyName = JOURNEY) {
+  const already = readStatusOrEmpty(dir)
+  if (already.journeys && already.journeys[journeyName] && already.journeys[journeyName].walked) return
+  advanceToJourneyApproved(dir, journeyName)
+  const r = mark(dir, 'journey-walked', ['--journey', journeyName])
+  assert.strictEqual(r.status, 0, 'test setup requires journey-walked to be accepted once the journey is approved and carries no open walk finding: ' + r.stderr)
+  return r
+}
+
 // D11: the SKIN/REVIEW states are retired — approved now stamps the wireframes produced at
 // journey-drawn/journey-approved straight through, with no intervening skin step.
 //
@@ -394,12 +408,17 @@ function advanceToJourneyApproved(dir, journeyName = JOURNEY, labels = LABELS) {
 // THEME step — the chain is WIREFRAMES -> SIGNOFF -> APPROVED, so advanceToApproved routes
 // through advanceToJourneyApproved directly, with no direction-composing or theme-picking
 // helper in between.
+//
+// specs/20260907/08-walk-critic.md orchestrator duty: WALK now sits ahead of SIGNOFF —
+// advanceToApproved routes through advanceToJourneyWalked (which itself routes through
+// advanceToJourneyApproved) in place of its prior direct call, so every caller reaching
+// APPROVED has walked its journey first.
 function advanceToApproved(dir) {
   if (readMarksOrEmpty(dir).approved) return
-  advanceToJourneyApproved(dir)
+  advanceToJourneyWalked(dir)
   decideLook(dir, 'approved', 'approve', { by: 'Ren' })
   const r = mark(dir, 'approved')
-  assert.strictEqual(r.status, 0, 'test setup requires approved to be accepted once every journey is approved, the approved stop is decided approve, notes are resolved, and render-gate/matrix check hold: ' + r.stderr)
+  assert.strictEqual(r.status, 0, 'test setup requires approved to be accepted once every journey is approved and walked, the approved stop is decided approve, notes are resolved, and render-gate/matrix check hold: ' + r.stderr)
   return r
 }
 
@@ -484,7 +503,7 @@ module.exports = {
   decideLook, openLook, freePort, startServe, stopServe, getBody,
   writeFixtureCapture, writeCaptureConfig,
   advanceToSeedDone, advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToJourneyApproved,
-  advanceToApproved,
+  advanceToJourneyWalked, advanceToApproved,
   writeShortSeed, advanceToShortJourneyDrawn,
   stubNpx,
 }

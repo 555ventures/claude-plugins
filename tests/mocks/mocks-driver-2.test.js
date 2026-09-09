@@ -11,7 +11,7 @@ const {
   writeCanon, writeWireframe, writeKitCanon,
   decideLook,
   advanceToSeedDone, advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToJourneyApproved,
-  advanceToApproved,
+  advanceToJourneyWalked, advanceToApproved,
   ledgerCmd,
   writeFixtureCapture, writeCaptureConfig,
   stubNpx, freePort, startServe, stopServe,
@@ -41,9 +41,14 @@ const {
 // ---------------------------------------------------------------------------
 // AC-20260906-02-5
 // ---------------------------------------------------------------------------
-test('AC-20260907-07-5 / AC-20260907-07-12 (retag of AC-20260906-02-5): approved refuses on an unresolved mock note and refuses with no decided approved stop, with no theme-picked precondition left to check first; once the stop is decided approve it stamps a sketch mock to approved byte-diff-only, records the decider, and derives APPROVED, all with no design/tokens.css and no status.theme anywhere', () => {
+test('AC-20260907-07-5 / AC-20260907-07-12 / AC-20260907-08-12 (retag of AC-20260906-02-5): approved refuses on an unresolved mock note and refuses with no decided approved stop, with no theme-picked precondition left to check first; once the journey is walked and the stop is decided approve it stamps a sketch mock to approved byte-diff-only, records the decider, and derives APPROVED, all with no design/tokens.css and no status.theme anywhere', () => {
   const dir = tmpdir('mocks-driver')
   advanceToJourneyApproved(dir)
+  // AC-20260907-08-1/D1 fixture repair: WALK now sits between WIREFRAMES and SIGNOFF, so the
+  // final "derives APPROVED" assertion below is vacuous unless the journey is actually walked
+  // before `--mark approved` is accepted — deriveState checks allJourneysWalked() before it
+  // ever checks marks.approved.
+  advanceToJourneyWalked(dir)
 
   // AC-20260907-07-5's own precondition: no theme was ever picked, anywhere on disk or in
   // status.json — a vacuous test would prove nothing if either were secretly present.
@@ -80,6 +85,34 @@ test('AC-20260907-07-5 / AC-20260907-07-12 (retag of AC-20260906-02-5): approved
   assert.strictEqual(status.decider, 'Ren', 'accepting approved must record status.decider from the stop\'s "by"')
   assert.ok(status.marks.approved, 'accepting approved must record marks.approved')
   assert.strictEqual(status.state, 'APPROVED', 'accepting approved must derive state APPROVED')
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260907-08-12
+// ---------------------------------------------------------------------------
+test('AC-20260907-08-12: approved CONTINUES TO refuse on a walk-kind note whose status is "addressed", the same unresolved-note gate that blocks a plain note', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToJourneyApproved(dir)
+  advanceToJourneyWalked(dir)
+  decideLook(dir, 'approved', 'approve', { by: 'Ren' })
+
+  const addressedWalkNote = {
+    id: 'N001', scope: 'mock', screen: LABELS[0], state: 'default',
+    text: 'the wrong-code state offers no way back', by: 'walk-critic',
+    at: new Date().toISOString(), status: 'addressed',
+    addressed: { at: new Date().toISOString(), change: 'added a back link', ledgerRow: null },
+    reply: null, resolvedBy: null, resolvedAt: null,
+    kind: 'walk', reason: 'no-path-back',
+  }
+  writeFile(path.join(dir, 'design/mocks/notes.json'), JSON.stringify([addressedWalkNote]))
+
+  const r = mark(dir, 'approved')
+  assert.strictEqual(r.status, 2,
+    'D3/A2: a walk-kind note in "addressed" status must CONTINUE TO count as unresolved for the terminal approved mark — the same unresolvedFor primitive already gates a plain note, and a walk finding is a mock-scope note, not a new gate: ' + r.stdout + r.stderr)
+  assert.match(r.stderr + r.stdout, /N001/,
+    'the refusal must name the offending walk-finding note id "N001": ' + r.stdout + r.stderr)
+  assert.strictEqual(statusJson(dir).marks.approved, null,
+    'a refused approved mark must leave marks.approved null, never recorded, even though the note carries kind "walk" rather than a plain note: ' + JSON.stringify(statusJson(dir).marks))
 })
 
 test('AC-20260905-06-9 / AC-20260906-02-5: --mark approved on a host declaring no design block with CHROME_BIN=/nonexistent/chrome exits 2 with "render-gate --mocks could not run:" naming CHROME_BIN, marks.approved stays null, and the mock file is byte-unchanged (render-gate runs before any file is stamped approved)', () => {
@@ -158,15 +191,17 @@ test('AC-20260906-02-7: --reopen journey:<j> on an APPROVED root clears that jou
 // ---------------------------------------------------------------------------
 // AC-20260907-07-4
 // ---------------------------------------------------------------------------
-test('AC-20260907-07-4: --reopen theme exits 2 with the exact literal "--reopen must be journey:<j>, shapes, or kit", writes nothing to status.json, and appends no row to status.reopens', () => {
+// Repair round (specs/20260907/08-walk-critic.md D6/AC-20260907-08-8): the retired-literal pin
+// below is updated in place — `--reopen` now widens to journey:<j>, walk:<j>, shapes, or kit.
+test('AC-20260907-07-4: --reopen theme exits 2 with the exact literal "--reopen must be journey:<j>, walk:<j>, shapes, or kit", writes nothing to status.json, and appends no row to status.reopens', () => {
   const dir = tmpdir('mocks-driver')
   advanceToApproved(dir)
   const before = fs.readFileSync(statusPath(dir), 'utf8')
 
   const r = runNode(SCRIPT, ['--root', dir, '--reopen', 'theme'])
   assert.strictEqual(r.status, 2, 'D6: --reopen theme must exit 2 — the target is retired outright, there is no mark left to clear: ' + r.stdout + r.stderr)
-  assert.strictEqual((r.stderr + r.stdout).trim(), 'mocks-driver: --reopen must be journey:<j>, shapes, or kit',
-    'D6: the refusal must be the exact narrowed literal, with "theme" dropped from the target list: ' + JSON.stringify({ stdout: r.stdout, stderr: r.stderr }))
+  assert.strictEqual((r.stderr + r.stdout).trim(), 'mocks-driver: --reopen must be journey:<j>, walk:<j>, shapes, or kit',
+    'D6: the refusal must be the exact narrowed literal, with "theme" dropped from the target list — specs/20260907/08-walk-critic.md D6 widens it to include "walk:<j>": ' + JSON.stringify({ stdout: r.stdout, stderr: r.stderr }))
 
   const after = fs.readFileSync(statusPath(dir), 'utf8')
   assert.strictEqual(after, before, 'D6: a refused --reopen theme must write nothing to status.json at all: ' + JSON.stringify({ before, after }))
@@ -176,20 +211,22 @@ test('AC-20260907-07-4: --reopen theme exits 2 with the exact literal "--reopen 
 // ---------------------------------------------------------------------------
 // AC-20260907-07-6
 // ---------------------------------------------------------------------------
+// Repair round (specs/20260907/08-walk-critic.md D6/AC-20260907-08-8): --reopen shapes now
+// additionally invalidates walk(all) — every journey's walked is cleared alongside the rest.
 test('AC-20260907-07-6: --reopen shapes on an approved root prints the exact D6 invalidated line with no theme token, and appends that same invalidated array to status.reopens', () => {
   const dir = tmpdir('mocks-driver')
   advanceToApproved(dir)
 
   const r = runNode(SCRIPT, ['--root', dir, '--reopen', 'shapes'])
   assert.strictEqual(r.status, 0, '--reopen shapes must CONTINUE TO exit 0 on an approved root: ' + r.stdout + r.stderr)
-  assert.strictEqual(r.stdout, '↩ reopened shapes — invalidated: shape, canon, kit, journeys(all), approved(all)\n',
-    'D6: the reopen output must be the exact invalidated line, canon before kit and no "theme" token anywhere: ' + JSON.stringify(r.stdout))
+  assert.strictEqual(r.stdout, '↩ reopened shapes — invalidated: shape, canon, kit, journeys(all), walk(all), approved(all)\n',
+    'D6: the reopen output must be the exact invalidated line, canon before kit, walk(all) before approved(all) per specs/20260907/08-walk-critic.md D6, and no "theme" token anywhere: ' + JSON.stringify(r.stdout))
   assert.ok(!r.stdout.includes('theme'), 'D6: --reopen shapes must never mention "theme" — the retired field leaves nothing to invalidate: ' + r.stdout)
 
   const reopenRow = statusJson(dir).reopens.find((row) => row.target === 'shapes')
   assert.ok(reopenRow, 'a --reopen shapes call must append a row to status.reopens: ' + JSON.stringify(statusJson(dir).reopens))
-  assert.deepStrictEqual(reopenRow.invalidated, ['shape', 'canon', 'kit', 'journeys(all)', 'approved(all)'],
-    'D6: the appended reopens row must carry the exact same invalidated array printed to stdout: ' + JSON.stringify(reopenRow))
+  assert.deepStrictEqual(reopenRow.invalidated, ['shape', 'canon', 'kit', 'journeys(all)', 'walk(all)', 'approved(all)'],
+    'D6: the appended reopens row must carry the exact same invalidated array printed to stdout, including walk(all): ' + JSON.stringify(reopenRow))
 })
 
 // ---------------------------------------------------------------------------

@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 29937,
-    "spec/scripts": 1248306,
-    "spec/scripts/lib": 231235,
-    "tests": 3448157
+    "spec/scripts": 1256977,
+    "spec/scripts/lib": 233720,
+    "tests": 3480197
   },
   "files": {
     "scripts/plugin-bump.js": 8564,
@@ -40,7 +40,7 @@
     "spec/scripts/lib/host-config.js": 5704,
     "spec/scripts/lib/leg-findings.js": 2393,
     "spec/scripts/lib/mocks-ledger.js": 12707,
-    "spec/scripts/lib/mocks-notes.js": 12415,
+    "spec/scripts/lib/mocks-notes.js": 14900,
     "spec/scripts/lib/mocks-picks.js": 8373,
     "spec/scripts/lib/notes-layer.browser.js": 24862,
     "spec/scripts/lib/observation.js": 2613,
@@ -58,7 +58,7 @@
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
     "spec/scripts/merge-back.sh": 17514,
-    "spec/scripts/mocks-driver.js": 93773,
+    "spec/scripts/mocks-driver.js": 102444,
     "spec/scripts/promise-sweep.js": 10409,
     "spec/scripts/prose-cap.js": 6271,
     "spec/scripts/question-style-gate.js": 10712,
@@ -106,7 +106,7 @@
     "tests/consistency/citations-check.test.js": 16363,
     "tests/consistency/comment-narration-live.test.js": 3527,
     "tests/consistency/dependency-free.test.js": 8614,
-    "tests/consistency/design-doctrine.test.js": 33846,
+    "tests/consistency/design-doctrine.test.js": 35535,
     "tests/consistency/entrypoints.test.js": 70405,
     "tests/consistency/genesis-doctrine.test.js": 86907,
     "tests/consistency/observed-grammar-purity.test.js": 3560,
@@ -168,20 +168,21 @@
     "tests/init-gen/probes.test.js": 6550,
     "tests/merge-back.test.js": 15683,
     "tests/mocks/chrome-harness.js": 6375,
-    "tests/mocks/mocks-driver-2.test.js": 16258,
-    "tests/mocks/mocks-driver-3.test.js": 16740,
+    "tests/mocks/mocks-driver-2.test.js": 19004,
+    "tests/mocks/mocks-driver-3.test.js": 17825,
     "tests/mocks/mocks-driver-4.test.js": 16765,
-    "tests/mocks/mocks-driver-fixtures.js": 24866,
+    "tests/mocks/mocks-driver-fixtures.js": 26168,
     "tests/mocks/mocks-driver-kit-gate.test.js": 2879,
     "tests/mocks/mocks-driver-look-stops-2.test.js": 12882,
     "tests/mocks/mocks-driver-look-stops-3.test.js": 9355,
-    "tests/mocks/mocks-driver-look-stops-4.test.js": 9944,
+    "tests/mocks/mocks-driver-look-stops-4.test.js": 12052,
     "tests/mocks/mocks-driver-look-stops.test.js": 21448,
     "tests/mocks/mocks-driver-theme.test.js": 51812,
+    "tests/mocks/mocks-driver-walk.test.js": 12899,
     "tests/mocks/mocks-driver-wire.test.js": 4300,
-    "tests/mocks/mocks-driver.test.js": 35057,
+    "tests/mocks/mocks-driver.test.js": 35227,
     "tests/mocks/mocks-ledger.test.js": 12490,
-    "tests/mocks/mocks-notes.test.js": 44834,
+    "tests/mocks/mocks-notes.test.js": 54875,
     "tests/mocks/mocks-picks.test.js": 11563,
     "tests/mocks/notes-layer-isolation.test.js": 6464,
     "tests/mocks/notes-layer-navigation.test.js": 27426,
@@ -377,6 +378,132 @@
       "from": 3440148,
       "to": 3448157,
       "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "spec/scripts/lib/mocks-notes.js",
+      "from": 12415,
+      "to": 14886,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 93773,
+      "to": 101152,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "spec/scripts/lib",
+      "from": 231235,
+      "to": 233706,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1248306,
+      "to": 1255685,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "tests/consistency/design-doctrine.test.js",
+      "from": 33846,
+      "to": 35535,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-2.test.js",
+      "from": 16258,
+      "to": 19004,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-3.test.js",
+      "from": 16740,
+      "to": 17825,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-fixtures.js",
+      "from": 24866,
+      "to": 26168,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-look-stops-4.test.js",
+      "from": 9944,
+      "to": 12052,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver.test.js",
+      "from": 35057,
+      "to": 35227,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "tests/mocks/mocks-notes.test.js",
+      "from": 44834,
+      "to": 54875,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "tests",
+      "from": 3448157,
+      "to": 3467298,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "tests",
+      "from": 3467298,
+      "to": 3480197,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 101152,
+      "to": 102178,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1255685,
+      "to": 1256711,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 102178,
+      "to": 102194,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1256711,
+      "to": 1256727,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "spec/scripts/lib/mocks-notes.js",
+      "from": 14886,
+      "to": 14900,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 102181,
+      "to": 102444,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1256714,
+      "to": 1256977,
+      "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "spec/scripts/lib",
+      "from": 233706,
+      "to": 233720,
+      "cite": "specs/20260907/08-walk-critic.md"
     }
   ]
 }

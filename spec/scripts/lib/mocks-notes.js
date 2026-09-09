@@ -28,12 +28,20 @@ const path = require('path')
 const SCOPES = ['mock', 'project']
 const STATUSES = ['open', 'addressed', 'resolved']
 const ID_RE = /^N\d+$/
-const KINDS = ['note', 'question']
+const KINDS = ['note', 'question', 'walk']
 // specs/20260906/06-sketch-high-fidelity-and-critique.md D4: the enum gains the four fixed
 // critique blind spots (error-prevention, error-recovery, help, efficiency) alongside the
 // original client-message reasons — one enum shared by a critic finding and a client message,
-// which differ only in `by` and `reason`.
-const REASONS = ['missing-screen', 'wrong-direction', 'wrong-words', 'other', 'error-prevention', 'error-recovery', 'help', 'efficiency']
+// which differ only in `by` and `reason`. PLAIN_REASONS is that eight-item set, kept separate
+// from REASONS below because specs/20260907/08-walk-critic.md D3 requires a plain note's
+// optional `reason` to reject a walk reason even though REASONS (the merged export) contains it —
+// the four blind-spot reasons stay in PLAIN_REASONS/REASONS unproduced (their critic pass is
+// retired by that same spec) purely so an existing host's notes.json keeps validating.
+const PLAIN_REASONS = ['missing-screen', 'wrong-direction', 'wrong-words', 'other', 'error-prevention', 'error-recovery', 'help', 'efficiency']
+// specs/20260907/08-walk-critic.md D3: the six flow breaks a walk finding may cite — no other
+// reason is ever valid on a `kind: "walk"` note, and no plain note may cite one of these either.
+const WALK_REASONS = ['no-path-back', 'no-path-forward', 'dead-end-state', 'missing-data', 'ambiguous-control', 'unrecoverable-error']
+const REASONS = PLAIN_REASONS.concat(WALK_REASONS)
 const LEDGER_ID_RE = /^[A-Z]+\d+[a-z]?$/
 
 function notesPath(root) { return path.join(root, 'design/mocks/notes.json') }
@@ -83,7 +91,12 @@ function validateNotes(notes) {
       errors.push('note "' + label + '": status must be one of ' + STATUSES.join('|') + ' (field "status")')
     }
     // D1: kind/reason/ledgerId/answer — additive to the shape above, never a stricter version of it.
+    // specs/20260907/08-walk-critic.md D3: validation now splits three ways by kind — a question
+    // (ledgerId required, no reason), a walk finding (scope "mock", a non-empty state, a reason
+    // from WALK_REASONS), or a plain note (an optional reason drawn from PLAIN_REASONS only — a
+    // walk reason on a plain note is an error, never silently accepted via the merged REASONS set).
     const isQuestion = n.kind === 'question'
+    const isWalk = n.kind === 'walk'
     if (n.kind != null && !KINDS.includes(n.kind)) {
       errors.push('note "' + label + '": kind must be one of ' + KINDS.join('|') + ' (field "kind")')
     } else if (isQuestion) {
@@ -93,8 +106,18 @@ function validateNotes(notes) {
       if (n.reason != null) {
         errors.push('note "' + label + '": reason is not allowed on a question (field "reason")')
       }
-    } else if (n.reason != null && !REASONS.includes(n.reason)) {
-      errors.push('note "' + label + '": reason must be one of ' + REASONS.join('|') + ' (field "reason")')
+    } else if (isWalk) {
+      if (n.scope !== 'mock') {
+        errors.push('note "' + label + '": a walk finding requires scope "mock" (field "scope")')
+      }
+      if (n.state == null || n.state === '') {
+        errors.push('note "' + label + '": a walk finding requires a non-empty state (field "state")')
+      }
+      if (!WALK_REASONS.includes(n.reason)) {
+        errors.push('note "' + label + '": reason must be one of ' + WALK_REASONS.join('|') + ' (field "reason")')
+      }
+    } else if (n.reason != null && !PLAIN_REASONS.includes(n.reason)) {
+      errors.push('note "' + label + '": reason must be one of ' + PLAIN_REASONS.join('|') + ' (field "reason")')
     }
     if (n.answer != null) {
       if (!['yes', 'no'].includes(n.answer.verdict)) {
@@ -131,10 +154,18 @@ function addNote(notes, input) {
   if (!SCOPES.includes(body.scope)) problems.push('scope must be one of ' + SCOPES.join('|'))
   else if (body.scope === 'mock' && !body.screen) problems.push('scope "mock" requires a screen')
   const isQuestion = body.kind === 'question'
+  const isWalk = body.kind === 'walk'
   if (isQuestion) {
     if (typeof body.ledgerId !== 'string' || !LEDGER_ID_RE.test(body.ledgerId)) problems.push('a question requires a valid ledgerId')
-  } else if (body.reason != null && !REASONS.includes(body.reason)) {
-    problems.push('reason must be one of ' + REASONS.join('|'))
+  } else if (isWalk) {
+    // specs/20260907/08-walk-critic.md D3/D4: mocks-driver.js's `notes add` already checks the
+    // screen/state pair against disk before ever calling this — the state-non-empty check here is
+    // this library's own floor, never a second copy of that disk check.
+    if (body.scope !== 'mock') problems.push('a walk finding requires scope "mock"')
+    if (!String(body.state || '').trim()) problems.push('a walk finding requires a non-empty state')
+    if (!WALK_REASONS.includes(body.reason)) problems.push('reason must be one of ' + WALK_REASONS.join('|'))
+  } else if (body.reason != null && !PLAIN_REASONS.includes(body.reason)) {
+    problems.push('reason must be one of ' + PLAIN_REASONS.join('|'))
   }
   if (problems.length) throw new Error(problems.join('; '))
 
@@ -156,6 +187,9 @@ function addNote(notes, input) {
     note.kind = 'question'
     note.ledgerId = body.ledgerId
     note.answer = null
+  } else if (isWalk) {
+    note.kind = 'walk'
+    note.reason = body.reason
   } else if (body.reason != null) {
     note.reason = body.reason
   }
@@ -255,5 +289,5 @@ function unresolvedFor(notes, labels) {
 
 module.exports = {
   readNotes, writeNotes, validateNotes, addNote, resolveNote, answerQuestion, addressNote, replyNote,
-  groupOpen, unresolvedFor,
+  groupOpen, unresolvedFor, WALK_REASONS,
 }

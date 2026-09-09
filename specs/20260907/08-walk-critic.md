@@ -1,6 +1,7 @@
 ---
 date: 2026-09-07
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +11,7 @@ depended_on_by: []
 brief: 22a
 spiked: 2026-09-07
 open_markers: 0
+diff_base: 5e4aa870b0e399a1a839f4b4e5f7f8fb1fe0f680
 ---
 
 # `/spec:mocks` gains WALK: one fresh-context critic per journey, flow breaks only, cited to a screen and a state or refused
@@ -72,6 +74,7 @@ test file. Per-file 45 s budget (specs/20260903/07) applies: `mocks-driver-2.tes
 | tests/mocks/mocks-driver-look-stops-4.test.js | MODIFY | tests | AC-20260907-08-9; repair the three SIGNOFF-block arms the WALK step reddens |
 | tests/mocks/mocks-notes.test.js | MODIFY | tests | AC-20260907-08-4, AC-20260907-08-5, AC-20260907-08-6, AC-20260907-08-7 |
 | tests/consistency/design-doctrine.test.js | MODIFY | tests | AC-20260907-08-10, AC-20260907-08-11; the four-blind-spot arm is replaced, never inverted |
+| size-baseline.json | MODIFY | tests | Amended at review (disposition `fix`): baseline raises for the grown scripts and test files plus the `tests` tree, every row citing this spec — `node scripts/size-ratchet.js --root . --raise <path> --to <bytes> --cite specs/20260907/08-walk-critic.md` |
 
 ## Contracts
 

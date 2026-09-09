@@ -75,6 +75,10 @@ wrong>` instead). Decided on the served atlas page or, from chat, `node {driver}
 directly. Next bare run reads the decided stop: `approve`/`pick` advances via its `--mark`
 line; `change` starts a fresh round.
 
+## Walk (WALK state)
+
+For the first journey with no `walked`: dispatch `Agent {subagent_type: 'design-critic'}` once — mock paths in declared order plus the seed path, never file contents (shared § Model Placement) — fresh context; it returns findings `{screen, state, break, finding, severity}`, flow breaks only (§ Mocks: State Machine). Record each with `node {driver} notes add --scope mock --screen <label> --state <s> --kind walk --reason <break> --by walk-critic --text "<finding>"`, then `--mark journey-walked --journey <j>` — refused on an `open` finding, naming each id and `notes address --id <id> --change "<what changed>"`; empty findings walk straight to the mark. WALK opens no look stop or render/look probe — fix a finding through `--reopen walk:<j>` or `--reopen journey:<j>`, both landing on states that already carry the look machinery.
+
 ## Sign-off (SIGNOFF state)
 
 The terminal look: one pass over `design/atlas/index.html`, every journey, gray. No separate review loop — run `node {driver} notes open` on go and triage every note
@@ -102,3 +106,4 @@ Printed once the driver reaches `APPROVED`. Assemble the slots (shared § Consol
 - The ledger is written only through the driver's `ledger` subcommands, notes.json only through
   its `notes` subcommands or the served page — never hand-typed; every `Agent`/workflow
   `model:` is explicit (shared § Model Placement).
+- **canon before screens, kit before wireframes, screens walked before sign-off.**

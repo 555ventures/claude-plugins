@@ -388,7 +388,7 @@ if (queueOverlay.on) {
       const blockers = r.ready ? [] : [`after ${r.target} (${r.state})`]
       return {
         action: it.payload, path: null, status: 'queued', brief: null, blockers,
-        note: `queue item ${it.id}`, rank: 0, queue: true, __queuePos: i,
+        note: `queue item ${it.id}`, rank: 0, queue: true, __queuePos: i, __queueId: it.id,
       }
     })
 }
@@ -642,7 +642,7 @@ if (nextMode) {
     // claim against), so the generic augmentation is skipped for it, never applied then
     // nulled out.
     writeOut(JSON.stringify({
-      next: entries.map(({ rank, parallelReason, __queuePos, ...e }) =>
+      next: entries.map(({ rank, parallelReason, __queuePos, __queueId, ...e }) =>
         e.queue ? e : { ...e, parallel: e.parallel === undefined ? null : e.parallel, parallel_reason: parallelReason || null }),
     }, null, 2))
     process.exit(0)
@@ -719,7 +719,9 @@ function laneAdmission(entries) {
   const later = unblocked.slice(1).filter(e => !lanes.includes(e))
   return { unblocked, blocked, lanes, laneClash, later }
 }
-const shortBlocker = b => b.replace(/^\S*\//, '').replace(/\s*\([^)]*\)$/, '').replace(/\.md$/, '')
+// Path-shortening is global, not anchored: a queue gate reads "after specs/2026…/08-x.md
+// (hardened)", where the path is not at the start of the string.
+const shortBlocker = b => b.replace(/\S*\//g, '').replace(/\s*\([^)]*\)$/, '').replace(/\.md$/, '')
 const waitClause = n => n === 1 ? '1 waits behind it' : `${n} wait behind it`
 
 {
@@ -815,7 +817,22 @@ const waitClause = n => n === 1 ? '1 waits behind it' : `${n} wait behind it`
     }
   }
 
-  const cmd = e => e.path ? `${e.action} @${e.path}` : e.action
+  // Every open-work row is exactly one line. A queued free-text item's payload runs to
+  // hundreds of words, and a row that wraps across twenty terminal lines has stopped being a
+  // list entry — so a prose row collapses to one line, cut to the terminal width, and leads
+  // with its queue id (`spec-queue show q119` prints the full text). A row that IS a command
+  // stays byte-identical and id-free: it must survive a double-click copy, and its own spec
+  // path is already a valid `spec-queue` <ref>. Width falls back to 100 off a TTY so piped
+  // output stays deterministic.
+  const rowWidth = process.stdout.columns || 100
+  const idWidth = Math.max(0, ...entries.filter(e => e.__queueId).map(e => e.__queueId.length))
+  const cmd = e => {
+    if (e.path) return `${e.action} @${e.path}`
+    const head = e.__queueId ? `${e.__queueId.padEnd(idWidth)}  ` : ''
+    const flat = String(e.action).replace(/\s+/g, ' ').trim()
+    const room = Math.max(20, rowWidth - head.length)
+    return head + (flat.length <= room ? flat : flat.slice(0, room - 1) + '…')
+  }
 
   if (allMode) {
     // D5: `--all` lifts the decide cap (above) and inserts the pre-diet lane render — verbatim,
@@ -863,13 +880,18 @@ const waitClause = n => n === 1 ? '1 waits behind it' : `${n} wait behind it`
       // the line explains that instead of masquerading as serial. Commands stay bare.
       if (later.length) {
         out.push('', '🕓 after that:')
-        for (const e of later) {
+        // Consecutive entries whose reason is identical share ONE branch line: repeating
+        // "🤷 no brief — parallelism unknown" under every row doubles the section's height
+        // and says nothing new on the second repeat.
+        const reasonOf = e => e.parallel === false ? `⛓️ ${e.parallelReason}`
+          : laneClash.has(e) ? `⛓️ ${laneClash.get(e)}`
+          : '🤷 no brief — parallelism unknown'
+        later.forEach((e, i) => {
           out.push(cmd(e))
-          out.push(`   └─ ${
-            e.parallel === false ? `⛓️ ${e.parallelReason}`
-            : laneClash.has(e) ? `⛓️ ${laneClash.get(e)}`
-            : '🤷 no brief — parallelism unknown'}`)
-        }
+          const reason = reasonOf(e)
+          const next = later[i + 1]
+          if (!next || reasonOf(next) !== reason) out.push(`   └─ ${reason}`)
+        })
       }
     }
     if (blocked.length) {

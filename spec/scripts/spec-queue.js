@@ -25,11 +25,13 @@
 //
 // Subcommands:
 //   next                          reconcile+write, print the pick (or a prompt payload)
-//   list                          pending items only, numbered, gates shown, footer
+//   list                          pending items only, one line each, gates shown, footer
 //   add <payload…> [--top | --at <n>] [--after-spec <path> | --after-brief NN]
 //                  [--when <type>:<args>]
 //   move <ref> <n>                n counts pending positions exactly as `list` prints them
 //   done <ref>                    manual tick: stamp ticked
+//   show <ref>                    the item's FULL payload, untruncated (list/status cut rows
+//                                 to one line, so this is the only way to read a long one)
 // Payload classification: NN/NNa or a docs/roadmap/NN-*.md path -> brief; a path matching
 // ^specs/.*\.md$ -> spec; anything else -> prompt verbatim.
 // <ref> resolves against an id, a brief number, a spec path (exact or unique basename
@@ -55,10 +57,10 @@ const {
 const SPEC_STATUS = path.join(__dirname, 'spec-status.js')
 
 function usage() {
-  console.error('usage: spec-queue.js <next|list|add|move|done> [args]')
+  console.error('usage: spec-queue.js <next|list|add|move|done|show> [args]')
   console.error('  next | list')
   console.error('  add <payload…> [--top | --at <n>] [--after-spec <path> | --after-brief NN] [--when <type>:<args>]')
-  console.error('  move <ref> <n> | done <ref>')
+  console.error('  move <ref> <n> | done <ref> | show <ref>')
 }
 
 const argv = process.argv.slice(2)
@@ -78,7 +80,7 @@ if (Object.prototype.hasOwnProperty.call(REMOVED_SUBS, sub)) {
   process.exit(2)
 }
 
-const SUBS = ['next', 'list', 'add', 'move', 'done']
+const SUBS = ['next', 'list', 'add', 'move', 'done', 'show']
 if (!SUBS.includes(sub)) { usage(); process.exit(2) }
 
 // The repository root, NOT the shell's CWD: every brief/spec state below is derived by
@@ -215,6 +217,17 @@ function itemDesc(it, briefNameByNum) {
   return it.payload
 }
 
+// Every rendered row is exactly one line. A free-text payload runs to hundreds of words, and
+// a row that wraps across twenty terminal lines stops being a list entry at all — so the
+// description is collapsed to a single line and cut to the terminal width, `show <ref>`
+// being the way back to the full text. Width falls back to 100 off a TTY so piped output
+// (tests, `| less`) is deterministic.
+const ROW_WIDTH = () => process.stdout.columns || 100
+function oneLine(text, width) {
+  const flat = String(text).replace(/\s+/g, ' ').trim()
+  return flat.length <= width ? flat : flat.slice(0, Math.max(1, width - 1)) + '…'
+}
+
 function resolveRef(items, ref) {
   let matches = items.filter(i => i.id === ref)
   if (!matches.length) matches = items.filter(i => i.kind === 'brief' && i.brief === normBrief(ref))
@@ -278,15 +291,24 @@ switch (sub) {
       console.log(`✨ nothing pending · ${doneCount} done`)
       process.exit(0)
     }
+    // Every item's own id is a valid `<ref>` for move/done, so the listing prints it as a
+    // column: a virtually reconciled item has none yet (`id: null`) and shows `—`, its brief
+    // number being the ref instead.
+    const refWidth = Math.max(...pending.map(it => (it.id || '—').length))
     pending.forEach((it, i) => {
-      let line = `${i + 1}  ${itemDesc(it, briefNameByNum)}`
+      const head = `${i + 1}  ${(it.id || '—').padEnd(refWidth)}  `
+      let gate = ''
       if (it.after) {
         const r = isItemReady(it, ctx)
-        if (!r.ready) line += `  ⏳ after ${r.target} (${r.state})`
+        // The gate target is shown by its basename: a full specs/YYYYMMDD/NN-name.md path
+        // costs half the row's width and adds nothing a reader of a one-line list needs.
+        if (!r.ready) gate = `  ⏳ after ${path.basename(r.target).replace(/\.md$/, '')} (${r.state})`
       }
-      console.log(line)
+      // The gate marker is the row's most decision-relevant part, so it keeps its full width
+      // and the description absorbs the cut.
+      console.log(head + oneLine(itemDesc(it, briefNameByNum), Math.max(20, ROW_WIDTH() - head.length - gate.length)) + gate)
     })
-    console.log(`— ${doneCount} done · move: spec-queue move <ref> <n>`)
+    console.log(`— ${doneCount} done · move: spec-queue move <ref> <n> · full text: spec-queue show <ref>`)
     process.exit(0)
   }
 
@@ -453,6 +475,27 @@ switch (sub) {
     item.ticked = nowIso()
     persist(items, raw.seq)
     console.log(`ticked ${item.id || itemDesc(item, new Map())}`)
+    process.exit(0)
+  }
+
+  case 'show': {
+    const ref = rest[0]
+    if (!ref) { console.error('spec-queue: show needs a <ref>'); process.exit(2) }
+    const statusJson = readSpecStatusJson()
+    const raw = loadQueue()
+    if (!raw) { console.error('spec-queue: no queue file — nothing to show (remedy: spec-queue next to seed one)'); process.exit(2) }
+    const ctx = ctxFor(statusJson)
+    const items = reconciledItems(raw.items, statusJson, { append: true })
+    const item = resolveRef(items, ref)
+    // Full payload, never truncated — this verb exists precisely because list/status cut.
+    const briefNameByNum = new Map(statusJson.briefs.map(b => [b.num, b.name]))
+    console.log(`${item.id || '—'}  ${item.kind}${isItemDone(item, ctx).done ? ' · done' : ''}`)
+    if (item.after) {
+      const r = isItemReady(item, ctx)
+      console.log(r.ready ? '⏳ gate met' : `⏳ after ${r.target} (${r.state})`)
+    }
+    console.log('')
+    console.log(item.kind === 'prompt' ? item.payload : itemDesc(item, briefNameByNum))
     process.exit(0)
   }
 }

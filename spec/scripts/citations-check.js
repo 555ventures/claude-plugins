@@ -48,6 +48,15 @@ const SCANNED_DIRS = ['spec/commands', 'spec/doctrine', 'spec/agents', 'git/comm
 // heading in either, so shared idioms resolve to BOTH files and the heading check unions.
 const SHARED_PATHS = [path.join(root, 'spec/doctrine/core.md'), path.join(root, 'spec/doctrine/design.md')]
 const GENESIS_PATH = path.join(root, 'spec/doctrine/genesis.md')
+// Every doctrine file, for the weak fallback below: a prose lookback names no file, and the
+// section it cites is nearly always in the doctrine family the citing command already reads.
+// Derived from the directory rather than listed, so a new doctrine file joins without an edit.
+const DOCTRINE_PATHS = (() => {
+  const dir = path.join(root, 'spec/doctrine')
+  try {
+    return fs.readdirSync(dir).filter(f => f.endsWith('.md')).sort().map(f => path.join(dir, f))
+  } catch { return [] }
+})()
 const SKIP_HOST_DIRS = new Set(['node_modules', '.git'])
 
 // ---- gather the scanned corpus -----------------------------------------------------------
@@ -170,7 +179,15 @@ function resolveTarget(farWord, nearWord, citingFile, citingDir) {
   }
 
   if (!nearWord && !farWord) return { kind: 'match', target: citingFile } // bare § → the citing file itself
-  return { kind: 'skip', reason: 'unresolvable file reference' }
+
+  // Prose lookback naming no file at all ("authored against § Design Canon"). In this corpus
+  // that overwhelmingly means a section of the citing file itself or of the doctrine family
+  // every command already reads, so the heading is checked against that union — but the
+  // resolution is WEAK: a heading matching nothing there stays a SKIP and never becomes a
+  // MISS. That asymmetry is the whole guard rail. Ordinary English before `§` cannot be told
+  // apart from a real file reference, so a strong resolution here would turn correct doctrine
+  // into false misses (the AC-20260810-09-2 defect); a weak one can only ever add coverage.
+  return { kind: 'weak', target: [citingFile, ...DOCTRINE_PATHS] }
 }
 
 // ---- scan -----------------------------------------------------------------------------------
@@ -203,8 +220,14 @@ for (const file of scannedFiles) {
       // terminator was found before this line ran out. `(` and `**` terminate too — a
       // citation's own trailing annotation ("§ Design Canon (rule checklist)") or bold-close
       // ("§ Review Checks**") is not part of the heading name being cited.
+      // `:` is deliberately NOT a terminator: this corpus self-namespaces nearly every heading
+      // ("Genesis: ...", "Mocks: ...", "Design ..."), so truncating at the first colon would
+      // verify the namespace prefix alone and leave every sub-heading name unchecked — a
+      // citation naming a section absent from the target file would still count as CHECKED. Prose
+      // that runs a colon on past a real heading name is caught by the `windowText` prefix
+      // check below, the same way an over-run without a colon already is.
       let afterSrc = line.slice(idx + 1)
-      const TERM = /[.,;:)(]|—|\*\*/
+      const TERM = /[.,;)(]|—|\*\*/
       let termIdx = afterSrc.replace(/^\s+/, '').search(TERM)
       let stripped = afterSrc.replace(/^\s+/, '')
       if (termIdx === -1 && L + 1 < lines.length) {
@@ -248,7 +271,11 @@ for (const file of scannedFiles) {
       // source) — checks the OTHER direction: a heading with no parenthetical whose
       // name the citation's own sentence over-runs ("§ Risk Tiers makes it universal") still
       // matches because the real heading is a prefix of the full trailing text, even though
-      // `heading`'s terminator-bounded capture over-ran the actual name.
+      // `heading`'s terminator-bounded capture over-ran the actual name. Because `:` does not
+      // terminate the capture, the over-run is compared against the FULL heading too, not just its
+      // namespace-stripped core — "§ Genesis: Discovery Interview names the grammar" reaches
+      // the end of the sentence and only the whole "Genesis: Discovery Interview" is a prefix
+      // of it.
       const windowText = stripped.trim().replace(/\s+/g, ' ')
       // genesis.md self-namespaces every heading with a "Genesis: " lead (there is no
       // spec/commands/genesis.md to disambiguate against) — the live corpus cites some of
@@ -257,10 +284,20 @@ for (const file of scannedFiles) {
       const matched = heads.some(h => {
         const core = h.replace(/^Genesis:\s*/, '').trim()
         const coreNoParen = core.replace(/\s*\([^)]*\)\s*$/, '').trim()
+        const hNoParen = h.replace(/\s*\([^)]*\)\s*$/, '').trim()
         return h.startsWith(heading) || core.startsWith(heading) ||
-          (coreNoParen.length > 0 && windowText.startsWith(coreNoParen))
+          (coreNoParen.length > 0 && windowText.startsWith(coreNoParen)) ||
+          (hNoParen.length > 0 && windowText.startsWith(hNoParen))
       })
       if (!matched) {
+        // A weak resolution never accuses: the lookback named no file, so a non-match means
+        // the checker could not find the target, not that the citation is broken.
+        if (resolution.kind === 'weak') {
+          checked--
+          skip++
+          skipLines.push(`SKIP ${file}:${lineNo} § ${heading} — unresolvable file reference`)
+          continue
+        }
         miss++
         missLines.push(`MISS ${file}:${lineNo} § ${heading} → ${targets.join(' + ')}`)
       }

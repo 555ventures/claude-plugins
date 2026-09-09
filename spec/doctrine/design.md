@@ -56,7 +56,7 @@ design doctrine doc (taste tokens can't encode, binding like a locked Decision);
 galleries, the notes layer — is authored under the `frontend-design` skill in the shadcn idiom on `viewer.css`'s
 register (the zinc roles byte-equal to `wire-tokens.css`), never on product tokens; the wireframe inside a frame stays gray.
 ## Design Authoring Contracts
-Consumed by `/spec:design` and the genesis design state (genesis.md § Genesis: Design State),
+Consumed by `/spec:design` and genesis's design ratification (genesis.md § Genesis: Brief State),
 authored against § Design Canon.
 **Grounded vs taste (mock supremacy):** each ruling is tagged `grounded` (external anchor —
 contrast/a11y, legal/brand, destructive-action safety) or `taste` (aesthetic), authored into

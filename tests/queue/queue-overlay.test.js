@@ -370,3 +370,58 @@ test('AC-20260823-08-15 / AC-20260903-03-10: a red-observation escape entry keep
   assert.strictEqual(j.next[0].path, specPath,
     'the escape entry at rank 0 must point at the red spec itself, not a queue-derived pick: ' + JSON.stringify(j.next[0]))
 })
+
+// One-line open-work rows: a free-text queue payload runs to hundreds of words, and printing
+// it whole turned a four-item section into ~45 wrapped terminal lines with no scannable left
+// edge. Every row is now exactly one line — a prose row leads with its queue id (the handle
+// `spec-queue move|done|show` takes) and is cut to the terminal width; a row that IS a command
+// stays byte-identical and id-free so a double-click copy still yields a runnable line.
+test('--all renders every open-work row on exactly one line: a long prose queue item leads with its id and is truncated, command rows stay bare', () => {
+  const payload = 'Escape-annotated release report: ' + 'per milestone promised ACs in plain language plus executed evidence '.repeat(12)
+  const dir = host({
+    briefs: { '05-a.md': '# 05 — A\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n' },
+    specs: {
+      '20260701/01-a.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 05',
+      '20260701/02-b.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 05',
+    },
+    queueItems: [
+      { id: 'q1', kind: 'spec', spec: 'specs/20260701/01-a.md', added: '2026-08-23T10:00:00Z' },
+      { id: 'q7', kind: 'prompt', payload, added: '2026-08-23T10:01:00Z' },
+    ],
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--all'])
+  assert.strictEqual(r.status, 0, r.stderr)
+
+  const promptRows = r.stdout.split('\n').filter(l => l.includes('Escape-annotated release report'))
+  assert.strictEqual(promptRows.length, 1,
+    'the prose payload must occupy exactly ONE rendered row — printing it whole is what made the section unreadable: ' + JSON.stringify(promptRows))
+  assert.match(promptRows[0], /^q7 *Escape-annotated release report/,
+    'a prose row leads with its queue id: that id is the only stable handle (positions renumber) and it also marks the row as not-a-command: ' + promptRows[0])
+  assert.ok(promptRows[0].length <= 100,
+    'off a TTY the row is cut at the 100-column fallback so piped output is deterministic and never wraps: ' + promptRows[0].length)
+  assert.ok(promptRows[0].endsWith('…'),
+    'a truncated row must SAY it was truncated, otherwise the reader cannot tell a cut payload from a short one: ' + promptRows[0])
+
+  assert.match(r.stdout, /^\/spec:run @specs\/20260701\/01-a\.md$/m,
+    'a queued row that IS a command stays bare and id-free — it must survive a double-click copy, and its spec path is already a valid spec-queue <ref>: ' + r.stdout)
+})
+
+// The reason branch under "after that" repeats verbatim for every briefless entry; saying
+// "no brief — parallelism unknown" three times in a row doubles the section height and adds
+// nothing on the second repeat.
+test('--all collapses a run of identical after-that reasons onto one shared branch line', () => {
+  const dir = host({
+    specs: {
+      '20260701/01-a.md': 'date: 2026-07-01\nstatus: hardened\nbrief: n/a',
+      '20260701/02-b.md': 'date: 2026-07-01\nstatus: hardened\nbrief: n/a',
+      '20260701/03-c.md': 'date: 2026-07-01\nstatus: hardened\nbrief: n/a',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--all'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const reasons = r.stdout.split('\n').filter(l => l.includes('no brief — parallelism unknown'))
+  assert.strictEqual(reasons.length, 1,
+    'consecutive entries sharing one reason get ONE branch line, not one per row: ' + JSON.stringify(reasons))
+  assert.match(r.stdout, /\/spec:run @specs\/20260701\/02-b\.md\n\/spec:run @specs\/20260701\/03-c\.md\n\s+└─ 🤷 no brief/,
+    'the shared branch line closes the run, so it still reads as covering every row above it: ' + r.stdout)
+})

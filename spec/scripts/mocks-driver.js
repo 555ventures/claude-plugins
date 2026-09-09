@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // mocks-driver.js [--root <dir>] [--state]
-// mocks-driver.js --root <dir> --mark <mark> [--journey <j>] [--direction <k>] [--shape <k>]
+// mocks-driver.js --root <dir> --mark <mark> [--journey <j>] [--shape <k>]
 // mocks-driver.js --root <dir> --reopen journey:<j>|shapes|kit
 // mocks-driver.js --root <dir> ledger (add|set|catch|check|counts|ask) [flags]
 // mocks-driver.js --root <dir> ledger add --id <i> --step <s> --kind <k> --claim <c> [--tag <t>]
@@ -1724,7 +1724,6 @@ if (rest[0] === 'skill-check') {
   } else if (MARK) {
     doMark(MARK, {
       journey: flagArg(rest, '--journey'),
-      direction: flagArg(rest, '--direction'),
       shape: flagArg(rest, '--shape'),
     })
   } else if (STATE_ONLY) {

@@ -295,9 +295,13 @@ test('AC-20260902-10-5: `notes open` prints the project note first, groups N004 
 })
 
 // ---------------------------------------------------------------------------
-// AC-20260902-10-6
+// AC-20260902-10-6 / AC-20260907-07-12
 // ---------------------------------------------------------------------------
-test('AC-20260902-10-6: journey-approved and approved both refuse on an open project note or an unresolved journey note, naming the note ids', () => {
+// specs/20260907/07-mocks-retires-theme.md AC-20260907-07-12 (retag): the approved-scope
+// assertions below are this AC's own "unresolved project or journey note" clause of the CONTINUE
+// TO pin that `--mark approved` still refuses on an unresolved note, a missing decided `approved`
+// stop, or an unapproved declared journey — the theme precondition's removal narrows nothing else.
+test('AC-20260902-10-6 / AC-20260907-07-12: journey-approved and approved both refuse on an open project note or an unresolved journey note, naming the note ids', () => {
   const dir = tmpdir('mocks-notes-gate')
   advanceToJourneyDrawn(dir)
   writeCaptureConfig(dir, writeFixtureCapture(dir))

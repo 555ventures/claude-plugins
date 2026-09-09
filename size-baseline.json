@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 29937,
-    "spec/scripts": 1246955,
+    "spec/scripts": 1246890,
     "spec/scripts/lib": 225608,
-    "tests": 3430982
+    "tests": 3431347
   },
   "files": {
     "scripts/plugin-bump.js": 8564,
@@ -57,7 +57,7 @@
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
     "spec/scripts/merge-back.sh": 17514,
-    "spec/scripts/mocks-driver.js": 93838,
+    "spec/scripts/mocks-driver.js": 93773,
     "spec/scripts/promise-sweep.js": 10409,
     "spec/scripts/prose-cap.js": 6271,
     "spec/scripts/question-style-gate.js": 10712,
@@ -169,8 +169,8 @@
     "tests/mocks/chrome-harness.js": 6375,
     "tests/mocks/mocks-driver-2.test.js": 16258,
     "tests/mocks/mocks-driver-3.test.js": 16740,
-    "tests/mocks/mocks-driver-4.test.js": 16815,
-    "tests/mocks/mocks-driver-fixtures.js": 24880,
+    "tests/mocks/mocks-driver-4.test.js": 16765,
+    "tests/mocks/mocks-driver-fixtures.js": 24866,
     "tests/mocks/mocks-driver-kit-gate.test.js": 2879,
     "tests/mocks/mocks-driver-look-stops-2.test.js": 12882,
     "tests/mocks/mocks-driver-look-stops-3.test.js": 9355,
@@ -180,7 +180,7 @@
     "tests/mocks/mocks-driver-wire.test.js": 4300,
     "tests/mocks/mocks-driver.test.js": 35057,
     "tests/mocks/mocks-ledger.test.js": 12490,
-    "tests/mocks/mocks-notes.test.js": 44405,
+    "tests/mocks/mocks-notes.test.js": 44834,
     "tests/mocks/mocks-picks.test.js": 11563,
     "tests/mocks/notes-layer-isolation.test.js": 6464,
     "tests/mocks/notes-layer-navigation.test.js": 27426,
@@ -413,9 +413,15 @@
       "cite": "specs/20260907/07-mocks-retires-theme.md"
     },
     {
-      "path": "tests/consistency/design-doctrine.test.js",
-      "from": 33846,
-      "to": 33846,
+      "path": "tests/mocks/mocks-notes.test.js",
+      "from": 44405,
+      "to": 44834,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests",
+      "from": 3430982,
+      "to": 3431347,
       "cite": "specs/20260907/07-mocks-retires-theme.md"
     }
   ]

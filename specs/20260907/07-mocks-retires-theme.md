@@ -1,6 +1,6 @@
 ---
 date: 2026-09-07
-status: implementing
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -47,7 +47,7 @@ reopen, look stop and report line of `/spec:mocks` behaves exactly as it does to
 | D10 | `spec/scripts/render-gate.js`'s `--mocks` comment stops naming a stage that no longer exists: `before /spec:mocks's THEME stage copies a chosen tokens.css into design/ — so design/tokens.css can be absent` becomes `before any theme has been picked at all (the pick moved to /spec:sketch, which runs after mocks sign-off) — so design/tokens.css can be absent`. No code changes: the empty-tokens substitution, its default-manifest scoping and its host-manifest exclusion are byte-identical `[no-ac: comment-only edit with no observable surface; the file's existing tests are the regression oracle]` | The comment answers "why can tokens be missing here?", and after this spec the honest answer is stronger, not weaker — tokens are absent for the whole mocks stage, not just its first half. |
 | D11 | Bump `spec/.claude-plugin/plugin.json` to the next free minor — target **7.101.0**, because `specs/20260907/04` claims 7.98.0, both hardened specs numbered `05` claim 7.99.0, and `specs/20260907/06` claims 7.100.0 — with the last-3-versions changelog entry `[no-ac: review's version-bump check is the oracle]` | § Planning version discipline; hardened-but-unbuilt siblings hold the numbers they claim. |
 | D12 | **Build-time ruling (user, this build).** `tests/mocks/mocks-driver-theme.test.js` joins the File Plan for the single purpose of deleting `AC-20260907-06-10` whole — spec 06's CONTINUE-TO pin asserting `--mark direction-composed`, `--mark theme-picked`, `--reopen theme` and the derived `THEME` state all keep working. Every other test in that file is untouched, and the file's `advanceToDirectionComposed` import is dropped with the test that used it. No AC: the pin's subject is exactly what D1–D6 delete, so this spec's own AC-20260907-07-1/-2/-3/-6 are its successors `[no-ac: deletion of a superseded pin; the deleting spec's own ACs are the oracle]` | This is the pipeline-rules § Gotchas retired-literal class from the CONTINUE-TO direction: spec 06 deliberately pinned the behaviour it left standing, and the spec that retires that behaviour is the one that must retire its pin. Leaving it is a permanently red suite (§ Test Rules: gates are plainly green, no standing red pins); weakening it instead of deleting it would be the banned repair. |
-| D13 | **Build-time ruling (extends D12's class, same build).** Two more live surfaces outside the File Plan assert literals D8 retires; both are updated in place, never weakened, never left red (pipeline rules § Gotchas, retired-literal class). (a) `tests/consistency/genesis-doctrine.test.js`'s `AC-20260902-09-3` drops `recompose` from its four-literal list and from its test name — that literal lived only inside the deleted `Theme = recompose, never repaint` bullet, so the rule it checked retires with the theme; its other three literals (`never a half-styled middle`, `dense screen first`, `gray until confirmed`), its heading assertion and its `shared-mocks` resolution assertion are byte-identical. (b) The six `[prior]` findings `comment-narration.js` reports against this build's own test-file comments are reworded to state the contract instead of what the code used to do `[no-ac: (a) narrows a superseded pin whose subject D8 deletes; (b) comment prose with no observable surface — comment-narration.js's standing zero-finding scan is the oracle]` | § Test Rules: gates are plainly green, no standing red pins. § Worker Rules bans prior-behaviour narration in comments outright, so a comment that explains a deletion by naming what used to be there is a defect the standing scan is built to catch. |
+| D13 | **Build-time ruling (extends D12's class, same build).** Two more live surfaces outside the File Plan assert literals D8 retires; both are updated in place, never weakened, never left red (pipeline rules § Gotchas, retired-literal class). (a) `tests/consistency/genesis-doctrine.test.js`'s `AC-20260902-09-3` drops **both** `recompose` and `dense screen first` from its four-literal list and from its test name — both phrases lived only inside the deleted `Theme = recompose, never repaint` bullet (`grep -n 'dense screen first\|recompose' spec/doctrine/mocks.md spec/doctrine/design.md` at this spec's close: no hits), so the two rules they checked retire with the theme; the surviving two literals (`never a half-styled middle`, `gray until confirmed`), the heading assertion and the `shared-mocks` resolution assertion are byte-identical. (b) The six `[prior]` findings `comment-narration.js` reports against this build's own test-file comments are reworded to state the contract instead of what the code used to do `[no-ac: (a) narrows a superseded pin whose subject D8 deletes; (b) comment prose with no observable surface — comment-narration.js's standing zero-finding scan is the oracle]` | § Test Rules: gates are plainly green, no standing red pins. § Worker Rules bans prior-behaviour narration in comments outright, so a comment that explains a deletion by naming what used to be there is a defect the standing scan is built to catch. |
 | D14 | **Build-time ruling (same class, review legs).** `specs/20260902/07-mocks-command-driver.md`'s `AC-20260902-07-7` loses its covering test with the `direction-composed` / `theme-picked` marks D3 deletes, so `ac-drift.js` reports it uncited. Its bullet gains `[retired: specs/20260907/07-mocks-retires-theme.md]` — the remedy `ac-drift.js` itself names — and nothing else in that spec is touched `[no-ac: retirement annotation on a superseded criterion; ac-drift.js's clean run is the oracle]` | A criterion whose subject a later spec deletes is retired, not uncovered; tagging some surviving test with the id would be the false-coverage repair the retired-marker exists to prevent. |
 
 **Orchestrator duty (outside the File Plan table):** `tests/mocks/mocks-driver-fixtures.js` is the
@@ -78,9 +78,9 @@ expected — if one crosses the budget anyway, split it rather than trimming an 
 | tests/mocks/mocks-driver-look-stops-2.test.js | MODIFY | tests | Fixture repair only (collision-closure `executes` hit): `advanceToThemePicked` → `advanceToJourneyApproved` — no AC |
 | tests/mocks/mocks-driver-look-stops-3.test.js | MODIFY | tests | AC-20260906-04-9's `stop open theme` test DELETED and its file-header comment re-pointed — no AC |
 | tests/mocks/mocks-driver-look-stops-4.test.js | MODIFY | tests | AC-20260907-07-8, AC-20260907-07-14; AC-20260906-02-8's THEME arm deleted, its WIREFRAMES and SIGNOFF arms kept |
-| tests/mocks/mocks-notes.test.js | MODIFY | tests | Fixture repair only (collision-closure `executes` hit): the file-local `advanceToThemePicked()` deleted, AC-20260902-10-6 re-chained onto `advanceToJourneyApproved` — no AC |
+| tests/mocks/mocks-notes.test.js | MODIFY | tests | Fixture repair only (collision-closure `executes` hit): the file-local `advanceToThemePicked()` deleted, AC-20260902-10-6 re-chained onto `advanceToJourneyApproved`; plus AC-20260907-07-12, retagged onto that same test's open-project-note refusal (review disposition s5, user override) |
 | specs/20260902/07-mocks-command-driver.md | MODIFY | doctrine | D14: `AC-20260902-07-7`'s bullet gains a `[retired: ...]` marker; nothing else in that spec touched — no AC |
-| tests/consistency/genesis-doctrine.test.js | MODIFY | tests | D13(a): `AC-20260902-09-3` drops the `recompose` literal from its list and its test name; every other assertion byte-identical — no AC |
+| tests/consistency/genesis-doctrine.test.js | MODIFY | tests | D13(a): `AC-20260902-09-3` drops the `recompose` and `dense screen first` literals from its list and its test name; every other assertion byte-identical — no AC |
 | tests/mocks/mocks-driver-theme.test.js | MODIFY | tests | D12: `AC-20260907-06-10`'s test DELETED whole with its `advanceToDirectionComposed` import; every other test in the file untouched — no AC |
 | tests/consistency/design-doctrine.test.js | MODIFY | tests | AC-20260907-07-10, AC-20260907-07-11; plus fixture repair on AC-20260902-10-8 (`advanceToThemePicked` → `advanceToJourneyApproved`, and its name drops "with the theme picked") |
 
@@ -281,6 +281,40 @@ What to watch during execution: the fixture chain. Nine of the ten test-layer ro
 because `advanceToThemePicked` disappears, so proving the fixture edit alone before touching
 anything else is the difference between one mechanical pass and nine independent debugging
 sessions.
+
+### What the build actually hit (folded from the deviations sidecar at review close)
+
+The plan's own warning about the fixture chain held, but it under-counted the collision surface.
+Six departures, none of which changed a promise:
+
+- **The predecessor's CONTINUE-TO pin was the one the closure sweep could not see.**
+  `tests/mocks/mocks-driver-theme.test.js`'s `AC-20260907-06-10` asserted that
+  `--mark direction-composed`, `--mark theme-picked`, `--reopen theme` and the derived `THEME`
+  state all keep working — spec 06 pinning exactly what it deliberately left standing for this
+  spec to remove. It reddened with `advanceToDirectionComposed is not a function` the moment the
+  mandatory fixtures edit landed, and would have been behaviourally false even with a stub.
+  D12 records the user's ruling to delete it; the class is now the fourth trigger on the
+  pipeline rules' retired-literal Gotcha.
+- **Two more live pins asserted literals D8 retires.** `AC-20260902-09-3` checked the
+  § Mocks: Authoring Rules body for `recompose` and for `dense screen first` — both phrases
+  lived only inside the deleted `Theme = recompose, never repaint` bullet, so both retire with
+  it (D13(a); the Decision's first draft named only `recompose` and was corrected at review).
+  `AC-20260902-07-7`'s covering test died with the marks it exercised, so its bullet carries a
+  `[retired: ...]` marker rather than a retagged stand-in that would have been false coverage
+  (D14).
+- **Two plan-time ACs mixed a new promise with a CONTINUE-TO pin** and were split at red-check
+  into `AC-20260907-07-13` and `AC-20260907-07-14`; nothing was loosened, and the CONTINUE-TO
+  halves are green against the pre-image, which is what makes them honest.
+- **D9's two premises about `spec/commands/mocks.md` were both false against HEAD.** The
+  frontend-design skill-line paragraph it described as merely relocated did not exist in the
+  file, and the Look rule's step enumeration read `shapes|journey:<j>|theme|signoff` — it never
+  named `kit`. The paragraph was authored net-new and `kit` was added, both to satisfy
+  AC-20260907-07-11's exact-match assertion and the driver's own executed `stop open` refusal.
+- **D11's version literal was stale, as its own Gotcha predicts.** Siblings had already pushed
+  `spec/.claude-plugin/plugin.json` past 7.101.0; `plugin-bump.js` derived the next free minor.
+- **Edited files outgrew their size baselines**, so raises citing this spec landed in
+  `size-baseline.json` — the one out-of-plan file at review, waived with the user's agreement
+  because the baseline is the size mechanism's own ledger rather than product surface.
 
 ## Canonical Delta
 

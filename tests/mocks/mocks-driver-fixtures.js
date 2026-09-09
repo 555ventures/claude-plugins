@@ -136,7 +136,7 @@ function writeWireframe(dir, label, opts = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// D11 fixture repair: the gated marks (shape-picked, journey-approved, theme-picked, approved)
+// D11 fixture repair: the gated marks (shape-picked, journey-approved, approved)
 // refuse without a decided look stop for the mark's key — decideLook/openLook write that stop
 // through lib/mocks-picks.js (spec 01's lib, never by hand), so every advanceTo* helper and
 // every direct mark() call below can keep exercising its OWN precondition (drawn-before-approved,

@@ -224,4 +224,10 @@ test('AC-20260908-05-10: stage appends a green substrate row for an all-inert ma
     'cannot be checked at all: ' + rB.stdout + ' / ' + rB.stderr)
   assert.deepStrictEqual(readRows(runManifestB), [],
     'D6: the refusal must append zero rows: ' + JSON.stringify(readRows(runManifestB)))
+  assert.match(rB.stderr, /release-manifest\.json/,
+    'D6: the refusal must name the release manifest it could not check — an operator who cannot ' +
+    'see which file to build has to read the script to recover: ' + rB.stderr)
+  assert.match(rB.stderr, /re-run stage/,
+    'D6: the refusal must name the remedy command (pipeline rules § Worker Rules: error messages ' +
+    'name the remedy) — exit 2 alone leaves the operator guessing what to do next: ' + rB.stderr)
 })

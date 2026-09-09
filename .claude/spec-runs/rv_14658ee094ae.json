@@ -1,0 +1,123 @@
+{
+  "runId": "rv_14658ee094ae",
+  "ts": "2026-09-09T05:42:09.847Z",
+  "spec": "specs/20260907/09-atlas-index-and-note-navigation.md",
+  "tier": "standard",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 2173,
+    "base": "01f7fe5c7c49623140087b244851bbf0550e9b3b",
+    "head": "ff13dee6e07ad8bb9add6fbc52226dbc116b8147",
+    "dirty": false
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 536
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1347
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 15,
+        "carried": 12,
+        "sanctioned": 3,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "reviewerCount": 1,
+    "tokens": 73000,
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "The new AC-20260907-09-1 ordering pin is vacuous (cannot fail on order or count drift), like the two earlier pins this spec shipped.",
+        "file": "tests/design-atlas.test.js",
+        "line": 3097,
+        "evidence": "Rebuilt the fixture with spec/scripts/design-atlas.js build and applied the test's exact regexes and assertions to the produced HTML plus five mutated copies. BASELINE passes with sections [shapes, alpha-area, zeta-area, no declaring brief]; orderSwapJourneys CAUGHT (order), orderShapesLast CAUGHT (order), oneGroupMissing CAUGHT (count), extraGhostGroup CAUGHT (count), typoInOneGroup CAUGHT (order). Five of five drifts fail the pin. The fixture yields four sections rather than three, which only strengthens the sequence comparison; the setup guard still holds."
+      },
+      {
+        "claim": "The new three-section fixture disturbed another assertion in tests/design-atlas.test.js.",
+        "file": "tests/design-atlas.test.js",
+        "line": 3083,
+        "evidence": "Run alone under CHROME_BIN at concurrency 3: 76 tests, 76 pass, 0 fail, 0 cancelled, 0 skipped. The diff adds only lines inside the AC-1 test body after its existing assertions; no other hunk in the file. The pre-existing shell/toc/main order, title-matched .tocgroup, id=\"j-<title>\" and four row-label assertions are untouched and still run first."
+      },
+      {
+        "claim": "The deviations-sidecar record for the stateless pill misstates the driver or the pin.",
+        "file": "specs/20260907/09-atlas-index-and-note-navigation.deviations.md",
+        "line": 146,
+        "evidence": "mocks-driver.js's header documents --state as optional on both ledger add and ledger ask, and lines 1241 and 1263 store state: stateArg || null. notes-layer.browser.js:186 labels n.state ? screen + ' · ' + state : screen. tests/mocks/notes-layer-navigation.test.js renders a state:null question with an iframe.frame present and asserts textContent === 'session-live' with a consequence message — a real assertion, not a name-only citation. Sidecar grammar scan: 0 malformed lines."
+      },
+      {
+        "claim": "The stateless-label departure from D7 should have been a Decision amendment, not a deviations-sidecar bullet.",
+        "file": "specs/20260907/09-atlas-index-and-note-navigation.md",
+        "line": 41,
+        "evidence": "D7 fixes the label form and enumerates the button-versus-inert-span cases; D7′ is the precedent for amending when the criterion changes. The fix changes neither the criterion nor any enumerated case, only the label for an input (a null state) the form does not describe. The deviations sidecar is the sanctioned, driver-validated record for spec departures, folded at CLOSE, so recording is the convention-conformant route; no rule requires an amendment for a label-form deviation."
+      },
+      {
+        "claim": "Suppression markers, non-builtin imports, weakened assertions, assert messages lacking consequences, or a hand-edited generated surface in this delta.",
+        "file": null,
+        "line": null,
+        "evidence": "Checked all five across ff13dee: none present."
+      }
+    ]
+  }
+}

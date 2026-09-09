@@ -103,7 +103,6 @@ passes `--refresh` to `init-gen generate` the same way any other regeneration do
   and records its exit. A second hand-run would re-probe registries the driver already resolved
   and write a currency stamp nothing recorded.
 - Greenfield-only: a populated repo → STOP, point to `/spec:init`.
-- `AskUserQuestion` dismissed → STOP; never invent the declined answer.
 - Hard-to-reverse forks always go to the user; never synthesized away.
 - `args` to `wf-research` is a control channel — paths, enum keys, booleans only.
 - Every `Agent`/workflow `model:` is explicit (Opus session is the sole proposer — shared §

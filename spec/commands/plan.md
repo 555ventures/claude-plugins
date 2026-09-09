@@ -11,8 +11,8 @@ Spec quality determines all downstream spend — this is the pipeline's judgment
 concentration point.
 
 **Setup:** run `spec-paths shared-for plan` and read its output. Read the host's
-`.claude/spec.config.json` and its `pipelineRules` file. Either missing → STOP: run
-`/spec:init` first.
+`.claude/spec.config.json` (its pipeline rules load with that Read — path-scoped, never
+re-read). Either missing → STOP: run `/spec:init` first.
 
 ## Input
 
@@ -73,20 +73,9 @@ Write the spec per the template. `status: draft`. While drafting:
   bundles an edit to a different file inside its Summary hands a worker a file its contract
   forbids touching — bundled edits get their own row or an explicit orchestrator-duty line
   outside the table.
-- **ACs** follow the template's contract: `WHEN … THE SYSTEM SHALL …`, namespaced IDs
-  (`AC-{YYYYMMDD-NN}-k`), `[env: VAR]` on environment-gated tests, `[oracle: <leg>]` where
-  a gate leg is the honest oracle, `[pre-green: <reason>]` (closed enum: `fallback-rejection`
-  | `absence-invariant` | `predicate-in-test` | `design-landed`) on an AC whose test is legitimately green
-  against the pre-image — verify against the pre-image before tagging; build's red-check
-  reads the tag as a sanction, never an attestation to take on faith — literal input→output
-  examples on ambiguity-prone terms (always, on critical tier). A Decision that promises a
-  user-observable surface owes an AC asserting on the observable itself through the real
-  in-repo route (the template names the anti-pattern: invented-fixture liveness). Defect-fix
-  and behavior-change specs write a **regression pin** per behavior that must survive: `WHEN
-  {trigger} THE SYSTEM SHALL CONTINUE TO {existing behavior}` — the literal words `SHALL
-  CONTINUE TO` are the machine-visible marker (build's red-check treats pin carriers as
-  sanctioned-green); prefer tagging the existing covering test with the AC-ID over
-  duplicating it.
+- **ACs** follow `spec/templates/spec.md`'s `## Acceptance Criteria` comment verbatim — shape,
+  tag grammar (`env`/`oracle`/`pre-green`), the terminal-observable rule, and the regression-pin
+  grammar all live there, the one binding home; this command never restates it.
 - **Decisions table is authoritative** — every fork's outcome lands there; zero open forks
   at lock. Fill **Assumptions** with each load-bearing assumption paired with its
   `if false →` fallback. Fill **Rationale** (for the cold-start reader) and **Canonical
@@ -157,7 +146,6 @@ Write the spec per the template. `status: draft`. While drafting:
 
 ## Rules
 
-- Genuine forks go to the user — never silently decided. `AskUserQuestion` dismissed →
-  STOP; never invent the answer.
+- Genuine forks go to the user — never silently decided.
 - The spec must be executable by an orchestrator that was not in this conversation —
   unstated context goes in Rationale.

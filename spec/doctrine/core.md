@@ -25,17 +25,17 @@ The pipeline is process; the repo supplies grounding. Two host files, both creat
 - **`.claude/spec.config.json`** — machine-readable knobs: `gateCommand`, `testCommand`,
   `setupCommand`, `patternsScript`, `layerGroups`, `agentMap`, `pipelineRules`, `runtime`,
   plus the optional blocks the grounding contract (`spec-paths contract`) enumerates.
-- **The pipeline rules file** (path in `pipelineRules`, conventionally
-  `.claude/rules/spec-pipeline.md`) — prose grounding by section: `Risk Tiers`, `Planning`,
-  `Build`, `Worker Rules`, `Test Rules`, `Review Checks`, `Gotchas`.
+- **The pipeline rules file** (`pipelineRules`'s path) — prose grounding by section:
+  `Risk Tiers`, `Planning`, `Build`, `Worker Rules`, `Test Rules`, `Review Checks`, `Gotchas`.
+  Path-scoped — injected once, first matching `Read` only, never Bash; missing from the
+  config's arrival → Read it once.
 
-Every command reads both at start; repo differences live there, never as forks inside the
-plugin's files. Either missing → STOP: run `/spec:init`.
+Every command reads the config at start; repo differences live in these two files, never as
+forks inside the plugin's own. Either missing → STOP: run `/spec:init`.
 
 **Regeneration ownership.** `/spec:init` bootstraps and regenerates the grounding layer;
-`/spec:enforce` owns the deterministic rule-enforcement layer; `/spec:doctor` is the
-read-only drift check — it diagnoses and patches line-items with approval (`--fix`) but never
-regenerates wholesale.
+`/spec:enforce` owns rule-enforcement; `/spec:doctor` diagnoses and patches line-items with
+approval (`--fix`) but never regenerates wholesale.
 
 ## Grounding Drift
 

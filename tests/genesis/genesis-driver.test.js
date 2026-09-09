@@ -1016,3 +1016,25 @@ test('AC-20260902-11-5: WHEN --mark skeleton-landed runs for a fresh visual run 
   assert.strictEqual(statusOf(ok).zeroDayGate.exit, 0, 'AC-20260902-11-13: skeleton-landed must CONTINUE TO run the zero-day gate once D5\'s new extraction checks all pass — its absence means the new checks were inserted in place of the gate instead of ahead of it')
   assert.match(landed.stdout, /ROADMAP/, 'AC-20260902-11-13: a green zero-day gate must still advance the driver to ROADMAP')
 })
+
+// specs/20260908/06-command-prose-states-contracts.md D9/AC-20260908-06-5: the DISCOVERY step
+// itself now carries the "print the brief in full once" instruction genesis.md's doctrine used
+// to restate every round — the driver prints it once brief.md exists, never on a cold root
+// where there is nothing to render yet.
+test('AC-20260908-06-5: genesis-driver.js DISCOVERY step prints "Before marking: print ## What I think you\'re building and ## Coverage once, in full" once .claude/genesis/brief.md exists, and omits it on a cold root', () => {
+  const cold = tmpdir('gdrv-ac5-cold')
+  const coldRun = bare(cold)
+  assert.match(coldRun.stdout, /state: DISCOVERY/, 'test setup requires a cold root to land on DISCOVERY: ' + coldRun.stdout)
+  assert.doesNotMatch(coldRun.stdout,
+    /Before marking: print ## What I think you're building and ## Coverage once, in full/,
+    'a cold root has no brief.md to render yet — printing the closing-render instruction here would tell the session to print a brief that does not exist')
+
+  const warm = tmpdir('gdrv-ac5-warm')
+  bare(warm)
+  writeBrief(warm, { picks: ['- archetype: data-ml'] })
+  const warmRun = bare(warm)
+  assert.match(warmRun.stdout, /state: DISCOVERY/, 'test setup requires a brief-carrying, not-yet-discovery-done root to still be DISCOVERY: ' + warmRun.stdout)
+  assert.match(warmRun.stdout,
+    /Before marking: print ## What I think you're building and ## Coverage once, in full/,
+    'once brief.md exists the DISCOVERY step must remind the session to render ## What I think you\'re building and ## Coverage in full exactly once before marking discovery-done — its absence is what let genesis.md\'s doctrine restate the brief 5-12 times a round instead')
+})

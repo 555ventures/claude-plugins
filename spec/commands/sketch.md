@@ -220,4 +220,3 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
   the sweep — no `Agent` dispatch ever writes a candidate direction's tokens or kit page.
 - The critique pass is never skipped and never self-run — a small brief still gets the states
   check, the render rules, and the fresh-context critic before its exit stop.
-- `AskUserQuestion` dismissed → STOP.

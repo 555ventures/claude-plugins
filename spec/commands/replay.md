@@ -14,14 +14,13 @@ one-reviewer bet falsifiable (shared § Feedback Loop).
 
 **Two entry points, one executor.** `/spec:review`'s driver invokes Phases 1–5 below itself
 when the harness reports a replay is due — its REPLAY state refuses to conclude the review
-until an outcome is recorded for the selected target. This command remains the **manual
-surface**: ad-hoc measurement, and the retry after a non-measurement outcome
-(`unresolved`/`setup-failed`), which leaves the harness due. Phase 0's STOP-on-not-due is
-unchanged here.
+until an outcome is recorded. This command remains the **manual surface**: ad-hoc measurement,
+and the retry after a non-measurement outcome (`unresolved`/`setup-failed`), which leaves the
+harness due. Phase 0's STOP-on-not-due is unchanged here.
 
 **Setup:** run `spec-paths shared-for replay` and read its output. Read the host's
-`.claude/spec.config.json` and its `pipelineRules` file. Either missing → STOP: run
-`/spec:init` first.
+`.claude/spec.config.json` (pipeline rules load with that Read — path-scoped). Either missing
+→ STOP: run `/spec:init` first.
 
 **Intended model: Sonnet** — and the placement covers mutation authoring itself, not just
 orchestration: run the harness's deterministic modes, author one mutation in-session, dispatch
@@ -72,21 +71,15 @@ asked.
    ever runs, so a host that boots from env files reaches setup and the smoke leg with them
    present; a host with no manifest is unchanged — no manifest means nothing to copy.
 2. **Setup gate (D4):** read the host's `setupCommand` from `.claude/spec.config.json` and run
-   it inside `{dir}` **without relocating the session** — a subshell (`(cd {dir} && <setupCommand>)`)
-   or the tool's own directory flag, never a bare `cd`, since a session shell that stays inside
-   `{dir}` silently redirects every later cwd-defaulted harness step into the tree teardown is
-   about to delete (Rules § The session never leaves the main root). Non-zero exit → run `node "$(spec-paths replay)" --record --spec {spec}
-   --review-run-id {reviewRunId} --legs none --outcome setup-failed`, then
-   `node "$(spec-paths replay)" --teardown --dir {dir}`, render Phase 5's `setup-failed` report,
-   and STOP — no class is picked, no patch is authored, nothing was measured, and the harness
-   stays due (D5: a non-measurement row never resets the clock). Zero exit → restore tracked
-   files inside `{dir}` (`git -C {dir} checkout -- .`) so nothing `setupCommand` wrote — a
-   rewritten lockfile, generated code — reaches the tree the legs and the blind reviewer read
-   (D10), then run `git -C {dir} clean -fd` — `git checkout -- .` alone restores tracked files
-   but cannot remove files `setupCommand` *creates* (specs/20260820/02-replay-scratch-write-access.md
-   D4), and `clean -fd` cannot touch the `scratch-worktree` marker, which lives in the
-   worktree's private git dir outside the working tree — order is load-bearing: checkout first,
-   then clean — then continue to class selection.
+   it inside `{dir}` **without relocating the session** — a subshell or the tool's own
+   directory flag, never a bare `cd` (Rules § The session never leaves the main root). Non-zero
+   exit → run `node "$(spec-paths replay)" --record --spec {spec} --review-run-id
+   {reviewRunId} --legs none --outcome setup-failed`, then `node "$(spec-paths replay)"
+   --teardown --dir {dir}`, render Phase 5's `setup-failed` report, and STOP — the harness
+   stays due (D5: a non-measurement row never resets the clock). Zero exit → `git -C {dir}
+   checkout -- .` then `git -C {dir} clean -fd` — checkout alone cannot remove files
+   `setupCommand` *creates* (specs/20260820/02-replay-scratch-write-access.md D4); order is
+   load-bearing, checkout before clean — then continue to class selection.
 3. **Pick a corpus class:** run `node "$(spec-paths replay)" --pick-class` and read `class=` from
    its stdout — the script owns selection (fewest measurement rows, derived classes breaking ties
    first) so this step never re-derives it. A class whose corpus section says it does not apply
@@ -258,38 +251,21 @@ Next: {spec-status --next, verbatim}
 
 ## Rules
 
-- **Blindness is the measurement's validity.** Nothing dispatched to the reviewer, directly or
-  transitively (file contents at `{dir}`, prompt text, worktree branch name, the worktree
-  **path** handed to the reviewer as its root, the marker filename in the tree's private git
-  dir), may reveal that a replay is in progress. The same bar covers everything the harness
-  itself creates inside `{dir}`: no artifact it produces — commit subject, tracked file, `git
-  status` entry, log line — may carry the harness's own name, a corpus term, or a class id into
-  anything readable from that tree. `--setup` and `--apply` excluding their own markers and
-  subjects from the diff and the commit log are this invariant's enforcement, not the invariant
-  itself — a new leak surface is still a blindness violation even where no flag polices it yet.
-  The path and the marker were the two surfaces that leaked
-  (specs/20260826/01-replay-scratch-path-blindness.md): `--setup` now derives the path from the
-  target spec instead of a doctrine example a session could copy, and the marker carries the
-  neutral name `scratch-worktree`. The `--overlay` materialization (specs/20260831/01) is bound
-  by the same invariant from the other direction: the three meta prefixes (`specs/`, `.claude/`,
-  `docs/canonical/`) — where a close commit records the review's own outcome (status flip,
-  ledger row, canonical delta) — never enter the tree at all, so the "already reviewed" signal
-  those paths would carry stays out of what the blind reviewer can read. One carve-out:
-  `.claude/agent-memory/` is a build surface (worker notes), not a review record, and IS
-  materialized — a host whose gate sweeps those notes would otherwise redden the scratch tree
-  on every replay for an edit the build already made.
+- **Blindness is the measurement's validity.** Nothing dispatched to the reviewer nor any
+  artifact the harness creates inside `{dir}` (file contents, prompt, branch name, worktree
+  **path**, marker filename, commit subject, `git status` entry) may reveal a replay is in
+  progress — a new leak surface is still a violation even unpoliced. The worktree path is
+  spec-derived and the marker is neutrally named `scratch-worktree`
+  (specs/20260826/01-replay-scratch-path-blindness.md); the three review-outcome meta prefixes
+  (`specs/`, `.claude/`, `docs/canonical/`) never enter the tree except `.claude/agent-memory/`
+  (specs/20260831/01-replay-range-materialization.md).
 - **The main tree is never in scope.** Every mutating step runs inside `{dir}`, a detached
   worktree isolated by three mechanisms together — the worktree itself, the ignore line
-  `--setup` self-provisions when the host lacks it, and the `--setup`/`--teardown` marker guard
-  in its private git dir — never by living outside the repo, which is now only the manual
-  fallback's isolation story.
-- **The session never leaves the main root.** Every step of this command runs with the session's
-  working directory in the repo whose ledger the run belongs to; `{dir}` is reached only by
-  naming it (`--dir {dir}`, `git -C {dir}`, a subshell), never by relocating the shell into it.
-  `replay.js` takes `--root <path>` for a caller that cannot honour this — the ledger-reading and
-  ledger-appending modes (`--due`, `--select`, `--setup`, `--record`, `--stats`, `--teardown`)
-  otherwise resolve the repo from the current directory, so a relocated shell writes the
-  measurement row into the scratch worktree and loses it at teardown
+  `--setup` self-provisions when missing, and the `--setup`/`--teardown` marker guard.
+- **The session never leaves the main root.** `{dir}` is reached only by naming it (`--dir
+  {dir}`, `git -C {dir}`, a subshell), never by relocating the shell into it; `replay.js`'s
+  `--root <path>` is the escape hatch for a caller that cannot honour this — a relocated shell
+  otherwise writes the measurement row into the scratch worktree and loses it at teardown
   (specs/20260827/01-genesis-tournament.md, review).
 - **Mutation authoring is model work; scoring and recording are not.** The session picks the
   site and writes the patch itself (step 4 — never a dispatched agent, never a scripted

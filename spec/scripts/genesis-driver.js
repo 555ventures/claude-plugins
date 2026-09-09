@@ -1925,6 +1925,9 @@ const STEPS = {
     } else {
       lines.push('Read only: ' + genesisRel('brief.md') + ' (## Coverage, ## Picks)')
       lines.push('Doctrine: spec/doctrine/genesis.md § Genesis: Discovery Interview')
+      // specs/20260908/06-command-prose-states-contracts.md D9/AC-20260908-06-5: reminds the
+      // session to render the brief in full once, replacing genesis.md's per-round restatement.
+      lines.push('Before marking: print ## What I think you\'re building and ## Coverage once, in full — the user reads this render as the brief.')
       const check = discoveryCheck()
       if (check.reason === 'unparseable') lines.push('unparseable coverage line(s): ' + check.detail.join('; '))
       if (check.reason === 'missing') lines.push('missing coverage key(s): ' + check.detail.join(', '))

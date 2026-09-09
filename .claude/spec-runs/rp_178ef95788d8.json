@@ -1,0 +1,64 @@
+{
+  "ts": "2026-09-09T15:06:46.075Z",
+  "stage": "replay",
+  "spec": "specs/20260908/07-one-wire-register-predicate.md",
+  "runId": "rp_178ef95788d8",
+  "reviewRunId": "rv_424c02573548",
+  "class": "doc-contract-lie",
+  "files": [
+    "spec/scripts/lib/wire-register.js"
+  ],
+  "legs": "baseline-red:gate,suite",
+  "outcome": "caught",
+  "tokens": 95000,
+  "via": "driver",
+  "patch": "diff --git a/spec/scripts/lib/wire-register.js b/spec/scripts/lib/wire-register.js\nindex ff9b4b7..46f86f2 100644\n--- a/spec/scripts/lib/wire-register.js\n+++ b/spec/scripts/lib/wire-register.js\n@@ -44,10 +44,10 @@ function stylesheetTargets(html) {\n     const href = attrValue(tag, 'href')\n     if (href) targets.push(href)\n   }\n-  const importRe = /@import\\s*(?:url\\(\\s*)?(?:\"([^\"]*)\"|'([^']*)'|([^\\s\"'()]+))/gi\n+  const importRe = /@import\\s*(?:url\\(\\s*)?(?:\"([^\"]*)\"|([^\\s\"'()]+))/gi\n   let m\n   while ((m = importRe.exec(stripped))) {\n-    const target = m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3]\n+    const target = m[1] !== undefined ? m[1] : m[2]\n     if (target) targets.push(target)\n   }\n   return targets\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "The HEAD commit of the range deletes the single-quoted @import arm from stylesheetTargets, so `@import '...'` yields no target and `@import url('...')` yields the garbage target \"url\" — contradicting D2/Contracts, which name both forms as stylesheet targets.",
+        "file": "spec/scripts/lib/wire-register.js",
+        "line": 47,
+        "impact": "A page that applies the gray register or its token sheet through a single-quoted CSS import is read as applying nothing: the atlas refuses a correctly styled page as missing its tokens, the theme composer accepts a candidate that still renders gray, and the journey-drawn closure refuses a drawn wireframe.",
+        "evidence": "Spec D2 names the forms @import \"...\", @import '...', @import url(...), @import url(\"...\"), @import url('...'). Violating hunk: importRe lost the '([^']*)' alternative and the m[2]/m[3] selection collapsed. Executed against HEAD lib: \"<style>@import 'e.css';</style>\" -> [] false; \"<style>@import url('g.css');</style>\" -> [\"url\"] false; \"<style>@import url('../../wire/tokens.css');</style>\" -> [\"url\"] false. Real entrypoint: node spec/scripts/design-atlas.js check <mock> on a labeled sketch whose only token sheet is <style>@import '../wire/tokens.css';</style> -> exit 1, CHECK FAIL does not link a tokens.css; the same page with the double-quoted import -> exit 0 CHECK PASS."
+      },
+      {
+        "severity": "hard",
+        "claim": "The gate leg is red at HEAD: plugin-bump.js --check fails for the spec plugin, and AC-20260908-07-14 declares [oracle: gate], so the ac-matrix leg emits a HARD oracle-red finding.",
+        "file": "spec/.claude-plugin/plugin.json",
+        "line": 3,
+        "impact": "The version-bump oracle this spec's last acceptance criterion relies on is failing, so the suite and gate are both red.",
+        "evidence": "Executed node scripts/plugin-bump.js --check -> spec: spec/ changed since 8d88691 but version is 7.114.0 (base 7.114.0), exit=1. Manifest gate exit 1, suite exit 1 (1380 pass / 1 fail: AC-20260908-01-1), ac-matrix exit 1 with HARD oracle-red-or-absent AC-20260908-07-14."
+      },
+      {
+        "severity": "medium",
+        "claim": "The range as handed looks wrong: main already merged and closed this exact spec CLEAN at the range's first commit, and the worktree is a detached HEAD carrying two further commits on top of that merged state.",
+        "file": null,
+        "line": null,
+        "impact": "This review is judging work that has already shipped plus post-merge edits that diverge from what landed.",
+        "evidence": "git log --graph --oneline main shows the merge, close and feat commits; git show main:specs/20260908/07-one-wire-register-predicate.md reports status done; git branch -a --contains reports no branch."
+      },
+      {
+        "severity": "medium",
+        "claim": "D2's promise of @import '...' and @import url('...') as stylesheet targets is carried by AC-20260908-07-1, but the AC-1 table test asserts neither single-quoted form, so the cited test does not deliver that part of the decision.",
+        "file": "tests/consistency/wire-register.test.js",
+        "line": 38,
+        "impact": "Two of the five import spellings the decision guarantees have no pin, so they can be silently dropped from the shared predicate without any test turning red.",
+        "evidence": "Test table lines 38-40 carry only the double-quoted, bare url() and double-quoted url() rows; grep for a single-quoted @import across the test corpus returns nothing. Executed node --test tests/consistency/wire-register.test.js -> pass 7 / fail 0 despite the regression."
+      },
+      {
+        "severity": "soft",
+        "claim": "The deviations file's first entry records handleJourneyDrawn calling ensureJourneyRecord + saveStatus() before the per-label loop, but a later commit reverted that change and the net diff no longer contains it.",
+        "file": "specs/20260908/07-one-wire-register-predicate.deviations.md",
+        "line": 3,
+        "impact": "A reader of the deviations record will believe the journey-drawn mark writes a stub record before validation when it does not.",
+        "evidence": "The revert commit removes the six lines from handleJourneyDrawn; grep at HEAD shows ensureJourneyRecord only on the success path."
+      }
+    ],
+    "killed": [],
+    "reviewerCount": 1,
+    "tokens": 95000
+  }
+}

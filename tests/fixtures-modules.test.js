@@ -72,12 +72,40 @@ test('AC-20260908-03-7: writeBrief called without extraSections keeps writing to
   const dirWithout = tmpdir('fixtures-ac3-without')
   writeBrief(dirWithout, {})
   const withoutText = fs.readFileSync(path.join(dirWithout, '.claude/genesis/brief.md'), 'utf8')
-  assert.ok(!withoutText.includes('## Journeys'),
-    'AC-7: omitting extraSections must CONTINUE to write today\'s template with no injected ## Journeys section: ' +
-    withoutText)
-  assert.ok(withoutText.includes('## Picks'),
-    'AC-7: omitting extraSections must still write the ## Picks section the tournament tests rely on today: ' +
-    withoutText)
+
+  const EXPECTED_DEFAULT_BRIEF = `# Discovery brief — test project
+
+## What I think you're building
+A synthetic project for tournament.test.js.
+
+## Coverage
+- payer: covered — synthetic test value
+- tenancy: covered — synthetic test value
+- data-sensitivity: covered — synthetic test value
+- residency: covered — synthetic test value
+- ai-use: covered — synthetic test value
+- unattended: covered — synthetic test value
+- integrations: covered — synthetic test value
+- scale-outage: covered — synthetic test value
+- vendor-budget: covered — synthetic test value
+- offline-mobile: covered — synthetic test value
+
+## Non-goals
+none
+
+## Open Dimensions
+- hosting: open
+
+## Research Angles
+none — synthetic host, no research needed.
+
+## Picks
+
+`
+
+  assert.strictEqual(withoutText, EXPECTED_DEFAULT_BRIEF,
+    'AC-7: omitting extraSections must CONTINUE to write today\'s exact template byte-for-byte (no ## Journeys, ' +
+    '## Picks intact), or every tournament test built on this brief silently drifts: ' + withoutText)
 })
 
 test('AC-20260908-03-4: baseHost(tmpdir()) returns a spec file that exists and a manifest run(...) can read, with findings(...) yielding the parsed --json payload whose findings key is an array', () => {
@@ -141,21 +169,13 @@ test('AC-20260908-03-5: setupOverlayHost returns two distinct commit shas whose 
     'AC-5: git show --name-only on the close sha must list EXACTLY the closeFiles keys: ' + nameOnly)
 })
 
-// `node --test <file>` on an explicit path runs it regardless of filename, and when the file
-// registers zero test()s node still emits exactly one synthetic top-level TAP subtest — but that
-// subtest is named after the FILE PATH itself, never after a test name. A file that DOES call
-// test() gets a subtest named after the registered test instead (verified empirically: a bare
-// CommonJS module vs. one calling test('a', ...) diverge exactly on this name, while both report
-// "# tests 1" — so a raw test-count assertion can't tell them apart). Matching the subtest name
-// against the invoked path is therefore the deterministic proxy for "this file called test() zero
-// times" that the worker prompt asked for, chosen over a brittle count comparison.
+// A file loaded via `node --test <file>` that registers zero test()s gets exactly one synthetic
+// TAP subtest named after the FILE PATH; a file that calls test() gets a subtest named after that
+// test instead (both report "# tests 1", so a count alone can't tell them apart) — the subtest
+// name is therefore the deterministic proxy for "registers zero tests".
 //
-// NODE_TEST_CONTEXT must be stripped from the child's environment: when this file is itself run
-// under `node --test` (which is exactly how the host gate runs it), node sees the inherited
-// variable in the child and refuses to recurse, printing "Warning: node --test ... recursively,
-// skipping" and emitting no `# Subtest:` line at all. The check would then report on node's
-// recursion guard rather than on the fixtures module, for every module including ones that are
-// fine. Stripping it makes the child a clean top-level test run either way.
+// NODE_TEST_CONTEXT must be stripped from the child env, or node sees this file's own recursive
+// `node --test` run and refuses to recurse, emitting no `# Subtest:` line at all for every module.
 function fixturesModuleSubtestLine(relPath) {
   const env = { ...process.env }
   delete env.NODE_TEST_CONTEXT

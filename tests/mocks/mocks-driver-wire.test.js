@@ -46,8 +46,9 @@ test('AC-20260908-07-5: journey-drawn refuses a mock whose only mention of ../wi
   assert.match(refused.stderr + refused.stdout,
     new RegExp(target + '\\.html: does not link \\.\\./wire/tokens\\.css'),
     'the refusal must be the exact D6 message naming the file and the missing tokens.css link, not a generic design-atlas.js check failure fallback: ' + JSON.stringify(refused.stdout + refused.stderr))
-  assert.strictEqual(statusJson(dir).journeys[JOURNEY].drawn, null,
-    'a refused journey-drawn must never record journeys.<j>.drawn')
+  const journeyRecord = statusJson(dir).journeys[JOURNEY]
+  assert.strictEqual(journeyRecord === undefined || journeyRecord.drawn == null, true,
+    'a refused journey-drawn must never record a drawn journeys.<j> entry — the base leaves the record absent entirely, never present with drawn set: ' + JSON.stringify(journeyRecord))
 
   // Restore, then apply BOTH register stylesheets only through CSS @import — the closure checks
   // must start accepting this, and design-atlas.js's own tokens.css rule must stop refusing it.

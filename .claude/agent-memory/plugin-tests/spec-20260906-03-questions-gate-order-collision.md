@@ -3,7 +3,7 @@ name: spec-20260906-03-questions-gate-order-collision
 description: A pinned question's ledger row necessarily collides with the pre-existing generic ledger gate (requireGateOpen), which runs before the note gate on every advancing mark — pin the AC literally and deviations-note the ordering, don't rewrite the test.
 metadata:
   type: project
-  reviewed: 2026-09-07
+  reviewed: 2026-09-08
 ---
 
 specs/20260906/03-questions-on-the-wireframe.md D2/D4: a question is pinned only onto an

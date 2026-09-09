@@ -987,12 +987,6 @@ function handleJourneyDrawn(journeyName) {
   const journeys = currentSeedJourneys()
   const j = journeys.get(journeyName)
   if (!j) die('journey "' + journeyName + '" is not declared in design/mocks/seed.md — add it under ## Journeys, then re-mark journey-drawn')
-  // Stub the record as {drawn: null, approved: null} before any per-label check can die() — a
-  // refused journey-drawn must still let a reader look up journeys.<j> without an undefined
-  // guard (mirrors the tolerant read already used elsewhere in this file); drawn stays null
-  // until every label conforms below, exactly as before.
-  ensureJourneyRecord(journeyName)
-  saveStatus()
   for (const label of j.labels) {
     const file = mockFile(label)
     if (!fs.existsSync(file)) die('design/mocks/' + label + '.html does not exist — draw it, then re-mark journey-drawn --journey ' + journeyName)

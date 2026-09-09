@@ -135,15 +135,6 @@ function writeWireframe(dir, label, opts = {}) {
     '<main data-screen-label="' + label + '" data-status="sketch">' + label + stateBtnsHtml + '</main>\n')
 }
 
-function writeThemeDirection(dir, kebab, labels) {
-  writeFile(path.join(dir, 'design/theme', kebab, 'tokens.css'), ':root{--text-body:#111}\n')
-  for (const label of labels) {
-    writeFile(path.join(dir, 'design/theme', kebab, label + '.html'),
-      '<link rel="stylesheet" href="tokens.css">\n' +
-      '<main data-screen-label="' + label + '" data-status="sketch">' + label + '</main>\n')
-  }
-}
-
 // ---------------------------------------------------------------------------
 // D11 fixture repair: the gated marks (shape-picked, journey-approved, theme-picked, approved)
 // refuse without a decided look stop for the mark's key — decideLook/openLook write that stop
@@ -396,49 +387,19 @@ function advanceToJourneyApproved(dir, journeyName = JOURNEY, labels = LABELS) {
   return approved
 }
 
-function advanceToDirectionComposed(dir, kebab, labels, ledgerId) {
-  const already = readStatusOrEmpty(dir)
-  if (already.directions && already.directions[kebab] && already.directions[kebab].composed) return
-  const ledgerR = ledgerCmd(dir, 'add', [
-    '--id', ledgerId, '--step', 'THEME', '--kind', 'product',
-    '--claim', 'theme-directions: ' + kebab, '--tag', 'said-by-user', '--status', 'confirmed',
-  ])
-  assert.strictEqual(ledgerR.status, 0, 'test setup requires the theme-directions ledger row to be accepted: ' + ledgerR.stderr)
-  writeThemeDirection(dir, kebab, labels)
-  const r = mark(dir, 'direction-composed', ['--direction', kebab])
-  assert.strictEqual(r.status, 0, 'test setup requires direction-composed to be accepted for "' + kebab + '" once at most 2 approved labels (the dense screen first) are composed under design/theme/' + kebab + ': ' + r.stderr)
-  return r
-}
-
-// D3: at most 2 screens per direction, the dense screen first — callers pass writeThemeDirection
-// a labels array shaped that way (specs/20260906/02-mocks-ends-at-wireframes.md D11); the
-// negative-path tests that deliberately compose more or a dense-screen-less set (AC-3) keep
-// passing whatever shape they need to isolate that one violation.
-function advanceToThemePicked(dir, chosen = 'quiet', other = 'warm') {
-  if (readMarksOrEmpty(dir).themePicked) return
-  const already = readStatusOrEmpty(dir)
-  if (!(already.journeys && already.journeys[JOURNEY] && already.journeys[JOURNEY].approved)) advanceToJourneyApproved(dir)
-  advanceToDirectionComposed(dir, chosen, [DENSE, LABELS[0]], 'P15')
-  advanceToDirectionComposed(dir, other, [DENSE, LABELS[1]], 'P16')
-  const ledgerR = ledgerCmd(dir, 'add', [
-    '--id', 'P17', '--step', 'THEME', '--kind', 'product', '--claim', 'theme: ' + chosen,
-    '--tag', 'said-by-user', '--status', 'confirmed', '--rejected', other,
-  ])
-  assert.strictEqual(ledgerR.status, 0, 'test setup requires the theme-pick ledger row to be accepted: ' + ledgerR.stderr)
-  decideLook(dir, 'theme-picked', 'pick', { pick: chosen, others: [other], by: 'jj' })
-  const r = mark(dir, 'theme-picked', ['--direction', chosen])
-  assert.strictEqual(r.status, 0, 'test setup requires theme-picked to be accepted once 2+ directions are composed and the theme row rejects every other one: ' + r.stderr)
-  return r
-}
-
 // D11: the SKIN/REVIEW states are retired — approved now stamps the wireframes produced at
 // journey-drawn/journey-approved straight through, with no intervening skin step.
+//
+// specs/20260907/07-mocks-retires-theme.md orchestrator duty: the mocks state machine has no
+// THEME step — the chain is WIREFRAMES -> SIGNOFF -> APPROVED, so advanceToApproved routes
+// through advanceToJourneyApproved directly, with no direction-composing or theme-picking
+// helper in between.
 function advanceToApproved(dir) {
   if (readMarksOrEmpty(dir).approved) return
-  if (!readMarksOrEmpty(dir).themePicked) advanceToThemePicked(dir)
+  advanceToJourneyApproved(dir)
   decideLook(dir, 'approved', 'approve', { by: 'Ren' })
   const r = mark(dir, 'approved')
-  assert.strictEqual(r.status, 0, 'test setup requires approved to be accepted once theme is picked, the approved stop is decided approve, notes are resolved, and render-gate/matrix check hold: ' + r.stderr)
+  assert.strictEqual(r.status, 0, 'test setup requires approved to be accepted once every journey is approved, the approved stop is decided approve, notes are resolved, and render-gate/matrix check hold: ' + r.stderr)
   return r
 }
 
@@ -519,11 +480,10 @@ module.exports = {
   bare, mark, stateOf, ledgerCmd,
   writeFile, writeJSON, statusPath, statusJson,
   writeTargets, writeResearchBrief, writeSeed, confirmFacts, writeCanon, writeWireframe,
-  writeThemeDirection, writeKitCanon, writeThemeKit,
+  writeKitCanon, writeThemeKit,
   decideLook, openLook, freePort, startServe, stopServe, getBody,
   writeFixtureCapture, writeCaptureConfig,
   advanceToSeedDone, advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToJourneyApproved,
-  advanceToDirectionComposed, advanceToThemePicked,
   advanceToApproved,
   writeShortSeed, advanceToShortJourneyDrawn,
   stubNpx,

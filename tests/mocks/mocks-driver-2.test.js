@@ -7,11 +7,11 @@ const { runNode, tmpdir } = require('../helpers')
 const {
   SCRIPT, JOURNEY, LABELS, DENSE,
   bare, mark, stateOf,
-  writeFile, statusJson,
+  writeFile, statusJson, statusPath,
   writeCanon, writeWireframe, writeKitCanon,
   decideLook,
   advanceToSeedDone, advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToJourneyApproved,
-  advanceToDirectionComposed, advanceToThemePicked, advanceToApproved,
+  advanceToApproved,
   ledgerCmd,
   writeFixtureCapture, writeCaptureConfig,
   stubNpx, freePort, startServe, stopServe,
@@ -41,31 +41,26 @@ const {
 // ---------------------------------------------------------------------------
 // AC-20260906-02-5
 // ---------------------------------------------------------------------------
-test('AC-20260906-02-5: approved refuses before theme-picked; once theme-picked, refuses on an unresolved mock note and refuses with no decided approved stop; once the stop is decided approve it stamps a sketch mock to approved byte-diff-only, records the decider, and derives APPROVED', () => {
+test('AC-20260907-07-5 / AC-20260907-07-12 (retag of AC-20260906-02-5): approved refuses on an unresolved mock note and refuses with no decided approved stop, with no theme-picked precondition left to check first; once the stop is decided approve it stamps a sketch mock to approved byte-diff-only, records the decider, and derives APPROVED, all with no design/tokens.css and no status.theme anywhere', () => {
   const dir = tmpdir('mocks-driver')
   advanceToJourneyApproved(dir)
 
-  const beforeTheme = mark(dir, 'approved')
-  assert.strictEqual(beforeTheme.status, 2, 'approved must refuse before theme-picked has been recorded: ' + beforeTheme.stdout + beforeTheme.stderr)
-  assert.match(beforeTheme.stderr + beforeTheme.stdout, /theme-picked first/, 'D5: the refusal must carry the exact "theme-picked first" remedy: ' + beforeTheme.stdout + beforeTheme.stderr)
-
-  advanceToDirectionComposed(dir, 'quiet', [DENSE, LABELS[0]], 'P15')
-  advanceToDirectionComposed(dir, 'warm', [DENSE, LABELS[1]], 'P16')
-  const themeRow = ledgerCmd(dir, 'add', ['--id', 'P17', '--step', 'THEME', '--kind', 'product', '--claim', 'theme: quiet', '--tag', 'said-by-user', '--status', 'confirmed', '--rejected', 'warm'])
-  assert.strictEqual(themeRow.status, 0, 'test setup requires the theme row to be accepted: ' + themeRow.stderr)
-  decideLook(dir, 'theme-picked', 'pick', { pick: 'quiet', others: ['warm'], by: 'jj' })
-  const picked = mark(dir, 'theme-picked', ['--direction', 'quiet'])
-  assert.strictEqual(picked.status, 0, 'test setup requires theme-picked to be accepted: ' + picked.stdout + picked.stderr)
+  // AC-20260907-07-5's own precondition: no theme was ever picked, anywhere on disk or in
+  // status.json — a vacuous test would prove nothing if either were secretly present.
+  assert.strictEqual(fs.existsSync(path.join(dir, 'design/tokens.css')), false,
+    'test setup requires no design/tokens.css to exist, or the "approved with no theme" assertion below is vacuous')
+  assert.strictEqual('theme' in statusJson(dir), false,
+    'test setup requires status.json to carry no top-level "theme" key at all, or the "approved with no theme" assertion below is vacuous: ' + JSON.stringify(statusJson(dir)))
 
   const openNote = { id: 'N001', scope: 'mock', screen: 'consent', state: null, text: 'wording is off', by: 'Ren', at: new Date().toISOString(), status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null }
   writeFile(path.join(dir, 'design/mocks/notes.json'), JSON.stringify([openNote]))
   const noteBlocked = mark(dir, 'approved')
-  assert.strictEqual(noteBlocked.status, 2, 'approved must refuse while a mock note on "consent" is unresolved: ' + noteBlocked.stdout + noteBlocked.stderr)
+  assert.strictEqual(noteBlocked.status, 2, 'AC-20260907-07-12: approved must CONTINUE TO refuse while a mock note on "consent" is unresolved, with no theme-picked check ahead of it: ' + noteBlocked.stdout + noteBlocked.stderr)
   assert.match(noteBlocked.stderr + noteBlocked.stdout, /N001/, 'the refusal must name the offending note id "N001": ' + noteBlocked.stdout + noteBlocked.stderr)
   fs.rmSync(path.join(dir, 'design/mocks/notes.json'))
 
   const noStop = mark(dir, 'approved')
-  assert.strictEqual(noStop.status, 2, 'approved must refuse with no decided approved stop, even once notes are resolved: ' + noStop.stdout + noStop.stderr)
+  assert.strictEqual(noStop.status, 2, 'AC-20260907-07-12: approved must CONTINUE TO refuse with no decided approved stop, even once notes are resolved: ' + noStop.stdout + noStop.stderr)
   assert.match(noStop.stderr + noStop.stdout, /no look stop for approved/, 'the refusal must name the exact "no look stop for approved" message: ' + noStop.stdout + noStop.stderr)
   assert.match(noStop.stderr + noStop.stdout, /stop open signoff/, 'the refusal must name the remedy "stop open signoff": ' + noStop.stdout + noStop.stderr)
 
@@ -75,7 +70,7 @@ test('AC-20260906-02-5: approved refuses before theme-picked; once theme-picked,
 
   decideLook(dir, 'approved', 'approve', { by: 'Ren' })
   const r = mark(dir, 'approved')
-  assert.strictEqual(r.status, 0, 'approved must be accepted once theme is picked, notes are resolved, and the stop is decided approve: ' + r.stdout + r.stderr)
+  assert.strictEqual(r.status, 0, 'AC-20260907-07-5: approved must be accepted with no design/tokens.css and no status.theme anywhere, once notes are resolved and the stop is decided approve: ' + r.stdout + r.stderr)
 
   const afterStamp = fs.readFileSync(signinPath, 'utf8')
   assert.strictEqual(afterStamp, beforeStamp.replace('data-status="sketch"', 'data-status="approved"'),
@@ -89,7 +84,7 @@ test('AC-20260906-02-5: approved refuses before theme-picked; once theme-picked,
 
 test('AC-20260905-06-9 / AC-20260906-02-5: --mark approved on a host declaring no design block with CHROME_BIN=/nonexistent/chrome exits 2 with "render-gate --mocks could not run:" naming CHROME_BIN, marks.approved stays null, and the mock file is byte-unchanged (render-gate runs before any file is stamped approved)', () => {
   const dir = tmpdir('mocks-driver')
-  advanceToThemePicked(dir)
+  advanceToJourneyApproved(dir)
   decideLook(dir, 'approved', 'approve', { by: 'Ren' })
   const before = fs.readFileSync(path.join(dir, 'design/mocks', LABELS[0] + '.html'), 'utf8')
   // The chain up to here (via advanceToJourneyApproved) declared a fixture capture command so
@@ -113,13 +108,13 @@ test('AC-20260905-06-9 / AC-20260906-02-5: --mark approved on a host declaring n
     'AC-20260906-02-5: a refused approved mark must never rewrite a mock file — the data-status stamp is the mark\'s own write and must only happen on acceptance: ' + JSON.stringify({ before, after }))
 })
 
-test('AC-20260906-02-5: approved refuses while a declared journey is not approved, even once theme is picked and the approved stop is decided approve — reopening the journey below journey-approved must re-block the mark it does not stamp', () => {
+test('AC-20260907-07-12 (retag of AC-20260906-02-5): approved refuses while a declared journey is not approved, even with no theme anywhere and the approved stop already decided approve — reopening the journey below journey-approved must re-block the mark it does not stamp', () => {
   const dir = tmpdir('mocks-driver')
-  advanceToThemePicked(dir)
+  advanceToJourneyApproved(dir)
   decideLook(dir, 'approved', 'approve', { by: 'Ren' })
 
   const reopened = runNode(SCRIPT, ['--root', dir, '--reopen', 'journey:' + JOURNEY])
-  assert.strictEqual(reopened.status, 0, 'test setup requires --reopen journey:<j> to be accepted on a theme-picked root, or the refusal below is not exercising an unapproved journey: ' + reopened.stdout + reopened.stderr)
+  assert.strictEqual(reopened.status, 0, 'test setup requires --reopen journey:<j> to be accepted once the journey is approved, or the refusal below is not exercising an unapproved journey: ' + reopened.stdout + reopened.stderr)
   assert.strictEqual(statusJson(dir).journeys[JOURNEY].approved, null, 'test setup requires journeys.<j>.approved to be cleared by the reopen, or the precondition under test is not actually violated: ' + JSON.stringify(statusJson(dir).journeys))
 
   const signinPath = path.join(dir, 'design/mocks', LABELS[0] + '.html')
@@ -127,7 +122,7 @@ test('AC-20260906-02-5: approved refuses while a declared journey is not approve
 
   const r = mark(dir, 'approved')
   assert.strictEqual(r.status, 2,
-    'D5: approved must refuse while any declared journey is not approved, even with theme picked and the approved stop already decided approve: ' + r.stdout + r.stderr)
+    'D5: approved must refuse while any declared journey is not approved, even with no theme anywhere and the approved stop already decided approve: ' + r.stdout + r.stderr)
   assert.match(r.stderr + r.stdout, new RegExp(JOURNEY),
     'D5: the refusal must name the unapproved journey "' + JOURNEY + '", not a generic message: ' + r.stdout + r.stderr)
   assert.match(r.stderr + r.stdout, /journey-approved/,
@@ -141,26 +136,11 @@ test('AC-20260906-02-5: approved refuses while a declared journey is not approve
 })
 
 // ---------------------------------------------------------------------------
-// AC-20260906-02-7
+// AC-20260906-02-7's own `--reopen theme` half is DELETED (specs/20260907/07 retires the
+// target outright — there is no mark left for it to clear); its `--reopen journey:<j>` half is
+// unrelated to theme and is kept below, unretagged.
 // ---------------------------------------------------------------------------
-test('AC-20260906-02-7: --reopen theme on an APPROVED root clears theme/marks.themePicked/marks.approved/decider, leaves every journeys[j].approved unchanged, and derives THEME; --reopen journey:<j> on an APPROVED root clears that journey\'s approved + marks.approved and derives WIREFRAMES', () => {
-  const dir = tmpdir('mocks-driver')
-  advanceToApproved(dir)
-  const journeyApprovedBefore = statusJson(dir).journeys[JOURNEY].approved
-  assert.ok(journeyApprovedBefore, 'test setup requires journeys.<j>.approved to be recorded before reopening theme, or the "leave journeys unchanged" assertion below is vacuous')
-
-  const themeReopen = runNode(SCRIPT, ['--root', dir, '--reopen', 'theme'])
-  assert.strictEqual(themeReopen.status, 0, '--reopen theme must exit 0 on an APPROVED root: ' + themeReopen.stdout + themeReopen.stderr)
-  assert.match(themeReopen.stdout, /invalidated: theme, approved\(all\)/, 'the reopen output must print the exact D7 invalidated list for a theme reopen: ' + themeReopen.stdout)
-  const status = statusJson(dir)
-  assert.strictEqual(status.theme, null, '--reopen theme must clear status.theme')
-  assert.strictEqual(status.marks.themePicked, null, '--reopen theme must clear marks.themePicked')
-  assert.strictEqual(status.marks.approved, null, '--reopen theme must clear marks.approved')
-  assert.strictEqual(status.decider, null, '--reopen theme must clear decider')
-  assert.strictEqual(status.journeys[JOURNEY].approved, journeyApprovedBefore, '--reopen theme must never touch journeys[j].approved — a theme re-pick must not un-approve a journey\'s wireframes (D7 rationale)')
-  const derived = stateOf(dir)
-  assert.strictEqual(derived.stdout.trim(), 'THEME', 'the next derivation after --reopen theme must land on THEME')
-
+test('AC-20260906-02-7: --reopen journey:<j> on an APPROVED root clears that journey\'s approved + marks.approved and derives WIREFRAMES', () => {
   const dir2 = tmpdir('mocks-driver')
   advanceToApproved(dir2)
   const journeyReopen = runNode(SCRIPT, ['--root', dir2, '--reopen', 'journey:' + JOURNEY])
@@ -173,5 +153,57 @@ test('AC-20260906-02-7: --reopen theme on an APPROVED root clears theme/marks.th
   assert.strictEqual(status2.marks.approved, null, '--reopen journey:<j> must clear marks.approved')
   const derived2 = stateOf(dir2)
   assert.strictEqual(derived2.stdout.trim(), 'WIREFRAMES', 'the next derivation after --reopen journey:<j> on the only journey must land on WIREFRAMES')
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260907-07-4
+// ---------------------------------------------------------------------------
+test('AC-20260907-07-4: --reopen theme exits 2 with the exact literal "--reopen must be journey:<j>, shapes, or kit", writes nothing to status.json, and appends no row to status.reopens', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToApproved(dir)
+  const before = fs.readFileSync(statusPath(dir), 'utf8')
+
+  const r = runNode(SCRIPT, ['--root', dir, '--reopen', 'theme'])
+  assert.strictEqual(r.status, 2, 'D6: --reopen theme must exit 2 — the target is retired outright, there is no mark left to clear: ' + r.stdout + r.stderr)
+  assert.strictEqual((r.stderr + r.stdout).trim(), 'mocks-driver: --reopen must be journey:<j>, shapes, or kit',
+    'D6: the refusal must be the exact narrowed literal, with "theme" dropped from the target list: ' + JSON.stringify({ stdout: r.stdout, stderr: r.stderr }))
+
+  const after = fs.readFileSync(statusPath(dir), 'utf8')
+  assert.strictEqual(after, before, 'D6: a refused --reopen theme must write nothing to status.json at all: ' + JSON.stringify({ before, after }))
+  assert.deepStrictEqual(statusJson(dir).reopens, [], 'D6: a refused --reopen theme must append no row to status.reopens: ' + JSON.stringify(statusJson(dir).reopens))
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260907-07-6
+// ---------------------------------------------------------------------------
+test('AC-20260907-07-6: --reopen shapes on an approved root prints the exact D6 invalidated line with no theme token, and appends that same invalidated array to status.reopens', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToApproved(dir)
+
+  const r = runNode(SCRIPT, ['--root', dir, '--reopen', 'shapes'])
+  assert.strictEqual(r.status, 0, '--reopen shapes must CONTINUE TO exit 0 on an approved root: ' + r.stdout + r.stderr)
+  assert.strictEqual(r.stdout, '↩ reopened shapes — invalidated: shape, canon, kit, journeys(all), approved(all)\n',
+    'D6: the reopen output must be the exact invalidated line, canon before kit and no "theme" token anywhere: ' + JSON.stringify(r.stdout))
+  assert.ok(!r.stdout.includes('theme'), 'D6: --reopen shapes must never mention "theme" — the retired field leaves nothing to invalidate: ' + r.stdout)
+
+  const reopenRow = statusJson(dir).reopens.find((row) => row.target === 'shapes')
+  assert.ok(reopenRow, 'a --reopen shapes call must append a row to status.reopens: ' + JSON.stringify(statusJson(dir).reopens))
+  assert.deepStrictEqual(reopenRow.invalidated, ['shape', 'canon', 'kit', 'journeys(all)', 'approved(all)'],
+    'D6: the appended reopens row must carry the exact same invalidated array printed to stdout: ' + JSON.stringify(reopenRow))
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260907-07-9
+// ---------------------------------------------------------------------------
+test('AC-20260907-07-9: the bare driver on an APPROVED root prints a step heading matching "## Step: done — every journey approved, signed off by <decider>" with no "theme" substring, followed by "next: /spec:genesis"', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToApproved(dir)
+
+  const r = bare(dir)
+  assert.strictEqual(r.status, 0, 'a bare re-run on an APPROVED root must exit 0: ' + r.stdout + r.stderr)
+  assert.match(r.stdout, /## Step: done — every journey approved, signed off by Ren/,
+    'D5: the terminal heading must name the exact D5 literal with the theme clause dropped — "done — every journey approved, signed off by <decider>": ' + r.stdout)
+  assert.ok(!r.stdout.includes('theme'), 'D5: the terminal heading must carry no "theme" substring at all: ' + r.stdout)
+  assert.match(r.stdout, /next: \/spec:genesis/, 'the terminal step must be followed by "next: /spec:genesis": ' + r.stdout)
 })
 

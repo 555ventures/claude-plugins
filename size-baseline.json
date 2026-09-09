@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 29937,
-    "spec/scripts": 1253798,
+    "spec/scripts": 1246955,
     "spec/scripts/lib": 225608,
-    "tests": 3423338
+    "tests": 3430982
   },
   "files": {
     "scripts/plugin-bump.js": 8564,
@@ -57,7 +57,7 @@
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
     "spec/scripts/merge-back.sh": 17514,
-    "spec/scripts/mocks-driver.js": 100719,
+    "spec/scripts/mocks-driver.js": 93838,
     "spec/scripts/promise-sweep.js": 10409,
     "spec/scripts/prose-cap.js": 6271,
     "spec/scripts/question-style-gate.js": 10712,
@@ -66,7 +66,7 @@
     "spec/scripts/release-legs.js": 25332,
     "spec/scripts/render-capture.js": 11937,
     "spec/scripts/render-compare.js": 13664,
-    "spec/scripts/render-gate.js": 30205,
+    "spec/scripts/render-gate.js": 30243,
     "spec/scripts/render-inventory.browser.js": 14416,
     "spec/scripts/render-rules.js": 19776,
     "spec/scripts/replay.js": 68870,
@@ -105,9 +105,9 @@
     "tests/consistency/citations-check.test.js": 13057,
     "tests/consistency/comment-narration-live.test.js": 3527,
     "tests/consistency/dependency-free.test.js": 8614,
-    "tests/consistency/design-doctrine.test.js": 25745,
+    "tests/consistency/design-doctrine.test.js": 33846,
     "tests/consistency/entrypoints.test.js": 70405,
-    "tests/consistency/genesis-doctrine.test.js": 86404,
+    "tests/consistency/genesis-doctrine.test.js": 86907,
     "tests/consistency/observed-grammar-purity.test.js": 3560,
     "tests/consistency/plugin-bump.test.js": 12177,
     "tests/consistency/plugin-version.test.js": 5267,
@@ -167,20 +167,20 @@
     "tests/init-gen/probes.test.js": 6550,
     "tests/merge-back.test.js": 15683,
     "tests/mocks/chrome-harness.js": 6375,
-    "tests/mocks/mocks-driver-2.test.js": 13908,
-    "tests/mocks/mocks-driver-3.test.js": 20832,
+    "tests/mocks/mocks-driver-2.test.js": 16258,
+    "tests/mocks/mocks-driver-3.test.js": 16740,
     "tests/mocks/mocks-driver-4.test.js": 16815,
-    "tests/mocks/mocks-driver-fixtures.js": 27411,
+    "tests/mocks/mocks-driver-fixtures.js": 24880,
     "tests/mocks/mocks-driver-kit-gate.test.js": 2879,
-    "tests/mocks/mocks-driver-look-stops-2.test.js": 12874,
-    "tests/mocks/mocks-driver-look-stops-3.test.js": 10336,
-    "tests/mocks/mocks-driver-look-stops-4.test.js": 6975,
-    "tests/mocks/mocks-driver-look-stops.test.js": 19181,
-    "tests/mocks/mocks-driver-theme.test.js": 54571,
+    "tests/mocks/mocks-driver-look-stops-2.test.js": 12882,
+    "tests/mocks/mocks-driver-look-stops-3.test.js": 9355,
+    "tests/mocks/mocks-driver-look-stops-4.test.js": 9944,
+    "tests/mocks/mocks-driver-look-stops.test.js": 21448,
+    "tests/mocks/mocks-driver-theme.test.js": 51812,
     "tests/mocks/mocks-driver-wire.test.js": 4300,
-    "tests/mocks/mocks-driver.test.js": 31925,
+    "tests/mocks/mocks-driver.test.js": 35057,
     "tests/mocks/mocks-ledger.test.js": 12490,
-    "tests/mocks/mocks-notes.test.js": 45728,
+    "tests/mocks/mocks-notes.test.js": 44405,
     "tests/mocks/mocks-picks.test.js": 11563,
     "tests/mocks/notes-layer-isolation.test.js": 6464,
     "tests/mocks/notes-layer-navigation.test.js": 27426,
@@ -345,6 +345,72 @@
       "from": 3402477,
       "to": 3423338,
       "cite": "specs/20260908/07-one-wire-register-predicate.md"
+    },
+    {
+      "path": "spec/scripts/render-gate.js",
+      "from": 30205,
+      "to": 30243,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/consistency/design-doctrine.test.js",
+      "from": 25745,
+      "to": 33736,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-2.test.js",
+      "from": 13908,
+      "to": 16258,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-look-stops-2.test.js",
+      "from": 12874,
+      "to": 12882,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-look-stops-4.test.js",
+      "from": 6975,
+      "to": 9944,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-look-stops.test.js",
+      "from": 19181,
+      "to": 21449,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver.test.js",
+      "from": 31925,
+      "to": 35121,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests",
+      "from": 3423338,
+      "to": 3430721,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/consistency/design-doctrine.test.js",
+      "from": 33736,
+      "to": 33846,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests/consistency/genesis-doctrine.test.js",
+      "from": 86404,
+      "to": 86907,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
+    },
+    {
+      "path": "tests",
+      "from": 3430721,
+      "to": 3430982,
+      "cite": "specs/20260907/07-mocks-retires-theme.md"
     }
   ]
 }

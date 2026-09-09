@@ -8,7 +8,7 @@ const {
   SCRIPT, JOURNEY, LABELS, DENSE,
   bare, mark, writeFile, writeWireframe,
   decideLook, openLook,
-  advanceToSeedDone, advanceToShapePicked, advanceToCanonWritten, advanceToThemePicked,
+  advanceToSeedDone, advanceToShapePicked, advanceToCanonWritten, advanceToJourneyApproved,
   freePort,
 } = require('./mocks-driver-fixtures')
 
@@ -31,7 +31,7 @@ const {
 
 test('AC-20260905-02-14/AC-20260905-04-9: approved refuses without a decided "approved" stop and accepts once its stop is decided approve', () => {
   const dir = tmpdir('mocks-driver')
-  advanceToThemePicked(dir)
+  advanceToJourneyApproved(dir)
   const noApprovedStop = mark(dir, 'approved')
   assert.strictEqual(noApprovedStop.status, 2, 'approved must refuse without a decided "approved" stop, even once every other precondition holds: ' + noApprovedStop.stdout + noApprovedStop.stderr)
   assert.match(noApprovedStop.stderr + noApprovedStop.stdout, /no look stop for approved/, 'the refusal must name the exact D7 message: ' + noApprovedStop.stdout + noApprovedStop.stderr)

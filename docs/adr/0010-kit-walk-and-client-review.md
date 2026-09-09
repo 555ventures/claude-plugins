@@ -16,8 +16,6 @@
   - specs/20260906/06 — D3 superseded (the fixed critique pass is no longer four
     single-screen heuristics; it is the journey walk of this ADR, run on themed surfaces at
     sketch); D5 narrowed (`design-critic.md`'s prompt becomes the walk's allow/forbid list).
-- Amended by: —
-
 ## Context
 
 Brief 22a made `/spec:mocks` a gray comprehension check and moved fidelity into

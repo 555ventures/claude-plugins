@@ -8,8 +8,6 @@
   hook that printed the top unblocked queue item at session start), the `hello` subcommand
   that fed it, and the worktree "finish this tree" line the same script printed.
   specs/20260823/08-derived-session-queue.md AC-11, AC-12, AC-13 are retired by this record.
-- Amended by: —
-
 ## Context
 
 Brief 15 shipped the derived session queue with a SessionStart hook (`session-queue.sh`) that

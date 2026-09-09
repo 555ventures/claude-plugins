@@ -22,9 +22,10 @@ Briefs are ordered; don't plan a brief before its `depends_on` briefs are done (
 implementing with the needed surface merged). **This sequence is the only to-do list** — no
 amendment may live outside it. A post-genesis product-shape decision is recorded as an ADR
 (`docs/adr/`) whose `Applies to` section names every brief it amends, and its effects are
-edited into those briefs in the same session (adr.md template § Applies to): an unplanned
-brief is edited in place and gains an `Amended by ADR-NNNN` line in Grounding; a brief whose
-specs are planned or shipped gets a letter-suffixed successor brief (`NNa-*`, depends_on NN)
+edited into those briefs in the same session (adr.md template § Applies to): the brief is
+edited in place and gains an `Amended by ADR-NNNN` line in Grounding, whether or not its specs
+are planned or shipped. Only a changed PREMISE — a reader of the old Context would now draw
+the wrong PRODUCT conclusion — earns a letter-suffixed successor brief (`NNa-*`, depends_on NN)
 added to the Sequence table below, re-entering the numbered order.
 
 ## Sequence

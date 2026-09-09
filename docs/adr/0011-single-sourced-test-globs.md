@@ -11,8 +11,6 @@
   `scope-reconcile.js`'s own `defaultTestGlobs` literal) is retired by it. The AC's first
   clause — a host-declared `testGlobs` array fully REPLACES the default classification — is
   unchanged and still covered by the same test.
-- Amended by: —
-
 ## Context
 
 `['tests/**', 'test/**', '**/*.test.*', '**/*.spec.*', '**/*_test.*']` — the set that decides

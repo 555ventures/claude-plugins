@@ -97,7 +97,25 @@ function runBash(script, argv, opts = {}) {
 }
 
 // Minimal git repo factory for merge-back / gate tests.
-function gitRepo(dir, opts = {}) {
+//
+// Seeding from scratch costs 5 git subprocesses (init, config x2, add, commit), and every repo
+// this helper makes starts from one of two fixed shapes. Each shape is therefore built once per
+// test-runner process and later callers get a copy-on-write clone of it — a near-free reflink on
+// APFS/btrfs. COPYFILE_FICLONE (not _FORCE) degrades to a normal recursive copy where reflinks
+// are unavailable, so the helper stays portable.
+//
+// The clone path requires an EMPTY target directory. Callers may write files into the dir first
+// and rely on `git add -A` sweeping them into the base commit; a clone would leave those files
+// uncommitted and silently change what the test observes, so a non-empty target seeds from
+// scratch instead. The branch is chosen by inspection at call time, never by the caller.
+//
+// Does NOT: change the returned `g` helper, the branch name, the committer identity, the seeded
+// file set, or the base commit's content. Repos cloned from one template within a process share
+// a base commit SHA — tests read that SHA at runtime (`g('rev-parse','HEAD')`) rather than
+// pinning a literal, so sharing it is invisible to them.
+const gitTemplates = new Map()
+
+function seedGitRepo(dir, opts) {
   const g = (...a) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8' })
   execFileSync('git', ['init', '-q', '-b', 'main', dir], { encoding: 'utf8' })
   g('config', 'user.email', 'test@test')
@@ -109,6 +127,27 @@ function gitRepo(dir, opts = {}) {
     g('commit', '-q', '-m', 'init')
   }
   return g
+}
+
+function gitTemplate(kind) {
+  if (!gitTemplates.has(kind)) {
+    const dir = fs.mkdtempSync(path.join(RUN_ROOT, 'git-template-' + kind + '-'))
+    seedGitRepo(dir, { empty: kind === 'empty' })
+    gitTemplates.set(kind, dir)
+  }
+  return gitTemplates.get(kind)
+}
+
+function isEmptyDir(dir) {
+  try { return fs.readdirSync(dir).length === 0 } catch { return true }
+}
+
+function gitRepo(dir, opts = {}) {
+  fs.mkdirSync(dir, { recursive: true })
+  if (!isEmptyDir(dir)) return seedGitRepo(dir, opts)
+  fs.cpSync(gitTemplate(opts.empty ? 'empty' : 'seeded'), dir,
+    { recursive: true, mode: fs.constants.COPYFILE_FICLONE })
+  return (...a) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8' })
 }
 
 module.exports = { ROOT, SPEC, read, extractFn, evalFns, checkWorkflowSyntax, tmpdir, runNode, runBash, gitRepo }

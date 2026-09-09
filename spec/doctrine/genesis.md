@@ -31,12 +31,13 @@ again as a fork (§ Genesis: Hard-to-Reverse Dimensions).
 **The brief is the interface.** `.claude/genesis/brief.md` is authored from the template
 `genesis-brief.md` (`$(spec-paths templates)/genesis-brief.md`) with exactly six `## ` sections
 in order: `What I think you're building`, `Coverage`, `Non-goals`, `Open Dimensions`,
-`Research Angles`, `Picks`. After **every** `AskUserQuestion` round the session rewrites the
-file and prints its `What I think you're building` + `Coverage` sections to the console
-verbatim — the running, readable record of what Claude understands, corrected in place as the
-user answers. There is no separate sign-off question: the finished page IS the discovery
-brief, because it has already been re-rendered and corrected after every answer a dedicated
-sign-off would only repeat.
+`Research Angles`, `Picks`. After **every** `AskUserQuestion` round the session edits the file
+in place — only the lines the answer changed (the answered `## Coverage` key, any new `##
+Open Dimensions` or `## Picks` line) — and prints those changed lines, one per key, never a
+rewrite or a re-print of the whole page. `## What I think you're building` + `## Coverage` are
+printed in full exactly once, at the end of discovery, immediately before `--mark
+discovery-done` (the driver's own step text names this render). There is no separate sign-off
+question: that single closing render IS the discovery brief.
 
 **Archetype and hand-off.** `discovery-done` requires a `- archetype: <registry key>` line in
 `## Picks` (§ Genesis: Archetype Registry) — the seed's primary-surface answer already settles

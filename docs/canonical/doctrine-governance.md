@@ -26,5 +26,17 @@ governing rules now:
   AC-ID, D-number, ADR, run id); dates, people, hosts, versions, and prior-behavior narration
   belong to specs, ledgers, and ADRs, and `comment-narration.js` refuses them in the suite.
 
+- **A driver-stepped command file states the loop contract and the session's judgments only**
+  (specs/20260908/06-command-prose-states-contracts.md): the driver prints every step's
+  envelope, exits, caps and remedies, and the command file never restates them — build,
+  review, run and mocks join genesis. Every `## Rules` section holds at most eight bullets
+  (`prose-cap`, pinned in `read-load.test.js`), and every `shared-for` section list is pinned
+  exactly there, so a section cannot join a command's read surface silently.
+- **The host pipeline-rules file is path-scoped** and arrives with the `spec.config.json`
+  Read; no command re-reads it. A host whose rules did not arrive with the config Reads them
+  once.
+- **The genesis brief is edited in place** — one line per changed key after each interview
+  answer — and rendered in full exactly once, at discovery's end.
+
 Legacy `<!-- enforcedBy: … -->` / `<!-- unenforced: … -->` comments surviving in doctrine
 files are inert annotations, not a maintained registry.

@@ -194,9 +194,8 @@ itself never installs, never asks, never fails on an adverse finding:
   is Phase 3's job, never the script's (ADR-0001's word is "offers", not installs). An
   `unavailable` value means detection itself couldn't run (no `claude` CLI, or an unparseable
   `claude plugin list --json` shape) — Phase 3 falls back to asking the user directly.
-- `testCommand.failsLoudOnNoMatch: false` — this repo's test runner exits 0 on a path matching
-  nothing, the exact vacuous-pass class an escaped defect rode in on (specs/20260822/02-init-generation-script.md
-  D8); Phase 3 surfaces it.
+- `testCommand.failsLoudOnNoMatch: false` — the test runner exits 0 on a path matching nothing
+  (specs/20260822/02-init-generation-script.md D8); Phase 3 surfaces it.
 - `atRisk.refs: 0` — the at-risk review leg's path-substring heuristic found no test
   references among the sampled files; Phase 3 discloses that the leg will likely never fire on
   this host.

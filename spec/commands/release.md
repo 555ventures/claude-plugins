@@ -232,4 +232,3 @@ Phase 4 report — the ledger row's `ci` field is the durable carrier of the obs
   `inert` manifest rows all appear in the report explicitly.
 - Defects found here route to the normal flow (fix/spec + `/spec:escape` when they escaped a
   review) — release records and gates; it never becomes a repair entry point.
-- `AskUserQuestion` dismissed → STOP.

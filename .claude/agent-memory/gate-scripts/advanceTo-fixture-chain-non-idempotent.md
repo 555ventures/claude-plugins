@@ -3,6 +3,7 @@ name: advanceto-fixture-chain-non-idempotent
 description: mocks-driver-fixtures.js's advanceTo* helpers are not idempotent — calling one on a dir already advanced past its own prefix re-appends duplicate ledger rows and refuses; this is a test-fixture bug, not fixable from production files
 metadata:
   type: feedback
+  reviewed: 2026-09-08
 ---
 
 `tests/mocks/mocks-driver-fixtures.js`'s `advanceTo*` chain (`advanceToSeedDone` ->

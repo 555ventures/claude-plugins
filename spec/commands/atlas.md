@@ -129,4 +129,3 @@ Design Atlas) — the whole picture should always exist; polish arrives per-surf
 - **Mock-vs-built divergence on `built` surfaces is informational, never a task** (shared §
   mock-authority lifecycle): report it when visible (atlasRoutes side-by-side), escalate it only
   when that surface enters a new spec's scope — where `/spec:design` re-syncs the mock first.
-- `AskUserQuestion` dismissed → STOP.

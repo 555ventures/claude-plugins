@@ -77,12 +77,13 @@ is the mechanism. Both the plugin session and the Hearwell session compacted sev
 during the run and resumed from files, not scrollback: the canon on disk, not one session's
 memory, is what kept the screens consistent.
 
-A second spike the same day (`docs/spikes/22-notes-layer/`) put a notes layer over the untouched
-Hearwell wireframes: the preview server injects one script at serve time, every state frame gets
-a note strip, every page gets a project-notes box, and notes persist to a JSON file beside the
-server. The user used it live from a browser (resolved two seeded notes, wrote a real catch on
-the read-back state's four-button row) and the session read the result from the file without
-the screen entering the conversation. Rulings from that spike: notes are per mock state and per
+A second spike the same day put a notes layer over the untouched Hearwell wireframes: the
+preview server injects one script at serve time, every state frame gets a note strip, every page
+gets a project-notes box, and notes persist to a JSON file beside the server. The user used it
+live from a browser (resolved two seeded notes, wrote a real catch on the read-back state's
+four-button row) and the session read the result from the file without the screen entering the
+conversation. The prototype was folded into `spec/scripts/lib/notes-layer.browser.js` and
+deleted. Rulings from that spike: notes are per mock state and per
 project, never per element; a project note ("the direction is wrong") is handled before any
 mock note; the author resolves, the session only marks "addressed"; the tool chrome uses shadcn
 default tokens and the wireframes share them in a flat register.
@@ -207,9 +208,9 @@ Order is binding: the ledger and gate land first so every later stage is already
 - `~/Projects/hearwell/design/wireframes/LEDGER.md` — the executed evidence: seed rows P1–P13,
   journey rows W/O/R/D/V, theme rows T1–T6, process rows A2–A8, catches M1–M14, and the six
   standing rules the run converged on. Spec 1's fixtures derive from it.
-- `docs/spikes/22-notes-layer/` — the notes-layer spike (`server.js`, `notes.js`,
-  `notes.sample.json` with the user's real notes, `screenshot.png`). Spec 4 starts from it;
-  spec 3's `viewer.css` starts from the tokens block in `notes.js`.
+- The notes-layer spike (`docs/spikes/22-notes-layer/`, executed with the user's real notes) was
+  folded into `spec/scripts/lib/notes-layer.browser.js` and deleted. Spec 4 starts from that
+  lib file; spec 3's `viewer.css` starts from its tokens block.
 - `docs/adr/0006-mocks-first-genesis.md` — the amendment: what it supersedes in briefs 10, 10a,
   02 (D8 via ADR-0003) and 20, and why the reorder is a product-understanding fix, not a
   design-quality fix.

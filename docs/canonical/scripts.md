@@ -61,3 +61,12 @@ owner id (a spec path, AC-ID, D-number, ADR, or run id) and nothing else; the st
 baseline holds no code-group path to fall back on. A mechanism explanation survives on its
 merits — the rule bans history, not reasons — but it lives in exactly one file, and every other
 site that would repeat it carries a one-line citation instead.
+
+The plugin's own code has a byte budget. `scripts/size-ratchet.js` keeps `size-baseline.json`
+(repo root) tight: every tracked file under `spec/scripts`, `scripts`, and `tests` carries a
+ceiling equal to its size, every tree carries a ceiling equal to its sum, and a new file may not
+exceed `newFileCap` (40,000 bytes). A stale ceiling is red; `--update` lowers, adds, and drops
+but never raises; `--raise … --cite <spec>` is the only way up and records who asked. The
+standing check is `tests/consistency/size-ratchet-live.test.js`; a spec that must grow a file
+lists the baseline in its File Plan and raises citing itself.
+(specs/20260908/01-size-ratchet.md)

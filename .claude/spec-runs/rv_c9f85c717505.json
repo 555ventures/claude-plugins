@@ -1,0 +1,208 @@
+{
+  "runId": "rv_c9f85c717505",
+  "ts": "2026-09-09T15:11:10.025Z",
+  "spec": "specs/20260908/01-size-ratchet.md",
+  "tier": "standard",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 2,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1667,
+    "base": "54b398a3b942ca3410fc4db01fcf26e3645d13e3",
+    "head": "14247adc043ebbf24109722d4f02bd9090cd2689",
+    "dirty": false
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 0,
+      "observed": {
+        "outOfPlan": 0,
+        "files": []
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 160
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1376
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 13
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 8,
+        "testsExecuted": 86
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 14,
+        "carried": 10,
+        "sanctioned": 4,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "soft",
+        "claim": "--cite accepts a path that prefix-matches the spec shape but resolves via '..' to a non-spec file, so a raise can be recorded citing something that is not a spec. CITE_RE is only start-anchored and the existence check runs path.join (which normalizes '..') before existsSync. The spec's own D4 regex (^specs/\\d{8}/\\d{2}-) is equally start-only, so this is not a contradiction of the spec text - hygiene only; the live AC-9 pin would also pass such a cite.",
+        "file": "scripts/size-ratchet.js",
+        "line": 358,
+        "impact": "A raise can be logged with a citation that points at something other than a spec, so the trace from growth back to the feature that asked for it can be faked by a malformed path.",
+        "evidence": "Synthetic tmpdir git repo, seeded baseline: '--raise tests/a.txt --to 20 --cite specs/20260909/01-x.md/../../../size-baseline.json' -> exit=0, raises [{path:'tests/a.txt',from:10,to:20,cite:'specs/20260909/01-x.md/../../../size-baseline.json'}]. Code: line 355 CITE_RE.test(args.cite) with CITE_RE = /^specs\\/\\d{8}\\/\\d{2}-/ (no end anchor), 358-359 path.join(root, args.cite) then existsSync."
+      },
+      {
+        "severity": "soft",
+        "claim": "The header's exit-2 list (lines 25-28) enumerates the raise/cite/target triggers but omits three exit-2 paths the script implements: a non-integer --to (line 353), --json combined with --update/--raise (line 77), and --update together with --raise (line 76). Same exit code, so not the hard undocumented-exit-code class - the same shape the prior round graded soft for the exit-1 line.",
+        "file": "scripts/size-ratchet.js",
+        "line": 25,
+        "impact": "A reader relying on the header to learn why an invocation was rejected is told most but not all of the reasons.",
+        "evidence": "'--raise tests/a.txt --to 12.5 --cite specs/20260909/01-x.md' -> exit=2 '--to must be a non-negative integer byte count, got 12.5'; adding --json -> exit=2 '--json is not compatible with --update or --raise'; '--update --raise ...' -> exit=2 '--update and --raise are mutually exclusive'. Header lines 25-28 list none of the three."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "Round-3 s0: the tracked-but-missing --update refusal has no behavioral test",
+        "file": "tests/size-ratchet/size-ratchet.test.js",
+        "line": 381,
+        "evidence": "Commit 72b96c8 adds two tests: line 381 (exit 1, stderr names the path and /tracked/i, baseline byte-identical, then git rm -> --update exit 0, files drops the path, trees.tests 30, check exit 0) and line 420 (from-scratch seed refuses, writes no baseline). Both fixtures assert git ls-files still lists the path first. Fresh run: 22 pass, 0 fail, 0 skipped. Closed."
+      },
+      {
+        "claim": "Round-3 s1: the header's exit-1 line names only two of the four --update refusal triggers",
+        "file": "scripts/size-ratchet.js",
+        "line": 23,
+        "evidence": "Lines 23-24 now read '1 findings (check) or refused (update: over/tree-over, new-over-cap against an existing baseline, or a tracked file missing from disk)'. Matches the blocking filter plus the missingTracked branch. Closed."
+      },
+      {
+        "claim": "Round-3 s2: fixture directories in the retagged D5 test still carry an sr-ac4 prefix",
+        "file": "tests/size-ratchet/size-ratchet.test.js",
+        "line": 151,
+        "evidence": "grep: 151 'sr-d5-malformed-', 162 'sr-d5-update-keeps-cap' inside the 'no AC (D5...)' test; remaining sr-ac4 tmpdirs at 177/209/227 sit in tests genuinely named AC-20260908-01-4. Closed."
+      },
+      {
+        "claim": "Live size-baseline.json was hand-typed or is stale against HEAD",
+        "file": "size-baseline.json",
+        "line": 1,
+        "evidence": "check -> '245 files, 4 trees, all tight' exit 0. Re-seeded to a scratch path and cmp against the tracked file -> BYTE-IDENTICAL. raises is []. git status clean."
+      },
+      {
+        "claim": "Test file reimplements the runNode helper inline",
+        "file": "tests/size-ratchet/size-ratchet.test.js",
+        "line": 15,
+        "evidence": "tests/helpers.js:89-92 runNode resolves path.join(SPEC, script) - it targets spec/ only; the script under test lives at repo root. Killed on the same grounds in round 1."
+      },
+      {
+        "claim": "D10 leaves live references to the deleted spike",
+        "file": "docs/roadmap/22-mocks-first-genesis.md",
+        "line": 211,
+        "evidence": "git ls-files docs/spikes/22-notes-layer -> empty. Grep for '22-notes-layer': only the two rewritten roadmap lines, the spec itself, two earlier specs (spec history, waived by the retired-name sweep), and the review record. Nothing under spec/, scripts/, tests/."
+      },
+      {
+        "claim": "D9 rule bullets missing or misplaced",
+        "file": ".claude/rules/spec-pipeline.md",
+        "line": 86,
+        "evidence": "git diff base..HEAD: one bullet added under Worker Rules (86-88) and one under Review Checks (131); no other rule edits."
+      },
+      {
+        "claim": "D12 violated (plugin file changed without bump) or a non-builtin import",
+        "file": null,
+        "line": null,
+        "evidence": "git diff --stat touches nothing under spec/ or git/ or any plugin.json; gate leg exit 0 (160 tests incl. plugin-bump --check and the non-builtin sweep); patterns leg 'non-builtin require(): 0'. Script requires only fs, path, child_process."
+      },
+      {
+        "claim": "--to 1e3 is accepted as 1000 (exponent notation passes the integer check)",
+        "file": "scripts/size-ratchet.js",
+        "line": 351,
+        "evidence": "exit 0, ceiling 1000, raises {from:10,to:1000}; Number('1e3') is a finite non-negative integer and the next check reports it stale per D2. No spec line constrains the lexical form of --to."
+      },
+      {
+        "claim": "--raise on a tree with no recorded ceiling, or a no-op raise, corrupts or bloats the baseline",
+        "file": "scripts/size-ratchet.js",
+        "line": 370,
+        "evidence": "--raise scripts --to 5 on an empty tree -> exit 0, trees.scripts=5, {from:0,to:5}; next check exit 1 'stale scripts 0 < 5' (tightness catches it, D2). Lowering -> exit 2 (D4). No-op raise -> exit 0 with a {from:20,to:20} row, sanctioned by D14."
+      },
+      {
+        "claim": "Baseline missing the optional raises key is rejected or rewritten wrongly",
+        "file": "scripts/size-ratchet.js",
+        "line": 135,
+        "evidence": "With raises absent: check exit 0; --update exit 0 writing raises: [] plus the three missing tree keys at 0. Contracts mandate only newFileCap/trees/files for the D5 exit-2 case."
+      },
+      {
+        "claim": "Range contains foreign work or the spec edits alter locked ground",
+        "file": "specs/20260908/01-size-ratchet.md",
+        "line": 46,
+        "evidence": "git log base..HEAD: five commits, all this spec. Spec diff: frontmatter plus D13 (orchestrator ruling, pinned by tests at 273-335) and D14 (user ruling, [no-ac] with a true reason). promise-sweep: rows=14 carried=10 sanctioned=4 orphans=0. reconcile: outOfPlan=[] unrealized=[]."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 52000
+  }
+}

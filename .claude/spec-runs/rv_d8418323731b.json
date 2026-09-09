@@ -1,0 +1,178 @@
+{
+  "runId": "rv_d8418323731b",
+  "ts": "2026-09-09T07:11:31.870Z",
+  "spec": "specs/20260908/01-size-ratchet.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "FINDINGS",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1474,
+    "base": "54b398a3b942ca3410fc4db01fcf26e3645d13e3",
+    "head": "72b96c831d3e18ac9376c43c6208f1930fc98cf6",
+    "dirty": false
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 158
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1374
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 13,
+        "carried": 9,
+        "sanctioned": 4,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "medium",
+        "claim": "The pass-2 ghost fix adds a new --update refusal branch (tracked-but-missing-from-disk -> exit 1, baseline untouched) with no behavioral test pinning it; commit 448bde4 touched the test file only to rename one test and trim a comment. Host Test Rules: 'Nothing here is exempt from TDD'.",
+        "file": "scripts/size-ratchet.js",
+        "line": 300,
+        "impact": "The only guard against a still-tracked file silently falling out of the budget is unpinned, so a later refactor can reintroduce the ghost and the suite stays green.",
+        "evidence": "grep -n 'missing from disk|missingTracked|tracked but missing' over both test files -> no output, exit=1. git show 448bde4 --stat: test file '5 +++---' (rename at 149 + comment trim at 502-505 only). The branch behaves correctly only under a scratch repro: tracked tests/b.txt rm'd -> --update exit=1 'tests/b.txt is tracked but missing from disk', baseline byte-identical."
+      },
+      {
+        "severity": "soft",
+        "claim": "The script header's Exit codes list still describes exit 1 for --update as 'refused (update, over/tree-over present)'; the two other refusal triggers now implemented - new-over-cap against an existing baseline, and tracked-but-missing - are absent from it.",
+        "file": "scripts/size-ratchet.js",
+        "line": 23,
+        "impact": "A reader relying on the header to learn why an update was refused is told only two of the four reasons.",
+        "evidence": "Header line 23: '1 findings (check) or refused (update, over/tree-over present)'. Executed: --update exit=1 with 'tests/c.txt is tracked but missing from disk'; line 314 filters !isSeed && f.kind === 'new-over-cap' into blocking. Same exit code, so not the hard undocumented-exit-code class."
+      },
+      {
+        "severity": "soft",
+        "claim": "The test retagged from AC-4 to D5 still names its tmpdirs with an 'sr-ac4-' prefix (lines 151 and 162), leaving the misattribution the retag was meant to remove in the fixture names.",
+        "file": "tests/size-ratchet/size-ratchet.test.js",
+        "line": 151,
+        "impact": "Someone grepping test artifacts by criterion is still pointed at the wrong pin, though the coverage matrix itself is no longer misled.",
+        "evidence": "grep -n 'sr-ac4' -> 151 'sr-ac4-malformed-', 162 'sr-ac4-update-keeps-cap' inside the test now named 'no AC (D5: ...)'. Not an AC-ID token, so ac-matrix is unaffected (uncovered=0)."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "Pass-2 F2 (soft): tracked-but-missing file is dropped by --update and the next check is green",
+        "file": "scripts/size-ratchet.js",
+        "line": 300,
+        "evidence": "Seed {a:10,b:30}; rm tests/b.txt. check -> exit=1 'stale tests/b.txt 0 < 30' + 'stale tests 10 < 40'. --update -> exit=1 'tracked but missing from disk'; baseline byte-identical. After git rm: --update exit=0, files {a:10}; check exit=0. Closed."
+      },
+      {
+        "claim": "Pass-2 F1 (medium): malformed-baseline test mislabeled AC-20260908-01-4",
+        "file": "tests/size-ratchet/size-ratchet.test.js",
+        "line": 149,
+        "evidence": "Line 149 now reads 'no AC (D5: unreadable/non-object baseline is a bad invocation)'. grep -c AC-20260908-01-4 -> 2, both genuinely pinning tree-over/new-over-cap. ac-matrix uncovered=0. Closed."
+      },
+      {
+        "claim": "Pass-2 F4 (soft): test comment narrates prior behavior",
+        "file": "tests/size-ratchet/size-ratchet.test.js",
+        "line": 502,
+        "evidence": "Lines 502-504 now end at '...from the AC-4 tree-over/true-sum pin.'; grep for prior-behavior phrasing -> no hits. Closed."
+      },
+      {
+        "claim": "New: check mode exits 0 while a tracked file absent from the baseline is missing on disk",
+        "file": "scripts/size-ratchet.js",
+        "line": 197,
+        "evidence": "tests/c.txt added to index then rm'd -> check exit=0 'all tight'. Spec Behavior: 'A file that is both new and under cap is not itself a finding'; D2's exit-0 condition holds. The following --update refuses so nothing lands. Spec-consistent."
+      },
+      {
+        "claim": "New: --raise on a tracked-but-missing path writes a phantom ceiling",
+        "file": "scripts/size-ratchet.js",
+        "line": 365,
+        "evidence": "--raise tests/c.txt --to 5 -> exit=0, raises [{from:0,to:5}]; next check exit=1 'stale tests/c.txt 0 < 5'. Target is tracked so D4's 'path' is satisfied and the tightness rule catches the slack. Correct under D2/D4."
+      },
+      {
+        "claim": "New: from-scratch seed proceeds despite a tracked-missing file (D13 path bypasses the guard)",
+        "file": "scripts/size-ratchet.js",
+        "line": 262,
+        "evidence": "With no baseline and tests/c.txt tracked-missing: --update exit=1 with the tracked-but-missing message; no baseline written. Guard runs before the isSeed filter."
+      },
+      {
+        "claim": "Fix commit left the live baseline stale or hand-typed",
+        "file": "size-baseline.json",
+        "line": 10,
+        "evidence": "448bde4 moved size-ratchet.js 14883->15658, test 28835->28783, trees to match. check -> '245 files, 4 trees, all tight' exit=0; manifest-3 gate exit 0 (158 tests), suite exit 0 (1374 tests, 0 skips)."
+      },
+      {
+        "claim": "D10/D12 regressed in the range",
+        "file": null,
+        "line": null,
+        "evidence": "git diff --stat: three docs/spikes/22-notes-layer files deleted, nothing under spec/ or git/ touched; git ls-files docs/spikes/22-notes-layer -> 0; roadmap line 211 is the rewritten sentence."
+      },
+      {
+        "claim": "Spec file edits in range alter locked ground",
+        "file": "specs/20260908/01-size-ratchet.md",
+        "line": 309,
+        "evidence": "Spec diff: frontmatter status/build_base/diff_base plus the D13 row (orchestrator ruling recorded, AC-5/-6 carried, pinned by tests at 273-335). promise-sweep: rows=13 carried=9 sanctioned=4 orphans=0."
+      },
+      {
+        "claim": "Pass-2 F3 (soft): no-op --raise appends a row to raises[]",
+        "file": "scripts/size-ratchet.js",
+        "line": 370,
+        "evidence": "Waived by the user (D4 forbids lowering only). Not re-reported."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 58000
+  }
+}

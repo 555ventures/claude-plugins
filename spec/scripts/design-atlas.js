@@ -162,6 +162,7 @@ const shellLib = require('./lib/shell-region')
 const notesLib = require('./lib/mocks-notes')
 const { parseLedger, setStatus } = require('./lib/mocks-ledger')
 const picksLib = require('./lib/mocks-picks.js')
+const { stylesheetTargets, linksWireRegister } = require('./lib/wire-register')
 // specs/20260906/04-journey-review-page.md D1: the pure journey-review builder — the served
 // GET /review/<j>.html route below adapts parseSeedJourneys()/loadTargets() into its input shape
 // and calls it fresh on every request (never cached, never storing derived state).
@@ -331,6 +332,9 @@ function statesViolations(f, html) {
 // "sketch", and data-status="approved" (mocks sign-off's own stamp) is exempt outright; --matrix
 // never binds this rule (Rationale "Why ratified only, never approved"). No tokens.css anywhere
 // above the mock = the rule never runs (AC-20260906-06-2's byte-identical-to-today pin).
+// specs/20260908/07-one-wire-register-predicate.md D1/D4: "a lingering wire/ stylesheet link" is
+// read via lib/wire-register.js's linksWireRegister(html) — every quoting form and attribute
+// order, plus CSS @import, gated on a stylesheet rel — never a private regex here.
 function resolveTokensCss(fromPath) {
   let dir = path.resolve(fromPath)
   try { if (!fs.statSync(dir).isDirectory()) dir = path.dirname(dir) } catch { dir = path.dirname(dir) }
@@ -343,8 +347,6 @@ function resolveTokensCss(fromPath) {
     dir = up
   }
 }
-const WIRE_LINK_RE = /<link[^>]+href\s*=\s*"[^"]*\bwire\/[^"]*"/
-
 // D3: same walk-up, but for design/mocks/notes.json — resolved from a mock at design/mocks/<f>,
 // or from the notes.json itself sitting alongside a mock in a flatter fixture tree. No notes.json
 // anywhere above the mock = "no notes store → no check" (D3), same absence-invariant as D1.
@@ -371,7 +373,7 @@ function themeAndNotesViolations(f, html, label) {
     const status = statusOf(html)
     if (status !== 'approved') {
       const tokensCss = resolveTokensCss(f)
-      if (tokensCss && WIRE_LINK_RE.test(html)) {
+      if (tokensCss && linksWireRegister(html)) {
         const msg = f + ': links the wireframe register (wire/) after the theme pick — skin it in the picked theme (design/tokens.css)'
         if (status === 'ratified') hard.push(msg); else warn.push(msg)
       }
@@ -449,7 +451,10 @@ function cmdCheck(argv) {
       // D1: a shell canon is chrome, never a screen — exempt entirely; an unlabeled mock is
       // already flagged above and has no [data-screen-label] root to read data-no-state from.
       if (statesMode && !isCanon && !isKitCanon && labelOf(html)) violations.push(...statesViolations(f, html))
-      if (!/<link[^>]+tokens\.css/.test(html)) violations.push(f + ': does not link a tokens.css')
+      // specs/20260908/07-one-wire-register-predicate.md D7: a target whose final path segment is
+      // tokens.css — read via lib/wire-register.js's stylesheetTargets(html), which admits an
+      // @import-applied tokens.css and excludes a non-stylesheet <link> (e.g. rel="icon").
+      if (!stylesheetTargets(html).some((t) => /(^|\/)tokens\.css$/.test(t))) violations.push(f + ': does not link a tokens.css')
       // strip the tokens link line itself, then flag color literals anywhere in markup/styles
       const body = html.replace(/<link[^>]*>/g, '')
       for (const re of [/#[0-9a-fA-F]{3,8}\b/g, /\brgba?\(/g, /\bhsla?\(/g, /\boklch\(/g]) {

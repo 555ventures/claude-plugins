@@ -13,7 +13,8 @@ is derived from disk on every invocation (Resume, below), never from a state fil
 Build treats the landed components as done inputs.
 
 **Setup:** run `spec-paths shared-for design` and read its output. Read the host's
-`.claude/spec.config.json` and its pipeline rules file. Either missing → STOP: run `/spec:init` first.
+`.claude/spec.config.json` (its pipeline rules load with that Read — path-scoped, never
+re-read). Either missing → STOP: run `/spec:init` first.
 
 ## Input
 
@@ -213,4 +214,3 @@ Next: /spec:run specs/20260824/02-example.md
   Ban, § MCP Policy, § Read-Only Surfaces.
 - **Components built here are real and kept** — `/spec:build` wires them, never rebuilds them.
 - The `.design/` sidecar is **never created, read, or audited** (D13); a leftover on a host is inert.
-- `AskUserQuestion` dismissed → STOP.

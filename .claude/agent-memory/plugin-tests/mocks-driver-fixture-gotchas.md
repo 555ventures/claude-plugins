@@ -3,7 +3,7 @@ name: mocks-driver-fixture-gotchas
 description: mocks-driver.js fixture-chain gotchas for red-phase tests reaching THEME/SIGNOFF state, plus a serve-endpoint content-type trap.
 metadata:
   type: pattern
-  reviewed: 2026-09-07
+  reviewed: 2026-09-08
 ---
 
 Building a `mocks-driver.js` fixture up to a late state (e.g. the SIGNOFF look, for an AC

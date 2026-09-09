@@ -1,0 +1,144 @@
+{
+  "runId": "rv_074eef1bd3d6",
+  "ts": "2026-09-09T01:38:04.747Z",
+  "spec": "specs/20260907/06-theme-pick-moves-to-sketch.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "FINDINGS",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 809,
+    "base": "df8d1d942c5b6e8f10f82856409a4582898bc192",
+    "head": "6870f13882dafcc5b6f8c43f86200195cc8fe4c3",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 530
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1349
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 9,
+        "carried": 8,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "soft",
+        "claim": "linksWireRegister's \\bwire\\/ boundary treats '-' and '.' as word boundaries, so a <link href> into a sibling directory merely named my-wire/ or v.wire/, or a non-stylesheet <link rel=\"icon\" href=\"../../wire/favicon.png\">, is refused as 'links the wireframe register' even though none is a wire/ stylesheet link. Advisory only: the boundary semantics are identical to the pre-fix scan and to design-atlas.js:346's own WIRE_LINK_RE, no such path exists in this repo's templates or fixtures, and D2's refusal text is unchanged.",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1129,
+        "impact": "A candidate direction whose page links a stylesheet from a directory whose name happens to end in the word wire after a dash or dot, or links a wire-register asset that is not a stylesheet, would be refused with a message that does not quite describe it. No such page exists today and nothing accepted before the fix is refused now.",
+        "evidence": "Executed node -e matrix over both regexes (node 26): '../my-wire/x.css' => true; '../v.wire/x.css' => true; '<link rel=\"icon\" href=\"../../wire/favicon.png\">' => true. Contrast (correctly composing): '../../hardwire/tokens.css' => false, '../firewire/x.css' => false, '../wired/x.css' => false, '../wireframe/x.css' => false, '../rewire/x.css' => false, '../my_wire/x.css' => false, '<script src=\"../../wire/x.js\">' => false, '<a href=\"../../wire/tokens.css\">' => false. design-atlas.js:346 uses the same \\bwire\\/ core; grep of spec/templates and tests/mocks fixtures finds only ../wire/tokens.css and ../wire/wire.css hrefs and prose."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "The widened predicate still admits one of the four link forms pass 2 named (single-quoted href, unquoted href, quoted @import, url() @import).",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1131,
+        "evidence": "Executed regex matrix: double-quoted, single-quoted, unquoted href; @import \"...\"; @import url(...); @import url(\"...\"); @import url( '...' ); uppercase <LINK ... HREF=\"...\">; href-before-rel; root /wire/tokens.css; bare wire/tokens.css; and a multi-line <link> all => true. End-to-end: node --test tests/mocks/mocks-driver-theme.test.js on the working tree, the five-form table test passes with each leg exiting 2 and stderr matching /links the wireframe register \\(wire\\/\\)/ (91/91 across the three touched test files)."
+      },
+      {
+        "claim": "The widened predicate regressed the pass-1 fix and again refuses prose-only wire/ occurrences (comments, data attributes).",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1131,
+        "evidence": "Matrix: '<!-- re-rendered from the gray wire/ register -->' => false; '<div data-note=\"from wire/ register\">' => false; '<link href=\"./tokens.css\"> from wire/ register' => false; '<p>@import the wire/ look</p>' => false. The test's prose leg exits 0 printing the exact accept line on the working tree."
+      },
+      {
+        "claim": "The new table-driven test is a vacuous pin that would also pass against the double-quote-only predicate.",
+        "file": "tests/mocks/mocks-driver-theme.test.js",
+        "line": 269,
+        "evidence": "Built a scratch copy of mocks-driver.js with linksWireRegister replaced by the pass-1 double-quote-only regex, and a copy of the test re-pointed at it. node --test --test-name-pattern=\"every href-quoting form\" => pass 0 / fail 1: 'a candidate that genuinely links the wire register via a single-quoted href must refuse', actual 0, expected 2. The prose leg passed under the old predicate, so the failure is exactly the leg the header comment names. Scratch deleted afterwards."
+      },
+      {
+        "claim": "The code comment's assertion that design-atlas.js's own check cannot catch these forms during the theme run is false, so a downstream net exists and the widening was unnecessary.",
+        "file": "spec/scripts/design-atlas.js",
+        "line": 374,
+        "evidence": "design-atlas.js:374 `if (tokensCss && WIRE_LINK_RE.test(html))` — the rule is gated on a resolving design/tokens.css and uses the double-quoted-only regex at line 346. Both halves of the comment's claim are true; design-atlas.js is untouched in the working tree, consistent with the File Plan."
+      },
+      {
+        "claim": "The full-suite red on AC-20260902-10-2 (served-atlas SIGTERM shutdown timeout) during this pass's first leg run is caused by this diff.",
+        "file": null,
+        "line": null,
+        "evidence": "legs-3/suite-output.txt ends 'skipped 0 / todo 0 / __FILE_BUDGET_OK__' with manifest-3 recording suite exit 0, 1349 tests executed; gate exit 0, 530 executed. The diff touches no serve/shutdown code path. No repro; pre-existing load-sensitive flake stands."
+      },
+      {
+        "claim": "The fix introduces a second behavior change needing its own plugin.json bump, a non-builtin import, or a new undocumented exit code.",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1145,
+        "evidence": "node scripts/plugin-bump.js --check => spec 7.108.0 -> 7.109.0 (already bumped in 6870f13; the working-tree change tightens the same D2 leg within the same spec). Requires are node builtins and repo-relative libs only. The refusal path still exits 2 via die() with the byte-identical message; no new exit code."
+      },
+      {
+        "claim": "Untouched working-tree edits outside the fix (spec-runs.jsonl, sketch.md, design-doctrine.test.js) are foreign or regress the pass-1 fixes.",
+        "file": "spec/commands/sketch.md",
+        "line": 102,
+        "evidence": "git diff: spec-runs.jsonl is a 1-line pipeline append; sketch.md carries the three pass-1 step-number retargets verified by reviewer-return-2; design-doctrine.test.js carries the pass-1 Theme-step slice. All three test files pass on the tree (91/91) and gate/suite legs are green."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 42000
+  }
+}

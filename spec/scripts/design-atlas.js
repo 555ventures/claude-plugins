@@ -372,7 +372,7 @@ function themeAndNotesViolations(f, html, label) {
     if (status !== 'approved') {
       const tokensCss = resolveTokensCss(f)
       if (tokensCss && WIRE_LINK_RE.test(html)) {
-        const msg = f + ': links the wireframe register (wire/) after THEME — skin it in the picked theme (design/tokens.css)'
+        const msg = f + ': links the wireframe register (wire/) after the theme pick — skin it in the picked theme (design/tokens.css)'
         if (status === 'ratified') hard.push(msg); else warn.push(msg)
       }
       const notesFile = resolveNotesFile(f)

@@ -300,6 +300,31 @@ function writeKitCanon(dir, primitives = [{ key: 'sheet', purpose: 'a modal pane
     '<div data-kit-canon="kit">\n' + body + '\n</div>\n')
 }
 
+// Orchestrator duty (specs/20260907/06-theme-pick-moves-to-sketch.md): a candidate direction
+// is now the signed-off gray kit re-rendered at production fidelity, one page per direction —
+// design/theme/<kebab>/kit.html (root data-kit-canon, every primitive `writeKitCanon` above
+// would put in design/kit/, same states/data-slot shape) linking its OWN ./tokens.css (never
+// wire/, D2's "a candidate direction is the kit at production fidelity" leg), whose tokens.css
+// always carries a [data-theme="dark"] block (D7's dark-block requirement) alongside the light
+// `:root` rule. `primitives` takes the identical `{key, purpose}` shape `writeKitCanon` takes so
+// a test can pass the SAME array to both and get a matching primitive set by construction; a
+// test isolating one D2 violation (an omitted primitive, a wire/ link, a missing tokens.css)
+// mutates the written files afterward rather than this fixture growing an opts bag — this
+// spec's orchestrator duty pins the signature at exactly (dir, kebab, primitives).
+function writeThemeKit(dir, kebab, primitives = [{ key: 'sheet', purpose: 'a modal panel for one focused task' }]) {
+  const body = primitives.map((p) =>
+    '<section data-kit-primitive="' + p.key + '" data-purpose="' + p.purpose + '">' +
+    '<div data-contract="none"><button data-state-btn="empty">Empty</button>' +
+    '<button data-state-btn="loading">Loading</button><button data-state-btn="error">Error</button></div>' +
+    '<div data-slot="content"></div>' +
+    '</section>').join('\n')
+  writeFile(path.join(dir, 'design/theme', kebab, 'kit.html'),
+    '<link rel="stylesheet" href="./tokens.css">\n' +
+    '<div data-kit-canon="' + kebab + '">\n' + body + '\n</div>\n')
+  writeFile(path.join(dir, 'design/theme', kebab, 'tokens.css'),
+    ':root{--text-body:#111}\n[data-theme="dark"]{--text-body:#eee}\n')
+}
+
 // Orchestrator duty (specs/20260907/04-kit-canon-family.md): D1 inserts KIT between SHAPES and
 // WIREFRAMES — every advanceTo* helper reaching canon-written or beyond now routes through a
 // real `--mark kit-signed` the same way it already routes through shape-picked, so a later
@@ -494,7 +519,7 @@ module.exports = {
   bare, mark, stateOf, ledgerCmd,
   writeFile, writeJSON, statusPath, statusJson,
   writeTargets, writeResearchBrief, writeSeed, confirmFacts, writeCanon, writeWireframe,
-  writeThemeDirection, writeKitCanon,
+  writeThemeDirection, writeKitCanon, writeThemeKit,
   decideLook, openLook, freePort, startServe, stopServe, getBody,
   writeFixtureCapture, writeCaptureConfig,
   advanceToSeedDone, advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToJourneyApproved,

@@ -1119,19 +1119,27 @@ function wireAfterThemeMock(status) {
   })
 }
 
-test('AC-20260906-06-1: check flags a mock linking wire/wire.css once design/tokens.css exists above it — violation at ratified, ⚠️ warn at sketch, exempt at approved with and without --matrix, and a wire-free mock always passes', () => {
+// Retagged AC-20260907-06-7 (specs/20260907/06-theme-pick-moves-to-sketch.md D6): the theme is
+// now picked in sketch, not in a retired mocks THEME state, so the violation literal loses the
+// retired state name — "after THEME" becomes "after the theme pick". The rule's binding, its
+// warn/violation stamp split and the no-tokens.css absence invariant (below) are untouched;
+// only the literal changes. TDD red: mocks-driver.js's pre-image text still reads "after THEME",
+// so this test's asserted literal and its "no `after THEME` anywhere" check are both false today.
+test('AC-20260907-06-7 (retag of AC-20260906-06-1): check flags a mock linking wire/wire.css once design/tokens.css exists above it — violation at ratified, ⚠️ warn at sketch, exempt at approved with and without --matrix, a wire-free mock always passes, and the message never says "after THEME"', () => {
   const dir = tmpdir('atlas-wire-after-theme')
   fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'design/tokens.css'), ':root{--text-body:#111}\n')
 
   const mockPath = writeMock(dir, wireAfterThemeMock('ratified'))
-  const violationMsg = 'links the wireframe register (wire/) after THEME — skin it in the picked theme (design/tokens.css)'
+  const violationMsg = 'links the wireframe register (wire/) after the theme pick — skin it in the picked theme (design/tokens.css)'
 
   const ratified = atlas(['check', mockPath])
   assert.strictEqual(ratified.status, 1,
     'a ratified mock still linking wire/wire.css once design/tokens.css exists above it must fail check — D1\'s register-after-theme rule is missing: ' + ratified.stdout + ratified.stderr)
   assert.ok(ratified.stdout.includes('  - ' + mockPath + ': ' + violationMsg),
-    'the D1 violation line must be printed verbatim, naming the file and the remedy: ' + ratified.stdout)
+    'the D1 violation line must be printed verbatim, naming the file and the remedy, with the theme-pick wording (not the retired "after THEME"): ' + ratified.stdout)
+  assert.doesNotMatch(ratified.stdout, /after THEME/,
+    'D6 retires the "after THEME" wording outright — no occurrence may survive anywhere in check\'s output: ' + ratified.stdout)
 
   writeMock(dir, wireAfterThemeMock('sketch'))
   const sketch = atlas(['check', mockPath])
@@ -1139,6 +1147,8 @@ test('AC-20260906-06-1: check flags a mock linking wire/wire.css once design/tok
     'the same mock at data-status="sketch" must pass check (exit 0) — D1 warns at sketch, it never fails the gate: ' + sketch.stdout + sketch.stderr)
   assert.ok(sketch.stdout.includes('  ⚠️ ' + mockPath + ': ' + violationMsg),
     'the sketch-stage run must print the same D1 line prefixed "  ⚠️ " as a warning (the shell-family warn/violation split D1 copies, A1), not silence it: ' + sketch.stdout)
+  assert.doesNotMatch(sketch.stdout, /after THEME/,
+    'the sketch-stage warn line must also carry the theme-pick wording, never the retired "after THEME": ' + sketch.stdout)
 
   writeMock(dir, wireAfterThemeMock('approved'))
   for (const extra of [[], ['--matrix']]) {
@@ -1157,11 +1167,13 @@ test('AC-20260906-06-1: check flags a mock linking wire/wire.css once design/tok
     'a wire-free ratified mock must print no wireframe-register line at all: ' + clean.stdout)
 })
 
-// AC-20260906-06-2: a "SHALL CONTINUE TO" continuity pin (core § Incident Policy's "absence of a
-// not-yet-built mechanism" pattern) — with no design/tokens.css anywhere above the mock, D1 must
-// never bind, so this assertion already holds against the pre-image and must keep holding once D1
-// exists; it is authored now so a future change that lets D1 leak onto a theme-less root is caught.
-test('AC-20260906-06-2: check over a ratified mock linking wire/wire.css in a root with no design/tokens.css SHALL CONTINUE TO exit 0 with output byte-identical to today', () => {
+// AC-20260906-06-2, retagged AC-20260907-06-11 (specs/20260907/06-theme-pick-moves-to-sketch.md):
+// a "SHALL CONTINUE TO" continuity pin (core § Incident Policy's "absence of a not-yet-built
+// mechanism" pattern) — with no design/tokens.css anywhere above the mock, D1 must never bind,
+// so this assertion already holds against the pre-image and must keep holding once D1's literal
+// changes (D6) and once the theme is picked in sketch instead of mocks THEME; it is authored now
+// so a future change that lets D1 leak onto a theme-less root is caught. Assertion unweakened.
+test('AC-20260907-06-11 (retag of AC-20260906-06-2): check over a ratified mock linking wire/wire.css in a root with no design/tokens.css SHALL CONTINUE TO exit 0 with output byte-identical to today', () => {
   const dir = tmpdir('atlas-wire-no-theme')
   const mockPath = writeMock(dir, wireAfterThemeMock('ratified'))
   const first = atlas(['check', mockPath])

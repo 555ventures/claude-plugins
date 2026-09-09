@@ -1,0 +1,140 @@
+{
+  "runId": "rv_ff8c9344c48e",
+  "ts": "2026-09-09T15:37:04.635Z",
+  "spec": "specs/20260908/06-command-prose-states-contracts.md",
+  "tier": "standard",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 1,
+    "rejected": 1,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 997,
+    "base": "c7bb7245e8c29fa0faf7ecc2fca4cb2f7d8d7aea",
+    "head": "035d7873c7236b8ae7ed136bf6af3ea0b1bc20ba",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 204
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1394
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 1,
+        "preGreen": 1
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 12,
+        "carried": 9,
+        "sanctioned": 3,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "soft",
+        "claim": "The THEME interview paragraph is hard-wrapped with a five-word orphan line left over from deleting the driver-printed clause; the paragraph should be re-flowed.",
+        "file": "spec/commands/mocks.md",
+        "line": 52,
+        "impact": "Reads as an editing artifact in a doctrine file the expensive seat loads every mocks session; no behavior or pin is affected.",
+        "evidence": "sed -n 51,53p showed an orphan continuation line; read-load and look-handoff pins green."
+      },
+      {
+        "severity": "soft",
+        "claim": "The build ledger row for this spec records deviations:0 while the sidecar now carries two grammar-valid entries; the row was written when the sidecar used ## headers that build's ^- count could not see.",
+        "file": ".claude/spec-runs.jsonl",
+        "line": 518,
+        "impact": "The build-stage ledger understates how many departures this build recorded; the review close enumerates the true count of two, so the history is self-correcting but the build row stays wrong.",
+        "evidence": "The added build row carries \"deviations\":0; the driver-grammar classifier over the current sidecar returns {entries:2, malformed:[]}. Ledger rows are append-only by doctrine, so this is advisory."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "The rewritten deviations sidecar still contains lines observeDeviations() would classify as malformed.",
+        "file": "specs/20260908/06-command-prose-states-contracts.deviations.md",
+        "line": 3,
+        "evidence": "Executed the driver's exact classifier over the file -> {entries:2, malformed:[]}."
+      },
+      {
+        "claim": "review.md's replacement warns text misattributes the derivation or names conclusions the ci leg does not emit.",
+        "file": "spec/commands/review.md",
+        "line": 46,
+        "evidence": "review-legs.js:284 emits {unavailable:'sha-unseen', branch, branchConclusion} at exit 0; no sha-unseen hits in spec-review-driver.js; base review.md named the same three conclusions."
+      },
+      {
+        "claim": "mocks.md's retained 'never anchor on a stock pair' caveat is itself driver-printed and should also have been deleted under D1.",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1754,
+        "evidence": "The driver's THEME title carries no stock-pair clause; the caveat is prose-only, correctly kept."
+      },
+      {
+        "claim": "Deleting the THEME clause broke a pinned literal.",
+        "file": "tests/design-look-handoff.test.js",
+        "line": null,
+        "evidence": "No test references the phrase; 165 pass / 0 fail across look-handoff, consistency and prose-debt; full npm test 1393 pass, 0 fail."
+      },
+      {
+        "claim": "The green manifest-2 evidence predates the uncommitted fixes.",
+        "file": "specs/20260908/06-command-prose-states-contracts.review/manifest-2.jsonl",
+        "line": null,
+        "evidence": "manifest and leg mtimes postdate every edited file; independent npm test on the current tree green (1393/1393)."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 45000
+  }
+}

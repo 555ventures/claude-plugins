@@ -4,6 +4,9 @@
 - Date: 2026-09-07
 - Archetype: n/a (amendment ADR for this plugin repo) · Audience: n/a
 - Deciders: JJ + session (brief 22a, amended in place)
+- Amended by: ADR-0012 (client review closes on captured evidence — the CLIENT paragraph's
+  "frame diff between the note's timestamp and the resolution commit" closure is replaced by a
+  capture taken when the client note is raised; session resolve refused; dated waiver)
 - Applies to: ADR-0008's order (`SEED → SHAPES → WIREFRAMES → THEME → SIGNOFF → APPROVED`)
   and its enumerated D-rows on specs/20260906/02 and specs/20260906/06:
   - specs/20260906/02 — D1 narrowed (the chain gains `KIT` between `SHAPES` and

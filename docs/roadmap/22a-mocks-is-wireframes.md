@@ -1,6 +1,6 @@
 # 22a — Mocks is wireframes: a gray comprehension check with the session's doubt on the screen, the shared primitives named before any screen, the theme picked in sketch, and every journey walked then client-reviewed before approval
 
-Phase: P2 · Depends on: 22 · Amends: 22 (the SEED → … → SKIN → REVIEW → APPROVED order ratified by ADR-0006 — via ADR-0008); **amended in place 2026-09-07 via ADR-0010** (KIT before screens, THEME and SIGNOFF out of the driver, WALK and CLIENT before approval) · Primary workspaces:
+Phase: P2 · Depends on: 22 · Amends: 22 (the SEED → … → SKIN → REVIEW → APPROVED order ratified by ADR-0006 — via ADR-0008); **amended in place 2026-09-07 via ADR-0010** (KIT before screens, THEME and SIGNOFF out of the driver, WALK and CLIENT before approval); **CLIENT closure amended 2026-09-09 via ADR-0012** (capture at note-raise, session resolve refused, dated waiver) · Primary workspaces:
 spec/scripts/{mocks-driver,design-atlas,components-check,genesis-driver}.js, spec/scripts/lib/{mocks-notes,notes-layer.browser,review-page,review.browser,shell-region,mocks-picks}.js,
 spec/doctrine/{mocks,design,genesis}.md, spec/commands/{mocks,sketch}.md, spec/agents/design-critic.md, spec/templates/{mocks-canon.md,mocks/viewer.css}, tests ·
 Risk: T2 (the mocks state machine loses two states and gains three; every mark keeps its on-disk checkpoint, a host mid-SKIN, mid-THEME or mid-SIGNOFF derives the current chain from its existing marks and continues) ·

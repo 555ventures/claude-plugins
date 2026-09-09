@@ -265,7 +265,10 @@ subcommand resolves. Triage bins are a closed set — `mock detail`, `product un
 `canon.md` first, every dependent screen after. Project notes outrank mock notes:
 `journey-approved` and `approved` refuse while any project note is unresolved or any note on
 the journey's screens is unresolved (`addressed` is not `resolved`); client review is the same
-page and the same notes — there is no review state. Zero unresolved notes on a journey is its
+page and the same notes, served on the client route as the `CLIENT` state (ADR-0012): note
+origin walk|client|session is set by the server from the route, a client note captures its
+screen at raise, a fix is recorded only when the re-capture differs, and only the client or a
+dated waiver after seven days of silence resolves it. Zero unresolved notes on a journey is its
 approval. The SIGNOFF step prints `Approval means "this is the product I understand" — the
 written brief, not these screens, holds scope`. `/spec:atlas` and `/spec:sketch` route their annotation loops
 through the same serve + `notes open`; the annotation-MCP discovery clause is retired.

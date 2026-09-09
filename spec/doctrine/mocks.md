@@ -220,8 +220,12 @@ concern outranks any per-screen work until it is answered. Once no project note 
 mark still refuses while any note on its own screens is unresolved; `approved` refuses while
 any note anywhere is unresolved. Zero open notes on a journey is that journey's approval mark.
 
-**Client review is the same page and the same notes — there is no review state.** The
-SIGNOFF step's printed text carries the fixed sign-off line: `Approval means "this is the
+**Client review is the same page and the same notes, served on the client route as the
+`CLIENT` state (ADR-0012).** A note's origin — walk, client or session — is set by the server
+from the route it arrived on, never from the typed name. A client-origin note captures its
+screen when raised; a fix is recorded only when the re-captured screen differs; only the client,
+or a dated waiver after seven days of silence, resolves it. The sign-off step's printed text
+carries the fixed sign-off line: `Approval means "this is the
 product I understand" — the written brief, not these screens, holds scope`.
 
 **Picks.** A pick stage of the flow — shapes, theme directions, per-surface variants — is

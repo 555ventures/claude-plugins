@@ -8,76 +8,47 @@ argument-hint: <spec path>
 `/spec:build <spec>` runs the build stage alone — a hardened spec to `implementing` and its
 build to `DONE`. `spec-build-driver.js` owns this stage's sequencing — admission, wave
 derivation, gate resolution, env preflight, red-check, the final gate, scope-reconcile, diff
-counts, and the ledger row — executing every deterministic step itself and printing exactly
-one step at a time for the judgments only this session can make. The spec is the contract; the
-gate is deterministic; surprises go to the user with the spec's own language. `/spec:run` is
-the loop that reaches this same driver with `--via loop` and, on `DONE`, continues straight
-into the review stage in the same invocation — see `spec/commands/run.md`. Orchestrator and
-workers: Sonnet.
+counts, and the ledger row — executing every deterministic step itself and printing exactly one
+step at a time for this session's judgments. `/spec:run` reaches this same driver with
+`--via loop` and, on `DONE`, continues into review — see `spec/commands/run.md`. Orchestrator
+and workers: Sonnet.
 
 **Setup:** run `spec-paths shared-for build` and read its output. Read the host's
-`.claude/spec.config.json` and its `pipelineRules` file. Either missing → STOP: run
-`/spec:init` first. Then run `spec-paths build-driver` once and keep the printed path — it is
-`{driver}` below.
+`.claude/spec.config.json` (pipeline rules load with that Read — path-scoped, never re-read).
+Either missing → STOP: run `/spec:init` first. Run `spec-paths build-driver` once, keeping the
+printed path as `{driver}`.
 
 ## Input
 
 `$ARGUMENTS` — path to a hardened spec (or one already `implementing`, to resume). **Worktree
-isolation is not build's concern** — run `/git:enter-worktree <spec>` first to build in
-isolation; the driver never creates, enters, or leaves a worktree and never writes
-`build_base`. The driver PREFERS the `diff_base` pin it stamps itself over that moving ref
-(`spec/scripts/lib/base-derivation.js`), so a `build_base: main` written after a build starts
-does not redirect the pre-image.
+isolation is not build's concern** — run `/git:enter-worktree <spec>` first; the driver never
+creates/enters/leaves a worktree, preferring its own stamped `diff_base` pin over `build_base`.
 
-**A design-landed component is not stub residue.** `/spec:design` commits real components before
-the build starts, and `/spec:build` wires them rather than rebuilding them, so a non-tests `CREATE`
-row whose file is already in the pre-image is legitimate. The `red-attributed` mark refuses only
-paths that DIFFER from the base (the predicate red-check itself applies); a `CREATE` row already
-tracked at base earns a WARN naming the row, never a refusal, and never a hand-edit of the File
-Plan.
+**A design-landed component is not stub residue.** `/spec:design` commits real components
+before the build starts, so a non-tests `CREATE` row already in the pre-image is legitimate —
+`red-attributed` refuses only paths that DIFFER from base; an already-tracked `CREATE` row
+earns a WARN naming it, never a refusal or a hand-edit of the File Plan.
 
 ## Build stage — the build driver owns this part of the state machine
 
-Loop until the driver prints `DONE`:
+Loop until the driver prints `DONE`: run `node {driver} <spec path>`; execute exactly the
+printed step; record it with `node {driver} <spec> --mark <mark> [args]`; re-run. The driver
+verifies the step's artifacts before advancing (a missing or malformed one is refused, exit 2,
+remedy named) and never trusts the sidecar alone, so it always re-derives the true step —
+never skip ahead of it or re-do a step it reports complete. An incident this session observes
+mid-build is recorded at any live step with `--mark incident --class <id>` (`class` from
+`fleet-reader --json`'s `.escapes.registry`); the mark never moves the state.
 
-1. Run `node {driver} <spec path>`. It inspects on-disk state (frontmatter, the
-   `<spec>.build/` sidecar, artifacts already on disk) and prints the **current step's
-   instructions** — running deterministic work itself (admission, the `hardened →
-   implementing` flip with the absent-only `diff_base` stamp, base derivation — the pin before
-   the ref, `diff_base` → `build_base`, validated as an ancestor of HEAD —, wave derivation from
-   `layerGroups`, gate resolution, env preflight, red-check, the final gate, scope-reconcile,
-   diff counts, the `stage:"build"` ledger row) — and printing only the steps that need this
-   session's judgment: test-author dispatch, red attribution, per-wave worker dispatch, host
-   integration, repair dispatch, and the checkpoint commit.
-2. Execute exactly that step. Record it with `node {driver} <spec> --mark <mark> [args]` once
-   the step is done — the driver verifies the step's artifacts before it advances; a missing
-   or malformed artifact is refused (exit 2) with the remedy named, and the state is left
-   unchanged.
-3. Re-run the driver. It never trusts the sidecar alone — a mark whose artifact vanished is
-   demanded again — so it always re-derives the true current step; never skip ahead of it or
-   re-do a step it reports complete.
-
-Re-entrancy is the driver's job: a fresh session, or this one resuming later, runs step 1 and
-lands exactly where the last run left off. A red-expected file that passed
-(`unsanctioned-green`), or a file whose carried AC mixes a promise with a pin (`mixed-pin` —
-split the AC, then re-run), or a red run that never observed a purity-clean pre-image
-(`redCheck: "skipped-resume"` on a no-sidecar resume) is diagnosed with the user before the
-next mark, never laundered past. A fourth `repair-applied` parks the run at the terminal
-`ESCALATE` state — the repair loop is capped at 3 rounds — and prints its two exits: edit the
-tree and delete `<spec>.build/gate-cap` to re-arm one more round, or delete the whole sidecar
-to restart cold. An incident this session observes mid-build (a test watchdog trip, a worker
-that pinned a CPU, an assumption that cost the session) is recorded with
-`node {driver} <spec> --mark incident --class <id> [--exit <n>]` at any live step — `class`
-from `fleet-reader --json`'s `.escapes.registry` (invent a kebab-case id only when none fits);
-the entry lands on the build row so the class counts toward core § Incident Policy's
-materiality. The mark never moves the state.
+A red-expected file that passed (`unsanctioned-green`), a carried AC mixing a promise with a
+pin (`mixed-pin` — split the AC, re-run), or a red run recorded `redCheck: "skipped-resume"`
+is diagnosed with the user before the next mark, never laundered past.
 
 ## Worker Contract — every dispatch this session makes
 
-Every worker prompt (test author, wave workers, repair dispatches) carries only: the spec
-path (workers Read Decisions, Contracts, UI, and their own File Plan rows themselves), the
-pipeline-rules path, and the worker's file list `{path, action}` — orchestrators pass paths,
-never raw file contents (core § Model Placement). Every worker applies this contract:
+Every worker prompt carries only the spec path, the pipeline-rules path, and the worker's file
+list — the driver prints these in each step body; orchestrators pass paths, never raw file
+contents (core § Model Placement). Workers Read Decisions, Contracts, UI, and their own File
+Plan rows themselves. Every worker applies this contract:
 
 - Apply the Decisions table verbatim — nobody overrides it; only this session adds entries,
   recording a user ruling.
@@ -87,19 +58,13 @@ never raw file contents (core § Model Placement). Every worker applies this con
   declared tool (core § Read-Only Surfaces).
 - Return `blocked` naming the assumption instead of improvising on a genuine fork or scope
   change.
-- Append forced-but-unblocking departures to the deviations sidecar
-  (`<spec path minus .md>.deviations.md`) as one `- ` bullet per departure, continuations
-  indented — flush-left prose is invisible to the ledger count and refused at review close.
-  The sidecar is per-spec and shared by every worker in the build and by review's own fold:
-  its first writer creates it under a spec-scoped header only (`# Deviations — <spec slug>`),
-  never a layer or worker name.
+- Append forced-but-unblocking departures to the deviations sidecar the driver's step prints
+  as one `- ` bullet per departure, continuations indented — flush-left prose is invisible to
+  the ledger count and refused at review close. Shared by every worker and review's own fold;
+  its first writer creates it under a spec-scoped header only (`# Deviations — <spec slug>`).
 
-**The WAVE step** names one worker per layer in the wave (`subagent_type` = the host
-`agentMap` value for that layer's kind, `model: sonnet`) — spawn one `Agent` per layer and
-**keep it**. **The REPAIR step** routes each failing file to the worker that owns its layer
-via `SendMessage`, spawning fresh only when that worker is gone (a resumed session); the
-counts (`--workers`, `--continued`/`--spawned`) land on the ledger row so continuation is
-measurable. The test author and the reviewer stay fresh-context dispatches.
+The test author and reviewer stay fresh-context dispatches; wave/repair workers are named and
+routed per the driver's own step (`--workers`/`--continued`/`--spawned` land on the ledger row).
 
 ## `blocked` returns
 
@@ -115,12 +80,10 @@ failure inside the File Plan routes to the owning worker per the Worker Contract
 ## Report
 
 Every stop — a judgment step this session must make, or the terminal `DONE` — prints one
-report (rationale: core § Console Output Style). Assemble the slots from the driver's state —
-`outcome`: the stop's one-line state (✅ at `DONE`, ⚠️ when the run needed the user);
-`bullets`: one line per escalation; `next`: the driver's captured
-`node "$(spec-paths spec-status)" --next`, printed verbatim at `DONE` — never a hand-applied
-command. Run `node "$(spec-paths report-render)" --slots <file>` and print its output
-verbatim.
+report (core § Console Output Style). Assemble slots from the driver's state — `outcome` (✅ at
+`DONE`, ⚠️ when the run needed the user), `bullets` (one line per escalation), `next` (the
+driver's captured `node "$(spec-paths spec-status)" --next`, printed verbatim at `DONE`, never
+hand-applied). Run `node "$(spec-paths report-render)" --slots <file>` and print it verbatim.
 
 ```report
 ✅ **DONE — hardened → implementing, gate green**
@@ -128,17 +91,10 @@ verbatim.
 Next: /spec:review specs/20260817/01-example.md
 ```
 
-If in a worktree, stay in it — this stage never relocates the session. Every ledger row lands
-in `.claude/spec-runs.jsonl`, appended by the driver at each stop — this session never
-hand-appends a line.
+If in a worktree, stay in it. Every ledger row lands in `.claude/spec-runs.jsonl`.
 
 ## Rules
 
-- **Workers never run git.** This session owns all git and checkpoint commits.
-- **Decisions table is authoritative** — nobody overrides it; only this session adds entries,
-  recording a user ruling.
-- **Workers never query MCPs** and read-only/generated surfaces change only via their
-  declared tools.
-- `AskUserQuestion` dismissed → STOP.
-- **The driver never dispatches agents, writes the Decisions table, renders a report, or runs
-  a git write** — those stay this session's, always.
+- **The Worker Contract above is binding** (git ban, MCP ban, Decisions-table authority) on
+  every dispatch. **The driver never dispatches agents, writes the Decisions table, renders a
+  report, or runs a git write** — those stay this session's, always.

@@ -17,10 +17,10 @@ change (frequent), not when the repo is re-profiled (rare), and the work is expe
 (live research + install-and-verify). So it is its own command, independently re-runnable.
 
 **Intended model: Opus.** **Setup:** run `spec-paths shared-for enforce` and read its output (shared
-invariants). Read the host's `.claude/spec.config.json` and its pipeline rules file
-(`pipelineRules`). If either is missing, STOP: tell the user to run `/spec:init` first. Also run
-`spec-paths wf-enforce` once and keep the printed absolute path — it is the `scriptPath` for
-the research workflow below.
+invariants). Read the host's `.claude/spec.config.json` (its pipeline rules load with that
+Read — path-scoped, never re-read). If either is missing, STOP: tell the user to run
+`/spec:init` first. Also run `spec-paths wf-enforce` once and keep the printed absolute path —
+it is the `scriptPath` for the research workflow below.
 
 ## Input
 

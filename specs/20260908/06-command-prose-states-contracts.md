@@ -1,6 +1,7 @@
 ---
 date: 2026-09-08
-status: hardened
+build_base: main
+status: implementing
 tier: standard
 area: doctrine-governance
 design: false
@@ -9,6 +10,7 @@ depends_on: []
 depended_on_by: []
 brief: n/a
 open_markers: 0
+diff_base: c7bb7245e8c29fa0faf7ecc2fca4cb2f7d8d7aea
 ---
 
 # Command prose states contracts — drivers print the steps
@@ -38,6 +40,7 @@ with every existing doctrine pin still green.
 | D9 | **The brief is edited, not rewritten.** `spec/doctrine/genesis.md` "The brief is the interface" paragraph is rewritten: after every `AskUserQuestion` round the session edits in place only the lines the answers changed (the answered `## Coverage` key, any new `## Open Dimensions` or `## Picks` line) and prints those changed lines — one line per key; it prints `## What I think you're building` + `## Coverage` in full exactly once, at the end of discovery, immediately before `--mark discovery-done`; the no-separate-sign-off sentence stays, anchored to that single closing render. `genesis-driver.js`'s DISCOVERY step, when `brief.md` exists, prints one additional line `Before marking: print ## What I think you're building and ## Coverage once, in full — the user reads this render as the brief.` (AC-20260908-06-5) | User ruling this session (Edit in place, print the diff). A brief is 3–6 KB rewritten and partly reprinted 5–12 times per interview; nothing deterministic depends on the reprint (no test, no driver read). |
 | D10 | **Not done here.** The `## Acceptance Criteria` lecture stays in `spec/templates/spec.md`: no real spec carries it (0 of 163) and only `/spec:plan` reads the template, so moving it into core would add ~50 lines to build/review/run loads. plan.md's own **ACs** bullet (lines 76–91) shrinks to two lines pointing at the template's comment for the grammar. The in-session mock-authorship rule (design.md § Design Atlas, ADR-0006) is kept by user ruling this session. `[no-ac: absence of change; plan.md's shrink is inside AC-1's plan budget]` | The premise "the lecture is copied into every spec" was measured false. |
 | D11 | `spec/.claude-plugin/plugin.json` bumped with `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph naming the driver-restatement cut, the Rules cap, the shared-for pins and the brief edit-in-place>"`. `[no-ac: manifest; tests/consistency/plugin-bump.test.js is the oracle]` | Host § Planning. |
+| D12 | **`design`'s budget is 510, not 490** (user ruling, 2026-09-09, recorded at build Phase 1). A4 measured design at 500 and D7 derived 490 from it; the true figure at `build_base` is 510 (own 217 + shared 293), and HEAD's pre-existing `RATCHET` already carried `design: 510`, granted by the recorded review-gate ruling in specs/20260907/09-atlas-index-and-note-navigation.md D13 — those ten lines are contracts, not procedure. design.md's File Plan authorizes only D3 and D4, which net to zero lines, so 490 is reachable only by cutting ~20 lines D13 protects and no File Plan row names. A4's escalation trigger fires as written: re-measure at build, never raise above the true ceiling. Every other budget lands as D7 specifies. (AC-20260908-06-1) | Restoring a ruled ceiling is not raising a budget; deleting prose to satisfy a number derived from a mismeasurement would be silent scope creep against a two-day-old ruling. |
 
 ## File Plan
 
@@ -94,9 +97,13 @@ once at the end.
 
 - **AC-20260908-06-1**: WHEN `tests/consistency/read-load.test.js` measures each command's own
   file plus its `shared-for` output (both as `split('\n').length`) THE SYSTEM SHALL report
-  build ≤ 300, review ≤ 340, run ≤ 310, mocks ≤ 325, replay ≤ 450, design ≤ 490, plan ≤ 328,
+  build ≤ 300, review ≤ 340, run ≤ 310, mocks ≤ 325, replay ≤ 450, design ≤ 510, plan ≤ 328,
   init ≤ 735 and every other command ≤ 500 (e.g. review.md today: `429` → after: `≤ 340`) →
   per-command budget tests in `tests/consistency/read-load.test.js`
+  - superseded at build Phase 1 by D12: this AC read `design ≤ 490`, derived from A4's
+    mismeasurement of 500. design's true figure at `build_base` is 510, which is also the
+    ceiling specs/20260907/09-atlas-index-and-note-navigation.md D13 granted by recorded
+    ruling; A4's escalation clause fires and the literal is corrected, never the prose cut.
 - **AC-20260908-06-2**: WHEN `spec-paths prose-cap --section Rules --cap 8` runs over every
   `spec/commands/*.md` THE SYSTEM SHALL exit 0 for every file that has a `## Rules` heading
   and treat a file with none (exit 2, stderr `no "## " heading containing`) as passing (e.g.
@@ -138,6 +145,11 @@ once at the end.
   362, replay 474, design 500, plan 335, init 735. **Executed:** measured through
   `spec-paths shared-for` this session. — **if false:** D7's budgets are re-measured at build
   Phase 1 and lowered to (today − the audit's restated line count + 10), never raised.
+  **FALSIFIED at build Phase 1 for `design` only:** its true total is 510 (own 217 + shared
+  293), not 500 — the figure was already stale at lock, HEAD's `RATCHET` carrying `design: 510`
+  from specs/20260907/09 D13. The clause fires: re-measured (510), restated count 0 (design is
+  not a D1-audited file), so the budget is the true ceiling and no prose is cut. Every other
+  command's total measured as recorded. See D12.
 - A5: no script reads a command file's prose (the drivers print their own text; only tests
   pin literals). — **if false:** STOP, ask the user — a script-read literal is a contract.
 

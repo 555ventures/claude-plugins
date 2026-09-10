@@ -142,15 +142,17 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    over the brief's mocks — the states-presence check (spec/doctrine/mocks.md § Mocks:
    Authoring Rules). Then run `node "$(spec-paths render-gate)" --mocks <the brief's sketch
    mocks>` (spec/doctrine/design.md § Design Render Gate). Then dispatch `Agent {subagent_type:
-   'design-critic'}` once — the brief path, the mock paths, and `design/tokens.css`, never file
-   contents (shared § Model Placement) — read-only, fresh context; it returns findings
-   `{screen, state, blindspot, finding, severity}` and edits nothing. Record every returned
-   finding as a page note: `node {driver} notes add --scope mock --screen <label> [--state <s>]
-   --by critic --reason <blindspot> --text "<finding>"`; an empty findings list is recorded as
-   nothing — the critic found no real gap. Fix what the session can (step 6's triage) and leave
-   the rest open for the user — the look stop below is where any note still open surfaces to
-   them. This pass runs on every exit, never skipped for a small brief, and never run by the
-   session standing in for the critic — the fresh-context dispatch is the whole point (Rules).
+   'design-critic'}` once — the brief's `surfaces` **in declared order** as the journey, that
+   journey's mock paths, and `design/tokens.css`, never file contents (shared § Model
+   Placement) — read-only, fresh context; it walks the journey and returns findings
+   `{screen, state, break, finding, severity}`, flow breaks only, and edits nothing. Record every
+   returned finding as a page note: `node {driver} notes add --scope mock --screen <label>
+   --state <s> --kind walk --reason <break> --by walk-critic --text "<finding>"`; an empty
+   findings list is recorded as nothing — the critic found no break. Fix what the session can
+   (step 6's triage) and leave the rest open for the user — the look stop below is where any note
+   still open surfaces to them. This pass runs on every exit, never skipped for a small brief,
+   and never run by the session standing in for the critic — the fresh-context dispatch is the
+   whole point (Rules).
 8. **Exit — ratification.** When the user says done (or asks "where are we"): produce the
    **coherence readout** — one line per declared surface: what the mock shows vs what
    Scope/`surfaces` claim, plus any unresolved architecture flags. Fix what the readout catches

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // mocks-driver.js [--root <dir>] [--state]
 // mocks-driver.js --root <dir> --mark <mark> [--journey <j>] [--shape <k>]
-// mocks-driver.js --root <dir> --reopen journey:<j>|shapes|kit
+// mocks-driver.js --root <dir> --reopen journey:<j>|walk:<j>|shapes|kit
 // mocks-driver.js --root <dir> ledger (add|set|catch|check|counts|ask) [flags]
 // mocks-driver.js --root <dir> ledger add --id <i> --step <s> --kind <k> --claim <c> [--tag <t>]
 //                              [--status <st>] [--rejected <r>] [--dependents <d>] [--note <n>]
@@ -10,6 +10,8 @@
 // mocks-driver.js --root <dir> notes open
 // mocks-driver.js --root <dir> notes add --scope mock|project [--screen <label>] [--state <s>]
 //                              --by <name> [--reason <r>] --text "<t>"
+// mocks-driver.js --root <dir> notes add --scope mock --screen <label> --state <s> --kind walk
+//                              --reason <break> --by <name> --text "<t>"
 // mocks-driver.js --root <dir> notes address --id <id> --change "<what changed>" [--ledger <rowId>]
 // mocks-driver.js --root <dir> notes reply --id <id> --text "<question back>"
 // mocks-driver.js --root <dir> look <label> [--state <s>] [--out <png>] [--port <n>]
@@ -32,12 +34,12 @@
 // consumes the stop, touching no mocks-state field at all (D5) — there is no `--reopen theme`
 // equivalent on this path. specs/20260907/07-mocks-retires-theme.md retires `/spec:mocks`'s own
 // THEME (direction-composed, theme-picked, `--reopen theme`, status.directions/status.theme/
-// status.marks.themePicked): this driver's state machine now ends WIREFRAMES -> SIGNOFF ->
+// status.marks.themePicked): this driver's state machine now ends WIREFRAMES -> WALK -> SIGNOFF ->
 // APPROVED, and the theme subcommand family above is the only theme producer left.
 //
 // WHY: specs/20260902/07-mocks-command-driver.md — `/spec:mocks` is the standalone design
-// stage; this driver derives SEED -> SHAPES -> KIT -> WIREFRAMES -> SIGNOFF -> APPROVED on
-// every invocation from `design/mocks/status.json` plus the artifacts actually on disk (a
+// stage; this driver derives SEED -> SHAPES -> KIT -> WIREFRAMES -> WALK -> SIGNOFF -> APPROVED
+// on every invocation from `design/mocks/status.json` plus the artifacts actually on disk (a
 // recorded mark whose artifact vanished is demanded again), prints exactly one step, gates every
 // advancing mark on the provenance ledger (spec 06, lib/mocks-ledger.js), and checkpoints every
 // accepted mark so a run survives any number of `/clear`s (the genesis driver's discipline
@@ -61,8 +63,8 @@
 // `stop decide` passes an id + verdict straight through to the same script (the chat channel for
 // a decision, `--by chat`). There is no per-machine hub — each project serves its own look stops
 // (specs/20260905/02's design-review-hub-and-look-stops.md D6-D8 established the delegation
-// shape; spec 04 retargets it at design-atlas.js). The four gated marks (shape-picked,
-// journey-approved, theme-picked, approved) read their verdict from the newest non-superseded
+// shape; spec 04 retargets it at design-atlas.js). The three gated marks (shape-picked,
+// journey-approved, approved) read their verdict from the newest non-superseded
 // look stop for the mark's key (lib/mocks-picks.js, spec 01) instead of trusting the session's
 // own judgment — a session can never mark past a look. A pick mark's `--shape`/`--direction` flag
 // is optional (the page's pick is the value); a given flag that disagrees with the pick refuses.
@@ -79,13 +81,19 @@
 // the "draw journey <j>" step's printed Then: block carries the same states/data-no-state prompt.
 //
 // specs/20260906/06-sketch-high-fidelity-and-critique.md D3/D4: `notes add` is the one CLI writer
-// of a plain (non-question) note — /spec:sketch's fixed critique step routes a design-critic
-// finding through it (`--by critic --reason <blindspot>`), and a client message on the page routes
-// through the same verb with a different `--by`. It refuses `--scope mock` with no `--screen`,
-// `--kind`/`--ledger-id` present at all (naming `ledger add --screen` as the remedy — questions are
-// session-authored, never client- or critic-authored), and an unknown `--reason` (naming the whole
-// eight-value enum via lib/mocks-notes.js's own validation); `notes open` renders a `by: "critic"`
-// note's reason as `[critic: <blindspot>]` alongside its existing status tag.
+// of a plain (non-question) note — a client message on the page routes through it with its own
+// `--by`. It refuses `--scope mock` with no `--screen`, and an unknown `--reason` (naming the
+// eight-value plain enum via lib/mocks-notes.js's own validation); `notes open` renders a
+// `by: "critic"` note's reason as `[critic: <reason>]` alongside its existing status tag.
+// specs/20260907/08-walk-critic.md D4 narrows `--kind`/`--ledger-id`: `--kind` now accepts only
+// `walk` (any other value, `question` included, refuses naming `ledger add --screen` as the
+// remedy — questions are session-authored, never client- or critic-authored); `--ledger-id` stays
+// refused outright, walk or not. A walk add additionally requires `--screen`/`--state`/`--reason`;
+// the screen must have a `design/mocks/<label>.html` on disk and the state must be `default` or a
+// `data-state-btn="<s>"` the mock itself declares, else it is refused naming the states the screen
+// does declare — the journey itself is never typed or stored (groupOpen() derives it from
+// seed.md). `notes open` renders a walk finding's reason as its own `[walk: <reason>]` tag,
+// beside (never instead of) the status tag.
 //
 // What this deliberately does NOT do:
 //   - author the seed, canon, screens, theme directions, or the sign-off itself — those stay
@@ -143,7 +151,7 @@ const path = require('path')
 const { spawnSync } = require('child_process')
 const { runChild, writeOut } = require('./lib/driver-io')
 const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, setStatus } = require('./lib/mocks-ledger')
-const { readNotes, writeNotes, addNote, addressNote, replyNote, groupOpen, unresolvedFor } = require('./lib/mocks-notes')
+const { readNotes, writeNotes, addNote, addressNote, replyNote, groupOpen, unresolvedFor, WALK_REASONS } = require('./lib/mocks-notes')
 const picksLib = require('./lib/mocks-picks.js')
 const shellLib = require('./lib/shell-region')
 const { stylesheetTargets, linksWireRegister } = require('./lib/wire-register')
@@ -499,10 +507,14 @@ function noteTag(n) {
   return n.status
 }
 // specs/20260906/06 D4: a critic note's reason renders as its own "[critic: <blindspot>]" tag,
-// alongside (never instead of) the existing status tag.
+// alongside (never instead of) the existing status tag. specs/20260907/08-walk-critic.md D5: a
+// walk finding renders its own "[walk: <reason>]" tag the same way, beside (never instead of)
+// the status tag — the two tags are mutually exclusive on `kind`, never both, so a walk note
+// authored `--by critic` still renders exactly one reason tag, not the same reason twice.
 function noteLine(n, indent) {
   let line = indent + n.id + ' [' + noteTag(n) + ']'
-  if (n.by === 'critic' && n.reason) line += ' [critic: ' + n.reason + ']'
+  if (n.kind === 'walk' && n.reason) line += ' [walk: ' + n.reason + ']'
+  else if (n.by === 'critic' && n.reason) line += ' [critic: ' + n.reason + ']'
   line += ' ' + n.by + ' · ' + n.text
   if (n.status === 'addressed' && n.addressed && n.addressed.change) line += '   ↳ changed: ' + n.addressed.change
   return line
@@ -588,16 +600,48 @@ function cmdNotes(sub, args) {
   const narg = (name) => flagArg(args, name)
   if (sub === 'open') { cmdNotesOpen(); return }
   if (sub === 'add') {
-    if (narg('--kind') != null || narg('--ledger-id') != null) {
-      die('notes add: --kind/--ledger-id are not accepted here — questions come from `ledger add --screen`')
+    // specs/20260907/08-walk-critic.md D4: the refusal narrows to "--kind accepts only walk" —
+    // `--ledger-id` stays refused outright, and any `--kind` other than "walk" (question included)
+    // refuses the same way, naming `ledger add --screen` as the one remedy for a question.
+    const kindArg = narg('--kind')
+    if (narg('--ledger-id') != null || (kindArg != null && kindArg !== 'walk')) {
+      die('notes add: --kind accepts only "walk" — questions come from `ledger add --screen`')
     }
     if (!narg('--by')) die('notes add: --by <name> is required')
+    const screenArg = narg('--screen')
+    const stateArg = narg('--state')
+    const reasonArg = narg('--reason')
+    if (kindArg === 'walk') {
+      // D4: the journey is never typed and never stored — groupOpen() already derives it from
+      // seed.md. The two halves a machine CAN check (screen on disk, state declared) are checked
+      // against disk here; the third (--reason) is left to addNote's own WALK_REASONS validation.
+      if (!screenArg) die('notes add: --screen <label> is required for --kind walk')
+      const file = mockFile(screenArg)
+      if (!fs.existsSync(file)) die('notes add: design/mocks/' + screenArg + '.html does not exist')
+      // AC-20260907-08-6: resolve the screen's declared states BEFORE checking --state at all, so
+      // a missing --state refuses naming the same list the undeclared-state branch below prints —
+      // never a bare "is required" with no remedy.
+      const html = fs.readFileSync(file, 'utf8')
+      const declared = [...new Set([...html.matchAll(/data-state-btn\s*=\s*"([^"]+)"/g)].map((mm) => mm[1]))]
+      const allowed = ['default', ...declared]
+      if (!stateArg) {
+        die('notes add: --state <s> is required for --kind walk — use --state <one of: ' + allowed.join(', ') + '>')
+      }
+      if (!allowed.includes(stateArg)) {
+        die('notes add: state "' + stateArg + '" is not declared by design/mocks/' + screenArg +
+          '.html — use --state <one of: ' + allowed.join(', ') + '>')
+      }
+      if (!reasonArg) {
+        die('notes add: --reason <break> is required for --kind walk — use --reason <one of: ' + WALK_REASONS.join('|') + '>')
+      }
+    }
     const notes = notesOrEmpty()
     let result
     try {
       result = addNote(notes, {
-        scope: narg('--scope'), screen: narg('--screen'), state: narg('--state'),
-        by: narg('--by'), reason: narg('--reason'), text: narg('--text'),
+        scope: narg('--scope'), screen: screenArg, state: stateArg,
+        by: narg('--by'), reason: reasonArg, text: narg('--text'),
+        kind: kindArg === 'walk' ? 'walk' : undefined,
       })
     } catch (e) { die('notes add: ' + e.message) }
     writeNotes(root, result.notes)
@@ -785,16 +829,28 @@ function allJourneysApproved() {
   for (const [jn] of journeys) { const st = status.journeys[jn]; if (!st || !st.approved) return false }
   return true
 }
-// D1: SEED -> SHAPES -> KIT (`!marks.kitSignedOff`) -> WIREFRAMES -> SIGNOFF (`!marks.approved`)
-// -> APPROVED — SKIN, REVIEW and THEME are retired; a root with any of their legacy fields still
-// carries them alongside without effect. specs/20260907/04-kit-canon-family.md D1: KIT sits
-// between SHAPES and WIREFRAMES, gated on one mark exactly like every other step in this chain —
-// never on design/kit/ existing on disk, so a half-authored kit never silently advances the state.
+// specs/20260907/08-walk-critic.md D1: mirrors allJourneysApproved byte-for-byte in shape —
+// false on an empty seed, false while any declared journey lacks journeys[j].walked.
+function allJourneysWalked() {
+  const journeys = currentSeedJourneys()
+  if (journeys.size === 0) return false
+  for (const [jn] of journeys) { const st = status.journeys[jn]; if (!st || !st.walked) return false }
+  return true
+}
+// D1: SEED -> SHAPES -> KIT (`!marks.kitSignedOff`) -> WIREFRAMES -> WALK -> SIGNOFF
+// (`!marks.approved`) -> APPROVED — SKIN, REVIEW and THEME are retired; a root with any of their
+// legacy fields still carries them alongside without effect. specs/20260907/04-kit-canon-family.md
+// D1: KIT sits between SHAPES and WIREFRAMES, gated on one mark exactly like every other step in
+// this chain — never on design/kit/ existing on disk, so a half-authored kit never silently
+// advances the state. specs/20260907/08-walk-critic.md D1: WALK sits between WIREFRAMES and
+// SIGNOFF, gated the same monotone way — a journey declared after the others were walked reopens
+// WALK, never SIGNOFF, so nothing written after sign-off can drag the chain backwards.
 function deriveState() {
   if (!status.marks.seedDone) return 'SEED'
   if (!shapeValid()) return 'SHAPES'
   if (!status.marks.kitSignedOff) return 'KIT'
   if (!(status.marks.canonWritten && allJourneysApproved())) return 'WIREFRAMES'
+  if (!allJourneysWalked()) return 'WALK'
   if (!status.marks.approved) return 'SIGNOFF'
   return 'APPROVED'
 }
@@ -957,7 +1013,7 @@ function handleCanonWritten() {
 }
 
 function ensureJourneyRecord(j) {
-  status.journeys[j] = Object.assign({ drawn: null, approved: null }, status.journeys[j] || {})
+  status.journeys[j] = Object.assign({ drawn: null, approved: null, walked: null }, status.journeys[j] || {})
   return status.journeys[j]
 }
 
@@ -1037,6 +1093,37 @@ function handleJourneyApproved(journeyName) {
   const stop = requireStopDecision('journey-approved:' + journeyName, 'stop open journey:' + journeyName)
   st.approved = nowIso()
   consumeStopAndSave(stop.id)
+}
+
+// specs/20260907/08-walk-critic.md D2: an OPEN (not addressed, not resolved) kind:"walk" note
+// anchored to one of `labels` — deliberately narrower than lib/mocks-notes.js's own
+// unresolvedFor (which also counts "addressed" as unresolved for the terminal `approved` gate):
+// `notes address` is exactly how the session closes a walk finding for THIS gate, so an addressed
+// finding must stop blocking journey-walked even though it still blocks approved.
+function openWalkFindingsFor(labels) {
+  const set = new Set(labels || [])
+  return notesOrEmpty().filter((n) => n.kind === 'walk' && n.status === 'open' && set.has(n.screen))
+}
+
+// D2: --mark journey-walked --journey <j> — refuses with no --journey, an undeclared journey, an
+// unapproved journey (naming journey-approved --journey <j>), or an open walk finding anchored to
+// one of the journey's declared labels (naming each id and the notes-address remedy). Runs no
+// ledger gate and no render gate (Rationale: "walking finds questions, it does not resolve them",
+// the same posture journey-drawn and direction-composed already have).
+function handleJourneyWalked(journeyName) {
+  if (!journeyName) die('--journey <name> is required')
+  const journeys = currentSeedJourneys()
+  const j = journeys.get(journeyName)
+  if (!j) die('journey "' + journeyName + '" is not declared in design/mocks/seed.md')
+  const st = status.journeys[journeyName]
+  if (!st || !st.approved) die('journey "' + journeyName + '" is not approved — mark journey-approved --journey ' + journeyName + ' first')
+  const open = openWalkFindingsFor(j.labels)
+  if (open.length) {
+    die('walk finding(s) still open on ' + journeyName + ': ' + open.map((n) => n.id).join(', ') +
+      ' — record the fix with `notes address --id <id> --change "<what changed>"`')
+  }
+  ensureJourneyRecord(journeyName).walked = nowIso()
+  saveStatus()
 }
 
 // ---------------------------------------------------------------------------
@@ -1255,8 +1342,9 @@ function doMark(mark, opts) {
     case 'canon-written': handleCanonWritten(); break
     case 'journey-drawn': handleJourneyDrawn(opts.journey); break
     case 'journey-approved': handleJourneyApproved(opts.journey); break
+    case 'journey-walked': handleJourneyWalked(opts.journey); break
     case 'approved': handleApproved(); break
-    default: die('unknown mark "' + mark + '" — one of: seed-done, shape-picked, canon-written, kit-signed, journey-drawn, journey-approved, approved')
+    default: die('unknown mark "' + mark + '" — one of: seed-done, shape-picked, canon-written, kit-signed, journey-drawn, journey-approved, journey-walked, approved')
   }
   const nextState = deriveState()
   printAcceptedTail(prevState, nextState)
@@ -1269,13 +1357,29 @@ function doMark(mark, opts) {
 function doReopen(target) {
   const at = nowIso()
   let m
-  if ((m = /^journey:(.+)$/.exec(target))) {
+  // specs/20260907/08-walk-critic.md D6: `--reopen walk:<j>` — clears that journey's `walked`,
+  // `marks.approved` and `decider`, leaves `journeys[j].approved` and every other journey
+  // untouched (a redraw is what invalidates approval; a walk finding alone never does).
+  if ((m = /^walk:(.+)$/.exec(target))) {
+    const j = m[1]
+    ensureJourneyRecord(j).walked = null
+    status.marks.approved = null
+    status.decider = null
+    const invalidated = ['walk:' + j, 'approved(all)']
+    status.reopens.push({ at, target: 'walk:' + j, invalidated })
+    saveStatus()
+    writeOut(1, '↩ reopened walk:' + j + ' — invalidated: ' + invalidated.join(', ') + '\n')
+    process.exit(0)
+  } else if ((m = /^journey:(.+)$/.exec(target))) {
     const j = m[1]
     const st = ensureJourneyRecord(j)
     st.approved = null
+    // D6: a redrawn journey is a different journey to walk — --reopen journey:<j> cascades into
+    // the walk exactly as it already cascades into approved.
+    st.walked = null
     status.marks.approved = null
     status.decider = null
-    const invalidated = ['approved', 'approved(all)']
+    const invalidated = ['approved', 'walk:' + j, 'approved(all)']
     status.reopens.push({ at, target: 'journey:' + j, invalidated })
     saveStatus()
     writeOut(1, '↩ reopened journey:' + j + ' — invalidated: ' + invalidated.join(', ') + '\n')
@@ -1291,10 +1395,13 @@ function doReopen(target) {
     for (const j of Object.keys(status.journeys || {})) {
       const st = status.journeys[j]
       st.drawn = null; st.approved = null
+      // specs/20260907/08-walk-critic.md D6: `--reopen shapes` additionally clears every
+      // journey's `walked` — a re-picked shape invalidates whatever every screen was walked as.
+      st.walked = null
     }
     status.decider = null
     status.marks.approved = null
-    const invalidated = ['shape', 'canon', 'kit', 'journeys(all)', 'approved(all)']
+    const invalidated = ['shape', 'canon', 'kit', 'journeys(all)', 'walk(all)', 'approved(all)']
     status.reopens.push({ at, target: 'shapes', invalidated })
     saveStatus()
     writeOut(1, '↩ reopened shapes — invalidated: ' + invalidated.join(', ') + '\n')
@@ -1309,7 +1416,7 @@ function doReopen(target) {
     writeOut(1, '↩ reopened kit — invalidated: ' + invalidated.join(', ') + '\n')
     process.exit(0)
   } else {
-    die('--reopen must be journey:<j>, shapes, or kit')
+    die('--reopen must be journey:<j>, walk:<j>, shapes, or kit')
   }
 }
 
@@ -1623,6 +1730,34 @@ function printWireframesStep() {
   }
 }
 
+// specs/20260907/08-walk-critic.md D7: WALK prints, for the first journey with no `walked`, the
+// dispatch/notes-add/mark trio in order — a fresh design-critic dispatch, one `notes add --kind
+// walk` per finding, then the mark itself. Deliberately no skill line (WALK is not in
+// AUTHORING_STATES — it draws nothing) and doBareStep's look-probe precondition below gains no
+// WALK disjunct — WALK opens no look stop and serves no page, so a machine with no browser must
+// still be able to walk a journey.
+function walkedCount(journeys) {
+  let n = 0
+  for (const [jn] of journeys) { const st = status.journeys[jn]; if (st && st.walked) n++ }
+  return n
+}
+function printWalkStep() {
+  const journeys = currentSeedJourneys()
+  for (const [jn, j] of journeys) {
+    const st = status.journeys[jn]
+    if (st && st.walked) continue
+    const openCount = openWalkFindingsFor(j.labels).length
+    printStepBlock('WALK', 'walk journey ' + jn + ' — one fresh critic, flow breaks only',
+      ['design/mocks/seed.md (## Journeys › ' + jn + ')', ...j.labels.map((l) => 'design/mocks/' + l + '.html')],
+      'Mocks: State Machine',
+      'walked: ' + walkedCount(journeys) + '/' + journeys.size + ' · open walk findings on ' + jn + ': ' + openCount,
+      ["dispatch Agent {subagent_type: 'design-critic'} once for journey " + jn + ' — its mock paths and design/mocks/seed.md, never file contents',
+        'record each finding: ' + driverCmd('notes add --scope mock --screen <label> --state <state> --kind walk --reason <break> --by walk-critic --text "<finding>"'),
+        driverCmd('--mark journey-walked --journey ' + jn)])
+    return
+  }
+}
+
 // D6: SIGNOFF is one look over the atlas index — the terminal `approved` mark is the one
 // sign-off, replacing REVIEW one-for-one minus the decider ceremony (the decider now comes from
 // the sign-off stop's own "by", set by handleApproved). Unlike every other look-gated step, D6
@@ -1652,6 +1787,7 @@ function doBareStep() {
   if (state === 'SHAPES') return printShapesStep()
   if (state === 'KIT') return printKitStep()
   if (state === 'WIREFRAMES') return printWireframesStep()
+  if (state === 'WALK') return printWalkStep()
   if (state === 'SIGNOFF') return printSignoffStep()
   return printApprovedTerminal()
 }

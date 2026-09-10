@@ -9,7 +9,7 @@ const {
   bare, mark, stateOf, ledgerCmd,
   statusJson, statusPath,
   decideLook,
-  advanceToCanonWritten, advanceToJourneyApproved, advanceToApproved,
+  advanceToCanonWritten, advanceToJourneyApproved, advanceToJourneyWalked, advanceToApproved,
 } = require('./mocks-driver-fixtures')
 
 // specs/20260906/05-gray-states-on-every-wireframe.md D7 (per-file 45 s budget guard,
@@ -33,18 +33,27 @@ const {
 // ---------------------------------------------------------------------------
 // AC-20260907-07-1 (retag of AC-20260906-02-1)
 // ---------------------------------------------------------------------------
-test('AC-20260907-07-1 (retag of AC-20260906-02-1): state derives SIGNOFF directly once canonWritten + kitSignedOff + every journey approved with no status.theme and no design/tokens.css anywhere, never THEME; APPROVED once marks.approved is additionally set; a legacy status.json additionally carrying marks.reviewOpened/decider/journeys[j].skinned/.reviewed derives the identical state, and the next accepted mark writes a status.json with none of reviewOpened/skinned/reviewed present', () => {
+test('AC-20260907-07-1 / AC-20260907-08-1 (retag of AC-20260906-02-1): state derives WALK directly once canonWritten + kitSignedOff + every journey approved but not yet walked, with no status.theme and no design/tokens.css anywhere, never THEME; SIGNOFF once the journey is walked; APPROVED once marks.approved is additionally set; a legacy status.json additionally carrying marks.reviewOpened/decider/journeys[j].skinned/.reviewed derives the identical state, and the next accepted mark writes a status.json with none of reviewOpened/skinned/reviewed present', () => {
   const dir = tmpdir('mocks-driver')
-  advanceToJourneyApproved(dir) // canonWritten + kitSignedOff (via the chain) + every declared journey approved
+  advanceToJourneyApproved(dir) // canonWritten + kitSignedOff (via the chain) + every declared journey approved, not yet walked
 
   assert.strictEqual(fs.existsSync(path.join(dir, 'design/tokens.css')), false,
     'test setup requires no design/tokens.css to exist yet, or the "SIGNOFF with no theme" assertion below is vacuous')
   assert.strictEqual('theme' in statusJson(dir), false,
     'test setup requires status.json to carry no top-level "theme" key at all, or the "SIGNOFF with no theme" assertion below is vacuous: ' + JSON.stringify(statusJson(dir)))
 
+  // AC-20260907-08-1/D1: WALK now sits between WIREFRAMES and SIGNOFF — every declared journey
+  // approved but none carrying `walked` must derive WALK, not SIGNOFF directly.
+  const beforeWalk = stateOf(dir)
+  assert.strictEqual(beforeWalk.stdout.trim(), 'WALK',
+    'AC-20260907-08-1: canonWritten + kitSignedOff + every journey approved but not yet walked must derive WALK: ' + beforeWalk.stdout + beforeWalk.stderr)
+  assert.ok(!beforeWalk.stdout.includes('THEME'),
+    'AC-20260907-07-1: THEME must never be printed once the theme step is retired: ' + beforeWalk.stdout)
+
+  advanceToJourneyWalked(dir)
   const s = stateOf(dir)
   assert.strictEqual(s.stdout.trim(), 'SIGNOFF',
-    'AC-20260907-07-1: canonWritten + kitSignedOff + every journey approved with no theme anywhere must derive SIGNOFF directly: ' + s.stdout + s.stderr)
+    'AC-20260907-08-1: once every declared journey carries walked and marks.approved is unset, state must derive SIGNOFF: ' + s.stdout + s.stderr)
   assert.ok(!s.stdout.includes('THEME'),
     'AC-20260907-07-1: THEME must never be printed once the theme step is retired: ' + s.stdout)
 
@@ -73,23 +82,25 @@ test('AC-20260907-07-1 (retag of AC-20260906-02-1): state derives SIGNOFF direct
 // ---------------------------------------------------------------------------
 // AC-20260907-07-2
 // ---------------------------------------------------------------------------
-test('AC-20260907-07-2: --mark direction-composed --direction quiet and --mark theme-picked each exit 2 naming "unknown mark" and the exact live seven-mark list, with neither retired name in that list', () => {
+// Repair round (specs/20260907/08-walk-critic.md D2/AC-20260907-08-3): the exact live-mark list
+// gains "journey-walked" in chain position, directly after "journey-approved".
+test('AC-20260907-07-2: --mark direction-composed --direction quiet and --mark theme-picked each exit 2 naming "unknown mark" and the exact live eight-mark list, with neither retired name in that list', () => {
   const dir = tmpdir('mocks-driver')
   advanceToJourneyApproved(dir)
-  const LIVE_LIST = 'seed-done, shape-picked, canon-written, kit-signed, journey-drawn, journey-approved, approved'
+  const LIVE_LIST = 'seed-done, shape-picked, canon-written, kit-signed, journey-drawn, journey-approved, journey-walked, approved'
   const listRe = new RegExp('one of: ' + LIVE_LIST.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$')
 
   const dc = mark(dir, 'direction-composed', ['--direction', 'quiet'])
   assert.strictEqual(dc.status, 2, 'D3: --mark direction-composed must exit 2 — the mark is retired outright: ' + dc.stdout + dc.stderr)
   assert.match(dc.stderr + dc.stdout, /unknown mark/, 'the refusal must say "unknown mark": ' + dc.stdout + dc.stderr)
   assert.match((dc.stderr + dc.stdout).trim(), listRe,
-    'D3: the refusal must end with the exact seven-mark live list (canon-written before kit-signed), naming neither direction-composed nor theme-picked: ' + JSON.stringify({ stdout: dc.stdout, stderr: dc.stderr }))
+    'D3: the refusal must end with the exact eight-mark live list (canon-written before kit-signed, journey-walked directly after journey-approved per specs/20260907/08-walk-critic.md D2), naming neither direction-composed nor theme-picked: ' + JSON.stringify({ stdout: dc.stdout, stderr: dc.stderr }))
 
   const tp = mark(dir, 'theme-picked')
   assert.strictEqual(tp.status, 2, 'D3: --mark theme-picked must exit 2 — the mark is retired outright: ' + tp.stdout + tp.stderr)
   assert.match(tp.stderr + tp.stdout, /unknown mark/, 'the refusal must say "unknown mark": ' + tp.stdout + tp.stderr)
   assert.match((tp.stderr + tp.stdout).trim(), listRe,
-    'D3: the refusal must end with the exact seven-mark live list (canon-written before kit-signed), naming neither direction-composed nor theme-picked: ' + JSON.stringify({ stdout: tp.stdout, stderr: tp.stderr }))
+    'D3: the refusal must end with the exact eight-mark live list (canon-written before kit-signed, journey-walked directly after journey-approved per specs/20260907/08-walk-critic.md D2), naming neither direction-composed nor theme-picked: ' + JSON.stringify({ stdout: tp.stdout, stderr: tp.stderr }))
 })
 
 // ---------------------------------------------------------------------------

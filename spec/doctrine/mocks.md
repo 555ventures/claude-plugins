@@ -19,7 +19,7 @@ identical.
 note`:
 
 - `id` — `^[A-Z]+\d+[a-z]?$`, unique across the table.
-- `step` — `^[A-Z][A-Z-]*$` (`SEED`, `SHAPES`, `KIT`, `WIREFRAMES`, `SKETCH`, `SIGNOFF`,
+- `step` — `^[A-Z][A-Z-]*$` (`SEED`, `SHAPES`, `KIT`, `WIREFRAMES`, `WALK`, `SKETCH`, `SIGNOFF`,
   `GENESIS`, …); rows written under retired step names (`SKIN`, `REVIEW`, `THEME`) still match
   the pattern and keep parsing.
 - `kind` — one fixed word: `product` or `process`.
@@ -65,11 +65,13 @@ removed) the derivation lands earlier and demands the mark again. The order is f
 (the 13 facts, journeys, dense screen, research brief) → **SHAPES** (one shape kebab picked
 from 2–3 candidates) → **KIT** (the shared-primitive canon named and signed off, before any
 screen) → **WIREFRAMES** (canon written, then every seed journey drawn and
-approved) → **SIGNOFF** (one look over the
+approved) → **WALK** (one fresh-context critic walks each declared journey once, flow breaks
+only) → **SIGNOFF** (one look over the
 whole approved set) → **APPROVED** (terminal). WIREFRAMES carries a sub-mark per
 journey so no single conversation ever has to hold more than one journey's state —
 a seed journey added mid-WIREFRAMES reappears as `0/N drawn` and reopens the state rather than
-silently completing.
+silently completing; a journey added after WALK already ran on the others reopens WALK the same
+way.
 
 **The gate rides every advancing mark.** `seed-done`, `shape-picked`, `kit-signed`,
 `canon-written`, `journey-approved`, and `approved` each
@@ -78,14 +80,17 @@ gate refuses (exit 2) naming the offending rows and the remedy (`ledger set --id
 confirmed --tag said-by-user`, or `--status overridden`). `journey-approved` and `approved`
 additionally run the rendered adaptation gate (§ Design Render Gate, `render-gate --mocks`),
 falling back to the plugin's own capture when the host declares none, and refuse the mark on
-any finding or on a machine with no browser. `journey-drawn`
-runs no gate — drawing is how open questions get found, not
+any finding or on a machine with no browser. `journey-drawn` and `journey-walked`
+run no gate — drawing and walking are how open questions get found, not
 resolved. Process rows never surface as something to resolve; they are counted, not asked.
 
 **Reopening never deletes.** `--reopen journey:<j>` clears that journey's `approved` mark
-(and the terminal `approved`); `--reopen shapes` clears the shape pick and every downstream
-mark; `--reopen kit` clears the kit sign-off and `approved`, never a journey's own approval.
-Every reopen appends one row to
+(and the terminal `approved`), and additionally clears that journey's `walked`, naming
+`walk:<j>` among what it invalidated; `--reopen walk:<j>` clears that journey's `walked`, the
+terminal `approved`, and the sign-off decider, leaving every journey's own `approved` untouched;
+`--reopen shapes` clears the shape pick and every downstream mark, including every journey's
+`walked`; `--reopen kit` clears the kit sign-off and `approved`, never a journey's own approval
+or its `walked`. Every reopen appends one row to
 `status.reopens` naming what it invalidated and leaves every file on disk byte-identical — the
 next derivation lands on the earliest state whose marks are now missing.
 
@@ -227,6 +232,16 @@ screen when raised; a fix is recorded only when the re-captured screen differs; 
 or a dated waiver after seven days of silence, resolves it. The sign-off step's printed text
 carries the fixed sign-off line: `Approval means "this is the
 product I understand" — the written brief, not these screens, holds scope`.
+
+**Walk findings.** A note with `kind: "walk"` is the journey critic's own lane (§ Mocks: State
+Machine, WALK) — one of the six flow breaks (`no-path-back`, `no-path-forward`,
+`dead-end-state`, `missing-data`, `ambiguous-control`, `unrecoverable-error`), always
+`scope: "mock"`, always cited to a screen and one of that screen's declared states, never both
+absent. The session closes one the same way it closes any other note — `notes address --id <id>
+--change "<what changed>"` — but closing is not resolving: only the served page's `Resolve`
+button, clicked by the human who looked, actually resolves it; `journey-walked` (§ Mocks: State
+Machine) refuses while one anchored to its journey's labels is still `open`, and the terminal
+`approved` mark still refuses while one anywhere is unresolved, `addressed` included.
 
 **Picks.** A pick stage of the flow — shapes, theme directions, per-surface variants — is
 recorded as a look stop in `design/mocks/picks.json`, written only by

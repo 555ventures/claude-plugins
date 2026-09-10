@@ -468,10 +468,12 @@ test('AC-20260907-04-13: --reopen kit on an APPROVED root prints the exact D10 i
 
   const bogus = runNode(SCRIPT, ['--root', dir, '--reopen', 'bogus'])
   assert.notStrictEqual(bogus.status, 0, '--reopen bogus must exit non-zero: ' + bogus.stdout + bogus.stderr)
-  // specs/20260907/07-mocks-retires-theme.md D6/AC-20260907-07-4 narrows this literal: "theme"
-  // drops out of the --reopen target list entirely (there is no mark left for it to clear).
-  assert.match(bogus.stderr + bogus.stdout, /--reopen must be journey:<j>, shapes, or kit/,
-    'the refusal must name the exact D6-narrowed target list — an unknown --reopen target must still name every live target, kit included and theme dropped: ' + bogus.stdout + bogus.stderr)
+  // specs/20260907/07-mocks-retires-theme.md D6/AC-20260907-07-4 narrowed this literal: "theme"
+  // dropped out of the --reopen target list entirely (there is no mark left for it to clear).
+  // specs/20260907/08-walk-critic.md D6/AC-20260907-08-8 widens it again: walk:<j> joins the
+  // list as the second target replacing --reopen theme.
+  assert.match(bogus.stderr + bogus.stdout, /--reopen must be journey:<j>, walk:<j>, shapes, or kit/,
+    'the refusal must name the exact live target list — an unknown --reopen target must still name every live target, kit and walk:<j> included and theme dropped: ' + bogus.stdout + bogus.stderr)
 })
 
 // ---------------------------------------------------------------------------

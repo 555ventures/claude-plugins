@@ -69,9 +69,15 @@ states via `data-state-btn`), linking the wireframe register and never skinned
 Fidelity lives in sketch (specs/20260906/06): `/spec:mocks` ends gray; `/spec:sketch` authors
 each brief's surfaces at production fidelity in the picked theme, reworks the brief's
 wireframes into it, writes a three-line UX argument per surface into the brief, and closes
-with the fixed critique pass — `check --states`, `render-gate --mocks`, one fresh-context
-`design-critic` (Opus, read-only) on error prevention · error recovery · help · efficiency —
-whose findings are page notes by `critic` resolved through the existing loop.
+with the fixed critique pass — `check --states`, `render-gate --mocks`, and the journey walk
+(specs/20260907/08): one fresh-context `design-critic` (Opus, read-only) per journey — per brief
+at sketch — reading the journey's screens in declared order with the gray empty/loading/error
+states entered as branches at the step where they occur, reporting only the six flow breaks (no
+path back, no path forward, a state with no exit, a step needing data no earlier step collected,
+a control meaning two things across screens, an error state with no recovery), each cited to a
+screen and one of that screen's declared states or refused. Findings are page notes carrying
+`kind: "walk"`; the session closes one with `notes address`, only the served page resolves it,
+and no journey is marked walked while one of its findings is still open.
 `design-atlas.js check` flags a mock linking `wire/` after `design/tokens.css` exists: warn at
 `sketch`, violation at `ratified` only — `approved` gray wireframes from mocks sign-off are
 exempt — and flags a `ratified` mock with unresolved notes on its label (critic or human) the
@@ -189,7 +195,7 @@ identical; a literal pipe inside a cell is written `\|`.
 ## The mocks command (2026-09-02, specs/20260902/07)
 
 `/spec:mocks` is the standalone design stage. `spec/scripts/mocks-driver.js` (`spec-paths
-mocks-driver`) derives `SEED → SHAPES → KIT → WIREFRAMES → SIGNOFF → APPROVED`
+mocks-driver`) derives `SEED → SHAPES → KIT → WIREFRAMES → WALK → SIGNOFF → APPROVED`
 (specs/20260907/04, ADR-0010 amending ADR-0008) from `design/mocks/status.json`
 (schemaVersion 1) plus the artifacts on disk: the skin and review states are retired; a
 wireframe is never skinned inside mocks — `/spec:sketch` owns fidelity per brief. The driver
@@ -199,7 +205,11 @@ saved (<prev> → <next>); safe to /clear and re-run /spec:mocks`, preceded by t
 counts line), gates every advance on the provenance ledger (`gateVerdict`, refusing on
 `open:false` and naming the rows), and records a sub-mark per journey (`journey-drawn`,
 `journey-approved`, and `variant-picked` when candidate flows are used), and
-`--reopen journey:<j>|shapes|kit` (recorded, printed, nothing deleted). The whole mocks stage
+`--reopen journey:<j>|walk:<j>|shapes|kit` (recorded, printed, nothing deleted). WALK sits
+between WIREFRAMES and SIGNOFF (specs/20260907/08): each declared journey is walked once by a
+fresh critic and stamped with `journey-walked --journey <j>`, which refuses while any walk
+finding on that journey is still open, so the stage cannot be signed off on a journey nobody
+walked. The whole mocks stage
 is gray (specs/20260907/07): the taste decision is picked on `/spec:sketch`'s first run against
 the signed-off kit (specs/20260907/06), and `design/tokens.css` on disk — never a mark and never
 a status field — is the one signal that a theme exists. SIGNOFF is one look over the

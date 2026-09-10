@@ -11,6 +11,10 @@ const { makeHost, readState, readStateRaw, run, stateOf, toReviewer, returnFileW
 // specs/20260901/09-disposer-gate.md AC-20260901-09-4/-7/-8 (dispositions refusals, the fix-cycle
 // disposer file, --same-survivors) plus the disposition-pool unit tests for a five-file reconcile
 // row. Shared helpers live in disposer-gate.fixtures.js (D2).
+//
+// specs/20260909/05-fix-delta-reviewer-pass.md D9/AC-20260909-05-6 (A2): AC-20260901-09-7's
+// setup edits src/foo.js (content-preserving) right before its --mark fix-applied call, since the
+// driver now refuses fix-applied on an empty delta.
 
 // ---- AC-20260901-09-4 -----------------------------------------------------------------------
 
@@ -98,6 +102,10 @@ test('AC-20260901-09-7: WHEN a fix cycle brings a second reviewer-returned with 
   assert.strictEqual(stateOf(host.root, host.spec), 'FIX', 'setup precondition: --fix-dispatched 1 must land FIX')
   assert.ok(fs.existsSync(path.join(host.sidecar, 'disposer-return-1.json')),
     'setup precondition: iteration 1\'s disposer-return-1.json must exist before this AC exercises the reset')
+
+  // specs/20260909/05-fix-delta-reviewer-pass.md D9/AC-20260909-05-6 (A2): a real,
+  // content-preserving edit so fix-applied never sees an empty delta.
+  fs.writeFileSync(path.join(host.root, 'src/foo.js'), 'module.exports = () => 42 // disposer-ac7 fix\n')
 
   const fixR = run(host.root, host.spec, '--mark', 'fix-applied')
   assert.strictEqual(fixR.status, 0, 'setup precondition: fix-applied within the iteration cap must succeed: ' + fixR.stdout + fixR.stderr)

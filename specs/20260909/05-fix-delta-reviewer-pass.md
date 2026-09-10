@@ -1,6 +1,7 @@
 ---
 date: 2026-09-09
-status: hardened
+status: implementing
+build_base: main
 tier: standard           # driver + doctrine only; verdict.js and every other named critical surface untouched
 area: review
 design: false
@@ -10,6 +11,7 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-09
 open_markers: 0
+diff_base: f65750a7e58218ba80634219dff6eb4a97172e27
 ---
 
 # The fix-delta reviewer pass reviews the fix, not the range again
@@ -36,6 +38,7 @@ the list cannot legitimately re-open the full range.
 | D5 | `spec/agents/reviewer.md` gains § The fix-delta pass: when the dispatcher names a delta file, the range under review is those files as they now stand; every prior survivor whose disposition was `fix` is re-verified and lands in `killed` (closed, with the executed evidence) or in `survivors` again (not closed, same claim text); new findings are reported only for lines inside the listed files; a finding outside the list is a finding about the range, reported as a `soft` naming the file, never a review of it [no-ac: agent prose contract; the driver half is AC-20260909-05-5] | Fresh eyes on the whole range every pass is what produced a new soft each round; the pass has a purpose, and this names it |
 | D6 | `spec/commands/review.md` § Reviewer dispatch names the extra inputs of a fix-delta pass and states the reviewer's range for that pass is the delta file [no-ac: doctrine prose] | The session hands paths, never contents; the step prints them, the doctrine says why |
 | D7 | The delta file and snapshots live in the sidecar only and die with it at DONE; nothing is added to the ledger row or the retained artifact [no-ac: absence invariant — the retained-artifact key pins in tests/review/verdict.test.js stay green] | Scratch state; the ledger records outcomes, not intermediate ranges |
+| D9 | The A2 collision reaches two setups outside the original File Plan — `tests/review/escalate-row.fixtures.js`'s shared `driveToCapEdge()` and `tests/review/disposer-gate-refusals.test.js`'s AC-20260901-09-7 setup both mark `fix-applied` with no file edit. Both are corrected in place the same way `review-driver-fix-cycle.test.js` was (a content-preserving edit before each `fix-applied`), never by narrowing D2's refusal [no-ac: the corrected pins are the existing ACs, unchanged] | Build-time ruling: the tests are red because the spec's new refusal is correct; the pipeline forbids a red suite, so the stale setups are fixed, not waived |
 | D8 | `spec/.claude-plugin/plugin.json` bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` [no-ac: `plugin-bump.js --check` is the oracle] | Version discipline |
 
 ## File Plan
@@ -47,6 +50,10 @@ the list cannot legitimately re-open the full range.
 | spec/commands/review.md | MODIFY | doctrine | D6: reviewer dispatch inputs for the fix-delta pass |
 | tests/review/fix-delta-pass.test.js | CREATE | tests | AC-20260909-05-1, AC-20260909-05-2, AC-20260909-05-3, AC-20260909-05-4, AC-20260909-05-5 |
 | tests/review/review-driver-fix-cycle.test.js | MODIFY | tests | AC-20260909-05-6 — SHALL CONTINUE TO pins: the cycle's fixture now edits a file between dispositions and fix-applied |
+| tests/review/escalate-row.fixtures.js | MODIFY | tests | D9 — shared `driveToCapEdge()` edits a file before each `fix-applied` so D2's refusal does not fire on a stale setup |
+| tests/review/disposer-gate-refusals.test.js | MODIFY | tests | D9 — same collision fix in its AC-20260901-09-7 setup |
+| tests/review/escalate-cap-durable.test.js | MODIFY | tests | D9 — same collision fix in its durable-cap setups |
+| tests/review/escalate-row-step.test.js | MODIFY | tests | D9 — same collision fix in its local `driveToCapEdgeHard()` mirror and trailing `fix-applied` |
 | spec/.claude-plugin/plugin.json | MODIFY | other | D8 bump |
 
 ## Contracts

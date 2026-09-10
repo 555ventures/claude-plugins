@@ -11,6 +11,11 @@ const { run, stateOf, returnFileWith, oneFixReturnFile, reviewerReturn, readJson
 // would begin at zero and one spec could escalate repeatedly as unrelated first reviews. The
 // escalate rows those refusals write are the durable record the cap reads. These tests drive the
 // driver's OWN documented remedy and pin that the count survives it.
+//
+// specs/20260909/05-fix-delta-reviewer-pass.md D2/AC-20260909-05-6 (A2): a fix-applied call that
+// is NOT the capping call (i.e. not preceded by driveToCapEdge()) now needs a real,
+// content-preserving edit to src/foo.js first, or the driver refuses it on an empty delta before
+// it ever reaches the cap-cleared/other-spec logic these two tests pin.
 
 function reviewerThenFixDispatched(root, spec, tag) {
   run(root, spec, '--mark', 'reviewer-returned', '--file', returnFileWith(tag, reviewerReturn()))
@@ -64,6 +69,8 @@ test('durable cap: WHEN an earlier escalate row for the spec is followed by a no
   assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER')
   const d = reviewerThenFixDispatched(host.root, host.spec, 'esc-durable-c1')
   assert.doesNotMatch(d.stderr, /already spent/, 'a cleared escalation must not warn: ' + d.stderr)
+  // AC-20260909-05-6 (A2): a real, content-preserving edit so fix-applied never sees an empty delta.
+  fs.writeFileSync(path.join(host.root, 'src/foo.js'), 'module.exports = () => 42 // durable cleared\n')
   const first = run(host.root, host.spec, '--mark', 'fix-applied')
   assert.strictEqual(first.status, 0,
     'a closed escalation is history, not a spent cap — the first fix-applied of a later review must succeed: ' + first.stdout + first.stderr)
@@ -77,6 +84,8 @@ test('durable cap: WHEN an uncleared escalate row exists for a DIFFERENT spec TH
   fs.writeFileSync(ledger, JSON.stringify(esc) + '\n')
   run(host.root, host.spec)
   reviewerThenFixDispatched(host.root, host.spec, 'esc-durable-o1')
+  // AC-20260909-05-6 (A2): a real, content-preserving edit so fix-applied never sees an empty delta.
+  fs.writeFileSync(path.join(host.root, 'src/foo.js'), 'module.exports = () => 42 // durable other-spec\n')
   const first = run(host.root, host.spec, '--mark', 'fix-applied')
   assert.strictEqual(first.status, 0, 'another spec\'s escalation is not this spec\'s: ' + first.stdout + first.stderr)
 })

@@ -657,6 +657,73 @@ function treeDirty() {
   return r.status === 0 && r.stdout.split('\n').some((l) => l.trim())
 }
 
+// specs/20260909/05-fix-delta-reviewer-pass.md D1/Contracts: snapshots the working tree —
+// tracked edits AND untracked files, which `git stash create` cannot see (A1, executed spike) —
+// as a git tree object via a scratch index, so the real .git/index and worktree are never
+// touched. GIT_INDEX_FILE points at a file INSIDE the sidecar, always removed afterward (even on
+// a failed write-tree) so a crash mid-snapshot never leaves a stray index for the next `git` call
+// in this same repo to pick up. The sidecar itself is excluded via a negative pathspec (not just
+// relying on the plugin repo's own `specs/**/*.review/` .gitignore line, which a test host or a
+// consuming repo need not carry) — without it every reviewer-return/disposer-return/manifest
+// write the driver makes between two snapshots would show up as a "changed file" in the fix's
+// delta, and the scratch index file itself (sitting inside the sidecar, mid-write) would try to
+// add its own lock file to itself (executed spike).
+function snapshotTree() {
+  fs.mkdirSync(sidecarDir, { recursive: true })
+  const indexFile = path.join(sidecarDir, 'snap-index')
+  const env = Object.assign({}, process.env, { GIT_INDEX_FILE: indexFile })
+  try {
+    // A host whose .gitignore already covers the sidecar (this plugin repo's own
+    // `specs/**/*.review/` line) makes the negative pathspec name an ignored path, which
+    // `git add` refuses outright with "paths are ignored by one of your .gitignore files".
+    // The exclusion is redundant there — `add -A` skips the sidecar on its own — so the
+    // pathspec is carried only when the sidecar is NOT already ignored.
+    const ignoredR = runChild('git', ['-C', repoRoot, 'check-ignore', '-q', sidecarRel],
+      { encoding: 'utf8' }, 'git check-ignore (sidecar already ignored?)')
+    const addArgs = ['-C', repoRoot, 'add', '-A', '--', '.']
+    if (ignoredR.status !== 0) addArgs.push(':(exclude)' + sidecarRel)
+    const addR = runChild('git', addArgs,
+      { encoding: 'utf8', env }, 'git add -A (scratch-index tree snapshot)')
+    if (addR.status !== 0) {
+      die('git add -A into a scratch index failed (exit ' + addR.status + '): ' +
+        (addR.stderr || addR.stdout).trim())
+    }
+    const wtR = runChild('git', ['-C', repoRoot, 'write-tree'], { encoding: 'utf8', env },
+      'git write-tree (scratch-index tree snapshot)')
+    const sha = (wtR.stdout || '').trim()
+    if (wtR.status !== 0 || !SHA40_RE.test(sha)) {
+      die('git write-tree against the scratch index did not print a 40-hex tree sha (exit ' +
+        wtR.status + '): ' + (wtR.stderr || wtR.stdout).trim())
+    }
+    return sha
+  } finally {
+    fs.rmSync(indexFile, { force: true })
+  }
+}
+
+// D3: the fallback snapshot for a sidecar carrying no marks.treeSnapshot[n] (an older sidecar
+// that predates this spec) — HEAD's own tree, so the delta at fix-applied lists every file dirty
+// against HEAD rather than refusing the whole pass for missing history.
+function headTree() {
+  const r = runChild('git', ['-C', repoRoot, 'rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' },
+    'git rev-parse HEAD^{tree}')
+  const sha = (r.stdout || '').trim()
+  if (r.status !== 0 || !SHA40_RE.test(sha)) {
+    die('git rev-parse HEAD^{tree} in ' + repoRoot + ' did not print a 40-hex tree sha (got ' +
+      JSON.stringify(sha) + ')')
+  }
+  return sha
+}
+
+// Contracts: `git diff --name-only <a> <b>` between two tree shas, sorted, LF-joined, no blank
+// lines — the exact shape fix-delta-<n>.txt is written in.
+function treeDiffNames(a, b) {
+  const r = runChild('git', ['-C', repoRoot, 'diff', '--name-only', a, b], { encoding: 'utf8' },
+    'git diff --name-only (fix-delta)')
+  if (r.status !== 0) die('git diff --name-only ' + a + ' ' + b + ' failed: ' + (r.stderr || r.stdout).trim())
+  return r.stdout.split('\n').map((l) => l.trim()).filter(Boolean).sort()
+}
+
 // ---- manifest helpers ---------------------------------------------------------------------------
 function manifestPathFor(n) { return path.join(sidecarDir, `manifest-${n}.jsonl`) }
 function outDirFor(n) { return path.join(sidecarDir, `legs-${n}`) }
@@ -1149,6 +1216,12 @@ function handleReviewerReturned() {
   // prior-iteration disposer mark satisfy this iteration's --mark dispositions.
   marks.disposer = null
   marks.pendingFix = false
+  // D1 (specs/20260909/05-fix-delta-reviewer-pass.md): snapshot the tree for iteration n THIS
+  // reviewer-returned covers — the fix-applied that follows diffs this against its own fresh
+  // snapshot to derive the fix's changed-file delta. Recorded before saveSidecar() below, same as
+  // every other mark this handler writes.
+  marks.treeSnapshot = marks.treeSnapshot || {}
+  marks.treeSnapshot[String(n)] = snapshotTree()
   // D6 (specs/20260909/04-review-soft-floor.md): an empty HARD pool needs no session judgment at
   // all — softs are advisory (D5), so a return whose survivors are all non-hard and whose current
   // manifest carries no red non-blocking leg is dispositioned by the driver itself, zero
@@ -1474,7 +1547,22 @@ function handleFixApplied() {
       : capMsg + '\nThe escalate ledger pass could not be completed: ' + result.error +
         '\nRe-run this driver once the evidence is repaired — the append will be retried.')
   }
-  const n = Math.max(...manifests) + 1
+  const curN = Math.max(...manifests)
+  const n = curN + 1
+  // D2/D3 (specs/20260909/05-fix-delta-reviewer-pass.md): diff the tree snapshotted at
+  // reviewer-returned for iteration curN against a fresh snapshot taken right now — a prior
+  // sidecar with no marks.treeSnapshot[curN] (older than this spec) falls back to HEAD's tree, so
+  // the delta lists every file dirty against HEAD rather than refusing the whole pass. Nothing is
+  // mutated (no saveSidecar(), no manifest) before the empty-delta check below.
+  const priorSha = (marks.treeSnapshot && marks.treeSnapshot[String(curN)]) || headTree()
+  const nowSha = snapshotTree()
+  const delta = treeDiffNames(priorSha, nowSha)
+  if (delta.length === 0) {
+    die('no file changed since the reviewer returned — the fix workers wrote nothing; ' +
+      'dispatch them again or close through waive/reject')
+  }
+  fs.mkdirSync(sidecarDir, { recursive: true })
+  fs.writeFileSync(path.join(sidecarDir, `fix-delta-${n}.txt`), delta.join('\n') + '\n')
   const r = runLegsIteration(n, { fixDelta: true })
   if (r.stopped) return 'STOPPED'
   marks.pendingFix = false
@@ -2037,21 +2125,43 @@ const STEPS = {
     `path — then:\n` +
     `  node ${__filename} ${specPath} --mark skips-extracted --file <path>`,
 
-  REVIEWER: () => `## Step: dispatch the reviewer\n` +
-    `Legs are green. Dispatch ONE Agent {subagent_type: "spec:reviewer"} with the spec path, ` +
-    `diff base ${base}, root ${repoRoot}, and this run's evidence:\n` +
-    `  manifest: ${manifestPath}\n  outputs: ${outDir}\n` +
-    (designFlag || designSource
+  // D4 (specs/20260909/05-fix-delta-reviewer-pass.md): iteration >= 2 (currentN, this driver's own
+  // "which manifest is live" derivation) means a fix-delta cycle just completed —
+  // manifest-<currentN>.jsonl and fix-delta-<currentN>.txt both exist (written at fix-applied,
+  // D2). The reviewer's range for that pass is the delta file plus the two prior returns it needs
+  // to re-verify closure, never the whole diff again (AC-20260909-05-5) — AC-20260902-05-13 bans
+  // the word "scope" from this step's text outright, so neither variant below prints it.
+  REVIEWER: () => {
+    const designBlock = (designFlag || designSource)
       ? '  design specs also get the component-manifest audit agent alongside the reviewer' +
         (renderGateDeclared
           ? '; also run the advisory render gate review.md names (design.render is declared — its ' +
             'run now carries the design-rules.json renderCheck pass too) and hand its report path ' +
             'to the reviewer as evidence.\n'
           : ' (design.render is not declared — skip the advisory render-gate run).\n')
-      : '') +
-    `Write its structured return ({verdict, survivors, killed, reviewerCount, tokens}) to ` +
-    `a file, then:\n  node ${__filename} ${specPath} --mark reviewer-returned --file <return.json>\n` +
-    `REVIEWER_FAILED is a failed run, never CLEAN — re-dispatch before marking.`,
+      : ''
+    const tail = `Write its structured return ({verdict, survivors, killed, reviewerCount, tokens}) to ` +
+      `a file, then:\n  node ${__filename} ${specPath} --mark reviewer-returned --file <return.json>\n` +
+      `REVIEWER_FAILED is a failed run, never CLEAN — re-dispatch before marking.`
+    if (currentN >= 2) {
+      const deltaFile = path.join(sidecarDir, `fix-delta-${currentN}.txt`)
+      const priorReviewer = path.join(sidecarDir, `reviewer-return-${currentN - 1}.json`)
+      const priorDisposer = path.join(sidecarDir, `disposer-return-${currentN - 1}.json`)
+      return `## Step: dispatch the reviewer — fix-delta pass\n` +
+        `Legs are green. Dispatch ONE Agent {subagent_type: "spec:reviewer"} with the spec path, ` +
+        `diff base ${base}, root ${repoRoot}, and this pass's inputs:\n` +
+        `  changed files: ${deltaFile}\n` +
+        `  prior reviewer return: ${priorReviewer}\n` +
+        `  prior disposer return: ${priorDisposer}\n` +
+        `  manifest: ${manifestPath}\n  outputs: ${outDir}\n` +
+        designBlock + tail
+    }
+    return `## Step: dispatch the reviewer\n` +
+      `Legs are green. Dispatch ONE Agent {subagent_type: "spec:reviewer"} with the spec path, ` +
+      `diff base ${base}, root ${repoRoot}, and this run's evidence:\n` +
+      `  manifest: ${manifestPath}\n  outputs: ${outDir}\n` +
+      designBlock + tail
+  },
 
   // D2/D3 (specs/20260901/09-disposer-gate.md): dispositionPools(n) is the SAME derivation
   // handleDispositions()'s own --file verification uses (A5) — this step and that check can never

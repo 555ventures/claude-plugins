@@ -23,6 +23,12 @@ const { GREEN_TEST, specBody, makeHost, run, stateOf, returnFileWith, oneFixRetu
 // shared with review-driver.test.js, review-driver-close-*.test.js and
 // review-driver-replay-*.test.js (outside this batch) and is not edited here — logged as a
 // deviation.
+//
+// specs/20260909/05-fix-delta-reviewer-pass.md D2/AC-20260909-05-6 (A2 confirmed false — this
+// fixture marked fix-applied with NO file edit): once the driver refuses an empty delta, every
+// fix-applied below needs a real file edit between dispositions and fix-applied or the SHALL
+// CONTINUE TO cycle pins go red on landing — src/foo.js is touched (content-preserving) right
+// before each fix-applied call below.
 const HARD_SURVIVOR_RETURN = {
   verdict: 'CLEAN',
   survivors: [{ severity: 'hard', claim: 'x', file: 'src/foo.js', line: 1, impact: 'x', evidence: 'x' }],
@@ -118,6 +124,9 @@ test('AC-20260820-07-8 (also AC-20260822-01-10, AC-20260909-04-13, SHALL CONTINU
     assert.strictEqual(dispR.status, 0, `cycle ${cycle}: fix-dispatched 1 (within the 1-survivor pool) must be accepted: ` + dispR.stdout + dispR.stderr)
     assert.strictEqual(stateOf(host.root, host.spec), 'FIX', `cycle ${cycle}: fix-dispatched 1 must land FIX`)
 
+    // AC-20260909-05-6 (A2): a real, content-preserving edit so fix-applied never sees an empty delta.
+    fs.writeFileSync(path.join(host.root, 'src/foo.js'), `module.exports = () => 42 // fix cycle ${cycle}\n`)
+
     const fixR = run(host.root, host.spec, '--mark', 'fix-applied')
     assert.strictEqual(fixR.status, 0, `cycle ${cycle}: fix-applied within the cap must succeed: ` + fixR.stdout + fixR.stderr)
     const manifestN = path.join(host.sidecar, `manifest-${cycle + 1}.jsonl`)
@@ -154,6 +163,8 @@ test('AC-20260820-07-8 (manifest-provable cap) / AC-20260901-09-2: hand-editing 
   const dispFile1 = oneFixReturnFile('rvdrv-hand-edit-disp', 's0')
   run(host.root, host.spec, '--mark', 'dispositions', '--file', dispFile1, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
   assert.strictEqual(stateOf(host.root, host.spec), 'FIX')
+  // AC-20260909-05-6 (A2): a real, content-preserving edit so fix-applied never sees an empty delta.
+  fs.writeFileSync(path.join(host.root, 'src/foo.js'), 'module.exports = () => 42 // hand-edit cycle 1\n')
   const fixR = run(host.root, host.spec, '--mark', 'fix-applied')
   assert.strictEqual(fixR.status, 0, 'setup: one real fix-applied cycle must succeed: ' + fixR.stdout + fixR.stderr)
   assert.ok(fs.existsSync(path.join(host.sidecar, 'manifest-2.jsonl')), 'setup: one real fix-applied cycle must produce manifest-2.jsonl')
@@ -174,6 +185,8 @@ test('AC-20260820-07-8 (manifest-provable cap) / AC-20260901-09-2: hand-editing 
   run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile2)
   const dispFile2 = oneFixReturnFile('rvdrv-hand-edit-disp2', 's0')
   run(host.root, host.spec, '--mark', 'dispositions', '--file', dispFile2, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+  // AC-20260909-05-6 (A2): a real, content-preserving edit so fix-applied never sees an empty delta.
+  fs.writeFileSync(path.join(host.root, 'src/foo.js'), 'module.exports = () => 42 // hand-edit cycle 2\n')
   const fixR2 = run(host.root, host.spec, '--mark', 'fix-applied')
   assert.strictEqual(fixR2.status, 0,
     'the hand-edited counter must not have consumed the real cap — the second genuine fix-applied (only manifest-1/2 on disk beforehand) must still succeed: ' + fixR2.stdout + fixR2.stderr)

@@ -19,13 +19,11 @@ once and keep the printed path — it is `{driver}` below.
 
 ## Input
 
-`$ARGUMENTS` — path to a spec with `status: implementing`. A spec that already closed
+`$ARGUMENTS` — path to a spec with `status: implementing`; one that already closed
 (`status: done`) is refused (exit 2) — `/spec:escape` records a defect that escaped a review
-that already passed.
-
-This command is the review driver's direct entry point (`--via direct`, the default). The
-`/spec:run` loop reaches the same driver with `--via loop` and runs the same DISPOSITIONS
-protocol below on both entries — see `spec/commands/run.md`.
+that already passed. This command is the review driver's direct entry point (`--via direct`,
+the default); the `/spec:run` loop reaches the same driver with `--via loop` and runs the same
+DISPOSITIONS protocol below on both entries — see `spec/commands/run.md`.
 
 ## Protocol — the driver owns the state machine
 
@@ -73,7 +71,9 @@ never a driver slot — plus `📎 N advisory finding(s) recorded` when the retu
   structured return to the file the driver names, then mark `reviewer-returned --file <json>`.
   `REVIEWER_FAILED` is a failed run, never CLEAN — re-dispatch before marking. It may
   create/delete its own repro file; fixes are always separate dispatches, no execution side
-  effects on shared stateful substrates.
+  effects on shared stateful substrates. Iteration ≥ 2 is the fix-delta pass: hand over the
+  delta file and the prior reviewer and disposer returns the step names — that delta file, not
+  the whole diff, is the range (`spec/agents/reviewer.md` § The fix-delta pass).
 - **The evidence standard is executed, not argued:** every non-soft finding carries a repro
   the reviewer actually ran, or the exact spec lines (Decision/AC) the diff violates with the
   hunk quoted — neither present returns `advisory`; an empty findings list is valid. No

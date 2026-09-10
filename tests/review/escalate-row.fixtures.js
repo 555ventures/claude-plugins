@@ -23,6 +23,10 @@ const { tmpdir, runNode, runBash, gitRepo } = require('../helpers')
 // unknown flag (usage, exit 2, spike A3) and the driver has no escalate-row mechanism at all.
 // AC-20260822-01-1 .. -9, -12, -13.
 //
+// specs/20260909/05-fix-delta-reviewer-pass.md D9: driveToCapEdge()'s three fix-applied
+// calls now precede each mark with a real, content-preserving edit to src/foo.js (AC-20260909-05-6
+// A2) — the driver refuses fix-applied on an empty delta since D2 landed.
+//
 // AC-20260901-08-9 (tagged, no assertion change, specs/20260901/08-corpus-derivation-and-kill-
 // match.md D8): `reviewerReturn()` below carries `killed: []` alongside a `survivors` array, and
 // every `--mark reviewer-returned` call in this file (directly and via `driveToCapEdge()`) feeds
@@ -204,6 +208,9 @@ function driveToCapEdge(root, spec) {
     const d = run(root, spec, '--mark', 'dispositions', '--file', dispFile, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
     assert.strictEqual(stateOf(root, spec), 'FIX',
       `setup cycle ${cycle}: fix-dispatched 1 (within the 1-survivor pool) must land FIX: ` + d.stdout + d.stderr)
+    // specs/20260909/05-fix-delta-reviewer-pass.md D2/AC-20260909-05-6 (A2): a real,
+    // content-preserving edit so fix-applied never sees an empty delta.
+    fs.writeFileSync(path.join(root, 'src/foo.js'), `module.exports = () => 42 // escalate cycle ${cycle}\n`)
     const f = run(root, spec, '--mark', 'fix-applied')
     assert.strictEqual(f.status, 0, `setup cycle ${cycle}: fix-applied within the cap must succeed: ` + f.stdout + f.stderr)
   }

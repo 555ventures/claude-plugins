@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 34997,
-    "spec/scripts": 1293360,
+    "spec/scripts": 1300077,
     "spec/scripts/lib": 233720,
-    "tests": 3642102
+    "tests": 3657939
   },
   "files": {
     "scripts/plugin-bump.js": 9427,
@@ -77,7 +77,7 @@
     "spec/scripts/smoke.sh": 8134,
     "spec/scripts/spec-build-driver.js": 49555,
     "spec/scripts/spec-queue.js": 25130,
-    "spec/scripts/spec-review-driver.js": 136859,
+    "spec/scripts/spec-review-driver.js": 143576,
     "spec/scripts/spec-session-stamp.sh": 2680,
     "spec/scripts/spec-state-gate.sh": 4846,
     "spec/scripts/spec-status.js": 52471,
@@ -219,13 +219,14 @@
     "tests/report/report-render.test.js": 14403,
     "tests/review/ci-query.test.js": 17510,
     "tests/review/deviations-backstop.test.js": 18269,
-    "tests/review/disposer-gate-refusals.test.js": 16755,
+    "tests/review/disposer-gate-refusals.test.js": 17265,
     "tests/review/disposer-gate.fixtures.js": 8169,
     "tests/review/disposer-gate.test.js": 15344,
-    "tests/review/escalate-cap-durable.test.js": 5826,
-    "tests/review/escalate-row-step.test.js": 18359,
-    "tests/review/escalate-row.fixtures.js": 11192,
+    "tests/review/escalate-cap-durable.test.js": 6600,
+    "tests/review/escalate-row-step.test.js": 19162,
+    "tests/review/escalate-row.fixtures.js": 11730,
     "tests/review/escalate-row.test.js": 18049,
+    "tests/review/fix-delta-pass.test.js": 12153,
     "tests/review/legs-verdict-pair.test.js": 31714,
     "tests/review/merge-reentry.test.js": 18818,
     "tests/review/promise-sweep.test.js": 21909,
@@ -233,7 +234,7 @@
     "tests/review/review-driver-close-drift-line.test.js": 9702,
     "tests/review/review-driver-close-refusals.test.js": 23221,
     "tests/review/review-driver-close-row.test.js": 25987,
-    "tests/review/review-driver-fix-cycle.test.js": 20768,
+    "tests/review/review-driver-fix-cycle.test.js": 21827,
     "tests/review/review-driver-replay-entry.test.js": 13485,
     "tests/review/review-driver-replay-record.test.js": 14277,
     "tests/review/review-driver.fixtures.js": 12355,
@@ -859,6 +860,78 @@
       "from": 3607779,
       "to": 3642102,
       "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "spec/scripts/spec-review-driver.js",
+      "from": 136859,
+      "to": 142928,
+      "cite": "specs/20260909/05-fix-delta-reviewer-pass.md"
+    },
+    {
+      "path": "tests/review/disposer-gate-refusals.test.js",
+      "from": 16755,
+      "to": 17265,
+      "cite": "specs/20260909/05-fix-delta-reviewer-pass.md"
+    },
+    {
+      "path": "tests/review/escalate-cap-durable.test.js",
+      "from": 5826,
+      "to": 6600,
+      "cite": "specs/20260909/05-fix-delta-reviewer-pass.md"
+    },
+    {
+      "path": "tests/review/escalate-row-step.test.js",
+      "from": 18359,
+      "to": 19162,
+      "cite": "specs/20260909/05-fix-delta-reviewer-pass.md"
+    },
+    {
+      "path": "tests/review/escalate-row.fixtures.js",
+      "from": 11192,
+      "to": 11730,
+      "cite": "specs/20260909/05-fix-delta-reviewer-pass.md"
+    },
+    {
+      "path": "tests/review/review-driver-fix-cycle.test.js",
+      "from": 20768,
+      "to": 21827,
+      "cite": "specs/20260909/05-fix-delta-reviewer-pass.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1293360,
+      "to": 1299429,
+      "cite": "specs/20260909/05-fix-delta-reviewer-pass.md"
+    },
+    {
+      "path": "tests",
+      "from": 3642102,
+      "to": 3656261,
+      "cite": "specs/20260909/05-fix-delta-reviewer-pass.md"
+    },
+    {
+      "path": "spec/scripts/spec-review-driver.js",
+      "from": 142916,
+      "to": 143576,
+      "cite": "specs/20260909/05-fix-delta-reviewer-pass.md"
+    },
+    {
+      "path": "tests/review/fix-delta-pass.test.js",
+      "from": 10475,
+      "to": 12153,
+      "cite": "specs/20260909/05-fix-delta-reviewer-pass.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1299417,
+      "to": 1300077,
+      "cite": "specs/20260909/05-fix-delta-reviewer-pass.md"
+    },
+    {
+      "path": "tests",
+      "from": 3656261,
+      "to": 3657939,
+      "cite": "specs/20260909/05-fix-delta-reviewer-pass.md"
     }
   ]
 }

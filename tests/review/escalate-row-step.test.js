@@ -20,6 +20,11 @@ const { run, stateOf, returnFileWith, oneFixReturnFile, readJsonl, readSidecar, 
 // (driveToCapEdgeHard below) keeps this file's own cap-edge mechanics exercising the FIX pool it
 // always meant to; escalate-row.fixtures.js itself is shared with escalate-row.test.js and
 // escalate-cap-durable.test.js (outside this batch) and is not edited here — logged as a deviation.
+//
+// specs/20260909/05-fix-delta-reviewer-pass.md D2/AC-20260909-05-6 (A2): every non-capping
+// fix-applied call below (driveToCapEdgeHard's own loop, and the AC-20260822-01-9 red-leg loop)
+// now needs a real, content-preserving edit to src/foo.js first, or the driver refuses it on an
+// empty delta before its `f.status === 0` setup assertion is ever reached.
 
 test('AC-20260822-01-8 (also AC-20260901-09-2): WHEN the driver is invoked bare with marks.escalated set and no escalateRunId THE SYSTEM SHALL self-heal by appending the row then, and print the ESCALATE step', () => {
   const host = makeHost('esc-ac8')
@@ -75,6 +80,8 @@ test('AC-20260822-01-9 (also AC-20260901-09-2): WHEN the escalate verdict pass e
     const d = run(host.root, host.spec, '--mark', 'dispositions', '--file', dispFile, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
     assert.strictEqual(stateOf(host.root, host.spec), 'FIX',
       `setup cycle ${cycle}: the injected red skip-reconcile finding must justify fix-dispatched 1: ` + d.stdout + d.stderr)
+    // AC-20260909-05-6 (A2): a real, content-preserving edit so fix-applied never sees an empty delta.
+    fs.writeFileSync(path.join(host.root, 'src/foo.js'), `module.exports = () => 42 // ac9 cycle ${cycle}\n`)
     const f = run(host.root, host.spec, '--mark', 'fix-applied')
     assert.strictEqual(f.status, 0, `setup cycle ${cycle}: fix-applied within the cap must succeed: ` + f.stdout + f.stderr)
   }
@@ -194,6 +201,8 @@ function driveToCapEdgeHard(root, spec) {
     const d = run(root, spec, '--mark', 'dispositions', '--file', dispFile, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
     assert.strictEqual(stateOf(root, spec), 'FIX',
       `setup cycle ${cycle}: fix-dispatched 1 (within the 1-survivor pool) must land FIX: ` + d.stdout + d.stderr)
+    // AC-20260909-05-6 (A2): a real, content-preserving edit so fix-applied never sees an empty delta.
+    fs.writeFileSync(path.join(root, 'src/foo.js'), `module.exports = () => 42 // escalate step hard cycle ${cycle}\n`)
     const f = run(root, spec, '--mark', 'fix-applied')
     assert.strictEqual(f.status, 0, `setup cycle ${cycle}: fix-applied within the cap must succeed: ` + f.stdout + f.stderr)
   }

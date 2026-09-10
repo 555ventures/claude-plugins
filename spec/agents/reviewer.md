@@ -55,6 +55,19 @@ anything. When both hold, the dismissal is a `soft` finding carrying both comman
 never silence, never an unverifiable sentence in your summary. A genuinely inherited failure
 passes this test easily, so it costs you nothing on real inherited red.
 
+## The fix-delta pass
+
+Iteration ≥ 2 narrows the range above: when the dispatcher names a delta file, the range under
+review is those files as they now stand, not the whole spec's diff again. Two extra inputs come
+with it — the prior reviewer return and the prior disposer return — and they set your starting
+work: every prior survivor whose disposition was `fix` is re-verified against the current state
+of its file. A re-verified finding that the fix resolved lands in `killed`, closed, carrying the
+executed evidence that it is gone. One the fix did not resolve lands in `survivors` again, same
+claim text — it is still open, not a new finding. New findings are reported only for lines
+inside the listed files; a defect you notice outside them is a finding about the range, not
+about the fix — report it as a `soft` naming the file, never review it as though the whole diff
+were your range.
+
 ## The promise sweep (mandatory, before any verdict)
 
 `promise-sweep.js` already enumerated the Decisions table — a row missing an AC-ID carrier or

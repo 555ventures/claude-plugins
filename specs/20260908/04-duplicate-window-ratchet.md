@@ -1,6 +1,6 @@
 ---
 date: 2026-09-08
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: gate-integrity
@@ -37,7 +37,7 @@ siblings landed, and every red case is pinned on synthetic trees.
 | D6 | Host rules § Review Checks gains: a `dup-baseline.json` raise whose `cite` is not the spec under review is **hard**; § Worker Rules' size bullet from spec 01 gains the words "and `scripts/dup-windows.js`". `[no-ac: prose; the mechanism is pinned by AC-1..7]` | One duty, two meters. |
 | D7 | Repo tooling only: no plugin file changes, no version bump, no `spec-paths` key. `[no-ac: absence of change]` | Same placement argument as spec 01 D12. |
 | D8 | AC-20260908-04-2 drops the words `CONTINUE TO`: both of its clauses are new promises of a script this spec creates, so there is no prior behavior to carry. The AC keeps its ID and its two clauses; no AC is split. (user ruling, build-time) | `red-check.js` refused the pre-image with `mixed-pin` — a `SHALL CONTINUE TO` clause promises a green the pre-image cannot produce, and a new script has no pre-image behavior at all. Rejected: splitting the second clause into AC-8, which would add a permanent AC-ID for a phrasing slip. |
-| D9 | The 14-line synchronous fd writer is deleted from `scripts/dup-windows.js` AND `scripts/size-ratchet.js`; both `require` `writeOut` from `spec/scripts/lib/driver-io.js` (resolved via `path.join(__dirname, '..', 'spec', 'scripts', 'lib', 'driver-io.js')`, never a cwd-relative string) and keep two one-line `writeOut`/`writeErr` shims. `scripts/size-ratchet.js` joins the File Plan. No file under `spec/` is edited, so D7 stands. (user ruling, build-time) | The new ratchet's first run flagged its own author: the writer was its only duplication with the size ratchet, one contiguous block counted as 7 overlapping windows. A new `scripts/lib/` module would relocate the block rather than remove it (−7, plus a new file that itself scores 7 against the nine `spec/scripts/` copies); importing the existing shared writer is −14 with no new file. Rejected: creating `scripts/lib/`, editing any plugin file, and reshaping the writer to dodge the window hash. The nine `spec/scripts/` copies are a queued plugin spec, not this one. |
+| D9 | The 14-line synchronous fd writer is deleted from `scripts/dup-windows.js` AND `scripts/size-ratchet.js`; both `require` `writeOut` from `spec/scripts/lib/driver-io.js` (resolved via `path.join(__dirname, '..', 'spec', 'scripts', 'lib', 'driver-io.js')`, never a cwd-relative string) and keep two one-line `writeOut`/`writeErr` shims. `scripts/size-ratchet.js` joins the File Plan. No file under `spec/` is edited, so D7 stands. (user ruling, build-time) `[no-ac: refactor; the extraction changes no observable behavior, and both scripts stay pinned by AC-1..7 and the size ratchet's own suite]` | The new ratchet's first run flagged its own author: the writer was its only duplication with the size ratchet, one contiguous block counted as 7 overlapping windows. A new `scripts/lib/` module would relocate the block rather than remove it (−7, plus a new file that itself scores 7 against the nine `spec/scripts/` copies); importing the existing shared writer is −14 with no new file. Rejected: creating `scripts/lib/`, editing any plugin file, and reshaping the writer to dodge the window hash. The nine `spec/scripts/` copies are a queued plugin spec, not this one. |
 
 ## File Plan
 
@@ -127,6 +127,21 @@ is legible. Deliberately not measured: comment density (the narration gate holds
 group at zero; mechanism explanations are allowed on their merits) and cross-repo duplication.
 Fragile: hashing is exact after normalization, so a renamed variable defeats it — that is
 accepted; the target is copy-paste, not clone detection.
+
+Folded from the build's deviations sidecar, both one-offs:
+
+- `--update` scopes D3's `new-dup` refusal to an EXISTING baseline. With no `dup-baseline.json`
+  present yet, `--update` is the seeding command: every tracked file's actual score is written
+  as-is and `new-dup` cannot refuse it, because "new" means absent from a baseline that already
+  exists. This is the same seed carve-out `scripts/size-ratchet.js`'s `doUpdate` already carries
+  (`isSeed`), which D2 and D3 incorporate by reference. Without it the two Decisions cannot both
+  hold: D5 makes `--update` the build's own seeding step, and every file in a first run is
+  unrecorded.
+- D9 brought `scripts/size-ratchet.js` into the File Plan mid-build, after the new ratchet's
+  first run reported its own author. Both scripts lost their local copy of the synchronous fd
+  writer in favor of importing `writeOut` from `spec/scripts/lib/driver-io.js`, resolved through
+  `__dirname` so the exec-a-script tests still resolve it from a `tmpdir()` root. The nine
+  remaining copies under `spec/scripts/` are plugin-side and queued, not in this spec.
 
 ## Canonical Delta
 

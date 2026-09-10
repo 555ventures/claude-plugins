@@ -604,9 +604,18 @@ const legFindings = computeLegFindings()
 
 if (workflow && waived + rejected + fixDispatched > hardSurvivors + legFindings) {
   const total = waived + rejected + fixDispatched
-  console.error(`verdict.js: waived ${waived} > hard pool ${hardSurvivors} (--waived(${waived}) + ` +
+  const pool = hardSurvivors + legFindings
+  // The lead clause must be a TRUE inequality for whichever flag actually drove the overflow —
+  // --waived alone is not always the culprit: --rejected/--fixDispatched can trip this guard with
+  // waived at 0, and a --waived-only lead there would print the false "waived 0 > hard pool 0".
+  // AC-20260909-04-5 pins the waived-overflow wording verbatim ("waived 2 > hard pool 1"), so that case keeps its exact
+  // lead; every other trigger gets an honest sum-based lead instead of a fabricated inequality.
+  const lead = waived > pool
+    ? `waived ${waived} > hard pool ${hardSurvivors}`
+    : `total ${total} > hard pool ${hardSurvivors}`
+  console.error(`verdict.js: ${lead} (--waived(${waived}) + ` +
     `--rejected(${rejected}) + --fixDispatched(${fixDispatched}) = ${total} exceeds the hard pool's ` +
-    `${hardSurvivors} survivor(s) + the manifest's ${legFindings} legFindings, sum ${hardSurvivors + legFindings}) ` +
+    `${hardSurvivors} survivor(s) + the manifest's ${legFindings} legFindings, sum ${pool}) ` +
     '— dispositions cannot exceed what was actually found across both pools; recount before re-running')
   process.exit(2)
 }

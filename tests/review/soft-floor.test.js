@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { makeHost, readState, run, stateOf, toReviewer, returnFileWith, disposerReturn } = require('./disposer-gate.fixtures')
+const { makeHost, readState, readStateRaw, run, stateOf, toReviewer, returnFileWith, disposerReturn, CLEAN_RETURN } = require('./disposer-gate.fixtures')
 
 // specs/20260909/04-review-soft-floor.md D5-D9, D11 — spec-review-driver.js's DISPOSITIONS step
 // and reviewer-returned/dispositions mark handlers against a synthetic host, exercised via a
@@ -131,4 +131,85 @@ test('AC-20260909-04-11: WHEN the hard pool is empty THE SYSTEM SHALL CONTINUE T
   assert.deepStrictEqual(state.dispositions, { waived: 0, rejected: 0, fixDispatched: 0, word: 'CLEAN' },
     'AC-20260909-04-11: the explicit mark must record exactly {waived:0, rejected:0, fixDispatched:0, ' +
     'word:"CLEAN"}, the same shape D6\'s own auto-dispose derives: ' + JSON.stringify(state.dispositions))
+})
+
+// specs/20260909/04-review-soft-floor.md D6 (fix review, review disposition "fix" against the
+// D6 auto-dispose path in handleReviewerReturned()): an empty hard pool's verdict pass can
+// derive a non-CLEAN word (most often UNVERIFIED, from a manifest that disagrees with itself),
+// and D6 sanctions writing marks.dispositions only for a CLEAN-shaped pass — a non-CLEAN word
+// here must refuse immediately, never advance state to CLOSE and surface the refusal one
+// round-trip later on the next bare invocation. Reproduced here by hand-appending a
+// scope-disagreeing manifest row (the same technique
+// AC-20260902-05-8 uses) BEFORE reviewer-returned, so the D6 auto-dispose pass itself derives
+// UNVERIFIED against an empty (zero-survivor) return.
+test('D6 (fix review): WHEN --mark reviewer-returned carries an empty-hard-pool return but the manifest disagrees with itself (verdict.js would derive UNVERIFIED, not CLEAN) THE SYSTEM SHALL exit 2, write no marks.dispositions, leave review-state.json byte-identical, and name the UNVERIFIED cause plus the cold-restart remedy in stderr', () => {
+  const host = makeHost('soft-floor-d6-unverified')
+  toReviewer(host)
+
+  // Hand-edit the manifest to append a "gate" row stamped scope:"fix-delta" — once D1 stamps
+  // every other row "full", this single override disagrees with the rest of the manifest, the
+  // same fixture AC-20260902-05-8 (review-driver-fix-cycle.test.js) uses to force UNVERIFIED.
+  const manifestPath = path.join(host.sidecar, 'manifest-1.jsonl')
+  fs.appendFileSync(manifestPath,
+    JSON.stringify({ leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1 }, scope: 'fix-delta' }) + '\n')
+
+  const stateBefore = readStateRaw(host.sidecar)
+  const r = run(host.root, host.spec, '--mark', 'reviewer-returned', '--file',
+    returnFileWith('soft-floor-d6-unverified-return', CLEAN_RETURN))
+
+  assert.strictEqual(r.status, 2,
+    'D6 (fix review): the auto-dispose path must refuse a pass that derives UNVERIFIED against an empty hard ' +
+    'pool, never write a non-CLEAN word into marks.dispositions and sail through to CLOSE: ' +
+    r.stdout + ' / ' + r.stderr)
+  assert.match(r.stderr, /verdict\.js: UNVERIFIED — manifest invalid: scope values disagree/,
+    'D6 (fix review): stderr must carry verdict.js\'s own UNVERIFIED cause line verbatim, mirroring ' +
+    'handleDispositions()\'s own UNVERIFIED pre-check text: ' + r.stderr)
+  assert.match(r.stderr, /cold legs re-run/,
+    'D6 (fix review): the refusal must name the same cold-legs-rerun remedy the UNVERIFIED pre-check ' +
+    'gives at DISPOSITIONS, so the two paths agree on what to do next: ' + r.stderr)
+  const stateAfter = readStateRaw(host.sidecar)
+  assert.strictEqual(stateAfter, stateBefore,
+    'D6 (fix review): the refusal must happen BEFORE saveSidecar() — review-state.json must be byte-identical ' +
+    'to before the refused mark, never recording marks.dispositions = {…, word:"UNVERIFIED"}')
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER',
+    'D6 (fix review): a refused reviewer-returned mark must leave state exactly where it was — never CLOSE, ' +
+    'and never a state the next bare invocation refuses to act on')
+})
+
+// specs/20260909/04-review-soft-floor.md D6/D12 (fix review, DISPOSITIONS "nothing to
+// disposition" branch): the empty-pool print still read the retired
+// `--mark dispositions --waived 0 --rejected 0 --fix-dispatched 0` form after D7 dropped the
+// count flags from every other DISPOSITIONS mark line. D6's own auto-dispose (above) now closes
+// a genuinely empty pool before this branch can ever print during a normal run, so it is forced
+// here by hand-resetting marks.dispositions after the auto-close — the same "reach an
+// otherwise-unreachable branch via a hand-edited sidecar" technique
+// AC-20260820-07-8's manifest-provable-cap test uses.
+test('D6/D12 (fix review): WHEN the DISPOSITIONS step prints with a genuinely empty hard pool (0 survivors, 0 leg findings) THE SYSTEM SHALL print the mark line as --mark dispositions --file <return.json>, matching the main DISPOSITIONS step, never the retired --waived 0 --rejected 0 --fix-dispatched 0 form', () => {
+  const host = makeHost('soft-floor-d6d12-empty-mark')
+  toReviewer(host)
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file',
+    returnFileWith('soft-floor-d6d12-return', CLEAN_RETURN))
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
+    'setup precondition: D6 auto-dispose must have already closed this zero-survivor, zero-leg-finding run')
+
+  // Force the otherwise-unreachable DISPOSITIONS-with-empty-pool print by resetting the marks
+  // D6 just wrote — the pools stay empty (same manifest, same zero-survivor return on file).
+  const stateFile = path.join(host.sidecar, 'review-state.json')
+  const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'))
+  state.dispositions = null
+  state.dispositionsIteration = null
+  fs.writeFileSync(stateFile, JSON.stringify(state))
+  assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS',
+    'the hand-edit must land the run at DISPOSITIONS with an empty pool — the only way to exercise this ' +
+    'branch now that D6 auto-closes every genuinely empty pool before it')
+
+  const step = run(host.root, host.spec)
+  assert.match(step.stdout, /nothing to disposition/,
+    'sanity: this must be the empty-pool branch, not the populated-pool DISPOSITIONS print: ' + step.stdout)
+  assert.match(step.stdout, /--mark dispositions --file <return\.json>/,
+    'D6/D12 (literal): the empty-pool branch\'s mark line must match the main DISPOSITIONS step\'s own line — ' +
+    'the count flags are retired everywhere, not just on the populated-pool path: ' + step.stdout)
+  assert.ok(!step.stdout.includes('--waived'),
+    'D6/D12 (literal): the empty-pool branch must never print the retired ' +
+    '--waived 0 --rejected 0 --fix-dispatched 0 form: ' + step.stdout)
 })

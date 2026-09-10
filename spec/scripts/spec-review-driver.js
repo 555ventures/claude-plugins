@@ -1168,6 +1168,21 @@ function handleReviewerReturned() {
       'verdict.js (auto-dispositions pass, empty hard pool)')
     if (r.status === 2) die((r.stderr || r.stdout).trim())
     const word = r.stdout.split('\n')[0].trim()
+    // D6 (specs/20260909/04-review-soft-floor.md) / AC-20260909-04-7: an empty hard pool is only
+    // ever auto-dispositioned into a CLEAN-shaped terminal pass — a non-CLEAN word here (most
+    // often UNVERIFIED: a required leg row is missing even though the survivor/leg-finding pools
+    // are empty) means dispositions cannot cure this and marks.dispositions must NEVER be written
+    // for it (that write is the exact bug this AC closes: a stale UNVERIFIED word saved to
+    // review-state.json, satisfying deriveState()'s "dispositions recorded" check and advancing to
+    // CLOSE, then refusing the next bare invocation one round-trip later). Surface the real remedy
+    // right here instead, mirroring handleDispositions()'s own UNVERIFIED pre-check text/exit
+    // above so the two paths agree — nothing is persisted (saveSidecar() has not run yet).
+    if (word !== 'CLEAN') {
+      die((r.stderr || '').trim() +
+        '\n--mark reviewer-returned refused: the hard pool is empty but the verdict pass derived ' +
+        word + ', not CLEAN — dispositions cannot cure missing or contradictory evidence, only a ' +
+        'cold legs re-run can. Delete ' + sidecarDir + ' and re-run:\n  node ' + __filename + ' ' + specPath)
+    }
     marks.dispositions = { waived: 0, rejected: 0, fixDispatched: 0, word }
     marks.dispositionsIteration = n
     marks.disposer = { file: null, iteration: n, overrides: 0, empty: true }
@@ -1321,10 +1336,16 @@ function handleDispositions() {
     // narrower than handleFixApplied's own count arithmetic on purpose: a dispositions mark that
     // lands FIX for what WOULD BE the capping cycle stays accepted (AC-20260820-07-8/AC-20260909-
     // 04-13 SHALL CONTINUE TO — the cap applies to fix-applied itself, the moment it re-runs legs,
-    // never to entering FIX); D10 only fires once the cap has ALREADY visibly tripped in this run
-    // (marks.escalated, set nowhere but handleFixApplied's own cap branch) — the ESCALATE step's
-    // own waive/reject exit is the scenario this guards. Checked before the tally/count
-    // cross-check and before any write (dest file or verdict pass).
+    // never to entering FIX); D10 only fires once the cap has ALREADY visibly tripped in THIS
+    // session (marks.escalated, set nowhere but handleFixApplied's own cap branch) — the durable,
+    // cross-session half of handleFixApplied's count (an uncleared prior escalate row) is
+    // deliberately NOT mirrored here: tests/review/escalate-cap-durable.test.js pins that exact
+    // scenario (a cold restart with one uncleared escalate row) as ACCEPTED at dispositions with a
+    // warning, refused only at the following fix-applied, which is where the durable escalate row
+    // for the repeat offense is written (core § Incident Policy) — refusing earlier here would
+    // silently drop that second escalate row. See the deviations sidecar. The ESCALATE step's own
+    // waive/reject exit is the scenario this guards. Checked before the tally/count cross-check
+    // and before any write (dest file or verdict pass).
     if (marks.escalated && tally.fix > 0) {
       die('iteration cap 2 reached — a third fix-applied is refused; this disposer return ' +
         'recommends fix for at least one finding, but the fix/review loop is capped at 2 ' +
@@ -2038,9 +2059,13 @@ const STEPS = {
   DISPOSITIONS: () => {
     const { survivors, softs, legs } = dispositionPools(currentN)
     if (survivors.length === 0 && legs.length === 0) {
+      // D6/D12 (specs/20260909/04-review-soft-floor.md): the mark line drops the count flags,
+      // matching the main DISPOSITIONS step's own line below — this branch is only ever reached
+      // when D6's own auto-disposition (handleReviewerReturned()) somehow did not already close
+      // the run out from under an empty hard pool.
       return `## Step: dispositions due — nothing to disposition\n` +
         `survivors (0) · leg findings (0). Then:\n` +
-        `  node ${__filename} ${specPath} --mark dispositions --waived 0 --rejected 0 --fix-dispatched 0`
+        `  node ${__filename} ${specPath} --mark dispositions --file <return.json>`
     }
     const softBlock = softs.length
       ? `advisory (${softs.length}, recorded, not dispositioned):\n` +

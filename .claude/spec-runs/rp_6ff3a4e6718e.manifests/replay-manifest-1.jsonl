@@ -1,0 +1,10 @@
+{"leg":"reconcile","exit":0,"observed":{"outOfPlan":0,"files":[]},"scope":"full"}
+{"leg":"ci","exit":0,"observed":{"unavailable":"no-adapter"},"scope":"full"}
+{"leg":"gate","exit":0,"observed":{"skips":0,"todos":0,"testsExecuted":174},"scope":"full"}
+{"leg":"suite","exit":0,"observed":{"skips":0,"todos":0,"testsExecuted":1562},"scope":"full"}
+{"leg":"patterns","exit":0,"observed":{"matches":10},"scope":"full"}
+{"leg":"at-risk","exit":0,"observed":{"files":10,"testsExecuted":111},"scope":"full"}
+{"leg":"smoke","exit":4,"observed":{"result":"inert"},"scope":"full"}
+{"leg":"ac-matrix","exit":0,"observed":{"uncovered":0,"oracle":0,"preGreen":0}}
+{"leg":"skip-reconcile","exit":0,"observed":{"skipped":0,"sanctioned":0}}
+{"leg":"promise-sweep","exit":1,"observed":{"rows":9,"carried":6,"sanctioned":2,"orphans":1}}

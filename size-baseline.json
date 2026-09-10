@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 50443,
-    "spec/scripts": 1320365,
+    "spec/scripts": 1320155,
     "spec/scripts/lib": 242860,
-    "tests": 3737700
+    "tests": 3737673
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -78,7 +78,7 @@
     "spec/scripts/scope-reconcile.js": 16902,
     "spec/scripts/smoke.sh": 8134,
     "spec/scripts/spec-build-driver.js": 49555,
-    "spec/scripts/spec-queue.js": 25130,
+    "spec/scripts/spec-queue.js": 24920,
     "spec/scripts/spec-review-driver.js": 143576,
     "spec/scripts/spec-session-stamp.sh": 2680,
     "spec/scripts/spec-state-gate.sh": 4846,
@@ -205,7 +205,7 @@
     "tests/provenance/provenance.test.js": 30412,
     "tests/question-style-gate.test.js": 12330,
     "tests/queue/queue-overlay.test.js": 28730,
-    "tests/queue/spec-queue.test.js": 40872,
+    "tests/queue/spec-queue.test.js": 40845,
     "tests/red-check/mixed-pin.test.js": 9223,
     "tests/red-check/red-check-watchdog.test.js": 1866,
     "tests/red-check/red-check.test.js": 51574,

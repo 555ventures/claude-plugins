@@ -6,33 +6,27 @@ const path = require('node:path')
 const { execFileSync, spawn } = require('node:child_process')
 const { tmpdir, runNode, gitRepo, SPEC } = require('../helpers')
 
-// specs/20260823/08-derived-session-queue.md: the queue this spec exists for —
-// the intended work order plus free-text items and their done-when predicates — lives in ONE
-// file, `spec-queue.json`, resolved via `git -C <root> rev-parse --git-common-dir` so every
-// linked worktree of a repo shares it and it never appears in `git status` (D1, executed spike
-// A1). All writes to that file are owned by `spec/scripts/spec-queue.js`; doneness for both item
-// kinds is evaluated by the single shared derivation `spec/scripts/lib/queue.js` (D5, D6, D14) —
-// never a second place that decides whether an item is done. This file pins the write-path CLI
-// behavior directly: common-dir placement, predicate evaluation, and manual ticks.
+// specs/20260823/08-derived-session-queue.md: the queue this spec exists for — the intended
+// work order plus free-text items and their done-when predicates — lives in ONE file,
+// `spec-queue.json`, resolved via `git -C <root> rev-parse --git-common-dir` so every linked
+// worktree shares it and it never shows in `git status` (D1, spike A1). All writes are owned
+// by `spec/scripts/spec-queue.js`; doneness for every kind is evaluated by the one shared
+// derivation `spec/scripts/lib/queue.js` (D5, D6, D14). This file pins the write-path CLI:
+// placement, predicate evaluation, ticks.
 //
-// specs/20260903/03-pipeline-queue-mechanics.md retools the write path on top of that: a third
-// `spec` item kind (D1), an optional `after` gate on any item (D2), append-last reconcile with
-// no `auto_placed` stamp and no veto notice (D4), first-occurrence dedupe of duplicate brief/spec
-// items on every write (D5), a shrunk five-verb set (`next|list|add|move|done`) where `bump`,
-// `defer`, `ok`, `add --after`, and `add --brief` all exit 2 naming their D6 replacement, and
-// `move <ref> <n>` counting pending positions exactly as `list` prints them (D7). The
-// AC-20260823-08-8/-10 tests below (dependency-parent auto-placement, `bump`) pinned behavior
-// this spec deliberately retires — they are rewritten in place to the new placed-last/`move`
-// behavior and retagged, never left red; AC-20260823-08-5/-6/-7/-9 are retagged in place as
-// continuation pins (D9).
-
+// specs/20260903/03-pipeline-queue-mechanics.md retools that write path: a third `spec` item
+// kind (D1), an optional `after` gate (D2), append-last reconcile with no `auto_placed` stamp
+// or veto notice (D4), first-occurrence dedupe on every write (D5), a shrunk verb set whose
+// retired members exit 2 naming their D6 replacement, and `move <ref> <n>` counting pending
+// positions as `list` prints them (D7). Retired tests are rewritten in place and
+// retagged, never left red (D9).
+//
 const SCRIPT = 'scripts/spec-queue.js'
 
 // Host factory: a real git repo (spec-queue.js requires one — exit 3 "not a git repository"
 // otherwise) optionally carrying roadmap briefs, specs, a ledger, and a pre-seeded queue file
-// written directly at <repo>/.git/spec-queue.json — the exact location D1 pins, so fixtures that
-// need to control queue contents precisely (baselines, auto_placed stamps) never depend on `add`'s
-// own payload-classification behavior.
+// written at <repo>/.git/spec-queue.json — the exact location D1 pins, so fixtures that control
+// queue contents precisely never depend on `add`'s own payload classification.
 function host({ briefs = {}, specs = {}, ledgerRows = null, queue = null } = {}) {
   const dir = fs.realpathSync(tmpdir('spec-queue'))
   gitRepo(dir)
@@ -188,8 +182,8 @@ test('AC-20260903-03-9: the retired bump/defer/ok verbs and the retired add flag
     { argv: ['ok'], mustMatch: /no accept step/ },
     { argv: ['add', 'x', '--after', 'q1'], mustMatch: /--at <n>/ },
     { argv: ['add', '--brief', '05'], mustMatch: /pass the brief number as the payload/ },
-    // An unknown flag must refuse, never fold into the payload — `add specs/x.md --root /abs` once
-    // landed as a kind "prompt" item with payload "specs/x.md --root /abs".
+    // An unknown flag must refuse, never fold into the payload — `add specs/x.md --root /abs`
+    // once landed as a kind "prompt" item with payload "specs/x.md --root /abs".
     { argv: ['add', 'specs/20260901/01-a.md', '--top', '--root', dir], mustMatch: /unknown flag --root/ },
   ]
   for (const { argv, mustMatch } of cases) {
@@ -233,8 +227,8 @@ test('AC-20260903-03-8: spec-queue list renders exactly the numbered pending for
     return host({
       briefs: {
         // Brief 24 only exists on the pending host — the empty-pending host must carry no
-        // non-done, non-queued brief at all, or `list`'s D8 reconcile step would legitimately
-        // surface it as a pending item and falsify the "nothing pending" assertion below.
+        // non-done, non-queued brief at all, or `list`'s D8 reconcile would legitimately
+        // surface it as pending and falsify the "nothing pending" assertion below.
         ...(withPending ? { '24-status-and-queue-diet.md': '# 24 — Status and queue diet\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n' } : {}),
         '20-a.md': '# 20 — A\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
         '21-b.md': '# 21 — B\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
@@ -364,8 +358,8 @@ test('AC-20260823-08-7 / AC-20260903-03-10: spec-queue done stamps an ISO ticked
 })
 
 // Rewritten in place (never left red) — specs/20260903/03-pipeline-queue-mechanics.md D4
-// retires the dependency-aware auto-placement and its veto notice this test pinned; the
-// replacement rule is append-last, silent, unstamped.
+// retires the dependency-aware auto-placement and veto notice this test pinned; the
+// replacement is append-last, silent, unstamped.
 test('AC-20260903-03-4 (was AC-20260823-08-8): an on-disk brief missing from the queue is appended LAST on `spec-queue next`, never inserted after its Depends-on parent, with no auto_placed stamp or notice', () => {
   const dir = host({
     briefs: {
@@ -424,9 +418,9 @@ test('AC-20260823-08-9 / AC-20260903-03-10: spec-queue next with no queue file s
 })
 
 // Rewritten in place (never left red) — specs/20260903/03-pipeline-queue-mechanics.md D6
-// retires `bump`; `move <ref> <n>` is the whole reorder API (D7), counting pending positions
-// exactly as `list` numbers them (done items keep their relative slots, undone-but-not-ready
-// items still count as pending).
+// retires `bump`; `move <ref> <n>` is the whole reorder API (D7), counting pending positions as
+// `list` numbers them (done items keep their slots, undone-but-not-ready items count as
+// pending).
 function moveHost() {
   return host({
     queue: [
@@ -439,8 +433,8 @@ function moveHost() {
 }
 
 test('AC-20260903-03-7: spec-queue move <ref> <n> counts pending positions as `list` prints them, done items keep their relative slot, and out-of-range n\'s are handled per D7', () => {
-  // move C 1 — C jumps to the very front of the PENDING order; the done item between A and B
-  // must stay between them (relative slots preserved), never get pushed around by the move.
+  // move C 1 — C jumps to the front of the PENDING order; the done item between A and B must
+  // stay between them (relative slots preserved), never get pushed around by the move.
   const dirFront = moveHost()
   const rFront = runNode(SCRIPT, ['move', 'task C', '1'], { cwd: dirFront })
   assert.strictEqual(rFront.status, 0, 'D7: `move <ref> 1` must succeed for a pending item: ' + rFront.stdout + rFront.stderr)
@@ -475,21 +469,21 @@ test('AC-20260903-03-7: spec-queue move <ref> <n> counts pending positions as `l
 })
 
 // A /spec:review of specs/20260823/08-derived-session-queue.md, second repair round:
-// writeQueue's atomic temp-file+rename fix (see its header comment in spec-queue.js) stays, but
-// this test's own evidence claim was overstated and is corrected here. It does NOT discriminate a
-// plain-fs.writeFileSync revert: a second review repro reconstructed the real pre-fix writeQueue
-// (plus its full lib/ + spec-status.js dependency set) and raced it ~250 times — this test's own
-// 12-way x 6-trial config, 200 trials at 12-way, and 25 trials at 48-way, all at realistic ~196KB
-// payloads — with ZERO corruptions on macOS/APFS (this repo's own test filesystem). A tearing
-// defect at this queue file's realistic size is not reachable on this filesystem, so a revert to
-// the unsafe single-write would still pass this test green here. What this test DOES discriminate:
+// writeQueue's atomic temp-file+rename fix (see its header in spec-queue.js) stays, but this
+// test's own evidence claim was overstated and is corrected here. It does NOT discriminate a
+// plain-fs.writeFileSync revert: a review repro reconstructed the pre-fix writeQueue (plus its
+// full lib/ + spec-status.js dependency set) and raced it ~250 times — this test's own 12-way x
+// 6-trial config, 200 trials at 12-way, and 25 at 48-way, all at ~196KB payloads — with ZERO
+// corruptions on macOS/APFS (this repo's test filesystem). A tearing defect at this file's real
+// size is unreachable here, so the unsafe single-write would still pass green on this machine.
+// What this test DOES discriminate:
 // (1) a regression to a FIXED (non-pid-discriminated) temp filename, where two writers cross-rename
-// each other's half-written temp file into place; (2) a temp file placed on a different filesystem
-// than QUEUE_PATH (rename across filesystems is never atomic, and would surface as ENOTEMPTY/EXDEV
+// each other's half-written temp file into place; (2) a temp file on a different filesystem than
+// QUEUE_PATH (cross-filesystem rename is never atomic, and would surface as ENOTEMPTY/EXDEV
 // failures or a missing/malformed final file under this same concurrent load); (3) lockfile- or
 // EEXIST-style concurrency crashes that leave the file missing or malformed; and (4) the pre-fix
 // tearing defect itself, on any future CI runner or filesystem where the >196KB threshold IS
-// reachable. Read this as a concurrent-invocation safety pin, not a corruption regression pin.
+// reachable. Read this as a concurrent-invocation safety pin, not a corruption one.
 test('AC-20260823-08-review-concurrent-writer-safety: N concurrent spec-queue invocations racing writes against one shared queue file all succeed and never leave it unparseable', async () => {
   const CONCURRENCY = 12
   const TRIALS = 6
@@ -504,8 +498,8 @@ test('AC-20260823-08-review-concurrent-writer-safety: N concurrent spec-queue in
     JSON.stringify({ version: 1, seq: items.length, items }, null, 2))
 
   // Retargeted from `bump` (retired by specs/20260903/03-pipeline-queue-mechanics.md D6) to
-  // `done` — still a live write subcommand, still races CONCURRENCY writers against the same
-  // shared queue file, preserving this test's own concurrency-safety intent.
+  // `done` — still a live write subcommand, still races CONCURRENCY writers against one shared
+  // queue file, preserving this test's concurrency-safety intent.
   function spawnOne(id) {
     return new Promise((resolve, reject) => {
       const child = spawn(process.execPath, [SCRIPT_PATH, 'done', id], { cwd: dirPath })
@@ -614,4 +608,15 @@ test('spec-queue list cuts every row to one line, and show <ref> prints the untr
 
   const rMissing = runNode(SCRIPT, ['show'], { cwd: dir })
   assert.strictEqual(rMissing.status, 2, 'show without a <ref> is a usage error, never a silent no-op: ' + rMissing.stdout)
+
+  const rBare = runNode(SCRIPT, ['q1'], { cwd: dir })
+  assert.strictEqual(rBare.status, 2, 'a bare <ref> stays an error: ' + rBare.stdout)
+  assert.match(rBare.stderr, /did you mean: spec-queue show q1/,
+    'a lone token is a <ref> missing its verb more often than a typo: ' + rBare.stderr)
+  assert.match(rBare.stderr, /\(next\|list\|add\|move\|done\|show\)/,
+    'the hint carries the verb list, so a typo self-corrects too: ' + rBare.stderr)
+  assert.ok(!/^usage:/m.test(rBare.stderr),
+    'the hint replaces the dump; both bury the actionable line: ' + rBare.stderr)
+  const rFlag = runNode(SCRIPT, ['--help'], { cwd: dir })
+  assert.match(rFlag.stderr, /^usage:/m, 'a flag is never a <ref> — it still gets usage')
 })

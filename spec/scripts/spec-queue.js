@@ -1,49 +1,39 @@
 #!/usr/bin/env node
 'use strict'
 // spec-queue.js <subcommand> [args] — the sole writer of the per-repo session queue
-// (<git-common-dir>/spec-queue.json). Why: specs/20260903/03-pipeline-queue-mechanics.md —
-// the queue is the pipeline's own memory for deferred work: an item can wait behind a spec
-// or a brief (an "after" gate) until that target is done, an ad-hoc spec can be queued by
-// path at any position, a brief that lands on the roadmap is appended last with no mark or
-// notice, and a brief or spec is queued at most once. spec-status.js reads this file
-// read-only, as an input overlay to its `--next` derivation — it never writes it, and this
-// script never re-derives `--next`'s own action/blockers shape; for a non-prompt item it
-// delegates the paste line entirely to `spec-status.js --next` (the one frozen next-pointer
-// surface). Item doneness and readiness (every kind) are evaluated exclusively via
-// lib/queue.js's isItemDone/isItemReady — the same evaluators spec-status.js's overlay
-// uses — never a second derivation here.
-//
-// What this deliberately does NOT do: reorder or render spec-status.js's `--next` output
-// itself; write a "done" flag onto a brief or spec item (doneness is always derived live
-// from spec-status.js, never stored); keep a sidecar journal for manual ticks (the tick
-// stamps the item itself, in this file); insert a newly-landed brief anywhere but the very
-// end (the dependency-aware/letter-suffix placement and its veto/accept notice are retired
-// — D4); alias the retired `bump`/`defer`/`ok` verbs or the retired `add --after`/`--brief`
-// flags (each exits 2 naming its `move`/`--at`/payload replacement — D6); have `list` mutate
-// the queue file (it virtually reconciles a copy — strip, dedupe, and append missing on-disk
-// briefs — purely for display numbering; only a write subcommand persists the result).
+// (<git-common-dir>/spec-queue.json). Owner: specs/20260903/03-pipeline-queue-mechanics.md.
+// The queue is the pipeline's memory for deferred work: an item can wait behind a spec or a
+// brief (an "after" gate) until that target is done, an ad-hoc spec can be queued by path at
+// any position, a landed brief is appended last with no mark, and a brief or spec is queued at
+// most once. spec-status.js reads this file read-only as an input overlay to its `--next`
+// derivation — it never writes it, and this script never re-derives `--next`'s own
+// action/blockers shape; for a non-prompt item it delegates the paste line to
+// `spec-status.js --next` (the one frozen next-pointer surface). Doneness and readiness (every
+// kind) are evaluated exclusively via lib/queue.js's isItemDone/isItemReady — the overlay's
+// own evaluators — never a second derivation. `list` never mutates the queue file (it
+// reconciles a copy for display numbering only); the retired `bump`/`defer`/`ok` verbs and
+// `add --after`/`--brief` flags each exit 2 naming their D6 replacement.
 //
 // Subcommands:
 //   next                          reconcile+write, print the pick (or a prompt payload)
 //   list                          pending items only, one line each, gates shown, footer
 //   add <payload…> [--top | --at <n>] [--after-spec <path> | --after-brief NN]
 //                  [--when <type>:<args>]
-//   move <ref> <n>                n counts pending positions exactly as `list` prints them
+//   move <ref> <n>                n counts pending positions as `list` prints them
 //   done <ref>                    manual tick: stamp ticked
-//   show <ref>                    the item's FULL payload, untruncated (list/status cut rows
-//                                 to one line, so this is the only way to read a long one)
-// Payload classification: NN/NNa or a docs/roadmap/NN-*.md path -> brief; a path matching
-// ^specs/.*\.md$ -> spec; anything else -> prompt verbatim.
+//   show <ref>                    the item's FULL payload (list/status cut rows to one line,
+//                                 so this is the only way to read a long one)
+// Payload classification: NN/NNa or a docs/roadmap/NN-*.md path -> brief; ^specs/.*\.md$ ->
+// spec; anything else -> prompt verbatim.
 // <ref> resolves against an id, a brief number, a spec path (exact or unique basename
-// substring), or a unique prompt-payload substring.
+// substring), or a unique prompt substring.
 // --when <type>:<args>: brief-state:NN:STATE · spec-exists:PATH · ledger-count:STAGE:MIN
-//   (baseline is auto-stamped from the CURRENT ledger count at add time) · manual.
+//   (baseline auto-stamped from the CURRENT ledger count at add time) · manual.
 //
 // Exit codes: 0 ok · 2 usage, unresolvable/ambiguous/already-done <ref>, duplicate brief/spec
 //   on add (names `spec-queue move <ref> <n>`), a missing --after-spec/--after-brief target,
-//   a removed verb/flag (names its replacement), or a corrupt queue file (remedy: remove
-//   <git-common-dir>/spec-queue.json and re-run `spec-queue next`) · 3 not a git repository
-//   (remedy: run inside the repo).
+//   a removed verb/flag (names its replacement), or a corrupt queue file (remove
+//   <git-common-dir>/spec-queue.json, re-run `next`) · 3 not a git repository (run inside it).
 
 const fs = require('fs')
 const path = require('path')
@@ -81,7 +71,18 @@ if (Object.prototype.hasOwnProperty.call(REMOVED_SUBS, sub)) {
 }
 
 const SUBS = ['next', 'list', 'add', 'move', 'done', 'show']
-if (!SUBS.includes(sub)) { usage(); process.exit(2) }
+if (!SUBS.includes(sub)) {
+  // A lone non-flag token is more often a <ref> typed without its verb (`spec-queue q133`)
+  // than a mistyped subcommand, and a usage dump leaves the user guessing. `show` is the only
+  // non-mutating verb, so the suggestion is always safe to paste; the verb list rides the same
+  // line so a genuine typo self-corrects too, without the dump burying the actionable half.
+  if (sub && !sub.startsWith('-') && rest.length === 0) {
+    console.error(`spec-queue: '${sub}' is not a subcommand (${SUBS.join('|')}) — did you mean: spec-queue show ${sub}`)
+    process.exit(2)
+  }
+  usage()
+  process.exit(2)
+}
 
 // The repository root, NOT the shell's CWD: every brief/spec state below is derived by
 // `spec-status.js --root <root>` and by `specRoot`-relative existsSync, so a run from a

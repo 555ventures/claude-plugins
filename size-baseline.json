@@ -1,15 +1,15 @@
 {
   "newFileCap": 40000,
   "trees": {
-    "scripts": 50443,
+    "scripts": 55589,
     "spec/scripts": 1320515,
     "spec/scripts/lib": 242860,
-    "tests": 3744130
+    "tests": 3754446
   },
   "files": {
     "scripts/dup-windows.js": 15589,
     "scripts/plugin-bump.js": 9427,
-    "scripts/size-ratchet.js": 19881,
+    "scripts/size-ratchet.js": 25027,
     "scripts/spec-patterns.sh": 2455,
     "scripts/test-file-budget-reporter.js": 3091,
     "spec/scripts/ac-drift.js": 9152,
@@ -119,7 +119,7 @@
     "tests/consistency/read-load.test.js": 9559,
     "tests/consistency/red-fixture-coverage.test.js": 40717,
     "tests/consistency/retired-flags.test.js": 10272,
-    "tests/consistency/size-ratchet-live.test.js": 1865,
+    "tests/consistency/size-ratchet-live.test.js": 2957,
     "tests/consistency/test-concurrency-cap.test.js": 2499,
     "tests/consistency/wire-register.test.js": 8079,
     "tests/count-observation.test.js": 4209,
@@ -261,7 +261,7 @@
     "tests/scope-reconcile-at-risk.test.js": 25346,
     "tests/scope-reconcile-glob-rows.test.js": 13295,
     "tests/scope-reconcile-probe.test.js": 7045,
-    "tests/size-ratchet/size-ratchet.test.js": 40539,
+    "tests/size-ratchet/size-ratchet.test.js": 49763,
     "tests/smoke-manifest.test.js": 5959,
     "tests/smoke-shutdown-behavior.test.js": 5986,
     "tests/smoke-stale-ready.test.js": 4064,
@@ -1160,6 +1160,36 @@
       "from": 3737673,
       "to": 3744130,
       "cite": "specs/20260909/06-ephemeral-serve-ports.md"
+    },
+    {
+      "path": "scripts/size-ratchet.js",
+      "from": 19881,
+      "to": 25027,
+      "cite": "specs/20260908/01-size-ratchet.md"
+    },
+    {
+      "path": "tests/consistency/size-ratchet-live.test.js",
+      "from": 1865,
+      "to": 2957,
+      "cite": "specs/20260908/01-size-ratchet.md"
+    },
+    {
+      "path": "tests/size-ratchet/size-ratchet.test.js",
+      "from": 40539,
+      "to": 49763,
+      "cite": "specs/20260908/01-size-ratchet.md"
+    },
+    {
+      "path": "scripts",
+      "from": 50443,
+      "to": 55589,
+      "cite": "specs/20260908/01-size-ratchet.md"
+    },
+    {
+      "path": "tests",
+      "from": 3744130,
+      "to": 3754446,
+      "cite": "specs/20260908/01-size-ratchet.md"
     }
   ]
 }

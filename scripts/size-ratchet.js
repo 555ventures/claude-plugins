@@ -3,7 +3,7 @@
 // size-ratchet.js --root <dir> [--baseline <file>] [--json]
 // size-ratchet.js --root <dir> --update
 // size-ratchet.js --root <dir> --raise <path|tree> --to <bytes> --cite <spec path>
-// size-ratchet.js --root <dir> --reconcile --cite <spec path>
+// size-ratchet.js --root <dir> --reconcile --cite <spec path>|direct
 //
 // Keeps size-baseline.json (repo root) a TIGHT byte ceiling over every tracked file under
 // spec/scripts, scripts, and tests, plus a per-tree total, so the plugin's own code can shrink
@@ -15,15 +15,26 @@
 // cited raises[] entry per lifted finding — the one-shot form of what a build does by hand
 // (--update refused, then --raise --cite per finding) after reconciling its own derived artifacts.
 //
+// specs/20260908/01-size-ratchet.md D15 adds one more admissible cite, to --reconcile alone: the
+// literal `direct`, for a fix core.md § Incident Policy forbids to have a spec at all. D4's
+// rejection was of free-form reason STRINGS, unverifiable by construction; `direct` carries no
+// string to verify, only a byte bound this script measures, git being the provenance of the
+// commit that adds the row. Admitted when all three hold: every grown-or-new file is a shell
+// gate (`*.sh`) or a test, each such file's own growth is inside its class budget, and the run's
+// NET per-tree growth is inside it too (DIRECT_BUDGETS). `--raise --cite direct` is refused —
+// only --reconcile sees a whole run, and the budget is a property of the run. D15 carries the
+// derivation of both numbers.
+//
 // Inventory is `git ls-files` over the three roots (D1) — never an fs walk with an ignore
 // list, never a name-shape/extension filter. Untracked files never count (AC-8). Trees:
 // spec/scripts (everything under it except lib/), spec/scripts/lib, scripts, tests.
 //
 // Deliberately does NOT: write the baseline except via --update/--raise/--reconcile, allow
 // --update against an existing baseline to raise anything (D3), allow --raise/--reconcile to
-// lower a ceiling, accept a free-form raise reason (D4/D8 both require --cite), accept a raise
-// target that is neither a tracked file nor an already-baselined path, classify by file
-// extension, or lift --reconcile's tracked-but-missing refusal (D9 — a missing file is a broken
+// lower a ceiling, accept a free-form raise reason (D4/D8 both require --cite; D15's `direct` is
+// a fixed literal with a measured bound, not a reason string), accept `--cite direct` on --raise
+// or on a check, accept a raise target that is neither a tracked file nor an already-baselined
+// path, classify a budget-class member by anything but its path, or lift --reconcile's tracked-but-missing refusal (D9 — a missing file is a broken
 // checkout, not a growth to baseline).
 //
 // Exit codes: 0 tight & under (check) or refusal-free write (update/raise/reconcile) ·
@@ -35,7 +46,9 @@
 //               without --to/--cite, --reconcile without --cite, a stray --to alongside
 //               --reconcile (--reconcile never reads --to — every ceiling comes from actual),
 //               --to/--cite without --raise or --reconcile, a non-integer --to,
-//               bad/missing/nonexistent --cite, a --raise --to below the current ceiling, a
+//               bad/missing/nonexistent --cite, `--cite direct` outside --reconcile, a
+//               --reconcile --cite direct whose growth leaves the D15 class or byte budget, a
+//               --raise --to below the current ceiling, a
 //               --raise target that is neither tracked nor already baselined, unknown flag)
 //
 // specs/20260908/04-duplicate-window-ratchet.md D9: the synchronous fd writer is imported from
@@ -49,6 +62,14 @@ const io = require(path.join(__dirname, '..', 'spec', 'scripts', 'lib', 'driver-
 
 const TREES = ['spec/scripts', 'spec/scripts/lib', 'scripts', 'tests']
 const CITE_RE = /^specs\/\d{8}\/\d{2}-/
+// D15: the one cite that is a literal rather than a path, admissible on --reconcile only.
+const DIRECT_CITE = 'direct'
+// Net growth one `--cite direct` run may take, per budget class — D15 derives both numbers from
+// the recorded raise distribution: each sits below the median spec-cited raise for its class, so
+// growth an ordinary spec would carry cannot fit through this door.
+const DIRECT_BUDGETS = { code: 2048, tests: 4096 }
+// A shell gate is the D15 file class alongside tests — matched by path, never by intent.
+const GATE_FILE_RE = /\.sh$/
 
 function writeOut(str) { io.writeOut(1, str) }
 function writeErr(str) { io.writeOut(2, str) }
@@ -71,7 +92,7 @@ function parseArgs(argv) {
       case '--to': args.to = argv[++i]; break
       case '--cite': args.cite = argv[++i]; break
       case '--reconcile': args.reconcile = true; break
-      default: fail('unknown flag ' + a + ' — usage: size-ratchet.js --root <dir> [--baseline <file>] [--json] | --update | --raise <path|tree> --to <bytes> --cite <spec path> | --reconcile --cite <spec path>')
+      default: fail('unknown flag ' + a + ' — usage: size-ratchet.js --root <dir> [--baseline <file>] [--json] | --update | --raise <path|tree> --to <bytes> --cite <spec path> | --reconcile --cite <spec path>|direct')
     }
   }
   if (!args.root) fail('missing --root — usage: size-ratchet.js --root <dir> [--baseline <file>] [--json]')
@@ -97,9 +118,66 @@ function parseArgs(argv) {
 // The "is --cite even present" requirement stays with each caller, since --raise and --reconcile
 // word that requirement differently ("--raise requires --cite" vs "--reconcile requires --cite").
 function validateCiteShapeAndExistence(root, cite) {
+  if (cite === DIRECT_CITE) return
   if (!CITE_RE.test(cite)) fail('--cite must match ^specs/\\d{8}/\\d{2}- , got ' + cite)
   const citePath = path.join(root, cite)
   if (!fs.existsSync(citePath)) fail('--cite names a file that does not exist: ' + cite)
+}
+
+// D15's budget class for any tracked path or tree key. `tests` is its own class because
+// core.md § Incident Policy requires a behavioral test with every incident fix: charging the
+// mandated test against the same budget as the fix would price the doctrine out of the door
+// built for it.
+function budgetClassFor(rel) {
+  return (rel === 'tests' || rel.startsWith('tests/')) ? 'tests' : 'code'
+}
+
+// D15: refuse a `--cite direct` reconcile whose growth leaves the class or the byte budget.
+// Refusal is exit 2 with the baseline untouched (D5's cite bucket) and names the spec-cite
+// route, because that is always the remedy — the door is narrow by design, not broken.
+//
+// The class and per-file tests read the TRUE growth set (every tracked file whose actual byte
+// count exceeds its recorded ceiling, plus every tracked file absent from the baseline), not
+// the finding list: a new file under `newFileCap` and a file whose growth is offset by a
+// shrink elsewhere both raise no file finding at all, and either would otherwise carry
+// unbudgeted, out-of-class growth through this door. The byte budget is then the NET per-tree
+// growth the findings record, which is what the baseline's own tree ceilings actually move by.
+function enforceDirectBudget(root, baseline, actualSize, findings) {
+  const files = baseline.files || {}
+  const grown = []
+  for (const rel of Object.keys(actualSize)) {
+    const had = Object.prototype.hasOwnProperty.call(files, rel)
+    const ceiling = had ? files[rel] : 0
+    if (!had || actualSize[rel] > ceiling) grown.push({ path: rel, from: ceiling, to: actualSize[rel] })
+  }
+
+  const offClass = grown.filter((g) => budgetClassFor(g.path) !== 'tests' && !GATE_FILE_RE.test(g.path))
+  if (offClass.length > 0) {
+    fail('--cite direct admits growth only in shell gates (*.sh) and tests/ — ' +
+      offClass.map((g) => g.path).join(', ') + ' ' + (offClass.length === 1 ? 'is' : 'are') +
+      ' neither; raise ' + (offClass.length === 1 ? 'it' : 'them') + ' with --cite <spec path> instead')
+  }
+
+  for (const g of grown) {
+    const cls = budgetClassFor(g.path)
+    const delta = g.to - g.from
+    if (delta > DIRECT_BUDGETS[cls]) {
+      fail('--cite direct allows ' + DIRECT_BUDGETS[cls] + ' bytes per ' + cls + ' file — ' + g.path +
+        ' grew ' + delta + ' (' + g.from + ' -> ' + g.to + '); raise it with --cite <spec path> instead')
+    }
+  }
+
+  const spend = { code: 0, tests: 0 }
+  for (const f of findings) {
+    if (f.kind !== 'tree-over') continue
+    spend[budgetClassFor(f.path)] += f.actual - f.ceiling
+  }
+  for (const cls of Object.keys(DIRECT_BUDGETS)) {
+    if (spend[cls] > DIRECT_BUDGETS[cls]) {
+      fail('--cite direct allows ' + DIRECT_BUDGETS[cls] + ' bytes of net ' + cls + ' growth per run — ' +
+        'this run grows ' + spend[cls] + '; split it, or raise it with --cite <spec path> instead')
+    }
+  }
 }
 
 // Classify a repo-relative path into one of the tracked trees, or null.
@@ -401,6 +479,8 @@ function doReconcile(root, baselinePath, baseline, args) {
     newTrees[t] = sum
   }
 
+  if (args.cite === DIRECT_CITE) enforceDirectBudget(root, baseline, actualSize, findings)
+
   const liftable = findings.filter((f) => f.kind === 'over' || f.kind === 'tree-over' || f.kind === 'new-over-cap')
   const raises = (baseline.raises || []).slice()
   const appended = []
@@ -425,6 +505,12 @@ function doReconcile(root, baselinePath, baseline, args) {
 function doRaise(root, baselinePath, baseline, args) {
   if (args.to === null) fail('--raise requires --to <bytes>')
   if (args.cite === null) fail('--raise requires --cite <spec path>')
+  // D15 is a property of a whole run, and only --reconcile sees one: a single --raise names one
+  // ceiling with a caller-supplied --to, so there is nothing for the budget to measure.
+  if (args.cite === DIRECT_CITE) {
+    fail("--cite direct is accepted on --reconcile only — it is bounded by a whole run's measured " +
+      'growth, which a single --raise cannot supply; use --reconcile --cite direct, or --raise --cite <spec path>')
+  }
   const toNum = Number(args.to)
   if (!Number.isFinite(toNum) || !Number.isInteger(toNum) || toNum < 0) {
     fail('--to must be a non-negative integer byte count, got ' + args.to)

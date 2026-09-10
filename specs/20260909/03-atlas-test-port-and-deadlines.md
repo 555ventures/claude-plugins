@@ -199,7 +199,10 @@ only after a path where nothing has killed the child, so it cannot hit A3's race
 
 Why a spec at all: `tests/mocks/chrome-harness.js` sits at its size ceiling to the byte and the
 ratchet accepts a raise only against a spec path (`size-ratchet.js --raise … --cite`); a direct
-fix could not pass the gate.
+fix could not pass the gate. (Amended by specs/20260908/01-size-ratchet.md D15, which cites this
+paragraph as the first recorded instance of the ratchet manufacturing a spec, and opens a
+budgeted `--cite direct` door for the class — narrow enough that this spec's own raise would
+still not fit through it.)
 
 Pipeline rules § Test Rules still says the two `render-capture` pins are the only env-gated
 tests; specs/20260907/09 made that false and this spec adds one more, so D9 corrects the

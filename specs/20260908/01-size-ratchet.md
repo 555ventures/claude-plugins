@@ -44,6 +44,7 @@ one-line duty.
 | D12 | No plugin file changes: no `plugin.json` bump, no `spec-paths` key, no `spec/entrypoints.json` row. `[no-ac: absence of change]` | The script is repo tooling like `scripts/test-file-budget-reporter.js`; it sits outside the entrypoint-conformance inventory (`spec/scripts` minus `lib`, `spec/workflows`), so it needs no activating command. |
 | D13 | A **from-scratch seed** (`--update` with no baseline file present) writes every tracked file at its actual size and exits 0; `new-over-cap` cannot arise there, because "new" means *absent from an existing baseline*. The D3 `new-over-cap` refusal applies to `--update` against a baseline that already exists. (AC-20260908-01-5, -6) | Ruling by the orchestrator, 2026-09-08, resolving a build-time fork: 26 tracked files already exceed `newFileCap`, so a literal reading made D8's seeding run impossible. The spec's own Contracts example settles the intent — it records `genesis-driver.js` at 124092 and `replay.test.js` at 202065 as plain `files` entries with no matching `raises[]` — and AC-20260908-01-6 names only `over` and `tree-over` as refusal triggers. D6's rationale grandfathers the same way: it refuses "a fourth 120 KB driver", not the three already here. |
 | D14 | `--raise --to <n>` where `<n>` equals the ceiling already recorded is **accepted** and appends its `{path, from, to, cite}` row to `raises[]` like any other raise; a no-op raise is not refused. `[no-ac: absence of a refusal; D4's lowering refusal is pinned by AC-20260908-01-7]` | Ruling by JJ, 2026-09-09, on a review finding. D4 forbids lowering only and D5's exit-2 alphabet admits no no-op-raise case, so refusing it would change a locked decision rather than fix a defect. Cost accepted: the raise log may carry occasional rows recording no growth. |
+| D15 | `--reconcile` accepts one cite that is a literal rather than a path: `--cite direct`, admitted only when all three hold — every **grown-or-new** tracked file is a shell gate (`*.sh`) or lives under `tests/`; each such file's own growth is within its class budget; and the run's **net per-tree** growth is within it too. Budgets: **2048 bytes** across `spec/scripts`, `spec/scripts/lib` and `scripts`, **4096 bytes** under `tests`. Anything else — an out-of-class path, either bound exceeded, or `--cite direct` on `--raise` or on a bare check — is exit 2 with the baseline byte-for-byte unchanged and the `--cite <spec path>` route named. `direct` rows carry the identical `{path, from, to, cite}` shape. (AC-20260908-01-10, -11, -12, -13) | Ruling by JJ, 2026-09-10, on a measured contradiction between this spec and `core.md`. § Incident Policy requires a pipeline defect to be fixed **in the session it is understood** — the fix plus a behavioral test, no intake queue — and § Pipeline Entry admits the pipeline only for delegation or durability; `plan.md`'s own Tier step says work too small for either "gets no spec — say so and stop". A ratchet that accepts nothing but a spec path therefore forces a spec into existence for exactly the class doctrine forbids one, and it has already happened: specs/20260909/03-atlas-test-port-and-deadlines.md records in its own Rationale that it exists because "the ratchet accepts a raise only against a spec path … a direct fix could not pass the gate". The trigger here was a 12-line `command -v jq` guard on the UserPromptSubmit gates. **Why this is not D4's rejected free-form reason:** D4 refused reason *strings*, unverifiable by construction. `direct` carries no string — the admissibility test is entirely measured (a path class and two byte sums), and the provenance is git itself: the commit that adds the row. A spec authored to satisfy a regex is *worse* provenance than an honest commit. **Derivation of both numbers**, over the 147 raises recorded when this was ruled: no raise in the log has ever touched a `.sh` file (0 of 147), so the shell-gate class collides with nothing; `spec/scripts` tree raises run p50 2127, so 2048 sits just below the median spec-cited code raise; test-file raises run p50 1445 / p75 4038, so 4096 sits at their p75 and well below the `tests` tree p50 of 7383. Growth an ordinary spec would carry therefore cannot fit through this door. `tests` is its own class because § Incident Policy *mandates* the behavioral test: charging it against the fix's budget would price the doctrine out of the door built for it. **Why the class and per-file bounds read the true growth set rather than the finding list:** a new file under `newFileCap` and a growth offset by a shrink elsewhere each raise no file finding at all, so either would otherwise carry out-of-class, unbudgeted growth through unseen (pinned by AC-11's second half). **Why `--raise` is excluded:** the budget is a property of a whole run, and only `--reconcile` sees one. Cost accepted: growth in shell gates and tests up to these bounds is attributable to a commit rather than to a spec — and the standing live pin can only bound it per row, since the raise log carries no run identity to group by. |
 
 ## File Plan
 
@@ -143,8 +144,28 @@ baseline is written with two-space indentation and sorted keys so diffs stay rev
   extension) → test in tests/size-ratchet/size-ratchet.test.js
 - **AC-20260908-01-9**: WHEN this repository's suite runs THE SYSTEM SHALL run
   `scripts/size-ratchet.js --root <repo>` and observe exit 0, and every `raises[].cite` in the
-  tracked baseline SHALL name a file that exists → test in
+  tracked baseline SHALL name a file that exists **or be the literal `direct`** → test in
   tests/consistency/size-ratchet-live.test.js
+- **AC-20260908-01-10**: WHEN `--reconcile --cite direct` runs against growth confined to shell
+  gates and `tests/` that is within both the per-file and the net per-tree budget THE SYSTEM
+  SHALL exit 0, set every ceiling to actual, append one `raises[]` row per lifted finding with
+  `cite` exactly `"direct"` and the same `{path, from, to}` shape a spec-cited row carries, and
+  leave the following check at exit 0; AND WHEN this repository's suite runs THE SYSTEM SHALL
+  observe that no `direct` row in the tracked baseline records growth past 4096 bytes → tests in
+  tests/size-ratchet/size-ratchet.test.js and tests/consistency/size-ratchet-live.test.js
+- **AC-20260908-01-11**: WHEN a `--cite direct` reconcile's grown-or-new file set contains any
+  path that is neither `*.sh` nor under `tests/` THE SYSTEM SHALL exit 2 naming that path and the
+  `--cite <spec path>` remedy with the baseline byte-for-byte unchanged, including the case of a
+  newly tracked file under `newFileCap` that raises no file-level finding of its own → test in
+  tests/size-ratchet/size-ratchet.test.js
+- **AC-20260908-01-12**: WHEN a `--cite direct` reconcile grows one file past its class budget, OR
+  grows several files each within it whose net per-tree total exceeds it, THE SYSTEM SHALL exit 2
+  printing the budget and the measured growth with the baseline byte-for-byte unchanged, WHILE the
+  same growth cited to an existing spec path SHALL still be admitted → test in
+  tests/size-ratchet/size-ratchet.test.js
+- **AC-20260908-01-13**: WHEN `--cite direct` is given to `--raise`, or without `--raise`/
+  `--reconcile` at all, THE SYSTEM SHALL exit 2 — naming `--reconcile` in the `--raise` case —
+  with the baseline byte-for-byte unchanged → test in tests/size-ratchet/size-ratchet.test.js
 
 ## Assumptions (escalation triggers)
 

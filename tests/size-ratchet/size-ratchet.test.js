@@ -706,3 +706,166 @@ test('AC-20260909-01-13: --reconcile refuses a bad invocation and writes nothing
   assert.strictEqual(after, before,
     'every rejected --reconcile invocation above must leave the baseline byte-for-byte unchanged: ' + after)
 })
+
+// specs/20260908/01-size-ratchet.md D15: `--cite direct`, the one cite that is a literal rather
+// than a spec path. It exists because core.md § Incident Policy requires a pipeline defect to be
+// fixed in the session it is understood with no intake queue, and § Pipeline Entry admits a spec
+// only for delegation or durability — so a ratchet that accepts nothing but a spec path forces a
+// spec into being for exactly the fixes doctrine says must not have one. The door is narrow, and
+// these pins are what keeps it narrow: a class bound (shell gates and tests only), a per-file
+// byte bound, and a whole-run net bound, each measured, each refusing with the spec-cite remedy.
+
+test('AC-20260908-01-10: --reconcile --cite direct lifts in-class growth inside budget, recording each row with cite "direct", and leaves the check green', () => {
+  const dir = tmpdir('sr-ac10')
+  repo(dir, { 'spec/scripts/g.sh': sized(900), 'tests/g.test.js': sized(1200) })
+  writeBaseline(dir, {
+    newFileCap: 40000,
+    trees: { 'spec/scripts': 100, 'spec/scripts/lib': 0, scripts: 0, tests: 200 },
+    files: { 'spec/scripts/g.sh': 100, 'tests/g.test.js': 200 },
+    raises: []
+  })
+
+  const r = run(['--root', dir, '--reconcile', '--cite', 'direct'])
+  assert.strictEqual(r.status, 0,
+    'growth of 800 bytes in a shell gate and 1000 in its test is inside both D15 budgets and must be admitted with no spec: ' + r.stderr)
+
+  const after = readBaseline(dir)
+  assert.strictEqual(after.files['spec/scripts/g.sh'], 900,
+    '--reconcile must set the shell gate ceiling to its actual size: ' + after.files['spec/scripts/g.sh'])
+  assert.strictEqual(after.trees.tests, 1200,
+    '--reconcile must set the tests tree ceiling to its actual sum: ' + after.trees.tests)
+  assert.ok(after.raises.length >= 2,
+    'every lifted finding owes its own raises[] row, file and tree alike: ' + JSON.stringify(after.raises))
+  assert.deepStrictEqual([...new Set(after.raises.map((x) => x.cite))], ['direct'],
+    'every row this run appends must record cite "direct" verbatim — that literal is what a reader greps to find growth git alone attributes: ' + JSON.stringify(after.raises))
+  assert.ok(after.raises.some((x) => x.path === 'spec/scripts/g.sh' && x.from === 100 && x.to === 900),
+    'a direct row carries the same {path, from, to} shape as a spec-cited one: ' + JSON.stringify(after.raises))
+
+  const rCheck = run(['--root', dir])
+  assert.strictEqual(rCheck.status, 0,
+    'the check must be green immediately after a direct reconcile, exactly as after a cited one: ' + rCheck.stderr)
+})
+
+test('AC-20260908-01-11: --cite direct refuses growth outside the shell-gate/tests class, including a new under-cap file that raises no file finding of its own', () => {
+  const dir = tmpdir('sr-ac11')
+  repo(dir, { 'spec/scripts/y.js': sized(300), 'specs/20260909/01-example.md': sized(5) })
+  writeBaseline(dir, {
+    newFileCap: 40000,
+    trees: { 'spec/scripts': 100, 'spec/scripts/lib': 0, scripts: 0, tests: 0 },
+    files: { 'spec/scripts/y.js': 100 },
+    raises: []
+  })
+  const before = rawBaseline(dir)
+
+  const r = run(['--root', dir, '--reconcile', '--cite', 'direct'])
+  assert.strictEqual(r.status, 2,
+    'a grown .js script is not a shell gate and must be refused, however small: ' + r.stdout + r.stderr)
+  assert.match(r.stderr, /spec\/scripts\/y\.js/,
+    'the refusal must name the offending path, not just the rule: ' + r.stderr)
+  assert.match(r.stderr, /--cite <spec path>/,
+    'the refusal must name the spec-cite route as the remedy, per the repo rule that a refusal names its remedy: ' + r.stderr)
+  assert.strictEqual(rawBaseline(dir), before,
+    'a refused direct reconcile must leave the baseline byte-for-byte unchanged: ' + rawBaseline(dir))
+
+  // A brand-new tracked file under newFileCap produces no `over` and no `new-over-cap` finding —
+  // only a tree-over. Reading the class rule off the finding list instead of the true growth set
+  // would let this one through unattributed.
+  const newDir = tmpdir('sr-ac11-new')
+  repo(newDir, { 'spec/scripts/g.sh': sized(100), 'spec/scripts/fresh.js': sized(50) })
+  writeBaseline(newDir, {
+    newFileCap: 40000,
+    trees: { 'spec/scripts': 100, 'spec/scripts/lib': 0, scripts: 0, tests: 0 },
+    files: { 'spec/scripts/g.sh': 100 },
+    raises: []
+  })
+  const beforeNew = rawBaseline(newDir)
+
+  const rNew = run(['--root', newDir, '--reconcile', '--cite', 'direct'])
+  assert.strictEqual(rNew.status, 2,
+    'a new under-cap .js file is still out-of-class growth and must be refused: ' + rNew.stdout + rNew.stderr)
+  assert.match(rNew.stderr, /spec\/scripts\/fresh\.js/,
+    'the refusal must name the new file, which no file-level finding would have surfaced: ' + rNew.stderr)
+  assert.strictEqual(rawBaseline(newDir), beforeNew,
+    'the refusal must leave the baseline byte-for-byte unchanged: ' + rawBaseline(newDir))
+})
+
+test('AC-20260908-01-12: --cite direct refuses growth over its byte budget — per file, and per run across files each individually inside it', () => {
+  const perFileDir = tmpdir('sr-ac12-file')
+  repo(perFileDir, { 'spec/scripts/g.sh': sized(3200) })
+  writeBaseline(perFileDir, {
+    newFileCap: 40000,
+    trees: { 'spec/scripts': 100, 'spec/scripts/lib': 0, scripts: 0, tests: 0 },
+    files: { 'spec/scripts/g.sh': 100 },
+    raises: []
+  })
+  const beforeFile = rawBaseline(perFileDir)
+
+  const rFile = run(['--root', perFileDir, '--reconcile', '--cite', 'direct'])
+  assert.strictEqual(rFile.status, 2,
+    '3100 bytes of growth in one shell gate is past the code budget and must be refused: ' + rFile.stdout + rFile.stderr)
+  assert.match(rFile.stderr, /2048/,
+    'the refusal must print the budget it enforced so the caller can see how far over they are: ' + rFile.stderr)
+  assert.match(rFile.stderr, /--cite <spec path>/,
+    'the refusal must name the spec-cite route as the remedy: ' + rFile.stderr)
+  assert.strictEqual(rawBaseline(perFileDir), beforeFile,
+    'the refusal must leave the baseline byte-for-byte unchanged: ' + rawBaseline(perFileDir))
+
+  // Two shell gates, each grown well inside the per-file bound, together past the run bound: the
+  // budget is a property of the run, or a large change lands as a series of small admissible ones.
+  const perRunDir = tmpdir('sr-ac12-run')
+  repo(perRunDir, { 'spec/scripts/a.sh': sized(1600), 'spec/scripts/b.sh': sized(1600) })
+  writeBaseline(perRunDir, {
+    newFileCap: 40000,
+    trees: { 'spec/scripts': 200, 'spec/scripts/lib': 0, scripts: 0, tests: 0 },
+    files: { 'spec/scripts/a.sh': 100, 'spec/scripts/b.sh': 100 },
+    raises: []
+  })
+  const beforeRun = rawBaseline(perRunDir)
+
+  const rRun = run(['--root', perRunDir, '--reconcile', '--cite', 'direct'])
+  assert.strictEqual(rRun.status, 2,
+    'two 1500-byte gate growths are each inside the per-file bound but 3000 net is past the run bound, and must be refused: ' + rRun.stdout + rRun.stderr)
+  assert.match(rRun.stderr, /3000/,
+    'the refusal must print the net growth it measured, not only the ceiling it compared against: ' + rRun.stderr)
+  assert.strictEqual(rawBaseline(perRunDir), beforeRun,
+    'the refusal must leave the baseline byte-for-byte unchanged: ' + rawBaseline(perRunDir))
+
+  // The same growth, cited to a spec, is admitted: D15 narrows who may skip a spec, never what
+  // a spec may ask for.
+  const citedDir = tmpdir('sr-ac12-cited')
+  repo(citedDir, { 'spec/scripts/g.sh': sized(3200), 'specs/20260909/01-example.md': sized(5) })
+  writeBaseline(citedDir, {
+    newFileCap: 40000,
+    trees: { 'spec/scripts': 100, 'spec/scripts/lib': 0, scripts: 0, tests: 0 },
+    files: { 'spec/scripts/g.sh': 100 },
+    raises: []
+  })
+  const rCited = run(['--root', citedDir, '--reconcile', '--cite', 'specs/20260909/01-example.md'])
+  assert.strictEqual(rCited.status, 0,
+    'a spec-cited reconcile of the same over-budget growth must still be admitted — the budget bounds the spec-free door only: ' + rCited.stderr)
+})
+
+test('AC-20260908-01-13: `direct` is a --reconcile cite only — refused on --raise, and refused without a write mode at all', () => {
+  const dir = tmpdir('sr-ac13')
+  repo(dir, { 'spec/scripts/g.sh': sized(100) })
+  writeBaseline(dir, {
+    newFileCap: 40000,
+    trees: { 'spec/scripts': 100, 'spec/scripts/lib': 0, scripts: 0, tests: 0 },
+    files: { 'spec/scripts/g.sh': 100 },
+    raises: []
+  })
+  const before = rawBaseline(dir)
+
+  const rRaise = run(['--root', dir, '--raise', 'spec/scripts/g.sh', '--to', '900', '--cite', 'direct'])
+  assert.strictEqual(rRaise.status, 2,
+    '--raise names one ceiling from a caller-supplied --to, so there is no run for the D15 budget to measure — it must be refused: ' + rRaise.stdout + rRaise.stderr)
+  assert.match(rRaise.stderr, /--reconcile/,
+    'the refusal must name --reconcile as where `direct` is accepted: ' + rRaise.stderr)
+
+  const rCheck = run(['--root', dir, '--cite', 'direct'])
+  assert.strictEqual(rCheck.status, 2,
+    'a bare check with --cite direct is a usage error like any other stray --cite, never a silently-ignored flag: ' + rCheck.stdout + rCheck.stderr)
+
+  assert.strictEqual(rawBaseline(dir), before,
+    'neither refusal may touch the baseline: ' + rawBaseline(dir))
+})

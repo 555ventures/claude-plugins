@@ -4,7 +4,7 @@
     "scripts": 34997,
     "spec/scripts": 1279712,
     "spec/scripts/lib": 233720,
-    "tests": 3607734
+    "tests": 3607779
   },
   "files": {
     "scripts/plugin-bump.js": 9427,
@@ -122,6 +122,7 @@
     "tests/count-observation.test.js": 4209,
     "tests/design-ac-reconcile.test.js": 5161,
     "tests/design-atlas-index.test.js": 34642,
+    "tests/design-atlas-serve-port.test.js": 3333,
     "tests/design-atlas.test.js": 217174,
     "tests/design-look-handoff.test.js": 11626,
     "tests/design-shell.test.js": 17216,
@@ -169,7 +170,8 @@
     "tests/init-gen/ignore-check.test.js": 3389,
     "tests/init-gen/probes.test.js": 6550,
     "tests/merge-back.test.js": 15683,
-    "tests/mocks/chrome-harness.js": 9308,
+    "tests/mocks/chrome-harness.js": 9353,
+    "tests/mocks/chrome-harness.test.js": 10855,
     "tests/mocks/mocks-driver-2.test.js": 19004,
     "tests/mocks/mocks-driver-3.test.js": 17825,
     "tests/mocks/mocks-driver-4.test.js": 16765,
@@ -783,6 +785,18 @@
       "path": "tests",
       "from": 3593546,
       "to": 3607734,
+      "cite": "specs/20260909/03-atlas-test-port-and-deadlines.md"
+    },
+    {
+      "path": "tests/mocks/chrome-harness.js",
+      "from": 9308,
+      "to": 9400,
+      "cite": "specs/20260909/03-atlas-test-port-and-deadlines.md"
+    },
+    {
+      "path": "tests",
+      "from": 3607734,
+      "to": 3607779,
       "cite": "specs/20260909/03-atlas-test-port-and-deadlines.md"
     }
   ]

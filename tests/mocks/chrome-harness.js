@@ -51,7 +51,7 @@ function serve(dir, port = 0) {
   child.stderr.on('data', (c) => { err += c })
   const ready = new Promise((resolve, reject) => {
     let settled = false
-    const finish = (fn) => { if (settled) return; settled = true; child.stdout.removeListener('data', onData); fn() }
+    const finish = (fn) => { if (settled) return; settled = true; child.stdout.removeListener('data', onData); clearTimeout(readyTimer); fn() }
     const onData = () => {
       const nl = out.indexOf('\n')
       if (nl === -1) return
@@ -70,7 +70,7 @@ function serve(dir, port = 0) {
     child.once('exit', (code) => {
       finish(() => reject(new Error('serve exited (code ' + code + ') before announcing a port: ' + err)))
     })
-    setTimeout(() => {
+    const readyTimer = setTimeout(() => {
       finish(() => reject(new Error('serve did not start: ' + out + err)))
     }, 5000)
   })

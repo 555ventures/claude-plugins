@@ -322,7 +322,10 @@ previous session left up is reused — serve answers `already serving`). `serve 
 OS-chosen port and prints the bound port in its banner; the test harness
 (`tests/mocks/chrome-harness.js`) uses that form so concurrent runs never share a port, treats any
 first line other than `serving` as a refusal, and bounds every DevTools wait with a deadline
-(specs/20260909/03). `design-atlas.js stop
+(specs/20260909/03). No test chooses a port number: `tests/helpers.js` exports the one
+`freePort()` and the one `serveAtlas(root, {port, script})` that every serve-backed harness binds
+through — `serveAtlas` spawns the real serve child on `--port 0`, resolves with the port the
+banner announced, and kills that child on its own timeout (specs/20260909/06). `design-atlas.js stop
 open|decide|list` own the stop CLI (`stop open` writes the stop through `lib/mocks-picks.js`,
 probes the served page for the stop's block and prints the one link
 `http://localhost:<port>/atlas/index.html#stop-<id>`; exit 3 names the serve command as the

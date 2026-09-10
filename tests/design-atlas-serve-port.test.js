@@ -113,7 +113,6 @@ test('AC-20260909-06-4: serveAtlas(dir, {script: <a stub that prints nothing and
   fs.writeFileSync(stubPath, "#!/usr/bin/env node\n'use strict'\nsetInterval(() => {}, 1000)\n")
 
   let rejection = null
-  let stubChild = null
   try {
     await serveAtlas(dir, { script: stubPath })
     assert.fail('serveAtlas must reject against a script that never prints a banner, not resolve')
@@ -124,15 +123,12 @@ test('AC-20260909-06-4: serveAtlas(dir, {script: <a stub that prints nothing and
   assert.match(rejection.message, /no banner within 5000 ms/,
     'the rejection message must contain "no banner within 5000 ms" so a caller can tell a hung child from a real crash: got ' + JSON.stringify(rejection.message))
 
-  // The stub child must not be left running once serveAtlas has given up on it — confirmed via
-  // a fresh probe: spawn the same stub once more under our own control and kill it the same way
-  // serveAtlas's own timeout does, proving the mechanism serveAtlas depends on actually works.
-  stubChild = spawn(process.execPath, [stubPath])
-  await new Promise((resolve) => setTimeout(resolve, 100))
-  assert.strictEqual(stubChild.exitCode, null, 'test setup: the stub must still be alive before the kill, or this leg proves nothing')
-  stubChild.kill('SIGKILL')
-  await new Promise((resolve) => stubChild.once('exit', resolve))
-  assert.ok(stubChild.exitCode !== null || stubChild.signalCode !== null,
+  // The rejection carries the actual child serveAtlas spawned and timed out on (helpers.js
+  // attaches it as err.child before rejecting) — asserting on THAT process, not a second stub
+  // this test spawns and kills itself, is what proves serveAtlas's own timeout path really
+  // kills the child it is responsible for.
+  assert.ok(rejection.child, 'AC-4: the rejection must carry the timed-out child as err.child, or this assertion cannot observe the process serveAtlas actually spawned: got ' + JSON.stringify(rejection.child))
+  assert.ok(rejection.child.exitCode !== null || rejection.child.signalCode !== null,
     'AC-4: the timed-out serve child must end up with exitCode or signalCode set, never left running')
 }, { timeout: 6000 })
 

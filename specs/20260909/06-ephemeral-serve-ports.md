@@ -1,6 +1,6 @@
 ---
 date: 2026-09-09
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: design-atlas
@@ -68,7 +68,8 @@ tests/helpers.js
     port: number, url: string /* http://localhost:<port> */, child: ChildProcess,
     stop(): Promise<void>  /* SIGTERM, SIGKILL after 5000 ms, resolves on exit */
   }>
-  rejects: Error('serveAtlas: no banner within 5000 ms\n' + stderr)
+  rejects: Error('serveAtlas: no banner within 5000 ms\n' + stderr) /* err.child = the spawned
+    ChildProcess, already exited (SIGKILLed) by the time the rejection settles */
 ```
 
 ## Behavior
@@ -141,6 +142,46 @@ product change the look-stop flow would have to carry too — if it recurs, that
 
 Spec 07 adds the bound and the check that keep this true: a per-test timeout with force-exit so a
 future hang is a two-minute red, and a doctor check that flags a port literal in tests.
+
+### What the build found (folded from the deviations sidecar at close)
+
+**Most of D1 had already landed.** specs/20260909/03 shipped the banner reading
+`server.address().port` (commit `e03f23a`) before this build started, so `design-atlas.js`'s only
+remaining change here was documenting `--port 0` in the usage block, AC-1/AC-2 became
+`SHALL CONTINUE TO` pins on landed behavior (D8), and the genuinely new work was the shared
+helper pair itself. `tests/design-atlas-serve-port.test.js` was likewise a MODIFY, not a CREATE —
+spec 03 authored it for AC-20260909-03-6, whose coverage was widened in place rather than
+replaced. Three File Plan rows (`design-atlas-index`, `notes-layer-isolation`,
+`notes-layer-navigation`) named work spec 03 had already done, and were dropped (D11).
+
+**Two serve-readiness contracts coexist on purpose.** `serveAtlas` is verb-blind: it parses the
+port out of the banner's first line whatever the verb, because AC-20260909-06-6's reuse-branch
+test must observe `already serving` and still get its port back. `tests/mocks/chrome-harness.js`'s
+own `serve()` stays strict — it reads the verb and refuses with `another run holds it`, because a
+Chrome-driving test that silently adopts another run's server does not fail, it hangs, which is
+the class specs/20260909/03 D2 exists to end. Verified against the shipped helper: a stub whose
+only stdout line is an `already serving` banner makes `serveAtlas` resolve with that port while
+`chrome-harness.js` refuses on the identical line. **Unifying the two on the shared helper
+reintroduces the hang class** — the obvious-looking refactor is the wrong one. For the same
+reason `chrome-harness.js`'s `serve()`, `startServe`/`stopServe` and the file-local `withServeAt`
+helpers keep their explicit port parameter against D3's literal wording (D10): their callers hand
+the same port to a second, separate CLI invocation (`stop open --port <p>`, `look --port <p>`).
+
+**The AC-4 kill promise was vacuous as first written, and its red is a hang.** The shipped test
+spawned a second stub of its own after the rejection and asserted on that, never on the child
+`serveAtlas` had timed out on — proved by removing the timeout's SIGKILL and watching the
+assertions still pass. Fixed by attaching the timed-out child to the rejection as `err.child` (a
+real Contracts change, recorded in the `rejects:` line) and asserting on it. The falsification
+that proves the pin is now live is worth keeping in mind: with the kill removed the run does not
+fail, it **hangs** — Node 26 does not fire a per-test `timeout` on a never-settling promise, and
+this repo's runner sets no `--test-timeout`/`--test-force-exit`. That is precisely the conversion
+spec 07 owns, and this is a real in-repo instance of it rather than a synthetic one.
+
+**Still open, filed forward.** `tests/mocks/mocks-driver-client.test.js` carries two
+`'--port', '4321'` literals. Neither pid-derived nor random, so outside this spec's Goal grep and
+outside D5's one named literal — but they match spec 07's `port-flag-literal` class and would make
+AC-20260909-07-8 red on arrival. Queued for 07, which owns both the check and the tree it must be
+green against, rather than grown into this spec's already-judged diff.
 
 ## Canonical Delta
 

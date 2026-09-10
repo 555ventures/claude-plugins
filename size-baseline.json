@@ -4,7 +4,7 @@
     "scripts": 34997,
     "spec/scripts": 1320725,
     "spec/scripts/lib": 242860,
-    "tests": 3726581
+    "tests": 3726913
   },
   "files": {
     "scripts/plugin-bump.js": 9427,
@@ -123,8 +123,8 @@
     "tests/count-observation.test.js": 4209,
     "tests/design-ac-reconcile.test.js": 5161,
     "tests/design-atlas-index.test.js": 34642,
-    "tests/design-atlas-serve-port.test.js": 8651,
-    "tests/design-atlas.test.js": 216081,
+    "tests/design-atlas-serve-port.test.js": 8546,
+    "tests/design-atlas.test.js": 216116,
     "tests/design-look-handoff.test.js": 11626,
     "tests/design-shell.test.js": 17216,
     "tests/design-template.test.js": 2207,
@@ -163,7 +163,7 @@
     "tests/genesis/tournament.fixtures.js": 11282,
     "tests/genesis/tournament.test.js": 15077,
     "tests/git/commit-escape-check.test.js": 5426,
-    "tests/helpers.js": 9632,
+    "tests/helpers.js": 10034,
     "tests/host-config/config-read.test.js": 19310,
     "tests/host-config/host-config-api.test.js": 7732,
     "tests/host-config/smoke-inert.test.js": 1834,
@@ -1114,6 +1114,24 @@
       "path": "tests",
       "from": 3720456,
       "to": 3726581,
+      "cite": "specs/20260909/06-ephemeral-serve-ports.md"
+    },
+    {
+      "path": "tests/design-atlas.test.js",
+      "from": 216081,
+      "to": 216116,
+      "cite": "specs/20260909/06-ephemeral-serve-ports.md"
+    },
+    {
+      "path": "tests/helpers.js",
+      "from": 9632,
+      "to": 10034,
+      "cite": "specs/20260909/06-ephemeral-serve-ports.md"
+    },
+    {
+      "path": "tests",
+      "from": 3726581,
+      "to": 3726913,
       "cite": "specs/20260909/06-ephemeral-serve-ports.md"
     }
   ]

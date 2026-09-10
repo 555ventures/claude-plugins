@@ -1741,7 +1741,7 @@ async function withServe(dir, fn) {
   }
 }
 
-test('AC-20260902-10-2: design-atlas.js serve injects the notes layer script before </body> on every served html unless ?clean is present, and GET /__notes/notes.js serves lib/notes-layer.browser.js verbatim as text/javascript', async () => {
+test('AC-20260902-10-2, AC-20260909-06-7: design-atlas.js serve injects the notes layer script before </body> on every served html unless ?clean is present, and GET /__notes/notes.js serves lib/notes-layer.browser.js verbatim as text/javascript', async () => {
   const dir = tmpdir('atlas-notes-inject')
   fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
   const bodyHtml = '<!doctype html>\n<html><head></head><body><main data-screen-label="a">hello</main>\n</body></html>\n'
@@ -1780,7 +1780,7 @@ test('AC-20260902-10-2: design-atlas.js serve injects the notes layer script bef
   })
 })
 
-test('AC-20260902-10-3: POST /__notes/add writes design/mocks/notes.json and returns 201, GET /__notes/list?screen filters by screen, POST /__notes/resolve marks resolved, empty text 400s, and an unknown /__notes/* path 404s', async () => {
+test('AC-20260902-10-3, AC-20260909-06-7: POST /__notes/add writes design/mocks/notes.json and returns 201, GET /__notes/list?screen filters by screen, POST /__notes/resolve marks resolved, empty text 400s, and an unknown /__notes/* path 404s', async () => {
   const dir = tmpdir('atlas-notes-add')
   fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'design/mocks/a.html'), '<main data-screen-label="a">hello</main>\n')
@@ -1815,7 +1815,7 @@ test('AC-20260902-10-3: POST /__notes/add writes design/mocks/notes.json and ret
   })
 })
 
-test('AC-20260902-10-4: lib/notes-layer.browser.js reads data-screen-label/data-state-btn, keys localStorage on nl-author, respects ?clean, uses only var(--v-*) chrome tokens with no raw hex literal, and GET /__notes/viewer.css serves the template bytes', async () => {
+test('AC-20260902-10-4, AC-20260909-06-7: lib/notes-layer.browser.js reads data-screen-label/data-state-btn, keys localStorage on nl-author, respects ?clean, uses only var(--v-*) chrome tokens with no raw hex literal, and GET /__notes/viewer.css serves the template bytes', async () => {
   const libPath = path.join(SPEC, 'scripts/lib/notes-layer.browser.js')
   assert.ok(fs.existsSync(libPath), 'D3: spec/scripts/lib/notes-layer.browser.js must exist — the served notes layer has no source file yet')
   const src = fs.readFileSync(libPath, 'utf8')
@@ -1910,7 +1910,7 @@ a -> b
 // serving a file only `build` ever wrote (a shapes-only tree at the SHAPES look stop has no
 // such file, and the banner promised the page anyway); a busy port reuses the running atlas
 // (prints the same URL line with "already serving", exit 0) instead of an EADDRINUSE trace.
-test('AC-20260905-01-11 / AC-20260909-03-9 / AC-20260909-06-6 / AC-20260909-06-7: serve SHALL CONTINUE TO derive the atlas index on request (shapes-only tree, no design/atlas file) and a second serve on the same freePort() value prints "already serving" + exits 0', async () => {
+test('AC-20260905-01-11 / AC-20260909-03-9 / AC-20260909-06-6: serve SHALL CONTINUE TO derive the atlas index on request (shapes-only tree, no design/atlas file) and a second serve on the same freePort() value prints "already serving" + exits 0', async () => {
   const dir = tmpdir('atlas-serve-derived')
   fs.mkdirSync(path.join(dir, 'design/shapes'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'design/shapes/work-queue.html'), '<main data-screen-label="work-queue">wq</main>')

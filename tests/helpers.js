@@ -117,8 +117,10 @@ function freePort() {
 // AC-20260909-06-4's stub) `serve --root <root> --port <port ?? 0>` and resolves once the
 // child's first stdout line names a bound port (`http://localhost:(\d+)/` — the banner verb is
 // deliberately not part of the parse, D4/AC-20260909-06-6), or rejects after 5000 ms with the
-// child's accumulated stderr. `stop()` sends SIGTERM, then SIGKILL after 5000 ms if the child
-// has not exited, and resolves once it has.
+// child's accumulated stderr, having already SIGKILLed the child and attached it to the
+// rejection as `err.child` so a caller can assert the timed-out child actually exited
+// (AC-20260909-06-4). `stop()` sends SIGTERM, then SIGKILL after 5000 ms if the child has not
+// exited, and resolves once it has.
 function serveAtlas(root, opts = {}) {
   const scriptPath = opts.script || path.join(SPEC, 'scripts/design-atlas.js')
   const port = opts.port
@@ -131,8 +133,14 @@ function serveAtlas(root, opts = {}) {
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
+      const rejectWithChild = () => {
+        const err = new Error('serveAtlas: no banner within 5000 ms\n' + stderrBuf)
+        err.child = child
+        reject(err)
+      }
+      if (child.exitCode !== null || child.signalCode !== null) { rejectWithChild(); return }
+      child.once('exit', rejectWithChild)
       child.kill('SIGKILL')
-      reject(new Error('serveAtlas: no banner within 5000 ms\n' + stderrBuf))
     }, 5000)
     const finish = (fn) => {
       if (settled) return

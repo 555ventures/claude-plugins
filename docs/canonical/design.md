@@ -101,7 +101,7 @@ no kit family it prints one gray-floor warning and sketches gray as before.
 
 ## One token set (2026-09-03, specs/20260902/09)
 
-`spec/templates/mocks/viewer.css` is the one token set: shadcn's default zinc values as plain
+`spec/templates/mocks/viewer.css` is the one token set: shadcn's Neutral theme values as plain
 CSS custom properties (`--v-*`) plus the full chrome register (cards, 1px borders with a soft
 shadow, filled primary button, badges, inputs, toolbar, status chips). `design-atlas.js`'s
 `page()` inlines it into every chrome page (atlas, galleries, the preview toolbar, the notes
@@ -109,9 +109,10 @@ layer, the sketch workbench), and the chrome's own rules consume only `var(--v-*
 literal color outside the inlined `:root{…}` block, output byte-stable across runs.
 `spec/templates/mocks/wire-tokens.css` carries the same values under flat role names
 (`--bg --fg --muted --muted-bg --border --primary --primary-fg --ring --radius --font`), and
-`wire.css` is the flat register on those roles (dashed `--border` placeholders, `--muted-bg`
-fills, no shadow, no filled button but `.btn.primary`); a test pins the two files value-equal
-per role. Product tokens exist only from the sketch theme pick and chrome never adopts them.
+`wire.css` is a CSS port of shadcn's component look on those roles (filled `.btn.primary` on
+`--primary`, `--shadow` on cards and inputs, dashed `--border` placeholders for undrawn content —
+ADR-0013 retired the flat no-fills register); a test pins the two files value-equal per role. A
+theme is the same roles re-valued; chrome never adopts product tokens.
 
 ## Render gate (2026-08-24, specs/20260824/01)
 
@@ -204,7 +205,7 @@ prints exactly one step
 saved (<prev> → <next>); safe to /clear and re-run /spec:mocks`, preceded by the `📒 ledger:`
 counts line), gates every advance on the provenance ledger (`gateVerdict`, refusing on
 `open:false` and naming the rows), and records a sub-mark per journey (`journey-drawn`,
-`journey-approved`, and `variant-picked` when candidate flows are used), and
+`journey-approved`), and
 `--reopen journey:<j>|walk:<j>|shapes|kit` (recorded, printed, nothing deleted). WALK sits
 between WIREFRAMES and CLIENT (specs/20260907/08): each declared journey is walked once by a
 fresh critic and stamped with `journey-walked --journey <j>`, which refuses while any walk
@@ -337,7 +338,7 @@ refusing without a decided stop, and the derived `rejected` cell are unchanged f
 **Questions (specs/20260906/03).** A note with `kind: "question"` is a ledger assumption row
 pinned to a screen by the session (`ledger add … --screen`, `ledger ask`); the page answers it
 (`/__notes/answer` yes/no + text), and the answer writes the row's status (`confirmed` /
-`overridden` + date) before resolving the note. `journey-approved` (and `variant-picked`,
+`overridden` + date) before resolving the note. `journey-approved` (and
 `approved`) refuse while a question on the journey is unanswered, naming the ledger ids — the
 question-aware notes gate runs ahead of the generic ledger gate, so that line is the first one
 printed. Free-form notes carry an optional `reason` (missing-screen · wrong-direction ·

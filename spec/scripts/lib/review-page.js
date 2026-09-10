@@ -29,7 +29,7 @@
 // that floor to the content height, never lowers it.
 //
 // Does NOT: serve, write, or touch notes.json / picks.json / ledger.md (design-atlas.js's routes
-// do the writes); render a pick stop's compare table (variants:<j> stops keep the atlas, D6);
+// do the writes); render a pick stop's compare table (pick stops keep the atlas, D6);
 // anchor a note to an element (the store has none — screen + state resolution only, D3).
 //
 // Exit codes: none — this is a library, not an executable.

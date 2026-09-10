@@ -54,7 +54,7 @@ measured, taste advisory; § Design Authoring Contracts' grounded-vs-taste rules
 design doctrine doc (taste tokens can't encode, binding like a locked Decision); the living showcase catalog (composes every landed spec's surfaces, drift visible with zero tooling).
 **Plugin chrome is a designed surface.** Every page the plugin serves for a look — atlas index, journey review page,
 galleries, the notes layer — is authored under the `frontend-design` skill in the shadcn idiom on `viewer.css`'s
-register (the zinc roles byte-equal to `wire-tokens.css`), never on product tokens; the wireframe inside a frame stays gray.
+register (the Neutral roles byte-equal to `wire-tokens.css`), never on product tokens; the wireframe inside a frame stays gray.
 ## Design Authoring Contracts
 Consumed by `/spec:design` and genesis's design ratification (genesis.md § Genesis: Brief State),
 authored against § Design Canon.

@@ -209,8 +209,9 @@ answered it.
 `product` row in § Provenance Ledger was written `inferred` or `invented`, and only the session
 can create one — `ledger add … --screen <label>` pins the assumption row and its question note
 in one call as the row is written, and `ledger ask --id <rowId> --screen <label>` pins an
-existing open row after the fact. Neither the client nor whoever signs off can author a
-question; a human free-form message is a note (optionally carrying `reason`), never a
+existing open row after the fact — both pin to a screen and refuse `--state`: a question never sits on
+an empty/loading/error state, because a gray state is craft, not a client decision (ADR-0013). Neither
+the client nor whoever signs off can author a question; a human free-form message is a note (optionally carrying `reason`), never a
 question. A question is answered only on the served page — `Yes, that's right` or `No, it's…`
 plus a one-line correction — never in chat and never through `notes resolve`; the answer writes the ledger
 row's status (`confirmed` for yes, `overridden` for no, both dated today) before it resolves
@@ -276,7 +277,10 @@ half the driver cannot check, carried here as contract prose the authoring sessi
   stamp, not an escape. `design-atlas.js check` prints the running count, `ⓘ <label>: <n> kit,
   <m> bespoke`, on every run, and `journey-approved` refuses on any region carrying neither
   mark.
-- **Wireframes are gray but carry every graphic that IS structure.** A state is shown as the
+- **Wireframes are neutral but carry every graphic that IS structure.** The register is shadcn's
+  Neutral component look on the eleven wire roles (ADR-0013) — filled primary buttons, cards with
+  a soft shadow, real tables — and a theme is the same roles re-valued, swapped in at serve time
+  for the client route; no screen is ever redrawn to be themed. A state is shown as the
   product's map or a slice, never described in a caption; text is reserved for what someone
   actually said (copy, labels), never for narrating what a picture should be doing instead.
 - **Every wireframe carries its states.** Behind `data-state-btn="<name>"` switches, drawn as
@@ -288,9 +292,9 @@ half the driver cannot check, carried here as contract prose the authoring sessi
   check --states` is the presence check — it judges only that the states exist, never what they
   say — run by the mocks driver at `journey-drawn` and `journey-approved`.
 - **One honest wireframe or the full theme, never a half-styled middle.** A screen is either
-  the flat gray register at full structural honesty or the themed register at production
-  fidelity — a screen half-dressed in theme colors while its neighbors stay gray is neither
-  register and misleads a reviewer about what has actually been judged. `design-atlas.js check`
+  the neutral register on `wire/` or the themed register at production fidelity on
+  `design/tokens.css` — a screen linking product tokens while its neighbors stay on the wire
+  register is neither register and misleads a reviewer about what has actually been judged. `design-atlas.js check`
   (`spec-paths design-atlas`) makes this mechanical at the stamp that matters: a labeled mock
   still linking `wire/` once `design/tokens.css` exists above it is a violation at
   `data-status="ratified"`, a `⚠️` warn at `sketch` — `approved` wireframes from `/spec:mocks`

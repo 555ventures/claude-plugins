@@ -1,6 +1,7 @@
 ---
 date: 2026-09-08
-status: hardened
+status: superseded
+superseded_by: "ADR-0013 — the client rehearses one journey at a time in a player; the flow pick is retired, D3a player mechanics carried forward"
 tier: standard
 area: design-mocks
 design: false

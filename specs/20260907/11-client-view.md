@@ -1,6 +1,7 @@
 ---
 date: 2026-09-09
-status: draft
+status: superseded
+superseded_by: "ADR-0013 — the client route serves a journey player, never the artboard grid in client mode"
 tier: standard
 area: design-atlas
 design: false

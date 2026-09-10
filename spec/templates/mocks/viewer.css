@@ -1,5 +1,5 @@
 /* Chrome token register — spec/doctrine/design.md § Design Atlas (D4/D5, specs/20260902/09).
-   shadcn's default zinc scale as plain CSS custom properties, plus the full register every
+   shadcn's Neutral theme as plain CSS custom properties, plus the full register every
    chrome page (atlas, galleries, preview toolbar, sketch workbench, notes layer) inlines and
    consumes — never a literal color outside this `:root` block. `design-atlas.js`'s `page()`
    reads this file once per process and inlines it before its own rules; every chrome rule
@@ -14,10 +14,10 @@
    same styles with and without the layer). */
 
 :host,:root{
-  --v-bg:#ffffff; --v-fg:#09090b; --v-muted:#71717a; --v-muted-bg:#f4f4f5; --v-border:#e4e4e7;
-  --v-primary:#18181b; --v-primary-fg:#fafafa; --v-ring:#a1a1aa; --v-accent:#f4f4f5;
+  --v-bg:#ffffff; --v-fg:#0a0a0a; --v-muted:#737373; --v-muted-bg:#f5f5f5; --v-border:#e5e5e5;
+  --v-primary:#171717; --v-primary-fg:#fafafa; --v-ring:#a3a3a3; --v-accent:#f5f5f5;
   --v-danger:#dc2626; --v-warn:#d97706; --v-ok:#16a34a;
-  --v-radius:6px; --v-space-1:4px; --v-space-2:8px; --v-space-3:12px; --v-space-4:16px; --v-space-6:24px;
+  --v-radius:8px; --v-space-1:4px; --v-space-2:8px; --v-space-3:12px; --v-space-4:16px; --v-space-6:24px;
   --v-font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
   --v-shadow:0 1px 2px rgba(0,0,0,.05),0 4px 12px rgba(0,0,0,.06);
 }

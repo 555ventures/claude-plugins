@@ -6,7 +6,9 @@
 - Deciders: JJ + session (brief 22a, amended in place)
 - Amended by: ADR-0012 (client review closes on captured evidence — the CLIENT paragraph's
   "frame diff between the note's timestamp and the resolution commit" closure is replaced by a
-  capture taken when the client note is raised; session resolve refused; dated waiver)
+  capture taken when the client note is raised; session resolve refused; dated waiver); ADR-0013 (the client
+  rehearses the journey in a player — the served review page is no longer the client surface, the
+  theme pick returns to mocks between WALK and CLIENT as a client pick on the user's shortlist)
 - Applies to: ADR-0008's order (`SEED → SHAPES → WIREFRAMES → THEME → SIGNOFF → APPROVED`)
   and its enumerated D-rows on specs/20260906/02 and specs/20260906/06:
   - specs/20260906/02 — D1 narrowed (the chain gains `KIT` between `SHAPES` and

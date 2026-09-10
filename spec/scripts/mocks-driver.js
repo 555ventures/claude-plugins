@@ -5,8 +5,8 @@
 // mocks-driver.js --root <dir> ledger (add|set|catch|check|counts|ask) [flags]
 // mocks-driver.js --root <dir> ledger add --id <i> --step <s> --kind <k> --claim <c> [--tag <t>]
 //                              [--status <st>] [--rejected <r>] [--dependents <d>] [--note <n>]
-//                              [--screen <label> [--state <s>]]
-// mocks-driver.js --root <dir> ledger ask --id <rowId> --screen <label> [--state <s>]
+//                              [--screen <label>]
+// mocks-driver.js --root <dir> ledger ask --id <rowId> --screen <label>
 // mocks-driver.js --root <dir> notes open
 // mocks-driver.js --root <dir> notes add --scope mock|project [--screen <label>] [--state <s>]
 //                              --by <name> [--reason <r>] --text "<t>"
@@ -1611,7 +1611,8 @@ function doReopen(target) {
 // --screen` and `ledger ask` both run before pinning a row as a question — a process row is
 // never a question, a said-by-user/ratified-doc row has nothing to ask, and the screen must be
 // one the seed actually declares.
-function refuseUnaskable(prefix, kind, tag, screenArg) {
+function refuseUnaskable(prefix, kind, tag, screenArg, stateArg) {
+  if (stateArg) die(prefix + ': --state refused (ADR-0013: never a gray state)')
   if (kind === 'process') die(prefix + ': --screen on a process row is never a question for the user')
   if (tag === 'said-by-user' || tag === 'ratified-doc') {
     die(prefix + ': --screen on a "' + tag + '" tag — nothing to ask — the user already said it')
@@ -1623,12 +1624,11 @@ function cmdLedger(sub, args) {
   const larg = (name) => flagArg(args, name)
   if (sub === 'add') {
     const screenArg = larg('--screen')
-    const stateArg = larg('--state')
     const kind = larg('--kind')
     const tag = larg('--tag')
     const claim = larg('--claim')
     const id = larg('--id')
-    if (screenArg) refuseUnaskable('ledger add', kind, tag, screenArg)
+    if (screenArg) refuseUnaskable('ledger add', kind, tag, screenArg, larg('--state'))
     let out
     try {
       out = appendAssumption(ledgerTextOrDie(), {
@@ -1642,7 +1642,7 @@ function cmdLedger(sub, args) {
       const notes = notesOrEmpty()
       let result
       try {
-        result = addNote(notes, { kind: 'question', ledgerId: id, scope: 'mock', screen: screenArg, state: stateArg || null, text: claim, by: 'session' })
+        result = addNote(notes, { kind: 'question', ledgerId: id, scope: 'mock', screen: screenArg, state: null, text: claim, by: 'session' })
       } catch (e) { die('ledger add: ' + e.message) }
       writeNotes(root, result.notes)
     }
@@ -1651,20 +1651,19 @@ function cmdLedger(sub, args) {
   if (sub === 'ask') {
     const id = larg('--id')
     const screenArg = larg('--screen')
-    const stateArg = larg('--state')
     if (!id) die('ledger ask: --id <id> is required')
     if (!screenArg) die('ledger ask: --screen <label> is required')
     const parsed = parseLedger(ledgerTextOrDie())
     const row = parsed.assumptions.find((a) => a.id === id)
     if (!row) die('ledger ask: no assumption row "' + id + '" found')
-    refuseUnaskable('ledger ask', row.kind, row.tag, screenArg)
+    refuseUnaskable('ledger ask', row.kind, row.tag, screenArg, larg('--state'))
     if (row.status !== 'open') die('ledger ask: row "' + id + '" must be open (found "' + row.status + '")')
     const notes = notesOrEmpty()
     const already = notes.find((n) => n.kind === 'question' && n.ledgerId === id)
     if (already) die(id + ' is already a question on ' + already.screen)
     let result
     try {
-      result = addNote(notes, { kind: 'question', ledgerId: id, scope: 'mock', screen: screenArg, state: stateArg || null, text: row.claim, by: 'session' })
+      result = addNote(notes, { kind: 'question', ledgerId: id, scope: 'mock', screen: screenArg, state: null, text: row.claim, by: 'session' })
     } catch (e) { die('ledger ask: ' + e.message) }
     writeNotes(root, result.notes)
     process.exit(0)

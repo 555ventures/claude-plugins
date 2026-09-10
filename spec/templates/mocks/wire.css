@@ -1,13 +1,13 @@
-/* Wireframe class set — spec/doctrine/mocks.md § Mocks: State Machine (D17), re-based on the
-   wire tokens per specs/20260902/09-one-hand-wireframes-one-token-set.md D6. Copied verbatim
-   into design/wire/wire.css by `canon-written` when absent, linked from every sketch-stage
-   screen alongside tokens.css. Every color here is var(--role) from wire-tokens.css — a
-   literal added to this file drifts the sketch register out from under design-atlas.js check,
-   which only inspects markup, not stylesheets. The flat register: no shadow, dashed
-   placeholders on --border, gray fills on --muted-bg, and no filled buttons except
-   `.btn.primary` (which fills with --muted-bg, never --primary) — a wireframe stays honestly
-   gray, never pre-empting THEME's color decisions. Layout uses px/rem freely (mocks
-   legitimately fix layout early); color is the one family this file must never hardcode. */
+/* Wireframe class set — spec/doctrine/mocks.md § Mocks: Authoring Rules, re-based on the wire
+   tokens per specs/20260902/09-one-hand-wireframes-one-token-set.md D6 and re-drawn as a CSS
+   port of shadcn's component look under ADR-0013 (the client walks these screens; the gray
+   register is shadcn Neutral, a theme is the same roles re-valued). Copied verbatim into
+   design/wire/wire.css by `canon-written` when absent, linked from every sketch-stage screen
+   alongside tokens.css. Every color here is var(--role) from wire-tokens.css — a literal added
+   to this file drifts the register out from under design-atlas.js check, which only inspects
+   markup, not stylesheets. Layout uses px/rem freely (mocks legitimately fix layout early);
+   color is the one family this file must never hardcode. Class names are the contract the
+   wireframes are written against — add, never rename. */
 
 * { box-sizing: border-box; }
 
@@ -16,17 +16,20 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 .screen {
   min-height: 100vh;
-  padding: 16px;
+  padding: 24px;
 }
 
 .stack {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .row {
@@ -36,11 +39,21 @@ body {
   gap: 12px;
 }
 
+/* card — shadcn Card: 1px border, radius, soft shadow, 24px padding */
 .card {
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: calc(var(--radius) + 4px);
   background: var(--bg);
-  padding: 16px;
+  box-shadow: var(--shadow);
+  padding: 24px;
+}
+
+.card > .title,
+.title {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 0;
 }
 
 .divider {
@@ -50,48 +63,89 @@ body {
 }
 
 .label {
-  font-size: 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 500;
   color: var(--fg);
-  opacity: 0.7;
 }
 
-.muted {
-  color: var(--fg);
-  background: var(--muted-bg);
+.muted,
+.description {
+  color: var(--muted);
+  font-size: 0.875rem;
 }
 
-.input {
+/* input — shadcn Input: 36px, 1px border, radius, subtle shadow, ring on focus */
+.input,
+select.input,
+textarea.input {
+  height: 36px;
+  width: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--fg);
-  padding: 8px 12px;
+  padding: 4px 12px;
   font: inherit;
+  font-size: 0.875rem;
+  box-shadow: var(--shadow);
 }
+textarea.input { height: auto; min-height: 80px; padding: 8px 12px; }
+.input::placeholder { color: var(--muted); }
 
+/* btn — shadcn Button: 36px, 500 weight, radius; default = outline, .primary = filled on
+   --primary (ADR-0013 retired the no-fills rule: a theme re-values --primary, nothing here
+   pre-empts it), .ghost = borderless, .sm = 32px */
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--fg);
-  padding: 8px 16px;
+  padding: 0 16px;
   font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
+  box-shadow: var(--shadow);
 }
-
-/* .btn.primary is the ONE filled button the flat register allows — filled with --muted-bg,
-   never --primary, so a wireframe never pre-empts a theme color decision. */
+.btn:hover { background: var(--muted-bg); }
 .btn.primary {
-  border-color: var(--border);
-  background: var(--muted-bg);
-  color: var(--fg);
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-fg);
 }
+.btn.primary:hover { opacity: 0.9; }
+.btn.ghost { border-color: transparent; background: transparent; box-shadow: none; }
+.btn.ghost:hover { background: var(--muted-bg); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 0.8125rem; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn:focus-visible,
 .input:focus-visible {
   outline: 2px solid var(--ring);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
+
+/* badge — shadcn Badge: pill, 12px, 600 weight; default outline, .primary filled */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--fg);
+  background: var(--bg);
+}
+.badge.primary { border-color: var(--primary); background: var(--primary); color: var(--primary-fg); }
+.badge.muted { background: var(--muted-bg); }
 
 .list-item {
   display: flex;
@@ -102,11 +156,63 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+/* nav — shadcn Tabs-style underline nav */
 .nav {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 8px;
+}
+.nav > * {
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.nav > .active { color: var(--fg); border-bottom-color: var(--primary); }
+
+/* table — shadcn Table: 1px row borders, muted header, 12px cell padding */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.table tr:hover td { background: var(--muted-bg); }
+
+/* sheet — shadcn Sheet/Dialog panel: elevated card on --bg with the ring's shadow */
+.sheet {
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--bg);
+  box-shadow: var(--shadow), 0 8px 24px var(--muted-bg);
+  padding: 24px;
+}
+
+/* empty — shadcn empty state: centered, muted, inside a dashed frame */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 24px;
+  border: 1px dashed var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  color: var(--muted);
+  text-align: center;
 }
 
 /* .placeholder — a dashed box standing in for content not yet drawn (an image, a chart, a
@@ -116,7 +222,7 @@ body {
   border: 1px dashed var(--border);
   border-radius: var(--radius);
   background: var(--muted-bg);
-  color: var(--fg);
+  color: var(--muted);
   display: flex;
   align-items: center;
   justify-content: center;

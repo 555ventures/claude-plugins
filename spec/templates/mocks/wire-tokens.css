@@ -1,22 +1,24 @@
-/* Wireframe token register — spec/doctrine/mocks.md § Mocks: State Machine (D17: flat gray
-   register on shadcn's zinc defaults). Copied verbatim into design/wire/tokens.css by
-   `canon-written` when absent. Every color a wireframe consumes must resolve to one of these
-   roles (design-atlas.js check flags any color literal in markup) — sketching stays neutral
-   on purpose so no direction is smuggled in before THEME. Do not add roles here without
-   updating design/wire/wire.css's consumers. Values are byte-equal (after whitespace trim) to
-   spec/templates/mocks/viewer.css's `--v-*` register per role pair — one token set, two
-   registers (specs/20260902/09-one-hand-wireframes-one-token-set.md D4); a pinned test
-   (tests/mocks/viewer-tokens.test.js) keeps the two files from drifting. */
+/* Wireframe token register — spec/doctrine/mocks.md § Mocks: Authoring Rules (ADR-0013: shadcn's
+   Neutral theme as the wireframe register, the same eleven roles a theme direction re-values).
+   Copied verbatim into design/wire/tokens.css by `canon-written` when absent. Every color a
+   wireframe consumes must resolve to one of these roles (design-atlas.js check flags any color
+   literal in markup); a theme is a second value set for the same role names, swapped in at
+   serve time for the client route, so no screen is ever redrawn to be themed. Do not add roles
+   here without updating design/wire/wire.css's consumers. Values are byte-equal (after
+   whitespace trim) to spec/templates/mocks/viewer.css's `--v-*` register per role pair — one
+   token set, two registers (specs/20260902/09-one-hand-wireframes-one-token-set.md D4); a
+   pinned test (tests/mocks/viewer-tokens.test.js) keeps the two files from drifting. */
 
 :root {
   --bg: #ffffff;
-  --fg: #09090b;
-  --muted: #71717a;
-  --muted-bg: #f4f4f5;
-  --border: #e4e4e7;
-  --primary: #18181b;
+  --fg: #0a0a0a;
+  --muted: #737373;
+  --muted-bg: #f5f5f5;
+  --border: #e5e5e5;
+  --primary: #171717;
   --primary-fg: #fafafa;
-  --ring: #a1a1aa;
-  --radius: 6px;
+  --ring: #a3a3a3;
+  --radius: 8px;
   --font: ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
+  --shadow: 0 1px 2px 0 rgba(0,0,0,.05);
 }

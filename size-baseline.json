@@ -2,8 +2,8 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 55589,
-    "spec/scripts": 1325460,
-    "spec/scripts/lib": 242860,
+    "spec/scripts": 1325405,
+    "spec/scripts/lib": 242852,
     "tests": 3773676
   },
   "files": {
@@ -23,7 +23,7 @@
     "spec/scripts/commit-coverage.js": 16400,
     "spec/scripts/components-check.js": 4708,
     "spec/scripts/design-ac-reconcile.js": 6011,
-    "spec/scripts/design-atlas.js": 146761,
+    "spec/scripts/design-atlas.js": 146707,
     "spec/scripts/env-preflight.js": 8794,
     "spec/scripts/escape-row.js": 10045,
     "spec/scripts/fleet-reader.js": 47448,
@@ -49,7 +49,7 @@
     "spec/scripts/lib/parse-selection.js": 2367,
     "spec/scripts/lib/queue.js": 9577,
     "spec/scripts/lib/replay-corpus.js": 3240,
-    "spec/scripts/lib/review-page.js": 21286,
+    "spec/scripts/lib/review-page.js": 21278,
     "spec/scripts/lib/review.browser.js": 18800,
     "spec/scripts/lib/session-stamp.js": 3458,
     "spec/scripts/lib/shell-region.js": 24925,
@@ -60,7 +60,7 @@
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
     "spec/scripts/merge-back.sh": 17514,
-    "spec/scripts/mocks-driver.js": 114479,
+    "spec/scripts/mocks-driver.js": 114478,
     "spec/scripts/port-check.js": 3536,
     "spec/scripts/promise-sweep.js": 10409,
     "spec/scripts/prose-cap.js": 6271,

@@ -588,17 +588,16 @@ test('AC-20260901-02-4 (also AC-20260901-09-6, rewritten in place, D9): a run cr
   }))
 
   const returnFile = returnFileWith('rvdrv-provenance-clean', CLEAN_RETURN)
-  run(loopHost.root, loopHost.spec, '--mark', 'reviewer-returned', '--file', returnFile)
-  // specs/20260901/09-disposer-gate.md D4: a --via loop run lands DISPOSITIONS directly after
-  // reviewer-returned — CHECKPOINT is retired as a reachable state, so there is no park to lift
-  // and no second stamp write needed before the dispositions-and-close path below.
-  assert.strictEqual(stateOf(loopHost.root, loopHost.spec), 'DISPOSITIONS',
-    'setup precondition/AC-20260901-09-1: a --via loop run\'s reviewer-returned mark must land DISPOSITIONS directly, never CHECKPOINT, so this AC\'s dispositions-and-close path can proceed immediately: ')
-
   const ledger = path.join(loopHost.root, '.claude/spec-runs.jsonl')
   const before = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean) : []
-  const r = run(loopHost.root, loopHost.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
-  assert.strictEqual(r.status, 0, 'a zero-survivor, zero-finding disposition must be accepted: ' + r.stdout + r.stderr)
+  // AC-20260909-04-7/D6 (retag in place, never weakened): a zero-survivor CLEAN_RETURN now runs
+  // the authoritative close pass directly inside THIS mark (empty hard pool, self-dispositioned),
+  // never landing DISPOSITIONS at all — the setup precondition and the dispositions-and-close
+  // path collapse into the one reviewer-returned call below.
+  const r = run(loopHost.root, loopHost.spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  assert.strictEqual(r.status, 0, 'a zero-survivor, zero-finding reviewer-returned mark must self-disposition and be accepted: ' + r.stdout + r.stderr)
+  assert.strictEqual(stateOf(loopHost.root, loopHost.spec), 'CLOSE',
+    'AC-20260909-04-7/D6: a --via loop run\'s zero-survivor reviewer-returned mark must land CLOSE directly, never DISPOSITIONS')
   const after = fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean)
   assert.strictEqual(after.length, before.length + 1, 'exactly one ledger line must be appended for the authoritative CLOSE pass: ' + JSON.stringify({ before, after }))
   const row = JSON.parse(after[after.length - 1])
@@ -615,10 +614,11 @@ test('AC-20260901-02-4 (also AC-20260901-09-6, rewritten in place, D9): a run cr
   const directHost = makeHost()
   toReviewer(directHost)
   const directReturnFile = returnFileWith('rvdrv-provenance-direct', CLEAN_RETURN)
-  run(directHost.root, directHost.spec, '--mark', 'reviewer-returned', '--file', directReturnFile)
   const directLedger = path.join(directHost.root, '.claude/spec-runs.jsonl')
-  const rDirect = run(directHost.root, directHost.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
-  assert.strictEqual(rDirect.status, 0, 'the no-via, no-stamp run must also close cleanly: ' + rDirect.stdout + rDirect.stderr)
+  // AC-20260909-04-7/D6 (retag in place, never weakened): the close pass runs directly inside
+  // this one reviewer-returned mark for the same reason as the loop host above.
+  const rDirect = run(directHost.root, directHost.spec, '--mark', 'reviewer-returned', '--file', directReturnFile)
+  assert.strictEqual(rDirect.status, 0, 'the no-via, no-stamp run must also self-disposition and close cleanly: ' + rDirect.stdout + rDirect.stderr)
   const directRows = fs.readFileSync(directLedger, 'utf8').trim().split('\n').filter(Boolean)
   const directRow = JSON.parse(directRows[directRows.length - 1])
   assert.strictEqual(directRow.via, 'direct',

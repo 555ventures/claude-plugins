@@ -1,6 +1,6 @@
 ---
 date: 2026-09-09
-status: hardened
+status: implementing
 tier: critical           # verdict.js is a named critical trigger (.claude/rules/spec-pipeline.md § Risk Tiers): this spec changes the CLEAN derivation
 area: review
 design: false
@@ -8,8 +8,10 @@ breaking: false
 depends_on: []
 depended_on_by: [specs/20260909/05-fix-delta-reviewer-pass.md]
 brief: n/a
+build_base: main
 spiked: 2026-09-09
 open_markers: 0
+diff_base: daf4177e91f6442677b7e3ccba127005f661f9a4
 ---
 
 # Review convergence floor — soft findings are advisory, never a fix cycle
@@ -59,6 +61,12 @@ undispositioned, and the two-iteration fix cap is untouched.
 | tests/review/escalate-row-step.test.js | MODIFY | tests | AC-20260909-04-10 — ESCALATE text names the file exit; a `fix` entry at a spent cap is refused |
 | tests/review/review-driver-fix-cycle.test.js | MODIFY | tests | AC-20260909-04-13 — SHALL CONTINUE TO pins on the cap and the FIX→REVIEWER cycle with hard findings |
 | spec/.claude-plugin/plugin.json | MODIFY | other | D13 bump |
+| tests/review/disposer-gate.fixtures.js | MODIFY | other | Forced collateral of D1/D8: `ONE_SURVIVOR_RETURN`/`TWO_SURVIVOR_RETURN` carried `severity: soft`, which the hard-only pool no longer admits — retagged to `hard`, never weakened |
+| tests/review/escalate-row.fixtures.js | MODIFY | other | Forced collateral of D1/D5/D8: `reviewerReturn()`'s survivor severity `soft` → `hard` so its out-of-batch consumers still land FIX |
+| tests/review/review-driver.fixtures.js | MODIFY | other | Forced collateral of D1/D5/D8: `SURVIVOR_RETURN`'s severity `soft` → `hard` for the same reason |
+| size-baseline.json | MODIFY | other | Ratchet raises for the grown test files, cited to this spec (.claude/rules/spec-pipeline.md § Review Checks) via `node scripts/size-ratchet.js --raise <path> --to <n> --cite specs/20260909/04-review-soft-floor.md` |
+| tests/review/review-driver-close-row.test.js | MODIFY | other | Forced collateral of D6: four ACs paired `reviewer-returned` with an explicit `dispositions` mark that the driver now runs itself — collapsed to one call, assertions unchanged |
+| tests/review/review-driver.test.js | MODIFY | other | Forced collateral of D6: AC-20260901-02-4 same collapse on both the `--via loop` and no-via hosts |
 
 Orchestrator duty outside the table: after the build, `grep -rn "medium" spec/agents/reviewer.md` must return nothing in § Severity calibration.
 

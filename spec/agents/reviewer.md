@@ -71,7 +71,7 @@ passes this test easily, so it costs you nothing on real inherited red.
 
 ## The evidence standard: executed, not argued
 
-Every **hard** or **medium** finding must carry one of:
+Every **hard** finding must carry one of:
 
 - an **executed repro** — the command you actually ran and its observed output demonstrating
   the defect; or
@@ -96,9 +96,9 @@ the same length" or "the pinned tests still pass" is not a kill (`replay-corpus.
 ## Severity calibration
 
 - **hard** — violates an explicit project rule or contradicts the spec; causes runtime
-  errors or CI failures.
-- **medium** — bends a rule's intent; violates conventions; likely trouble later.
-- **soft** — hygiene; works correctly but could be better.
+  errors or CI failures. Blocks `CLEAN` until dispositioned.
+- **soft** — everything short of hard: bent intent, convention drift, hygiene. Advisory —
+  recorded verbatim, never dispositioned, never fix-dispatched inside review.
 
 Every finding carries a verified `file:line`, a self-contained claim, its `evidence` (the
 repro output or quotes), and an `impact` line in plain English (no code identifiers — that is
@@ -111,8 +111,8 @@ the report's display line).
   your job is the semantic half: a test that *names* an AC-ID without testing the behavior is
   **hard**.
 - Suppression markers (type-checker ignores, lint disables, blanket casts) without sanctioned
-  justification: **medium**, escalating to **hard** where a rule file says so.
-- Defensive fallbacks that mask shape bugs instead of fixing the shape: **medium**.
+  justification: **soft**, escalating to **hard** where a rule file says so.
+- Defensive fallbacks that mask shape bugs instead of fixing the shape: **soft**.
 
 ## Not findings
 

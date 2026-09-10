@@ -108,7 +108,7 @@ function oneFixReturnFile(scratchName, ref) {
 function reviewerReturn() {
   return {
     verdict: 'CLEAN',
-    survivors: [{ severity: 'soft', claim: 'x', file: 'src/foo.js', line: 1, impact: 'x', evidence: 'x' }],
+    survivors: [{ severity: 'hard', claim: 'x', file: 'src/foo.js', line: 1, impact: 'x', evidence: 'x' }],
     killed: [], reviewerCount: 1, scope: 'fix-delta', tokens: 10,
   }
 }

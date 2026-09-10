@@ -11,8 +11,23 @@ const { GREEN_TEST, specBody, makeHost, run, stateOf, returnFileWith, oneFixRetu
 // fix-cycle ACs: specs/20260903/02-whole-suite-review-leg.md AC-20260903-02-9;
 // specs/20260820/07-review-driver.md AC-20260820-07-8; specs/20260822/01-escalate-ledger-row.md
 // AC-20260822-01-10; specs/20260901/09-disposer-gate.md AC-20260901-09-2;
-// specs/20260902/05-manifest-stamped-scope.md AC-20260902-05-6/-8. Shared helpers live in
-// review-driver.fixtures.js (D2).
+// specs/20260902/05-manifest-stamped-scope.md AC-20260902-05-6/-8;
+// specs/20260909/04-review-soft-floor.md AC-20260909-04-13 (D1: fix-cycle mechanics only ever
+// dispatch on the HARD pool now). Shared helpers live in review-driver.fixtures.js (D2).
+//
+// specs/20260909/04-review-soft-floor.md D1: review-driver.fixtures.js's shared SURVIVOR_RETURN
+// carries severity:"soft", which never enters the hard pool any more and would leave every
+// fix-dispatch below refused (the disposer return naming s0 would match nothing in the hard-only
+// pool, D8) — every test in this file drives a real fix cycle, so a local hard-severity return
+// keeps them exercising the FIX pool they always meant to. review-driver.fixtures.js itself is
+// shared with review-driver.test.js, review-driver-close-*.test.js and
+// review-driver-replay-*.test.js (outside this batch) and is not edited here — logged as a
+// deviation.
+const HARD_SURVIVOR_RETURN = {
+  verdict: 'CLEAN',
+  survivors: [{ severity: 'hard', claim: 'x', file: 'src/foo.js', line: 1, impact: 'x', evidence: 'x' }],
+  killed: [], reviewerCount: 1, scope: 'full', tokens: 10,
+}
 
 // specs/20260903/02-whole-suite-review-leg.md D1/D3 (AC-20260903-02-9): a synthetic host whose
 // planned test is green but whose tests/consistency/scanner.test.js (outside the File Plan,
@@ -86,17 +101,17 @@ test('AC-20260903-02-9: WHEN the driver runs against a synthetic host whose plan
 // writeEscalateRow() call ahead of this same die(), but the refusal itself (exit 2, iteration cap
 // 2, state ESCALATE) must survive byte-for-byte in spirit. The new escalate-row mechanics are
 // pinned separately in tests/review/escalate-row.test.js.
-test('AC-20260820-07-8 (also AC-20260822-01-10, SHALL CONTINUE TO) / AC-20260901-09-2: a dispatched fix cycles FIX -> fix-applied (fresh manifest, legs --fix-delta) -> REVIEWER twice, and a third fix-applied is refused with state ESCALATE naming the iteration cap of 2', () => {
+test('AC-20260820-07-8 (also AC-20260822-01-10, AC-20260909-04-13, SHALL CONTINUE TO) / AC-20260901-09-2: a dispatched fix on a HARD finding cycles FIX -> fix-applied (fresh manifest, legs --fix-delta) -> REVIEWER twice, and a third fix-applied is refused with state ESCALATE naming the iteration cap of 2', () => {
   const host = makeHost()
   run(host.root, host.spec)
   assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER')
 
   for (let cycle = 1; cycle <= 2; cycle++) {
-    const returnFile = returnFileWith('rvdrv-fix-' + cycle, SURVIVOR_RETURN)
+    const returnFile = returnFileWith('rvdrv-fix-' + cycle, HARD_SURVIVOR_RETURN)
     run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
     assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS', `cycle ${cycle}: a returned survivor must land DISPOSITIONS`)
 
-    // AC-20260901-09-2: SURVIVOR_RETURN's single survivor is the whole pool (s0) — cover it with
+    // AC-20260901-09-2: HARD_SURVIVOR_RETURN's single survivor is the whole pool (s0) — cover it with
     // a minimal "fix" disposer return before --mark dispositions --fix-dispatched 1 is accepted.
     const dispFile = oneFixReturnFile('rvdrv-fix-disp-' + cycle, 's0')
     const dispR = run(host.root, host.spec, '--mark', 'dispositions', '--file', dispFile, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
@@ -111,7 +126,7 @@ test('AC-20260820-07-8 (also AC-20260822-01-10, SHALL CONTINUE TO) / AC-20260901
     assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', `cycle ${cycle}: fix-applied must return to REVIEWER for the fix-delta reviewer pass: ` + fixR.stdout + fixR.stderr)
   }
 
-  const returnFile3 = returnFileWith('rvdrv-fix-3', SURVIVOR_RETURN)
+  const returnFile3 = returnFileWith('rvdrv-fix-3', HARD_SURVIVOR_RETURN)
   run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile3)
   const dispFile3 = oneFixReturnFile('rvdrv-fix-disp-3', 's0')
   const dispR3 = run(host.root, host.spec, '--mark', 'dispositions', '--file', dispFile3, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
@@ -134,7 +149,7 @@ test('AC-20260820-07-8 (also AC-20260822-01-10, SHALL CONTINUE TO) / AC-20260901
 test('AC-20260820-07-8 (manifest-provable cap) / AC-20260901-09-2: hand-editing the sidecar\'s stored iteration count cannot reach ESCALATE — only manifest-<n>.jsonl files actually present on disk advance the cap', () => {
   const host = makeHost()
   run(host.root, host.spec)
-  const returnFile = returnFileWith('rvdrv-hand-edit', SURVIVOR_RETURN)
+  const returnFile = returnFileWith('rvdrv-hand-edit', HARD_SURVIVOR_RETURN)
   run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
   const dispFile1 = oneFixReturnFile('rvdrv-hand-edit-disp', 's0')
   run(host.root, host.spec, '--mark', 'dispositions', '--file', dispFile1, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
@@ -155,7 +170,7 @@ test('AC-20260820-07-8 (manifest-provable cap) / AC-20260901-09-2: hand-editing 
     'a hand-edited sidecar counter must NEVER be able to reach ESCALATE on its own — the iteration cap must derive from manifest-<n>.jsonl files actually present on disk (only manifest-1 and manifest-2 exist, within the cap of 2), per the Fragile Spots note that the count must not be a stored counter')
 
   // The real cap must still be reachable normally afterward — the fabricated counter consumed nothing real.
-  const returnFile2 = returnFileWith('rvdrv-hand-edit-2', SURVIVOR_RETURN)
+  const returnFile2 = returnFileWith('rvdrv-hand-edit-2', HARD_SURVIVOR_RETURN)
   run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile2)
   const dispFile2 = oneFixReturnFile('rvdrv-hand-edit-disp2', 's0')
   run(host.root, host.spec, '--mark', 'dispositions', '--file', dispFile2, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
@@ -176,7 +191,7 @@ test('AC-20260902-05-6: WHEN the driver\'s --mark fix-applied legs run hard-stop
   run(host.root, host.spec)
   assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', 'setup: a fresh green-legs fixture must reach REVIEWER')
 
-  const returnFile = returnFileWith('rvdrv-05-6-return', SURVIVOR_RETURN)
+  const returnFile = returnFileWith('rvdrv-05-6-return', HARD_SURVIVOR_RETURN)
   run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
   assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS', 'setup: the one soft survivor must land DISPOSITIONS')
 
@@ -218,8 +233,12 @@ test('AC-20260902-05-8: WHEN --mark dispositions is invoked after a gate overrid
   const host = makeHost()
   run(host.root, host.spec)
   assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', 'setup: a fresh green-legs fixture must reach REVIEWER')
-  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-05-8-return', CLEAN_RETURN))
-  assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS', 'setup: a clean zero-survivor return must land DISPOSITIONS')
+  // AC-20260909-04-7/D6 (retag in place, never weakened): a zero-survivor CLEAN_RETURN now
+  // self-dispositions straight to CLOSE at this very mark, before the manifest hand-edit below
+  // can ever run — swapped to SURVIVOR_RETURN (one hard survivor) so the run genuinely parks at
+  // DISPOSITIONS, which this AC's manifest-disagreement refusal needs to reach.
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-05-8-return', SURVIVOR_RETURN))
+  assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS', 'setup: a one-hard-survivor return must land DISPOSITIONS')
 
   // Hand-edit the manifest to append a "gate" row stamped scope:"fix-delta" — once D1 stamps
   // every other row "full", this single override disagrees with the rest of the manifest.

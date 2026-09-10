@@ -19,26 +19,25 @@ const { GREEN_TEST, specBody, makeHost, run, stateOf, toReviewer, returnFileWith
 // specs/20260901/03-unified-build-loop.md D2/AC-20260901-03-5 (brief 18, SHALL
 // CONTINUE TO, tagged in place, never weakened): this host is built with no --via flag, so it
 // defaults to via:"direct" — the new CHECKPOINT state (reached only for via:"loop") must never
-// engage here, and the line below asserting DISPOSITIONS directly after reviewer-returned stays
-// the correct, unweakened pin for the direct-entry path.
+// engage here.
 //
-// specs/20260901/09-disposer-gate.md D9/AC-20260901-09-5 (brief 18b, tagged in
-// place, never weakened): D9 keeps this exact zero-pool CONTINUES-TO-pass shape as the AC-5
-// pin — both pools empty still admits --mark dispositions --waived 0 --rejected 0
-// --fix-dispatched 0 with no --file and lands CLOSE, unaffected by the CHECKPOINT retirement.
-test('AC-20260820-07-6 / AC-20260901-03-5 / AC-20260901-09-5 (SHALL CONTINUE TO) / AC-20260902-05-11 (SHALL CONTINUE TO, D6): WHEN a clean run reaches CLOSE (0 survivors, dispositions 0 0 0) THE SYSTEM runs the authoritative verdict with --retain .claude/spec-runs, appends one ledger line, flips status implementing -> done, and prints the close-step instructions', () => {
+// specs/20260909/04-review-soft-floor.md AC-20260909-04-7/D6 (retag in place, never weakened):
+// a zero-survivor CLEAN_RETURN now leaves an empty hard pool, which the driver self-dispositions
+// at the `reviewer-returned` mark itself — it lands CLOSE directly, appending the ledger row and
+// flipping status right there, with no separate `--mark dispositions` step ever required or
+// printed. The line below asserting DISPOSITIONS directly after reviewer-returned is superseded;
+// this test now captures the ledger `before` snapshot before that single mark and asserts CLOSE.
+test('AC-20260820-07-6 / AC-20260901-03-5 (SHALL CONTINUE TO) / AC-20260909-04-7 (D6, retagged): WHEN a clean run\'s reviewer-returned mark leaves an empty hard pool THE SYSTEM self-dispositions, runs the authoritative verdict with --retain .claude/spec-runs, appends one ledger line, flips status implementing -> done, and prints the close-step instructions, all within that one mark', () => {
   const host = makeHost()
   toReviewer(host)
   const returnFile = returnFileWith('rvdrv-clean', CLEAN_RETURN)
-  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
-  assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS',
-    'AC-20260901-03-5 (SHALL CONTINUE TO)/D2: a via:"direct" run (no --via flag given) must land DISPOSITIONS directly after reviewer-returned, never CHECKPOINT — CHECKPOINT exists only for via:"loop"')
 
   const ledger = path.join(host.root, '.claude/spec-runs.jsonl')
   const before = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean) : []
-  const r = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
-  assert.strictEqual(r.status, 0, 'a zero-survivor, zero-finding disposition must be accepted: ' + r.stdout + r.stderr)
-  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE', 'zero undispositioned findings must land CLOSE: ' + r.stdout + r.stderr)
+  const r = run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  assert.strictEqual(r.status, 0, 'a zero-survivor reviewer-returned mark must self-disposition and be accepted: ' + r.stdout + r.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
+    'AC-20260909-04-7/D6: an empty hard pool must land CLOSE directly off the reviewer-returned mark, with no DISPOSITIONS step in between: ' + r.stdout + r.stderr)
 
   const after = fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean)
   assert.strictEqual(after.length, before.length + 1,
@@ -66,14 +65,18 @@ test('AC-20260820-07-6 / AC-20260901-03-5 / AC-20260901-09-5 (SHALL CONTINUE TO)
 // close commit that follows, never `head` alone. Untracked files (the sidecar, scratch artifacts)
 // never count — `git status --porcelain --untracked-files=no` is the exact command D4 pins.
 test('AC-20260824-06-6: WHEN a clean run reaches CLOSE with one uncommitted tracked-file edit in the fixture tree THE SYSTEM appends a close row with diff.dirty:true and diff.head equal to the fixture\'s HEAD before the close commit, and a retained artifact whose diff deep-equals the row\'s; WHEN the tree is clean apart from untracked files THE SYSTEM records diff.dirty:false', () => {
+  // AC-20260909-04-7/D6 (retag in place, never weakened): a zero-survivor CLEAN_RETURN now runs
+  // the authoritative close pass immediately inside the reviewer-returned mark itself (the hard
+  // pool is empty, so the driver self-dispositions), not at a later explicit dispositions mark —
+  // the dirty edit must exist BEFORE that one mark for this AC's dirty-tracking claim to hold.
   const dirtyHost = makeHost()
   toReviewer(dirtyHost)
-  run(dirtyHost.root, dirtyHost.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-dirty-clean', CLEAN_RETURN))
-  assert.strictEqual(stateOf(dirtyHost.root, dirtyHost.spec), 'DISPOSITIONS', 'setup: a returned CLEAN, zero-survivor result must land DISPOSITIONS')
   fs.writeFileSync(path.join(dirtyHost.root, 'src/foo.js'), 'module.exports = () => 42 // uncommitted fix-worker edit\n')
   const expectedHeadDirty = execFileSync('git', ['-C', dirtyHost.root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
-  const dClose = run(dirtyHost.root, dirtyHost.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
-  assert.strictEqual(dClose.status, 0, 'a zero-survivor disposition must still close even with an uncommitted tracked edit present: ' + dClose.stdout + dClose.stderr)
+  const dClose = run(dirtyHost.root, dirtyHost.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-dirty-clean', CLEAN_RETURN))
+  assert.strictEqual(dClose.status, 0, 'a zero-survivor reviewer-returned mark must still self-disposition and close even with an uncommitted tracked edit present: ' + dClose.stdout + dClose.stderr)
+  assert.strictEqual(stateOf(dirtyHost.root, dirtyHost.spec), 'CLOSE',
+    'AC-20260909-04-7/D6: an empty hard pool must land CLOSE directly off the reviewer-returned mark')
   const ledgerDirtyLines = fs.readFileSync(path.join(dirtyHost.root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').filter(Boolean)
   const rowDirty = JSON.parse(ledgerDirtyLines[ledgerDirtyLines.length - 1])
   assert.strictEqual(rowDirty.diff && rowDirty.diff.dirty, true,
@@ -89,11 +92,11 @@ test('AC-20260824-06-6: WHEN a clean run reaches CLOSE with one uncommitted trac
 
   const cleanHost = makeHost()
   toReviewer(cleanHost)
-  run(cleanHost.root, cleanHost.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-untracked-clean', CLEAN_RETURN))
-  assert.strictEqual(stateOf(cleanHost.root, cleanHost.spec), 'DISPOSITIONS')
   fs.writeFileSync(path.join(cleanHost.root, 'scratch.txt'), 'an untracked scratch file, never git add-ed\n')
-  const cClose = run(cleanHost.root, cleanHost.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
-  assert.strictEqual(cClose.status, 0, 'a zero-survivor disposition must close normally with only an untracked file present: ' + cClose.stdout + cClose.stderr)
+  const cClose = run(cleanHost.root, cleanHost.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-untracked-clean', CLEAN_RETURN))
+  assert.strictEqual(cClose.status, 0, 'a zero-survivor reviewer-returned mark must self-disposition and close normally with only an untracked file present: ' + cClose.stdout + cClose.stderr)
+  assert.strictEqual(stateOf(cleanHost.root, cleanHost.spec), 'CLOSE',
+    'AC-20260909-04-7/D6: an empty hard pool must land CLOSE directly off the reviewer-returned mark')
   const ledgerCleanLines = fs.readFileSync(path.join(cleanHost.root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').filter(Boolean)
   const rowClean = JSON.parse(ledgerCleanLines[ledgerCleanLines.length - 1])
   assert.strictEqual(rowClean.diff && rowClean.diff.dirty, false,
@@ -155,12 +158,12 @@ test('AC-20260823-03-11: WHEN the review driver processes a spec whose frontmatt
 
   toReviewer({ root, spec })
   const returnFile = returnFileWith('rvdrv-fm11-clean', CLEAN_RETURN)
-  run(root, spec, '--mark', 'reviewer-returned', '--file', returnFile)
-  assert.strictEqual(stateOf(root, spec), 'DISPOSITIONS', 'setup: a returned CLEAN, zero-survivor result must land DISPOSITIONS')
-
   const ledger = path.join(root, '.claude/spec-runs.jsonl')
-  const r = run(root, spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
-  assert.strictEqual(r.status, 0, 'a zero-survivor, zero-finding disposition must be accepted even when tier carries a comment: ' + r.stdout + r.stderr)
+  // AC-20260909-04-7/D6 (retag in place, never weakened): a zero-survivor CLEAN_RETURN's close
+  // pass now runs directly inside this one mark (empty hard pool, self-dispositioned).
+  const r = run(root, spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  assert.strictEqual(r.status, 0, 'a zero-survivor, zero-finding reviewer-returned mark must self-disposition and be accepted even when tier carries a comment: ' + r.stdout + r.stderr)
+  assert.strictEqual(stateOf(root, spec), 'CLOSE', 'AC-20260909-04-7/D6: an empty hard pool must land CLOSE directly off the reviewer-returned mark')
 
   const rows = fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l))
   const row = rows[rows.length - 1]
@@ -247,11 +250,11 @@ test('AC-20260823-05-7 / AC-20260824-06-11: WHEN the driver flips a spec whose f
   const expectedSha = execFileSync('git', ['-C', host.root, 'rev-parse', 'main'], { encoding: 'utf8' }).trim()
 
   const returnFile = returnFileWith('rvdrv-stamp-clean', CLEAN_RETURN)
-  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
-  assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS', 'setup: a returned CLEAN, zero-survivor result must land DISPOSITIONS')
-  const r = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  // AC-20260909-04-7/D6 (retag in place, never weakened): the close flip now happens directly
+  // inside this one reviewer-returned mark (empty hard pool, self-dispositioned).
+  const r = run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
   assert.strictEqual(r.status, 0, 'D3: the close flip must still succeed for a spec with no diff_base: ' + r.stdout + r.stderr)
-  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE', 'D3: a zero-survivor disposition must still land CLOSE')
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE', 'D3/AC-20260909-04-7: a zero-survivor reviewer-returned mark must self-disposition straight to CLOSE')
 
   const afterText = fs.readFileSync(host.spec, 'utf8')
   assert.match(afterText, /^status:\s*done$/m, 'D3: the flip must still write status: done alongside the stamp')

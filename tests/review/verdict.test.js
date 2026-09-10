@@ -226,59 +226,130 @@ test('AC-20260813-10-8 (retag of AC-20260813-02-8): a review-profile run whose c
 // reviewer survivor was enough to reach CLEAN while the ac-matrix leg finding itself sat
 // undispositioned) is the defect D1-D3 close, so the fixture's disposition count is updated
 // in place — never weakened, never left red.
-test('AC-20260818-01-10 (retag of AC-20260805-02-3): a red ac-matrix leg finding coexisting with a reviewer survivor requires dispositions covering both pools before CLEAN — waiving only the survivor still derives HARD_FINDINGS', () => {
+test('AC-20260818-01-10 (retag of AC-20260805-02-3, and by specs/20260909/04-review-soft-floor.md D1: the fixture\'s survivor moves from soft to hard, since a soft survivor never shares a pool with a leg finding any more): a red ac-matrix leg finding coexisting with a reviewer survivor requires dispositions covering both pools before CLEAN — waiving only the survivor still derives HARD_FINDINGS', () => {
   const dir = tmpdir('verdict')
   const rows = SIX_GREEN.map(r => (r.leg === 'ac-matrix' ? { leg: 'ac-matrix', exit: 1, observed: { uncovered: 1, oracle: 0 } } : r))
   const manifest = writeManifest(dir, rows)
-  const workflow = writeWorkflow(dir, cleanWorkflow([{ severity: 'soft', id: 'AC-20260805-02-99' }]))
+  const workflow = writeWorkflow(dir, cleanWorkflow([{ severity: 'hard', id: 'AC-20260805-02-99' }]))
   const partial = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '1'])
   assert.strictEqual(partial.stdout.split('\n')[0], 'HARD_FINDINGS',
     'D1/D2: ac-matrix\'s "uncovered=1" observed must parse to 1 leg finding — waiving only the 1 reviewer ' +
     'survivor leaves that leg finding undispositioned, so the derivation must stay HARD_FINDINGS ' +
-    '(legFindings>0 makes it hard even though the survivor itself is soft), never the CLEAN the pre-D1 ' +
-    'survivors-only arithmetic wrongly reached: ' + partial.stdout + ' / ' + partial.stderr)
+    '(legFindings>0 makes it hard on its own), never the CLEAN the pre-D1 survivors-only arithmetic wrongly ' +
+    'reached: ' + partial.stdout + ' / ' + partial.stderr)
   const full = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '2'])
   assert.strictEqual(full.stdout.split('\n')[0], 'CLEAN',
     'ac-matrix is a findings-producing leg (D3) — its non-zero exit still counts as executed-green for leg ' +
-    'presence, and waiving both the survivor and the leg finding (2 total) must reach CLEAN, not get stuck ' +
-    'unable to ever return to CLEAN: ' + full.stdout + ' / ' + full.stderr)
+    'presence, and waiving both the hard survivor and the leg finding (2 total) must reach CLEAN, not get ' +
+    'stuck unable to ever return to CLEAN: ' + full.stdout + ' / ' + full.stderr)
   assert.strictEqual(full.status, 0, 'CLEAN reached via full disposition of both pools must exit 0: ' + full.stderr)
 })
 
-test('AC-20260805-02-4: undispositioned survivors of medium+soft severity derive FINDINGS', () => {
+// specs/20260909/04-review-soft-floor.md (D1-D4, brief: review convergence floor — a soft-only
+// return could reach CLEAN only through fix/waive/reject, and a fresh reviewer produces a new
+// soft every pass): the undispositioned pool narrows to HARD survivors only — `hardSurvivors =
+// survivors.filter(f => f.severity === 'hard').length` — never the whole survivors array; the
+// FINDINGS-for-undispositioned-softs branch is deleted outright (D2), so FINDINGS now means
+// exactly one thing, `fixDispatched > 0`. The three tests below collided with this narrowing
+// (all three fed medium/soft survivors through the OLD whole-pool arithmetic) and are retagged
+// in place per this spec's own File Plan row, never weakened, never left red.
+
+test('AC-20260909-04-1 (retag of AC-20260805-02-4\'s medium+soft half): undispositioned survivors of medium+soft severity alone, with zero dispositions, derive CLEAN — softs and mediums never enter the pool at all', () => {
   const dir = tmpdir('verdict')
   const manifest = writeManifest(dir, SIX_GREEN)
   const workflow = writeWorkflow(dir, cleanWorkflow([
     { severity: 'medium', id: 'AC-a' }, { severity: 'soft', id: 'AC-b' }, { severity: 'medium', id: 'AC-c' },
   ]))
-  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '1'])
-  assert.strictEqual(r.stdout.split('\n')[0], 'FINDINGS',
-    '3 survivors, 1 waived, and no hard severity among them — undispositioned medium/soft findings must ' +
-    'derive FINDINGS, never CLEAN and never the harder HARD_FINDINGS word: ' + r.stdout + ' / ' + r.stderr)
-  assert.strictEqual(r.status, 1, 'FINDINGS is a non-CLEAN word and must still exit 1: ' + r.stderr)
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(r.stdout.split('\n')[0], 'CLEAN',
+    'AC-20260909-04-1 (literal: "survivors: [soft, medium] -> CLEAN, exit 0"): D1 counts hardSurvivors as ' +
+    'severity==="hard" only — 3 non-hard survivors (medium/soft/medium) leave the hard pool at 0, and D2 ' +
+    'deletes the FINDINGS-for-undispositioned-softs branch this same 3-survivor input used to hit pre-D1/D2 — ' +
+    'it must now derive CLEAN with zero dispositions needed, never FINDINGS and never HARD_FINDINGS: ' +
+    r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 0, 'CLEAN here must exit 0: ' + r.stderr)
 })
 
-test('AC-20260805-02-4: undispositioned survivors including a hard severity derive HARD_FINDINGS', () => {
+test('AC-20260909-04-2 (retag of AC-20260805-02-4\'s hard-severity half): undispositioned survivors mixing hard with medium and soft derive HARD_FINDINGS from the hard survivor alone, and waiving just that one hard survivor derives CLEAN — the medium/soft survivors in the same return never contribute to the pool', () => {
   const dir = tmpdir('verdict')
   const manifest = writeManifest(dir, SIX_GREEN)
   const workflow = writeWorkflow(dir, cleanWorkflow([
     { severity: 'hard', id: 'AC-a' }, { severity: 'medium', id: 'AC-b' }, { severity: 'soft', id: 'AC-c' },
   ]))
-  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '1'])
-  assert.strictEqual(r.stdout.split('\n')[0], 'HARD_FINDINGS',
-    'a hard-severity survivor among the undispositioned set must derive the stronger HARD_FINDINGS word, ' +
-    'not the FINDINGS word medium/soft alone would get: ' + r.stdout + ' / ' + r.stderr)
+  const zero = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(zero.stdout.split('\n')[0], 'HARD_FINDINGS',
+    'AC-20260909-04-2 (literal, zero-dispositions half): D1\'s hardSurvivors = 1 (the one severity==="hard" ' +
+    'survivor) even though 3 survivors total sit undispositioned — the medium and soft survivors are never ' +
+    'counted, so zero dispositions against a pool of 1 must derive HARD_FINDINGS: ' + zero.stdout + ' / ' + zero.stderr)
+  assert.strictEqual(zero.status, 1, 'HARD_FINDINGS must exit 1: ' + zero.stderr)
+
+  const waived = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '1'])
+  assert.strictEqual(waived.stdout.split('\n')[0], 'CLEAN',
+    'AC-20260909-04-2 (literal, --waived 1 half): waiving exactly 1 clears the hard-only pool of 1 and must ' +
+    'derive CLEAN — pre-D1 arithmetic pooled all 3 survivors, so this same --waived 1 used to leave 2 ' +
+    'undispositioned (HARD_FINDINGS forever, never reachable to CLEAN with only 1 waive): ' +
+    waived.stdout + ' / ' + waived.stderr)
+  assert.strictEqual(waived.status, 0, 'CLEAN here must exit 0: ' + waived.stderr)
 })
 
-test('AC-20260805-02-4: a non-zero fixDispatched derives FINDINGS even when it equals the survivor count, because a dispatched fix is non-terminal', () => {
+test('AC-20260909-04-3 (retag of AC-20260805-02-4\'s fixDispatched half): WHEN survivors are all soft and --fixDispatched 1 is passed THE SYSTEM exits 2 on the contradiction guard (pool 0 < dispositions 1), never FINDINGS', () => {
   const dir = tmpdir('verdict')
   const manifest = writeManifest(dir, SIX_GREEN)
   const workflow = writeWorkflow(dir, cleanWorkflow([{ severity: 'soft', id: 'AC-a' }]))
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--fixDispatched', '1'])
-  assert.strictEqual(r.stdout.split('\n')[0], 'FINDINGS',
-    'fixDispatched fully accounting for the one survivor must NOT derive CLEAN — a dispatched fix is ' +
-    'non-terminal by design (D3): CLEAN is only reachable from the NEXT iteration\'s fresh derivation: ' +
+  assert.strictEqual(r.status, 2,
+    'AC-20260909-04-3 (literal): a lone soft survivor never enters the hard pool (D1), so the pool is 0 — ' +
+    '--fixDispatched 1 exceeds 0 and must trip the disposition-contradiction guard (exit 2), never derive ' +
+    'FINDINGS the way a soft-severity fixDispatched used to pre-D1/D2 (fixDispatched fully "covering" a soft ' +
+    'that was never dispositionable in the first place is a bookkeeping error, not a legitimate fix): ' +
     r.stdout + ' / ' + r.stderr)
+  assert.match(r.stderr, /exceeds/, 'the contradiction guard\'s own message must fire, naming the pool arithmetic: ' + r.stderr)
+})
+
+test('D2 (specs/20260909/04-review-soft-floor.md): a fixDispatched fully covering the one hard survivor still derives FINDINGS, never CLEAN — a dispatched fix stays non-terminal even though softs no longer share its pool', () => {
+  const dir = tmpdir('verdict')
+  const manifest = writeManifest(dir, SIX_GREEN)
+  const workflow = writeWorkflow(dir, cleanWorkflow([{ severity: 'hard', id: 'AC-a' }]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--fixDispatched', '1'])
+  assert.strictEqual(r.stdout.split('\n')[0], 'FINDINGS',
+    'D2: fixDispatched fully accounting for the one hard survivor must NOT derive CLEAN — a dispatched fix is ' +
+    'non-terminal by design: CLEAN is only reachable from the NEXT iteration\'s fresh derivation: ' +
+    r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 1, 'FINDINGS is a non-CLEAN word and must still exit 1: ' + r.stderr)
+})
+
+test('AC-20260909-04-4: WHEN verdict.js prints a review-profile --ledger row for a return with survivors [hard, soft, soft] THE SYSTEM SHALL emit findings with exactly the eight keys survived, killed, waived, rejected, fixDispatched, reviewerCount, legFindings, soft in that order with survived:3 and soft:2', () => {
+  const dir = tmpdir('verdict-04-4')
+  const manifest = writeManifest(dir, SIX_GREEN)
+  const workflow = writeWorkflow(dir, cleanWorkflow([
+    { severity: 'hard', id: 'AC-a' }, { severity: 'soft', id: 'AC-b' }, { severity: 'soft', id: 'AC-c' },
+  ]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir, '--waived', '1'])
+  const row = JSON.parse(r.stdout.trim().split('\n')[1])
+  assert.deepStrictEqual(Object.keys(row.findings),
+    ['survived', 'killed', 'waived', 'rejected', 'fixDispatched', 'reviewerCount', 'legFindings', 'soft'],
+    'AC-20260909-04-4 (literal): D3 appends an eighth key, soft, LAST — a reader iterating row.findings\'s own ' +
+    'keys must see this exact order, never soft inserted earlier or the seven-key shape surviving: ' +
+    JSON.stringify(row.findings))
+  assert.strictEqual(row.findings.survived, 3, 'survived must stay the total survivor count (D3): ' + JSON.stringify(row.findings))
+  assert.strictEqual(row.findings.soft, 2,
+    'AC-20260909-04-4 (literal): soft = survivors.length - hardSurvivors = 3 - 1 = 2: ' + JSON.stringify(row.findings))
+})
+
+test('AC-20260909-04-5: WHEN survivors are [hard, soft], leg findings 0, and --waived 2 is passed THE SYSTEM SHALL exit 2 naming both pools in the guard message (waived 2 > hard pool 1)', () => {
+  const dir = tmpdir('verdict-04-5')
+  const manifest = writeManifest(dir, SIX_GREEN)
+  const workflow = writeWorkflow(dir, cleanWorkflow([
+    { severity: 'hard', id: 'AC-a' }, { severity: 'soft', id: 'AC-b' },
+  ]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '2'])
+  assert.strictEqual(r.status, 2,
+    'AC-20260909-04-5: waiving 2 against a hard-only pool of 1 (the soft survivor never counts) must trip the ' +
+    'contradiction guard: ' + r.stdout + ' / ' + r.stderr)
+  assert.match(r.stderr, /waived 2 > hard pool 1/,
+    'AC-20260909-04-5 (literal): the guard message must name both pools by this exact phrase — a caller must ' +
+    'be able to tell a hard-pool overrun from a leg-finding overrun without re-deriving the arithmetic itself: ' +
+    r.stderr)
 })
 
 // specs/20260818/01-ledger-truth.md D7 retag: the surviving half (legs mirror the manifest,
@@ -558,10 +629,10 @@ test('AC-20260813-02-2: a skip-reconcile typed observed object carrying only {"s
 // six-key `deepStrictEqual` is the defect — D4 adds a seventh key (`legFindings`) to
 // `row.findings`, so the old six-key object is not what the script emits. Updated in
 // place and retagged to AC-20260818-01-2, never weakened to a subset/partial match.
-test('AC-20260818-01-2 (retag of AC-20260805-02-8): the review ledger row nests survived/killed/waived/rejected/fixDispatched/reviewerCount/legFindings under findings and carries none of them flat at the top level', () => {
+test('AC-20260909-04-4 (retag of AC-20260818-01-2/AC-20260805-02-8: their fixture waived a SOFT survivor, which specs/20260909/04-review-soft-floor.md D1 now refuses at the contradiction guard before any row ever prints): the review ledger row nests survived/killed/waived/rejected/fixDispatched/reviewerCount/legFindings/soft under findings and carries none of them flat at the top level', () => {
   const dir = tmpdir('verdict')
   const manifest = writeManifest(dir, SIX_GREEN)
-  const workflow = writeWorkflow(dir, cleanWorkflow([{ severity: 'soft', id: 'AC-a' }]))
+  const workflow = writeWorkflow(dir, cleanWorkflow([{ severity: 'hard', id: 'AC-a' }]))
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir, '--waived', '1'])
   const row = JSON.parse(r.stdout.trim().split('\n')[1])
   assert.ok(row.findings && typeof row.findings === 'object',
@@ -569,12 +640,13 @@ test('AC-20260818-01-2 (retag of AC-20260805-02-8): the review ledger row nests 
     'template — a flat row is a schema shape a consumer reading row.findings.killed cannot parse: ' +
     JSON.stringify(row))
   assert.deepStrictEqual(row.findings, {
-    survived: 1, killed: 0, waived: 1, rejected: 0, fixDispatched: 0, reviewerCount: 1, legFindings: 0,
-  }, 'D4: row.findings must carry exactly the SEVEN disposition/finding counts with their derived values ' +
-    '(all legs green in this fixture, so legFindings:0) — a mismatch means either escape.md\'s ' +
+    survived: 1, killed: 0, waived: 1, rejected: 0, fixDispatched: 0, reviewerCount: 1, legFindings: 0, soft: 0,
+  }, 'D3/D4: row.findings must carry exactly the EIGHT disposition/finding counts with their derived values ' +
+    '(all legs green, one hard survivor waived, so soft:0) — a mismatch means either escape.md\'s ' +
     '"findings.killed" backlink reads the wrong number, or a reader of the ledger row cannot tell ' +
-    'CLEAN-because-zero-leg-findings from CLEAN-because-some-were-waived: ' + JSON.stringify(row.findings))
-  for (const flatKey of ['survived', 'killed', 'waived', 'rejected', 'fixDispatched', 'reviewerCount', 'legFindings']) {
+    'CLEAN-because-zero-leg-findings from CLEAN-because-some-were-waived, or a reader cannot tell how many ' +
+    'of the survivors were advisory softs: ' + JSON.stringify(row.findings))
+  for (const flatKey of ['survived', 'killed', 'waived', 'rejected', 'fixDispatched', 'reviewerCount', 'legFindings', 'soft']) {
     assert.ok(!(flatKey in row),
       `row.${flatKey} must not also exist flat at the top level once nested under findings — carrying both ` +
       'shapes at once is not what "additive" (Contracts: "ledger row (additive)") means, and a consumer ' +
@@ -587,10 +659,10 @@ test('AC-20260818-01-2 (retag of AC-20260805-02-8): the review ledger row nests 
 // plain number — two shapes verdict.js's --ledger row was passing through unnormalized instead
 // of converting to the documented review.md:229 template (findings.killed = a count,
 // tokens = {"workflow":<n>}). This test pins the corrected normalization by execution.
-test('AC-20260805-02-8: --ledger normalizes an array-shaped workflow.killed to its length and a numeric workflow.tokens to {workflow:<n>}', () => {
+test('AC-20260805-02-8 (fixture updated by specs/20260909/04-review-soft-floor.md D1: a soft survivor is never dispositionable, so --waived 1 below needs a hard one to reach the ledger row this AC actually pins): --ledger normalizes an array-shaped workflow.killed to its length and a numeric workflow.tokens to {workflow:<n>}', () => {
   const dir = tmpdir('verdict')
   const manifest = writeManifest(dir, SIX_GREEN)
-  const workflowObj = cleanWorkflow([{ severity: 'soft', id: 'AC-a' }])
+  const workflowObj = cleanWorkflow([{ severity: 'hard', id: 'AC-a' }])
   workflowObj.killed = [{ file: 'x' }, { file: 'y' }]
   workflowObj.tokens = 777
   const workflow = writeWorkflow(dir, workflowObj)
@@ -1217,11 +1289,15 @@ test('AC-20260818-01-5: --ledger retains each leg\'s observed string in the row,
 
 const LONG_OBSERVED = 'o'.repeat(300)
 
+// specs/20260909/04-review-soft-floor.md D1: this fixture's one survivor is HARD, not soft — every
+// consumer below passes --waived 1 to fully disposition it and reach CLEAN/exit 0, and a soft
+// survivor never enters the hard pool any more (it would trip the contradiction guard on
+// --waived 1 against a pool of 0, exit 2, before any ledger row ever prints).
 function retentionFixture(dir) {
   const rows = [...SIX_GREEN, { leg: 'drift', exit: 0, observed: { summary: LONG_OBSERVED } }]
   const manifest = writeManifest(dir, rows)
   const workflowObj = cleanWorkflow([
-    { severity: 'soft', id: 'AC-20260819-01-x', evidence: 'e'.repeat(40) + '-repro-transcript' },
+    { severity: 'hard', id: 'AC-20260819-01-x', evidence: 'e'.repeat(40) + '-repro-transcript' },
   ])
   const workflow = writeWorkflow(dir, workflowObj)
   return { manifest, workflow, rows, workflowObj }
@@ -1406,10 +1482,12 @@ test('AC-20260819-01-6 (behavior updated by D2/D11 — the 120-char bound moves 
     'retired along with the string shape it applied to: the printed row must carry the drift leg\'s summary ' +
     'at its FULL 300-char length, matching the retained artifact byte-for-byte, never re-truncated a second ' +
     'time on the way to stdout: got ' + driftLeg.observed.summary.length + ' chars')
-  assert.strictEqual(Object.keys(row.findings).length, 7,
-    'D4: retention adds no new ledger key — row.findings must still carry exactly its seven documented keys ' +
-    '(survived/killed/waived/rejected/fixDispatched/reviewerCount/legFindings), never an eighth for the ' +
-    'artifact path or retain directory: ' + JSON.stringify(row.findings))
+  assert.strictEqual(Object.keys(row.findings).length, 8,
+    'AC-20260909-04-4 (retag of AC-20260819-01-6\'s key-count half): D3 widens findings to EIGHT keys ' +
+    '(survived/killed/waived/rejected/fixDispatched/reviewerCount/legFindings/soft) — retention still adds no ' +
+    'key of its OWN (no ninth for the artifact path or retain directory), so this fixture (whose only ' +
+    'survivor is hard and fully waived, per retentionFixture above) must carry exactly 8 keys with soft:0, ' +
+    'never the pre-D3 seven: ' + JSON.stringify(row.findings))
 })
 
 test('AC-20260819-01-7: retention CONTINUES TO print exactly the verdict word as stdout line 1 and the ledger row as stdout line 2 with nothing after', () => {

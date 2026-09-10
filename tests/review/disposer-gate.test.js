@@ -9,7 +9,9 @@ const { makeHost, readState, readStateRaw, lastLedgerRow, run, stateOf, toReview
 // by specs/20260903/06-test-suite-critical-path.md D1/D3). Owns
 // specs/20260901/09-disposer-gate.md AC-20260901-09-1/-2/-3/-6/-9/-13 (via, DISPOSITIONS routing,
 // the disposer clause, the review-state.json checkpoint shape, gate-fail ledger rows). Shared
-// helpers live in disposer-gate.fixtures.js (D2).
+// helpers live in disposer-gate.fixtures.js (D2). Also owns specs/20260909/04-review-soft-floor.md
+// AC-20260909-04-8 (D7: --mark dispositions --file with no count flags derives the weighted tally
+// from the disposer return itself).
 
 // ---- AC-20260901-09-1 ---------------------------------------------------------------------
 
@@ -17,7 +19,10 @@ test('AC-20260901-09-1: WHEN a review driver created with --via loop (and, separ
   const loopHost = makeHost('disposer-ac1-loop')
   run(loopHost.root, loopHost.spec, '--via', 'loop')
   writeStamp(loopHost.root, 's1')
-  run(loopHost.root, loopHost.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('disposer-ac1-loop-return', CLEAN_RETURN))
+  // AC-20260909-04-7/D6: a zero-pool return now self-dispositions straight to CLOSE, so this AC's
+  // own DISPOSITIONS-routing claim needs a genuine (hard) survivor to reach DISPOSITIONS at all —
+  // swapped from CLEAN_RETURN to ONE_SURVIVOR_RETURN, never weakening the assertion below.
+  run(loopHost.root, loopHost.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('disposer-ac1-loop-return', ONE_SURVIVOR_RETURN))
   assert.strictEqual(stateOf(loopHost.root, loopHost.spec), 'DISPOSITIONS',
     'AC-20260901-09-1/D4: a --via loop run whose stamp is present and unchanged must land DISPOSITIONS directly — CHECKPOINT no longer exists as a state deriveState() can return')
   const stepR = run(loopHost.root, loopHost.spec)
@@ -30,7 +35,7 @@ test('AC-20260901-09-1: WHEN a review driver created with --via loop (and, separ
   const noFlagHost = makeHost('disposer-ac1-noflag')
   run(noFlagHost.root, noFlagHost.spec)
   writeStamp(noFlagHost.root, 's1')
-  run(noFlagHost.root, noFlagHost.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('disposer-ac1-noflag-return', CLEAN_RETURN))
+  run(noFlagHost.root, noFlagHost.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('disposer-ac1-noflag-return', ONE_SURVIVOR_RETURN))
   assert.strictEqual(stateOf(noFlagHost.root, noFlagHost.spec), 'DISPOSITIONS',
     'AC-20260901-09-1/D4: a run created with no --via flag must also land DISPOSITIONS directly with a stamp present and unchanged')
   const noFlagState = readState(noFlagHost.sidecar)
@@ -113,7 +118,9 @@ test('AC-20260901-09-9: WHEN review-state.json (as 7.53.0 wrote it) carries "che
   const host = makeHost('disposer-ac9')
   run(host.root, host.spec, '--via', 'loop')
   writeStamp(host.root, 's1')
-  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('disposer-ac9-return', CLEAN_RETURN))
+  // AC-20260909-04-7/D6: a zero-pool return self-dispositions straight to CLOSE; swapped to
+  // ONE_SURVIVOR_RETURN (a hard survivor) so this AC's own DISPOSITIONS claim stays exercisable.
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('disposer-ac9-return', ONE_SURVIVOR_RETURN))
 
   // Hand-write the legacy pre-D4 sidecar shape onto the sidecar the current run already created — the
   // driver must never consult these keys once D4 lands.
@@ -147,4 +154,32 @@ test('AC-20260901-09-13: WHEN a run\'s synthetic gate fails at iteration 1 THE S
   assert.strictEqual(directRow.verdict, 'GATE_RED', 'a red-gate run must append a GATE_RED row: ' + JSON.stringify(directRow))
   assert.deepStrictEqual(directRow.checkpoint, { outcome: 'not-reached' },
     'AC-20260901-09-13/D6: D6 threads the derived outcome onto EVERY review verdict pass, both via values — unlike the retired mechanism, a --via-absent GATE_RED row must also carry checkpoint:{"outcome":"not-reached"}, not omit the key: ' + JSON.stringify(directRow))
+})
+
+// ---- AC-20260909-04-8 (specs/20260909/04-review-soft-floor.md D7) -------------------------------
+
+test('AC-20260909-04-8: WHEN the manifest holds a red reconcile row with outOfPlan:5 and --mark dispositions --file holds one leg:reconcile waive entry and NO count flags THE SYSTEM SHALL exit 0 and record dispositions: {waived:5, rejected:0, fixDispatched:0, word:"CLEAN"}', () => {
+  const host = makeHost('disposer-ac-04-8')
+  run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER',
+    'setup precondition: the fixture must reach REVIEWER (manifest-1.jsonl written) before the reconcile row can be appended')
+  fs.appendFileSync(path.join(host.sidecar, 'manifest-1.jsonl'),
+    JSON.stringify({ leg: 'reconcile', exit: 3, observed: { outOfPlan: 5, files: ['a', 'b', 'c', 'd', 'e'] } }) + '\n')
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('disposer-ac-04-8-return', CLEAN_RETURN))
+  assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS',
+    'setup precondition: a red reconcile row must land DISPOSITIONS: ' + JSON.stringify(readState(host.sidecar)))
+
+  const returnFile = returnFileWith('disposer-ac-04-8-file',
+    disposerReturn([{ ref: 'leg:reconcile', recommended: 'waive', reason: 'D1 sanctions every out-of-plan file' }]))
+  const r = run(host.root, host.spec, '--mark', 'dispositions', '--file', returnFile)
+  assert.strictEqual(r.status, 0,
+    'AC-20260909-04-8 (literal): D7 derives the tally from the file\'s own effective values when no ' +
+    '--waived/--rejected/--fix-dispatched flags are passed at all — this return names exactly one leg:reconcile ' +
+    'waive, and the leg\'s whole outOfPlan:5 count must be what gets waived, not refused for missing flags: ' +
+    r.stdout + ' / ' + r.stderr)
+  const state = readState(host.sidecar)
+  assert.deepStrictEqual(state.dispositions, { waived: 5, rejected: 0, fixDispatched: 0, word: 'CLEAN' },
+    'AC-20260909-04-8 (literal): the derived tally must record exactly {waived:5, rejected:0, fixDispatched:0, ' +
+    'word:"CLEAN"} — a mismatch means the driver still needs hand-typed counts the file already determined: ' +
+    JSON.stringify(state.dispositions))
 })

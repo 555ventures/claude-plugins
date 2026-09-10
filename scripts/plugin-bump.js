@@ -7,8 +7,11 @@
 //       For every plugin in <root>/.claude-plugin/marketplace.json: when any path under the
 //       plugin's directory OTHER than its own .claude-plugin/plugin.json changed between <base>
 //       and HEAD, the manifest version at HEAD must be strictly greater (numeric, per component)
-//       than the manifest version at <base>. Base: --base, else merge-base(HEAD, main), else
-//       merge-base(HEAD, origin/main); none resolvable is a refusal, never a pass.
+//       than the manifest version at <base>. Base: --base, else a 40-hex $SPEC_REVIEW_BASE, else
+//       merge-base(HEAD, main), else merge-base(HEAD, origin/main); none resolvable is a
+//       refusal, never a pass. $SPEC_REVIEW_BASE is ignored unless it is a full 40-hex commit
+//       sha — a ref name resolves in every repository (including a synthetic one a test builds
+//       in tmpdir()) and would silently redirect the base there.
 //   node scripts/plugin-bump.js --bump --plugin <name> --changelog "<paragraph>" [--root <dir>] [--dry-run]
 //       Rewrites the plugin's manifest: version -> MAJOR.(MINOR+1).0; the description's
 //       "Changelog (last 3): " run gains "<new> — <paragraph>" at its head and keeps exactly three
@@ -84,16 +87,23 @@ function readManifestAt(rel) {
 }
 
 // ---- --check --------------------------------------------------------------------------------
+// resolveBase (specs/20260909/02-replay-base-and-label-honesty.md D2): --base outranks
+// everything; otherwise SPEC_REVIEW_BASE is a candidate ONLY when it is a full 40-hex commit
+// sha (a ref name resolves in every repo, including the synthetic marketplaces this script's
+// own tests build in tmpdir(), and would silently redirect their base), then main, then
+// origin/main — first candidate whose merge-base resolves wins.
 function resolveBase() {
   const explicit = flag('--base')
-  const candidates = explicit ? [explicit] : ['main', 'origin/main']
+  const env = process.env.SPEC_REVIEW_BASE
+  const envCandidate = env && /^[0-9a-f]{40}$/.test(env) ? env : null
+  const candidates = explicit ? [explicit] : [envCandidate, 'main', 'origin/main'].filter(Boolean)
   for (const c of candidates) {
     const r = git('merge-base', 'HEAD', c)
     if (r.code === 0 && r.out) return r.out
   }
   die(explicit
     ? `cannot resolve --base ${explicit} to a commit — remedy: pass a ref git rev-parse accepts`
-    : 'no base resolvable: neither main nor origin/main is a ref here — remedy: git fetch origin main:main or pass --base <ref>')
+    : 'no base resolvable: neither $SPEC_REVIEW_BASE, main nor origin/main is a ref here — remedy: git fetch origin main:main or pass --base <ref>')
 }
 
 function check() {

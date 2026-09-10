@@ -11,6 +11,11 @@
 // red/green summary. The leg scripts (scope-reconcile.js, smoke.sh, ci-query.js, ac-matrix.js)
 // are reused as-is — this file only orchestrates.
 //
+// Every leg subprocess is told the base this review is judging against: sh() exports
+// SPEC_REVIEW_BASE=<--base>, applied after any leg-local opts.env, so a host check that
+// resolves its own comparison point (e.g. plugin-bump.js --check) can read it as one candidate
+// among its own (specs/20260909/02-replay-base-and-label-honesty.md D1).
+//
 // Legs and row shapes (verdict.js's REVIEW_LEGS; observed is always a typed JSON object per
 // specs/20260820/06-typed-evidence-manifest.md D1/D2 — the Contracts block there is the closed
 // set, reproduced here for orientation):
@@ -199,7 +204,11 @@ function sh(cmd, opts = {}) {
     // a fresh top-level runner even when review-legs.js was invoked from inside one (a nested
     // runner inheriting NODE_TEST_CONTEXT degrades to a silent child-protocol run — exit 0
     // over failing tests).
-    const env = { ...process.env, ...opts.env }
+    // SPEC_REVIEW_BASE (specs/20260909/02-replay-base-and-label-honesty.md D1) is set to the
+    // exact --base value AFTER opts.env, in every leg subprocess, so no leg-local override can
+    // redirect the base this review is judging against — a host check (e.g. plugin-bump.js
+    // --check) that resolves its own comparison point reads it as one candidate among its own.
+    const env = { ...process.env, ...opts.env, SPEC_REVIEW_BASE: base }
     delete env.NODE_TEST_CONTEXT
     const child = spawn('bash', ['-c', cmd], { cwd: root, env })
     let out = '', err = ''

@@ -475,6 +475,52 @@ test('AC-20260823-09-3: --select emits baselineRed=unknown baselineLegs=unknown 
     'emitting "none" here would falsely assert a verified-clean baseline for a row that recorded no legs at all: ' + r2.stdout)
 })
 
+// specs/20260909/02-replay-base-and-label-honesty.md D3 (AC-20260909-02-8): one shared selector
+// (reviewRowFor) defines what a review run id means — among ledger rows sharing one runId with
+// stage:"review", the row with verdict:"CLEAN" (last in read order when several); no CLEAN row
+// means no row at all. --select's own candidate-selection (which SPEC among several to replay)
+// is unchanged (it already filters to verdict:"CLEAN" rows directly); this AC pins the OTHER
+// consumer, --record's cross-check, which does not exist yet — the ledger below deliberately
+// carries a red iteration sharing rv_a's runId with the CLEAN row, so a naive "any row with this
+// id" or "the last row with this id" reading would wrongly found a baseline-red claim.
+test('AC-20260909-02-8: a review run id resolves to its CLEAN row, not to a red iteration that shares the id', () => {
+  const root = fs.realpathSync(tmpdir('replay-review-row-selector'))
+  gitRepo(root)
+  const ancestor = commitReal(root, 'lib/pre.js', 'a\n', 'pre a')
+  commitSpecFlow(root, 'specs/a.md',
+    `---\ndiff_base: ${ancestor}\n---\n# a\n`,
+    `---\ndiff_base: ${ancestor}\nstatus: done\n---\n# a\n`)
+  writeLedger(root, [
+    { ts: '2026-08-10T00:00:00Z', stage: 'review', spec: 'specs/a.md', runId: 'rv_a', verdict: 'GATE_RED', legs: [{ leg: 'suite', exit: 1 }] },
+    { ts: '2026-08-10T00:01:00Z', stage: 'review', spec: 'specs/a.md', runId: 'rv_a', verdict: 'CLEAN', legs: [{ leg: 'suite', exit: 0 }] },
+  ])
+  const select = runNode(SCRIPT, ['--select'], { cwd: root })
+  assert.strictEqual(select.status, 0, 'D3: --select over this window must still succeed: ' + select.stderr)
+  assert.match(select.stdout, / baselineRed=none baselineLegs=suite(\s|$)/,
+    'D3: --select must derive its baseline from the CLEAN row (suite exit 0), never the earlier GATE_RED ' +
+    'iteration sharing the same runId (suite exit 1) — reading the wrong row here would print baselineRed=suite: ' +
+    select.stdout)
+
+  const patchFile = path.join(root, 'mutation.patch')
+  fs.writeFileSync(patchFile, '--- a/lib/x.js\n+++ b/lib/x.js\n@@ -1 +1 @@\n-a\n+B\n')
+  const workflowFile = path.join(root, 'workflow.json')
+  fs.writeFileSync(workflowFile, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: 0 }))
+  const linesBefore = fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').length
+  const record = runNode(SCRIPT, ['--record',
+    '--spec', 'specs/a.md', '--review-run-id', 'rv_a', '--class', 'silent-fallback',
+    '--legs', 'baseline-red:suite', '--outcome', 'caught',
+    '--patch', patchFile, '--workflow', workflowFile,
+  ], { cwd: root })
+  assert.strictEqual(record.status, 2,
+    'D3/D4: rv_a\'s CLEAN row records suite exit 0 — a baseline-red:suite claim against that row is unfounded ' +
+    'and must be refused, even though an earlier GATE_RED iteration sharing the same runId really did record ' +
+    'suite red; today\'s --record performs no cross-check at all and would accept this outright: ' +
+    JSON.stringify(record))
+  const linesAfter = fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').length
+  assert.strictEqual(linesAfter, linesBefore,
+    'D4: a refused baseline-red claim must append nothing to the ledger: ' + JSON.stringify({ linesBefore, linesAfter }))
+})
+
 test('AC-20260823-05-5: --select tries diff_base BEFORE build_base — a validated diff_base wins outright, and build_base is the fallback only when diff_base is absent', () => {
   // D4 reorders spec 20260819/02's original preference (build_base first): D3 now stamps diff_base
   // durably at every close, making it the trustworthy pin, so it is tried first.
@@ -2639,8 +2685,17 @@ test('AC-20260819-03-6 / AC-20260823-09-11 (pre-existing matrix continuity: none
 // recorded. `unresolved` becomes two-armed: green/baseline-red:* still requires --patch+--workflow
 // (Phase 3 dismissal, reviewer ran); red:<leg> requires --patch and REFUSES --workflow (step-7
 // dismissal, reviewer never ran). The three tests below pin the new grammar directly.
-test('AC-20260823-09-4: --record --outcome caught --legs baseline-red:reconcile appends a row whose legs field is the literal string "baseline-red:reconcile" and writes the evidence artifact exactly as for a green outcome', () => {
+// D4 fixture duty (File Plan): this accept-path test cites review-run-id rv_aaaaaaaaaaaa, and its
+// ledger carries no review row for that id at all — under D4's new cross-check, --record refuses
+// ANY baseline-red claim citing a runId with no CLEAN row, so this fixture gains a CLEAN review
+// row recording the named leg (reconcile) red, keeping the claim founded; retagged with
+// AC-20260909-02-10 alongside its original AC-ID, never loosened.
+test('AC-20260823-09-4 (also AC-20260909-02-10): --record --outcome caught --legs baseline-red:reconcile appends a row whose legs field is the literal string "baseline-red:reconcile" and writes the evidence artifact exactly as for a green outcome', () => {
   const root = fs.realpathSync(tmpdir('replay-record-baselinered'))
+  writeLedger(root, [
+    { ts: '2026-08-22T00:00:00Z', stage: 'review', spec: 'specs/20260823/09-replay-baseline-attribution.md',
+      runId: 'rv_aaaaaaaaaaaa', verdict: 'CLEAN', legs: [{ leg: 'reconcile', exit: 3 }] },
+  ])
   const patchFile = path.join(root, 'mutation.patch')
   fs.writeFileSync(patchFile, '--- a/lib/x.js\n+++ b/lib/x.js\n@@ -1 +1 @@\n-a\n+B\n')
   const workflowFile = path.join(root, 'workflow.json')
@@ -2661,7 +2716,11 @@ test('AC-20260823-09-4: --record --outcome caught --legs baseline-red:reconcile 
     'D2: --legs baseline-red:<leg> must be ACCEPTED alongside green for a caught outcome — a truthful record ' +
     'of a run whose target closed with a sanctioned red leg is the entire point of this spec: ' + r.stderr)
 
-  const row = JSON.parse(fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8').trim())
+  const lines = fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n')
+  assert.strictEqual(lines.length, 2,
+    'D4: exactly one row must be APPENDED to this fixture\'s pre-seeded CLEAN review row — the seed row must ' +
+    'never be touched: ' + JSON.stringify(lines))
+  const row = JSON.parse(lines[1])
   assert.strictEqual(row.legs, 'baseline-red:reconcile',
     'D2: the row\'s legs field must be the literal string "baseline-red:reconcile" verbatim, never collapsed ' +
     'to "green" — collapsing it is the exact 2026-08-23 rp_1b176ebff5c7 misrecord this spec exists to stop: ' +
@@ -2678,6 +2737,218 @@ test('AC-20260823-09-4: --record --outcome caught --legs baseline-red:reconcile 
   assert.deepStrictEqual(artifact.reviewer, workflowObj,
     'D2: the artifact must hold the dispatched reviewer\'s workflow return verbatim, exactly as for green — ' +
     'the reviewer genuinely ran on a baseline-red row: ' + JSON.stringify(artifact.reviewer))
+})
+
+// specs/20260909/02-replay-base-and-label-honesty.md D4 (AC-20260909-02-9, -10, -11): --record
+// cross-checks a baseline-red:<leg>[,<leg>] claim against reviewRowFor's CLEAN row — every named
+// leg must appear in that row's legs array AND be red there under isBaselineLegRed (smoke red is
+// exit ∉ {0,4}; every other leg is exit !== 0). Today's --record performs no such cross-check at
+// all, so every test below is red on the pre-image, not on a stub.
+
+test('AC-20260909-02-9: a baseline-red claim the cited review row records green is refused', () => {
+  const root = fs.realpathSync(tmpdir('replay-record-baselinered-green-refused'))
+  writeLedger(root, [
+    { ts: '2026-08-22T00:00:00Z', stage: 'review', spec: 'specs/x.md', runId: 'rv_a', verdict: 'CLEAN', legs: [{ leg: 'suite', exit: 0 }] },
+  ])
+  const patchFile = path.join(root, 'mutation.patch')
+  fs.writeFileSync(patchFile, '--- a/lib/x.js\n+++ b/lib/x.js\n@@ -1 +1 @@\n-a\n+B\n')
+  const workflowFile = path.join(root, 'workflow.json')
+  fs.writeFileSync(workflowFile, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: 0 }))
+  const before = fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8')
+
+  const r = runNode(SCRIPT, ['--record',
+    '--spec', 'specs/x.md', '--review-run-id', 'rv_a', '--class', 'silent-fallback',
+    '--legs', 'baseline-red:suite', '--outcome', 'caught',
+    '--patch', patchFile, '--workflow', workflowFile,
+  ], { cwd: root })
+  assert.strictEqual(r.status, 2,
+    'D4: rv_a\'s CLEAN row records suite exit 0 (green) — a baseline-red:suite claim against it is unfounded ' +
+    'and must be refused: ' + JSON.stringify(r))
+  assert.match(r.stderr, /suite/, 'D4: the refusal must name the leg: ' + r.stderr)
+  assert.match(r.stderr, /exit 0/, 'D4: the refusal must name the leg\'s recorded exit code: ' + r.stderr)
+  assert.strictEqual(fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8'), before,
+    'D4: a refused baseline-red claim must leave the ledger file BYTE-FOR-BYTE unchanged: ' + root)
+})
+
+test('AC-20260909-02-10: a founded baseline-red claim records unchanged, and smoke\'s exit 4 counts as green to the cross-check while exit 1 counts as red', () => {
+  const founded = fs.realpathSync(tmpdir('replay-record-baselinered-founded'))
+  writeLedger(founded, [
+    { ts: '2026-08-22T00:00:00Z', stage: 'review', spec: 'specs/x.md', runId: 'rv_a', verdict: 'CLEAN', legs: [{ leg: 'suite', exit: 1 }] },
+  ])
+  const patchFile = path.join(founded, 'mutation.patch')
+  fs.writeFileSync(patchFile, '--- a/lib/x.js\n+++ b/lib/x.js\n@@ -1 +1 @@\n-a\n+B\n')
+  const workflowFile = path.join(founded, 'workflow.json')
+  fs.writeFileSync(workflowFile, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: 0 }))
+  const r = runNode(SCRIPT, ['--record',
+    '--spec', 'specs/x.md', '--review-run-id', 'rv_a', '--class', 'silent-fallback',
+    '--legs', 'baseline-red:suite', '--outcome', 'caught',
+    '--patch', patchFile, '--workflow', workflowFile,
+  ], { cwd: founded })
+  assert.strictEqual(r.status, 0,
+    'D4: rv_a\'s CLEAN row records suite exit 1 (red) — this baseline-red:suite claim is founded and must ' +
+    'record exactly as it does today: ' + r.stderr)
+  assert.match(r.stdout, /recorded runId=rp_[0-9a-f]{12}/, 'D4: a founded claim must print the usual confirmation: ' + r.stdout)
+  const lines = fs.readFileSync(path.join(founded, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n')
+  assert.strictEqual(lines.length, 2, 'D4: exactly one row must be appended onto the seed row: ' + JSON.stringify(lines))
+  assert.strictEqual(JSON.parse(lines[1]).legs, 'baseline-red:suite',
+    'D4: the appended row\'s legs field must carry the claim verbatim: ' + lines[1])
+
+  const smokeGreen = fs.realpathSync(tmpdir('replay-record-baselinered-smoke-green'))
+  writeLedger(smokeGreen, [
+    { ts: '2026-08-22T00:00:00Z', stage: 'review', spec: 'specs/x.md', runId: 'rv_b', verdict: 'CLEAN', legs: [{ leg: 'smoke', exit: 4 }] },
+  ])
+  const smokeGreenR = runNode(SCRIPT, ['--record',
+    '--spec', 'specs/x.md', '--review-run-id', 'rv_b', '--class', 'silent-fallback',
+    '--legs', 'baseline-red:smoke', '--outcome', 'caught',
+    '--patch', patchFile, '--workflow', workflowFile,
+  ], { cwd: smokeGreen })
+  assert.strictEqual(smokeGreenR.status, 2,
+    'D4: smoke at exit 4 is the sanctioned inert-green reading (review-legs.js\'s own red definition), so a ' +
+    'baseline-red:smoke claim against it must be refused exactly like any other green leg: ' + JSON.stringify(smokeGreenR))
+
+  const smokeRed = fs.realpathSync(tmpdir('replay-record-baselinered-smoke-red'))
+  writeLedger(smokeRed, [
+    { ts: '2026-08-22T00:00:00Z', stage: 'review', spec: 'specs/x.md', runId: 'rv_c', verdict: 'CLEAN', legs: [{ leg: 'smoke', exit: 1 }] },
+  ])
+  const smokeRedR = runNode(SCRIPT, ['--record',
+    '--spec', 'specs/x.md', '--review-run-id', 'rv_c', '--class', 'silent-fallback',
+    '--legs', 'baseline-red:smoke', '--outcome', 'caught',
+    '--patch', patchFile, '--workflow', workflowFile,
+  ], { cwd: smokeRed })
+  assert.strictEqual(smokeRedR.status, 0,
+    'D4: smoke at exit 1 is genuinely red under isBaselineLegRed (only exit 4 is inert) — a baseline-red:smoke ' +
+    'claim against it is founded and must record: ' + smokeRedR.stderr)
+})
+
+test('AC-20260909-02-11: a baseline-red claim citing an absent, never-CLEAN, or legless review row is refused', () => {
+  const patchIn = tmpdir('replay-record-baselinered-11-inputs')
+  const patchFile = path.join(patchIn, 'mutation.patch')
+  fs.writeFileSync(patchFile, '--- a/lib/x.js\n+++ b/lib/x.js\n@@ -1 +1 @@\n-a\n+B\n')
+  const workflowFile = path.join(patchIn, 'workflow.json')
+  fs.writeFileSync(workflowFile, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: 0 }))
+
+  const absent = fs.realpathSync(tmpdir('replay-record-baselinered-absent'))
+  writeLedger(absent, [
+    { ts: '2026-08-22T00:00:00Z', stage: 'review', spec: 'specs/x.md', runId: 'rv_a', verdict: 'CLEAN', legs: [{ leg: 'suite', exit: 0 }] },
+  ])
+  const rAbsent = runNode(SCRIPT, ['--record',
+    '--spec', 'specs/x.md', '--review-run-id', 'rv_missing', '--class', 'silent-fallback',
+    '--legs', 'baseline-red:suite', '--outcome', 'caught',
+    '--patch', patchFile, '--workflow', workflowFile,
+  ], { cwd: absent })
+  assert.strictEqual(rAbsent.status, 2, 'D4: a review-run-id absent from the ledger entirely must be refused: ' + JSON.stringify(rAbsent))
+  assert.match(rAbsent.stderr, /rv_missing/, 'D4: the refusal must name the missing run id: ' + rAbsent.stderr)
+
+  const neverClean = fs.realpathSync(tmpdir('replay-record-baselinered-neverclean'))
+  writeLedger(neverClean, [
+    { ts: '2026-08-22T00:00:00Z', stage: 'review', spec: 'specs/x.md', runId: 'rv_b', verdict: 'GATE_RED', legs: [{ leg: 'suite', exit: 1 }] },
+  ])
+  const rNeverClean = runNode(SCRIPT, ['--record',
+    '--spec', 'specs/x.md', '--review-run-id', 'rv_b', '--class', 'silent-fallback',
+    '--legs', 'baseline-red:suite', '--outcome', 'caught',
+    '--patch', patchFile, '--workflow', workflowFile,
+  ], { cwd: neverClean })
+  assert.strictEqual(rNeverClean.status, 2,
+    'D4: a run id whose only row is GATE_RED (never CLEAN) supports no baseline-red claim, even though that ' +
+    'row genuinely records suite red — the row is disqualified by verdict, not by leg content: ' + JSON.stringify(rNeverClean))
+  assert.match(rNeverClean.stderr, /rv_b/, 'D4: the refusal must name the run id: ' + rNeverClean.stderr)
+
+  const legless = fs.realpathSync(tmpdir('replay-record-baselinered-legless'))
+  writeLedger(legless, [
+    { ts: '2026-08-22T00:00:00Z', stage: 'review', spec: 'specs/x.md', runId: 'rv_c', verdict: 'CLEAN' },
+  ])
+  const rLegless = runNode(SCRIPT, ['--record',
+    '--spec', 'specs/x.md', '--review-run-id', 'rv_c', '--class', 'silent-fallback',
+    '--legs', 'baseline-red:suite', '--outcome', 'caught',
+    '--patch', patchFile, '--workflow', workflowFile,
+  ], { cwd: legless })
+  assert.strictEqual(rLegless.status, 2, 'D4: a CLEAN row with no legs array at all cannot support any baseline-red claim: ' + JSON.stringify(rLegless))
+  assert.match(rLegless.stderr, /rv_c/, 'D4: the refusal must name the run id: ' + rLegless.stderr)
+
+  for (const dir of [absent, neverClean, legless]) {
+    const ledgerPath = path.join(dir, '.claude/spec-runs.jsonl')
+    const lines = fs.readFileSync(ledgerPath, 'utf8').trim().split('\n')
+    assert.strictEqual(lines.length, 1, 'D4: none of these three refusals may append a row: ' + JSON.stringify({ dir, lines }))
+  }
+})
+
+// specs/20260909/02-replay-base-and-label-honesty.md D5 (AC-20260909-02-12, -13, -14): --legs
+// gains pristine-red:<leg>[,<leg>], accepted ONLY with --outcome setup-failed, cross-checked as
+// D4's mirror — every named leg must be recorded GREEN by the cited CLEAN row, since the claim is
+// "the review judged this leg green and the scratch tree cannot reproduce that". Today's --record
+// does not recognize this shape at all (A3, executed): it is refused with the old four-value
+// usage message.
+
+test('AC-20260909-02-12: a pristine-red setup-failed row records the legs that could not be reproduced', () => {
+  const root = fs.realpathSync(tmpdir('replay-record-pristinered-accept'))
+  writeLedger(root, [
+    { ts: '2026-08-22T00:00:00Z', stage: 'review', spec: 'specs/x.md', runId: 'rv_a', verdict: 'CLEAN',
+      legs: [{ leg: 'gate', exit: 0 }, { leg: 'suite', exit: 0 }] },
+  ])
+  const r = runNode(SCRIPT, ['--record',
+    '--spec', 'specs/x.md', '--review-run-id', 'rv_a',
+    '--legs', 'pristine-red:gate,suite', '--outcome', 'setup-failed',
+  ], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    'D5: rv_a\'s CLEAN row records BOTH gate and suite green — a pristine-red claim naming both, riding ' +
+    '--outcome setup-failed, is founded and must record: ' + JSON.stringify(r))
+  const lines = fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n')
+  assert.strictEqual(lines.length, 2, 'D5: exactly one row must be appended onto the seed row: ' + JSON.stringify(lines))
+  const row = JSON.parse(lines[1])
+  assert.strictEqual(row.legs, 'pristine-red:gate,suite',
+    'D5: the appended row\'s legs field must be the literal string naming both legs that could not be reproduced: ' + JSON.stringify(row))
+  assert.strictEqual(row.class, null, 'D5: setup-failed rows must record class:null — no mutation class was ever selected: ' + JSON.stringify(row))
+  assert.strictEqual(row.files, null, 'D5: setup-failed rows must record files:null — nothing was ever measured: ' + JSON.stringify(row))
+})
+
+test('AC-20260909-02-13: a pristine-red claim about a leg that was already red is refused', () => {
+  const root = fs.realpathSync(tmpdir('replay-record-pristinered-alreadyred'))
+  writeLedger(root, [
+    { ts: '2026-08-22T00:00:00Z', stage: 'review', spec: 'specs/x.md', runId: 'rv_a', verdict: 'CLEAN', legs: [{ leg: 'gate', exit: 1 }] },
+  ])
+  const r = runNode(SCRIPT, ['--record',
+    '--spec', 'specs/x.md', '--review-run-id', 'rv_a',
+    '--legs', 'pristine-red:gate', '--outcome', 'setup-failed',
+  ], { cwd: root })
+  assert.strictEqual(r.status, 2,
+    'D5: rv_a\'s CLEAN row records gate exit 1 (already red at review) — a pristine-red claim asserts the ' +
+    'review judged the leg GREEN, the exact opposite, and must be refused: ' + JSON.stringify(r))
+  // Discriminating on the CROSS-CHECK'S own wording, not merely "baseline-red" — the pre-image's
+  // generic --legs enum-usage message ALSO contains the substring "baseline-red" (it lists
+  // 'baseline-red:<leg>[,<leg>]' among the accepted shapes) and would make a bare /baseline-red/
+  // regex pass vacuously today, since pristine-red is not yet a recognized shape at all (A3).
+  assert.match(r.stderr, /cannot reproduce/,
+    'D5: the refusal must be the CROSS-CHECK\'s own message ("claims the scratch tree cannot reproduce review ' +
+    '<id>\'s green <L>"), not the pre-image\'s generic --legs enum-usage refusal, which also happens to ' +
+    'contain the word "baseline-red" and would pass this assertion vacuously: ' + r.stderr)
+  assert.match(r.stderr, /exit 1/,
+    'D5: the refusal must name the leg\'s recorded exit code (1) from the cited CLEAN row: ' + r.stderr)
+  assert.match(r.stderr, /baseline-red/,
+    'D5: the refusal must name baseline-red:<leg> as the correct shape for a leg that was already red at review: ' + r.stderr)
+  assert.ok(!fs.existsSync(path.join(root, '.claude/spec-runs.jsonl')) ||
+    fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').length === 1,
+    'D5: the refusal must append nothing beyond the pre-seeded row: ' + root)
+})
+
+test('AC-20260909-02-14: pristine-red is accepted only with setup-failed', () => {
+  const root = fs.realpathSync(tmpdir('replay-record-pristinered-wrongoutcome'))
+  writeLedger(root, [
+    { ts: '2026-08-22T00:00:00Z', stage: 'review', spec: 'specs/x.md', runId: 'rv_a', verdict: 'CLEAN', legs: [{ leg: 'gate', exit: 0 }] },
+  ])
+  const patchFile = path.join(root, 'mutation.patch')
+  fs.writeFileSync(patchFile, '--- a/lib/x.js\n+++ b/lib/x.js\n@@ -1 +1 @@\n-a\n+B\n')
+  const r = runNode(SCRIPT, ['--record',
+    '--spec', 'specs/x.md', '--review-run-id', 'rv_a', '--class', 'silent-fallback',
+    '--legs', 'pristine-red:gate', '--outcome', 'leg-caught', '--patch', patchFile,
+  ], { cwd: root })
+  assert.strictEqual(r.status, 2,
+    'D5: --legs pristine-red:<leg> must be refused with any --outcome other than setup-failed — nothing was ' +
+    'ever measured, so recording leg-caught (or caught/missed/unresolved) here would be a data claim about a ' +
+    'run that never happened: ' + JSON.stringify(r))
+  assert.match(r.stderr, /setup-failed/,
+    'D5: the refusal must name setup-failed as the only accepted outcome: ' + r.stderr)
+  assert.strictEqual(fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').length, 1,
+    'D5: the refusal must append nothing beyond the pre-seeded row: ' + root)
 })
 
 test('AC-20260823-09-5: --record --outcome caught --legs red:gate is refused with exit 2 naming baseline-red as an accepted value, since red: stays reserved for a newly-red leg and is incompatible with a caught outcome', () => {
@@ -2816,7 +3087,7 @@ test('AC-20260819-03-11: --record CONTINUES TO exit 2 when --outcome is any valu
 // each sub-case's own stderr-content assertion (naming --workflow/--patch/--class specifically) will
 // only pass once the real validation matrix names the actual violated flag, so the test is not
 // fully inert even pre-implementation.
-test('AC-20260819-03-13: --record exits 2 naming the violated requirement when --outcome caught omits --patch or --workflow, or when --outcome setup-failed rides with --class', () => {
+test('AC-20260819-03-13 (also AC-20260909-02-15, SHALL CONTINUE TO): --record exits 2 naming the violated requirement when --outcome caught omits --patch or --workflow, or when --outcome setup-failed rides with --class', () => {
   const root = fs.realpathSync(tmpdir('replay-record-matrix'))
   const patchFile = path.join(root, 'mutation.patch')
   fs.writeFileSync(patchFile, '--- a/lib/x.js\n+++ b/lib/x.js\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n')
@@ -3220,7 +3491,7 @@ test('AC-20260823-09-9: replay.md\'s Phase 1 step 7 re-keys red-leg attribution 
 // specs/20260831/01-replay-range-materialization.md D6/D7: section-scoped exactly
 // like AC-20260823-09-9 above — a whole-file grep would let a paraphrase living anywhere else in
 // the file satisfy this pin without step 1's own invocation or step 7's own rung 3 ever changing.
-test('AC-20260831-01-7: replay.md states, in Phase 1 step 1, that setup passes --overlay {commit} because the judged range ends at the close commit, and in step 7 rung 3, the pristine-baseline verification (reset --hard HEAD^, fresh manifest, re-run legs) between the failed retry and leg-caught, with red-pristine routing to rung 4\'s seam', () => {
+test('AC-20260831-01-7 (also AC-20260909-02-16): replay.md states, in Phase 1 step 1, that setup passes --overlay {commit} because the judged range ends at the close commit, and in step 7 rung 3, the pristine-baseline verification (reset --hard HEAD^, fresh manifest, re-run legs) between the failed retry and leg-caught, with a DETERMINISTIC still-red result recording pristine-red/setup-failed with manifests retained and the failing line, and a nondeterministic one routing to rung 4\'s seam; Phase 4 names the pristine-red matrix row and all three setup-failed sites', () => {
   const replayMdPath = path.join(SPEC, 'commands/replay.md')
   assert.ok(fs.existsSync(replayMdPath),
     'D6/D7: spec/commands/replay.md must exist — it is the doctrine file both Decisions amend; a missing ' +
@@ -3271,6 +3542,45 @@ test('AC-20260831-01-7: replay.md states, in Phase 1 step 1, that setup passes -
     'D6: rung 3 must state that a STILL-red pristine result routes to rung 4\'s question seam — silently ' +
     'recording leg-caught (or silently explaining it away) on a pristine-red result would misattribute ' +
     'environment drift as either mutation-caused or pre-existing: ' + JSON.stringify(step7Match[0]))
+
+  // AC-20260909-02-16: D6 replaces the still-red-on-pristine arm — a still-red result is
+  // re-verified ONCE more; the SAME first failing line is deterministic (a harness defect,
+  // recorded pristine-red/setup-failed with retained manifests and the failing line, then STOP);
+  // a different or green result is nondeterministic drift and falls through to rung 4.
+  assert.match(step7, /pristine-red:/,
+    'D6: rung 3 must state the new --legs pristine-red:<leg>[,<leg>] shape a deterministic still-red result ' +
+    'is recorded with: ' + JSON.stringify(step7Match[0]))
+  assert.match(step7, /setup-failed/,
+    'D6: rung 3 must state that a deterministic still-red result records --outcome setup-failed — the ' +
+    'harness stays due rather than fabricating a leg-caught it never measured: ' + JSON.stringify(step7Match[0]))
+  assert.match(step7, /once more|third/i,
+    'D6: rung 3 must state that the legs are re-run ONCE MORE against a THIRD manifest before a still-red ' +
+    'result is trusted as deterministic — a single still-red observation cannot distinguish a harness defect ' +
+    'from drift: ' + JSON.stringify(step7Match[0]))
+  assert.match(step7, /manifests/,
+    'D6: rung 3 must state that the three manifests are retained (copied to ' +
+    '{root}/.claude/spec-runs/{runId}.manifests/ before teardown) — a manifest a teardown deletes cannot be ' +
+    'cited by the harness spec this STOP asks the session to open: ' + JSON.stringify(step7Match[0]))
+  assert.match(step7, /first failing line/i,
+    'D7: rung 3 must name "the same first failing line" as the determinism discriminator, defined elsewhere ' +
+    'as the first ✖/not ok line with its trailing duration stripped: ' + JSON.stringify(step7Match[0]))
+
+  // D8: Phase 4's matrix gains the pristine-red row, and its "setup-failed ... never reaches this
+  // phase" claim is corrected to name all THREE setup-failed sites (step 2's setup gate, step 5's
+  // post-apply hook refusal, and step 7 rung 3) rather than the two the sibling spec already named.
+  const phase4Match = src.match(/## Phase 4 — Record & teardown\n([\s\S]*?)\n## Phase 5 —/)
+  assert.ok(phase4Match,
+    'sanity: Phase 4 — Record & teardown must exist as its own section ending at Phase 5 — if this heading ' +
+    'moved or was reworded, the Phase 4 slice below is scoped to the wrong text region')
+  const phase4 = phase4Match[1].replace(/\s+/g, ' ')
+
+  assert.match(phase4, /pristine-red:<leg>/,
+    'D8: Phase 4\'s validation matrix must gain a row for setup-failed | none | pristine-red:<leg>[,<leg>] | ' +
+    'refused | refused — an accepted --legs shape missing from this table is the document teaching the next ' +
+    'session to pass the wrong one: ' + JSON.stringify(phase4Match[1]))
+  assert.doesNotMatch(phase4, /never reaches this phase/,
+    'D8: Phase 4 must no longer claim setup-failed "never reaches this phase" — step 7 rung 3 is now a THIRD ' +
+    'site that records and tears down a setup-failed row, so that claim is now false: ' + JSON.stringify(phase4Match[1]))
 })
 
 // specs/20260909/01-replay-build-shaped-mutation.md D7/D11: step 5 must document the new --spec

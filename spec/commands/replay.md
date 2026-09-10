@@ -151,10 +151,25 @@ asked.
       commit (the overlay commit, or the parent when none exists, remains), then a fresh manifest
       and a fresh `node "$(spec-paths review-legs)"` run against the now-pristine tree. `L` green
       there → outcome `leg-caught` — skip Phase 2 (the reviewer never dispatches) and go straight
-      to Phase 3 with `--legs red:<leg>` (the newly-red meaning, never baseline-red). `L` still
-      red there → not mutation-caused (environment drift): fall through to rung 4's
-      `AskUserQuestion` seam with both manifests as evidence — never record `leg-caught` from an
-      unverified still-red result.
+      to Phase 3 with `--legs red:<leg>` (the newly-red meaning, never baseline-red). `L` still red
+      there (D6/D7) → re-run the legs **once more** against the same pristine tree (no further
+      `reset` — the mutation commit is already gone) with a **third** fresh manifest, and compare
+      "the same first failing line" across the second and third pristine runs: read
+      `{outDir}/<leg>-output.txt` when `L` wrote one, else `L`'s captured stderr, top-down, for the
+      first line matching `/^\s*(✖|not ok)\b/` with any trailing ` (<n>ms)` duration suffix
+      stripped — a leg whose output has no such line uses its first non-empty stderr line instead
+      — and compare the two runs' strings byte-for-byte. The **same first failing line** twice is
+      deterministic: the scratch tree does not reproduce the state the cited review row
+      (`{reviewRunId}`) judged green — a harness defect, never a user question. `node
+      "$(spec-paths replay)" --record --spec {spec} --review-run-id {reviewRunId} --legs
+      pristine-red:<L>[,<L>] --outcome setup-failed` (no `--class`, `--patch`, or `--workflow`)
+      prints the replay run id; copy all three manifests to
+      `{root}/.claude/spec-runs/{runId}.manifests/` before teardown, then `--teardown --dir {dir}`,
+      render Phase 5's `setup-failed` report naming `L`'s first failing line where `setupCommand`
+      would be named, STOP, and open a spec against the harness citing the retained manifests. A
+      **green** result, or red with a **different** first failing line, is nondeterministic drift:
+      fall through to rung 4's `AskUserQuestion` seam with all three manifests as evidence — never
+      record `leg-caught` from an unverified still-red result.
    4. Otherwise (`L ∉ {baselineLegs}`, or the baseline is `unknown`) → unattributable: one
       `AskUserQuestion` showing `L`'s failure output beside the recorded baseline — is this leg's
       redness pre-existing or caused by the mutation? "pre-existing" resolves it explained, same
@@ -213,16 +228,17 @@ nothing (D10's rationale).
    | unresolved | `green` \| `baseline-red:<leg>[,<leg>]` | required | required |
    | unresolved | `red:<leg>` | required | **refused** |
    | leg-caught | `red:<leg>` (newly-red only — doctrine-enforced) | required | not required (unchanged) |
-   | setup-failed | `none` | refused | refused |
+   | setup-failed | `none` \| `pristine-red:<leg>[,<leg>]` | refused | refused |
 
    `caught`/`missed` and Phase 3's `unresolved` (the reviewer ran) accept `green` or step 7's
    explained-red case, `baseline-red:<leg>[,<leg>]`, and require `--patch` + `--workflow`. Step
    7's dismissed-question `unresolved` (the reviewer never ran) instead carries `red:<leg>`,
    requires `--patch`, and **refuses** `--workflow` — passing it there would fabricate reviewer
    evidence never produced. `leg-caught` keeps `red:<leg>`, newly-red only, `--patch` required,
-   `--workflow` still not required. `setup-failed` is recorded and torn down at two sites, both
-   inside Phase 1 (step 2's setup-gate refusal, step 5's post-apply reconcile-hook refusal) —
-   neither one reaches this phase.
+   `--workflow` still not required. `setup-failed` is recorded and torn down at three sites, all
+   inside Phase 1: step 2's setup-gate refusal and step 5's post-apply reconcile-hook refusal
+   (both `--legs none`), and step 7 rung 3's deterministic still-red-on-pristine result (`--legs
+   pristine-red:<leg>[,<leg>]`) — none of the three reaches this phase.
 2. Run `node "$(spec-paths replay)" --teardown --dir {dir}` — the worktree is removed
    unconditionally at this point, success or failure; the main tree was never touched at any
    point in this command.
@@ -239,8 +255,10 @@ verbatim (shared § Console Output Style):
   setup-failed — the scratch copy could not be prepared`.
 - `bullets`: the class id, the mutated file(s), and the selected spec; `unresolved` adds the
   retained `runId`; `setup-failed` never had a class or a mutated file — its bullets name the
-  failing `setupCommand` and the selected spec instead; `missed` adds `- {runId} — the plugin
-  repo's fleet-reader --owed picks this row up; no handoff prompt is composed here`.
+  selected spec plus whichever of the three sites recorded it: the failing `setupCommand` (step
+  2), the post-apply hook's stderr (step 5), or the pristine-red leg's first failing line (step 7
+  rung 3); `missed` adds `- {runId} — the plugin repo's fleet-reader --owed picks this row up; no
+  handoff prompt is composed here`.
 - `warns`: `ambiguous score adjudicated by hand — see the recorded outcome` when Phase 3 asked;
   omit otherwise.
 - `next`: `{kind:'status-verbatim', text: <spec-status --next captured this run>}`.

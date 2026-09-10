@@ -1,6 +1,6 @@
 ---
 date: 2026-09-09
-status: hardened
+status: implementing
 tier: critical
 area: replay-harness
 design: false
@@ -10,6 +10,8 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-09
 open_markers: 0
+build_base: main
+diff_base: db21bb937bf56889e8779494c7ec6dcc2443046f
 ---
 
 # The review's base reaches every leg, and the ledger refuses a label its evidence denies

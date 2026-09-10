@@ -154,8 +154,14 @@
   (range identity, specs/20260824/06), so the parent alone under-states the range and made
   legs falsely newly-red. Before `leg-caught` is ever recorded, step 7 now verifies the
   still-red leg against the pristine (mutation-free) baseline via `reset --hard HEAD^` plus a
-  fresh leg run — red there means not mutation-caused and routes to the attribution question
-  seam instead. (specs/20260831/01-replay-range-materialization.md)
+  fresh leg run — red there means the scratch tree does not reproduce the state the cited
+  review row judged green. The legs are re-run once more against the same pristine tree: the
+  same first failing line makes it deterministic — a harness defect, recorded as `setup-failed`
+  with `--legs pristine-red:<leg>`, reported with that failing line, its manifests retained
+  beside the run id, and stopped, so the harness stays due; a green or differently-failing
+  re-run is drift and routes to the attribution question seam instead.
+  (specs/20260831/01-replay-range-materialization.md,
+  specs/20260909/02-replay-base-and-label-honesty.md)
   `--setup` refuses a
   caller `--dir` whose basename opens with `replay`. Inside the repo, so agent edits are
   auto-approved and the scheduled replay runs unattended (an out-of-repo scratch tree is denied

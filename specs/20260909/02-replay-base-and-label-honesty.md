@@ -1,6 +1,6 @@
 ---
 date: 2026-09-09
-status: implementing
+status: done
 tier: critical
 area: replay-harness
 design: false
@@ -427,6 +427,42 @@ Fragile spot to watch during execution: step 7's rung 3 already carries a prose 
 route to rung 4's seam. All four survive this rewrite — the rung-4 route remains, for the
 nondeterministic arm — so the pin is extended and retagged in place, never loosened, and the
 build must not delete the assertions it inherits.
+
+Departures recorded during the build and review, folded from the deviations sidecar at close.
+All six are one-offs specific to this spec; none is recurring-shaped, so none earned a Gotchas
+entry (the section stood at its 15-entry cap at verdict).
+
+- AC-20260909-02-2's File Plan text said `tests/review/review-legs.test.js` carried an existing
+  nested-runner test for the `NODE_TEST_CONTEXT` scrub, to be retagged in place. No such test
+  existed anywhere in the repo. The AC's own worked example was authored fresh instead — a
+  sanctioned green-pre-change pin, since the scrub behavior already lived in `sh()`, never
+  weakened.
+- The File Plan's fixture-duty note for `tests/replay/replay.test.js` estimated "~15
+  occurrences" of a pre-existing `baseline-red:*` accept-path test needing a CLEAN-row fixture.
+  Exactly one such test existed (AC-20260823-09-4). Its fixture was fixed and it was retagged
+  with AC-20260909-02-10; the "~15" figure was treated as a stale estimate, not a target.
+- As first authored, AC-20260909-02-17's sanity assertion required this repo's HEAD to carry the
+  spec's committed edits plus the plugin.json bump, so a bare `--check` — judging the
+  `merge-base(HEAD, main)` window — would show a real version-comparison line. That made the
+  test's redness a fact about branch topology rather than about the behavior under test, and it
+  would have gone red on `main` the moment this work merged. The review's first iteration caught
+  it; the test now anchors both comparison windows to state it controls — an explicit `--base`
+  naming a fixed ancestor commit versus HEAD — so it holds identically on any branch, with more
+  assertions than before and none removed.
+- Five new `--record` tests (AC-8, AC-9, AC-10, AC-11, AC-14) each re-inlined an identical
+  `mutation.patch`/`workflow.json` fixture block instead of using `tests/replay/replay.fixtures.js`
+  per A7. The review's first iteration caught it; a shared `writeRecordFixture(root)` builder was
+  extracted into that module and all five tests switched to it.
+- The build's read-load repair round condensed `replay.md`'s Phase 1 steps 1 and 5 beyond D6–D8's
+  scope, dropping four operational facts the script still enforces (the self-provisioned ignore
+  line, the `--dir` remedy, `{patchOutFile}`'s exit-3 refusal, and `afterApply` being read from
+  the main root). The review's first iteration caught it; all four were restored, offset by
+  condensing Phase 4 prose that merely restated the validation matrix above it. `/spec:replay`
+  closes at 449 of its 450-line read-load budget — one line of slack, so the next change to that
+  file will have to find room before it can add any.
+- The test-authoring pass and the implementation wave overlapped: every test in the batch was
+  verified genuinely red against the pre-image before the wave landed, and needed no change of
+  its own once the implementation arrived.
 
 ## Canonical Delta
 

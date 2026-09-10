@@ -2,10 +2,8 @@
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const net = require('node:net')
 const http = require('node:http')
-const { spawn } = require('node:child_process')
-const { tmpdir, runNode } = require('../helpers')
+const { tmpdir, runNode, freePort, serveAtlas } = require('../helpers')
 const picksLib = require('../../spec/scripts/lib/mocks-picks')
 
 // mocks-driver family shared fixtures — split from tests/mocks/mocks-driver.test.js by
@@ -175,32 +173,21 @@ function openLook(dir, key, extra = {}) {
   return opened.stop
 }
 
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer()
-    srv.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address()
-      srv.close((err) => (err ? reject(err) : resolve(port)))
-    })
-    srv.on('error', reject)
-  })
-}
-
+// specs/20260909/06-ephemeral-serve-ports.md D2/D3: freePort() is re-exported from
+// tests/helpers.js verbatim (AC-20260909-06-5) — this module's 8 look-stop callers pass its
+// result straight into `--port <p>` on a SEPARATE mocks-driver.js invocation, so the port must
+// be known before that second process starts; `--port 0` (an ephemeral pick read back after the
+// fact) cannot serve that two-process handshake.
+//
 // specs/20260905/04-per-project-look-server.md D7: the deleted hub script's `killHubIn(home)`
 // (kill a registry-recorded pid under a fake per-machine state dir) is replaced by a per-project
 // `design-atlas.js serve` child — `startServe` spawns it on the given port and resolves once its
 // first stdout line lands (readiness), `stopServe` always tears it down (SIGTERM, then SIGKILL if
 // it does not exit) so a failing assertion in a caller's try block never orphans a listener.
+// `startServe` is now a thin call to helpers.serveAtlas for that spawn-and-wait step; `stopServe`
+// keeps its own kill ladder because callers hand it a bare ChildProcess, not a serveAtlas result.
 function startServe(root, port) {
-  return new Promise((resolve, reject) => {
-    const designAtlasBin = path.join(__dirname, '../../spec/scripts/design-atlas.js')
-    const child = spawn(process.execPath, [designAtlasBin, 'serve', '--root', root, '--port', String(port)])
-    let stderrBuf = ''
-    child.stderr.on('data', (chunk) => { stderrBuf += chunk.toString('utf8') })
-    const timer = setTimeout(() => reject(new Error('design-atlas.js serve --port ' + port + ' did not print its first stdout line within 5s: ' + stderrBuf)), 5000)
-    child.stdout.once('data', () => { clearTimeout(timer); resolve(child) })
-    child.once('error', (err) => { clearTimeout(timer); reject(err) })
-  })
+  return serveAtlas(root, { port }).then((s) => s.child)
 }
 
 function stopServe(child) {

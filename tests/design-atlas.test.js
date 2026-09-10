@@ -6,7 +6,7 @@ const path = require('node:path')
 const http = require('node:http')
 const vm = require('node:vm')
 const { spawn, spawnSync } = require('node:child_process')
-const { tmpdir, runNode, SPEC, read } = require('./helpers')
+const { tmpdir, runNode, SPEC, read, freePort, serveAtlas } = require('./helpers')
 
 const atlas = (argv, opts) => runNode('scripts/design-atlas.js', argv, opts)
 
@@ -1632,7 +1632,11 @@ test('AC-20260905-01-11 (carrying forward AC-20260902-07-12 / AC-20260902-10-2) 
   fs.writeFileSync(path.join(dir, 'design/mocks/a.html'), '<main data-screen-label="a">hello</main>\n')
   fs.writeFileSync(path.join(dir, 'package.json'), '{"name":"should-never-be-served"}')
 
-  const port = 41230 + (process.pid % 300)
+  // specs/20260909/06-ephemeral-serve-ports.md D4: freePort() replaces the pid-derived window —
+  // this test still needs one specific port up front (the raw spawn below re-derives its own
+  // exact-banner-text assertion from it), so it keeps a fixed port rather than moving to
+  // serveAtlas's `--port 0` (which would only hand back the number, never the full first line).
+  const port = await freePort()
   const child = spawn(process.execPath, [path.join(SPEC, 'scripts/design-atlas.js'), 'serve', '--root', dir, '--port', String(port)])
 
   try {
@@ -1693,24 +1697,15 @@ test('AC-20260905-01-11 (carrying forward AC-20260902-07-12 / AC-20260902-10-2) 
 
 // specs/20260902/10-page-notes-review-loop.md D2/D3, AC-20260902-10-2/-3/-4 (TDD red): serve
 // has no notes injection, no /__notes/* endpoints, and lib/notes-layer.browser.js does not
-// exist yet — this async-spawn + http helper mirrors AC-20260902-07-12's runner above (Gotcha:
-// runNode's spawnSync would block the parent event loop for the child's whole lifetime).
-async function withServe(dir, portOffset, fn) {
-  const port = 41830 + ((process.pid + portOffset) % 300)
-  const child = spawn(process.execPath, [path.join(SPEC, 'scripts/design-atlas.js'), 'serve', '--root', dir, '--port', String(port)])
+// exist yet — this helper mirrors AC-20260902-07-12's runner above.
+// specs/20260909/06-ephemeral-serve-ports.md D3/D4: no caller of withServe needs a specific
+// port (the three pid-offset windows below existed only to keep this file's own concurrent
+// serve calls from colliding with each other and with other files) — withServe is now a thin
+// call to helpers.serveAtlas, which binds ephemerally and hands back whatever port it got.
+async function withServe(dir, fn) {
+  const s = await serveAtlas(dir)
+  const port = s.port
   try {
-    let stdoutBuf = ''
-    let stderrBuf = ''
-    child.stderr.on('data', (chunk) => { stderrBuf += chunk.toString('utf8') })
-    const firstLinePromise = new Promise((resolve) => {
-      child.stdout.on('data', (chunk) => {
-        stdoutBuf += chunk.toString('utf8')
-        if (stdoutBuf.includes('\n')) resolve()
-      })
-    })
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('serve did not print its first stdout line within 5s: ' + stderrBuf)), 5000))
-    await Promise.race([firstLinePromise, timeout])
-
     function get(urlPath) {
       return new Promise((resolve, reject) => {
         http.get({ host: 'localhost', port, path: urlPath }, (res) => {
@@ -1738,18 +1733,11 @@ async function withServe(dir, portOffset, fn) {
 
     await fn({ get, post, port })
   } finally {
-    // Harness-level hardening (repair, AC-20260902-07-12 sibling): a failure anywhere above —
-    // including the first-line wait itself — must not orphan the serve child, or it keeps the
-    // event loop alive and hangs the whole test process, not just this test.
-    if (child.exitCode === null && child.signalCode === null) {
-      const exitPromise = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })))
-      child.kill('SIGTERM')
-      const exitTimeout = new Promise((resolve) => setTimeout(resolve, 5000))
-      await Promise.race([exitPromise, exitTimeout])
-      if (child.exitCode === null && child.signalCode === null) {
-        child.kill('SIGKILL')
-      }
-    }
+    // Harness-level hardening (repair, AC-20260902-07-12 sibling): a failure anywhere above must
+    // not orphan the serve child, or it keeps the event loop alive and hangs the whole test
+    // process, not just this test — serveAtlas's own stop() carries the same SIGTERM/SIGKILL
+    // ladder.
+    await s.stop()
   }
 }
 
@@ -1759,7 +1747,7 @@ test('AC-20260902-10-2: design-atlas.js serve injects the notes layer script bef
   const bodyHtml = '<!doctype html>\n<html><head></head><body><main data-screen-label="a">hello</main>\n</body></html>\n'
   fs.writeFileSync(path.join(dir, 'design/mocks/a.html'), bodyHtml)
 
-  await withServe(dir, 1, async ({ get, port }) => {
+  await withServe(dir, async ({ get, port }) => {
     // Repair (coordinator fix request): the Contracts section pins "server binds `localhost`
     // only" — assert the live listener via `lsof`, since `server.address()` isn't reachable from
     // this test (the server runs in a spawned child process).
@@ -1797,7 +1785,7 @@ test('AC-20260902-10-3: POST /__notes/add writes design/mocks/notes.json and ret
   fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'design/mocks/a.html'), '<main data-screen-label="a">hello</main>\n')
 
-  await withServe(dir, 2, async ({ get, post }) => {
+  await withServe(dir, async ({ get, post }) => {
     const added = await post('/__notes/add', { scope: 'mock', screen: 'a', state: 'busy', text: 'x', by: 'JJ' })
     assert.strictEqual(added.status, 201, 'POST /__notes/add with a valid mock-scope body must respond 201: ' + added.status + ' ' + added.body)
     const addedNote = JSON.parse(added.body)
@@ -1843,7 +1831,7 @@ test('AC-20260902-10-4: lib/notes-layer.browser.js reads data-screen-label/data-
   fs.writeFileSync(path.join(dir, 'design/mocks/a.html'), '<main data-screen-label="a">hello</main>\n')
   const templateBytes = fs.readFileSync(path.join(SPEC, 'templates/mocks/viewer.css'), 'utf8')
 
-  await withServe(dir, 3, async ({ get }) => {
+  await withServe(dir, async ({ get }) => {
     const res = await get('/__notes/viewer.css')
     assert.strictEqual(res.status, 200, 'GET /__notes/viewer.css must respond 200: ' + res.status)
     assert.strictEqual(res.body, templateBytes, 'GET /__notes/viewer.css must return spec/templates/mocks/viewer.css verbatim, byte for byte')
@@ -1922,12 +1910,15 @@ a -> b
 // serving a file only `build` ever wrote (a shapes-only tree at the SHAPES look stop has no
 // such file, and the banner promised the page anyway); a busy port reuses the running atlas
 // (prints the same URL line with "already serving", exit 0) instead of an EADDRINUSE trace.
-test('AC-20260905-01-11 / AC-20260909-03-9: serve SHALL CONTINUE TO derive the atlas index on request (shapes-only tree, no design/atlas file) and a second serve on the same port prints "already serving" + exits 0', async () => {
+test('AC-20260905-01-11 / AC-20260909-03-9 / AC-20260909-06-6 / AC-20260909-06-7: serve SHALL CONTINUE TO derive the atlas index on request (shapes-only tree, no design/atlas file) and a second serve on the same freePort() value prints "already serving" + exits 0', async () => {
   const dir = tmpdir('atlas-serve-derived')
   fs.mkdirSync(path.join(dir, 'design/shapes'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'design/shapes/work-queue.html'), '<main data-screen-label="work-queue">wq</main>')
   fs.writeFileSync(path.join(dir, 'design/shapes/stacked-cards.html'), '<main data-screen-label="stacked-cards">sc</main>')
-  const port = 43000 + Math.floor(Math.random() * 2000)
+  // specs/20260909/06-ephemeral-serve-ports.md D4: this is "the reuse-branch test" — the one
+  // place a specific, caller-chosen port is legitimate (two serves must deliberately collide) —
+  // so it keeps freePort() rather than moving to serveAtlas's own `--port 0` ephemeral pick.
+  const port = await freePort()
   const child = spawn(process.execPath, [path.join(SPEC, 'scripts/design-atlas.js'), 'serve', '--root', dir, '--port', String(port)])
   try {
     await new Promise((resolve, reject) => {
@@ -1967,44 +1958,21 @@ test('AC-20260905-01-11 / AC-20260909-03-9: serve SHALL CONTINUE TO derive the a
 // assertion below is red until the three subcommands move here from the deleted hub script (D1).
 // AC-20260905-04-2, AC-20260905-04-3, AC-20260905-04-4.
 
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const net = require('node:net')
-    const srv = net.createServer()
-    srv.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address()
-      srv.close((err) => (err ? reject(err) : resolve(port)))
-    })
-    srv.on('error', reject)
-  })
-}
-
+// specs/20260909/06-ephemeral-serve-ports.md D2/D3: freePort() now comes from tests/helpers.js
+// (AC-20260909-06-5's own look-stop callers keep it too) — these AC-20260905-04-* tests need a
+// specific, known-ahead-of-time port (the `stop open --port <p>` CLI argument below must match
+// the port the serve child actually bound), so freePort() + a fixed-port serveAtlas call is the
+// sanctioned shape, not `--port 0`.
+//
 // Starts a `design-atlas.js serve --root <dir> --port <port>` child, waits for its first stdout
 // line (readiness), runs `fn`, and always tears the child down — a hung/failed assertion in `fn`
 // must never leave a listening server behind (AC-20260905-04-2/-3/-4's shared hygiene rule).
 async function withServeAt(dir, port, fn) {
-  const child = spawn(process.execPath, [path.join(SPEC, 'scripts/design-atlas.js'), 'serve', '--root', dir, '--port', String(port)])
+  const s = await serveAtlas(dir, { port })
   try {
-    let stderrBuf = ''
-    child.stderr.on('data', (chunk) => { stderrBuf += chunk.toString('utf8') })
-    let stdoutBuf = ''
-    const firstLinePromise = new Promise((resolve) => {
-      child.stdout.on('data', (chunk) => {
-        stdoutBuf += chunk.toString('utf8')
-        if (stdoutBuf.includes('\n')) resolve()
-      })
-    })
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('serve --port ' + port + ' did not print its first stdout line within 5s: ' + stderrBuf)), 5000))
-    await Promise.race([firstLinePromise, timeout])
     return await fn()
   } finally {
-    if (child.exitCode === null && child.signalCode === null) {
-      const exitPromise = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })))
-      child.kill('SIGTERM')
-      const exitTimeout = new Promise((resolve) => setTimeout(resolve, 5000))
-      await Promise.race([exitPromise, exitTimeout])
-      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
-    }
+    await s.stop()
   }
 }
 

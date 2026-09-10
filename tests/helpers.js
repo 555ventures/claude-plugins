@@ -8,7 +8,7 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const { execFileSync, spawnSync } = require('child_process')
+const { execFileSync, spawnSync, spawn } = require('child_process')
 
 const ROOT = path.join(__dirname, '..')
 const SPEC = path.join(ROOT, 'spec')
@@ -96,6 +96,76 @@ function runBash(script, argv, opts = {}) {
     { encoding: 'utf8', ...opts })
 }
 
+// specs/20260909/06-ephemeral-serve-ports.md D2: the one port-binding pair every serve-backed
+// test uses — no test in this repo chooses a port number itself. freePort() binds :0, reads the
+// bound number, and closes so the caller can hand it to a process that will bind it for real
+// (D4's one legitimate use: two cooperating processes — a serve child and a second CLI
+// invocation, or a deliberate reuse probe — that must agree on the same port ahead of time).
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const net = require('net')
+    const srv = net.createServer()
+    srv.on('error', reject)
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address()
+      srv.close((err) => (err ? reject(err) : resolve(port)))
+    })
+  })
+}
+
+// serveAtlas(root, {port, script} = {}): spawns design-atlas.js (or `script`, a test seam for
+// AC-20260909-06-4's stub) `serve --root <root> --port <port ?? 0>` and resolves once the
+// child's first stdout line names a bound port (`http://localhost:(\d+)/` — the banner verb is
+// deliberately not part of the parse, D4/AC-20260909-06-6), or rejects after 5000 ms with the
+// child's accumulated stderr. `stop()` sends SIGTERM, then SIGKILL after 5000 ms if the child
+// has not exited, and resolves once it has.
+function serveAtlas(root, opts = {}) {
+  const scriptPath = opts.script || path.join(SPEC, 'scripts/design-atlas.js')
+  const port = opts.port
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath,
+      [scriptPath, 'serve', '--root', root, '--port', String(port == null ? 0 : port)])
+    let stdoutBuf = ''
+    let stderrBuf = ''
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      child.kill('SIGKILL')
+      reject(new Error('serveAtlas: no banner within 5000 ms\n' + stderrBuf))
+    }, 5000)
+    const finish = (fn) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      fn()
+    }
+    child.stdout.on('data', (chunk) => {
+      stdoutBuf += chunk.toString('utf8')
+      const m = stdoutBuf.match(/http:\/\/localhost:(\d+)\//)
+      if (!m) return
+      finish(() => {
+        const boundPort = Number(m[1])
+        resolve({
+          port: boundPort,
+          url: 'http://localhost:' + boundPort,
+          child,
+          stop() {
+            return new Promise((res) => {
+              if (child.exitCode !== null || child.signalCode !== null) { res(); return }
+              const killer = setTimeout(() => { try { child.kill('SIGKILL') } catch { /* already gone */ } }, 5000)
+              child.once('exit', () => { clearTimeout(killer); res() })
+              child.kill('SIGTERM')
+            })
+          },
+        })
+      })
+    })
+    child.stderr.on('data', (chunk) => { stderrBuf += chunk.toString('utf8') })
+    child.on('error', (err) => finish(() => reject(err)))
+  })
+}
+
 // Minimal git repo factory for merge-back / gate tests.
 //
 // Seeding from scratch costs 5 git subprocesses (init, config x2, add, commit), and every repo
@@ -150,4 +220,7 @@ function gitRepo(dir, opts = {}) {
   return (...a) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8' })
 }
 
-module.exports = { ROOT, SPEC, read, extractFn, evalFns, checkWorkflowSyntax, tmpdir, runNode, runBash, gitRepo }
+module.exports = {
+  ROOT, SPEC, read, extractFn, evalFns, checkWorkflowSyntax, tmpdir, runNode, runBash, gitRepo,
+  freePort, serveAtlas,
+}

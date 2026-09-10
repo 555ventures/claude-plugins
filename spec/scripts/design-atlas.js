@@ -68,6 +68,10 @@
 //                                                  read-only server over <root>/design/ — first
 //                                                  stdout line is the SSH port-forward
 //                                                  instruction; exits on SIGINT/SIGTERM.
+//                                                  specs/20260909/06 D1: --port 0 binds an
+//                                                  ephemeral port; the first stdout line's URL
+//                                                  and ssh -L hint name the bound port
+//                                                  (server.address().port), not 0.
 //                                                  specs/20260902/10 D2: every served text/html
 //                                                  response gets the page-notes layer script
 //                                                  injected before </body> unless the request

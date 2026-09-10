@@ -119,7 +119,11 @@ test('AC-20260906-04-3 (F9): look <label> --state "x\'y" refuses naming the mock
   const argvLog = path.join(dir, 'npx-argv.log')
   const okPath = stubNpx(dir, { exitCode: 0, logArgvTo: argvLog })
 
-  const r = runNode(SCRIPT, ['--root', dir, 'look', 'signin', '--state', "x'y", '--port', '4599'],
+  // specs/20260909/06-ephemeral-serve-ports.md D5: this run refuses on --state before any
+  // socket is touched, so the --port value is never dialed — '0' keeps that true while removing
+  // AC-20260909-06-8's grep target (a false positive today, a real one once spec 07's literal
+  // check ships).
+  const r = runNode(SCRIPT, ['--root', dir, 'look', 'signin', '--state', "x'y", '--port', '0'],
     { env: { ...process.env, PATH: okPath } })
   assert.notStrictEqual(r.status, 0, 'F9: an undeclared/invalid --state must refuse, never exit 0: ' + r.stdout + r.stderr)
   assert.match(r.stderr, /empty/, 'F9: the refusal must name the mock\'s declared states, including "empty": ' + JSON.stringify(r.stderr))

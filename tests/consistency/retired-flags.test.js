@@ -3,9 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const net = require('node:net')
-const { spawn } = require('node:child_process')
-const { SPEC, tmpdir, runNode } = require('../helpers')
+const { tmpdir, runNode, freePort, serveAtlas } = require('../helpers')
 
 // Pins: specs/20260906/01-ac-drift-doctor-check.md D8, AC-20260906-01-11 .. AC-20260906-01-14.
 // Four parsed-but-never-passed flags are deleted (render-gate.js --no-boot, registry-check.js
@@ -15,38 +13,17 @@ const { SPEC, tmpdir, runNode } = require('../helpers')
 // AC-20260906-01-10, because that file is green-expected under red-check.js). Every
 // assertion below observes the flag's own script directly against a synthetic host.
 
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer()
-    srv.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address()
-      srv.close((err) => (err ? reject(err) : resolve(port)))
-    })
-    srv.on('error', reject)
-  })
-}
-
-// Starts `design-atlas.js serve --root <dir> --port <port>`, waits for its readiness line, runs
-// `fn`, and always tears the child down — the same idiom tests/design-atlas.test.js uses.
+// specs/20260909/06-ephemeral-serve-ports.md D2/D3: freePort() comes from tests/helpers.js now
+// — this test needs a specific port up front because the `stop open --port <p>` CLI argument
+// below must name the exact port the serve child bound. withServeAt is a thin call to
+// helpers.serveAtlas for the spawn-and-wait-for-readiness step, the same idiom
+// tests/design-atlas.test.js uses.
 async function withServeAt(dir, port, fn) {
-  const child = spawn(process.execPath, [path.join(SPEC, 'scripts/design-atlas.js'), 'serve', '--root', dir, '--port', String(port)])
+  const s = await serveAtlas(dir, { port })
   try {
-    let stderrBuf = ''
-    child.stderr.on('data', (c) => { stderrBuf += c.toString('utf8') })
-    let stdoutBuf = ''
-    const firstLine = new Promise((resolve) => {
-      child.stdout.on('data', (c) => { stdoutBuf += c.toString('utf8'); if (stdoutBuf.includes('\n')) resolve() })
-    })
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('serve --port ' + port + ' did not start within 5s: ' + stderrBuf)), 5000))
-    await Promise.race([firstLine, timeout])
     return await fn()
   } finally {
-    if (child.exitCode === null && child.signalCode === null) {
-      const exitP = new Promise((resolve) => child.on('exit', () => resolve()))
-      child.kill('SIGTERM')
-      await Promise.race([exitP, new Promise((r) => setTimeout(r, 5000))])
-      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
-    }
+    await s.stop()
   }
 }
 

@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 55589,
-    "spec/scripts": 1321924,
+    "spec/scripts": 1325460,
     "spec/scripts/lib": 242860,
-    "tests": 3757137
+    "tests": 3773676
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -61,6 +61,7 @@
     "spec/scripts/memory-sweep.js": 7856,
     "spec/scripts/merge-back.sh": 17514,
     "spec/scripts/mocks-driver.js": 114479,
+    "spec/scripts/port-check.js": 3536,
     "spec/scripts/promise-sweep.js": 10409,
     "spec/scripts/prose-cap.js": 6271,
     "spec/scripts/question-style-gate.js": 10712,
@@ -133,6 +134,8 @@
     "tests/doctor/ac-drift-clean.test.js": 3087,
     "tests/doctor/ac-drift.test.js": 21661,
     "tests/doctor/ci-gate-parity.test.js": 5168,
+    "tests/doctor/port-check-clean.test.js": 1918,
+    "tests/doctor/port-check.test.js": 8318,
     "tests/doctrine-review.test.js": 2477,
     "tests/dup-windows/dup-windows.test.js": 15328,
     "tests/env-preflight.test.js": 11643,
@@ -180,7 +183,7 @@
     "tests/mocks/mocks-driver-2.test.js": 19004,
     "tests/mocks/mocks-driver-3.test.js": 17977,
     "tests/mocks/mocks-driver-4.test.js": 16765,
-    "tests/mocks/mocks-driver-client.test.js": 26628,
+    "tests/mocks/mocks-driver-client.test.js": 26622,
     "tests/mocks/mocks-driver-fixtures.js": 25848,
     "tests/mocks/mocks-driver-kit-gate.test.js": 2879,
     "tests/mocks/mocks-driver-look-stops-2.test.js": 12882,
@@ -271,7 +274,8 @@
     "tests/status/red-alarm.test.js": 11155,
     "tests/status/status-diet.test.js": 12626,
     "tests/surfaces-lib.test.js": 4569,
-    "tests/test-file-budget.test.js": 9042,
+    "tests/test-file-budget.test.js": 11842,
+    "tests/test-hang-bound.test.js": 3509,
     "tests/tracked-text-purity.test.js": 4265,
     "tests/verdict-gatered-no-workflow.test.js": 8762,
     "tests/verdict-require-leg.test.js": 9752,
@@ -1220,6 +1224,24 @@
       "from": 3754446,
       "to": 3757137,
       "cite": "direct"
+    },
+    {
+      "path": "tests/test-file-budget.test.js",
+      "from": 9042,
+      "to": 11842,
+      "cite": "specs/20260909/07-hang-bound-and-port-check.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1321924,
+      "to": 1325460,
+      "cite": "specs/20260909/07-hang-bound-and-port-check.md"
+    },
+    {
+      "path": "tests",
+      "from": 3757137,
+      "to": 3773676,
+      "cite": "specs/20260909/07-hang-bound-and-port-check.md"
     }
   ]
 }

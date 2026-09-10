@@ -177,7 +177,7 @@ test('AC-20260907-10-10: notes address on a client-origin mock-scope note exits 
   assert.match(noPort.stderr + noPort.stdout, /serve/, 'AC-10: the no-port refusal must name the serve command: ' + noPort.stdout + noPort.stderr)
 
   const samePath = stubNpxScreenshot(dir, { bytes: beforeBytes })
-  const same = runNode(SCRIPT, ['--root', dir, 'notes', 'address', '--id', 'N001', '--change', 'recolored the button', '--port', '4321'],
+  const same = runNode(SCRIPT, ['--root', dir, 'notes', 'address', '--id', 'N001', '--change', 'recolored the button', '--port', '0'],
     { env: { ...process.env, PATH: samePath } })
   assert.strictEqual(same.status, 2, 'AC-10: a re-capture whose hash equals the before capture must exit 2: ' + same.stdout + same.stderr)
   assert.match(same.stderr + same.stdout, /the screen has not changed/,
@@ -189,7 +189,7 @@ test('AC-20260907-10-10: notes address on a client-origin mock-scope note exits 
 
   const diffBytes = Buffer.from('after-frame-fixture-bytes-DIFFERENT')
   const diffPath = stubNpxScreenshot(dir, { bytes: diffBytes })
-  const diff = runNode(SCRIPT, ['--root', dir, 'notes', 'address', '--id', 'N001', '--change', 'recolored the button', '--port', '4321'],
+  const diff = runNode(SCRIPT, ['--root', dir, 'notes', 'address', '--id', 'N001', '--change', 'recolored the button', '--port', '0'],
     { env: { ...process.env, PATH: diffPath } })
   assert.strictEqual(diff.status, 0, 'AC-10: a re-capture whose hash differs from the before capture must exit 0: ' + diff.stdout + diff.stderr)
   const afterDiff = readNotesFile(dir).find((n) => n.id === 'N001')

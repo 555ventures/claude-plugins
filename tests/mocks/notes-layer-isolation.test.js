@@ -60,7 +60,7 @@ const PROBE = '(function(){var b=getComputedStyle(document.body),x=getComputedSt
   'return {bodyBg:b.backgroundColor,bodyColor:b.color,boxSizing:x.boxSizing,boxWidth:x.width,' +
   'headLinks:document.querySelectorAll("head link").length,hosts:document.querySelectorAll(".nl-host").length}})()'
 
-test('notes layer (executed, headless Chrome): a served dark mock computes identical body/box styles with and without the layer', { timeout: 60000 }, async (t) => {
+test('notes layer (executed, headless Chrome): a served dark mock computes identical body/box styles with and without the layer', { timeout: 45000 }, async (t) => {
   const chrome = findChrome()
   if (!chrome) return t.skip('no Chrome binary (set CHROME_BIN) — the static pin above still runs')
   const dir = tmpdir('notes-isolation')

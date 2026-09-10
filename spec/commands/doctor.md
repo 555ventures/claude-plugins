@@ -158,6 +158,10 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     `[pre-green:]` / cited `[retired:]` sanction covers. Each printed row is a finding whose
     remedy the row names (tag the covering test, or mark the bullet `[retired: <citation>]`);
     `inapplicable — no specs/` is not a finding.
+18. **Fixed test ports** (deterministic, advisory) — run
+    `node "$(spec-paths port-check)" --root .`. Each printed line is a fixed or computed port
+    literal under `tests/`; remedy = bind `--port 0` / `listen(0)` and read the bound port back
+    from the server rather than choosing one (a host may wrap this in a shared test helper).
 
 ## Semantic spot-check — small, bounded
 

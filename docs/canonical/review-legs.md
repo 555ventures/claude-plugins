@@ -62,6 +62,31 @@ Every row this script appends carries `scope` as its last key, `full` or `fix-de
 one `--fix-delta` flag; rows appended by `ac-matrix.js` and `promise-sweep.js` carry no key and
 `verdict.js` treats them as non-carriers. (specs/20260902/05-manifest-stamped-scope.md)
 
+## The review's base reaches the legs
+
+Two legs used to be the only ones told what this review is judging against: `scope-reconcile`
+receives it as an argument, and the host patterns script receives it as an inline `DIFF_BASE=`
+prefix. The gate and suite legs run the host's whole test suite, which can contain checks that
+resolve a comparison point of their own — and a check that derives its own base from branch
+topology reads a different history than the one the review is judging. A merged branch is the
+clearest case: `merge-base(HEAD, main)` collapses onto a commit above the change the check
+exists to see, so the check reports a skipped step on a tree that never skipped it.
+`review-legs.js` therefore sets `SPEC_REVIEW_BASE` to its `--base` value in every leg
+subprocess's environment, at the one place all of them are spawned, applied after any leg-local
+environment so a leg cannot redirect it. A host check reads it as one candidate among its own
+and must ignore any value that is not a full 40-hex commit sha — a ref name resolves in every
+repository, including a synthetic one a test builds in a temporary directory, so only a commit
+identity may cross that boundary. It never outranks an explicit flag and never becomes a
+required input. `DIFF_BASE` keeps its own meaning as the patterns script's documented input.
+
+**One row per review run id is the CLEAN one.** A review appends a row per iteration under one
+`runId`, and the failing iterations record their legs red. Only the CLEAN row describes the
+state the close was judged on, so every consumer that asks "what did this review observe"
+resolves the run id through one shared selector — the CLEAN row, the last when several — rather
+than restating the rule. Two replay rows were recorded claiming a leg was already failing at
+review because that ambiguity had no owner.
+(specs/20260909/02-replay-base-and-label-honesty.md)
+
 ## The suite leg
 
 `review-legs.js` runs the host's bare `testCommand` once per legs iteration as the `suite` leg —

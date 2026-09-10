@@ -119,6 +119,19 @@
 // "worktree registered but unusable" arm). (D5) spec-paths gains a `worktree-include` key for
 // every other caller; --setup's own resolution stays a sibling-script lookup, off the hot path.
 //
+// specs/20260909/02-replay-base-and-label-honesty.md: a review run id names several ledger rows
+// (the red iterations plus the CLEAN one), so "was this leg red at review" had no single answer.
+// (D3) reviewRowFor(rows, runId) is the one shared selector — among rows with stage:"review" and
+// this runId, the row with verdict:"CLEAN" (last in read order when several), or null when none
+// is CLEAN — used by --record's cross-check; --select's own CLEAN-filtered candidate list already
+// implements the same rule per runId. (D4) --record --legs baseline-red:<leg>[,<leg>] is now
+// cross-checked against that row: every named leg must appear in its `legs` array and be red
+// under review-legs.js's own isBaselineLegRed predicate, or the call exits 2 naming the leg and
+// its recorded exit (or absence) and appends nothing. (D5) --legs gains the mirror shape
+// pristine-red:<leg>[,<leg>], accepted ONLY with --outcome setup-failed, cross-checked the other
+// way — every named leg must be recorded GREEN there, because the claim is precisely "the review
+// judged this leg green and the scratch tree cannot reproduce that".
+//
 // What this deliberately does NOT do: derive review-legs verdicts, touch the main working tree
 // (--setup/--apply/--teardown only ever act on a --dir the caller supplies, or one --setup derives
 // itself from --spec (D1, specs/20260826/01) — --setup refuses a caller --dir that resolves inside
@@ -157,7 +170,11 @@
 // red:<leg> arm missing --patch or --workflow, unresolved's red:<leg> arm missing --patch or
 // refusing a --workflow that rides along (a step-7 dismissal never ran the reviewer), a missing
 // --patch or a non-`red:`-shaped --legs for leg-caught, or setup-failed riding with
-// --class/--patch/--workflow) /
+// --class/--patch/--workflow) / a `pristine-red:<leg>[,<leg>]` --legs value given with any
+// --outcome other than setup-failed (specs/20260909/02 D5) / a `baseline-red:`/`pristine-red:`
+// claim whose cited --review-run-id names no CLEAN review row, whose CLEAN row carries no `legs`
+// array, or whose `legs` array contradicts the claim for a named leg (specs/20260909/02 D4/D5 —
+// nothing is appended) /
 // --apply's host config carries a present-but-unparsable config file, a malformed
 // replay.afterApply block, a paths entry that is absolute/contains ".."/resolves under a
 // review-outcome meta prefix/would (as a declared subtree) admit one of those prefixes as a
@@ -231,7 +248,8 @@ function usage() {
     '[--overlay <closeSha>] [--subject <text>] | ' +
     '--apply --dir <path> --patch <file> --patch-out <file> --class <id> [--spec <path>] [--subject <text>] | ' +
     '--score --workflow <file> --patch <file> | ' +
-    '--record --spec <path> --review-run-id <id> --legs green|red:<leg>|baseline-red:<leg>[,<leg>]|none ' +
+    '--record --spec <path> --review-run-id <id> --legs green|red:<leg>|baseline-red:<leg>[,<leg>]|' +
+    'pristine-red:<leg>[,<leg>]|none ' +
     '--outcome caught|missed|leg-caught|unresolved|setup-failed [--class <id>] [--patch <file>] ' +
     '[--workflow <file>] [--tokens N] [--via driver|manual] | --stats | --pick-class [--root <path>] | ' +
     '--teardown --dir <path>')
@@ -353,13 +371,27 @@ function deriveBaseline(row) {
   return { baselineRed, baselineLegs }
 }
 
+// D3 (specs/20260909/02-replay-base-and-label-honesty.md): the one shared selector for what a
+// review run id MEANS, used by --select's derivation and --record's cross-check alike — among
+// ledger rows sharing this runId, the row with verdict "CLEAN" (last in read order when several);
+// null when none is CLEAN (a run id with only red iterations supports no claim).
+function reviewRowFor(rows, runId) {
+  const matches = rows.filter((r) => r.stage === 'review' && r.runId === runId && r.verdict === 'CLEAN')
+  return matches.length ? matches[matches.length - 1] : null
+}
+
 function cmdSelect() {
   const rows = readLedgerRows(root)
   let lastReplayIdx = -1
   rows.forEach((r, i) => { if (isMeasurementReplay(r)) lastReplayIdx = i })
-  const candidates = rows
-    .map((r, i) => ({ r, i }))
-    .filter(({ r, i }) => i > lastReplayIdx && r.stage === 'review' && r.verdict === 'CLEAN' && r.runId)
+  // D3: resolve every runId seen in the window to reviewRowFor's row — the one shared selector —
+  // rather than restating "verdict === 'CLEAN'" here as a second, driftable copy of the rule.
+  const runIdsInWindow = new Set()
+  rows.forEach((r, i) => { if (i > lastReplayIdx && r.stage === 'review' && r.runId) runIdsInWindow.add(r.runId) })
+  const candidates = [...runIdsInWindow]
+    .map((runId) => reviewRowFor(rows, runId))
+    .filter((r) => r && rows.indexOf(r) > lastReplayIdx)
+    .map((r) => ({ r, i: rows.indexOf(r) }))
   if (!candidates.length) {
     console.error('replay.js: no eligible CLEAN review row with a runId found in the window since the ' +
       'last measurement replay row — run /spec:review first, or check replay.js --due to confirm one is expected')
@@ -1146,6 +1178,10 @@ function cmdScore() {
 
 const RECORD_OUTCOMES = ['caught', 'missed', 'leg-caught', 'unresolved', 'setup-failed']
 const BASELINE_RED_RE = /^baseline-red:.+/
+// D5 (specs/20260909/02-replay-base-and-label-honesty.md): pristine-red is baseline-red's mirror
+// — it claims the cited CLEAN row recorded the named leg(s) GREEN, i.e. the scratch tree cannot
+// reproduce the state the review judged. Accepted only with --outcome setup-failed.
+const PRISTINE_RED_RE = /^pristine-red:.+/
 
 function cmdRecord() {
   if (!specArg || !reviewRunId || !legs || !outcome) { usage(); process.exit(2) }
@@ -1153,8 +1189,15 @@ function cmdRecord() {
     console.error(`replay.js: --outcome must be one of ${RECORD_OUTCOMES.join('|')}, got '${outcome}'`)
     process.exit(2)
   }
-  if (legs !== 'green' && legs !== 'none' && !/^red:.+/.test(legs) && !BASELINE_RED_RE.test(legs)) {
-    console.error(`replay.js: --legs must be 'green', 'red:<leg>', 'baseline-red:<leg>[,<leg>]', or 'none', got '${legs}'`)
+  if (legs !== 'green' && legs !== 'none' && !/^red:.+/.test(legs) && !BASELINE_RED_RE.test(legs) && !PRISTINE_RED_RE.test(legs)) {
+    console.error(`replay.js: --legs must be 'green', 'red:<leg>', 'baseline-red:<leg>[,<leg>]', ` +
+      `'pristine-red:<leg>[,<leg>]', or 'none', got '${legs}'`)
+    process.exit(2)
+  }
+  // D5: pristine-red asserts a fact about a different run's row and records no measurement of
+  // this one — it is accepted only under the one outcome that records none.
+  if (PRISTINE_RED_RE.test(legs) && outcome !== 'setup-failed') {
+    console.error(`replay.js: --legs ${legs} is accepted only with --outcome setup-failed — nothing was measured`)
     process.exit(2)
   }
   // D2/D3 validation matrix.
@@ -1207,8 +1250,8 @@ function cmdRecord() {
       process.exit(2)
     }
   } else { // setup-failed
-    if (legs !== 'none') {
-      console.error(`replay.js: --outcome setup-failed requires --legs none, got '${legs}'`)
+    if (legs !== 'none' && !PRISTINE_RED_RE.test(legs)) {
+      console.error(`replay.js: --outcome setup-failed requires --legs none or pristine-red:<leg>[,<leg>], got '${legs}'`)
       process.exit(2)
     }
     if (cls) {
@@ -1223,6 +1266,46 @@ function cmdRecord() {
     if (workflowPath) {
       console.error('replay.js: --outcome setup-failed refuses --workflow — the reviewer was never dispatched')
       process.exit(2)
+    }
+  }
+  // D4/D5: cross-check a baseline-red or pristine-red claim against reviewRowFor's row — every
+  // other --legs shape reads no ledger. Runs AFTER the D7 outcome matrix above (so a matrix
+  // violation is still reported first) but BEFORE --class/--patch/--workflow are read — a
+  // refused claim must append nothing and write no evidence artifact.
+  if (BASELINE_RED_RE.test(legs) || PRISTINE_RED_RE.test(legs)) {
+    const isPristine = PRISTINE_RED_RE.test(legs)
+    const row = reviewRowFor(readLedgerRows(root), reviewRunId)
+    if (!row) {
+      console.error(`replay.js: --review-run-id ${reviewRunId} names no CLEAN review row in ${root} — ` +
+        `re-run --select and pass its printed reviewRunId`)
+      process.exit(2)
+    }
+    if (!Array.isArray(row.legs)) {
+      console.error(`replay.js: row ${reviewRunId} records no legs array, so it cannot support a ` +
+        `${isPristine ? 'pristine-red' : 'baseline-red'} claim — pass --legs green or red:<leg>`)
+      process.exit(2)
+    }
+    const names = legs.slice(legs.indexOf(':') + 1).split(',')
+    for (const name of names) {
+      const rec = row.legs.find((l) => l.leg === name)
+      const exitDesc = rec ? `exit ${rec.exit}` : 'absent from the row'
+      if (!isPristine) {
+        // baseline-red: every named leg must be recorded RED there.
+        if (!rec || !isBaselineLegRed(rec)) {
+          console.error(`replay.js: --legs baseline-red:${name} claims ${name} was already red at review ` +
+            `${reviewRunId}, whose CLEAN row records ${name} ${exitDesc} — pass --legs red:${name} if the ` +
+            `mutation reddened it, or green`)
+          process.exit(2)
+        }
+      } else {
+        // pristine-red: every named leg must be recorded GREEN there (the mirror claim).
+        if (!rec || isBaselineLegRed(rec)) {
+          console.error(`replay.js: --legs pristine-red:${name} claims the scratch tree cannot reproduce ` +
+            `review ${reviewRunId}'s green ${name}, whose CLEAN row records ${name} ${exitDesc} — a leg ` +
+            `already red at review is --legs baseline-red:${name}`)
+          process.exit(2)
+        }
+      }
     }
   }
   // D2: validate --class against the corpus AFTER the D7 matrix above (so a matrix violation is

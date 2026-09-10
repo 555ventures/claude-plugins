@@ -1,13 +1,13 @@
 {
   "newFileCap": 40000,
   "trees": {
-    "scripts": 34134,
-    "spec/scripts": 1273422,
+    "scripts": 34997,
+    "spec/scripts": 1279689,
     "spec/scripts/lib": 233720,
-    "tests": 3553850
+    "tests": 3591249
   },
   "files": {
-    "scripts/plugin-bump.js": 8564,
+    "scripts/plugin-bump.js": 9427,
     "scripts/size-ratchet.js": 20024,
     "scripts/spec-patterns.sh": 2455,
     "scripts/test-file-budget-reporter.js": 3091,
@@ -70,9 +70,9 @@
     "spec/scripts/render-gate.js": 30243,
     "spec/scripts/render-inventory.browser.js": 14416,
     "spec/scripts/render-rules.js": 19776,
-    "spec/scripts/replay.js": 85010,
+    "spec/scripts/replay.js": 90525,
     "spec/scripts/report-render.js": 7899,
-    "spec/scripts/review-legs.js": 27558,
+    "spec/scripts/review-legs.js": 28310,
     "spec/scripts/scope-reconcile.js": 16902,
     "spec/scripts/smoke.sh": 8134,
     "spec/scripts/spec-build-driver.js": 49555,
@@ -111,7 +111,7 @@
     "tests/consistency/entrypoints.test.js": 70405,
     "tests/consistency/genesis-doctrine.test.js": 86907,
     "tests/consistency/observed-grammar-purity.test.js": 3560,
-    "tests/consistency/plugin-bump.test.js": 12177,
+    "tests/consistency/plugin-bump.test.js": 23763,
     "tests/consistency/plugin-version.test.js": 5267,
     "tests/consistency/read-load.test.js": 9559,
     "tests/consistency/red-fixture-coverage.test.js": 40717,
@@ -211,8 +211,8 @@
     "tests/render/render-rules.test.js": 33656,
     "tests/replay/record-via.test.js": 7611,
     "tests/replay/replay-corpus.test.js": 7478,
-    "tests/replay/replay.fixtures.js": 1919,
-    "tests/replay/replay.test.js": 256198,
+    "tests/replay/replay.fixtures.js": 2811,
+    "tests/replay/replay.test.js": 276845,
     "tests/report/report-render.test.js": 14403,
     "tests/review/ci-query.test.js": 17510,
     "tests/review/deviations-backstop.test.js": 18269,
@@ -238,7 +238,7 @@
     "tests/review/review-legs-at-risk-argv.test.js": 15160,
     "tests/review/review-legs-smoke-wave.test.js": 10397,
     "tests/review/review-legs.fixtures.js": 2714,
-    "tests/review/review-legs.test.js": 40695,
+    "tests/review/review-legs.test.js": 44969,
     "tests/review/reviewer-return-killed.test.js": 11061,
     "tests/review/reviewer-scope-identity.test.js": 2982,
     "tests/review/reviewer-seat.test.js": 1771,
@@ -687,6 +687,66 @@
       "from": 3521810,
       "to": 3553850,
       "cite": "specs/20260907/08-walk-critic.md"
+    },
+    {
+      "path": "scripts/plugin-bump.js",
+      "from": 8564,
+      "to": 9427,
+      "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
+    },
+    {
+      "path": "spec/scripts/replay.js",
+      "from": 85010,
+      "to": 90525,
+      "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
+    },
+    {
+      "path": "spec/scripts/review-legs.js",
+      "from": 27558,
+      "to": 28310,
+      "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
+    },
+    {
+      "path": "tests/consistency/plugin-bump.test.js",
+      "from": 12177,
+      "to": 23763,
+      "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
+    },
+    {
+      "path": "tests/replay/replay.fixtures.js",
+      "from": 1919,
+      "to": 2811,
+      "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
+    },
+    {
+      "path": "tests/replay/replay.test.js",
+      "from": 256198,
+      "to": 276845,
+      "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
+    },
+    {
+      "path": "tests/review/review-legs.test.js",
+      "from": 40695,
+      "to": 44969,
+      "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1273422,
+      "to": 1279689,
+      "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
+    },
+    {
+      "path": "scripts",
+      "from": 34134,
+      "to": 34997,
+      "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
+    },
+    {
+      "path": "tests",
+      "from": 3553850,
+      "to": 3591249,
+      "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
     }
   ]
 }

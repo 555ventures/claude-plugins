@@ -102,6 +102,69 @@ function run(dir, base, extra = []) {
   return { r, rows, byLeg: new Map(rows.map(x => [x.leg, x])), manifest }
 }
 
+// specs/20260909/02-replay-base-and-label-honesty.md D1 (AC-20260909-02-1, AC-20260909-02-2):
+// sh() sets SPEC_REVIEW_BASE to the exact --base value in every leg subprocess's environment,
+// applied AFTER opts.env so a leg-local value can never redirect it, and CONTINUES TO scrub
+// NODE_TEST_CONTEXT the same way. Both tests below build their own bespoke gateCommand/
+// patternsScript, so they use makeReviewLegsHost directly rather than this file's own makeHost().
+
+test('AC-20260909-02-1: every leg subprocess is told the base this review is judging against, including the patterns leg alongside its existing DIFF_BASE prefix', () => {
+  const { dir, base } = makeReviewLegsHost('review-legs-review-base', {
+    specDate: '20260817', ordinal: '99', acId: 'AC-20260817-99-1',
+    config: {
+      gateCommand: "sh -c 'echo base=$SPEC_REVIEW_BASE'",
+      testCommand: 'node --test',
+      runtime: { inert: 'plugin repo — nothing boots' },
+      capabilities: { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' },
+      patternsScript: 'patterns.sh',
+    },
+    testBody: GREEN_TEST,
+    extraFiles: { 'patterns.sh': '#!/usr/bin/env bash\necho "reviewbase=$SPEC_REVIEW_BASE diffbase=$DIFF_BASE"\n' },
+  })
+  const outDir = tmpdir('review-legs-base-outdir')
+  const manifest = path.join(tmpdir('review-legs-base-out'), 'manifest.jsonl')
+  const r = runNode(SCRIPT, ['--root', dir, '--spec', 'specs/20260817/99-test.md',
+    '--base', base, '--manifest', manifest, '--out-dir', outDir])
+  const gateOutput = fs.readFileSync(path.join(outDir, 'gate-output.txt'), 'utf8')
+  assert.match(gateOutput, new RegExp('base=' + base),
+    'D1: the gate leg subprocess must see SPEC_REVIEW_BASE set to the exact --base value in its own ' +
+    'environment — a host check that resolves its own comparison point (like plugin-bump.js --check) reads ' +
+    'this to judge the SAME window the review is judging; a missing or empty value here means every host ' +
+    'check that runs inside the gate/suite legs judges the wrong window: ' + JSON.stringify(gateOutput) +
+    ' / ' + r.stdout + r.stderr)
+  const patternsOutput = fs.readFileSync(path.join(outDir, 'patterns.txt'), 'utf8')
+  assert.match(patternsOutput, new RegExp('reviewbase=' + base),
+    'D1: the patterns leg subprocess must ALSO see SPEC_REVIEW_BASE set to the same --base value — every leg ' +
+    'is spawned through sh(), so every leg must be told the base, not just the two that already receive it ' +
+    'via their own explicit argument/prefix: ' + JSON.stringify(patternsOutput))
+  assert.match(patternsOutput, new RegExp('diffbase=' + base),
+    'sanity: the existing inline DIFF_BASE= prefix on the patterns leg must be unchanged by this addition — ' +
+    'it is the host patterns script\'s own documented input and keeps its own meaning: ' + JSON.stringify(patternsOutput))
+})
+
+test('AC-20260909-02-2: review-legs.js CONTINUES TO remove NODE_TEST_CONTEXT from every leg subprocess\'s environment, even when review-legs.js itself is invoked from inside a node --test run', () => {
+  const { dir, base } = makeReviewLegsHost('review-legs-nested-runner', {
+    specDate: '20260817', ordinal: '99', acId: 'AC-20260817-99-1',
+    config: {
+      gateCommand: "sh -c 'echo ctx=[${NODE_TEST_CONTEXT-unset}]'",
+      testCommand: 'node --test',
+      runtime: { inert: 'plugin repo — nothing boots' },
+      capabilities: { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' },
+    },
+    testBody: GREEN_TEST,
+  })
+  const outDir = tmpdir('review-legs-ctx-outdir')
+  const manifest = path.join(tmpdir('review-legs-ctx-out'), 'manifest.jsonl')
+  const r = runNode(SCRIPT, ['--root', dir, '--spec', 'specs/20260817/99-test.md',
+    '--base', base, '--manifest', manifest, '--out-dir', outDir])
+  const gateOutput = fs.readFileSync(path.join(outDir, 'gate-output.txt'), 'utf8')
+  assert.strictEqual(gateOutput, 'ctx=[unset]\n',
+    'D1: a gate that itself runs node --test must see NODE_TEST_CONTEXT unset even though this very test file ' +
+    'is running inside node --test right now — a leaked value here would degrade the nested gate run to a ' +
+    'silent child-protocol run that reports exit 0 over failing tests: ' + JSON.stringify(gateOutput) +
+    ' / ' + r.stdout + r.stderr)
+})
+
 test('AC-20260820-03-1: an unset declared testEnv var makes review-legs.js exit 2 before any leg runs, naming the var and its provision command on stderr, with no manifest row appended', () => {
   const { dir, base } = makeHost({
     testBody: GREEN_TEST,

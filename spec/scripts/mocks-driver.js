@@ -800,13 +800,14 @@ function cmdNotes(sub, args) {
 // an address the session has already exposed on its own (ADR-0012, memory: hub base is optional,
 // never ask for Tailscale).
 // ---------------------------------------------------------------------------
-function probeClientNotesList(address) {
+function probeClientNotesList(address, scheme) {
   return new Promise((resolve) => {
     let settled = false
     const finish = (ok) => { if (!settled) { settled = true; resolve(ok) } }
+    const mod = scheme === 'https:' ? require('https') : http
     let req
     try {
-      req = http.get(address + '/client/__notes/list', { timeout: 3000 }, (res) => {
+      req = mod.get(address + '/client/__notes/list', { timeout: 3000 }, (res) => {
         let raw = ''
         res.on('data', (c) => { raw += c })
         res.on('end', () => {
@@ -829,7 +830,15 @@ function cmdClient(sub, args) {
   const addressArg = flagArg(args, '--address')
   if (!addressArg) die('client open: --address <url> is required')
   const address = addressArg.replace(/\/+$/, '')
-  probeClientNotesList(address).then((ok) => {
+  // Scheme is normalized once (WHATWG URL lowercases protocol) ahead of both the guard below and
+  // the transport selection in probeClientNotesList — checking address.startsWith('https:') twice
+  // let an uppercase scheme (e.g. "HTTPS://") pass the guard but pick the wrong http/https module.
+  let scheme
+  try { scheme = new URL(address).protocol } catch { scheme = null }
+  if (scheme !== 'http:' && scheme !== 'https:') {
+    die('client open: --address <url> must start with "http:" or "https:" (got "' + address + '")')
+  }
+  probeClientNotesList(address, scheme).then((ok) => {
     if (!ok) {
       die('client open: ' + address + '/client/__notes/list did not answer 200 with a JSON array within 3s — run `node ' +
         designAtlasBin + ' serve --root ' + root + '` (or your own server) and expose it yourself — the plugin never opens a tunnel')

@@ -195,8 +195,8 @@ identical; a literal pipe inside a cell is written `\|`.
 ## The mocks command (2026-09-02, specs/20260902/07)
 
 `/spec:mocks` is the standalone design stage. `spec/scripts/mocks-driver.js` (`spec-paths
-mocks-driver`) derives `SEED → SHAPES → KIT → WIREFRAMES → WALK → SIGNOFF → APPROVED`
-(specs/20260907/04, ADR-0010 amending ADR-0008) from `design/mocks/status.json`
+mocks-driver`) derives `SEED → SHAPES → KIT → WIREFRAMES → WALK → CLIENT → APPROVED`
+(specs/20260907/10, ADR-0012; specs/20260907/04, ADR-0010 amending ADR-0008) from `design/mocks/status.json`
 (schemaVersion 1) plus the artifacts on disk: the skin and review states are retired; a
 wireframe is never skinned inside mocks — `/spec:sketch` owns fidelity per brief. The driver
 prints exactly one step
@@ -206,17 +206,23 @@ counts line), gates every advance on the provenance ledger (`gateVerdict`, refus
 `open:false` and naming the rows), and records a sub-mark per journey (`journey-drawn`,
 `journey-approved`, and `variant-picked` when candidate flows are used), and
 `--reopen journey:<j>|walk:<j>|shapes|kit` (recorded, printed, nothing deleted). WALK sits
-between WIREFRAMES and SIGNOFF (specs/20260907/08): each declared journey is walked once by a
+between WIREFRAMES and CLIENT (specs/20260907/08): each declared journey is walked once by a
 fresh critic and stamped with `journey-walked --journey <j>`, which refuses while any walk
-finding on that journey is still open, so the stage cannot be signed off on a journey nobody
+finding on that journey is still open, so the stage cannot close on a journey nobody
 walked. The whole mocks stage
 is gray (specs/20260907/07): the taste decision is picked on `/spec:sketch`'s first run against
 the signed-off kit (specs/20260907/06), and `design/tokens.css` on disk — never a mark and never
-a status field — is the one signal that a theme exists. SIGNOFF is one look over the
-atlas and the stage's single human gate; `--mark approved` stamps every top-level mock
+a status field — is the one signal that a theme exists. CLIENT (specs/20260907/10, ADR-0012)
+replaces the one-look sign-off as the stage's single human gate: the session exposes its own
+running serve and records the address with `client open --address <url>`, refused unless
+`<url>/client/__notes/list` answers — the plugin never opens a tunnel itself. `--mark approved`
+keeps the decided `approved` stop as the decider ceremony, prints `waived: N` plus one reason
+line per waived note, and closes on the ledger and the notes alone: a waived note or a
+`waived <date>` ledger row satisfies the same gates a resolved note or a confirmed row does.
+It stamps every top-level mock
 `data-status="approved"` and records the stop's decider, so a mock approved by `/spec:mocks` is
 always a gray wireframe and the atlas's wire-register rule exempts it by design.
-`--reopen journey:<j>` clears that journey's approval and the sign-off. The 13 seed fact keys are closed (`primary-surface platforms-horizon tenancy offline
+`--reopen journey:<j>` clears that journey's approval and the terminal approval. The 13 seed fact keys are closed (`primary-surface platforms-horizon tenancy offline
 realtime ai-in-loop residency payer day-one-integrations scale-outage vendor-limits retention
 legal-floor`), each mapped in `seed.md ## Facts` to a confirmed `product` ledger row. Registers
 are link signatures: a wireframe links `design/wire/tokens.css` + `wire.css` (copied from
@@ -276,11 +282,19 @@ subcommand resolves. Triage bins are a closed set — `mock detail`, `product un
 `canon.md` first, every dependent screen after. Project notes outrank mock notes:
 `journey-approved` and `approved` refuse while any project note is unresolved or any note on
 the journey's screens is unresolved (`addressed` is not `resolved`); client review is the same
-page and the same notes, served on the client route as the `CLIENT` state (ADR-0012): note
-origin walk|client|session is set by the server from the route, a client note captures its
-screen at raise, a fix is recorded only when the re-capture differs, and only the client or a
-dated waiver after seven days of silence resolves it. Zero unresolved notes on a journey is its
-approval. The SIGNOFF step prints `Approval means "this is the product I understand" — the
+page and the same notes, served on the client route as the `CLIENT` state (specs/20260907/10,
+ADR-0012). A note carries `origin: walk|client|session`, set by the route it arrived on
+(`/client/__notes/*` stamps `client`, `/__notes/*` stamps `session`, `notes add --kind walk`
+stamps `walk`) and never accepted from a body. A client's mock-scope note captures its screen at
+raise through `lib/client-capture.js` — the look command's URL form and first-declared viewport,
+`captures/<id>.before.png` beside `notes.json`, sha256 on the note; `notes address --port <n>`
+re-captures and refuses when the hash is unchanged, else stores the after image and moves the
+note to `addressed`. Only the client route resolves a client note — `withdrawn` from `open`,
+`accepted` from `addressed` — and a session-route resolve is a 403. `notes waive --id --reason`
+releases a client note or a question after seven days of client silence (a question's ledger row
+becomes `waived <date>`; the note's `answer.verdict` is `waived`). `writeNotes` is a tmp-file
+rename, never an in-place overwrite. Zero unresolved notes on a journey is its
+approval. The CLIENT step prints `Approval means "this is the product I understand" — the
 written brief, not these screens, holds scope`. `/spec:atlas` and `/spec:sketch` route their annotation loops
 through the same serve + `notes open`; the annotation-MCP discovery clause is retired.
 

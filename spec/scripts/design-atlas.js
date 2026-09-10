@@ -84,6 +84,13 @@
 //                                                  /__notes/answer; /__notes/add 400s a body
 //                                                  carrying kind/ledgerId (questions are
 //                                                  session-authored).
+//                                                  specs/20260907/10-client-review.md D4: every
+//                                                  /__notes/* route above is also mounted at
+//                                                  /client/__notes/* — the client route strips the
+//                                                  leading /client segment and re-dispatches
+//                                                  identically, except origin stamping ("client"
+//                                                  instead of "session") and /client/__notes/list's
+//                                                  question-plus-client-origin-only filter.
 //                                                  specs/20260905/01 D2: every served page also
 //                                                  carries a <meta name="notes-scope"> tag (mock
 //                                                  for a static file, project for the derived
@@ -1784,6 +1791,29 @@ function createRequestHandler(root, opts = {}) {
       reqPath = reqPath === '/client' ? '/' : reqPath.slice('/client'.length)
     }
 
+    // specs/20260907/10-client-review.md: the three POST /__notes/add outcomes below (client
+    // mock-scope, client project-scope, non-client) all read notes, call notesLib.addNote, then
+    // write — this is the one shared shape. `decorate` runs synchronously between addNote and
+    // writeNotes so callers can stamp capture/lastClientAt fields; `onAddError` runs synchronous
+    // cleanup (the mock-scope path's pending-capture unlink) before the 400 is reported. The
+    // whole function is synchronous end to end — no `await` anywhere in it — so a caller that
+    // invokes it without awaiting anything else in between still satisfies D6's "no await between
+    // the notes read and the notes write" for the mock-scope capture path.
+    function addNoteAndRespond(addBody, { onAddError, decorate } = {}) {
+      let notes = []
+      try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
+      let result
+      try {
+        result = notesLib.addNote(notes, addBody)
+      } catch (e) {
+        if (onAddError) onAddError()
+        return { error: e.message }
+      }
+      if (decorate) decorate(result.note)
+      notesLib.writeNotes(rootAbs, result.notes)
+      return { note: result.note }
+    }
+
     // specs/20260907/10-client-review.md D5/D6: the client route's mock-scope
     // POST /__notes/add — captures the before-frame FIRST (a `.pending-<ts>.png` beside
     // notes.json, D5's captureScreen), then reads notes, adds the note, renames the pending file
@@ -1809,23 +1839,17 @@ function createRequestHandler(root, opts = {}) {
       }
       // D6: the read, addNote, rename, and write below are one synchronous chain — no `await`
       // between the read and the write.
-      let notes = []
-      try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
-      let result
-      try {
-        result = notesLib.addNote(notes, Object.assign({}, body, { origin: 'client' }))
-      } catch (e) {
-        try { fs.unlinkSync(pendingPath) } catch { /* best effort */ }
-        jsonRes(res, 400, { error: e.message })
-        return
-      }
-      const id = result.note.id
-      const finalRel = 'captures/' + id + '.before.png'
-      fs.renameSync(pendingPath, path.join(rootAbs, 'design/mocks', finalRel))
-      result.note.capture = { before: { hash: captured.hash, file: finalRel }, after: null }
-      result.note.lastClientAt = new Date().toISOString()
-      notesLib.writeNotes(rootAbs, result.notes)
-      jsonRes(res, 201, result.note)
+      const outcome = addNoteAndRespond(Object.assign({}, body, { origin: 'client' }), {
+        onAddError: () => { try { fs.unlinkSync(pendingPath) } catch { /* best effort */ } },
+        decorate: (note) => {
+          const finalRel = 'captures/' + note.id + '.before.png'
+          fs.renameSync(pendingPath, path.join(rootAbs, 'design/mocks', finalRel))
+          note.capture = { before: { hash: captured.hash, file: finalRel }, after: null }
+          note.lastClientAt = new Date().toISOString()
+        },
+      })
+      if (outcome.error) { jsonRes(res, 400, { error: outcome.error }); return }
+      jsonRes(res, 201, outcome.note)
     }
 
     // ---- /__notes/* (D2) ------------------------------------------------------------------
@@ -1897,23 +1921,17 @@ function createRequestHandler(root, opts = {}) {
           // D6: a mock-scope client add captures its before-frame FIRST — no note is written, and
           // no note id (and so no captures/<id>.before.png name) exists, until the capture lands.
           if (body && body.scope === 'mock') { addClientMockNote(body); return }
-          let notes = []
-          try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
-          let result
-          try { result = notesLib.addNote(notes, Object.assign({}, body, { origin: 'client' })) } catch (e) { jsonRes(res, 400, { error: e.message }); return }
           // D6: a project-scope client note carries no capture at all.
-          result.note.capture = null
-          result.note.lastClientAt = new Date().toISOString()
-          notesLib.writeNotes(rootAbs, result.notes)
-          jsonRes(res, 201, result.note)
+          const outcome = addNoteAndRespond(Object.assign({}, body, { origin: 'client' }), {
+            decorate: (note) => { note.capture = null; note.lastClientAt = new Date().toISOString() },
+          })
+          if (outcome.error) { jsonRes(res, 400, { error: outcome.error }); return }
+          jsonRes(res, 201, outcome.note)
           return
         }
-        let notes = []
-        try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
-        let result
-        try { result = notesLib.addNote(notes, body) } catch (e) { jsonRes(res, 400, { error: e.message }); return }
-        notesLib.writeNotes(rootAbs, result.notes)
-        jsonRes(res, 201, result.note)
+        const outcome = addNoteAndRespond(body)
+        if (outcome.error) { jsonRes(res, 400, { error: outcome.error }); return }
+        jsonRes(res, 201, outcome.note)
       }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
       return
     }

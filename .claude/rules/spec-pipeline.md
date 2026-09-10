@@ -147,7 +147,15 @@ upstream bug list. -->
   the file**, comments included. An edit-only File Plan row that mentions another AC's new
   behavioral home in a comment forces a false red expectation onto a file whose only change is
   a deletion, and the build stops at `unsanctioned-green`. Name the file, not the ID — the
-  removal fix, never an invented ID. (specs/20260822/02-init-generation-script.md)
+  removal fix, never an invented ID. Second trigger, in the test NAME rather than a comment: a
+  fixture-CURRENCY retag, where a spec renames a state or enum value that the subject under test
+  merely echoes back. Tagging that retag with the new AC promises a red the pre-image cannot
+  produce — the refusal names whatever the fixture stamps, so the assertion passes before any code
+  changes. Same removal fix: restore the file's original AC tags and keep the fixture edit. Check
+  the AC's coverage survives first — `ac-matrix.js` greps the AC-ID across the union of the File
+  Plan's tests rows, so the ID need only occur in one genuinely red sibling, not in every file the
+  AC's `→` pointer names. (specs/20260822/02-init-generation-script.md;
+  specs/20260907/10-client-review.md D15)
 - `[host]` A spec Decision naming a literal version-bump target can be stale by build time —
   concurrent sessions in this repo race the same semver. The build bumps to the next free
   version and records the deviation; the spec's literal number is a target, not a pin.

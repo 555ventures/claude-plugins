@@ -2,7 +2,7 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 34997,
-    "spec/scripts": 1297500,
+    "spec/scripts": 1299605,
     "spec/scripts/lib": 242860,
     "tests": 3653766
   },
@@ -22,7 +22,7 @@
     "spec/scripts/commit-coverage.js": 16400,
     "spec/scripts/components-check.js": 4708,
     "spec/scripts/design-ac-reconcile.js": 6011,
-    "spec/scripts/design-atlas.js": 144514,
+    "spec/scripts/design-atlas.js": 146006,
     "spec/scripts/env-preflight.js": 8794,
     "spec/scripts/escape-row.js": 10045,
     "spec/scripts/fleet-reader.js": 47448,
@@ -58,7 +58,7 @@
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
     "spec/scripts/merge-back.sh": 17514,
-    "spec/scripts/mocks-driver.js": 113866,
+    "spec/scripts/mocks-driver.js": 114479,
     "spec/scripts/promise-sweep.js": 10409,
     "spec/scripts/prose-cap.js": 6271,
     "spec/scripts/question-style-gate.js": 10712,
@@ -843,6 +843,36 @@
       "path": "tests",
       "from": 3605078,
       "to": 3653766,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts/design-atlas.js",
+      "from": 144514,
+      "to": 146006,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 113866,
+      "to": 114111,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1297500,
+      "to": 1299237,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 114111,
+      "to": 114479,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1299237,
+      "to": 1299605,
       "cite": "specs/20260907/10-client-review.md"
     }
   ]

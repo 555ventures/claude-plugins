@@ -1,6 +1,7 @@
 ---
 date: 2026-09-09
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: mocks-driver
 design: false
@@ -10,6 +11,7 @@ depended_on_by: [specs/20260907/11-client-view.md]
 brief: 22a
 spiked: 2026-09-09
 open_markers: 0
+diff_base: 0bdf532e547c4a1a67f1001c634aae7248fde9ab
 ---
 
 # CLIENT replaces SIGNOFF: a client note captures its screen when raised, closes only on a re-capture that differs, and a silent client is released by a dated waiver
@@ -46,6 +48,7 @@ after one real client is observed on the existing review page.
 | D12 | `spec/doctrine/mocks.md`: § Mocks: State Machine's order sentence names **CLIENT** (the served journey pages, exposed by the user, where product questions are answered and client notes raised; closes when every client-visible question is answered-or-waived and every client note resolved-or-waived) in SIGNOFF's slot; § Provenance Ledger's step vocabulary lists `CLIENT` live and moves `SIGNOFF` to the retired-but-still-parsing clause beside SKIN/REVIEW/THEME; § Mocks: Look and Serve's "or SIGNOFF" reads "or CLIENT"; § Mocks: Page Notes' ADR-0012 paragraph gains the waiver command and the withdraw/accept derivation. `spec/commands/mocks.md`: `## Sign-off (SIGNOFF state)` becomes `## Client review (CLIENT state)` (expose, `client open`, triage with `notes address --port`, `notes reply`, `notes waive` after seven days, `stop open signoff`, `--mark approved`); the look rule names CLIENT; the `stop open` enumeration keeps `signoff` (AC-20260907-10-19, AC-20260907-10-20) | Doctrine is the one binding home for the chain; the command names the moves |
 | D13 | Test retags, one edit each: `tests/consistency/design-doctrine.test.js` (order tokens `…WIREFRAMES, CLIENT, APPROVED`; the AC-20260902-10-8 step-literal test reaches CLIENT), `tests/mocks/mocks-driver-3.test.js` and `tests/mocks/mocks-driver-walk.test.js` (derived state `CLIENT`), `tests/mocks/mocks-driver-look-stops-4.test.js` (`state: CLIENT`, heading `## Step: client review`), `tests/genesis/brief-state.test.js` (the AC-20260902-08-4/AC-20260906-02-9 fixture state `THEME` → `CLIENT` and its chain sentence rewritten to `SEED → SHAPES → KIT → WIREFRAMES → WALK → CLIENT → APPROVED`, one edit) — every pin retagged with its new AC, never weakened (AC-20260907-10-1, AC-20260907-10-13, AC-20260907-10-17) | Gotcha: a retired literal outside the File Plan leaves a red pin; the brief-state fixture is stale from two specs back (q127 fold-in) |
 | D14 | `spec/.claude-plugin/plugin.json` bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` [no-ac: `plugin-bump.js --check` is the oracle] | Version discipline |
+| D15 | `tests/genesis/brief-state.test.js` keeps its original `AC-20260902-08-4 / AC-20260906-02-9` tags and carries no `AC-20260907-10-13` token; its fixture still stamps `state: "CLIENT"` and still asserts the refusal names `CLIENT` [no-ac: `red-check.js` is the oracle — the file is edit-only currency, and AC-20260907-10-13 stays covered by `tests/consistency/design-doctrine.test.js`] | Build-time ruling: the genesis `brief-written` refusal echoes whatever `state` the fixture stamps, so the retag is green against the pre-image by construction and red-check refuses it as `unsanctioned-green`. The removal fix is the pipeline-rules gotcha's sanctioned one (name the file, not the ID); D13's own rationale already calls this row a staleness fix, so no promise changes and no AC is amended |
 
 ## File Plan
 

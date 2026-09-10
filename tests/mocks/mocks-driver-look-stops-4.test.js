@@ -28,20 +28,20 @@ const {
 // ---------------------------------------------------------------------------
 // AC-20260906-02-6
 // ---------------------------------------------------------------------------
-test('AC-20260906-02-6: the bare driver in SIGNOFF prints the exact step heading, the approval literal, a look: line naming stop open signoff, and a Then: line naming --mark approved, with none of the retired SKIN/REVIEW literals anywhere in stdout', () => {
+test('AC-20260907-10-17 (retag of AC-20260906-02-6): the bare driver in CLIENT prints the exact step heading, the approval literal, a look: line naming stop open signoff, and a Then: line naming --mark approved, with none of the retired SKIN/REVIEW/SIGNOFF literals anywhere in stdout', () => {
   const dir = tmpdir('mocks-driver')
-  // AC-20260907-08-1/D1 fixture repair: WALK now sits between WIREFRAMES and SIGNOFF — the
+  // AC-20260907-08-1/D1 fixture repair: WALK now sits between WIREFRAMES and CLIENT — the
   // bare step block below is vacuous unless the journey is actually walked first, or the
-  // driver prints the WALK block instead of SIGNOFF.
+  // driver prints the WALK block instead of CLIENT.
   advanceToJourneyWalked(dir)
   const step = bare(dir)
-  assert.strictEqual(step.status, 0, 'a bare invocation in SIGNOFF must exit 0: ' + step.stdout + step.stderr)
-  assert.match(step.stdout, /## Step: sign off — the product I understand/, 'the SIGNOFF block must open with the exact D6 heading: ' + step.stdout)
-  assert.match(step.stdout, /Approval means "this is the product I understand" — the written brief, not these screens, holds scope\./, 'the SIGNOFF block must carry the exact D6 approval literal: ' + step.stdout)
-  assert.match(step.stdout, /look:[\s\S]*stop open signoff/, 'the SIGNOFF block must carry a look: line naming `stop open signoff`: ' + step.stdout)
-  assert.match(step.stdout, /Then:[\s\S]*--mark approved/, 'the SIGNOFF block must carry a Then: line naming `--mark approved`: ' + step.stdout)
-  for (const retired of ['review-opened', '--decider', 'journey-reviewed', 'SKIN', 'REVIEW']) {
-    assert.ok(!step.stdout.includes(retired), 'the SIGNOFF block must never print the retired literal "' + retired + '": ' + step.stdout)
+  assert.strictEqual(step.status, 0, 'a bare invocation in CLIENT must exit 0: ' + step.stdout + step.stderr)
+  assert.match(step.stdout, /## Step: client review — the product I understand/, 'the CLIENT block must open with the exact D10 heading: ' + step.stdout)
+  assert.match(step.stdout, /Approval means "this is the product I understand" — the written brief, not these screens, holds scope\./, 'the CLIENT block must carry the exact D10 approval literal: ' + step.stdout)
+  assert.match(step.stdout, /look:[\s\S]*stop open signoff/, 'the CLIENT block must carry a look: line naming `stop open signoff` — the stop step name is unchanged (D9 rationale): ' + step.stdout)
+  assert.match(step.stdout, /Then:[\s\S]*--mark approved/, 'the CLIENT block must carry a Then: line naming `--mark approved`: ' + step.stdout)
+  for (const retired of ['review-opened', '--decider', 'journey-reviewed', 'SKIN', 'REVIEW', 'SIGNOFF']) {
+    assert.ok(!step.stdout.includes(retired), 'the CLIENT block must never print the retired literal "' + retired + '": ' + step.stdout)
   }
 })
 
@@ -70,7 +70,7 @@ test('AC-20260907-07-9: in APPROVED the bare driver prints the exact theme-less 
 // AC-20260906-02-8's THEME arm is DELETED (specs/20260907/07 retires the step whole); its
 // WIREFRAMES and SIGNOFF arms are kept below, unretagged.
 // ---------------------------------------------------------------------------
-test('AC-20260906-02-8 / AC-20260907-07-8: the WIREFRAMES step block continues to print the frontend-design skill line; the SIGNOFF block prints state: SIGNOFF with no frontend-design line, and its own look mechanism (`stop open signoff`) exits 3 when nothing answers the served port', async () => {
+test('AC-20260907-10-17 (retag of AC-20260906-02-8 / AC-20260907-07-8): the WIREFRAMES step block continues to print the frontend-design skill line; the CLIENT block prints state: CLIENT with no frontend-design line, and its own look mechanism (`stop open signoff`) exits 3 when nothing answers the served port', async () => {
   const fakeBin = (rows) => {
     const dir = tmpdir('fake-claude-')
     const bin = path.join(dir, 'claude')
@@ -87,19 +87,19 @@ test('AC-20260906-02-8 / AC-20260907-07-8: the WIREFRAMES step block continues t
   assert.match(wireframesStep.stdout, /state: WIREFRAMES/, 'a canon-written root must print the WIREFRAMES step block — got: ' + wireframesStep.stdout.slice(0, 200))
   assert.match(wireframesStep.stdout, /🎨 Load the `frontend-design` skill/, 'D8: the WIREFRAMES step block must CONTINUE TO print the skill line: ' + wireframesStep.stdout)
 
-  const signoffRoot = tmpdir('skill-signoff')
-  // AC-20260907-08-1/D1 fixture repair: WALK now sits between WIREFRAMES and SIGNOFF — this
+  const clientRoot = tmpdir('skill-client')
+  // AC-20260907-08-1/D1 fixture repair: WALK now sits between WIREFRAMES and CLIENT — this
   // root must actually walk its journey, or it derives WALK (also skill-line-free, but a
-  // different state string) instead of SIGNOFF.
-  advanceToJourneyWalked(signoffRoot)
-  const signoffStep = runNode(SCRIPT, ['--root', signoffRoot], withFullPath(installed))
-  assert.match(signoffStep.stdout, /state: SIGNOFF/, 'AC-20260907-07-8: a root reached through advanceToJourneyWalked must print state: SIGNOFF — got: ' + signoffStep.stdout.slice(0, 200))
-  assert.match(signoffStep.stdout, /## Step: sign off/, 'a journey-approved root must print the SIGNOFF step block — got: ' + signoffStep.stdout.slice(0, 200))
-  assert.doesNotMatch(signoffStep.stdout, /frontend-design/, 'D8: the SIGNOFF block must print no line containing "frontend-design" — SIGNOFF is not an authoring state: ' + signoffStep.stdout)
+  // different state string) instead of CLIENT.
+  advanceToJourneyWalked(clientRoot)
+  const clientStep = runNode(SCRIPT, ['--root', clientRoot], withFullPath(installed))
+  assert.match(clientStep.stdout, /state: CLIENT/, 'AC-20260907-10-17: a root reached through advanceToJourneyWalked must print state: CLIENT (the SIGNOFF state is retired) — got: ' + clientStep.stdout.slice(0, 200))
+  assert.match(clientStep.stdout, /## Step: client review/, 'a journey-approved root must print the CLIENT step block — got: ' + clientStep.stdout.slice(0, 200))
+  assert.doesNotMatch(clientStep.stdout, /frontend-design/, 'D8: the CLIENT block must print no line containing "frontend-design" — CLIENT is not an authoring state: ' + clientStep.stdout)
 
   const busyPort = await freePort()
-  const unreachable = runNode(SCRIPT, ['--root', signoffRoot, 'stop', 'open', 'signoff', '--port', String(busyPort)])
-  assert.strictEqual(unreachable.status, 3, 'AC-8: SIGNOFF\'s own look mechanism (`stop open signoff`) must exit 3 when nothing answers the served port: ' + unreachable.stdout + unreachable.stderr)
+  const unreachable = runNode(SCRIPT, ['--root', clientRoot, 'stop', 'open', 'signoff', '--port', String(busyPort)])
+  assert.strictEqual(unreachable.status, 3, 'AC-20260907-10-17: CLIENT\'s own look mechanism (`stop open signoff`) must exit 3 when nothing answers the served port: ' + unreachable.stdout + unreachable.stderr)
   assert.match(unreachable.stderr, /serve --root/, 'the exit-3 remedy must name `serve --root`: ' + JSON.stringify(unreachable.stderr))
 })
 
@@ -111,28 +111,28 @@ test('AC-20260906-02-8 / AC-20260907-07-8: the WIREFRAMES step block continues t
 // clause (the probe-failure run, plus the vacuousness guard proving the root is genuinely
 // SIGNOFF and not the retired THEME step, since dieProbeFailed never prints a state name).
 // ---------------------------------------------------------------------------
-// AC-20260907-07-8
+// AC-20260907-10-17 (retag of AC-20260907-07-8)
 // ---------------------------------------------------------------------------
-test('AC-20260907-07-8: the bare driver on a root reached through advanceToJourneyWalked prints state: SIGNOFF and does not print the frontend-design skill line', () => {
+test('AC-20260907-10-17 (retag of AC-20260907-07-8): the bare driver on a root reached through advanceToJourneyWalked prints state: CLIENT and does not print the frontend-design skill line', () => {
   const dir = tmpdir('mocks-driver')
   // AC-20260907-08-1/D1 fixture repair: this root must be walked, not merely journey-approved,
-  // to derive SIGNOFF — WALK now sits between WIREFRAMES and SIGNOFF.
-  advanceToJourneyWalked(dir) // now at SIGNOFF
+  // to derive CLIENT — WALK now sits between WIREFRAMES and CLIENT.
+  advanceToJourneyWalked(dir) // now at CLIENT
 
   const r = bare(dir)
   assert.strictEqual(r.status, 0, 'a bare invocation on a root reached through advanceToJourneyWalked must exit 0: ' + r.stdout + r.stderr)
-  assert.match(r.stdout, /state: SIGNOFF/,
-    'AC-20260907-07-8: a root reached through advanceToJourneyWalked must print state: SIGNOFF — got: ' + r.stdout.slice(0, 200))
+  assert.match(r.stdout, /state: CLIENT/,
+    'AC-20260907-10-17: a root reached through advanceToJourneyWalked must print state: CLIENT (the SIGNOFF state is retired) — got: ' + r.stdout.slice(0, 200))
   assert.ok(!(r.stdout + r.stderr).includes('🎨 Load the `frontend-design` skill'),
-    'AC-20260907-07-8: SIGNOFF must never print the frontend-design skill line: ' + JSON.stringify({ stdout: r.stdout, stderr: r.stderr }))
+    'AC-20260907-10-17: CLIENT must never print the frontend-design skill line: ' + JSON.stringify({ stdout: r.stdout, stderr: r.stderr }))
 })
 
 // ---------------------------------------------------------------------------
-// AC-20260907-07-14
+// AC-20260907-10-17 (retag of AC-20260907-07-14)
 // ---------------------------------------------------------------------------
-test('AC-20260907-07-14: the bare driver on a root reached through advanceToJourneyWalked CONTINUES TO exit 2 naming the install remedy when the look probe fails, the same way SHAPES/WIREFRAMES do', () => {
+test('AC-20260907-10-17 (retag of AC-20260907-07-14): the bare driver on a root reached through advanceToJourneyWalked CONTINUES TO exit 2 naming the install remedy when the look probe fails, the same way SHAPES/WIREFRAMES do', () => {
   const dir = tmpdir('mocks-driver')
-  // AC-20260907-08-1/D1 fixture repair: this test pins the SIGNOFF probe-failure refusal
+  // AC-20260907-08-1/D1 fixture repair: this test pins the CLIENT probe-failure refusal
   // specifically — the journey must be walked first, or the root sits at WALK (a state
   // AC-20260907-08-9 pins as running no look probe at all, tested separately below).
   advanceToJourneyWalked(dir)
@@ -140,9 +140,9 @@ test('AC-20260907-07-14: the bare driver on a root reached through advanceToJour
 
   const r = runNode(SCRIPT, ['--root', dir], { env: { ...process.env, PATH: failingPath } })
   assert.strictEqual(r.status, 2,
-    'D8: SIGNOFF "runs the look probe" (not merely the stop-open path) — a bare run must refuse exit 2 when the probe\'s npx is unreachable, the same way SHAPES/WIREFRAMES do: ' + r.stdout + r.stderr)
+    'D8: CLIENT "runs the look probe" (not merely the stop-open path) — a bare run must refuse exit 2 when the probe\'s npx is unreachable, the same way SHAPES/WIREFRAMES do: ' + r.stdout + r.stderr)
   assert.match(r.stderr + r.stdout, /npx playwright install chromium/,
-    'D8: the SIGNOFF probe refusal must name the exact install remedy, same as the SHAPES/WIREFRAMES probe: ' + r.stdout + r.stderr)
+    'D8: the CLIENT probe refusal must name the exact install remedy, same as the SHAPES/WIREFRAMES probe: ' + r.stdout + r.stderr)
 })
 
 // ---------------------------------------------------------------------------

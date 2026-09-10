@@ -13,7 +13,13 @@ const { writeWireframe, writeKitCanon, advanceToJourneyApproved } = require('./m
 // tests/mocks/mocks-ledger.test.js used for spec 06's not-yet-existing lib) until D1 lands;
 // the CLI-level tests stay red independently (mocks-driver.js ignores an unknown "notes" verb
 // and falls through to its ordinary bare-step/mark output) once the lib exists but D4/D5 don't.
-const { validateNotes, answerQuestion, resolveNote, unresolvedFor } = require('../../spec/scripts/lib/mocks-notes')
+const { validateNotes, answerQuestion, resolveNote, unresolvedFor, originOf, waiveNote, writeNotes: writeNotesLib } = require('../../spec/scripts/lib/mocks-notes')
+
+// specs/20260907/10-client-review.md D3/D8/D11: `ORIGINS`/`originOf`/origin stamping,
+// `waiveNote`, and the atomic (tmp-file rename) `writeNotes` do not exist yet on
+// spec/scripts/lib/mocks-notes.js — every test below tagged AC-20260907-10-3/-12/-18 is red
+// until D3/D8/D11 land. `writeNotesLib` is imported under that name to avoid colliding with this
+// file's own local `writeNotes(dir, notes)` helper (a thin JSON.stringify fixture writer).
 
 // specs/20260907/08-walk-critic.md D3's six flow-break reasons — the enum
 // `KINDS`/`WALK_REASONS` do not exist yet on spec/scripts/lib/mocks-notes.js, so every
@@ -789,4 +795,124 @@ test('AC-20260907-08-7: `notes open` renders a walk finding as "<id> [<status>] 
   assert.strictEqual(opened.status, 0, '`notes open` must exit 0 over a valid seed.md + a walk-kind note: ' + opened.stderr)
   assert.match(opened.stdout, /N001 \[open\] \[walk: no-path-back\] walk-critic · the wrong-code state offers no way back/,
     'D5: `notes open` must render the walk finding as exactly "N001 [open] [walk: no-path-back] walk-critic · the wrong-code state offers no way back", the walk tag riding beside the status tag: got ' + JSON.stringify(opened.stdout))
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260907/10-client-review.md D3, AC-20260907-10-3: `ORIGINS`/`originOf` and origin
+// validation do not exist yet on spec/scripts/lib/mocks-notes.js — this test is red until D3
+// lands.
+// ---------------------------------------------------------------------------
+test('AC-20260907-10-3: validateNotes rejects origin "customer" naming the id and field "origin"; a note with no origin validates; originOf returns "walk" for {kind:"walk"} with no origin, "session" for a plain note with no origin, and the stored value otherwise', () => {
+  const base = {
+    id: 'N001', scope: 'mock', screen: 'signin', state: null, text: 'x', by: 'y',
+    at: nowIso(), status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null,
+  }
+
+  const badOrigin = Object.assign({}, base, { origin: 'customer' })
+  const r1 = validateNotes([badOrigin])
+  assert.strictEqual(r1.errors.length, 1,
+    'D3: a note with origin "customer" (outside walk|client|session) must produce exactly one error, not zero (silently accepted) or more than one: ' + JSON.stringify(r1.errors))
+  assert.match(r1.errors.join(' '), /N001/, 'the bad-origin error must name the offending note id "N001": ' + JSON.stringify(r1.errors))
+  assert.match(r1.errors.join(' '), /origin/, 'the bad-origin error must name the field "origin": ' + JSON.stringify(r1.errors))
+
+  const noOrigin = Object.assign({}, base, { id: 'N002' })
+  const clean = validateNotes([noOrigin])
+  assert.deepStrictEqual(clean.errors, [],
+    'D3: a note carrying no "origin" field at all (the legacy shape) must validate with zero errors — origin is additive, and its absence is originOf()\'s own job to resolve: ' + JSON.stringify(clean.errors))
+
+  assert.strictEqual(originOf({ kind: 'walk' }), 'walk',
+    'D3: originOf must return "walk" for a note with kind:"walk" and no stored origin — a walk finding is a walk finding by construction')
+  assert.strictEqual(originOf({}), 'session',
+    'D3: originOf must return "session" for a plain note (no kind, no origin) — notes written before this spec default to "session" per ADR-0012')
+  assert.strictEqual(originOf({ origin: 'client' }), 'client',
+    'D3: originOf must return the stored value verbatim when one is present, even alongside a kind that would otherwise imply a different default')
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260907/10-client-review.md D8, AC-20260907-10-12: `waiveNote` does not exist yet on
+// spec/scripts/lib/mocks-notes.js — this test is red until D8 lands.
+// ---------------------------------------------------------------------------
+test('AC-20260907-10-12: waiveNote(notes, id, {reason, by, now}) throws naming the days elapsed (6) and the first accepted date on a client note whose lastClientAt is 6 days before now; at 7 days it returns the note resolved with resolvedBy "waiver" and waived {at, reason, by}; on a question it additionally sets answer.verdict "waived" with text = the reason, and validateNotes accepts verdict "waived" with text and rejects it without', () => {
+  const now = new Date('2026-09-09T00:00:00.000Z')
+  const DAY = 86400000
+  const sixDaysAgo = new Date(now.getTime() - 6 * DAY).toISOString()
+  const sevenDaysAgo = new Date(now.getTime() - 7 * DAY).toISOString()
+
+  const clientNoteBase = {
+    id: 'N001', scope: 'mock', screen: 'signin', state: 'error', text: 'the color is wrong',
+    by: 'client', at: sixDaysAgo, status: 'open', addressed: null, reply: null, resolvedBy: null,
+    resolvedAt: null, origin: 'client', capture: null, resolution: null, waived: null, answer: null,
+  }
+
+  const tooSoon = Object.assign({}, clientNoteBase, { lastClientAt: sixDaysAgo })
+  assert.throws(() => waiveNote([tooSoon], 'N001', { reason: 'silent client', by: 'session', now }),
+    /6/, 'AC-12: waiveNote on a client note 6 days silent must throw naming the days elapsed (6) — a note that has not gone silent for the full seven days must never be releasable')
+
+  const ready = Object.assign({}, clientNoteBase, { lastClientAt: sevenDaysAgo })
+  const waived = waiveNote([ready], 'N001', { reason: 'silent client', by: 'session', now })
+  assert.strictEqual(waived.note.status, 'resolved',
+    'AC-12: waiveNote at exactly seven days silent must set status "resolved": got ' + JSON.stringify(waived.note))
+  assert.strictEqual(waived.note.resolvedBy, 'waiver',
+    'AC-12: waiveNote must set resolvedBy "waiver" so a waived note is distinguishable from a session/client resolve: got ' + JSON.stringify(waived.note))
+  assert.deepStrictEqual(
+    { reason: waived.note.waived && waived.note.waived.reason, by: waived.note.waived && waived.note.waived.by },
+    { reason: 'silent client', by: 'session' },
+    'AC-12: waiveNote must record waived.reason/waived.by verbatim from its input: got ' + JSON.stringify(waived.note.waived))
+  assert.ok(waived.note.waived && waived.note.waived.at, 'AC-12: waiveNote must record a waived.at timestamp: got ' + JSON.stringify(waived.note.waived))
+
+  const question = {
+    id: 'N002', scope: 'mock', screen: 'signin', state: null, kind: 'question', ledgerId: 'W7',
+    text: 'single-use link', by: 'session', at: sevenDaysAgo, status: 'open',
+    addressed: null, reply: null, resolvedBy: null, resolvedAt: null, answer: null,
+  }
+  const waivedQuestion = waiveNote([question], 'N002', { reason: 'no client available', by: 'session', now, lastClientAt: sevenDaysAgo })
+  assert.strictEqual(waivedQuestion.note.answer && waivedQuestion.note.answer.verdict, 'waived',
+    'AC-12: waiveNote on a question must additionally set answer.verdict "waived": got ' + JSON.stringify(waivedQuestion.note))
+  assert.strictEqual(waivedQuestion.note.answer && waivedQuestion.note.answer.text, 'no client available',
+    'AC-12: waiveNote on a question must set answer.text to the waiver reason verbatim: got ' + JSON.stringify(waivedQuestion.note))
+
+  const withWaivedVerdict = validateNotes([Object.assign({}, question, {
+    answer: { verdict: 'waived', text: 'no client available', by: 'session', at: now.toISOString() },
+  })])
+  assert.deepStrictEqual(withWaivedVerdict.errors, [],
+    'AC-12: validateNotes must accept answer.verdict "waived" with non-empty text — the verdict enum gains "waived": ' + JSON.stringify(withWaivedVerdict.errors))
+
+  const withoutText = validateNotes([Object.assign({}, question, {
+    answer: { verdict: 'waived', text: '', by: 'session', at: now.toISOString() },
+  })])
+  assert.ok(withoutText.errors.length >= 1,
+    'AC-12: validateNotes must reject answer.verdict "waived" with empty text — a waiver reason is required: got zero errors')
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260907/10-client-review.md D11, AC-20260907-10-18: writeNotes still writes
+// notes.json directly today (no tmp file, no renameSync) — this test is red until D11 lands.
+// ---------------------------------------------------------------------------
+test('AC-20260907-10-18: WHEN writeNotes runs in-process with fs.renameSync patched to throw THE SYSTEM leaves an existing notes.json byte-identical; unpatched it leaves no notes.json.tmp-* file beside notes.json and the file parses to the given array', () => {
+  const dir = tmpdir('mocks-notes-atomic-write')
+  const fsReal = require('node:fs')
+  const notesFile = path.join(dir, 'design/mocks/notes.json')
+
+  const initial = [Object.assign(projectNote('N001', 'open'))]
+  writeNotesLib(dir, initial)
+  const before = fsReal.readFileSync(notesFile, 'utf8')
+
+  const originalRename = fsReal.renameSync
+  fsReal.renameSync = () => { throw new Error('boom — simulated rename failure') }
+  try {
+    assert.throws(() => writeNotesLib(dir, [...initial, projectNote('N002', 'open')]),
+      'AC-18: writeNotes must propagate a renameSync failure rather than swallow it')
+  } finally {
+    fsReal.renameSync = originalRename
+  }
+  const after = fsReal.readFileSync(notesFile, 'utf8')
+  assert.strictEqual(after, before,
+    'AC-18: a renameSync failure must leave the existing notes.json byte-identical — the write never touches the final path directly, only the tmp file it renames from')
+
+  writeNotesLib(dir, initial)
+  const entries = fsReal.readdirSync(path.join(dir, 'design/mocks'))
+  assert.ok(!entries.some((f) => /^notes\.json\.tmp-/.test(f)),
+    'AC-18: an unpatched writeNotes call must leave no notes.json.tmp-* file beside notes.json once the rename completes: got ' + JSON.stringify(entries))
+  assert.deepStrictEqual(JSON.parse(fsReal.readFileSync(notesFile, 'utf8')), initial,
+    'AC-18: the final notes.json must parse to exactly the given array')
 })

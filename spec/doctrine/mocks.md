@@ -19,9 +19,9 @@ identical.
 note`:
 
 - `id` — `^[A-Z]+\d+[a-z]?$`, unique across the table.
-- `step` — `^[A-Z][A-Z-]*$` (`SEED`, `SHAPES`, `KIT`, `WIREFRAMES`, `WALK`, `SKETCH`, `SIGNOFF`,
-  `GENESIS`, …); rows written under retired step names (`SKIN`, `REVIEW`, `THEME`) still match
-  the pattern and keep parsing.
+- `step` — `^[A-Z][A-Z-]*$` (`SEED`, `SHAPES`, `KIT`, `WIREFRAMES`, `WALK`, `CLIENT`, `SKETCH`,
+  `GENESIS`, …); rows written under retired step names (`SKIN`, `REVIEW`, `THEME`, `SIGNOFF`)
+  still match the pattern and keep parsing.
 - `kind` — one fixed word: `product` or `process`.
 - `claim` — free text; the assumption itself.
 - `tag` — one fixed word: `said-by-user`, `ratified-doc`, `inferred`, or `invented`.
@@ -66,8 +66,10 @@ removed) the derivation lands earlier and demands the mark again. The order is f
 from 2–3 candidates) → **KIT** (the shared-primitive canon named and signed off, before any
 screen) → **WIREFRAMES** (canon written, then every seed journey drawn and
 approved) → **WALK** (one fresh-context critic walks each declared journey once, flow breaks
-only) → **SIGNOFF** (one look over the
-whole approved set) → **APPROVED** (terminal). WIREFRAMES carries a sub-mark per
+only) → **CLIENT** (the served journey pages, exposed by the user, where product questions
+are answered and client notes raised; closes when every client-visible question is
+answered-or-waived and every client note resolved-or-waived) → **APPROVED** (terminal).
+WIREFRAMES carries a sub-mark per
 journey so no single conversation ever has to hold more than one journey's state —
 a seed journey added mid-WIREFRAMES reappears as `0/N drawn` and reopens the state rather than
 silently completing; a journey added after WALK already ran on the others reopens WALK the same
@@ -174,7 +176,7 @@ CLI at the first declared viewport in `design/targets.json`, and deletes the sib
 `require.resolve('playwright')` does not resolve from a host repo even when the CLI works.
 
 **Reachability is a precondition, not an afterthought.** Before printing SHAPES, WIREFRAMES,
-or SIGNOFF — every state that asks the session to look at a screen — the driver runs the
+or CLIENT — every state that asks the session to look at a screen — the driver runs the
 look probe unless `status.look` is already `"browser"`; a failed probe refuses (exit 2) naming
 `npx playwright install chromium` rather than silently proceeding into a state no one can
 verify. `mocks-driver.js look-via <playwright|browser>` records the session's declared path:
@@ -228,9 +230,11 @@ any note anywhere is unresolved. Zero open notes on a journey is that journey's 
 **Client review is the same page and the same notes, served on the client route as the
 `CLIENT` state (ADR-0012).** A note's origin — walk, client or session — is set by the server
 from the route it arrived on, never from the typed name. A client-origin note captures its
-screen when raised; a fix is recorded only when the re-captured screen differs; only the client,
-or a dated waiver after seven days of silence, resolves it. The sign-off step's printed text
-carries the fixed sign-off line: `Approval means "this is the
+screen when raised; a fix is recorded only when the re-captured screen differs. Only the client
+resolves a client note — withdrawing an `open` one records `resolution: "withdrawn"`, accepting
+an `addressed` one records `resolution: "accepted"` — or `notes waive --id --reason` releases it
+after seven days of client silence, a question's ledger row becoming `waived <date>`. The
+`CLIENT` step's printed text carries the fixed approval line: `Approval means "this is the
 product I understand" — the written brief, not these screens, holds scope`.
 
 **Walk findings.** A note with `kind: "walk"` is the journey critic's own lane (§ Mocks: State

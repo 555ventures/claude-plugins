@@ -13,7 +13,10 @@
 // mocks-driver.js --root <dir> notes add --scope mock --screen <label> --state <s> --kind walk
 //                              --reason <break> --by <name> --text "<t>"
 // mocks-driver.js --root <dir> notes address --id <id> --change "<what changed>" [--ledger <rowId>]
+//                              [--port <n>]   (--port is required on a client-origin mock-scope note)
 // mocks-driver.js --root <dir> notes reply --id <id> --text "<question back>"
+// mocks-driver.js --root <dir> notes waive --id <id> --reason "<r>" [--by <who>]
+// mocks-driver.js --root <dir> client open --address <url>
 // mocks-driver.js --root <dir> look <label> [--state <s>] [--out <png>] [--port <n>]
 // mocks-driver.js --root <dir> look-probe | look-via <playwright|browser>
 // mocks-driver.js --root <dir> stop open <step> [--port <n>]   shapes | kit | journey:<j> | signoff
@@ -34,11 +37,25 @@
 // consumes the stop, touching no mocks-state field at all (D5) — there is no `--reopen theme`
 // equivalent on this path. specs/20260907/07-mocks-retires-theme.md retires `/spec:mocks`'s own
 // THEME (direction-composed, theme-picked, `--reopen theme`, status.directions/status.theme/
-// status.marks.themePicked): this driver's state machine now ends WIREFRAMES -> WALK -> SIGNOFF ->
+// status.marks.themePicked): this driver's state machine now ends WIREFRAMES -> WALK -> CLIENT ->
 // APPROVED, and the theme subcommand family above is the only theme producer left.
 //
+// specs/20260907/10-client-review.md D1/ADR-0012: CLIENT is the state that follows WALK, the
+// served journey pages, exposed by the user, where a client answers product questions and
+// leaves notes; `client open --address <url>` records the address once the exposed serve answers
+// its own `/client/__notes/list` (D2), and the terminal `--mark approved` still closes on the
+// ledger and the notes alone (D9), unchanged in every precondition. D3/D4: a note's `origin`
+// (walk|client|session) is decided by the route it arrived on — `/client/__notes/*` stamps
+// "client", `/__notes/*` stamps "session", `notes add --kind walk` stamps "walk" — never by a
+// typed name. D5/D6: a client's mock-scope note captures its screen at raise
+// (lib/client-capture.js, the look command's own URL form and first-declared viewport); D7:
+// `notes address --port <n>` re-captures and refuses when the hash is unchanged, else stores the
+// after image and moves the note to "addressed". D8: `notes waive --id --reason` releases a
+// client-origin note or a question after seven days of client silence — a question's ledger row
+// becomes `waived <date>`, printed by `--mark approved` (D9/D10) before the checkpoint line.
+//
 // WHY: specs/20260902/07-mocks-command-driver.md — `/spec:mocks` is the standalone design
-// stage; this driver derives SEED -> SHAPES -> KIT -> WIREFRAMES -> WALK -> SIGNOFF -> APPROVED
+// stage; this driver derives SEED -> SHAPES -> KIT -> WIREFRAMES -> WALK -> CLIENT -> APPROVED
 // on every invocation from `design/mocks/status.json` plus the artifacts actually on disk (a
 // recorded mark whose artifact vanished is demanded again), prints exactly one step, gates every
 // advancing mark on the provenance ledger (spec 06, lib/mocks-ledger.js), and checkpoints every
@@ -112,9 +129,11 @@
 //     subcommand — resolving happens only from the served page (the Resolve button, POST
 //     /__notes/resolve), so a `notes resolve` invocation refuses (exit 2) naming the page.
 //   - migrate a legacy status.json: a root checkpointed at SKIN, REVIEW or THEME derives
-//     WIREFRAMES or SIGNOFF from its still-live marks on the very next invocation; the retired
+//     WIREFRAMES or CLIENT from its still-live marks on the very next invocation; the retired
 //     fields it still carries are ignored on read and dropped on the next write — there is
 //     nothing to migrate.
+//   - open a tunnel or expose anything itself (D2): `client open --address <url>` only probes
+//     and records an address the session has already exposed on its own.
 //   - answer a question (specs/20260906/03-questions-on-the-wireframe.md D2-D4): `ledger add
 //     --screen`/`ledger ask` only PIN an assumption row to a screen as a question note; the page
 //     is the only place a question is answered (POST /__notes/answer on design-atlas.js), which
@@ -130,28 +149,38 @@
 // Exit codes:
 //   0  a bare invocation printed the current step (or `--state` printed the state name), an
 //      accepted `--mark` recorded its result and printed the checkpoint line, a `--reopen`
-//      printed what it invalidated, a ledger/look subcommand succeeded, `stop open` printed the
-//      link + reply line, `stop decide` recorded a decision, `theme state` printed `absent` or
-//      `picked`, or `theme compose`/`theme open`/`theme adopt` accepted its candidate(s).
+//      printed what it invalidated, a ledger/look/notes subcommand succeeded, `stop open` printed
+//      the link + reply line, `stop decide` recorded a decision, `theme state` printed `absent` or
+//      `picked`, `theme compose`/`theme open`/`theme adopt` accepted its candidate(s), or
+//      `client open` recorded `status.client` and printed the open line.
 //   1  `ledger check` found a blocked gate (rows printed).
 //   2  a refused mark (an unknown mark or the retired `--decider` flag included), a failed
 //      precondition (missing artifact, blocked gate, unreachable look probe, undeclared/undrawn
 //      journey for `stop open`, a `look --state` value the mock does not declare), a usage error,
 //      `ledger check` grammar errors, a dead child process (runChild's fail-closed refusal),
-//      `theme state` naming design/tokens.css as the wireframe gray register byte-for-byte, or
+//      `theme state` naming design/tokens.css as the wireframe gray register byte-for-byte,
 //      `theme compose`/`theme open`/`theme adopt` refusing a candidate direction (a D2 violation,
 //      the composed-direction floor, a missing/disagreeing theme-picked stop, or an incomplete
-//      ledger row with no remedy left to supersede).
+//      ledger row with no remedy left to supersede), `client open` outside CLIENT / with no
+//      `--address` / against an address whose `/client/__notes/list` never answers, `notes
+//      address` on a client-origin note with no `--port` or an unchanged re-capture, `notes
+//      address` on a client-origin project-scope note, or `notes waive` on a note that is neither
+//      client-origin nor a question, already resolved, or not yet silent seven days.
 //   3  `stop open`/`stop decide`/`theme open` failed inside design-atlas.js itself (its own
 //      stderr forwarded).
 
 'use strict'
 const fs = require('fs')
 const path = require('path')
+const http = require('http')
 const { spawnSync } = require('child_process')
 const { runChild, writeOut } = require('./lib/driver-io')
 const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, setStatus } = require('./lib/mocks-ledger')
-const { readNotes, writeNotes, addNote, addressNote, replyNote, groupOpen, unresolvedFor, WALK_REASONS } = require('./lib/mocks-notes')
+const {
+  readNotes, writeNotes, addNote, addressNote, replyNote, groupOpen, unresolvedFor, WALK_REASONS,
+  originOf, waiveNote,
+} = require('./lib/mocks-notes')
+const clientCaptureLib = require('./lib/client-capture')
 const picksLib = require('./lib/mocks-picks.js')
 const shellLib = require('./lib/shell-region')
 const { stylesheetTargets, linksWireRegister } = require('./lib/wire-register')
@@ -347,6 +376,18 @@ function currentSeedJourneys() { return parseJourneysSeed(stripComments(seedText
 
 function loadTargetsOrNull() {
   try { return JSON.parse(fs.readFileSync(path.join(root, 'design/targets.json'), 'utf8')) } catch { return null }
+}
+
+// D5: the same viewport rule lib/review-page.js's viewportOf(loadTargets(root)) derives — the
+// first declared design/targets.json viewport, 1280×800 when none — restated over this driver's
+// own root-relative loadTargetsOrNull() rather than importing the served-page library.
+function captureViewport() {
+  const targets = loadTargetsOrNull()
+  const vp = targets && Array.isArray(targets.viewports) && targets.viewports[0]
+  return {
+    width: vp && vp.width > 0 ? vp.width | 0 : 1280,
+    height: vp && vp.height > 0 ? vp.height | 0 : 800,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -652,9 +693,45 @@ function cmdNotes(sub, args) {
     const id = narg('--id')
     const change = narg('--change')
     const ledgerRow = narg('--ledger')
+    const port = narg('--port')
     if (!id) die('notes address: --id <id> is required')
     if (!change) die('notes address: --change "<what changed>" is required')
     const notes = notesOrEmpty()
+    const found = notes.find((n) => n.id === id)
+    if (!found) die('notes address: no note with id "' + id + '"')
+    // specs/20260907/10-client-review.md D7: a client-origin note re-captures through D5 before
+    // it can be addressed — every other note (session-origin, walk, or --port simply omitted on
+    // a note this driver has no capture opinion about) carries no capture field at all.
+    if (originOf(found) === 'client' && found.scope === 'mock') {
+      if (!port) die('notes address: a client-origin mock-scope note requires --port <n> — run `node ' + designAtlasBin + ' serve --root ' + root + ' --port <n>` first')
+      const capturesDir = path.join(mocksDir, 'captures')
+      fs.mkdirSync(capturesDir, { recursive: true })
+      const outPath = path.join(capturesDir, id + '.after.png')
+      clientCaptureLib.captureScreen({
+        port, label: found.screen, state: found.state || null, viewport: captureViewport(), out: outPath,
+      }).then((captured) => {
+        const beforeHash = found.capture && found.capture.before && found.capture.before.hash
+        if (captured.hash === beforeHash) {
+          try { fs.unlinkSync(outPath) } catch { /* best effort */ }
+          die('notes address: the screen has not changed — a client note closes on a visible change, a reply (`notes reply`), a client withdrawal, or a waiver (`notes waive`)')
+          return
+        }
+        let result
+        try {
+          result = addressNote(notes, id, { change, ledgerRow, capture: { hash: captured.hash, file: 'captures/' + id + '.after.png' } })
+        } catch (e) { die('notes address: ' + e.message) }
+        writeNotes(root, result.notes)
+        writeOut(1, 'notes address: ' + id + ' → addressed\n')
+        process.exit(0)
+      }).catch((e) => {
+        try { fs.unlinkSync(outPath) } catch { /* best effort */ }
+        die('notes address: re-capture failed: ' + e.message)
+      })
+      return
+    }
+    if (originOf(found) === 'client' && found.scope === 'project') {
+      die('notes address: a client-origin project-scope note is never addressed — the only closures are acceptance (through the client route) or a waiver (`notes waive`)')
+    }
     let result
     try { result = addressNote(notes, id, { change, ledgerRow }) } catch (e) { die('notes address: ' + e.message) }
     writeNotes(root, result.notes)
@@ -673,8 +750,96 @@ function cmdNotes(sub, args) {
     writeOut(1, 'notes reply: ' + id + ' → reply recorded\n')
     process.exit(0)
   }
+  if (sub === 'waive') {
+    // specs/20260907/10-client-review.md D8: the one release for a silent client — refused
+    // (exit 2) on a note that is neither client-origin nor a question, already resolved, or not
+    // yet silent seven full days; the seven-day clock itself is measured by
+    // lib/mocks-notes.js's waiveNote — this command only derives WHERE that clock starts.
+    const id = narg('--id')
+    const reason = narg('--reason')
+    const by = narg('--by') || 'session'
+    if (!id) die('notes waive: --id <id> is required')
+    if (!reason) die('notes waive: --reason "<r>" is required')
+    const notes = notesOrEmpty()
+    const found = notes.find((n) => n.id === id)
+    if (!found) die('notes waive: no note with id "' + id + '"')
+    const isQuestion = found.kind === 'question'
+    const isClientOrigin = originOf(found) === 'client'
+    if (!isQuestion && !isClientOrigin) {
+      die('notes waive: only client-origin notes and questions are waivable (note "' + id + '" is kind "' +
+        (found.kind || 'note') + '", origin "' + originOf(found) + '")')
+    }
+    if (found.status === 'resolved') die('notes waive: note "' + id + '" is already resolved')
+    let lastClientAt
+    if (isQuestion) {
+      const openedAt = status.client && status.client.openedAt
+      if (!openedAt) die('notes waive: no client has ever been opened for this project — run `client open --address <url>` first')
+      lastClientAt = found.at > openedAt ? found.at : openedAt
+    } else {
+      lastClientAt = found.lastClientAt || found.at
+    }
+    let result
+    try {
+      result = waiveNote(notes, id, { reason, by, now: new Date(), lastClientAt })
+    } catch (e) { die('notes waive: ' + e.message) }
+    if (isQuestion) {
+      let out
+      try { out = setStatus(ledgerTextOrDie(), found.ledgerId, 'waived ' + todayIso()) } catch (e) { die('notes waive: ' + e.message) }
+      fs.writeFileSync(ledgerPath, out)
+    }
+    writeNotes(root, result.notes)
+    writeOut(1, 'notes waive: ' + id + ' → waived\n')
+    process.exit(0)
+  }
   die('notes: no "' + sub + '" subcommand — resolving a note happens only on the served page ' +
-    '(the Resolve button); one of: open, add, address, reply')
+    '(the Resolve button); one of: open, add, address, reply, waive')
+}
+
+// ---------------------------------------------------------------------------
+// client open --address <url> (D2). The plugin never exposes anything itself — this only probes
+// an address the session has already exposed on its own (ADR-0012, memory: hub base is optional,
+// never ask for Tailscale).
+// ---------------------------------------------------------------------------
+function probeClientNotesList(address) {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (ok) => { if (!settled) { settled = true; resolve(ok) } }
+    let req
+    try {
+      req = http.get(address + '/client/__notes/list', { timeout: 3000 }, (res) => {
+        let raw = ''
+        res.on('data', (c) => { raw += c })
+        res.on('end', () => {
+          if (res.statusCode !== 200) { finish(false); return }
+          try { finish(Array.isArray(JSON.parse(raw))) } catch { finish(false) }
+        })
+      })
+    } catch { finish(false); return }
+    req.on('timeout', () => { req.destroy(); finish(false) })
+    req.on('error', () => finish(false))
+  })
+}
+
+function cmdClient(sub, args) {
+  if (sub !== 'open') die('client: unknown subcommand "' + sub + '" — one of: open')
+  const state = deriveState()
+  if (state !== 'CLIENT') {
+    die('client open: the state is "' + state + '", not CLIENT — client open only runs once every journey is walked, before approval')
+  }
+  const addressArg = flagArg(args, '--address')
+  if (!addressArg) die('client open: --address <url> is required')
+  const address = addressArg.replace(/\/+$/, '')
+  probeClientNotesList(address).then((ok) => {
+    if (!ok) {
+      die('client open: ' + address + '/client/__notes/list did not answer 200 with a JSON array within 3s — run `node ' +
+        designAtlasBin + ' serve --root ' + root + '` (or your own server) and expose it yourself — the plugin never opens a tunnel')
+      return
+    }
+    status.client = { address, openedAt: nowIso() }
+    saveStatus()
+    writeOut(1, 'client: open — ' + address + '/client/index.html\n')
+    process.exit(0)
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -837,21 +1002,21 @@ function allJourneysWalked() {
   for (const [jn] of journeys) { const st = status.journeys[jn]; if (!st || !st.walked) return false }
   return true
 }
-// D1: SEED -> SHAPES -> KIT (`!marks.kitSignedOff`) -> WIREFRAMES -> WALK -> SIGNOFF
+// D1: SEED -> SHAPES -> KIT (`!marks.kitSignedOff`) -> WIREFRAMES -> WALK -> CLIENT
 // (`!marks.approved`) -> APPROVED — SKIN, REVIEW and THEME are retired; a root with any of their
 // legacy fields still carries them alongside without effect. specs/20260907/04-kit-canon-family.md
 // D1: KIT sits between SHAPES and WIREFRAMES, gated on one mark exactly like every other step in
 // this chain — never on design/kit/ existing on disk, so a half-authored kit never silently
 // advances the state. specs/20260907/08-walk-critic.md D1: WALK sits between WIREFRAMES and
-// SIGNOFF, gated the same monotone way — a journey declared after the others were walked reopens
-// WALK, never SIGNOFF, so nothing written after sign-off can drag the chain backwards.
+// CLIENT, gated the same monotone way — a journey declared after the others were walked reopens
+// WALK, never CLIENT, so nothing written after the client review can drag the chain backwards.
 function deriveState() {
   if (!status.marks.seedDone) return 'SEED'
   if (!shapeValid()) return 'SHAPES'
   if (!status.marks.kitSignedOff) return 'KIT'
   if (!(status.marks.canonWritten && allJourneysApproved())) return 'WIREFRAMES'
   if (!allJourneysWalked()) return 'WALK'
-  if (!status.marks.approved) return 'SIGNOFF'
+  if (!status.marks.approved) return 'CLIENT'
   return 'APPROVED'
 }
 
@@ -1326,9 +1491,19 @@ function handleApproved() {
 // ---------------------------------------------------------------------------
 // doMark / printAcceptedTail (D1, AC-20260902-07-2).
 // ---------------------------------------------------------------------------
-function printAcceptedTail(prev, next) {
+// D9: the accepted `approved` mark prints `waived: N` and one `  <id> — <reason>` line per
+// waived note (a waived client note or a waived question both count — the note's own `waived`
+// field is set by D8's waiveNote either way), before the checkpoint line — every other mark's
+// tail prints only the counts line and the checkpoint line, unchanged.
+function printAcceptedTail(prev, next, mark) {
   const parsed = parseLedger(ledgerTextOrDie())
   writeOut(1, countsLine(parsed) + '\n\n')
+  if (mark === 'approved') {
+    const waived = notesOrEmpty().filter((n) => n.waived != null)
+    writeOut(1, 'waived: ' + waived.length + '\n')
+    for (const n of waived) writeOut(1, '  ' + n.id + ' — ' + n.waived.reason + '\n')
+    writeOut(1, '\n')
+  }
   writeOut(1, '✅ checkpoint — mocks state saved (' + prev + ' → ' + next + '); safe to /clear and re-run /spec:mocks\n')
   process.exit(0)
 }
@@ -1347,7 +1522,7 @@ function doMark(mark, opts) {
     default: die('unknown mark "' + mark + '" — one of: seed-done, shape-picked, canon-written, kit-signed, journey-drawn, journey-approved, journey-walked, approved')
   }
   const nextState = deriveState()
-  printAcceptedTail(prevState, nextState)
+  printAcceptedTail(prevState, nextState, mark)
 }
 
 // ---------------------------------------------------------------------------
@@ -1624,7 +1799,7 @@ function openRowsLine() {
 }
 
 // D8: one constant feeds both the skill line (printStepBlock) and the look-probe precondition
-// (doBareStep) — SIGNOFF is not an authoring state (it asks the user to look, not to draw), so
+// (doBareStep) — CLIENT is not an authoring state (it asks the user to look, not to draw), so
 // it prints no skill line even though its own look probe still runs.
 const AUTHORING_STATES = new Set(['SHAPES', 'KIT', 'WIREFRAMES'])
 function printStepBlock(state, title, readOnlyList, doctrineSection, progressLine, thenLines) {
@@ -1662,7 +1837,7 @@ function printShapesStep() {
 }
 
 // specs/20260907/04-kit-canon-family.md D8: the KIT step's own printStepBlock invocation — the
-// fixed instantiate-not-invent line is the authoring seed, and (like SIGNOFF's D6) the Then:
+// fixed instantiate-not-invent line is the authoring seed, and (like CLIENT's D10) the Then:
 // command stays pinned to `--mark kit-signed` regardless of the look stop's own state; only the
 // look: progress line varies (none/waiting/change/approved).
 function printKitStep() {
@@ -1758,16 +1933,42 @@ function printWalkStep() {
   }
 }
 
-// D6: SIGNOFF is one look over the atlas index — the terminal `approved` mark is the one
-// sign-off, replacing REVIEW one-for-one minus the decider ceremony (the decider now comes from
-// the sign-off stop's own "by", set by handleApproved). Unlike every other look-gated step, D6
-// pins the Then: line to the literal `--mark approved` regardless of the stop's own state (the
-// `look:` progress line still varies — none/waiting/change/approved — the same as any other
-// look-gated step; only the Then: command itself is unconditional here).
-function printSignoffStep() {
+// D10: the client: progress line — "not opened" names the `client open --address <url>` command
+// when `status.client` is absent; once present it derives its counts fresh from notes.json on
+// every run rather than trusting anything cached. specs/20260907/10-client-review.md D10.
+function clientNoteCounts() {
+  const notes = notesOrEmpty()
+  const clientNotes = notes.filter((n) => n.kind !== 'question' && originOf(n) === 'client')
+  const open = clientNotes.filter((n) => n.status === 'open').length
+  const addressed = clientNotes.filter((n) => n.status === 'addressed').length
+  const waived = clientNotes.filter((n) => n.waived != null).length
+  const unanswered = notes.filter((n) => n.kind === 'question' && n.answer == null).length
+  return { open, addressed, waived, unanswered }
+}
+function clientLineFor() {
+  if (!status.client) {
+    return 'client: not opened — expose the served atlas yourself, then: ' + driverCmd('client open --address <url>')
+  }
+  const c = clientNoteCounts()
+  return 'client: open since ' + String(status.client.openedAt).slice(0, 10) + ' — ' + status.client.address +
+    '/client/index.html · client notes: ' + c.open + ' open · ' + c.addressed + ' addressed · ' + c.waived +
+    ' waived · questions: ' + c.unanswered + ' unanswered'
+}
+
+// D10: CLIENT is one look over the atlas index — the terminal `approved` mark is the one
+// sign-off, replacing the retired sign-off state one-for-one minus the decider ceremony (the
+// decider now comes from the `approved` stop's own "by", set by handleApproved). Unlike every
+// other look-gated step, D9's rationale pins the Then: line to the literal `--mark approved`
+// regardless of the stop's own state (the `look:` progress line still varies —
+// none/waiting/change/approved — the same as any other look-gated step; only the Then: command
+// itself is unconditional here). The `approved` stop key and the `signoff` stop step NAME are
+// both kept unchanged (D9 rationale — AC-20260907-08-12's pin and the `stop open` enumeration
+// both still name "signoff").
+function printClientStep() {
   const look = lookLineAndThen('approved', 'signoff', () => driverCmd('--mark approved'))
-  printStepBlock('SIGNOFF', 'sign off — the product I understand',
-    ['design/atlas/index.html'], 'Mocks: State Machine',
+  printStepBlock('CLIENT', 'client review — the product I understand',
+    ['design/atlas/index.html', 'design/mocks/notes.json'], 'Mocks: State Machine',
+    clientLineFor() + '\n' +
     'Approval means "this is the product I understand" — the written brief, not these screens, holds scope.' + '\n' + look.look,
     [driverCmd('--mark approved')])
 }
@@ -1780,7 +1981,7 @@ function printApprovedTerminal() {
 
 function doBareStep() {
   const state = deriveState()
-  if ((AUTHORING_STATES.has(state) || state === 'SIGNOFF') && status.look !== 'browser' && !probeOk()) {
+  if ((AUTHORING_STATES.has(state) || state === 'CLIENT') && status.look !== 'browser' && !probeOk()) {
     dieProbeFailed()
   }
   if (state === 'SEED') return printSeedStep()
@@ -1788,7 +1989,7 @@ function doBareStep() {
   if (state === 'KIT') return printKitStep()
   if (state === 'WIREFRAMES') return printWireframesStep()
   if (state === 'WALK') return printWalkStep()
-  if (state === 'SIGNOFF') return printSignoffStep()
+  if (state === 'CLIENT') return printClientStep()
   return printApprovedTerminal()
 }
 
@@ -1831,6 +2032,8 @@ if (rest[0] === 'skill-check') {
   cmdLedger(rest[1], rest.slice(2))
 } else if (rest[0] === 'notes') {
   cmdNotes(rest[1], rest.slice(2))
+} else if (rest[0] === 'client') {
+  cmdClient(rest[1], rest.slice(2))
 } else if (rest[0] === 'look-probe') {
   cmdLookProbe()
 } else if (rest[0] === 'look-via') {

@@ -168,6 +168,10 @@ const surfacesLib = require('./lib/surfaces')
 // GET /review/<j>.html route below adapts parseSeedJourneys()/loadTargets() into its input shape
 // and calls it fresh on every request (never cached, never storing derived state).
 const reviewPageLib = require('./lib/review-page')
+// specs/20260907/10-client-review.md D5/D6: the client route's mock-scope note capture — always
+// async spawn (client-capture.js's own contract), never spawnSync, since the capture runs INSIDE
+// this same serving process while it is still answering the client's own POST.
+const clientCaptureLib = require('./lib/client-capture')
 
 const die = (msg, code = 2) => { process.stderr.write('[design-atlas] ' + msg + '\n'); process.exit(code) }
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -1768,6 +1772,62 @@ function createRequestHandler(root, opts = {}) {
       reqPath = fullPath
     }
 
+    // specs/20260907/10-client-review.md D4: a request whose stripped path begins `/client/` (or
+    // is exactly `/client`) is re-dispatched with clientRoute=true and the `/client` segment
+    // removed — every route below this point matches identically for both mounts; only the
+    // note-touching handlers below read `clientRoute` to change behavior (origin stamping, list
+    // filtering, who may resolve what). Every other `/client/…` path (spec 11's served view)
+    // still 404s below, unchanged.
+    let clientRoute = false
+    if (reqPath === '/client' || reqPath.startsWith('/client/')) {
+      clientRoute = true
+      reqPath = reqPath === '/client' ? '/' : reqPath.slice('/client'.length)
+    }
+
+    // specs/20260907/10-client-review.md D5/D6: the client route's mock-scope
+    // POST /__notes/add — captures the before-frame FIRST (a `.pending-<ts>.png` beside
+    // notes.json, D5's captureScreen), then reads notes, adds the note, renames the pending file
+    // to `captures/<id>.before.png`, and writes — no `await` between the read and the write. A
+    // capture failure answers 503 and writes no note (the pending file, if any, is removed); the
+    // note carries `capture: { before: { hash, file }, after: null }`.
+    async function addClientMockNote(body) {
+      const screenLabel = body && body.screen
+      if (!screenLabel) { jsonRes(res, 400, { error: 'scope "mock" requires a screen' }); return }
+      const capturesDir = path.join(rootAbs, 'design/mocks/captures')
+      fs.mkdirSync(capturesDir, { recursive: true })
+      const pendingPath = path.join(capturesDir, '.pending-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.png')
+      const vp = reviewPageLib.viewportOf(loadTargets(rootAbs))
+      let captured
+      try {
+        captured = await clientCaptureLib.captureScreen({
+          port: opts.port, label: screenLabel, state: (body && body.state) || null, viewport: vp, out: pendingPath,
+        })
+      } catch (e) {
+        try { fs.unlinkSync(pendingPath) } catch { /* best effort — capture may never have landed */ }
+        jsonRes(res, 503, { error: e.message })
+        return
+      }
+      // D6: the read, addNote, rename, and write below are one synchronous chain — no `await`
+      // between the read and the write.
+      let notes = []
+      try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
+      let result
+      try {
+        result = notesLib.addNote(notes, Object.assign({}, body, { origin: 'client' }))
+      } catch (e) {
+        try { fs.unlinkSync(pendingPath) } catch { /* best effort */ }
+        jsonRes(res, 400, { error: e.message })
+        return
+      }
+      const id = result.note.id
+      const finalRel = 'captures/' + id + '.before.png'
+      fs.renameSync(pendingPath, path.join(rootAbs, 'design/mocks', finalRel))
+      result.note.capture = { before: { hash: captured.hash, file: finalRel }, after: null }
+      result.note.lastClientAt = new Date().toISOString()
+      notesLib.writeNotes(rootAbs, result.notes)
+      jsonRes(res, 201, result.note)
+    }
+
     // ---- /__notes/* (D2) ------------------------------------------------------------------
     if (reqPath === '/__notes/notes.js' && req.method === 'GET') {
       fs.readFile(notesLibPath, (err, data) => {
@@ -1793,11 +1853,15 @@ function createRequestHandler(root, opts = {}) {
       // project panel's D7 flat listing needs to reach a mock-scope note screen=* never could);
       // screen=* and screen=<label> keep their present meaning byte-for-byte
       // (specs/20260906/03 D3's scope contract).
-      const out = screen === '**'
+      let out = screen === '**'
         ? notes
         : screen === '*'
           ? notes.filter((n) => n.scope === 'project')
           : notes.filter((n) => n.scope === 'mock' && n.screen === screen)
+      // specs/20260907/10-client-review.md D4: the client route's own /__notes/list returns
+      // questions plus client-origin notes only — a walk or session-origin plain note never
+      // appears there; the non-client route keeps returning everything, unchanged (AC-20260907-10-21).
+      if (clientRoute) out = out.filter((n) => n.kind === 'question' || notesLib.originOf(n) === 'client')
       // specs/20260906/03 D3: a question note is joined against its ledger row on every request
       // (never cached) — claim/rejected/tag/status come from the row, ledgerMissing:true when the
       // row is gone. Parsed at most once per request, lazily (most lists carry no question).
@@ -1823,6 +1887,27 @@ function createRequestHandler(root, opts = {}) {
           jsonRes(res, 400, { error: 'questions are session-authored — kind/ledgerId are not accepted here' })
           return
         }
+        // specs/20260907/10-client-review.md D4: origin is decided by the route alone, never
+        // accepted from the body, on EITHER route.
+        if (body && body.origin != null) {
+          jsonRes(res, 400, { error: 'origin is set by the route, not the request body' })
+          return
+        }
+        if (clientRoute) {
+          // D6: a mock-scope client add captures its before-frame FIRST — no note is written, and
+          // no note id (and so no captures/<id>.before.png name) exists, until the capture lands.
+          if (body && body.scope === 'mock') { addClientMockNote(body); return }
+          let notes = []
+          try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
+          let result
+          try { result = notesLib.addNote(notes, Object.assign({}, body, { origin: 'client' })) } catch (e) { jsonRes(res, 400, { error: e.message }); return }
+          // D6: a project-scope client note carries no capture at all.
+          result.note.capture = null
+          result.note.lastClientAt = new Date().toISOString()
+          notesLib.writeNotes(rootAbs, result.notes)
+          jsonRes(res, 201, result.note)
+          return
+        }
         let notes = []
         try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
         let result
@@ -1843,8 +1928,23 @@ function createRequestHandler(root, opts = {}) {
           jsonRes(res, 400, { error: 'a question is answered, never resolved — answer it (/__notes/answer)' })
           return
         }
+        // specs/20260907/10-client-review.md D4: only a client-origin note is ever resolved on
+        // the client route (400 naming the offending origin otherwise); the non-client route
+        // refuses a client-origin note outright (403, naming the client route and `notes waive`)
+        // — the note is left byte-identical on disk in both refusal cases.
+        if (target) {
+          const origin = notesLib.originOf(target)
+          if (clientRoute && origin !== 'client') {
+            jsonRes(res, 400, { error: 'note "' + target.id + '" is ' + origin + '-origin — the client route resolves only client-origin notes' })
+            return
+          }
+          if (!clientRoute && origin === 'client') {
+            jsonRes(res, 403, { error: 'note "' + target.id + '" is client-origin — resolve it through the client route, or release it with `notes waive`' })
+            return
+          }
+        }
         let result
-        try { result = notesLib.resolveNote(notes, body.id, body.by) } catch (e) { jsonRes(res, 404, { error: e.message }); return }
+        try { result = notesLib.resolveNote(notes, body.id, body.by, clientRoute ? { viaClient: true } : undefined) } catch (e) { jsonRes(res, 404, { error: e.message }); return }
         notesLib.writeNotes(rootAbs, result.notes)
         jsonRes(res, 200, result.note)
       }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
@@ -1893,6 +1993,14 @@ function createRequestHandler(root, opts = {}) {
       return
     }
     if (reqPath.startsWith('/__notes/')) {
+      res.writeHead(404, { 'cache-control': 'no-store' })
+      res.end('not found')
+      return
+    }
+    // D4: every other `/client/…` path 404s until specs/20260907/11-client-view.md serves it —
+    // the client mount answers only its own `/__notes/*` verbs above, never the atlas index or
+    // the static design/ tree the non-client route falls through to below.
+    if (clientRoute) {
       res.writeHead(404, { 'cache-control': 'no-store' })
       res.end('not found')
       return
@@ -2019,7 +2127,7 @@ function cmdServe(argv) {
   const root = path.resolve(arg('--root', '.'))
   const port = parseInt(arg('--port', '4173'), 10)
   const http = require('node:http')
-  const server = http.createServer(createRequestHandler(root, { prefix: '' }))
+  const server = http.createServer(createRequestHandler(root, { prefix: '', port }))
   const banner = (verb) => verb + ' http://localhost:' + port + '/atlas/index.html — remote: ssh -L ' + port + ':localhost:' + port + ' <host>\n'
   // A busy port is the common case, not an error: the previous session left its server up. Probe
   // it for the notes layer (the one route only this server answers); an atlas answers → print the

@@ -21,11 +21,11 @@ const {
 // ---------------------------------------------------------------------------
 // AC-20260907-08-1
 // ---------------------------------------------------------------------------
-test('AC-20260907-08-1: a seed that declares a new journey after the others were walked derives WALK again, even though the state had already reached SIGNOFF', () => {
+test('AC-20260907-10-1 (setup assertion retag of AC-20260907-08-1): a seed that declares a new journey after the others were walked derives WALK again, even though the state had already reached CLIENT', () => {
   const dir = tmpdir('mocks-driver-walk')
   advanceToJourneyWalked(dir)
-  assert.strictEqual(stateOf(dir).stdout.trim(), 'SIGNOFF',
-    'test setup requires the only declared journey to be walked and the state to already read SIGNOFF, or the "derives WALK again" assertion below is vacuous')
+  assert.strictEqual(stateOf(dir).stdout.trim(), 'CLIENT',
+    'test setup requires the only declared journey to be walked and the state to already read CLIENT (the SIGNOFF state is retired), or the "derives WALK again" assertion below is vacuous')
 
   const seedPath = path.join(dir, 'design/mocks/seed.md')
   const seedText = fs.readFileSync(seedPath, 'utf8')

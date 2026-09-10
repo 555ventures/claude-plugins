@@ -33,17 +33,17 @@ const {
 // ---------------------------------------------------------------------------
 // AC-20260907-07-1 (retag of AC-20260906-02-1)
 // ---------------------------------------------------------------------------
-test('AC-20260907-07-1 / AC-20260907-08-1 (retag of AC-20260906-02-1): state derives WALK directly once canonWritten + kitSignedOff + every journey approved but not yet walked, with no status.theme and no design/tokens.css anywhere, never THEME; SIGNOFF once the journey is walked; APPROVED once marks.approved is additionally set; a legacy status.json additionally carrying marks.reviewOpened/decider/journeys[j].skinned/.reviewed derives the identical state, and the next accepted mark writes a status.json with none of reviewOpened/skinned/reviewed present', () => {
+test('AC-20260907-10-1 (retag of AC-20260907-07-1 / AC-20260907-08-1, itself a retag of AC-20260906-02-1): state derives WALK directly once canonWritten + kitSignedOff + every journey approved but not yet walked, with no status.theme and no design/tokens.css anywhere, never THEME; CLIENT once the journey is walked; APPROVED once marks.approved is additionally set; a legacy status.json additionally carrying marks.reviewOpened/decider/journeys[j].skinned/.reviewed derives the identical state, and the next accepted mark writes a status.json with none of reviewOpened/skinned/reviewed present', () => {
   const dir = tmpdir('mocks-driver')
   advanceToJourneyApproved(dir) // canonWritten + kitSignedOff (via the chain) + every declared journey approved, not yet walked
 
   assert.strictEqual(fs.existsSync(path.join(dir, 'design/tokens.css')), false,
-    'test setup requires no design/tokens.css to exist yet, or the "SIGNOFF with no theme" assertion below is vacuous')
+    'test setup requires no design/tokens.css to exist yet, or the "CLIENT with no theme" assertion below is vacuous')
   assert.strictEqual('theme' in statusJson(dir), false,
-    'test setup requires status.json to carry no top-level "theme" key at all, or the "SIGNOFF with no theme" assertion below is vacuous: ' + JSON.stringify(statusJson(dir)))
+    'test setup requires status.json to carry no top-level "theme" key at all, or the "CLIENT with no theme" assertion below is vacuous: ' + JSON.stringify(statusJson(dir)))
 
-  // AC-20260907-08-1/D1: WALK now sits between WIREFRAMES and SIGNOFF — every declared journey
-  // approved but none carrying `walked` must derive WALK, not SIGNOFF directly.
+  // AC-20260907-08-1/D1: WALK now sits between WIREFRAMES and CLIENT — every declared journey
+  // approved but none carrying `walked` must derive WALK, not CLIENT directly.
   const beforeWalk = stateOf(dir)
   assert.strictEqual(beforeWalk.stdout.trim(), 'WALK',
     'AC-20260907-08-1: canonWritten + kitSignedOff + every journey approved but not yet walked must derive WALK: ' + beforeWalk.stdout + beforeWalk.stderr)
@@ -52,8 +52,8 @@ test('AC-20260907-07-1 / AC-20260907-08-1 (retag of AC-20260906-02-1): state der
 
   advanceToJourneyWalked(dir)
   const s = stateOf(dir)
-  assert.strictEqual(s.stdout.trim(), 'SIGNOFF',
-    'AC-20260907-08-1: once every declared journey carries walked and marks.approved is unset, state must derive SIGNOFF: ' + s.stdout + s.stderr)
+  assert.strictEqual(s.stdout.trim(), 'CLIENT',
+    'AC-20260907-10-1: once every declared journey carries walked and marks.approved is unset, state must derive CLIENT (the SIGNOFF state is retired) — a legacy status.json stamped state:"SIGNOFF" with those marks derives CLIENT the same way: ' + s.stdout + s.stderr)
   assert.ok(!s.stdout.includes('THEME'),
     'AC-20260907-07-1: THEME must never be printed once the theme step is retired: ' + s.stdout)
 
@@ -67,8 +67,8 @@ test('AC-20260907-07-1 / AC-20260907-08-1 (retag of AC-20260906-02-1): state der
   legacy.journeys[JOURNEY].skinned = '2026-09-01T00:00:00Z'
   legacy.journeys[JOURNEY].reviewed = '2026-09-01T00:00:00Z'
   fs.writeFileSync(statusPath(dir), JSON.stringify(legacy, null, 2))
-  assert.strictEqual(stateOf(dir).stdout.trim(), 'SIGNOFF',
-    'a legacy status.json written state:"SKIN" with no theme anywhere, plus reviewOpened/decider/skinned/reviewed, must still derive SIGNOFF — the legacy fields are ignored on read')
+  assert.strictEqual(stateOf(dir).stdout.trim(), 'CLIENT',
+    'a legacy status.json written state:"SKIN" with no theme anywhere, plus reviewOpened/decider/skinned/reviewed, must still derive CLIENT — the legacy fields are ignored on read')
 
   advanceToApproved(dir)
   assert.strictEqual(stateOf(dir).stdout.trim(), 'APPROVED', 'marks.approved set must derive APPROVED')

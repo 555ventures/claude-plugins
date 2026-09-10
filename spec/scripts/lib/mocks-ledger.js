@@ -18,6 +18,11 @@
 // `^[A-Z][A-Z-]*$` token parses), or dedupe/normalize rows beyond flagging duplicate ids as
 // an Err.
 //
+// specs/20260907/10-client-review.md D8: STATUS_WORDS/STATUS_RE gain "waived" (a question's row
+// once `notes waive` releases it) and gateVerdict treats a waived product row as non-blocking,
+// the same posture as "overridden" — a waived question keeps the ledger truthful (never
+// laundered into "confirmed") without ever tripping the gate.
+//
 // Exit codes: none — this is a library, not an executable.
 
 const ASSUMPTIONS_HEADER = ['id', 'step', 'kind', 'claim', 'tag', 'status', 'rejected', 'dependents', 'note']
@@ -25,12 +30,12 @@ const CATCHES_HEADER = ['id', 'what', 'step', 'cost', 'note']
 
 const KINDS = ['product', 'process']
 const TAGS = ['said-by-user', 'ratified-doc', 'inferred', 'invented']
-const STATUS_WORDS = ['open', 'confirmed', 'overridden', 'decided']
+const STATUS_WORDS = ['open', 'confirmed', 'overridden', 'decided', 'waived']
 
 const ID_RE = /^[A-Z]+\d+[a-z]?$/
 const STEP_RE = /^[A-Z][A-Z-]*$/
 const CATCH_ID_RE = /^M\d+$/
-const STATUS_RE = /^(open|confirmed|overridden|decided)(?: (\d{4}-\d{2}-\d{2}))?$/
+const STATUS_RE = /^(open|confirmed|overridden|decided|waived)(?: (\d{4}-\d{2}-\d{2}))?$/
 
 // Splits a markdown table row on unescaped `|`, trims each cell, and unescapes `\|` -> `|`.
 // Returns null if the row does not look like a pipe row at all.
@@ -186,7 +191,7 @@ function gateVerdict(ledger) {
   const blocking = []
   for (const row of ledger.assumptions) {
     if (row.kind !== 'product') continue
-    if (row.tag === 'invented' && row.status !== 'overridden') {
+    if (row.tag === 'invented' && row.status !== 'overridden' && row.status !== 'waived') {
       blocking.push({ id: row.id, tag: row.tag, status: row.status })
     } else if (row.tag === 'inferred' && row.status === 'open') {
       blocking.push({ id: row.id, tag: row.tag, status: row.status })

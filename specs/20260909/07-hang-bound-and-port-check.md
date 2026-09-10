@@ -1,6 +1,7 @@
 ---
 date: 2026-09-09
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: gate
 design: false
@@ -10,6 +11,7 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-09
 open_markers: 0
+diff_base: 614c32451ec398fd4df4e4b34dbe40816454eb59
 ---
 
 # A hanging test is a bounded red, and a fixed test port is a doctor finding
@@ -38,6 +40,7 @@ is green against this repo.
 | D9 | `tests/mocks/mocks-driver-client.test.js`'s two `'--port', '4321'` literals (lines 180 and 192 at the pre-image) become `'0'`; the assertions are untouched (AC-20260909-07-8) | Both runs are `notes address --id N001 --change …`, which the driver refuses on an earlier argument before any socket is bound, so the flip is assertion-neutral — verified by executing spec 07's own `port-flag-literal` regex against the spec 06 worktree on 2026-09-10: exactly these two lines, `exit would be 1 (2 findings)`. Spec 06's owner confirmed the same two lines and queued the flip to this spec rather than growing a diff its reviewer already held; without this row the fix lands out-of-plan and `scope-reconcile` reports it |
 | D10 | `tests/mocks/notes-layer-isolation.test.js`'s test-level `{ timeout: 60000 }` drops to `45000` `[no-ac: a literal alignment with D1's bound; the per-file budget already reds the file either way]` | A test-level option OVERRIDES the CLI default rather than racing it (A4 corrected), so that one test's bound would stay 60 s while every other test's is 45 s. Aligning it removes the exception rather than documenting it |
 | D8 | `spec/.claude-plugin/plugin.json` bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` [no-ac: `plugin-bump.js --check` is the oracle] | Version discipline |
+| D11 (build ruling, 2026-09-10) | `tests/doctor/port-check.test.js` composes every port literal it writes into its synthetic fixtures — and every assertion message quoting one — from concatenated fragments (e.g. `'server.listen(' + '4173)'`), so the test file's own source bytes never spell one of D3's three patterns; the bytes written to the fixture files and every assertion stay identical (AC-20260909-07-4, AC-20260909-07-8) | Build-time collision: D3's Gotcha forbids classifying by file name or extension, so the walk admits `tests/doctor/port-check.test.js` itself, and its inline fixture literals are real `listen-literal`/`computed-port`/`port-flag-literal` matches — 6 findings, all in that one file, which reds AC-8's clean pin. Exempting a path or narrowing a regex is the forbidden fix (it reopens exactly the hole the Gotcha names); moving the literal out of the source text is assertion-neutral and keeps the check at full strength. Executed 2026-09-10: `port-check.js --root .` reported `tests/doctor/port-check.test.js:22,23,24,25,26,60` and nothing else |
 
 ## File Plan
 

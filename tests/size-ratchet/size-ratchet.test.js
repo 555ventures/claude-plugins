@@ -378,9 +378,9 @@ test('AC-20260908-01-6: --update refuses and leaves the baseline byte-for-byte u
     '--update must leave the baseline byte-for-byte unchanged on refusal — any diff here means growth landed through --update: ' + after)
 })
 
-test('AC-20260908-01-6: --update refuses when git ls-files still lists a path that a plain rm removed from disk, and leaves the baseline byte-for-byte unchanged', () => {
+test('AC-20260908-01-6 / AC-20260909-01-14: --update (and --reconcile) refuse when git ls-files still lists a path that a plain rm removed from disk, and leave the baseline byte-for-byte unchanged', () => {
   const dir = tmpdir('sr-ac6-tracked-missing')
-  const g = repo(dir, { 'tests/a.txt': sized(30), 'tests/gone.txt': sized(20) })
+  const g = repo(dir, { 'tests/a.txt': sized(30), 'tests/gone.txt': sized(20), 'specs/20260909/01-example.md': sized(5) })
   writeBaseline(dir, {
     newFileCap: 40000,
     trees: { 'spec/scripts': 0, 'spec/scripts/lib': 0, scripts: 0, tests: 50 },
@@ -402,6 +402,25 @@ test('AC-20260908-01-6: --update refuses when git ls-files still lists a path th
   const after = rawBaseline(dir)
   assert.strictEqual(after, before,
     '--update must leave the baseline byte-for-byte unchanged when refusing on a tracked-but-missing path: ' + after)
+
+  // AC-20260909-01-14 (D9): --reconcile keeps --update's tracked-but-missing refusal unchanged —
+  // the same exit 1, the same path/remedy, nothing written — a missing file is a broken checkout,
+  // not a growth to baseline, and lifting the refusal too would let a reconcile silently drop a
+  // file from the budget.
+  const rReconcile = run(['--root', dir, '--reconcile', '--cite', 'specs/20260909/01-example.md'])
+  assert.strictEqual(rReconcile.status, 1,
+    '--reconcile must CONTINUE TO refuse (exit 1) when a path git still tracks is missing from disk, exactly ' +
+    'like --update — it must never fall through to a reconcile that silently drops the file from the budget: ' +
+    rReconcile.stderr)
+  assert.match(rReconcile.stderr, /tests\/gone\.txt/,
+    '--reconcile\'s refusal must name the same tracked-but-missing path: ' + rReconcile.stderr)
+  assert.match(rReconcile.stderr, /tracked/i,
+    '--reconcile\'s refusal must say the path is tracked but missing from disk, the same reason --update gives: ' +
+    rReconcile.stderr)
+  const afterReconcile = rawBaseline(dir)
+  assert.strictEqual(afterReconcile, before,
+    '--reconcile must leave the baseline byte-for-byte unchanged when refusing on a tracked-but-missing path: ' +
+    afterReconcile)
 
   g('rm', '-q', 'tests/gone.txt')
   const rAfterGitRm = run(['--root', dir, '--update'])
@@ -576,4 +595,114 @@ test('AC-20260908-01-8: an untracked file of any size is ignored, and a tracked 
   const rj = JSON.parse(run(['--root', dir, '--json']).stdout)
   assert.strictEqual(rj.findings.length, 1,
     'the untracked 100000-byte file must not add a second finding (neither new-over-cap nor a spec/scripts tree-over) — it is invisible to the checker: ' + JSON.stringify(rj.findings))
+})
+
+// specs/20260909/01-replay-build-shaped-mutation.md D8: --reconcile is --update's pass with the
+// over/tree-over/new-over-cap refusal replaced by one raises[] entry per lifted finding — the
+// audit trail that replaces the per-file decision --raise already demands via --cite.
+test('AC-20260909-01-12: --reconcile tightens stale ceilings, lifts growth into cited raises, and leaves the check green', () => {
+  const dir = tmpdir('sr-ac12-reconcile')
+  repo(dir, {
+    'scripts/a.js': sized(8),
+    'scripts/b.js': sized(12),
+    'specs/20260909/01-example.md': sized(5)
+  })
+  writeBaseline(dir, {
+    newFileCap: 40000,
+    trees: { 'spec/scripts': 0, 'spec/scripts/lib': 0, scripts: 18, tests: 0 },
+    files: { 'scripts/a.js': 10, 'scripts/b.js': 10 },
+    raises: []
+  })
+
+  const r = run(['--root', dir, '--reconcile', '--cite', 'specs/20260909/01-example.md'])
+  assert.strictEqual(r.status, 0,
+    'D8: --reconcile must succeed and write, never refuse the way --update refuses growth: ' + r.stderr)
+
+  const after = readBaseline(dir)
+  assert.strictEqual(after.files['scripts/a.js'], 8,
+    'D8: a stale (shrunk) file ceiling must tighten to its actual size, exactly like --update: ' + after.files['scripts/a.js'])
+  assert.strictEqual(after.files['scripts/b.js'], 12,
+    'D8: an over (grown) file ceiling must be lifted to its actual size: ' + after.files['scripts/b.js'])
+  assert.strictEqual(after.trees.scripts, 20,
+    'D8: the scripts tree ceiling must be lifted to the true sum of its files (8 + 12 = 20): ' + after.trees.scripts)
+  assert.deepStrictEqual(after.raises, [
+    { path: 'scripts/b.js', from: 10, to: 12, cite: 'specs/20260909/01-example.md' },
+    { path: 'scripts', from: 18, to: 20, cite: 'specs/20260909/01-example.md' },
+  ], 'D8: exactly one raises[] entry must be appended per lifted finding (the over file, then the tree-over ' +
+    'tree, in evaluate()\'s own finding order) — the stale a.js tightening must NOT append a raise: ' +
+    JSON.stringify(after.raises))
+
+  const rCheck = run(['--root', dir])
+  assert.strictEqual(rCheck.status, 0,
+    'D8: a plain check against the reconciled baseline must exit 0 — that is the whole point of the reconcile: ' +
+    rCheck.stderr)
+})
+
+test('AC-20260909-01-12: a no-op reconcile leaves the baseline byte-identical', () => {
+  const dir = tmpdir('sr-ac12-noop')
+  repo(dir, {
+    'scripts/a.js': sized(8),
+    'scripts/b.js': sized(12),
+    'specs/20260909/01-example.md': sized(5)
+  })
+  const seed = run(['--root', dir, '--update'])
+  assert.strictEqual(seed.status, 0, 'fixture setup: --update must seed a tight baseline: ' + seed.stderr)
+  const before = rawBaseline(dir)
+
+  const r = run(['--root', dir, '--reconcile', '--cite', 'specs/20260909/01-example.md'])
+  assert.strictEqual(r.status, 0, 'D8: --reconcile against an already-tight tree must still succeed: ' + r.stderr)
+  const after = rawBaseline(dir)
+  assert.strictEqual(after, before,
+    'D8: with nothing to reconcile, the same serializer must rewrite the same bytes and append no raises[] ' +
+    'entry — any diff here means a no-op reconcile is not actually a no-op: ' + JSON.stringify({ before, after }))
+  const afterParsed = readBaseline(dir)
+  assert.deepStrictEqual(afterParsed.raises, [],
+    'D8: an already-tight reconcile must append no raises[] entry: ' + JSON.stringify(afterParsed.raises))
+})
+
+// D8's --cite validation reuses --raise's own checks (mutual exclusivity plus the same shape/
+// existence rules) — this test pins the bad-invocation half in one pass rather than one test per case.
+test('AC-20260909-01-13: --reconcile refuses a bad invocation and writes nothing', () => {
+  const dir = tmpdir('sr-ac13-badinvoke')
+  repo(dir, { 'scripts/a.js': sized(8), 'specs/20260909/01-example.md': sized(5) })
+  writeBaseline(dir, {
+    newFileCap: 40000,
+    trees: { 'spec/scripts': 0, 'spec/scripts/lib': 0, scripts: 8, tests: 0 },
+    files: { 'scripts/a.js': 8 },
+    raises: []
+  })
+  const before = rawBaseline(dir)
+  const cite = 'specs/20260909/01-example.md'
+
+  // Each expected regex is deliberately something the CURRENT unrecognized-flag usage message
+  // does not contain (that generic message is the same fixed string for every case below) — a
+  // regex that already appears in the generic usage text (like a bare "--cite") would let this
+  // test pass vacuously before --reconcile exists at all, pinning nothing about the real
+  // per-case validation D8 requires.
+  const cases = [
+    { args: ['--reconcile', '--update', '--cite', cite], label: '--reconcile with --update', expect: /mutually exclusive/i },
+    { args: ['--reconcile', '--raise', 'scripts/a.js', '--to', '9', '--cite', cite], label: '--reconcile with --raise', expect: /mutually exclusive/i },
+    { args: ['--reconcile', '--json', '--cite', cite], label: '--reconcile with --json', expect: /not compatible/i },
+    { args: ['--reconcile'], label: '--reconcile with no --cite', expect: /--cite.*require|require.*--cite/i },
+    { args: ['--reconcile', '--cite', 'docs/x.md'], label: '--reconcile with a non-spec-shaped --cite', expect: /must match/i },
+    { args: ['--reconcile', '--cite', 'specs/20260909/99-absent.md'], label: '--reconcile citing a spec that does not exist', expect: /does not exist/i },
+    // Review finding (build-repair, F3): the existing "--to/--cite require --raise" guard is
+    // gated on `args.raise === null && !args.reconcile`, so it never fires when --reconcile is
+    // also set — a stray --to under --reconcile is silently accepted (ceilings lifted, exit 0)
+    // even though --reconcile derives every ceiling from actual and never reads --to at all.
+    { args: ['--reconcile', '--to', '5', '--cite', cite], label: '--reconcile with a stray --to',
+      expect: /(?=.*--to)(?=.*reconcile)/is },
+  ]
+  for (const { args, label, expect } of cases) {
+    const r = run(['--root', dir, ...args])
+    assert.strictEqual(r.status, 2, label + ' must exit 2: ' + JSON.stringify({ status: r.status, stderr: r.stderr }))
+    assert.match(r.stderr, /^size-ratchet: /, label + ' must print a size-ratchet:-prefixed stderr line naming the remedy: ' + r.stderr)
+    assert.match(r.stderr, expect,
+      label + ' must be refused for its OWN specific reason, not a generic "unrecognized flag" fallback — the ' +
+      'refusal must actually validate this case: ' + r.stderr)
+  }
+
+  const after = rawBaseline(dir)
+  assert.strictEqual(after, before,
+    'every rejected --reconcile invocation above must leave the baseline byte-for-byte unchanged: ' + after)
 })

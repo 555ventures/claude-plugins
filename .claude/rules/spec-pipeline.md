@@ -174,6 +174,16 @@ upstream bug list. -->
   own File Plan. Read every predecessor named in `depends_on` for CONTINUE-TO pins on the
   surface being retired, and enter each one as a deletion row; a pin whose subject is gone is
   retired, never weakened into passing.
+  Fifth trigger, the one that changes no words at all: a **line REFLOW**. A doctrine file under
+  a read-load budget has no slack, so landing new prose forces condensing old prose, and the
+  rewrap can push a multi-word literal across a line break — the text is byte-identical as
+  prose and invisible in review, but a check that greps for that literal as one string stops
+  matching. One squeeze here broke the entrypoints manifest by splitting `spec-paths
+  worktree-include` over two lines: the declared entry point read as an overclaim with no call
+  site, in a file whose diff showed only reflow. Before reflowing a passage, grep the literals
+  inside it — and note that the phrases at risk are the ones a test greps whole, not the ones
+  the spec names. A budget-capped file is also where this recurs, because every future addition
+  forces another squeeze.
   (specs/20260813/07-command-report-conformance.md D8; specs/20260813/09-model-placement-mechanics.md D4;
   specs/20260814/01-ac-matrix-script.md; specs/20260907/09-atlas-index-and-note-navigation.md;
   specs/20260907/07-mocks-retires-theme.md D12)

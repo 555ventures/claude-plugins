@@ -157,7 +157,13 @@
 // red:<leg> arm missing --patch or --workflow, unresolved's red:<leg> arm missing --patch or
 // refusing a --workflow that rides along (a step-7 dismissal never ran the reviewer), a missing
 // --patch or a non-`red:`-shaped --legs for leg-caught, or setup-failed riding with
-// --class/--patch/--workflow)
+// --class/--patch/--workflow) /
+// --apply's host config carries a present-but-unparsable config file, a malformed
+// replay.afterApply block, a paths entry that is absolute/contains ".."/resolves under a
+// review-outcome meta prefix/would (as a declared subtree) admit one of those prefixes as a
+// descendant, a {spec}-needing command with no --spec, or a --spec not matching
+// ^specs/\d{8}/\d{2}- (specs/20260909/01-replay-build-shaped-mutation.md D4-D6 — every one of
+// these refuses before the patch is applied)
 // · 3 = safety refusal (--setup --dir's basename matches /^replay/i — specs/20260826/01 D2, refused
 // before any filesystem or git side effect, in-repo or out-of-repo alike; --setup --dir resolves
 // inside the repo root but NOT inside <root>/.claude/worktrees/ — specs/20260823/05 D1 narrows this
@@ -176,7 +182,20 @@
 // sha), refused before any worktree is created, naming the --select remedy, or --setup's call to
 // the shared worktree-include.sh owner (spec/scripts/worktree-include.sh, D4 below) exits
 // anything other than 0 or 3 — the worktree is registered but unusable; the message names the
-// `git -C <root> worktree remove --force <dir>` remedy (specs/20260904/02 D4).
+// `git -C <root> worktree remove --force <dir>` remedy (specs/20260904/02 D4), or --apply's
+// declared replay.afterApply command cannot even be spawned (the spawn error's own message plus
+// a PATH remedy), exits nonzero (its own stderr quoted), dirties a path nobody declared in
+// `paths` — including one it staged itself via `git add`, D13's amendment to D2's Dafter/D0
+// snapshots (naming every offender) — or, checked AFTER D2's own staging loop has run (a
+// declared reconcile path is not exempt: declared-and-mutated is itself the contradiction
+// named), alters or drops from the index a file the mutation patch itself touches on EITHER
+// side (every `+++ b/` and every `--- a/` path, so a deleted file's frozen state — absent from
+// the index — and a rename's source are covered like a written one, F10), or leaves one dirty
+// in the worktree without staging it (naming the file — D14; reading this check any earlier
+// than after the staging loop would let a hook that rewrites a mutated file unstaged sail
+// through the blob check and then be swept into the commit by that same loop), or a
+// `git add -- <path>` staging call fails
+// (specs/20260909/01-replay-build-shaped-mutation.md D1-D2/D13-D14 — nothing is committed).
 //
 // specs/20260826/01-replay-scratch-path-blindness.md: a value whose correctness is load-bearing
 // for a measurement's validity must be derived by a script, never asserted in prose a session
@@ -210,7 +229,7 @@ const { pinnedBaseCandidates } = require('./lib/base-derivation')
 function usage() {
   console.error('usage: replay.js [--root <path>] --due | --select | --setup --commit <sha> (--spec <path>|--dir <path>) ' +
     '[--overlay <closeSha>] [--subject <text>] | ' +
-    '--apply --dir <path> --patch <file> --patch-out <file> --class <id> [--subject <text>] | ' +
+    '--apply --dir <path> --patch <file> --patch-out <file> --class <id> [--spec <path>] [--subject <text>] | ' +
     '--score --workflow <file> --patch <file> | ' +
     '--record --spec <path> --review-run-id <id> --legs green|red:<leg>|baseline-red:<leg>[,<leg>]|none ' +
     '--outcome caught|missed|leg-caught|unresolved|setup-failed [--class <id>] [--patch <file>] ' +
@@ -693,6 +712,165 @@ function cmdSetup() {
   process.exit(0)
 }
 
+// ---- D1-D6 (specs/20260909/01-replay-build-shaped-mutation.md): --apply's optional --------------
+// ---- replay.afterApply post-apply reconcile hook. Read from <--root> only (never <--dir>, D6) — ---
+// ---- <--dir>'s .claude/ is a stale parent-version copy by the overlay's own design. Absent config,
+// ---- or a config with no replay.afterApply, is HOOK OFF: --apply stays byte-for-byte today's -----
+// ---- behavior. A present-but-malformed block, an escaping/meta-prefixed paths entry, or a ----------
+// ---- {spec}-needing command with no (or badly-shaped) --spec are all exit 2, before the patch is --
+// ---- ever applied (D4/D5). --------------------------------------------------------------------------
+
+const AFTER_APPLY_SPEC_SHAPE_RE = /^specs\/\d{8}\/\d{2}-/
+
+// F2 (review, build-repair): a declared PARENT subtree (e.g. "docs/") never itself starts with a
+// meta prefix like "docs/canonical/", so the escape/meta check alone lets it through — but
+// isDeclaredPath's own trailing-slash subtree match then treats any descendant, including one
+// under a meta prefix, as declared. A subtree entry that would ADMIT a meta prefix as a
+// descendant (the meta prefix starts with the declared subtree) is refused too, exactly like
+// declaring the meta path directly.
+function normalizeAfterApplyPath(raw) {
+  const p = raw.startsWith('./') ? raw.slice(2) : raw
+  const sitsUnderOrIsMeta = OVERLAY_META_PREFIXES.some((m) => p.startsWith(m))
+  const admitsMetaDescendant = p.endsWith('/') && OVERLAY_META_PREFIXES.some((m) => m.startsWith(p))
+  if (path.isAbsolute(p) || p.split('/').includes('..') || sitsUnderOrIsMeta || admitsMetaDescendant) {
+    console.error(`replay.js: ${configPath(root)} replay.afterApply.paths entry '${raw}' is absolute, contains ` +
+      "'..', resolves under a review-outcome surface (specs/, .claude/, docs/canonical/), or — as a declared " +
+      'subtree — would admit one of those surfaces as a descendant — refusing to declare it; narrow the path ' +
+      'or drop it from replay.afterApply.paths')
+    process.exit(2)
+  }
+  return p
+}
+
+// D6: reads ONLY <--root>/.claude/spec.config.json. Returns null for HOOK OFF (absent file, or
+// present with no replay.afterApply); every other failure below exits 2 directly, never a
+// silent fall-through to HOOK OFF (D6's "never a silent-fallback" requirement).
+function readAfterApplyHook() {
+  if (!configExists(root)) return null
+  let config
+  try {
+    config = readConfigStrict(root)
+  } catch (e) {
+    console.error(`replay.js: ${e.message}`)
+    process.exit(2)
+  }
+  const afterApply = config && typeof config === 'object' && !Array.isArray(config)
+    ? config.replay && config.replay.afterApply
+    : undefined
+  if (afterApply === undefined || afterApply === null) return null
+  if (typeof afterApply !== 'object' || Array.isArray(afterApply)) {
+    console.error(`replay.js: ${configPath(root)} replay.afterApply must be an object carrying 'command' and 'paths'`)
+    process.exit(2)
+  }
+  if (typeof afterApply.command !== 'string' || afterApply.command.length === 0) {
+    console.error(`replay.js: ${configPath(root)} replay.afterApply.command must be a non-empty string`)
+    process.exit(2)
+  }
+  if (!Array.isArray(afterApply.paths) || afterApply.paths.length === 0 ||
+      afterApply.paths.some((p) => typeof p !== 'string' || p.length === 0)) {
+    console.error(`replay.js: ${configPath(root)} replay.afterApply.paths must be a non-empty array of ` +
+      'non-empty strings')
+    process.exit(2)
+  }
+  const paths = afterApply.paths.map(normalizeAfterApplyPath)
+  const needsSpec = afterApply.command.includes('{spec}')
+  if (needsSpec) {
+    if (!specArg) {
+      console.error("replay.js: replay.afterApply.command contains '{spec}' but no --spec was given — pass " +
+        '--spec <path> naming the target spec')
+      process.exit(2)
+    }
+    if (!AFTER_APPLY_SPEC_SHAPE_RE.test(specArg)) {
+      console.error(`replay.js: --spec '${specArg}' does not match ^specs/\\d{8}/\\d{2}- — refusing to ` +
+        'substitute an unshaped value into a bash -c string')
+      process.exit(2)
+    }
+  }
+  const command = needsSpec ? afterApply.command.split('{spec}').join(specArg) : afterApply.command
+  return { command, paths }
+}
+
+// D2 (amended by D13, user ruling): the three-list dirty snapshot — `git diff --name-only`
+// (worktree vs index) ∪ `git diff --cached --name-only` (staged vs HEAD, D13 — closes the gap
+// where a hook command running `git add` itself moves a path into the index where neither of
+// the other two lists can see it) ∪ `git ls-files --others --exclude-standard` (untracked) —
+// taken inside --dir, before and after the hook command runs. F1 (review, build-repair): every
+// list runs under the same `-c core.quotePath=off` pin --apply's own canonical emission already
+// uses, so a declared non-ASCII path is never C-quoted into a false "undeclared" refusal.
+function dirtySnapshot(dirPath) {
+  const flags = ['-c', 'core.quotePath=off']
+  const modified = execFileSync('git', [...flags, 'diff', '--name-only'], { cwd: dirPath, encoding: 'utf8' })
+    .split('\n').filter(Boolean)
+  const staged = execFileSync('git', [...flags, 'diff', '--cached', '--name-only'], { cwd: dirPath, encoding: 'utf8' })
+    .split('\n').filter(Boolean)
+  const untracked = execFileSync('git', [...flags, 'ls-files', '--others', '--exclude-standard'], { cwd: dirPath, encoding: 'utf8' })
+    .split('\n').filter(Boolean)
+  return new Set([...modified, ...staged, ...untracked])
+}
+
+// D5: a declared path matches itself exactly, or — for a trailing-slash "subtree" entry —
+// any path starting with that subtree prefix.
+function isDeclaredPath(p, declaredPaths) {
+  return declaredPaths.some((d) => (d.endsWith('/') ? p.startsWith(d) : p === d))
+}
+
+// F9 (review, build-repair): a mutated path is parsed straight off the patch's own `+++ b/<path>`
+// headers and must never be interpreted as a git pathspec glob (`*`, `?`, `[`) — a mutated
+// filename that happens to contain one of those characters must still be matched literally, or
+// the freeze silently exempts exactly the file whose name looks most like an attack.
+function literalPathspec(p) { return ':(literal)' + p }
+
+// F10 (review, build-repair; D14): the D14 freeze set is BOTH sides of the patch — every
+// `+++ b/` path (parsePatch's own set) AND every `--- a/` path — never `parsePatch().files`
+// alone, which only ever collects `+++ b/` headers. A deletion's `+++ b/` side is `/dev/null`
+// (matching neither regex, since neither carries an `a/`/`b/` prefix), so the deleted file, and
+// the source side of a rename, would otherwise never enter the frozen set at all — a hook could
+// restore either and --apply would report success with an empty canonical patch. Deliberately a
+// SEPARATE, site-local derivation rather than a widening of `parsePatch().files` itself: that
+// list also feeds `--score`'s hunk-range matching and `--record`'s ledger `files` field, and
+// folding the delete/rename source side into it would change what those two see.
+function mutationFreezeTargets(patchText) {
+  const files = new Set()
+  for (const line of patchText.split('\n')) {
+    const bm = line.match(/^\+\+\+ b\/(.*)$/)
+    if (bm) { files.add(bm[1]); continue }
+    const am = line.match(/^--- a\/(.*)$/)
+    if (am) files.add(am[1])
+  }
+  return [...files]
+}
+
+// D14: the staged blob id of each of `files`, via `git ls-files -s` (mode, blob, stage\tpath) —
+// a file that has left the index entirely is simply absent from the returned Map, so comparing
+// `m0.get(f) !== mAfter.get(f)` catches BOTH a rewritten blob and a removed-from-index file with
+// one check. Every path is passed as a literal pathspec (F9).
+function stagedBlobIds(dirPath, files) {
+  const map = new Map()
+  if (files.length === 0) return map
+  const out = execFileSync('git', ['-c', 'core.quotePath=off', 'ls-files', '-s', '--', ...files.map(literalPathspec)],
+    { cwd: dirPath, encoding: 'utf8' })
+  for (const line of out.split('\n')) {
+    if (!line) continue
+    const tab = line.indexOf('\t')
+    const blob = line.slice(0, tab).split(' ')[1]
+    map.set(line.slice(tab + 1), blob)
+  }
+  return map
+}
+
+// F8 (review, build-repair): the freeze must also catch a mutated file the hook left dirty in
+// the WORKTREE without staging it — the blob-id check alone is index-keyed and would miss it,
+// but Phase 1 step 6 runs the review legs against the worktree while the reviewer reads the
+// committed diff, so a silently-dirty mutated file scores two different trees. `git diff
+// --name-only` (worktree vs index) restricted to the mutation's own files, each a literal
+// pathspec (F9).
+function worktreeDirtyMutatedFiles(dirPath, files) {
+  if (files.length === 0) return new Set()
+  const out = execFileSync('git', ['-c', 'core.quotePath=off', 'diff', '--name-only', '--', ...files.map(literalPathspec)],
+    { cwd: dirPath, encoding: 'utf8' })
+  return new Set(out.split('\n').filter(Boolean))
+}
+
 // ---- --apply (D9/D10): git apply --index (never `git add -A`, D10) then commit on the -----------
 // ---- worktree's detached HEAD, so the mutation lands inside base..HEAD — the diff surface --------
 // ---- review-legs.js and the reviewer both read. After committing, re-emit the canonical patch -----
@@ -741,6 +919,11 @@ function cmdApply() {
       '--patch-out path outside the worktree')
     process.exit(3)
   }
+  // D6: read the host's post-apply reconcile hook from <--root> — null means HOOK OFF, byte-for-
+  // byte today's behavior. Every malformed/escaping/unresolvable-spec shape below has already
+  // exited 2 by this point, before anything is applied.
+  const hook = readAfterApplyHook()
+
   const patchAbs = path.resolve(patch)
   // D10: --index stages only the files the patch itself touches — never `git add -A`, which would
   // sweep whatever D4's setup-gate `setupCommand` left dirty in the worktree into this exact commit.
@@ -751,6 +934,78 @@ function cmdApply() {
       `against the worktree's current HEAD (git -C ${dir} apply --check ${patch}): ${e.message}`)
     process.exit(4)
   }
+  if (hook) {
+    // D2: D0 is captured immediately before running the declared command — AFTER git apply
+    // --index, so the mutation's own staged files (already reflected identically in the worktree
+    // and index by `apply --index`, and now visible to D13's third staged-vs-HEAD list too) sit in
+    // the baseline rather than looking like something the hook newly dirtied. A hand-driven --dir
+    // whose tree was never restored keeps its own pre-existing dirt out of the refusal delta below.
+    const d0 = dirtySnapshot(dir)
+    // D14: M0 is the staged blob id of every file the mutation patch itself touches (BOTH sides,
+    // F10 — see mutationFreezeTargets), fingerprinted right after `git apply --index` —
+    // independently of D2/D13's path sets, which (per D13) can never see the hook touch these
+    // files at all, since they are already members of D0/Dafter's union before the hook ever
+    // runs.
+    const mutatedFiles = mutationFreezeTargets(fs.readFileSync(patchAbs, 'utf8'))
+    const m0 = stagedBlobIds(dir, mutatedFiles)
+    // D1: run the declared reconcile between applying and committing, cwd = --dir.
+    const hookResult = spawnSync('bash', ['-c', hook.command], { cwd: dir, encoding: 'utf8' })
+    // F4 (review, build-repair): spawnSync sets `.error` (and leaves `.status` null/`.stderr`
+    // null) when bash itself cannot be spawned — that case is named explicitly, with the spawn
+    // error's own message and the PATH remedy, never folded into the generic "exited <status>"
+    // branch below (which would otherwise print the uninformative "exited null").
+    if (hookResult.error) {
+      console.error(`replay.js: failed to spawn bash for the replay.afterApply command in ${dir} — ` +
+        `${hookResult.error.message} — confirm bash is on PATH; nothing was committed`)
+      process.exit(4)
+    }
+    if (hookResult.status !== 0) {
+      console.error(`replay.js: replay.afterApply command exited ${hookResult.status} in ${dir} — ` +
+        `${hookResult.stderr} — narrow the command until it succeeds, or fix what it runs; nothing was committed`)
+      process.exit(4)
+    }
+    // D2: Refused = (Dafter \ D0) \ paths — only a path the command itself newly dirtied and
+    // nobody declared. Staged = paths ∩ Dafter — a declared path dirty now is staged whether or
+    // not it was already dirty in D0.
+    const dAfter = dirtySnapshot(dir)
+    const offenders = [...dAfter].filter((p) => !d0.has(p) && !isDeclaredPath(p, hook.paths))
+    if (offenders.length > 0) {
+      console.error(`replay.js: replay.afterApply command dirtied undeclared path(s): ${offenders.join(', ')} ` +
+        '— narrow the command so it touches only declared paths, or add them to replay.afterApply.paths; ' +
+        'nothing was committed')
+      process.exit(4)
+    }
+    const toStage = [...dAfter].filter((p) => isDeclaredPath(p, hook.paths))
+    for (const p of toStage) {
+      try {
+        execFileSync('git', ['add', '--', p], { cwd: dir, stdio: 'pipe' })
+      } catch (e) {
+        console.error(`replay.js: git add -- ${p} failed in ${dir} after the post-apply reconcile ran — ` +
+          `inspect with git -C ${dir} status: ${e.message}`)
+        process.exit(4)
+      }
+    }
+    // D14 (F7): Mafter is read AFTER D2's staging loop above, not before it — a hook that
+    // rewrites a mutated file in the WORKTREE without staging it leaves the staged blob
+    // untouched at hook-return time, so reading Mafter any earlier lets D2's own staging loop
+    // (when the rewritten file is, as it may be, a declared path) carry the hook's bytes into
+    // the commit while D3's exclusion strips it from the canonical patch entirely. Reading here
+    // sees whatever the staging loop just staged, so a declared-and-mutated path is caught too —
+    // exactly D14's "not exempt" clause. F8: a worktree-clean check on the same files runs
+    // alongside — the blob-id check alone is index-keyed and would miss a mutated file the hook
+    // left dirty but unstaged and undeclared (never reaching the staging loop at all), yet
+    // Phase 1 step 6 runs the review legs against that dirty worktree while the reviewer reads
+    // the clean commit.
+    const mAfter = stagedBlobIds(dir, mutatedFiles)
+    const dirtyMutated = worktreeDirtyMutatedFiles(dir, mutatedFiles)
+    const frozenViolations = mutatedFiles.filter((f) => m0.get(f) !== mAfter.get(f) || dirtyMutated.has(f))
+    if (frozenViolations.length > 0) {
+      console.error(`replay.js: replay.afterApply command altered the mutation's own file(s): ` +
+        `${frozenViolations.join(', ')} — narrow the command so it never touches the mutation's own files; ` +
+        'nothing was committed')
+      process.exit(4)
+    }
+  }
   try {
     execFileSync('git', ['commit', '-q', '-m', subject], { cwd: dir, stdio: 'pipe' })
   } catch (e) {
@@ -758,16 +1013,19 @@ function cmdApply() {
       `git -C ${dir} status: ${e.message}`)
     process.exit(4)
   }
-  // D9: re-emit the just-committed mutation under pinned flags that neutralize a hostile host git
+  // D9/D3: re-emit the just-committed mutation under pinned flags that neutralize a hostile host git
   // config (diff.noprefix/diff.mnemonicPrefix/core.quotePath) — every downstream --score/--record
-  // call reads THIS file, never a caller's own raw `git diff` capture.
+  // call reads THIS file, never a caller's own raw `git diff` capture. A declared reconcile hook
+  // excludes its own paths so later phases score only the mutation's own files (D3).
+  const diffArgs = [
+    '-c', 'core.quotePath=off', '-c', 'diff.noprefix=false', '-c', 'diff.mnemonicPrefix=false',
+    '-c', 'diff.srcPrefix=a/', '-c', 'diff.dstPrefix=b/',
+    'diff', '--no-ext-diff', '--no-color', 'HEAD^', 'HEAD',
+  ]
+  if (hook) diffArgs.push('--', '.', ...hook.paths.map((p) => ':(exclude)' + p))
   let emitted
   try {
-    emitted = execFileSync('git', [
-      '-c', 'core.quotePath=off', '-c', 'diff.noprefix=false', '-c', 'diff.mnemonicPrefix=false',
-      '-c', 'diff.srcPrefix=a/', '-c', 'diff.dstPrefix=b/',
-      'diff', '--no-ext-diff', '--no-color', 'HEAD^', 'HEAD',
-    ], { cwd: dir, encoding: 'utf8' })
+    emitted = execFileSync('git', diffArgs, { cwd: dir, encoding: 'utf8' })
   } catch (e) {
     console.error(`replay.js: canonical patch re-emission (git diff HEAD^ HEAD) failed in ${dir} after the ` +
       `mutation was committed — inspect with git -C ${dir} log: ${e.message}`)

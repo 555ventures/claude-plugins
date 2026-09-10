@@ -39,6 +39,10 @@
     "inapplicableClasses": [
       "server-code-in-client-bundle",
       "scoped-gate-blind-spot"
-    ]
+    ],
+    "afterApply": {
+      "command": "node scripts/size-ratchet.js --root . --reconcile --cite {spec}",
+      "paths": ["size-baseline.json"]
+    }
   }
 }

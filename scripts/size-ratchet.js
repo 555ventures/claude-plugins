@@ -3,30 +3,40 @@
 // size-ratchet.js --root <dir> [--baseline <file>] [--json]
 // size-ratchet.js --root <dir> --update
 // size-ratchet.js --root <dir> --raise <path|tree> --to <bytes> --cite <spec path>
+// size-ratchet.js --root <dir> --reconcile --cite <spec path>
 //
 // Keeps size-baseline.json (repo root) a TIGHT byte ceiling over every tracked file under
 // spec/scripts, scripts, and tests, plus a per-tree total, so the plugin's own code can shrink
 // freely but can only grow through a raise that names the spec asking for it.
 // Owner: specs/20260908/01-size-ratchet.md D1-D6, D13 (AC-20260908-01-1..8); the live standing
-// pin is tests/consistency/size-ratchet-live.test.js (AC-20260908-01-9).
+// pin is tests/consistency/size-ratchet-live.test.js (AC-20260908-01-9). --reconcile is owned by
+// specs/20260909/01-replay-build-shaped-mutation.md D8-D9 (AC-20260909-01-12..14): the same
+// tightening --update performs, with the over/tree-over/new-over-cap refusal replaced by one
+// cited raises[] entry per lifted finding — the one-shot form of what a build does by hand
+// (--update refused, then --raise --cite per finding) after reconciling its own derived artifacts.
 //
 // Inventory is `git ls-files` over the three roots (D1) — never an fs walk with an ignore
 // list, never a name-shape/extension filter. Untracked files never count (AC-8). Trees:
 // spec/scripts (everything under it except lib/), spec/scripts/lib, scripts, tests.
 //
-// Deliberately does NOT: write the baseline except via --update/--raise, allow --update
-// against an existing baseline to raise anything (D3), allow --raise to lower a ceiling (D4),
-// accept a free-form raise reason (D4 requires --cite), accept a raise target that is neither
-// a tracked file nor an already-baselined path, or classify by file extension.
+// Deliberately does NOT: write the baseline except via --update/--raise/--reconcile, allow
+// --update against an existing baseline to raise anything (D3), allow --raise/--reconcile to
+// lower a ceiling, accept a free-form raise reason (D4/D8 both require --cite), accept a raise
+// target that is neither a tracked file nor an already-baselined path, classify by file
+// extension, or lift --reconcile's tracked-but-missing refusal (D9 — a missing file is a broken
+// checkout, not a growth to baseline).
 //
-// Exit codes: 0 tight & under (check) or refusal-free write (update/raise) ·
-//             1 findings (check) or refused (update: over/tree-over, new-over-cap against an
-//               existing baseline, or a tracked file missing from disk) ·
+// Exit codes: 0 tight & under (check) or refusal-free write (update/raise/reconcile) ·
+//             1 findings (check) or refused (update/reconcile: a tracked file missing from
+//               disk; update also refuses over/tree-over/new-over-cap against an existing
+//               baseline, which reconcile lifts into raises[] instead) ·
 //             2 bad invocation (missing --root, unreadable/malformed-shape baseline,
-//               --update+--raise or either+--json together, --raise without --to/--cite,
-//               --to/--cite without --raise, a non-integer --to, bad/missing/nonexistent
-//               --cite, a --raise --to below the current ceiling, a --raise target that is
-//               neither tracked nor already baselined, unknown flag)
+//               --update/--raise/--reconcile combined with one another or with --json, --raise
+//               without --to/--cite, --reconcile without --cite, a stray --to alongside
+//               --reconcile (--reconcile never reads --to — every ceiling comes from actual),
+//               --to/--cite without --raise or --reconcile, a non-integer --to,
+//               bad/missing/nonexistent --cite, a --raise --to below the current ceiling, a
+//               --raise target that is neither tracked nor already baselined, unknown flag)
 
 const fs = require('fs')
 const path = require('path')
@@ -58,7 +68,7 @@ function fail(msg) {
 }
 
 function parseArgs(argv) {
-  const args = { root: null, baseline: null, json: false, update: false, raise: null, to: null, cite: null }
+  const args = { root: null, baseline: null, json: false, update: false, raise: null, to: null, cite: null, reconcile: false }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     switch (a) {
@@ -69,17 +79,36 @@ function parseArgs(argv) {
       case '--raise': args.raise = argv[++i]; break
       case '--to': args.to = argv[++i]; break
       case '--cite': args.cite = argv[++i]; break
-      default: fail('unknown flag ' + a + ' — usage: size-ratchet.js --root <dir> [--baseline <file>] [--json] | --update | --raise <path|tree> --to <bytes> --cite <spec path>')
+      case '--reconcile': args.reconcile = true; break
+      default: fail('unknown flag ' + a + ' — usage: size-ratchet.js --root <dir> [--baseline <file>] [--json] | --update | --raise <path|tree> --to <bytes> --cite <spec path> | --reconcile --cite <spec path>')
     }
   }
   if (!args.root) fail('missing --root — usage: size-ratchet.js --root <dir> [--baseline <file>] [--json]')
-  const modes = [args.update, args.raise !== null].filter(Boolean).length
-  if (modes > 1) fail('--update and --raise are mutually exclusive')
-  if ((args.update || args.raise !== null) && args.json) fail('--json is not compatible with --update or --raise')
-  if (args.raise === null && (args.to !== null || args.cite !== null)) {
+  const modes = [args.update, args.raise !== null, args.reconcile].filter(Boolean).length
+  if (modes > 1) fail('--update, --raise, and --reconcile are mutually exclusive')
+  if ((args.update || args.raise !== null || args.reconcile) && args.json) {
+    fail('--json is not compatible with --update, --raise, or --reconcile')
+  }
+  if (args.raise === null && !args.reconcile && (args.to !== null || args.cite !== null)) {
     fail('--to/--cite require --raise — usage: size-ratchet.js --root <dir> --raise <path|tree> --to <bytes> --cite <spec path>')
   }
+  // F3 (review, build-repair): --to is meaningless under --reconcile — every ceiling is derived
+  // from the tracked file's actual byte count, never from a caller-supplied --to — so a stray
+  // --to alongside --reconcile is a bad invocation, not a silently-accepted no-op flag.
+  if (args.reconcile && args.to !== null) {
+    fail('--to is not compatible with --reconcile — --reconcile derives every ceiling from actual, never ' +
+      'from --to; drop --to')
+  }
   return args
+}
+
+// D8's --cite validation reuses exactly what --raise already demands: shape, then existence.
+// The "is --cite even present" requirement stays with each caller, since --raise and --reconcile
+// word that requirement differently ("--raise requires --cite" vs "--reconcile requires --cite").
+function validateCiteShapeAndExistence(root, cite) {
+  if (!CITE_RE.test(cite)) fail('--cite must match ^specs/\\d{8}/\\d{2}- , got ' + cite)
+  const citePath = path.join(root, cite)
+  if (!fs.existsSync(citePath)) fail('--cite names a file that does not exist: ' + cite)
 }
 
 // Classify a repo-relative path into one of the tracked trees, or null.
@@ -272,6 +301,9 @@ function main() {
   if (args.update) {
     return doUpdate(root, baselinePath, baseline)
   }
+  if (args.reconcile) {
+    return doReconcile(root, baselinePath, baseline, args)
+  }
   return doCheck(root, baseline, args)
 }
 
@@ -346,6 +378,59 @@ function doUpdate(root, baselinePath, baseline, isSeed) {
   process.exit(0)
 }
 
+// D8/D9: --reconcile is --update's own pass (every tracked file's and tree's ceiling set to its
+// actual byte count) with the over/tree-over/new-over-cap refusal replaced by one raises[] entry
+// per lifted finding, in evaluate()'s own finding order — `from` is the finding's own recorded
+// ceiling (0 for new-over-cap, which by definition has none). The tracked-but-missing refusal
+// (D9) is untouched: it still exits 1 and writes nothing, exactly like --update.
+function doReconcile(root, baselinePath, baseline, args) {
+  if (args.cite === null) fail('--reconcile requires --cite <spec path>')
+  validateCiteShapeAndExistence(root, args.cite)
+
+  const { actualSize, findings, missingTracked } = evaluate(root, baseline)
+  if (missingTracked.length > 0) {
+    for (const rel of missingTracked) {
+      writeErr('size-ratchet: ' + rel + ' is tracked but missing from disk — restore it or `git rm` it before --reconcile can run\n')
+    }
+    process.exit(1)
+  }
+
+  const newFiles = {}
+  for (const rel of Object.keys(actualSize)) {
+    const tree = treeFor(rel)
+    if (!tree) continue
+    newFiles[rel] = actualSize[rel]
+  }
+  const newTrees = {}
+  for (const t of TREES) {
+    let sum = 0
+    for (const rel of Object.keys(newFiles)) {
+      if (treeFor(rel) === t) sum += newFiles[rel]
+    }
+    newTrees[t] = sum
+  }
+
+  const liftable = findings.filter((f) => f.kind === 'over' || f.kind === 'tree-over' || f.kind === 'new-over-cap')
+  const raises = (baseline.raises || []).slice()
+  const appended = []
+  for (const f of liftable) {
+    const from = f.kind === 'new-over-cap' ? 0 : f.ceiling
+    const entry = { path: f.path, from, to: f.actual, cite: args.cite }
+    raises.push(entry)
+    appended.push(entry)
+  }
+
+  const updated = { newFileCap: baseline.newFileCap, trees: newTrees, files: newFiles, raises }
+  writeBaseline(baselinePath, updated)
+
+  for (const e of appended) {
+    writeOut('size-ratchet: reconciled ' + e.path + ' ' + e.from + ' -> ' + e.to + '\n')
+  }
+  writeOut('size-ratchet: reconciled ' + appended.length + ' raises, ' + Object.keys(newFiles).length +
+    ' files, ' + TREES.length + ' trees\n')
+  process.exit(0)
+}
+
 function doRaise(root, baselinePath, baseline, args) {
   if (args.to === null) fail('--raise requires --to <bytes>')
   if (args.cite === null) fail('--raise requires --cite <spec path>')
@@ -353,13 +438,7 @@ function doRaise(root, baselinePath, baseline, args) {
   if (!Number.isFinite(toNum) || !Number.isInteger(toNum) || toNum < 0) {
     fail('--to must be a non-negative integer byte count, got ' + args.to)
   }
-  if (!CITE_RE.test(args.cite)) {
-    fail('--cite must match ^specs/\\d{8}/\\d{2}- , got ' + args.cite)
-  }
-  const citePath = path.join(root, args.cite)
-  if (!fs.existsSync(citePath)) {
-    fail('--cite names a file that does not exist: ' + args.cite)
-  }
+  validateCiteShapeAndExistence(root, args.cite)
 
   const target = args.raise
   const isTree = TREES.includes(target)

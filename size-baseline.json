@@ -1,14 +1,14 @@
 {
   "newFileCap": 40000,
   "trees": {
-    "scripts": 29937,
-    "spec/scripts": 1248772,
+    "scripts": 34134,
+    "spec/scripts": 1264751,
     "spec/scripts/lib": 231235,
-    "tests": 3459222
+    "tests": 3521810
   },
   "files": {
     "scripts/plugin-bump.js": 8564,
-    "scripts/size-ratchet.js": 15827,
+    "scripts/size-ratchet.js": 20024,
     "scripts/spec-patterns.sh": 2455,
     "scripts/test-file-budget-reporter.js": 3091,
     "spec/scripts/ac-drift.js": 9152,
@@ -70,7 +70,7 @@
     "spec/scripts/render-gate.js": 30243,
     "spec/scripts/render-inventory.browser.js": 14416,
     "spec/scripts/render-rules.js": 19776,
-    "spec/scripts/replay.js": 69031,
+    "spec/scripts/replay.js": 85010,
     "spec/scripts/report-render.js": 7899,
     "spec/scripts/review-legs.js": 27558,
     "spec/scripts/scope-reconcile.js": 16902,
@@ -212,7 +212,7 @@
     "tests/replay/record-via.test.js": 7611,
     "tests/replay/replay-corpus.test.js": 7478,
     "tests/replay/replay.fixtures.js": 1919,
-    "tests/replay/replay.test.js": 201519,
+    "tests/replay/replay.test.js": 256198,
     "tests/report/report-render.test.js": 14403,
     "tests/review/ci-query.test.js": 17510,
     "tests/review/deviations-backstop.test.js": 18269,
@@ -250,7 +250,7 @@
     "tests/scope-reconcile-at-risk.test.js": 25346,
     "tests/scope-reconcile-glob-rows.test.js": 13295,
     "tests/scope-reconcile-probe.test.js": 7045,
-    "tests/size-ratchet/size-ratchet.test.js": 32630,
+    "tests/size-ratchet/size-ratchet.test.js": 40539,
     "tests/smoke-manifest.test.js": 5959,
     "tests/smoke-shutdown-behavior.test.js": 5986,
     "tests/smoke-stale-ready.test.js": 4064,
@@ -459,6 +459,162 @@
       "from": 3455513,
       "to": 3459222,
       "cite": "specs/20260819/01-review-evidence-retention.md"
+    },
+    {
+      "path": "scripts/size-ratchet.js",
+      "from": 15827,
+      "to": 19430,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "spec/scripts/replay.js",
+      "from": 69031,
+      "to": 76407,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "tests/replay/replay.test.js",
+      "from": 201519,
+      "to": 229263,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "tests/size-ratchet/size-ratchet.test.js",
+      "from": 32630,
+      "to": 40012,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1248772,
+      "to": 1256148,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "scripts",
+      "from": 29937,
+      "to": 33540,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "tests",
+      "from": 3459222,
+      "to": 3494348,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "scripts/size-ratchet.js",
+      "from": 19430,
+      "to": 20024,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "spec/scripts/replay.js",
+      "from": 76407,
+      "to": 79063,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "tests/replay/replay.test.js",
+      "from": 229263,
+      "to": 240418,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "tests/size-ratchet/size-ratchet.test.js",
+      "from": 40012,
+      "to": 40539,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1256148,
+      "to": 1258804,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "scripts",
+      "from": 33540,
+      "to": 34134,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "tests",
+      "from": 3494348,
+      "to": 3506030,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "spec/scripts/replay.js",
+      "from": 79063,
+      "to": 81629,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "tests/replay/replay.test.js",
+      "from": 240418,
+      "to": 244801,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1258804,
+      "to": 1261370,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "tests",
+      "from": 3506030,
+      "to": 3510413,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "spec/scripts/replay.js",
+      "from": 81629,
+      "to": 83756,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "tests/replay/replay.test.js",
+      "from": 244801,
+      "to": 252469,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1261370,
+      "to": 1263497,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "tests",
+      "from": 3510413,
+      "to": 3518081,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "spec/scripts/replay.js",
+      "from": 83756,
+      "to": 85010,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "tests/replay/replay.test.js",
+      "from": 252469,
+      "to": 256198,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1263497,
+      "to": 1264751,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
+    },
+    {
+      "path": "tests",
+      "from": 3518081,
+      "to": 3521810,
+      "cite": "specs/20260909/01-replay-build-shaped-mutation.md"
     }
   ]
 }

@@ -1,6 +1,7 @@
 ---
 date: 2026-09-09
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: replay-harness
 design: false
@@ -10,6 +11,7 @@ depended_on_by: [specs/20260909/02-replay-base-and-label-honesty.md]
 brief: n/a
 spiked: 2026-09-09
 open_markers: 0
+diff_base: 056cb05974d3d6f7cbdc11fb2856beaecee2562d
 ---
 
 # The replay mutation commit is shaped like a real build commit
@@ -47,6 +49,8 @@ one-shot form of what a build does by hand today.
 | D10 | This repo declares the hook: `"replay": {"afterApply": {"command": "node scripts/size-ratchet.js --root . --reconcile --cite {spec}", "paths": ["size-baseline.json"]}}`, alongside the existing `inapplicableClasses` `[no-ac: host configuration data — the mechanism it feeds is pinned by AC-20260909-01-1..11; a config value has no behavioral surface of its own]` | The grounding contract (`spec-paths contract`) does not enumerate the `replay` block, so this is an additive host key and no host's grounding stamp changes. |
 | D11 | `spec/commands/replay.md` Phase 1 step 5 states that `--apply` takes `--spec {spec}`, runs the host's declared post-apply reconcile between applying and committing, stages only the declared paths so the mutation commit carries the same derived-artifact reconciliation a real build commit carries, excludes those paths from the canonical patch, and that a host declaring none is unchanged. Phase 3 gains one sentence: a survivor naming **only** a declared reconcile path is not a kill — the reviewer spent its finding on commit shape rather than the planted defect — so that adjudication resolves `missed` (AC-20260909-01-11, AC-20260909-01-15) | Doctrine is where a host author learns a hook exists; a mechanism reachable only by reading `replay.js` is a mechanism hosts never adopt (the `.worktreeinclude` precedent, specs/20260904/02 D6). The excluded path turns such a survivor into `--score`'s `ambiguous`, and an unruled `ambiguous` is a coin flip in the catch-rate numerator. |
 | D12 | `spec/.claude-plugin/plugin.json` is bumped via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` `[no-ac: version discipline is pinned mechanically by scripts/plugin-bump.js --check in the gate]` | Pipeline rules § Planning: a plugin.json row cites the command and names no version literal. |
+| D13 | **Amends D2 (user ruling, review stage 2026-09-09).** The `D0` and `Dafter` snapshots gain a third list, `git diff --cached --name-only` (staged vs `HEAD`), alongside the worktree-vs-index and untracked lists, under the same `core.quotePath=off` pin every list carries. The refusal set `(Dafter \ D0) \ paths` and the staging set `paths ∩ Dafter` keep D2's definitions verbatim — only the two snapshots' membership widens (AC-20260909-01-2) | A hook command that runs `git add` on a path itself moves it into the index, where neither of D2's original two lists can see it: the undeclared path rides the mutation commit AND lands in the canonical patch `--score` reads, which is exactly the over-count D2 exists to prevent. Rejected: leaving it — nothing in this repo's own hook stages by hand today, but the failure is silent when one does, and a catch rate that quietly over-counts is the one defect this harness cannot self-detect. |
+| D14 | **The mutation's own bytes are frozen across the hook (user ruling, review stage 2026-09-09).** Independently of D2/D13's path sets, `--apply` records the staged blob id of every file the mutation patch touches immediately after `git apply --index` — **touches means both sides of the patch**: every `+++ b/` path and every `--- a/` path, so a file the mutation DELETES, and the source side of a rename, are frozen exactly like a file it writes (a deleted file's frozen state is "absent from the index", and a hook restoring it is the same refusal) — and re-reads them after the hook returns **and after D2's staging loop has run**, together with a worktree-clean check on the same files. Any such file whose staged blob id changed, that left the index, or that is dirty in the worktree, is exit 4 naming it and the remedy (narrow the command so it does not touch the mutation's own files), with nothing committed. A declared reconcile path is not exempt: a path that is both declared and mutated is a contradiction the refusal names (AC-20260909-01-2) | D0-after-apply is the only ordering that does not self-refuse (D13), and it necessarily puts the mutation's own files in `D0` — so no path-set rule can also see the hook rewriting the defect under measurement. The two questions are different in kind: "did the hook dirty an undeclared path" is keyed on names, "did the hook alter the defect" is keyed on bytes. Splitting them keeps D2/D13 verbatim and needs no third amendment. The patch's file list is already parsed for `--patch-out` and `--score`, so the fingerprint costs nothing new. Rejected: moving the snapshot earlier — executed and shown to refuse every hook-active `--apply`. Rejected: reading `Mafter` before D2's staging loop and from the index alone — a third review pass executed both escapes, a hook rewriting a mutated file unstaged (D2 then stages the hook's bytes and D3's exclusion empties the canonical patch) and a hook leaving a mutated file dirty (the legs run on that tree while the reviewer reads the commit). Rejected: deriving the frozen set from `parsePatch().files` alone — a fourth pass executed the deletion shape, where the `+++ b/` side is `/dev/null`, the deleted file is therefore in no frozen set, a hook restored it, and the canonical patch came out zero bytes. Known and accepted residue, recorded rather than fixed: a permission-only change on a frozen file passes a content-keyed compare, and a hook with both a D2 and a D14 problem is refused one at a time since D2's check runs first. |
 
 ## File Plan
 
@@ -101,15 +105,35 @@ spec/scripts/replay.js  --apply  (Node built-ins only)
                                                                 exit 2   (D5)
          command contains {spec} and no --spec given             exit 2   (D4)
          --spec given and not matching ^specs/\d{8}/\d{2}-       exit 2   (D4)
-    6. D0     = git -C <dir> diff --name-only
+    6. git apply --index <patch>                                exit 4   (unchanged)
+    7. D0     = git -C <dir> diff --name-only
               + git -C <dir> ls-files --others --exclude-standard
-    7. git apply --index <patch>                                exit 4   (unchanged)
+              + git -C <dir> diff --cached --name-only                   (D13)
+              (every list under -c core.quotePath=off, as the emission
+               side already pins; captured AFTER git apply, immediately
+               before the hook — D2's "immediately before running
+               `command`" names the hook, not the apply. Capturing it
+               earlier would put the mutation's own now-staged files in
+               Dafter \ D0 and self-refuse every hook-active --apply.)
+       M0     = staged blob id of every file the mutation patch touches,     (D14)
+                BOTH sides — every +++ b/ path and every --- a/ path, so a
+                deleted file (frozen as "absent from the index") and a
+                rename's source are covered like a written one
     8. bash -c "<command, {spec} substituted>"  cwd=<dir>
          nonzero exit -> exit 4, stderr quoted, remedy named     (D2)
-    9. Dafter = the same two lists
+         unspawnable bash -> exit 4 naming the spawn error + a PATH remedy
+    9. Dafter = the same three lists
          offenders = (Dafter \ D0) \ paths
          offenders non-empty -> exit 4 naming every offender     (D2)
          else git add -- <p> for each p in (paths ∩ Dafter)      (D2)
+       Mafter = the same blob ids, read AFTER that staging loop, plus a
+                worktree-clean check on the same files                   (D14)
+         any changed, gone, or dirty in the worktree -> exit 4 naming it
+         (after staging, because a hook that rewrites a mutated file
+          WITHOUT staging it would otherwise pass an index-only check and
+          then be staged by the loop above; and worktree-clean because
+          Phase 1 step 6 runs the review legs against this tree while the
+          reviewer reads the commit)
    10. git commit -q -m <subject>                               exit 4   (unchanged)
    11. git diff HEAD^ HEAD -- . ':(exclude)<p>' … -> --patch-out (D3)
    stdout on success: applied class=<id> dir=<dir> patchOut=<abs>   (unchanged)
@@ -349,6 +373,52 @@ The step-7 ladder rewrite that stops a still-red pristine leg from stalling on a
 question is deliberately **not** here: it depends on the `pristine-red:<leg>` recording shape,
 which belongs with the recorder changes in the sibling spec. Until that lands, a pristine-red leg
 ends where it ends today — at rung 4's question — which is unchanged behavior, not a regression.
+
+### What the build and review actually cost (folded from the deviations sidecar)
+
+**The freeze took four passes to get right, and each pass's fix opened the next hole.** The
+sequence is worth keeping because it is one mistake repeated, not four separate ones: a single
+path-keyed set was being asked to answer two questions of different kinds. D2 asked "did the
+hook dirty a path nobody declared", which is a question about names. Review then asked "did the
+hook touch the defect under measurement", which is a question about bytes. Every attempt to
+stretch the name-keyed set over the byte question failed in a new place. D13 widened the set to
+see hand-staged paths, which forced `D0` after `git apply --index`, which put the mutation's own
+files inside `D0` and made them invisible to the very refusal meant to protect them. D14 added
+the byte check but read it before the staging loop and from the index alone, so a hook that
+rewrote a mutated file *without* staging it passed the check and was then staged by D2's own
+loop — with D3's exclusion emptying the canonical patch, the worst possible outcome, since the
+blind reviewer is handed nothing at all. Moving the read after staging and pairing it with a
+worktree-clean check closed that. A fourth pass then found the byte check's *input* was still
+half a set: derived from `+++ b/` headers alone, it never covered a file the mutation deletes.
+The lesson that generalizes: when one derived set starts answering two questions, split the set
+rather than widen it — and enumerate both sides of any patch-derived set, because the shape a
+patch can take is not the shape the common case takes.
+
+**Three residues are known and deliberately unfixed**, each with the condition that would change
+the answer. A permission-only change on a frozen file passes a content-keyed compare — reachable
+only by a hook that chmods a mutated file, and closing it means comparing modes alongside blobs.
+A hook carrying both a D2 and a D14 problem is refused one at a time, since D2's check runs
+first — an ergonomics cost of two rounds, not a correctness gap. A path already untracked before
+`--apply` that the hook then stages is neither refused nor excluded; A3's executed spike shows
+the doctrine path cleans the scratch tree before `--apply`, so this is reachable only by a
+hand-driven `--dir` against an unrestored tree, and it becomes real the moment such runs become
+a supported path or the doctrine path stops cleaning first.
+
+**Two test-quality notes worth carrying.** The `:(literal)` pathspec pin passes for the
+unstaged-rewrite reason rather than its own: on this git version a bracketed filename already
+resolves exactly, so the pin stands as a regression guard rather than as proof of the gap it was
+written for. And the rename shape of the both-sides freeze is unpinned — forcing `git diff` to
+emit real rename headers depends on similarity heuristics at capture time, and a fixture built
+to defeat those is more likely to rot than to catch anything.
+
+**The AC-20260909-01-9 retagging carried a trap.** Its six `--apply` tests named no `--root` and
+no `cwd`, so they resolved the host root to the *test runner's* cwd — this repo — which was
+harmless only while this repo declared no hook. D10 declares one, so those tests would have
+started reading a real `{spec}`-bearing command with no `--spec` and failing on a refusal that
+had nothing to do with what they pin. Naming each fixture root explicitly is what preserved the
+AC's literal premise ("hosts carry no config file at all"); an inherited cwd was never testing
+that premise in the first place. A test that omits the flag naming its own subject is not
+testing what its name says as soon as the ambient default acquires meaning.
 
 ## Canonical Delta
 

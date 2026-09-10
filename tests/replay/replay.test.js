@@ -228,6 +228,46 @@ function initApplyFixture(prefix) {
   return { root, baseSha, patchFile }
 }
 
+// specs/20260909/01-replay-build-shaped-mutation.md D1-D6: --apply's optional
+// replay.afterApply post-apply reconcile hook, read from <--root>/.claude/spec.config.json. Every
+// hook test below composes its host from initHookFixture/commitFiles (the latter shared from
+// replay.fixtures.js) and its own writeHookConfig call — never a re-inlined host builder.
+function writeHookConfig(root, config) {
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify(config))
+}
+
+// Same shape as initApplyFixture, plus a tracked lock.txt so AC-3's pre-existing-dirt cases have
+// a file that is already clean-tracked (and can be dirtied by the test) before --apply ever runs.
+function initHookFixture(prefix) {
+  const root = fs.realpathSync(tmpdir(prefix + '-repo'))
+  gitRepo(root)
+  const baseSha = commitFiles(root, { 'lib/x.js': 'a\nb\nc\n', 'lock.txt': 'pinned\n' }, 'add lib/x.js + lock.txt')
+
+  const scratch = path.join(fs.realpathSync(tmpdir(prefix + '-scratch')), 'scratch')
+  execFileSync('git', ['-C', root, 'worktree', 'add', '--detach', scratch, baseSha])
+  fs.writeFileSync(path.join(scratch, 'lib/x.js'), 'a\nB\nc\n')
+  const patch = execFileSync('git', ['-C', scratch, 'diff'], { encoding: 'utf8' })
+  execFileSync('git', ['-C', root, 'worktree', 'remove', '--force', scratch])
+  const patchFile = path.join(fs.realpathSync(tmpdir(prefix + '-patch')), 'mutation.patch')
+  fs.writeFileSync(patchFile, patch)
+  return { root, baseSha, patchFile }
+}
+
+// Every hook test needs its own fresh --setup-created worktree (--apply commits onto it), always
+// run with cwd=root so --apply's default --root resolution (no --root flag) targets the
+// SYNTHETIC host root the test built, never this repo's own real config.
+function setupWt(root, baseSha, prefix) {
+  const dir = path.join(fs.realpathSync(tmpdir(prefix)), 'wt')
+  const r = runNode(SCRIPT, ['--setup', '--commit', baseSha, '--dir', dir], { cwd: root })
+  assert.strictEqual(r.status, 0, 'fixture setup: --setup must succeed: ' + r.stderr)
+  return dir
+}
+
+function patchOutPath(prefix) {
+  return path.join(fs.realpathSync(tmpdir(prefix)), 'mutation-out.patch')
+}
+
 test('AC-20260819-02-1: --due exits 0 printing "due reviewsSince=N" once N review rows have landed after the last replay row, and exits 1 below the threshold', () => {
   const dueDir = fs.realpathSync(tmpdir('replay-due'))
   writeLedger(dueDir, [1, 2, 3, 4, 5].map(n => reviewRow(n)))
@@ -1272,7 +1312,7 @@ test('AC-20260823-05-6 / AC-20260826-01-6 (retagged from AC-20260819-02-3, SHALL
     'the maintainer actually works in: ' + JSON.stringify({ before: statusBefore, after: statusAfter }))
 })
 
-test('AC-20260819-02-4: --setup composed with --apply commits the mutation on base..HEAD without leaking the .scratch-worktree marker into the diff or git status, subject defaulting to "build: follow-up" or landing verbatim', () => {
+test('AC-20260819-02-4 / AC-20260909-01-9: --setup composed with --apply commits the mutation on base..HEAD without leaking the .scratch-worktree marker into the diff or git status, subject defaulting to "build: follow-up" or landing verbatim', () => {
   const { root, baseSha, patchFile } = initApplyFixture('replay-apply')
 
   // F1 regression pin: the worktree comes from --setup itself (marker excluded via
@@ -1288,7 +1328,7 @@ test('AC-20260819-02-4: --setup composed with --apply commits the mutation on ba
   // assertions and this test's own AC-ID untouched, since nothing this test asserts changed.
   const patchOutDefault = path.join(fs.realpathSync(tmpdir('replay-apply-out-default')), 'mutation-out.patch')
   const applyDefault = runNode(SCRIPT, ['--apply', '--dir', wtDefault, '--patch', patchFile,
-    '--patch-out', patchOutDefault, '--class', 'self-consistent-polarity'])
+    '--patch-out', patchOutDefault, '--class', 'self-consistent-polarity', '--root', root])
   assert.strictEqual(applyDefault.status, 0,
     'D5: --apply on a --setup-created worktree with a valid patch must succeed: ' + applyDefault.stderr)
 
@@ -1320,14 +1360,14 @@ test('AC-20260819-02-4: --setup composed with --apply commits the mutation on ba
   const subjectText = 'build: tidy up lib/x.js formatting'
   const patchOutExplicit = path.join(fs.realpathSync(tmpdir('replay-apply-out-explicit')), 'mutation-out.patch')
   const applyExplicit = runNode(SCRIPT, ['--apply', '--dir', wtExplicit, '--patch', patchFile,
-    '--patch-out', patchOutExplicit, '--class', 'self-consistent-polarity', '--subject', subjectText])
+    '--patch-out', patchOutExplicit, '--class', 'self-consistent-polarity', '--subject', subjectText, '--root', root])
   assert.strictEqual(applyExplicit.status, 0, 'D5: --apply with a clean --subject must succeed: ' + applyExplicit.stderr)
   const msgExplicit = execFileSync('git', ['-C', wtExplicit, 'log', '-1', '--format=%s'], { encoding: 'utf8' }).trim()
   assert.strictEqual(msgExplicit, subjectText,
     'D5: a passed --subject must land as the commit subject VERBATIM, not wrapped, truncated, or prefixed: ' + msgExplicit)
 })
 
-test('AC-20260819-02-4: --apply refuses a --subject announcing the harness or containing the --class value, with exit 2 and nothing committed, but accepts a spec-derived subject that merely uses the words', () => {
+test('AC-20260819-02-4 / AC-20260909-01-9: --apply refuses a --subject announcing the harness or containing the --class value, with exit 2 and nothing committed, but accepts a spec-derived subject that merely uses the words', () => {
   const { root, baseSha, patchFile } = initApplyFixture('replay-apply-refuse')
 
   const wt = path.join(fs.realpathSync(tmpdir('replay-apply-refuse-wt')), 'wt')
@@ -1341,7 +1381,8 @@ test('AC-20260819-02-4: --apply refuses a --subject announcing the harness or co
   const patchOutRefuse = path.join(fs.realpathSync(tmpdir('replay-apply-refuse-out')), 'mutation-out.patch')
 
   const replaySubject = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile,
-    '--patch-out', patchOutRefuse, '--class', 'self-consistent-polarity', '--subject', 'replay mutation test'], { cwd: root })
+    '--patch-out', patchOutRefuse, '--class', 'self-consistent-polarity', '--subject', 'replay mutation test',
+    '--root', root], { cwd: root })
   assert.strictEqual(replaySubject.status, 2,
     'F2 regression pin (2026-08-19 review): a --subject announcing the harness must be refused ' +
     'with exit 2 BEFORE any git command runs — this is the exact leak that let a dispatched reviewer read ' +
@@ -1351,7 +1392,8 @@ test('AC-20260819-02-4: --apply refuses a --subject announcing the harness or co
     JSON.stringify(replaySubject.stdout))
 
   const classSubject = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile,
-    '--patch-out', patchOutRefuse, '--class', 'self-consistent-polarity', '--subject', 'build: fix self-consistent-polarity edge case'],
+    '--patch-out', patchOutRefuse, '--class', 'self-consistent-polarity', '--subject', 'build: fix self-consistent-polarity edge case',
+    '--root', root],
     { cwd: root })
   assert.strictEqual(classSubject.status, 2,
     'F2 regression pin: a --subject containing the literal --class value must also be refused with exit 2 ' +
@@ -1375,7 +1417,7 @@ test('AC-20260819-02-4: --apply refuses a --subject announcing the harness or co
   // not vocabulary, so a spec-derived subject that merely contains those words must be ACCEPTED.
   const derived = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile,
     '--patch-out', patchOutRefuse, '--class', 'self-consistent-polarity',
-    '--subject', 'build(20260819/02): scheduled mutation replay harness'], { cwd: root })
+    '--subject', 'build(20260819/02): scheduled mutation replay harness', '--root', root], { cwd: root })
   assert.strictEqual(derived.status, 0,
     'D5: a build-commit-shaped subject derived from the target spec must be ACCEPTED even when the ' +
     "spec's own title contains 'replay' or 'mutation' — refusing it would force the harness to commit " +
@@ -1391,7 +1433,7 @@ test('AC-20260819-02-4: --apply refuses a --subject announcing the harness or co
 // parseCorpus(corpusPath())) does not carry — today's --apply performs no such check at all
 // (verified below: 'not-a-class' commits the mutation exactly like a real corpus id), so a typo'd
 // class silently forks a class's catch-rate history into two rows nobody joins.
-test('AC-20260901-08-2: --apply --class not-a-class exits 2 naming replay-corpus.md and the valid ids, leaves the worktree HEAD unchanged, and writes no --patch-out, while --class silent-fallback on the same inputs still commits the mutation (AC-20260819-02-4\'s existing fixture)', () => {
+test('AC-20260901-08-2 / AC-20260909-01-9: --apply --class not-a-class exits 2 naming replay-corpus.md and the valid ids, leaves the worktree HEAD unchanged, and writes no --patch-out, while --class silent-fallback on the same inputs still commits the mutation (AC-20260819-02-4\'s existing fixture)', () => {
   const { root, baseSha, patchFile } = initApplyFixture('replay-apply-classcheck')
   const setupBad = runNode(SCRIPT, ['--setup', '--commit', baseSha, '--dir', path.join(fs.realpathSync(tmpdir('replay-apply-classcheck-wt1')), 'wt')], { cwd: root })
   assert.strictEqual(setupBad.status, 0, 'fixture setup: --setup must succeed before --apply can be composed onto it: ' + setupBad.stderr)
@@ -1400,7 +1442,7 @@ test('AC-20260901-08-2: --apply --class not-a-class exits 2 naming replay-corpus
   const headBefore = execFileSync('git', ['-C', wtBad, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
 
   const badClass = runNode(SCRIPT, ['--apply', '--dir', wtBad, '--patch', patchFile,
-    '--patch-out', patchOutBad, '--class', 'not-a-class'])
+    '--patch-out', patchOutBad, '--class', 'not-a-class', '--root', root])
   assert.strictEqual(badClass.status, 2,
     'D2: a --class value absent from the corpus must be refused with exit 2 — nothing in today\'s ' +
     '--apply validates --class at all, so this currently commits the mutation instead: ' +
@@ -1423,7 +1465,7 @@ test('AC-20260901-08-2: --apply --class not-a-class exits 2 naming replay-corpus
   const wtOk = setupOk.stdout.match(/setup dir=(\S+)/)[1]
   const patchOutOk = path.join(fs.realpathSync(tmpdir('replay-apply-classcheck-out2')), 'mutation.patch')
   const goodClass = runNode(SCRIPT, ['--apply', '--dir', wtOk, '--patch', patchFile,
-    '--patch-out', patchOutOk, '--class', 'silent-fallback'])
+    '--patch-out', patchOutOk, '--class', 'silent-fallback', '--root', root])
   assert.strictEqual(goodClass.status, 0,
     'D2: silent-fallback is a real corpus id and must still be accepted — the validation must not over-' +
     'refuse a genuinely valid class: ' + goodClass.stderr)
@@ -1431,7 +1473,669 @@ test('AC-20260901-08-2: --apply --class not-a-class exits 2 naming replay-corpus
     'D2: a valid --class must still commit the mutation exactly like AC-20260819-02-4\'s existing fixture: ' + goodClass.stdout)
 })
 
-test('AC-20260819-03-14: --apply --patch-out writes unquoted +++ b/<path> headers off HEAD^..HEAD even when the worktree\'s repo config sets diff.noprefix/diff.mnemonicPrefix and core.quotePath is left on, for a mutation touching a non-ASCII path', () => {
+test('AC-20260909-01-1: the declared post-apply reconcile rides the mutation commit', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-basic')
+  writeHookConfig(root, { replay: { afterApply: { command: 'printf x > derived.json', paths: ['derived.json'] } } })
+  const wt = setupWt(root, baseSha, 'replay-hook-basic-wt')
+  const patchOut = patchOutPath('replay-hook-basic-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    'D1: --apply must succeed when the host declares a valid afterApply hook: ' + r.stderr)
+  const nameOnly = execFileSync('git', ['-C', wt, 'diff', '--name-only', 'HEAD^', 'HEAD'], { encoding: 'utf8' })
+  assert.match(nameOnly, /derived\.json/,
+    'D1: the declared reconcile path must ride the SAME commit as the mutation — a separate commit or a ' +
+    'dropped file here means the mutation commit is still shaped like it skipped its last step: ' + nameOnly)
+  assert.match(nameOnly, /lib\/x\.js/,
+    'D1: the mutation itself must still be in that same commit: ' + nameOnly)
+})
+
+test('AC-20260909-01-2: an undeclared path dirtied by the post-apply reconcile is refused and nothing is committed', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-undeclared')
+  writeHookConfig(root, {
+    replay: { afterApply: { command: 'printf x > derived.json; printf y > stray.txt', paths: ['derived.json'] } },
+  })
+  const wt = setupWt(root, baseSha, 'replay-hook-undeclared-wt')
+  const headBefore = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const patchOut = patchOutPath('replay-hook-undeclared-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 4,
+    'D2: a path the hook newly dirtied but nobody declared in paths must refuse --apply with exit 4: ' +
+    JSON.stringify({ status: r.status, stdout: r.stdout, stderr: r.stderr }))
+  assert.match(r.stderr, /stray\.txt/,
+    'D2: the refusal must name the offending undeclared path so the remedy (narrow the command, or declare ' +
+    'the path) is on screen: ' + r.stderr)
+  const headAfter = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(headAfter, headBefore,
+    'D2: a refused hook must leave HEAD exactly where --setup left it — nothing may be committed: ' + headAfter)
+})
+
+test('AC-20260909-01-2: a failing post-apply command is exit 4 with its own stderr quoted', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-failcmd')
+  writeHookConfig(root, { replay: { afterApply: { command: 'echo boom-marker 1>&2; exit 3', paths: ['derived.json'] } } })
+  const wt = setupWt(root, baseSha, 'replay-hook-failcmd-wt')
+  const headBefore = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const patchOut = patchOutPath('replay-hook-failcmd-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 4,
+    'D2: a nonzero exit from the declared command must refuse --apply with exit 4: ' +
+    JSON.stringify({ status: r.status, stderr: r.stderr }))
+  assert.match(r.stderr, /boom-marker/,
+    "D2: the command's own stderr must be quoted in the refusal, not swallowed: " + r.stderr)
+  const headAfter = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(headAfter, headBefore, 'D2: a failing hook must leave HEAD unchanged: ' + headAfter)
+})
+
+// Review finding (build-repair, F1): dirtySnapshot() takes `git diff --name-only` and `git
+// ls-files --others --exclude-standard` with no `-c core.quotePath=off` pin, unlike --apply's own
+// canonical re-emission (AC-20260819-03-14) a few hundred lines below. A declared non-ASCII path
+// therefore comes back C-quoted from dirtySnapshot and never string-equals the literal declared
+// entry, so D1/D2's "a declared path dirty after the command runs is staged" promise breaks: the
+// path is refused as undeclared instead.
+test('AC-20260909-01-1 / AC-20260909-01-2: a declared non-ASCII path dirtied by the post-apply reconcile is staged and rides the mutation commit, not refused as undeclared', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-nonascii')
+  const nonAsciiName = 'dérivé.json'
+  writeHookConfig(root, {
+    replay: { afterApply: { command: 'printf x > ' + JSON.stringify(nonAsciiName), paths: [nonAsciiName] } },
+  })
+  const wt = setupWt(root, baseSha, 'replay-hook-nonascii-wt')
+  const patchOut = patchOutPath('replay-hook-nonascii-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    'D1/D2: a declared path is staged whether or not dirtySnapshot() C-quotes it — an unpinned ' +
+    'core.quotePath must never turn a declared non-ASCII path into an undeclared-path exit 4 refusal: ' +
+    JSON.stringify({ status: r.status, stdout: r.stdout, stderr: r.stderr }))
+  const nameOnly = execFileSync('git', ['-C', wt,
+    '-c', 'core.quotePath=off', 'diff', '--name-only', 'HEAD^', 'HEAD'], { encoding: 'utf8' })
+  assert.match(nameOnly, /dérivé\.json/,
+    'D1: the declared non-ASCII reconcile path must ride the SAME commit as the mutation, unquoted: ' + nameOnly)
+})
+
+// A PATH containing only a `git` symlink, so execFileSync('git', ...) still resolves inside
+// --apply but spawnSync('bash', ...) for the hook command ENOENTs — isolates F4's spawn-failure
+// branch without breaking every other git call --apply makes before/after it.
+function gitOnlyPath() {
+  const gitAbs = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim()
+  const bin = fs.realpathSync(tmpdir('replay-hook-nobash-bin'))
+  fs.symlinkSync(gitAbs, path.join(bin, 'git'))
+  return bin
+}
+
+// Review finding (build-repair, F4): when spawnSync('bash', ...) itself cannot spawn the hook
+// command (bash missing from PATH), spawnSync sets `.error` and leaves `.status` null and
+// `.stderr` null — the refusal prints "exited null in <dir> — null — narrow the command..." with
+// no mention of the actual spawn failure, and no PATH remedy, instead of naming what really broke.
+test('AC-20260909-01-2: a post-apply command that cannot even be spawned (bash missing from PATH) names the underlying spawn failure and a PATH remedy, not a bare "exited null"', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-nobash')
+  writeHookConfig(root, { replay: { afterApply: { command: 'printf x > derived.json', paths: ['derived.json'] } } })
+  const wt = setupWt(root, baseSha, 'replay-hook-nobash-wt')
+  const headBefore = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const patchOut = patchOutPath('replay-hook-nobash-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root, env: { ...process.env, PATH: gitOnlyPath() } })
+  assert.strictEqual(r.status, 4,
+    'D2: a hook command that cannot be spawned at all must still refuse --apply with exit 4, exactly like ' +
+    'a nonzero-exit hook: ' + JSON.stringify({ status: r.status, stderr: r.stderr }))
+  assert.ok(!/exited null/.test(r.stderr),
+    "the refusal must never fall back to the bare, uninformative \"exited null\" — spawnSync's own " +
+    '.error carries the real reason and must be read: ' + r.stderr)
+  assert.match(r.stderr, /ENOENT|spawn bash/i,
+    "the refusal must name the underlying spawn failure (spawnSync's own .error.message) so it is clear " +
+    'bash itself never ran, not just that the hook "exited": ' + r.stderr)
+  assert.match(r.stderr, /PATH/,
+    'the refusal must name the remedy for a missing bash — this repo requires every error path to name ' +
+    'its remedy command, and "confirm bash is on PATH" is the only actionable fix here: ' + r.stderr)
+  const headAfter = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(headAfter, headBefore, 'D2: a hook that never ran must leave HEAD unchanged: ' + headAfter)
+})
+
+test('AC-20260909-01-3: pre-existing dirt is neither refused nor staged', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-predirty')
+  writeHookConfig(root, {
+    replay: { afterApply: { command: 'printf x > derived.json; printf y >> lock.txt', paths: ['derived.json'] } },
+  })
+  const wt = setupWt(root, baseSha, 'replay-hook-predirty-wt')
+  fs.appendFileSync(path.join(wt, 'lock.txt'), 'already dirty\n')
+  const patchOut = patchOutPath('replay-hook-predirty-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    'D2: a tracked path already dirty before --apply ran, that the hook ALSO rewrites, must not be refused ' +
+    '— it is not in Dafter \\ D0: ' + r.stderr)
+  const nameOnly = execFileSync('git', ['-C', wt, 'diff', '--name-only', 'HEAD^', 'HEAD'], { encoding: 'utf8' })
+  assert.match(nameOnly, /derived\.json/, 'D2: the declared path must still ride the commit: ' + nameOnly)
+  assert.match(nameOnly, /lib\/x\.js/, 'D2: the mutation must still ride the commit: ' + nameOnly)
+  assert.ok(!nameOnly.includes('lock.txt'),
+    'D2: lock.txt is not in paths, so it must not be staged even though the hook rewrote it — staging reads ' +
+    'paths ∩ Dafter, and lock.txt is not in paths: ' + nameOnly)
+  const status = execFileSync('git', ['-C', wt, 'status', '--porcelain'], { encoding: 'utf8' })
+  assert.match(status, /lock\.txt/,
+    'D2: lock.txt must remain dirty in the working tree, neither committed nor reverted: ' + JSON.stringify(status))
+})
+
+test('AC-20260909-01-3: a declared path already dirty in D0 is still staged', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-predirty-staged')
+  writeHookConfig(root, {
+    replay: {
+      afterApply: {
+        command: 'printf x > derived.json; printf y >> lock.txt',
+        paths: ['derived.json', 'lock.txt'],
+      },
+    },
+  })
+  const wt = setupWt(root, baseSha, 'replay-hook-predirty-staged-wt')
+  fs.appendFileSync(path.join(wt, 'lock.txt'), 'already dirty\n')
+  const patchOut = patchOutPath('replay-hook-predirty-staged-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    'D2: staging reads paths ∩ Dafter, not the D0-relative delta, so a declared path already dirty before ' +
+    '--apply ran must still succeed: ' + r.stderr)
+  const nameOnly = execFileSync('git', ['-C', wt, 'diff', '--name-only', 'HEAD^', 'HEAD'], { encoding: 'utf8' })
+  assert.match(nameOnly, /lock\.txt/,
+    'D2: lock.txt is declared in paths, so it must be staged and ride the commit even though it was already ' +
+    'dirty before --apply ran: ' + nameOnly)
+})
+
+// F5 (review, user-ruled D2 amendment): dirtySnapshot()'s two lists — `git diff --name-only`
+// (worktree vs index) and `git ls-files --others --exclude-standard` (untracked) — never see a
+// path the declared command stages itself with `git add`: staging moves it out of both the
+// worktree-diff and the untracked lists in one step, so (Dafter \ D0) \ paths never contains it
+// and it rides the mutation commit (and the canonical --patch-out later scoring reads) completely
+// unrefused — exactly the undeclared-path leak AC-20260909-01-2 exists to close. The amended D2
+// adds a third list, `git diff --cached --name-only` (staged vs HEAD), to BOTH the D0 and Dafter
+// snapshots; the refusal and staging SETS (`(Dafter \ D0) \ paths` and `paths ∩ Dafter`) keep
+// their existing definitions.
+test('AC-20260909-01-2: an undeclared path the post-apply reconcile stages itself with `git add` is refused and nothing is committed', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-selfstage-undeclared')
+  writeHookConfig(root, {
+    replay: { afterApply: { command: 'printf x > stray.txt; git add stray.txt', paths: ['derived.json'] } },
+  })
+  const wt = setupWt(root, baseSha, 'replay-hook-selfstage-undeclared-wt')
+  const headBefore = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const patchOut = patchOutPath('replay-hook-selfstage-undeclared-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 4,
+    'D2 (amended): a path the hook staged itself via `git add` must still be caught as undeclared — ' +
+    'the two pre-amendment lists never see an already-staged path at all, so this exit-4 refusal is ' +
+    'exactly what the third `git diff --cached --name-only` list closes: ' +
+    JSON.stringify({ status: r.status, stdout: r.stdout, stderr: r.stderr }))
+  assert.match(r.stderr, /stray\.txt/,
+    'D2 (amended): the refusal must name the self-staged offending path so the remedy (narrow the ' +
+    'command, or declare the path) is on screen: ' + r.stderr)
+  const headAfter = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(headAfter, headBefore,
+    'D2 (amended): a refused hook must leave HEAD exactly where --setup left it — a self-staged ' +
+    'undeclared path must never ride a commit: ' + headAfter)
+})
+
+// Discriminating control for the pin above: the same self-staging shape, but the path the hook
+// `git add`s itself is DECLARED — this must still succeed and carry that path, so the F5 pin
+// above cannot pass vacuously off a blanket "any self-staged path is refused" implementation.
+test('AC-20260909-01-2 (control): a DECLARED path the post-apply reconcile stages itself with `git add` still succeeds and rides the commit', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-selfstage-declared')
+  writeHookConfig(root, {
+    replay: { afterApply: { command: 'printf x > derived.json; git add derived.json', paths: ['derived.json'] } },
+  })
+  const wt = setupWt(root, baseSha, 'replay-hook-selfstage-declared-wt')
+  const patchOut = patchOutPath('replay-hook-selfstage-declared-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    'D2 (amended): a DECLARED path must still succeed even when the hook stages it itself — the third ' +
+    'list must never over-refuse a legitimately declared, self-staged path: ' + r.stderr)
+  const nameOnly = execFileSync('git', ['-C', wt, 'diff', '--name-only', 'HEAD^', 'HEAD'], { encoding: 'utf8' })
+  assert.match(nameOnly, /derived\.json/,
+    'D2 (amended): the declared, self-staged path must ride the mutation commit exactly like any other ' +
+    'declared path: ' + nameOnly)
+})
+
+// D14 (user ruling): D13's own fix put D0 AFTER `git apply --index`, so the mutation's own file
+// (lib/x.js) is already a MEMBER of D0/Dafter's unioned path set before the hook ever runs — no
+// path-set rule (D2's original two lists, or D13's added staged-vs-HEAD list) can ever put it in
+// `Dafter \ D0`, so none of them can notice the hook rewriting or dropping the planted defect
+// itself. D14 is an independent, byte-keyed guarantee: the staged blob id of every file the
+// patch touches is fingerprinted right after `git apply --index` (M0) and compared again right
+// after the hook returns (Mafter); a changed or missing blob id is exit 4 naming the file, even
+// though the file's mere PRESENCE in Dafter never once became "new" by D2/D13's own path-set
+// logic. Both scenarios below declare an UNRELATED path ('derived.json', never created) to prove
+// the refusal fires independently of what — if anything — is declared.
+test('AC-20260909-01-2: a post-apply command that rewrites the mutation\'s own file and re-stages it is refused, leaving HEAD unchanged', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-freeze-rewrite')
+  writeHookConfig(root, {
+    replay: { afterApply: { command: 'printf x >> lib/x.js && git add lib/x.js', paths: ['derived.json'] } },
+  })
+  const wt = setupWt(root, baseSha, 'replay-hook-freeze-rewrite-wt')
+  const headBefore = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const patchOut = patchOutPath('replay-hook-freeze-rewrite-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 4,
+    'D14: a hook that changes the staged blob id of a file the mutation patch itself touches must be ' +
+    'refused with exit 4 — D2/D13\'s path-set lists already contained lib/x.js before the hook ran and so ' +
+    'can never flag this rewrite on their own, which is exactly the gap D14 closes: ' +
+    JSON.stringify({ status: r.status, stdout: r.stdout, stderr: r.stderr }))
+  assert.match(r.stderr, /lib\/x\.js/,
+    'D14: the refusal must name the mutated file whose bytes changed under the hook, and a remedy (narrow ' +
+    'the command so it never touches the mutation\'s own files): ' + r.stderr)
+  const headAfter = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(headAfter, headBefore,
+    'D14: a refused hook must leave HEAD exactly where --setup left it — the rewritten defect must never ' +
+    'ride a commit: ' + headAfter)
+})
+
+test('AC-20260909-01-2: a post-apply command that removes the mutation\'s own file from the index is refused, and nothing is committed', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-freeze-unindex')
+  writeHookConfig(root, {
+    replay: { afterApply: { command: 'git rm --cached lib/x.js', paths: ['derived.json'] } },
+  })
+  const wt = setupWt(root, baseSha, 'replay-hook-freeze-unindex-wt')
+  const headBefore = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const patchOut = patchOutPath('replay-hook-freeze-unindex-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 4,
+    'D14: a hook that drops a mutated file out of the index entirely (git rm --cached) must be refused ' +
+    'with exit 4 — the file stays a member of both D0 and Dafter\'s unioned path set the whole time (it ' +
+    'moves from the staged list to the untracked list), so D2/D13\'s (Dafter \\ D0) \\ paths refusal never ' +
+    'fires on it; only M0/Mafter\'s "left the index" check can catch this: ' +
+    JSON.stringify({ status: r.status, stdout: r.stdout, stderr: r.stderr }))
+  assert.match(r.stderr, /lib\/x\.js/,
+    'D14: the refusal must name the file the hook removed from the index: ' + r.stderr)
+  const headAfter = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(headAfter, headBefore,
+    'D14: a refused hook must leave HEAD exactly where --setup left it — nothing may be committed when the ' +
+    'mutation\'s own file was dropped from the index: ' + headAfter)
+})
+
+// Review finding (build-repair, F7, hard): Mafter is read from the INDEX (stagedBlobIds) BEFORE
+// D2's own staging loop runs. A hook that rewrites a mutated file in the WORKTREE without staging
+// it therefore leaves the staged blob untouched at M0/Mafter comparison time — D14 sees no
+// change — and D2's own staging loop then `git add`s that file if it is declared, carrying the
+// hook's rewrite of the planted defect into the commit while D3's exclusion strips it from the
+// canonical --patch-out entirely. Executed repro (paths: ["lib/x.js"], command `printf hookwrote >
+// lib/x.js`): exit 0, HEAD:lib/x.js is "hookwrote", emitted patch is zero bytes. D14's own
+// "declared reconcile path is not exempt" clause makes this the sharpest case: declaring the
+// mutated file explicitly must not open this hole.
+test('AC-20260909-01-2: a post-apply command that rewrites the mutation\'s own file WITHOUT staging it is refused, even when that exact file is a declared reconcile path', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-freeze-unstaged')
+  writeHookConfig(root, {
+    replay: { afterApply: { command: 'printf hookwrote > lib/x.js', paths: ['lib/x.js'] } },
+  })
+  const wt = setupWt(root, baseSha, 'replay-hook-freeze-unstaged-wt')
+  const headBefore = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const patchOut = patchOutPath('replay-hook-freeze-unstaged-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 4,
+    'D14: a hook that rewrites a mutated file in the WORKTREE without staging it must still be refused — ' +
+    'checking only the staged blob at Mafter time lets an unstaged rewrite sail through M0/Mafter and then ' +
+    'get swept into the commit by D2\'s own staging loop when the file is (as here) a declared path: ' +
+    JSON.stringify({ status: r.status, stdout: r.stdout, stderr: r.stderr }))
+  assert.match(r.stderr, /lib\/x\.js/,
+    'D14: the refusal must name the mutated file the hook rewrote unstaged: ' + r.stderr)
+  const headAfter = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(headAfter, headBefore,
+    'D14: a refused hook must leave HEAD exactly where --setup left it — the unstaged rewrite of the ' +
+    'mutation\'s own declared file must never ride a commit: ' + headAfter)
+})
+
+// Review finding (build-repair, F8, medium): the freeze is index-keyed while the review legs
+// read the WORKTREE. A hook that dirties a mutated file unstaged, while also touching its own
+// declared (unrelated) reconcile path, currently commits cleanly (the mutation intact in the
+// commit, since the undeclared unstaged rewrite of lib/x.js is never staged) but leaves lib/x.js
+// dirty on disk — Phase 1 step 6 then runs the review legs against that dirty worktree while the
+// reviewer reads the clean committed diff, a silent divergence between what gets scored and what
+// gets reviewed. A successful --apply must never leave a patch-touched file dirty in the worktree.
+test('AC-20260909-01-2: a post-apply command that leaves a mutated file dirty in the worktree (without staging or declaring it) is refused, not silently committed clean with the worktree left dirty', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-freeze-worktree-dirty')
+  writeHookConfig(root, {
+    replay: { afterApply: { command: 'printf x > derived.json; printf hookwrote > lib/x.js', paths: ['derived.json'] } },
+  })
+  const wt = setupWt(root, baseSha, 'replay-hook-freeze-worktree-dirty-wt')
+  const headBefore = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const patchOut = patchOutPath('replay-hook-freeze-worktree-dirty-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 4,
+    'D14: a hook that leaves a mutated file dirty and unstaged in the worktree must be refused, not ' +
+    'committed as if the mutation were untouched — a green --apply that silently leaves lib/x.js dirty on ' +
+    'disk means the review legs (which read the worktree) and the reviewer (which reads the committed ' +
+    'diff) score two different trees: ' +
+    JSON.stringify({ status: r.status, stdout: r.stdout, stderr: r.stderr }))
+  assert.match(r.stderr, /lib\/x\.js/,
+    'D14: the refusal must name the mutated file left dirty in the worktree: ' + r.stderr)
+  const headAfter = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(headAfter, headBefore,
+    'D14: a refused hook must leave HEAD exactly where --setup left it: ' + headAfter)
+})
+
+// Review finding (build-repair, F9, soft): mutated paths, parsed straight off the patch's own
+// `+++ b/<path>` headers, are passed to git as bare `--` pathspec arguments (stagedBlobIds).
+// A mutated filename containing a glob metacharacter (*, ?, [) must not become silently exempt
+// from the freeze because of how that string resolves as a pathspec. Reuses F7's unstaged-rewrite
+// shape (declaring the glob-named file itself, mirroring F7's sharpest case) against a mutated
+// file whose real name contains a literal '[' — the freeze must still catch the rewrite.
+test('AC-20260909-01-2: a post-apply command that rewrites a mutated file whose name contains a glob metacharacter is still refused', () => {
+  const globName = 'lib/x[1].js'
+  const root = fs.realpathSync(tmpdir('replay-hook-freeze-glob-repo'))
+  gitRepo(root)
+  const baseSha = commitFiles(root, { [globName]: 'a\nb\nc\n', 'lock.txt': 'pinned\n' }, 'add ' + globName)
+  const scratch = path.join(fs.realpathSync(tmpdir('replay-hook-freeze-glob-scratch')), 'scratch')
+  execFileSync('git', ['-C', root, 'worktree', 'add', '--detach', scratch, baseSha])
+  fs.writeFileSync(path.join(scratch, globName), 'a\nB\nc\n')
+  const patch = execFileSync('git', ['-C', scratch, 'diff'], { encoding: 'utf8' })
+  execFileSync('git', ['-C', root, 'worktree', 'remove', '--force', scratch])
+  const patchFile = path.join(fs.realpathSync(tmpdir('replay-hook-freeze-glob-patch')), 'mutation.patch')
+  fs.writeFileSync(patchFile, patch)
+
+  writeHookConfig(root, {
+    replay: { afterApply: { command: 'printf hookwrote > ' + JSON.stringify(globName), paths: [globName] } },
+  })
+  const wt = setupWt(root, baseSha, 'replay-hook-freeze-glob-wt')
+  const headBefore = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const patchOut = patchOutPath('replay-hook-freeze-glob-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 4,
+    'D14: a mutated file whose name contains a glob metacharacter (here "[") must be frozen exactly like ' +
+    'any other mutated file — a hook rewriting it must never be silently exempt because of how that ' +
+    'filename resolves as a bare git pathspec: ' +
+    JSON.stringify({ status: r.status, stdout: r.stdout, stderr: r.stderr }))
+  assert.match(r.stderr, /x\[1\]\.js/,
+    'D14: the refusal must name the glob-metacharacter-bearing mutated file: ' + r.stderr)
+  const headAfter = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(headAfter, headBefore,
+    'D14: a refused hook must leave HEAD exactly where --setup left it: ' + headAfter)
+})
+
+// Review finding (build-repair, F10, medium): the protected file set comes from
+// parsePatch().files, which collects only `+++ b/` headers. A deletion-shaped mutation patch
+// carries `+++ /dev/null` for its deleted file instead — that path never enters `files`, so it is
+// never fingerprinted (M0/Mafter) and never dirty-checked (D2/D13). A hook can then simply
+// restore the deleted file and --apply reports success with an empty canonical --patch-out — the
+// same "reviewer gets nothing to find" symptom F7 closed for the rewrite shape, reached through
+// the one patch shape parsePatch's own header regex does not enumerate. This needs its own
+// fixture (a deletion-shaped patch, not initHookFixture's modify-shaped one): built the same way
+// as the glob-metacharacter fixture above — gitRepo/commitFiles directly, a scratch worktree, an
+// `fs.unlinkSync` instead of a rewrite, then `git diff` captured as the patch. A rename fixture
+// (the `--- a/` side of a rename is the same gap) would need rename-detection to reliably kick in
+// at diff-capture time depending on similarity, which risks a flaky, contorted fixture — this
+// pins the deletion shape only, per the coordinator's own fallback.
+test('AC-20260909-01-2: a post-apply command that restores a file the mutation patch DELETED is refused, leaving HEAD unchanged', () => {
+  const root = fs.realpathSync(tmpdir('replay-hook-freeze-delete-repo'))
+  gitRepo(root)
+  const baseSha = commitFiles(root, { 'lib/x.js': 'a\nb\nc\n', 'lock.txt': 'pinned\n' }, 'add lib/x.js + lock.txt')
+  const scratch = path.join(fs.realpathSync(tmpdir('replay-hook-freeze-delete-scratch')), 'scratch')
+  execFileSync('git', ['-C', root, 'worktree', 'add', '--detach', scratch, baseSha])
+  fs.unlinkSync(path.join(scratch, 'lib/x.js'))
+  const patch = execFileSync('git', ['-C', scratch, 'diff'], { encoding: 'utf8' })
+  execFileSync('git', ['-C', root, 'worktree', 'remove', '--force', scratch])
+  assert.match(patch, /\+\+\+ \/dev\/null/,
+    'fixture setup: the captured patch must actually be deletion-shaped (+++ /dev/null) or this test is not ' +
+    'exercising the gap it claims to: ' + patch)
+  const patchFile = path.join(fs.realpathSync(tmpdir('replay-hook-freeze-delete-patch')), 'mutation.patch')
+  fs.writeFileSync(patchFile, patch)
+
+  writeHookConfig(root, {
+    replay: { afterApply: { command: 'mkdir -p lib; printf back > lib/x.js', paths: ['lib/x.js'] } },
+  })
+  const wt = setupWt(root, baseSha, 'replay-hook-freeze-delete-wt')
+  const headBefore = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const patchOut = patchOutPath('replay-hook-freeze-delete-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 4,
+    'D14: a hook that restores a file the mutation patch DELETED must be refused — parsePatch\'s files ' +
+    'list only ever collects `+++ b/` headers, so a deletion\'s `+++ /dev/null` file never enters the ' +
+    'protected set and the restore sails through M0/Mafter untouched, then gets staged as a declared path ' +
+    'exactly like F7\'s rewrite-shaped gap: ' +
+    JSON.stringify({ status: r.status, stdout: r.stdout, stderr: r.stderr }))
+  assert.match(r.stderr, /lib\/x\.js/,
+    'D14: the refusal must name the deleted-then-restored file: ' + r.stderr)
+  const headAfter = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(headAfter, headBefore,
+    'D14: a refused hook must leave HEAD exactly where --setup left it — the restored file must never ride ' +
+    'a commit: ' + headAfter)
+})
+
+test('AC-20260909-01-4: the canonical patch excludes the declared reconcile paths', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-exclude')
+  writeHookConfig(root, { replay: { afterApply: { command: 'printf x > derived.json', paths: ['derived.json'] } } })
+  const wt = setupWt(root, baseSha, 'replay-hook-exclude-wt')
+  const patchOut = patchOutPath('replay-hook-exclude-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 0, 'D3: --apply with a valid declared reconcile must succeed: ' + r.stderr)
+  const nameOnly = execFileSync('git', ['-C', wt, 'diff', '--name-only', 'HEAD^', 'HEAD'], { encoding: 'utf8' })
+  assert.match(nameOnly, /derived\.json/,
+    'sanity: the hook must actually have run and committed derived.json, or the exclusion check below is ' +
+    'vacuous — it would pass just as well from a patch that never contained the file to begin with: ' + nameOnly)
+  const out = fs.readFileSync(patchOut, 'utf8')
+  assert.match(out, /\+\+\+ b\/lib\/x\.js/, 'D3: the emitted canonical patch must still carry the mutation itself: ' + out)
+  assert.ok(!out.includes('+++ b/derived.json'),
+    "D3: the emitted canonical patch must exclude the declared reconcile path — leaving it in would let a " +
+    "reviewer's finding on it score as a kill of the actual defect: " + out)
+})
+
+test('AC-20260909-01-4: a trailing-slash path excludes its whole subtree', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-subtree')
+  writeHookConfig(root, { replay: { afterApply: { command: 'mkdir -p gen && printf x > gen/a.json', paths: ['gen/'] } } })
+  const wt = setupWt(root, baseSha, 'replay-hook-subtree-wt')
+  const patchOut = patchOutPath('replay-hook-subtree-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 0, 'D3/D5: a trailing-slash paths entry must be accepted as a subtree form: ' + r.stderr)
+  const nameOnly = execFileSync('git', ['-C', wt, 'diff', '--name-only', 'HEAD^', 'HEAD'], { encoding: 'utf8' })
+  assert.match(nameOnly, /gen\/a\.json/,
+    'sanity: the hook must actually have run and committed gen/a.json, or the exclusion check below is ' +
+    'vacuous — it would pass just as well from a patch that never contained the file to begin with: ' + nameOnly)
+  const out = fs.readFileSync(patchOut, 'utf8')
+  assert.ok(!out.includes('+++ b/gen/a.json'),
+    'D3/D5: a trailing-slash "gen/" entry must exclude every file the command wrote under that subtree, not ' +
+    'just an exact-string match: ' + out)
+  assert.match(out, /\+\+\+ b\/lib\/x\.js/, 'D3: the mutation itself must still be present in the emitted patch: ' + out)
+})
+
+test('AC-20260909-01-5: a {spec} placeholder with no --spec is refused before anything is applied', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-nospec')
+  writeHookConfig(root, {
+    replay: { afterApply: { command: "touch ran.marker; printf '%s' '{spec}' > derived.json", paths: ['derived.json'] } },
+  })
+  const wt = setupWt(root, baseSha, 'replay-hook-nospec-wt')
+  const statusBefore = execFileSync('git', ['-C', wt, 'status', '--porcelain'], { encoding: 'utf8' })
+  const patchOut = patchOutPath('replay-hook-nospec-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 2,
+    'D4: a declared command containing {spec} with no --spec given must be refused with exit 2, before the ' +
+    'patch is ever applied: ' + JSON.stringify({ status: r.status, stderr: r.stderr }))
+  assert.match(r.stderr, /--spec/, 'D4: the refusal must name --spec: ' + r.stderr)
+  const statusAfter = execFileSync('git', ['-C', wt, 'status', '--porcelain'], { encoding: 'utf8' })
+  assert.strictEqual(statusAfter, statusBefore,
+    'D4: the worktree must stay exactly as --setup left it — this check runs before the patch is applied: ' +
+    JSON.stringify(statusAfter))
+  assert.ok(!fs.existsSync(path.join(wt, 'ran.marker')),
+    'D4: the declared command must never run at all — the shell is never reached: ' + wt)
+})
+
+test('AC-20260909-01-5: {spec} is substituted with the --spec value', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-specsub')
+  writeHookConfig(root, { replay: { afterApply: { command: "printf '%s' '{spec}' > derived.json", paths: ['derived.json'] } } })
+  const wt = setupWt(root, baseSha, 'replay-hook-specsub-wt')
+  const patchOut = patchOutPath('replay-hook-specsub-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity', '--spec', 'specs/20260909/01-x.md'], { cwd: root })
+  assert.strictEqual(r.status, 0, 'D4: a valid dated --spec value must let a {spec}-containing command run: ' + r.stderr)
+  const nameOnly = execFileSync('git', ['-C', wt, 'diff', '--name-only', 'HEAD^', 'HEAD'], { encoding: 'utf8' })
+  assert.match(nameOnly, /derived\.json/,
+    'D4: the hook must actually have run and committed derived.json once a valid --spec unblocks it: ' + nameOnly)
+  const derived = execFileSync('git', ['-C', wt, 'show', 'HEAD:derived.json'], { encoding: 'utf8' })
+  assert.strictEqual(derived, 'specs/20260909/01-x.md',
+    'D4: {spec} in the declared command must be substituted with the exact --spec value before the shell ' +
+    'runs it: ' + JSON.stringify(derived))
+})
+
+test('AC-20260909-01-6: a --spec that is not a dated spec path is refused before it reaches the shell', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-badspec')
+  writeHookConfig(root, {
+    replay: { afterApply: { command: "touch ran.marker; printf '%s' '{spec}' > derived.json", paths: ['derived.json'] } },
+  })
+
+  const wt1 = setupWt(root, baseSha, 'replay-hook-badspec-wt1')
+  const r1 = runNode(SCRIPT, ['--apply', '--dir', wt1, '--patch', patchFile,
+    '--patch-out', patchOutPath('replay-hook-badspec-out1'), '--class', 'self-consistent-polarity',
+    '--spec', 'x; rm -rf /'], { cwd: root })
+  assert.strictEqual(r1.status, 2,
+    "D4: a --spec value that is not a dated spec path ('x; rm -rf /') must be refused with exit 2 before the " +
+    'shell ever runs: ' + JSON.stringify({ status: r1.status, stderr: r1.stderr }))
+  assert.ok(!fs.existsSync(path.join(wt1, 'ran.marker')),
+    'D4: the shell must never run — a shell-metacharacter-laden --spec is exactly the injection seam the ' +
+    'shape check exists to close: ' + wt1)
+
+  const wt2 = setupWt(root, baseSha, 'replay-hook-badspec-wt2')
+  const r2 = runNode(SCRIPT, ['--apply', '--dir', wt2, '--patch', patchFile,
+    '--patch-out', patchOutPath('replay-hook-badspec-out2'), '--class', 'self-consistent-polarity',
+    '--spec', 'docs/notes.md'], { cwd: root })
+  assert.strictEqual(r2.status, 2,
+    'D4: a --spec that does not match ^specs/\\d{8}/\\d{2}- must also be refused with exit 2: ' +
+    JSON.stringify({ status: r2.status, stderr: r2.stderr }))
+  assert.ok(!fs.existsSync(path.join(wt2, 'ran.marker')), 'D4: the shell must never run for this refusal either: ' + wt2)
+})
+
+test('AC-20260909-01-7: an afterApply path that escapes the worktree or names a review-outcome surface is refused', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-escape')
+  const bad = ['/etc/x', '../outside.json', '.claude/notes.json']
+  bad.forEach((p, i) => {
+    writeHookConfig(root, { replay: { afterApply: { command: 'printf x > derived.json', paths: [p] } } })
+    const wt = setupWt(root, baseSha, 'replay-hook-escape-wt-' + i)
+    const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile,
+      '--patch-out', patchOutPath('replay-hook-escape-out-' + i), '--class', 'self-consistent-polarity'], { cwd: root })
+    assert.strictEqual(r.status, 2,
+      'D5: a paths entry of ' + p + ' must be refused with exit 2, applying nothing: ' +
+      JSON.stringify({ status: r.status, stderr: r.stderr }))
+    assert.match(r.stderr, new RegExp(p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+      'D5: the refusal must name the offending entry: ' + r.stderr)
+    const status = execFileSync('git', ['-C', wt, 'status', '--porcelain'], { encoding: 'utf8' })
+    assert.strictEqual(status.trim(), '', 'D5: nothing may be applied for a refused paths entry: ' + JSON.stringify(status))
+  })
+})
+
+test('AC-20260909-01-7: a ./-prefixed path is normalized', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-dotslash')
+  writeHookConfig(root, { replay: { afterApply: { command: 'printf x > derived.json', paths: ['./derived.json'] } } })
+  const wt = setupWt(root, baseSha, 'replay-hook-dotslash-wt')
+  const patchOut = patchOutPath('replay-hook-dotslash-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    'D5: a leading ./ on a declared path must be stripped and treated as the bare path, not refused as ' +
+    'escaping the worktree: ' + r.stderr)
+  const nameOnly = execFileSync('git', ['-C', wt, 'diff', '--name-only', 'HEAD^', 'HEAD'], { encoding: 'utf8' })
+  assert.match(nameOnly, /derived\.json/, 'D5: the normalized path must still be staged and ride the commit: ' + nameOnly)
+})
+
+// Review finding (build-repair, F2): normalizeAfterApplyPath's meta-prefix ban is a `startsWith`
+// test on the DECLARED entry itself. A declared PARENT subtree (e.g. "docs/") never itself starts
+// with "docs/canonical/" and so walks past that check — but isDeclaredPath's own trailing-slash
+// subtree match then treats any descendant, including one under a meta prefix, as declared. That
+// lets a hook writing docs/canonical/x.md land in the mutation commit: the exact review-outcome
+// surface D5 exists to keep out of a replay commit.
+test('AC-20260909-01-7: a declared parent subtree that would ADMIT a meta-prefixed descendant is refused, applying nothing', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-metaadmit')
+  writeHookConfig(root, {
+    replay: { afterApply: { command: 'mkdir -p docs/canonical && printf x > docs/canonical/x.md', paths: ['docs/'] } },
+  })
+  const wt = setupWt(root, baseSha, 'replay-hook-metaadmit-wt')
+  const headBefore = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const patchOut = patchOutPath('replay-hook-metaadmit-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 2,
+    'D5: a declared parent ("docs/") that would admit a descendant under a review-outcome meta prefix ' +
+    '(docs/canonical/) must be refused with exit 2 BEFORE git apply, exactly like declaring the meta path ' +
+    'directly — an accepted parent here lets a hook re-introduce specs/.claude/docs-canonical content into ' +
+    'a replay commit: ' + JSON.stringify({ status: r.status, stdout: r.stdout, stderr: r.stderr }))
+  assert.match(r.stderr, /docs\//,
+    'D5: the refusal must name the offending declared entry: ' + r.stderr)
+  const headAfter = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(headAfter, headBefore,
+    'D5: a refused afterApply.paths entry must leave HEAD exactly where --setup left it — nothing applied: ' +
+    headAfter)
+  const status = execFileSync('git', ['-C', wt, 'status', '--porcelain'], { encoding: 'utf8' })
+  assert.strictEqual(status.trim(), '',
+    'D5: every check here runs before git apply — the working tree must stay clean on this refusal: ' +
+    JSON.stringify(status))
+})
+
+test('AC-20260909-01-8: a malformed afterApply block is refused before the patch is applied', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-malformed')
+  const bad = [
+    { command: '' },
+    { command: 'x' },
+    { command: 'x', paths: 'derived.json' },
+    { command: 'x', paths: [] },
+  ]
+  bad.forEach((afterApply, i) => {
+    writeHookConfig(root, { replay: { afterApply } })
+    const wt = setupWt(root, baseSha, 'replay-hook-malformed-wt-' + i)
+    const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile,
+      '--patch-out', patchOutPath('replay-hook-malformed-out-' + i), '--class', 'self-consistent-polarity'], { cwd: root })
+    assert.strictEqual(r.status, 2,
+      'D5: a malformed replay.afterApply block (' + JSON.stringify(afterApply) + ') must be refused with ' +
+      'exit 2 before the patch is applied: ' + JSON.stringify({ status: r.status, stderr: r.stderr }))
+    assert.match(r.stderr, /spec\.config\.json/, 'D5: the refusal must name .claude/spec.config.json: ' + r.stderr)
+    const status = execFileSync('git', ['-C', wt, 'status', '--porcelain'], { encoding: 'utf8' })
+    assert.strictEqual(status.trim(), '', 'D5: nothing may be applied for this malformed block: ' + JSON.stringify(status))
+  })
+})
+
+test('AC-20260909-01-10: an unparsable host config is refused rather than read as no-hook', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-badjson')
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), '{ not json')
+  const wt = setupWt(root, baseSha, 'replay-hook-badjson-wt')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile,
+    '--patch-out', patchOutPath('replay-hook-badjson-out'), '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 2,
+    'D6: a config file that exists but cannot be parsed must be refused with exit 2, never fall through to ' +
+    'the no-hook path: ' + JSON.stringify({ status: r.status, stderr: r.stderr }))
+  assert.match(r.stderr, /spec\.config\.json/, 'D6: the refusal must name the unparsable file: ' + r.stderr)
+})
+
+test('AC-20260909-01-10: the hook is read from the main root, never from the scratch worktree', () => {
+  const { root, baseSha, patchFile } = initHookFixture('replay-hook-dirconfig')
+  const wt = setupWt(root, baseSha, 'replay-hook-dirconfig-wt')
+  fs.mkdirSync(path.join(wt, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(wt, '.claude/spec.config.json'),
+    JSON.stringify({ replay: { afterApply: { command: 'printf x > derived.json', paths: ['derived.json'] } } }))
+  const patchOut = patchOutPath('replay-hook-dirconfig-out')
+  const r = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', patchOut,
+    '--class', 'self-consistent-polarity'], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    "D6: a config living only at --dir must never be read — --apply must behave exactly as the no-hook path: " +
+    r.stderr)
+  const nameOnly = execFileSync('git', ['-C', wt, 'diff', '--name-only', 'HEAD^', 'HEAD'], { encoding: 'utf8' })
+  assert.ok(!nameOnly.includes('derived.json'),
+    "D6: a hook declared only in --dir's own .claude/ (a stale parent-version copy by the overlay's own " +
+    'design) must never run — derived.json must not appear in the commit: ' + nameOnly)
+  const out = fs.readFileSync(patchOut, 'utf8')
+  const fullDiff = execFileSync('git', [
+    '-c', 'core.quotePath=off', '-c', 'diff.noprefix=false', '-c', 'diff.mnemonicPrefix=false',
+    '-c', 'diff.srcPrefix=a/', '-c', 'diff.dstPrefix=b/',
+    'diff', '--no-ext-diff', '--no-color', 'HEAD^', 'HEAD',
+  ], { cwd: wt, encoding: 'utf8' })
+  assert.strictEqual(out, fullDiff,
+    'D6: with no hook read (the config lived only at --dir), --patch-out must equal the FULL git diff ' +
+    'HEAD^ HEAD under the pinned flags, byte for byte, exactly as today\'s behavior: ' +
+    JSON.stringify({ out, fullDiff }))
+})
+
+test('AC-20260819-03-14 / AC-20260909-01-9: --apply --patch-out writes unquoted +++ b/<path> headers off HEAD^..HEAD even when the worktree\'s repo config sets diff.noprefix/diff.mnemonicPrefix and core.quotePath is left on, for a mutation touching a non-ASCII path', () => {
   const root = fs.realpathSync(tmpdir('replay-apply-hostile'))
   gitRepo(root)
   // Host git config is not ours (D9's own rationale) — this hostile config is entirely the
@@ -1464,7 +2168,7 @@ test('AC-20260819-03-14: --apply --patch-out writes unquoted +++ b/<path> header
   assert.strictEqual(setup.status, 0, 'fixture setup: --setup must succeed: ' + setup.stderr)
 
   const outFile = path.join(fs.realpathSync(tmpdir('replay-apply-hostile-out')), 'mutation-out.patch')
-  const apply = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', outFile, '--class', 'silent-fallback'])
+  const apply = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', outFile, '--class', 'silent-fallback', '--root', root])
   assert.strictEqual(apply.status, 0,
     'D9: --apply must succeed inside a worktree whose repo config is hostile to plain git diff — the ' +
     'pinned re-emission flags exist precisely so this host-config combination never breaks the harness: ' + apply.stderr)
@@ -1493,13 +2197,13 @@ test('AC-20260819-03-14: --apply --patch-out writes unquoted +++ b/<path> header
     'proving the patch was not silently treated as zero-hunk: ' + score.stdout)
 })
 
-test('AC-20260819-03-15: --apply exits 2 naming --patch-out when it is omitted, and exits 3 with nothing applied, committed, or written when --patch-out resolves inside --dir', () => {
+test('AC-20260819-03-15 / AC-20260909-01-9: --apply exits 2 naming --patch-out when it is omitted, and exits 3 with nothing applied, committed, or written when --patch-out resolves inside --dir', () => {
   const { root, baseSha, patchFile } = initApplyFixture('replay-apply-flagvalidation')
 
   const wtMissing = path.join(fs.realpathSync(tmpdir('replay-apply-flagvalidation-missing')), 'wt')
   const setupMissing = runNode(SCRIPT, ['--setup', '--commit', baseSha, '--dir', wtMissing], { cwd: root })
   assert.strictEqual(setupMissing.status, 0, 'fixture setup: --setup must succeed: ' + setupMissing.stderr)
-  const missingOut = runNode(SCRIPT, ['--apply', '--dir', wtMissing, '--patch', patchFile, '--class', 'self-consistent-polarity'])
+  const missingOut = runNode(SCRIPT, ['--apply', '--dir', wtMissing, '--patch', patchFile, '--class', 'self-consistent-polarity', '--root', root])
   assert.strictEqual(missingOut.status, 2,
     'D9: --apply without --patch-out must be refused with exit 2 — --patch-out is REQUIRED, not optional, ' +
     'since --apply is now the harness\'s only patch emitter: ' + JSON.stringify({ status: missingOut.status, stderr: missingOut.stderr }))
@@ -1511,7 +2215,7 @@ test('AC-20260819-03-15: --apply exits 2 naming --patch-out when it is omitted, 
   assert.strictEqual(setupInside.status, 0, 'fixture setup: --setup must succeed: ' + setupInside.stderr)
   const headBefore = execFileSync('git', ['-C', wtInside, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
   const insideOut = path.join(wtInside, 'mutation-out.patch')
-  const insideApply = runNode(SCRIPT, ['--apply', '--dir', wtInside, '--patch', patchFile, '--patch-out', insideOut, '--class', 'self-consistent-polarity'])
+  const insideApply = runNode(SCRIPT, ['--apply', '--dir', wtInside, '--patch', patchFile, '--patch-out', insideOut, '--class', 'self-consistent-polarity', '--root', root])
   assert.strictEqual(insideApply.status, 3,
     'D9: a --patch-out resolving INSIDE --dir must be refused with exit 3 BEFORE applying anything — ' +
     'writing the emitted patch into the exact tree the blind reviewer reads is a blindness violation, ' +
@@ -1529,7 +2233,7 @@ test('AC-20260819-03-15: --apply exits 2 naming --patch-out when it is omitted, 
     '--patch-out path — a partial write there would itself leak into the tree the reviewer reads: ' + insideOut)
 })
 
-test('AC-20260819-03-16: --apply commits only the patch\'s own files onto HEAD^..HEAD via git apply --index, leaving an unrelated modified tracked file and an unrelated untracked file both uncommitted', () => {
+test('AC-20260819-03-16 / AC-20260909-01-9: --apply commits only the patch\'s own files onto HEAD^..HEAD via git apply --index, leaving an unrelated modified tracked file and an unrelated untracked file both uncommitted', () => {
   const { root, baseSha, patchFile } = initApplyFixture('replay-apply-scope')
   const wt = path.join(fs.realpathSync(tmpdir('replay-apply-scope-wt')), 'wt')
   const setup = runNode(SCRIPT, ['--setup', '--commit', baseSha, '--dir', wt], { cwd: root })
@@ -1544,7 +2248,7 @@ test('AC-20260819-03-16: --apply commits only the patch\'s own files onto HEAD^.
   fs.writeFileSync(path.join(wt, 'stray.txt'), 'untracked\n')
 
   const outFile = path.join(fs.realpathSync(tmpdir('replay-apply-scope-out')), 'mutation-out.patch')
-  const apply = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', outFile, '--class', 'self-consistent-polarity'])
+  const apply = runNode(SCRIPT, ['--apply', '--dir', wt, '--patch', patchFile, '--patch-out', outFile, '--class', 'self-consistent-polarity', '--root', root])
   assert.strictEqual(apply.status, 0, 'D10: --apply must still succeed with unrelated dirty files present in the worktree: ' + apply.stderr)
 
   const nameStatus = execFileSync('git', ['-C', wt, 'diff', '--name-status', 'HEAD^..HEAD'], { encoding: 'utf8' })
@@ -2567,6 +3271,77 @@ test('AC-20260831-01-7: replay.md states, in Phase 1 step 1, that setup passes -
     'D6: rung 3 must state that a STILL-red pristine result routes to rung 4\'s question seam — silently ' +
     'recording leg-caught (or silently explaining it away) on a pristine-red result would misattribute ' +
     'environment drift as either mutation-caused or pre-existing: ' + JSON.stringify(step7Match[0]))
+})
+
+// specs/20260909/01-replay-build-shaped-mutation.md D7/D11: step 5 must document the new --spec
+// flag, the post-apply reconcile hook, its staging/exclusion behavior, the unchanged no-hook
+// case, and the hook's own setup-failed failure arm; Phase 4's "setup-failed ... never reaches
+// this phase" sentence must be corrected since D7 gives the hook a SECOND setup-failed site.
+test('AC-20260909-01-11: replay.md Phase 1 step 5 documents the post-apply reconcile hook and its failure arm', () => {
+  const replayMdPath = path.join(SPEC, 'commands/replay.md')
+  assert.ok(fs.existsSync(replayMdPath),
+    'D7/D11: spec/commands/replay.md must exist — it is the doctrine file both Decisions amend: ' + replayMdPath)
+  const src = read('spec/commands/replay.md')
+
+  const phase1Match = src.match(/## Phase 1 — Mutation authoring\n([\s\S]*?)\n## Phase 2 —/)
+  assert.ok(phase1Match,
+    'sanity: Phase 1 — Mutation authoring must exist as its own section ending at Phase 2 — if this heading ' +
+    'moved or was reworded, the step-5 slice below is scoped to the wrong text region')
+  const phase1 = phase1Match[1]
+
+  const step5Match = phase1.match(/5\.\s+\*\*Capture and apply[\s\S]*?(?=\n6\.\s+\*\*Legs)/)
+  assert.ok(step5Match,
+    'sanity: step 5, "**Capture and apply ...**", must exist as Phase 1\'s fifth numbered step, bounded by ' +
+    'step 6\'s own heading — if this step moved or was reworded, the assertions below are scoped to the ' +
+    'wrong text')
+  const step5 = step5Match[0].replace(/\s+/g, ' ')
+
+  assert.match(step5, /--spec/,
+    'D11: step 5 must state that --apply takes --spec {spec} — a host author reading this doctrine is the ' +
+    'only way this flag is ever adopted: ' + JSON.stringify(step5Match[0]))
+  assert.match(step5, /afterApply/,
+    'D11: step 5 must name replay.afterApply — the config key a host declares to opt in: ' + JSON.stringify(step5Match[0]))
+  assert.match(step5, /reconcil/i,
+    'D11: step 5 must state that --apply runs the host\'s declared post-apply RECONCILE between applying ' +
+    'and committing: ' + JSON.stringify(step5Match[0]))
+  assert.match(step5, /exclude/i,
+    'D11: step 5 must state that the declared paths are EXCLUDED from the canonical patch — otherwise a ' +
+    'reviewer\'s finding on the reconcile path could score as a kill of the actual defect: ' + JSON.stringify(step5Match[0]))
+  assert.match(step5, /declares? (none|no)/i,
+    'D11: step 5 must state that a host declaring none is unchanged — the hook is opt-in, never load-bearing ' +
+    'on a host with no derived artifacts: ' + JSON.stringify(step5Match[0]))
+  assert.match(step5, /setup-failed/,
+    'D7: step 5 must state that an --apply refusal at the hook records --legs none --outcome setup-failed ' +
+    'and stops — a designed failure path with no doctrine arm is a path the next session invents an answer ' +
+    'for: ' + JSON.stringify(step5Match[0]))
+
+  const phase4Match = src.match(/## Phase 4 — Record & teardown\n([\s\S]*?)\n## Phase 5 —/)
+  assert.ok(phase4Match,
+    'sanity: Phase 4 — Record & teardown must exist as its own section ending at Phase 5 — if this heading ' +
+    'moved or was reworded, the phase-4 slice below is scoped to the wrong text region')
+  assert.doesNotMatch(phase4Match[1], /never reaches this phase/,
+    'D7: Phase 4 must no longer claim setup-failed "never reaches this phase" — D7 gives the hook\'s own ' +
+    'refusal a SECOND setup-failed recording site (step 5), so the old absolute claim (naming only step 2) ' +
+    'is now false and must be corrected to name both sites: ' + JSON.stringify(phase4Match[1]))
+})
+
+// specs/20260909/01-replay-build-shaped-mutation.md D11: a survivor naming only a declared
+// reconcile path spent its finding on commit shape, not the planted defect — an unruled
+// `ambiguous` here is a coin flip in the catch-rate numerator, so D11 gives it a ruling: `missed`.
+test('AC-20260909-01-15: replay.md Phase 3 rules a reconcile-path-only survivor', () => {
+  const src = read('spec/commands/replay.md')
+  const phase3Match = src.match(/## Phase 3 — Score\n([\s\S]*?)\n## Phase 4 —/)
+  assert.ok(phase3Match,
+    'sanity: Phase 3 — Score must exist as its own section ending at Phase 4 — if this heading moved or was ' +
+    'reworded, the assertion below is scoped to the wrong text region')
+  const phase3 = phase3Match[1]
+  assert.match(phase3, /reconcile path/i,
+    'D11: Phase 3 must state the reconcile-path-only-survivor ruling explicitly — without it, such a ' +
+    'survivor falls into the ambiguous seam with no default, a coin flip in the catch-rate numerator: ' +
+    JSON.stringify(phase3))
+  assert.match(phase3, /missed/,
+    'D11: the ruling must resolve such a survivor to missed — the reviewer spent its finding on commit ' +
+    'shape rather than the planted defect, so it did not find the defect: ' + JSON.stringify(phase3))
 })
 
 // specs/20260904/02-worktree-include-shared-owner.md D6, AC-20260904-02-13: Phase 1 step 1 must

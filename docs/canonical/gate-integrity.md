@@ -63,6 +63,27 @@ rules that replaced it:
   their real target stays inside the scanned root, symlinked directories are walked cycle-safe.
 - **The gate resolves `{testDirs}` to the glob form** (`node --test 'tests/<scope>/*.test.js'`)
   — a bare directory runs nothing on Node 26.
+- **A derived artifact is reconciled in the commit that changes its inputs.** The size ratchet
+  is a byte-exact ceiling per tracked file, so any commit that changes a file's length and does
+  not carry the matching `size-baseline.json` reads as a build that skipped its last step. This
+  is true of hand-built commits and of the mutation commits the replay harness plants alike:
+  `replay.js --apply` runs the host's declared `replay.afterApply` command inside the scratch
+  worktree between applying the patch and committing it, stages exactly the declared paths, and
+  excludes them from the canonical patch later phases score against — so the planted commit is
+  shaped like a real build commit and the legs judge the defect rather than the edit. Two
+  guarantees hold that shape honest, and they are keyed differently on purpose: the declared
+  paths are governed by name, while the mutation's own files are frozen by content — their
+  staged blob ids are recorded after the patch applies and re-read after the hook and after
+  staging, alongside a worktree-clean check, so a hook cannot rewrite, delete, restore or dirty
+  the defect under measurement. The frozen set is both sides of the patch, since a mutation that
+  deletes a file is as forgeable as one that writes it. A failure of that hook records
+  `setup-failed` and stops; it is never worked around in-session. The one-shot form of the
+  reconcile is `scripts/size-ratchet.js --reconcile --cite <spec>`: every tracked ceiling set to
+  actual, one `raises[]` entry per growth it lifts. `--update` still refuses growth outright, so
+  the two verbs differ in what they demand up front — `--reconcile` demands a citing spec before
+  it will lift anything, and the record it leaves is the same `raises[]` trail `--raise` writes,
+  held by the live cite-existence check and by review's rule that a raise citing anything but
+  the spec under review is a hard finding.
 
 History: the baseline mechanics (pre-image snapshots, `--gate` wrap choreography,
 green-by-subtraction qualification) are preserved in git history through v6.91.0 and in the

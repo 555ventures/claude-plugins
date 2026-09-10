@@ -84,8 +84,8 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
   (`__SMOKE_PASS__`-style) or `--json`; the human render is the only other format.
 - Hand-rolled `--flag value` arg parsing only; no arg-parsing library, ever.
 - **A mechanism pays its own size**: every file under the three roots lands under
-  `scripts/size-ratchet.js`; a raise cites its spec; spec history stays in the spec, a script
-  header carries the owner citation only.
+  `scripts/size-ratchet.js` and `scripts/dup-windows.js`; a raise cites its spec; spec history
+  stays in the spec, a script header carries the owner citation only.
 
 ## Test Rules
 
@@ -133,6 +133,7 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
   naming the extraction — batch-scoped workers never see the third repetition; the reviewer
   is the first eye that can.
 - A baseline raise whose `cite` is not the spec under review is **hard**.
+- A `dup-baseline.json` raise whose `cite` is not the spec under review is **hard**.
 
 ## Gotchas (evidence-cited)
 

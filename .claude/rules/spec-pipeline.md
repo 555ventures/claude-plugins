@@ -151,7 +151,8 @@ upstream bug list. -->
 - `[host]` A spec Decision naming a literal version-bump target can be stale by build time —
   concurrent sessions in this repo race the same semver. The build bumps to the next free
   version and records the deviation; the spec's literal number is a target, not a pin.
-  (specs/20260810/02-terminal-observable-acs.md D11; specs/20260901/08-corpus-derivation-and-kill-match.md D10)
+  (specs/20260810/02-terminal-observable-acs.md D11; specs/20260901/08-corpus-derivation-and-kill-match.md D10;
+  specs/20260907/08-walk-critic.md D11)
 - `[host]` A locked Decision that retires or narrows a literal glyph, phrase, or claim from
   doctrine prose can leave a live assertion of the retired form **outside** the spec's File
   Plan — in test files (dense regex pins) or the doctrine corpus itself (paraphrased or
@@ -176,7 +177,7 @@ upstream bug list. -->
   retired, never weakened into passing.
   (specs/20260813/07-command-report-conformance.md D8; specs/20260813/09-model-placement-mechanics.md D4;
   specs/20260814/01-ac-matrix-script.md; specs/20260907/09-atlas-index-and-note-navigation.md;
-  specs/20260907/07-mocks-retires-theme.md D12)
+  specs/20260907/07-mocks-retires-theme.md D12; specs/20260907/08-walk-critic.md D2/D6)
 - `[plugin]` `ac-matrix.js` parses AC bullets as `^- \*\*(token)\*\*` and requires the token to
   fully match `AC-\d{8}-\d{2}[a-z]?-\d+`. A build-time amendment written the way the Decisions
   table writes one — a prime-suffixed successor (`AC-…-3′`) plus the superseded original left as

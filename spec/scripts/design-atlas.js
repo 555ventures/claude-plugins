@@ -2020,7 +2020,7 @@ function cmdServe(argv) {
   const port = parseInt(arg('--port', '4173'), 10)
   const http = require('node:http')
   const server = http.createServer(createRequestHandler(root, { prefix: '' }))
-  const banner = (verb) => verb + ' http://localhost:' + port + '/atlas/index.html — remote: ssh -L ' + port + ':localhost:' + port + ' <host>\n'
+  const banner = (verb, p) => verb + ' http://localhost:' + p + '/atlas/index.html — remote: ssh -L ' + p + ':localhost:' + p + ' <host>\n'
   // A busy port is the common case, not an error: the previous session left its server up. Probe
   // it for the notes layer (the one route only this server answers); an atlas answers → print the
   // same URL line with "already serving" and exit 0, so a caller reading the first line still
@@ -2029,13 +2029,13 @@ function cmdServe(argv) {
     if (!err || err.code !== 'EADDRINUSE') die('serve: ' + (err && err.message || err))
     const probe = http.get({ host: '127.0.0.1', port, path: '/__notes/notes.js', timeout: 1500 }, (r) => {
       r.resume()
-      if (r.statusCode === 200) { process.stdout.write(banner('already serving')); process.exit(0) }
+      if (r.statusCode === 200) { process.stdout.write(banner('already serving', port)); process.exit(0) }
       die('serve: port ' + port + ' is taken by something that is not a design atlas — pass --port <n>')
     })
     probe.on('timeout', () => probe.destroy(new Error('timeout')))
     probe.on('error', () => die('serve: port ' + port + ' is taken by something that is not a design atlas — pass --port <n>'))
   })
-  server.listen(port, '127.0.0.1', () => { process.stdout.write(banner('serving')) })
+  server.listen(port, '127.0.0.1', () => { process.stdout.write(banner('serving', server.address().port)) })
   const shutdown = () => server.close(() => process.exit(0))
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)

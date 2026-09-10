@@ -323,10 +323,9 @@ test('AC-20260907-09-10: activating a served project panel\'s button.nl-anchor o
   const chrome = findChrome()
   if (!chrome) return t.skip('no Chrome binary (set CHROME_BIN) — AC-20260907-09-10 requires the real atlas lightbox/notes-layer wiring')
   const dir = buildNavFixtureRoot()
-  const port = 43570 + (process.pid % 300)
-  const { child, ready } = serve(dir, port)
+  const { ready, stop } = serve(dir)
   try {
-    await ready
+    const { port } = await ready
     await withChrome(chrome, async ({ navigate, evalJs, sleep }) => {
       await navigate('http://127.0.0.1:' + port + '/atlas/index.html')
       await sleep(400) // let the notes layer's initial refresh()/render() land
@@ -372,7 +371,6 @@ test('AC-20260907-09-10: activating a served project panel\'s button.nl-anchor o
       assert.strictEqual(afterEscape.panelStillThere, true, 'D9: the notes panel must still be rendered after Escape closes the lightbox')
     })
   } finally {
-    child.kill('SIGTERM')
-    await new Promise((r) => child.on('exit', r))
+    await stop()
   }
 })

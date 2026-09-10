@@ -29,19 +29,18 @@ function buildFixtureRoot() {
   return dir
 }
 
-async function withServedAtlas(port, fn) {
+async function withServedAtlas(fn) {
   const chrome = findChrome()
   const dir = buildFixtureRoot()
-  const { child, ready } = serve(dir, port)
+  const { ready, stop } = serve(dir)
   try {
-    await ready
+    const { port } = await ready
     await withChrome(chrome, async (page) => {
       await page.navigate('http://127.0.0.1:' + port + '/atlas/index.html')
       await fn(page)
     })
   } finally {
-    child.kill('SIGTERM')
-    await new Promise((r) => child.on('exit', r))
+    await stop()
   }
 }
 
@@ -64,27 +63,25 @@ function buildFixtureRootWithShapesAndTheme() {
   return dir
 }
 
-async function withServedShapesThemeAtlas(port, fn) {
+async function withServedShapesThemeAtlas(fn) {
   const chrome = findChrome()
   const dir = buildFixtureRootWithShapesAndTheme()
-  const { child, ready } = serve(dir, port)
+  const { ready, stop } = serve(dir)
   try {
-    await ready
+    const { port } = await ready
     await withChrome(chrome, async (page) => {
       await page.navigate('http://127.0.0.1:' + port + '/atlas/index.html')
       await fn(page)
     })
   } finally {
-    child.kill('SIGTERM')
-    await new Promise((r) => child.on('exit', r))
+    await stop()
   }
 }
 
 test('AC-20260907-09-2: typing "session" into #tocsearch leaves visible exactly the rows whose label or group title contains it, and the sketch status chip then narrows to rows matching both', async (t) => {
   const chrome = findChrome()
   if (!chrome) return t.skip('no Chrome binary (set CHROME_BIN) — AC-20260907-09-2 requires a real DOM/CSSOM to drive #tocsearch')
-  const port = 42530 + (process.pid % 300)
-  await withServedAtlas(port, async ({ evalJs }) => {
+  await withServedAtlas(async ({ evalJs }) => {
     const afterSearch = await evalJs(`
       (function () {
         var input = document.getElementById('tocsearch')
@@ -164,8 +161,7 @@ const SETTLE_SCROLL_FN = 'function settleScroll(){return new Promise(function(re
 test('AC-20260907-09-3: activating a .tocrow scrolls its #s-<label> target into view and adds class "flash", and Enter in a non-empty #tocsearch activates the first visible row', async (t) => {
   const chrome = findChrome()
   if (!chrome) return t.skip('no Chrome binary (set CHROME_BIN) — AC-20260907-09-3 requires real DOM event dispatch')
-  const port = 42540 + (process.pid % 300)
-  await withServedAtlas(port, async ({ evalJs }) => {
+  await withServedAtlas(async ({ evalJs }) => {
     const clickResult = await evalJs(`
       ${SETTLE_SCROLL_FN}
       (async function () {
@@ -231,11 +227,10 @@ const SETTLE_FN = 'function __settle(el){return new Promise(function(resolve){va
 test('AC-20260907-09-4: below 1200px #tocbtn is displayed and #toc is off-canvas by default; activating #tocbtn opens #toc and paints #tocscrim; a row, Escape, or the scrim each close it', async (t) => {
   const chrome = findChrome()
   if (!chrome) return t.skip('no Chrome binary (set CHROME_BIN) — AC-20260907-09-4 requires real viewport/computed-style behavior')
-  const port = 42550 + (process.pid % 300)
   const dir = buildFixtureRoot()
-  const { child, ready } = serve(dir, port)
+  const { ready, stop } = serve(dir)
   try {
-    await ready
+    const { port } = await ready
     await withChrome(chrome, async ({ navigate, evalJs, setViewport, sleep }) => {
       await setViewport(800, 900)
       await navigate('http://127.0.0.1:' + port + '/atlas/index.html')
@@ -332,16 +327,14 @@ test('AC-20260907-09-4: below 1200px #tocbtn is displayed and #toc is off-canvas
       assert.strictEqual(afterScrim.btnOn, false, '§ UI: clicking #tocscrim must remove #tocbtn\'s "on" class along with the rest of the overlay-closed state: got ' + JSON.stringify(afterScrim))
     })
   } finally {
-    child.kill('SIGTERM')
-    await new Promise((r) => child.on('exit', r))
+    await stop()
   }
 })
 
 test('AC-20260907-09-6: the last .sect > h2 at or above max(80, innerHeight*0.25) carries .here on its matching .tochead exclusively, recomputed on scroll, defaulting to the first heading at scroll 0', async (t) => {
   const chrome = findChrome()
   if (!chrome) return t.skip('no Chrome binary (set CHROME_BIN) — AC-20260907-09-6 requires real scroll/rAF behavior')
-  const port = 42560 + (process.pid % 300)
-  await withServedAtlas(port, async ({ evalJs, sleep }) => {
+  await withServedAtlas(async ({ evalJs, sleep }) => {
     const atTop = await evalJs(`
       (function () {
         var heads = document.querySelectorAll('.tochead')
@@ -431,8 +424,7 @@ test('AC-20260907-09-6: the last .sect > h2 at or above max(80, innerHeight*0.25
 test('D2/D4 review finding: the row-less shapes and theme groups are visible at load, hide when the search query excludes their own titles, and hide exactly when the status filter has hidden their underlying .sect; the theme heading carries its .count pill', async (t) => {
   const chrome = findChrome()
   if (!chrome) return t.skip('no Chrome binary (set CHROME_BIN) — this pin requires real DOM/CSSOM filtering behavior')
-  const port = 42580 + (process.pid % 300)
-  await withServedShapesThemeAtlas(port, async ({ evalJs }) => {
+  await withServedShapesThemeAtlas(async ({ evalJs }) => {
     const groupVisible = (title) => `!(document.querySelector('.tocgroup[data-group="${title}"]') || { hidden: true }).hidden`
 
     const atLoad = await evalJs(`
@@ -516,11 +508,10 @@ test('D2/D4 review finding: the row-less shapes and theme groups are visible at 
 test('D2: activating a .tochead scrolls its section into view and closes the overlay in narrow mode, without adding .flash', async (t) => {
   const chrome = findChrome()
   if (!chrome) return t.skip('no Chrome binary (set CHROME_BIN) — this pin requires real DOM/CSSOM scroll and overlay behavior')
-  const port = 42590 + (process.pid % 300)
   const dir = buildFixtureRoot()
-  const { child, ready } = serve(dir, port)
+  const { ready, stop } = serve(dir)
   try {
-    await ready
+    const { port } = await ready
     await withChrome(chrome, async ({ navigate, evalJs, setViewport, sleep }) => {
       await setViewport(800, 900)
       await navigate('http://127.0.0.1:' + port + '/atlas/index.html')
@@ -560,7 +551,6 @@ test('D2: activating a .tochead scrolls its section into view and closes the ove
       assert.strictEqual(result.sectionFlashed, false, 'D2: activating a .tochead must NOT add .flash to its section — .flash pairs with the row-jump clause specifically, and the heading\'s persistent .here border is its own arrival feedback: got ' + JSON.stringify(result))
     })
   } finally {
-    child.kill('SIGTERM')
-    await new Promise((r) => child.on('exit', r))
+    await stop()
   }
 })

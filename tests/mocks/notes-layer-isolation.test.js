@@ -66,10 +66,9 @@ test('notes layer (executed, headless Chrome): a served dark mock computes ident
   const dir = tmpdir('notes-isolation')
   fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'design/mocks/m.html'), MOCK)
-  const port = 42230 + (process.pid % 300)
-  const { child, ready } = serve(dir, port)
+  const { ready, stop } = serve(dir)
   try {
-    await ready
+    const { port } = await ready
     const base = 'http://127.0.0.1:' + port + '/mocks/m.html'
     await withChrome(chrome, async ({ navigate, evalJs }) => {
       // evalAt(url) = navigate, wait for load plus withChrome's own settle tick, evaluate PROBE.
@@ -86,7 +85,6 @@ test('notes layer (executed, headless Chrome): a served dark mock computes ident
         'the layer must not change the mock\'s computed body colours or box model — with layer: ' + JSON.stringify(injected) + ' clean: ' + JSON.stringify(clean))
     })
   } finally {
-    child.kill('SIGTERM')
-    await new Promise((r) => child.on('exit', r))
+    await stop()
   }
 })

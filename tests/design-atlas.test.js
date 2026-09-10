@@ -1626,7 +1626,7 @@ test('check/sync: active nav derived (AC-20260901-04-8)', () => {
 // longer true for an unclean request). The `?clean` query keeps this pin's original meaning —
 // the server serves exact bytes when asked cleanly — per spec-pipeline.md § Gotchas: "a colliding
 // test pin is updated in place and retagged with the new AC-ID, never weakened, never left red."
-test('AC-20260905-01-11 (carrying forward AC-20260902-07-12 / AC-20260902-10-2): design-atlas.js serve SHALL CONTINUE TO print the port-forward line first, serve design/ statically with no-store (exact bytes via ?clean), block path traversal, and exit on SIGTERM', async () => {
+test('AC-20260905-01-11 (carrying forward AC-20260902-07-12 / AC-20260902-10-2) / AC-20260909-03-7: design-atlas.js serve SHALL CONTINUE TO print the port-forward line first, serve design/ statically with no-store (exact bytes via ?clean), block path traversal, and exit on SIGTERM', async () => {
   const dir = tmpdir('atlas-serve')
   fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'design/mocks/a.html'), '<main data-screen-label="a">hello</main>\n')
@@ -1922,7 +1922,7 @@ a -> b
 // serving a file only `build` ever wrote (a shapes-only tree at the SHAPES look stop has no
 // such file, and the banner promised the page anyway); a busy port reuses the running atlas
 // (prints the same URL line with "already serving", exit 0) instead of an EADDRINUSE trace.
-test('AC-20260905-01-11: serve SHALL CONTINUE TO derive the atlas index on request (shapes-only tree, no design/atlas file) and a second serve on the same port prints "already serving" + exits 0', async () => {
+test('AC-20260905-01-11 / AC-20260909-03-9: serve SHALL CONTINUE TO derive the atlas index on request (shapes-only tree, no design/atlas file) and a second serve on the same port prints "already serving" + exits 0', async () => {
   const dir = tmpdir('atlas-serve-derived')
   fs.mkdirSync(path.join(dir, 'design/shapes'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'design/shapes/work-queue.html'), '<main data-screen-label="work-queue">wq</main>')

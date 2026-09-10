@@ -1,6 +1,6 @@
 ---
 date: 2026-09-09
-status: hardened
+status: done
 tier: critical           # verdict.js is a named critical trigger (.claude/rules/spec-pipeline.md § Risk Tiers): this spec changes the CLEAN derivation
 area: review
 design: false
@@ -8,8 +8,10 @@ breaking: false
 depends_on: []
 depended_on_by: [specs/20260909/05-fix-delta-reviewer-pass.md]
 brief: n/a
+build_base: main
 spiked: 2026-09-09
 open_markers: 0
+diff_base: daf4177e91f6442677b7e3ccba127005f661f9a4
 ---
 
 # Review convergence floor — soft findings are advisory, never a fix cycle
@@ -59,6 +61,12 @@ undispositioned, and the two-iteration fix cap is untouched.
 | tests/review/escalate-row-step.test.js | MODIFY | tests | AC-20260909-04-10 — ESCALATE text names the file exit; a `fix` entry at a spent cap is refused |
 | tests/review/review-driver-fix-cycle.test.js | MODIFY | tests | AC-20260909-04-13 — SHALL CONTINUE TO pins on the cap and the FIX→REVIEWER cycle with hard findings |
 | spec/.claude-plugin/plugin.json | MODIFY | other | D13 bump |
+| tests/review/disposer-gate.fixtures.js | MODIFY | other | Forced collateral of D1/D8: `ONE_SURVIVOR_RETURN`/`TWO_SURVIVOR_RETURN` carried `severity: soft`, which the hard-only pool no longer admits — retagged to `hard`, never weakened |
+| tests/review/escalate-row.fixtures.js | MODIFY | other | Forced collateral of D1/D5/D8: `reviewerReturn()`'s survivor severity `soft` → `hard` so its out-of-batch consumers still land FIX |
+| tests/review/review-driver.fixtures.js | MODIFY | other | Forced collateral of D1/D5/D8: `SURVIVOR_RETURN`'s severity `soft` → `hard` for the same reason |
+| size-baseline.json | MODIFY | other | Ratchet raises for the grown test files, cited to this spec (.claude/rules/spec-pipeline.md § Review Checks) via `node scripts/size-ratchet.js --raise <path> --to <n> --cite specs/20260909/04-review-soft-floor.md` |
+| tests/review/review-driver-close-row.test.js | MODIFY | other | Forced collateral of D6: four ACs paired `reviewer-returned` with an explicit `dispositions` mark that the driver now runs itself — collapsed to one call, assertions unchanged |
+| tests/review/review-driver.test.js | MODIFY | other | Forced collateral of D6: AC-20260901-02-4 same collapse on both the `--via loop` and no-via hosts |
 
 Orchestrator duty outside the table: after the build, `grep -rn "medium" spec/agents/reviewer.md` must return nothing in § Severity calibration.
 
@@ -204,6 +212,36 @@ word in its effort/model sense (core.md, wf-*.js, spec-status tests); the one se
 is tests/review/verdict.test.js:248–270, already a File Plan row. The `executes` hit,
 tests/consistency/entrypoints.test.js, exercises the driver's entrypoint conformance (usage,
 header, exit codes), which D5–D10 leave unchanged — recorded waive.
+
+### Build and review record (deviations fold, 2026-09-09)
+
+- **Scope widening, forced by D1/D5/D8.** The lock-time collision sweep swept the literal
+  `medium`; the value that actually moved meaning was `soft`. Three shared review fixtures
+  (`disposer-gate.fixtures.js`, `escalate-row.fixtures.js`, `review-driver.fixtures.js`) carried
+  soft-severity survivors that the hard-only pool no longer admits, and D6's empty-pool
+  auto-close also fires for the plain zero-survivor `CLEAN_RETURN` fixture — together reddening
+  25 tests across eight files outside the File Plan. All were retagged in place (severity
+  `soft` → `hard`; setup pairs of `reviewer-returned` + an explicit zero `dispositions` mark
+  collapsed to the one call D6 now makes), never weakened, and the six affected paths plus
+  `size-baseline.json` were added to the File Plan as `other` rows. The class is folded into the
+  host's Gotchas as the sixth trigger of the retired-literal entry.
+- **A red test in a SHALL-CONTINUE-TO file.** The test author placed a genuinely-red file-only
+  disposition test in `disposer-gate-refusals.test.js`, whose only new AC (AC-20260909-04-12) is
+  a continuation pin — `red-check.js` classifies such a file `sanctioned-green`, so the red test
+  broke it. Removed; AC-20260909-04-8 in `disposer-gate.test.js` already pins that promise.
+- **D10's cap guard is left keyed on `marks.escalated`, diverging from the Contract's "the same
+  count `handleFixApplied` uses".** Widening it — even to only the durable cross-session half —
+  contradicts two already-hardened pins that require a `fix` disposition into a spent cap to be
+  ACCEPTED with a warning and refused at the following `fix-applied`, which is where the durable
+  cap's second escalate row is written. `escalate-cap-durable.test.js` (outside this File Plan)
+  pins the identical scenario. The over-cap case is still caught one step later, unchanged. The
+  Contract text and the code should be reconciled under a follow-up, not by weakening a pin.
+- **`review.md` read-load.** Landing D12's prose pushed `/spec:review` to 344 of its 340-line
+  budget; the DISPOSITIONS bullet and the `warns` slot paragraph were condensed in place, with
+  every test-grepped literal checked to stay whole across the rewrap.
+- **Review dispositions.** Iteration 1 returned one hard and three soft findings, all
+  dispositioned `fix`; iteration 2 returned two soft findings, both dispositioned `fix`;
+  iteration 3 returned CLEAN with zero survivors. No waive and no reject was taken.
 
 ## Canonical Delta
 

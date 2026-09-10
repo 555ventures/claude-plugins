@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 34997,
-    "spec/scripts": 1279689,
+    "spec/scripts": 1293337,
     "spec/scripts/lib": 233720,
-    "tests": 3591249
+    "tests": 3625572
   },
   "files": {
     "scripts/plugin-bump.js": 9427,
@@ -77,11 +77,11 @@
     "spec/scripts/smoke.sh": 8134,
     "spec/scripts/spec-build-driver.js": 49555,
     "spec/scripts/spec-queue.js": 25130,
-    "spec/scripts/spec-review-driver.js": 126005,
+    "spec/scripts/spec-review-driver.js": 136859,
     "spec/scripts/spec-session-stamp.sh": 2680,
     "spec/scripts/spec-state-gate.sh": 4846,
     "spec/scripts/spec-status.js": 52471,
-    "spec/scripts/verdict.js": 49897,
+    "spec/scripts/verdict.js": 52691,
     "spec/scripts/worktree-include.sh": 3277,
     "tests/ac-matrix-coverage-holes.test.js": 12430,
     "tests/ac-matrix/ac-matrix.fixtures.js": 2238,
@@ -180,6 +180,7 @@
     "tests/mocks/mocks-driver-look-stops-4.test.js": 12052,
     "tests/mocks/mocks-driver-look-stops.test.js": 21448,
     "tests/mocks/mocks-driver-theme.test.js": 51812,
+    "tests/mocks/mocks-driver-walk.test.js": 12899,
     "tests/mocks/mocks-driver-wire.test.js": 4300,
     "tests/mocks/mocks-driver.test.js": 35227,
     "tests/mocks/mocks-ledger.test.js": 12490,
@@ -216,11 +217,11 @@
     "tests/report/report-render.test.js": 14403,
     "tests/review/ci-query.test.js": 17510,
     "tests/review/deviations-backstop.test.js": 18269,
-    "tests/review/disposer-gate-refusals.test.js": 16328,
+    "tests/review/disposer-gate-refusals.test.js": 16755,
     "tests/review/disposer-gate.fixtures.js": 8169,
-    "tests/review/disposer-gate.test.js": 12428,
+    "tests/review/disposer-gate.test.js": 15344,
     "tests/review/escalate-cap-durable.test.js": 5826,
-    "tests/review/escalate-row-step.test.js": 12621,
+    "tests/review/escalate-row-step.test.js": 18359,
     "tests/review/escalate-row.fixtures.js": 11192,
     "tests/review/escalate-row.test.js": 18049,
     "tests/review/legs-verdict-pair.test.js": 31714,
@@ -229,12 +230,12 @@
     "tests/review/review-base-derivation.test.js": 7117,
     "tests/review/review-driver-close-drift-line.test.js": 9702,
     "tests/review/review-driver-close-refusals.test.js": 23221,
-    "tests/review/review-driver-close-row.test.js": 25731,
-    "tests/review/review-driver-fix-cycle.test.js": 19323,
+    "tests/review/review-driver-close-row.test.js": 25987,
+    "tests/review/review-driver-fix-cycle.test.js": 20768,
     "tests/review/review-driver-replay-entry.test.js": 13485,
     "tests/review/review-driver-replay-record.test.js": 14277,
     "tests/review/review-driver.fixtures.js": 12355,
-    "tests/review/review-driver.test.js": 51071,
+    "tests/review/review-driver.test.js": 51043,
     "tests/review/review-legs-at-risk-argv.test.js": 15160,
     "tests/review/review-legs-smoke-wave.test.js": 10397,
     "tests/review/review-legs.fixtures.js": 2714,
@@ -243,8 +244,9 @@
     "tests/review/reviewer-scope-identity.test.js": 2982,
     "tests/review/reviewer-seat.test.js": 1771,
     "tests/review/scope-reconcile.test.js": 9687,
+    "tests/review/soft-floor.test.js": 15073,
     "tests/review/stopped-row-durability.test.js": 30391,
-    "tests/review/verdict.test.js": 122564,
+    "tests/review/verdict.test.js": 131060,
     "tests/review/workflow-scripts-in-scope.test.js": 6856,
     "tests/run-ledger.test.js": 10704,
     "tests/scope-reconcile-at-risk.test.js": 25346,
@@ -747,6 +749,150 @@
       "from": 3553850,
       "to": 3591249,
       "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
+    },
+    {
+      "path": "spec/scripts/spec-review-driver.js",
+      "from": 126005,
+      "to": 134480,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "spec/scripts/verdict.js",
+      "from": 49897,
+      "to": 52062,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "tests/review/disposer-gate-refusals.test.js",
+      "from": 16328,
+      "to": 16755,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "tests/review/disposer-gate.test.js",
+      "from": 12428,
+      "to": 15344,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "tests/review/escalate-row-step.test.js",
+      "from": 12621,
+      "to": 18359,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "tests/review/review-driver-close-row.test.js",
+      "from": 25731,
+      "to": 25987,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "tests/review/review-driver-fix-cycle.test.js",
+      "from": 19323,
+      "to": 20768,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "tests/review/verdict.test.js",
+      "from": 122564,
+      "to": 129678,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1279689,
+      "to": 1290329,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "tests",
+      "from": 3591249,
+      "to": 3609117,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "tests",
+      "from": 3609117,
+      "to": 3618198,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "spec/scripts/spec-review-driver.js",
+      "from": 134480,
+      "to": 136636,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "spec/scripts/verdict.js",
+      "from": 52062,
+      "to": 52669,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "tests/review/soft-floor.test.js",
+      "from": 9081,
+      "to": 15036,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1290329,
+      "to": 1293092,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "tests",
+      "from": 3618198,
+      "to": 3624153,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "spec/scripts/verdict.js",
+      "from": 52669,
+      "to": 52691,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "tests/review/soft-floor.test.js",
+      "from": 15036,
+      "to": 15073,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1293092,
+      "to": 1293114,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "tests",
+      "from": 3624153,
+      "to": 3624190,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "spec/scripts/spec-review-driver.js",
+      "from": 136636,
+      "to": 136859,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "tests/review/verdict.test.js",
+      "from": 129678,
+      "to": 131060,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1293114,
+      "to": 1293337,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "tests",
+      "from": 3624190,
+      "to": 3625572,
+      "cite": "specs/20260909/04-review-soft-floor.md"
     }
   ]
 }

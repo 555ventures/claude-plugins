@@ -46,14 +46,15 @@ When the driver prints `DONE`, report (core § Console Output Style) from slots 
 `outcome` (✅ `CLEAN — merged`, or its one-line MERGE-skip note), `warns` (derived by this
 session from the ci leg's manifest row — `unavailable: sha-unseen` with a `branchConclusion`
 of `failure`, `timed_out` or `cancelled` — dropped otherwise; report-only, never a finding,
-and never a driver slot), `queued` (one line per queued
-follow-up, omitted when none), `next` (its captured `node "$(spec-paths spec-status)" --next`,
-verbatim, never hand-applied). Run `node "$(spec-paths report-render)" --slots <file>` and
-print it verbatim.
+never a driver slot — plus `📎 N advisory finding(s) recorded` when the return carried a soft),
+`queued` (one line per queued follow-up, omitted when none), `next` (its captured
+`node "$(spec-paths spec-status)" --next`, verbatim, never hand-applied). Run
+`node "$(spec-paths report-render)" --slots <file>` and print it verbatim.
 
 ```report
 ✅ **CLEAN — merged**
 ⚠️ CI has not seen this commit; origin `main`'s latest run: `failure`    (only when the ci leg observed sha-unseen with a failing/timed-out/cancelled branch conclusion)
+📎 3 advisory finding(s) recorded    (only when the reviewer return carried any soft survivor)
 {spec-status --next, verbatim}
 ```
 
@@ -78,7 +79,9 @@ print it verbatim.
   hunk quoted — neither present returns `advisory`; an empty findings list is valid. No
   finding dies by argument — dismissed only on executed contrary evidence, a quoted spec
   sanction, or a demonstrated miscitation, presented to the user, never silently.
-- **Dispositions (the DISPOSITIONS step).** Dispatch **one** `Agent {subagent_type:
+- **Dispositions (the DISPOSITIONS step).** Only the hard pool needs judgment; softs are advisory
+  — printed once, recorded in the artifact and the ledger's `findings.soft`, never dispositioned;
+  one worth fixing becomes `spec-queue add`. Dispatch **one** `Agent {subagent_type:
   'spec:disposer'}` with the paths the driver's step prints; no memory of the build. Every
   `fix` recommendation dispatches a Sonnet worker (via `agentMap`) with no question —
   reversible, re-reviewed by the fix-delta pass once you mark `fix-applied`. Every
@@ -88,6 +91,7 @@ print it verbatim.
   changes a recommendation or asks about a `fix`; it may attach `sessionNote` (informational).
   Waive/Reject land in the spec's Rationale with date + reason; only the user waives.
   `DISPOSER_FAILED` is a failed dispatch, never a disposition — re-dispatch before marking.
+  An empty hard pool the driver dispositions itself at `reviewer-returned` — no mark, no disposer.
 - **The verdict word is derived by `verdict.js`, never asserted in prose** — the driver runs
   every verdict pass and prints its word. Never hand-write the word; a CLEAN row with non-zero
   `survived` records dispositioned findings, never ignored ones. review-legs runs the host's

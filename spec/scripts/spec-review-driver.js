@@ -145,10 +145,17 @@
 // (names the duplicate), an entry whose `ref` matches neither pool (names the unknown ref), a
 // `recommended`/`final` value outside `fix|waive|reject`, a blank `reason`, a `final` that differs
 // from `recommended` with no `overriddenBy:"user"` plus non-blank `overrideReason`, a
-// `--waived`/`--rejected`/`--fix-dispatched` count that does not match the return's
-// `final`-or-`recommended` tallies (names `--fix-dispatched`; a `leg:<name>` entry weighs that
-// leg's whole finding count via lib/leg-findings.js, the unit verdict.js sums — so one waived
-// reconcile leg with `outOfPlan: 5` is `--waived 5`, never 1), or `--skip-independence-check-
+// `--waived`/`--rejected`/`--fix-dispatched` count that IS PASSED and does not match the return's
+// `final`-or-`recommended` tallies (specs/20260909/04-review-soft-floor.md D7 makes the three
+// count flags optional — an omitted flag is filled in from the derived tally instead of refused;
+// names `--fix-dispatched`; a `leg:<name>` entry weighs that leg's whole finding count via
+// lib/leg-findings.js, the unit verdict.js sums — so one waived reconcile leg with
+// `outOfPlan: 5` is `--waived 5`, never 1), a disposition entry whose effective (`final` else
+// `recommended`) value is `fix` while this run's fix cap has already visibly tripped —
+// `marks.escalated`, set nowhere but `handleFixApplied`'s own cap refusal, never the raw manifest
+// count (a dispositions mark that lands FIX for what would be the capping cycle stays accepted,
+// AC-20260820-07-8 SHALL CONTINUE TO) — (names "iteration cap 2" — specs/20260909/04-review-soft-
+// floor.md D10), or `--skip-independence-check-
 // because` passed at all, on any run (names the flag and ADR-0005 — there is no CHECKPOINT left
 // for it to bypass), or (specs/20260902/05-manifest-stamped-scope.md D5) `--mark dispositions`
 // whose pass derives `UNVERIFIED` — message quotes verdict.js's own `UNVERIFIED — <cause>` line
@@ -164,6 +171,34 @@
 // a stray `scope` key (an older doctrine copy, or this spec's own dogfooding review pipeline, A7)
 // is accepted and the key silently ignored — `--mark dispositions` derives its required-leg set
 // from the manifest's own scope stamps (D2, verdict.js) regardless of what the return says.
+//
+// specs/20260909/04-review-soft-floor.md (D5-D10): a soft-only reviewer return demanding the
+// same fix/waive/reject ceremony as a hard one, with a fresh reviewer producing a new soft every
+// pass, is the loop's measured non-convergence mechanism. dispositionPools(n) (D5/D9) now splits the
+// reviewer return's survivors into a HARD-only `survivors` array (0-based `s<i>` indexes THIS
+// filtered list, in printed order) and an advisory-only `softs` array, never indexed and never
+// covered by a disposition; the DISPOSITIONS step prints softs under a separate
+// `advisory (N, recorded, not dispositioned):` heading so nothing is hidden, then never asks
+// about them again. handleReviewerReturned() (D6) checks this SAME pool derivation: an empty hard
+// pool (softs only, or none at all) needs no session judgment, so the driver runs the verdict
+// pass itself with zero dispositions, records `marks.dispositions`, and the SAME invocation's
+// `deriveState()` call proceeds straight through to CLOSE — no `--mark dispositions` is ever
+// printed or required. An explicit `--mark dispositions --waived 0 --rejected 0
+// --fix-dispatched 0` against that same empty pool SHALL CONTINUE TO be accepted afterward (D6/
+// AC-11 — 17 existing test files and any host mid-run pass this exact form). handleDispositions()
+// (D7) makes the three count flags optional on a non-empty pool: the tally derived from the
+// disposer return's own `final`-else-`recommended` values (weighted by lib/leg-findings.js for a
+// `leg:<name>` ref, exactly as before) is authoritative — a flag that IS passed must still equal
+// it (the existing mismatch refusal, unchanged text), and an omitted flag is filled in from the
+// tally rather than defaulting to a hand-typed 0. D8's refusal text ("matches nothing in the
+// survivor or leg-finding pools") is unchanged, but now fires for ANY ref naming a soft survivor
+// by another name — a soft never enters the pool a disposer return can cover. D10: once this
+// run's fix cap has already visibly tripped (`marks.escalated`), a disposer return whose
+// effective value for any ref is `fix` is refused (names "iteration cap 2") rather than silently
+// promising
+// a cycle the cap already forbids — the ESCALATE step's own waive/reject exit therefore names
+// `--mark dispositions --file <return.json>` (every entry `waive`/`reject`), never the retired
+// hand-typed `--waived N --rejected N --fix-dispatched 0` form.
 
 'use strict'
 const fs = require('fs')
@@ -359,17 +394,23 @@ function checkpointOutcome(n) {
   return { outcome: 'disposer', overrides: d.overrides }
 }
 
-// ---- D2/A5 (specs/20260901/09-disposer-gate.md): the ONE derivation of the two disposition -----
-// pools, shared by the printed DISPOSITIONS step body and handleDispositions()'s own --file
-// verification — never two derivations that could silently disagree about what needs covering.
-// survivors come from the recorded reviewer-return file (0-based `s<i>`); leg findings are the
-// current manifest's non-blocking red rows (`leg:<name>`), mirroring BLOCKING_LEGS exactly as
-// verdict.js's own leg-findings pool does.
+// ---- D2/A5 (specs/20260901/09-disposer-gate.md), narrowed to hard-only survivors by
+// ---- D5/D9 (specs/20260909/04-review-soft-floor.md): the ONE derivation of the disposition ----
+// pools, shared by the printed DISPOSITIONS step body, handleReviewerReturned()'s own D6
+// auto-dispose check, and handleDispositions()'s own --file verification — never a second
+// derivation that could silently disagree about what needs covering. `survivors` is the
+// HARD-only subset of the recorded reviewer-return file's survivors (0-based `s<i>` indexes THIS
+// filtered list, in printed order — D9); `softs` is every other-severity survivor, advisory only,
+// never indexed and never covered by a disposition. leg findings are the current manifest's
+// non-blocking red rows (`leg:<name>`), mirroring BLOCKING_LEGS exactly as verdict.js's own
+// leg-findings pool does.
 function dispositionPools(n) {
-  let survivors = []
-  try { survivors = JSON.parse(fs.readFileSync(marks.reviewerReturnFile, 'utf8')).survivors || [] } catch { /* ignore */ }
+  let allSurvivors = []
+  try { allSurvivors = JSON.parse(fs.readFileSync(marks.reviewerReturnFile, 'utf8')).survivors || [] } catch { /* ignore */ }
+  const survivors = allSurvivors.filter((s) => s.severity === 'hard')
+  const softs = allSurvivors.filter((s) => s.severity !== 'hard')
   const legs = readManifestRows(manifestPathFor(n)).filter((r) => !BLOCKING_LEGS.has(r.leg) && r.exit !== 0)
-  return { survivors, legs }
+  return { survivors, softs, legs }
 }
 
 // ---- Gotchas cap (prose-cap.js, specs/20260823/06 ratchet) ------------------------
@@ -1108,6 +1149,47 @@ function handleReviewerReturned() {
   // prior-iteration disposer mark satisfy this iteration's --mark dispositions.
   marks.disposer = null
   marks.pendingFix = false
+  // D6 (specs/20260909/04-review-soft-floor.md): an empty HARD pool needs no session judgment at
+  // all — softs are advisory (D5), so a return whose survivors are all non-hard and whose current
+  // manifest carries no red non-blocking leg is dispositioned by the driver itself, zero
+  // waived/rejected/fixDispatched, and deriveState() below (this same invocation, once handleMark()
+  // returns) proceeds straight through CLOSE — no `--mark dispositions` is ever printed or
+  // required. dispositionPools(n) is the SAME derivation the DISPOSITIONS step and
+  // handleDispositions() use (A5), so this can never silently disagree about what needs covering.
+  // An explicit `--mark dispositions --waived 0 --rejected 0 --fix-dispatched 0` against this same
+  // empty pool SHALL CONTINUE TO be accepted afterward (AC-20260909-04-11) — handleDispositions()
+  // re-runs the same zero-disposition verdict pass and overwrites marks.dispositions with an
+  // identical value.
+  const pools = dispositionPools(n)
+  if (pools.survivors.length === 0 && pools.legs.length === 0) {
+    const args = ['--manifest', manifestPathFor(n), '--workflow', dest,
+      '--waived', '0', '--rejected', '0', '--fixDispatched', '0']
+    const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
+      'verdict.js (auto-dispositions pass, empty hard pool)')
+    if (r.status === 2) die((r.stderr || r.stdout).trim())
+    const word = r.stdout.split('\n')[0].trim()
+    // D6 (specs/20260909/04-review-soft-floor.md) / AC-20260909-04-7: an empty hard pool is only
+    // ever auto-dispositioned into a CLEAN-shaped terminal pass — a non-CLEAN word here (most
+    // often UNVERIFIED: a required leg row is missing even though the survivor/leg-finding pools
+    // are empty) means dispositions cannot cure this and marks.dispositions must NEVER be written
+    // for it (that write is the exact bug this AC closes: a stale UNVERIFIED word saved to
+    // review-state.json, satisfying deriveState()'s "dispositions recorded" check and advancing to
+    // CLOSE, then refusing the next bare invocation one round-trip later). Surface the real remedy
+    // right here instead, mirroring handleDispositions()'s own UNVERIFIED pre-check text/exit
+    // above so the two paths agree — review-state.json itself is untouched (saveSidecar() has
+    // not run yet), but this iteration's reviewer-return artifact is already on disk (written at
+    // line 1142, above), which is why the named remedy deletes the sidecar directory rather than
+    // just re-marking.
+    if (word !== 'CLEAN') {
+      die((r.stderr || '').trim() +
+        '\n--mark reviewer-returned refused: the hard pool is empty but the verdict pass derived ' +
+        word + ', not CLEAN — dispositions cannot cure missing or contradictory evidence, only a ' +
+        'cold legs re-run can. Delete ' + sidecarDir + ' and re-run:\n  node ' + __filename + ' ' + specPath)
+    }
+    marks.dispositions = { waived: 0, rejected: 0, fixDispatched: 0, word }
+    marks.dispositionsIteration = n
+    marks.disposer = { file: null, iteration: n, overrides: 0, empty: true }
+  }
   saveSidecar()
   return null
 }
@@ -1152,10 +1234,16 @@ function handleDispositions() {
     ...pools.survivors.map((_, i) => 's' + i),
     ...pools.legs.map((r) => 'leg:' + r.leg),
   ]
+  // D7 (specs/20260909/04-review-soft-floor.md): the three count flags are now optional — when
+  // --file is present (non-empty pool) the tally derived from the file below is authoritative; a
+  // flag that IS passed must still equal that derived tally (the existing mismatch refusal,
+  // unchanged text). "Given" tracks presence (flag() returns null when absent) separately from
+  // the parsed number, since an omitted flag must never be treated as an explicit 0.
   const waivedRaw = flag('--waived'), rejectedRaw = flag('--rejected'), fixRaw = flag('--fix-dispatched')
-  const waived = Number(waivedRaw), rejected = Number(rejectedRaw), fixDispatched = Number(fixRaw)
+  const waivedGiven = waivedRaw !== null, rejectedGiven = rejectedRaw !== null, fixGiven = fixRaw !== null
+  let waived = Number(waivedRaw), rejected = Number(rejectedRaw), fixDispatched = Number(fixRaw)
   if (![waived, rejected, fixDispatched].every(Number.isFinite)) {
-    die('--mark dispositions needs numeric --waived/--rejected/--fix-dispatched (got ' +
+    die('--mark dispositions needs numeric --waived/--rejected/--fix-dispatched when passed (got ' +
       JSON.stringify({ waivedRaw, rejectedRaw, fixRaw }) + ')')
   }
 
@@ -1246,13 +1334,40 @@ function handleDispositions() {
       }
       tally[effective] += legWeight.has(entry.ref) ? legWeight.get(entry.ref) : 1
     }
-    if (tally.fix !== fixDispatched || tally.waive !== waived || tally.reject !== rejected) {
+    // D10 (specs/20260909/04-review-soft-floor.md): at a spent cap, an effective fix can never be
+    // honored — accepting one would silently promise a fix cycle the cap already forbids. This is
+    // narrower than handleFixApplied's own count arithmetic on purpose: a dispositions mark that
+    // lands FIX for what WOULD BE the capping cycle stays accepted (AC-20260820-07-8/AC-20260909-
+    // 04-13 SHALL CONTINUE TO — the cap applies to fix-applied itself, the moment it re-runs legs,
+    // never to entering FIX); D10 only fires once the cap has ALREADY visibly tripped in THIS
+    // session (marks.escalated, set nowhere but handleFixApplied's own cap branch) — the durable,
+    // cross-session half of handleFixApplied's count (an uncleared prior escalate row) is
+    // deliberately NOT mirrored here: tests/review/escalate-cap-durable.test.js pins that exact
+    // scenario (a cold restart with one uncleared escalate row) as ACCEPTED at dispositions with a
+    // warning, refused only at the following fix-applied, which is where the durable escalate row
+    // for the repeat offense is written (core § Incident Policy) — refusing earlier here would
+    // silently drop that second escalate row. See the deviations sidecar. The ESCALATE step's own
+    // waive/reject exit is the scenario this guards. Checked before the tally/count cross-check
+    // and before any write (dest file or verdict pass).
+    if (marks.escalated && tally.fix > 0) {
+      die('iteration cap 2 reached — a third fix-applied is refused; this disposer return ' +
+        'recommends fix for at least one finding, but the fix/review loop is capped at 2 ' +
+        'iterations — waive or reject through --mark dispositions --file <return.json> instead')
+    }
+    if ((waivedGiven && tally.waive !== waived) || (rejectedGiven && tally.reject !== rejected) ||
+        (fixGiven && tally.fix !== fixDispatched)) {
       const weights = [...legWeight].filter(([, w]) => w > 1).map(([ref, w]) => ref + '=' + w).join(', ')
       die('--waived/--rejected/--fix-dispatched (' + waived + '/' + rejected + '/' + fixDispatched +
         ') do not match the return\'s final-or-recommended tallies (waive:' + tally.waive +
         ' reject:' + tally.reject + ' fix:' + tally.fix + ') — a leg ref counts that leg\'s whole ' +
         'finding count' + (weights ? ' (' + weights + ')' : '') + '; recount before re-running')
     }
+    // D7: the file's own derived tally is authoritative — an omitted flag fills in from it, and a
+    // present flag was just checked equal to it above, so this reassignment is a no-op whenever a
+    // flag WAS passed and the correct fill-in whenever it was not.
+    waived = tally.waive
+    rejected = tally.reject
+    fixDispatched = tally.fix
     fs.mkdirSync(sidecarDir, { recursive: true })
     dest = path.join(sidecarDir, `disposer-return-${n}.json`)
     fs.writeFileSync(dest, raw)
@@ -1940,17 +2055,29 @@ const STEPS = {
 
   // D2/D3 (specs/20260901/09-disposer-gate.md): dispositionPools(n) is the SAME derivation
   // handleDispositions()'s own --file verification uses (A5) — this step and that check can never
-  // silently disagree about what needs covering.
+  // silently disagree about what needs covering. D5/D9 (specs/20260909/04-review-soft-floor.md):
+  // `survivors` is hard-only (s0..sN-1 index THIS printed order) and softs print under a separate
+  // advisory heading — visible, never dispositionable. D7: the mark line drops the count flags —
+  // the driver derives them from the file.
   DISPOSITIONS: () => {
-    const { survivors, legs } = dispositionPools(currentN)
+    const { survivors, softs, legs } = dispositionPools(currentN)
     if (survivors.length === 0 && legs.length === 0) {
+      // D6/D12 (specs/20260909/04-review-soft-floor.md): the mark line drops the count flags,
+      // matching the main DISPOSITIONS step's own line below — this branch is only ever reached
+      // when D6's own auto-disposition (handleReviewerReturned()) somehow did not already close
+      // the run out from under an empty hard pool.
       return `## Step: dispositions due — nothing to disposition\n` +
         `survivors (0) · leg findings (0). Then:\n` +
-        `  node ${__filename} ${specPath} --mark dispositions --waived 0 --rejected 0 --fix-dispatched 0`
+        `  node ${__filename} ${specPath} --mark dispositions --file <return.json>`
     }
+    const softBlock = softs.length
+      ? `advisory (${softs.length}, recorded, not dispositioned):\n` +
+        softs.map((s) => `  [${s.severity}] ${s.file}:${s.line} — ${s.claim}`).join('\n') + '\n'
+      : ''
     return `## Step: dispositions due — dispatch the disposer, apply its recommendations\n` +
       `survivors (${survivors.length}):\n` +
       survivors.map((s) => `  [${s.severity}] ${s.file}:${s.line} — ${s.claim}`).join('\n') + '\n' +
+      softBlock +
       `leg findings (${legs.length} leg(s), ${legs.reduce((t, r) => t + countLegFinding(r), 0)} finding(s) — ` +
       `one leg:<name> disposition covers the leg's whole count):\n` +
       legs.map((r) => `  leg:${r.leg} exit=${r.exit} count=${countLegFinding(r)} ${JSON.stringify(r.observed)}`).join('\n') + '\n' +
@@ -1961,9 +2088,10 @@ const STEPS = {
       `  manifest: ${manifestPath}\n` +
       `  outputs: ${outDir}\n` +
       `Fix recommendations dispatch without a question; waive/reject recommendations go to the ` +
-      `user (AskUserQuestion; record the answer as final with overriddenBy:"user" when it differs).\n` +
+      `user (AskUserQuestion; record the answer as final with overriddenBy:"user" when it differs). ` +
+      `A soft finding the user wants fixed goes to spec-queue add, never a fix dispatched here.\n` +
       `Write the return to a file, then:\n` +
-      `  node ${__filename} ${specPath} --mark dispositions --file <return.json> --waived N --rejected N --fix-dispatched N\n` +
+      `  node ${__filename} ${specPath} --mark dispositions --file <return.json>\n` +
       `DISPOSER_FAILED is a failed dispatch, never a disposition — re-dispatch before marking.`
   },
 
@@ -1974,7 +2102,10 @@ const STEPS = {
     `(re-runs legs --fix-delta on a fresh manifest and returns to REVIEWER for the fix-delta pass)`,
 
   // D9: the ESCALATE step names both exit routes plus where the escalate row landed (or, when D8
-  // withheld the write, the loud drift note naming why — never silently omitted).
+  // withheld the write, the loud drift note naming why — never silently omitted). D10
+  // (specs/20260909/04-review-soft-floor.md): the waive/reject exit names the --file form —
+  // handleDispositions() derives the tally from the return, and a return carrying an effective
+  // fix entry is refused (cap already spent) rather than the driver asking for hand-typed counts.
   ESCALATE: () => {
     const rowLine = marks.escalateRunId
       ? `An escalate ledger line has been appended to ${marks.escalateLedgerPath}.\n`
@@ -1987,9 +2118,10 @@ const STEPS = {
       `refused. Surface this to the user — a capped run needs a decision, not a fourth dispatch.\n` +
       rowLine +
       `Remedy — two exits:\n` +
-      `  waive/reject: mark dispositions --fix-dispatched 0 once --waived/--rejected covers the ` +
-      `pool — that closes normally:\n` +
-      `    node ${__filename} ${specPath} --mark dispositions --waived N --rejected N --fix-dispatched 0\n` +
+      `  waive/reject: dispatch Agent {subagent_type: "spec:disposer"} against the ESCALATE pool ` +
+      `with every entry waive or reject (an effective fix is refused at a spent cap) — the derived ` +
+      `tally is dispositions --fix-dispatched 0 once every entry is covered, closing normally:\n` +
+      `    node ${__filename} ${specPath} --mark dispositions --file <return.json>\n` +
       `  abandon: delete ${sidecarDir} (the <spec>.review sidecar and its manifests) to restart cold — ` +
       `this does NOT reset the cap: the escalate row stays on the ledger and the restarted review's ` +
       `first fix-applied is refused again until a waive/reject close clears it.\n`

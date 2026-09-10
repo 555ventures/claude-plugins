@@ -130,7 +130,8 @@ test('AC-20260901-09-8: WHEN --mark dispositions --waived 0 --rejected 0 --fix-d
   const directHost = makeHost('disposer-ac8-direct')
   toReviewer(directHost)
   run(directHost.root, directHost.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('disposer-ac8-direct-return', CLEAN_RETURN))
-  assert.strictEqual(stateOf(directHost.root, directHost.spec), 'DISPOSITIONS', 'setup precondition: a zero-pool return must land DISPOSITIONS')
+  assert.strictEqual(stateOf(directHost.root, directHost.spec), 'CLOSE',
+    'AC-20260909-04-7/D6: a zero-pool return has no hard survivors left to disposition, so the driver self-dispositions and lands CLOSE directly, never DISPOSITIONS')
   const before = readStateRaw(directHost.sidecar)
   const rDirect = run(directHost.root, directHost.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0',
     '--fix-dispatched', '0', '--skip-independence-check-because', 'jq missing')
@@ -141,13 +142,15 @@ test('AC-20260901-09-8: WHEN --mark dispositions --waived 0 --rejected 0 --fix-d
   assert.match(rDirect.stderr, /ADR-0005/,
     'AC-20260901-09-8: the refusal must name ADR-0005 — the message must say WHY the flag is gone, not just that it is unknown: ' + rDirect.stderr)
   assert.strictEqual(readStateRaw(directHost.sidecar), before, 'a refused mark must leave review-state.json byte-identical')
-  assert.strictEqual(stateOf(directHost.root, directHost.spec), 'DISPOSITIONS', 'a refused mark must leave state at DISPOSITIONS')
+  assert.strictEqual(stateOf(directHost.root, directHost.spec), 'CLOSE',
+    'AC-20260909-04-7/D6: a refused mark against an already-self-dispositioned zero-pool run must leave state at CLOSE, not DISPOSITIONS')
 
   const loopHost = makeHost('disposer-ac8-loop')
   run(loopHost.root, loopHost.spec, '--via', 'loop')
   writeStamp(loopHost.root, 's1')
   run(loopHost.root, loopHost.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('disposer-ac8-loop-return', CLEAN_RETURN))
-  assert.strictEqual(stateOf(loopHost.root, loopHost.spec), 'DISPOSITIONS', 'setup precondition: a --via loop zero-pool return must also land DISPOSITIONS directly')
+  assert.strictEqual(stateOf(loopHost.root, loopHost.spec), 'CLOSE',
+    'AC-20260909-04-7/D6: a --via loop zero-pool return also self-dispositions straight to CLOSE, never DISPOSITIONS')
   const rLoop = run(loopHost.root, loopHost.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0',
     '--fix-dispatched', '0', '--skip-independence-check-because')
   assert.strictEqual(rLoop.status, 2,
@@ -180,7 +183,7 @@ const ONE_LEG_WAIVE = () => disposerReturn([
   { ref: 'leg:reconcile', recommended: 'waive', reason: 'D1 sanctions every out-of-plan file' },
 ])
 
-test('disposition-pool unit: WHEN the manifest holds a red reconcile row with outOfPlan:5 and --file holds ONE leg:reconcile waive entry THE SYSTEM refuses --waived 1 (exit 2, stderr names the leg weight, state byte-identical) and accepts --waived 5, recording dispositions.word CLEAN — the count verdict.js derives, never a per-entry tally', () => {
+test('disposition-pool unit / AC-20260909-04-12 (SHALL CONTINUE TO, specs/20260909/04-review-soft-floor.md D7 — an explicit count flag remains an optional cross-check that must equal the derived tally when present): WHEN the manifest holds a red reconcile row with outOfPlan:5 and --file holds ONE leg:reconcile waive entry THE SYSTEM refuses --waived 1 (exit 2, stderr names the leg weight, state byte-identical) and accepts --waived 5, recording dispositions.word CLEAN — the count verdict.js derives, never a per-entry tally', () => {
   const host = makeFiveFileReconcileHost('disposer-unit-five')
   const before = readStateRaw(host.sidecar)
 
@@ -207,7 +210,7 @@ test('disposition-pool unit: WHEN the manifest holds a red reconcile row with ou
   assert.strictEqual(state.disposer.iteration, 1, JSON.stringify(state.disposer))
 })
 
-test('disposition-pool unit: WHEN the same five-file reconcile row is waived with --waived 6 THE SYSTEM refuses (exit 2) — the weighted tally check stays meaningful in both directions', () => {
+test('disposition-pool unit / AC-20260909-04-12 (SHALL CONTINUE TO): WHEN the same five-file reconcile row is waived with --waived 6 THE SYSTEM refuses (exit 2) — the weighted tally check stays meaningful in both directions', () => {
   const host = makeFiveFileReconcileHost('disposer-unit-over')
   const r = run(host.root, host.spec, '--mark', 'dispositions', '--file',
     returnFileWith('disposer-unit-over-w6', ONE_LEG_WAIVE()), '--waived', '6', '--rejected', '0', '--fix-dispatched', '0')

@@ -160,8 +160,9 @@
 // Exit codes: 0 = derived CLEAN · 1 = derived other non-CLEAN word
 // (still printed on stdout line 1) · 2 = usage error, missing/unreadable --manifest or
 // --workflow file, a disposition contradiction (--waived + --rejected + --fixDispatched
-// exceeds the workflow's survivor count PLUS the manifest's leg-finding count — the guard spans
-// both pools per D1-D3, specs/20260818/01-ledger-truth.md), (review profile, no --workflow) a
+// exceeds the workflow's HARD-severity survivor count PLUS the manifest's leg-finding count —
+// the guard spans both pools per D1-D3, specs/20260818/01-ledger-truth.md, narrowed to hard-only
+// survivors by specs/20260909/04-review-soft-floor.md D4), (review profile, no --workflow) a
 // manifest that derives green/complete — a panel-less CLEAN is undecidable without --workflow
 // and must not print, --retain passed with --profile release (D3 — release rows carry no runId
 // to key an artifact by), --retain passed without --ledger (retention with no row has no runId
@@ -228,6 +229,21 @@
 // documented in this spec's Contracts (after `verdict`/`checkpoint`/`escalated`, before
 // `iteration`), present on every review row including the no-`--workflow` hard-stop row, which
 // never saw a reviewer return to read a scope off in the first place.
+//
+// specs/20260909/04-review-soft-floor.md (D1-D4): a soft-only reviewer return could reach
+// CLEAN only through fix/waive/reject — a fresh reviewer produces a new soft every pass, and 195
+// ledgered reviews (91 waives vs 60 fixes) spent most of their round-trips legitimising hygiene
+// notes (17 of 21 retained returns with survivors were soft-only). The undispositioned pool
+// narrows to `hardSurvivors = survivors.filter(f => f.severity === 'hard').length` plus
+// legFindings (D1) — a survivor of any other severity (soft, medium, or anything else a reviewer
+// writes) never enters the pool and never blocks CLEAN. `FINDINGS` now means exactly one thing,
+// `fixDispatched > 0` (D2) — the old FINDINGS-for-undispositioned-softs branch is deleted
+// outright, not merely made unreachable. The `--ledger` row's `findings` object gains an eighth
+// key, `soft` (= `survivors.length - hardSurvivors`), appended LAST so every existing
+// `findings.*` reader stays unchanged (D3); `survived` stays the total survivor count. The
+// disposition-contradiction guard widens against `hardSurvivors + legFindings`, never the whole
+// survivors array (D4) — a waive that can only be explained by a soft is a bookkeeping error the
+// old guard would have let pass.
 
 const fs = require('fs')
 const path = require('path')
@@ -483,6 +499,10 @@ if (workflowPath) {
 }
 
 const survivors = workflow && Array.isArray(workflow.survivors) ? workflow.survivors : []
+// D1 (specs/20260909/04-review-soft-floor.md): the undispositioned pool counts hard-severity
+// survivors only — a survivor of any other severity (soft, medium, or anything else a reviewer
+// writes) is advisory and never enters the pool.
+const hardSurvivors = survivors.filter((f) => f.severity === 'hard').length
 
 // ---- pass scope: manifest-derived, never workflow.scope (D2, specs/20260902/05-manifest-
 // stamped-scope.md) ----------------------------------------------------------------------------
@@ -578,14 +598,25 @@ function computeLegFindings() {
 
 const legFindings = computeLegFindings()
 
-// ---- disposition-contradiction guard (D3): widens to survivors + legFindings ----------------
+// ---- disposition-contradiction guard (D3/specs/20260818/01-ledger-truth.md, narrowed to
+// ---- hard-only survivors by D4/specs/20260909/04-review-soft-floor.md): widens to
+// ---- hardSurvivors + legFindings, never the whole survivors array ---------------------------
 
-if (workflow && waived + rejected + fixDispatched > survivors.length + legFindings) {
+if (workflow && waived + rejected + fixDispatched > hardSurvivors + legFindings) {
   const total = waived + rejected + fixDispatched
-  console.error(`verdict.js: --waived(${waived}) + --rejected(${rejected}) + --fixDispatched(${fixDispatched}) ` +
-    `= ${total} exceeds the workflow file's ${survivors.length} survivors + the manifest's ${legFindings} ` +
-    `legFindings (sum ${survivors.length + legFindings}) — dispositions cannot exceed what was actually found ` +
-    'across both pools; recount before re-running')
+  const pool = hardSurvivors + legFindings
+  // The lead clause must be a TRUE inequality for whichever flag actually drove the overflow —
+  // --waived alone is not always the culprit: --rejected/--fixDispatched can trip this guard with
+  // waived at 0, and a --waived-only lead there would print the false "waived 0 > hard pool 0".
+  // AC-20260909-04-5 pins the waived-overflow wording verbatim ("waived 2 > hard pool 1"), so that case keeps its exact
+  // lead; every other trigger gets an honest sum-based lead instead of a fabricated inequality.
+  const lead = waived > pool
+    ? `waived ${waived} > hard pool ${hardSurvivors}`
+    : `total ${total} > hard pool ${hardSurvivors}`
+  console.error(`verdict.js: ${lead} (--waived(${waived}) + ` +
+    `--rejected(${rejected}) + --fixDispatched(${fixDispatched}) = ${total} exceeds the hard pool's ` +
+    `${hardSurvivors} survivor(s) + the manifest's ${legFindings} legFindings, sum ${pool}) ` +
+    '— dispositions cannot exceed what was actually found across both pools; recount before re-running')
   process.exit(2)
 }
 
@@ -596,12 +627,11 @@ function derive() {
   if (!manifestValid || requiredLegs.some(l => !legRows.has(l))) return 'UNVERIFIED'
   if ([...blockingLegs].some(legIsRed)) return 'GATE_RED'
   if (profile === 'release') return 'CLEAN'
-  if (fixDispatched > 0) return 'FINDINGS' // a dispatched fix is non-terminal
-  const undispositioned = (survivors.length + legFindings) - waived - rejected - fixDispatched
-  if (undispositioned > 0) {
-    // leg findings are always hard (deterministic contract violations); survivors fall back to severity
-    return (legFindings > 0 || survivors.some(f => f.severity === 'hard')) ? 'HARD_FINDINGS' : 'FINDINGS'
-  }
+  if (fixDispatched > 0) return 'FINDINGS' // a dispatched fix is non-terminal; the ONLY meaning FINDINGS carries (D2)
+  // D1: the pool is hard survivors + leg findings only — a soft survivor never contributes and
+  // never blocks CLEAN.
+  const undispositioned = (hardSurvivors + legFindings) - waived - rejected - fixDispatched
+  if (undispositioned > 0) return 'HARD_FINDINGS'
   return 'CLEAN'
 }
 
@@ -767,8 +797,12 @@ if (ledger) {
         rejected,
         fixDispatched,
         reviewerCount: workflow.reviewerCount,
-        legFindings // D4: the leg-findings pool's count, so a reader can tell CLEAN-because-zero-findings
-                    // from CLEAN-because-dispositioned
+        legFindings, // D4: the leg-findings pool's count, so a reader can tell CLEAN-because-zero-findings
+                     // from CLEAN-because-dispositioned
+        // D3 (specs/20260909/04-review-soft-floor.md): eighth key, appended LAST so every
+        // existing findings.* reader (by key, never by count) stays unchanged. survived stays the
+        // total survivor count; soft is the non-hard remainder.
+        soft: survivors.length - hardSurvivors
       }
       row.verify = workflow.verify
     }

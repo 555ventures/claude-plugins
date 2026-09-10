@@ -9,7 +9,17 @@ const { run, stateOf, returnFileWith, oneFixReturnFile, readJsonl, readSidecar, 
 // escalate-row.test.js by specs/20260903/06-test-suite-critical-path.md D1/D3). Owns
 // specs/20260822/01-escalate-ledger-row.md AC-20260822-01-8/-9/-12/-13 (the ESCALATE step's
 // bare-invocation, retryable-drift, and durable-row mechanics). Shared helpers live in
-// escalate-row.fixtures.js (D2).
+// escalate-row.fixtures.js (D2). Also owns specs/20260909/04-review-soft-floor.md AC-20260909-04-10
+// (D10: the ESCALATE step's exit route names --mark dispositions --file <return.json> with no
+// --waived N text, and a disposer return naming a "fix" entry at a spent cap is refused).
+//
+// specs/20260909/04-review-soft-floor.md D1/D5: escalate-row.fixtures.js's shared reviewerReturn()
+// carries severity:"soft", which under D1 never enters the hard pool and would leave every cycle
+// below landing DISPOSITIONS with an empty pool (auto-closing, D6) instead of routing through FIX
+// — driveToCapEdge() could never actually reach the cap. A local hard-severity variant
+// (driveToCapEdgeHard below) keeps this file's own cap-edge mechanics exercising the FIX pool it
+// always meant to; escalate-row.fixtures.js itself is shared with escalate-row.test.js and
+// escalate-cap-durable.test.js (outside this batch) and is not edited here — logged as a deviation.
 
 test('AC-20260822-01-8 (also AC-20260901-09-2): WHEN the driver is invoked bare with marks.escalated set and no escalateRunId THE SYSTEM SHALL self-heal by appending the row then, and print the ESCALATE step', () => {
   const host = makeHost('esc-ac8')
@@ -159,4 +169,77 @@ test('AC-20260822-01-13 (also AC-20260901-09-2): WHEN the sidecar records a dura
     'the warning must name the durable path that was checked, so the loss is diagnosable: ' + r2.stderr)
   assert.doesNotMatch(r1.stderr, new RegExp(sidecar.escalateRunId),
     'sanity: the FIRST bare invocation (row still present) must not have printed this warning — otherwise the detector would be firing unconditionally, not on genuine loss: ' + r1.stderr)
+})
+
+// ---- AC-20260909-04-10 (specs/20260909/04-review-soft-floor.md D10) -----------------------------
+
+function hardSurvivorReturn() {
+  return {
+    verdict: 'CLEAN',
+    survivors: [{ severity: 'hard', claim: 'x', file: 'src/foo.js', line: 1, impact: 'x', evidence: 'x' }],
+    killed: [], reviewerCount: 1, scope: 'fix-delta', tokens: 10,
+  }
+}
+
+// Local mirror of escalate-row.fixtures.js's driveToCapEdge() with a HARD (not soft) survivor —
+// see this file's header comment for why the shared reviewerReturn() cannot be reused here.
+function driveToCapEdgeHard(root, spec) {
+  const r0 = run(root, spec)
+  assert.strictEqual(stateOf(root, spec), 'REVIEWER',
+    'setup precondition: a fresh green-legs fixture must reach REVIEWER before the fix cap can be exercised: ' + r0.stdout + r0.stderr)
+  for (let cycle = 1; cycle <= 2; cycle++) {
+    const rf = returnFileWith('esc-step-hard-' + cycle, hardSurvivorReturn())
+    run(root, spec, '--mark', 'reviewer-returned', '--file', rf)
+    const dispFile = oneFixReturnFile('esc-step-hard-disp-' + cycle, 's0')
+    const d = run(root, spec, '--mark', 'dispositions', '--file', dispFile, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+    assert.strictEqual(stateOf(root, spec), 'FIX',
+      `setup cycle ${cycle}: fix-dispatched 1 (within the 1-survivor pool) must land FIX: ` + d.stdout + d.stderr)
+    const f = run(root, spec, '--mark', 'fix-applied')
+    assert.strictEqual(f.status, 0, `setup cycle ${cycle}: fix-applied within the cap must succeed: ` + f.stdout + f.stderr)
+  }
+  const rf3 = returnFileWith('esc-step-hard-3', hardSurvivorReturn())
+  run(root, spec, '--mark', 'reviewer-returned', '--file', rf3)
+  const dispFile3 = oneFixReturnFile('esc-step-hard-disp-3', 's0')
+  const d3 = run(root, spec, '--mark', 'dispositions', '--file', dispFile3, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+  assert.strictEqual(stateOf(root, spec), 'FIX',
+    'setup: the third dispositions --fix-dispatched 1 must land FIX, poised for the capping fix-applied: ' + d3.stdout + d3.stderr)
+}
+
+test('AC-20260909-04-10: WHEN the driver prints the ESCALATE step THE SYSTEM SHALL name the exit --mark dispositions --file <return.json> and contain no --waived N text, and WHEN the cap is spent and a disposer return names a "fix" entry THE SYSTEM SHALL exit 2 with stderr containing iteration cap 2 and leave review-state.json byte-identical', () => {
+  const host = makeHost('esc-step-ac10')
+  driveToCapEdgeHard(host.root, host.spec)
+  const thirdFix = run(host.root, host.spec, '--mark', 'fix-applied')
+  assert.strictEqual(thirdFix.status, 2, 'setup: the capping fix-applied must be refused: ' + thirdFix.stdout + thirdFix.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'ESCALATE',
+    'setup precondition: state must be ESCALATE for this AC: ' + thirdFix.stdout + thirdFix.stderr)
+
+  const step = run(host.root, host.spec)
+  assert.match(step.stdout, /--mark dispositions --file <return\.json>/,
+    'AC-20260909-04-10 (literal): the ESCALATE step must name the exit route by this exact form — D7 retires ' +
+    'the hand-typed count flags from the printed instruction: ' + step.stdout)
+  assert.ok(!/--waived N/.test(step.stdout),
+    'AC-20260909-04-10 (literal): the ESCALATE step must contain no "--waived N" text — the old ' +
+    '"mark dispositions --waived N --rejected N --fix-dispatched 0" waive/reject exit line is retired in ' +
+    'favor of the --file form: ' + step.stdout)
+
+  const stateFile = path.join(host.sidecar, 'review-state.json')
+  const before = fs.readFileSync(stateFile, 'utf8')
+  const fixReturn = {
+    verdict: 'DISPOSED',
+    dispositions: [{ ref: 's0', recommended: 'fix', reason: 'D3 of specs/20260901/09-disposer-gate.md: fix is the conservative disposition' }],
+    tokens: 1,
+  }
+  const fixFile = returnFileWith('esc-step-ac10-fix', fixReturn)
+  const r = run(host.root, host.spec, '--mark', 'dispositions', '--file', fixFile, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+  assert.strictEqual(r.status, 2,
+    'AC-20260909-04-10 (literal): a disposer return whose effective value for s0 is "fix" must be refused at a ' +
+    'spent cap — accepting it would silently promise a fourth fix cycle the cap already forbids: ' +
+    r.stdout + ' / ' + r.stderr)
+  assert.match(r.stdout + r.stderr, /iteration cap 2/,
+    'AC-20260909-04-10 (literal): the refusal must name the iteration cap so the honest-exit-unavailable case ' +
+    'is diagnosable: ' + (r.stdout + r.stderr))
+  const after = fs.readFileSync(stateFile, 'utf8')
+  assert.strictEqual(after, before,
+    'AC-20260909-04-10 (literal): a refused mark must leave review-state.json byte-identical — no partial ' +
+    'write may survive a refusal: ' + JSON.stringify({ before, after }))
 })

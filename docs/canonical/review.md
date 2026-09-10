@@ -28,9 +28,13 @@
 
   Findings legs are counted, not just colored: every red non-blocking manifest row
   contributes its typed finding count (`observed`'s per-leg count field; floor 1 when that
-  field is absent or non-numeric) to the undispositioned pool beside reviewer survivors, and
-  `CLEAN` is unreachable until dispositions cover the whole pool — leg findings are always
-  hard. **Manifest row v2** is `{"leg","exit","observed"}` where `observed` is always a
+  field is absent or non-numeric) to the undispositioned pool beside reviewer survivors: the
+  pool is hard survivors plus leg findings, and soft survivors are advisory —
+  counted in the row's `findings.soft`, retained verbatim in the artifact, never dispositioned,
+  never fix-dispatched. `CLEAN` is unreachable until dispositions cover the hard pool;
+  `FINDINGS` means exactly one thing, a dispatched fix that has not landed.
+  (specs/20260909/04-review-soft-floor.md, done 2026-09-09)
+  **Manifest row v2** is `{"leg","exit","observed"}` where `observed` is always a
   non-null JSON object drawn from the Contracts closed set; any row whose `observed` is a
   string, an array, null, or absent makes the manifest invalid and derives `UNVERIFIED` in
   both profiles — an old-format row is loudly underivable, never silently misread. verdict.js
@@ -308,7 +312,10 @@
   passes, both ledger appends, the `implementing → done` flip, the merge-back sequence — and
   PRINTS exactly one step at a time for what needs judgment: reviewer + design-leg dispatch,
   dispositions, the Canonical Delta + deviations fold, the close commit, merge strategy,
-  conflict resolution. `review.md` is the judgment shell that hosts those conversations; the
+  conflict resolution. An empty hard pool after `reviewer-returned` is dispositioned by the
+  driver itself (no mark); `--mark dispositions --file` derives the waived/rejected/fix tallies
+  from the disposer return, the count flags being an optional cross-check.
+  `review.md` is the judgment shell that hosts those conversations; the
   driver never recommends a disposition, never picks a merge strategy, and never renders a
   user-facing report. Marks are a closed, artifact-verified set — state is re-derived from
   frontmatter + sidecar + on-disk artifacts on every invocation, a mark whose artifact vanished

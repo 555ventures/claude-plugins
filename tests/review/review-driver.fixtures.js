@@ -132,7 +132,7 @@ const CLEAN_RETURN = { verdict: 'CLEAN', survivors: [], killed: [], reviewerCoun
 
 const SURVIVOR_RETURN = {
   verdict: 'CLEAN',
-  survivors: [{ severity: 'soft', claim: 'x', file: 'src/foo.js', line: 1, impact: 'x', evidence: 'x' }],
+  survivors: [{ severity: 'hard', claim: 'x', file: 'src/foo.js', line: 1, impact: 'x', evidence: 'x' }],
   killed: [], reviewerCount: 1, scope: 'full', tokens: 10,
 }
 

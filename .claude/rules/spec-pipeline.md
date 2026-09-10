@@ -196,10 +196,17 @@ upstream bug list. -->
   moved from blocking to advisory) stranded three shared review fixtures and reddened 25 tests
   across eight files, none in the File Plan. At lock, grep the VALUES a Decision re-scopes
   across `tests/`, not only the names it retires.
+  Seventh trigger, the one no literal or value grep reaches at all: a Decision that ADDS A
+  REFUSAL where the old behavior was permissive. Shared test setups that legally did nothing now
+  trip it — one new empty-fix refusal reddened 13 tests across five files, none in the File Plan,
+  and no name, value, or phrase changed anywhere. The only grep that finds them is for the CALL
+  the refusal now guards: before landing a refusal, grep every call site of the guarded command
+  across `tests/` and enter each stale setup as a fix row.
   (specs/20260813/07-command-report-conformance.md D8; specs/20260813/09-model-placement-mechanics.md D4;
   specs/20260814/01-ac-matrix-script.md; specs/20260907/09-atlas-index-and-note-navigation.md;
   specs/20260907/07-mocks-retires-theme.md D12; specs/20260907/08-walk-critic.md D2/D6;
-  specs/20260909/04-review-soft-floor.md D1/D5/D8)
+  specs/20260909/04-review-soft-floor.md D1/D5/D8;
+  specs/20260909/05-fix-delta-reviewer-pass.md D2/D9)
 - `[plugin]` `ac-matrix.js` parses AC bullets as `^- \*\*(token)\*\*` and requires the token to
   fully match `AC-\d{8}-\d{2}[a-z]?-\d+`. A build-time amendment written the way the Decisions
   table writes one — a prime-suffixed successor (`AC-…-3′`) plus the superseded original left as

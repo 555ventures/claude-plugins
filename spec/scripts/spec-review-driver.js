@@ -667,14 +667,22 @@ function treeDirty() {
 // consuming repo need not carry) — without it every reviewer-return/disposer-return/manifest
 // write the driver makes between two snapshots would show up as a "changed file" in the fix's
 // delta, and the scratch index file itself (sitting inside the sidecar, mid-write) would try to
-// add its own lock file to itself (executed spike, 2026-09-10).
+// add its own lock file to itself (executed spike).
 function snapshotTree() {
   fs.mkdirSync(sidecarDir, { recursive: true })
   const indexFile = path.join(sidecarDir, 'snap-index')
   const env = Object.assign({}, process.env, { GIT_INDEX_FILE: indexFile })
   try {
-    const addR = runChild('git',
-      ['-C', repoRoot, 'add', '-A', '--', '.', ':(exclude)' + sidecarRel],
+    // A host whose .gitignore already covers the sidecar (this plugin repo's own
+    // `specs/**/*.review/` line) makes the negative pathspec name an ignored path, which
+    // `git add` refuses outright with "paths are ignored by one of your .gitignore files".
+    // The exclusion is redundant there — `add -A` skips the sidecar on its own — so the
+    // pathspec is carried only when the sidecar is NOT already ignored.
+    const ignoredR = runChild('git', ['-C', repoRoot, 'check-ignore', '-q', sidecarRel],
+      { encoding: 'utf8' }, 'git check-ignore (sidecar already ignored?)')
+    const addArgs = ['-C', repoRoot, 'add', '-A', '--', '.']
+    if (ignoredR.status !== 0) addArgs.push(':(exclude)' + sidecarRel)
+    const addR = runChild('git', addArgs,
       { encoding: 'utf8', env }, 'git add -A (scratch-index tree snapshot)')
     if (addR.status !== 0) {
       die('git add -A into a scratch index failed (exit ' + addR.status + '): ' +

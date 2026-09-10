@@ -334,6 +334,12 @@
   a `done` spec whose sidecar lacks this run's own `closeRunId` is refused naming `/spec:escape`,
   the command that exists for defects escaping a review that already passed.
   (specs/20260820/07-review-driver.md, done 2026-08-21)
+  The driver snapshots the tree at each `reviewer-returned` (scratch-index write-tree, untracked
+  files included) and at `fix-applied` writes `<sidecar>/fix-delta-<n>.txt`, refusing a fix that
+  changed no file before any legs run; the iteration-≥2 REVIEWER step is the fix-delta pass and
+  hands the reviewer that list plus the prior reviewer and disposer returns — the reviewer
+  re-verifies fix-routed findings and reports only inside the listed files.
+  (specs/20260909/05-fix-delta-reviewer-pass.md)
 
 - **The merge step is re-entrant, and promotion leaves the worktree clean.** A worktree
   review's merge-back sequence can fail mid-promotion; the retry must not deadlock on its own

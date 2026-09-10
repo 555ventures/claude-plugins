@@ -3,7 +3,7 @@ name: spec-20260905-04-per-project-look-server
 description: Test-authoring gotchas when a spec deletes a script the pre-image still spawns — isolate the pre-image's real side effects in red-phase tests, retired-literal self-collision, comment-narration, and the rm-vs-git-ls-files transient.
 metadata:
   type: project
-  reviewed: 2026-09-05
+  reviewed: 2026-09-10
 ---
 
 - When a File Plan deletes a script that the pre-image still spawns on the code path a red-phase

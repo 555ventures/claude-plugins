@@ -3,6 +3,7 @@ name: scratch-index-snapshot-sidecar-self-reference
 description: a GIT_INDEX_FILE scratch-index tree snapshot placed inside a driver's own sidecar dir must exclude that dir via a negative pathspec, or it captures its own churn and lock file
 metadata:
   type: project
+reviewed: 2026-09-10
 ---
 
 When a driver snapshots the working tree as a git tree object via `GIT_INDEX_FILE=<scratch> git
@@ -23,6 +24,14 @@ Two failure modes without the exclusion, both confirmed by an executed spike (20
 
 Both are fixed by the same negative pathspec excluding the sidecar directory; `git status
 --porcelain` on the REAL index is unaffected either way (GIT_INDEX_FILE never touches it).
+
+Correction, from the same spec's review run: the pathspec must be CONDITIONAL. On a host whose
+`.gitignore` already covers the sidecar (this repo's own `specs/**/*.review/` line), the negative
+pathspec names an ignored path and `git add` refuses the entire command — "paths are ignored by
+one of your .gitignore files", exit 1 — so the snapshot never runs at all. The exclusion is
+redundant on such a host anyway, since `add -A` skips ignored paths on its own. Gate the pathspec
+on `git check-ignore -q <sidecarRel>` exiting non-zero, and pin the ignored-sidecar host with its
+own behavioral test.
 
 See [[gate-scripts-parallel-batch-corpus-landing]] for the general pattern of test hosts diverging
 from the real repo's gitignore assumptions.

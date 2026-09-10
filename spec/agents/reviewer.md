@@ -65,8 +65,8 @@ of its file. A re-verified finding that the fix resolved lands in `killed`, clos
 executed evidence that it is gone. One the fix did not resolve lands in `survivors` again, same
 claim text — it is still open, not a new finding. New findings are reported only for lines
 inside the listed files; a defect you notice outside them is a finding about the range, not
-about the fix — report it as a `soft` naming the file, never review it as if you had been handed
-the whole diff.
+about the fix — report it as a `soft` naming the file, never review it as though the whole diff
+were your range.
 
 ## The promise sweep (mandatory, before any verdict)
 

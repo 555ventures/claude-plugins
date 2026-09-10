@@ -146,3 +146,26 @@ test('AC-20260909-05-5: the REVIEWER step for iteration >= 2 (manifest-2.jsonl p
   assert.ok(!fixR.stdout.includes('scope'),
     'D4/AC-20260909-05-5 (literal): the fix-delta pass step text must contain no "scope" substring — AC-20260902-05-13 forbids the word in this step: ' + fixR.stdout)
 })
+
+// Incident (this spec's own review run, caught dogfooding in the plugin repo): a host whose
+// .gitignore already covers the review sidecar made D1's negative pathspec name an ignored path,
+// and `git add` refuses that outright — the snapshot died before any mark could land. The
+// exclusion is redundant on such a host, so it is only carried when the sidecar is not ignored.
+test('a host whose .gitignore already covers the review sidecar still snapshots at reviewer-returned — the negative pathspec must not make git add refuse an ignored path', () => {
+  const host = makeHost()
+  fs.appendFileSync(path.join(host.root, '.gitignore'), 'specs/**/*.review/\n')
+  g(host.root, 'add', '.gitignore')
+  g(host.root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-m', 'ignore review sidecars')
+
+  run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER',
+    'setup: a fresh green-legs fixture must reach REVIEWER before the ignored-sidecar snapshot can be exercised')
+
+  const r = run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('fdp-ign-return', SURVIVOR_RETURN))
+  assert.strictEqual(r.status, 0,
+    'D1: the tree snapshot must succeed on a host that already gitignores the sidecar — a refusal here blocks every review in such a repo: ' + r.stdout + r.stderr)
+
+  const state = JSON.parse(fs.readFileSync(path.join(host.sidecar, 'review-state.json'), 'utf8'))
+  assert.match(String(state.treeSnapshot && state.treeSnapshot['1']), /^[0-9a-f]{40}$/,
+    'D1: an ignored sidecar must still yield a recorded 40-hex tree sha, not a missing snapshot that silently widens the next delta to HEAD')
+})

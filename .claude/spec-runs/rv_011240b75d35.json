@@ -1,0 +1,186 @@
+{
+  "runId": "rv_011240b75d35",
+  "ts": "2026-09-10T03:15:57.364Z",
+  "spec": "specs/20260907/08-walk-critic.md",
+  "tier": "standard",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 1,
+    "rejected": 2,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1145,
+    "base": "5e4aa870b0e399a1a839f4b4e5f7f8fb1fe0f680",
+    "head": "5b1ccf8d4ca66d92d37b20fe6b2dec1f21e7d163",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 3,
+      "observed": {
+        "outOfPlan": 1,
+        "files": [
+          "tests/mocks/mocks-driver.test.js"
+        ]
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 278
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1456
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 13
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 19,
+        "testsExecuted": 266
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 11,
+        "carried": 10,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "reviewerCount": 1,
+    "tokens": 110000,
+    "survivors": [
+      {
+        "severity": "soft",
+        "claim": "The driver comment above noteLine() still spells the retired field name `blindspot` (\"[critic: <blindspot>]\") after the spec's collision closure named mocks-driver.js's comments as retirement sites; the token is now a stale name for a tag whose producer no longer exists.",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 509,
+        "impact": "A reader of the driver is pointed at a vocabulary the critic no longer emits; nothing behaves differently.",
+        "evidence": "grep -rn 'four blind|blindspot|--by critic --reason|four fixed usability' spec/ docs/canonical/ (excluding lib/mocks-notes.js's sanctioned keep) -> exactly one hit: spec/scripts/mocks-driver.js:509 '// specs/20260906/06 D4: a critic note's reason renders as its own \"[critic: <blindspot>]\" tag,'. AC-20260907-08-10 bans the literal only in design-critic.md, so this is hygiene, not a violation."
+      },
+      {
+        "severity": "soft",
+        "claim": "The walk-add refusal for a screen with no mock on disk names the missing file but no remedy command or list of screens that do exist, unlike the sibling state refusal which enumerates the declared states.",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 309,
+        "impact": "A session that mistypes a screen label gets told the file is absent but not which labels it could have used.",
+        "evidence": "Executed: notes add --scope mock --screen nope --state error --kind walk --reason no-path-back --by walk-critic --text x -> exit 2, 'mocks-driver: notes add: design/mocks/nope.html does not exist'. Same shape as the pre-existing undeclared-journey refusal ('journey \"ghost\" is not declared in design/mocks/seed.md', exit 2), so it matches repo precedent; AC-20260907-08-6's 'naming the states that screen does declare' cannot apply to a screen with no mock. Advisory only."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "A walk note authored --by critic renders both [walk:] and [critic:] tags (the prior-cycle fix did not land).",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 281,
+        "evidence": "Executed notes add ... --kind walk --reason missing-data --by critic then notes open -> 'N002 [open] [walk: missing-data] critic · by=critic walk note' — exactly one reason tag."
+      },
+      {
+        "claim": "WALK still runs the look probe or prints the frontend-design skill line (D7/AC-9 not honored).",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1783,
+        "evidence": "Fixture stubNpx(dir,{exitCode:1}) on PATH (stub verified: npx --no-install playwright --version -> status 1); bare driver at WALK -> status 0, no 'frontend-design' in stdout. AUTHORING_STATES at line 1629 unchanged (SHAPES, KIT, WIREFRAMES) and the precondition at 1783 has no WALK disjunct."
+      },
+      {
+        "claim": "D10's Rules line was implemented as an added bullet, leaving a duplicate of the old line.",
+        "file": "spec/commands/mocks.md",
+        "line": 109,
+        "evidence": "git show 5e4aa870:spec/commands/mocks.md | grep -n 'canon before|kit before' -> no output (no such line existed at base); post-image grep shows exactly one occurrence at line 109. Nothing to duplicate."
+      },
+      {
+        "claim": "--reopen kit silently clears walked too, contradicting the doctrine sentence 'never a journey's own approval or its walked'.",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1409,
+        "evidence": "Lines 1409-1418: the kit branch nulls only marks.kitSignedOff, marks.approved, decider; no journey record is touched; invalidated list is ['kit','approved(all)']. Matches spec/doctrine/mocks.md's reopen paragraph and D6."
+      },
+      {
+        "claim": "The reconcile leg's out-of-plan file tests/mocks/mocks-driver.test.js carries work beyond the recorded widened-literal pin repair.",
+        "file": "tests/mocks/mocks-driver.test.js",
+        "line": 473,
+        "evidence": "git diff 5e4aa870..HEAD -- tests/mocks/mocks-driver.test.js -> the only substantive change is the assert regex widened to include walk:<j> plus a citation comment naming D6/AC-20260907-08-8 — an in-place retag of a colliding pin, recorded in the deviations sidecar."
+      },
+      {
+        "claim": "The replaced AC-20260906-02-x / 07-x test arms were weakened or inverted rather than retagged.",
+        "file": "tests/consistency/design-doctrine.test.js",
+        "line": 1,
+        "evidence": "Removed-line diff across tests/ shows every dropped assert replaced by a stricter successor: AC-20260906-06-4 -> AC-20260907-08-10 keeps model/effort/tools asserts and adds six-key/forbidden-word/retired-literal asserts; the 07 arms retagged to the widened live literals with both citations. tests/consistency 158/158, tests/mocks 115/115. Patterns leg: single-arg assert.ok = 0, skipped/todo = 0, non-builtin require = 0."
+      },
+      {
+        "claim": "A plain note can still carry a walk reason through the merged REASONS export (D3's split not real).",
+        "file": "spec/scripts/lib/mocks-notes.js",
+        "line": 162,
+        "evidence": "Executed notes add --scope mock --screen signin --reason no-path-back --by client --text x -> exit 2, 'reason must be one of missing-screen|wrong-direction|wrong-words|other|error-prevention|error-recovery|help|efficiency'; the inverse (--kind walk --reason wrong-words) -> exit 2 naming the six walk keys."
+      },
+      {
+        "claim": "The [no-ac:] tags on D10 and D11 sanction behavior the spec should have AC'd.",
+        "file": null,
+        "line": null,
+        "evidence": "D10 is doctrine prose whose mechanisms are AC-1/-4/-9 (all covered, verified); D11 is the version bump whose oracle node scripts/plugin-bump.js --check was executed (spec 7.120.0 -> 7.121.0). promise-sweep leg: rows 11, carried 10, sanctioned 1, orphans 0."
+      }
+    ]
+  }
+}

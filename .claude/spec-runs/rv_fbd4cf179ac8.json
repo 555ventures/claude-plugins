@@ -1,0 +1,152 @@
+{
+  "runId": "rv_fbd4cf179ac8",
+  "ts": "2026-09-09T23:35:34.680Z",
+  "spec": "specs/20260907/08-walk-critic.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "FINDINGS",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1102,
+    "base": "5e4aa870b0e399a1a839f4b4e5f7f8fb1fe0f680",
+    "head": "303c26565d0b2d116e5c3608ed2a44bbc07db5a8",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 278
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1456
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 11,
+        "carried": 10,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "reviewerCount": 1,
+    "tokens": 75000,
+    "survivors": [
+      {
+        "severity": "medium",
+        "claim": "Header rewrite left the driver's own state-machine description without WALK, contradicting D1 (lines 37 and 41).",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 37,
+        "impact": "A reader of the driver's header is told the stage chain has no walk step, which is exactly the behavior this spec added.",
+        "evidence": "Line 37: 'this driver's state machine now ends WIREFRAMES -> SIGNOFF -> APPROVED'; line 41: 'derives SEED -> SHAPES -> KIT -> WIREFRAMES -> SIGNOFF -> APPROVED'. D1: 'deriveState() gains one step between WIREFRAMES and SIGNOFF'. Executed --state on a journey-approved root prints WALK; code comment line 837 and deriveState line 850 carry WALK. Blame 0fe3f000 predates base (is-ancestor exit 0) but the range falsified the claim."
+      },
+      {
+        "severity": "soft",
+        "claim": "Header still lists theme-picked among 'the four gated marks' though the same header says spec 07 retired it.",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 66,
+        "impact": "The header contradicts itself about which marks are look-gated.",
+        "evidence": "Lines 36-37 name theme-picked as retired; lines 66-67 list it as gated. Blame 8bfae0a1 predates base (is-ancestor exit 0) and was stale at base."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "Fix 3 collided with a pinned assertion on the missing --state path",
+        "file": "tests/mocks/mocks-notes.test.js",
+        "line": 766,
+        "evidence": "pin asserts only status===2; executed driver: exit 2 'use --state <one of: default, empty, loading, error>'; tests/mocks green post-fix"
+      },
+      {
+        "claim": "printWalkStep still prints literal {driver}",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1752,
+        "evidence": "executed bare run in WALK: Then line is 'record each finding: node /.../mocks-driver.js --root /tmp/... notes add ...'; includes('{driver}') false"
+      },
+      {
+        "claim": "Sidecar six-file count is wrong",
+        "file": "specs/20260907/08-walk-critic.deviations.md",
+        "line": 45,
+        "evidence": "size-baseline.json raise rows citing this spec name exactly those six tests plus mocks-driver.test.js"
+      },
+      {
+        "claim": "docs/canonical/design.md chain lacks WALK",
+        "file": "docs/canonical/design.md",
+        "line": 192,
+        "evidence": "Canonical Delta is a post-verdict stage deliverable — expected precondition, not a finding"
+      },
+      {
+        "claim": "size-baseline raises unsanctioned or mis-cited",
+        "file": "size-baseline.json",
+        "line": 458,
+        "evidence": "all raise cites = specs/20260907/08-walk-critic.md; File Plan row at spec line 77; size-ratchet.js --root . exit 0 'all tight'"
+      },
+      {
+        "claim": "Doctrine state-machine sentence omits WALK",
+        "file": "spec/doctrine/mocks.md",
+        "line": 68,
+        "evidence": "'→ **WALK** (one fresh-context critic walks each declared journey once, flow breaks only) → **SIGNOFF**' present"
+      },
+      {
+        "claim": "Version bump missing for fix-delta behavior change",
+        "file": null,
+        "line": null,
+        "evidence": "plugin-bump.js --check: 'spec 7.120.0 → 7.121.0' green; branch already bumped once"
+      }
+    ]
+  }
+}

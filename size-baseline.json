@@ -4,7 +4,7 @@
     "scripts": 34997,
     "spec/scripts": 1290329,
     "spec/scripts/lib": 233720,
-    "tests": 3609117
+    "tests": 3618198
   },
   "files": {
     "scripts/plugin-bump.js": 9427,
@@ -244,6 +244,7 @@
     "tests/review/reviewer-scope-identity.test.js": 2982,
     "tests/review/reviewer-seat.test.js": 1771,
     "tests/review/scope-reconcile.test.js": 9687,
+    "tests/review/soft-floor.test.js": 9081,
     "tests/review/stopped-row-durability.test.js": 30391,
     "tests/review/verdict.test.js": 129678,
     "tests/review/workflow-scripts-in-scope.test.js": 6856,
@@ -807,6 +808,12 @@
       "path": "tests",
       "from": 3591249,
       "to": 3609117,
+      "cite": "specs/20260909/04-review-soft-floor.md"
+    },
+    {
+      "path": "tests",
+      "from": 3609117,
+      "to": 3618198,
       "cite": "specs/20260909/04-review-soft-floor.md"
     }
   ]

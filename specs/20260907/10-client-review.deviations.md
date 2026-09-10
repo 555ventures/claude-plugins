@@ -28,3 +28,10 @@
   per pipeline rules § Worker Rules "a mechanism pays its own size" — the new
   `spec/scripts/lib/client-capture.js` file itself landed under its own floor with no raise
   needed.
+
+- Review LEGS `gate`/`suite` red on `AC-20260908-01-9` (this session): the `spec/scripts/lib` and
+  `tests` TREE totals were still over baseline after both waves — each worker raised the per-file
+  entries and its own tree, but the two waves' growth compounded on the shared totals, which only
+  the post-commit whole-suite run could observe. Raised both trees via
+  `node scripts/size-ratchet.js --root . --raise <tree> --to <n> --cite specs/20260907/10-client-review.md`
+  per pipeline rules § Worker Rules "a mechanism pays its own size"; no code touched.

@@ -3,8 +3,8 @@
   "trees": {
     "scripts": 34997,
     "spec/scripts": 1297500,
-    "spec/scripts/lib": 239841,
-    "tests": 3605078
+    "spec/scripts/lib": 242860,
+    "tests": 3653766
   },
   "files": {
     "scripts/plugin-bump.js": 9427,
@@ -831,6 +831,18 @@
       "path": "spec/scripts",
       "from": 1297484,
       "to": 1297500,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts/lib",
+      "from": 239841,
+      "to": 242860,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "tests",
+      "from": 3605078,
+      "to": 3653766,
       "cite": "specs/20260907/10-client-review.md"
     }
   ]

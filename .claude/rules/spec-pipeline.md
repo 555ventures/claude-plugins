@@ -185,9 +185,17 @@ upstream bug list. -->
   inside it — and note that the phrases at risk are the ones a test greps whole, not the ones
   the spec names. A budget-capped file is also where this recurs, because every future addition
   forces another squeeze.
+  Sixth trigger, the one where the diff changes no literal a test spells: a Decision that
+  NARROWS THE MEANING of an existing enum value. Shared fixtures keep spelling the old value,
+  which is still valid syntax, so no grep for a retired name finds them — and every
+  out-of-batch consumer silently takes the new branch. One such narrowing (a severity level
+  moved from blocking to advisory) stranded three shared review fixtures and reddened 25 tests
+  across eight files, none in the File Plan. At lock, grep the VALUES a Decision re-scopes
+  across `tests/`, not only the names it retires.
   (specs/20260813/07-command-report-conformance.md D8; specs/20260813/09-model-placement-mechanics.md D4;
   specs/20260814/01-ac-matrix-script.md; specs/20260907/09-atlas-index-and-note-navigation.md;
-  specs/20260907/07-mocks-retires-theme.md D12; specs/20260907/08-walk-critic.md D2/D6)
+  specs/20260907/07-mocks-retires-theme.md D12; specs/20260907/08-walk-critic.md D2/D6;
+  specs/20260909/04-review-soft-floor.md D1/D5/D8)
 - `[plugin]` `ac-matrix.js` parses AC bullets as `^- \*\*(token)\*\*` and requires the token to
   fully match `AC-\d{8}-\d{2}[a-z]?-\d+`. A build-time amendment written the way the Decisions
   table writes one — a prime-suffixed successor (`AC-…-3′`) plus the superseded original left as

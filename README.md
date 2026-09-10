@@ -1,11 +1,13 @@
 # 555-tools
 
-A Claude Code plugin marketplace with two plugins:
+A Claude Code plugin marketplace with three plugins:
 
 - **spec** — the full project lifecycle: optional greenfield **genesis** (picks your stack and
   design direction), then the spec-driven **plan → run** loop per feature, and a **release**
   gate per milestone.
 - **git** — fast add-all-commit and a guided merge.
+- **style** — an output style with outcome-first, emoji-anchored response rules that applies
+  wherever the plugin is enabled, instead of per-machine `CLAUDE.md` edits.
 
 The idea in one sentence:
 
@@ -24,7 +26,18 @@ build resumes instead of restarting.
 /plugin marketplace add 555ventures/claude-plugins
 /plugin install spec@555-tools
 /plugin install git@555-tools            # optional
+/plugin install style@555-tools          # optional
 ```
+
+### Prerequisites
+
+| Tool | Needed for | If missing |
+|---|---|---|
+| `git` | everything — worktrees, diffs, the state the pipeline derives | nothing works |
+| `node` (18+) | every deterministic gate and driver script | nothing works |
+| `jq` | the hook-enforced state machine and the plugin's own path helper | **stage-order enforcement stops running** — install it before you rely on the gates |
+| Chrome or Chromium | design capture (`/spec:mocks`, `/spec:sketch`, `/spec:atlas`) only | set `CHROME_BIN` to your binary; discovery probes macOS app paths first |
+| `gh` | optional PR conveniences | degrades with a named fallback |
 
 ## Set up a repo (once)
 
@@ -54,7 +67,20 @@ setup never ends without a next command. Existing repos skip both entirely.
 
 Until `/spec:init` has run, every other `spec` command refuses to start.
 
+**Lost? Run `/spec:status`.** It is the orientation surface: one script run that prints where the
+work stands and the single command to paste next. Nothing it prints is stored — every status is
+derived from disk — so it is always safe to run and never needs to be kept up to date.
+
 ## Build a feature (the loop you repeat)
+
+```
+/spec:plan "let signed-in users export their invoices as CSV"   # existing repo: just describe it
+/spec:run  specs/20260716/01-invoice-export.md                  # hardened → done
+```
+
+`plan` takes a **feature description, a spec path, or a roadmap brief path**. An existing repo has
+no `docs/roadmap/`, so describe the feature in prose — briefs only exist if genesis wrote them, or
+if you write them yourself. With briefs, the same loop reads:
 
 ```
 /spec:sketch docs/roadmap/01-*.md            # optional, UI briefs: mock + brainstorm, ratify
@@ -105,7 +131,7 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 | Command | What it does | When |
 |---|---|---|
 | `/spec:mocks` | Driver-stepped design entry point, run to an approved mock set — the current stage chain lives in [`docs/canonical/design.md`](docs/canonical/design.md) | Greenfield only, before genesis |
-| `/spec:genesis` / `-design` | Stack + scaffold + roadmap + rendered design candidates in your browser; ratify the pick | Greenfield only, before init |
+| `/spec:genesis` | Stack + scaffold + roadmap + rendered design candidates in your browser; ratify the pick | Greenfield only, before init |
 | `/spec:init` | Profile the repo, generate the grounding layer, run enforce | Once per repo |
 | `/spec:sketch` | Mock + brainstorm one roadmap brief; ratify mock↔brief agreement | Before planning a UI-bearing brief |
 | `/spec:plan` | Author + adversarially harden a spec | Per feature |
@@ -115,6 +141,9 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 | `/spec:review` | Stage entry point: re-enter the review driver directly (same driver `/spec:run` runs at `--via loop`) | Per feature, if resuming review alone |
 | `/spec:release` | Staging deploy → executed checks → confirmed promote | Per milestone |
 | `/spec:atlas` | Whole-product design view + annotation loop | Anytime |
+| `/spec:status` | Where the work stands + the one command to paste next; `--all` adds lanes, blocked list, hygiene | Anytime you are lost |
+| `/spec:queue` | Your intended work order across briefs and specs — the one thing the pipeline cannot derive | When the order matters |
+| `/spec:replay` | Blind mutation replay: injects a known defect and measures whether review catches it | Occasionally, to keep review honest |
 | `/spec:doctor` | Drift + ledger check; `--fix` repairs with approval | When things feel off |
 | `/spec:escape` | Record a defect that slipped past review | When one surfaces |
 | `/spec:enforce` | Turn rules into deterministic checks | On rule/tooling change |
@@ -164,6 +193,6 @@ established pattern never gets a spec — the plugin will tell you the same.
   Policy), never by an incident memory written into doctrine.
 - **The design family's `wf-*.js` files are frozen checked-in scripts** (the codegen seam was
   retired in v7.0); they change only under a spec that names them, pending the v7.1 design
-  thinning (`docs/roadmap/08-design-thinning.md`).
+  thinning.
 - **Doctrine hygiene:** state a fact once (highest common ancestor in `doctrine/core.md` or
   `doctrine/design.md`, everywhere else points); never name a derived case.

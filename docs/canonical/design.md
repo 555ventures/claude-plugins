@@ -304,7 +304,11 @@ mountable under a prefix — and runs its CLI only as a main module.
 **Look server (specs/20260905/04).** There is no resident process. A mock look stop is served by
 that project's own `design-atlas.js serve`, which the session starts as a tracked background task
 before the first `stop open` of a run and stops at sign-off or when the session ends (a server a
-previous session left up is reused — serve answers `already serving`). `design-atlas.js stop
+previous session left up is reused — serve answers `already serving`). `serve --port 0` binds an
+OS-chosen port and prints the bound port in its banner; the test harness
+(`tests/mocks/chrome-harness.js`) uses that form so concurrent runs never share a port, treats any
+first line other than `serving` as a refusal, and bounds every DevTools wait with a deadline
+(specs/20260909/03). `design-atlas.js stop
 open|decide|list` own the stop CLI (`stop open` writes the stop through `lib/mocks-picks.js`,
 probes the served page for the stop's block and prints the one link
 `http://localhost:<port>/atlas/index.html#stop-<id>`; exit 3 names the serve command as the

@@ -15,15 +15,36 @@
 //
 // Does NOT: touch design/mocks/status.json or design/mocks/ledger.md (design-atlas.js's
 // /__notes/answer is the one caller that rewrites the ledger, via lib/mocks-ledger.js's
-// setStatus, before calling answerQuestion here), parse seed.md itself (groupOpen takes the
-// caller's already-parsed {journey -> {labels}} map), or enforce D5's mark-gate rule —
-// unresolvedFor is the primitive the gate is built from; the refusal message and exit code live
-// in mocks-driver.js.
+// setStatus, before calling answerQuestion here — mocks-driver.js's `notes waive` does the same
+// for a waived question's row), parse seed.md itself (groupOpen takes the caller's already-parsed
+// {journey -> {labels}} map), or enforce D5's mark-gate rule — unresolvedFor is the primitive
+// the gate is built from; the refusal message and exit code live in mocks-driver.js.
+//
+// specs/20260907/10-client-review.md D3: a note's `origin` (walk|client|session) is decided by
+// the route it arrived on, never by a typed name — ORIGINS/originOf are the shared enum/default;
+// addNote stamps `origin` from `input.origin` when the caller gives one (design-atlas.js's client
+// route passes "client" explicitly), else by originOf's own rule. D8: waiveNote is the one writer
+// of a note's `waived` field and the sole non-page closure of a client-origin note or a question —
+// the seven-day silence clock and the day-count/first-accepted-date refusal text are the caller's
+// (mocks-driver.js `notes waive`) job to assemble from `lastClientAt`/`status.client.openedAt`;
+// this function only measures elapsed time against the `lastClientAt` it is handed. D11: writeNotes
+// is now a tmp-file rename (no lock file — two writers by design, Rationale) instead of a direct
+// overwrite, so a reader (the served page) never observes a torn file mid-write.
 //
 // Exit codes: none — this is a library, not an executable.
 
 const fs = require('fs')
 const path = require('path')
+
+// D3: absent = "session" (a legacy note carrying no origin field), except a walk-kind note which
+// is always "walk" by construction — a client note is only ever "client" by an explicit stamp
+// (never inferred), since nothing else on a note's own shape implies a client wrote it.
+const ORIGINS = ['walk', 'client', 'session']
+function originOf(n) {
+  if (n && n.origin != null) return n.origin
+  if (n && n.kind === 'walk') return 'walk'
+  return 'session'
+}
 
 const SCOPES = ['mock', 'project']
 const STATUSES = ['open', 'addressed', 'resolved']
@@ -59,10 +80,17 @@ function readNotes(root) {
   return JSON.parse(raw)
 }
 
+// D11: a tmp file in the same directory, then renameSync over the final path — atomic on one
+// filesystem, so a reader (the served page's own GET /__notes/list) never sees a torn write. No
+// lock file: the remaining read-modify-write race between the driver and the server is a
+// millisecond window, accepted (spec Rationale "Two writers, no lock").
 function writeNotes(root, notes) {
   const p = notesPath(root)
-  fs.mkdirSync(path.dirname(p), { recursive: true })
-  fs.writeFileSync(p, JSON.stringify(notes, null, 2) + '\n')
+  const dir = path.dirname(p)
+  fs.mkdirSync(dir, { recursive: true })
+  const tmp = path.join(dir, 'notes.json.tmp-' + process.pid)
+  fs.writeFileSync(tmp, JSON.stringify(notes, null, 2) + '\n')
+  fs.renameSync(tmp, p)
 }
 
 // D1: one error string per problem, each naming the offending note's id (or its array index
@@ -120,11 +148,19 @@ function validateNotes(notes) {
       errors.push('note "' + label + '": reason must be one of ' + PLAIN_REASONS.join('|') + ' (field "reason")')
     }
     if (n.answer != null) {
-      if (!['yes', 'no'].includes(n.answer.verdict)) {
-        errors.push('note "' + label + '": answer.verdict must be "yes" or "no" (field "answer")')
-      } else if (n.answer.verdict === 'no' && !String(n.answer.text || '').trim()) {
-        errors.push('note "' + label + '": a "no" answer requires non-empty text (field "answer")')
+      // specs/20260907/10-client-review.md D8: the verdict enum gains "waived" — a waived
+      // question keeps its answer non-null (every existing "unanswered" derivation closes with
+      // no edit), and like "no" it requires non-empty text (the waiver's reason).
+      if (!['yes', 'no', 'waived'].includes(n.answer.verdict)) {
+        errors.push('note "' + label + '": answer.verdict must be "yes", "no" or "waived" (field "answer")')
+      } else if ((n.answer.verdict === 'no' || n.answer.verdict === 'waived') && !String(n.answer.text || '').trim()) {
+        errors.push('note "' + label + '": a "' + n.answer.verdict + '" answer requires non-empty text (field "answer")')
       }
+    }
+    // D3: origin is additive and optional (absent = legacy, resolved by originOf()) — the only
+    // new validation is that a PRESENT value must be one of the enum.
+    if (n.origin != null && !ORIGINS.includes(n.origin)) {
+      errors.push('note "' + label + '": origin must be one of ' + ORIGINS.join('|') + ' (field "origin")')
     }
   }
   return { errors }
@@ -193,6 +229,10 @@ function addNote(notes, input) {
   } else if (body.reason != null) {
     note.reason = body.reason
   }
+  // D3: origin from the caller when given (design-atlas.js's client route always passes
+  // "client" explicitly), else originOf's own rule — a walk-kind note is "walk" by construction,
+  // everything else (including a question) defaults "session".
+  note.origin = body.origin != null ? body.origin : originOf(note)
   return { notes: notes.concat([note]), note }
 }
 
@@ -206,12 +246,22 @@ function cloneFind(notes, id) {
 // D2's POST /__notes/resolve — the page's Resolve button is the only caller; mocks-driver.js
 // never calls this (D4: no `notes resolve` subcommand exists). specs/20260906/03 D1: a question
 // is never resolved this way — it throws, naming the only path that closes a question.
-function resolveNote(notes, id, by) {
+// specs/20260907/10-client-review.md D4: `opts.viaClient` (design-atlas.js's client-route
+// /__notes/resolve only) derives `resolution` from the note's prior status — "withdrawn" from
+// "open", "accepted" from "addressed" — and stamps `lastClientAt`; the non-client route (the
+// existing caller) omits opts and leaves both fields untouched.
+function resolveNote(notes, id, by, opts) {
   const { next, found } = cloneFind(notes, id)
   if (found.kind === 'question') throw new Error('question "' + id + '" is answered, never resolved')
+  const o = opts || {}
+  const priorStatus = found.status
   found.status = 'resolved'
   found.resolvedBy = by || 'session'
   found.resolvedAt = new Date().toISOString()
+  if (o.viaClient) {
+    found.resolution = priorStatus === 'addressed' ? 'accepted' : 'withdrawn'
+    found.lastClientAt = found.resolvedAt
+  }
   return { notes: next, note: found }
 }
 
@@ -231,11 +281,19 @@ function answerQuestion(notes, id, opts) {
 }
 
 // D4's `notes address --id --change [--ledger]` — driver-only file write.
+// specs/20260907/10-client-review.md D7: `opts.capture` ({hash, file}, given only by the driver's
+// own client-origin mock-scope re-capture path) stores the after-image and stamps `lastClientAt`;
+// every other caller (session-origin or walk note, `--port` omitted) leaves the note with no
+// `capture` field at all — CONTINUE-TO byte-identical, AC-20260907-10-22.
 function addressNote(notes, id, opts) {
   const { next, found } = cloneFind(notes, id)
   const o = opts || {}
   found.status = 'addressed'
   found.addressed = { at: new Date().toISOString(), change: o.change || '', ledgerRow: o.ledgerRow || null }
+  if (o.capture) {
+    found.capture = Object.assign({}, found.capture, { after: o.capture })
+    found.lastClientAt = found.addressed.at
+  }
   return { notes: next, note: found }
 }
 
@@ -287,7 +345,38 @@ function unresolvedFor(notes, labels) {
     (n.kind === 'question' ? n.answer == null : n.status !== 'resolved'))
 }
 
+const DAY_MS = 86400000
+
+// D8's `notes waive` primitive — the caller (mocks-driver.js) refuses a note that is neither
+// client-origin nor a question and one already resolved BEFORE ever calling this; this function's
+// own job is the seven-day silence clock alone. `opts.lastClientAt` is the silence clock's start
+// — the caller derives it (a client note's own `lastClientAt`, or a question's later of `at` and
+// `status.client.openedAt`) and hands it in explicitly; `found.lastClientAt` is the fallback for a
+// direct library caller (this file's own tests) that omits it. `opts.now` accepts a Date or an
+// ISO string, defaulting to the real clock.
+function waiveNote(notes, id, opts) {
+  const { next, found } = cloneFind(notes, id)
+  const o = opts || {}
+  const now = o.now instanceof Date ? o.now : new Date(o.now || Date.now())
+  const silenceSince = o.lastClientAt != null ? o.lastClientAt : found.lastClientAt
+  const since = new Date(silenceSince)
+  const elapsedDays = Math.floor((now.getTime() - since.getTime()) / DAY_MS)
+  if (elapsedDays < 7) {
+    const firstOk = new Date(since.getTime() + 7 * DAY_MS).toISOString().slice(0, 10)
+    throw new Error('note "' + id + '" has been silent ' + elapsedDays + ' day(s) — a waiver needs 7; first accepted on ' + firstOk)
+  }
+  const at = now.toISOString()
+  found.status = 'resolved'
+  found.resolvedBy = 'waiver'
+  found.resolvedAt = at
+  found.waived = { at, reason: o.reason, by: o.by || 'session' }
+  if (found.kind === 'question') {
+    found.answer = { verdict: 'waived', text: o.reason, by: o.by || 'session', at }
+  }
+  return { notes: next, note: found }
+}
+
 module.exports = {
   readNotes, writeNotes, validateNotes, addNote, resolveNote, answerQuestion, addressNote, replyNote,
-  groupOpen, unresolvedFor, WALK_REASONS,
+  groupOpen, unresolvedFor, WALK_REASONS, ORIGINS, originOf, waiveNote,
 }

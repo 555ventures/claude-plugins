@@ -156,21 +156,23 @@ test('AC-20260902-10-7: spec/commands/mocks.md names the four D6 triage bins and
 })
 
 // specs/20260906/02-mocks-ends-at-wireframes.md D11: setup now goes through the shared
-// mocks-driver-fixtures.js `advanceToJourneyApproved` helper (SKIN and REVIEW are retired — the
-// sign-off step is SIGNOFF, reached straight from journey-approved, with no skin/review marks in
-// between). Fixture repair (specs/20260907/07-mocks-retires-theme.md): THEME is retired too, so
-// this test's name drops "with the theme picked" — SIGNOFF is now reached with no theme anywhere.
-test('AC-20260902-10-8: WHEN the driver prints the SIGNOFF step THE SYSTEM includes the D7 sign-off literal', () => {
-  const dir = tmpdir('mocks-review-signoff')
+// mocks-driver-fixtures.js `advanceToJourneyApproved` helper (SKIN and REVIEW are retired). Fixture
+// repair (specs/20260907/07-mocks-retires-theme.md): THEME is retired too. specs/20260907/10-
+// client-review.md D1/D12: the sign-off state is renamed CLIENT in place (SIGNOFF is retired),
+// reached straight from WALK — the D7/D10 approval literal is carried over unchanged.
+test('AC-20260907-10-13 (retag of AC-20260902-10-8): WHEN the driver prints the CLIENT step THE SYSTEM includes the D10 approval literal', () => {
+  const dir = tmpdir('mocks-review-client')
   // specs/20260907/08-walk-critic.md AC-20260907-08-1/D1 fixture repair: WALK now sits between
-  // WIREFRAMES and SIGNOFF — the journey must be walked, or the driver prints the WALK block
-  // instead of the SIGNOFF sign-off literal this AC pins.
+  // WIREFRAMES and CLIENT — the journey must be walked, or the driver prints the WALK block
+  // instead of the CLIENT approval literal this AC pins.
   advanceToJourneyWalked(dir)
   const step = bare(dir)
-  assert.strictEqual(step.status, 0, 'a bare invocation at the SIGNOFF sign-off step must exit 0: ' + step.stderr)
+  assert.strictEqual(step.status, 0, 'a bare invocation at the CLIENT approval step must exit 0: ' + step.stderr)
   assert.ok(step.stdout.includes('the written brief, not these screens, holds scope'),
-    'D7: the sign-off step must print the exact literal "the written brief, not these screens, ' +
+    'D10: the CLIENT step must print the exact literal "the written brief, not these screens, ' +
     'holds scope" — approval is on understanding, not on these screens holding scope: got ' + step.stdout)
+  assert.ok(!step.stdout.includes('SIGNOFF'),
+    'AC-20260907-10-1: the CLIENT step must never print the retired "SIGNOFF" state literal: got ' + step.stdout)
 })
 
 test('AC-20260902-10-9: spec/commands/atlas.md and spec/commands/sketch.md route their annotation loop through `notes open` and name neither the retired "annotation MCP" nor "Vibe Annotations", spec/doctrine/mocks.md carries "## Mocks: Page Notes", and citations-check.js reports MISS=0', () => {
@@ -394,13 +396,15 @@ test('AC-20260907-06-9: spec/doctrine/design.md § Design Canon names design/the
     'D8: § Design Canon must say the theme itself is picked on /spec:sketch\'s first run: ' + canonSection)
 })
 
-// specs/20260907/07-mocks-retires-theme.md D8, AC-20260907-07-10: the mocks driver's state
-// machine is SEED -> SHAPES -> KIT -> WIREFRAMES -> SIGNOFF -> APPROVED, with no THEME step —
-// composing candidate directions and picking one is /spec:sketch's own job now. Accordingly,
-// spec/doctrine/mocks.md describes no THEME state anywhere, except § Provenance Ledger's own
-// "retired step names still parse" clause, which deliberately names THEME (alongside SKIN and
-// REVIEW) as one such retired-but-still-parsing step name.
-test('AC-20260907-07-10: spec/doctrine/mocks.md carries no THEME occurrence outside § Provenance Ledger\'s retired-step-names clause, no theme-picked/direction-composed/--reopen theme, no "Theme = recompose, never repaint" bullet, and names SEED, SHAPES, KIT, WIREFRAMES, SIGNOFF, APPROVED in that order within its § Mocks: State Machine order sentence', () => {
+// specs/20260907/07-mocks-retires-theme.md D8, AC-20260907-07-10 (retag AC-20260907-10-13): the
+// mocks driver's state machine is SEED -> SHAPES -> KIT -> WIREFRAMES -> WALK -> CLIENT ->
+// APPROVED, with no THEME step and (per specs/20260907/10-client-review.md D1/D12) no SIGNOFF
+// step — composing candidate directions and picking one is /spec:sketch's own job now, and the
+// last human gate before APPROVED is named CLIENT (ADR-0012). Accordingly, spec/doctrine/mocks.md
+// describes no THEME and no SIGNOFF state anywhere, except § Provenance Ledger's own "retired
+// step names still parse" clause, which deliberately names THEME and SIGNOFF (alongside SKIN and
+// REVIEW) as retired-but-still-parsing step names.
+test('AC-20260907-10-13 (retag of AC-20260907-07-10): spec/doctrine/mocks.md carries no THEME or SIGNOFF occurrence outside § Provenance Ledger\'s retired-step-names clause, no theme-picked/direction-composed/--reopen theme, no "Theme = recompose, never repaint" bullet, and names SEED, SHAPES, KIT, WIREFRAMES, WALK, CLIENT, APPROVED in that order within its § Mocks: State Machine order sentence', () => {
   const p = 'spec/doctrine/mocks.md'
   assert.ok(fs.existsSync(path.join(ROOT, p)), p + ' must exist for this doctrine pin to be meaningful')
   const src = read(p)
@@ -414,11 +418,16 @@ test('AC-20260907-07-10: spec/doctrine/mocks.md carries no THEME occurrence outs
 
   assert.ok(!withoutLedger.includes('THEME'),
     'D8: no occurrence of "THEME" may remain outside § Provenance Ledger\'s retired-step-names clause — the state is fully retired: ' + JSON.stringify(withoutLedger.match(/.{0,40}THEME.{0,40}/)))
+  assert.ok(!withoutLedger.includes('SIGNOFF'),
+    'D12: no occurrence of "SIGNOFF" may remain outside § Provenance Ledger\'s retired-step-names clause — the state is renamed CLIENT: ' + JSON.stringify(withoutLedger.match(/.{0,40}SIGNOFF.{0,40}/)))
   assert.match(ledgerSection, /THEME/,
     'D8: § Provenance Ledger must still name THEME beside SKIN and REVIEW in its retired-but-still-parsing clause: ' + ledgerSection)
-  assert.match(ledgerSection, /SKIN/, 'D8: § Provenance Ledger\'s retired-but-still-parsing clause must still name SKIN alongside THEME: ' + ledgerSection)
-  assert.match(ledgerSection, /REVIEW/, 'D8: § Provenance Ledger\'s retired-but-still-parsing clause must still name REVIEW alongside THEME: ' + ledgerSection)
+  assert.match(ledgerSection, /SIGNOFF/,
+    'D12: § Provenance Ledger must name SIGNOFF beside SKIN, REVIEW and THEME in its retired-but-still-parsing clause: ' + ledgerSection)
+  assert.match(ledgerSection, /SKIN/, 'D8: § Provenance Ledger\'s retired-but-still-parsing clause must still name SKIN alongside THEME/SIGNOFF: ' + ledgerSection)
+  assert.match(ledgerSection, /REVIEW/, 'D8: § Provenance Ledger\'s retired-but-still-parsing clause must still name REVIEW alongside THEME/SIGNOFF: ' + ledgerSection)
   assert.match(ledgerSection, /SKETCH/, 'D8: § Provenance Ledger\'s live step-vocabulary examples must add SKETCH in THEME\'s place: ' + ledgerSection)
+  assert.match(ledgerSection, /CLIENT/, 'D12: § Provenance Ledger\'s live step-vocabulary examples must list CLIENT (SIGNOFF\'s successor): ' + ledgerSection)
 
   for (const literal of ['theme-picked', 'direction-composed', '--reopen theme', 'Theme = recompose, never repaint']) {
     assert.ok(!src.includes(literal),
@@ -430,13 +439,13 @@ test('AC-20260907-07-10: spec/doctrine/mocks.md carries no THEME occurrence outs
   assert.ok(stateMachineIdx !== -1, p + ' must carry a "## Mocks: State Machine" heading to anchor the order-sentence search')
   const smNextIdx = src.indexOf('\n## ', stateMachineIdx + 1)
   const stateMachineSection = src.slice(stateMachineIdx, smNextIdx === -1 ? src.length : smNextIdx)
-  const orderTokens = ['SEED', 'SHAPES', 'KIT', 'WIREFRAMES', 'SIGNOFF', 'APPROVED']
+  const orderTokens = ['SEED', 'SHAPES', 'KIT', 'WIREFRAMES', 'WALK', 'CLIENT', 'APPROVED']
   const positions = orderTokens.map((tok) => stateMachineSection.indexOf('**' + tok + '**'))
   assert.ok(positions.every((pos) => pos !== -1),
-    'D8: § Mocks: State Machine must name every live state SEED, SHAPES, KIT, WIREFRAMES, SIGNOFF, APPROVED (each bold) — got positions ' + JSON.stringify(positions) + ' in:\n' + stateMachineSection)
+    'AC-20260907-10-13: § Mocks: State Machine must name every live state SEED, SHAPES, KIT, WIREFRAMES, WALK, CLIENT, APPROVED (each bold) — got positions ' + JSON.stringify(positions) + ' in:\n' + stateMachineSection)
   for (let i = 1; i < positions.length; i++) {
     assert.ok(positions[i] > positions[i - 1],
-      'D8: the order sentence must name ' + orderTokens.join(' -> ') + ' in that order, with THEME deleted from between WIREFRAMES and SIGNOFF: got positions ' + JSON.stringify(positions))
+      'AC-20260907-10-13: the order sentence must name ' + orderTokens.join(' -> ') + ' in that order, with SIGNOFF renamed CLIENT in its slot: got positions ' + JSON.stringify(positions))
   }
 })
 
@@ -452,7 +461,7 @@ test('AC-20260907-07-10: spec/doctrine/mocks.md carries no THEME occurrence outs
 // HEAD: `grep -rn "frontend-design skill line" spec/` finds this literal nowhere in the repo. The
 // AC's own requirement is still fully testable and left as an executable pin below; the doctrine
 // worker authors the paragraph net-new under "## The driver loop" rather than moving one.
-test('AC-20260907-07-11: spec/commands/mocks.md carries no "## THEME interview rule" heading and no THEME occurrence anywhere, carries the frontend-design skill-line paragraph under "## The driver loop", names the step enumeration shapes/kit/journey:<j>/signoff and the pick-stop parenthetical "a pick stop — SHAPES —", drops the sign-off "theme tokens" clause, and its Report section names the theme-less outcome with no "theme: {direction}" bullet', () => {
+test('AC-20260907-10-19 (retag of AC-20260907-07-11): spec/commands/mocks.md carries no "## THEME interview rule" heading, no "## Sign-off" heading, and no THEME occurrence anywhere; carries the frontend-design skill-line paragraph under "## The driver loop"; a "## Client review (CLIENT state)" heading names client open --address, notes address … --port, notes waive, seven days, stop open signoff and --mark approved; the look rule names CLIENT and its <step> enumeration is unchanged (shapes | kit | journey:<j> | signoff)', () => {
   const p = 'spec/commands/mocks.md'
   const src = read(p)
 
@@ -460,6 +469,8 @@ test('AC-20260907-07-11: spec/commands/mocks.md carries no "## THEME interview r
     'D9: "## THEME interview rule" must be deleted whole — its successor lives in sketch.md § The run\'s Theme step (specs/20260907/06 D7): ' + JSON.stringify(src.match(/.{0,40}THEME interview rule.{0,40}/)))
   assert.ok(!src.includes('THEME'),
     'D9: spec/commands/mocks.md must name no "THEME" occurrence anywhere — every step it narrates must be one the driver can still print: ' + JSON.stringify(src.match(/.{0,40}THEME.{0,40}/)))
+  assert.ok(!src.includes('## Sign-off'),
+    'D12: "## Sign-off (SIGNOFF state)" must be replaced whole by "## Client review (CLIENT state)": ' + JSON.stringify(src.match(/.{0,40}## Sign-off.{0,40}/)))
 
   const skillLine = 'Every authoring step block the driver prints carries the frontend-design skill line'
   assert.ok(src.includes(skillLine), 'D9: the generic skill-line paragraph must be present verbatim: ' + skillLine)
@@ -471,9 +482,21 @@ test('AC-20260907-07-11: spec/commands/mocks.md carries no "## THEME interview r
     'D9: the skill-line paragraph must specifically live as the closing paragraph of "## The driver loop", not merely appear elsewhere in the file: ' + runLoopSection)
 
   assert.match(src, /`shapes`\s*\|\s*`kit`\s*\|\s*`journey:<j>`\s*\|\s*`signoff`/,
-    'D9: § Look rule\'s <step> enumeration must read "shapes | kit | journey:<j> | signoff" once THEME is dropped: ' + JSON.stringify(src.match(/`shapes`[^)]*`signoff`/)))
+    'AC-20260907-10-19: § Look rule\'s <step> enumeration must CONTINUE TO read "shapes | kit | journey:<j> | signoff" — the stop step name is unchanged (D9 Rationale): ' + JSON.stringify(src.match(/`shapes`[^)]*`signoff`/)))
   assert.ok(src.includes('a pick stop — SHAPES —'),
     'D9: § Look rule\'s pick-stop parenthetical must read exactly "a pick stop — SHAPES —" once THEME is dropped: ' + JSON.stringify(src.match(/a pick stop.{0,20}/)))
+  assert.match(src, /look rule[\s\S]{0,300}CLIENT|CLIENT[\s\S]{0,300}look rule/i,
+    'AC-20260907-10-19: the look rule must name CLIENT: ' + JSON.stringify(src.match(/.{0,80}(look rule|CLIENT).{0,80}/i)))
+
+  const clientHeadingIdx = src.indexOf('## Client review (CLIENT state)')
+  assert.ok(clientHeadingIdx !== -1,
+    'D12: spec/commands/mocks.md must carry a "## Client review (CLIENT state)" heading in place of the retired "## Sign-off (SIGNOFF state)": ' + src.slice(0, 200))
+  const clientNextIdx = src.indexOf('\n## ', clientHeadingIdx + 1)
+  const clientSection = src.slice(clientHeadingIdx, clientNextIdx === -1 ? src.length : clientNextIdx)
+  for (const literal of ['client open --address', 'notes address', '--port', 'notes waive', 'seven days', 'stop open signoff', '--mark approved']) {
+    assert.ok(clientSection.includes(literal),
+      'AC-20260907-10-19: "## Client review (CLIENT state)" must name "' + literal + '": got ' + clientSection)
+  }
 
   assert.ok(!src.includes('theme tokens'),
     'D9: § Sign-off\'s "theme tokens … in place" clause must be dropped — the theme is no longer picked before sign-off: ' + JSON.stringify(src.match(/.{0,40}theme tokens.{0,40}/)))
@@ -482,4 +505,31 @@ test('AC-20260907-07-11: spec/commands/mocks.md carries no "## THEME interview r
     'D9: § Report\'s outcome slot must read the exact theme-less literal "✅ mocks approved — {N} journeys, signed off by {name}": ' + JSON.stringify(src.match(/✅ mocks approved.{0,60}/)))
   assert.ok(!src.includes('theme: {direction}'),
     'D9: § Report\'s "theme: {direction} — rejected {others}" bullet must be deleted: ' + JSON.stringify(src.match(/.{0,40}theme: \{direction\}.{0,40}/)))
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260907-10-20
+// ---------------------------------------------------------------------------
+test('AC-20260907-10-20: spec/doctrine/mocks.md § Mocks: Look and Serve names CLIENT in the reachability sentence in SIGNOFF\'s place, and § Mocks: Page Notes\' ADR-0012 paragraph names notes waive, withdrawn and accepted', () => {
+  const p = 'spec/doctrine/mocks.md'
+  const src = read(p)
+
+  const lookIdx = src.indexOf('## Mocks: Look and Serve')
+  assert.ok(lookIdx !== -1, p + ' must carry a "## Mocks: Look and Serve" heading')
+  const lookNextIdx = src.indexOf('\n## ', lookIdx + 1)
+  const lookSection = src.slice(lookIdx, lookNextIdx === -1 ? src.length : lookNextIdx)
+  assert.match(lookSection, /CLIENT/,
+    'D20: § Mocks: Look and Serve\'s reachability sentence must name CLIENT in SIGNOFF\'s retired place: ' + lookSection)
+  assert.ok(!lookSection.includes('SIGNOFF'),
+    'D20: § Mocks: Look and Serve must never name the retired "SIGNOFF" state: ' + lookSection)
+
+  const notesIdx = src.indexOf('## Mocks: Page Notes')
+  assert.ok(notesIdx !== -1, p + ' must carry a "## Mocks: Page Notes" heading')
+  const notesNextIdx = src.indexOf('\n## ', notesIdx + 1)
+  const notesSection = src.slice(notesIdx, notesNextIdx === -1 ? src.length : notesNextIdx)
+  assert.match(notesSection, /ADR-0012/, '§ Mocks: Page Notes must carry its ADR-0012 paragraph: ' + notesSection)
+  for (const literal of ['notes waive', 'withdrawn', 'accepted']) {
+    assert.ok(notesSection.includes(literal),
+      'D20: § Mocks: Page Notes\' ADR-0012 paragraph must name "' + literal + '": got ' + notesSection)
+  }
 })

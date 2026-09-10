@@ -52,7 +52,7 @@ neither mark.
 
 ## Look rule
 
-Before SHAPES, KIT, WIREFRAMES, or SIGNOFF the driver runs the look-reachability probe;
+Before SHAPES, KIT, WIREFRAMES, or CLIENT the driver runs the look-reachability probe;
 if it refuses, either fix the remedy (`npx playwright install chromium`) or, when a browser MCP
 is the real look path, `ToolSearch` for `claude-in-chrome` and record `mocks-driver.js look-via
 browser` before re-running. Look with `mocks-driver.js look <label> [--state <s>] [--port <n>]`
@@ -79,15 +79,14 @@ line; `change` starts a fresh round.
 
 For the first journey with no `walked`: dispatch `Agent {subagent_type: 'design-critic'}` once — mock paths in declared order plus the seed path, never file contents (shared § Model Placement) — fresh context; it returns findings `{screen, state, break, finding, severity}`, flow breaks only (§ Mocks: State Machine). Record each with `node {driver} notes add --scope mock --screen <label> --state <s> --kind walk --reason <break> --by walk-critic --text "<finding>"`, then `--mark journey-walked --journey <j>` — refused on an `open` finding, naming each id and `notes address --id <id> --change "<what changed>"`; empty findings walk straight to the mark. WALK opens no look stop or render/look probe — fix a finding through `--reopen walk:<j>` or `--reopen journey:<j>`, both landing on states that already carry the look machinery.
 
-## Sign-off (SIGNOFF state)
+## Client review (CLIENT state)
 
-The terminal look: one pass over `design/atlas/index.html`, every journey, gray. No separate review loop — run `node {driver} notes open` on go and triage every note
-into one bin: **mock detail** (`notes address --id <id> --change "<what changed>"`), **product understanding**
-(a ledger row first, same call plus `--ledger <rowId>`), **question back**
-(`notes reply --id <id> --text "<question>"`), or **propose to decline** (never decided here).
-A canon-primitive note edits canon.md first, every dependent screen after; resolve only on the
-page. The step prints its sign-off line, then `stop open signoff`; `decided approve` marks
-`approved`, stamping every top-level mock `data-status="approved"`.
+The terminal step: expose the running serve, then `client open --address <url>` (refused outside CLIENT, without `--address`, or against a dead address, naming the serve command).
+A client answers questions and raises notes on the served pages; a mock-scope note captures its screen at raise. `node {driver} notes open` triages each into one bin: **mock detail**
+(`notes address --id <id> --change "<what changed>" [--port <n>]` — client-origin mock-scope notes require `--port`, refusing if the screen is unchanged), **product understanding**
+(a ledger row first, same call plus `--ledger <rowId>`), **question back** (`notes reply --id <id> --text "<question>"`), or **propose to decline**.
+A canon-primitive note edits canon.md first. Only the client resolves a note on the page, or `notes waive --id <id> --reason "<r>"` releases it after seven days of silence.
+Then `stop open signoff`; `decided approve` runs `{driver} --mark approved`, printing `waived: N` plus each reason, and stamps every top-level mock `data-status="approved"`.
 
 ## Report
 

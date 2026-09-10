@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 34997,
-    "spec/scripts": 1300077,
-    "spec/scripts/lib": 233720,
-    "tests": 3657939
+    "spec/scripts": 1320365,
+    "spec/scripts/lib": 242860,
+    "tests": 3720456
   },
   "files": {
     "scripts/plugin-bump.js": 9427,
@@ -22,7 +22,7 @@
     "spec/scripts/commit-coverage.js": 16400,
     "spec/scripts/components-check.js": 4708,
     "spec/scripts/design-ac-reconcile.js": 6011,
-    "spec/scripts/design-atlas.js": 138148,
+    "spec/scripts/design-atlas.js": 146401,
     "spec/scripts/env-preflight.js": 8794,
     "spec/scripts/escape-row.js": 10045,
     "spec/scripts/fleet-reader.js": 47448,
@@ -30,6 +30,7 @@
     "spec/scripts/genesis-state-gate.sh": 2979,
     "spec/scripts/init-gen.js": 35902,
     "spec/scripts/lib/base-derivation.js": 3145,
+    "spec/scripts/lib/client-capture.js": 3019,
     "spec/scripts/lib/count-observation.js": 2294,
     "spec/scripts/lib/driver-io.js": 6199,
     "spec/scripts/lib/escape-row.js": 4940,
@@ -39,8 +40,8 @@
     "spec/scripts/lib/glob-match.js": 4339,
     "spec/scripts/lib/host-config.js": 5704,
     "spec/scripts/lib/leg-findings.js": 2393,
-    "spec/scripts/lib/mocks-ledger.js": 12707,
-    "spec/scripts/lib/mocks-notes.js": 14900,
+    "spec/scripts/lib/mocks-ledger.js": 13101,
+    "spec/scripts/lib/mocks-notes.js": 20627,
     "spec/scripts/lib/mocks-picks.js": 8373,
     "spec/scripts/lib/notes-layer.browser.js": 24862,
     "spec/scripts/lib/observation.js": 2613,
@@ -58,7 +59,7 @@
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
     "spec/scripts/merge-back.sh": 17514,
-    "spec/scripts/mocks-driver.js": 102444,
+    "spec/scripts/mocks-driver.js": 114479,
     "spec/scripts/promise-sweep.js": 10409,
     "spec/scripts/prose-cap.js": 6271,
     "spec/scripts/question-style-gate.js": 10712,
@@ -107,7 +108,7 @@
     "tests/consistency/citations-check.test.js": 16363,
     "tests/consistency/comment-narration-live.test.js": 3527,
     "tests/consistency/dependency-free.test.js": 8614,
-    "tests/consistency/design-doctrine.test.js": 35535,
+    "tests/consistency/design-doctrine.test.js": 39573,
     "tests/consistency/entrypoints.test.js": 70405,
     "tests/consistency/genesis-doctrine.test.js": 86907,
     "tests/consistency/observed-grammar-purity.test.js": 3560,
@@ -152,7 +153,7 @@
     "tests/frontmatter.test.js": 4254,
     "tests/frontmatter/frontmatter.test.js": 16719,
     "tests/genesis-gate.test.js": 14633,
-    "tests/genesis/brief-state.test.js": 61918,
+    "tests/genesis/brief-state.test.js": 61957,
     "tests/genesis/conventions-handoff.test.js": 28971,
     "tests/genesis/genesis-driver.test.js": 75630,
     "tests/genesis/registry-check.test.js": 23113,
@@ -172,21 +173,23 @@
     "tests/merge-back.test.js": 15683,
     "tests/mocks/chrome-harness.js": 9353,
     "tests/mocks/chrome-harness.test.js": 10855,
+    "tests/mocks/client-route.test.js": 22060,
     "tests/mocks/mocks-driver-2.test.js": 19004,
-    "tests/mocks/mocks-driver-3.test.js": 17825,
+    "tests/mocks/mocks-driver-3.test.js": 17977,
     "tests/mocks/mocks-driver-4.test.js": 16765,
+    "tests/mocks/mocks-driver-client.test.js": 26628,
     "tests/mocks/mocks-driver-fixtures.js": 26168,
     "tests/mocks/mocks-driver-kit-gate.test.js": 2879,
     "tests/mocks/mocks-driver-look-stops-2.test.js": 12882,
     "tests/mocks/mocks-driver-look-stops-3.test.js": 9355,
-    "tests/mocks/mocks-driver-look-stops-4.test.js": 12052,
+    "tests/mocks/mocks-driver-look-stops-4.test.js": 12345,
     "tests/mocks/mocks-driver-look-stops.test.js": 21448,
     "tests/mocks/mocks-driver-theme.test.js": 51812,
-    "tests/mocks/mocks-driver-walk.test.js": 12899,
+    "tests/mocks/mocks-driver-walk.test.js": 12971,
     "tests/mocks/mocks-driver-wire.test.js": 4300,
     "tests/mocks/mocks-driver.test.js": 35227,
     "tests/mocks/mocks-ledger.test.js": 12490,
-    "tests/mocks/mocks-notes.test.js": 54875,
+    "tests/mocks/mocks-notes.test.js": 64110,
     "tests/mocks/mocks-picks.test.js": 11563,
     "tests/mocks/notes-layer-isolation.test.js": 6372,
     "tests/mocks/notes-layer-navigation.test.js": 27334,
@@ -932,6 +935,150 @@
       "from": 3656261,
       "to": 3657939,
       "cite": "specs/20260909/05-fix-delta-reviewer-pass.md"
+    },
+    {
+      "path": "tests/consistency/design-doctrine.test.js",
+      "from": 35535,
+      "to": 39573,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "tests/genesis/brief-state.test.js",
+      "from": 61918,
+      "to": 61987,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-3.test.js",
+      "from": 17825,
+      "to": 17977,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-look-stops-4.test.js",
+      "from": 12052,
+      "to": 12345,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "tests/mocks/mocks-notes.test.js",
+      "from": 54875,
+      "to": 64110,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "tests",
+      "from": 3591249,
+      "to": 3605108,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts/design-atlas.js",
+      "from": 138125,
+      "to": 144514,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts/lib/mocks-ledger.js",
+      "from": 12707,
+      "to": 13101,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts/lib/mocks-notes.js",
+      "from": 14900,
+      "to": 20648,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 102444,
+      "to": 113850,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1279689,
+      "to": 1297484,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts/lib",
+      "from": 233720,
+      "to": 239862,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 113850,
+      "to": 113866,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1297484,
+      "to": 1297500,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts/lib",
+      "from": 239841,
+      "to": 242860,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "tests",
+      "from": 3605078,
+      "to": 3653766,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts/design-atlas.js",
+      "from": 144514,
+      "to": 146006,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 113866,
+      "to": 114111,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1297500,
+      "to": 1299237,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 114111,
+      "to": 114479,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1299237,
+      "to": 1299605,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts/design-atlas.js",
+      "from": 146006,
+      "to": 146401,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1300077,
+      "to": 1320365,
+      "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "tests",
+      "from": 3657939,
+      "to": 3720456,
+      "cite": "specs/20260907/10-client-review.md"
     }
   ]
 }

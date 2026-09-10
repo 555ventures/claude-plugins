@@ -17,7 +17,13 @@ rules that replaced it:
   The remedy is always the same: split the file into sibling `*.test.js` files by owning AC
   family, sharing helpers through a `<family>.fixtures.js` module. The budget tightens via
   `SPEC_TEST_FILE_BUDGET_MS` (tests only) and loosens only by editing the constant in a
-  reviewed diff. (specs/20260903/07-test-file-budget-guard.md)
+  reviewed diff. `npm test` and the host `testCommand` carry `--test-timeout=45000
+  --test-force-exit` so a test that never resolves is a `cancelled` red and the process ends;
+  the budget reporter is wired to **stderr** because a second reporter on stdout is truncated
+  under force-exit; the scoped `gateCommand` carries the same two flags without the reporter.
+  `/spec:doctor` check 18 (`port-check.js`) reports any fixed, computed or `--port <n>` literal
+  under `tests/`. (specs/20260903/07-test-file-budget-guard.md;
+  specs/20260909/07-hang-bound-and-port-check.md)
 - **One derivation per verdict.** `verdict.js` is the sole source of the review/release
   verdict word, derived from the evidence manifest `review-legs.js` writes plus the
   reviewer's return and disposition counts. Nothing else computes or asserts CLEAN.

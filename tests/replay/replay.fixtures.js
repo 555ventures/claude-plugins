@@ -37,4 +37,18 @@ function setupOverlayHost(root, { parentFiles, closeFiles }) {
   return { parent, close, dir }
 }
 
-module.exports = { setupOverlayHost, commitFiles }
+// specs/20260909/02-replay-base-and-label-honesty.md D4/D5: the --record fixture shared by every
+// baseline-red/pristine-red cross-check test in tests/replay/replay.test.js (AC-8, AC-9, AC-10,
+// AC-11, AC-14) — a well-formed mutation patch plus a CLEAN reviewer return, written into `root`.
+// A caller whose case never rides --workflow (e.g. a pristine-red-with-wrong-outcome refusal)
+// simply ignores the workflowFile/workflowObj it doesn't need.
+function writeRecordFixture(root) {
+  const patchFile = path.join(root, 'mutation.patch')
+  fs.writeFileSync(patchFile, '--- a/lib/x.js\n+++ b/lib/x.js\n@@ -1 +1 @@\n-a\n+B\n')
+  const workflowFile = path.join(root, 'workflow.json')
+  const workflowObj = { verdict: 'CLEAN', survivors: [], killed: 0 }
+  fs.writeFileSync(workflowFile, JSON.stringify(workflowObj))
+  return { patchFile, workflowFile, workflowObj }
+}
+
+module.exports = { setupOverlayHost, commitFiles, writeRecordFixture }

@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync, spawnSync } = require('node:child_process')
 const { SPEC, read, tmpdir, runNode, gitRepo } = require('../helpers')
-const { setupOverlayHost, commitFiles } = require('./replay.fixtures')
+const { setupOverlayHost, commitFiles, writeRecordFixture } = require('./replay.fixtures')
 
 // specs/20260819/02-mutation-replay.md (brief 14): the ad-hoc consult
 // injection (specs/20260819/01-review-evidence-retention.md's Fable retainer pass) proved a
@@ -501,10 +501,7 @@ test('AC-20260909-02-8: a review run id resolves to its CLEAN row, not to a red 
     'iteration sharing the same runId (suite exit 1) — reading the wrong row here would print baselineRed=suite: ' +
     select.stdout)
 
-  const patchFile = path.join(root, 'mutation.patch')
-  fs.writeFileSync(patchFile, '--- a/lib/x.js\n+++ b/lib/x.js\n@@ -1 +1 @@\n-a\n+B\n')
-  const workflowFile = path.join(root, 'workflow.json')
-  fs.writeFileSync(workflowFile, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: 0 }))
+  const { patchFile, workflowFile } = writeRecordFixture(root)
   const linesBefore = fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').length
   const record = runNode(SCRIPT, ['--record',
     '--spec', 'specs/a.md', '--review-run-id', 'rv_a', '--class', 'silent-fallback',
@@ -2750,10 +2747,7 @@ test('AC-20260909-02-9: a baseline-red claim the cited review row records green 
   writeLedger(root, [
     { ts: '2026-08-22T00:00:00Z', stage: 'review', spec: 'specs/x.md', runId: 'rv_a', verdict: 'CLEAN', legs: [{ leg: 'suite', exit: 0 }] },
   ])
-  const patchFile = path.join(root, 'mutation.patch')
-  fs.writeFileSync(patchFile, '--- a/lib/x.js\n+++ b/lib/x.js\n@@ -1 +1 @@\n-a\n+B\n')
-  const workflowFile = path.join(root, 'workflow.json')
-  fs.writeFileSync(workflowFile, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: 0 }))
+  const { patchFile, workflowFile } = writeRecordFixture(root)
   const before = fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8')
 
   const r = runNode(SCRIPT, ['--record',
@@ -2775,10 +2769,7 @@ test('AC-20260909-02-10: a founded baseline-red claim records unchanged, and smo
   writeLedger(founded, [
     { ts: '2026-08-22T00:00:00Z', stage: 'review', spec: 'specs/x.md', runId: 'rv_a', verdict: 'CLEAN', legs: [{ leg: 'suite', exit: 1 }] },
   ])
-  const patchFile = path.join(founded, 'mutation.patch')
-  fs.writeFileSync(patchFile, '--- a/lib/x.js\n+++ b/lib/x.js\n@@ -1 +1 @@\n-a\n+B\n')
-  const workflowFile = path.join(founded, 'workflow.json')
-  fs.writeFileSync(workflowFile, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: 0 }))
+  const { patchFile, workflowFile } = writeRecordFixture(founded)
   const r = runNode(SCRIPT, ['--record',
     '--spec', 'specs/x.md', '--review-run-id', 'rv_a', '--class', 'silent-fallback',
     '--legs', 'baseline-red:suite', '--outcome', 'caught',
@@ -2821,11 +2812,7 @@ test('AC-20260909-02-10: a founded baseline-red claim records unchanged, and smo
 })
 
 test('AC-20260909-02-11: a baseline-red claim citing an absent, never-CLEAN, or legless review row is refused', () => {
-  const patchIn = tmpdir('replay-record-baselinered-11-inputs')
-  const patchFile = path.join(patchIn, 'mutation.patch')
-  fs.writeFileSync(patchFile, '--- a/lib/x.js\n+++ b/lib/x.js\n@@ -1 +1 @@\n-a\n+B\n')
-  const workflowFile = path.join(patchIn, 'workflow.json')
-  fs.writeFileSync(workflowFile, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: 0 }))
+  const { patchFile, workflowFile } = writeRecordFixture(tmpdir('replay-record-baselinered-11-inputs'))
 
   const absent = fs.realpathSync(tmpdir('replay-record-baselinered-absent'))
   writeLedger(absent, [
@@ -2935,8 +2922,7 @@ test('AC-20260909-02-14: pristine-red is accepted only with setup-failed', () =>
   writeLedger(root, [
     { ts: '2026-08-22T00:00:00Z', stage: 'review', spec: 'specs/x.md', runId: 'rv_a', verdict: 'CLEAN', legs: [{ leg: 'gate', exit: 0 }] },
   ])
-  const patchFile = path.join(root, 'mutation.patch')
-  fs.writeFileSync(patchFile, '--- a/lib/x.js\n+++ b/lib/x.js\n@@ -1 +1 @@\n-a\n+B\n')
+  const { patchFile } = writeRecordFixture(root)
   const r = runNode(SCRIPT, ['--record',
     '--spec', 'specs/x.md', '--review-run-id', 'rv_a', '--class', 'silent-fallback',
     '--legs', 'pristine-red:gate', '--outcome', 'leg-caught', '--patch', patchFile,

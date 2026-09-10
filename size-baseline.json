@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 34997,
-    "spec/scripts": 1270922,
+    "spec/scripts": 1271018,
     "spec/scripts/lib": 231235,
-    "tests": 3557294
+    "tests": 3559209
   },
   "files": {
     "scripts/plugin-bump.js": 9427,
@@ -70,7 +70,7 @@
     "spec/scripts/render-gate.js": 30243,
     "spec/scripts/render-inventory.browser.js": 14416,
     "spec/scripts/render-rules.js": 19776,
-    "spec/scripts/replay.js": 90429,
+    "spec/scripts/replay.js": 90525,
     "spec/scripts/report-render.js": 7899,
     "spec/scripts/review-legs.js": 28310,
     "spec/scripts/scope-reconcile.js": 16902,
@@ -111,7 +111,7 @@
     "tests/consistency/entrypoints.test.js": 70405,
     "tests/consistency/genesis-doctrine.test.js": 86907,
     "tests/consistency/observed-grammar-purity.test.js": 3560,
-    "tests/consistency/plugin-bump.test.js": 21712,
+    "tests/consistency/plugin-bump.test.js": 23763,
     "tests/consistency/plugin-version.test.js": 5267,
     "tests/consistency/read-load.test.js": 9559,
     "tests/consistency/red-fixture-coverage.test.js": 40717,
@@ -211,8 +211,8 @@
     "tests/render/render-rules.test.js": 33656,
     "tests/replay/record-via.test.js": 7611,
     "tests/replay/replay-corpus.test.js": 7478,
-    "tests/replay/replay.fixtures.js": 1919,
-    "tests/replay/replay.test.js": 277873,
+    "tests/replay/replay.fixtures.js": 2811,
+    "tests/replay/replay.test.js": 276845,
     "tests/report/report-render.test.js": 14403,
     "tests/review/ci-query.test.js": 17510,
     "tests/review/deviations-backstop.test.js": 18269,
@@ -668,6 +668,36 @@
       "path": "tests",
       "from": 3521810,
       "to": 3557294,
+      "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
+    },
+    {
+      "path": "spec/scripts/replay.js",
+      "from": 90429,
+      "to": 90525,
+      "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
+    },
+    {
+      "path": "tests/consistency/plugin-bump.test.js",
+      "from": 21712,
+      "to": 23763,
+      "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
+    },
+    {
+      "path": "tests/replay/replay.fixtures.js",
+      "from": 1919,
+      "to": 2811,
+      "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1270922,
+      "to": 1271018,
+      "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
+    },
+    {
+      "path": "tests",
+      "from": 3557294,
+      "to": 3559209,
       "cite": "specs/20260909/02-replay-base-and-label-honesty.md"
     }
   ]

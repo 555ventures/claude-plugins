@@ -252,26 +252,49 @@ test('AC-20260909-02-6: a ref-shaped SPEC_REVIEW_BASE is ignored, because a name
     'tests build: ' + JSON.stringify({ bare: bare.stdout, withRefEnv: withRefEnv.stdout }))
 })
 
-test('AC-20260909-02-17: on this checkout, SPEC_REVIEW_BASE moves the window the check judges', () => {
+// AC-20260909-02-17 must prove SPEC_REVIEW_BASE moves the window on THIS real checkout (not only
+// in a synthetic host) without depending on this branch's own topology relative to main — a bare
+// `--check` (no --base, no env) shows a "→" line only while HEAD carries an unbumped or
+// not-yet-merged change under spec/, which is false the instant this branch merges into main. The
+// two windows below are instead both anchored to state the test itself controls: a fixed,
+// already-merged historical commit (the commit that first gave spec's manifest a semver-shaped
+// version — an ancestor of every future HEAD, so `git merge-base HEAD <this sha>` always resolves
+// to it unchanged) versus HEAD itself — neither depends on whether HEAD is ahead of, equal to, or on a
+// branch alongside main.
+const SPEC_FIRST_VERSIONED_MANIFEST_SHA = '8b97167412d120d20a758db557d7daf1f7ebe75c'
+
+test('AC-20260909-02-17: on this checkout, SPEC_REVIEW_BASE moves the window the check judges, independent of this branch\'s own topology', () => {
   const headSha = execGitCapture(ROOT, 'rev-parse', 'HEAD')
-  const bare = run(['--check'], ROOT)
-  assert.match(bare.stdout, /→/,
-    'sanity: this repository must show at least one real version-comparison "→" line at the moment this test ' +
-    'runs — this spec\'s own File Plan bumps spec/.claude-plugin/plugin.json (D9) alongside real edits under ' +
-    'spec/, so the bare merge-base(HEAD, main) window must show a genuine bump once that lands: ' + bare.stdout)
-  const withEnv = runEnv(['--check'], ROOT, { SPEC_REVIEW_BASE: headSha })
-  assert.strictEqual(withEnv.status, 0,
+  const explicitOldBase = run(['--check', '--base', SPEC_FIRST_VERSIONED_MANIFEST_SHA], ROOT)
+  assert.strictEqual(explicitOldBase.status, 0,
+    'sanity: --base pinned to a real ancestor commit must resolve and succeed on this checkout: ' + JSON.stringify(explicitOldBase))
+  assert.match(explicitOldBase.stdout, /✅ spec .* → /,
+    'sanity: every commit since this fixed ancestor has only ever raised the spec plugin\'s version, so an ' +
+    'explicit --base pinned to it must show a real version-comparison "→" line for spec — this anchors the ' +
+    'test to a value it controls instead of the ambient bare-run topology: ' + explicitOldBase.stdout)
+
+  const viaEnv = runEnv(['--check'], ROOT, { SPEC_REVIEW_BASE: SPEC_FIRST_VERSIONED_MANIFEST_SHA })
+  assert.strictEqual(viaEnv.status, explicitOldBase.status,
+    'AC-20260909-02-17: SPEC_REVIEW_BASE set to the SAME ancestor sha, with no --base flag, must resolve to an ' +
+    'identical outcome as passing it explicitly via --base: ' + JSON.stringify(viaEnv))
+  assert.strictEqual(viaEnv.stdout, explicitOldBase.stdout,
+    'AC-20260909-02-17: SPEC_REVIEW_BASE must be honored on this real checkout (not only in synthetic hosts) — ' +
+    'stdout must be byte-identical to the explicit --base run naming the same commit, proving the env value ' +
+    'resolved through the same code path: ' + JSON.stringify({ explicitOldBase: explicitOldBase.stdout, viaEnv: viaEnv.stdout }))
+
+  const viaEnvHead = runEnv(['--check'], ROOT, { SPEC_REVIEW_BASE: headSha })
+  assert.strictEqual(viaEnvHead.status, 0,
     'AC-20260909-02-17: SPEC_REVIEW_BASE=<HEAD sha> collapses the window to HEAD..HEAD (no change anywhere) ' +
-    'and must exit 0 — proving the variable is honored on this real checkout, not only in synthetic hosts: ' +
-    JSON.stringify(withEnv))
-  for (const line of withEnv.stdout.trim().split('\n')) {
+    'and must exit 0 — HEAD is always resolvable regardless of this branch\'s relationship to main: ' + JSON.stringify(viaEnvHead))
+  for (const line of viaEnvHead.stdout.trim().split('\n')) {
     assert.match(line, /\(no change under /,
       'AC-20260909-02-17: every plugin line under SPEC_REVIEW_BASE=<HEAD sha> must read "(no change under " — ' +
-      'a "→" line here means the variable was not honored and the bare-run derivation ran instead: ' + line)
+      'a "→" line here means the variable was not honored: ' + line)
   }
-  assert.notStrictEqual(withEnv.stdout, bare.stdout,
-    'AC-20260909-02-17: the env-based run\'s stdout must differ from the bare run\'s — identical output means ' +
-    'SPEC_REVIEW_BASE was silently ignored: ' + JSON.stringify({ bare: bare.stdout, withEnv: withEnv.stdout }))
+  assert.notStrictEqual(viaEnv.stdout, viaEnvHead.stdout,
+    'AC-20260909-02-17: two different SPEC_REVIEW_BASE values must produce two different windows — identical ' +
+    'output for the old-ancestor candidate and the HEAD candidate would mean the variable is not actually ' +
+    'moving the comparison point at all: ' + JSON.stringify({ viaEnv: viaEnv.stdout, viaEnvHead: viaEnvHead.stdout }))
 })
 
 function execGitCapture(dir, ...a) {

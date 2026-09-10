@@ -374,10 +374,7 @@ function deriveBaseline(row) {
 // D3 (specs/20260909/02-replay-base-and-label-honesty.md): the one shared selector for what a
 // review run id MEANS, used by --select's derivation and --record's cross-check alike — among
 // ledger rows sharing this runId, the row with verdict "CLEAN" (last in read order when several);
-// null when none is CLEAN (a run id with only red iterations supports no claim). --select's own
-// candidate filtering above already restricts to verdict==='CLEAN' rows and tie-breaks later
-// (read-order) rows on ties, so it already implements this same rule per runId; --record calls it
-// directly because it is handed a bare runId with no pre-filtered row.
+// null when none is CLEAN (a run id with only red iterations supports no claim).
 function reviewRowFor(rows, runId) {
   const matches = rows.filter((r) => r.stage === 'review' && r.runId === runId && r.verdict === 'CLEAN')
   return matches.length ? matches[matches.length - 1] : null
@@ -387,9 +384,14 @@ function cmdSelect() {
   const rows = readLedgerRows(root)
   let lastReplayIdx = -1
   rows.forEach((r, i) => { if (isMeasurementReplay(r)) lastReplayIdx = i })
-  const candidates = rows
-    .map((r, i) => ({ r, i }))
-    .filter(({ r, i }) => i > lastReplayIdx && r.stage === 'review' && r.verdict === 'CLEAN' && r.runId)
+  // D3: resolve every runId seen in the window to reviewRowFor's row — the one shared selector —
+  // rather than restating "verdict === 'CLEAN'" here as a second, driftable copy of the rule.
+  const runIdsInWindow = new Set()
+  rows.forEach((r, i) => { if (i > lastReplayIdx && r.stage === 'review' && r.runId) runIdsInWindow.add(r.runId) })
+  const candidates = [...runIdsInWindow]
+    .map((runId) => reviewRowFor(rows, runId))
+    .filter((r) => r && rows.indexOf(r) > lastReplayIdx)
+    .map((r) => ({ r, i: rows.indexOf(r) }))
   if (!candidates.length) {
     console.error('replay.js: no eligible CLEAN review row with a runId found in the window since the ' +
       'last measurement replay row — run /spec:review first, or check replay.js --due to confirm one is expected')

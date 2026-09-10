@@ -54,10 +54,12 @@ asked.
    worktree up at `--commit`, re-applies the close commit's non-meta content as one build-shaped
    commit (leaving the three review-outcome surfaces at the parent version, Rules § Blindness),
    and derives `{dir}` from `{spec}` (build-shaped, under `<root>/.claude/worktrees/`,
-   random-suffixed) — never a path a session could copy. `--dir <path>` is the manual out-of-repo
-   fallback when no `{spec}` is available; it wins verbatim over derivation, and is refused with
-   exit 3 when its basename opens with `replay` or (in-repo) resolves outside
-   `.claude/worktrees/`. Once registered, `--setup` copies the host's `.worktreeinclude`-matched
+   random-suffixed), self-provisioning the host's ignore line when missing so the worktree stays
+   invisible to `git status` in the main tree — never a path a session could copy. `--dir <path>`
+   is the manual out-of-repo fallback when no `{spec}` is available; it wins verbatim over
+   derivation, and is refused with exit 3 when its basename opens with `replay` or (in-repo)
+   resolves outside `.claude/worktrees/` — the remedy is to omit `--dir` and pass `--spec`. Once
+   registered, `--setup` copies the host's `.worktreeinclude`-matched
    gitignored files into `{dir}` (via `spec-paths worktree-include`) before the setup gate below
    ever runs; a host with no manifest is unchanged.
 2. **Setup gate (D4):** read the host's `setupCommand` from `.claude/spec.config.json` and run it
@@ -99,14 +101,15 @@ asked.
    never left as the raw session edit — AC-20260819-02-4's fixture pattern; step 7's retry repeats
    this same capture). Run `node "$(spec-paths replay)" --apply --dir {dir} --patch {patchFile}
    --patch-out {patchOutFile} --class {classId} --subject "{subject}" --spec {spec}`, where
-   `{patchOutFile}` is a fresh `mktemp` path outside `{dir}` and becomes the canonical patch every
-   later phase reads instead of `{patchFile}`, and `{subject}` is a build-commit-shaped subject
+   `{patchOutFile}` is a fresh `mktemp` path outside `{dir}` (which `--apply` refuses with exit 3)
+   and becomes the canonical patch every later phase reads instead of `{patchFile}`, and
+   `{subject}` is a build-commit-shaped subject
    derived from the target spec — never the class id and never a subject opening with `replay`,
    both refused outright (a spec titled "replay" or "mutation" still derives a legal subject;
    vocabulary is not the leak, provenance is). **The post-apply reconcile:** `--apply` always
    takes `--spec {spec}` and, between `git apply --index` and the commit, runs the host's declared
-   post-apply reconcile (`replay.afterApply` in `.claude/spec.config.json`) inside `{dir}`,
-   staging only the declared paths — never the whole dirty tree — so the commit carries the same
+   post-apply reconcile (`replay.afterApply` in `.claude/spec.config.json`, read from the main
+   root) inside `{dir}`, staging only the declared paths — never the whole dirty tree — so the commit carries the same
    derived-artifact reconciliation a real build commit carries, and excludes those paths from
    `{patchOutFile}` so the reconcile never scores as part of the mutation. A host that declares
    none is unchanged: `--apply` behaves byte-for-byte as today. A refusal at the hook (nonzero
@@ -212,15 +215,12 @@ nothing (D10's rationale).
    | leg-caught | `red:<leg>` (newly-red only — doctrine-enforced) | required | not required (unchanged) |
    | setup-failed | `none` \| `pristine-red:<leg>[,<leg>]` | refused | refused |
 
-   `caught`/`missed` and Phase 3's `unresolved` (the reviewer ran) accept `green` or step 7's
-   explained-red case, `baseline-red:<leg>[,<leg>]`, and require `--patch` + `--workflow`. Step
-   7's dismissed-question `unresolved` (the reviewer never ran) instead carries `red:<leg>`,
-   requires `--patch`, and **refuses** `--workflow` — passing it there would fabricate reviewer
-   evidence never produced. `leg-caught` keeps `red:<leg>`, newly-red only, `--patch` required,
-   `--workflow` still not required. `setup-failed` is recorded and torn down at three sites, all
-   inside Phase 1: step 2's setup-gate refusal and step 5's post-apply reconcile-hook refusal
-   (both `--legs none`), and step 7 rung 3's deterministic still-red-on-pristine result (`--legs
-   pristine-red:<leg>[,<leg>]`) — none of the three reaches this phase.
+   `caught`/`missed` and Phase 3's `unresolved` accept `green`/`baseline-red:<leg>[,<leg>]`
+   requiring `--patch`+`--workflow`; step 7's dismissed-question `unresolved` instead carries
+   `red:<leg>` and **refuses** `--workflow` — the reviewer never ran, so nothing to fabricate.
+   `setup-failed` is recorded and torn down at three Phase 1 sites — step 2's setup-gate refusal,
+   step 5's post-apply hook refusal, and step 7 rung 3's deterministic pristine still-red (`--legs
+   pristine-red:<leg>[,<leg>]`) — none reaches this phase.
 2. Run `node "$(spec-paths replay)" --teardown --dir {dir}` — the worktree is removed
    unconditionally at this point, success or failure; the main tree was never touched at any
    point in this command.

@@ -352,6 +352,23 @@ test('AC-20260909-04-5: WHEN survivors are [hard, soft], leg findings 0, and --w
     r.stderr)
 })
 
+test('AC-20260909-04-5 (other branch, spec/scripts/verdict.js:613): WHEN survivors are [hard] and --rejected 2 is passed (waived 0, so waived never exceeds the pool) THE SYSTEM SHALL exit 2 with the sum-based lead "total 2 > hard pool 1", never the false waived-based lead', () => {
+  const dir = tmpdir('verdict-04-5-sum')
+  const manifest = writeManifest(dir, SIX_GREEN)
+  const workflow = writeWorkflow(dir, cleanWorkflow([{ severity: 'hard', id: 'AC-a' }]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--rejected', '2'])
+  assert.strictEqual(r.status, 2,
+    'rejecting 2 against a hard-only pool of 1, with waived at 0, must still trip the contradiction guard on ' +
+    'the sum (waived + rejected + fixDispatched = 2 > pool 1): ' + r.stdout + ' / ' + r.stderr)
+  assert.match(r.stderr, /total 2 > hard pool 1/,
+    'spec/scripts/verdict.js:613: waived(0) is not > pool(1), so the ternary must fall to the sum-based lead ' +
+    '"total 2 > hard pool 1" — a regression back to always printing the waived-based lead would instead emit ' +
+    'the false "waived 0 > hard pool 0" here, hiding which flag actually drove the overflow: ' + r.stderr)
+  assert.doesNotMatch(r.stderr, /waived 0 > hard pool/,
+    'the false waived-based lead must never appear when rejected/fixDispatched, not waived, drove the ' +
+    'overflow: ' + r.stderr)
+})
+
 // specs/20260818/01-ledger-truth.md D7 retag: the surviving half (legs mirror the manifest,
 // in order, with leg+exit intact) continues; the {leg,exit}-only SHAPE is the defect D4
 // closes — the assert widens to per-row {leg,exit,observed} equality, never weakened.

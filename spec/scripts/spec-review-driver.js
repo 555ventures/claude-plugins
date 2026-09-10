@@ -1176,7 +1176,10 @@ function handleReviewerReturned() {
     // review-state.json, satisfying deriveState()'s "dispositions recorded" check and advancing to
     // CLOSE, then refusing the next bare invocation one round-trip later). Surface the real remedy
     // right here instead, mirroring handleDispositions()'s own UNVERIFIED pre-check text/exit
-    // above so the two paths agree — nothing is persisted (saveSidecar() has not run yet).
+    // above so the two paths agree — review-state.json itself is untouched (saveSidecar() has
+    // not run yet), but this iteration's reviewer-return artifact is already on disk (written at
+    // line 1142, above), which is why the named remedy deletes the sidecar directory rather than
+    // just re-marking.
     if (word !== 'CLEAN') {
       die((r.stderr || '').trim() +
         '\n--mark reviewer-returned refused: the hard pool is empty but the verdict pass derived ' +

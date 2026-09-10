@@ -126,3 +126,48 @@ test('non-spec prompts and missing paths pass through', () => {
   assert.strictEqual(gate('hello world', null).status, 0)
   assert.strictEqual(gate('/spec:build specs/20260101/99-none.md', null).status, 0)
 })
+
+// `jq` is a hard dependency of every UserPromptSubmit gate: it is how the prompt is extracted.
+// Absent, the gate cannot tell a gated command from ordinary chat, so it must fall through — but
+// a silent fall-through means the whole hook-enforced state machine is off with no signal, which
+// is the one failure a host must never absorb quietly. These pins hold the loud shape: still
+// non-blocking (exit 0, stdout is injected context on this hook), but the notice names jq, names
+// the install, and names which pipeline commands pass unchecked. genesis-state-gate.sh shares
+// the dependency and stays deliberately silent so exactly one warning appears per prompt.
+function gateWithoutJq(script) {
+  const dir = tmpdir('gate-nojq')
+  const shimBin = path.join(dir, 'nojq-bin')
+  fs.mkdirSync(shimBin, { recursive: true })
+  // A PATH holding only the interpreters the gates need — and no jq.
+  for (const tool of ['bash', 'sh', 'printf', 'cat', 'grep', 'sed', 'node', 'git', 'awk', 'tr', 'dirname', 'pwd', 'cd']) {
+    const found = spawnSync('command', ['-v', tool], { shell: '/bin/bash', encoding: 'utf8' }).stdout.trim()
+    if (found && fs.existsSync(found)) {
+      try { fs.symlinkSync(found, path.join(shimBin, tool)) } catch { /* already linked */ }
+    }
+  }
+  return spawnSync('bash', [path.join(SPEC, `scripts/${script}`)], {
+    encoding: 'utf8',
+    input: JSON.stringify({ prompt: '/spec:build specs/20260704/01-x.md' }),
+    cwd: dir,
+    env: { PATH: shimBin, CLAUDE_PROJECT_DIR: dir, HOME: dir },
+  })
+}
+
+test('a missing jq announces that the state machine is off instead of silently allowing everything', () => {
+  const res = gateWithoutJq('spec-state-gate.sh')
+  assert.strictEqual(res.status, 0,
+    'the gate must stay non-blocking without jq — a missing dependency may not lock the user out of their own session')
+  assert.match(res.stdout, /jq/,
+    'the notice must name jq as the missing dependency, or the user cannot act on it')
+  assert.match(res.stdout, /brew install jq|apt-get install jq/,
+    'the notice must name the install command, per the repo rule that a refusal names its remedy')
+  assert.match(res.stdout, /\/spec:build/,
+    'the notice must name the commands that pass unchecked, so the user knows the gates are down rather than green')
+})
+
+test('the genesis gate stays silent without jq so exactly one notice appears per prompt', () => {
+  const res = gateWithoutJq('genesis-state-gate.sh')
+  assert.strictEqual(res.status, 0, 'the genesis gate must also stay non-blocking without jq')
+  assert.strictEqual(res.stdout.trim(), '',
+    'spec-state-gate.sh owns the single jq notice — a second warning on the same prompt is noise')
+})

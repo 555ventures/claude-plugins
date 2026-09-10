@@ -18,6 +18,10 @@
 # tokens-landed is reworded to "re-run /spec:genesis to reach BRIEF" and the pending/absent note
 # to "the genesis BRIEF state has not ratified a design canon" — neither message says
 # "genesis-design" (that command is retired; BRIEF is a driver state, not a command).
+# `jq` is a hard dependency here as it is in every UserPromptSubmit gate: absent, the prompt
+# cannot be extracted and this gate allows everything. spec-state-gate.sh owns the single
+# user-facing notice for that condition (one warning per prompt, not three), so this gate stays
+# silent and simply falls through.
 set -u
 
 INPUT=$(cat)

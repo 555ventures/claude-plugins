@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 55589,
-    "spec/scripts": 1320515,
+    "spec/scripts": 1321924,
     "spec/scripts/lib": 242860,
-    "tests": 3754446
+    "tests": 3757137
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -28,7 +28,7 @@
     "spec/scripts/escape-row.js": 10045,
     "spec/scripts/fleet-reader.js": 47448,
     "spec/scripts/genesis-driver.js": 119780,
-    "spec/scripts/genesis-state-gate.sh": 2979,
+    "spec/scripts/genesis-state-gate.sh": 3293,
     "spec/scripts/init-gen.js": 35902,
     "spec/scripts/lib/base-derivation.js": 3145,
     "spec/scripts/lib/client-capture.js": 3019,
@@ -81,7 +81,7 @@
     "spec/scripts/spec-queue.js": 24920,
     "spec/scripts/spec-review-driver.js": 143576,
     "spec/scripts/spec-session-stamp.sh": 2680,
-    "spec/scripts/spec-state-gate.sh": 4846,
+    "spec/scripts/spec-state-gate.sh": 5941,
     "spec/scripts/spec-status.js": 52471,
     "spec/scripts/verdict.js": 52691,
     "spec/scripts/worktree-include.sh": 3277,
@@ -267,7 +267,7 @@
     "tests/smoke-stale-ready.test.js": 4064,
     "tests/spec-paths.test.js": 41974,
     "tests/spec-status.test.js": 60655,
-    "tests/state-gates.test.js": 8821,
+    "tests/state-gates.test.js": 11512,
     "tests/status/red-alarm.test.js": 11155,
     "tests/status/status-diet.test.js": 12626,
     "tests/surfaces-lib.test.js": 4569,
@@ -1190,6 +1190,36 @@
       "from": 3744130,
       "to": 3754446,
       "cite": "specs/20260908/01-size-ratchet.md"
+    },
+    {
+      "path": "spec/scripts/genesis-state-gate.sh",
+      "from": 2979,
+      "to": 3293,
+      "cite": "direct"
+    },
+    {
+      "path": "spec/scripts/spec-state-gate.sh",
+      "from": 4846,
+      "to": 5941,
+      "cite": "direct"
+    },
+    {
+      "path": "tests/state-gates.test.js",
+      "from": 8821,
+      "to": 11512,
+      "cite": "direct"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1320515,
+      "to": 1321924,
+      "cite": "direct"
+    },
+    {
+      "path": "tests",
+      "from": 3754446,
+      "to": 3757137,
+      "cite": "direct"
     }
   ]
 }

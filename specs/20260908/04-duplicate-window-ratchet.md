@@ -1,6 +1,7 @@
 ---
 date: 2026-09-08
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: gate-integrity
 design: false
@@ -10,6 +11,7 @@ depended_on_by: []
 brief: n/a
 open_markers: 0
 spiked: 2026-09-08
+diff_base: 29cb1f457090582d4e4bf7f0fafdf00a039d8a2a
 ---
 
 # Duplicate-window ratchet — copy-paste detection that can only tighten
@@ -34,6 +36,8 @@ siblings landed, and every red case is pinned on synthetic trees.
 | D5 | Tests: `tests/dup-windows/dup-windows.test.js` on synthetic repos; `tests/consistency/dup-windows-live.test.js` runs the real script over this repo and asserts exit 0. Build seeds the baseline with `--update` at its last step (orchestrator duty). (AC-20260908-04-1..7) | Same two-suite shape as spec 01 D7/D8. |
 | D6 | Host rules § Review Checks gains: a `dup-baseline.json` raise whose `cite` is not the spec under review is **hard**; § Worker Rules' size bullet from spec 01 gains the words "and `scripts/dup-windows.js`". `[no-ac: prose; the mechanism is pinned by AC-1..7]` | One duty, two meters. |
 | D7 | Repo tooling only: no plugin file changes, no version bump, no `spec-paths` key. `[no-ac: absence of change]` | Same placement argument as spec 01 D12. |
+| D8 | AC-20260908-04-2 drops the words `CONTINUE TO`: both of its clauses are new promises of a script this spec creates, so there is no prior behavior to carry. The AC keeps its ID and its two clauses; no AC is split. (user ruling, build-time) | `red-check.js` refused the pre-image with `mixed-pin` — a `SHALL CONTINUE TO` clause promises a green the pre-image cannot produce, and a new script has no pre-image behavior at all. Rejected: splitting the second clause into AC-8, which would add a permanent AC-ID for a phrasing slip. |
+| D9 | The 14-line synchronous fd writer is deleted from `scripts/dup-windows.js` AND `scripts/size-ratchet.js`; both `require` `writeOut` from `spec/scripts/lib/driver-io.js` (resolved via `path.join(__dirname, '..', 'spec', 'scripts', 'lib', 'driver-io.js')`, never a cwd-relative string) and keep two one-line `writeOut`/`writeErr` shims. `scripts/size-ratchet.js` joins the File Plan. No file under `spec/` is edited, so D7 stands. (user ruling, build-time) `[no-ac: refactor; the extraction changes no observable behavior, and both scripts stay pinned by AC-1..7 and the size ratchet's own suite]` | The new ratchet's first run flagged its own author: the writer was its only duplication with the size ratchet, one contiguous block counted as 7 overlapping windows. A new `scripts/lib/` module would relocate the block rather than remove it (−7, plus a new file that itself scores 7 against the nine `spec/scripts/` copies); importing the existing shared writer is −14 with no new file. Rejected: creating `scripts/lib/`, editing any plugin file, and reshaping the writer to dodge the window hash. The nine `spec/scripts/` copies are a queued plugin spec, not this one. |
 
 ## File Plan
 
@@ -44,6 +48,7 @@ siblings landed, and every red case is pinned on synthetic trees.
 | tests/dup-windows/dup-windows.test.js | CREATE | tests | AC-20260908-04-1, -2, -3, -4, -5, -6 |
 | tests/consistency/dup-windows-live.test.js | CREATE | tests | AC-20260908-04-7 |
 | .claude/rules/spec-pipeline.md | MODIFY | other | D6 |
+| scripts/size-ratchet.js | MODIFY | scripts | D9: writer deleted, imports the shared one |
 | size-baseline.json | MODIFY | other | the new script and tests are new files under the size ratchet: `--update` records them |
 
 Orchestrator duty (D5): run `node scripts/dup-windows.js --root . --update` and then
@@ -74,7 +79,7 @@ empty normalized line is skipped; the hash is SHA-1 of the eight lines joined by
   each file 1, and WHEN they share only seven THE SYSTEM SHALL score both 0 → test in
   tests/dup-windows/dup-windows.test.js
 - **AC-20260908-04-2**: WHEN the two copies differ only in trailing `// comments` or
-  indentation THE SYSTEM SHALL CONTINUE TO count them as duplicates, and the text finding SHALL
+  indentation THE SYSTEM SHALL count them as duplicates, and the text finding SHALL
   name the partner as `<path>:<line> ≡ <path>:<line>` → test in tests/dup-windows/dup-windows.test.js
 - **AC-20260908-04-3**: WHEN the same eight lines appear twice within one file at different
   offsets THE SYSTEM SHALL score that file 2 → test in tests/dup-windows/dup-windows.test.js
@@ -122,6 +127,21 @@ is legible. Deliberately not measured: comment density (the narration gate holds
 group at zero; mechanism explanations are allowed on their merits) and cross-repo duplication.
 Fragile: hashing is exact after normalization, so a renamed variable defeats it — that is
 accepted; the target is copy-paste, not clone detection.
+
+Folded from the build's deviations sidecar, both one-offs:
+
+- `--update` scopes D3's `new-dup` refusal to an EXISTING baseline. With no `dup-baseline.json`
+  present yet, `--update` is the seeding command: every tracked file's actual score is written
+  as-is and `new-dup` cannot refuse it, because "new" means absent from a baseline that already
+  exists. This is the same seed carve-out `scripts/size-ratchet.js`'s `doUpdate` already carries
+  (`isSeed`), which D2 and D3 incorporate by reference. Without it the two Decisions cannot both
+  hold: D5 makes `--update` the build's own seeding step, and every file in a first run is
+  unrecorded.
+- D9 brought `scripts/size-ratchet.js` into the File Plan mid-build, after the new ratchet's
+  first run reported its own author. Both scripts lost their local copy of the synchronous fd
+  writer in favor of importing `writeOut` from `spec/scripts/lib/driver-io.js`, resolved through
+  `__dirname` so the exec-a-script tests still resolve it from a `tmpdir()` root. The nine
+  remaining copies under `spec/scripts/` are plugin-side and queued, not in this spec.
 
 ## Canonical Delta
 

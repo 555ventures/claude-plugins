@@ -37,30 +37,21 @@
 //               --to/--cite without --raise or --reconcile, a non-integer --to,
 //               bad/missing/nonexistent --cite, a --raise --to below the current ceiling, a
 //               --raise target that is neither tracked nor already baselined, unknown flag)
+//
+// specs/20260908/04-duplicate-window-ratchet.md D9: the synchronous fd writer is imported from
+// spec/scripts/lib/driver-io.js rather than carried locally, so this script and
+// scripts/dup-windows.js stop duplicating it.
 
 const fs = require('fs')
 const path = require('path')
 const { execFileSync } = require('child_process')
+const io = require(path.join(__dirname, '..', 'spec', 'scripts', 'lib', 'driver-io.js'))
 
 const TREES = ['spec/scripts', 'spec/scripts/lib', 'scripts', 'tests']
 const CITE_RE = /^specs\/\d{8}\/\d{2}-/
 
-// A script that prints a payload and exits routes through a synchronous fd writer, looped for
-// partial writes and retried on EAGAIN, so the payload is never truncated ahead of exit.
-function writeFd(fd, str) {
-  const buf = Buffer.from(str, 'utf8')
-  let offset = 0
-  while (offset < buf.length) {
-    try {
-      offset += fs.writeSync(fd, buf, offset, buf.length - offset)
-    } catch (e) {
-      if (e && e.code === 'EAGAIN') continue
-      throw e
-    }
-  }
-}
-function writeOut(str) { writeFd(1, str) }
-function writeErr(str) { writeFd(2, str) }
+function writeOut(str) { io.writeOut(1, str) }
+function writeErr(str) { io.writeOut(2, str) }
 
 function fail(msg) {
   writeErr('size-ratchet: ' + msg + '\n')

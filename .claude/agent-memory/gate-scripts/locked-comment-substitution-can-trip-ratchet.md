@@ -3,6 +3,7 @@ name: locked-comment-substitution-can-trip-ratchet
 description: A Decision-mandated verbatim comment substitution (no code change) can still push a file's byte count over scripts/size-ratchet.js's baseline — report it, don't reword or raise
 metadata:
   type: feedback
+  reviewed: 2026-09-10
 ---
 
 specs/20260907/07-mocks-retires-theme.md D10 mandated an exact verbatim replacement string for

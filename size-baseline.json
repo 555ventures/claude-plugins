@@ -1,14 +1,15 @@
 {
   "newFileCap": 40000,
   "trees": {
-    "scripts": 34997,
+    "scripts": 50443,
     "spec/scripts": 1320365,
     "spec/scripts/lib": 242860,
-    "tests": 3720456
+    "tests": 3737700
   },
   "files": {
+    "scripts/dup-windows.js": 15589,
     "scripts/plugin-bump.js": 9427,
-    "scripts/size-ratchet.js": 20024,
+    "scripts/size-ratchet.js": 19881,
     "scripts/spec-patterns.sh": 2455,
     "scripts/test-file-budget-reporter.js": 3091,
     "spec/scripts/ac-drift.js": 9152,
@@ -109,6 +110,7 @@
     "tests/consistency/comment-narration-live.test.js": 3527,
     "tests/consistency/dependency-free.test.js": 8614,
     "tests/consistency/design-doctrine.test.js": 39573,
+    "tests/consistency/dup-windows-live.test.js": 1916,
     "tests/consistency/entrypoints.test.js": 70405,
     "tests/consistency/genesis-doctrine.test.js": 86907,
     "tests/consistency/observed-grammar-purity.test.js": 3560,
@@ -132,6 +134,7 @@
     "tests/doctor/ac-drift.test.js": 21661,
     "tests/doctor/ci-gate-parity.test.js": 5168,
     "tests/doctrine-review.test.js": 2477,
+    "tests/dup-windows/dup-windows.test.js": 15328,
     "tests/env-preflight.test.js": 11643,
     "tests/escape/escape-row.test.js": 24093,
     "tests/file-plan/multi-table.test.js": 11943,
@@ -1079,6 +1082,18 @@
       "from": 3657939,
       "to": 3720456,
       "cite": "specs/20260907/10-client-review.md"
+    },
+    {
+      "path": "scripts",
+      "from": 34997,
+      "to": 50443,
+      "cite": "specs/20260908/04-duplicate-window-ratchet.md"
+    },
+    {
+      "path": "tests",
+      "from": 3720456,
+      "to": 3737700,
+      "cite": "specs/20260908/04-duplicate-window-ratchet.md"
     }
   ]
 }

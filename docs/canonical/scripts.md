@@ -65,6 +65,10 @@ is deleted. Test setup that a second file needs lives in a sibling `*.fixtures.j
 (`review-legs`, `tournament`, `ac-matrix`, `replay`), never as a second copy; the
 duplicate-window ratchet prices the third repetition.
 
+`scripts/dup-windows.js` keeps `dup-baseline.json` tight over duplicate 8-line windows across
+the same three roots; the same `--update` / `--raise --cite` model as the size ratchet; the live
+check is `tests/consistency/dup-windows-live.test.js`.
+
 The plugin's own code-group comments — everything under `spec/scripts`, `spec/bin`, `scripts`,
 and `tests` — are at zero narration. A new comment there states the current invariant plus one
 owner id (a spec path, AC-ID, D-number, ADR, or run id) and nothing else; the standing scan in

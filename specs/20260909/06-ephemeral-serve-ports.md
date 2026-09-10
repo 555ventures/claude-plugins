@@ -1,6 +1,7 @@
 ---
 date: 2026-09-09
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: design-atlas
 design: false
@@ -10,6 +11,7 @@ depended_on_by: [specs/20260909/07-hang-bound-and-port-check.md]
 brief: n/a
 spiked: 2026-09-09
 open_markers: 0
+diff_base: 29cb1f457090582d4e4bf7f0fafdf00a039d8a2a
 ---
 
 # Every test-bound port is ephemeral
@@ -35,6 +37,10 @@ and two serve-backed test files run concurrently without sharing a port window.
 | D5 | `tests/mocks/mocks-driver-look-stops-3.test.js`'s literal `'4599'` becomes `'0'` [no-ac: the run refuses on `--state` before any socket; AC-20260909-06-8's grep is the observable] | The literal is harmless today and a false positive for spec 07's check tomorrow |
 | D6 | `docs/canonical/design.md`'s serve line records `--port 0` [no-ac: applied by Canonical Delta] | Canon names the flag hosts may rely on |
 | D7 | `spec/.claude-plugin/plugin.json` bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` [no-ac: `plugin-bump.js --check` is the oracle] | Version discipline |
+| D8 | D1's banner mechanism (`server.address().port` in both the URL and the `ssh -L` hint) already landed on `main` via specs/20260909/03-atlas-test-port-and-deadlines.md (commit `e03f23a`), so this spec's `design-atlas.js` row narrows to documenting `--port 0` in the usage block, and AC-20260909-06-1 / AC-20260909-06-2 are re-cast as `SHALL CONTINUE TO` pins on that landed behavior (user ruling, 2026-09-10, at the build's RED_FINDINGS step) | The promises are still this spec's to hold — a sibling landing them first makes them continuation pins, not laundered new promises; `[pre-green:]` has no reason covering "a sibling shipped it", so the honest carrier is the pin |
+| D9 | AC-20260909-06-3 / AC-20260909-06-4 carry `[pre-green: predicate-in-test]` and AC-20260909-06-8 carries `[pre-green: absence-invariant]`: `serveAtlas`/`freePort` ARE the deliverable and live in `tests/helpers.js`, and AC-8 asserts the absence of a literal from the tests tree — neither can be red against a pre-image whose only implementation layer is already shipped (user ruling, 2026-09-10) | Both reasons are exactly the enum cases the template names; the sanction stays in the spec where red-check and ac-matrix both read it |
+| D10 | `tests/mocks/chrome-harness.js`'s `serve(dir, port = 0)` keeps its port parameter, and `startServe`/`stopServe` (mocks-driver-fixtures.js) plus the file-local `withServeAt` helpers keep theirs, contrary to D3's literal "minus any port argument" — only `withServe` (design-atlas.test.js) drops it [no-ac: AC-20260909-06-5's CONTINUE-TO pin is the observable] | Out-of-batch callers hand the SAME port to a second CLI invocation (`stop open --port <p>`, `look --port <p>`), and chrome-harness.test.js's AC-20260909-03-2 forces a deliberate collision on an explicit port; dropping the parameter would strand live pins this spec's File Plan does not own |
+| D11 | The File Plan drops its `tests/design-atlas-index.test.js`, `tests/mocks/notes-layer-isolation.test.js` and `tests/mocks/notes-layer-navigation.test.js` rows (specs/20260909/03 already removed every computed port there — verified: zero call sites pass a port) and its `tests/mocks/chrome-harness.js` row (D10); `tests/design-atlas-serve-port.test.js` is a MODIFY, not a CREATE (specs/20260909/03 authored it for AC-20260909-03-6, whose coverage is widened in place, never deleted); `size-baseline.json` is added as a row [no-ac: `size-ratchet.js --reconcile` is the oracle] | The plan must name what this build actually changes, or reconcile reports a phantom scope in both directions |
 
 ## File Plan
 
@@ -42,16 +48,13 @@ and two serve-backed test files run concurrently without sharing a port window.
 |------|--------|-------|---------|
 | spec/scripts/design-atlas.js | MODIFY | scripts | D1: banner reads the bound port; `--port 0` documented in the usage block |
 | tests/helpers.js | MODIFY | tests | D2: `freePort`, `serveAtlas` exported (AC-20260909-06-3, AC-20260909-06-4 exercised from tests/design-atlas-serve-port.test.js) |
-| tests/design-atlas-serve-port.test.js | CREATE | tests | AC-20260909-06-1, AC-20260909-06-2, AC-20260909-06-3, AC-20260909-06-4, AC-20260909-06-8 |
+| tests/design-atlas-serve-port.test.js | MODIFY | tests | AC-20260909-06-1, AC-20260909-06-2, AC-20260909-06-3, AC-20260909-06-4, AC-20260909-06-8 |
 | tests/design-atlas.test.js | MODIFY | tests | D3/D4: `withServe` over `serveAtlas`, local `freePort` deleted, every computed port removed; AC-20260909-06-6, AC-20260909-06-7 |
-| tests/design-atlas-index.test.js | MODIFY | tests | D4: six computed ports removed |
-| tests/mocks/notes-layer-isolation.test.js | MODIFY | tests | D4: computed port removed |
-| tests/mocks/notes-layer-navigation.test.js | MODIFY | tests | D4: computed port removed |
 | tests/mocks/mocks-driver-fixtures.js | MODIFY | tests | D3: `startServe`/`stopServe` over `serveAtlas`; `freePort` re-exported from helpers; AC-20260909-06-5 |
-| tests/mocks/chrome-harness.js | MODIFY | tests | D3: `serve()` over `serveAtlas`, port argument dropped |
 | tests/consistency/retired-flags.test.js | MODIFY | tests | D3: local `freePort` deleted, import from helpers |
 | tests/mocks/mocks-driver-look-stops-3.test.js | MODIFY | tests | D5: `'4599'` → `'0'` |
 | spec/.claude-plugin/plugin.json | MODIFY | other | D7 bump |
+| size-baseline.json | MODIFY | other | D11: ratchet raises/updates for the files this spec grows and shrinks, cited to this spec |
 
 ## Contracts
 
@@ -65,7 +68,8 @@ tests/helpers.js
     port: number, url: string /* http://localhost:<port> */, child: ChildProcess,
     stop(): Promise<void>  /* SIGTERM, SIGKILL after 5000 ms, resolves on exit */
   }>
-  rejects: Error('serveAtlas: no banner within 5000 ms\n' + stderr)
+  rejects: Error('serveAtlas: no banner within 5000 ms\n' + stderr) /* err.child = the spawned
+    ChildProcess, already exited (SIGKILLed) by the time the rejection settles */
 ```
 
 ## Behavior
@@ -81,17 +85,18 @@ tests/helpers.js
 ## Acceptance Criteria
 
 - **AC-20260909-06-1**: WHEN `design-atlas.js serve --root <dir> --port 0` starts THE SYSTEM SHALL
-  print a first stdout line matching `^serving http://localhost:(\d+)/atlas/index\.html` with a
-  port ≥ 1024 (never `:0`), and `GET http://127.0.0.1:<that port>/__notes/notes.js` SHALL return
-  200 → test in tests/design-atlas-serve-port.test.js
-- **AC-20260909-06-2**: WHEN two `serve --port 0` children start on the same root THE SYSTEM SHALL
-  announce two different ports, and both SHALL answer `GET /__notes/notes.js` with 200 → test in
+  CONTINUE TO print a first stdout line matching `^serving http://localhost:(\d+)/atlas/index\.html`
+  with a port ≥ 1024 (never `:0`), and SHALL CONTINUE TO answer
+  `GET http://127.0.0.1:<that port>/__notes/notes.js` with 200 → test in
   tests/design-atlas-serve-port.test.js
-- **AC-20260909-06-3**: WHEN `serveAtlas(dir)` resolves THE SYSTEM SHALL return `port` equal to the
+- **AC-20260909-06-2**: WHEN two `serve --port 0` children start on the same root THE SYSTEM SHALL
+  CONTINUE TO announce two different ports, and both SHALL CONTINUE TO answer
+  `GET /__notes/notes.js` with 200 → test in tests/design-atlas-serve-port.test.js
+- **AC-20260909-06-3** `[pre-green: predicate-in-test]`: WHEN `serveAtlas(dir)` resolves THE SYSTEM SHALL return `port` equal to the
   number in the child's banner and `url` equal to `http://localhost:<port>`, and `await stop()`
   SHALL leave `child.exitCode !== null || child.signalCode !== null` → test in
   tests/design-atlas-serve-port.test.js
-- **AC-20260909-06-4**: WHEN `serveAtlas(dir, {script: <path to a stub that prints nothing and
+- **AC-20260909-06-4** `[pre-green: predicate-in-test]`: WHEN `serveAtlas(dir, {script: <path to a stub that prints nothing and
   keeps a 1 s interval alive>})` runs THE SYSTEM SHALL reject within 6 s with a message containing
   `no banner within 5000 ms` and the stub child SHALL have `exitCode !== null || signalCode !== null`
   → test in tests/design-atlas-serve-port.test.js
@@ -104,7 +109,7 @@ tests/helpers.js
 - **AC-20260909-06-7**: WHEN the design-atlas serve-backed tests run THE SYSTEM SHALL CONTINUE TO
   pass their existing assertions with `withServe(dir, fn)` taking no port argument → tests in
   tests/design-atlas.test.js (existing `withServe` callers, retagged)
-- **AC-20260909-06-8**: WHEN `grep -rnE "[0-9]{4,5} *\+ *\(?(process\.pid|Math\.random)" tests/`
+- **AC-20260909-06-8** `[pre-green: absence-invariant]`: WHEN `grep -rnE "[0-9]{4,5} *\+ *\(?(process\.pid|Math\.random)" tests/`
   runs THE SYSTEM SHALL print nothing (exit 1) → test in tests/design-atlas-serve-port.test.js
   (executes the grep via `child_process` against `ROOT/tests`)
 
@@ -137,6 +142,46 @@ product change the look-stop flow would have to carry too — if it recurs, that
 
 Spec 07 adds the bound and the check that keep this true: a per-test timeout with force-exit so a
 future hang is a two-minute red, and a doctor check that flags a port literal in tests.
+
+### What the build found (folded from the deviations sidecar at close)
+
+**Most of D1 had already landed.** specs/20260909/03 shipped the banner reading
+`server.address().port` (commit `e03f23a`) before this build started, so `design-atlas.js`'s only
+remaining change here was documenting `--port 0` in the usage block, AC-1/AC-2 became
+`SHALL CONTINUE TO` pins on landed behavior (D8), and the genuinely new work was the shared
+helper pair itself. `tests/design-atlas-serve-port.test.js` was likewise a MODIFY, not a CREATE —
+spec 03 authored it for AC-20260909-03-6, whose coverage was widened in place rather than
+replaced. Three File Plan rows (`design-atlas-index`, `notes-layer-isolation`,
+`notes-layer-navigation`) named work spec 03 had already done, and were dropped (D11).
+
+**Two serve-readiness contracts coexist on purpose.** `serveAtlas` is verb-blind: it parses the
+port out of the banner's first line whatever the verb, because AC-20260909-06-6's reuse-branch
+test must observe `already serving` and still get its port back. `tests/mocks/chrome-harness.js`'s
+own `serve()` stays strict — it reads the verb and refuses with `another run holds it`, because a
+Chrome-driving test that silently adopts another run's server does not fail, it hangs, which is
+the class specs/20260909/03 D2 exists to end. Verified against the shipped helper: a stub whose
+only stdout line is an `already serving` banner makes `serveAtlas` resolve with that port while
+`chrome-harness.js` refuses on the identical line. **Unifying the two on the shared helper
+reintroduces the hang class** — the obvious-looking refactor is the wrong one. For the same
+reason `chrome-harness.js`'s `serve()`, `startServe`/`stopServe` and the file-local `withServeAt`
+helpers keep their explicit port parameter against D3's literal wording (D10): their callers hand
+the same port to a second, separate CLI invocation (`stop open --port <p>`, `look --port <p>`).
+
+**The AC-4 kill promise was vacuous as first written, and its red is a hang.** The shipped test
+spawned a second stub of its own after the rejection and asserted on that, never on the child
+`serveAtlas` had timed out on — proved by removing the timeout's SIGKILL and watching the
+assertions still pass. Fixed by attaching the timed-out child to the rejection as `err.child` (a
+real Contracts change, recorded in the `rejects:` line) and asserting on it. The falsification
+that proves the pin is now live is worth keeping in mind: with the kill removed the run does not
+fail, it **hangs** — Node 26 does not fire a per-test `timeout` on a never-settling promise, and
+this repo's runner sets no `--test-timeout`/`--test-force-exit`. That is precisely the conversion
+spec 07 owns, and this is a real in-repo instance of it rather than a synthetic one.
+
+**Still open, filed forward.** `tests/mocks/mocks-driver-client.test.js` carries two
+`'--port', '4321'` literals. Neither pid-derived nor random, so outside this spec's Goal grep and
+outside D5's one named literal — but they match spec 07's `port-flag-literal` class and would make
+AC-20260909-07-8 red on arrival. Queued for 07, which owns both the check and the tree it must be
+green against, rather than grown into this spec's already-judged diff.
 
 ## Canonical Delta
 

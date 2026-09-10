@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 50443,
-    "spec/scripts": 1320155,
+    "spec/scripts": 1320515,
     "spec/scripts/lib": 242860,
-    "tests": 3737673
+    "tests": 3744130
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -23,7 +23,7 @@
     "spec/scripts/commit-coverage.js": 16400,
     "spec/scripts/components-check.js": 4708,
     "spec/scripts/design-ac-reconcile.js": 6011,
-    "spec/scripts/design-atlas.js": 146401,
+    "spec/scripts/design-atlas.js": 146761,
     "spec/scripts/env-preflight.js": 8794,
     "spec/scripts/escape-row.js": 10045,
     "spec/scripts/fleet-reader.js": 47448,
@@ -118,15 +118,15 @@
     "tests/consistency/plugin-version.test.js": 5267,
     "tests/consistency/read-load.test.js": 9559,
     "tests/consistency/red-fixture-coverage.test.js": 40717,
-    "tests/consistency/retired-flags.test.js": 11314,
+    "tests/consistency/retired-flags.test.js": 10272,
     "tests/consistency/size-ratchet-live.test.js": 1865,
     "tests/consistency/test-concurrency-cap.test.js": 2499,
     "tests/consistency/wire-register.test.js": 8079,
     "tests/count-observation.test.js": 4209,
     "tests/design-ac-reconcile.test.js": 5161,
     "tests/design-atlas-index.test.js": 34642,
-    "tests/design-atlas-serve-port.test.js": 3333,
-    "tests/design-atlas.test.js": 217174,
+    "tests/design-atlas-serve-port.test.js": 8546,
+    "tests/design-atlas.test.js": 216116,
     "tests/design-look-handoff.test.js": 11626,
     "tests/design-shell.test.js": 17216,
     "tests/design-template.test.js": 2207,
@@ -166,7 +166,7 @@
     "tests/genesis/tournament.fixtures.js": 11282,
     "tests/genesis/tournament.test.js": 15077,
     "tests/git/commit-escape-check.test.js": 5426,
-    "tests/helpers.js": 6671,
+    "tests/helpers.js": 10034,
     "tests/host-config/config-read.test.js": 19310,
     "tests/host-config/host-config-api.test.js": 7732,
     "tests/host-config/smoke-inert.test.js": 1834,
@@ -181,10 +181,10 @@
     "tests/mocks/mocks-driver-3.test.js": 17977,
     "tests/mocks/mocks-driver-4.test.js": 16765,
     "tests/mocks/mocks-driver-client.test.js": 26628,
-    "tests/mocks/mocks-driver-fixtures.js": 26168,
+    "tests/mocks/mocks-driver-fixtures.js": 25848,
     "tests/mocks/mocks-driver-kit-gate.test.js": 2879,
     "tests/mocks/mocks-driver-look-stops-2.test.js": 12882,
-    "tests/mocks/mocks-driver-look-stops-3.test.js": 9355,
+    "tests/mocks/mocks-driver-look-stops-3.test.js": 9656,
     "tests/mocks/mocks-driver-look-stops-4.test.js": 12345,
     "tests/mocks/mocks-driver-look-stops.test.js": 21448,
     "tests/mocks/mocks-driver-theme.test.js": 51812,
@@ -1090,10 +1090,76 @@
       "cite": "specs/20260908/04-duplicate-window-ratchet.md"
     },
     {
+      "path": "spec/scripts/design-atlas.js",
+      "from": 146401,
+      "to": 146761,
+      "cite": "specs/20260909/06-ephemeral-serve-ports.md"
+    },
+    {
+      "path": "tests/design-atlas-serve-port.test.js",
+      "from": 3333,
+      "to": 8651,
+      "cite": "specs/20260909/06-ephemeral-serve-ports.md"
+    },
+    {
+      "path": "tests/helpers.js",
+      "from": 6671,
+      "to": 9632,
+      "cite": "specs/20260909/06-ephemeral-serve-ports.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-look-stops-3.test.js",
+      "from": 9355,
+      "to": 9656,
+      "cite": "specs/20260909/06-ephemeral-serve-ports.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1320365,
+      "to": 1320725,
+      "cite": "specs/20260909/06-ephemeral-serve-ports.md"
+    },
+    {
       "path": "tests",
       "from": 3720456,
       "to": 3737700,
       "cite": "specs/20260908/04-duplicate-window-ratchet.md"
+    },
+    {
+      "path": "tests",
+      "from": 3720456,
+      "to": 3726581,
+      "cite": "specs/20260909/06-ephemeral-serve-ports.md"
+    },
+    {
+      "path": "tests/design-atlas.test.js",
+      "from": 216081,
+      "to": 216116,
+      "cite": "specs/20260909/06-ephemeral-serve-ports.md"
+    },
+    {
+      "path": "tests/helpers.js",
+      "from": 9632,
+      "to": 10034,
+      "cite": "specs/20260909/06-ephemeral-serve-ports.md"
+    },
+    {
+      "path": "tests",
+      "from": 3726581,
+      "to": 3726913,
+      "cite": "specs/20260909/06-ephemeral-serve-ports.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1320155,
+      "to": 1320515,
+      "cite": "specs/20260909/06-ephemeral-serve-ports.md"
+    },
+    {
+      "path": "tests",
+      "from": 3737673,
+      "to": 3744130,
+      "cite": "specs/20260909/06-ephemeral-serve-ports.md"
     }
   ]
 }

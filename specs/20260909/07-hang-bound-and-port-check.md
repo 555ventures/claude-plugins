@@ -95,9 +95,13 @@ port-check.js --root <dir> [--json]
 - **AC-20260909-07-1**: WHEN `.claude/spec.config.json` and `package.json` are read THE SYSTEM SHALL
   hold `testCommand` equal to the D1 string byte-for-byte and `scripts.test` equal to
   `testCommand + " 'tests/**/*.test.js'"` → test in tests/test-file-budget.test.js
+  [retired: specs/20260910/01-contention-proof-budget-and-uncapped-suite.md — D1 drops
+  `--test-concurrency=3` from the pinned string; the live pin is AC-20260910-01-1]
 - **AC-20260909-07-2**: WHEN `.claude/spec.config.json` is read THE SYSTEM SHALL hold `gateCommand`
   equal to `node --test --test-concurrency=3 --test-timeout=45000 --test-force-exit {testDirs}`
   → test in tests/test-file-budget.test.js
+  [retired: specs/20260910/01-contention-proof-budget-and-uncapped-suite.md — D1 drops
+  `--test-concurrency=3` from the pinned string; the live pin is AC-20260910-01-2]
 - **AC-20260909-07-3**: WHEN the two-reporter wiring runs a passing fixture file THE SYSTEM SHALL
   print exactly one `__FILE_BUDGET_OK__` line on stderr and none on stdout, and WHEN
   `SPEC_TEST_FILE_BUDGET_MS=5` runs a 30 ms fixture THE SYSTEM SHALL print `__FILE_BUDGET_RED__` on

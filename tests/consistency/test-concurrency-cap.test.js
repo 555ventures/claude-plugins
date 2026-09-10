@@ -5,36 +5,25 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT } = require('../helpers')
 
-// specs/20260907/09-atlas-index-and-note-navigation.md D15: on a multi-core machine, `node
-// --test` with no cap fans out one worker per core, and this spec's five Chrome-driving ACs
-// running alongside the rest of the suite starved unrelated files of CPU — one full-suite leg
-// passed but pushed several pre-existing files over their per-file budget, another leg failed a
-// genesis test that passes in isolation. Capping `--test-concurrency` on both `gateCommand` and
-// `testCommand` in `.claude/spec.config.json` is what makes a run reproducible; this test is the
-// guard a later regeneration of that file cannot silently drop. Intent, not byte-exact text, is
-// pinned — an unrelated reordering of flags must not redden this.
+// D15 (specs/20260907/09) capped --test-concurrency at 3 on both gateCommand and testCommand
+// because a green full-suite run at the runner's default fan-out had stopped proving anything:
+// per-file wall time inflated under load, reddening healthy files, and a port collision failed
+// a genesis test that passed in isolation. specs/20260910/01-contention-proof-budget-and-uncapped-suite.md
+// D4 supersedes the cap: both causes are now closed (port collisions by specs/20260909/06, false
+// budget reds by D2's serial confirm step), so this file retires the `<= 3` assertion and pins
+// the replacement mechanism instead — neither command may carry --test-concurrency at all, and
+// the guard proves itself via the reporter's exported CONFIRMING_ENV, not a hand-picked number.
+// AC-20260910-01-6.
 
-function concurrencyValue(command, label) {
-  const m = /--test-concurrency=(\d+)\b/.exec(command)
-  assert.ok(m,
-    'D15: ' + label + ' must carry a --test-concurrency=<n> flag — without it node --test fans out ' +
-    'one worker per core again, this spec\'s Chrome-driving ACs starve unrelated files of CPU, and ' +
-    'a green full-suite run stops proving anything (the suite becomes a coin flip): got ' + JSON.stringify(command))
-  return Number(m[1])
-}
-
-test('D15: .claude/spec.config.json caps test-file parallelism at --test-concurrency=3 (or lower) on both gateCommand and testCommand', () => {
+test('AC-20260910-01-6: neither gateCommand nor testCommand in .claude/spec.config.json carries a --test-concurrency flag, and the budget reporter module exports CONFIRMING_ENV as the confirm step\'s child-mode env-var name', () => {
   const config = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude/spec.config.json'), 'utf8'))
 
-  const gateN = concurrencyValue(config.gateCommand, 'gateCommand')
-  assert.ok(gateN <= 3,
-    'D15: gateCommand\'s --test-concurrency value must be 3 or lower — a higher (or removed) cap ' +
-    'lets node --test fan out past the budget this spec\'s executed evidence found unsafe on a ' +
-    '6-core machine, making gate runs non-reproducible again: got ' + gateN + ' in ' + JSON.stringify(config.gateCommand))
+  assert.ok(!/--test-concurrency\b/.test(config.gateCommand),
+    'D4: gateCommand must never carry --test-concurrency again — D2\'s serial confirm step, not a hand-picked cap, is what keeps a scoped gate run reproducible under load: got ' + JSON.stringify(config.gateCommand))
+  assert.ok(!/--test-concurrency\b/.test(config.testCommand),
+    'D4: testCommand must never carry --test-concurrency again — capping parallelism here is exactly the D15 regression this spec closes: got ' + JSON.stringify(config.testCommand))
 
-  const testN = concurrencyValue(config.testCommand, 'testCommand')
-  assert.ok(testN <= 3,
-    'D15: testCommand\'s --test-concurrency value must be 3 or lower — a higher (or removed) cap ' +
-    'lets the whole-suite leg fan out past the budget this spec\'s executed evidence found unsafe ' +
-    'on a 6-core machine, making a green full-suite run stop proving anything: got ' + testN + ' in ' + JSON.stringify(config.testCommand))
+  const reporterModule = require(path.join(ROOT, 'scripts/test-file-budget-reporter.js'))
+  assert.strictEqual(reporterModule.CONFIRMING_ENV, 'SPEC_TEST_BUDGET_CONFIRMING',
+    'D4: the reporter must export CONFIRMING_ENV === \'SPEC_TEST_BUDGET_CONFIRMING\' — this export exists only because the D2 confirm step exists, so a regeneration that silently drops the confirm also drops this export and reds this pin: got ' + JSON.stringify(reporterModule.CONFIRMING_ENV))
 })

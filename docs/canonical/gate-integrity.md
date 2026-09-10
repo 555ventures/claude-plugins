@@ -14,6 +14,18 @@ rules that replaced it:
   `testCommand`, so the review's `suite` leg and the close-time re-run see it — sums each
   file's test durations and fails the run (`__FILE_BUDGET_RED__ <file> …`, exit 1) when any
   file exceeds 45 s; a green run prints `__FILE_BUDGET_OK__ slowest <file> <ms>ms of 45000ms`.
+  **The budget is confirmed before it reds.** Per-file wall time inflates substantially under
+  load, so a file over budget in a parallel run is a *suspect*, not an offender: the reporter
+  re-runs the suspects one at a time in a child process and reds only those still over the
+  budget alone, printing `__FILE_BUDGET_CONTENTION__ <file> <loadMs>ms under load but <aloneMs>ms
+  alone` for the rest. An unconfirmed budget check measures the machine, not the file. The child
+  is bounded — its own per-test timeout is twice the budget and its `spawnSync` carries a
+  deadline — and a suspect it leaves unmeasured, or one in which a test timed out, is confirmed
+  rather than cleared, so the guard fails closed on exactly the shape of a file that hangs. Its
+  threshold is never also the clamp on what it measures, and the comparison runs on the raw
+  duration; rounding is for display. **Neither gate command caps `--test-concurrency`** — both
+  use the runner's own default fan-out, and the confirming guard, not a cap, is what keeps a
+  green run meaningful.
   The remedy is always the same: split the file into sibling `*.test.js` files by owning AC
   family, sharing helpers through a `<family>.fixtures.js` module. The budget tightens via
   `SPEC_TEST_FILE_BUDGET_MS` (tests only) and loosens only by editing the constant in a
@@ -23,7 +35,8 @@ rules that replaced it:
   under force-exit; the scoped `gateCommand` carries the same two flags without the reporter.
   `/spec:doctor` check 18 (`port-check.js`) reports any fixed, computed or `--port <n>` literal
   under `tests/`. (specs/20260903/07-test-file-budget-guard.md;
-  specs/20260909/07-hang-bound-and-port-check.md)
+  specs/20260909/07-hang-bound-and-port-check.md;
+  specs/20260910/01-contention-proof-budget-and-uncapped-suite.md)
 - **One derivation per verdict.** `verdict.js` is the sole source of the review/release
   verdict word, derived from the evidence manifest `review-legs.js` writes plus the
   reviewer's return and disposition counts. Nothing else computes or asserts CLEAN.

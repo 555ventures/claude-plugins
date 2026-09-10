@@ -3,6 +3,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const http = require('node:http')
+const crypto = require('node:crypto')
 const { tmpdir, runNode, freePort, serveAtlas } = require('../helpers')
 const picksLib = require('../../spec/scripts/lib/mocks-picks')
 
@@ -37,6 +38,43 @@ function writeJSON(p, obj) { writeFile(p, JSON.stringify(obj, null, 2) + '\n') }
 
 function statusPath(dir) { return path.join(dir, 'design/mocks/status.json') }
 function statusJson(dir) { return JSON.parse(fs.readFileSync(statusPath(dir), 'utf8')) }
+
+// specs/20260910/01-contention-proof-budget-and-uncapped-suite.md gate repair: notesPath through
+// stubNpxScreenshot were duplicated byte-for-byte across tests/mocks/mocks-driver-client.test.js
+// and its D3 sibling tests/mocks/mocks-driver-client-2.test.js, tripping the repo's duplicate-
+// window gate. Both files call these; this is their one shared home.
+function notesPath(dir) { return path.join(dir, 'design/mocks/notes.json') }
+function writeNotesFile(dir, notes) {
+  fs.mkdirSync(path.dirname(notesPath(dir)), { recursive: true })
+  fs.writeFileSync(notesPath(dir), JSON.stringify(notes, null, 2) + '\n')
+}
+function readNotesFile(dir) { return JSON.parse(fs.readFileSync(notesPath(dir), 'utf8')) }
+function nowIso() { return new Date().toISOString() }
+function isoDaysAgo(n) { return new Date(Date.now() - n * 86400000).toISOString() }
+function patchStatus(dir, patch) {
+  const s = statusJson(dir)
+  Object.assign(s, patch)
+  fs.writeFileSync(statusPath(dir), JSON.stringify(s, null, 2) + '\n')
+}
+function sha256(buf) { return crypto.createHash('sha256').update(buf).digest('hex') }
+
+// file-local PATH-stub for `npx … playwright screenshot … <out>` — copies a fixed byte buffer
+// to the invocation's last argv item (the <out> path). Distinct from the exitCode-only
+// `stubNpx` this module already exports (that helper never writes a file).
+function stubNpxScreenshot(dir, { bytes, exitCode = 0 } = {}) {
+  const binDir = path.join(dir, 'npx-shot-bin')
+  fs.mkdirSync(binDir, { recursive: true })
+  const npxPath = path.join(binDir, 'npx')
+  if (exitCode !== 0) {
+    fs.writeFileSync(npxPath, '#!/usr/bin/env bash\nexit ' + exitCode + '\n')
+  } else {
+    const src = path.join(dir, 'shot-src.png')
+    fs.writeFileSync(src, bytes)
+    fs.writeFileSync(npxPath, '#!/usr/bin/env bash\nlast="${@: -1}"\ncp "' + src + '" "$last"\nexit 0\n')
+  }
+  fs.chmodSync(npxPath, 0o755)
+  return binDir + path.delimiter + process.env.PATH
+}
 
 function writeTargets(dir) {
   writeJSON(path.join(dir, 'design/targets.json'), {
@@ -485,6 +523,7 @@ module.exports = {
   SCRIPT, FACT_KEYS, JOURNEY, LABELS, DENSE,
   bare, mark, stateOf, ledgerCmd,
   writeFile, writeJSON, statusPath, statusJson,
+  notesPath, writeNotesFile, readNotesFile, nowIso, isoDaysAgo, patchStatus, sha256, stubNpxScreenshot,
   writeTargets, writeResearchBrief, writeSeed, confirmFacts, writeCanon, writeWireframe,
   writeKitCanon, writeThemeKit,
   decideLook, openLook, freePort, startServe, stopServe, getBody,

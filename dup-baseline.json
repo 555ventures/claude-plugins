@@ -49,6 +49,8 @@
     "tests/mocks/mocks-driver-2.test.js": 2,
     "tests/mocks/mocks-driver-3.test.js": 1,
     "tests/mocks/mocks-driver-4.test.js": 2,
+    "tests/mocks/mocks-driver-client-2.test.js": 7,
+    "tests/mocks/mocks-driver-client.test.js": 7,
     "tests/mocks/mocks-driver-fixtures.js": 26,
     "tests/mocks/mocks-driver-look-stops-2.test.js": 3,
     "tests/mocks/mocks-driver-look-stops-3.test.js": 1,
@@ -89,5 +91,18 @@
     "tests/status/status-diet.test.js": 2,
     "tests/verdict-gatered-no-workflow.test.js": 4
   },
-  "raises": []
+  "raises": [
+    {
+      "path": "tests/mocks/mocks-driver-client.test.js",
+      "from": 0,
+      "to": 7,
+      "cite": "specs/20260910/01-contention-proof-budget-and-uncapped-suite.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-client-2.test.js",
+      "from": 0,
+      "to": 7,
+      "cite": "specs/20260910/01-contention-proof-budget-and-uncapped-suite.md"
+    }
+  ]
 }

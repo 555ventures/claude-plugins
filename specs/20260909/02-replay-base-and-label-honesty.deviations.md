@@ -32,4 +32,11 @@
   wave landed, `node --test tests/consistency/plugin-bump.test.js tests/replay/replay.test.js
   tests/review/review-legs.test.js` is 136/136 green with no further changes needed to the tests
   themselves beyond the two disposition fixes above.
-- AC-20260909-02-17's own sanity assertion (tests/consistency/plugin-bump.test.js:255) requires this repo's HEAD to already carry this spec's committed edits under spec/ plus the plugin.json bump, so the bare merge-base(HEAD, main) window shows a real "→" line — resolveBase()/--check read committed history via `git diff base HEAD`, never the working tree, so this test stays red until the orchestrator commits the build (as its own failure message anticipates: "once that lands"). No code change closes this from the scripts layer; verified plugin-bump.js's D2 implementation independently via every other AC-20260909-02-3..7 test, all green.
+- Superseded, kept for the record: as first authored, AC-20260909-02-17's sanity assertion required
+  this repo's HEAD to already carry this spec's committed edits plus the plugin.json bump, so that a
+  bare `--check` — judging the merge-base(HEAD, main) window — would show a real "→" line. That made
+  the test's redness a fact about branch topology rather than about the behavior under test, and it
+  would have gone red on `main` the moment this work merged. The iteration-1 review disposition
+  above replaced it: both windows are now anchored to state the test controls, so no assertion reads
+  the bare run and none of this bullet's original claim stands. It is recorded only so the departure
+  is traceable.

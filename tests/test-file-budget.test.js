@@ -98,11 +98,10 @@ test('AC-20260903-07-2: a file over the tightened SPEC_TEST_FILE_BUDGET_MS budge
     'all three tests passed, so the underlying run must still report zero failures: ' + out)
 })
 
-// AC-20260909-07-3 (sanctioned pin exception, green pre-change per D2: "its output contract
-// ... is unchanged" — --test-reporter-destination is a node:test CLI mechanism this reporter
-// already honors unmodified, confirmed executed 2026-09-10 against this exact reporter binary
-// with --test-timeout=45000 --test-force-exit also applied; only AC-20260909-07-1/-2 (the host
-// config actually carrying this wiring) are the red half of this spec).
+// AC-20260909-07-3 (sanctioned pin exception, green pre-change per specs/20260909/07's D2:
+// "its output contract ... is unchanged" — --test-reporter-destination is a node:test CLI
+// mechanism this reporter already honors unmodified; only AC-20260909-07-1/-2, the host config
+// actually carrying this wiring, are the red half of that spec).
 test('AC-20260903-07-3 (carried, now on stderr per AC-20260909-07-3): the same tree under a loose budget exits 0 and prints exactly one __FILE_BUDGET_OK__ line on stderr naming the slowest file, and none on stdout', () => {
   const root = seedSlowFastTree()
   const r = runBudgetedSuite(root, ['tests/slow.test.js', 'tests/fast.test.js'], { SPEC_TEST_FILE_BUDGET_MS: '5000' })

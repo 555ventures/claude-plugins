@@ -3,7 +3,7 @@
 // port-check.js --root <dir> [--json] — walk <dir>/tests and report every fixed or computed
 // port literal, so the class specs/20260909/06-ephemeral-serve-ports.md removed cannot creep
 // back in unnoticed (specs/20260909/07-hang-bound-and-port-check.md D3, AC-20260909-07-4
-// through -6). /spec:doctor check 18 runs this as `node "$(spec-paths port-check)" --root .`.
+// through -6). /spec:doctor's fixed-test-ports check is its caller.
 //
 // Classifies by LOCATION, not by filename or extension — every regular file under <root>/tests
 // is walked (node_modules and .git excluded) — and by three regexes only, checked in this

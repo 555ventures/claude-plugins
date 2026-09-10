@@ -48,23 +48,18 @@ asked.
 
 1. **Setup:** run `node "$(spec-paths replay)" --setup --commit {parent} --overlay {commit} --spec
    {spec}` and read `{dir}` from the `dir=` value it prints — `--overlay {commit}` materializes
-   the judged range's true upper bound: a `diff.dirty:true` row's judged range is completed by
-   the close commit that follows it (range-identity spec 20260824/06 D3/D7), so the bare parent
+   the judged range's true upper bound: a `diff.dirty:true` row's judged range is completed by the
+   close commit that follows it (range-identity spec 20260824/06 D3/D7), so the bare parent
    under-states the range whenever fix-worker edits rode that close commit. `--setup` stands the
-   worktree up at `--commit` (the parent), then re-applies the close commit's non-meta content as
-   one build-shaped commit, leaving the three review-outcome surfaces at the parent version (Rules
-   § Blindness). `--setup` derives `{dir}` from `{spec}` (a build-shaped name under
-   `<root>/.claude/worktrees/`, random-suffixed so it coexists with the spec's own build
-   worktree) and self-provisions the host's ignore line when missing, so the worktree stays
-   invisible to `git status` in the main tree — doctrine names how the path is derived, never a
-   path a session could copy (Rules § Blindness). `--dir <path>` is the manual out-of-repo
-   fallback for when no `{spec}` is available; it wins verbatim over derivation when both are
-   given, and is refused with exit 3 when its basename opens with `replay` (case-insensitive) —
-   the remedy is to omit `--dir` and pass `--spec` so the harness derives a build-shaped name
-   instead. An in-repo `--dir` that resolves outside `.claude/worktrees/` keeps its own exit-3
-   refusal unchanged. Once registered, `--setup` calls the shared owner
-   (`spec-paths worktree-include`) to copy the host's `.worktreeinclude`-matched gitignored files
-   into `{dir}` before the setup gate below ever runs; a host with no manifest is unchanged.
+   worktree up at `--commit`, re-applies the close commit's non-meta content as one build-shaped
+   commit (leaving the three review-outcome surfaces at the parent version, Rules § Blindness),
+   and derives `{dir}` from `{spec}` (build-shaped, under `<root>/.claude/worktrees/`,
+   random-suffixed) — never a path a session could copy. `--dir <path>` is the manual out-of-repo
+   fallback when no `{spec}` is available; it wins verbatim over derivation, and is refused with
+   exit 3 when its basename opens with `replay` or (in-repo) resolves outside
+   `.claude/worktrees/`. Once registered, `--setup` copies the host's `.worktreeinclude`-matched
+   gitignored files into `{dir}` (via `spec-paths worktree-include`) before the setup gate below
+   ever runs; a host with no manifest is unchanged.
 2. **Setup gate (D4):** read the host's `setupCommand` from `.claude/spec.config.json` and run it
    inside `{dir}` **without relocating the session** — a subshell or the tool's own directory
    flag, never a bare `cd` (Rules § The session never leaves the main root). Non-zero exit → run
@@ -97,36 +92,29 @@ asked.
    violation, treated as a failed authoring attempt, and git stays out of authoring entirely — the
    first git the mutation meets is step 5's pinned capture. No File-Plan-scoped site satisfying
    the recipe → note why, pick a different class, and retry once before escalating to the user.
-5. **Capture and apply (D9):** capture the raw authoring edit with the same pinned flags D9's
-   re-emission uses —
-   `git -C {dir} -c core.quotePath=off -c diff.noprefix=false -c diff.mnemonicPrefix=false
-   -c diff.srcPrefix=a/ -c diff.dstPrefix=b/ diff --no-ext-diff --no-color > {patchFile}` —
-   then `git -C {dir} checkout -- .` to return the worktree to clean (the mutation must be
-   applied fresh through the harness, not left as the raw session edit — AC-20260819-02-4's own
-   fixture pattern; the retry in step 7 repeats this same pinned capture). Run
-   `node "$(spec-paths replay)" --apply --dir {dir} --patch {patchFile} --patch-out {patchOutFile}
-   --class {classId} --subject "{subject}" --spec {spec}`, where `{patchOutFile}` is a fresh `mktemp` path
-   outside `{dir}` (which `--apply` refuses with exit 3) and becomes the canonical patch every
+5. **Capture and apply (D9):** capture the raw authoring edit with D9's own pinned-flags `git diff`
+   (`-c core.quotePath=off -c diff.noprefix=false -c diff.mnemonicPrefix=false -c
+   diff.srcPrefix=a/ -c diff.dstPrefix=b/ diff --no-ext-diff --no-color > {patchFile}`), then
+   `git -C {dir} checkout -- .` to return the worktree to clean (applied fresh through the harness,
+   never left as the raw session edit — AC-20260819-02-4's fixture pattern; step 7's retry repeats
+   this same capture). Run `node "$(spec-paths replay)" --apply --dir {dir} --patch {patchFile}
+   --patch-out {patchOutFile} --class {classId} --subject "{subject}" --spec {spec}`, where
+   `{patchOutFile}` is a fresh `mktemp` path outside `{dir}` and becomes the canonical patch every
    later phase reads instead of `{patchFile}`, and `{subject}` is a build-commit-shaped subject
-   derived from the target spec — the same shape this repo's real build commits use (e.g.
-   `build(20260819/02): scheduled mutation replay harness`) — never the class id and never a
-   subject that opens with `replay`, both of which `--apply` refuses outright. A spec whose own
-   title contains "replay" or "mutation" still derives a legal subject — indistinguishable from a
-   real build commit because it IS one; vocabulary is not the leak, provenance is.
-   **`--spec {spec}` and the post-apply reconcile:** `--apply` always takes `--spec {spec}` and,
-   between `git apply --index` and the commit, runs the host's declared post-apply reconcile
-   (`replay.afterApply` in `.claude/spec.config.json`, read from the main root) inside `{dir}`,
-   `{spec}` substituted into the declared command. It stages only the paths declared — never the
-   whole dirty tree — so the commit carries the same derived-artifact reconciliation a real build
-   commit carries, and excludes those declared paths from `{patchOutFile}` so the reconcile never
-   scores as part of the mutation. A host that declares no `replay.afterApply` is unchanged:
-   `--apply` behaves byte-for-byte as today. A refusal at the hook (nonzero command exit, an undeclared path
-   newly dirtied, a `--spec` failing its shape check, a malformed `afterApply` block, or the hook
-   changing or removing a file the mutation patch itself touches (D14)) leaves the
-   commit unmade and is recorded, never improvised: `--record --spec {spec} --review-run-id
-   {reviewRunId} --legs none --outcome setup-failed` (no `--class` — nothing was measured), then
-   `--teardown --dir {dir}`, then Phase 5's `setup-failed` report with the hook's stderr in the
-   bullet that would otherwise name `setupCommand`, then STOP — the harness stays due.
+   derived from the target spec — never the class id and never a subject opening with `replay`,
+   both refused outright (a spec titled "replay" or "mutation" still derives a legal subject;
+   vocabulary is not the leak, provenance is). **The post-apply reconcile:** `--apply` always
+   takes `--spec {spec}` and, between `git apply --index` and the commit, runs the host's declared
+   post-apply reconcile (`replay.afterApply` in `.claude/spec.config.json`) inside `{dir}`,
+   staging only the declared paths — never the whole dirty tree — so the commit carries the same
+   derived-artifact reconciliation a real build commit carries, and excludes those paths from
+   `{patchOutFile}` so the reconcile never scores as part of the mutation. A host that declares
+   none is unchanged: `--apply` behaves byte-for-byte as today. A refusal at the hook (nonzero
+   exit, an undeclared path dirtied, a bad `--spec`/`afterApply` shape, or the hook touching a
+   file the mutation patch itself touches (D14)) leaves the commit unmade and is recorded, never
+   improvised: `--record --spec {spec} --review-run-id {reviewRunId} --legs none --outcome
+   setup-failed` (no `--class`), then `--teardown --dir {dir}`, then Phase 5's `setup-failed`
+   report with the hook's stderr where `setupCommand` would be named, then STOP.
 6. **Legs:** fresh `{manifestPath}` (`mktemp`), then `node "$(spec-paths review-legs)" --root
    {dir} --spec {spec} --base {diffBase} --manifest {manifestPath}` — the sole leg derivation
    (pipeline rules § Risk Tiers); replay never re-derives legs.
@@ -152,24 +140,18 @@ asked.
       and a fresh `node "$(spec-paths review-legs)"` run against the now-pristine tree. `L` green
       there → outcome `leg-caught` — skip Phase 2 (the reviewer never dispatches) and go straight
       to Phase 3 with `--legs red:<leg>` (the newly-red meaning, never baseline-red). `L` still red
-      there (D6/D7) → re-run the legs **once more** against the same pristine tree (no further
-      `reset` — the mutation commit is already gone) with a **third** fresh manifest, and compare
-      "the same first failing line" across the second and third pristine runs: read
-      `{outDir}/<leg>-output.txt` when `L` wrote one, else `L`'s captured stderr, top-down, for the
-      first line matching `/^\s*(✖|not ok)\b/` with any trailing ` (<n>ms)` duration suffix
-      stripped — a leg whose output has no such line uses its first non-empty stderr line instead
-      — and compare the two runs' strings byte-for-byte. The **same first failing line** twice is
-      deterministic: the scratch tree does not reproduce the state the cited review row
-      (`{reviewRunId}`) judged green — a harness defect, never a user question. `node
-      "$(spec-paths replay)" --record --spec {spec} --review-run-id {reviewRunId} --legs
-      pristine-red:<L>[,<L>] --outcome setup-failed` (no `--class`, `--patch`, or `--workflow`)
-      prints the replay run id; copy all three manifests to
-      `{root}/.claude/spec-runs/{runId}.manifests/` before teardown, then `--teardown --dir {dir}`,
-      render Phase 5's `setup-failed` report naming `L`'s first failing line where `setupCommand`
-      would be named, STOP, and open a spec against the harness citing the retained manifests. A
-      **green** result, or red with a **different** first failing line, is nondeterministic drift:
-      fall through to rung 4's `AskUserQuestion` seam with all three manifests as evidence — never
-      record `leg-caught` from an unverified still-red result.
+      there (D6/D7) → re-run **once more**, a **third** fresh manifest, same pristine tree (no
+      further `reset`); compare the same first failing line — the first `/^\s*(✖|not ok)\b/` line
+      in `{outDir}/<leg>-output.txt` or `L`'s stderr, duration suffix stripped, else the first
+      non-empty stderr line — across both pristine runs. Same line twice is deterministic: the
+      tree doesn't reproduce the state review `{reviewRunId}` judged green — a harness defect,
+      never a user question: `--record --review-run-id {reviewRunId} --legs pristine-red:<L>[,<L>]
+      --outcome setup-failed` (no `--class`/`--patch`/`--workflow`), copy all three manifests to
+      `{root}/.claude/spec-runs/{runId}.manifests/` before `--teardown --dir {dir}`, render Phase
+      5's `setup-failed` report naming `L`'s first failing line, STOP, and open a harness spec
+      citing the manifests. Green, or a different failing line, is drift: fall through to rung 4's
+      `AskUserQuestion` seam with all three manifests as evidence — never record `leg-caught` from
+      an unverified still-red result.
    4. Otherwise (`L ∉ {baselineLegs}`, or the baseline is `unknown`) → unattributable: one
       `AskUserQuestion` showing `L`'s failure output beside the recorded baseline — is this leg's
       redness pre-existing or caused by the mutation? "pre-existing" resolves it explained, same

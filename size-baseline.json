@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 61878,
-    "spec/scripts": 1329059,
+    "spec/scripts": 1330422,
     "spec/scripts/lib": 249210,
-    "tests": 3822936
+    "tests": 3828999
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -85,7 +85,7 @@
     "spec/scripts/spec-review-driver.js": 143576,
     "spec/scripts/spec-session-stamp.sh": 2680,
     "spec/scripts/spec-state-gate.sh": 5941,
-    "spec/scripts/spec-status.js": 52471,
+    "spec/scripts/spec-status.js": 53834,
     "spec/scripts/verdict.js": 52691,
     "spec/scripts/worktree-include.sh": 3277,
     "tests/ac-matrix-coverage-holes.test.js": 12430,
@@ -180,7 +180,7 @@
     "tests/init-gen/probes.test.js": 6550,
     "tests/merge-back.test.js": 15683,
     "tests/mocks/chrome-harness.js": 9353,
-    "tests/mocks/chrome-harness.test.js": 10855,
+    "tests/mocks/chrome-harness.test.js": 11208,
     "tests/mocks/client-route.test.js": 22060,
     "tests/mocks/mock-edges.test.js": 12014,
     "tests/mocks/mocks-driver-2.test.js": 19004,
@@ -212,7 +212,7 @@
     "tests/prose-debt/prose-cap.test.js": 11612,
     "tests/provenance/provenance.test.js": 30412,
     "tests/question-style-gate.test.js": 12330,
-    "tests/queue/queue-overlay.test.js": 28730,
+    "tests/queue/queue-overlay.test.js": 28659,
     "tests/queue/spec-queue.test.js": 40845,
     "tests/red-check/mixed-pin.test.js": 9223,
     "tests/red-check/red-check-watchdog.test.js": 1866,
@@ -274,10 +274,10 @@
     "tests/smoke-shutdown-behavior.test.js": 5986,
     "tests/smoke-stale-ready.test.js": 4064,
     "tests/spec-paths.test.js": 41974,
-    "tests/spec-status.test.js": 60655,
+    "tests/spec-status.test.js": 63178,
     "tests/state-gates.test.js": 11512,
     "tests/status/red-alarm.test.js": 11155,
-    "tests/status/status-diet.test.js": 12626,
+    "tests/status/status-diet.test.js": 15884,
     "tests/surfaces-lib.test.js": 4569,
     "tests/test-file-budget.test.js": 30807,
     "tests/test-hang-bound.test.js": 3509,
@@ -1505,6 +1505,42 @@
       "from": 3802621,
       "to": 3822936,
       "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "spec/scripts/spec-status.js",
+      "from": 52471,
+      "to": 53834,
+      "cite": "specs/20260909/08-next-carries-the-lanes.md"
+    },
+    {
+      "path": "tests/spec-status.test.js",
+      "from": 60655,
+      "to": 63178,
+      "cite": "specs/20260909/08-next-carries-the-lanes.md"
+    },
+    {
+      "path": "tests/status/status-diet.test.js",
+      "from": 12626,
+      "to": 15884,
+      "cite": "specs/20260909/08-next-carries-the-lanes.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1329059,
+      "to": 1330422,
+      "cite": "specs/20260909/08-next-carries-the-lanes.md"
+    },
+    {
+      "path": "tests",
+      "from": 3822936,
+      "to": 3828999,
+      "cite": "specs/20260909/08-next-carries-the-lanes.md"
+    },
+    {
+      "path": "tests/mocks/chrome-harness.test.js",
+      "from": 10855,
+      "to": 11208,
+      "cite": "direct"
     }
   ]
 }

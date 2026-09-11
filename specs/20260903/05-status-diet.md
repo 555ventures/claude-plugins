@@ -16,6 +16,8 @@ diff_base: 90c89d2364043c7fe2fac506fdf76c8b9e142cd7
 
 ## Goal
 
+Amended by: ADR-0014 (specs/20260909/08-next-carries-the-lanes.md retires the named clauses of D1/D4/D5 and AC-20260903-05-1/-2/-5/-7 — see the ADR's Applies to)
+
 `/spec:status` fits one screen and answers one question: what do I paste next. The default
 render is exactly four blocks — 🗺️ Roadmap (unchanged), 🎯 Next (the paste line), up to three
 ⚠️ decide lines (one sentence, one question, one paste each), and a one-line footer. The

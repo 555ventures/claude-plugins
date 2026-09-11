@@ -5,10 +5,12 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// specs/20260903/05-status-diet.md: the default /spec:status render is exactly four blocks —
-// 🗺️ Roadmap, 🎯 Next, up to three ⚠️ decide lines, one footer — with the anomaly fold, the
-// ⚠️ Anomalies section, the lane render, the 📡 block and the headline verdict moved behind
-// `--all` or deleted outright. AC-20260903-05-1..5, -7, -8.
+// specs/20260903/05-status-diet.md: the default render is exactly four blocks — Roadmap, Next,
+// up to three decide lines, one footer (AC-20260903-05-1..5,-7,-8). specs/20260909/08-next-
+// carries-the-lanes.md (D1/D3/D4, ADR-0014) moves the lane render INTO the Next block in both
+// the default render and --all, deletes 📋 All open work, moves --all's 🕓/⛔ sections to
+// directly after the Next block's lane lines, and reworks the wait clause to "more open" /
+// "nothing else open" (AC-20260909-08-2,-5,-6,-7,-10).
 
 const SCRIPT = 'scripts/spec-status.js'
 
@@ -34,38 +36,40 @@ const BRIEFS = {
   '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n',
   '03-reports.md': '# 03 — Reports\n\nPhase: P1 · Depends on: 01, 02 ·\nPrimary workspaces: web\n',
 }
+const sp = (status, extra) => 'date: 2026-07-01\nstatus: ' + status + (extra ? '\n' + extra : '')
 
-test('AC-20260903-05-1: default render is exactly Roadmap, Next, and a footer — no lane/anomaly/observation surface, no tag on the Next line', () => {
+test('AC-20260909-08-7 (⚡ clause retired, was AC-20260903-05-1): default render footer\'s zero-wait clause reads "nothing else open"', () => {
   const dir = host({
     briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
-    specs: { '20260701/01-x.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 01' },
+    specs: { '20260701/01-x.md': sp('hardened', 'brief: 01') },
     overviewRow: '| 01 | auth | P0 | — | ✅ done |', // hand-tracked-status: 1 hygiene finding
   })
   const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
   const lines = r.stdout.split('\n')
-  const idxRoadmap = lines.findIndex(l => l.includes('🗺️ Roadmap'))
   const idxNext = lines.findIndex(l => l.includes('🎯 Next'))
-  assert.ok(idxRoadmap !== -1 && idxNext !== -1, 'test fixture bug: Roadmap and Next must both render: ' + r.stdout)
-  assert.ok(idxRoadmap < idxNext, 'D1: Roadmap must render before Next')
-  for (const forbidden of ['Anomalies', 'anomal', '⚠️ hand-tracked-status', '⛔', '🕓', '⚡', '📡']) {
-    assert.ok(!r.stdout.includes(forbidden), `D1: the default render must never contain "${forbidden}" — that surface moved behind --all or was deleted: ${r.stdout}`)
+  assert.ok(lines.findIndex(l => l.includes('🗺️ Roadmap')) < idxNext, 'D1: Roadmap must render before Next: ' + r.stdout)
+  // ⚡ deliberately dropped: D1 now legitimately lets a lane header print by default (unreachable here).
+  for (const forbidden of ['Anomalies', 'anomal', '⚠️ hand-tracked-status', '⛔', '🕓', '📡']) {
+    assert.ok(!r.stdout.includes(forbidden), `D1: forbidden "${forbidden}" moved behind --all or was deleted: ${r.stdout}`)
   }
   const nextBlockLines = lines.slice(idxNext + 1, lines.indexOf('', idxNext + 1))
   assert.deepStrictEqual(nextBlockLines, ['/spec:run @specs/20260701/01-x.md'],
     'D1: the Next block is exactly the top-pick command, no trailing ⚠️ tag even though the host carries a hygiene finding')
   const nonEmpty = lines.filter(l => l.trim() !== '')
   assert.strictEqual(nonEmpty[nonEmpty.length - 1],
-    '🟢 next is ready · nothing waits behind it · 1 hygiene finding (/spec:doctor)',
-    'D4: the one-line footer is the LAST line, carrying the verdict glyph and the hygiene count clause')
+    '🟢 next is ready · nothing else open · 1 hygiene finding (/spec:doctor)',
+    'AC-20260909-08-7/D4: the zero-wait clause is reworded to "nothing else open" — "nothing waits behind it" is retired wording')
+  assert.ok(!r.stdout.includes('could run in parallel'),
+    'AC-20260909-08-7/D4: the parallel-count footer clause is retired — reintroducing it puts a lane count beside lanes already on screen')
 })
 
-test('AC-20260903-05-2: an unblocked top pick with two other open specs prints exactly one Next command and the plural wait clause', () => {
+test('AC-20260909-08-2 ("one command line" clause retired, was AC-20260903-05-2): default render prints the top pick plus a 🚦 solo branch and the reworded "N more open" wait clause', () => {
   const dir = host({
     specs: {
-      '20260701/01-billing.md': 'date: 2026-07-01\nstatus: implementing',
-      '20260701/02-other.md': 'date: 2026-07-01\nstatus: hardened',
-      '20260701/03-another.md': 'date: 2026-07-01\nstatus: hardened',
+      '20260701/01-billing.md': sp('implementing'),
+      '20260701/02-other.md': sp('hardened'),
+      '20260701/03-another.md': sp('hardened'),
     },
   })
   const r = runNode(SCRIPT, ['--root', dir])
@@ -73,11 +77,13 @@ test('AC-20260903-05-2: an unblocked top pick with two other open specs prints e
   const lines = r.stdout.split('\n')
   const idxNext = lines.findIndex(l => l.includes('🎯 Next'))
   const nextBlockLines = lines.slice(idxNext + 1, lines.indexOf('', idxNext + 1))
-  assert.deepStrictEqual(nextBlockLines, ['/spec:run @specs/20260701/01-billing.md'],
-    'D1: exactly one command line in the Next block — the closest-to-done (implementing) entry')
+  assert.deepStrictEqual(nextBlockLines, ['/spec:run @specs/20260701/01-billing.md', '   └─ 🚦 solo'],
+    'D1(b): the default render now prints the solo branch under a single-lane pick, like --all does today')
   const nonEmpty = lines.filter(l => l.trim() !== '')
-  assert.strictEqual(nonEmpty[nonEmpty.length - 1], '🟢 next is ready · 2 wait behind it',
-    'D4: two unblocked runner-ups behind the top pick — plural wait clause, no other clause (m/k/h are all zero here)')
+  assert.strictEqual(nonEmpty[nonEmpty.length - 1], '🟢 next is ready · 2 more open',
+    'AC-20260909-08-7/D4: two unblocked runner-ups — the reworded "N more open" clause, no other clause')
+  assert.ok(!r.stdout.includes('could run in parallel'),
+    'AC-20260909-08-7/D4: the parallel-count footer clause is retired on the populated host too')
 })
 
 test('AC-20260903-05-3: a skipped-brief decide pair prints as one sentence, one question, one paste — no bracketed kind line', () => {
@@ -152,19 +158,45 @@ test('AC-20260903-05-5: five decide anomalies cap at three by default with a "2 
   assert.strictEqual(decideLinesAll.length, 5, 'D3: --all lifts the cap and prints all five decide lines: ' + all.stdout)
 })
 
-test('AC-20260903-05-7: --all prints a 🧹 Hygiene catalogue with one bracketed line per hygiene anomaly, and --all with --next is usage', () => {
+test('AC-20260909-08-6 (📋 deleted, was AC-20260903-05-7): --all prints 🧹 Hygiene with no 📋 header, and --all with --next stays a usage error', () => {
   const dir = host({
     briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
     specs: { '20260701/01-x.md': 'date: 2026-07-01\nstatus: done\nbrief: 07' }, // orphan-stamp
   })
   const r = runNode(SCRIPT, ['--root', dir, '--all'])
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout, /📋 All open work/, 'D5: --all prints the lane block under this header')
+  assert.ok(!r.stdout.includes('📋'), 'D3: the 📋 All open work header is deleted outright, under no flag')
   assert.match(r.stdout, /🧹 Hygiene \(1\) — \/spec:doctor\n\s*\[orphan-stamp\]/,
-    'D5: the hygiene catalogue prints the count and one [kind] line per hygiene anomaly')
+    'D3: the hygiene catalogue keeps its place after the decide lines, ahead of the footer, printing the count and one [kind] line per hygiene anomaly')
 
   const usage = runNode(SCRIPT, ['--root', dir, '--all', '--next'])
   assert.strictEqual(usage.status, 2, 'D5/Contracts: --all combined with --next is a usage error')
+})
+
+test('AC-20260909-08-6: --all prints 🕓 after that then ⛔ blocked right after the Next block\'s lane lines and before the first ⚠️ decide line', () => {
+  const dir = host({
+    briefs: {
+      '02-b.md': '# 02 — B\n\nPhase: P0 · Depends on: 04\n',
+      '03-c.md': '# 03 — C\n\nPhase: P0 · Depends on: —\n',
+      '04-d.md': '# 04 — D\n\nPhase: P0 · Depends on: —\n',
+    },
+    specs: {
+      '20260701/01-a-lane.md': sp('hardened', 'brief: 02'),
+      '20260701/02-a-sink.md': sp('hardened', 'brief: 02'),
+      '20260701/03-c-lane.md': sp('hardened', 'brief: 03'),
+      '20260701/04-x-blocked.md': sp('hardened', 'depends_on: [specs/20260701/01-a-lane.md]'),
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--all'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.ok(!r.stdout.includes('📋'), 'D3: 📋 All open work is deleted outright')
+  const lines = r.stdout.split('\n')
+  const idxLastLane = lines.lastIndexOf('/spec:run @specs/20260701/03-c-lane.md')
+  const idxAfterThat = lines.findIndex(l => l.includes('🕓 after that:'))
+  const idxBlocked = lines.findIndex(l => l.includes('⛔ blocked:'))
+  const idxDecide = lines.findIndex(l => l.includes('⚠️'))
+  assert.ok(idxLastLane !== -1 && idxAfterThat > idxLastLane && idxBlocked > idxAfterThat && idxBlocked < idxDecide,
+    `AC-20260909-08-6/D3: order must be lane(${idxLastLane}) < 🕓(${idxAfterThat}) < ⛔(${idxBlocked}) < ⚠️(${idxDecide}) — under --all the lane/wait/blocked sections no longer sit behind the anomaly fold: ${r.stdout}`)
 })
 
 test('AC-20260903-05-8: nothing-actionable prints the blocked-brief message and the ⬜ nothing-waits footer', () => {
@@ -184,25 +216,39 @@ test('AC-20260903-05-8: nothing-actionable prints the blocked-brief message and 
     'D4: the ⬜ nothing-waits footer, no other clause (n/m/k/h all zero on this host)')
 })
 
-test('AC-20260903-05-8: an all-blocked top entry prints its command with an ⏳ branch and the blocked footer naming the blocker', () => {
-  // Rank (implementing < hardened) decides which of the two mutually-blocked entries sorts
-  // first: 02-blocked (implementing, rank 0) sorts ahead of 01-inflight.md (hardened, rank 1),
-  // so the top entry's own blocker names the file "01-inflight" — the literal the AC pins.
+// Rank sorts 02-blocked (implementing) ahead of 01-inflight (hardened) — the top blocker names
+// "01-inflight", the literal both ACs pin.
+test('AC-20260909-08-5 / AC-20260909-08-10: an all-blocked top entry prints an ⏳ branch, no ⚡/🚦, the exact footer, and under --all its command once with ⛔ holding only the other entry', () => {
   const dir = host({
     specs: {
-      '20260701/01-inflight.md': 'date: 2026-07-01\nstatus: hardened\ndepends_on: [specs/20260701/02-blocked.md]',
-      '20260701/02-blocked.md': 'date: 2026-07-01\nstatus: implementing\ndepends_on: [specs/20260701/01-inflight.md]',
+      '20260701/01-inflight.md': sp('hardened', 'depends_on: [specs/20260701/02-blocked.md]'),
+      '20260701/02-blocked.md': sp('implementing', 'depends_on: [specs/20260701/01-inflight.md]'),
     },
   })
   const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout, /^\/spec:run @specs\/20260701\/02-blocked\.md\n\s+└─ ⏳ 01-inflight$/m,
-    'Behavior: the blocked-top entry prints its command and its ⏳ branch line exactly as --next does')
+  const topCmd = '/spec:run @specs/20260701/02-blocked.md'
+  assert.match(r.stdout, new RegExp(`^${topCmd.replace(/[/.]/g, '\\$&')}\\n\\s+└─ ⏳ 01-inflight$`, 'm'),
+    'the blocked-top entry prints its command and ⏳ branch exactly as --next does')
+  assert.ok(!r.stdout.includes('⚡') && !r.stdout.includes('🚦'), 'AC-20260909-08-5: no ⚡/🚦 — nothing unblocked to fan out from')
   const nonEmpty = r.stdout.split('\n').filter(l => l.trim() !== '')
-  // The other (mutually-blocked) entry also counts toward the wait clause, so this pins the
-  // required head-and-blocker-name prefix rather than the full line (D4's clause list is a
-  // general contract, not scoped to a zero-wait fixture the way AC-20260903-05-1/-8's other
-  // case is).
-  assert.match(nonEmpty[nonEmpty.length - 1], /^🟠 next is blocked · waiting on 01-inflight\b/,
-    'D4: the blocked head names the short blocker — waiting on 01-inflight')
+  assert.strictEqual(nonEmpty[nonEmpty.length - 1], '🟠 next is blocked · waiting on 01-inflight · 1 more open',
+    'AC-20260909-08-5/D4: the exact blocked footer, reworded wait clause')
+
+  const rAll = runNode(SCRIPT, ['--root', dir, '--all'])
+  assert.strictEqual(rAll.status, 0, rAll.stderr)
+  assert.strictEqual(rAll.stdout.split('\n').filter(l => l === topCmd).length, 1,
+    'AC-20260909-08-10/D3: top pick prints once — a ⛔ re-print is the defect this spec removes: ' + rAll.stdout)
+  assert.match(rAll.stdout, /⛔ blocked:\n\/spec:run @specs\/20260701\/01-inflight\.md/,
+    'AC-20260909-08-10/D3: ⛔ blocked keeps only the OTHER entry (01-inflight)')
+
+  // D3's other half: with the top pick filtered out, nothing survives on a single-blocked host,
+  // so the section is skipped rather than printed as a bare header over no rows.
+  const solo = host({ specs: { '20260701/01-x.md': sp('hardened', 'depends_on: [specs/20260701/02-y.md]') } })
+  const rSolo = runNode(SCRIPT, ['--root', solo, '--all'])
+  assert.strictEqual(rSolo.status, 0, rSolo.stderr)
+  assert.ok(!rSolo.stdout.includes('⛔ blocked:'),
+    'AC-20260909-08-10/D3: a lone blocked entry already printed in 🎯 Next leaves ⛔ empty — a bare header over no rows is the regression: ' + rSolo.stdout)
+  assert.strictEqual(rSolo.stdout.split('\n').filter(l => l === '/spec:run @specs/20260701/01-x.md').length, 1,
+    'AC-20260909-08-10/D3: the lone blocked entry still prints exactly once')
 })

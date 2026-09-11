@@ -34,11 +34,30 @@ function host({ briefs = {}, specs = {}, overviewRow = null } = {}) {
   return dir
 }
 
+// One red-observation ledger row naming specPath — shared by every escape-entry fixture below.
+function writeRedLedger(dir, specPath) {
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/spec-runs.jsonl'), JSON.stringify({
+    ts: '2026-08-20', stage: 'observe', spec: specPath, branch: 'main', ci: 'red',
+    sha: 'deadbee', url: 'https://github.com/x/y/actions/runs/9', runAt: '2026-08-20T09:00:00Z',
+  }) + '\n')
+}
+
 const BRIEFS = {
   '01-auth.md': '# 01 — Auth\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
   '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n',
   '03-reports.md': '# 03 — Reports\n\nPhase: P1 · Depends on: 01, 02 ·\nPrimary workspaces: web\n',
 }
+// 01/02/03 as BRIEFS but 03 depends only on 01 (not 01,02) — the shape several lane tests below
+// need for a mutually-unrelated 02/03 pair. Shared by both the parallel-annotation tests and the
+// merge-conflict tests further down, rather than repeated inline in each.
+const PARALLEL_BRIEFS = {
+  '01-auth.md': BRIEFS['01-auth.md'],
+  '02-billing.md': BRIEFS['02-billing.md'],
+  '03-reports.md': '# 03 — Reports\n\nPhase: P1 · Depends on: 01 · Primary workspaces: web\n',
+}
+// Terse spec frontmatter for the lane-render tests below — date never matters to derivation.
+const sp = (status, extra) => 'date: 2026-07-10\nstatus: ' + status + (extra ? '\n' + extra : '')
 
 // AC-20260805-01-7 (sanctioned pin exception, green pre-change): --json output must stay
 // byte-identical after parseFilePlan/splitPlanCell move into spec/scripts/lib/file-plan.js —
@@ -84,7 +103,7 @@ test('AC-20260903-05-3: flags a skipped brief as a decide pair — in-flight wor
 
 // AC-20260805-01-7 (sanctioned pin exception, green pre-change): --brief output must stay
 // byte-identical after the lib extraction (D2).
-test('AC-20260903-05-9: --brief preflight (D6 frozen surface) exit 1 with unmet dependencies, 0 when met', () => {
+test('AC-20260903-05-9 / AC-20260909-08-8: --brief preflight (D6 frozen surface) exit 1 with unmet dependencies, 0 when met', () => {
   const dir = host({
     briefs: BRIEFS,
     specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01' },
@@ -339,11 +358,7 @@ test('AC-20260901-10-6: --json emits only /spec:plan | /spec:run | /spec:escape 
     },
   })
   const redSpecPath = 'specs/20260701/01-auth-core.md'
-  fs.mkdirSync(path.join(dirA, '.claude'), { recursive: true })
-  fs.writeFileSync(path.join(dirA, '.claude/spec-runs.jsonl'), JSON.stringify({
-    ts: '2026-08-20', stage: 'observe', spec: redSpecPath, branch: 'main', ci: 'red',
-    sha: 'deadbee', url: 'https://github.com/x/y/actions/runs/9', runAt: '2026-08-20T09:00:00Z',
-  }) + '\n')
+  writeRedLedger(dirA, redSpecPath)
   const rA = runNode(SCRIPT, ['--root', dirA, '--next', '--json'])
   assert.strictEqual(rA.status, 0, rA.stderr)
   const jA = JSON.parse(rA.stdout)
@@ -498,32 +513,81 @@ test('consecutive done briefs collapse to one range row with brief and spec coun
     'the collapsed done run must replace the per-brief rows, not print alongside them')
 })
 
-test('AC-20260903-05-7 (--all retag): AC-20260901-10-4: dashboard draws unblocked parallel-ok runner-ups as lanes and sinks serial/blocked, both as /spec:run', () => {
-  const dir = host({
+// D1(b): the lane render is now the DEFAULT screen's own Next-block content — --all adds
+// nothing to it, only the 🕓/⛔ sections after it.
+test('AC-20260909-08-1: default render prints the ⚡ lane header + both lane commands inside the Next block; --all still sinks the serial/no-claim runner-ups under 🕓 and the blocked entry under ⛔', () => {
+  // AC-20260909-08-1's own literal: 01 and 02 mutually independent, only 03 depends on 01 — a
+  // different shape from PARALLEL_BRIEFS (whose 02 depends on 01, which would wrongly demote 02).
+  const lit = host({
     briefs: {
-      '01-auth.md': BRIEFS['01-auth.md'],
-      '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n',
-      '03-reports.md': '# 03 — Reports\n\nPhase: P1 · Depends on: 01 · Primary workspaces: web\n',
+      '01-a.md': '# 01 — A\n\nPhase: P0 · Depends on: —\n',
+      '02-b.md': '# 02 — B\n\nPhase: P0 · Depends on: —\n',
+      '03-c.md': '# 03 — C\n\nPhase: P1 · Depends on: 01\n',
     },
     specs: {
-      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
-      '20260710/01-billing.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
-      '20260710/02-billing-b.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
-      '20260710/03-reports.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 03',
-      '20260710/04-blocked.md': 'date: 2026-07-10\nstatus: hardened\ndepends_on: [specs/20260710/01-billing.md]',
-      '20260710/05-adhoc.md': 'date: 2026-07-10\nstatus: hardened\nbrief: n/a',
+      '20260701/01-a.md': sp('hardened', 'brief: 01'),
+      '20260701/02-b.md': sp('hardened', 'brief: 02'),
+      '20260701/03-c.md': sp('hardened', 'brief: 03'),
     },
   })
-  const r = runNode(SCRIPT, ['--root', dir, '--all'])
+  const litOut = runNode(SCRIPT, ['--root', lit])
+  assert.strictEqual(litOut.status, 0, litOut.stderr)
+  const litLines = litOut.stdout.split('\n')
+  const idxLit = litLines.findIndex(l => l.includes('🎯 Next'))
+  assert.deepStrictEqual(litLines.slice(idxLit + 1, litLines.indexOf('', idxLit + 1)), [
+    '⚡ 2 parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):',
+    '/spec:run @specs/20260701/01-a.md', '/spec:run @specs/20260701/02-b.md',
+  ], 'literal: lane header + both lane commands must render inside the default Next block: ' + litOut.stdout)
+  assert.ok(!litOut.stdout.includes('📋'), 'D3: no 📋 line anywhere')
+
+  const dir = host({
+    briefs: PARALLEL_BRIEFS,
+    specs: {
+      '20260701/01-auth-core.md': sp('done', 'brief: 01'),
+      '20260710/01-billing.md': sp('hardened', 'brief: 02'),
+      '20260710/02-billing-b.md': sp('hardened', 'brief: 02'),
+      '20260710/03-reports.md': sp('hardened', 'brief: 03'),
+      '20260710/04-blocked.md': sp('hardened', 'depends_on: [specs/20260710/01-billing.md]'),
+      '20260710/05-adhoc.md': sp('hardened', 'brief: n/a'),
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout, /⚡ 2 parallel lanes/, 'top pick + parallel-ok runner-up form the lane group')
   assert.match(r.stdout, /lanes[^\n]*\n\/spec:run @specs\/20260710\/01-billing\.md\n\/spec:run @specs\/20260710\/03-reports\.md/,
-    'lane lines are bare flush-left commands — top pick first, parallel-ok runner-up second')
-  assert.match(r.stdout, /🕓 after that:\n\/spec:run @specs\/20260710\/02-billing-b\.md\n\s+└─ ⛓️ shared brief 02/,
-    'serial runner-up sinks below the lanes with its reason on a branch line, command line bare')
-  assert.match(r.stdout, /\/spec:run @specs\/20260710\/05-adhoc\.md\n\s+└─ 🤷 no brief — parallelism unknown/,
-    'briefless runner-up gets a no-claim branch, not silently lumped in with the serial ones')
-  assert.match(r.stdout, /⛔ blocked:\n\/spec:run @specs\/20260710\/04-blocked\.md\n\s+└─ ⏳ 01-billing/, 'blocked entries close the section, each blocker a tree branch under its command')
+    'lane lines are bare commands — top pick first, runner-up second, in the DEFAULT render now')
+
+  const rAll = runNode(SCRIPT, ['--root', dir, '--all'])
+  assert.strictEqual(rAll.status, 0, rAll.stderr)
+  assert.match(rAll.stdout, /🕓 after that:\n\/spec:run @specs\/20260710\/02-billing-b\.md\n\s+└─ ⛓️ shared brief 02/,
+    'serial runner-up sinks below the lanes with its reason on a branch line — still only under --all')
+  assert.match(rAll.stdout, /\/spec:run @specs\/20260710\/05-adhoc\.md\n\s+└─ 🤷 no brief — parallelism unknown/,
+    'briefless runner-up gets a no-claim branch')
+  assert.match(rAll.stdout, /⛔ blocked:\n\/spec:run @specs\/20260710\/04-blocked\.md\n\s+└─ ⏳ 01-billing/, 'blocked entries close the section')
+})
+
+// D1(a)+(b): an escape entry ranks first, then the lane render, never duplicated elsewhere.
+test('AC-20260909-08-4: default render prints /spec:escape first, then the lane header and both lane commands, with the escape line exactly once total', () => {
+  const dir = host({
+    briefs: PARALLEL_BRIEFS,
+    specs: {
+      '20260701/01-auth-core.md': sp('done', 'brief: 01'),
+      '20260710/01-x.md': sp('hardened', 'brief: 02'),
+      '20260710/02-y.md': sp('hardened', 'brief: 03'),
+    },
+  })
+  const redSpecPath = 'specs/20260701/01-auth-core.md'
+  writeRedLedger(dir, redSpecPath)
+  const r = runNode(SCRIPT, ['--root', dir])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const lines = r.stdout.split('\n')
+  const idxNext = lines.findIndex(l => l.includes('🎯 Next'))
+  assert.deepStrictEqual(lines.slice(idxNext + 1, lines.indexOf('', idxNext + 1)), [
+    `/spec:escape @${redSpecPath}`,
+    '⚡ 2 parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):',
+    '/spec:run @specs/20260710/01-x.md', '/spec:run @specs/20260710/02-y.md',
+  ], 'D1(a)+(b): escape line first, then the lane header + both lane commands, all inside the Next block: ' + r.stdout)
+  const escapeOccurrences = r.stdout.split('\n').filter(l => l === `/spec:escape @${redSpecPath}`).length
+  assert.strictEqual(escapeOccurrences, 1, 'the /spec:escape line must print exactly once — never duplicated inside the lane list: ' + r.stdout)
 })
 
 // merge-conflict heads-up: parallel lanes are independently safe by brief, but
@@ -531,15 +595,10 @@ test('AC-20260903-05-7 (--all retag): AC-20260901-10-4: dashboard draws unblocke
 // audit showed overlap can't DECIDE parallelism (51% of unrelated-brief pairs overlap), so
 // this is a branch-line annotation under the lane list — never a change to the verdict.
 
-const PARALLEL_BRIEFS = {
-  '01-auth.md': '# 01 — Auth\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
-  '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n',
-  '03-reports.md': '# 03 — Reports\n\nPhase: P1 · Depends on: 01 · Primary workspaces: web\n',
-}
 const planBody = rows => '# spec\n\n## File Plan\n\n| File | Notes |\n|---|---|\n'
   + rows.map(r => `| \`${r}\` | — |\n`).join('')
 
-test('AC-20260903-05-7 (--all retag): AC-20260901-10-4: dashboard flags a merge-conflict heads-up when two parallel lanes share a File Plan path, both as /spec:run', () => {
+test('AC-20260909-08-3: default render flags a merge-conflict heads-up as the LAST line of the Next block when two parallel lanes share a File Plan path', () => {
   const dir = host({
     briefs: PARALLEL_BRIEFS,
     specs: {
@@ -554,15 +613,20 @@ test('AC-20260903-05-7 (--all retag): AC-20260901-10-4: dashboard flags a merge-
       },
     },
   })
-  const r = runNode(SCRIPT, ['--root', dir, '--all'])
+  const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /⚡ 2 parallel lanes/, 'shared File Plan path must NOT demote the verdict')
   assert.match(r.stdout,
     /\/spec:run @specs\/20260710\/01-billing\.md\n\/spec:run @specs\/20260710\/02-reports\.md\n\s+└─ 🔶 merge-conflict risk: spec\/shared\/util\.js/,
     'the branch line sits under the lane commands and names the shared file')
+  const lines = r.stdout.split('\n')
+  const idxNext = lines.findIndex(l => l.includes('🎯 Next'))
+  const nextBlockLines = lines.slice(idxNext + 1, lines.indexOf('', idxNext + 1))
+  assert.strictEqual(nextBlockLines[nextBlockLines.length - 1], '   └─ 🔶 merge-conflict risk: spec/shared/util.js',
+    'AC-20260909-08-3/literal: the 🔶 line is the last line of the Next block: ' + JSON.stringify(nextBlockLines))
 })
 
-test('AC-20260903-05-7 (--all retag): dashboard adds no heads-up when parallel lanes\' File Plans are disjoint', () => {
+test('AC-20260909-08-3: dashboard adds no heads-up when parallel lanes\' File Plans are disjoint', () => {
   const dir = host({
     briefs: PARALLEL_BRIEFS,
     specs: {
@@ -577,13 +641,13 @@ test('AC-20260903-05-7 (--all retag): dashboard adds no heads-up when parallel l
       },
     },
   })
-  const r = runNode(SCRIPT, ['--root', dir, '--all'])
+  const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /⚡ 2 parallel lanes/)
   assert.doesNotMatch(r.stdout, /🔶/, 'disjoint File Plans must never earn a heads-up line')
 })
 
-test('AC-20260903-05-7 (--all retag): dashboard is silent, not broken, when a parallel lane has no File Plan section', () => {
+test('AC-20260909-08-3: dashboard is silent, not broken, when a parallel lane has no File Plan section', () => {
   const dir = host({
     briefs: PARALLEL_BRIEFS,
     specs: {
@@ -598,13 +662,13 @@ test('AC-20260903-05-7 (--all retag): dashboard is silent, not broken, when a pa
       },
     },
   })
-  const r = runNode(SCRIPT, ['--root', dir, '--all'])
+  const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /⚡ 2 parallel lanes/)
   assert.doesNotMatch(r.stdout, /🔶/, 'zero rows parsed from a missing File Plan is a silent no-op')
 })
 
-test('AC-20260903-05-7 (--all retag): File Plan compound cells (a + b, comma lists, braces, trailing annotations) split into real paths', () => {
+test('AC-20260909-08-3: File Plan compound cells split into real paths', () => {
   // The only format variance the corpus audit counted (~1% of cells) — pinned here so the
   // splitter never regresses into treating a compound cell as one bogus path.
   const dir = host({
@@ -621,64 +685,59 @@ test('AC-20260903-05-7 (--all retag): File Plan compound cells (a + b, comma lis
       },
     },
   })
-  const r = runNode(SCRIPT, ['--root', dir, '--all'])
+  const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /└─ 🔶 merge-conflict risk: worker\/package\.json/,
     'worker/package.json hides inside a "a + b" compound cell — the splitter must surface it')
 })
 
-test('AC-20260903-05-7 (--all retag): AC-20260901-10-4: lane admission is pairwise — a runner-up parallel with the pick but ordered against another lane is demoted, both as /spec:run', () => {
+test('AC-20260909-08-1: lane admission is pairwise — a runner-up parallel with the pick but ordered against another lane is demoted; --all still sinks it under 🕓', () => {
   // 03 and 04 are both unrelated to the pick's brief 02, but 04 depends on 03 — vs-top-only
   // checking would draw three "parallel" lanes with a declared ordering inside the fan-out.
   const dir = host({
-    briefs: {
-      '01-auth.md': BRIEFS['01-auth.md'],
-      '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n',
-      '03-reports.md': '# 03 — Reports\n\nPhase: P1 · Depends on: 01 · Primary workspaces: web\n',
-      '04-exports.md': '# 04 — Exports\n\nPhase: P1 · Depends on: 03 · Primary workspaces: web\n',
-    },
+    briefs: { ...PARALLEL_BRIEFS, '04-exports.md': '# 04 — Exports\n\nPhase: P1 · Depends on: 03 · Primary workspaces: web\n' },
     specs: {
-      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
-      '20260701/02-reports-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 03',
-      '20260710/01-billing.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
-      '20260710/02-reports-ui.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 03',
-      '20260710/03-exports.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 04',
+      '20260701/01-auth-core.md': sp('done', 'brief: 01'),
+      '20260701/02-reports-core.md': sp('done', 'brief: 03'),
+      '20260710/01-billing.md': sp('hardened', 'brief: 02'),
+      '20260710/02-reports-ui.md': sp('hardened', 'brief: 03'),
+      '20260710/03-exports.md': sp('hardened', 'brief: 04'),
     },
   })
-  const r = runNode(SCRIPT, ['--root', dir, '--all'])
+  const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /⚡ 2 parallel lanes/, 'only the mutually-unrelated pair fans out')
   assert.match(r.stdout, /lanes[^\n]*\n\/spec:run @specs\/20260710\/01-billing\.md\n\/spec:run @specs\/20260710\/02-reports-ui\.md/,
     'pick + first admissible runner-up form the lanes')
-  assert.match(r.stdout, /🕓 after that:\n\/spec:run @specs\/20260710\/03-exports\.md\n\s+└─ ⛓️ brief 04 depends on 03/,
-    'the vs-top-parallel entry ordered against lane 03 is demoted with the pairwise reason')
+
+  const rAll = runNode(SCRIPT, ['--root', dir, '--all'])
+  assert.strictEqual(rAll.status, 0, rAll.stderr)
+  assert.match(rAll.stdout, /🕓 after that:\n\/spec:run @specs\/20260710\/03-exports\.md\n\s+└─ ⛓️ brief 04 depends on 03/,
+    'the vs-top-parallel entry ordered against lane 03 is demoted with the pairwise reason — still only under --all')
 })
 
-test('AC-20260903-05-7 (--all retag): AC-20260901-10-4: dashboard states solo out loud when the pick has no parallel lane but other work exists, as /spec:run', () => {
+test('AC-20260909-08-2: default render states solo out loud when the pick has no parallel lane but other work exists', () => {
   const dir = host({
-    briefs: {
-      '01-auth.md': BRIEFS['01-auth.md'],
-      '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n',
-    },
+    briefs: { '01-auth.md': BRIEFS['01-auth.md'], '02-billing.md': BRIEFS['02-billing.md'] },
     specs: {
-      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
-      '20260710/01-billing.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
-      '20260710/02-billing-b.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+      '20260701/01-auth-core.md': sp('done', 'brief: 01'),
+      '20260710/01-billing.md': sp('hardened', 'brief: 02'),
+      '20260710/02-billing-b.md': sp('hardened', 'brief: 02'),
     },
   })
-  const r = runNode(SCRIPT, ['--root', dir, '--all'])
+  const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.doesNotMatch(r.stdout, /⚡/, 'one lane is not a fan-out')
   assert.match(r.stdout, /\/spec:run @specs\/20260710\/01-billing\.md\n\s+└─ 🚦 solo/,
     'the solo pick says it is not parallelable instead of relying on the missing ⚡ header')
 })
 
-test('AC-20260903-05-7 (--all retag): dashboard omits the solo branch when the pick is the only open work', () => {
+test('AC-20260909-08-2: dashboard omits the solo branch when the pick is the only open work', () => {
   const dir = host({
     briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
     specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 01' },
   })
-  const r = runNode(SCRIPT, ['--root', dir, '--all'])
+  const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.doesNotMatch(r.stdout, /🚦/, 'nothing else exists to be parallel WITH — the branch would be noise')
 })
@@ -708,12 +767,9 @@ test('brief: n/a (and none/-) is deliberately briefless — no orphan-stamp, bri
   assert.match(orphans[0].detail, /04-typo\.md/)
 })
 
-// D1 (status diet, specs/20260903/05-status-diet.md): the anomaly fold and the ⚠️ Anomalies
-// section are DELETED from the default render — the screen is exactly four blocks (Roadmap,
-// Next, up to three decide lines, one footer). The old AC-20260807-01-1 order pin (Roadmap →
-// anomalies → Next → headline) is rewritten in place to the new order and retagged; this is
-// a deliberate rewrite, not a weakening (spec's own "Regression pins" note).
-test('AC-20260903-05-1 / AC-20260903-05-3 (rewritten in place, was AC-20260807-01-1): default render is Roadmap then Next then the footer, with no anomaly section anywhere', () => {
+// D1: the anomaly fold and ⚠️ Anomalies section are deleted from the default render — exactly
+// four blocks (Roadmap, Next, up to three decide lines, one footer).
+test('AC-20260903-05-1 / AC-20260903-05-3: default render is Roadmap then Next then the footer, with no anomaly section anywhere', () => {
   const dir = host({
     briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
     specs: { '20260701/01-x.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 01' },
@@ -722,20 +778,17 @@ test('AC-20260903-05-1 / AC-20260903-05-3 (rewritten in place, was AC-20260807-0
   const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
   const lines = r.stdout.split('\n')
-  const idxRoadmap = lines.findIndex((l) => l.includes('🗺️ Roadmap'))
   const idxNext = lines.findIndex((l) => l.includes('🎯 Next'))
-  assert.ok(idxRoadmap !== -1 && idxNext !== -1, 'test fixture bug: Roadmap and Next must both be present: ' + r.stdout)
-  assert.ok(idxRoadmap < idxNext, 'D1: 🗺️ Roadmap must render before 🎯 Next')
-  assert.doesNotMatch(r.stdout, /Anomalies/, 'D1: the ⚠️ Anomalies section is deleted from the default render — this repo\'s only anomaly is hygiene-kind and must be invisible here')
-  assert.doesNotMatch(r.stdout, /anomal/, 'D1: no anomaly-count language survives in the default render')
+  assert.ok(lines.findIndex((l) => l.includes('🗺️ Roadmap')) < idxNext, 'D1: Roadmap must render before Next: ' + r.stdout)
+  assert.doesNotMatch(r.stdout, /[Aa]nomal/, 'D1: no ⚠️ Anomalies section or anomaly-count language in the default render')
   const nonEmpty = lines.filter((l) => l.trim() !== '')
-  assert.strictEqual(nonEmpty[nonEmpty.length - 1], '🟢 next is ready · nothing waits behind it · 1 hygiene finding (/spec:doctor)',
-    'D4: the one-line footer is the LAST line, carries the verdict glyph and the hygiene count clause for the hand-tracked-status finding')
+  assert.strictEqual(nonEmpty[nonEmpty.length - 1], '🟢 next is ready · nothing else open · 1 hygiene finding (/spec:doctor)',
+    'D4: the footer is the LAST line — zero-wait clause reworded to "nothing else open"')
 })
 
 // D1/D3: the old anomaly-fold (a ⚠️ tag trailing the spec's own Next line) is deleted — D1's
 // own list of forbidden default-render content names "no ⚠️ tags on Next lines" explicitly.
-test('AC-20260903-05-1 (rewritten in place, was AC-20260901-10-4 fold test): a hygiene anomaly never tags the Next line and never prints a bracketed line by default', () => {
+test('AC-20260903-05-1: a hygiene anomaly never tags the Next line and never prints a bracketed line by default', () => {
   const dir = host({
     briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
     specs: { '20260701/01-x.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 07' },
@@ -747,11 +800,16 @@ test('AC-20260903-05-1 (rewritten in place, was AC-20260901-10-4 fold test): a h
   assert.doesNotMatch(r.stdout, /⚠️/, 'D1: no ⚠️ glyph anywhere in the default render when the only anomaly is hygiene-kind (no decide anomaly exists on this host)')
   assert.doesNotMatch(r.stdout, /\[orphan-stamp\]/, 'D1: no bracketed hygiene line in the default render')
   const nonEmpty = r.stdout.split('\n').filter((l) => l.trim() !== '')
-  assert.strictEqual(nonEmpty[nonEmpty.length - 1], '🟢 next is ready · nothing waits behind it · 1 hygiene finding (/spec:doctor)',
-    'D4: the orphan-stamp finding must still be visible somewhere — folded into the footer\'s hygiene clause, never on the Next line')
+  assert.strictEqual(nonEmpty[nonEmpty.length - 1], '🟢 next is ready · nothing else open · 1 hygiene finding (/spec:doctor)',
+    'D4: the orphan-stamp is folded into the footer\'s hygiene clause — zero-wait clause reworded to "nothing else open"')
 })
 
-test('AC-20260903-05-9: --pretty is a no-op (D6 frozen surface) — pretty is the default render, old call sites keep working', () => {
+// AC-20260909-08-8 (sanctioned green pre-change, D5): these five frozen surfaces are byte-for-
+// byte unchanged by the lane-render move — coverage lives in the pre-existing --brief, --pretty,
+// --next, and --json/--next --json key-set pins below, each retagged in place with this AC-ID
+// rather than duplicated into a new test.
+
+test('AC-20260903-05-9 / AC-20260909-08-8: --pretty is a no-op (D6 frozen surface) — pretty is the default render, old call sites keep working', () => {
   const dir = host({
     briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
     specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 01' },
@@ -766,7 +824,7 @@ test('AC-20260903-05-9: --pretty is a no-op (D6 frozen surface) — pretty is th
 
 // AC-20260805-01-7 (sanctioned pin exception, green pre-change): --next output must stay
 // byte-identical after the lib extraction (D2).
-test('AC-20260901-10-4 / AC-20260903-05-9 (D6 frozen surface): --next prints only the header and the top pick, @-prefixed, as /spec:run', () => {
+test('AC-20260901-10-4 / AC-20260903-05-9 / AC-20260909-08-8 (D6 frozen surface): --next prints only the header and the top pick, @-prefixed, as /spec:run', () => {
   const dir = host({
     briefs: {},
     specs: {
@@ -1003,7 +1061,7 @@ test('AC-20260902-11-6: WHEN spec-status.js runs on a root whose design/mocks/le
 // AC-20260903-05-9 (retag): this is the --json/--next --json top-level key-set pin the spec's
 // D6 (frozen surfaces) targets — the additive `audience` field lands on individual anomaly
 // objects, never on the top-level key set pinned here.
-test('AC-20260902-11-7 / AC-20260903-05-9: WHEN spec-status.js --json and --next --json run on a root whose ledger has catches THE SYSTEM CONTINUES TO emit the same top-level keys as before this spec, with no misunderstandings key', () => {
+test('AC-20260902-11-7 / AC-20260903-05-9 / AC-20260909-08-8: WHEN spec-status.js --json and --next --json run on a root whose ledger has catches THE SYSTEM CONTINUES TO emit the same top-level keys as before this spec, with no misunderstandings key', () => {
   const dir = host({
     briefs: BRIEFS,
     specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01' },

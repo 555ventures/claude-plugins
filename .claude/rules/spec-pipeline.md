@@ -167,9 +167,13 @@ upstream bug list. -->
   specs/20260907/10-client-review.md D15)
 - `[host]` A spec Decision naming a literal version-bump target can be stale by build time —
   concurrent sessions in this repo race the same semver. The build bumps to the next free
-  version and records the deviation; the spec's literal number is a target, not a pin.
+  version and records the deviation; the spec's literal number is a target, not a pin. Same class,
+  second surface: a Decision naming the literal filename of an ADR it will CREATE races the same
+  way — a sibling landing first claims that number, and the build ships the next free one. Take
+  the next number, then amend the spec's own Decision, File Plan row and every `Amended by:`
+  backlink to it in the same build, or scope-reconcile reports the created path out-of-plan.
   (specs/20260810/02-terminal-observable-acs.md D11; specs/20260901/08-corpus-derivation-and-kill-match.md D10;
-  specs/20260907/08-walk-critic.md D11)
+  specs/20260907/08-walk-critic.md D11; specs/20260909/08-next-carries-the-lanes.md D6)
 - `[host]` A locked Decision that retires or narrows a literal glyph, phrase, or claim from
   doctrine prose can leave a live assertion of the retired form **outside** the spec's File
   Plan — in test files (dense regex pins) or the doctrine corpus itself (paraphrased or

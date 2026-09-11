@@ -7,7 +7,7 @@ const { runNode, tmpdir } = require('../helpers')
 const {
   SCRIPT,
   bare, mark, decideLook,
-  advanceToCanonWritten, advanceToJourneyApproved, advanceToJourneyWalked,
+  advanceToCanonWritten, advanceToJourneyApproved, advanceToJourneyWalked, confirmEveryJourney,
   freePort, stubNpx,
 } = require('./mocks-driver-fixtures')
 
@@ -56,6 +56,10 @@ test('AC-20260907-07-9: in APPROVED the bare driver prints the exact theme-less 
   // marks.approved — the terminal-step assertion below is vacuous unless the journey is walked
   // before `--mark approved`, or the bare re-run prints the WALK block instead of APPROVED.
   advanceToJourneyWalked(dir)
+  // specs/20260910/03-client-journey-player.md D7 fixture repair: `--mark approved` now
+  // refuses while a seed journey is unconfirmed by the client, so this setup records the
+  // confirmation to keep the precondition it actually pins isolated.
+  confirmEveryJourney(dir)
   decideLook(dir, 'approved', 'approve', { by: 'Ren' })
   const accepted = mark(dir, 'approved')
   assert.strictEqual(accepted.status, 0, 'test setup requires the approved mark to be accepted for the terminal-step assertion below: ' + accepted.stdout + accepted.stderr)

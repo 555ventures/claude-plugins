@@ -88,7 +88,7 @@ The terminal step: expose the running serve, then `client open --address <url>` 
 A client answers questions and raises notes on the served pages; a mock-scope note captures its screen at raise. `node {driver} notes open` triages each into one bin: **mock detail**
 (`notes address --id <id> --change "<what changed>" [--port <n>]` — client-origin mock-scope notes require `--port`, refusing if the screen is unchanged), **product understanding**
 (a ledger row first, same call plus `--ledger <rowId>`), **question back** (`notes reply --id <id> --text "<question>"`), or **propose to decline**.
-A canon-primitive note edits canon.md first. Only the client resolves a note on the page, or `notes waive --id <id> --reason "<r>"` releases it after seven days of silence.
+A canon-primitive note edits canon.md first. Only the client resolves a note on the page, or `notes waive --id <id> --reason "<r>"` releases it after seven days of silence. The client also walks each journey to confirmation on `/client/index.html`; `client log [--journey <j>]` prints each journey's sentence or its open count and misses, `client waive --journey <j> --reason "<r>"` releases an unconfirmed one after seven days, and `--mark approved` refuses until every journey is confirmed or waived (§ Mocks: Client Player).
 Then `stop open signoff`; `decided approve` runs `{driver} --mark approved`, printing `waived: N` plus each reason, and stamps every top-level mock `data-status="approved"`.
 
 ## Report

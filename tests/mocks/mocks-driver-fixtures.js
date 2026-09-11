@@ -6,6 +6,7 @@ const http = require('node:http')
 const crypto = require('node:crypto')
 const { tmpdir, runNode, freePort, serveAtlas } = require('../helpers')
 const picksLib = require('../../spec/scripts/lib/mocks-picks')
+const walkLib = require('../../spec/scripts/lib/mocks-walk')
 
 // mocks-driver family shared fixtures — split from tests/mocks/mocks-driver.test.js by
 // specs/20260903/07-test-file-budget-guard.md's per-file 45s guard (that file's own review run
@@ -476,9 +477,26 @@ function advanceToJourneyWalked(dir, journeyName = JOURNEY) {
 // advanceToApproved routes through advanceToJourneyWalked (which itself routes through
 // advanceToJourneyApproved) in place of its prior direct call, so every caller reaching
 // APPROVED has walked its journey first.
+
+// specs/20260910/03-client-journey-player.md D7: `--mark approved` refuses while any seed
+// journey is neither confirmed by the client nor waived, so every fixture chain reaching
+// APPROVED records the client's confirmation first — through lib/mocks-walk.js, the one writer
+// of walk.json, never a hand-written file. The sentence is the fixture's stand-in for what the
+// client types on /client/walk/<j>.html; a test asserting on the sentence writes its own.
+function confirmEveryJourney(dir) {
+  const st = readStatusOrEmpty(dir)
+  let walk = walkLib.readWalk(dir)
+  for (const jn of Object.keys(st.journeys || {})) {
+    if (walkLib.isClosed(walk, jn)) continue
+    walk = walkLib.confirmJourney(walk, { journey: jn, sentence: 'walked it end to end', at: new Date().toISOString() })
+  }
+  walkLib.writeWalk(dir, walk)
+}
+
 function advanceToApproved(dir) {
   if (readMarksOrEmpty(dir).approved) return
   advanceToJourneyWalked(dir)
+  confirmEveryJourney(dir)
   decideLook(dir, 'approved', 'approve', { by: 'Ren' })
   const r = mark(dir, 'approved')
   assert.strictEqual(r.status, 0, 'test setup requires approved to be accepted once every journey is approved and walked, the approved stop is decided approve, notes are resolved, and render-gate/matrix check hold: ' + r.stderr)
@@ -573,7 +591,7 @@ module.exports = {
   decideLook, openLook, freePort, startServe, stopServe, getBody,
   writeFixtureCapture, writeCaptureConfig,
   advanceToSeedDone, advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToJourneyApproved,
-  advanceToJourneyWalked, advanceToApproved,
+  advanceToJourneyWalked, advanceToApproved, confirmEveryJourney,
   writeShortSeed, advanceToShortJourneyDrawn,
   stubNpx,
 }

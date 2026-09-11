@@ -1,6 +1,6 @@
 ---
 date: 2026-09-10
-status: hardened
+status: implementing
 tier: standard
 area: design-atlas
 design: false
@@ -9,6 +9,8 @@ depends_on: [specs/20260910/02-click-to-advance-and-real-records.md, specs/20260
 depended_on_by: [specs/20260910/04-theme-before-the-client-walk.md, specs/20260910/05-what-the-journey-does-not-do.md]
 brief: 22a
 open_markers: 0
+build_base: main
+diff_base: 360152d3860e82efa328bcf628442e1b0d61460e
 ---
 
 # The client walks one journey at a time: a player advanced by the real control, the session's guesses marked on the screen, approve unlocked by reaching the end, one sentence at approve
@@ -62,11 +64,18 @@ the `.wk-*` register; both are authored in-session, never by a subagent.
 | spec/commands/mocks.md | MODIFY | doctrine | D9 |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D10 bump |
 | size-baseline.json | MODIFY | other | D11 raise, cited to this spec |
+| dup-baseline.json | MODIFY | other | D7 fixture repair tightened two windows — `dup-windows.js --update` (a lowering, not a raise) |
 | tests/mocks/walk-page.test.js | CREATE | tests | AC-20260910-03-1, AC-20260910-03-2, AC-20260910-03-3 |
 | tests/mocks/mocks-walk.test.js | CREATE | tests | AC-20260910-03-4 |
 | tests/mocks/client-walk-route.test.js | CREATE | tests | AC-20260910-03-5, AC-20260910-03-6, AC-20260910-03-10 |
-| tests/mocks/mocks-driver-client-2.test.js | CREATE | tests | AC-20260910-03-7, AC-20260910-03-8 |
+| tests/mocks/mocks-driver-client-3.test.js | CREATE | tests | AC-20260910-03-7, AC-20260910-03-8 |
 | tests/consistency/design-doctrine.test.js | MODIFY | tests | AC-20260910-03-9 |
+| tests/mocks/mocks-driver-fixtures.js | MODIFY | tests | D7 fixture repair: `confirmEveryJourney` — every chain reaching APPROVED records the client confirmation first |
+| tests/mocks/mocks-driver-2.test.js | MODIFY | tests | D7 fixture repair: two stale `approved` setups confirm the journey so each pins its own precondition |
+| tests/mocks/mocks-driver-client-2.test.js | MODIFY | tests | D7 fixture repair: four stale `approved` setups confirm the journey |
+| tests/mocks/mocks-driver-look-stops-2.test.js | MODIFY | tests | D7 fixture repair: the no-stop `approved` refusal setup confirms the journey |
+| tests/mocks/mocks-driver-look-stops-4.test.js | MODIFY | tests | D7 fixture repair: the terminal-step setup confirms the journey |
+| tests/mocks/mocks-notes.test.js | MODIFY | tests | D7 fixture repair: the `approved` note-gate setup confirms the journey |
 
 ## Contracts
 
@@ -122,10 +131,10 @@ marks `approved` once every journey is confirmed or, after seven days of silence
 - **AC-20260910-03-2**: WHEN `buildWalkPage` runs over `onboarding` (four screens, `signin` declaring `empty,error`) with two open questions on `signin` and one answered THE SYSTEM SHALL render one `[data-wk="frame"]` with no `src`, four `[data-wk="thumb"]` in seed order with `data-states="empty,error"` on `signin`'s, exactly two `[data-wk="mark"][data-label="signin"]` each carrying `data-wk="yes"`, `data-wk="no"` and `data-wk="why"`, `[data-wk="left"][data-count="2"]`, `[data-wk="approve"][hidden]` with `[data-wk="confirm"]`, and no author input; over a journey whose `walk.json` record carries `sentence` THE SYSTEM SHALL render the sentence text inside `[data-wk="approve"]` and no `[data-wk="confirm"]` → `tests/mocks/walk-page.test.js`
 - **AC-20260910-03-3**: WHEN `walk.browser.js` runs under `vm` against the D1 markup with a stub `fetch` answering `state` as `{reached:['signin','invite'], …}` THE SYSTEM SHALL set the frame `src` to `/mocks/invite.html?clean&walk`, show only `[data-wk="mark"][data-label="invite"]`, keep `[data-wk="approve"]` hidden; on a `message` `{walk:'to', from:'invite', to:'consent'}` it SHALL `fetch` `POST /client/__walk/event` with that body and set the frame `src` to `/mocks/consent.html?clean&walk`; on `{walk:'miss', …}` it SHALL post the event and leave `src` unchanged; once `reached` contains the last label it SHALL unhide `[data-wk="approve"]` and, with `data-count="0"`, enable `[data-wk="confirm"]`; a `[data-wk="yes"]` click SHALL post `/client/__notes/answer` with `by:'client'` and no author prompt SHALL be called → `tests/mocks/walk-page.test.js`
 - **AC-20260910-03-4**: WHEN `recordEvent` receives `{journey:'onboarding', walk:'to', from:'signin', to:'invite'}` twice over an empty walk THE SYSTEM SHALL leave `reached` as `['signin','invite']` (`from` and `to` each appended once, in that order, never duplicated); a `miss` SHALL append `{at, from, target}` to `misses` and leave `reached` unchanged; `confirmJourney` with `sentence: ''` SHALL throw naming the journey, with a sentence SHALL set `confirmedAt` and `sentence`, and a second confirm SHALL throw `already confirmed`; `waiveJourney` at six days since `openedAt` SHALL throw naming `6` and `7`, at seven SHALL set `waived` — `isClosed` true after either → `tests/mocks/mocks-walk.test.js`
-- **AC-20260910-03-5**: WHEN the served handler receives `GET /client/index.html` THE SYSTEM SHALL answer 200 with the D1 index; `GET /client/walk/onboarding.html` 200 with the player and `GET /client/walk/nope.html` 404 naming `onboarding`; `GET /client/__walk/state?journey=onboarding` 200 `{reached:['signin'],misses:[],confirmedAt:null,sentence:null,waived:null}` on a cold root; `POST /client/__walk/event` with `{journey:'onboarding', walk:'miss', from:'signin', target:'button#help'}` 200 and the miss on disk; `POST /client/__walk/confirm` with an empty sentence 400, with a sentence 200 and `confirmedAt` on disk, again 409; `POST /__walk/event` (non-client) 404; `GET /__walk/player.js` 200 byte-verbatim `walk.browser.js` with `no-store` → `tests/mocks/client-walk-route.test.js`
+- **AC-20260910-03-5**: WHEN the served handler receives `GET /client/index.html` THE SYSTEM SHALL answer 200 with the D1 index; `GET /client/walk/onboarding.html` 200 with the player and `GET /client/walk/nope.html` 404 naming `onboarding`; `GET /client/__walk/state?journey=onboarding` 200 `{reached:[],misses:[],confirmedAt:null,sentence:null,waived:null}` on a cold root; `POST /client/__walk/event` with `{journey:'onboarding', walk:'miss', from:'signin', target:'button#help'}` 200 and the miss on disk; `POST /client/__walk/confirm` with an empty sentence 400, with a sentence 200 and `confirmedAt` on disk, again 409; `POST /__walk/event` (non-client) 404; `GET /__walk/player.js` 200 byte-verbatim `walk.browser.js` with `no-store` → `tests/mocks/client-walk-route.test.js`
 - **AC-20260910-03-6**: WHEN `POST /client/__notes/answer` receives `{id:'N003', verdict:'no', text:'配送先は3つまで', by:'client'}` over ledger row `W7` (`inferred`, `open`) THE SYSTEM SHALL answer 200 with `promoted` naming a new row id, and `ledger.md` SHALL carry `W7` as `overridden <today>` and the new row as `| CLIENT | product | 配送先は3つまで | said-by-user | confirmed <today> | - | - | corrects W7 |` → `tests/mocks/client-walk-route.test.js`
-- **AC-20260910-03-7**: WHEN `--mark approved` runs with every other precondition met and `walk.json` absent THE SYSTEM SHALL exit 2 with stderr containing `journey "onboarding" is not confirmed by the client` and `client waive --journey onboarding`; with the journey confirmed it SHALL accept and stdout SHALL carry `client: onboarding — "<sentence>"` before `waived:`; with the journey waived it SHALL accept and carry `waived journeys: 1` → `tests/mocks/mocks-driver-client-2.test.js`
-- **AC-20260910-03-8**: WHEN `client waive --journey onboarding --reason "no reply"` runs six days after `status.client.openedAt` THE SYSTEM SHALL exit 2 naming `6` day(s) and `7`; at seven days it SHALL exit 0 and `walk.json` SHALL carry `waived.reason` `"no reply"`; `client log` over a record with two misses on `signin` (same target) and one on `invite` SHALL print `open — reached 2/4`, `  signin: button#help Need help? (2×)` and `  invite: a Back (1×)` → `tests/mocks/mocks-driver-client-2.test.js`
+- **AC-20260910-03-7**: WHEN `--mark approved` runs with every other precondition met and `walk.json` absent THE SYSTEM SHALL exit 2 with stderr containing `journey "onboarding" is not confirmed by the client` and `client waive --journey onboarding`; with the journey confirmed it SHALL accept and stdout SHALL carry `client: onboarding — "<sentence>"` before `waived:`; with the journey waived it SHALL accept and carry `waived journeys: 1` → `tests/mocks/mocks-driver-client-3.test.js`
+- **AC-20260910-03-8**: WHEN `client waive --journey onboarding --reason "no reply"` runs six days after `status.client.openedAt` THE SYSTEM SHALL exit 2 naming `6` day(s) and `7`; at seven days it SHALL exit 0 and `walk.json` SHALL carry `waived.reason` `"no reply"`; `client log` over a record with two misses on `signin` (same target) and one on `invite` SHALL print `open — reached 2/4`, `  signin: button#help Need help? (2×)` and `  invite: a Back (1×)` → `tests/mocks/mocks-driver-client-3.test.js`
 - **AC-20260910-03-9**: WHEN `spec/doctrine/mocks.md` is read THE SYSTEM SHALL carry a `## Mocks: Client Player` heading, the literal `confirmed-or-waived` in § Mocks: State Machine's CLIENT sentence, and no `Client review is the same page` sentence; `spec/commands/mocks.md` § Client review SHALL carry `client log` and `client waive` → `tests/consistency/design-doctrine.test.js`
 - **AC-20260910-03-10**: WHEN `POST /__notes/answer` (non-client) receives a `no` with text THE SYSTEM SHALL CONTINUE TO write only the row's `overridden` status and SHALL CONTINUE TO append no row → `tests/mocks/client-walk-route.test.js`
 

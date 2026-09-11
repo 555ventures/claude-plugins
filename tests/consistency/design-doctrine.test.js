@@ -606,3 +606,44 @@ test('AC-20260910-06-4: spec/doctrine/mocks.md § Mocks: Authoring Rules carries
   assert.ok(commandsSrc.includes('records/'),
     'D4: ' + commandsPath + ' must name "records/" — the SEED records ask and the WIREFRAMES draw-with-them line: got no "records/" anywhere in the file')
 })
+
+// ---------------------------------------------------------------------------
+// AC-20260910-03-9
+// ---------------------------------------------------------------------------
+// specs/20260910/03-client-journey-player.md D9: spec/doctrine/mocks.md gains a
+// "## Mocks: Client Player" heading and the CLIENT sentence in § Mocks: State Machine is
+// rewritten to close on "confirmed-or-waived" (the walk/confirm mechanism this spec adds, in
+// place of the retired "answered/raised" description); § Mocks: Page Notes' "Client review is
+// the same page and the same notes" sentence is retired along with it (the client route is now
+// the dedicated player, not the session's own review page). spec/commands/mocks.md § Client
+// review names `client log` and `client waive`. Every assertion below is red pre-D9: the
+// heading does not exist, the CLIENT sentence carries none of "confirmed-or-waived", the
+// retired sentence is still present, and neither `client log` nor `client waive` is named yet.
+test('AC-20260910-03-9: spec/doctrine/mocks.md carries a "## Mocks: Client Player" heading, § Mocks: State Machine\'s CLIENT sentence carries the literal "confirmed-or-waived", and the file carries no "Client review is the same page" sentence; spec/commands/mocks.md § Client review names "client log" and "client waive"', () => {
+  const mocksDoctrinePath = 'spec/doctrine/mocks.md'
+  const src = read(mocksDoctrinePath)
+
+  assert.ok(src.includes('## Mocks: Client Player'),
+    'D9: ' + mocksDoctrinePath + ' must carry a "## Mocks: Client Player" heading naming the pages, the walk record, walk-to-unlock and the promotion rule: got no such heading in the file')
+
+  const stateMachineIdx = src.indexOf('## Mocks: State Machine')
+  assert.ok(stateMachineIdx !== -1, mocksDoctrinePath + ' must carry a "## Mocks: State Machine" heading')
+  const stateMachineNextIdx = src.indexOf('\n## ', stateMachineIdx + 1)
+  const stateMachineSection = src.slice(stateMachineIdx, stateMachineNextIdx === -1 ? src.length : stateMachineNextIdx)
+  assert.ok(stateMachineSection.includes('confirmed-or-waived'),
+    'D9: § Mocks: State Machine\'s CLIENT sentence must carry the literal "confirmed-or-waived" — the walk/confirm-or-waive closure this spec adds: got\n' + stateMachineSection)
+
+  assert.ok(!src.includes('Client review is the same page'),
+    'D9: ' + mocksDoctrinePath + ' must carry no "Client review is the same page" sentence — the client route is now the dedicated player, not the session\'s review page restated: got the retired sentence still present')
+
+  const commandsPath = 'spec/commands/mocks.md'
+  const commandsSrc = read(commandsPath)
+  const clientReviewIdx = commandsSrc.indexOf('## Client review')
+  assert.ok(clientReviewIdx !== -1, commandsPath + ' must carry a "## Client review" heading')
+  const clientReviewNextIdx = commandsSrc.indexOf('\n## ', clientReviewIdx + 1)
+  const clientReviewSection = commandsSrc.slice(clientReviewIdx, clientReviewNextIdx === -1 ? commandsSrc.length : clientReviewNextIdx)
+  assert.ok(clientReviewSection.includes('client log'),
+    'D9: ' + commandsPath + ' § Client review must name `client log`: got\n' + clientReviewSection)
+  assert.ok(clientReviewSection.includes('client waive'),
+    'D9: ' + commandsPath + ' § Client review must name `client waive`: got\n' + clientReviewSection)
+})

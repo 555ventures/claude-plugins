@@ -25,7 +25,7 @@
     "tests/consistency/retired-flags.test.js": 1,
     "tests/consistency/wire-register.test.js": 2,
     "tests/design-atlas-index.test.js": 8,
-    "tests/design-atlas.test.js": 26,
+    "tests/design-atlas.test.js": 44,
     "tests/design-shell.test.js": 13,
     "tests/dup-windows/dup-windows.test.js": 1,
     "tests/fleet-reader/corpus-gaps.test.js": 1,
@@ -46,11 +46,13 @@
     "tests/genesis/tournament.test.js": 8,
     "tests/init-gen/generate.test.js": 47,
     "tests/merge-back.test.js": 2,
+    "tests/mocks/client-route.test.js": 8,
+    "tests/mocks/client-walk-route.test.js": 8,
     "tests/mocks/mocks-driver-2.test.js": 2,
     "tests/mocks/mocks-driver-3.test.js": 1,
     "tests/mocks/mocks-driver-4.test.js": 2,
-    "tests/mocks/mocks-driver-client-2.test.js": 7,
-    "tests/mocks/mocks-driver-client.test.js": 7,
+    "tests/mocks/mocks-driver-client-2.test.js": 3,
+    "tests/mocks/mocks-driver-client.test.js": 3,
     "tests/mocks/mocks-driver-fixtures.js": 26,
     "tests/mocks/mocks-driver-look-stops-2.test.js": 3,
     "tests/mocks/mocks-driver-look-stops-3.test.js": 1,
@@ -61,6 +63,7 @@
     "tests/mocks/mocks-notes.test.js": 26,
     "tests/mocks/notes-layer-navigation.test.js": 3,
     "tests/mocks/walk-mode.test.js": 3,
+    "tests/mocks/walk-page.test.js": 18,
     "tests/provenance/provenance.test.js": 3,
     "tests/question-style-gate.test.js": 4,
     "tests/queue/queue-overlay.test.js": 13,
@@ -128,6 +131,30 @@
       "from": 0,
       "to": 1,
       "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "tests/design-atlas.test.js",
+      "from": 26,
+      "to": 44,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "tests/mocks/walk-page.test.js",
+      "from": 0,
+      "to": 18,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "tests/mocks/client-route.test.js",
+      "from": 0,
+      "to": 8,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "tests/mocks/client-walk-route.test.js",
+      "from": 0,
+      "to": 8,
+      "cite": "specs/20260910/03-client-journey-player.md"
     }
   ]
 }

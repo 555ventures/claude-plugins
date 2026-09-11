@@ -8,7 +8,7 @@ const {
   SCRIPT, JOURNEY,
   bare, mark, stateOf, statusPath, statusJson, ledgerCmd,
   decideLook, freePort, startServe, stopServe,
-  advanceToJourneyWalked, advanceToApproved, advanceToSeedDone,
+  advanceToJourneyWalked, advanceToApproved, confirmEveryJourney, advanceToSeedDone,
   stubNpx,
   notesPath, writeNotesFile, readNotesFile, nowIso, isoDaysAgo, patchStatus, sha256, stubNpxScreenshot,
 } = require('./mocks-driver-fixtures')
@@ -126,6 +126,10 @@ test('AC-20260907-10-15: --mark approved on a root holding two waived notes prin
     { id: 'N001', scope: 'project', screen: null, state: null, text: 'x', by: 'client', at: nowIso(), status: 'resolved', addressed: null, reply: null, resolvedBy: 'waiver', resolvedAt: nowIso(), origin: 'client', lastClientAt: nowIso(), resolution: null, capture: null, waived: { at: nowIso(), reason: 'client gone quiet', by: 'session' }, answer: null },
     { id: 'N002', scope: 'project', screen: null, state: null, text: 'y', by: 'client', at: nowIso(), status: 'resolved', addressed: null, reply: null, resolvedBy: 'waiver', resolvedAt: nowIso(), origin: 'client', lastClientAt: nowIso(), resolution: null, capture: null, waived: { at: nowIso(), reason: 'no reply after outreach', by: 'session' }, answer: null },
   ])
+  // specs/20260910/03-client-journey-player.md D7 fixture repair: `--mark approved` now
+  // refuses while a seed journey is unconfirmed by the client, so this setup records the
+  // confirmation to keep the precondition it actually pins isolated.
+  confirmEveryJourney(withWaived)
   const accepted = mark(withWaived, 'approved')
   assert.strictEqual(accepted.status, 0, 'AC-15: `--mark approved` must accept once every note is resolved (waived counts as resolved): ' + accepted.stdout + accepted.stderr)
   assert.match(accepted.stdout, /waived: 2/, 'AC-15: the accepted output must print "waived: 2": ' + accepted.stdout)
@@ -137,6 +141,7 @@ test('AC-20260907-10-15: --mark approved on a root holding two waived notes prin
   const noWaived = tmpdir('approved-no-waived')
   advanceToJourneyWalked(noWaived)
   decideLook(noWaived, 'approved', 'approve', { by: 'Ren' })
+  confirmEveryJourney(noWaived)
   const accepted2 = mark(noWaived, 'approved')
   assert.strictEqual(accepted2.status, 0, 'AC-15: `--mark approved` with no waived notes must accept: ' + accepted2.stdout + accepted2.stderr)
   assert.match(accepted2.stdout, /waived: 0/, 'AC-15: with no waived notes the accepted output must print "waived: 0": ' + accepted2.stdout)
@@ -148,6 +153,10 @@ test('AC-20260907-10-15: --mark approved on a root holding two waived notes prin
 test('AC-20260907-10-16 (SHALL CONTINUE TO): --mark approved refuses with no decided approved stop (naming stop open signoff), on an unresolved mock note anchored to any declared label, and on any journey whose approved is unset', () => {
   const noStop = tmpdir('approved-nostop')
   advanceToJourneyWalked(noStop)
+  // specs/20260910/03-client-journey-player.md D7 fixture repair: `--mark approved` now
+  // refuses while a seed journey is unconfirmed by the client, so this setup records the
+  // confirmation to keep the precondition it actually pins isolated.
+  confirmEveryJourney(noStop)
   const r1 = mark(noStop, 'approved')
   assert.strictEqual(r1.status, 2, 'AC-16: `--mark approved` with no decided approved stop must CONTINUE TO exit 2: ' + r1.stdout + r1.stderr)
   assert.match(r1.stderr + r1.stdout, /stop open signoff/, 'AC-16: the refusal must CONTINUE TO name `stop open signoff`: ' + r1.stdout + r1.stderr)
@@ -158,6 +167,10 @@ test('AC-20260907-10-16 (SHALL CONTINUE TO): --mark approved refuses with no dec
   writeNotesFile(unresolvedNote, [
     { id: 'N001', scope: 'mock', screen: 'signin', state: 'error', text: 'x', by: 'session', at: nowIso(), status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null },
   ])
+  // specs/20260910/03-client-journey-player.md D7 fixture repair: `--mark approved` now
+  // refuses while a seed journey is unconfirmed by the client, so this setup records the
+  // confirmation to keep the precondition it actually pins isolated.
+  confirmEveryJourney(unresolvedNote)
   const r2 = mark(unresolvedNote, 'approved')
   assert.strictEqual(r2.status, 2, 'AC-16: `--mark approved` on an unresolved mock note must CONTINUE TO exit 2: ' + r2.stdout + r2.stderr)
 

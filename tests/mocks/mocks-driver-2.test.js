@@ -11,7 +11,7 @@ const {
   writeCanon, writeWireframe, writeKitCanon,
   decideLook,
   advanceToSeedDone, advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToJourneyApproved,
-  advanceToJourneyWalked, advanceToApproved,
+  advanceToJourneyWalked, advanceToApproved, confirmEveryJourney,
   ledgerCmd,
   writeFixtureCapture, writeCaptureConfig,
   stubNpx, freePort, startServe, stopServe,
@@ -57,6 +57,10 @@ test('AC-20260907-07-5 / AC-20260907-07-12 / AC-20260907-08-12 (retag of AC-2026
   assert.strictEqual('theme' in statusJson(dir), false,
     'test setup requires status.json to carry no top-level "theme" key at all, or the "approved with no theme" assertion below is vacuous: ' + JSON.stringify(statusJson(dir)))
 
+  // specs/20260910/03-client-journey-player.md D7 fixture repair: `--mark approved` now
+  // refuses while a seed journey is unconfirmed by the client, so this setup records the
+  // confirmation to keep the precondition it actually pins isolated.
+  confirmEveryJourney(dir)
   const openNote = { id: 'N001', scope: 'mock', screen: 'consent', state: null, text: 'wording is off', by: 'Ren', at: new Date().toISOString(), status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null }
   writeFile(path.join(dir, 'design/mocks/notes.json'), JSON.stringify([openNote]))
   const noteBlocked = mark(dir, 'approved')
@@ -123,6 +127,10 @@ test('AC-20260905-06-9 / AC-20260906-02-5: --mark approved on a host declaring n
   // The chain up to here (via advanceToJourneyApproved) declared a fixture capture command so
   // every earlier journey-approved mark could pass predictably — this AC needs a host declaring
   // NO design block at all when the final `approved` mark itself runs.
+  // specs/20260910/03-client-journey-player.md D7 fixture repair: `--mark approved` now
+  // refuses while a seed journey is unconfirmed by the client, so this setup records the
+  // confirmation to keep the precondition it actually pins isolated.
+  confirmEveryJourney(dir)
   fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({}))
 
   const r = runNode(SCRIPT, ['--root', dir, '--mark', 'approved'],

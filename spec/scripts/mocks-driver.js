@@ -17,6 +17,8 @@
 // mocks-driver.js --root <dir> notes reply --id <id> --text "<question back>"
 // mocks-driver.js --root <dir> notes waive --id <id> --reason "<r>" [--by <who>]
 // mocks-driver.js --root <dir> client open --address <url>
+// mocks-driver.js --root <dir> client waive --journey <j> --reason "<r>"
+// mocks-driver.js --root <dir> client log [--journey <j>]
 // mocks-driver.js --root <dir> look <label> [--state <s>] [--out <png>] [--port <n>]
 // mocks-driver.js --root <dir> look-probe | look-via <playwright|browser>
 // mocks-driver.js --root <dir> stop open <step> [--port <n>]   shapes | kit | journey:<j> | signoff
@@ -53,6 +55,15 @@
 // after image and moves the note to "addressed". D8: `notes waive --id --reason` releases a
 // client-origin note or a question after seven days of client silence — a question's ledger row
 // becomes `waived <date>`, printed by `--mark approved` (D9/D10) before the checkpoint line.
+//
+// specs/20260910/03-client-journey-player.md D7: `--mark approved` additionally refuses (before
+// the ledger gate) while any seed journey is neither confirmed nor waived in design/mocks/
+// walk.json (lib/mocks-walk.js's isClosed) — `client waive --journey <j> --reason "<r>"` is the
+// remedy the refusal names, mirroring `notes waive`'s own seven-day-silence clock but over a
+// whole journey; `client log [--journey <j>]` prints each journey's confirmed sentence or its
+// reached/total count, then its misses grouped and counted. The accepted `approved` tail gains
+// one `client: <j> — "<sentence>"` line per confirmed journey and a `waived journeys: <n>` line,
+// both before the existing `waived: N` (notes) line.
 //
 // WHY: specs/20260902/07-mocks-command-driver.md — `/spec:mocks` is the standalone design
 // stage; this driver derives SEED -> SHAPES -> KIT -> WIREFRAMES -> WALK -> CLIENT -> APPROVED
@@ -196,6 +207,10 @@ const {
   originOf, waiveNote,
 } = require('./lib/mocks-notes')
 const clientCaptureLib = require('./lib/client-capture')
+// specs/20260910/03-client-journey-player.md D4/D7: the one reader/writer of design/mocks/
+// walk.json and its pure per-journey transforms — `client waive`/`client log` and the `approved`
+// gate's new precondition all share it, never hand-parsing the file themselves.
+const walkLib = require('./lib/mocks-walk')
 const picksLib = require('./lib/mocks-picks.js')
 const shellLib = require('./lib/shell-region')
 const { stylesheetTargets, linksWireRegister } = require('./lib/wire-register')
@@ -610,6 +625,14 @@ function notesOrEmpty() {
   return [] // unreachable
 }
 
+// specs/20260910/03-client-journey-player.md D4/D7: design/mocks/walk.json's one reader —
+// {journeys:{}} on a cold root is a valid starting point (lib/mocks-walk.js's own readWalk
+// posture), a malformed file is a hard refusal naming the remedy, same shape as notesOrEmpty.
+function readWalkOrEmpty() {
+  try { return walkLib.readWalk(root) } catch (e) { die('design/mocks/walk.json is not valid JSON (' + e.message + ') — restore it from git history, or delete it (no walk record is a valid starting point) and re-run') }
+  return { journeys: {} } // unreachable
+}
+
 // D5: any open (not-resolved) project note blocks every advancing mark, named first; then, when
 // `labels` is given, an unresolved note on any of those screens blocks it too. `approved` calls
 // this with every declared label (D5: "any unresolved note anywhere").
@@ -923,8 +946,63 @@ function probeClientNotesList(address, scheme) {
   })
 }
 
+// specs/20260910/03-client-journey-player.md D7: `client waive --journey <j> --reason <r>` —
+// the whole-journey counterpart to `notes waive`, over the SAME `status.client.openedAt` floor
+// (A3: a journey the client never opened is silent from `client open`, never from its own first
+// event) — lib/mocks-walk.js's waiveJourney runs the actual seven-day clock; this command only
+// derives WHERE that clock starts and reports its own refusal/acceptance.
+function cmdClientWaive(args) {
+  const journey = flagArg(args, '--journey')
+  const reason = flagArg(args, '--reason')
+  const by = flagArg(args, '--by') || 'session'
+  if (!journey) die('client waive: --journey <j> is required')
+  if (!reason) die('client waive: --reason "<r>" is required')
+  const openedAt = status.client && status.client.openedAt
+  if (!openedAt) die('client waive: no client has ever been opened for this project — run `client open --address <url>` first')
+  let result
+  try {
+    result = walkLib.waiveJourney(readWalkOrEmpty(), { journey, reason, by, now: new Date(), openedAt })
+  } catch (e) { die('client waive: ' + e.message) }
+  walkLib.writeWalk(root, result)
+  writeOut(1, 'client waive: ' + journey + ' → waived\n')
+  process.exit(0)
+}
+
+// specs/20260910/03-client-journey-player.md D7: the one-line-per-journey status form `client
+// log` and the CLIENT step block both print — `confirmed <date> — "<sentence>"` once the client
+// has confirmed, else `open — reached <n>/<total>`.
+function journeyWalkStatusLine(jn, rec, total) {
+  if (rec && rec.confirmedAt) return jn + ': confirmed ' + String(rec.confirmedAt).slice(0, 10) + ' — "' + (rec.sentence || '') + '"'
+  return jn + ': open — reached ' + ((rec && rec.reached) || []).length + '/' + total
+}
+
+// specs/20260910/03-client-journey-player.md D7: `client log [--journey <j>]` — the misses and
+// the sentence are the two signals the client pass exists to collect; this prints them exactly
+// where the session already looks, grouped/counted by {from,target} pair, first-seen order.
+function cmdClientLog(args) {
+  const only = flagArg(args, '--journey')
+  const walk = readWalkOrEmpty()
+  for (const [jn, j] of currentSeedJourneys()) {
+    if (only && jn !== only) continue
+    const rec = (walk.journeys || {})[jn] || { reached: [], misses: [], confirmedAt: null, sentence: null }
+    writeOut(1, journeyWalkStatusLine(jn, rec, j.labels.length) + '\n')
+    const groups = new Map() // insertion-ordered "from target" -> count
+    for (const m of rec.misses || []) {
+      const key = JSON.stringify([m.from, m.target])
+      groups.set(key, (groups.get(key) || 0) + 1)
+    }
+    for (const [key, count] of groups) {
+      const [from, target] = JSON.parse(key)
+      writeOut(1, '  ' + from + ': ' + target + ' (' + count + '×)\n')
+    }
+  }
+  process.exit(0)
+}
+
 function cmdClient(sub, args) {
-  if (sub !== 'open') die('client: unknown subcommand "' + sub + '" — one of: open')
+  if (sub === 'waive') return cmdClientWaive(args)
+  if (sub === 'log') return cmdClientLog(args)
+  if (sub !== 'open') die('client: unknown subcommand "' + sub + '" — one of: open, waive, log')
   const state = deriveState()
   if (state !== 'CLIENT') {
     die('client open: the state is "' + state + '", not CLIENT — client open only runs once every journey is walked, before approval')
@@ -1635,6 +1713,17 @@ function handleApproved() {
   // specs/20260906/03: notes gate (question-aware) runs before requireGateOpen — same ordering
   // reason as handleJourneyApproved above.
   requireNotesResolved(allDeclaredLabels(), null)
+  // specs/20260910/03-client-journey-player.md D7: every seed journey must be confirmed by the
+  // client, or waived after seven days of silence, before the ledger gate ever runs.
+  {
+    const walk = readWalkOrEmpty()
+    for (const [jn] of currentSeedJourneys()) {
+      if (!walkLib.isClosed(walk, jn)) {
+        die('journey "' + jn + '" is not confirmed by the client — the client walks it to the end and confirms on ' +
+          '/client/walk/' + jn + '.html, or after seven days: client waive --journey ' + jn + ' --reason "<r>"')
+      }
+    }
+  }
   requireGateOpen()
   const stop = requireStopDecision('approved', 'stop open signoff')
 
@@ -1671,6 +1760,18 @@ function printAcceptedTail(prev, next, mark) {
   const parsed = parseLedger(ledgerTextOrDie())
   writeOut(1, countsLine(parsed) + '\n\n')
   if (mark === 'approved') {
+    // specs/20260910/03-client-journey-player.md D7: one `client: <j> — "<sentence>"` line per
+    // confirmed seed journey, then `waived journeys: <n>`, both before the existing waived-notes
+    // block below.
+    const walk = readWalkOrEmpty()
+    let waivedJourneys = 0
+    for (const [jn] of currentSeedJourneys()) {
+      const rec = (walk.journeys || {})[jn]
+      if (rec && rec.confirmedAt) writeOut(1, 'client: ' + jn + ' — "' + (rec.sentence || '') + '"\n')
+      if (rec && rec.waived) waivedJourneys++
+    }
+    writeOut(1, 'waived journeys: ' + waivedJourneys + '\n\n')
+
     const waived = notesOrEmpty().filter((n) => n.waived != null)
     writeOut(1, 'waived: ' + waived.length + '\n')
     for (const n of waived) writeOut(1, '  ' + n.id + ' — ' + n.waived.reason + '\n')
@@ -2135,11 +2236,22 @@ function clientLineFor() {
 // itself is unconditional here). The `approved` stop key and the `signoff` stop step NAME are
 // both kept unchanged (D9 rationale — AC-20260907-08-12's pin and the `stop open` enumeration
 // both still name "signoff").
+// specs/20260910/03-client-journey-player.md D7: one journeyWalkStatusLine per seed journey,
+// right beside the existing client-notes progress line — the same form `client log` prints.
+function clientWalkLinesFor() {
+  const walk = readWalkOrEmpty()
+  const lines = []
+  for (const [jn, j] of currentSeedJourneys()) {
+    lines.push(journeyWalkStatusLine(jn, (walk.journeys || {})[jn], j.labels.length))
+  }
+  return lines.join('\n')
+}
+
 function printClientStep() {
   const look = lookLineAndThen('approved', 'signoff', () => driverCmd('--mark approved'))
   printStepBlock('CLIENT', 'client review — the product I understand',
     ['design/atlas/index.html', 'design/mocks/notes.json'], 'Mocks: State Machine',
-    clientLineFor() + '\n' +
+    clientLineFor() + '\n' + clientWalkLinesFor() + '\n' +
     'Approval means "this is the product I understand" — the written brief, not these screens, holds scope.' + '\n' + look.look,
     [driverCmd('--mark approved')])
 }

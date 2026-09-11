@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, tmpdir, runNode } = require('../helpers')
 const picksLib = require('../../spec/scripts/lib/mocks-picks')
-const { writeWireframe, writeKitCanon, advanceToJourneyApproved } = require('./mocks-driver-fixtures')
+const { writeWireframe, writeKitCanon, advanceToJourneyApproved, confirmEveryJourney } = require('./mocks-driver-fixtures')
 
 // specs/20260902/10-page-notes-review-loop.md D1/D4/D5, AC-20260902-10-1/-5/-6/-10.
 // spec/scripts/lib/mocks-notes.js and the driver's `notes` subcommands + mark gates do not
@@ -356,6 +356,10 @@ test('AC-20260902-10-6 / AC-20260907-07-12: journey-approved and approved both r
   // set and returns immediately); no explicit action item advances a theme-less root any further
   // toward SIGNOFF, so nothing replaces the deleted advanceToThemePicked() call's real work.
   advanceToJourneyApproved(dir, JOURNEY, LABELS)
+  // specs/20260910/03-client-journey-player.md D7 fixture repair: `--mark approved` now
+  // refuses while a seed journey is unconfirmed by the client, so this setup records the
+  // confirmation to keep the precondition it actually pins isolated.
+  confirmEveryJourney(dir)
   decideLook(dir, 'approved', 'approve', { by: 'jj' })
 
   // approved: any unresolved note anywhere blocks it (project scope again, this time — SKIN and

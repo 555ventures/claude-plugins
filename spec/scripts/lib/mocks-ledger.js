@@ -8,10 +8,10 @@
 // Grammar (D1): two header-driven markdown tables.
 //   Assumptions:      | id | step | kind | claim | tag | status | rejected | dependents | note |
 //   Misunderstandings: | id | what | step | cost | note |
-// Enum cells are exactly one fixed word: kind product|process, tag said-by-user|ratified-
-// doc|inferred|invented, status (open|confirmed|overridden|decided) with an optional trailing
-// ISO date — `decided` is restricted to process rows. Free text lives only in claim/rejected/
-// note/what/cost; a literal pipe inside a cell is written `\|` and read back as `|`.
+// Enum cells are exactly one fixed word: kind product|process|exclusion, tag said-by-user|
+// ratified-doc|inferred|invented, status (open|confirmed|overridden|decided) with an optional
+// trailing ISO date — `decided` is restricted to process rows. Free text lives only in claim/
+// rejected/note/what/cost; a literal pipe inside a cell is written `\|` and read back as `|`.
 //
 // Does NOT: read or write files, know about design/mocks/status.json or any driver state
 // machine (spec 07), validate `step` against the enumerated list of stage names (any
@@ -23,12 +23,18 @@
 // the same posture as "overridden" — a waived question keeps the ledger truthful (never
 // laundered into "confirmed") without ever tripping the gate.
 //
+// specs/20260910/05-what-the-journey-does-not-do.md D1: KINDS gains "exclusion" — a row kind
+// derived by `lib/mocks-exclusions.js` + mocks-driver.js's `ledger derive`, never hand-authored
+// (the caller-side refusal on `ledger add --kind exclusion` lives in mocks-driver.js, not here).
+// gateVerdict already never blocks on it (its loop only ever inspects `kind === "product"` rows);
+// countsLine gains a trailing ` · <n> exclusions` segment.
+//
 // Exit codes: none — this is a library, not an executable.
 
 const ASSUMPTIONS_HEADER = ['id', 'step', 'kind', 'claim', 'tag', 'status', 'rejected', 'dependents', 'note']
 const CATCHES_HEADER = ['id', 'what', 'step', 'cost', 'note']
 
-const KINDS = ['product', 'process']
+const KINDS = ['product', 'process', 'exclusion']
 const TAGS = ['said-by-user', 'ratified-doc', 'inferred', 'invented']
 const STATUS_WORDS = ['open', 'confirmed', 'overridden', 'decided', 'waived']
 
@@ -200,7 +206,9 @@ function gateVerdict(ledger) {
   return { open: blocking.length === 0, blocking, errors: [] }
 }
 
-// D3: the one fixed counts-line shape.
+// D3: the one fixed counts-line shape. specs/20260910/05-…-05 D1 appends a trailing
+// ` · <n> exclusions` segment — an exclusion row counts only there, never as said-by-user (even
+// though its `tag` is always "said-by-user" by D1's own grammar).
 function countsLine(ledger) {
   let said = 0
   let ratified = 0
@@ -209,7 +217,12 @@ function countsLine(ledger) {
   let invented = 0
   let inventedOpen = 0
   let process = 0
+  let exclusions = 0
   for (const row of ledger.assumptions) {
+    if (row.kind === 'exclusion') {
+      exclusions++
+      continue
+    }
     if (row.kind === 'process') {
       process++
       continue
@@ -225,7 +238,7 @@ function countsLine(ledger) {
     }
   }
   const catches = ledger.catches.length
-  return `📒 ledger: ${said} said-by-user · ${ratified} ratified-doc · ${inferred} inferred (${inferredOpen} open) · ${invented} invented (${inventedOpen} open) · ${process} process · ${catches} catches`
+  return `📒 ledger: ${said} said-by-user · ${ratified} ratified-doc · ${inferred} inferred (${inferredOpen} open) · ${invented} invented (${inventedOpen} open) · ${process} process · ${catches} catches · ${exclusions} exclusions`
 }
 
 function validateAssumptionInput(row) {

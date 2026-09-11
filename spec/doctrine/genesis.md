@@ -620,6 +620,12 @@ only a seed-declared label is checked for placement. This is what makes the desi
 gap/orphan badges mean what they say from day one, instead of drifting the moment a journey's
 screens land in the wrong brief.
 
+**Confirmed exclusions land in the Parking lot.** `--mark roadmap-written` also requires every
+`confirmed` `exclusion` ledger row's claim (spec/doctrine/mocks.md § Provenance Ledger) to
+appear verbatim under the overview's `## Parking lot` heading, refusing by claim otherwise —
+the same fencing that keeps discovery non-goals out of briefs, applied to what the client
+confirmed was left out.
+
 ## Genesis: On-disk Handoff (the genesis artifacts)
 
 Genesis follows the same on-disk-handoff spine as the per-feature pipeline (shared § Workflows

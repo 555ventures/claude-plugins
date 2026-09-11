@@ -2,7 +2,7 @@
 // mocks-driver.js [--root <dir>] [--state]
 // mocks-driver.js --root <dir> --mark <mark> [--journey <j>] [--shape <k>]
 // mocks-driver.js --root <dir> --reopen journey:<j>|walk:<j>|shapes|kit|theme
-// mocks-driver.js --root <dir> ledger (add|set|catch|check|counts|ask) [flags]
+// mocks-driver.js --root <dir> ledger (add|set|catch|check|counts|ask|derive) [flags]
 // mocks-driver.js --root <dir> ledger add --id <i> --step <s> --kind <k> --claim <c> [--tag <t>]
 //                              [--status <st>] [--rejected <r>] [--dependents <d>] [--note <n>]
 //                              [--screen <label>]
@@ -214,6 +214,9 @@ const {
   readNotes, writeNotes, addNote, addressNote, replyNote, groupOpen, unresolvedFor, WALK_REASONS,
   originOf, waiveNote,
 } = require('./lib/mocks-notes')
+// specs/20260910/05-what-the-journey-does-not-do.md D2/D4: the pure derivation `ledger derive`
+// materializes into actual rows.
+const { deriveExclusions } = require('./lib/mocks-exclusions')
 const clientCaptureLib = require('./lib/client-capture')
 // specs/20260910/03-client-journey-player.md D4/D7: the one reader/writer of design/mocks/
 // walk.json and its pure per-journey transforms — `client waive`/`client log` and the `approved`
@@ -543,6 +546,103 @@ function nextLedgerId(parsed) {
     if (m) max = Math.max(max, parseInt(m[1], 10))
   }
   return 'P' + (max + 1)
+}
+
+// specs/20260910/05-what-the-journey-does-not-do.md D4: exclusion rows get their own "E<n>"
+// prefix, same derivation shape as nextLedgerId's own "P<n>".
+function nextExclusionId(parsed) {
+  let max = 0
+  for (const a of parsed.assumptions) {
+    const m = /^E(\d+)$/.exec(a.id)
+    if (m) max = Math.max(max, parseInt(m[1], 10))
+  }
+  return 'E' + (max + 1)
+}
+
+// A1: `.claude/genesis/brief.md` may not exist when mocks runs — deriveExclusions itself takes
+// `brief: null` and its non-goal source simply yields nothing.
+function briefTextOrNull() {
+  try { return fs.readFileSync(path.join(root, '.claude/genesis/brief.md'), 'utf8') } catch { return null }
+}
+
+// D2/D4: the journey (or null, project-wide) an exclusion row is anchored to — parsed straight
+// off its own D1 `note` grammar (`answer: <noteId>` / `withdrawn: <noteId>`), never a second
+// dedicated field; a `non-goal:` row carries no note id and so is always project-wide.
+function journeyForExclusionRow(row, notes, seedJourneys) {
+  const m = /^(?:answer|withdrawn): (\S+)/.exec(row.note || '')
+  if (!m) return null
+  const note = (notes || []).find((n) => n.id === m[1])
+  if (!note || !note.screen) return null
+  for (const [name, j] of seedJourneys) {
+    if (((j && j.labels) || []).includes(note.screen)) return name
+  }
+  return null
+}
+
+// D4: `ledger derive` — materializes deriveExclusions' pure `{add, retire, reopen}` output into
+// `ledger.md`. `add` entries are appended as new `exclusion` rows (`status: open`); `retire`
+// rows (an existing exclusion whose source decision was undone) are set to `overridden <today>`
+// via `setStatus` — NEVER deleted, the `note` cell is the audit trail. `reopen` rows (an
+// existing `overridden` exclusion whose source decision was reinstated) are set back to `open`
+// via `setStatus` on that SAME row/id — never appended as a new row, which would give one
+// `note` two rows and duplicate the claim on the player's last screen (mocks-exclusions.js).
+// Re-running over unchanged inputs appends, retires and reopens nothing (deriveExclusions' own
+// idempotence key, matched by `note`), so a second run's ledger.md is byte-identical to the
+// first.
+function deriveAndAppendExclusions() {
+  const notes = notesOrEmpty()
+  const seedJourneys = currentSeedJourneys()
+  let text = ledgerTextOrDie()
+  let parsed = parseLedger(text)
+  const { add, retire, reopen } = deriveExclusions({ brief: briefTextOrNull(), notes, ledger: parsed.assumptions, seedJourneys })
+  for (const e of add) {
+    const id = nextExclusionId(parsed)
+    text = appendAssumption(text, {
+      id, step: 'CLIENT', kind: 'exclusion', claim: e.claim, tag: 'said-by-user',
+      status: 'open', rejected: null, dependents: null, note: e.source,
+    })
+    parsed = parseLedger(text)
+  }
+  for (const row of reopen) {
+    text = setStatus(text, row.id, 'open')
+    parsed = parseLedger(text)
+  }
+  for (const row of retire) {
+    text = setStatus(text, row.id, 'overridden ' + todayIso())
+    parsed = parseLedger(text)
+  }
+  fs.writeFileSync(ledgerPath, text)
+  const total = parsed.assumptions.filter((a) => a.kind === 'exclusion').length
+  return { total, added: add.length, retired: retire.length, reopened: reopen.length }
+}
+
+// D6/D7: the seed's own `# Seed — <name>` H1 — same derivation as design-atlas.js's
+// seedForReview, restated here (this driver never imports that module) so exclusions.md's title
+// line and the seed-review page never disagree about the product name.
+function productName() {
+  let product = path.basename(root)
+  try {
+    const seedText = fs.readFileSync(seedPath, 'utf8')
+    const m = /^# Seed — (.+)$/m.exec(seedText)
+    if (m) product = m[1].trim()
+  } catch { /* no seed.md yet — fall back to the root dir's basename */ }
+  return product
+}
+
+// D7: `design/mocks/exclusions.md`, regenerated on every `approved` from the confirmed exclusion
+// rows alone — an `open` row never reaches here (handleApproved refuses on any first).
+function writeExclusionsFile() {
+  const parsed = parseLedger(ledgerTextOrDie())
+  const confirmed = parsed.assumptions.filter((a) => a.kind === 'exclusion' && a.status === 'confirmed')
+  const notes = notesOrEmpty()
+  const seedJourneys = currentSeedJourneys()
+  const lines = ['# Exclusions — ' + productName() + ' — approved ' + todayIso(), '']
+  for (const row of confirmed) {
+    const jn = journeyForExclusionRow(row, notes, seedJourneys)
+    lines.push('- ' + row.claim + ' (' + (jn || 'project') + ', ' + row.note + ')')
+  }
+  fs.writeFileSync(path.join(mocksDir, 'exclusions.md'), lines.join('\n') + '\n')
+  return confirmed.length
 }
 
 // ---------------------------------------------------------------------------
@@ -1798,6 +1898,25 @@ function handleThemePicked(directionArg) {
 // carry data-status="approved" (D5 rationale: with no review loop nobody would ever set it by
 // hand).
 function handleApproved() {
+  // specs/20260910/05-what-the-journey-does-not-do.md D4: `ledger derive` runs before every
+  // other gate below, then any exclusion row still `open` refuses by id and claim — the client
+  // confirms it on the journey's last screen (D5), or the session overrides it directly.
+  deriveAndAppendExclusions()
+  {
+    const parsed = parseLedger(ledgerTextOrDie())
+    const openExclusions = parsed.assumptions.filter((a) => a.kind === 'exclusion' && a.status === 'open')
+    if (openExclusions.length) {
+      const notes = notesOrEmpty()
+      const seedJourneys = currentSeedJourneys()
+      for (const row of openExclusions) {
+        const jn = journeyForExclusionRow(row, notes, seedJourneys)
+        writeOut(2, 'mocks-driver: exclusion ' + row.id + ' ("' + row.claim + '") is not confirmed — ' +
+          'the client confirms it on the last screen of ' + (jn || 'its journey') +
+          ', or: ledger set --id ' + row.id + ' --status confirmed\n')
+      }
+      process.exit(2)
+    }
+  }
   for (const [jn] of currentSeedJourneys()) {
     const st = status.journeys[jn]
     if (!st || !st.approved) die('journey "' + jn + '" is not approved — mark journey-approved --journey ' + jn + ' first')
@@ -1836,6 +1955,10 @@ function handleApproved() {
     const html = fs.readFileSync(f, 'utf8')
     if (statusOf(html) === 'sketch') fs.writeFileSync(f, html.replace('data-status="sketch"', 'data-status="approved"'))
   }
+  // D7: written on every accepted `approved` — the confirmed exclusion set, dated by this
+  // approval, is what a statement of work cites.
+  const exclusionCount = writeExclusionsFile()
+  writeOut(1, '📦 design/mocks/exclusions.md — ' + exclusionCount + ' exclusions\n')
   status.decider = stop.decision.by
   status.marks.approved = nowIso()
   consumeStopAndSave(stop.id)
@@ -1997,6 +2120,9 @@ function cmdLedger(sub, args) {
     const tag = larg('--tag')
     const claim = larg('--claim')
     const id = larg('--id')
+    // specs/20260910/05-what-the-journey-does-not-do.md D1: exclusion rows are derived, never
+    // hand-authored — the refusal text is the Decision's own remedy, verbatim.
+    if (kind === 'exclusion') die('ledger add: exclusion rows are derived — run ledger derive')
     if (screenArg) refuseUnaskable('ledger add', kind, tag, screenArg, larg('--state'))
     let out
     try {
@@ -2069,7 +2195,12 @@ function cmdLedger(sub, args) {
     writeOut(1, countsLine(parsed) + '\n' + catchProvenanceLine(parsed) + '\n')
     process.exit(0)
   }
-  die('ledger: unknown subcommand "' + sub + '" — one of: add, set, catch, check, counts, ask')
+  if (sub === 'derive') {
+    const result = deriveAndAppendExclusions()
+    writeOut(1, '📒 exclusions: ' + result.total + ' total · ' + result.added + ' new · ' + result.retired + ' retired\n')
+    process.exit(0)
+  }
+  die('ledger: unknown subcommand "' + sub + '" — one of: add, set, catch, check, counts, ask, derive')
 }
 
 // specs/20260906/03-questions-on-the-wireframe.md D6: derived, never attested — a catch row

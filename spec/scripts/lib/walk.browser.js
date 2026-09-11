@@ -68,6 +68,8 @@
   var approveEl = q('[data-wk="approve"]')
   var confirmBtn = q('[data-wk="confirm"]')
   var msgEl = q('[data-wk="msg"]')
+  var exclSection = q('[data-wk="exclusions"]')
+  var exclOpen = exclSection ? (parseInt(exclSection.getAttribute('data-exclusions-open'), 10) || 0) : 0
   var lastLabel = thumbs.length ? thumbs[thumbs.length - 1].getAttribute('data-label') : null
 
   // D4: the one slot every save reports through — never narrates the server's own error text,
@@ -113,19 +115,25 @@
     posEl.textContent = thumbs.length ? (ix + 1) + ' / ' + thumbs.length : ''
   }
 
+  // D5: [data-wk="confirm"] stays disabled while any listed exclusion is still open, the same
+  // "disabled until zero" gate the marks count already applies — both counts feed one button.
   function updateLeft() {
     if (leftEl) { leftEl.setAttribute('data-count', String(leftCount)); leftEl.textContent = String(leftCount) }
     if (confirmBtn) {
-      if (leftCount > 0) confirmBtn.setAttribute('disabled', '')
+      if (leftCount > 0 || exclOpen > 0) confirmBtn.setAttribute('disabled', '')
       else confirmBtn.removeAttribute('disabled')
     }
   }
 
-  // D3: approve becomes visible only once `reachedSoFar` (the server's own record, plus every
-  // "to" seen this session) carries the journey's last declared label — never re-hidden once
-  // shown, since nothing here ever removes a label from `reachedSoFar`.
+  // D3/D5: approve and the exclusions section both become visible only once `reachedSoFar` (the
+  // server's own record, plus every "to" seen this session) carries the journey's last declared
+  // label — never re-hidden once shown, since nothing here ever removes a label from
+  // `reachedSoFar`.
   function checkUnlock() {
-    if (approveEl && lastLabel && reachedSoFar.indexOf(lastLabel) !== -1) approveEl.hidden = false
+    if (lastLabel && reachedSoFar.indexOf(lastLabel) !== -1) {
+      if (approveEl) approveEl.hidden = false
+      if (exclSection) exclSection.hidden = false
+    }
   }
 
   function render() {
@@ -193,6 +201,21 @@
     }
     on(m.querySelector('[data-wk="yes"]'), 'click', function () { answer('yes') })
     on(m.querySelector('[data-wk="no"]'), 'click', function () { answer('no') })
+  })
+
+  // ---- exclusions: one agree posts /client/__walk/exclusion, lowers the open count on ok -----
+  qa('[data-wk="exclusion"]').forEach(function (art) {
+    var id = art.getAttribute('data-id')
+    var btn = art.querySelector('[data-wk="agree"]')
+    on(btn, 'click', function () {
+      post('/client/__walk/exclusion', { id: id }).then(function (r) {
+        if (!r.ok) { showMsg('failed'); return }
+        if (btn && btn.parentNode) btn.setAttribute('disabled', '')
+        exclOpen = Math.max(0, exclOpen - 1)
+        if (exclSection) exclSection.setAttribute('data-exclusions-open', String(exclOpen))
+        updateLeft()
+      }).catch(function () { showMsg('failed') })
+    })
   })
 
   // ---- the free note, current screen/state, by:'client' --------------------------------------

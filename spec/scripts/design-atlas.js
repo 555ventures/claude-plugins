@@ -2090,8 +2090,17 @@ function createRequestHandler(root, opts = {}) {
             return
           }
         }
+        // specs/20260910/05-what-the-journey-does-not-do.md D3: an optional withdraw `reason`,
+        // client route only — a value outside the enum 400s naming all three, before resolveNote
+        // ever runs (its own idea of "not found" stays a clean 404 with no enum error mixed in).
+        if (clientRoute && body && body.reason != null && !notesLib.WITHDRAW_REASONS.includes(body.reason)) {
+          jsonRes(res, 400, { error: 'reason must be one of ' + notesLib.WITHDRAW_REASONS.join(', ') })
+          return
+        }
         let result
-        try { result = notesLib.resolveNote(notes, body.id, body.by, clientRoute ? { viaClient: true } : undefined) } catch (e) { jsonRes(res, 404, { error: e.message }); return }
+        try {
+          result = notesLib.resolveNote(notes, body.id, body.by, clientRoute ? { viaClient: true, reason: body.reason } : undefined)
+        } catch (e) { jsonRes(res, 404, { error: e.message }); return }
         notesLib.writeNotes(rootAbs, result.notes)
         jsonRes(res, 200, result.note)
       }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
@@ -2168,7 +2177,8 @@ function createRequestHandler(root, opts = {}) {
 
     // ---- the client player (specs/20260910/03-client-journey-player.md D5) --------------------
     // GET /client/index.html, GET /client/walk/<j>.html, GET /client/__walk/state?journey=<j>,
-    // POST /client/__walk/event, POST /client/__walk/confirm — every one client-mount-only by
+    // POST /client/__walk/event, POST /client/__walk/exclusion, POST /client/__walk/confirm —
+    // every one client-mount-only by
     // construction (guarded on `clientRoute`), so a non-client request for the same stripped path
     // (e.g. a bare POST /__walk/event) falls through, unmatched, to the 404 every other unknown
     // path already gets below.
@@ -2278,6 +2288,34 @@ function createRequestHandler(root, opts = {}) {
           })
           walkLib.writeWalk(rootAbs, next)
           jsonRes(res, 200, next.journeys[journey])
+        }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
+        return
+      }
+
+      // specs/20260910/05-what-the-journey-does-not-do.md D5: the client's one agree per
+      // exclusion row — 400 on a row that is not `kind: "exclusion"`, 404 on an unknown id, else
+      // the row's own `confirmed <today>` write (the client route's one ledger write besides
+      // /__notes/answer's promoted row).
+      if (reqPath === '/__walk/exclusion' && req.method === 'POST') {
+        readJsonBody(req).then((body) => {
+          const id = body && body.id
+          const ledgerPath = path.join(rootAbs, 'design/mocks/ledger.md')
+          let ledgerText
+          try { ledgerText = fs.readFileSync(ledgerPath, 'utf8') } catch (e) {
+            jsonRes(res, 400, { error: 'design/mocks/ledger.md does not exist: ' + e.message })
+            return
+          }
+          const row = parseLedger(ledgerText).assumptions.find((a) => a.id === id)
+          if (!row) { jsonRes(res, 404, { error: 'no ledger row "' + id + '"' }); return }
+          if (row.kind !== 'exclusion') {
+            jsonRes(res, 400, { error: 'row "' + id + '" is not an exclusion (kind "' + row.kind + '")' })
+            return
+          }
+          const status = 'confirmed ' + new Date().toISOString().slice(0, 10)
+          let rewritten
+          try { rewritten = setStatus(ledgerText, id, status) } catch (e) { jsonRes(res, 400, { error: e.message }); return }
+          fs.writeFileSync(ledgerPath, rewritten)
+          jsonRes(res, 200, { id, status })
         }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
         return
       }

@@ -368,6 +368,29 @@ function seedFacts() {
   return facts
 }
 
+// specs/20260910/05-what-the-journey-does-not-do.md D6: every CONFIRMED exclusion row —
+// read/parse failure (no design/mocks/ledger.md at all, a non-visual host per AC-10) degrades to
+// [], the same posture as confirmedProductRows below, never a throw.
+function confirmedExclusionRows() {
+  let text
+  try { text = fs.readFileSync(mocksLedgerPath(), 'utf8') } catch (e) { return [] }
+  const ledger = mocksLedgerLib.parseLedger(text)
+  if (ledger.errors.length) return []
+  return ledger.assumptions.filter((r) => r.kind === 'exclusion' && r.status === 'confirmed')
+}
+
+// A4: the overview's own heading is `## Parking lot (deferred ideas — not scope, not backlog)`
+// — matched by prefix `## Parking lot`, never section()'s exact-name regex (which would refuse
+// the parenthetical). Returns the body between that heading and the next `## `, or null.
+function parkingLotSection(text) {
+  const re = /^## Parking lot.*$/m
+  const m = re.exec(text)
+  if (!m) return null
+  const rest = text.slice(m.index + m[0].length)
+  const next = rest.search(/^## /m)
+  return next === -1 ? rest : rest.slice(0, next)
+}
+
 // D2: every confirmed said-by-user/ratified-doc product row — the derivation sources the BRIEF
 // step text must list by id, never the discovery interview alone. Read/parse failure degrades
 // to [] (the step text falls back to "none"), never a throw.
@@ -1623,6 +1646,23 @@ function handleRoadmapWritten() {
       }
     }
   }
+  // specs/20260910/05-what-the-journey-does-not-do.md D6: every confirmed exclusion row's claim
+  // must appear verbatim as a bullet under the overview's own Parking lot heading — applies to
+  // every host regardless of archetype/status.brief.mocks (AC-10: zero rows is a no-op that
+  // still runs the pre-existing checks above).
+  {
+    const exclusions = confirmedExclusionRows()
+    if (exclusions.length) {
+      const overviewText = fs.readFileSync(path.join(root, 'docs/roadmap/00-overview.md'), 'utf8')
+      const parking = parkingLotSection(overviewText) || ''
+      const bullets = parking.split('\n').map((l) => l.trim())
+      for (const row of exclusions) {
+        if (!bullets.includes('- ' + row.claim)) {
+          die('exclusion "' + row.claim + '" (' + row.id + ') is not in the parking lot — add it under ## Parking lot, then re-mark')
+        }
+      }
+    }
+  }
   status.marks.roadmapWritten = true
   // specs/20260902/08-genesis-shrink-brief-state.md D9: the design canon (doctrine,
   // design-rules, tokens) is ratified at BRIEF now, long before ROADMAP — there is no DESIGN
@@ -1971,9 +2011,13 @@ const STEPS = {
       try {
         notesUnresolved = mocksNotesLib.readNotes(root).filter((n) => n && n.status !== 'resolved').length
       } catch (e) { notesUnresolved = 0 }
+      // D6: the same confirmed-exclusion count the parking-lot check (below, ROADMAP_WRITTEN)
+      // requires verbatim — read-only here, this step only surfaces the count.
+      const exclusionsConfirmed = confirmedExclusionRows().length
       lines.push('derived from: product ledger row(s) ' +
         (productRows.length ? productRows.map((r) => r.id).join(', ') : 'none') +
         ' · seed journeys: ' + seedCount + ' · notes unresolved: ' + notesUnresolved +
+        ' · exclusions confirmed: ' + exclusionsConfirmed +
         ' — write ## What I think you\'re building, ## Journeys, and ## Non-UI Coverage from these, never from the interview alone')
     }
     lines.push('Write docs/design/doctrine.md (one page, ## Dissents) and .claude/genesis/design-rules.json, then:')

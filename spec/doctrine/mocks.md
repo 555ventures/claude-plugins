@@ -22,13 +22,19 @@ note`:
 - `step` — `^[A-Z][A-Z-]*$` (`SEED`, `SHAPES`, `KIT`, `WIREFRAMES`, `WALK`, `CLIENT`, `SKETCH`,
   `GENESIS`, …); rows written under retired step names (`SKIN`, `REVIEW`, `THEME`, `SIGNOFF`)
   still match the pattern and keep parsing.
-- `kind` — one fixed word: `product` or `process`.
+- `kind` — one fixed word: `product`, `process`, or `exclusion`.
 - `claim` — free text; the assumption itself.
 - `tag` — one fixed word: `said-by-user`, `ratified-doc`, `inferred`, or `invented`.
 - `status` — one fixed word `open | confirmed | overridden | decided`, with an optional
   trailing ISO date (`confirmed YYYY-MM-DD`); `decided` is process-only — a `decided`
   `product` row does not parse.
 - `rejected`, `dependents`, `note` — free text; `-` means empty.
+
+An `exclusion` row is derived, never hand-typed — `ledger add --kind exclusion` refuses,
+naming `ledger derive`. Its `tag` is always `said-by-user`; its `note` grammar is fixed —
+`non-goal: <brief line>` | `answer: <noteId>` | `withdrawn: <noteId>` — naming the discovery
+non-goal, invented-row answer, or withdrawn client note it derives from. It never blocks the
+gate and counts separately in the counts line's ` · <E> exclusions` tail.
 
 **Misunderstandings** table — `id · what · step · cost · note`: `id` is `^M\d+$`, unique;
 `note` names an originating note id or `-`.
@@ -49,12 +55,12 @@ answer writes the row's status.
 **Counts line.** Every mark prints one fixed line:
 
 ```
-📒 ledger: {S} said-by-user · {R} ratified-doc · {I} inferred ({Io} open) · {V} invented ({Vo} open) · {P} process · {C} catches
+📒 ledger: {S} said-by-user · {R} ratified-doc · {I} inferred ({Io} open) · {V} invented ({Vo} open) · {P} process · {C} catches · {E} exclusions
 ```
 
-counting product rows per tag, every process row in one bucket, and misunderstanding rows as
-catches. The shape is fixed so a reader learns it once — change it only under the spec that
-owns it.
+counting product rows per tag, every process row in one bucket, misunderstanding rows as
+catches, and exclusion rows last. The shape is fixed so a reader learns it once — change it
+only under the spec that owns it.
 
 ## Mocks: State Machine
 
@@ -323,6 +329,13 @@ misses.
 `note: "corrects <rowId>"` — the client's own correction becomes a fact the next round can build
 on, never just a flipped status. The session's own review page keeps today's behavior; only a
 client-origin answer promotes.
+
+**The last screen names what the journey does not do.** `mocks-driver.js ledger derive`
+(§ Provenance Ledger) turns discovery non-goals, `no`-answered invented rows, and withdrawn
+notes into `exclusion` rows before the client ever sees the player; `approved` runs it
+automatically and refuses on any that are still `open`. On a journey's last label
+`buildWalkPage` lists every exclusion anchored to it plus every project-wide one, each agreed
+with one button; the approve control stays disabled until the listed count reaches zero.
 
 ## Mocks: Authoring Rules
 

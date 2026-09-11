@@ -64,6 +64,11 @@ const PLAIN_REASONS = ['missing-screen', 'wrong-direction', 'wrong-words', 'othe
 const WALK_REASONS = ['no-path-back', 'no-path-forward', 'dead-end-state', 'missing-data', 'ambiguous-control', 'unrecoverable-error']
 const REASONS = PLAIN_REASONS.concat(WALK_REASONS)
 const LEDGER_ID_RE = /^[A-Z]+\d+[a-z]?$/
+// specs/20260910/05-what-the-journey-does-not-do.md D3: the optional `reason` a client gives when
+// withdrawing a note through the client route — stored as `withdrawReason`, validated here and by
+// design-atlas.js's client `/__notes/resolve` route (which 400s a value outside this enum before
+// ever calling resolveNote).
+const WITHDRAW_REASONS = ['not-needed', 'fixed-elsewhere', 'mistake']
 
 function notesPath(root) { return path.join(root, 'design/mocks/notes.json') }
 
@@ -162,6 +167,10 @@ function validateNotes(notes) {
     if (n.origin != null && !ORIGINS.includes(n.origin)) {
       errors.push('note "' + label + '": origin must be one of ' + ORIGINS.join('|') + ' (field "origin")')
     }
+    // D3: additive and optional — a present value must be one of the enum.
+    if (n.withdrawReason != null && !WITHDRAW_REASONS.includes(n.withdrawReason)) {
+      errors.push('note "' + label + '": withdrawReason must be one of ' + WITHDRAW_REASONS.join('|') + ' (field "withdrawReason")')
+    }
   }
   return { errors }
 }
@@ -250,6 +259,10 @@ function cloneFind(notes, id) {
 // /__notes/resolve only) derives `resolution` from the note's prior status — "withdrawn" from
 // "open", "accepted" from "addressed" — and stamps `lastClientAt`; the non-client route (the
 // existing caller) omits opts and leaves both fields untouched.
+// specs/20260910/05-what-the-journey-does-not-do.md D3: `opts.reason`, given only alongside
+// `opts.viaClient`, is stored as `withdrawReason` on the note — the route validates it against
+// WITHDRAW_REASONS before ever calling this (a 400, not a thrown error, so the enum check has
+// only the one home); this function trusts an already-validated value.
 function resolveNote(notes, id, by, opts) {
   const { next, found } = cloneFind(notes, id)
   if (found.kind === 'question') throw new Error('question "' + id + '" is answered, never resolved')
@@ -261,6 +274,7 @@ function resolveNote(notes, id, by, opts) {
   if (o.viaClient) {
     found.resolution = priorStatus === 'addressed' ? 'accepted' : 'withdrawn'
     found.lastClientAt = found.resolvedAt
+    if (o.reason != null) found.withdrawReason = o.reason
   }
   return { notes: next, note: found }
 }
@@ -378,5 +392,5 @@ function waiveNote(notes, id, opts) {
 
 module.exports = {
   readNotes, writeNotes, validateNotes, addNote, resolveNote, answerQuestion, addressNote, replyNote,
-  groupOpen, unresolvedFor, WALK_REASONS, ORIGINS, originOf, waiveNote,
+  groupOpen, unresolvedFor, WALK_REASONS, ORIGINS, originOf, waiveNote, WITHDRAW_REASONS,
 }

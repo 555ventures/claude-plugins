@@ -239,7 +239,18 @@ upstream bug list. -->
   an AC by keeping the plain ID and demoting the superseded text to an indented sub-line; prime
   marks are for Decision IDs (unlinted) only. An unparseable bullet counts as uncovered in both
   drift modes, so it cannot be silently dropped from the coverage denominator.
-  (specs/20260814/04-lock-signal-window.md; specs/20260815/03-ac-matrix-fail-closed.md)
+  The inverse failure is the one no leg can see: an AC that PARSES, is mapped, and goes green
+  while covering only PART of the Decision it carries. `promise-sweep` counts a Decision carried
+  by ID, never by clause, so a D-row promising a route AND the control that calls it is "carried"
+  by an AC asserting the route alone — and the unbuilt half reaches review as a reviewer finding
+  or not at all. Worse, the spec's own Contracts block and AC examples are what a worker follows
+  when they contradict the Decision two lines above: one spec spelled a derived key as the TAG in
+  its Contracts row and AC while D1 said the LINE, and the build shipped the collision with a test
+  enshrining it, every leg green. At lock, read each multi-clause Decision against its cited ACs
+  clause by clause, and diff the Contracts block against the Decision it illustrates — an example
+  that contradicts its Decision is a defect in the example, never a licence to change the Decision.
+  (specs/20260814/04-lock-signal-window.md; specs/20260815/03-ac-matrix-fail-closed.md;
+  specs/20260910/05-what-the-journey-does-not-do.md D1/D3)
 - `[plugin]` A test worker editing a File Plan row that carries **no AC** still reaches for the
   spec template's AC-ID shape and writes the literal placeholder (`AC-<date>-NN-N`) into the
   test name and assert message. The token is not a valid AC-ID under `ac-matrix.js`'s grammar,

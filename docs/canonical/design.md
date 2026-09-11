@@ -192,12 +192,39 @@ via `spec-paths shared-mocks`; empty ledger at `spec/templates/mocks-ledger.md`)
 Assumptions (`id · step · kind · claim · tag · status · rejected · dependents · note`) and
 Misunderstandings (`id · what · step · cost · note`). Every enum cell is one fixed word — tag
 `said-by-user|ratified-doc|inferred|invented`, status `open|confirmed|overridden|decided`
-(+ optional ISO date), kind `product|process` — and free text lives only in `claim`,
+(+ optional ISO date), kind `product|process|exclusion` — and free text lives only in `claim`,
 `rejected`, and `note`. A product row that is `invented` (not `overridden`) or `inferred` +
 `open` blocks every advance; `ratified-doc` rows and every `process` row never block and are
 counted on the fixed `📒 ledger:` line. A ledger that does not parse never opens a gate. The
 lib is the one writer of rows: edits rewrite only the touched row and leave every other byte
 identical; a literal pipe inside a cell is written `\|`.
+
+### Exclusions (2026-09-11, specs/20260910/05)
+
+An `exclusion` row is what the product will NOT do, and it is **derived, never typed**
+(`lib/mocks-exclusions.js`'s `deriveExclusions`, materialized by `mocks-driver.js ledger derive`;
+`ledger add --kind exclusion` is refused toward `ledger derive`). Its `tag` is always
+`said-by-user`, and its `note` names the decision it came from: `non-goal: <brief line>` (a
+discovery non-goal tagged Later or Won't-this-time), `answer: <noteId>` (the client answering `no`
+to a question on a row the session invented), or `withdrawn: <noteId>` (a client note withdrawn as
+`not-needed`). The `note` is the row's identity, so it carries the brief LINE and never the tag — a
+shared key makes every non-goal after the first silently underivable. Derivation reconciles rather
+than only appending: `deriveExclusions` returns `{add, retire}`, and a row whose source decision
+was undone is set `overridden <today>` rather than deleted, since the `note` cell is the audit
+trail. Exclusion rows never block the gate and are counted on the `📒 ledger:` line.
+
+Three renders, one source. The client player's closing screen lists the journey's exclusions plus
+the project-wide ones, each agreed with one button, and holds the journey's confirm control
+disabled while any is open. `--mark approved` derives first, refuses on any still open, and writes
+`design/mocks/exclusions.md` stamped with the approval date — the snapshot a statement of work
+cites, never rewritten in place. `genesis-driver.js --mark roadmap-written` requires every
+confirmed exclusion's claim verbatim under `docs/roadmap/00-overview.md`'s `## Parking lot`, and
+the BRIEF step's derived-from line carries the confirmed count.
+
+A client withdrawal carries `withdrawReason` (`not-needed | fixed-elsewhere | mistake`), validated
+on the client route and by `validateNotes`. The client-facing control for it is deliberately not
+shipped: the player has no list of the client's own notes, and an irreversible one-click write
+landing in a dated contractual file is worse than a missing feature.
 
 ## The mocks command (2026-09-02, specs/20260902/07)
 

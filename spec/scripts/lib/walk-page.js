@@ -65,6 +65,7 @@ const STRINGS = {
   themePrompt: 'Pick a look',
   themePick: 'Pick this',
   themePicked: 'Picked',
+  exclAgree: 'This journey does not do this — correct?',
 }
 
 function count(s, none, one, many, n) {
@@ -259,6 +260,45 @@ function renderMark(note, ledger, s) {
     '</article>'
 }
 
+// specs/20260910/05-what-the-journey-does-not-do.md D5: the exclusion rows this journey shows —
+// every project-wide one (an unanchored `non-goal:` row) plus every one anchored (via its own D1
+// `note` grammar, `answer: <noteId>` / `withdrawn: <noteId>`) to a screen THIS journey declares.
+// Anchoring is derived from the already-threaded `ledger`/`notes` params — never a new param
+// (the build's own deviations note).
+function exclusionsForJourney(journey, ledger, notes, journeys) {
+  const entry = journeys.find((j) => j.name === journey)
+  const labels = new Set(screensOf(entry).map((sc) => sc.label))
+  const noteById = new Map((notes || []).map((n) => [n.id, n]))
+  const rows = (ledger || []).filter((r) => r.kind === 'exclusion')
+  const out = []
+  for (const row of rows) {
+    const m = /^(?:answer|withdrawn): (\S+)/.exec(row.note || '')
+    if (!m) { out.push(row); continue } // non-goal: project-wide, shows on every journey
+    const note = noteById.get(m[1])
+    if (note && note.screen && labels.has(note.screen)) out.push(row)
+  }
+  return out
+}
+
+function renderExclusion(row, s) {
+  const open = row.status === 'open'
+  return '<article class="wk-excl" data-wk="exclusion" data-id="' + esc(row.id) + '">' +
+    '<p class="wk-excl-claim">' + esc(row.claim) + '</p>' +
+    (open ? '<button class="wk-excl-agree" data-wk="agree">' + esc(s.exclAgree) + '</button>' : '') +
+    '</article>'
+}
+
+// Returns { html, openCount } — openCount feeds renderApprove's own disabled-until-zero gate
+// alongside the pre-existing mark count.
+function renderExclusions(journey, ledger, notes, journeys, s) {
+  const rows = exclusionsForJourney(journey, ledger, notes, journeys)
+  const openCount = rows.filter((r) => r.status === 'open').length
+  const articles = rows.map((r) => renderExclusion(r, s)).join('')
+  const html = '<section class="wk-exclusions" data-wk="exclusions" data-exclusions-open="' + openCount + '" hidden>' +
+    articles + '</section>'
+  return { html, openCount }
+}
+
 function renderApprove(rec, openCount, s) {
   if (rec && rec.confirmedAt) {
     return '<section class="wk-approve" data-wk="approve">' +
@@ -292,6 +332,7 @@ function buildWalkPage(input) {
   const open = (o.notes || []).filter((n) => isOpenQuestion(n) && n.scope === 'mock' && labels.has(n.screen))
 
   const marks = open.map((n) => renderMark(n, ledger, s)).join('')
+  const excl = renderExclusions(journey, ledger, o.notes || [], journeys, s)
   const title = (entry.title || journey) + ' · ' + (seed.product || 'Mocks')
 
   return head(title, prefix) +
@@ -319,7 +360,8 @@ function buildWalkPage(input) {
     '<textarea class="wk-note-in" name="text" rows="2"></textarea></label>' +
     '<button class="wk-send" type="submit">' + esc(s.noteSend) + '</button>' +
     '</form>' +
-    renderApprove(rec, open.length, s) +
+    excl.html +
+    renderApprove(rec, open.length + excl.openCount, s) +
     // D3: one hidden, empty status slot — walk.browser.js sets its text from its own data-why/
     // data-failed attribute and unhides it; the builder never renders text into it.
     '<p class="wk-msg" data-wk="msg" role="status" aria-live="polite" data-why="' + esc(s.msgWhy) +

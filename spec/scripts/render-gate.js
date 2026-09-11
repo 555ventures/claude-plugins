@@ -327,9 +327,15 @@ function probeReady(cmd) {
   return r.status === 0
 }
 
+// Set when readiness passed against a server THIS run did not start. A ready-probe answers "is
+// something serving here", never "is it serving THIS root" — a sibling worktree holding the
+// configured port satisfies the probe, and every capture then renders that other tree's
+// components against this tree's mocks. Recorded here, diagnosed at verdict time (adoptedServerNote).
+let adoptedServer = false
+
 async function ensureReady() {
   if (!renderConfig || !renderConfig.ready) return // Behavior: neither ready nor boot declared -> assume up
-  if (probeReady(renderConfig.ready)) return
+  if (probeReady(renderConfig.ready)) { adoptedServer = true; return }
   if (renderConfig.boot) {
     bootChild = spawn('bash', ['-c', renderConfig.boot], { cwd: root, detached: true, stdio: 'ignore' })
     bootChild.unref()
@@ -457,6 +463,22 @@ function runCompare(mockOut, compOut, width) {
     die(3, 'render-compare.js produced unparsable --json output for ' + mockOut + ' vs ' + compOut +
       ' (' + e.message + ')')
   }
+}
+
+// A cell that matched NOTHING did not drift — it rendered something else entirely (an error page,
+// a foreign tree's component). When every cell in the run looks like that AND the render server was
+// one this run adopted rather than started, the port is the first suspect, not the component: name
+// it, because the raw counts read exactly like a catastrophic self-inflicted regression. Silent
+// when the run started its own server, when any cell matched at all, or when there are no cells.
+function adoptedServerNote(cellReports) {
+  if (!adoptedServer || !cellReports.length) return null
+  if (!cellReports.every((c) => !c.pass && !(c.counts && c.counts.matched))) return null
+  return '⚠️ every cell matched ZERO elements against a render server this run did NOT start ' +
+    '(design.render.ready passed before design.render.boot ran, so an already-running server was ' +
+    'adopted). A server belonging to another checkout or worktree answers that probe exactly like ' +
+    'this one\'s would, and its components are then compared against THIS tree\'s mocks. Confirm ' +
+    'whose it is before treating this as a component regression — find the listener on the port in ' +
+    'design.render.ready and check its working directory — then free the port and re-run.'
 }
 
 // ---- main ---------------------------------------------------------------------------------------
@@ -590,9 +612,12 @@ async function main() {
     writeOut(JSON.stringify({
       cells: cellReports, unboundStates: unboundFindings, excused: excusedLines,
       rulesDeclared: !!rulesManifestRel, capture: captureMode, exit: exitCode,
+      adoptedServer, adoptedServerNote: adoptedServerNote(cellReports) || undefined,
     }))
     process.exit(exitCode)
   }
+
+  const adoptedNote = adoptedServerNote(cellReports)
 
   const lines = []
   for (const c of cellReports) {
@@ -609,6 +634,7 @@ async function main() {
   for (const c of cellReports) for (const f of c.findings) lines.push(f)
   for (const e of excusedLines) lines.push(e)
   if (rulesSkipLine) lines.push(rulesSkipLine)
+  if (adoptedNote) lines.push(adoptedNote)
   lines.push(exitCode === 0 ? '__RENDER_GATE_PASS__' : '__RENDER_GATE_FAIL__')
   writeOut(lines.join('\n'))
   process.exit(exitCode)

@@ -211,6 +211,59 @@ function serveAtlas(root, opts = {}) {
   })
 }
 
+// specs/20260910/04-theme-before-the-client-walk.md D12 (clean-up round): the in-process
+// createRequestHandler HTTP harness — get/post against design-atlas.js's own request handler,
+// mounted on a real ephemeral-port http.createServer with no child process and no port race
+// (the A4 discipline specs/20260910/02-click-to-advance-and-real-records.md set for this exact
+// shape) — one home for what was three drifting copies (tests/design-atlas.test.js,
+// tests/mocks/walk-mode.test.js, tests/mocks/theme-serve.test.js). Every caller's
+// own require-cache-busting `loadDesignAtlas()`-style helper (needed for OTHER, non-HTTP re-require
+// cases those files still have) is untouched — this function does its own cache bust internally,
+// so a test that mutates a fixture on disk between calls always drives the current module.
+// Signature: withHandler(root, fn) or withHandler(root, prefix, fn) — design-atlas.test.js's own
+// call sites already pass a string prefix positionally; callers that never mount under a prefix
+// omit it.
+function withHandler(root, prefixOrFn, maybeFn) {
+  const prefix = typeof prefixOrFn === 'string' ? prefixOrFn : ''
+  const fn = typeof prefixOrFn === 'function' ? prefixOrFn : maybeFn
+  const scriptPath = path.join(SPEC, 'scripts/design-atlas.js')
+  delete require.cache[scriptPath]
+  const mod = require(scriptPath)
+  if (!mod || typeof mod.createRequestHandler !== 'function') {
+    throw new Error('design-atlas.js must export createRequestHandler(root,{prefix})')
+  }
+  const server = http.createServer(mod.createRequestHandler(root, { prefix }))
+  return new Promise((resolve, reject) => {
+    server.listen(0, '127.0.0.1', () => {
+      const port = server.address().port
+      const get = (p) => new Promise((res2, rej2) => {
+        http.get({ host: '127.0.0.1', port, path: p }, (r) => {
+          let body = ''
+          r.on('data', (c) => { body += c })
+          r.on('end', () => res2({ status: r.statusCode, headers: r.headers, body }))
+        }).on('error', rej2)
+      })
+      const post = (p, obj) => new Promise((res2, rej2) => {
+        const data = typeof obj === 'string' ? obj : JSON.stringify(obj)
+        const req = http.request({
+          host: '127.0.0.1', port, path: p, method: 'POST',
+          headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) },
+        }, (r) => {
+          let body = ''
+          r.on('data', (c) => { body += c })
+          r.on('end', () => res2({ status: r.statusCode, headers: r.headers, body }))
+        })
+        req.on('error', rej2)
+        req.end(data)
+      })
+      Promise.resolve(fn({ get, post, port })).then(
+        (v) => server.close(() => resolve(v)),
+        (e) => server.close(() => reject(e)),
+      )
+    })
+  })
+}
+
 // Minimal git repo factory for merge-back / gate tests.
 //
 // Seeding from scratch costs 5 git subprocesses (init, config x2, add, commit), and every repo
@@ -267,5 +320,5 @@ function gitRepo(dir, opts = {}) {
 
 module.exports = {
   ROOT, SPEC, read, extractFn, evalFns, checkWorkflowSyntax, tmpdir, runNode, runBash, gitRepo,
-  freePort, serveAtlas, getJson, postJson,
+  freePort, serveAtlas, getJson, postJson, withHandler,
 }

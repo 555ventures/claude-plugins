@@ -66,12 +66,14 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    Style): `🚫 **{surface} is bound — sketch is pre-plan only.**` then `Next: /spec:design —
    reopen the spec that bound this surface.`
 3. **Theme (first run only).** Run `node {driver} theme state`. A refusal (exit code 2) → STOP,
-   printing the driver's stderr verbatim. `picked` → skip straight to the sweep. `absent` with **no**
-   `design/kit/` resolving → print
+   printing the driver's stderr verbatim. `picked` → skip straight to the sweep — the theme was
+   picked in `/spec:mocks` (THEME), by the client on the two dense screens, and every mock this
+   command draws is served in the picked roles already. `absent` with **no** `design/kit/`
+   resolving → print
    `⚠️ no design/kit/ and no theme — sketching gray, structure only (run /spec:mocks to KIT first)`
-   and continue gray. `absent` **with** a kit family → run
-   the theme interview: read the gray kit, the seed, `design/mocks/references/`, and
-   `docs/design/research-brief.md`; derive 2–3 candidate directions from the brief's product,
+   and continue gray. `absent` **with** a kit family → the host skipped mocks' THEME state, so
+   this command authors the directions itself: read the gray kit, the seed, `design/mocks/references/`,
+   and `docs/design/research-brief.md`; derive 2–3 candidate directions from the brief's product,
    audience, and references and `AskUserQuestion` which to compose — never a stock pair (warm/
    cool, playful/serious). Record each picked direction as a confirmed `theme-directions: <k>`
    row via `node {driver} ledger add --step SKETCH`. Per direction, author
@@ -79,11 +81,12 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    `design/targets.json` declares `dark`) and re-render every kit primitive at production
    fidelity into `design/theme/<k>/kit.html`, primitive keys and structure kept, under the
    `frontend-design` skill, verifying each with `node {driver} theme compose --direction <k>`.
-   Start the served atlas as a tracked background task, run `node {driver} theme open`, print
-   its two lines, and **end the turn** — never `AskUserQuestion`. On the next invocation, run
-   `node {driver} theme adopt`; a `decided change` is one more compose round then a fresh
-   `theme open`. After adopt, when no shell canon exists, `design/shell/app.html` is extracted
-   from the picked direction's kit page rather than authored freehand.
+   Start the served atlas as a tracked background task, run
+   `node {driver} theme shortlist --directions <k1,k2[,k3]>`, print its two lines, and **end the
+   turn** — never `AskUserQuestion`. On the next invocation, run
+   `node {driver} --mark theme-picked`; a `decided change` is one more compose round then a fresh
+   `theme shortlist`. After the mark, when no shell canon exists, `design/shell/app.html` is
+   extracted from the picked direction's kit page rather than authored freehand.
 4. **Scoped sweep — single pass, over this brief's gap surfaces and its existing gray mocks.**
    Every gap surface of this brief is authored in-session by one hand, following the shared
    authorship + grounding rule in full (shared § Design Atlas's authorship paragraph) — no

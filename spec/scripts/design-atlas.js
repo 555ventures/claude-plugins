@@ -391,6 +391,32 @@ function resolveNotesFile(fromPath) {
   }
 }
 
+// specs/20260910/04-theme-before-the-client-walk.md D8: same walk-up shape, for design/mocks/
+// status.json — the one signal `check` reads to know a host already carries a picked theme, so
+// the wire-link warn below (never a hard finding — the register is themed by the ?theme= swap,
+// not by relinking) stops firing once marks.themePicked is set. Absence (no status.json anywhere
+// above the mock) reads as "not picked", same posture the other AC-20260910-04-11 leg keeps.
+function resolveMocksStatusFile(fromPath) {
+  let dir = path.resolve(fromPath)
+  try { if (!fs.statSync(dir).isDirectory()) dir = path.dirname(dir) } catch { dir = path.dirname(dir) }
+  for (;;) {
+    for (const c of [path.join(dir, 'status.json'), path.join(dir, 'mocks', 'status.json'), path.join(dir, 'design', 'mocks', 'status.json')]) {
+      if (fs.existsSync(c)) return c
+    }
+    const up = path.dirname(dir)
+    if (up === dir) return null
+    dir = up
+  }
+}
+function themePickedAbove(fromPath) {
+  const p = resolveMocksStatusFile(fromPath)
+  if (!p) return false
+  try {
+    const s = JSON.parse(fs.readFileSync(p, 'utf8'))
+    return !!(s.marks && s.marks.themePicked)
+  } catch { return false }
+}
+
 // Both D1 and D3 bind on the same stamp split (ratified violation / sketch warn / approved
 // exempt) for a labeled non-canon mock — computed once per file and pushed into `violations` or
 // `warnLines` by the caller, which already owns those arrays.
@@ -401,7 +427,10 @@ function themeAndNotesViolations(f, html, label) {
     const status = statusOf(html)
     if (status !== 'approved') {
       const tokensCss = resolveTokensCss(f)
-      if (tokensCss && linksWireRegister(html)) {
+      // D8/AC-20260910-04-8/-11: once design/mocks/status.json carries marks.themePicked, the
+      // wireframes are themed by the ?theme= link swap, never by relinking — this rule prints
+      // nothing at all (no hard finding, no warn) once that mark is set.
+      if (tokensCss && linksWireRegister(html) && !themePickedAbove(f)) {
         const msg = f + ': links the wireframe register (wire/) after the theme pick — skin it in the picked theme (design/tokens.css)'
         if (status === 'ratified') hard.push(msg); else warn.push(msg)
       }
@@ -1755,6 +1784,31 @@ function walkScriptTag(prefix) {
   return '<script src="' + prefix + '/__walk/walk.js"></script>'
 }
 
+// specs/20260910/04-theme-before-the-client-walk.md D1/A1: GET /mocks/<label>.html?theme=<kebab>
+// serves every stylesheetTargets() hit that lib/wire-register.js's linksWireRegister recognizes
+// as the wireframe register, swapped role-for-role to design/theme/<kebab>/, path-relative form
+// preserved. `kebab` must be `[a-z0-9-]+` and design/theme/<kebab>/tokens.css must exist on disk,
+// else the html comes back byte-identical — advisory tooling, exactly like ?state. The
+// recognition predicate is lib/wire-register.js's own (specs/20260908/07's authority, D9: no
+// second private spelling of "which stylesheet targets are the wireframe register" anywhere else
+// under spec/scripts/); this function owns only the swap once a target is recognized.
+function applyThemeSwap(html, kebab, rootAbs) {
+  if (!kebab || !/^[a-z0-9-]+$/.test(kebab)) return html
+  if (!fs.existsSync(path.join(rootAbs, 'design/theme', kebab, 'tokens.css'))) return html
+  let out = html
+  for (const target of stylesheetTargets(html)) {
+    if (!/(^|\/)tokens\.css$/.test(target)) continue
+    if (!linksWireRegister('<link rel="stylesheet" href="' + target + '">')) continue
+    const segs = target.split('/')
+    const roleIdx = segs.length - 2
+    if (roleIdx < 0 || segs[roleIdx] !== 'wire') continue
+    segs[roleIdx] = 'theme'
+    segs.splice(roleIdx + 1, 0, kebab)
+    out = out.split(target).join(segs.join('/'))
+  }
+  return out
+}
+
 // review fix round F1: insert before the last `</body>`, append at the end when none — shared
 // with injectNotesScript's own placement rule so the two injections never straddle it.
 function insertBeforeBodyEnd(html, snippet) {
@@ -1788,6 +1842,26 @@ function readJsonBody(req) {
 function jsonRes(res, code, obj) {
   res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' })
   res.end(JSON.stringify(obj))
+}
+
+// specs/20260910/04-theme-before-the-client-walk.md D5: shared by the session's /__picks/decide
+// and the client-mounted one — both hand mocks-picks.js's decideStop the same body and map its
+// tagged refusals to the same statuses (an untagged throw is findStop's not-found, so 404).
+function decideAndRespond(res, rootAbs, stops, body, extra) {
+  let result
+  try {
+    result = picksLib.decideStop(stops, body && body.id, extra ? Object.assign({}, body || {}, extra) : (body || {}))
+  } catch (e) {
+    if (!e.code) { jsonRes(res, 404, { error: e.message }); return }
+    if (e.code === 'consumed' || e.code === 'superseded') {
+      jsonRes(res, 409, { error: e.message, stop: stops.find((s) => s.id === (body && body.id)) })
+      return
+    }
+    jsonRes(res, 400, { error: e.message })
+    return
+  }
+  picksLib.writePicks(rootAbs, result.stops)
+  jsonRes(res, 200, result.stop)
 }
 
 // specs/20260910/03-client-journey-player.md D5: shared by GET /review/<j>.html and GET
@@ -2106,14 +2180,61 @@ function createRequestHandler(root, opts = {}) {
         try { return parseLedger(fs.readFileSync(path.join(rootAbs, 'design/mocks/ledger.md'), 'utf8')).assumptions } catch { return [] }
       }
 
+      // specs/20260910/04-theme-before-the-client-walk.md D5/D7: the one signal both the index
+      // link and GET /client/theme.html read — the newest non-superseded, non-consumed
+      // "theme-picked" stop, the same liveStopFor shape mocks-driver.js already uses.
+      const liveThemeStop = () => {
+        let stops = []
+        try { stops = picksLib.readPicks(rootAbs) } catch { stops = [] }
+        const live = stops.filter((s) => s.key === 'theme-picked' && s.status !== 'superseded' && s.status !== 'consumed')
+        if (!live.length) return null
+        live.sort((a, b) => (a.openedAt < b.openedAt ? 1 : a.openedAt > b.openedAt ? -1 : 0))
+        return live[0]
+      }
+      // D7: `theme: status.theme` — read fresh from design/mocks/status.json every request, never
+      // cached; absent/unparseable reads as "no theme adopted yet" (undefined, the same "when set"
+      // posture buildWalkPage's own o.theme check already has).
+      const mocksTheme = () => {
+        try { return JSON.parse(fs.readFileSync(path.join(rootAbs, 'design/mocks/status.json'), 'utf8')).theme || null } catch { return null }
+      }
+
       if ((reqPath === '/index.html' || reqPath === '/') && req.method === 'GET') {
         let notes = []
         try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
+        const themeStop = liveThemeStop()
         const html = walkPageLib.buildClientIndex({
           seed: seedForReview(rootAbs), notes, ledger: readLedgerRowsOrEmpty(), walk: readWalkOrEmpty(), prefix, lang,
+          themeOpen: !!(themeStop && themeStop.status === 'open'),
         })
         res.writeHead(200, { 'content-type': MIME['.html'], 'cache-control': 'no-store' })
         res.end(html)
+        return
+      }
+
+      // D5: the theme compare page — the open or decided theme-picked stop, or none at all.
+      if (reqPath === '/theme.html' && req.method === 'GET') {
+        const html = walkPageLib.buildThemePage({
+          stop: liveThemeStop(), seed: seedForReview(rootAbs), prefix, lang,
+        })
+        res.writeHead(200, { 'content-type': MIME['.html'], 'cache-control': 'no-store' })
+        res.end(html)
+        return
+      }
+
+      // D5: the client-mounted picks decide route — `by` is always forced to "client" regardless
+      // of what the body sent, and only the theme-picked stop may be decided here (a stop keyed
+      // anything else refuses 400, the non-client /__picks/decide route below is untouched).
+      if (reqPath === '/__picks/decide' && req.method === 'POST') {
+        readJsonBody(req).then((body) => {
+          let stops = []
+          try { stops = picksLib.readPicks(rootAbs) } catch { stops = [] }
+          const target = stops.find((s) => s.id === (body && body.id))
+          if (target && target.key !== 'theme-picked') {
+            jsonRes(res, 400, { error: 'the client theme route only decides the theme-picked stop (stop "' + target.id + '" is keyed "' + target.key + '")' })
+            return
+          }
+          decideAndRespond(res, rootAbs, stops, body, { by: 'client' })
+        }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
         return
       }
 
@@ -2123,7 +2244,7 @@ function createRequestHandler(root, opts = {}) {
         try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
         serveBuiltHtml(res, () => walkPageLib.buildWalkPage({
           seed: seedForReview(rootAbs), journey: walkPageMatch[1], notes, ledger: readLedgerRowsOrEmpty(),
-          walk: readWalkOrEmpty(), prefix, lang,
+          walk: readWalkOrEmpty(), prefix, lang, theme: mocksTheme(),
         }))
         return
       }
@@ -2205,22 +2326,7 @@ function createRequestHandler(root, opts = {}) {
       readJsonBody(req).then((body) => {
         let stops = []
         try { stops = picksLib.readPicks(rootAbs) } catch { stops = [] }
-        let result
-        try {
-          result = picksLib.decideStop(stops, body && body.id, body || {})
-        } catch (e) {
-          // mocks-picks.js's decideStop tags its refusals with a code (consumed|superseded|
-          // bad-request); findStop's not-found throw carries none, which is exactly the 404 case.
-          if (!e.code) { jsonRes(res, 404, { error: e.message }); return }
-          if (e.code === 'consumed' || e.code === 'superseded') {
-            jsonRes(res, 409, { error: e.message, stop: stops.find((s) => s.id === (body && body.id)) })
-            return
-          }
-          jsonRes(res, 400, { error: e.message })
-          return
-        }
-        picksLib.writePicks(rootAbs, result.stops)
-        jsonRes(res, 200, result.stop)
+        decideAndRespond(res, rootAbs, stops, body, null)
       }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
       return
     }
@@ -2307,6 +2413,8 @@ function createRequestHandler(root, opts = {}) {
       if (ext === '.html') {
         const state = validState(urlObj.searchParams.get('state'))
         let body = data.toString('utf8')
+        const themeArg = urlObj.searchParams.get('theme')
+        if (themeArg) body = applyThemeSwap(body, themeArg, rootAbs)
         if (state) body = insertBeforeBodyEnd(body, stateClickScript(state))
         if (urlObj.searchParams.has('walk')) body = insertBeforeBodyEnd(body, walkScriptTag(prefix))
         if (!urlObj.searchParams.has('clean')) body = injectNotesScript(body, 'mock', prefix)

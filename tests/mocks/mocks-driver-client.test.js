@@ -6,11 +6,11 @@ const path = require('node:path')
 const { read, tmpdir, runNode } = require('../helpers')
 const {
   SCRIPT, JOURNEY,
-  bare, mark, stateOf, statusPath, statusJson, ledgerCmd,
-  decideLook, freePort, startServe, stopServe,
-  advanceToJourneyWalked, advanceToApproved, advanceToSeedDone,
+  bare, statusJson,
+  freePort, startServe, stopServe,
+  advanceToThemePicked, advanceToApproved, advanceToSeedDone,
   stubNpx,
-  notesPath, writeNotesFile, readNotesFile, nowIso, isoDaysAgo, patchStatus, sha256, stubNpxScreenshot,
+  writeNotesFile, readNotesFile, nowIso, patchStatus, sha256, stubNpxScreenshot,
 } = require('./mocks-driver-fixtures')
 
 // specs/20260907/10-client-review.md — the CLIENT state (D1), `client open --address` (D2),
@@ -22,23 +22,18 @@ const {
 // ---------------------------------------------------------------------------
 // AC-20260907-10-1
 // ---------------------------------------------------------------------------
-test('AC-20260907-10-1: WHEN every declared journey carries walked and marks.approved is unset THE SYSTEM derives CLIENT (--state prints CLIENT; a legacy status.json stamped state:"SIGNOFF" with those marks derives CLIENT), and the string SIGNOFF does not occur anywhere in spec/scripts/mocks-driver.js', () => {
-  const dir = tmpdir('mocks-driver-client-state')
-  advanceToJourneyWalked(dir)
-  const s = stateOf(dir)
-  assert.strictEqual(s.stdout.trim(), 'CLIENT',
-    'AC-1: once every declared journey carries walked and marks.approved is unset, --state must print CLIENT: ' + s.stdout + s.stderr)
-
-  const legacy = statusJson(dir)
-  legacy.state = 'SIGNOFF'
-  fs.writeFileSync(statusPath(dir), JSON.stringify(legacy, null, 2) + '\n')
-  const legacyState = stateOf(dir)
-  assert.strictEqual(legacyState.stdout.trim(), 'CLIENT',
-    'AC-1: a legacy status.json stamped state:"SIGNOFF" with the same marks must still derive CLIENT — the recorded state string is never trusted over the marks-derivation: ' + legacyState.stdout + legacyState.stderr)
-
+// D12 clean-up round (specs/20260910/04-theme-before-the-client-walk.md):
+// the "every walked journey derives CLIENT directly, and a legacy state:'SIGNOFF' string still
+// derives CLIENT" halves of this test are exactly the "CLIENT derived straight from WALK"
+// contract ADR-0013 retires — deleted, not rewritten. The new WALK->THEME->CLIENT derivation
+// (with its own legacy-status.json-ignored coverage) is pinned in
+// tests/mocks/mocks-driver-3.test.js's AC-20260910-04-3. What has NO coverage anywhere else is
+// the literal "SIGNOFF" absence from mocks-driver.js's own source — unrelated to the theme
+// reinstatement, still a live invariant — so a minimal version of exactly that survives here.
+test('AC-20260907-10-1 (D12 minimal): the literal "SIGNOFF" does not occur anywhere in spec/scripts/mocks-driver.js — the state was renamed CLIENT in place, not merely aliased', () => {
   const src = read('spec/scripts/mocks-driver.js')
   assert.ok(!src.includes('SIGNOFF'),
-    'AC-1/D1: the literal "SIGNOFF" must not occur anywhere in spec/scripts/mocks-driver.js — the state is renamed CLIENT in place, not merely aliased: got ' +
+    'the literal "SIGNOFF" must not occur anywhere in spec/scripts/mocks-driver.js: got ' +
     JSON.stringify(src.match(/.{0,40}SIGNOFF.{0,40}/)))
 })
 
@@ -53,13 +48,13 @@ test('AC-20260907-10-2: client open --address refuses (exit 2) naming the cause 
   assert.match(r1.stderr + r1.stdout, /APPROVED/, 'AC-2: the refusal must name the current state ("APPROVED"): ' + r1.stdout + r1.stderr)
 
   const noAddress = tmpdir('client-open-noaddress')
-  advanceToJourneyWalked(noAddress)
+  advanceToThemePicked(noAddress)
   const r2 = bare(noAddress, ['client', 'open'])
   assert.strictEqual(r2.status, 2, 'AC-2: `client open` with no --address must exit 2: ' + r2.stdout + r2.stderr)
   assert.match(r2.stderr + r2.stdout, /--address/, 'AC-2: the refusal must name the missing "--address" flag: ' + r2.stdout + r2.stderr)
 
   const unreachable = tmpdir('client-open-unreachable')
-  advanceToJourneyWalked(unreachable)
+  advanceToThemePicked(unreachable)
   const busyPort = await freePort() // nothing listens on it
   const r3 = bare(unreachable, ['client', 'open', '--address', 'http://127.0.0.1:' + busyPort])
   assert.strictEqual(r3.status, 2, 'AC-2: `client open` against an address that answers nothing must exit 2: ' + r3.stdout + r3.stderr)
@@ -67,7 +62,7 @@ test('AC-20260907-10-2: client open --address refuses (exit 2) naming the cause 
   assert.match(r3.stderr + r3.stdout, /expose it yourself/, 'AC-2: the refusal must carry the exact "expose it yourself" remedy phrase: ' + r3.stdout + r3.stderr)
 
   const live = tmpdir('client-open-live')
-  advanceToJourneyWalked(live)
+  advanceToThemePicked(live)
   const port = await freePort()
   const child = await startServe(live, port)
   try {
@@ -89,7 +84,7 @@ test('AC-20260907-10-2: client open --address refuses (exit 2) naming the cause 
 // ---------------------------------------------------------------------------
 test('AC-20260907-10-17: the bare driver in CLIENT prints a client: line reading "client: not opened — expose the served atlas yourself, then: <driver> client open --address <url>" when status.client is absent, or the exact "client: open since <date> — <address>/client/index.html · client notes: A open · B addressed · C waived · questions: Q unanswered" line when present; with a failing look probe it exits 2 naming the install remedy', () => {
   const notOpened = tmpdir('client-step-notopened')
-  advanceToJourneyWalked(notOpened)
+  advanceToThemePicked(notOpened)
   const step1 = bare(notOpened)
   assert.strictEqual(step1.status, 0, 'a bare invocation in CLIENT with no status.client must exit 0: ' + step1.stdout + step1.stderr)
   assert.match(step1.stdout, /client: not opened — expose the served atlas yourself, then:/,
@@ -98,7 +93,7 @@ test('AC-20260907-10-17: the bare driver in CLIENT prints a client: line reading
     'AC-17: the not-opened client: block must name the "client open --address <url>" command: ' + step1.stdout)
 
   const opened = tmpdir('client-step-opened')
-  advanceToJourneyWalked(opened)
+  advanceToThemePicked(opened)
   patchStatus(opened, { client: { address: 'https://hearwell.example', openedAt: '2026-09-01T00:00:00.000Z' } })
   writeNotesFile(opened, [
     { id: 'N001', scope: 'mock', screen: JOURNEY, state: 'error', text: 'x', by: 'client', at: nowIso(), status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null, origin: 'client', capture: null, lastClientAt: nowIso(), resolution: null, waived: null, answer: null },
@@ -113,7 +108,7 @@ test('AC-20260907-10-17: the bare driver in CLIENT prints a client: line reading
     'AC-17: the opened client: line must derive its counts exactly (1 open, 1 addressed, 1 waived, 1 unanswered question): got ' + step2.stdout)
 
   const failingProbe = tmpdir('client-step-probefail')
-  advanceToJourneyWalked(failingProbe)
+  advanceToThemePicked(failingProbe)
   const failingPath = stubNpx(failingProbe, { exitCode: 1 })
   const r = runNode(SCRIPT, ['--root', failingProbe], { env: { ...process.env, PATH: failingPath } })
   assert.strictEqual(r.status, 2, 'AC-17: CLIENT must still run the look probe before printing its block — a failing npx on PATH must exit 2: ' + r.stdout + r.stderr)

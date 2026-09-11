@@ -1,6 +1,7 @@
 ---
 date: 2026-09-10
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: design-mocks
 design: false
@@ -9,6 +10,7 @@ depends_on: [specs/20260910/03-client-journey-player.md, specs/20260910/06-real-
 depended_on_by: []
 brief: 22a
 open_markers: 0
+diff_base: 7fd991183eddfd79dc37d99789fca2afeca3a52c
 ---
 
 # The theme is picked by the client before the walk: candidates on the two dense screens, the user's shortlist, one client pick, every walked screen served in the picked roles
@@ -42,6 +44,7 @@ chose, and `/spec:sketch` finds the theme already picked.
 | D9 | `/spec:sketch` step 3 (`spec/commands/sketch.md`): `theme state` returning `picked` is the normal path once mocks picked it; the interview/`theme open`/`theme adopt` prose is replaced by "the theme was picked in `/spec:mocks` (THEME); when `design/tokens.css` is absent on a host that skipped mocks, author directions and pick through `theme shortlist` + `--mark theme-picked`". `spec/doctrine/mocks.md` § Mocks: State Machine gains the THEME sentence; § Mocks: Look and Serve names `?theme`; `spec/doctrine/design.md` line "the theme itself is picked on `/spec:sketch`'s first run" becomes "picked in `/spec:mocks`'s THEME state by the client on the two dense screens"; `spec/commands/mocks.md` gains `## Theme (THEME state)` (AC-20260910-04-10) | Doctrine binding homes; sketch keeps its kit-authoring role |
 | D10 | `spec/.claude-plugin/plugin.json` bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` [no-ac: `plugin-bump.js --check` is the oracle] | Version discipline |
 | D11 | `size-baseline.json` is raised for `design-atlas.js`, `mocks-driver.js` and the `spec/scripts` tree by `node scripts/size-ratchet.js --root . --reconcile --cite specs/20260910/04-theme-before-the-client-walk.md` [no-ac: the ratchet's live test is the oracle] | Both entry points sit at their ceilings |
+| D12 | Sibling test files outside the File Plan that assert the pre-ADR-0013 flow are **cleaned up, not retagged** (JJ ruling, 2026-09-11, mid-build): a test whose whole contract this spec retires (`--reopen theme` refused, `never THEME`, `theme-picked` an unknown mark, no top-level `theme` key, CLIENT derived straight from WALK) is **deleted**, never rewritten to assert the new shape — the new shape already has its own executed tests in this spec's own File Plan rows. A test whose contract survives and only fails because its fixture no longer reaches the state it walks to is fixed **once, in the shared fixture**, never per test file. Affected files admitted to scope: `tests/mocks/mocks-driver-2.test.js`, `tests/mocks/mocks-driver-client.test.js`, `tests/mocks/mocks-driver-look-stops-4.test.js`, `tests/mocks/mocks-driver-walk.test.js`, `tests/mocks/mocks-driver.test.js` [no-ac: the gate is the oracle] | The suite is already large; a retired contract earns a deletion, and one fixture fix beats thirteen hand edits |
 
 ## File Plan
 

@@ -7,7 +7,7 @@ const { runNode, tmpdir } = require('../helpers')
 const {
   SCRIPT,
   bare, mark, decideLook,
-  advanceToCanonWritten, advanceToJourneyApproved, advanceToJourneyWalked, confirmEveryJourney,
+  advanceToCanonWritten, advanceToJourneyApproved, advanceToThemePicked, confirmEveryJourney,
   freePort, stubNpx,
 } = require('./mocks-driver-fixtures')
 
@@ -33,7 +33,7 @@ test('AC-20260907-10-17 (retag of AC-20260906-02-6): the bare driver in CLIENT p
   // AC-20260907-08-1/D1 fixture repair: WALK now sits between WIREFRAMES and CLIENT — the
   // bare step block below is vacuous unless the journey is actually walked first, or the
   // driver prints the WALK block instead of CLIENT.
-  advanceToJourneyWalked(dir)
+  advanceToThemePicked(dir)
   const step = bare(dir)
   assert.strictEqual(step.status, 0, 'a bare invocation in CLIENT must exit 0: ' + step.stdout + step.stderr)
   assert.match(step.stdout, /## Step: client review — the product I understand/, 'the CLIENT block must open with the exact D10 heading: ' + step.stdout)
@@ -55,7 +55,7 @@ test('AC-20260907-07-9: in APPROVED the bare driver prints the exact theme-less 
   // WIREFRAMES and SIGNOFF, and deriveState checks allJourneysWalked() before it ever checks
   // marks.approved — the terminal-step assertion below is vacuous unless the journey is walked
   // before `--mark approved`, or the bare re-run prints the WALK block instead of APPROVED.
-  advanceToJourneyWalked(dir)
+  advanceToThemePicked(dir)
   // specs/20260910/03-client-journey-player.md D7 fixture repair: `--mark approved` now
   // refuses while a seed journey is unconfirmed by the client, so this setup records the
   // confirmation to keep the precondition it actually pins isolated.
@@ -95,9 +95,9 @@ test('AC-20260907-10-17 (retag of AC-20260906-02-8 / AC-20260907-07-8): the WIRE
   // AC-20260907-08-1/D1 fixture repair: WALK now sits between WIREFRAMES and CLIENT — this
   // root must actually walk its journey, or it derives WALK (also skill-line-free, but a
   // different state string) instead of CLIENT.
-  advanceToJourneyWalked(clientRoot)
+  advanceToThemePicked(clientRoot)
   const clientStep = runNode(SCRIPT, ['--root', clientRoot], withFullPath(installed))
-  assert.match(clientStep.stdout, /state: CLIENT/, 'AC-20260907-10-17: a root reached through advanceToJourneyWalked must print state: CLIENT (the SIGNOFF state is retired) — got: ' + clientStep.stdout.slice(0, 200))
+  assert.match(clientStep.stdout, /state: CLIENT/, 'AC-20260907-10-17: a root reached through advanceToThemePicked must print state: CLIENT (the SIGNOFF state is retired) — got: ' + clientStep.stdout.slice(0, 200))
   assert.match(clientStep.stdout, /## Step: client review/, 'a journey-approved root must print the CLIENT step block — got: ' + clientStep.stdout.slice(0, 200))
   assert.doesNotMatch(clientStep.stdout, /frontend-design/, 'D8: the CLIENT block must print no line containing "frontend-design" — CLIENT is not an authoring state: ' + clientStep.stdout)
 
@@ -117,16 +117,16 @@ test('AC-20260907-10-17 (retag of AC-20260906-02-8 / AC-20260907-07-8): the WIRE
 // ---------------------------------------------------------------------------
 // AC-20260907-10-17 (retag of AC-20260907-07-8)
 // ---------------------------------------------------------------------------
-test('AC-20260907-10-17 (retag of AC-20260907-07-8): the bare driver on a root reached through advanceToJourneyWalked prints state: CLIENT and does not print the frontend-design skill line', () => {
+test('AC-20260907-10-17 (retag of AC-20260907-07-8): the bare driver on a root reached through advanceToThemePicked prints state: CLIENT and does not print the frontend-design skill line', () => {
   const dir = tmpdir('mocks-driver')
   // AC-20260907-08-1/D1 fixture repair: this root must be walked, not merely journey-approved,
   // to derive CLIENT — WALK now sits between WIREFRAMES and CLIENT.
-  advanceToJourneyWalked(dir) // now at CLIENT
+  advanceToThemePicked(dir) // now at CLIENT
 
   const r = bare(dir)
-  assert.strictEqual(r.status, 0, 'a bare invocation on a root reached through advanceToJourneyWalked must exit 0: ' + r.stdout + r.stderr)
+  assert.strictEqual(r.status, 0, 'a bare invocation on a root reached through advanceToThemePicked must exit 0: ' + r.stdout + r.stderr)
   assert.match(r.stdout, /state: CLIENT/,
-    'AC-20260907-10-17: a root reached through advanceToJourneyWalked must print state: CLIENT (the SIGNOFF state is retired) — got: ' + r.stdout.slice(0, 200))
+    'AC-20260907-10-17: a root reached through advanceToThemePicked must print state: CLIENT (the SIGNOFF state is retired) — got: ' + r.stdout.slice(0, 200))
   assert.ok(!(r.stdout + r.stderr).includes('🎨 Load the `frontend-design` skill'),
     'AC-20260907-10-17: CLIENT must never print the frontend-design skill line: ' + JSON.stringify({ stdout: r.stdout, stderr: r.stderr }))
 })
@@ -134,12 +134,12 @@ test('AC-20260907-10-17 (retag of AC-20260907-07-8): the bare driver on a root r
 // ---------------------------------------------------------------------------
 // AC-20260907-10-17 (retag of AC-20260907-07-14)
 // ---------------------------------------------------------------------------
-test('AC-20260907-10-17 (retag of AC-20260907-07-14): the bare driver on a root reached through advanceToJourneyWalked CONTINUES TO exit 2 naming the install remedy when the look probe fails, the same way SHAPES/WIREFRAMES do', () => {
+test('AC-20260907-10-17 (retag of AC-20260907-07-14): the bare driver on a root reached through advanceToThemePicked CONTINUES TO exit 2 naming the install remedy when the look probe fails, the same way SHAPES/WIREFRAMES do', () => {
   const dir = tmpdir('mocks-driver')
   // AC-20260907-08-1/D1 fixture repair: this test pins the CLIENT probe-failure refusal
   // specifically — the journey must be walked first, or the root sits at WALK (a state
   // AC-20260907-08-9 pins as running no look probe at all, tested separately below).
-  advanceToJourneyWalked(dir)
+  advanceToThemePicked(dir)
   const failingPath = stubNpx(dir, { exitCode: 1 })
 
   const r = runNode(SCRIPT, ['--root', dir], { env: { ...process.env, PATH: failingPath } })

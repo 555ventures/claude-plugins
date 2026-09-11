@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { ROOT, SPEC, read, runNode, tmpdir } = require('../helpers')
-const { bare, advanceToJourneyApproved, advanceToJourneyWalked } = require('../mocks/mocks-driver-fixtures')
+const { bare, advanceToJourneyApproved, advanceToThemePicked } = require('../mocks/mocks-driver-fixtures')
 
 // specs/20260824/05-design-doctrine-cut.md D1/D2/D5: spec/doctrine/design.md holds five
 // sections (contracts a script enforces or a worker applies only) capped at 160 lines;
@@ -156,16 +156,16 @@ test('AC-20260902-10-7: spec/commands/mocks.md names the four D6 triage bins and
 })
 
 // specs/20260906/02-mocks-ends-at-wireframes.md D11: setup now goes through the shared
-// mocks-driver-fixtures.js `advanceToJourneyApproved` helper (SKIN and REVIEW are retired). Fixture
-// repair (specs/20260907/07-mocks-retires-theme.md): THEME is retired too. specs/20260907/10-
-// client-review.md D1/D12: the sign-off state is renamed CLIENT in place (SIGNOFF is retired),
-// reached straight from WALK — the D7/D10 approval literal is carried over unchanged.
+// mocks-driver-fixtures.js `advanceToJourneyApproved` helper (SKIN and REVIEW are retired).
+// specs/20260907/10-client-review.md D1/D12: the sign-off state is renamed CLIENT in place
+// (SIGNOFF is retired) — the D7/D10 approval literal is carried over unchanged.
+// specs/20260910/04-theme-before-the-client-walk.md D3 fixture repair (D12 clean-up round):
+// ADR-0013 reinstates THEME between WALK and CLIENT — the journey must be
+// walked AND the theme picked, or the driver prints the THEME block instead of the CLIENT
+// approval literal this AC pins.
 test('AC-20260907-10-13 (retag of AC-20260902-10-8): WHEN the driver prints the CLIENT step THE SYSTEM includes the D10 approval literal', () => {
   const dir = tmpdir('mocks-review-client')
-  // specs/20260907/08-walk-critic.md AC-20260907-08-1/D1 fixture repair: WALK now sits between
-  // WIREFRAMES and CLIENT — the journey must be walked, or the driver prints the WALK block
-  // instead of the CLIENT approval literal this AC pins.
-  advanceToJourneyWalked(dir)
+  advanceToThemePicked(dir)
   const step = bare(dir)
   assert.strictEqual(step.status, 0, 'a bare invocation at the CLIENT approval step must exit 0: ' + step.stderr)
   assert.ok(step.stdout.includes('the written brief, not these screens, holds scope'),
@@ -327,11 +327,17 @@ test('AC-20260907-04-14: spec/doctrine/mocks.md names SEED, SHAPES, KIT, WIREFRA
 // inside step 3's "Scoped sweep" absent-tokens clause), and that clause still names both
 // "/spec:mocks THEME" and "no theme picked yet" — so every assertion below is false against the
 // pre-image, including the two literals this AC requires to be absent everywhere in the file.
-test('AC-20260907-06-8: spec/commands/sketch.md carries a step under § The run, positioned before both the Critique and Exit steps, whose heading names Theme and whose body names theme state/compose/open/adopt, the no-kit gray-floor warning literal, and "end the turn"; the file names neither "/spec:mocks THEME" nor "no theme picked yet" anywhere', () => {
+// Retagged (specs/20260910/04-theme-before-the-client-walk.md D9, ADR-0013): the theme pick
+// belongs to /spec:mocks's THEME state; sketch.md's Theme step runs `theme state` as the
+// normal-path check (`picked` is expected) and points the absent-tokens fallback at
+// `/spec:mocks` (THEME) plus `theme shortlist` + `--mark theme-picked` for a host that skipped
+// mocks — an interview/`theme open`/`theme adopt` flow inside sketch.md is exactly the collision
+// this spec's Rationale owns (D9 hands that pick back to `/spec:mocks` on purpose). TDD red: this
+// spec's own worktree still carries sketch.md's `theme open`/`theme adopt` interview body with no
+// `theme shortlist` mention anywhere, so the literal-presence assertions below fail against it.
+test('AC-20260907-06-8 (retag of the interview-body literals, specs/20260910/04-theme-before-the-client-walk.md D9): spec/commands/sketch.md carries a step under § The run, positioned before both the Critique and Exit steps, whose heading names Theme and whose body names theme state and theme shortlist but neither theme open nor theme adopt as a live command; the file names no "no theme picked yet" anywhere', () => {
   const src = read('spec/commands/sketch.md')
 
-  assert.ok(!src.includes('/spec:mocks THEME'),
-    'D7 retires the mocks-THEME hand-off from sketch.md outright — "/spec:mocks THEME" must not appear anywhere in the file: ' + JSON.stringify(src.match(/.{0,40}\/spec:mocks THEME.{0,40}/)))
   assert.ok(!src.includes('no theme picked yet'),
     'D7 rewords the absent-theme branch — the retired "no theme picked yet" phrasing must not appear anywhere in the file: ' + JSON.stringify(src.match(/.{0,40}no theme picked yet.{0,40}/)))
 
@@ -364,13 +370,13 @@ test('AC-20260907-06-8: spec/commands/sketch.md carries a step under § The run,
   const themeStepEnd = stepStarts.find((i) => i > themeIdx)
   const themeStep = runSection.slice(themeStepStart, themeStepEnd === undefined ? runSection.length : themeStepEnd)
 
-  for (const literal of [
-    'theme state', 'theme compose', 'theme open', 'theme adopt',
-    '⚠️ no design/kit/ and no theme — sketching gray, structure only (run /spec:mocks to KIT first)',
-    'end the turn',
-  ]) {
+  for (const literal of ['theme state', 'theme shortlist']) {
     assert.ok(themeStep.includes(literal),
-      'D7: the Theme step\'s OWN body must name "' + literal + '" — the Theme step wires the driver\'s theme subcommand family, the no-kit gray floor, and the turn-ending look-stop hand-off; a literal sitting in a sibling step does not satisfy this AC: ' + themeStep)
+      'D9: the Theme step\'s OWN body must name "' + literal + '" — theme state stays the normal-path check, theme shortlist is the fallback authoring path for a host that skipped mocks; a literal sitting in a sibling step does not satisfy this AC: ' + themeStep)
+  }
+  for (const retired of ['theme open', 'theme adopt']) {
+    assert.ok(!themeStep.includes(retired),
+      'D9: the Theme step must name neither "' + retired + '" as a live command — both are retired in favor of `theme shortlist` + `--mark theme-picked`: ' + themeStep)
   }
 })
 
@@ -381,7 +387,13 @@ test('AC-20260907-06-8: spec/commands/sketch.md carries a step under § The run,
 // reference every later sketch surface is built from. TDD red: today's sentence names none of
 // this — no "design/theme/", no "fidelity reference", and no mention that the theme is picked
 // on sketch's first run.
-test('AC-20260907-06-9: spec/doctrine/design.md § Design Canon names design/theme/<kebab>/kit.html, the phrase "fidelity reference", and that the theme is picked on /spec:sketch\'s first run', () => {
+// Retagged (specs/20260910/04-theme-before-the-client-walk.md D9/AC-20260910-04-10, ADR-0013):
+// the theme pick belongs to /spec:mocks's THEME state, picked by the client on the two dense
+// screens — § Design Canon's "picked on /spec:sketch's first run" clause is exactly the phrase
+// AC-20260910-04-10 requires design.md to keep absent, the collision this spec's Rationale owns.
+// TDD red: this spec's own worktree still carries that literal in spec/doctrine/design.md, so the
+// "must NOT say" assertion below fails against it.
+test('AC-20260907-06-9 (retag of the sketch-first-run clause, specs/20260910/04-theme-before-the-client-walk.md D9): spec/doctrine/design.md § Design Canon names design/theme/<kebab>/kit.html and the phrase "fidelity reference", and no longer says the theme is picked on /spec:sketch\'s first run', () => {
   const src = read('spec/doctrine/design.md')
   const canonIdx = src.indexOf('## Design Canon')
   assert.ok(canonIdx !== -1, 'spec/doctrine/design.md must still carry a "## Design Canon" heading to anchor this search')
@@ -392,8 +404,8 @@ test('AC-20260907-06-9: spec/doctrine/design.md § Design Canon names design/the
     'D8: § Design Canon must name design/theme/<kebab>/kit.html — the candidate direction path every later sketch surface is built from: ' + canonSection)
   assert.ok(canonSection.includes('fidelity reference'),
     'D8: § Design Canon must name the phrase "fidelity reference" — the picked direction\'s kit page is the fidelity reference: ' + canonSection)
-  assert.match(canonSection, /theme[^.]*picked[^.]*(?:\/spec:sketch|sketch)[^.]*first run|(?:\/spec:sketch|sketch)[^.]*first run[^.]*theme[^.]*picked/,
-    'D8: § Design Canon must say the theme itself is picked on /spec:sketch\'s first run: ' + canonSection)
+  assert.ok(!/first run/.test(canonSection),
+    'D9/AC-20260910-04-10: § Design Canon must no longer say the theme is picked on /spec:sketch\'s first run — the pick moves back to /spec:mocks\'s THEME state: ' + canonSection)
 })
 
 // specs/20260907/07-mocks-retires-theme.md D8, AC-20260907-07-10 (retag AC-20260907-10-13): the
@@ -404,7 +416,18 @@ test('AC-20260907-06-9: spec/doctrine/design.md § Design Canon names design/the
 // describes no THEME and no SIGNOFF state anywhere, except § Provenance Ledger's own "retired
 // step names still parse" clause, which deliberately names THEME and SIGNOFF (alongside SKIN and
 // REVIEW) as retired-but-still-parsing step names.
-test('AC-20260907-10-13 (retag of AC-20260907-07-10): spec/doctrine/mocks.md carries no THEME or SIGNOFF occurrence outside § Provenance Ledger\'s retired-step-names clause, no theme-picked/direction-composed/--reopen theme, no "Theme = recompose, never repaint" bullet, and names SEED, SHAPES, KIT, WIREFRAMES, WALK, CLIENT, APPROVED in that order within its § Mocks: State Machine order sentence', () => {
+// Retagged (specs/20260910/04-theme-before-the-client-walk.md D9, ADR-0013): THEME returns to
+// the mocks state machine between WALK and CLIENT, and `theme-picked`/`--reopen theme` return as
+// live literals alongside it — exactly the collision this spec's own Rationale names ("the pins
+// that assert 'never THEME' and 'theme-picked is unknown' are the collision this spec owns; they
+// are retagged to the new derivation, never weakened"). `direction-composed` and the "Theme =
+// recompose, never repaint" bullet stay retired (this spec reuses neither). SIGNOFF stays fully
+// retired — unrelated to this spec, unchanged. TDD red: spec/doctrine/mocks.md's pre-image still
+// forbids THEME everywhere outside § Provenance Ledger and still forbids theme-picked/--reopen
+// theme outright, so the assertions below (which now scope the forbidden zone to exclude
+// § Mocks: State Machine, and drop theme-picked/--reopen theme from the forbidden-literal list)
+// are false against the pre-image — the doctrine text has not moved yet.
+test('AC-20260907-10-13 (retag of AC-20260907-07-10, re-retagged specs/20260910/04-theme-before-the-client-walk.md D9): spec/doctrine/mocks.md carries no SIGNOFF occurrence outside § Provenance Ledger\'s retired-step-names clause, no THEME occurrence outside § Provenance Ledger or § Mocks: State Machine, no direction-composed or "Theme = recompose, never repaint" bullet, and names SEED, SHAPES, KIT, WIREFRAMES, WALK, CLIENT, APPROVED in that order within its § Mocks: State Machine order sentence', () => {
   const p = 'spec/doctrine/mocks.md'
   assert.ok(fs.existsSync(path.join(ROOT, p)), p + ' must exist for this doctrine pin to be meaningful')
   const src = read(p)
@@ -414,12 +437,27 @@ test('AC-20260907-10-13 (retag of AC-20260907-07-10): spec/doctrine/mocks.md car
   const ledgerNextIdx = src.indexOf('\n## ', ledgerIdx + 1)
   const ledgerEnd = ledgerNextIdx === -1 ? src.length : ledgerNextIdx
   const ledgerSection = src.slice(ledgerIdx, ledgerEnd)
-  const withoutLedger = src.slice(0, ledgerIdx) + src.slice(ledgerEnd)
 
-  assert.ok(!withoutLedger.includes('THEME'),
-    'D8: no occurrence of "THEME" may remain outside § Provenance Ledger\'s retired-step-names clause — the state is fully retired: ' + JSON.stringify(withoutLedger.match(/.{0,40}THEME.{0,40}/)))
+  const stateMachineIdx = src.indexOf('## Mocks: State Machine')
+  assert.ok(stateMachineIdx !== -1, p + ' must carry a "## Mocks: State Machine" heading to anchor the order-sentence search')
+  const smNextIdx = src.indexOf('\n## ', stateMachineIdx + 1)
+  const stateMachineEnd = smNextIdx === -1 ? src.length : smNextIdx
+  const stateMachineSection = src.slice(stateMachineIdx, stateMachineEnd)
+
+  // D9: THEME may appear in exactly two homes now — § Provenance Ledger's retired-step-names
+  // clause (SKIN/REVIEW/THEME/SIGNOFF, unchanged) and § Mocks: State Machine's own order
+  // sentence (ADR-0013's reinstatement) — nowhere else.
+  const withoutLedgerAndStateMachine = ledgerIdx < stateMachineIdx
+    ? src.slice(0, ledgerIdx) + src.slice(ledgerEnd, stateMachineIdx) + src.slice(stateMachineEnd)
+    : src.slice(0, stateMachineIdx) + src.slice(stateMachineEnd, ledgerIdx) + src.slice(ledgerEnd)
+  assert.ok(!withoutLedgerAndStateMachine.includes('THEME'),
+    'D9: no occurrence of "THEME" may remain outside § Provenance Ledger\'s retired-step-names clause and § Mocks: State Machine\'s own order sentence: ' +
+    JSON.stringify(withoutLedgerAndStateMachine.match(/.{0,40}THEME.{0,40}/)))
+  assert.match(stateMachineSection, /THEME/, 'D9: § Mocks: State Machine must itself name THEME once ADR-0013 reinstates it: ' + stateMachineSection)
+
+  const withoutLedger = src.slice(0, ledgerIdx) + src.slice(ledgerEnd)
   assert.ok(!withoutLedger.includes('SIGNOFF'),
-    'D12: no occurrence of "SIGNOFF" may remain outside § Provenance Ledger\'s retired-step-names clause — the state is renamed CLIENT: ' + JSON.stringify(withoutLedger.match(/.{0,40}SIGNOFF.{0,40}/)))
+    'D12: no occurrence of "SIGNOFF" may remain outside § Provenance Ledger\'s retired-step-names clause — the state stays renamed CLIENT: ' + JSON.stringify(withoutLedger.match(/.{0,40}SIGNOFF.{0,40}/)))
   assert.match(ledgerSection, /THEME/,
     'D8: § Provenance Ledger must still name THEME beside SKIN and REVIEW in its retired-but-still-parsing clause: ' + ledgerSection)
   assert.match(ledgerSection, /SIGNOFF/,
@@ -429,16 +467,12 @@ test('AC-20260907-10-13 (retag of AC-20260907-07-10): spec/doctrine/mocks.md car
   assert.match(ledgerSection, /SKETCH/, 'D8: § Provenance Ledger\'s live step-vocabulary examples must add SKETCH in THEME\'s place: ' + ledgerSection)
   assert.match(ledgerSection, /CLIENT/, 'D12: § Provenance Ledger\'s live step-vocabulary examples must list CLIENT (SIGNOFF\'s successor): ' + ledgerSection)
 
-  for (const literal of ['theme-picked', 'direction-composed', '--reopen theme', 'Theme = recompose, never repaint']) {
+  for (const literal of ['direction-composed', 'Theme = recompose, never repaint']) {
     assert.ok(!src.includes(literal),
-      'D8: spec/doctrine/mocks.md must name none of the retired literal "' + literal + '" — its presence means a retired THEME-era mark, reopen target, or authoring rule is still documented: ' +
+      'D9: spec/doctrine/mocks.md must name none of the retired literal "' + literal + '" — its presence means a retired mark or authoring rule this spec does not reinstate is still documented: ' +
       JSON.stringify(src.match(new RegExp('.{0,40}' + literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '.{0,40}'))))
   }
 
-  const stateMachineIdx = src.indexOf('## Mocks: State Machine')
-  assert.ok(stateMachineIdx !== -1, p + ' must carry a "## Mocks: State Machine" heading to anchor the order-sentence search')
-  const smNextIdx = src.indexOf('\n## ', stateMachineIdx + 1)
-  const stateMachineSection = src.slice(stateMachineIdx, smNextIdx === -1 ? src.length : smNextIdx)
   const orderTokens = ['SEED', 'SHAPES', 'KIT', 'WIREFRAMES', 'WALK', 'CLIENT', 'APPROVED']
   const positions = orderTokens.map((tok) => stateMachineSection.indexOf('**' + tok + '**'))
   assert.ok(positions.every((pos) => pos !== -1),
@@ -461,14 +495,21 @@ test('AC-20260907-10-13 (retag of AC-20260907-07-10): spec/doctrine/mocks.md car
 // HEAD: `grep -rn "frontend-design skill line" spec/` finds this literal nowhere in the repo. The
 // AC's own requirement is still fully testable and left as an executable pin below; the doctrine
 // worker authors the paragraph net-new under "## The driver loop" rather than moving one.
-test('AC-20260907-10-19 (retag of AC-20260907-07-11): spec/commands/mocks.md carries no "## THEME interview rule" heading, no "## Sign-off" heading, and no THEME occurrence anywhere; carries the frontend-design skill-line paragraph under "## The driver loop"; a "## Client review (CLIENT state)" heading names client open --address, notes address … --port, notes waive, seven days, stop open signoff and --mark approved; the look rule names CLIENT and its <step> enumeration is unchanged (shapes | kit | journey:<j> | signoff)', () => {
+// Retagged (specs/20260910/04-theme-before-the-client-walk.md D9, ADR-0013): spec/commands/
+// mocks.md gains a "## Theme (THEME state)" heading — THEME is a step the driver can print (this
+// file's own step-narration promise) — so a blanket "no THEME occurrence anywhere" check is
+// exactly the collision this spec's Rationale owns. The "## THEME interview rule" heading name
+// (sketch.md's own theme-authoring-inside-sketch section) is unrelated prose and stays forbidden.
+// TDD red: this spec's own worktree carries no "## Theme (THEME state)" heading anywhere in
+// spec/commands/mocks.md, so the assertion requiring it below fails against it.
+test('AC-20260907-10-19 (retag of AC-20260907-07-11, re-retagged specs/20260910/04-theme-before-the-client-walk.md D9): spec/commands/mocks.md carries no "## THEME interview rule" heading, no "## Sign-off" heading, and a "## Theme (THEME state)" heading (the only sanctioned THEME occurrence); carries the frontend-design skill-line paragraph under "## The driver loop"; a "## Client review (CLIENT state)" heading names client open --address, notes address … --port, notes waive, seven days, stop open signoff and --mark approved; the look rule names CLIENT and its <step> enumeration is unchanged (shapes | kit | journey:<j> | signoff)', () => {
   const p = 'spec/commands/mocks.md'
   const src = read(p)
 
   assert.ok(!src.includes('## THEME interview rule'),
-    'D9: "## THEME interview rule" must be deleted whole — its successor lives in sketch.md § The run\'s Theme step (specs/20260907/06 D7): ' + JSON.stringify(src.match(/.{0,40}THEME interview rule.{0,40}/)))
-  assert.ok(!src.includes('THEME'),
-    'D9: spec/commands/mocks.md must name no "THEME" occurrence anywhere — every step it narrates must be one the driver can still print: ' + JSON.stringify(src.match(/.{0,40}THEME.{0,40}/)))
+    'D9: "## THEME interview rule" must be deleted whole — its successor lives under this file\'s own "## Theme (THEME state)" heading: ' + JSON.stringify(src.match(/.{0,40}THEME interview rule.{0,40}/)))
+  assert.ok(src.includes('## Theme (THEME state)'),
+    'D9/AC-20260910-04-10: spec/commands/mocks.md must carry a "## Theme (THEME state)" heading now that THEME is reinstated: ' + src.slice(0, 200))
   assert.ok(!src.includes('## Sign-off'),
     'D12: "## Sign-off (SIGNOFF state)" must be replaced whole by "## Client review (CLIENT state)": ' + JSON.stringify(src.match(/.{0,40}## Sign-off.{0,40}/)))
 
@@ -646,4 +687,46 @@ test('AC-20260910-03-9: spec/doctrine/mocks.md carries a "## Mocks: Client Playe
     'D9: ' + commandsPath + ' § Client review must name `client log`: got\n' + clientReviewSection)
   assert.ok(clientReviewSection.includes('client waive'),
     'D9: ' + commandsPath + ' § Client review must name `client waive`: got\n' + clientReviewSection)
+})
+
+// specs/20260910/04-theme-before-the-client-walk.md D9, AC-20260910-04-10 (ADR-0013): THEME
+// returns to /spec:mocks's own state machine, between WALK and CLIENT — the doctrine binding
+// homes this spec's Decisions table names directly. TDD red: spec/doctrine/mocks.md's § Mocks:
+// State Machine order sentence carries no THEME and no "?theme=" literal yet, spec/doctrine/
+// design.md still says the theme is picked on /spec:sketch's first run, spec/commands/sketch.md
+// step 3 still runs its own theme open/theme adopt interview with no theme shortlist mention, and
+// spec/commands/mocks.md carries no "## Theme (THEME state)" heading — so every assertion below
+// is false against the pre-image.
+test('AC-20260910-04-10: spec/doctrine/mocks.md carries WALK -> THEME -> CLIENT in its § Mocks: State Machine order sentence and the literal "?theme="; spec/doctrine/design.md does not carry "picked on /spec:sketch\'s first run"; spec/commands/sketch.md step 3 carries `theme shortlist` and neither `theme open` nor `theme adopt` as a live command; spec/commands/mocks.md carries "## Theme (THEME state)"', () => {
+  const mocksDoctrine = read('spec/doctrine/mocks.md')
+  const smIdx = mocksDoctrine.indexOf('## Mocks: State Machine')
+  assert.ok(smIdx !== -1, 'spec/doctrine/mocks.md must carry a "## Mocks: State Machine" heading to anchor this search')
+  const smNextIdx = mocksDoctrine.indexOf('\n## ', smIdx + 1)
+  const smSection = mocksDoctrine.slice(smIdx, smNextIdx === -1 ? mocksDoctrine.length : smNextIdx)
+  const walkIdx = smSection.indexOf('**WALK**')
+  const themeIdx = smSection.indexOf('**THEME**')
+  const clientIdx = smSection.indexOf('**CLIENT**')
+  assert.ok(walkIdx !== -1 && themeIdx !== -1 && clientIdx !== -1,
+    'AC-20260910-04-10: § Mocks: State Machine must name **WALK**, **THEME** and **CLIENT** (each bold): got positions ' + JSON.stringify({ walkIdx, themeIdx, clientIdx }) + ' in:\n' + smSection)
+  assert.ok(walkIdx < themeIdx && themeIdx < clientIdx,
+    'AC-20260910-04-10: the order sentence must name WALK -> THEME -> CLIENT in that order: got positions ' + JSON.stringify({ walkIdx, themeIdx, clientIdx }))
+  assert.ok(mocksDoctrine.includes('?theme='),
+    'AC-20260910-04-10: spec/doctrine/mocks.md must carry the literal "?theme=" (the D1 link-swap param): got no occurrence')
+
+  const designDoctrine = read('spec/doctrine/design.md')
+  assert.ok(!/picked on `\/spec:sketch`'s first run/.test(designDoctrine),
+    'AC-20260910-04-10: spec/doctrine/design.md must not carry "picked on `/spec:sketch`\'s first run": ' + JSON.stringify(designDoctrine.match(/.{0,40}first run.{0,40}/)))
+
+  const sketchCmd = read('spec/commands/sketch.md')
+  const step3Idx = sketchCmd.search(/\n3\.\s+\*\*/)
+  assert.ok(step3Idx !== -1, 'spec/commands/sketch.md must carry a numbered step 3 ("3. **...") to anchor the Theme step search')
+  const step4Idx = sketchCmd.indexOf('\n4. ', step3Idx + 1)
+  const step3Section = sketchCmd.slice(step3Idx, step4Idx === -1 ? sketchCmd.length : step4Idx)
+  assert.match(step3Section, /theme shortlist/, 'AC-20260910-04-10: spec/commands/sketch.md step 3 must carry `theme shortlist`: ' + step3Section)
+  assert.ok(!step3Section.includes('theme open'), 'AC-20260910-04-10: spec/commands/sketch.md step 3 must name no `theme open` as a live command: ' + step3Section)
+  assert.ok(!step3Section.includes('theme adopt'), 'AC-20260910-04-10: spec/commands/sketch.md step 3 must name no `theme adopt` as a live command: ' + step3Section)
+
+  const mocksCmd = read('spec/commands/mocks.md')
+  assert.ok(mocksCmd.includes('## Theme (THEME state)'),
+    'AC-20260910-04-10: spec/commands/mocks.md must carry a "## Theme (THEME state)" heading: got no occurrence')
 })

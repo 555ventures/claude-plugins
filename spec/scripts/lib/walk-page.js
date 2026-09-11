@@ -57,6 +57,10 @@ const STRINGS = {
     sentence: 'In one sentence…',
     confirm: 'Confirm this journey',
     confirmedLead: 'You confirmed this journey.',
+    themeNone: 'nothing to pick yet',
+    themePrompt: 'Pick a look',
+    themePick: 'Pick this',
+    themePicked: 'Picked',
   },
   ja: {
     indexLead: 'ジャーニーを開いて、最後まで進んでください。思ったとおりかどうか教えてください。',
@@ -80,6 +84,10 @@ const STRINGS = {
     sentence: '一文で…',
     confirm: 'このジャーニーを確認',
     confirmedLead: 'このジャーニーを確認しました。',
+    themeNone: 'まだ選ぶものはありません',
+    themePrompt: '見た目を選んでください',
+    themePick: 'これに決める',
+    themePicked: '決定済み',
   },
 }
 
@@ -143,14 +151,112 @@ function buildClientIndex(input) {
       '</span></a>'
   }).join('')
 
+  // specs/20260910/04-theme-before-the-client-walk.md D7: the index links the theme page while
+  // its own pick stop is open — `o.themeOpen` is a plain boolean the caller derives from
+  // picks.json (this pure builder never reads it itself).
+  const themeLink = o.themeOpen
+    ? '<a class="wk-theme" data-cl="theme" href="' + esc(prefix) + '/client/theme.html">' + esc(s.themePrompt) + '</a>'
+    : ''
+
   return head(seed.product || 'Mocks', prefix) +
     '<body class="wk wk-index" data-prefix="' + esc(prefix) + '">' +
     '<main class="wk-index-main">' +
     '<h1 class="wk-title">' + esc(seed.product || 'Mocks') + '</h1>' +
     '<p class="wk-lead">' + esc(s.indexLead) + '</p>' +
+    themeLink +
     '<nav class="wk-list">' + rows + '</nav>' +
     '</main>' +
     '<script src="' + esc(prefix) + '/__walk/player.js"></script>' +
+    '</body></html>\n'
+}
+
+// ---------------------------------------------------------------------------
+// specs/20260910/04-theme-before-the-client-walk.md D5: the theme compare page —
+// GET /client/theme.html renders the open or decided theme-picked stop as a table of dense
+// screens (rows) × directions (columns), each cell a live frame of the mock served with
+// ?theme=<kebab>. A [data-th="pick"][data-group] button per column posts the decision through
+// POST /client/__picks/decide (design-atlas.js forces `by` to "client" and refuses any key but
+// theme-picked); the picked column is marked once decided. With no such stop the page renders
+// only the "nothing to pick yet" string and no pick button at all.
+// ---------------------------------------------------------------------------
+// The page's own inline decide script — a small, single-purpose sibling of lib/stop-block.js's
+// PICKS_SCRIPT (never reused directly: this page posts through the CLIENT mount, which forces
+// `by` server-side, so there is no author-identity prompt here at all — D3's client pages never
+// ask who is answering).
+function themeDecideScript(prefix) {
+  return '<script>(function(){\n' +
+    'function post(id,extra){\n' +
+    "  var body=Object.assign({id:id,verdict:'pick'},extra||{})\n" +
+    "  return fetch('" + esc(prefix) + "/client/__picks/decide',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})\n" +
+    '    .then(function(r){return r.json().then(function(j){return {status:r.status,body:j}})})\n' +
+    '}\n' +
+    "document.addEventListener('click',function(e){\n" +
+    "  var btn=e.target.closest && e.target.closest('[data-th=\"pick\"]')\n" +
+    '  if(!btn) return\n' +
+    "  var id=document.body.getAttribute('data-stop-id')\n" +
+    '  if(!id) return\n' +
+    "  post(id,{pick:btn.getAttribute('data-group')}).then(function(res){\n" +
+    '    if(res.status===200) location.reload()\n' +
+    '  })\n' +
+    '})\n' +
+    '})()</script>'
+}
+
+function buildThemePage(input) {
+  const o = input || {}
+  const stop = o.stop || null
+  const seed = o.seed || { product: '' }
+  const prefix = o.prefix || ''
+  const s = stringsFor(o.lang)
+  const candidates = (stop && Array.isArray(stop.candidates)) ? stop.candidates : []
+
+  const groups = []
+  const labels = []
+  for (const c of candidates) {
+    if (!groups.includes(c.group)) groups.push(c.group)
+    if (!labels.includes(c.label)) labels.push(c.label)
+  }
+  const decided = !!(stop && stop.status === 'decided' && stop.decision)
+  const pickedGroup = decided ? stop.decision.pick : null
+
+  let body
+  if (!candidates.length) {
+    body = '<p class="th-empty">' + esc(s.themeNone) + '</p>'
+  } else {
+    const heads = groups.map((g) => {
+      const isPicked = decided && g === pickedGroup
+      return '<div class="th-head' + (isPicked ? ' th-picked' : '') + '" data-group="' + esc(g) + '">' +
+        '<span class="th-name">' + esc(g) + '</span>' +
+        '<button data-th="pick" data-group="' + esc(g) + '"' + (isPicked ? ' disabled' : '') + '>' +
+        esc(isPicked ? s.themePicked : s.themePick) + '</button></div>'
+    }).join('')
+    const rows = labels.map((label) => {
+      const cells = groups.map((g) => {
+        const cand = candidates.find((c) => c.group === g && c.label === label)
+        if (!cand) return '<div class="th-cell th-cell-empty"></div>'
+        // D5's own Contracts example spells the src unescaped ("?clean&theme=<k>") — esc() only
+        // the base path (label/prefix are the one untrusted-ish part); the query string is built
+        // from already-validated kebabs/labels, so it is appended raw, matching frameTag's own
+        // "escape the path, not the trailing query" convention above.
+        const src = esc(prefix + '/mocks/' + encodeURIComponent(label) + '.html') + '?clean&theme=' + encodeURIComponent(g)
+        return '<div class="th-cell" data-group="' + esc(g) + '" data-label="' + esc(label) + '">' +
+          '<iframe class="th-frame" title="' + esc(label) + '" src="' + src + '"></iframe></div>'
+      }).join('')
+      return '<div class="th-row"><div class="th-row-label">' + esc(label) + '</div>' + cells + '</div>'
+    }).join('')
+    // id="stop-<id>" matches every other stop renderer's own convention (design-atlas.js's
+    // renderCompareTable/renderApproveStop) — `stop open`'s own probe (cmdStopOpen) confirms a
+    // freshly opened stop actually rendered by grepping the served body for this exact literal.
+    body = '<div class="th-cmp" id="stop-' + esc(stop.id) + '" style="--cols:' + groups.length + '">' + heads + rows + '</div>'
+  }
+
+  return head((seed.product || 'Mocks') + ' · theme', prefix) +
+    '<body class="wk th-page" data-prefix="' + esc(prefix) + '" data-stop-id="' + esc(stop ? stop.id : '') + '">' +
+    '<main class="th-main">' +
+    '<h1 class="wk-title">' + esc(s.themePrompt) + '</h1>' +
+    body +
+    '</main>' +
+    (candidates.length ? themeDecideScript(prefix) : '') +
     '</body></html>\n'
 }
 
@@ -245,4 +351,4 @@ function buildWalkPage(input) {
     '</body></html>\n'
 }
 
-module.exports = { buildClientIndex, buildWalkPage, STRINGS }
+module.exports = { buildClientIndex, buildWalkPage, buildThemePage, STRINGS }

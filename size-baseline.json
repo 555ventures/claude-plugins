@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 61878,
-    "spec/scripts": 1359266,
-    "spec/scripts/lib": 279809,
-    "tests": 3934140
+    "spec/scripts": 1372333,
+    "spec/scripts/lib": 285543,
+    "tests": 3943920
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -23,7 +23,7 @@
     "spec/scripts/commit-coverage.js": 16400,
     "spec/scripts/components-check.js": 4708,
     "spec/scripts/design-ac-reconcile.js": 6011,
-    "spec/scripts/design-atlas.js": 156386,
+    "spec/scripts/design-atlas.js": 162324,
     "spec/scripts/env-preflight.js": 8794,
     "spec/scripts/escape-row.js": 10045,
     "spec/scripts/fleet-reader.js": 47448,
@@ -59,13 +59,13 @@
     "spec/scripts/lib/stop-block.js": 9749,
     "spec/scripts/lib/surfaces.js": 5646,
     "spec/scripts/lib/walk-mode.browser.js": 3101,
-    "spec/scripts/lib/walk-page.js": 12132,
+    "spec/scripts/lib/walk-page.js": 17866,
     "spec/scripts/lib/walk.browser.js": 10413,
     "spec/scripts/lib/wire-register.js": 2871,
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
     "spec/scripts/merge-back.sh": 17514,
-    "spec/scripts/mocks-driver.js": 130247,
+    "spec/scripts/mocks-driver.js": 137376,
     "spec/scripts/port-check.js": 3536,
     "spec/scripts/promise-sweep.js": 10409,
     "spec/scripts/prose-cap.js": 6271,
@@ -117,7 +117,7 @@
     "tests/consistency/citations-check.test.js": 16363,
     "tests/consistency/comment-narration-live.test.js": 3527,
     "tests/consistency/dependency-free.test.js": 8614,
-    "tests/consistency/design-doctrine.test.js": 47909,
+    "tests/consistency/design-doctrine.test.js": 55484,
     "tests/consistency/dup-windows-live.test.js": 1916,
     "tests/consistency/entrypoints.test.js": 70405,
     "tests/consistency/genesis-doctrine.test.js": 86907,
@@ -134,7 +134,7 @@
     "tests/design-ac-reconcile.test.js": 5161,
     "tests/design-atlas-index.test.js": 34642,
     "tests/design-atlas-serve-port.test.js": 8546,
-    "tests/design-atlas.test.js": 216116,
+    "tests/design-atlas.test.js": 214762,
     "tests/design-look-handoff.test.js": 11626,
     "tests/design-shell.test.js": 17216,
     "tests/design-template.test.js": 2207,
@@ -176,7 +176,7 @@
     "tests/genesis/tournament.fixtures.js": 11282,
     "tests/genesis/tournament.test.js": 15077,
     "tests/git/commit-escape-check.test.js": 5426,
-    "tests/helpers.js": 11538,
+    "tests/helpers.js": 14337,
     "tests/host-config/config-read.test.js": 19310,
     "tests/host-config/host-config-api.test.js": 7732,
     "tests/host-config/smoke-inert.test.js": 1834,
@@ -189,23 +189,24 @@
     "tests/mocks/client-route.test.js": 21003,
     "tests/mocks/client-walk-route.test.js": 12214,
     "tests/mocks/mock-edges.test.js": 12014,
-    "tests/mocks/mocks-driver-2.test.js": 19577,
-    "tests/mocks/mocks-driver-3.test.js": 17977,
+    "tests/mocks/mocks-driver-2.test.js": 16692,
+    "tests/mocks/mocks-driver-3.test.js": 19265,
     "tests/mocks/mocks-driver-4.test.js": 17661,
     "tests/mocks/mocks-driver-client-2.test.js": 13610,
     "tests/mocks/mocks-driver-client-3.test.js": 7492,
-    "tests/mocks/mocks-driver-client.test.js": 13341,
-    "tests/mocks/mocks-driver-fixtures.js": 31829,
+    "tests/mocks/mocks-driver-client.test.js": 13032,
+    "tests/mocks/mocks-driver-fixtures.js": 35160,
     "tests/mocks/mocks-driver-kit-gate.test.js": 2879,
     "tests/mocks/mocks-driver-look-stops-2.test.js": 13218,
     "tests/mocks/mocks-driver-look-stops-3.test.js": 9656,
-    "tests/mocks/mocks-driver-look-stops-4.test.js": 12642,
+    "tests/mocks/mocks-driver-look-stops-4.test.js": 12620,
     "tests/mocks/mocks-driver-look-stops.test.js": 21565,
     "tests/mocks/mocks-driver-seed-2.test.js": 15589,
-    "tests/mocks/mocks-driver-theme.test.js": 51812,
-    "tests/mocks/mocks-driver-walk.test.js": 13030,
+    "tests/mocks/mocks-driver-theme-2.test.js": 19428,
+    "tests/mocks/mocks-driver-theme.test.js": 21405,
+    "tests/mocks/mocks-driver-walk.test.js": 13131,
     "tests/mocks/mocks-driver-wire.test.js": 4753,
-    "tests/mocks/mocks-driver.test.js": 35878,
+    "tests/mocks/mocks-driver.test.js": 34986,
     "tests/mocks/mocks-ledger.test.js": 12490,
     "tests/mocks/mocks-notes.test.js": 65034,
     "tests/mocks/mocks-picks.test.js": 11563,
@@ -213,8 +214,9 @@
     "tests/mocks/notes-layer-isolation.test.js": 6372,
     "tests/mocks/notes-layer-navigation.test.js": 27334,
     "tests/mocks/review-page.test.js": 20272,
+    "tests/mocks/theme-serve.test.js": 12159,
     "tests/mocks/viewer-tokens.test.js": 4600,
-    "tests/mocks/walk-mode.test.js": 11226,
+    "tests/mocks/walk-mode.test.js": 10319,
     "tests/mocks/walk-page.test.js": 20861,
     "tests/parse-selection/parse-selection.test.js": 4720,
     "tests/prose-debt/doctrine-pins.test.js": 4759,
@@ -289,7 +291,7 @@
     "tests/status/red-alarm.test.js": 11155,
     "tests/status/status-diet.test.js": 15884,
     "tests/surfaces-lib.test.js": 4569,
-    "tests/test-file-budget.test.js": 30807,
+    "tests/test-file-budget.test.js": 30682,
     "tests/test-hang-bound.test.js": 3509,
     "tests/tracked-text-purity.test.js": 4265,
     "tests/verdict-gatered-no-workflow.test.js": 8762,
@@ -1737,6 +1739,72 @@
       "from": 10034,
       "to": 11538,
       "cite": "direct"
+    },
+    {
+      "path": "spec/scripts/design-atlas.js",
+      "from": 156386,
+      "to": 162324,
+      "cite": "specs/20260910/04-theme-before-the-client-walk.md"
+    },
+    {
+      "path": "spec/scripts/lib/walk-page.js",
+      "from": 12132,
+      "to": 17866,
+      "cite": "specs/20260910/04-theme-before-the-client-walk.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 130247,
+      "to": 137376,
+      "cite": "specs/20260910/04-theme-before-the-client-walk.md"
+    },
+    {
+      "path": "tests/consistency/design-doctrine.test.js",
+      "from": 47909,
+      "to": 55555,
+      "cite": "specs/20260910/04-theme-before-the-client-walk.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-3.test.js",
+      "from": 17977,
+      "to": 19265,
+      "cite": "specs/20260910/04-theme-before-the-client-walk.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-fixtures.js",
+      "from": 31829,
+      "to": 35160,
+      "cite": "specs/20260910/04-theme-before-the-client-walk.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1359266,
+      "to": 1372333,
+      "cite": "specs/20260910/04-theme-before-the-client-walk.md"
+    },
+    {
+      "path": "spec/scripts/lib",
+      "from": 279809,
+      "to": 285543,
+      "cite": "specs/20260910/04-theme-before-the-client-walk.md"
+    },
+    {
+      "path": "tests",
+      "from": 3915998,
+      "to": 3949429,
+      "cite": "specs/20260910/04-theme-before-the-client-walk.md"
+    },
+    {
+      "path": "tests/helpers.js",
+      "from": 11538,
+      "to": 14337,
+      "cite": "specs/20260910/04-theme-before-the-client-walk.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-walk.test.js",
+      "from": 13030,
+      "to": 13131,
+      "cite": "specs/20260910/04-theme-before-the-client-walk.md"
     }
   ]
 }

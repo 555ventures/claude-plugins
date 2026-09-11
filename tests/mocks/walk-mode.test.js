@@ -3,44 +3,18 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const http = require('node:http')
 const vm = require('node:vm')
-const { tmpdir, SPEC } = require('../helpers')
+const { tmpdir, SPEC, withHandler } = require('../helpers')
 
 // specs/20260910/02-click-to-advance-and-real-records.md D3/D4: TDD red — spec/scripts/lib/
 // walk-mode.browser.js does not exist yet and design-atlas.js's serve route does not inject or
 // serve it yet, so both ACs below are red until the scripts wave lands. AC-20260910-02-3,
 // AC-20260910-02-4.
-
-// In-process mirror of tests/design-atlas.test.js's withHandler — createRequestHandler is
-// exercised directly over http, never a child process (A4).
-function loadDesignAtlas() {
-  const scriptPath = path.join(SPEC, 'scripts/design-atlas.js')
-  delete require.cache[scriptPath]
-  return require(scriptPath)
-}
-function withHandler(root, fn) {
-  const mod = loadDesignAtlas()
-  assert.ok(mod && typeof mod.createRequestHandler === 'function',
-    'design-atlas.js must export createRequestHandler(root,{prefix})')
-  const server = http.createServer(mod.createRequestHandler(root, { prefix: '' }))
-  return new Promise((resolve, reject) => {
-    server.listen(0, '127.0.0.1', () => {
-      const port = server.address().port
-      const get = (p) => new Promise((res2, rej2) => {
-        http.get({ host: '127.0.0.1', port, path: p }, (r) => {
-          let body = ''
-          r.on('data', (c) => { body += c })
-          r.on('end', () => res2({ status: r.statusCode, headers: r.headers, body }))
-        }).on('error', rej2)
-      })
-      Promise.resolve(fn({ get, port })).then(
-        (v) => server.close(() => resolve(v)),
-        (e) => server.close(() => reject(e)),
-      )
-    })
-  })
-}
+//
+// withHandler(root, fn) — the in-process createRequestHandler HTTP harness (A4: never a child
+// process for these) — lives once in tests/helpers.js now, shared with tests/design-atlas.test.js
+// and tests/mocks/theme-serve.test.js (specs/20260910/04-theme-before-the-client-walk.md D12
+// clean-up round).
 
 // ---------------------------------------------------------------------------
 // AC-20260910-02-3

@@ -8,7 +8,7 @@ const {
   SCRIPT, JOURNEY, LABELS,
   bare, mark, stateOf, statusJson,
   writeFile, decideLook, writeWireframe,
-  advanceToSeedDone, advanceToCanonWritten, advanceToJourneyApproved, advanceToJourneyWalked, advanceToApproved,
+  advanceToSeedDone, advanceToCanonWritten, advanceToJourneyApproved, advanceToThemePicked, advanceToApproved,
 } = require('./mocks-driver-fixtures')
 
 // specs/20260907/08-walk-critic.md D1/D2/D6/D7. `deriveState`'s WALK step, `allJourneysWalked`,
@@ -23,9 +23,9 @@ const {
 // ---------------------------------------------------------------------------
 test('AC-20260907-10-1 (setup assertion retag of AC-20260907-08-1): a seed that declares a new journey after the others were walked derives WALK again, even though the state had already reached CLIENT', () => {
   const dir = tmpdir('mocks-driver-walk')
-  advanceToJourneyWalked(dir)
+  advanceToThemePicked(dir)
   assert.strictEqual(stateOf(dir).stdout.trim(), 'CLIENT',
-    'test setup requires the only declared journey to be walked and the state to already read CLIENT (the SIGNOFF state is retired), or the "derives WALK again" assertion below is vacuous')
+    'test setup requires the only declared journey to be walked, the theme picked, and the state to already read CLIENT, or the "derives WALK again" assertion below is vacuous')
 
   const seedPath = path.join(dir, 'design/mocks/seed.md')
   const seedText = fs.readFileSync(seedPath, 'utf8')
@@ -112,7 +112,7 @@ test('AC-20260907-08-3: --mark <unknown> names "journey-walked" in the known-mar
 // ---------------------------------------------------------------------------
 // AC-20260907-08-8
 // ---------------------------------------------------------------------------
-test('AC-20260907-08-8: --reopen walk:<j> clears that journey\'s walked, marks.approved and decider while leaving journeys[*].approved untouched and prints the exact invalidated line; --reopen journey:<j> additionally clears walked and names walk:<j>; --reopen shapes clears every walked and names walk(all); an unknown target exits 2 with the exact narrowed literal', () => {
+test('AC-20260907-08-8: --reopen walk:<j> clears that journey\'s walked, marks.approved and decider while leaving journeys[*].approved untouched and prints the exact invalidated line; --reopen journey:<j> additionally clears walked and names walk:<j>; --reopen shapes clears every walked and names walk(all); an unknown target exits 2 with the exact live target list', () => {
   const dir = tmpdir('mocks-driver-walk-8a')
   advanceToApproved(dir)
   const r = runNode(SCRIPT, ['--root', dir, '--reopen', 'walk:' + JOURNEY])
@@ -145,8 +145,8 @@ test('AC-20260907-08-8: --reopen walk:<j> clears that journey\'s walked, marks.a
   advanceToSeedDone(dir4)
   const r4 = runNode(SCRIPT, ['--root', dir4, '--reopen', 'bogus'])
   assert.strictEqual(r4.status, 2, 'an unknown --reopen target must exit 2: ' + r4.stdout + r4.stderr)
-  assert.strictEqual((r4.stderr + r4.stdout).trim(), 'mocks-driver: --reopen must be journey:<j>, walk:<j>, shapes, or kit',
-    'D6: the refusal must be the exact narrowed literal, with "walk:<j>" now in the target list: ' + JSON.stringify({ stdout: r4.stdout, stderr: r4.stderr }))
+  assert.strictEqual((r4.stderr + r4.stdout).trim(), 'mocks-driver: --reopen must be journey:<j>, walk:<j>, shapes, kit, or theme',
+    'D6/D3 (specs/20260910/04-theme-before-the-client-walk.md, ADR-0013): the refusal must be the exact live target list, with "walk:<j>" and "theme" both in it (theme reinstated as a live --reopen target): ' + JSON.stringify({ stdout: r4.stdout, stderr: r4.stderr }))
 })
 
 // ---------------------------------------------------------------------------

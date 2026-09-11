@@ -60,6 +60,16 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
   next minor, rotates the changelog to three entries). A spec's plugin.json File Plan row cites
   that command; Decisions name no version literal and no sibling claims —
   `node scripts/plugin-bump.js --check` in the gate is the oracle.
+- **Every control the least-technical actor can press is specified three ways before lock**: the
+  sentence they see on SUCCESS, the PATH BACK, and the farthest ARTIFACT the click reaches. A
+  click with no path back that reaches a dated or contractual artifact is a plan defect, not a
+  follow-up — and a control whose only success signal is the control disabling has no sentence,
+  so say so deliberately or give it one. The surface the control lives on is asserted, never
+  assumed: name the file that renders it and the caller that posts it, because a Decision can
+  name note rows, a withdraw control or a list the product has never had, and no leg can see the
+  absence — `promise-sweep` counts a Decision carried by AC-ID, so an AC asserting the route
+  alone reports the whole Decision delivered.
+  (specs/20260910/05-what-the-journey-does-not-do.md D3; Fable consult 2026-09-11)
 
 ## Build
 

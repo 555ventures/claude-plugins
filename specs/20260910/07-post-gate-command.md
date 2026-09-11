@@ -1,6 +1,7 @@
 ---
 date: 2026-09-10
-status: hardened
+status: implementing
+build_base: main
 tier: critical
 area: build-driver
 design: false
@@ -10,6 +11,7 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-10
 open_markers: 0
+diff_base: 246d1aaf895055fa8890594aebefb0f952ce143d
 ---
 
 # Build runs a host-declared post-gate command once the scoped gate is green

@@ -12,6 +12,9 @@ only when the contract genuinely changes, and never edit it for wording alone.
 `generatedBy`, `contractHash`, `gateCommand`, `testCommand`, `setupCommand`,
 `patternsScript`, `layerGroups`, `agentMap` (must include `tests` and `default`),
 `pipelineRules`, `runtime` (see § Runtime verification). Optional: `driftScript`, `routing`,
+`postGateCommand` (a shell string the build driver chains after a green scoped gate at
+integration and on every repair round; `{testCommand}` substitutes the host's `testCommand`;
+absent = no post-gate),
 `testEnv` (array of `{"var": "<NAME>", "provision": "<command>"}` rows — suite-gating
 environment variables, checked by `env-preflight.js` before `/spec:build`'s and
 `/spec:design`'s gate/repair paths run; absent = legacy mode, no preflight), `design`

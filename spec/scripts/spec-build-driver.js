@@ -18,6 +18,15 @@
 //   RED_ATTRIBUTION? -> WAVE:<label>... -> INTEGRATION -> GATE (driver-only) ->
 //   REPAIR? (cap 3; 4th -> ESCALATE, terminal) -> COMMIT -> DONE (terminal)
 //
+// specs/20260910/07-post-gate-command.md: a host's optional `postGateCommand` config key is
+// chained into runGate()'s ONE bash -c child after the resolved scoped gate
+// (`<gate> && echo '== postGateCommand' && <post>`) — a red post-gate enters this driver's
+// existing repair loop exactly as a red scoped gate does, one gate run per round either way.
+// Absent, empty, or non-string -> no post-gate, today's gate child byte-for-byte unchanged.
+// `{testCommand}` inside `postGateCommand` substitutes the config's `testCommand` string; no
+// other placeholder is recognized. The DONE ledger row's `gate` object carries a `postGate`
+// boolean recording whether one was declared.
+//
 // WHY THIS EXISTS: specs/20260901/01-build-driver.md — /spec:build was a
 // 161-line markdown procedure with no driver and no state file: it resumed by inspecting the
 // diff, ran the red-check/gate/scope-reconcile by hand, and hand-appended its own ledger row —
@@ -389,6 +398,17 @@ function ensureRedCheckAdvanced() {
   saveSidecar()
 }
 
+// specs/20260910/07-post-gate-command.md D2: the literal `{testCommand}` inside
+// `postGateCommand` is replaced with the config's `testCommand` string; no other placeholder is
+// recognized. Returns null when no non-empty string postGateCommand is declared, so callers
+// never need to re-check emptiness.
+function resolvePostGate() {
+  const raw = hostConfig.postGateCommand
+  if (typeof raw !== 'string' || raw.length === 0) return null
+  const testCommand = typeof hostConfig.testCommand === 'string' ? hostConfig.testCommand : ''
+  return raw.split('{testCommand}').join(testCommand)
+}
+
 // ---- gate (GATE, driver-only) ---------------------------------------------------------------------
 function runGate() {
   const resolved = resolveGate(specText, hostConfig)
@@ -396,6 +416,15 @@ function runGate() {
     die('gate could not be resolved — ' + (resolved.reason || 'no gateCommand declared') +
       ' — add File Plan test rows or a gateCommand, then re-run this driver')
   }
+  // D1: the host's optional postGateCommand is chained into this SAME bash -c child after the
+  // resolved scoped gate, so the repair-round bookkeeping (marks.gateRuns, REPAIR_CAP,
+  // isAtRepairNow) sees exactly one gate run per round whether or not a post-gate is declared.
+  // bash && short-circuits on a red scoped gate — the post-gate never runs, and the marker line
+  // never lands in the log (AC-3).
+  const postGate = resolvePostGate()
+  const gateCommand = postGate !== null
+    ? resolved.gate + " && echo '== postGateCommand' && " + postGate
+    : resolved.gate
   const env = { ...process.env }
   delete env.NODE_TEST_CONTEXT
   const k = (marks.gateRuns || []).length + 1
@@ -416,8 +445,8 @@ function runGate() {
   }
   let r
   try {
-    r = runChild('bash', ['-c', resolved.gate], { cwd: repoRoot, stdio: ['ignore', fd, fd], env },
-      'gate (' + resolved.gate + ')')
+    r = runChild('bash', ['-c', gateCommand], { cwd: repoRoot, stdio: ['ignore', fd, fd], env },
+      'gate (' + gateCommand + ')')
   } finally {
     try { fs.closeSync(fd) } catch (e) { /* already closed */ }
   }
@@ -757,7 +786,9 @@ function handleCommitted() {
     model,
     runId,
     diff: { files: diffFiles, loc: diffLoc },
-    gate: { finalRounds: (marks.gateRuns || []).length },
+    // D4: postGate records whether a non-empty postGateCommand was declared at row-write time —
+    // the only way to later compare review-time GATE_RED rates for builds with the knob on vs off.
+    gate: { finalRounds: (marks.gateRuns || []).length, postGate: resolvePostGate() !== null },
     deviations: countDeviations(),
     redCheck: marks.redCheck || 'none',
     workers,
@@ -913,8 +944,13 @@ function repairStepBody() {
   const current = runs[runs.length - 1]
   const previous = runs[runs.length - 2]
   const roundLabel = marks.capEverTripped ? `round ${round} (re-armed past the cap of 3)` : `round ${round} of 3`
+  const postGate = resolvePostGate()
+  const postGateLine = postGate !== null
+    ? `\npost-gate: ${postGate} — red only after the scoped gate passed; find '== postGateCommand' in the log`
+    : ''
   return `## REPAIR — ${roundLabel}\n` +
     `gate: ${current ? current.log : '(none)'}` +
+    postGateLine +
     (previous ? `\nprevious gate: ${previous.log}` : '') + '\n' +
     `File Plan rows by layer, so failures route to the worker that owns them:\n` +
     waveOrder.map((w) => `  ${w.label}: ` + w.rows.flatMap((r) => r.paths).join(', ')).join('\n') + '\n' +

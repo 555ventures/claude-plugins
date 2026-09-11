@@ -2,7 +2,7 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 61878,
-    "spec/scripts": 1337823,
+    "spec/scripts": 1340136,
     "spec/scripts/lib": 250997,
     "tests": 3849652
   },
@@ -80,7 +80,7 @@
     "spec/scripts/review-legs.js": 28310,
     "spec/scripts/scope-reconcile.js": 16902,
     "spec/scripts/smoke.sh": 8134,
-    "spec/scripts/spec-build-driver.js": 49555,
+    "spec/scripts/spec-build-driver.js": 51868,
     "spec/scripts/spec-queue.js": 24920,
     "spec/scripts/spec-review-driver.js": 143576,
     "spec/scripts/spec-session-stamp.sh": 2680,
@@ -1602,6 +1602,18 @@
       "from": 3828999,
       "to": 3849652,
       "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "spec/scripts/spec-build-driver.js",
+      "from": 49555,
+      "to": 51868,
+      "cite": "specs/20260910/07-post-gate-command.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1337823,
+      "to": 1340136,
+      "cite": "specs/20260910/07-post-gate-command.md"
     }
   ]
 }

@@ -3,6 +3,7 @@
   "contractHash": "d84ad1eb648e",
   "gateCommand": "node --test --test-timeout=45000 --test-force-exit {testDirs}",
   "testCommand": "node --test --test-timeout=45000 --test-force-exit --test-reporter=spec --test-reporter-destination=stdout --test-reporter=./scripts/test-file-budget-reporter.js --test-reporter-destination=stderr",
+  "postGateCommand": "{testCommand}",
   "setupCommand": "npm install",
   "runtime": {
     "inert": "marketplace of CLI plugins and dependency-free scripts — no bootable app; the autopilot daemon is parked (JJ 2026-08-18, confirmed 2026-08-20)"

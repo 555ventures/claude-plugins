@@ -1,6 +1,7 @@
 ---
 date: 2026-09-10
-status: hardened
+status: done
+build_base: main
 tier: critical
 area: build-driver
 design: false
@@ -10,6 +11,7 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-10
 open_markers: 0
+diff_base: 246d1aaf895055fa8890594aebefb0f952ce143d
 ---
 
 # Build runs a host-declared post-gate command once the scoped gate is green
@@ -150,6 +152,19 @@ D7 chooses the whole suite over the 9-second pin set because history cannot say 
 Fragile: the first build dogfoods the knob on its own landing (A6) — expect an INTEGRATION red on the size ratchet and the bump, both in-plan. The ledger boolean (D4) is what makes the knob measurable later: compare review `GATE_RED` rates for builds with `postGate: true` against the 36-of-54 baseline after ten or so specs.
 
 Neighbors pinned: AC-8 (absent key, byte-for-byte today's gate child) and AC-9 (the shared resolver ignores the key, so review's gate leg and close-time re-run are unchanged).
+
+Build-time finding, 2026-09-10 (a one-off recorded here rather than as a Gotchas entry — that
+section is at its 15-entry cap): the post-gate ran green at INTEGRATION and the review `suite` leg
+was still red, on the size ratchet. The knob's blind spot is ORDER, not coverage — `runGate()`
+fires before the checkpoint commit, and `size-ratchet.js` measures git-TRACKED files only, so a
+`CREATE` row's bytes stay invisible to it until the commit the post-gate precedes. Any repo-wide
+pin that reads the git index rather than the working tree inherits the same one-round lag: the
+post-gate catches it on the NEXT repair round, and on a one-round build it does not catch it at
+all. A7's per-file budget and the plugin-bump oracle are unaffected (both read the working tree).
+The cheapest honest fix is a second chain run after the checkpoint commit at `--mark committed`,
+not a change to the ratchet; queued as a follow-up rather than widened into this spec. A6's
+prediction was therefore half right — the ratchet did red, but at review rather than at
+integration.
 
 ## Canonical Delta
 

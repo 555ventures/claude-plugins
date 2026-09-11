@@ -3,8 +3,8 @@
   "trees": {
     "scripts": 55589,
     "spec/scripts": 1328457,
-    "spec/scripts/lib": 242852,
-    "tests": 3779381
+    "spec/scripts/lib": 248790,
+    "tests": 3799127
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -41,6 +41,7 @@
     "spec/scripts/lib/glob-match.js": 4339,
     "spec/scripts/lib/host-config.js": 5704,
     "spec/scripts/lib/leg-findings.js": 2393,
+    "spec/scripts/lib/mock-seed-checks.js": 2837,
     "spec/scripts/lib/mocks-ledger.js": 13101,
     "spec/scripts/lib/mocks-notes.js": 20627,
     "spec/scripts/lib/mocks-picks.js": 8373,
@@ -56,6 +57,7 @@
     "spec/scripts/lib/spec-sections.js": 24006,
     "spec/scripts/lib/stop-block.js": 9749,
     "spec/scripts/lib/surfaces.js": 5646,
+    "spec/scripts/lib/walk-mode.browser.js": 3101,
     "spec/scripts/lib/wire-register.js": 2871,
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
@@ -180,6 +182,7 @@
     "tests/mocks/chrome-harness.js": 9353,
     "tests/mocks/chrome-harness.test.js": 10855,
     "tests/mocks/client-route.test.js": 22060,
+    "tests/mocks/mock-edges.test.js": 8520,
     "tests/mocks/mocks-driver-2.test.js": 19004,
     "tests/mocks/mocks-driver-3.test.js": 17977,
     "tests/mocks/mocks-driver-4.test.js": 17266,
@@ -201,6 +204,7 @@
     "tests/mocks/notes-layer-navigation.test.js": 27334,
     "tests/mocks/review-page.test.js": 20272,
     "tests/mocks/viewer-tokens.test.js": 4600,
+    "tests/mocks/walk-mode.test.js": 11226,
     "tests/parse-selection/parse-selection.test.js": 4720,
     "tests/prose-debt/doctrine-pins.test.js": 4759,
     "tests/prose-debt/memory-sweep.test.js": 12286,
@@ -1319,6 +1323,18 @@
       "path": "tests",
       "from": 3773676,
       "to": 3779381,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "spec/scripts/lib",
+      "from": 242852,
+      "to": 248790,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests",
+      "from": 3779381,
+      "to": 3799127,
       "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
     }
   ]

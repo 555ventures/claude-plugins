@@ -25,7 +25,7 @@
     "tests/consistency/retired-flags.test.js": 1,
     "tests/consistency/wire-register.test.js": 2,
     "tests/design-atlas-index.test.js": 8,
-    "tests/design-atlas.test.js": 23,
+    "tests/design-atlas.test.js": 26,
     "tests/design-shell.test.js": 13,
     "tests/dup-windows/dup-windows.test.js": 1,
     "tests/fleet-reader/corpus-gaps.test.js": 1,
@@ -58,6 +58,7 @@
     "tests/mocks/mocks-driver-walk.test.js": 1,
     "tests/mocks/mocks-notes.test.js": 26,
     "tests/mocks/notes-layer-navigation.test.js": 3,
+    "tests/mocks/walk-mode.test.js": 3,
     "tests/provenance/provenance.test.js": 3,
     "tests/question-style-gate.test.js": 4,
     "tests/queue/queue-overlay.test.js": 13,
@@ -89,5 +90,18 @@
     "tests/status/status-diet.test.js": 2,
     "tests/verdict-gatered-no-workflow.test.js": 4
   },
-  "raises": []
+  "raises": [
+    {
+      "path": "tests/mocks/walk-mode.test.js",
+      "from": 0,
+      "to": 3,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests/design-atlas.test.js",
+      "from": 23,
+      "to": 26,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    }
+  ]
 }

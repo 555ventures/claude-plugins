@@ -1,6 +1,6 @@
 ---
 date: 2026-09-10
-status: hardened
+status: implementing
 tier: critical
 area: build-integrity
 design: false
@@ -9,7 +9,9 @@ depends_on: []
 depended_on_by: []
 brief: n/a
 spiked: 2026-09-10
+build_base: main
 open_markers: 0
+diff_base: a9134b8e15846d4bced168dcd584c8eb986888c9
 ---
 
 # The build gate sees the files the build created
@@ -41,6 +43,7 @@ child per round, and nothing about the checkpoint commit changes.
 | D9 | The driver's absence contract narrows, so it narrows by an accepted record, never a silent edit: `docs/adr/0015-*.md` (Applies to: specs/20260901/01-build-driver.md D12 — only its "never runs a git write (its git calls are `rev-parse`, `diff --shortstat`, `status --porcelain`)" clause, which becomes "its only index write is the intent-to-add of untracked File Plan paths immediately before the gate child"; every other clause of D12 stands), plus one `Amended by: ADR-0015` line in specs/20260901/01-build-driver.md and the matching narrowing of `spec/commands/build.md` § Rules' "or runs a git write" clause. The driver's own header `does NOT` list is corrected in the same edit. `[no-ac: planning-seat prose and a backlink; review's citations-check and the doctrine leg are their oracle]` | ADR-0011/ADR-0014 precedent: a contract a landed spec locked is narrowed by an accepted record. |
 | D10 | The spec plugin's semver bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"`; no Decision here names a version literal. `[no-ac: `plugin-bump.js --check` in the gate is the oracle]` | Host § Planning version-bump discipline; concurrent sessions race the number, so the literal is never pinned. |
 | D11 | `size-baseline.json` is a File Plan row satisfied by `node scripts/size-ratchet.js --root . --reconcile --cite specs/20260910/08-gate-sees-created-files.md` after every other row has landed — the driver and the new test file both grow past their ceilings. `[no-ac: `size-ratchet.js --root .` exiting 0 is the oracle, pinned by AC-20260908-01-9]` | specs/20260909/05 D10 precedent; and this build is the first whose gate can actually see the new test file's bytes, which is the point. |
+| D12 | Build-time ruling (user, 2026-09-10): `specs/.DS_Store` — a macOS Finder metadata file swept into this spec's own plan commit — is untracked and deleted, and `.DS_Store` is added to the host `.gitignore`. The file's raw NUL bytes red the repo-wide tracked-text-purity pin, so no gate on this branch could go green while it stayed tracked. Scope was widened by explicit user answer rather than deferred. `[no-ac: the tracked-text-purity pin is the oracle; this Decision adds no promise]` | A gate failure implicating an out-of-plan path is never silently widened (build.md § `blocked` returns); the alternative was pausing the build until main was cleaned by hand. |
 
 ## File Plan
 
@@ -55,6 +58,8 @@ child per round, and nothing about the checkpoint commit changes.
 | spec/commands/build.md | MODIFY | doctrine | D9: § Rules' driver clause narrowed to exclude the intent-to-add; the Worker Contract git ban above it is untouched |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D10: bumped via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"`, never by hand |
 | size-baseline.json | MODIFY | other | D11: `node scripts/size-ratchet.js --root . --reconcile --cite specs/20260910/08-gate-sees-created-files.md`, last step before the final gate |
+| .gitignore | MODIFY | other | D12: one `.DS_Store` entry so Finder metadata is never tracked again |
+| specs/.DS_Store | DELETE | other | D12: untracked and removed — raw NUL bytes red the tracked-text-purity pin |
 
 ## Contracts
 

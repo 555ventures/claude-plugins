@@ -11,6 +11,8 @@ const { makeHost, makeNoTestsHost, run, stateOf, toIntegration, toCommit } = req
 // `postGateCommand` chained into runGate()'s ONE bash -c child (D1/D2), the REPAIR step's
 // post-gate line (D3), the DONE row's gate.postGate flag (D4), and the two CONTINUE-TO pins
 // (D5: resolveGate ignores the key; D5/AC-8: an absent key is byte-for-byte today's gate).
+// specs/20260910/08-gate-sees-created-files.md D6/AC-20260910-08-6 retags the AC-20260910-07-5
+// test below — its own gateRuns.length===2 assertion is that coverage; no assertion changed.
 
 function setConfig(host, patch) {
   const cfgPath = path.join(host.root, '.claude/spec.config.json')
@@ -96,7 +98,7 @@ test('AC-20260910-07-4: WHEN the config declares testCommand "echo SUITE-SENTINE
     'D2: the literal {testCommand} placeholder inside postGateCommand must be replaced with the config\'s testCommand string before the chain runs — a log without SUITE-SENTINEL-7 means the placeholder reached bash unresolved: ' + log)
 })
 
-test('AC-20260910-07-5: WHEN a run is at REPAIR because only a flag-file-reading post-gate is red and the flag is removed before --mark repair-applied THE SYSTEM re-runs the chain and lands COMMIT with gateRuns.length===2 and gateRuns[1].exit===0', () => {
+test('AC-20260910-07-5 / AC-20260910-08-6 (SHALL CONTINUE TO): WHEN a run is at REPAIR because only a flag-file-reading post-gate is red and the flag is removed before --mark repair-applied THE SYSTEM re-runs the chain and lands COMMIT with gateRuns.length===2 and gateRuns[1].exit===0', () => {
   const host = makeHost()
   toIntegration(host)
   fs.writeFileSync(path.join(host.root, 'post.sh'),

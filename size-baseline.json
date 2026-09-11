@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 61878,
-    "spec/scripts": 1340136,
+    "spec/scripts": 1344873,
     "spec/scripts/lib": 250997,
-    "tests": 3865164
+    "tests": 3880107
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -80,7 +80,7 @@
     "spec/scripts/review-legs.js": 28310,
     "spec/scripts/scope-reconcile.js": 16902,
     "spec/scripts/smoke.sh": 8134,
-    "spec/scripts/spec-build-driver.js": 51868,
+    "spec/scripts/spec-build-driver.js": 56605,
     "spec/scripts/spec-queue.js": 24920,
     "spec/scripts/spec-review-driver.js": 143576,
     "spec/scripts/spec-session-stamp.sh": 2680,
@@ -96,9 +96,10 @@
     "tests/ac-matrix/qualified-skip-mapping.test.js": 15784,
     "tests/ac-matrix/rejected-trailing-tag.test.js": 24021,
     "tests/build/build-driver-base.test.js": 7604,
-    "tests/build/build-driver-commit.test.js": 22102,
+    "tests/build/build-driver-commit.test.js": 23490,
+    "tests/build/build-driver-gate-stage.test.js": 13324,
     "tests/build/build-driver-incident-auto.test.js": 1615,
-    "tests/build/build-driver-post-gate.test.js": 15512,
+    "tests/build/build-driver-post-gate.test.js": 15743,
     "tests/build/build-driver-repair.test.js": 23707,
     "tests/build/build-driver.fixtures.js": 9349,
     "tests/build/build-driver.test.js": 14204,
@@ -1621,6 +1622,42 @@
       "from": 3849652,
       "to": 3865164,
       "cite": "specs/20260910/07-post-gate-command.md"
+    },
+    {
+      "path": "spec/scripts/spec-build-driver.js",
+      "from": 51868,
+      "to": 56605,
+      "cite": "specs/20260910/08-gate-sees-created-files.md"
+    },
+    {
+      "path": "tests/build/build-driver-commit.test.js",
+      "from": 22102,
+      "to": 23490,
+      "cite": "specs/20260910/08-gate-sees-created-files.md"
+    },
+    {
+      "path": "tests/build/build-driver-post-gate.test.js",
+      "from": 15512,
+      "to": 15743,
+      "cite": "specs/20260910/08-gate-sees-created-files.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1340136,
+      "to": 1344873,
+      "cite": "specs/20260910/08-gate-sees-created-files.md"
+    },
+    {
+      "path": "tests",
+      "from": 3865164,
+      "to": 3866783,
+      "cite": "specs/20260910/08-gate-sees-created-files.md"
+    },
+    {
+      "path": "tests",
+      "from": 3866783,
+      "to": 3880107,
+      "cite": "specs/20260910/08-gate-sees-created-files.md"
     }
   ]
 }

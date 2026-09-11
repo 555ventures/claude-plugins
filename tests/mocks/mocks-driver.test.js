@@ -396,36 +396,25 @@ test('AC-20260906-05-4: the bare driver\'s "draw journey <j>" step Then: block g
 // ---------------------------------------------------------------------------
 // AC-20260907-07-7
 // ---------------------------------------------------------------------------
-test('AC-20260907-07-7: a cold --root creates a status.json whose marks object has exactly seedDone/shapePicked/canonWritten/kitSignedOff/approved (each null) and carries no top-level theme or directions key; a pre-existing status.json carrying theme/marks.themePicked/directions writes none of those three keys on its next save', () => {
+// D12 clean-up round (specs/20260910/04-theme-before-the-client-walk.md):
+// this test's "themePicked dropped outright" / "a legacy status.json's theme fields are scrubbed
+// on next save" premise is exactly the contract ADR-0013 retires — `marks.themePicked` and
+// `status.theme` are live fields now, never stripped. Deleted, not rewritten; the new
+// theme-picked-is-set shape has its own executed coverage in
+// tests/mocks/mocks-driver-theme-2.test.js's AC-20260910-04-6/-9. What has NO coverage anywhere
+// else is the cold-root marks-object key SET itself (unrelated to the scrub behavior, still a
+// live invariant), so a minimal version of exactly that survives here, with themePicked now
+// counted among the live keys.
+test('AC-20260907-07-7 (D12 minimal): a cold --root creates a status.json whose marks object has exactly seedDone/shapePicked/canonWritten/kitSignedOff/themePicked/approved (each null)', () => {
   const dir = tmpdir('mocks-driver')
   bare(dir)
   const cold = statusJson(dir)
   assert.deepStrictEqual(Object.keys(cold.marks).sort(),
-    ['approved', 'canonWritten', 'kitSignedOff', 'seedDone', 'shapePicked'].sort(),
-    'D7: a cold status.json\'s marks object must carry exactly these five keys, themePicked dropped outright: ' + JSON.stringify(cold.marks))
+    ['approved', 'canonWritten', 'kitSignedOff', 'seedDone', 'shapePicked', 'themePicked'].sort(),
+    'a cold status.json\'s marks object must carry exactly these six keys, themePicked included (ADR-0013): ' + JSON.stringify(cold.marks))
   for (const key of Object.keys(cold.marks)) {
     assert.strictEqual(cold.marks[key], null, 'mark "' + key + '" must be null on a cold status.json: ' + JSON.stringify(cold.marks))
   }
-  assert.strictEqual('theme' in cold, false, 'D7: a cold status.json must carry no top-level "theme" key at all: ' + JSON.stringify(cold))
-  assert.strictEqual('directions' in cold, false, 'D7: a cold status.json must carry no top-level "directions" key at all: ' + JSON.stringify(cold))
-
-  const dir2 = tmpdir('mocks-driver')
-  advanceToShapePicked(dir2)
-  const legacy = statusJson(dir2)
-  legacy.theme = 'quiet'
-  legacy.marks.themePicked = '2026-09-01T00:00:00Z'
-  legacy.directions = { quiet: { composed: '2026-09-01T00:00:00Z' } }
-  fs.writeFileSync(statusPath(dir2), JSON.stringify(legacy, null, 2) + '\n')
-
-  advanceToKitSigned(dir2)
-  writeCanon(dir2)
-  const canonWritten = mark(dir2, 'canon-written')
-  assert.strictEqual(canonWritten.status, 0, 'test setup requires canon-written to be accepted so a real save happens after the legacy fields are hand-written: ' + canonWritten.stdout + canonWritten.stderr)
-
-  const written = statusJson(dir2)
-  assert.strictEqual('theme' in written, false, 'D7: the next save after a legacy status.json carrying "theme" must drop that key entirely, never null it: ' + JSON.stringify(written))
-  assert.strictEqual(written.marks.themePicked, undefined, 'D7: the next save must drop marks.themePicked entirely: ' + JSON.stringify(written.marks))
-  assert.strictEqual('directions' in written, false, 'D7: the next save must drop the top-level "directions" key entirely: ' + JSON.stringify(written))
 })
 
 // ---------------------------------------------------------------------------
@@ -473,12 +462,11 @@ test('AC-20260907-04-13: --reopen kit on an APPROVED root prints the exact D10 i
 
   const bogus = runNode(SCRIPT, ['--root', dir, '--reopen', 'bogus'])
   assert.notStrictEqual(bogus.status, 0, '--reopen bogus must exit non-zero: ' + bogus.stdout + bogus.stderr)
-  // specs/20260907/07-mocks-retires-theme.md D6/AC-20260907-07-4 narrowed this literal: "theme"
-  // dropped out of the --reopen target list entirely (there is no mark left for it to clear).
-  // specs/20260907/08-walk-critic.md D6/AC-20260907-08-8 widens it again: walk:<j> joins the
-  // list as the second target replacing --reopen theme.
-  assert.match(bogus.stderr + bogus.stdout, /--reopen must be journey:<j>, walk:<j>, shapes, or kit/,
-    'the refusal must name the exact live target list — an unknown --reopen target must still name every live target, kit and walk:<j> included and theme dropped: ' + bogus.stdout + bogus.stderr)
+  // specs/20260907/08-walk-critic.md D6/AC-20260907-08-8 widened this literal: walk:<j> joins the
+  // list as the second target. specs/20260910/04-theme-before-the-client-walk.md D3/ADR-0013
+  // widens it again: "theme" rejoins the target list — it is a live --reopen target once more.
+  assert.match(bogus.stderr + bogus.stdout, /--reopen must be journey:<j>, walk:<j>, shapes, kit, or theme/,
+    'the refusal must name the exact live target list — an unknown --reopen target must still name every live target, kit, walk:<j> and theme all included: ' + bogus.stdout + bogus.stderr)
 })
 
 // ---------------------------------------------------------------------------

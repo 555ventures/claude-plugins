@@ -289,7 +289,14 @@ upstream bug list. -->
   somewhere outside its File Plan, and the leg never looks for it because the name is not in
   the spec's inherited literal set. Until the leg sweeps retired names too, read every Decision
   that removes or renames a public symbol and grep that symbol across `tests/` by hand at lock.
-  (specs/20260820/08-config-name-ban.md D14)
+  Second trigger, the widest one: a spec that REINSTATES a state into a derived state machine
+  retires every sibling pin asserting the machine's old shape — "never <STATE>", "<next> derived
+  straight off <prev>", the narrowed `--reopen` enumeration, the marks-object key set — and those
+  pins live in test files the spec's own File Plan never names, so neither the literals leg nor
+  the File-Plan-scoped grep sees them. Fourteen tests across five sibling files reddened this way
+  in one build. At lock, for any Decision that changes a state machine's shape, grep the retired
+  shape's literals across all of `tests/` and add every hit's file to the File Plan.
+  (specs/20260820/08-config-name-ban.md D14; specs/20260910/04-theme-before-the-client-walk.md D12)
 - `[plugin]` A script that derives two or more manifest leg exits by testing a finding's
   `class` against per-leg `Set`s of class names silently couples them the moment one class can
   be emitted from more than one code path: a single emission reddens BOTH legs, and the

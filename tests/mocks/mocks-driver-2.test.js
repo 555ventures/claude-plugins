@@ -11,7 +11,7 @@ const {
   writeCanon, writeWireframe, writeKitCanon,
   decideLook,
   advanceToSeedDone, advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToJourneyApproved,
-  advanceToJourneyWalked, advanceToApproved, confirmEveryJourney,
+  advanceToJourneyWalked, advanceToThemePicked, advanceToApproved, confirmEveryJourney,
   ledgerCmd,
   writeFixtureCapture, writeCaptureConfig,
   stubNpx, freePort, startServe, stopServe,
@@ -41,37 +41,21 @@ const {
 // ---------------------------------------------------------------------------
 // AC-20260906-02-5
 // ---------------------------------------------------------------------------
-test('AC-20260907-07-5 / AC-20260907-07-12 / AC-20260907-08-12 (retag of AC-20260906-02-5): approved refuses on an unresolved mock note and refuses with no decided approved stop, with no theme-picked precondition left to check first; once the journey is walked and the stop is decided approve it stamps a sketch mock to approved byte-diff-only, records the decider, and derives APPROVED, all with no design/tokens.css and no status.theme anywhere', () => {
+// D12 clean-up round (specs/20260910/04-theme-before-the-client-walk.md):
+// this test's "no design/tokens.css and no status.theme anywhere" premise is exactly the
+// contract ADR-0013 retires (a theme must be picked to ever reach APPROVED now) — deleted, not
+// rewritten. Its unresolved-note and no-decided-stop refusal legs already have executed coverage
+// in tests/mocks/mocks-driver-client-2.test.js's AC-20260907-10-16 (unaffected by ADR-0013,
+// unchanged). What has NO coverage anywhere else is the ACCEPT path itself — the byte-diff-only
+// mock stamp, the recorded decider, and the derived APPROVED state — so a minimal version of
+// exactly that survives here, through the real (now theme-picked) chain.
+test('AC-20260907-07-5 (D12 minimal): once the journey is walked, the theme is picked, and the approved stop is decided approve, --mark approved stamps a sketch mock to approved byte-diff-only, records the decider, and derives APPROVED', () => {
   const dir = tmpdir('mocks-driver')
-  advanceToJourneyApproved(dir)
-  // AC-20260907-08-1/D1 fixture repair: WALK now sits between WIREFRAMES and SIGNOFF, so the
-  // final "derives APPROVED" assertion below is vacuous unless the journey is actually walked
-  // before `--mark approved` is accepted — deriveState checks allJourneysWalked() before it
-  // ever checks marks.approved.
-  advanceToJourneyWalked(dir)
-
-  // AC-20260907-07-5's own precondition: no theme was ever picked, anywhere on disk or in
-  // status.json — a vacuous test would prove nothing if either were secretly present.
-  assert.strictEqual(fs.existsSync(path.join(dir, 'design/tokens.css')), false,
-    'test setup requires no design/tokens.css to exist, or the "approved with no theme" assertion below is vacuous')
-  assert.strictEqual('theme' in statusJson(dir), false,
-    'test setup requires status.json to carry no top-level "theme" key at all, or the "approved with no theme" assertion below is vacuous: ' + JSON.stringify(statusJson(dir)))
-
+  advanceToThemePicked(dir)
   // specs/20260910/03-client-journey-player.md D7 fixture repair: `--mark approved` now
   // refuses while a seed journey is unconfirmed by the client, so this setup records the
   // confirmation to keep the precondition it actually pins isolated.
   confirmEveryJourney(dir)
-  const openNote = { id: 'N001', scope: 'mock', screen: 'consent', state: null, text: 'wording is off', by: 'Ren', at: new Date().toISOString(), status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null }
-  writeFile(path.join(dir, 'design/mocks/notes.json'), JSON.stringify([openNote]))
-  const noteBlocked = mark(dir, 'approved')
-  assert.strictEqual(noteBlocked.status, 2, 'AC-20260907-07-12: approved must CONTINUE TO refuse while a mock note on "consent" is unresolved, with no theme-picked check ahead of it: ' + noteBlocked.stdout + noteBlocked.stderr)
-  assert.match(noteBlocked.stderr + noteBlocked.stdout, /N001/, 'the refusal must name the offending note id "N001": ' + noteBlocked.stdout + noteBlocked.stderr)
-  fs.rmSync(path.join(dir, 'design/mocks/notes.json'))
-
-  const noStop = mark(dir, 'approved')
-  assert.strictEqual(noStop.status, 2, 'AC-20260907-07-12: approved must CONTINUE TO refuse with no decided approved stop, even once notes are resolved: ' + noStop.stdout + noStop.stderr)
-  assert.match(noStop.stderr + noStop.stdout, /no look stop for approved/, 'the refusal must name the exact "no look stop for approved" message: ' + noStop.stdout + noStop.stderr)
-  assert.match(noStop.stderr + noStop.stdout, /stop open signoff/, 'the refusal must name the remedy "stop open signoff": ' + noStop.stdout + noStop.stderr)
 
   const signinPath = path.join(dir, 'design/mocks', LABELS[0] + '.html')
   const beforeStamp = fs.readFileSync(signinPath, 'utf8')
@@ -79,7 +63,7 @@ test('AC-20260907-07-5 / AC-20260907-07-12 / AC-20260907-08-12 (retag of AC-2026
 
   decideLook(dir, 'approved', 'approve', { by: 'Ren' })
   const r = mark(dir, 'approved')
-  assert.strictEqual(r.status, 0, 'AC-20260907-07-5: approved must be accepted with no design/tokens.css and no status.theme anywhere, once notes are resolved and the stop is decided approve: ' + r.stdout + r.stderr)
+  assert.strictEqual(r.status, 0, 'approved must be accepted once the theme is picked, notes are resolved and the stop is decided approve: ' + r.stdout + r.stderr)
 
   const afterStamp = fs.readFileSync(signinPath, 'utf8')
   assert.strictEqual(afterStamp, beforeStamp.replace('data-status="sketch"', 'data-status="approved"'),
@@ -197,24 +181,12 @@ test('AC-20260906-02-7: --reopen journey:<j> on an APPROVED root clears that jou
 })
 
 // ---------------------------------------------------------------------------
-// AC-20260907-07-4
+// AC-20260907-07-4's whole contract (`--reopen theme` refuses — the target is retired outright)
+// is DELETED whole (specs/20260910/04-theme-before-the-client-walk.md D12 clean-up round):
+// ADR-0013 reinstates `theme` as a live `--reopen` target. The new shape has
+// its own executed test — tests/mocks/mocks-driver-theme-2.test.js's AC-20260910-04-3, which
+// pins `--reopen theme` ACCEPTED (clears themePicked/approved/decider, re-derives THEME).
 // ---------------------------------------------------------------------------
-// Repair round (specs/20260907/08-walk-critic.md D6/AC-20260907-08-8): the retired-literal pin
-// below is updated in place — `--reopen` now widens to journey:<j>, walk:<j>, shapes, or kit.
-test('AC-20260907-07-4: --reopen theme exits 2 with the exact literal "--reopen must be journey:<j>, walk:<j>, shapes, or kit", writes nothing to status.json, and appends no row to status.reopens', () => {
-  const dir = tmpdir('mocks-driver')
-  advanceToApproved(dir)
-  const before = fs.readFileSync(statusPath(dir), 'utf8')
-
-  const r = runNode(SCRIPT, ['--root', dir, '--reopen', 'theme'])
-  assert.strictEqual(r.status, 2, 'D6: --reopen theme must exit 2 — the target is retired outright, there is no mark left to clear: ' + r.stdout + r.stderr)
-  assert.strictEqual((r.stderr + r.stdout).trim(), 'mocks-driver: --reopen must be journey:<j>, walk:<j>, shapes, or kit',
-    'D6: the refusal must be the exact narrowed literal, with "theme" dropped from the target list — specs/20260907/08-walk-critic.md D6 widens it to include "walk:<j>": ' + JSON.stringify({ stdout: r.stdout, stderr: r.stderr }))
-
-  const after = fs.readFileSync(statusPath(dir), 'utf8')
-  assert.strictEqual(after, before, 'D6: a refused --reopen theme must write nothing to status.json at all: ' + JSON.stringify({ before, after }))
-  assert.deepStrictEqual(statusJson(dir).reopens, [], 'D6: a refused --reopen theme must append no row to status.reopens: ' + JSON.stringify(statusJson(dir).reopens))
-})
 
 // ---------------------------------------------------------------------------
 // AC-20260907-07-6

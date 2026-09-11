@@ -6,7 +6,7 @@ const path = require('node:path')
 const http = require('node:http')
 const vm = require('node:vm')
 const { spawn, spawnSync } = require('node:child_process')
-const { tmpdir, runNode, SPEC, read, freePort, serveAtlas } = require('./helpers')
+const { tmpdir, runNode, SPEC, read, freePort, serveAtlas, withHandler } = require('./helpers')
 
 const atlas = (argv, opts) => runNode('scripts/design-atlas.js', argv, opts)
 
@@ -21,43 +21,10 @@ function loadDesignAtlas() {
   return require(scriptPath)
 }
 
-// In-process mirror of the file's existing withServe() child-process helper, for the new
-// createRequestHandler-based tests (A4: never a child process for these).
-function withHandler(root, prefix, fn) {
-  const mod = loadDesignAtlas()
-  assert.ok(mod && typeof mod.createRequestHandler === 'function',
-    'design-atlas.js must export createRequestHandler(root,{prefix}), the handler cmdServe mounts on http.createServer')
-  const server = http.createServer(mod.createRequestHandler(root, { prefix }))
-  return new Promise((resolve, reject) => {
-    server.listen(0, '127.0.0.1', () => {
-      const port = server.address().port
-      const get = (p) => new Promise((res2, rej2) => {
-        http.get({ host: '127.0.0.1', port, path: p }, (r) => {
-          let body = ''
-          r.on('data', (c) => { body += c })
-          r.on('end', () => res2({ status: r.statusCode, headers: r.headers, body }))
-        }).on('error', rej2)
-      })
-      const post = (p, obj) => new Promise((res2, rej2) => {
-        const data = typeof obj === 'string' ? obj : JSON.stringify(obj)
-        const req = http.request({
-          host: '127.0.0.1', port, path: p, method: 'POST',
-          headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) },
-        }, (r) => {
-          let body = ''
-          r.on('data', (c) => { body += c })
-          r.on('end', () => res2({ status: r.statusCode, headers: r.headers, body }))
-        })
-        req.on('error', rej2)
-        req.end(data)
-      })
-      Promise.resolve(fn({ get, post, port })).then(
-        (v) => server.close(() => resolve(v)),
-        (e) => server.close(() => reject(e)),
-      )
-    })
-  })
-}
+// withHandler(root, prefix, fn) — the in-process createRequestHandler HTTP harness (A4: never a
+// child process for these) — lives once in tests/helpers.js now, shared with
+// tests/mocks/walk-mode.test.js and tests/mocks/theme-serve.test.js
+// (specs/20260910/04-theme-before-the-client-walk.md D12 clean-up round).
 
 // Balanced-<div> element extraction (extractFn's brace-matching, adapted for markup) — lets the
 // buildAtlas rendering tests below isolate exactly the compare-table/stop element they assert on

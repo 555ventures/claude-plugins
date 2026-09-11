@@ -9,7 +9,7 @@ const {
   bare, mark, stateOf, ledgerCmd,
   statusJson, statusPath,
   decideLook,
-  advanceToCanonWritten, advanceToJourneyApproved, advanceToJourneyWalked, advanceToApproved,
+  advanceToCanonWritten, advanceToJourneyApproved, advanceToJourneyWalked, advanceToThemePicked, advanceToApproved,
 } = require('./mocks-driver-fixtures')
 
 // specs/20260906/05-gray-states-on-every-wireframe.md D7 (per-file 45 s budget guard,
@@ -24,42 +24,53 @@ const {
 // outright — journey-skinned is not among the driver's live marks.
 
 // ---------------------------------------------------------------------------
-// `theme-picked` and `direction-composed` are not live marks (specs/20260907/07 Rationale) — the
-// driver's only seven marks are seed-done, shape-picked, canon-written, kit-signed,
-// journey-drawn, journey-approved and approved, and AC-20260907-07-1/-07-2 below assert the
-// refusal directly for each retired name.
+// `direction-composed` is not a live mark (specs/20260907/07 Rationale). `theme-picked` IS a
+// live mark under specs/20260910/04-theme-before-the-client-walk.md D6 (ADR-0013) — the driver's
+// nine marks are seed-done, shape-picked, canon-written, kit-signed, journey-drawn,
+// journey-approved, journey-walked, theme-picked and approved. AC-20260907-07-1/-07-2 below
+// (both retagged) assert the refusal for direction-composed and the reinstated derivation/mark
+// shape for theme-picked's own collision.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // AC-20260907-07-1 (retag of AC-20260906-02-1)
 // ---------------------------------------------------------------------------
-test('AC-20260907-10-1 (retag of AC-20260907-07-1 / AC-20260907-08-1, itself a retag of AC-20260906-02-1): state derives WALK directly once canonWritten + kitSignedOff + every journey approved but not yet walked, with no status.theme and no design/tokens.css anywhere, never THEME; CLIENT once the journey is walked; APPROVED once marks.approved is additionally set; a legacy status.json additionally carrying marks.reviewOpened/decider/journeys[j].skinned/.reviewed derives the identical state, and the next accepted mark writes a status.json with none of reviewOpened/skinned/reviewed present', () => {
+// Retagged (specs/20260910/04-theme-before-the-client-walk.md D3, ADR-0013): THEME sits between
+// WALK and CLIENT — a blanket "never THEME" derivation check is exactly the collision this spec
+// owns (Rationale: "The pins that assert 'never THEME' ... are the collision this spec owns;
+// they are retagged to the new derivation, never weakened"). TDD red: this spec's own worktree
+// still lands CLIENT straight off WALK (no marks.themePicked check at all), so the "must derive
+// THEME" assertion below fails against it.
+test('AC-20260910-04-3 (retag of AC-20260907-10-1 / AC-20260907-07-1 / AC-20260907-08-1 / AC-20260906-02-1): state derives WALK directly once canonWritten + kitSignedOff + every journey approved but not yet walked; THEME once every journey is walked and marks.themePicked is unset (ADR-0013 reinstates it); CLIENT once themePicked is additionally set; APPROVED once marks.approved is additionally set; a legacy status.json additionally carrying marks.reviewOpened/decider/journeys[j].skinned/.reviewed derives the identical state, and the next accepted mark writes a status.json with none of reviewOpened/skinned/reviewed present', () => {
   const dir = tmpdir('mocks-driver')
   advanceToJourneyApproved(dir) // canonWritten + kitSignedOff (via the chain) + every declared journey approved, not yet walked
 
   assert.strictEqual(fs.existsSync(path.join(dir, 'design/tokens.css')), false,
-    'test setup requires no design/tokens.css to exist yet, or the "CLIENT with no theme" assertion below is vacuous')
+    'test setup requires no design/tokens.css to exist yet, or the "THEME with no theme picked" assertion below is vacuous')
   assert.strictEqual('theme' in statusJson(dir), false,
-    'test setup requires status.json to carry no top-level "theme" key at all, or the "CLIENT with no theme" assertion below is vacuous: ' + JSON.stringify(statusJson(dir)))
+    'test setup requires status.json to carry no top-level "theme" key at all, or the "THEME with no theme picked" assertion below is vacuous: ' + JSON.stringify(statusJson(dir)))
 
-  // AC-20260907-08-1/D1: WALK now sits between WIREFRAMES and CLIENT — every declared journey
-  // approved but none carrying `walked` must derive WALK, not CLIENT directly.
+  // AC-20260907-08-1/D1: WALK sits between WIREFRAMES and THEME — every declared journey
+  // approved but none carrying `walked` must derive WALK, not THEME/CLIENT directly.
   const beforeWalk = stateOf(dir)
   assert.strictEqual(beforeWalk.stdout.trim(), 'WALK',
     'AC-20260907-08-1: canonWritten + kitSignedOff + every journey approved but not yet walked must derive WALK: ' + beforeWalk.stdout + beforeWalk.stderr)
   assert.ok(!beforeWalk.stdout.includes('THEME'),
-    'AC-20260907-07-1: THEME must never be printed once the theme step is retired: ' + beforeWalk.stdout)
+    'before every journey is walked, THEME must never be printed: ' + beforeWalk.stdout)
 
   advanceToJourneyWalked(dir)
+  const walked = stateOf(dir)
+  assert.strictEqual(walked.stdout.trim(), 'THEME',
+    'AC-20260910-04-3: once every declared journey carries walked and marks.themePicked is unset, state must derive THEME (ADR-0013 reinstates it between WALK and CLIENT): ' + walked.stdout + walked.stderr)
+
+  advanceToThemePicked(dir)
   const s = stateOf(dir)
   assert.strictEqual(s.stdout.trim(), 'CLIENT',
-    'AC-20260907-10-1: once every declared journey carries walked and marks.approved is unset, state must derive CLIENT (the SIGNOFF state is retired) — a legacy status.json stamped state:"SIGNOFF" with those marks derives CLIENT the same way: ' + s.stdout + s.stderr)
-  assert.ok(!s.stdout.includes('THEME'),
-    'AC-20260907-07-1: THEME must never be printed once the theme step is retired: ' + s.stdout)
+    'AC-20260910-04-3: once marks.themePicked is additionally set, state must derive CLIENT (the SIGNOFF state stays retired) — a legacy status.json stamped state:"SIGNOFF" with those marks derives CLIENT the same way: ' + s.stdout + s.stderr)
 
   // Hand-write a legacy status.json in the pre-20260906/02 shape (state:"SKIN") plus every
   // other retired SKIN/REVIEW field, and confirm the derivation is unaffected by the fields it
-  // carries alongside — unrelated to THEME's own retirement, kept from the prior AC this retags.
+  // carries alongside — unrelated to THEME's own reinstatement, kept from the prior AC this retags.
   const legacy = statusJson(dir)
   legacy.state = 'SKIN'
   legacy.marks.reviewOpened = '2026-09-01T00:00:00Z'
@@ -68,7 +79,7 @@ test('AC-20260907-10-1 (retag of AC-20260907-07-1 / AC-20260907-08-1, itself a r
   legacy.journeys[JOURNEY].reviewed = '2026-09-01T00:00:00Z'
   fs.writeFileSync(statusPath(dir), JSON.stringify(legacy, null, 2))
   assert.strictEqual(stateOf(dir).stdout.trim(), 'CLIENT',
-    'a legacy status.json written state:"SKIN" with no theme anywhere, plus reviewOpened/decider/skinned/reviewed, must still derive CLIENT — the legacy fields are ignored on read')
+    'a legacy status.json written state:"SKIN" with themePicked already set, plus reviewOpened/decider/skinned/reviewed, must still derive CLIENT — the legacy fields are ignored on read')
 
   advanceToApproved(dir)
   assert.strictEqual(stateOf(dir).stdout.trim(), 'APPROVED', 'marks.approved set must derive APPROVED')
@@ -84,29 +95,32 @@ test('AC-20260907-10-1 (retag of AC-20260907-07-1 / AC-20260907-08-1, itself a r
 // ---------------------------------------------------------------------------
 // Repair round (specs/20260907/08-walk-critic.md D2/AC-20260907-08-3): the exact live-mark list
 // gains "journey-walked" in chain position, directly after "journey-approved".
-test('AC-20260907-07-2: --mark direction-composed --direction quiet and --mark theme-picked each exit 2 naming "unknown mark" and the exact live eight-mark list, with neither retired name in that list', () => {
+//
+// Retagged (specs/20260910/04-theme-before-the-client-walk.md D6, ADR-0013): `theme-picked` is a
+// live mark — an "theme-picked is unknown" refusal check is exactly the second collision this
+// spec's own Rationale names ("the collision this spec owns; they are retagged to the new
+// derivation, never weakened"); direction-composed stays retired outright, so only that half
+// survives here (the positive `--mark theme-picked` behavior is pinned in tests/mocks/
+// mocks-driver-theme-2.test.js's AC-20260910-04-6/-9). TDD red: this spec's own worktree still
+// lists exactly eight marks with no theme-picked, so the nine-mark LIVE_LIST assertion below
+// fails against it.
+test('AC-20260907-07-2 (retag): --mark direction-composed --direction quiet exits 2 naming "unknown mark" and the exact live nine-mark list, which now names theme-picked (not direction-composed) between journey-walked and approved', () => {
   const dir = tmpdir('mocks-driver')
   advanceToJourneyApproved(dir)
-  const LIVE_LIST = 'seed-done, shape-picked, canon-written, kit-signed, journey-drawn, journey-approved, journey-walked, approved'
+  const LIVE_LIST = 'seed-done, shape-picked, canon-written, kit-signed, journey-drawn, journey-approved, journey-walked, theme-picked, approved'
   const listRe = new RegExp('one of: ' + LIVE_LIST.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$')
 
   const dc = mark(dir, 'direction-composed', ['--direction', 'quiet'])
   assert.strictEqual(dc.status, 2, 'D3: --mark direction-composed must exit 2 — the mark is retired outright: ' + dc.stdout + dc.stderr)
   assert.match(dc.stderr + dc.stdout, /unknown mark/, 'the refusal must say "unknown mark": ' + dc.stdout + dc.stderr)
   assert.match((dc.stderr + dc.stdout).trim(), listRe,
-    'D3: the refusal must end with the exact eight-mark live list (canon-written before kit-signed, journey-walked directly after journey-approved per specs/20260907/08-walk-critic.md D2), naming neither direction-composed nor theme-picked: ' + JSON.stringify({ stdout: dc.stdout, stderr: dc.stderr }))
-
-  const tp = mark(dir, 'theme-picked')
-  assert.strictEqual(tp.status, 2, 'D3: --mark theme-picked must exit 2 — the mark is retired outright: ' + tp.stdout + tp.stderr)
-  assert.match(tp.stderr + tp.stdout, /unknown mark/, 'the refusal must say "unknown mark": ' + tp.stdout + tp.stderr)
-  assert.match((tp.stderr + tp.stdout).trim(), listRe,
-    'D3: the refusal must end with the exact eight-mark live list (canon-written before kit-signed, journey-walked directly after journey-approved per specs/20260907/08-walk-critic.md D2), naming neither direction-composed nor theme-picked: ' + JSON.stringify({ stdout: tp.stdout, stderr: tp.stderr }))
+    'D3/D6: the refusal must end with the exact nine-mark live list (theme-picked reinstated between journey-walked and approved, ADR-0013), naming direction-composed nowhere in it: ' + JSON.stringify({ stdout: dc.stdout, stderr: dc.stderr }))
 })
 
 // ---------------------------------------------------------------------------
 // AC-20260906-02-2
 // ---------------------------------------------------------------------------
-test('AC-20260906-02-2: --mark journey-skinned/review-opened/journey-reviewed exit 2 naming "unknown mark" and the seven live mark names; --decider on a bare or --mark invocation exits 2 with the retirement message', () => {
+test('AC-20260906-02-2 (retag of the live-mark-name list, specs/20260910/04-theme-before-the-client-walk.md D6): --mark journey-skinned/review-opened/journey-reviewed exit 2 naming "unknown mark" and the eight live mark names (theme-picked reinstated, direction-composed still absent); --decider on a bare or --mark invocation exits 2 with the retirement message', () => {
   const dir = tmpdir('mocks-driver')
   advanceToJourneyApproved(dir)
 
@@ -118,13 +132,16 @@ test('AC-20260906-02-2: --mark journey-skinned/review-opened/journey-reviewed ex
     const r = mark(dir, markName, extra)
     assert.strictEqual(r.status, 2, '--mark ' + markName + ' must exit 2 — it is a retired mark, never a silent no-op: ' + r.stdout + r.stderr)
     assert.match(r.stderr + r.stdout, /unknown mark/, '--mark ' + markName + '\'s refusal must say "unknown mark": ' + r.stdout + r.stderr)
-    // specs/20260907/07-mocks-retires-theme.md D3 fixture repair: direction-composed and
-    // theme-picked drop out of the live-mark list entirely (nine live marks -> seven).
-    for (const live of ['seed-done', 'shape-picked', 'canon-written', 'kit-signed', 'journey-drawn', 'journey-approved', 'approved']) {
+    // specs/20260907/07-mocks-retires-theme.md D3 fixture repair (retagged specs/20260910/04-
+    // theme-before-the-client-walk.md D6, ADR-0013): direction-composed stays retired, but
+    // theme-picked returns as a live mark — the collision this spec's own Rationale names
+    // ("theme-picked is unknown ... retagged to the new derivation, never weakened"). TDD red:
+    // the pre-image's live-mark list has no theme-picked at all, so this "must list theme-picked"
+    // assertion is false against the pre-image.
+    for (const live of ['seed-done', 'shape-picked', 'canon-written', 'kit-signed', 'journey-drawn', 'journey-approved', 'theme-picked', 'approved']) {
       assert.match(r.stderr + r.stdout, new RegExp(live), '--mark ' + markName + '\'s refusal must list the live mark name "' + live + '": ' + r.stdout + r.stderr)
     }
     assert.ok(!(r.stderr + r.stdout).includes('direction-composed'), '--mark ' + markName + '\'s refusal must never name the retired mark "direction-composed": ' + r.stdout + r.stderr)
-    assert.ok(!(r.stderr + r.stdout).includes('theme-picked'), '--mark ' + markName + '\'s refusal must never name the retired mark "theme-picked": ' + r.stdout + r.stderr)
   }
 
   const deciderBare = runNode(SCRIPT, ['--root', dir, '--decider', 'Ren'])

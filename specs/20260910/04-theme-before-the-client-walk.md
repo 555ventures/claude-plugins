@@ -1,6 +1,7 @@
 ---
 date: 2026-09-10
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: design-mocks
 design: false
@@ -9,6 +10,7 @@ depends_on: [specs/20260910/03-client-journey-player.md, specs/20260910/06-real-
 depended_on_by: []
 brief: 22a
 open_markers: 0
+diff_base: 7fd991183eddfd79dc37d99789fca2afeca3a52c
 ---
 
 # The theme is picked by the client before the walk: candidates on the two dense screens, the user's shortlist, one client pick, every walked screen served in the picked roles
@@ -42,6 +44,7 @@ chose, and `/spec:sketch` finds the theme already picked.
 | D9 | `/spec:sketch` step 3 (`spec/commands/sketch.md`): `theme state` returning `picked` is the normal path once mocks picked it; the interview/`theme open`/`theme adopt` prose is replaced by "the theme was picked in `/spec:mocks` (THEME); when `design/tokens.css` is absent on a host that skipped mocks, author directions and pick through `theme shortlist` + `--mark theme-picked`". `spec/doctrine/mocks.md` § Mocks: State Machine gains the THEME sentence; § Mocks: Look and Serve names `?theme`; `spec/doctrine/design.md` line "the theme itself is picked on `/spec:sketch`'s first run" becomes "picked in `/spec:mocks`'s THEME state by the client on the two dense screens"; `spec/commands/mocks.md` gains `## Theme (THEME state)` (AC-20260910-04-10) | Doctrine binding homes; sketch keeps its kit-authoring role |
 | D10 | `spec/.claude-plugin/plugin.json` bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` [no-ac: `plugin-bump.js --check` is the oracle] | Version discipline |
 | D11 | `size-baseline.json` is raised for `design-atlas.js`, `mocks-driver.js` and the `spec/scripts` tree by `node scripts/size-ratchet.js --root . --reconcile --cite specs/20260910/04-theme-before-the-client-walk.md` [no-ac: the ratchet's live test is the oracle] | Both entry points sit at their ceilings |
+| D12 | Sibling test files outside the File Plan that assert the pre-ADR-0013 flow are **cleaned up, not retagged** (JJ ruling, 2026-09-11, mid-build): a test whose whole contract this spec retires (`--reopen theme` refused, `never THEME`, `theme-picked` an unknown mark, no top-level `theme` key, CLIENT derived straight from WALK) is **deleted**, never rewritten to assert the new shape — the new shape already has its own executed tests in this spec's own File Plan rows. A test whose contract survives and only fails because its fixture no longer reaches the state it walks to is fixed **once, in the shared fixture**, never per test file. Affected files admitted to scope: `tests/mocks/mocks-driver-2.test.js`, `tests/mocks/mocks-driver-client.test.js`, `tests/mocks/mocks-driver-look-stops-4.test.js`, `tests/mocks/mocks-driver-walk.test.js`, `tests/mocks/mocks-driver.test.js`, plus the de-duplication the same ruling forces: the in-process `withHandler` server harness, copied three times, moves to `tests/helpers.js` and its three call sites (`tests/design-atlas.test.js`, `tests/mocks/walk-mode.test.js`, `tests/mocks/theme-serve.test.js`) import it, `tests/test-file-budget.test.js`'s `KEPT_TEST_NAMES` literal follows the renamed tests, and `dup-baseline.json` is reconciled by `node scripts/dup-windows.js --root . --update` the same way D11 reconciles `size-baseline.json` [no-ac: the gate is the oracle] | The suite is already large; a retired contract earns a deletion, and one fixture fix beats thirteen hand edits |
 
 ## File Plan
 
@@ -63,6 +66,16 @@ chose, and `/spec:sketch` finds the theme already picked.
 | tests/mocks/mocks-driver-theme.test.js | MODIFY | tests | the `theme open`/`theme adopt` pins retagged to the retired-command refusals (AC-20260910-04-4, AC-20260910-04-6); the "no THEME state" derivations (AC-20260907-10-1's `never THEME` clause, AC-20260907-07-2's `theme-picked` unknown-mark clause) retired by ADR-0013 and re-pinned to D3 |
 | tests/mocks/mocks-driver-3.test.js | MODIFY | tests | AC-20260907-10-1's `never THEME` derivation clause retired by ADR-0013 and retagged to AC-20260910-04-3 (the derivation now lands on THEME between WALK and CLIENT) |
 | tests/consistency/design-doctrine.test.js | MODIFY | tests | AC-20260910-04-10 |
+| tests/helpers.js | MODIFY | tests | D12 — the thrice-copied in-process `withHandler` server harness lands here once |
+| tests/design-atlas.test.js | MODIFY | tests | D12 — imports the shared `withHandler` instead of its own copy |
+| tests/mocks/walk-mode.test.js | MODIFY | tests | D12 — imports the shared `withHandler` instead of its own copy |
+| tests/mocks/mocks-driver-2.test.js | MODIFY | tests | D12 — retired-contract clean-up |
+| tests/mocks/mocks-driver-client.test.js | MODIFY | tests | D12 — retired-contract clean-up; fixture routed through THEME |
+| tests/mocks/mocks-driver-look-stops-4.test.js | MODIFY | tests | D12 — fixture routed through THEME |
+| tests/mocks/mocks-driver-walk.test.js | MODIFY | tests | D12 — fixture routed through THEME; widened `--reopen` enumeration literal |
+| tests/mocks/mocks-driver.test.js | MODIFY | tests | D12 — retired-contract clean-up; widened `--reopen` enumeration literal |
+| tests/test-file-budget.test.js | MODIFY | tests | D12 — `KEPT_TEST_NAMES` follows the renamed tests |
+| dup-baseline.json | MODIFY | other | D12 reconcile via `node scripts/dup-windows.js --root . --update` |
 
 ## Contracts
 
@@ -153,6 +166,47 @@ the one path (`advanceToApproved`) whose precondition set grows.
 Rejected: rendering the theme candidates on the kit page (the client does not read a kit); a
 session-side pick with a client "preview" (the client's pick is the point); a THEME state before
 WIREFRAMES (nothing to judge on).
+
+**What the build ran into** (folded from this spec's deviations sidecar at close; the recurring
+class went to pipeline rules § Gotchas, the collision-closure literals entry).
+
+Reinstating THEME into the derived state machine retired far more sibling coverage than the File
+Plan anticipated. The collision sweep this spec's own Rationale ran greps the File Plan's test
+rows; the pins asserting the machine's OLD shape — "never THEME", "CLIENT derived straight off
+WALK", the narrower `--reopen` enumeration, the five-key `marks` object — lived in five test files
+the File Plan never named, and fourteen tests reddened the moment `deriveState` and `doReopen`
+landed. JJ ruled clean-up over retag (D12): a test whose whole contract this spec retires is
+deleted once its surviving facts are confirmed covered elsewhere, and a test whose contract
+survives but whose fixture no longer reaches the state it walks to is fixed once, in
+`advanceToThemePicked`, never per file. Four tests were deleted with a minimal version kept for
+the unrelated facts each carried (the approved-accept byte-diff/decider assertions, the "SIGNOFF
+absent from the source" clause, the cold-root `marks` key set); the rest were fixture swaps and
+one `--reopen` literal update.
+
+Two of that clean-up's own cuts went too deep and the review caught both. The supersede
+mechanics — a stale same-kebab row marked `overridden` with a fresh row appended, cross-direction
+rows overridden, duplicate confirmed rows collapsed, uncomposed siblings excluded from the
+rejected cell — are kept alive verbatim by D6, not retired, so deleting their tests left live
+behaviour with zero coverage and the `[retired: …]` annotations added to
+`specs/20260907/06-theme-pick-moves-to-sketch.md` were false. One consolidated test now covers all
+four mechanics plus the ghost-sibling regression pin, retagged to AC-20260910-04-6. Separately,
+AC-20260910-04-9's wire-template half had been passing for the wrong reason: it omitted
+`--direction`, so it landed on the "no look stop" refusal instead of the wire check it names — and
+behind that wrong-reason pass sat a real hole, the legacy no-stop path never checking D3's
+"non-wire" precondition at all, so a host whose `design/tokens.css` was still the gray register
+could stamp itself themed and skip the client's pick entirely. The branch now reads
+`wire-tokens.css` at run time and refuses naming `theme shortlist`.
+
+The scope ruling also had to be widened at review: D12 named five files, but honouring it forced
+five more (the thrice-copied in-process `withHandler` harness moving to `tests/helpers.js`, its
+three call sites, the `KEPT_TEST_NAMES` literal, and the `dup-baseline.json` reconcile). Those are
+now admitted by D12 and carried as File Plan rows rather than resting on the sidecar alone.
+
+Two mechanical notes for anyone re-running this: the red-check refuses a pre-image where a
+non-tests File Plan path already differs from base, so the standing size and duplication baselines
+must be reconciled AFTER the red check, never before it; and the doctrine trim that bought back
+the `/spec:mocks` read-load budget twice broke a literal check by hard-wrapping the phrase it
+asserts — a pinned literal must not be allowed to straddle a line break.
 
 ## Canonical Delta
 

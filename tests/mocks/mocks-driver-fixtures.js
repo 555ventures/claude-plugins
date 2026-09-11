@@ -375,8 +375,32 @@ function writeThemeKit(dir, kebab, primitives = [{ key: 'sheet', purpose: 'a mod
   writeFile(path.join(dir, 'design/theme', kebab, 'kit.html'),
     '<link rel="stylesheet" href="./tokens.css">\n' +
     '<div data-kit-canon="' + kebab + '">\n' + body + '\n</div>\n')
+  // specs/20260910/04-theme-before-the-client-walk.md D2/A3: `theme compose` (and everything
+  // that reuses composeViolations — theme shortlist, --mark theme-picked) additionally refuses a
+  // candidate whose tokens.css omits any of the eleven wire roles spec/templates/mocks/
+  // wire-tokens.css declares under :root — every caller of writeThemeKit needs a candidate that
+  // clears that new leg by default, so a test isolating ANOTHER D2 violation never trips this one
+  // by accident. A test isolating the role-completeness leg itself mutates the written file
+  // afterward (drops one or more `--role: …;` declarations) rather than this fixture growing an
+  // opts bag.
   writeFile(path.join(dir, 'design/theme', kebab, 'tokens.css'),
-    ':root{--text-body:#111}\n[data-theme="dark"]{--text-body:#eee}\n')
+    ':root{--bg:#fff;--fg:#111;--muted:#666;--muted-bg:#f0f0f0;--border:#ddd;--primary:#222;' +
+    '--primary-fg:#fff;--ring:#999;--radius:8px;--font:sans-serif;--shadow:0 1px 2px rgba(0,0,0,.1)}\n' +
+    '[data-theme="dark"]{--bg:#000;--fg:#eee;--muted:#999;--muted-bg:#111;--border:#333;' +
+    '--primary:#eee;--primary-fg:#000;--ring:#555;--radius:8px;--font:sans-serif;' +
+    '--shadow:0 1px 2px rgba(0,0,0,.5)}\n')
+}
+
+// specs/20260910/04-theme-before-the-client-walk.md: the confirmed `theme-directions: <kebab>`
+// said-by-user product row composeViolations requires as its last leg — shared by every advanceTo*
+// helper and test file in this family so the row shape is asserted in exactly one place.
+function themeDirectionsRow(dir, kebab, id) {
+  const r = ledgerCmd(dir, 'add', [
+    '--id', id, '--step', 'SKETCH', '--kind', 'product',
+    '--claim', 'theme-directions: ' + kebab, '--tag', 'said-by-user', '--status', 'confirmed',
+  ])
+  assert.strictEqual(r.status, 0, 'test setup requires the theme-directions ledger row for "' + kebab + '" to be accepted: ' + r.stderr)
+  return r
 }
 
 // Orchestrator duty (specs/20260907/04-kit-canon-family.md): D1 inserts KIT between SHAPES and
@@ -468,15 +492,42 @@ function advanceToJourneyWalked(dir, journeyName = JOURNEY) {
 // D11: the SKIN/REVIEW states are retired — approved now stamps the wireframes produced at
 // journey-drawn/journey-approved straight through, with no intervening skin step.
 //
-// specs/20260907/07-mocks-retires-theme.md orchestrator duty: the mocks state machine has no
-// THEME step — the chain is WIREFRAMES -> SIGNOFF -> APPROVED, so advanceToApproved routes
-// through advanceToJourneyApproved directly, with no direction-composing or theme-picking
-// helper in between.
+// specs/20260907/07-mocks-retires-theme.md orchestrator duty (superseded below, specs/20260910/04):
+// the mocks state machine had no THEME step for a while — that spec's WIREFRAMES -> SIGNOFF ->
+// APPROVED chain is what advanceToJourneyApproved/advanceToJourneyWalked still build.
 //
 // specs/20260907/08-walk-critic.md orchestrator duty: WALK now sits ahead of SIGNOFF —
 // advanceToApproved routes through advanceToJourneyWalked (which itself routes through
 // advanceToJourneyApproved) in place of its prior direct call, so every caller reaching
 // APPROVED has walked its journey first.
+//
+// specs/20260910/04-theme-before-the-client-walk.md D3/D6 orchestrator duty (ADR-0013): THEME
+// returns, between WALK and CLIENT — advanceToThemePicked composes two directions (full eleven
+// wire roles, D2) over the walked host's own design/kit/, decides the theme-picked pick stop
+// (bypassing the served `theme shortlist` step exactly as every other advanceTo* bypasses its own
+// "open" step) and runs the real `--mark theme-picked --direction <k>`, the one executed-proof
+// write every later stage's fixture now depends on.
+function advanceToThemePicked(dir, opts = {}) {
+  if (readMarksOrEmpty(dir).themePicked) return
+  advanceToJourneyWalked(dir)
+  const kebab = opts.kebab || 'a'
+  const others = opts.others || ['b']
+  const primitives = opts.primitives || [{ key: 'sheet', purpose: 'a modal panel for one focused task' }]
+  if (!fs.existsSync(path.join(dir, 'design/kit/kit.html'))) writeKitCanon(dir, primitives)
+  const all = [kebab, ...others]
+  const candidates = all.map((k, i) => ({
+    group: k, label: DENSE, path: 'mocks/' + DENSE + '.html?theme=' + k,
+  }))
+  let nextLedgerP = 90
+  for (const k of all) {
+    writeThemeKit(dir, k, primitives)
+    themeDirectionsRow(dir, k, 'P' + (nextLedgerP++))
+  }
+  decideLook(dir, 'theme-picked', 'pick', { pick: kebab, others, by: 'jj', candidates })
+  const r = mark(dir, 'theme-picked', ['--direction', kebab])
+  assert.strictEqual(r.status, 0, 'test setup requires --mark theme-picked to be accepted once two composed directions exist and the theme-picked stop is decided pick: ' + r.stdout + r.stderr)
+  return r
+}
 
 // specs/20260910/03-client-journey-player.md D7: `--mark approved` refuses while any seed
 // journey is neither confirmed by the client nor waived, so every fixture chain reaching
@@ -495,7 +546,7 @@ function confirmEveryJourney(dir) {
 
 function advanceToApproved(dir) {
   if (readMarksOrEmpty(dir).approved) return
-  advanceToJourneyWalked(dir)
+  advanceToThemePicked(dir)
   confirmEveryJourney(dir)
   decideLook(dir, 'approved', 'approve', { by: 'Ren' })
   const r = mark(dir, 'approved')
@@ -587,11 +638,11 @@ module.exports = {
   notesPath, writeNotesFile, readNotesFile, nowIso, isoDaysAgo, patchStatus, sha256, stubNpxScreenshot,
   writeTargets, writeResearchBrief, writeSeed, confirmFacts, writeCanon, writeWireframe,
   CUSTOMER_RECORDS, writeCustomerRecords,
-  writeKitCanon, writeThemeKit,
+  writeKitCanon, writeThemeKit, themeDirectionsRow,
   decideLook, openLook, freePort, startServe, stopServe, getBody,
   writeFixtureCapture, writeCaptureConfig,
   advanceToSeedDone, advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToJourneyApproved,
-  advanceToJourneyWalked, advanceToApproved, confirmEveryJourney,
+  advanceToJourneyWalked, advanceToThemePicked, advanceToApproved, confirmEveryJourney,
   writeShortSeed, advanceToShortJourneyDrawn,
   stubNpx,
 }

@@ -55,32 +55,31 @@ neither mark.
 
 ## Look rule
 
-Before SHAPES, KIT, WIREFRAMES, or CLIENT the driver runs the look-reachability probe;
-if it refuses, either fix the remedy (`npx playwright install chromium`) or, when a browser MCP
-is the real look path, `ToolSearch` for `claude-in-chrome` and record `mocks-driver.js look-via
-browser` before re-running. Look with `mocks-driver.js look <label> [--state <s>] [--port <n>]`
-or the declared browser MCP — never approve on the HTML source alone.
+Before SHAPES, KIT, WIREFRAMES, or CLIENT the driver runs the look-reachability probe; a
+refusal fixes with `npx playwright install chromium` or, for a browser-MCP host, `ToolSearch`
+`claude-in-chrome` and record `mocks-driver.js look-via browser`. Look with `mocks-driver.js
+look <label> [--state <s>] [--port <n>]` or the declared browser MCP — never approve on source
+alone.
 
-**The user's look is a served atlas stop, never a question.** Before the first `stop open`, start
-`node "$(spec-paths design-atlas)" serve --root . [--port <n>]` as a **tracked background task**
-(`already serving` means reuse it); leave it running across this run's look stops and
-stop it at sign-off or session end. Every step waiting on a human verdict runs `node {driver}
-stop open <step>` (`shapes`|`kit`|`journey:<j>`|`signoff`); its stdout is the whole hand-off
-— exactly two lines — then **end the turn** (shared § Design Atlas: look stops are never
-questions):
+**The user's look is a served atlas stop, never a question.** Before the first `stop open`,
+start `node "$(spec-paths design-atlas)" serve --root . [--port <n>]` as a
+**tracked background task** (`already serving` means reuse it); stop it at sign-off or session
+end. Every step waiting on a human verdict runs `node {driver} stop open <step>`
+(`shapes`|`kit`|`journey:<j>`|`signoff`, CLIENT included); its stdout is the whole hand-off,
+then **end the turn** (shared § Design Atlas: look stops are never questions):
 
     🎨 ready for review — <url>
     Reply  ✅ approve  — or —  ✏️ change <what looks wrong>
 
-(a pick stop — SHAPES — prints `Reply  ✅ pick <name>  — or —  ✏️ change <what looks
-wrong>` instead). Decided on the served atlas page or, from chat, `node {driver} stop decide
-<P…> --verdict approve|pick|change [--pick <group>] [--note <n>] --by chat` — never interpreted
-directly. Next bare run reads the decided stop: `approve`/`pick` advances via its `--mark`
-line; `change` starts a fresh round.
+(a pick stop — SHAPES — offers `pick <name>` in place of `approve`). Decided on the served atlas page, or `node {driver} stop decide <P…> --verdict approve|pick|change [--pick <group>] [--note <n>] --by chat`; the next bare run reads the decision and advances via its `--mark`, or `change` starts a fresh round.
 
 ## Walk (WALK state)
 
 For the first journey with no `walked`: dispatch `Agent {subagent_type: 'design-critic'}` once — mock paths in declared order plus the seed path, never file contents (shared § Model Placement) — fresh context; it returns findings `{screen, state, break, finding, severity}`, flow breaks only (§ Mocks: State Machine). Record each with `node {driver} notes add --scope mock --screen <label> --state <s> --kind walk --reason <break> --by walk-critic --text "<finding>"`, then `--mark journey-walked --journey <j>` — refused on an `open` finding, naming each id and `notes address --id <id> --change "<what changed>"`; empty findings walk straight to the mark. WALK opens no look stop or render/look probe — fix a finding through `--reopen walk:<j>` or `--reopen journey:<j>`, both landing on states that already carry the look machinery.
+
+## Theme (THEME state)
+
+Once every journey is walked, author two or three directions under `design/theme/<k>/` and run `theme compose`, `theme shortlist --directions <a,b[,c]>`, and `--mark theme-picked [--direction <k>]` — the driver's own printed steps carry the exact invocations and stop shape (§ Mocks: State Machine). Contract: the mark refuses an undecided stop or a disagreeing `--direction`; once adopted, every mock the client walks is served `?theme=<k>` while the session's own pages stay neutral; a host already past WALK with `design/tokens.css` byte-equal to a direction may skip the stop (the legacy path).
 
 ## Client review (CLIENT state)
 

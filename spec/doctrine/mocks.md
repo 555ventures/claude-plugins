@@ -66,7 +66,11 @@ removed) the derivation lands earlier and demands the mark again. The order is f
 from 2–3 candidates) → **KIT** (the shared-primitive canon named and signed off, before any
 screen) → **WIREFRAMES** (canon written, then every seed journey drawn and
 approved) → **WALK** (one fresh-context critic walks each declared journey once, flow breaks
-only) → **CLIENT** (the client player, exposed by the user, where the client walks each
+only) → **THEME** (the user authors two or three directions under `design/theme/<kebab>/`,
+`theme shortlist` opens a client pick over the seed's dense screens served with
+`?theme=<kebab>` — a link swap of the wire register's token file, never a redraw — and
+`--mark theme-picked` adopts the client's pick, copying its tokens the way `theme adopt` once
+did) → **CLIENT** (the client player, exposed by the user, where the client walks each
 journey by its real controls, answers the session's guesses, raises notes and confirms with one
 sentence; closes when every journey is confirmed-or-waived, every client-visible question
 answered-or-waived and every client note resolved-or-waived) → **APPROVED** (terminal).
@@ -190,6 +194,15 @@ look probe unless `status.look` is already `"browser"`; a failed probe refuses (
 verify. `mocks-driver.js look-via <playwright|browser>` records the session's declared path:
 `browser` means a browser MCP the command told the session to `ToolSearch` for, which cannot be
 probed from a script and so is declared once and trusted thereafter.
+
+**Theme mode is a link swap, not a redraw.** `GET /mocks/<label>.html?theme=<kebab>` rewrites,
+in the served HTML only, every stylesheet target `linksWireRegister` recognizes as
+`wire/tokens.css` to `theme/<kebab>/tokens.css`, when `design/theme/<kebab>/tokens.css` exists
+on disk; an unknown or malformed `kebab` leaves the response byte-identical, the same
+fail-quiet discipline as `?state`. `?theme` composes with `?clean`, `?walk`, and `?state=`. Only
+the client route (`/client/walk/<j>.html`) appends `?theme=<k>` once `status.theme` is set; the
+session's own atlas index and review pages serve no `?theme` — the session always judges the
+neutral register.
 
 **Walk mode is a query token, not a separate route.** `GET /mocks/<label>.html?walk` injects
 `<script src="<prefix>/__walk/walk.js"></script>` before the last `</body>` (after the state

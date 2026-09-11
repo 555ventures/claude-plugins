@@ -569,3 +569,40 @@ test('AC-20260910-02-5: spec/doctrine/mocks.md gains the "Every edge is a real c
   assert.ok(seedTemplateSrc.includes('data-to'),
     'D5: ' + seedTemplatePath + '\'s "## Journeys" comment must name data-to: got no "data-to" anywhere in the file')
 })
+
+// ---------------------------------------------------------------------------
+// AC-20260910-06-4
+// ---------------------------------------------------------------------------
+test('AC-20260910-06-4: spec/doctrine/mocks.md § Mocks: Authoring Rules carries the bold rule name "Screens carry the client\'s records" and § Mocks: Seed carries the literals "## Dense screens" and "## Records"; spec/templates/mocks-seed.md carries both headings; spec/commands/mocks.md carries "records/"', () => {
+  const p = 'spec/doctrine/mocks.md'
+  const src = read(p)
+
+  const authoringIdx = src.indexOf('## Mocks: Authoring Rules')
+  assert.ok(authoringIdx !== -1, p + ' must carry a "## Mocks: Authoring Rules" heading')
+  const authoringNextIdx = src.indexOf('\n## ', authoringIdx + 1)
+  const authoringSection = src.slice(authoringIdx, authoringNextIdx === -1 ? src.length : authoringNextIdx)
+  assert.match(authoringSection, /\*\*Screens carry the client's records\.?\*\*/,
+    'D4: § Mocks: Authoring Rules must carry the bold rule name "Screens carry the client\'s records" — the rule naming that wireframes draw the seed\'s Records values: got ' + authoringSection)
+
+  const seedIdx = src.indexOf('## Mocks: Seed')
+  assert.ok(seedIdx !== -1, p + ' must carry a "## Mocks: Seed" heading')
+  const seedNextIdx = src.indexOf('\n## ', seedIdx + 1)
+  const seedSection = src.slice(seedIdx, seedNextIdx === -1 ? src.length : seedNextIdx)
+  assert.ok(seedSection.includes('## Dense screens'),
+    'D4: § Mocks: Seed must name the literal "## Dense screens" — the plural grammar D1 adds: got ' + seedSection)
+  assert.ok(seedSection.includes('## Records'),
+    'D4: § Mocks: Seed must name the literal "## Records" — the new section D2 adds: got ' + seedSection)
+
+  const seedTemplatePath = 'spec/templates/mocks-seed.md'
+  assert.ok(fs.existsSync(path.join(ROOT, seedTemplatePath)), seedTemplatePath + ' must exist')
+  const seedTemplateSrc = read(seedTemplatePath)
+  assert.ok(seedTemplateSrc.includes('## Dense screens'),
+    'D4: ' + seedTemplatePath + ' must carry the "## Dense screens" heading: got no such heading in the file')
+  assert.ok(seedTemplateSrc.includes('## Records'),
+    'D4: ' + seedTemplatePath + ' must carry the "## Records" heading: got no such heading in the file')
+
+  const commandsPath = 'spec/commands/mocks.md'
+  const commandsSrc = read(commandsPath)
+  assert.ok(commandsSrc.includes('records/'),
+    'D4: ' + commandsPath + ' must name "records/" — the SEED records ask and the WIREFRAMES draw-with-them line: got no "records/" anywhere in the file')
+})

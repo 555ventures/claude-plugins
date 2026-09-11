@@ -1,6 +1,7 @@
 ---
 date: 2026-09-10
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: design-mocks
 design: false
@@ -9,6 +10,7 @@ depends_on: [specs/20260910/02-click-to-advance-and-real-records.md]
 depended_on_by: [specs/20260910/04-theme-before-the-client-walk.md]
 brief: 22a
 open_markers: 0
+diff_base: 5291bb9bcb393e39dbc33782a0b3b6ff5c1c7f3e
 ---
 
 # The seed names the client's real records and two dense screens; a journey drawn on placeholders is refused

@@ -107,20 +107,27 @@ residency payer day-one-integrations scale-outage vendor-limits retention legal-
 the dry run (audio-retention limits; a regulation constraining a core mechanic) — every product
 has some data lifetime and some regulatory floor worth naming even when the answer is "none".
 
-`design/mocks/seed.md` (template `spec/templates/mocks-seed.md`) carries five sections in
+`design/mocks/seed.md` (template `spec/templates/mocks-seed.md`) carries six sections in
 order: `## Product` (three sentences — what it is, who it is for, the one job), `## Facts`
 (one `- <key>: <ledger id>` line per key above, each id `confirmed`), `## References` (a path,
 URL, or `- none`; anything under `design/mocks/references/` is picked up automatically),
-`## Journeys` (one `### <journey-kebab>` per journey, a persona line, and one fenced
-` ```surfaces ``` ` block in the roadmap-brief grammar — names and arrows only, one line per
-edge, every label declared in exactly one journey), and `## Dense screen` (one label already
-declared in a journey — the screen most representative of the product's real complexity, the
-one theme directions must survive). `design/targets.json` must parse with non-empty
-`themes`/`viewports`; `docs/design/research-brief.md` must exist and be non-empty (authored via
-genesis.md § Genesis: Fresh UX Research — the method is fixed there, this command only names
-the step). Journeys exist before the first screen because no roadmap exists yet to derive them
-from; the same surfaces grammar lets the atlas render journeys today and a later spec derive
-roadmap briefs from them.
+`## Records` (one `- <entity>: records/<entity>.json` line per entity the product handles, the
+path relative to `design/mocks/`; each file a JSON array of at least three of the client's real
+records — `seed-done` refuses a missing section, a `- none` line, a path that is missing, does
+not parse as a JSON array, or holds fewer than three objects, naming the entity and the remedy
+`ask the client for three real <entity> records and save them as
+design/mocks/records/<entity>.json`), `## Journeys` (one `### <journey-kebab>` per journey, a
+persona line, and one fenced ` ```surfaces ``` ` block in the roadmap-brief grammar — names and
+arrows only, one line per edge, every label declared in exactly one journey), and
+`## Dense screens` (one or two labels already declared in a journey — the screen(s) every
+theme candidate is judged on; `seed-done` refuses zero lines, more than two, or an undeclared
+label; the singular `## Dense screen` heading with one line still parses, for hosts seeded
+before this grammar). `design/targets.json` must parse with non-empty `themes`/`viewports`;
+`docs/design/research-brief.md` must exist and be non-empty (authored via genesis.md § Genesis:
+Fresh UX Research — the method is fixed there, this command only names the step). Journeys
+exist before the first screen because no roadmap exists yet to derive them from; the same
+surfaces grammar lets the atlas render journeys today and a later spec derive roadmap briefs
+from them.
 
 ## Mocks: Checkpoint contract
 
@@ -285,6 +292,15 @@ half the driver cannot check, carried here as contract prose the authoring sessi
   `check --states`, any seed edge with no `data-to` control and any `data-to` naming an
   undeclared screen (`lib/mock-seed-checks.js`'s `edgeGaps`, ADR-0013). `data-to` is an
   attribute, not a link — a wireframe never carries an `href` to another mock.
+- **Screens carry the client's records.** After the edge check, `journey-drawn` compares every
+  drawn screen's HTML against the seed's `## Records` values (`lib/mock-seed-checks.js`'s
+  `recordValues` — every string value of length ≥ 3 in any record object, nested objects and
+  arrays walked, numbers stringified, deduplicated — and `recordHits`, the values a screen's
+  HTML contains): a screen with zero hits prints `⚠️ <label>: carries none of the client's
+  records`, and a journey where every screen has zero hits refuses, `journey "<j>": no screen
+  carries a value from design/mocks/records/*.json — draw with the client's own data, then
+  re-mark` (ADR-0013). A settings screen legitimately shows none; a whole journey drawn on
+  placeholders does not.
 - **Name the shared parts before the screens.** Once a kit family (`design/kit/`) resolves,
   every content region of a labeled mock carries `data-kit="<key>"` naming the primitive it
   instantiates, or `data-bespoke="<key>: <difference>"` naming the primitive it is *not* and

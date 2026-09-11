@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 61878,
-    "spec/scripts": 1329059,
-    "spec/scripts/lib": 249210,
-    "tests": 3822936
+    "spec/scripts": 1336379,
+    "spec/scripts/lib": 250997,
+    "tests": 3827999
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -41,7 +41,7 @@
     "spec/scripts/lib/glob-match.js": 4339,
     "spec/scripts/lib/host-config.js": 5704,
     "spec/scripts/lib/leg-findings.js": 2393,
-    "spec/scripts/lib/mock-seed-checks.js": 3257,
+    "spec/scripts/lib/mock-seed-checks.js": 5044,
     "spec/scripts/lib/mocks-ledger.js": 13101,
     "spec/scripts/lib/mocks-notes.js": 20627,
     "spec/scripts/lib/mocks-picks.js": 8373,
@@ -62,7 +62,7 @@
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
     "spec/scripts/merge-back.sh": 17514,
-    "spec/scripts/mocks-driver.js": 116523,
+    "spec/scripts/mocks-driver.js": 123843,
     "spec/scripts/port-check.js": 3536,
     "spec/scripts/promise-sweep.js": 10409,
     "spec/scripts/prose-cap.js": 6271,
@@ -112,7 +112,7 @@
     "tests/consistency/citations-check.test.js": 16363,
     "tests/consistency/comment-narration-live.test.js": 3527,
     "tests/consistency/dependency-free.test.js": 8614,
-    "tests/consistency/design-doctrine.test.js": 41962,
+    "tests/consistency/design-doctrine.test.js": 44550,
     "tests/consistency/dup-windows-live.test.js": 1916,
     "tests/consistency/entrypoints.test.js": 70405,
     "tests/consistency/genesis-doctrine.test.js": 86907,
@@ -185,10 +185,10 @@
     "tests/mocks/mock-edges.test.js": 12014,
     "tests/mocks/mocks-driver-2.test.js": 19004,
     "tests/mocks/mocks-driver-3.test.js": 17977,
-    "tests/mocks/mocks-driver-4.test.js": 17266,
+    "tests/mocks/mocks-driver-4.test.js": 17661,
     "tests/mocks/mocks-driver-client-2.test.js": 12708,
     "tests/mocks/mocks-driver-client.test.js": 13341,
-    "tests/mocks/mocks-driver-fixtures.js": 29397,
+    "tests/mocks/mocks-driver-fixtures.js": 30889,
     "tests/mocks/mocks-driver-kit-gate.test.js": 2879,
     "tests/mocks/mocks-driver-look-stops-2.test.js": 12921,
     "tests/mocks/mocks-driver-look-stops-3.test.js": 9656,
@@ -199,7 +199,7 @@
     "tests/mocks/mocks-driver-wire.test.js": 4753,
     "tests/mocks/mocks-driver.test.js": 35878,
     "tests/mocks/mocks-ledger.test.js": 12490,
-    "tests/mocks/mocks-notes.test.js": 64149,
+    "tests/mocks/mocks-notes.test.js": 64737,
     "tests/mocks/mocks-picks.test.js": 11563,
     "tests/mocks/notes-layer-isolation.test.js": 6372,
     "tests/mocks/notes-layer-navigation.test.js": 27334,
@@ -1505,6 +1505,60 @@
       "from": 3802621,
       "to": 3822936,
       "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "spec/scripts/lib/mock-seed-checks.js",
+      "from": 3257,
+      "to": 5044,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 116523,
+      "to": 123843,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "tests/consistency/design-doctrine.test.js",
+      "from": 41962,
+      "to": 44550,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-4.test.js",
+      "from": 17266,
+      "to": 17661,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-fixtures.js",
+      "from": 29397,
+      "to": 30889,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "tests/mocks/mocks-notes.test.js",
+      "from": 64149,
+      "to": 64737,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1329059,
+      "to": 1336379,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "spec/scripts/lib",
+      "from": 249210,
+      "to": 250997,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "tests",
+      "from": 3822936,
+      "to": 3827999,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
     }
   ]
 }

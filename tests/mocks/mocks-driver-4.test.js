@@ -198,12 +198,17 @@ test('AC-20260907-04-10: stop open kit with two files under design/kit/ writes o
 // specs/20260910/02-click-to-advance-and-real-records.md D6: `to` (the journey's next label,
 // undefined on the terminal screen) adds a `data-to` control so the new edge check at
 // journey-drawn keeps accepting this inline mock.
+//
+// specs/20260910/06-real-records-and-two-dense-screens.md D5, AC-20260910-06-7: a plain-text
+// "Aoi Tanaka" mention (the fixture record value, mocks-driver-fixtures.js's CUSTOMER_RECORDS[0])
+// so the future journey-drawn record-hit check keeps accepting every label written through this
+// helper — a bare text node, invisible to the kit family's unabsorbed-region rule.
 function kitAwareWireframe(label, regionAttr, to) {
   return '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
     '<link rel="stylesheet" href="../wire/tokens.css">\n' +
     '<link rel="stylesheet" href="../wire/wire.css">\n' +
     '<style>* { box-sizing: border-box; }</style>\n' +
-    '<main data-screen-label="' + label + '" data-status="sketch">' + label +
+    '<main data-screen-label="' + label + '" data-status="sketch">' + label + ' Aoi Tanaka' +
     (to ? '<a data-to="' + to + '" data-bespoke="sheet: synthetic edge control for tests" href="#">Next</a>' : '') +
     '<div data-contract="none"><button data-state-btn="empty">empty</button>' +
     '<button data-state-btn="loading">loading</button><button data-state-btn="error">error</button></div>' +

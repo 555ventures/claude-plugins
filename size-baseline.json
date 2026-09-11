@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 61878,
-    "spec/scripts": 1325405,
+    "spec/scripts": 1326768,
     "spec/scripts/lib": 242852,
-    "tests": 3793991
+    "tests": 3798524
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -83,7 +83,7 @@
     "spec/scripts/spec-review-driver.js": 143576,
     "spec/scripts/spec-session-stamp.sh": 2680,
     "spec/scripts/spec-state-gate.sh": 5941,
-    "spec/scripts/spec-status.js": 52471,
+    "spec/scripts/spec-status.js": 53834,
     "spec/scripts/verdict.js": 52691,
     "spec/scripts/worktree-include.sh": 3277,
     "tests/ac-matrix-coverage-holes.test.js": 12430,
@@ -208,7 +208,7 @@
     "tests/prose-debt/prose-cap.test.js": 11612,
     "tests/provenance/provenance.test.js": 30412,
     "tests/question-style-gate.test.js": 12330,
-    "tests/queue/queue-overlay.test.js": 28730,
+    "tests/queue/queue-overlay.test.js": 28659,
     "tests/queue/spec-queue.test.js": 40845,
     "tests/red-check/mixed-pin.test.js": 9223,
     "tests/red-check/red-check-watchdog.test.js": 1866,
@@ -270,10 +270,10 @@
     "tests/smoke-shutdown-behavior.test.js": 5986,
     "tests/smoke-stale-ready.test.js": 4064,
     "tests/spec-paths.test.js": 41974,
-    "tests/spec-status.test.js": 60655,
+    "tests/spec-status.test.js": 63178,
     "tests/state-gates.test.js": 11512,
     "tests/status/red-alarm.test.js": 11155,
-    "tests/status/status-diet.test.js": 12626,
+    "tests/status/status-diet.test.js": 14707,
     "tests/surfaces-lib.test.js": 4569,
     "tests/test-file-budget.test.js": 30807,
     "tests/test-hang-bound.test.js": 3509,
@@ -1363,6 +1363,48 @@
       "from": 3792890,
       "to": 3793991,
       "cite": "specs/20260910/01-contention-proof-budget-and-uncapped-suite.md"
+    },
+    {
+      "path": "spec/scripts/spec-status.js",
+      "from": 52471,
+      "to": 53784,
+      "cite": "specs/20260909/08-next-carries-the-lanes.md"
+    },
+    {
+      "path": "tests/spec-status.test.js",
+      "from": 60655,
+      "to": 63178,
+      "cite": "specs/20260909/08-next-carries-the-lanes.md"
+    },
+    {
+      "path": "tests/status/status-diet.test.js",
+      "from": 12626,
+      "to": 14707,
+      "cite": "specs/20260909/08-next-carries-the-lanes.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1325405,
+      "to": 1326718,
+      "cite": "specs/20260909/08-next-carries-the-lanes.md"
+    },
+    {
+      "path": "tests",
+      "from": 3793991,
+      "to": 3798524,
+      "cite": "specs/20260909/08-next-carries-the-lanes.md"
+    },
+    {
+      "path": "spec/scripts/spec-status.js",
+      "from": 53784,
+      "to": 53834,
+      "cite": "specs/20260909/08-next-carries-the-lanes.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1326718,
+      "to": 1326768,
+      "cite": "specs/20260909/08-next-carries-the-lanes.md"
     }
   ]
 }

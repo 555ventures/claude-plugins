@@ -6,22 +6,11 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260823/08-derived-session-queue.md: D2 keeps `--next` the sole
-// next-pointer surface (every live consumer captures spec-status --next stdout verbatim) by
-// landing the queue as a READ-ONLY overlay inside deriveNext() rather than a post-processing
-// sibling script. This file pins that overlay boundary directly against spec/scripts/spec-status.js:
-// queue position reordering unblocked entries across briefs (D6/Behavior), prompt items surfacing
-// verbatim with no @path (D11), the overlay staying OFF byte-for-byte with no queue file present
-// (a "SHALL CONTINUE TO" pin that must already be green on today's pre-queue code and stay green
-// after), the overlay being suppressed entirely inside a linked worktree (D9), and the red-
-// observation escape entry keeping rank supremacy over every queue position (D10).
-//
-// specs/20260903/03-pipeline-queue-mechanics.md adds two new readiness inputs to this same
-// read-only overlay: an `after` gate on any item (D2/D3 — a not-ready item's entry gains a
-// blocker string and sinks into the blocked tier, isItemReady shared with spec-queue.js's own
-// write path) and a queued `spec` item whose own position overrides its brief's (D1). The four
-// AC-20260823-08-3/-4/-14/-15 tests below are retagged in place as continuation pins (D9/D12);
-// nothing in their bodies changes.
+// specs/20260823/08-derived-session-queue.md D2: `--next` stays the sole next-pointer surface;
+// the queue is a READ-ONLY overlay inside deriveNext() — pinned here: queue-position reordering
+// (D6), prompt items verbatim with no @path (D11), overlay-OFF byte-identity, worktree
+// suppression (D9), escape-rank supremacy (D10). specs/20260903/03 D2/D3/D1 add an `after` gate
+// and a queued `spec` item's own position override.
 
 const SCRIPT = 'scripts/spec-status.js'
 
@@ -223,6 +212,18 @@ test('AC-20260823-08-4 / AC-20260903-03-10: a top prompt queue item prints its p
   assert.deepStrictEqual(j.next[0], {
     action: 'ship the landing page', path: null, queue: true, status: 'queued', brief: null, blockers: [], note: 'queue item q1',
   }, 'D11: the --json shape for a prompt entry is a frozen, append-only addition — it must match Contracts verbatim: ' + JSON.stringify(j.next[0]))
+})
+
+// D9: the raw-payload default-render special case is deleted — a prompt top pick renders as cmd().
+test('AC-20260909-08-9: default render prints a top prompt as the id-led cmd() row, never the bare payload', () => {
+  const dir = host({ queueItems: [{ id: 'q7', kind: 'prompt', payload: 'Backfill the escape ledger', added: '2026-08-23T10:00:00Z' }] })
+  const r = runNode(SCRIPT, ['--root', dir])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const lines = r.stdout.split('\n')
+  const idxNext = lines.findIndex(l => l.includes('🎯 Next'))
+  const nextBlockLines = lines.slice(idxNext + 1, lines.indexOf('', idxNext + 1))
+  assert.deepStrictEqual(nextBlockLines, ['q7  Backfill the escape ledger'],
+    'D9: the id-led cmd() row, one line, is the whole Next block — never the raw payload alone: ' + JSON.stringify(nextBlockLines))
 })
 
 // (sanctioned pin exception, green pre-change): the differentiating mechanism this AC pins — the

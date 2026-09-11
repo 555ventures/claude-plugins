@@ -86,9 +86,9 @@
     "tests/scope-reconcile-at-risk.test.js": 4,
     "tests/size-ratchet/size-ratchet.test.js": 3,
     "tests/spec-paths.test.js": 2,
-    "tests/spec-status.test.js": 12,
+    "tests/spec-status.test.js": 7,
     "tests/status/red-alarm.test.js": 6,
-    "tests/status/status-diet.test.js": 2,
+    "tests/status/status-diet.test.js": 1,
     "tests/verdict-gatered-no-workflow.test.js": 4
   },
   "raises": [

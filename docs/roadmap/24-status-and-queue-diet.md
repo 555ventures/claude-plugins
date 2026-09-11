@@ -5,6 +5,7 @@ first field run of the new screen) · Primary workspaces: spec/scripts/spec-stat
 spec/scripts/spec-queue.js, spec/scripts/lib/queue.js, spec/commands/{status,queue,doctor}.md,
 tests · Risk: T3 (spec-status.js is a critical-tier frozen surface; the `--next --json` shape
 and the queue verbs change) · Design stage: no · Expected specs: 3
+Amended by: ADR-0014 (specs/20260909/08-next-carries-the-lanes.md — the acceptance picture's `· 2 wait behind it` footer wording is retired; see the ADR's Applies to)
 
 <!-- One brief = one /spec:plan session = 1–4 sibling specs. Execution-shaped detail belongs in
      the spec. This brief names WHAT and WHY and where the ground truth lives. -->

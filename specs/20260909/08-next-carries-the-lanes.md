@@ -1,6 +1,7 @@
 ---
 date: 2026-09-09
-status: hardened
+status: implementing
+build_base: main
 tier: critical           # spec-status.js is a named critical trigger (.claude/rules/spec-pipeline.md § Risk Tiers)
 area: session-queue
 design: false
@@ -9,6 +10,7 @@ depends_on: []
 depended_on_by: []
 brief: n/a
 open_markers: 0
+diff_base: 9d244d74fc1e0a0688bb92503f687e6e6119657c
 ---
 
 # 🎯 Next carries every startable lane
@@ -36,7 +38,7 @@ work is reachable only by typing a flag.
 | D4 | Footer: the `· {m} could run in parallel (--all)` clause is deleted (the lanes are on screen). The wait clause keeps today's count `n` and its derivation exactly — only its wording changes: `· {n} more open` when `n > 0` (under every head — `🔴`, `🟠`, `🟢`, `⬜` — exactly as today), and `· nothing else open` in place of `nothing waits behind it` on the `🟢` head at `n === 0` (AC-20260909-08-5, AC-20260909-08-7) | The number stays a true total of open work below the top pick; calling a printed, startable lane "waiting" is the only part that became false (JJ ruling 2026-09-09) |
 | D9 | A queue prompt entry (`path: null`) reaching the default `🎯 Next` block renders as the one-line `cmd(e)` row — queue id first, whitespace flattened, cut to the terminal width with a trailing `…` — the same row `--all` already prints for it today; the current default-render special case that prints the raw payload alone is deleted, and the `--next` render keeps that bare payload untouched (D5). `spec/commands/status.md`'s "prints its payload alone" sentence goes with it (AC-20260909-08-9) | A prose item's payload runs to hundreds of words: as a bare line it wraps the whole default screen away, and the `q7` handle is what `spec-queue move\|done\|show` takes; the one-line row already IS the contract everywhere else in the dashboard |
 | D5 | Frozen surfaces are untouched: `--next`, `--next --json`, `--json`, `--pretty`, `--brief NN` keep their exact output and exit codes; `laneAdmission`, `deriveNext` and every entry field keep their shapes (AC-20260909-08-8) | .claude/rules/spec-pipeline.md § Risk Tiers: `spec-status.js` is a frozen API for external `--json` consumers; the drivers read `--next`/`--json` and none of them scrape the dashboard |
-| D6 | This spec retires acceptance criteria a `done` spec locked, so it ships `docs/adr/0013-next-carries-the-lanes.md` (Applies to: specs/20260903/05-status-diet.md D1, D4, D5 — the "no `⚡`/`🚦` lane render by default" clause of AC-20260903-05-1, the "exactly one command line in the Next block" clause of AC-20260903-05-2, the `· {m} could run in parallel (--all)` and `nothing waits behind it` clauses of D4/AC-20260903-05-5, and the `📋 All open work` header of D5/AC-20260903-05-7 — every other clause of those criteria stands), and `specs/20260903/05-status-diet.md` plus `docs/roadmap/24-status-and-queue-diet.md` (whose acceptance picture quotes the retired footer wording) each gain one `Amended by: ADR-0013` line under their Goal/heading `[no-ac: the ADR and the backlink are planning-seat prose; review's citations-check and the doctrine leg are their oracle]` | ADR-0011 precedent: a criterion a landed spec locked is retired by an accepted record, never by a silent edit |
+| D6 | This spec retires acceptance criteria a `done` spec locked, so it ships `docs/adr/0014-next-carries-the-lanes.md` (Applies to: specs/20260903/05-status-diet.md D1, D4, D5 — the "no `⚡`/`🚦` lane render by default" clause of AC-20260903-05-1, the "exactly one command line in the Next block" clause of AC-20260903-05-2, the `· {m} could run in parallel (--all)` and `nothing waits behind it` clauses of D4/AC-20260903-05-5, and the `📋 All open work` header of D5/AC-20260903-05-7 — every other clause of those criteria stands), and `specs/20260903/05-status-diet.md` plus `docs/roadmap/24-status-and-queue-diet.md` (whose acceptance picture quotes the retired footer wording) each gain one `Amended by: ADR-0014` line under their Goal/heading `[no-ac: the ADR and the backlink are planning-seat prose; review's citations-check and the doctrine leg are their oracle]` | ADR-0011 precedent: a criterion a landed spec locked is retired by an accepted record, never by a silent edit |
 | D7 | `spec/commands/status.md` is rewritten to the new contract: the default screen's `🎯 Next` block description becomes the lane render (escapes, `⚡`/`🚦`, `🔶`, `⏳`), the "no `⚡`/`🚦` lane render" sentence drops those two glyphs, the footer clause list drops the parallel count and renames the wait clause, and the `--all` section loses the `📋 All open work` bullet and gains `🕓 after that:` / `⛔ blocked:` described as "what you cannot start yet". The rewrite is not limited to that clause list: every restatement of the retired contract anywhere in the file goes with it — the frontmatter `description` line, the narration steps in the Run section, the "no `⚡`/`🚦`/`🕓`/`⛔` lane render" sentence and the "only the lane render, the blocked list and the hygiene catalogue move behind `--all`" sentence, and the "prints its payload alone" queue-row sentence (D9). Grep the file for `📋`, `⚡`, `parallel`, `wait behind` and `payload alone` before calling the row done `[no-ac: doctrine prose, pinned by review's citations-check and the doctrine-without-bump hard check]` | New-surface checklist: the command doc is the human contract for the render and pins the retired block verbatim today |
 | D8 | The `spec` plugin bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"`; `size-baseline.json` is re-stamped in the same build with `node scripts/size-ratchet.js --root . --update` (the render change can leave `spec-status.js` under its ceiling, which the ratchet reports as `stale` and fails on) `[no-ac: both are gate-enforced — tests/consistency/plugin-bump.test.js and tests/consistency/size-ratchet-live.test.js are the oracles]` | .claude/rules/spec-pipeline.md § Planning (version discipline) and specs/20260908/01 D1: a shrink is a ratchet finding exactly like a growth |
 
@@ -46,14 +48,15 @@ work is reachable only by typing a flag.
 |------|--------|-------|---------|
 | spec/scripts/spec-status.js | MODIFY | scripts | D1/D3/D4: move the lane render into the `🎯 Next` block for both renders, delete the `📋 All open work` header, re-order `🕓`/`⛔` under Next in `--all`, drop the footer's parallel clause and reword the wait clause |
 | spec/commands/status.md | MODIFY | doctrine | D7: default-screen `🎯 Next` contract, footer clause list, `--all` section |
-| docs/adr/0013-next-carries-the-lanes.md | CREATE | doctrine | D6: amendment ADR — Applies to specs/20260903/05 D1/D4/D5 and the named AC clauses; Amended by: — |
-| specs/20260903/05-status-diet.md | MODIFY | doctrine | D6: one `Amended by: ADR-0013` line only |
-| docs/roadmap/24-status-and-queue-diet.md | MODIFY | doctrine | D6: one `Amended by: ADR-0013` line only — its acceptance-picture footer line `🟢 next is ready · 2 wait behind it` is retired wording |
+| docs/adr/0014-next-carries-the-lanes.md | CREATE | doctrine | D6: amendment ADR — Applies to specs/20260903/05 D1/D4/D5 and the named AC clauses; Amended by: — |
+| specs/20260903/05-status-diet.md | MODIFY | doctrine | D6: one `Amended by: ADR-0014` line only |
+| docs/roadmap/24-status-and-queue-diet.md | MODIFY | doctrine | D6: one `Amended by: ADR-0014` line only — its acceptance-picture footer line `🟢 next is ready · 2 wait behind it` is retired wording |
 | tests/status/status-diet.test.js | MODIFY | tests | AC-20260909-08-2, AC-20260909-08-5, AC-20260909-08-6, AC-20260909-08-7, AC-20260909-08-10 — retag the retired clauses of AC-20260903-05-1/-2/-5/-7; the default-render forbidden-glyph loop drops `⚡` and keeps `⛔`/`🕓`/`📡` |
 | tests/spec-status.test.js | MODIFY | tests | AC-20260909-08-1, AC-20260909-08-3, AC-20260909-08-4, AC-20260909-08-8 — lane/`🔶`/escape assertions move to the default render; `🕓`/`⛔` assertions stay on `--all`; the two footer pins asserting `nothing waits behind it` become `nothing else open` (D4) |
 | tests/queue/queue-overlay.test.js | MODIFY | tests | AC-20260909-08-9 — the default-render prompt row is the id-led one-line form (D9) |
 | spec/.claude-plugin/plugin.json | MODIFY | other | D8: `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` |
 | size-baseline.json | MODIFY | other | D8: `node scripts/size-ratchet.js --root . --update` after the script edit |
+| dup-baseline.json | MODIFY | other | D8 (build-time amendment): `node scripts/dup-windows.js --root . --update` — cutting the new tests' duplication left two files scoring under their dup ceiling, which the check reports as `stale` and fails on, exactly as D8 anticipated for the size ratchet |
 
 ## Contracts
 

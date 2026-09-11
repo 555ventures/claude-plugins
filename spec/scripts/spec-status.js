@@ -4,15 +4,19 @@
 // status, never store it.
 //
 // Human output is ALWAYS the pretty render: bare invocation → the four-block dashboard —
-// 🗺️ Roadmap, 🎯 Next (the paste line), up to three ⚠️ decide lines, one glyph+sentence
-// footer — and nothing else (specs/20260903/05-status-diet.md D1/D3/D4). --next → the lean
-// 🎯 top-pick line alone (@-prefixed so it pastes straight into Claude Code). --all lifts the
-// decide-line cap and appends the full lane render and the hygiene catalogue ahead of the
-// same footer (D5) — every anomaly kind classifies once, in code, as `audience: "decide"`
-// (a choice only the reader can make) or `"hygiene"` (/spec:doctor's findings), never
-// re-derived per call site (D2). --json is the only machine format (doctor check 13,
-// release). --pretty is accepted as a no-op for old call sites; there is no plain human
-// render anymore.
+// 🗺️ Roadmap, 🎯 Next, up to three ⚠️ decide lines, one glyph+sentence footer — and nothing
+// else (specs/20260903/05-status-diet.md D1/D3/D4). The 🎯 Next block IS the lane render —
+// escape lines first, then the ⚡ parallel-lanes fan-out (or the lone pick's 🚦 solo tag), or
+// the blocked top pick's ⏳ branch when nothing is unblocked — identically in the default
+// render and under --all (specs/20260909/08-next-carries-the-lanes.md D1). --next → the lean
+// 🎯 top-pick line alone (@-prefixed so it pastes straight into Claude Code). --all only lifts
+// the decide-line cap and inserts what is genuinely not startable now — 🕓 after that: and
+// ⛔ blocked: (D3) — directly after the Next block's own lines and before the decide lines,
+// plus the hygiene catalogue ahead of the same footer (D5) — every anomaly kind classifies
+// once, in code, as `audience: "decide"` (a choice only the reader can make) or `"hygiene"`
+// (/spec:doctor's findings), never re-derived per call site (D2). --json is the only machine
+// format (doctor check 13, release). --pretty is accepted as a no-op for old call sites; there
+// is no plain human render anymore.
 //
 // The single source of truth for "where is the work": specs/** frontmatter (`status:`,
 // `brief:`, `depends_on:`, `design:`, `designed:`) and docs/roadmap/NN-*.md headers
@@ -689,10 +693,11 @@ if (briefFilter) {
 
 // ---- the /spec:status dashboard (default render + --all) --------------------------------------
 // Deterministic emoji render of the same derivation, roadmap with per-brief progress bars
-// (consecutive unplanned briefs collapse to one row); under --all, the next-action lanes
-// (parallel-ok runner-ups drawn as fan-out lanes under the top pick, a 🔶 branch line when
-// two lanes' File Plan tables share a path) and the hygiene catalogue. Purely a view — same
-// data as --json, styled here so no renderer re-derives it.
+// (consecutive unplanned briefs collapse to one row); the 🎯 Next block carries the next-action
+// lanes (parallel-ok runner-ups drawn as fan-out lanes under the top pick, a 🔶 branch line
+// when two lanes' File Plan tables share a path) in both the default render and --all; --all
+// additionally adds the 🕓/⛔ not-startable-yet sections and the hygiene catalogue. Purely a
+// view — same data as --json, styled here so no renderer re-derives it.
 
 if (json) {
   // `superseded` (the brief-level flag, internal-only per its own comment above) is
@@ -702,9 +707,9 @@ if (json) {
   process.exit(0)
 }
 
-// Lane admission (shared by --all's 📋 render and the footer's parallel-count clause, D4/D5):
-// pairwise-greedy fan-out over unblocked, non-escape entries — one derivation, two call sites,
-// so the count in the footer and the lanes actually drawn under --all can never disagree.
+// Lane admission (shared by the 🎯 Next block's lane render and --all's 🕓/⛔ sections, D1/D3):
+// pairwise-greedy fan-out over unblocked, non-escape entries — one derivation, every call site,
+// so the lanes drawn in Next and the runner-ups sunk under --all can never disagree.
 function laneAdmission(entries) {
   const unblocked = entries.filter(e => !e.blockers.length && e.action !== '/spec:escape')
   const blocked = entries.filter(e => e.blockers.length)
@@ -722,13 +727,16 @@ function laneAdmission(entries) {
 // Path-shortening is global, not anchored: a queue gate reads "after specs/2026…/08-x.md
 // (hardened)", where the path is not at the start of the string.
 const shortBlocker = b => b.replace(/\S*\//g, '').replace(/\s*\([^)]*\)$/, '').replace(/\.md$/, '')
-const waitClause = n => n === 1 ? '1 waits behind it' : `${n} wait behind it`
+// D4 (specs/20260909/08-next-carries-the-lanes.md): n counts open work below the top pick —
+// every lane the 🎯 Next block printed is startable now, so the clause says "open", not "waiting".
+const waitClause = n => `${n} more open`
 
 {
-  // D1/D5: the default render is exactly four blocks — 🗺️ Roadmap, 🎯 Next, up to three ⚠️
-  // decide lines, one footer. `--all` lifts the decide cap and inserts 📋 All open work (the
-  // pre-diet lane render, verbatim) and 🧹 Hygiene before the same footer. No anomaly fold, no
-  // ⚠️ Anomalies section, no 📡 block, no headline verdict line survive anywhere (D1/D8).
+  // D1/D5 (specs/20260903/05 as amended by ADR-0014): the default render is exactly four
+  // blocks — 🗺️ Roadmap, 🎯 Next (the whole lane fan-out), up to three ⚠️ decide lines, one
+  // footer. `--all` lifts the decide cap and inserts 🕓 after that: / ⛔ blocked: under 🎯 Next
+  // plus 🧹 Hygiene before the same footer. No anomaly fold, no ⚠️ Anomalies section, no 📡
+  // block, no headline verdict line survive anywhere (D1/D8).
   const out = []
   const BRIEF_ICON = { done: '✅', 'in-flight': '🔨', unplanned: '⬜' }
 
@@ -793,17 +801,115 @@ const waitClause = n => n === 1 ? '1 waits behind it' : `${n} wait behind it`
     }
   }
 
-  // 🎯 Next (D1): the same top-pick line(s) --next prints after its header — one command, plus
-  // ⏳ branch lines only when the top pick is blocked. No trailing ⚠️ tag ever (the anomaly fold
-  // is deleted, D1) — a queue prompt entry (no path) prints its payload alone, same as --next.
+  // Every open-work row is exactly one line. A queued free-text item's payload runs to
+  // hundreds of words, and a row that wraps across twenty terminal lines has stopped being a
+  // list entry — so a prose row collapses to one line, cut to the terminal width, and leads
+  // with its queue id (`spec-queue show q119` prints the full text). A row that IS a command
+  // stays byte-identical and id-free: it must survive a double-click copy, and its own spec
+  // path is already a valid `spec-queue` <ref>. Width falls back to 100 off a TTY so piped
+  // output stays deterministic. Hoisted above the 🎯 Next block (below) because that block now
+  // renders every command through it too (D9).
+  const rowWidth = process.stdout.columns || 100
+  const idWidth = Math.max(0, ...entries.filter(e => e.__queueId).map(e => e.__queueId.length))
+  const cmd = e => {
+    if (e.path) return `${e.action} @${e.path}`
+    const head = e.__queueId ? `${e.__queueId.padEnd(idWidth)}  ` : ''
+    const flat = String(e.action).replace(/\s+/g, ' ').trim()
+    const room = Math.max(20, rowWidth - head.length)
+    return head + (flat.length <= room ? flat : flat.slice(0, room - 1) + '…')
+  }
+
+  // 🎯 Next (D1, specs/20260909/08-next-carries-the-lanes.md): the lane render IS the Next
+  // block now, byte-identical in the default render and under --all — (a) every /spec:escape
+  // entry, one bare command line each; (b) the ⚡ parallel-lanes fan-out (with its 🔶
+  // merge-conflict heads-up) or the single admitted lane's 🚦 solo tag; (c) when neither (a)
+  // nor (b) printed anything and entries exist, the top pick's command plus its ⏳ branch — by
+  // construction (Behavior/A1) a blocked top pick means lanes is empty, so (b) and (c) never
+  // both fire; (d) ✨ nothingNextLine() when there are no entries at all. Every command line
+  // renders through cmd() — the old raw-payload special case for a queue prompt entry is gone
+  // (D9).
   out.push('', '🎯 Next')
-  if (!entries.length) {
-    out.push(`   ✨ ${nothingNextLine()}`)
-  } else {
-    const top = entries[0]
-    out.push(top.path ? `${top.action} @${top.path}` : top.action)
-    top.blockers.forEach((b, i) =>
-      out.push(`   ${i === top.blockers.length - 1 ? '└─' : '├─'} ⏳ ${shortBlocker(b)}`))
+  const { blocked, lanes, laneClash, later } = laneAdmission(entries)
+  const escapes = entries.filter(e => e.action === '/spec:escape')
+  escapes.forEach(e => out.push(cmd(e)))
+  let laneRendered = false
+  if (lanes.length > 1) {
+    laneRendered = true
+    out.push(`⚡ ${lanes.length} parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):`)
+    lanes.forEach(e => out.push(cmd(e)))
+    // Merge-conflict heads-up: annotation only, never a verdict change — the corpus audit
+    // showed File Plan overlap can't DECIDE parallelism (51% of unrelated-brief pairs
+    // overlap; strict demotion would serialize half of everything) but it can PREDICT
+    // where two lanes will collide at merge-back. One branch line per overlapping lane
+    // pair; with 3+ lanes each line names its two specs so it stays unambiguous.
+    const bySpecPath = new Map(specs.map(s => [s.path, s]))
+    const overlaps = []
+    for (let i = 0; i < lanes.length; i++) {
+      for (let j = i + 1; j < lanes.length; j++) {
+        const a = bySpecPath.get(lanes[i].path), b = bySpecPath.get(lanes[j].path)
+        const shared = a && b ? a.filePlan.filter(f => b.filePlan.includes(f)) : []
+        if (shared.length) overlaps.push({ a: lanes[i], b: lanes[j], shared })
+      }
+    }
+    overlaps.forEach((o, i) => {
+      const shownFiles = o.shared.slice(0, 2).join(', ') + (o.shared.length > 2 ? ` (+${o.shared.length - 2} more)` : '')
+      const pair = lanes.length > 2 ? `${path.basename(o.a.path)} × ${path.basename(o.b.path)}: ` : ''
+      out.push(`   ${i === overlaps.length - 1 ? '└─' : '├─'} 🔶 ${pair}merge-conflict risk: ${shownFiles}`)
+    })
+  } else if (lanes.length === 1) {
+    laneRendered = true
+    out.push(cmd(lanes[0]))
+    // "Is this parallelable?" must never be answered by the ABSENCE of the ⚡ header —
+    // when other open work exists, the solo pick states it out loud.
+    if (later.length || blocked.length) out.push('   └─ 🚦 solo')
+  }
+  // D3: when branch (c) below fires, the top pick it prints is also the head of `blocked` —
+  // remembered here so --all's ⛔ section can filter it back out instead of re-printing it.
+  let topPrintedAsBlocked = false
+  if (!escapes.length && !laneRendered) {
+    if (!entries.length) {
+      out.push(`   ✨ ${nothingNextLine()}`)
+    } else {
+      const top = entries[0]
+      topPrintedAsBlocked = true
+      out.push(cmd(top))
+      top.blockers.forEach((b, i) =>
+        out.push(`   ${i === top.blockers.length - 1 ? '└─' : '├─'} ⏳ ${shortBlocker(b)}`))
+    }
+  }
+
+  if (allMode) {
+    // D3: `--all` inserts only what the Next block above did NOT already show as startable —
+    // 🕓 after that: (serial/no-claim runner-ups) then ⛔ blocked: — directly after the Next
+    // block's own lines and before the ⚠️ decide lines below. Nothing here re-prints a line the
+    // Next block already carried.
+    if (later.length) {
+      out.push('', '🕓 after that:')
+      // Consecutive entries whose reason is identical share ONE branch line: repeating
+      // "🤷 no brief — parallelism unknown" under every row doubles the section's height
+      // and says nothing new on the second repeat.
+      const reasonOf = e => e.parallel === false ? `⛓️ ${e.parallelReason}`
+        : laneClash.has(e) ? `⛓️ ${laneClash.get(e)}`
+        : '🤷 no brief — parallelism unknown'
+      later.forEach((e, i) => {
+        out.push(cmd(e))
+        const reason = reasonOf(e)
+        const next = later[i + 1]
+        if (!next || reasonOf(next) !== reason) out.push(`   └─ ${reason}`)
+      })
+    }
+    // D3: `blocked` is the same array the branch-(c) top pick came from — filter it back out
+    // here (never in the Next block) so the top pick keeps its position above and the section
+    // is skipped entirely when nothing else survives the filter.
+    const blockedForAll = topPrintedAsBlocked ? blocked.filter(e => e !== entries[0]) : blocked
+    if (blockedForAll.length) {
+      out.push('', '⛔ blocked:')
+      blockedForAll.forEach(e => {
+        out.push(cmd(e))
+        e.blockers.forEach((b, i) =>
+          out.push(`   ${i === e.blockers.length - 1 ? '└─' : '├─'} ⏳ ${shortBlocker(b)}`))
+      })
+    }
   }
 
   // ⚠️ Decide lines (D3): `⚠️ {line}` then `   {ask}  {paste}` — capped at three by default in
@@ -817,101 +923,19 @@ const waitClause = n => n === 1 ? '1 waits behind it' : `${n} wait behind it`
     }
   }
 
-  // Every open-work row is exactly one line. A queued free-text item's payload runs to
-  // hundreds of words, and a row that wraps across twenty terminal lines has stopped being a
-  // list entry — so a prose row collapses to one line, cut to the terminal width, and leads
-  // with its queue id (`spec-queue show q119` prints the full text). A row that IS a command
-  // stays byte-identical and id-free: it must survive a double-click copy, and its own spec
-  // path is already a valid `spec-queue` <ref>. Width falls back to 100 off a TTY so piped
-  // output stays deterministic.
-  const rowWidth = process.stdout.columns || 100
-  const idWidth = Math.max(0, ...entries.filter(e => e.__queueId).map(e => e.__queueId.length))
-  const cmd = e => {
-    if (e.path) return `${e.action} @${e.path}`
-    const head = e.__queueId ? `${e.__queueId.padEnd(idWidth)}  ` : ''
-    const flat = String(e.action).replace(/\s+/g, ' ').trim()
-    const room = Math.max(20, rowWidth - head.length)
-    return head + (flat.length <= room ? flat : flat.slice(0, room - 1) + '…')
-  }
-
   if (allMode) {
-    // D5: `--all` lifts the decide cap (above) and inserts the pre-diet lane render — verbatim,
-    // text unchanged — under a 📋 header, then the hygiene catalogue, ahead of the same footer.
-    out.push('', '📋 All open work')
-    // Escape entries (D5/D8) rank first but are never worktree build work — they print as
-    // their own bare command line(s) ahead of everything else, excluded from the ⚡ fan-out.
-    const escapes = entries.filter(e => e.action === '/spec:escape')
-    escapes.forEach(e => out.push(cmd(e)))
-    const { unblocked, blocked, lanes, laneClash, later } = laneAdmission(entries)
-    if (unblocked.length) {
-      if (lanes.length > 1) {
-        out.push(`⚡ ${lanes.length} parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):`)
-        lanes.forEach(e => out.push(cmd(e)))
-        // Merge-conflict heads-up: annotation only, never a verdict change — the corpus audit
-        // showed File Plan overlap can't DECIDE parallelism (51% of unrelated-brief pairs
-        // overlap; strict demotion would serialize half of everything) but it can PREDICT
-        // where two lanes will collide at merge-back. One branch line per overlapping lane
-        // pair; with 3+ lanes each line names its two specs so it stays unambiguous.
-        const bySpecPath = new Map(specs.map(s => [s.path, s]))
-        const overlaps = []
-        for (let i = 0; i < lanes.length; i++) {
-          for (let j = i + 1; j < lanes.length; j++) {
-            const a = bySpecPath.get(lanes[i].path), b = bySpecPath.get(lanes[j].path)
-            const shared = a && b ? a.filePlan.filter(f => b.filePlan.includes(f)) : []
-            if (shared.length) overlaps.push({ a: lanes[i], b: lanes[j], shared })
-          }
-        }
-        overlaps.forEach((o, i) => {
-          const shownFiles = o.shared.slice(0, 2).join(', ') + (o.shared.length > 2 ? ` (+${o.shared.length - 2} more)` : '')
-          const pair = lanes.length > 2 ? `${path.basename(o.a.path)} × ${path.basename(o.b.path)}: ` : ''
-          out.push(`   ${i === overlaps.length - 1 ? '└─' : '├─'} 🔶 ${pair}merge-conflict risk: ${shownFiles}`)
-        })
-      } else {
-        out.push(cmd(unblocked[0]))
-        // "Is this parallelable?" must never be answered by the ABSENCE of the ⚡ header —
-        // when other open work exists, the solo pick states it out loud.
-        if (later.length || blocked.length) out.push('   └─ 🚦 solo')
-      }
-      // Every "after that" entry says WHY it isn't a lane, on its own ⏳-style branch line
-      // (trailing tags wrap badly on narrow terminals): provably-serial entries carry the
-      // derived reason in plain words. No-claim entries: among unblocked specs, spec-level
-      // depends_on carries no signal (a non-done dep = blocked, a done dep = no ordering),
-      // so briefs are the only declared-surfaces source — briefless means unknowable, and
-      // the line explains that instead of masquerading as serial. Commands stay bare.
-      if (later.length) {
-        out.push('', '🕓 after that:')
-        // Consecutive entries whose reason is identical share ONE branch line: repeating
-        // "🤷 no brief — parallelism unknown" under every row doubles the section's height
-        // and says nothing new on the second repeat.
-        const reasonOf = e => e.parallel === false ? `⛓️ ${e.parallelReason}`
-          : laneClash.has(e) ? `⛓️ ${laneClash.get(e)}`
-          : '🤷 no brief — parallelism unknown'
-        later.forEach((e, i) => {
-          out.push(cmd(e))
-          const reason = reasonOf(e)
-          const next = later[i + 1]
-          if (!next || reasonOf(next) !== reason) out.push(`   └─ ${reason}`)
-        })
-      }
-    }
-    if (blocked.length) {
-      out.push('', '⛔ blocked:')
-      blocked.forEach(e => {
-        out.push(cmd(e))
-        e.blockers.forEach((b, i) =>
-          out.push(`   ${i === e.blockers.length - 1 ? '└─' : '├─'} ⏳ ${shortBlocker(b)}`))
-      })
-    }
+    // 🧹 Hygiene keeps its place after the decide lines, ahead of the footer (D3).
     out.push('', `🧹 Hygiene (${hygieneAnomalies.length}) — /spec:doctor`)
     for (const a of hygieneAnomalies) out.push(`   [${a.kind}] ${a.detail}`)
   }
 
   // D4: the one-line footer — glyph + one sentence, the LAST line printed. A red observation
   // outranks every other head (the Next line above is already its /spec:escape entry); else a
-  // blocked top pick names its short blocker; else ready/nothing. Clauses (wait, parallel-count,
-  // decide-overflow, hygiene-count), each only when non-zero, ride after the head in that order
-  // — except the wait clause on the 🟢 line, which prints "nothing waits behind it" at n = 0
-  // rather than being omitted.
+  // blocked top pick names its short blocker; else ready/nothing. Clauses (wait, decide-overflow,
+  // hygiene-count), each only when non-zero, ride after the head in that order — except the wait
+  // clause on the 🟢 line, which prints "nothing else open" at n = 0 rather than being omitted.
+  // specs/20260909/08-next-carries-the-lanes.md D4: the `{m} could run in parallel (--all)`
+  // clause is retired outright — the lanes it counted are already on screen above.
   {
     // D4/Behavior: wait count n excludes escape entries outright, then excludes the top pick
     // itself — the top pick is entries[0] regardless of whether it is the escape entry, so an
@@ -919,8 +943,6 @@ const waitClause = n => n === 1 ? '1 waits behind it' : `${n} wait behind it`
     const nonEscape = entries.filter(e => e.action !== '/spec:escape')
     const topIsEscape = entries.length > 0 && entries[0].action === '/spec:escape'
     const n = topIsEscape ? nonEscape.length : (nonEscape.length ? nonEscape.length - 1 : 0)
-    const { lanes } = laneAdmission(entries)
-    const m = Math.max(0, lanes.length - 1)
     const k = decideOverflow
     const h = hygieneAnomalies.length
     let glyph, head
@@ -943,9 +965,8 @@ const waitClause = n => n === 1 ? '1 waits behind it' : `${n} wait behind it`
       head = 'next is ready'
     }
     const clauses = []
-    if (glyph === '🟢') clauses.push(n === 0 ? 'nothing waits behind it' : waitClause(n))
+    if (glyph === '🟢') clauses.push(n === 0 ? 'nothing else open' : waitClause(n))
     else if (n > 0) clauses.push(waitClause(n))
-    if (m > 0) clauses.push(`${m} could run in parallel (--all)`)
     if (k > 0) clauses.push(`${k} more to decide (--all)`)
     if (h > 0) clauses.push(`${h} hygiene finding${h === 1 ? '' : 's'} (/spec:doctor)`)
     out.push('', `${glyph} ${head}${clauses.map(c => ` · ${c}`).join('')}`)

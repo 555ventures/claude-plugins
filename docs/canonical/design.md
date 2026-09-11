@@ -393,7 +393,16 @@ every wrong click lands in `design/mocks/walk.json` as a miss and is never shown
 `confirmJourney`, `waiveJourney`, `isClosed`); both event kinds stamp the journey's
 `lastEventAt`, which is the waiver's silence clock. Approve unlocks only once the server's own
 record shows the journey's last screen reached, stays disabled while any guess is open, and
-records one typed sentence. A client's `no` with a reason promotes to a `said-by-user` ledger
+records one typed sentence. Both halves are enforced twice: the page never advances its own
+state ahead of a save — a mark hides, the open count drops, a note clears and a reached label
+counts only on a response the server actually returned, and any refusal or network failure
+leaves the page as it was and says so in `[data-wk="msg"]` — and `POST /client/__walk/confirm`
+independently refuses with `409` while any question anchored to the journey's screens is
+unanswered, so a stale tab or a player script that failed to load cannot record an approval
+over an open question. The player's own chrome is English for every client; the mocks inside
+the frame stay in whatever language the client's product is written in, and everything the
+client types — sentences, notes, reasons — is stored and re-rendered verbatim. A client's `no`
+with a reason promotes to a `said-by-user` ledger
 row; the session's own review page keeps today's behavior and is the session's surface only.
 `--mark approved` refuses while any journey is neither confirmed nor waived
 (`client waive --journey <j> --reason "<r>"`, after seven days), and `client log` prints each

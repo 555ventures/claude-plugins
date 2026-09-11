@@ -525,7 +525,7 @@ test('AC-20260911-01-5: a mark\'s answer request resolving ok:false leaves the m
 // ---------------------------------------------------------------------------
 // AC-20260911-01-6
 // ---------------------------------------------------------------------------
-test('AC-20260911-01-6: the free-note request and a walk-event "to" request resolving ok:false both show the slot\'s data-failed value; the note textarea keeps its text, and approve stays hidden even when the failed "to" message named the journey\'s last label', async () => {
+test('AC-20260911-01-6: the free-note request, a walk-event "to" request, and a confirm request resolving ok:false all show the slot\'s data-failed value; the note textarea keeps its text, approve stays hidden even when the failed "to" message named the journey\'s last label, and a failed confirm unhides the slot', async () => {
   const screens = [{ label: 'signin', states: [] }, { label: 'invite', states: [] }]
 
   // ---- leg 1: the free note --------------------------------------------------------------
@@ -562,6 +562,25 @@ test('AC-20260911-01-6: the free-note request and a walk-event "to" request reso
   assert.ok(msg2, 'AC-6: the page must carry a [data-wk="msg"] slot for the event failure to show in')
   assert.strictEqual(msg2.textContent, msg2.getAttribute('data-failed'),
     'AC-6: a failed "to" event must show the slot\'s own data-failed value: got ' + JSON.stringify(msg2.textContent))
+
+  // ---- leg 3: the confirm request, refused server-side ----------------------------------
+  const { document: doc3, posts: posts3 } = await walkThroughRouted({
+    screens, reached: ['signin'], routes: { '/client/__walk/confirm': { ok: false } },
+  })
+  const sentenceEl = doc3.querySelector('[data-wk="sentence"]')
+  assert.ok(sentenceEl, 'test setup requires a [data-wk="sentence"] textarea to render')
+  sentenceEl.value = 'done and done'
+  const confirmBtn3 = doc3.querySelector('[data-wk="confirm"]')
+  assert.ok(confirmBtn3, 'test setup requires a [data-wk="confirm"] control to render')
+  confirmBtn3.click()
+  await flush()
+  assert.ok(posts3.some((p) => p.url.includes('/client/__walk/confirm')),
+    'AC-6: clicking confirm must still POST /client/__walk/confirm even though it will fail: got ' + JSON.stringify(posts3.map((p) => p.url)))
+  const msg3 = doc3.querySelector('[data-wk="msg"]')
+  assert.ok(msg3, 'AC-6: the page must carry a [data-wk="msg"] slot for the confirm failure to show in')
+  assert.strictEqual(msg3.hidden, false, 'AC-6: a failed confirm must unhide the msg slot: got hidden=' + msg3.hidden)
+  assert.strictEqual(msg3.textContent, msg3.getAttribute('data-failed'),
+    'AC-6: a failed confirm must show the slot\'s own data-failed value: got ' + JSON.stringify(msg3.textContent))
 })
 
 // ---------------------------------------------------------------------------

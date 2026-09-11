@@ -3,7 +3,7 @@ name: feedback-pinned-sentence-hardwrap
 description: Verbatim-pinned doctrine sentences must be typed without a markdown line-wrap inside the pinned phrase — a wrap inserts a literal newline that breaks single-line regex pins
 metadata:
   type: feedback
-  reviewed: 2026-09-10
+  reviewed: 2026-09-11
 ---
 
 When a task says "keep this sentence verbatim — it's a regex pin," the danger isn't

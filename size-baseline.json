@@ -4,7 +4,7 @@
     "scripts": 61878,
     "spec/scripts": 1373767,
     "spec/scripts/lib": 287256,
-    "tests": 3976676
+    "tests": 3978048
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -217,7 +217,7 @@
     "tests/mocks/theme-serve.test.js": 12159,
     "tests/mocks/viewer-tokens.test.js": 4600,
     "tests/mocks/walk-mode.test.js": 10319,
-    "tests/mocks/walk-page.test.js": 38572,
+    "tests/mocks/walk-page.test.js": 39944,
     "tests/parse-selection/parse-selection.test.js": 4720,
     "tests/prose-debt/doctrine-pins.test.js": 4759,
     "tests/prose-debt/memory-sweep.test.js": 12286,
@@ -1876,6 +1876,18 @@
       "path": "tests",
       "from": 3952807,
       "to": 3977723,
+      "cite": "specs/20260911/01-the-page-waits-for-the-server.md"
+    },
+    {
+      "path": "tests/mocks/walk-page.test.js",
+      "from": 38572,
+      "to": 39944,
+      "cite": "specs/20260911/01-the-page-waits-for-the-server.md"
+    },
+    {
+      "path": "tests",
+      "from": 3976676,
+      "to": 3978048,
       "cite": "specs/20260911/01-the-page-waits-for-the-server.md"
     }
   ]

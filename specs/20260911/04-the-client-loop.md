@@ -1,6 +1,6 @@
 ---
 date: 2026-09-11
-status: draft
+status: hardened
 tier: standard
 area: design-mocks
 design: false
@@ -8,6 +8,7 @@ breaking: false
 depends_on: [specs/20260910/05-what-the-journey-does-not-do.md, specs/20260911/01-the-page-waits-for-the-server.md]
 depended_on_by: [specs/20260911/05-approval-is-bookkeeping.md]
 brief: 22a
+open_markers: 0
 ---
 
 # The client loop: a journey's state follows the client's requests, the session picks up what the client left, and the served pages outlive every session
@@ -206,7 +207,13 @@ agreeing an exclusion, provenance lines. Sibling spec 20260911/05 makes approval
 lists exclusions from the first walk; it depends on this one and lands after it.
 
 Collision closure at lock: this spec retires no literal a test outside its File Plan spells (A6);
-the `already confirmed` 409 keeps its literal for the still-confirmed case.
+the `already confirmed` 409 keeps its literal for the still-confirmed case. Executes-leg hits
+outside the File Plan, each read and waived: `tests/design-atlas.test.js` (non-client routes only,
+no client-route assertion), `tests/mocks/exclusions-route.test.js` (renders `buildWalkPage` with
+no client note, so `journeyState` is never `changes-requested`/`fixed` and D5's extra `disabled`
+never fires — fixed in the same build if it does), `tests/mocks/notes-layer-isolation.test.js`
+(Chrome-gated, notes layer only), `tests/consistency/retired-flags.test.js` (flag scan, no client
+surface).
 
 ## Canonical Delta
 

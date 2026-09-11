@@ -1708,18 +1708,24 @@ function cmdThemeAdopt() {
 // `theme adopt` never had: `status.marks.themePicked` and `status.theme`.
 // D3/AC-20260910-04-9: the legacy path — a host with no stop at all (it picked at sketch, before
 // this spec existed) accepts `--direction <k>` with no stop when design/tokens.css is already
-// byte-equal to design/theme/<k>/tokens.css, skipping the compose/ledger/copy work since there is
-// nothing left to write; any other no-stop shape (no `--direction`, an unmatched byte compare)
-// refuses naming `theme shortlist` — the one remedy for "you have not really picked yet".
+// present, NON-wire (byte-different from the wire template — D3's own "present and non-wire"
+// precondition, never inferred from the direction's own tokens.css alone), and byte-equal to
+// design/theme/<k>/tokens.css, skipping the compose/ledger/copy work since there is nothing left
+// to write; any other no-stop shape (no `--direction`, still the wire template, an unmatched byte
+// compare) refuses naming `theme shortlist` — the one remedy for "you have not really picked yet".
 function handleThemePicked(directionArg) {
   const stop = liveStopFor('theme-picked')
   if (!stop) {
     if (!directionArg) die('no look stop for theme-picked — run `theme shortlist` first')
     const tokensCssPath = path.join(root, 'design/tokens.css')
     if (!fs.existsSync(tokensCssPath)) die('no look stop for theme-picked — run `theme shortlist` first')
+    const written = fs.readFileSync(tokensCssPath)
+    const wireTemplate = fs.readFileSync(path.join(templatesDir, 'mocks', 'wire-tokens.css'))
+    if (Buffer.compare(written, wireTemplate) === 0) {
+      die('design/tokens.css is the wireframe gray register byte-for-byte — no theme was ever picked; run `theme shortlist` first')
+    }
     const candidatePath = path.join(root, 'design/theme', directionArg, 'tokens.css')
     if (!fs.existsSync(candidatePath)) die('design/theme/' + directionArg + '/tokens.css does not exist')
-    const written = fs.readFileSync(tokensCssPath)
     const candidate = fs.readFileSync(candidatePath)
     if (Buffer.compare(written, candidate) !== 0) {
       die('design/tokens.css does not match design/theme/' + directionArg + '/tokens.css byte-for-byte — run `theme shortlist` first')

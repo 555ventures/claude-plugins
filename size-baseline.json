@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 61878,
-    "spec/scripts": 1372333,
+    "spec/scripts": 1372823,
     "spec/scripts/lib": 285543,
-    "tests": 3943920
+    "tests": 3952807
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -65,7 +65,7 @@
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
     "spec/scripts/merge-back.sh": 17514,
-    "spec/scripts/mocks-driver.js": 137376,
+    "spec/scripts/mocks-driver.js": 137866,
     "spec/scripts/port-check.js": 3536,
     "spec/scripts/promise-sweep.js": 10409,
     "spec/scripts/prose-cap.js": 6271,
@@ -202,7 +202,7 @@
     "tests/mocks/mocks-driver-look-stops-4.test.js": 12620,
     "tests/mocks/mocks-driver-look-stops.test.js": 21565,
     "tests/mocks/mocks-driver-seed-2.test.js": 15589,
-    "tests/mocks/mocks-driver-theme-2.test.js": 19428,
+    "tests/mocks/mocks-driver-theme-2.test.js": 28315,
     "tests/mocks/mocks-driver-theme.test.js": 21405,
     "tests/mocks/mocks-driver-walk.test.js": 13131,
     "tests/mocks/mocks-driver-wire.test.js": 4753,
@@ -1804,6 +1804,30 @@
       "path": "tests/mocks/mocks-driver-walk.test.js",
       "from": 13030,
       "to": 13131,
+      "cite": "specs/20260910/04-theme-before-the-client-walk.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 137376,
+      "to": 137866,
+      "cite": "specs/20260910/04-theme-before-the-client-walk.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-theme-2.test.js",
+      "from": 19428,
+      "to": 28315,
+      "cite": "specs/20260910/04-theme-before-the-client-walk.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1372333,
+      "to": 1372823,
+      "cite": "specs/20260910/04-theme-before-the-client-walk.md"
+    },
+    {
+      "path": "tests",
+      "from": 3943920,
+      "to": 3952807,
       "cite": "specs/20260910/04-theme-before-the-client-walk.md"
     }
   ]

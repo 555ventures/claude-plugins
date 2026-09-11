@@ -261,6 +261,96 @@ test('AC-20260910-04-6: --mark theme-picked over a decided theme-picked stop cop
   assert.match(adoptRetired.stderr, /--mark theme-picked/, 'the retirement refusal must name `--mark theme-picked` as the remedy: ' + JSON.stringify(adoptRetired.stderr))
 })
 
+// Review fix (specs/20260910/04-theme-before-the-client-walk.md build, hard finding): D6 keeps
+// the retired `theme adopt`'s D10/D12 supersede mechanics alive verbatim behind `--mark
+// theme-picked` — a stale same-kebab row superseded, a cross-direction row superseded,
+// duplicate confirmed rows collapsed, and an uncomposed sibling excluded from the rejected cell.
+// Deleting the old `theme adopt`-era tests that pinned these four mechanics left them with zero
+// executed coverage; restored here, retagged to AC-20260910-04-6 (the behavior's live home) and
+// built on the reviewer's own repro shape: advanceToThemePicked -> add a third direction plus an
+// uncomposed "ghost" -> --reopen theme -> decide pick a -> --mark theme-picked.
+function themeClaimRows(ledgerText, kebab) {
+  const kebabGroup = kebab === undefined ? '([a-zA-Z0-9-]+)' : '(' + kebab + ')'
+  const re = new RegExp('\\|\\s*(P\\d+)\\s*\\|\\s*SKETCH\\s*\\|\\s*product\\s*\\|\\s*theme: ' + kebabGroup +
+    '\\s*\\|\\s*said-by-user\\s*\\|\\s*(confirmed|overridden) (\\d{4}-\\d{2}-\\d{2})\\s*\\|\\s*([^|]*)\\|', 'g')
+  return [...ledgerText.matchAll(re)].map((m) => ({ id: m[1], kebab: m[2], status: m[3], date: m[4], rejected: m[5].trim() }))
+}
+function readLedgerText(dir) { return fs.readFileSync(path.join(dir, 'design/mocks/ledger.md'), 'utf8') }
+function themeCandidates(kebabs) {
+  return kebabs.map((k) => ({ group: k, label: DENSE, path: 'mocks/' + DENSE + '.html?theme=' + k }))
+}
+
+test('AC-20260910-04-6 (retag of AC-20260907-06-12, AC-20260907-06-13): --mark theme-picked inherits theme adopt\'s D10/D12 supersede mechanics verbatim — a stale same-kebab row is superseded and a fresh complete row appended, a cross-direction confirmed row is superseded, duplicate confirmed same-kebab rows collapse to one, and an uncomposed sibling directory is excluded from the rejected cell', () => {
+  const dir = tmpdir('mocks-driver-theme-2')
+  advanceToThemePicked(dir) // kebab 'a', others ['b'] — the first confirmed "theme: a" row, rejected "b"
+  const today = new Date().toISOString().slice(0, 10)
+
+  // A third composed direction, plus an uncomposed "ghost" sibling — composeViolations refuses
+  // "ghost" at its first leg (no tokens.css/kit.html/ledger row), so it must never appear in a
+  // rejected cell (mechanic 4).
+  writeThemeKit(dir, 'c', KIT_PRIMITIVES)
+  themeDirectionsRow(dir, 'c', 'P95')
+  fs.mkdirSync(path.join(dir, 'design/theme/ghost'), { recursive: true })
+
+  let reopened = runNode(SCRIPT, ['--root', dir, '--reopen', 'theme'])
+  assert.strictEqual(reopened.status, 0, 'test setup requires --reopen theme to be accepted so the theme can be re-picked: ' + reopened.stdout + reopened.stderr)
+  decideLook(dir, 'theme-picked', 'pick', { pick: 'a', others: ['b', 'c'], by: 'jj', candidates: themeCandidates(['a', 'b', 'c']) })
+  const rePick = mark(dir, 'theme-picked', ['--direction', 'a'])
+  assert.strictEqual(rePick.status, 0, 'D10: re-picking "a" once a third direction composes must accept, not dead-end on the stale rejected cell: ' + rePick.stdout + rePick.stderr)
+
+  const aRows = themeClaimRows(readLedgerText(dir), 'a')
+  assert.strictEqual(aRows.length, 2, 'D10: exactly two "theme: a" rows must exist after the supersede — the superseded stale row plus the fresh complete one (mechanic 1 — stale same-kebab supersede): ' + JSON.stringify(aRows))
+  const stale = aRows.find((r) => r.status === 'overridden')
+  assert.ok(stale, 'D10: the original "theme: a" row must now read overridden, never deleted (mechanic 1): ' + JSON.stringify(aRows))
+  assert.strictEqual(stale.date, today, 'D10: the stale row must be overridden as of today: ' + JSON.stringify(stale))
+  const fresh = aRows.find((r) => r.status === 'confirmed')
+  assert.ok(fresh, 'D10: a fresh confirmed "theme: a" row must be appended (mechanic 1): ' + JSON.stringify(aRows))
+  const freshRejected = fresh.rejected.split(/[,\s]+/).filter(Boolean)
+  assert.ok(freshRejected.includes('b') && freshRejected.includes('c'),
+    'D10: the fresh row\'s rejected cell must name both composed siblings "b" and "c" (mechanic 1): ' + JSON.stringify(fresh))
+  assert.ok(!freshRejected.includes('ghost'),
+    'the rejected cell must NEVER name "ghost" — a bare, uncomposed directory is not a rejected composed direction (mechanic 4 — the ghost-sibling regression pin): ' + JSON.stringify(fresh))
+
+  // D12: adopting a DIFFERENT direction ("b") supersedes every OTHER confirmed "theme:" row
+  // too, across ALL directions, not only the same kebab (mechanic 2).
+  reopened = runNode(SCRIPT, ['--root', dir, '--reopen', 'theme'])
+  assert.strictEqual(reopened.status, 0, 'test setup requires a second --reopen theme to be accepted: ' + reopened.stdout + reopened.stderr)
+  decideLook(dir, 'theme-picked', 'pick', { pick: 'b', others: ['a', 'c'], by: 'jj', candidates: themeCandidates(['a', 'b', 'c']) })
+  const crossPick = mark(dir, 'theme-picked', ['--direction', 'b'])
+  assert.strictEqual(crossPick.status, 0, 'D12: adopting a DIFFERENT direction ("b") after "a" was already adopted must accept: ' + crossPick.stdout + crossPick.stderr)
+
+  const allRowsAfterCross = themeClaimRows(readLedgerText(dir))
+  const confirmedAfterCross = allRowsAfterCross.filter((r) => r.status === 'confirmed')
+  assert.strictEqual(confirmedAfterCross.length, 1,
+    'D12: exactly one confirmed "theme:" row must exist across ALL directions once "b" is adopted after "a" — a same-kebab-only supersede would leave "theme: a" confirmed too (mechanic 2 — cross-direction supersede): ' + JSON.stringify(allRowsAfterCross))
+  assert.strictEqual(confirmedAfterCross[0].kebab, 'b', 'the sole confirmed row must name "b", the most recently adopted direction: ' + JSON.stringify(confirmedAfterCross[0]))
+  assert.ok(allRowsAfterCross.find((r) => r.kebab === 'a' && r.status === 'overridden'),
+    'D12: the "theme: a" row must now be overridden, not left confirmed (mechanic 2): ' + JSON.stringify(allRowsAfterCross))
+
+  // Review finding (specs/20260907/06-theme-pick-moves-to-sketch.md build): `ledger add` (the
+  // sanctioned, documented path) performs no duplicate-claim check, so two confirmed "theme: b"
+  // rows can coexist — re-adopting "b" must collapse BOTH into one confirmed row, never leave
+  // one behind via a first-match lookup (mechanic 3 — duplicate-row collapse).
+  const dupe = ledgerCmd(dir, 'add', [
+    '--id', 'P99', '--step', 'SKETCH', '--kind', 'product',
+    '--claim', 'theme: b', '--tag', 'said-by-user', '--status', 'confirmed 2026-01-01',
+  ])
+  assert.strictEqual(dupe.status, 0, 'test setup requires `ledger add` to accept a second confirmed "theme: b" row: ' + dupe.stderr)
+  const dupedRows = themeClaimRows(readLedgerText(dir), 'b')
+  assert.strictEqual(dupedRows.length, 2, 'test setup requires exactly two confirmed "theme: b" rows before the re-adopt: ' + JSON.stringify(dupedRows))
+
+  reopened = runNode(SCRIPT, ['--root', dir, '--reopen', 'theme'])
+  assert.strictEqual(reopened.status, 0, 'test setup requires a third --reopen theme to be accepted: ' + reopened.stdout + reopened.stderr)
+  decideLook(dir, 'theme-picked', 'pick', { pick: 'b', others: ['a', 'c'], by: 'jj', candidates: themeCandidates(['a', 'b', 'c']) })
+  const reAdopt = mark(dir, 'theme-picked', ['--direction', 'b'])
+  assert.strictEqual(reAdopt.status, 0, 're-adopting "b" with two pre-existing confirmed same-kebab rows must accept: ' + reAdopt.stdout + reAdopt.stderr)
+
+  const finalRows = themeClaimRows(readLedgerText(dir), 'b')
+  const finalConfirmed = finalRows.filter((r) => r.status === 'confirmed')
+  assert.strictEqual(finalConfirmed.length, 1,
+    'exactly one confirmed "theme: b" row must remain once "b" is re-adopted with two pre-existing same-kebab confirmed rows — a first-match find() would leave one of them confirmed (mechanic 3): ' + JSON.stringify(finalRows))
+})
+
 // AC-20260910-04-9
 test('AC-20260910-04-9: on a walked host with no marks.themePicked, --mark theme-picked --direction <k> accepts with no stop when design/tokens.css is byte-equal to design/theme/<k>/tokens.css (the legacy path); with tokens.css byte-equal to the wire template it refuses naming theme shortlist', () => {
   const dir = tmpdir('mocks-driver-theme-2')
@@ -282,11 +372,25 @@ test('AC-20260910-04-9: on a walked host with no marks.themePicked, --mark theme
   assert.ok(status.marks.themePicked, 'the legacy path must still set marks.themePicked: ' + JSON.stringify(status.marks))
   assert.strictEqual(status.theme, 'legacy', 'the legacy path must still set status.theme to the matching kebab: ' + JSON.stringify(status.theme))
 
+  // Review fix (specs/20260910/04-theme-before-the-client-walk.md build): a bare `mark(wireDir,
+  // 'theme-picked')` with no --direction exercises the generic "no look stop for theme-picked"
+  // refusal branch, never the wire-template leg this AC names — it passed for the wrong reason.
+  // AC-9's wire-template refusal is specifically about a --direction whose OWN tokens.css also
+  // matches the wire template byte-for-byte (a "legacy match" that never really picked
+  // anything), so the direction must be named and its own tokens.css set to the wire template
+  // too, not just design/tokens.css.
   const wireDir = tmpdir('mocks-driver-theme-2')
   advanceToJourneyWalked(wireDir)
+  writeKitCanon(wireDir, KIT_PRIMITIVES)
+  writeThemeKit(wireDir, 'legacy', KIT_PRIMITIVES)
+  themeDirectionsRow(wireDir, 'legacy', 'P90')
+  const wireTemplateText = fs.readFileSync(path.join(SPEC, 'templates/mocks/wire-tokens.css'), 'utf8')
+  fs.writeFileSync(path.join(wireDir, 'design/theme/legacy/tokens.css'), wireTemplateText)
   fs.mkdirSync(path.join(wireDir, 'design'), { recursive: true })
-  fs.copyFileSync(path.join(SPEC, 'templates/mocks/wire-tokens.css'), path.join(wireDir, 'design/tokens.css'))
-  const refused = mark(wireDir, 'theme-picked')
-  assert.strictEqual(refused.status, 2, 'with design/tokens.css still the wireframe gray register byte-for-byte, --mark theme-picked must refuse — the legacy path never fires on an ungray-picked register: ' + refused.stdout + refused.stderr)
+  fs.writeFileSync(path.join(wireDir, 'design/tokens.css'), wireTemplateText)
+
+  const refused = mark(wireDir, 'theme-picked', ['--direction', 'legacy'])
+  assert.strictEqual(refused.status, 2,
+    'AC-9: with design/tokens.css AND design/theme/legacy/tokens.css both byte-equal to the wire template, --mark theme-picked --direction legacy must refuse — nothing was ever really picked, so the legacy path must not fire on an ungray-picked register: ' + refused.stdout + refused.stderr)
   assert.match(refused.stderr, /theme shortlist/, 'the refusal must name `theme shortlist` as the remedy: ' + JSON.stringify(refused.stderr))
 })

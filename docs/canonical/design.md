@@ -83,13 +83,19 @@ and no journey is marked walked while one of its findings is still open.
 exempt — and flags a `ratified` mock with unresolved notes on its label (critic or human) the
 same way.
 
-The theme itself is picked in sketch (specs/20260907/06). `mocks-driver.js` carries a `theme`
-subcommand family outside the mocks state machine — `theme state` derives `absent`/`picked`
+The theme is already picked when sketch runs: specs/20260910/04 (ADR-0013) returns the pick to
+`/spec:mocks`'s own `THEME` state, and `/spec:sketch` finds `theme state` reporting `picked`.
+`mocks-driver.js` carries a `theme` subcommand family — `theme state` derives `absent`/`picked`
 from `design/tokens.css` and refuses outright when that file is the wireframe gray register
-byte-for-byte; `theme compose --direction <k>` validates one candidate directory; `theme open`
-opens the `theme-picked` pick stop over every valid candidate; `theme adopt` writes
-`design/tokens.css`, appends the `theme: <k>` provenance row at step `SKETCH` and consumes the
-stop. Candidates are the signed-off gray kit re-rendered at production fidelity per direction
+byte-for-byte; `theme compose --direction <k>` validates one candidate directory and refuses a
+direction whose `tokens.css` does not re-value every role `wire-tokens.css` declares, naming the
+missing roles; `theme shortlist --directions <a,b[,c]>` opens the `theme-picked` pick stop over
+the user's own shortlist; `--mark theme-picked [--direction <k>]` writes `design/tokens.css`,
+appends the `theme: <k>` provenance row and consumes the stop. `theme open` and `theme adopt`
+are retired — each exits 2 naming its replacement. A host that already picked at sketch keeps a
+legacy no-stop path: `--mark theme-picked --direction <k>` is accepted when `design/tokens.css`
+is byte-equal to that direction's, and refused naming `theme shortlist` when it is still the
+wireframe gray register. Candidates are the signed-off gray kit re-rendered at production fidelity per direction
 at `design/theme/<kebab>/kit.html`; the picked direction's kit page is the fidelity reference
 every later sketch surface is built from. `adopt` writes no mark — `design/tokens.css` on disk
 is the sole "a theme is picked" signal, and a re-pick is a fresh stop, never a reopen. Adopting
@@ -196,7 +202,7 @@ identical; a literal pipe inside a cell is written `\|`.
 ## The mocks command (2026-09-02, specs/20260902/07)
 
 `/spec:mocks` is the standalone design stage. `spec/scripts/mocks-driver.js` (`spec-paths
-mocks-driver`) derives `SEED → SHAPES → KIT → WIREFRAMES → WALK → CLIENT → APPROVED`
+mocks-driver`) derives `SEED → SHAPES → KIT → WIREFRAMES → WALK → THEME → CLIENT → APPROVED`
 (specs/20260907/10, ADR-0012; specs/20260907/04, ADR-0010 amending ADR-0008) from `design/mocks/status.json`
 (schemaVersion 1) plus the artifacts on disk: the skin and review states are retired; a
 wireframe is never skinned inside mocks — `/spec:sketch` owns fidelity per brief. The driver
@@ -206,14 +212,19 @@ saved (<prev> → <next>); safe to /clear and re-run /spec:mocks`, preceded by t
 counts line), gates every advance on the provenance ledger (`gateVerdict`, refusing on
 `open:false` and naming the rows), and records a sub-mark per journey (`journey-drawn`,
 `journey-approved`), and
-`--reopen journey:<j>|walk:<j>|shapes|kit` (recorded, printed, nothing deleted). WALK sits
-between WIREFRAMES and CLIENT (specs/20260907/08): each declared journey is walked once by a
+`--reopen journey:<j>|walk:<j>|shapes|kit|theme` (recorded, printed, nothing deleted). WALK sits
+between WIREFRAMES and THEME (specs/20260907/08): each declared journey is walked once by a
 fresh critic and stamped with `journey-walked --journey <j>`, which refuses while any walk
 finding on that journey is still open, so the stage cannot close on a journey nobody
-walked. The whole mocks stage
-is gray (specs/20260907/07): the taste decision is picked on `/spec:sketch`'s first run against
-the signed-off kit (specs/20260907/06), and `design/tokens.css` on disk — never a mark and never
-a status field — is the one signal that a theme exists. CLIENT (specs/20260907/10, ADR-0012)
+walked. Mocks are authored gray and end themed (specs/20260907/07; specs/20260910/04, ADR-0013): THEME
+sits between WALK and CLIENT, the user authors directions under `design/theme/<kebab>/`, `theme
+shortlist` opens a client pick whose candidates are the seed's two dense screens served in each
+direction's roles, the client picks on `/client/theme.html`, and `--mark theme-picked` adopts —
+setting `status.marks.themePicked` and `status.theme` alongside the `design/tokens.css` copy.
+From then on every mock the client walks is served with `?theme=<kebab>`, a link swap that
+exchanges the wire register's token file for the direction's in the served HTML only; the
+session's own pages — the atlas index, the review page, every non-client route — stay neutral,
+and `check` stops warning on wire links once the theme is picked. CLIENT (specs/20260907/10, ADR-0012)
 replaces the one-look sign-off as the stage's single human gate: the session exposes its own
 running serve and records the address with `client open --address <url>`, refused unless
 `<url>/client/__notes/list` answers — the plugin never opens a tunnel itself. `--mark approved`

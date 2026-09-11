@@ -22,17 +22,21 @@ const {
 const STATE_BTNS = '<div data-contract="none"><button data-state-btn="empty">e</button>' +
   '<button data-state-btn="loading">l</button><button data-state-btn="error">e</button></div>'
 
-function writeCustomWireframe(dir, label, headHtml) {
+// specs/20260910/02-click-to-advance-and-real-records.md D6: `to`, when passed, adds a
+// `data-to` control so the new edge check at journey-drawn keeps accepting the accepting case
+// below — the refusing case never reaches the edge check (it fails an earlier per-label check).
+function writeCustomWireframe(dir, label, headHtml, to) {
   writeFile(path.join(dir, 'design/mocks', label + '.html'),
     '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
     headHtml +
-    '<main data-screen-label="' + label + '" data-status="sketch">' + label + STATE_BTNS + '</main>\n')
+    '<main data-screen-label="' + label + '" data-status="sketch">' + label +
+    (to ? '<a data-to="' + to + '" data-bespoke="sheet: synthetic edge control for tests" href="#">Next</a>' : '') + STATE_BTNS + '</main>\n')
 }
 
 test('AC-20260908-07-5: journey-drawn refuses a mock whose only mention of ../wire/tokens.css is a comment with the exact D6 message, and accepts a mock that applies both register stylesheets only through CSS @import', () => {
   const dir = tmpdir('mocks-driver-wire')
   advanceToCanonWritten(dir)
-  for (const label of LABELS) writeWireframe(dir, label)
+  for (let i = 0; i < LABELS.length; i++) writeWireframe(dir, LABELS[i], { to: LABELS[i + 1] })
   const target = LABELS[1]
 
   // A real wire.css link, but the wire/tokens.css mention survives only in a comment — the
@@ -54,7 +58,7 @@ test('AC-20260908-07-5: journey-drawn refuses a mock whose only mention of ../wi
   // must start accepting this, and design-atlas.js's own tokens.css rule must stop refusing it.
   writeCustomWireframe(dir, target,
     '<style>@import "../wire/tokens.css"; @import "../wire/wire.css";</style>\n' +
-    '<style>* { box-sizing: border-box; }</style>\n')
+    '<style>* { box-sizing: border-box; }</style>\n', LABELS[2])
   const accepted = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
   assert.strictEqual(accepted.status, 0,
     'a mock applying both register stylesheets only through CSS @import must be accepted by journey-drawn, not refused as unlinked — the exact mirror-image of the comment-mention defect: ' + accepted.stdout + accepted.stderr)

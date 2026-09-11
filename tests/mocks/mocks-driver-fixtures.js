@@ -151,8 +151,14 @@ This canon is binding: see docs/design/research-brief.md for the research basis.
 // missing-states refusal case needs to isolate that violation. `stateBtn` (a raw HTML string) stays the pre-existing
 // escape hatch for the look-stops fixtures that need one exact button element with no wrapper
 // markup around it — passing it bypasses `states` entirely, unchanged from its prior behavior.
+//
+// specs/20260910/02-click-to-advance-and-real-records.md D6: `opts.to` is the new escape hatch
+// for the edge check `journey-drawn` gains — every advanceTo* helper below passes the journey's
+// next label so its own outgoing seed edge always carries a real control. When set, the written
+// mock's root gains a plain `<a data-to="<to>">` control (D1's own Contracts example shape);
+// when absent (the journey's terminal screen has no outgoing edge) nothing is added.
 function writeWireframe(dir, label, opts = {}) {
-  const { stateBtn } = opts
+  const { stateBtn, to } = opts
   const states = opts.states !== undefined ? opts.states : ['empty', 'loading', 'error']
   // The design-atlas.js hygiene(d) rule (specs/20260824/03 D1(d)) requires every data-state-btn
   // to sit inside a data-contract="none" ancestor once a mock is bound (approved mark runs
@@ -163,12 +169,19 @@ function writeWireframe(dir, label, opts = {}) {
     ? stateBtn
     : (states.length ? '<div data-contract="none">' +
         states.map((s) => '<button data-state-btn="' + s + '">' + s + '</button>').join('') + '</div>' : '')
+  // specs/20260907/04-kit-canon-family.md D5/D6: an unwrapped top-level child of the content
+  // region needs data-kit or data-bespoke naming an EXISTING kit primitive once a kit family
+  // resolves — every advanceTo* chain routes through a signed kit family whose default (and
+  // every fixture's) primitive key is "sheet" (writeKitCanon's own default), so the injected
+  // edge control carries data-bespoke="sheet: …" to stay invisible to that unrelated gate,
+  // exactly like the state-button switcher stays invisible to it via data-contract="none".
+  const toHtml = to ? '<a data-to="' + to + '" data-bespoke="sheet: synthetic edge control for tests" href="#">Next</a>' : ''
   writeFile(path.join(dir, 'design/mocks', label + '.html'),
     '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
     '<link rel="stylesheet" href="../wire/tokens.css">\n' +
     '<link rel="stylesheet" href="../wire/wire.css">\n' +
     '<style>* { box-sizing: border-box; }</style>\n' +
-    '<main data-screen-label="' + label + '" data-status="sketch">' + label + stateBtnsHtml + '</main>\n')
+    '<main data-screen-label="' + label + '" data-status="sketch">' + label + toHtml + stateBtnsHtml + '</main>\n')
 }
 
 // ---------------------------------------------------------------------------
@@ -402,7 +415,8 @@ function advanceToJourneyApproved(dir, journeyName = JOURNEY, labels = LABELS) {
   const already = readStatusOrEmpty(dir)
   if (already.journeys && already.journeys[journeyName] && already.journeys[journeyName].approved) return
   if (!readMarksOrEmpty(dir).canonWritten) advanceToCanonWritten(dir)
-  for (const label of labels) writeWireframe(dir, label)
+  // D6: each screen's control points at the journey's next label — the terminal screen gets none.
+  for (let i = 0; i < labels.length; i++) writeWireframe(dir, labels[i], { to: labels[i + 1] })
   const drawn = mark(dir, 'journey-drawn', ['--journey', journeyName])
   assert.strictEqual(drawn.status, 0, 'test setup requires journey-drawn to be accepted once every label of the journey conforms to D6: ' + drawn.stderr)
   writeCaptureConfig(dir, writeFixtureCapture(dir))
@@ -499,7 +513,8 @@ function advanceToShortJourneyDrawn(dir, journeyName, labels) {
   writeCanon(dir)
   const canonWritten = mark(dir, 'canon-written')
   assert.strictEqual(canonWritten.status, 0, 'test setup requires canon-written to be accepted: ' + canonWritten.stderr)
-  for (const label of labels) writeWireframe(dir, label)
+  // D6: each screen's control points at the journey's next label — the terminal screen gets none.
+  for (let i = 0; i < labels.length; i++) writeWireframe(dir, labels[i], { to: labels[i + 1] })
   const drawn = mark(dir, 'journey-drawn', ['--journey', journeyName])
   assert.strictEqual(drawn.status, 0, 'test setup requires journey-drawn to be accepted once every label of the short journey conforms to D6: ' + drawn.stderr)
 }

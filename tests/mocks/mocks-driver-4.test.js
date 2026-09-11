@@ -81,7 +81,7 @@ test('AC-20260902-07-13: look-probe refuses on a failing npx naming the install 
 test('AC-20260905-06-7: --mark journey-approved --journey <j> on a fixture host declaring a capture command whose canned inventory is a phone-width column at the 1440 cell exits 2 naming "fails the rendered adaptation gate" and a desktop-fill line, leaving journeys[j].approved unset', () => {
   const dir = tmpdir('mocks-driver')
   advanceToCanonWritten(dir)
-  for (const label of LABELS) writeWireframe(dir, label)
+  for (let i = 0; i < LABELS.length; i++) writeWireframe(dir, LABELS[i], { to: LABELS[i + 1] })
   const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
   assert.strictEqual(drawn.status, 0, 'test setup requires journey-drawn to be accepted once every label conforms to D6: ' + drawn.stderr)
 
@@ -110,7 +110,7 @@ test('AC-20260905-06-7: --mark journey-approved --journey <j> on a fixture host 
 test('AC-20260905-06-8: the same journey-approved mark with canned inventories that fill the 1440 cell records journeys[j].approved and prints the checkpoint line', () => {
   const dir = tmpdir('mocks-driver')
   advanceToCanonWritten(dir)
-  for (const label of LABELS) writeWireframe(dir, label)
+  for (let i = 0; i < LABELS.length; i++) writeWireframe(dir, LABELS[i], { to: LABELS[i + 1] })
   const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
   assert.strictEqual(drawn.status, 0, 'test setup requires journey-drawn to be accepted once every label conforms to D6: ' + drawn.stderr)
 
@@ -195,12 +195,16 @@ test('AC-20260907-04-10: stop open kit with two files under design/kit/ writes o
 // ---------------------------------------------------------------------------
 // specs/20260907/04-kit-canon-family.md D9: journey-approved's kit gate.
 // ---------------------------------------------------------------------------
-function kitAwareWireframe(label, regionAttr) {
+// specs/20260910/02-click-to-advance-and-real-records.md D6: `to` (the journey's next label,
+// undefined on the terminal screen) adds a `data-to` control so the new edge check at
+// journey-drawn keeps accepting this inline mock.
+function kitAwareWireframe(label, regionAttr, to) {
   return '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
     '<link rel="stylesheet" href="../wire/tokens.css">\n' +
     '<link rel="stylesheet" href="../wire/wire.css">\n' +
     '<style>* { box-sizing: border-box; }</style>\n' +
     '<main data-screen-label="' + label + '" data-status="sketch">' + label +
+    (to ? '<a data-to="' + to + '" data-bespoke="sheet: synthetic edge control for tests" href="#">Next</a>' : '') +
     '<div data-contract="none"><button data-state-btn="empty">empty</button>' +
     '<button data-state-btn="loading">loading</button><button data-state-btn="error">error</button></div>' +
     '<section' + (regionAttr ? ' ' + regionAttr : '') + '>content</section>' +
@@ -214,7 +218,7 @@ test('AC-20260907-04-12: journey-approved refuses naming the file and the D4 rem
   const canonWritten = mark(dir, 'canon-written')
   assert.strictEqual(canonWritten.status, 0, 'test setup requires canon-written to be accepted: ' + canonWritten.stderr)
 
-  for (const label of LABELS) writeFile(path.join(dir, 'design/mocks', label + '.html'), kitAwareWireframe(label, null))
+  for (let i = 0; i < LABELS.length; i++) writeFile(path.join(dir, 'design/mocks', LABELS[i] + '.html'), kitAwareWireframe(LABELS[i], null, LABELS[i + 1]))
   const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
   assert.strictEqual(drawn.status, 0,
     'test setup requires journey-drawn to be accepted — the unabsorbed-region rule only violates at journey-approved\'s forced --matrix, journey-drawn only warns: ' + drawn.stdout + drawn.stderr)
@@ -231,7 +235,7 @@ test('AC-20260907-04-12: journey-approved refuses naming the file and the D4 rem
   assert.strictEqual(statusJson(dir).journeys[JOURNEY].approved, null,
     'a refused journey-approved mark must leave journeys.<j>.approved unset: ' + JSON.stringify(statusJson(dir).journeys))
 
-  for (const label of LABELS) writeFile(path.join(dir, 'design/mocks', label + '.html'), kitAwareWireframe(label, 'data-kit="sheet"'))
+  for (let i = 0; i < LABELS.length; i++) writeFile(path.join(dir, 'design/mocks', LABELS[i] + '.html'), kitAwareWireframe(LABELS[i], 'data-kit="sheet"', LABELS[i + 1]))
   const good = mark(dir, 'journey-approved', ['--journey', JOURNEY])
   assert.strictEqual(good.status, 0,
     'journey-approved must accept once every content region is kit-tagged or bespoke-marked: ' + good.stdout + good.stderr)

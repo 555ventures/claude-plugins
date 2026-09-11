@@ -230,13 +230,15 @@ test('AC-20260908-07-12 (retag of AC-20260902-07-6) / AC-20260905-02-18 / AC-202
   const dir = tmpdir('mocks-driver')
   advanceToCanonWritten(dir)
 
-  writeWireframe(dir, LABELS[0])
+  writeWireframe(dir, LABELS[0], { to: LABELS[1] })
   // LABELS[1] ("invite") deliberately missing
   let r = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
   assert.strictEqual(r.status, 2, 'journey-drawn must refuse when a declared label\'s file does not exist: ' + r.stdout + r.stderr)
   assert.match(r.stderr + r.stdout, new RegExp(LABELS[1]), 'the refusal must name the missing label "' + LABELS[1] + '"')
 
-  for (const label of LABELS) writeWireframe(dir, label)
+  // specs/20260910/02-click-to-advance-and-real-records.md D6: each screen's control points at
+  // the journey's next label — LABELS' terminal screen (session-live) gets none.
+  for (let i = 0; i < LABELS.length; i++) writeWireframe(dir, LABELS[i], { to: LABELS[i + 1] })
 
   // AC-6's three named non-conforming shapes, each isolated to ONE violation against an
   // otherwise-conforming file — the literal text requires exit 2, the failing label, AND
@@ -258,7 +260,7 @@ test('AC-20260908-07-12 (retag of AC-20260902-07-6) / AC-20260905-02-18 / AC-202
 
   // (b) links no wire/tokens.css — otherwise D6-conforming (sketch status, wire.css still
   // linked); design-atlas.js check unconditionally requires a tokens.css link at any tier.
-  writeWireframe(dir, LABELS[1]) // restore baseline before isolating the next violation
+  writeWireframe(dir, LABELS[1], { to: LABELS[2] }) // restore baseline before isolating the next violation
   fs.writeFileSync(path.join(dir, 'design/mocks', LABELS[1] + '.html'),
     '<link rel="stylesheet" href="../wire/wire.css">\n' +
     '<main data-screen-label="' + LABELS[1] + '" data-status="sketch">' + LABELS[1] + '</main>\n')
@@ -270,7 +272,7 @@ test('AC-20260908-07-12 (retag of AC-20260902-07-6) / AC-20260905-02-18 / AC-202
 
   // (c) contains an off-token color literal (#999) — otherwise D6-conforming; design-atlas.js
   // check unconditionally flags inline off-token color literals at any tier.
-  writeWireframe(dir, LABELS[1]) // restore baseline before isolating the next violation
+  writeWireframe(dir, LABELS[1], { to: LABELS[2] }) // restore baseline before isolating the next violation
   fs.writeFileSync(path.join(dir, 'design/mocks', LABELS[1] + '.html'),
     '<link rel="stylesheet" href="../wire/tokens.css">\n' +
     '<link rel="stylesheet" href="../wire/wire.css">\n' +
@@ -282,7 +284,7 @@ test('AC-20260908-07-12 (retag of AC-20260902-07-6) / AC-20260905-02-18 / AC-202
   assert.match(r.stderr + r.stdout, CHECK_LINE_RE,
     'the off-token-color refusal must also carry design-atlas.js check\'s own output line, not just the label: ' + r.stdout + r.stderr)
 
-  writeWireframe(dir, LABELS[1])
+  writeWireframe(dir, LABELS[1], { to: LABELS[2] })
   r = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
   assert.strictEqual(r.status, 0,
     'AC-20260906-05-5: journey-drawn must CONTINUE TO be accepted once every label of the journey conforms to D6, including the fixture default\'s three declared gray states: ' + r.stdout + r.stderr)
@@ -312,8 +314,11 @@ test('AC-20260908-07-12 (retag of AC-20260902-07-6) / AC-20260905-02-18 / AC-202
 test('AC-20260906-05-3: journey-drawn refuses when one screen of the journey declares none of the three gray states, naming the file, every missing state in empty/loading/error order, and the draw-the-missing-states remedy, and never records journeys.onboarding.drawn', () => {
   const dir = tmpdir('mocks-driver')
   advanceToCanonWritten(dir)
-  for (const label of LABELS) {
-    writeWireframe(dir, label, label === 'consent' ? { states: [] } : {})
+  // specs/20260910/02-click-to-advance-and-real-records.md D2: the edge check runs BEFORE
+  // check --states, so every screen still needs its data-to control here or the edge refusal
+  // would preempt the states refusal this test pins.
+  for (let i = 0; i < LABELS.length; i++) {
+    writeWireframe(dir, LABELS[i], Object.assign({ to: LABELS[i + 1] }, LABELS[i] === 'consent' ? { states: [] } : {}))
   }
 
   const r = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
@@ -346,7 +351,7 @@ test('AC-20260906-05-3: journey-drawn refuses when one screen of the journey dec
 test('AC-20260906-05-6: journey-approved refuses when a screen has lost its three gray states since journey-drawn, naming the file, every missing state in empty/loading/error order, and the draw-the-missing-states remedy, and never records journeys.onboarding.approved', () => {
   const dir = tmpdir('mocks-driver')
   advanceToCanonWritten(dir)
-  for (const label of LABELS) writeWireframe(dir, label)
+  for (let i = 0; i < LABELS.length; i++) writeWireframe(dir, LABELS[i], { to: LABELS[i + 1] })
 
   const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
   assert.strictEqual(drawn.status, 0,
@@ -356,7 +361,7 @@ test('AC-20260906-05-6: journey-approved refuses when a screen has lost its thre
   decideLook(dir, 'journey-approved:' + JOURNEY, 'approve', { by: 'jj' })
 
   // the redraw D2's Rationale names: a screen loses a state between drawn and approved
-  writeWireframe(dir, 'consent', { states: [] })
+  writeWireframe(dir, 'consent', { states: [], to: 'session-live' })
 
   const r = mark(dir, 'journey-approved', ['--journey', JOURNEY])
   assert.strictEqual(r.status, 2,

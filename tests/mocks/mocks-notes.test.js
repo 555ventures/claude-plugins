@@ -203,7 +203,7 @@ function advanceToJourneyDrawn(dir) {
   const canonWritten = mark(dir, 'canon-written')
   assert.strictEqual(canonWritten.status, 0, 'test setup requires canon-written to be accepted: ' + canonWritten.stderr)
 
-  for (const label of LABELS) writeWireframe(dir, label)
+  for (let i = 0; i < LABELS.length; i++) writeWireframe(dir, LABELS[i], { to: LABELS[i + 1] })
   const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
   assert.strictEqual(drawn.status, 0, 'test setup requires journey-drawn to be accepted: ' + drawn.stderr)
 }

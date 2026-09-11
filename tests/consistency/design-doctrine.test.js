@@ -533,3 +533,39 @@ test('AC-20260907-10-20: spec/doctrine/mocks.md § Mocks: Look and Serve names C
       'D20: § Mocks: Page Notes\' ADR-0012 paragraph must name "' + literal + '": got ' + notesSection)
   }
 })
+
+// ---------------------------------------------------------------------------
+// AC-20260910-02-5
+// ---------------------------------------------------------------------------
+test('AC-20260910-02-5: spec/doctrine/mocks.md gains the "Every edge is a real control" rule under § Mocks: Authoring Rules and "?walk" under § Mocks: Look and Serve; spec/commands/mocks.md and spec/templates/mocks-seed.md each name data-to', () => {
+  const p = 'spec/doctrine/mocks.md'
+  const src = read(p)
+
+  const rulesIdx = src.indexOf('## Mocks: Authoring Rules')
+  assert.ok(rulesIdx !== -1, p + ' must carry a "## Mocks: Authoring Rules" heading')
+  const rulesNextIdx = src.indexOf('\n## ', rulesIdx + 1)
+  const rulesSection = src.slice(rulesIdx, rulesNextIdx === -1 ? src.length : rulesNextIdx)
+  assert.match(rulesSection, /\*\*Every edge is a real control\.\*\*/,
+    'D5: § Mocks: Authoring Rules must carry the bold rule name "Every edge is a real control." naming the data-to rule refused at journey-drawn: got ' + rulesSection)
+  assert.match(rulesSection, /data-to/,
+    'D5: § Mocks: Authoring Rules\' new rule must name the data-to attribute: got ' + rulesSection)
+
+  const lookIdx = src.indexOf('## Mocks: Look and Serve')
+  assert.ok(lookIdx !== -1, p + ' must carry a "## Mocks: Look and Serve" heading')
+  const lookNextIdx = src.indexOf('\n## ', lookIdx + 1)
+  const lookSection = src.slice(lookIdx, lookNextIdx === -1 ? src.length : lookNextIdx)
+  assert.ok(lookSection.includes('?walk'),
+    'D5: § Mocks: Look and Serve must name the literal "?walk" — the walk-mode query token this spec adds: got ' + lookSection)
+
+  const commandsPath = 'spec/commands/mocks.md'
+  assert.ok(fs.existsSync(path.join(ROOT, commandsPath)), commandsPath + ' must exist')
+  const commandsSrc = read(commandsPath)
+  assert.ok(commandsSrc.includes('data-to'),
+    'D5: ' + commandsPath + '\'s WIREFRAMES step must tell the authoring session to put data-to on the advancing control: got no "data-to" anywhere in the file')
+
+  const seedTemplatePath = 'spec/templates/mocks-seed.md'
+  assert.ok(fs.existsSync(path.join(ROOT, seedTemplatePath)), seedTemplatePath + ' must exist')
+  const seedTemplateSrc = read(seedTemplatePath)
+  assert.ok(seedTemplateSrc.includes('data-to'),
+    'D5: ' + seedTemplatePath + '\'s "## Journeys" comment must name data-to: got no "data-to" anywhere in the file')
+})

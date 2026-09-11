@@ -114,6 +114,14 @@
 //                                                  script `look --state` injects, before the
 //                                                  notes-layer tag (?clean&state=<s> injects only
 //                                                  the click script).
+//                                                  specs/20260910/02-click-to-advance-and-real-records.md
+//                                                  D3: GET /mocks/<label>.html?walk injects
+//                                                  <script src="<prefix>/__walk/walk.js"></script>
+//                                                  before the last </body> (after the state click
+//                                                  script when both are present); ?walk composes
+//                                                  with ?clean (which never strips it) and
+//                                                  ?state=; GET /__walk/walk.js serves
+//                                                  lib/walk-mode.browser.js verbatim, no-store.
 //   design-atlas.js shell sync  [--root <r>] [<mock|dir>…]
 //                                                  specs/20260901/04-shell-composed-mocks.md D5:
 //                                                  rewrite every declaring mock's chrome region
@@ -1722,6 +1730,12 @@ function stateClickScript(state) {
     state + '"]\');if(b)b.click()})</script>'
 }
 
+// specs/20260910/02-click-to-advance-and-real-records.md D3: the tag injected before the last
+// `</body>` by GET /mocks/<label>.html?walk — after stateClickScript when both are present.
+function walkScriptTag(prefix) {
+  return '<script src="' + prefix + '/__walk/walk.js"></script>'
+}
+
 // review fix round F1: insert before the last `</body>`, append at the end when none — shared
 // with injectNotesScript's own placement rule so the two injections never straddle it.
 function insertBeforeBodyEnd(html, snippet) {
@@ -1768,6 +1782,7 @@ function createRequestHandler(root, opts = {}) {
   const notesLibPath = path.join(__dirname, 'lib', 'notes-layer.browser.js')
   const viewerCssPath = path.join(__dirname, '..', 'templates', 'mocks', 'viewer.css')
   const reviewBrowserPath = path.join(__dirname, 'lib', 'review.browser.js')
+  const walkBrowserPath = path.join(__dirname, 'lib', 'walk-mode.browser.js')
 
   return function handler(req, res) {
     const urlObj = new URL(req.url || '/', 'http://localhost')
@@ -2067,6 +2082,14 @@ function createRequestHandler(root, opts = {}) {
 
     // ---- /review/<journey>.html and /__review/review.js (specs/20260906/04-journey-review-page.md
     // D1) ------------------------------------------------------------------------------------
+    if (reqPath === '/__walk/walk.js' && req.method === 'GET') {
+      fs.readFile(walkBrowserPath, (err, data) => {
+        if (err) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end('not found'); return }
+        res.writeHead(200, { 'content-type': 'text/javascript', 'cache-control': 'no-store' })
+        res.end(data)
+      })
+      return
+    }
     if (reqPath === '/__review/review.js' && req.method === 'GET') {
       fs.readFile(reviewBrowserPath, (err, data) => {
         if (err) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end('not found'); return }
@@ -2133,6 +2156,7 @@ function createRequestHandler(root, opts = {}) {
         const state = validState(urlObj.searchParams.get('state'))
         let body = data.toString('utf8')
         if (state) body = insertBeforeBodyEnd(body, stateClickScript(state))
+        if (urlObj.searchParams.has('walk')) body = insertBeforeBodyEnd(body, walkScriptTag(prefix))
         if (!urlObj.searchParams.has('clean')) body = injectNotesScript(body, 'mock', prefix)
         res.writeHead(200, { 'content-type': contentType, 'cache-control': 'no-store' })
         res.end(body)

@@ -183,6 +183,15 @@ verify. `mocks-driver.js look-via <playwright|browser>` records the session's de
 `browser` means a browser MCP the command told the session to `ToolSearch` for, which cannot be
 probed from a script and so is declared once and trusted thereafter.
 
+**Walk mode is a query token, not a separate route.** `GET /mocks/<label>.html?walk` injects
+`<script src="<prefix>/__walk/walk.js"></script>` before the last `</body>` (after the state
+click script when `?state=` is also present), and `GET /__walk/walk.js` serves
+`spec/scripts/lib/walk-mode.browser.js` verbatim, `no-store`. `?walk` composes with `?clean` and
+`?state=`; `?clean` strips the notes layer but never the walk script. Inside the frame, a click
+on the `[data-to]` control reports `{walk:'to', from, to}` to the parent; any other click reports
+`{walk:'miss', from, target}` — the mechanism spec 03's journey player reads to know where a
+client's click went (ADR-0013).
+
 ## Mocks: Page Notes
 
 Feedback on served mocks is written on the page, never in chat and never in mock markup.
@@ -270,6 +279,12 @@ structure.
 The six rules the dry run converged on (LEDGER standing rules + M11/M13/M14 + A6/A7) — the
 half the driver cannot check, carried here as contract prose the authoring session applies:
 
+- **Every edge is a real control.** The element whose click leads to the next screen carries
+  `data-to="<label>"` naming a screen declared in a seed journey — one screen may carry several
+  (a menu screen with three exits). `journey-drawn` refuses, after the per-label checks and before
+  `check --states`, any seed edge with no `data-to` control and any `data-to` naming an
+  undeclared screen (`lib/mock-seed-checks.js`'s `edgeGaps`, ADR-0013). `data-to` is an
+  attribute, not a link — a wireframe never carries an `href` to another mock.
 - **Name the shared parts before the screens.** Once a kit family (`design/kit/`) resolves,
   every content region of a labeled mock carries `data-kit="<key>"` naming the primitive it
   instantiates, or `data-bespoke="<key>: <difference>"` naming the primitive it is *not* and

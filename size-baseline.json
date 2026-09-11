@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 61878,
-    "spec/scripts": 1325405,
-    "spec/scripts/lib": 242852,
-    "tests": 3793991
+    "spec/scripts": 1329059,
+    "spec/scripts/lib": 249210,
+    "tests": 3822936
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -23,7 +23,7 @@
     "spec/scripts/commit-coverage.js": 16400,
     "spec/scripts/components-check.js": 4708,
     "spec/scripts/design-ac-reconcile.js": 6011,
-    "spec/scripts/design-atlas.js": 146707,
+    "spec/scripts/design-atlas.js": 148316,
     "spec/scripts/env-preflight.js": 8794,
     "spec/scripts/escape-row.js": 10045,
     "spec/scripts/fleet-reader.js": 47448,
@@ -41,6 +41,7 @@
     "spec/scripts/lib/glob-match.js": 4339,
     "spec/scripts/lib/host-config.js": 5704,
     "spec/scripts/lib/leg-findings.js": 2393,
+    "spec/scripts/lib/mock-seed-checks.js": 3257,
     "spec/scripts/lib/mocks-ledger.js": 13101,
     "spec/scripts/lib/mocks-notes.js": 20627,
     "spec/scripts/lib/mocks-picks.js": 8373,
@@ -56,11 +57,12 @@
     "spec/scripts/lib/spec-sections.js": 24006,
     "spec/scripts/lib/stop-block.js": 9749,
     "spec/scripts/lib/surfaces.js": 5646,
+    "spec/scripts/lib/walk-mode.browser.js": 3101,
     "spec/scripts/lib/wire-register.js": 2871,
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
     "spec/scripts/merge-back.sh": 17514,
-    "spec/scripts/mocks-driver.js": 114478,
+    "spec/scripts/mocks-driver.js": 116523,
     "spec/scripts/port-check.js": 3536,
     "spec/scripts/promise-sweep.js": 10409,
     "spec/scripts/prose-cap.js": 6271,
@@ -110,7 +112,7 @@
     "tests/consistency/citations-check.test.js": 16363,
     "tests/consistency/comment-narration-live.test.js": 3527,
     "tests/consistency/dependency-free.test.js": 8614,
-    "tests/consistency/design-doctrine.test.js": 39573,
+    "tests/consistency/design-doctrine.test.js": 41962,
     "tests/consistency/dup-windows-live.test.js": 1916,
     "tests/consistency/entrypoints.test.js": 70405,
     "tests/consistency/genesis-doctrine.test.js": 86907,
@@ -180,28 +182,30 @@
     "tests/mocks/chrome-harness.js": 9353,
     "tests/mocks/chrome-harness.test.js": 10855,
     "tests/mocks/client-route.test.js": 22060,
+    "tests/mocks/mock-edges.test.js": 12014,
     "tests/mocks/mocks-driver-2.test.js": 19004,
     "tests/mocks/mocks-driver-3.test.js": 17977,
-    "tests/mocks/mocks-driver-4.test.js": 16765,
+    "tests/mocks/mocks-driver-4.test.js": 17266,
     "tests/mocks/mocks-driver-client-2.test.js": 12708,
     "tests/mocks/mocks-driver-client.test.js": 13341,
-    "tests/mocks/mocks-driver-fixtures.js": 27940,
+    "tests/mocks/mocks-driver-fixtures.js": 29397,
     "tests/mocks/mocks-driver-kit-gate.test.js": 2879,
-    "tests/mocks/mocks-driver-look-stops-2.test.js": 12882,
+    "tests/mocks/mocks-driver-look-stops-2.test.js": 12921,
     "tests/mocks/mocks-driver-look-stops-3.test.js": 9656,
     "tests/mocks/mocks-driver-look-stops-4.test.js": 12345,
-    "tests/mocks/mocks-driver-look-stops.test.js": 21448,
+    "tests/mocks/mocks-driver-look-stops.test.js": 21565,
     "tests/mocks/mocks-driver-theme.test.js": 51812,
-    "tests/mocks/mocks-driver-walk.test.js": 12971,
-    "tests/mocks/mocks-driver-wire.test.js": 4300,
-    "tests/mocks/mocks-driver.test.js": 35227,
+    "tests/mocks/mocks-driver-walk.test.js": 13030,
+    "tests/mocks/mocks-driver-wire.test.js": 4753,
+    "tests/mocks/mocks-driver.test.js": 35878,
     "tests/mocks/mocks-ledger.test.js": 12490,
-    "tests/mocks/mocks-notes.test.js": 64110,
+    "tests/mocks/mocks-notes.test.js": 64149,
     "tests/mocks/mocks-picks.test.js": 11563,
     "tests/mocks/notes-layer-isolation.test.js": 6372,
     "tests/mocks/notes-layer-navigation.test.js": 27334,
     "tests/mocks/review-page.test.js": 20272,
     "tests/mocks/viewer-tokens.test.js": 4600,
+    "tests/mocks/walk-mode.test.js": 11226,
     "tests/parse-selection/parse-selection.test.js": 4720,
     "tests/prose-debt/doctrine-pins.test.js": 4759,
     "tests/prose-debt/memory-sweep.test.js": 12286,
@@ -1363,6 +1367,144 @@
       "from": 3792890,
       "to": 3793991,
       "cite": "specs/20260910/01-contention-proof-budget-and-uncapped-suite.md"
+    },
+    {
+      "path": "spec/scripts/design-atlas.js",
+      "from": 146707,
+      "to": 148316,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 114478,
+      "to": 115921,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests/consistency/design-doctrine.test.js",
+      "from": 39573,
+      "to": 41962,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-4.test.js",
+      "from": 16765,
+      "to": 17266,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-fixtures.js",
+      "from": 25848,
+      "to": 27305,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-look-stops-2.test.js",
+      "from": 12882,
+      "to": 12921,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-look-stops.test.js",
+      "from": 21448,
+      "to": 21565,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-walk.test.js",
+      "from": 12971,
+      "to": 13030,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-wire.test.js",
+      "from": 4300,
+      "to": 4753,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver.test.js",
+      "from": 35227,
+      "to": 35878,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests/mocks/mocks-notes.test.js",
+      "from": 64110,
+      "to": 64149,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1325405,
+      "to": 1328457,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests",
+      "from": 3773676,
+      "to": 3779381,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "spec/scripts/lib",
+      "from": 242852,
+      "to": 248790,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests",
+      "from": 3779381,
+      "to": 3799127,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "spec/scripts/lib/mock-seed-checks.js",
+      "from": 2837,
+      "to": 3257,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 115921,
+      "to": 116523,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests/mocks/mock-edges.test.js",
+      "from": 8520,
+      "to": 12014,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1328457,
+      "to": 1329059,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "spec/scripts/lib",
+      "from": 248790,
+      "to": 249210,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests",
+      "from": 3799127,
+      "to": 3802621,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-fixtures.js",
+      "from": 27940,
+      "to": 29397,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests",
+      "from": 3802621,
+      "to": 3822936,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
     }
   ]
 }

@@ -184,6 +184,8 @@ const clientCaptureLib = require('./lib/client-capture')
 const picksLib = require('./lib/mocks-picks.js')
 const shellLib = require('./lib/shell-region')
 const { stylesheetTargets, linksWireRegister } = require('./lib/wire-register')
+const { parseSeedJourneys } = require('./lib/surfaces')
+const { edgeGaps } = require('./lib/mock-seed-checks')
 
 function die(msg) { writeOut(2, 'mocks-driver: ' + msg + '\n'); process.exit(2) }
 function nowIso() { return new Date().toISOString() }
@@ -1222,6 +1224,36 @@ function handleJourneyDrawn(journeyName) {
     if (!stylesheetTargets(html).some((t) => WIRE_TOKENS_CSS_RE.test(t))) die(file + ': does not link ../wire/tokens.css' + atlasSuffix)
     if (!stylesheetTargets(html).some((t) => WIRE_WIRE_CSS_RE.test(t))) die(file + ': does not link ../wire/wire.css' + atlasSuffix)
     if (r.status !== 0) die(file + ': design-atlas.js check failed for label "' + label + '": ' + childOutput(r))
+  }
+  // specs/20260910/02-click-to-advance-and-real-records.md D1/D2: every seed edge needs a
+  // matching data-to control and every data-to must name a screen declared in ANY seed
+  // journey — edges come from lib/surfaces.js's parseSeedJourneys (A1: this driver's own
+  // parseJourneysSeed stays labels-only), never mocks-driver.js's own parser. `declared` is the
+  // repo-wide union of every seed journey's labels, computed here (not in the library) since
+  // only this driver knows the full journey set — a `data-to` naming a screen owned by a
+  // DIFFERENT seed journey is still a real, drawable edge and must not refuse. The screens
+  // scanned and the `missing` loop stay this journey's own `j.labels`. Runs after the per-label
+  // closure checks above and before check --states (the same posture the states gate already
+  // has), and never records journeys.<j>.drawn on a refusal.
+  const allSeedJourneys = parseSeedJourneys(seedTextOr(null))
+  const surfJourney = allSeedJourneys.get(journeyName)
+  const declared = []
+  for (const jrn of allSeedJourneys.values()) {
+    for (const label of jrn.labels) if (!declared.includes(label)) declared.push(label)
+  }
+  const gaps = edgeGaps({ labels: j.labels, edges: surfJourney ? surfJourney.edges : [], declared },
+    (label) => { try { return fs.readFileSync(mockFile(label), 'utf8') } catch { return '' } })
+  if (gaps.missing.length || gaps.unknown.length) {
+    const lines = []
+    for (const g of gaps.missing) {
+      lines.push(g.from + '.html: no control carries data-to="' + g.to + '" — the seed edge ' +
+        g.from + ' -> ' + g.to + ' has no clickable path; add data-to="' + g.to +
+        '" to the control that leads there')
+    }
+    for (const g of gaps.unknown) {
+      lines.push(g.from + '.html: data-to="' + g.to + '" names a screen no journey declares')
+    }
+    die(lines.join('\n') + '\nre-mark journey-drawn --journey ' + journeyName)
   }
   // specs/20260906/05-gray-states-on-every-wireframe.md D2: after every per-label closure check
   // above, run check --states over the journey's own top-level mocks — a violation refuses the

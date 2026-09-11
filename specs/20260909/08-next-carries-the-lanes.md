@@ -1,6 +1,6 @@
 ---
 date: 2026-09-09
-status: implementing
+status: done
 build_base: main
 tier: critical           # spec-status.js is a named critical trigger (.claude/rules/spec-pipeline.md § Risk Tiers)
 area: session-queue
@@ -260,6 +260,23 @@ collision sites, and the tool's lack of a worktree exclusion is queued as toolin
 
 Nothing was queued at this lock: the change is self-contained in one render plus its two
 doc/test pin sites, and the consult found no follow-on work that this spec defers.
+
+Build deviations (folded at close, 2026-09-10). Five one-offs, none recurring except the ADR
+numbering, which extended the existing stale-literal Gotcha in place rather than earning a
+sixteenth entry at the cap. **ADR number:** D6 named `docs/adr/0013-next-carries-the-lanes.md`,
+but `ADR-0013` was claimed by `0013-client-rehearses-the-journey.md`, landed on `main` from the
+20260910/02–06 series ahead of this build; it shipped as `ADR-0014`, with D6, the File Plan row,
+both `Amended by:` backlinks and one stale test-header citation amended to match. **Frozen-surface
+pin:** AC-20260909-08-8 is a sanctioned green-pre-change pin — D5's five surfaces pass before and
+after, unlike every other criterion here. **Mixed pins:** several existing lane/`🔶`/`🚦` tests
+asserted a lane-render and a `🕓`/`⛔` fact from one `--all` run; they were split in place into a
+bare run and an `--all` run inside the same test body rather than duplicated. **Baselines:** D8
+predicted a shrink and named only `size-baseline.json`; the build needed seven `--raise` entries
+citing this spec (`spec-status.js`, the two test files, and the `spec/scripts` + `tests` tree
+ceilings, two of them twice as the close-time comment repairs landed) before `--update` could
+tighten the one stale file, and cutting the new tests' duplication left two files scoring under
+their `dup-baseline.json` ceilings — a `stale` exit that only `dup-windows.js --update` clears, so
+that file joined the File Plan as a build-time amendment. A tightening owes no cite.
 
 ## Canonical Delta
 

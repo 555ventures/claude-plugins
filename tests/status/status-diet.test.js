@@ -60,6 +60,8 @@ test('AC-20260909-08-7 (⚡ clause retired, was AC-20260903-05-1): default rende
   assert.strictEqual(nonEmpty[nonEmpty.length - 1],
     '🟢 next is ready · nothing else open · 1 hygiene finding (/spec:doctor)',
     'AC-20260909-08-7/D4: the zero-wait clause is reworded to "nothing else open" — "nothing waits behind it" is retired wording')
+  assert.ok(!r.stdout.includes('could run in parallel'),
+    'AC-20260909-08-7/D4: the parallel-count footer clause is retired — reintroducing it puts a lane count beside lanes already on screen')
 })
 
 test('AC-20260909-08-2 ("one command line" clause retired, was AC-20260903-05-2): default render prints the top pick plus a 🚦 solo branch and the reworded "N more open" wait clause', () => {
@@ -79,7 +81,9 @@ test('AC-20260909-08-2 ("one command line" clause retired, was AC-20260903-05-2)
     'D1(b): the default render now prints the solo branch under a single-lane pick, like --all does today')
   const nonEmpty = lines.filter(l => l.trim() !== '')
   assert.strictEqual(nonEmpty[nonEmpty.length - 1], '🟢 next is ready · 2 more open',
-    'D4: two unblocked runner-ups — the reworded "N more open" clause, no other clause')
+    'AC-20260909-08-7/D4: two unblocked runner-ups — the reworded "N more open" clause, no other clause')
+  assert.ok(!r.stdout.includes('could run in parallel'),
+    'AC-20260909-08-7/D4: the parallel-count footer clause is retired on the populated host too')
 })
 
 test('AC-20260903-05-3: a skipped-brief decide pair prints as one sentence, one question, one paste — no bracketed kind line', () => {
@@ -237,4 +241,14 @@ test('AC-20260909-08-5 / AC-20260909-08-10: an all-blocked top entry prints an �
     'AC-20260909-08-10/D3: top pick prints once — a ⛔ re-print is the defect this spec removes: ' + rAll.stdout)
   assert.match(rAll.stdout, /⛔ blocked:\n\/spec:run @specs\/20260701\/01-inflight\.md/,
     'AC-20260909-08-10/D3: ⛔ blocked keeps only the OTHER entry (01-inflight)')
+
+  // D3's other half: with the top pick filtered out, nothing survives on a single-blocked host,
+  // so the section is skipped rather than printed as a bare header over no rows.
+  const solo = host({ specs: { '20260701/01-x.md': sp('hardened', 'depends_on: [specs/20260701/02-y.md]') } })
+  const rSolo = runNode(SCRIPT, ['--root', solo, '--all'])
+  assert.strictEqual(rSolo.status, 0, rSolo.stderr)
+  assert.ok(!rSolo.stdout.includes('⛔ blocked:'),
+    'AC-20260909-08-10/D3: a lone blocked entry already printed in 🎯 Next leaves ⛔ empty — a bare header over no rows is the regression: ' + rSolo.stdout)
+  assert.strictEqual(rSolo.stdout.split('\n').filter(l => l === '/spec:run @specs/20260701/01-x.md').length, 1,
+    'AC-20260909-08-10/D3: the lone blocked entry still prints exactly once')
 })

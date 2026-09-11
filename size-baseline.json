@@ -4,7 +4,7 @@
     "scripts": 61878,
     "spec/scripts": 1326768,
     "spec/scripts/lib": 242852,
-    "tests": 3798524
+    "tests": 3799701
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -273,7 +273,7 @@
     "tests/spec-status.test.js": 63178,
     "tests/state-gates.test.js": 11512,
     "tests/status/red-alarm.test.js": 11155,
-    "tests/status/status-diet.test.js": 14707,
+    "tests/status/status-diet.test.js": 15884,
     "tests/surfaces-lib.test.js": 4569,
     "tests/test-file-budget.test.js": 30807,
     "tests/test-hang-bound.test.js": 3509,
@@ -1404,6 +1404,18 @@
       "path": "spec/scripts",
       "from": 1326718,
       "to": 1326768,
+      "cite": "specs/20260909/08-next-carries-the-lanes.md"
+    },
+    {
+      "path": "tests/status/status-diet.test.js",
+      "from": 14707,
+      "to": 15884,
+      "cite": "specs/20260909/08-next-carries-the-lanes.md"
+    },
+    {
+      "path": "tests",
+      "from": 3798524,
+      "to": 3799701,
       "cite": "specs/20260909/08-next-carries-the-lanes.md"
     }
   ]

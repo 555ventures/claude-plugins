@@ -60,8 +60,9 @@ no on-disk shape changes.
 ## Consequences
 
 - specs/20260903/05-status-diet.md's D1/D4/D5 and the named clauses of
-  AC-20260903-05-1/-2/-5/-7 are superseded by this record; the spec stays `done` and is never
-  edited — this ADR is the durable account of what changed and why. Every other clause of
+  AC-20260903-05-1/-2/-5/-7 are superseded by this record; the spec stays `done` and its
+  criteria are never rewritten in place — it gains only the one `Amended by: ADR-0014` backlink
+  line, and this ADR is the durable account of what changed and why. Every other clause of
   those criteria (the roadmap block, the decide-line cap, the `🔴`/red-CI footer, the hygiene
   catalogue's continued life under `--all`) stands unchanged.
 - `docs/roadmap/24-status-and-queue-diet.md`'s acceptance picture keeps its 2026-09-03 footer

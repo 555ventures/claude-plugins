@@ -51,7 +51,7 @@ function writeWalk(root, walk) {
   fs.renameSync(tmp, p)
 }
 
-const EMPTY_RECORD = () => ({ reached: [], misses: [], confirmedAt: null, sentence: null, waived: null })
+const EMPTY_RECORD = () => ({ reached: [], misses: [], confirmedAt: null, sentence: null, waived: null, lastEventAt: null })
 
 function recordOf(walk, journey) {
   return (walk.journeys && walk.journeys[journey]) || EMPTY_RECORD()
@@ -75,6 +75,7 @@ function recordEvent(walk, input) {
   } else {
     throw new Error('recordEvent: unknown walk event "' + body.walk + '" — expected "to" or "miss"')
   }
+  next.lastEventAt = body.at
   return { journeys: Object.assign({}, walk.journeys, { [journey]: next }) }
 }
 
@@ -98,9 +99,10 @@ function confirmJourney(walk, input) {
 
 // waiveJourney(walk, {journey, reason, by, now, openedAt}) → a NEW walk object. Refuses (throws,
 // naming the elapsed day count and 7) before seven full days have elapsed since the LATER of
-// `openedAt` and the journey's own last recorded miss (a client that keeps missing on a journey
-// is not silent, even before it reaches the end) — the same elapsed-days clock lib/mocks-notes.js's
-// waiveNote runs for a note, applied here to a whole journey.
+// `openedAt`, the journey's `lastEventAt` (any client event, a correct click included) and the
+// journey's own last recorded miss (kept as a fallback so records written before lastEventAt
+// existed still clock correctly) — the same elapsed-days clock lib/mocks-notes.js's waiveNote
+// runs for a note, applied here to a whole journey.
 function waiveJourney(walk, input) {
   const body = input || {}
   const journey = body.journey
@@ -108,6 +110,7 @@ function waiveJourney(walk, input) {
   const rec = recordOf(walk, journey)
   const now = body.now instanceof Date ? body.now : new Date(body.now || Date.now())
   let since = body.openedAt
+  if (rec.lastEventAt && rec.lastEventAt > since) since = rec.lastEventAt
   for (const m of rec.misses || []) if (m.at && m.at > since) since = m.at
   const sinceDate = new Date(since)
   const elapsedDays = Math.floor((now.getTime() - sinceDate.getTime()) / DAY_MS)

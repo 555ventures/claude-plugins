@@ -103,6 +103,19 @@ test('AC-20260910-03-5: the served client mount answers the index and the player
     const nonClientWrite = await postJson(base + '/__walk/event', { journey: JOURNEY, walk: 'miss', from: 'signin', target: 'x' })
     assert.strictEqual(nonClientWrite.status, 404, 'AC-5/D5: a non-client POST /__walk/event must 404 — the walk record is written only from the client route: got ' + nonClientWrite.status)
 
+    const badToFrom = await postJson(base + '/client/__walk/event', { journey: JOURNEY, walk: 'to', from: 'nope-screen', to: 'invite' })
+    assert.strictEqual(badToFrom.status, 400, 'AC-5/D5: a "to" event whose `from` is not a label declared on the journey must 400 — the D5 malformed-body/unknown-label rule binds `from` too: got ' + badToFrom.status + ' ' + JSON.stringify(badToFrom.body))
+    const walkAfterBadTo = readWalkJson(dir)
+    assert.ok(!(walkAfterBadTo && walkAfterBadTo.journeys[JOURNEY] && walkAfterBadTo.journeys[JOURNEY].reached.includes('nope-screen')),
+      'AC-5/D5: a rejected "to" event must never reach recordEvent — the bogus `from` "nope-screen" must not appear in reached on disk: got ' + JSON.stringify(walkAfterBadTo))
+
+    const badMissFrom = await postJson(base + '/client/__walk/event', { journey: JOURNEY, walk: 'miss', from: 'nope-screen', target: 'x' })
+    assert.strictEqual(badMissFrom.status, 400, 'AC-5/D5: a "miss" event whose `from` is not a label declared on the journey must 400: got ' + badMissFrom.status + ' ' + JSON.stringify(badMissFrom.body))
+    const walkAfterBadMiss = readWalkJson(dir)
+    assert.ok(!(walkAfterBadMiss && walkAfterBadMiss.journeys[JOURNEY] &&
+      walkAfterBadMiss.journeys[JOURNEY].misses.some((m) => m.from === 'nope-screen')),
+      'AC-5/D5: a rejected "miss" event must never reach recordEvent — the bogus `from` "nope-screen" must not appear in misses on disk: got ' + JSON.stringify(walkAfterBadMiss))
+
     const playerJs = await getJson(base + '/__walk/player.js')
     assert.strictEqual(playerJs.status, 200, 'AC-5: GET /__walk/player.js must answer 200: got ' + playerJs.status)
     assert.strictEqual(playerJs.headers['cache-control'], 'no-store', 'AC-5: /__walk/player.js must be served with cache-control: no-store: got ' + JSON.stringify(playerJs.headers))

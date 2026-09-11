@@ -67,3 +67,24 @@ test('AC-20260910-03-4: waiveJourney refuses before seven days have elapsed sinc
   assert.strictEqual(isClosed(walk, 'onboarding'), true,
     'AC-4: isClosed must be true for a waived journey: got ' + isClosed(walk, 'onboarding'))
 })
+
+test('AC-20260910-03-4: recordEvent stamps journeys[j].lastEventAt with `at` on BOTH a "to" and a "miss" event, and waiveJourney clocks from the later of openedAt and lastEventAt so a correct click made seconds ago refuses a waiver even eight days after openedAt', () => {
+  let walk = { journeys: {} }
+  const eightDaysAgo = isoDaysAgo(8)
+  const justNow = new Date().toISOString()
+
+  walk = recordEvent(walk, { journey: 'onboarding', walk: 'to', from: 'signin', to: 'invite', at: justNow }) || walk
+  assert.strictEqual(walk.journeys.onboarding.lastEventAt, justNow,
+    'AC-4: a "to" event must stamp journeys[j].lastEventAt with `at`: got ' + JSON.stringify(walk.journeys.onboarding))
+
+  assert.throws(
+    () => waiveJourney(walk, { journey: 'onboarding', reason: 'no reply', by: 'session', now: new Date(), openedAt: eightDaysAgo }),
+    /onboarding/,
+    'AC-4: waiveJourney must refuse a journey whose lastEventAt is seconds old, even though openedAt was eight days ago — the click, not openedAt, is the live clock: got no throw',
+  )
+
+  let missWalk = { journeys: {} }
+  missWalk = recordEvent(missWalk, { journey: 'onboarding', walk: 'miss', from: 'signin', target: 'button#help', at: justNow }) || missWalk
+  assert.strictEqual(missWalk.journeys.onboarding.lastEventAt, justNow,
+    'AC-4: a "miss" event must also stamp journeys[j].lastEventAt with `at`: got ' + JSON.stringify(missWalk.journeys.onboarding))
+})

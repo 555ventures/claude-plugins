@@ -2145,12 +2145,13 @@ function createRequestHandler(root, opts = {}) {
             jsonRes(res, 400, { error: 'event needs {journey, walk:"to"|"miss", from, to|target} naming a declared journey' })
             return
           }
-          if (kind === 'to' && (!body.from || !body.to || !declared.get(journey).labels.includes(body.to))) {
-            jsonRes(res, 400, { error: 'a "to" event needs {from, to} naming a label declared on journey "' + journey + '"' })
+          if (kind === 'to' && (!body.from || !body.to ||
+              !declared.get(journey).labels.includes(body.from) || !declared.get(journey).labels.includes(body.to))) {
+            jsonRes(res, 400, { error: 'a "to" event needs {from, to} naming labels declared on journey "' + journey + '"' })
             return
           }
-          if (kind === 'miss' && (!body.from || !body.target)) {
-            jsonRes(res, 400, { error: 'a "miss" event needs {from, target}' })
+          if (kind === 'miss' && (!body.from || !body.target || !declared.get(journey).labels.includes(body.from))) {
+            jsonRes(res, 400, { error: 'a "miss" event needs {from, target} naming a label declared on journey "' + journey + '"' })
             return
           }
           const next = walkLib.recordEvent(readWalkOrEmpty(), {

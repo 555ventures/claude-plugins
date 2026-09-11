@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 61878,
-    "spec/scripts": 1352044,
-    "spec/scripts/lib": 279610,
-    "tests": 3901428
+    "spec/scripts": 1352216,
+    "spec/scripts/lib": 279809,
+    "tests": 3904346
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -23,7 +23,7 @@
     "spec/scripts/commit-coverage.js": 16400,
     "spec/scripts/components-check.js": 4708,
     "spec/scripts/design-ac-reconcile.js": 6011,
-    "spec/scripts/design-atlas.js": 156214,
+    "spec/scripts/design-atlas.js": 156386,
     "spec/scripts/env-preflight.js": 8794,
     "spec/scripts/escape-row.js": 10045,
     "spec/scripts/fleet-reader.js": 47448,
@@ -45,7 +45,7 @@
     "spec/scripts/lib/mocks-ledger.js": 13101,
     "spec/scripts/lib/mocks-notes.js": 20627,
     "spec/scripts/lib/mocks-picks.js": 8373,
-    "spec/scripts/lib/mocks-walk.js": 6068,
+    "spec/scripts/lib/mocks-walk.js": 6267,
     "spec/scripts/lib/notes-layer.browser.js": 24862,
     "spec/scripts/lib/observation.js": 2613,
     "spec/scripts/lib/parse-selection.js": 2367,
@@ -185,7 +185,7 @@
     "tests/mocks/chrome-harness.js": 9353,
     "tests/mocks/chrome-harness.test.js": 11209,
     "tests/mocks/client-route.test.js": 22060,
-    "tests/mocks/client-walk-route.test.js": 11831,
+    "tests/mocks/client-walk-route.test.js": 13322,
     "tests/mocks/mock-edges.test.js": 12014,
     "tests/mocks/mocks-driver-2.test.js": 19577,
     "tests/mocks/mocks-driver-3.test.js": 17977,
@@ -207,7 +207,7 @@
     "tests/mocks/mocks-ledger.test.js": 12490,
     "tests/mocks/mocks-notes.test.js": 65034,
     "tests/mocks/mocks-picks.test.js": 11563,
-    "tests/mocks/mocks-walk.test.js": 4927,
+    "tests/mocks/mocks-walk.test.js": 6354,
     "tests/mocks/notes-layer-isolation.test.js": 6372,
     "tests/mocks/notes-layer-navigation.test.js": 27334,
     "tests/mocks/review-page.test.js": 20272,
@@ -1686,6 +1686,48 @@
       "path": "tests",
       "from": 3856317,
       "to": 3901428,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "spec/scripts/design-atlas.js",
+      "from": 156214,
+      "to": 156386,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "spec/scripts/lib/mocks-walk.js",
+      "from": 6068,
+      "to": 6267,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "tests/mocks/client-walk-route.test.js",
+      "from": 11831,
+      "to": 13322,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "tests/mocks/mocks-walk.test.js",
+      "from": 4927,
+      "to": 6354,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1352044,
+      "to": 1352216,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "spec/scripts/lib",
+      "from": 279610,
+      "to": 279809,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "tests",
+      "from": 3901428,
+      "to": 3904346,
       "cite": "specs/20260910/03-client-journey-player.md"
     }
   ]

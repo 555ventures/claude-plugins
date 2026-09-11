@@ -1,6 +1,6 @@
 ---
 date: 2026-09-10
-status: implementing
+status: done
 tier: standard
 area: design-atlas
 design: false
@@ -171,6 +171,32 @@ path whose precondition grows, `advanceToApproved` in the fixtures, is covered b
 fixture row (the series lands in order) and by this spec's AC-7 fixture writing `walk.json`
 confirmed; `tests/mocks/mocks-driver-client.test.js` spells `/client/index.html` as the printed
 `client open` line, which this spec keeps (mention, nothing owed).
+
+Build record. Five one-offs, folded from the deviations sidecar at close. (1) The File Plan named
+`tests/mocks/mocks-driver-client-2.test.js`, which specs/20260910/01 already owns — this spec took
+the next free name, `-client-3`, and its File Plan row and AC-7/-8 pointers were amended to match.
+(2) AC-20260910-03-5's worked example wrote the cold-root state response as `reached:['signin']`,
+which contradicts D5's own stated default of an empty `reached` and has no mechanism anywhere in
+D1-D11; the Decision won and the AC's literal was corrected. (3) A2 is false: `appendAssumption`
+takes a caller-supplied id rather than deriving one, so the promotion row derives `C<n>` the way
+`mocks-driver.js`'s `nextLedgerId` derives `P<n>` — A2's own stated remedy. (4) The AC-2 test's
+mark-matching pattern could never match a content-bearing element, so its per-mark control
+assertions were unreachable; the pattern was corrected, which strengthens the pin rather than
+weakening it. (5) D7's refusal was first placed ahead of the notes gate, displacing four
+pre-existing refusal messages; it now sits between `requireNotesResolved` and `requireGateOpen`,
+literally before the ledger gate as D7 says, with every prior refusal keeping its precedence.
+
+Review round. Two hard findings, both dispositioned fix on executed repros. The event route
+validated only `to`, so an undeclared origin label entered the walk record with 200 — both kinds
+now require `from` to be a declared label (`target` stays unvalidated, being a control selector).
+`waiveJourney`'s clock scanned only `misses`, so a client walking a journey correctly left no
+mark on it and could be waived mid-walk — D4 and the Contracts block gained `lastEventAt`, stamped
+by both event kinds, and the clock takes the later of `openedAt`, `lastEventAt` and the miss scan
+(kept, so records written before the fix still clock correctly). Four soft findings stand
+recorded and unfixed: the player hides a mark optimistically before the server answers, both
+pages hard-code `<html lang="en">` while rendering the `ja` strings, the HTTP test helpers reached
+a third repetition, and this spec's `dup-baseline.json` File Plan row under-describes its own
+change.
 
 Rejected: a thumbnail rail of live frames (73 screens on one host — the rail is labels); a
 per-screen confirm (fatigue, and the ledger already knows per screen); scoring the sentence

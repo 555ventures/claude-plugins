@@ -138,8 +138,8 @@ depended_on_by: []
      file> :: <title prefix>` for a named existing test that already covers this behavior,
      unchanged. `::` is the reference separator — a title may carry quotes, brackets, parentheses
      or an arrow but essentially never that pair — and the prefix is grown only until it is
-     unique within its own file; `spec-paths count-tests --titles [--file <rel>]` prints every
-     candidate reference string in the repo. The declaration is mandatory on every criterion; a
+     unique within its own file; `spec-paths count-tests --root . --titles [--file <rel>]` prints
+     every candidate reference string in the repo. The declaration is mandatory on every criterion; a
      bullet ending with no disposition is refused at lock (`ac-matrix --lint`), and where the
      tree is available (`--resolve-root`) a `rewrites`/`reuses` reference resolving to other than
      exactly one pre-image test is refused too. -->

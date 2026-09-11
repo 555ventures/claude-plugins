@@ -428,18 +428,37 @@ function escapeTitleForRegex(title) {
   return title.replace(/[\\^$.|?*+()[\]{}]/g, '\\$&')
 }
 
+// Wraps `arg` in single quotes for literal, no-expansion substitution into a `bash -c` command
+// string — single quotes are the one POSIX quoting form with zero escapes recognised inside
+// (no `\`, `$`, backtick, or `"` is special there), so this is the only form that survives a
+// title carrying any of those characters unexpanded. An embedded single quote is closed,
+// escaped as `\'` OUTSIDE the quoting (a literal backslash-quote passed straight through the
+// shell), then reopened, e.g. `it's` → `'it'\''s'`.
+function shellQuoteSingle(arg) {
+  return `'${arg.replace(/'/g, `'\\''`)}'`
+}
+
 // D6/D7: `{testCommand} {testNameFilter←escaped ^title$} <file>`, appended ahead of the file path
 // (matching the existing `{typecheckCommand} <file>` append form) — output is captured (never
 // `stdio: 'ignore'` like runLeg above) because D8's selection proof needs the run's own stdout to
 // confirm the title was actually selected, not merely infer it from the exit code (Assumptions
 // A1: a pattern matching nothing still exits 0).
+//
+// Hardened (confirmed hard finding, review): the filter/path fragments were substituted via
+// `JSON.stringify`, which produces DOUBLE-quoted shell words — bash still expands `` ` `` (command
+// substitution) and `$` (variable expansion) inside double quotes, so a test title carrying
+// either ran as shell syntax instead of a literal string (a backtick-quoted `touch` in a title
+// created the file it named; 27 of this repo's 1,050 live titles carry a backtick and 6 carry
+// `$`). `testCommand` itself is still `bash -c`-interpreted (it is a host-supplied command
+// string, D6's own contract) — only the SUBSTITUTED filter/path fragments are now single-quoted
+// via `shellQuoteSingle`, which recognises no shell metacharacter at all.
 function runFilteredLeg(cmd, filterTemplate, title, relPath) {
   const pattern = `^${escapeTitleForRegex(title)}$`
   const filterArg = filterTemplate.replace('{name}', pattern)
   const env = { ...process.env }
   delete env.NODE_TEST_CONTEXT
   const res = spawnSync('bash',
-    ['-c', `${cmd} ${JSON.stringify(filterArg)} ${JSON.stringify(relPath)}`],
+    ['-c', `${cmd} ${shellQuoteSingle(filterArg)} ${shellQuoteSingle(relPath)}`],
     { cwd: root, env, encoding: 'utf8' })
   return { code: res.status === null ? 1 : res.status, output: (res.stdout || '') + (res.stderr || '') }
 }

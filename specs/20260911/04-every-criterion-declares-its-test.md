@@ -1,6 +1,6 @@
 ---
 date: 2026-09-11
-status: implementing
+status: done
 build_base: main
 tier: critical
 area: spec-grammar
@@ -147,9 +147,9 @@ and the missing piece is discovery, not doctrine.
 - **AC-20260911-04-9**: WHEN an AC declares `→ reuses tests/a.test.js :: no such title` and `testNameFilter` IS declared THE SYSTEM SHALL fall back to `tests/a.test.js`'s whole-file colour, emit `WARN` naming the file, the prefix and cause `unresolved`, emit NO finding for that AC, and exit 0 when no other finding exists; and WHEN the title resolves but the filtered run's stdout does not contain it THE SYSTEM SHALL do the same with cause `unselected` → writes tests/disposition/red-check-per-test.test.js
 - **AC-20260911-04-10**: WHEN `review-legs.js` runs over a fixture host whose `count-tests.js` invocation exits non-zero THE SYSTEM SHALL append exactly one `{"leg":"tests","exit":0,"observed":{"unavailable":"count-failed"}}` row carrying no `count` key — a failed instrument SHALL NOT read as `{"count":0}` → rewrites tests/ceiling/tests-leg.test.js :: AC-20260911-02-5 (full scope): WHEN review-legs.js runs over a fixture host
 - **AC-20260911-04-11**: WHEN `review-legs.js` runs over a fixture host reviewing a spec whose ACs declare two `writes`, one `rewrites` and one `reuses` THE SYSTEM SHALL append `{"leg":"tests","exit":0,"observed":{"count":N,"dispositions":{"writes":2,"rewrites":1,"reuses":1}}}` → writes tests/ceiling/tests-leg.test.js
-- **AC-20260911-04-16**: WHEN the `tests` leg gains its disposition counts THE SYSTEM SHALL CONTINUE TO keep `"tests"` out of `review-legs.js`'s `BLOCKING` array literal — a leg with no red arm can never redden a review → reuses tests/ceiling/tests-leg.test.js :: AC-20260911-02-5: review-legs.js's own BLOCKING array literal
+- **AC-20260911-04-16**: WHEN the `tests` leg gains its disposition counts THE SYSTEM SHALL CONTINUE TO keep `"tests"` out of `review-legs.js`'s `BLOCKING` array literal — a leg with no red arm can never redden a review → reuses tests/ceiling/tests-leg.test.js :: AC-20260911-04-16
 - **AC-20260911-04-12**: WHEN `scanCalls` reads a two-call source whose first call is followed by `typeof /a'b/` (and, each in its own case, by `"^" + /a'b/.source`, `case /a'b/.test(y):`, `await /a'b/.exec(y)`, `throw /a'b/`, `x < /a'b/.source.length`, `1 - /a(b/.source.length`, `else /a'b/.test(y)`) THE SYSTEM SHALL return 2 calls with the first call's `end` strictly less than the second's `start` and neither equal to `src.length` → writes tests/ceiling/count-tests.test.js
-- **AC-20260911-04-17**: WHEN the regex-context set is widened per D10 THE SYSTEM SHALL CONTINUE TO read `arr[0]/2`, `x++/2`, `(a+b)/2` and `foo(a)/2` inside `if(...)` as division → reuses tests/ceiling/count-tests.test.js :: AC-20260911-02-11: WHEN count-tests.js --root . runs over this repository at HEAD
+- **AC-20260911-04-17**: WHEN the regex-context set is widened per D10 THE SYSTEM SHALL CONTINUE TO read `arr[0]/2`, `x++/2`, `(a+b)/2` and `foo(a)/2` inside `if(...)` as division → writes tests/ceiling/count-tests.test.js
 - **AC-20260911-04-18**: WHEN `count-tests.js --root .` runs over this repository immediately before and immediately after D10's change THE SYSTEM SHALL report the identical count both times — no live file exercises the widened shapes, so a corrected set moves no total, and a moved count means the set was blanket-widened rather than corrected → writes tests/ceiling/count-tests.test.js
 - **AC-20260911-04-14**: WHEN `ac-matrix.js --lint` runs over a spec whose bullets are one promise, one pin and one two-clause pin, each carrying a disposition, THE SYSTEM SHALL print exactly `ac-matrix: lint malformed=0 invalidPreGreen=0 mixed=0 missingDisposition=0 unresolvedDisposition=0 · 0 finding(s)` as its last stdout line and exit 0 — the existing pin's expectation updated in place for D3's two counters, never weakened away → rewrites tests/ac-matrix/lint-mode.test.js :: AC-20260907-01-5: --lint on a spec whose bullets are one promise
 - **AC-20260911-04-13** `[oracle: gate]`: WHEN the build completes THE SYSTEM SHALL leave `spec/templates/grounding-contract.md` § Required config keys naming `testNameFilter` in its Optional list with an `absent = …` clause, `.claude/spec.config.json` carrying `"testNameFilter": "--test-name-pattern={name}"`, and `scripts/plugin-bump.js --check` green → writes spec/.claude-plugin/plugin.json
@@ -209,6 +209,42 @@ means the growth moved inside the tests). Grammar health: if ≥ 80% of criteria
 `writes`, the disposition is being defaulted and the missing piece is discovery, not doctrine — and
 if the first three targets are missed, the mechanism is elsewhere, most likely the test-author
 contract itself, and this approach is wrong.
+
+**As built (deviations folded at close, 2026-09-11).** Seven departures, none changing a Decision:
+
+- `spec/entrypoints.json` gained two `entryPoints` rows under `count-tests.js` — the doctrine edits
+  to `plan.md` and `spec.md` name `spec-paths count-tests`, and the reverse-invocation check
+  requires the manifest to declare that. A File Plan omission, waived at review on the standing
+  ruling that adding a member to an exhaustive live-file pin always lands out-of-plan.
+- The single-key `.claude/spec.config.json` edit (D11) was applied by the orchestrator rather than
+  a worker; that wave held no other file.
+- `--lint --json`'s `observed.lint` carries D3's two new keys only for specs dated on or after
+  `DISPOSITION_APPLIES_FROM`, where the Contracts block shows five keys unconditionally. Forced by
+  a live `deepStrictEqual` pin on the 3-key object for an undated fixture spec, outside this File
+  Plan. The human summary line always prints all five, so every pinned string holds.
+- AC-20260911-04-17's disposition was amended from `reuses` to `writes`: the cited reference
+  resolved to a case asserting only a positive count and the absence of two files, so the criterion
+  was carried by a header comment and nothing else. A real division pin now lives in the same file.
+  The amendment note lives outside the bullet — an indented sub-line is folded into the bullet's
+  raw text, which strips the criterion of its trailing pointer and trips D3's own refusal.
+- AC-20260911-04-16's `reuses` reference was re-pointed after the coverage fix retitled the reused
+  case, which had left the spec citing a prefix that no longer resolved.
+- The first AC-20260911-04-18 pin was vacuous: it patched D10's widening INTO a copy of the
+  already-widened library, comparing a scanner against itself. Rewritten to derive a genuinely
+  pre-D10 image by REMOVING D10's lines, and to prove the two images disagree on a control corpus
+  before asserting they agree on the live one.
+- `parseDisposition`'s right-to-left rescan is a collected index array walked backward, not a
+  `lastIndexOf(bullet, arrowIdx - 1)` loop: that shape infinite-loops the moment an unmatched arrow
+  sits at index 0, because `lastIndexOf` clamps a negative `fromIndex` to `0` and re-finds the same
+  index forever.
+
+**The lesson this build paid for twice.** A spec that ships a new AC grammar is parsed by the
+parser it ships, so its own prose examples become fixtures: taking the FIRST matching arrow made
+six of this spec's criteria parse as the examples they quote, and an ordinary amendment sub-bullet
+silently stripped a criterion of its pointer. Both were invisible to every deterministic leg and
+surfaced only by running the lock lint against the spec itself — which is now the thing to run
+before closing any spec that changes AC grammar.
+
 
 ## Canonical Delta
 

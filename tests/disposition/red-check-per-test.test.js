@@ -185,3 +185,47 @@ test('AC-20260911-04-9: WHEN a reuses reference resolves to zero titles THE SYST
   assert.ok(outUnsel.warnings.some(w => w.includes('tests/a.test.js') && w.includes('AC-99-4: the only case') && w.includes('unselected')),
     'the fallback WARN must name the file, the prefix, and the cause "unselected": ' + JSON.stringify(outUnsel.warnings))
 })
+
+// AC-20260911-04-9/AC-20260911-04-7: runFilteredLeg's substituted filter/path fragments used to
+// be JSON.stringify (double-quoted) into the `bash -c` command string, so bash still expanded a
+// backtick (command substitution) and a `$` (variable expansion) inside a test's own title before
+// the pattern ever reached `node --test-name-pattern`. A title carrying a backtick-quoted
+// `touch <marker>` therefore ran the touch for real instead of matching it as literal text, and
+// the run's own output no longer named the title verbatim (D8's selection proof failed), so the
+// reference degraded to "unselected" and fell back to whole-file colour. Single-quoting the
+// substituted fragments (shellQuoteSingle) fixes both: the marker is never created, and the
+// title still selects and resolves as a genuine reuses match.
+test('AC-20260911-04-9 / AC-20260911-04-7: WHEN a reuses reference\'s own title carries a backtick-quoted shell command, a $-prefixed name, a single quote and a double quote THE SYSTEM selects and resolves that exact case with no fallback and executes no shell expansion of the title', () => {
+  const { dir, base } = newHost('rcd9-quoting', FILTER_CONFIG)
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  const markerPath = path.join(dir, 'marker-red-check-quoting.txt')
+  const rawTitle = 'AC-99-9: guards `touch ' + markerPath + '` and $HOME and \'single\' and "double" quoting'
+  fs.writeFileSync(path.join(dir, 'tests/a.test.js'),
+    "'use strict'\n// AC-20260911-99-9\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    `test(${JSON.stringify(rawTitle)}, () => { assert.ok(true) })\n`)
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260911-99-9**: WHEN x runs THE SYSTEM SHALL CONTINUE TO y → reuses tests/a.test.js :: ' + rawTitle],
+    ['| tests/a.test.js | CREATE | tests | the reused case\'s own title carries backtick/$/quote shell metacharacters |']))
+  const res = run(spec, dir, base, ['--json'])
+  assert.strictEqual(res.status, 0,
+    'a genuinely-passing reuses case must exit 0 regardless of what shell metacharacters its title carries (stderr: ' + res.stderr + ')')
+  const out = readJson(res)
+
+  assert.ok(!fs.existsSync(markerPath),
+    'the title\'s backtick-quoted `touch <marker>` must never execute as a real shell command ' +
+    'substitution — its existence means the substituted title fragment was still shell-expanded')
+
+  const d = (out.dispositions || []).find(x => x.ac === 'AC-20260911-99-9')
+  assert.ok(d, 'the dispositions[] array must carry an entry for this AC — its absence means the ' +
+    'per-test run for it never happened at all: ' + JSON.stringify(out.dispositions))
+  assert.strictEqual(d.fallback, undefined,
+    'the reference must resolve and select cleanly with no fallback — a shell-expanded pattern ' +
+    'that no longer matches the title\'s own output degrades this to "unselected": ' + JSON.stringify(d))
+  assert.strictEqual(d.observed, 'green',
+    'the reused case genuinely passes, so observed must be green once selection succeeds: ' + JSON.stringify(d))
+  assert.ok(!out.warnings.some(w => w.includes('AC-20260911-99-9') && w.includes('unselected')),
+    'no "unselected" warning may be emitted for this AC once the title survives shell substitution intact: ' + JSON.stringify(out.warnings))
+  assert.deepStrictEqual(out.findings, [],
+    'a genuinely-passing, correctly-selected reused case must emit no finding of any class: ' + JSON.stringify(out.findings))
+})

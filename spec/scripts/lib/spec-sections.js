@@ -115,25 +115,54 @@ const V7_APPLIES_FROM = '20260817'
 // with ac-matrix.js's `--lint` gate (D3) so the floor is one literal, not a second copy.
 const DISPOSITION_APPLIES_FROM = '20260911'
 
-// D1/D2: parseDisposition(bullet) reads the LAST `→` occurrence in `bullet` (an AC bullet's raw
-// text, or any string ending in the disposition tail) and parses everything after it as one of
-// the three dispositions. `::` is the reference separator (D1's rationale: a title may carry
-// quotes, brackets, parens or an arrow, but essentially never that pair) — everything after it,
-// verbatim, to the end of the string is the prefix. Returns null, never throws, on: no `→` at
-// all, or a tail that matches no disposition keyword (documentation-by-example prose, or a
+// D1/D2: parseDisposition(bullet) locates the disposition tail by scanning every `→` occurrence
+// in `bullet` (an AC bullet's raw text, or any string ending in the disposition tail)
+// RIGHT-TO-LEFT and taking the FIRST one (i.e. the RIGHTMOST occurrence) whose tail matches
+// DISPOSITION_TAIL_RE. D1 states verbatim the disposition is the bullet's **trailing** `→`
+// pointer, so the rightmost matching arrow is definitionally the right answer, and it resolves
+// both failure modes a plain single-direction scan hits:
+//   - a title may itself carry quotes, brackets, parentheses or an arrow (D1), so a
+//     `rewrites`/`reuses` reference whose title prefix contains a `→` must carry that arrow into
+//     `prefix` verbatim. A plain `lastIndexOf` alone would stop at the title's own trailing arrow,
+//     whose tail is plain prose with no disposition keyword, find no match, and refuse the whole
+//     bullet as `missing-disposition` (5 live titles carry `→`, confirmed hard finding). Because
+//     this scan keeps walking leftward past non-matching arrows, it falls through the title's
+//     arrow and finds the real (leftmost, in that case) disposition arrow instead.
+//   - a bullet's PROSE may quote an example disposition (e.g. "... declares → reuses x.test.js ::
+//     title ... → writes y.test.js") before its real trailing pointer. A forward (left-to-right)
+//     first-match scan stops at the quoted example — whose tail also satisfies
+//     DISPOSITION_TAIL_RE, since `prefix` is `[\s\S]*` and swallows everything including the real
+//     trailing pointer — and reports the example instead of the trailing pointer (regression: 6 of
+//     this spec's own AC bullets misparsed this way, confirmed hard finding). Scanning
+//     right-to-left instead finds the real trailing pointer FIRST, before ever considering the
+//     earlier quoted example.
+// `::` is the reference separator (D1's rationale: a title may carry quotes, brackets, parens or
+// an arrow, but essentially never that pair). Returns null, never throws, on: no `→` at all, or no
+// `→` occurrence's tail matching a disposition keyword (documentation-by-example prose, or a
 // pre-existing arrow-bearing bullet from before this grammar shipped) — a spec's 1,472 arrow-free
 // and (pre-this-decision) prose-tail bullets stay untouched (AC-20260911-04-1).
 const DISPOSITION_TAIL_RE = /^(writes|rewrites|reuses)\s+(\S+)(?:\s*::\s*([\s\S]*))?$/
 
 function parseDisposition(bullet) {
   if (typeof bullet !== 'string') return null
-  const arrowIdx = bullet.lastIndexOf('→')
-  if (arrowIdx === -1) return null
-  const tail = bullet.slice(arrowIdx + 1).trim()
-  const m = DISPOSITION_TAIL_RE.exec(tail)
-  if (!m) return null
-  const [, kind, file, prefix] = m
-  return { kind, file, prefix: kind === 'writes' ? null : (prefix === undefined ? null : prefix.trim()) }
+  // Collect every `→` index left-to-right first, then walk the collected list right-to-left —
+  // `lastIndexOf('→', arrowIdx - 1)` looks like the direct way to step backward, but when
+  // arrowIdx is 0 the next call's fromIndex is -1, which String.lastIndexOf clamps back to 0 and
+  // re-finds the SAME index forever (an infinite loop the collected-array approach cannot hit,
+  // since the array shrinks by one real index every iteration).
+  const arrowIndices = []
+  for (let i = bullet.indexOf('→'); i !== -1; i = bullet.indexOf('→', i + 1)) {
+    arrowIndices.push(i)
+  }
+  for (let i = arrowIndices.length - 1; i >= 0; i--) {
+    const tail = bullet.slice(arrowIndices[i] + 1).trim()
+    const m = DISPOSITION_TAIL_RE.exec(tail)
+    if (m) {
+      const [, kind, file, prefix] = m
+      return { kind, file, prefix: kind === 'writes' ? null : (prefix === undefined ? null : prefix.trim()) }
+    }
+  }
+  return null
 }
 
 // AC-ID shape: full anchored match of `AC-\d{8}-\d{2}[a-z]?-\d+`.

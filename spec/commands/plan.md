@@ -94,7 +94,7 @@ Write the spec per the template. `status: draft`. While drafting:
    first — zero findings to lock (`mixed-pin`: split the bullet; `missing-disposition`: end it
    `→ writes <file>` / `→ rewrites <file> :: <title>` / `→ reuses <file> :: <title>`;
    `unresolved-disposition`: lengthen the prefix to name exactly one pre-image test —
-   `node "$(spec-paths count-tests)" --titles [--file <rel>]` is the reference lookup). Then:
+   `node "$(spec-paths count-tests)" --root . --titles [--file <rel>]` is the reference lookup). Then:
    zero open forks; every shape-triggered micro-spike executed with evidence
    in Assumptions; every Goal promise traced to a Decision that delivers it and an AC that
    goes red in its absence — run `node "$(spec-paths promise-sweep)" --spec {spec path}`

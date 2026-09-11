@@ -13,9 +13,9 @@ const { ROOT, tmpdir, runNode } = require('../helpers')
 // specs/20260911/04-every-criterion-declares-its-test.md D10: AC-20260911-04-12 pins the widened
 // regex-context set (operators + - * % < > ~ ^, keywords typeof/case/await/throw/else/in/of) and
 // the span invariant (a call's end never lands at src.length unless that index is the source's
-// own last significant character). AC-20260911-04-17 (reuses AC-20260911-02-11 below, unchanged)
-// and AC-20260911-04-18 (the widening moves this repo's own live count by exactly zero) round it
-// out.
+// own last significant character). AC-20260911-04-17 pins that the four named division controls
+// stay division after that widening, and AC-20260911-04-18 pins that the widening moves this
+// repo's own live count by exactly zero.
 
 const SCRIPT = 'scripts/count-tests.js'
 
@@ -263,38 +263,103 @@ test('AC-20260911-04-12: WHEN scanCalls reads a two-call source whose first call
   }
 })
 
-test('AC-20260911-04-18: WHEN D10\'s regex-context widening (operators + - * % < > ~ ^, keywords typeof/case/await/throw/else/in/of) is applied to THIS repository\'s own live test-file corpus THE SYSTEM SHALL report the identical total case count — no live file exercises the widened shapes, so a corrected regex-context set moves this repo\'s own count by exactly zero', () => {
-  const before = runNode(SCRIPT, ['--root', '.', '--json'], { cwd: ROOT })
-  assert.strictEqual(before.status, 0,
-    'the live repo\'s own count must be measurable before comparing it against the widened reconstruction: ' + before.stdout + ' / ' + before.stderr)
-  const beforeCount = JSON.parse(before.stdout).count
+// D10's own named division controls — each places the division expression as an `if(...)`
+// condition so a scanner that over-widened the regex-context set (rather than excluding `++`/
+// `--` and leaving bare identifiers/brackets/calls/groupings alone) would misread the `/` as
+// opening a regex and swallow the second test( call whole.
+const DIVISION_CONTROL_FRAGMENTS = {
+  'array-index': 'if (arr[0]/2) { x() }',
+  'post-increment': 'if (x++/2) { x() }',
+  'grouping': 'if ((a+b)/2) { x() }',
+  'call': 'if (foo(a)/2) { x() }',
+}
 
-  // A faithful reconstruction of D10's widening, built from the Decision's own literal token
-  // list and patched onto a scratch copy of THIS repo's real lib/scan-test-calls.js, then run
-  // over the exact same corpus — the executed proof, not an assertion taken on faith, that the
-  // widening moves this repo's total by zero (D10's own rationale: "no live file exercises the
-  // widened shapes").
+test('AC-20260911-04-17: WHEN scanCalls reads a two-call source whose first call\'s if(...) condition divides by an array index, a post-increment, a grouping, or a call result (arr[0]/2, x++/2, (a+b)/2, foo(a)/2) THE SYSTEM SHALL CONTINUE TO read each `/` as division, returning 2 calls with the first call\'s end strictly less than the second\'s start and neither equal to src.length', () => {
+  delete require.cache[testScanPath]
+  const { scanCalls } = require(testScanPath)
+  for (const [name, frag] of Object.entries(DIVISION_CONTROL_FRAGMENTS)) {
+    const src = "'use strict'\nconst { test } = require('node:test')\n" +
+      "const arr = [4]\nconst a = 1\nconst b = 1\nfunction foo(n) { return n }\n" +
+      "test('one', () => {\n  let x = 4\n  " + frag + "\n})\n" +
+      "test('two', () => {})\n"
+    const calls = scanCalls(src)
+    assert.strictEqual(calls.length, 2,
+      `AC-20260911-04-17 (${name} shape): scanCalls must find BOTH calls — misreading "${frag}"'s "/" as opening a regex swallows the second test( call entirely into the first's span: ${JSON.stringify(calls)}`)
+    assert.ok(calls[0].end < calls[1].start,
+      `AC-20260911-04-17 (${name} shape): the first call's end must land strictly before the second call's start — a regex misread of the "/" pushes it past that boundary: got ${JSON.stringify(calls)}`)
+    assert.notStrictEqual(calls[0].end, src.length,
+      `AC-20260911-04-17 (${name} shape): the first call's end must never reach src.length when a second call follows it: ${JSON.stringify(calls[0])}`)
+  }
+})
+
+// The two lines D10 added to lib/scan-test-calls.js's isRegexContext, verbatim from the real
+// file at HEAD — stripping them out (rather than patching them IN on top of an already-widened
+// copy, which proves nothing because the union was already true via these same two lines) is
+// what makes the resulting image genuinely PRE-D10.
+const D10_OPERATOR_LINE =
+  "  if ('+-*%<>~^'.includes(last) && word.slice(-2) !== '++' && word.slice(-2) !== '--') return true\n"
+const D10_KEYWORD_LINE =
+  '  if (/(^|[^A-Za-z0-9_$])(typeof|case|await|throw|else|in|of)$/.test(word)) return true\n'
+
+// Builds a requireable copy of lib/scan-test-calls.js at `srcText` (rewritten to the given
+// `outPath`), with its relative sibling requires re-pointed at the real host-config/glob-match
+// libs so only the regex-context logic under test differs from HEAD.
+function writeScanLibVariant(outPath, srcText) {
   const libDir = path.dirname(testScanPath)
-  const libSrc = fs.readFileSync(testScanPath, 'utf8')
-  const widenedSrc = libSrc
-    .replace("'(,=:[!&|?{};'.includes(last)", "'(,=:[!&|?{};+-*%<>~^'.includes(last)")
-    .replace(
-      "return /(^|[^A-Za-z0-9_$])return$/.test(word)",
-      "return /(^|[^A-Za-z0-9_$])(return|typeof|case|await|throw|else|in|of)$/.test(word)")
-    // Keep the scratch copy's own relative requires resolving to the real sibling libs (host-config,
-    // glob-match) — only the regex-context logic above is under test here.
+  const patched = srcText
     .replace("require('./host-config')", `require(${JSON.stringify(path.join(libDir, 'host-config.js'))})`)
     .replace("require('./glob-match')", `require(${JSON.stringify(path.join(libDir, 'glob-match.js'))})`)
-  assert.notStrictEqual(widenedSrc, libSrc,
-    'setup precondition: the textual patch must actually change lib/scan-test-calls.js\'s source, or this comparison proves nothing about D10\'s widening')
-  const widenedPath = path.join(tmpdir('count-ac18-widened'), 'scan-test-calls.js')
-  fs.writeFileSync(widenedPath, widenedSrc)
-  delete require.cache[widenedPath]
-  const widened = require(widenedPath)
+  fs.writeFileSync(outPath, patched)
+  delete require.cache[outPath]
+  return require(outPath)
+}
+
+test('AC-20260911-04-18: WHEN D10\'s regex-context widening (operators + - * % < > ~ ^, keywords typeof/case/await/throw/else/in/of) is applied to THIS repository\'s own live test-file corpus THE SYSTEM SHALL report the identical total case count — no live file exercises the widened shapes, so a corrected regex-context set moves this repo\'s own count by exactly zero', () => {
+  const libSrc = fs.readFileSync(testScanPath, 'utf8')
+  assert.ok(libSrc.includes(D10_OPERATOR_LINE) && libSrc.includes(D10_KEYWORD_LINE),
+    'setup precondition: lib/scan-test-calls.js at HEAD must still carry D10\'s own two widening ' +
+    'lines verbatim, or this reconstruction is stale and proves nothing: ' + testScanPath)
+
+  // The PRE-D10 image: HEAD's real source with D10's two widening lines REMOVED — never a copy
+  // that adds the widening on top of an already-widened file (that comparison is vacuous: HEAD
+  // already contains these exact two lines, so "patching them in" changes nothing and the
+  // "before"/"after" counts trivially match by construction, proving nothing about D10 itself).
+  const preSrc = libSrc.replace(D10_OPERATOR_LINE, '').replace(D10_KEYWORD_LINE, '')
+  assert.notStrictEqual(preSrc, libSrc,
+    'setup precondition: removing D10\'s two lines must actually change the source, or the pre-D10 ' +
+    'reconstruction is identical to HEAD and this comparison proves nothing')
+
+  const preDir = tmpdir('count-ac18-pre')
+  const pre = writeScanLibVariant(path.join(preDir, 'scan-test-calls.js'), preSrc)
+  const headDir = tmpdir('count-ac18-head')
+  const head = writeScanLibVariant(path.join(headDir, 'scan-test-calls.js'), libSrc)
   const { readConfig } = require(path.join(ROOT, 'spec/scripts/lib/host-config.js'))
   const config = readConfig(ROOT)
-  const afterCount = widened.countCases(ROOT, config).count
 
+  // Discriminating proof first: the two images must genuinely differ on a control corpus that
+  // DOES exercise a widened shape — otherwise a scanner that (by some other bug) behaves
+  // identically to HEAD regardless of the removed lines would pass the live-corpus comparison
+  // below for the wrong reason.
+  const controlSrc = "'use strict'\nconst { test } = require('node:test')\n" +
+    "test('one', () => {\n  typeof /a'b/\n})\n" +
+    "test('two', () => {})\n"
+  const preControlCount = pre.scanCalls(controlSrc).length
+  const headControlCount = head.scanCalls(controlSrc).length
+  assert.notStrictEqual(preControlCount, headControlCount,
+    'setup precondition: the pre-D10 and HEAD images must disagree on a control source that ' +
+    'exercises a widened shape (typeof immediately before a regex literal) — got pre=' +
+    preControlCount + ' head=' + headControlCount + ', which means the two images are not ' +
+    'actually different and this test can pass vacuously')
+  assert.strictEqual(headControlCount, 2,
+    'HEAD must read the control source\'s typeof-guarded regex correctly (2 calls) — got ' + headControlCount)
+  assert.strictEqual(preControlCount, 1,
+    'the pre-D10 image must collapse the control source to 1 call (the second test( call ' +
+    'swallowed by the misread regex) — got ' + preControlCount + ', meaning it is not genuinely pre-D10')
+
+  const beforeCount = pre.countCases(ROOT, config).count
+  const afterCount = head.countCases(ROOT, config).count
   assert.strictEqual(afterCount, beforeCount,
-    'D18: widening the regex-context set per D10\'s own literal token list must move this repo\'s live count by exactly zero — a moved count means the set was blanket-widened rather than corrected: before=' + beforeCount + ' after=' + afterCount)
+    'D18: counting this repo\'s own live corpus with the pre-D10 image and with the real HEAD ' +
+    'image must yield the identical total — a moved count means the widening was NOT the ' +
+    'no-op D10\'s rationale claims: pre=' + beforeCount + ' head=' + afterCount)
 })

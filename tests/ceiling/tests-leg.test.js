@@ -10,6 +10,9 @@ const { makeReviewLegsHost } = require('../review/review-legs.fixtures')
 // `tests` leg (AC-5) and verdict.js's advisory-only derivation over it (AC-6). The leg is
 // required in both scopes but forbidden from every blocking spelling — required-but-never-red
 // is the property under test, not a comparison against any limit.
+//
+// specs/20260911/04-every-criterion-declares-its-test.md AC-20260911-04-16 reuses the
+// BLOCKING-array case below (its name and header now cite both AC-IDs) — unchanged assertions.
 
 const GREEN_TEST = `'use strict'
 const { test } = require('node:test')
@@ -173,7 +176,7 @@ test('AC-20260911-02-5 (fix-delta scope): WHEN review-legs.js runs --fix-delta o
   assert.strictEqual(row.observed.count, 1, 'observed.count must reflect the one planted case: ' + JSON.stringify(row))
 })
 
-test('AC-20260911-02-5: review-legs.js\'s own BLOCKING array literal SHALL NOT contain "tests" — the leg can never redden a review', () => {
+test('AC-20260911-04-16 (reuses AC-20260911-02-5): review-legs.js\'s own BLOCKING array literal SHALL NOT contain "tests" — the leg can never redden a review', () => {
   const src = read('spec/scripts/review-legs.js')
   const m = src.match(/const BLOCKING = \[([^\]]*)\]/)
   assert.ok(m, 'review-legs.js\'s BLOCKING const array literal was not found — this pin\'s source shape changed: ' + src.slice(0, 0))

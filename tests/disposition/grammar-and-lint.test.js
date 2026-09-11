@@ -45,6 +45,40 @@ test('AC-20260911-04-1: parseDisposition reads the arrow-tail disposition gramma
     'D2: parseDisposition must never throw, even on an empty bullet with no arrow tail at all')
   assert.strictEqual(parseDisposition('no arrow tail here at all'), null,
     'a bullet with no arrow tail at all must parse null, matching the 440-arrow-bearing / 1,472-arrow-free split D2 requires stay untouched')
+
+  // D1: a title carrying an arrow needs no escaping. scanning the arrows RIGHT-TO-LEFT and
+  // stopping at the FIRST (rightmost) one whose tail matches the disposition grammar skips past
+  // the title's own trailing arrow (whose tail is plain prose, no keyword) and lands on the real
+  // disposition arrow instead of refusing the whole bullet as null (missing-disposition at lock).
+  const arrowInPrefixBullet =
+    '→ reuses tests/a.test.js :: AC-1: maps a → b on read'
+  assert.deepStrictEqual(parseDisposition(arrowInPrefixBullet), {
+    kind: 'reuses', file: 'tests/a.test.js', prefix: 'AC-1: maps a → b on read',
+  }, 'D1: a reuses bullet whose title prefix itself contains a `→` must still parse — scanning ' +
+    'right-to-left and skipping the title\'s own non-matching trailing arrow finds the real ' +
+    'disposition arrow, and the title\'s own arrow must carry into prefix verbatim: ' +
+    JSON.stringify(parseDisposition(arrowInPrefixBullet)))
+
+  const arrowThenProseBullet = '→ maps a → b on read'
+  assert.strictEqual(parseDisposition(arrowThenProseBullet), null,
+    'a bullet whose tail after EVERY `→` occurrence matches no disposition keyword must still ' +
+    'parse null — an arrow inside prose is never mistaken for a disposition pointer: ' +
+    JSON.stringify(parseDisposition(arrowThenProseBullet)))
+
+  // Regression (specs/20260911/04 fix round 2): a bullet's PROSE may quote an example disposition
+  // BEFORE its real trailing pointer. D1 states verbatim the disposition is the bullet's
+  // **trailing** `→` pointer — a left-to-right first-match scan instead stops at the quoted
+  // example (whose tail also satisfies the grammar, since `prefix` is greedy and swallows
+  // everything after `::`, including the real trailing pointer) and reports the wrong disposition
+  // entirely, silently dropping the real one.
+  const proseQuotesExampleBullet =
+    '→ the AC bullet declares → reuses tests/a.test.js :: no such title against a tree ' +
+    'that has no such reference → writes tests/b.test.js'
+  assert.deepStrictEqual(parseDisposition(proseQuotesExampleBullet), {
+    kind: 'writes', file: 'tests/b.test.js', prefix: null,
+  }, 'D1: a bullet whose prose quotes an example disposition before its real trailing pointer ' +
+    'must parse as the TRAILING pointer, never the quoted example — scanning right-to-left finds ' +
+    'the real trailing arrow first: ' + JSON.stringify(parseDisposition(proseQuotesExampleBullet)))
 })
 
 function writeDatedSpec(prefix, relSpecPath, content) {

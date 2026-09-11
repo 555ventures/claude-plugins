@@ -1,6 +1,6 @@
 ---
 date: 2026-09-11
-status: hardened
+status: done
 tier: critical
 area: scripts
 design: false
@@ -9,82 +9,98 @@ depends_on: []
 depended_on_by: [specs/20260911/03-tests-expire-at-close.md]
 brief: n/a
 open_markers: 0
+build_base: main
+diff_base: 1e2836182d08684ddeb4cc836c3d8ad13a51a38e
 ---
 
-# Tests have a ceiling
+# The test count is instrumented
 
 ## Goal
 
-The number of test cases in a repo becomes a human-owned number. `.claude/test-ceiling.json`
-holds it; a review leg and the build's final gate go red when the count of `test(`/`it(`
-cases exceeds it; a hook refuses the model's edits to that file. There is no cite, no
-reconcile and no override — the only way back under the line is deleting tests. Done means:
-this repo's own ceiling file has moved under `.claude/`, both gates read it, and the hook
-blocks an Edit/Write/Bash change of it while letting every other write through.
+A repo's test-case count becomes a derived, recorded number instead of an unmeasured one. One
+scanner (`lib/scan-test-calls.js`) is the single definition of "a test case"; one CLI reports the
+count; the review writes it to the evidence manifest as an advisory row, so growth per closed
+spec is readable from the ledger. There is no limit, no gate and no hook — the count is
+measurement, never a verdict. Done means: the scanner and its CLI exist, the review leg records
+the count and can never redden a verdict, and `spec/test-ceiling.json` is gone.
+
+## Amendment (2026-09-11, user ruling — supersedes this spec's original lock)
+
+This spec locked as "Tests have a ceiling": a human-owned `maxTests` number, a blocking review
+leg, a final-gate arm and a PreToolUse hook guarding the number. Measurement of this repo's own
+history (37 closed specs: +360 test cases added, 35 removed, 0 of 321 promise ACs satisfied by
+rewriting an existing test, 76 of 85 `SHALL CONTINUE TO` pins landing as brand-new cases) showed
+the growth is a pipeline artifact — the AC-ID is the test's identity, so a promise can only be
+appended, never revised. A count limit caps that symptom and, because its only sanctioned remedy
+is deleting tests inside the build's automatic REPAIR loop, hands test deletion to the model
+under pressure to go green. The limit, the gate arm and the hook are therefore dropped
+(D1′, D3′, D4′, D5†, D6†, D7†, D9′); the scanner and the count survive as the instrument that
+makes the growth falsifiable. The cause is fixed by a successor spec (the AC disposition
+grammar), which is queued ahead of specs/20260911/03.
+
+Second amendment, forced by executed evidence at the build's final gate: both new files were
+first named `test-count.js` and `lib/test-scan.js`. `node --test`'s default discovery matches
+`**/test-*.js` anywhere under the root, so the post-gate ran the CLI as if it were a test file
+and reported `✖ spec/scripts/test-count.js  'test failed'` — the script's own argv handling
+exiting non-zero under the runner. The scanner carried the same latent trap silently (discovered,
+zero tests, passing). Both are therefore named away from the `test-*` prefix — `count-tests.js`
+and `lib/scan-test-calls.js` — matching the verb-noun convention `lib/` already uses
+(`count-observation.js`, `base-derivation.js`). No executable this repo ships may be named
+`test-*`; spec 03 imports the scanner under its new name.
 
 ## Decisions (locked — workers apply verbatim, never override)
 
 | ID | Decision | One-line rationale |
 |----|----------|--------------------|
-| D1 | The ceiling lives at `.claude/test-ceiling.json` in every host, shape `{"maxTests": N}`; `spec/test-ceiling.json` is deleted and this repo's file moves as-is (900). An absent file means no ceiling (AC-20260911-02-3). | Hosts have no `spec/` directory — everything host-owned lives under `.claude/`; a plugin-dir path can never bind prax or salon-os. |
-| D2 | One derivation of "a test case": `spec/scripts/lib/test-scan.js` classifies test files by the host's `testGlobs` (or `DEFAULT_TEST_GLOBS`) over a walk that skips `.git`, `node_modules`, `fixtures`, `__fixtures__`, `.claude/worktrees`; a case is a `test(` or `it(` call whose only preceding characters on its line are whitespace; the scanner skips string, template, comment and regex-literal bodies and finds the call's closing paren by depth (AC-20260911-02-1, AC-20260911-02-4). | The same corpus `ac-drift.js` classifies; `describe(` and `t.test(` are never counted; a scanner that mis-reads a regex literal containing a quote corrupted a file in the 2026-09-11 sweep. |
-| D3 | `spec/scripts/test-ceiling.js --root <r> [--json]` prints `ceiling: <count>/<max> cases` and exits 0 under the line; exits 1 over it naming the overage and the remedy (delete tests — the ceiling is edited only by a human); prints `inapplicable — no .claude/test-ceiling.json` exit 0 when the file is absent; exits 2 on usage error or an unreadable/invalid ceiling file (AC-20260911-02-2, AC-20260911-02-3). | The number and the count are the whole contract; an invalid file is a loud stop, never a silent pass. |
-| D4 | `review-legs.js` gains a `ceiling` leg in wave 2 writing `{leg:"ceiling", exit, observed:{count,max}}` (or `observed:{unavailable:"no-ceiling-file"}`, exit 0) and adds `ceiling` to its `BLOCKING` array; `verdict.js` adds `ceiling` to `REVIEW_LEGS` (required in both scopes) and `REVIEW_BLOCKING`; `spec-review-driver.js` adds it to `BLOCKING_LEGS`; the template's oracle closed set gains `ceiling` (AC-20260911-02-5, AC-20260911-02-6). | Executed (A7): today's verdict reads an unknown red row as `HARD_FINDINGS` — dispositionable, waivable — so only built-in membership in all three spellings makes an over-ceiling tree structurally un-CLEAN (specs/20260903/02 D3 precedent); `--require` merely widens the required set. |
-| D10 | Every existing fixture manifest and required-leg list that must keep deriving its word gains a green `ceiling` row (`{leg:"ceiling", exit:0, observed:{count:1, max:900}}`) in place — `verdict.test.js`'s `SIX_GREEN` and siblings, `verdict-gatered-no-workflow.test.js`, `provenance.test.js`, `escalate-row.test.js`, `promise-sweep.test.js`, `review-legs.test.js`'s required-leg list, `legs-verdict-pair.test.js`, `review-driver.test.js`, `ac-matrix.test.js` — never weakened, retagged with AC-20260911-02-12. | Executed (A7): the pre-image `verdict.js` derives `CLEAN` over a manifest with an extra green `ceiling` row, so every pin is green pre-image as a `SHALL CONTINUE TO` pin must be; the exhaustive-pin Gotcha says update in place, never loosen. |
-| D5 | The build driver's `runGate()` chains `&& node <plugin>/scripts/test-ceiling.js --root <repoRoot>` after the resolved gate (and post-gate) inside the same `bash -c`, so an over-ceiling tree is a red final gate and enters REPAIR like any red gate (AC-20260911-02-7). | The documented home of the ceiling is the final gate; one bash child keeps `marks.gateRuns` at one run per round. |
-| D6 | `spec/scripts/block-ceiling-writes.sh` (PreToolUse, stdin JSON, exit 2 = block, fail-open on parse/git error): a Write/Edit/NotebookEdit whose target's last two path segments are `.claude/test-ceiling.json` is blocked when that file already exists; a Bash command whose text contains `test-ceiling.json` is blocked; everything else exits 0. The block message names the remedy: a human edits the file in an editor; the model's only route under the line is deleting tests (AC-20260911-02-8). | Creation of a missing file stays open so a host can bootstrap its first ceiling; the Bash arm closes the `sed -i`/`rm` tunnel the Edit arm alone leaves open. |
-| D7 | `spec/hooks/hooks.json` wires the hook as a second entry in the existing `Write\|Edit\|NotebookEdit` group and as a new `Bash` matcher group; the exhaustive pins (`entrypoints.test.js` five-paths pin, `red-fixture-coverage.test.js` `HOOK_HANDLERS` and `LEG_HANDLERS`) are updated in the same build (AC-20260911-02-9). | A new hook arm owes a red fixture proving it engages; the exhaustive pins fail closed by design. |
-| D8 | `spec/bin/spec-paths` gains the key `test-ceiling`; `spec/entrypoints.json` gains rows for `test-ceiling.js` (entry points: `review-legs.js`, `spec-build-driver.js`), `block-ceiling-writes.sh` (`hooks.json`) and `lib/test-scan.js` (`test-ceiling.js`); the plugin version bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` (AC-20260911-02-10 `[oracle: gate]`). | Every executable owes a manifest row and a resolvable key; the bump check in the gate is the version oracle. |
-| D9 | Live-repo pin: `.claude/test-ceiling.json` exists here, `spec/test-ceiling.json` does not, and `test-ceiling.js --root .` exits 0 at HEAD (AC-20260911-02-11). | The plugin dogfoods its own ceiling from the first commit; a missing file here would make the leg vacuous. |
+| D1′ | No ceiling file exists in any host. `spec/test-ceiling.json` is deleted because nothing reads it; no `.claude/test-ceiling.json` is created. No `maxTests` number is stored, read or written anywhere (AC-20260911-02-11). | A number nothing enforces is a lie on disk; the count is derived on demand from the tree. |
+| D2 | One derivation of "a test case": `spec/scripts/lib/scan-test-calls.js` classifies test files by the host's `testGlobs` (or `DEFAULT_TEST_GLOBS`) over a walk that skips `.git`, `node_modules`, `fixtures`, `__fixtures__`, `.claude/worktrees`; a case is a `test(` or `it(` call whose only preceding characters on its line are whitespace; the scanner skips string, template, comment and regex-literal bodies and finds the call's closing paren by depth (AC-20260911-02-1, AC-20260911-02-4). | The same corpus `ac-drift.js` classifies; `describe(` and `t.test(` are never counted; a scanner that mis-reads a regex literal containing a quote corrupted a file in the 2026-09-11 sweep. Spec 03's expiry and the successor's title lookup both import it, so it is the one scanner. |
+| D3′ | `spec/scripts/count-tests.js --root <r> [--json]` prints `tests: <count> cases` and exits 0; `--json` prints `{"count":N}`. It has no red arm and no comparison: the only non-zero exit is 2, for a usage error or an unreadable root (AC-20260911-02-2). The script is named `count-tests.js`, never `test-ceiling.js` — there is no ceiling to name. | A reporter that can fail a build is a gate wearing a reporter's name; the absence of a red arm is the robustness property, enforced by AC-20260911-02-2. |
+| D4′ | `review-legs.js` gains a `tests` leg in wave 2 writing `{leg:"tests", exit:0, observed:{count:N}}` — always exit 0, in every scope. It is NOT added to `review-legs.js`'s `BLOCKING`, NOT to `verdict.js`'s `REVIEW_BLOCKING`, and NOT to `spec-review-driver.js`'s `BLOCKING_LEGS`; it IS added to `verdict.js`'s `REVIEW_LEGS` so the row is required in both scopes and a missing row is `UNVERIFIED` (AC-20260911-02-5, AC-20260911-02-6). The leg shells out to `count-tests.js --json`; it never re-derives the count. | Required-but-never-red is what makes the number appear on every ledger row without ever changing a verdict; one invocation keeps the derivation single (D8's manifest row is the executed proof). |
+| D8′ | `spec/bin/spec-paths` gains the key `count-tests`; `spec/entrypoints.json` gains one row for `count-tests.js` (entry point: `review-legs.js`). `lib/scan-test-calls.js` gets NO manifest row — `tests/consistency/entrypoints.test.js`'s inventory excludes `spec/scripts/lib/` by design. The plugin version bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` (AC-20260911-02-10 `[oracle: gate]`). | Every executable owes a manifest row and a resolvable key; a library file is not an executable, and the pre-existing exclusion invariant outranks a spec's convenience. |
+| D9′ | Live-repo pin: `count-tests.js --root .` exits 0 at HEAD reporting a positive integer count, and `spec/test-ceiling.json` does not exist (AC-20260911-02-11). | The instrument must be executed against the real tree, not only fixtures; with no limit there is nothing for the live count to violate. |
+| D10′ | Every existing fixture manifest and required-leg list that must keep deriving its word gains a green `tests` row (`{leg:"tests", exit:0, observed:{count:1}}`) in place — `verdict.test.js`'s `SIX_GREEN` and siblings, `verdict-gatered-no-workflow.test.js`, `provenance.test.js`, `escalate-row.test.js`, `review-legs.test.js`'s required-leg list, `review-driver.test.js` — never weakened, retagged with AC-20260911-02-12. | Executed (A7): the pre-image `verdict.js` derives `CLEAN` over a manifest with an extra green row, so every pin is green pre-image as a `SHALL CONTINUE TO` pin must be; the exhaustive-pin Gotcha says update in place, never loosen. |
+
+**Retired at amendment, deliberately not built (D5†, D6†, D7†):** the build driver's `runGate()`
+ceiling arm, `block-ceiling-writes.sh` and its two `hooks.json` matcher groups. Each existed only
+to defend a number that no longer exists. `spec/hooks/hooks.json` and
+`spec/scripts/spec-build-driver.js` are therefore untouched by this spec.
 
 ## File Plan
 
 | Path | Action | Layer | Summary |
 |------|--------|-------|---------|
-| spec/scripts/lib/test-scan.js | CREATE | scripts | `listTestFiles(root, config)`, `scanCalls(src)` → `[{start, end, callText, title, commentAbove}]`, `countCases(root, config)`; the one test-call scanner (D2) |
-| spec/scripts/test-ceiling.js | CREATE | scripts | CLI over `lib/test-scan.js` + `.claude/test-ceiling.json`; exit codes 0/1/2 per D3; `--json` prints `{count, max, over}` or `{inapplicable: "no-ceiling-file"}` |
-| spec/scripts/block-ceiling-writes.sh | CREATE | scripts | PreToolUse guard per D6; header cites this spec; `set -uo pipefail`, jq |
-| spec/hooks/hooks.json | MODIFY | doctrine | Second hook in the `Write\|Edit\|NotebookEdit` group + new `Bash` matcher group, both `block-ceiling-writes.sh` (D7) |
-| spec/scripts/review-legs.js | MODIFY | scripts | `ceiling` leg in wave 2, row shape per D4; closed-set comment block gains the row |
-| spec/scripts/verdict.js | MODIFY | scripts | `ceiling` in `REVIEW_LEGS` and `REVIEW_BLOCKING` (D4); header comment names the leg |
-| spec/scripts/spec-review-driver.js | MODIFY | scripts | `ceiling` in `BLOCKING_LEGS` (D4) |
-| spec/scripts/spec-build-driver.js | MODIFY | scripts | `runGate()` chains the ceiling command after the post-gate (D5) |
-| spec/bin/spec-paths | MODIFY | scripts | Key `test-ceiling` → `scripts/test-ceiling.js`; usage line updated (D8) |
-| spec/entrypoints.json | MODIFY | other | Rows for the three new files (D8) |
-| spec/templates/spec.md | MODIFY | doctrine | Oracle closed set in the `## Acceptance Criteria` comment lists `ceiling` (D4) |
-| .claude/test-ceiling.json | CREATE | other | `{"maxTests": 900}` (D1, D9) |
-| spec/test-ceiling.json | DELETE | other | Moved to `.claude/` (D1) |
-| spec/.claude-plugin/plugin.json | MODIFY | doctrine | `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` (D8) |
-| tests/consistency/red-fixture-coverage.test.js | MODIFY | tests | `HOOK_HANDLERS` gains `block-ceiling-writes.sh`, `LEG_HANDLERS` gains `ceiling` (D7); AC-20260911-02-9 |
-| tests/consistency/entrypoints.test.js | MODIFY | tests | The exactly-five hooks.json paths pin becomes six (D7); AC-20260911-02-9 |
-| tests/ceiling/test-ceiling.test.js | CREATE | tests | AC-20260911-02-1, AC-20260911-02-2, AC-20260911-02-3, AC-20260911-02-4, AC-20260911-02-8, AC-20260911-02-11 |
-| tests/ceiling/ceiling-gates.test.js | CREATE | tests | AC-20260911-02-5, AC-20260911-02-6, AC-20260911-02-7 |
-| tests/review/verdict.test.js | MODIFY | tests | AC-20260911-02-12 — `SIX_GREEN` and sibling manifests gain the green `ceiling` row; existing words unchanged (D10) |
-| tests/verdict-gatered-no-workflow.test.js | MODIFY | tests | AC-20260911-02-12 — fixture manifests gain the green `ceiling` row (D10) |
-| tests/provenance/provenance.test.js | MODIFY | tests | AC-20260911-02-12 — fixture manifest gains the green `ceiling` row (D10) |
-| tests/review/escalate-row.test.js | MODIFY | tests | AC-20260911-02-12 — fixture manifests gain the green `ceiling` row (D10) |
-| tests/review/promise-sweep.test.js | MODIFY | tests | AC-20260911-02-12 — fixture manifests gain the green `ceiling` row (D10) |
-| tests/review/review-legs.test.js | MODIFY | tests | AC-20260911-02-12 — required-leg list gains `ceiling` (D10) |
-| tests/review/legs-verdict-pair.test.js | MODIFY | tests | AC-20260911-02-12 — the pair fixture expects the `ceiling` row (D10) |
-| tests/review/review-driver.test.js | MODIFY | tests | AC-20260911-02-12 — fixture manifest gains the green `ceiling` row (D10) |
-| tests/ac-matrix/ac-matrix.test.js | MODIFY | tests | AC-20260911-02-12 — the oracle-leg fixture manifest gains the green `ceiling` row (D10) |
+| spec/scripts/lib/scan-test-calls.js | CREATE | scripts | `listTestFiles(root, config)`, `scanCalls(src)` → `[{start, end, callText, title, commentAbove}]`, `countCases(root, config)`; the one test-call scanner (D2) |
+| spec/scripts/count-tests.js | CREATE | scripts | CLI over `lib/scan-test-calls.js`; prints `tests: <count> cases`, `--json` prints `{"count":N}`; exits 0 always except 2 on usage error (D3′) |
+| spec/scripts/review-legs.js | MODIFY | scripts | `tests` leg in wave 2 shelling out to `count-tests.js --json`, row shape per D4′; NOT added to `BLOCKING`; closed-set comment block gains the row |
+| spec/scripts/verdict.js | MODIFY | scripts | `tests` in `REVIEW_LEGS` only — never `REVIEW_BLOCKING` (D4′); header comment names the leg as advisory |
+| spec/bin/spec-paths | MODIFY | scripts | Key `count-tests` → `scripts/count-tests.js`; usage line updated (D8′) |
+| spec/entrypoints.json | MODIFY | other | One row for `spec/scripts/count-tests.js` (D8′) |
+| spec/templates/spec.md | MODIFY | doctrine | Oracle closed set in the `## Acceptance Criteria` comment lists `tests` (D4′) |
+| spec/test-ceiling.json | DELETE | other | Nothing reads it (D1′) |
+| spec/.claude-plugin/plugin.json | MODIFY | doctrine | `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` (D8′) |
+| tests/ceiling/count-tests.test.js | CREATE | tests | AC-20260911-02-1, AC-20260911-02-2, AC-20260911-02-4, AC-20260911-02-11 |
+| tests/ceiling/tests-leg.test.js | CREATE | tests | AC-20260911-02-5, AC-20260911-02-6 |
+| tests/review/verdict.test.js | MODIFY | tests | AC-20260911-02-12 — `SIX_GREEN` and sibling manifests gain the green `tests` row; existing words unchanged (D10′) |
+| tests/verdict-gatered-no-workflow.test.js | MODIFY | tests | AC-20260911-02-12 — fixture manifests gain the green `tests` row (D10′) |
+| tests/provenance/provenance.test.js | MODIFY | tests | AC-20260911-02-12 — fixture manifest gains the green `tests` row (D10′) |
+| tests/review/escalate-row.test.js | MODIFY | tests | AC-20260911-02-12 — fixture manifests gain the green `tests` row (D10′) |
+| tests/review/review-legs.test.js | MODIFY | tests | AC-20260911-02-12 — required-leg list gains `tests` (D10′) |
+| tests/review/review-driver.test.js | MODIFY | tests | AC-20260911-02-12 — required-leg list gains `tests` (D10′) |
+| tests/consistency/red-fixture-coverage.test.js | MODIFY | tests | `LEG_HANDLERS` gains `tests` (D4′); AC-20260911-02-5 |
 
-Orchestrator duty outside the table: `docs/canonical/scripts.md`'s ceiling paragraph is replaced by the Canonical Delta at review close, not in the build.
+Orchestrator duty outside the table: `docs/canonical/scripts.md`'s ceiling paragraph is replaced
+by the Canonical Delta at review close, not in the build.
 
 ## Contracts
 
 ```text
-.claude/test-ceiling.json          { "maxTests": <positive integer> }        human-owned
+node spec/scripts/count-tests.js --root <r> [--json]
+  stdout (human)  tests: <count> cases                              exit 0
+  stdout (--json) {"count":N}                                       exit 0
+  exit 2          usage error, or <r> is not a readable directory
+  There is no other non-zero exit: this script never reports a failure of the tree.
 
-node spec/scripts/test-ceiling.js --root <r> [--json]
-  stdout (human)  ceiling: <count>/<max> cases                       exit 0
-                  ceiling: <count>/<max> cases — OVER by <n>; delete tests (the ceiling is
-                  edited only by a human, never raised by the model)  exit 1
-                  inapplicable — no .claude/test-ceiling.json          exit 0
-  stdout (--json) {"count":N,"max":M,"over":N-M|0}  |  {"inapplicable":"no-ceiling-file"}
-  exit 2          usage error, or .claude/test-ceiling.json unreadable / not {"maxTests":int>0}
-
-lib/test-scan.js
+lib/scan-test-calls.js
   listTestFiles(root, config) -> string[]   absolute paths, testGlobs-classified, skip dirs per D2
   scanCalls(src) -> [{ start, end, callText, title, commentAbove }]
       start   index of the contiguous comment block directly above the call (or the call's
@@ -94,10 +110,7 @@ lib/test-scan.js
   countCases(root, config) -> { count, files }
 
 review-legs.js manifest row
-  {"leg":"ceiling","exit":0|1,"observed":{"count":N,"max":M},"scope":"full"|"fix-delta"}
-  {"leg":"ceiling","exit":0,"observed":{"unavailable":"no-ceiling-file"},"scope":...}
-
-block-ceiling-writes.sh    stdin = PreToolUse JSON; exit 0 allow, exit 2 block (stderr names remedy)
+  {"leg":"tests","exit":0,"observed":{"count":N},"scope":"full"|"fix-delta"}
 ```
 
 ## Behavior
@@ -106,148 +119,177 @@ block-ceiling-writes.sh    stdin = PreToolUse JSON; exit 0 allow, exit 2 block (
   inside a string, a comment or a regex literal does not; `t.test(` does not (the call is not at
   line start). Given three files holding 2 + 2 + 1 such calls, plus one `"test("` inside a string
   and one `// test(` comment, the count is 5.
-- Over the line: count 5, `maxTests` 4 → exit 1, the message says `OVER by 1`, no file is
-  written. Under or equal: exit 0.
-- Review: the `ceiling` leg row is required at every tier; a missing row is `UNVERIFIED`, a red
-  row blocks (`GATE_RED`-class verdict, never `CLEAN`). Fix-delta scope runs it too (cheap, and
-  a fix round can add tests).
-- Build: the final gate's log ends with the `ceiling:` line when the scoped gate and post-gate
-  were green; an over-ceiling tree reds the gate and the driver enters REPAIR with the ceiling
-  line visible in `gate-<k>.log`.
-- Hook: `{"tool_name":"Edit","tool_input":{"file_path":"/r/.claude/test-ceiling.json"}}` with the
-  file present → exit 2; the same with the file absent → exit 0; `{"tool_name":"Bash",
-  "tool_input":{"command":"sed -i s/900/9000/ .claude/test-ceiling.json"}}` → exit 2;
-  `{"tool_name":"Bash","tool_input":{"command":"echo hi"}}` → exit 0; an Edit of any other path
-  → exit 0; malformed stdin → exit 0.
+- Reporting only: whatever the count is, `count-tests.js` exits 0. A tree with one case and a tree
+  with a million cases are both exit 0; the number is the output, never the verdict.
+- Review: the `tests` leg row is required at every tier and in both scopes; a missing row is
+  `UNVERIFIED`, and a present row never changes the verdict word — a manifest that derived
+  `CLEAN`, `GATE_RED`, `HARD_FINDINGS` or `ESCALATED` derives the same word with the row added.
+- Build: untouched. The final gate has no ceiling arm; an over-count tree does not exist as a
+  concept.
 
 ## Acceptance Criteria
 
-- **AC-20260911-02-1**: WHEN `test-ceiling.js --root <fixture> --json` runs over a fixture host
+- **AC-20260911-02-1**: WHEN `count-tests.js --root <fixture> --json` runs over a fixture host
   whose test files hold five line-start `test(`/`it(` calls plus one `"test("` string, one
-  `// test(` comment, one `describe(` and one `t.test(` THE SYSTEM SHALL print `{"count":5,...}`
-  (e.g. `maxTests` 10 → `{"count":5,"max":10,"over":0}`, exit 0) → test in
-  tests/ceiling/test-ceiling.test.js
-- **AC-20260911-02-2**: WHEN the count exceeds `maxTests` THE SYSTEM SHALL exit 1, print
-  `OVER by <n>` and the delete-tests remedy, and leave every file byte-identical (e.g. count 5,
-  `{"maxTests": 4}` → exit 1, `OVER by 1`) → test in tests/ceiling/test-ceiling.test.js
-- **AC-20260911-02-3**: WHEN `.claude/test-ceiling.json` is absent THE SYSTEM SHALL print
-  `inapplicable — no .claude/test-ceiling.json` and exit 0; WHEN it is present but not
-  `{"maxTests": <int>0>}` (e.g. `{"maxTests": "lots"}`) THE SYSTEM SHALL exit 2 naming the file →
-  test in tests/ceiling/test-ceiling.test.js
+  `// test(` comment, one `describe(` and one `t.test(` THE SYSTEM SHALL print `{"count":5}` and
+  exit 0 → test in tests/ceiling/count-tests.test.js
+- **AC-20260911-02-2**: WHEN `count-tests.js` runs over a fixture host holding any number of test
+  cases THE SYSTEM SHALL exit 0 (e.g. a one-case host and a 500-case host both exit 0), and THE
+  SYSTEM SHALL exit 2 only for a usage error or an unreadable `--root` (e.g. `--root /nonexistent`
+  → exit 2 naming the remedy) → test in tests/ceiling/count-tests.test.js
+  - Superseded at amendment: the original AC-20260911-02-2 required exit 1 and an `OVER by <n>`
+    message when the count exceeded `maxTests`. There is no `maxTests` (D1′), and the absence of a
+    red arm is now the property under test (D3′).
 - **AC-20260911-02-4**: WHEN a test file contains a regex literal holding a quote and a paren
   (e.g. `assert.match(x, /atlas\)" stop open/)`) followed by another `test(` call THE SYSTEM
   SHALL count both calls and `scanCalls` SHALL return each call's `end` at its own closing paren
-  (the second call's `title` is read correctly) → test in tests/ceiling/test-ceiling.test.js
-- **AC-20260911-02-5**: WHEN `review-legs.js` runs over a fixture host THE SYSTEM SHALL write a
-  `ceiling` manifest row (e.g. `{"leg":"ceiling","exit":1,"observed":{"count":5,"max":4}}` for an
-  over-ceiling fixture; `observed:{"unavailable":"no-ceiling-file"}`, exit 0 without the file) →
-  test in tests/ceiling/ceiling-gates.test.js
-- **AC-20260911-02-6**: WHEN `verdict.js` reads a manifest whose `ceiling` row has `exit:1` THE
-  SYSTEM SHALL never derive `CLEAN` (a blocking leg), and WHEN the `ceiling` row is absent THE
-  SYSTEM SHALL derive `UNVERIFIED` → test in tests/ceiling/ceiling-gates.test.js
-- **AC-20260911-02-7**: WHEN the build driver's final gate runs over a fixture host whose test
-  count exceeds its ceiling THE SYSTEM SHALL record the gate run as red with a `ceiling:` line in
-  the gate log and derive `REPAIR`; WHEN the count is under the line THE SYSTEM SHALL keep the
-  gate green with the `ceiling:` line in the log → test in tests/ceiling/ceiling-gates.test.js
-- **AC-20260911-02-8**: WHEN `block-ceiling-writes.sh` reads a PreToolUse payload THE SYSTEM
-  SHALL exit 2 for an Edit/Write of an existing `.claude/test-ceiling.json` and for a Bash
-  command containing `test-ceiling.json` (e.g. `sed -i s/900/9000/ .claude/test-ceiling.json`),
-  and exit 0 for an Edit of a missing ceiling file, an Edit of any other path, `echo hi`, and
-  malformed stdin → test in tests/ceiling/test-ceiling.test.js
-- **AC-20260911-02-9**: WHEN `spec/hooks/hooks.json` is parsed THE SYSTEM SHALL wire
-  `block-ceiling-writes.sh` under both the `Write|Edit|NotebookEdit` and `Bash` matchers, and
-  the red-fixture handler for it SHALL observe a real block (status 2) → test in
-  tests/consistency/red-fixture-coverage.test.js and tests/consistency/entrypoints.test.js
+  (the second call's `title` is read correctly) → test in tests/ceiling/count-tests.test.js
+- **AC-20260911-02-5**: WHEN `review-legs.js` runs over a fixture host in either scope THE SYSTEM
+  SHALL write exactly one `tests` manifest row of the form
+  `{"leg":"tests","exit":0,"observed":{"count":N}}` (e.g. a five-case fixture host →
+  `observed:{"count":5}`), and `tests` SHALL NOT appear in the script's `BLOCKING` array → test in
+  tests/ceiling/tests-leg.test.js and tests/consistency/red-fixture-coverage.test.js
+- **AC-20260911-02-6**: WHEN `verdict.js` reads a manifest carrying a green `tests` row THE SYSTEM
+  SHALL derive the same verdict word it derives without that row (e.g. a CLEAN manifest stays
+  `CLEAN`, a gate-red manifest stays `GATE_RED`), and WHEN the `tests` row is absent THE SYSTEM
+  SHALL derive `UNVERIFIED`; `tests` SHALL NOT appear in `REVIEW_BLOCKING` → test in
+  tests/ceiling/tests-leg.test.js
+  - Superseded at amendment: the original AC-20260911-02-6 required a red `ceiling` row to block
+    `CLEAN`. The leg has no red arm (D3′, D4′), so blocking membership is now forbidden rather
+    than required.
 - **AC-20260911-02-10** `[oracle: gate]`: WHEN the gate runs THE SYSTEM SHALL resolve
-  `spec-paths test-ceiling`, find a `spec/entrypoints.json` row for every new executable, and
-  pass `scripts/plugin-bump.js --check`
-- **AC-20260911-02-11**: WHEN `test-ceiling.js --root .` runs over this repository at HEAD THE
-  SYSTEM SHALL exit 0 with `count ≤ max`, and `spec/test-ceiling.json` SHALL NOT exist → test
-  in tests/ceiling/test-ceiling.test.js
+  `spec-paths count-tests`, find a `spec/entrypoints.json` row for `count-tests.js`, find no row for
+  `lib/scan-test-calls.js`, and pass `scripts/plugin-bump.js --check`
+- **AC-20260911-02-11**: WHEN `count-tests.js --root .` runs over this repository at HEAD THE
+  SYSTEM SHALL exit 0 reporting a positive integer count, and `spec/test-ceiling.json` SHALL NOT
+  exist, and no `.claude/test-ceiling.json` SHALL exist → test in tests/ceiling/count-tests.test.js
 - **AC-20260911-02-12**: WHEN an existing fixture manifest that derived `CLEAN`, `GATE_RED`,
-  `HARD_FINDINGS` or `ESCALATED` gains a green `ceiling` row THE SYSTEM SHALL CONTINUE TO derive
-  the same word (e.g. `SIX_GREEN` + CLEAN workflow → `CLEAN`) → the existing tests in the nine
-  D10 files, retagged
+  `HARD_FINDINGS` or `ESCALATED` gains a green `tests` row THE SYSTEM SHALL CONTINUE TO derive
+  the same word (e.g. `SIX_GREEN` + CLEAN workflow → `CLEAN`) → the existing tests in the six
+  D10′ files, retagged
+
+Retired at amendment, with no successor: AC-20260911-02-3 (absent ceiling file), -7 (build gate
+arm), -8 (the hook's exit codes) and -9 (the hook's `hooks.json` wiring). Each named a surface
+this spec no longer builds.
 
 ## Assumptions (escalation triggers)
 
-- A1: The Claude Code PreToolUse contract is stdin JSON with `tool_name`/`tool_input`, exit 2 =
-  block — executed: the existing `block-cross-worktree-writes.sh` given
-  `{"cwd":"/Users/jj/Projects/claude-plugins","tool_name":"Edit","tool_input":{"file_path":
-  ".../.claude/test-ceiling.json"}}` exited 0 (so today nothing blocks that edit), and its
-  documented contract is the one D6 copies — **if false:** copy whatever `question-style-gate.js`
-  does on block, never invent a third protocol.
 - A2: The line-start scanner and `node --test` agree on the corpus but not the number: scanner
   11 vs `ℹ tests 11` on `tests/doctor/`, scanner 1024 vs `ℹ tests 1035` on the whole suite (the
-  eleven are subtests) — executed. The ceiling counts calls, never runtime tests — **if false:**
-  STOP, the ceiling would need the reporter and the reporter was retired.
+  eleven are subtests) — executed. The instrument counts calls, never runtime tests — **if false:**
+  the count would need the reporter and the reporter was retired; record the divergence on the
+  ledger row rather than changing the scanner.
 - A3: The scanner's regex-literal rule (a `/` whose previous significant character is one of
   `( , = : [ ! & | ? { } ;` or the keyword `return` opens a regex) and the wrapped-bullet rule —
   executed on a scratch snippet: 2 calls counted out of a snippet holding `/design-atlas\)" stop
-  open/`, a `"test("` string and a `describe(`; a `SHALL\n  CONTINUE TO` bullet reads as a pin
-  only after collapsing continuation lines — **if false:** add the failing shape to
+  open/`, a `"test("` string and a `describe(` — **if false:** add the failing shape to
   AC-20260911-02-4's fixture and fix the scanner, never widen the count.
-- A4: The new hook is not live in the session that builds this spec (hooks load at session
-  start from the installed plugin), so the worker can `Write` `.claude/test-ceiling.json` and
-  `git rm spec/test-ceiling.json` — **if false:** the orchestrator creates the file (allowed:
-  absent) and removes the old one with a Bash path spelled without the literal
-  (`git rm spec/test-ceil*.json`); record the deviation.
-- A5: An extra `Bash` matcher hook costs one `bash`+`jq` start per Bash call in every host —
-  **if false** (a host reports visible latency): keep the arm, it is the only tunnel closer.
-- A7: The pre-image `verdict.js` ignores an unknown green row and reads an unknown red row as
-  dispositionable — executed: a ten-row manifest (`SIX_GREEN` + `{"leg":"ceiling","exit":0}`)
-  with a CLEAN workflow printed `CLEAN`; the same with `exit:1` printed `HARD_FINDINGS` — so
-  D10's pins are green pre-image and D4 needs all three blocking spellings — **if false:** the
-  pin that goes red is updated in place and retagged, never loosened.
-- A8: The nine D10 files are the complete set of hand-built manifests (grep executed:
-  `promise-sweep` as a leg literal across `tests/`, worktrees excluded) — a prediction, not an
-  inventory — **if false:** the tenth file gains its row in the same build as an out-of-plan row
-  and is retagged; never weaken the verdict.
+- A7: The pre-image `verdict.js` ignores an unknown green row — executed: a ten-row manifest
+  (`SIX_GREEN` + `{"leg":"tests","exit":0}`) with a CLEAN workflow printed `CLEAN` — so D10′'s
+  pins are green pre-image as `SHALL CONTINUE TO` pins must be — **if false:** the pin that goes
+  red is updated in place and retagged, never loosened.
+- A8: The six D10′ files are the complete set of hand-built manifests that must keep deriving
+  their word (executed at build: `promise-sweep.test.js`, `ac-matrix.test.js` and
+  `legs-verdict-pair.test.js` were confirmed NOT to feed a hand-built full-required-leg manifest
+  to `verdict.js` — they derive theirs from real script execution) — **if false:** the seventh
+  file gains its row in the same build as an out-of-plan row and is retagged; never weaken the
+  verdict.
 - A6: `tests/spec-paths.test.js` and `tests/consistency/read-load.test.js` tolerate one added key
   and the template comment growing by one word — **if false:** update the pin in the same build
   as an out-of-plan row and record it.
+- A9 (amendment): removing the `ceiling` leg's blocking membership cannot strand a fixture,
+  because the leg never shipped — this spec is the only thing that has ever written the row —
+  **if false:** the stranded fixture is updated in place and retagged, never weakened.
 
 ## Rationale
 
-The direct batch of 2026-09-11 wrote `spec/test-ceiling.json` and documented it, but nothing
-reads it and hosts cannot host a `spec/` path — so D1 moves it under `.claude/` before any
-gate learns the path. The number is human-owned by construction: the hook (D6) blocks the
-model's Edit, Write and Bash routes to the file, and a missing file is not an error (a host that
-never set a ceiling has none). The hook is a speed bump, not a wall — a path spelled by glob or
-a renamed directory walks past it — and that is acceptable: its job is to stop the easy
-self-authorization the size ratchet's `--reconcile --cite` used to hand the model.
+The direct batch of 2026-09-11 wrote `spec/test-ceiling.json` and documented it, but nothing reads
+it and hosts cannot host a `spec/` path — so the file is deleted rather than relocated, because
+the number it holds has no enforcer worth building.
 
-Two gates read the file so the number bites at both ends: the build's final gate (D5) stops a
-worker from landing an over-ceiling tree, and the review leg (D4) is the blocking evidence row
-the verdict derives from. Both call the one script; neither re-derives the count. The scanner
-(D2) is shared with spec 03's expiry so the two never disagree about what a test case is.
+Why no limit: the suite's growth was measured, not assumed. Over 37 closed specs this repo added
+360 test cases and removed 35; specs that only changed existing behaviour added a median of 6.5
+and 17 of 18 removed nothing; 0 of 321 promise ACs were satisfied by rewriting an existing test.
+The cause is that the AC-ID is a test's identity, so a promise can only ever be appended — the
+suite is a log of every decision ever made rather than a description of what the system does. A
+count limit caps that symptom while making it worse in one specific way: its only sanctioned
+remedy is deleting tests, and the remedy would run inside the build's automatic REPAIR loop,
+handing deletion to the model exactly when it is under pressure to go green. Field practice
+independently rejects raw test count as the most gameable coverage metric, no published source
+enforces a hard cap, and the named gaming moves (fatter tests, table-driven folding, nested
+subtests) would hide the very growth this spec exists to measure.
+
+What survives is the instrument. The scanner is the one definition of a test case — spec 03's
+expiry and the successor disposition spec both import it, so a second derivation would make the
+three disagree. The CLI reports and never judges: the absence of a red arm is a property under
+test (AC-20260911-02-2), not an omission. The review leg is required in both scopes so the count
+lands on every ledger row, and is excluded from all three blocking spellings so it can never
+change a verdict — required-but-never-red is what makes growth per closed spec falsifiable
+without giving a number veto power over a merge.
 
 Rejected: a `testCeiling` config key — the model edits `spec.config.json` routinely, so a hook
-cannot single it out; a separate file is the only thing a hook can guard. Rejected: counting via
-the test reporter's `ℹ tests` line — it was retired with the budget reporter and needs a full
-run; the scanner counts a tree in milliseconds. Rejected: `--require ceiling` wiring — it
-never makes a leg blocking. No `SHALL CONTINUE TO` pin: this spec adds surfaces and retires only
-a path nothing reads; no neighbour behaviour changes.
+cannot single it out. Rejected: counting via the test reporter's `ℹ tests` line — it was retired
+with the budget reporter and needs a full run; the scanner counts a tree in milliseconds.
+Rejected at amendment: the hook guarding the number (nothing left to guard), the build gate's
+ceiling arm (no red arm to chain), and a behaviour-identity redesign of what a test is named for
+(`behaviour` has no derivation in this repo — the only stable handles are a test's file and
+title — so it would become a hand-maintained registry and would rip out the AC-ID grammar six
+scripts and two host repos depend on).
 
-Collision-closure at lock: the literals leg's one hit outside worktrees is
-`docs/canonical/scripts.md`, which is this spec's own Canonical Delta target — waived here, applied
-at review close. The `executes` hits on `verdict.js`, `review-legs.js` and the build driver are the
-D10 fixture rows.
+Watch during build: the exhaustive pins in `tests/consistency/` fail closed on the new leg; the
+template's oracle set must list `tests` or `[oracle: tests]` is a laundering route in future
+specs.
 
-Watch during build: the exhaustive pins in `tests/consistency/` fail closed on the new hook arm
-and the new leg (D7 names them); the template's oracle set must list `ceiling` or `[oracle:
-ceiling]` is a laundering route in future specs.
+Build deviations, folded at close:
+
+- **A9 held, A8 was revised down.** Three of the nine files the lock named as hand-built
+  manifests — `promise-sweep.test.js`, `ac-matrix.test.js`, `legs-verdict-pair.test.js` — turned
+  out not to feed a full required-leg manifest literal to `verdict.js` at all: they exercise
+  single-leg append behaviour or derive their manifest from a real `review-legs.js` execution, so
+  they needed no row. D10′ names the true set of six.
+- **The `test-*` naming collision, caught by the final gate.** `node --test`'s default discovery
+  matches `**/test-*.js` anywhere under the root, so the CLI shipped as `test-count.js` was
+  executed as a test file and reported failed; the scanner as `lib/test-scan.js` carried the same
+  trap silently. Both were renamed (`count-tests.js`, `lib/scan-test-calls.js`). The rule lands in
+  `docs/canonical/scripts.md` rather than Gotchas, which is at its cap: no executable this repo
+  ships may be named `test-*`.
+- **The leg reads the CLI, not the scanner.** A first implementation had the `ceiling` leg call
+  `countCases()` directly to dodge a fixture that used an invalid `maxTests`. That contradicted
+  D8's declared entry point and left a malformed ceiling file reading as a silent green row; it
+  was rebuilt to shell out, and the fixture corrected to the spec's own literal. The
+  entrypoints check caught it as a manifest overclaim with no call site.
+- **`lib/` owes no manifest row.** D8 asked for one for the scanner, but
+  `tests/consistency/entrypoints.test.js` deliberately excludes `spec/scripts/lib/` from its
+  executable inventory. The pre-existing exclusion won; D8′ records it.
+- **The changelog was hand-edited.** `scripts/plugin-bump.js` has no amend mode — `--bump`
+  unconditionally increments the minor — so correcting 7.142.0's paragraph after the amendment
+  meant editing the string in place, leaving the version and every other field byte-identical.
+- **A3 fired, twice over.** The scanner's regex-context heuristic missed the `=>` arrow token and
+  treated every `)` as division, so `x => /re`$/.test(x)` and `if (a) /re"(/.test(x)` each opened
+  a false division that ran to end of file and swallowed every later call — reproduced against
+  `tests/design-look-handoff.test.js`, which read as one call whose `end` landed at `src.length`.
+  Per A3 the heuristic was widened, never the count: `=>` opens regex context, and a paren-stack
+  records whether each `(` followed `if`/`while`/`for`/`switch`/`catch`, so only a conditional's
+  `)` re-opens regex context while a call or grouping `)` still reads as division. Fixing that
+  surfaced a deeper bug of the same class: `sig`'s whitespace stripping collapsed two identifiers
+  separated only by a newline into one run-on word, breaking every keyword-boundary check
+  including the pre-existing `return` one. Both shapes are pinned behaviourally under
+  AC-20260911-02-4 alongside a division control. The live count moved 1017 → 1021 — the corrected
+  count, not a widened one. A residual gap in the same heuristic (a regex after `+ - <` or
+  `typeof`/`case`/`await`/`throw`/`else`) is latent, hits no live file, and is queued to close
+  before spec 03 consumes these spans to delete tests.
 
 ## Canonical Delta
 
 `docs/canonical/scripts.md` — replace the paragraph beginning "The plugin's own test count has
 a ceiling" with:
 
-A repo's test count has a ceiling. `.claude/test-ceiling.json` (`{"maxTests": N}`) is owned by
-the human: `block-ceiling-writes.sh` refuses the model's Edit, Write and Bash changes to it, the
-review's `ceiling` leg (blocking) and the build's final gate both run `test-ceiling.js`, which
-counts `test(`/`it(` calls at line start across the host's test-classified files
-(`lib/test-scan.js`, the one scanner) and reds when the count exceeds the number. An absent file
-means no ceiling. There is no cite, no reconcile and no raise command; the only way under the
-line is deleting tests. Byte-size ratchets and duplicate-window baselines were retired on
-2026-09-11 as self-authorizing.
+A repo's test count is instrumented, not capped. `lib/scan-test-calls.js` is the one definition of a
+test case — a `test(`/`it(` call at line start across the host's test-classified files, blind to
+strings, comments and regex literals — and `count-tests.js` reports it (`tests: <count> cases`,
+`--json` → `{"count":N}`). The review's `tests` leg records that count on every evidence manifest
+and is deliberately absent from every blocking set, so the number appears on each ledger row and
+can never redden a verdict. There is no limit, no ceiling file and no hook: a count that could
+fail a build would make deleting tests the model's cheapest route to green. Byte-size ratchets and
+duplicate-window baselines were retired on 2026-09-11 as self-authorizing; the growth they tried
+to police is addressed at its cause by the AC disposition grammar, not by a number.

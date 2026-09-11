@@ -45,6 +45,9 @@ function writeManifest(dir, rows) {
 // fixtures gain a green `suite` row — A3's executed check confirms the pre-image verdict.js
 // ignores this unknown row entirely, so this GATE_RED-from-gate-alone pin (and the green-
 // manifest usage-error pin below) both stay green pre-image.
+//
+// specs/20260911/02-tests-have-a-ceiling.md D10′ (AC-20260911-02-12, SHALL CONTINUE TO): both
+// fixtures gain a green `tests` row too, for the same reason.
 const SIX_ROWS_GATE_RED = [
   { leg: 'gate', exit: 1, observed: { unavailable: 'gate-unresolvable', detail: 'boot-crash' } },
   { leg: 'suite', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1035 } },
@@ -55,6 +58,7 @@ const SIX_ROWS_GATE_RED = [
   { leg: 'ci', exit: 0, observed: { unavailable: 'no-adapter' } },
   { leg: 'at-risk', exit: 0, observed: { files: 0, testsExecuted: 0 } },
   { leg: 'promise-sweep', exit: 0, observed: { rows: 1, carried: 1, sanctioned: 0, orphans: 0 } },
+  { leg: 'tests', exit: 0, observed: { count: 1 } },
 ]
 
 test('JJ-20260808-01 / AC-20260813-03-7 (CONTINUE TO AC-20260815-02-9 / AC-20260817-07-13 / AC-20260903-02-15): review.md Phase 0 step 8\'s documented pre-panel hard-stop invocation (--manifest --ledger, no --workflow) derives GATE_RED and exits 1 from a red gate leg alone', () => {
@@ -101,6 +105,7 @@ const SIX_ROWS_GREEN = [
   { leg: 'ci', exit: 0, observed: { unavailable: 'no-adapter' } },
   { leg: 'at-risk', exit: 0, observed: { files: 0, testsExecuted: 0 } },
   { leg: 'promise-sweep', exit: 0, observed: { rows: 1, carried: 1, sanctioned: 0, orphans: 0 } },
+  { leg: 'tests', exit: 0, observed: { count: 1 } },
 ]
 
 test('AC-20260813-03-8 (CONTINUE TO AC-20260815-02-9 / AC-20260817-07-13 / AC-20260903-02-15): verdict.js --manifest with no --workflow on a green, complete manifest exits 2 with a usage error naming --workflow as the remedy, never a derived CLEAN', () => {

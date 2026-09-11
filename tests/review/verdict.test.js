@@ -122,6 +122,11 @@ function writeWorkflow(dir, obj) {
 // executed check confirms the pre-image verdict.js ignores this unknown green row entirely (CLEAN
 // over nine rows unweakened), so this fixture's own pin stays green pre-image, as a SHALL
 // CONTINUE TO pin must be; every downstream reuse of SIX_GREEN inherits the row from here.
+//
+// specs/20260911/02-tests-have-a-ceiling.md D10′ (AC-20260911-02-12, SHALL CONTINUE TO): `tests`
+// joins as a tenth green row — A7's executed check confirms the pre-image verdict.js ignores this
+// unknown row entirely (CLEAN over ten rows unweakened), so this fixture's own pin stays green
+// pre-image; every downstream reuse of SIX_GREEN inherits the row from here.
 const SIX_GREEN = [
   { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 40 } },
   { leg: 'suite', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1035 } },
@@ -132,6 +137,7 @@ const SIX_GREEN = [
   { leg: 'ci', exit: 0, observed: { conclusion: 'success' } },
   { leg: 'at-risk', exit: 0, observed: { files: 0, testsExecuted: 0 } },
   { leg: 'promise-sweep', exit: 0, observed: { rows: 1, carried: 1, sanctioned: 0, orphans: 0 } },
+  { leg: 'tests', exit: 0, observed: { count: 1 } },
 ]
 
 // The same six legs with ci structurally unobservable — the qualifier fixture (D4).
@@ -716,6 +722,10 @@ test('AC-20260805-02-8 (fixture updated by specs/20260909/04-review-soft-floor.m
 // specs/20260903/02-whole-suite-review-leg.md D6 (AC-20260903-02-15, SHALL CONTINUE TO): `suite`
 // joins here too — A3's executed check (an unknown green row is ignored pre-image) keeps this
 // fixture's own pin green pre-image; every downstream reuse of SIX_LEGS_NO_AT_RISK inherits it.
+//
+// specs/20260911/02-tests-have-a-ceiling.md D10′ (AC-20260911-02-12, SHALL CONTINUE TO): `tests`
+// joins here too, for the same reason — every downstream reuse of SIX_LEGS_NO_AT_RISK (the
+// HARD_FINDINGS/CLEAN derivations below, both listed words D10′ pins) inherits the row from here.
 const SIX_LEGS_NO_AT_RISK = [
   { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 40 } },
   { leg: 'suite', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1035 } },
@@ -725,6 +735,7 @@ const SIX_LEGS_NO_AT_RISK = [
   { leg: 'skip-reconcile', exit: 0, observed: { skipped: 0, sanctioned: 0 } },
   { leg: 'ci', exit: 0, observed: { conclusion: 'success' } },
   { leg: 'promise-sweep', exit: 0, observed: { rows: 1, carried: 1, sanctioned: 0, orphans: 0 } },
+  { leg: 'tests', exit: 0, observed: { count: 1 } },
 ]
 
 test('AC-20260815-02-6 (also AC-20260902-05-10, SHALL CONTINUE TO): a full-scope review manifest (no rows carry a scope key, or all carriers say "full") missing the at-risk row derives UNVERIFIED, never CLEAN, even with all six legacy legs green and a CLEAN workflow return', () => {

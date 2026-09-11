@@ -448,13 +448,59 @@ function legSmoke() {
     'from a stub that reports not-ready without ever spawning bootCommand')
 }
 
-// AC-20260903-02-11: called directly (not only through the dynamic LEGS loop below, which
-// derives its test set from verdict.js's OWN current REVIEW_LEGS source and so cannot exercise
-// a leg the script has not yet declared) — this is the genuinely-red-now pin for the handler.
-// Once verdict.js's REVIEW_LEGS gains "suite", the loop below also exercises it through this
-// same registered handler.
+// tests: specs/20260911/02-tests-have-a-ceiling.md D4′/AC-20260911-02-5. This leg has NO red
+// arm by design (D3′) — "engagement" here is proven not by a planted violation but by a planted
+// COUNT: three real test( calls in the host's own tests/inplan/foo.test.js must come back as
+// observed.count:3, exit 0, never a stub echoing a generic or zero count.
+function legTests() {
+  const dir = tmpdir('rfc-tests')
+  const g = gitRepo(dir)
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'tests/inplan'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), baseHostConfig())
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const base = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(dir, 'specs/20260911'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'specs/20260911/91-fixture.md'),
+    '---\nstatus: implementing\n---\n\n## File Plan\n\n| Path | Action | Layer | Summary |\n|---|---|---|---|\n' +
+    '| `src/foo.js` | MODIFY | scripts | x |\n| `tests/inplan/foo.test.js` | CREATE | tests | x |\n')
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 42\n')
+  fs.writeFileSync(path.join(dir, 'tests/inplan/foo.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "const foo = require('../../src/foo.js')\n" +
+    "test('RED_FIXTURE_TESTS_PLANTED_ONE', () => { assert.strictEqual(foo(), 42) })\n" +
+    "test('RED_FIXTURE_TESTS_PLANTED_TWO', () => { assert.strictEqual(foo(), 42) })\n" +
+    "test('RED_FIXTURE_TESTS_PLANTED_THREE', () => { assert.strictEqual(foo(), 42) })\n")
+  g('add', '-A'); g('commit', '-q', '-m', 'work')
+  const outDir = tmpdir('rfc-tests-out')
+  const manifest = path.join(tmpdir('rfc-tests-manifest'), 'manifest.jsonl')
+  const r = runNode('scripts/review-legs.js', ['--root', dir, '--spec', 'specs/20260911/91-fixture.md',
+    '--base', base, '--manifest', manifest, '--out-dir', outDir])
+  const byLeg = new Map(manifestRows(manifest).map((x) => [x.leg, x]))
+  const row = byLeg.get('tests')
+  assert.ok(row, 'review-legs.js must append a "tests" manifest row: ' + r.stdout + r.stderr)
+  assert.strictEqual(row.exit, 0,
+    'D3′/D4′: the tests leg has no red arm — it must exit 0 regardless of the observed count: ' +
+    JSON.stringify(row) + ' / ' + r.stdout + r.stderr)
+  assert.strictEqual(row.observed && row.observed.count, 3,
+    'evidence the check engaged: observed.count must reflect the three planted test cases exactly ' +
+    '— a stub echoing a generic or zero count would still exit 0 and pass a mere presence check: ' +
+    JSON.stringify(row))
+}
+
+// AC-20260903-02-11 / AC-20260911-02-5: called directly (not only through the dynamic LEGS loop
+// below, which derives its test set from verdict.js's OWN current REVIEW_LEGS source and so
+// cannot exercise a leg the script has not yet declared) — this is the genuinely-red-now pin for
+// each handler. Once verdict.js's REVIEW_LEGS gains the leg, the loop below also exercises it
+// through the same registered handler.
 test('AC-20260903-02-11 (direct call): the "suite" review leg (verdict.js REVIEW_LEGS) can actually go red on a planted violation', () => {
   legSuite()
+})
+
+test('AC-20260911-02-5 (direct call): the "tests" review leg (verdict.js REVIEW_LEGS) actually derives its observed count from the host, never a stub', () => {
+  legTests()
 })
 
 const LEG_HANDLERS = {
@@ -467,6 +513,7 @@ const LEG_HANDLERS = {
   ci: legCi,
   'at-risk': legAtRisk,
   'promise-sweep': legPromiseSweep,
+  tests: legTests,
 }
 
 for (const leg of LEGS) {

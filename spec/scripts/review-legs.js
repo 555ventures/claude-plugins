@@ -59,6 +59,10 @@
 //                  suite run is the wider-blast-radius half of the same escape); runs in EVERY
 //                  scope including --fix-delta; BLOCKING (specs/20260903/02-whole-suite-review-
 //                  leg.md D1-D3)
+//   tests          {"leg":"tests","exit":0,"observed":{"count":N}} — always exit 0, in every
+//                  scope including --fix-delta; advisory only, derived by shelling out to
+//                  count-tests.js --json (D4′ entry point; neither script re-derives the count);
+//                  NOT in BLOCKING (specs/20260911/02-tests-have-a-ceiling.md D4′)
 //   ac-matrix / skip-reconcile — appended by ac-matrix.js itself (same manifest)
 //   promise-sweep  {"leg":"promise-sweep","exit":<0|1>,"observed":{"rows":N,"carried":C,
 //                  "sanctioned":S,"orphans":O}} — appended by promise-sweep.js itself (same
@@ -327,6 +331,18 @@ async function main() {
 
   // ---- wave 2 (parallel): at-risk + patterns (post-gate; both need reconcile's output) ----
   const wave2 = []
+  // specs/20260911/02-tests-have-a-ceiling.md D4′: `tests` — the count-tests instrument. Runs in
+  // EVERY scope including --fix-delta (a fix round can add tests) and is advisory ONLY — always
+  // exit 0, never in BLOCKING. Shells out to count-tests.js --json (D4′ names review-legs.js as
+  // its one entry point) rather than re-deriving the count via lib/scan-test-calls.js directly — "the
+  // leg shells out to count-tests.js --json; it never re-derives the count" (D4′).
+  {
+    const testCountResult = spawnSync(process.execPath,
+      [path.join(scriptDir, 'count-tests.js'), '--root', root, '--json'], { encoding: 'utf8' })
+    let testCountJson = null
+    try { testCountJson = JSON.parse((testCountResult.stdout || '').trim().split('\n').pop() || '') } catch { testCountJson = null }
+    appendRow('tests', 0, { count: testCountJson ? testCountJson.count : 0 })
+  }
   if (!fixDelta) {
     const atRisk = (reconcileJson && Array.isArray(reconcileJson.atRisk)) ? reconcileJson.atRisk : []
     // Zero at-risk files is a genuine, known zero (nothing needed to run) — not an unmade

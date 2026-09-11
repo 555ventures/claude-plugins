@@ -30,6 +30,9 @@ test('AC-20260822-01-1 (also AC-20260903-02-15, SHALL CONTINUE TO): WHEN verdict
     { leg: 'ci', exit: 0, observed: { conclusion: 'success' } },
     { leg: 'at-risk', exit: 1, observed: { files: 1, testsExecuted: 5 } },
     { leg: 'promise-sweep', exit: 0, observed: { rows: 1, carried: 1, sanctioned: 0, orphans: 0 } },
+    // specs/20260911/02-tests-have-a-ceiling.md D10′ (AC-20260911-02-12, SHALL CONTINUE TO): a
+    // green `tests` row, so this HARD_FINDINGS derivation stays green pre-image.
+    { leg: 'tests', exit: 0, observed: { count: 1 } },
   ].map((r) => JSON.stringify(r)).join('\n') + '\n')
   const workflowPath = path.join(dir, 'workflow.json')
   fs.writeFileSync(workflowPath, JSON.stringify({
@@ -95,6 +98,10 @@ test('AC-20260822-01-4 (also AC-20260902-05-2, AC-20260903-02-15, SHALL CONTINUE
     { leg: 'ci', exit: 0, observed: { conclusion: 'success' }, scope: 'fix-delta' },
     { leg: 'promise-sweep', exit: 0, observed: { rows: 1, carried: 1, sanctioned: 0, orphans: 0 } },
     { leg: 'at-risk', exit: 0, observed: { files: 0, testsExecuted: 0 }, scope: 'fix-delta' },
+    // specs/20260911/02-tests-have-a-ceiling.md D10′ (AC-20260911-02-12, SHALL CONTINUE TO): a
+    // green `tests` row, required in both scopes, so this CLEAN-baseline derivation stays
+    // green pre-image.
+    { leg: 'tests', exit: 0, observed: { count: 1 }, scope: 'fix-delta' },
   ].map((r) => JSON.stringify(r)).join('\n') + '\n')
   const workflowPath = path.join(dir, 'workflow.json')
   fs.writeFileSync(workflowPath, JSON.stringify({

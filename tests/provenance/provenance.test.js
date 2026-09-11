@@ -208,6 +208,9 @@ test('AC-20260901-02-2: readSessionStamp(root) returns the parsed stamp object, 
 // specs/20260903/02-whole-suite-review-leg.md D6 (AC-20260903-02-15, SHALL CONTINUE TO): `suite`
 // joins here too — A3's executed check confirms the pre-image verdict.js ignores this unknown
 // green row entirely, so this fixture's own pin stays green pre-image.
+//
+// specs/20260911/02-tests-have-a-ceiling.md D10′ (AC-20260911-02-12, SHALL CONTINUE TO): `tests`
+// joins here too, for the same reason.
 const CLEAN_LEGS = [
   { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 40 } },
   { leg: 'suite', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1035 } },
@@ -218,6 +221,7 @@ const CLEAN_LEGS = [
   { leg: 'ci', exit: 0, observed: { conclusion: 'success' } },
   { leg: 'at-risk', exit: 0, observed: { files: 0, testsExecuted: 0 } },
   { leg: 'promise-sweep', exit: 0, observed: { rows: 1, carried: 1, sanctioned: 0, orphans: 0 } },
+  { leg: 'tests', exit: 0, observed: { count: 1 } },
 ]
 
 function manifestFixture() {

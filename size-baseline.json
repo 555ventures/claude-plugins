@@ -4,7 +4,7 @@
     "scripts": 61878,
     "spec/scripts": 1336379,
     "spec/scripts/lib": 250997,
-    "tests": 3827999
+    "tests": 3841179
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -180,7 +180,7 @@
     "tests/init-gen/probes.test.js": 6550,
     "tests/merge-back.test.js": 15683,
     "tests/mocks/chrome-harness.js": 9353,
-    "tests/mocks/chrome-harness.test.js": 10855,
+    "tests/mocks/chrome-harness.test.js": 11208,
     "tests/mocks/client-route.test.js": 22060,
     "tests/mocks/mock-edges.test.js": 12014,
     "tests/mocks/mocks-driver-2.test.js": 19004,
@@ -194,6 +194,7 @@
     "tests/mocks/mocks-driver-look-stops-3.test.js": 9656,
     "tests/mocks/mocks-driver-look-stops-4.test.js": 12345,
     "tests/mocks/mocks-driver-look-stops.test.js": 21565,
+    "tests/mocks/mocks-driver-seed-2.test.js": 12827,
     "tests/mocks/mocks-driver-theme.test.js": 51812,
     "tests/mocks/mocks-driver-walk.test.js": 13030,
     "tests/mocks/mocks-driver-wire.test.js": 4753,
@@ -1558,6 +1559,24 @@
       "path": "tests",
       "from": 3822936,
       "to": 3827999,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "tests",
+      "from": 3827999,
+      "to": 3840826,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "tests/mocks/chrome-harness.test.js",
+      "from": 10855,
+      "to": 11208,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "tests",
+      "from": 3840826,
+      "to": 3841179,
       "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
     }
   ]

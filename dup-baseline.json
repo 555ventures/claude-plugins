@@ -46,6 +46,7 @@
     "tests/genesis/tournament.test.js": 8,
     "tests/init-gen/generate.test.js": 47,
     "tests/merge-back.test.js": 2,
+    "tests/mocks/mock-edges.test.js": 1,
     "tests/mocks/mocks-driver-2.test.js": 2,
     "tests/mocks/mocks-driver-3.test.js": 1,
     "tests/mocks/mocks-driver-4.test.js": 2,
@@ -56,6 +57,7 @@
     "tests/mocks/mocks-driver-look-stops-3.test.js": 1,
     "tests/mocks/mocks-driver-look-stops-4.test.js": 3,
     "tests/mocks/mocks-driver-look-stops.test.js": 1,
+    "tests/mocks/mocks-driver-seed-2.test.js": 1,
     "tests/mocks/mocks-driver-theme.test.js": 6,
     "tests/mocks/mocks-driver-walk.test.js": 1,
     "tests/mocks/mocks-notes.test.js": 26,
@@ -116,6 +118,18 @@
       "from": 23,
       "to": 26,
       "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests/mocks/mock-edges.test.js",
+      "from": 0,
+      "to": 1,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-seed-2.test.js",
+      "from": 0,
+      "to": 1,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
     }
   ]
 }

@@ -13,3 +13,4 @@ specs/**/*.build/
 
 # spike screenshots are look-and-see artifacts, never tracked (tracked-text-purity pin; re-added three times)
 docs/spikes/**/*.png
+.DS_Store

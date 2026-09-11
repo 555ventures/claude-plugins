@@ -66,8 +66,9 @@ removed) the derivation lands earlier and demands the mark again. The order is f
 from 2–3 candidates) → **KIT** (the shared-primitive canon named and signed off, before any
 screen) → **WIREFRAMES** (canon written, then every seed journey drawn and
 approved) → **WALK** (one fresh-context critic walks each declared journey once, flow breaks
-only) → **CLIENT** (the served journey pages, exposed by the user, where product questions
-are answered and client notes raised; closes when every client-visible question is
+only) → **CLIENT** (the client player, exposed by the user, where the client walks each
+journey by its real controls, answers the session's guesses, raises notes and confirms with one
+sentence; closes when every journey is confirmed-or-waived, every client-visible question
 answered-or-waived and every client note resolved-or-waived) → **APPROVED** (terminal).
 WIREFRAMES carries a sub-mark per
 journey so no single conversation ever has to hold more than one journey's state —
@@ -244,8 +245,10 @@ concern outranks any per-screen work until it is answered. Once no project note 
 mark still refuses while any note on its own screens is unresolved; `approved` refuses while
 any note anywhere is unresolved. Zero open notes on a journey is that journey's approval mark.
 
-**Client review is the same page and the same notes, served on the client route as the
-`CLIENT` state (ADR-0012).** A note's origin — walk, client or session — is set by the server
+**The client's page is the player** (`/client/index.html`, `/client/walk/<j>.html` — § Mocks:
+Client Player), not the session's own review page; its notes are the same notes machinery,
+served on the client route as the `CLIENT` state (ADR-0012), every one raised there carrying
+`by: 'client'`. A note's origin — walk, client or session — is set by the server
 from the route it arrived on, never from the typed name. A client-origin note captures its
 screen when raised; a fix is recorded only when the re-captured screen differs. Only the client
 resolves a client note — withdrawing an `open` one records `resolution: "withdrawn"`, accepting
@@ -280,6 +283,33 @@ Every served page declares which notes bar it shows through the `notes-scope` me
 server stamps on it — `project` on the atlas index, `mock` on a screen — so the notes layer
 renders **one scope per page**, declared by the page, rather than guessing from document
 structure.
+
+## Mocks: Client Player
+
+The client's surface is two pages, `lib/walk-page.js`'s `buildClientIndex` (`/client/index.html`
+— every journey, how many of the session's guesses are still open on it, whether it is
+confirmed) and `buildWalkPage` (`/client/walk/<j>.html` — one screen at a time in a frame,
+advanced by the mock's own `data-to` control, the session's guesses beside it as marks, a free
+note box, the gray states one click away, and an approve control that appears only once the
+last screen is reached). `lib/walk.browser.js`, served at `GET /__walk/player.js`, drives it:
+it moves the frame on a real click and records the move, and records — never shows the client —
+a click on anything else as a miss.
+
+**Walk-to-unlock is a server record, not a page state.** `design/mocks/walk.json`
+(`lib/mocks-walk.js`, the one writer — § Provenance Ledger's pattern) holds, per journey, the
+labels reached in first-reached order, the misses, and — once the client reaches the last label
+with every guess answered and writes one sentence — `confirmedAt` and that sentence. A reload
+returns the client to the last screen they reached, never to the first; a confirmed journey
+shows its sentence and no controls. `approved` refuses while any seed journey is neither
+confirmed nor waived (`client waive --journey <j> --reason "<r>"`, the same seven-day clock as a
+note's waiver); `client log` prints each journey's confirmation sentence or its open count and
+misses.
+
+**A client's `no` promotes.** Answering a mark `違う` with a reason does what an `overridden`
+status alone does not: it also writes a new `said-by-user` row to the provenance ledger,
+`note: "corrects <rowId>"` — the client's own correction becomes a fact the next round can build
+on, never just a flipped status. The session's own review page keeps today's behavior; only a
+client-origin answer promotes.
 
 ## Mocks: Authoring Rules
 

@@ -308,9 +308,9 @@ subcommand resolves. Triage bins are a closed set — `mock detail`, `product un
 `question back`, `propose to decline` — and a note that hits a canon primitive changes
 `canon.md` first, every dependent screen after. Project notes outrank mock notes:
 `journey-approved` and `approved` refuse while any project note is unresolved or any note on
-the journey's screens is unresolved (`addressed` is not `resolved`); client review is the same
-page and the same notes, served on the client route as the `CLIENT` state (specs/20260907/10,
-ADR-0012). A note carries `origin: walk|client|session`, set by the route it arrived on
+the journey's screens is unresolved (`addressed` is not `resolved`); the client answers and
+raises on the client route as the `CLIENT` state (specs/20260907/10, ADR-0012), on the clientâs own
+pages rather than the session's review page. A note carries `origin: walk|client|session`, set by the route it arrived on
 (`/client/__notes/*` stamps `client`, `/__notes/*` stamps `session`, `notes add --kind walk`
 stamps `walk`) and never accepted from a body. A client's mock-scope note captures its screen at
 raise through `lib/client-capture.js` — the look command's URL form and first-declared viewport,
@@ -370,3 +370,20 @@ question-aware notes gate runs ahead of the generic ledger gate, so that line is
 printed. Free-form notes carry an optional `reason` (missing-screen · wrong-direction ·
 wrong-words · other). Catch provenance is derived from `addressed.ledgerRow` and printed by
 `ledger counts` as question · note · unlinked — never a ledger column.
+
+
+**Client player (specs/20260910/03).** The client route serves the client's own two pages —
+`/client/index.html` (every seed journey, how many of the session's guesses are still open on
+each, which are confirmed) and `/client/walk/<j>.html` (one screen at a time in a frame), both
+built by `lib/walk-page.js`'s two pure builders and driven by `lib/walk.browser.js`, served
+verbatim at `GET /__walk/player.js`. The client advances by the mock's own `data-to` control;
+every wrong click lands in `design/mocks/walk.json` as a miss and is never shown to them.
+`lib/mocks-walk.js` is that file's one writer (`readWalk`, `writeWalk`, `recordEvent`,
+`confirmJourney`, `waiveJourney`, `isClosed`); both event kinds stamp the journey's
+`lastEventAt`, which is the waiver's silence clock. Approve unlocks only once the server's own
+record shows the journey's last screen reached, stays disabled while any guess is open, and
+records one typed sentence. A client's `no` with a reason promotes to a `said-by-user` ledger
+row; the session's own review page keeps today's behavior and is the session's surface only.
+`--mark approved` refuses while any journey is neither confirmed nor waived
+(`client waive --journey <j> --reason "<r>"`, after seven days), and `client log` prints each
+journey's sentence or its reached count and misses. The client route never asks who they are.

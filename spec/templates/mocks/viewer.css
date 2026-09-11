@@ -401,3 +401,91 @@ body {
   .rv-keys { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .rv-fill { transition: none; } }
+
+/* Client journey player (.wk-*) — specs/20260910/03-client-journey-player.md D8, chrome rule in
+   spec/doctrine/design.md § Design Canon. Two pages on one register: the index (a list of
+   journeys) and the player (spine · framed screen · marks). The reader is the client, not the
+   session, so the base size is 15px rather than the review page's 13 and the controls are full
+   size. Every color is an existing --v-* role — no new token, no literal; the spine's reached/
+   current states are the only accented thing on either page, everything else stays quiet. The
+   mock inside the frame keeps its own document: nothing here reaches into it. */
+.wk [hidden] { display: none !important; }
+.wk { --wk-bar: 52px; --wk-spine: 200px; --wk-side: 340px; font-size: 15px; line-height: 1.5; min-height: 100vh; margin: 0; display: flex; flex-direction: column; }
+.wk button { font: inherit; color: var(--v-fg); background: var(--v-bg); border: 1px solid var(--v-border); border-radius: var(--v-radius); padding: 6px 14px; cursor: pointer; }
+.wk button:hover { background: var(--v-muted-bg); }
+.wk button[disabled] { opacity: .45; cursor: not-allowed; }
+.wk button:focus-visible, .wk a:focus-visible, .wk textarea:focus-visible { outline: 2px solid var(--v-ring); outline-offset: 2px; }
+.wk textarea { width: 100%; font: inherit; color: var(--v-fg); background: var(--v-bg); border: 1px solid var(--v-border); border-radius: var(--v-radius); padding: 8px 10px; resize: vertical; }
+.wk-lead { margin: 0 0 var(--v-space-4); color: var(--v-muted); max-width: 46ch; }
+
+/* index — a list of journeys, not a grid of cards: the name is the whole choice */
+.wk-index-main { max-width: 40rem; margin: 0 auto; padding: var(--v-space-6) var(--v-space-4) 25vh; }
+.wk-title { margin: 0 0 var(--v-space-2); font-size: 28px; font-weight: 600; letter-spacing: -.01em; }
+.wk-list { display: flex; flex-direction: column; border-top: 1px solid var(--v-border); }
+.wk-j { display: flex; align-items: baseline; gap: var(--v-space-4); padding: var(--v-space-4) var(--v-space-2); border-bottom: 1px solid var(--v-border); color: var(--v-fg); text-decoration: none; }
+.wk-j:hover { background: var(--v-muted-bg); }
+.wk-j-name { font-size: 19px; font-weight: 500; }
+.wk-j-meta { margin-left: auto; font-size: 14px; color: var(--v-muted); white-space: nowrap; }
+.wk-done { color: var(--v-ok); }
+
+/* player bar */
+.wk-bar { position: sticky; top: 0; z-index: 5; height: var(--wk-bar); display: flex; align-items: center; gap: var(--v-space-4); padding: 0 var(--v-space-4); background: var(--v-bg); border-bottom: 1px solid var(--v-border); }
+.wk-crumb { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wk-crumb strong { font-weight: 600; }
+.wk-pos { color: var(--v-muted); font-variant-numeric: tabular-nums; }
+.wk-nav { margin-left: auto; display: flex; gap: var(--v-space-2); }
+
+/* panes */
+.wk-main { flex: 1; display: grid; grid-template-columns: var(--wk-spine) minmax(0, 1fr) var(--wk-side); min-height: 0; }
+
+/* spine — the walk itself: a reached screen reads solid, the current one carries the only
+   accent on the page, an unreached one is an outline waiting to be filled */
+.wk-spine { border-right: 1px solid var(--v-border); padding: var(--v-space-4) var(--v-space-3); display: flex; flex-direction: column; gap: 2px; position: sticky; top: var(--wk-bar); height: calc(100vh - var(--wk-bar)); overflow: auto; }
+.wk .wk-step { text-align: left; border: 0; border-left: 2px solid var(--v-border); border-radius: 0; padding: 8px 12px; color: var(--v-muted); background: transparent; }
+.wk .wk-step:hover { background: var(--v-muted-bg); }
+.wk .wk-seen { color: var(--v-fg); border-left-color: var(--v-fg); }
+.wk .wk-step[aria-current="true"] { color: var(--v-primary); border-left-color: var(--v-primary); border-left-width: 3px; font-weight: 600; background: color-mix(in srgb, var(--v-primary) 6%, transparent); }
+
+/* stage — the framed screen is the hero; the muted ground lets the mock's own white read as a
+   device rather than as the page continuing */
+.wk-stage { background: var(--v-muted-bg); padding: var(--v-space-4); display: flex; flex-direction: column; align-items: center; gap: var(--v-space-3); min-width: 0; }
+.wk-frame { flex: 1; width: 100%; max-width: 100%; min-height: 60vh; border: 1px solid var(--v-border); border-radius: var(--v-radius); background: var(--v-bg); box-shadow: var(--v-shadow); display: block; }
+.wk-states { display: flex; flex-wrap: wrap; gap: var(--v-space-2); justify-content: center; }
+.wk-states button { font-size: 13px; padding: 4px 12px; color: var(--v-muted); }
+.wk-states button[aria-selected="true"] { background: var(--v-primary); color: var(--v-primary-fg); border-color: var(--v-primary); }
+
+/* marks — hairline rows, the same language the notes layer's question rows use; never cards */
+.wk-side { border-left: 1px solid var(--v-border); padding: var(--v-space-4); display: flex; flex-direction: column; gap: var(--v-space-4); position: sticky; top: var(--wk-bar); height: calc(100vh - var(--wk-bar)); overflow: auto; }
+.wk-marks { display: flex; flex-direction: column; }
+.wk-mark { border-bottom: 1px solid var(--v-border); padding: var(--v-space-3) 0; }
+.wk-mark:first-of-type { border-top: 1px solid var(--v-border); }
+.wk-claim { margin: 0 0 var(--v-space-3); }
+.wk-verdicts { display: flex; gap: var(--v-space-2); }
+.wk-why { margin-top: var(--v-space-2); }
+.wk-left { margin: 0; color: var(--v-muted); font-size: 14px; }
+.wk-note { display: flex; flex-direction: column; gap: var(--v-space-2); align-items: flex-start; }
+.wk-note-label { display: block; width: 100%; color: var(--v-muted); font-size: 14px; }
+.wk-note-in { margin-top: var(--v-space-1); }
+
+/* approve — the end of the walk, so it is allowed to be the heaviest control on the page */
+.wk-approve { margin-top: auto; padding-top: var(--v-space-4); border-top: 1px solid var(--v-border); display: flex; flex-direction: column; gap: var(--v-space-3); align-items: flex-start; }
+.wk-approve .wk-lead { margin: 0; }
+.wk .wk-confirm { background: var(--v-primary); color: var(--v-primary-fg); border-color: var(--v-primary); font-weight: 500; }
+.wk .wk-confirm:hover:not([disabled]) { background: color-mix(in srgb, var(--v-primary) 88%, var(--v-bg)); }
+.wk-sentence { margin: 0; padding-left: var(--v-space-3); border-left: 2px solid var(--v-ok); color: var(--v-fg); }
+
+@media (max-width: 900px) {
+  .wk-main { grid-template-columns: var(--wk-spine) minmax(0, 1fr); }
+  .wk-side { grid-column: 1 / -1; position: static; height: auto; border-left: 0; border-top: 1px solid var(--v-border); }
+  .wk-approve { margin-top: var(--v-space-4); }
+}
+@media (max-width: 600px) {
+  .wk-main { grid-template-columns: minmax(0, 1fr); }
+  .wk-spine { position: static; height: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--v-border); padding: var(--v-space-2) var(--v-space-3); }
+  .wk .wk-step { border-left: 0; border-bottom: 2px solid var(--v-border); white-space: nowrap; }
+  .wk .wk-seen { border-bottom-color: var(--v-fg); }
+  .wk .wk-step[aria-current="true"] { border-left-width: 0; border-bottom-width: 3px; border-bottom-color: var(--v-primary); }
+  .wk-stage { padding: var(--v-space-2); }
+  .wk-frame { min-height: 70vh; }
+  .wk-index-main { padding: var(--v-space-4) var(--v-space-3) 20vh; }
+}

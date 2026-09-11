@@ -8,7 +8,7 @@ const {
   SCRIPT, JOURNEY, LABELS, DENSE,
   bare, mark, writeFile, writeWireframe,
   decideLook, openLook,
-  advanceToSeedDone, advanceToShapePicked, advanceToCanonWritten, advanceToJourneyApproved,
+  advanceToSeedDone, advanceToShapePicked, advanceToCanonWritten, advanceToJourneyApproved, confirmEveryJourney,
   freePort,
 } = require('./mocks-driver-fixtures')
 
@@ -32,6 +32,10 @@ const {
 test('AC-20260905-02-14/AC-20260905-04-9: approved refuses without a decided "approved" stop and accepts once its stop is decided approve', () => {
   const dir = tmpdir('mocks-driver')
   advanceToJourneyApproved(dir)
+  // specs/20260910/03-client-journey-player.md D7 fixture repair: `--mark approved` now
+  // refuses while a seed journey is unconfirmed by the client, so this setup records the
+  // confirmation to keep the precondition it actually pins isolated.
+  confirmEveryJourney(dir)
   const noApprovedStop = mark(dir, 'approved')
   assert.strictEqual(noApprovedStop.status, 2, 'approved must refuse without a decided "approved" stop, even once every other precondition holds: ' + noApprovedStop.stdout + noApprovedStop.stderr)
   assert.match(noApprovedStop.stderr + noApprovedStop.stdout, /no look stop for approved/, 'the refusal must name the exact D7 message: ' + noApprovedStop.stdout + noApprovedStop.stderr)

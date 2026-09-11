@@ -228,6 +228,13 @@ upstream bug list. -->
   mock in the same batch; never weaken the gate"), so the miss cost one more fixture repair
   instead of a scope fight. Price a caller-count assumption as a prediction and write its remedy
   at lock, not just its confidence.
+  Ninth trigger, the one that is not a grep failure at all: a lock-time closure that NAMES A
+  SIBLING SPEC'S File Plan row as the remedy. One spec closed its own refusal collision with
+  "covered by spec 04's fixture row (the series lands in order)"; that row was about theme
+  composition, wrote none of the state the new refusal reads, and its spec was still `hardened`
+  when this one built — so the collision arrived undefended and reddened 16 tests across eight
+  files. A deferral to a sibling is only real when the sibling's row is read and shown to write
+  the exact state the refusal checks; otherwise price it as unclosed and enter the fix rows here.
   (specs/20260813/07-command-report-conformance.md D8; specs/20260813/09-model-placement-mechanics.md D4;
   specs/20260814/01-ac-matrix-script.md; specs/20260907/09-atlas-index-and-note-navigation.md;
   specs/20260907/07-mocks-retires-theme.md D12; specs/20260907/08-walk-critic.md D2/D6;

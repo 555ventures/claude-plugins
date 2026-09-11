@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 61878,
-    "spec/scripts": 1340136,
-    "spec/scripts/lib": 250997,
-    "tests": 3865164
+    "spec/scripts": 1354529,
+    "spec/scripts/lib": 279809,
+    "tests": 3919858
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -23,7 +23,7 @@
     "spec/scripts/commit-coverage.js": 16400,
     "spec/scripts/components-check.js": 4708,
     "spec/scripts/design-ac-reconcile.js": 6011,
-    "spec/scripts/design-atlas.js": 148316,
+    "spec/scripts/design-atlas.js": 156386,
     "spec/scripts/env-preflight.js": 8794,
     "spec/scripts/escape-row.js": 10045,
     "spec/scripts/fleet-reader.js": 47448,
@@ -45,6 +45,7 @@
     "spec/scripts/lib/mocks-ledger.js": 13101,
     "spec/scripts/lib/mocks-notes.js": 20627,
     "spec/scripts/lib/mocks-picks.js": 8373,
+    "spec/scripts/lib/mocks-walk.js": 6267,
     "spec/scripts/lib/notes-layer.browser.js": 24862,
     "spec/scripts/lib/observation.js": 2613,
     "spec/scripts/lib/parse-selection.js": 2367,
@@ -58,11 +59,13 @@
     "spec/scripts/lib/stop-block.js": 9749,
     "spec/scripts/lib/surfaces.js": 5646,
     "spec/scripts/lib/walk-mode.browser.js": 3101,
+    "spec/scripts/lib/walk-page.js": 12132,
+    "spec/scripts/lib/walk.browser.js": 10413,
     "spec/scripts/lib/wire-register.js": 2871,
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
     "spec/scripts/merge-back.sh": 17514,
-    "spec/scripts/mocks-driver.js": 123924,
+    "spec/scripts/mocks-driver.js": 130247,
     "spec/scripts/port-check.js": 3536,
     "spec/scripts/promise-sweep.js": 10409,
     "spec/scripts/prose-cap.js": 6271,
@@ -113,7 +116,7 @@
     "tests/consistency/citations-check.test.js": 16363,
     "tests/consistency/comment-narration-live.test.js": 3527,
     "tests/consistency/dependency-free.test.js": 8614,
-    "tests/consistency/design-doctrine.test.js": 44550,
+    "tests/consistency/design-doctrine.test.js": 47909,
     "tests/consistency/dup-windows-live.test.js": 1916,
     "tests/consistency/entrypoints.test.js": 70405,
     "tests/consistency/genesis-doctrine.test.js": 86907,
@@ -183,17 +186,19 @@
     "tests/mocks/chrome-harness.js": 9353,
     "tests/mocks/chrome-harness.test.js": 11209,
     "tests/mocks/client-route.test.js": 22060,
+    "tests/mocks/client-walk-route.test.js": 13322,
     "tests/mocks/mock-edges.test.js": 12014,
-    "tests/mocks/mocks-driver-2.test.js": 19004,
+    "tests/mocks/mocks-driver-2.test.js": 19577,
     "tests/mocks/mocks-driver-3.test.js": 17977,
     "tests/mocks/mocks-driver-4.test.js": 17661,
-    "tests/mocks/mocks-driver-client-2.test.js": 12708,
+    "tests/mocks/mocks-driver-client-2.test.js": 13610,
+    "tests/mocks/mocks-driver-client-3.test.js": 7492,
     "tests/mocks/mocks-driver-client.test.js": 13341,
-    "tests/mocks/mocks-driver-fixtures.js": 30889,
+    "tests/mocks/mocks-driver-fixtures.js": 31829,
     "tests/mocks/mocks-driver-kit-gate.test.js": 2879,
-    "tests/mocks/mocks-driver-look-stops-2.test.js": 12921,
+    "tests/mocks/mocks-driver-look-stops-2.test.js": 13218,
     "tests/mocks/mocks-driver-look-stops-3.test.js": 9656,
-    "tests/mocks/mocks-driver-look-stops-4.test.js": 12345,
+    "tests/mocks/mocks-driver-look-stops-4.test.js": 12642,
     "tests/mocks/mocks-driver-look-stops.test.js": 21565,
     "tests/mocks/mocks-driver-seed-2.test.js": 15589,
     "tests/mocks/mocks-driver-theme.test.js": 51812,
@@ -201,13 +206,15 @@
     "tests/mocks/mocks-driver-wire.test.js": 4753,
     "tests/mocks/mocks-driver.test.js": 35878,
     "tests/mocks/mocks-ledger.test.js": 12490,
-    "tests/mocks/mocks-notes.test.js": 64737,
+    "tests/mocks/mocks-notes.test.js": 65034,
     "tests/mocks/mocks-picks.test.js": 11563,
+    "tests/mocks/mocks-walk.test.js": 6354,
     "tests/mocks/notes-layer-isolation.test.js": 6372,
     "tests/mocks/notes-layer-navigation.test.js": 27334,
     "tests/mocks/review-page.test.js": 20272,
     "tests/mocks/viewer-tokens.test.js": 4600,
     "tests/mocks/walk-mode.test.js": 11226,
+    "tests/mocks/walk-page.test.js": 20861,
     "tests/parse-selection/parse-selection.test.js": 4720,
     "tests/prose-debt/doctrine-pins.test.js": 4759,
     "tests/prose-debt/memory-sweep.test.js": 12286,
@@ -1621,6 +1628,78 @@
       "from": 3849652,
       "to": 3865164,
       "cite": "specs/20260910/07-post-gate-command.md"
+    },
+    {
+      "path": "spec/scripts/design-atlas.js",
+      "from": 148316,
+      "to": 156386,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 123924,
+      "to": 130247,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "tests/consistency/design-doctrine.test.js",
+      "from": 44550,
+      "to": 47909,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-2.test.js",
+      "from": 19004,
+      "to": 19577,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-client-2.test.js",
+      "from": 12708,
+      "to": 13610,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-fixtures.js",
+      "from": 30889,
+      "to": 31829,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-look-stops-2.test.js",
+      "from": 12921,
+      "to": 13218,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-look-stops-4.test.js",
+      "from": 12345,
+      "to": 12642,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "tests/mocks/mocks-notes.test.js",
+      "from": 64737,
+      "to": 65034,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1340136,
+      "to": 1354529,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "spec/scripts/lib",
+      "from": 250997,
+      "to": 279809,
+      "cite": "specs/20260910/03-client-journey-player.md"
+    },
+    {
+      "path": "tests",
+      "from": 3865164,
+      "to": 3919858,
+      "cite": "specs/20260910/03-client-journey-player.md"
     }
   ]
 }

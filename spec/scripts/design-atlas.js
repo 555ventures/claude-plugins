@@ -179,7 +179,7 @@ const path = require('node:path')
 const { readConfig } = require('./lib/host-config')
 const shellLib = require('./lib/shell-region')
 const notesLib = require('./lib/mocks-notes')
-const { parseLedger, setStatus } = require('./lib/mocks-ledger')
+const { parseLedger, setStatus, appendAssumption } = require('./lib/mocks-ledger')
 const picksLib = require('./lib/mocks-picks.js')
 const { stylesheetTargets, linksWireRegister } = require('./lib/wire-register')
 const surfacesLib = require('./lib/surfaces')
@@ -191,6 +191,10 @@ const reviewPageLib = require('./lib/review-page')
 // async spawn (client-capture.js's own contract), never spawnSync, since the capture runs INSIDE
 // this same serving process while it is still answering the client's own POST.
 const clientCaptureLib = require('./lib/client-capture')
+// specs/20260910/03-client-journey-player.md D5/D6: the client player's own pure page builder
+// and the one writer of design/mocks/walk.json.
+const walkPageLib = require('./lib/walk-page')
+const walkLib = require('./lib/mocks-walk')
 
 const die = (msg, code = 2) => { process.stderr.write('[design-atlas] ' + msg + '\n'); process.exit(code) }
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -1096,6 +1100,21 @@ function seedForReview(root) {
   return { product, viewportWidth: vp.width, viewportHeight: vp.height, journeys }
 }
 
+// specs/20260910/03-client-journey-player.md D6: the promoted said-by-user row's own id — A2
+// (false, per the spec's own escalation): lib/mocks-ledger.js's appendAssumption does not derive
+// an id itself (the caller always supplies one), so the client route derives its own next free
+// "C<n>" the same way mocks-driver.js's nextLedgerId derives "P<n>" for its own picks-originated
+// rows — a distinct prefix keeps a client-promoted row's id from ever colliding with one the
+// session assigns through `ledger add`.
+function nextClientLedgerId(parsed) {
+  let max = 0
+  for (const a of parsed.assumptions) {
+    const m = /^C(\d+)$/.exec(a.id)
+    if (m) max = Math.max(max, parseInt(m[1], 10))
+  }
+  return 'C' + (max + 1)
+}
+
 // ---- picks (specs/20260905/01-picks-on-the-atlas-page.md D3/D4) ----------------------------------
 // A look stop's key says where it renders (D3b): shape-picked -> the shapes section, theme-picked
 // -> a dedicated theme section right after shapes, journey-approved:<j> -> the <j>
@@ -1771,6 +1790,22 @@ function jsonRes(res, code, obj) {
   res.end(JSON.stringify(obj))
 }
 
+// specs/20260910/03-client-journey-player.md D5: shared by GET /review/<j>.html and GET
+// /client/walk/<j>.html — both build a page from a builder that throws (naming every declared
+// journey) on an unknown one, and both turn that throw into the same 404 shape.
+function serveBuiltHtml(res, build) {
+  let html
+  try {
+    html = build()
+  } catch (e) {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
+    res.end((e && e.message) || 'not found')
+    return
+  }
+  res.writeHead(200, { 'content-type': MIME['.html'], 'cache-control': 'no-store' })
+  res.end(html)
+}
+
 // specs/20260905/01-picks-on-the-atlas-page.md D2: the per-root request handler extracted from
 // `cmdServe` — `serve` mounts it at prefix '' (the only mount this repo uses, specs/20260905/04
 // D1). Every path is matched after stripping `prefix`; a request whose path does not start with
@@ -1783,6 +1818,7 @@ function createRequestHandler(root, opts = {}) {
   const viewerCssPath = path.join(__dirname, '..', 'templates', 'mocks', 'viewer.css')
   const reviewBrowserPath = path.join(__dirname, 'lib', 'review.browser.js')
   const walkBrowserPath = path.join(__dirname, 'lib', 'walk-mode.browser.js')
+  const walkPlayerPath = path.join(__dirname, 'lib', 'walk.browser.js')
 
   return function handler(req, res) {
     const urlObj = new URL(req.url || '/', 'http://localhost')
@@ -2022,10 +2058,31 @@ function createRequestHandler(root, opts = {}) {
         try { rewritten = setStatus(ledgerText, target.ledgerId, newStatus) } catch (e) { jsonRes(res, 400, { error: e.message }); return }
         fs.writeFileSync(ledgerPath, rewritten)
 
+        // specs/20260910/03-client-journey-player.md D6: a client's "no" WITH text is a fact the
+        // client said, not merely the session's own guess being corrected — it promotes to a new
+        // said-by-user row, right after the row it corrects flips to overridden. The non-client
+        // route (D6 CONTINUES TO) never runs this: the session correcting its own guess is not the
+        // client saying something.
+        let promotedId = null
+        if (clientRoute) {
+          const claimText = String((body && body.text) || '').trim()
+          if (claimText) {
+            let promotedLedger
+            try {
+              promotedId = nextClientLedgerId(parseLedger(rewritten))
+              promotedLedger = appendAssumption(rewritten, {
+                id: promotedId, step: 'CLIENT', kind: 'product', claim: claimText, tag: 'said-by-user',
+                status: 'confirmed ' + today, rejected: null, dependents: null, note: 'corrects ' + target.ledgerId,
+              })
+            } catch (e) { jsonRes(res, 400, { error: e.message }); return }
+            fs.writeFileSync(ledgerPath, promotedLedger)
+          }
+        }
+
         let result
         try { result = notesLib.answerQuestion(notes, id, { verdict, text: (body && body.text) || '', by }) } catch (e) { jsonRes(res, 400, { error: e.message }); return }
         notesLib.writeNotes(rootAbs, result.notes)
-        jsonRes(res, 200, result.note)
+        jsonRes(res, 200, promotedId ? Object.assign({}, result.note, { promoted: promotedId }) : result.note)
       }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
       return
     }
@@ -2034,9 +2091,102 @@ function createRequestHandler(root, opts = {}) {
       res.end('not found')
       return
     }
+
+    // ---- the client player (specs/20260910/03-client-journey-player.md D5) --------------------
+    // GET /client/index.html, GET /client/walk/<j>.html, GET /client/__walk/state?journey=<j>,
+    // POST /client/__walk/event, POST /client/__walk/confirm — every one client-mount-only by
+    // construction (guarded on `clientRoute`), so a non-client request for the same stripped path
+    // (e.g. a bare POST /__walk/event) falls through, unmatched, to the 404 every other unknown
+    // path already gets below.
+    if (clientRoute) {
+      const targetsForLang = loadTargets(rootAbs)
+      const lang = (targetsForLang && targetsForLang.lang) || 'en'
+      const readWalkOrEmpty = () => { try { return walkLib.readWalk(rootAbs) } catch { return { journeys: {} } } }
+      const readLedgerRowsOrEmpty = () => {
+        try { return parseLedger(fs.readFileSync(path.join(rootAbs, 'design/mocks/ledger.md'), 'utf8')).assumptions } catch { return [] }
+      }
+
+      if ((reqPath === '/index.html' || reqPath === '/') && req.method === 'GET') {
+        let notes = []
+        try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
+        const html = walkPageLib.buildClientIndex({
+          seed: seedForReview(rootAbs), notes, ledger: readLedgerRowsOrEmpty(), walk: readWalkOrEmpty(), prefix, lang,
+        })
+        res.writeHead(200, { 'content-type': MIME['.html'], 'cache-control': 'no-store' })
+        res.end(html)
+        return
+      }
+
+      const walkPageMatch = /^\/walk\/([^/]+)\.html$/.exec(reqPath)
+      if (walkPageMatch && req.method === 'GET') {
+        let notes = []
+        try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
+        serveBuiltHtml(res, () => walkPageLib.buildWalkPage({
+          seed: seedForReview(rootAbs), journey: walkPageMatch[1], notes, ledger: readLedgerRowsOrEmpty(),
+          walk: readWalkOrEmpty(), prefix, lang,
+        }))
+        return
+      }
+
+      if (reqPath === '/__walk/state' && req.method === 'GET') {
+        const journey = urlObj.searchParams.get('journey')
+        const rec = (readWalkOrEmpty().journeys || {})[journey] ||
+          { reached: [], misses: [], confirmedAt: null, sentence: null, waived: null }
+        jsonRes(res, 200, { reached: rec.reached, misses: rec.misses, confirmedAt: rec.confirmedAt, sentence: rec.sentence, waived: rec.waived })
+        return
+      }
+
+      if (reqPath === '/__walk/event' && req.method === 'POST') {
+        readJsonBody(req).then((body) => {
+          const journey = body && body.journey
+          const kind = body && body.walk
+          const declared = parseSeedJourneys(rootAbs)
+          if (!journey || !declared.has(journey) || (kind !== 'to' && kind !== 'miss')) {
+            jsonRes(res, 400, { error: 'event needs {journey, walk:"to"|"miss", from, to|target} naming a declared journey' })
+            return
+          }
+          if (kind === 'to' && (!body.from || !body.to ||
+              !declared.get(journey).labels.includes(body.from) || !declared.get(journey).labels.includes(body.to))) {
+            jsonRes(res, 400, { error: 'a "to" event needs {from, to} naming labels declared on journey "' + journey + '"' })
+            return
+          }
+          if (kind === 'miss' && (!body.from || !body.target || !declared.get(journey).labels.includes(body.from))) {
+            jsonRes(res, 400, { error: 'a "miss" event needs {from, target} naming a label declared on journey "' + journey + '"' })
+            return
+          }
+          const next = walkLib.recordEvent(readWalkOrEmpty(), {
+            journey, walk: kind, from: body.from, to: body.to, target: body.target, at: new Date().toISOString(),
+          })
+          walkLib.writeWalk(rootAbs, next)
+          jsonRes(res, 200, next.journeys[journey])
+        }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
+        return
+      }
+
+      if (reqPath === '/__walk/confirm' && req.method === 'POST') {
+        readJsonBody(req).then((body) => {
+          const journey = body && body.journey
+          const declared = parseSeedJourneys(rootAbs)
+          if (!journey || !declared.has(journey)) {
+            jsonRes(res, 400, { error: 'confirm needs {journey, sentence} naming a declared journey' })
+            return
+          }
+          let next
+          try {
+            next = walkLib.confirmJourney(readWalkOrEmpty(), { journey, sentence: body && body.sentence, at: new Date().toISOString() })
+          } catch (e) {
+            jsonRes(res, /already confirmed/.test(e.message) ? 409 : 400, { error: e.message })
+            return
+          }
+          walkLib.writeWalk(rootAbs, next)
+          jsonRes(res, 200, next.journeys[journey])
+        }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
+        return
+      }
+    }
     // D4: every other `/client/…` path 404s until specs/20260907/11-client-view.md serves it —
-    // the client mount answers only its own `/__notes/*` verbs above, never the atlas index or
-    // the static design/ tree the non-client route falls through to below.
+    // the client mount answers only its own `/__notes/*` and `/__walk/*` verbs above, never the
+    // atlas index or the static design/ tree the non-client route falls through to below.
     if (clientRoute) {
       res.writeHead(404, { 'cache-control': 'no-store' })
       res.end('not found')
@@ -2090,6 +2240,17 @@ function createRequestHandler(root, opts = {}) {
       })
       return
     }
+    // specs/20260910/03-client-journey-player.md D5: the player itself, loaded by every page
+    // lib/walk-page.js builds — served byte-verbatim, never mounted under `/client` (the player
+    // is what talks to the client mount, not part of it).
+    if (reqPath === '/__walk/player.js' && req.method === 'GET') {
+      fs.readFile(walkPlayerPath, (err, data) => {
+        if (err) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end('not found'); return }
+        res.writeHead(200, { 'content-type': 'text/javascript', 'cache-control': 'no-store' })
+        res.end(data)
+      })
+      return
+    }
     if (reqPath === '/__review/review.js' && req.method === 'GET') {
       fs.readFile(reviewBrowserPath, (err, data) => {
         if (err) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end('not found'); return }
@@ -2110,19 +2271,10 @@ function createRequestHandler(root, opts = {}) {
       try { ledgerRows = parseLedger(fs.readFileSync(path.join(rootAbs, 'design/mocks/ledger.md'), 'utf8')).assumptions } catch { ledgerRows = [] }
       let stops = []
       try { stops = picksLib.readPicks(rootAbs) } catch { stops = [] }
-      let html
-      try {
-        html = reviewPageLib.buildReviewPage({
-          root: rootAbs, journey, prefix, seed: seedForReview(rootAbs), notes, ledger: ledgerRows, stops,
-          clean: urlObj.searchParams.has('clean'),
-        })
-      } catch (e) {
-        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
-        res.end((e && e.message) || 'not found')
-        return
-      }
-      res.writeHead(200, { 'content-type': MIME['.html'], 'cache-control': 'no-store' })
-      res.end(html)
+      serveBuiltHtml(res, () => reviewPageLib.buildReviewPage({
+        root: rootAbs, journey, prefix, seed: seedForReview(rootAbs), notes, ledger: ledgerRows, stops,
+        clean: urlObj.searchParams.has('clean'),
+      }))
       return
     }
 

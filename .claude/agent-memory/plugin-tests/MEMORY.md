@@ -1,5 +1,6 @@
 # Memory index
 
+- [Spec 04 disposition-grammar tests: testGlobs:[null] crash + green-pre-change reconstruction](spec-20260911-04-disposition-grammar-tests.md) — force count-tests.js/scope-reconcile.js to crash via host config; AC-18's before/after count pin is legitimately green today, proven via a scratch-patched real-lib reconstruction, not skipped.
 - [Doctrine regex pins and line-wrap](doctrine-regex-linewrap.md) — use \s+ not a literal space between words in multi-word doctrine regex pins; markdown hard-wrap can split the phrase across lines in only one of several files.
 - [Stale dispatch premise from a concurrent session](stale-dispatch-premise-concurrent-session.md) — re-derive current repo state (git log, live grep) before authoring a red pin from a dispatch prompt's incident narrative; another session can land the fix mid-task.
 - [scope-reconcile degenerate stems](scope-reconcile-degenerate-stems.md) — gitRepo() pre-seeds a committed root .gitignore; mutation-proof one AC via cp-mutant + test-name-pattern + restore, never a stray scratch file.
@@ -38,3 +39,4 @@
 - [ac-drift-clean standing test](ac-drift-clean-standing-test.md) — runs ac-drift.js against ROOT itself, not a tmpdir fixture; its live finding count shifts with every sibling File Plan edit, never hardcode the observed number.
 - [Spec 02 replay-base/label-honesty File Plan overstatement](spec-20260909-02-replay-base-label-honesty.md) — "existing test"/occurrence-count citations can be stale; grep before retagging; a retired-shape refusal message can vacuously contain the new shape's own accepted-value name.
 - [Spec 02 amendment: ceiling to instrument](spec-20260911-02-amendment-ceiling-to-instrument.md) — retag a D-locked green-row literal by grepping the OLD string across the File Plan's named files; a never-reddens leg's red-fixture handler proves engagement via an exact planted count, never a redness assertion.
+- [Spec 04 review-fix: vacuous D18 rebuild + missing AC-17 + AC-16 retag + shell-quote/arrow pins](spec-20260911-04-review-fix-five-items.md) — build "old" by REMOVING new lines from HEAD, never by patching new lines onto HEAD; falsify a fix pin by reverting the real fix in a scratch copy of the script.

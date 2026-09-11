@@ -269,9 +269,16 @@ function scanCalls(src) {
         const openParen = i + (isTest ? 4 : 2)
         const callEnd = findCallEnd(src, openParen)
         const title = extractTitle(src, openParen)
+        // D10 (specs/20260911/04-every-criterion-declares-its-test.md): only a trailing `;` is
+        // consumed now — the former unconditional trailing-`\n` consumption pushed a span past
+        // its own call's closing paren into the FOLLOWING line, so a call immediately followed by
+        // another (the overwhelmingly common shape, one blank-free line between two test( calls)
+        // reported `end === <next call's start>` instead of strictly less, and the file's last
+        // call (one trailing newline before EOF, equally common) reported `end === src.length`
+        // indistinguishable from a swallowed-rest-of-file span — the exact file-corrupting
+        // deletion this invariant exists to let spec 03 detect (AC-20260911-04-12).
         let end = callEnd
-        if (src[end] === ';') end++
-        if (src[end] === '\n') end++
+        if (src[end] === ';' && end + 1 < src.length) end++
         calls.push({
           start: findCommentAbove(src, lineStart),
           end,

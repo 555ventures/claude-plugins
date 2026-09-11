@@ -90,9 +90,12 @@ Write the spec per the template. `status: draft`. While drafting:
    (ask or explore; delete the marker, record the ruling in Decisions), then write
    `open_markers: N` into frontmatter (0 to lock; quoted narration doesn't count — the
    state gate reads this field as authoritative).
-2. **Confirm:** run `node "$(spec-paths ac-matrix)" --spec {spec path} --lint` first — zero
-   findings to lock (a `mixed-pin` is fixed by splitting the bullet, never by rewording the
-   pin away). Then: zero open forks; every shape-triggered micro-spike executed with evidence
+2. **Confirm:** run `node "$(spec-paths ac-matrix)" --spec {spec path} --lint --resolve-root .`
+   first — zero findings to lock (`mixed-pin`: split the bullet; `missing-disposition`: end it
+   `→ writes <file>` / `→ rewrites <file> :: <title>` / `→ reuses <file> :: <title>`;
+   `unresolved-disposition`: lengthen the prefix to name exactly one pre-image test —
+   `node "$(spec-paths count-tests)" --root . --titles [--file <rel>]` is the reference lookup). Then:
+   zero open forks; every shape-triggered micro-spike executed with evidence
    in Assumptions; every Goal promise traced to a Decision that delivers it and an AC that
    goes red in its absence — run `node "$(spec-paths promise-sweep)" --spec {spec path}`
    (no `--manifest`) and resolve every `orphan-decision` finding by citing the delivering

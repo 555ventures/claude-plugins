@@ -34,11 +34,23 @@
 //
 // Exit codes: 0 = every resolved tests-layer file matches its expected pre-image colour ·
 //             1 = findings emitted (unsanctioned-green | broken-pin | missing-test-file |
-//                 invalid-pre-green | rejected-trailing-tag | mixed-pin) — rides the normal build
-//                 Phase 1 disposition flow, never a script failure · 2 = usage error, unreadable
-//                 --spec, no ## Acceptance Criteria section, host config declares no testCommand,
-//                 or a pre-image purity refusal (a non-tests File Plan path already differs from
-//                 --base — tracked or untracked)
+//                 invalid-pre-green | rejected-trailing-tag | mixed-pin | gutted-rewrite |
+//                 broken-reuse) — rides the normal build Phase 1 disposition flow, never a script
+//                 failure · 2 = usage error, unreadable --spec, no ## Acceptance Criteria section,
+//                 host config declares no testCommand, or a pre-image purity refusal (a non-tests
+//                 File Plan path already differs from --base — tracked or untracked)
+//
+// specs/20260911/04-every-criterion-declares-its-test.md D6/D7/D8: an AC declaring `rewrites` or
+// `reuses` (lib/spec-sections.js's `parseDisposition`) gets one additional TARGETED run, on top of
+// the whole-file arms above, ONLY when the host config declares `testNameFilter` — a shell-
+// argument fragment carrying `{name}`. A `rewrites` case observed green is hard `gutted-rewrite`;
+// a `reuses` case observed red is hard `broken-reuse`. Absent `testNameFilter`, every rewrites/
+// reuses AC degrades to today's whole-file-only behaviour with exactly one warning naming the
+// key — never one per AC, never a per-test spawn. A reference that resolves to other than exactly
+// one pre-image test, or resolves but is absent from the filtered run's OWN OUTPUT (a pattern
+// matching nothing still exits 0 — Assumptions A1), falls back the same way, WARN naming the file/
+// prefix/cause (`unresolved` | `unselected`) — never a finding on that path alone. `--json` gains
+// a fourth top-level array, `dispositions`, one entry per rewrites/reuses AC.
 //
 // specs/20260821/03-cross-spec-skip-mapping.md D7: the carried-AC
 // classifier below (content.includes(b.id)) was a bare substring test — a tests-layer file
@@ -73,9 +85,10 @@ const { execFileSync, spawnSync } = require('child_process')
 const { parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
 const { readConfig } = require('./lib/host-config')
+const { scanCalls } = require('./lib/scan-test-calls')
 const {
   extractSection, parseAcBullets, PRE_GREEN_REASONS, acIdOccurs, rejectedTrailingTagDetail,
-  normalizeForPinCheck, pinShape,
+  normalizeForPinCheck, pinShape, parseDisposition,
 } = require('./lib/spec-sections')
 
 function usage() {
@@ -405,6 +418,118 @@ for (const relPath of [...testFiles].sort()) {
   files.push({ path: relPath, expected, observed, carriedAcs })
 }
 
+// ---- D6/D7/D8 (specs/20260911/04-every-criterion-declares-its-test.md): per-test verification
+// for rewrites/reuses dispositions — a targeted run ON TOP OF the whole-file arms above, never a
+// replacement for them. `writes` dispositions and undeclared (null) ones are untouched.
+
+// D6: the regex-escaped, anchored title substituted for the host config's `{name}` placeholder —
+// `\ ^ $ . | ? * + ( ) [ ] { }` are the only characters escaped, per the Decision's own list.
+function escapeTitleForRegex(title) {
+  return title.replace(/[\\^$.|?*+()[\]{}]/g, '\\$&')
+}
+
+// Wraps `arg` in single quotes for literal, no-expansion substitution into a `bash -c` command
+// string — single quotes are the one POSIX quoting form with zero escapes recognised inside
+// (no `\`, `$`, backtick, or `"` is special there), so this is the only form that survives a
+// title carrying any of those characters unexpanded. An embedded single quote is closed,
+// escaped as `\'` OUTSIDE the quoting (a literal backslash-quote passed straight through the
+// shell), then reopened, e.g. `it's` → `'it'\''s'`.
+function shellQuoteSingle(arg) {
+  return `'${arg.replace(/'/g, `'\\''`)}'`
+}
+
+// D6/D7: `{testCommand} {testNameFilter←escaped ^title$} <file>`, appended ahead of the file path
+// (matching the existing `{typecheckCommand} <file>` append form) — output is captured (never
+// `stdio: 'ignore'` like runLeg above) because D8's selection proof needs the run's own stdout to
+// confirm the title was actually selected, not merely infer it from the exit code (Assumptions
+// A1: a pattern matching nothing still exits 0).
+//
+// Hardened (confirmed hard finding, review): the filter/path fragments were substituted via
+// `JSON.stringify`, which produces DOUBLE-quoted shell words — bash still expands `` ` `` (command
+// substitution) and `$` (variable expansion) inside double quotes, so a test title carrying
+// either ran as shell syntax instead of a literal string (a backtick-quoted `touch` in a title
+// created the file it named; 27 of this repo's 1,050 live titles carry a backtick and 6 carry
+// `$`). `testCommand` itself is still `bash -c`-interpreted (it is a host-supplied command
+// string, D6's own contract) — only the SUBSTITUTED filter/path fragments are now single-quoted
+// via `shellQuoteSingle`, which recognises no shell metacharacter at all.
+function runFilteredLeg(cmd, filterTemplate, title, relPath) {
+  const pattern = `^${escapeTitleForRegex(title)}$`
+  const filterArg = filterTemplate.replace('{name}', pattern)
+  const env = { ...process.env }
+  delete env.NODE_TEST_CONTEXT
+  const res = spawnSync('bash',
+    ['-c', `${cmd} ${shellQuoteSingle(filterArg)} ${shellQuoteSingle(relPath)}`],
+    { cwd: root, env, encoding: 'utf8' })
+  return { code: res.status === null ? 1 : res.status, output: (res.stdout || '') + (res.stderr || '') }
+}
+
+const dispositions = []
+const dispositionCandidates = []
+for (const b of wellFormed) {
+  const disposition = parseDisposition(b.raw)
+  if (disposition && (disposition.kind === 'rewrites' || disposition.kind === 'reuses')) {
+    dispositionCandidates.push({ b, disposition })
+  }
+}
+
+if (dispositionCandidates.length) {
+  if (!config.testNameFilter) {
+    // D6: absent testNameFilter degrades every rewrites/reuses AC to today's whole-file
+    // behaviour, ONE warning naming the key (never one per AC), and spawns no per-test run at all.
+    warnings.push(`testNameFilter is not declared in the host config — no per-test verification ` +
+      `runs for any rewrites/reuses disposition (${dispositionCandidates.length} declared here); ` +
+      `every file keeps its whole-file classification`)
+  } else {
+    for (const { b, disposition } of dispositionCandidates) {
+      const expected = disposition.kind === 'rewrites' ? 'red' : 'green'
+      let src = null
+      try { src = fs.readFileSync(path.join(root, disposition.file), 'utf8') } catch { src = null }
+      const matches = src === null ? [] : scanCalls(src).filter(c => c.title.startsWith(disposition.prefix))
+      // D8: not resolvable to exactly one pre-image test — fall back to the file's whole-file
+      // colour, WARN naming the file/prefix/cause, never a finding on this path alone.
+      if (matches.length !== 1) {
+        warnings.push(`${b.id}: ${disposition.kind} reference "${disposition.file} :: ` +
+          `${disposition.prefix}" is unresolved (${matches.length} matches) — falling back to ` +
+          `${disposition.file}'s whole-file colour (cause: unresolved)`)
+        dispositions.push({
+          ac: b.id, kind: disposition.kind, file: disposition.file, prefix: disposition.prefix,
+          expected, observed: null, fallback: 'unresolved',
+        })
+        continue
+      }
+      const title = matches[0].title
+      const { code, output } = runFilteredLeg(config.testCommand, config.testNameFilter, title, disposition.file)
+      // D8: selection proof — the run's OWN OUTPUT must name the selected title; a pattern
+      // matching nothing still exits 0 (Assumptions A1), so the exit code alone proves nothing.
+      if (!output.includes(title)) {
+        warnings.push(`${b.id}: ${disposition.kind} reference "${disposition.file} :: ${title}" ` +
+          `was not selected by the filtered run's own output — falling back to ` +
+          `${disposition.file}'s whole-file colour (cause: unselected)`)
+        dispositions.push({
+          ac: b.id, kind: disposition.kind, file: disposition.file, prefix: disposition.prefix,
+          expected, observed: null, fallback: 'unselected',
+        })
+        continue
+      }
+      const observed = code === 0 ? 'green' : 'red'
+      dispositions.push({ ac: b.id, kind: disposition.kind, file: disposition.file, prefix: disposition.prefix, expected, observed })
+      if (disposition.kind === 'rewrites' && observed === 'green') {
+        findings.push({
+          class: 'gutted-rewrite', path: disposition.file, acs: [b.id],
+          detail: `${b.id}: rewrites reference "${disposition.file} :: ${title}" already passes ` +
+            `against the pre-image — a gutted rewrite (a failing sibling case never satisfies it)`,
+        })
+      } else if (disposition.kind === 'reuses' && observed === 'red') {
+        findings.push({
+          class: 'broken-reuse', path: disposition.file, acs: [b.id],
+          detail: `${b.id}: reuses reference "${disposition.file} :: ${title}" fails against the ` +
+            `pre-image — a broken reuse`,
+        })
+      }
+    }
+  }
+}
+
 // ---- output -------------------------------------------------------------------------------------
 // The 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in full
 // at spec/scripts/lib/driver-io.js's writeOut.
@@ -417,7 +542,7 @@ function writeAll(fd, buf) {
 }
 
 if (jsonOut) {
-  writeAll(1, Buffer.from(JSON.stringify({ files, findings, warnings }, null, 2) + '\n'))
+  writeAll(1, Buffer.from(JSON.stringify({ files, findings, warnings, dispositions }, null, 2) + '\n'))
 } else {
   for (const f of findings) console.log(`HARD  ${f.class.padEnd(20)} ${f.path}  ${f.detail}`)
   for (const w of warnings) console.log(`WARN  ${w}`)

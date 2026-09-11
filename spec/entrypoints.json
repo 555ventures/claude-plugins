@@ -300,7 +300,9 @@
   },
   "spec/scripts/count-tests.js": {
     "entryPoints": [
-      "spec/scripts/review-legs.js"
+      "spec/scripts/review-legs.js",
+      "spec/commands/plan.md",
+      "spec/templates/spec.md"
     ]
   },
   "spec/scripts/verdict.js": {

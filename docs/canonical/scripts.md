@@ -84,3 +84,19 @@ this repo ships may be named `test-*` — `node --test`'s default discovery matc
 anywhere under the root and would execute it as a test file. Byte-size ratchets and
 duplicate-window baselines were retired as self-authorizing; the growth they tried to police is
 addressed at its cause by the AC disposition grammar, not by a number.
+
+An acceptance criterion declares what it does to the test suite it inherits — `→ writes <file>`,
+`→ rewrites <file> :: <title prefix>`, or `→ reuses <file> :: <title prefix>` — and the declaration
+is refused at plan lock when absent or when its reference resolves to other than exactly one
+pre-image test. `::` is the reference separator because a title may carry quotes, brackets,
+parentheses or an arrow but essentially never that pair; the pointer is the bullet's TRAILING
+arrow run, so a criterion may quote the grammar in its own prose without shadowing its own
+declaration, and a prefix is grown only until it is unique within its own file.
+`count-tests.js --root <dir> --titles` is the one place an author finds a reference string. The
+pre-image check verifies a rewrite is red and a reuse is green against the named test rather than
+its whole file, but only where the host declares `testNameFilter`; absent, every file is classified
+exactly as before. A title reaches the runner single-quoted, never interpolated — a backtick or `$`
+in a test's own name is data, not shell. A test-name filter that selects nothing is invisible to a
+runner's exit code — the run's own output naming the selected title is the only proof of selection,
+and an unresolved or unselected reference falls back to the file's colour with a warning, never a
+finding.

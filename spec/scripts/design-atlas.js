@@ -2173,8 +2173,6 @@ function createRequestHandler(root, opts = {}) {
     // (e.g. a bare POST /__walk/event) falls through, unmatched, to the 404 every other unknown
     // path already gets below.
     if (clientRoute) {
-      const targetsForLang = loadTargets(rootAbs)
-      const lang = (targetsForLang && targetsForLang.lang) || 'en'
       const readWalkOrEmpty = () => { try { return walkLib.readWalk(rootAbs) } catch { return { journeys: {} } } }
       const readLedgerRowsOrEmpty = () => {
         try { return parseLedger(fs.readFileSync(path.join(rootAbs, 'design/mocks/ledger.md'), 'utf8')).assumptions } catch { return [] }
@@ -2203,7 +2201,7 @@ function createRequestHandler(root, opts = {}) {
         try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
         const themeStop = liveThemeStop()
         const html = walkPageLib.buildClientIndex({
-          seed: seedForReview(rootAbs), notes, ledger: readLedgerRowsOrEmpty(), walk: readWalkOrEmpty(), prefix, lang,
+          seed: seedForReview(rootAbs), notes, ledger: readLedgerRowsOrEmpty(), walk: readWalkOrEmpty(), prefix,
           themeOpen: !!(themeStop && themeStop.status === 'open'),
         })
         res.writeHead(200, { 'content-type': MIME['.html'], 'cache-control': 'no-store' })
@@ -2214,7 +2212,7 @@ function createRequestHandler(root, opts = {}) {
       // D5: the theme compare page — the open or decided theme-picked stop, or none at all.
       if (reqPath === '/theme.html' && req.method === 'GET') {
         const html = walkPageLib.buildThemePage({
-          stop: liveThemeStop(), seed: seedForReview(rootAbs), prefix, lang,
+          stop: liveThemeStop(), seed: seedForReview(rootAbs), prefix,
         })
         res.writeHead(200, { 'content-type': MIME['.html'], 'cache-control': 'no-store' })
         res.end(html)
@@ -2244,7 +2242,7 @@ function createRequestHandler(root, opts = {}) {
         try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
         serveBuiltHtml(res, () => walkPageLib.buildWalkPage({
           seed: seedForReview(rootAbs), journey: walkPageMatch[1], notes, ledger: readLedgerRowsOrEmpty(),
-          walk: readWalkOrEmpty(), prefix, lang, theme: mocksTheme(),
+          walk: readWalkOrEmpty(), prefix, theme: mocksTheme(),
         }))
         return
       }
@@ -2290,6 +2288,22 @@ function createRequestHandler(root, opts = {}) {
           const declared = parseSeedJourneys(rootAbs)
           if (!journey || !declared.has(journey)) {
             jsonRes(res, 400, { error: 'confirm needs {journey, sentence} naming a declared journey' })
+            return
+          }
+          // specs/20260911/01-the-page-waits-for-the-server.md D5: the backstop under the
+          // browser's own gate — a stale tab, a player script that failed to load, or a
+          // hand-made request cannot record an approval while the journey still carries an
+          // unanswered guess. Same rule lib/walk-page.js's isOpenQuestion applies (a waived
+          // question carries answer.verdict:'waived', so `answer == null` already excludes it).
+          let openNotes = []
+          try { openNotes = notesLib.readNotes(rootAbs) } catch { openNotes = [] }
+          const labels = declared.get(journey).labels
+          const openCount = openNotes.filter((n) => n && n.kind === 'question' && n.answer == null &&
+            n.scope === 'mock' && labels.includes(n.screen)).length
+          if (openCount > 0) {
+            jsonRes(res, 409, {
+              error: 'journey "' + journey + '" still has ' + openCount + ' unanswered guess(es) — answer them on /client/walk/' + journey + '.html before confirming',
+            })
             return
           }
           let next

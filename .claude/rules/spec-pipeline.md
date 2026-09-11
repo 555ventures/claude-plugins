@@ -328,7 +328,7 @@ upstream bug list. -->
   count drops, and a gate counting open items unlocks. Act on the server's answer, never on the
   request — and where a page pre-checks locally to save a round trip, that pre-check must be the
   same predicate the server enforces, never a looser one.
-  (escape:claude-plugins:2026-09-11T16:40:23Z:spec/scripts/lib/walk.browser.js)
+  (specs/20260910/03-client-journey-player.md; specs/20260911/01-the-page-waits-for-the-server.md)
 - `[plugin]` `tests/helpers.js`'s `runNode` is `spawnSync`, which blocks the parent Node event
   loop for the child's whole lifetime — so a test that stands up an **in-process**
   `http.createServer` stub and then `runNode`s the script under test against it can never

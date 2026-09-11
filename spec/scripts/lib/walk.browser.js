@@ -6,7 +6,8 @@
 // mark visibility, the walk-to-unlock check, the four POST routes it drives), D1 (the markup
 // contract it reads: [data-journey]/[data-prefix]/[data-theme] on the page's own root element,
 // [data-wk="…"] hooks on frame/rail/thumb/pos/back/next/states/mark/yes/no/why/left/note/
-// approve/sentence/confirm).
+// approve/sentence/confirm/msg); specs/20260911/01-the-page-waits-for-the-server.md D4 (every
+// save acts only on the server's answer, never before it — see the Behavior table).
 //
 // On load: fetches <prefix>/client/__walk/state?journey=<j> (the server's own walk record — the
 // one source of truth for what survives a reload) and derives the current screen from the last
@@ -19,11 +20,19 @@
 // approve without forcing a reload — never the other way around (nothing here ever shrinks the
 // server's own reached list).
 //
+// D4: local state follows the server's answer, it never precedes it. A mark's "no" with an empty
+// [data-wk="why"] posts nothing at all and shows the slot's own data-why text. Every other save
+// posts, and only on `ok === true` performs its local effect (a mark hides and decrements
+// [data-wk="left"]; the note textarea clears; a "to" message's from/to enter reachedSoFar and the
+// unlock check re-runs); on a non-ok response or a rejected fetch the local effect does NOT
+// happen and the slot shows its own data-failed text. The frame still moves on a "to" message
+// either way — navigating the prototype is local, per spec 03 D3.
+//
 // Deliberately does NOT read or write anything beyond those five HTTP calls — no localStorage,
 // no author identity of any kind (D3: the client route never asks who is answering; every POST
 // is stamped by:'client' here, never a window.prompt), and never decides approval itself — a
 // confirm POST is only ever sent with whatever the client typed; the 400/409 the server may
-// answer is not narrated here.
+// answer is narrated only through the [data-wk="msg"] slot, never parsed for its error text.
 //
 // Written against the same jsdom-free `vm` shim discipline lib/review.browser.js and lib/walk-
 // mode.browser.js use: querySelector/querySelectorAll/closest/getAttribute/setAttribute/
@@ -58,7 +67,16 @@
   var leftEl = q('[data-wk="left"]')
   var approveEl = q('[data-wk="approve"]')
   var confirmBtn = q('[data-wk="confirm"]')
+  var msgEl = q('[data-wk="msg"]')
   var lastLabel = thumbs.length ? thumbs[thumbs.length - 1].getAttribute('data-label') : null
+
+  // D4: the one slot every save reports through — never narrates the server's own error text,
+  // only its own two canned sentences, keyed by the attribute the builder already carried.
+  function showMsg(key) {
+    if (!msgEl) return
+    msgEl.textContent = msgEl.getAttribute('data-' + key) || ''
+    msgEl.hidden = false
+  }
 
   var currentLabel = thumbs.length ? thumbs[0].getAttribute('data-label') : null
   var currentState = null
@@ -158,15 +176,20 @@
   })
 
   // ---- marks: yes/no post the answer, by:'client', no author prompt --------------------------
+  // D4: local state follows the server's answer, never precedes it — a "no" with an empty reason
+  // posts nothing at all; every other answer posts and only an ok response hides the mark.
   qa('[data-wk="mark"]').forEach(function (m) {
     var id = m.getAttribute('data-id')
     function answer(verdict) {
       var whyEl = m.querySelector('[data-wk="why"]')
       var text = whyEl ? String(whyEl.value || '').trim() : ''
-      post('/client/__notes/answer', { id: id, verdict: verdict, text: text, by: 'client' })
-      if (!answered[id]) { answered[id] = true; leftCount = Math.max(0, leftCount - 1); updateLeft() }
-      m.hidden = true
-      checkUnlock()
+      if (verdict === 'no' && !text) { showMsg('why'); return }
+      post('/client/__notes/answer', { id: id, verdict: verdict, text: text, by: 'client' }).then(function (r) {
+        if (!r.ok) { showMsg('failed'); return }
+        if (!answered[id]) { answered[id] = true; leftCount = Math.max(0, leftCount - 1); updateLeft() }
+        m.hidden = true
+        checkUnlock()
+      }).catch(function () { showMsg('failed') })
     }
     on(m.querySelector('[data-wk="yes"]'), 'click', function () { answer('yes') })
     on(m.querySelector('[data-wk="no"]'), 'click', function () { answer('no') })
@@ -178,8 +201,10 @@
     var ta = q('[data-wk="note"] textarea')
     var text = ta ? String(ta.value || '').trim() : ''
     if (!text) return
-    post('/client/__notes/add', { scope: 'mock', screen: currentLabel, state: currentState, text: text, by: 'client' })
-    if (ta) ta.value = ''
+    post('/client/__notes/add', { scope: 'mock', screen: currentLabel, state: currentState, text: text, by: 'client' }).then(function (r) {
+      if (!r.ok) { showMsg('failed'); return }
+      if (ta) ta.value = ''
+    }).catch(function () { showMsg('failed') })
   })
 
   // ---- confirm: the terminal sentence -----------------------------------------------------------
@@ -187,22 +212,30 @@
     var ta = q('[data-wk="sentence"]')
     var sentence = ta ? String(ta.value || '').trim() : ''
     if (!sentence) return
-    post('/client/__walk/confirm', { journey: journey, sentence: sentence })
+    post('/client/__walk/confirm', { journey: journey, sentence: sentence }).then(function (r) {
+      if (!r.ok) showMsg('failed')
+    }).catch(function () { showMsg('failed') })
   })
 
   // ---- the embedded mock's own reporter (walk-mode.browser.js) -------------------------------
+  // The frame still moves on a "to" message regardless of the save — navigation stays local, per
+  // spec 03 D3 — but reachedSoFar (and therefore the unlock check) only advances on an ok save.
   if (window && window.addEventListener) {
     window.addEventListener('message', function (e) {
       var data = e && e.data
       if (!data || !data.walk) return
       if (data.walk === 'to') {
-        post('/client/__walk/event', { journey: journey, walk: 'to', from: data.from, to: data.to })
-        if (reachedSoFar.indexOf(data.from) === -1) reachedSoFar.push(data.from)
-        if (reachedSoFar.indexOf(data.to) === -1) reachedSoFar.push(data.to)
+        post('/client/__walk/event', { journey: journey, walk: 'to', from: data.from, to: data.to }).then(function (r) {
+          if (!r.ok) { showMsg('failed'); return }
+          if (reachedSoFar.indexOf(data.from) === -1) reachedSoFar.push(data.from)
+          if (reachedSoFar.indexOf(data.to) === -1) reachedSoFar.push(data.to)
+          checkUnlock()
+        }).catch(function () { showMsg('failed') })
         goTo(data.to)
-        checkUnlock()
       } else if (data.walk === 'miss') {
-        post('/client/__walk/event', { journey: journey, walk: 'miss', from: data.from, target: data.target })
+        post('/client/__walk/event', { journey: journey, walk: 'miss', from: data.from, target: data.target }).then(function (r) {
+          if (!r.ok) showMsg('failed')
+        }).catch(function () { showMsg('failed') })
       }
     })
   }

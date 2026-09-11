@@ -318,8 +318,8 @@ confirmed nor waived (`client waive --journey <j> --reason "<r>"`, the same seve
 note's waiver); `client log` prints each journey's confirmation sentence or its open count and
 misses.
 
-**A client's `no` promotes.** Answering a mark `違う` with a reason does what an `overridden`
-status alone does not: it also writes a new `said-by-user` row to the provenance ledger,
+**A client's `no` promotes.** Answering a mark `That's not right` with a reason does what an
+`overridden` status alone does not: it also writes a new `said-by-user` row to the provenance ledger,
 `note: "corrects <rowId>"` — the client's own correction becomes a fact the next round can build
 on, never just a flipped status. The session's own review page keeps today's behavior; only a
 client-origin answer promotes.

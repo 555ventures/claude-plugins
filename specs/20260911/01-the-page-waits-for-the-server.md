@@ -1,6 +1,7 @@
 ---
 date: 2026-09-11
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: design-atlas
 design: false
@@ -10,6 +11,7 @@ depended_on_by: []
 brief: n/a
 open_markers: 0
 spiked: 2026-09-11
+diff_base: 427d4b746c3a1dde7ca4eee2c5a660ba5f79cb33
 ---
 
 # The client player speaks English and waits for the server

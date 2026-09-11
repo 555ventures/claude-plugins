@@ -730,3 +730,22 @@ test('AC-20260910-04-10: spec/doctrine/mocks.md carries WALK -> THEME -> CLIENT 
   assert.ok(mocksCmd.includes('## Theme (THEME state)'),
     'AC-20260910-04-10: spec/commands/mocks.md must carry a "## Theme (THEME state)" heading: got no occurrence')
 })
+
+// ---------------------------------------------------------------------------
+// AC-20260911-01-11
+// ---------------------------------------------------------------------------
+// specs/20260911/01-the-page-waits-for-the-server.md D6: the "A client's no promotes" paragraph
+// in § Mocks: Client Player names the mark's English control ("That's not right") instead of
+// the retired `違う`, and the section gains no language claim of any kind. TDD red: the
+// pre-image's only Japanese in this file is exactly that one control name, at this heading.
+test('AC-20260911-01-11: spec/doctrine/mocks.md § Mocks: Client Player carries no character in the Hiragana/Katakana or CJK-Unified-Ideographs ranges', () => {
+  const p = 'spec/doctrine/mocks.md'
+  const src = read(p)
+  const headingIdx = src.indexOf('## Mocks: Client Player')
+  assert.ok(headingIdx !== -1, p + ' must carry a "## Mocks: Client Player" heading to anchor this search')
+  const nextHeadingIdx = src.indexOf('\n## ', headingIdx + 1)
+  const section = src.slice(headingIdx, nextHeadingIdx === -1 ? src.length : nextHeadingIdx)
+  assert.ok(!/[぀-ヿ一-龯]/.test(section),
+    'D6: § Mocks: Client Player must carry no Japanese character — the section is the only doctrine that ever named a player control, and retiring the two-language chrome means it names none: got\n' +
+    JSON.stringify(section.match(/.{0,20}[぀-ヿ一-龯].{0,20}/)))
+})

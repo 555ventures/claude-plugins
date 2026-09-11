@@ -152,3 +152,68 @@ test('AC-20260910-03-6: POST /client/__notes/answer with verdict "no" and non-em
     await stop2()
   }
 })
+
+// ---------------------------------------------------------------------------
+// AC-20260911-01-7
+// ---------------------------------------------------------------------------
+// specs/20260911/01-the-page-waits-for-the-server.md D5: design-atlas.js's confirm route counts
+// the journey's own open questions before calling confirmJourney and refuses 409, writing
+// nothing, while any are unanswered — the server-side backstop under D4's browser fix. Unbuilt:
+// today's confirm route calls confirmJourney with no open-question check at all, so a real
+// sentence over an open question 200s instead of 409ing — every assertion below is red.
+test('AC-20260911-01-7: POST /client/__walk/confirm 409s naming the journey and the open-guess count when a declared journey carries an unanswered question note scoped to its own screens, and leaves design/mocks/walk.json unwritten', async () => {
+  const dir = tmpdir('client-confirm-guess-gate')
+  advanceToSeedDone(dir)
+  writeNotesFile(dir, [{
+    id: 'N001', scope: 'mock', screen: 'signin', state: null, text: 'a claim', by: 'session', at: nowIso(),
+    status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null, kind: 'question', ledgerId: null, answer: null,
+  }])
+  const port = await freePort()
+  const { stop } = await serveAtlas(dir, { port })
+  try {
+    const r = await postJson('http://127.0.0.1:' + port + '/client/__walk/confirm', { journey: JOURNEY, sentence: 'done' })
+    assert.strictEqual(r.status, 409,
+      'AC-7: confirm must 409 while the journey carries an unanswered guess on one of its own screens — the browser is not the only guard against a confirmed record over an open question: got ' + r.status + ' ' + JSON.stringify(r.body))
+    assert.deepStrictEqual(r.body, {
+      error: 'journey "' + JOURNEY + '" still has 1 unanswered guess(es) — answer them on /client/walk/' + JOURNEY + '.html before confirming',
+    }, 'AC-7: the 409 body must name the journey and the exact open-guess count in the D5 Contract wording: got ' + JSON.stringify(r.body))
+    assert.ok(!fs.existsSync(walkJsonPath(dir)),
+      'AC-7: a refused confirm must write nothing at all to design/mocks/walk.json — the record must stay unwritten, never partially applied: got a file at ' + walkJsonPath(dir))
+  } finally {
+    await stop()
+  }
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260911-01-9
+// ---------------------------------------------------------------------------
+// D5 adds a refusal in front of confirmJourney; it must add no NEW refusal reason and change
+// none of the 400/200/409 shapes for a journey that already carries zero unanswered questions
+// (advanceToSeedDone alone writes no notes.json, so JOURNEY starts with none). CONTINUE-TO pin:
+// true against both the pre-image (no gate at all) and the D5 build (gate open, count zero).
+test('AC-20260911-01-9: POST /client/__walk/confirm on a declared journey with no unanswered question CONTINUES TO 400 an empty sentence, 200 a real one (a Japanese sentence included, client content unaffected by D1), and 409 an already-confirmed journey', async () => {
+  const dir = tmpdir('client-confirm-no-guess')
+  advanceToSeedDone(dir)
+  const port = await freePort()
+  const { stop } = await serveAtlas(dir, { port })
+  try {
+    const empty = await postJson('http://127.0.0.1:' + port + '/client/__walk/confirm', { journey: JOURNEY, sentence: '' })
+    assert.strictEqual(empty.status, 400,
+      'AC-9: confirm must CONTINUE TO 400 an empty sentence when no guess is open: got ' + empty.status + ' ' + JSON.stringify(empty.body))
+
+    const sentence = '設定完了'
+    const real = await postJson('http://127.0.0.1:' + port + '/client/__walk/confirm', { journey: JOURNEY, sentence })
+    assert.strictEqual(real.status, 200,
+      'AC-9: confirm must CONTINUE TO 200 a real sentence — including a Japanese one, which is client content D1 never touches — when no guess is open: got ' + real.status + ' ' + JSON.stringify(real.body))
+    assert.ok(real.body && real.body.confirmedAt,
+      'AC-9: a successful confirm must CONTINUE TO record confirmedAt: got ' + JSON.stringify(real.body))
+    assert.strictEqual(real.body && real.body.sentence, sentence,
+      'AC-9: a successful confirm must CONTINUE TO record the sentence verbatim, Japanese included: got ' + JSON.stringify(real.body))
+
+    const repeat = await postJson('http://127.0.0.1:' + port + '/client/__walk/confirm', { journey: JOURNEY, sentence: 'again' })
+    assert.strictEqual(repeat.status, 409,
+      'AC-9: confirm must CONTINUE TO 409 an already-confirmed journey: got ' + repeat.status + ' ' + JSON.stringify(repeat.body))
+  } finally {
+    await stop()
+  }
+})

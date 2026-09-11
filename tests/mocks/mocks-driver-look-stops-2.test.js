@@ -47,7 +47,7 @@ test('AC-20260905-02-14/AC-20260905-04-9: approved refuses without a decided "ap
 test('AC-20260905-02-15/AC-20260905-04-9: the bare driver prints the look: progress line and derives Then: from the stop state, for an approve step (journey-approved) and a pick step (shapes)', () => {
   const dir = tmpdir('mocks-driver')
   advanceToCanonWritten(dir)
-  for (const label of LABELS) writeWireframe(dir, label)
+  for (let i = 0; i < LABELS.length; i++) writeWireframe(dir, LABELS[i], { to: LABELS[i + 1] })
   assert.strictEqual(mark(dir, 'journey-drawn', ['--journey', JOURNEY]).status, 0, 'test setup requires journey-drawn to be accepted')
 
   const none = bare(dir)

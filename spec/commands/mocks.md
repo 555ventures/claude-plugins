@@ -27,7 +27,10 @@ at SEED and tells you to fill `design/mocks/seed.md` from the user's idea, if no
    advancing; missing/failing artifacts are demanded again. While drawing a journey, pin every
    inferred product assumption as written (`ledger add … --screen <label>`, or `ledger ask`
    after — § Mocks: Page Notes, **Questions**). Draw empty/loading/error states with the happy
-   path, or opt one out with its reason in the ledger (§ Mocks: Authoring Rules).
+   path, or opt one out with its reason in the ledger (§ Mocks: Authoring Rules). While drawing
+   a WIREFRAMES screen, put `data-to="<label>"` on the control that actually leads to the next
+   screen — the seed's edges are checked against it at `journey-drawn`, which refuses any edge
+   with no such control (§ Mocks: Authoring Rules, **Every edge is a real control**).
 3. Re-run. Repeat until `APPROVED`.
 
 A dismissed `AskUserQuestion` STOPS the run; state is already safe on disk. Every accepted mark

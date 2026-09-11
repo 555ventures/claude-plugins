@@ -40,7 +40,9 @@
 <!-- One `### <journey-kebab>` per journey: a persona line, then one fenced surfaces block in
      the roadmap-brief grammar (spec/templates/roadmap-brief.md § Surfaces) — names and arrows
      only, one line per edge. Journeys exist before the first screen; the atlas renders them
-     today, a later spec can derive roadmap briefs from them. -->
+     today, a later spec can derive roadmap briefs from them. Each edge here is drawn in the
+     mock as a real control: the element that leads from one screen to the next carries
+     `data-to="<label>"`, checked against these edges at `journey-drawn`. -->
 ### { journey-kebab }
 { Persona name (role) is invited/starts/arrives, does the one thing this journey is for, and
 ends at the last screen. }

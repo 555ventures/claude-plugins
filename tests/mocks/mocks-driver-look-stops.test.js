@@ -188,7 +188,7 @@ test('AC-20260907-07-13: stop open shapes on a root with two composed directions
 test('AC-20260905-02-11/AC-20260905-04-9: --mark journey-approved refuses naming the remedy when no stop exists, "waiting on" when one is open, and the change note when one is decided change', () => {
   const dir = tmpdir('mocks-driver')
   advanceToCanonWritten(dir)
-  for (const label of LABELS) writeWireframe(dir, label)
+  for (let i = 0; i < LABELS.length; i++) writeWireframe(dir, LABELS[i], { to: LABELS[i + 1] })
   const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
   assert.strictEqual(drawn.status, 0, 'test setup requires journey-drawn to be accepted: ' + drawn.stderr)
   writeCaptureConfig(dir, writeFixtureCapture(dir))
@@ -216,7 +216,7 @@ test('AC-20260905-02-11/AC-20260905-04-9: --mark journey-approved refuses naming
 test('AC-20260905-02-12/AC-20260905-04-9: journey-approved accepts a decided-approve stop and consumes it; a newer open stop sharing the key makes it refuse "waiting on" that newer url', () => {
   const dir = tmpdir('mocks-driver')
   advanceToCanonWritten(dir)
-  for (const label of LABELS) writeWireframe(dir, label)
+  for (let i = 0; i < LABELS.length; i++) writeWireframe(dir, LABELS[i], { to: LABELS[i + 1] })
   assert.strictEqual(mark(dir, 'journey-drawn', ['--journey', JOURNEY]).status, 0, 'test setup requires journey-drawn to be accepted')
   writeCaptureConfig(dir, writeFixtureCapture(dir))
 
@@ -230,7 +230,7 @@ test('AC-20260905-02-12/AC-20260905-04-9: journey-approved accepts a decided-app
 
   const dir2 = tmpdir('mocks-driver')
   advanceToCanonWritten(dir2)
-  for (const label of LABELS) writeWireframe(dir2, label)
+  for (let i = 0; i < LABELS.length; i++) writeWireframe(dir2, LABELS[i], { to: LABELS[i + 1] })
   assert.strictEqual(mark(dir2, 'journey-drawn', ['--journey', JOURNEY]).status, 0, 'test setup requires journey-drawn to be accepted')
   writeCaptureConfig(dir2, writeFixtureCapture(dir2))
   decideLook(dir2, 'journey-approved:' + JOURNEY, 'approve', { by: 'jj' })

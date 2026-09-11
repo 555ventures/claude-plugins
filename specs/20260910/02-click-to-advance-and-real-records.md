@@ -1,6 +1,7 @@
 ---
 date: 2026-09-10
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: design-mocks
 design: false
@@ -9,6 +10,7 @@ depends_on: []
 depended_on_by: [specs/20260910/03-client-journey-player.md, specs/20260910/06-real-records-and-two-dense-screens.md]
 brief: 22a
 open_markers: 0
+diff_base: b62c89ad0651c65b7c110343f8c35b7a06457995
 ---
 
 # Every journey edge is a real control: `data-to` on the advancing element, refused at journey-drawn when missing, and a walk mode that reports where a click went

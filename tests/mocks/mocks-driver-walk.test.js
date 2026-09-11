@@ -33,7 +33,7 @@ test('AC-20260907-10-1 (setup assertion retag of AC-20260907-08-1): a seed that 
   assert.ok(seedText.includes('## Dense screen'), 'test setup requires seed.md to still carry "## Dense screen" to anchor the new journey insertion')
   fs.writeFileSync(seedPath, seedText.replace('## Dense screen', secondJourney + '## Dense screen'))
 
-  writeWireframe(dir, 'second-a')
+  writeWireframe(dir, 'second-a', { to: 'second-b' })
   writeWireframe(dir, 'second-b')
   const drawn = mark(dir, 'journey-drawn', ['--journey', 'second-journey'])
   assert.strictEqual(drawn.status, 0, 'test setup requires journey-drawn to be accepted for the newly declared journey: ' + drawn.stdout + drawn.stderr)
@@ -61,7 +61,7 @@ test('AC-20260907-08-2: --mark journey-walked refuses with no --journey, an unde
 
   const dirUnapproved = tmpdir('mocks-driver-walk-unapproved')
   advanceToCanonWritten(dirUnapproved)
-  for (const label of LABELS) writeWireframe(dirUnapproved, label)
+  for (let i = 0; i < LABELS.length; i++) writeWireframe(dirUnapproved, LABELS[i], { to: LABELS[i + 1] })
   const drawnOnly = mark(dirUnapproved, 'journey-drawn', ['--journey', JOURNEY])
   assert.strictEqual(drawnOnly.status, 0, 'test setup requires journey-drawn to be accepted: ' + drawnOnly.stdout + drawnOnly.stderr)
   const unapproved = mark(dirUnapproved, 'journey-walked', ['--journey', JOURNEY])

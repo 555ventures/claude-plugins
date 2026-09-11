@@ -11,7 +11,7 @@ rules that replaced it:
 - **A hanging test ends the run.** `npm test`, the host `testCommand` and the scoped
   `gateCommand` carry `--test-timeout=45000 --test-force-exit`, so a test that never resolves
   is a `cancelled` red and the process ends. Neither command caps `--test-concurrency`.
-  `/spec:doctor` check 18 (`port-check.js`) reports any fixed, computed or `--port <n>` literal
+  `/spec:doctor` check 19 (`port-check.js`) reports any fixed, computed or `--port <n>` literal
   under `tests/`. (specs/20260909/07-hang-bound-and-port-check.md)
 - **One derivation per verdict.** `verdict.js` is the sole source of the review/release
   verdict word, derived from the evidence manifest `review-legs.js` writes plus the

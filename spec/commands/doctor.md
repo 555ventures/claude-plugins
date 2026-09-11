@@ -158,7 +158,15 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     `[retired:]` tags that cite no retiring path. Every other criterion of a done spec expired
     at close and is never a finding. Each printed row names its remedy (tag the covering test,
     or drop the pin); `inapplicable — no specs/` is not a finding.
-18. **Fixed test ports** (deterministic, advisory) — run
+18. **Spec-number collisions** (deterministic, broken — never advisory) — run
+    `node "$(spec-paths spec-number-check)" --root .`. Each printed line names one
+    `specs/YYYYMMDD/` directory in which two or more non-`superseded` specs share one `NN[a]-`
+    number: the number IS the AC-ID namespace, so both specs mint the same `AC-<date>-<NN>-<n>`
+    ids and the review coverage grep cannot tell whose test it found — either spec can pass its
+    coverage leg on the other's tests with a criterion that has no test anywhere. Remedy = renumber
+    whichever spec has not yet built to the next free number in its directory, rewriting its AC-ids,
+    its `depends_on`/`depended_on_by` backlinks and any run-ledger `spec` path with it.
+19. **Fixed test ports** (deterministic, advisory) — run
     `node "$(spec-paths port-check)" --root .`. Each printed line is a fixed or computed port
     literal under `tests/`; remedy = bind `--port 0` / `listen(0)` and read the bound port back
     from the server rather than choosing one (a host may wrap this in a shared test helper).

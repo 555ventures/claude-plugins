@@ -139,6 +139,11 @@
       "spec/commands/doctor.md"
     ]
   },
+  "spec/scripts/spec-number-check.js": {
+    "entryPoints": [
+      "spec/commands/doctor.md"
+    ]
+  },
   "spec/scripts/promise-sweep.js": {
     "entryPoints": [
       "spec/commands/plan.md",

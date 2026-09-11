@@ -67,19 +67,23 @@ function evaluateWhen(when, ctx) {
 }
 
 // Item doneness (D1/D4/D14 of the two specs): a `brief` item's doneness is ALWAYS the
-// derived brief state — never a stored flag. A `spec` item's doneness (D1, this spec) is
-// ALWAYS the derived spec status — done or superseded — OR the file being absent
-// (retirement precedent: a vanished spec is silence, not a dangling reference). A `prompt`
-// item is done when manually ticked (`ticked` stamped), OR — when it carries a `when`
-// predicate — when that predicate evaluates true; a prompt item with neither is manual-only
-// and stays undone until ticked.
+// derived brief state — never a stored flag, with ONE exception: an explicit tick always wins
+// (see isItemDone). A `spec` item's doneness (D1, this spec) is otherwise ALWAYS the derived
+// spec status — done or superseded — OR the file being absent (retirement precedent: a vanished
+// spec is silence, not a dangling reference). A `prompt` item is done when manually ticked
+// (`ticked` stamped), OR — when it carries a `when` predicate — when that predicate evaluates
+// true; a prompt item with neither is manual-only and stays undone until ticked.
 function isItemDone(item, ctx) {
+  // an explicit tick retires ANY item, whatever its kind — a `brief`/`spec` item whose target
+  // has vanished from the roadmap is otherwise unclearable, because its derived status can
+  // never reach 'done' and `spec-queue` has no remove verb (the queue-orphan hygiene finding
+  // prints `spec-queue done <brief>` as its first remedy, which is only true if a tick wins here)
+  if (item.ticked) return { done: true, unknownType: false }
   if (item.kind === 'brief') return { done: ctx.briefStatus(item.brief) === 'done', unknownType: false }
   if (item.kind === 'spec') {
     const st = ctx.specStatus(item.spec)
     return { done: st === null || st === 'done' || st === 'superseded', unknownType: false }
   }
-  if (item.ticked) return { done: true, unknownType: false }
   if (item.when) return evaluateWhen(item.when, ctx)
   return { done: false, unknownType: false }
 }

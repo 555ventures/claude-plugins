@@ -215,11 +215,21 @@ upstream bug list. -->
   and no name, value, or phrase changed anywhere. The only grep that finds them is for the CALL
   the refusal now guards: before landing a refusal, grep every call site of the guarded command
   across `tests/` and enter each stale setup as a fix row.
+  Eighth trigger, the one where the grep itself was accurate and still missed: a lock-time
+  assumption that grepped every caller matching a pattern and named the count (**seven** files
+  calling `journey-drawn`/`journey-approved` over an inline mock, minus fixture users) is a
+  prediction, not an inventory — an eighth caller matching the same pattern surfaced only once
+  the new gate actually ran against it, mid-build. The count held at build time only because the
+  assumption had named its own remedy at lock ("if false: add the attribute to that test's inline
+  mock in the same batch; never weaken the gate"), so the miss cost one more fixture repair
+  instead of a scope fight. Price a caller-count assumption as a prediction and write its remedy
+  at lock, not just its confidence.
   (specs/20260813/07-command-report-conformance.md D8; specs/20260813/09-model-placement-mechanics.md D4;
   specs/20260814/01-ac-matrix-script.md; specs/20260907/09-atlas-index-and-note-navigation.md;
   specs/20260907/07-mocks-retires-theme.md D12; specs/20260907/08-walk-critic.md D2/D6;
   specs/20260909/04-review-soft-floor.md D1/D5/D8;
-  specs/20260909/05-fix-delta-reviewer-pass.md D2/D9)
+  specs/20260909/05-fix-delta-reviewer-pass.md D2/D9;
+  specs/20260910/02-click-to-advance-and-real-records.md A2)
 - `[plugin]` `ac-matrix.js` parses AC bullets as `^- \*\*(token)\*\*` and requires the token to
   fully match `AC-\d{8}-\d{2}[a-z]?-\d+`. A build-time amendment written the way the Decisions
   table writes one — a prime-suffixed successor (`AC-…-3′`) plus the superseded original left as

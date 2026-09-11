@@ -5,7 +5,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, SPEC } = require('../helpers')
 const {
-  JOURNEY, mark, statusJson, writeWireframe, advanceToCanonWritten, advanceToJourneyApproved,
+  JOURNEY, LABELS, mark, statusJson, writeFile, writeWireframe, advanceToCanonWritten,
+  advanceToJourneyApproved,
 } = require('./mocks-driver-fixtures')
 
 // specs/20260910/02-click-to-advance-and-real-records.md D1/D2/D6: TDD red — spec/scripts/lib/
@@ -43,6 +44,17 @@ test('AC-20260910-02-1: edgeGaps({labels,edges}, readHtml) returns a missing ent
   }[label]))
   assert.deepStrictEqual(covered, { missing: [], unknown: [] },
     'AC-1: once every seed edge has a matching data-to control and no data-to names an undeclared label, edgeGaps must return {missing:[],unknown:[]}: got ' + JSON.stringify(covered))
+
+  // D1: a data-to naming a screen declared by a DIFFERENT seed journey is a real, drawable edge
+  // — it must never appear as unknown once the caller supplies the repo-wide `declared` union,
+  // even though that screen is absent from THIS journey's own `labels`/`edges`.
+  const crossJourney = edgeGaps({ ...journey, declared: ['a', 'b', 'c', 'zzz'] }, (label) => ({
+    a: '<main data-screen-label="a"><button data-to="b">Go</button><a data-to="zzz">Elsewhere</a></main>',
+    b: '<main data-screen-label="b"><button data-to="c">Go</button></main>',
+    c: '<main data-screen-label="c">terminal</main>',
+  }[label]))
+  assert.deepStrictEqual(crossJourney, { missing: [], unknown: [] },
+    'AC-1: a data-to="zzz" must NOT be reported unknown once "zzz" is in the caller-supplied `declared` union (a screen owned by another seed journey), even though "zzz" is absent from this journey\'s own labels: got ' + JSON.stringify(crossJourney))
 
   const outsideRoot = edgeGaps(journey, (label) => ({
     a: '<main data-screen-label="a">no control here</main><button data-to="b">Go</button>',
@@ -92,6 +104,60 @@ test('AC-20260910-02-2: `--mark journey-drawn --journey onboarding` refuses nami
     'AC-2: journey-drawn must accept once signin.html carries data-to="invite" and every other edge is covered: ' + accepted.stdout + accepted.stderr)
   assert.strictEqual(statusJson(dir).journeys[JOURNEY].drawn !== null, true,
     'AC-2: an accepted journey-drawn must record journeys.onboarding.drawn')
+})
+
+// D1: `--mark journey-drawn --journey onboarding` accepts a data-to naming a screen declared by
+// a DIFFERENT seed journey (`second-journey`, second-a -> second-b) — repro for the confirmed
+// review defect where edgeGaps's `unknown` test was scoped to the marked journey's own labels
+// only, refusing session-live.html's data-to="second-a" with the literally-false message
+// 'names a screen no journey declares' even though second-journey declares it.
+test('AC-20260910-02-2: `--mark journey-drawn --journey onboarding` accepts a data-to naming a screen declared by a different seed journey in design/mocks/seed.md, never refusing it as "no journey declares" it', () => {
+  const dir = tmpdir('mock-edges')
+  advanceToCanonWritten(dir)
+  writeFile(path.join(dir, 'design/mocks/seed.md'), `# Seed — Test Product
+
+## Product
+It is a synthetic dispatch product for tests.
+Built for QA engineers running the driver's test suite.
+It must let a user complete a short onboarding.
+
+## Facts
+- primary-surface: P1
+
+## References
+- none
+
+## Journeys
+### ${JOURNEY}
+Mika (dispatch lead) signs in, sends an invite, gathers consent, and reaches the live session.
+\`\`\`surfaces
+${LABELS[0]} -> ${LABELS[1]}
+${LABELS[1]} -> ${LABELS[2]}
+${LABELS[2]} -> ${LABELS[3]}
+\`\`\`
+
+### second-journey
+Ren (support) starts a second, unrelated journey.
+\`\`\`surfaces
+second-a -> second-b
+\`\`\`
+
+## Dense screen
+- ${LABELS[3]}
+`)
+  writeWireframe(dir, LABELS[0], { to: LABELS[1] })
+  writeWireframe(dir, LABELS[1], { to: LABELS[2] })
+  writeWireframe(dir, LABELS[2], { to: LABELS[3] })
+  // session-live's data-to names "second-a", a screen declared only by second-journey.
+  writeWireframe(dir, LABELS[3], { to: 'second-a' })
+
+  const accepted = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
+  assert.strictEqual(accepted.status, 0,
+    'AC-2: journey-drawn must accept a data-to naming a screen declared by ANY seed journey (here, second-journey\'s second-a), not only the marked journey\'s own labels — the D1 remedy for the confirmed cross-journey refusal defect: ' + accepted.stdout + accepted.stderr)
+  assert.doesNotMatch(accepted.stderr + accepted.stdout, /names a screen no journey declares/,
+    'AC-2: second-a IS declared (by second-journey) so the refusal message must never fire for it: ' + accepted.stdout + accepted.stderr)
+  assert.strictEqual(statusJson(dir).journeys[JOURNEY].drawn !== null, true,
+    'AC-2: an accepted journey-drawn over a cross-journey-declared data-to must record journeys.onboarding.drawn')
 })
 
 // ---------------------------------------------------------------------------

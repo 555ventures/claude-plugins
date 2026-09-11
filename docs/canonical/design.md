@@ -256,6 +256,19 @@ CHECK PASS/FAIL block, warns at `sketch` and violates at `ratified`/`approved`/`
 file. `--reopen kit` clears the kit sign-off and the terminal approval only, never a journey's
 own approval. A tree with no `design/kit/` is unaffected.
 
+Every seed edge is a real control (specs/20260910/02, ADR-0013): the element whose click leads
+onward from a mock carries `data-to="<label>"`, and `journey-drawn` refuses while any seed edge
+has no such control, or while any `data-to` names a screen no seed journey declares —
+`spec/scripts/lib/mock-seed-checks.js`'s `edgeGaps` checks a journey's own edges for a missing
+control, but tests an unfamiliar `data-to` against the union of every seed journey's declared
+labels, so a control may point at a screen a different journey owns. `GET
+/mocks/<label>.html?walk` injects `/__walk/walk.js` (`spec/scripts/lib/walk-mode.browser.js`)
+before the last `</body>`, composing with `?clean`/`?state=`; inside the served frame, a click on
+a `data-to` control posts `{walk:'to', from, to}` to `window.parent` and any other click posts
+`{walk:'miss', from, target}`, describing what was clicked, while state switchers post nothing —
+with no parent frame the script installs nothing. This is the mechanism an embedding player
+reads to know where a click went.
+
 The journey look surface is the review page `/review/<j>.html` (specs/20260906/04): screens rail ·
 artboards with state tabs (`?state=<s>` on the served mock) · question inspector answered in place
 with `J K Y N Esc \`; `stop open journey:<j>` points there; the approve control mirrors the on-disk

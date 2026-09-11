@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 55589,
-    "spec/scripts": 1328457,
-    "spec/scripts/lib": 248790,
-    "tests": 3799127
+    "spec/scripts": 1329059,
+    "spec/scripts/lib": 249210,
+    "tests": 3802621
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -41,7 +41,7 @@
     "spec/scripts/lib/glob-match.js": 4339,
     "spec/scripts/lib/host-config.js": 5704,
     "spec/scripts/lib/leg-findings.js": 2393,
-    "spec/scripts/lib/mock-seed-checks.js": 2837,
+    "spec/scripts/lib/mock-seed-checks.js": 3257,
     "spec/scripts/lib/mocks-ledger.js": 13101,
     "spec/scripts/lib/mocks-notes.js": 20627,
     "spec/scripts/lib/mocks-picks.js": 8373,
@@ -62,7 +62,7 @@
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
     "spec/scripts/merge-back.sh": 17514,
-    "spec/scripts/mocks-driver.js": 115921,
+    "spec/scripts/mocks-driver.js": 116523,
     "spec/scripts/port-check.js": 3536,
     "spec/scripts/promise-sweep.js": 10409,
     "spec/scripts/prose-cap.js": 6271,
@@ -182,7 +182,7 @@
     "tests/mocks/chrome-harness.js": 9353,
     "tests/mocks/chrome-harness.test.js": 10855,
     "tests/mocks/client-route.test.js": 22060,
-    "tests/mocks/mock-edges.test.js": 8520,
+    "tests/mocks/mock-edges.test.js": 12014,
     "tests/mocks/mocks-driver-2.test.js": 19004,
     "tests/mocks/mocks-driver-3.test.js": 17977,
     "tests/mocks/mocks-driver-4.test.js": 17266,
@@ -1335,6 +1335,42 @@
       "path": "tests",
       "from": 3779381,
       "to": 3799127,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "spec/scripts/lib/mock-seed-checks.js",
+      "from": 2837,
+      "to": 3257,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 115921,
+      "to": 116523,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests/mocks/mock-edges.test.js",
+      "from": 8520,
+      "to": 12014,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1328457,
+      "to": 1329059,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "spec/scripts/lib",
+      "from": 248790,
+      "to": 249210,
+      "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
+    },
+    {
+      "path": "tests",
+      "from": 3799127,
+      "to": 3802621,
       "cite": "specs/20260910/02-click-to-advance-and-real-records.md"
     }
   ]

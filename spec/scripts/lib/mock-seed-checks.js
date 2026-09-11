@@ -6,13 +6,18 @@
 // `journey-drawn` refuses on any `missing` or `unknown` entry (AC-20260910-02-1,
 // AC-20260910-02-2).
 //
-// `journey` is `{labels, edges}` (edges: `[from, to]` pairs); `readHtml(label)` returns that
-// label's mock source or a falsy value. Pure: no `fs`, no path policy, no network — the caller
-// owns how a label's HTML is read. Does NOT parse full HTML into a DOM: a mock's
-// `[data-screen-label]` root is located by regex-matched tag nesting (open/close tags of the
-// same name), which is sufficient for the hand-authored, non-pathological markup mocks are —
-// it deliberately does not handle self-closing variants of the root tag or malformed HTML.
-// A `data-to` sitting outside the root (after it closes) counts as absent, never as unknown.
+// `journey` is `{labels, edges, declared}` (edges: `[from, to]` pairs); `readHtml(label)`
+// returns that label's mock source or a falsy value. Pure: no `fs`, no path policy, no
+// network — the caller owns how a label's HTML is read. Does NOT parse full HTML into a DOM: a
+// mock's `[data-screen-label]` root is located by regex-matched tag nesting (open/close tags of
+// the same name), which is sufficient for the hand-authored, non-pathological markup mocks
+// are — it deliberately does not handle self-closing variants of the root tag or malformed
+// HTML. A `data-to` sitting outside the root (after it closes) counts as absent, never as
+// unknown.
+// D1: a `data-to` names "a screen declared in ANY seed journey", not only the marked journey's
+// own labels — `journey.declared` (the repo-wide union the caller computes) is what `unknown`
+// tests against, defaulting to `labels` when omitted. The screens scanned and the `missing`
+// loop stay journey-local: only the `unknown` test widens.
 //
 // Exit codes: n/a (library, not an entrypoint).
 
@@ -48,6 +53,7 @@ function dataToValuesIn(rootHtml) {
 function edgeGaps(journey, readHtml) {
   const labels = (journey && journey.labels) || []
   const edges = (journey && journey.edges) || []
+  const declared = (journey && journey.declared) || labels
   const rootCache = new Map()
   const rootFor = (label) => {
     if (rootCache.has(label)) return rootCache.get(label)
@@ -67,7 +73,7 @@ function edgeGaps(journey, readHtml) {
   const unknown = []
   for (const label of labels) {
     for (const to of dataToValuesIn(rootFor(label))) {
-      if (!labels.includes(to)) unknown.push({ from: label, to })
+      if (!declared.includes(to)) unknown.push({ from: label, to })
     }
   }
 

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-10
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: design-mocks
@@ -133,6 +133,48 @@ client-route, chrome-harness tests) observe routes this spec does not touch — 
 `/__walk/walk.js` are new — so nothing they assert changes; the `executes` hits on
 `mocks-driver.js` are the inline-mock callers already entered as File Plan rows plus fixture users
 covered by the fixtures row.
+
+Build deviations, folded from the review's deviations sidecar (now deleted): `tests/consistency/wire-register.test.js`
+was entered as a D6 repair row on the File Plan's grep, but on inspection it pins
+`lib/wire-register.js`'s two exports (`stylesheetTargets`/`linksWireRegister`) as pure functions
+with no `journey-drawn`/`journey-approved` call and no inline mock through the mocks-driver CLI
+at all — the row needed no edit. A2's own seven-file grep did **not** hold:
+`tests/mocks/mocks-driver-walk.test.js` is an eighth caller outside that grep (its own
+second-journey fixture plus an unindexed `LABELS` loop, both driving inline `writeWireframe`
+calls with no `data-to`), and it surfaced only once `edgeGaps` actually ran at `journey-drawn`
+mid-build, reddening `AC-20260907-10-1` and `AC-20260907-08-2`. Repaired under A2's own named
+remedy — `writeWireframe(dir, 'second-a', {to:'second-b'})` and an indexed `LABELS` loop
+threading `{to: LABELS[i+1]}`, the same pattern `mocks-driver-fixtures.js`'s
+`advanceToJourneyApproved` already uses — with no assertion, matcher, or AC tag touched. A2 is
+proven false at eight files, not seven.
+
+The test-author wave's own D6 repair (adding `opts.to`/`writeWireframe` calls and an indexed loop
+across several existing test files) pushed nine tracked tests-layer files over their size-ratchet
+budgets before D8's scripts-layer raise was due at build close; reconciled early via the same
+`size-ratchet.js --reconcile --cite` command so the ratchet's own live gate (AC-20260908-01-9)
+stayed green mid-build, with D8's scripts-layer raise still landing at close as planned. That
+close-time raise then needed a second reconcile pass: `size-ratchet.js` walks tracked files only,
+so the files this spec creates were invisible to the reconcile until the checkpoint commit
+tracked them, costing three stop-diagnose-reconcile-rerun cycles in one run — a spec that both
+creates files and raises their tree's baseline should expect the raise to run twice, once before
+and once after the commit that tracks them.
+
+`dup-baseline.json` was also raised, out of the File Plan: the new `tests/mocks/walk-mode.test.js`
+carries an in-process `withHandler` HTTP harness mirroring the one `tests/design-atlas.test.js`
+already holds, tripping `dup-windows.js` on both files (0 → 3 and 23 → 26 respectively). Raised
+rather than extracted — exactly two near-identical blocks, below the three-block extraction bar,
+and the sibling file is not a File Plan row of this spec — leaving the extraction as a follow-up;
+both raises carry `--cite` to this spec.
+
+At review, an independent reviewer and disposer with executed repros found `edgeGaps`'s `unknown`
+test scoped to the marked journey's own `labels` rather than D1's repo-wide "declared in any seed
+journey" set, so a `data-to` naming a screen a different seed journey owns was refused with the
+literally-false message "names a screen no journey declares." Fixed by adding an optional
+`declared` field to `edgeGaps`'s journey argument, defaulting to `labels` so AC-20260910-02-1's
+single-journey literal stays byte-unchanged, with `handleJourneyDrawn` passing the union of every
+`parseSeedJourneys` journey's labels through — the `missing` loop and the screens scanned stay
+journey-local, only the `unknown` test widens. A cross-journey assertion was added under the
+existing AC-20260910-02-1/AC-20260910-02-2 tags, confirmed red before the fix and green after.
 
 Rejected: putting the advancing control in the seed as an `advances-on: <selector>` line (the
 candidate-flows draft's shape) — a selector in markdown drifts from the markup the moment a class

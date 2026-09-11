@@ -1226,13 +1226,22 @@ function handleJourneyDrawn(journeyName) {
     if (r.status !== 0) die(file + ': design-atlas.js check failed for label "' + label + '": ' + childOutput(r))
   }
   // specs/20260910/02-click-to-advance-and-real-records.md D1/D2: every seed edge needs a
-  // matching data-to control and every data-to must name a declared screen — edges come from
-  // lib/surfaces.js's parseSeedJourneys (A1: this driver's own parseJourneysSeed stays
-  // labels-only), never mocks-driver.js's own parser. Runs after the per-label closure checks
-  // above and before check --states (the same posture the states gate already has), and never
-  // records journeys.<j>.drawn on a refusal.
-  const surfJourney = parseSeedJourneys(seedTextOr(null)).get(journeyName)
-  const gaps = edgeGaps({ labels: j.labels, edges: surfJourney ? surfJourney.edges : [] },
+  // matching data-to control and every data-to must name a screen declared in ANY seed
+  // journey — edges come from lib/surfaces.js's parseSeedJourneys (A1: this driver's own
+  // parseJourneysSeed stays labels-only), never mocks-driver.js's own parser. `declared` is the
+  // repo-wide union of every seed journey's labels, computed here (not in the library) since
+  // only this driver knows the full journey set — a `data-to` naming a screen owned by a
+  // DIFFERENT seed journey is still a real, drawable edge and must not refuse. The screens
+  // scanned and the `missing` loop stay this journey's own `j.labels`. Runs after the per-label
+  // closure checks above and before check --states (the same posture the states gate already
+  // has), and never records journeys.<j>.drawn on a refusal.
+  const allSeedJourneys = parseSeedJourneys(seedTextOr(null))
+  const surfJourney = allSeedJourneys.get(journeyName)
+  const declared = []
+  for (const jrn of allSeedJourneys.values()) {
+    for (const label of jrn.labels) if (!declared.includes(label)) declared.push(label)
+  }
+  const gaps = edgeGaps({ labels: j.labels, edges: surfJourney ? surfJourney.edges : [], declared },
     (label) => { try { return fs.readFileSync(mockFile(label), 'utf8') } catch { return '' } })
   if (gaps.missing.length || gaps.unknown.length) {
     const lines = []

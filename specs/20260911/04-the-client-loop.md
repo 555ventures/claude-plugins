@@ -1,6 +1,6 @@
 ---
 date: 2026-09-11
-status: hardened
+status: implementing
 tier: standard
 area: design-mocks
 design: false
@@ -8,7 +8,9 @@ breaking: false
 depends_on: [specs/20260910/05-what-the-journey-does-not-do.md, specs/20260911/01-the-page-waits-for-the-server.md]
 depended_on_by: [specs/20260911/05-approval-is-bookkeeping.md]
 brief: 22a
+build_base: main
 open_markers: 0
+diff_base: f5c0ed242625c9df305ee9d10599966d2cb2bc4e
 ---
 
 # The client loop: a journey's state follows the client's requests, the session picks up what the client left, and the served pages outlive every session

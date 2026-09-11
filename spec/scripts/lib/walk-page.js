@@ -34,15 +34,13 @@
 // Exit codes: none — this is a library, not an executable.
 
 const { esc } = require('./stop-block')
+const { originOf } = require('./mocks-notes')
+const walkLib = require('./mocks-walk')
 
 // Every visible string in the player's own chrome, flat — one language, because the declared
 // `<html lang="en">` and the rendered language can never disagree when there is only one.
 const STRINGS = {
   indexLead: 'Open a journey and walk it to the end. Tell us what matches what you expected.',
-  toCheckNone: 'nothing to check',
-  toCheckOne: '1 thing to check',
-  toCheckMany: '{n} things to check',
-  confirmed: 'Confirmed',
   back: 'Back',
   next: 'Next',
   states: 'Other states',
@@ -66,6 +64,34 @@ const STRINGS = {
   themePick: 'Pick this',
   themePicked: 'Picked',
   exclAgree: 'This journey does not do this — correct?',
+  // specs/20260911/04-the-client-loop.md D4: the journey row's derived-state text.
+  notStarted: 'Not started',
+  inProgress: 'In progress',
+  changesRequested: 'Changes requested ({n})',
+  fixedCheck: 'Fixed — please check ({n})',
+  okText: 'OK',
+  skipped: 'Skipped',
+  comingSoon: 'Coming soon',
+  // D4: the index's own composer and request list.
+  askHeading: 'Something missing?',
+  askMissingScreen: 'A screen is missing',
+  askOther: 'Something else',
+  askSend: 'Send',
+  requestsHeading: 'Your requests',
+  reqWatching: "We'll look at this",
+  reqClosed: 'Closed',
+  reqClosedThanks: 'Closed — thank you',
+  reqDonePrefix: 'Done: ',
+  reqAcceptIndex: 'Looks good',
+  reqReopenIndex: 'Still not right',
+  msgWhyIndex: 'Please say what is missing first.',
+  msgSaved: "Saved. We'll fix this and let you know here.",
+  // D5: the walk page's own request cards and derived approve lead.
+  reqFixedPrefix: 'Fixed: ',
+  reqAcceptWalk: 'Looks good now',
+  reqReopenWalk: 'Still not right',
+  fixedLead: 'We fixed what you asked. Check the screens marked Fixed, then confirm.',
+  changesLead: "You asked for changes. We'll fix them and let you know.",
 }
 
 function count(s, none, one, many, n) {
@@ -92,6 +118,138 @@ function recordOf(walk, journey) {
   return js[journey] || null
 }
 
+// specs/20260911/04-the-client-loop.md D1/D4/D5: the client-origin, non-question requests a
+// journey's labels carry — the set journeyState's own "changes-requested"/"fixed" derivation
+// counts, restated here so buildWalkPage/buildClientIndex's own N counts and request cards never
+// disagree with the state word painted beside them.
+function journeyRequestsOn(notes, labels) {
+  const set = labels instanceof Set ? labels : new Set(labels || [])
+  return (notes || []).filter((n) => n && n.scope === 'mock' && set.has(n.screen) &&
+    n.kind !== 'question' && originOf(n) === 'client')
+}
+
+// D4: every client-origin, non-question note (project AND mock scope) — the index's own "Your
+// requests" list, newest first.
+function clientRequestNotes(notes) {
+  return (notes || []).filter((n) => n && n.kind !== 'question' && originOf(n) === 'client')
+    .slice().sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
+}
+
+function journeyStateText(state, openReq, addressedReq, s) {
+  if (state === 'unseen') return s.notStarted
+  if (state === 'walking') return s.inProgress
+  if (state === 'changes-requested') return s.changesRequested.replace('{n}', String(openReq))
+  if (state === 'fixed') return s.fixedCheck.replace('{n}', String(addressedReq))
+  if (state === 'ok') return s.okText
+  if (state === 'waived') return s.skipped
+  return state
+}
+
+// D4: an addressed request's "See <journey>" link resolves off `addressed.journey` (a session's
+// `notes address --journey`) or `addressed.screen` (`--screen`, matched against every journey's
+// declared labels) — never the note's own top-level `screen` (mock-scope notes already know their
+// journey from context; this resolution exists for the project-scope "something missing?" answer).
+function resolveJourneyForAddressed(note, journeysList) {
+  const addressed = (note && note.addressed) || {}
+  if (addressed.journey) {
+    const j = journeysList.find((x) => x.name === addressed.journey)
+    if (j) return j
+  }
+  if (addressed.screen) {
+    for (const j of journeysList) {
+      if (screensOf(j).some((sc) => sc.label === addressed.screen)) return j
+    }
+  }
+  return null
+}
+
+// D4: one request article for the client index — text, screen (mock-scope only), status line,
+// and (addressed only) the "See <journey>" link plus the accept/reopen pair.
+function renderIndexRequest(n, journeysList, prefix, s) {
+  const status = n.status
+  let statusLine
+  let extra = ''
+  if (status === 'open') {
+    statusLine = s.reqWatching
+  } else if (status === 'resolved') {
+    statusLine = n.resolution === 'accepted' ? s.reqClosedThanks : s.reqClosed
+  } else {
+    const change = (n.addressed && n.addressed.change) || ''
+    statusLine = s.reqDonePrefix + change
+    const journey = resolveJourneyForAddressed(n, journeysList)
+    if (journey) {
+      extra += '<a class="wk-req-link" href="' + esc(prefix) + '/client/walk/' + esc(journey.name) + '.html">' +
+        esc('See ' + (journey.title || journey.name)) + '</a>'
+    }
+    extra += '<div class="wk-req-acts">' +
+      '<button class="wk-req-act" type="button" data-cl="accept">' + esc(s.reqAcceptIndex) + '</button>' +
+      '<button class="wk-req-act" type="button" data-cl="reopen">' + esc(s.reqReopenIndex) + '</button>' +
+      '<textarea class="wk-req-why" data-cl="reopen-text"></textarea>' +
+      '</div>'
+  }
+  return '<article class="wk-req" data-cl="request" data-id="' + esc(n.id) + '" data-status="' + esc(status) + '">' +
+    '<p class="wk-req-text">' + esc(n.text) + '</p>' +
+    (n.scope === 'mock' ? '<span class="wk-req-where">' + esc(n.screen) + '</span>' : '') +
+    '<p class="wk-req-status">' + esc(statusLine) + '</p>' +
+    extra +
+    '</article>'
+}
+
+// D4: "Something missing?" — a project-scope free-text ask plus two reason chips. `other`
+// defaults `aria-pressed="true"` (walk.browser.js toggles the pressed chip on click) so a Send
+// with no chip touched still posts `reason: "other"` (D6).
+function renderAskForm(s) {
+  return '<form class="wk-ask" data-cl="ask">' +
+    '<h2 class="wk-ask-h">' + esc(s.askHeading) + '</h2>' +
+    '<textarea class="wk-ask-in"></textarea>' +
+    '<div class="wk-ask-chips">' +
+    '<button type="button" class="wk-ask-chip" data-cl="reason" data-value="missing-screen">' + esc(s.askMissingScreen) + '</button>' +
+    '<button type="button" class="wk-ask-chip" data-cl="reason" data-value="other" aria-pressed="true">' + esc(s.askOther) + '</button>' +
+    '</div>' +
+    '<button type="submit">' + esc(s.askSend) + '</button>' +
+    '</form>'
+}
+
+// D4: the request list itself, plus a hidden, unattached template article walk.browser.js
+// activates (by ADDING `data-cl="request"` and the id/status attributes) when the ask form's own
+// POST lands — the browser script never fabricates a DOM node from scratch, only reveals/labels
+// this one, so a freshly served page always carries exactly one spare slot for the session's next
+// save before a reload folds it into the real, server-rendered list.
+function renderRequestsSection(notes, journeysList, prefix, s) {
+  const articles = clientRequestNotes(notes).map((n) => renderIndexRequest(n, journeysList, prefix, s)).join('')
+  return '<section class="wk-reqs" data-cl="requests"><h2 class="wk-reqs-h">' + esc(s.requestsHeading) + '</h2>' +
+    '<article class="wk-req" data-cl-template hidden></article>' + articles + '</section>'
+}
+
+// D5: one request card per client-origin, non-question, mock-scope note on the journey (every
+// label — walk.browser.js hides all but the current screen's). Same open/resolved wording as the
+// index; the addressed line reads "Fixed: <change>" (not "Done:" — the walk page is where the fix
+// is being CHECKED, the index is where it is being REPORTED).
+function renderWalkRequest(n, s) {
+  const status = n.status
+  let statusLine
+  let extra = ''
+  if (status === 'open') {
+    statusLine = s.reqWatching
+  } else if (status === 'resolved') {
+    statusLine = n.resolution === 'accepted' ? s.reqClosedThanks : s.reqClosed
+  } else {
+    const change = (n.addressed && n.addressed.change) || ''
+    statusLine = s.reqFixedPrefix + change
+    extra = '<div class="wk-req-acts">' +
+      '<button class="wk-req-act" type="button" data-wk="accept">' + esc(s.reqAcceptWalk) + '</button>' +
+      '<button class="wk-req-act" type="button" data-wk="reopen">' + esc(s.reqReopenWalk) + '</button>' +
+      '<textarea class="wk-req-why" data-wk="reopen-text"></textarea>' +
+      '</div>'
+  }
+  return '<article class="wk-req" data-wk="request" data-id="' + esc(n.id) + '" data-label="' + esc(n.screen) +
+    '" data-status="' + esc(status) + '" hidden>' +
+    '<p class="wk-req-text">' + esc(n.text) + '</p>' +
+    '<p class="wk-req-status">' + esc(statusLine) + '</p>' +
+    extra +
+    '</article>'
+}
+
 function head(title, prefix) {
   return '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
@@ -113,18 +271,34 @@ function buildClientIndex(input) {
   const s = STRINGS
   const notes = o.notes || []
   const ledger = o.ledger || []
-  const rows = journeysOf(seed).map((entry) => {
-    const labels = new Set(screensOf(entry).map((sc) => sc.label))
-    const open = notes.filter((n) => isOpenQuestion(n) && n.scope === 'mock' && labels.has(n.screen)).length
+  const ready = o.ready instanceof Set ? o.ready : new Set()
+  const journeysList = journeysOf(seed)
+  const rows = journeysList.map((entry) => {
+    const labels = screensOf(entry).map((sc) => sc.label)
+    const labelSet = new Set(labels)
+    // CONTINUE-TO (specs/20260911/01-the-page-waits-for-the-server.md): `data-guesses` is the
+    // open-QUESTION count (a session's own unanswered guess), unrelated to D1's client-request
+    // states below — kept byte-identical so the predecessor spec's own pin never regresses.
+    const openGuesses = notes.filter((n) => isOpenQuestion(n) && n.scope === 'mock' && labelSet.has(n.screen)).length
     const rec = recordOf(o.walk, entry.name)
-    const done = !!(rec && rec.confirmedAt)
-    return '<a class="wk-j" data-cl="journey" href="' + esc(prefix) + '/client/walk/' + esc(entry.name) + '.html"' +
-      ' data-guesses="' + open + '" data-confirmed="' + (done ? 'true' : 'false') + '">' +
-      '<span class="wk-j-name">' + esc(entry.title || entry.name) + '</span>' +
-      '<span class="wk-j-meta">' + (done
-        ? '<span class="wk-done">' + esc(s.confirmed) + '</span>'
-        : esc(count(s, 'toCheckNone', 'toCheckOne', 'toCheckMany', open))) +
-      '</span></a>'
+    const state = walkLib.journeyState(rec, notes, labels)
+    const reqs = journeyRequestsOn(notes, labels)
+    const openReq = reqs.filter((n) => n.status === 'open').length
+    const addressedReq = reqs.filter((n) => n.status === 'addressed').length
+    const isReady = ready.has(entry.name)
+    const stateText = isReady ? journeyStateText(state, openReq, addressedReq, s) : s.comingSoon
+    const tag = isReady ? 'a' : 'span'
+    const hrefAttr = isReady ? ' href="' + esc(prefix) + '/client/walk/' + esc(entry.name) + '.html"' : ''
+    const readyAttr = isReady ? '' : ' data-ready="false"'
+    // A not-ready row skips its own inner name span — a nested `<span class="wk-j-name">…</span>`
+    // sibling before the meta span would close (and so end) on ITS OWN first `</span>`, hiding
+    // "Coming soon" from anything scanning the outer span for its first closing tag.
+    const nameHtml = isReady ? '<span class="wk-j-name">' + esc(entry.title || entry.name) + '</span>' : esc(entry.title || entry.name) + ' — '
+    return '<' + tag + ' class="wk-j" data-cl="journey"' + hrefAttr + readyAttr +
+      ' data-guesses="' + openGuesses + '" data-confirmed="' + (state === 'ok' ? 'true' : 'false') + '"' +
+      ' data-state="' + esc(state) + '">' +
+      nameHtml +
+      '<span class="wk-j-meta">' + esc(stateText) + '</span></' + tag + '>'
   }).join('')
 
   // specs/20260910/04-theme-before-the-client-walk.md D7: the index links the theme page while
@@ -141,6 +315,11 @@ function buildClientIndex(input) {
     '<p class="wk-lead">' + esc(s.indexLead) + '</p>' +
     themeLink +
     '<nav class="wk-list">' + rows + '</nav>' +
+    renderAskForm(s) +
+    renderRequestsSection(notes, journeysList, prefix, s) +
+    // D4: the shared receipt slot — every ask/accept/reopen save reports through it.
+    '<p class="wk-msg" data-wk="msg" role="status" aria-live="polite" data-saved="' + esc(s.msgSaved) +
+    '" data-failed="' + esc(s.msgFailed) + '" data-why="' + esc(s.msgWhyIndex) + '" hidden></p>' +
     '</main>' +
     '<script src="' + esc(prefix) + '/__walk/player.js"></script>' +
     '</body></html>\n'
@@ -299,17 +478,26 @@ function renderExclusions(journey, ledger, notes, journeys, s) {
   return { html, openCount }
 }
 
-function renderApprove(rec, openCount, s) {
-  if (rec && rec.confirmedAt) {
+// specs/20260911/04-the-client-loop.md D5/D14: the read-only confirmed render is used only when
+// `confirmedAt` is set AND the derived state is "ok" — an OPEN request outranks a stale
+// `confirmedAt` by construction (D1), so this is never a second, unconditional check on
+// `confirmedAt` alone (D14 retires that unconditional render). The approve lead reads by state
+// (`fixed`/`changes-requested` get their own sentence, everything else the original prompt), and
+// confirm stays disabled while the state is `changes-requested`/`fixed`, in addition to the
+// existing marks/exclusions open count.
+function renderApprove(rec, openCount, s, state) {
+  if (rec && rec.confirmedAt && state === 'ok') {
     return '<section class="wk-approve" data-wk="approve">' +
       '<p class="wk-lead">' + esc(s.confirmedLead) + '</p>' +
       '<blockquote class="wk-sentence">' + esc(rec.sentence || '') + '</blockquote>' +
       '</section>'
   }
+  const lead = state === 'fixed' ? s.fixedLead : state === 'changes-requested' ? s.changesLead : s.approveLead
+  const disabled = openCount > 0 || state === 'changes-requested' || state === 'fixed'
   return '<section class="wk-approve" data-wk="approve" hidden>' +
-    '<p class="wk-lead">' + esc(s.approveLead) + '</p>' +
+    '<p class="wk-lead">' + esc(lead) + '</p>' +
     '<textarea class="wk-sentence-in" data-wk="sentence" rows="2" placeholder="' + esc(s.sentence) + '"></textarea>' +
-    '<button class="wk-confirm" data-wk="confirm"' + (openCount > 0 ? ' disabled' : '') + '>' + esc(s.confirm) + '</button>' +
+    '<button class="wk-confirm" data-wk="confirm"' + (disabled ? ' disabled' : '') + '>' + esc(s.confirm) + '</button>' +
     '</section>'
 }
 
@@ -329,10 +517,19 @@ function buildWalkPage(input) {
   const rec = recordOf(o.walk, journey)
   const reached = (rec && Array.isArray(rec.reached)) ? rec.reached : []
   const ledger = o.ledger || []
-  const open = (o.notes || []).filter((n) => isOpenQuestion(n) && n.scope === 'mock' && labels.has(n.screen))
+  const notes = o.notes || []
+  const open = notes.filter((n) => isOpenQuestion(n) && n.scope === 'mock' && labels.has(n.screen))
+  const state = walkLib.journeyState(rec, notes, labels)
+  const requestNotes = journeyRequestsOn(notes, labels)
 
   const marks = open.map((n) => renderMark(n, ledger, s)).join('')
-  const excl = renderExclusions(journey, ledger, o.notes || [], journeys, s)
+  // D6: the note form's own free-text save appends a request article for the current screen — one
+  // hidden, unattached template article (same activation-not-fabrication discipline as the index's
+  // own template, above) walk.browser.js labels/reveals rather than the script ever building a new
+  // DOM node from scratch.
+  const requestsHtml = '<article class="wk-req" data-wk-template hidden></article>' +
+    requestNotes.map((n) => renderWalkRequest(n, s)).join('')
+  const excl = renderExclusions(journey, ledger, notes, journeys, s)
   const title = (entry.title || journey) + ' · ' + (seed.product || 'Mocks')
 
   return head(title, prefix) +
@@ -355,17 +552,18 @@ function buildWalkPage(input) {
     '<div class="wk-marks">' + marks + '</div>' +
     '<p class="wk-left"><span data-wk="left" data-count="' + open.length + '">' +
     esc(count(s, 'leftNone', 'leftOne', 'leftMany', open.length)) + '</span></p>' +
+    '<section class="wk-reqs" data-wk="requests">' + requestsHtml + '</section>' +
     '<form class="wk-note" data-wk="note">' +
     '<label class="wk-note-label">' + esc(s.noteLabel) +
     '<textarea class="wk-note-in" name="text" rows="2"></textarea></label>' +
     '<button class="wk-send" type="submit">' + esc(s.noteSend) + '</button>' +
     '</form>' +
     excl.html +
-    renderApprove(rec, open.length + excl.openCount, s) +
-    // D3: one hidden, empty status slot — walk.browser.js sets its text from its own data-why/
-    // data-failed attribute and unhides it; the builder never renders text into it.
-    '<p class="wk-msg" data-wk="msg" role="status" aria-live="polite" data-why="' + esc(s.msgWhy) +
-    '" data-failed="' + esc(s.msgFailed) + '" hidden></p>' +
+    renderApprove(rec, open.length + excl.openCount, s, state) +
+    // D3/D5: one hidden, empty status slot — walk.browser.js sets its text from its own data-why/
+    // data-failed/data-saved attribute and unhides it; the builder never renders text into it.
+    '<p class="wk-msg" data-wk="msg" role="status" aria-live="polite" data-saved="' + esc(s.msgSaved) +
+    '" data-why="' + esc(s.msgWhy) + '" data-failed="' + esc(s.msgFailed) + '" hidden></p>' +
     '</aside>' +
     '</div>' +
     '<script src="' + esc(prefix) + '/__walk/player.js"></script>' +

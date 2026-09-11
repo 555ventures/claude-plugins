@@ -474,6 +474,52 @@ body {
 .wk .wk-confirm:hover:not([disabled]) { background: color-mix(in srgb, var(--v-primary) 88%, var(--v-bg)); }
 .wk-sentence { margin: 0; padding-left: var(--v-space-3); border-left: 2px solid var(--v-ok); color: var(--v-fg); }
 
+/* The return leg (.wk-req* / .wk-ask*) — specs/20260911/04-the-client-loop.md D10, chrome rule
+   in spec/doctrine/design.md § Design Canon. Two surfaces share this register: the index's
+   request list under its composer, and the same request rows in the player's side panel above
+   the note box. The client reads state first and text second, so state rides the one device this
+   page already uses for it — a 2px left border on --v-warn / --v-ok / --v-border, the same
+   accent .nl-q and .wk-sentence carry. No card, no shadow, no badge: a third restatement of a
+   status the border and the status line already give would be decoration. Every color is an
+   existing --v-* role — no new token, no literal. */
+
+/* the client's receipt — silent until a write answers, then one quiet line */
+.wk-msg { margin: var(--v-space-2) 0 0; color: var(--v-muted); font-size: 14px; }
+
+/* composer — "Something missing?" sits under the journey list, carried on the list's own
+   hairline rather than boxed off from it */
+.wk-ask { margin-top: var(--v-space-6); padding-top: var(--v-space-6); border-top: 1px solid var(--v-border); display: flex; flex-direction: column; gap: var(--v-space-3); align-items: flex-start; }
+.wk-ask-h { margin: 0; font-size: 19px; font-weight: 500; }
+.wk-ask-chips { display: flex; flex-wrap: wrap; gap: var(--v-space-2); }
+.wk .wk-ask-chip { border-radius: 999px; background: var(--v-muted-bg); color: var(--v-muted); padding: 4px var(--v-space-3); font-size: 14px; }
+.wk .wk-ask-chip[aria-pressed="true"] { border-color: var(--v-primary); background: var(--v-primary); color: var(--v-primary-fg); }
+
+/* a journey the session has not walked yet: present in the list so the client sees the whole
+   product, but inert — no link affordance, no hover */
+.wk .wk-j[data-ready="false"] { color: var(--v-muted); cursor: default; }
+.wk .wk-j[data-ready="false"]:hover { background: none; }
+
+/* the request list — hairline rows, newest first */
+.wk-reqs { margin-top: var(--v-space-6); display: flex; flex-direction: column; }
+.wk-reqs-h { margin: 0 0 var(--v-space-2); font-size: 19px; font-weight: 500; }
+.wk-req { border-top: 1px solid var(--v-border); border-left: 2px solid var(--v-border); padding: var(--v-space-3) 0 var(--v-space-3) var(--v-space-3); display: flex; flex-direction: column; gap: var(--v-space-2); align-items: flex-start; }
+.wk-req:last-of-type { border-bottom: 1px solid var(--v-border); }
+/* open — we owe them something; addressed — we did something and it is their turn */
+.wk-req[data-status="open"] { border-left-color: var(--v-warn); }
+.wk-req[data-status="addressed"] { border-left-color: var(--v-ok); }
+.wk-req[data-status="resolved"] { color: var(--v-muted); }
+.wk-req-text { margin: 0; color: var(--v-fg); max-width: 46ch; }
+.wk-req[data-status="resolved"] .wk-req-text { color: var(--v-muted); }
+.wk-req-where { color: var(--v-muted); font-size: 14px; }
+.wk-req-status { margin: 0; color: var(--v-muted); font-size: 14px; }
+.wk-req-link { color: var(--v-fg); }
+.wk-req-acts { display: flex; flex-wrap: wrap; gap: var(--v-space-2); }
+.wk-req-why { width: 100%; }
+
+/* the same rows in the player's side panel, where 340px is the whole width */
+.wk-side .wk-reqs { margin-top: 0; }
+.wk-side .wk-req-text { max-width: none; }
+
 @media (max-width: 900px) {
   .wk-main { grid-template-columns: var(--wk-spine) minmax(0, 1fr); }
   .wk-side { grid-column: 1 / -1; position: static; height: auto; border-left: 0; border-top: 1px solid var(--v-border); }
@@ -488,4 +534,6 @@ body {
   .wk-stage { padding: var(--v-space-2); }
   .wk-frame { min-height: 70vh; }
   .wk-index-main { padding: var(--v-space-4) var(--v-space-3) 20vh; }
+  .wk-ask { margin-top: var(--v-space-4); padding-top: var(--v-space-4); }
+  .wk-reqs { margin-top: var(--v-space-4); }
 }

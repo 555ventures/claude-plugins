@@ -28,7 +28,18 @@
 // happen and the slot shows its own data-failed text. The frame still moves on a "to" message
 // either way — navigating the prototype is local, per spec 03 D3.
 //
-// Deliberately does NOT read or write anything beyond those five HTTP calls — no localStorage,
+// specs/20260911/04-the-client-loop.md D6: this same script also drives the CLIENT INDEX page
+// (no `[data-journey]` root at all) — the "something missing?" composer (`[data-cl="ask"]`) and
+// the accept/reopen pair on both the index's `[data-cl="request"]` cards and the walk page's own
+// `[data-wk="request"]` cards. `wireRequestCard` is the one shared implementation, parameterized
+// on the attribute name ("cl" or "wk") the two pages render their hooks under. A brand-new
+// request (the ask form's own save) is never fabricated as a fresh DOM node — every page ships
+// one hidden, unattached template article (`[data-cl-template]` / `[data-wk-template]`); a
+// successful save ACTIVATES it (adds the real `data-cl="request"`/`data-wk="request"` attribute,
+// stamps id/status/label) rather than inserting new markup, so this script never parses or builds
+// HTML beyond the pre-existing states-switcher buttons below.
+//
+// Deliberately does NOT read or write anything beyond its own HTTP calls — no localStorage,
 // no author identity of any kind (D3: the client route never asks who is answering; every POST
 // is stamped by:'client' here, never a window.prompt), and never decides approval itself — a
 // confirm POST is only ever sent with whatever the client typed; the 400/409 the server may
@@ -45,20 +56,96 @@
 // This is a browser script, not a Node module — no `require`, no `module.exports`.
 'use strict'
 ;(function () {
-  var root = document.querySelector('[data-journey]')
-  if (!root) return
-  var journey = root.getAttribute('data-journey')
-  var prefix = root.getAttribute('data-prefix') || ''
-  var theme = root.getAttribute('data-theme')
-
   function q(sel) { return document.querySelector(sel) }
   function qa(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)) }
   function on(el, ev, fn) { if (el && el.addEventListener) el.addEventListener(ev, fn) }
+
+  var prefixEl = q('[data-prefix]')
+  var prefix = prefixEl ? (prefixEl.getAttribute('data-prefix') || '') : ''
+
   function post(pathname, body) {
     return fetch(prefix + pathname, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
     })
   }
+
+  // D3/D4: the one slot every save (index or walk) reports through — never narrates the server's
+  // own error text, only its own canned sentences, keyed by the attribute the builder already
+  // carried.
+  var msgEl = q('[data-wk="msg"]')
+  function showMsg(key) {
+    if (!msgEl) return
+    msgEl.textContent = msgEl.getAttribute('data-' + key) || ''
+    msgEl.hidden = false
+  }
+
+  // D6: accept/reopen — shared by the index's `[data-cl="request"]` cards and the walk page's own
+  // `[data-wk="request"]` cards. `onChange` (walk page only) recomputes confirm's disabled state
+  // after either action.
+  function wireRequestCard(attr, art, onChange) {
+    var id = art.getAttribute('data-id')
+    var acceptBtn = art.querySelector('[data-' + attr + '="accept"]')
+    var reopenBtn = art.querySelector('[data-' + attr + '="reopen"]')
+    var reopenText = art.querySelector('[data-' + attr + '="reopen-text"]')
+    on(acceptBtn, 'click', function () {
+      post('/client/__notes/resolve', { id: id, by: 'client' }).then(function (r) {
+        if (!r.ok) { showMsg('failed'); return }
+        art.setAttribute('data-status', 'resolved')
+        if (onChange) onChange()
+      }).catch(function () { showMsg('failed') })
+    })
+    on(reopenBtn, 'click', function () {
+      var text = reopenText ? String(reopenText.value || '').trim() : ''
+      if (!text) { showMsg('why'); return }
+      post('/client/__notes/reopen', { id: id, text: text, by: 'client' }).then(function (r) {
+        if (!r.ok) { showMsg('failed'); return }
+        art.setAttribute('data-status', 'open')
+        if (onChange) onChange()
+      }).catch(function () { showMsg('failed') })
+    })
+  }
+
+  // ---- the client index: the "something missing?" composer + its own request cards -----------
+  var askForm = q('[data-cl="ask"]')
+  if (askForm) {
+    var reasonChips = qa('[data-cl="reason"]')
+    var selectedReason = 'other'
+    reasonChips.forEach(function (chip) {
+      on(chip, 'click', function () {
+        selectedReason = chip.getAttribute('data-value') || 'other'
+        reasonChips.forEach(function (c) { c.setAttribute('aria-pressed', c === chip ? 'true' : 'false') })
+      })
+    })
+    on(askForm, 'submit', function (e) {
+      if (e && e.preventDefault) e.preventDefault()
+      var ta = askForm.querySelector('textarea')
+      var text = ta ? String(ta.value || '').trim() : ''
+      if (!text) { showMsg('why'); return }
+      post('/client/__notes/add', { scope: 'project', reason: selectedReason, text: text, by: 'client' }).then(function (r) {
+        if (!r.ok) { showMsg('failed'); return }
+        return r.json().then(function (j) {
+          if (ta) ta.value = ''
+          showMsg('saved')
+          var tmpl = q('[data-cl="requests"] [data-cl-template]')
+          if (tmpl && j && j.id) {
+            tmpl.setAttribute('data-cl', 'request')
+            tmpl.setAttribute('data-id', j.id)
+            tmpl.setAttribute('data-status', 'open')
+            tmpl.removeAttribute('data-cl-template')
+            tmpl.hidden = false
+          }
+        })
+      }).catch(function () { showMsg('failed') })
+    })
+    qa('[data-cl="request"]').forEach(function (art) { wireRequestCard('cl', art, null) })
+    return
+  }
+
+  // ---- the walk page -------------------------------------------------------------------------
+  var root = q('[data-journey]')
+  if (!root) return
+  var journey = root.getAttribute('data-journey')
+  var theme = root.getAttribute('data-theme')
 
   var frame = q('[data-wk="frame"]')
   var thumbs = qa('[data-wk="thumb"]')
@@ -67,18 +154,9 @@
   var leftEl = q('[data-wk="left"]')
   var approveEl = q('[data-wk="approve"]')
   var confirmBtn = q('[data-wk="confirm"]')
-  var msgEl = q('[data-wk="msg"]')
   var exclSection = q('[data-wk="exclusions"]')
   var exclOpen = exclSection ? (parseInt(exclSection.getAttribute('data-exclusions-open'), 10) || 0) : 0
   var lastLabel = thumbs.length ? thumbs[thumbs.length - 1].getAttribute('data-label') : null
-
-  // D4: the one slot every save reports through — never narrates the server's own error text,
-  // only its own two canned sentences, keyed by the attribute the builder already carried.
-  function showMsg(key) {
-    if (!msgEl) return
-    msgEl.textContent = msgEl.getAttribute('data-' + key) || ''
-    msgEl.hidden = false
-  }
 
   var currentLabel = thumbs.length ? thumbs[0].getAttribute('data-label') : null
   var currentState = null
@@ -117,12 +195,28 @@
 
   // D5: [data-wk="confirm"] stays disabled while any listed exclusion is still open, the same
   // "disabled until zero" gate the marks count already applies — both counts feed one button.
+  // D6: confirm's disabled state also follows every [data-wk="request"] card's own status — any
+  // "open" or "addressed" on the journey disables it, recomputed after every accept/reopen.
+  function refreshConfirm() {
+    if (!confirmBtn) return
+    var blocked = qa('[data-wk="request"]').some(function (a) {
+      var st = a.getAttribute('data-status')
+      return st === 'open' || st === 'addressed'
+    })
+    if (leftCount > 0 || exclOpen > 0 || blocked) confirmBtn.setAttribute('disabled', '')
+    else confirmBtn.removeAttribute('disabled')
+  }
+
   function updateLeft() {
     if (leftEl) { leftEl.setAttribute('data-count', String(leftCount)); leftEl.textContent = String(leftCount) }
-    if (confirmBtn) {
-      if (leftCount > 0 || exclOpen > 0) confirmBtn.setAttribute('disabled', '')
-      else confirmBtn.removeAttribute('disabled')
-    }
+    refreshConfirm()
+  }
+
+  // D6: a request card is visible only when its data-label is the current screen.
+  function renderRequests(label) {
+    qa('[data-wk="request"]').forEach(function (art) {
+      art.hidden = art.getAttribute('data-label') !== label
+    })
   }
 
   // D3/D5: approve and the exclusions section both become visible only once `reachedSoFar` (the
@@ -145,6 +239,7 @@
       frame.src = src
     }
     renderMarks(currentLabel)
+    renderRequests(currentLabel)
     renderStates(currentLabel)
     renderPos()
   }
@@ -218,7 +313,13 @@
     })
   })
 
+  // ---- request cards: accept/reopen, shared with the index's own cards ------------------------
+  qa('[data-wk="request"]').forEach(function (art) { wireRequestCard('wk', art, refreshConfirm) })
+
   // ---- the free note, current screen/state, by:'client' --------------------------------------
+  // D6: the note form's own ok additionally shows data-saved and activates the journey's spare
+  // template article for the current screen (same activation-not-fabrication discipline as the
+  // index's ask form, above).
   on(q('[data-wk="note"]'), 'submit', function (e) {
     if (e && e.preventDefault) e.preventDefault()
     var ta = q('[data-wk="note"] textarea')
@@ -226,7 +327,21 @@
     if (!text) return
     post('/client/__notes/add', { scope: 'mock', screen: currentLabel, state: currentState, text: text, by: 'client' }).then(function (r) {
       if (!r.ok) { showMsg('failed'); return }
-      if (ta) ta.value = ''
+      return r.json().then(function (j) {
+        if (ta) ta.value = ''
+        showMsg('saved')
+        var tmpl = q('[data-wk="requests"] [data-wk-template]')
+        if (tmpl && j && j.id) {
+          tmpl.setAttribute('data-wk', 'request')
+          tmpl.setAttribute('data-id', j.id)
+          tmpl.setAttribute('data-label', currentLabel)
+          tmpl.setAttribute('data-status', 'open')
+          tmpl.removeAttribute('data-wk-template')
+          tmpl.hidden = false
+          wireRequestCard('wk', tmpl, refreshConfirm)
+          refreshConfirm()
+        }
+      })
     }).catch(function () { showMsg('failed') })
   })
 

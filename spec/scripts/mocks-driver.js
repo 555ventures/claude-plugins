@@ -927,7 +927,11 @@ function cmdNotes(sub, args) {
     const id = narg('--id')
     const change = narg('--change')
     const ledgerRow = narg('--ledger')
-    const port = narg('--port')
+    // specs/20260911/04-the-client-loop.md D7: --port falls back to status.client.port (recorded
+    // by `client open`) when the flag is absent — the flag still wins when given.
+    const port = narg('--port') || (status.client && status.client.port ? String(status.client.port) : null)
+    const screenArg = narg('--screen')
+    const journeyArg = narg('--journey')
     if (!id) die('notes address: --id <id> is required')
     if (!change) die('notes address: --change "<what changed>" is required')
     const notes = notesOrEmpty()
@@ -963,8 +967,21 @@ function cmdNotes(sub, args) {
       })
       return
     }
+    // specs/20260911/04-the-client-loop.md D7: a client-origin project-scope note (a "something
+    // missing?" ask) is addressed by naming where the session pointed it — a mock (`--screen`, a
+    // label already on disk) or a journey (`--journey`, a declared seed journey) — never both
+    // omitted; the client index's own "Done" line resolves its link from whichever is given.
     if (originOf(found) === 'client' && found.scope === 'project') {
-      die('notes address: a client-origin project-scope note is never addressed — the only closures are acceptance (through the client route) or a waiver (`notes waive`)')
+      if (!screenArg && !journeyArg) {
+        die('notes address: a client-origin project-scope note requires --screen <label> or --journey <j> — say where it was answered')
+      }
+      if (screenArg && !fs.existsSync(mockFile(screenArg))) die('notes address: design/mocks/' + screenArg + '.html does not exist')
+      if (journeyArg && !currentSeedJourneys().has(journeyArg)) die('notes address: unknown journey "' + journeyArg + '"')
+      let result
+      try { result = addressNote(notes, id, { change, ledgerRow, screen: screenArg || undefined, journey: journeyArg || undefined }) } catch (e) { die('notes address: ' + e.message) }
+      writeNotes(root, result.notes)
+      writeOut(1, 'notes address: ' + id + ' → addressed\n')
+      process.exit(0)
     }
     let result
     try { result = addressNote(notes, id, { change, ledgerRow }) } catch (e) { die('notes address: ' + e.message) }
@@ -1123,9 +1140,24 @@ function cmdClient(sub, args) {
   // the transport selection in probeClientNotesList — checking address.startsWith('https:') twice
   // let an uppercase scheme (e.g. "HTTPS://") pass the guard but pick the wrong http/https module.
   let scheme
-  try { scheme = new URL(address).protocol } catch { scheme = null }
+  let hostname
+  let urlPort
+  try { const u = new URL(address); scheme = u.protocol; hostname = u.hostname; urlPort = u.port } catch { scheme = null }
   if (scheme !== 'http:' && scheme !== 'https:') {
     die('client open: --address <url> must start with "http:" or "https:" (got "' + address + '")')
+  }
+  // specs/20260911/04-the-client-loop.md D7: `--port` names the server's OWN local port (the
+  // capture's own address, always 127.0.0.1/localhost) — derived automatically off a localhost
+  // address, else required outright, since a tunnel/tailscale hostname carries no port a capture
+  // could ever reach.
+  const portArg = flagArg(args, '--port')
+  let port
+  if (portArg) {
+    port = parseInt(portArg, 10)
+  } else if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    port = urlPort ? parseInt(urlPort, 10) : (scheme === 'https:' ? 443 : 80)
+  } else {
+    die('client open: ' + address + ' is not a localhost address — pass --port <n> (the server\'s local port, which the capture needs)')
   }
   probeClientNotesList(address, scheme).then((ok) => {
     if (!ok) {
@@ -1133,7 +1165,7 @@ function cmdClient(sub, args) {
         designAtlasBin + ' serve --root ' + root + '` (or your own server) and expose it yourself — the plugin never opens a tunnel')
       return
     }
-    status.client = { address, openedAt: nowIso() }
+    status.client = { address, port, openedAt: nowIso() }
     saveStatus()
     writeOut(1, 'client: open — ' + address + '/client/index.html\n')
     process.exit(0)
@@ -2043,6 +2075,9 @@ function doReopen(target) {
     st.walked = null
     status.marks.approved = null
     status.decider = null
+    // specs/20260911/04-the-client-loop.md D8: a redrawn journey is a different journey to OK
+    // too — take back any client confirmation on walk.json (a no-op when it was never confirmed).
+    walkLib.writeWalk(root, walkLib.unconfirmJourney(readWalkOrEmpty(), { journey: j, at, cause: 'reopen' }))
     const invalidated = ['approved', 'walk:' + j, 'approved(all)']
     status.reopens.push({ at, target: 'journey:' + j, invalidated })
     saveStatus()
@@ -2456,26 +2491,72 @@ function printThemeStep() {
       driverCmd('theme shortlist --directions <a,b[,c]>')])
 }
 
-// D10: the client: progress line — "not opened" names the `client open --address <url>` command
-// when `status.client` is absent; once present it derives its counts fresh from notes.json on
-// every run rather than trusting anything cached. specs/20260907/10-client-review.md D10.
-function clientNoteCounts() {
-  const notes = notesOrEmpty()
-  const clientNotes = notes.filter((n) => n.kind !== 'question' && originOf(n) === 'client')
-  const open = clientNotes.filter((n) => n.status === 'open').length
-  const addressed = clientNotes.filter((n) => n.status === 'addressed').length
-  const waived = clientNotes.filter((n) => n.waived != null).length
-  const unanswered = notes.filter((n) => n.kind === 'question' && n.answer == null).length
-  return { open, addressed, waived, unanswered }
+// specs/20260911/04-the-client-loop.md D7: the client-origin, non-question requests a journey's
+// labels carry — the same set lib/mocks-walk.js's journeyState derives its "changes-requested"/
+// "fixed" verdict from, restated here so the printed N count and the state word never disagree.
+function requestsOnLabels(notes, labels) {
+  const set = new Set(labels || [])
+  return (notes || []).filter((n) => n.scope === 'mock' && set.has(n.screen) && n.kind !== 'question' && originOf(n) === 'client')
 }
-function clientLineFor() {
+
+// D7: the server-answering line — "server: answering — <address>/client/index.html" (probed live,
+// the same 3s /client/__notes/list probe `client open` runs) or "server: NOT answering — …"
+// naming the serve command with its recorded port; "client: not opened — …" when `status.client`
+// is absent, unchanged.
+function clientOpenedLineAsync() {
   if (!status.client) {
-    return 'client: not opened — expose the served atlas yourself, then: ' + driverCmd('client open --address <url>')
+    return Promise.resolve('client: not opened — expose the served atlas yourself, then: ' + driverCmd('client open --address <url>'))
   }
-  const c = clientNoteCounts()
-  return 'client: open since ' + String(status.client.openedAt).slice(0, 10) + ' — ' + status.client.address +
-    '/client/index.html · client notes: ' + c.open + ' open · ' + c.addressed + ' addressed · ' + c.waived +
-    ' waived · questions: ' + c.unanswered + ' unanswered'
+  const address = status.client.address
+  let scheme
+  try { scheme = new URL(address).protocol } catch { scheme = 'http:' }
+  return probeClientNotesList(address, scheme).then((ok) => {
+    if (ok) return 'server: answering — ' + address + '/client/index.html'
+    const port = status.client.port
+    return 'server: NOT answering — start it in your own terminal and keep it running until approval: node ' +
+      designAtlasBin + ' serve --root ' + root + (port ? ' --port ' + port : '')
+  })
+}
+
+// D7: one `<j>: <state>` line per seed journey, `journeyState`-derived — never a second
+// derivation of what the client's own requests mean.
+function journeyStateLinesFor() {
+  const notes = notesOrEmpty()
+  const walk = readWalkOrEmpty()
+  const lines = []
+  for (const [jn, j] of currentSeedJourneys()) {
+    const rec = (walk.journeys || {})[jn]
+    const labels = j.labels
+    const state = walkLib.journeyState(rec, notes, labels)
+    let word
+    if (state === 'unseen') word = 'not started'
+    else if (state === 'walking') word = 'walking ' + ((rec && rec.reached) || []).length + '/' + labels.length
+    else if (state === 'changes-requested') word = 'changes requested (' + requestsOnLabels(notes, labels).filter((n) => n.status === 'open').length + ')'
+    else if (state === 'fixed') word = 'fixed — waiting for the client (' + requestsOnLabels(notes, labels).filter((n) => n.status === 'addressed').length + ')'
+    else if (state === 'ok') word = 'ok — "' + ((rec && rec.sentence) || '') + '"'
+    else if (state === 'waived') word = 'skipped — ' + ((rec && rec.waived && rec.waived.reason) || '')
+    else word = state
+    lines.push(jn + ': ' + word)
+  }
+  return lines.join('\n')
+}
+
+// D7: "📥 what the client left" — one line per client-origin, non-question, not-yet-resolved
+// note, and (for an open one only) the exact remedy command on the following line. Replaces the
+// retired counts line one-for-one; this is the pickup surface JJ asked for.
+function pickupLinesFor() {
+  const notes = notesOrEmpty().filter((n) => n.kind !== 'question' && originOf(n) === 'client' && n.status !== 'resolved')
+  const lines = ['📥 what the client left:']
+  if (!notes.length) { lines.push('  nothing new'); return lines.join('\n') }
+  for (const n of notes) {
+    const where = n.scope === 'mock' ? n.screen : 'project'
+    lines.push('  ' + n.id + ' ' + n.status + ' · ' + where + ' · "' + n.text + '"')
+    if (n.status === 'open') {
+      const hint = n.scope === 'project' ? ' --screen <label> | --journey <j>' : ''
+      lines.push('      notes address --id ' + n.id + ' --change "<what changed>"' + hint)
+    }
+  }
+  return lines.join('\n')
 }
 
 // D10: CLIENT is one look over the atlas index — the terminal `approved` mark is the one
@@ -2487,24 +2568,19 @@ function clientLineFor() {
 // itself is unconditional here). The `approved` stop key and the `signoff` stop step NAME are
 // both kept unchanged (D9 rationale — AC-20260907-08-12's pin and the `stop open` enumeration
 // both still name "signoff").
-// specs/20260910/03-client-journey-player.md D7: one journeyWalkStatusLine per seed journey,
-// right beside the existing client-notes progress line — the same form `client log` prints.
-function clientWalkLinesFor() {
-  const walk = readWalkOrEmpty()
-  const lines = []
-  for (const [jn, j] of currentSeedJourneys()) {
-    lines.push(journeyWalkStatusLine(jn, (walk.journeys || {})[jn], j.labels.length))
-  }
-  return lines.join('\n')
-}
-
+// specs/20260911/04-the-client-loop.md D7: the server-answering/journey-state/pickup lines above
+// replace the retired per-journey `confirmed/open — reached` form and the counts line one-for-one
+// — the driver never starts or stops the client server itself, only probes it (Rationale).
 function printClientStep() {
   const look = lookLineAndThen('approved', 'signoff', () => driverCmd('--mark approved'))
-  printStepBlock('CLIENT', 'client review — the product I understand',
-    ['design/atlas/index.html', 'design/mocks/notes.json'], 'Mocks: State Machine',
-    clientLineFor() + '\n' + clientWalkLinesFor() + '\n' +
-    'Approval means "this is the product I understand" — the written brief, not these screens, holds scope.' + '\n' + look.look,
-    [driverCmd('--mark approved')])
+  clientOpenedLineAsync().then((topLine) => {
+    printStepBlock('CLIENT', 'client review — the product I understand',
+      ['design/atlas/index.html', 'design/mocks/notes.json'], 'Mocks: State Machine',
+      topLine + '\n' + journeyStateLinesFor() + '\n' +
+      'Approval means "this is the product I understand" — the written brief, not these screens, holds scope.' + '\n' +
+      pickupLinesFor() + '\n' + look.look,
+      [driverCmd('--mark approved')])
+  })
 }
 
 function printApprovedTerminal() {

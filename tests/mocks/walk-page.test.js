@@ -224,6 +224,249 @@ async function walkThroughRouted({ screens, notes = [], ledger = [], reached = [
 }
 
 // ---------------------------------------------------------------------------
+// specs/20260911/04-the-client-loop.md D1/D4/D5/D6 — journeyState-driven index/walk-page
+// rendering (D4/D5) and the client's own return-leg controls (D6). Unbuilt against the
+// pre-image: buildClientIndex renders no composer/request list at all, buildWalkPage renders no
+// request cards at all, and walk.browser.js's index-page handlers do not exist (the script
+// no-ops on a page with no `[data-journey]` root). Every test below is red until D4/D5/D6 land.
+// AC-20260911-04-6, -7, -8, -9.
+// ---------------------------------------------------------------------------
+
+// A client-origin, non-question, non-walk note (kind absent) — the shape D4/D5's request lists
+// and D6's controls all act on. Distinct from question()'s session-authored, kind:"question" shape
+// already defined above.
+function clientNote(overrides) {
+  return Object.assign({
+    id: 'N000', scope: 'mock', screen: null, state: null, text: 'a client note', by: 'client',
+    at: NOW, status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null,
+    origin: 'client',
+  }, overrides)
+}
+
+// Same vm-shim discipline as runWalkBrowserRouted, over the CLIENT INDEX page instead of a walk
+// page — the index carries no `[data-journey]` root and never fetches `/client/__walk/state`, so
+// this is a thinner sandbox than runWalkBrowserRouted's, not a copy of its walk-only wiring.
+function runIndexBrowser(html, routeStub) {
+  const src = fs.readFileSync(path.join(SPEC, 'scripts/lib/walk.browser.js'), 'utf8')
+  const document = parseFlatDom(html)
+  const posts = []
+  const sandbox = {
+    document,
+    window: { addEventListener() {} },
+    location: { pathname: '/client/index.html', origin: 'http://localhost:5173' },
+    fetch(url, init) {
+      posts.push({ url: String(url), init })
+      const key = Object.keys(routeStub || {}).find((k) => String(url).includes(k))
+      const resp = key ? routeStub[key] : { ok: true }
+      if (resp === 'reject') return Promise.reject(new Error('network down'))
+      return Promise.resolve(Object.assign({ json: () => Promise.resolve({}) }, resp))
+    },
+    console,
+  }
+  vm.createContext(sandbox)
+  vm.runInContext(src, sandbox)
+  return { document, posts }
+}
+
+test('AC-20260911-04-6: buildClientIndex renders a journey\'s derived state, the "something missing?" composer, and every client request with its own status line and controls, newest first, session-origin excluded', () => {
+  const seed = { product: 'Hearwell', journeys: [{ name: 'onboarding', title: 'Onboarding', screens: [{ label: 'invite', states: [] }] }] }
+  const notes = [
+    clientNote({
+      id: 'N006', scope: 'project', text: 'An old request', status: 'resolved', resolution: 'accepted',
+      at: '2026-09-01T00:00:00.000Z',
+    }),
+    clientNote({
+      id: 'N003', scope: 'mock', screen: 'invite', text: 'Says Submit, not Send', status: 'open',
+      at: '2026-09-05T00:00:00.000Z',
+    }),
+    clientNote({
+      id: 'N005', scope: 'project', text: 'No password reset screen', status: 'addressed',
+      addressed: { at: '2026-09-10T00:00:00.000Z', change: 'Added the reset screen', ledgerRow: null, journey: 'onboarding' },
+      at: '2026-09-10T00:00:00.000Z',
+    }),
+    Object.assign(clientNote({ id: 'N009', scope: 'project', text: 'a session note', status: 'open' }), { origin: 'session' }),
+  ]
+  const html = buildClientIndex({ seed, notes, ledger: [], walk: { journeys: {} }, prefix: '', ready: new Set(['onboarding']) })
+
+  assert.match(html, /data-state="changes-requested"/,
+    'AC-6: a journey with an open client mock-scope note must carry data-state="changes-requested" — journeyState-driven rendering is unbuilt: got\n' + html)
+  assert.match(html, /Changes requested \(1\)/,
+    'AC-6: the row must render the count-bearing state text "Changes requested (1)": got\n' + html)
+
+  const formMatch = /<form[^>]*data-cl="ask"[\s\S]*?<\/form>/.exec(html)
+  assert.ok(formMatch, 'AC-6: buildClientIndex must render <form data-cl="ask"> (the "Something missing?" composer): got\n' + html)
+  assert.match(formMatch[0], /<textarea/, 'AC-6: the ask form must carry a textarea: got\n' + formMatch[0])
+  const chips = [...formMatch[0].matchAll(/data-cl="reason"[^>]*data-value="([^"]+)"/g)].map((m) => m[1]).sort()
+  assert.deepStrictEqual(chips, ['missing-screen', 'other'],
+    'AC-6: the ask form must carry exactly the two reason chips missing-screen/other: got ' + JSON.stringify(chips))
+
+  const sectionMatch = /<section[^>]*data-cl="requests"[\s\S]*?<\/section>/.exec(html)
+  assert.ok(sectionMatch, 'AC-6: buildClientIndex must render <section data-cl="requests">: got\n' + html)
+  const articles = [...sectionMatch[0].matchAll(/<article[^>]*data-cl="request"[\s\S]*?<\/article>/g)].map((m) => m[0])
+  assert.strictEqual(articles.length, 3,
+    'AC-6: exactly three requests must render (N005, N003, N006) — the session-origin N009 must never appear: got ' + articles.length + ' in\n' + sectionMatch[0])
+
+  assert.match(articles[0], /data-id="N005"/, 'AC-6: the newest request (N005) must render first: got\n' + articles[0])
+  assert.match(articles[0], /data-status="addressed"/, 'AC-6: N005 must carry data-status="addressed": got\n' + articles[0])
+  assert.match(articles[0], /Done: Added the reset screen/, 'AC-6: an addressed request must read "Done: <change>": got\n' + articles[0])
+  assert.match(articles[0], /href="\/client\/walk\/onboarding\.html"/, 'AC-6: an addressed request resolving to a journey must link to it: got\n' + articles[0])
+  assert.match(articles[0], /data-cl="accept"/, 'AC-6: an addressed request must carry the accept control: got\n' + articles[0])
+  assert.match(articles[0], /data-cl="reopen"/, 'AC-6: an addressed request must carry the reopen control: got\n' + articles[0])
+  assert.match(articles[0], /data-cl="reopen-text"/, 'AC-6: an addressed request must carry the reopen textarea: got\n' + articles[0])
+
+  assert.match(articles[1], /data-id="N003"/, 'AC-6: the second-newest request (N003) must render second: got\n' + articles[1])
+  assert.match(articles[1], /We'll look at this/, 'AC-6: an open request must read "We\'ll look at this": got\n' + articles[1])
+  assert.doesNotMatch(articles[1], /data-cl="accept"/, 'AC-6: an open request must carry no accept control: got\n' + articles[1])
+
+  assert.match(articles[2], /data-id="N006"/, 'AC-6: the oldest request (N006) must render last: got\n' + articles[2])
+  assert.match(articles[2], /Closed — thank you/, 'AC-6: a resolved/accepted request must read "Closed — thank you": got\n' + articles[2])
+
+  assert.match(html, /data-wk="msg"[^>]*data-saved="Saved\. We'll fix this and let you know here\."/,
+    'AC-6: the shared msg slot must carry data-saved="Saved. We\'ll fix this and let you know here.": got\n' + html)
+})
+
+test('AC-20260911-04-7: buildWalkPage renders one request card per client note on the journey, and the approve lead/disabled state and read-only confirmed render all follow the derived journey state', () => {
+  const seed = onboardingSeed([{ label: 'invite', states: [] }])
+  const addressedNote = clientNote({
+    id: 'N003', scope: 'mock', screen: 'invite', text: 'Says Submit', status: 'addressed',
+    addressed: { at: NOW, change: 'Button now says Send', ledgerRow: null },
+  })
+  const openNote = clientNote({ id: 'N003', scope: 'mock', screen: 'invite', text: 'Says Submit', status: 'open' })
+  const resolvedNote = clientNote({ id: 'N003', scope: 'mock', screen: 'invite', text: 'Says Submit', status: 'resolved' })
+  const confirmedWalk = { journeys: { onboarding: { reached: [], misses: [], confirmedAt: NOW, sentence: 'Looks right', waived: null } } }
+
+  const htmlA = buildWalkPage({ seed, journey: 'onboarding', notes: [addressedNote], ledger: [], walk: { journeys: {} }, prefix: '' })
+  const reqMatch = /<article[^>]*data-wk="request"[\s\S]*?<\/article>/.exec(htmlA)
+  assert.ok(reqMatch, 'AC-7: buildWalkPage must render [data-wk="request"] for a client note on this journey — D5 is unbuilt: got\n' + htmlA)
+  assert.match(reqMatch[0], /data-id="N003"/, 'AC-7: the request card must carry data-id="N003": got\n' + reqMatch[0])
+  assert.match(reqMatch[0], /data-label="invite"/, 'AC-7: the request card must carry data-label="invite": got\n' + reqMatch[0])
+  assert.match(reqMatch[0], /data-status="addressed"/, 'AC-7: the request card must carry data-status="addressed": got\n' + reqMatch[0])
+  assert.match(reqMatch[0], /Fixed: Button now says Send/, 'AC-7: an addressed request card must read "Fixed: <change>": got\n' + reqMatch[0])
+  assert.match(reqMatch[0], /data-wk="accept"/, 'AC-7: an addressed request card must carry the accept control: got\n' + reqMatch[0])
+  assert.match(reqMatch[0], /data-wk="reopen"/, 'AC-7: an addressed request card must carry the reopen control: got\n' + reqMatch[0])
+  assert.match(htmlA, /We fixed what you asked\. Check the screens marked Fixed, then confirm\./,
+    'AC-7: the "fixed" approve lead must read exactly this sentence: got\n' + htmlA)
+  assert.match(htmlA, /data-wk="confirm"[^>]*disabled/,
+    'AC-7: confirm must stay disabled while the journey is "fixed": got\n' + htmlA)
+
+  const htmlB = buildWalkPage({ seed, journey: 'onboarding', notes: [openNote], ledger: [], walk: { journeys: {} }, prefix: '' })
+  assert.match(htmlB, /You asked for changes\. We'll fix them and let you know\./,
+    'AC-7: the "changes-requested" approve lead must read exactly this sentence: got\n' + htmlB)
+
+  const htmlC = buildWalkPage({ seed, journey: 'onboarding', notes: [resolvedNote], ledger: [], walk: confirmedWalk, prefix: '' })
+  assert.match(htmlC, /You confirmed this journey\./,
+    'AC-7: a confirmed journey with no open/addressed request (state "ok") must render the read-only confirmed section: got\n' + htmlC)
+
+  const htmlD = buildWalkPage({ seed, journey: 'onboarding', notes: [openNote], ledger: [], walk: confirmedWalk, prefix: '' })
+  assert.doesNotMatch(htmlD, /You confirmed this journey\./,
+    'AC-7: confirmedAt set but an OPEN request outranks it (state "changes-requested") — the confirmed render must not show: got\n' + htmlD)
+})
+
+test('AC-20260911-04-8: under the vm shim, the client index\'s ask form posts a project-scope request through the server and only inserts a new request article on ok:true', async () => {
+  const seed = { product: 'Hearwell', journeys: [{ name: 'onboarding', title: 'Onboarding', screens: [{ label: 'invite', states: [] }] }] }
+  const html = buildClientIndex({ seed, notes: [], ledger: [], walk: { journeys: {} }, prefix: '', ready: new Set(['onboarding']) })
+
+  const { document, posts } = runIndexBrowser(html, {
+    '/client/__notes/add': { ok: true, json: () => Promise.resolve({ id: 'N007' }) },
+  })
+  const askForm = document.querySelector('[data-cl="ask"]')
+  assert.ok(askForm, 'AC-8: buildClientIndex must render <form data-cl="ask">: got\n' + html)
+  const textarea = askForm.querySelector('textarea')
+  const chip = document.querySelector('[data-cl="reason"][data-value="missing-screen"]')
+  assert.ok(chip, 'AC-8: the missing-screen reason chip must render: got\n' + html)
+  textarea.value = 'No reset screen'
+  chip.click()
+  askForm.submit()
+  await flush()
+
+  const postCall = posts.find((p) => p.url.includes('/client/__notes/add'))
+  assert.ok(postCall, 'AC-8: submitting the ask form must POST /client/__notes/add — walk.browser.js has no index-page handler yet: got posts=' + JSON.stringify(posts))
+  assert.deepStrictEqual(JSON.parse(postCall.init.body), { scope: 'project', reason: 'missing-screen', text: 'No reset screen', by: 'client' },
+    'AC-8: the posted body must carry the selected reason chip and the typed text: got ' + postCall.init.body)
+  assert.strictEqual(textarea.value, '', 'AC-8: an ok:true save must clear the textarea: got "' + textarea.value + '"')
+  const msgEl = document.querySelector('[data-wk="msg"]')
+  assert.strictEqual(msgEl.hidden, false, 'AC-8: an ok:true save must unhide the msg slot: got hidden=' + msgEl.hidden)
+  assert.strictEqual(msgEl.textContent, msgEl.getAttribute('data-saved'),
+    'AC-8: an ok:true save must show the data-saved text: got "' + msgEl.textContent + '"')
+  const requestArticles = document.querySelectorAll('[data-cl="requests"] [data-cl="request"]')
+  assert.strictEqual(requestArticles.length, 1, 'AC-8: an ok:true save must insert exactly one new request article: got ' + requestArticles.length)
+  assert.strictEqual(requestArticles[0].getAttribute('data-id'), 'N007', 'AC-8: the inserted article must carry the server\'s new id: got ' + requestArticles[0].getAttribute('data-id'))
+  assert.strictEqual(requestArticles[0].getAttribute('data-status'), 'open', 'AC-8: the inserted article must be status "open": got ' + requestArticles[0].getAttribute('data-status'))
+
+  const { document: doc2, posts: posts2 } = runIndexBrowser(html, {
+    '/client/__notes/add': { ok: false, json: () => Promise.resolve({}) },
+  })
+  const askForm2 = doc2.querySelector('[data-cl="ask"]')
+  const textarea2 = askForm2.querySelector('textarea')
+  textarea2.value = 'No reset screen'
+  askForm2.submit()
+  await flush()
+  assert.strictEqual(textarea2.value, 'No reset screen', 'AC-8: an ok:false save must keep the typed text: got "' + textarea2.value + '"')
+  assert.strictEqual(doc2.querySelectorAll('[data-cl="request"]').length, 0, 'AC-8: an ok:false save must insert nothing: got ' + doc2.querySelectorAll('[data-cl="request"]').length)
+  const msgEl2 = doc2.querySelector('[data-wk="msg"]')
+  assert.strictEqual(msgEl2.textContent, msgEl2.getAttribute('data-failed'),
+    'AC-8: an ok:false save must show the data-failed text: got "' + msgEl2.textContent + '" (posts=' + JSON.stringify(posts2) + ')')
+})
+
+test('AC-20260911-04-9: under the vm shim on the walk page, accept/reopen post their own routes, update the request card in place, and recompute confirm\'s disabled state', async () => {
+  const seed = onboardingSeed([{ label: 'invite', states: [] }])
+  const addressedNote = clientNote({
+    id: 'N003', scope: 'mock', screen: 'invite', text: 'Says Submit', status: 'addressed',
+    addressed: { at: NOW, change: 'Button now says Send', ledgerRow: null },
+  })
+
+  const htmlAccept = buildWalkPage({ seed, journey: 'onboarding', notes: [addressedNote], ledger: [], walk: { journeys: {} }, prefix: '' })
+  const acceptHarness = runWalkBrowserRouted(htmlAccept, { reached: ['invite'], misses: [], confirmedAt: null, sentence: null },
+    { '/client/__notes/resolve': { ok: true } })
+  await flush()
+  const acceptArticle = acceptHarness.document.querySelector('[data-wk="request"][data-id="N003"]')
+  assert.ok(acceptArticle, 'AC-9: buildWalkPage must render [data-wk="request"] for the addressed note — D5 is unbuilt: got\n' + htmlAccept)
+  const acceptBtn = acceptArticle.querySelector('[data-wk="accept"]')
+  assert.ok(acceptBtn, 'AC-9: the request card must carry [data-wk="accept"]: got\n' + acceptArticle.attrs)
+  acceptBtn.click()
+  await flush()
+  const acceptPost = acceptHarness.posts.find((p) => p.url.includes('/client/__notes/resolve'))
+  assert.ok(acceptPost, 'AC-9: clicking accept must POST /client/__notes/resolve: got posts=' + JSON.stringify(acceptHarness.posts))
+  assert.deepStrictEqual(JSON.parse(acceptPost.init.body), { id: 'N003', by: 'client' },
+    'AC-9: the accept POST body must carry {id, by:"client"}: got ' + acceptPost.init.body)
+  assert.strictEqual(acceptArticle.getAttribute('data-status'), 'resolved',
+    'AC-9: accepting must set data-status="resolved" on ok:true: got ' + acceptArticle.getAttribute('data-status'))
+  const confirmAfterAccept = acceptHarness.document.querySelector('[data-wk="confirm"]')
+  assert.strictEqual(confirmAfterAccept.hasAttribute('disabled'), false,
+    'AC-9: confirm must lose its disabled attribute once no request is open/addressed and every other count is zero: got disabled=' + confirmAfterAccept.hasAttribute('disabled'))
+
+  const htmlReopen = buildWalkPage({ seed, journey: 'onboarding', notes: [addressedNote], ledger: [], walk: { journeys: {} }, prefix: '' })
+  const reopenHarness = runWalkBrowserRouted(htmlReopen, { reached: ['invite'], misses: [], confirmedAt: null, sentence: null },
+    { '/client/__notes/reopen': { ok: true } })
+  await flush()
+  const reopenArticle = reopenHarness.document.querySelector('[data-wk="request"][data-id="N003"]')
+  assert.ok(reopenArticle, 'AC-9: buildWalkPage must render [data-wk="request"] for the reopen case too: got\n' + htmlReopen)
+  const reopenBtn = reopenArticle.querySelector('[data-wk="reopen"]')
+  const reopenTextEl = reopenArticle.querySelector('[data-wk="reopen-text"]')
+  assert.ok(reopenBtn && reopenTextEl, 'AC-9: the request card must carry [data-wk="reopen"] and [data-wk="reopen-text"]: got\n' + reopenArticle.attrs)
+  reopenBtn.click()
+  await flush()
+  assert.strictEqual(reopenHarness.posts.find((p) => p.url.includes('/client/__notes/reopen')), undefined,
+    'AC-9: reopen with an empty textarea must post nothing: got posts=' + JSON.stringify(reopenHarness.posts))
+  const msgAfterEmpty = reopenHarness.document.querySelector('[data-wk="msg"]')
+  assert.strictEqual(msgAfterEmpty.textContent, msgAfterEmpty.getAttribute('data-why'),
+    'AC-9: an empty reopen must show the data-why text: got "' + msgAfterEmpty.textContent + '"')
+
+  reopenTextEl.value = 'Still wrong'
+  reopenBtn.click()
+  await flush()
+  const reopenPost = reopenHarness.posts.find((p) => p.url.includes('/client/__notes/reopen'))
+  assert.ok(reopenPost, 'AC-9: reopen with text must POST /client/__notes/reopen: got posts=' + JSON.stringify(reopenHarness.posts))
+  assert.deepStrictEqual(JSON.parse(reopenPost.init.body), { id: 'N003', text: 'Still wrong', by: 'client' },
+    'AC-9: the reopen POST body must carry {id, text, by:"client"}: got ' + reopenPost.init.body)
+  assert.strictEqual(reopenArticle.getAttribute('data-status'), 'open',
+    'AC-9: reopening must set data-status="open" on ok:true: got ' + reopenArticle.getAttribute('data-status'))
+  const confirmAfterReopen = reopenHarness.document.querySelector('[data-wk="confirm"]')
+  assert.strictEqual(confirmAfterReopen.hasAttribute('disabled'), true,
+    'AC-9: confirm must stay (or become) disabled once the reopened request is "open" again: got disabled=' + confirmAfterReopen.hasAttribute('disabled'))
+})
+
+// ---------------------------------------------------------------------------
 // AC-20260911-01-8
 // ---------------------------------------------------------------------------
 test('AC-20260911-01-8: a mark\'s answer request resolving ok:true CONTINUES TO hide that mark, decrement [data-wk="left"], and remove disabled from [data-wk="confirm"] once the count reaches zero', async () => {

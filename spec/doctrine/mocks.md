@@ -78,7 +78,7 @@ only) → **THEME** (the user authors two or three directions under `design/them
 `--mark theme-picked` adopts the client's pick, copying its tokens the way `theme adopt` once
 did) → **CLIENT** (the client player, exposed by the user, where the client walks each
 journey by its real controls, answers the session's guesses, raises notes and confirms with one
-sentence; closes when every journey is confirmed-or-waived, every client-visible question
+sentence; closes when every journey is `ok` or waived, every client-visible question
 answered-or-waived and every client note resolved-or-waived) → **APPROVED** (terminal).
 WIREFRAMES carries a sub-mark per
 journey so no single conversation ever has to hold more than one journey's state —
@@ -170,10 +170,14 @@ branch answers `already serving` when a previous session's server is still up on
 starting it is idempotent. This makes `serve` the session's own tool: before the first look
 stop of a `/spec:mocks`, `/spec:sketch`, or `/spec:atlas` run, the session starts
 `node "$(spec-paths design-atlas)" serve --root . [--port <n>]` as a
-**tracked background task** (D4, specs/20260905/04), leaves it running across that run's look
-stops, and stops the task at sign-off or when the session ends — no script ever spawns a
-detached server, writes a pid file, or runs a registry; the serve command itself is
-never printed to the user. **The user's path is the look link**: a look stop's `🎨 ready for review —
+**tracked background task** (D4, specs/20260905/04) through the authoring states — SHAPES, KIT,
+WIREFRAMES, WALK, THEME — leaves it running across that run's look stops, and stops the task at
+sign-off or when the session ends — no script ever spawns a detached server, writes a pid file,
+or runs a registry; the serve command itself is never printed to the user. **In CLIENT the
+server is the user's own process**: started once in the user's terminal, kept running until
+`approved`, never started, stopped, or probed for liveness by any script except the CLIENT
+step's own answering/not-answering line (§ Mocks: State Machine, § Mocks: Client Player). **The
+user's path is the look link**: a look stop's `🎨 ready for review —
 <url>` line is that project's own served atlas page, `http://localhost:<port>/atlas/index.html
 #stop-<id>` — never a per-project port the user forwards by hand, and never a machine-wide
 address shared across projects.
@@ -272,7 +276,13 @@ from the route it arrived on, never from the typed name. A client-origin note ca
 screen when raised; a fix is recorded only when the re-captured screen differs. Only the client
 resolves a client note — withdrawing an `open` one records `resolution: "withdrawn"`, accepting
 an `addressed` one records `resolution: "accepted"` — or `notes waive --id --reason` releases it
-after seven days of client silence, a question's ledger row becoming `waived <date>`. The
+after seven days of client silence, a question's ledger row becoming `waived <date>`. The page
+carries the client's only two controls on an addressed note: `Looks good` accepts it,
+`Still not right` reopens it with the client's own text appended to `thread`, never a second
+note. A project-scope request (no screen of its own) is answered the same way the session
+answers any note, naming where the answer lives: `notes address --id <id> --change "<what
+changed>" --screen <label>` or `--journey <j>`, so the client's "Done" line links straight to
+the screen or journey that answers it. The
 `CLIENT` step's printed text carries the fixed approval line: `Approval means "this is the
 product I understand" — the written brief, not these screens, holds scope`.
 
@@ -323,6 +333,17 @@ shows its sentence and no controls. `approved` refuses while any seed journey is
 confirmed nor waived (`client waive --journey <j> --reason "<r>"`, the same seven-day clock as a
 note's waiver); `client log` prints each journey's confirmation sentence or its open count and
 misses.
+
+**The journey's state is derived, never stored.** `lib/mocks-walk.js`'s `journeyState` reads
+`walk.json` and `notes.json` and returns one of six words: `unseen`, `walking`,
+`changes-requested` (an open client request outranks a set `confirmedAt`), `fixed` (every client
+request on it addressed, none open), `ok` (`confirmedAt` set, nothing open or waiting), or
+`waived`. A new client request on an `ok` journey takes the OK back — `unconfirmJourney` nulls
+`confirmedAt` and its sentence into `history` — because pressing `Looks good` on one thing and
+raising `Still not right` on another cannot leave the journey reading `ok`; the confirm control
+itself stays disabled while the state is `changes-requested` or `fixed`, and only a fresh
+confirmation, after the client's own accept or reopen clears every open and addressed request,
+reopens it.
 
 **A client's `no` promotes.** Answering a mark `That's not right` with a reason does what an
 `overridden` status alone does not: it also writes a new `said-by-user` row to the provenance ledger,

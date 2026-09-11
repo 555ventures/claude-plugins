@@ -150,20 +150,26 @@ function freePort() {
   })
 }
 
-// serveAtlas(root, {port, script} = {}): spawns design-atlas.js (or `script`, a test seam for
-// AC-20260909-06-4's stub) `serve --root <root> --port <port ?? 0>` and resolves once the
+// serveAtlas(root, {port, script, env} = {}): spawns design-atlas.js (or `script`, a test seam
+// for AC-20260909-06-4's stub) `serve --root <root> --port <port ?? 0>` and resolves once the
 // child's first stdout line names a bound port (`http://localhost:(\d+)/` — the banner verb is
 // deliberately not part of the parse, D4/AC-20260909-06-6), or rejects after 5000 ms with the
 // child's accumulated stderr, having already SIGKILLed the child and attached it to the
 // rejection as `err.child` so a caller can assert the timed-out child actually exited
 // (AC-20260909-06-4). `stop()` sends SIGTERM, then SIGKILL after 5000 ms if the child has not
 // exited, and resolves once it has.
+// specs/20260911/04-the-client-loop.md D12: `env`, when given, is passed to `spawn` verbatim
+// (replacing the default inherited environment) — the served process's own `npx playwright
+// screenshot` re-capture (lib/client-capture.js, run from inside this same child) needs a PATH
+// carrying a stub `npx` ahead of the real one; omitting `env` keeps the prior default (the
+// child inherits this process's environment unmodified).
 function serveAtlas(root, opts = {}) {
   const scriptPath = opts.script || path.join(SPEC, 'scripts/design-atlas.js')
   const port = opts.port
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath,
-      [scriptPath, 'serve', '--root', root, '--port', String(port == null ? 0 : port)])
+      [scriptPath, 'serve', '--root', root, '--port', String(port == null ? 0 : port)],
+      opts.env ? { env: opts.env } : {})
     let stdoutBuf = ''
     let stderrBuf = ''
     let settled = false

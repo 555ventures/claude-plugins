@@ -293,6 +293,11 @@
       "spec/doctrine/core.md"
     ]
   },
+  "spec/scripts/count-tests.js": {
+    "entryPoints": [
+      "spec/scripts/review-legs.js"
+    ]
+  },
   "spec/scripts/verdict.js": {
     "entryPoints": [
       "spec/scripts/spec-review-driver.js",

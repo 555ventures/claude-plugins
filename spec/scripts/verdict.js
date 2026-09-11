@@ -541,7 +541,11 @@ if (profile !== 'release') {
 // neither scope's requiredLegs filter below, mirroring ac-matrix's standing exactly (the spec
 // text may be amended during a fix pass, and the leg costs milliseconds).
 
-const REVIEW_LEGS = ['gate', 'suite', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk', 'promise-sweep']
+// specs/20260911/02-tests-have-a-ceiling.md D4′: 'tests' joins REVIEW_LEGS as a required leg
+// in BOTH scopes (never excluded from fix-delta's filter below — a fix round can add tests) but
+// is deliberately advisory: it is NOT in REVIEW_BLOCKING, so a present row (always exit 0) can
+// never change the derived word and an absent row derives UNVERIFIED like any other required leg.
+const REVIEW_LEGS = ['gate', 'suite', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk', 'promise-sweep', 'tests']
 const REVIEW_BLOCKING = new Set(['gate', 'suite', 'smoke', 'ci'])
 const RELEASE_LEGS = ['deploy', 'ready', 'e2e', 'journeys', 'substrate', 'production', 'ci']
 

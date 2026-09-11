@@ -42,7 +42,10 @@ function makeSkipsHost() {
   return { root, spec, sidecar: spec.replace(/\.md$/, '.review') }
 }
 
-test('AC-20260820-07-1: WHEN the driver runs on an implementing spec whose legs all pass THE SYSTEM executes review-legs itself (manifest-1.jsonl carries every leg row) and prints the REVIEWER dispatch step, never a leg instruction', () => {
+// specs/20260911/02-tests-have-a-ceiling.md D4′ (AC-20260911-02-5): review-legs.js (invoked here
+// through the driver) gains a `tests` leg — this loop derives its expectation from the driver's
+// real manifest-1.jsonl, not a hand-built literal.
+test('AC-20260820-07-1 (also AC-20260911-02-5): WHEN the driver runs on an implementing spec whose legs all pass THE SYSTEM executes review-legs itself (manifest-1.jsonl carries every leg row) and prints the REVIEWER dispatch step, never a leg instruction', () => {
   const { root, spec, sidecar } = makeHost()
   const r = run(root, spec)
   assert.strictEqual(r.status, 0, 'a fully green legs run must exit 0 (step printed), not a precondition failure: ' + r.stdout + r.stderr)
@@ -50,7 +53,7 @@ test('AC-20260820-07-1: WHEN the driver runs on an implementing spec whose legs 
   assert.ok(fs.existsSync(manifestPath),
     'the driver must execute review-legs.js itself and write manifest-1.jsonl into the <spec>.review sidecar — a session that only follows printed steps could otherwise skip this deterministic leg run entirely: ' + r.stdout + r.stderr)
   const rows = fs.readFileSync(manifestPath, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l))
-  for (const leg of ['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk', 'promise-sweep']) {
+  for (const leg of ['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk', 'promise-sweep', 'tests']) {
     assert.ok(rows.some(x => x.leg === leg),
       `manifest-1.jsonl must carry a "${leg}" row from the driver's own review-legs.js invocation — a missing row means the driver did not genuinely run the leg it claims to have executed: ${JSON.stringify(rows)}`)
   }

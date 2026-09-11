@@ -195,10 +195,16 @@ test('AC-20260820-03-1: an unset declared testEnv var makes review-legs.js exit 
 // asserts the gate leg executes the resolved glob form and exits 0 (the bare-directory class),
 // so it is the extraction's own regression pin — tagged in place below, never duplicated, never
 // weakened.
-test('AC-20260820-03-2 (also AC-20260830-02-3, AC-20260903-02-12, SHALL CONTINUE TO): a green synthetic host produces every required leg row (now nine, suite included), resolves {testDirs} to the glob form via lib/gate-resolve.js\'s resolveGate(), and exits 0', () => {
+// specs/20260911/02-tests-have-a-ceiling.md D4′ (AC-20260911-02-5): review-legs.js gains a tenth
+// leg, `tests`, in wave 2 — this loop derives its expectation from the real review-legs.js
+// execution below, not a hand-built manifest, so it proves the leg's row genuinely appears
+// (advisory only, never in BLOCKING) rather than "staying green pre-image" the way the
+// hand-built SIX_GREEN-style fixtures in tests/review/verdict.test.js and its siblings do for
+// the SAME leg addition, per D10′.
+test('AC-20260820-03-2 (also AC-20260830-02-3, AC-20260903-02-12, AC-20260911-02-5): a green synthetic host produces every required leg row (now ten, tests included), resolves {testDirs} to the glob form via lib/gate-resolve.js\'s resolveGate(), and exits 0', () => {
   const { dir, base } = makeHost({ testBody: GREEN_TEST })
   const { r, byLeg } = run(dir, base)
-  for (const leg of ['gate', 'suite', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk', 'promise-sweep']) {
+  for (const leg of ['gate', 'suite', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk', 'promise-sweep', 'tests']) {
     assert.ok(byLeg.has(leg),
       `the manifest must carry a "${leg}" row — verdict.js's REVIEW_LEGS presence rule derives UNVERIFIED ` +
       `without it, so a review over this manifest could never close: rows=${JSON.stringify([...byLeg.keys()])} ` +

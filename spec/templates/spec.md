@@ -93,9 +93,10 @@ depended_on_by: []
      instead of a hard finding; never leave an env dependency undeclared. An AC whose honest
      oracle is a non-test gate leg (e.g. the typecheck/gate leg itself) declares
      `[oracle: <manifest leg>]` — a leg name from the evidence manifest's closed set (`gate`,
-     `smoke`, `drift`, `ci`, …), sibling syntax to `[env:]`, never free-form command text (no
-     manifest row means no mechanical redness check, which would make the tag a coverage-
-     laundering route). A declared oracle covers the AC by declaration in review's matrix; a
+     `smoke`, `drift`, `ci`, `tests`, …), sibling syntax to `[env:]`, never free-form command
+     text (no manifest row means no mechanical redness check, which would make the tag a
+     coverage-laundering route). A declared oracle covers the AC by declaration in review's
+     matrix; a
      red or absent oracle leg is a hard finding, identical in standing to an uncovered AC. One
      oracle per AC; an AC never carries both a test mapping and an `[oracle:]` tag. An AC whose
      test is legitimately green pre-implementation declares `[pre-green: <reason>]` — closed

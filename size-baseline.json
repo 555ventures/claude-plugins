@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 61878,
-    "spec/scripts": 1336379,
+    "spec/scripts": 1336460,
     "spec/scripts/lib": 250997,
-    "tests": 3841179
+    "tests": 3843942
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -62,7 +62,7 @@
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
     "spec/scripts/merge-back.sh": 17514,
-    "spec/scripts/mocks-driver.js": 123843,
+    "spec/scripts/mocks-driver.js": 123924,
     "spec/scripts/port-check.js": 3536,
     "spec/scripts/promise-sweep.js": 10409,
     "spec/scripts/prose-cap.js": 6271,
@@ -180,7 +180,7 @@
     "tests/init-gen/probes.test.js": 6550,
     "tests/merge-back.test.js": 15683,
     "tests/mocks/chrome-harness.js": 9353,
-    "tests/mocks/chrome-harness.test.js": 11208,
+    "tests/mocks/chrome-harness.test.js": 11209,
     "tests/mocks/client-route.test.js": 22060,
     "tests/mocks/mock-edges.test.js": 12014,
     "tests/mocks/mocks-driver-2.test.js": 19004,
@@ -194,7 +194,7 @@
     "tests/mocks/mocks-driver-look-stops-3.test.js": 9656,
     "tests/mocks/mocks-driver-look-stops-4.test.js": 12345,
     "tests/mocks/mocks-driver-look-stops.test.js": 21565,
-    "tests/mocks/mocks-driver-seed-2.test.js": 12827,
+    "tests/mocks/mocks-driver-seed-2.test.js": 15589,
     "tests/mocks/mocks-driver-theme.test.js": 51812,
     "tests/mocks/mocks-driver-walk.test.js": 13030,
     "tests/mocks/mocks-driver-wire.test.js": 4753,
@@ -1577,6 +1577,48 @@
       "path": "tests",
       "from": 3840826,
       "to": 3841179,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "spec/scripts/mocks-driver.js",
+      "from": 123843,
+      "to": 123924,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "tests/mocks/chrome-harness.test.js",
+      "from": 11208,
+      "to": 11209,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-seed-2.test.js",
+      "from": 12827,
+      "to": 14861,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1336379,
+      "to": 1336460,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "tests",
+      "from": 3841179,
+      "to": 3843214,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "tests/mocks/mocks-driver-seed-2.test.js",
+      "from": 14861,
+      "to": 15589,
+      "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
+    },
+    {
+      "path": "tests",
+      "from": 3843214,
+      "to": 3843942,
       "cite": "specs/20260910/06-real-records-and-two-dense-screens.md"
     }
   ]

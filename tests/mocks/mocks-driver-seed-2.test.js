@@ -30,43 +30,42 @@ function customWireframe(dir, label, { to, withRecord = false } = {}) {
     '<main data-screen-label="' + label + '" data-status="sketch">' + label + record + toHtml + stateBtnsHtml + '</main>\n')
 }
 
+// specs/20260910/06-real-records-and-two-dense-screens.md review round: the AC-20260910-06-1
+// and AC-20260910-06-2 (cold-host) cases both need an inline seed differing only in whether
+// "## Records" and the second "shift-roster" journey are present and in the dense-screens
+// heading/body — one file-local builder for both, so this file carries the shared Journeys
+// block once rather than as a third inline copy (dup-windows: 2 copies of this block already
+// exist across the repo, in tests/mocks/mock-edges.test.js; a third here trips the
+// three-or-more-near-identical-blocks extraction rule).
+function buildSeedText({ includeRecords, includeShiftRoster, denseHeading, denseBody }) {
+  const factLines = FACT_KEYS.map((k, i) => `- ${k}: P${i + 1}`).join('\n')
+  const sections = [
+    '# Seed — Test Product',
+    '## Product\nIt is a synthetic dispatch product for tests.\n' +
+      'Built for QA engineers running the driver\'s test suite.\n' +
+      'It must let a user complete a short onboarding.',
+    '## Facts\n' + factLines,
+    '## References\n- none',
+  ]
+  if (includeRecords) sections.push('## Records\n- customer: records/customer.json')
+  let journeys = '## Journeys\n### ' + JOURNEY + '\n' +
+    'Mika (dispatch lead) signs in, sends an invite, gathers consent, and reaches the live session.\n' +
+    '```surfaces\n' + LABELS[0] + ' -> ' + LABELS[1] + '\n' + LABELS[1] + ' -> ' + LABELS[2] + '\n' +
+    LABELS[2] + ' -> ' + LABELS[3] + '\n```'
+  if (includeShiftRoster) {
+    journeys += '\n\n### shift-roster\nPriya (shift lead) reviews the roster for the day.\n' +
+      '```surfaces\nroster\n```'
+  }
+  sections.push(journeys)
+  sections.push('## ' + denseHeading + '\n' + denseBody)
+  return sections.join('\n\n') + '\n'
+}
+
 function buildDenseSeed(dir, denseSection) {
   writeCustomerRecords(dir)
-  const factLines = FACT_KEYS.map((k, i) => `- ${k}: P${i + 1}`).join('\n')
-  writeFile(path.join(dir, 'design/mocks/seed.md'), `# Seed — Test Product
-
-## Product
-It is a synthetic dispatch product for tests.
-Built for QA engineers running the driver's test suite.
-It must let a user complete a short onboarding.
-
-## Facts
-${factLines}
-
-## References
-- none
-
-## Records
-- customer: records/customer.json
-
-## Journeys
-### ${JOURNEY}
-Mika (dispatch lead) signs in, sends an invite, gathers consent, and reaches the live session.
-\`\`\`surfaces
-${LABELS[0]} -> ${LABELS[1]}
-${LABELS[1]} -> ${LABELS[2]}
-${LABELS[2]} -> ${LABELS[3]}
-\`\`\`
-
-### shift-roster
-Priya (shift lead) reviews the roster for the day.
-\`\`\`surfaces
-roster
-\`\`\`
-
-## Dense screens
-${denseSection}
-`)
+  writeFile(path.join(dir, 'design/mocks/seed.md'), buildSeedText({
+    includeRecords: true, includeShiftRoster: true, denseHeading: 'Dense screens', denseBody: denseSection,
+  }))
 }
 
 test('AC-20260910-06-1: seed-done accepts ## Dense screens naming two declared labels, refuses three lines or an undeclared label naming the section and the offending count/label, and shape-picked accepts a shape labeled with the second dense screen', () => {
@@ -151,6 +150,30 @@ test('AC-20260910-06-2: seed-done refuses a missing ## Records section, a "- non
   writeCustomerRecords(dir)
   r = mark(dir, 'seed-done')
   assert.strictEqual(r.status, 0, 'seed-done must accept once records/customer.json holds three objects: ' + r.stdout + r.stderr)
+})
+
+test('AC-20260910-06-2: seed-done refuses a missing ## Records section on a cold host with no design/mocks/records/ directory at all, naming the remedy with the literal <entity> placeholder since no entity is derivable from disk', () => {
+  const dir = tmpdir('mocks-driver-seed-2')
+  bare(dir)
+  writeTargets(dir)
+  writeResearchBrief(dir)
+  confirmFacts(dir)
+  // Deliberately no writeSeed/writeCustomerRecords call here: this seed carries no "## Records"
+  // section, and design/mocks/records/ is never created, so existingRecordEntities() must find
+  // nothing on disk either — the cold-host case the reviewer flagged as never exercised.
+  writeFile(path.join(dir, 'design/mocks/seed.md'), buildSeedText({
+    includeRecords: false, includeShiftRoster: false, denseHeading: 'Dense screen', denseBody: '- ' + DENSE,
+  }))
+  assert.ok(!fs.existsSync(path.join(dir, 'design/mocks/records')),
+    'test setup requires a cold host: design/mocks/records/ must not exist before seed-done runs')
+
+  const r = mark(dir, 'seed-done')
+  assert.strictEqual(r.status, 2,
+    'seed-done must refuse a missing ## Records section even on a cold host with no records directory on disk: ' + r.stdout + r.stderr)
+  assert.ok((r.stderr + r.stdout).includes('ask the client for three real'),
+    'the refusal must carry the three-real-records remedy sentence: ' + r.stdout + r.stderr)
+  assert.ok((r.stderr + r.stdout).includes('<entity>'),
+    'with no entity derivable from seed text or disk, the remedy must carry the literal <entity> placeholder rather than a guessed name: ' + r.stdout + r.stderr)
 })
 
 test('AC-20260910-06-3: recordValues walks nested records deduping strings of length >= 3 (stringified numbers included, "14" excluded), recordHits returns only the values a page contains, and journey-drawn refuses a journey with no record hit on any screen while accepting and warning per screen for a journey with one hit', () => {

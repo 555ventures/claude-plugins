@@ -431,7 +431,7 @@ function requireRecords(text) {
   if (missing || entities.size === 0) {
     const entity = existingRecordEntities()[0]
     if (!entity) {
-      die('design/mocks/seed.md is missing "## Records" — add one "- <entity>: records/<entity>.json" line per entity the product handles, then re-mark seed-done')
+      die('design/mocks/seed.md is missing "## Records" — add one "- <entity>: records/<entity>.json" line per entity the product handles, then ask the client for three real <entity> records and save them as design/mocks/records/<entity>.json')
     }
     die('design/mocks/seed.md ## Records must declare "' + entity + '" — ask the client for three real ' +
       entity + ' records and save them as design/mocks/records/' + entity + '.json')

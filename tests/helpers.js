@@ -9,6 +9,7 @@ const fs = require('fs')
 const path = require('path')
 const os = require('os')
 const { execFileSync, spawnSync, spawn } = require('child_process')
+const http = require('http')
 
 const ROOT = path.join(__dirname, '..')
 const SPEC = path.join(ROOT, 'spec')
@@ -97,6 +98,42 @@ function runBash(script, argv, opts = {}) {
 }
 
 // specs/20260909/06-ephemeral-serve-ports.md D2: the one port-binding pair every serve-backed
+// getJson(url) / postJson(url, payload): the one JSON-over-HTTP pair every serve-backed test
+// speaks to a served route through, so a second copy never drifts from the first. Both resolve
+// rather than reject on a non-2xx — a route test asserts on the status code, so a 400 or a 404
+// is the subject under test, never an error. The resolved shape is the superset every caller
+// needs: `status`, `headers`, the parsed `body` (null when the payload is not JSON, which is
+// itself assertable), and the raw `text`. Network-level failures still reject.
+function readJsonResponse(res, resolve) {
+  const chunks = []
+  res.on('data', (c) => chunks.push(c))
+  res.on('end', () => {
+    const text = Buffer.concat(chunks).toString('utf8')
+    let body = null
+    try { body = JSON.parse(text) } catch { body = null }
+    resolve({ status: res.statusCode, headers: res.headers, body, text })
+  })
+}
+
+function getJson(url) {
+  return new Promise((resolve, reject) => {
+    http.get(url, (res) => readJsonResponse(res, resolve)).on('error', reject)
+  })
+}
+
+function postJson(url, payload) {
+  return new Promise((resolve, reject) => {
+    const data = Buffer.from(JSON.stringify(payload))
+    const req = http.request(new URL(url), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'content-length': data.length },
+    }, (res) => readJsonResponse(res, resolve))
+    req.on('error', reject)
+    req.write(data)
+    req.end()
+  })
+}
+
 // test uses — no test in this repo chooses a port number itself. freePort() binds :0, reads the
 // bound number, and closes so the caller can hand it to a process that will bind it for real
 // (D4's one legitimate use: two cooperating processes — a serve child and a second CLI
@@ -230,5 +267,5 @@ function gitRepo(dir, opts = {}) {
 
 module.exports = {
   ROOT, SPEC, read, extractFn, evalFns, checkWorkflowSyntax, tmpdir, runNode, runBash, gitRepo,
-  freePort, serveAtlas,
+  freePort, serveAtlas, getJson, postJson,
 }

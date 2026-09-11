@@ -4,7 +4,7 @@
     "scripts": 61878,
     "spec/scripts": 1359266,
     "spec/scripts/lib": 279809,
-    "tests": 3934801
+    "tests": 3934140
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -176,7 +176,7 @@
     "tests/genesis/tournament.fixtures.js": 11282,
     "tests/genesis/tournament.test.js": 15077,
     "tests/git/commit-escape-check.test.js": 5426,
-    "tests/helpers.js": 10034,
+    "tests/helpers.js": 11538,
     "tests/host-config/config-read.test.js": 19310,
     "tests/host-config/host-config-api.test.js": 7732,
     "tests/host-config/smoke-inert.test.js": 1834,
@@ -186,8 +186,8 @@
     "tests/merge-back.test.js": 15683,
     "tests/mocks/chrome-harness.js": 9353,
     "tests/mocks/chrome-harness.test.js": 11209,
-    "tests/mocks/client-route.test.js": 22060,
-    "tests/mocks/client-walk-route.test.js": 13322,
+    "tests/mocks/client-route.test.js": 21003,
+    "tests/mocks/client-walk-route.test.js": 12214,
     "tests/mocks/mock-edges.test.js": 12014,
     "tests/mocks/mocks-driver-2.test.js": 19577,
     "tests/mocks/mocks-driver-3.test.js": 17977,
@@ -1731,6 +1731,12 @@
       "from": 3919858,
       "to": 3934801,
       "cite": "specs/20260910/08-gate-sees-created-files.md"
+    },
+    {
+      "path": "tests/helpers.js",
+      "from": 10034,
+      "to": 11538,
+      "cite": "direct"
     }
   ]
 }

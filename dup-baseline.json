@@ -46,8 +46,6 @@
     "tests/genesis/tournament.test.js": 8,
     "tests/init-gen/generate.test.js": 47,
     "tests/merge-back.test.js": 2,
-    "tests/mocks/client-route.test.js": 8,
-    "tests/mocks/client-walk-route.test.js": 8,
     "tests/mocks/mocks-driver-2.test.js": 2,
     "tests/mocks/mocks-driver-3.test.js": 1,
     "tests/mocks/mocks-driver-4.test.js": 2,

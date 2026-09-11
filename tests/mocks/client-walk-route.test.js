@@ -4,7 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const http = require('node:http')
-const { tmpdir, freePort, serveAtlas, SPEC } = require('../helpers')
+const { tmpdir, freePort, serveAtlas, SPEC, getJson, postJson } = require('../helpers')
 const { advanceToSeedDone, JOURNEY, writeNotesFile, ledgerCmd, nowIso } = require('./mocks-driver-fixtures')
 
 // specs/20260910/03-client-journey-player.md D5 (design-atlas.js's client-mount walk routes and
@@ -21,37 +21,6 @@ function readWalkJson(dir) {
   try { return JSON.parse(fs.readFileSync(walkJsonPath(dir), 'utf8')) } catch { return null }
 }
 
-function getJson(url) {
-  return new Promise((resolve, reject) => {
-    http.get(url, (res) => {
-      const chunks = []
-      res.on('data', (c) => chunks.push(c))
-      res.on('end', () => {
-        let body = null
-        try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { body = null }
-        resolve({ status: res.statusCode, headers: res.headers, body, text: Buffer.concat(chunks).toString('utf8') })
-      })
-    }).on('error', reject)
-  })
-}
-function postJson(url, payload) {
-  return new Promise((resolve, reject) => {
-    const data = Buffer.from(JSON.stringify(payload))
-    const u = new URL(url)
-    const req = http.request(u, { method: 'POST', headers: { 'content-type': 'application/json', 'content-length': data.length } }, (res) => {
-      const chunks = []
-      res.on('data', (c) => chunks.push(c))
-      res.on('end', () => {
-        let body = null
-        try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { body = null }
-        resolve({ status: res.statusCode, body })
-      })
-    })
-    req.on('error', reject)
-    req.write(data)
-    req.end()
-  })
-}
 
 // ---------------------------------------------------------------------------
 // AC-20260910-03-5

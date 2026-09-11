@@ -7,7 +7,7 @@ const net = require('node:net')
 const http = require('node:http')
 const crypto = require('node:crypto')
 const { spawn } = require('node:child_process')
-const { tmpdir } = require('../helpers')
+const { tmpdir, getJson, postJson } = require('../helpers')
 
 // specs/20260907/10-client-review.md D4 (the /client/ route dispatch on
 // spec/scripts/design-atlas.js's createRequestHandler) and D5 (spec/scripts/lib/client-capture.js,
@@ -81,40 +81,6 @@ function stopServe(child) {
   })
 }
 
-function getJson(url) {
-  return new Promise((resolve, reject) => {
-    http.get(url, (res) => {
-      const chunks = []
-      res.on('data', (c) => chunks.push(c))
-      res.on('end', () => {
-        let body = null
-        try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { body = null }
-        resolve({ status: res.statusCode, body })
-      })
-    }).on('error', reject)
-  })
-}
-function postJson(url, payload) {
-  return new Promise((resolve, reject) => {
-    const data = Buffer.from(JSON.stringify(payload))
-    const u = new URL(url)
-    const req = http.request(u, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'content-length': data.length },
-    }, (res) => {
-      const chunks = []
-      res.on('data', (c) => chunks.push(c))
-      res.on('end', () => {
-        let body = null
-        try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { body = null }
-        resolve({ status: res.statusCode, body })
-      })
-    })
-    req.on('error', reject)
-    req.write(data)
-    req.end()
-  })
-}
 
 // PATH-stub `npx` — logs its argv to `argvLogFile` and copies a fixed PNG-fixture buffer to its
 // invocation's last argv item (the <out> path client-capture.js's captureScreen passes); the

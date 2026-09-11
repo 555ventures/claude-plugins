@@ -6,7 +6,7 @@ const path = require('node:path')
 const { read, SPEC, tmpdir, runNode } = require('../helpers')
 const { makeReviewLegsHost } = require('../review/review-legs.fixtures')
 
-// specs/20260911/02-tests-have-a-ceiling.md D4′ (amended 2026-09-11): pins review-legs.js's
+// specs/20260911/02-tests-have-a-ceiling.md D4′: pins review-legs.js's
 // `tests` leg (AC-5) and verdict.js's advisory-only derivation over it (AC-6). The leg is
 // required in both scopes but forbidden from every blocking spelling — required-but-never-red
 // is the property under test, not a comparison against any limit.
@@ -110,10 +110,10 @@ function writeWorkflow(dir, obj) {
   return p
 }
 
-// The nine legs REVIEW_LEGS already required before this spec, all green, deliberately WITHOUT
-// a tests row — this file's own local fixture (never verdict.test.js's SIX_GREEN, which already
-// carries the D10′ green tests row per that spec's own SHALL-CONTINUE-TO pin) so this test can
-// isolate tests's OWN presence the same way SIX_LEGS_NO_AT_RISK isolates at-risk's.
+// Every other REVIEW_LEGS-required leg, all green, deliberately WITHOUT a tests row — a local
+// fixture rather than verdict.test.js's SIX_GREEN (which carries the D10′ green tests row for
+// its own SHALL-CONTINUE-TO pin), so this test isolates the tests row's OWN presence the same
+// way SIX_LEGS_NO_AT_RISK isolates at-risk's.
 const NINE_LEGS_GREEN_NO_TESTS = [
   { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 40 } },
   { leg: 'suite', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1035 } },

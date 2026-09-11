@@ -73,8 +73,14 @@ baseline holds no code-group path to fall back on. A mechanism explanation survi
 merits — the rule bans history, not reasons — but it lives in exactly one file, and every other
 site that would repeat it carries a one-line citation instead.
 
-The plugin's own test count has a ceiling. `spec/test-ceiling.json` (`{"maxTests": N}`) is
-owned by the human: a deny hook keeps the plugin from editing it, and the final gate reds when
-the number of `test(` cases under `tests/` exceeds it. There is no cite, no reconcile and no
-raise command; the only way under the line is deleting tests. Byte-size ratchets and
-duplicate-window baselines were retired on 2026-09-11 as self-authorizing.
+A repo's test count is instrumented, not capped. `lib/scan-test-calls.js` is the one definition
+of a test case — a `test(`/`it(` call at line start across the host's test-classified files,
+blind to strings, comments and regex literals — and `count-tests.js` reports it (`tests: <count>
+cases`, `--json` → `{"count":N}`). The review's `tests` leg records that count on every evidence
+manifest and is deliberately absent from every blocking set, so the number appears on each ledger
+row and can never redden a verdict. There is no limit, no ceiling file and no hook: a count that
+could fail a build would make deleting tests the model's cheapest route to green. No executable
+this repo ships may be named `test-*` — `node --test`'s default discovery matches `**/test-*.js`
+anywhere under the root and would execute it as a test file. Byte-size ratchets and
+duplicate-window baselines were retired as self-authorizing; the growth they tried to police is
+addressed at its cause by the AC disposition grammar, not by a number.

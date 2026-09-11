@@ -1,6 +1,6 @@
 ---
 date: 2026-09-11
-status: implementing
+status: done
 tier: critical
 area: scripts
 design: false
@@ -158,7 +158,7 @@ review-legs.js manifest row
     `CLEAN`. The leg has no red arm (D3′, D4′), so blocking membership is now forbidden rather
     than required.
 - **AC-20260911-02-10** `[oracle: gate]`: WHEN the gate runs THE SYSTEM SHALL resolve
-  `spec-paths test-count`, find a `spec/entrypoints.json` row for `count-tests.js`, find no row for
+  `spec-paths count-tests`, find a `spec/entrypoints.json` row for `count-tests.js`, find no row for
   `lib/scan-test-calls.js`, and pass `scripts/plugin-bump.js --check`
 - **AC-20260911-02-11**: WHEN `count-tests.js --root .` runs over this repository at HEAD THE
   SYSTEM SHALL exit 0 reporting a positive integer count, and `spec/test-ceiling.json` SHALL NOT
@@ -239,6 +239,45 @@ scripts and two host repos depend on).
 Watch during build: the exhaustive pins in `tests/consistency/` fail closed on the new leg; the
 template's oracle set must list `tests` or `[oracle: tests]` is a laundering route in future
 specs.
+
+Build deviations, folded at close:
+
+- **A9 held, A8 was revised down.** Three of the nine files the lock named as hand-built
+  manifests — `promise-sweep.test.js`, `ac-matrix.test.js`, `legs-verdict-pair.test.js` — turned
+  out not to feed a full required-leg manifest literal to `verdict.js` at all: they exercise
+  single-leg append behaviour or derive their manifest from a real `review-legs.js` execution, so
+  they needed no row. D10′ names the true set of six.
+- **The `test-*` naming collision, caught by the final gate.** `node --test`'s default discovery
+  matches `**/test-*.js` anywhere under the root, so the CLI shipped as `test-count.js` was
+  executed as a test file and reported failed; the scanner as `lib/test-scan.js` carried the same
+  trap silently. Both were renamed (`count-tests.js`, `lib/scan-test-calls.js`). The rule lands in
+  `docs/canonical/scripts.md` rather than Gotchas, which is at its cap: no executable this repo
+  ships may be named `test-*`.
+- **The leg reads the CLI, not the scanner.** A first implementation had the `ceiling` leg call
+  `countCases()` directly to dodge a fixture that used an invalid `maxTests`. That contradicted
+  D8's declared entry point and left a malformed ceiling file reading as a silent green row; it
+  was rebuilt to shell out, and the fixture corrected to the spec's own literal. The
+  entrypoints check caught it as a manifest overclaim with no call site.
+- **`lib/` owes no manifest row.** D8 asked for one for the scanner, but
+  `tests/consistency/entrypoints.test.js` deliberately excludes `spec/scripts/lib/` from its
+  executable inventory. The pre-existing exclusion won; D8′ records it.
+- **The changelog was hand-edited.** `scripts/plugin-bump.js` has no amend mode — `--bump`
+  unconditionally increments the minor — so correcting 7.142.0's paragraph after the amendment
+  meant editing the string in place, leaving the version and every other field byte-identical.
+- **A3 fired, twice over.** The scanner's regex-context heuristic missed the `=>` arrow token and
+  treated every `)` as division, so `x => /re`$/.test(x)` and `if (a) /re"(/.test(x)` each opened
+  a false division that ran to end of file and swallowed every later call — reproduced against
+  `tests/design-look-handoff.test.js`, which read as one call whose `end` landed at `src.length`.
+  Per A3 the heuristic was widened, never the count: `=>` opens regex context, and a paren-stack
+  records whether each `(` followed `if`/`while`/`for`/`switch`/`catch`, so only a conditional's
+  `)` re-opens regex context while a call or grouping `)` still reads as division. Fixing that
+  surfaced a deeper bug of the same class: `sig`'s whitespace stripping collapsed two identifiers
+  separated only by a newline into one run-on word, breaking every keyword-boundary check
+  including the pre-existing `return` one. Both shapes are pinned behaviourally under
+  AC-20260911-02-4 alongside a division control. The live count moved 1017 → 1021 — the corrected
+  count, not a widened one. A residual gap in the same heuristic (a regex after `+ - <` or
+  `typeof`/`case`/`await`/`throw`/`else`) is latent, hits no live file, and is queued to close
+  before spec 03 consumes these spans to delete tests.
 
 ## Canonical Delta
 

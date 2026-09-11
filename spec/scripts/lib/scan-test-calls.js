@@ -15,8 +15,12 @@
 // comments, and regex literals as opaque spans so a quote or paren inside one of them can never
 // desynchronize the paren-depth count used to find a call's own closing paren (AC-20260911-02-4).
 // Regex-literal detection follows the standard heuristic: a `/` opens a regex only when the last
-// significant character read is one of `( , = : [ ! & | ? { } ;` or the word `return` — anywhere
-// else (an identifier, `)`, a literal) it is division and left alone.
+// significant character read is one of `( , = : [ ! & | ? { } ;`, the word `return`, or the `=>`
+// arrow token — anywhere else (an identifier, a literal) it is division and left alone. A `)` is
+// ambiguous on its own (`(a + b) / 2` is division, `if (a) /re/.test(x)` is a regex) so a paren
+// stack tracks, for each `(`, whether the word immediately before it was `if`/`while`/`for`/
+// `switch`/`catch` — only a `)` that closed one of those conditionals opens a regex context
+// (AC-20260911-02-4's second shape, the amendment's forcing incident).
 //
 // What this deliberately does NOT do: understand JSX, decorators, or any transpiled syntax
 // (plain post-Node-current-syntax test files only); count `describe(`/`t.test(`/any other call
@@ -100,14 +104,33 @@ function skipTemplate(src, i) {
   return src.length
 }
 
+// Control-flow keywords whose closing `)` re-opens a regex context (`if (a) /re/`) rather than
+// division (`foo() / 2`, `(a + b) / 2` — a bare call or grouping paren is never one of these).
+const CONTROL_KEYWORD_PAREN_RE = /(^|[^A-Za-z0-9_$])(if|while|for|switch|catch)$/
+
+// `sig` collapses every whitespace run to one trailing `' '` (never more — callers only ever
+// append a boundary space once per run) so two identifier-like tokens separated only by
+// whitespace (`true\n  if`) keep a real word boundary; without it they'd read as one run-on word
+// (`trueif`) and a keyword regex anchored on `[^A-Za-z0-9_$]` would never match. Both keyword
+// checks below trim that trailing space before testing.
+function trailingWord(sig) {
+  return sig.replace(/ $/, '')
+}
+
 // A `/` opens a regex only in the documented contexts (D2/A3) — the trailing significant-
-// character buffer `sig` (whitespace never appended to it) is checked, never a single char, so
-// the `return` keyword test can match a whole word rather than its last letter.
-function isRegexContext(sig) {
-  if (!sig) return true
-  const last = sig[sig.length - 1]
+// character buffer `sig` (a boundary space collapses each whitespace run, never fully dropped)
+// is checked, never a single char, so the `return`/`=>` checks can match a whole token rather
+// than its last letter. `lastCloseWasKeyword` carries whether the most recently closed paren (if
+// `sig` currently ends in `)`) matched CONTROL_KEYWORD_PAREN_RE when it was opened — a bare `)`
+// is otherwise division, never regex.
+function isRegexContext(sig, lastCloseWasKeyword) {
+  const word = trailingWord(sig)
+  if (!word) return true
+  const last = word[word.length - 1]
+  if (last === ')') return !!lastCloseWasKeyword
+  if (word.slice(-2) === '=>') return true
   if ('(,=:[!&|?{};'.includes(last)) return true
-  return /(^|[^A-Za-z0-9_$])return$/.test(sig)
+  return /(^|[^A-Za-z0-9_$])return$/.test(word)
 }
 
 function skipRegex(src, i) {
@@ -133,6 +156,8 @@ function findCallEnd(src, openParenIdx) {
   let depth = 1
   let pos = openParenIdx + 1
   let sig = '('
+  let lastCloseWasKeyword = false
+  const parenStack = []
   const n = src.length
   while (pos < n && depth > 0) {
     const c = src[pos]
@@ -140,10 +165,22 @@ function findCallEnd(src, openParenIdx) {
     if (c === '/' && src[pos + 1] === '*') { pos = skipBlockComment(src, pos); continue }
     if (c === '\'' || c === '"') { pos = skipQuoteString(src, pos, c); sig = c; continue }
     if (c === '`') { pos = skipTemplate(src, pos); sig = '`'; continue }
-    if (c === '/' && isRegexContext(sig)) { pos = skipRegex(src, pos); sig = '/'; continue }
-    if (/\s/.test(c)) { pos++; continue }
-    if (c === '(') { depth++; sig = (sig + c).slice(-24); pos++; continue }
-    if (c === ')') { depth--; pos++; sig = ')'; continue }
+    if (c === '/' && isRegexContext(sig, lastCloseWasKeyword)) { pos = skipRegex(src, pos); sig = '/'; continue }
+    if (/\s/.test(c)) { if (sig[sig.length - 1] !== ' ') sig = (sig + ' ').slice(-24); pos++; continue }
+    if (c === '(') {
+      depth++
+      parenStack.push(CONTROL_KEYWORD_PAREN_RE.test(trailingWord(sig)))
+      sig = (sig + c).slice(-24)
+      pos++
+      continue
+    }
+    if (c === ')') {
+      depth--
+      lastCloseWasKeyword = parenStack.length ? parenStack.pop() : false
+      pos++
+      sig = ')'
+      continue
+    }
     sig = (sig + c).slice(-24)
     pos++
   }
@@ -187,14 +224,28 @@ function scanCalls(src) {
   const n = src.length
   let i = 0
   let sig = ''
+  let lastCloseWasKeyword = false
+  const parenStack = []
   while (i < n) {
     const c = src[i]
     if (c === '/' && src[i + 1] === '/') { i = skipLineComment(src, i); continue }
     if (c === '/' && src[i + 1] === '*') { i = skipBlockComment(src, i); continue }
     if (c === '\'' || c === '"') { i = skipQuoteString(src, i, c); sig = c; continue }
     if (c === '`') { i = skipTemplate(src, i); sig = '`'; continue }
-    if (c === '/' && isRegexContext(sig)) { i = skipRegex(src, i); sig = '/'; continue }
-    if (/\s/.test(c)) { i++; continue }
+    if (c === '/' && isRegexContext(sig, lastCloseWasKeyword)) { i = skipRegex(src, i); sig = '/'; continue }
+    if (/\s/.test(c)) { if (sig[sig.length - 1] !== ' ') sig = (sig + ' ').slice(-24); i++; continue }
+    if (c === '(') {
+      parenStack.push(CONTROL_KEYWORD_PAREN_RE.test(trailingWord(sig)))
+      sig = (sig + c).slice(-24)
+      i++
+      continue
+    }
+    if (c === ')') {
+      lastCloseWasKeyword = parenStack.length ? parenStack.pop() : false
+      sig = ')'
+      i++
+      continue
+    }
     const isTest = c === 't' && src.startsWith('test(', i)
     const isIt = c === 'i' && src.startsWith('it(', i)
     if (isTest || isIt) {
@@ -216,6 +267,7 @@ function scanCalls(src) {
         })
         i = end
         sig = ')'
+        lastCloseWasKeyword = false
         continue
       }
     }

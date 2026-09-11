@@ -5,8 +5,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, tmpdir, runNode } = require('../helpers')
 
-// specs/20260911/02-tests-have-a-ceiling.md D2/D3′/D9′ (amended 2026-09-11 — the ceiling, its
-// file and its hook are retired): pins spec/scripts/count-tests.js by execution (AC-1, AC-2,
+// specs/20260911/02-tests-have-a-ceiling.md D2/D3′/D9′ (the ceiling, its file and its
+// hook are retired): pins spec/scripts/count-tests.js by execution (AC-1, AC-2,
 // AC-4) and the live-repo self-application pin (AC-11). There is no red arm and no ceiling file
 // left to pin — their absence IS the property under test.
 
@@ -128,6 +128,77 @@ test('AC-20260911-02-4: WHEN a test file contains a regex literal holding a quot
     JSON.stringify(calls[1]))
   assert.ok(src.slice(calls[1].start, calls[1].end).includes('two'),
     'the second call\'s own span must include its own title literal "two": ' + JSON.stringify(calls[1]))
+})
+
+test('AC-20260911-02-4 (A3 arrow shape): WHEN a test file holds an arrow function whose body is a regex literal containing a backtick (e.g. prefix => /never `$/.test(prefix)) followed by another test( call THE SYSTEM SHALL count both calls', () => {
+  const dir = tmpdir('count-ac4-arrow')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  const src = "'use strict'\n" +
+    "const { test } = require('node:test')\n" +
+    "const assert = require('node:assert')\n" +
+    "test('one', () => {\n" +
+    "  const mentions = ['x']\n" +
+    "  assert.ok(mentions.every(prefix => /never `$/.test(prefix)))\n" +
+    "})\n" +
+    "test('two', () => { assert.ok(true) })\n" +
+    "test('three', () => { assert.ok(true) })\n"
+  fs.writeFileSync(path.join(dir, 'tests/arrow-regex.test.js'), src)
+
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, 'a three-case host must exit 0: ' + r.stdout + ' / ' + r.stderr)
+  let out
+  assert.doesNotThrow(() => { out = JSON.parse(r.stdout) }, '--json must print parseable JSON: ' + r.stdout)
+  assert.strictEqual(out.count, 3,
+    'an arrow-function body opening a regex literal (the `=>` token before the `/`) must not be ' +
+    'misread as division — a misread here treats the backtick inside the regex as opening a ' +
+    'template literal that never resynchronizes, swallowing every later test( call: ' + JSON.stringify(out))
+
+  delete require.cache[testScanPath]
+  const { scanCalls } = require(testScanPath)
+  const calls = scanCalls(src)
+  assert.strictEqual(calls.length, 3,
+    'scanCalls must find exactly three calls, never swallowing the second and third into the ' +
+    'first\'s span: ' + JSON.stringify(calls))
+  assert.ok(calls[0].end <= calls[1].start,
+    'the first call\'s end must land at or before the second call\'s start, never past it — a scan ' +
+    'that misread the arrow-regex swallows every later call into the first\'s span, which would ' +
+    'push its end to src.length: ' + JSON.stringify(calls))
+})
+
+test('AC-20260911-02-4 (A3 paren-keyword shape): WHEN a test file holds a control-flow `)` immediately followed by a regex literal containing a quote (e.g. if (a) /re"(/.test(x)) followed by another test( call THE SYSTEM SHALL count both calls, and a plain division after a grouping/call paren SHALL still be read as division', () => {
+  const dir = tmpdir('count-ac4-paren-keyword')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  const src = "'use strict'\n" +
+    "const { test } = require('node:test')\n" +
+    "const assert = require('node:assert')\n" +
+    "test('one', () => {\n" +
+    "  const a = true\n" +
+    "  if (a) /re\"(/.test('x')\n" +
+    "  const half = (2 + 2) / 2\n" +
+    "  assert.ok(half === 2)\n" +
+    "})\n" +
+    "test('two', () => { assert.ok(true) })\n"
+  fs.writeFileSync(path.join(dir, 'tests/paren-keyword-regex.test.js'), src)
+
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, 'a two-case host must exit 0: ' + r.stdout + ' / ' + r.stderr)
+  let out
+  assert.doesNotThrow(() => { out = JSON.parse(r.stdout) }, '--json must print parseable JSON: ' + r.stdout)
+  assert.strictEqual(out.count, 2,
+    'a `)` closing an `if (...)` condition must open a regex context so the quote inside the regex ' +
+    'never opens a string span that swallows the following test( call, while a `)` closing a ' +
+    'grouping or call expression must still read the next `/` as division: ' + JSON.stringify(out))
+
+  delete require.cache[testScanPath]
+  const { scanCalls } = require(testScanPath)
+  const calls = scanCalls(src)
+  assert.strictEqual(calls.length, 2,
+    'scanCalls must find exactly two calls, never merging the second into the first via a ' +
+    'misread `)`-preceded regex: ' + JSON.stringify(calls))
+  assert.ok(calls[0].end <= calls[1].start,
+    'the first call\'s end must land at or before the second call\'s start, never past it — a ' +
+    'misread `)`-preceded regex swallows the second call into the first\'s span, which would push ' +
+    'its end to src.length: ' + JSON.stringify(calls))
 })
 
 test('AC-20260911-02-11: WHEN count-tests.js --root . runs over this repository at HEAD THE SYSTEM SHALL exit 0 reporting a positive integer count, and spec/test-ceiling.json SHALL NOT exist, and no .claude/test-ceiling.json SHALL exist', () => {

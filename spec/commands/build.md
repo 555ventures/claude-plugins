@@ -95,6 +95,6 @@ If in a worktree, stay in it. Every ledger row lands in `.claude/spec-runs.jsonl
 
 ## Rules
 
-- **The Worker Contract above is binding** (git ban, MCP ban, Decisions-table authority) on
-  every dispatch. **The driver never dispatches agents, writes the Decisions table, renders a
-  report, or runs a git write** — those stay this session's, always.
+- **The Worker Contract above is binding** (git ban, MCP ban, Decisions-table authority) on every
+  dispatch. **The driver never dispatches agents, writes the Decisions table, renders a report, or
+  runs a git write beyond the gate-time intent-to-add (ADR-0015)** — those stay this session's, always.

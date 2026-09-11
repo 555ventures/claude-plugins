@@ -10,8 +10,8 @@ const { makeHost, run, stateOf, toCommit, toFirstWave, implementScriptsWave, spe
 // build-driver.test.js, split by specs/20260903/07-test-file-budget-guard.md D7. Owns COMMIT/
 // ledger/provenance and the glob-expansion File Plan rows: AC-20260901-01-9, -10,
 // AC-20260901-02-5 (--via/model), the "build already DONE" field report, and D10's glob rows.
-// Admission/TESTS-stage lives in build-driver.test.js; wave/repair/escalate lives in
-// build-driver-repair.test.js. Shared helpers in tests/build/build-driver.fixtures.js.
+// AC-20260901-01-9 also carries AC-20260910-08-7 (SHALL CONTINUE TO)'s intent-to-add case.
+// Admission/TESTS-stage lives in build-driver.test.js; wave/repair/escalate in build-driver-repair.test.js.
 
 test('AC-20260901-01-9: WHEN --mark committed is received with every File Plan path clean in git status and HEAD past the base sha THE SYSTEM appends exactly one D6-shaped ledger line and deletes the sidecar; a dirty File Plan path refuses the mark', () => {
   const host = makeHost()
@@ -21,6 +21,23 @@ test('AC-20260901-01-9: WHEN --mark committed is received with every File Plan p
   assert.strictEqual(rEarly.status, 2,
     'the wave edits are still uncommitted working-tree changes at this point — a committed mark before the session\'s own checkpoint commit must refuse: ' + rEarly.stdout + rEarly.stderr)
   assert.strictEqual(stateOf(host.root, host.spec), 'COMMIT', 'a refused committed mark must leave the state at COMMIT')
+
+  // AC-20260910-08-7 (SHALL CONTINUE TO): specs/20260910/08-gate-sees-created-files.md D7 —
+  // an intent-to-add File Plan path (`git add -N`, never committed) must refuse `--mark
+  // committed` exactly like any other dirty path. `git status --porcelain` reports it as
+  // ` A src/bar.js`, which gitStatusPaths()'s slice(3) already parses into `src/bar.js` — this
+  // refusal needs no new driver behavior, only the git-status parsing this file already pins.
+  execFileSync('git', ['-C', host.root, 'add', '-N', '--', 'src/bar.js'], { encoding: 'utf8' })
+  const rIntentToAdd = run(host.root, host.spec, '--mark', 'committed')
+  assert.strictEqual(rIntentToAdd.status, 2,
+    'AC-20260910-08-7: an intent-to-add File Plan path must refuse --mark committed exactly like ' +
+    'any other dirty path — accepting it would let a new file whose content was never actually ' +
+    'committed ride through to DONE: ' + rIntentToAdd.stdout + rIntentToAdd.stderr)
+  assert.match(rIntentToAdd.stderr, /src\/bar\.js/,
+    'AC-20260910-08-7: the refusal must name the intent-to-add path, or the session cannot tell ' +
+    'which File Plan row is still uncommitted: ' + rIntentToAdd.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'COMMIT',
+    'AC-20260910-08-7: a refused committed mark from an intent-to-add path must leave the state at COMMIT')
 
   fs.writeFileSync(host.spec.replace(/\.md$/, '.deviations.md'),
     '# Deviations — 99-bd-test\n\n- first departure\n- second departure\n- third departure\n')

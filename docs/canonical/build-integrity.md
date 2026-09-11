@@ -111,6 +111,17 @@ re-running red-check on a post-image tree. Build rows are script-written and car
 `build.md` is the judgment shell. Both drivers share `lib/driver-io.js` for the fail-closed
 child runner, the synchronous stdout writer, the ledger append, and sidecar I/O.
 
+Before the gate child is spawned, the driver adds every File Plan path that is untracked and
+not git-ignored to the index with intent-to-add (`git add -N`). A host check whose inventory is
+the git index — a size or duplication baseline, a file manifest — therefore counts the files
+the build just created, at build time, instead of first seeing them at review after the
+checkpoint commit. The staging is bounded to the File Plan: a creation outside it stays
+untracked and remains a scope-reconcile finding. The entries are never reverted by the driver;
+they persist through repair rounds, whose fix tooling reads the same index, and are consumed by
+the checkpoint commit. A File Plan path that git ignores is warned about and skipped, and a
+failed staging refuses the mark rather than letting the gate run blind. This is the driver's
+only index write; every other git call it makes is still a read.
+
 **A state marker must never outrank the observation it summarizes.** Two defects in one review
 (2026-09-01) had the same shape: a marker file recording "the re-arm budget is spent" was also
 read as "the state is ESCALATE", burying a gate that had gone green; and a handler recorded its

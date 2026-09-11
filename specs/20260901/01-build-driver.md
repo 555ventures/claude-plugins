@@ -17,6 +17,8 @@ open_markers: 0
 
 ## Goal
 
+Amended by: ADR-0015 (specs/20260910/08-gate-sees-created-files.md narrows D12's git-write clause — see the ADR's Applies to)
+
 `/spec:build` today is a 161-line markdown procedure with no driver and no state file: it
 resumes by inspecting the diff, runs the red-check, the gate, and scope-reconcile by hand, and
 hand-appends its own ledger row — the last stage in the per-feature loop whose deterministic

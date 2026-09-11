@@ -41,8 +41,11 @@
 // invocation — a mark whose artifact vanished is demanded again.
 //
 // What this deliberately does NOT do: dispatch any agent, write the Decisions table, render a
-// user-facing report, or run a git write (its own git calls are rev-parse/diff/status only) —
-// D12. It never accepts an "unsanctioned green" itself; the sanction stays in the spec's own
+// user-facing report, or make any git write beyond one — the intent-to-add (`git add -N`) of
+// untracked, non-ignored File Plan paths immediately before the gate child spawns
+// (specs/20260910/08-gate-sees-created-files.md D1; D12 narrowed by ADR-0015 to admit exactly
+// this write — every other git call this driver makes is still rev-parse/diff/status/ls-files).
+// It never accepts an "unsanctioned green" itself; the sanction stays in the spec's own
 // carriers (`[pre-green:]`, `SHALL CONTINUE TO`) that red-check reads — a driver mark that let
 // the session record "the user said it's fine" would be a second sanction channel invisible to
 // review's ac-matrix (D4 rationale). It never creates, enters, or leaves a worktree (build_base
@@ -60,7 +63,10 @@
 //                 maxBuffer-overflowed) via lib/driver-io.js's runChild() fail-closed refusal,
 //                 and a re-run on a status: implementing spec with no sidecar whose build is
 //                 already DONE (a stage:"build" ledger row names this spec) — refused before any
-//                 sidecar is opened, remedy = the review driver.
+//                 sidecar is opened, remedy = the review driver; and a non-zero exit from the
+//                 `git ls-files`/`git add -N` intent-to-add staging that now runs before the gate
+//                 child (stderr names the failing command and its exit code; no gate child is
+//                 spawned and no gateRuns entry is recorded — specs/20260910/08 D5).
 
 'use strict'
 const fs = require('fs')
@@ -409,6 +415,70 @@ function resolvePostGate() {
   return raw.split('{testCommand}').join(testCommand)
 }
 
+// specs/20260910/08-gate-sees-created-files.md D1-D5: before the gate child ever spawns, the
+// driver asks git which of the spec's own File Plan paths (D2 — nothing wider, so an out-of-plan
+// creation stays untracked for scope-reconcile to catch at COMMIT) are untracked and not
+// git-ignored, and adds exactly those to the index with intent-to-add (`git add -N`). That makes
+// `git ls-files` list the path and a `statSync`-based inventory (a size or duplication baseline)
+// read its real on-disk bytes, so the ONE gate run this round already sees what the build just
+// created instead of first seeing it at review, after the checkpoint commit made it tracked.
+// The entries are never reverted (D3) — they persist through every repair round, whose own
+// fix tooling reads the same index, and are consumed by the checkpoint commit; the driver prints
+// one stderr notice naming the staged paths and the undo command. A File Plan path that is a
+// regular file on disk, neither tracked nor listed as untracked, is hidden by the host's own
+// .gitignore (D4): the driver warns and continues to the gate rather than refusing — a directory
+// path never triggers the warning. A non-zero exit from either git call refuses the mark (D5,
+// exit 2) before any gate child spawns and before any `marks.gateRuns` entry is recorded, so the
+// mark is simply re-issuable once the underlying git failure is fixed.
+function stageCreatedFilePlanPaths() {
+  const paths = [...new Set(filePlanRows.flatMap((r) => r.paths))]
+  if (!paths.length) return
+
+  const untrackedR = runChild('git',
+    ['-C', repoRoot, 'ls-files', '-o', '--exclude-standard', '-z', '--', ...paths],
+    { encoding: 'utf8' }, 'git ls-files -o --exclude-standard (untracked File Plan paths)')
+  if (untrackedR.status !== 0) {
+    die('git ls-files -o --exclude-standard -- <File Plan paths> exited ' + untrackedR.status +
+      ' (' + (untrackedR.stderr || '').trim() + ') — resolve the git failure, then re-run this mark')
+  }
+  const untracked = untrackedR.stdout.split('\0').filter(Boolean)
+
+  const trackedR = runChild('git', ['-C', repoRoot, 'ls-files', '-z', '--', ...paths],
+    { encoding: 'utf8' }, 'git ls-files (tracked File Plan paths)')
+  if (trackedR.status !== 0) {
+    die('git ls-files -- <File Plan paths> exited ' + trackedR.status +
+      ' (' + (trackedR.stderr || '').trim() + ') — resolve the git failure, then re-run this mark')
+  }
+  const tracked = new Set(trackedR.stdout.split('\0').filter(Boolean))
+  const untrackedSet = new Set(untracked)
+
+  // D4: a File Plan path is a regular file on disk, git knows it as neither tracked nor
+  // untracked, and it is not a directory — the only way that combination happens is the host's
+  // own .gitignore hiding it.
+  const ignored = paths.filter((p) => {
+    if (tracked.has(p) || untrackedSet.has(p)) return false
+    let st
+    try { st = fs.statSync(path.join(repoRoot, p)) } catch { return false }
+    return st.isFile()
+  })
+  if (ignored.length) {
+    process.stderr.write('spec-build-driver: ⚠️ File Plan path(s) ignored by this ' +
+      'host\'s .gitignore — staying untracked and invisible to any index-reading gate check: ' +
+      ignored.join(', ') + '\n')
+  }
+
+  if (!untracked.length) return
+  const addR = runChild('git', ['-C', repoRoot, 'add', '-N', '--', ...untracked],
+    { encoding: 'utf8' }, 'git add -N (stage untracked File Plan paths)')
+  if (addR.status !== 0) {
+    die('git add -N -- <File Plan paths> exited ' + addR.status +
+      ' (' + (addR.stderr || '').trim() + ') — resolve the git failure, then re-run this mark')
+  }
+  process.stderr.write('spec-build-driver: staged File Plan path(s) into the index with `git ' +
+    'add -N` so the gate can see them: ' + untracked.join(', ') + ' — undo with `git reset -- ' +
+    untracked.join(' ') + '`\n')
+}
+
 // ---- gate (GATE, driver-only) ---------------------------------------------------------------------
 function runGate() {
   const resolved = resolveGate(specText, hostConfig)
@@ -416,6 +486,7 @@ function runGate() {
     die('gate could not be resolved — ' + (resolved.reason || 'no gateCommand declared') +
       ' — add File Plan test rows or a gateCommand, then re-run this driver')
   }
+  stageCreatedFilePlanPaths()
   // D1: the host's optional postGateCommand is chained into this SAME bash -c child after the
   // resolved scoped gate, so the repair-round bookkeeping (marks.gateRuns, REPAIR_CAP,
   // isAtRepairNow) sees exactly one gate run per round whether or not a post-gate is declared.
@@ -934,8 +1005,10 @@ function waveStepBody(label) {
 }
 function integrationStepBody() {
   return `## Step: host integration\n` +
-    `Every wave has landed. Do the session-only integration work (wiring, README, doctrine), ` +
-    `then:\n` +
+    `Every wave has landed. Do the session-only integration work (wiring, README, doctrine). ` +
+    `New File Plan files this build created are staged into the index with \`git add -N\` when ` +
+    `the gate runs, so an index-reading host check (a size or duplication baseline) already ` +
+    `counts them — reconcile it now if it needs raising, rather than in a repair round. Then:\n` +
     `Then: node ${__filename} ${specPath} --mark integrated`
 }
 function repairStepBody() {

@@ -4,7 +4,7 @@
     "scripts": 61878,
     "spec/scripts": 1373767,
     "spec/scripts/lib": 287256,
-    "tests": 3978048
+    "tests": 3979615
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -128,7 +128,7 @@
     "tests/consistency/red-fixture-coverage.test.js": 40717,
     "tests/consistency/retired-flags.test.js": 10272,
     "tests/consistency/size-ratchet-live.test.js": 2957,
-    "tests/consistency/test-concurrency-cap.test.js": 2330,
+    "tests/consistency/test-concurrency-cap.test.js": 1553,
     "tests/consistency/wire-register.test.js": 8079,
     "tests/count-observation.test.js": 4209,
     "tests/design-ac-reconcile.test.js": 5161,
@@ -219,7 +219,7 @@
     "tests/mocks/walk-mode.test.js": 10319,
     "tests/mocks/walk-page.test.js": 39944,
     "tests/parse-selection/parse-selection.test.js": 4720,
-    "tests/prose-debt/doctrine-pins.test.js": 4759,
+    "tests/prose-debt/doctrine-pins.test.js": 7103,
     "tests/prose-debt/memory-sweep.test.js": 12286,
     "tests/prose-debt/prose-cap.test.js": 11612,
     "tests/provenance/provenance.test.js": 30412,
@@ -1889,6 +1889,18 @@
       "from": 3976676,
       "to": 3978048,
       "cite": "specs/20260911/01-the-page-waits-for-the-server.md"
+    },
+    {
+      "path": "tests/prose-debt/doctrine-pins.test.js",
+      "from": 4759,
+      "to": 7103,
+      "cite": "direct"
+    },
+    {
+      "path": "tests",
+      "from": 3978048,
+      "to": 3979615,
+      "cite": "direct"
     }
   ]
 }

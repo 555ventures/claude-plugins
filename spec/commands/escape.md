@@ -141,9 +141,12 @@ defective file — that is the only unrecoverable input.
 6. **Close the loop on the prevention delta** (the one write beyond the ledger row, and the
    only one): by `preventedBy` value —
    - `doctrine` → **draft the one-line Gotchas entry as tag + rule + one owner citation
-     (this escape row's id) — never dates, people, hosts, versions, or prior behavior**
+     (the spec path whose review the defect escaped, plus the spec path that fixes it once one
+     exists) — never dates, people, hosts, versions, or prior behavior**
      (pipeline rules § Gotchas; tag `[host]` or `[plugin]` by where the wrong assumption
-     came from). Check whether the target section is at cap:
+     came from). **Never cite the escape row's own id here**: its `<ts>` segment is a date, so
+     the narration sweep that polices this very section refuses the entry — the row stays
+     reachable by spec path through the ledger, which is what a reader follows anyway. Check whether the target section is at cap:
      `node "$(spec-paths prose-cap)" --file <host pipelineRules> --section Gotchas`; exit 1
      means it is — evict before appending (on a legacy over-cap host the next review close
      is ratcheted against its verdict-time count, so the append must be paired with at least

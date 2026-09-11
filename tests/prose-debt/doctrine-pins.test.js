@@ -74,3 +74,36 @@ test('AC-20260823-06-4: escape.md\'s step-6 `doctrine` branch states the at-cap 
     'mechanize — per D4\'s closed enum, the same as review.md\'s CLOSE step; an eviction ask ' +
     'with no enumerated fates collapses to "clean it up somehow"')
 })
+
+// Owner: spec/commands/escape.md step 6, the `doctrine` branch's owner-citation rule.
+// An escape row's id embeds a `<ts>` segment, which comment-narration.js classes as `date`
+// narration — and § Gotchas bans dates in its entries, policed repo-wide by
+// tests/consistency/comment-narration-live.test.js. So the row id is not an admissible
+// citation in that section, and the branch must prescribe spec paths instead: a citation the
+// no-dates rule admits and the ledger still resolves back to the row.
+test('escape.md\'s step-6 `doctrine` branch prescribes a spec-path owner citation and never the escape row\'s dated id', () => {
+  assert.ok(fs.existsSync(ESCAPE), 'setup: spec/commands/escape.md must exist for this pin to check anything')
+  const escape = fs.readFileSync(ESCAPE, 'utf8')
+
+  const start = escape.indexOf('`doctrine` → **draft the one-line Gotchas entry')
+  assert.ok(start !== -1,
+    'setup: escape.md step 6 must still carry its `doctrine` branch bullet — without this ' +
+    'anchor the citation prescription has nowhere defined to live')
+  const end = escape.indexOf('`enforcer` → recommend', start)
+  assert.ok(end !== -1,
+    'setup: escape.md step 6 must still carry the `enforcer` branch immediately after ' +
+    '`doctrine`, used here only to bound the doctrine-branch section being checked')
+  const doctrineSection = escape.slice(start, end)
+
+  assert.match(doctrineSection, /spec path/i,
+    'the `doctrine` branch must prescribe a spec path as the entry\'s owner citation — an ' +
+    'entry with no citable owner cannot be audited back to the defect it prevents, and the ' +
+    'spec path is the only owner form this section\'s own no-dates rule admits')
+  assert.doesNotMatch(doctrineSection, /citation\s*\n?\s*\(this escape row's id\)/i,
+    'the `doctrine` branch must not prescribe the escape row\'s id as the citation — the id ' +
+    'embeds a timestamp, so every entry written to that instruction is classed as date ' +
+    'narration and reddens the repo-wide comment-narration scan, exactly as it did once')
+  assert.match(doctrineSection, /never cite the escape row's own id/i,
+    'the `doctrine` branch must say outright that the row id is not the citation — without the ' +
+    'explicit ban the next author reaches for the row id again, since step 7 still prints it')
+})

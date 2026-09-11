@@ -59,10 +59,16 @@
 //                  suite run is the wider-blast-radius half of the same escape); runs in EVERY
 //                  scope including --fix-delta; BLOCKING (specs/20260903/02-whole-suite-review-
 //                  leg.md D1-D3)
-//   tests          {"leg":"tests","exit":0,"observed":{"count":N}} — always exit 0, in every
-//                  scope including --fix-delta; advisory only, derived by shelling out to
-//                  count-tests.js --json (D4′ entry point; neither script re-derives the count);
-//                  NOT in BLOCKING (specs/20260911/02-tests-have-a-ceiling.md D4′)
+//   tests          {"leg":"tests","exit":0,"observed":{"count":N,"dispositions":{"writes":N,
+//                  "rewrites":N,"reuses":N}}} | {"leg":"tests","exit":0,"observed":
+//                  {"unavailable":"count-failed"}} — always exit 0, in every scope including
+//                  --fix-delta; advisory only, count derived by shelling out to count-tests.js
+//                  --json (D4′ entry point; neither script re-derives the count), dispositions
+//                  counted here from the spec's own AC bullets via lib/spec-sections.js's
+//                  parseDisposition (specs/20260911/04-every-criterion-declares-its-test.md D9); a
+//                  count-tests.js invocation that itself exits non-zero or prints unparseable
+//                  stdout reads as the typed unavailable shape, never as a false {"count":0}; NOT
+//                  in BLOCKING (specs/20260911/02-tests-have-a-ceiling.md D4′)
 //   ac-matrix / skip-reconcile — appended by ac-matrix.js itself (same manifest)
 //   promise-sweep  {"leg":"promise-sweep","exit":<0|1>,"observed":{"rows":N,"carried":C,
 //                  "sanctioned":S,"orphans":O}} — appended by promise-sweep.js itself (same
@@ -131,6 +137,7 @@ const { spawn, spawnSync } = require('child_process')
 const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
 const { computeTestsExecuted, computeSkips, isUnobserved } = require('./lib/count-observation')
+const { extractSection, parseAcBullets, parseDisposition } = require('./lib/spec-sections')
 
 function usage() {
   console.error('usage: review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path> [--skips <file>] [--fix-delta] [--out-dir <dir>]')
@@ -337,11 +344,32 @@ async function main() {
   // its one entry point) rather than re-deriving the count via lib/scan-test-calls.js directly — "the
   // leg shells out to count-tests.js --json; it never re-derives the count" (D4′).
   {
+    // specs/20260911/04-every-criterion-declares-its-test.md D9: a count-tests.js invocation that
+    // itself exits non-zero (a broken instrument, e.g. a corrupt testGlobs entry) must NOT read as
+    // a healthy {"count":0} — that's indistinguishable from a genuinely empty suite. The typed
+    // {"unavailable":"count-failed"} shape carries no count/dispositions key at all. `dispositions`
+    // is counted here (not by count-tests.js — it derives from the SPEC's own AC bullets, not the
+    // tree) via parseDisposition, the same authority ac-matrix.js's --lint D3 imports.
     const testCountResult = spawnSync(process.execPath,
       [path.join(scriptDir, 'count-tests.js'), '--root', root, '--json'], { encoding: 'utf8' })
     let testCountJson = null
-    try { testCountJson = JSON.parse((testCountResult.stdout || '').trim().split('\n').pop() || '') } catch { testCountJson = null }
-    appendRow('tests', 0, { count: testCountJson ? testCountJson.count : 0 })
+    if (testCountResult.status === 0) {
+      try { testCountJson = JSON.parse((testCountResult.stdout || '').trim().split('\n').pop() || '') } catch { testCountJson = null }
+    }
+    if (!testCountJson || !Number.isInteger(testCountJson.count)) {
+      appendRow('tests', 0, { unavailable: 'count-failed' })
+    } else {
+      const dispositions = { writes: 0, rewrites: 0, reuses: 0 }
+      const acSection = extractSection(specText, 'Acceptance Criteria')
+      if (acSection !== null) {
+        for (const b of parseAcBullets(acSection)) {
+          if (b.malformed) continue
+          const d = parseDisposition(b.raw)
+          if (d && Object.prototype.hasOwnProperty.call(dispositions, d.kind)) dispositions[d.kind]++
+        }
+      }
+      appendRow('tests', 0, { count: testCountJson.count, dispositions })
+    }
   }
   if (!fixDelta) {
     const atRisk = (reconcileJson && Array.isArray(reconcileJson.atRisk)) ? reconcileJson.atRisk : []

@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { read, SPEC, tmpdir, runNode } = require('../helpers')
+const { read, SPEC, tmpdir, runNode, gitRepo } = require('../helpers')
 const { makeReviewLegsHost } = require('../review/review-legs.fixtures')
 
 // specs/20260911/02-tests-have-a-ceiling.md D4′: pins review-legs.js's
@@ -43,28 +43,117 @@ function manifestRows(manifestPath) {
   return fs.readFileSync(manifestPath, 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l))
 }
 
+// specs/20260911/04-every-criterion-declares-its-test.md D9: review-legs.fixtures.js's shared
+// makeReviewLegsHost only ever seeds a spec with ONE AC bullet, so AC-20260911-04-11's four-AC,
+// mixed-disposition fixture needs its own thin host builder — the same git/config/spec-write
+// steps, inlined here rather than widening the shared fixture for one caller (A1's own rule).
+function multiDispositionSpecBody() {
+  return `---
+status: implementing
+tier: standard
+---
+# Multi Disposition Spec
+
+## Decisions
+
+| ID | Decision | One-line rationale |
+|----|----------|--------------------|
+| D1 | four ACs, four dispositions | why |
+
+## File Plan
+
+| File | Action | Layer |
+|---|---|---|
+| src/foo.js | edit | scripts |
+| tests/foo.test.js | create | tests |
+
+## Acceptance Criteria
+
+- **AC-20260911-98-1**: WHEN a runs THE SYSTEM SHALL b → writes tests/foo.test.js
+- **AC-20260911-98-2**: WHEN c runs THE SYSTEM SHALL d → writes tests/bar.test.js
+- **AC-20260911-98-3**: WHEN e runs THE SYSTEM SHALL CONTINUE TO f → rewrites tests/foo.test.js :: AC-1: some title
+- **AC-20260911-98-4**: WHEN g runs THE SYSTEM SHALL CONTINUE TO h → reuses tests/foo.test.js :: AC-2: another title
+`
+}
+
+function makeMultiDispositionHost(prefix, config) {
+  const dir = tmpdir(prefix)
+  const g = gitRepo(dir)
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify(config))
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const base = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(dir, 'specs/20260911'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'specs/20260911/98-test.md'), multiDispositionSpecBody())
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 42\n')
+  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), GREEN_TEST)
+  g('add', '-A'); g('commit', '-q', '-m', 'implement')
+  return { dir, base }
+}
+
 // ---- AC-20260911-02-5: review-legs.js's own `tests` leg row ---------------------------------
 
-test('AC-20260911-02-5 (full scope): WHEN review-legs.js runs over a fixture host holding five test cases in FULL scope THE SYSTEM SHALL append exactly one {"leg":"tests","exit":0,"observed":{"count":5}} row', () => {
-  const { dir, base } = makeReviewLegsHost('tests-leg-full', {
+// AC-20260911-04-10 (rewrites AC-20260911-02-5, full scope, specs/20260911/04-every-criterion-
+// declares-its-test.md D9): the original assertion here (a healthy count-tests.js reporting
+// {"count":5}) is now covered by AC-20260911-04-11 below instead — this case is repurposed to
+// pin the FAILED-INSTRUMENT arm the old assertion never exercised: a count-tests.js invocation
+// that itself crashes must read as the typed {"unavailable":"count-failed"} shape, never as
+// {"count":0} — a failed instrument silently reporting a healthy zero is indistinguishable from a
+// genuinely empty suite.
+test('AC-20260911-04-10 (rewrites AC-20260911-02-5, full scope): WHEN review-legs.js runs over a fixture host whose count-tests.js invocation exits non-zero THE SYSTEM SHALL append exactly one {"leg":"tests","exit":0,"observed":{"unavailable":"count-failed"}} row carrying no count key', () => {
+  const cfg = baseConfig()
+  // A null entry in testGlobs crashes lib/scan-test-calls.js's listTestFiles (globMatch(null, …)
+  // throws), forcing count-tests.js's own child process to exit non-zero with no parseable
+  // stdout — the "broken instrument" fixture this AC exists to name. Confirmed executed against
+  // the untouched pre-image: count-tests.js exits 1 with an empty stdout under this config.
+  cfg.testGlobs = [null]
+  const { dir, base } = makeReviewLegsHost('tests-leg-countfail', {
     specDate: '20260911', ordinal: '97', acId: 'AC-20260911-97-1',
-    config: baseConfig(),
+    config: cfg,
     testBody: GREEN_TEST_5,
   })
-  const manifest = path.join(tmpdir('tests-leg-full-out'), 'manifest.jsonl')
+  const direct = runNode('scripts/count-tests.js', ['--root', dir, '--json'])
+  assert.notStrictEqual(direct.status, 0,
+    'setup precondition: count-tests.js must genuinely crash (non-zero exit) against this ' +
+    'testGlobs:[null] config, or this fixture never exercises a failed instrument at all: ' +
+    direct.stdout + ' / ' + direct.stderr)
+
+  const manifest = path.join(tmpdir('tests-leg-countfail-out'), 'manifest.jsonl')
   const r = runNode('scripts/review-legs.js', ['--root', dir, '--spec', 'specs/20260911/97-test.md',
     '--base', base, '--manifest', manifest])
   const rows = manifestRows(manifest).filter((x) => x.leg === 'tests')
   assert.strictEqual(rows.length, 1,
-    'review-legs.js must append EXACTLY one "tests" manifest row, never zero or a duplicate: ' +
+    'review-legs.js must append EXACTLY one "tests" manifest row even when count-tests.js fails: ' +
     JSON.stringify(manifestRows(manifest)) + ' / ' + r.stdout + r.stderr)
   const row = rows[0]
   assert.strictEqual(row.exit, 0,
-    'D3′/D4′: the tests leg has no red arm — it must exit 0 regardless of the observed count: ' +
-    JSON.stringify(row))
-  assert.strictEqual(row.observed.count, 5,
-    'observed.count must reflect the host\'s real test-case count (this fixture\'s own five ' +
-    'planted cases), derived via count-tests.js, never a stub: ' + JSON.stringify(row))
+    'D9: a failed instrument is still advisory-only — the leg must still exit 0: ' + JSON.stringify(row))
+  assert.deepStrictEqual(row.observed, { unavailable: 'count-failed' },
+    'D9: a count-tests.js failure must read as the typed {"unavailable":"count-failed"} shape, ' +
+    'never as {"count":0} — a failed instrument reporting count:0 is indistinguishable from a ' +
+    'genuinely empty suite: ' + JSON.stringify(row))
+})
+
+test('AC-20260911-04-11: WHEN review-legs.js runs over a fixture host reviewing a spec whose ACs declare two writes, one rewrites and one reuses THE SYSTEM SHALL append {"leg":"tests","exit":0,"observed":{"count":N,"dispositions":{"writes":2,"rewrites":1,"reuses":1}}}', () => {
+  const { dir, base } = makeMultiDispositionHost('tests-leg-dispositions', baseConfig())
+  const manifest = path.join(tmpdir('tests-leg-dispositions-out'), 'manifest.jsonl')
+  const r = runNode('scripts/review-legs.js', ['--root', dir, '--spec', 'specs/20260911/98-test.md',
+    '--base', base, '--manifest', manifest])
+  const rows = manifestRows(manifest).filter((x) => x.leg === 'tests')
+  assert.strictEqual(rows.length, 1,
+    'review-legs.js must append EXACTLY one "tests" manifest row: ' +
+    JSON.stringify(manifestRows(manifest)) + ' / ' + r.stdout + r.stderr)
+  const row = rows[0]
+  assert.strictEqual(row.exit, 0,
+    'D9: the tests leg has no red arm — it must exit 0 regardless of the disposition mix: ' + JSON.stringify(row))
+  assert.ok(Number.isInteger(row.observed.count),
+    'D9: observed.count must still be reported alongside dispositions, never dropped: ' + JSON.stringify(row))
+  assert.deepStrictEqual(row.observed.dispositions, { writes: 2, rewrites: 1, reuses: 1 },
+    'D9: observed.dispositions must count each AC bullet\'s own declared disposition via parseDisposition, ' +
+    'exactly two writes, one rewrites, one reuses for this spec: ' + JSON.stringify(row))
 })
 
 test('AC-20260911-02-5 (fix-delta scope): WHEN review-legs.js runs --fix-delta over the same fixture host THE SYSTEM SHALL still append a green "tests" row — the leg runs in every scope', () => {

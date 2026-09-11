@@ -9,6 +9,13 @@ const { ROOT, tmpdir, runNode } = require('../helpers')
 // hook are retired): pins spec/scripts/count-tests.js by execution (AC-1, AC-2,
 // AC-4) and the live-repo self-application pin (AC-11). There is no red arm and no ceiling file
 // left to pin — their absence IS the property under test.
+//
+// specs/20260911/04-every-criterion-declares-its-test.md D10: AC-20260911-04-12 pins the widened
+// regex-context set (operators + - * % < > ~ ^, keywords typeof/case/await/throw/else/in/of) and
+// the span invariant (a call's end never lands at src.length unless that index is the source's
+// own last significant character). AC-20260911-04-17 (reuses AC-20260911-02-11 below, unchanged)
+// and AC-20260911-04-18 (the widening moves this repo's own live count by exactly zero) round it
+// out.
 
 const SCRIPT = 'scripts/count-tests.js'
 
@@ -218,4 +225,76 @@ test('AC-20260911-02-11: WHEN count-tests.js --root . runs over this repository 
   assert.ok(!fs.existsSync(path.join(ROOT, '.claude/test-ceiling.json')),
     'D1′: no .claude/test-ceiling.json is ever created — there is no ceiling for a host to declare: ' +
     fs.existsSync(path.join(ROOT, '.claude/test-ceiling.json')))
+})
+
+// D10's eight forcing shapes: each embeds a two-character regex literal (`/a'b/` or `/a(b/`)
+// immediately after an operator/keyword D10 adds to the regex-context set. Confirmed executed
+// against the untouched pre-image (node v26.8.2): every one of the eight collapses `scanCalls` to
+// ONE call whose `end` lands at `src.length` — the second `test(` call is swallowed whole, because
+// the `/` is misread as division, the literal's `'`/`(` is then read as a real quote/paren, and
+// the resulting unterminated span consumes the rest of the file.
+const D10_FRAGMENTS = {
+  typeof: "typeof /a'b/",
+  'string-concat': '"^" + /a\'b/.source',
+  case: "case /a'b/.test(y):",
+  await: "await /a'b/.exec(y)",
+  throw: "throw /a'b/",
+  'less-than': "x < /a'b/.source.length",
+  minus: '1 - /a(b/.source.length',
+  else: "else /a'b/.test(y)",
+}
+
+test('AC-20260911-04-12: WHEN scanCalls reads a two-call source whose first call is followed by a regex literal immediately after one of D10\'s newly-recognized operators/keywords (typeof, string-concat `"^" +`, case, await, throw, `<`, `-`, else) THE SYSTEM SHALL return 2 calls with the first call\'s end strictly less than the second\'s start and neither equal to src.length', () => {
+  delete require.cache[testScanPath]
+  const { scanCalls } = require(testScanPath)
+  for (const [name, frag] of Object.entries(D10_FRAGMENTS)) {
+    const src = "'use strict'\nconst { test } = require('node:test')\n" +
+      "test('one', () => {\n  " + frag + "\n})\n" +
+      "test('two', () => {})\n"
+    const calls = scanCalls(src)
+    assert.strictEqual(calls.length, 2,
+      `D10 (${name} shape): scanCalls must find BOTH calls — a regex literal misread as division after "${frag}" swallows the second test( call entirely into the first's span, which today collapses this to 1 call: ${JSON.stringify(calls)}`)
+    assert.ok(calls[0].end < calls[1].start,
+      `D10 (${name} shape): the first call's end must land strictly before the second call's start — got ${JSON.stringify(calls)}`)
+    assert.notStrictEqual(calls[0].end, src.length,
+      `D10 (${name} shape): the first call's end must never reach src.length when a second call follows it — a span reaching end-of-file here is exactly the file-corrupting deletion spec 03 depends on this invariant to prevent: ${JSON.stringify(calls[0])}`)
+    assert.notStrictEqual(calls[1].end, src.length,
+      `D10 (${name} shape): the second call is genuinely the file's last call, so its own end MAY equal src.length only if that index is the source's last significant character — got end=${calls[1].end} vs src.length=${src.length}: ${JSON.stringify(calls[1])}`)
+  }
+})
+
+test('AC-20260911-04-18: WHEN D10\'s regex-context widening (operators + - * % < > ~ ^, keywords typeof/case/await/throw/else/in/of) is applied to THIS repository\'s own live test-file corpus THE SYSTEM SHALL report the identical total case count — no live file exercises the widened shapes, so a corrected regex-context set moves this repo\'s own count by exactly zero', () => {
+  const before = runNode(SCRIPT, ['--root', '.', '--json'], { cwd: ROOT })
+  assert.strictEqual(before.status, 0,
+    'the live repo\'s own count must be measurable before comparing it against the widened reconstruction: ' + before.stdout + ' / ' + before.stderr)
+  const beforeCount = JSON.parse(before.stdout).count
+
+  // A faithful reconstruction of D10's widening, built from the Decision's own literal token
+  // list and patched onto a scratch copy of THIS repo's real lib/scan-test-calls.js, then run
+  // over the exact same corpus — the executed proof, not an assertion taken on faith, that the
+  // widening moves this repo's total by zero (D10's own rationale: "no live file exercises the
+  // widened shapes").
+  const libDir = path.dirname(testScanPath)
+  const libSrc = fs.readFileSync(testScanPath, 'utf8')
+  const widenedSrc = libSrc
+    .replace("'(,=:[!&|?{};'.includes(last)", "'(,=:[!&|?{};+-*%<>~^'.includes(last)")
+    .replace(
+      "return /(^|[^A-Za-z0-9_$])return$/.test(word)",
+      "return /(^|[^A-Za-z0-9_$])(return|typeof|case|await|throw|else|in|of)$/.test(word)")
+    // Keep the scratch copy's own relative requires resolving to the real sibling libs (host-config,
+    // glob-match) — only the regex-context logic above is under test here.
+    .replace("require('./host-config')", `require(${JSON.stringify(path.join(libDir, 'host-config.js'))})`)
+    .replace("require('./glob-match')", `require(${JSON.stringify(path.join(libDir, 'glob-match.js'))})`)
+  assert.notStrictEqual(widenedSrc, libSrc,
+    'setup precondition: the textual patch must actually change lib/scan-test-calls.js\'s source, or this comparison proves nothing about D10\'s widening')
+  const widenedPath = path.join(tmpdir('count-ac18-widened'), 'scan-test-calls.js')
+  fs.writeFileSync(widenedPath, widenedSrc)
+  delete require.cache[widenedPath]
+  const widened = require(widenedPath)
+  const { readConfig } = require(path.join(ROOT, 'spec/scripts/lib/host-config.js'))
+  const config = readConfig(ROOT)
+  const afterCount = widened.countCases(ROOT, config).count
+
+  assert.strictEqual(afterCount, beforeCount,
+    'D18: widening the regex-context set per D10\'s own literal token list must move this repo\'s live count by exactly zero — a moved count means the set was blanket-widened rather than corrected: before=' + beforeCount + ' after=' + afterCount)
 })

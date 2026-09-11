@@ -131,13 +131,25 @@ depended_on_by: []
      that mixes a new promise with a pin is refused at lock (`ac-matrix --lint`) and at build
      (red-check `mixed-pin`): split it. Pin tests are
      expected GREEN against pre-change code (the sanctioned exception to red-first);
-     prefer tagging the existing covering test with the AC-ID over duplicating it. -->
+     prefer tagging the existing covering test with the AC-ID over duplicating it. Every bullet
+     ends with a disposition against the test suite it inherits — the bullet's final `→` run,
+     nothing after it: `→ writes <test file>` for a brand-new test, `→ rewrites <test file> ::
+     <title prefix>` for a named existing test whose assertion must change, or `→ reuses <test
+     file> :: <title prefix>` for a named existing test that already covers this behavior,
+     unchanged. `::` is the reference separator — a title may carry quotes, brackets, parentheses
+     or an arrow but essentially never that pair — and the prefix is grown only until it is
+     unique within its own file; `spec-paths count-tests --titles [--file <rel>]` prints every
+     candidate reference string in the repo. The declaration is mandatory on every criterion; a
+     bullet ending with no disposition is refused at lock (`ac-matrix --lint`), and where the
+     tree is available (`--resolve-root`) a `rewrites`/`reuses` reference resolving to other than
+     exactly one pre-image test is refused too. -->
 
 - **AC-{YYYYMMDD-NN}-1**: WHEN { trigger/state } THE SYSTEM SHALL { observable response }
-  (e.g. `{ literal input }` → `{ literal output }`) → { test reference } in { test file }
+  (e.g. `{ literal input }` → `{ literal output }`) → writes { test file }
 - **AC-{YYYYMMDD-NN}-2** `[env: { VAR }]` (only when the test is environment-gated): …
+  → rewrites { test file } :: { title prefix }
 - **AC-{YYYYMMDD-NN}-3** `[oracle: { manifest leg, e.g. gate }]` (only when no test is the
-  right oracle — the named leg is): …
+  right oracle — the named leg is): … → reuses { test file } :: { title prefix }
 
 ## Assumptions (escalation triggers)
 

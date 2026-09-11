@@ -17,7 +17,12 @@ integration and on every repair round; `{testCommand}` substitutes the host's `t
 absent = no post-gate),
 `testEnv` (array of `{"var": "<NAME>", "provision": "<command>"}` rows — suite-gating
 environment variables, checked by `env-preflight.js` before `/spec:build`'s and
-`/spec:design`'s gate/repair paths run; absent = legacy mode, no preflight), `design`
+`/spec:design`'s gate/repair paths run; absent = legacy mode, no preflight),
+`testNameFilter` (a shell-argument fragment carrying `{name}`, e.g.
+`"--test-name-pattern={name}"` — `red-check.js` substitutes a `rewrites`/`reuses` AC's
+regex-escaped, anchored title and appends the fragment to `testCommand` ahead of the file path
+to verify that one declared test rather than its whole file; absent = every file keeps today's
+per-file classification), `design`
 (`tool`/`command`/`storyFormat`/`doctrine`/`render` — see § Render gate; optional
 `rulesManifest`, `atlasRoutes`, `gateCommand`; legacy-tolerated and unread: `copyCatalogs`,
 `screenshot`),

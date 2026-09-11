@@ -110,6 +110,32 @@
 // identical-literal shape this module's own history (see the header notes above) exists to remove.
 const V7_APPLIES_FROM = '20260817'
 
+// specs/20260911/04-every-criterion-declares-its-test.md D1/D2: the disposition-grammar floor —
+// the date this AC bullet's `→ writes|rewrites|reuses` trailing-pointer grammar shipped. Shared
+// with ac-matrix.js's `--lint` gate (D3) so the floor is one literal, not a second copy.
+const DISPOSITION_APPLIES_FROM = '20260911'
+
+// D1/D2: parseDisposition(bullet) reads the LAST `→` occurrence in `bullet` (an AC bullet's raw
+// text, or any string ending in the disposition tail) and parses everything after it as one of
+// the three dispositions. `::` is the reference separator (D1's rationale: a title may carry
+// quotes, brackets, parens or an arrow, but essentially never that pair) — everything after it,
+// verbatim, to the end of the string is the prefix. Returns null, never throws, on: no `→` at
+// all, or a tail that matches no disposition keyword (documentation-by-example prose, or a
+// pre-existing arrow-bearing bullet from before this grammar shipped) — a spec's 1,472 arrow-free
+// and (pre-this-decision) prose-tail bullets stay untouched (AC-20260911-04-1).
+const DISPOSITION_TAIL_RE = /^(writes|rewrites|reuses)\s+(\S+)(?:\s*::\s*([\s\S]*))?$/
+
+function parseDisposition(bullet) {
+  if (typeof bullet !== 'string') return null
+  const arrowIdx = bullet.lastIndexOf('→')
+  if (arrowIdx === -1) return null
+  const tail = bullet.slice(arrowIdx + 1).trim()
+  const m = DISPOSITION_TAIL_RE.exec(tail)
+  if (!m) return null
+  const [, kind, file, prefix] = m
+  return { kind, file, prefix: kind === 'writes' ? null : (prefix === undefined ? null : prefix.trim()) }
+}
+
 // AC-ID shape: full anchored match of `AC-\d{8}-\d{2}[a-z]?-\d+`.
 const AC_ID_RE = /^AC-\d{8}-\d{2}[a-z]?-\d+$/
 const AC_ID_RE_GLOBAL = /AC-\d{8}-\d{2}[a-z]?-\d+/g
@@ -372,4 +398,5 @@ function parseAcBullets(sectionText) {
 module.exports = {
   AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, V7_APPLIES_FROM, extractSection, parseAcBullets,
   acIdOccurs, rejectedTrailingTagDetail, extractTag, normalizeForPinCheck, pinShape,
+  DISPOSITION_APPLIES_FROM, parseDisposition,
 }

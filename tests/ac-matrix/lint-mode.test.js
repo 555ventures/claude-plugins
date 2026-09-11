@@ -10,6 +10,10 @@ const { tmpdir, runNode } = require('../helpers')
 // ac-matrix.js's argv loop today rejects any unrecognized flag (usage + exit 2) — `--lint` does
 // not exist yet, so every lint-mode assertion below is TDD red against a synthetic spec file in
 // tmpdir(), executed via runNode (mirrors tests/ac-matrix/ac-matrix.test.js's idiom).
+//
+// specs/20260911/04-every-criterion-declares-its-test.md D3 (AC-20260911-04-14): the
+// AC-20260907-01-5 case below is rewritten in place for the new missingDisposition/
+// unresolvedDisposition lint counters — updated, never weakened.
 
 function specMd(acLines, filePlanRows) {
   return '# Test Spec\n\n## Acceptance Criteria\n\n' + acLines.join('\n') + '\n\n' +
@@ -83,20 +87,26 @@ test('AC-20260907-01-4: --lint on a mixed spec with no ## File Plan section at a
     `mixed, well-formed bullet — got ${JSON.stringify(out.observed && out.observed.lint)}`)
 })
 
-test('AC-20260907-01-5: --lint on a spec whose bullets are one promise, one pin, and one two-clause pin exits 0 and prints exactly "ac-matrix: lint malformed=0 invalidPreGreen=0 mixed=0 · 0 finding(s)" as its last stdout line', () => {
+// AC-20260911-04-14 (rewrites AC-20260907-01-5, specs/20260911/04-every-criterion-declares-its-
+// test.md D3): the original three bullets are unchanged in shape (one promise, one pin, one
+// two-clause pin) but each now carries a disposition — D3 gains two new lint counters,
+// missingDisposition and unresolvedDisposition, and this fixture proves they stay at zero for a
+// spec that declares one, never that the floor is inapplicable here.
+test('AC-20260911-04-14 (rewrites AC-20260907-01-5): --lint on a spec whose bullets are one promise, one pin, and one two-clause pin — each carrying a disposition — exits 0 and prints exactly "ac-matrix: lint malformed=0 invalidPreGreen=0 mixed=0 missingDisposition=0 unresolvedDisposition=0 · 0 finding(s)" as its last stdout line', () => {
   const { spec } = writeSpec('lint5', specMd(
-    ['- **AC-20260907-99-1**: WHEN x THE SYSTEM SHALL y',
-      '- **AC-20260907-99-2**: WHEN x THE SYSTEM SHALL CONTINUE TO y',
-      '- **AC-20260907-99-3**: WHEN x THE SYSTEM SHALL CONTINUE TO y and SHALL CONTINUE TO z'],
+    ['- **AC-20260907-99-1**: WHEN x THE SYSTEM SHALL y → writes tests/x.test.js',
+      '- **AC-20260907-99-2**: WHEN x THE SYSTEM SHALL CONTINUE TO y → writes tests/y.test.js',
+      '- **AC-20260907-99-3**: WHEN x THE SYSTEM SHALL CONTINUE TO y and SHALL CONTINUE TO z → writes tests/z.test.js'],
     null))
   const res = runLint(spec)
   assert.strictEqual(res.status, 0,
-    `a promise, a pin, and a two-clause pin are all unambiguous shapes — none is mixed, so this must ` +
-    `exit 0 (stdout: ${res.stdout} stderr: ${res.stderr})`)
+    `a promise, a pin, and a two-clause pin are all unambiguous shapes — none is mixed, and each ` +
+    `declares a disposition, so this must exit 0 (stdout: ${res.stdout} stderr: ${res.stderr})`)
   const lines = res.stdout.split('\n').filter(Boolean)
   assert.strictEqual(lines[lines.length - 1],
-    'ac-matrix: lint malformed=0 invalidPreGreen=0 mixed=0 · 0 finding(s)',
-    `the lint summary must be the exact last stdout line D3 pins — got ${JSON.stringify(lines[lines.length - 1])}`)
+    'ac-matrix: lint malformed=0 invalidPreGreen=0 mixed=0 missingDisposition=0 unresolvedDisposition=0 · 0 finding(s)',
+    `D3: the lint summary must gain the missingDisposition/unresolvedDisposition segments in this ` +
+    `exact position and spelling, updated in place — never weakened away — got ${JSON.stringify(lines[lines.length - 1])}`)
 })
 
 test('AC-20260907-01-6: --lint combined with --root, --manifest, --skips, or --has-drift-script is usage error exit 2 naming --lint as spec-only, and --lint on a spec with no ## Acceptance Criteria section is exit 2 naming the missing section', () => {

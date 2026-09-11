@@ -127,8 +127,9 @@ const { parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
 const {
   AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets, acIdOccurs,
-  rejectedTrailingTagDetail, pinShape,
+  rejectedTrailingTagDetail, pinShape, parseDisposition, DISPOSITION_APPLIES_FROM,
 } = require('./lib/spec-sections')
+const { scanCalls } = require('./lib/scan-test-calls')
 const { writeOut } = require('./lib/driver-io')
 
 // A script that prints a payload and exits routes through a synchronous writer — the 64 KiB pipe
@@ -142,11 +143,11 @@ const { writeOut } = require('./lib/driver-io')
 function usage() {
   console.error('usage: ac-matrix.js --spec <path> --root <dir> --manifest <path> ' +
     '[--skips <file>] [--has-drift-script] [--json]\n' +
-    '       ac-matrix.js --spec <path> --lint [--json]        ' +
+    '       ac-matrix.js --spec <path> --lint [--resolve-root <dir>] [--json]        ' +
     '(spec-only: no --root/--manifest/--skips/--has-drift-script)')
 }
 
-let specPath = null, root = null, manifestPath = null, skipsFile = null
+let specPath = null, root = null, manifestPath = null, skipsFile = null, resolveRoot = null
 let hasDriftScript = false, jsonOut = false, lintMode = false
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -156,13 +157,15 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--manifest') manifestPath = argv[++i]
   else if (a === '--skips') skipsFile = argv[++i]
   else if (a === '--has-drift-script') hasDriftScript = true
+  else if (a === '--resolve-root') resolveRoot = argv[++i]
   else if (a === '--json') jsonOut = true
   else if (a === '--lint') lintMode = true
   else { usage(); process.exit(2) }
 }
 if (!specPath) { usage(); process.exit(2) }
 if (lintMode) {
-  // D3: --lint is spec-only — combining it with any full-mode flag is a usage error.
+  // D3/D4: --lint is spec-only — combining it with any full-mode flag is a usage error.
+  // --resolve-root is the ONE tree-reading companion --lint accepts (D4).
   if (root !== null || manifestPath !== null || skipsFile !== null || hasDriftScript) {
     usage(); process.exit(2)
   }
@@ -222,13 +225,60 @@ if (lintMode) {
       })
     }
   }
+
+  // specs/20260911/04-every-criterion-declares-its-test.md D3/D4: the disposition grammar's own
+  // lint arms — applicable only to a spec dated on or after DISPOSITION_APPLIES_FROM (spec date =
+  // the first specs/<YYYYMMDD>/ path segment in --spec, the same convention promise-sweep.js's
+  // own applicability cutoff uses). An inapplicable (undated, or pre-floor-dated) spec computes
+  // neither counter and carries neither key in --json's observed.lint — every pre-existing tmpdir
+  // fixture (no specs/<date>/ segment) keeps today's exact 3-key shape (AC-20260907-01-4).
+  const specDateMatch = /specs\/(\d{8})\//.exec(specPath)
+  const dispositionApplies = !!(specDateMatch && specDateMatch[1] >= DISPOSITION_APPLIES_FROM)
+  let missingDispositionCount = 0
+  let unresolvedDispositionCount = 0
+  if (dispositionApplies) {
+    for (const b of wellFormed) {
+      const disposition = parseDisposition(b.raw)
+      if (disposition === null) {
+        missingDispositionCount++
+        lintFindings.push({
+          severity: 'hard', class: 'missing-disposition', ac: b.id,
+          detail: `${b.id}: no disposition — end the bullet with → writes <file>, → rewrites ` +
+            `<file> :: <title>, or → reuses <file> :: <title>`,
+        })
+        continue
+      }
+      // D4: reference resolution is the SEPARATE opt-in --resolve-root flag — a `writes`
+      // disposition names a file that does not exist yet, so only rewrites/reuses resolve.
+      if (resolveRoot && (disposition.kind === 'rewrites' || disposition.kind === 'reuses')) {
+        let src = null
+        try { src = fs.readFileSync(path.join(resolveRoot, disposition.file), 'utf8') } catch { src = null }
+        const matches = src === null ? 0 : scanCalls(src).filter(c => c.title.startsWith(disposition.prefix)).length
+        if (matches !== 1) {
+          unresolvedDispositionCount++
+          lintFindings.push({
+            severity: 'hard', class: 'unresolved-disposition', ac: b.id,
+            detail: `${b.id}: ${disposition.kind} reference "${disposition.file} :: ` +
+              `${disposition.prefix}" resolved to ${matches} matches (need exactly 1) — use ` +
+              `\`count-tests.js --titles --file ${disposition.file}\` to find a unique reference`,
+          })
+        }
+      }
+    }
+  }
+
   const lintObserved = { malformed: malformedCount, invalidPreGreen: invalidPreGreenCount, mixed: mixedCount }
+  if (dispositionApplies) {
+    lintObserved.missingDisposition = missingDispositionCount
+    lintObserved.unresolvedDisposition = unresolvedDispositionCount
+  }
   if (jsonOut) {
     writeOut(1, JSON.stringify({ findings: lintFindings, warnings: [], observed: { lint: lintObserved } }, null, 2) + '\n')
   } else {
     for (const f of lintFindings) writeOut(1, `HARD  ${f.class.padEnd(20)} ${f.detail}\n`)
     writeOut(1, `ac-matrix: lint malformed=${lintObserved.malformed} ` +
-      `invalidPreGreen=${lintObserved.invalidPreGreen} mixed=${lintObserved.mixed} · ` +
+      `invalidPreGreen=${lintObserved.invalidPreGreen} mixed=${lintObserved.mixed} ` +
+      `missingDisposition=${missingDispositionCount} unresolvedDisposition=${unresolvedDispositionCount} · ` +
       `${lintFindings.length} finding(s)\n`)
   }
   process.exit(lintFindings.length ? 1 : 0)

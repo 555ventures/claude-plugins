@@ -1,6 +1,7 @@
 ---
 date: 2026-09-11
-status: hardened
+status: implementing
+build_base: main
 tier: critical
 area: spec-grammar
 design: false
@@ -10,6 +11,7 @@ depended_on_by: [specs/20260911/03-tests-expire-at-close.md]
 brief: n/a
 spiked: 2026-09-11
 open_markers: 0
+diff_base: 7b1e4a177d0a739f4a3c649e6d375cbc60f44254
 ---
 
 # Every criterion declares its test

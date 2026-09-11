@@ -130,6 +130,13 @@ function isRegexContext(sig, lastCloseWasKeyword) {
   if (last === ')') return !!lastCloseWasKeyword
   if (word.slice(-2) === '=>') return true
   if ('(,=:[!&|?{};'.includes(last)) return true
+  // specs/20260911/04-every-criterion-declares-its-test.md D10: widen the operator set (+ - * %
+  // < > ~ ^) and the keyword set (typeof, case, await, throw, else, in, of) that open a regex
+  // context — eight two-call fixtures each collapsed scanCalls to ONE call (the second test( call
+  // swallowed whole) before this widening (AC-20260911-04-12). `++`/`--` are excluded from the
+  // operator check so a post/pre-increment (`x++/2`) still reads as division (AC-20260911-04-17).
+  if ('+-*%<>~^'.includes(last) && word.slice(-2) !== '++' && word.slice(-2) !== '--') return true
+  if (/(^|[^A-Za-z0-9_$])(typeof|case|await|throw|else|in|of)$/.test(word)) return true
   return /(^|[^A-Za-z0-9_$])return$/.test(word)
 }
 
@@ -255,9 +262,16 @@ function scanCalls(src) {
         const openParen = i + (isTest ? 4 : 2)
         const callEnd = findCallEnd(src, openParen)
         const title = extractTitle(src, openParen)
+        // D10 (specs/20260911/04-every-criterion-declares-its-test.md): only a trailing `;` is
+        // consumed now — the former unconditional trailing-`\n` consumption pushed a span past
+        // its own call's closing paren into the FOLLOWING line, so a call immediately followed by
+        // another (the overwhelmingly common shape, one blank-free line between two test( calls)
+        // reported `end === <next call's start>` instead of strictly less, and the file's last
+        // call (one trailing newline before EOF, equally common) reported `end === src.length`
+        // indistinguishable from a swallowed-rest-of-file span — the exact file-corrupting
+        // deletion this invariant exists to let spec 03 detect (AC-20260911-04-12).
         let end = callEnd
-        if (src[end] === ';') end++
-        if (src[end] === '\n') end++
+        if (src[end] === ';' && end + 1 < src.length) end++
         calls.push({
           start: findCommentAbove(src, lineStart),
           end,

@@ -323,15 +323,12 @@ upstream bug list. -->
   not as a crash. Any script that prints a payload and exits routes through a synchronous
   writer (`fs.writeSync` on fd 1, looped for partial writes, retried on EAGAIN).
   (specs/20260823/08-derived-session-queue.md repair round)
-- `[plugin]` **`synthetic-repro-presented-as-real`** (grep this slug to
-  count recurrences). A review repro that exercises a SYNTHETIC stand-in rather than the real
-  entrypoint, whose measured numbers are then transcribed into permanent code or test comments
-  as if the real code path was observed failing. A review finding may still be true on
-  contract reading alone — but the comment it leaves behind must cite the basis it actually
-  has. Reopen/recurrence condition (grep-answerable): any code or test comment citing a repro's
-  numbers where the repro did not invoke the real entrypoint under the conditions the finding
-  claims. A guard is deliberately unbuilt — Generality and Materiality are unfillable at count 1
-  (core § Incident Policy). (specs/20260823/08-derived-session-queue.md review)
+- `[plugin]` A client-facing page that changes what it shows **before the server has accepted
+  the change** turns every refusal into a silent success: the refused item disappears, its open
+  count drops, and a gate counting open items unlocks. Act on the server's answer, never on the
+  request — and where a page pre-checks locally to save a round trip, that pre-check must be the
+  same predicate the server enforces, never a looser one.
+  (escape:claude-plugins:2026-09-11T16:40:23Z:spec/scripts/lib/walk.browser.js)
 - `[plugin]` `tests/helpers.js`'s `runNode` is `spawnSync`, which blocks the parent Node event
   loop for the child's whole lifetime — so a test that stands up an **in-process**
   `http.createServer` stub and then `runNode`s the script under test against it can never

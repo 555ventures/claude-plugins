@@ -382,3 +382,11 @@
   dispositions cannot cure missing evidence; the remedy is a cold re-run of the legs. The
   review-profile ledger row's `scope` is the manifest-derived value on every row, hard-stop rows
   included. (specs/20260902/05-manifest-stamped-scope.md, done 2026-09-02)
+- **A repro's comment cites the basis it actually has.** A review finding may be true on
+  contract reading alone, but a repro that exercises a synthetic stand-in rather than the real
+  entrypoint has not observed the real code path failing — so the comment it leaves behind in
+  permanent code or tests must say which of the two it rests on, and must not transcribe the
+  synthetic run's numbers as if the real path produced them. Grep-answerable as a standing
+  question: any code or test comment citing a repro's numbers where the repro did not invoke the
+  real entrypoint under the conditions the finding claims.
+  (merged from pipeline rules § Gotchas 2026-09-11; specs/20260823/08-derived-session-queue.md review)

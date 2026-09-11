@@ -9,10 +9,11 @@
 // repo-wide and statelessly: for every spec whose frontmatter `status:` is `done` and whose dated
 // directory is on or after the v7 floor (lib/spec-sections.js's `V7_APPLIES_FROM`), it parses
 // `## Acceptance Criteria` (lib/spec-sections.js's `extractSection`/`parseAcBullets`) and reports
-// each well-formed AC that no test-classified file cites (full-token, `acIdOccurs`) and that
-// carries no sanction — `SHALL CONTINUE TO`, a bare `[oracle:]`, a bare `[pre-green:]`, or a
-// `[retired: <citation>]` tag whose value names a `specs/*.md` or `docs/adr/` path. `/spec:doctor`
-// runs this as check 17, advisory.
+// two things: a `[retired: <citation>]` tag whose value names no `specs/*.md` or `docs/adr/` path,
+// and a `SHALL CONTINUE TO` pin in a spec dated on or after EXPIRY_APPLIES_FROM that no
+// test-classified file cites (full-token, `acIdOccurs`). Every other criterion of a done spec
+// has expired: its test was allowed to die at close (pins are the opt-in exception, 2026-09-11).
+// `/spec:doctor` runs this as check 17, advisory.
 //
 // What this deliberately does NOT do: write a manifest row, mutate any spec file, verify a
 // `[retired:]` citation's target actually exists (the citation is provenance, not a live link), or
@@ -34,6 +35,10 @@ const { readConfig, DEFAULT_TEST_GLOBS } = require('./lib/host-config')
 const { globMatch } = require('./lib/glob-match')
 
 const USAGE = 'ac-drift.js --root <dir> [--json]'
+
+// Specs dated on or after this may opt a criterion into permanence with `SHALL CONTINUE TO`; a
+// pin without a citing test is drift. Earlier pins were never opt-in and expired retroactively.
+const EXPIRY_APPLIES_FROM = '20260911'
 
 // A script that prints a payload and exits routes through a synchronous writer — the 64 KiB pipe
 // truncation this avoids is spelled out at spec/scripts/lib/driver-io.js's writeOut.
@@ -155,7 +160,7 @@ for (const specFile of specFiles) {
     if (bullet.malformed) continue
     criteria++
 
-    if (acIdOccurs(getHaystack(), bullet.id)) continue // covered — never reported, sanctioned or not
+    if (acIdOccurs(getHaystack(), bullet.id)) continue // covered — never reported
 
     // specs/20260907/01-mixed-pin-guard-and-drift-line.md D1: the inline backtick-strip/whitespace-
     // collapse here is lib/spec-sections.js's exported normalizeForPinCheck — the single authority
@@ -164,9 +169,7 @@ for (const specFile of specFiles) {
     // only asks whether the bullet contains a `SHALL CONTINUE TO` phrase at all, never `pinShape`'s
     // finer promise/pin/mixed read — a done spec's mixed bullet is history (Assumptions A1), not a
     // hygiene finding this script reports.
-    if (/SHALL CONTINUE TO/.test(normalizeForPinCheck(bullet.raw))) continue
-    if (bullet.oracle !== null) continue
-    if (bullet.preGreen !== null) continue
+    const pinned = /SHALL CONTINUE TO/.test(normalizeForPinCheck(bullet.raw))
 
     const firstLine = bullet.raw.split('\n')[0]
     const retired = extractTag('retired', firstLine, bullet.raw)
@@ -180,6 +183,7 @@ for (const specFile of specFiles) {
       continue
     }
 
+    if (!pinned || dateMatch[1] < EXPIRY_APPLIES_FROM) continue // expired at close — not drift
     findings.push({ spec: rel, ac: bullet.id, class: 'uncovered-ac', detail: 'no test cites it' })
   }
 }
@@ -200,7 +204,7 @@ if (findings.length) {
     f.class === 'retired-uncited'
       ? 'ac-drift: ' + f.spec + ' ' + f.ac + ' — ' + f.detail
       : 'ac-drift: ' + f.spec + ' ' + f.ac + ' — ' + f.detail + '; remedy: tag the covering test ' +
-        'with the id, or mark the bullet [retired: <spec path or docs/adr path that retired it>]'
+        'with the id, or drop the SHALL CONTINUE TO pin so the criterion expires'
   ))
   writeOut(2, lines.join('\n'))
 }

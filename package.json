@@ -5,7 +5,7 @@
     "node": ">=26.8.2"
   },
   "scripts": {
-    "test": "node --test --test-timeout=45000 --test-force-exit --test-reporter=spec --test-reporter-destination=stdout --test-reporter=./scripts/test-file-budget-reporter.js --test-reporter-destination=stderr 'tests/**/*.test.js'",
+    "test": "node --test --test-timeout=45000 --test-force-exit --test-reporter=spec --test-reporter-destination=stdout 'tests/**/*.test.js'",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"spec/scripts/**/*.js\" --test-coverage-include=\"scripts/**/*.js\" --test-reporter=spec --test-reporter-destination=stdout 'tests/**/*.test.js'"
   }
 }

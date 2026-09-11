@@ -96,9 +96,10 @@ Write the spec per the template. `status: draft`. While drafting:
    in Assumptions; every Goal promise traced to a Decision that delivers it and an AC that
    goes red in its absence — run `node "$(spec-paths promise-sweep)" --spec {spec path}`
    (no `--manifest`) and resolve every `orphan-decision` finding by citing the delivering
-   AC in the row or recording `[no-ac: <reason>]`; zero orphans to lock; for a defect-fix
-   spec, at least one `SHALL CONTINUE TO` pin or
-   a Rationale line saying why no neighbor needs pinning. A Decision that retires or
+   AC in the row or recording `[no-ac: <reason>]`; zero orphans to lock. A `SHALL CONTINUE
+   TO` pin is opt-in per criterion: it names one behavior that must outlive this spec's close
+   (its test survives expiry at close); every other AC's test expires when the spec closes. A
+   defect-fix spec with no pin says why in one Rationale line. A Decision that retires or
    narrows prose elsewhere runs
    `node "$(spec-paths collision-closure)" --spec {spec path} --root . --literal <stem>…`
    and enumerates every literals-leg hit in the File Plan as fix or recorded waive;

@@ -40,17 +40,22 @@ function parseJson(res) {
   return parsed
 }
 
-test('AC-20260906-01-1: a done spec dated on-or-after the v7 floor whose only AC no test-classified file cites exits 1 and prints the exact per-row stderr finding line', () => {
+test('AC-20260906-01-1: a done spec dated on-or-after the expiry floor whose only pinned AC no test-classified file cites exits 1 and prints the exact per-row stderr finding line, while an unpinned uncited AC has expired and is clean', () => {
   const dir = tmpdir('ac-drift-1')
-  writeSpec(dir, 'specs/20260901/01-x.md', 'done',
-    ['- **AC-20260901-01-1**: WHEN a THE SYSTEM SHALL b'])
+  writeSpec(dir, 'specs/20260912/01-x.md', 'done',
+    ['- **AC-20260912-01-1**: WHEN a THE SYSTEM SHALL CONTINUE TO b'])
   writeFile(dir, 'tests/x.test.js', '// nothing cites the AC here\n')
+  const expired = tmpdir('ac-drift-1b')
+  writeSpec(expired, 'specs/20260912/01-x.md', 'done',
+    ['- **AC-20260912-01-1**: WHEN a THE SYSTEM SHALL b'])
+  const expiredRes = run(expired)
+  assert.strictEqual(expiredRes.status, 0,
+    `an unpinned criterion of a done spec expired at close — reporting it as drift would force every test to live forever (stderr: ${expiredRes.stderr})`)
   const res = run(dir)
   assert.strictEqual(res.status, 1,
-    `a done, post-floor spec with an uncovered, unsanctioned AC must exit 1 — the exact backlog class this ` +
-    `check exists to surface, never a silent 0 (stdout: ${res.stdout} stderr: ${res.stderr})`)
+    `a done, post-floor spec with an uncited SHALL CONTINUE TO pin must exit 1 — a pin is the one criterion that promised its test outlives the close (stdout: ${res.stdout} stderr: ${res.stderr})`)
   assert.ok(res.stderr.includes(
-    'ac-drift: specs/20260901/01-x.md AC-20260901-01-1 — no test cites it; remedy: tag the covering test with the id, or mark the bullet [retired: <spec path or docs/adr path that retired it>]'),
+    'ac-drift: specs/20260912/01-x.md AC-20260912-01-1 — no test cites it; remedy: tag the covering test with the id, or drop the SHALL CONTINUE TO pin so the criterion expires'),
     `D1's per-row finding line is pinned byte-for-byte so a host reading raw stderr output gets an ` +
     `actionable remedy with no script-source lookup — got stderr: ${JSON.stringify(res.stderr)}`)
 })
@@ -58,7 +63,7 @@ test('AC-20260906-01-1: a done spec dated on-or-after the v7 floor whose only AC
 test('AC-20260906-01-2: coverage is full-token (a prefix citation never counts) and fixture-directory citations never count, while a genuine same-file citation clears the finding', () => {
   const covered = tmpdir('ac-drift-2a')
   writeSpec(covered, 'specs/20260901/01-x.md', 'done',
-    ['- **AC-20260901-01-1**: WHEN a THE SYSTEM SHALL b'])
+    ['- **AC-20260901-01-1**: WHEN a THE SYSTEM SHALL CONTINUE TO b'])
   writeFile(covered, 'tests/x.test.js', "test('AC-20260901-01-1: ...', () => {})\n")
   const coveredRes = run(covered)
   assert.strictEqual(coveredRes.status, 0,
@@ -68,26 +73,26 @@ test('AC-20260906-01-2: coverage is full-token (a prefix citation never counts) 
     `the clean sentinel must be exactly "ac-drift: clean — 1 specs, 1 criteria" — got ${JSON.stringify(coveredRes.stdout)}`)
 
   const prefix = tmpdir('ac-drift-2b')
-  writeSpec(prefix, 'specs/20260901/01-x.md', 'done',
-    ['- **AC-20260901-01-1**: WHEN a THE SYSTEM SHALL b'])
-  writeFile(prefix, 'tests/x.test.js', "test('AC-20260901-01-12 only', () => {})\n")
+  writeSpec(prefix, 'specs/20260912/01-x.md', 'done',
+    ['- **AC-20260912-01-1**: WHEN a THE SYSTEM SHALL CONTINUE TO b'])
+  writeFile(prefix, 'tests/x.test.js', "test('AC-20260912-01-12 only', () => {})\n")
   const prefixRes = run(prefix)
   assert.strictEqual(prefixRes.status, 1,
-    `a test file citing only AC-20260901-01-12 must NOT credit AC-20260901-01-1 — acIdOccurs is full-token, ` +
+    `a test file citing only AC-20260912-01-12 must NOT credit AC-20260912-01-1 — acIdOccurs is full-token, ` +
     `a bare substring match would silently launder coverage for a same-prefix sibling AC (stderr: ${prefixRes.stderr})`)
-  assert.ok(prefixRes.stderr.includes('AC-20260901-01-1 —'),
-    `AC-20260901-01-1 must still be reported uncovered despite the AC-20260901-01-12 citation — got stderr: ${JSON.stringify(prefixRes.stderr)}`)
+  assert.ok(prefixRes.stderr.includes('AC-20260912-01-1 —'),
+    `AC-20260912-01-1 must still be reported uncovered despite the AC-20260912-01-12 citation — got stderr: ${JSON.stringify(prefixRes.stderr)}`)
 
   const fixture = tmpdir('ac-drift-2c')
-  writeSpec(fixture, 'specs/20260901/01-x.md', 'done',
-    ['- **AC-20260901-01-1**: WHEN a THE SYSTEM SHALL b'])
-  writeFile(fixture, 'tests/fixtures/spec.md', 'AC-20260901-01-1 mentioned only inside a fixture\n')
+  writeSpec(fixture, 'specs/20260912/01-x.md', 'done',
+    ['- **AC-20260912-01-1**: WHEN a THE SYSTEM SHALL CONTINUE TO b'])
+  writeFile(fixture, 'tests/fixtures/spec.md', 'AC-20260912-01-1 mentioned only inside a fixture\n')
   const fixtureRes = run(fixture)
   assert.strictEqual(fixtureRes.status, 1,
     `D4: a citation living only inside a "fixtures" directory must never count as coverage — a fixture is ` +
     `input data for some OTHER test, not a citation of its own (stderr: ${fixtureRes.stderr})`)
-  assert.ok(fixtureRes.stderr.includes('AC-20260901-01-1 —'),
-    `the fixture-only citation must still leave AC-20260901-01-1 reported uncovered — got stderr: ${JSON.stringify(fixtureRes.stderr)}`)
+  assert.ok(fixtureRes.stderr.includes('AC-20260912-01-1 —'),
+    `the fixture-only citation must still leave AC-20260912-01-1 reported uncovered — got stderr: ${JSON.stringify(fixtureRes.stderr)}`)
 })
 
 test('AC-20260907-01-10 (was AC-20260906-01-3, retagged by specs/20260907/01-mixed-pin-guard-and-drift-line.md D1): SHALL CONTINUE TO (plain and hard-wrapped), bare [oracle:], bare [pre-green:], and a cited [retired:] each sanction an otherwise-uncovered AC — no finding, but each still counts toward criteria', () => {
@@ -137,15 +142,15 @@ test('AC-20260906-01-4: an uncited [retired:] (empty or free text) is itself a f
   }
 
   const backticked = tmpdir('ac-drift-4b')
-  writeSpec(backticked, 'specs/20260901/01-x.md', 'done', [
-    '- **AC-20260901-01-1**: WHEN a THE SYSTEM SHALL b `[retired: specs/a/b.md]`',
+  writeSpec(backticked, 'specs/20260912/01-x.md', 'done', [
+    '- **AC-20260912-01-1**: WHEN a THE SYSTEM SHALL CONTINUE TO b `[retired: specs/a/b.md]`',
   ])
   const backtickedRes = run(backticked, ['--json'])
   assert.strictEqual(backtickedRes.status, 1,
     `a backticked trailing [retired:] is a worked-example quote, not a declaration — it must not sanction ` +
     `the bullet at all (stderr: ${backtickedRes.stderr})`)
   const backtickedOut = parseJson(backtickedRes)
-  const f = backtickedOut.findings.find((x) => x.ac === 'AC-20260901-01-1')
+  const f = backtickedOut.findings.find((x) => x.ac === 'AC-20260912-01-1')
   assert.ok(f && f.class === 'uncovered-ac',
     `a backticked trailing [retired:] must parse as no tag at all — the finding class must be the plain ` +
     `"uncovered-ac", never "retired-uncited" (that would credit a quote as a real citation) — got ${JSON.stringify(f)}`)
@@ -153,16 +158,16 @@ test('AC-20260906-01-4: an uncited [retired:] (empty or free text) is itself a f
 
 test('AC-20260906-01-5: a done pre-floor spec is skipped with a summary line, and a non-done spec is ignored entirely — neither reports its uncovered AC', () => {
   const dir = tmpdir('ac-drift-5')
-  writeSpec(dir, 'specs/20260901/01-x.md', 'done',
-    ['- **AC-20260901-01-1**: WHEN a THE SYSTEM SHALL b'])
+  writeSpec(dir, 'specs/20260912/01-x.md', 'done',
+    ['- **AC-20260912-01-1**: WHEN a THE SYSTEM SHALL CONTINUE TO b'])
   writeSpec(dir, 'specs/20260810/01-old.md', 'done',
     ['- **AC-20260810-01-1**: WHEN a THE SYSTEM SHALL b'])
-  writeSpec(dir, 'specs/20260902/01-open.md', 'hardened',
-    ['- **AC-20260902-01-1**: WHEN a THE SYSTEM SHALL b'])
+  writeSpec(dir, 'specs/20260913/01-open.md', 'hardened',
+    ['- **AC-20260913-01-1**: WHEN a THE SYSTEM SHALL CONTINUE TO b'])
   const res = run(dir)
   assert.strictEqual(res.status, 1,
     `the post-floor done spec's own uncovered AC must still exit 1 (stdout: ${res.stdout} stderr: ${res.stderr})`)
-  assert.ok(!res.stderr.includes('AC-20260810-01-1') && !res.stderr.includes('AC-20260902-01-1'),
+  assert.ok(!res.stderr.includes('AC-20260810-01-1') && !res.stderr.includes('AC-20260913-01-1'),
     `D2/D5: neither the pre-floor done spec nor the non-done "hardened" spec may ever surface a finding — ` +
     `got stderr: ${JSON.stringify(res.stderr)}`)
   assert.ok(res.stdout.includes('ac-drift: skipped 1 pre-v7 specs (dated before 20260817)'),
@@ -174,9 +179,9 @@ test('AC-20260906-01-5: a done pre-floor spec is skipped with a summary line, an
 
 test('AC-20260906-01-6: --json prints exactly one object with keys floor/scanned/criteria/skippedPreFloor/findings, floor equal to "20260817", and the same exit code as the human render', () => {
   const dir = tmpdir('ac-drift-6')
-  writeSpec(dir, 'specs/20260901/01-x.md', 'done', [
-    '- **AC-20260901-01-1**: WHEN a THE SYSTEM SHALL b',
-    '- **AC-20260901-01-2**: WHEN a THE SYSTEM SHALL b [retired: ]',
+  writeSpec(dir, 'specs/20260912/01-x.md', 'done', [
+    '- **AC-20260912-01-1**: WHEN a THE SYSTEM SHALL CONTINUE TO b',
+    '- **AC-20260912-01-2**: WHEN a THE SYSTEM SHALL b [retired: ]',
   ])
   const res = run(dir, ['--json'])
   assert.strictEqual(res.status, 1,
@@ -192,10 +197,10 @@ test('AC-20260906-01-6: --json prints exactly one object with keys floor/scanned
   assert.strictEqual(out.criteria, 2, `"criteria" must count both bullets — got ${out.criteria}`)
   assert.strictEqual(out.skippedPreFloor, 0, `no pre-floor spec exists in this host — got ${out.skippedPreFloor}`)
   assert.strictEqual(out.findings.length, 2, `both bullets are unsanctioned-or-uncited — got ${JSON.stringify(out.findings)}`)
-  const uncovered = out.findings.find((f) => f.ac === 'AC-20260901-01-1')
-  assert.ok(uncovered && uncovered.class === 'uncovered-ac' && uncovered.spec === 'specs/20260901/01-x.md' && uncovered.detail === 'no test cites it',
+  const uncovered = out.findings.find((f) => f.ac === 'AC-20260912-01-1')
+  assert.ok(uncovered && uncovered.class === 'uncovered-ac' && uncovered.spec === 'specs/20260912/01-x.md' && uncovered.detail === 'no test cites it',
     `the uncovered-ac finding must carry {spec, ac, class, detail} exactly as the human line's own facts — got ${JSON.stringify(uncovered)}`)
-  const retired = out.findings.find((f) => f.ac === 'AC-20260901-01-2')
+  const retired = out.findings.find((f) => f.ac === 'AC-20260912-01-2')
   assert.ok(retired && retired.class === 'retired-uncited',
     `the uncited-retired bullet must produce class "retired-uncited" — got ${JSON.stringify(retired)}`)
 })

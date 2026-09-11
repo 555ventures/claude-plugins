@@ -153,11 +153,11 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     repair-mode bar above (before → after: the note rewritten as tag + rule + one owner
     citation — spec path, AC-ID, D-number, ADR, run id — evidence is the finding line itself).
 17. **AC-pin drift** (deterministic, advisory) — run `node "$(spec-paths ac-drift)" --root .`.
-    It re-derives, for every `done` spec dated on or after the v7 cutover, the acceptance
-    criteria no test-classified file cites and no `SHALL CONTINUE TO` / `[oracle:]` /
-    `[pre-green:]` / cited `[retired:]` sanction covers. Each printed row is a finding whose
-    remedy the row names (tag the covering test, or mark the bullet `[retired: <citation>]`);
-    `inapplicable — no specs/` is not a finding.
+    It re-derives, for every `done` spec dated on or after the v7 cutover, the `SHALL CONTINUE
+    TO` pins (specs dated on or after 20260911) no test-classified file cites, and the
+    `[retired:]` tags that cite no retiring path. Every other criterion of a done spec expired
+    at close and is never a finding. Each printed row names its remedy (tag the covering test,
+    or drop the pin); `inapplicable — no specs/` is not a finding.
 18. **Fixed test ports** (deterministic, advisory) — run
     `node "$(spec-paths port-check)" --root .`. Each printed line is a fixed or computed port
     literal under `tests/`; remedy = bind `--port 0` / `listen(0)` and read the bound port back

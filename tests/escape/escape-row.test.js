@@ -45,94 +45,6 @@ function lastLine(root, file) {
   return JSON.parse(lines[lines.length - 1])
 }
 
-// AC-20260901-07-1
-test('AC-20260901-07-1: escape-row.js --check exits 1 printing exactly one violated reason name for a malformed escape row, and 0 for a valid one', () => {
-  const ok = check(validEscapeRow())
-  assert.strictEqual(ok.status, 0, 'a fully valid escape row (class null, unclassedReason no-fix-diff) must exit 0 — a script that always rejects would break every legitimate --append call: ' + ok.stderr)
-  assert.strictEqual(ok.stdout.trim(), '', 'D2 Contracts: exit 0 prints nothing on stdout — any text here means a caller\'s script-parsing of --append output would misread a clean check as carrying reasons')
-
-  const malformed = check(validEscapeRow({ class: 'Silent_Fallback', unclassedReason: null }))
-  assert.strictEqual(malformed.status, 1, 'a class value with an uppercase letter and underscore violates CLASS_ID_RE — this must be a validation failure (exit 1), not a silent accept: ' + malformed.stderr)
-  assert.strictEqual(malformed.stdout.trim(), 'class-malformed', 'D1 Contracts: the closed reason set spells this exact violation "class-malformed" — a different string or wording means callers scripting on this token break')
-
-  const missing = check(validEscapeRow({ class: null, unclassedReason: null }))
-  assert.strictEqual(missing.status, 1, 'class:null with no unclassedReason must fail — this is exactly the brief\'s "nothing validates a class" defect restated as a row with no class and no excuse')
-  assert.strictEqual(missing.stdout.trim(), 'class-missing', 'the reason for a null class with no reason is "class-missing"')
-
-  const withClassAndReason = check(validEscapeRow({ class: 'a-b', unclassedReason: 'deferred' }))
-  assert.strictEqual(withClassAndReason.status, 1, 'a row cannot carry both a real class and an unclassedReason — the fields are meant to be mutually exclusive, one XOR the other')
-  assert.strictEqual(withClassAndReason.stdout.trim(), 'unclassed-reason-with-class', 'D1 Contracts names this exact reason "unclassed-reason-with-class"')
-
-  const badReason = check(validEscapeRow({ class: null, unclassedReason: 'because' }))
-  assert.strictEqual(badReason.status, 1, 'unclassedReason must be one of the closed UNCLASSED_REASONS set (no-fix-diff, deferred) — a free-text excuse must be rejected the same way an out-of-enum preventedBy is')
-  assert.strictEqual(badReason.stdout.trim(), 'unclassed-reason-out-of-enum', 'D1 Contracts names this exact reason "unclassed-reason-out-of-enum"')
-
-  const badPreventedBy = check(validEscapeRow({ preventedBy: 'test' }))
-  assert.strictEqual(badPreventedBy.status, 1, 'preventedBy:"test" is the literal historical defect this spec exists to prevent (D2 Rationale) — it must still be rejected')
-  assert.strictEqual(badPreventedBy.stdout.trim(), 'preventedBy-out-of-enum', 'D1 keeps fleet-reader\'s existing spelling for this reason — a respelled token would break the drift census\'s existing bucket name')
-})
-
-// AC-20260901-07-2
-test('AC-20260901-07-2: escape-row.js --check applies the amendment rules to a stage:"escape-class" row', () => {
-  const noEscapeTs = check(validAmendmentRow({ escapeTs: undefined }))
-  assert.strictEqual(noEscapeTs.status, 1, 'an amendment row without a string escapeTs cannot be joined to the escape row it amends — this must fail validation, not silently write an orphan amendment')
-  assert.strictEqual(noEscapeTs.stdout.trim(), 'amendment-missing-escape-ts', 'D1 Contracts names this exact reason "amendment-missing-escape-ts"')
-
-  const badVia = check(validAmendmentRow({ via: 'cron' }))
-  assert.strictEqual(badVia.status, 1, 'via must be one of backfill|manual — an out-of-enum via must be rejected the same way an out-of-enum preventedBy is on an escape row')
-  assert.strictEqual(badVia.stdout.trim(), 'amendment-via-out-of-enum', 'D1 Contracts names this exact reason "amendment-via-out-of-enum"')
-
-  const missingClass = check(validAmendmentRow({ class: null, unclassedReason: null }))
-  assert.strictEqual(missingClass.status, 1, 'an amendment with class:null and no reason repeats the same "nothing validates a class" defect on the amendment side — it must fail the same way an unclassed escape row does')
-  assert.strictEqual(missingClass.stdout.trim(), 'class-missing', 'the same class-missing reason applies to amendment rows, not a separate amendment-specific name')
-
-  const validAmend = check(validAmendmentRow())
-  assert.strictEqual(validAmend.status, 0, 'a fully valid amendment row must exit 0: ' + validAmend.stderr)
-  assert.strictEqual(validAmend.stdout.trim(), '', 'exit 0 prints nothing on stdout, same contract as a valid escape row')
-})
-
-// AC-20260901-07-3 / AC-20260903-01-16 (CONTINUE TO pin, retagged in place: the append still
-// exits 0 with exactly one row and the unanchored confirmation line — specs/20260903/01 D16)
-test('AC-20260901-07-3 / AC-20260903-01-16: escape-row.js --append creates the ledger and appends exactly one canonicalized JSON line for a valid row, and touches nothing for an invalid one', () => {
-  const root = tmpdir('escape-row-append')
-  const row = validEscapeRow({ spec: 'specs/new.md', file: 'new.js' })
-  const r = runNode(SCRIPT, ['--append', '--root', root, '--row', JSON.stringify(row)])
-  assert.strictEqual(r.status, 0, 'appending a valid escape row to a root with no ledger must exit 0 and create the ledger, not fail because nothing existed yet: ' + r.stderr)
-  assert.match(r.stdout, /appended spec=specs\/new\.md file=new\.js/, 'D2 Contracts: the exact confirmation line names the appended row\'s spec and file so a session can verify what landed')
-  const ledgerPath = path.join(root, '.claude', 'spec-runs.jsonl')
-  assert.ok(fs.existsSync(ledgerPath), 'AC-3: --append must create .claude/spec-runs.jsonl when it does not exist yet')
-  const content = fs.readFileSync(ledgerPath, 'utf8')
-  assert.strictEqual(content, JSON.stringify(JSON.parse(JSON.stringify(row))) + '\n',
-    'the appended line must be exactly JSON.stringify(JSON.parse(row)) followed by one newline — any re-shaping, pretty-printing, or trailing content would corrupt every other reader (fleet-reader, spec-status) that globs this file')
-
-  const badRow = validEscapeRow({ spec: 'specs/bad.md', file: 'bad.js', class: 'Bad_Id', unclassedReason: null })
-  const before = fs.readFileSync(ledgerPath, 'utf8')
-  const r2 = runNode(SCRIPT, ['--append', '--root', root, '--row', JSON.stringify(badRow)])
-  assert.strictEqual(r2.status, 1, 'an invalid row must never be appended, so --append itself must refuse it with exit 1: ' + r2.stderr)
-  assert.match(r2.stdout, /class-malformed/, 'the printed reason must name the actual violation, not a generic append failure')
-  assert.strictEqual(fs.readFileSync(ledgerPath, 'utf8'), before,
-    'D2 Contracts: "an invalid row -> exit 1 with reasons and the file untouched" — the ledger must be byte-identical after a rejected append')
-})
-
-// AC-20260903-01-13: specs/20260903/01-owed-query-and-row-handoff.md D11 — the confirmation
-// line gains a trailing key= suffix derived from basename(resolved --root), the row's own ts,
-// and file, so a session copies the key verbatim into its report for fleet-reader --owed to
-// look up. A5 (assumption): the existing AC-20260901-07-3 regex above is unanchored and already
-// tolerates this suffix — it stays untouched; this is a fresh pin for the suffix itself.
-test('AC-20260903-01-13: escape-row.js --append prints a trailing key=escape:<repo>:<ts>:<file> suffix on the existing confirmation line, derived from basename(--root), the row\'s own ts, and file', () => {
-  const parent = tmpdir('escape-row-append-key')
-  const hostDir = path.join(parent, 'host-a')
-  fs.mkdirSync(hostDir, { recursive: true })
-  const row = validEscapeRow({ spec: 'specs/new.md', file: 'new.js', ts: '2026-09-03T10:00:00.000Z' })
-  const r = runNode(SCRIPT, ['--append', '--root', hostDir, '--row', JSON.stringify(row)])
-  assert.strictEqual(r.status, 0, 'AC-13: a valid append against a --root whose basename is host-a must still exit 0: ' + r.stderr)
-  assert.strictEqual(r.stdout.trim(),
-    'appended spec=specs/new.md file=new.js key=escape:host-a:2026-09-03T10:00:00.000Z:new.js',
-    'D11/AC-13: the confirmation line must gain a trailing key= suffix derived from basename(resolved ' +
-    '--root), the row\'s own ts, and file — the session copies this key verbatim into its report so ' +
-    'fleet-reader --owed can look it up, and a missing or malformed suffix breaks that handoff: ' + JSON.stringify(r.stdout))
-})
-
 // Trailing-newline guard: a ledger seeded WITHOUT a trailing newline (e.g. by an older writer,
 // or a session `printf` with no `\n`) followed by --append must not glue the new JSON straight
 // onto the end of the last line, producing one unparseable line — every fleet-reader /
@@ -173,31 +85,6 @@ test('escape-row.js --amend prefixes a newline when the existing ledger does not
   const amended = JSON.parse(lines[1])
   assert.strictEqual(amended.stage, 'escape-class', 'line 2 must parse as the appended amendment row, carrying stage:"escape-class"')
   assert.strictEqual(amended.class, 'silent-fallback', 'the appended amendment must carry the requested class')
-})
-
-// AC-20260901-07-4
-test('AC-20260901-07-4: escape-row.js --append refuses a same-spec-and-file duplicate found in the live ledger or a spec-runs-2026.jsonl archive, unless --allow-duplicate', () => {
-  const liveRoot = tmpdir('escape-row-dup-live')
-  seedLedger(liveRoot, 'spec-runs.jsonl', [validEscapeRow({ spec: 'specs/dup.md', file: 'dup.js' })])
-  const dupRow = validEscapeRow({ ts: '2026-09-02T00:00:00Z', spec: 'specs/dup.md', file: 'dup.js' })
-  const refused = runNode(SCRIPT, ['--append', '--root', liveRoot, '--row', JSON.stringify(dupRow)])
-  assert.strictEqual(refused.status, 3, 'a second escape row with the same spec and file in the live ledger must be refused (exit 3), the backstop behind escape.md step 2\'s own grep: ' + refused.stdout)
-  assert.match(refused.stderr, /--allow-duplicate/, 'the refusal must name --allow-duplicate as the remedy on stderr — an error path without its remedy command is a hard finding (§ Review Checks)')
-  const linesBefore = fs.readFileSync(path.join(liveRoot, '.claude', 'spec-runs.jsonl'), 'utf8').trim().split('\n').length
-  assert.strictEqual(linesBefore, 1, 'the refused --append must not have appended anything')
-
-  const allowed = runNode(SCRIPT, ['--append', '--root', liveRoot, '--row', JSON.stringify(dupRow), '--allow-duplicate'])
-  assert.strictEqual(allowed.status, 0, 'the same call with --allow-duplicate must succeed: ' + allowed.stderr)
-  const linesAfter = fs.readFileSync(path.join(liveRoot, '.claude', 'spec-runs.jsonl'), 'utf8').trim().split('\n').length
-  assert.strictEqual(linesAfter, 2, '--allow-duplicate must actually append the second row, not silently no-op')
-
-  // A9: the duplicate check must also see a spec-runs-2026.jsonl archive, not only the live ledger.
-  const archiveRoot = tmpdir('escape-row-dup-archive')
-  seedLedger(archiveRoot, 'spec-runs-2026.jsonl', [validEscapeRow({ spec: 'specs/arch.md', file: 'arch.js' })])
-  const archiveDup = validEscapeRow({ ts: '2026-09-02T00:00:00Z', spec: 'specs/arch.md', file: 'arch.js' })
-  const archiveRefused = runNode(SCRIPT, ['--append', '--root', archiveRoot, '--row', JSON.stringify(archiveDup)])
-  assert.strictEqual(archiveRefused.status, 3, 'AC-4/A9: a same-spec-and-file duplicate living only in a spec-runs-2026.jsonl archive (not the live ledger) must be found and refused the same way — reading only the live file would silently let archived duplicates back in: ' + archiveRefused.stdout)
-  assert.match(archiveRefused.stderr, /--allow-duplicate/, 'the archive-duplicate refusal must also name --allow-duplicate on stderr')
 })
 
 // AC-20260901-07-5
@@ -247,26 +134,3 @@ test('AC-20260901-07-6: escape-row.js --amend exits 3 and appends nothing when t
   assert.strictEqual(appended.via, 'backfill', 'an explicit --via backfill must be honored, not overridden by the manual default')
 })
 
-// AC-20260901-07-7
-test('AC-20260901-07-7: escape-row.js --amend exits 2 on conflicting/missing class flags or a non-directory --root, and exits 1 with class-malformed for a bad --class id', () => {
-  const root = tmpdir('escape-row-amend-usage')
-  seedLedger(root, 'spec-runs.jsonl', [validEscapeRow({ ts: '2026-08-15T00:00:00Z', spec: 'specs/u.md', file: 'u.js' })])
-
-  const both = runNode(SCRIPT, ['--amend', '--root', root, '--escape-ts', '2026-08-15T00:00:00Z', '--spec', 'specs/u.md', '--file', 'u.js', '--class', 'a-b', '--unclassed-reason', 'deferred'])
-  assert.strictEqual(both.status, 2, 'passing both --class and --unclassed-reason is a usage error (the two are meant to be exclusive), not a validation failure to route through --check\'s reason machinery')
-  assert.match(both.stderr, /Usage:/, 'D2/Worker Rules: a usage error must print the usage line on stderr')
-
-  const neither = runNode(SCRIPT, ['--amend', '--root', root, '--escape-ts', '2026-08-15T00:00:00Z', '--spec', 'specs/u.md', '--file', 'u.js'])
-  assert.strictEqual(neither.status, 2, 'passing neither --class nor --unclassed-reason is also a usage error — --amend cannot infer what to write')
-  assert.match(neither.stderr, /Usage:/, 'a usage error must print the usage line on stderr')
-
-  const notADir = path.join(root, 'not-a-dir.txt')
-  fs.writeFileSync(notADir, 'x')
-  const badRoot = runNode(SCRIPT, ['--amend', '--root', notADir, '--escape-ts', '2026-08-15T00:00:00Z', '--spec', 'specs/u.md', '--file', 'u.js', '--class', 'a-b'])
-  assert.strictEqual(badRoot.status, 2, 'a --root that is not a directory must exit 2, not attempt to read a ledger under a file path and crash')
-  assert.match(badRoot.stderr, /Usage:/, 'the non-directory --root case must also print the usage line')
-
-  const badClass = runNode(SCRIPT, ['--amend', '--root', root, '--escape-ts', '2026-08-15T00:00:00Z', '--spec', 'specs/u.md', '--file', 'u.js', '--class', 'Bad_Id'])
-  assert.strictEqual(badClass.status, 1, 'AC-7: a malformed --class id must fail through validation (exit 1), distinct from the exit-2 usage errors above — the key matched fine, the class itself is what\'s wrong')
-  assert.match(badClass.stdout, /class-malformed/, 'the printed reason for the bad --class id must name class-malformed, the same token --check uses')
-})

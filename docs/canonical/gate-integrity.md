@@ -8,35 +8,11 @@ rules that replaced it:
 - **Gates are plainly green.** `npm test` exits 0 on untouched code; there is no
   sanctioned-failing set and no failing-pins-as-TODO convention. A red gate is a regression
   or unfinished work, never a backlog entry.
-- **No single test file may be the suite's floor.** `node:test` parallelises across files
-  and serialises within one, so a file's serial runtime caps the whole run regardless of core
-  count. `scripts/test-file-budget-reporter.js` — wired into both `npm test` and the host
-  `testCommand`, so the review's `suite` leg and the close-time re-run see it — sums each
-  file's test durations and fails the run (`__FILE_BUDGET_RED__ <file> …`, exit 1) when any
-  file exceeds 45 s; a green run prints `__FILE_BUDGET_OK__ slowest <file> <ms>ms of 45000ms`.
-  **The budget is confirmed before it reds.** Per-file wall time inflates substantially under
-  load, so a file over budget in a parallel run is a *suspect*, not an offender: the reporter
-  re-runs the suspects one at a time in a child process and reds only those still over the
-  budget alone, printing `__FILE_BUDGET_CONTENTION__ <file> <loadMs>ms under load but <aloneMs>ms
-  alone` for the rest. An unconfirmed budget check measures the machine, not the file. The child
-  is bounded — its own per-test timeout is twice the budget and its `spawnSync` carries a
-  deadline — and a suspect it leaves unmeasured, or one in which a test timed out, is confirmed
-  rather than cleared, so the guard fails closed on exactly the shape of a file that hangs. Its
-  threshold is never also the clamp on what it measures, and the comparison runs on the raw
-  duration; rounding is for display. **Neither gate command caps `--test-concurrency`** — both
-  use the runner's own default fan-out, and the confirming guard, not a cap, is what keeps a
-  green run meaningful.
-  The remedy is always the same: split the file into sibling `*.test.js` files by owning AC
-  family, sharing helpers through a `<family>.fixtures.js` module. The budget tightens via
-  `SPEC_TEST_FILE_BUDGET_MS` (tests only) and loosens only by editing the constant in a
-  reviewed diff. `npm test` and the host `testCommand` carry `--test-timeout=45000
-  --test-force-exit` so a test that never resolves is a `cancelled` red and the process ends;
-  the budget reporter is wired to **stderr** because a second reporter on stdout is truncated
-  under force-exit; the scoped `gateCommand` carries the same two flags without the reporter.
+- **A hanging test ends the run.** `npm test`, the host `testCommand` and the scoped
+  `gateCommand` carry `--test-timeout=45000 --test-force-exit`, so a test that never resolves
+  is a `cancelled` red and the process ends. Neither command caps `--test-concurrency`.
   `/spec:doctor` check 18 (`port-check.js`) reports any fixed, computed or `--port <n>` literal
-  under `tests/`. (specs/20260903/07-test-file-budget-guard.md;
-  specs/20260909/07-hang-bound-and-port-check.md;
-  specs/20260910/01-contention-proof-budget-and-uncapped-suite.md)
+  under `tests/`. (specs/20260909/07-hang-bound-and-port-check.md)
 - **One derivation per verdict.** `verdict.js` is the sole source of the review/release
   verdict word, derived from the evidence manifest `review-legs.js` writes plus the
   reviewer's return and disposition counts. Nothing else computes or asserts CLEAN.
@@ -82,27 +58,13 @@ rules that replaced it:
   their real target stays inside the scanned root, symlinked directories are walked cycle-safe.
 - **The gate resolves `{testDirs}` to the glob form** (`node --test 'tests/<scope>/*.test.js'`)
   — a bare directory runs nothing on Node 26.
-- **A derived artifact is reconciled in the commit that changes its inputs.** The size ratchet
-  is a byte-exact ceiling per tracked file, so any commit that changes a file's length and does
-  not carry the matching `size-baseline.json` reads as a build that skipped its last step. This
-  is true of hand-built commits and of the mutation commits the replay harness plants alike:
-  `replay.js --apply` runs the host's declared `replay.afterApply` command inside the scratch
+- **A host may declare a post-apply hook for replay.** `replay.js --apply` runs the host's
+  `replay.afterApply` command (when declared in `.claude/spec.config.json`) inside the scratch
   worktree between applying the patch and committing it, stages exactly the declared paths, and
-  excludes them from the canonical patch later phases score against — so the planted commit is
-  shaped like a real build commit and the legs judge the defect rather than the edit. Two
-  guarantees hold that shape honest, and they are keyed differently on purpose: the declared
-  paths are governed by name, while the mutation's own files are frozen by content — their
-  staged blob ids are recorded after the patch applies and re-read after the hook and after
-  staging, alongside a worktree-clean check, so a hook cannot rewrite, delete, restore or dirty
-  the defect under measurement. The frozen set is both sides of the patch, since a mutation that
-  deletes a file is as forgeable as one that writes it. A failure of that hook records
-  `setup-failed` and stops; it is never worked around in-session. The one-shot form of the
-  reconcile is `scripts/size-ratchet.js --reconcile --cite <spec>`: every tracked ceiling set to
-  actual, one `raises[]` entry per growth it lifts. `--update` still refuses growth outright, so
-  the two verbs differ in what they demand up front — `--reconcile` demands a citing spec before
-  it will lift anything, and the record it leaves is the same `raises[]` trail `--raise` writes,
-  held by the live cite-existence check and by review's rule that a raise citing anything but
-  the spec under review is a hard finding.
+  excludes them from the canonical patch later phases score against. The declared paths are
+  governed by name, while the mutation's own files are frozen by content, so a hook cannot
+  rewrite, delete, restore or dirty the defect under measurement. A failure of that hook records
+  `setup-failed` and stops. This repo declares no hook since the size ratchet was retired.
 
 History: the baseline mechanics (pre-image snapshots, `--gate` wrap choreography,
 green-by-subtraction qualification) are preserved in git history through v6.91.0 and in the

@@ -58,10 +58,10 @@ function makeHostNoSpecs() {
 }
 
 function writeDoneUncitedSpec(root) {
-  fs.mkdirSync(path.join(root, 'specs/20260901'), { recursive: true })
-  fs.writeFileSync(path.join(root, 'specs/20260901/01-x.md'),
+  fs.mkdirSync(path.join(root, 'specs/20260912'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'specs/20260912/01-x.md'),
     '---\nstatus: done\n---\n# X\n\n## Acceptance Criteria\n\n' +
-    '- **AC-20260901-01-1**: WHEN a THE SYSTEM SHALL b\n')
+    '- **AC-20260912-01-1**: WHEN a THE SYSTEM SHALL CONTINUE TO b\n')
 }
 
 test('AC-20260907-01-8: WHEN the review driver prints the CLOSE step in a fixture host that also holds a done spec with one uncited AC THE SYSTEM includes the advisory AC-pin drift line naming the count', () => {

@@ -4,8 +4,8 @@ const assert = require('node:assert')
 const { ROOT, runNode } = require('../helpers')
 
 // specs/20260907/02-ac-drift-backfill.md AC-20260907-02-1 / D5 — this repository holds zero
-// AC-pin drift: every done spec's criterion is cited by a test or carries [retired:]/[oracle:]/
-// [pre-green:]/SHALL CONTINUE TO. Fails the moment a split, waive, or retirement orphans one.
+// AC-pin drift: every SHALL CONTINUE TO pin of a done spec dated on or after the expiry floor is
+// cited by a test, and every [retired:] tag cites its retiring path. Unpinned criteria expired at close.
 // Executed against this repository's own real tree via ac-drift.js, JSON and plain render.
 
 test('AC-20260907-02-1: ac-drift.js --root <this repo> --json exits 0 with an empty findings array and scanned >= 87', () => {

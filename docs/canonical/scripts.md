@@ -65,10 +65,6 @@ is deleted. Test setup that a second file needs lives in a sibling `*.fixtures.j
 (`review-legs`, `tournament`, `ac-matrix`, `replay`), never as a second copy; the
 duplicate-window ratchet prices the third repetition.
 
-`scripts/dup-windows.js` keeps `dup-baseline.json` tight over duplicate 8-line windows across
-the same three roots; the same `--update` / `--raise --cite` model as the size ratchet; the live
-check is `tests/consistency/dup-windows-live.test.js`.
-
 The plugin's own code-group comments — everything under `spec/scripts`, `spec/bin`, `scripts`,
 and `tests` — are at zero narration. A new comment there states the current invariant plus one
 owner id (a spec path, AC-ID, D-number, ADR, or run id) and nothing else; the standing scan in
@@ -77,11 +73,8 @@ baseline holds no code-group path to fall back on. A mechanism explanation survi
 merits — the rule bans history, not reasons — but it lives in exactly one file, and every other
 site that would repeat it carries a one-line citation instead.
 
-The plugin's own code has a byte budget. `scripts/size-ratchet.js` keeps `size-baseline.json`
-(repo root) tight: every tracked file under `spec/scripts`, `scripts`, and `tests` carries a
-ceiling equal to its size, every tree carries a ceiling equal to its sum, and a new file may not
-exceed `newFileCap` (40,000 bytes). A stale ceiling is red; `--update` lowers, adds, and drops
-but never raises; `--raise … --cite <spec>` is the only way up and records who asked. The
-standing check is `tests/consistency/size-ratchet-live.test.js`; a spec that must grow a file
-lists the baseline in its File Plan and raises citing itself.
-(specs/20260908/01-size-ratchet.md)
+The plugin's own test count has a ceiling. `spec/test-ceiling.json` (`{"maxTests": N}`) is
+owned by the human: a deny hook keeps the plugin from editing it, and the final gate reds when
+the number of `test(` cases under `tests/` exceeds it. There is no cite, no reconcile and no
+raise command; the only way under the line is deleting tests. Byte-size ratchets and
+duplicate-window baselines were retired on 2026-09-11 as self-authorizing.

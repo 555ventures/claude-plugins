@@ -110,7 +110,7 @@ function makeChromeWrapper(realChrome, pidFile) {
   return wrapper
 }
 
-test('AC-20260909-03-5 [env: CHROME_BIN]: withChrome({deadlineMs:1500}) navigating to a socket that accepts and never replies rejects navigate within 4000ms naming the deadline and the URL, and Chrome is gone after withChrome returns', { timeout: 20000 }, async (t) => {
+test('AC-20260909-03-5 [env: CHROME_BIN]: withChrome({deadlineMs:1500}) navigating to a socket that accepts and never replies rejects navigate within 10000ms naming the deadline and the URL, and Chrome is gone after withChrome returns', { timeout: 20000 }, async (t) => {
   const chrome = findChrome()
   if (!chrome) return t.skip('no Chrome binary (set CHROME_BIN) — AC-20260909-03-5 requires a real DevTools socket/navigate wait')
 

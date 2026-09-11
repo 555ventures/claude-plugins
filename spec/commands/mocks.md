@@ -17,12 +17,14 @@ section loads one step at a time — each driver step's `Doctrine:` line names i
 `print:` slices exactly it. Run `spec-paths mocks-driver` once, keeping the path as `{driver}`.
 
 **Input:** none required. A cold root has no `design/mocks/status.json`; the driver creates it
-at SEED and tells you to fill `design/mocks/seed.md` from the user's idea, if not already clear.
+at SEED and tells you to fill `design/mocks/seed.md` from the user's idea, if not already clear
+— ask the client for three real records per `## Records` entity into `records/<entity>.json`
+(`seed-done` refuses without them).
 
 ## The driver loop
 
-1. Run `node {driver} --root .`. It prints the state, one step (`Read only:` file list — never
-   the whole `design/mocks/` dir), and a `Doctrine:` line naming the governing section.
+1. Run `node {driver} --root .` and read its printed step, `Read only:` file list, and
+   `Doctrine:` line naming the governing section.
 2. Do that step and record it with the step's own printed `--mark …` line — verified before
    advancing; missing/failing artifacts are demanded again. While drawing a journey, pin every
    inferred product assumption as written (`ledger add … --screen <label>`, or `ledger ask`
@@ -30,12 +32,10 @@ at SEED and tells you to fill `design/mocks/seed.md` from the user's idea, if no
    path, or opt one out with its reason in the ledger (§ Mocks: Authoring Rules). While drawing
    a WIREFRAMES screen, put `data-to="<label>"` on the control that actually leads to the next
    screen — the seed's edges are checked against it at `journey-drawn`, which refuses any edge
-   with no such control (§ Mocks: Authoring Rules, **Every edge is a real control**).
+   with no such control (§ Mocks: Authoring Rules, **Every edge is a real control**); draw with
+   the seed's `## Records` values, never placeholders (§ Mocks: Authoring Rules, **Screens
+   carry the client's records**).
 3. Re-run. Repeat until `APPROVED`.
-
-A dismissed `AskUserQuestion` STOPS the run; state is already safe on disk. Every accepted mark
-ends with the ledger's counts line and the driver's own checkpoint line — `/clear` any time
-after; re-invoking cold re-derives everything from disk, never chat context.
 
 Every authoring step block the driver prints carries the frontend-design skill line; act on it
 before the first edit (§ Mocks: Authoring Rules — the one binding home).

@@ -87,8 +87,23 @@ function writeResearchBrief(dir) {
     '# Research brief\n\n## Findings\nSynthetic test brief for mocks-driver.test.js.\n')
 }
 
+// specs/20260910/06-real-records-and-two-dense-screens.md D5/D2: writeSeed
+// writes the three-record customer.json D2 requires beside a "## Records" seed section naming
+// it, so every caller that marks seed-done over this fixture keeps being accepted once D2 lands.
+// The three objects are the spec's own Contracts example verbatim (the awkward no-surname "Ren"
+// record included) — writeWireframe's embedded "Aoi Tanaka" text below is this file's `name`.
+const CUSTOMER_RECORDS = [
+  { name: 'Aoi Tanaka', phone: '090-1234-5678', visits: 14 },
+  { name: 'Ren', phone: '', visits: 1 },
+  { name: 'Sato Hana', phone: '080-0000-1111', visits: 3 },
+]
+function writeCustomerRecords(dir) {
+  writeJSON(path.join(dir, 'design/mocks/records/customer.json'), CUSTOMER_RECORDS)
+}
+
 function writeSeed(dir, { journeyLabels = LABELS, journeyName = JOURNEY, dense = DENSE } = {}) {
   const factLines = FACT_KEYS.map((k, i) => `- ${k}: P${i + 1}`).join('\n')
+  writeCustomerRecords(dir)
   writeFile(path.join(dir, 'design/mocks/seed.md'), `# Seed — Test Product
 
 ## Product
@@ -101,6 +116,9 @@ ${factLines}
 
 ## References
 - none
+
+## Records
+- customer: records/customer.json
 
 ## Journeys
 ### ${journeyName}
@@ -176,12 +194,18 @@ function writeWireframe(dir, label, opts = {}) {
   // edge control carries data-bespoke="sheet: …" to stay invisible to that unrelated gate,
   // exactly like the state-button switcher stays invisible to it via data-contract="none".
   const toHtml = to ? '<a data-to="' + to + '" data-bespoke="sheet: synthetic edge control for tests" href="#">Next</a>' : ''
+  // specs/20260910/06-real-records-and-two-dense-screens.md D3/D5: every
+  // wireframe carries a plain-text mention of "Aoi Tanaka" (CUSTOMER_RECORDS[0].name above) so
+  // `journey-drawn`'s future record-hit check finds a hit on every screen once D3 lands — a
+  // bare text node, never a new top-level content-region element, so it stays invisible to the
+  // kit family's unabsorbed-region rule (design-atlas.js's diagnoseKitRegions only walks
+  // top-level ELEMENT children of the content region).
   writeFile(path.join(dir, 'design/mocks', label + '.html'),
     '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
     '<link rel="stylesheet" href="../wire/tokens.css">\n' +
     '<link rel="stylesheet" href="../wire/wire.css">\n' +
     '<style>* { box-sizing: border-box; }</style>\n' +
-    '<main data-screen-label="' + label + '" data-status="sketch">' + label + toHtml + stateBtnsHtml + '</main>\n')
+    '<main data-screen-label="' + label + '" data-status="sketch">' + label + ' Aoi Tanaka' + toHtml + stateBtnsHtml + '</main>\n')
 }
 
 // ---------------------------------------------------------------------------
@@ -469,6 +493,7 @@ function advanceToApproved(dir) {
 function writeShortSeed(dir, journeyName, labels) {
   const factLines = FACT_KEYS.map((k, i) => `- ${k}: P${i + 1}`).join('\n')
   const edges = labels.slice(0, -1).map((l, i) => `${l} -> ${labels[i + 1]}`).join('\n')
+  writeCustomerRecords(dir)
   writeFile(path.join(dir, 'design/mocks/seed.md'), `# Seed — Test Product
 
 ## Product
@@ -481,6 +506,9 @@ ${factLines}
 
 ## References
 - none
+
+## Records
+- customer: records/customer.json
 
 ## Journeys
 ### ${journeyName}
@@ -540,6 +568,7 @@ module.exports = {
   writeFile, writeJSON, statusPath, statusJson,
   notesPath, writeNotesFile, readNotesFile, nowIso, isoDaysAgo, patchStatus, sha256, stubNpxScreenshot,
   writeTargets, writeResearchBrief, writeSeed, confirmFacts, writeCanon, writeWireframe,
+  CUSTOMER_RECORDS, writeCustomerRecords,
   writeKitCanon, writeThemeKit,
   decideLook, openLook, freePort, startServe, stopServe, getBody,
   writeFixtureCapture, writeCaptureConfig,

@@ -19,6 +19,13 @@
 // tests against, defaulting to `labels` when omitted. The screens scanned and the `missing`
 // loop stay journey-local: only the `unknown` test widens.
 //
+// recordValues(records)/recordHits(values, html): specs/20260910/06-real-records-and-two-dense-screens.md
+// D3 — `recordValues` walks every one of the client's `## Records` JSON arrays (objects, nested
+// objects, and arrays all walked) and collects every string value of length >= 3, stringifying
+// numbers first (so a bare `14` — two characters — never becomes a candidate) and deduplicating
+// in first-seen order. `recordHits` is the pure substring test against one mock's HTML source
+// mocks-driver.js's `journey-drawn` runs per screen. Both are pure: no `fs`, no path policy.
+//
 // Exit codes: n/a (library, not an entrypoint).
 
 function findRootHtml(html, label) {
@@ -80,4 +87,35 @@ function edgeGaps(journey, readHtml) {
   return { missing, unknown }
 }
 
-module.exports = { edgeGaps }
+// D3: walks one record object (or nested array/object) collecting every string value of length
+// >= 3 into `out`, deduplicated via `seen` (first-seen order preserved — the order callers and
+// tests observe). A number is stringified before the length test; a bare `14` stringifies to
+// two characters and is never collected.
+function walkRecordValues(node, out, seen) {
+  if (node == null) return
+  if (typeof node === 'string') {
+    if (node.length >= 3 && !seen.has(node)) { seen.add(node); out.push(node) }
+    return
+  }
+  if (typeof node === 'number') {
+    const s = String(node)
+    if (s.length >= 3 && !seen.has(s)) { seen.add(s); out.push(s) }
+    return
+  }
+  if (Array.isArray(node)) { for (const v of node) walkRecordValues(v, out, seen); return }
+  if (typeof node === 'object') { for (const k of Object.keys(node)) walkRecordValues(node[k], out, seen); return }
+}
+
+function recordValues(records) {
+  const out = []
+  const seen = new Set()
+  for (const rec of records || []) walkRecordValues(rec, out, seen)
+  return out
+}
+
+function recordHits(values, html) {
+  const text = html || ''
+  return (values || []).filter((v) => text.includes(v))
+}
+
+module.exports = { edgeGaps, recordValues, recordHits }

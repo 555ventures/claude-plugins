@@ -2,8 +2,9 @@
 
 <!-- Grammar: spec/doctrine/mocks.md § Mocks: Seed. `seed-done` closes this file: every key
      below must name a ledger.md product row whose status is confirmed (said-by-user or
-     ratified-doc); every journey label must be declared in exactly one journey; the Dense
-     screen label must already be declared. Written by the mocks driver on a cold root
+     ratified-doc); every journey label must be declared in exactly one journey; each Dense
+     screens label must already be declared; each Records entity's file must exist, parse as a
+     JSON array, and hold at least three objects. Written by the mocks driver on a cold root
      (spec-paths mocks-driver), then hand-edited by the session between marks. -->
 
 ## Product
@@ -35,6 +36,14 @@
      note on what to borrow from it. -->
 - none
 
+## Records
+
+<!-- One `- <entity>: records/<entity>.json` line per entity the product handles; each file a
+     JSON array of at least three of the client's REAL records (the awkward ones: the customer
+     with no surname, the order with three delivery addresses) — path relative to
+     design/mocks/. Wireframes draw these values; ask the client for them, never invent one. -->
+- customer: records/customer.json
+
 ## Journeys
 
 <!-- One `### <journey-kebab>` per journey: a persona line, then one fenced surfaces block in
@@ -51,8 +60,9 @@ ends at the last screen. }
 { label } -> { label }
 ```
 
-## Dense screen
+## Dense screens
 
-<!-- One label already declared in a journey above — the screen most representative of the
-     product's real complexity; theme directions must survive composing against it. -->
+<!-- One or two labels already declared in a journey above — the screen(s) most representative
+     of the product's real complexity; every theme candidate is judged on this pair. -->
+- { label }
 - { label }

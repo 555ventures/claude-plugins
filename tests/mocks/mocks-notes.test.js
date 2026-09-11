@@ -71,8 +71,17 @@ function confirmFacts(dir) {
       'test setup requires `ledger add` to accept a said-by-user/confirmed row for fact "' + key + '": ' + r.stderr)
   })
 }
+// specs/20260910/06-real-records-and-two-dense-screens.md D5/D2: this
+// file's own local writeSeed (distinct from mocks-driver-fixtures.js's) gains a "## Records"
+// section naming the same three-record customer.json the shared fixture writes, so `seed-done`
+// keeps being accepted once D2 lands.
 function writeSeed(dir) {
   const factLines = FACT_KEYS.map((k, i) => `- ${k}: P${i + 1}`).join('\n')
+  writeJSON(path.join(dir, 'design/mocks/records/customer.json'), [
+    { name: 'Aoi Tanaka', phone: '090-1234-5678', visits: 14 },
+    { name: 'Ren', phone: '', visits: 1 },
+    { name: 'Sato Hana', phone: '080-0000-1111', visits: 3 },
+  ])
   writeFile(path.join(dir, 'design/mocks/seed.md'), `# Seed — Test Product
 
 ## Product
@@ -85,6 +94,9 @@ ${factLines}
 
 ## References
 - none
+
+## Records
+- customer: records/customer.json
 
 ## Journeys
 ### ${JOURNEY}

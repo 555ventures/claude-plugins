@@ -112,6 +112,21 @@
 // seed.md). `notes open` renders a walk finding's reason as its own `[walk: <reason>]` tag,
 // beside (never instead of) the status tag.
 //
+// specs/20260910/06-real-records-and-two-dense-screens.md D1/D2/D3: `## Dense screens` (plural)
+// carries one or two `- <label>` lines, each already declared in a journey — `seed-done` refuses
+// zero lines, more than two, or an undeclared label; the singular `## Dense screen` heading with
+// one line still parses (legacy hosts, AC-20260910-06-5). D2: `## Records` names one
+// `- <entity>: records/<entity>.json` line per entity the product handles — `seed-done` refuses
+// a missing section, a `- none` line, or a records file that is missing, non-array, or holds
+// fewer than three objects, naming the entity and the client-ask remedy; when the seed's own text
+// carries no entity to name (section missing or `- none`), the entity named in the refusal falls
+// back to whatever `design/mocks/records/*.json` already holds on disk, so the remedy is never
+// silent about which file to author. D3: `journey-drawn` collects every declared entity's record
+// values (`lib/mock-seed-checks.js` `recordValues`) and, after the D1/D2 edge-gap check above,
+// warns per screen carrying no record value and refuses the whole journey when no screen carries
+// one — never before the edge-gap check, so a placeholder-drawn journey is refused for its
+// missing controls first.
+//
 // What this deliberately does NOT do:
 //   - author the seed, canon, screens, theme directions, or the sign-off itself — those stay
 //     session judgment; the driver only closes each mark once the artifact exists and validates
@@ -185,7 +200,7 @@ const picksLib = require('./lib/mocks-picks.js')
 const shellLib = require('./lib/shell-region')
 const { stylesheetTargets, linksWireRegister } = require('./lib/wire-register')
 const { parseSeedJourneys } = require('./lib/surfaces')
-const { edgeGaps } = require('./lib/mock-seed-checks')
+const { edgeGaps, recordValues, recordHits } = require('./lib/mock-seed-checks')
 
 function die(msg) { writeOut(2, 'mocks-driver: ' + msg + '\n'); process.exit(2) }
 function nowIso() { return new Date().toISOString() }
@@ -365,10 +380,95 @@ function parseJourneysSeed(fullText) {
   return journeys
 }
 
-function parseDenseScreen(text) {
-  const sec = sectionOf(text, 'Dense screen') || ''
-  const m = sec.match(/^- (.+)$/m)
-  return m ? m[1].trim() : null
+// D1: `## Dense screens` (plural) carries one or two `- <label>` lines; a host still on the
+// singular `## Dense screen` heading (one line) keeps parsing — `sectionOf`'s anchored `\s*$`
+// match never confuses the two headings (the plural's trailing "s" fails the singular's regex
+// and vice versa), so the plural section is tried first and the singular is a pure fallback.
+function parseDenseScreens(text) {
+  const plural = sectionOf(text, 'Dense screens')
+  const sec = plural !== null ? plural : (sectionOf(text, 'Dense screen') || '')
+  const out = []
+  for (const raw of sec.split('\n')) {
+    const line = raw.trim()
+    const m = line.match(/^- (.+)$/)
+    if (m) out.push(m[1].trim())
+  }
+  return out
+}
+
+// D2: the records directory listing (`design/mocks/records/*.json` basenames) — the fallback
+// entity source for a `## Records` refusal when the seed's own text names no entity at all (the
+// section is missing, or its one line is `- none`), so the refusal still names a concrete file to
+// author instead of a bare "no entity declared".
+function recordsDir() { return path.join(mocksDir, 'records') }
+function existingRecordEntities() {
+  let files = []
+  try { files = fs.readdirSync(recordsDir()).filter((f) => f.endsWith('.json')) } catch { return [] }
+  return files.map((f) => path.basename(f, '.json')).sort()
+}
+
+// D2: `## Records` — one `- <entity>: records/<entity>.json` line per entity; `- none` parses as
+// declaring zero entities (never as an entity named "none"). Returns { missing, entities } where
+// `entities` is a Map(entity -> relative path).
+function parseRecordsSection(text) {
+  const sec = sectionOf(text, 'Records')
+  const entities = new Map()
+  if (sec === null) return { missing: true, entities }
+  for (const raw of sec.split('\n')) {
+    const line = raw.trim()
+    if (!line || line === '- none') continue
+    const m = line.match(/^- ([a-z0-9-]+):\s*(\S+)$/)
+    if (m) entities.set(m[1], m[2])
+  }
+  return { missing: false, entities }
+}
+
+// D2: refuses seed-done on a missing ## Records section, a "- none"-only section, or a records
+// file that is missing, not valid JSON, not an array, or shorter than three objects — naming the
+// entity and the client-ask remedy every branch shares.
+function requireRecords(text) {
+  const { missing, entities } = parseRecordsSection(text)
+  if (missing || entities.size === 0) {
+    const entity = existingRecordEntities()[0]
+    if (!entity) {
+      die('design/mocks/seed.md is missing "## Records" — add one "- <entity>: records/<entity>.json" line per entity the product handles, then ask the client for three real <entity> records and save them as design/mocks/records/<entity>.json')
+    }
+    die('design/mocks/seed.md ## Records must declare "' + entity + '" — ask the client for three real ' +
+      entity + ' records and save them as design/mocks/records/' + entity + '.json')
+  }
+  for (const [entity, relPath] of entities) {
+    const remedy = 'ask the client for three real ' + entity + ' records and save them as design/mocks/records/' + entity + '.json'
+    const filePath = path.join(mocksDir, relPath)
+    let raw
+    try { raw = fs.readFileSync(filePath, 'utf8') } catch {
+      die('design/mocks/seed.md ## Records names "' + entity + '" but ' + relPath + ' does not exist — ' + remedy)
+    }
+    let parsed
+    try { parsed = JSON.parse(raw) } catch (e) {
+      die('design/mocks/seed.md ## Records names "' + entity + '" but ' + relPath + ' is not valid JSON (' + e.message + ') — ' + remedy)
+    }
+    if (!Array.isArray(parsed)) die('design/mocks/seed.md ## Records names "' + entity + '" but ' + relPath + ' does not hold a JSON array — ' + remedy)
+    if (parsed.length < 3) {
+      die('design/mocks/seed.md ## Records names "' + entity + '" but ' + relPath + ' holds only ' +
+        parsed.length + ' record(s) (three are required) — ' + remedy)
+    }
+  }
+}
+
+// D3: every entity's record values, combined and deduplicated — the values `journey-drawn`
+// screens a journey's screens against. Missing/invalid records files contribute nothing here
+// (that precondition is `seed-done`'s job, via requireRecords above); this is a read-only
+// derivation over whatever is currently on disk.
+function collectRecordValues(text) {
+  const { entities } = parseRecordsSection(text)
+  const values = []
+  for (const relPath of entities.values()) {
+    let parsed
+    try { parsed = JSON.parse(fs.readFileSync(path.join(mocksDir, relPath), 'utf8')) } catch { continue }
+    if (!Array.isArray(parsed)) continue
+    for (const v of recordValues(parsed)) if (!values.includes(v)) values.push(v)
+  }
+  return values
 }
 
 function seedTextOr(fallback) {
@@ -1068,8 +1168,18 @@ function handleSeedDone() {
     }
   }
 
-  const dense = parseDenseScreen(text)
-  if (!dense || !labelOwners.has(dense)) die('design/mocks/seed.md ## Dense screen must name a label already declared in a journey')
+  const denseScreens = parseDenseScreens(text)
+  if (denseScreens.length === 0) {
+    die('design/mocks/seed.md ## Dense screens has 0 lines — name one or two labels already declared in a journey')
+  }
+  if (denseScreens.length > 2) {
+    die('design/mocks/seed.md ## Dense screens has ' + denseScreens.length + ' lines — one or two labels are allowed')
+  }
+  for (const label of denseScreens) {
+    if (!labelOwners.has(label)) die('design/mocks/seed.md ## Dense screens names "' + label + '" which is not declared in a journey')
+  }
+
+  requireRecords(text)
 
   const targets = loadTargetsOrNull()
   if (!targets) die('design/targets.json does not exist or is not valid JSON')
@@ -1102,14 +1212,14 @@ function handleShapePicked(shapeArg) {
   if (!kebabs.includes(shapeChosen)) die('"' + shapeChosen + '" is not among the shape candidates (' + kebabs.join(', ') + ')')
 
   const text = stripComments(seedTextOr(''))
-  const dense = parseDenseScreen(text)
+  const denseScreens = parseDenseScreens(text)
   const journeys = parseJourneysSeed(text)
   const allLabels = new Set()
   for (const [, j] of journeys) for (const l of j.labels) allLabels.add(l)
   for (const f of files) {
     const html = fs.readFileSync(path.join(shapesDir, f), 'utf8')
     const label = labelOf(html)
-    if (!label || (label !== dense && !allLabels.has(label))) die(f + ': data-screen-label must equal the dense screen or a declared journey label')
+    if (!label || (!denseScreens.includes(label) && !allLabels.has(label))) die(f + ': data-screen-label must equal a dense screen or a declared journey label')
     const kebab = path.basename(f, '.html')
     const m = html.match(/data-shape\s*=\s*"([^"]+)"/)
     if (!m || m[1] !== kebab) die(f + ': data-shape must equal "' + kebab + '"')
@@ -1254,6 +1364,27 @@ function handleJourneyDrawn(journeyName) {
       lines.push(g.from + '.html: data-to="' + g.to + '" names a screen no journey declares')
     }
     die(lines.join('\n') + '\nre-mark journey-drawn --journey ' + journeyName)
+  }
+  // specs/20260910/06-real-records-and-two-dense-screens.md D3: runs after the edge-gap check
+  // above (a placeholder-drawn journey is refused for its missing controls first). Every
+  // declared entity's record values (collectRecordValues, over lib/mock-seed-checks.js's
+  // recordValues) are screened against each of the journey's own top-level mocks; a screen with
+  // zero hits warns (never refuses — a settings screen legitimately shows no record) and the
+  // whole journey refuses only when every screen has zero hits.
+  const recordVals = collectRecordValues(stripComments(seedTextOr('')))
+  if (recordVals.length) {
+    const warnLines = []
+    let anyHit = false
+    for (const label of j.labels) {
+      const html = fs.readFileSync(mockFile(label), 'utf8')
+      if (recordHits(recordVals, html).length) anyHit = true
+      else warnLines.push('⚠️ ' + label + ': carries none of the client\'s records')
+    }
+    if (!anyHit) {
+      die('journey "' + journeyName + '": no screen carries a value from design/mocks/records/*.json — ' +
+        'draw with the client\'s own data, then re-mark')
+    }
+    for (const line of warnLines) writeOut(1, line + '\n')
   }
   // specs/20260906/05-gray-states-on-every-wireframe.md D2: after every per-label closure check
   // above, run check --states over the journey's own top-level mocks — a violation refuses the

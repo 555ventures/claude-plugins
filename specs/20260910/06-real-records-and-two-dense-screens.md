@@ -1,6 +1,7 @@
 ---
 date: 2026-09-10
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: design-mocks
 design: false
@@ -9,6 +10,7 @@ depends_on: [specs/20260910/02-click-to-advance-and-real-records.md]
 depended_on_by: [specs/20260910/04-theme-before-the-client-walk.md]
 brief: 22a
 open_markers: 0
+diff_base: 5291bb9bcb393e39dbc33782a0b3b6ff5c1c7f3e
 ---
 
 # The seed names the client's real records and two dense screens; a journey drawn on placeholders is refused
@@ -135,6 +137,46 @@ anchors on the singular heading as a prefix (A2); the remaining hits are File Pl
 This spec is the second half of what was one draft with specs/20260910/02; it was split because
 each half repairs the same fixture family for a different reason, and one spec carrying both
 sweeps overran the build cap.
+
+### Build and review departures (folded from the deviations sidecar, 2026-09-10)
+
+- A1 held with one narrowing. `tests/consistency/wire-register.test.js`'s File Plan row is
+  inert — the file is pure unit tests over `lib/wire-register.js`'s exports and never writes an
+  inline seed or mock. `mocks-driver.test.js`, `mocks-driver-look-stops.test.js`,
+  `mocks-driver-look-stops-2.test.js` and `mocks-driver-wire.test.js` carry no inline writer of
+  their own — every seed and mock they mark routes through the shared fixtures, so one shared
+  edit satisfied all four rows. Only `mocks-driver-4.test.js` needed its own edit, its local
+  `kitAwareWireframe` helper bypassing the shared `writeWireframe`.
+- D4's two additions to `spec/commands/mocks.md` pushed `/spec:mocks`'s read-load to 330 lines
+  against a 325 budget. The first repair joined every hard-wrapped paragraph into one line each:
+  it passed the line count without removing any reading and left the file undiffable, so it was
+  reverted as gaming the gate. The landed fix restores the ~95-column wrap and deletes one
+  paragraph of procedural narration (the dismissed-question / checkpoint-line restatement) that
+  duplicated the Checkpoint contract already loaded at Setup and carried no pinned literal. The
+  file now sits at exactly 325/325 — every future addition to it forces another squeeze.
+- `tests/mocks/chrome-harness.test.js` was edited out of plan on the user's decision
+  (2026-09-10): `AC-20260909-03-5`'s navigate-deadline assert capped at 4000ms passes in
+  isolation (2131ms observed) and reds only under the loaded whole-suite leg, measuring machine
+  load rather than the behavior it claims. The cap moved to 10000ms and the test title was
+  corrected to match; the test's own `timeout: 20000` is what still catches a true hang, so the
+  claim is unweakened. Waived at review on that record.
+- The inline seed body in the new test file duplicated a block `mock-edges.test.js` already
+  carried. Both sides were raised to 1 citing this spec (the host's rule fires at three, and
+  extraction would have edited an out-of-plan test); the later cold-host case then made a third
+  copy inside the new file, so a file-local `buildSeedText` builder was extracted there and both
+  windows went back to zero. Out-of-plan changed files were waived at review on the user's
+  record (2026-09-10).
+- The review's first legs round red on a baseline the build had reconciled too early: the size
+  ratchet ran while the new test file was still untracked, so the tests tree budget had not
+  counted it, and the first review run failed on a 12827-byte overage that was exactly that
+  file. Reconcile after the checkpoint commit, not before it.
+- Review finding, fixed: `requireRecords` refused a cold host — no `design/mocks/records/` at
+  all and a seed with no `## Records` section — with a message naming neither an entity nor D2's
+  promised remedy, because the entity name was derived from the on-disk records listing and that
+  listing was empty. The remedy now prints with the literal `<entity>` placeholder when nothing
+  is derivable, and a new `AC-20260910-06-2` case builds its seed inline so the records directory
+  never exists. The original case had passed only because the shared fixture left a records file
+  on disk — a branch pinned through a fixture's side effect is not pinned.
 
 ## Canonical Delta
 

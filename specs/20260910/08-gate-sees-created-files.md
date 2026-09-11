@@ -1,6 +1,6 @@
 ---
 date: 2026-09-10
-status: implementing
+status: done
 tier: critical
 area: build-integrity
 design: false
@@ -238,6 +238,23 @@ a path moves from the first list to the second (spike A2), so the union is uncha
 worker touching that function should be told, because the `??` branch alone no longer sees a
 staged File Plan path. Expect one repair round on this build itself: the new test file will red
 the ratchet on `tree-over`, which is D11's reconcile, and the round is the feature working.
+
+**Deviations fold (2026-09-10, one-off).** The predicted repair round happened for a different
+reason than predicted, and the prediction itself was made moot by D8: the integration step's new
+sentence told the session to reconcile the baseline before the gate, which it did, so the
+ratchet never reddened. The round that did happen was `specs/.DS_Store` — macOS Finder metadata
+swept into this spec's own plan commit `a9134b8`, whose raw NUL bytes red the repo-wide
+`tests/tracked-text-purity.test.js` pin on every branch cut from it. Escalated to the user per
+build.md § `blocked` returns rather than silently widened; the user chose to fix it in this
+build. Recorded as D12 with two File Plan rows. Not promoted to a Gotchas entry: the class
+already has its deterministic guard (the purity pin caught it in one round) and its permanent
+fix (the `.DS_Store` ignore entry), so prose would add nothing a script does not already do.
+
+**Waived advisory (2026-09-10).** The reviewer's one soft survivor — three near-identical
+`if (r.status !== 0) die(…)` blocks inside `stageCreatedFilePlanPaths()`, the host's
+three-repetitions extraction point — is real and costs no behavior today. Queued rather than
+fixed under this spec, so the extraction can be judged against the driver's other git callers
+instead of only these three.
 
 ## Canonical Delta
 

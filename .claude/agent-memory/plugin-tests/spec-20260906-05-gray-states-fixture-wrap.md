@@ -3,7 +3,7 @@ name: spec-20260906-05-gray-states-fixture-wrap
 description: writeWireframe's new default 3-state-button set must be wrapped in data-contract="none" or advanceToApproved's own check --matrix call fails on a pre-existing hygiene rule; opts.states coexists with the legacy opts.stateBtn escape hatch.
 metadata:
   type: project
-  reviewed: 2026-09-10
+  reviewed: 2026-09-11
 ---
 
 specs/20260906/05-gray-states-on-every-wireframe.md D4 changed `tests/mocks/mocks-driver-fixtures.js`'s

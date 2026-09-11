@@ -1,6 +1,7 @@
 ---
 date: 2026-09-11
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: design-atlas
 design: false
@@ -10,6 +11,7 @@ depended_on_by: []
 brief: n/a
 open_markers: 0
 spiked: 2026-09-11
+diff_base: 427d4b746c3a1dde7ca4eee2c5a660ba5f79cb33
 ---
 
 # The client player speaks English and waits for the server
@@ -281,6 +283,34 @@ narrow DOM surface (no `innerHTML` on anything untrusted, no `getBoundingClientR
 slot's text uses `textContent` and `hidden`, both already in the shim's vocabulary — reach for
 nothing else. And `answer()` becoming promise-driven must not become `async`/`await`: the file is a
 browser script held to the same ES5-ish register as its siblings; chain `.then()`.
+
+**Deviations recorded at build, folded here at close.** Three, all one-offs; none recurring
+enough to earn a Gotchas entry.
+
+1. D1 and D2 name `buildClientIndex` and `buildWalkPage` as the two builders that lose `lang`,
+   but `buildThemePage` in the same module also called the deleted `stringsFor` and also
+   received a `lang` argument from `design-atlas.js`'s `clientRoute` block. Deleting
+   `stringsFor` and the `lang` locals forced the identical edit on that third builder — it now
+   reads `STRINGS` directly and takes no `lang`. Forced and unblocking: both files were already
+   File Plan rows and no Decision was overridden. The reviewer executed `buildThemePage({stop:
+   null, seed, prefix: '', lang: 'ja'})` and confirmed no Japanese-range character survives.
+
+2. **Waived 2026-09-11 by the user** (disposer recommended `waive`, no override):
+   `.claude/rules/spec-pipeline.md` entered the diff out of plan. The comment-narration gate was
+   already red at `diff_base` — the escape commit `427d4b7` had landed the client-page
+   prevention gotcha citing an escape-row id whose embedded timestamp that gate classes as a
+   banned `date` narration — and this build's own gate cannot pass over a red repo-wide check.
+   The user was asked at build time (add to scope / file separately / pause) and chose to fix it
+   here. The citation now names the spec that escaped and the spec that fixes it, the form every
+   other entry in that section already uses; no prose changed. Scan at HEAD: `0 findings in 331
+   files`, exit 0. Not this spec's defect — a pre-existing failure adopted so the build could
+   reach a green gate.
+
+3. A6 assumed `specs/20260910/04-theme-before-the-client-walk.md` would still be `implementing`
+   in its own worktree, forbidding a concurrent build. It resolved the benign way its "if false"
+   branch names: 04 merged to `main` at `097ad2a` before this build started and its worktree was
+   gone, so this spec built against the merged `main` with no concurrency. The `depends_on`
+   entry for 04 stays as the ordering record it now is.
 
 ## Canonical Delta
 

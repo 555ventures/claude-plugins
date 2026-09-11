@@ -1,10 +1,12 @@
 'use strict'
 // lib/walk-page.js — the two pure builders of the client's own pages, served by design-atlas.js
 // at GET /client/index.html and GET /client/walk/<j>.html.
-// specs/20260910/03-client-journey-player.md D1 (both builders and their markup contract),
-// D2 (the STRINGS table and the `lang` roles), D3 (the hooks walk.browser.js drives).
+// specs/20260910/03-client-journey-player.md D1 (both builders and their markup contract), D3
+// (the hooks walk.browser.js drives); specs/20260911/01-the-page-waits-for-the-server.md D1
+// (supersedes spec 03 D2: `STRINGS`/`stringsFor`/the `lang` param are retired — the player's own
+// chrome is English-only), D3 (the `[data-wk="msg"]` status slot).
 //
-//   buildClientIndex({ seed, notes, ledger, walk, prefix, lang }) → html
+//   buildClientIndex({ seed, notes, ledger, walk, prefix }) → html
 //     seed    { product, journeys: [{ name, title, screens: [{ label, states }] }] } in seed
 //             order — design-atlas.js's seedForReview builds it
 //     notes   notes.json array, raw — joined onto `ledger` exactly as review-page.js joins it
@@ -12,9 +14,8 @@
 //     walk    design/mocks/walk.json, raw ({ journeys: { <j>: { reached, misses, confirmedAt,
 //             sentence, waived } } }) — lib/mocks-walk.js is its only writer
 //     prefix  the served mount ('' or '/p/<name>')
-//     lang    'ja' | 'en' (default 'en') — design/targets.json's optional "lang"
 //
-//   buildWalkPage({ seed, journey, notes, ledger, walk, prefix, lang, theme }) → html
+//   buildWalkPage({ seed, journey, notes, ledger, walk, prefix, theme }) → html
 //     journey the journey's kebab name; an unknown one throws naming every declared journey
 //             (design-atlas.js turns that throw into the route's 404)
 //     theme   the adopted theme kebab, threaded into the frame URL by walk.browser.js
@@ -26,72 +27,46 @@
 //
 // Does NOT: serve, read or write walk.json / notes.json / ledger.md (design-atlas.js's routes do
 // every write); ask the reader who they are (D3 — the client route has no identity, so no name
-// control is ever rendered); render a session-only surface (no artboard grid, no stop block).
+// control is ever rendered); render a session-only surface (no artboard grid, no stop block);
+// render the mocks themselves in English — only the player's own chrome is English, the mocks
+// stay whatever language the client's product is written in.
 //
 // Exit codes: none — this is a library, not an executable.
 
 const { esc } = require('./stop-block')
 
-// D2: every visible string, keyed by lang. A table, not a template fork — the plugin is not
-// Japan-only and the client pages are the one surface a non-English-reading client reads.
+// Every visible string in the player's own chrome, flat — one language, because the declared
+// `<html lang="en">` and the rendered language can never disagree when there is only one.
 const STRINGS = {
-  en: {
-    indexLead: 'Open a journey and walk it to the end. Tell us what matches what you expected.',
-    toCheckNone: 'nothing to check',
-    toCheckOne: '1 thing to check',
-    toCheckMany: '{n} things to check',
-    confirmed: 'Confirmed',
-    back: 'Back',
-    next: 'Next',
-    states: 'Other states',
-    happy: 'Normal',
-    yes: "That's right",
-    no: "That's not right",
-    why: 'What should it be instead?',
-    noteLabel: 'Anything else about this screen?',
-    noteSend: 'Send',
-    leftNone: 'Nothing left to check',
-    leftOne: '1 thing still to check',
-    leftMany: '{n} things still to check',
-    approveLead: 'Describe what you just did, in one sentence.',
-    sentence: 'In one sentence…',
-    confirm: 'Confirm this journey',
-    confirmedLead: 'You confirmed this journey.',
-    themeNone: 'nothing to pick yet',
-    themePrompt: 'Pick a look',
-    themePick: 'Pick this',
-    themePicked: 'Picked',
-  },
-  ja: {
-    indexLead: 'ジャーニーを開いて、最後まで進んでください。思ったとおりかどうか教えてください。',
-    toCheckNone: '確認するものはありません',
-    toCheckOne: '確認するもの 1件',
-    toCheckMany: '確認するもの {n}件',
-    confirmed: '確認済み',
-    back: '戻る',
-    next: '次へ',
-    states: '他の状態',
-    happy: '通常',
-    yes: '合ってる',
-    no: '違う',
-    why: 'どう違いますか',
-    noteLabel: 'この画面について他にありますか',
-    noteSend: '送信',
-    leftNone: '残りはありません',
-    leftOne: '残り 1件',
-    leftMany: '残り {n}件',
-    approveLead: 'いま何をしたか、一文で書いてください。',
-    sentence: '一文で…',
-    confirm: 'このジャーニーを確認',
-    confirmedLead: 'このジャーニーを確認しました。',
-    themeNone: 'まだ選ぶものはありません',
-    themePrompt: '見た目を選んでください',
-    themePick: 'これに決める',
-    themePicked: '決定済み',
-  },
+  indexLead: 'Open a journey and walk it to the end. Tell us what matches what you expected.',
+  toCheckNone: 'nothing to check',
+  toCheckOne: '1 thing to check',
+  toCheckMany: '{n} things to check',
+  confirmed: 'Confirmed',
+  back: 'Back',
+  next: 'Next',
+  states: 'Other states',
+  happy: 'Normal',
+  yes: "That's right",
+  no: "That's not right",
+  why: 'What should it be instead?',
+  noteLabel: 'Anything else about this screen?',
+  noteSend: 'Send',
+  leftNone: 'Nothing left to check',
+  leftOne: '1 thing still to check',
+  leftMany: '{n} things still to check',
+  approveLead: 'Describe what you just did, in one sentence.',
+  sentence: 'In one sentence…',
+  confirm: 'Confirm this journey',
+  confirmedLead: 'You confirmed this journey.',
+  msgWhy: 'Please say what should be different first.',
+  msgFailed: 'That did not save. Please try again.',
+  themeNone: 'nothing to pick yet',
+  themePrompt: 'Pick a look',
+  themePick: 'Pick this',
+  themePicked: 'Picked',
 }
 
-function stringsFor(lang) { return STRINGS[lang] || STRINGS.en }
 function count(s, none, one, many, n) {
   return n === 0 ? s[none] : n === 1 ? s[one] : s[many].replace('{n}', String(n))
 }
@@ -134,7 +109,7 @@ function buildClientIndex(input) {
   const o = input || {}
   const seed = o.seed || { product: '', journeys: [] }
   const prefix = o.prefix || ''
-  const s = stringsFor(o.lang)
+  const s = STRINGS
   const notes = o.notes || []
   const ledger = o.ledger || []
   const rows = journeysOf(seed).map((entry) => {
@@ -207,7 +182,7 @@ function buildThemePage(input) {
   const stop = o.stop || null
   const seed = o.seed || { product: '' }
   const prefix = o.prefix || ''
-  const s = stringsFor(o.lang)
+  const s = STRINGS
   const candidates = (stop && Array.isArray(stop.candidates)) ? stop.candidates : []
 
   const groups = []
@@ -303,7 +278,7 @@ function buildWalkPage(input) {
   const journey = o.journey
   const seed = o.seed || { product: '', journeys: [] }
   const prefix = o.prefix || ''
-  const s = stringsFor(o.lang)
+  const s = STRINGS
   if (!journey) throw new Error('buildWalkPage needs {journey}')
   const journeys = journeysOf(seed)
   const entry = journeys.find((j) => j.name === journey)
@@ -345,6 +320,10 @@ function buildWalkPage(input) {
     '<button class="wk-send" type="submit">' + esc(s.noteSend) + '</button>' +
     '</form>' +
     renderApprove(rec, open.length, s) +
+    // D3: one hidden, empty status slot — walk.browser.js sets its text from its own data-why/
+    // data-failed attribute and unhides it; the builder never renders text into it.
+    '<p class="wk-msg" data-wk="msg" role="status" aria-live="polite" data-why="' + esc(s.msgWhy) +
+    '" data-failed="' + esc(s.msgFailed) + '" hidden></p>' +
     '</aside>' +
     '</div>' +
     '<script src="' + esc(prefix) + '/__walk/player.js"></script>' +

@@ -61,7 +61,7 @@ test('AC-20260910-03-1: buildClientIndex renders exactly one [data-cl="journey"]
   const ledger = [ledgerRow('W1'), ledgerRow('W2'), ledgerRow('W3')]
   const walk = { journeys: { billing: { reached: ['plan'], misses: [], confirmedAt: NOW, sentence: '設定完了', waived: null } } }
 
-  const input = { seed, notes, ledger, walk, prefix: '', lang: 'en' }
+  const input = { seed, notes, ledger, walk, prefix: '' }
   const html1 = buildClientIndex(input)
   const html2 = buildClientIndex(input)
   assert.strictEqual(html1, html2,
@@ -106,7 +106,7 @@ test('AC-20260910-03-2: buildWalkPage renders a src-less frame, one thumb per sc
   const ledger = [ledgerRow('W1'), ledgerRow('W2'), ledgerRow('W3')]
   const openWalk = { journeys: { onboarding: { reached: [], misses: [], confirmedAt: null, sentence: null, waived: null } } }
 
-  const html = buildWalkPage({ seed, journey: 'onboarding', notes, ledger, walk: openWalk, prefix: '', lang: 'en' })
+  const html = buildWalkPage({ seed, journey: 'onboarding', notes, ledger, walk: openWalk, prefix: '' })
 
   const frameTag = (html.match(/<iframe[^>]*data-wk="frame"[^>]*>/) || [])[0]
   assert.ok(frameTag, 'AC-2: the page must carry one <iframe data-wk="frame">: got none in\n' + html)
@@ -141,7 +141,7 @@ test('AC-20260910-03-2: buildWalkPage renders a src-less frame, one thumb per sc
 
   const sentence = '招待を送って、同意をもらって、セッションを始めた'
   const confirmedWalk = { journeys: { onboarding: { reached: ['signin', 'invite', 'consent', 'session-live'], misses: [], confirmedAt: NOW, sentence, waived: null } } }
-  const confirmedHtml = buildWalkPage({ seed, journey: 'onboarding', notes: [], ledger: [], walk: confirmedWalk, prefix: '', lang: 'en' })
+  const confirmedHtml = buildWalkPage({ seed, journey: 'onboarding', notes: [], ledger: [], walk: confirmedWalk, prefix: '' })
   const approveIdx = confirmedHtml.indexOf('data-wk="approve"')
   const approveEndIdx = confirmedHtml.indexOf('</section>', approveIdx)
   const approveBlock = confirmedHtml.slice(approveIdx, approveEndIdx)
@@ -215,6 +215,7 @@ function parseFlatDom(html) {
       querySelector(sel) { return queryAll(this, sel)[0] || null },
       querySelectorAll(sel) { return queryAll(this, sel) },
       click() { for (const h of (this._handlers.click || [])) h({ target: this, preventDefault() {} }) },
+      submit() { for (const h of (this._handlers.submit || [])) h({ target: this, preventDefault() {} }) },
     }
     Object.defineProperty(node, 'hidden', {
       get() { return this.hasAttribute('hidden') },
@@ -251,34 +252,11 @@ function parseFlatDom(html) {
   }
 }
 
+// A thin wrapper over runWalkBrowserRouted (below): an empty routeStub defaults every route to
+// {ok:true}, the exact sandbox this needs, so the two functions share one sandbox-construction
+// block instead of each carrying their own.
 function runWalkBrowser(html, stateStub) {
-  const src = fs.readFileSync(path.join(SPEC, 'scripts/lib/walk.browser.js'), 'utf8')
-  const document = parseFlatDom(html)
-  const posts = []
-  const messageHandlers = []
-  const sandbox = {
-    document,
-    window: {
-      prompt: () => { throw new Error('AC-3: window.prompt must never be called — the client route never asks for an author name') },
-      addEventListener(type, fn) { if (type === 'message') messageHandlers.push(fn) },
-    },
-    location: { pathname: '/client/walk/onboarding.html', origin: 'http://localhost:5173' },
-    fetch(url, init) {
-      if (String(url).includes('/client/__walk/state')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(stateStub) })
-      }
-      posts.push({ url: String(url), init })
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
-    },
-    console,
-  }
-  vm.createContext(sandbox)
-  vm.runInContext(src, sandbox)
-  const fireMessage = async (data) => {
-    for (const h of messageHandlers) h({ data })
-    await Promise.resolve(); await Promise.resolve()
-  }
-  return { document, posts, fireMessage }
+  return runWalkBrowserRouted(html, stateStub, {})
 }
 
 // ---------------------------------------------------------------------------
@@ -294,7 +272,7 @@ test('AC-20260910-03-3: walk.browser.js under vm derives the current screen from
   const notes = [question('N001', 'invite', 'W1')]
   const ledger = [ledgerRow('W1')]
   const navWalk = { journeys: { onboarding: { reached: [], misses: [], confirmedAt: null, sentence: null, waived: null } } }
-  const navHtml = buildWalkPage({ seed, journey: 'onboarding', notes, ledger, walk: navWalk, prefix: '', lang: 'en' })
+  const navHtml = buildWalkPage({ seed, journey: 'onboarding', notes, ledger, walk: navWalk, prefix: '' })
   const { document: navDoc, posts: navPosts, fireMessage: fireNav } = runWalkBrowser(navHtml, { reached: ['signin', 'invite'], misses: [], confirmedAt: null, sentence: null })
   await Promise.resolve(); await Promise.resolve()
 
@@ -334,7 +312,7 @@ test('AC-20260910-03-3: walk.browser.js under vm derives the current screen from
 
   // ---- unlock leg: zero open guesses, reached already carries the journey's last label ----
   const unlockWalk = { journeys: { onboarding: { reached: ['signin', 'invite', 'consent'], misses: [], confirmedAt: null, sentence: null, waived: null } } }
-  const unlockHtml = buildWalkPage({ seed, journey: 'onboarding', notes: [], ledger: [], walk: unlockWalk, prefix: '', lang: 'en' })
+  const unlockHtml = buildWalkPage({ seed, journey: 'onboarding', notes: [], ledger: [], walk: unlockWalk, prefix: '' })
   const { document: unlockDoc } = runWalkBrowser(unlockHtml, unlockWalk.journeys.onboarding)
   await Promise.resolve(); await Promise.resolve()
   const approveEl2 = unlockDoc.querySelector('[data-wk="approve"]')
@@ -344,4 +322,310 @@ test('AC-20260910-03-3: walk.browser.js under vm derives the current screen from
   assert.ok(confirmBtn, 'test setup requires a [data-wk="confirm"] control on an unconfirmed journey')
   assert.strictEqual(confirmBtn.hasAttribute('disabled'), false,
     'AC-3: with [data-wk="left"] at zero, [data-wk="confirm"] must be enabled (no "disabled" attribute): got disabled=' + confirmBtn.hasAttribute('disabled'))
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260911/01-the-page-waits-for-the-server.md D1 (STRINGS flattens, stringsFor and the
+// `lang` param are deleted), D2 (design-atlas.js stops reading/passing lang — this file only
+// pins that the builders ignore it even if a caller still passes one), D3 (the [data-wk="msg"]
+// slot) and D4 (walk.browser.js acts only on the server's answer). Unbuilt: every test below is
+// red against the pre-image walk-page.js/walk.browser.js. AC-20260911-01-1, -2, -3, -4, -5, -6,
+// -8, -10.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// AC-20260911-01-1
+// ---------------------------------------------------------------------------
+test('AC-20260911-01-1: lib/walk-page.js exports a STRINGS object with no "ja" key and no "en" key, holding the English strings at its top level, and exports no stringsFor', () => {
+  assert.strictEqual(walkPageLib.stringsFor, undefined,
+    'AC-1: walk-page.js must export no stringsFor — the two-language lookup this spec deletes: got ' + typeof walkPageLib.stringsFor)
+  const { STRINGS } = walkPageLib
+  assert.ok(STRINGS && typeof STRINGS === 'object', 'AC-1: STRINGS must be exported as an object: got ' + typeof STRINGS)
+  assert.strictEqual(STRINGS.ja, undefined,
+    'AC-1: STRINGS must carry no "ja" sub-table now that the chrome is English-only: got ' + JSON.stringify(STRINGS.ja))
+  assert.strictEqual(STRINGS.en, undefined,
+    'AC-1: STRINGS must carry no "en" sub-table — the former STRINGS.en strings flatten to the top level: got ' + JSON.stringify(STRINGS.en))
+  assert.strictEqual(STRINGS.confirm, 'Confirm this journey',
+    'AC-1: STRINGS.confirm must hold the flattened English string at the top level: got ' + JSON.stringify(STRINGS.confirm))
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260911-01-2
+// ---------------------------------------------------------------------------
+test('AC-20260911-01-2: buildClientIndex and buildWalkPage render no character in the Hiragana/Katakana or CJK ranges and open <html lang="en"> even when the caller passes lang: "ja"', () => {
+  const seed = {
+    product: 'Hearwell',
+    journeys: [{ name: 'onboarding', title: 'Onboarding', screens: [{ label: 'signin', states: [] }] }],
+  }
+  const jpRange = /[぀-ヿ一-龯]/
+  const indexHtml = buildClientIndex({ seed, notes: [], ledger: [], walk: { journeys: {} }, prefix: '', lang: 'ja' })
+  assert.ok(!jpRange.test(indexHtml),
+    'AC-2: buildClientIndex must emit no Japanese character even when the caller passes lang: "ja" — the fork is retired, not merely defaulted: got\n' + indexHtml)
+  assert.match(indexHtml, /^<!doctype html>\n<html lang="en">/,
+    'AC-2: buildClientIndex must open <html lang="en">: got\n' + indexHtml.slice(0, 80))
+
+  const walkHtml = buildWalkPage({ seed, journey: 'onboarding', notes: [], ledger: [], walk: { journeys: {} }, prefix: '', lang: 'ja' })
+  assert.ok(!jpRange.test(walkHtml),
+    'AC-2: buildWalkPage must emit no Japanese character even when the caller passes lang: "ja": got\n' + walkHtml)
+  assert.match(walkHtml, /^<!doctype html>\n<html lang="en">/,
+    'AC-2: buildWalkPage must open <html lang="en">: got\n' + walkHtml.slice(0, 80))
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260911-01-3
+// ---------------------------------------------------------------------------
+test('AC-20260911-01-3: buildWalkPage renders exactly one [data-wk="msg"] element, hidden, with empty text content and both data-why and data-failed non-empty', () => {
+  const seed = {
+    product: 'Hearwell',
+    journeys: [{ name: 'onboarding', title: 'Onboarding', screens: [{ label: 'signin', states: [] }] }],
+  }
+  const html = buildWalkPage({ seed, journey: 'onboarding', notes: [], ledger: [], walk: { journeys: {} }, prefix: '' })
+  const msgs = [...html.matchAll(/<p[^>]*data-wk="msg"[^>]*>([\s\S]*?)<\/p>/g)]
+  assert.strictEqual(msgs.length, 1,
+    'AC-3: exactly one [data-wk="msg"] element must render: got ' + msgs.length + ' in\n' + html)
+  const inner = msgs[0][1]
+  const tag = msgs[0][0]
+  assert.match(tag, /\bhidden\b/, 'AC-3: the msg slot must render hidden at build time: got ' + tag)
+  assert.strictEqual(inner, '', 'AC-3: the msg slot must render with empty text content at build time: got ' + JSON.stringify(inner))
+  const why = /data-why="([^"]*)"/.exec(tag)
+  const failed = /data-failed="([^"]*)"/.exec(tag)
+  assert.ok(why && why[1], 'AC-3: the msg slot must carry a non-empty data-why attribute: got ' + tag)
+  assert.ok(failed && failed[1], 'AC-3: the msg slot must carry a non-empty data-failed attribute: got ' + tag)
+})
+
+// ---------------------------------------------------------------------------
+// D4 harness: like runWalkBrowser above, but lets each POST route resolve per-call rather than
+// always {ok:true} — needed to exercise D4's non-ok/rejected-fetch paths. A5: the existing vm
+// sandbox's stub/microtask discipline is reused; only the per-route response is new.
+// ---------------------------------------------------------------------------
+function runWalkBrowserRouted(html, stateStub, routeStub) {
+  const src = fs.readFileSync(path.join(SPEC, 'scripts/lib/walk.browser.js'), 'utf8')
+  const document = parseFlatDom(html)
+  const posts = []
+  const messageHandlers = []
+  const sandbox = {
+    document,
+    window: {
+      prompt: () => { throw new Error('D3: window.prompt must never be called — the client route never asks for an author name') },
+      addEventListener(type, fn) { if (type === 'message') messageHandlers.push(fn) },
+    },
+    location: { pathname: '/client/walk/onboarding.html', origin: 'http://localhost:5173' },
+    fetch(url, init) {
+      if (String(url).includes('/client/__walk/state')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(stateStub) })
+      }
+      posts.push({ url: String(url), init })
+      const key = Object.keys(routeStub || {}).find((k) => String(url).includes(k))
+      const resp = key ? routeStub[key] : { ok: true }
+      if (resp === 'reject') return Promise.reject(new Error('network down'))
+      return Promise.resolve(Object.assign({ json: () => Promise.resolve({}) }, resp))
+    },
+    console,
+  }
+  vm.createContext(sandbox)
+  vm.runInContext(src, sandbox)
+  const fireMessage = async (data) => {
+    for (const h of messageHandlers) h({ data })
+    await flush()
+  }
+  return { document, posts, fireMessage }
+}
+
+async function flush(n = 6) { for (let i = 0; i < n; i++) await Promise.resolve() }
+
+// Shared setup for the AC-4/5/6/8 harness tests below — one onboarding-shaped seed builder, one
+// open-question-notes/ledger builder, and one buildWalkPage+runWalkBrowserRouted+initial-flush
+// combinator, replacing what were near-identical copy-pasted blocks across those four tests
+// (dup-windows repair round: the copy-paste, not any single one of these tests, was the finding).
+function onboardingSeed(screens) {
+  return { product: 'Hearwell', journeys: [{ name: 'onboarding', title: 'Onboarding', screens }] }
+}
+function openQuestions(n, screen = 'signin') {
+  const notes = []
+  const ledger = []
+  for (let i = 1; i <= n; i++) {
+    notes.push(question('N00' + i, screen, 'W' + i))
+    ledger.push(ledgerRow('W' + i))
+  }
+  return { notes, ledger }
+}
+async function walkThroughRouted({ screens, notes = [], ledger = [], reached = [], routes = {} }) {
+  const seed = onboardingSeed(screens)
+  const html = buildWalkPage({ seed, journey: 'onboarding', notes, ledger, walk: { journeys: {} }, prefix: '' })
+  const harness = runWalkBrowserRouted(html, { reached, misses: [], confirmedAt: null, sentence: null }, routes)
+  await flush()
+  return harness
+}
+
+// ---------------------------------------------------------------------------
+// AC-20260911-01-4
+// ---------------------------------------------------------------------------
+test('AC-20260911-01-4: pressing a mark\'s no control while its own [data-wk="why"] holds only whitespace issues no request at all, leaves the mark visible, leaves [data-wk="left"] unchanged, leaves [data-wk="confirm"] disabled, and shows the slot\'s own data-why value', async () => {
+  const { notes, ledger } = openQuestions(1)
+  const { document, posts } = await walkThroughRouted({ screens: [{ label: 'signin', states: [] }], notes, ledger })
+
+  const mark = document.querySelector('[data-wk="mark"][data-label="signin"]')
+  assert.ok(mark, 'test setup requires a mark to render on signin')
+  const whyEl = mark.querySelector('[data-wk="why"]')
+  assert.ok(whyEl, 'test setup requires the mark to carry a [data-wk="why"] control')
+  whyEl.value = '   '
+  const noBtn = mark.querySelector('[data-wk="no"]')
+  assert.ok(noBtn, 'test setup requires the mark to carry a [data-wk="no"] control')
+  noBtn.click()
+  await flush()
+
+  assert.strictEqual(posts.length, 0,
+    'AC-4: pressing no with a whitespace-only reason must issue no request at all: got ' + JSON.stringify(posts.map((p) => p.url)))
+  assert.strictEqual(mark.hidden, false, 'AC-4: the mark must stay visible: got hidden=' + mark.hidden)
+  const leftEl = document.querySelector('[data-wk="left"]')
+  assert.strictEqual(leftEl.getAttribute('data-count'), '1', 'AC-4: [data-wk="left"]\'s data-count must stay unchanged: got ' + leftEl.getAttribute('data-count'))
+  const confirmBtn = document.querySelector('[data-wk="confirm"]')
+  assert.strictEqual(confirmBtn.hasAttribute('disabled'), true, 'AC-4: [data-wk="confirm"] must stay disabled: got disabled=' + confirmBtn.hasAttribute('disabled'))
+  const msgEl = document.querySelector('[data-wk="msg"]')
+  assert.ok(msgEl, 'AC-4: the page must carry a [data-wk="msg"] slot for the rejection to show in')
+  assert.strictEqual(msgEl.hidden, false, 'AC-4: the msg slot must unhide to show the rejection: got hidden=' + msgEl.hidden)
+  assert.strictEqual(msgEl.textContent, msgEl.getAttribute('data-why'),
+    'AC-4: the msg slot\'s text must be set to its own data-why value: got ' + JSON.stringify(msgEl.textContent))
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260911-01-5
+// ---------------------------------------------------------------------------
+test('AC-20260911-01-5: a mark\'s answer request resolving ok:false leaves the mark visible, leaves [data-wk="left"] unchanged, leaves [data-wk="confirm"] disabled, and shows the slot\'s own data-failed value', async () => {
+  const { notes, ledger } = openQuestions(2)
+  const { document, posts } = await walkThroughRouted({
+    screens: [{ label: 'signin', states: [] }], notes, ledger,
+    routes: { '/client/__notes/answer': { ok: false } },
+  })
+
+  const leftElBefore = document.querySelector('[data-wk="left"]')
+  assert.strictEqual(leftElBefore.getAttribute('data-count'), '2', 'test setup requires two open marks (data-count="2")')
+
+  const marks = document.querySelectorAll('[data-wk="mark"][data-label="signin"]')
+  const mark0 = marks[0]
+  const yesBtn = mark0.querySelector('[data-wk="yes"]')
+  assert.ok(yesBtn, 'test setup requires the mark to carry a [data-wk="yes"] control')
+  yesBtn.click()
+  await flush()
+
+  assert.ok(posts.some((p) => p.url.includes('/client/__notes/answer')),
+    'AC-5: clicking yes must still POST /client/__notes/answer even though the answer will fail: got ' + JSON.stringify(posts.map((p) => p.url)))
+  assert.strictEqual(mark0.hidden, false, 'AC-5: on a non-ok answer the mark must stay visible: got hidden=' + mark0.hidden)
+  const leftEl = document.querySelector('[data-wk="left"]')
+  assert.strictEqual(leftEl.getAttribute('data-count'), '2',
+    'AC-5: on a non-ok answer [data-wk="left"]\'s data-count must stay unchanged (data-count="2" -> "2"): got ' + leftEl.getAttribute('data-count'))
+  const confirmBtn = document.querySelector('[data-wk="confirm"]')
+  assert.strictEqual(confirmBtn.hasAttribute('disabled'), true, 'AC-5: [data-wk="confirm"] must stay disabled: got disabled=' + confirmBtn.hasAttribute('disabled'))
+  const msgEl = document.querySelector('[data-wk="msg"]')
+  assert.ok(msgEl, 'AC-5: the page must carry a [data-wk="msg"] slot for the failure to show in')
+  assert.strictEqual(msgEl.textContent, msgEl.getAttribute('data-failed'),
+    'AC-5: the msg slot\'s text must be set to its own data-failed value on a non-ok answer: got ' + JSON.stringify(msgEl.textContent))
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260911-01-6
+// ---------------------------------------------------------------------------
+test('AC-20260911-01-6: the free-note request, a walk-event "to" request, and a confirm request resolving ok:false all show the slot\'s data-failed value; the note textarea keeps its text, approve stays hidden even when the failed "to" message named the journey\'s last label, and a failed confirm unhides the slot', async () => {
+  const screens = [{ label: 'signin', states: [] }, { label: 'invite', states: [] }]
+
+  // ---- leg 1: the free note --------------------------------------------------------------
+  const { document: doc1, posts: posts1 } = await walkThroughRouted({
+    screens, reached: ['signin'], routes: { '/client/__notes/add': { ok: false } },
+  })
+  const noteForm = doc1.querySelector('[data-wk="note"]')
+  const textarea = noteForm.querySelector('textarea')
+  assert.ok(textarea, 'test setup requires the note form to carry a textarea')
+  textarea.value = 'a real note'
+  noteForm.submit()
+  await flush()
+  assert.ok(posts1.some((p) => p.url.includes('/client/__notes/add')),
+    'AC-6: submitting the note form must still POST /client/__notes/add even though it will fail: got ' + JSON.stringify(posts1.map((p) => p.url)))
+  assert.strictEqual(textarea.value, 'a real note',
+    'AC-6: on a non-ok note save the textarea must keep its text, not clear: got ' + JSON.stringify(textarea.value))
+  const msg1 = doc1.querySelector('[data-wk="msg"]')
+  assert.ok(msg1, 'AC-6: the page must carry a [data-wk="msg"] slot for the note failure to show in')
+  assert.strictEqual(msg1.textContent, msg1.getAttribute('data-failed'),
+    'AC-6: a failed note save must show the slot\'s own data-failed value: got ' + JSON.stringify(msg1.textContent))
+
+  // ---- leg 2: a "to" event landing on the journey's last label, refused server-side -----
+  const { document: doc2, posts: posts2, fireMessage } = await walkThroughRouted({
+    screens, reached: ['signin'], routes: { '/client/__walk/event': { ok: false } },
+  })
+  await fireMessage({ walk: 'to', from: 'signin', to: 'invite' })
+  assert.ok(posts2.some((p) => p.url.includes('/client/__walk/event')),
+    'AC-6: a "to" message must still POST /client/__walk/event even though it will fail: got ' + JSON.stringify(posts2.map((p) => p.url)))
+  const approveEl = doc2.querySelector('[data-wk="approve"]')
+  assert.ok(approveEl, 'test setup requires an approve section to render')
+  assert.strictEqual(approveEl.hidden, true,
+    'AC-6: a failed "to" event naming the journey\'s last label must leave approve hidden — reachedSoFar must stay untouched on a refusal: got hidden=' + approveEl.hidden)
+  const msg2 = doc2.querySelector('[data-wk="msg"]')
+  assert.ok(msg2, 'AC-6: the page must carry a [data-wk="msg"] slot for the event failure to show in')
+  assert.strictEqual(msg2.textContent, msg2.getAttribute('data-failed'),
+    'AC-6: a failed "to" event must show the slot\'s own data-failed value: got ' + JSON.stringify(msg2.textContent))
+
+  // ---- leg 3: the confirm request, refused server-side ----------------------------------
+  const { document: doc3, posts: posts3 } = await walkThroughRouted({
+    screens, reached: ['signin'], routes: { '/client/__walk/confirm': { ok: false } },
+  })
+  const sentenceEl = doc3.querySelector('[data-wk="sentence"]')
+  assert.ok(sentenceEl, 'test setup requires a [data-wk="sentence"] textarea to render')
+  sentenceEl.value = 'done and done'
+  const confirmBtn3 = doc3.querySelector('[data-wk="confirm"]')
+  assert.ok(confirmBtn3, 'test setup requires a [data-wk="confirm"] control to render')
+  confirmBtn3.click()
+  await flush()
+  assert.ok(posts3.some((p) => p.url.includes('/client/__walk/confirm')),
+    'AC-6: clicking confirm must still POST /client/__walk/confirm even though it will fail: got ' + JSON.stringify(posts3.map((p) => p.url)))
+  const msg3 = doc3.querySelector('[data-wk="msg"]')
+  assert.ok(msg3, 'AC-6: the page must carry a [data-wk="msg"] slot for the confirm failure to show in')
+  assert.strictEqual(msg3.hidden, false, 'AC-6: a failed confirm must unhide the msg slot: got hidden=' + msg3.hidden)
+  assert.strictEqual(msg3.textContent, msg3.getAttribute('data-failed'),
+    'AC-6: a failed confirm must show the slot\'s own data-failed value: got ' + JSON.stringify(msg3.textContent))
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260911-01-8
+// ---------------------------------------------------------------------------
+test('AC-20260911-01-8: a mark\'s answer request resolving ok:true CONTINUES TO hide that mark, decrement [data-wk="left"], and remove disabled from [data-wk="confirm"] once the count reaches zero', async () => {
+  const { notes, ledger } = openQuestions(2)
+  const { document } = await walkThroughRouted({ screens: [{ label: 'signin', states: [] }], notes, ledger })
+
+  const marks = document.querySelectorAll('[data-wk="mark"][data-label="signin"]')
+  assert.strictEqual(marks.length, 2, 'test setup requires two marks on signin')
+  for (const m of marks) {
+    const yesBtn = m.querySelector('[data-wk="yes"]')
+    yesBtn.click()
+    await flush()
+    assert.strictEqual(m.hidden, true, 'AC-8: an ok:true answer must CONTINUE TO hide the answered mark: got hidden=' + m.hidden)
+  }
+  const leftEl = document.querySelector('[data-wk="left"]')
+  assert.strictEqual(leftEl.getAttribute('data-count'), '0', 'AC-8: [data-wk="left"] must CONTINUE TO decrement to "0": got ' + leftEl.getAttribute('data-count'))
+  const confirmBtn = document.querySelector('[data-wk="confirm"]')
+  assert.strictEqual(confirmBtn.hasAttribute('disabled'), false,
+    'AC-8: [data-wk="confirm"] must CONTINUE TO lose its disabled attribute once the count reaches zero: got disabled=' + confirmBtn.hasAttribute('disabled'))
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260911-01-10
+// ---------------------------------------------------------------------------
+test('AC-20260911-01-10: a question note carrying answer.verdict: "waived" CONTINUES TO be excluded from the open count buildClientIndex and buildWalkPage render', () => {
+  const seed = {
+    product: 'Hearwell',
+    journeys: [{ name: 'onboarding', title: 'Onboarding', screens: [{ label: 'signin', states: [] }] }],
+  }
+  const notes = [
+    question('N001', 'signin', 'W1', { status: 'resolved', answer: { verdict: 'waived', text: '', by: 'session', at: NOW } }),
+  ]
+  const ledger = [ledgerRow('W1')]
+
+  const indexHtml = buildClientIndex({ seed, notes, ledger, walk: { journeys: {} }, prefix: '' })
+  assert.match(indexHtml, /data-guesses="0"/,
+    'AC-10: buildClientIndex must exclude a waived question from the open count: got\n' + indexHtml)
+
+  const walkHtml = buildWalkPage({ seed, journey: 'onboarding', notes, ledger, walk: { journeys: {} }, prefix: '' })
+  assert.match(walkHtml, /data-wk="left"\s+data-count="0"/,
+    'AC-10: buildWalkPage must exclude a waived question from [data-wk="left"]\'s open count: got\n' + walkHtml)
+  const marks = [...walkHtml.matchAll(/<article[^>]*data-wk="mark"[\s\S]*?<\/article>/g)]
+  assert.strictEqual(marks.length, 0,
+    'AC-10: buildWalkPage must render no mark for a waived question: got ' + marks.length + ' in\n' + walkHtml)
 })

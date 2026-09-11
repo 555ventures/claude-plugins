@@ -2,9 +2,9 @@
   "newFileCap": 40000,
   "trees": {
     "scripts": 61878,
-    "spec/scripts": 1372823,
-    "spec/scripts/lib": 285543,
-    "tests": 3952807
+    "spec/scripts": 1373767,
+    "spec/scripts/lib": 287256,
+    "tests": 3978048
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -23,7 +23,7 @@
     "spec/scripts/commit-coverage.js": 16400,
     "spec/scripts/components-check.js": 4708,
     "spec/scripts/design-ac-reconcile.js": 6011,
-    "spec/scripts/design-atlas.js": 162324,
+    "spec/scripts/design-atlas.js": 163268,
     "spec/scripts/env-preflight.js": 8794,
     "spec/scripts/escape-row.js": 10045,
     "spec/scripts/fleet-reader.js": 47448,
@@ -59,8 +59,8 @@
     "spec/scripts/lib/stop-block.js": 9749,
     "spec/scripts/lib/surfaces.js": 5646,
     "spec/scripts/lib/walk-mode.browser.js": 3101,
-    "spec/scripts/lib/walk-page.js": 17866,
-    "spec/scripts/lib/walk.browser.js": 10413,
+    "spec/scripts/lib/walk-page.js": 17313,
+    "spec/scripts/lib/walk.browser.js": 12679,
     "spec/scripts/lib/wire-register.js": 2871,
     "spec/scripts/manifest-check.sh": 4001,
     "spec/scripts/memory-sweep.js": 7856,
@@ -117,7 +117,7 @@
     "tests/consistency/citations-check.test.js": 16363,
     "tests/consistency/comment-narration-live.test.js": 3527,
     "tests/consistency/dependency-free.test.js": 8614,
-    "tests/consistency/design-doctrine.test.js": 55484,
+    "tests/consistency/design-doctrine.test.js": 56906,
     "tests/consistency/dup-windows-live.test.js": 1916,
     "tests/consistency/entrypoints.test.js": 70405,
     "tests/consistency/genesis-doctrine.test.js": 86907,
@@ -187,7 +187,7 @@
     "tests/mocks/chrome-harness.js": 9353,
     "tests/mocks/chrome-harness.test.js": 11209,
     "tests/mocks/client-route.test.js": 21003,
-    "tests/mocks/client-walk-route.test.js": 12214,
+    "tests/mocks/client-walk-route.test.js": 16950,
     "tests/mocks/mock-edges.test.js": 12014,
     "tests/mocks/mocks-driver-2.test.js": 16692,
     "tests/mocks/mocks-driver-3.test.js": 19265,
@@ -217,7 +217,7 @@
     "tests/mocks/theme-serve.test.js": 12159,
     "tests/mocks/viewer-tokens.test.js": 4600,
     "tests/mocks/walk-mode.test.js": 10319,
-    "tests/mocks/walk-page.test.js": 20861,
+    "tests/mocks/walk-page.test.js": 39944,
     "tests/parse-selection/parse-selection.test.js": 4720,
     "tests/prose-debt/doctrine-pins.test.js": 4759,
     "tests/prose-debt/memory-sweep.test.js": 12286,
@@ -1829,6 +1829,66 @@
       "from": 3943920,
       "to": 3952807,
       "cite": "specs/20260910/04-theme-before-the-client-walk.md"
+    },
+    {
+      "path": "spec/scripts/design-atlas.js",
+      "from": 162324,
+      "to": 163268,
+      "cite": "specs/20260911/01-the-page-waits-for-the-server.md"
+    },
+    {
+      "path": "spec/scripts/lib/walk.browser.js",
+      "from": 10413,
+      "to": 12679,
+      "cite": "specs/20260911/01-the-page-waits-for-the-server.md"
+    },
+    {
+      "path": "tests/consistency/design-doctrine.test.js",
+      "from": 55484,
+      "to": 56906,
+      "cite": "specs/20260911/01-the-page-waits-for-the-server.md"
+    },
+    {
+      "path": "tests/mocks/client-walk-route.test.js",
+      "from": 12214,
+      "to": 16950,
+      "cite": "specs/20260911/01-the-page-waits-for-the-server.md"
+    },
+    {
+      "path": "tests/mocks/walk-page.test.js",
+      "from": 20861,
+      "to": 39619,
+      "cite": "specs/20260911/01-the-page-waits-for-the-server.md"
+    },
+    {
+      "path": "spec/scripts",
+      "from": 1372823,
+      "to": 1373767,
+      "cite": "specs/20260911/01-the-page-waits-for-the-server.md"
+    },
+    {
+      "path": "spec/scripts/lib",
+      "from": 285543,
+      "to": 287256,
+      "cite": "specs/20260911/01-the-page-waits-for-the-server.md"
+    },
+    {
+      "path": "tests",
+      "from": 3952807,
+      "to": 3977723,
+      "cite": "specs/20260911/01-the-page-waits-for-the-server.md"
+    },
+    {
+      "path": "tests/mocks/walk-page.test.js",
+      "from": 38572,
+      "to": 39944,
+      "cite": "specs/20260911/01-the-page-waits-for-the-server.md"
+    },
+    {
+      "path": "tests",
+      "from": 3976676,
+      "to": 3978048,
+      "cite": "specs/20260911/01-the-page-waits-for-the-server.md"
     }
   ]
 }

@@ -4,7 +4,7 @@
     "scripts": 61878,
     "spec/scripts": 1340136,
     "spec/scripts/lib": 250997,
-    "tests": 3849652
+    "tests": 3865164
   },
   "files": {
     "scripts/dup-windows.js": 15589,
@@ -98,6 +98,7 @@
     "tests/build/build-driver-base.test.js": 7604,
     "tests/build/build-driver-commit.test.js": 22102,
     "tests/build/build-driver-incident-auto.test.js": 1615,
+    "tests/build/build-driver-post-gate.test.js": 15512,
     "tests/build/build-driver-repair.test.js": 23707,
     "tests/build/build-driver.fixtures.js": 9349,
     "tests/build/build-driver.test.js": 14204,
@@ -1613,6 +1614,12 @@
       "path": "spec/scripts",
       "from": 1337823,
       "to": 1340136,
+      "cite": "specs/20260910/07-post-gate-command.md"
+    },
+    {
+      "path": "tests",
+      "from": 3849652,
+      "to": 3865164,
       "cite": "specs/20260910/07-post-gate-command.md"
     }
   ]

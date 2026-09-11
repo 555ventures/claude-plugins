@@ -201,6 +201,72 @@ test('AC-20260911-02-4 (A3 paren-keyword shape): WHEN a test file holds a contro
     'its end to src.length: ' + JSON.stringify(calls))
 })
 
+test('AC-20260911-02-4 (A3 operator/keyword shapes): WHEN a test file opens a regex literal holding a quote after an operator (+ - < ) or a keyword (typeof case await throw else) followed by another test( call THE SYSTEM SHALL count both calls with the first call\'s end inside its own span, AND a division after `]`, a postfix `++`, a grouping paren or a call paren SHALL still be read as division', () => {
+  const dir = tmpdir('count-ac4-operators')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  const head = "'use strict'\n" +
+    "const { test } = require('node:test')\n" +
+    "const assert = require('node:assert')\n"
+  const tail = "test('two', () => { assert.ok(true) })\n"
+
+  // Each body opens a regex literal containing a `"` in a context the scanner once read as
+  // DIVISION. A misread leaves the quote opening a string span that never closes, so the
+  // following test( call is swallowed and the first call's end lands at src.length — the
+  // file-corrupting shape for spec 03's span-driven deletions.
+  const regexShapes = {
+    'string concat': "test('one', () => { const s = 'a' + /x\"y/.source; assert.ok(s) })\n",
+    'typeof': "test('one', () => { assert.ok(typeof /x\"y/ === 'object') })\n",
+    'case': "test('one', () => { switch (1) { case /x\"y/.source.length: break; default: break } assert.ok(1) })\n",
+    'await': "test('one', async () => { const r = await /x\"y/.test('x'); assert.ok(r !== undefined) })\n",
+    'throw': "test('one', () => { try { throw /x\"y/ } catch (e) { assert.ok(e) } })\n",
+    'less-than': "test('one', () => { assert.ok(1 < /x\"y/.source.length) })\n",
+    'minus': "test('one', () => { assert.ok(3 - /x\"y/.source.length !== 99) })\n",
+    'else': "test('one', () => { if (false) { assert.ok(1) } else /x\"y/.test('x'); assert.ok(1) })\n",
+  }
+  // Division controls: the context set must NOT have been blanket-widened. Each of these `/`
+  // characters divides, and each body asserts the arithmetic itself so the fixture would fail
+  // under `node --test` if the expression were ever a regex.
+  const divisionControls = {
+    'index': "test('one', () => { const arr = [4]; assert.strictEqual(arr[0] / 2, 2) })\n",
+    'postfix increment': "test('one', () => { let x = 3; assert.strictEqual(x++ / 2, 1.5) })\n",
+    'grouping paren': "test('one', () => { const a = 1, b = 3; assert.strictEqual((a + b) / 2, 2) })\n",
+    'call paren': "test('one', () => { const foo = (v) => v * 2; assert.strictEqual(foo(2) / 2, 2) })\n",
+  }
+
+  delete require.cache[testScanPath]
+  const { scanCalls } = require(testScanPath)
+
+  for (const [label, body] of Object.entries({ ...regexShapes, ...divisionControls })) {
+    const src = head + body + tail
+    const calls = scanCalls(src)
+    assert.strictEqual(calls.length, 2,
+      'the "' + label + '" shape must scan as exactly two calls — a misread `/` here opens a span ' +
+      'that swallows every later line-start test( call: ' + JSON.stringify(calls))
+    assert.ok(calls[0].end < src.length,
+      'the "' + label + '" shape\'s first call must end inside the source, never at src.length — an ' +
+      'end at EOF is the span spec 20260911/03 would DELETE, corrupting the whole file: ' +
+      JSON.stringify(calls[0]))
+    assert.ok(calls[0].end <= calls[1].start,
+      'the "' + label + '" shape\'s first call must end at or before the second call\'s start: ' +
+      JSON.stringify(calls))
+    assert.strictEqual(calls[1].title, 'two',
+      'the "' + label + '" shape\'s second call title must read "two": ' + JSON.stringify(calls))
+  }
+
+  // The same twelve shapes seen end-to-end through the CLI: one file per shape, two cases each.
+  let i = 0
+  for (const body of Object.values({ ...regexShapes, ...divisionControls })) {
+    fs.writeFileSync(path.join(dir, 'tests/shape-' + (i++) + '.test.js'), head + body + tail)
+  }
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, 'the twelve-file host must exit 0: ' + r.stdout + ' / ' + r.stderr)
+  let out
+  assert.doesNotThrow(() => { out = JSON.parse(r.stdout) }, '--json must print parseable JSON: ' + r.stdout)
+  assert.strictEqual(out.count, 24,
+    'twelve files of two cases each must total 24 — a single misread `/` collapses a file to 1: ' +
+    JSON.stringify(out))
+})
+
 test('AC-20260911-02-11: WHEN count-tests.js --root . runs over this repository at HEAD THE SYSTEM SHALL exit 0 reporting a positive integer count, and spec/test-ceiling.json SHALL NOT exist, and no .claude/test-ceiling.json SHALL exist', () => {
   const r = runNode(SCRIPT, ['--root', '.', '--json'], { cwd: ROOT })
   assert.strictEqual(r.status, 0,

@@ -13,10 +13,11 @@
 // former's name doesn't match, the latter has a non-whitespace `t.` before it on the line).
 // The scanner walks the whole source once, skipping string/template literals, `//` and `/* */`
 // comments, and regex literals as opaque spans so a quote or paren inside one of them can never
-// desynchronize the paren-depth count used to find a call's own closing paren (AC-20260911-02-4).
+// desynchronize the paren-depth count that finds a call's own closing paren (AC-20260911-02-4).
 // Regex-literal detection follows the standard heuristic: a `/` opens a regex only when the last
-// significant character read is one of `( , = : [ ! & | ? { } ;`, the word `return`, or the `=>`
-// arrow token — anywhere else (an identifier, a literal) it is division and left alone. A `)` is
+// significant character read is one of `( , = : [ ! & | ? { } ; + - * % < > ~ ^`, one of the
+// keywords `return typeof case await throw else in of`, or the `=>` arrow token — anywhere else
+// (an identifier, a literal, `]`, a postfix `++`/`--`) it is division and left alone. A `)` is
 // ambiguous on its own (`(a + b) / 2` is division, `if (a) /re/.test(x)` is a regex) so a paren
 // stack tracks, for each `(`, whether the word immediately before it was `if`/`while`/`for`/
 // `switch`/`catch` — only a `)` that closed one of those conditionals opens a regex context
@@ -117,6 +118,16 @@ function trailingWord(sig) {
   return sig.replace(/ $/, '')
 }
 
+// Every punctuation character after which a `/` can only open a regex literal, never divide:
+// nothing here yields a value. `]` and `)` are deliberately absent — `arr[0] / 2` and
+// `foo(a) / 2` are division (a `)` is resolved separately by the paren stack).
+const REGEX_OPENING_PUNCT = '(,=:[!&|?{};+-*%<>~^'
+
+// Keywords after which a `/` can only open a regex literal — each is followed by an expression,
+// never by a value that could be divided (`typeof /re/`, `case /re/:`, `await /re/.test(x)`,
+// `throw /re/`, `else /re/.test(x)`, `x in /re/`, `for (x of /re/)`, `return /re/`).
+const REGEX_OPENING_KEYWORD_RE = /(^|[^A-Za-z0-9_$])(return|typeof|case|await|throw|else|in|of)$/
+
 // A `/` opens a regex only in the documented contexts (D2/A3) — the trailing significant-
 // character buffer `sig` (a boundary space collapses each whitespace run, never fully dropped)
 // is checked, never a single char, so the `return`/`=>` checks can match a whole token rather
@@ -129,8 +140,11 @@ function isRegexContext(sig, lastCloseWasKeyword) {
   const last = word[word.length - 1]
   if (last === ')') return !!lastCloseWasKeyword
   if (word.slice(-2) === '=>') return true
-  if ('(,=:[!&|?{};'.includes(last)) return true
-  return /(^|[^A-Za-z0-9_$])return$/.test(word)
+  // `++`/`--` are the one operator-set exception: a postfix increment yields a value, so
+  // `x++ / 2` is division even though a bare `+`/`-` opens a regex context.
+  if ((last === '+' || last === '-') && word[word.length - 2] === last) return false
+  if (REGEX_OPENING_PUNCT.includes(last)) return true
+  return REGEX_OPENING_KEYWORD_RE.test(word)
 }
 
 function skipRegex(src, i) {

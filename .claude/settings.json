@@ -11,6 +11,11 @@
       "Bash(npm ls:*)",
       "Bash(npm view:*)"
     ],
-    "deny": ["Bash(rm -rf:*)", "Read(**/*.pem)", "Read(**/id_rsa*)"]
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Read(**/*.pem)",
+      "Read(**/id_rsa*)",
+      "Read(.env*)"
+    ]
   }
 }

@@ -1082,3 +1082,25 @@ test('AC-20260902-11-7 / AC-20260903-05-9 / AC-20260909-08-8: WHEN spec-status.j
   assert.ok(!Object.prototype.hasOwnProperty.call(nextJsonOut, 'misunderstandings'),
     'AC-20260902-11-7/D6: --next --json must carry no "misunderstandings" key even though the ledger has 13 catches')
 })
+
+// The head is flattened to one line before matching, and `Depends on:` stopped only at a `·`
+// or end-of-head. A brief that places another header label (`Amended by:`, `Primary
+// workspaces:`) on the line BELOW `Depends on:` therefore had that whole label swallowed into
+// its dependency value, which then parsed as neither a brief id nor `none` and surfaced as a
+// permanent unparsed-dependency anomaly. Sibling briefs that put the same label ABOVE parsed
+// fine, so the defect was purely positional. A value stops at the next `Label:` too.
+test('a header label on the line below Depends on is not swallowed into the dependency value', () => {
+  const dir = host({
+    briefs: {
+      '01-auth.md': BRIEFS['01-auth.md'],
+      '02-billing.md': '# 02 — Billing\n\nPhase: P0\nDepends on: none\nAmended by: ADR-0009 (the hook is removed — the command is the surface)\n',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const j = JSON.parse(r.stdout)
+  assert.strictEqual(j.anomalies.filter(a => a.kind === 'unparsed-dependency').length, 0,
+    'a following header label must not become a phantom dependency item: ' + JSON.stringify(j.anomalies))
+  const b2 = j.briefs.find(b => b.num === '02')
+  assert.deepStrictEqual(b2.depends_on, [], 'the declared "none" still reads as no dependencies')
+})

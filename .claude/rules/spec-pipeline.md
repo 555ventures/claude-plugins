@@ -69,7 +69,7 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
   name note rows, a withdraw control or a list the product has never had, and no leg can see the
   absence — `promise-sweep` counts a Decision carried by AC-ID, so an AC asserting the route
   alone reports the whole Decision delivered.
-  (specs/20260910/05-what-the-journey-does-not-do.md D3; Fable consult 2026-09-11)
+  (specs/20260910/05-what-the-journey-does-not-do.md D3)
 
 ## Build
 
@@ -107,14 +107,11 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
   that matters gets a script (core § Incident Policy).
 - Tests cite the owner id they pin in a header comment — spec path, AC-ID, or escape row id;
   pipeline-authored tests for new specs reference AC-IDs in the test name (`AC-{YYYYMMDD-NN}-1`).
-- Nothing here is exempt from TDD. The only env-gated tests are the two `[env: CHROME_BIN]`
-  pins in `tests/render/render-capture.test.js` (specs/20260905/06 D6), and the `chrome-harness`
-  requirers' `[env: CHROME_BIN]` pins in `tests/mocks/chrome-harness.test.js`,
-  `tests/design-atlas-index.test.js`, `tests/mocks/notes-layer-isolation.test.js`, and
-  `tests/mocks/notes-layer-navigation.test.js` (specs/20260907/09, specs/20260909/03 D9): they
-  skip with a named reason when no Chrome resolves. Provision: set `CHROME_BIN` to a
-  Chrome/Chromium binary, or install Google Chrome / `chromium` on PATH. No other skip is
-  sanctioned.
+- Nothing here is exempt from TDD. The only sanctioned skip is an `[env: CHROME_BIN]`-tagged
+  pin whose `t.skip` reason names `CHROME_BIN` — the pin carries its own owner citation in the
+  test header, and this rule never enumerates the files (specs/20260905/06 D6; specs/20260909/03
+  D9). Provision: set `CHROME_BIN` to a Chrome/Chromium binary, or install Google Chrome /
+  `chromium` on PATH. No other skip is sanctioned.
 - **Gates are plainly green** (v7): `npm test` exits 0 on untouched code; there is no
   sanctioned-failing baseline and no standing red pins. A red suite is a regression or an
   unfinished change, never a TODO.

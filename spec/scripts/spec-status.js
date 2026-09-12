@@ -228,7 +228,10 @@ if (fs.existsSync(roadmapDir)) {
     // the pre-section head to one line before matching — a wrapped `Depends on:` must not
     // silently drop the dependencies on the continuation line.
     const head = text.split(/\n## /)[0].replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ')
-    const dep = head.match(/Depends on:\s*([^·]*?)\s*(?:·|$)/)
+    // Stop at the next header label too, not only at a `·` or end-of-head: flattening puts a
+    // label written on the FOLLOWING line inside the dependency value, where it parses as
+    // neither a brief id nor `none` and surfaces as a permanent unparsed-dependency anomaly.
+    const dep = head.match(/Depends on:\s*([^·]*?)\s*(?:·|\s[A-Z][A-Za-z ]*:|$)/)
     const phase = head.match(/Phase:\s*(P\d+)/)
     // Parse the dependency value item-wise: split on commas, accept an item only if it is
     // exactly a brief id (NN/NNa, optional "brief" prefix or name suffix) or a sanctioned
@@ -366,7 +369,10 @@ if (queueOverlay.on) {
   reconciled.forEach((it, i) => {
     if (it.kind === 'brief') {
       queuePosByBrief.set(it.brief, i)
-      if (!briefByNum.has(it.brief)) {
+      // A tick retires any item (lib/queue.js isItemDone) — including a brief whose roadmap
+      // file is gone. Flagging a ticked orphan prints a remedy (`spec-queue done <n>`) that has
+      // already been applied, leaving deletion of closed queue memory as the only way to clear it.
+      if (!briefByNum.has(it.brief) && !it.ticked) {
         pushAnomaly({ kind: 'queue-orphan', detail: `spec-queue.json item points at brief ${it.brief}, which has no docs/roadmap/${it.brief}-*.md — remove it with \`spec-queue done ${it.brief}\`, reorder it away with \`spec-queue move ${it.brief} <n>\`, or restore the brief file` })
       }
     } else if (it.kind === 'spec') {

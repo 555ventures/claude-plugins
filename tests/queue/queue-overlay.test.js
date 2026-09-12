@@ -426,3 +426,39 @@ test('--all collapses a run of identical after-that reasons onto one shared bran
   assert.match(r.stdout, /\/spec:run @specs\/20260701\/02-b\.md\n\/spec:run @specs\/20260701\/03-c\.md\n\s+└─ 🤷 no brief/,
     'the shared branch line closes the run, so it still reads as covering every row above it: ' + r.stdout)
 })
+
+// specs/20260903/03-pipeline-queue-mechanics.md D4: the orphan check fires on any queue item
+// whose brief has no roadmap file, including one already ticked off. A finished brief whose
+// file is later removed leaves a permanent anomaly whose printed remedy (`spec-queue done
+// <n>`) has already been applied, so the only way to clear it is to delete the row — which
+// erases the record that the brief was ever completed. A ticked item is closed queue memory,
+// not a pointer at pending work.
+test('a ticked queue item whose brief file is gone is not reported as a queue orphan', () => {
+  const dir = host({
+    briefs: { '05-a.md': '# 05 — A\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n' },
+    queueItems: [
+      { id: 'q1', kind: 'brief', brief: '05', added: '2026-09-01T10:00:00Z' },
+      { id: 'q2', kind: 'brief', brief: '26', ticked: '2026-09-11T22:53:12.329Z' },
+    ],
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const orphans = JSON.parse(r.stdout).anomalies.filter(a => a.kind === 'queue-orphan')
+  assert.strictEqual(orphans.length, 0,
+    'a ticked item is closed queue memory — flagging it demands a deletion that destroys the record the brief was finished: ' + JSON.stringify(orphans))
+})
+
+test('an unticked queue item whose brief file is gone is still reported as a queue orphan', () => {
+  const dir = host({
+    briefs: { '05-a.md': '# 05 — A\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n' },
+    queueItems: [
+      { id: 'q1', kind: 'brief', brief: '05', added: '2026-09-01T10:00:00Z' },
+      { id: 'q2', kind: 'brief', brief: '26', added: '2026-09-01T10:01:00Z' },
+    ],
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const orphans = JSON.parse(r.stdout).anomalies.filter(a => a.kind === 'queue-orphan')
+  assert.strictEqual(orphans.length, 1,
+    'an open item pointing at a missing brief is real drift and must stay visible: ' + JSON.stringify(orphans))
+})

@@ -35,6 +35,6 @@ one the way the suite does (`tests/helpers.js`):
 
 ## Consumers
 
-`/spec:review`'s verifiers use this skill to exercise findings; T3 builds may use it for
+The review stage's verifiers use this skill to exercise findings; T3 builds may use it for
 advisory behavioral checks of acceptance criteria — advisory only, it gates nothing until the
 run ledger (`.claude/spec-runs.jsonl`) shows its verdicts track real escapes.

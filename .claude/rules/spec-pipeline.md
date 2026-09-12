@@ -22,7 +22,7 @@ Critical-tier triggers for THIS repo:
   `spec/scripts/block-cross-worktree-writes.sh` — a broken hook blocks or pollutes every
   session's prompts in every host repo.
 - **`spec/scripts/merge-back.sh`** — runs destructive git ops against host repos; exit-code
-  alphabet (3 = conflicts, 4 = CWD-inside-worktree refusal) is load-bearing for /spec:review.
+  alphabet (3 = conflicts, 4 = CWD-inside-worktree refusal) is load-bearing for the review stage.
 - **`spec/scripts/spec-status.js`** — the sole source of "what's next" across all hosts and a
   frozen API for external `--json` consumers (`--root/--next/--json` shape, the five action
   strings); never a second derivation of roadmap state anywhere.
@@ -142,7 +142,7 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
 <!-- One line per entry: a provenance tag — [host] (this repo/stack) or [plugin] (traces to a
 spec-plugin template/command/generated artifact) — the rule with its mechanism, and one owner
 citation (spec path, AC-ID, D-number, ADR, run id). Never dates, people, hosts, versions, or
-prior behavior (/spec:doctor check 16 scans this layer). Writers: /spec:review close and
+prior behavior (/spec:doctor check 16 scans this layer). Writers: the review stage close and
 /spec:escape only. /spec:doctor prunes dead citations and rolls [plugin] entries up as an
 upstream bug list. -->
 - `[plugin]` A conformance guard that classifies what to inspect by **file name or extension**
@@ -335,7 +335,7 @@ upstream bug list. -->
   (specs/20260816/03-file-plan-table-scoped-parsing.md; specs/20260901/02-run-provenance.md D10;
   specs/20260907/09-atlas-index-and-note-navigation.md)
 - `[plugin]` **`orchestrator-compensation-during-live-worker`** (grep this
-  slug to count recurrences). The harness fired completion notifications for `/spec:build`
+  slug to count recurrences). The harness fired completion notifications for build-stage
   workers still executing; the orchestrator read those as returns-with-no-work and began
   writing the same files itself, making the concurrency real in a tree build deliberately does
   not isolate. The fix target is liveness/serialization (never write into a possibly-live

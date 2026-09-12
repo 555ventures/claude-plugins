@@ -16,4 +16,4 @@ paths:
 - `spec/templates/grounding-contract.md` is hash-stamped into every host — edit only for genuine contract changes, never wording.
 - Behavior changes bump the owning plugin's `.claude-plugin/plugin.json` semver via `node scripts/plugin-bump.js --bump --plugin <name> --changelog "<paragraph>"`; its `description` is the changelog surface. Never write a version literal into a spec.
 - Doctrine prose is deduplicated at touch-time per `core.md` § Doctrine Authoring — never a sweep.
-- Agent: `doctrine-author` · exemplars: `spec/commands/review.md`, `spec/doctrine/core.md`.
+- Agent: `doctrine-author` · exemplars: `spec/commands/plan.md`, `spec/doctrine/core.md`.

@@ -35,7 +35,7 @@ You never write implementation code.
 
 ## Worker Contract (spec pipeline)
 
-When dispatched as a build worker by `/spec:build`:
+When dispatched as a build worker by the build stage:
 
 - The spec's **Decisions** table is authoritative — apply it verbatim. An unlocked design fork or stale spec assumption is a `blocked` return (kind, detail, options, recommendation), never a guess.
 - The rules file's `## Gotchas` section is hard context, not a suggestion — it is distilled from this repo's real failures.

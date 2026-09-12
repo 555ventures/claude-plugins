@@ -98,7 +98,7 @@
     {
       "claim": "design foundation",
       "kind": "inert",
-      "target": "no UI and no component catalog \u2014 no design block; /spec:design never runs here"
+      "target": "no UI and no component catalog \u2014 no design block; the design stage never runs here"
     },
     {
       "claim": ".worktreeinclude env manifest",

@@ -23,7 +23,7 @@ edit gate scripts, workflow bodies, or generated `wf-*.js`.
 ## Reference Material
 
 - `.claude/rules/conventions/doctrine.md` — the hard rules for this layer
-- Read before writing: `spec/commands/review.md` (command structure exemplar), `spec/doctrine/core.md` (§ heading register + Doctrine Authoring section), `spec/templates/spec.md` (frontmatter + machine-consumed section comments)
+- Read before writing: `spec/commands/plan.md` (command structure exemplar), `spec/doctrine/core.md` (§ heading register + Doctrine Authoring section), `spec/templates/spec.md` (frontmatter + machine-consumed section comments)
 - Prose-pinning tests: grep `tests/*.test.js` for the file you're editing before changing wording — many sentences are load-bearing regex targets.
 
 ## Critical Constraints
@@ -38,7 +38,7 @@ edit gate scripts, workflow bodies, or generated `wf-*.js`.
 
 ## Worker Contract (spec pipeline)
 
-When dispatched as a build worker by `/spec:build`:
+When dispatched as a build worker by the build stage:
 
 - The spec's **Decisions** table is authoritative — apply it verbatim. An unlocked design fork or stale spec assumption is a `blocked` return (kind, detail, options, recommendation), never a guess.
 - The rules file's `## Gotchas` section is hard context, not a suggestion — it is distilled from this repo's real failures.

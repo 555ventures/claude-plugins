@@ -402,138 +402,270 @@ body {
 }
 @media (prefers-reduced-motion: reduce) { .rv-fill { transition: none; } }
 
-/* Client journey player (.wk-*) — specs/20260910/03-client-journey-player.md D8, chrome rule in
-   spec/doctrine/design.md § Design Canon. Two pages on one register: the index (a list of
-   journeys) and the player (spine · framed screen · marks). The reader is the client, not the
-   session, so the base size is 15px rather than the review page's 13 and the controls are full
-   size. Every color is an existing --v-* role — no new token, no literal; the spine's reached/
-   current states are the only accented thing on either page, everything else stays quiet. The
-   mock inside the frame keeps its own document: nothing here reaches into it. */
+/* Client journey player (.wk-*) — specs/20260910/03-client-journey-player.md D8, amended by
+   specs/20260911/04-the-client-loop.md D18-D22 (design/client-mocks/index.html and walk.html,
+   approved by JJ at the look stop 2026-09-11, are the binding reference this register ports),
+   chrome rule in spec/doctrine/design.md § Design Canon. Two pages: the index (one bounded card
+   per journey, a fixed four-slot thumbnail rail as its hero) and the player (a step indicator in
+   the top bar, a framed stage, the current screen's own requests in the side panel). The reader
+   is the client, not the session, so the base size is 15px and the controls are full size. Every
+   color is an existing --v-* role — no new token, no literal. The mock inside the frame/thumbnail
+   iframes keeps its own document: nothing here reaches into it.
+
+   Hierarchy, in order: the gray mocks (thumbnails on the index, the framed screen on the walk)
+   are the focus; one filled control per surface says what to do next; everything the client
+   wrote or we owe them is a hairline log; chrome is quiet. Muted text is 14px, body is 15px. */
 .wk [hidden] { display: none !important; }
-.wk { --wk-bar: 52px; --wk-spine: 200px; --wk-side: 340px; font-size: 15px; line-height: 1.5; min-height: 100vh; margin: 0; display: flex; flex-direction: column; }
-.wk button { font: inherit; color: var(--v-fg); background: var(--v-bg); border: 1px solid var(--v-border); border-radius: var(--v-radius); padding: 6px 14px; cursor: pointer; }
+.wk { --wk-bar: 56px; --wk-side: 380px; --wk-card-r: calc(var(--v-radius) + 4px); font-size: 15px; line-height: 1.5; min-height: 100vh; margin: 0; display: flex; flex-direction: column; background: var(--v-bg); }
+.wk a { color: inherit; }
+.wk button { font: inherit; color: var(--v-fg); background: var(--v-bg); border: 1px solid var(--v-border); border-radius: var(--v-radius); padding: 7px 14px; cursor: pointer; line-height: 1.5; }
 .wk button:hover { background: var(--v-muted-bg); }
 .wk button[disabled] { opacity: .45; cursor: not-allowed; }
-.wk button:focus-visible, .wk a:focus-visible, .wk textarea:focus-visible { outline: 2px solid var(--v-ring); outline-offset: 2px; }
-.wk textarea { width: 100%; font: inherit; color: var(--v-fg); background: var(--v-bg); border: 1px solid var(--v-border); border-radius: var(--v-radius); padding: 8px 10px; resize: vertical; }
-.wk-lead { margin: 0 0 var(--v-space-4); color: var(--v-muted); max-width: 46ch; }
+.wk button[disabled]:hover { background: var(--v-bg); }
+.wk button:focus-visible, .wk a:focus-visible, .wk textarea:focus-visible, .wk summary:focus-visible { outline: 2px solid var(--v-ring); outline-offset: 2px; }
+.wk textarea { width: 100%; font: inherit; color: var(--v-fg); background: var(--v-bg); border: 1px solid var(--v-border); border-radius: var(--v-radius); padding: 8px 10px; resize: vertical; min-height: 44px; }
+.wk textarea::placeholder { color: var(--v-muted); }
+.wk-lead { margin: 0 0 var(--v-space-4); color: var(--v-muted); max-width: 52ch; }
+/* the one filled control per surface: the card's go action when it is the client's turn, the
+   bar's Next/Confirm, the composer's Send */
+.wk .wk-j-cta-primary, .wk [data-wk-role="nav"], .wk .wk-ask-form button[type="submit"] { background: var(--v-primary); color: var(--v-primary-fg); border-color: var(--v-primary); font-weight: 500; }
+.wk .wk-j-cta-primary:hover, .wk [data-wk-role="nav"]:hover:not([disabled]), .wk .wk-ask-form button[type="submit"]:hover { background: color-mix(in srgb, var(--v-primary) 88%, var(--v-bg)); }
+.wk [data-wk-role="nav"][disabled]:hover { background: var(--v-primary); }
+/* labels arrive as kebab file names until the builder humanises them (see the implementation
+   notes): a capital first letter is the one thing CSS can do about it */
+.wk-title::first-letter, .wk-j-title::first-letter, .wk-thumb-cap::first-letter, .wk-caption-h::first-letter, .wk-home strong::first-letter { text-transform: uppercase; }
 
-/* index — a list of journeys, not a grid of cards: the name is the whole choice */
-.wk-index-main { max-width: 40rem; margin: 0 auto; padding: var(--v-space-6) var(--v-space-4) 25vh; }
-.wk-title { margin: 0 0 var(--v-space-2); font-size: 28px; font-weight: 600; letter-spacing: -.01em; }
-.wk-list { display: flex; flex-direction: column; border-top: 1px solid var(--v-border); }
-.wk-j { display: flex; align-items: baseline; gap: var(--v-space-4); padding: var(--v-space-4) var(--v-space-2); border-bottom: 1px solid var(--v-border); color: var(--v-fg); text-decoration: none; }
-.wk-j:hover { background: var(--v-muted-bg); }
-.wk-j-name { font-size: 19px; font-weight: 500; }
-.wk-j-meta { margin-left: auto; font-size: 14px; color: var(--v-muted); white-space: nowrap; }
-.wk-done { color: var(--v-ok); }
+/* ---- index: the journey cards — the product itself, one bounded surface per journey ---- */
+.wk-index-main { width: 100%; max-width: 1180px; margin: 0 auto; padding: var(--v-space-6) clamp(16px, 3vw, 40px) 20vh; }
+.wk-index-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--v-space-6); flex-wrap: wrap; margin-bottom: var(--v-space-6); }
+.wk-title { margin: 0 0 4px; font-size: 26px; font-weight: 600; letter-spacing: -.01em; }
+.wk-index-head .wk-lead { margin: 0; }
+.wk-progress { margin: 0; color: var(--v-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wk-theme { display: inline-block; margin-bottom: var(--v-space-4); }
 
-/* player bar */
-.wk-bar { position: sticky; top: 0; z-index: 5; height: var(--wk-bar); display: flex; align-items: center; gap: var(--v-space-4); padding: 0 var(--v-space-4); background: var(--v-bg); border-bottom: 1px solid var(--v-border); }
-.wk-crumb { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wk-crumb strong { font-weight: 600; }
-.wk-pos { color: var(--v-muted); font-variant-numeric: tabular-nums; }
-.wk-nav { margin-left: auto; display: flex; gap: var(--v-space-2); }
+/* The rail is a fixed four-slot object: --wk-tw is the thumbnail width, fixed per breakpoint and
+   never flexed, so every card shares one silhouette however many screens the journey has. Fewer
+   than four screens leave quiet empty slots on the right; more than four show the first three
+   and a "+N more" tile in the fourth slot. */
+.wk-journeys { --wk-tw: 112px; --wk-th: 74px; --wk-rail: calc(var(--wk-tw) * 4 + var(--v-space-2) * 3);
+  --wk-thumb-vw: 1280px; --wk-thumb-vh: 800px;
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--v-space-4); }
+.wk-journey { display: grid; grid-template-columns: var(--wk-rail) minmax(0, 1fr) 150px; gap: var(--v-space-6); align-items: center;
+  padding: var(--v-space-4) var(--v-space-6) var(--v-space-4) var(--v-space-4); text-decoration: none; color: inherit;
+  background: var(--v-bg); border: 1px solid var(--v-border); border-radius: var(--wk-card-r); box-shadow: var(--v-shadow); }
+.wk-journey:hover { border-color: var(--v-ring); }
+.wk-journey[data-state="unseen"] { box-shadow: none; background: color-mix(in srgb, var(--v-muted-bg) 50%, var(--v-bg)); }
+.wk-j-text { min-width: 0; }
+.wk-j-title { margin: 0 0 2px; font-size: 19px; font-weight: 600; letter-spacing: -.005em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the title is a heading that happens to be clickable: no underline at rest, an underline on
+   hover/focus is its affordance; the action is a button — never underlined, ever */
+.wk-j-title a { text-decoration: none; color: inherit; border-radius: 4px; }
+.wk-j-title a:hover, .wk-j-title a:focus-visible { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1.5px; }
+.wk-j-title a:focus-visible { outline: 2px solid var(--v-ring); outline-offset: 2px; }
+/* name, path-or-sentence, state: the path is one line; the client's own sentence may take two */
+.wk-j-desc { margin: 0; color: var(--v-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wk-j-said { margin: 0; padding-left: var(--v-space-3); border-left: 2px solid var(--v-ok); color: var(--v-fg);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wk-j-state { margin: var(--v-space-2) 0 0; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--v-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wk-j-state::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--v-border); flex: none; }
+.wk-journey[data-state="walking"] .wk-j-state::before { background: var(--v-fg); }
+.wk-journey[data-state="changes-requested"] .wk-j-state::before { background: var(--v-warn); }
+.wk-journey[data-state="fixed"] .wk-j-state::before, .wk-journey[data-state="ok"] .wk-j-state::before { background: var(--v-ok); }
+.wk-journey[data-state="unseen"] .wk-j-state, .wk-journey[data-state="waived"] .wk-j-state { color: var(--v-muted); }
+.wk-j-cta { display: block; text-align: center; text-decoration: none; border: 1px solid var(--v-border); border-radius: var(--v-radius); padding: 7px 14px; white-space: nowrap; color: var(--v-fg); background: var(--v-bg); }
+.wk-j-cta:hover { background: var(--v-muted-bg); text-decoration: none; }
+.wk-j-cta:focus-visible { outline: 2px solid var(--v-ring); outline-offset: 2px; }
+.wk .wk-j-cta[data-primary="true"] { background: var(--v-primary); color: var(--v-primary-fg); border-color: var(--v-primary); font-weight: 500; }
+.wk .wk-j-cta[data-primary="true"]:hover { background: color-mix(in srgb, var(--v-primary) 88%, var(--v-bg)); }
 
-/* panes */
-.wk-main { flex: 1; display: grid; grid-template-columns: var(--wk-spine) minmax(0, 1fr) var(--wk-side); min-height: 0; }
+/* the strip of screen thumbnails — the journey, read left to right; the last screen the client
+   reached carries the one ring, a screen with an open/fixed request carries a dot */
+.wk-slots { display: flex; gap: var(--v-space-2); padding: 0; margin: 0; list-style: none; width: var(--wk-rail); }
+/* document order is the render order: thumbnail, then its caption beneath */
+.wk-slot { width: var(--wk-tw); flex: none; display: flex; flex-direction: column; min-height: calc(var(--wk-th) + 22px); }
+.wk-thumb { position: relative; display: block; height: var(--wk-th); border: 1px solid var(--v-border); border-radius: 4px; background: var(--v-bg); overflow: hidden; }
+.wk-thumb[data-current="true"] { outline: 2px solid var(--v-primary); outline-offset: 1px; }
+/* the tile holds a real desktop render of the mock, scaled down to the tile's own width — never
+   a fragment: --wk-thumb-vw/--wk-thumb-vh are the fixed viewport the mock renders at, the scale
+   is the tile width over that viewport, and .wk-thumb's own overflow crops the bottom */
+.wk-thumb-frame { width: var(--wk-thumb-vw); height: var(--wk-thumb-vh); border: 0; display: block;
+  pointer-events: none; transform-origin: 0 0; transform: scale(calc(var(--wk-tw) / var(--wk-thumb-vw))); }
+.wk-thumb[data-dot="warn"]::after, .wk-thumb[data-dot="ok"]::after { content: ""; position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 2px var(--v-bg); }
+.wk-thumb[data-dot="warn"]::after { background: var(--v-warn); }
+.wk-thumb[data-dot="ok"]::after { background: var(--v-ok); }
+.wk-thumb-cap { display: block; margin: 4px 0 0; font-size: 12px; color: var(--v-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wk-thumb[data-current="true"] + .wk-thumb-cap { color: var(--v-fg); font-weight: 500; }
+.wk-more { display: grid; place-items: center; height: var(--wk-th); background: var(--v-muted-bg); color: var(--v-muted); font-size: 14px; font-weight: 500; text-decoration: none; border-radius: 4px; border: 1px solid var(--v-border); }
+.wk-more:hover { color: var(--v-fg); background: var(--v-bg); }
 
-/* spine — the walk itself: a reached screen reads solid, the current one carries the only
-   accent on the page, an unreached one is an outline waiting to be filled */
-.wk-spine { border-right: 1px solid var(--v-border); padding: var(--v-space-4) var(--v-space-3); display: flex; flex-direction: column; gap: 2px; position: sticky; top: var(--wk-bar); height: calc(100vh - var(--wk-bar)); overflow: auto; }
-.wk .wk-step { text-align: left; border: 0; border-left: 2px solid var(--v-border); border-radius: 0; padding: 8px 12px; color: var(--v-muted); background: transparent; }
-.wk .wk-step:hover { background: var(--v-muted-bg); }
-.wk .wk-seen { color: var(--v-fg); border-left-color: var(--v-fg); }
-.wk .wk-step[aria-current="true"] { color: var(--v-primary); border-left-color: var(--v-primary); border-left-width: 3px; font-weight: 600; background: color-mix(in srgb, var(--v-primary) 6%, transparent); }
+@media (max-width: 1180px) {
+  .wk-journeys { --wk-tw: 88px; --wk-th: 58px; }
+  .wk-journey { gap: var(--v-space-4); grid-template-columns: var(--wk-rail) minmax(0, 1fr) 130px; }
+}
+@media (max-width: 860px) {
+  .wk-journey { grid-template-columns: var(--wk-rail) minmax(0, 1fr); }
+  .wk-j-cta { grid-column: 2; justify-self: start; width: 150px; }
+}
+@media (max-width: 700px) {
+  .wk-index-main { padding: var(--v-space-4) var(--v-space-4) 12vh; }
+  .wk-journeys { --wk-tw: 76px; --wk-th: 50px; }
+  .wk-journey { grid-template-columns: minmax(0, 1fr); padding: var(--v-space-4); gap: var(--v-space-3); }
+  .wk-thumb-cap { font-size: 11px; }
+  .wk-j-cta { grid-column: 1; width: auto; justify-self: stretch; }
+}
 
-/* stage — the framed screen is the hero; the muted ground lets the mock's own white read as a
-   device rather than as the page continuing */
-.wk-stage { background: var(--v-muted-bg); padding: var(--v-space-4); display: flex; flex-direction: column; align-items: center; gap: var(--v-space-3); min-width: 0; }
-.wk-frame { flex: 1; width: 100%; max-width: 100%; min-height: 60vh; border: 1px solid var(--v-border); border-radius: var(--v-radius); background: var(--v-bg); box-shadow: var(--v-shadow); display: block; }
-.wk-states { display: flex; flex-wrap: wrap; gap: var(--v-space-2); justify-content: center; }
-.wk-states button { font-size: 13px; padding: 4px 12px; color: var(--v-muted); }
-.wk-states button[aria-selected="true"] { background: var(--v-primary); color: var(--v-primary-fg); border-color: var(--v-primary); }
+/* ---- composer: one line until it is needed ---- */
+.wk-ask { margin-top: var(--v-space-6); border-top: 1px solid var(--v-border); padding-top: var(--v-space-4); }
+.wk-ask-summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: var(--v-space-3); color: var(--v-muted); }
+.wk-ask-summary::-webkit-details-marker { display: none; }
+.wk-ask-summary b { color: var(--v-fg); font-weight: 500; }
+.wk-ask-plus { width: 22px; height: 22px; border: 1px solid var(--v-border); border-radius: 50%; display: grid; place-items: center; font-size: 16px; line-height: 1; color: var(--v-fg); flex: none; }
+.wk-ask[open] .wk-ask-plus { transform: rotate(45deg); }
+.wk-ask-form { margin: var(--v-space-3) 0 0 calc(22px + var(--v-space-3)); display: grid; gap: var(--v-space-3); max-width: 60ch; justify-items: start; }
+.wk-ask-in { min-height: 72px; }
+.wk-ask-chips { display: flex; gap: var(--v-space-2); flex-wrap: wrap; }
+.wk .wk-ask-chip { border-radius: 999px; background: var(--v-muted-bg); color: var(--v-muted); padding: 4px var(--v-space-3); font-size: 14px; border-color: transparent; }
+.wk .wk-ask-chip:hover { color: var(--v-fg); }
+.wk .wk-ask-chip[aria-pressed="true"] { background: var(--v-primary); color: var(--v-primary-fg); }
 
-/* marks — hairline rows, the same language the notes layer's question rows use; never cards */
-.wk-side { border-left: 1px solid var(--v-border); padding: var(--v-space-4); display: flex; flex-direction: column; gap: var(--v-space-4); position: sticky; top: var(--wk-bar); height: calc(100vh - var(--wk-bar)); overflow: auto; }
-.wk-marks { display: flex; flex-direction: column; }
-.wk-mark { border-bottom: 1px solid var(--v-border); padding: var(--v-space-3) 0; }
-.wk-mark:first-of-type { border-top: 1px solid var(--v-border); }
-.wk-claim { margin: 0 0 var(--v-space-3); }
-.wk-verdicts { display: flex; gap: var(--v-space-2); }
-.wk-why { margin-top: var(--v-space-2); }
-.wk-left { margin: 0; color: var(--v-muted); font-size: 14px; }
-.wk-note { display: flex; flex-direction: column; gap: var(--v-space-2); align-items: flex-start; }
-.wk-note-label { display: block; width: 100%; color: var(--v-muted); font-size: 14px; }
-.wk-note-in { margin-top: var(--v-space-1); }
-
-/* approve — the end of the walk, so it is allowed to be the heaviest control on the page */
-.wk-approve { margin-top: auto; padding-top: var(--v-space-4); border-top: 1px solid var(--v-border); display: flex; flex-direction: column; gap: var(--v-space-3); align-items: flex-start; }
-.wk-approve .wk-lead { margin: 0; }
-.wk .wk-confirm { background: var(--v-primary); color: var(--v-primary-fg); border-color: var(--v-primary); font-weight: 500; }
-.wk .wk-confirm:hover:not([disabled]) { background: color-mix(in srgb, var(--v-primary) 88%, var(--v-bg)); }
-.wk-sentence { margin: 0; padding-left: var(--v-space-3); border-left: 2px solid var(--v-ok); color: var(--v-fg); }
-
-/* The return leg (.wk-req* / .wk-ask*) — specs/20260911/04-the-client-loop.md D10, chrome rule
-   in spec/doctrine/design.md § Design Canon. Two surfaces share this register: the index's
-   request list under its composer, and the same request rows in the player's side panel above
-   the note box. The client reads state first and text second, so state rides the one device this
-   page already uses for it — a 2px left border on --v-warn / --v-ok / --v-border, the same
-   accent .nl-q and .wk-sentence carry. No card, no shadow, no badge: a third restatement of a
-   status the border and the status line already give would be decoration. Every color is an
-   existing --v-* role — no new token, no literal. */
-
-/* the client's receipt — silent until a write answers, then one quiet line */
-.wk-msg { margin: var(--v-space-2) 0 0; color: var(--v-muted); font-size: 14px; }
-
-/* composer — "Something missing?" sits under the journey list, carried on the list's own
-   hairline rather than boxed off from it */
-.wk-ask { margin-top: var(--v-space-6); padding-top: var(--v-space-6); border-top: 1px solid var(--v-border); display: flex; flex-direction: column; gap: var(--v-space-3); align-items: flex-start; }
-.wk-ask-h { margin: 0; font-size: 19px; font-weight: 500; }
-.wk-ask-chips { display: flex; flex-wrap: wrap; gap: var(--v-space-2); }
-.wk .wk-ask-chip { border-radius: 999px; background: var(--v-muted-bg); color: var(--v-muted); padding: 4px var(--v-space-3); font-size: 14px; }
-.wk .wk-ask-chip[aria-pressed="true"] { border-color: var(--v-primary); background: var(--v-primary); color: var(--v-primary-fg); }
-
-/* a journey the session has not walked yet: present in the list so the client sees the whole
-   product, but inert — no link affordance, no hover */
-.wk .wk-j[data-ready="false"] { color: var(--v-muted); cursor: default; }
-.wk .wk-j[data-ready="false"]:hover { background: none; }
-
-/* the request list — hairline rows, newest first */
-.wk-reqs { margin-top: var(--v-space-6); display: flex; flex-direction: column; }
-.wk-reqs-h { margin: 0 0 var(--v-space-2); font-size: 19px; font-weight: 500; }
-.wk-req { border-top: 1px solid var(--v-border); border-left: 2px solid var(--v-border); padding: var(--v-space-3) 0 var(--v-space-3) var(--v-space-3); display: flex; flex-direction: column; gap: var(--v-space-2); align-items: flex-start; }
+/* ---- requests: a log, so hairlines — open/addressed visible, resolved behind the toggle ----
+   One row: the request, its actions on the right; beneath it one muted line saying where it
+   is and where it stands. The left rule is the one status colour: amber we owe you, green it is
+   your turn, gray closed. */
+.wk-reqs { margin-top: var(--v-space-6); }
+.wk-reqs-h { display: flex; align-items: baseline; gap: var(--v-space-4); margin: 0 0 var(--v-space-2); }
+.wk-reqs-title { margin: 0; font-size: 15px; font-weight: 600; }
+.wk-reqs-n { color: var(--v-muted); font-size: 14px; }
+.wk .wk-reqs-toggle { margin-left: auto; font-size: 14px; border-color: transparent; background: transparent; color: var(--v-muted); padding: 4px 8px; }
+.wk .wk-reqs-toggle:hover { color: var(--v-fg); background: var(--v-muted-bg); }
+.wk-req { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: var(--v-space-2); row-gap: var(--v-space-1); align-items: start;
+  border-top: 1px solid var(--v-border); border-left: 2px solid var(--v-border); padding: var(--v-space-3) 0 var(--v-space-3) var(--v-space-3); }
 .wk-req:last-of-type { border-bottom: 1px solid var(--v-border); }
-/* open — we owe them something; addressed — we did something and it is their turn */
 .wk-req[data-status="open"] { border-left-color: var(--v-warn); }
 .wk-req[data-status="addressed"] { border-left-color: var(--v-ok); }
 .wk-req[data-status="resolved"] { color: var(--v-muted); }
-.wk-req-text { margin: 0; color: var(--v-fg); max-width: 46ch; }
+.wk-req-text { margin: 0; grid-column: 1 / 3; grid-row: 1; color: var(--v-fg); max-width: 60ch; }
 .wk-req[data-status="resolved"] .wk-req-text { color: var(--v-muted); }
-.wk-req-where { color: var(--v-muted); font-size: 14px; }
-.wk-req-status { margin: 0; color: var(--v-muted); font-size: 14px; }
-.wk-req-link { color: var(--v-fg); }
-.wk-req-acts { display: flex; flex-wrap: wrap; gap: var(--v-space-2); }
-.wk-req-why { width: 100%; }
+.wk-req-where { grid-column: 1; grid-row: 2; color: var(--v-muted); font-size: 14px; }
+.wk-req-status { margin: 0; grid-column: 2; grid-row: 2; color: var(--v-muted); font-size: 14px; }
+.wk-req-where + .wk-req-status::before { content: "·"; margin-right: var(--v-space-2); }
+.wk-req-link { grid-column: 1 / 3; grid-row: 3; justify-self: start; font-size: 14px; color: var(--v-fg); text-underline-offset: 3px; }
+.wk-req-acts { grid-column: 3; grid-row: 1 / 4; display: flex; flex-wrap: wrap; gap: var(--v-space-2); justify-content: flex-end; margin-left: var(--v-space-6); }
+.wk-req[data-status="resolved"] .wk-req-acts { display: none; }
+/* the "why" box waits until "Still not right" is pressed — the script alone opens and closes it
+   through the `hidden` attribute (`.wk [hidden]` above); no CSS state of its own */
+.wk-req-why { flex-basis: 100%; width: 100%; min-width: 0; margin-top: var(--v-space-1); }
+.wk-msg { margin: var(--v-space-2) 0 0; color: var(--v-muted); font-size: 14px; }
+@media (max-width: 700px) {
+  .wk-ask { margin-top: var(--v-space-4); }
+  .wk-ask-form { margin-left: 0; }
+  .wk-reqs { margin-top: var(--v-space-4); }
+  /* narrow: where and status stack as two short lines instead of wrapping under each other */
+  .wk-req { grid-template-columns: minmax(0, 1fr); }
+  .wk-req-text { grid-column: 1; }
+  .wk-req-where { grid-row: 2; }
+  .wk-req-status { grid-column: 1; grid-row: 3; }
+  .wk-req-where + .wk-req-status::before { content: none; }
+  .wk-req-link { grid-column: 1; grid-row: 4; }
+  .wk-req-acts { grid-column: 1; grid-row: 5; justify-content: flex-start; margin-left: 0; }
+}
 
-/* the same rows in the player's side panel, where 340px is the whole width */
-.wk-side .wk-reqs { margin-top: 0; }
-.wk-side .wk-req-text { max-width: none; }
+/* ---- player bar: home · step indicator · back/next ---- */
+.wk-walk { background: var(--v-muted-bg); }
+.wk-bar { position: sticky; top: 0; z-index: 5; background: var(--v-bg); border-bottom: 1px solid var(--v-border);
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--v-space-6);
+  height: var(--wk-bar); padding: 0 var(--v-space-4); }
+.wk-home { grid-column: 1; text-decoration: none; color: var(--v-muted); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.wk-home:hover { color: var(--v-fg); }
+.wk-home strong { color: var(--v-fg); font-weight: 600; display: inline-block; }
+.wk-nav { grid-column: 3; display: flex; gap: var(--v-space-2); white-space: nowrap; }
 
+/* the step indicator: reached is solid, current carries the one accent, unreached is an outline */
+.wk-steps { grid-column: 2; display: flex; gap: var(--v-space-4); margin: 0; padding: 0; list-style: none; justify-content: center; min-width: 0; overflow: hidden; }
+.wk .wk-step { display: inline-block; color: var(--v-muted); background: none; border: 0; padding: 6px 4px; border-radius: var(--v-radius); white-space: nowrap; }
+.wk .wk-step::first-letter { text-transform: uppercase; }
+.wk .wk-step:hover { background: var(--v-muted-bg); color: var(--v-fg); }
+.wk .wk-step::before { content: ""; display: inline-block; vertical-align: -1px; margin-right: 8px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--v-border); background: transparent; box-sizing: border-box; }
+.wk .wk-step[data-reached="true"] { color: var(--v-fg); }
+.wk .wk-step[data-reached="true"]::before { border-color: var(--v-fg); background: var(--v-fg); }
+.wk .wk-step[data-current="true"] { color: var(--v-primary); font-weight: 600; }
+.wk .wk-step[data-current="true"]::before { border-color: var(--v-primary); background: var(--v-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--v-primary) 18%, transparent); }
+
+/* ---- two zones: the stage, and this screen's panel ---- */
+/* width:100% is load-bearing: .wk is a column flex container and .wk-main's auto side margins
+   would otherwise shrink-wrap it */
+.wk-main { flex: 1; width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) var(--wk-side); gap: var(--v-space-6); padding: var(--v-space-6); max-width: 1600px; margin: 0 auto; align-items: start; box-sizing: border-box; }
+.wk-stage { min-width: 0; }
+/* the screen, as an object: a caption bar it belongs to, a bounded surface, the states it can be in */
+.wk-object { background: var(--v-bg); border: 1px solid var(--v-border); border-radius: var(--wk-card-r); box-shadow: var(--v-shadow); overflow: hidden; margin: 0; }
+.wk-caption { display: flex; align-items: center; gap: var(--v-space-4); padding: 10px var(--v-space-4); border-bottom: 1px solid var(--v-border); background: color-mix(in srgb, var(--v-muted-bg) 60%, var(--v-bg)); }
+.wk-caption-h { margin: 0; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wk-states { margin-left: auto; display: flex; flex-wrap: wrap; gap: 4px; }
+.wk .wk-states button { font-size: 13px; padding: 3px 10px; color: var(--v-muted); border-color: transparent; background: transparent; text-transform: capitalize; }
+.wk .wk-states button:hover { background: var(--v-bg); border-color: var(--v-border); color: var(--v-fg); }
+.wk .wk-states button[aria-selected="true"] { background: var(--v-bg); color: var(--v-fg); border-color: var(--v-border); }
+.wk-frame { min-height: 62vh; width: 100%; border: 0; display: block; background: var(--v-bg); }
+
+/* the sign-off block: the end of the walk, in the stage above the screen so it is the first
+   thing seen; the Confirm control itself is the bar's one nav button */
+.wk-signoff { background: var(--v-bg); border: 1px solid var(--v-border); border-radius: var(--wk-card-r); box-shadow: var(--v-shadow);
+  padding: var(--v-space-4) var(--v-space-6); margin: 0 0 var(--v-space-4); }
+.wk-signoff .wk-lead { margin: 0 0 var(--v-space-2); max-width: none; color: var(--v-fg); font-weight: 500; }
+.wk-sentence-in { min-height: 44px; }
+.wk-sentence { margin: 0; padding-left: var(--v-space-3); border-left: 2px solid var(--v-ok); color: var(--v-fg); }
+
+/* ---- panel: what this screen needs from the client — our guesses, their requests, a note ----
+   Each is one card; inside a card, rows are hairlines. The side's own gap is carried by the
+   cards' margins so the guesses card can be drawn from two siblings (.wk-marks + .wk-left). */
+.wk-side { display: flex; flex-direction: column; gap: 0; position: sticky; top: calc(var(--wk-bar) + var(--v-space-6)); min-width: 0; }
+.wk-marks { display: flex; flex-direction: column; background: var(--v-bg); border: 1px solid var(--v-border); border-bottom: 0; border-radius: var(--wk-card-r) var(--wk-card-r) 0 0; box-shadow: var(--v-shadow); padding: var(--v-space-4) var(--v-space-4) 0; }
+.wk-marks:not(:has(.wk-mark:not([hidden]))) { display: none; }
+.wk-mark { padding: 0 0 var(--v-space-3); margin: 0 0 var(--v-space-3); border-bottom: 1px solid var(--v-border); }
+.wk-mark:not(:has(~ .wk-mark:not([hidden]))) { border-bottom: 0; padding-bottom: 0; }
+.wk-claim { margin: 0 0 var(--v-space-2); }
+.wk-verdicts { display: flex; gap: var(--v-space-2); flex-wrap: wrap; }
+.wk-why { margin-top: var(--v-space-2); }
+.wk-left { margin: 0 0 var(--v-space-4); padding: 0 var(--v-space-4) var(--v-space-4); color: var(--v-muted); font-size: 14px; background: var(--v-bg); border: 1px solid var(--v-border); border-top: 0; border-radius: 0 0 var(--wk-card-r) var(--wk-card-r); box-shadow: var(--v-shadow); }
+.wk-marks:not(:has(.wk-mark:not([hidden]))) + .wk-left { border-top: 1px solid var(--v-border); border-radius: var(--wk-card-r); padding-top: var(--v-space-4); }
+.wk-side .wk-reqs { margin: 0 0 var(--v-space-4); background: var(--v-bg); border: 1px solid var(--v-border); border-radius: var(--wk-card-r); box-shadow: var(--v-shadow); padding: var(--v-space-2) var(--v-space-4); }
+.wk-side .wk-reqs:not(:has(.wk-req:not([hidden]))) { display: none; }
+.wk-side .wk-req { grid-template-columns: minmax(0, 1fr); border-top: 0; border-bottom: 1px solid var(--v-border); }
+.wk-side .wk-req:last-of-type { border-bottom: 0; }
+.wk-side .wk-req-text { grid-column: 1; max-width: none; }
+.wk-side .wk-req-status { grid-column: 1; }
+.wk-side .wk-req-acts { grid-column: 1; grid-row: 3; justify-content: flex-start; margin-left: 0; margin-top: var(--v-space-1); }
+.wk-note { margin: 0 0 var(--v-space-4); background: var(--v-bg); border: 1px solid var(--v-border); border-radius: var(--wk-card-r); box-shadow: var(--v-shadow); padding: var(--v-space-4); display: flex; flex-direction: column; gap: var(--v-space-2); align-items: flex-start; }
+.wk-note-label { display: block; width: 100%; color: var(--v-muted); font-size: 14px; }
+.wk-note-in { margin-top: 6px; }
+.wk-exclusions { margin: 0 0 var(--v-space-4); background: var(--v-bg); border: 1px solid var(--v-border); border-radius: var(--wk-card-r); box-shadow: var(--v-shadow); padding: var(--v-space-2) var(--v-space-4); }
+.wk-exclusions:not(:has(.wk-excl)) { display: none; }
+.wk-excl { padding: var(--v-space-3) 0; border-bottom: 1px solid var(--v-border); }
+.wk-excl:last-child { border-bottom: 0; }
+.wk-excl-claim { margin: 0 0 var(--v-space-2); }
+.wk-side .wk-msg { margin: 0; }
+
+@media (max-width: 1180px) {
+  .wk { --wk-side: 300px; }
+  .wk-main { gap: var(--v-space-4); padding: var(--v-space-4); }
+  .wk-frame { min-height: 56vh; }
+}
 @media (max-width: 900px) {
-  .wk-main { grid-template-columns: var(--wk-spine) minmax(0, 1fr); }
-  .wk-side { grid-column: 1 / -1; position: static; height: auto; border-left: 0; border-top: 1px solid var(--v-border); }
-  .wk-approve { margin-top: var(--v-space-4); }
+  .wk-main { grid-template-columns: minmax(0, 1fr); }
+  .wk-side { position: static; }
+  .wk-steps { gap: var(--v-space-2); }
+  .wk .wk-step { padding: 6px; }
 }
 @media (max-width: 600px) {
-  .wk-main { grid-template-columns: minmax(0, 1fr); }
-  .wk-spine { position: static; height: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--v-border); padding: var(--v-space-2) var(--v-space-3); }
-  .wk .wk-step { border-left: 0; border-bottom: 2px solid var(--v-border); white-space: nowrap; }
-  .wk .wk-seen { border-bottom-color: var(--v-fg); }
-  .wk .wk-step[aria-current="true"] { border-left-width: 0; border-bottom-width: 3px; border-bottom-color: var(--v-primary); }
-  .wk-stage { padding: var(--v-space-2); }
-  .wk-frame { min-height: 70vh; }
-  .wk-index-main { padding: var(--v-space-4) var(--v-space-3) 20vh; }
-  .wk-ask { margin-top: var(--v-space-4); padding-top: var(--v-space-4); }
-  .wk-reqs { margin-top: var(--v-space-4); }
+  .wk-bar { grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--v-space-3); padding: 0 var(--v-space-3); }
+  .wk-steps { display: none; }
+  .wk .wk-arrow { padding: 7px 10px; }
+  .wk-main { padding: var(--v-space-3); }
+  .wk-frame { min-height: 60vh; }
+  .wk-caption { flex-wrap: wrap; gap: var(--v-space-2); }
+  .wk-states { margin-left: 0; width: 100%; }
+  .wk-signoff { padding: var(--v-space-4); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .wk-ask-plus { transition: transform .15s ease; }
+  .wk .wk-step, .wk .wk-states button, .wk-journey { transition: background .12s ease, border-color .12s ease; }
 }

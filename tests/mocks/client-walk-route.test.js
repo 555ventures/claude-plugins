@@ -255,7 +255,12 @@ test('AC-20260911-04-4: POST /client/__walk/confirm refuses 409 while the journe
   }
 })
 
-test('AC-20260911-04-5: GET /client/index.html renders a walked journey as a linked row and an unwalked one as a hrefless "Coming soon" span keyed off status.json\'s per-journey walked flag', async () => {
+// specs/20260911/04-the-client-loop.md D15 (amended, JJ's ruling 2026-09-11): a journey is
+// listed only when its page exists on disk — every declared screen has a
+// design/mocks/<label>.html — never when status.json's `walked` flag says so. The `Coming soon`
+// string, the `data-ready` attribute, and the `<span data-cl="journey">` not-ready branch are
+// retired outright: an unready journey renders NO row of any kind, linked or not.
+test('AC-20260911-04-5: GET /client/index.html lists a journey only when its declared screens exist on disk as design/mocks/<label>.html, never by status.json\'s walked flag, and a --reopen-cleared walked flag leaves an on-disk journey still linked', async () => {
   const dir = tmpdir('client-index-ready')
   writeFile(path.join(dir, 'design/mocks/seed.md'), `# Seed — Ready Test
 
@@ -272,25 +277,68 @@ Mika checks a plan.
 plan
 \`\`\`
 `)
-  writeJSON(path.join(dir, 'design/mocks/status.json'), { journeys: { onboarding: { walked: true } } })
+  writeFile(path.join(dir, 'design/mocks/signin.html'), '<main data-screen-label="signin">signin</main>\n')
   const port = await freePort()
   const { stop } = await serveAtlas(dir, { port })
   try {
     const res = await getJson('http://127.0.0.1:' + port + '/client/index.html')
     assert.strictEqual(res.status, 200, 'AC-5: GET /client/index.html must answer 200: got ' + res.status)
-    assert.strictEqual((res.text.match(/<a[^>]*data-cl="journey"[^>]*>/g) || []).length, 1,
-      'AC-5: exactly one journey (the walked one, onboarding) must render as a linked <a data-cl="journey"> row — the ready set is unbuilt: got\n' + res.text)
-    const spanMatch = /<span[^>]*data-cl="journey"[^>]*data-ready="false"[^>]*>([\s\S]*?)<\/span>/.exec(res.text)
-    assert.ok(spanMatch, 'AC-5: an unwalked journey (billing) must render as <span data-cl="journey" data-ready="false">: got\n' + res.text)
-    assert.ok(!/href=/.test(spanMatch[0]),
-      'AC-5: the unwalked journey\'s span must carry no href: got ' + spanMatch[0])
-    assert.match(spanMatch[1], /Coming soon/,
-      'AC-5: the unwalked journey\'s row must read "Coming soon": got ' + spanMatch[1])
+    // D23 (amended AC-5): the journey card is a container, not a link — `[data-cl="journey"]` is
+    // now an `<li>` that CONTAINS a link to the walk page, never an `<a>` itself.
+    const rows = res.text.match(/<li[^>]*data-cl="journey"[^>]*>/g) || []
+    assert.strictEqual(rows.length, 1,
+      'AC-5: exactly one journey (onboarding, whose screen exists on disk) must render as a <li data-cl="journey"> row — the disk-derived ready set is unbuilt: got\n' + res.text)
+    assert.match(res.text, /href="\/client\/walk\/onboarding\.html"/,
+      'AC-5: the onboarding card must contain a link to /client/walk/onboarding.html (D23: the card is a container, not a link): got\n' + res.text)
+    assert.doesNotMatch(res.text, /billing/i,
+      'AC-5: billing has no drawn screen and must be absent from the page entirely — D15 retires the not-ready row, not just its link: got\n' + res.text)
+    assert.doesNotMatch(res.text, /Coming soon/,
+      'AC-5: "Coming soon" is retired in the same build: got\n' + res.text)
+    assert.doesNotMatch(res.text, /data-ready/,
+      'AC-5: the data-ready attribute is retired in the same build: got\n' + res.text)
+    assert.doesNotMatch(res.text, /<span[^>]*data-cl="journey"/,
+      'AC-5: the <span data-cl="journey"> not-ready branch is retired in the same build: got\n' + res.text)
 
-    fs.unlinkSync(path.join(dir, 'design/mocks/status.json'))
+    // D15's own executed proof: --reopen walk:<j> clears status.json's per-journey walked flag
+    // while the drawn mocks stay on disk — the client must still see onboarding as a linked row.
+    writeJSON(path.join(dir, 'design/mocks/status.json'), { journeys: { onboarding: { walked: false } } })
     const res2 = await getJson('http://127.0.0.1:' + port + '/client/index.html')
-    assert.strictEqual((res2.text.match(/data-ready="false"/g) || []).length, 2,
-      'AC-5: with no status.json at all, BOTH journeys must render as not-ready spans (absent file → empty ready set): got\n' + res2.text)
+    const rows2 = res2.text.match(/<li[^>]*data-cl="journey"[^>]*>/g) || []
+    assert.strictEqual(rows2.length, 1,
+      'AC-5: a --reopen-cleared walked flag must not remove onboarding from the list — the page still exists on disk, so `walked` is not consulted: got\n' + res2.text)
+  } finally {
+    await stop()
+  }
+})
+
+// specs/20260911/04-the-client-loop.md D16 (new): the route half — resolveNote's existing
+// `withdrawn` resolution and the WITHDRAW_REASONS enum, exercised here through the served
+// route the client's own "Never mind" control posts to. Green pre-change on the mechanism
+// (specs/20260910/05's D3 shipped it); red on the consequence D16 adds — a withdrawn note must
+// stop blocking confirm the same way a resolved one already does.
+test('AC-20260911-04-16: POST /client/__notes/resolve withdraws an open client-origin note (200, resolution:"withdrawn"), and a subsequent POST /client/__walk/confirm on that journey succeeds instead of 409', async () => {
+  const dir = tmpdir('client-notes-withdraw-confirm')
+  advanceToSeedDone(dir)
+  writeNotesFile(dir, [baseNote({ id: 'N010', screen: LABELS[1], status: 'open' })])
+  const port = await freePort()
+  const { stop } = await serveAtlas(dir, { port })
+  try {
+    const blocked = await postJson('http://127.0.0.1:' + port + '/client/__walk/confirm', { journey: JOURNEY, sentence: 'Looks right' })
+    assert.strictEqual(blocked.status, 409,
+      'AC-16 setup: confirm must 409 while the note this test withdraws is still open — otherwise the withdraw never has anything to unblock: got ' + blocked.status + ' ' + JSON.stringify(blocked.body))
+
+    const withdrawn = await postJson('http://127.0.0.1:' + port + '/client/__notes/resolve',
+      { id: 'N010', by: 'client', reason: 'not-needed' })
+    assert.strictEqual(withdrawn.status, 200,
+      'AC-16: withdrawing an open client-origin note through the served client route must answer 200: got ' + withdrawn.status + ' ' + JSON.stringify(withdrawn.body))
+    assert.strictEqual(withdrawn.body && withdrawn.body.resolution, 'withdrawn',
+      'AC-16: withdrawing an open note must record resolution:"withdrawn": got ' + JSON.stringify(withdrawn.body))
+
+    const confirmed = await postJson('http://127.0.0.1:' + port + '/client/__walk/confirm', { journey: JOURNEY, sentence: 'Looks right' })
+    assert.strictEqual(confirmed.status, 200,
+      'AC-16: once the blocking note is withdrawn, confirm must succeed rather than 409 — a note left "open" would still report changes-requested and re-block it: got ' + confirmed.status + ' ' + JSON.stringify(confirmed.body))
+    assert.ok(confirmed.body && confirmed.body.confirmedAt,
+      'AC-16: a successful confirm after a withdraw must record a fresh confirmedAt: got ' + JSON.stringify(confirmed.body))
   } finally {
     await stop()
   }

@@ -4,7 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
-const { SPEC } = require('../helpers')
+const { SPEC, read } = require('../helpers')
 
 // specs/20260910/03-client-journey-player.md D1 (spec/scripts/lib/walk-page.js's
 // buildClientIndex/buildWalkPage) and D3 (spec/scripts/lib/walk.browser.js) do not exist yet —
@@ -68,6 +68,16 @@ function parseFlatDom(html) {
       if (!node.hasAttribute(m[1])) return false
       if (m[2] !== undefined && node.getAttribute(m[1]) !== m[2]) return false
     }
+    // D16 repair: walk.browser.js's own withdraw handler selects its status line by class
+    // (`.wk-req-status`) — every prior test in this shim only ever needed tag+bracket-attribute
+    // compounds, so `.class` tokens were never matched at all (silently matching every node, the
+    // classic "no selector text left to check" shim bug). Real class-list matching, added here
+    // rather than in the shim's caller, since it is a gap in the shim's own contract.
+    const classRe = /\.([-\w]+)/g
+    while ((m = classRe.exec(rest))) {
+      const classes = (node.getAttribute('class') || '').split(/\s+/).filter(Boolean)
+      if (!classes.includes(m[1])) return false
+    }
     return true
   }
   const allNodes = []
@@ -107,6 +117,9 @@ function parseFlatDom(html) {
       querySelectorAll(sel) { return queryAll(this, sel) },
       click() { for (const h of (this._handlers.click || [])) h({ target: this, preventDefault() {} }) },
       submit() { for (const h of (this._handlers.submit || [])) h({ target: this, preventDefault() {} }) },
+      // AC-20260911-04-24: walk.browser.js's mark handler calls whyEl.focus() on first press —
+      // no-op here, the shim has no real focus concept to assert against.
+      focus() {},
     }
     Object.defineProperty(node, 'hidden', {
       get() { return this.hasAttribute('hidden') },
@@ -268,6 +281,16 @@ function runIndexBrowser(html, routeStub) {
   return { document, posts }
 }
 
+// D23 decides the fork D20 left open: Send is the composer's real `<form>` submit, never also a
+// button click handler (one click must post exactly once in a real browser). Under this flat-DOM
+// shim a button click does not itself dispatch a `submit` event on its form (there is no real
+// layout/DOM-spec engine here), so the single real path is exercised by submitting the form node
+// directly — the same node walk.browser.js's own `on(askForm, 'submit', submitAsk)` listens on.
+function clickSend(askRoot) {
+  const form = askRoot.querySelector('form') || askRoot
+  form.submit()
+}
+
 test('AC-20260911-04-6: buildClientIndex renders a journey\'s derived state, the "something missing?" composer, and every client request with its own status line and controls, newest first, session-origin excluded', () => {
   const seed = { product: 'Hearwell', journeys: [{ name: 'onboarding', title: 'Onboarding', screens: [{ label: 'invite', states: [] }] }] }
   const notes = [
@@ -293,12 +316,15 @@ test('AC-20260911-04-6: buildClientIndex renders a journey\'s derived state, the
   assert.match(html, /Changes requested \(1\)/,
     'AC-6: the row must render the count-bearing state text "Changes requested (1)": got\n' + html)
 
-  const formMatch = /<form[^>]*data-cl="ask"[\s\S]*?<\/form>/.exec(html)
-  assert.ok(formMatch, 'AC-6: buildClientIndex must render <form data-cl="ask"> (the "Something missing?" composer): got\n' + html)
-  assert.match(formMatch[0], /<textarea/, 'AC-6: the ask form must carry a textarea: got\n' + formMatch[0])
-  const chips = [...formMatch[0].matchAll(/data-cl="reason"[^>]*data-value="([^"]+)"/g)].map((m) => m[1]).sort()
+  // D20 relocation (2026-09-11 redesign): the composer's data-cl="ask" moved from a bare <form>
+  // onto a collapsed <details> wrapper (AC-20) — the textarea/chip assertions below are the same
+  // AC-6 coverage, just captured off the new wrapper tag, never weakened.
+  const askMatch = /<details[^>]*data-cl="ask"[\s\S]*?<\/details>/.exec(html)
+  assert.ok(askMatch, 'AC-6: buildClientIndex must render <details data-cl="ask"> (the "Something missing?" composer): got\n' + html)
+  assert.match(askMatch[0], /<textarea/, 'AC-6: the composer must carry a textarea: got\n' + askMatch[0])
+  const chips = [...askMatch[0].matchAll(/data-cl="reason"[^>]*data-value="([^"]+)"/g)].map((m) => m[1]).sort()
   assert.deepStrictEqual(chips, ['missing-screen', 'other'],
-    'AC-6: the ask form must carry exactly the two reason chips missing-screen/other: got ' + JSON.stringify(chips))
+    'AC-6: the composer must carry exactly the two reason chips missing-screen/other: got ' + JSON.stringify(chips))
 
   const sectionMatch = /<section[^>]*data-cl="requests"[\s\S]*?<\/section>/.exec(html)
   assert.ok(sectionMatch, 'AC-6: buildClientIndex must render <section data-cl="requests">: got\n' + html)
@@ -370,13 +396,13 @@ test('AC-20260911-04-8: under the vm shim, the client index\'s ask form posts a 
     '/client/__notes/add': { ok: true, json: () => Promise.resolve({ id: 'N007' }) },
   })
   const askForm = document.querySelector('[data-cl="ask"]')
-  assert.ok(askForm, 'AC-8: buildClientIndex must render <form data-cl="ask">: got\n' + html)
+  assert.ok(askForm, 'AC-8: buildClientIndex must render [data-cl="ask"] (D20: a <details>, not a <form>): got\n' + html)
   const textarea = askForm.querySelector('textarea')
   const chip = document.querySelector('[data-cl="reason"][data-value="missing-screen"]')
   assert.ok(chip, 'AC-8: the missing-screen reason chip must render: got\n' + html)
   textarea.value = 'No reset screen'
   chip.click()
-  askForm.submit()
+  clickSend(askForm)
   await flush()
 
   const postCall = posts.find((p) => p.url.includes('/client/__notes/add'))
@@ -399,7 +425,7 @@ test('AC-20260911-04-8: under the vm shim, the client index\'s ask form posts a 
   const askForm2 = doc2.querySelector('[data-cl="ask"]')
   const textarea2 = askForm2.querySelector('textarea')
   textarea2.value = 'No reset screen'
-  askForm2.submit()
+  clickSend(askForm2)
   await flush()
   assert.strictEqual(textarea2.value, 'No reset screen', 'AC-8: an ok:false save must keep the typed text: got "' + textarea2.value + '"')
   assert.strictEqual(doc2.querySelectorAll('[data-cl="request"]').length, 0, 'AC-8: an ok:false save must insert nothing: got ' + doc2.querySelectorAll('[data-cl="request"]').length)
@@ -467,6 +493,379 @@ test('AC-20260911-04-9: under the vm shim on the walk page, accept/reopen post t
 })
 
 // ---------------------------------------------------------------------------
+// specs/20260911/04-the-client-loop.md D16/D17 (amended/new, JJ's ruling and Fable's finding,
+// both 2026-09-11). D16: an open client request gains a "Never mind" withdraw control on both
+// surfaces. D17: the walk page's accept control byte-matches the index's own "Looks good", and
+// every request article additionally names its location. AC-20260911-04-16, AC-20260911-04-17.
+// ---------------------------------------------------------------------------
+
+test('AC-20260911-04-16: buildClientIndex and buildWalkPage render a "Never mind" withdraw control on an open client request only, never on an addressed or resolved one', () => {
+  const seed = onboardingSeed([{ label: 'invite', states: [] }])
+  const openNote = clientNote({ id: 'N010', scope: 'mock', screen: 'invite', text: 'Wrong color', status: 'open' })
+  const addressedNote = clientNote({
+    id: 'N011', scope: 'mock', screen: 'invite', text: 'Wrong color', status: 'addressed',
+    addressed: { at: NOW, change: 'Fixed the color', ledgerRow: null },
+  })
+  const resolvedNote = clientNote({
+    id: 'N012', scope: 'mock', screen: 'invite', text: 'Wrong color', status: 'resolved', resolution: 'withdrawn',
+  })
+
+  const indexHtml = buildClientIndex({
+    seed, notes: [openNote, addressedNote, resolvedNote], ledger: [], walk: { journeys: {} }, prefix: '',
+    ready: new Set(['onboarding']),
+  })
+  const indexArticles = [...indexHtml.matchAll(/<article[^>]*data-cl="request"[\s\S]*?<\/article>/g)].map((m) => m[0])
+  const indexOpen = indexArticles.find((a) => a.includes('data-id="N010"'))
+  const indexAddressed = indexArticles.find((a) => a.includes('data-id="N011"'))
+  const indexResolved = indexArticles.find((a) => a.includes('data-id="N012"'))
+  assert.ok(indexOpen, 'AC-16 setup: the open note must render as a request article: got\n' + indexHtml)
+  assert.match(indexOpen, /<button[^>]*data-cl="withdraw">Never mind<\/button>/,
+    'AC-16: an open request on the index must render [data-cl="withdraw"] reading exactly "Never mind": got\n' + indexOpen)
+  assert.doesNotMatch(indexAddressed, /data-cl="withdraw"/,
+    'AC-16: an addressed request on the index must render no withdraw control — it already has accept/reopen: got\n' + indexAddressed)
+  assert.doesNotMatch(indexResolved, /data-cl="withdraw"/,
+    'AC-16: a resolved request on the index must render no withdraw control — there is nothing left to take back: got\n' + indexResolved)
+
+  const walkOpenHtml = buildWalkPage({ seed, journey: 'onboarding', notes: [openNote], ledger: [], walk: { journeys: {} }, prefix: '' })
+  const walkOpenArticle = /<article[^>]*data-wk="request"[\s\S]*?<\/article>/.exec(walkOpenHtml)
+  assert.ok(walkOpenArticle, 'AC-16: buildWalkPage must render a request card for the open note: got\n' + walkOpenHtml)
+  assert.match(walkOpenArticle[0], /<button[^>]*data-wk="withdraw">Never mind<\/button>/,
+    'AC-16: the walk page\'s open request card must render [data-wk="withdraw"] reading exactly "Never mind": got\n' + walkOpenArticle[0])
+
+  const walkAddressedHtml = buildWalkPage({ seed, journey: 'onboarding', notes: [addressedNote], ledger: [], walk: { journeys: {} }, prefix: '' })
+  const walkAddressedArticle = /<article[^>]*data-wk="request"[\s\S]*?<\/article>/.exec(walkAddressedHtml)
+  assert.doesNotMatch(walkAddressedArticle[0], /data-wk="withdraw"/,
+    'AC-16: the walk page\'s addressed request card must render no withdraw control: got\n' + walkAddressedArticle[0])
+})
+
+test('AC-20260911-04-16: under the vm shim, clicking the walk page\'s withdraw control posts the resolve-with-reason route and, on ok:true, sets the card resolved with status text "Closed"', async () => {
+  const seed = onboardingSeed([{ label: 'invite', states: [] }])
+  const openNote = clientNote({ id: 'N010', scope: 'mock', screen: 'invite', text: 'Wrong color', status: 'open' })
+  const html = buildWalkPage({ seed, journey: 'onboarding', notes: [openNote], ledger: [], walk: { journeys: {} }, prefix: '' })
+  const harness = runWalkBrowserRouted(html, { reached: ['invite'], misses: [], confirmedAt: null, sentence: null },
+    { '/client/__notes/resolve': { ok: true } })
+  await flush()
+  const article = harness.document.querySelector('[data-wk="request"][data-id="N010"]')
+  assert.ok(article, 'AC-16 setup: buildWalkPage must render the open request card: got\n' + html)
+  const withdrawBtn = article.querySelector('[data-wk="withdraw"]')
+  assert.ok(withdrawBtn, 'AC-16: the open request card must carry [data-wk="withdraw"]: got ' + JSON.stringify(article.attrs))
+  withdrawBtn.click()
+  await flush()
+
+  const post = harness.posts.find((p) => p.url.includes('/client/__notes/resolve'))
+  assert.ok(post, 'AC-16: clicking withdraw must POST /client/__notes/resolve: got posts=' + JSON.stringify(harness.posts))
+  assert.deepStrictEqual(JSON.parse(post.init.body), { id: 'N010', by: 'client', reason: 'not-needed' },
+    'AC-16: the withdraw POST body must carry {id, by:"client", reason:"not-needed"}: got ' + post.init.body)
+  assert.strictEqual(article.getAttribute('data-status'), 'resolved',
+    'AC-16: withdrawing must set data-status="resolved" on ok:true: got ' + article.getAttribute('data-status'))
+  const statusEl = article.querySelector('.wk-req-status')
+  assert.ok(statusEl, 'AC-16 setup: the request card must carry a .wk-req-status line: got ' + JSON.stringify(article.attrs))
+  assert.strictEqual(statusEl.textContent, 'Closed',
+    'AC-16: withdrawing must set the card\'s status line text to "Closed": got "' + statusEl.textContent + '"')
+})
+
+test('AC-20260911-04-17: buildWalkPage\'s accept control reads exactly "Looks good" and never "Looks good now", and buildClientIndex names each request\'s location — "on <screen>" for a mock-scope request, "across the whole product" for a project-scope one', () => {
+  const seed = onboardingSeed([{ label: 'invite', states: [] }])
+  const addressedNote = clientNote({
+    id: 'N020', scope: 'mock', screen: 'invite', text: 'Wrong copy', status: 'addressed',
+    addressed: { at: NOW, change: 'Fixed the copy', ledgerRow: null },
+  })
+  const walkHtml = buildWalkPage({ seed, journey: 'onboarding', notes: [addressedNote], ledger: [], walk: { journeys: {} }, prefix: '' })
+  assert.match(walkHtml, /data-wk="accept">Looks good<\/button>/,
+    'AC-17: the walk page\'s accept control must read exactly "Looks good": got\n' + walkHtml)
+  assert.doesNotMatch(walkHtml, /Looks good now/,
+    'AC-17: "Looks good now" is retired — the walk page must byte-match the index\'s own wording: got\n' + walkHtml)
+
+  const mockNote = clientNote({ id: 'N021', scope: 'mock', screen: 'invite', text: 'Wrong copy', status: 'open' })
+  const projectNote = clientNote({ id: 'N022', scope: 'project', screen: null, text: 'No password reset screen', status: 'open' })
+  const indexHtml = buildClientIndex({
+    seed, notes: [mockNote, projectNote], ledger: [], walk: { journeys: {} }, prefix: '', ready: new Set(['onboarding']),
+  })
+  const articles = [...indexHtml.matchAll(/<article[^>]*data-cl="request"[\s\S]*?<\/article>/g)].map((m) => m[0])
+  const mockArticle = articles.find((a) => a.includes('data-id="N021"'))
+  const projectArticle = articles.find((a) => a.includes('data-id="N022"'))
+  assert.ok(mockArticle && projectArticle, 'AC-17 setup: both requests must render as articles: got\n' + indexHtml)
+  assert.match(mockArticle, /<span class="wk-req-where">on invite<\/span>/,
+    'AC-17: a mock-scope request on invite must name its location as "on invite": got\n' + mockArticle)
+  assert.match(projectArticle, /<span class="wk-req-where">across the whole product<\/span>/,
+    'AC-17: a project-scope request must name its location as "across the whole product": got\n' + projectArticle)
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260911/04-the-client-loop.md D18-D22 (JJ's owner-approved replacement design; D18:
+// design/client-mocks/index.html and walk.html are the binding reference — where these ACs and
+// the mock disagree, the mock is the design). D19: the index journey row becomes a bounded card
+// with a fixed four-slot thumbnail rail, one title/desc/state text column and one go action. D20:
+// the composer collapses into a closed <details>, the request log moves below the cards and hides
+// resolved items behind a toggle, showing a "waiting" count. D21: the 200px spine is replaced by a
+// step indicator in the bar and a caption; the separate approve section is deleted, replaced by a
+// confirm control and sign-off block inside the stage on the last screen only. D22: the retired
+// wk-spine/wk-approve register and the bare-count [data-wk="left"] overwrite carry zero live
+// mentions. Unbuilt against the pre-image (still the pre-D18-22 row/spine/approve shapes): every
+// test below is red until the sibling build round lands. AC-20260911-04-18, -19, -20, -21, -22.
+// ---------------------------------------------------------------------------
+
+// Journey cards render as flat siblings, never nested inside one another, so one card's own
+// markup is simply the slice of html from its own opening tag (found by walking back to the
+// nearest "<" before its data-cl="journey" attribute, since D19 does not pin the card's tag name)
+// to the next card's opening tag — or, for the last card, to the first non-card marker that
+// follows the list (the composer or the request log, in either order).
+function journeyCards(html) {
+  const attrPositions = [...html.matchAll(/data-cl="journey"/g)].map((m) => m.index)
+  const tagStarts = attrPositions.map((p) => html.lastIndexOf('<', p))
+  const afterMatch = /<[^>]*data-cl="(?:ask|requests)"/.exec(html)
+  const fallbackEnd = afterMatch ? afterMatch.index : html.length
+  return tagStarts.map((start, i) => html.slice(start, i + 1 < tagStarts.length ? tagStarts[i + 1] : fallbackEnd))
+}
+
+// A resolved-vs-visible check needs the ARTICLE's own opening tag only — an addressed request's
+// nested reopen textarea legitimately carries its own `hidden` attribute (D17's mock: the "why"
+// box stays hidden until "Still not right" is clicked), so scanning the whole article body for
+// the word "hidden" would false-positive on that unrelated child.
+function openTagOf(el) {
+  const m = /^<[a-zA-Z][\w-]*[^>]*>/.exec(el)
+  return m ? m[0] : el
+}
+
+test('AC-20260911-04-18: buildClientIndex renders each ready journey as one card with a fixed four-slot thumbnail rail — filling only as many thumbs as it has screens, up to three plus a "+n more" tile — and exactly one title/desc/state/go element', () => {
+  const screensOf = (n) => Array.from({ length: n }, (_, i) => ({ label: 's' + (i + 1), states: [] }))
+  const journeys = [1, 3, 4, 8].map((n) => ({ name: 'j' + n, title: 'Journey ' + n, screens: screensOf(n) }))
+  const seed = { product: 'Hearwell', journeys }
+  const html = buildClientIndex({ seed, notes: [], ledger: [], walk: { journeys: {} }, prefix: '', ready: new Set(journeys.map((j) => j.name)) })
+  const cards = journeyCards(html)
+  assert.strictEqual(cards.length, 4, 'AC-18 setup: all four journeys must render as ready cards — D19 is unbuilt: got ' + cards.length + ' in\n' + html)
+
+  const expected = {
+    j1: { thumbs: 1, more: 0 },
+    j3: { thumbs: 3, more: 0 },
+    j4: { thumbs: 4, more: 0 },
+    j8: { thumbs: 3, more: 1, moreText: '+5 more' },
+  }
+  for (const j of journeys) {
+    const card = cards.find((c) => c.includes(j.title))
+    assert.ok(card, 'AC-18: a card for "' + j.title + '" must render: got\n' + html)
+    const slotCount = (card.match(/data-cl="slot"/g) || []).length
+    assert.strictEqual(slotCount, 4, 'AC-18: every card must carry exactly four [data-cl="slot"] elements — got ' + slotCount + ' for ' + j.name + ':\n' + card)
+    const thumbCount = (card.match(/data-cl="thumb"/g) || []).length
+    const moreCount = (card.match(/data-cl="more"/g) || []).length
+    const exp = expected[j.name]
+    assert.strictEqual(thumbCount, exp.thumbs,
+      'AC-18: ' + j.name + ' (' + j.screens.length + ' screens) must render ' + exp.thumbs + ' [data-cl="thumb"] slot(s): got ' + thumbCount + ':\n' + card)
+    assert.strictEqual(moreCount, exp.more,
+      'AC-18: ' + j.name + ' must render ' + exp.more + ' [data-cl="more"] tile(s): got ' + moreCount + ':\n' + card)
+    if (exp.moreText) {
+      assert.ok(card.includes(exp.moreText),
+        'AC-18: the 8-screen card\'s more tile must read "+5 more" (8 screens, 3 shown as thumbs): got\n' + card)
+    }
+    const goCount = (card.match(/data-cl="go"/g) || []).length
+    assert.strictEqual(goCount, 1, 'AC-18: every card must carry exactly one [data-cl="go"] action: got ' + goCount + ' for ' + j.name + ':\n' + card)
+    for (const attr of ['title', 'desc', 'state']) {
+      const c = (card.match(new RegExp('data-cl="' + attr + '"', 'g')) || []).length
+      assert.strictEqual(c, 1, 'AC-18: every card must carry exactly one [data-cl="' + attr + '"] element: got ' + c + ' for ' + j.name + ':\n' + card)
+    }
+  }
+})
+
+test('AC-20260911-04-19: buildClientIndex sets each card\'s go action and data-primary by derived state, flags a screen\'s open/addressed request as a dot, marks the last-reached screen current, renders a confirmed journey\'s own sentence, and totals "<n> of <total> confirmed"', () => {
+  const AT = '2026-09-12T00:00:00.000Z'
+  const journeys = [
+    { name: 'j-unseen', title: 'Unseen journey', screens: [{ label: 'un1', states: [] }] },
+    { name: 'j-walking', title: 'Walking journey', screens: [{ label: 'wa1', states: [] }, { label: 'wa2', states: [] }] },
+    { name: 'j-fixed', title: 'Fixed journey', screens: [{ label: 'fx', states: [] }] },
+    { name: 'j-changes', title: 'Changes journey', screens: [{ label: 'cr', states: [] }] },
+    { name: 'j-ok', title: 'OK journey', screens: [{ label: 'oks', states: [] }] },
+    { name: 'j-flags', title: 'Flags journey', screens: [{ label: 'alpha', states: [] }, { label: 'beta', states: [] }, { label: 'gamma', states: [] }] },
+  ]
+  const seed = { product: 'Hearwell', journeys }
+  const notes = [
+    clientNote({ id: 'F1', scope: 'mock', screen: 'fx', text: 'x', status: 'addressed', addressed: { at: AT, change: 'Fixed it', ledgerRow: null } }),
+    clientNote({ id: 'C1', scope: 'mock', screen: 'cr', text: 'y', status: 'open' }),
+    clientNote({ id: 'B1', scope: 'mock', screen: 'beta', text: 'still wrong', status: 'open' }),
+    clientNote({ id: 'G1', scope: 'mock', screen: 'gamma', text: 'was wrong', status: 'addressed', addressed: { at: AT, change: 'done', ledgerRow: null } }),
+  ]
+  const walk = {
+    journeys: {
+      'j-walking': { reached: ['wa1'], misses: [], confirmedAt: null, sentence: null },
+      'j-ok': { reached: [], misses: [], confirmedAt: AT, sentence: 'Looks right', waived: null },
+      'j-flags': { reached: ['alpha', 'beta'], misses: [], confirmedAt: null, sentence: null },
+    },
+  }
+  const html = buildClientIndex({ seed, notes, ledger: [], walk, prefix: '', ready: new Set(journeys.map((j) => j.name)) })
+  const cards = journeyCards(html)
+
+  const goExpect = {
+    'Unseen journey': { go: 'Start', primary: true },
+    'Walking journey': { go: 'Continue', primary: true },
+    'Fixed journey': { go: 'Check the fix', primary: true },
+    'Changes journey': { go: 'Open again', primary: false },
+    'OK journey': { go: 'Walk it again', primary: false },
+  }
+  for (const [title, exp] of Object.entries(goExpect)) {
+    const card = cards.find((c) => c.includes(title))
+    assert.ok(card, 'AC-19 setup: a card for "' + title + '" must render: got\n' + html)
+    assert.match(card, new RegExp('data-cl="go"[^>]*>' + exp.go + '<'),
+      'AC-19: "' + title + '"\'s [data-cl="go"] must read "' + exp.go + '": got\n' + card)
+    if (exp.primary) {
+      assert.match(card, /data-primary="true"/, 'AC-19: "' + title + '" (the client\'s turn) must carry data-primary="true": got\n' + card)
+    } else {
+      assert.doesNotMatch(card, /data-primary="true"/, 'AC-19: "' + title + '" must not carry data-primary="true": got\n' + card)
+    }
+  }
+
+  const okCard = cards.find((c) => c.includes('OK journey'))
+  assert.match(okCard, /data-cl="said"[^>]*>Looks right</, 'AC-19: a confirmed journey\'s card must render its own sentence in [data-cl="said"]: got\n' + okCard)
+
+  const flagsCard = cards.find((c) => c.includes('Flags journey'))
+  const windowAround = (text, needle, radius = 200) => {
+    const i = text.indexOf(needle)
+    return i === -1 ? '' : text.slice(Math.max(0, i - radius), i + needle.length + radius)
+  }
+  const alphaWindow = windowAround(flagsCard, 'alpha')
+  const betaWindow = windowAround(flagsCard, 'beta')
+  const gammaWindow = windowAround(flagsCard, 'gamma')
+  assert.doesNotMatch(alphaWindow, /data-dot="(warn|ok)"/, 'AC-19: a screen with no client request must carry no data-dot: got\n' + alphaWindow)
+  assert.match(betaWindow, /data-dot="warn"/, 'AC-19: the screen carrying an open request must carry data-dot="warn": got\n' + betaWindow)
+  assert.match(betaWindow, /data-current="true"/, 'AC-19: the last-reached screen must carry data-current="true": got\n' + betaWindow)
+  assert.match(gammaWindow, /data-dot="ok"/, 'AC-19: the screen carrying an addressed request must carry data-dot="ok": got\n' + gammaWindow)
+
+  assert.match(html, /1 of 6 confirmed/, 'AC-19: the header must total "<n> of <total> confirmed" (one of six journeys is ok): got\n' + html)
+})
+
+test('AC-20260911-04-20: buildClientIndex collapses the composer into a closed <details>, places the request log after the journey cards showing only open/addressed with a waiting count and a closed-items toggle, and buildWalkPage never renders a resolved request card', () => {
+  const seed = onboardingSeed([{ label: 'invite', states: [] }])
+  const openNote = clientNote({ id: 'O1', scope: 'mock', screen: 'invite', text: 'open one', status: 'open' })
+  const addressedNote = clientNote({
+    id: 'A1', scope: 'mock', screen: 'invite', text: 'addressed one', status: 'addressed',
+    addressed: { at: NOW, change: 'fixed', ledgerRow: null },
+  })
+  const resolvedNote1 = clientNote({ id: 'R1', scope: 'mock', screen: 'invite', text: 'closed one', status: 'resolved', resolution: 'accepted' })
+  const resolvedNote2 = clientNote({ id: 'R2', scope: 'project', text: 'closed two', status: 'resolved' })
+  const notes = [openNote, addressedNote, resolvedNote1, resolvedNote2]
+
+  const html = buildClientIndex({ seed, notes, ledger: [], walk: { journeys: {} }, prefix: '', ready: new Set(['onboarding']) })
+
+  const detailsMatch = /<details[^>]*data-cl="ask"[^>]*>/.exec(html)
+  assert.ok(detailsMatch, 'AC-20: the composer must render as <details data-cl="ask">: got\n' + html)
+  assert.doesNotMatch(detailsMatch[0], /\bopen\b/, 'AC-20: the composer <details> must be closed by default (no bare "open" attribute): got ' + detailsMatch[0])
+
+  const journeyEnd = html.lastIndexOf('data-cl="journey"')
+  const requestsStart = html.indexOf('data-cl="requests"')
+  assert.ok(journeyEnd !== -1 && requestsStart !== -1 && requestsStart > journeyEnd,
+    'AC-20: [data-cl="requests"] must sit after the last journey card in document order: got journeyEnd=' + journeyEnd + ' requestsStart=' + requestsStart)
+
+  assert.match(html, /2 waiting/, 'AC-20: the requests heading must carry "2 waiting" (one open, one addressed): got\n' + html)
+
+  const showClosedMatch = /<[a-zA-Z][\w-]*[^>]*data-cl="show-closed"[^>]*>([\s\S]*?)<\/[a-zA-Z][\w-]*>/.exec(html)
+  assert.ok(showClosedMatch, 'AC-20: a [data-cl="show-closed"] toggle must render: got\n' + html)
+  assert.match(showClosedMatch[1], /Show 2 closed/, 'AC-20: the toggle must read "Show 2 closed": got "' + showClosedMatch[1] + '"')
+
+  const articles = [...html.matchAll(/<article[^>]*data-cl="request"[\s\S]*?<\/article>/g)].map((m) => m[0])
+  const resolvedArticles = articles.filter((a) => a.includes('data-status="resolved"'))
+  assert.strictEqual(resolvedArticles.length, 2, 'AC-20 setup: both resolved notes must still render (hidden, not deleted): got ' + resolvedArticles.length)
+  for (const a of resolvedArticles) {
+    assert.match(openTagOf(a), /\bhidden\b/, 'AC-20: a resolved request article must render hidden behind the closed toggle: got\n' + openTagOf(a))
+  }
+  const openArticle = articles.find((a) => a.includes('data-id="O1"'))
+  const addressedArticle = articles.find((a) => a.includes('data-id="A1"'))
+  assert.doesNotMatch(openTagOf(openArticle), /\bhidden\b/, 'AC-20: an open request must render visible (not hidden): got\n' + openTagOf(openArticle))
+  assert.doesNotMatch(openTagOf(addressedArticle), /\bhidden\b/, 'AC-20: an addressed request must render visible (not hidden): got\n' + openTagOf(addressedArticle))
+
+  const walkHtml = buildWalkPage({ seed, journey: 'onboarding', notes, ledger: [], walk: { journeys: {} }, prefix: '' })
+  const walkArticles = [...walkHtml.matchAll(/<article[^>]*data-wk="request"[\s\S]*?<\/article>/g)].map((m) => m[0])
+  const walkResolved = walkArticles.filter((a) => a.includes('data-status="resolved"'))
+  assert.strictEqual(walkResolved.length, 0,
+    'AC-20: buildWalkPage must render no [data-wk="request"] whose data-status is "resolved": got ' + walkResolved.length + ' in\n' + walkHtml)
+  assert.strictEqual(walkArticles.length, 2,
+    'AC-20: buildWalkPage must render exactly the open and addressed cards, never the resolved ones: got ' + walkArticles.length)
+})
+
+test('AC-20260911-04-21: buildWalkPage renders a step indicator and caption for the current mid-journey screen with Next and no confirm, and the sign-off block with "Confirm this journey" inside the stage — with no Next — on the last screen', () => {
+  const seed = onboardingSeed([
+    { label: 'Sign in', states: [] }, { label: 'Invite', states: [] },
+    { label: 'Consent', states: [] }, { label: 'First session', states: [] },
+  ])
+  const midWalk = { journeys: { onboarding: { reached: ['Sign in', 'Invite'], misses: [], confirmedAt: null, sentence: null } } }
+  const htmlMid = buildWalkPage({ seed, journey: 'onboarding', notes: [], ledger: [], walk: midWalk, prefix: '' })
+
+  assert.match(htmlMid, /data-wk="steps"/, 'AC-21: the bar must carry [data-wk="steps"] — D21 is unbuilt: got\n' + htmlMid)
+  const steps = [...htmlMid.matchAll(/<[a-zA-Z][\w-]*[^>]*data-wk="step"[^>]*>/g)].map((m) => m[0])
+  assert.strictEqual(steps.length, 4, 'AC-21: [data-wk="steps"] must render one [data-wk="step"] per screen: got ' + steps.length + ' in\n' + htmlMid)
+  assert.match(steps[0], /data-reached="true"/, 'AC-21: a reached screen\'s step must carry data-reached="true": got\n' + steps[0])
+  assert.match(steps[1], /data-reached="true"/, 'AC-21: the current (reached) screen\'s step must carry data-reached="true": got\n' + steps[1])
+  assert.match(steps[1], /data-current="true"/, 'AC-21: the step for the current screen (Invite, last reached) must carry data-current="true": got\n' + steps[1])
+  assert.match(steps[2], /data-reached="false"/, 'AC-21: an unreached screen\'s step must carry data-reached="false": got\n' + steps[2])
+  assert.doesNotMatch(steps[2], /data-current="true"/, 'AC-21: an unreached step must not carry data-current="true": got\n' + steps[2])
+
+  const capIdx = htmlMid.indexOf('data-wk="caption"')
+  assert.ok(capIdx !== -1, 'AC-21: the stage must carry [data-wk="caption"]: got\n' + htmlMid)
+  const capWindow = htmlMid.slice(capIdx, capIdx + 300)
+  assert.match(capWindow, /Invite/, 'AC-21: the caption must name the current screen "Invite": got "' + capWindow + '"')
+  assert.match(capWindow, /2 of 4/, 'AC-21: the caption must read "2 of 4" (Invite is the second of four screens): got "' + capWindow + '"')
+
+  const statesBlocks = [...htmlMid.matchAll(/data-wk="states"/g)]
+  assert.strictEqual(statesBlocks.length, 1, 'AC-21: exactly one set of state controls must render (the duplicate bare row is deleted): got ' + statesBlocks.length)
+
+  assert.match(htmlMid, /<[a-zA-Z][\w-]*[^>]*data-wk="next"[^>]*>Next<\/[a-zA-Z][\w-]*>/,
+    'AC-21: mid-journey must render [data-wk="next"] reading "Next": got\n' + htmlMid)
+  assert.doesNotMatch(htmlMid, /data-wk="confirm"/, 'AC-21: mid-journey must render no [data-wk="confirm"]: got\n' + htmlMid)
+
+  const lastWalk = { journeys: { onboarding: { reached: ['Sign in', 'Invite', 'Consent', 'First session'], misses: [], confirmedAt: null, sentence: null } } }
+  const htmlLast = buildWalkPage({ seed, journey: 'onboarding', notes: [], ledger: [], walk: lastWalk, prefix: '' })
+  assert.match(htmlLast, /<[a-zA-Z][\w-]*[^>]*data-wk="confirm"[^>]*>Confirm this journey<\/[a-zA-Z][\w-]*>/,
+    'AC-21: the last screen must render [data-wk="confirm"] reading "Confirm this journey" in the bar: got\n' + htmlLast)
+  assert.doesNotMatch(htmlLast, /data-wk="next"/, 'AC-21: the last screen must render no [data-wk="next"]: got\n' + htmlLast)
+
+  const stageIdx = htmlLast.indexOf('data-wk="stage"')
+  const sentenceIdx = htmlLast.indexOf('data-wk="sentence"')
+  const requestsIdx = htmlLast.indexOf('data-wk="requests"')
+  assert.ok(stageIdx !== -1, 'AC-21: [data-wk="stage"] must render: got\n' + htmlLast)
+  assert.ok(sentenceIdx !== -1, 'AC-21: the sign-off block\'s [data-wk="sentence"] must render: got\n' + htmlLast)
+  assert.ok(sentenceIdx > stageIdx,
+    'AC-21: [data-wk="sentence"] must render after [data-wk="stage"] opens — the sign-off block sits inside the stage: got stage@' + stageIdx + ' sentence@' + sentenceIdx)
+  if (requestsIdx !== -1) {
+    assert.ok(sentenceIdx < requestsIdx,
+      'AC-21: [data-wk="sentence"] must render before the side panel\'s [data-wk="requests"] — still inside the stage, not the panel: got sentence@' + sentenceIdx + ' requests@' + requestsIdx)
+  }
+
+  // AC-7's disabled rule must CONTINUE TO gate confirm on the last screen too — an open request
+  // outranks the walk's own last-screen position.
+  const openNote = clientNote({ id: 'X1', scope: 'mock', screen: 'Invite', text: 'still wrong', status: 'open' })
+  const htmlLastBlocked = buildWalkPage({ seed, journey: 'onboarding', notes: [openNote], ledger: [], walk: lastWalk, prefix: '' })
+  assert.match(htmlLastBlocked, /data-wk="confirm"[^>]*disabled/,
+    'AC-21: confirm must stay disabled on the last screen while a request is open (AC-7\'s rule continues to apply): got\n' + htmlLastBlocked)
+})
+
+test('AC-20260911-04-22: the retired wk-spine/wk-approve register and the bare-count [data-wk="left"] overwrite carry zero live mentions in the walk player\'s own script/style files', () => {
+  const files = [
+    'spec/scripts/lib/walk-page.js',
+    'spec/scripts/lib/walk.browser.js',
+    'spec/templates/mocks/viewer.css',
+  ]
+  const literals = ['wk-spine', 'wk-approve', 'leftEl.textContent = String(leftCount)']
+  for (const rel of files) {
+    const src = read(rel)
+    for (const lit of literals) {
+      assert.ok(!src.includes(lit),
+        'AC-22: `grep -n "wk-spine\\|wk-approve\\|leftEl.textContent = String(leftCount)" ' + rel +
+        '` must print nothing — the spine, the approve section and the bare-count overwrite are deleted, not orphaned: found "' + lit + '" in ' + rel)
+    }
+  }
+})
+
+test('AC-20260911-04-22: under the vm shim, [data-wk="left"] renders the sentence "Nothing left to check" once the last mark is answered, never overwritten by a bare digit', async () => {
+  const { notes, ledger } = openQuestions(1)
+  const { document } = await walkThroughRouted({ screens: [{ label: 'signin', states: [] }], notes, ledger })
+  const mark = document.querySelector('[data-wk="mark"][data-label="signin"]')
+  assert.ok(mark, 'AC-22 setup: one mark must render on signin: got no [data-wk="mark"][data-label="signin"]')
+  mark.querySelector('[data-wk="yes"]').click()
+  await flush()
+  const leftEl = document.querySelector('[data-wk="left"]')
+  assert.strictEqual(leftEl.getAttribute('data-count'), '0', 'AC-22 setup: the open count must reach zero: got ' + leftEl.getAttribute('data-count'))
+  assert.strictEqual(leftEl.textContent, 'Nothing left to check',
+    'AC-22: [data-wk="left"] must render the sentence "Nothing left to check" once nothing is left — never the bare-count overwrite: got "' + leftEl.textContent + '"')
+})
+
+// ---------------------------------------------------------------------------
 // AC-20260911-01-8
 // ---------------------------------------------------------------------------
 test('AC-20260911-01-8: a mark\'s answer request resolving ok:true CONTINUES TO hide that mark, decrement [data-wk="left"], and remove disabled from [data-wk="confirm"] once the count reaches zero', async () => {
@@ -501,7 +900,10 @@ test('AC-20260911-01-10: a question note carrying answer.verdict: "waived" CONTI
   ]
   const ledger = [ledgerRow('W1')]
 
-  const indexHtml = buildClientIndex({ seed, notes, ledger, walk: { journeys: {} }, prefix: '' })
+  // D15 repair: buildClientIndex now renders only journeys in `ready` — onboarding's screen has
+  // no on-disk mock in this pure-builder test, so it must be named ready explicitly, or D15
+  // filters the row out before this test's own AC-10 assertion ever sees data-guesses.
+  const indexHtml = buildClientIndex({ seed, notes, ledger, walk: { journeys: {} }, prefix: '', ready: new Set(['onboarding']) })
   assert.match(indexHtml, /data-guesses="0"/,
     'AC-10: buildClientIndex must exclude a waived question from the open count: got\n' + indexHtml)
 
@@ -511,4 +913,50 @@ test('AC-20260911-01-10: a question note carrying answer.verdict: "waived" CONTI
   const marks = [...walkHtml.matchAll(/<article[^>]*data-wk="mark"[\s\S]*?<\/article>/g)]
   assert.strictEqual(marks.length, 0,
     'AC-10: buildWalkPage must render no mark for a waived question: got ' + marks.length + ' in\n' + walkHtml)
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260911/04-the-client-loop.md D24 — a box the client must type into is never revealed
+// by focus alone. The mark's why textarea was the request reopen box's identical defect, its
+// last instance: a `:focus-within` CSS rule hid `[data-wk="why"]` and dropped it the moment focus
+// left, taking the client's typing with it. The fix makes the script the single owner of
+// visibility, exactly as D23 fixed the reopen box. AC-20260911-04-24.
+// ---------------------------------------------------------------------------
+
+test('AC-20260911-04-24: buildWalkPage renders a mark\'s why textarea hidden, viewer.css owns none of that visibility, and a first "That\'s not right" press only unhides/focuses the box while a second press with text posts', async () => {
+  const { notes, ledger } = openQuestions(1)
+  const seed = onboardingSeed([{ label: 'signin', states: [] }])
+  const walkHtml = buildWalkPage({ seed, journey: 'onboarding', notes, ledger, walk: { journeys: {} }, prefix: '' })
+  const whyMatch = walkHtml.match(/<textarea[^>]*data-wk="why"[^>]*>/)
+  assert.ok(whyMatch, 'AC-24 setup: buildWalkPage must render a [data-wk="why"] textarea: got\n' + walkHtml)
+  assert.match(whyMatch[0], /\bhidden\b/,
+    'AC-24: buildWalkPage must render the mark\'s [data-wk="why"] with the hidden attribute: got ' + whyMatch[0])
+
+  const cssRel = 'spec/templates/mocks/viewer.css'
+  const css = read(cssRel)
+  assert.ok(!/focus-within/.test(css),
+    'AC-24: `grep -n "focus-within" spec/templates/mocks/viewer.css` must print nothing — the ' +
+    'script is the single owner of the why box\'s visibility, not a CSS focus rule: found "focus-within" in ' + cssRel)
+
+  const harness = await walkThroughRouted({ screens: [{ label: 'signin', states: [] }], notes, ledger })
+  const mark = harness.document.querySelector('[data-wk="mark"][data-label="signin"]')
+  assert.ok(mark, 'AC-24 setup: one mark must render on signin: got no [data-wk="mark"][data-label="signin"]')
+  const whyEl = mark.querySelector('[data-wk="why"]')
+  const noBtn = mark.querySelector('[data-wk="no"]')
+  assert.strictEqual(whyEl.hidden, true, 'AC-24 setup: the why box must start hidden: got hidden=' + whyEl.hidden)
+
+  noBtn.click()
+  await flush()
+  assert.strictEqual(whyEl.hidden, false,
+    'AC-24: a first "That\'s not right" press must unhide the why box: got hidden=' + whyEl.hidden)
+  assert.strictEqual(harness.posts.find((p) => p.url.includes('/client/__notes/answer')), undefined,
+    'AC-24: a first press that only reveals the why box must post nothing: got posts=' + JSON.stringify(harness.posts))
+
+  whyEl.value = 'Not how it works'
+  noBtn.click()
+  await flush()
+  const answerPost = harness.posts.find((p) => p.url.includes('/client/__notes/answer'))
+  assert.ok(answerPost, 'AC-24: a second press with text must POST /client/__notes/answer: got posts=' + JSON.stringify(harness.posts))
+  assert.deepStrictEqual(JSON.parse(answerPost.init.body), { id: 'N001', verdict: 'no', text: 'Not how it works', by: 'client' },
+    'AC-24: the answer POST body must carry the typed text: got ' + answerPost.init.body)
 })

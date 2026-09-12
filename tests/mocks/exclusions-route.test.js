@@ -126,7 +126,10 @@ test('AC-20260910-05-6: POST /client/__walk/exclusion confirms an exclusion row,
   const seed = { product: 'Hearwell', journeys: [{ name: JOURNEY, title: 'Onboarding', screens: LABELS.map((l) => ({ label: l, states: [] })) }] }
   const openLedgerRow = { id: 'E1', step: 'CLIENT', kind: 'exclusion', claim: 'SMS reminders', tag: 'said-by-user', status: 'open', rejected: null, dependents: null, note: 'non-goal: SMS reminders' }
   const html = buildWalkPageForVm(seed, openLedgerRow)
-  const harness = runWalkBrowserRouted(html, { reached: [], misses: [], confirmedAt: null, sentence: null },
+  // D21: walk.browser.js's own apply() derives currentLabel from this fetched state's `reached`
+  // the same way buildWalkPage's static render does — it must carry every label too, or the
+  // client-side re-render drops back to screen 1 and removes the confirm button on load.
+  const harness = runWalkBrowserRouted(html, { reached: LABELS, misses: [], confirmedAt: null, sentence: null },
     { '/client/__walk/exclusion': { ok: true, json: () => Promise.resolve({ id: 'E1', status: 'confirmed 2026-09-12' }) } })
   await flush()
   const confirmBtn = harness.document.querySelector('[data-wk="confirm"]')
@@ -146,7 +149,14 @@ test('AC-20260910-05-6: POST /client/__walk/exclusion confirms an exclusion row,
 })
 
 function buildWalkPageForVm(seed, exclusionRow) {
-  return buildWalkPage({ seed, journey: JOURNEY, notes: [], ledger: [exclusionRow], walk: { journeys: {} }, prefix: '' })
+  // D21 moved [data-wk="confirm"] onto the journey's LAST screen only; this vm harness's own
+  // subject (exclusion-agree unlocking confirm) needs a screen where confirm exists at all, so
+  // mark every label reached to land on the last screen (currentLabel = reached[reached.length-1]).
+  return buildWalkPage({
+    seed, journey: JOURNEY, notes: [], ledger: [exclusionRow],
+    walk: { journeys: { [JOURNEY]: { reached: LABELS, misses: [], confirmedAt: null, sentence: null } } },
+    prefix: '',
+  })
 }
 
 // ---------------------------------------------------------------------------

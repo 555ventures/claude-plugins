@@ -2257,14 +2257,18 @@ function createRequestHandler(root, opts = {}) {
         try { return JSON.parse(fs.readFileSync(path.join(rootAbs, 'design/mocks/status.json'), 'utf8')).theme || null } catch { return null }
       }
 
-      // specs/20260911/04-the-client-loop.md D2: `ready` — the set of journey names whose
-      // `status.journeys[<j>].walked` is set in design/mocks/status.json; an absent or
-      // unparseable file reads as an empty set (every journey renders "Coming soon").
+      // specs/20260911/04-the-client-loop.md D15: `ready` — the set of seed journeys every one
+      // of whose declared screens has design/mocks/<label>.html on disk. `status.json`'s
+      // `walked` flag is NOT consulted: it is a session work flag, cleared by --reopen while the
+      // page it describes still answers, so it lies about whether the client can click through.
+      // A journey with no declared screen is never ready.
       const readyJourneys = () => {
-        let st
-        try { st = JSON.parse(fs.readFileSync(path.join(rootAbs, 'design/mocks/status.json'), 'utf8')) } catch { return new Set() }
+        const declared = parseSeedJourneys(rootAbs)
         const out = new Set()
-        for (const [jn, rec] of Object.entries((st && st.journeys) || {})) if (rec && rec.walked) out.add(jn)
+        for (const [jn, j] of declared.entries()) {
+          if (!j.labels.length) continue
+          if (j.labels.every((label) => fs.existsSync(path.join(rootAbs, 'design/mocks', label + '.html')))) out.add(jn)
+        }
         return out
       }
 

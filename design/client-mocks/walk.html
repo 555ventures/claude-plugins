@@ -23,6 +23,8 @@ button:hover{background:var(--v-muted-bg)}
 button[disabled]{opacity:.45;cursor:not-allowed}
 button.primary{background:var(--v-primary);color:var(--v-primary-fg);border-color:var(--v-primary);font-weight:500}
 button.primary:hover:not([disabled]){background:color-mix(in srgb,var(--v-primary) 88%,var(--v-bg))}
+button.quiet{border-color:transparent;background:transparent;color:var(--v-muted);padding:2px 8px;font-size:14px}
+button.quiet:hover{color:var(--v-fg);background:var(--v-muted-bg)}
 textarea{width:100%;background:var(--v-bg);border:1px solid var(--v-border);border-radius:var(--v-radius);padding:8px 10px;resize:vertical}
 :is(button,a,textarea):focus-visible{outline:2px solid var(--v-ring);outline-offset:2px}
 a{color:inherit}
@@ -76,7 +78,7 @@ a{color:inherit}
 .mark{padding:var(--v-space-3) 0;border-top:1px solid var(--v-border)}
 .mark:first-of-type{border-top:0;padding-top:0}
 .claim{margin:0 0 var(--v-space-2)}
-.verdicts{display:flex;gap:var(--v-space-2)}
+.verdicts{display:flex;gap:var(--v-space-2);flex-wrap:wrap}
 .why{margin-top:var(--v-space-2)}
 .left{margin:var(--v-space-2) 0 0;color:var(--v-muted);font-size:14px}
 
@@ -86,12 +88,39 @@ a{color:inherit}
 .req:last-of-type{border-bottom:1px solid var(--v-border)}
 .req[data-status="open"]{border-left-color:var(--v-warn)}
 .req[data-status="addressed"]{border-left-color:var(--v-ok)}
+.req[data-status="resolved"]{color:var(--v-muted)}
 .req-text{margin:0}
+.req[data-status="resolved"] .req-text{color:var(--v-muted)}
 .req-meta{margin:0;color:var(--v-muted);font-size:14px}
 .req-acts{display:flex;gap:var(--v-space-2);flex-wrap:wrap}
 .req-why{width:100%}
 .note label{display:block;color:var(--v-muted);font-size:14px;margin-bottom:6px}
 .note .acts{margin-top:var(--v-space-2)}
+.msg{margin:0;color:var(--v-muted);font-size:14px}
+
+/* ============================================================================================
+   The won't-build card — specs 20260912/01 (a question with a memory), 02 (an answer is the
+   client's until sign-off), 03 (every write answers back; a take-back can be put back).
+   Mock class → viewer.css selector. NEW = no rule with that role exists in viewer.css today;
+   the ones marked "exists" already render from .wk-exclusions/.wk-excl/.wk-excl-claim.
+   ============================================================================================ */
+.excl-card{}                                                             /* exists: .wk-exclusions (the card) */
+.excl-card h2{margin-bottom:var(--v-space-1)}                            /* NEW .wk-excl-h — the card has no heading rule today */
+.excl-card .lead{font-size:14px;margin-bottom:var(--v-space-1)}          /* NEW .wk-excl-lead — 14px so the question sits under the heading like a request's status line */
+.excl{padding:var(--v-space-3) 0;border-top:1px solid var(--v-border)}   /* exists: .wk-excl (hairline between rows) */
+.excl:last-of-type{padding-bottom:0}
+.excl-claim{margin:0 0 var(--v-space-1)}                                 /* exists: .wk-excl-claim */
+.excl-from{margin:0 0 var(--v-space-2);color:var(--v-muted);font-size:14px}                     /* NEW .wk-excl-from — why the row is here */
+.excl-said{margin:0 0 var(--v-space-2);padding-left:var(--v-space-3);border-left:2px solid var(--v-ring);font-size:14px;color:var(--v-fg)}  /* NEW .wk-excl-said — the client's own words, the page's one quote shape (.wk-j-said/.wk-req-again) on the neutral ring */
+.excl-put,.excl-change{display:inline;padding:0 4px;font-size:14px;text-decoration:underline;text-underline-offset:3px;color:var(--v-fg)} /* NEW .wk-excl-put / .wk-excl-change — the two "way back" controls share one inline shape, read as part of their sentence */
+.excl-put:hover,.excl-change:hover{background:var(--v-muted-bg)}
+.excl-state{margin:0;font-size:14px;color:var(--v-fg)}                   /* NEW .wk-excl-state — the remembered answer */
+.excl[data-verdict] .verdicts{display:none}                              /* NEW .wk-excl[data-verdict] .wk-verdicts — an answered row keeps only its state line */
+.excl-card[data-recorded] .verdicts,
+.excl-card[data-recorded] .excl-change,
+.excl-card[data-recorded] .excl-put{display:none}                        /* NEW .wk-exclusions[data-recorded] … — after sign-off nothing on the card is a control */
+.excl-card[data-recorded] .excl-state{color:var(--v-muted)}              /* NEW — recorded outcomes read as the log they now are */
+.req-put{}                                                               /* NEW: `.wk-req[data-status="resolved"][data-resolution="withdrawn"] .wk-req-acts{display:flex}` — viewer.css hides every resolved row's actions today; a taken-back row keeps its one */
 
 /* the end of the walk: the sentence box sits in the stage, above the screen, so it is the first thing seen */
 .confirm{background:var(--v-bg);border:1px solid var(--v-border);border-radius:calc(var(--v-radius) + 4px);box-shadow:var(--v-shadow);
@@ -101,10 +130,19 @@ a{color:inherit}
 .confirm p{margin:0 0 var(--v-space-1);color:var(--v-muted);grid-column:1/-1}
 .confirm textarea{min-height:44px}
 .confirm .hint{grid-column:1/-1;margin:0;font-size:14px;color:var(--v-muted)}
+/* the confirmed render, in place: the lead in the client's own weight, their sentence as the receipt */
+.confirm.done{grid-template-columns:minmax(0,1fr)}                       /* exists: .wk-signoff (confirmed) */
+.confirm.done .lead{margin:0;color:var(--v-fg);font-weight:500}          /* exists: .wk-signoff .wk-lead */
+.confirm.done .sentence{margin:0;padding-left:var(--v-space-3);border-left:2px solid var(--v-ok);color:var(--v-fg)}  /* exists: .wk-sentence */
 
-/* owner-only divider between the two renders in this file */
+/* owner-only chrome: dividers between renders, and the card-only gallery */
 .divider{margin:64px 0 0;padding:var(--v-space-4) var(--v-space-6);border-top:2px dashed var(--v-ring);border-bottom:2px dashed var(--v-ring);background:var(--v-bg);text-align:center;color:var(--v-muted)}
 .divider b{color:var(--v-fg)}
+.divider.first{margin-top:0}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,380px);gap:var(--v-space-6) 40px;padding:var(--v-space-6);max-width:1600px;margin:0 auto;align-items:start}
+.gallery figure{margin:0;display:flex;flex-direction:column;gap:var(--v-space-4)}
+.gallery figcaption{color:var(--v-muted);font-size:14px;padding:0 var(--v-space-2)}
+.gallery figcaption b{color:var(--v-fg)}
 
 @media (max-width:1180px){
   .main{grid-template-columns:minmax(0,1fr)}
@@ -130,6 +168,7 @@ a{color:inherit}
   .states{margin-left:0;width:100%}
   .confirm{grid-template-columns:minmax(0,1fr);padding:var(--v-space-4)}
   .confirm button{width:100%}
+  .gallery{grid-template-columns:minmax(0,1fr);padding:var(--v-space-3)}
 }
 @media (prefers-reduced-motion:no-preference){
   .step,.states button{transition:background .12s ease}
@@ -228,10 +267,10 @@ a{color:inherit}
 </div>
 
 <!-- ============================================================ -->
-<p class="divider">Owner view only — below is the same page again on the <b>last screen</b> (First session, 4 of 4), where Next has become Confirm.</p>
+<p class="divider"><b>R3 · Unanswered, before sign-off.</b> The last screen (First session, 4 of 4). The panel carries the won't-build card with all three provenance sentences and both buttons per row, and — just above it — the request the client took back a moment ago, with Put it back offered and the take-back receipt in the msg slot.</p>
 <!-- ============================================================ -->
 
-<!-- RENDER 2 · last screen: First session, 4 of 4 -->
+<!-- RENDER 2 / R3 · last screen: First session, 4 of 4 -->
 <header class="bar" style="position:static">
   <a class="home" href="index.html"><span aria-hidden="true">←</span> <span class="name">All journeys ·</span> <b>Patient onboarding</b></a>
   <ol class="steps" aria-label="Screens in this journey">
@@ -281,21 +320,234 @@ a{color:inherit}
       <h2>Nothing we guessed on this screen</h2>
       <p class="lead" style="margin:0">You answered both questions on Invite. Thank you.</p>
     </div>
+
+    <!-- the just-withdrawn request: Never mind was pressed a moment ago; the row stays, says where it went, and offers the way back -->
     <div class="card reqs">
       <h2>Your requests on this screen</h2>
-      <p class="lead" style="margin:0">None yet.</p>
+      <article class="req" data-status="resolved" data-resolution="withdrawn">
+        <p class="req-text">Show the patient's mobile number on the first-session card so the desk can ring them if they're running late.</p>
+        <p class="req-meta">You took this back. It's now on the list of things we will not build, below.</p>
+        <div class="req-acts req-put"><button>Put it back</button></div>
+      </article>
     </div>
+
     <form class="card note" onsubmit="return false">
       <label for="note2">Anything else about this screen?</label>
       <textarea id="note2" rows="2"></textarea>
       <div class="acts"><button type="submit">Send</button></div>
     </form>
+
+    <!-- R3: the won't-build card, unanswered -->
+    <section class="card excl-card" aria-labelledby="excl-h3">
+      <h2 id="excl-h3">Three things this product will not do</h2>
+      <p class="lead">Each one is here for a reason. Say Correct if it should stay out, or tell us you need it. Anything you leave unanswered is recorded as not contested when the work is signed off.</p>
+      <article class="excl">
+        <p class="excl-claim">Taking card payments online at the time of booking.</p>
+        <p class="excl-from">In the project brief: payment stays at the front desk for now.</p>
+        <div class="verdicts"><button>Correct</button><button>No — we need this</button></div>
+      </article>
+      <article class="excl">
+        <p class="excl-claim">Letting patients invite themselves from the clinic website.</p>
+        <p class="excl-from">Because you told us, on Invite:</p>
+        <blockquote class="excl-said">No — the front desk sends every invite. We check the referral first, and that isn't changing.</blockquote>
+        <div class="verdicts"><button>Correct</button><button>No — we need this</button></div>
+      </article>
+      <article class="excl">
+        <p class="excl-claim">Showing the patient's mobile number on the first-session card.</p>
+        <p class="excl-from">Because you took back your request on First session. <button class="quiet excl-put">Put it back</button></p>
+        <blockquote class="excl-said">Show the patient's mobile number on the first-session card so the desk can ring them if they're running late.</blockquote>
+        <div class="verdicts"><button>Correct</button><button>No — we need this</button></div>
+      </article>
+    </section>
+
+    <p class="msg" role="status" aria-live="polite">Saved. You took this back — put it back any time before the work is signed off.</p>
+  </aside>
+</div>
+
+<!-- ============================================================ -->
+<p class="divider"><b>R4 · R5 · R7 — the card alone,</b> at panel width. Everything around it on the page is unchanged from R3; only the card and the msg slot beneath it differ.</p>
+<!-- ============================================================ -->
+
+<div class="gallery">
+
+  <!-- R4 -->
+  <figure>
+    <figcaption><b>R4 · Answered, before sign-off.</b> One agreed, one "you need this", one still unanswered. An answered row keeps its state line and Change answer; the msg slot shows the receipt for the answer just given.</figcaption>
+    <section class="card excl-card" aria-labelledby="excl-h4">
+      <h2 id="excl-h4">Three things this product will not do</h2>
+      <p class="lead">Each one is here for a reason. Say Correct if it should stay out, or tell us you need it. Anything you leave unanswered is recorded as not contested when the work is signed off.</p>
+      <article class="excl" data-verdict="agree">
+        <p class="excl-claim">Taking card payments online at the time of booking.</p>
+        <p class="excl-from">In the project brief: payment stays at the front desk for now.</p>
+        <div class="verdicts"><button>Correct</button><button>No — we need this</button></div>
+        <p class="excl-state">You agreed. It stays out. <button class="quiet excl-change">Change answer</button></p>
+      </article>
+      <article class="excl" data-verdict="needed">
+        <p class="excl-claim">Letting patients invite themselves from the clinic website.</p>
+        <p class="excl-from">Because you told us, on Invite:</p>
+        <blockquote class="excl-said">No — the front desk sends every invite. We check the referral first, and that isn't changing.</blockquote>
+        <div class="verdicts"><button>Correct</button><button>No — we need this</button></div>
+        <p class="excl-state">You need this. We'll treat it as a request and let you know here. <button class="quiet excl-change">Change answer</button></p>
+      </article>
+      <article class="excl">
+        <p class="excl-claim">Showing the patient's mobile number on the first-session card.</p>
+        <p class="excl-from">Because you took back your request on First session. <button class="quiet excl-put">Put it back</button></p>
+        <blockquote class="excl-said">Show the patient's mobile number on the first-session card so the desk can ring them if they're running late.</blockquote>
+        <div class="verdicts"><button>Correct</button><button>No — we need this</button></div>
+      </article>
+    </section>
+    <p class="msg" role="status" aria-live="polite">Saved. You can change your answer until the work is signed off.</p>
+  </figure>
+
+  <!-- R5 -->
+  <figure>
+    <figcaption><b>R5 · After sign-off, read-only.</b> The recorded date replaces the question. All three outcomes are stated, including the one the client never answered — recorded as not contested, said plainly, while the note form above can still carry a surprise back to us. No buttons, no Put it back.</figcaption>
+    <section class="card excl-card" data-recorded="2026-09-12" aria-labelledby="excl-h5">
+      <h2 id="excl-h5">Three things this product will not do</h2>
+      <p class="lead">Recorded on 12 September 2026 when the work was signed off. If anything here is a surprise, tell us in the note above.</p>
+      <article class="excl" data-verdict="agree">
+        <p class="excl-claim">Taking card payments online at the time of booking.</p>
+        <p class="excl-from">In the project brief: payment stays at the front desk for now.</p>
+        <p class="excl-state">You agreed. It stays out.</p>
+      </article>
+      <article class="excl" data-verdict="needed">
+        <p class="excl-claim">Letting patients invite themselves from the clinic website.</p>
+        <p class="excl-from">Because you told us, on Invite:</p>
+        <blockquote class="excl-said">No — the front desk sends every invite. We check the referral first, and that isn't changing.</blockquote>
+        <p class="excl-state">You said you need this. It's on your requests.</p>
+      </article>
+      <article class="excl" data-verdict="not-contested">
+        <p class="excl-claim">Showing the patient's mobile number on the first-session card.</p>
+        <p class="excl-from">Because you took back your request on First session.</p>
+        <blockquote class="excl-said">Show the patient's mobile number on the first-session card so the desk can ring them if they're running late.</blockquote>
+        <p class="excl-state">You did not answer, so this was recorded as not contested. It stays out.</p>
+      </article>
+    </section>
+  </figure>
+
+  <!-- R7 -->
+  <figure>
+    <figcaption><b>R7 · Error.</b> The client pressed Correct on the first row and the save failed. The existing wording, unchanged, sits in the msg slot; the row's buttons are still live, so trying again is one press.</figcaption>
+    <section class="card excl-card" aria-labelledby="excl-h7">
+      <h2 id="excl-h7">Three things this product will not do</h2>
+      <p class="lead">Each one is here for a reason. Say Correct if it should stay out, or tell us you need it. Anything you leave unanswered is recorded as not contested when the work is signed off.</p>
+      <article class="excl">
+        <p class="excl-claim">Taking card payments online at the time of booking.</p>
+        <p class="excl-from">In the project brief: payment stays at the front desk for now.</p>
+        <div class="verdicts"><button>Correct</button><button>No — we need this</button></div>
+      </article>
+      <article class="excl">
+        <p class="excl-claim">Letting patients invite themselves from the clinic website.</p>
+        <p class="excl-from">Because you told us, on Invite:</p>
+        <blockquote class="excl-said">No — the front desk sends every invite. We check the referral first, and that isn't changing.</blockquote>
+        <div class="verdicts"><button>Correct</button><button>No — we need this</button></div>
+      </article>
+      <article class="excl">
+        <p class="excl-claim">Showing the patient's mobile number on the first-session card.</p>
+        <p class="excl-from">Because you took back your request on First session. <button class="quiet excl-put">Put it back</button></p>
+        <blockquote class="excl-said">Show the patient's mobile number on the first-session card so the desk can ring them if they're running late.</blockquote>
+        <div class="verdicts"><button>Correct</button><button>No — we need this</button></div>
+      </article>
+    </section>
+    <p class="msg" role="status" aria-live="polite">That did not save. Please try again.</p>
+  </figure>
+
+  <!-- Empty -->
+  <figure>
+    <figcaption><b>Empty card.</b> A journey with nothing on the won't-build list renders no card at all — not a heading, not a "none" line. Nothing to show here; this caption is the whole state.</figcaption>
+  </figure>
+
+</div>
+
+<!-- ============================================================ -->
+<p class="divider"><b>R6 · Confirm receipt.</b> The client pressed Confirm this journey. The sign-off block swaps to its confirmed render in place, the receipt lands in the msg slot, and the bar's Confirm control is gone (Back stays). The card keeps Change answer: an answer is the client's until the work is signed off.</p>
+<!-- ============================================================ -->
+
+<header class="bar" style="position:static">
+  <a class="home" href="index.html"><span aria-hidden="true">←</span> <span class="name">All journeys ·</span> <b>Patient onboarding</b></a>
+  <ol class="steps" aria-label="Screens in this journey">
+    <li><button class="step" data-reached="true"><span class="pip" aria-hidden="true"></span><span class="lbl">Sign in</span></button></li>
+    <li><button class="step" data-reached="true"><span class="pip" aria-hidden="true"></span><span class="lbl">Invite</span></button></li>
+    <li><button class="step" data-reached="true"><span class="pip" aria-hidden="true"></span><span class="lbl">Consent</span></button></li>
+    <li><button class="step" data-reached="true" aria-current="step"><span class="pip" aria-hidden="true"></span><span class="lbl">First session</span></button></li>
+  </ol>
+  <p class="pos">4 of 4</p>
+  <nav class="nav"><button>Back</button></nav>
+</header>
+
+<div class="main">
+  <section class="stage">
+    <section class="confirm done" aria-labelledby="confirm-h6">
+      <p class="lead" id="confirm-h6">You confirmed this journey.</p>
+      <blockquote class="sentence">I signed in, invited a new patient by text, they agreed to the consent form, and their first session was on my list.</blockquote>
+    </section>
+
+    <figure class="object" style="margin:0">
+      <figcaption class="caption">
+        <h1>First session <span class="of">· 4 of 4</span></h1>
+        <div class="states" role="tablist" aria-label="Other states of this screen">
+          <button role="tab" aria-selected="true">Normal</button><button role="tab" aria-selected="false">Empty</button>
+        </div>
+      </figcaption>
+      <div class="frame" role="img" aria-label="First session screen, gray wireframe">
+        <div class="wf">
+          <div class="ok"></div>
+          <div class="h c" style="width:55%"></div>
+          <div class="p c" style="width:80%"></div>
+          <div class="p c" style="width:60%"></div>
+          <div class="in" style="margin-top:12px"></div>
+          <div class="in"></div>
+          <div class="btn c"></div>
+        </div>
+      </div>
+    </figure>
+    <p class="step-under"><span>Consent came before this.</span><span>This is the last screen.</span></p>
+  </section>
+
+  <aside class="panel" aria-label="About this screen">
+    <div class="card">
+      <h2>Nothing we guessed on this screen</h2>
+      <p class="lead" style="margin:0">You answered both questions on Invite. Thank you.</p>
+    </div>
+
+    <form class="card note" onsubmit="return false">
+      <label for="note3">Anything else about this screen?</label>
+      <textarea id="note3" rows="2"></textarea>
+      <div class="acts"><button type="submit">Send</button></div>
+    </form>
+
+    <section class="card excl-card" aria-labelledby="excl-h6">
+      <h2 id="excl-h6">Three things this product will not do</h2>
+      <p class="lead">Each one is here for a reason. Say Correct if it should stay out, or tell us you need it. Anything you leave unanswered is recorded as not contested when the work is signed off.</p>
+      <article class="excl" data-verdict="agree">
+        <p class="excl-claim">Taking card payments online at the time of booking.</p>
+        <p class="excl-from">In the project brief: payment stays at the front desk for now.</p>
+        <div class="verdicts"><button>Correct</button><button>No — we need this</button></div>
+        <p class="excl-state">You agreed. It stays out. <button class="quiet excl-change">Change answer</button></p>
+      </article>
+      <article class="excl" data-verdict="agree">
+        <p class="excl-claim">Letting patients invite themselves from the clinic website.</p>
+        <p class="excl-from">Because you told us, on Invite:</p>
+        <blockquote class="excl-said">No — the front desk sends every invite. We check the referral first, and that isn't changing.</blockquote>
+        <div class="verdicts"><button>Correct</button><button>No — we need this</button></div>
+        <p class="excl-state">You agreed. It stays out. <button class="quiet excl-change">Change answer</button></p>
+      </article>
+      <article class="excl" data-verdict="agree">
+        <p class="excl-claim">Showing the patient's mobile number on the first-session card.</p>
+        <p class="excl-from">Because you took back your request on First session. <button class="quiet excl-put">Put it back</button></p>
+        <blockquote class="excl-said">Show the patient's mobile number on the first-session card so the desk can ring them if they're running late.</blockquote>
+        <div class="verdicts"><button>Correct</button><button>No — we need this</button></div>
+        <p class="excl-state">You agreed. It stays out. <button class="quiet excl-change">Change answer</button></p>
+      </article>
+    </section>
+
+    <p class="msg" role="status" aria-live="polite">Confirmed — thank you. You can still change an answer on this page until the work is signed off.</p>
   </aside>
 </div>
 
 <script>
 function reason(b){const t=b.closest('.req').querySelector('.req-why');t.hidden=false;t.focus()}
-document.querySelectorAll('.verdicts button:last-child').forEach(b=>b.addEventListener('click',()=>{const t=b.closest('.mark').querySelector('.why');t.hidden=false;t.focus()}))
+document.querySelectorAll('.mark .verdicts button:last-child').forEach(b=>b.addEventListener('click',()=>{const t=b.closest('.mark').querySelector('.why');t.hidden=false;t.focus()}))
 document.querySelectorAll('.states').forEach(g=>g.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;g.querySelectorAll('button').forEach(x=>x.setAttribute('aria-selected',x===b))}))
 </script>
 </body>

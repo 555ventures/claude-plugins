@@ -119,6 +119,11 @@ a{color:inherit}
 .req[data-status="open"]{border-left-color:var(--v-warn)}
 .req[data-status="addressed"]{border-left-color:var(--v-ok)}
 .req[data-status="resolved"]{color:var(--v-muted)}
+/* NEW (spec 20260912/03): viewer.css hides every resolved row's actions today
+   (`.wk-req[data-status="resolved"] .wk-req-acts{display:none}`); a row the client took back keeps
+   its one control → `.wk-req[data-status="resolved"][data-resolution="withdrawn"] .wk-req-acts{display:flex}`.
+   The mock never hid them, so the rule below only documents the shape. */
+.req[data-status="resolved"][data-resolution="withdrawn"] .req-acts{display:flex}
 .req-text{margin:0;max-width:60ch}
 .req-meta{margin:0;color:var(--v-muted);font-size:14px}
 .req-meta a{color:var(--v-fg)}
@@ -303,7 +308,7 @@ a{color:inherit}
 
   <!-- requests: the log, open and fixed only; closed behind the toggle -->
   <section class="reqs">
-    <div class="reqs-h"><h2>Your requests</h2><span class="n">2 waiting</span><button class="quiet" id="toggle" aria-expanded="false" onclick="toggleClosed()">Show 2 closed</button></div>
+    <div class="reqs-h"><h2>Your requests</h2><span class="n">2 waiting</span><button class="quiet" id="toggle" aria-expanded="true" onclick="toggleClosed()">Hide closed</button></div>
 
     <article class="req" data-status="open">
       <p class="req-text">The invite button should say Send, not Submit. Submit reads like a form.</p>
@@ -318,11 +323,18 @@ a{color:inherit}
       <textarea class="req-why" rows="2" placeholder="What should be different?" hidden aria-label="What should be different"></textarea>
     </article>
 
-    <article class="req" data-status="resolved" data-closed hidden>
+    <!-- R-index · a taken-back request in the closed list: it says why it is closed, where it went, and offers the way back.
+         (The closed list is shown open here so the row renders; the toggle reads Hide closed accordingly.) -->
+    <article class="req" data-status="resolved" data-resolution="withdrawn" data-closed>
+      <p class="req-text">Show the patient's mobile number on the first-session card so the desk can ring them if they're running late.</p>
+      <div class="req-acts"><button>Put it back</button></div>
+      <p class="req-meta">On <a href="walk.html">First session</a> in Patient onboarding. You took this back — it's on the list of things we will not build.</p>
+    </article>
+    <article class="req" data-status="resolved" data-closed>
       <p class="req-text">The consent copy was too long.</p>
       <p class="req-meta">On Consent in Patient onboarding. Closed — thank you.</p>
     </article>
-    <article class="req" data-status="resolved" data-closed hidden>
+    <article class="req" data-status="resolved" data-closed>
       <p class="req-text">Can patients pay by bank transfer as well as by card?</p>
       <p class="req-meta">Across the whole product. Closed.</p>
     </article>
@@ -334,7 +346,7 @@ a{color:inherit}
 <script>
 function pick(b){for(const c of b.parentNode.children)c.setAttribute('aria-pressed',c===b)}
 function toggleClosed(){const t=document.getElementById('toggle');const open=t.getAttribute('aria-expanded')!=='true';
-  t.setAttribute('aria-expanded',open);t.textContent=open?'Hide closed':'Show 2 closed';
+  t.setAttribute('aria-expanded',open);t.textContent=open?'Hide closed':'Show 3 closed';
   document.querySelectorAll('[data-closed]').forEach(el=>el.hidden=!open)}
 function reason(b){const t=b.closest('.req').querySelector('.req-why');t.hidden=false;t.focus()}
 </script>

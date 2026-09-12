@@ -37,7 +37,7 @@ and the disagreement is a defect in this spec.
 | ID | Decision | One-line rationale |
 |----|----------|--------------------|
 | D1 | `renderExclusions` emits a card head before the articles, rendered ONLY when `rows.length > 0` (the section already renders nothing otherwise): `<h2 class="wk-excl-h">` carrying `<n> things this product will not do` and `<p class="wk-excl-lead">` carrying `Each one is here for a reason. Say Correct if it should stay out, or tell us you need it. Anything you leave unanswered is recorded as not contested when the work is signed off.` The count word is spelled for 1–9 and a digit from 10, and the noun agrees: 1 → `One thing this product will not do`, 3 → `Three things this product will not do`, 10 → `10 things this product will not do`. Counts ALL rows the card shows, not only `open` ones (AC-20260912-01-1, AC-20260912-01-2) | The lead is what makes `Correct` answer something; JJ's ruling (2026-09-12) puts the silence warning before the client leaves the page, not only after sign-off |
-| D2 | `renderExclusion` emits `<p class="wk-excl-from">` under the claim, one sentence derived from the row's own `note` grammar, never an id and never the raw grammar: `non-goal: <line>` → `In the project brief: <line>`; `answer: <noteId>` → `Because you told us, on <Screen>:` followed by `<p class="wk-excl-said">` carrying the note's answer text; `withdrawn: <noteId>` → `Because you took back your request on <Screen>.` followed by `<p class="wk-excl-said">` carrying the note's request text. `<Screen>` is the note's `screen` label put through walk-page.js's existing `humanizeLabel` (first letter capitalised, hyphens to spaces — `session-live` → `Session live`), never a second renderer. `exclusionsForJourney` already resolves each anchored row's note by id but returns only the row; it now returns `{ row, note }` per entry so `renderExclusion` has the note without a new parameter, and `renderExclusions` maps over that shape. A row whose note is resolvable to no note renders the claim with no `wk-excl-from` line at all, never a placeholder (AC-20260912-01-3, AC-20260912-01-4) | A client cannot tell why a project-wide claim appears on their journey; quoting their own words is the only answer that settles it |
+| D2 | `renderExclusion` emits `<p class="wk-excl-from">` under the claim for the two rows whose claim this pipeline CONSTRUCTED from something the client said in other words, never an id and never the raw grammar: `answer: <noteId>` → `Because you told us, on <Screen>:` followed by `<p class="wk-excl-said">` carrying the note's answer text; `withdrawn: <noteId>` → `Because you took back your request on <Screen>.` followed by `<p class="wk-excl-said">` carrying the note's request text. A `non-goal:` row renders NO provenance line and no quote: its `note` cell is `'non-goal: ' + claim` — byte-identical to the claim already on screen (`nonGoalEntries`), so any sentence built from it repeats the claim verbatim, and nothing was inferred there to show. `<Screen>` is the note's `screen` label put through walk-page.js's existing `humanizeLabel` (first letter capitalised, hyphens to spaces — `session-live` → `Session live`), never a second renderer. `exclusionsForJourney` already resolves each anchored row's note by id but returns only the row; it now returns `{ row, note }` per entry so `renderExclusion` has the note without a new parameter, and `renderExclusions` maps over that shape. A row whose note names an unresolvable note id likewise renders the claim alone, never a placeholder (AC-20260912-01-3, AC-20260912-01-4) | Those two rows ask the client to confirm a sentence they never wrote — showing their original words beside our paraphrase is what makes the question answerable |
 | D3 | A source-(b) row's claim carries the literal `not: ` prefix in the ledger (`not: a second insurer field`). `renderExclusion` strips that prefix and renders `We won't build: <claim>`; every other claim renders verbatim. The ledger cell is untouched (AC-20260912-01-5) | The raw `not:` prefix is internal grammar leaking onto a client's screen |
 | D4 | `renderExclusion` sets `data-verdict` on the article server-side and emits `<p class="wk-excl-state">` in place of the buttons for every non-`open` row: `confirmed` → `data-verdict="agree"`, `You agreed. It stays out.`; `overridden` with `rejected` `client-needed` → `data-verdict="needed"`, `You need this. We'll treat it as a request and let you know here.`; `overridden` with any other `rejected` (a retired source — the client never touched it) → `data-verdict="dropped"`, `We've taken this off the list.` An `open` row renders no state line and no `data-verdict`, and keeps its two buttons (AC-20260912-01-6, AC-20260912-01-7) | The reload trace is the whole of defect 2; the retired-source row is a real third state and a bare claim there is the same defect |
 | D5 | `walk.browser.js`'s exclusion handler stops disabling the buttons. On `ok` it does what the server does: sets `data-verdict` to the pressed verdict, and fills and unhides the row's own `<p class="wk-excl-state" hidden>` — shipped inside every `open` article by D4's renderer, its two texts carried on the section as `data-said-agree` / `data-said-needed` (activation, never fabrication — the same discipline as `wk-req-again`). CSS hides `.wk-verdicts` on an article carrying `data-verdict`, so the answered row matches its own reload render. The handler additionally shows the receipt in the existing msg slot: `Saved. You can change your answer until the work is signed off.` (AC-20260912-01-8, AC-20260912-01-9) | A row that changes shape only on reload reads as a failure; the in-session and reload renders must be the same markup |
@@ -69,9 +69,8 @@ and the disagreement is a defect in this spec.
 '<h2 class="wk-excl-h">Three things this product will not do</h2>' +
 '<p class="wk-excl-lead">Each one is here for a reason. …</p>' +
 '<article class="wk-excl" data-wk="exclusion" data-id="E1" data-verdict="agree">' +
-'  <p class="wk-excl-claim">Taking card payments online at the time of booking.</p>' +
-'  <p class="wk-excl-from">In the project brief: payment stays at the front desk for now.</p>' +
-'  <p class="wk-excl-state">You agreed. It stays out.</p>' +
+'  <p class="wk-excl-claim">SMS appointment reminders</p>' +
+'  <p class="wk-excl-state">You agreed. It stays out.</p>' +   // non-goal row: no provenance line
 '</article>' +
 '<article class="wk-excl" data-wk="exclusion" data-id="E2">' +
 '  <p class="wk-excl-claim">Letting patients invite themselves from the clinic website.</p>' +
@@ -85,8 +84,8 @@ and the disagreement is a defect in this spec.
 
 ```
 claim 'not: a second insurer field'  → <p class="wk-excl-claim">We won't build: a second insurer field</p>
-note  'non-goal: payment stays at the front desk for now'
-                                     → <p class="wk-excl-from">In the project brief: payment stays at the front desk for now.</p>
+note  'non-goal: SMS appointment reminders'   (claim is the same string)
+                                     → no wk-excl-from, no wk-excl-said — the claim alone
 note  'withdrawn: N020' (screen session-live)
                                      → <p class="wk-excl-from">Because you took back your request on Session live.</p>
 rows 1 → <h2>One thing this product will not do</h2>
@@ -117,8 +116,8 @@ confirms the save. Reloading the page renders exactly what the client left behin
 
 - **AC-20260912-01-1**: WHEN `buildWalkPage` renders a card holding three rows THE SYSTEM SHALL emit, as the section's first two children, `<h2 class="wk-excl-h">Three things this product will not do</h2>` and a `<p class="wk-excl-lead">` whose text contains `recorded as not contested when the work is signed off`; with one row the heading SHALL read `One thing this product will not do` and with ten `10 things this product will not do`; the count SHALL include non-`open` rows → writes tests/mocks/walk-page.test.js
 - **AC-20260912-01-2**: WHEN `buildWalkPage` renders a journey with no exclusion rows THE SYSTEM SHALL emit no `wk-excl-h` and no `wk-excl-lead` anywhere on the page → writes tests/mocks/walk-page.test.js
-- **AC-20260912-01-3**: WHEN a row's note is `non-goal: payment stays at the front desk for now` THE SYSTEM SHALL render `<p class="wk-excl-from">In the project brief: payment stays at the front desk for now.</p>` and no `wk-excl-said`; WHEN it is `answer: N014` for a note on screen `invite` whose answer text is `No — the front desk sends every invite.` THE SYSTEM SHALL render `Because you told us, on Invite:` followed by a `wk-excl-said` carrying that text; WHEN it is `withdrawn: N020` for a note on screen `session-live` whose text is `Show the patient's mobile number.` THE SYSTEM SHALL render `Because you took back your request on Session live.` followed by a `wk-excl-said` carrying that text → writes tests/mocks/walk-page.test.js
-- **AC-20260912-01-4**: WHEN a row's note names a note id that resolves to no note THE SYSTEM SHALL render that row's claim with no `wk-excl-from` and no `wk-excl-said` element, and SHALL NOT render the id anywhere in the page → writes tests/mocks/walk-page.test.js
+- **AC-20260912-01-3**: WHEN a row's note is `answer: N014` for a note on screen `invite` whose answer text is `No — the front desk sends every invite.` THE SYSTEM SHALL render `Because you told us, on Invite:` followed by a `wk-excl-said` carrying that text; WHEN it is `withdrawn: N020` for a note on screen `session-live` whose text is `Show the patient's mobile number.` THE SYSTEM SHALL render `Because you took back your request on Session live.` followed by a `wk-excl-said` carrying that text → writes tests/mocks/walk-page.test.js
+- **AC-20260912-01-4**: WHEN a row's note is `non-goal: SMS appointment reminders`, and WHEN a row's note names a note id that resolves to no note, THE SYSTEM SHALL in each case render that row's claim with no `wk-excl-from` and no `wk-excl-said` element, SHALL NOT render the id anywhere in the page, and SHALL NOT render the claim text twice inside the article → writes tests/mocks/walk-page.test.js
 - **AC-20260912-01-5**: WHEN a row's claim is `not: a second insurer field` THE SYSTEM SHALL render `We won't build: a second insurer field` as the claim text, and WHEN it is `Multi-currency billing` THE SYSTEM SHALL render it verbatim → writes tests/mocks/walk-page.test.js
 - **AC-20260912-01-6**: WHEN `buildWalkPage` renders a `confirmed` row, an `overridden` row whose `rejected` is `client-needed`, and an `overridden` row whose `rejected` is `-` THE SYSTEM SHALL give the three articles `data-verdict` `agree` / `needed` / `dropped` and a `wk-excl-state` reading `You agreed. It stays out.` / `You need this. We'll treat it as a request and let you know here.` / `We've taken this off the list.`, and SHALL render no `wk-verdicts` block inside any of them → writes tests/mocks/walk-page.test.js
 - **AC-20260912-01-7**: WHEN `buildWalkPage` renders an `open` row THE SYSTEM SHALL CONTINUE TO render its two `[data-wk="agree"]` / `[data-wk="needed"]` buttons and SHALL CONTINUE TO leave `[data-wk="confirm"]` without `disabled` whatever `data-exclusions-open` holds → rewrites tests/mocks/exclusions-route.test.js :: AC-20260911-05-5
@@ -149,9 +148,20 @@ that fact while he can still act on a surprise, not in the statement of work. D1
 before the client leaves the page and specs/20260912/02's read-only render repeats it after
 sign-off.
 
-The provenance line (D2) exists because a project-wide non-goal appearing on a journey the client
-is walking reads as an accusation with no author. Quoting the client's own words where the row came
-from them is the only form that answers "why is this here?" without naming an id.
+The provenance line (D2) covers two of the three sources, and JJ's challenge on 2026-09-12 is why
+it covers only two. A `non-goal:` row is a TRANSCRIPTION — `nonGoalEntries` sets the note to
+`'non-goal: ' + claim`, the same string as the claim — so any sentence built from it repeats the
+claim the client is already reading, and nothing was inferred there to disclose. It is deleted, not
+shortened. The other two rows are CONSTRUCTIONS: an `answer:` row turns a description the client
+gave ("the front desk sends every invite") into a contractual non-goal they never wrote ("letting
+patients invite themselves"), and a `withdrawn:` row turns a cancelled request into a won't-build.
+In both, the card asks the client to confirm our paraphrase, so it shows their original words beside
+it. That is a readable defect on the card itself, checkable by reading the two strings side by side
+— not a prediction about which button they press, which neither this session nor the design seat
+has evidence for and which is deliberately NOT claimed here. Consulted design seat agreed and
+abandoned its own three-case design (2026-09-12). The dated `exclusions.md` already carries each
+row's source pointer (`- <claim> (<journey>, answer: N014)`); only the quoted words are absent from
+it, and putting them there is a separate spec against that file, not this one.
 
 `data-verdict` was already set by specs/20260911/05's handler and styled by nothing; D4/D5 make it
 the real state carrier and make the in-session render equal to the reload render, which is the
@@ -166,8 +176,10 @@ seam, not a defect.
 
 `docs/canonical/design.md` § Exclusions: the client's card carries a heading counting the rows, a
 lead posing the question and stating that an unanswered row is recorded as not contested at
-sign-off, one provenance sentence per row derived from its `note` grammar (the project brief, or
-the client's own quoted words on a named screen), and — for every non-`open` row — a state line
-saying what the client answered, carried by `data-verdict` ∈ `agree|needed|dropped`. The
+sign-off, one provenance sentence on each of the two rows whose claim this pipeline
+constructed from something the client said in other words — their answer to a question, or a
+request they took back — each carrying their original words quoted; a row transcribed straight from
+the brief's non-goals carries none, because its source text is the claim itself. Every non-`open` row
+carries a state line saying what the client answered, held by `data-verdict` ∈ `agree|needed|dropped`. The
 in-session render after an answer is the same markup as the reload render. `design/client-mocks/walk.html`
 is the binding reference for the card's states.

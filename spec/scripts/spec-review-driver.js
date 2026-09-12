@@ -521,9 +521,55 @@ function checkDurableRowPresent(ledgerPathKey, runIdKey) {
 checkDurableRowPresent('stoppedLedgerPath', 'runId')
 checkDurableRowPresent('escalateLedgerPath', 'escalateRunId')
 
+// A mark is an imperative, never a query, so the cold no-op below must never answer one. The
+// recorded failure: `--mark conflicts-resolved` was issued against the MAIN root's copy of a spec
+// whose merge had just landed (status already done) while the review's sidecar lived in the build
+// worktree. With no sidecar beside THAT copy, the cold path printed DONE and exited 0 — so
+// finishMerge() never ran: no evidence promotion, no worktree cleanup, and the build + review
+// ledger rows stayed inside the worktree until it was removed (specs/20260911/04, rows
+// bd_0974405f169d / rv_7743c7c0ed68, recovered by hand). The sidecar lives beside the spec file
+// the review actually ran against, so a mark aimed at the wrong copy refuses and names the right
+// one rather than reporting success.
+function sidecarInLinkedWorktree() {
+  const r = runChild('git', ['-C', mainRoot, 'worktree', 'list', '--porcelain'],
+    { encoding: 'utf8' }, 'git worktree list')
+  if (r.status !== 0) return null
+  for (const block of r.stdout.split('\n\n')) {
+    const line = block.split('\n').find((l) => l.startsWith('worktree '))
+    if (!line) continue
+    const wtPath = line.slice('worktree '.length)
+    if (path.resolve(wtPath) === path.resolve(repoRoot)) continue
+    const candidate = path.join(wtPath, specRel)
+    if (fs.existsSync(candidate.replace(/\.md$/, '.review'))) return { worktree: wtPath, specPath: candidate }
+  }
+  return null
+}
+// The mark's own trailing operands (a strategy token, a --file path), stopping at the next flag —
+// so the re-run line the refusal prints is the caller's command with only the spec path corrected.
+function markOperands() {
+  const out = []
+  for (const a of argv.slice(markIdx + 2)) {
+    if (a.startsWith('--')) break
+    out.push(a)
+  }
+  return out
+}
+
 // ---- terminal cold path: no sidecar, status already done -> DONE, no auto-restart -------------
 const sidecarExistsAtStart = fs.existsSync(sidecarDir)
 if (!sidecarExistsAtStart && status === 'done') {
+  if (MARK && !STATE_ONLY) {
+    const elsewhere = sidecarInLinkedWorktree()
+    const fileFlag = flag('--file')
+    die('--mark ' + MARK + ' has no review state to apply: there is no sidecar at ' + sidecarDir +
+      (elsewhere
+        ? ', because this review ran in a linked worktree. Re-run the mark against that ' +
+          'worktree\'s copy of the spec:\n  node ' + __filename + ' ' + elsewhere.specPath +
+          ' --mark ' + MARK + markOperands().map((a) => ' ' + a).join('') +
+          (typeof fileFlag === 'string' ? ' --file ' + fileFlag : '')
+        : ', and no linked worktree holds one either — the review is already concluded ' +
+          '(status: done), so there is nothing left for this mark to apply'))
+  }
   printDoneNow('')
 }
 // R8: a spec already marked done whose sidecar does not carry THIS run's own closeRunId is not

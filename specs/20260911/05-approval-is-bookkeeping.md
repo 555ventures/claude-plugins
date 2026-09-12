@@ -5,7 +5,7 @@ tier: standard
 area: design-mocks
 design: false
 breaking: false
-depends_on: [specs/20260911/06-the-client-loop.md]
+depends_on: [specs/20260911/04-the-client-loop.md]
 depended_on_by: []
 brief: 22a
 open_markers: 0

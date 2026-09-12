@@ -46,3 +46,14 @@
   longer matched the driver's row. That last file was outside the File Plan and has been added to
   it as a MODIFY row; its re-run now threads the row's own recorded `via`/`model`, which is what
   its sibling reproducibility pin already documented as the correct shape.
+- AC-20260912-03-18, File Plan gap found at review LEGS: the spec's File Plan names only
+  `spec/.claude-plugin/plugin.json`, but D5/D6 edit `git/commands/enter-worktree.md`, and the host
+  rules' version-bump discipline binds every plugin directory a spec touches. `plugin-bump.js
+  --check` compares against the MERGE BASE, so the miss was invisible while the git/ edit was
+  still uncommitted and reddened only once the checkpoint commit landed — the same close-time
+  shape § Gotchas records for Canonical Delta prose. `git/.claude-plugin/plugin.json` was bumped
+  1.3.0 → 1.4.0 and added to the File Plan; the bump was made by hand rather than through
+  `plugin-bump.js --bump` because that script refuses a manifest whose description carries no
+  `Changelog (last 3):` run and the git plugin's never had one — the run was seeded in the same
+  edit, so future bumps of this plugin can use the script. The changelog paragraph elides the
+  retired stage-command names, since `git/` is inside AC-20260912-03-17's own sweep scope.

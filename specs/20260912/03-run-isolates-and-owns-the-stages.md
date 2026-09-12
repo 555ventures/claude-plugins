@@ -78,6 +78,7 @@ design stage, `/spec:build` is not an invokable command anywhere, and the ledger
 | spec/templates/grounding-contract.md | MODIFY | doctrine | D15 sweep — changes `spec-paths contract-hash`, host escalation trigger, one edit only |
 | spec/entrypoints.json | MODIFY | doctrine | 16 rows renamed to the three stage paths |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D17 — bump via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` |
+| git/.claude-plugin/plugin.json | MODIFY | doctrine | D17, added at build — D5/D6 edit `git/commands/enter-worktree.md`, so the git plugin owes its own bump; `plugin-bump.js --check` reads the merge base, so the gap reddens only once the checkpoint commit lands |
 | README.md | MODIFY | other | Command table loses three rows; `/git:enter-worktree` row's "Before build/design isolation" and the approval-stops paragraph rewritten |
 | docs/canonical/pipeline.md | MODIFY | other | D15 sweep — the three-direct-entries paragraph and the state-gate admissions paragraph |
 | docs/canonical/design.md | MODIFY | other | D15 sweep |

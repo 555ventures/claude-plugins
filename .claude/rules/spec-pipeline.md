@@ -164,8 +164,20 @@ upstream bug list. -->
   changes. Same removal fix: restore the file's original AC tags and keep the fixture edit. Check
   the AC's coverage survives first — `ac-matrix.js` greps the AC-ID across the union of the File
   Plan's tests rows, so the ID need only occur in one genuinely red sibling, not in every file the
-  AC's `→` pointer names. (specs/20260822/02-init-generation-script.md;
-  specs/20260907/10-client-review.md D15)
+  AC's `→` pointer names. Third trigger, the comment-line case again and at scale: a spec whose
+  File Plan carries a dozen currency-only test rows draws an AC-ID into each one's explanatory
+  comment, and every such file reports `unsanctioned-green` at once — the removal fix is the same,
+  and the comment keeps naming the spec and the Decision, just not the ID.
+  The same step's OTHER refusal is about the `→` pointer's own verb, and both directions bite.
+  `rewrites <file> :: <name>` demands that named case be RED and `reuses` demands it GREEN, so an
+  AC whose text says SHALL CONTINUE TO but whose pointer says `rewrites` is self-contradictory and
+  hard-stops at `gutted-rewrite`; fix the verb at lock, and read every CONTINUE-TO AC's pointer as
+  part of lock rather than trusting the text alone. Conversely, an authoring wave that puts an
+  AC's genuinely-red assertions in a NEW sibling test while the pointer still names an existing
+  green one gets the same `gutted-rewrite` — a failing sibling never satisfies the named case.
+  Fold the assertions into the test the pointer names (usually their semantic home anyway) rather
+  than renaming tests to match a pattern. (specs/20260822/02-init-generation-script.md;
+  specs/20260907/10-client-review.md D15; specs/20260912/03-run-isolates-and-owns-the-stages.md)
 - `[host]` A spec Decision naming a literal version-bump target can be stale by build time —
   concurrent sessions in this repo race the same semver. The build bumps to the next free
   version and records the deviation; the spec's literal number is a target, not a pin. Same class,
@@ -179,8 +191,17 @@ upstream bug list. -->
   number across the spec (Decisions, File Plan Summary, Behavior, ACs, Canonical Delta) in the
   same build; grep case-insensitively, since the File Plan spells it `Check NN` and the prose
   spells it `check NN`.
+  Fourth surface, the one that is a File Plan gap rather than a race: a spec whose Decisions edit
+  a file under a SECOND plugin directory owes that plugin its own bump, and `plugin-bump.js
+  --check` reads the MERGE BASE — so while the second plugin's edit is still uncommitted the
+  check is green, and the gap reddens only at the review gate, after the checkpoint commit and
+  after the last green build run. At lock, list the plugin directories every File Plan row falls
+  under and give each one a plugin.json row. Note also that `--bump` refuses a manifest whose
+  description carries no `Changelog (last 3):` run; a plugin that has never had one is bumped by
+  hand, seeding the run in the same edit so the next bump can use the script.
   (specs/20260810/02-terminal-observable-acs.md D11; specs/20260901/08-corpus-derivation-and-kill-match.md D10;
-  specs/20260907/08-walk-critic.md D11; specs/20260909/08-next-carries-the-lanes.md D6)
+  specs/20260907/08-walk-critic.md D11; specs/20260909/08-next-carries-the-lanes.md D6;
+  specs/20260912/03-run-isolates-and-owns-the-stages.md D17)
 - `[host]` A locked Decision that retires or narrows a literal glyph, phrase, or claim from
   doctrine prose can leave a live assertion of the retired form **outside** the spec's File
   Plan — in test files (dense regex pins) or the doctrine corpus itself (paraphrased or
@@ -219,7 +240,15 @@ upstream bug list. -->
   out-of-batch consumer silently takes the new branch. One such narrowing (a severity level
   moved from blocking to advisory) stranded three shared review fixtures and reddened 25 tests
   across eight files, none in the File Plan. At lock, grep the VALUES a Decision re-scopes
-  across `tests/`, not only the names it retires.
+  across `tests/`, not only the names it retires. Recurred as a changed DEFAULT rather than a
+  narrowed meaning, which adds two hiding places worth greping separately: a SECOND pin of the
+  old default inside a file the authoring wave already edited (the wave rewrote the pointer's
+  named occurrence and never looked for siblings), and a byte-equality RECONSTRUCTION test that
+  re-invokes the underlying script to rebuild the expected row — such a test never spells the
+  value at all, it inherits the script's own untouched default, so it reddens with a diff that
+  looks like the new code hand-assembled its output. Fix it by threading the observed row's own
+  field into the re-invocation, never by hardcoding the new default, or the test stops proving
+  anything about what the caller actually passed.
   Seventh trigger, the one no literal or value grep reaches at all: a Decision that ADDS A
   REFUSAL where the old behavior was permissive. Shared test setups that legally did nothing now
   trip it — one new empty-fix refusal reddened 13 tests across five files, none in the File Plan,
@@ -257,7 +286,8 @@ upstream bug list. -->
   specs/20260907/07-mocks-retires-theme.md D12; specs/20260907/08-walk-critic.md D2/D6;
   specs/20260909/04-review-soft-floor.md D1/D5/D8;
   specs/20260909/05-fix-delta-reviewer-pass.md D2/D9;
-  specs/20260910/02-click-to-advance-and-real-records.md A2)
+  specs/20260910/02-click-to-advance-and-real-records.md A2;
+  specs/20260912/03-run-isolates-and-owns-the-stages.md D10)
 - `[plugin]` `ac-matrix.js` parses AC bullets as `^- \*\*(token)\*\*` and requires the token to
   fully match `AC-\d{8}-\d{2}[a-z]?-\d+`. A build-time amendment written the way the Decisions
   table writes one — a prime-suffixed successor (`AC-…-3′`) plus the superseded original left as

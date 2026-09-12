@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: implementing
+status: done
 tier: critical
 area: pipeline-entry
 design: false
@@ -279,6 +279,14 @@ render server at the main root would let a worktree's render gate capture the ma
 components. It is already recorded as `adoptedServerNote` and diagnosed at verdict, so it can
 only mis-attribute a red, never manufacture a green. Step 0 carries one line of prose about it
 rather than a new check.
+
+**The two measured constants, at build.** D14 pins three numbers the test-authoring wave cannot
+know: `BUDGET.run` and the three stage files' line caps only exist once the doctrine wave has
+written Step 0 and the moved bodies. The tests were authored with deliberate placeholders and the
+obligation recorded, then corrected from the true measurement at integration: `BUDGET.run` rose
+310 → **334** (112 own + 222 shared), and the caps landed at 96 / 129 / 212 — each file's exact
+measured length under the test's own `split('\n')` metric, which runs one higher than `wc -l` for
+a newline-terminated file. Every cap may only shrink from here.
 
 **Collision closure at lock.** `collision-closure --literal` over `/spec:build`, `/spec:review`,
 `/spec:design`, the three `spec/commands/*.md` paths and the three `shared-for` keys returned 38

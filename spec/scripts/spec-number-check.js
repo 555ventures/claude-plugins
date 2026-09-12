@@ -19,7 +19,10 @@
 // never re-derived, and the two historical pairs here are each one live spec beside one retired
 // one. A directory whose only duplicate is between two superseded specs is likewise clean. Files
 // outside a `specs/YYYYMMDD/` directory, and files not ending `.md`, are not specs and are skipped;
-// so is any `*-deviations.md` sidecar, which carries no ACs of its own.
+// so is any deviations sidecar, which carries no ACs of its own — matched as either
+// `*-deviations.md` or the build driver's own `<spec-stem>.deviations.md` (a DOT before
+// `deviations`, e.g. `03-tests-expire-at-close.deviations.md`), since the dot form still matches
+// SPEC_NAME below and, unskipped, reads as a second spec sharing its own spec's number.
 //
 // Usage: spec-number-check.js --root <dir> [--json]
 // Exit codes:
@@ -94,7 +97,7 @@ for (const dateDir of dateDirs) {
   }
   const byNumber = new Map()
   for (const name of entries) {
-    if (name.endsWith('-deviations.md')) continue
+    if (name.endsWith('-deviations.md') || name.endsWith('.deviations.md')) continue
     const m = SPEC_NAME.exec(name)
     if (!m) continue
     scannedSpecs++

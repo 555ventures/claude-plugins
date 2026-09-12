@@ -76,11 +76,17 @@ test('AC-20260820-01-4: the repo root contains no autopilot directory', () => {
 })
 
 test('no AC (generalization of D4, ruled in by JJ 2026-08-20 after a consultation brief): no tracked source declares or imports any non-builtin package', () => {
+  // `git ls-files` reports the INDEX, which can name a path a same-run deletion has already
+  // removed from the working tree (e.g. test-expiry.js's close-time expiry sweep, staged later
+  // in the same build) — reading such a path throws ENOENT for a reason that has nothing to do
+  // with this pin. Filter to paths that still exist on disk: a gone file trivially declares and
+  // imports nothing, so dropping it narrows only the denominator, never a real finding.
   const tracked = execFileSync('git', ['-C', ROOT, 'ls-files'], { encoding: 'utf8' })
     .split('\n').filter(Boolean)
+    .filter((f) => fs.existsSync(path.join(ROOT, f)))
   assert.ok(tracked.length > 0,
-    'git ls-files returned zero tracked files — this pin scanned nothing, and a green verdict ' +
-    'over an empty scan would be vacuous; run the suite from a git checkout of the repo')
+    'git ls-files returned zero tracked files present on disk — this pin scanned nothing, and a ' +
+    'green verdict over an empty scan would be vacuous; run the suite from a git checkout of the repo')
 
   // 1) node_modules/ is never a tracked path segment — a vendored install would resurrect
   // exactly the class of dependency D4 removed the carve-outs for.

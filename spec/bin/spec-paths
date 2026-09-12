@@ -51,6 +51,7 @@ case "${1:-root}" in
   ci-query)       echo "$ROOT/scripts/ci-query.js" ;;
   ci-gate-parity) echo "$ROOT/scripts/ci-gate-parity.js" ;;
   ac-drift)       echo "$ROOT/scripts/ac-drift.js" ;;
+  test-expiry)    echo "$ROOT/scripts/expire-tests.js" ;;
   count-tests)    echo "$ROOT/scripts/count-tests.js" ;;
   replay)         echo "$ROOT/scripts/replay.js" ;;
   escape-row)     echo "$ROOT/scripts/escape-row.js" ;;
@@ -132,7 +133,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|design-atlas|components-check|render-gate|render-capture|render-compare|render-inventory|render-rules|registry-check|port-check|spec-number-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|design-ac-reconcile|promise-sweep|collision-closure|ci-query|ci-gate-parity|ac-drift|count-tests|replay|escape-row|fleet-reader|comment-narration|shared|shared-design|shared-for <command>|shared-genesis [--section <names>]|shared-mocks [--section <names>]|replay-corpus|template|templates|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|design-atlas|components-check|render-gate|render-capture|render-compare|render-inventory|render-rules|registry-check|port-check|spec-number-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|design-ac-reconcile|promise-sweep|collision-closure|ci-query|ci-gate-parity|ac-drift|test-expiry|count-tests|replay|escape-row|fleet-reader|comment-narration|shared|shared-design|shared-for <command>|shared-genesis [--section <names>]|shared-mocks [--section <names>]|replay-corpus|template|templates|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

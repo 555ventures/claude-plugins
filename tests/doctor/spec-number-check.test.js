@@ -77,6 +77,19 @@ test('a deviations sidecar and a non-spec file are skipped, never counted as a s
   assert.match(res.stdout, /clean — 1 specs across 1 date directories/, 'only the spec itself is counted')
 })
 
+test('a build-driver-shaped dot sidecar (<spec-stem>.deviations.md) is skipped, never counted as a second spec sharing its own number', () => {
+  const root = tmpdir()
+  writeSpec(root, 'specs/20260911/01-x.md', 'hardened')
+  writeSpec(root, 'specs/20260911/01-x.deviations.md', 'hardened')
+  const res = run(root)
+  assert.strictEqual(res.status, 0,
+    'spec-build-driver.js writes the sidecar as <spec-stem>.deviations.md (a dot, not a dash) — ' +
+    'that name still matches SPEC_NAME (dot is any char), so an unskipped dot sidecar reads as a ' +
+    'second live spec numbered 01 and collides with the very spec it documents, refusing every ' +
+    `build that has a deviations sidecar on disk — got ${res.status}: ${res.stdout}${res.stderr}`)
+  assert.match(res.stdout, /clean — 1 specs across 1 date directories/, 'only the spec itself is counted')
+})
+
 test('--json prints one object carrying the scan counts and one finding per colliding number', () => {
   const root = tmpdir()
   writeSpec(root, 'specs/20260911/04-a.md', 'hardened')

@@ -216,7 +216,7 @@ function driveToClose(host, scratchName) {
 // instead, so the spec's newest commit has a parent that predates the spec entirely — which is
 // what makes `replay.js --select` fail to resolve a target (AC-20260821-02-3).
 function commitClose(host, { amend = false } = {}) {
-  host.g('add', host.specRel)
+  host.g('add', host.specRel, 'tests/foo.test.js')
   if (amend) host.g('commit', '-q', '--amend', '--no-edit')
   else host.g('commit', '-q', '-m', 'close')
 }

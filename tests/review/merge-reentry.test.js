@@ -129,7 +129,7 @@ function driveToMerge(label, acId, { trackLedger = false } = {}) {
 
   // The session's close commit — specific file only, never `add -A` (never commits the sidecar
   // or the ledger, per D10's "dies with the worktree at cleanup, by design").
-  gw('add', specRel)
+  gw('add', specRel, 'tests/foo.test.js')
   gw('commit', '-q', '-m', 'close')
   const closeR = run(wt, spec, '--mark', 'closed')
   assert.strictEqual(closeR.status, 0,

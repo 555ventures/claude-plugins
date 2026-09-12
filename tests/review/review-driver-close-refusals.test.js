@@ -57,7 +57,7 @@ test('AC-20260903-02-10: WHEN --mark closed is invoked with every earlier refusa
   run(root, spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
   assert.strictEqual(stateOf(root, spec), 'CLOSE', 'setup: a clean pass must reach CLOSE')
 
-  execFileSync('git', ['-C', root, 'add', 'specs/20260903/98-drv-suite-close.md'])
+  execFileSync('git', ['-C', root, 'add', 'specs/20260903/98-drv-suite-close.md', 'tests/foo.test.js'])
   execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'close'])
 
   // Now that CLOSE is reached, swap testCommand to the red script — this AC pins the CLOSE-time
@@ -208,7 +208,7 @@ test('AC-20260830-02-1: WHEN --mark closed is invoked with all earlier refusals 
   cfg.gateCommand = 'bash always-red.sh'
   fs.writeFileSync(cfgPath, JSON.stringify(cfg))
   const specRel = path.relative(host.root, host.spec)
-  execFileSync('git', ['-C', host.root, 'add', specRel, '.claude/spec.config.json', 'always-red.sh'], { encoding: 'utf8' })
+  execFileSync('git', ['-C', host.root, 'add', specRel, '.claude/spec.config.json', 'always-red.sh', 'tests/foo.test.js'], { encoding: 'utf8' })
   execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'close'], { encoding: 'utf8' })
 
   const r = run(host.root, host.spec, '--mark', 'closed')
@@ -270,7 +270,7 @@ test('AC-20260830-02-4: WHEN --mark closed is invoked and gate resolution return
   const diffBase = /^diff_base:\s*(\S+)/m.exec(fs.readFileSync(host.spec, 'utf8'))[1]
   fs.writeFileSync(host.spec, specBodyNoTestFilePlanRow({ diffBase, acId: 'AC-20260820-99-1' }))
   const specRel = path.relative(host.root, host.spec)
-  execFileSync('git', ['-C', host.root, 'add', specRel], { encoding: 'utf8' })
+  execFileSync('git', ['-C', host.root, 'add', specRel, 'tests/foo.test.js'], { encoding: 'utf8' })
   execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'close (drop File Plan test row)'], { encoding: 'utf8' })
 
   const r = run(host.root, host.spec, '--mark', 'closed')

@@ -277,6 +277,7 @@ const verdictBin = path.join(PLUGIN, 'scripts/verdict.js')
 const mergeBackBin = path.join(PLUGIN, 'scripts/merge-back.sh')
 const specStatusBin = path.join(PLUGIN, 'scripts/spec-status.js')
 const replayBin = path.join(PLUGIN, 'scripts/replay.js')
+const testExpiryBin = path.join(PLUGIN, 'scripts/expire-tests.js')
 
 // D6/A3: repoRoot is derived from process.cwd() (the driver's INHERITED CWD), never from the
 // spec's own path — the whole relocation guard at MERGE depends on the session's shell CWD, not
@@ -1039,14 +1040,38 @@ function doCloseWork(n) {
     'verdict.js (authoritative pass)')
   if (r.status === 2) die('verdict.js (authoritative pass) failed: ' + (r.stdout + r.stderr).trim())
   const lines = r.stdout.split('\n')
-  // Gotchas count rides the review row only when a rules file was observed — a host without one
-  // keeps verdict.js's line byte-identical.
-  const gotchas = observeGotchas()
-  if (gotchas !== null) {
-    const row = JSON.parse(lines[1])
-    row.gotchas = gotchas
-    lines[1] = JSON.stringify(row)
+
+  // specs/20260911/03-tests-expire-at-close.md D5: expire-tests.js runs after the authoritative
+  // verdict and before the ledger append — every test tagged with this spec's own AC-IDs is
+  // retired unless a keep clause fires. A non-zero exit or unparseable output refuses the close
+  // (status unchanged, no ledger append) rather than close over an unresolved expiry pass.
+  const er = runChild(process.execPath, [testExpiryBin, '--root', repoRoot, '--spec', specRel,
+    '--apply', '--json'], { encoding: 'utf8' }, 'expire-tests.js (close-time expiry)')
+  const expiryRemedy = 'node "$(spec-paths test-expiry)" --root . --spec ' + specRel
+  if (er.status !== 0) {
+    die('expire-tests.js failed at close — status unchanged. Remedy: ' + expiryRemedy + '\n' +
+      (er.stdout + er.stderr).trim())
   }
+  let expiry = null
+  try {
+    expiry = JSON.parse(er.stdout)
+  } catch {
+    expiry = null
+  }
+  if (!expiry || !Array.isArray(expiry.retired) || typeof expiry.tagged !== 'number') {
+    die('expire-tests.js printed unparseable output at close — status unchanged. Remedy: ' + expiryRemedy)
+  }
+  const testsRow = { born: expiry.tagged, kept: expiry.tagged - expiry.retired.length, retired: expiry.retired.length }
+  marks.testsExpiry = { ...testsRow, filesRemoved: expiry.emptied.length }
+
+  // Gotchas count rides the review row only when a rules file was observed — a host without one
+  // keeps verdict.js's line byte-identical. D5: `tests` rides every close row; when gotchas is
+  // also present it lands first, `tests` after (Contracts: "after gotchas when present").
+  const gotchas = observeGotchas()
+  const row = JSON.parse(lines[1])
+  if (gotchas !== null) row.gotchas = gotchas
+  row.tests = testsRow
+  lines[1] = JSON.stringify(row)
   appendLedger(lines[1])
 
   const newSpecText = specText.replace(/^status:\s*.*$/m, 'status: done')
@@ -2303,9 +2328,15 @@ const STEPS = {
         `running in a linked worktree (main root: ${mainRoot}), so the ledger and retained ` +
         `evidence are promoted there only once the merge lands, not committed from the worktree ` +
         `now; this is the close commit.\n` + gateRerunNote
+    // D6: the 🧹 line prints only when the close-time expiry pass (D5) actually retired
+    // something — nothing otherwise, so a clean close never claims a deletion that never happened.
+    const testsExpiredLine = (marks.testsExpiry && marks.testsExpiry.retired > 0)
+      ? `🧹 expired ${marks.testsExpiry.retired} tests (${marks.testsExpiry.filesRemoved} files removed) — part of the close commit\n`
+      : ''
     return `## Step: close (the driver has already run the authoritative verdict and flipped status: done)\n` +
       `verdict: ${marks.dispositions.word}   runId: ${marks.closeRunId}   ` +
       `retained: .claude/spec-runs/${marks.closeRunId}.jsonl\n` +
+      testsExpiredLine +
       waivedWarn +
       `1. Apply the spec's Canonical Delta to ${canonicalTarget}.\n` +
       `2. Fold the deviations sidecar if one exists (recurring -> Gotchas [host]/[plugin]; one-offs ` +

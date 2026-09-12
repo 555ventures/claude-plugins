@@ -170,6 +170,11 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     `node "$(spec-paths port-check)" --root .`. Each printed line is a fixed or computed port
     literal under `tests/`; remedy = bind `--port 0` / `listen(0)` and read the bound port back
     from the server rather than choosing one (a host may wrap this in a shared test helper).
+20. **Expired tests still present** (deterministic, advisory) — run
+    `node "$(spec-paths test-expiry)" --root . --all-done` (dry run) and report
+    `expired tests present: N in M files` (or `none`), naming each file. Remedy = the same
+    command with `--apply`, run only after one `AskUserQuestion` naming the count and the
+    files it will delete — never under `--fix`'s line-item path and never silently.
 
 ## Semantic spot-check — small, bounded
 

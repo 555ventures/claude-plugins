@@ -170,7 +170,7 @@ test('AC-20260821-02-2 (worktree merge carrier): WHEN a due CLEAN close merges b
   run(wt, spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-replay-wt-return', CLEAN_RETURN))
   run(wt, spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
   assert.strictEqual(stateOf(wt, spec), 'CLOSE', 'setup: a clean worktree pass must reach CLOSE')
-  gw('add', specRel); gw('commit', '-q', '-m', 'close')
+  gw('add', specRel, 'tests/foo.test.js'); gw('commit', '-q', '-m', 'close')
   const closed = run(wt, spec, '--mark', 'closed')
   assert.strictEqual(closed.status, 0, 'setup: closed must succeed: ' + closed.stdout + closed.stderr)
 

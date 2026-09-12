@@ -359,13 +359,15 @@ test('AC-20260820-07-12 (also AC-20260821-04-9, AC-20260823-07-6, AC-20260830-02
 
   // The session's close commit — specific file only, never a blind `add -A` that would scoop up
   // the sidecar (never committed, per D10).
-  gw('add', 'specs/20260820/99-drv-merge.md')
+  gw('add', 'specs/20260820/99-drv-merge.md', 'tests/foo.test.js')
   gw('commit', '-q', '-m', 'close')
   const closeR = run(wt, spec, '--mark', 'closed')
   assert.strictEqual(closeR.status, 0,
     'AC-20260830-02-2: closed must succeed once the tree is clean apart from the sidecar, INCLUDING the new close-time host-gate re-run over gateCommand "true" — a regression here means D1\'s gate check began refusing a genuinely green gate: ' + closeR.stdout + closeR.stderr)
   assert.strictEqual(stateOf(wt, spec), 'MERGE',
     'AC-20260830-02-2: a closed spec whose gate is green must land state MERGE, unchanged by the new close-time gate check')
+  assert.ok(!fs.existsSync(path.join(wt, 'tests/foo.test.js')),
+    'the committed close tree must not carry tests/foo.test.js — expire-tests.js --apply deletes AC-tagged tests for the closing spec at CLOSE, and this fixture is the one place the full production sequence (expiry deletes, the deletion is committed, the close-time gate re-run runs over the emptied glob, then MERGE) is exercised end to end; a future regression that silently stops deleting must be caught here')
 
   const refused = run(wt, spec, '--mark', 'merge-strategy', 'ff-only')
   assert.strictEqual(refused.status, 2,

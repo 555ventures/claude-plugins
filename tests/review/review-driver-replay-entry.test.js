@@ -123,22 +123,13 @@ test('AC-20260903-01-12: WHEN --mark replay-recorded is refused for a missing ro
 // regardless of whether the regex's absence fallback worked. AC-8's actual coverage (the five-token
 // / absent-token shape) lives in tests/parse-selection/parse-selection.test.js, which drives
 // the extracted parser directly with a hand-built five-token string — the only way to reach that
-// branch. This test is retargeted to what its exec fixture genuinely proves: a seven-token line
-// (today's real replay.js output) still enters REPLAY without dying.
-test('WHEN the driver parses a seven-token selection line carrying both baseline tokens (replay.js\'s real output shape) THE SYSTEM enters the REPLAY state and prints the step, never a parse die', () => {
-  const host = makeReplayHost('rvdrvreplaynobaseline', { acId: 'AC-20260820-99-18', seedRows: fiveSeedReviews })
-  driveToClose(host, 'rvdrv-replay-nobaseline-ret')
-  commitClose(host)
-  const r = run(host.root, host.spec, '--mark', 'closed')
-  assert.strictEqual(r.status, 0,
-    'a seven-token selection line — the only shape the real replay.js binary emits — must be ACCEPTED: ' +
-    r.stdout + r.stderr)
-  assert.strictEqual(stateOf(host.root, host.spec), 'REPLAY',
-    'a close with a selected target carrying both baseline tokens must park at REPLAY exactly like any ' +
-    'other selected close: ' + r.stdout)
-  assert.doesNotMatch(r.stdout, /\bdie\b|parse.*fail|cannot parse/i,
-    'a well-formed seven-token line must never be treated as a parse failure: ' + r.stdout)
-})
+// branch. The retargeted "seven-token line still enters REPLAY without dying" case this comment
+// used to introduce was deleted BY HAND during specs/20260911/03-tests-expire-at-close.md's BUILD
+// (not by that spec's expiry rule, which keeps this file under D3(b) — `replay.js` is in the
+// derived invariants set, and not by its review, which had not yet run): it built the identical
+// makeReplayHost + fiveSeedReviews fixture as AC-20260823-09-7 above and asserted a strict subset
+// of that test's own coverage, so its removal loses no coverage. Recorded in that spec's
+// deviations sidecar as an out-of-plan deletion.
 
 // Direct fix, no spec (the CWD-relocation trap): the driver's own replay.js calls were
 // never vulnerable (they pass cwd: repoRoot explicitly), but the step it PRINTS hands the executing

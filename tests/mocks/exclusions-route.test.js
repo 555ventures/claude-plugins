@@ -33,96 +33,6 @@ function articleFor(html, id) {
   return re.exec(html)
 }
 
-// ---------------------------------------------------------------------------
-// AC-20260910-05-5
-// ---------------------------------------------------------------------------
-test('AC-20260910-05-5: buildWalkPage renders [data-wk="exclusions"] carrying every project-wide and journey-anchored exclusion, excludes one anchored to another journey, counts only open rows, and renders no agree button on a confirmed row', () => {
-  const seed = {
-    product: 'Hearwell',
-    journeys: [
-      { name: 'onboarding', title: 'Onboarding', screens: [{ label: 'intake', states: [] }, { label: 'signin', states: [] }] },
-      { name: 'billing', title: 'Billing', screens: [{ label: 'roster', states: [] }] },
-    ],
-  }
-  const notes = [
-    { id: 'N014', kind: 'question', scope: 'mock', screen: 'intake', ledgerId: 'W9', status: 'resolved', answer: { verdict: 'no', text: 'x', by: 'client', at: '2026-09-01T00:00:00.000Z' } },
-    { id: 'N020', kind: 'note', scope: 'mock', screen: 'roster', origin: 'client', status: 'resolved', resolution: 'withdrawn', withdrawReason: 'not-needed', text: 'export bookings to CSV' },
-  ]
-  const ledger = [
-    { id: 'E1', step: 'CLIENT', kind: 'exclusion', claim: 'SMS reminders', tag: 'said-by-user', status: 'open', rejected: null, dependents: null, note: 'non-goal: SMS reminders' },
-    { id: 'E2', step: 'CLIENT', kind: 'exclusion', claim: 'not: a second insurer field', tag: 'said-by-user', status: 'open', rejected: null, dependents: null, note: 'answer: N014' },
-    { id: 'E3', step: 'CLIENT', kind: 'exclusion', claim: 'export bookings to CSV', tag: 'said-by-user', status: 'open', rejected: null, dependents: null, note: 'withdrawn: N020' },
-    { id: 'E4', step: 'CLIENT', kind: 'exclusion', claim: 'legacy SSO', tag: 'said-by-user', status: 'confirmed 2026-09-01', rejected: null, dependents: null, note: 'non-goal: SMS reminders' },
-  ]
-
-  const html = buildWalkPage({ seed, journey: 'onboarding', notes, ledger, walk: { journeys: {} }, prefix: '' })
-
-  const section = sectionOf(html, 'exclusions')
-  assert.ok(section, 'AC-5: the page must render a [data-wk="exclusions"] section at all — its absence means D5\'s render never landed: got\n' + html)
-  const openAttr = /data-exclusions-open="(\d+)"/.exec(section[0])
-  assert.ok(openAttr, 'AC-5: the section must carry a data-exclusions-open count attribute: got ' + section[0])
-  assert.strictEqual(openAttr[1], '2',
-    'AC-5: data-exclusions-open must count only the two OPEN rows this journey shows (E1 project, E2 anchored to intake) — E3 (another journey) and E4 (confirmed) must not be counted: got ' + openAttr[1])
-
-  for (const id of ['E1', 'E2', 'E4']) {
-    assert.ok(articleFor(section[0], id), 'AC-5: exclusion "' + id + '" must be rendered inside the section: got\n' + section[0])
-  }
-  assert.ok(!articleFor(section[0], 'E3'), 'AC-5: E3 is anchored to "roster" (a billing screen) — it must never render on the onboarding page: got\n' + section[0])
-
-  const e1Article = articleFor(section[0], 'E1')[0]
-  assert.match(e1Article, /data-wk="agree"/, 'AC-5: an open exclusion must render one [data-wk="agree"] button: got ' + e1Article)
-  const e2Article = articleFor(section[0], 'E2')[0]
-  assert.match(e2Article, /data-wk="agree"/, 'AC-5: an open exclusion must render one [data-wk="agree"] button: got ' + e2Article)
-  const e4Article = articleFor(section[0], 'E4')[0]
-  assert.doesNotMatch(e4Article, /data-wk="agree"/,
-    'AC-5: a confirmed exclusion row must render no agree button — the client already confirmed it: got ' + e4Article)
-})
-
-// ---------------------------------------------------------------------------
-// AC-20260910-05-6
-// ---------------------------------------------------------------------------
-test('AC-20260910-05-6: POST /client/__walk/exclusion confirms an exclusion row, 400s a non-exclusion id, 404s an unknown one, and 404s off the client mount', async () => {
-  const dir = tmpdir('excl-route')
-  advanceToSeedDone(dir)
-  const ledgerPath = path.join(dir, 'design/mocks/ledger.md')
-  let text = fs.readFileSync(ledgerPath, 'utf8')
-  text = appendAssumption(text, {
-    id: 'E2', step: 'CLIENT', kind: 'exclusion', claim: 'not: a second insurer field',
-    tag: 'said-by-user', status: 'open', rejected: null, dependents: null, note: 'answer: N014',
-  })
-  fs.writeFileSync(ledgerPath, text)
-  const notExclusion = ledgerCmd(dir, 'add', [
-    '--id', 'W7', '--step', 'WIREFRAMES', '--kind', 'product', '--claim', 'a claim',
-    '--tag', 'invented', '--status', 'open',
-  ])
-  assert.strictEqual(notExclusion.status, 0, 'test setup requires the non-exclusion row W7 to be accepted: ' + notExclusion.stderr)
-
-  const port = await freePort()
-  const { stop } = await serveAtlas(dir, { port })
-  try {
-    const base = 'http://127.0.0.1:' + port
-    const notAnExclusion = await postJson(base + '/client/__walk/exclusion', { id: 'W7' })
-    assert.strictEqual(notAnExclusion.status, 400,
-      'AC-6: confirming a non-exclusion row must 400 — a 200/404 here means the route never checks the row\'s kind: got ' + notAnExclusion.status + ' ' + JSON.stringify(notAnExclusion.body))
-
-    const unknown = await postJson(base + '/client/__walk/exclusion', { id: 'E9' })
-    assert.strictEqual(unknown.status, 404,
-      'AC-6: confirming an unknown id must 404: got ' + unknown.status + ' ' + JSON.stringify(unknown.body))
-
-    const offMount = await postJson(base + '/__walk/exclusion', { id: 'E2' })
-    assert.strictEqual(offMount.status, 404,
-      'AC-6: the non-client mount must never answer /__walk/exclusion — a status other than 404 means the route leaked off the client-only mount: got ' + offMount.status)
-
-    const ok = await postJson(base + '/client/__walk/exclusion', { id: 'E2' })
-    assert.strictEqual(ok.status, 200,
-      'AC-6: confirming a real open exclusion row must 200: got ' + ok.status + ' ' + JSON.stringify(ok.body))
-    const after = fs.readFileSync(ledgerPath, 'utf8')
-    assert.match(after, /\| E2 \|[^\n]*\| confirmed \d{4}-\d{2}-\d{2} \|/,
-      'AC-6: ledger.md must record E2 as "confirmed <today>" after the agree — its still-open status means the write never landed: got\n' + after)
-  } finally {
-    await stop()
-  }
-})
 
 // ---------------------------------------------------------------------------
 // specs/20260911/05-approval-is-bookkeeping.md D3: an agree-only control cannot record
@@ -131,43 +41,6 @@ test('AC-20260910-05-6: POST /client/__walk/exclusion confirms an exclusion row,
 // AC-20260911-05-3, -4, -5, -12.
 // ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// AC-20260911-05-3
-// ---------------------------------------------------------------------------
-test('AC-20260911-05-3: GET /client/walk/<j>.html materializes exclusion rows from the brief on the client\'s FIRST request, and a second GET leaves ledger.md byte-identical', async () => {
-  const dir = tmpdir('excl-materialize-on-walk')
-  advanceToSeedDone(dir)
-  const briefPath = path.join(dir, '.claude/genesis/brief.md')
-  fs.mkdirSync(path.dirname(briefPath), { recursive: true })
-  fs.writeFileSync(briefPath, "## Non-goals\n- SMS reminders — Later\n- Multi-currency — Won't-this-time\n")
-  const ledgerFile = path.join(dir, 'design/mocks/ledger.md')
-  const beforeGet = fs.existsSync(ledgerFile) ? fs.readFileSync(ledgerFile, 'utf8') : null
-  assert.ok(!/\| E\d+ \|/.test(beforeGet || ''),
-    'test setup requires no exclusion row to exist before the client\'s first request: got\n' + beforeGet)
-
-  const port = await freePort()
-  const { stop } = await serveAtlas(dir, { port })
-  try {
-    const res1 = await getJson('http://127.0.0.1:' + port + '/client/walk/' + JOURNEY + '.html')
-    assert.strictEqual(res1.status, 200,
-      'AC-3: GET /client/walk/<j>.html must answer 200 on the client\'s very first request: got ' + res1.status)
-    assert.strictEqual((res1.text.match(/data-wk="exclusion"/g) || []).length, 2,
-      'AC-3: the first request must render two [data-wk="exclusion"] articles — the page must derive the rows itself, on the client\'s own request, before any session command ever runs: got\n' + res1.text)
-    const afterFirst = fs.readFileSync(ledgerFile, 'utf8')
-    assert.match(afterFirst, /\bE1\b[\s\S]*exclusion/,
-      'AC-3: ledger.md must carry an exclusion row (E1) after the client\'s first GET: got\n' + afterFirst)
-    assert.match(afterFirst, /\bE2\b[\s\S]*exclusion/,
-      'AC-3: ledger.md must carry a second exclusion row (E2) after the client\'s first GET: got\n' + afterFirst)
-
-    const res2 = await getJson('http://127.0.0.1:' + port + '/client/walk/' + JOURNEY + '.html')
-    assert.strictEqual(res2.status, 200, 'AC-3: a second GET must also answer 200: got ' + res2.status)
-    const afterSecond = fs.readFileSync(ledgerFile, 'utf8')
-    assert.strictEqual(afterSecond, afterFirst,
-      'AC-3: a second GET must leave ledger.md byte-identical — any diff means materialize is not idempotent when called from the route: got a diff of ' + afterSecond.length + ' vs ' + afterFirst.length + ' bytes')
-  } finally {
-    await stop()
-  }
-})
 
 // ---------------------------------------------------------------------------
 // Review finding (specs/20260911/05, reviewer iteration 1, dispositioned `fix`): D2 put
@@ -257,62 +130,6 @@ test('AC-20260911-05-4: POST /client/__walk/exclusion {verdict:"needed"} sets th
   }
 })
 
-// ---------------------------------------------------------------------------
-// AC-20260911-05-5
-// ---------------------------------------------------------------------------
-test('AC-20260911-05-5: buildWalkPage renders both `agree` and `needed` on an open exclusion, `[data-wk="confirm"]` is never disabled by data-exclusions-open, and the vm player posts each verdict correctly', async () => {
-  const seed = { product: 'Hearwell', journeys: [{ name: JOURNEY, title: 'Onboarding', screens: LABELS.map((l) => ({ label: l, states: [] })) }] }
-  const rows = [
-    { id: 'E1', step: 'CLIENT', kind: 'exclusion', claim: 'SMS reminders', tag: 'said-by-user', status: 'open', rejected: null, dependents: null, note: 'non-goal: SMS reminders' },
-    { id: 'E2', step: 'CLIENT', kind: 'exclusion', claim: 'Multi-currency', tag: 'said-by-user', status: 'open', rejected: null, dependents: null, note: 'non-goal: Multi-currency' },
-  ]
-  const html = buildWalkPage({
-    seed, journey: JOURNEY, notes: [], ledger: rows,
-    walk: { journeys: { [JOURNEY]: { reached: LABELS, misses: [], confirmedAt: null, sentence: null } } },
-    prefix: '',
-  })
-
-  const e1Article = articleFor(html, 'E1')[0]
-  assert.match(e1Article, /data-wk="agree"/,
-    'AC-5: an open exclusion must still render [data-wk="agree"]: got ' + e1Article)
-  assert.match(e1Article, /data-wk="needed"/,
-    'AC-5: an open exclusion must ALSO render [data-wk="needed"] ("No — we need this") — an agree-only control cannot record disagreement: got ' + e1Article)
-
-  const harness = runWalkBrowserRouted(html, { reached: LABELS, misses: [], confirmedAt: null, sentence: null },
-    { '/client/__walk/exclusion': { ok: true, json: () => Promise.resolve({}) } })
-  await flush()
-  const confirmBtn = harness.document.querySelector('[data-wk="confirm"]')
-  assert.ok(confirmBtn, 'test setup requires the built page to carry [data-wk="confirm"]')
-  assert.strictEqual(confirmBtn.hasAttribute('disabled'), false,
-    'AC-5: [data-wk="confirm"] must not be disabled while marks are zero, whatever data-exclusions-open holds — the closing screen asks, it does not block: got disabled=' + confirmBtn.hasAttribute('disabled'))
-
-  const neededBtn = harness.document.querySelector('[data-id="E2"] [data-wk="needed"]')
-  assert.ok(neededBtn, 'test setup requires an [data-wk="needed"] button on exclusion E2')
-  neededBtn.click()
-  await flush()
-  const neededPost = harness.posts.find((p) => p.url.includes('/client/__walk/exclusion') && JSON.parse(p.init.body).id === 'E2')
-  assert.ok(neededPost, 'AC-5: clicking [data-wk="needed"] must POST to /client/__walk/exclusion: got posts=' + JSON.stringify(harness.posts))
-  assert.deepStrictEqual(JSON.parse(neededPost.init.body), { id: 'E2', verdict: 'needed' },
-    'AC-5: the posted body for a needed click must be exactly {id, verdict:"needed"}: got ' + neededPost.init.body)
-  const e2Article = harness.document.querySelector('[data-id="E2"]')
-  assert.strictEqual(e2Article.getAttribute('data-verdict'), 'needed',
-    'AC-5: on an ok response the article must gain data-verdict="needed": got ' + e2Article.getAttribute('data-verdict'))
-  assert.strictEqual(neededBtn.hasAttribute('disabled'), true,
-    'AC-5: the pressed needed button must disable itself: got disabled=' + neededBtn.hasAttribute('disabled'))
-  const agreeBtnOnE2 = harness.document.querySelector('[data-id="E2"] [data-wk="agree"]')
-  assert.strictEqual(agreeBtnOnE2.hasAttribute('disabled'), true,
-    'AC-5: pressing one verdict must disable BOTH buttons on that article, not just the one pressed: got disabled=' + agreeBtnOnE2.hasAttribute('disabled'))
-
-  const agreeBtnOnE1 = harness.document.querySelector('[data-id="E1"] [data-wk="agree"]')
-  agreeBtnOnE1.click()
-  await flush()
-  const agreePost = harness.posts.find((p) => p.url.includes('/client/__walk/exclusion') && JSON.parse(p.init.body).id === 'E1')
-  assert.deepStrictEqual(JSON.parse(agreePost.init.body), { id: 'E1', verdict: 'agree' },
-    'AC-5: clicking [data-wk="agree"] must post {id, verdict:"agree"}: got ' + agreePost.init.body)
-  const e1ArticleAfter = harness.document.querySelector('[data-id="E1"]')
-  assert.strictEqual(e1ArticleAfter.getAttribute('data-verdict'), 'agree',
-    'AC-5: on an ok response an agree click must set data-verdict="agree": got ' + e1ArticleAfter.getAttribute('data-verdict'))
-})
 
 function buildWalkPageForVm(seed, exclusionRow) {
   // D21 moved [data-wk="confirm"] onto the journey's LAST screen only; this vm harness's own

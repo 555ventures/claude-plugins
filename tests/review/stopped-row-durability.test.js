@@ -313,7 +313,7 @@ test('AC-20260821-04-5 (also AC-20260822-01-11, SHALL CONTINUE TO): WHEN a workt
   const dispR = run(host.wt, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
   assert.strictEqual(stateOf(host.wt, host.spec), 'CLOSE', 'setup precondition: a zero-survivor disposition must reach CLOSE: ' + dispR.stdout + dispR.stderr)
 
-  host.gw('add', host.specRel); host.gw('commit', '-q', '-m', 'close')
+  host.gw('add', host.specRel, 'tests/foo.test.js'); host.gw('commit', '-q', '-m', 'close')
   const closeR = run(host.wt, host.spec, '--mark', 'closed')
   assert.strictEqual(closeR.status, 0, 'setup: closed must succeed once the tree is clean apart from the sidecar: ' + closeR.stdout + closeR.stderr)
   assert.strictEqual(stateOf(host.wt, host.spec), 'MERGE', 'setup precondition: a closed spec must land state MERGE')

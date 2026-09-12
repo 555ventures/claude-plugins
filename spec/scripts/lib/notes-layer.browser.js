@@ -51,29 +51,31 @@
   document.head.appendChild(hostStyle)
 
   var css =
-    '.nl-bar,.nl-strip,.nl-proj{font:14px/1.45 var(--v-font);color:var(--v-fg)}' +
-    '.nl-bar{position:fixed;top:12px;right:12px;z-index:9999;display:flex;gap:8px;align-items:center;' +
-    'background:var(--v-bg);border:1px solid var(--v-border);border-radius:var(--v-radius);' +
-    'padding:6px 10px;box-shadow:var(--v-shadow)}' +
-    '.nl-btn{display:inline-flex;align-items:center;height:28px;padding:0 10px;border-radius:var(--v-radius);' +
+    '.nl-bar,.nl-strip,.nl-proj{font:15px/1.5 var(--v-font);color:var(--v-fg)}' +
+    '.nl-bar{position:fixed;top:13px;right:32px;z-index:9999;display:flex;gap:8px;align-items:center;' +
+    'background:none;border:0;border-radius:0;' +
+    'padding:0;box-shadow:none}' +
+    '.nl-btn{display:inline-flex;align-items:center;height:32px;padding:0 12px;border-radius:var(--v-radius);' +
     'border:1px solid var(--v-border);background:var(--v-bg);color:var(--v-fg);cursor:pointer;' +
-    'font:500 12px/1 var(--v-font)}' +
-    '.nl-btn.primary{background:var(--v-primary);color:var(--v-primary-fg);border-color:var(--v-primary)}' +
-    '.nl-strip,.nl-proj{margin:8px 0;border:1px solid var(--v-border);border-radius:var(--v-radius);' +
-    'background:var(--v-bg);padding:8px 10px}' +
-    '.nl-strip h4,.nl-proj h4{margin:0 0 6px;font-size:13px;font-weight:600;color:var(--v-fg)}' +
-    '.nl-strip .n,.nl-proj .n{border-top:1px solid var(--v-border);padding:6px 0;display:flex;' +
-    'align-items:flex-start;gap:8px}' +
+    'font:400 14px/1 var(--v-font)}' +
+    '.nl-btn:hover{background:var(--v-muted-bg)}' +
+    '.nl-btn.primary{background:var(--v-primary);color:var(--v-primary-fg);border-color:var(--v-primary);font-weight:500}' +
+    '.nl-strip,.nl-proj{margin:16px 0;border:0;border-top:1px solid var(--v-border);border-radius:0;' +
+    'background:none;padding:16px 0 0}' +
+    '.nl-strip h4,.nl-proj h4{margin:0 0 10px;font-size:19px;font-weight:600;letter-spacing:-.005em;color:var(--v-fg)}' +
+    '.nl-strip .n,.nl-proj .n{border-top:1px solid var(--v-border);border-left:2px solid var(--v-warn);' +
+    'padding:10px 0 10px 12px;display:flex;align-items:flex-start;gap:10px}' +
     '.nl-strip .n:first-of-type,.nl-proj .n:first-of-type{border-top:0}' +
-    '.nl-strip .n.done,.nl-proj .n.done{color:var(--v-muted);text-decoration:line-through}' +
-    '.nl-strip .n b,.nl-proj .n b{font-size:11px;font-weight:600;color:var(--v-muted);' +
-    'border:1px solid var(--v-border);border-radius:999px;padding:1px 6px;flex:none}' +
-    '.nl-strip .n .t,.nl-proj .n .t{flex:1}' +
-    '.nl-strip .n small,.nl-proj .n small{display:block;color:var(--v-muted);font-size:12px}' +
+    '.nl-strip .n.done,.nl-proj .n.done{border-left-color:var(--v-border)}' +
+    '.nl-strip .n.done,.nl-proj .n.done{color:var(--v-muted)}' +
+    '.nl-strip .n b,.nl-proj .n b{font-size:14px;font-weight:600;color:var(--v-fg);' +
+    'font-variant-numeric:tabular-nums;border:0;border-radius:0;padding:0;flex:none}' +
+    '.nl-strip .n .t,.nl-proj .n .t{flex:1;max-width:80ch}' +
+    '.nl-strip .n small,.nl-proj .n small{display:block;color:var(--v-muted);font-size:14px;margin-top:2px}' +
     '.nl-strip textarea,.nl-proj textarea{width:100%;box-sizing:border-box;min-height:64px;' +
-    'font:14px/1.45 var(--v-font);color:var(--v-fg);border:1px solid var(--v-border);' +
-    'border-radius:var(--v-radius);padding:6px 8px;margin:6px 0;resize:vertical}' +
-    '.nl-row{display:flex;gap:6px;justify-content:flex-end}'
+    'font:15px/1.5 var(--v-font);color:var(--v-fg);border:1px solid var(--v-border);' +
+    'border-radius:var(--v-radius);padding:8px 10px;margin:10px 0;resize:vertical;max-width:60ch}' +
+    '.nl-row{display:flex;gap:8px;justify-content:flex-end}'
 
   // One shadow host per chrome piece (the fixed bar; the in-flow strip or project panel). The
   // host element is a plain block in the mock's flow; everything painted lives behind the

@@ -803,67 +803,108 @@ function page(title, bodyHtml, extraHead = '') {
   return '<!doctype html>\n<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">\n' +
     '<title>' + esc(title) + '</title>\n<style>\n' +
     viewerCss() + '\n' +
-    'body{font:14px/1.5 var(--v-font);margin:0;padding:1.25rem 1.5rem 3rem;background:var(--v-muted-bg);color:var(--v-fg);overflow-x:hidden}\n' +
+    // ── The atlas skin (Fable, 2026-09-12; design source design/client-mocks/*.html) ────────
+    // One rule decides every value below: ONLY A SCREEN IS AN OBJECT. A mock card, a compare
+    // cell and a review artboard are the only things allowed a white fill, a border and a
+    // shadow; every other container — stops index, decision block, compare panel, section
+    // heading, index, legend — is ink on paper: the client type scale (26/19/15/14/12),
+    // hairlines, and a dot or a 2px left rule for state. Weight comes from size and fill, never
+    // from another box. This is a skin: no selector here is new, no element moved, and every
+    // color is a --v-* role (a test forbids a hex literal outside the inlined :root).
+    'body{font:15px/1.5 var(--v-font);margin:0;padding:0;background:var(--v-bg);color:var(--v-fg);overflow-x:hidden}\n' +
+    // Pages with no #shell (the gallery) keep the same gutter their top-level blocks would
+    // have had inside #main.
+    'body>.hdr,body>.lede,body>.legend,body>.pick,body>.bar,body>.sect,body>#stops,body>#journey,body>.cmp,body>.stop,body>.grid{\n' +
+    'margin-left:clamp(24px,3vw,48px);margin-right:clamp(24px,3vw,48px)}\n' +
+    'body>.hdr:first-child{padding-top:32px}\n' +
     'h1,h2{font-weight:600} a{color:var(--v-primary)}\n' +
-    'h1{margin:0;font-size:22px;letter-spacing:-.01em}\n' +
-    '.hdr{display:flex;flex-wrap:wrap;align-items:baseline;gap:.5rem 1rem;margin:0 0 .35rem}\n' +
-    '.hdr .proj{color:var(--v-muted);font-size:14px}\n' +
-    '.lede{color:var(--v-muted);font-size:13px;margin:0 0 .9rem;max-width:70ch}\n' +
-    '.legend{display:flex;flex-wrap:wrap;gap:.4rem .9rem;font-size:12px;color:var(--v-muted);margin:0 0 1rem}\n' +
-    '.legend .badge{margin-right:.15em}\n' +
-    '.pick{border:1px solid var(--v-border);border-left:4px solid var(--v-warn);background:var(--v-bg);border-radius:var(--v-radius);' +
-    'padding:.75rem 1rem;margin:0 0 1rem;box-shadow:var(--v-shadow)}\n' +
-    '.pick h2{margin:0 0 .2rem;font-size:16px}\n' +
-    '.pick p{margin:0;color:var(--v-muted);font-size:13px}\n' +
-    '.card .num{display:inline-flex;align-items:center;justify-content:center;width:1.6em;height:1.6em;border-radius:99px;' +
-    'background:var(--v-primary);color:var(--v-primary-fg);font-size:12px;font-weight:600;margin-right:.5em}\n' +
-    '.empty{border:1px dashed var(--v-border);border-radius:var(--v-radius);color:var(--v-muted);padding:2rem;text-align:center;background:var(--v-bg)}\n' +
-    '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;align-items:start}\n' +
-    '.card{border:1px solid var(--v-border);border-radius:var(--v-radius);padding:.75rem;background:var(--v-bg);box-shadow:var(--v-shadow);min-width:0;' +
-    'transition:box-shadow .15s,transform .15s}\n' +
-    '.card:hover{box-shadow:0 2px 6px color-mix(in srgb, var(--v-fg) 8%, transparent),0 12px 28px color-mix(in srgb, var(--v-fg) 12%, transparent);transform:translateY(-1px)}\n' +
+    'h1{margin:0;font-size:26px;letter-spacing:-.01em}\n' +
+    '.hdr{display:flex;flex-wrap:wrap;align-items:baseline;gap:.5rem 1rem;margin:0 0 .25rem}\n' +
+    '.hdr .proj{color:var(--v-muted);font-size:15px}\n' +
+    '.lede{color:var(--v-muted);font-size:15px;margin:0 0 1rem;max-width:60ch}\n' +
+    '.legend{display:flex;flex-wrap:wrap;gap:.4rem 1.1rem;font-size:14px;color:var(--v-muted);margin:0 0 1rem}\n' +
+    '.legend .badge{margin-right:.4em}\n' +
+    // The header's own pick prompt: a hairline and a left rule, never a box.
+    '.pick{border:0;border-top:1px solid var(--v-border);border-left:2px solid var(--v-warn);background:none;border-radius:0;' +
+    'padding:1rem 0 1rem 1rem;margin:0 0 1.5rem;box-shadow:none}\n' +
+    '.pick h2{margin:0 0 .15rem;font-size:15px}\n' +
+    '.pick p{margin:0;color:var(--v-muted);font-size:14px}\n' +
+    // The step number stops being a filled token and becomes a number, set in the meta voice.
+    '.num{color:var(--v-muted);font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;margin-right:.5em}\n' +
+    '.card .num{display:inline;width:auto;height:auto;background:none;color:var(--v-muted);border-radius:0}\n' +
+    '.empty{border:1px dashed var(--v-border);border-radius:var(--v-radius);color:var(--v-muted);padding:2rem;text-align:center;background:none;font-size:15px}\n' +
+    '.grid{--v-shot-max:180px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;align-items:stretch}\n' +
+    // THE object. It was already right; it was only never alone. Hover moves nothing — the
+    // border warms to the ring role, which is the whole hover vocabulary on this page.
+    '.card{border:1px solid var(--v-border);border-radius:calc(var(--v-radius) + 4px);padding:1rem;background:var(--v-bg);' +
+    'box-shadow:var(--v-shadow);min-width:0;height:100%;box-sizing:border-box;transition:border-color .15s}\n' +
+    '.card:hover{border-color:var(--v-ring);box-shadow:var(--v-shadow);transform:none}\n' +
     '.card.wide{grid-column:1/-1}\n' +
-    '.card h3{margin:.1rem 0 .4rem;font-size:15px;display:flex;align-items:center;flex-wrap:wrap;gap:.15em}\n' +
+    '.card h3{margin:0 0 .5rem;font-size:15px;font-weight:600;display:flex;align-items:center;flex-wrap:wrap;gap:.15em}\n' +
     '.card h3 .open{margin-left:auto}\n' +
-    '.statelabel{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--v-muted);margin:.6rem 0 .1rem}\n' +
-    '.vp{color:var(--v-muted);font-size:11px;font-weight:400;margin-left:.4em}\n' +
-    '.open{float:right;font-size:12px;font-weight:400}\n' +
-    '.badge{display:inline-block;border:1px solid var(--v-border);border-radius:99px;padding:.05em .6em;font-size:11px;font-weight:600;' +
-    'margin-right:.3em;text-transform:uppercase;letter-spacing:.04em;background:var(--v-muted-bg);color:var(--v-muted)}\n' +
-    '.badge.gap{border-color:color-mix(in srgb, var(--v-danger) 40%, transparent);color:var(--v-danger);background:color-mix(in srgb, var(--v-danger) 10%, var(--v-bg))}\n' +
-    '.badge.sketch{border-color:color-mix(in srgb, var(--v-warn) 40%, transparent);color:var(--v-warn);background:color-mix(in srgb, var(--v-warn) 12%, var(--v-bg))}\n' +
-    '.badge.ratified,.badge.approved{border-color:color-mix(in srgb, var(--v-ok) 40%, transparent);color:var(--v-ok);background:color-mix(in srgb, var(--v-ok) 12%, var(--v-bg))}\n' +
-    '.badge.bound{border-color:var(--v-ring);color:var(--v-fg);background:var(--v-bg)}\n' +
-    '.badge.built{border-color:var(--v-primary);color:var(--v-primary-fg);background:var(--v-primary)}\n' +
-    '.badge.orphan{border-color:var(--v-danger);color:var(--v-primary-fg);background:var(--v-danger)}\n' +
-    '.badge.candidate{border-color:color-mix(in srgb, var(--v-warn) 40%, transparent);color:var(--v-warn);background:color-mix(in srgb, var(--v-warn) 12%, var(--v-bg))}\n' +
-    '.shot{overflow:hidden;border-radius:var(--v-radius);background:var(--v-muted-bg);cursor:zoom-in;margin-top:.5rem;' +
-    'border:1px solid var(--v-border);box-shadow:inset 0 1px 3px color-mix(in srgb, var(--v-fg) 6%, transparent)}\n' +
+    '.statelabel{font-size:12px;text-transform:none;letter-spacing:0;color:var(--v-muted);margin:.75rem 0 .25rem}\n' +
+    // The states a screen declares, as links that open the mock already in that state — the
+    // chip shape the filter bar uses, so a state reads as something to click, not a caption.
+
+    '.vp{color:var(--v-muted);font-size:12px;font-weight:400;margin-left:.5em;font-variant-numeric:tabular-nums}\n' +
+    '.open{float:none;margin-left:auto;font-size:14px;font-weight:500;color:var(--v-fg);text-decoration:none;' +
+    'border:1px solid var(--v-border);border-radius:var(--v-radius);padding:.25em .7em}\n' +
+    '.open:hover{background:var(--v-muted-bg)}\n' +
+    // Six tinted uppercase pills become one shape: a dot in the role color, then the word in the
+    // meta voice. The dot register is the client index's .j-state dot, unchanged in meaning.
+    '.badge{display:inline-flex;align-items:center;gap:.45em;border:0;border-radius:0;padding:0;font-size:12px;font-weight:400;' +
+    'margin-right:.7em;text-transform:none;letter-spacing:0;background:none;color:var(--v-muted)}\n' +
+    '.badge::before{content:"";width:6px;height:6px;border-radius:99px;background:var(--v-muted);flex:none}\n' +
+    '.badge.gap::before{background:var(--v-danger)}\n' +
+    '.badge.sketch::before{background:var(--v-warn)}\n' +
+    '.badge.ratified::before,.badge.approved::before{background:var(--v-ok)}\n' +
+    '.badge.bound::before{background:var(--v-ring)}\n' +
+    '.badge.built::before{background:var(--v-primary)}\n' +
+    // Orphan is the one error in the register, so it is the one badge that colors its word.
+    '.badge.orphan{color:var(--v-danger)}.badge.orphan::before{background:var(--v-danger)}\n' +
+    '.badge.candidate::before{background:var(--v-warn)}\n' +
+    '.shotlink{display:block;text-decoration:none;color:inherit}\n' +
+    '.shotlink .shot{cursor:pointer}\n' +
+    '.shot{overflow:hidden;border-radius:4px;background:var(--v-muted-bg);cursor:zoom-in;margin-top:0;' +
+    'border:1px solid var(--v-border);box-shadow:none}\n' +
     '.frame{border:0;display:block;transform-origin:0 0;pointer-events:none;background:var(--v-muted-bg);width:100%}\n' +
     // Cards clamp to one fixed preview height (a tall mock must never make a tall card — the card is
     // a thumbnail); the clipped remainder fades out and the click-to-inspect lightbox shows the full mock.
     '.shot{position:relative;max-height:var(--v-shot-max,260px)}\n' +
     '.shot.clip::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4rem;pointer-events:none;' +
     'background:linear-gradient(to bottom,transparent,var(--v-bg))}\n' +
-    '.sect{margin:2rem 0 0}\n' +
-    '.sect>h2{font-size:17px;margin:0 0 .75rem;padding:.1rem 0 .1rem .7rem;border-left:4px solid var(--v-primary);display:flex;align-items:baseline;flex-wrap:wrap;gap:.5em}\n' +
-    '.sect>h2 .count{color:var(--v-muted);font-size:12px;font-weight:500;border:1px solid var(--v-border);border-radius:99px;padding:0 .6em;background:var(--v-bg)}\n' +
-    '.sect>h2 .rv-review{margin-left:auto;font-size:13px;font-weight:500;color:var(--v-primary);text-decoration:none}\n' +
-    '.sect>p.meta{margin:-.4rem 0 .75rem .95rem;font-size:13px;max-width:100ch}\n' +
-    '.gaps{display:flex;flex-wrap:wrap;gap:.4rem;margin:.75rem 0 0}\n' +
-    '.gapchip{border:1px dashed var(--v-danger);color:var(--v-danger);border-radius:99px;padding:.05rem .65rem;font-size:12px}\n' +
-    '.gapcard{border:1px dashed var(--v-border);border-radius:var(--v-radius);color:var(--v-muted);display:flex;align-items:center;' +
-    'justify-content:center;min-height:6rem;margin-top:.35rem}\n' +
-    '.meta{color:var(--v-muted);font-size:12px;margin-top:.35rem}\n' +
-    '.bar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;' +
-    'background:color-mix(in srgb, var(--v-muted-bg) 88%, transparent);backdrop-filter:blur(6px);padding:.5rem 0;margin:0 0 .5rem;border-bottom:1px solid var(--v-border)}\n' +
-    '.bar button{background:var(--v-bg);color:var(--v-fg);border:1px solid var(--v-border);border-radius:99px;padding:.25em .8em;' +
-    'cursor:pointer;font:inherit;font-size:12px;display:inline-flex;align-items:center;gap:.4em}\n' +
-    '.bar button.on{border-color:var(--v-primary);background:var(--v-primary);color:var(--v-primary-fg)}\n' +
-    '.bar button .dot{width:.55em;height:.55em;border-radius:99px;background:var(--v-muted);display:inline-block}\n' +
+    '.sect{margin:3rem 0 0}\n' +
+    // The heading names the board. The 4px primary bar was doing the board's job for it.
+    '.sect>h2{font-size:19px;font-weight:600;letter-spacing:-.005em;margin:0 0 .5rem;padding:0;border-left:0;' +
+    'display:flex;align-items:baseline;flex-wrap:wrap;gap:.6em}\n' +
+    '.sect>h2 .count{color:var(--v-muted);font-size:14px;font-weight:400;border:0;border-radius:0;padding:0;' +
+    'background:none;font-variant-numeric:tabular-nums}\n' +
+    '.sect>h2 .rv-review{margin-left:auto;font-size:14px;font-weight:400;color:var(--v-muted);text-decoration:none}\n' +
+    '.sect>h2 .rv-review:hover{color:var(--v-fg);text-decoration:underline}\n' +
+    '.sect>p.meta{margin:0 0 1rem;font-size:15px;max-width:60ch;color:var(--v-muted)}\n' +
+    '.gaps{display:flex;flex-wrap:wrap;gap:.4rem;margin:1rem 0 0}\n' +
+    // A screen nobody has drawn yet is a to-do, not an error: it takes the chip shape the filter
+    // bar uses and keeps danger to a 6px dot.
+    '.gapchip{display:inline-flex;align-items:center;gap:.45em;border:0;background:var(--v-muted-bg);color:var(--v-muted);' +
+    'border-radius:999px;padding:.2rem .75rem;font-size:14px}\n' +
+    '.gapchip::before{content:"";width:6px;height:6px;border-radius:99px;background:var(--v-danger);flex:none}\n' +
+    '.gapcard{border:1px dashed var(--v-border);border-radius:calc(var(--v-radius) + 4px);color:var(--v-muted);display:flex;' +
+    'align-items:center;justify-content:center;min-height:6rem;margin-top:.35rem;font-size:14px}\n' +
+    '.meta{color:var(--v-muted);font-size:14px;margin-top:.4rem}\n' +
+    // The bar rides on the page's own white so the chips are the only fills in it.
+    '.bar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;' +
+    'background:color-mix(in srgb, var(--v-bg) 92%, transparent);backdrop-filter:blur(6px);' +
+    'padding:.85rem clamp(24px,3vw,48px);margin:0 calc(-1 * clamp(24px,3vw,48px)) 1.25rem;' +
+    'border-bottom:1px solid var(--v-border)}\n' +
+    '.bar button{background:var(--v-muted-bg);color:var(--v-muted);border:0;border-radius:999px;padding:.35em .9em;' +
+    'cursor:pointer;font:inherit;font-size:14px;display:inline-flex;align-items:center;gap:.45em}\n' +
+    '.bar button:hover{color:var(--v-fg)}\n' +
+    '.bar button.on{border-color:transparent;background:var(--v-primary);color:var(--v-primary-fg);font-weight:500}\n' +
+    '.bar button .dot{width:6px;height:6px;border-radius:99px;background:var(--v-muted);display:inline-block}\n' +
     '.bar button .dot.gap{background:var(--v-danger)}.bar button .dot.sketch{background:var(--v-warn)}\n' +
     '.bar button .dot.approved,.bar button .dot.ratified,.bar button .dot.built{background:var(--v-ok)}\n' +
-    '.bar .sep{width:1px;height:1.2em;background:var(--v-border);margin:0 .35em}\n' +
+    '.bar button.on .dot{background:var(--v-primary-fg)}\n' +
+    '.bar .sep{width:1px;height:1.2em;background:var(--v-border);margin:0 .4em}\n' +
     // specs/20260907/09-atlas-index-and-note-navigation.md D1/D2/D10: the persistent screen
     // index — shipped in this shared stylesheet on every page (AC-14), emitted for pages that
     // never use it (AC-5: cmdGallery renders none of the #shell/#toc/.tocrow markup below). D1:
@@ -871,36 +912,36 @@ function page(title, bodyHtml, extraHead = '') {
     // the breakpoint lives ONLY here — the script reads #tocbtn's computed display instead of
     // repeating it (A4: a duplicated breakpoint left the overlay open after a jump).
     '#shell{display:flex;align-items:flex-start}\n' +
-    '#toc{--toc-w:264px;width:var(--toc-w);flex:none;box-sizing:border-box;background:var(--v-bg);' +
-    'border-right:1px solid var(--v-border);padding:1rem .75rem;overflow:auto}\n' +
-    '#main{flex:1;min-width:0}\n' +
-    '.tochdr{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--v-muted);margin:0 0 .5rem}\n' +
-    '#tocsearch{width:100%;box-sizing:border-box;font:inherit;padding:.35em .6em;border:1px solid var(--v-border);' +
-    'border-radius:var(--v-radius);background:var(--v-bg);color:var(--v-fg);margin:0 0 .75rem}\n' +
+    '#toc{--toc-w:280px;width:var(--toc-w);flex:none;box-sizing:border-box;background:var(--v-muted-bg);' +
+    'border-right:0;padding:32px 24px 20vh;overflow:auto}\n' +
+    '#main{flex:1;min-width:0;padding:32px clamp(24px,3vw,48px) 20vh}\n' +
+    '.tochdr{font-size:15px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--v-fg);margin:0 0 .75rem}\n' +
+    '#tocsearch{width:100%;box-sizing:border-box;font:inherit;font-size:14px;padding:.45em .7em;border:1px solid var(--v-border);' +
+    'border-radius:var(--v-radius);background:var(--v-bg);color:var(--v-fg);margin:0 0 1rem}\n' +
     '.tocgroup{margin:0 0 1rem}\n' +
     // D2: the heading is a jump target too, so it reads as clickable like a .tocrow does.
-    '.tochead{display:flex;align-items:baseline;gap:.4em;font-size:11px;text-transform:uppercase;letter-spacing:.06em;' +
-    'color:var(--v-muted);border-left:4px solid transparent;padding:.1rem 0 .1rem .5rem;margin:0 0 .3rem;cursor:pointer}\n' +
+    '.tochead{display:flex;align-items:baseline;gap:.5em;font-size:14px;font-weight:600;text-transform:none;letter-spacing:0;' +
+    'color:var(--v-fg);border-left:2px solid transparent;padding:.15rem 0 .15rem .6rem;margin:0 0 .35rem;cursor:pointer}\n' +
     '.tochead.here{border-left-color:var(--v-primary);color:var(--v-fg)}\n' +
-    '.tochead .count{margin-left:auto;color:var(--v-muted);font-size:11px;border:1px solid var(--v-border);' +
-    'border-radius:99px;padding:0 .5em;background:var(--v-bg)}\n' +
-    '.tocrow{display:flex;align-items:center;gap:.5em;width:100%;box-sizing:border-box;background:none;border:0;' +
-    'border-radius:var(--v-radius);padding:.3em .5em;color:var(--v-fg);cursor:pointer;font:inherit;font-size:13px;text-align:left}\n' +
-    '.tocrow:hover{background:var(--v-muted-bg)}\n' +
-    '.tocrow .dot{width:.55em;height:.55em;border-radius:99px;background:var(--v-muted);display:inline-block;flex:none}\n' +
+    '.tochead .count{margin-left:auto;color:var(--v-muted);font-size:14px;font-weight:400;border:0;' +
+    'border-radius:0;padding:0;background:none;font-variant-numeric:tabular-nums}\n' +
+    '.tocrow{display:flex;align-items:center;gap:.55em;width:100%;box-sizing:border-box;background:none;border:0;' +
+    'border-radius:var(--v-radius);padding:.35em .5em;color:var(--v-fg);cursor:pointer;font:inherit;font-size:14px;text-align:left}\n' +
+    '.tocrow:hover{background:var(--v-bg)}\n' +
+    '.tocrow .dot{width:8px;height:8px;border-radius:99px;background:var(--v-muted);display:inline-block;flex:none}\n' +
     // UI section's dot register, verbatim: danger gap, warn sketch, ok approved/built, ring
     // bound, muted otherwise (ratified rides the same ok tint the .bar chips already give it).
     '.tocrow .dot.gap{background:var(--v-danger)}.tocrow .dot.sketch{background:var(--v-warn)}\n' +
     '.tocrow .dot.approved,.tocrow .dot.ratified,.tocrow .dot.built{background:var(--v-ok)}\n' +
     '.tocrow .dot.bound{background:var(--v-ring)}\n' +
     '.tocrow .lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n' +
-    '.tocempty{color:var(--v-muted);font-size:12px;margin:.5rem 0}\n' +
+    '.tocempty{color:var(--v-muted);font-size:14px;margin:.5rem 0}\n' +
     '#tocbtn{display:none}\n' +
     // UI section, verbatim: "overlay open" is #toc at translateX(0), the scrim painted, and
     // #tocbtn.on — the same pressed treatment the .bar status chips already give `.on`, pinned
     // explicitly here (higher specificity than the shared `.bar button.on` rule) so the pressed
     // state never depends on rule order.
-    '#tocbtn.on{border-color:var(--v-primary);background:var(--v-primary);color:var(--v-primary-fg)}\n' +
+    '#tocbtn.on{border-color:transparent;background:var(--v-primary);color:var(--v-primary-fg)}\n' +
     '#tocscrim{display:none;position:fixed;inset:0;z-index:8;background:color-mix(in srgb, var(--v-fg) 40%, transparent)}\n' +
     '#tocscrim.on{display:block}\n' +
     '.flash{outline:2px solid var(--v-primary);outline-offset:2px}\n' +
@@ -911,45 +952,68 @@ function page(title, bodyHtml, extraHead = '') {
     // UI section: the transition is suppressed under prefers-reduced-motion — the page already
     // honours that media feature elsewhere.
     '@media(prefers-reduced-motion:reduce){#toc{transition:none}}\n' +
-    '#journey{height:280px;border:1px solid var(--v-border);border-radius:var(--v-radius);margin-bottom:1rem;background:var(--v-bg);box-shadow:var(--v-shadow)}\n' +
+    // The graph is a pane, not a card: a fill and a radius, no border and no shadow.
+    '#journey{height:280px;border:0;border-radius:calc(var(--v-radius) + 4px);margin-bottom:1.5rem;background:var(--v-muted-bg);box-shadow:none}\n' +
     '#lb{position:fixed;inset:0;z-index:10;background:color-mix(in srgb, var(--v-fg) 85%, transparent);display:none;overflow:auto;padding:3.2rem 1rem 1rem}\n' +
     '#lb.on{display:block}\n' +
-    '#lb iframe{border:0;display:block;margin:0 auto;background:var(--v-bg);box-shadow:var(--v-shadow)}\n' +
-    '#lbbar{position:fixed;top:.6rem;right:1rem;z-index:11;display:flex;gap:.4rem;align-items:center}\n' +
-    '#lbbar span{color:var(--v-bg);font-size:13px;margin-right:.4em}\n' +
-    '#lbbar button,#lbbar a{background:var(--v-muted-bg);color:var(--v-fg);border:1px solid var(--v-border);border-radius:var(--v-radius);' +
-    'padding:.2em .7em;cursor:pointer;font:inherit;font-size:13px;text-decoration:none}\n' +
+    '#lb iframe{border:0;display:block;margin:0 auto;background:var(--v-bg);border-radius:var(--v-radius);box-shadow:var(--v-shadow)}\n' +
+    '#lbbar{position:fixed;top:.75rem;right:1rem;z-index:11;display:flex;gap:.5rem;align-items:center}\n' +
+    '#lbbar span{color:var(--v-bg);font-size:15px;font-weight:500;margin-right:.5em}\n' +
+    '#lbbar button,#lbbar a{background:var(--v-bg);color:var(--v-fg);border:1px solid var(--v-border);border-radius:var(--v-radius);' +
+    'padding:.35em .9em;cursor:pointer;font:inherit;font-size:14px;text-decoration:none}\n' +
+    '#lbbar a:hover,#lbbar button:hover{background:var(--v-muted-bg)}\n' +
     // specs/20260905/01-picks-on-the-atlas-page.md D3(c): the compare table — #stops is links
     // only (D3a), .cmp is a CSS grid with one column per group (--cols, set inline per stop),
     // .chead stays visible while its steps scroll, .step spans every column as a row label, and
     // .card.empty renders as a dashed placeholder instead of a blank cell.
-    '#stops{margin:0 0 1.25rem;padding:.75rem 1rem;border:1px solid var(--v-border);border-left:4px solid var(--v-warn);' +
-    'border-radius:var(--v-radius);background:var(--v-bg);box-shadow:var(--v-shadow)}\n' +
-    '#stops h2{margin:0 0 .3rem;font-size:14px}#stops h2~h2{margin-top:.6rem}\n' +
-    '#stops ol{margin:0;padding-left:1.2rem;font-size:13px}\n' +
-    '.cmp{display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:.75rem;align-items:start;' +
-    'margin:0 0 1.25rem;padding:.75rem;border:1px solid var(--v-border);border-radius:var(--v-radius);background:var(--v-bg)}\n' +
-    '.chead{position:sticky;top:2.6rem;z-index:3;display:flex;align-items:center;flex-wrap:wrap;gap:.4em;' +
-    'padding:.4rem .1rem;background:var(--v-bg);font-size:13px;font-weight:600}\n' +
-    '.chead button{background:var(--v-bg);color:var(--v-fg);border:1px solid var(--v-border);border-radius:99px;' +
-    'padding:.15em .8em;cursor:pointer;font:inherit;font-size:12px;margin-left:auto}\n' +
-    '.chead.picked button{border-color:var(--v-ok);color:var(--v-ok)}\n' +
+    // The stops index is the client's request log turned toward the owner: hairline rows, a 2px
+    // left rule, and the only filled control above the fold.
+    '#stops{margin:0 0 2rem;padding:0;border:0;border-radius:0;background:none;box-shadow:none}\n' +
+    '#stops h2{margin:0 0 .5rem;font-size:15px;font-weight:600}#stops h2~h2{margin-top:1.5rem}\n' +
+    '#stops ol{margin:0;padding:0;list-style:none;font-size:15px}\n' +
+    '#stops li{border-top:1px solid var(--v-border);border-left:2px solid var(--v-warn);padding:.65rem 0 .65rem .85rem;' +
+    'color:var(--v-muted);font-size:14px}\n' +
+    '#stops li:last-child{border-bottom:1px solid var(--v-border)}\n' +
+    '#stops li a{font-size:15px;font-weight:500;color:var(--v-fg);text-decoration:none;margin-right:.4em}\n' +
+    '#stops li a:hover{text-decoration:underline}\n' +
+    // A second <ol> only ever exists when the decided list is present alongside the open one.
+    '#stops ol~ol li{border-left-color:var(--v-ok)}\n' +
+    '.cmp{--v-shot-max:260px;display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:1.5rem;align-items:start;' +
+    'margin:0 0 2rem;padding:0;border:0;border-radius:0;background:none}\n' +
+    '.chead{position:sticky;top:3.1rem;z-index:3;display:flex;align-items:center;flex-wrap:wrap;gap:.5em;' +
+    'padding:.6rem 0;background:var(--v-bg);border-bottom:1px solid var(--v-border);font-size:15px;font-weight:600}\n' +
+    '.chead button{background:var(--v-bg);color:var(--v-fg);border:1px solid var(--v-border);border-radius:var(--v-radius);' +
+    'padding:.35em .9em;cursor:pointer;font:inherit;font-size:14px;margin-left:auto}\n' +
+    '.chead button:hover{background:var(--v-muted-bg)}\n' +
+    // The picked column carries the page's one filled control; the rejected ones step back.
+    '.chead.picked button{background:var(--v-primary);color:var(--v-primary-fg);border-color:var(--v-primary);font-weight:500}\n' +
+    '.chead.rejected{color:var(--v-muted)}\n' +
     '.chead.rejected button{color:var(--v-muted)}\n' +
-    '.step{grid-column:1/-1;font-size:12px;font-weight:600;color:var(--v-muted);text-transform:uppercase;' +
-    'letter-spacing:.04em;padding:.5rem 0 0;border-top:1px solid var(--v-border);margin-top:.25rem}\n' +
+    '.chead .settled{margin-left:auto;font-size:14px;font-weight:400;color:var(--v-muted)}\n' +
+    '.chead.picked .settled{display:none}\n' +
+    '.step{grid-column:1/-1;font-size:14px;font-weight:400;color:var(--v-muted);text-transform:none;' +
+    'letter-spacing:0;padding:1rem 0 0;border-top:1px solid var(--v-border);margin-top:.5rem}\n' +
     '.chead + .step{border-top:0;margin-top:0;padding-top:0}\n' +
-    '.card.empty{border:1px dashed var(--v-border);border-radius:var(--v-radius);background:transparent;' +
+    '.card.empty{border:1px dashed var(--v-border);border-radius:calc(var(--v-radius) + 4px);background:none;' +
     'min-height:6rem;box-shadow:none}\n' +
-    '.badge.picked{border-color:var(--v-ok);color:var(--v-ok);background:color-mix(in srgb, var(--v-ok) 12%, var(--v-bg))}\n' +
-    '.badge.rejected{border-color:var(--v-border);color:var(--v-muted);background:var(--v-muted-bg)}\n' +
-    '.stop{display:flex;flex-wrap:wrap;gap:.5rem;align-items:flex-start;margin:0 0 1rem;padding:.75rem;' +
-    'border:1px solid var(--v-border);border-radius:var(--v-radius);background:var(--v-bg)}\n' +
-    '.stop textarea{flex:1 1 16rem;min-height:2.6rem;font:14px/1.4 var(--v-font);color:var(--v-fg);' +
-    'border:1px solid var(--v-border);border-radius:var(--v-radius);padding:.4em .6em;resize:vertical}\n' +
+    '.badge.picked::before{background:var(--v-ok)}\n' +
+    '.badge.rejected{color:var(--v-muted)}.badge.rejected::before{background:var(--v-border)}\n' +
+    // The decision block: a hairline at the foot of what it decides, never a box of its own.
+    '.stop{display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-start;margin:0 0 1.5rem;padding:1rem 0 0;' +
+    'border:0;border-top:1px solid var(--v-border);border-radius:0;background:none}\n' +
+    '.stop textarea{flex:0 1 32rem;min-height:0;font:15px/1.5 var(--v-font);color:var(--v-fg);' +
+    'border:1px solid var(--v-border);border-radius:var(--v-radius);padding:.35em .7em;resize:vertical;max-width:60ch}\n' +
     '.stop button,.cmp input,.cmp button[data-decide]{background:var(--v-bg);color:var(--v-fg);' +
-    'border:1px solid var(--v-border);border-radius:99px;padding:.25em .9em;cursor:pointer;font:inherit;font-size:13px}\n' +
-    '.decide-msg{grid-column:1/-1;font-size:12px;color:var(--v-danger);margin-top:.25rem}\n' +
-    '@media(max-width:640px){body{padding:.75rem}.grid{grid-template-columns:1fr}#journey{height:200px}' +
+    'border:1px solid var(--v-border);border-radius:var(--v-radius);padding:.4em 1em;cursor:pointer;font:inherit;font-size:14px}\n' +
+    '.stop button:hover{background:var(--v-muted-bg)}\n' +
+    // One filled button per decision — the thing it is your turn to do.
+    '.stop button[data-decide="approve"]{background:var(--v-primary);color:var(--v-primary-fg);' +
+    'border-color:var(--v-primary);font-weight:500}\n' +
+    '.stop button[data-decide="approve"]:hover{background:color-mix(in srgb, var(--v-primary) 88%, var(--v-bg))}\n' +
+    '.decide-msg{grid-column:1/-1;font-size:14px;color:var(--v-danger);margin-top:.35rem}\n' +
+    // One focus treatment for the whole page.
+    ':is(button,a,input,textarea,summary):focus-visible{outline:2px solid var(--v-ring);outline-offset:2px}\n' +
+    '@media(max-width:640px){#main{padding:24px 16px 20vh}.grid{grid-template-columns:1fr}#journey{height:200px}' +
     '.cmp{grid-template-columns:1fr}.chead{position:static}}\n' +
     '</style>' + extraHead + '</head><body>\n' + bodyHtml + '\n</body></html>\n'
 }
@@ -972,7 +1036,7 @@ const UI_SCRIPT = '<script>\n' +
   'var h=Math.max(__measure(f)||0,vh);f.style.height=h+"px";' +
   'var sc=Math.min(1,cw/w);f.style.transform="scale("+sc+")";f.style.margin=sc<1?"0":"0 auto";' +
   'var full=Math.round(h*sc),cap=parseInt(getComputedStyle(s).maxHeight)||full;' +
-  's.style.height=Math.min(full,cap)+"px";s.classList.toggle("clip",full>cap)}\n' +
+  's.style.height=cap+"px";s.classList.toggle("clip",full>cap)}\n' +
   'function __fitAll(){document.querySelectorAll("iframe.frame").forEach(function(f){__still(f);__fit(f)})}\n' +
   // Grid mocks pause every CSS animation (infinite pulse/shimmer loops across ~20 iframes burn
   // 25%+ renderer CPU at idle); the lightbox iframe is separate and stays live.
@@ -1004,7 +1068,7 @@ const UI_SCRIPT = '<script>\n' +
   '"<span class=\\"vp\\">"+(+f.dataset.w||390)+"\\u00d7"+(+f.dataset.h||844)+"</span> ' +
   '<a class=\\"open\\" href=\\""+__full(f.getAttribute("src"))+"\\" target=\\"_blank\\">open \\u2197</a>");\n' +
   '    f.addEventListener("load",function(){__still(f);__fit(f);setTimeout(function(){__fit(f)},250)});\n' +
-  '    s.addEventListener("click",function(){__lbOpen(f)});\n' +
+  '    if(!s.closest("a.shotlink"))s.addEventListener("click",function(){__lbOpen(f)});\n' +
   '  });\n' +
   '  var lb=document.getElementById("lb");if(lb)lb.addEventListener("click",function(e){if(e.target===lb)__lbClose()});\n' +
   '  var lf=document.getElementById("lbframe");if(lf)lf.addEventListener("load",function(){' +
@@ -1352,15 +1416,22 @@ function buildAtlas(root, out) {
       }
     }
     const badgeHtml = badges.map(b => '<span class="badge ' + b + '">' + b + '</span>').join('')
-    // D15: one frame per declared data-state-btn state, each carrying data-screen-label/
-    // data-state so the atlas surfaces every state side by side instead of only the default —
-    // a mock with no state controls keeps the single default frame, byte-identical to before.
-    const body = mock.states.length
-      ? mock.states.map(s =>
-          '<div class="framewrap" data-screen-label="' + esc(label) + '" data-state="' + esc(s) + '">' +
-          '<div class="statelabel">' + esc(s) + '</div>' +
-          frameTag(path.relative(outDir, mock.file), mock.vp.width, mock.vp.height) + '</div>').join('')
-      : frameTag(path.relative(outDir, mock.file), mock.vp.width, mock.vp.height)
+    // ONE frame per screen, never one per state. A screen declaring nine states used to stack
+    // nine full-size frames in a single card, and because a grid row is as tall as its tallest
+    // card, a single such card pushed the next row a whole screen-height down — the grid stopped
+    // working as a grid. The preview is a recognition thumbnail (the reviewer opens the mock
+    // itself to read it), so the happy screen is the picture and every other state becomes a
+    // link that opens the mock already in that state. The data-screen-label/data-state pair the
+    // frames carried moves onto those links, so anything resolving "which screen, which state"
+    // still finds it.
+    const mockRel = path.relative(outDir, mock.file)
+    const journeyOf = rawBrief && rawBrief.startsWith('seed:') ? rawBrief.slice(5) : null
+    const frameHtml = frameTag(mockRel, mock.vp.width, mock.vp.height)
+    const body = journeyOf
+      ? '<a class="shotlink" href="/review/' + encodeURIComponent(journeyOf) + '.html#board-' +
+        encodeURIComponent(label) + '" title="Review ' + esc(label) + ' on the ' + esc(journeyOf) + ' journey">' +
+        frameHtml + '</a>'
+      : frameHtml
     const builtFrame = routes[label]
       ? '\n<h3>built</h3>' + frameTag(routes[label], mock.vp.width, mock.vp.height)
       : ''
@@ -1369,6 +1440,7 @@ function buildAtlas(root, out) {
       : 'brief: ' + esc(path.basename(rawBrief))
     const meta = [
       briefDisplay || 'no declaring brief',
+      mock.states.length ? mock.states.length + ' states' : null,
       claim ? 'spec: ' + esc(claim.spec) : null,
     ].filter(Boolean).join(' · ')
     // wide framings (tablet/desktop mocks) take the full row so they stay legible when scaled
@@ -2651,7 +2723,8 @@ function createRequestHandler(root, opts = {}) {
         if (themeArg) body = applyThemeSwap(body, themeArg, rootAbs)
         if (state) body = insertBeforeBodyEnd(body, stateClickScript(state))
         if (urlObj.searchParams.has('walk')) body = insertBeforeBodyEnd(body, walkScriptTag(prefix))
-        if (!urlObj.searchParams.has('clean')) body = injectNotesScript(body, 'mock', prefix)
+        if (urlObj.searchParams.has('clean')) body = insertBeforeBodyEnd(body, CLEAN_STYLE)
+        else body = injectNotesScript(body, 'mock', prefix)
         res.writeHead(200, { 'content-type': contentType, 'cache-control': 'no-store' })
         res.end(body)
         return
@@ -2661,6 +2734,10 @@ function createRequestHandler(root, opts = {}) {
     })
   }
 }
+
+// The chrome a mock carries for its own sake, hidden whenever a host surface frames it.
+const CLEAN_STYLE = '<style>[data-state-btn]{display:none!important}' +
+  '[data-contract="none"]:has(>[data-state-btn]){display:none!important}</style>'
 
 function cmdServe(argv) {
   const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d }

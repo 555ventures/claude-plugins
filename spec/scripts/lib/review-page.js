@@ -90,7 +90,7 @@ function pillText(stop) {
 // ---- rail ---------------------------------------------------------------------------------------
 // Rail anchors use `data-journey`/`data-screen`, never `data-label` — `data-label` is the
 // artboard's own anchor (Contracts) and the tests slice the page on it.
-function renderRail(seed, journey, screens, openByLabel) {
+function renderRail(seed, journey, screens, openByLabel, projectOpen) {
   const journeysHtml = (seed.journeys || []).map((j, i) => {
     const cur = j.name === journey
     // The current journey's mark trails its title (a small "reviewing" chip carrying aria-current).
@@ -105,9 +105,16 @@ function renderRail(seed, journey, screens, openByLabel) {
   }).join('')
   const select = '<select class="rv-jump" aria-label="Jump to a screen" data-rv="jump">' +
     screens.map((s, i) => '<option value="board-' + esc(s.label) + '">' + (i + 1) + '. ' + esc(s.label) + '</option>').join('') + '</select>'
+  // Rendered whenever the journey carries any project-scope item, open or not, so the row does
+  // not blink in and out as the last one is resolved.
+  const projectHtml = projectOpen == null ? '' :
+    '<ol class="rv-list rv-screens rv-project"><li><a data-rv="screen" data-screen="__project" href="#">' +
+    '<span class="rv-n">·</span>Whole project' +
+    '<span class="rv-count" data-rv="count" data-screen="__project"' + (projectOpen ? '' : ' data-zero') + '>' +
+    projectOpen + '</span></a></li></ol>'
   return '<nav class="rv-rail" data-rv="rail" aria-label="Journeys and screens">' +
     '<h2>Journeys</h2><ol class="rv-list rv-journeys">' + journeysHtml + '</ol>' +
-    '<h2>Screens</h2><ol class="rv-list rv-screens">' + screensHtml + '</ol>' + select + '</nav>'
+    '<h2>Screens</h2><ol class="rv-list rv-screens">' + screensHtml + '</ol>' + projectHtml + select + '</nav>'
 }
 
 // ---- artboards ----------------------------------------------------------------------------------
@@ -120,24 +127,35 @@ function frameSrc(prefix, label, state) {
 // One iframe per state tab (the tab shows its own frame; the others stay hidden and unloaded), so
 // a tab's src is a static attribute the page never rewrites. All of a focused board's frames carry
 // data-focus. width/height come from the primary viewport (A6 floor).
-function renderBoard(screen, i, vp, prefix, openCount, itemCount, focused) {
+function renderBoard(screen, i, vp, prefix, openCount, focused, total) {
   const label = screen.label
   const tabs = ['happy'].concat(screen.states || [])
-  const tabsHtml = tabs.map((s, k) =>
-    '<button type="button" role="tab" data-rv="tab" data-state="' + esc(s) + '" aria-selected="' + (k === 0 ? 'true' : 'false') + '">' + esc(s) + '</button>').join('')
+  const GRAY = ['empty', 'loading', 'error']
+  let firstGray = true
+  const tabsHtml = tabs.map((s, k) => {
+    const gray = GRAY.indexOf(String(s).toLowerCase()) >= 0
+    const mark = gray && firstGray ? ' data-gray data-gray-first' : (gray ? ' data-gray' : '')
+    if (gray) firstGray = false
+    return '<button type="button" role="tab" data-rv="tab" data-state="' + esc(s) + '"' + mark +
+      ' aria-selected="' + (k === 0 ? 'true' : 'false') + '">' + esc(s) + '</button>'
+  }).join('')
   const framesHtml = tabs.map((s, k) =>
     '<iframe data-rv="frame" data-label="' + esc(label) + '" data-state="' + esc(s) + '"' + (focused ? ' data-focus' : '') + (k === 0 ? '' : ' hidden') +
     ' width="' + vp.width + '" height="' + vp.height + '" loading="lazy" scrolling="no" title="' + esc(label) + ' · ' + esc(s) +
     '" src="' + frameSrc(prefix, label, k === 0 ? null : s) + '"></iframe>').join('')
   return '<section class="rv-board" data-rv="board" data-label="' + esc(label) + '" id="board-' + esc(label) + '"' + (focused ? ' data-focus' : '') + '>' +
-    '<header class="rv-cap"><h3>' + (i + 1) + '. ' + esc(label) + '</h3>' +
+    '<header class="rv-cap"><h3>' + esc(label) +
+    '<span class="rv-of">· ' + (i + 1) + ' of ' + total + '</span></h3>' +
+    '<span class="rv-vp">' + vp.width + '×' + vp.height + '</span>' +
     // D3: the badge is the screen's OPEN count (the title carries the total); review.browser.js
     // keeps it in step with the rail after every answer.
     '<button type="button" class="rv-badge" data-rv="badge" data-label="' + esc(label) + '"' + (openCount ? '' : ' data-zero') +
-    ' title="' + openCount + ' open of ' + itemCount + ' on this screen">' + openCount + '</button>' +
-    '<button type="button" class="rv-addnote" data-rv="addnote" data-label="' + esc(label) + '">+ note</button></header>' +
-    '<div class="rv-tabs" role="tablist" aria-label="States of ' + esc(label) + '">' + tabsHtml + '</div>' +
-    '<div class="rv-shot" data-rv="shot" style="--rv-w:' + vp.width + ';--rv-h:' + vp.height + '">' + framesHtml + '</div></section>'
+    ' title="' + (openCount ? openCount + ' open on this screen' : 'nothing open on this screen') + '">' + openCount + '</button>' +
+    '<button type="button" class="rv-addnote" data-rv="addnote" data-label="' + esc(label) + '">+ note</button>' +
+    '<div class="rv-tabs" role="tablist" aria-label="States of ' + esc(label) + '">' + tabsHtml + '</div></header>' +
+    '<div class="rv-stage">' +
+    '<div class="rv-shot" data-rv="shot" style="--rv-w:' + vp.width + ';--rv-h:' + vp.height + '">' + framesHtml + '</div>' +
+    '</div></section>'
 }
 
 // ---- inspector ----------------------------------------------------------------------------------
@@ -178,13 +196,19 @@ function renderNoteRow(n, selected) {
   const head = '<div class="rv-rowhead"><span class="rv-id">' + esc(n.id) + '</span><span class="rv-who">You told JJ</span>' +
     '<span class="rv-sep">·</span><span class="rv-screen">' + scopeText + '</span>' + chip + '</div>'
   const body = '<p class="rv-claim">' + esc(n.text) + '</p>'
+  const addressed = open && n.status === 'addressed' && n.addressed
   const status = open
-    ? (n.status === 'addressed' && n.addressed
-      ? '<p class="rv-wait">Addressed: ' + esc(n.addressed.change) + ' · blocks approval until resolved by the session</p>'
+    ? (addressed
+      ? '<p class="rv-wait">Addressed: ' + esc(n.addressed.change) + '</p>'
       : '<p class="rv-wait">Waiting for the session · blocks approval until addressed</p>')
     : '<p class="rv-answered">' + (n.addressed && n.addressed.change ? 'Addressed: ' + esc(n.addressed.change) : 'Addressed') + '</p>'
+  // Only an addressed note is the reviewer's to close: one still waiting has nothing to accept.
+  const noteActions = addressed
+    ? '<div class="rv-actions" data-rv="note-actions"><button type="button" data-rv="accept">Looks good</button>' +
+      '<button type="button" data-rv="reopen">Still not right</button></div>'
+    : ''
   return rowOpen(n, 'note', open ? 'open' : 'resolved', (selected ? ' data-selected' : '') + (open ? '' : ' hidden')) +
-    head + body + status + '</article>'
+    head + body + status + noteActions + '</article>'
 }
 
 function renderComposer(prefix) {
@@ -192,10 +216,6 @@ function renderComposer(prefix) {
     '<button type="button" class="rv-chipbtn' + (i === REASONS.length - 1 ? ' rv-chip-on' : '') + '" data-rv="chip" data-value="' + r +
     '" aria-pressed="' + (i === REASONS.length - 1 ? 'true' : 'false') + '">' + REASON_LABELS[r] + '</button>').join('')
   return '<form class="rv-composer" data-rv="composer" data-prefix="' + esc(prefix) + '" aria-label="Tell the session something">' +
-    '<div class="rv-scope" role="group" aria-label="Scope">' +
-    '<button type="button" data-rv="scope" data-value="project" class="rv-scope-on" aria-pressed="true">Whole project</button>' +
-    '<button type="button" data-rv="scope" data-value="screen" aria-pressed="false">This screen</button>' +
-    '<span class="rv-scope-label" data-rv="scope-label"></span></div>' +
     '<div class="rv-chips">' + chips + '</div>' +
     '<textarea data-rv="text" rows="3" placeholder="What should change, or what is missing?"></textarea>' +
     '<div class="rv-actions"><button type="submit" data-rv="send" class="rv-primary">Send</button><kbd>⌘</kbd><kbd>Enter</kbd></div></form>'
@@ -209,16 +229,18 @@ function renderInspector(items, prefix, selectedId) {
     '<div class="rv-filters" role="tablist"><button type="button" data-rv="filter" data-filter="open" aria-selected="true">Open<span class="rv-count" data-rv="open-count">' + openCount + '</span></button>' +
     '<button type="button" data-rv="filter" data-filter="answered" aria-selected="false">Answered</button>' +
     '<button type="button" data-rv="filter" data-filter="all" aria-selected="false">All</button>' +
+    '<button type="button" class="rv-keyhint" data-rv="keyhint" title="Keyboard shortcuts" aria-label="Keyboard shortcuts" aria-expanded="false">?</button>' +
     '<button type="button" class="rv-fold" data-rv="fold" title="Fold the inspector (\\)" aria-label="Fold the inspector">›</button></div>' +
+    '<div class="rv-scopeband"><span class="rv-screenfilter" data-rv="screenfilter"></span></div>' +
     '<div class="rv-rows" data-rv="rows">' + rows + empty + '</div>' +
     renderComposer(prefix) +
-    '<footer class="rv-keys"><span><kbd>J</kbd><kbd>K</kbd> move</span><span><kbd>Y</kbd> yes</span><span><kbd>N</kbd> no, it\'s…</span><span><kbd>Esc</kbd> clear</span><span><kbd>\\</kbd> fold</span></footer>' +
+    '<footer class="rv-keys" data-rv="keys" hidden><span><kbd>J</kbd><kbd>K</kbd> move</span><span><kbd>Y</kbd> yes</span><span><kbd>N</kbd> no, it\'s…</span><span><kbd>Esc</kbd> clear</span><span><kbd>\\</kbd> fold</span></footer>' +
     '</aside>' +
     '<button type="button" class="rv-strip" data-rv="strip" hidden aria-label="Unfold the inspector"><span class="rv-strip-arrow">‹</span><span class="rv-strip-count" data-rv="strip-count">' + openCount + '</span></button>'
 }
 
 // ---- header -------------------------------------------------------------------------------------
-function renderHeader(seed, journeyEntry, journeyIndex, items, stop) {
+function renderHeader(seed, journeyEntry, journeyIndex, items, stop, prefix) {
   const questions = items.filter(isQuestion)
   const answered = questions.filter((q) => q.answer != null).length
   const openNotes = items.filter((n) => !isQuestion(n) && isOpen(n)).length
@@ -245,7 +267,10 @@ function renderHeader(seed, journeyEntry, journeyIndex, items, stop) {
   }
   // The decide script sits right beside the block it drives (spec 01 D9's literals, unchanged).
   return '<header class="rv-bar">' +
-    '<nav class="rv-crumb" aria-label="Breadcrumb"><span>' + esc(seed.product || 'Product') + '</span><span class="rv-sep">/</span><span>Mocks</span><span class="rv-sep">/</span><strong>' + esc(title) + '</strong></nav>' +
+    '<nav class="rv-crumb" aria-label="Breadcrumb">' +
+    '<a class="rv-home" href="' + esc((prefix || '') + '/') + '" title="Every screen in this product">' +
+    esc(seed.product || 'Product') + '</a>' +
+    '<span class="rv-sep">/</span><strong>' + esc(title) + '</strong></nav>' +
     '<span class="rv-pill" data-rv="pill">' + pillText(stop) + '</span>' +
     '<div class="rv-progress" data-rv="progress" data-answered="' + answered + '" data-total="' + questions.length + '">' +
     '<span class="rv-progress-text" data-rv="progress-text">' + progressText + '</span>' +
@@ -286,10 +311,8 @@ function buildReviewPage(input) {
     })
 
   const openByLabel = new Map()
-  const countByLabel = new Map()
   for (const n of items) {
     if (n.scope !== 'mock') continue
-    countByLabel.set(n.screen, (countByLabel.get(n.screen) || 0) + 1)
     if (isOpen(n)) openByLabel.set(n.screen, (openByLabel.get(n.screen) || 0) + 1)
   }
   const firstOpen = items.find(isOpen)
@@ -301,7 +324,7 @@ function buildReviewPage(input) {
   const stop = live.open.find((s) => s.key === key) || live.decided.find((s) => s.key === key) || null
 
   const boards = screens.map((s, i) =>
-    renderBoard(s, i, vp, prefix, openByLabel.get(s.label) || 0, countByLabel.get(s.label) || 0, s.label === focusLabel)).join('')
+    renderBoard(s, i, vp, prefix, openByLabel.get(s.label) || 0, s.label === focusLabel, screens.length)).join('')
 
   const head = '<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
     '<title>' + esc(entry.title || journey) + ' · review · ' + esc(seed.product || 'Mocks') + '</title>' +
@@ -311,8 +334,9 @@ function buildReviewPage(input) {
     return head + '<body class="rv rv-clean" data-journey="' + esc(journey) + '"><main class="rv-canvas" data-rv="canvas">' + boards + '</main></body></html>\n'
   }
   return head + '<body class="rv" data-journey="' + esc(journey) + '" data-prefix="' + esc(prefix) + '">' +
-    renderHeader(seed, entry, jIndex, items, stop) +
-    '<div class="rv-main">' + renderRail(seed, journey, screens, openByLabel) +
+    renderHeader(seed, entry, jIndex, items, stop, prefix) +
+    '<div class="rv-main">' + renderRail(seed, journey, screens, openByLabel,
+      items.some((n) => !n.screen) ? (openByLabel.get(null) || 0) : null) +
     '<main class="rv-canvas" data-rv="canvas">' + boards + '</main>' +
     renderInspector(items, prefix, selectedId) + '</div>' +
     '<script src="' + esc(prefix) + '/__review/review.js"></script>' +

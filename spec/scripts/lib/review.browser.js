@@ -27,10 +27,11 @@
   var TEXT_TAGS = { TEXTAREA: 1, INPUT: 1, SELECT: 1 }
 
   var filter = 'open'
+  var screenFilter = null
   var folded = false
   var initial = q('[data-rv="row"][data-selected]')
   var selectedId = initial ? initial.getAttribute('data-id') : null
-  var scopeMode = 'project'
+  var scopeMode = 'screen'
   var scopeLabel = null
   var reason = 'other'
 
@@ -65,13 +66,24 @@
       var open = isOpenRow(row)
       if (open) anyOpen = true
       var show = filter === 'all' || (filter === 'open' && open) || (filter === 'answered' && !open)
+      if (show && screenFilter) {
+        show = screenFilter === '__project'
+          ? !row.getAttribute('data-label')
+          : row.getAttribute('data-label') === screenFilter
+      }
       setHidden(row, !show)
     })
     qa('[data-rv="filter"]').forEach(function (b) { b.setAttribute('aria-selected', b.getAttribute('data-filter') === filter ? 'true' : 'false') })
+    var chip = q('[data-rv="screenfilter"]')
+    if (chip) {
+      var name = screenFilter === '__project' ? 'the whole project' : (screenFilter || '')
+      setText(chip, name)
+      setHidden(chip, !name)
+    }
     setHidden(q('[data-rv="empty"]'), !(filter === 'open' && !anyOpen))
   }
 
-  function select(id) {
+  function select(id, reveal) {
     selectedId = id
     var label = null
     rows().forEach(function (row) {
@@ -84,6 +96,10 @@
     })
     var row = id ? rowById(id) : null
     if (row && row.focus) row.focus()
+    if (reveal && label) {
+      var board = q('[data-rv="board"][data-label="' + label + '"]')
+      if (board && board.scrollIntoView) board.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    }
   }
 
   function move(delta) {
@@ -92,7 +108,7 @@
     var ix = -1
     for (var i = 0; i < list.length; i++) if (list[i].getAttribute('data-id') === selectedId) ix = i
     var next = ix === -1 ? (delta > 0 ? 0 : list.length - 1) : Math.min(list.length - 1, Math.max(0, ix + delta))
-    select(list[next].getAttribute('data-id'))
+    select(list[next].getAttribute('data-id'), true)
   }
 
   // ---- counts (rail, badges, progress, approve) ----------------------------------------------
@@ -107,7 +123,8 @@
       var label = row.getAttribute('data-label')
       if (open) openTotal++
       if (kind === 'question') { questions++; if (!open) answered++ } else if (open) openNotes++
-      if (open && label) openByLabel[label] = (openByLabel[label] || 0) + 1
+      var bucket = label || '__project'
+      if (open) openByLabel[bucket] = (openByLabel[bucket] || 0) + 1
     })
     qa('[data-rv="count"]').forEach(function (c) {
       var n = openByLabel[c.getAttribute('data-screen')] || 0
@@ -164,13 +181,13 @@
       row.setAttribute('data-status', 'open'); row.removeAttribute('data-verdict')
       setHidden(row.querySelector('[data-rv="actions"]'), false)
       var done = row.querySelector('[data-rv="answered"]'); if (done) { setText(done, ''); setHidden(done, true) }
-      applyFilter(); recount(); select(id)
+      applyFilter(); recount(); select(id, true)
     })
   }
   function openCorrection(id) {
     var row = rowById(id)
     if (!row || !isOpenRow(row)) return
-    select(id)
+    select(id, true)
     var box = row.querySelector('[data-rv="correct"]')
     setHidden(box, false)
     var ta = row.querySelector('[data-rv="correction"]')
@@ -201,7 +218,7 @@
       b.setAttribute('aria-pressed', on ? 'true' : 'false')
       if (b.classList) b.classList.toggle('rv-scope-on', on)
     })
-    setText(q('[data-rv="scope-label"]'), mode === 'screen' && scopeLabel ? scopeLabel : '')
+    setText(q('[data-rv="scope-label"]'), scopeLabel || focusedLabel() || '')
   }
   function focusedLabel() {
     var f = q('[data-rv="board"][data-focus]')
@@ -212,6 +229,30 @@
     for (var i = 0; i < tabs.length; i++) if (tabs[i].getAttribute('aria-selected') === 'true') return tabs[i].getAttribute('data-state')
     return 'happy'
   }
+  // Survives exactly one reload, keyed to this journey's own URL so another page cannot claim it.
+  var PLACE_KEY = 'rv-place'
+  function rememberPlace() {
+    var label = focusedLabel()
+    if (!label) return
+    try { localStorage.setItem(PLACE_KEY, JSON.stringify({ p: location.pathname, label: label })) } catch (e) { /* private mode */ }
+  }
+  function restorePlace() {
+    var raw = null
+    try { raw = localStorage.getItem(PLACE_KEY); localStorage.removeItem(PLACE_KEY) } catch (e) { return }
+    if (!raw) return
+    var v = null
+    try { v = JSON.parse(raw) } catch (e) { return }
+    if (!v || v.p !== location.pathname || !v.label) return
+    var go = function () {
+      var b = q('[data-rv="board"][data-label="' + v.label + '"]')
+      if (b && b.scrollIntoView) b.scrollIntoView({ block: 'start' })
+    }
+    go()
+    // Frames finish loading and re-fit after this, which moves everything below them, so the
+    // position is taken again once the page has settled.
+    if (window.addEventListener) window.addEventListener('load', go)
+  }
+
   function send() {
     var ta = q('[data-rv="text"]')
     var text = ta ? String(ta.value || '').trim() : ''
@@ -223,12 +264,54 @@
     return post('/__notes/add', body).then(function () {
       if (ta) ta.value = ''
       // The new row exists on disk; the next GET renders it. Reload so the rail, badges, and the
-      // approve gate all derive from the store rather than a client-side guess.
+      // approve gate all derive from the store rather than a client-side guess — carrying the
+      // reviewer's place across it.
+      rememberPlace()
       try { if (location.reload) location.reload() } catch (e) { /* vm harness */ }
     }).catch(function () { /* the composer keeps the text — the store refused or the server is gone */ })
   }
 
   // ---- frames (D3 scale + A6 floor) ------------------------------------------------------------
+  // A board shows the WHOLE screen. A phone mock is usually a fixed device-height app shell whose
+  // content region scrolls inside itself, so measuring documentElement.scrollHeight returns the
+  // device height forever and the board renders a window with a nested scrollbar in it — the one
+  // thing a review surface must never do, because what is below the fold is exactly what nobody
+  // reviews. Every inner scroll container is therefore released to its natural height before the
+  // measurement, and so is any element pinned to the viewport height. Same-origin only (the
+  // served mock), idempotent, and scoped to this page: the atlas thumbnails and the mock itself
+  // are untouched.
+  function unclip(frame) {
+    var d
+    try { d = frame.contentDocument } catch (e) { return }
+    if (!d || !d.documentElement || d.__rvUnclipped) return
+    d.__rvUnclipped = 1
+    var vh = parseInt(frame.getAttribute('data-vh') || frame.getAttribute('height'), 10) || 800
+    var free = function (el, alsoHeight) {
+      el.style.setProperty('overflow', 'visible', 'important')
+      el.style.setProperty('max-height', 'none', 'important')
+      if (alsoHeight) {
+        el.style.setProperty('height', 'auto', 'important')
+        el.style.setProperty('min-height', '0', 'important')
+        el.style.setProperty('flex', 'none', 'important')
+      }
+    }
+    free(d.documentElement, true)
+    if (d.body) free(d.body, true)
+    var all
+    try { all = d.querySelectorAll('*') } catch (e) { return }
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i], cs
+      try { cs = d.defaultView.getComputedStyle(el) } catch (e) { continue }
+      if (!cs) continue
+      var scrolls = cs.overflowY === 'auto' || cs.overflowY === 'scroll' ||
+        cs.overflowX === 'auto' || cs.overflowX === 'scroll'
+      // A shell pinned to the device height keeps its children from growing even once the
+      // scroller inside it is released, so it is freed on the same rule.
+      var pinned = Math.abs(parseFloat(cs.height) - vh) < 2
+      if (scrolls || pinned) free(el, true)
+    }
+  }
+
   function fit(frame) {
     var shot = frame.parentNode
     if (!shot || !shot.style || !frame.style || frame.hidden) return
@@ -236,9 +319,11 @@
     var vh = parseInt(frame.getAttribute('data-vh') || frame.getAttribute('height'), 10) || 800
     if (!frame.getAttribute('data-vh')) frame.setAttribute('data-vh', String(vh))
     var h = vh
+    unclip(frame)
     try {
       var d = frame.contentDocument
       var sh = d && d.documentElement ? d.documentElement.scrollHeight : 0
+      if (d && d.body && d.body.scrollHeight > sh) sh = d.body.scrollHeight
       if (sh > h) h = sh
     } catch (e) { /* not loaded yet, or cross-origin */ }
     frame.setAttribute('height', String(h))
@@ -246,6 +331,9 @@
     var s = col ? Math.min(1, col / w) : 1
     shot.style.setProperty('--rv-scale', String(s))
     shot.style.setProperty('--rv-h', String(h))
+    // transform-origin is the frame's top-left, so a plain left margin centres the scaled box.
+    var slack = col - (w * s)
+    frame.style.marginLeft = (slack > 1 ? Math.round(slack / 2) : 0) + 'px'
   }
   function fitAll() { qa('[data-rv="frame"]').forEach(function (f) { if (!f.hidden) fit(f) }) }
 
@@ -281,28 +369,61 @@
     var id = row.getAttribute('data-id')
     on(row.querySelector('[data-rv="yes"]'), 'click', function () { answer(id, 'yes') })
     on(row.querySelector('[data-rv="no"]'), 'click', function () { openCorrection(id) })
-    on(row.querySelector('[data-rv="later"]'), 'click', function () { select(id); move(1) })
+    on(row.querySelector('[data-rv="later"]'), 'click', function () { select(id, true); move(1) })
     on(row.querySelector('[data-rv="save"]'), 'click', function () { saveCorrection(id) })
     on(row, 'click', function (e) {
       var t = e && e.target
       var tag = t && t.tagName ? String(t.tagName).toUpperCase() : ''
       if (tag === 'BUTTON' || TEXT_TAGS[tag]) return
-      select(id)
+      select(id, true)
     })
   })
   qa('[data-rv="filter"]').forEach(function (b) { on(b, 'click', function () { filter = b.getAttribute('data-filter'); applyFilter() }) })
+  // The rail's Whole project row lists the items that belong to no screen — the ones a per-screen
+  // list can never show.
+  qa('[data-rv="screen"][data-screen="__project"]').forEach(function (a) {
+    on(a, 'click', function (e) {
+      if (e && e.preventDefault) e.preventDefault()
+      setFolded(false); screenFilter = '__project'; applyFilter()
+      var shown = rows().filter(function (r) { return !r.hidden })[0]
+      if (shown) select(shown.getAttribute('data-id'))
+    })
+  })
+  on(q('[data-rv="keyhint"]'), 'click', function () {
+    var keys = q('[data-rv="keys"]')
+    var btn = q('[data-rv="keyhint"]')
+    if (!keys || !btn) return
+    var show = keys.hidden
+    setHidden(keys, !show)
+    btn.setAttribute('aria-expanded', show ? 'true' : 'false')
+  })
   on(q('[data-rv="fold"]'), 'click', function () { setFolded(true) })
   on(q('[data-rv="strip"]'), 'click', function () { setFolded(false) })
+  function closeNote(btn, pathname) {
+    on(btn, 'click', function () {
+      var row = btn.closest ? btn.closest('[data-rv="row"]') : null
+      if (!row) return
+      post(pathname, { id: row.getAttribute('data-id'), by: author() }).then(function () {
+        rememberPlace()
+        try { if (location.reload) location.reload() } catch (e) { /* vm harness */ }
+      }).catch(function () { /* the store refused or the server is gone — the row is unchanged */ })
+    })
+  }
+  qa('[data-rv="accept"]').forEach(function (b) { closeNote(b, '/__notes/resolve') })
+  qa('[data-rv="reopen"]').forEach(function (b) { closeNote(b, '/__notes/reopen') })
+
   qa('[data-rv="badge"]').forEach(function (b) {
     on(b, 'click', function () {
       setFolded(false)
       var label = b.getAttribute('data-label')
+      screenFilter = label
       var first = openRows().filter(function (r) { return r.getAttribute('data-label') === label })[0]
-      if (first) select(first.getAttribute('data-id'))
-      else {
-        var any = rows().filter(function (r) { return r.getAttribute('data-label') === label })[0]
-        if (any) { filter = 'all'; applyFilter(); select(any.getAttribute('data-id')) }
-      }
+      // A screen with nothing open still has something to show, so the status widens rather than
+      // leaving the reviewer with an empty panel.
+      if (!first) filter = 'all'
+      applyFilter()
+      var shown = rows().filter(function (r) { return !r.hidden })[0]
+      if (shown) select(shown.getAttribute('data-id'))
     })
   })
   qa('[data-rv="addnote"]').forEach(function (b) {
@@ -358,8 +479,46 @@
     window.addEventListener('resize', function () { clearTimeout(rz); rz = setTimeout(fitAll, 150) })
   }
 
+  // ---- the focused board follows the eye ---------------------------------------------------
+  // The composer's "This screen" scope names whichever board carries data-focus, and until now
+  // that attribute moved ONLY when a rail entry or an inspector row was clicked. Scrolling down
+  // to the third screen therefore left the scope pointing at the first, and a note typed there
+  // was filed against a screen the reviewer was not looking at — silently, with the wrong name
+  // sitting in plain sight beside the toggle. The board with the most of itself on screen now
+  // takes the focus. Feature-detected: the vm shim this file is written against (see the header)
+  // has no IntersectionObserver, and the observer is the only way to do this without the
+  // getBoundingClientRect that discipline forbids.
+  function focusBoard(label) {
+    if (!label || label === focusedLabel()) return
+    qa('[data-rv="frame"]').concat(qa('[data-rv="board"]')).forEach(function (el) {
+      if (el.getAttribute('data-label') === label) el.setAttribute('data-focus', '')
+      else el.removeAttribute('data-focus')
+    })
+    setScope(scopeMode, label)
+    screenFilter = label
+    applyFilter()
+  }
+  if (typeof IntersectionObserver === 'function') {
+    var seen = {}
+    var io = new IntersectionObserver(function (entries) {
+      for (var i = 0; i < entries.length; i++) {
+        var el = entries[i].target
+        var lb = el.getAttribute('data-label')
+        if (lb) seen[lb] = entries[i].intersectionRatio
+      }
+      var best = null, bestRatio = 0
+      for (var k in seen) {
+        if (Object.prototype.hasOwnProperty.call(seen, k) && seen[k] > bestRatio) { bestRatio = seen[k]; best = k }
+      }
+      if (best && bestRatio > 0) focusBoard(best)
+    }, { threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] })
+    qa('[data-rv="board"]').forEach(function (el) { io.observe(el) })
+  }
+
+  screenFilter = focusedLabel()
   applyFilter()
   recount()
+  setScope(scopeMode, focusedLabel())
   if (selectedId && rowById(selectedId)) select(selectedId)
   fitAll()
   // The look stop's URL ends in #stop-<id>, whose target lives inside the sticky bar: the browser's
@@ -368,5 +527,7 @@
   if (location.hash && /^#stop-/.test(location.hash) && typeof scrollTo === 'function') {
     scrollTo(0, 0)
     if (window.addEventListener) window.addEventListener('load', function () { scrollTo(0, 0) })
+  } else {
+    restorePlace()
   }
 })()

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: hardened
+status: done
 tier: critical           # review-legs.js is a named critical trigger in .claude/rules/spec-pipeline.md § Risk Tiers — the sole leg deriver, "a bug here silently changes what every review observes"
 area: feedback-loop
 design: false
@@ -11,6 +11,7 @@ brief: n/a
 build_base: main
 spiked: 2026-09-12
 open_markers: 0
+diff_base: f0a9d25ad70dd113d1a5f9c6fac4ad2009df068e
 ---
 
 # Soft findings get a reader, and replay gets a measurement
@@ -114,8 +115,8 @@ cannot reach `CLEAN` without a promise-sweep row.
 - **AC-20260912-04-1**: WHEN `escape-row.js --append` is handed a row whose `softMatch` or
   `killedMatch` is outside the tri-state THE SYSTEM SHALL refuse with exit 1 naming that
   reason, and SHALL accept the row when the key is absent or is `true`/`false`/`null`
-  (e.g. `{"softMatch":"yes",…}` → stderr contains `softMatch-out-of-enum`, exit 1;
-  `{"killedMatch":0,…}` → stderr contains `killedMatch-out-of-enum`, exit 1; the same row
+  (e.g. `{"softMatch":"yes",…}` → stdout contains `softMatch-out-of-enum`, exit 1;
+  `{"killedMatch":0,…}` → stdout contains `killedMatch-out-of-enum`, exit 1; the same row
   carrying `"softMatch":null` and no `killedMatch` key at all → exit 0)
   → writes tests/escape/escape-row.test.js
 - **AC-20260912-04-2**: WHEN `fleet-reader --json` reads a ledger holding three escape rows
@@ -189,6 +190,14 @@ whose realistic triage outcome is "leave it" — and it would have made the stat
 hygiene count useless as a tidiness signal while putting the frozen-API status script in scope.
 The soft floor owed one follow-up, and it was `softMatch`, not a viewer. If the notes turn out
 to be worth reading, that is its own spec with its own evidence.
+
+Build deviation, folded at close (2026-09-12). AC-20260912-04-1's example named **stderr** as
+the stream a `--append` refusal's reason lands on. The shipped `escape-row.js` prints every
+`validateEscapeRow` reason via `printReasons()` → `console.log` — stdout — for both `--check`
+and `--append`, and D3 changes only the reason set inside `lib/escape-row.js`, naming no change
+to the CLI's I/O plumbing. The test pinned the shipped behavior, review filed the contradiction
+as hard, and the example was corrected to `stdout` in the fix round: the defect was in the
+example, never a licence to re-plumb the writer. One-off, not a class — no Gotchas entry.
 
 Fragile, and what to watch. `softMatch` fires rarely by construction — it needs an escape
 against a spec whose review recorded a matching soft — so a long run of `null`/`false` is the

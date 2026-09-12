@@ -51,14 +51,24 @@ function classReasons(row, { amended = false } = {}) {
   return reasons
 }
 
+// tristate(v): true for the four values validateEscapeRow's killedMatch/softMatch keys may
+// hold — absent, true, false or null (specs/20260912/04-softs-get-a-reader.md D3).
+function tristate(v) {
+  return v === undefined || v === true || v === false || v === null
+}
+
 // validateEscapeRow(row, {amended}) -> string[] (empty = valid). preventedBy/foundBy/severity
 // keep fleet-reader's pre-existing reason spellings (D1 Contracts: "the three existing reason
-// names keep their spelling").
+// names keep their spelling"). killedMatch and softMatch share one tri-state predicate
+// (D3): absent, true, false or null passes; any other value is a reason, appended after the
+// three enum reasons in that order.
 function validateEscapeRow(row, { amended = false } = {}) {
   const reasons = classReasons(row, { amended })
   if (!PREVENTED_BY.includes(row.preventedBy)) reasons.push('preventedBy-out-of-enum')
   if (!FOUND_BY.includes(row.foundBy)) reasons.push('foundBy-out-of-enum')
   if (!SEVERITY.includes(row.severity)) reasons.push('severity-out-of-enum')
+  if (!tristate(row.killedMatch)) reasons.push('killedMatch-out-of-enum')
+  if (!tristate(row.softMatch)) reasons.push('softMatch-out-of-enum')
   return reasons
 }
 

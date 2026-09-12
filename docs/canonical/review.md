@@ -92,7 +92,10 @@
   (specs/20260822/01-escalate-ledger-row.md)
 
   `/spec:escape` derives `killedMatch` from it. (amended by specs/20260820/07-review-driver.md,
-  2026-08-21) Plan locks
+  2026-08-21) A row also carries `softMatch`, derived the same way from the correlated
+  artifact's non-hard survivors, so a defect the reviewer filed as advisory and that later
+  escaped is distinguishable from one review never saw; the fleet reader counts them as
+  `escapes.softMatchTrue`. (specs/20260912/04-softs-get-a-reader.md) Plan locks
   append a `stage:"plan"` ledger row of executed facts (spike count, promise-sweep
   counters, collision counts). The escape ledger and replay catch-rate are the pipeline's
   two ground-truth signals; self-reported review quality is subordinate to both.
@@ -156,7 +159,10 @@
   commit's non-meta content (everything outside `specs/`, `.claude/`, `docs/canonical/`) as
   one build-shaped commit — a `diff.dirty:true` row's fix-worker edits ride the close commit
   (range identity, specs/20260824/06), so the parent alone under-states the range and made
-  legs falsely newly-red. Before `leg-caught` is ever recorded, step 7 now verifies the
+  legs falsely newly-red. Because the overlay withholds `specs/`, a leg whose only input is
+  the spec text re-derives the pre-review-fix result in a replay tree; `review-legs.js
+  --replay` skips `promise-sweep` for that reason, and no other leg is affected.
+  (specs/20260912/04-softs-get-a-reader.md) Before `leg-caught` is ever recorded, step 7 now verifies the
   still-red leg against the pristine (mutation-free) baseline via `reset --hard HEAD^` plus a
   fresh leg run — red there means the scratch tree does not reproduce the state the cited
   review row judged green. The legs are re-run once more against the same pristine tree: the

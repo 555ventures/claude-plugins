@@ -61,8 +61,9 @@ defective file — that is the only unrecoverable input.
    `runId` field. Note the row's `verdict` and `findings.killed` for steps 4–5. When
    `reviewRunId` is set, check for `.claude/spec-runs/<reviewRunId>.jsonl`, then the same
    stem with the legacy `.json` extension earlier runs wrote — either is the same object,
-   whichever exists — read its `killed[]` claims (evidence strings intact); step 4 derives
-   `killedMatch` from them. When the correlated row carries `diff.base`/`diff.head` (specs/20260824/06-review-range-identity.md
+   whichever exists — read its `reviewer.killed[]` claims (evidence strings intact); step 4
+   derives `killedMatch` from them, and `reviewer.survivors[]` supplies `softMatch`. When
+   the correlated row carries `diff.base`/`diff.head` (specs/20260824/06-review-range-identity.md
    D4), those name the reviewed range and `diff.dirty: true` means the close commit that
    follows the row completes it; older rows carry neither, and this step proceeds exactly
    as today.
@@ -110,7 +111,7 @@ defective file — that is the only unrecoverable input.
      compare `file` first — an entry whose `file` equals the defect file is the candidate,
      with claim/evidence then confirming the match against this defect's behavior → `true`;
      a `file:null` entry compares by claim/evidence as before; the artifact present with
-     `killed[]` non-empty but nothing matching by file or claim → `false`; genuinely
+     `reviewer.killed[]` non-empty but nothing matching by file or claim → `false`; genuinely
      ambiguous even with the evidence in hand → `null`. It rides as its own
      question in the same call, the derived value first and marked "(Recommended)" with its
      reasoning citing the matched claim — the user CONFIRMS or corrects it, same as every
@@ -119,14 +120,25 @@ defective file — that is the only unrecoverable input.
      `findings.killed > 0`, ask from memory, never derived: "Does this defect match a
      finding that review killed?" Yes → `true`, no → `false`, can't recall → `null`. Either
      path: if there is nothing to match against (`findings.killed` was 0, or the artifact's
-     `killed[]` is empty), `killedMatch` is `null` without asking. **Unknown is `null`,
+     `reviewer.killed[]` is empty), `killedMatch` is `null` without asking. **Unknown is `null`,
      never a guessed `false`** — a wrong `false` poisons the one signal that tunes
      execution-grounded verification.
+   - `softMatch` — derived exactly as `killedMatch`, from the same artifact's
+     `reviewer.survivors[]` filtered to `severity !== 'hard'`: no artifact at all → `null`
+     without asking — there is no memory fallback, because unlike a killed claim nobody
+     recalls an advisory note. An artifact with no softs at all (`findings.soft` 0, or the
+     filtered survivor list empty) → `null` without asking. Otherwise compare `file` first —
+     an entry whose `file` equals the defect file, or matches by path tail when the recorded
+     value is an absolute build-worktree path, is the candidate, with claim/evidence then
+     confirming the match → `true`; a `file:null` entry compares by claim/evidence; softs
+     present but nothing matching → `false`; genuinely ambiguous even with the evidence in
+     hand → `null`. It rides as its own question in the same call, the derived value first
+     and marked "(Recommended)".
 5. **Append exactly ONE row** via `node "$(spec-paths escape-row)" --append --root . --row
    '<json>'`:
 
    ```
-   {"ts":"<ISO-8601>","stage":"escape","spec":"<repo-relative spec path>","file":"<repo-relative defect file>","reviewRunId":"<rv_…>"|null,"foundBy":"<user|later-spec|production>","severity":"<hard|soft>","killedMatch":true|false|null,"class":"<kebab-case defect-class id>"|null,"unclassedReason":"no-fix-diff"|"deferred"|null,"preventedBy":"<doctrine|enforcer|review-check|runtime-leg|none>","via":"commit|manual"}
+   {"ts":"<ISO-8601>","stage":"escape","spec":"<repo-relative spec path>","file":"<repo-relative defect file>","reviewRunId":"<rv_…>"|null,"foundBy":"<user|later-spec|production>","severity":"<hard|soft>","killedMatch":true|false|null,"softMatch":true|false|null,"class":"<kebab-case defect-class id>"|null,"unclassedReason":"no-fix-diff"|"deferred"|null,"preventedBy":"<doctrine|enforcer|review-check|runtime-leg|none>","via":"commit|manual"}
    ```
 
    Fixed shape — paths/enums/booleans only, **never prose or finding text** (the defect

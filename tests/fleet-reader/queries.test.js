@@ -155,3 +155,4 @@ test('Incident Policy: build-row incidents join escapes.byClass and reach recurr
   assert.match(bare.stdout, /buildIncidents: 2/, 'the human render names the build-incident count')
   assert.match(bare.stdout, /byClass \(escapes \+ build incidents\)/, 'the human render says byClass is the joined count')
 })
+

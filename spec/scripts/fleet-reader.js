@@ -322,6 +322,7 @@ function effectiveClassReason(row, amendments) {
 function computeEscapes(reposList) {
   let total = 0
   let killedMatchNull = 0
+  let softMatchTrue = 0
   let amendmentsCount = 0
   const preventedBy = {}
   const byClass = {}
@@ -352,6 +353,7 @@ function computeEscapes(reposList) {
       total++
       repoCount++
       if (r.killedMatch === null) killedMatchNull++
+      if (r.softMatch === true) softMatchTrue++
       const pv = r.preventedBy === undefined ? 'missing' : String(r.preventedBy)
       preventedBy[pv] = (preventedBy[pv] || 0) + 1
       const effective = effectiveClassReason(r, amendments)
@@ -373,7 +375,7 @@ function computeEscapes(reposList) {
     recurrentUnguarded.push({ class: cls, count, latestTs: classLatest[cls] || null })
   }
   recurrentUnguarded.sort((a, b) => a.class.localeCompare(b.class))
-  return { total, killedMatchNull, preventedBy, byClass, recurrentUnguarded, byRepo, amendments: amendmentsCount, incidents, unclassedRows }
+  return { total, killedMatchNull, softMatchTrue, preventedBy, byClass, recurrentUnguarded, byRepo, amendments: amendmentsCount, incidents, unclassedRows }
 }
 
 // D6: cross the joined byClass count against the plugin's own shipped corpus — corpusGaps names
@@ -877,7 +879,8 @@ function renderGate08(g) {
 }
 
 function renderEscapes(esc) {
-  const lines = [`3. Escapes — ${esc.total} total, ${esc.killedMatchNull} with no kill match`]
+  const softClause = esc.softMatchTrue > 0 ? `, ${esc.softMatchTrue} the review filed as advisory` : ''
+  const lines = [`3. Escapes — ${esc.total} total, ${esc.killedMatchNull} with no kill match${softClause}`]
   lines.push(`  preventedBy: ${Object.entries(esc.preventedBy).map(([k, v]) => `${k}=${v}`).join(', ') || 'none'}`)
   lines.push(`  byClass (escapes + build incidents): ${Object.entries(esc.byClass).map(([k, v]) => `${k}=${v}`).join(', ') || 'none'}`)
   lines.push(`  buildIncidents: ${esc.incidents}`)

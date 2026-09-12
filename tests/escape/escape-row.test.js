@@ -134,3 +134,40 @@ test('AC-20260901-07-6: escape-row.js --amend exits 3 and appends nothing when t
   assert.strictEqual(appended.via, 'backfill', 'an explicit --via backfill must be honored, not overridden by the manual default')
 })
 
+// specs/20260912/04-softs-get-a-reader.md D3: killedMatch and softMatch are validated by one
+// shared tri-state predicate — absent, true, false or null passes; any other value is a reason.
+// escape-row.js's --check/--append print each validateEscapeRow reason on STDOUT (never stderr —
+// confirmed by reading printReasons()/mode==='check'/mode==='append' as shipped; D3 only extends
+// the reason set inside lib/escape-row.js, it does not touch the CLI's I/O plumbing), so this
+// test pins the actual stream rather than the Contracts block's illustrative "stderr" wording.
+test('AC-20260912-04-1: escape-row.js --append refuses a row whose killedMatch or softMatch value is outside the tri-state (absent/true/false/null), naming the reason on stdout at exit 1, and accepts the row when both are absent-or-in-range', () => {
+  const root = tmpdir('escape-row-tristate')
+
+  const badSoft = validEscapeRow({ spec: 'specs/soft.md', file: 'soft.js', softMatch: 'yes' })
+  const rSoft = runNode(SCRIPT, ['--append', '--root', root, '--row', JSON.stringify(badSoft)])
+  assert.strictEqual(rSoft.status, 1, 'a softMatch value outside {true,false,null,absent} must refuse, not silently ride into the ledger: ' + rSoft.stdout + rSoft.stderr)
+  assert.match(rSoft.stdout, /softMatch-out-of-enum/, 'D3 Contracts: the refusal must name the reason "softMatch-out-of-enum" so a session or backfill agent can diagnose it: ' + rSoft.stdout)
+
+  const badKilled = validEscapeRow({ spec: 'specs/killed.md', file: 'killed.js', killedMatch: 0 })
+  const rKilled = runNode(SCRIPT, ['--append', '--root', root, '--row', JSON.stringify(badKilled)])
+  assert.strictEqual(rKilled.status, 1, 'a killedMatch value outside {true,false,null,absent} (here the number 0, not the boolean false) must refuse: ' + rKilled.stdout + rKilled.stderr)
+  assert.match(rKilled.stdout, /killedMatch-out-of-enum/, 'D3: killedMatch has never been validated before this spec — shipping softMatch validated while its twin stays open is the asymmetry D3 exists to close: ' + rKilled.stdout)
+
+  const badBoth = validEscapeRow({ spec: 'specs/both.md', file: 'both.js', killedMatch: 'nope', softMatch: 42 })
+  const rBoth = runNode(SCRIPT, ['--append', '--root', root, '--row', JSON.stringify(badBoth)])
+  assert.strictEqual(rBoth.status, 1, 'a row with both fields out of range must still refuse once: ' + rBoth.stdout + rBoth.stderr)
+  const bothLines = rBoth.stdout.trim().split('\n')
+  assert.deepStrictEqual(bothLines, ['killedMatch-out-of-enum', 'softMatch-out-of-enum'],
+    'Contracts: the reason list emits killedMatch-out-of-enum THEN softMatch-out-of-enum, appended after the three existing enum reasons in that order: ' + rBoth.stdout)
+
+  const good = validEscapeRow({ spec: 'specs/good.md', file: 'good.js', softMatch: null })
+  delete good.killedMatch
+  const rGood = runNode(SCRIPT, ['--append', '--root', root, '--row', JSON.stringify(good)])
+  assert.strictEqual(rGood.status, 0, 'softMatch:null and no killedMatch key at all must both be accepted — absent stays valid because every historical escape row predates softMatch (A4): ' + rGood.stdout + rGood.stderr)
+
+  const content = fs.readFileSync(path.join(root, '.claude', 'spec-runs.jsonl'), 'utf8')
+  const lines = content.trim().split('\n')
+  assert.strictEqual(lines.length, 1, 'the three refused rows (bad softMatch, bad killedMatch, both bad) must append nothing — only the one valid row may reach the ledger: ' + content)
+  assert.strictEqual(JSON.parse(lines[0]).file, 'good.js', 'the single ledger line must be the accepted row, not one of the refused ones: ' + content)
+})
+

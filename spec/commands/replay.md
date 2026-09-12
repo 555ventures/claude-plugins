@@ -119,16 +119,16 @@ asked.
    setup-failed` (no `--class`), then `--teardown --dir {dir}`, then Phase 5's `setup-failed`
    report with the hook's stderr where `setupCommand` would be named, then STOP.
 6. **Legs:** fresh `{manifestPath}` (`mktemp`), then `node "$(spec-paths review-legs)" --root
-   {dir} --spec {spec} --base {diffBase} --manifest {manifestPath}` — the sole leg derivation
-   (pipeline rules § Risk Tiers); replay never re-derives legs.
+   {dir} --spec {spec} --base {diffBase} --manifest {manifestPath} --replay` — the sole leg
+   derivation (pipeline rules § Risk Tiers); replay never re-derives legs.
 7. **Red legs → attribute against the baseline, retry only what's newly-red:** for each red leg
    `L` in the manifest, attribute it against `{baselineRed}`/`{baselineLegs}` (step 2's tokens)
    in this order:
    1. `L == reconcile` → explained: a deterministic exemption, not a judgment call — the mutation
-      is File-Plan-confined by step 4's authoring contract and reconcile redness is definitionally
-      about a path *outside* the File Plan, so it can never be mutation-caused. (A canonical patch
-      naming an out-of-plan file is a failed authoring attempt under step 4's rule instead; this
-      exemption never applies there.)
+      is File-Plan-confined by step 4's authoring contract, so reconcile redness (definitionally
+      outside the File Plan) can never be mutation-caused — nor can `promise-sweep`, which step
+      6's `--replay` skips outright, leaving no row to ever read as newly red. (An out-of-plan
+      canonical patch is a failed authoring attempt under step 4's rule instead.)
    2. `L ∈ {baselineRed}` → explained. The review that closed this target already recorded `L`
       red for a sanctioned, pre-existing reason.
    3. Otherwise, if `L ∈ {baselineLegs}` → **newly red**: `L` was green at the reviewed run and is

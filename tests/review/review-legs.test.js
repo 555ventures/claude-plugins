@@ -693,3 +693,67 @@ test('the suite row reads the LAST testCountPattern match, so a per-test line th
     'and forces the suite row red on a green run — a nondeterministic false GATE_RED whenever that test file reports ' +
     'before the summary line: ' + JSON.stringify(out.byLeg.get('suite')) + ' / ' + out.r.stdout + out.r.stderr)
 })
+
+// ---- specs/20260912/04-softs-get-a-reader.md D5: --replay skips promise-sweep only ----------
+// promise-sweep.js reads nothing but the spec text (its own header: "no --root, no File Plan
+// parsing, no test-file reads"), and replay's overlay deliberately withholds specs/ to keep the
+// reviewer blind — so in a replay tree the leg deterministically re-derives the pre-review-fix
+// result and burns three retries before recording setup-failed. --replay guards exactly the
+// wave-3b promise-sweep invocation; every other leg is run unaffected.
+test('AC-20260912-04-3: WHEN review-legs.js runs with --replay against a synthetic host THE SYSTEM SHALL write no promise-sweep row to the manifest, SHALL write every other leg\'s row byte-identical (keys, order, scope value) to a non-replay run on the same host, and SHALL leave promise-sweep.txt absent from the out-dir', () => {
+  const { dir, base } = makeHost({ testBody: GREEN_TEST })
+
+  const manifestFull = path.join(tmpdir('review-legs-replay-baseline-manifest'), 'manifest.jsonl')
+  const outDirFull = tmpdir('review-legs-replay-baseline-outdir')
+  const rFull = runNode(SCRIPT, ['--root', dir, '--spec', 'specs/20260817/99-test.md',
+    '--base', base, '--manifest', manifestFull, '--out-dir', outDirFull])
+  assert.strictEqual(rFull.status, 0,
+    'the baseline (no --replay) run must be green on this host, or the byte-identical comparison below proves ' +
+    'nothing about what --replay changes: ' + rFull.stdout + rFull.stderr)
+  const rowsFull = fs.readFileSync(manifestFull, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
+  const legsFull = rowsFull.map(r => r.leg)
+  assert.ok(legsFull.includes('promise-sweep'),
+    'sanity: the baseline run itself must carry a promise-sweep row, or the "skips only that leg" comparison ' +
+    'below is vacuous: ' + JSON.stringify(rowsFull))
+
+  const manifestReplay = path.join(tmpdir('review-legs-replay-manifest'), 'manifest.jsonl')
+  const outDirReplay = tmpdir('review-legs-replay-outdir')
+  const rReplay = runNode(SCRIPT, ['--root', dir, '--spec', 'specs/20260817/99-test.md',
+    '--base', base, '--manifest', manifestReplay, '--out-dir', outDirReplay, '--replay'])
+  assert.strictEqual(rReplay.status, 0,
+    '--replay must not itself redden a host every other leg passes on: ' + rReplay.stdout + rReplay.stderr)
+  const rowsReplay = fs.readFileSync(manifestReplay, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
+  const legsReplay = rowsReplay.map(r => r.leg)
+
+  assert.ok(!legsReplay.includes('promise-sweep'),
+    'D5: --replay must write NO promise-sweep row to the manifest — that leg\'s only input (the spec text) is ' +
+    'exactly what replay\'s overlay withholds, so its row can never be a genuine observation in a replay tree: ' +
+    JSON.stringify(rowsReplay))
+  assert.strictEqual(legsReplay.length, legsFull.length - 1,
+    'D5: --replay skips promise-sweep and nothing else — the leg count must drop by exactly one, never more: ' +
+    JSON.stringify(legsFull) + ' vs ' + JSON.stringify(legsReplay))
+
+  for (const leg of legsFull) {
+    if (leg === 'promise-sweep') continue
+    const rowFull = rowsFull.find(r => r.leg === leg)
+    const rowReplay = rowsReplay.find(r => r.leg === leg)
+    assert.ok(rowReplay,
+      `D5: --replay must still write the "${leg}" row — every leg but promise-sweep is unaffected: ` +
+      JSON.stringify(rowsReplay))
+    assert.strictEqual(JSON.stringify(rowReplay), JSON.stringify(rowFull),
+      `D5: the "${leg}" row's keys, order and scope value must be byte-identical whether or not --replay is ` +
+      `passed — any difference means the flag leaked into a leg it must not touch: ${JSON.stringify(rowReplay)} ` +
+      `vs ${JSON.stringify(rowFull)}`)
+  }
+
+  assert.ok(!fs.existsSync(path.join(outDirReplay, 'promise-sweep.txt')),
+    'D5: no promise-sweep.txt output file may land in the out-dir when the leg never ran: ' +
+    fs.readdirSync(outDirReplay).join(','))
+})
+
+// AC-20260912-04-4 (SHALL CONTINUE TO) is carried by the two existing "AC-20260902-05-1" tests
+// above (full-scope and --fix-delta): both already assert a promise-sweep row is appended in
+// their respective scope with no "scope" key on it — exactly what D5's "additive, never
+// exclusive" flag must leave undisturbed when --replay is absent. No new assertion is needed
+// here; weakening either of those tests to accommodate this spec would be the regression D5
+// exists to avoid.

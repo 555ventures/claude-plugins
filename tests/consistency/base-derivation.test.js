@@ -102,10 +102,12 @@ test('pinnedBaseCandidates accepts a lookup function as well as a map', () => {
     [{ key: 'diff_base', value: 'pinned' }, { key: 'build_base', value: 'main' }])
 })
 
+// specs/20260912/03-run-isolates-and-owns-the-stages.md AC-20260912-03-6: review.md's body
+// moves to spec/doctrine/stages/stage-review.md — repointed in place.
 test('the review command documents the pin before the ref', () => {
-  const doc = fs.readFileSync(path.join(ROOT, 'spec/commands/review.md'), 'utf8')
+  const doc = fs.readFileSync(path.join(ROOT, 'spec/doctrine/stages/stage-review.md'), 'utf8')
   assert.ok(!/`build_base`\s*→\s*`diff_base`/.test(doc),
-    'spec/commands/review.md states the base order backwards from its own driver — the prose is ' +
-    'what the next person reads before touching base derivation')
+    'spec/doctrine/stages/stage-review.md states the base order backwards from its own driver — ' +
+    'the prose is what the next person reads before touching base derivation')
   assert.match(doc, /`diff_base`\s*→\s*`build_base`/)
 })

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict'
 // ci-query.js (--branch <name> | --commit <sha>) [--root <dir>] — one normalized `gh` wrapper
-// answering "what did CI just do?", shared by /spec:review's `ci` leg (--commit, per-SHA),
+// answering "what did CI just do?", shared by the review stage's `ci` leg (--commit, per-SHA),
 // /spec:release's `ci` leg (--commit, per-SHA), and spec 20260805/03's observe-ci.js (--branch,
 // trunk latest-run) (review-evidence-manifest D4, spiked A1; per-sha-ci-
 // legs D1, spiked A1: `gh run list --commit <sha>` returns `[]` exit 0 for a commit CI never saw

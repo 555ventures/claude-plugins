@@ -50,19 +50,19 @@
   "spec/scripts/components-check.js": {
     "entryPoints": [
       "spec/doctrine/design.md",
-      "spec/commands/design.md"
+      "spec/doctrine/stages/stage-design.md"
     ]
   },
   "spec/scripts/design-ac-reconcile.js": {
     "entryPoints": [
-      "spec/commands/design.md"
+      "spec/doctrine/stages/stage-design.md"
     ]
   },
   "spec/scripts/design-atlas.js": {
     "entryPoints": [
       "spec/commands/sketch.md",
       "spec/commands/atlas.md",
-      "spec/commands/design.md",
+      "spec/doctrine/stages/stage-design.md",
       "spec/doctrine/design.md",
       "spec/scripts/mocks-driver.js",
       "spec/doctrine/mocks.md",
@@ -73,7 +73,7 @@
     "entryPoints": [
       "spec/commands/doctor.md",
       "spec/scripts/spec-build-driver.js",
-      "spec/commands/design.md",
+      "spec/doctrine/stages/stage-design.md",
       "spec/scripts/review-legs.js"
     ]
   },
@@ -115,7 +115,7 @@
   },
   "spec/scripts/memory-sweep.js": {
     "entryPoints": [
-      "spec/commands/review.md"
+      "spec/doctrine/stages/stage-review.md"
     ]
   },
   "spec/scripts/merge-back.sh": {
@@ -152,7 +152,7 @@
   },
   "spec/scripts/prose-cap.js": {
     "entryPoints": [
-      "spec/commands/review.md",
+      "spec/doctrine/stages/stage-review.md",
       "spec/commands/escape.md"
     ]
   },
@@ -188,8 +188,8 @@
   },
   "spec/scripts/render-gate.js": {
     "entryPoints": [
-      "spec/commands/review.md",
-      "spec/commands/design.md",
+      "spec/doctrine/stages/stage-review.md",
+      "spec/doctrine/stages/stage-design.md",
       "spec/commands/sketch.md"
     ]
   },
@@ -218,14 +218,14 @@
       "spec/commands/init.md",
       "spec/commands/release.md",
       "spec/commands/atlas.md",
-      "spec/commands/build.md",
+      "spec/doctrine/stages/stage-build.md",
       "spec/commands/run.md",
       "spec/commands/genesis.md",
       "spec/commands/enforce.md",
-      "spec/commands/design.md",
+      "spec/doctrine/stages/stage-design.md",
       "spec/commands/escape.md",
       "spec/commands/mocks.md",
-      "spec/commands/review.md",
+      "spec/doctrine/stages/stage-review.md",
       "spec/commands/plan.md",
       "git/commands/enter-worktree.md",
       "git/commands/merge.md",
@@ -255,7 +255,7 @@
   },
   "spec/scripts/spec-build-driver.js": {
     "entryPoints": [
-      "spec/commands/build.md",
+      "spec/doctrine/stages/stage-build.md",
       "spec/commands/run.md"
     ]
   },
@@ -263,14 +263,14 @@
     "entryPoints": [
       "spec/commands/queue.md",
       "spec/commands/plan.md",
-      "spec/commands/review.md",
+      "spec/doctrine/stages/stage-review.md",
       "spec/commands/escape.md",
       "spec/doctrine/core.md"
     ]
   },
   "spec/scripts/spec-review-driver.js": {
     "entryPoints": [
-      "spec/commands/review.md",
+      "spec/doctrine/stages/stage-review.md",
       "spec/commands/run.md"
     ]
   },
@@ -291,8 +291,8 @@
       "spec/commands/init.md",
       "spec/commands/release.md",
       "spec/commands/plan.md",
-      "spec/commands/review.md",
-      "spec/commands/build.md",
+      "spec/doctrine/stages/stage-review.md",
+      "spec/doctrine/stages/stage-build.md",
       "spec/scripts/spec-review-driver.js",
       "spec/scripts/spec-build-driver.js",
       "spec/doctrine/core.md"

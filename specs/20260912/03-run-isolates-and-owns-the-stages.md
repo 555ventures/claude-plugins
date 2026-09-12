@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: hardened
+status: implementing
 tier: critical
 area: pipeline-entry
 design: false
@@ -10,6 +10,8 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-12
 open_markers: 0
+build_base: main
+diff_base: 66141d41b1c25a2b1727792e88a2542d139e7ec7
 ---
 
 # `/spec:run` isolates by default, and it is the only stage command
@@ -123,6 +125,7 @@ design stage, `/spec:build` is not an invokable command anywhere, and the ledger
 | tests/render/render-gate.test.js | MODIFY | tests | AC-20260912-03-17 |
 | tests/smoke-manifest.test.js | MODIFY | tests | AC-20260912-03-17 |
 | tests/merge-back.test.js | MODIFY | tests | AC-20260912-03-2 (refusal pins tagged in place) |
+| tests/review/stopped-row-durability.test.js | MODIFY | tests | AC-20260912-03-10 — added at build: D10's `via` default collision (the byte-equality re-run never threaded `--via`, so verdict.js's own `direct` default no longer matches the driver's recorded `loop`); the re-run now threads the row's own `via`/`model`, as its sibling pin already does |
 
 Orchestrator duty, outside the table: the three CREATE rows are the DELETE rows' bodies. The
 build performs them with `git mv` followed by the in-place edits, so the rename is visible to
@@ -213,7 +216,7 @@ idempotently, so the stalled-review retry surface is `/spec:run <spec>` with no 
 ## Acceptance Criteria
 
 - **AC-20260912-03-1**: WHEN `spec/commands/run.md` is read THE SYSTEM SHALL carry a `## Step 0` heading positioned before its `## Routing` heading whose section text contains the literal `--in-place`, the literal `git worktree list --porcelain`, the literal `<spec>.build/`, and a phrase matching `/never .{0,30}in place/i`; and `spec/commands/run.md` SHALL NOT contain the literal `/git:enter-worktree <spec>` first (e.g. the current § Input sentence `run /git:enter-worktree <spec> first` → absent) → writes tests/run/isolate-step.test.js
-- **AC-20260912-03-2**: WHEN `merge-back.sh create --source spec/99-demo --root <repo>` runs against a repo whose `.claude/worktrees/` is not gitignored THE SYSTEM SHALL CONTINUE TO exit 2 with stderr containing `create: '.claude/worktrees/' is not gitignored`, and WHEN `--root` names a path inside an existing worktree it SHALL CONTINUE TO exit 2 with stderr containing `create: run from the main working tree` → rewrites tests/merge-back.test.js :: create refuses
+- **AC-20260912-03-2**: WHEN `merge-back.sh create --source spec/99-demo --root <repo>` runs against a repo whose `.claude/worktrees/` is not gitignored THE SYSTEM SHALL CONTINUE TO exit 2 with stderr containing `create: '.claude/worktrees/' is not gitignored`, and WHEN `--root` names a path inside an existing worktree it SHALL CONTINUE TO exit 2 with stderr containing `create: run from the main working tree` → reuses tests/merge-back.test.js :: create refuses
 - **AC-20260912-03-3**: WHEN `spec/commands/run.md`'s Step 0 section is read THE SYSTEM SHALL state the past-`hardened`-with-no-registered-worktree skip in a single bullet that names both conditions and both artifacts an in-flight build holds (literals `<spec>.build/` and `uncommitted`), and SHALL name `/clear` as a case that reaches it → writes tests/run/isolate-step.test.js
 - **AC-20260912-03-4**: WHEN `git/commands/enter-worktree.md` Step 2 is read THE SYSTEM SHALL open with a short-circuit bullet containing the literals `git rev-parse --show-toplevel`, `re-entered`, and a phrase matching `/no .{0,20}EnterWorktree/i`, positioned before the existing `git worktree list --porcelain` re-enter bullet → writes tests/run/isolate-step.test.js
 - **AC-20260912-03-5**: WHEN `git/commands/enter-worktree.md` is read THE SYSTEM SHALL NOT contain the literal `the pipeline runs **in place** on the current branch`, and SHALL contain a phrase matching `/repair|manual/i` within its first 20 lines → writes tests/run/isolate-step.test.js

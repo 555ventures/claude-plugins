@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mechanical shortcut-pattern sweep — deterministic input to /spec:review.
+# Mechanical shortcut-pattern sweep — deterministic input to the review stage.
 # Usage: [DIFF_BASE=<ref>] scripts/spec-patterns.sh [dir ...]    (defaults to spec git tests scripts)
 # Pure report: always exits 0. Sanctioned exceptions exist — the reviewer judges; this only counts.
 set -u

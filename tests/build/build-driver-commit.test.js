@@ -91,15 +91,19 @@ test('AC-20260901-01-10: WHEN --state is passed THE SYSTEM prints exactly the ba
 // specs/20260901/02-run-provenance.md D5 (brief 18, AC-20260901-02-5): the build
 // driver gains the review driver's own --via flag (D4's sibling), recorded at sidecar creation,
 // and writes via/model onto the build row immediately after tier — model derived at row-write
-// time from lib/session-stamp.js's sessionModel(repoRoot). This test is written before
-// spec-session-stamp.sh / lib/session-stamp.js / the driver's --via support exist (TDD red)
-// and must fail until the driver genuinely threads --via through sidecar creation and
-// stamps the row with a real transcript-derived model.
-test('AC-20260901-02-5: a run created with --via loop and a stamp whose transcript ends in an assistant line with model claude-opus-5 appends a build row whose keys after tier begin via, model with "via":"loop","model":"claude-opus-5"; a run created without --via and without a stamp appends via:"direct", model:null', () => {
+// time from lib/session-stamp.js's sessionModel(repoRoot).
+//
+// specs/20260912/03-run-isolates-and-owns-the-stages.md D10 (AC-20260912-03-9, rewrites
+// AC-20260901-02-5 in place): the driver stops reading --via from argv entirely — a sidecar
+// created with NO flags at all now records via:"loop" (the old default was via:"direct"), and a
+// FIRST invocation explicitly passing --via direct records via:"loop" too. `via` remains a
+// measurement field written once at creation; only the flag that used to choose its value is
+// gone.
+test('AC-20260912-03-9 (rewrites AC-20260901-02-5): a build driver sidecar created with no flags at all records via:"loop" and appends a DONE row whose keys immediately after tier are via, model with "via":"loop"; the same first invocation passing --via direct still records via:"loop"', () => {
   const loopHost = makeHost()
-  const rInit = run(loopHost.root, loopHost.spec, '--via', 'loop')
+  const rInit = run(loopHost.root, loopHost.spec)
   assert.strictEqual(stateOf(loopHost.root, loopHost.spec), 'TESTS',
-    'setup precondition: the FIRST invocation (the one that creates the sidecar) must carry --via loop so D5\'s creation-time recording has something to record: ' + rInit.stdout + rInit.stderr)
+    'setup precondition: the FIRST invocation (the one that creates the sidecar), with no flags at all, must reach TESTS: ' + rInit.stdout + rInit.stderr)
 
   fs.mkdirSync(path.join(loopHost.root, '.claude'), { recursive: true })
   const transcript = path.join(loopHost.root, 'transcript.jsonl')
@@ -123,22 +127,32 @@ test('AC-20260901-02-5: a run created with --via loop and a stamp whose transcri
   const tierIdx = Object.keys(row).indexOf('tier')
   assert.deepStrictEqual(Object.keys(row).slice(tierIdx, tierIdx + 3), ['tier', 'via', 'model'],
     'via and model must be the two keys immediately after tier on the build row: ' + JSON.stringify(row))
-  assert.strictEqual(row.via, 'loop', 'a run created with --via loop must carry via:"loop" on its DONE row: ' + JSON.stringify(row))
+  assert.strictEqual(row.via, 'loop',
+    'D10: a sidecar created with NO flags at all must record via:"loop" — the driver no longer ' +
+    'reads --via from argv at all, so the flag\'s absence can no longer default the run to ' +
+    'via:"direct": ' + JSON.stringify(row))
   assert.strictEqual(row.model, 'claude-opus-5',
     'a run whose stamp names a transcript ending in an assistant line with model claude-opus-5 must carry that model on the DONE row — the model is derived at row-write time, not creation time: ' + JSON.stringify(row))
 
+  // AC-20260912-03-9's second clause: the FIRST invocation explicitly passing --via direct must
+  // ALSO record via:"loop" — the flag is read by no one any more, so no argv value can override
+  // the fixed default.
   const directHost = makeHost()
+  const rDirectInit = run(directHost.root, directHost.spec, '--via', 'direct')
+  assert.strictEqual(stateOf(directHost.root, directHost.spec), 'TESTS',
+    'setup precondition: the first invocation, even carrying --via direct, must still reach TESTS: ' + rDirectInit.stdout + rDirectInit.stderr)
   toCommit(directHost)
   fs.writeFileSync(directHost.spec.replace(/\.md$/, '.deviations.md'), '# Deviations — 99-bd-test\n\n- one departure\n')
   execFileSync('git', ['-C', directHost.root, 'add', 'src/foo.js', 'src/bar.js', 'other.txt', 'tests/foo.test.js', path.relative(directHost.root, directHost.spec)], { encoding: 'utf8' })
   execFileSync('git', ['-C', directHost.root, 'commit', '-q', '-m', 'checkpoint'], { encoding: 'utf8' })
   const directLedger = path.join(directHost.root, '.claude/spec-runs.jsonl')
   const rDirect = run(directHost.root, directHost.spec, '--mark', 'committed')
-  assert.strictEqual(rDirect.status, 0, 'the no-via, no-stamp run must also reach DONE cleanly: ' + rDirect.stdout + rDirect.stderr)
+  assert.strictEqual(rDirect.status, 0, 'the --via direct run must also reach DONE cleanly: ' + rDirect.stdout + rDirect.stderr)
   const directRows = fs.readFileSync(directLedger, 'utf8').trim().split('\n').filter(Boolean)
   const directRow = JSON.parse(directRows[directRows.length - 1])
-  assert.strictEqual(directRow.via, 'direct',
-    'a run created with no --via flag must default to via:"direct" on its DONE row: ' + JSON.stringify(directRow))
+  assert.strictEqual(directRow.via, 'loop',
+    'D10: a sidecar whose FIRST invocation explicitly passed --via direct must still record ' +
+    'via:"loop" — the flag no longer exists to choose a value: ' + JSON.stringify(directRow))
   assert.strictEqual(directRow.model, null,
     'a run with no .claude/spec-session.json stamp anywhere must carry model:null on its DONE row, never a thrown error or a fabricated value: ' + JSON.stringify(directRow))
 })
@@ -173,8 +187,15 @@ test('field report 2026-09-02 (build already DONE): WHEN invoked on a status:imp
     assert.match(r.stderr, /spec-review-driver\.js/, 'the remedy must name the review driver: ' + r.stderr)
     assert.ok(!fs.existsSync(host.sidecar), 'a refused re-run must never open a sidecar — that is the exact skipped-resume trap: ' + JSON.stringify(args))
   }
+  // AC-20260912-03-11: the remedy string loses its conditional --via loop suffix — the flag no
+  // longer exists, so echoing it would tell the session to type a dead flag.
   const rLoop = run(host.root, host.spec, '--via', 'loop')
-  assert.match(rLoop.stderr, /--via loop/, 'the loop path must be handed a --via loop review invocation: ' + rLoop.stderr)
+  assert.doesNotMatch(rLoop.stderr, /--via/,
+    'AC-20260912-03-11: the remedy must not contain the literal --via — the driver no longer ' +
+    'reads that flag from argv at all: ' + rLoop.stderr)
+  assert.match(rLoop.stderr, new RegExp('spec-review-driver\\.js ' + host.spec.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'm'),
+    'AC-20260912-03-11: the remedy must name the review driver followed by the spec path with no ' +
+    'trailing suffix: ' + rLoop.stderr)
   assert.strictEqual(fs.readFileSync(host.spec, 'utf8'), specText, 'the spec must be byte-identical after a refusal')
 })
 

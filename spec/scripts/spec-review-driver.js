@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Deterministic state-machine driver for /spec:review.
+// Deterministic state-machine driver for the review stage.
 //
-// WHY: specs/20260820/07-review-driver.md (brief 16) — /spec:review hand-performed ~14
+// WHY: specs/20260820/07-review-driver.md (brief 16) — the review stage hand-performed ~14
 // choreography steps around review-legs.js/verdict.js/merge-back.sh every review: resolve the
 // base, launch legs, append the GATE_RED ledger line by hand, run three separate verdict.js
 // passes, flip status, drive merge-back's inspect/merge/cleanup/verify sequence. Every one of
@@ -337,7 +337,7 @@ const renderGateDeclared = !!(hostDesignConfig && hostDesignConfig.render)
 
 if (!['implementing', 'done'].includes(status)) {
   die('spec status is "' + (status || '<missing>') + '" — spec-review-driver requires ' +
-    'status: implementing (or done for a re-run); run /spec:build first')
+    'status: implementing (or done for a re-run); run /spec:run ' + specPath + ' first')
 }
 
 // `let`, not `const`: a worktree merge relocates the sidecar into the main root mid-invocation
@@ -586,17 +586,16 @@ if (status === 'done' && !marks.closeRunId) {
     'defect that escaped a review that already passed, not another review run')
 }
 
-// ---- D4 (specs/20260901/02-run-provenance.md): --via recorded once, at sidecar creation --------
-// A later invocation naming a different --via is ignored — the run's provenance is fixed at
-// creation, so a resumed session reports the same via the run started with, never re-derived.
-// flag('--via') (A5) reads any --via value present; anything other than exactly "loop" defaults
-// to "direct", mirroring verdict.js's own default (D3) — the driver documents no separate --via
-// usage refusal, so an unrecognized value is treated the same as its absence rather than dying.
-// Placed AFTER the terminal-cold-path short-circuits above (never before them): saving here on a
-// spec already status:"done" with no sidecar would resurrect the very directory printDoneNow just
-// deleted, corrupting a `--state` query on a finished review into a fresh restart attempt.
+// ---- D10 (specs/20260912/03-run-isolates-and-owns-the-stages.md): `via` recorded once, at
+// sidecar creation, as "loop" unconditionally -------------------------------------------------
+// /spec:run is the only entry point left, so the flag that once chose between it and a direct
+// invocation is gone; argv is never consulted here at all, and a resumed session reports the
+// same via the run started with, never re-derived. Placed AFTER the terminal-cold-path
+// short-circuits above (never before them): saving here on a spec already status:"done" with no
+// sidecar would resurrect the very directory printDoneNow just deleted, corrupting a `--state`
+// query on a finished review into a fresh restart attempt.
 if (marks.via === undefined) {
-  marks.via = flag('--via') === 'loop' ? 'loop' : 'direct'
+  marks.via = 'loop'
   saveSidecar()
 }
 
@@ -1353,8 +1352,8 @@ function handleDispositions() {
   // silently succeed.
   if (argv.includes('--skip-independence-check-because')) {
     die('--skip-independence-check-because is retired (ADR-0005, specs/20260901/09-disposer-gate.md) ' +
-      '— independence is now the disposer agent (spec:disposer), dispatched at DISPOSITIONS on both ' +
-      '/spec:run and /spec:review; drop the flag')
+      '— independence is now the disposer agent (spec:disposer), dispatched at DISPOSITIONS on every ' +
+      '/spec:run pass through the review stage; drop the flag')
   }
   const n = marks.reviewerReturnIteration
 

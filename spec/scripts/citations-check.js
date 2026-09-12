@@ -43,7 +43,7 @@ for (let i = 0; i < argv.length; i++) {
   else usage()
 }
 
-const SCANNED_DIRS = ['spec/commands', 'spec/doctrine', 'spec/agents', 'git/commands']
+const SCANNED_DIRS = ['spec/commands', 'spec/doctrine', 'spec/doctrine/stages', 'spec/agents', 'git/commands']
 // core.md and design.md both carry doctrine that a "shared" citation may target a
 // heading in either, so shared idioms resolve to BOTH files and the heading check unions.
 const SHARED_PATHS = [path.join(root, 'spec/doctrine/core.md'), path.join(root, 'spec/doctrine/design.md')]

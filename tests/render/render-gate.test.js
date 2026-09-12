@@ -284,12 +284,14 @@ function flagVal(argv, name) {
 }
 
 // AC-20260824-02-2 (specs/20260824/02-design-stage-on-render-gate.md D8): the render gate's
-// own exit-2 remedy for a missing design.render block must name /spec:design — the command's
-// STOP (D3 preflight) and the script's STOP are meant to be one message, so a session that hits
-// this exit from either direction reads the same next step. Added to the r1 arm of the existing
-// AC-20260824-01-7 pin rather than a new test, since it is the same stderr the config-shape
-// assertions below already check.
-test('AC-20260824-01-7 / AC-20260824-02-2 / AC-20260905-06-11: a root whose config has no design.render exits 2 naming .claude/spec.config.json design.render.capture and design.render.url and /spec:design; a root with design.render but no design/targets.json exits 2 naming design/targets.json and design-targets.json', () => {
+// own exit-2 remedy for a missing design.render block once named the (now-retired) /spec:design
+// command directly — the command's STOP (D3 preflight) and the script's STOP were meant to be
+// one message, so a session that hit this exit from either direction read the same next step.
+// specs/20260912/03-run-isolates-and-owns-the-stages.md D15: the design stage is no longer an
+// invokable command, so the literal-naming half of this pin is retired outright
+// (rules § Gotchas: a pin whose subject is gone is retired, never weakened into passing) — the
+// remaining config-key assertions below, which this spec does not touch, still hold.
+test('AC-20260824-01-7 / AC-20260905-06-11: a root whose config has no design.render exits 2 naming .claude/spec.config.json design.render.capture and design.render.url; a root with design.render but no design/targets.json exits 2 naming design/targets.json and design-targets.json', () => {
   const root = fs.realpathSync(tmpdir('rg7a'))
   fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
   fs.mkdirSync(path.join(root, 'specs/20260824'), { recursive: true })
@@ -302,10 +304,6 @@ test('AC-20260824-01-7 / AC-20260824-02-2 / AC-20260905-06-11: a root whose conf
   assert.match(r1.stderr, /\.claude\/spec\.config\.json/, 'the remedy must name the config file: ' + r1.stderr)
   assert.match(r1.stderr, /design\.render\.capture/, 'the remedy must name the missing capture key: ' + r1.stderr)
   assert.match(r1.stderr, /design\.render\.url/, 'the remedy must name the missing url key: ' + r1.stderr)
-  assert.match(r1.stderr, /\/spec:design/,
-    'D8/AC-20260824-02-2: the remedy must name /spec:design — the command\'s own preflight STOP ' +
-    '(D3) and this script\'s STOP are meant to be one message, so a session that reaches this ' +
-    'exit from either direction reads the same next step: ' + r1.stderr)
 
   const root2 = fs.realpathSync(tmpdir('rg7b'))
   fs.mkdirSync(path.join(root2, '.claude'), { recursive: true })

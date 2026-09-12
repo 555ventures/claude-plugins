@@ -14,8 +14,8 @@ exemption therefore covers appearance only — reachability is never exempt.
 
 Enforcement rides mechanisms that already exist: `/spec:plan`'s lock audit (widened from Goal
 promises to Decision-level observable promises), the Phase 3 refuters (a mocked in-repo hop
-between producer and terminal is top-severity), `/spec:build`'s `blocked` ruling duty (a
-mid-build ruling adds its AC in the same edit), and `/spec:review`'s AC↔test matrix,
+between producer and terminal is top-severity), the build stage's `blocked` ruling duty (a
+mid-build ruling adds its AC in the same edit), and the review stage's AC↔test matrix,
 skipped-test reconciliation and semantic backstop. No new script, section, or review leg
 exists for this — deliberately (ruled 2026-08-10, superseding the discarded `## Surface
 Paths` design; specs/20260810/02-terminal-observable-acs.md).
@@ -77,13 +77,10 @@ already closed. (specs/20260823/04-review-close-hardening.md, done 2026-08-23)
 ## One command per feature
 
 After `/spec:plan`, `/spec:run <spec>` derives the stage from disk and runs design (when
-due), the build driver, and the review driver in sequence, each with `--via loop`;
-`/spec:design`, `/spec:build`, and `/spec:review` are the three stages' direct entries
-(`--via direct`). Status
-transitions are owned by driver states, not commands: plan's lock → `hardened`, the build
-driver's preflight → `implementing`, the review driver's close → `done`; the state gate
-admits `/spec:run` on all three (`/spec:build` on `hardened|implementing`, `/spec:review` on
-`implementing|done`) and stays a prompt-boundary check. There is no stop
+due), the build driver, and the review driver in sequence. Status transitions are owned by
+driver states, not commands: plan's lock → `hardened`, the build driver's preflight →
+`implementing`, the review driver's close → `done`; the state gate admits `/spec:run` and
+stays a prompt-boundary check. There is no stop
 between the reviewer's return and dispositions. Independence is a fresh-context
 `spec:disposer` agent (read-only, paths only, the session's model) dispatched at
 DISPOSITIONS on both review entries; it returns one grounded recommendation per survivor

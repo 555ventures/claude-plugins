@@ -19,8 +19,10 @@ const LEDGER = '.claude/spec-runs.jsonl'
 // release.md leg of this pin (the file already matches .claude/spec-runs.jsonl) is a SHALL-
 // CONTINUE-TO carrier through the release-legs.js rewrite (D11) — tagged here rather than
 // restated, since the assertion below already exercises exactly this file.
+// specs/20260912/03-run-isolates-and-owns-the-stages.md AC-20260912-03-6: build.md's and
+// review.md's bodies move to spec/doctrine/stages/stage-{build,review}.md — repointed in place.
 test('AC-20260820-07-13 / AC-20260823-01-20: build, review, escape, and release all append to the single repo-wide ledger', () => {
-  for (const f of ['commands/build.md', 'commands/review.md', 'commands/escape.md', 'commands/release.md']) {
+  for (const f of ['doctrine/stages/stage-build.md', 'doctrine/stages/stage-review.md', 'commands/escape.md', 'commands/release.md']) {
     assert.match(read(f), new RegExp(LEDGER.replace(/[./]/g, '\\$&')),
       `${f} must reference ${LEDGER} — a stage that stops writing ledger rows silently drops ` +
       'out of the durable cost/verdict history')
@@ -40,7 +42,7 @@ test('no per-spec ledger files: nothing instructs writing runs files under specs
 // sentences are kept verbatim through that rewrite (load-bearing regression carriers, per
 // D7's own rationale), so they are tagged with the new AC-ID here rather than restated.
 test('AC-20260820-07-13: review never hand-writes the verdict word — verdict.js is the sole derivation', () => {
-  const review = read('commands/review.md')
+  const review = read('doctrine/stages/stage-review.md')
   assert.match(review, /derived by `verdict\.js`, never asserted in prose/,
     'review.md must state that the verdict word is script-derived — the 2026-08-05 incident ' +
     'was a CLEAN printed with nothing executed')
@@ -87,7 +89,7 @@ test('union driver resolves concurrent worktree appends under squash merge', () 
 const squash = (s) => s.replace(/\s+/g, ' ')
 
 test('AC-20260821-02-8: review.md names the driver\'s REPLAY state as what executes a due replay at CLEAN close, via replay.md\'s phases, and no longer carries the retired advisory warn', () => {
-  const review = squash(read('commands/review.md'))
+  const review = squash(read('doctrine/stages/stage-review.md'))
   assert.match(review, /REPLAY/,
     'review.md must name the REPLAY state — the shell is where the session learns it owes the ' +
     'measurement before the review can conclude, and a shell silent about it leaves the driver ' +
@@ -136,7 +138,7 @@ test('AC-20260821-02-9: core § Feedback Loop names the driver\'s REPLAY state a
 // widened who lands on the disposition desk, never what disposition means.
 
 test('AC-20260821-02-10 / AC-20260823-06-9: agent memory is a disposed artifact, never a silent improvement carrier — review.md\'s close gives every touched memory file one stated fate, and core § Feedback Loop says why', () => {
-  const review = squash(read('commands/review.md'))
+  const review = squash(read('doctrine/stages/stage-review.md'))
   assert.match(review, /agent-memory/,
     'review.md\'s close step must name .claude/agent-memory/ as something the session disposes — ' +
     'a memory file nobody adjudicates rides the spec\'s own commit into every future session and ' +

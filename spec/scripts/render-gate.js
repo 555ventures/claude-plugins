@@ -9,8 +9,8 @@
 // (mock x component) matrix from `design/targets.json` and the mock's own declared states,
 // serves the mock side itself (D8 — so `../tokens.css` resolves without a host obligation),
 // drives a capture command per cell — the host's OWN `design.render.capture` when declared —
-// diffs each pair with render-compare.js, and reports a sentinel-terminated verdict
-// `/spec:review` (or any script consumer) can trust without reading prose.
+// diffs each pair with render-compare.js, and reports a sentinel-terminated verdict the review
+// stage (or any script consumer) can trust without reading prose.
 //
 // specs/20260824/04-render-rules.md (D5): when the host config declares
 // `design.rulesManifest`, every COMPONENT inventory (never the mock side, in --spec mode) is
@@ -134,7 +134,7 @@ if (mode === 'spec') {
   if (!hostCaptureCmd || typeof renderConfig.url !== 'string' || !renderConfig.url.trim()) {
     die(2, 'no usable design.render block in ' + path.join(root, CONFIG_RELPATH) + ' — declare ' +
       'design.render.capture and design.render.url (see spec/templates/grounding-contract.md) ' +
-      '— this is the same precondition /spec:design stops on at preflight')
+      '— this is the same precondition the design stage stops on at preflight')
   }
 }
 

@@ -5,7 +5,7 @@
 // WHY: specs/20260824/04-render-rules.md (D1-D3) — a design-rules.json manifest's
 // thresholds (CTA count, touch-target size, contrast, colors within the token palette) were only
 // ever checked by a Sonnet rule-checklist walk at /spec:sketch exit, in the render gate, and in
-// /spec:review's design leg — a rule the manifest can express as a number was still being judged
+// the review stage's design leg — a rule the manifest can express as a number was still being judged
 // by a model at runtime. This is the reader that replaces that walk: it executes a rule's
 // `renderCheck` (a closed kind set — target-size, cta-count, contrast, palette) over one or more
 // render-inventory.browser.js documents, resolving palette colors from the host's own

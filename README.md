@@ -93,10 +93,11 @@ if you write them yourself. With briefs, the same loop reads:
 - `sketch` only matters for UI-bearing work. It mocks ONE brief before planning and triages every
   brainstorm change into its binding home (mock / brief / scope / ADR); plan warns if you skipped
   it, never blocks.
-- `/spec:run` carries a hardened spec the rest of the way itself: design when due, then
-  test-first implementation behind the host gate, then independent executed review. It stops
-  only for decisions — design approval, findings the disposition agent wants to let stand,
-  merge strategy, and the step out of the worktree before merge — and never for a `/clear`.
+- `/spec:run` opens the spec's own worktree first, then carries a hardened spec the rest of the
+  way itself: design when due, then test-first implementation behind the host gate, then
+  independent executed review. It stops only for decisions — a worktree it cannot create,
+  design approval, findings the disposition agent wants to let stand, merge strategy, and the
+  step out of the worktree before merge — and never for a `/clear`.
 - Requirement changed mid-build? Write the ruling into the spec's Decisions table — that is
   where workers read it — and re-run `/spec:run`; it resumes by skipping File Plan rows the
   diff already shows landed.
@@ -135,10 +136,7 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 | `/spec:init` | Profile the repo, generate the grounding layer, run enforce | Once per repo |
 | `/spec:sketch` | Mock + brainstorm one roadmap brief; ratify mock↔brief agreement | Before planning a UI-bearing brief |
 | `/spec:plan` | Author + adversarially harden a spec | Per feature |
-| `/spec:run` | Runs the whole feature: design when due, then test-first implementation behind the host gate, then independent executed review, commits/merges and flips `done`; resumable, stopping only for decisions | Per feature |
-| `/spec:design` | Stage entry point: mock → components → your catalog approval | UI specs, catalog repos only |
-| `/spec:build` | Stage entry point: test-first implementation behind the host gate, direct into the build driver alone | Per feature, if resuming the build stage alone |
-| `/spec:review` | Stage entry point: re-enter the review driver directly (same driver `/spec:run` runs at `--via loop`) | Per feature, if resuming review alone |
+| `/spec:run` | Isolates in the spec's own worktree, then runs the whole feature: design when due, then test-first implementation behind the host gate, then independent executed review, commits/merges and flips `done`; resumable, stopping only for decisions — the only way into the design, build, and review stages | Per feature |
 | `/spec:release` | Staging deploy → executed checks → confirmed promote | Per milestone |
 | `/spec:atlas` | Whole-product design view + annotation loop | Anytime |
 | `/spec:status` | Where the work stands + the one command to paste next; `--all` adds lanes, blocked list, hygiene | Anytime you are lost |
@@ -148,7 +146,7 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 | `/spec:escape` | Record a defect that slipped past review | When one surfaces |
 | `/spec:enforce` | Turn rules into deterministic checks | On rule/tooling change |
 | `/git:commit`, `/git:merge` | Add-all-commit (with escape capture); guided merge | Anytime |
-| `/git:enter-worktree` | Enter the isolated worktree for a spec | Before build/design isolation |
+| `/git:enter-worktree` | Manually enter or repair a spec's worktree — `/spec:run` opens it automatically | If `/spec:run`'s isolation step fails, or to re-enter by hand |
 
 ## What makes it different
 

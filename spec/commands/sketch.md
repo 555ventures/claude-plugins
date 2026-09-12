@@ -19,7 +19,7 @@ whole-product map; this command is the per-brief workbench — the atlas's annot
 **Never required.** Plan warns on an unratified UI brief and offers this command; it never blocks.
 
 **Intended model: the session model, plus the planning seat for scoped-sweep authorship**
-(shared § Model Placement — direction is judged here so `/spec:design` later inherits it):
+(shared § Model Placement — direction is judged here so the design stage later inherits it):
 recommend the best available model for brainstorm rounds. Scoped-sweep mock authorship follows
 the shared authorship + grounding rule in full (shared § Design Atlas's authorship paragraph,
 ADR-0003) — one hand, in-session, for every edit; no `Agent` dispatch ever writes a mock
@@ -61,10 +61,10 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    cites (including `Amended by ADR-NNNN` lines), the design doctrine, and `design/tokens.css`. Scan `design/mocks/` for the brief's
    declared surfaces; derive gaps and statuses.
 2. **Bound check.** Surfaces already `bound`/`built` (coverage ledger claim) are contracts —
-   changes to them route through `/spec:design`'s drift handling, never through this command.
+   changes to them route through the design stage's drift handling, never through this command.
    If the requested change targets one, STOP with the shared shape (shared § Console Output
-   Style): `🚫 **{surface} is bound — sketch is pre-plan only.**` then `Next: /spec:design —
-   reopen the spec that bound this surface.`
+   Style): `🚫 **{surface} is bound — sketch is pre-plan only.**` then `Next: /spec:run <the spec
+   that bound this surface> — its design stage handles the drift.`
 3. **Theme (first run only).** Run `node {driver} theme state`. A refusal (exit code 2) → STOP,
    printing the driver's stderr verbatim. `picked` → skip straight to the sweep — the theme was
    picked in `/spec:mocks` (THEME), by the client on the two dense screens, and every mock this
@@ -220,7 +220,7 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
   implicitly. Sketches stay honest sketches until then.
 - Never edits `specs/**`, the coverage ledger, or `design/atlas/` (derived); never touches
   surfaces another brief owns (Out of scope fences are binding here too).
-- Bound mocks are contracts; the fork ruling lives in `/spec:design`, not here.
+- Bound mocks are contracts; the fork ruling lives in the design stage, not here.
 - Theme direction authoring (step 3) follows the same in-session authorship + grounding rule as
   the sweep — no `Agent` dispatch ever writes a candidate direction's tokens or kit page.
 - The critique pass is never skipped and never self-run — a small brief still gets the states

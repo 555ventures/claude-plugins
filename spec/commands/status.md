@@ -48,7 +48,7 @@ node "$(spec-paths spec-status)" --root . --all
 
 If the run errors, print the error and stop — never reconstruct statuses or a next
 suggestion by hand; an absent answer is correct, a hand-derived one never is. (The `--next`
-mode still exists for other consumers — `/spec:review`'s close-out pointer — and prints just
+mode still exists for other consumers — the review stage's close-out pointer — and prints just
 the 🎯 top pick.)
 
 ## Render (Console Output Style — the script output IS the render)
@@ -94,8 +94,8 @@ already printed reprints there.
 
 1. **After the block, narrate in one or two sentences** what the dashboard means for the
    user's next hour — name the paste line and, only when a decide line printed, the one
-   question it asks. Tags worth knowing in the roadmap rows: `[design]` routes through
-   `/spec:design` first; `[designed]` means that stage already ran and the Next line is
+   question it asks. Tags worth knowing in the roadmap rows: `[design]` routes through the
+   design stage first; `[designed]` means that stage already ran and the Next line is
    `/spec:run`.
 2. **Decide lines** — narrate each printed `⚠️` pair in plain language: `skipped-brief` means
    a later brief moved on while an earlier dependency was never planned; `out-of-order` means

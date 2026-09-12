@@ -1,17 +1,11 @@
----
-description: Build stage direct entry — direct Sonnet worker dispatch per layer wave behind the deterministic gate, driver-stepped: spec-build-driver.js owns admission, wave derivation, gate resolution, red-check, the final gate, scope-reconcile, and the ledger row; this session holds test-author dispatch, per-wave worker dispatch, and repair; `/spec:run` is the loop that reaches this stage with `--via loop` and continues into review
-argument-hint: <spec path>
----
-
 # Spec Build: The Build Stage
 
-`/spec:build <spec>` runs the build stage alone — a hardened spec to `implementing` and its
-build to `DONE`. `spec-build-driver.js` owns this stage's sequencing — admission, wave
-derivation, gate resolution, env preflight, red-check, the final gate, scope-reconcile, diff
-counts, and the ledger row — executing every deterministic step itself and printing exactly one
-step at a time for this session's judgments. `/spec:run` reaches this same driver with
-`--via loop` and, on `DONE`, continues into review — see `spec/commands/run.md`. Orchestrator
-and workers: Sonnet.
+The build stage carries a hardened spec to `implementing` and its build to `DONE`.
+`spec-build-driver.js` owns this stage's sequencing — admission, wave derivation, gate
+resolution, env preflight, red-check, the final gate, scope-reconcile, diff counts, and the
+ledger row — executing every deterministic step itself and printing exactly one step at a time
+for this session's judgments. `/spec:run` is the only way here: it reaches this driver and, on
+`DONE`, continues into review — see `spec/commands/run.md`. Orchestrator and workers: Sonnet.
 
 **Setup:** run `spec-paths shared-for build` and read its output. Read the host's
 `.claude/spec.config.json` (pipeline rules load with that Read — path-scoped, never re-read).
@@ -21,10 +15,11 @@ printed path as `{driver}`.
 ## Input
 
 `$ARGUMENTS` — path to a hardened spec (or one already `implementing`, to resume). **Worktree
-isolation is not build's concern** — run `/git:enter-worktree <spec>` first; the driver never
-creates/enters/leaves a worktree, preferring its own stamped `diff_base` pin over `build_base`.
+isolation is not build's concern** — `/spec:run`'s Step 0 opens the spec's worktree before this
+stage ever runs; the driver never creates/enters/leaves one itself, preferring its own stamped
+`diff_base` pin over `build_base`.
 
-**A design-landed component is not stub residue.** `/spec:design` commits real components
+**A design-landed component is not stub residue.** The design stage commits real components
 before the build starts, so a non-tests `CREATE` row already in the pre-image is legitimate —
 `red-attributed` refuses only paths that DIFFER from base; an already-tracked `CREATE` row
 earns a WARN naming it, never a refusal or a hand-edit of the File Plan.
@@ -88,7 +83,7 @@ hand-applied). Run `node "$(spec-paths report-render)" --slots <file>` and print
 ```report
 ✅ **DONE — hardened → implementing, gate green**
 
-Next: /spec:review specs/20260817/01-example.md
+Next: /spec:run specs/20260817/01-example.md
 ```
 
 If in a worktree, stay in it. Every ledger row lands in `.claude/spec-runs.jsonl`.

@@ -191,7 +191,7 @@ test('AC-20260823-08-3 / AC-20260901-10-4 / AC-20260903-03-10: with no queue fil
   const r = runNode(SCRIPT, ['--root', dir, '--next'])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.strictEqual(r.stdout.trim(), '🎯 Next\n/spec:run @specs/20260701/02-ready.md',
-    'AC-20260901-10-4/D5: D2/Behavior "Overlay OFF": no queue file (and no git repo at all) must leave --next byte-identical to the pre-queue derivation, updated in place from /spec:build to /spec:run per D5\'s action-string change — this pin must be green after the overlay lands the same as it was green before D5')
+    'AC-20260901-10-4/D5: D2/Behavior "Overlay OFF": no queue file (and no git repo at all) must leave --next byte-identical to the pre-queue derivation, updated in place from the retired build-stage action string to /spec:run per D5\'s action-string change — this pin must be green after the overlay lands the same as it was green before D5')
   assert.strictEqual(r.stderr, '',
     'a host with no git repository at all must never print overlay-resolution noise to stderr')
 })

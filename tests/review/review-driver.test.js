@@ -108,11 +108,15 @@ test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO) / AC-20260824-
   // specs/20260901/02-run-provenance.md D4/A6 (brief 18, AC-20260901-02-4's sibling pin): the
   // driver always passes --via/--model onto every verdict.js pass, so this fixture
   // (no --via given to the driver, no .claude/spec-session.json stamp anywhere on the host) must
-  // land the default row shape — via:"direct", model:null. This assertion is what makes the
-  // reproducibility re-run below need the two flags at all: without it, a driver that silently
-  // dropped via/model from the row would still pass the byte-identity diff vacuously.
-  assert.strictEqual(appended.via, 'direct',
-    'AC-20260901-02-4/A6: a driver invocation with no --via and no stamp must default the appended row to via:"direct" — via is fixed at sidecar creation, not derived here: ' + JSON.stringify(appended))
+  // land the default row shape. This assertion is what makes the reproducibility re-run below
+  // need the two flags at all: without it, a driver that silently dropped via/model from the row
+  // would still pass the byte-identity diff vacuously.
+  // AC-20260912-03-10 (specs/20260912/03-run-isolates-and-owns-the-stages.md D10): the recorded
+  // default is now "loop", not "direct" — the drivers stopped reading --via from argv because the
+  // loop is the only entry point left, while `via` itself stays on the row as the measurement
+  // field the fleet's escapes-per-CLEAN query buckets on. Retagged in place, never weakened.
+  assert.strictEqual(appended.via, 'loop',
+    'AC-20260912-03-10/AC-20260901-02-4: a driver invocation with no --via and no stamp must record the appended row as via:"loop" — via is fixed at sidecar creation and no longer read from argv, so a "direct" here means the retired flag read survived: ' + JSON.stringify(appended))
   assert.strictEqual(appended.model, null,
     'AC-20260901-02-4/A6: a host with no .claude/spec-session.json stamp must derive model:null on the appended row, never a thrown error or a fabricated value: ' + JSON.stringify(appended))
 
@@ -576,14 +580,30 @@ test('AC-20260820-07-15: WHEN a done spec\'s sidecar exists but does not record 
 // instead of {"outcome":"cleared"} (D6: a zero-survivor, zero-leg-finding run's disposer mark is
 // recorded empty:true, never a checkpoint-clear fact, since CHECKPOINT is retired), for both the
 // --via loop run and the run created without --via.
-test('AC-20260901-02-4 (also AC-20260901-09-6, rewritten in place, D9): a run created with --via loop and later driven to a CLEAN close with a stamp whose transcript ends in an assistant line with model claude-sonnet-5 records via:"loop" in review-state.json at creation and appends a CLEAN row carrying via:"loop", model:"claude-sonnet-5", checkpoint:{"outcome":"empty"}; a run created without --via and without a stamp appends via:"direct", model:null, checkpoint:{"outcome":"empty"}', () => {
+//
+// specs/20260912/03-run-isolates-and-owns-the-stages.md D10 (AC-20260912-03-10, retagged in
+// place): the driver stops reading --via from argv entirely — a sidecar created with NO flags at
+// all now records via:"loop" (the old default was via:"direct"), and a FIRST invocation
+// explicitly passing --via direct records via:"loop" too.
+test('AC-20260912-03-10 (also AC-20260901-02-4, AC-20260901-09-6, rewritten in place, D9): a review driver sidecar created with no flags at all records via:"loop" in review-state.json, and the same first invocation passing --via direct still records via:"loop"; the no-flags run driven to a CLEAN close with a stamp whose transcript ends in an assistant line with model claude-sonnet-5 appends a CLEAN row carrying via:"loop", model:"claude-sonnet-5", checkpoint:{"outcome":"empty"}', () => {
+  const explicitDirectHost = makeHost()
+  const rExplicit = run(explicitDirectHost.root, explicitDirectHost.spec, '--via', 'direct')
+  assert.strictEqual(stateOf(explicitDirectHost.root, explicitDirectHost.spec), 'REVIEWER',
+    'setup precondition: the first invocation, even carrying --via direct, must still reach REVIEWER: ' + rExplicit.stdout + rExplicit.stderr)
+  const stateAtCreationExplicit = JSON.parse(fs.readFileSync(path.join(explicitDirectHost.sidecar, 'review-state.json'), 'utf8'))
+  assert.strictEqual(stateAtCreationExplicit.via, 'loop',
+    'AC-20260912-03-10/D10: a sidecar whose FIRST invocation explicitly passed --via direct must ' +
+    'still record via:"loop" — the flag no longer exists to choose a value: ' + JSON.stringify(stateAtCreationExplicit))
+
   const loopHost = makeHost()
-  const rInit = run(loopHost.root, loopHost.spec, '--via', 'loop')
+  const rInit = run(loopHost.root, loopHost.spec)
   assert.strictEqual(stateOf(loopHost.root, loopHost.spec), 'REVIEWER',
-    'setup precondition: the FIRST invocation (the one that creates the sidecar) must carry --via loop so D4\'s creation-time recording has something to record: ' + rInit.stdout + rInit.stderr)
+    'setup precondition: the FIRST invocation (the one that creates the sidecar), with no flags at all, must reach REVIEWER: ' + rInit.stdout + rInit.stderr)
   const stateAtCreation = JSON.parse(fs.readFileSync(path.join(loopHost.sidecar, 'review-state.json'), 'utf8'))
   assert.strictEqual(stateAtCreation.via, 'loop',
-    'review-state.json must record via:"loop" at sidecar creation — a resumed session must report the same via the run started with, not re-derive it from a later invocation: ' + JSON.stringify(stateAtCreation))
+    'AC-20260912-03-10/D10: a sidecar created with NO flags at all must record via:"loop" — the ' +
+    'driver no longer reads --via from argv at all, so the flag\'s absence can no longer default ' +
+    'the run to via:"direct": ' + JSON.stringify(stateAtCreation))
 
   fs.mkdirSync(path.join(loopHost.root, '.claude'), { recursive: true })
   const transcript = path.join(loopHost.root, 'transcript.jsonl')
@@ -626,10 +646,11 @@ test('AC-20260901-02-4 (also AC-20260901-09-6, rewritten in place, D9): a run cr
   assert.strictEqual(rDirect.status, 0, 'the no-via, no-stamp run must also self-disposition and close cleanly: ' + rDirect.stdout + rDirect.stderr)
   const directRows = fs.readFileSync(directLedger, 'utf8').trim().split('\n').filter(Boolean)
   const directRow = JSON.parse(directRows[directRows.length - 1])
-  assert.strictEqual(directRow.via, 'direct',
-    'a run created with no --via flag must default to via:"direct" on its appended CLOSE row: ' + JSON.stringify(directRow))
+  assert.strictEqual(directRow.via, 'loop',
+    'AC-20260912-03-10/D10: a sidecar created with no --via flag at all must now record via:"loop" ' +
+    'on its appended CLOSE row — the old default was via:"direct"; the flag is no longer read at all: ' + JSON.stringify(directRow))
   assert.strictEqual(directRow.model, null,
     'a run with no .claude/spec-session.json stamp anywhere must carry model:null on its appended CLOSE row: ' + JSON.stringify(directRow))
   assert.deepStrictEqual(directRow.checkpoint, { outcome: 'empty' },
-    'AC-20260901-09-6: a run created without --via must ALSO carry checkpoint:{"outcome":"empty"} on its close row — D6 threads the derived outcome onto every review verdict pass for both via values, not just loop: ' + JSON.stringify(directRow))
+    'AC-20260901-09-6: a run created without --via must ALSO carry checkpoint:{"outcome":"empty"} on its close row — D6 threads the derived outcome onto every review verdict pass regardless of via: ' + JSON.stringify(directRow))
 })

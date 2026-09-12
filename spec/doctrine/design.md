@@ -9,7 +9,7 @@ config's `design` block declares `tool`/`command`/`storyFormat`/`doctrine`/`rend
 gate, `grounding-contract.md`), optional `rulesManifest`/`atlasRoutes`/`gateCommand`,
 legacy-tolerated unread `copyCatalogs`/`screenshot` (the render gate judges painted text, never
 source copy or pixels). A UI-bearing spec on such a host defaults to `design: true`
-frontmatter, routed through `/spec:design` between plan and build; the catalog and § Design
+frontmatter, routed through the design stage between plan and build; the catalog and § Design
 Render Gate gate UI **appearance**, TDD gates logic, **reachability is never exempt**
 (`plan.md` Phase 2) — skipping design is the user's call, never the model's.
 
@@ -56,7 +56,7 @@ design doctrine doc (taste tokens can't encode, binding like a locked Decision);
 galleries, the notes layer — is authored under the `frontend-design` skill in the shadcn idiom on `viewer.css`'s
 register (the Neutral roles byte-equal to `wire-tokens.css`), never on product tokens; the wireframe inside a frame stays gray.
 ## Design Authoring Contracts
-Consumed by `/spec:design` and genesis's design ratification (genesis.md § Genesis: Brief State),
+Consumed by the design stage and genesis's design ratification (genesis.md § Genesis: Brief State),
 authored against § Design Canon.
 **Grounded vs taste (mock supremacy):** each ruling is tagged `grounded` (external anchor —
 contrast/a11y, legal/brand, destructive-action safety) or `taste` (aesthetic), authored into
@@ -79,21 +79,21 @@ prose is not enforcement. `design/components.json` (`name`, `purpose`, `props`, 
 plus `authorJustification` for `author` decisions) is extended at reconcile from each worker's
 receipt, read at preflight before any bind-vs-author call. Every `author` decision returns the
 nearest manifest entry and why it fails — absence is a gate failure (base primitives, seeded by
-the genesis design state, owe none) — verified by `/spec:review`'s component-manifest check;
+the genesis design state, owe none) — verified by the review stage's component-manifest check;
 creating a component must cost strictly more than reusing one.
 **Component vocabulary (commitment entries).** The genesis design state also seeds
 `design/components.json` with **commitment entries** — `name`, `purpose`, optional
 `boundaries` — distinguished from a landed entry by having no `props`/`mockRefs` yet.
 `spec/scripts/components-check.js` (`spec-paths components-check`) is the manifest's schema
 authority (`name`+`purpose` required, `boundaries` an array when present, no duplicate `name`s)
-— fail-closed at the genesis design state's `skeleton-landed` mark, advisory at `/spec:design`
-preflight. Authoring dispatches read it as binding canon like tokens: bind/import or author to
-fulfil an entry, never re-invent a lookalike; a `boundaries` contradiction is a fork, and
-`/spec:review` treats commitment entries as first-class near-duplicate targets.
+— fail-closed at the genesis design state's `skeleton-landed` mark, advisory at the design
+stage's preflight. Authoring dispatches read it as binding canon like tokens: bind/import or
+author to fulfil an entry, never re-invent a lookalike; a `boundaries` contradiction is a fork,
+and the review stage treats commitment entries as first-class near-duplicate targets.
 ## Design Render Gate
 `render-gate.js` is the deterministic fidelity judge — fidelity is measured **at the render**
 (painted text, in-flow order, bound-region geometry), never by diffing source (ADR-0002);
-consumed by `/spec:design`'s render-gate step and `/spec:sketch`'s exit, stating invariants
+consumed by the design stage's render-gate step and `/spec:sketch`'s exit, stating invariants
 only, never the sequencing those commands own. **Inputs & exclusions:** the mock
 (`design_source`, read directly from disk), one story per declared state, and the theme ×
 viewport **targets matrix** when declared; `--mocks <mock>…` runs mock-only, no component

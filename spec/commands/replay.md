@@ -7,12 +7,12 @@ argument-hint: "[none — the harness selects the target spec and corpus class i
 
 Generalizes the one-time v7 replay eval into a repeatable measurement: a known defect from the
 corpus is injected into a just-CLEANed spec's tree, in a scratch worktree that never touches the
-main tree, and the standard reviewer is dispatched **exactly as `/spec:review` dispatches it**,
+main tree, and the standard reviewer is dispatched **exactly as the review stage dispatches it**,
 blind to the fact that anything is being tested. Catch/miss/leg-caught lands as one
 `stage:"replay"` ledger row with retained evidence — the number that makes the pipeline's
 one-reviewer bet falsifiable (shared § Feedback Loop).
 
-**Two entry points, one executor.** `/spec:review`'s driver invokes Phases 1–5 below itself when
+**Two entry points, one executor.** The review driver invokes Phases 1–5 below itself when
 the harness reports a replay is due — its REPLAY state refuses to conclude the review until an
 outcome is recorded. This command remains the **manual surface**: ad-hoc measurement, and the
 retry after a non-measurement outcome (`unresolved`/`setup-failed`), which leaves the harness
@@ -170,10 +170,10 @@ asked.
 ## Phase 2 — Blind reviewer dispatch (skipped on `leg-caught`)
 
 **The blind-dispatch contract:** dispatch **one** `Agent {subagent_type: 'spec:reviewer'}` with
-*exactly* the inputs `/spec:review` Phase 1 gives it — the spec path, the diff base
+*exactly* the inputs the review stage's own REVIEWER step gives it — the spec path, the diff base
 (`{diffBase}`), `{dir}` as the root, the pipeline-rules path, and the paths review-legs printed —
 and nothing else; no mention of "replay," "mutation," "corpus," "injected," or that anything is
-being measured, so the reviewer believes this is an ordinary `/spec:review` run. Same evidence
+being measured, so the reviewer believes this is an ordinary review run. Same evidence
 standard (executed repro or quoted spec violation; an empty findings list is valid), same
 structured return: `{verdict: "CLEAN"|"REVIEWER_FAILED", survivors: [{severity, claim, file, line,
 impact, evidence}], killed: [], reviewerCount: 1, tokens: <n>}`, written to a temp file.

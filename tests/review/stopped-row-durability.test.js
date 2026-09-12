@@ -214,6 +214,14 @@ test('AC-20260821-04-1 / AC-20260824-06-5 (worktree carrier) / AC-20260901-09-13
     reArgs.push('--checkpoint', appended.checkpoint.outcome)
     if (appended.checkpoint.outcome === 'disposer') reArgs.push('--checkpoint-overrides', String(appended.checkpoint.overrides))
   }
+  // AC-20260912-03-10 (specs/20260912/03-run-isolates-and-owns-the-stages.md D10): the driver
+  // records via:"loop" at sidecar creation and no longer reads --via from argv, while verdict.js
+  // keeps its own --via default of "direct" — so the re-run must thread the row's OWN recorded
+  // via/model, exactly as the sibling reproducibility pin in tests/review/review-driver.test.js
+  // already does. Hardcoding either here would make this a byte-equality assertion about the
+  // test's guess rather than about what the driver actually threaded.
+  if (appended.via) reArgs.push('--via', appended.via)
+  if (appended.model) reArgs.push('--model', appended.model)
   const reRun = runNode('scripts/verdict.js', reArgs)
   const reRunLine = reRun.stdout.trim().split('\n')[1]
   assert.ok(reRunLine, 'verdict.js must print a ledger line when re-invoked with the driver\'s own recorded flags against the same manifest: ' + reRun.stdout + reRun.stderr)

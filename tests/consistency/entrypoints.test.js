@@ -329,6 +329,11 @@ function corpusFiles(root) {
   const surfaces = [
     ['spec/commands', ['.md']],
     ['spec/doctrine', ['.md']],
+    // specs/20260912/03-run-isolates-and-owns-the-stages.md D9/A4: listFiles is a non-recursive
+    // single-level listing, so files under spec/doctrine/stages/ are invisible to the
+    // 'spec/doctrine' row above — a sibling entry is the only way this walker sees them, exactly
+    // like the D9 case that motivated it originally (AC-20260912-03-7).
+    ['spec/doctrine/stages', ['.md']],
     ['spec/agents', ['.md']],
     ['spec/templates', null],
     ['git/commands', ['.md']],
@@ -593,6 +598,97 @@ test('AC-20260907-01-13: spec/entrypoints.json lists spec/commands/plan.md as an
     'D8/D6: the spec/scripts/ac-drift.js manifest row must declare spec/scripts/spec-review-driver.js ' +
     'as an entry point — the CLOSE step now runs ac-drift.js via runChild, and an undeclared ' +
     'invocation is exactly the class checkReverseInvocation exists to catch: ' + JSON.stringify(acDriftRow))
+})
+
+// specs/20260912/03-run-isolates-and-owns-the-stages.md D7/D9 (AC-20260912-03-7): the sixteen
+// manifest entryPoints naming the three retired command files are renamed to their stage-*.md
+// counterparts — spec/commands/{build,review,design}.md are deleted outright, so a surviving
+// mention here would name a file that no longer exists (the exact class checkInventoryForward's
+// own AC-2 sibling catches, applied to entry points instead of keys).
+test('AC-20260912-03-7: spec/entrypoints.json\'s former spec/commands/{build,review,design}.md entry points are renamed to their spec/doctrine/stages/stage-*.md counterparts, with none of the three old paths surviving anywhere in the manifest', () => {
+  const manifest = readManifest(ROOT)
+  const OLD_TO_NEW = {
+    'spec/commands/build.md': 'spec/doctrine/stages/stage-build.md',
+    'spec/commands/review.md': 'spec/doctrine/stages/stage-review.md',
+    'spec/commands/design.md': 'spec/doctrine/stages/stage-design.md',
+  }
+  const stillOld = []
+  for (const [script, entry] of Object.entries(manifest)) {
+    const eps = Array.isArray(entry.entryPoints) ? entry.entryPoints : []
+    for (const ep of eps) {
+      if (Object.prototype.hasOwnProperty.call(OLD_TO_NEW, ep)) stillOld.push(script + ' -> ' + ep)
+    }
+  }
+  assert.deepStrictEqual(stillOld, [],
+    'D7 deletes spec/commands/build.md, review.md and design.md outright — any manifest entry ' +
+    'still naming one of them as an entry point overclaims a call site to a file that no longer ' +
+    'exists on disk: ' + stillOld.join(', '))
+
+  // The twelve script rows the spec's own File Plan derivation names (D7 File Plan Summary):
+  // each old entry point must have been replaced by its exact stage-file counterpart.
+  const EXPECTED = {
+    'spec/scripts/components-check.js': ['spec/doctrine/stages/stage-design.md'],
+    'spec/scripts/design-ac-reconcile.js': ['spec/doctrine/stages/stage-design.md'],
+    'spec/scripts/design-atlas.js': ['spec/doctrine/stages/stage-design.md'],
+    'spec/scripts/env-preflight.js': ['spec/doctrine/stages/stage-design.md'],
+    'spec/scripts/memory-sweep.js': ['spec/doctrine/stages/stage-review.md'],
+    'spec/scripts/prose-cap.js': ['spec/doctrine/stages/stage-review.md'],
+    'spec/scripts/spec-queue.js': ['spec/doctrine/stages/stage-review.md'],
+    'spec/scripts/spec-build-driver.js': ['spec/doctrine/stages/stage-build.md'],
+    'spec/scripts/spec-review-driver.js': ['spec/doctrine/stages/stage-review.md'],
+  }
+  for (const [script, expectedEps] of Object.entries(EXPECTED)) {
+    const entry = manifest[script]
+    assert.ok(entry && Array.isArray(entry.entryPoints),
+      script + ' must still carry a manifest row with an entryPoints array: ' + JSON.stringify(entry))
+    for (const ep of expectedEps) {
+      assert.ok(entry.entryPoints.includes(ep),
+        script + '\'s entryPoints must include ' + ep + ' — the renamed row is missing it: ' +
+        JSON.stringify(entry.entryPoints))
+    }
+  }
+  // render-gate.js, report-render.js and spec-status.js each had TWO or THREE old entries
+  // collapsing onto stage-review.md/stage-build.md/stage-design.md — checked by set membership
+  // rather than exact arrays, since other unrelated entry points on these rows are untouched.
+  const renderGate = manifest['spec/scripts/render-gate.js']
+  assert.ok(renderGate && renderGate.entryPoints.includes('spec/doctrine/stages/stage-review.md') &&
+    renderGate.entryPoints.includes('spec/doctrine/stages/stage-design.md'),
+    'render-gate.js must be an entry point of both stage-review.md and stage-design.md: ' + JSON.stringify(renderGate))
+  const reportRender = manifest['spec/scripts/report-render.js']
+  assert.ok(reportRender &&
+    ['stage-build.md', 'stage-design.md', 'stage-review.md'].every((f) =>
+      reportRender.entryPoints.includes('spec/doctrine/stages/' + f)),
+    'report-render.js must be an entry point of all three stage files: ' + JSON.stringify(reportRender))
+  const specStatus = manifest['spec/scripts/spec-status.js']
+  assert.ok(specStatus && specStatus.entryPoints.includes('spec/doctrine/stages/stage-review.md') &&
+    specStatus.entryPoints.includes('spec/doctrine/stages/stage-build.md'),
+    'spec-status.js must be an entry point of both stage-review.md and stage-build.md: ' + JSON.stringify(specStatus))
+})
+
+// AC-20260912-03-7's own worked example: a fixture whose spec/doctrine/stages/stage-x.md
+// contains a spec-paths invocation with no manifest row declaring it must surface exactly one
+// reverse-invocation violation naming that file — proving corpusFiles' new surface entry is
+// actually scanned, not merely present in the surfaces list.
+test('AC-20260912-03-7: a spec/doctrine/stages/stage-x.md invoking spec-paths widget with no manifest row declaring it surfaces one reverse-invocation violation naming that file', () => {
+  const root = tmpdir('entrypoints-ac7-stages-surface')
+  writeTree(root, {
+    'spec/scripts/widget.js': '#!/usr/bin/env node\n',
+    'spec/bin/spec-paths': '#!/usr/bin/env bash\nset -u\nROOT="$(pwd)"\ncase "${1:-root}" in\n  widget)  echo "$ROOT/scripts/widget.js" ;;\nesac\n',
+    'spec/doctrine/stages/stage-x.md': '# Stage X\n\nRun `node "$(spec-paths widget)" --root .` here.\n',
+    'spec/entrypoints.json': JSON.stringify({
+      'spec/scripts/widget.js': { entryPoints: ['spec/commands/other.md'] }
+    })
+  })
+  const violations = checkReverseInvocation(root)
+  assert.strictEqual(violations.length, 1,
+    'exactly one reverse-invocation violation is expected for the one undeclared spec-paths ' +
+    'call site under spec/doctrine/stages/: ' + JSON.stringify(violations))
+  assert.match(violations[0], /spec\/doctrine\/stages\/stage-x\.md/,
+    'the violation must name the undeclared call site inside spec/doctrine/stages/ — without ' +
+    'this surface in corpusFiles, the moved stage files\' own call sites would be invisible to ' +
+    'this guard exactly like the D9 recurrence this same corpus list already closed once: ' + violations[0])
+  assert.match(violations[0], /widget\.js/,
+    'the violation must name the invoked script (widget.js): ' + violations[0])
 })
 
 // Exhaustive live-file pin: every hooks.json addition updates the expected set here in place

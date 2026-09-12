@@ -34,7 +34,7 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
    `.claude/agents/*.md` whose frontmatter `name:` is exactly that value; no orphan agents
    claiming pipeline kinds. **Routing coverage:** every layer in `layerGroups` (plus `tests`
    and `other`) resolves to a kind via `routing`/`agentMap` or falls to `default` — a layer
-   no kind claims breaks `/spec:build` dispatch.
+   no kind claims breaks the build stage's dispatch.
 4. **Worker Contract text** — each generated agent's `## Worker Contract (spec pipeline)`
    section is byte-identical across agents (allowing only the sanctioned self-verify command
    substitution) and matches the contract file's § Worker Contract block; the `tests`-kind

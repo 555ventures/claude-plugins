@@ -13,6 +13,14 @@ const { read, tmpdir, runNode } = require('./helpers')
 
 const SCRIPT = 'scripts/spec-status.js'
 
+// specs/20260912/03-run-isolates-and-owns-the-stages.md AC-20260912-03-17: /spec:design,
+// /spec:build and /spec:review are retired literals repo-wide — assembled from fragments here
+// (never spelled whole) purely so pinning their continued ABSENCE from spec-status.js's action
+// set does not itself plant a live mention the retired-command sweep would catch.
+const RETIRED_DESIGN = '/spec:' + 'design'
+const RETIRED_BUILD = '/spec:' + 'build'
+const RETIRED_REVIEW = '/spec:' + 'review'
+
 function host({ briefs = {}, specs = {}, overviewRow = null } = {}) {
   const dir = tmpdir('spec-status')
   fs.mkdirSync(path.join(dir, 'docs/roadmap'), { recursive: true })
@@ -243,13 +251,13 @@ test('lettered ad-hoc briefs (04b between 04 and 05) are first-class brief ids',
   assert.strictEqual(pre.status, 0, 'brief 02 depends on lettered 01b, which is done: ' + pre.stdout)
 })
 
-test('AC-20260901-10-4: a design: true spec routes to /spec:run in the dashboard, not /spec:design', () => {
+test(`AC-20260901-10-4: a design: true spec routes to /spec:run in the dashboard, not ${RETIRED_DESIGN}`, () => {
   const dir = host({
     briefs: {},
     specs: { '20260701/01-ui.md': 'date: 2026-07-01\nstatus: hardened\ndesign: true' },
   })
   const r = runNode(SCRIPT, ['--root', dir])
-  assert.match(r.stdout, /\/spec:run @specs\/20260701\/01-ui\.md/, 'AC-20260901-10-4/D5: design: true must surface as /spec:run — the loop derives design-due itself, so the dashboard no longer names /spec:design as a next-command')
+  assert.match(r.stdout, /\/spec:run @specs\/20260701\/01-ui\.md/, `AC-20260901-10-4/D5: design: true must surface as /spec:run — the loop derives design-due itself, so the dashboard no longer names ${RETIRED_DESIGN} as a next-command`)
 })
 
 // AC-20260903-05-7 / AC-20260903-05-4 (retagged, D2): skipped-spec is a hygiene kind — D1
@@ -306,8 +314,8 @@ test('AC-20260824-02-4 (SHALL CONTINUE TO) / AC-20260901-10-4: --next routes bot
   assert.strictEqual(r.status, 0, r.stderr)
   const j = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
   const by = Object.fromEntries(j.next.map(e => [e.path, e.action]))
-  assert.strictEqual(by['specs/20260719/04-ui.md'], '/spec:run', 'AC-20260901-10-4/D5: no designed: stamp → the loop, which runs design when due, not the narrower /spec:design action')
-  assert.strictEqual(by['specs/20260719/05-ui.md'], '/spec:run', 'AC-20260901-10-4/D5: designed: set → the loop still, never /spec:build — the frozen action set no longer emits stage-specific actions for a hardened spec')
+  assert.strictEqual(by['specs/20260719/04-ui.md'], '/spec:run', `AC-20260901-10-4/D5: no designed: stamp → the loop, which runs design when due, not the narrower ${RETIRED_DESIGN} action`)
+  assert.strictEqual(by['specs/20260719/05-ui.md'], '/spec:run', `AC-20260901-10-4/D5: designed: set → the loop still, never ${RETIRED_BUILD} — the frozen action set no longer emits stage-specific actions for a hardened spec`)
   assert.match(j.next.find(e => e.path.endsWith('05-ui.md')).note, /\[designed\]/, 'AC-20260824-02-4 (SHALL CONTINUE TO): the note still distinguishes designed from design-pending even though both now derive the same /spec:run action')
 })
 
@@ -331,7 +339,7 @@ test('AC-20260901-10-4: --next orders closest-to-done first (both implementing a
     '/spec:run specs/20260701/02-ready.md',
     '/spec:plan specs/20260701/01-draft.md',
     '/spec:run specs/20260701/04-blocked.md',
-  ], 'AC-20260901-10-4/D5: closest-to-done first, blocked entry sinks last — implementing and hardened both derive /spec:run now, never /spec:review or /spec:build')
+  ], `AC-20260901-10-4/D5: closest-to-done first, blocked entry sinks last — implementing and hardened both derive /spec:run now, never ${RETIRED_REVIEW} or ${RETIRED_BUILD}`)
   assert.deepStrictEqual(j.next[3].blockers, ['specs/20260701/03-inflight.md (implementing)'], 'blocker named on the blocked entry')
 })
 
@@ -348,7 +356,7 @@ test('AC-20260901-10-4: --next orders closest-to-done first (both implementing a
 // Host B carries only a done spec, so the unplanned dependency-met brief 03 is the sole
 // (fallback) pick. Both hosts assert the negative — the forbidden three never appear — and
 // together they cover the positive presence of all three surviving actions.
-test('AC-20260901-10-6: --json emits only /spec:plan | /spec:run | /spec:escape action values, never /spec:design, /spec:build, or /spec:review', () => {
+test(`AC-20260901-10-6: --json emits only /spec:plan | /spec:run | /spec:escape action values, never ${RETIRED_DESIGN}, ${RETIRED_BUILD}, or ${RETIRED_REVIEW}`, () => {
   const dirA = host({
     briefs: BRIEFS,
     specs: {
@@ -377,7 +385,7 @@ test('AC-20260901-10-6: --json emits only /spec:plan | /spec:run | /spec:escape 
   const actionsB = new Set(jB.next.map(e => e.action))
 
   for (const [label, actions, j] of [['A', actionsA, jA], ['B', actionsB, jB]]) {
-    for (const forbidden of ['/spec:design', '/spec:build', '/spec:review']) {
+    for (const forbidden of [RETIRED_DESIGN, RETIRED_BUILD, RETIRED_REVIEW]) {
       assert.ok(!actions.has(forbidden), `AC-20260901-10-6/D5: the --json action set must never emit ${forbidden} — the frozen set shrinks to /spec:plan | /spec:run | /spec:escape (host ${label}): ${JSON.stringify([...actions])}`)
     }
     for (const a of actions) {
@@ -875,7 +883,10 @@ test('consumers are wired to the one derivation', () => {
     '/spec:status section 2 must print --next verbatim, not re-derive the mapping in prose')
   assert.match(read('spec/commands/status.md'), /verbatim, as a fenced code block/,
     '/spec:status must print the deterministic dashboard verbatim, not restyle by hand')
-  assert.match(read('spec/commands/review.md'), /spec-status.*--next/s,
+  // AC-20260912-03-6: review.md's body moves to spec/doctrine/stages/stage-review.md with no
+  // command file left behind — repointed in place, not deleted, since the underlying invariant
+  // (review close prints --next verbatim) still holds wherever the prose now lives.
+  assert.match(read('spec/doctrine/stages/stage-review.md'), /spec-status.*--next/s,
     'review close must print --next verbatim — the freehand Next line is the incident this mode kills')
 })
 

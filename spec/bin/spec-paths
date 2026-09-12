@@ -90,12 +90,9 @@ case "${1:-root}" in
     DESIGN="$ROOT/doctrine/design.md"
     case "$CMD" in
       plan)    SECTIONS="Host Grounding|Pipeline Entry|Tiers|Decomposition|State Machine|Model Placement|Decisions|Question Style|Console Output Style|MCP Policy|Canonical Docs Loop|Session Execution" ;;
-      design)  SECTIONS="Host Grounding|State Machine|Design Canon|Design Authoring Contracts|Design Render Gate|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|MCP Policy|Session Execution" ;;
       atlas)   SECTIONS="Host Grounding|Design Canon|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Session Execution" ;;
       sketch)  SECTIONS="Host Grounding|State Machine|Design Canon|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Session Execution" ;;
-      build)   SECTIONS="Host Grounding|Tiers|State Machine|Model Placement|Incident Policy|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|MCP Policy|On-Disk Handoff|Session Execution" ;;
       run)     SECTIONS="Host Grounding|Tiers|State Machine|Runtime Verification|Model Placement|Incident Policy|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|MCP Policy|On-Disk Handoff|Canonical Docs Loop|Session Execution" ;;
-      review)  SECTIONS="Host Grounding|Tiers|State Machine|Runtime Verification|Model Placement|Incident Policy|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|Canonical Docs Loop|Session Execution" ;;
       release) SECTIONS="Host Grounding|Runtime Verification|Release Stage|Model Placement|Decisions|Question Style|Console Output Style|Canonical Docs Loop|Session Execution" ;;
       enforce) SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Model Placement|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Session Execution" ;;
       genesis)           SECTIONS="Host Grounding|Pipeline Entry|Design Canon|Design Authoring Contracts|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|MCP Policy|Session Execution" ;;

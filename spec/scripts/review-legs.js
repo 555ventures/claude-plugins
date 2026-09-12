@@ -3,7 +3,7 @@
 // review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path>
 //   [--skips <file>] [--fix-delta] [--out-dir <dir>]
 //
-// Why (v7 redesign): /spec:review Phase 0 was ~2 pages of leg choreography a
+// Why (v7 redesign): the review stage's Phase 0 was ~2 pages of leg choreography a
 // session re-performed by hand every review — resolve the gate, launch five background legs,
 // append JSONL rows, remember which legs feed which. Every step was deterministic; none needed
 // a model. This script IS that phase: it runs every deterministic review leg, appends one JSONL

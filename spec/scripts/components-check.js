@@ -6,7 +6,7 @@
 // WHY: design/components.json gained a `boundaries` field and genesis-seeded "commitment"
 // entries (vocabulary rows with no props/mockRefs yet) alongside landed component entries.
 // Nothing validated the file's shape before this — a malformed manifest would only surface as
-// a confusing failure downstream (the design workers' grounding, /spec:review's near-duplicate check).
+// a confusing failure downstream (the design workers' grounding, the review stage's near-duplicate check).
 // This script is the single schema authority (D2): canonical shape is a top-level JSON array
 // of `{name, purpose, boundaries?, props?, mockRefs?, authorJustification?}`; `name`/`purpose`
 // are required non-empty strings, `boundaries` when present is an array of non-empty strings,
@@ -14,7 +14,7 @@
 // (unspecified by D2) and does NOT resolve component paths against the filesystem.
 //
 // Callers: genesis-driver.js's `skeleton-landed` mark (specs/20260902/11-brief-from-approved-set.md
-// D5; fail-closed — a malformed manifest must refuse the mark); /spec:design's preflight
+// D5; fail-closed — a malformed manifest must refuse the mark); the design stage's preflight
 // (advisory only — brownfield hosts may hold pre-D2 files).
 //
 // Exit codes: 0 = valid; 1 = findings (one line each, naming the entry and field); 2 = usage

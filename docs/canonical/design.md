@@ -321,14 +321,21 @@ realtime ai-in-loop residency payer day-one-integrations scale-outage vendor-lim
 legal-floor`), each mapped in `seed.md ## Facts` to a confirmed `product` ledger row. The
 seed's six sections are Product · Facts · References · Records · Journeys · Dense screens
 (specs/20260910/06, ADR-0013). Records carries one `- <entity>: records/<entity>.json` line
-per entity, each path relative to `design/mocks/` and each file a JSON array of at least three
-of the client's real records; `seed-done` refuses a missing section, a `- none` line, a path
-that does not exist or does not parse as an array, and an array shorter than three, naming the
-entity and the remedy — and when a cold host derives no entity at all, the remedy still prints
-with the literal `<entity>` placeholder. Dense screens carries one or two labels, each declared
+per entity, each path relative to `design/mocks/` and each file
+`{ "provenance": "real" | "synthetic", "records": [...] }` holding at least three records
+(2026-09-12 direct fix, amending specs/20260910/06's real-only requirement: the gate asks for
+three records with a declared origin, never three REAL records — a pre-launch product with no
+customers tags its invented records `synthetic` and passes, where the earlier rule left it with
+no legitimate input at all). `seed-done` refuses a missing section, a `- none` line, a path that
+does not exist or does not parse, a file that is not an object, a `provenance` other than
+`real`/`synthetic`, a bare JSON array (refused by name — an untagged array's origin is exactly
+what the gate asks for), and fewer than three `records`, naming the entity and the remedy — and
+when a cold host derives no entity at all, the remedy still prints with the literal `<entity>`
+placeholder. The accepted `seed-done` mark prints one `records: <entity> <n> (<provenance>)`
+line per entity. Dense screens carries one or two labels, each declared
 in a journey — the pair every theme candidate is judged on; the singular `## Dense screen`
 heading with one line continues to parse, so hosts already past SEED are untouched.
-`journey-drawn` prints `⚠️ <label>: carries none of the client's records` for every screen
+`journey-drawn` prints `⚠️ <label>: carries none of the seed's records` for every screen
 carrying no record value and refuses a journey where no screen carries one — a settings screen
 legitimately shows no record, a whole journey drawn on placeholders does not.
 `spec/scripts/lib/mock-seed-checks.js`'s `recordValues`/`recordHits` are that one derivation. Registers

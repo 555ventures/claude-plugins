@@ -18,8 +18,11 @@ section loads one step at a time — each driver step's `Doctrine:` line names i
 
 **Input:** none required. A cold root has no `design/mocks/status.json`; the driver creates it
 at SEED and tells you to fill `design/mocks/seed.md` from the user's idea, if not already clear
-— ask the client for three real records per `## Records` entity into `records/<entity>.json`
-(`seed-done` refuses without them).
+— seed at least three records per `## Records` entity into `records/<entity>.json`, shaped
+`{"provenance": "real"|"synthetic", "records": [...]}`: ask the client for their own records
+where the product has customers (`real`, always preferred — ask for the awkward ones), invent
+them where it has none (`synthetic`). `seed-done` refuses a file with fewer than three records
+or no declared provenance; it never asks whether they are real.
 
 ## The driver loop
 
@@ -34,7 +37,7 @@ at SEED and tells you to fill `design/mocks/seed.md` from the user's idea, if no
    screen — the seed's edges are checked against it at `journey-drawn`, which refuses any edge
    with no such control (§ Mocks: Authoring Rules, **Every edge is a real control**); draw with
    the seed's `## Records` values, never placeholders (§ Mocks: Authoring Rules, **Screens
-   carry the client's records**).
+   carry the seed's records**).
 3. Re-run. Repeat until `APPROVED`.
 
 Every authoring step block the driver prints carries the frontend-design skill line; act on it

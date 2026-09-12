@@ -88,18 +88,22 @@ function writeResearchBrief(dir) {
     '# Research brief\n\n## Findings\nSynthetic test brief for mocks-driver.test.js.\n')
 }
 
-// specs/20260910/06-real-records-and-two-dense-screens.md D5/D2: writeSeed
-// writes the three-record customer.json D2 requires beside a "## Records" seed section naming
-// it, so every caller that marks seed-done over this fixture keeps being accepted once D2 lands.
-// The three objects are the spec's own Contracts example verbatim (the awkward no-surname "Ren"
-// record included) — writeWireframe's embedded "Aoi Tanaka" text below is this file's `name`.
+// specs/20260910/06-real-records-and-two-dense-screens.md D5/D2, amended by the 2026-09-12
+// direct fix: writeSeed writes the three-record customer.json seed-done requires beside a
+// "## Records" seed section naming it, so every caller that marks seed-done over this fixture
+// keeps being accepted. The three objects are the spec's own Contracts example verbatim (the
+// awkward no-surname "Ren" record included) — writeWireframe's embedded "Aoi Tanaka" text below
+// is this file's `name`. The file is the wrapper shape the gate now requires, tagged
+// `synthetic` because these records are invented — which is the point of the fix: a product
+// with no customers has no real records and must still be able to pass SEED.
 const CUSTOMER_RECORDS = [
   { name: 'Aoi Tanaka', phone: '090-1234-5678', visits: 14 },
   { name: 'Ren', phone: '', visits: 1 },
   { name: 'Sato Hana', phone: '080-0000-1111', visits: 3 },
 ]
-function writeCustomerRecords(dir) {
-  writeJSON(path.join(dir, 'design/mocks/records/customer.json'), CUSTOMER_RECORDS)
+function writeCustomerRecords(dir, { provenance = 'synthetic' } = {}) {
+  writeJSON(path.join(dir, 'design/mocks/records/customer.json'),
+    { provenance, records: CUSTOMER_RECORDS })
 }
 
 function writeSeed(dir, { journeyLabels = LABELS, journeyName = JOURNEY, dense = DENSE } = {}) {

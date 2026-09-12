@@ -93,17 +93,15 @@ function writeResearchBrief(dir) {
 // "## Records" seed section naming it, so every caller that marks seed-done over this fixture
 // keeps being accepted. The three objects are the spec's own Contracts example verbatim (the
 // awkward no-surname "Ren" record included) — writeWireframe's embedded "Aoi Tanaka" text below
-// is this file's `name`. The file is the wrapper shape the gate now requires, tagged
-// `synthetic` because these records are invented — which is the point of the fix: a product
-// with no customers has no real records and must still be able to pass SEED.
+// is this file's `name`. The file is a JSON array: these records are invented, like every record
+// in a mock, and the gate asks nothing about where they came from.
 const CUSTOMER_RECORDS = [
   { name: 'Aoi Tanaka', phone: '090-1234-5678', visits: 14 },
   { name: 'Ren', phone: '', visits: 1 },
   { name: 'Sato Hana', phone: '080-0000-1111', visits: 3 },
 ]
-function writeCustomerRecords(dir, { provenance = 'synthetic' } = {}) {
-  writeJSON(path.join(dir, 'design/mocks/records/customer.json'),
-    { provenance, records: CUSTOMER_RECORDS })
+function writeCustomerRecords(dir, { records = CUSTOMER_RECORDS } = {}) {
+  writeJSON(path.join(dir, 'design/mocks/records/customer.json'), records)
 }
 
 function writeSeed(dir, { journeyLabels = LABELS, journeyName = JOURNEY, dense = DENSE } = {}) {

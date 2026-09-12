@@ -3,8 +3,8 @@
 <!-- Grammar: spec/doctrine/mocks.md § Mocks: Seed. `seed-done` closes this file: every key
      below must name a ledger.md product row whose status is confirmed (said-by-user or
      ratified-doc); every journey label must be declared in exactly one journey; each Dense
-     screens label must already be declared; each Records entity's file must exist, parse as an
-     object with `provenance` "real" or "synthetic", and hold at least three `records`. Written by the mocks driver on a cold root
+     screens label must already be declared; each Records entity's file must exist, parse, and
+     hold at least three records. Written by the mocks driver on a cold root
      (spec-paths mocks-driver), then hand-edited by the session between marks. -->
 
 ## Product
@@ -39,12 +39,10 @@
 ## Records
 
 <!-- One `- <entity>: records/<entity>.json` line per entity the product handles, path relative
-     to design/mocks/. Each file is
-     { "provenance": "real" | "synthetic", "records": [ ... ] } with at least three records.
-     "real" = the client's own records — ask for the awkward ones (the customer with no
-     surname, the order with three delivery addresses); always prefer these. "synthetic" = you
-     invented them, the honest answer when the product has no customers yet — invent the same
-     awkward ones. Wireframes draw these values, never placeholders. -->
+     to design/mocks/. Each file is a JSON array of at least three record objects, derived from
+     the Product and Facts above, docs/design/research-brief.md and anything under
+     design/mocks/references/ — invent them, awkward ones included (the customer with no
+     surname). This is a mock: never ask the user for data. Wireframes draw these values. -->
 - customer: records/customer.json
 
 ## Journeys

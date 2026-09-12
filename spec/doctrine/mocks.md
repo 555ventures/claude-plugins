@@ -123,17 +123,12 @@ order: `## Product` (three sentences — what it is, who it is for, the one job)
 (one `- <key>: <ledger id>` line per key above, each id `confirmed`), `## References` (a path,
 URL, or `- none`; anything under `design/mocks/references/` is picked up automatically),
 `## Records` (one `- <entity>: records/<entity>.json` line per entity the product handles, the
-path relative to `design/mocks/`; each file `{ "provenance": "real" | "synthetic", "records":
-[...] }` holding at least three records — `seed-done` refuses a missing section, a `- none`
-line, a path that is missing, does not parse, is not an object, carries no `provenance` of
-`real` or `synthetic`, or holds fewer than three `records`, naming the entity and the remedy in
-both shapes; the accepted mark prints one `records: <entity> <n> (<provenance>)` line per
-entity. **Three records with a declared origin, never three real records** — the gate can check
-that the origin was stated, not that it is true, and a pre-launch product with no customers has
-no real records to state: it tags its invented ones `synthetic` and passes, inventing the same
-awkward cases (the customer with no surname) the client would have supplied. `real` is always
-preferred where the client has records to give. A bare JSON array is refused by name — an
-untagged array's origin is exactly what this asks for), `## Journeys` (one `### <journey-kebab>` per journey, a
+path relative to `design/mocks/`; each file a JSON array of at least three record objects, which
+**the session derives and asks nobody for** — from the seed's own Product and Facts,
+`docs/design/research-brief.md` and anything under `design/mocks/references/`, inventing the
+awkward cases (the customer with no surname) a client would have supplied. `seed-done` refuses a
+missing section, a `- none` line, and a path that is missing, does not parse, is not an array, or
+holds fewer than three records, naming the entity and that one remedy), `## Journeys` (one `### <journey-kebab>` per journey, a
 persona line, and one fenced ` ```surfaces ``` ` block in the roadmap-brief grammar — names and
 arrows only, one line per edge, every label declared in exactly one journey), and
 `## Dense screens` (one or two labels already declared in a journey — the screen(s) every
@@ -391,14 +386,13 @@ half the driver cannot check, carried here as contract prose the authoring sessi
 - **Screens carry the seed's records.** After the edge check, `journey-drawn` compares every
   drawn screen's HTML against the seed's `## Records` values (`lib/mock-seed-checks.js`'s
   `recordValues` — every string value of length ≥ 3 in any record object, nested objects and
-  arrays walked, numbers stringified, deduplicated, read from the file's `records` array — and
+  arrays walked, numbers stringified, deduplicated — and
   `recordHits`, the values a screen's HTML contains): a screen with zero hits prints
   `⚠️ <label>: carries none of the seed's records`, and a journey where every screen has zero
   hits refuses, `journey "<j>": no screen carries a value from design/mocks/records/*.json —
   draw with the seed's own records, then re-mark` (ADR-0013). A settings screen legitimately
-  shows none; a whole journey drawn on placeholders does not. The records may be `real` or
-  `synthetic` (§ Mocks: Seed) — this check is about drawing with the seeded data instead of
-  lorem ipsum, and a `synthetic` seed satisfies it exactly as a `real` one does.
+  shows none; a whole journey drawn on placeholders does not. This check is about drawing with
+  the seeded data instead of lorem ipsum, never about where that data came from.
 - **Name the shared parts before the screens.** Once a kit family (`design/kit/`) resolves,
   every content region of a labeled mock carries `data-kit="<key>"` naming the primitive it
   instantiates, or `data-bespoke="<key>: <difference>"` naming the primitive it is *not* and

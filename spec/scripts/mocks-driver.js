@@ -132,15 +132,12 @@
 // one line still parses (legacy hosts, AC-20260910-06-5). D2: `## Records` names one
 // `- <entity>: records/<entity>.json` line per entity the product handles — `seed-done` refuses
 // a missing section, a `- none` line, or a records file that is missing, unparseable, not an
-// object, missing/misspelling `provenance`, or holding fewer than three `records` objects,
-// naming the entity and the remedy; when the seed's own text carries no entity to name (section
-// missing or `- none`), the entity named in the refusal falls back to whatever
-// `design/mocks/records/*.json` already holds on disk, so the remedy is never silent about which
-// file to author. The file is `{ "provenance": "real" | "synthetic", "records": [...] }`: a
-// greenfield product with no customers tags its invented records `synthetic` and passes — the
-// gate is three records with their origin declared, never three REAL records, which no
-// pre-launch host can produce (2026-09-12 direct fix; the bare-array shape this replaces is
-// refused with the wrapper named, since an untagged array's origin is exactly what is unknown). D3: `journey-drawn` collects every declared entity's record
+// array, or holding fewer than three records, naming the entity and the remedy; when the seed's
+// own text carries no entity to name (section missing or `- none`), the entity named in the
+// refusal falls back to whatever `design/mocks/records/*.json` already holds on disk, so the
+// remedy is never silent about which file to author. The file is a JSON array of record objects
+// the session derives; where the data came from is neither checked nor recorded, and every
+// refusal points at deriving it, never at asking the user for it. D3: `journey-drawn` collects every declared entity's record
 // values (`lib/mock-seed-checks.js` `recordValues`) and, after the D1/D2 edge-gap check above,
 // warns per screen carrying no record value and refuses the whole journey when no screen carries
 // one — never before the edge-gap check, so a placeholder-drawn journey is refused for its
@@ -455,24 +452,18 @@ function parseRecordsSection(text) {
   return { missing: false, entities }
 }
 
-// The records-file shape, and the one remedy every refusal shares. A records file is
-// `{ "provenance": "real" | "synthetic", "records": [...] }` — the origin travels with the data,
-// because the thing the gate can check is that the origin was declared, not that it is true.
-// "real" is the client's own records (the awkward ones); "synthetic" is invented, which is the
-// only honest answer for a product that has no customers yet.
-const RECORD_PROVENANCE = ['real', 'synthetic']
+// The records-file shape, and the one remedy every refusal shares: a JSON array of record
+// objects the session derives, asking nobody.
 function recordsRemedy(entity) {
-  return 'save at least three ' + entity + ' records as design/mocks/records/' + entity +
-    '.json, shaped {"provenance": "real"|"synthetic", "records": [...]} — "real" for the ' +
-    'client\'s own records (ask for the awkward ones), "synthetic" for records you invented ' +
-    'because the product has no customers yet'
+  return 'derive at least three ' + entity + ' records from docs/design/research-brief.md, ' +
+    'design/mocks/seed.md and anything under design/mocks/references/, and save them as ' +
+    'design/mocks/records/' + entity + '.json — a JSON array of record objects. Invent them; ' +
+    'this is a mock, so never ask the user for data'
 }
 
-// D2 (amended 2026-09-12): refuses seed-done on a missing ## Records section, a "- none"-only
-// section, or a records file that is missing, not valid JSON, not an object, carrying no valid
-// `provenance`, or holding fewer than three `records` objects — naming the entity and the remedy
-// every branch shares. A bare JSON array (the shape this replaces) is refused by name: an
-// untagged array's origin is precisely what the gate now asks for.
+// D2: refuses seed-done on a missing ## Records section, a "- none"-only section, or a records
+// file that is missing, not valid JSON, not an array, or holding fewer than three records —
+// naming the entity and the remedy every branch shares.
 function requireRecords(text) {
   const { missing, entities } = parseRecordsSection(text)
   if (missing || entities.size === 0) {
@@ -494,45 +485,11 @@ function requireRecords(text) {
     try { parsed = JSON.parse(raw) } catch (e) {
       die(names + 'is not valid JSON (' + e.message + ') — ' + remedy)
     }
-    if (Array.isArray(parsed)) {
-      die(names + 'holds a bare JSON array with no provenance — wrap it as ' +
-        '{"provenance": "real"|"synthetic", "records": [...]}: "real" if these are the client\'s ' +
-        'own records, "synthetic" if they were invented')
-    }
-    if (!parsed || typeof parsed !== 'object') die(names + 'does not hold a JSON object — ' + remedy)
-    if (!RECORD_PROVENANCE.includes(parsed.provenance)) {
-      die(names + 'has provenance ' + JSON.stringify(parsed.provenance === undefined ? null : parsed.provenance) +
-        ' — it must be "real" (the client\'s own records) or "synthetic" (records you invented because the product has no customers yet)')
-    }
-    if (!Array.isArray(parsed.records)) die(names + 'has no "records" array — ' + remedy)
-    if (parsed.records.length < 3) {
-      die(names + 'holds only ' + parsed.records.length + ' record(s) (three are required) — ' + remedy)
+    if (!Array.isArray(parsed)) die(names + 'does not hold a JSON array of records — ' + remedy)
+    if (parsed.length < 3) {
+      die(names + 'holds only ' + parsed.length + ' record(s) (three are required) — ' + remedy)
     }
   }
-}
-
-// The records array of one already-validated or not-yet-validated file, tolerantly: the wrapper
-// object's `records`, or a bare array (the pre-2026-09-12 shape) so read-only derivations over a
-// host mid-migration still see values. Anything else contributes nothing.
-function recordsArrayOf(parsed) {
-  if (Array.isArray(parsed)) return parsed
-  if (parsed && typeof parsed === 'object' && Array.isArray(parsed.records)) return parsed.records
-  return []
-}
-
-// The per-entity provenance summary the accepted `seed-done` mark prints, so the origin the seed
-// declared is visible in the run's own output and not only inside the JSON file.
-function recordsSummaryLine(text) {
-  const { entities } = parseRecordsSection(text)
-  const parts = []
-  for (const [entity, relPath] of entities) {
-    let parsed
-    try { parsed = JSON.parse(fs.readFileSync(path.join(mocksDir, relPath), 'utf8')) } catch { continue }
-    const arr = recordsArrayOf(parsed)
-    const prov = (parsed && !Array.isArray(parsed) && parsed.provenance) || 'untagged'
-    parts.push(entity + ' ' + arr.length + ' (' + prov + ')')
-  }
-  return parts.length ? 'records: ' + parts.join(', ') : null
 }
 
 // D3: every entity's record values, combined and deduplicated — the values `journey-drawn`
@@ -545,7 +502,8 @@ function collectRecordValues(text) {
   for (const relPath of entities.values()) {
     let parsed
     try { parsed = JSON.parse(fs.readFileSync(path.join(mocksDir, relPath), 'utf8')) } catch { continue }
-    for (const v of recordValues(recordsArrayOf(parsed))) if (!values.includes(v)) values.push(v)
+    if (!Array.isArray(parsed)) continue
+    for (const v of recordValues(parsed)) if (!values.includes(v)) values.push(v)
   }
   return values
 }
@@ -2025,13 +1983,6 @@ function handleApproved() {
 function printAcceptedTail(prev, next, mark) {
   const parsed = parseLedger(ledgerTextOrDie())
   writeOut(1, countsLine(parsed) + '\n\n')
-  if (mark === 'seed-done') {
-    // 2026-09-12 direct fix: one `records: <entity> <n> (real|synthetic)` line per declared
-    // entity, so the origin the seed declared is visible in the run's output — a journey later
-    // drawn on synthetic records is disclosed here, not buried in the JSON file.
-    const line = recordsSummaryLine(stripComments(seedTextOr('')))
-    if (line) writeOut(1, line + '\n\n')
-  }
   if (mark === 'approved') {
     // specs/20260910/03-client-journey-player.md D7: one `client: <j> — "<sentence>"` line per
     // confirmed seed journey, then `waived journeys: <n>`, both before the existing waived-notes
@@ -2394,9 +2345,10 @@ function driverCmd(extra) { return 'node ' + __filename + ' --root ' + root + ' 
 
 function printSeedStep() {
   printStepBlock('SEED', 'seed the product — facts before screens',
-    ['design/mocks/seed.md', 'design/mocks/ledger.md', 'docs/design/research-brief.md', 'design/targets.json'],
+    ['design/mocks/seed.md', 'design/mocks/ledger.md', 'docs/design/research-brief.md', 'design/targets.json', 'design/mocks/references/'],
     'Mocks: Seed', openRowsLine(),
-    [driverCmd('--mark seed-done')])
+    ['derive every ## Records file from the brief, the research and the references on disk — invent the records; this is a mock, so never ask the user for data',
+      driverCmd('--mark seed-done')])
 }
 
 function printShapesStep() {

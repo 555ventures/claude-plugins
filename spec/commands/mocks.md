@@ -18,11 +18,10 @@ section loads one step at a time — each driver step's `Doctrine:` line names i
 
 **Input:** none required. A cold root has no `design/mocks/status.json`; the driver creates it
 at SEED and tells you to fill `design/mocks/seed.md` from the user's idea, if not already clear
-— seed at least three records per `## Records` entity into `records/<entity>.json`, shaped
-`{"provenance": "real"|"synthetic", "records": [...]}`: ask the client for their own records
-where the product has customers (`real`, always preferred — ask for the awkward ones), invent
-them where it has none (`synthetic`). `seed-done` refuses a file with fewer than three records
-or no declared provenance; it never asks whether they are real.
+— derive at least three records per `## Records` entity into `records/<entity>.json`, a JSON
+array, from the seed's Product and Facts, `docs/design/research-brief.md` and anything under
+`design/mocks/references/`. Invent them, awkward cases included; this is a mock, so never ask the
+user for data.
 
 ## The driver loop
 

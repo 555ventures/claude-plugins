@@ -131,9 +131,13 @@ and every screen the client walks is served with the picked values in place of t
 Internally the atlas and the session's review page stay neutral. `/spec:sketch`'s theme step
 finds the theme already picked.
 
-**Real records, not placeholders.** The seed names the client's real records — three per entity
-— and every wireframe draws them. The seed's dense screen becomes two dense screens, the pair
-every theme candidate is judged on.
+**Derived records, not placeholders.** The seed names three records per entity, which the
+session derives for itself from the brief, the research and the references on disk — and every
+wireframe draws them. (Amended: this decision originally read *the client's real records*, which
+a pre-launch product cannot supply and which sent the session to the user for data. A mock's
+records are drawing material, not evidence; the gate asks for three records and nothing about
+where they came from.) The seed's dense screen becomes two dense screens, the pair every theme
+candidate is judged on.
 
 **What the journey does not do is derived, never typed.** Exclusion rows accumulate from decisions
 already made — discovery non-goals marked Later / Won't-this-time, a client's 違う on an

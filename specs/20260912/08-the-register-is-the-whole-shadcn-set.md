@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: hardened
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +10,8 @@ depended_on_by: [specs/20260912/09-a-mock-may-not-invent.md]
 brief: n/a
 spiked: 2026-09-12
 open_markers: 0
+build_base: main
+diff_base: 7ae10bda237df1c9a168175c49f2ca2710561700
 ---
 
 # The register is the whole shadcn set
@@ -54,7 +56,7 @@ command.
 | spec/commands/mocks.md | MODIFY | doctrine | D5 one step line telling a session holding an older register to run `--refresh-register` before drawing |
 | spec/doctrine/mocks.md | MODIFY | doctrine | D1/D3 § Mocks: Authoring Rules' "Wireframes are neutral…" bullet: eighteen roles under shadcn's names, filled-by-default primary button, the raised-pill tab row |
 | docs/adr/0013-client-rehearses-the-journey.md | MODIFY | other | D8 the § Context bullet and the § Decision register paragraph amended to eighteen roles; an `Amended by` backlink added |
-| docs/adr/0016-the-register-is-the-whole-shadcn-set.md | CREATE | other | D8 the amendment ADR; `Applies to: docs/adr/0013-client-rehearses-the-journey.md`. Take the next free number if 0016 is claimed by a sibling and amend every mention in this spec in the same build |
+| docs/adr/0017-the-register-is-the-whole-shadcn-set.md | CREATE | other | D8 the amendment ADR; `Applies to: docs/adr/0013-client-rehearses-the-journey.md`. Take the next free number if 0016 is claimed by a sibling and amend every mention in this spec in the same build |
 | tests/mocks/wire-register.test.js | CREATE | tests | AC-20260912-08-1, AC-20260912-08-2, AC-20260912-08-3, AC-20260912-08-7, AC-20260912-08-8 |
 | tests/mocks/register-refresh.test.js | CREATE | tests | AC-20260912-08-4, AC-20260912-08-5, AC-20260912-08-6 |
 | tests/mocks/mocks-driver-fixtures.js | MODIFY | tests | `writeThemeKit`'s candidate `tokens.css` re-valued to all twenty-two current roles in both its light and dark blocks, so every caller keeps clearing the role-completeness leg by default; its comment re-worded off "the eleven wire roles" |
@@ -302,6 +304,10 @@ to a worker's implementation choice.
 
 What to watch: the shared theme fixture and the register template must land in the same batch,
 or every caller of `advanceToThemePicked` reddens on a leg this spec never touches.
+
+A5 falsified at merge: a sibling spec landed `docs/adr/0016-a-screen-appears-on-the-atlas-once.md`
+on `main` while this build ran, so the amendment ADR took the next free number, 0017, and every
+`Applies to`/`Amended by` backlink and File Plan row was amended in the same build.
 
 Collision closure run at lock over `eleven`, `viewer-tokens`, `muted-bg`, `primary-fg`. Every
 `eleven` and `viewer-tokens` hit is already a File Plan row. The `muted-bg`/`primary-fg` hits

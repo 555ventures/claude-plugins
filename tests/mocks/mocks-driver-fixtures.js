@@ -379,18 +379,31 @@ function writeThemeKit(dir, kebab, primitives = [{ key: 'sheet', purpose: 'a mod
     '<div data-kit-canon="' + kebab + '">\n' + body + '\n</div>\n')
   // specs/20260910/04-theme-before-the-client-walk.md D2/A3: `theme compose` (and everything
   // that reuses composeViolations — theme shortlist, --mark theme-picked) additionally refuses a
-  // candidate whose tokens.css omits any of the eleven wire roles spec/templates/mocks/
-  // wire-tokens.css declares under :root — every caller of writeThemeKit needs a candidate that
-  // clears that new leg by default, so a test isolating ANOTHER D2 violation never trips this one
-  // by accident. A test isolating the role-completeness leg itself mutates the written file
-  // afterward (drops one or more `--role: …;` declarations) rather than this fixture growing an
-  // opts bag.
+  // candidate whose tokens.css omits any wire role spec/templates/mocks/wire-tokens.css declares
+  // under :root — every caller of writeThemeKit needs a candidate that clears that leg by
+  // default, so a test isolating ANOTHER D2 violation never trips this one by accident. A test
+  // isolating the role-completeness leg itself mutates the written file afterward (drops one or
+  // more `--role: …;` declarations) rather than this fixture growing an opts bag.
+  // specs/20260912/08-the-register-is-the-whole-shadcn-set.md D1: re-valued to all twenty-two
+  // current shadcn-Neutral roles (the retired --bg/--fg/--muted-bg/--primary-fg short names are
+  // gone) in both the light `:root` block and the `[data-theme="dark"]` block, so every caller
+  // keeps clearing the role-completeness leg once wire-tokens.css itself grows to the same set.
   writeFile(path.join(dir, 'design/theme', kebab, 'tokens.css'),
-    ':root{--bg:#fff;--fg:#111;--muted:#666;--muted-bg:#f0f0f0;--border:#ddd;--primary:#222;' +
-    '--primary-fg:#fff;--ring:#999;--radius:8px;--font:sans-serif;--shadow:0 1px 2px rgba(0,0,0,.1)}\n' +
-    '[data-theme="dark"]{--bg:#000;--fg:#eee;--muted:#999;--muted-bg:#111;--border:#333;' +
-    '--primary:#eee;--primary-fg:#000;--ring:#555;--radius:8px;--font:sans-serif;' +
-    '--shadow:0 1px 2px rgba(0,0,0,.5)}\n')
+    ':root{--background:oklch(1 0 0);--foreground:oklch(0.145 0 0);--card:oklch(1 0 0);' +
+    '--card-foreground:oklch(0.145 0 0);--popover:oklch(1 0 0);--popover-foreground:oklch(0.145 0 0);' +
+    '--primary:oklch(0.205 0 0);--primary-foreground:oklch(0.985 0 0);--secondary:oklch(0.97 0 0);' +
+    '--secondary-foreground:oklch(0.205 0 0);--muted:oklch(0.97 0 0);--muted-foreground:oklch(0.556 0 0);' +
+    '--accent:oklch(0.97 0 0);--accent-foreground:oklch(0.205 0 0);--destructive:oklch(0.577 0.245 27.325);' +
+    '--border:oklch(0.922 0 0);--input:oklch(0.922 0 0);--ring:oklch(0.708 0 0);--radius:0.625rem;' +
+    '--font:sans-serif;--shadow:0 1px 2px rgba(0,0,0,.1);--shadow-lg:0 10px 15px rgba(0,0,0,.1)}\n' +
+    '[data-theme="dark"]{--background:oklch(0.145 0 0);--foreground:oklch(0.985 0 0);' +
+    '--card:oklch(0.205 0 0);--card-foreground:oklch(0.985 0 0);--popover:oklch(0.205 0 0);' +
+    '--popover-foreground:oklch(0.985 0 0);--primary:oklch(0.922 0 0);--primary-foreground:oklch(0.205 0 0);' +
+    '--secondary:oklch(0.269 0 0);--secondary-foreground:oklch(0.985 0 0);--muted:oklch(0.269 0 0);' +
+    '--muted-foreground:oklch(0.708 0 0);--accent:oklch(0.269 0 0);--accent-foreground:oklch(0.985 0 0);' +
+    '--destructive:oklch(0.704 0.191 22.216);--border:oklch(1 0 0 / 10%);--input:oklch(1 0 0 / 15%);' +
+    '--ring:oklch(0.556 0 0);--radius:0.625rem;--font:sans-serif;--shadow:0 1px 2px rgba(0,0,0,.5);' +
+    '--shadow-lg:0 10px 15px rgba(0,0,0,.5)}\n')
 }
 
 // specs/20260910/04-theme-before-the-client-walk.md: the confirmed `theme-directions: <kebab>`
@@ -504,8 +517,8 @@ function advanceToJourneyWalked(dir, journeyName = JOURNEY) {
 // APPROVED has walked its journey first.
 //
 // specs/20260910/04-theme-before-the-client-walk.md D3/D6 orchestrator duty (ADR-0013): THEME
-// returns, between WALK and CLIENT — advanceToThemePicked composes two directions (full eleven
-// wire roles, D2) over the walked host's own design/kit/, decides the theme-picked pick stop
+// returns, between WALK and CLIENT — advanceToThemePicked composes two directions (every current
+// wire role, D2) over the walked host's own design/kit/, decides the theme-picked pick stop
 // (bypassing the served `theme shortlist` step exactly as every other advanceTo* bypasses its own
 // "open" step) and runs the real `--mark theme-picked --direction <k>`, the one executed-proof
 // write every later stage's fixture now depends on.

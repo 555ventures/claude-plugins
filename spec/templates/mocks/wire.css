@@ -1,20 +1,23 @@
 /* Wireframe class set — spec/doctrine/mocks.md § Mocks: Authoring Rules, re-based on the wire
    tokens per specs/20260902/09-one-hand-wireframes-one-token-set.md D6 and re-drawn as a CSS
-   port of shadcn's component look under ADR-0013 (the client walks these screens; the gray
-   register is shadcn Neutral, a theme is the same roles re-valued). Copied verbatim into
+   port of shadcn's component look under ADR-0013, amended by
+   docs/adr/0017-the-register-is-the-whole-shadcn-set.md (the client walks these screens; the
+   gray register is shadcn Neutral, a theme is the same roles re-valued). Copied verbatim into
    design/wire/wire.css by `canon-written` when absent, linked from every sketch-stage screen
    alongside tokens.css. Every color here is var(--role) from wire-tokens.css — a literal added
    to this file drifts the register out from under design-atlas.js check, which only inspects
-   markup, not stylesheets. Layout uses px/rem freely (mocks legitimately fix layout early);
-   color is the one family this file must never hardcode. Class names are the contract the
-   wireframes are written against — add, never rename. */
+   markup, not stylesheets. Every border-radius resolves through shadcn's four-step scale
+   (`calc(var(--radius) * 0.6|0.8|1.4)` or `var(--radius)`) or is the deliberate `9999px` pill —
+   never a raw length, never a hand-rolled calc. Layout uses px/rem freely (mocks legitimately
+   fix layout early); color and radius are the two families this file must never hardcode. Class
+   names are the contract the wireframes are written against — add, never rename. */
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--fg);
+  background: var(--background);
+  color: var(--foreground);
   font-family: var(--font);
   font-size: 14px;
   line-height: 1.5;
@@ -39,11 +42,12 @@ body {
   gap: 12px;
 }
 
-/* card — shadcn Card: 1px border, radius, soft shadow, 24px padding */
+/* card — shadcn Card: 1px border, xl radius, soft shadow, 24px padding, on --card */
 .card {
   border: 1px solid var(--border);
-  border-radius: calc(var(--radius) + 4px);
-  background: var(--bg);
+  border-radius: calc(var(--radius) * 1.4);
+  background: var(--card);
+  color: var(--card-foreground);
   box-shadow: var(--shadow);
   padding: 24px;
 }
@@ -65,16 +69,16 @@ body {
 .label {
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--fg);
+  color: var(--foreground);
 }
 
 .muted,
 .description {
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 0.875rem;
 }
 
-/* input — shadcn Input: 36px, 1px border, radius, subtle shadow, ring on focus */
+/* input — shadcn Input: 36px, 1px border, lg radius, subtle shadow, ring on focus */
 .input,
 select.input,
 textarea.input {
@@ -82,29 +86,29 @@ textarea.input {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--bg);
-  color: var(--fg);
+  background: var(--background);
+  color: var(--foreground);
   padding: 4px 12px;
   font: inherit;
   font-size: 0.875rem;
   box-shadow: var(--shadow);
 }
 textarea.input { height: auto; min-height: 80px; padding: 8px 12px; }
-.input::placeholder { color: var(--muted); }
+.input::placeholder { color: var(--muted-foreground); }
 
-/* btn — shadcn Button: 36px, 500 weight, radius; default = outline, .primary = filled on
-   --primary (ADR-0013 retired the no-fills rule: a theme re-values --primary, nothing here
-   pre-empts it), .ghost = borderless, .sm = 32px */
+/* btn — shadcn Button: 36px, 500 weight, md radius; default = filled on --primary,
+   .outline = the named alternative (bordered on --border, transparent), .ghost = borderless,
+   .sm = 32px */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   height: 36px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
-  color: var(--fg);
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) * 0.8);
+  background: var(--primary);
+  color: var(--primary-foreground);
   padding: 0 16px;
   font: inherit;
   font-size: 0.875rem;
@@ -113,39 +117,53 @@ textarea.input { height: auto; min-height: 80px; padding: 8px 12px; }
   cursor: pointer;
   box-shadow: var(--shadow);
 }
-.btn:hover { background: var(--muted-bg); }
+.btn:hover { opacity: 0.9; }
+.btn.outline {
+  border-color: var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: none;
+}
+.btn.outline:hover { background: var(--muted); }
 .btn.primary {
   border-color: var(--primary);
   background: var(--primary);
-  color: var(--primary-fg);
+  color: var(--primary-foreground);
 }
 .btn.primary:hover { opacity: 0.9; }
-.btn.ghost { border-color: transparent; background: transparent; box-shadow: none; }
-.btn.ghost:hover { background: var(--muted-bg); }
+.btn.ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--foreground);
+  box-shadow: none;
+}
+.btn.ghost:hover { background: var(--accent); color: var(--accent-foreground); }
 .btn.sm { height: 32px; padding: 0 12px; font-size: 0.8125rem; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn:focus-visible,
 .input:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+  outline: none;
 }
 
-/* badge — shadcn Badge: pill, 12px, 600 weight; default outline, .primary filled */
+/* badge — shadcn Badge: pill, 12px, 500 weight; default filled on --primary, .outline bordered */
 .badge {
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 2px 10px;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  padding: 2px 8px;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.25;
-  color: var(--fg);
-  background: var(--bg);
+  color: var(--primary-foreground);
+  background: var(--primary);
 }
-.badge.primary { border-color: var(--primary); background: var(--primary); color: var(--primary-fg); }
-.badge.muted { background: var(--muted-bg); }
+.badge.outline { border-color: var(--border); background: var(--background); color: var(--foreground); }
+.badge.primary { border-color: var(--primary); background: var(--primary); color: var(--primary-foreground); }
+.badge.muted { background: var(--muted); color: var(--muted-foreground); }
 
 .list-item {
   display: flex;
@@ -156,21 +174,25 @@ textarea.input { height: auto; min-height: 80px; padding: 8px 12px; }
   border-bottom: 1px solid var(--border);
 }
 
-/* nav — shadcn Tabs-style underline nav */
+/* nav — shadcn Tabs: a raised pill on a --muted track, the active item raised on --background
+   with --shadow, in place of the old underline */
 .nav {
-  display: flex;
+  display: inline-flex;
+  align-items: center;
   gap: 4px;
-  border-bottom: 1px solid var(--border);
+  height: 36px;
+  background: var(--muted);
+  border-radius: var(--radius);
+  padding: 3px;
 }
 .nav > * {
-  padding: 8px 12px;
+  padding: 4px 8px;
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--muted);
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  color: var(--muted-foreground);
+  border-radius: calc(var(--radius) * 0.8);
 }
-.nav > .active { color: var(--fg); border-bottom-color: var(--primary); }
+.nav > .active { color: var(--foreground); background: var(--background); box-shadow: var(--shadow); }
 
 /* table — shadcn Table: 1px row borders, muted header, 12px cell padding */
 .table {
@@ -181,7 +203,7 @@ textarea.input { height: auto; min-height: 80px; padding: 8px 12px; }
 .table th {
   text-align: left;
   font-weight: 500;
-  color: var(--muted);
+  color: var(--muted-foreground);
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
 }
@@ -190,14 +212,16 @@ textarea.input { height: auto; min-height: 80px; padding: 8px 12px; }
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }
-.table tr:hover td { background: var(--muted-bg); }
+.table tr:hover td { background: var(--muted); }
 
-/* sheet — shadcn Sheet/Dialog panel: elevated card on --bg with the ring's shadow */
+/* sheet — shadcn Sheet/Dialog panel: elevated card on --card via --shadow-lg, never a
+   second layer naming an opaque surface role as a shadow colour */
 .sheet {
   border: 1px solid var(--border);
-  border-radius: calc(var(--radius) + 4px);
-  background: var(--bg);
-  box-shadow: var(--shadow), 0 8px 24px var(--muted-bg);
+  border-radius: calc(var(--radius) * 1.4);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: var(--shadow-lg);
   padding: 24px;
 }
 
@@ -210,19 +234,19 @@ textarea.input { height: auto; min-height: 80px; padding: 8px 12px; }
   gap: 8px;
   padding: 48px 24px;
   border: 1px dashed var(--border);
-  border-radius: calc(var(--radius) + 4px);
-  color: var(--muted);
+  border-radius: calc(var(--radius) * 1.4);
+  color: var(--muted-foreground);
   text-align: center;
 }
 
 /* .placeholder — a dashed box standing in for content not yet drawn (an image, a chart, a
-   pending region); dashed on --border, filled --muted-bg, so it reads as "not real" at a
+   pending region); dashed on --border, filled --muted, so it reads as "not real" at a
    glance, never mistaken for a card. */
 .placeholder {
   border: 1px dashed var(--border);
   border-radius: var(--radius);
-  background: var(--muted-bg);
-  color: var(--muted);
+  background: var(--muted);
+  color: var(--muted-foreground);
   display: flex;
   align-items: center;
   justify-content: center;

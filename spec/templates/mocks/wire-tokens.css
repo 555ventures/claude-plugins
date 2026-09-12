@@ -1,24 +1,39 @@
-/* Wireframe token register — spec/doctrine/mocks.md § Mocks: Authoring Rules (ADR-0013: shadcn's
-   Neutral theme as the wireframe register, the same eleven roles a theme direction re-values).
+/* Wireframe token register — spec/doctrine/mocks.md § Mocks: Authoring Rules (ADR-0013,
+   amended by docs/adr/0017-the-register-is-the-whole-shadcn-set.md: shadcn's Neutral theme,
+   verbatim, as the wireframe register — shadcn's own eighteen colour roles plus `--radius`,
+   plus three pipeline-local roles).
    Copied verbatim into design/wire/tokens.css by `canon-written` when absent. Every color a
    wireframe consumes must resolve to one of these roles (design-atlas.js check flags any color
    literal in markup); a theme is a second value set for the same role names, swapped in at
    serve time for the client route, so no screen is ever redrawn to be themed. Do not add roles
-   here without updating design/wire/wire.css's consumers. Values are byte-equal (after
-   whitespace trim) to spec/templates/mocks/viewer.css's `--v-*` register per role pair — one
-   token set, two registers (specs/20260902/09-one-hand-wireframes-one-token-set.md D4); a
-   pinned test (tests/mocks/viewer-tokens.test.js) keeps the two files from drifting. */
+   here without updating design/wire/wire.css's consumers. This register is separately owned
+   from spec/templates/mocks/viewer.css's `--v-*` chrome register — chrome answers to
+   design/chrome-mocks/, this register answers to shadcn, and the two are not value-equal. */
 
 :root {
-  --bg: #ffffff;
-  --fg: #0a0a0a;
-  --muted: #737373;
-  --muted-bg: #f5f5f5;
-  --border: #e5e5e5;
-  --primary: #171717;
-  --primary-fg: #fafafa;
-  --ring: #a3a3a3;
-  --radius: 8px;
+  /* shadcn Neutral — the eighteen colour roles, verbatim from the registry */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  /* shadcn's own base radius; wire.css's scale is derived, never re-declared */
+  --radius: 0.625rem;
+  /* pipeline-local roles — not shadcn's, re-valued by a theme like any other */
   --font: ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
-  --shadow: 0 1px 2px 0 rgba(0,0,0,.05);
+  --shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 }

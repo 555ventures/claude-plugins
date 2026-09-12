@@ -113,12 +113,18 @@ shadow, filled primary button, badges, inputs, toolbar, status chips). `design-a
 `page()` inlines it into every chrome page (atlas, galleries, the preview toolbar, the notes
 layer, the sketch workbench), and the chrome's own rules consume only `var(--v-*)` roles — no
 literal color outside the inlined `:root{…}` block, output byte-stable across runs.
-`spec/templates/mocks/wire-tokens.css` carries the same values under flat role names
-(`--bg --fg --muted --muted-bg --border --primary --primary-fg --ring --radius --font`), and
-`wire.css` is a CSS port of shadcn's component look on those roles (filled `.btn.primary` on
-`--primary`, `--shadow` on cards and inputs, dashed `--border` placeholders for undrawn content —
-ADR-0013 retired the flat no-fills register); a test pins the two files value-equal per role. A
-theme is the same roles re-valued; chrome never adopts product tokens.
+`spec/templates/mocks/wire-tokens.css` is shadcn Neutral's own register: its eighteen colour
+roles plus `--radius`, under shadcn's names and `oklch()` values exactly as the registry serves
+them, plus three pipeline-local roles (`--font`, `--shadow`, `--shadow-lg`). `wire.css` is a CSS
+port of the shadcn component look on those roles — filled `.btn` by default on `--primary`, the
+3px translucent focus ring, the raised-pill tab row, radii on shadcn's four-step scale, dashed
+`--border` placeholders for undrawn content. A theme direction re-values all twenty-two roles,
+and the role-completeness leg reads the template at run time, so the register file is the single
+source of what a theme owes. The chrome register (`viewer.css`'s `--v-*`) is separately owned and
+is not value-equal: chrome answers to `design/chrome-mocks/`, the wireframe register answers to
+shadcn. A host repo holding an older register moves onto the current one with `mocks-driver.js
+--refresh-register`, which classifies by role names, rewrites both wire files, renames role
+references across `design/`, and is idempotent.
 
 ## Render gate (2026-08-24, specs/20260824/01)
 

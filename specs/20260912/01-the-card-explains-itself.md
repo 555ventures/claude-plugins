@@ -1,6 +1,7 @@
 ---
 date: 2026-09-12
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +11,7 @@ depends_on: [specs/20260911/05-approval-is-bookkeeping.md]
 depended_on_by: []
 brief: n/a
 open_markers: 0
+diff_base: 2328310df9f925ae538ac6e68dce360d8fae72a9
 ---
 
 # The exclusions card explains itself and remembers: a heading, the question, why each claim is on the list, and what the client answered

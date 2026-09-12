@@ -360,7 +360,9 @@ project-wide one, each with two buttons, `Correct` and `No — we need this` —
 the row `overridden` with `rejected: client-needed`, final for the derivation, never
 re-added by a later `ledger derive`. The confirm control no longer waits on the list: approval
 is the session's own bookkeeping, not a gate on the client's consent, so `approved` lists what
-the client did not answer as not contested and never refuses on it.
+the client did not answer as not contested and never refuses on it. The card itself states what
+it is, why each row is listed, and what the client answered, and an unanswered row's own text
+warns the client that its silence is recorded as not contested when the work is signed off.
 
 ## Mocks: Authoring Rules
 

@@ -77,6 +77,23 @@ const STRINGS = {
   // is retired: no other reference remains once both labels render on their own buttons.
   exclCorrect: 'Correct',
   exclNeeded: 'No — we need this',
+  // specs/20260912/01-the-card-explains-itself.md D1: the card head's lead, warning that silence
+  // is recorded as agreement before the client leaves the page, not only after sign-off.
+  exclLead: 'Each one is here for a reason. Say Correct if it should stay out, or tell us you ' +
+    'need it. Anything you leave unanswered is recorded as not contested when the work is ' +
+    'signed off.',
+  // D2: the provenance sentence for the two CONSTRUCTED rows — {screen} is humanizeLabel's output.
+  exclFromAnswer: 'Because you told us, on {screen}:',
+  exclFromWithdrawn: 'Because you took back your request on {screen}.',
+  // D3: the ledger's internal `not: ` grammar never leaks onto the client's screen.
+  exclNotPrefix: "We won't build: ",
+  // D4: the state sentence replacing the buttons on every non-open row.
+  exclStateAgree: 'You agreed. It stays out.',
+  exclStateNeeded: "You need this. We'll treat it as a request and let you know here.",
+  exclStateDropped: "We've taken this off the list.",
+  // D5: the exclusion save's own receipt — distinct from `msgSaved`, which narrates the free-note
+  // and mark saves elsewhere on this same page.
+  exclSaved: 'Saved. You can change your answer until the work is signed off.',
   // specs/20260911/06-the-client-loop.md D4: the journey row's derived-state text.
   notStarted: 'Not started',
   inProgress: 'In progress',
@@ -670,6 +687,13 @@ function renderMark(note, ledger, s) {
 // `note` grammar, `answer: <noteId>` / `withdrawn: <noteId>`) to a screen THIS journey declares.
 // Anchoring is derived from the already-threaded `ledger`/`notes` params — never a new param
 // (the build's own deviations note).
+// specs/20260912/01-the-card-explains-itself.md D2/A1: returns `{ row, note }` per entry — the
+// note is resolved here (once) so `renderExclusion` never needs a second lookup or a new
+// parameter. `note` is `null` for a `non-goal:` row (nothing to resolve, the claim is its own
+// source) and for an anchored row whose note id resolves to nothing (renders the claim alone,
+// never dropped — the id is unresolvable, not a reason to hide the row). An anchored row whose
+// note DOES resolve is still shown only on the journey its note's screen belongs to, unchanged
+// from the pre-image.
 function exclusionsForJourney(journey, ledger, notes, journeys) {
   const entry = journeys.find((j) => j.name === journey)
   const labels = new Set(screensOf(entry).map((sc) => sc.label))
@@ -678,38 +702,99 @@ function exclusionsForJourney(journey, ledger, notes, journeys) {
   const out = []
   for (const row of rows) {
     const m = /^(?:answer|withdrawn): (\S+)/.exec(row.note || '')
-    if (!m) { out.push(row); continue } // non-goal: project-wide, shows on every journey
+    if (!m) { out.push({ row, note: null }); continue } // non-goal: project-wide, shows on every journey
     const note = noteById.get(m[1])
-    if (note && note.screen && labels.has(note.screen)) out.push(row)
+    if (!note) { out.push({ row, note: null }); continue } // unresolvable id: claim alone, never dropped
+    if (note.screen && labels.has(note.screen)) out.push({ row, note })
   }
   return out
+}
+
+// D3: the ledger's `not: ` prefix (source (b), a declined question turned non-goal) is internal
+// grammar — it never reaches the client's screen verbatim.
+function renderExclClaim(claim, s) {
+  return claim.indexOf('not: ') === 0 ? s.exclNotPrefix + claim.slice('not: '.length) : claim
+}
+
+// D2: the provenance sentence for the two rows this pipeline CONSTRUCTED from the client's own
+// words — never rendered for a `non-goal:` row (transcription, nothing was inferred) or a row
+// whose note id resolved to nothing (nothing to quote).
+function renderExclProvenance(row, note, s) {
+  if (!note) return ''
+  const screen = humanizeLabel(note.screen)
+  if (row.note.indexOf('answer: ') === 0) {
+    const said = (note.answer && note.answer.text) || ''
+    return '<p class="wk-excl-from">' + esc(s.exclFromAnswer.replace('{screen}', screen)) + '</p>' +
+      '<p class="wk-excl-said">' + esc(said) + '</p>'
+  }
+  if (row.note.indexOf('withdrawn: ') === 0) {
+    const said = note.text || ''
+    return '<p class="wk-excl-from">' + esc(s.exclFromWithdrawn.replace('{screen}', screen)) + '</p>' +
+      '<p class="wk-excl-said">' + esc(said) + '</p>'
+  }
+  return ''
+}
+
+// D4: the reload trace — a non-open row's own state sentence and the `data-verdict` that CSS
+// keys the buttons' visibility off of. Returns `{ verdict, text }`, both '' for an `open` row
+// (renderExclusion keeps its two buttons there instead).
+function exclVerdict(row, s) {
+  if (row.status === 'confirmed') return { verdict: 'agree', text: s.exclStateAgree }
+  if (row.status === 'overridden' && row.rejected === 'client-needed') return { verdict: 'needed', text: s.exclStateNeeded }
+  if (row.status === 'overridden') return { verdict: 'dropped', text: s.exclStateDropped }
+  return { verdict: '', text: '' }
 }
 
 // specs/20260911/05-approval-is-bookkeeping.md D3: an open row offers both verdicts side by
 // side — "Correct" and "No — we need this" — using the page's existing `.wk-verdicts`/`.wk-v`
 // side-by-side answer classes (renderMark's own verdict pattern), never a bespoke agree-only
-// control.
-function renderExclusion(row, s) {
+// control. specs/20260912/01-the-card-explains-itself.md D1-D4: the card head, the provenance
+// line, the `not: ` strip and the reload-trace state line — `entry` is `{ row, note }` from
+// `exclusionsForJourney`.
+function renderExclusion(entry, s) {
+  const row = entry.row
   const open = row.status === 'open'
-  return '<article class="wk-excl" data-wk="exclusion" data-id="' + esc(row.id) + '">' +
-    '<p class="wk-excl-claim">' + esc(row.claim) + '</p>' +
+  const { verdict, text } = exclVerdict(row, s)
+  return '<article class="wk-excl" data-wk="exclusion" data-id="' + esc(row.id) + '"' +
+    (verdict ? ' data-verdict="' + verdict + '"' : '') + '>' +
+    '<p class="wk-excl-claim">' + esc(renderExclClaim(row.claim, s)) + '</p>' +
+    renderExclProvenance(row, entry.note, s) +
     (open
       ? '<div class="wk-verdicts">' +
         '<button class="wk-v" data-wk="agree">' + esc(s.exclCorrect) + '</button>' +
         '<button class="wk-v" data-wk="needed">' + esc(s.exclNeeded) + '</button>' +
-        '</div>'
-      : '') +
+        '</div>' +
+        // D8: shipped hidden and empty on every open row — walk.browser.js activates it (fills
+        // and unhides) on an ok verdict; the builder never fabricates its text server-side.
+        '<p class="wk-excl-state" hidden></p>'
+      : '<p class="wk-excl-state">' + esc(text) + '</p>') +
     '</article>'
 }
 
+// specs/20260912/01-the-card-explains-itself.md D1: the count word is spelled 1-9, a digit from
+// 10 — "One thing…" / "Three things…" / "10 things…" — and the noun agrees on the singular.
+const EXCL_COUNT_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine']
+function exclHeading(n) {
+  const word = n < 10 ? EXCL_COUNT_WORDS[n] : String(n)
+  return word + ' ' + (n === 1 ? 'thing' : 'things') + ' this product will not do'
+}
+
 // Returns { html, openCount } — openCount feeds the nav button's own disabled-until-zero gate
-// alongside the pre-existing mark count.
+// alongside the pre-existing mark count. D1: the heading and lead render only when rows.length >
+// 0, counting every row shown (open or not); D5: `data-said-agree`/`data-said-needed` on the
+// section itself are what walk.browser.js activates an open row's own hidden state line from —
+// activation, never fabrication, the same discipline `wk-req-again` already uses.
 function renderExclusions(journey, ledger, notes, journeys, s) {
-  const rows = exclusionsForJourney(journey, ledger, notes, journeys)
-  const openCount = rows.filter((r) => r.status === 'open').length
-  const articles = rows.map((r) => renderExclusion(r, s)).join('')
-  const html = '<section class="wk-exclusions" data-wk="exclusions" data-exclusions-open="' + openCount + '" hidden>' +
-    articles + '</section>'
+  const entries = exclusionsForJourney(journey, ledger, notes, journeys)
+  const openCount = entries.filter((e) => e.row.status === 'open').length
+  const articles = entries.map((e) => renderExclusion(e, s)).join('')
+  const head = entries.length
+    ? '<h2 class="wk-excl-h">' + esc(exclHeading(entries.length)) + '</h2>' +
+      '<p class="wk-excl-lead">' + esc(s.exclLead) + '</p>'
+    : ''
+  const html = '<section class="wk-exclusions" data-wk="exclusions" data-exclusions-open="' + openCount + '"' +
+    ' data-said-agree="' + esc(s.exclStateAgree) + '" data-said-needed="' + esc(s.exclStateNeeded) + '" hidden>' +
+    head + articles + '</section>'
   return { html, openCount }
 }
 
@@ -842,8 +927,11 @@ function buildWalkPage(input) {
     excl.html +
     // D3/D5: one hidden, empty status slot — walk.browser.js sets its text from its own data-why/
     // data-failed/data-saved attribute and unhides it; the builder never renders text into it.
+    // specs/20260912/01-the-card-explains-itself.md D5: `data-excl-saved` is a distinct receipt
+    // from `data-saved` — the exclusion answer's own sentence, never the free-note/mark one.
     '<p class="wk-msg" data-wk="msg" role="status" aria-live="polite" data-saved="' + esc(s.msgSaved) +
-    '" data-why="' + esc(s.msgWhy) + '" data-failed="' + esc(s.msgFailed) + '" hidden></p>' +
+    '" data-why="' + esc(s.msgWhy) + '" data-failed="' + esc(s.msgFailed) +
+    '" data-excl-saved="' + esc(s.exclSaved) + '" hidden></p>' +
     '</aside>' +
     '</div>' +
     '<script src="' + esc(prefix) + '/__walk/player.js"></script>' +

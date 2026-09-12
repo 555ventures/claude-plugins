@@ -131,6 +131,97 @@ test('AC-20260911-05-4: POST /client/__walk/exclusion {verdict:"needed"} sets th
 })
 
 
+// ---------------------------------------------------------------------------
+// specs/20260912/01-the-card-explains-itself.md D4/D5 — the open row's own state stub, its
+// pressed-verdict activation, and the confirm-not-blocked pin. AC-20260912-01-7, -8, -9.
+// buildWalkPageForVm/runWalkBrowserRouted/flush are defined further below in this same file;
+// hoisted function declarations make them usable here.
+// ---------------------------------------------------------------------------
+
+function onboardingExclSeed() {
+  return { product: 'Hearwell', journeys: [{ name: JOURNEY, title: 'Onboarding', screens: LABELS.map((label) => ({ label, states: [] })) }] }
+}
+
+test('AC-20260912-01-7: buildWalkPage CONTINUES TO render an open exclusion row\'s two verdict buttons and leaves [data-wk="confirm"] without disabled whatever data-exclusions-open holds', () => {
+  const seed = onboardingExclSeed()
+  const openRow = { id: 'E1', step: 'CLIENT', kind: 'exclusion', claim: 'a claim', tag: 'said-by-user', status: 'open', rejected: null, dependents: null, note: 'non-goal: a claim' }
+  const html = buildWalkPageForVm(seed, openRow)
+  const article = /<article[^>]*data-id="E1"[\s\S]*?<\/article>/.exec(html)
+  assert.ok(article, 'AC-7 setup: the open exclusion row must render as an article: got\n' + html)
+  assert.match(article[0], /data-wk="agree"/, 'AC-7: an open row must CONTINUE TO render its "Correct" button: got\n' + article[0])
+  assert.match(article[0], /data-wk="needed"/, 'AC-7: an open row must CONTINUE TO render its "No — we need this" button: got\n' + article[0])
+  assert.match(html, /data-exclusions-open="1"/, 'AC-7 setup: the section must report one open exclusion row: got\n' + html)
+  const confirmMatch = /<[a-zA-Z][\w-]*[^>]*data-wk="confirm"[^>]*>/.exec(html)
+  assert.ok(confirmMatch, 'AC-7 setup: the last screen must render [data-wk="confirm"]: got\n' + html)
+  assert.doesNotMatch(confirmMatch[0], /disabled/,
+    'AC-7: [data-wk="confirm"] must CONTINUE TO carry no disabled attribute while an exclusion is open — an open exclusion asks, it does not block: got ' + confirmMatch[0])
+})
+
+test('AC-20260912-01-8: buildWalkPage ships an open exclusion row with one hidden, empty wk-excl-state stub, and carries data-said-agree/data-said-needed on the exclusions section', () => {
+  const seed = onboardingExclSeed()
+  const openRow = { id: 'E1', step: 'CLIENT', kind: 'exclusion', claim: 'a claim', tag: 'said-by-user', status: 'open', rejected: null, dependents: null, note: 'non-goal: a claim' }
+  const html = buildWalkPageForVm(seed, openRow)
+  const sectionMatch = /<section[^>]*data-wk="exclusions"[^>]*>/.exec(html)
+  assert.ok(sectionMatch, 'AC-8 setup: the exclusions section must render: got\n' + html)
+  assert.match(sectionMatch[0], /data-said-agree="[^"]+"/, 'AC-8: the exclusions section must carry data-said-agree: got ' + sectionMatch[0])
+  assert.match(sectionMatch[0], /data-said-needed="[^"]+"/, 'AC-8: the exclusions section must carry data-said-needed: got ' + sectionMatch[0])
+  const article = /<article[^>]*data-id="E1"[\s\S]*?<\/article>/.exec(html)
+  assert.ok(article && article[0].includes('<p class="wk-excl-state" hidden></p>'),
+    'AC-8: an open row must ship one hidden, empty wk-excl-state stub for the browser to activate — never fabricate text server-side: got\n' + (article ? article[0] : html))
+})
+
+test('AC-20260912-01-9: clicking an open exclusion row\'s verdict button (ok:true) sets data-verdict, unhides and fills wk-excl-state from the section\'s own data-said attribute, leaves both buttons without disabled, and writes the receipt into [data-wk="msg"]', async () => {
+  const seed = onboardingExclSeed()
+  const stateStub = { reached: LABELS, misses: [], confirmedAt: null, sentence: null }
+
+  const rowNeeded = { id: 'E1', step: 'CLIENT', kind: 'exclusion', claim: 'claim one', tag: 'said-by-user', status: 'open', rejected: null, dependents: null, note: 'non-goal: claim one' }
+  const html1 = buildWalkPageForVm(seed, rowNeeded)
+  const { document: doc1 } = runWalkBrowserRouted(html1, stateStub, {})
+  await flush()
+  const article1 = doc1.querySelector('[data-wk="exclusion"][data-id="E1"]')
+  assert.ok(article1, 'AC-9 setup: the exclusion article must be in the vm document')
+  const neededBtn = article1.querySelector('[data-wk="needed"]')
+  const agreeBtn1 = article1.querySelector('[data-wk="agree"]')
+  const stateEl1 = article1.querySelector('.wk-excl-state')
+  assert.ok(stateEl1, 'AC-9 setup: the open row must ship its own hidden wk-excl-state stub for this handler to activate')
+  const section1 = doc1.querySelector('[data-wk="exclusions"]')
+  const saidNeeded = section1.getAttribute('data-said-needed')
+
+  neededBtn.click()
+  await flush()
+  assert.strictEqual(article1.getAttribute('data-verdict'), 'needed',
+    'AC-9: an ok:true "needed" answer must set the article\'s data-verdict to "needed": got ' + article1.getAttribute('data-verdict'))
+  assert.strictEqual(stateEl1.hidden, false, 'AC-9: the wk-excl-state line must be unhidden once answered: got hidden=' + stateEl1.hidden)
+  assert.strictEqual(stateEl1.textContent, saidNeeded,
+    'AC-9: the unhidden wk-excl-state must carry the section\'s own data-said-needed text — activation, never fabrication: got "' + stateEl1.textContent + '"')
+  assert.strictEqual(neededBtn.hasAttribute('disabled'), false,
+    'AC-9: the "needed" button must be left WITHOUT disabled after an ok answer: got disabled=' + neededBtn.hasAttribute('disabled'))
+  assert.strictEqual(agreeBtn1.hasAttribute('disabled'), false,
+    'AC-9: the "agree" button must be left WITHOUT disabled after an ok answer: got disabled=' + agreeBtn1.hasAttribute('disabled'))
+  const msgEl1 = doc1.querySelector('[data-wk="msg"]')
+  assert.strictEqual(msgEl1.textContent, 'Saved. You can change your answer until the work is signed off.',
+    'AC-9: the message slot must read the receipt sentence: got "' + msgEl1.textContent + '"')
+
+  const rowAgree = { id: 'E2', step: 'CLIENT', kind: 'exclusion', claim: 'claim two', tag: 'said-by-user', status: 'open', rejected: null, dependents: null, note: 'non-goal: claim two' }
+  const html2 = buildWalkPageForVm(seed, rowAgree)
+  const { document: doc2 } = runWalkBrowserRouted(html2, stateStub, {})
+  await flush()
+  const article2 = doc2.querySelector('[data-wk="exclusion"][data-id="E2"]')
+  const agreeBtn2 = article2.querySelector('[data-wk="agree"]')
+  const stateEl2 = article2.querySelector('.wk-excl-state')
+  assert.ok(stateEl2, 'AC-9 setup: the second open row must also ship its own hidden wk-excl-state stub')
+  const section2 = doc2.querySelector('[data-wk="exclusions"]')
+  const saidAgree = section2.getAttribute('data-said-agree')
+
+  agreeBtn2.click()
+  await flush()
+  assert.strictEqual(article2.getAttribute('data-verdict'), 'agree',
+    'AC-9: an ok:true "agree" answer must set the article\'s data-verdict to "agree": got ' + article2.getAttribute('data-verdict'))
+  assert.strictEqual(stateEl2.textContent, saidAgree,
+    'AC-9: the "agree" branch must fill wk-excl-state from the section\'s own data-said-agree text: got "' + stateEl2.textContent + '"')
+})
+
+
 function buildWalkPageForVm(seed, exclusionRow) {
   // D21 moved [data-wk="confirm"] onto the journey's LAST screen only; this vm harness's own
   // subject (exclusion-agree unlocking confirm) needs a screen where confirm exists at all, so
@@ -164,6 +255,15 @@ function parseFlatDom(html) {
     while ((m = attrRe.exec(rest))) {
       if (!node.hasAttribute(m[1])) return false
       if (m[2] !== undefined && node.getAttribute(m[1]) !== m[2]) return false
+    }
+    // AC-20260912-01-9 repair (same gap tests/mocks/walk-page.test.js's own D16 note fixed): this
+    // shim's class matching was never implemented — `.class` tokens matched every node — and
+    // AC-9's wk-excl-state paragraph carries no attribute but its class, so a real check is added
+    // here rather than left silently vacuous.
+    const classRe = /\.([-\w]+)/g
+    while ((m = classRe.exec(rest))) {
+      const classes = (node.getAttribute('class') || '').split(/\s+/).filter(Boolean)
+      if (!classes.includes(m[1])) return false
     }
     return true
   }

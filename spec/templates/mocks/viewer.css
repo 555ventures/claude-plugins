@@ -660,6 +660,14 @@ body {
 .wk-excl { padding: var(--v-space-3) 0; border-bottom: 1px solid var(--v-border); }
 .wk-excl:last-child { border-bottom: 0; }
 .wk-excl-claim { margin: 0 0 var(--v-space-2); }
+/* the card says what it is, why each row is here, and what the client answered
+   (design/client-mocks/walk.html R3/R4; specs/20260912/01 D6) */
+.wk-excl-h { margin: 0 0 var(--v-space-1); font-size: 15px; font-weight: 600; }
+.wk-excl-lead { margin: 0 0 var(--v-space-1); color: var(--v-muted); font-size: 14px; }
+.wk-excl-from { margin: 0 0 var(--v-space-2); color: var(--v-muted); font-size: 14px; }
+.wk-excl-said { margin: 0 0 var(--v-space-2); padding-left: var(--v-space-3); border-left: 2px solid var(--v-ring); color: var(--v-fg); font-size: 14px; }
+.wk-excl-state { margin: 0; color: var(--v-fg); font-size: 14px; }
+.wk-excl[data-verdict] .wk-verdicts { display: none; }
 .wk-side .wk-msg { margin: 0; }
 
 @media (max-width: 1180px) {

@@ -73,7 +73,7 @@ const STRINGS = {
   themePick: 'Pick this',
   themePicked: 'Picked',
   exclAgree: 'This journey does not do this — correct?',
-  // specs/20260911/04-the-client-loop.md D4: the journey row's derived-state text.
+  // specs/20260911/06-the-client-loop.md D4: the journey row's derived-state text.
   notStarted: 'Not started',
   inProgress: 'In progress',
   changesRequested: 'Changes requested ({n})',
@@ -140,7 +140,7 @@ function claimOf(note, ledgerRows) {
   return (row && row.claim) || note.text || ''
 }
 
-// specs/20260911/04-the-client-loop.md D23: a raw kebab screen label is never a client-facing
+// specs/20260911/06-the-client-loop.md D23: a raw kebab screen label is never a client-facing
 // word — every DISPLAY occurrence (thumbnail title/caption, step label, card description) reads
 // its first word capitalized and its hyphens turned to spaces; `data-label` keeps the raw label
 // everywhere else, since tests and behavior key off it.
@@ -158,7 +158,7 @@ function recordOf(walk, journey) {
   return js[journey] || null
 }
 
-// specs/20260911/04-the-client-loop.md D1/D4/D5: the client-origin, non-question requests a
+// specs/20260911/06-the-client-loop.md D1/D4/D5: the client-origin, non-question requests a
 // journey's labels carry — the set journeyState's own "changes-requested"/"fixed" derivation
 // counts, restated here so buildWalkPage/buildClientIndex's own N counts and request cards never
 // disagree with the state word painted beside them.
@@ -466,7 +466,7 @@ function buildClientIndex(input) {
   const notes = o.notes || []
   const ready = o.ready instanceof Set ? o.ready : new Set()
   const journeysList = journeysOf(seed)
-  // specs/20260911/04-the-client-loop.md D15: a journey is listed when its page exists, never
+  // specs/20260911/06-the-client-loop.md D15: a journey is listed when its page exists, never
   // when a session flag says so — an unready journey is absent from the list entirely, never a
   // "Coming soon" row the client cannot click.
   const readyList = journeysList.filter((entry) => ready.has(entry.name))

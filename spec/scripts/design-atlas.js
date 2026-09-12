@@ -1982,7 +1982,7 @@ function createRequestHandler(root, opts = {}) {
       jsonRes(res, 201, outcome.note)
     }
 
-    // specs/20260911/04-the-client-loop.md D2: a mock-scope client add on a journey that is
+    // specs/20260911/06-the-client-loop.md D2: a mock-scope client add on a journey that is
     // CURRENTLY confirmed takes the OK back — one synchronous unconfirmJourney/writeWalk pair
     // right after the note write, `cause` the new note's own id. A project-scope add (D6: no
     // screen at all) never reaches here; a journey with no `confirmedAt` set is a no-op
@@ -2192,7 +2192,7 @@ function createRequestHandler(root, opts = {}) {
       }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
       return
     }
-    // specs/20260911/04-the-client-loop.md D2: POST /client/__notes/reopen — the client's own
+    // specs/20260911/06-the-client-loop.md D2: POST /client/__notes/reopen — the client's own
     // return leg on an addressed note. Client-mount only by construction (the same `clientRoute`
     // guard every other client-only route uses); the bare /__notes/reopen path falls through,
     // unmatched, to the shared /__notes/ 404 below.
@@ -2257,7 +2257,7 @@ function createRequestHandler(root, opts = {}) {
         try { return JSON.parse(fs.readFileSync(path.join(rootAbs, 'design/mocks/status.json'), 'utf8')).theme || null } catch { return null }
       }
 
-      // specs/20260911/04-the-client-loop.md D15: `ready` — the set of seed journeys every one
+      // specs/20260911/06-the-client-loop.md D15: `ready` — the set of seed journeys every one
       // of whose declared screens has design/mocks/<label>.html on disk. `status.json`'s
       // `walked` flag is NOT consulted: it is a session work flag, cleared by --reopen while the
       // page it describes still answers, so it lies about whether the client can click through.
@@ -2402,7 +2402,7 @@ function createRequestHandler(root, opts = {}) {
           let openNotes = []
           try { openNotes = notesLib.readNotes(rootAbs) } catch { openNotes = [] }
           const labels = declared.get(journey).labels
-          // specs/20260911/04-the-client-loop.md D2: the derived-state gate runs BEFORE the
+          // specs/20260911/06-the-client-loop.md D2: the derived-state gate runs BEFORE the
           // unanswered-guess check above's sibling below — a `changes-requested`/`fixed` journey
           // (an open or addressed client request) refuses 409 naming how many, regardless of
           // whether any session guess is also open.

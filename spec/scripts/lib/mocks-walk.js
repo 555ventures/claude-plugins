@@ -130,7 +130,7 @@ function isClosed(walk, journey) {
   return !!(rec.confirmedAt || rec.waived)
 }
 
-// specs/20260911/04-the-client-loop.md D1: journeyState(rec, notes, labels) — `rec` is ONE
+// specs/20260911/06-the-client-loop.md D1: journeyState(rec, notes, labels) — `rec` is ONE
 // journey's own record (recordOf's return shape, not the whole {journeys:{}} file), `notes` is
 // notes.json's raw array, `labels` is that journey's declared screen set (Array or Set). Derived,
 // never stored — callers (design-atlas.js's client routes, mocks-driver.js's CLIENT step and
@@ -151,7 +151,7 @@ function journeyState(rec, notes, labels) {
   return 'unseen'
 }
 
-// specs/20260911/04-the-client-loop.md D1: unconfirmJourney(walk, {journey, at, cause}) — the
+// specs/20260911/06-the-client-loop.md D1: unconfirmJourney(walk, {journey, at, cause}) — the
 // whole-file transform (same shape as confirmJourney/recordEvent: takes the {journeys:{}} object,
 // returns a NEW one). A confirmed journey's `confirmedAt`/`sentence` move into one APPENDED
 // `history` entry (`{confirmedAt, sentence, clearedAt: at, cause}`) and are nulled; an unconfirmed

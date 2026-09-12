@@ -117,7 +117,7 @@ function parseFlatDom(html) {
       querySelectorAll(sel) { return queryAll(this, sel) },
       click() { for (const h of (this._handlers.click || [])) h({ target: this, preventDefault() {} }) },
       submit() { for (const h of (this._handlers.submit || [])) h({ target: this, preventDefault() {} }) },
-      // AC-20260911-04-24: walk.browser.js's mark handler calls whyEl.focus() on first press —
+      // AC-20260911-06-24: walk.browser.js's mark handler calls whyEl.focus() on first press —
       // no-op here, the shim has no real focus concept to assert against.
       focus() {},
     }
@@ -237,12 +237,12 @@ async function walkThroughRouted({ screens, notes = [], ledger = [], reached = [
 }
 
 // ---------------------------------------------------------------------------
-// specs/20260911/04-the-client-loop.md D1/D4/D5/D6 — journeyState-driven index/walk-page
+// specs/20260911/06-the-client-loop.md D1/D4/D5/D6 — journeyState-driven index/walk-page
 // rendering (D4/D5) and the client's own return-leg controls (D6). Unbuilt against the
 // pre-image: buildClientIndex renders no composer/request list at all, buildWalkPage renders no
 // request cards at all, and walk.browser.js's index-page handlers do not exist (the script
 // no-ops on a page with no `[data-journey]` root). Every test below is red until D4/D5/D6 land.
-// AC-20260911-04-6, -7, -8, -9.
+// AC-20260911-06-6, -7, -8, -9.
 // ---------------------------------------------------------------------------
 
 // A client-origin, non-question, non-walk note (kind absent) — the shape D4/D5's request lists
@@ -291,7 +291,7 @@ function clickSend(askRoot) {
   form.submit()
 }
 
-test('AC-20260911-04-6: buildClientIndex renders a journey\'s derived state, the "something missing?" composer, and every client request with its own status line and controls, newest first, session-origin excluded', () => {
+test('AC-20260911-06-6: buildClientIndex renders a journey\'s derived state, the "something missing?" composer, and every client request with its own status line and controls, newest first, session-origin excluded', () => {
   const seed = { product: 'Hearwell', journeys: [{ name: 'onboarding', title: 'Onboarding', screens: [{ label: 'invite', states: [] }] }] }
   const notes = [
     clientNote({
@@ -351,7 +351,7 @@ test('AC-20260911-04-6: buildClientIndex renders a journey\'s derived state, the
     'AC-6: the shared msg slot must carry data-saved="Saved. We\'ll fix this and let you know here.": got\n' + html)
 })
 
-test('AC-20260911-04-7: buildWalkPage renders one request card per client note on the journey, and the approve lead/disabled state and read-only confirmed render all follow the derived journey state', () => {
+test('AC-20260911-06-7: buildWalkPage renders one request card per client note on the journey, and the approve lead/disabled state and read-only confirmed render all follow the derived journey state', () => {
   const seed = onboardingSeed([{ label: 'invite', states: [] }])
   const addressedNote = clientNote({
     id: 'N003', scope: 'mock', screen: 'invite', text: 'Says Submit', status: 'addressed',
@@ -388,7 +388,7 @@ test('AC-20260911-04-7: buildWalkPage renders one request card per client note o
     'AC-7: confirmedAt set but an OPEN request outranks it (state "changes-requested") — the confirmed render must not show: got\n' + htmlD)
 })
 
-test('AC-20260911-04-8: under the vm shim, the client index\'s ask form posts a project-scope request through the server and only inserts a new request article on ok:true', async () => {
+test('AC-20260911-06-8: under the vm shim, the client index\'s ask form posts a project-scope request through the server and only inserts a new request article on ok:true', async () => {
   const seed = { product: 'Hearwell', journeys: [{ name: 'onboarding', title: 'Onboarding', screens: [{ label: 'invite', states: [] }] }] }
   const html = buildClientIndex({ seed, notes: [], ledger: [], walk: { journeys: {} }, prefix: '', ready: new Set(['onboarding']) })
 
@@ -454,7 +454,7 @@ test('AC-20260911-04-8: under the vm shim, the client index\'s ask form posts a 
     'AC-8: an ok:false save must show the data-failed text: got "' + msgEl2.textContent + '" (posts=' + JSON.stringify(posts2) + ')')
 })
 
-test('AC-20260911-04-9: under the vm shim on the walk page, accept/reopen post their own routes, update the request card in place, and recompute confirm\'s disabled state', async () => {
+test('AC-20260911-06-9: under the vm shim on the walk page, accept/reopen post their own routes, update the request card in place, and recompute confirm\'s disabled state', async () => {
   const seed = onboardingSeed([{ label: 'invite', states: [] }])
   const addressedNote = clientNote({
     id: 'N003', scope: 'mock', screen: 'invite', text: 'Says Submit', status: 'addressed',
@@ -526,7 +526,7 @@ test('AC-20260911-04-9: under the vm shim on the walk page, accept/reopen post t
     'AC-9 (fold-in): once reopened, the request must no longer offer "Looks good" — the accept control must be removed or hidden, not still clickable: got ' + JSON.stringify(reopenArticle.attrs))
 })
 
-test('AC-20260911-04-9 (fold-in): under the vm shim, the client index\'s own accept/reopen controls post their own routes and, on reopen, reset the status line and drop the accept control', async () => {
+test('AC-20260911-06-9 (fold-in): under the vm shim, the client index\'s own accept/reopen controls post their own routes and, on reopen, reset the status line and drop the accept control', async () => {
   const seed = onboardingSeed([{ label: 'invite', states: [] }])
   const addressedNote = clientNote({
     id: 'N040', scope: 'mock', screen: 'invite', text: 'Wrong copy', status: 'addressed',
@@ -561,7 +561,7 @@ test('AC-20260911-04-9 (fold-in): under the vm shim, the client index\'s own acc
     'AC-9 (fold-in): once reopened, the index request must no longer offer "Looks good" — the accept control must be removed or hidden: got ' + JSON.stringify(article.attrs))
 })
 
-test('AC-20260911-04-8 (fold-in): under the vm shim, the walk page\'s own note form activates its spare template into a complete open request row, including a working withdraw control', async () => {
+test('AC-20260911-06-8 (fold-in): under the vm shim, the walk page\'s own note form activates its spare template into a complete open request row, including a working withdraw control', async () => {
   const seed = onboardingSeed([{ label: 'invite', states: [] }])
   const html = buildWalkPage({ seed, journey: 'onboarding', notes: [], ledger: [], walk: { journeys: {} }, prefix: '' })
   const harness = runWalkBrowserRouted(html, { reached: ['invite'], misses: [], confirmedAt: null, sentence: null },
@@ -600,14 +600,14 @@ test('AC-20260911-04-8 (fold-in): under the vm shim, the walk page\'s own note f
 })
 
 // ---------------------------------------------------------------------------
-// specs/20260911/04-the-client-loop.md D23 (the design seat's findings against the rendered
-// pages, 2026-09-11). AC-20260911-04-23 named this file as its oracle but no test here ever
-// mentioned it — `grep -rn "AC-20260911-04-23" tests/` found nothing and the whole design round
+// specs/20260911/06-the-client-loop.md D23 (the design seat's findings against the rendered
+// pages, 2026-09-11). AC-20260911-06-23 named this file as its oracle but no test here ever
+// mentioned it — `grep -rn "AC-20260911-06-23" tests/` found nothing and the whole design round
 // (the shattered card, the raw slug caption, the reading order, the state text, the home link,
 // the state switcher, the reopen/accept wording) was unpinned. Every clause below.
 // ---------------------------------------------------------------------------
 
-test('AC-20260911-04-23: buildClientIndex never nests the "+n more" tile inside another anchor, humanises a session-live slot\'s caption while keeping its raw data-label, orders each slot\'s thumbnail before its caption, and renders a confirmed journey\'s state as "Confirmed"', () => {
+test('AC-20260911-06-23: buildClientIndex never nests the "+n more" tile inside another anchor, humanises a session-live slot\'s caption while keeping its raw data-label, orders each slot\'s thumbnail before its caption, and renders a confirmed journey\'s state as "Confirmed"', () => {
   const screensOf = (n) => Array.from({ length: n }, (_, i) => ({ label: 's' + (i + 1), states: [] }))
   const journeys = [
     { name: 'j8', title: 'Eight screener', screens: screensOf(8) },
@@ -651,14 +651,14 @@ test('AC-20260911-04-23: buildClientIndex never nests the "+n more" tile inside 
     'AC-23: a confirmed ("ok") journey\'s state must read exactly "Confirmed": got\n' + okCard)
 })
 
-test('AC-20260911-04-23: buildWalkPage carries the "← All journeys · <Journey>" home link', () => {
+test('AC-20260911-06-23: buildWalkPage carries the "← All journeys · <Journey>" home link', () => {
   const seed = onboardingSeed([{ label: 'invite', states: [] }])
   const html = buildWalkPage({ seed, journey: 'onboarding', notes: [], ledger: [], walk: { journeys: {} }, prefix: '' })
   assert.ok(html.includes('←') && html.includes('All journeys') && html.includes('<strong>Onboarding</strong>'),
     'AC-23: the player must carry the home link "← All journeys · Onboarding": got\n' + html)
 })
 
-test('AC-20260911-04-23: under the vm shim, the walk page\'s reopen control unhides its own reopen-text box, an accept sets the status line to "Closed — thank you", and the state switcher\'s first tab reads "Normal" with aria-selected on the current state', async () => {
+test('AC-20260911-06-23: under the vm shim, the walk page\'s reopen control unhides its own reopen-text box, an accept sets the status line to "Closed — thank you", and the state switcher\'s first tab reads "Normal" with aria-selected on the current state', async () => {
   const seed = onboardingSeed([{ label: 'invite', states: ['error'] }])
   const addressedNote = clientNote({
     id: 'N060', scope: 'mock', screen: 'invite', text: 'Wrong copy', status: 'addressed',
@@ -693,13 +693,13 @@ test('AC-20260911-04-23: under the vm shim, the walk page\'s reopen control unhi
 })
 
 // ---------------------------------------------------------------------------
-// specs/20260911/04-the-client-loop.md D16/D17 (amended/new, JJ's ruling and Fable's finding,
+// specs/20260911/06-the-client-loop.md D16/D17 (amended/new, JJ's ruling and Fable's finding,
 // both 2026-09-11). D16: an open client request gains a "Never mind" withdraw control on both
 // surfaces. D17: the walk page's accept control byte-matches the index's own "Looks good", and
-// every request article additionally names its location. AC-20260911-04-16, AC-20260911-04-17.
+// every request article additionally names its location. AC-20260911-06-16, AC-20260911-06-17.
 // ---------------------------------------------------------------------------
 
-test('AC-20260911-04-16: buildClientIndex and buildWalkPage render a "Never mind" withdraw control on an open client request only, never on an addressed or resolved one', () => {
+test('AC-20260911-06-16: buildClientIndex and buildWalkPage render a "Never mind" withdraw control on an open client request only, never on an addressed or resolved one', () => {
   const seed = onboardingSeed([{ label: 'invite', states: [] }])
   const openNote = clientNote({ id: 'N010', scope: 'mock', screen: 'invite', text: 'Wrong color', status: 'open' })
   const addressedNote = clientNote({
@@ -738,7 +738,7 @@ test('AC-20260911-04-16: buildClientIndex and buildWalkPage render a "Never mind
     'AC-16: the walk page\'s addressed request card must render no withdraw control: got\n' + walkAddressedArticle[0])
 })
 
-test('AC-20260911-04-16: under the vm shim, clicking the walk page\'s withdraw control posts the resolve-with-reason route and, on ok:true, sets the card resolved with status text "Closed"', async () => {
+test('AC-20260911-06-16: under the vm shim, clicking the walk page\'s withdraw control posts the resolve-with-reason route and, on ok:true, sets the card resolved with status text "Closed"', async () => {
   const seed = onboardingSeed([{ label: 'invite', states: [] }])
   const openNote = clientNote({ id: 'N010', scope: 'mock', screen: 'invite', text: 'Wrong color', status: 'open' })
   const html = buildWalkPage({ seed, journey: 'onboarding', notes: [openNote], ledger: [], walk: { journeys: {} }, prefix: '' })
@@ -764,7 +764,7 @@ test('AC-20260911-04-16: under the vm shim, clicking the walk page\'s withdraw c
     'AC-16: withdrawing must set the card\'s status line text to "Closed": got "' + statusEl.textContent + '"')
 })
 
-test('AC-20260911-04-17: buildWalkPage\'s accept control reads exactly "Looks good" and never "Looks good now", and buildClientIndex names each request\'s location — "on <screen>" for a mock-scope request, "across the whole product" for a project-scope one', () => {
+test('AC-20260911-06-17: buildWalkPage\'s accept control reads exactly "Looks good" and never "Looks good now", and buildClientIndex names each request\'s location — "on <screen>" for a mock-scope request, "across the whole product" for a project-scope one', () => {
   const seed = onboardingSeed([{ label: 'invite', states: [] }])
   const addressedNote = clientNote({
     id: 'N020', scope: 'mock', screen: 'invite', text: 'Wrong copy', status: 'addressed',
@@ -792,7 +792,7 @@ test('AC-20260911-04-17: buildWalkPage\'s accept control reads exactly "Looks go
 })
 
 // ---------------------------------------------------------------------------
-// specs/20260911/04-the-client-loop.md D18-D22 (JJ's owner-approved replacement design; D18:
+// specs/20260911/06-the-client-loop.md D18-D22 (JJ's owner-approved replacement design; D18:
 // design/client-mocks/index.html and walk.html are the binding reference — where these ACs and
 // the mock disagree, the mock is the design). D19: the index journey row becomes a bounded card
 // with a fixed four-slot thumbnail rail, one title/desc/state text column and one go action. D20:
@@ -802,7 +802,7 @@ test('AC-20260911-04-17: buildWalkPage\'s accept control reads exactly "Looks go
 // confirm control and sign-off block inside the stage on the last screen only. D22: the retired
 // wk-spine/wk-approve register and the bare-count [data-wk="left"] overwrite carry zero live
 // mentions. Unbuilt against the pre-image (still the pre-D18-22 row/spine/approve shapes): every
-// test below is red until the sibling build round lands. AC-20260911-04-18, -19, -20, -21, -22.
+// test below is red until the sibling build round lands. AC-20260911-06-18, -19, -20, -21, -22.
 // ---------------------------------------------------------------------------
 
 // Journey cards render as flat siblings, never nested inside one another, so one card's own
@@ -827,7 +827,7 @@ function openTagOf(el) {
   return m ? m[0] : el
 }
 
-test('AC-20260911-04-18: buildClientIndex renders each ready journey as one card with a fixed four-slot thumbnail rail — filling only as many thumbs as it has screens, up to three plus a "+n more" tile — and exactly one title/desc/state/go element', () => {
+test('AC-20260911-06-18: buildClientIndex renders each ready journey as one card with a fixed four-slot thumbnail rail — filling only as many thumbs as it has screens, up to three plus a "+n more" tile — and exactly one title/desc/state/go element', () => {
   const screensOf = (n) => Array.from({ length: n }, (_, i) => ({ label: 's' + (i + 1), states: [] }))
   const journeys = [1, 3, 4, 8].map((n) => ({ name: 'j' + n, title: 'Journey ' + n, screens: screensOf(n) }))
   const seed = { product: 'Hearwell', journeys }
@@ -866,7 +866,7 @@ test('AC-20260911-04-18: buildClientIndex renders each ready journey as one card
   }
 })
 
-test('AC-20260911-04-19: buildClientIndex sets each card\'s go action and data-primary by derived state, flags a screen\'s open/addressed request as a dot, marks the last-reached screen current, renders a confirmed journey\'s own sentence, and totals "<n> of <total> confirmed"', () => {
+test('AC-20260911-06-19: buildClientIndex sets each card\'s go action and data-primary by derived state, flags a screen\'s open/addressed request as a dot, marks the last-reached screen current, renders a confirmed journey\'s own sentence, and totals "<n> of <total> confirmed"', () => {
   const AT = '2026-09-12T00:00:00.000Z'
   const journeys = [
     { name: 'j-unseen', title: 'Unseen journey', screens: [{ label: 'un1', states: [] }] },
@@ -931,7 +931,7 @@ test('AC-20260911-04-19: buildClientIndex sets each card\'s go action and data-p
   assert.match(html, /1 of 6 confirmed/, 'AC-19: the header must total "<n> of <total> confirmed" (one of six journeys is ok): got\n' + html)
 })
 
-test('AC-20260911-04-20: buildClientIndex collapses the composer into a closed <details>, places the request log after the journey cards showing only open/addressed with a waiting count and a closed-items toggle, and buildWalkPage never renders a resolved request card', () => {
+test('AC-20260911-06-20: buildClientIndex collapses the composer into a closed <details>, places the request log after the journey cards showing only open/addressed with a waiting count and a closed-items toggle, and buildWalkPage never renders a resolved request card', () => {
   const seed = onboardingSeed([{ label: 'invite', states: [] }])
   const openNote = clientNote({ id: 'O1', scope: 'mock', screen: 'invite', text: 'open one', status: 'open' })
   const addressedNote = clientNote({
@@ -979,7 +979,7 @@ test('AC-20260911-04-20: buildClientIndex collapses the composer into a closed <
     'AC-20: buildWalkPage must render exactly the open and addressed cards, never the resolved ones: got ' + walkArticles.length)
 })
 
-test('AC-20260911-04-21: buildWalkPage renders a step indicator and caption for the current mid-journey screen with Next and no confirm, and the sign-off block with "Confirm this journey" inside the stage — with no Next — on the last screen', () => {
+test('AC-20260911-06-21: buildWalkPage renders a step indicator and caption for the current mid-journey screen with Next and no confirm, and the sign-off block with "Confirm this journey" inside the stage — with no Next — on the last screen', () => {
   const seed = onboardingSeed([
     { label: 'Sign in', states: [] }, { label: 'Invite', states: [] },
     { label: 'Consent', states: [] }, { label: 'First session', states: [] },
@@ -1035,7 +1035,7 @@ test('AC-20260911-04-21: buildWalkPage renders a step indicator and caption for 
     'AC-21: confirm must stay disabled on the last screen while a request is open (AC-7\'s rule continues to apply): got\n' + htmlLastBlocked)
 })
 
-test('AC-20260911-04-22: the retired wk-spine/wk-approve register and the bare-count [data-wk="left"] overwrite carry zero live mentions in the walk player\'s own script/style files', () => {
+test('AC-20260911-06-22: the retired wk-spine/wk-approve register and the bare-count [data-wk="left"] overwrite carry zero live mentions in the walk player\'s own script/style files', () => {
   const files = [
     'spec/scripts/lib/walk-page.js',
     'spec/scripts/lib/walk.browser.js',
@@ -1052,7 +1052,7 @@ test('AC-20260911-04-22: the retired wk-spine/wk-approve register and the bare-c
   }
 })
 
-test('AC-20260911-04-22: under the vm shim, [data-wk="left"] renders the sentence "Nothing left to check" once the last mark is answered, never overwritten by a bare digit', async () => {
+test('AC-20260911-06-22: under the vm shim, [data-wk="left"] renders the sentence "Nothing left to check" once the last mark is answered, never overwritten by a bare digit', async () => {
   const { notes, ledger } = openQuestions(1)
   const { document } = await walkThroughRouted({ screens: [{ label: 'signin', states: [] }], notes, ledger })
   const mark = document.querySelector('[data-wk="mark"][data-label="signin"]')
@@ -1116,14 +1116,14 @@ test('AC-20260911-01-10: a question note carrying answer.verdict: "waived" CONTI
 })
 
 // ---------------------------------------------------------------------------
-// specs/20260911/04-the-client-loop.md D24 — a box the client must type into is never revealed
+// specs/20260911/06-the-client-loop.md D24 — a box the client must type into is never revealed
 // by focus alone. The mark's why textarea was the request reopen box's identical defect, its
 // last instance: a `:focus-within` CSS rule hid `[data-wk="why"]` and dropped it the moment focus
 // left, taking the client's typing with it. The fix makes the script the single owner of
-// visibility, exactly as D23 fixed the reopen box. AC-20260911-04-24.
+// visibility, exactly as D23 fixed the reopen box. AC-20260911-06-24.
 // ---------------------------------------------------------------------------
 
-test('AC-20260911-04-24: buildWalkPage renders a mark\'s why textarea hidden, viewer.css owns none of that visibility, and a first "That\'s not right" press only unhides/focuses the box while a second press with text posts', async () => {
+test('AC-20260911-06-24: buildWalkPage renders a mark\'s why textarea hidden, viewer.css owns none of that visibility, and a first "That\'s not right" press only unhides/focuses the box while a second press with text posts', async () => {
   const { notes, ledger } = openQuestions(1)
   const seed = onboardingSeed([{ label: 'signin', states: [] }])
   const walkHtml = buildWalkPage({ seed, journey: 'onboarding', notes, ledger, walk: { journeys: {} }, prefix: '' })

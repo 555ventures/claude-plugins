@@ -403,7 +403,7 @@ body {
 @media (prefers-reduced-motion: reduce) { .rv-fill { transition: none; } }
 
 /* Client journey player (.wk-*) — specs/20260910/03-client-journey-player.md D8, amended by
-   specs/20260911/04-the-client-loop.md D18-D22 (design/client-mocks/index.html and walk.html,
+   specs/20260911/06-the-client-loop.md D18-D22 (design/client-mocks/index.html and walk.html,
    approved by JJ at the look stop 2026-09-11, are the binding reference this register ports),
    chrome rule in spec/doctrine/design.md § Design Canon. Two pages: the index (one bounded card
    per journey, a fixed four-slot thumbnail rail as its hero) and the player (a step indicator in

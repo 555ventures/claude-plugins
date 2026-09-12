@@ -171,7 +171,7 @@ function validateNotes(notes) {
     if (n.withdrawReason != null && !WITHDRAW_REASONS.includes(n.withdrawReason)) {
       errors.push('note "' + label + '": withdrawReason must be one of ' + WITHDRAW_REASONS.join('|') + ' (field "withdrawReason")')
     }
-    // specs/20260911/04-the-client-loop.md D3: `thread` is additive/optional — a present value
+    // specs/20260911/06-the-client-loop.md D3: `thread` is additive/optional — a present value
     // must be an array (its own entries, {at, text, by, addressed}, are reopenNote's own shape,
     // never re-validated here — the client route is the only writer).
     if (n.thread != null && !Array.isArray(n.thread)) {
@@ -305,7 +305,7 @@ function answerQuestion(notes, id, opts) {
 // own client-origin mock-scope re-capture path) stores the after-image and stamps `lastClientAt`;
 // every other caller (session-origin or walk note, `--port` omitted) leaves the note with no
 // `capture` field at all — CONTINUE-TO byte-identical, AC-20260907-10-22.
-// specs/20260911/04-the-client-loop.md D3: `opts.screen`/`opts.journey`, given only when the
+// specs/20260911/06-the-client-loop.md D3: `opts.screen`/`opts.journey`, given only when the
 // caller (mocks-driver.js's `notes address --screen/--journey`) points a project-scope answer
 // somewhere, are stored on `addressed` — the client index's "Done" line resolves its "See
 // <journey>" link from these, never from the note's own (mock-scope-only) `screen` field.
@@ -323,7 +323,7 @@ function addressNote(notes, id, opts) {
   return { notes: next, note: found }
 }
 
-// specs/20260911/04-the-client-loop.md D2's POST /client/__notes/reopen — the client's own return
+// specs/20260911/06-the-client-loop.md D2's POST /client/__notes/reopen — the client's own return
 // leg on an already-addressed note: threads the prior `addressed` object (verbatim) plus the
 // client's new text into `thread` (created when absent), nulls `addressed`, and sets status back
 // to "open". design-atlas.js's client route checks origin/status/text preconditions BEFORE ever

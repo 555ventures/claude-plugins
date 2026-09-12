@@ -10,11 +10,11 @@ const {
 } = require('./mocks-driver-fixtures')
 const walkLib = require('../../spec/scripts/lib/mocks-walk')
 
-// specs/20260911/04-the-client-loop.md D1 (lib/mocks-walk.js journeyState/unconfirmJourney),
+// specs/20260911/06-the-client-loop.md D1 (lib/mocks-walk.js journeyState/unconfirmJourney),
 // D7 (client open --port, notes address defaults/--screen/--journey, the CLIENT step's own
 // pickup block), D8 (--reopen journey:<j> unconfirms), D14 (clientNoteCounts/"client notes: "
 // deleted). All unbuilt against the pre-image — every assertion below is red until they land.
-// AC-20260911-04-1, -10, -11, -12, -14. A5: this file is the scratch harness
+// AC-20260911-06-1, -10, -11, -12, -14. A5: this file is the scratch harness
 // (scratchpad/loop.js, run client-first against the pre-image at lock) made into a test.
 
 // ---------------------------------------------------------------------------
@@ -67,9 +67,9 @@ function writeHttpsStub(dir) {
 function withPath(pathValue) { return Object.assign({}, process.env, { PATH: pathValue }) }
 
 // ---------------------------------------------------------------------------
-// AC-20260911-04-1
+// AC-20260911-06-1
 // ---------------------------------------------------------------------------
-test('AC-20260911-04-1: journeyState derives all six states from the Contracts table\'s own inputs (an open client note outranking a set confirmedAt), and unconfirmJourney nulls confirmedAt/sentence into one history entry, or no-ops on an unconfirmed journey', () => {
+test('AC-20260911-06-1: journeyState derives all six states from the Contracts table\'s own inputs (an open client note outranking a set confirmedAt), and unconfirmJourney nulls confirmedAt/sentence into one history entry, or no-ops on an unconfirmed journey', () => {
   assert.strictEqual(typeof walkLib.journeyState, 'function',
     'AC-1: lib/mocks-walk.js must export journeyState(walk, notes, labels) — D1 is unbuilt')
   assert.strictEqual(typeof walkLib.unconfirmJourney, 'function',
@@ -112,9 +112,9 @@ test('AC-20260911-04-1: journeyState derives all six states from the Contracts t
 })
 
 // ---------------------------------------------------------------------------
-// AC-20260911-04-14
+// AC-20260911-06-14
 // ---------------------------------------------------------------------------
-test('AC-20260911-04-14: mocks-driver.js carries neither the retired clientNoteCounts helper nor its "client notes: " counts line — D7\'s pickup lines replace them, not join them', () => {
+test('AC-20260911-06-14: mocks-driver.js carries neither the retired clientNoteCounts helper nor its "client notes: " counts line — D7\'s pickup lines replace them, not join them', () => {
   const r = spawnSync('grep', ['-n', 'clientNoteCounts\\|client notes: ', path.join(SPEC, 'scripts/mocks-driver.js')])
   assert.strictEqual(r.status, 1,
     'AC-14: grep must find zero hits (exit 1) for clientNoteCounts / "client notes: " in mocks-driver.js — D14\'s deletion is unbuilt: got status ' +
@@ -122,9 +122,9 @@ test('AC-20260911-04-14: mocks-driver.js carries neither the retired clientNoteC
 })
 
 // ---------------------------------------------------------------------------
-// AC-20260911-04-10
+// AC-20260911-06-10
 // ---------------------------------------------------------------------------
-test('AC-20260911-04-10: `client open` derives the port from a localhost address (or refuses naming --port for any other host), and the bare CLIENT step names the server\'s answering state, each journey\'s state, and "what the client left" per note', async () => {
+test('AC-20260911-06-10: `client open` derives the port from a localhost address (or refuses naming --port for any other host), and the bare CLIENT step names the server\'s answering state, each journey\'s state, and "what the client left" per note', async () => {
   const dir = tmpdir('client-loop-ac10')
   advanceToThemePicked(dir)
   const stub = writeSmartNpxStub(dir)
@@ -189,9 +189,9 @@ test('AC-20260911-04-10: `client open` derives the port from a localhost address
 })
 
 // ---------------------------------------------------------------------------
-// AC-20260911-04-11
+// AC-20260911-06-11
 // ---------------------------------------------------------------------------
-test('AC-20260911-04-11: `notes address` falls back to status.client.port and requires --screen/--journey on a client-origin project note, and the CLIENT step\'s journey line tracks fixed → ok', async () => {
+test('AC-20260911-06-11: `notes address` falls back to status.client.port and requires --screen/--journey on a client-origin project note, and the CLIENT step\'s journey line tracks fixed → ok', async () => {
   const dir = tmpdir('client-loop-ac11')
   advanceToThemePicked(dir)
   const stub = writeSmartNpxStub(dir)
@@ -247,9 +247,9 @@ test('AC-20260911-04-11: `notes address` falls back to status.client.port and re
 })
 
 // ---------------------------------------------------------------------------
-// AC-20260911-04-12
+// AC-20260911-06-12
 // ---------------------------------------------------------------------------
-test('AC-20260911-04-12: `--reopen journey:<j>` takes back a confirmed journey\'s OK into one history entry on walk.json, and the next bare run\'s derived state still cascades to WIREFRAMES', () => {
+test('AC-20260911-06-12: `--reopen journey:<j>` takes back a confirmed journey\'s OK into one history entry on walk.json, and the next bare run\'s derived state still cascades to WIREFRAMES', () => {
   const dir = tmpdir('client-loop-ac12')
   advanceToThemePicked(dir)
   const walk = walkLib.confirmJourney({ journeys: {} }, { journey: JOURNEY, sentence: 'Looks right', at: nowIso() })

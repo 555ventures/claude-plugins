@@ -927,7 +927,7 @@ function cmdNotes(sub, args) {
     const id = narg('--id')
     const change = narg('--change')
     const ledgerRow = narg('--ledger')
-    // specs/20260911/04-the-client-loop.md D7: --port falls back to status.client.port (recorded
+    // specs/20260911/06-the-client-loop.md D7: --port falls back to status.client.port (recorded
     // by `client open`) when the flag is absent — the flag still wins when given.
     const port = narg('--port') || (status.client && status.client.port ? String(status.client.port) : null)
     const screenArg = narg('--screen')
@@ -967,7 +967,7 @@ function cmdNotes(sub, args) {
       })
       return
     }
-    // specs/20260911/04-the-client-loop.md D7: a client-origin project-scope note (a "something
+    // specs/20260911/06-the-client-loop.md D7: a client-origin project-scope note (a "something
     // missing?" ask) is addressed by naming where the session pointed it — a mock (`--screen`, a
     // label already on disk) or a journey (`--journey`, a declared seed journey) — never both
     // omitted; the client index's own "Done" line resolves its link from whichever is given.
@@ -1146,7 +1146,7 @@ function cmdClient(sub, args) {
   if (scheme !== 'http:' && scheme !== 'https:') {
     die('client open: --address <url> must start with "http:" or "https:" (got "' + address + '")')
   }
-  // specs/20260911/04-the-client-loop.md D7: `--port` names the server's OWN local port (the
+  // specs/20260911/06-the-client-loop.md D7: `--port` names the server's OWN local port (the
   // capture's own address, always 127.0.0.1/localhost) — derived automatically off a localhost
   // address, else required outright, since a tunnel/tailscale hostname carries no port a capture
   // could ever reach.
@@ -2075,7 +2075,7 @@ function doReopen(target) {
     st.walked = null
     status.marks.approved = null
     status.decider = null
-    // specs/20260911/04-the-client-loop.md D8: a redrawn journey is a different journey to OK
+    // specs/20260911/06-the-client-loop.md D8: a redrawn journey is a different journey to OK
     // too — take back any client confirmation on walk.json (a no-op when it was never confirmed).
     walkLib.writeWalk(root, walkLib.unconfirmJourney(readWalkOrEmpty(), { journey: j, at, cause: 'reopen' }))
     const invalidated = ['approved', 'walk:' + j, 'approved(all)']
@@ -2491,7 +2491,7 @@ function printThemeStep() {
       driverCmd('theme shortlist --directions <a,b[,c]>')])
 }
 
-// specs/20260911/04-the-client-loop.md D7: the client-origin, non-question requests a journey's
+// specs/20260911/06-the-client-loop.md D7: the client-origin, non-question requests a journey's
 // labels carry — the same set lib/mocks-walk.js's journeyState derives its "changes-requested"/
 // "fixed" verdict from, restated here so the printed N count and the state word never disagree.
 function requestsOnLabels(notes, labels) {
@@ -2568,7 +2568,7 @@ function pickupLinesFor() {
 // itself is unconditional here). The `approved` stop key and the `signoff` stop step NAME are
 // both kept unchanged (D9 rationale — AC-20260907-08-12's pin and the `stop open` enumeration
 // both still name "signoff").
-// specs/20260911/04-the-client-loop.md D7: the server-answering/journey-state/pickup lines above
+// specs/20260911/06-the-client-loop.md D7: the server-answering/journey-state/pickup lines above
 // replace the retired per-journey `confirmed/open — reached` form and the counts line one-for-one
 // — the driver never starts or stops the client server itself, only probes it (Rationale).
 function printClientStep() {

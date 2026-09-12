@@ -28,7 +28,7 @@
 // happen and the slot shows its own data-failed text. The frame still moves on a "to" message
 // either way — navigating the prototype is local, per spec 03 D3.
 //
-// specs/20260911/04-the-client-loop.md D6: this same script also drives the CLIENT INDEX page
+// specs/20260911/06-the-client-loop.md D6: this same script also drives the CLIENT INDEX page
 // (no `[data-journey]` root at all) — the "something missing?" composer (`[data-cl="ask"]`, now
 // nested inside a `<details>` per D20) and the accept/reopen pair on both the index's
 // `[data-cl="request"]` cards and the walk page's own `[data-wk="request"]` cards.
@@ -125,7 +125,7 @@
         // FIX 3 (review): a reopened request is addressed→open, not addressed→addressed — its
         // status line and controls must stop reading/offering the addressed shape (D6: sets
         // data-status "open" and "We'll look at this"; D16/D17: `Looks good`/`Still not right`
-        // are addressed-only). AC-20260911-04-16 (locked) forbids the server from ever rendering
+        // are addressed-only). AC-20260911-06-16 (locked) forbids the server from ever rendering
         // a withdraw control on a non-open article, even hidden, so a reopened row cannot be
         // handed a working `Never mind` without fabricating markup (no innerHTML/createElement
         // outside the states switcher's own generated-from-safe-data exception, see header) — it

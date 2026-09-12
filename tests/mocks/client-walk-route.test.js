@@ -60,11 +60,11 @@ test('AC-20260911-01-9: POST /client/__walk/confirm on a declared journey with n
 })
 
 // ---------------------------------------------------------------------------
-// specs/20260911/04-the-client-loop.md D2 — a wholly new client route
+// specs/20260911/06-the-client-loop.md D2 — a wholly new client route
 // (POST /client/__notes/reopen) and a wholly new refusal state on an existing one
 // (POST /client/__walk/confirm's D1-derived-state 409). Both are unbuilt against the pre-image:
 // every assertion below is red until D1 (lib/mocks-walk.js journeyState/unconfirmJourney) and D2
-// land. AC-20260911-04-2, AC-20260911-04-3, AC-20260911-04-4, AC-20260911-04-5.
+// land. AC-20260911-06-2, AC-20260911-06-3, AC-20260911-06-4, AC-20260911-06-5.
 // ---------------------------------------------------------------------------
 
 function baseNote(overrides) {
@@ -75,12 +75,12 @@ function baseNote(overrides) {
   }, overrides)
 }
 
-// specs/20260911/04-the-client-loop.md AC-20260911-04-15 — a SHALL-CONTINUE-TO pin: this
+// specs/20260911/06-the-client-loop.md AC-20260911-06-15 — a SHALL-CONTINUE-TO pin: this
 // behavior is specs/20260907/10-client-review.md D5/D6 (before-frame capture) and D4 (resolve's
 // resolution:'accepted') and predates this spec entirely. Sanctioned GREEN today, unlike every
 // other test in this file — this spec touches neither the capture path nor the accepted-
 // resolution write, and the pin exists so a future build can never silently regress either.
-test('AC-20260911-04-15: POST /client/__notes/add on a mock-scope client note CONTINUES TO capture the before-frame first and answer 201 with capture.before, and POST /client/__notes/resolve on an addressed client note CONTINUES TO record resolution:\'accepted\'', async () => {
+test('AC-20260911-06-15: POST /client/__notes/add on a mock-scope client note CONTINUES TO capture the before-frame first and answer 201 with capture.before, and POST /client/__notes/resolve on an addressed client note CONTINUES TO record resolution:\'accepted\'', async () => {
   const dir = tmpdir('client-continue-capture')
   advanceToSeedDone(dir)
   const stubPath = stubNpxScreenshot(dir, { bytes: Buffer.from('before-bytes') })
@@ -111,7 +111,7 @@ test('AC-20260911-04-15: POST /client/__notes/add on a mock-scope client note CO
   }
 })
 
-test('AC-20260911-04-2: POST /client/__notes/reopen turns an addressed client-origin note back open with the prior addressed object threaded, and refuses every other shape by the Contracts\' own literals', async () => {
+test('AC-20260911-06-2: POST /client/__notes/reopen turns an addressed client-origin note back open with the prior addressed object threaded, and refuses every other shape by the Contracts\' own literals', async () => {
   const dir = tmpdir('client-notes-reopen')
   advanceToSeedDone(dir)
   const addressedAt = nowIso()
@@ -175,7 +175,7 @@ test('AC-20260911-04-2: POST /client/__notes/reopen turns an addressed client-or
   }
 })
 
-test('AC-20260911-04-3: POST /client/__notes/add on a mock-scope screen takes back a currently-confirmed journey\'s OK into one history entry, and a second such note appends no second entry', async () => {
+test('AC-20260911-06-3: POST /client/__notes/add on a mock-scope screen takes back a currently-confirmed journey\'s OK into one history entry, and a second such note appends no second entry', async () => {
   const dir = tmpdir('client-notes-add-unconfirms')
   advanceToSeedDone(dir)
   const confirmedAt = nowIso()
@@ -210,7 +210,7 @@ test('AC-20260911-04-3: POST /client/__notes/add on a mock-scope screen takes ba
   }
 })
 
-test('AC-20260911-04-4: POST /client/__walk/confirm refuses 409 while the journey\'s derived state is changes-requested or fixed, and succeeds once the blocking note is resolved', async () => {
+test('AC-20260911-06-4: POST /client/__walk/confirm refuses 409 while the journey\'s derived state is changes-requested or fixed, and succeeds once the blocking note is resolved', async () => {
   const dir = tmpdir('client-confirm-derived-state')
   advanceToSeedDone(dir)
   writeNotesFile(dir, [baseNote({ id: 'N003', screen: LABELS[1], status: 'open' })])
@@ -255,12 +255,12 @@ test('AC-20260911-04-4: POST /client/__walk/confirm refuses 409 while the journe
   }
 })
 
-// specs/20260911/04-the-client-loop.md D15 (amended, JJ's ruling 2026-09-11): a journey is
+// specs/20260911/06-the-client-loop.md D15 (amended, JJ's ruling 2026-09-11): a journey is
 // listed only when its page exists on disk — every declared screen has a
 // design/mocks/<label>.html — never when status.json's `walked` flag says so. The `Coming soon`
 // string, the `data-ready` attribute, and the `<span data-cl="journey">` not-ready branch are
 // retired outright: an unready journey renders NO row of any kind, linked or not.
-test('AC-20260911-04-5: GET /client/index.html lists a journey only when its declared screens exist on disk as design/mocks/<label>.html, never by status.json\'s walked flag, and a --reopen-cleared walked flag leaves an on-disk journey still linked', async () => {
+test('AC-20260911-06-5: GET /client/index.html lists a journey only when its declared screens exist on disk as design/mocks/<label>.html, never by status.json\'s walked flag, and a --reopen-cleared walked flag leaves an on-disk journey still linked', async () => {
   const dir = tmpdir('client-index-ready')
   writeFile(path.join(dir, 'design/mocks/seed.md'), `# Seed — Ready Test
 
@@ -311,12 +311,12 @@ plan
   }
 })
 
-// specs/20260911/04-the-client-loop.md D16 (new): the route half — resolveNote's existing
+// specs/20260911/06-the-client-loop.md D16 (new): the route half — resolveNote's existing
 // `withdrawn` resolution and the WITHDRAW_REASONS enum, exercised here through the served
 // route the client's own "Never mind" control posts to. Green pre-change on the mechanism
 // (specs/20260910/05's D3 shipped it); red on the consequence D16 adds — a withdrawn note must
 // stop blocking confirm the same way a resolved one already does.
-test('AC-20260911-04-16: POST /client/__notes/resolve withdraws an open client-origin note (200, resolution:"withdrawn"), and a subsequent POST /client/__walk/confirm on that journey succeeds instead of 409', async () => {
+test('AC-20260911-06-16: POST /client/__notes/resolve withdraws an open client-origin note (200, resolution:"withdrawn"), and a subsequent POST /client/__walk/confirm on that journey succeeds instead of 409', async () => {
   const dir = tmpdir('client-notes-withdraw-confirm')
   advanceToSeedDone(dir)
   writeNotesFile(dir, [baseNote({ id: 'N010', screen: LABELS[1], status: 'open' })])

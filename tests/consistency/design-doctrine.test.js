@@ -44,11 +44,11 @@ test('AC-20260910-05-9: spec/doctrine/genesis.md names "Parking lot" beside "exc
     'AC-9: § Genesis: Roadmap Decomposition must also name "exclusion" beside the parking-lot requirement — its absence leaves D6\'s roadmap-written refusal undocumented: got\n' + sec)
 })
 
-// specs/20260911/04-the-client-loop.md D9: the CLIENT server is the user's own long-lived
+// specs/20260911/06-the-client-loop.md D9: the CLIENT server is the user's own long-lived
 // process, never started/stopped/probed by any script but the CLIENT step's own answering line
 // — three doctrine sections and one command file each gain a literal naming that rule. Unbuilt
 // against the pre-image (D9's prose has not landed): every assertion below is red until it does.
-test('AC-20260911-04-13: spec/doctrine/mocks.md names the user-owned CLIENT server and the client player\'s six derived states, and spec/commands/mocks.md names the pickup loop and the authoring-only look rule', () => {
+test('AC-20260911-06-13: spec/doctrine/mocks.md names the user-owned CLIENT server and the client player\'s six derived states, and spec/commands/mocks.md names the pickup loop and the authoring-only look rule', () => {
   const doctrinePath = path.join(ROOT, 'spec/doctrine/mocks.md')
   assert.ok(fs.existsSync(doctrinePath), 'AC-13: spec/doctrine/mocks.md must exist: not found at ' + doctrinePath)
   const doctrine = read('spec/doctrine/mocks.md')

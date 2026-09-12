@@ -401,11 +401,13 @@ half the driver cannot check, carried here as contract prose the authoring sessi
   <m> bespoke`, on every run, and `journey-approved` refuses on any region carrying neither
   mark.
 - **Wireframes are neutral but carry every graphic that IS structure.** The register is shadcn's
-  Neutral component look on the eleven wire roles (ADR-0013) — filled primary buttons, cards with
-  a soft shadow, real tables — and a theme is the same roles re-valued, swapped in at serve time
-  for the client route; no screen is ever redrawn to be themed. A state is shown as the
-  product's map or a slice, never described in a caption; text is reserved for what someone
-  actually said (copy, labels), never for narrating what a picture should be doing instead.
+  Neutral component look on shadcn's own eighteen colour roles (ADR-0013, amended by
+  docs/adr/0016-the-register-is-the-whole-shadcn-set.md) — filled-by-default buttons on
+  `--primary`, cards with a soft shadow, a raised-pill tab row, real tables — and a theme is the
+  same roles re-valued, swapped in at serve time for the client route; no screen is ever redrawn
+  to be themed. A state is shown as the product's map or a slice, never described in a caption;
+  text is reserved for what someone actually said (copy, labels), never for narrating what a
+  picture should be doing instead.
 - **Every wireframe carries its states.** Behind `data-state-btn="<name>"` switches, drawn as
   gray boxes, a wireframe shows its `empty`, `loading`, and `error` states alongside the happy
   path — happy path alone is a finding, not a wireframe. A screen the product truly has no such

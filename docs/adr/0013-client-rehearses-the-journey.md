@@ -34,6 +34,8 @@
     driver under a later spec, between `WALK` and `CLIENT`, with different mechanics (client
     pick on a shortlist, role-swap render); the retired `direction-composed` mechanics stay
     retired.
+- Amended by: ADR-0016 — the eleven-role register this record describes becomes shadcn's own
+  eighteen colour roles verbatim; this record's register wording is narrowed to match.
 
 ## Context
 
@@ -86,8 +88,9 @@ last screen was reached by clicking through).
 - At the end of a journey: an approve button and one typed sentence ("今、何をしましたか？"). No
   name, no role, no identity of any kind — the URL is exposed over Tailscale for a session to one
   named contact, so there is no second person to distinguish ("名前とか役割いらない").
-- The register is shadcn's **Neutral** theme; a theme is the same roles re-valued. No React: the
-  mocks stay hand-written HTML, so the register is a CSS port of the shadcn component look.
+- The register is shadcn's **Neutral** theme: eighteen colour roles under shadcn's own names,
+  plus `--radius`; a theme re-values all eighteen. No React: the mocks stay hand-written HTML,
+  so the register is a CSS port of the shadcn component look.
 - Rejected: the client picking among flows; per-screen or per-state confirmation; automated
   scoring of client input; further grid improvements.
 
@@ -123,9 +126,9 @@ becomes a new `said-by-user` `confirmed` row, the guessed row `overridden` and l
 player shows the count of guesses still open on the journey.
 
 **The client walks themed screens.** The wireframe register is shadcn's Neutral component look
-on the eleven roles `wire-tokens.css` already names; the flat "no fills, no shadow" register is
-retired. A theme direction is the same eleven roles re-valued, authored by JJ with Claude Code
-under `design/theme/<kebab>/`. After `WALK`, the session composes candidates on the seed's two
+on the eighteen colour roles `wire-tokens.css` names under shadcn's own spelling; the flat "no
+fills, no shadow" register is retired. A theme direction is the same eighteen roles re-valued,
+authored by JJ with Claude Code under `design/theme/<kebab>/`. After `WALK`, the session composes candidates on the seed's two
 dense screens, JJ shortlists, and the client picks one on the client route; the driver adopts it
 and every screen the client walks is served with the picked values in place of the neutral ones.
 Internally the atlas and the session's review page stay neutral. `/spec:sketch`'s theme step

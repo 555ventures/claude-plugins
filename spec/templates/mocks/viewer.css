@@ -4,9 +4,10 @@
    consumes — never a literal color outside this `:root` block. `design-atlas.js`'s `page()`
    reads this file once per process and inlines it before its own rules; every chrome rule
    below is written on `var(--v-*)` roles only. The flat register a wireframe links
-   (`wire-tokens.css`/`wire.css`) carries the SAME values under role names without the `v-`
-   prefix — a pinned test (tests/mocks/viewer-tokens.test.js) keeps the two files value-equal
-   per the Contracts' pair list. Plain CSS, no build step, no preprocessor.
+   (`wire-tokens.css`/`wire.css`) is separately owned and is not value-equal: chrome answers to
+   design/chrome-mocks/ (specs/20260912/05-07), the wireframe register answers to shadcn
+   (docs/adr/0016-the-register-is-the-whole-shadcn-set.md). Plain CSS, no build step, no
+   preprocessor.
    `:host` is listed beside `:root` so the same register resolves inside a shadow tree: the notes
    layer (lib/notes-layer.browser.js) links this file INSIDE its shadow roots, never into a served
    mock's document — the `body`/`*` rules below are chrome-page rules and must never reach a

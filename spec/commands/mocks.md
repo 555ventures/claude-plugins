@@ -101,4 +101,9 @@ Printed once the driver reaches `APPROVED`. Assemble the slots (shared § Consol
 - The ledger is written only through the driver's `ledger` subcommands, notes.json only through
   its `notes` subcommands or the served page — never hand-typed; every `Agent`/workflow
   `model:` is explicit (shared § Model Placement).
+- **A host on the retired register runs `--refresh-register` first.** A `design/wire/tokens.css`
+  declaring the old eleven roles is rewritten in place — both wire files and every role
+  reference under `design/` — by `node {driver} --refresh-register`, before KIT or any screen is
+  drawn; idempotent, exit 0 whether it rewrites or finds the register already current (§ Mocks:
+  Authoring Rules).
 - **canon before screens, kit before wireframes, screens walked before sign-off.**

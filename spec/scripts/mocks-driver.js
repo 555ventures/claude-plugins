@@ -27,6 +27,7 @@
 // mocks-driver.js --root <dir> theme compose --direction <kebab>
 // mocks-driver.js --root <dir> theme shortlist --directions <a,b[,c]> [--port <n>]
 // mocks-driver.js --root <dir> --mark theme-picked [--direction <kebab>]
+// mocks-driver.js --root <dir> --refresh-register
 //
 // specs/20260907/06-theme-pick-moves-to-sketch.md: `theme state|compose` is a SECOND theme
 // producer that lives entirely outside the mocks state machine above — `/spec:sketch`'s own
@@ -143,10 +144,26 @@
 // one — never before the edge-gap check, so a placeholder-drawn journey is refused for its
 // missing controls first.
 //
+// specs/20260912/08-the-register-is-the-whole-shadcn-set.md D5: `--refresh-register` moves a
+// host repo already holding the retired eleven-role wireframe register onto the current
+// eighteen-colour-role shadcn Neutral one. It keys on the role NAMES `design/wire/tokens.css`
+// declares (never byte identity — `canon-written`'s own copy-only-when-absent leaves every host
+// that already has a register frozen on whatever it wrote first), classifying PRE-RENAME/
+// CURRENT/neither exactly as Contracts § `mocks-driver.js --refresh-register` orders it. It is
+// deliberately OUTSIDE the mark chain — neither gated on a mark nor itself writing one, and
+// dispatched before `loadStatus()` (alongside `theme state`, above) so it touches nothing under
+// design/mocks/ on a host that has no status.json yet. `spec/scripts/lib/wire-roles.js` (D6)
+// owns the retired-to-current map and the one-pass `renameRoles()` this arm calls over every
+// `design/**/*.html` and `design/wire/*.css` (tokens.css and wire.css excepted — the template
+// copy already replaced them).
+//
 // What this deliberately does NOT do:
 //   - author the seed, canon, screens, theme directions, or the sign-off itself — those stay
 //     session judgment; the driver only closes each mark once the artifact exists and validates
 //     under D2-D10's closure checks.
+//   - gate `--refresh-register` on any mark, or write one itself (D5) — a host between
+//     canon-written and approved needs the fix equally, and refusing it until some later step is
+//     reached would strand exactly the repos that need it.
 //   - judge taste — every check is a closure on an artifact (a heading, a label, a linked
 //     stylesheet, a status attribute, a ledger row), never an opinion on which screen is right.
 //   - relocate the session CWD, delete a file on `--reopen` (D11 — marks are cleared, disk is
@@ -187,8 +204,9 @@
 //      subcommand succeeded, `stop open` printed the link + reply line, `stop decide` recorded a
 //      decision, `theme state` printed `absent` or `picked`, `theme compose`/`theme shortlist`
 //      accepted its candidate(s), or `client open` recorded `status.client` and printed the open
-//      line.
-//   1  `ledger check` found a blocked gate (rows printed).
+//      line, or `--refresh-register` found the register already current or refreshed it (D5).
+//   1  `ledger check` found a blocked gate (rows printed), or `--refresh-register` refused
+//      because `design/wire/tokens.css` declares neither register in full, or is absent (D5).
 //   2  a refused mark (an unknown mark or the retired `--decider` flag included), a failed
 //      precondition (missing artifact, blocked gate, unreachable look probe, undeclared/undrawn
 //      journey for `stop open`, a `look --state` value the mock does not declare), a usage error,
@@ -228,6 +246,10 @@ const picksLib = require('./lib/mocks-picks.js')
 const shellLib = require('./lib/shell-region')
 const { stylesheetTargets, linksWireRegister } = require('./lib/wire-register')
 const { parseSeedJourneys } = require('./lib/surfaces')
+// specs/20260912/08-the-register-is-the-whole-shadcn-set.md D5/D6: the retired-to-current role
+// map and its one-pass renameRoles() live in lib/wire-roles.js, shared with the tests, never
+// spelled twice here.
+const wireRolesLib = require('./lib/wire-roles')
 const { edgeGaps, recordValues, recordHits } = require('./lib/mock-seed-checks')
 
 function die(msg) { writeOut(2, 'mocks-driver: ' + msg + '\n'); process.exit(2) }
@@ -348,6 +370,76 @@ function cmdThemeState() {
   process.exit(0)
 }
 if (rest[0] === 'theme' && rest[1] === 'state') cmdThemeState()
+
+// specs/20260912/08-the-register-is-the-whole-shadcn-set.md D5: `--refresh-register`, dispatched
+// here for the same reason `theme state` is above — it must create no design/mocks/ artifact on
+// a host that only wants its wireframe register fixed, and it is deliberately outside the mark
+// chain (Behavior), so it needs no `status` at all. `rootRoles` (defined further below, but
+// function declarations hoist) reads only the FIRST `:root{…}` block, exactly as
+// `composeViolations` already does.
+//
+// D6's kept-name roles (`border`, `primary`, `ring`, `radius`, `font`, `shadow`) are the same
+// under both registers, so classification cannot key on their presence; RETIRED_KEYS (the five
+// renamed roles) and NEW_ONLY_NAMES (the fifteen shadcn roles the retired register never had at
+// all, in any spelling) are what actually discriminate PRE-RENAME from CURRENT from neither.
+const RETIRED_KEYS = Object.keys(wireRolesLib.RETIRED_TO_CURRENT)
+const KEPT_ROLE_NAMES = ['border', 'primary', 'ring', 'radius', 'font', 'shadow']
+const NEW_ONLY_ROLE_NAMES = wireRolesLib.CURRENT_ROLES.filter(
+  (r) => !RETIRED_KEYS.includes(r) && !KEPT_ROLE_NAMES.includes(r))
+
+function walkFilesUnder(dir, matches, out) {
+  let entries
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+  for (const e of entries) {
+    const p = path.join(dir, e.name)
+    if (e.isDirectory()) walkFilesUnder(p, matches, out)
+    else if (matches(e.name)) out.push(p)
+  }
+}
+
+function cmdRefreshRegister() {
+  const wireDir = path.join(root, 'design/wire')
+  const tokensPath = path.join(wireDir, 'tokens.css')
+  if (!fs.existsSync(tokensPath)) {
+    writeOut(2, 'mocks-driver: design/wire/tokens.css does not exist — mark canon-written first\n')
+    process.exit(1)
+  }
+  const declared = new Set(rootRoles(fs.readFileSync(tokensPath, 'utf8')))
+  const isCurrent = wireRolesLib.CURRENT_ROLES.every((r) => declared.has(r))
+  const isPreRename = RETIRED_KEYS.every((r) => declared.has(r)) &&
+    !NEW_ONLY_ROLE_NAMES.some((r) => declared.has(r))
+
+  if (isCurrent) {
+    writeOut(1, '✅ register is already the current one — nothing to refresh\n')
+    process.exit(0)
+  }
+  if (!isPreRename) {
+    writeOut(2, 'mocks-driver: design/wire/tokens.css declares neither the retired nor the ' +
+      'current register — re-copy it from spec/templates/mocks/wire-tokens.css by hand, then re-run\n')
+    process.exit(1)
+  }
+
+  const tplDir = path.join(templatesDir, 'mocks')
+  fs.copyFileSync(path.join(tplDir, 'wire-tokens.css'), tokensPath)
+  fs.copyFileSync(path.join(tplDir, 'wire.css'), path.join(wireDir, 'wire.css'))
+
+  const targets = []
+  walkFilesUnder(path.join(root, 'design'), (name) => name.toLowerCase().endsWith('.html'), targets)
+  walkFilesUnder(wireDir, (name) => name.endsWith('.css') && name !== 'tokens.css' && name !== 'wire.css', targets)
+
+  let count = 0
+  for (const file of targets) {
+    const before = fs.readFileSync(file, 'utf8')
+    const after = wireRolesLib.renameRoles(before)
+    if (after !== before) {
+      fs.writeFileSync(file, after)
+      count++
+    }
+  }
+  writeOut(1, '✅ register refreshed — ' + count + ' file(s) rewritten\n')
+  process.exit(0)
+}
+if (rest.includes('--refresh-register')) cmdRefreshRegister()
 
 let status = loadStatus()
 
@@ -2464,7 +2556,7 @@ function printThemeStep() {
   printStepBlock('THEME', 'pick the theme — the client chooses from a shortlist you compose',
     ['design/mocks/seed.md (## Dense screens)', 'design/kit/kit.html', 'design/theme/<kebab>/'],
     'Mocks: State Machine', openRowsLine(),
-    ['author two or three directions under design/theme/<kebab>/ (tokens.css re-valuing the eleven wire roles, plus kit.html)',
+    ['author two or three directions under design/theme/<kebab>/ (tokens.css re-valuing the twenty-two wire roles, plus kit.html)',
       driverCmd('theme compose --direction <kebab>'),
       driverCmd('theme shortlist --directions <a,b[,c]>')])
 }

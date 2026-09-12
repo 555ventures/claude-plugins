@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: hardened
+status: implementing
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +10,8 @@ depended_on_by: [specs/20260912/09-a-mock-may-not-invent.md]
 brief: n/a
 spiked: 2026-09-12
 open_markers: 0
+build_base: main
+diff_base: 7ae10bda237df1c9a168175c49f2ca2710561700
 ---
 
 # The register is the whole shadcn set

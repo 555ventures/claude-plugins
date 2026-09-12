@@ -2254,15 +2254,22 @@ function createRequestHandler(root, opts = {}) {
       // specs/20260911/05-approval-is-bookkeeping.md D2: materializes exclusion rows over the
       // CURRENT brief/notes/ledger and writes ledger.md only when something moved — a no-op
       // request (nothing new to derive) leaves the file byte-identical, never rewritten.
+      // A malformed ledger throws out of `materialize` (its appender refuses a missing Assumptions
+      // header); this runs inside the client's own GET on a long-lived server, so it takes the
+      // same swallow-and-serve posture every sibling read above already takes — the page still
+      // renders from whatever parses, exactly as it did before rows were materialized here.
       const materializeExclusions = (notes) => {
         const text = ledgerTextOrNull()
         if (text === null) return
-        const result = materialize({
-          text, brief: briefTextOrNull(), notes, seedJourneys: parseSeedJourneys(rootAbs),
-          today: new Date().toISOString().slice(0, 10),
-        })
+        let result
+        try {
+          result = materialize({
+            text, brief: briefTextOrNull(), notes, seedJourneys: parseSeedJourneys(rootAbs),
+            today: new Date().toISOString().slice(0, 10),
+          })
+        } catch { return }
         if (result.added + result.retired + result.reopened > 0) {
-          fs.writeFileSync(path.join(rootAbs, 'design/mocks/ledger.md'), result.text)
+          try { fs.writeFileSync(path.join(rootAbs, 'design/mocks/ledger.md'), result.text) } catch { /* read-only tree: serve the page anyway */ }
         }
       }
 

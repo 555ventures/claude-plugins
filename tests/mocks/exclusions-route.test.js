@@ -170,6 +170,38 @@ test('AC-20260911-05-3: GET /client/walk/<j>.html materializes exclusion rows fr
 })
 
 // ---------------------------------------------------------------------------
+// Review finding (specs/20260911/05, reviewer iteration 1, dispositioned `fix`): D2 put
+// `materialize` inside the client's own GET on a long-lived server, and `materialize`'s appender
+// throws on a ledger with no Assumptions table header — so one hand-broken file killed the whole
+// serve process, where the pre-image answered 200. The route now takes the same swallow-and-serve
+// posture its sibling reads already take.
+// ---------------------------------------------------------------------------
+test('a malformed ledger.md never takes the client review server down — GET /client/walk/<j>.html still answers 200 and the server keeps serving afterwards', async () => {
+  const dir = tmpdir('excl-materialize-malformed-ledger')
+  advanceToSeedDone(dir)
+  const briefPath = path.join(dir, '.claude/genesis/brief.md')
+  fs.mkdirSync(path.dirname(briefPath), { recursive: true })
+  fs.writeFileSync(briefPath, '## Non-goals\n- SMS reminders — Later\n')
+  const ledgerFile = path.join(dir, 'design/mocks/ledger.md')
+  fs.writeFileSync(ledgerFile, '# Provenance ledger\n\nno table here\n')
+
+  const port = await freePort()
+  const { stop } = await serveAtlas(dir, { port })
+  try {
+    const res = await getJson('http://127.0.0.1:' + port + '/client/walk/' + JOURNEY + '.html')
+    assert.strictEqual(res.status, 200,
+      'a ledger the parser cannot read must not reach the client as a dead connection — the page still renders from whatever parses: got ' + res.status)
+    const after = await getJson('http://127.0.0.1:' + port + '/client/index.html')
+    assert.strictEqual(after.status, 200,
+      'the serve process must still be alive after the malformed-ledger request — an uncaught throw here refuses every later request until someone restarts the server: got ' + after.status)
+    assert.strictEqual(fs.readFileSync(ledgerFile, 'utf8'), '# Provenance ledger\n\nno table here\n',
+      'a ledger that could not be materialized must be left exactly as found — a partial rewrite would destroy the file the user still has to repair')
+  } finally {
+    await stop()
+  }
+})
+
+// ---------------------------------------------------------------------------
 // AC-20260911-05-4, AC-20260911-05-12
 // ---------------------------------------------------------------------------
 test('AC-20260911-05-4: POST /client/__walk/exclusion {verdict:"needed"} sets the row overridden/client-needed, {verdict:"maybe"} 400s naming both accepted values, and AC-20260911-05-12: an absent verdict CONTINUES TO set confirmed', async () => {

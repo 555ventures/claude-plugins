@@ -61,12 +61,7 @@ refusal fixes with `npx playwright install chromium` or, for a browser-MCP host,
 look <label> [--state <s>] [--port <n>]` or the declared browser MCP — never approve on source
 alone.
 
-**The user's look is a served atlas stop, never a question.** Before the first `stop open`,
-start `node "$(spec-paths design-atlas)" serve --root . [--port <n>]` as a
-**tracked background task** (`already serving` means reuse it); stop it at sign-off or session
-end. Every step waiting on a human verdict runs `node {driver} stop open <step>`
-(`shapes`|`kit`|`journey:<j>`|`signoff`, CLIENT included); its stdout is the whole hand-off,
-then **end the turn** (shared § Design Atlas: look stops are never questions):
+**The user's look is a served atlas stop, never a question.** Before the first `stop open`, start `node "$(spec-paths design-atlas)" serve --root . [--port <n>]` as a **tracked background task** (`already serving` means reuse it); stop it at sign-off or session end (authoring states only — the CLIENT server is the user's, § Mocks: Look and Serve). Every step waiting on a human verdict runs `node {driver} stop open <step>` (`shapes`|`kit`|`journey:<j>`|`signoff`, CLIENT included); its stdout is the whole hand-off, then **end the turn** (shared § Design Atlas: look stops are never questions):
 
     🎨 ready for review — <url>
     Reply  ✅ approve  — or —  ✏️ change <what looks wrong>
@@ -83,11 +78,8 @@ Once every journey is walked, author two or three directions under `design/theme
 
 ## Client review (CLIENT state)
 
-The terminal step: expose the running serve, then `client open --address <url>` (refused outside CLIENT, without `--address`, or against a dead address, naming the serve command).
-A client answers questions and raises notes on the served pages; a mock-scope note captures its screen at raise. `node {driver} notes open` triages each into one bin: **mock detail**
-(`notes address --id <id> --change "<what changed>" [--port <n>]` — client-origin mock-scope notes require `--port`, refusing if the screen is unchanged), **product understanding**
-(a ledger row first, same call plus `--ledger <rowId>`), **question back** (`notes reply --id <id> --text "<question>"`), or **propose to decline**.
-A canon-primitive note edits canon.md first. Only the client resolves a note on the page, or `notes waive --id <id> --reason "<r>"` releases it after seven days of silence. The client also walks each journey to confirmation on `/client/index.html`; `client log [--journey <j>]` prints each journey's sentence or its open count and misses, `client waive --journey <j> --reason "<r>"` releases an unconfirmed one after seven days, and `--mark approved` refuses until every journey is confirmed or waived (§ Mocks: Client Player).
+The terminal step, and the one loop that runs across closed sessions: `client open --address <url> [--port <n>]` exposes the running serve in the user's own terminal (§ Mocks: Look and Serve; refused outside CLIENT, without `--address`, against a dead address, or a non-localhost address with no `--port`). Every re-run is a pickup, not a fresh read of chat: run `node {driver} --root .`, read `📥 what the client left`, answer each line with its printed command (`notes address --id <id> --change "<what changed>"` after fixing the screen — plus `--screen <label>` or `--journey <j>` for a project-scope one, `notes reply` for a question back), then re-run.
+`notes waive --id <id> --reason "<r>"` releases one after seven days of silence. Only the client's page controls close a request (`Looks good` accepts, `Still not right` reopens with the client's text, § Mocks: Page Notes); a new request on an already-`ok` journey takes its confirmation back (§ Mocks: Client Player); `client log`/`client waive` are unchanged, and `--mark approved` refuses until every journey is `ok` or waived.
 Then `stop open signoff`; `decided approve` runs `{driver} --mark approved`, which first runs `ledger derive` and refuses on any `open` exclusion row, then prints `waived: N` plus each reason, writes `design/mocks/exclusions.md`, and stamps every top-level mock `data-status="approved"`.
 
 ## Report

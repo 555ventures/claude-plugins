@@ -130,4 +130,45 @@ function isClosed(walk, journey) {
   return !!(rec.confirmedAt || rec.waived)
 }
 
-module.exports = { readWalk, writeWalk, recordEvent, confirmJourney, waiveJourney, isClosed }
+// specs/20260911/06-the-client-loop.md D1: journeyState(rec, notes, labels) — `rec` is ONE
+// journey's own record (recordOf's return shape, not the whole {journeys:{}} file), `notes` is
+// notes.json's raw array, `labels` is that journey's declared screen set (Array or Set). Derived,
+// never stored — callers (design-atlas.js's client routes, mocks-driver.js's CLIENT step and
+// lib/walk-page.js's builders) all read the same two files and get the same answer. Order is
+// fixed: `waived` short-circuits regardless of notes; an OPEN client request outranks a set
+// `confirmedAt` (a new "changes requested" ask takes back a stale OK by construction, before D2's
+// own route-level unconfirm ever runs); an ADDRESSED one with none open reads `fixed`; only then
+// does a set `confirmedAt` read `ok`; `walking`/`unseen` split on whether any screen was reached.
+function journeyState(rec, notes, labels) {
+  if (rec && rec.waived) return 'waived'
+  const set = labels instanceof Set ? labels : new Set(labels || [])
+  const relevant = (notes || []).filter((n) => n && n.scope === 'mock' && set.has(n.screen) &&
+    n.kind !== 'question' && (n.origin === 'client'))
+  if (relevant.some((n) => n.status === 'open')) return 'changes-requested'
+  if (relevant.some((n) => n.status === 'addressed')) return 'fixed'
+  if (rec && rec.confirmedAt) return 'ok'
+  if (rec && Array.isArray(rec.reached) && rec.reached.length) return 'walking'
+  return 'unseen'
+}
+
+// specs/20260911/06-the-client-loop.md D1: unconfirmJourney(walk, {journey, at, cause}) — the
+// whole-file transform (same shape as confirmJourney/recordEvent: takes the {journeys:{}} object,
+// returns a NEW one). A confirmed journey's `confirmedAt`/`sentence` move into one APPENDED
+// `history` entry (`{confirmedAt, sentence, clearedAt: at, cause}`) and are nulled; an unconfirmed
+// journey (confirmedAt already null) is returned byte-identical, with no history entry appended —
+// a second take-back on the same journey (D2's own re-add case) is a no-op, never a growing log.
+function unconfirmJourney(walk, input) {
+  const body = input || {}
+  const journey = body.journey
+  if (!journey) throw new Error('unconfirmJourney: {journey} is required')
+  const rec = recordOf(walk, journey)
+  if (!rec.confirmedAt) return walk
+  const history = Array.isArray(rec.history) ? rec.history.slice() : []
+  history.push({ confirmedAt: rec.confirmedAt, sentence: rec.sentence, clearedAt: body.at, cause: body.cause })
+  const next = Object.assign({}, rec, { confirmedAt: null, sentence: null, history })
+  return { journeys: Object.assign({}, walk.journeys, { [journey]: next }) }
+}
+
+module.exports = {
+  readWalk, writeWalk, recordEvent, confirmJourney, waiveJourney, isClosed, journeyState, unconfirmJourney,
+}

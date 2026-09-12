@@ -1978,7 +1978,30 @@ function createRequestHandler(root, opts = {}) {
         },
       })
       if (outcome.error) { jsonRes(res, 400, { error: outcome.error }); return }
+      maybeUnconfirmForScreen(outcome.note)
       jsonRes(res, 201, outcome.note)
+    }
+
+    // specs/20260911/06-the-client-loop.md D2: a mock-scope client add on a journey that is
+    // CURRENTLY confirmed takes the OK back — one synchronous unconfirmJourney/writeWalk pair
+    // right after the note write, `cause` the new note's own id. A project-scope add (D6: no
+    // screen at all) never reaches here; a journey with no `confirmedAt` set is a no-op
+    // (unconfirmJourney's own guarantee), so a second request on an already-unconfirmed journey
+    // appends no second history entry.
+    function maybeUnconfirmForScreen(note) {
+      if (!note || !note.screen) return
+      const declared = parseSeedJourneys(rootAbs)
+      for (const [jn, j] of declared) {
+        if (!((j && j.labels) || []).includes(note.screen)) continue
+        let walk
+        try { walk = walkLib.readWalk(rootAbs) } catch { walk = { journeys: {} } }
+        const rec = (walk.journeys || {})[jn]
+        if (rec && rec.confirmedAt) {
+          const next = walkLib.unconfirmJourney(walk, { journey: jn, at: new Date().toISOString(), cause: note.id })
+          walkLib.writeWalk(rootAbs, next)
+        }
+        return
+      }
     }
 
     // ---- /__notes/* (D2) ------------------------------------------------------------------
@@ -2169,6 +2192,34 @@ function createRequestHandler(root, opts = {}) {
       }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
       return
     }
+    // specs/20260911/06-the-client-loop.md D2: POST /client/__notes/reopen — the client's own
+    // return leg on an addressed note. Client-mount only by construction (the same `clientRoute`
+    // guard every other client-only route uses); the bare /__notes/reopen path falls through,
+    // unmatched, to the shared /__notes/ 404 below.
+    if (reqPath === '/__notes/reopen' && req.method === 'POST' && clientRoute) {
+      readJsonBody(req).then((body) => {
+        const id = body && body.id
+        const text = String((body && body.text) || '').trim()
+        let notes = []
+        try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
+        const target = notes.find((n) => n.id === id)
+        if (!target) { jsonRes(res, 404, { error: 'no note with id "' + id + '"' }); return }
+        const origin = notesLib.originOf(target)
+        if (origin !== 'client') {
+          jsonRes(res, 400, { error: 'note "' + id + '" is ' + origin + '-origin — the client route reopens only client-origin notes' })
+          return
+        }
+        if (target.status !== 'addressed') {
+          jsonRes(res, 400, { error: 'note "' + id + '" is ' + target.status + ' — only an addressed note is reopened' })
+          return
+        }
+        if (!text) { jsonRes(res, 400, { error: 'reopen text must be non-empty' }); return }
+        const result = notesLib.reopenNote(notes, id, { text, by: (body && body.by) || 'client' })
+        notesLib.writeNotes(rootAbs, result.notes)
+        jsonRes(res, 200, result.note)
+      }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
+      return
+    }
     if (reqPath.startsWith('/__notes/')) {
       res.writeHead(404, { 'cache-control': 'no-store' })
       res.end('not found')
@@ -2206,13 +2257,28 @@ function createRequestHandler(root, opts = {}) {
         try { return JSON.parse(fs.readFileSync(path.join(rootAbs, 'design/mocks/status.json'), 'utf8')).theme || null } catch { return null }
       }
 
+      // specs/20260911/06-the-client-loop.md D15: `ready` — the set of seed journeys every one
+      // of whose declared screens has design/mocks/<label>.html on disk. `status.json`'s
+      // `walked` flag is NOT consulted: it is a session work flag, cleared by --reopen while the
+      // page it describes still answers, so it lies about whether the client can click through.
+      // A journey with no declared screen is never ready.
+      const readyJourneys = () => {
+        const declared = parseSeedJourneys(rootAbs)
+        const out = new Set()
+        for (const [jn, j] of declared.entries()) {
+          if (!j.labels.length) continue
+          if (j.labels.every((label) => fs.existsSync(path.join(rootAbs, 'design/mocks', label + '.html')))) out.add(jn)
+        }
+        return out
+      }
+
       if ((reqPath === '/index.html' || reqPath === '/') && req.method === 'GET') {
         let notes = []
         try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
         const themeStop = liveThemeStop()
         const html = walkPageLib.buildClientIndex({
           seed: seedForReview(rootAbs), notes, ledger: readLedgerRowsOrEmpty(), walk: readWalkOrEmpty(), prefix,
-          themeOpen: !!(themeStop && themeStop.status === 'open'),
+          themeOpen: !!(themeStop && themeStop.status === 'open'), ready: readyJourneys(),
         })
         res.writeHead(200, { 'content-type': MIME['.html'], 'cache-control': 'no-store' })
         res.end(html)
@@ -2336,6 +2402,20 @@ function createRequestHandler(root, opts = {}) {
           let openNotes = []
           try { openNotes = notesLib.readNotes(rootAbs) } catch { openNotes = [] }
           const labels = declared.get(journey).labels
+          // specs/20260911/06-the-client-loop.md D2: the derived-state gate runs BEFORE the
+          // unanswered-guess check above's sibling below — a `changes-requested`/`fixed` journey
+          // (an open or addressed client request) refuses 409 naming how many, regardless of
+          // whether any session guess is also open.
+          const rec = (readWalkOrEmpty().journeys || {})[journey]
+          const derived = walkLib.journeyState(rec, openNotes, labels)
+          if (derived === 'changes-requested' || derived === 'fixed') {
+            const requestCount = openNotes.filter((n) => n && n.scope === 'mock' && labels.includes(n.screen) &&
+              n.kind !== 'question' && n.origin === 'client' && (n.status === 'open' || n.status === 'addressed')).length
+            jsonRes(res, 409, {
+              error: 'journey "' + journey + '" has ' + requestCount + ' request(s) still open or waiting for your check — answer them first',
+            })
+            return
+          }
           const openCount = openNotes.filter((n) => n && n.kind === 'question' && n.answer == null &&
             n.scope === 'mock' && labels.includes(n.screen)).length
           if (openCount > 0) {

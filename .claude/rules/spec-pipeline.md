@@ -340,7 +340,22 @@ upstream bug list. -->
   count drops, and a gate counting open items unlocks. Act on the server's answer, never on the
   request — and where a page pre-checks locally to save a round trip, that pre-check must be the
   same predicate the server enforces, never a looser one.
-  (specs/20260910/03-client-journey-player.md; specs/20260911/01-the-page-waits-for-the-server.md)
+  Second surface, the one no leg can reach: **a client-facing page's defects live in the render, not
+  in the assertions.** One spec shipped three of them past a green 1093-test suite — a card wrapped
+  in an `<a>` that nested the `+n more` tile's own anchor (invalid HTML; the card visibly shattered,
+  but only on a journey with more screens than the rail holds), a composer wired to BOTH a click and
+  a submit handler (one click, two POSTs), and every textarea the client types into hidden by
+  `:focus-within`, so it vanished on blur with their words in it. Each passed every leg because the
+  tests asserted attributes and counts, which were all correct. Three more of the same class survived
+  to the reviewer: an `<a>` with no `href`, an "activated" row template that was an empty `<article>`,
+  and a status line never rewritten on reopen. Render the page and look at it before marking a
+  client-facing build DONE, populate the preview with realistic data (a synthetic fixture whose
+  screens are 554 bytes cannot show a thumbnail rail), and restart the server after editing — a
+  stale `require` cache served pre-fix markup and nearly banked a false verdict. Where markup and
+  stylesheet have different owners, check the seam explicitly: two defects here were a CSS rule and a
+  script each believing it owned one element's visibility.
+  (specs/20260910/03-client-journey-player.md; specs/20260911/01-the-page-waits-for-the-server.md;
+  specs/20260911/04-the-client-loop.md)
 - `[plugin]` `tests/helpers.js`'s `runNode` is `spawnSync`, which blocks the parent Node event
   loop for the child's whole lifetime — so a test that stands up an **in-process**
   `http.createServer` stub and then `runNode`s the script under test against it can never

@@ -44,6 +44,35 @@ test('AC-20260910-05-9: spec/doctrine/genesis.md names "Parking lot" beside "exc
     'AC-9: § Genesis: Roadmap Decomposition must also name "exclusion" beside the parking-lot requirement — its absence leaves D6\'s roadmap-written refusal undocumented: got\n' + sec)
 })
 
+// specs/20260911/06-the-client-loop.md D9: the CLIENT server is the user's own long-lived
+// process, never started/stopped/probed by any script but the CLIENT step's own answering line
+// — three doctrine sections and one command file each gain a literal naming that rule. Unbuilt
+// against the pre-image (D9's prose has not landed): every assertion below is red until it does.
+test('AC-20260911-06-13: spec/doctrine/mocks.md names the user-owned CLIENT server and the client player\'s six derived states, and spec/commands/mocks.md names the pickup loop and the authoring-only look rule', () => {
+  const doctrinePath = path.join(ROOT, 'spec/doctrine/mocks.md')
+  assert.ok(fs.existsSync(doctrinePath), 'AC-13: spec/doctrine/mocks.md must exist: not found at ' + doctrinePath)
+  const doctrine = read('spec/doctrine/mocks.md')
+  const lookSec = section(doctrine, 'Mocks: Look and Serve')
+  assert.ok(lookSec, 'AC-13: § Mocks: Look and Serve must exist in spec/doctrine/mocks.md')
+  assert.match(lookSec, /the user's own process/,
+    'AC-13: § Mocks: Look and Serve must state the CLIENT server is "the user\'s own process" — D9 is unbuilt: got\n' + lookSec)
+
+  const playerSec = section(doctrine, 'Mocks: Client Player')
+  assert.ok(playerSec, 'AC-13: § Mocks: Client Player must exist in spec/doctrine/mocks.md')
+  for (const literal of ['changes-requested', 'fixed', 'ok', 'Still not right', 'Looks good', 'reopens']) {
+    assert.ok(playerSec.includes(literal),
+      'AC-13: § Mocks: Client Player must name "' + literal + '" among the client player\'s six derived states/controls — D9 is unbuilt: got\n' + playerSec)
+  }
+
+  const commandsPath = path.join(ROOT, 'spec/commands/mocks.md')
+  assert.ok(fs.existsSync(commandsPath), 'AC-13: spec/commands/mocks.md must exist: not found at ' + commandsPath)
+  const commands = read('spec/commands/mocks.md')
+  assert.match(commands, /what the client left/,
+    'AC-13: spec/commands/mocks.md must name "what the client left" (the CLIENT step\'s pickup block) — D9 is unbuilt: got the full file with no match')
+  assert.match(commands, /authoring states only/,
+    'AC-13: spec/commands/mocks.md\'s look-rule sentence must gain "authoring states only" — D9 is unbuilt: got the full file with no match')
+})
+
 test('AC-20260910-05-9: spec/commands/mocks.md names exclusions.md', () => {
   const p = path.join(ROOT, 'spec/commands/mocks.md')
   assert.ok(fs.existsSync(p), 'AC-9: spec/commands/mocks.md must exist: not found at ' + p)

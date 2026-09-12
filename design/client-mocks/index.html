@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marlow Bookings</title>
+<style>
+/* ---- palette: the viewer.css :root block, verbatim. No other color exists on this page. ---- */
+:host,:root{
+  --v-bg:#ffffff; --v-fg:#0a0a0a; --v-muted:#737373; --v-muted-bg:#f5f5f5; --v-border:#e5e5e5;
+  --v-primary:#171717; --v-primary-fg:#fafafa; --v-ring:#a3a3a3; --v-accent:#f5f5f5;
+  --v-danger:#dc2626; --v-warn:#d97706; --v-ok:#16a34a;
+  --v-radius:8px; --v-space-1:4px; --v-space-2:8px; --v-space-3:12px; --v-space-4:16px; --v-space-6:24px;
+  --v-font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
+  --v-shadow:0 1px 2px rgba(0,0,0,.05),0 4px 12px rgba(0,0,0,.06);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--v-bg);color:var(--v-fg);font:15px/1.5 var(--v-font)}
+button,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:var(--v-bg);border:1px solid var(--v-border);border-radius:var(--v-radius);padding:7px 14px}
+button:hover{background:var(--v-muted-bg)}
+button.primary{background:var(--v-primary);color:var(--v-primary-fg);border-color:var(--v-primary);font-weight:500}
+button.primary:hover{background:color-mix(in srgb,var(--v-primary) 88%,var(--v-bg))}
+button.quiet{border-color:transparent;background:transparent;color:var(--v-muted);padding-left:6px;padding-right:6px}
+button.quiet:hover{color:var(--v-fg);background:var(--v-muted-bg)}
+textarea{width:100%;background:var(--v-bg);border:1px solid var(--v-border);border-radius:var(--v-radius);padding:8px 10px;resize:vertical}
+:is(button,a,textarea,summary):focus-visible{outline:2px solid var(--v-ring);outline-offset:2px}
+a{color:inherit}
+
+/* ---- page ---- */
+.page{max-width:1180px;margin:0 auto;padding:var(--v-space-6) clamp(16px,3vw,40px) 20vh}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--v-space-6);flex-wrap:wrap;margin-bottom:var(--v-space-6)}
+.head h1{margin:0 0 4px;font-size:26px;font-weight:600;letter-spacing:-.01em}
+.head p{margin:0;color:var(--v-muted);max-width:52ch}
+.progress{color:var(--v-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.progress b{color:var(--v-fg);font-weight:600}
+
+/* ---- journeys: the product itself, one bounded surface per journey ---- */
+/* The rail is a fixed four-slot object: --tw is the thumbnail width, fixed per breakpoint and
+   never flexed, so every card shares one silhouette however many screens the journey has.
+   Fewer than four screens leave quiet empty slots on the right; more than four show the first
+   three and a "+N more" tile in the fourth slot. */
+.journeys{--tw:112px;--th:74px;--rail:calc(var(--tw) * 4 + var(--v-space-2) * 3);
+  list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:var(--v-space-4)}
+.j{display:grid;grid-template-columns:var(--rail) minmax(0,1fr) 150px;gap:var(--v-space-6);align-items:center;
+   padding:var(--v-space-4) var(--v-space-6) var(--v-space-4) var(--v-space-4);
+   background:var(--v-bg);border:1px solid var(--v-border);border-radius:calc(var(--v-radius) + 4px);box-shadow:var(--v-shadow)}
+.j[data-state="unseen"]{box-shadow:none;background:color-mix(in srgb,var(--v-muted-bg) 50%,var(--v-bg))}
+.j-text{min-width:0}
+.j-name{margin:0 0 2px;font-size:19px;font-weight:600;letter-spacing:-.005em}
+.j-name a{text-decoration:none}
+.j-name a:hover{text-decoration:underline}
+.j-path{margin:0;color:var(--v-muted)}
+/* name, path (or the client's sentence), state: the path is one line; the sentence may take two */
+.j-path,.j-state{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.j-quote{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.j-state{margin:var(--v-space-2) 0 0;display:flex;align-items:center;gap:8px;font-size:14px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--v-border);flex:none}
+.j[data-state="walking"] .dot{background:var(--v-fg)}
+.j[data-state="changes-requested"] .dot{background:var(--v-warn)}
+.j[data-state="fixed"] .dot{background:var(--v-ok)}
+.j[data-state="ok"] .dot{background:var(--v-ok)}
+.j-quote{margin:0;padding-left:var(--v-space-3);border-left:2px solid var(--v-ok);color:var(--v-fg)}
+.j-cta{margin:0}
+.j-cta a{display:block;text-align:center;text-decoration:none;border:1px solid var(--v-border);border-radius:var(--v-radius);padding:7px 14px;white-space:nowrap}
+.j-cta a:hover{background:var(--v-muted-bg)}
+.j-cta a.primary{background:var(--v-primary);color:var(--v-primary-fg);border-color:var(--v-primary);font-weight:500}
+.j-cta a.primary:hover{background:color-mix(in srgb,var(--v-primary) 88%,var(--v-bg))}
+
+/* strip of screen thumbnails — the journey, read left to right. A reached screen is full
+   strength, an unreached one waits at half; the current screen carries the one ring. */
+.strip{display:flex;gap:var(--v-space-2);padding:0;margin:0;list-style:none;width:var(--rail)}
+.th{width:var(--tw);flex:none}
+.th-frame{position:relative;height:var(--th);border:1px solid var(--v-border);border-radius:4px;background:var(--v-bg);overflow:hidden;padding:7px 8px}
+.th-more .th-frame{display:grid;place-items:center;background:var(--v-muted-bg);color:var(--v-muted);font-size:15px;font-weight:500;text-decoration:none}
+.th-more .th-frame:hover{color:var(--v-fg);background:var(--v-bg)}
+.th[data-reached="false"] .th-frame{opacity:.45}
+.th[data-current="true"] .th-frame{outline:2px solid var(--v-primary);outline-offset:1px}
+.th-cap{margin:4px 0 0;font-size:12px;color:var(--v-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.th[data-current="true"] .th-cap{color:var(--v-fg);font-weight:500}
+.th-flag{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%}
+.th-flag.open{background:var(--v-warn)}
+.th-flag.fixed{background:var(--v-ok)}
+/* real build: each .th-frame holds a scaled iframe of the screen's mock; the .wf bars are stand-ins */
+.wf{display:flex;flex-direction:column;gap:4px}
+.wf i{display:block;height:5px;border-radius:2px;background:var(--v-border)}
+.wf i.t{width:55%;height:7px;background:color-mix(in srgb,var(--v-muted) 45%,var(--v-border))}
+.wf i.f{height:9px;background:var(--v-muted-bg);border:1px solid var(--v-border)}
+.wf i.b{width:34%;height:9px;background:var(--v-muted);border-radius:3px}
+.wf .row{display:flex;gap:4px}.wf .row i{flex:1}
+.wf.tick{align-items:center;justify-content:center;height:100%}
+.wf.tick i.c{width:18px;height:18px;border-radius:50%;border:2px solid var(--v-muted);background:transparent}
+.wf.tick i.t{width:40%}
+
+/* ---- composer: one line until it is needed ---- */
+.ask{margin-top:var(--v-space-6);border-top:1px solid var(--v-border);padding-top:var(--v-space-4)}
+.ask summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:var(--v-space-3);color:var(--v-muted)}
+.ask summary::-webkit-details-marker{display:none}
+.ask summary b{color:var(--v-fg);font-weight:500}
+.ask summary .plus{width:22px;height:22px;border:1px solid var(--v-border);border-radius:50%;display:grid;place-items:center;font-size:16px;line-height:1;color:var(--v-fg);flex:none}
+.ask[open] summary .plus{transform:rotate(45deg)}
+.ask-body{margin-top:var(--v-space-3);display:grid;gap:var(--v-space-3);max-width:60ch}
+.chips{display:flex;gap:var(--v-space-2);flex-wrap:wrap}
+.chip{border-radius:999px;background:var(--v-muted-bg);color:var(--v-muted);padding:4px 12px;font-size:14px;border-color:transparent}
+.chip[aria-pressed="true"]{background:var(--v-primary);color:var(--v-primary-fg)}
+.ask-acts{display:flex;gap:var(--v-space-2);align-items:center;flex-wrap:wrap}
+.ask-acts span{color:var(--v-muted);font-size:14px}
+
+/* ---- requests: a log, so hairlines ---- */
+.reqs{margin-top:var(--v-space-6)}
+.reqs-h{display:flex;align-items:baseline;gap:var(--v-space-4);margin:0 0 var(--v-space-2)}
+.reqs-h h2{margin:0;font-size:15px;font-weight:600}
+.reqs-h .n{color:var(--v-muted);font-size:14px}
+.reqs-h button{margin-left:auto;font-size:14px}
+.req{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--v-space-2) var(--v-space-6);align-items:start;
+     border-top:1px solid var(--v-border);border-left:2px solid var(--v-border);padding:var(--v-space-3) 0 var(--v-space-3) var(--v-space-3)}
+.req:last-of-type{border-bottom:1px solid var(--v-border)}
+.req[data-status="open"]{border-left-color:var(--v-warn)}
+.req[data-status="addressed"]{border-left-color:var(--v-ok)}
+.req[data-status="resolved"]{color:var(--v-muted)}
+.req-text{margin:0;max-width:60ch}
+.req-meta{margin:0;color:var(--v-muted);font-size:14px}
+.req-meta a{color:var(--v-fg)}
+.req-acts{display:flex;gap:var(--v-space-2);flex-wrap:wrap;justify-content:flex-end}
+.req-why{grid-column:1/-1;max-width:60ch}
+.msg{margin:var(--v-space-2) 0 0;color:var(--v-muted);font-size:14px}
+
+@media (max-width:1180px){
+  .journeys{--tw:88px;--th:58px}
+  .j{gap:var(--v-space-4);grid-template-columns:var(--rail) minmax(0,1fr) 130px}
+  .th-frame{padding:6px 7px}
+}
+@media (max-width:860px){
+  .j{grid-template-columns:var(--rail) minmax(0,1fr)}
+  .j-cta{grid-column:2;justify-self:start;width:150px}
+}
+@media (max-width:700px){
+  .page{padding-bottom:12vh}
+  .journeys{--tw:76px;--th:50px}
+  .j{grid-template-columns:minmax(0,1fr);padding:var(--v-space-4);gap:var(--v-space-3)}
+  .th-frame{padding:5px 6px}
+  .th-cap{font-size:11px}
+  .j-cta{grid-column:1;width:auto;justify-self:stretch}
+  .req{grid-template-columns:minmax(0,1fr)}
+  .req-acts{justify-content:flex-start}
+}
+@media (prefers-reduced-motion:no-preference){
+  .ask summary .plus{transition:transform .15s ease}
+}
+</style>
+</head>
+<body>
+<main class="page">
+
+  <header class="head">
+    <div>
+      <h1>Marlow Bookings</h1>
+      <p>Walk each part of your booking tool screen by screen. Tell us what matches what you expected, and what does not.</p>
+    </div>
+    <p class="progress"><b>2 of 8</b> confirmed</p>
+  </header>
+
+  <ul class="journeys">
+
+    <!-- Fixed — please check: the studio has done something and it is the client's turn -->
+    <li class="j" data-state="fixed">
+      <ul class="strip" aria-label="Screens in Reminders">
+        <li class="th" data-reached="true"><div class="th-frame"><div class="wf"><i class="t"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="b"></i></div></div><p class="th-cap">Reminder settings</p></li>
+        <li class="th" data-reached="true"><div class="th-frame"><div class="wf"><i class="t"></i><i></i><i style="width:80%"></i><i style="width:60%"></i><i class="b"></i></div></div><p class="th-cap">Message preview</p></li>
+        <li class="th" data-reached="false"><div class="th-frame"><span class="th-flag fixed" title="Fixed — please check"></span><div class="wf"><i class="t"></i><div class="row"><i></i><i></i><i></i></div><div class="row"><i></i><i></i><i></i></div><div class="row"><i></i><i></i><i></i></div></div></div><p class="th-cap">Sent log</p></li>
+      </ul>
+      <div class="j-text">
+        <h2 class="j-name"><a href="walk.html">Reminders</a></h2>
+        <p class="j-path">Reminder settings, message preview, sent log</p>
+        <p class="j-state"><span class="dot"></span>Fixed — please check (1)</p>
+      </div>
+      <p class="j-cta"><a class="primary" href="walk.html">Check the fix</a></p>
+    </li>
+
+    <!-- Changes requested: the client is waiting on the studio -->
+    <li class="j" data-state="changes-requested">
+      <ul class="strip" aria-label="Screens in Patient onboarding">
+        <li class="th" data-reached="true"><div class="th-frame"><div class="wf"><i class="t"></i><i class="f"></i><i class="f"></i><i class="b"></i></div></div><p class="th-cap">Sign in</p></li>
+        <li class="th" data-reached="true"><div class="th-frame"><span class="th-flag open" title="Change requested"></span><div class="wf"><i class="t"></i><i class="f"></i><i class="f"></i><i class="b"></i></div></div><p class="th-cap">Invite</p></li>
+        <li class="th" data-reached="true"><div class="th-frame"><span class="th-flag open" title="Change requested"></span><div class="wf"><i class="t"></i><i></i><i></i><i style="width:70%"></i><i class="b"></i></div></div><p class="th-cap">Consent</p></li>
+        <li class="th" data-reached="true"><div class="th-frame"><div class="wf tick"><i class="c"></i><i class="t"></i></div></div><p class="th-cap">First session</p></li>
+      </ul>
+      <div class="j-text">
+        <h2 class="j-name"><a href="walk.html">Patient onboarding</a></h2>
+        <p class="j-path">Sign in, invite, consent, first session</p>
+        <p class="j-state"><span class="dot"></span>Changes requested (2) — we'll let you know here</p>
+      </div>
+      <p class="j-cta"><a href="walk.html">Open again</a></p>
+    </li>
+
+    <!-- In progress: reached 2 of 4 -->
+    <li class="j" data-state="walking">
+      <ul class="strip" aria-label="Screens in Billing">
+        <li class="th" data-reached="true"><div class="th-frame"><div class="wf"><i class="t"></i><div class="row"><i></i><i></i><i></i></div><div class="row"><i></i><i></i><i></i></div><div class="row"><i></i><i></i><i></i></div><div class="row"><i></i><i></i><i></i></div></div></div><p class="th-cap">Invoices</p></li>
+        <li class="th" data-reached="true" data-current="true"><div class="th-frame"><div class="wf"><i class="t"></i><i></i><i style="width:75%"></i><i></i><i class="b" style="align-self:flex-end"></i></div></div><p class="th-cap">Invoice</p></li>
+        <li class="th" data-reached="false"><div class="th-frame"><div class="wf"><i class="t"></i><i class="f"></i><div class="row"><i class="f"></i><i class="f"></i></div><i class="b"></i></div></div><p class="th-cap">Pay</p></li>
+        <li class="th" data-reached="false"><div class="th-frame"><div class="wf tick"><i class="c"></i><i class="t"></i></div></div><p class="th-cap">Receipt</p></li>
+      </ul>
+      <div class="j-text">
+        <h2 class="j-name"><a href="walk.html">Billing</a></h2>
+        <p class="j-path">Invoices, invoice, pay, receipt</p>
+        <p class="j-state"><span class="dot"></span>In progress — you stopped at Invoice, 2 of 4</p>
+      </div>
+      <p class="j-cta"><a class="primary" href="walk.html">Continue</a></p>
+    </li>
+
+    <!-- 8 screens, in progress beyond the rail: the first three thumbnails, then "+5 more" -->
+    <li class="j" data-state="walking">
+      <ul class="strip" aria-label="Screens in New patient intake">
+        <li class="th" data-reached="true"><div class="th-frame"><div class="wf"><i class="t"></i><i class="f"></i><i class="f"></i><i class="b"></i></div></div><p class="th-cap">Your details</p></li>
+        <li class="th" data-reached="true"><div class="th-frame"><div class="wf"><i class="t"></i><div class="row"><i class="f"></i><i class="f"></i></div><i class="f"></i><i class="b"></i></div></div><p class="th-cap">Contact</p></li>
+        <li class="th" data-reached="true"><div class="th-frame"><div class="wf"><i class="t"></i><i class="f"></i><i></i><i style="width:60%"></i><i class="b"></i></div></div><p class="th-cap">Your GP</p></li>
+        <li class="th th-more" data-reached="true"><a class="th-frame" href="walk.html" aria-label="5 more screens: Medical history, Medication, Allergies, Emergency contact, Done">+5</a><p class="th-cap">more screens</p></li>
+      </ul>
+      <div class="j-text">
+        <h2 class="j-name"><a href="walk.html">New patient intake</a></h2>
+        <p class="j-path">Your details, contact, your GP, medical history, medication, allergies, emergency contact, done</p>
+        <p class="j-state"><span class="dot"></span>In progress — you stopped at Allergies, 6 of 8</p>
+      </div>
+      <p class="j-cta"><a class="primary" href="walk.html">Continue</a></p>
+    </li>
+
+    <!-- Not started -->
+    <li class="j" data-state="unseen">
+      <ul class="strip" aria-label="Screens in Clinic settings">
+        <li class="th" data-reached="false"><div class="th-frame"><div class="wf"><i class="t"></i><div class="row"><i></i><i class="f"></i><i class="f"></i></div><div class="row"><i></i><i class="f"></i><i class="f"></i></div><div class="row"><i></i><i class="f"></i><i class="f"></i></div></div></div><p class="th-cap">Opening hours</p></li>
+        <li class="th" data-reached="false"><div class="th-frame"><div class="wf"><i class="t"></i><div class="row"><i></i><i></i></div><div class="row"><i></i><i></i></div><div class="row"><i></i><i></i></div><i class="b"></i></div></div><p class="th-cap">Practitioners</p></li>
+        <li class="th" data-reached="false"><div class="th-frame"><div class="wf"><i class="t"></i><div class="row"><i></i><i></i></div><div class="row"><i></i><i></i></div><i class="b"></i></div></div><p class="th-cap">Rooms</p></li>
+      </ul>
+      <div class="j-text">
+        <h2 class="j-name"><a href="walk.html">Clinic settings</a></h2>
+        <p class="j-path">Opening hours, practitioners, rooms</p>
+        <p class="j-state"><span class="dot"></span>Not started</p>
+      </div>
+      <p class="j-cta"><a href="walk.html">Start</a></p>
+    </li>
+
+    <!-- Confirmed: the client's own sentence is the receipt -->
+    <li class="j" data-state="ok">
+      <ul class="strip" aria-label="Screens in Book an appointment">
+        <li class="th" data-reached="true"><div class="th-frame"><div class="wf"><i class="t"></i><div class="row"><i class="f"></i><i class="f"></i></div><div class="row"><i class="f"></i><i class="f"></i></div><i class="b"></i></div></div><p class="th-cap">Choose a service</p></li>
+        <li class="th" data-reached="true"><div class="th-frame"><div class="wf"><i class="t"></i><div class="row"><i></i><i></i><i></i><i></i><i></i></div><div class="row"><i></i><i></i><i></i><i></i><i></i></div><div class="row"><i></i><i></i><i></i><i></i><i></i></div><i class="b"></i></div></div><p class="th-cap">Pick a time</p></li>
+        <li class="th" data-reached="true"><div class="th-frame"><div class="wf"><i class="t"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="b"></i></div></div><p class="th-cap">Your details</p></li>
+        <li class="th" data-reached="true"><div class="th-frame"><div class="wf tick"><i class="c"></i><i class="t"></i></div></div><p class="th-cap">Booked</p></li>
+      </ul>
+      <div class="j-text">
+        <h2 class="j-name"><a href="walk.html">Book an appointment</a></h2>
+        <blockquote class="j-quote">I booked a physio session for Tuesday morning and got a confirmation with the clinic address.</blockquote>
+        <p class="j-state"><span class="dot"></span>Confirmed</p>
+      </div>
+      <p class="j-cta"><a href="walk.html">Walk it again</a></p>
+    </li>
+
+    <!-- 2 screens, not started: two slots filled, two quiet -->
+    <li class="j" data-state="unseen">
+      <ul class="strip" aria-label="Screens in Cancel a booking">
+        <li class="th" data-reached="false"><div class="th-frame"><div class="wf"><i class="t"></i><i class="f"></i><div class="row"><i></i><i></i><i></i></div><div class="row"><i></i><i></i><i></i></div></div></div><p class="th-cap">Find the booking</p></li>
+        <li class="th" data-reached="false"><div class="th-frame"><div class="wf tick"><i class="c"></i><i class="t"></i></div></div><p class="th-cap">Cancelled</p></li>
+      </ul>
+      <div class="j-text">
+        <h2 class="j-name"><a href="walk.html">Cancel a booking</a></h2>
+        <p class="j-path">Find the booking, cancelled</p>
+        <p class="j-state"><span class="dot"></span>Not started</p>
+      </div>
+      <p class="j-cta"><a href="walk.html">Start</a></p>
+    </li>
+
+    <!-- 1 screen, confirmed: one slot filled, the sentence still the receipt -->
+    <li class="j" data-state="ok">
+      <ul class="strip" aria-label="Screens in Waiting list">
+        <li class="th" data-reached="true"><div class="th-frame"><div class="wf"><i class="t"></i><div class="row"><i></i><i class="f"></i></div><div class="row"><i></i><i class="f"></i></div><i class="b"></i></div></div><p class="th-cap">Join the list</p></li>
+      </ul>
+      <div class="j-text">
+        <h2 class="j-name"><a href="walk.html">Waiting list</a></h2>
+        <blockquote class="j-quote">I put a patient on the list for an earlier physio slot.</blockquote>
+        <p class="j-state"><span class="dot"></span>Confirmed</p>
+      </div>
+      <p class="j-cta"><a href="walk.html">Walk it again</a></p>
+    </li>
+
+  </ul>
+
+  <!-- composer: one line, opens on demand -->
+  <details class="ask">
+    <summary><span class="plus" aria-hidden="true">+</span><span><b>Something missing?</b> Tell us about a screen you expected, or anything else.</span></summary>
+    <!-- the composer is a form and Send is its submit button: Enter-to-send and the browser's
+         own form semantics for free; the script intercepts submit so nothing navigates -->
+    <form class="ask-body" onsubmit="return false">
+      <textarea rows="3" placeholder="For example: there is no screen where a patient can cancel a booking." aria-label="What is missing"></textarea>
+      <div class="chips" role="group" aria-label="What kind of request">
+        <button type="button" class="chip" aria-pressed="false" onclick="pick(this)">A screen is missing</button>
+        <button type="button" class="chip" aria-pressed="true" onclick="pick(this)">Something else</button>
+      </div>
+      <div class="ask-acts"><button type="submit" class="primary">Send</button></div>
+    </form>
+  </details>
+
+  <!-- requests: the log, open and fixed only; closed behind the toggle -->
+  <section class="reqs">
+    <div class="reqs-h"><h2>Your requests</h2><span class="n">2 waiting</span><button class="quiet" id="toggle" aria-expanded="false" onclick="toggleClosed()">Show 2 closed</button></div>
+
+    <article class="req" data-status="open">
+      <p class="req-text">The invite button should say Send, not Submit. Submit reads like a form.</p>
+      <div class="req-acts"><button>Never mind</button></div>
+      <p class="req-meta">On <a href="walk.html">Invite</a> in Patient onboarding. We'll look at this.</p>
+    </article>
+
+    <article class="req" data-status="addressed">
+      <p class="req-text">There is no way to see which reminders actually went out. The front desk will ask.</p>
+      <div class="req-acts"><button class="primary">Looks good</button><button onclick="reason(this)">Still not right</button></div>
+      <p class="req-meta">Across the whole product. Done: added a Sent log screen to <a href="walk.html">Reminders</a>.</p>
+      <textarea class="req-why" rows="2" placeholder="What should be different?" hidden aria-label="What should be different"></textarea>
+    </article>
+
+    <article class="req" data-status="resolved" data-closed hidden>
+      <p class="req-text">The consent copy was too long.</p>
+      <p class="req-meta">On Consent in Patient onboarding. Closed — thank you.</p>
+    </article>
+    <article class="req" data-status="resolved" data-closed hidden>
+      <p class="req-text">Can patients pay by bank transfer as well as by card?</p>
+      <p class="req-meta">Across the whole product. Closed.</p>
+    </article>
+
+    <p class="msg" role="status" aria-live="polite" hidden>Saved. We'll fix this and let you know here.</p>
+  </section>
+
+</main>
+<script>
+function pick(b){for(const c of b.parentNode.children)c.setAttribute('aria-pressed',c===b)}
+function toggleClosed(){const t=document.getElementById('toggle');const open=t.getAttribute('aria-expanded')!=='true';
+  t.setAttribute('aria-expanded',open);t.textContent=open?'Hide closed':'Show 2 closed';
+  document.querySelectorAll('[data-closed]').forEach(el=>el.hidden=!open)}
+function reason(b){const t=b.closest('.req').querySelector('.req-why');t.hidden=false;t.focus()}
+</script>
+</body>
+</html>

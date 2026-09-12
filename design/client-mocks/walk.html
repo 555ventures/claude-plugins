@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patient onboarding · Marlow Bookings</title>
+<style>
+/* ---- palette: the viewer.css :root block, verbatim. No other color exists on this page. ---- */
+:host,:root{
+  --v-bg:#ffffff; --v-fg:#0a0a0a; --v-muted:#737373; --v-muted-bg:#f5f5f5; --v-border:#e5e5e5;
+  --v-primary:#171717; --v-primary-fg:#fafafa; --v-ring:#a3a3a3; --v-accent:#f5f5f5;
+  --v-danger:#dc2626; --v-warn:#d97706; --v-ok:#16a34a;
+  --v-radius:8px; --v-space-1:4px; --v-space-2:8px; --v-space-3:12px; --v-space-4:16px; --v-space-6:24px;
+  --v-font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
+  --v-shadow:0 1px 2px rgba(0,0,0,.05),0 4px 12px rgba(0,0,0,.06);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--v-muted-bg);color:var(--v-fg);font:15px/1.5 var(--v-font)}
+button,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:var(--v-bg);border:1px solid var(--v-border);border-radius:var(--v-radius);padding:7px 14px}
+button:hover{background:var(--v-muted-bg)}
+button[disabled]{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--v-primary);color:var(--v-primary-fg);border-color:var(--v-primary);font-weight:500}
+button.primary:hover:not([disabled]){background:color-mix(in srgb,var(--v-primary) 88%,var(--v-bg))}
+textarea{width:100%;background:var(--v-bg);border:1px solid var(--v-border);border-radius:var(--v-radius);padding:8px 10px;resize:vertical}
+:is(button,a,textarea):focus-visible{outline:2px solid var(--v-ring);outline-offset:2px}
+a{color:inherit}
+
+/* ---- top bar: back · journey · the walk itself · next ---- */
+.bar{position:sticky;top:0;z-index:5;background:var(--v-bg);border-bottom:1px solid var(--v-border);
+     display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:var(--v-space-6);
+     height:56px;padding:0 var(--v-space-4)}
+.home{text-decoration:none;color:var(--v-muted);white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.home:hover{color:var(--v-fg)}
+.home b{color:var(--v-fg);font-weight:600}
+.nav{display:flex;gap:var(--v-space-2);white-space:nowrap}
+
+/* the step indicator: reached is solid, current carries the one accent, unreached is an outline */
+.steps{display:flex;gap:var(--v-space-4);margin:0;padding:0;list-style:none;justify-content:center;min-width:0}
+.step{display:flex;align-items:center;gap:8px;color:var(--v-muted);background:none;border:0;padding:6px 4px;border-radius:var(--v-radius);white-space:nowrap}
+.step:hover{background:var(--v-muted-bg)}
+.step .pip{width:10px;height:10px;border-radius:50%;border:2px solid var(--v-border);background:transparent;flex:none}
+.step[data-reached="true"]{color:var(--v-fg)}
+.step[data-reached="true"] .pip{border-color:var(--v-fg);background:var(--v-fg)}
+.step[aria-current="step"]{color:var(--v-primary);font-weight:600}
+.step[aria-current="step"] .pip{border-color:var(--v-primary);background:var(--v-primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--v-primary) 18%,transparent)}
+.step .flag{width:6px;height:6px;border-radius:50%;flex:none;margin-left:-4px;align-self:flex-start}
+.step .flag.open{background:var(--v-warn)}
+.step .flag.fixed{background:var(--v-ok)}
+.pos{display:none;color:var(--v-muted);font-variant-numeric:tabular-nums}
+
+/* ---- two zones: the stage, and this screen's panel ---- */
+.main{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:var(--v-space-6);padding:var(--v-space-6);max-width:1600px;margin:0 auto;align-items:start}
+
+/* the screen, as an object: a caption bar it belongs to, a bounded surface, the states it can be in */
+.stage{min-width:0}
+.object{background:var(--v-bg);border:1px solid var(--v-border);border-radius:calc(var(--v-radius) + 4px);box-shadow:var(--v-shadow);overflow:hidden}
+.caption{display:flex;align-items:center;gap:var(--v-space-4);padding:10px var(--v-space-4);border-bottom:1px solid var(--v-border);background:color-mix(in srgb,var(--v-muted-bg) 60%,var(--v-bg))}
+.caption h1{margin:0;font-size:15px;font-weight:600}
+.caption .of{color:var(--v-muted);font-weight:400;font-variant-numeric:tabular-nums}
+.states{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
+.states button{font-size:13px;padding:3px 10px;color:var(--v-muted);border-color:transparent;background:transparent}
+.states button:hover{background:var(--v-bg);border-color:var(--v-border)}
+.states button[aria-selected="true"]{background:var(--v-bg);color:var(--v-fg);border-color:var(--v-border)}
+.frame{min-height:62vh;padding:0;background:var(--v-bg)}
+/* real build: .frame IS the <iframe class="wk-frame"> of the mock; the .wf markup below is a stand-in */
+.step-under{display:flex;justify-content:space-between;align-items:center;margin-top:var(--v-space-3);color:var(--v-muted);font-size:14px}
+.step-under a{color:var(--v-muted)}
+
+/* panel: what this screen needs from the client */
+.panel{display:flex;flex-direction:column;gap:var(--v-space-4);position:sticky;top:calc(56px + var(--v-space-6))}
+.card{background:var(--v-bg);border:1px solid var(--v-border);border-radius:calc(var(--v-radius) + 4px);box-shadow:var(--v-shadow);padding:var(--v-space-4)}
+.card h2{margin:0 0 var(--v-space-2);font-size:15px;font-weight:600}
+.card .lead{margin:0 0 var(--v-space-3);color:var(--v-muted)}
+.mark{padding:var(--v-space-3) 0;border-top:1px solid var(--v-border)}
+.mark:first-of-type{border-top:0;padding-top:0}
+.claim{margin:0 0 var(--v-space-2)}
+.verdicts{display:flex;gap:var(--v-space-2)}
+.why{margin-top:var(--v-space-2)}
+.left{margin:var(--v-space-2) 0 0;color:var(--v-muted);font-size:14px}
+
+/* this screen's requests: hairline log inside the panel */
+.reqs h2{margin-bottom:var(--v-space-1)}
+.req{border-top:1px solid var(--v-border);border-left:2px solid var(--v-border);padding:var(--v-space-3) 0 var(--v-space-3) var(--v-space-3);display:flex;flex-direction:column;gap:var(--v-space-2);align-items:flex-start}
+.req:last-of-type{border-bottom:1px solid var(--v-border)}
+.req[data-status="open"]{border-left-color:var(--v-warn)}
+.req[data-status="addressed"]{border-left-color:var(--v-ok)}
+.req-text{margin:0}
+.req-meta{margin:0;color:var(--v-muted);font-size:14px}
+.req-acts{display:flex;gap:var(--v-space-2);flex-wrap:wrap}
+.req-why{width:100%}
+.note label{display:block;color:var(--v-muted);font-size:14px;margin-bottom:6px}
+.note .acts{margin-top:var(--v-space-2)}
+
+/* the end of the walk: the sentence box sits in the stage, above the screen, so it is the first thing seen */
+.confirm{background:var(--v-bg);border:1px solid var(--v-border);border-radius:calc(var(--v-radius) + 4px);box-shadow:var(--v-shadow);
+         padding:var(--v-space-4) var(--v-space-6);margin-bottom:var(--v-space-4);
+         display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--v-space-2) var(--v-space-6);align-items:end}
+.confirm h2{margin:0;font-size:17px;font-weight:600;grid-column:1/-1}
+.confirm p{margin:0 0 var(--v-space-1);color:var(--v-muted);grid-column:1/-1}
+.confirm textarea{min-height:44px}
+.confirm .hint{grid-column:1/-1;margin:0;font-size:14px;color:var(--v-muted)}
+
+/* owner-only divider between the two renders in this file */
+.divider{margin:64px 0 0;padding:var(--v-space-4) var(--v-space-6);border-top:2px dashed var(--v-ring);border-bottom:2px dashed var(--v-ring);background:var(--v-bg);text-align:center;color:var(--v-muted)}
+.divider b{color:var(--v-fg)}
+
+@media (max-width:1180px){
+  .main{grid-template-columns:minmax(0,1fr)}
+  .panel{position:static}
+  .frame{min-height:56vh}
+}
+@media (max-width:900px){
+  .steps .lbl{display:none}
+  .steps{gap:var(--v-space-2)}
+  .step{padding:6px}
+}
+@media (max-width:600px){
+  .bar{grid-template-columns:auto minmax(0,1fr) auto;gap:var(--v-space-3);padding:0 var(--v-space-3)}
+  .home .name,.home b{display:none}
+  .home{font-size:20px}
+  .steps{display:none}
+  .pos{display:block;text-align:center;white-space:nowrap;margin:0}
+  .nav button{padding:7px 10px}
+  .nav .long{display:none}
+  .main{padding:var(--v-space-3);gap:var(--v-space-4)}
+  .frame{min-height:60vh}
+  .caption{flex-wrap:wrap;gap:var(--v-space-2)}
+  .states{margin-left:0;width:100%}
+  .confirm{grid-template-columns:minmax(0,1fr);padding:var(--v-space-4)}
+  .confirm button{width:100%}
+}
+@media (prefers-reduced-motion:no-preference){
+  .step,.states button{transition:background .12s ease}
+}
+
+/* ---- gray wireframe stand-in for the mock inside the frame ---- */
+.wf{max-width:520px;margin:0 auto;padding:56px 24px;display:flex;flex-direction:column;gap:14px}
+.wf .h{height:22px;width:45%;border-radius:4px;background:color-mix(in srgb,var(--v-muted) 45%,var(--v-border))}
+.wf .p{height:10px;border-radius:3px;background:var(--v-border)}
+.wf .lbl{height:9px;width:28%;border-radius:3px;background:var(--v-border);margin-top:6px}
+.wf .in{height:40px;border:1px solid var(--v-border);border-radius:6px;background:var(--v-muted-bg)}
+.wf .btn{height:40px;width:38%;border-radius:6px;background:var(--v-muted);margin-top:8px}
+.wf .row{display:flex;gap:12px}.wf .row>*{flex:1}
+.wf .ok{width:64px;height:64px;border-radius:50%;border:3px solid var(--v-muted);align-self:center;margin-bottom:8px}
+.wf .c{align-self:center}
+</style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- RENDER 1 · mid-journey: Invite, screen 2 of 4                 -->
+<!-- ============================================================ -->
+
+<header class="bar">
+  <a class="home" href="index.html"><span aria-hidden="true">←</span> <span class="name">All journeys ·</span> <b>Patient onboarding</b></a>
+  <ol class="steps" aria-label="Screens in this journey">
+    <li><button class="step" data-reached="true"><span class="pip" aria-hidden="true"></span><span class="lbl">Sign in</span></button></li>
+    <li><button class="step" data-reached="true" aria-current="step"><span class="pip" aria-hidden="true"></span><span class="lbl">Invite</span><span class="flag open" title="Change requested"></span></button></li>
+    <li><button class="step" data-reached="false"><span class="pip" aria-hidden="true"></span><span class="lbl">Consent</span></button></li>
+    <li><button class="step" data-reached="false"><span class="pip" aria-hidden="true"></span><span class="lbl">First session</span></button></li>
+  </ol>
+  <p class="pos">2 of 4</p>
+  <nav class="nav"><button>Back</button><button class="primary">Next</button></nav>
+</header>
+
+<div class="main">
+  <section class="stage">
+    <figure class="object" style="margin:0">
+      <figcaption class="caption">
+        <h1>Invite <span class="of">· 2 of 4</span></h1>
+        <div class="states" role="tablist" aria-label="Other states of this screen">
+          <button role="tab" aria-selected="true">Normal</button><button role="tab" aria-selected="false">Empty</button><button role="tab" aria-selected="false">Loading</button><button role="tab" aria-selected="false">Error</button>
+        </div>
+      </figcaption>
+      <div class="frame" role="img" aria-label="Invite screen, gray wireframe">
+        <div class="wf">
+          <div class="h"></div>
+          <div class="p" style="width:70%"></div>
+          <div class="lbl"></div><div class="in"></div>
+          <div class="lbl"></div><div class="in"></div>
+          <div class="row"><div><div class="lbl"></div><div class="in"></div></div><div><div class="lbl"></div><div class="in"></div></div></div>
+          <div class="btn"></div>
+        </div>
+      </div>
+    </figure>
+    <p class="step-under"><span>Sign in came before this.</span><span>Next: Consent</span></p>
+  </section>
+
+  <aside class="panel" aria-label="About this screen">
+    <div class="card">
+      <h2>Two things we guessed on this screen</h2>
+      <article class="mark">
+        <p class="claim">A new patient gets the invite by text message, not by email.</p>
+        <div class="verdicts"><button>That's right</button><button>That's not right</button></div>
+        <textarea class="why" rows="2" placeholder="What should it be instead?" hidden aria-label="What should it be instead"></textarea>
+      </article>
+      <article class="mark">
+        <p class="claim">The front desk sends the invite; patients cannot invite themselves.</p>
+        <div class="verdicts"><button>That's right</button><button>That's not right</button></div>
+        <textarea class="why" rows="2" placeholder="What should it be instead?" hidden aria-label="What should it be instead"></textarea>
+      </article>
+      <p class="left">2 things still to check</p>
+    </div>
+
+    <div class="card reqs">
+      <h2>Your requests on this screen</h2>
+      <article class="req" data-status="open">
+        <p class="req-text">The invite button should say Send, not Submit. Submit reads like a form.</p>
+        <p class="req-meta">We'll look at this.</p>
+        <div class="req-acts"><button>Never mind</button></div>
+      </article>
+      <article class="req" data-status="addressed">
+        <p class="req-text">The phone number field needs a country code. Half our patients are on Irish numbers.</p>
+        <p class="req-meta">Fixed: added a country picker before the number.</p>
+        <div class="req-acts"><button class="primary">Looks good</button><button onclick="reason(this)">Still not right</button></div>
+        <textarea class="req-why" rows="2" placeholder="What should be different?" hidden aria-label="What should be different"></textarea>
+      </article>
+    </div>
+
+    <form class="card note" onsubmit="return false">
+      <label for="note1">Anything else about this screen?</label>
+      <textarea id="note1" rows="2"></textarea>
+      <div class="acts"><button type="submit">Send</button></div>
+    </form>
+  </aside>
+</div>
+
+<!-- ============================================================ -->
+<p class="divider">Owner view only — below is the same page again on the <b>last screen</b> (First session, 4 of 4), where Next has become Confirm.</p>
+<!-- ============================================================ -->
+
+<!-- RENDER 2 · last screen: First session, 4 of 4 -->
+<header class="bar" style="position:static">
+  <a class="home" href="index.html"><span aria-hidden="true">←</span> <span class="name">All journeys ·</span> <b>Patient onboarding</b></a>
+  <ol class="steps" aria-label="Screens in this journey">
+    <li><button class="step" data-reached="true"><span class="pip" aria-hidden="true"></span><span class="lbl">Sign in</span></button></li>
+    <li><button class="step" data-reached="true"><span class="pip" aria-hidden="true"></span><span class="lbl">Invite</span></button></li>
+    <li><button class="step" data-reached="true"><span class="pip" aria-hidden="true"></span><span class="lbl">Consent</span></button></li>
+    <li><button class="step" data-reached="true" aria-current="step"><span class="pip" aria-hidden="true"></span><span class="lbl">First session</span></button></li>
+  </ol>
+  <p class="pos">4 of 4</p>
+  <nav class="nav"><button>Back</button><button class="primary" onclick="document.getElementById('sentence').focus()">Confirm<span class="long"> this journey</span></button></nav>
+</header>
+
+<div class="main">
+  <section class="stage">
+    <section class="confirm" aria-labelledby="confirm-h">
+      <h2 id="confirm-h">You've walked all four screens.</h2>
+      <p>Describe what you just did, in one sentence. That sentence is your sign-off on this journey.</p>
+      <textarea id="sentence" rows="2" placeholder="In one sentence…" aria-label="Describe what you just did, in one sentence">I signed in, invited a new patient by text, they agreed to the consent form, and their first session was on my list.</textarea>
+      <button class="primary">Confirm this journey</button>
+      <p class="hint">Nothing left to check. You can still go back and change your mind before confirming.</p>
+    </section>
+
+    <figure class="object" style="margin:0">
+      <figcaption class="caption">
+        <h1>First session <span class="of">· 4 of 4</span></h1>
+        <div class="states" role="tablist" aria-label="Other states of this screen">
+          <button role="tab" aria-selected="true">Normal</button><button role="tab" aria-selected="false">Empty</button>
+        </div>
+      </figcaption>
+      <div class="frame" role="img" aria-label="First session screen, gray wireframe">
+        <div class="wf">
+          <div class="ok"></div>
+          <div class="h c" style="width:55%"></div>
+          <div class="p c" style="width:80%"></div>
+          <div class="p c" style="width:60%"></div>
+          <div class="in" style="margin-top:12px"></div>
+          <div class="in"></div>
+          <div class="btn c"></div>
+        </div>
+      </div>
+    </figure>
+    <p class="step-under"><span>Consent came before this.</span><span>This is the last screen.</span></p>
+  </section>
+
+  <aside class="panel" aria-label="About this screen">
+    <div class="card">
+      <h2>Nothing we guessed on this screen</h2>
+      <p class="lead" style="margin:0">You answered both questions on Invite. Thank you.</p>
+    </div>
+    <div class="card reqs">
+      <h2>Your requests on this screen</h2>
+      <p class="lead" style="margin:0">None yet.</p>
+    </div>
+    <form class="card note" onsubmit="return false">
+      <label for="note2">Anything else about this screen?</label>
+      <textarea id="note2" rows="2"></textarea>
+      <div class="acts"><button type="submit">Send</button></div>
+    </form>
+  </aside>
+</div>
+
+<script>
+function reason(b){const t=b.closest('.req').querySelector('.req-why');t.hidden=false;t.focus()}
+document.querySelectorAll('.verdicts button:last-child').forEach(b=>b.addEventListener('click',()=>{const t=b.closest('.mark').querySelector('.why');t.hidden=false;t.focus()}))
+document.querySelectorAll('.states').forEach(g=>g.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;g.querySelectorAll('button').forEach(x=>x.setAttribute('aria-selected',x===b))}))
+</script>
+</body>
+</html>

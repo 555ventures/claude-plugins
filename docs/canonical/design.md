@@ -199,7 +199,7 @@ counted on the fixed `📒 ledger:` line. A ledger that does not parse never ope
 lib is the one writer of rows: edits rewrite only the touched row and leave every other byte
 identical; a literal pipe inside a cell is written `\|`.
 
-### Exclusions (2026-09-11, specs/20260910/05 + specs/20260911/05)
+### Exclusions (2026-09-12, specs/20260910/05 + specs/20260911/05 + specs/20260912/01)
 
 An `exclusion` row is what the product will NOT do, and it is **derived, never typed**
 (`lib/mocks-exclusions.js`'s `deriveExclusions`, materialized by `mocks-driver.js ledger derive`;
@@ -232,8 +232,22 @@ A client withdrawal carries `withdrawReason` (`not-needed | fixed-elsewhere | mi
 on the client route and by `validateNotes`. The client-facing control ships (specs/20260911/04):
 an open request carries `Never mind` on both client pages, because without it a client who changes
 their mind locks the journey — they cannot withdraw, `notes address` refuses to answer a request
-whose screen capture is unchanged, and the only exit is the seven-day `notes waive` timeout. Only
-un-agreeing an already-confirmed exclusion and provenance lines stay unshipped (q178).
+whose screen capture is unchanged, and the only exit is the seven-day `notes waive` timeout.
+
+The card explains itself (specs/20260912/01). It carries a heading counting the rows, and a lead
+posing the question and stating that an unanswered row is recorded as not contested at sign-off.
+One provenance sentence sits on each of the two rows whose claim this pipeline CONSTRUCTED from
+something the client said in other words — their answer to a question (`answer:`), or a request
+they took back (`withdrawn:`) — each followed by their original words quoted; a row transcribed
+straight from the brief's non-goals carries none, because its source text is the claim itself, and
+neither does a row whose note names an unresolvable id. The ledger's internal `not: ` prefix
+renders as `We won't build: `, never raw. Every non-`open` row carries a state line saying what the
+client answered, held by `data-verdict` ∈ `agree|needed|dropped`, in place of its buttons. The
+in-session render after an answer is the same markup as the reload render: the handler activates
+the row's own hidden state line from the section's `data-said-*` attributes instead of disabling
+the buttons. `design/client-mocks/walk.html` is the binding reference for the card's states. The
+reversibility half — `Change answer`, `Put it back`, the post-sign-off read-only render and the
+confirm receipt — is specs/20260912/02's.
 
 ## The mocks command (2026-09-02, specs/20260902/07)
 

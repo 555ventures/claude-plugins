@@ -1199,22 +1199,34 @@ function stepLabelsOf(candidates) {
 // D3(c)/(e): one column per candidate group (sticky chead with the Pick this control), one row
 // per distinct step label in candidate order, a full `.card` (or `.card empty`) per cell — plus,
 // once decided, the picked/rejected chead treatment and the why-line input.
-function renderCompareTable(stop, root, outDir, vp0) {
+function renderCompareTable(stop, root, outDir, vp0, settled) {
   const groups = candidateGroupsOf(stop.candidates)
-  const labels = stepLabelsOf(stop.candidates)
-  const decided = stop.status === 'decided' && stop.decision
+  // A settled stop (consumed by the driver) keeps its picked/rejected marks on the page — the
+  // client must always be able to see which one was chosen — but offers no control: the pick
+  // is recorded in status.json and only a `--reopen` brings the choice back.
+  const decided = (stop.status === 'decided' || settled) && stop.decision
   const pickedGroup = decided ? stop.decision.pick : null
   const heads = groups.map((g, i) => {
     const cls = decided ? (g === pickedGroup ? 'chead picked' : 'chead rejected') : 'chead'
     const badge = decided ? (g === pickedGroup ? 'picked' : 'rejected') : 'candidate'
     const btnText = decided ? (g === pickedGroup ? 'Picked' : 'Pick this instead') : 'Pick this'
+    const control = settled
+      ? (g === pickedGroup ? '<span class="settled">picked' + (stop.decision.by && stop.decision.by !== 'anonymous' ? ' by ' + esc(stop.decision.by) : '') + '</span>' : '')
+      : '<button data-decide="pick" data-group="' + esc(g) + '">' + esc(btnText) + '</button>'
     return '<div class="' + cls + '" data-group="' + esc(g) + '"><span class="num">' + (i + 1) + '</span>' +
-      esc(g) + ' <span class="badge ' + badge + '">' + badge + '</span>' +
-      '<button data-decide="pick" data-group="' + esc(g) + '">' + esc(btnText) + '</button></div>'
+      esc(g) + ' <span class="badge ' + badge + '">' + badge + '</span>' + control + '</div>'
   }).join('')
-  const rows = labels.map((label, i) => {
-    const cells = groups.map((g) => {
-      const cand = (stop.candidates || []).find((c) => c.group === g && c.label === label)
+  // Rows are keyed by step POSITION within each group, never by label: a pick whose groups
+  // each carry one differently-named screen (the SHAPES stop) would otherwise render as a
+  // diagonal, one candidate per row. The row label is the shared label when every group
+  // agrees, else just the step number.
+  const perGroup = groups.map((g) => (stop.candidates || []).filter((c) => c.group === g))
+  const nSteps = Math.max(0, ...perGroup.map((l) => l.length))
+  const rows = Array.from({ length: nSteps }, (_, i) => {
+    const rowLabels = perGroup.map((l) => l[i] && l[i].label).filter(Boolean)
+    const label = rowLabels.every((l) => l === rowLabels[0]) ? rowLabels[0] : ''
+    const cells = groups.map((g, gi) => {
+      const cand = perGroup[gi][i]
       if (!cand) return '<div class="card empty"></div>'
       const filePath = path.join(root, 'design', cand.path)
       let html = ''
@@ -1223,18 +1235,18 @@ function renderCompareTable(stop, root, outDir, vp0) {
       const rel = path.relative(outDir, filePath).split(path.sep).join('/')
       // D4's lightbox wiring resolves "same step, other candidate" and "which group is this
       // card" purely from these two attributes — never from a page-wide frame index.
-      return '<div class="card" data-group="' + esc(g) + '" data-step="' + (i + 1) + '"><h3>' + esc(label) +
+      return '<div class="card" data-group="' + esc(g) + '" data-step="' + (i + 1) + '"><h3>' + esc(cand.label) +
         '<span class="vp">' + vp.width + '×' + vp.height + '</span>' +
         '<a class="open" title="open ↗" href="' + esc(rel) + '" target="_blank">open ↗</a></h3>' +
         frameTag(rel, vp.width, vp.height) + '</div>'
     }).join('')
-    return '<div class="step">step ' + (i + 1) + ' · ' + esc(label) + '</div>' + cells
+    return '<div class="step">step ' + (i + 1) + (label ? ' · ' + esc(label) : '') + '</div>' + cells
   }).join('')
-  const why = decided
+  const why = decided && !settled
     ? '<input name="why-' + stop.id + '" placeholder="why this one — optional">' +
       '<button data-decide="why">Save</button>'
-    : ''
-  return '<div class="cmp" id="stop-' + stop.id + '" data-kind="pick" data-id="' + stop.id +
+    : (settled && stop.decision.note ? '<p class="meta">' + esc(stop.decision.note) + '</p>' : '')
+  return '<div class="cmp' + (settled ? ' settled' : '') + '" id="stop-' + stop.id + '" data-kind="pick" data-id="' + stop.id +
     '" style="--cols:' + groups.length + '">' + heads + rows + why + '</div>'
 }
 
@@ -1451,7 +1463,14 @@ function buildAtlas(root, out) {
     if (shapeFiles.length) {
       // D3(b)/(c): an open or decided shape-picked stop replaces the plain candidate cards with
       // the compare table — the pick lives where the look already happened.
-      const shapeStopsHtml = stopsByHome.shapes.map((s) => renderStop(s, root, outDir, vp0)).join('\n')
+      // Once the driver has consumed the pick, the newest consumed shape-picked stop still
+      // renders as the compare table with its picked/rejected marks, read-only — the chosen
+      // shape stays visible on the page instead of collapsing back to anonymous candidates.
+      const settledShape = stopsByHome.shapes.length ? null
+        : picksStops.filter((s) => s.key === 'shape-picked' && s.status === 'consumed' && s.decision && s.decision.pick).pop()
+      const shapeStopsHtml = stopsByHome.shapes.length
+        ? stopsByHome.shapes.map((s) => renderStop(s, root, outDir, vp0)).join('\n')
+        : (settledShape ? renderCompareTable(settledShape, root, outDir, vp0, true) : '')
       const shapeCards = shapeFiles.map((f, i) => {
         const kebab = path.basename(f, '.html')
         const filePath = path.join(shapesDir, f)

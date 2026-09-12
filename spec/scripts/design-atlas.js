@@ -180,6 +180,13 @@ const { readConfig } = require('./lib/host-config')
 const shellLib = require('./lib/shell-region')
 const notesLib = require('./lib/mocks-notes')
 const { parseLedger, setStatus, appendAssumption } = require('./lib/mocks-ledger')
+// D7(c): the byte-identical design/mocks/ledger.md read-and-catch shared by the /__notes/list
+// and /review/<journey>.html route handlers — the only two sites that need every ledger row for
+// a request, read fresh (never cached). The three other parseLedger( call sites read a different
+// text source or want a different shape and stay as they are.
+const readLedgerRows = (rootAbs) => {
+  try { return parseLedger(fs.readFileSync(path.join(rootAbs, 'design/mocks/ledger.md'), 'utf8')).assumptions } catch { return [] }
+}
 // specs/20260911/05-approval-is-bookkeeping.md D2: the walk-page GET route materializes exclusion
 // rows itself, on the client's own request — the same lib mocks-driver.js's `ledger derive`/
 // `client open`/`approved` call, so the server and the driver never carry two copies.
@@ -201,7 +208,6 @@ const walkPageLib = require('./lib/walk-page')
 const walkLib = require('./lib/mocks-walk')
 
 const die = (msg, code = 2) => { process.stderr.write('[design-atlas] ' + msg + '\n'); process.exit(code) }
-const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const flagArg = (argv, name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : null }
 
 function htmlFilesUnder(p, out = []) {
@@ -842,7 +848,6 @@ function page(title, bodyHtml, extraHead = '') {
     '.card.wide{grid-column:1/-1}\n' +
     '.card h3{margin:0 0 .5rem;font-size:15px;font-weight:600;display:flex;align-items:center;flex-wrap:wrap;gap:.15em}\n' +
     '.card h3 .open{margin-left:auto}\n' +
-    '.statelabel{font-size:12px;text-transform:none;letter-spacing:0;color:var(--v-muted);margin:.75rem 0 .25rem}\n' +
     // The states a screen declares, as links that open the mock already in that state — the
     // chip shape the filter bar uses, so a state reads as something to click, not a caption.
 
@@ -888,8 +893,6 @@ function page(title, bodyHtml, extraHead = '') {
     '.gapchip{display:inline-flex;align-items:center;gap:.45em;border:0;background:var(--v-muted-bg);color:var(--v-muted);' +
     'border-radius:999px;padding:.2rem .75rem;font-size:14px}\n' +
     '.gapchip::before{content:"";width:6px;height:6px;border-radius:99px;background:var(--v-danger);flex:none}\n' +
-    '.gapcard{border:1px dashed var(--v-border);border-radius:calc(var(--v-radius) + 4px);color:var(--v-muted);display:flex;' +
-    'align-items:center;justify-content:center;min-height:6rem;margin-top:.35rem;font-size:14px}\n' +
     '.meta{color:var(--v-muted);font-size:14px;margin-top:.4rem}\n' +
     // The bar rides on the page's own white so the chips are the only fills in it.
     '.bar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;' +
@@ -1254,12 +1257,6 @@ function candidateGroupsOf(candidates) {
   return groups
 }
 
-function stepLabelsOf(candidates) {
-  const labels = []
-  for (const c of candidates || []) if (!labels.includes(c.label)) labels.push(c.label)
-  return labels
-}
-
 // D3(c)/(e): one column per candidate group (sticky chead with the Pick this control), one row
 // per distinct step label in candidate order, a full `.card` (or `.card empty`) per cell — plus,
 // once decided, the picked/rejected chead treatment and the why-line input.
@@ -1318,7 +1315,7 @@ function renderCompareTable(stop, root, outDir, vp0, settled) {
 // one renderer and one copy of the picks script shared with the journey review page
 // (specs/20260906/04-journey-review-page.md A1/D5), so a decision recorded from either page is
 // byte-identical on disk. `?clean` strips the script wholesale via its comment markers.
-const { renderApproveStop, PICKS_SCRIPT, stripPicksScript } = require('./lib/stop-block')
+const { renderApproveStop, PICKS_SCRIPT, stripPicksScript, esc } = require('./lib/stop-block')
 
 function renderStop(stop, root, outDir, vp0) {
   return stop.kind === 'pick' ? renderCompareTable(stop, root, outDir, vp0) : renderApproveStop(stop)
@@ -1858,9 +1855,7 @@ const MIME = {
 function injectNotesScript(html, scope, prefix) {
   const tag = '<meta name="notes-scope" content="' + scope + '">\n' +
     '<script src="' + prefix + '/__notes/notes.js"></script>\n'
-  const idx = html.lastIndexOf('</body>')
-  if (idx === -1) return html + '\n' + tag
-  return html.slice(0, idx) + tag + html.slice(idx)
+  return insertBeforeBodyEnd(html, tag)
 }
 
 // specs/20260906/04-journey-review-page.md D2: the exact literal mocks-driver.js's `look --state`
@@ -2135,17 +2130,9 @@ function createRequestHandler(root, opts = {}) {
       if (clientRoute) out = out.filter((n) => n.kind === 'question' || notesLib.originOf(n) === 'client')
       // specs/20260906/03 D3: a question note is joined against its ledger row on every request
       // (never cached) — claim/rejected/tag/status come from the row, ledgerMissing:true when the
-      // row is gone. Parsed at most once per request, lazily (most lists carry no question).
-      let ledgerRows = null
-      const joined = out.map((n) => {
-        if (n.kind !== 'question') return n
-        if (ledgerRows === null) {
-          try { ledgerRows = parseLedger(fs.readFileSync(path.join(rootAbs, 'design/mocks/ledger.md'), 'utf8')).assumptions } catch { ledgerRows = [] }
-        }
-        const row = ledgerRows.find((a) => a.id === n.ledgerId)
-        if (!row) return Object.assign({}, n, { ledgerMissing: true })
-        return Object.assign({}, n, { claim: row.claim, rejected: row.rejected, tag: row.tag, status: row.status })
-      })
+      // row is gone. Read at most once per request, lazily (most lists carry no question).
+      const ledgerRows = out.some((n) => n.kind === 'question') ? readLedgerRows(rootAbs) : null
+      const joined = reviewPageLib.joinQuestions(out, ledgerRows)
       jsonRes(res, 200, joined)
       return
     }
@@ -2679,8 +2666,7 @@ function createRequestHandler(root, opts = {}) {
       const journey = reviewMatch[1]
       let notes = []
       try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
-      let ledgerRows = []
-      try { ledgerRows = parseLedger(fs.readFileSync(path.join(rootAbs, 'design/mocks/ledger.md'), 'utf8')).assumptions } catch { ledgerRows = [] }
+      const ledgerRows = readLedgerRows(rootAbs)
       let stops = []
       try { stops = picksLib.readPicks(rootAbs) } catch { stops = [] }
       serveBuiltHtml(res, () => reviewPageLib.buildReviewPage({

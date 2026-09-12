@@ -52,9 +52,9 @@ measured, taste advisory; § Design Authoring Contracts' grounded-vs-taste rules
 **Cross-spec consistency**, strongest first: token/theme files in code (a code-side
 `off-token-color` rule wired by `/spec:enforce`; near-matches reuse, never fork the scale); the
 design doctrine doc (taste tokens can't encode, binding like a locked Decision); the living showcase catalog (composes every landed spec's surfaces, drift visible with zero tooling).
-**Plugin chrome is a designed surface.** Every page the plugin serves for a look — atlas index, journey review page,
-galleries, the notes layer — is authored under the `frontend-design` skill in the shadcn idiom on `viewer.css`'s
-register (the Neutral roles byte-equal to `wire-tokens.css`), never on product tokens; the wireframe inside a frame stays gray.
+**Plugin chrome is a designed surface.** Every page the plugin serves for a look — atlas index, journey review page, galleries, the notes layer — is authored under the `frontend-design` skill in the shadcn idiom on `viewer.css`'s
+register (the Neutral roles byte-equal to `wire-tokens.css`), never on product tokens — the atlas index binds to `design/chrome-mocks/atlas.html` and the journey review page to `design/chrome-mocks/review.html`; a spec that edits
+either cites it as `design_source`. The wireframe inside a frame stays gray.
 ## Design Authoring Contracts
 Consumed by the design stage and genesis's design ratification (genesis.md § Genesis: Brief State),
 authored against § Design Canon.

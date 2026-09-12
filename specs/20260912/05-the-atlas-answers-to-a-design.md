@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: hardened
+status: implementing
 tier: standard
 area: design-mocks
 design: false
@@ -11,6 +11,7 @@ depended_on_by: [specs/20260912/06-the-review-page-answers-to-a-design.md]
 brief: n/a
 build_base: main
 open_markers: 0
+diff_base: f0a9d25ad70dd113d1a5f9c6fac4ad2009df068e
 ---
 
 # The atlas answers to a design, and a screen appears on it once
@@ -107,7 +108,7 @@ fragment is `#board-<label>` against the review page's own `id="board-<label>"`.
   persona line and exactly one `<iframe>` for `a` and one for `b`; `a`'s card meta line SHALL
   CONTINUE TO contain `2 states` and `b`'s SHALL CONTINUE TO contain no `states` clause; a root
   with roadmap surfaces and no seed SHALL CONTINUE TO build byte-identically to today
-  → rewrites tests/design-atlas.test.js :: build: a mock with no brief AND no claim is an orphan
+  → reuses tests/design-atlas.test.js :: build: a mock with no brief AND no claim is an orphan
 - **AC-20260912-05-2**: WHEN that same build runs THE SYSTEM SHALL CONTINUE TO wrap `a`'s frame in
   `<a class="shotlink" href="/review/j1.html#board-a"` and `b`'s in the same shape for `b`, and
   SHALL CONTINUE TO wrap a `design/shapes/*.html` card's frame in no `shotlink` at all; the page's
@@ -129,7 +130,17 @@ fragment is `#board-<label>` against the review page's own `id="board-<label>"`.
 - **AC-20260912-05-5**: WHEN `spec/scripts/design-atlas.js` is read THE SYSTEM SHALL contain zero
   occurrences of `stepLabelsOf`, `gapcard` and `statelabel`, exactly one occurrence of
   `insertBeforeBodyEnd(` outside its own definition being reachable from `injectNotesScript`, and
-  no second copy of the `parseLedger(` read-and-catch — `grep -c 'parseLedger(' ` SHALL return `1`
+  no second copy of the `design/mocks/ledger.md` read-and-catch — the literal
+  `parseLedger(fs.readFileSync(path.join(rootAbs, 'design/mocks/ledger.md'), 'utf8')).assumptions`
+  SHALL occur exactly once, inside a single `readLedgerRows(` helper both former route sites call
+    - superseded at build: the original clause read "no second copy of the `parseLedger(`
+      read-and-catch — `grep -c 'parseLedger(' ` SHALL return `1`". That total is impossible and
+      contradicts the Decision it illustrates: D7(c) collapses only the two byte-identical route
+      sites, leaving three semantically distinct `parseLedger(` uses untouched (a
+      `nextClientLedgerId` wrap, a text-arg read-and-catch, and an `.assumptions.find`), so the
+      post-fix total is four. Per pipeline rules § Gotchas, an example that contradicts its
+      Decision is a defect in the example — the Decision governs and the clause is restated as
+      D7(c)'s actual promise.
   → writes tests/design-atlas.test.js
 - **AC-20260912-05-6**: WHEN `spec/doctrine/design.md` is read THE SYSTEM SHALL contain the literals
   `design/chrome-mocks/atlas.html` and `design/chrome-mocks/review.html` inside § Design Canon's

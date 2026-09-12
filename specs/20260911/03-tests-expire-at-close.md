@@ -1,6 +1,6 @@
 ---
 date: 2026-09-11
-status: implementing
+status: done
 build_base: main
 tier: critical
 area: review-close
@@ -199,6 +199,37 @@ new script's own contract (AC-3/4), not a neighbour behaviour this spec could br
 Watch during build: the driver test must fixture a done-flip in a `tmpdir` host with a real
 `.claude/spec-runs.jsonl`; the `[a-z]?` suffix in the AC-ID grammar (`AC-…-02a-3`) is a real
 host shape and must ride `AC_ID_RE_GLOBAL`, never a local regex.
+
+What the build learned (one-offs; the recurring classes folded into the host's Gotchas instead):
+
+- **A2 was false, in the direction it predicted.** `--all-done` at HEAD found 47 retirable cases
+  across 8 files rather than none, because specs 20260910/05 and 20260911/06 both closed AFTER
+  the 2026-09-11 hand sweep and BEFORE this mechanism existed — they are precisely the backlog
+  the mechanism would have retired at their own closes. Applied in the build per A2's own remedy;
+  six files emptied and removed. A2's value was that it priced its own falsification and named
+  the remedy at lock, so the miss cost one apply rather than a scope fight.
+- **AC-9 is a standing tripwire, not a one-time pin.** Any future `status: done` flip made by
+  hand rather than through `doCloseWork()` leaves retirable tests behind and reddens it. A red
+  AC-9 means backlog to sweep, never a rule defect.
+- **The invariants clause makes most of this repo immortal, by design.** 758 of 905 tagged cases
+  are kept by D3(b) — their file names a script in the derived invariants set — so the mechanism
+  bites design/mocks and doctrine-prose tests almost exclusively here. The small retire count is
+  the fail-safe working, not the rule being toothless. Hosts, whose tests mostly do not exercise
+  pipeline scripts, will see a very different ratio; that is the point of D7's question gate.
+- **D3(c)'s permanence floor has a one-day edge, deliberately not moved.** AC-20260910-05-10
+  carries a real `SHALL CONTINUE TO` bullet but its spec is dated 20260910, one day under the
+  floor, so it expired — and it was the last surviving test of `--mark roadmap-written`'s
+  journey-placement checks (`genesis-driver.js` is not an invariant script). The floor's own
+  rationale ("pre-floor pins expired with the hand sweep") is false for this one, since spec 05
+  closed after the sweep. Moving a locked floor mid-build would have been a Decision change
+  without the user; the path back is a future genesis spec re-pinning the criterion.
+- **Ownership of an AC-ID is many-to-many, and the review found out the hard way.** The build
+  shipped first-writer-wins by directory walk order, so a number collision let one spec's close
+  delete a different, still-`implementing` spec's tests — and that spec could not see its own
+  test at all. D3's fail-safe intent admits no such hole; a cited AC-ID now counts as done only
+  when EVERY spec defining it is done. `spec-number-check` refuses live collisions in this
+  repo's gate, but in hosts it is only a doctor check, and `--all-done --apply` runs there at
+  scale — so the gate was never the thing making this safe.
 
 ## Canonical Delta
 

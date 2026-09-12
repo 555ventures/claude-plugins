@@ -275,6 +275,103 @@ test('${neighbourTitle}', () => {
     'AC-6: the file left behind after removing the retired test\'s span must still be syntactically valid JS')
 })
 
+// Collision fixture: two specs define the identical AC-ID (spec-number-check.js's job to refuse
+// at the gate, not this script's — D3's fail-safe rule must still hold in its presence). One
+// citing test keyed to the collided ID must be kept `open` whenever ANY of its collided ID's
+// defining specs is not done, in both --all-done and --spec mode, and each spec must still see
+// the test as tagged even though a sibling defines the same ID (the `tagged:0` failure mode).
+function makeCollisionHost(prefix, { bothDone } = {}) {
+  const root = tmpdir(prefix)
+  const doneSpecRel = 'specs/20260901/01-a.md'
+  const otherStatus = bothDone ? 'done' : 'implementing'
+  writeSpec(root, doneSpecRel, `---
+status: done
+tier: standard
+diff_base: 0000000000000000000000000000000000000000
+---
+# Collision Spec A
+
+## Acceptance Criteria
+
+- **AC-20260901-01-1**: THE SYSTEM defines this AC-ID from spec A.
+`)
+  const otherSpecRel = 'specs/20260901/01-b.md'
+  writeSpec(root, otherSpecRel, `---
+status: ${otherStatus}
+tier: standard
+diff_base: 0000000000000000000000000000000000000000
+---
+# Collision Spec B
+
+## Acceptance Criteria
+
+- **AC-20260901-01-1**: THE SYSTEM defines the identical AC-ID from spec B.
+`)
+  writeTest(root, 'tests/collision.test.js', `'use strict'
+const { test } = require('node:test')
+const assert = require('node:assert')
+test('AC-20260901-01-1: cited by a test while two specs both define this AC-ID', () => { assert.ok(true) })
+`)
+  return { root, doneSpecRel, otherSpecRel }
+}
+
+test('AC-20260911-03-3/AC-20260911-03-5: WHEN two specs define the identical AC-ID and one is not done THE SYSTEM keeps the citing test as kept.open (never retired) under --all-done', () => {
+  const { root } = makeCollisionHost('expiry-collision-open')
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, 'a dry run over the collision fixture must succeed: ' + r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.strictEqual(out.retired.length, 0,
+    'D3: a collided AC-ID with one non-done defining spec must never retire the citing test — closing one ' +
+    'spec must not be able to delete a different, still-unfinished spec\'s tests: ' + JSON.stringify(out))
+  assert.strictEqual(out.kept.open, 1,
+    'D3: the citing test must be classified kept.open, not silently dropped or misclassified: ' + JSON.stringify(out.kept))
+})
+
+test('AC-20260911-03-3/AC-20260911-03-5: WHEN --spec names the done spec of a collided AC-ID whose sibling is not done THE SYSTEM keeps the citing test as kept.open, never retired', () => {
+  const { root, doneSpecRel } = makeCollisionHost('expiry-collision-spec-done')
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--spec', doneSpecRel, '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, 'a dry run scoped to the done half of the collision must succeed: ' + r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.strictEqual(out.tagged, 1,
+    'the done spec must still see the citing test as tagged even though a sibling spec defines the same ' +
+    'AC-ID: ' + JSON.stringify(out))
+  assert.strictEqual(out.retired.length, 0,
+    'D3: closing spec A must not retire a test whose collided AC-ID sibling (spec B) is still implementing: ' +
+    JSON.stringify(out))
+  assert.strictEqual(out.kept.open, 1, 'the citing test must be classified kept.open: ' + JSON.stringify(out.kept))
+})
+
+test('AC-20260911-03-3/AC-20260911-03-5: WHEN --spec names the NOT-done spec of a collided AC-ID THE SYSTEM still reports the citing test as tagged (never tagged:0)', () => {
+  const { root, otherSpecRel } = makeCollisionHost('expiry-collision-spec-implementing')
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--spec', otherSpecRel, '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, 'a dry run scoped to the implementing half of the collision must succeed: ' + r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.strictEqual(out.tagged, 1,
+    'a first-writer-wins ownership map would report tagged:0 here — the implementing spec must still be able ' +
+    'to see a test citing its own AC-ID just because a sibling spec defines the same ID: ' + JSON.stringify(out))
+  // --spec mode counts the NAMED spec itself as done regardless of its literal on-disk status
+  // (D3/D5: this runs before the status flip on close) — here that spec (B) is the one being
+  // closed, and its collided sibling (spec A) is independently already done, so both owners of
+  // the collided AC-ID are done and the citing test correctly retires. This is not the D3
+  // violation under fix: THAT is closing one spec deleting a DIFFERENT, still-open spec's tests,
+  // which the two tests above cover (--all-done and --spec <the done one> both keep the test
+  // open while spec B is still implementing).
+  assert.strictEqual(out.retired.length, 1,
+    'closing spec B (the --spec target) counts as done, and spec A already is done, so every owner of the ' +
+    'collided AC-ID is done and the citing test must retire: ' + JSON.stringify(out))
+})
+
+test('AC-20260911-03-3/AC-20260911-03-5: control — WHEN two specs define the identical AC-ID and BOTH are done THE SYSTEM retires the citing test, so the collision fix does not over-keep', () => {
+  const { root } = makeCollisionHost('expiry-collision-both-done', { bothDone: true })
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, 'a dry run over the both-done collision fixture must succeed: ' + r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.strictEqual(out.retired.length, 1,
+    'a collided AC-ID whose every defining spec is done must still retire the citing test — the fail-safe ' +
+    'fix must not keep tests alive forever once every owner is actually done: ' + JSON.stringify(out.retired))
+  assert.strictEqual(out.kept.open, 0, 'no clause should keep this test once both collided owners are done: ' + JSON.stringify(out.kept))
+})
+
 test('AC-20260911-03-9: WHEN expire-tests.js --root . --all-done --json runs over this repository at HEAD THE SYSTEM reports retired:[] and applied:false', () => {
   const r = runNode('scripts/expire-tests.js', ['--root', '.', '--all-done', '--json'], { cwd: ROOT, encoding: 'utf8' })
   assert.strictEqual(r.status, 0,

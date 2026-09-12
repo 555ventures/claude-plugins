@@ -157,8 +157,11 @@ const specsDir = path.join(root, 'specs')
 const specFiles = []
 if (fs.existsSync(specsDir)) walkSpecs(specsDir, specFiles)
 
-// acId -> { specRel, status, raw, dateStr }. First writer wins on a duplicate ID (should not
-// occur in a well-formed host; not itself this script's concern to police).
+// acId -> [{ specRel, status, raw, dateStr }, ...]. An AC-ID is many-to-many: spec-number-check.js
+// polices collisions at the gate (this script is not the place for that — see header), so an ID
+// defined by more than one spec keeps every one of those owner records rather than the first
+// walked. D3's fail-safe rule then reads as "done only when EVERY owner is done" (allCitedDone
+// below) instead of picking a single winner by directory walk order.
 const acOwners = new Map()
 for (const f of specFiles) {
   const rel = relPosix(f)
@@ -175,16 +178,15 @@ for (const f of specFiles) {
   if (acSection === null) continue
   for (const bullet of parseAcBullets(acSection)) {
     if (bullet.malformed) continue
-    if (!acOwners.has(bullet.id)) {
-      acOwners.set(bullet.id, { specRel: rel, status, raw: bullet.raw, dateStr })
-    }
+    if (!acOwners.has(bullet.id)) acOwners.set(bullet.id, [])
+    acOwners.get(bullet.id).push({ specRel: rel, status, raw: bullet.raw, dateStr })
   }
 }
 
 const closingSpecAcIds = new Set()
 if (closingSpecRel !== null) {
-  for (const [id, owner] of acOwners) {
-    if (owner.specRel === closingSpecRel) closingSpecAcIds.add(id)
+  for (const [id, owners] of acOwners) {
+    if (owners.some((o) => o.specRel === closingSpecRel)) closingSpecAcIds.add(id)
   }
 }
 
@@ -231,13 +233,17 @@ function citedAcIds(call) {
 
 // allDone(ids): every cited AC-ID resolves to a done spec — the closing spec itself (--spec mode)
 // counts as done regardless of its literal on-disk status (D3, D5: this runs before the status
-// flip). An unresolved AC-ID is never "done".
+// flip). An unresolved AC-ID is never "done". A collided AC-ID (defined by more than one spec) is
+// done only when EVERY defining spec is done — any single open owner keeps the test (D3's
+// fail-safe rule extended to the many-to-many case; see the acOwners comment above).
 function allCitedDone(ids) {
   return ids.every((id) => {
-    const owner = acOwners.get(id)
-    if (!owner) return false
-    if (closingSpecRel !== null && owner.specRel === closingSpecRel) return true
-    return owner.status === 'done'
+    const owners = acOwners.get(id)
+    if (!owners || owners.length === 0) return false
+    return owners.every((owner) => {
+      if (closingSpecRel !== null && owner.specRel === closingSpecRel) return true
+      return owner.status === 'done'
+    })
   })
 }
 
@@ -250,9 +256,11 @@ function classify(call, ids, fileText) {
     if (fileText.includes(base)) return 'invariant'
   }
   for (const id of ids) {
-    const owner = acOwners.get(id)
-    if (!owner || !owner.dateStr || owner.dateStr < EXPIRY_APPLIES_FROM) continue
-    if (/SHALL CONTINUE TO/.test(normalizeForPinCheck(owner.raw))) return 'pin'
+    const owners = acOwners.get(id) || []
+    for (const owner of owners) {
+      if (!owner.dateStr || owner.dateStr < EXPIRY_APPLIES_FROM) continue
+      if (/SHALL CONTINUE TO/.test(normalizeForPinCheck(owner.raw))) return 'pin'
+    }
   }
   return 'retired'
 }

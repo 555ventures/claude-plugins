@@ -173,6 +173,12 @@ upstream bug list. -->
   way — a sibling landing first claims that number, and the build ships the next free one. Take
   the next number, then amend the spec's own Decision, File Plan row and every `Amended by:`
   backlink to it in the same build, or scope-reconcile reports the created path out-of-plan.
+  Third surface, same class: a Decision naming the literal ORDINAL of a numbered list item it
+  will ADD — "`/spec:doctor` check 19" — races identically, because a sibling spec adding its own
+  check claims that ordinal first. Take the next free ordinal and amend every mention of the
+  number across the spec (Decisions, File Plan Summary, Behavior, ACs, Canonical Delta) in the
+  same build; grep case-insensitively, since the File Plan spells it `Check NN` and the prose
+  spells it `check NN`.
   (specs/20260810/02-terminal-observable-acs.md D11; specs/20260901/08-corpus-derivation-and-kill-match.md D10;
   specs/20260907/08-walk-critic.md D11; specs/20260909/08-next-carries-the-lanes.md D6)
 - `[host]` A locked Decision that retires or narrows a literal glyph, phrase, or claim from
@@ -219,7 +225,17 @@ upstream bug list. -->
   trip it — one new empty-fix refusal reddened 13 tests across five files, none in the File Plan,
   and no name, value, or phrase changed anywhere. The only grep that finds them is for the CALL
   the refusal now guards: before landing a refusal, grep every call site of the guarded command
-  across `tests/` and enter each stale setup as a fix row.
+  across `tests/` and enter each stale setup as a fix row. Recurred with a new SIDE EFFECT rather
+  than a new refusal, which widens the rule: a Decision that makes an existing step WRITE
+  something (close-time test expiry now DELETES files before the close commit) strands every
+  shared setup that rehearses that step, because an EXISTING refusal downstream — here the
+  dirty-tree check at `--mark closed` — now fires on the new artifact first, and every assertion
+  reads as a wrong-refusal-message failure rather than as anything to do with the new code. 23
+  tests across six files, none in the File Plan. Grep for the call the DOWNSTREAM refusal guards,
+  not only the one the Decision changes; and fix such setups by making them do what a real
+  session does at that step (stage the deletion into the close commit), never by neutering the
+  fixture so the new side effect cannot reach it — an untagged fixture would have left the
+  fixture's own AC uncovered and reddened `ac-matrix` instead.
   Eighth trigger, the one where the grep itself was accurate and still missed: a lock-time
   assumption that grepped every caller matching a pattern and named the count (**seven** files
   calling `journey-drawn`/`journey-approved` over an inline mock, minus fixture users) is a
@@ -334,7 +350,20 @@ upstream bug list. -->
   the output programmatically; the first `--json` consumer surfaces it as unparseable output,
   not as a crash. Any script that prints a payload and exits routes through a synchronous
   writer (`fs.writeSync` on fd 1, looped for partial writes, retried on EAGAIN).
-  (specs/20260823/08-derived-session-queue.md repair round)
+  Second trap in the same family — shipping a new executable: **no script this repo ships may be
+  named `test-*`**. `node --test`'s default discovery matches `**/test-*.js` anywhere under the
+  root, so the post-gate's path-less run DISCOVERS AND EXECUTES the tool as a test file, and its
+  own argv handling exiting non-zero surfaces as a spurious test failure. The scoped gate cannot
+  see it — that run passes explicit paths — so only the whole-suite post-gate catches it, one
+  repair round after the name has already spread through `spec-paths`, `entrypoints.json`, every
+  call site and every test. This has now bitten twice (`count-tests.js`, which carries the rule
+  in its own header; and a spec whose LOCKED Decision named `test-expiry.js`, renamed mid-build
+  to `expire-tests.js`). Check a new executable's name against node's full default pattern set —
+  `**/*.test.js`, `**/*-test.js`, `**/*_test.js`, `**/test-*.js`, `**/test.js`, `**/test/**` —
+  at PLAN time, not at build time: a Decision that locks an illegal filename costs a Decisions
+  amendment plus a sweep of every reference to it.
+  (specs/20260823/08-derived-session-queue.md repair round;
+  specs/20260911/03-tests-expire-at-close.md D4/D8)
 - `[plugin]` A client-facing page that changes what it shows **before the server has accepted
   the change** turns every refusal into a silent success: the refused item disappears, its open
   count drops, and a gate counting open items unlocks. Act on the server's answer, never on the

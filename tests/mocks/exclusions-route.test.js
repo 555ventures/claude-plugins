@@ -131,6 +131,33 @@ test('AC-20260911-05-4: POST /client/__walk/exclusion {verdict:"needed"} sets th
 })
 
 
+// ---------------------------------------------------------------------------
+// specs/20260912/01-the-card-explains-itself.md D4/D5 — the open row's own state stub, its
+// pressed-verdict activation, and the confirm-not-blocked pin. AC-20260912-01-7, -8, -9.
+// buildWalkPageForVm/runWalkBrowserRouted/flush are defined further below in this same file;
+// hoisted function declarations make them usable here.
+// ---------------------------------------------------------------------------
+
+function onboardingExclSeed() {
+  return { product: 'Hearwell', journeys: [{ name: JOURNEY, title: 'Onboarding', screens: LABELS.map((label) => ({ label, states: [] })) }] }
+}
+
+test('AC-20260912-01-7: buildWalkPage CONTINUES TO render an open exclusion row\'s two verdict buttons and leaves [data-wk="confirm"] without disabled whatever data-exclusions-open holds', () => {
+  const seed = onboardingExclSeed()
+  const openRow = { id: 'E1', step: 'CLIENT', kind: 'exclusion', claim: 'a claim', tag: 'said-by-user', status: 'open', rejected: null, dependents: null, note: 'non-goal: a claim' }
+  const html = buildWalkPageForVm(seed, openRow)
+  const article = /<article[^>]*data-id="E1"[\s\S]*?<\/article>/.exec(html)
+  assert.ok(article, 'AC-7 setup: the open exclusion row must render as an article: got\n' + html)
+  assert.match(article[0], /data-wk="agree"/, 'AC-7: an open row must CONTINUE TO render its "Correct" button: got\n' + article[0])
+  assert.match(article[0], /data-wk="needed"/, 'AC-7: an open row must CONTINUE TO render its "No — we need this" button: got\n' + article[0])
+  assert.match(html, /data-exclusions-open="1"/, 'AC-7 setup: the section must report one open exclusion row: got\n' + html)
+  const confirmMatch = /<[a-zA-Z][\w-]*[^>]*data-wk="confirm"[^>]*>/.exec(html)
+  assert.ok(confirmMatch, 'AC-7 setup: the last screen must render [data-wk="confirm"]: got\n' + html)
+  assert.doesNotMatch(confirmMatch[0], /disabled/,
+    'AC-7: [data-wk="confirm"] must CONTINUE TO carry no disabled attribute while an exclusion is open — an open exclusion asks, it does not block: got ' + confirmMatch[0])
+})
+
+
 function buildWalkPageForVm(seed, exclusionRow) {
   // D21 moved [data-wk="confirm"] onto the journey's LAST screen only; this vm harness's own
   // subject (exclusion-agree unlocking confirm) needs a screen where confirm exists at all, so
@@ -164,6 +191,15 @@ function parseFlatDom(html) {
     while ((m = attrRe.exec(rest))) {
       if (!node.hasAttribute(m[1])) return false
       if (m[2] !== undefined && node.getAttribute(m[1]) !== m[2]) return false
+    }
+    // AC-20260912-01-9 repair (same gap tests/mocks/walk-page.test.js's own D16 note fixed): this
+    // shim's class matching was never implemented — `.class` tokens matched every node — and
+    // AC-9's wk-excl-state paragraph carries no attribute but its class, so a real check is added
+    // here rather than left silently vacuous.
+    const classRe = /\.([-\w]+)/g
+    while ((m = classRe.exec(rest))) {
+      const classes = (node.getAttribute('class') || '').split(/\s+/).filter(Boolean)
+      if (!classes.includes(m[1])) return false
     }
     return true
   }

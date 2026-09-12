@@ -1,6 +1,7 @@
 ---
 date: 2026-09-12
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +11,7 @@ depends_on: [specs/20260911/05-approval-is-bookkeeping.md]
 depended_on_by: []
 brief: n/a
 open_markers: 0
+diff_base: 2328310df9f925ae538ac6e68dce360d8fae72a9
 ---
 
 # The exclusions card explains itself and remembers: a heading, the question, why each claim is on the list, and what the client answered
@@ -166,6 +168,14 @@ it, and putting them there is a separate spec against that file, not this one.
 `data-verdict` was already set by specs/20260911/05's handler and styled by nothing; D4/D5 make it
 the real state carrier and make the in-session render equal to the reload render, which is the
 defect the reviewer's second soft finding named.
+
+One deviation at build (folded from the sidecar at close): the File Plan lists
+`tests/consistency/design-doctrine.test.js` as MODIFY, but the file did not exist at the
+pre-image — the 2026-09-11 test-expiry sweep removed it along with every test its now-`done`
+owning specs had tagged. AC-20260912-01-11 says "writes", not "rewrites", so this was a stale
+action label rather than a scope fork, and the test was authored as if the file were new. The same
+mechanism produced the same stale label under specs/20260911/03; a third occurrence is what would
+earn a guard.
 
 D9 is deliberate: this spec is the comprehension half. The reversibility half — `Change answer`,
 `Put it back`, the sign-off cut-off, and the confirm receipt — is specs/20260912/02, which is why

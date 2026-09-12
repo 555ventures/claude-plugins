@@ -515,3 +515,29 @@ test('AC-20260911-01-10: a question note carrying answer.verdict: "waived" CONTI
 // visibility, exactly as D23 fixed the reopen box. AC-20260911-06-24.
 // ---------------------------------------------------------------------------
 
+
+// ---------------------------------------------------------------------------
+// specs/20260912/01-the-card-explains-itself.md D1/D2/D3/D4/D6 — the exclusions card gains a
+// heading, a lead, per-row provenance and a state sentence, and viewer.css gains the rules that
+// style them. Unbuilt against the pre-image: renderExclusion emits no heading, no lead, no
+// provenance line and no state sentence, and viewer.css carries none of the six new `.wk-excl*`
+// rules. AC-20260912-01-1, -2, -3, -4, -5, -6, -10.
+// ---------------------------------------------------------------------------
+
+function exclusionsSection(html) {
+  const m = /<section[^>]*data-wk="exclusions"[^>]*>([\s\S]*?)<\/section>/.exec(html)
+  return m ? m[1] : null
+}
+function exclusionArticles(html) {
+  return [...html.matchAll(/<article[^>]*data-wk="exclusion"[\s\S]*?<\/article>/g)].map((m) => m[0])
+}
+function oneScreenSeed(labels) {
+  return {
+    product: 'Hearwell',
+    journeys: [{ name: 'onboarding', title: 'Onboarding', screens: labels.map((label) => ({ label, states: [] })) }],
+  }
+}
+function exclRow(id, extra) {
+  return ledgerRow(id, Object.assign({ kind: 'exclusion', claim: 'a claim', note: 'non-goal: a claim', status: 'open', rejected: null }, extra))
+}
+

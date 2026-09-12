@@ -438,20 +438,30 @@
     on(m.querySelector('[data-wk="no"]'), 'click', function () { answer('no') })
   })
 
-  // ---- exclusions: agree or needed posts a verdict; either disables both buttons on ok --------
+  // ---- exclusions: agree or needed posts a verdict; an ok answer activates the row's own -------
+  // ---- hidden state line instead of disabling the buttons ---------------------------------------
   // specs/20260911/05-approval-is-bookkeeping.md D3: an agree-only control cannot record
-  // disagreement — "No — we need this" posts {id, verdict:'needed'}, and the ok response sets
-  // data-verdict on the article and disables both buttons, exactly like the agree branch.
+  // disagreement — "No — we need this" posts {id, verdict:'needed'}.
+  // specs/20260912/01-the-card-explains-itself.md D5: the buttons are no longer disabled on ok —
+  // the server-rendered `data-verdict` + CSS is what hides `.wk-verdicts` now, matching the
+  // reload render exactly. The row's own `.wk-excl-state` (shipped hidden and empty by D4/D8) is
+  // filled from the section's own `data-said-agree`/`data-said-needed` attribute and unhidden —
+  // activation, never fabrication, the same discipline `wk-req-again` already uses — and the
+  // save is confirmed through the shared msg slot's own `data-excl-saved` text.
   qa('[data-wk="exclusion"]').forEach(function (art) {
     var id = art.getAttribute('data-id')
     var agreeBtn = art.querySelector('[data-wk="agree"]')
     var neededBtn = art.querySelector('[data-wk="needed"]')
+    var stateEl = art.querySelector('.wk-excl-state')
     function answer(verdict) {
       post('/client/__walk/exclusion', { id: id, verdict: verdict }).then(function (r) {
         if (!r.ok) { showMsg('failed'); return }
         art.setAttribute('data-verdict', verdict)
-        if (agreeBtn) agreeBtn.setAttribute('disabled', '')
-        if (neededBtn) neededBtn.setAttribute('disabled', '')
+        if (stateEl && exclSection) {
+          stateEl.textContent = exclSection.getAttribute('data-said-' + verdict) || ''
+          stateEl.hidden = false
+        }
+        showMsg('excl-saved')
       }).catch(function () { showMsg('failed') })
     }
     on(agreeBtn, 'click', function () { answer('agree') })

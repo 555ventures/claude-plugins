@@ -1,6 +1,6 @@
 ---
 date: 2026-09-11
-status: implementing
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -75,7 +75,7 @@ apart, across closed sessions — until the session approves.
 | tests/helpers.js | MODIFY | tests | D12 `serveAtlas` `env` |
 | tests/mocks/client-loop.test.js | CREATE | tests | AC-20260911-04-1, AC-20260911-04-10, AC-20260911-04-11, AC-20260911-04-12, AC-20260911-04-14 — the end-to-end loop, client-first, driver re-run between acts |
 | tests/mocks/client-walk-route.test.js | MODIFY | tests | AC-20260911-04-2, AC-20260911-04-3, AC-20260911-04-4, AC-20260911-04-5 |
-| tests/mocks/walk-page.test.js | MODIFY | tests | AC-20260911-04-6, AC-20260911-04-7, AC-20260911-04-8, AC-20260911-04-9 |
+| tests/mocks/walk-page.test.js | MODIFY | tests | AC-20260911-04-6, AC-20260911-04-7, AC-20260911-04-8, AC-20260911-04-9, AC-20260911-04-16, AC-20260911-04-17, AC-20260911-04-18, AC-20260911-04-19, AC-20260911-04-20, AC-20260911-04-21, AC-20260911-04-22, AC-20260911-04-23, AC-20260911-04-24 |
 | tests/consistency/design-doctrine.test.js | MODIFY | tests | AC-20260911-04-13 |
 | design/client-mocks/index.html | CREATE | doctrine | D18 the approved index design, reference only |
 | design/client-mocks/walk.html | CREATE | doctrine | D18 the approved player design, reference only |
@@ -226,8 +226,8 @@ per-journey and pickup lines); specs/20260910/03 D5's "409 when already confirme
 only while `confirmedAt` is set; specs/20260910/05's Boundary "A confirmed journey is not
 un-confirmed by the client" — it is, by the client's own request. Kept: spec 03 D7's approve gate
 (every journey confirmed-or-waived, now `ok`-or-waived), spec 05's other Boundaries, and the
-seven-day waivers. Deferred to q178 (the reversible journey): withdrawing an open request, un-
-agreeing an exclusion, provenance lines. Sibling spec 20260911/05 makes approval bookkeeping and
+seven-day waivers. Withdrawing an open request SHIPS here (D16, added at the look stop). Still
+deferred to q178 (the reversible journey): un-agreeing an exclusion, provenance lines. Sibling spec 20260911/05 makes approval bookkeeping and
 lists exclusions from the first walk; it depends on this one and lands after it.
 
 Collision closure at lock: this spec retires no literal a test outside its File Plan spells (A6);
@@ -239,6 +239,30 @@ never fires — fixed in the same build if it does), `tests/mocks/notes-layer-is
 (Chrome-gated, notes layer only), `tests/consistency/retired-flags.test.js` (flag scan, no client
 surface).
 
+Deviations folded at close (the sidecar is deleted; these are the one-offs this spec's rounds
+forced). **D23 reversed two of its own earlier build choices**, both authored from the mock and both
+wrong in a browser: the whole journey card had been built as one `<a>`, which nested the `+n more`
+tile's own anchor inside it — invalid HTML that visibly shattered the 8-screen card — and each
+thumbnail's caption had been emitted BEFORE its image with `column-reverse` restoring the visual
+order, to keep an AC's proximity window short. The card is now an `<li>` whose title and action are
+separate links, and `data-label` on the slot plays the proximity role the caption had, so document
+order can follow the eye. **`humanizeLabel`** implements D23's "humanised for display" (one example,
+no algorithm) as hyphens-to-spaces plus first-character capitalisation, with `data-label` carrying
+the raw value everywhere so nothing keys off the humanised string. **Two authorised pin moves**:
+AC-20260911-04-5's oracle moved from asserting the row IS an anchor to asserting it CONTAINS the
+walk link, and `clickSend`'s dual-trigger harness collapsed to the single real submit path once D23
+decided the composer is a form — every assertion in both kept its force. **The session-authored CSS
+register** (D10, later superseded by D22) added a rule for `.wk-msg`, which the markup already
+emitted with no rule at all; styled the `Coming soon` row off the row's own attribute rather than a
+parallel class; and marked the selected reason chip with `aria-pressed` rather than the notes
+layer's modifier-class idiom, because this surface is read by clients. **`notes address --screen` /
+`--journey`** validates its value against disk before writing, unpinned by any AC, so the client's
+"See ⟨journey⟩" link cannot be written dead. **Three defects reached review that a green 1093-test
+suite could not see** and only a rendered page exposed: the nested-anchor card, a composer wired to
+both a click and a submit handler (one click, two POSTs), and every box the client types into
+hidden by `:focus-within` so it vanished on blur with their words in it. Each was found by opening
+the page, not by a leg.
+
 ## Canonical Delta
 
 `docs/canonical/design.md` § The mocks command: the CLIENT state is a loop — a journey's state
@@ -247,5 +271,8 @@ waived`, `lib/mocks-walk.js journeyState`), a request on an OK'd journey takes t
 `history`, the client accepts or reopens an addressed note on the page, the index carries a
 "something missing?" composer and the client's request list, the CLIENT step prints `📥 what
 the client left` with one command per item, and the client server is the user's own long-lived
-process. § Exclusions: the sentence "The client-facing control for it is deliberately not shipped"
-is unchanged (withdrawal stays q178).
+process; an open request carries a `Never mind` control, so a client who changes their mind
+withdraws it themselves and the journey's OK unlocks by the same derivation. § Exclusions: the
+sentence "The client-facing control for it is deliberately not shipped" is REPLACED — a client
+withdraws their own open request from either client page; only un-agreeing a confirmed exclusion
+and provenance lines stay unshipped (q178).

@@ -222,9 +222,11 @@ confirmed exclusion's claim verbatim under `docs/roadmap/00-overview.md`'s `## P
 the BRIEF step's derived-from line carries the confirmed count.
 
 A client withdrawal carries `withdrawReason` (`not-needed | fixed-elsewhere | mistake`), validated
-on the client route and by `validateNotes`. The client-facing control for it is deliberately not
-shipped: the player has no list of the client's own notes, and an irreversible one-click write
-landing in a dated contractual file is worse than a missing feature.
+on the client route and by `validateNotes`. The client-facing control ships (specs/20260911/04):
+an open request carries `Never mind` on both client pages, because without it a client who changes
+their mind locks the journey — they cannot withdraw, `notes address` refuses to answer a request
+whose screen capture is unchanged, and the only exit is the seven-day `notes waive` timeout. Only
+un-agreeing an already-confirmed exclusion and provenance lines stay unshipped (q178).
 
 ## The mocks command (2026-09-02, specs/20260902/07)
 
@@ -261,7 +263,27 @@ line per waived note, and closes on the ledger and the notes alone: a waived not
 It stamps every top-level mock
 `data-status="approved"` and records the stop's decider, so a mock approved by `/spec:mocks` is
 always a gray wireframe and the atlas's wire-register rule exempts it by design.
-`--reopen journey:<j>` clears that journey's approval and the terminal approval. The 13 seed fact keys are closed (`primary-surface platforms-horizon tenancy offline
+`--reopen journey:<j>` clears that journey's approval and the terminal approval.
+
+CLIENT is a loop, not a one-way form (specs/20260911/04). A journey's state is derived from the
+client's own requests, never stored — `lib/mocks-walk.js journeyState` returns `unseen | walking |
+changes-requested | fixed | ok | waived`, and an open request outranks a stale confirmation by
+construction, so a request on an OK'd journey takes the confirmation back into `journeys[j].history`
+and the confirm route refuses 409 until nothing is open or awaiting the client's check. The client
+accepts (`Looks good`) or reopens (`Still not right`, their words threaded onto the note) an
+addressed request on the page, and takes back an open one with `Never mind`. The index is the
+client's own view of the product: one card per walkable journey whose hero is a four-slot rail of
+its screens rendered as the real mocks scaled down, a dot on the screen carrying a request, one
+action whose verb follows the state, a `Something missing?` composer, and the client's request list
+below. A journey is listed when its page exists, never when a session flag says so, so redrawing one
+never takes it away from the client; a journey with no drawn page is absent, and the request that
+asked for it is the acknowledgement. The player is two zones — the screens as a step indicator in
+the bar, the mock framed as an object under its caption — and confirming is the last step of the
+walk: on the final screen `Next` becomes `Confirm this journey` with the sign-off block in the
+stage. The CLIENT step prints whether the server answers, one state line per journey, then `📥 what
+the client left` with the one command that answers each item. The client server is the user's own
+long-lived process — started once in their terminal, kept running until `approved`, never started
+or stopped by a session. The 13 seed fact keys are closed (`primary-surface platforms-horizon tenancy offline
 realtime ai-in-loop residency payer day-one-integrations scale-outage vendor-limits retention
 legal-floor`), each mapped in `seed.md ## Facts` to a confirmed `product` ledger row. The
 seed's six sections are Product · Facts · References · Records · Journeys · Dense screens

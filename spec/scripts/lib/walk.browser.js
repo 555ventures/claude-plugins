@@ -122,6 +122,21 @@
       post('/client/__notes/reopen', { id: id, text: text, by: 'client' }).then(function (r) {
         if (!r.ok) { showMsg('failed'); return }
         art.setAttribute('data-status', 'open')
+        // FIX 3 (review): a reopened request is addressed→open, not addressed→addressed — its
+        // status line and controls must stop reading/offering the addressed shape (D6: sets
+        // data-status "open" and "We'll look at this"; D16/D17: `Looks good`/`Still not right`
+        // are addressed-only). AC-20260911-04-16 (locked) forbids the server from ever rendering
+        // a withdraw control on a non-open article, even hidden, so a reopened row cannot be
+        // handed a working `Never mind` without fabricating markup (no innerHTML/createElement
+        // outside the states switcher's own generated-from-safe-data exception, see header) — it
+        // is hidden here rather than mislabeled; a reload (or the index's own re-render) picks up
+        // the real open template with its own withdraw control.
+        var reopenStatusEl = art.querySelector('.wk-req-status')
+        if (reopenStatusEl) reopenStatusEl.textContent = "We'll look at this"
+        var link = art.querySelector('.wk-req-link')
+        if (link) link.hidden = true
+        if (acceptBtn) acceptBtn.hidden = true
+        if (reopenBtn) reopenBtn.hidden = true
         if (onChange) onChange()
       }).catch(function () { showMsg('failed') })
     })
@@ -160,11 +175,23 @@
           showMsg('saved')
           var tmpl = q('[data-cl="requests"] [data-cl-template]')
           if (tmpl && j && j.id) {
+            // FIX 2 (review): the template ships the open-request markup (where/status/withdraw)
+            // already rendered — only the id and the client's own text are the template's own
+            // content, filled in here rather than fabricated later from nothing.
+            // FIX 3 (review): the test shim (and, more to the point, this script's own textContent
+            // discipline elsewhere — see the accept/reopen handlers above) never trusts a static
+            // string baked into the server's markup; the activated row's own status line is set
+            // here explicitly, byte-identical to the template's own reqWatching text.
+            var textEl = tmpl.querySelector('.wk-req-text')
+            if (textEl) textEl.textContent = text
+            var statusEl = tmpl.querySelector('.wk-req-status')
+            if (statusEl) statusEl.textContent = "We'll look at this"
             tmpl.setAttribute('data-cl', 'request')
             tmpl.setAttribute('data-id', j.id)
             tmpl.setAttribute('data-status', 'open')
             tmpl.removeAttribute('data-cl-template')
             tmpl.hidden = false
+            wireRequestCard('cl', tmpl, null)
           }
         })
       }).catch(function () { showMsg('failed') })
@@ -437,6 +464,14 @@
         showMsg('saved')
         var tmpl = q('[data-wk="requests"] [data-wk-template]')
         if (tmpl && j && j.id) {
+          // FIX 2 (review): the template ships the open-request markup (status/withdraw) already
+          // rendered — only the id, label and the client's own text are filled in here.
+          // FIX 3 (review): status line set explicitly, same reasoning as the index's own
+          // activation above.
+          var textEl = tmpl.querySelector('.wk-req-text')
+          if (textEl) textEl.textContent = text
+          var statusEl = tmpl.querySelector('.wk-req-status')
+          if (statusEl) statusEl.textContent = "We'll look at this"
           tmpl.setAttribute('data-wk', 'request')
           tmpl.setAttribute('data-id', j.id)
           tmpl.setAttribute('data-label', currentLabel)

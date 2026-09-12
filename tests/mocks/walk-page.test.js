@@ -419,6 +419,26 @@ test('AC-20260911-04-8: under the vm shim, the client index\'s ask form posts a 
   assert.strictEqual(requestArticles[0].getAttribute('data-id'), 'N007', 'AC-8: the inserted article must carry the server\'s new id: got ' + requestArticles[0].getAttribute('data-id'))
   assert.strictEqual(requestArticles[0].getAttribute('data-status'), 'open', 'AC-8: the inserted article must be status "open": got ' + requestArticles[0].getAttribute('data-status'))
 
+  // AC-8 fold-in (review 2026-09-11): activation must produce a COMPLETE open request row — the
+  // client's own text, the "We'll look at this" status line, and a working "Never mind" control —
+  // never an article carrying only stamped attributes over an otherwise-empty body (the blank
+  // amber stripe the client actually saw).
+  const insertedTextEl = requestArticles[0].querySelector('.wk-req-text')
+  assert.ok(insertedTextEl, 'AC-8 (fold-in): the activated article must carry a .wk-req-text element: got ' + JSON.stringify(requestArticles[0].attrs))
+  assert.strictEqual(insertedTextEl.textContent, 'No reset screen',
+    'AC-8 (fold-in): the activated template must carry the client\'s own typed text, not an empty article: got "' + insertedTextEl.textContent + '"')
+  const insertedStatusEl = requestArticles[0].querySelector('.wk-req-status')
+  assert.strictEqual(insertedStatusEl.textContent, "We'll look at this",
+    'AC-8 (fold-in): a freshly-activated open request must read "We\'ll look at this", not an empty status line: got "' + insertedStatusEl.textContent + '"')
+  const insertedWithdraw = requestArticles[0].querySelector('[data-cl="withdraw"]')
+  assert.ok(insertedWithdraw, 'AC-8 (fold-in): the activated row must carry a [data-cl="withdraw"] control, not an inert stamped article: got ' + JSON.stringify(requestArticles[0].attrs))
+  insertedWithdraw.click()
+  await flush()
+  const withdrawPost = posts.find((p) => p.url.includes('/client/__notes/resolve'))
+  assert.ok(withdrawPost, 'AC-8 (fold-in): the freshly-activated withdraw control must actually POST /client/__notes/resolve — a control stamped on but never wired would leave the client stuck: got posts=' + JSON.stringify(posts))
+  assert.strictEqual(requestArticles[0].getAttribute('data-status'), 'resolved',
+    'AC-8 (fold-in): withdrawing the freshly-activated request must set it resolved like any other card: got ' + requestArticles[0].getAttribute('data-status'))
+
   const { document: doc2, posts: posts2 } = runIndexBrowser(html, {
     '/client/__notes/add': { ok: false, json: () => Promise.resolve({}) },
   })
@@ -472,6 +492,10 @@ test('AC-20260911-04-9: under the vm shim on the walk page, accept/reopen post t
   assert.ok(reopenBtn && reopenTextEl, 'AC-9: the request card must carry [data-wk="reopen"] and [data-wk="reopen-text"]: got\n' + reopenArticle.attrs)
   reopenBtn.click()
   await flush()
+  // AC-23: the reopen control unhides its own reopen-text box on the very first press, even one
+  // that finds it still empty and posts nothing.
+  assert.strictEqual(reopenTextEl.hidden, false,
+    'AC-23: clicking [data-wk="reopen"] must unhide its own [data-wk="reopen-text"] box: got hidden=' + reopenTextEl.hidden)
   assert.strictEqual(reopenHarness.posts.find((p) => p.url.includes('/client/__notes/reopen')), undefined,
     'AC-9: reopen with an empty textarea must post nothing: got posts=' + JSON.stringify(reopenHarness.posts))
   const msgAfterEmpty = reopenHarness.document.querySelector('[data-wk="msg"]')
@@ -490,6 +514,182 @@ test('AC-20260911-04-9: under the vm shim on the walk page, accept/reopen post t
   const confirmAfterReopen = reopenHarness.document.querySelector('[data-wk="confirm"]')
   assert.strictEqual(confirmAfterReopen.hasAttribute('disabled'), true,
     'AC-9: confirm must stay (or become) disabled once the reopened request is "open" again: got disabled=' + confirmAfterReopen.hasAttribute('disabled'))
+
+  // AC-9 fold-in (review 2026-09-11): reopening an addressed request must reset its visible
+  // status line and stop offering "Looks good" — today it is left reading "Done: …" and still
+  // offers accept.
+  const reopenStatusEl = reopenArticle.querySelector('.wk-req-status')
+  assert.strictEqual(reopenStatusEl.textContent, "We'll look at this",
+    'AC-9 (fold-in): reopening an addressed request must reset its status line to "We\'ll look at this": got "' + reopenStatusEl.textContent + '"')
+  const reopenAcceptBtn = reopenArticle.querySelector('[data-wk="accept"]')
+  assert.ok(!reopenAcceptBtn || reopenAcceptBtn.hidden === true,
+    'AC-9 (fold-in): once reopened, the request must no longer offer "Looks good" — the accept control must be removed or hidden, not still clickable: got ' + JSON.stringify(reopenArticle.attrs))
+})
+
+test('AC-20260911-04-9 (fold-in): under the vm shim, the client index\'s own accept/reopen controls post their own routes and, on reopen, reset the status line and drop the accept control', async () => {
+  const seed = onboardingSeed([{ label: 'invite', states: [] }])
+  const addressedNote = clientNote({
+    id: 'N040', scope: 'mock', screen: 'invite', text: 'Wrong copy', status: 'addressed',
+    addressed: { at: NOW, change: 'Fixed the copy', ledgerRow: null },
+  })
+  const html = buildClientIndex({ seed, notes: [addressedNote], ledger: [], walk: { journeys: {} }, prefix: '', ready: new Set(['onboarding']) })
+  const { document, posts } = runIndexBrowser(html, { '/client/__notes/resolve': { ok: true } })
+  const article = document.querySelector('[data-cl="request"][data-id="N040"]')
+  assert.ok(article, 'AC-9 (fold-in) setup: buildClientIndex must render the addressed request as an article: got\n' + html)
+
+  const acceptBtn = article.querySelector('[data-cl="accept"]')
+  assert.ok(acceptBtn, 'AC-9 (fold-in) setup: the addressed article must carry [data-cl="accept"]: got ' + JSON.stringify(article.attrs))
+  const reopenBtn = article.querySelector('[data-cl="reopen"]')
+  const reopenTextEl = article.querySelector('[data-cl="reopen-text"]')
+  assert.strictEqual(reopenTextEl.hidden, true, 'AC-9 (fold-in) setup: the reopen textarea must start hidden: got hidden=' + reopenTextEl.hidden)
+
+  reopenTextEl.value = 'Still not right'
+  reopenBtn.click()
+  await flush()
+  assert.strictEqual(reopenTextEl.hidden, false,
+    'AC-23/AC-9 (fold-in): clicking [data-cl="reopen"] must unhide [data-cl="reopen-text"]: got hidden=' + reopenTextEl.hidden)
+  const reopenPost = posts.find((p) => p.url.includes('/client/__notes/reopen'))
+  assert.ok(reopenPost, 'AC-9 (fold-in): clicking the index\'s own reopen control must POST /client/__notes/reopen: got posts=' + JSON.stringify(posts))
+  assert.deepStrictEqual(JSON.parse(reopenPost.init.body), { id: 'N040', text: 'Still not right', by: 'client' },
+    'AC-9 (fold-in): the reopen POST body must carry {id, text, by:"client"}: got ' + reopenPost.init.body)
+  assert.strictEqual(article.getAttribute('data-status'), 'open',
+    'AC-9 (fold-in): reopening must set data-status="open": got ' + article.getAttribute('data-status'))
+  const statusEl = article.querySelector('.wk-req-status')
+  assert.strictEqual(statusEl.textContent, "We'll look at this",
+    'AC-9 (fold-in, review 2026-09-11): reopening an addressed request on the index must reset its status line to "We\'ll look at this" — today it is left reading "Done: …": got "' + statusEl.textContent + '"')
+  assert.ok(!acceptBtn || acceptBtn.hidden === true,
+    'AC-9 (fold-in): once reopened, the index request must no longer offer "Looks good" — the accept control must be removed or hidden: got ' + JSON.stringify(article.attrs))
+})
+
+test('AC-20260911-04-8 (fold-in): under the vm shim, the walk page\'s own note form activates its spare template into a complete open request row, including a working withdraw control', async () => {
+  const seed = onboardingSeed([{ label: 'invite', states: [] }])
+  const html = buildWalkPage({ seed, journey: 'onboarding', notes: [], ledger: [], walk: { journeys: {} }, prefix: '' })
+  const harness = runWalkBrowserRouted(html, { reached: ['invite'], misses: [], confirmedAt: null, sentence: null },
+    { '/client/__notes/add': { ok: true, json: () => Promise.resolve({ id: 'N050' }) } })
+  await flush()
+  const noteForm = harness.document.querySelector('[data-wk="note"]')
+  assert.ok(noteForm, 'AC-8 (fold-in) setup: buildWalkPage must render [data-wk="note"]: got\n' + html)
+  const textarea = noteForm.querySelector('textarea')
+  textarea.value = 'The button label is wrong here'
+  noteForm.submit()
+  await flush()
+
+  const postCall = harness.posts.find((p) => p.url.includes('/client/__notes/add'))
+  assert.ok(postCall, 'AC-8 (fold-in): submitting the walk page\'s own note form must POST /client/__notes/add — D6 promises this on the walk page too, not only the index: got posts=' + JSON.stringify(harness.posts))
+
+  const article = harness.document.querySelector('[data-wk="request"][data-id="N050"]')
+  assert.ok(article, 'AC-8 (fold-in): the walk page must activate its spare template into a real [data-wk="request"] article — a template only ever stamped with attributes and never wired is the "may not be wiring the new row at all" defect')
+  assert.strictEqual(article.getAttribute('data-label'), 'invite',
+    'AC-8 (fold-in): the activated row must carry the current screen\'s label: got ' + article.getAttribute('data-label'))
+  assert.strictEqual(article.getAttribute('data-status'), 'open',
+    'AC-8 (fold-in): a freshly-added request must be status "open": got ' + article.getAttribute('data-status'))
+  const textEl = article.querySelector('.wk-req-text')
+  assert.strictEqual(textEl.textContent, 'The button label is wrong here',
+    'AC-8 (fold-in): the activated row must carry the client\'s own typed text, not an empty article: got "' + textEl.textContent + '"')
+  const statusEl = article.querySelector('.wk-req-status')
+  assert.strictEqual(statusEl.textContent, "We'll look at this",
+    'AC-8 (fold-in): a freshly-activated open request must read "We\'ll look at this": got "' + statusEl.textContent + '"')
+  const withdrawBtn = article.querySelector('[data-wk="withdraw"]')
+  assert.ok(withdrawBtn, 'AC-8 (fold-in): the activated row must carry a working [data-wk="withdraw"] control: got ' + JSON.stringify(article.attrs))
+  withdrawBtn.click()
+  await flush()
+  const withdrawPost = harness.posts.find((p) => p.url.includes('/client/__notes/resolve'))
+  assert.ok(withdrawPost, 'AC-8 (fold-in): clicking the freshly-activated withdraw control must actually POST /client/__notes/resolve — a stamped-but-unwired control leaves the client stuck: got posts=' + JSON.stringify(harness.posts))
+  assert.strictEqual(article.getAttribute('data-status'), 'resolved',
+    'AC-8 (fold-in): withdrawing the freshly-activated request must set it resolved like any other card: got ' + article.getAttribute('data-status'))
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260911/04-the-client-loop.md D23 (the design seat's findings against the rendered
+// pages, 2026-09-11). AC-20260911-04-23 named this file as its oracle but no test here ever
+// mentioned it — `grep -rn "AC-20260911-04-23" tests/` found nothing and the whole design round
+// (the shattered card, the raw slug caption, the reading order, the state text, the home link,
+// the state switcher, the reopen/accept wording) was unpinned. Every clause below.
+// ---------------------------------------------------------------------------
+
+test('AC-20260911-04-23: buildClientIndex never nests the "+n more" tile inside another anchor, humanises a session-live slot\'s caption while keeping its raw data-label, orders each slot\'s thumbnail before its caption, and renders a confirmed journey\'s state as "Confirmed"', () => {
+  const screensOf = (n) => Array.from({ length: n }, (_, i) => ({ label: 's' + (i + 1), states: [] }))
+  const journeys = [
+    { name: 'j8', title: 'Eight screener', screens: screensOf(8) },
+    { name: 'j-live', title: 'Live journey', screens: [{ label: 'session-live', states: [] }] },
+    { name: 'j-ok', title: 'OK journey', screens: [{ label: 'done', states: [] }] },
+  ]
+  const seed = { product: 'Hearwell', journeys }
+  const walk = { journeys: { 'j-ok': { reached: [], misses: [], confirmedAt: NOW, sentence: 'Looks right', waived: null } } }
+  const html = buildClientIndex({ seed, notes: [], ledger: [], walk, prefix: '', ready: new Set(journeys.map((j) => j.name)) })
+  const cards = journeyCards(html)
+
+  const eightCard = cards.find((c) => c.includes('Eight screener'))
+  assert.ok(eightCard, 'AC-23 setup: the 8-screen journey must render a card: got\n' + html)
+  const cardDom = parseFlatDom(eightCard)
+  const moreEl = cardDom.querySelector('[data-cl="more"]')
+  assert.ok(moreEl, 'AC-23 setup: an 8-screen card must render a [data-cl="more"] tile: got\n' + eightCard)
+  let anc = moreEl.parentNode
+  let outerAnchor = null
+  while (anc) { if (anc.tagName === 'A') { outerAnchor = anc; break } anc = anc.parentNode }
+  assert.strictEqual(outerAnchor, null,
+    'AC-23: no <a> may be an ancestor of [data-cl="more"] other than itself — an <a> wrapping the whole card nests the more tile\'s own anchor inside it, which shatters the card in every browser: got an ancestor <a> in\n' + eightCard)
+  assert.strictEqual(moreEl.tagName, 'A', 'AC-23 setup: the more tile itself must be an <a>: got ' + moreEl.tagName)
+  assert.match(moreEl.getAttribute('href') || '', /\/client\/walk\/j8\.html$/,
+    'AC-23 (fold-in, review FIX 1): the "+n more" tile must carry an href to the journey\'s own walk page — it was previously an inert <a> with no href: got href="' + moreEl.getAttribute('href') + '"')
+  assert.ok(moreEl.getAttribute('aria-label'),
+    'AC-23 (fold-in, review FIX 1): the "+n more" tile must carry an aria-label naming the hidden screens: got ' + JSON.stringify(moreEl.attrs))
+
+  const liveCard = cards.find((c) => c.includes('Live journey'))
+  assert.ok(liveCard, 'AC-23 setup: the session-live journey must render a card: got\n' + html)
+  const slotMatch = /<li[^>]*data-cl="slot"[^>]*data-label="session-live"[^>]*>[\s\S]*?<\/li>/.exec(liveCard)
+  assert.ok(slotMatch, 'AC-23: the session-live slot must keep data-cl="slot" data-label="session-live" raw: got\n' + liveCard)
+  assert.match(slotMatch[0], /Session live/,
+    'AC-23: the session-live slot\'s caption must humanise the raw label to "Session live": got\n' + slotMatch[0])
+  const thumbIdx = slotMatch[0].indexOf('data-cl="thumb"')
+  const capIdx = slotMatch[0].indexOf('wk-thumb-cap')
+  assert.ok(thumbIdx !== -1 && capIdx !== -1 && thumbIdx < capIdx,
+    'AC-23: each slot\'s thumbnail must precede its caption in document order — the column-reverse workaround is deleted: got thumb@' + thumbIdx + ' cap@' + capIdx + ' in\n' + slotMatch[0])
+
+  const okCard = cards.find((c) => c.includes('OK journey'))
+  assert.match(okCard, /data-cl="state"[^>]*>Confirmed</,
+    'AC-23: a confirmed ("ok") journey\'s state must read exactly "Confirmed": got\n' + okCard)
+})
+
+test('AC-20260911-04-23: buildWalkPage carries the "← All journeys · <Journey>" home link', () => {
+  const seed = onboardingSeed([{ label: 'invite', states: [] }])
+  const html = buildWalkPage({ seed, journey: 'onboarding', notes: [], ledger: [], walk: { journeys: {} }, prefix: '' })
+  assert.ok(html.includes('←') && html.includes('All journeys') && html.includes('<strong>Onboarding</strong>'),
+    'AC-23: the player must carry the home link "← All journeys · Onboarding": got\n' + html)
+})
+
+test('AC-20260911-04-23: under the vm shim, the walk page\'s reopen control unhides its own reopen-text box, an accept sets the status line to "Closed — thank you", and the state switcher\'s first tab reads "Normal" with aria-selected on the current state', async () => {
+  const seed = onboardingSeed([{ label: 'invite', states: ['error'] }])
+  const addressedNote = clientNote({
+    id: 'N060', scope: 'mock', screen: 'invite', text: 'Wrong copy', status: 'addressed',
+    addressed: { at: NOW, change: 'Fixed the copy', ledgerRow: null },
+  })
+  const html = buildWalkPage({ seed, journey: 'onboarding', notes: [addressedNote], ledger: [], walk: { journeys: {} }, prefix: '' })
+  const harness = runWalkBrowserRouted(html, { reached: ['invite'], misses: [], confirmedAt: null, sentence: null },
+    { '/client/__notes/resolve': { ok: true } })
+  await flush()
+
+  const statesEl = harness.document.querySelector('[data-wk="states"]')
+  assert.ok(statesEl, 'AC-23 setup: buildWalkPage must render [data-wk="states"]: got\n' + html)
+  assert.match(statesEl.innerHTML || '', /^<button[^>]*data-state-opt=""[^>]*aria-selected="true"[^>]*>Normal</,
+    'AC-23: the state switcher\'s first tab must read "Normal" (not the internal "happy" key) with aria-selected="true" on the current (default) state: got "' + statesEl.innerHTML + '"')
+
+  const article = harness.document.querySelector('[data-wk="request"][data-id="N060"]')
+  assert.ok(article, 'AC-23 setup: buildWalkPage must render the addressed request card: got\n' + html)
+  const reopenBtn = article.querySelector('[data-wk="reopen"]')
+  const reopenTextEl = article.querySelector('[data-wk="reopen-text"]')
+  assert.strictEqual(reopenTextEl.hidden, true, 'AC-23 setup: the reopen textarea must start hidden: got hidden=' + reopenTextEl.hidden)
+  reopenBtn.click()
+  await flush()
+  assert.strictEqual(reopenTextEl.hidden, false,
+    'AC-23: clicking [data-wk="reopen"] must unhide its own [data-wk="reopen-text"] box: got hidden=' + reopenTextEl.hidden)
+
+  const acceptBtn = article.querySelector('[data-wk="accept"]')
+  acceptBtn.click()
+  await flush()
+  const statusEl = article.querySelector('.wk-req-status')
+  assert.strictEqual(statusEl.textContent, 'Closed — thank you',
+    'AC-23: an accept must set the request card\'s status line to "Closed — thank you": got "' + statusEl.textContent + '"')
 })
 
 // ---------------------------------------------------------------------------

@@ -119,6 +119,10 @@ const STRINGS = {
   reqReopenWalk: 'Still not right',
   fixedLead: 'We fixed what you asked. Check the screens marked Fixed, then confirm.',
   changesLead: "You asked for changes. We'll fix them and let you know.",
+  // FIX 1 (review): design/client-mocks/index.html:219's "+n more" tile is a real link to the
+  // walk page, named by an aria-label listing the hidden screens — restated here so the code
+  // matches the binding mock instead of rendering an inert, unlabeled span.
+  moreScreens: '{n} more screens: {list}',
 }
 
 function count(s, none, one, many, n) {
@@ -273,6 +277,25 @@ function renderAskForm(s) {
     '</details>'
 }
 
+// FIX 2 (review): the ask form's own template was a genuinely empty `<article>` — activating it
+// (walk.browser.js's submitAsk) could only ever stamp attributes, never the row's own text,
+// location, status line or withdraw control, so a client who just pressed Send saw an empty amber
+// stripe. A freshly-added request is always `scope: 'project'` (D6's ask form hardcodes it) and
+// always `open` (D6), so the template carries that one shape's full markup — byte-identical to
+// `renderIndexRequest`'s own `open` branch minus the id/text, which walk.browser.js fills in from
+// what it already has (the id from the server's response, the text from the textarea it is about
+// to clear) rather than re-deriving them.
+function renderIndexRequestTemplate(s) {
+  return '<article class="wk-req" data-cl-template hidden>' +
+    '<p class="wk-req-text"></p>' +
+    '<span class="wk-req-where">' + esc(s.reqWhereProject) + '</span>' +
+    '<p class="wk-req-status">' + esc(s.reqWatching) + '</p>' +
+    '<div class="wk-req-acts">' +
+    '<button class="wk-req-act" type="button" data-cl="withdraw">' + esc(s.reqWithdraw) + '</button>' +
+    '</div>' +
+    '</article>'
+}
+
 // D20: the request list itself — open/addressed articles first (visible), then resolved ones
 // (hidden, behind `[data-cl="show-closed"]`) — plus a hidden, unattached template article
 // walk.browser.js activates (by ADDING `data-cl="request"` and the id/status attributes) when the
@@ -291,7 +314,7 @@ function renderRequestsSection(notes, journeysList, prefix, s) {
     '<div class="wk-reqs-h"><h2 class="wk-reqs-title">' + esc(s.requestsHeading) + '</h2>' +
     '<span class="wk-reqs-n">' + esc(s.waitingCount.replace('{n}', String(openOrAddressed.length))) + '</span>' +
     toggle + '</div>' +
-    '<article class="wk-req" data-cl-template hidden></article>' + openArticles + closedArticles +
+    renderIndexRequestTemplate(s) + openArticles + closedArticles +
     '</section>'
 }
 
@@ -364,7 +387,12 @@ function renderThumbSlot(sc, statusByLabel, currentLabel, prefix) {
     '</li>'
 }
 
-function renderCardSlots(screens, statusByLabel, currentLabel, prefix) {
+// FIX 1 (review): the mock (design/client-mocks/index.html:219) renders the "+n more" tile as a
+// real anchor to the walk page, `aria-label`ed with the count and the hidden screens' names — the
+// prior render had no `href`, so the tile was inert and unreachable by keyboard. `href` is the
+// same walk-page link every other card control uses; the label names the screens `renderCardSlots`
+// itself is not showing (index 3 onward).
+function renderCardSlots(screens, statusByLabel, currentLabel, prefix, href, s) {
   const n = screens.length
   const out = []
   if (n <= 4) {
@@ -373,7 +401,9 @@ function renderCardSlots(screens, statusByLabel, currentLabel, prefix) {
     }
   } else {
     for (let i = 0; i < 3; i++) out.push(renderThumbSlot(screens[i], statusByLabel, currentLabel, prefix))
-    out.push('<li class="wk-slot" data-cl="slot"><a class="wk-thumb wk-more" data-cl="more">+' + (n - 3) + ' more</a></li>')
+    const hidden = screens.slice(3)
+    const label = s.moreScreens.replace('{n}', String(n - 3)).replace('{list}', hidden.map((sc) => humanizeLabel(sc.label)).join(', '))
+    out.push('<li class="wk-slot" data-cl="slot"><a class="wk-thumb wk-more" data-cl="more" href="' + href + '" aria-label="' + esc(label) + '">+' + (n - 3) + ' more</a></li>')
   }
   return out.join('')
 }
@@ -401,11 +431,11 @@ function renderJourneyCard(entry, notes, walk, prefix, s) {
   const currentLabel = (rec && Array.isArray(rec.reached) && rec.reached.length) ? rec.reached[rec.reached.length - 1] : null
   const confirmed = state === 'ok'
   const go = goFor(state, s)
-  const slots = renderCardSlots(screens, statusByLabel, currentLabel, prefix)
+  const href = esc(prefix) + '/client/walk/' + esc(entry.name) + '.html'
+  const slots = renderCardSlots(screens, statusByLabel, currentLabel, prefix, href, s)
   const descOrSaid = confirmed
     ? '<blockquote class="wk-j-said" data-cl="said">' + esc((rec && rec.sentence) || '') + '</blockquote>'
     : '<p class="wk-j-desc" data-cl="desc">' + esc(labels.map(humanizeLabel).join(', ')) + '</p>'
-  const href = esc(prefix) + '/client/walk/' + esc(entry.name) + '.html'
   // D23: the card is a container, not a link — `<li data-cl="journey">` never wraps an `<a>` of
   // its own. The title and the go action are separate links to the same walk page (nesting the
   // `+n more` tile's own `<a>` inside a card-wide `<a>` was invalid HTML and shattered the card
@@ -695,8 +725,16 @@ function buildWalkPage(input) {
   // D6: the note form's own free-text save appends a request article for the current screen — one
   // hidden, unattached template article (same activation-not-fabrication discipline as the index's
   // own template) walk.browser.js labels/reveals rather than the script ever building a new DOM
-  // node from scratch.
-  const requestsHtml = '<article class="wk-req" data-wk-template hidden></article>' +
+  // node from scratch. FIX 2 (review): the template carries the `open` shape's full markup (text/
+  // status/withdraw), byte-identical to `renderWalkRequest`'s own `open` branch minus the id/label/
+  // text walk.browser.js fills in — a genuinely empty article left the activated row blank.
+  const requestsHtml = '<article class="wk-req" data-wk-template hidden>' +
+    '<p class="wk-req-text"></p>' +
+    '<p class="wk-req-status">' + esc(s.reqWatching) + '</p>' +
+    '<div class="wk-req-acts">' +
+    '<button class="wk-req-act" type="button" data-wk="withdraw">' + esc(s.reqWithdraw) + '</button>' +
+    '</div>' +
+    '</article>' +
     requestNotes.map((n) => renderWalkRequest(n, s)).join('')
   const excl = renderExclusions(journey, ledger, notes, journeys, s)
   const title = (entry.title || journey) + ' · ' + (seed.product || 'Mocks')

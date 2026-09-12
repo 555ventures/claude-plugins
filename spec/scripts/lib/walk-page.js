@@ -88,6 +88,10 @@ const STRINGS = {
   askSend: 'Send',
   requestsHeading: 'Your requests',
   reqWatching: "We'll look at this",
+  // D16 (amended)/AC-20260911-06-26: an `open` note whose `thread` carries a client reopen reads
+  // "again" — the row remembers the second round rather than looking untouched after a reload.
+  reqWatchingAgain: "We'll look at this again",
+  reqAgainPrefix: 'You said: ',
   reqClosed: 'Closed',
   reqClosedThanks: 'Closed — thank you',
   reqDonePrefix: 'Done: ',
@@ -168,6 +172,19 @@ function journeyRequestsOn(notes, labels) {
     n.kind !== 'question' && originOf(n) === 'client')
 }
 
+// specs/20260911/06-the-client-loop.md D16 (amended)/AC-20260911-06-26: the latest client reopen
+// text on a note's `thread` (mocks-notes.js's `reopenNote` appends `{at, text, by, addressed}`,
+// oldest first) — null when the note has never been reopened, so a fresh `open` note (no thread)
+// and a reopened one read differently even though both carry `status: 'open'`.
+function latestReopenText(note) {
+  const thread = Array.isArray(note && note.thread) ? note.thread : []
+  for (let i = thread.length - 1; i >= 0; i--) {
+    const entry = thread[i]
+    if (entry && entry.by === 'client' && entry.text) return entry.text
+  }
+  return null
+}
+
 // D4: every client-origin, non-question note (project AND mock scope) — the index's own "Your
 // requests" list, newest first.
 function clientRequestNotes(notes) {
@@ -221,8 +238,12 @@ function renderIndexRequest(n, journeysList, prefix, s, closed) {
   const status = n.status
   let statusLine
   let extra = ''
+  // D16 (amended)/AC-20260911-06-26: an `open` note whose `thread` carries a client reopen reads
+  // "again" and gets its own "You said: …" line — rendered here identically to what
+  // walk.browser.js's own reopen handler paints, so a reload changes nothing the client can see.
+  const reopenText = status === 'open' ? latestReopenText(n) : null
   if (status === 'open') {
-    statusLine = s.reqWatching
+    statusLine = reopenText != null ? s.reqWatchingAgain : s.reqWatching
     // D16: the client can take back an open request — posts /client/__notes/resolve through the
     // mechanism withdrawNote/resolveNote already ship.
     extra = '<div class="wk-req-acts">' +
@@ -238,19 +259,28 @@ function renderIndexRequest(n, journeysList, prefix, s, closed) {
       extra += '<a class="wk-req-link" href="' + esc(prefix) + '/client/walk/' + esc(journey.name) + '.html">' +
         esc('See ' + (journey.title || journey.name)) + '</a>'
     }
+    // D16 (amended): an addressed article renders the same withdraw control, carrying `hidden` —
+    // a hidden control is not an offer; a successful reopen reveals it (AC-20260911-06-25).
     extra += '<div class="wk-req-acts">' +
       '<button class="wk-req-act" type="button" data-cl="accept">' + esc(s.reqAcceptIndex) + '</button>' +
       '<button class="wk-req-act" type="button" data-cl="reopen">' + esc(s.reqReopenIndex) + '</button>' +
       '<textarea class="wk-req-why" data-cl="reopen-text" hidden></textarea>' +
+      '<button class="wk-req-act" type="button" data-cl="withdraw" hidden>' + esc(s.reqWithdraw) + '</button>' +
       '</div>'
   }
   // D17: every request article renders its location — `on <screen label>` for a mock-scope
   // note, `across the whole product` for a project-scope one — so the same request read here
   // and on the walk page is recognisably one request.
   const where = n.scope === 'mock' ? s.reqWhereScreen.replace('{label}', n.screen) : s.reqWhereProject
+  // D16 (amended): the "You said: …" line always renders — hidden/empty unless this open request
+  // carries a reopen — placed right after the request text (never CSS-positioned) so the browser
+  // reopen handler can activate the same element in place rather than fabricate one.
+  const again = '<p class="wk-req-again"' + (reopenText != null ? '' : ' hidden') + '>' +
+    (reopenText != null ? esc(s.reqAgainPrefix + reopenText) : '') + '</p>'
   return '<article class="wk-req" data-cl="request" data-id="' + esc(n.id) + '" data-status="' + esc(status) + '"' +
     (closed ? ' data-closed hidden' : '') + '>' +
     '<p class="wk-req-text">' + esc(n.text) + '</p>' +
+    again +
     '<span class="wk-req-where">' + esc(where) + '</span>' +
     '<p class="wk-req-status">' + esc(statusLine) + '</p>' +
     extra +
@@ -328,8 +358,10 @@ function renderWalkRequest(n, s) {
   const status = n.status
   let statusLine
   let extra = ''
+  // D16 (amended)/AC-20260911-06-26: byte-identical "again" derivation to the index's own.
+  const reopenText = status === 'open' ? latestReopenText(n) : null
   if (status === 'open') {
-    statusLine = s.reqWatching
+    statusLine = reopenText != null ? s.reqWatchingAgain : s.reqWatching
     // D16: the same take-back control as the index, keyed data-wk on this surface.
     extra = '<div class="wk-req-acts">' +
       '<button class="wk-req-act" type="button" data-wk="withdraw">' + esc(s.reqWithdraw) + '</button>' +
@@ -337,15 +369,21 @@ function renderWalkRequest(n, s) {
   } else {
     const change = (n.addressed && n.addressed.change) || ''
     statusLine = s.reqFixedPrefix + change
+    // D16 (amended): the same hidden withdraw control as the index — revealed on a successful
+    // reopen (AC-20260911-06-25).
     extra = '<div class="wk-req-acts">' +
       '<button class="wk-req-act" type="button" data-wk="accept">' + esc(s.reqAcceptWalk) + '</button>' +
       '<button class="wk-req-act" type="button" data-wk="reopen">' + esc(s.reqReopenWalk) + '</button>' +
       '<textarea class="wk-req-why" data-wk="reopen-text" hidden></textarea>' +
+      '<button class="wk-req-act" type="button" data-wk="withdraw" hidden>' + esc(s.reqWithdraw) + '</button>' +
       '</div>'
   }
+  const again = '<p class="wk-req-again"' + (reopenText != null ? '' : ' hidden') + '>' +
+    (reopenText != null ? esc(s.reqAgainPrefix + reopenText) : '') + '</p>'
   return '<article class="wk-req" data-wk="request" data-id="' + esc(n.id) + '" data-label="' + esc(n.screen) +
     '" data-status="' + esc(status) + '" hidden>' +
     '<p class="wk-req-text">' + esc(n.text) + '</p>' +
+    again +
     '<p class="wk-req-status">' + esc(statusLine) + '</p>' +
     extra +
     '</article>'

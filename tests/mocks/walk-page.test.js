@@ -518,9 +518,11 @@ test('AC-20260911-06-9: under the vm shim on the walk page, accept/reopen post t
   // AC-9 fold-in (review 2026-09-11): reopening an addressed request must reset its visible
   // status line and stop offering "Looks good" — today it is left reading "Done: …" and still
   // offers accept.
+  // AC-20260911-06-26 (amended here from the original fold-in's "We'll look at this"): a reopen
+  // always leaves a thread entry, so the status line reads "again" from the very first reopen.
   const reopenStatusEl = reopenArticle.querySelector('.wk-req-status')
-  assert.strictEqual(reopenStatusEl.textContent, "We'll look at this",
-    'AC-9 (fold-in): reopening an addressed request must reset its status line to "We\'ll look at this": got "' + reopenStatusEl.textContent + '"')
+  assert.strictEqual(reopenStatusEl.textContent, "We'll look at this again",
+    'AC-26: reopening an addressed request must reset its status line to "We\'ll look at this again": got "' + reopenStatusEl.textContent + '"')
   const reopenAcceptBtn = reopenArticle.querySelector('[data-wk="accept"]')
   assert.ok(!reopenAcceptBtn || reopenAcceptBtn.hidden === true,
     'AC-9 (fold-in): once reopened, the request must no longer offer "Looks good" — the accept control must be removed or hidden, not still clickable: got ' + JSON.stringify(reopenArticle.attrs))
@@ -543,20 +545,28 @@ test('AC-20260911-06-9 (fold-in): under the vm shim, the client index\'s own acc
   const reopenTextEl = article.querySelector('[data-cl="reopen-text"]')
   assert.strictEqual(reopenTextEl.hidden, true, 'AC-9 (fold-in) setup: the reopen textarea must start hidden: got hidden=' + reopenTextEl.hidden)
 
-  reopenTextEl.value = 'Still not right'
+  // AC-23: the first press only unhides the why box (still empty) and posts nothing.
   reopenBtn.click()
   await flush()
   assert.strictEqual(reopenTextEl.hidden, false,
     'AC-23/AC-9 (fold-in): clicking [data-cl="reopen"] must unhide [data-cl="reopen-text"]: got hidden=' + reopenTextEl.hidden)
+  assert.strictEqual(posts.find((p) => p.url.includes('/client/__notes/reopen')), undefined,
+    'AC-23/AC-9 (fold-in): a first press with an empty why box must post nothing: got posts=' + JSON.stringify(posts))
+
+  reopenTextEl.value = 'Still not right'
+  reopenBtn.click()
+  await flush()
   const reopenPost = posts.find((p) => p.url.includes('/client/__notes/reopen'))
   assert.ok(reopenPost, 'AC-9 (fold-in): clicking the index\'s own reopen control must POST /client/__notes/reopen: got posts=' + JSON.stringify(posts))
   assert.deepStrictEqual(JSON.parse(reopenPost.init.body), { id: 'N040', text: 'Still not right', by: 'client' },
     'AC-9 (fold-in): the reopen POST body must carry {id, text, by:"client"}: got ' + reopenPost.init.body)
   assert.strictEqual(article.getAttribute('data-status'), 'open',
     'AC-9 (fold-in): reopening must set data-status="open": got ' + article.getAttribute('data-status'))
+  // AC-20260911-06-26 (amended here from the original fold-in's "We'll look at this"): the very
+  // first reopen already leaves a thread entry, so the status line reads "again".
   const statusEl = article.querySelector('.wk-req-status')
-  assert.strictEqual(statusEl.textContent, "We'll look at this",
-    'AC-9 (fold-in, review 2026-09-11): reopening an addressed request on the index must reset its status line to "We\'ll look at this" — today it is left reading "Done: …": got "' + statusEl.textContent + '"')
+  assert.strictEqual(statusEl.textContent, "We'll look at this again",
+    'AC-26: reopening an addressed request on the index must reset its status line to "We\'ll look at this again": got "' + statusEl.textContent + '"')
   assert.ok(!acceptBtn || acceptBtn.hidden === true,
     'AC-9 (fold-in): once reopened, the index request must no longer offer "Looks good" — the accept control must be removed or hidden: got ' + JSON.stringify(article.attrs))
 })
@@ -721,8 +731,10 @@ test('AC-20260911-06-16: buildClientIndex and buildWalkPage render a "Never mind
   assert.ok(indexOpen, 'AC-16 setup: the open note must render as a request article: got\n' + indexHtml)
   assert.match(indexOpen, /<button[^>]*data-cl="withdraw">Never mind<\/button>/,
     'AC-16: an open request on the index must render [data-cl="withdraw"] reading exactly "Never mind": got\n' + indexOpen)
-  assert.doesNotMatch(indexAddressed, /data-cl="withdraw"/,
-    'AC-16: an addressed request on the index must render no withdraw control — it already has accept/reopen: got\n' + indexAddressed)
+  // D16 (amended): an addressed article renders the SAME withdraw control, carrying `hidden` — a
+  // hidden control is not an offer (AC-20260911-06-25).
+  assert.match(indexAddressed, /<button[^>]*data-cl="withdraw"[^>]*hidden[^>]*>Never mind<\/button>/,
+    'AC-16 (amended): an addressed request on the index must render [data-cl="withdraw"] carrying hidden, not omit it: got\n' + indexAddressed)
   assert.doesNotMatch(indexResolved, /data-cl="withdraw"/,
     'AC-16: a resolved request on the index must render no withdraw control — there is nothing left to take back: got\n' + indexResolved)
 
@@ -734,8 +746,8 @@ test('AC-20260911-06-16: buildClientIndex and buildWalkPage render a "Never mind
 
   const walkAddressedHtml = buildWalkPage({ seed, journey: 'onboarding', notes: [addressedNote], ledger: [], walk: { journeys: {} }, prefix: '' })
   const walkAddressedArticle = /<article[^>]*data-wk="request"[\s\S]*?<\/article>/.exec(walkAddressedHtml)
-  assert.doesNotMatch(walkAddressedArticle[0], /data-wk="withdraw"/,
-    'AC-16: the walk page\'s addressed request card must render no withdraw control: got\n' + walkAddressedArticle[0])
+  assert.match(walkAddressedArticle[0], /<button[^>]*data-wk="withdraw"[^>]*hidden[^>]*>Never mind<\/button>/,
+    'AC-16 (amended): the walk page\'s addressed request card must render [data-wk="withdraw"] carrying hidden, not omit it: got\n' + walkAddressedArticle[0])
 })
 
 test('AC-20260911-06-16: under the vm shim, clicking the walk page\'s withdraw control posts the resolve-with-reason route and, on ok:true, sets the card resolved with status text "Closed"', async () => {
@@ -762,6 +774,154 @@ test('AC-20260911-06-16: under the vm shim, clicking the walk page\'s withdraw c
   assert.ok(statusEl, 'AC-16 setup: the request card must carry a .wk-req-status line: got ' + JSON.stringify(article.attrs))
   assert.strictEqual(statusEl.textContent, 'Closed',
     'AC-16: withdrawing must set the card\'s status line text to "Closed": got "' + statusEl.textContent + '"')
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260911/06-the-client-loop.md D16 (amended)/AC-20260911-06-25 (JJ's ruling, 2026-09-11):
+// a successful reopen must leave the row in the SAME shape the server renders for an open
+// request — the accept/reopen pair and the "See <journey>" link hidden, the why textarea hidden
+// AND cleared (its text is already sent), and the withdraw control revealed — on both surfaces.
+// ---------------------------------------------------------------------------
+
+test('AC-20260911-06-25: under the vm shim, on both the index and the walk page a successful reopen leaves the article open with a working withdraw control and no stray open textarea', async () => {
+  const seed = onboardingSeed([{ label: 'invite', states: [] }])
+
+  // ---- the index ----
+  const addressedNoteIdx = clientNote({
+    id: 'N050', scope: 'mock', screen: 'invite', text: 'Wrong copy', status: 'addressed',
+    addressed: { at: NOW, change: 'Fixed the copy', ledgerRow: null },
+  })
+  const indexHtml = buildClientIndex({
+    seed, notes: [addressedNoteIdx], ledger: [], walk: { journeys: {} }, prefix: '', ready: new Set(['onboarding']),
+  })
+  const indexHarness = runIndexBrowser(indexHtml, { '/client/__notes/reopen': { ok: true } })
+  await flush()
+  const indexArticle = indexHarness.document.querySelector('[data-cl="request"][data-id="N050"]')
+  assert.ok(indexArticle, 'AC-25 setup: buildClientIndex must render the addressed request article: got\n' + indexHtml)
+  const indexWithdrawBtn = indexArticle.querySelector('[data-cl="withdraw"]')
+  assert.ok(indexWithdrawBtn && indexWithdrawBtn.hidden, 'AC-25 setup: the addressed article\'s withdraw control must render hidden: got ' + JSON.stringify(indexArticle.attrs))
+  const indexReopenTextEl = indexArticle.querySelector('[data-cl="reopen-text"]')
+  indexArticle.querySelector('[data-cl="reopen"]').click() // first press: only unhides the why box
+  await flush()
+  indexReopenTextEl.value = 'Still not right'
+  indexArticle.querySelector('[data-cl="reopen"]').click()
+  await flush()
+  assert.strictEqual(indexArticle.getAttribute('data-status'), 'open',
+    'AC-25: a successful reopen must set data-status="open": got ' + indexArticle.getAttribute('data-status'))
+  // AC-26: the status line reads "again" (a reopen always leaves a thread entry).
+  const indexStatusEl = indexArticle.querySelector('.wk-req-status')
+  assert.strictEqual(indexStatusEl.textContent, "We'll look at this again",
+    'AC-26: a successful reopen must set the status line to "We\'ll look at this again": got "' + indexStatusEl.textContent + '"')
+  const indexAgainEl = indexArticle.querySelector('.wk-req-again')
+  assert.ok(indexAgainEl && indexAgainEl.hidden === false,
+    'AC-26: a successful reopen must reveal [class~="wk-req-again"]: got ' + JSON.stringify(indexArticle.attrs))
+  assert.strictEqual(indexAgainEl.textContent, 'You said: Still not right',
+    'AC-26: [class~="wk-req-again"] must read "You said: <the text just sent>": got "' + indexAgainEl.textContent + '"')
+  // AC-25: the reopen answers in the msg slot exactly as the ask form does.
+  const indexMsgEl = indexHarness.document.querySelector('[data-wk="msg"]')
+  assert.strictEqual(indexMsgEl.textContent, indexMsgEl.getAttribute('data-saved'),
+    'AC-25: a successful reopen must show the msg slot\'s own data-saved text, same as the ask form: got "' + indexMsgEl.textContent + '"')
+  assert.strictEqual(indexArticle.querySelector('[data-cl="accept"]').hidden, true,
+    'AC-25: a successful reopen must hide the accept control: got hidden=' + indexArticle.querySelector('[data-cl="accept"]').hidden)
+  assert.strictEqual(indexArticle.querySelector('[data-cl="reopen"]').hidden, true,
+    'AC-25: a successful reopen must hide the reopen control itself: got hidden=' + indexArticle.querySelector('[data-cl="reopen"]').hidden)
+  const indexLink = indexArticle.querySelector('.wk-req-link')
+  assert.ok(!indexLink || indexLink.hidden === true,
+    'AC-25: a successful reopen must hide the "See <journey>" link: got ' + JSON.stringify(indexArticle.attrs))
+  assert.strictEqual(indexReopenTextEl.hidden, true,
+    'AC-25: a successful reopen must hide the why textarea, not leave it open with nothing to press: got hidden=' + indexReopenTextEl.hidden)
+  assert.strictEqual(indexReopenTextEl.value, '',
+    'AC-25: a successful reopen must clear the why textarea — its text is already sent: got "' + indexReopenTextEl.value + '"')
+  assert.strictEqual(indexWithdrawBtn.hidden, false,
+    'AC-25: a successful reopen must reveal the withdraw control so the row has a working control: got hidden=' + indexWithdrawBtn.hidden)
+
+  // ---- the walk page ----
+  const addressedNoteWk = clientNote({
+    id: 'N051', scope: 'mock', screen: 'invite', text: 'Wrong copy', status: 'addressed',
+    addressed: { at: NOW, change: 'Fixed the copy', ledgerRow: null },
+  })
+  const walkHtml = buildWalkPage({ seed, journey: 'onboarding', notes: [addressedNoteWk], ledger: [], walk: { journeys: {} }, prefix: '' })
+  const walkHarness = runWalkBrowserRouted(walkHtml, { reached: ['invite'], misses: [], confirmedAt: null, sentence: null },
+    { '/client/__notes/reopen': { ok: true } })
+  await flush()
+  const walkArticle = walkHarness.document.querySelector('[data-wk="request"][data-id="N051"]')
+  assert.ok(walkArticle, 'AC-25 setup: buildWalkPage must render the addressed request card: got\n' + walkHtml)
+  const walkWithdrawBtn = walkArticle.querySelector('[data-wk="withdraw"]')
+  assert.ok(walkWithdrawBtn && walkWithdrawBtn.hidden, 'AC-25 setup: the addressed card\'s withdraw control must render hidden: got ' + JSON.stringify(walkArticle.attrs))
+  const walkReopenTextEl = walkArticle.querySelector('[data-wk="reopen-text"]')
+  walkArticle.querySelector('[data-wk="reopen"]').click() // first press: only unhides the why box
+  await flush()
+  walkReopenTextEl.value = 'Still not right'
+  walkArticle.querySelector('[data-wk="reopen"]').click()
+  await flush()
+  assert.strictEqual(walkArticle.getAttribute('data-status'), 'open',
+    'AC-25: the walk page\'s successful reopen must set data-status="open": got ' + walkArticle.getAttribute('data-status'))
+  const walkStatusEl = walkArticle.querySelector('.wk-req-status')
+  assert.strictEqual(walkStatusEl.textContent, "We'll look at this again",
+    'AC-26: the walk page\'s successful reopen must set the status line to "We\'ll look at this again": got "' + walkStatusEl.textContent + '"')
+  const walkAgainEl = walkArticle.querySelector('.wk-req-again')
+  assert.ok(walkAgainEl && walkAgainEl.hidden === false,
+    'AC-26: the walk page\'s successful reopen must reveal [class~="wk-req-again"]: got ' + JSON.stringify(walkArticle.attrs))
+  assert.strictEqual(walkAgainEl.textContent, 'You said: Still not right',
+    'AC-26: the walk page\'s [class~="wk-req-again"] must read "You said: <the text just sent>": got "' + walkAgainEl.textContent + '"')
+  const walkMsgEl = walkHarness.document.querySelector('[data-wk="msg"]')
+  assert.strictEqual(walkMsgEl.textContent, walkMsgEl.getAttribute('data-saved'),
+    'AC-25: the walk page\'s successful reopen must show the msg slot\'s own data-saved text: got "' + walkMsgEl.textContent + '"')
+  assert.strictEqual(walkArticle.querySelector('[data-wk="accept"]').hidden, true,
+    'AC-25: the walk page\'s successful reopen must hide the accept control: got hidden=' + walkArticle.querySelector('[data-wk="accept"]').hidden)
+  assert.strictEqual(walkArticle.querySelector('[data-wk="reopen"]').hidden, true,
+    'AC-25: the walk page\'s successful reopen must hide the reopen control itself: got hidden=' + walkArticle.querySelector('[data-wk="reopen"]').hidden)
+  assert.strictEqual(walkReopenTextEl.hidden, true,
+    'AC-25: the walk page\'s successful reopen must hide the why textarea: got hidden=' + walkReopenTextEl.hidden)
+  assert.strictEqual(walkReopenTextEl.value, '',
+    'AC-25: the walk page\'s successful reopen must clear the why textarea: got "' + walkReopenTextEl.value + '"')
+  assert.strictEqual(walkWithdrawBtn.hidden, false,
+    'AC-25: the walk page\'s successful reopen must reveal the withdraw control: got hidden=' + walkWithdrawBtn.hidden)
+})
+
+test('AC-20260911-06-26: buildClientIndex and buildWalkPage render an open note\'s thread as "We\'ll look at this again" plus a [class~="wk-req-again"] "You said: …" line, and render plain "We\'ll look at this" with no such element when the note carries no thread', () => {
+  const seed = onboardingSeed([{ label: 'invite', states: [] }])
+  const openNoThread = clientNote({ id: 'N060', scope: 'mock', screen: 'invite', text: 'Wrong color', status: 'open' })
+  const openWithThread = clientNote({
+    id: 'N061', scope: 'mock', screen: 'invite', text: 'Wrong copy', status: 'open',
+    addressed: null,
+    thread: [
+      { at: '2026-09-10T10:00:00.000Z', text: 'Please fix the color', by: 'client', addressed: { at: NOW, change: 'Changed the color', ledgerRow: null } },
+      { at: '2026-09-11T10:00:00.000Z', text: 'Still says Submit', by: 'client', addressed: { at: NOW, change: 'Renamed the button', ledgerRow: null } },
+    ],
+  })
+
+  const indexHtml = buildClientIndex({
+    seed, notes: [openNoThread, openWithThread], ledger: [], walk: { journeys: {} }, prefix: '', ready: new Set(['onboarding']),
+  })
+  const indexArticles = [...indexHtml.matchAll(/<article[^>]*data-cl="request"[\s\S]*?<\/article>/g)].map((m) => m[0])
+  const indexNoThread = indexArticles.find((a) => a.includes('data-id="N060"'))
+  const indexWithThread = indexArticles.find((a) => a.includes('data-id="N061"'))
+  assert.ok(indexNoThread && indexWithThread, 'AC-26 setup: both open notes must render as request articles: got\n' + indexHtml)
+  assert.match(indexNoThread, /<p class="wk-req-status">We'll look at this<\/p>/,
+    'AC-26: a threadless open note must read plain "We\'ll look at this": got\n' + indexNoThread)
+  assert.match(indexNoThread, /<p class="wk-req-again" hidden><\/p>/,
+    'AC-26: a threadless open note must render [class~="wk-req-again"] hidden and empty, never omitted: got\n' + indexNoThread)
+  assert.match(indexWithThread, /<p class="wk-req-status">We'll look at this again<\/p>/,
+    'AC-26: an open note whose thread carries a client reopen must read "We\'ll look at this again": got\n' + indexWithThread)
+  assert.match(indexWithThread, /<p class="wk-req-again">You said: Still says Submit<\/p>/,
+    'AC-26: the again line must read "You said: <the LATEST thread entry\'s text>", not the first: got\n' + indexWithThread)
+  assert.doesNotMatch(indexWithThread, /Done:/,
+    'AC-26: the superseded "Done: …" line must not render once the note is open again: got\n' + indexWithThread)
+
+  const walkHtml = buildWalkPage({ seed, journey: 'onboarding', notes: [openNoThread, openWithThread], ledger: [], walk: { journeys: {} }, prefix: '' })
+  const walkArticles = [...walkHtml.matchAll(/<article[^>]*data-wk="request"[\s\S]*?<\/article>/g)].map((m) => m[0])
+  const walkNoThread = walkArticles.find((a) => a.includes('data-id="N060"'))
+  const walkWithThread = walkArticles.find((a) => a.includes('data-id="N061"'))
+  assert.ok(walkNoThread && walkWithThread, 'AC-26 setup: buildWalkPage must render both request cards: got\n' + walkHtml)
+  assert.match(walkNoThread, /<p class="wk-req-status">We'll look at this<\/p>/,
+    'AC-26: the walk page\'s threadless open card must read plain "We\'ll look at this": got\n' + walkNoThread)
+  assert.match(walkWithThread, /<p class="wk-req-status">We'll look at this again<\/p>/,
+    'AC-26: the walk page\'s open card with a thread must read "We\'ll look at this again": got\n' + walkWithThread)
+  assert.match(walkWithThread, /<p class="wk-req-again">You said: Still says Submit<\/p>/,
+    'AC-26: the walk page\'s again line must match the index\'s own — byte-identical rendering: got\n' + walkWithThread)
+  assert.doesNotMatch(walkWithThread, /Fixed:/,
+    'AC-26: the walk page\'s superseded "Fixed: …" line must not render once the note is open again: got\n' + walkWithThread)
 })
 
 test('AC-20260911-06-17: buildWalkPage\'s accept control reads exactly "Looks good" and never "Looks good now", and buildClientIndex names each request\'s location — "on <screen>" for a mock-scope request, "across the whole product" for a project-scope one', () => {

@@ -122,21 +122,28 @@
       post('/client/__notes/reopen', { id: id, text: text, by: 'client' }).then(function (r) {
         if (!r.ok) { showMsg('failed'); return }
         art.setAttribute('data-status', 'open')
-        // FIX 3 (review): a reopened request is addressed→open, not addressed→addressed — its
-        // status line and controls must stop reading/offering the addressed shape (D6: sets
-        // data-status "open" and "We'll look at this"; D16/D17: `Looks good`/`Still not right`
-        // are addressed-only). AC-20260911-06-16 (locked) forbids the server from ever rendering
-        // a withdraw control on a non-open article, even hidden, so a reopened row cannot be
-        // handed a working `Never mind` without fabricating markup (no innerHTML/createElement
-        // outside the states switcher's own generated-from-safe-data exception, see header) — it
-        // is hidden here rather than mislabeled; a reload (or the index's own re-render) picks up
-        // the real open template with its own withdraw control.
+        // D16 (amended)/AC-20260911-06-25: a reopened request ends up in the SAME shape the
+        // server renders for an open request — its status line and addressed-only controls (the
+        // link, accept, reopen) hide, the why box hides AND clears (its text is already sent, so
+        // keeping it invites a duplicate), and the withdraw control (rendered hidden on every
+        // addressed article — see lib/walk-page.js) is revealed. A reload must change nothing the
+        // client can see. AC-20260911-06-26: the row also remembers this round — its status line
+        // reads "again" and its own [class~="wk-req-again"] placeholder (server-rendered hidden/
+        // empty on every article, never fabricated here) is activated with the text just sent, so
+        // a reload paints byte-identically (lib/walk-page.js's `latestReopenText` reads it back
+        // off the note's own `thread`).
         var reopenStatusEl = art.querySelector('.wk-req-status')
-        if (reopenStatusEl) reopenStatusEl.textContent = "We'll look at this"
+        if (reopenStatusEl) reopenStatusEl.textContent = "We'll look at this again"
+        var againEl = art.querySelector('.wk-req-again')
+        if (againEl) { againEl.textContent = 'You said: ' + text; againEl.hidden = false }
         var link = art.querySelector('.wk-req-link')
         if (link) link.hidden = true
         if (acceptBtn) acceptBtn.hidden = true
         if (reopenBtn) reopenBtn.hidden = true
+        if (reopenText) { reopenText.hidden = true; reopenText.value = '' }
+        if (withdrawBtn) withdrawBtn.hidden = false
+        // AC-20260911-06-25: the reopen answers in the msg slot exactly as the ask form does.
+        showMsg('saved')
         if (onChange) onChange()
       }).catch(function () { showMsg('failed') })
     })

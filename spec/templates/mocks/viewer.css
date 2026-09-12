@@ -562,6 +562,12 @@ body {
 .wk-req:has(.wk-req-again:not([hidden])) .wk-req-link { grid-row: 4; }
 .wk-req:has(.wk-req-again:not([hidden])) .wk-req-acts { grid-row: 1 / 5; }
 .wk-req[data-status="resolved"] .wk-req-acts { display: none; }
+/* specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D6: the one exception to the
+   resolved-row hide rule above — a withdrawn request still offers "Put it back", so its own
+   .wk-req-acts must survive the general rule. Selector specificity (two attribute selectors vs
+   one) is what wins here, not source order alone — kept directly under the rule it overrides so
+   the exception reads next to the rule it exists to defeat. */
+.wk-req[data-status="resolved"][data-resolution="withdrawn"] .wk-req-acts { display: flex; }
 /* the "why" box waits until "Still not right" is pressed — the script alone opens and closes it
    through the `hidden` attribute (`.wk [hidden]` above); no CSS state of its own */
 .wk-req-why { flex-basis: 100%; width: 100%; min-width: 0; margin-top: var(--v-space-1); }
@@ -668,6 +674,21 @@ body {
 .wk-excl-said { margin: 0 0 var(--v-space-2); padding-left: var(--v-space-3); border-left: 2px solid var(--v-ring); color: var(--v-fg); font-size: 14px; }
 .wk-excl-state { margin: 0; color: var(--v-fg); font-size: 14px; }
 .wk-excl[data-verdict] .wk-verdicts { display: none; }
+/* specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D4/D6 (render-check fix, JJ
+   2026-09-12): the binding mock (design/client-mocks/walk.html:115) renders both "way back"
+   controls INLINE, inside the sentence they belong to — never as a bordered `.wk button` box on
+   its own line. `.wk .wk-excl-change`/`.wk .wk-excl-put` (the extra `.wk` ancestor class, matching
+   the `.wk .wk-j-cta-primary`/`.wk [data-wk-role="nav"]` pattern above) is what beats `.wk
+   button`'s own (0,1,1) specificity at :421 — a bare `.wk-excl-change` selector alone is (0,1,0)
+   and loses to it. Values are the mock's own (`display:inline`, `padding:0 4px`, 14px, underline,
+   `text-underline-offset:3px`), translated onto this file's own --v-* tokens where one exists
+   (color -> --v-fg, hover -> --v-muted-bg) rather than the mock's raw hex. */
+.wk .wk-excl-change, .wk .wk-excl-put {
+  display: inline; padding: 0 4px; font-size: 14px; text-decoration: underline;
+  text-underline-offset: 3px; color: var(--v-fg); background: transparent; border: 0;
+  border-radius: var(--v-radius); line-height: inherit;
+}
+.wk .wk-excl-change:hover, .wk .wk-excl-put:hover { background: var(--v-muted-bg); }
 .wk-side .wk-msg { margin: 0; }
 
 @media (max-width: 1180px) {

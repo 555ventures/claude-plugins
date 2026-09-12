@@ -2213,6 +2213,17 @@ function createRequestHandler(root, opts = {}) {
           jsonRes(res, 400, { error: 'note "' + id + '" is ' + origin + '-origin — the client route reopens only client-origin notes' })
           return
         }
+        // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D5: "Put it back" — a
+        // resolved/withdrawn client-origin note is reopened with NO text required, ahead of the
+        // two pre-existing refusals below (which stay untouched for every other status/text
+        // combination). Nothing new is written to the ledger here: the note leaving "withdrawn" is
+        // what the next materialize (on the walk page's own GET) reads to retire the derived row.
+        if (target.status === 'resolved' && target.resolution === 'withdrawn') {
+          const result = notesLib.reopenNote(notes, id, { text, by: (body && body.by) || 'client' })
+          notesLib.writeNotes(rootAbs, result.notes)
+          jsonRes(res, 200, result.note)
+          return
+        }
         if (target.status !== 'addressed') {
           jsonRes(res, 400, { error: 'note "' + id + '" is ' + target.status + ' — only an addressed note is reopened' })
           return
@@ -2290,6 +2301,16 @@ function createRequestHandler(root, opts = {}) {
       const mocksTheme = () => {
         try { return JSON.parse(fs.readFileSync(path.join(rootAbs, 'design/mocks/status.json'), 'utf8')).theme || null } catch { return null }
       }
+      // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D3: the sign-off cut-off —
+      // `marks.approved` read fresh from design/mocks/status.json on every request, the same
+      // fresh-read shape `mocksTheme` above already uses (A3). Returns the plain `YYYY-MM-DD` date
+      // (the ISO stamp's own date portion) or null when the work has not been signed off yet.
+      const approvedDate = () => {
+        try {
+          const marks = JSON.parse(fs.readFileSync(path.join(rootAbs, 'design/mocks/status.json'), 'utf8')).marks
+          return (marks && marks.approved) ? String(marks.approved).slice(0, 10) : null
+        } catch { return null }
+      }
 
       // specs/20260911/06-the-client-loop.md D15: `ready` — the set of seed journeys every one
       // of whose declared screens has design/mocks/<label>.html on disk. `status.json`'s
@@ -2355,7 +2376,7 @@ function createRequestHandler(root, opts = {}) {
         materializeExclusions(notes)
         serveBuiltHtml(res, () => walkPageLib.buildWalkPage({
           seed: seedForReview(rootAbs), journey: walkPageMatch[1], notes, ledger: readLedgerRowsOrEmpty(),
-          walk: readWalkOrEmpty(), prefix, theme: mocksTheme(),
+          walk: readWalkOrEmpty(), prefix, theme: mocksTheme(), approved: approvedDate(),
         }))
         return
       }
@@ -2397,17 +2418,31 @@ function createRequestHandler(root, opts = {}) {
 
       // specs/20260911/05-approval-is-bookkeeping.md D3: the client's verdict per exclusion row —
       // 400 on a row that is not `kind: "exclusion"`, 404 on an unknown id, 400 on a verdict
-      // outside {agree, needed}; `verdict: 'agree'` (the default when absent — spec 20260910/05
-      // D5's caller shape keeps working) sets `confirmed <today>`, `verdict: 'needed'` sets
-      // `overridden <today>` and stamps `rejected: 'client-needed'` so a future `ledger derive`
-      // never reopens or re-adds it — the client's D4 answer is final (the client route's one
-      // ledger write besides /__notes/answer's promoted row).
+      // outside {agree, needed, reconsider}; `verdict: 'agree'` (the default when absent — spec
+      // 20260910/05 D5's caller shape keeps working) sets `confirmed <today>`, `verdict: 'needed'`
+      // sets `overridden <today>` and stamps `rejected: 'client-needed'` so a future `ledger
+      // derive` never reopens or re-adds it, and `verdict: 'reconsider'`
+      // (specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D1/D2) is the inverse — it
+      // sets `open` and clears `rejected` — the client's D4 answer is final only until the client
+      // reconsiders (the client route's one ledger write besides /__notes/answer's promoted row).
+      // D3: the sign-off cut-off outranks every check below — once `marks.approved` is set, every
+      // verdict (even one that would otherwise 400 or 404) refuses 409 naming the date, and the
+      // ledger is never even read, let alone rewritten. The page never renders a control the 409
+      // would refuse (buildWalkPage's read-only render), so a client only meets this from a stale
+      // tab.
       if (reqPath === '/__walk/exclusion' && req.method === 'POST') {
         readJsonBody(req).then((body) => {
+          const approved = approvedDate()
+          if (approved) {
+            jsonRes(res, 409, {
+              error: 'the work was signed off on ' + approved + ' — this list is now a record; tell us in the note box and we will come back to you',
+            })
+            return
+          }
           const id = body && body.id
           const verdict = (body && body.verdict) || 'agree'
-          if (verdict !== 'agree' && verdict !== 'needed') {
-            jsonRes(res, 400, { error: 'verdict must be agree or needed (got "' + verdict + '")' })
+          if (verdict !== 'agree' && verdict !== 'needed' && verdict !== 'reconsider') {
+            jsonRes(res, 400, { error: 'verdict must be agree, needed or reconsider (got "' + verdict + '")' })
             return
           }
           const ledgerPath = path.join(rootAbs, 'design/mocks/ledger.md')
@@ -2423,11 +2458,13 @@ function createRequestHandler(root, opts = {}) {
             return
           }
           const today = new Date().toISOString().slice(0, 10)
-          const status = (verdict === 'needed' ? 'overridden ' : 'confirmed ') + today
+          const status = verdict === 'needed' ? 'overridden ' + today : verdict === 'reconsider' ? 'open' : 'confirmed ' + today
           let rewritten
           try { rewritten = setExclusionVerdict(ledgerText, id, verdict, today) } catch (e) { jsonRes(res, 400, { error: e.message }); return }
           fs.writeFileSync(ledgerPath, rewritten)
-          jsonRes(res, 200, verdict === 'needed' ? { id, status, rejected: 'client-needed' } : { id, status })
+          const respBody = verdict === 'needed' ? { id, status, rejected: 'client-needed' } :
+            verdict === 'reconsider' ? { id, status, rejected: null } : { id, status }
+          jsonRes(res, 200, respBody)
         }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
         return
       }

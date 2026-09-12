@@ -1,6 +1,7 @@
 # Memory index
 
 - [Spec 01 card-explains-itself: expired-file recreation + shim class-match gap](spec-20260912-01-card-explains-itself.md) — design-doctrine.test.js recreated fresh (test-expiry sweep, not a fork); copied the class-selector repair into exclusions-route.test.js's own flat-DOM shim copy.
+- [Spec 02 answer-is-clients-until-signoff: marks.approved ISO shape + ledger cell index](spec-20260912-02-answer-is-clients-until-signoff.md) — status.json's marks.approved is a full ISO timestamp, sliced to a date; AC-9's observable is mechanism-agnostic (reopenNote never clears resolution); ledger row split-by-| has a leading empty cell (status is index 6, not 5).
 - [Spec 04 disposition-grammar tests: testGlobs:[null] crash + green-pre-change reconstruction](spec-20260911-04-disposition-grammar-tests.md) — force count-tests.js/scope-reconcile.js to crash via host config; AC-18's before/after count pin is legitimately green today, proven via a scratch-patched real-lib reconstruction, not skipped.
 - [Doctrine regex pins and line-wrap](doctrine-regex-linewrap.md) — use \s+ not a literal space between words in multi-word doctrine regex pins; markdown hard-wrap can split the phrase across lines in only one of several files.
 - [Stale dispatch premise from a concurrent session](stale-dispatch-premise-concurrent-session.md) — re-derive current repo state (git log, live grep) before authoring a red pin from a dispatch prompt's incident narrative; another session can land the fix mid-task.

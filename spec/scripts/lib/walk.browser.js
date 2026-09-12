@@ -8,6 +8,11 @@
 // only on the server's answer, never before it — see the Behavior table); specs/20260911/04-the-
 // client-loop.md D6/D16/D17 (the return-leg controls) and D21 (the step indicator replacing the
 // old screen spine, the caption text, and the one nav button that reads Next or Confirm).
+// specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D4 ("Change answer" — an exclusion
+// row's own reversal, posting `verdict:'reconsider'`), D6 ("Put it back" — the shared
+// wireRequestCard putback arm plus the exclusion row's own inline one, both posting
+// /client/__notes/reopen with no text), D7 (the confirm handler's in-place swap to the sign-off
+// block's confirmed shape, dropping the bar's confirm control).
 //
 // On load: fetches <prefix>/client/__walk/state?journey=<j> (the server's own walk record — the
 // one source of truth for what survives a reload) and derives the current screen from the last
@@ -102,6 +107,26 @@
     // the visible status line to "Closed", the same word a session-side resolve without an
     // "accepted" resolution renders on a full page reload.
     var withdrawBtn = art.querySelector('[data-' + attr + '="withdraw"]')
+    // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D6: "Put it back" — the
+    // inverse of the withdraw button above, rendered only on an already-withdrawn (resolved)
+    // article. Posts the SAME route the accept/reopen/withdraw handlers already use
+    // (POST /client/__notes/reopen), with NO text (the "no text required" arm D5 adds server-
+    // side) — this is a return-leg, not a new request. On ok the article's own status flips to
+    // "open" and the button that just fired hides (a reload after this renders the article's full
+    // open shape from scratch, same as any other reopen).
+    var putbackBtn = art.querySelector('[data-' + attr + '="putback"]')
+    on(putbackBtn, 'click', function () {
+      post('/client/__notes/reopen', { id: id, by: 'client' }).then(function (r) {
+        if (!r.ok) { showMsg('failed'); return }
+        art.setAttribute('data-status', 'open')
+        art.removeAttribute('data-resolution')
+        var statusEl = art.querySelector('.wk-req-status')
+        if (statusEl) statusEl.textContent = "We'll look at this"
+        putbackBtn.hidden = true
+        showMsg('putback-saved')
+        if (onChange) onChange()
+      }).catch(function () { showMsg('failed') })
+    })
     on(acceptBtn, 'click', function () {
       post('/client/__notes/resolve', { id: id, by: 'client' }).then(function (r) {
         if (!r.ok) { showMsg('failed'); return }
@@ -244,6 +269,13 @@
   var reachedSoFar = []
   var answered = {}
   var leftCount = qa('[data-wk="mark"]').length
+  // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D7: set the moment a confirm
+  // succeeds — `updateNav()` (below) checks this FIRST so a later `apply()` (the initial
+  // `/client/__walk/state` fetch can resolve after the confirm click's own, shorter promise
+  // chain — both are in flight from page load) never re-adds `[data-wk="confirm"]` over the
+  // just-confirmed bar. Without this flag the confirm handler's own attribute removal is a race
+  // it can lose.
+  var confirmedLocally = false
 
   function stepFor(label) {
     for (var i = 0; i < steps.length; i++) if (steps[i].getAttribute('data-label') === label) return steps[i]
@@ -294,6 +326,11 @@
   // attributes (the builder's already-escaped strings), never hardcoded here.
   function updateNav() {
     if (!navBtn) return
+    // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D7: once confirmed locally,
+    // stay confirmed — a later `apply()` (the page-load state fetch, still in flight when the
+    // confirm click's own shorter promise chain finishes first) must never re-add the confirm
+    // control over an already-confirmed bar.
+    if (confirmedLocally) { navBtn.removeAttribute('data-wk'); navBtn.hidden = true; return }
     var isLast = lastLabel && currentLabel === lastLabel
     if (isLast) {
       navBtn.setAttribute('data-wk', 'confirm')
@@ -396,7 +433,23 @@
       var sentence = ta ? String(ta.value || '').trim() : ''
       if (!sentence) return
       post('/client/__walk/confirm', { journey: journey, sentence: sentence }).then(function (r) {
-        if (!r.ok) showMsg('failed')
+        if (!r.ok) { showMsg('failed'); return }
+        // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D7: the second click no
+        // longer looks like nothing happened — the sign-off block swaps to its confirmed shape IN
+        // PLACE (no reload) and the bar drops the confirm control, leaving Back. The confirmed
+        // lead/sentence are activated from the block's own hidden attribute/element (see
+        // lib/walk-page.js's renderSignoff) rather than fabricated here.
+        if (signoffEl) {
+          var leadEl = signoffEl.querySelector('.wk-lead')
+          if (leadEl) leadEl.textContent = signoffEl.getAttribute('data-confirmed-lead') || leadEl.textContent
+          var confirmedSentenceEl = signoffEl.querySelector('[data-wk="confirmed-sentence"]')
+          if (confirmedSentenceEl) { confirmedSentenceEl.textContent = sentence; confirmedSentenceEl.hidden = false }
+        }
+        if (ta) { ta.removeAttribute('data-wk'); ta.hidden = true }
+        confirmedLocally = true
+        navBtn.removeAttribute('data-wk')
+        navBtn.hidden = true
+        showMsg('confirm-saved')
       }).catch(function () { showMsg('failed') })
     } else {
       step(1)
@@ -453,19 +506,58 @@
     var agreeBtn = art.querySelector('[data-wk="agree"]')
     var neededBtn = art.querySelector('[data-wk="needed"]')
     var stateEl = art.querySelector('.wk-excl-state')
+    // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D4 (render-check fix, JJ
+    // 2026-09-12): "Change answer" now lives INSIDE `.wk-excl-state`'s own `<p>`, so the sentence
+    // is written into a dedicated child span (`.wk-excl-state-text`) — never the paragraph's own
+    // `textContent`, which would erase the embedded button on every answer.
+    var stateTextEl = art.querySelector('.wk-excl-state-text')
+    var verdictsEl = art.querySelector('.wk-verdicts')
+    var reconsiderBtn = art.querySelector('[data-wk="reconsider"]')
     function answer(verdict) {
       post('/client/__walk/exclusion', { id: id, verdict: verdict }).then(function (r) {
         if (!r.ok) { showMsg('failed'); return }
         art.setAttribute('data-verdict', verdict)
-        if (stateEl && exclSection) {
-          stateEl.textContent = exclSection.getAttribute('data-said-' + verdict) || ''
-          stateEl.hidden = false
-        }
+        if (stateTextEl && exclSection) stateTextEl.textContent = exclSection.getAttribute('data-said-' + verdict) || ''
+        if (stateEl) stateEl.hidden = false
+        // D4: the row's own reconsider control is shipped hidden while open (there was nothing
+        // yet to change) — a fresh agree/needed answer reveals it immediately, no reload needed,
+        // matching the shape a reload of an already-answered row already carries.
+        if (reconsiderBtn) reconsiderBtn.hidden = false
         showMsg('excl-saved')
       }).catch(function () { showMsg('failed') })
     }
     on(agreeBtn, 'click', function () { answer('agree') })
     on(neededBtn, 'click', function () { answer('needed') })
+    // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D4: "Change answer" — posts
+    // {id, verdict:'reconsider'} and, on ok, returns the row to its open shape IN PLACE: clears
+    // data-verdict (so the row no longer reads its old state sentence), re-hides the state
+    // sentence, and reveals the two verdict buttons again — the exact inverse of `answer()`
+    // above. The receipt is the SAME `data-excl-saved` text `answer()` already shows (D4's own
+    // sentence promises unlimited change before sign-off, which is the same promise the first
+    // save's receipt makes).
+    on(reconsiderBtn, 'click', function () {
+      post('/client/__walk/exclusion', { id: id, verdict: 'reconsider' }).then(function (r) {
+        if (!r.ok) { showMsg('failed'); return }
+        art.removeAttribute('data-verdict')
+        if (stateEl) stateEl.hidden = true
+        if (verdictsEl) verdictsEl.hidden = false
+        showMsg('excl-saved')
+      }).catch(function () { showMsg('failed') })
+    })
+    // D6: the exclusion row's own "Put it back" — reopens the WITHDRAWN NOTE this row was
+    // derived from (`data-note-id`, never the row's own `data-id`), through the same
+    // /client/__notes/reopen route the request cards' own putback uses. The row itself is not
+    // rewritten here at all — the next materialize (the walk page's own GET) is what retires it,
+    // per D5's Rationale ("nothing new is written to the ledger").
+    var putbackBtn = art.querySelector('[data-wk="putback"]')
+    on(putbackBtn, 'click', function () {
+      var noteId = putbackBtn.getAttribute('data-note-id')
+      post('/client/__notes/reopen', { id: noteId, by: 'client' }).then(function (r) {
+        if (!r.ok) { showMsg('failed'); return }
+        putbackBtn.hidden = true
+        showMsg('putback-saved')
+      }).catch(function () { showMsg('failed') })
+    })
   })
 
   // ---- request cards: accept/reopen, shared with the index's own cards ------------------------

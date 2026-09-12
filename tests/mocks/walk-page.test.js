@@ -541,3 +541,37 @@ function exclRow(id, extra) {
   return ledgerRow(id, Object.assign({ kind: 'exclusion', claim: 'a claim', note: 'non-goal: a claim', status: 'open', rejected: null }, extra))
 }
 
+
+// ---------------------------------------------------------------------------
+// specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D6 — viewer.css gains a more
+// specific override so a withdrawn request's "Put it back" survives the general resolved-row
+// hide rule, which every other closed request must CONTINUE to obey. AC-20260912-02-12,
+// AC-20260912-02-15. A brace-depth CSS-rule extractor, copied from tests/design-atlas.test.js's
+// own cssRuleBody (single extra consumer — kept file-local rather than promoted to helpers.js,
+// same discipline this repo's shim duplication already follows).
+// ---------------------------------------------------------------------------
+function cssRuleBody(css, selector) {
+  const re = new RegExp(selector.replace(/[.#[\]]/g, '\\$&') + '\\s*\\{')
+  const m = re.exec(css)
+  if (!m) return null
+  let depth = 0
+  let i = m.index + m[0].length - 1
+  for (; i < css.length; i++) {
+    if (css[i] === '{') depth++
+    else if (css[i] === '}') { depth--; if (depth === 0) break }
+  }
+  return css.slice(m.index + m[0].length, i)
+}
+
+
+test('AC-20260912-02-15: viewer.css CONTINUES TO declare `.wk-req[data-status="resolved"] .wk-req-acts { display: none; }`', () => {
+  const css = read('spec/templates/mocks/viewer.css')
+  const body = cssRuleBody(css, '.wk-req[data-status="resolved"] .wk-req-acts')
+  assert.ok(body,
+    'AC-15: the general resolved-row hide rule must CONTINUE TO exist — its disappearance would ' +
+    'reveal accept/reopen/withdraw controls on every already-closed request, not only a withdrawn ' +
+    'one: got no matching rule')
+  assert.match(body, /display\s*:\s*none\s*;/,
+    'AC-15: the general resolved-row rule must CONTINUE TO set display:none: got "' + body + '"')
+})
+

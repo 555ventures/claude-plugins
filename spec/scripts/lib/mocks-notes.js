@@ -328,6 +328,14 @@ function addressNote(notes, id, opts) {
 // client's new text into `thread` (created when absent), nulls `addressed`, and sets status back
 // to "open". design-atlas.js's client route checks origin/status/text preconditions BEFORE ever
 // calling this — reopenNote itself performs the mutation only, no validation of its own.
+// specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D5: the "put it back" arm reopens a
+// resolved/withdrawn note the same way — the note must actually LEAVE "withdrawn" so
+// lib/mocks-exclusions.js's `withdrawnNotNeededEntries` (which keys only on `resolution`/
+// `withdrawReason`, never `status`) stops deriving a source from it; a status flip alone would
+// leave the note reading `status: 'open'` with a stale `resolution: 'withdrawn'` forever, and the
+// next `materialize` would neither retire the derived row nor ever let the source register again.
+// Nulling both is a no-op for the pre-existing addressed-note arm (neither field is ever set on an
+// addressed note in the first place).
 function reopenNote(notes, id, opts) {
   const { next, found } = cloneFind(notes, id)
   const o = opts || {}
@@ -337,6 +345,8 @@ function reopenNote(notes, id, opts) {
   ])
   found.status = 'open'
   found.addressed = null
+  found.resolution = null
+  found.withdrawReason = null
   found.lastClientAt = new Date().toISOString()
   return { notes: next, note: found }
 }

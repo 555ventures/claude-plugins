@@ -10,6 +10,7 @@ const {
   ledgerCmd, nowIso, stubNpxScreenshot,
 } = require('./mocks-driver-fixtures')
 const walkLib = require('../../spec/scripts/lib/mocks-walk')
+const { appendAssumption, parseLedger } = require('../../spec/scripts/lib/mocks-ledger')
 
 // specs/20260910/03-client-journey-player.md D5 (design-atlas.js's client-mount walk routes and
 // /__walk/player.js) and D6 (the client-route answer promotion) are both unbuilt — every test
@@ -106,6 +107,42 @@ test('AC-20260911-06-15: POST /client/__notes/add on a mock-scope client note CO
       'AC-15: resolving an addressed client note must CONTINUE TO answer 200: got ' + resolved.status + ' ' + JSON.stringify(resolved.body))
     assert.strictEqual(resolved.body && resolved.body.resolution, 'accepted',
       'AC-15: resolving an addressed client note must CONTINUE TO record resolution:"accepted": got ' + JSON.stringify(resolved.body))
+  } finally {
+    await stop()
+  }
+})
+
+
+// ---------------------------------------------------------------------------
+// specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D5 — the route's two pre-existing
+// refusals must survive the new arm untouched. AC-20260912-02-10.
+// ---------------------------------------------------------------------------
+test('AC-20260912-02-10: POST /client/__notes/reopen CONTINUES TO 400 an open client-origin note naming "only an addressed note is reopened", and CONTINUES TO 400 an addressed note given empty text naming "reopen text must be non-empty"', async () => {
+  const dir = tmpdir('client-reopen-continue')
+  advanceToSeedDone(dir)
+  const openNote = baseNote({ id: 'N030', status: 'open', origin: 'client' })
+  const addressedNote = baseNote({
+    id: 'N031', status: 'addressed', origin: 'client',
+    addressed: { at: nowIso(), change: 'fixed it', ledgerRow: null },
+  })
+  writeNotesFile(dir, [openNote, addressedNote])
+
+  const port = await freePort()
+  const { stop } = await serveAtlas(dir, { port })
+  try {
+    const address = 'http://127.0.0.1:' + port
+    const openRes = await postJson(address + '/client/__notes/reopen', { id: 'N030', text: 'still wrong', by: 'client' })
+    assert.strictEqual(openRes.status, 400,
+      'AC-10: reopening an open note must CONTINUE TO 400 — D5 adds one arm for a resolved/' +
+      'withdrawn note only, never widens the open-note refusal: got ' + openRes.status + ' ' + JSON.stringify(openRes.body))
+    assert.match((openRes.body && openRes.body.error) || '', /only an addressed note is reopened/,
+      'AC-10: the open-note refusal must CONTINUE TO name "only an addressed note is reopened": got ' + JSON.stringify(openRes.body))
+
+    const emptyRes = await postJson(address + '/client/__notes/reopen', { id: 'N031', text: '', by: 'client' })
+    assert.strictEqual(emptyRes.status, 400,
+      'AC-10: reopening an addressed note with empty text must CONTINUE TO 400: got ' + emptyRes.status + ' ' + JSON.stringify(emptyRes.body))
+    assert.match((emptyRes.body && emptyRes.body.error) || '', /reopen text must be non-empty/,
+      'AC-10: the empty-text refusal must CONTINUE TO name "reopen text must be non-empty": got ' + JSON.stringify(emptyRes.body))
   } finally {
     await stop()
   }

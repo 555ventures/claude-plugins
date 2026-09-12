@@ -24,10 +24,15 @@
 //     ready   Set of journey names whose declared screens all exist on disk (D15) — an unready
 //             journey renders no row of any kind
 //
-//   buildWalkPage({ seed, journey, notes, ledger, walk, prefix, theme }) → html
-//     journey the journey's kebab name; an unknown one throws naming every declared journey
-//             (design-atlas.js turns that throw into the route's 404)
-//     theme   the adopted theme kebab, threaded into the frame URL by walk.browser.js
+//   buildWalkPage({ seed, journey, notes, ledger, walk, prefix, theme, approved }) → html
+//     journey  the journey's kebab name; an unknown one throws naming every declared journey
+//              (design-atlas.js turns that throw into the route's 404)
+//     theme    the adopted theme kebab, threaded into the frame URL by walk.browser.js
+//     approved specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D3: the sign-off
+//              date ("YYYY-MM-DD") once design/mocks/status.json carries `marks.approved`, or
+//              undefined/null before it — design-atlas.js reads it fresh per request. Once set,
+//              the exclusions section renders as a dated, control-free record (renderExclusions/
+//              renderExclusion) — nothing else on the page reads this param.
 //
 // Byte-deterministic for equal inputs: no fs, no clock, no randomness, no environment read. The
 // page ships no dynamic state of its own — every moving part (the frame's src, which marks show,
@@ -94,6 +99,26 @@ const STRINGS = {
   // D5: the exclusion save's own receipt — distinct from `msgSaved`, which narrates the free-note
   // and mark saves elsewhere on this same page.
   exclSaved: 'Saved. You can change your answer until the work is signed off.',
+  // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D4: "Change answer" — every
+  // non-open exclusion row's own reversal control before sign-off, EXCEPT a dropped row the client
+  // never touched (renderExclusion's own `verdict !== 'dropped'` gate).
+  exclChange: 'Change answer',
+  // D3: the sign-off cut-off's own read-only lead (replaces specs/20260912/01 D1's question lead
+  // once approved is set) and an unanswered row's own read-only state sentence.
+  exclRecordedLead: 'Recorded on {date} when the work was signed off. If anything here is a ' +
+    'surprise, tell us in the note above.',
+  exclStateNone: 'You did not answer, so this was recorded as not contested. It stays out.',
+  // D6: "Put it back" — the one sentence and control shared by all three surfaces a withdrawn
+  // client request renders on (the index's closed list, the walk page's own request card, and
+  // the exclusion row it produced).
+  reqWithdrawnLine: "You took this back — it's on the list of things we will not build.",
+  reqPutback: 'Put it back',
+  putbackSaved: "Saved. That's back on your list.",
+  // D7: the confirm receipt — the sign-off block's own successful-confirm message, distinct from
+  // `confirmedLead`, which narrates the CONFIRMED RENDER itself rather than the save that produced
+  // it.
+  confirmSaved: 'Confirmed — thank you. You can still change an answer on this page until the ' +
+    'work is signed off.',
   // specs/20260911/06-the-client-loop.md D4: the journey row's derived-state text.
   notStarted: 'Not started',
   inProgress: 'In progress',
@@ -271,7 +296,18 @@ function renderIndexRequest(n, journeysList, prefix, s, closed) {
       '<button class="wk-req-act" type="button" data-cl="withdraw">' + esc(s.reqWithdraw) + '</button>' +
       '</div>'
   } else if (status === 'resolved') {
-    statusLine = n.resolution === 'accepted' ? s.reqClosedThanks : s.reqClosed
+    // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D6: a withdrawn request
+    // carries its own sentence and its own "Put it back" — the only resolved request that gets a
+    // control at all, keyed by `data-resolution="withdrawn"` on the article itself (below) so
+    // viewer.css's more specific override can un-hide only this one row's `.wk-req-acts`.
+    if (n.resolution === 'withdrawn') {
+      statusLine = s.reqWithdrawnLine
+      extra = '<div class="wk-req-acts">' +
+        '<button class="wk-req-act" type="button" data-cl="putback">' + esc(s.reqPutback) + '</button>' +
+        '</div>'
+    } else {
+      statusLine = n.resolution === 'accepted' ? s.reqClosedThanks : s.reqClosed
+    }
   } else {
     const change = (n.addressed && n.addressed.change) || ''
     statusLine = s.reqDonePrefix + change
@@ -299,6 +335,7 @@ function renderIndexRequest(n, journeysList, prefix, s, closed) {
   const again = '<p class="wk-req-again"' + (reopenText != null ? '' : ' hidden') + '>' +
     (reopenText != null ? esc(s.reqAgainPrefix + reopenText) : '') + '</p>'
   return '<article class="wk-req" data-cl="request" data-id="' + esc(n.id) + '" data-status="' + esc(status) + '"' +
+    (n.resolution ? ' data-resolution="' + esc(n.resolution) + '"' : '') +
     (closed ? ' data-closed hidden' : '') + '>' +
     '<p class="wk-req-text">' + esc(n.text) + '</p>' +
     again +
@@ -387,6 +424,15 @@ function renderWalkRequest(n, s) {
     extra = '<div class="wk-req-acts">' +
       '<button class="wk-req-act" type="button" data-wk="withdraw">' + esc(s.reqWithdraw) + '</button>' +
       '</div>'
+  } else if (status === 'resolved' && n.resolution === 'withdrawn') {
+    // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D6: the same withdrawn-only
+    // exception as the index's own renderIndexRequest — a resolved-withdrawn request is the one
+    // resolved request the walk page's D20 "no resolved cards" filter does NOT drop
+    // (buildWalkPage's own requestNotes filter), because it carries a live way back.
+    statusLine = s.reqWithdrawnLine
+    extra = '<div class="wk-req-acts">' +
+      '<button class="wk-req-act" type="button" data-wk="putback">' + esc(s.reqPutback) + '</button>' +
+      '</div>'
   } else {
     const change = (n.addressed && n.addressed.change) || ''
     statusLine = s.reqFixedPrefix + change
@@ -402,7 +448,7 @@ function renderWalkRequest(n, s) {
   const again = '<p class="wk-req-again"' + (reopenText != null ? '' : ' hidden') + '>' +
     (reopenText != null ? esc(s.reqAgainPrefix + reopenText) : '') + '</p>'
   return '<article class="wk-req" data-wk="request" data-id="' + esc(n.id) + '" data-label="' + esc(n.screen) +
-    '" data-status="' + esc(status) + '" hidden>' +
+    '" data-status="' + esc(status) + '"' + (n.resolution ? ' data-resolution="' + esc(n.resolution) + '"' : '') + ' hidden>' +
     '<p class="wk-req-text">' + esc(n.text) + '</p>' +
     again +
     '<p class="wk-req-status">' + esc(statusLine) + '</p>' +
@@ -556,8 +602,11 @@ function buildClientIndex(input) {
     renderAskForm(s) +
     renderRequestsSection(notes, journeysList, prefix, s) +
     // D4: the shared receipt slot — every ask/accept/reopen save reports through it.
+    // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D6: `data-putback-saved` is
+    // its own receipt, distinct from `data-saved` — Put it back is not an ask/accept/reopen.
     '<p class="wk-msg" data-wk="msg" role="status" aria-live="polite" data-saved="' + esc(s.msgSaved) +
-    '" data-failed="' + esc(s.msgFailed) + '" data-why="' + esc(s.msgWhyIndex) + '" hidden></p>' +
+    '" data-failed="' + esc(s.msgFailed) + '" data-why="' + esc(s.msgWhyIndex) +
+    '" data-putback-saved="' + esc(s.putbackSaved) + '" hidden></p>' +
     '</main>' +
     '<script src="' + esc(prefix) + '/__walk/player.js"></script>' +
     '</body></html>\n'
@@ -719,9 +768,17 @@ function renderExclClaim(claim, s) {
 // D2: the provenance sentence for the two rows this pipeline CONSTRUCTED from the client's own
 // words — never rendered for a `non-goal:` row (transcription, nothing was inferred) or a row
 // whose note id resolved to nothing (nothing to quote).
-function renderExclProvenance(row, note, s) {
+// specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D6 (render-check finding, JJ
+// 2026-09-12): the binding mock (design/client-mocks/walk.html:356, R3) renders "Put it back"
+// INSIDE the provenance line's own `<p>`, right after its sentence and BEFORE the
+// `wk-excl-said` quote — never as a bordered box stacked below it. `putbackHtml` is the
+// caller's own `renderExclPutback(...)` output (or '' once approved/not-withdrawn), spliced in
+// here rather than appended after this function's return, so the button never becomes a sibling
+// of the sentence it belongs to.
+function renderExclProvenance(row, note, s, putbackHtml) {
   if (!note) return ''
   const screen = humanizeLabel(note.screen)
+  const put = putbackHtml || ''
   if (row.note.indexOf('answer: ') === 0) {
     const said = (note.answer && note.answer.text) || ''
     return '<p class="wk-excl-from">' + esc(s.exclFromAnswer.replace('{screen}', screen)) + '</p>' +
@@ -729,7 +786,7 @@ function renderExclProvenance(row, note, s) {
   }
   if (row.note.indexOf('withdrawn: ') === 0) {
     const said = note.text || ''
-    return '<p class="wk-excl-from">' + esc(s.exclFromWithdrawn.replace('{screen}', screen)) + '</p>' +
+    return '<p class="wk-excl-from">' + esc(s.exclFromWithdrawn.replace('{screen}', screen)) + (put ? ' ' + put : '') + '</p>' +
       '<p class="wk-excl-said">' + esc(said) + '</p>'
   }
   return ''
@@ -738,11 +795,36 @@ function renderExclProvenance(row, note, s) {
 // D4: the reload trace — a non-open row's own state sentence and the `data-verdict` that CSS
 // keys the buttons' visibility off of. Returns `{ verdict, text }`, both '' for an `open` row
 // (renderExclusion keeps its two buttons there instead).
+// specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D1/D3: a real ledger row's own
+// `status` cell carries an optional trailing date ("confirmed 2026-09-01") — this now reads the
+// status WORD alone (the same `statusWord` derivation lib/mocks-exclusions.js's own
+// `deriveExclusions` already applies to the identical cell), so a dated status is never silently
+// read as "open" (the two client-facing tests that pin D3's read-only render and D4's "Change
+// answer" both hand this function a dated status, which the old exact-equality check could never
+// match).
+function statusWord(status) { return String(status || '').trim().split(/\s+/)[0] }
 function exclVerdict(row, s) {
-  if (row.status === 'confirmed') return { verdict: 'agree', text: s.exclStateAgree }
-  if (row.status === 'overridden' && row.rejected === 'client-needed') return { verdict: 'needed', text: s.exclStateNeeded }
-  if (row.status === 'overridden') return { verdict: 'dropped', text: s.exclStateDropped }
+  const word = statusWord(row.status)
+  if (word === 'confirmed') return { verdict: 'agree', text: s.exclStateAgree }
+  if (word === 'overridden' && row.rejected === 'client-needed') return { verdict: 'needed', text: s.exclStateNeeded }
+  if (word === 'overridden') return { verdict: 'dropped', text: s.exclStateDropped }
   return { verdict: '', text: '' }
+}
+
+// specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D6: the exclusion row's own "Put it
+// back" — its caller (renderExclusion, via renderExclProvenance) splices this INSIDE the
+// provenance line's own `<p class="wk-excl-from">`, right after its sentence and before the
+// `wk-excl-said` quote (design/client-mocks/walk.html:356, R3; render-check fix, JJ 2026-09-12),
+// never as a sibling box below it. Only for a row derived from a WITHDRAWN note (never an
+// "answer:" row, and never once the note itself has actually gone back — `note.resolution`
+// is what `mocks-notes.js`'s `reopenNote` clears, so a put-back note stops offering a second one
+// here even though its now-stale exclusion row may still render until the next materialize retires
+// it). `note.id`, not the exclusion row's own `id`, is what the client's click must post — the
+// route this reopens is `/client/__notes/reopen`, never a ledger write.
+function renderExclPutback(row, note, s) {
+  if (!note || note.resolution !== 'withdrawn') return ''
+  if (row.note.indexOf('withdrawn: ') !== 0) return ''
+  return '<button class="wk-excl-put" data-wk="putback" data-note-id="' + esc(note.id) + '">' + esc(s.reqPutback) + '</button>'
 }
 
 // specs/20260911/05-approval-is-bookkeeping.md D3: an open row offers both verdicts side by
@@ -751,23 +833,65 @@ function exclVerdict(row, s) {
 // control. specs/20260912/01-the-card-explains-itself.md D1-D4: the card head, the provenance
 // line, the `not: ` strip and the reload-trace state line — `entry` is `{ row, note }` from
 // `exclusionsForJourney`.
-function renderExclusion(entry, s) {
+// specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D3/D4/D6: `approved` (the sign-off
+// date, or falsy before it) switches this to the read-only record shape — no verdict buttons, no
+// "Change answer", no "Put it back", and an open row reads `data-verdict="none"` with its own
+// "not contested" sentence rather than the two-button prompt. Before sign-off, every non-open row
+// EXCEPT a dropped one (D4: `verdict !== 'dropped'` — a dropped row is one the client never
+// touched, so there is nothing of theirs to change) gets "Change answer" after its state line, and
+// any row derived from a still-withdrawn note gets "Put it back" after its provenance line
+// regardless of its own verdict — reversing the withdrawal is independent of whatever the client
+// answered about the derived row itself.
+function renderExclusion(entry, s, approved) {
   const row = entry.row
   const open = row.status === 'open'
-  const { verdict, text } = exclVerdict(row, s)
+  const ev = exclVerdict(row, s)
+  if (approved) {
+    const verdict = open ? 'none' : ev.verdict
+    const text = open ? s.exclStateNone : ev.text
+    return '<article class="wk-excl" data-wk="exclusion" data-id="' + esc(row.id) + '" data-verdict="' + verdict + '">' +
+      '<p class="wk-excl-claim">' + esc(renderExclClaim(row.claim, s)) + '</p>' +
+      renderExclProvenance(row, entry.note, s) +
+      '<p class="wk-excl-state">' + esc(text) + '</p>' +
+      '</article>'
+  }
+  // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D4/AC-20260912-02-8 (render-check
+  // fix, JJ 2026-09-12): the binding mock (design/client-mocks/walk.html:381/:388, R4) renders
+  // "Change answer" INSIDE the state line's own `<p>`, right after its sentence — never a bordered
+  // box stacked below it. It ships EVEN on a `dropped` row's shape... no: a dropped row gets no
+  // button at all (AC-7 — there is nothing of the client's own to change), so it is omitted
+  // entirely there, never merely hidden. On every other row (including an `open` one, so the
+  // control is already in place, hidden, ready to activate the moment the client answers via the
+  // two verdict buttons with no reload in between) it ships hidden until `!open`.
+  const changeBtn = ev.verdict === 'dropped' ? '' :
+    '<button class="wk-excl-change" data-wk="reconsider"' + (open ? ' hidden' : '') + '>' + esc(s.exclChange) + '</button>'
+  // D6 (render-check fix): "Put it back" moves INSIDE `wk-excl-from`'s own `<p>` — see
+  // renderExclProvenance's own comment. Computed first so it can be spliced into that paragraph
+  // rather than appended after it.
+  const putbackHtml = renderExclPutback(row, entry.note, s)
+  // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D4/AC-20260912-02-8: "Change
+  // answer" returns a non-open row to its open shape IN PLACE — walk.browser.js's reconsider
+  // handler reveals `.wk-verdicts` and re-hides `.wk-excl-state` rather than fabricating either.
+  // That activation needs BOTH elements to already exist in the markup on every row, not only an
+  // open one — `.wk-verdicts` ships here for a non-open row too, hidden by the same
+  // `[data-verdict] .wk-verdicts { display: none }` CSS rule the reload render already relies on
+  // (data-verdict is removed on a successful reconsider, which is what un-hides it — the
+  // `hidden` attribute below is redundant defence-in-depth, not the primary hider).
+  const verdictsHtml = '<div class="wk-verdicts"' + (open ? '' : ' hidden') + '>' +
+    '<button class="wk-v" data-wk="agree">' + esc(s.exclCorrect) + '</button>' +
+    '<button class="wk-v" data-wk="needed">' + esc(s.exclNeeded) + '</button>' +
+    '</div>'
+  // D8: shipped hidden and empty on every open row — walk.browser.js activates the TEXT span
+  // (never the whole `<p>`'s textContent, which would erase the embedded Change-answer button)
+  // and unhides the paragraph on an ok verdict; the builder never fabricates the sentence itself.
+  const stateHtml = '<p class="wk-excl-state"' + (open ? ' hidden' : '') + '>' +
+    '<span class="wk-excl-state-text">' + esc(open ? '' : ev.text) + '</span>' +
+    (changeBtn ? ' ' + changeBtn : '') + '</p>'
   return '<article class="wk-excl" data-wk="exclusion" data-id="' + esc(row.id) + '"' +
-    (verdict ? ' data-verdict="' + verdict + '"' : '') + '>' +
+    (ev.verdict ? ' data-verdict="' + ev.verdict + '"' : '') + '>' +
     '<p class="wk-excl-claim">' + esc(renderExclClaim(row.claim, s)) + '</p>' +
-    renderExclProvenance(row, entry.note, s) +
-    (open
-      ? '<div class="wk-verdicts">' +
-        '<button class="wk-v" data-wk="agree">' + esc(s.exclCorrect) + '</button>' +
-        '<button class="wk-v" data-wk="needed">' + esc(s.exclNeeded) + '</button>' +
-        '</div>' +
-        // D8: shipped hidden and empty on every open row — walk.browser.js activates it (fills
-        // and unhides) on an ok verdict; the builder never fabricates its text server-side.
-        '<p class="wk-excl-state" hidden></p>'
-      : '<p class="wk-excl-state">' + esc(text) + '</p>') +
+    renderExclProvenance(row, entry.note, s, putbackHtml) +
+    verdictsHtml + stateHtml +
     '</article>'
 }
 
@@ -784,16 +908,23 @@ function exclHeading(n) {
 // 0, counting every row shown (open or not); D5: `data-said-agree`/`data-said-needed` on the
 // section itself are what walk.browser.js activates an open row's own hidden state line from —
 // activation, never fabrication, the same discipline `wk-req-again` already uses.
-function renderExclusions(journey, ledger, notes, journeys, s) {
+// specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D3: `approved` (the sign-off date,
+// falsy before it) stamps `data-recorded` on the section and swaps in the read-only lead — the
+// open count is forced to 0 (the confirm gate this feeds is moot once the page renders no confirm
+// control for an already-approved journey, but a stale 1 here would still read as "something
+// still open" to anything that inspects the attribute directly).
+function renderExclusions(journey, ledger, notes, journeys, s, approved) {
   const entries = exclusionsForJourney(journey, ledger, notes, journeys)
-  const openCount = entries.filter((e) => e.row.status === 'open').length
-  const articles = entries.map((e) => renderExclusion(e, s)).join('')
+  const openCount = approved ? 0 : entries.filter((e) => e.row.status === 'open').length
+  const articles = entries.map((e) => renderExclusion(e, s, approved)).join('')
+  const lead = approved ? s.exclRecordedLead.replace('{date}', approved) : s.exclLead
   const head = entries.length
     ? '<h2 class="wk-excl-h">' + esc(exclHeading(entries.length)) + '</h2>' +
-      '<p class="wk-excl-lead">' + esc(s.exclLead) + '</p>'
+      '<p class="wk-excl-lead">' + esc(lead) + '</p>'
     : ''
   const html = '<section class="wk-exclusions" data-wk="exclusions" data-exclusions-open="' + openCount + '"' +
-    ' data-said-agree="' + esc(s.exclStateAgree) + '" data-said-needed="' + esc(s.exclStateNeeded) + '" hidden>' +
+    ' data-said-agree="' + esc(s.exclStateAgree) + '" data-said-needed="' + esc(s.exclStateNeeded) + '"' +
+    (approved ? ' data-recorded="' + esc(approved) + '"' : '') + ' hidden>' +
     head + articles + '</section>'
   return { html, openCount }
 }
@@ -811,9 +942,15 @@ function renderSignoff(rec, s, state) {
       '</section>'
   }
   const lead = state === 'fixed' ? s.fixedLead : state === 'changes-requested' ? s.changesLead : s.approveLead
-  return '<section class="wk-signoff" data-wk="signoff" hidden>' +
+  // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D7: `data-confirmed-lead` and
+  // the hidden, empty `[data-wk="confirmed-sentence"]` are what walk.browser.js's confirm handler
+  // activates ON OK, in place — the same activation-not-fabrication discipline `wk-req-again`/the
+  // exclusion state line already use, so the confirmed swap never needs to fabricate the
+  // confirmed-branch markup above from scratch client-side.
+  return '<section class="wk-signoff" data-wk="signoff" hidden data-confirmed-lead="' + esc(s.confirmedLead) + '">' +
     '<p class="wk-lead">' + esc(lead) + '</p>' +
     '<textarea class="wk-sentence-in" data-wk="sentence" rows="2" placeholder="' + esc(s.sentence) + '"></textarea>' +
+    '<blockquote class="wk-sentence" data-wk="confirmed-sentence" hidden></blockquote>' +
     '</section>'
 }
 
@@ -855,7 +992,10 @@ function buildWalkPage(input) {
   const open = notes.filter((n) => isOpenQuestion(n) && n.scope === 'mock' && labels.has(n.screen))
   const state = walkLib.journeyState(rec, notes, labels)
   // D20: the panel never renders a resolved request — closed items live only in the index's log.
-  const requestNotes = journeyRequestsOn(notes, labels).filter((n) => n.status !== 'resolved')
+  // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D6: EXCEPT a resolved/withdrawn
+  // one — it still needs its own "Put it back" on this surface, not only on the index's closed
+  // list and the derived exclusion row.
+  const requestNotes = journeyRequestsOn(notes, labels).filter((n) => n.status !== 'resolved' || n.resolution === 'withdrawn')
 
   const marks = open.map((n) => renderMark(n, ledger, s)).join('')
   // D6: the note form's own free-text save appends a request article for the current screen — one
@@ -872,7 +1012,7 @@ function buildWalkPage(input) {
     '</div>' +
     '</article>' +
     requestNotes.map((n) => renderWalkRequest(n, s)).join('')
-  const excl = renderExclusions(journey, ledger, notes, journeys, s)
+  const excl = renderExclusions(journey, ledger, notes, journeys, s, o.approved)
   const title = (entry.title || journey) + ' · ' + (seed.product || 'Mocks')
   // specs/20260911/05-approval-is-bookkeeping.md D3: the confirm control is no longer held
   // disabled by exclusions — the closing screen asks, it does not block. `excl.openCount` still
@@ -929,9 +1069,12 @@ function buildWalkPage(input) {
     // data-failed/data-saved attribute and unhides it; the builder never renders text into it.
     // specs/20260912/01-the-card-explains-itself.md D5: `data-excl-saved` is a distinct receipt
     // from `data-saved` — the exclusion answer's own sentence, never the free-note/mark one.
+    // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D6/D7: `data-putback-saved`
+    // and `data-confirm-saved` are their own receipts, same discipline.
     '<p class="wk-msg" data-wk="msg" role="status" aria-live="polite" data-saved="' + esc(s.msgSaved) +
     '" data-why="' + esc(s.msgWhy) + '" data-failed="' + esc(s.msgFailed) +
-    '" data-excl-saved="' + esc(s.exclSaved) + '" hidden></p>' +
+    '" data-excl-saved="' + esc(s.exclSaved) + '" data-putback-saved="' + esc(s.putbackSaved) +
+    '" data-confirm-saved="' + esc(s.confirmSaved) + '" hidden></p>' +
     '</aside>' +
     '</div>' +
     '<script src="' + esc(prefix) + '/__walk/player.js"></script>' +

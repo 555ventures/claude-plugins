@@ -199,7 +199,7 @@ counted on the fixed `📒 ledger:` line. A ledger that does not parse never ope
 lib is the one writer of rows: edits rewrite only the touched row and leave every other byte
 identical; a literal pipe inside a cell is written `\|`.
 
-### Exclusions (2026-09-12, specs/20260910/05 + specs/20260911/05 + specs/20260912/01)
+### Exclusions (2026-09-12, specs/20260910/05 + specs/20260911/05 + specs/20260912/01 + specs/20260912/02)
 
 An `exclusion` row is what the product will NOT do, and it is **derived, never typed**
 (`lib/mocks-exclusions.js`'s `deriveExclusions`, materialized by `mocks-driver.js ledger derive`;
@@ -245,9 +245,21 @@ renders as `We won't build: `, never raw. Every non-`open` row carries a state l
 client answered, held by `data-verdict` ∈ `agree|needed|dropped`, in place of its buttons. The
 in-session render after an answer is the same markup as the reload render: the handler activates
 the row's own hidden state line from the section's `data-said-*` attributes instead of disabling
-the buttons. `design/client-mocks/walk.html` is the binding reference for the card's states. The
-reversibility half — `Change answer`, `Put it back`, the post-sign-off read-only render and the
-confirm receipt — is specs/20260912/02's.
+the buttons. `design/client-mocks/walk.html` is the binding reference for the card's states.
+
+An answer is the client's to change until the session marks the work approved
+(specs/20260912/02). An answered row carries `Change answer`, which posts `verdict: 'reconsider'`
+and returns the row to `open` with its `rejected` cell cleared. Once `design/mocks/status.json`
+carries `marks.approved`, the card is a dated record: it renders the approval date, states every
+outcome including an unanswered row's ("recorded as not contested"), renders no control, and
+`POST /client/__walk/exclusion` answers 409 naming the date and pointing at the note box. A
+client-origin request resolved `withdrawn` carries `Put it back` on the walk page, on the client
+index's closed list, and on the exclusion row it produced; the put-back reopens the note — clearing
+`resolution` and `withdrawReason`, not only the status, or the derived row's source never reads as
+gone — and the next `materialize` retires the derived row by the existing derivation. Confirming a
+journey swaps the sign-off block to its confirmed render in place and answers in the message slot.
+Both way-back controls render inline inside the sentence they belong to on the walk page, and as an
+ordinary action button on the index's closed list, per the two approved mocks.
 
 ## The mocks command (2026-09-02, specs/20260902/07)
 

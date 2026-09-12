@@ -247,11 +247,31 @@ function materialize(input) {
 // `overridden <today>` AND stamps the row's own `rejected` cell `client-needed`, which
 // `deriveExclusions` above reads to never reopen or re-add it. `setStatus` (mocks-ledger.js)
 // rewrites only the status/tag cells, so a `needed` verdict rewrites the row directly here rather
-// than widening that module for this one caller. Throws the same "no Assumptions row" error
-// setStatus does when `id` is not found.
+// than widening that module for this one caller.
+// specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D1: a third verdict,
+// `reconsider` — the inverse of `needed`. It sets the row's status back to `open` and clears its
+// `rejected` cell to `-`, undoing whatever verdict made the row final (client-needed or a plain
+// agree/confirm). `deriveExclusions`'s idempotence key is the row's `note`, unaffected by this
+// cell rewrite, so a still-live source is already covered by the now-open row and neither re-adds
+// nor re-reopens it (AC-20260912-02-1). Throws the same "no Assumptions row" error setStatus does
+// when `id` is not found.
 function setExclusionVerdict(text, id, verdict, today) {
-  if (verdict !== 'agree' && verdict !== 'needed') throw new Error('verdict must be agree or needed')
+  if (verdict !== 'agree' && verdict !== 'needed' && verdict !== 'reconsider') {
+    throw new Error('verdict must be agree, needed or reconsider')
+  }
   if (verdict === 'agree') return setStatus(text, id, 'confirmed ' + today)
+  if (verdict === 'reconsider') {
+    const lines = String(text).split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      const cells = splitRow(lines[i])
+      if (!cells || cells.length !== 9 || cells[0] !== id) continue
+      cells[5] = 'open'
+      cells[6] = '-'
+      lines[i] = '| ' + cells.map(escapeCell).join(' | ') + ' |'
+      return lines.join('\n')
+    }
+    throw new Error('no Assumptions row with id "' + id + '" found')
+  }
   const lines = String(text).split('\n')
   for (let i = 0; i < lines.length; i++) {
     const cells = splitRow(lines[i])

@@ -77,7 +77,7 @@ test('a malformed ledger.md never takes the client review server down — GET /c
 // ---------------------------------------------------------------------------
 // AC-20260911-05-4, AC-20260911-05-12
 // ---------------------------------------------------------------------------
-test('AC-20260911-05-4: POST /client/__walk/exclusion {verdict:"needed"} sets the row overridden/client-needed, {verdict:"maybe"} 400s naming both accepted values, and AC-20260911-05-12: an absent verdict CONTINUES TO set confirmed', async () => {
+test('AC-20260912-02-3 (rewrites AC-20260911-05-4): POST /client/__walk/exclusion {verdict:"needed"} sets the row overridden/client-needed, {verdict:"maybe"} 400s naming all three accepted values including "reconsider", and AC-20260911-05-12: an absent verdict CONTINUES TO set confirmed', async () => {
   const dir = tmpdir('excl-verdicts')
   advanceToSeedDone(dir)
   const ledgerFilePath = path.join(dir, 'design/mocks/ledger.md')
@@ -99,10 +99,14 @@ test('AC-20260911-05-4: POST /client/__walk/exclusion {verdict:"needed"} sets th
 
     const bad = await postJson(base + '/client/__walk/exclusion', { id: 'E2', verdict: 'maybe' })
     assert.strictEqual(bad.status, 400,
-      'AC-4: a verdict outside {agree, needed} must 400 — a 200 here means an arbitrary verdict is silently accepted: got ' + bad.status + ' ' + JSON.stringify(bad.body))
+      'AC-4: a verdict outside {agree, needed, reconsider} must 400 — a 200 here means an arbitrary verdict is silently accepted: got ' + bad.status + ' ' + JSON.stringify(bad.body))
     const errText = (bad.body && bad.body.error) || ''
     assert.match(errText, /agree/, 'AC-4: the 400\'s error must name "agree" as an accepted value: got "' + errText + '"')
     assert.match(errText, /needed/, 'AC-4: the 400\'s error must name "needed" as an accepted value: got "' + errText + '"')
+    assert.match(errText, /reconsider/,
+      'AC-20260912-02-3: D2 adds "reconsider" to the accepted verdict set — the 400\'s error must ' +
+      'name it too, or a client reading the message after a typo has no way to learn the real third ' +
+      'option exists: got "' + errText + '"')
 
     const needed = await postJson(base + '/client/__walk/exclusion', { id: 'E2', verdict: 'needed' })
     assert.strictEqual(needed.status, 200,

@@ -3,6 +3,7 @@ name: spec-20260911-04-client-loop-fix-round
 description: D15/D16/D17 fix round on the-client-loop — flat-DOM shim's matchesCompound needs .class support, and buildClientIndex's ready-Set filter breaks CONTINUE-TO tests that omit it.
 metadata:
   type: project
+  reviewed: 2026-09-12
 ---
 
 specs/20260911/04-the-client-loop.md's fix round (D15/D16/D17): the sibling scripts worker landed

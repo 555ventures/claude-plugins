@@ -364,6 +364,13 @@ the client did not answer as not contested and never refuses on it. The card its
 it is, why each row is listed, and what the client answered, and an unanswered row's own text
 warns the client that its silence is recorded as not contested when the work is signed off.
 
+**An exclusion answer is the client's until sign-off.** Every answered row carries a way back
+(`Change answer` returns it to `open`, its `rejected` cell cleared) — the answer is the client's
+to change until the work is signed off. Once `--mark approved` writes the dated
+`exclusions.md`, the card becomes that date's read-only record — no verdict control renders,
+and the answer route refuses every write, naming the date, because the ledger and the dated
+snapshot a statement of work cites must never diverge (specs/20260912/02).
+
 ## Mocks: Authoring Rules
 
 The six rules the dry run converged on (LEDGER standing rules + M11/M13/M14 + A6/A7) — the

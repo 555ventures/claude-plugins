@@ -3,6 +3,7 @@ name: spec-20260912-01-card-explains-itself
 description: tests-layer authoring for the exclusions card head/provenance/state spec — design-doctrine.test.js recreation and the exclusions-route.test.js class-matching shim gap
 metadata:
   type: project
+  reviewed: 2026-09-12
 ---
 
 specs/20260912/01-the-card-explains-itself.md's tests-layer File Plan named

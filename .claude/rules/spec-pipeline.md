@@ -261,7 +261,12 @@ upstream bug list. -->
   not only the one the Decision changes; and fix such setups by making them do what a real
   session does at that step (stage the deletion into the close commit), never by neutering the
   fixture so the new side effect cannot reach it — an untagged fixture would have left the
-  fixture's own AC uncovered and reddened `ac-matrix` instead.
+  fixture's own AC uncovered and reddened `ac-matrix` instead. The same side effect has a
+  PLAN-TIME inverse that has now bitten twice on the same file: a File Plan row spelled MODIFY
+  against a test file a previous close's expiry sweep already deleted, so the authoring wave finds
+  nothing to modify. Recreate it fresh carrying only this spec's own pins — never restore the
+  expired ones — and record the row's action as a deviation; at lock, stat every MODIFY row's path
+  rather than assuming a file named in an older spec still exists.
   Eighth trigger, the one where the grep itself was accurate and still missed: a lock-time
   assumption that grepped every caller matching a pattern and named the count (**seven** files
   calling `journey-drawn`/`journey-approved` over an inline mock, minus fixture users) is a
@@ -284,6 +289,7 @@ upstream bug list. -->
   specs/20260909/04-review-soft-floor.md D1/D5/D8;
   specs/20260909/05-fix-delta-reviewer-pass.md D2/D9;
   specs/20260910/02-click-to-advance-and-real-records.md A2;
+  specs/20260912/02-an-answer-is-the-clients-until-sign-off.md;
   specs/20260912/03-run-isolates-and-owns-the-stages.md D10)
 - `[plugin]` `ac-matrix.js` parses AC bullets as `^- \*\*(token)\*\*` and requires the token to
   fully match `AC-\d{8}-\d{2}[a-z]?-\d+`. A build-time amendment written the way the Decisions

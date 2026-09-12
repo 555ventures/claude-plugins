@@ -1,6 +1,7 @@
 ---
 date: 2026-09-12
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +11,7 @@ depends_on: [specs/20260912/01-the-card-explains-itself.md]
 depended_on_by: []
 brief: n/a
 open_markers: 0
+diff_base: 4b5d420e89c6b9f74aa3cbc01f5734f44f6baa73
 ---
 
 # An answer is the client's until sign-off: change it, put a taken-back request back, and see every write land
@@ -192,6 +194,64 @@ host § Gotchas entry on a Delta re-reddening the retired-name sweep at the clos
 `specs/20260911/06-the-client-loop.md` is a closed spec doc under the sweep's waived prefixes; the
 remaining hits are stale copies inside a sibling's `.claude/worktrees/` checkout, not this tree.
 The `likely`/`mentions` tier owes no waive line. No test asserts either literal.
+
+### Build record (2026-09-12, deviations folded at close)
+
+A4 held only in part. `reopenNote` restored `status: 'open'` as assumed but left
+`resolution: 'withdrawn'` and `withdrawReason` in place, and `deriveExclusions`'s
+`withdrawnNotNeededEntries` keys on those two fields and never on `status` — so the put-back's
+source would never read as gone and D5's promised retire-by-existing-derivation could not happen.
+The `lib/mocks-notes.js` row was widened per A4's own stated remedy: the reopen now clears both
+fields alongside the status flip.
+
+D8's retirement half was already satisfied on arrival — the sentence reserving un-agreement and
+provenance lines to a later spec was removed by specs/20260912/01's own close, so only D8's
+additive half changed anything and AC-20260912-02-14's `doesNotMatch` leg passed trivially.
+
+Two pre-existing defects sat directly under this spec's promises and were fixed in place rather
+than reported, because each one made a locked Decision unobservable: `walk-page.js`'s `exclVerdict`
+compared `row.status` for exact equality against a bare word, so every real dated status
+(`confirmed 2026-09-01`) read as open and D4's `Change answer` could never render on a live ledger;
+and `walk.browser.js`'s initial `/client/__walk/state` fetch could resolve after a faster
+confirm-click chain whose reconciliation silently re-added the confirm control over an
+already-confirmed bar, contradicting D7's "no reload is required".
+
+`spec/templates/mocks/viewer.css` is its own wave in the build driver's layer derivation, but its
+rules are the visual half of D4/D6 whose markup the scripts worker was already writing. It was
+folded into that batch rather than given a separate worker, because a second worker would have been
+editing the other side of the same CSS/markup seam blind.
+
+The first scripts pass shipped `Change answer` and `Put it back` as sibling block buttons after
+their sentences, inheriting the bordered base button look. The binding approved mock
+`design/client-mocks/walk.html` puts each one inside the sentence it belongs to, in one quiet inline
+underlined shape. The divergence was caught by serving the real `buildWalkPage` output and looking
+at it: on a row that is both withdrawn-derived and answered, the shipped version stacked two boxes
+with the state sentence wedged between them, so the sentence read as a caption for the control above
+it. Corrected to the mock. The client index keeps its ordinary action button inside the request
+row's action group, which is what `design/client-mocks/index.html` specifies — the two surfaces
+differ deliberately.
+
+D4 says every non-`open` row renders `Change answer`. An `open` row now also ships the control
+`hidden`, for the same reason a non-open row already ships a hidden `.wk-verdicts`: the answer
+handler reveals it in place, so a client who answers a row sees the way back without a reload. The
+control is never visible on an open row and a `dropped` row still ships none, so nothing the client
+can observe departs from D4.
+
+The four tests-layer files carry unused `require`/helper declarations. Every one was verified
+against the diff from `diff_base` to pre-date this spec, so all were left alone rather than swept
+into this spec's diff.
+
+### Review (2026-09-12, CLEAN — no hard findings, four advisories recorded)
+
+The reviewer killed ten claims on executed evidence and left four softs, three of which are queued
+rather than fixed here: the in-session `Never mind` handler does not give the card it just withdrew
+its `Put it back` until a reload; put-back in place restores only part of the open request shape;
+and the reopen route has no approval gate, so a post-sign-off put-back can still retire a derived
+exclusion row and reopen exactly the ledger-versus-dated-file divergence D3 closes for answers. The
+last is spec-consistent as written — D3 gates the exclusion route only — and is the one worth
+closing next. The fourth soft is that the File Plan's promised read-only `viewer.css` rules never
+landed; they are unnecessary because the approved render omits the controls from the markup
+entirely.
 
 ## Canonical Delta
 

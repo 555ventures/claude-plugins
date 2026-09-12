@@ -170,11 +170,19 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     `node "$(spec-paths port-check)" --root .`. Each printed line is a fixed or computed port
     literal under `tests/`; remedy = bind `--port 0` / `listen(0)` and read the bound port back
     from the server rather than choosing one (a host may wrap this in a shared test helper).
-20. **Expired tests still present** (deterministic, advisory) — run
-    `node "$(spec-paths test-expiry)" --root . --all-done` (dry run) and report
+20. **Expiry readiness** (deterministic, advisory) — two derivations, both run every time:
+    (a) `node "$(spec-paths test-expiry)" --root . --all-done` (dry run) reports
     `expired tests present: N in M files` (or `none`), naming each file. Remedy = the same
     command with `--apply`, run only after one `AskUserQuestion` naming the count and the
     files it will delete — never under `--fix`'s line-item path and never silently.
+    (b) `node "$(spec-paths coverage-scope)" --root .` names each host file that parses
+    acceptance-criterion ids alongside a `done` status yet never mentions `SHALL CONTINUE TO`.
+    A check demanding a carrier for every AC of a done spec contradicts close-time expiry and
+    deadlocks every close — the close deletes those tests, then the gate re-run calls the
+    just-closed spec's criteria uncovered. Remedy = scope the named check's carriers to specs
+    that are not `done` (grounding contract § Test expiry). A hit is a file to read, never a
+    verdict; run (b) even when (a) reports `none`, because the deadlock is a property of the
+    gate, not of today's retirable count.
 
 ## Semantic spot-check — small, bounded
 

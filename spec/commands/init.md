@@ -78,7 +78,8 @@ Launch parallel Explore agents (`model: sonnet`) and read key files yourself:
   consistently real screens follow it — input to Phase 6.
 - **Architecture:** how is code organized (features? domains? modules?), what are the layer
   boundaries, which surfaces are generated/managed (codegen outputs, lockfile-like catalogs,
-  translation files), what CI enforces (import linters, purity checks).
+  translation files), what CI enforces (import linters, purity checks) — a check requiring a test carrier per
+  acceptance criterion must exempt `done` specs (contract § Test expiry) or every close deadlocks.
 - **Conventions:** read 3–5 representative source files per layer; extract naming patterns,
   canonical exemplar files, the rules docs that already exist (`.claude/rules/`,
   `docs/standards/`, `docs/rules/`, `AGENTS.md`, `CLAUDE.md`).

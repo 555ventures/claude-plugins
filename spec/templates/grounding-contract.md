@@ -67,6 +67,25 @@ readiness, it sends `runtime.stopSignal` and requires a bounded, clean exit
 runs it as a verdict leg (CLEAN requires it), and `/spec:init` proves it once via the deliverable
 manifest before stamping.
 
+## Test expiry (required)
+
+A spec's tests die when the spec does. At review close the plugin deletes every test tagged with
+the closing spec's own AC-IDs, keeping only a test that cites a ledger
+escape class, exercises a script the pipeline itself runs, or pins an AC bullet carrying
+`SHALL CONTINUE TO` — the opt-in permanence marker. The host obligation follows from that:
+
+- **A check that requires a test carrier per acceptance criterion scopes its carriers to specs
+  that are NOT `done`.** A `done` spec owes a carrier only for a criterion whose bullet says
+  `SHALL CONTINUE TO`; every other criterion of a done spec expired at close. This is exactly the
+  rule the plugin's own `ac-drift.js` applies repo-wide (`/spec:doctor` check 17).
+- A host check that demands a carrier for **every** AC of a done spec deadlocks every close: the
+  close deletes the tests, then `--mark closed` re-runs the host gate over that tree, which reports
+  the just-closed spec's criteria uncovered and refuses the close with no path forward.
+- Relabelling a criterion `SHALL CONTINUE TO` to satisfy such a check is never the remedy — that
+  phrase pins pre-existing behavior a spec must not break, never behavior the spec introduces.
+
+The pipeline generates no coverage check of its own; a host that authors one owns this scoping.
+
 ## Deliverable manifest (required)
 
 `/spec:init` writes `.claude/spec-manifest.json` — one entry per deliverable, each carrying

@@ -298,6 +298,11 @@
       "spec/doctrine/core.md"
     ]
   },
+  "spec/scripts/coverage-scope.js": {
+    "entryPoints": [
+      "spec/commands/doctor.md"
+    ]
+  },
   "spec/scripts/expire-tests.js": {
     "entryPoints": [
       "spec/scripts/spec-review-driver.js",

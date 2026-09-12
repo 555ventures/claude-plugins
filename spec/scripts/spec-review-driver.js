@@ -1654,6 +1654,23 @@ function tailLines(text, n) {
   if (lines.length && lines[lines.length - 1] === '') lines.pop()
   return lines.slice(-n).join('\n')
 }
+// specs/20260911/03-tests-expire-at-close.md: CLOSE deleted this spec's own expired tests from
+// the very tree the two re-runs below execute over. A host gate that enforces per-AC test coverage
+// on `done` specs then reports every criterion of the spec just closed as uncovered and refuses
+// here on every future close (prax, 2026-09-12) — the grounding contract's § Test expiry scopes
+// that obligation, but a session reading only a red gate has no way to connect the two. The hint
+// is derived from this driver's own facts (expiry retired something AND the re-run went red),
+// never from reading the host gate's output — the plugin never forks on a host gate's semantics.
+function expiryHint() {
+  const retired = (marks.testsExpiry && marks.testsExpiry.retired) || 0
+  if (retired < 1) return ''
+  return 'NOTE: CLOSE deleted ' + retired + ' expired test(s) from this tree immediately before ' +
+    'this run. If the failure names those tests, or reports this spec\'s acceptance criteria as ' +
+    'uncovered, then the host is enforcing per-AC coverage on a spec that is now done — that ' +
+    'contradicts test expiry and will refuse every future close in this repo. Fix the host check ' +
+    'to exempt done specs (grounding contract § Test expiry: a done spec owes a carrier only for ' +
+    'a SHALL CONTINUE TO criterion); never restore the tests, and never relabel the criteria.\n'
+}
 function runCloseTimeGate() {
   const gateConfig = readConfig(repoRoot)
   const resolved = resolveGate(specText, gateConfig)
@@ -1670,7 +1687,8 @@ function runCloseTimeGate() {
   if (r.status !== 0) {
     const output = (r.stdout || '') + (r.stderr || '')
     die('gate red at close — ' + resolved.gate + ' exited ' + r.status + ' over the committed ' +
-      'close tree.\nCheck WHICH path the gate names first: the pipeline\'s own artifacts under ' +
+      'close tree.\n' + expiryHint() +
+      'Check WHICH path the gate names first: the pipeline\'s own artifacts under ' +
       '.claude/ (ledger, retained evidence, config) are in the rule surface but this driver ' +
       'wrote them — a finding against one is a plugin defect to report, never a file to edit.\n' +
       'Fix the session-written files, commit the fix, then re-run `node ' + __filename + ' ' +
@@ -1693,7 +1711,8 @@ function runCloseTimeGate() {
   if (sr.status !== 0) {
     const output = (sr.stdout || '') + (sr.stderr || '')
     die('suite red at close — ' + gateConfig.testCommand + ' exited ' + sr.status + ' over the ' +
-      'committed close tree.\nThe files written at CLOSE (canonical doc, rules fold) are inside ' +
+      'committed close tree.\n' + expiryHint() +
+      'The files written at CLOSE (canonical doc, rules fold) are inside ' +
       'the host\'s rule surface; fix them, commit the fix, then re-run `node ' + __filename + ' ' +
       specPath + ' --mark closed`.\n--- last 40 lines of suite output ---\n' + tailLines(output, 40))
   }

@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design atlas — chrome reference</title>
+<!--
+  design/chrome-mocks/atlas.html — the design source the atlas index answers to.
+  specs/20260912/05-the-atlas-answers-to-a-design.md D1/D2, AC-20260912-05-6.
+
+  This is a REFERENCE ARTIFACT, sibling in kind to design/client-mocks/*.html
+  (specs/20260911/06 D18): one static file, never served by design-atlas.js and never shipped to
+  a host. A spec that edits the atlas index cites it as `design_source`; spec/doctrine/design.md
+  § Design Canon's "Plugin chrome is a designed surface" paragraph is where that binding is
+  written down.
+
+  Authored FROM the shipped page, not as a fresh design pass — mock authority inverts at `built`
+  (design.md § Design Canon), so the atlas index the owner approved on 2026-09-12 is the truth
+  this file records. The product shown is a fixture (a community seed library), never a real
+  client's: the chrome is the subject, the content is scaffolding.
+
+  What it carries, per D1: the header, the filter chips, the left rail, one journey section whose
+  cards show the three shapes a screen can take on this page — a journey-owned card with the
+  `· N states` meta line, a gap chip for a declared screen nobody has drawn, and an orphan card
+  for a mock no journey claims — and the stops index.
+
+  What it deliberately does NOT carry: the lightbox overlay's open state, the compare panel, the
+  notes layer, the theme/kit/shapes sections, and every behaviour that only exists when the page
+  is served. Those are the served page's, not the look's.
+
+  The previews are `srcdoc` iframes rather than `src="../mocks/*.html?clean"` ones so the file
+  renders standalone; the element, its classes and its place in the card are the shipped ones.
+-->
+<style>
+/* ---- palette: the viewer.css :root block, verbatim. No other color exists on this page. ---- */
+:host,:root{
+  --v-bg:#ffffff; --v-fg:#0a0a0a; --v-muted:#737373; --v-muted-bg:#f5f5f5; --v-border:#e5e5e5;
+  --v-primary:#171717; --v-primary-fg:#fafafa; --v-ring:#a3a3a3; --v-accent:#f5f5f5;
+  --v-danger:#dc2626; --v-warn:#d97706; --v-ok:#16a34a;
+  --v-radius:8px; --v-space-1:4px; --v-space-2:8px; --v-space-3:12px; --v-space-4:16px; --v-space-6:24px;
+  --v-font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
+  --v-shadow:0 1px 2px rgba(0,0,0,.05),0 4px 12px rgba(0,0,0,.06);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--v-bg);color:var(--v-fg);font:15px/1.5 var(--v-font)}
+button,input{font:inherit;color:inherit}
+a{color:inherit}
+:is(button,a,input):focus-visible{outline:2px solid var(--v-ring);outline-offset:2px}
+
+/* ---- shell: a fixed rail beside a fluid column. The rail is the map, the column is the page. ---- */
+#shell{display:flex;align-items:flex-start}
+#toc{--toc-w:280px;width:var(--toc-w);flex:none;background:var(--v-muted-bg);border-right:0;padding:32px 24px 20vh;overflow:auto}
+#main{flex:1;min-width:0;padding:32px clamp(24px,3vw,48px) 20vh}
+/* The rail is a column at desktop and a drawer below 1200px, where the bar grows its own
+   Index button — declared before the media query so the query can turn it back on. */
+#tocbtn{display:none}
+@media(max-width:1199px){#toc{position:fixed;top:0;left:0;height:100vh;z-index:9;transform:translateX(-100%);transition:transform .18s ease;box-shadow:var(--v-shadow)}#toc.open{transform:translateX(0)}#tocbtn{display:inline-flex}}
+@media(min-width:1200px){#toc{position:sticky;top:0;height:100vh}}
+@media(prefers-reduced-motion:reduce){#toc{transition:none}}
+
+/* ---- the rail: one row per screen, one status dot each. A map, never a second status surface. ---- */
+.tochdr{font-size:15px;font-weight:600;color:var(--v-fg);margin:0 0 .75rem}
+#tocsearch{width:100%;font-size:14px;padding:.45em .7em;border:1px solid var(--v-border);border-radius:var(--v-radius);background:var(--v-bg);color:var(--v-fg);margin:0 0 1rem}
+.tocgroup{margin:0 0 1rem}
+.tochead{display:flex;align-items:baseline;gap:.5em;font-size:14px;font-weight:600;color:var(--v-fg);border-left:2px solid transparent;padding:.15rem 0 .15rem .6rem;margin:0 0 .35rem;cursor:pointer}
+.tochead.here{border-left-color:var(--v-primary)}
+.tochead .count{margin-left:auto;color:var(--v-muted);font-size:14px;font-weight:400;font-variant-numeric:tabular-nums}
+.tocrow{display:flex;align-items:center;gap:.55em;width:100%;background:none;border:0;border-radius:var(--v-radius);padding:.35em .5em;color:var(--v-fg);cursor:pointer;font-size:14px;text-align:left}
+.tocrow:hover{background:var(--v-bg)}
+.tocrow .dot{width:8px;height:8px;border-radius:99px;background:var(--v-muted);display:inline-block;flex:none}
+.tocrow .lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot.gap{background:var(--v-danger)}
+.dot.sketch{background:var(--v-warn)}
+.dot.approved,.dot.ratified,.dot.built{background:var(--v-ok)}
+.dot.bound{background:var(--v-ring)}
+
+/* ---- header ---- */
+.hdr{display:flex;flex-wrap:wrap;align-items:baseline;gap:.5rem 1rem;margin:0 0 .25rem}
+.hdr h1{margin:0;font-size:26px;font-weight:600;letter-spacing:-.01em}
+.hdr .proj{color:var(--v-muted);font-size:15px}
+.lede{color:var(--v-muted);font-size:15px;margin:0 0 1rem;max-width:60ch}
+.legend{display:flex;flex-wrap:wrap;gap:.4rem 1.1rem;font-size:14px;color:var(--v-muted);margin:0 0 1rem}
+.legend .badge{margin-right:.4em}
+
+/* ---- the stops index: what is waiting on the owner, before anything else on the page ---- */
+#stops{margin:0 0 2rem}
+#stops h2{margin:0 0 .5rem;font-size:15px;font-weight:600}
+#stops h2~h2{margin-top:1.5rem}
+#stops ol{margin:0;padding:0;list-style:none}
+#stops li{border-top:1px solid var(--v-border);border-left:2px solid var(--v-warn);padding:.65rem 0 .65rem .85rem;color:var(--v-muted);font-size:14px}
+#stops li:last-child{border-bottom:1px solid var(--v-border)}
+#stops li a{font-size:15px;font-weight:500;color:var(--v-fg);text-decoration:none;margin-right:.4em}
+#stops li a:hover{text-decoration:underline}
+#stops ol~ol li{border-left-color:var(--v-ok)}
+
+/* ---- filter chips: one filter model. The chips narrow the rail and the cards together. ---- */
+.bar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;background:color-mix(in srgb, var(--v-bg) 92%, transparent);backdrop-filter:blur(6px);padding:.85rem clamp(24px,3vw,48px);margin:0 calc(-1 * clamp(24px,3vw,48px)) 1.25rem;border-bottom:1px solid var(--v-border)}
+.bar button{background:var(--v-muted-bg);color:var(--v-muted);border:0;border-radius:999px;padding:.35em .9em;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;gap:.45em}
+.bar button:hover{color:var(--v-fg)}
+.bar button.on{background:var(--v-primary);color:var(--v-primary-fg);font-weight:500}
+.bar button .dot{width:6px;height:6px;border-radius:99px;background:var(--v-muted);display:inline-block}
+.bar button.on .dot{background:var(--v-primary-fg)}
+
+/* ---- journey section ---- */
+.sect{margin:3rem 0 0}
+.sect>h2{font-size:19px;font-weight:600;letter-spacing:-.005em;margin:0 0 .5rem;display:flex;align-items:baseline;flex-wrap:wrap;gap:.6em}
+.sect>h2 .count{color:var(--v-muted);font-size:14px;font-weight:400;font-variant-numeric:tabular-nums}
+.sect>h2 .rv-review{margin-left:auto;font-size:14px;font-weight:400;color:var(--v-muted);text-decoration:none}
+.sect>h2 .rv-review:hover{color:var(--v-fg);text-decoration:underline}
+.sect>p.meta{margin:0 0 1rem;font-size:15px;max-width:60ch;color:var(--v-muted)}
+
+/* ---- the card: a recognition surface. One frame per screen, whatever the mock declares. ----
+   --v-shot-max is set on the grid, so every preview in a row clamps to the same height and the
+   cards in a row match. A nine-state screen costs one card, not nine screen-heights; the count
+   on the meta line is the pointer to where the states are actually reviewed. */
+.grid{--v-shot-max:180px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;align-items:stretch}
+.card{border:1px solid var(--v-border);border-radius:calc(var(--v-radius) + 4px);padding:1rem;background:var(--v-bg);box-shadow:var(--v-shadow);min-width:0;height:100%;transition:border-color .15s}
+.card:hover{border-color:var(--v-ring)}
+.card h3{margin:0 0 .5rem;font-size:15px;font-weight:600;display:flex;align-items:center;flex-wrap:wrap;gap:.15em}
+.card h3 .open{margin-left:auto}
+.card h3 .open button{background:none;border:0;color:var(--v-muted);font-size:14px;cursor:pointer;padding:0}
+.card h3 .open button:hover{color:var(--v-fg)}
+.badge{display:inline-flex;align-items:center;gap:.45em;font-size:12px;margin-right:.7em;color:var(--v-muted)}
+.badge::before{content:"";width:6px;height:6px;border-radius:99px;background:var(--v-muted);flex:none}
+.badge.sketch::before{background:var(--v-warn)}
+.badge.ratified::before,.badge.approved::before{background:var(--v-ok)}
+.badge.bound::before{background:var(--v-ring)}
+.badge.built::before{background:var(--v-primary)}
+.badge.gap::before{background:var(--v-danger)}
+.badge.orphan{color:var(--v-danger)}
+.badge.orphan::before{background:var(--v-danger)}
+
+/* ---- the preview. A journey-owned preview is a link to that screen's board on the review page;
+   a mock no journey claims keeps the lightbox instead, so the two never both fire on one click. */
+.shotlink{display:block;text-decoration:none;color:inherit}
+.shotlink .shot{cursor:pointer}
+.shot{position:relative;overflow:hidden;border-radius:4px;background:var(--v-muted-bg);cursor:zoom-in;border:1px solid var(--v-border);max-height:var(--v-shot-max,260px)}
+.shot.clip::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4rem;pointer-events:none;background:linear-gradient(to bottom,transparent,var(--v-bg))}
+.frame{border:0;display:block;transform-origin:0 0;pointer-events:none;background:var(--v-muted-bg);width:100%}
+.meta{color:var(--v-muted);font-size:14px;margin-top:.4rem}
+
+/* ---- gaps: a screen the product declares and nobody has drawn. A chip, never a card. ---- */
+.gaps{display:flex;flex-wrap:wrap;gap:.4rem;margin:1rem 0 0}
+.gapchip{display:inline-flex;align-items:center;gap:.45em;background:var(--v-muted-bg);color:var(--v-muted);border-radius:999px;padding:.2rem .75rem;font-size:14px}
+.gapchip::before{content:"";width:6px;height:6px;border-radius:99px;background:var(--v-danger);flex:none}
+</style>
+</head>
+<body>
+
+<div id="shell">
+
+  <aside id="toc">
+    <p class="tochdr">Index</p>
+    <input id="tocsearch" type="search" placeholder="Search screens   /">
+    <nav id="toctree">
+      <div class="tocgroup" data-group="borrow">
+        <div class="tochead here" id="th-borrow">borrow<span class="count">3</span></div>
+        <button class="tocrow" data-label="catalog" data-st="approved"><span class="dot approved"></span><span class="lbl">catalog</span></button>
+        <button class="tocrow" data-label="pickup" data-st="ratified"><span class="dot ratified"></span><span class="lbl">pickup</span></button>
+        <button class="tocrow" data-label="hold" data-st="gap"><span class="dot gap"></span><span class="lbl">hold</span></button>
+      </div>
+      <div class="tocgroup" data-group="no declaring brief">
+        <div class="tochead" id="th-no-declaring-brief">no declaring brief<span class="count">1</span></div>
+        <button class="tocrow" data-label="receipt" data-st="sketch"><span class="dot sketch"></span><span class="lbl">receipt</span></button>
+      </div>
+    </nav>
+  </aside>
+
+  <div id="main">
+
+    <div class="hdr">
+      <h1>Design atlas</h1>
+      <span class="proj">seed-library · 1 approved · 1 gap · 1 ratified · 1 sketch</span>
+    </div>
+    <p class="lede">One card per screen, grouped by journey. Click a card to see it at full size; the width and theme buttons re-frame every card at once.</p>
+    <div class="legend">
+      <span><span class="badge gap">gap</span>declared, not drawn yet</span>
+      <span><span class="badge sketch">sketch</span>drawn, waiting for your look</span>
+      <span><span class="badge approved">approved</span>you approved it</span>
+    </div>
+
+    <section id="stops">
+      <h2>Waiting for your look</h2>
+      <ol>
+        <li><a href="#stop-P001">borrow — the shelf, the hold, the pickup</a> · approve</li>
+      </ol>
+      <h2>Decided — waiting for the session</h2>
+      <ol>
+        <li><a href="#stop-P002">How the shelf lists what is in stock</a> · pick rows · chat</li>
+      </ol>
+    </section>
+
+    <div class="bar">
+      <button id="tocbtn">Index</button>
+      <button data-f class="on">all 4</button>
+      <button data-f><span class="dot approved"></span>approved 1</button>
+      <button data-f><span class="dot gap"></span>gap 1</button>
+      <button data-f><span class="dot ratified"></span>ratified 1</button>
+      <button data-f><span class="dot sketch"></span>sketch 1</button>
+    </div>
+
+    <section class="sect">
+      <h2 id="j-borrow">borrow<span class="count">2 mocked · 1 gap</span><a class="rv-review" href="/review/borrow.html">Review →</a></h2>
+      <p class="meta">Priya walks in with a jar and leaves with next spring's beans.</p>
+
+      <div class="grid">
+
+        <!-- A journey-owned card. Three declared states, ONE frame: the count is the pointer to
+             the review page, where each state gets its own tab. -->
+        <div class="card" id="s-catalog" data-st="approved">
+          <h3>catalog<span class="badge approved">approved</span><span class="open"><button>open ↗</button></span></h3>
+          <a class="shotlink" href="/review/borrow.html#board-catalog" title="Review catalog on the borrow journey">
+            <div class="shot clip">
+              <iframe class="frame" scrolling="no" height="360" title="catalog"
+                srcdoc="&lt;style&gt;*{box-sizing:border-box}body{margin:0;font:13px/1.45 ui-sans-serif,system-ui,sans-serif;color:#0a0a0a;background:#fff;padding:14px}h1{font-size:17px;margin:0 0 2px}p{margin:0 0 14px;color:#737373}.r{display:flex;gap:10px;align-items:center;border-top:1px solid #e5e5e5;padding:9px 0}.t{width:38px;height:38px;border-radius:6px;background:#f5f5f5;flex:none}.n{flex:1}.n b{display:block;font-weight:600}.n span{color:#737373;font-size:12px}.q{color:#737373;font-variant-numeric:tabular-nums}&lt;/style&gt;&lt;h1&gt;What&amp;#39;s on the shelf&lt;/h1&gt;&lt;p&gt;214 varieties, all grown within forty miles.&lt;/p&gt;&lt;div class=&quot;r&quot;&gt;&lt;div class=&quot;t&quot;&gt;&lt;/div&gt;&lt;div class=&quot;n&quot;&gt;&lt;b&gt;Cherokee Trail of Tears&lt;/b&gt;&lt;span&gt;pole bean · 2024 harvest&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;q&quot;&gt;18 left&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;r&quot;&gt;&lt;div class=&quot;t&quot;&gt;&lt;/div&gt;&lt;div class=&quot;n&quot;&gt;&lt;b&gt;Lemon Drop&lt;/b&gt;&lt;span&gt;tomato · 2025 harvest&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;q&quot;&gt;4 left&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;r&quot;&gt;&lt;div class=&quot;t&quot;&gt;&lt;/div&gt;&lt;div class=&quot;n&quot;&gt;&lt;b&gt;Painted Mountain&lt;/b&gt;&lt;span&gt;flour corn · 2025 harvest&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;q&quot;&gt;31 left&lt;/div&gt;&lt;/div&gt;"></iframe>
+            </div>
+          </a>
+          <div class="meta">journey: borrow · 3 states · spec: specs/20260912/05-the-atlas-answers-to-a-design.md</div>
+        </div>
+
+        <!-- A journey-owned card declaring no states: the meta line carries no states clause at
+             all, never "0 states". -->
+        <div class="card" id="s-pickup" data-st="ratified">
+          <h3>pickup<span class="badge ratified">ratified</span><span class="open"><button>open ↗</button></span></h3>
+          <a class="shotlink" href="/review/borrow.html#board-pickup" title="Review pickup on the borrow journey">
+            <div class="shot clip">
+              <iframe class="frame" scrolling="no" height="230" title="pickup"
+                srcdoc="&lt;style&gt;*{box-sizing:border-box}body{margin:0;font:13px/1.45 ui-sans-serif,system-ui,sans-serif;color:#0a0a0a;background:#fff;padding:14px}h1{font-size:17px;margin:0 0 2px}p{margin:0 0 14px;color:#737373}.b{border:1px solid #e5e5e5;border-radius:8px;padding:12px;margin-bottom:10px}.b b{display:block}.b span{color:#737373;font-size:12px}button{font:inherit;background:#171717;color:#fafafa;border:0;border-radius:8px;padding:8px 14px}&lt;/style&gt;&lt;h1&gt;Ready at the desk&lt;/h1&gt;&lt;p&gt;Bring a jar. We&amp;#39;ll label it.&lt;/p&gt;&lt;div class=&quot;b&quot;&gt;&lt;b&gt;Cherokee Trail of Tears&lt;/b&gt;&lt;span&gt;held until Saturday&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;b&quot;&gt;&lt;b&gt;Painted Mountain&lt;/b&gt;&lt;span&gt;held until Saturday&lt;/span&gt;&lt;/div&gt;&lt;button&gt;I picked these up&lt;/button&gt;"></iframe>
+            </div>
+          </a>
+          <div class="meta">journey: borrow</div>
+        </div>
+
+      </div>
+
+      <!-- A screen the journey declares that nobody has drawn. A chip in the journey's own
+           section, never an empty card. -->
+      <div class="gaps"><span class="gapchip" id="s-hold" data-st="gap" title="declared, no mock yet">hold</span></div>
+    </section>
+
+    <section class="sect">
+      <h2 id="j-no-declaring-brief">no declaring brief<span class="count">1 mocked</span></h2>
+      <div class="grid">
+
+        <!-- An orphan: a mock no journey declares and no spec claims. No shotlink — there is no
+             review page to send it to — so it keeps the lightbox. -->
+        <div class="card" id="s-receipt" data-st="sketch">
+          <h3>receipt<span class="badge sketch">sketch</span><span class="badge orphan">orphan</span><span class="open"><button>open ↗</button></span></h3>
+          <div class="shot clip">
+            <iframe class="frame" scrolling="no" height="200" title="receipt"
+              srcdoc="&lt;style&gt;*{box-sizing:border-box}body{margin:0;font:13px/1.45 ui-sans-serif,system-ui,sans-serif;color:#0a0a0a;background:#fff;padding:14px}h1{font-size:17px;margin:0 0 2px}p{margin:0 0 14px;color:#737373}dl{margin:0;border-top:1px solid #e5e5e5}div{display:flex;justify-content:space-between;border-bottom:1px solid #e5e5e5;padding:8px 0}dt{color:#737373}dd{margin:0}&lt;/style&gt;&lt;h1&gt;Borrowed&lt;/h1&gt;&lt;p&gt;Return twice what you took, next autumn.&lt;/p&gt;&lt;dl&gt;&lt;div&gt;&lt;dt&gt;Taken&lt;/dt&gt;&lt;dd&gt;2 varieties&lt;/dd&gt;&lt;/div&gt;&lt;div&gt;&lt;dt&gt;Due back&lt;/dt&gt;&lt;dd&gt;October 2027&lt;/dd&gt;&lt;/div&gt;&lt;/dl&gt;"></iframe>
+          </div>
+          <div class="meta">no declaring brief</div>
+        </div>
+
+      </div>
+    </section>
+
+  </div>
+</div>
+
+</body>
+</html>

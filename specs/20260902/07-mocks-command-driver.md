@@ -18,6 +18,9 @@ diff_base: 1add289c6c7090ba7654a24cfb1ec549e4838113
 
 ## Goal
 
+Amended by: ADR-0016 (specs/20260912/05-the-atlas-answers-to-a-design.md narrows D15's
+frame-per-state clause and AC-20260902-07-14's worked example — see the ADR's Applies to)
+
 Ship the design stage as its own command: `/spec:mocks` loops `mocks-driver.js`, whose state
 is derived on every invocation from `design/mocks/status.json` plus the artifacts on disk —
 SEED → SHAPES → WIREFRAMES → THEME → SKIN → REVIEW → APPROVED — with the genesis checkpoint

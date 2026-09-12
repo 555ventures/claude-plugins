@@ -6,7 +6,7 @@ const path = require('node:path')
 const http = require('node:http')
 const vm = require('node:vm')
 const { spawn, spawnSync } = require('node:child_process')
-const { tmpdir, runNode, SPEC, read, freePort, serveAtlas, withHandler } = require('./helpers')
+const { ROOT, tmpdir, runNode, SPEC, read, freePort, serveAtlas, withHandler } = require('./helpers')
 
 const atlas = (argv, opts) => runNode('scripts/design-atlas.js', argv, opts)
 
@@ -186,6 +186,101 @@ test('build: a mock with no brief AND no claim is an orphan; a non-done claiming
   assert.match(out, /badge orphan/)
   assert.match(out, /badge bound/)
   assert.doesNotMatch(out, /badge built/)
+
+  // AC-20260912-05-1: a root with roadmap surfaces and no seed.md (this fixture's own shape)
+  // must build byte-identically to today — nothing about the seed-journey/states rendering below
+  // may leak onto a build that carries no seed.md at all.
+  const before = out
+  const res2 = atlas(['build'], { cwd: dir })
+  assert.strictEqual(res2.status, 0, res2.stdout + res2.stderr)
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8'), before,
+    'AC-20260912-05-1: a root with roadmap surfaces and no seed.md must build byte-identically run to run — no seed-journey rendering may perturb the no-seed path')
+})
+
+// AC-20260912-05-1: a seed.md journey declaring `a -> b`, where `a` carries two data-state-btn
+// states and `b` carries none, renders ONE <iframe> per screen (never one per declared state) and
+// carries the state count on the card's own meta line — the pre-2026-09-12 atlas rendered one
+// full-size frame per state instead, so a nine-state screen cost nine screen-heights. The repair
+// already shipped (commit b43217a) with no test watching it; this pins it as a regression.
+// cardBlock() isolates one card's own markup by its id="s-<label>" marker up to the next such
+// marker (or the section's own close), so an iframe/meta assertion here can never accidentally
+// count or read a sibling card's markup.
+function cardBlock(html, label) {
+  const start = html.indexOf('id="s-' + label + '"')
+  if (start === -1) return null
+  const next = html.indexOf('id="s-', start + 1)
+  const sectionEnd = html.indexOf('</section>', start)
+  const end = next === -1 ? sectionEnd : Math.min(next, sectionEnd === -1 ? next : sectionEnd)
+  return html.slice(start, end === -1 ? html.length : end)
+}
+
+test('AC-20260912-05-1: build renders one <iframe> per screen for a journey with states, carrying the state count on the meta line, and a section headed by the journey with its persona line', () => {
+  const dir = tmpdir('atlas-ac1')
+  const mk = (rel, c) => { const p = path.join(dir, rel); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, c) }
+  mk('design/mocks/seed.md', '# Seed — Fixture\n\n## Journeys\n### j1\nMika moves through a short flow.\n```surfaces\na -> b\n```\n')
+  mk('design/mocks/a.html',
+    '<main data-screen-label="a">\n<div data-contract="none">' +
+    '<button data-state-btn="busy">Busy</button><button data-state-btn="empty">Empty</button></div>\nA\n</main>\n')
+  mk('design/mocks/b.html', '<main data-screen-label="b">B</main>\n')
+
+  const res = atlas(['build'], { cwd: dir })
+  assert.strictEqual(res.status, 0, res.stdout + res.stderr)
+  const out = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')
+
+  const secStart = out.indexOf('id="j-j1"')
+  assert.notStrictEqual(secStart, -1, 'a seed journey j1 must render its own section, headed by the journey name')
+  const secEnd = out.indexOf('</section>', secStart)
+  const section = out.slice(secStart, secEnd)
+  assert.match(section, /Mika moves through a short flow\./,
+    'the j1 section must carry the seed\'s persona line as its subtitle')
+
+  const aBlock = cardBlock(section, 'a')
+  const bBlock = cardBlock(section, 'b')
+  assert.ok(aBlock, 'a\'s card (id="s-a") must exist inside the j1 section')
+  assert.ok(bBlock, 'b\'s card (id="s-b") must exist inside the j1 section')
+
+  const iframeCount = (block) => (block.match(/<iframe\b/g) || []).length
+  assert.strictEqual(iframeCount(aBlock), 1,
+    'D3: a declaring two data-state-btn states must still render exactly ONE <iframe> — one full-size frame per state was the pre-repair shape that made a nine-state screen nine screens tall: got ' + iframeCount(aBlock))
+  assert.strictEqual(iframeCount(bBlock), 1,
+    'D3: b (no declared states) must render exactly one <iframe>, the same as every other screen: got ' + iframeCount(bBlock))
+
+  assert.match(aBlock, /2 states/,
+    'D3: a\'s card meta line must carry "2 states" — the state count replaces the per-state frames the repair removed')
+  assert.doesNotMatch(bBlock, /\bstates\b/,
+    'D3: a mock declaring no states must render a meta line with no "states" clause at all, not "0 states"')
+})
+
+// AC-20260912-05-2/D4: a journey-owned card's frame is wrapped in <a class="shotlink" href=
+// "/review/<journey>.html#board-<label>">, and a design/shapes/*.html candidate — which has no
+// declaring journey — gets no shotlink wrapper at all and keeps the plain lightbox. The lightbox
+// binding itself must skip any .shot nested in a shotlink (`if(!s.closest("a.shotlink"))`), or a
+// journey-owned card's click would open BOTH the review page navigation and the lightbox.
+test('AC-20260912-05-2: a journey-owned card wraps its frame in a shotlink to the review page, a shapes candidate gets no shotlink, and the lightbox binding skips shotlinked frames', () => {
+  const dir = tmpdir('atlas-ac2')
+  const mk = (rel, c) => { const p = path.join(dir, rel); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, c) }
+  mk('design/mocks/seed.md', '# Seed — Fixture\n\n## Journeys\n### j1\nMika moves through a short flow.\n```surfaces\na -> b\n```\n')
+  mk('design/mocks/a.html', '<main data-screen-label="a">A</main>\n')
+  mk('design/mocks/b.html', '<main data-screen-label="b">B</main>\n')
+  mk('design/shapes/one.html', '<main data-screen-label="one">One</main>\n')
+
+  const res = atlas(['build'], { cwd: dir })
+  assert.strictEqual(res.status, 0, res.stdout + res.stderr)
+  const out = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')
+
+  assert.match(out, /<a class="shotlink" href="\/review\/j1\.html#board-a"/,
+    'D4: a\'s journey-owned card must wrap its frame in a shotlink pointing at the review page\'s board-a anchor')
+  assert.match(out, /<a class="shotlink" href="\/review\/j1\.html#board-b"/,
+    'D4: b\'s journey-owned card must wrap its frame in a shotlink pointing at the review page\'s board-b anchor')
+
+  const shapesStart = out.indexOf('id="shapes"')
+  assert.notStrictEqual(shapesStart, -1, 'a design/shapes/*.html candidate must render its own "shapes" section')
+  const shapesSection = out.slice(shapesStart, out.indexOf('</section>', shapesStart))
+  assert.doesNotMatch(shapesSection, /shotlink/,
+    'D4: a shapes candidate has no declaring journey and must get NO shotlink wrapper at all — it keeps the plain lightbox')
+
+  assert.match(out, /if\(!s\.closest\("a\.shotlink"\)\)/,
+    'D4: the lightbox click binding must skip any .shot nested inside a shotlink, or a journey-owned card would open both the review page and the lightbox on click')
 })
 
 test('build: a ledger-claimed mock is NOT an orphan even when no brief declares it (standalone-spec mocks)', () => {
@@ -831,4 +926,45 @@ function cssRuleBody(css, selector) {
   }
   return css.slice(m.index + m[0].length, i)
 }
+
+// =============================================================================================
+// specs/20260912/05-the-atlas-answers-to-a-design.md — AC-20260912-05-3, -5, -6.
+// =============================================================================================
+
+// AC-20260912-05-3/D5: `?clean` on a served static mock suppresses ONLY the mock's own state
+// switcher: the CLEAN_STYLE block hides every [data-state-btn] and every data-contract="none"
+// element that DIRECTLY wraps one, via the `:has(>[data-state-btn])` qualifier — never a bare
+// [data-contract="none"] selector, which would also erase a legitimate shell region (a header, a
+// nav) carrying that same marker for an unrelated reason (the regression the 2026-09-12 first-fix
+// attempt shipped). The fixture below carries both shapes in one mock, per the spec's own
+// Rationale ("a test that does not carry a legitimate data-contract="none" region…cannot catch
+// the regression").
+test('AC-20260912-05-3: GET ?clean hides state-button controls without touching an unrelated data-contract="none" shell region, and plain GET carries neither rule', async () => {
+  const dir = tmpdir('atlas-ac3')
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/mocks/a.html'),
+    '<header data-contract="none">App header</header>\n' +
+    '<main data-screen-label="a">\n' +
+    '<div data-contract="none"><button data-state-btn="empty">Empty</button></div>\nA\n</main>\n')
+
+  await withHandler(dir, async ({ get }) => {
+    const clean = await get('/mocks/a.html?clean')
+    assert.strictEqual(clean.status, 200, 'GET /mocks/a.html?clean must serve the mock: ' + clean.body)
+    assert.match(clean.body, /\[data-state-btn\]\{display:none!important\}/,
+      'D5: ?clean must hide every [data-state-btn] control')
+    assert.match(clean.body, /\[data-contract="none"\]:has\(>\[data-state-btn\]\)\{display:none!important\}/,
+      'D5: ?clean must carry the :has(>[data-state-btn]) qualifier — a bare [data-contract="none"] rule ' +
+      'would also hide the unrelated <header data-contract="none"> shell region below')
+    assert.match(clean.body, /<header data-contract="none">App header<\/header>/,
+      'D5: the qualifier must be load-bearing — a data-contract="none" region NOT wrapping a state button ' +
+      '(this mock\'s own app header) must survive ?clean intact, never emptied')
+
+    const plain = await get('/mocks/a.html')
+    assert.strictEqual(plain.status, 200, 'GET /mocks/a.html (no ?clean) must serve the mock: ' + plain.body)
+    assert.doesNotMatch(plain.body, /\[data-state-btn\]\{display:none!important\}/,
+      'without ?clean, the state-button hiding rule must not be present at all')
+    assert.doesNotMatch(plain.body, /:has\(>\[data-state-btn\]\)/,
+      'without ?clean, the data-contract qualifier rule must not be present at all')
+  })
+})
 

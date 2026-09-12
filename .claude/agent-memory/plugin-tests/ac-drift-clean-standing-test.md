@@ -3,6 +3,7 @@ name: ac-drift-clean-standing-test
 description: tests/doctor/ac-drift-clean.test.js pins ac-drift.js against ROOT itself (not a synthetic host) — its red count shifts with every retire/tag edit landed in the same spec.
 metadata:
   type: project
+  reviewed: 2026-09-12
 ---
 
 specs/20260907/02-ac-drift-backfill.md D5 adds `tests/doctor/ac-drift-clean.test.js`, a

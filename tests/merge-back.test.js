@@ -206,6 +206,28 @@ test('create refuses on an un-gitignored worktree dir and an unborn HEAD', () =>
   assert.match(r2.stderr, /no commits yet/)
 })
 
+// AC-20260912-03-2 (specs/20260912/03-run-isolates-and-owns-the-stages.md D2/D4, SHALL CONTINUE
+// TO): `create` already refuses when `--root` names a path inside an existing worktree rather
+// than the main working tree (spec-build-driver.js's own line 114 check) — /spec:run's new Step
+// 0 discriminates its stop message on exactly this stderr text, so the refusal itself must keep
+// working unchanged. Never tested directly before this spec; adding coverage here rather than
+// asserting it only indirectly through Step 0's own doctrine pin.
+test('AC-20260912-03-2 (SHALL CONTINUE TO): create refuses with "run from the main working tree" when --root names a path inside an existing worktree', () => {
+  const main = tmpdir('mbwt-main')
+  const g = gitRepo(main)
+  const wtPath = path.join(tmpdir('mbwt-holder'), 'other-worktree')
+  g('worktree', 'add', '-b', 'spec/other', wtPath)
+  const r = runBash(SCRIPT, ['create', '--source', 'spec/b', '--root', wtPath])
+  assert.strictEqual(r.status, 2,
+    'a create invocation whose --root names a path inside an existing worktree (not the main ' +
+    'working tree) must refuse — a session already inside a different spec\'s worktree must not ' +
+    'silently branch and add a second worktree nested under the first: ' + r.stdout + r.stderr)
+  assert.match(r.stderr, /create: run from the main working tree/,
+    'the refusal must carry the exact "create: run from the main working tree" text — Step 0 ' +
+    'discriminates its own stop message on this literal, since all four create refusals share ' +
+    'the same exit code: ' + r.stderr)
+})
+
 // `cleanup` must not rely on `git branch -d`'s ANCESTRY
 // containment check alone — a squash merge deliberately creates none (it copies the tree into
 // one new commit and links nothing), so an ancestry-only check fails on 100% of squash merges,

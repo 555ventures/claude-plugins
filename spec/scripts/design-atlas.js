@@ -233,7 +233,7 @@ const frameTag = (src, w, h) =>
 
 // ---- targets -------------------------------------------------------------------------------------
 // design/targets.json declares the theme × viewport matrix the product owes (archetype-derived;
-// written by the genesis explore state, or the /spec:design preamble on non-genesis repos). Found by walking
+// written by the genesis explore state, or the design stage's preamble on non-genesis repos). Found by walking
 // up from the given path; absent = legacy single-frame behavior, no extra checks, no controls.
 function loadTargets(fromPath) {
   let dir = path.resolve(fromPath)

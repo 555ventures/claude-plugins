@@ -14,8 +14,8 @@ exemption therefore covers appearance only — reachability is never exempt.
 
 Enforcement rides mechanisms that already exist: `/spec:plan`'s lock audit (widened from Goal
 promises to Decision-level observable promises), the Phase 3 refuters (a mocked in-repo hop
-between producer and terminal is top-severity), `/spec:build`'s `blocked` ruling duty (a
-mid-build ruling adds its AC in the same edit), and `/spec:review`'s AC↔test matrix,
+between producer and terminal is top-severity), the build stage's `blocked` ruling duty (a
+mid-build ruling adds its AC in the same edit), and the review stage's AC↔test matrix,
 skipped-test reconciliation and semantic backstop. No new script, section, or review leg
 exists for this — deliberately (ruled 2026-08-10, superseding the discarded `## Surface
 Paths` design; specs/20260810/02-terminal-observable-acs.md).
@@ -76,17 +76,24 @@ already closed. (specs/20260823/04-review-close-hardening.md, done 2026-08-23)
 
 ## One command per feature
 
-After `/spec:plan`, `/spec:run <spec>` derives the stage from disk and runs design (when
-due), the build driver, and the review driver in sequence, each with `--via loop`;
-`/spec:design`, `/spec:build`, and `/spec:review` are the three stages' direct entries
-(`--via direct`). Status
-transitions are owned by driver states, not commands: plan's lock → `hardened`, the build
-driver's preflight → `implementing`, the review driver's close → `done`; the state gate
-admits `/spec:run` on all three (`/spec:build` on `hardened|implementing`, `/spec:review` on
-`implementing|done`) and stays a prompt-boundary check. There is no stop
+`/spec:run` is the only way into the design, build and review stages. It derives the next
+stage from disk, opens the spec's own git worktree before anything else runs, and carries a
+hardened spec to `done` in one command. The three stage bodies live under
+`spec/doctrine/stages/` as prose the loop executes; none of them is an invokable command, and
+the state-machine hook gates `/spec:plan` and `/spec:run` alone. Isolation is the default:
+`--in-place` opts out, and a worktree that cannot be created stops the run rather than
+continuing on the current branch. A spec already past `hardened` with no worktree registered
+stays where it is, because an in-flight build's sidecar marks and uncommitted worker output do
+not travel into a new working tree. `/git:enter-worktree` remains the manual surface for
+entering or repairing a spec's worktree by hand; it is idempotent and short-circuits when the
+session is already inside the tree it would create.
+(specs/20260912/03-run-isolates-and-owns-the-stages.md, done 2026-09-12)
+
+Status transitions are owned by driver states, not commands: plan's lock → `hardened`, the
+build driver's preflight → `implementing`, the review driver's close → `done`. There is no stop
 between the reviewer's return and dispositions. Independence is a fresh-context
 `spec:disposer` agent (read-only, paths only, the session's model) dispatched at
-DISPOSITIONS on both review entries; it returns one grounded recommendation per survivor
+DISPOSITIONS; it returns one grounded recommendation per survivor
 and leg finding, and the review driver refuses `--mark dispositions` on non-empty pools
 without a return that covers every finding exactly once with a non-blank reason. Fix
 recommendations dispatch without a question; waive and reject recommendations go to the

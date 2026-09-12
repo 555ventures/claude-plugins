@@ -394,7 +394,7 @@ function cmdSelect() {
     .map((r) => ({ r, i: rows.indexOf(r) }))
   if (!candidates.length) {
     console.error('replay.js: no eligible CLEAN review row with a runId found in the window since the ' +
-      'last measurement replay row — run /spec:review first, or check replay.js --due to confirm one is expected')
+      'last measurement replay row — run /spec:run first, or check replay.js --due to confirm one is expected')
     process.exit(1)
   }
   let best = null

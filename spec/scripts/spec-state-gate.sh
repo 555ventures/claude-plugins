@@ -1,16 +1,13 @@
 #!/usr/bin/env bash
 # UserPromptSubmit hook: enforce the spec state machine at the command boundary.
 #   /spec:run    requires status: hardened, implementing, or done (the loop's resume and
-#                no-op entries — a /clear then re-pasting /spec:run <spec>)
-#   /spec:build  requires status: hardened or implementing (to resume); done resumes only
-#                through /spec:run
-#   /spec:design requires status: hardened
-#   /spec:review requires status: implementing (or done, for a re-run)
-#   all four      require zero [NEEDS CLARIFICATION] markers in the spec
-# Also warns (stdout → injected context, never a block) on exactly the five gated
-# commands (/spec:plan, /spec:run, /spec:design, /spec:build, /spec:review — the same
-# case pattern below) when the host grounding layer's contractHash stamp fails to
-# match the plugin's grounding-contract file —
+#                no-op entries — a /clear then re-pasting /spec:run <spec>) — the design, build
+#                and review stages are reached only through this command; they are prose under
+#                spec/doctrine/stages/, not invokable commands, so they carry no arm of their own
+#   /spec:plan   requires zero [NEEDS CLARIFICATION] markers in the spec
+# Also warns (stdout → injected context, never a block) on exactly the two gated
+# commands (/spec:plan, /spec:run — the same case pattern below) when the host grounding
+# layer's contractHash stamp fails to match the plugin's grounding-contract file —
 # fully automatic; no version bookkeeping involved.
 # Exit 2 blocks the prompt and shows stderr to the user. Exit 0 allows.
 set -u
@@ -23,7 +20,7 @@ set -u
 # This gate owns the notice for all three UserPromptSubmit hooks (genesis-state-gate.sh and
 # spec-session-stamp.sh share the same dependency), so exactly one warning appears per prompt.
 if ! command -v jq >/dev/null 2>&1; then
-  echo "spec plugin: \`jq\` is not installed, so the hook-enforced state machine cannot run — /spec:plan, /spec:run, /spec:design, /spec:build and /spec:review are NOT being checked against spec status, and the grounding-drift warning is off. Install jq (macOS: brew install jq · Debian/Ubuntu: apt-get install jq). This notice repeats on every prompt until jq is present."
+  echo "spec plugin: \`jq\` is not installed, so the hook-enforced state machine cannot run — /spec:plan and /spec:run are NOT being checked against spec status, and the grounding-drift warning is off. Install jq (macOS: brew install jq · Debian/Ubuntu: apt-get install jq). This notice repeats on every prompt until jq is present."
   exit 0
 fi
 
@@ -32,7 +29,7 @@ PROMPT=$(printf '%s' "$INPUT" | jq -r '.prompt // empty' 2>/dev/null)
 [ -z "$PROMPT" ] && exit 0
 
 case "$PROMPT" in
-  /spec:plan*|/spec:run*|/spec:design*|/spec:build*|/spec:review*) ;;
+  /spec:plan*|/spec:run*) ;;
   *) exit 0 ;;
 esac
 
@@ -88,27 +85,6 @@ case "$PROMPT" in
       hardened|implementing|done) exit 0 ;;
     esac
     echo "Spec state gate: /spec:run requires status: hardened, implementing, or done — $SPEC has status: ${STATUS:-<missing>}. Run /spec:plan first." >&2
-    exit 2
-    ;;
-  /spec:design*)
-    case "$STATUS" in
-      hardened) exit 0 ;;
-    esac
-    echo "Spec state gate: /spec:design requires status: hardened — $SPEC has status: ${STATUS:-<missing>}. Run /spec:plan first." >&2
-    exit 2
-    ;;
-  /spec:build*)
-    case "$STATUS" in
-      hardened|implementing) exit 0 ;;
-    esac
-    echo "Spec state gate: /spec:build requires status: hardened (or implementing to resume) — $SPEC has status: ${STATUS:-<missing>}. A done spec resumes through /spec:run <spec>." >&2
-    exit 2
-    ;;
-  /spec:review*)
-    case "$STATUS" in
-      implementing|done) exit 0 ;;
-    esac
-    echo "Spec state gate: /spec:review requires status: implementing (or done for a re-run) — $SPEC has status: ${STATUS:-<missing>}. Run /spec:build first." >&2
     exit 2
     ;;
 esac

@@ -1,14 +1,9 @@
----
-description: Independent execution-verified review gate, driver-stepped — spec-review-driver.js owns legs, verdict, ledger, and merge-back sequencing; this session holds reviewer dispatch, dispositions, and merge strategy; flips spec to done, updates canonical docs, commits and merges back
-argument-hint: <spec path>
----
-
 # Spec Review: Independent Gate
 
 `spec-review-driver.js` owns the review stage's sequencing — base derivation, legs, all three
 `verdict.js` passes, both ledger appends, the `implementing → done` flip, and the merge-back
 sequence — executing every deterministic step itself and printing exactly one step at a time
-for the judgments only this session can make. This is the only command that flips `done`;
+for the judgments only this session can make. This is the only stage that flips `done`;
 judgment on survivors (fix / waive / reject) happens in this session with the user — the
 reviewer reports, never adjudicates.
 
@@ -21,9 +16,8 @@ once and keep the printed path — it is `{driver}` below.
 
 `$ARGUMENTS` — path to a spec with `status: implementing`; one that already closed
 (`status: done`) is refused (exit 2) — `/spec:escape` records a defect that escaped a review
-that already passed. This command is the review driver's direct entry point (`--via direct`,
-the default); the `/spec:run` loop reaches the same driver with `--via loop` and runs the same
-DISPOSITIONS protocol below on both entries — see `spec/commands/run.md`.
+that already passed. `/spec:run` is this driver's only entry point, and runs the same
+DISPOSITIONS protocol below — see `spec/commands/run.md`'s Review stage.
 
 ## Protocol — the driver owns the state machine
 

@@ -1,18 +1,19 @@
 #!/usr/bin/env node
-// Deterministic state-machine driver for /spec:build.
+// Deterministic state-machine driver for the build stage.
 //
-// spec-build-driver <spec.md> [--via loop|direct]      -> print current state + ONLY that step
+// spec-build-driver <spec.md>                          -> print current state + ONLY that step
 // spec-build-driver <spec.md> --mark <mark> [args]     -> verify artifacts, record, print next step
 //   marks: tests-authored | red-attributed |
 //          wave-done --wave <label> --workers <n> | integrated |
 //          repair-applied --continued <n> --spawned <n> | committed
 // spec-build-driver <spec.md> --state                  -> print the state name only (scripting)
 //
-// specs/20260901/02-run-provenance.md (D5): --via <loop|direct> is recorded
-// once, at sidecar creation (default "direct"; a later invocation naming a different value is
-// ignored) and the DONE row gains `via`/`model` immediately after `tier` — model derived at
-// row-write time by lib/session-stamp.js's sessionModel(repoRoot), `null` on a host with no
-// .claude/spec-session.json stamp.
+// specs/20260912/03-run-isolates-and-owns-the-stages.md (D10): `via` is recorded as "loop" once,
+// at sidecar creation, regardless of argv — /spec:run is the only entry point left, so the flag
+// that once chose between it and a direct invocation is gone; `via` itself stays a measurement
+// field fleet-reader.js still buckets escapes-per-CLEAN by. The DONE row gains `via`/`model`
+// immediately after `tier` — model derived at row-write time by lib/session-stamp.js's
+// sessionModel(repoRoot), `null` on a host with no .claude/spec-session.json stamp.
 //
 // States: PREFLIGHT (driver-only) -> TESTS -> RED_CHECK (driver-only) -> RED_FINDINGS? ->
 //   RED_ATTRIBUTION? -> WAVE:<label>... -> INTEGRATION -> GATE (driver-only) ->
@@ -27,7 +28,7 @@
 // other placeholder is recognized. The DONE ledger row's `gate` object carries a `postGate`
 // boolean recording whether one was declared.
 //
-// WHY THIS EXISTS: specs/20260901/01-build-driver.md — /spec:build was a
+// WHY THIS EXISTS: specs/20260901/01-build-driver.md — the build stage was a
 // 161-line markdown procedure with no driver and no state file: it resumed by inspecting the
 // diff, ran the red-check/gate/scope-reconcile by hand, and hand-appended its own ledger row —
 // the last stage in the per-feature loop whose deterministic choreography was still performed by
@@ -153,7 +154,7 @@ if (status === 'hardened') {
   const hostDesignConfig = hostConfig.design
   if (hostDesignConfig && fmVal('design') === 'true' && !fmVal('designed')) {
     die('spec declares design: true with no designed: in a host whose config declares a design ' +
-      'block — run /spec:design ' + specPath + ' first')
+      'block — run /spec:run ' + specPath + ' first')
   }
 
   // ---- PREFLIGHT (driver-only) -------------------------------------------------------------
@@ -292,7 +293,7 @@ if (!sidecarExisted && !justFlipped) {
   if (doneRow) {
     die('build already DONE for ' + specRel + ' (ledger row ' + doneRow.runId + ', ' + doneRow.ts +
       ') — run the review driver: node ' + path.join(PLUGIN, 'scripts/spec-review-driver.js') + ' ' +
-      specPath + (flag('--via') === 'loop' ? ' --via loop' : ''))
+      specPath)
   }
 }
 function ledgerBuildRow(root, rel) {
@@ -326,10 +327,11 @@ if (!STATE_ONLY) {
     }
   }
   if (!hasTestsRows && marks.redCheck === undefined) marks.redCheck = 'none'
-  // D5 (specs/20260901/02-run-provenance.md): --via recorded once, at sidecar creation — a later
-  // invocation naming a different --via is ignored, mirroring the review driver's own D4 (flag()
-  // reads any --via value present, A5-style; anything but exactly "loop" defaults to "direct").
-  if (marks.via === undefined) marks.via = flag('--via') === 'loop' ? 'loop' : 'direct'
+  // D10 (specs/20260912/03-run-isolates-and-owns-the-stages.md): `via` is recorded once, at
+  // sidecar creation, as "loop" unconditionally — the flag that used to choose between a direct
+  // invocation and the loop is gone now that /spec:run is the only entry point, so argv is never
+  // consulted here at all.
+  if (marks.via === undefined) marks.via = 'loop'
   saveSidecar()
 }
 
@@ -586,8 +588,8 @@ function handleTestsAuthored() {
 // Residue is "differs from base", never "exists on disk".
 //
 // The former predicate was a bare `fs.existsSync` per CREATE path, and it contradicted the design
-// stage's own published promise — spec/commands/design.md: "Components built here are real and
-// kept — /spec:build wires them, never rebuilds them." A design-landed component is committed
+// stage's own published promise — spec/doctrine/stages/stage-design.md: components built there are
+// real and kept, wired by the build stage rather than rebuilt. A design-landed component is committed
 // BEFORE the build starts, so it is in the pre-image, so it exists on disk, so every design:true
 // spec had to hand-edit its File Plan CREATE -> MODIFY to get past this mark. Two stages of the
 // same pipeline disagreed about what a CREATE row means.

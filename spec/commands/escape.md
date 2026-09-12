@@ -5,7 +5,7 @@ argument-hint: "[defective file or spec path] [short defect description] — bot
 
 # Spec Escape: Record a Defect the Pipeline Missed
 
-An **escape** is a real defect found *after* `/spec:review` closed the spec that built the
+An **escape** is a real defect found *after* the review stage closed the spec that built the
 code — found by you, by a later spec's build/review tripping over it, or in production.
 Recording escapes is what makes the run ledger's quality story falsifiable: a CLEAN verdict
 with no escapes behind it is evidence the review was trustworthy (or safe to cut); a CLEAN

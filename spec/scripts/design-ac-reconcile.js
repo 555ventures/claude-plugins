@@ -3,7 +3,7 @@
 // design-ac-reconcile.js --spec <path> --components <design/components.json>
 //   [--component <name>]... [--json]
 //
-// /spec:design Step 6's AC ↔ design-landed reconcile (core § Incident Policy same-session fix;
+// The design stage's Step 6 AC ↔ design-landed reconcile (core § Incident Policy same-session fix;
 // the triggering host spec's D15/D16 hold the field record).
 //
 // WHY: plan writes Acceptance Criteria and File Plan test rows before design exists. Design then

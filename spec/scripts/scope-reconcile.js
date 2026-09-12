@@ -5,15 +5,15 @@
 // --json additionally emits `atRisk` (specs/20260815/02-at-risk-pins.md D1): test files outside
 // the spec's File Plan tests rows whose content references a changed file's path stem.
 //
-// specs/20260805/01-review-scope-reconciliation.md: /spec:review diffed only the File Plan's directories, so an
+// specs/20260805/01-review-scope-reconciliation.md: the review stage diffed only the File Plan's directories, so an
 // out-of-plan `waitForExit` edit was structurally invisible to review and rode a CLEAN verdict
 // into production. This script inverts the File Plan's role from scope-definer to
 // prediction-under-test: every changed file is seen; the plan's misses (out-of-plan) and
 // overshoots (unrealized) both surface, mechanically, never by reviewer diligence.
 //
 // What it deliberately does NOT do: resolve `pipelineOwnedPaths` beyond the additive glob list
-// in .claude/spec.config.json, or re-derive the changed set anywhere else — /spec:review and
-// /spec:build's Final gate both call this, once each. It DOES read test-file CONTENT, but only
+// in .claude/spec.config.json, or re-derive the changed set anywhere else — the review stage and
+// the build stage's Final gate both call this, once each. It DOES read test-file CONTENT, but only
 // for the at-risk derivation's substring scan below (specs/20260815/02-at-risk-pins.md D1) — the
 // outOfPlan/unrealized/excluded/renamed derivation never looks past a path string. The at-risk
 // walk does NOT descend into `fixtures`/`__fixtures__` directories (specs/20260903/07-test-file-

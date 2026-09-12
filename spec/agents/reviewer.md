@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: "Read-only spec-implementation reviewer. Checks a diff against the spec and the host repo's rule surfaces and reports execution-grounded findings by severity. Dispatched by /spec:review as its single fresh-context reviewer."
+description: "Read-only spec-implementation reviewer. Checks a diff against the spec and the host repo's rule surfaces and reports execution-grounded findings by severity. Dispatched by the review stage (run only through /spec:run) as its single fresh-context reviewer."
 model: fable
 effort: low
 tools:

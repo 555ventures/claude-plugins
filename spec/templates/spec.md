@@ -3,16 +3,16 @@ date: { YYYY-MM-DD }
 status: draft            # draft → hardened → implementing → done (hook-enforced); to retire a preserved spec: superseded (terminal — drops out of /spec:status silently; optional superseded_by: <what replaced it> is free-form provenance)
 tier: standard           # standard | critical (critical: irreversible/high-blast-radius surfaces — auth, migrations, money, data deletion). Work too small to need a spec gets none.
 area: { area-name }      # primary feature/domain/module; "cross-cutting" if none
-design: false            # design-capable hosts only (config design block): true → /spec:design gates before /spec:build
+design: false            # design-capable hosts only (config design block): true → the design stage gates before the build stage
 breaking: false
 depends_on: []
 depended_on_by: []
 # brief: NN              # roadmap-planned specs only: the docs/roadmap/NN-*.md brief this spec hydrates; /spec:status (and /spec:doctor check 14) derive roadmap status from this stamp
 # spiked: YYYY-MM-DD     # only if a spike ran during /spec:plan
-# designed: YYYY-MM-DD   # set by /spec:design on user approval (design-capable hosts)
+# designed: YYYY-MM-DD   # set by the design stage on user approval (design-capable hosts)
 # design_source: design/mocks/<label>.html  # optional, single path/URL: the repo's local mock (or a Claude Design escape-hatch URL) — read-first binding canon the render gate resolves directly
-# build_base: <branch>   # set by /git:enter-worktree; read by /spec:review as the merge-back target
-# diff_base: <sha>       # set by /spec:build for in-place builds; read by /spec:review as the diff base when build_base is absent
+# build_base: <branch>   # set by /git:enter-worktree; read by the review stage as the merge-back target
+# diff_base: <sha>       # set by the build stage for in-place builds; read by the review stage as the diff base when build_base is absent
 # The host's pipeline rules may declare extra flags (e.g. migration: true) — include them when they apply.
 # While drafting: never guess — write [NEEDS CLARIFICATION: question] inline where information
 # is missing. Lock requires zero markers; the state gate blocks downstream commands on any survivor.
@@ -41,7 +41,7 @@ depended_on_by: []
 
 ## File Plan
 
-<!-- Machine-consumed: /spec:build parses this table into workflow batches.
+<!-- Machine-consumed: the build stage parses this table into workflow batches.
      Layer ∈ the host config's layerGroups (flattened, in order) plus tests | other.
      Tests rows list their AC-IDs in Summary. -->
 
@@ -60,10 +60,10 @@ depended_on_by: []
 
 { Screens, components, dialogs; their props and states (empty / loading / error / edge).
   Embed Component API References here — registry + library excerpts gathered at plan time.
-  In /spec:design this section is the component inventory workers author against; the mock
+  In the design stage this section is the component inventory workers author against; the mock
   (`design_source`) is the authored canon, held to by the render gate, and the reconcile step
-  folds this section to the approved design (final APIs + states). Sonnet workers (and
-  /spec:build) build from the spec + mock and never query MCPs. Omit section if no UI changes
+  folds this section to the approved design (final APIs + states). Sonnet workers (and the
+  build stage) build from the spec + mock and never query MCPs. Omit section if no UI changes
   (then design: false). }
 
 ## Data Model
@@ -85,7 +85,7 @@ depended_on_by: []
      where YYYYMMDD is the date dir and NN the spec number — so the review grep matrix never
      collides across two specs touching one test file. Reference the AC-ID per the host's
      convention (test name, comment, or docstring — pipeline rules § Test Rules). Hosts with
-     a driftScript get it checked mechanically; hosts without get /spec:review's mechanical
+     a driftScript get it checked mechanically; hosts without get the review stage's mechanical
      grep matrix (an AC-ID with no test hit is a hard finding — and the matrix counts
      EXECUTED tests: a skipped test is a hard finding too, unless the AC carries an explicit
      env gate). An AC whose test legitimately needs an environment declares it inline:
@@ -168,4 +168,4 @@ depended_on_by: []
 ## Canonical Delta
 
 { What sections of docs/canonical/{area}.md change when this lands. Applied
-  verbatim by /spec:review on CLEAN. Written as ready-to-merge prose, not a diff. }
+  verbatim by the review stage on CLEAN. Written as ready-to-merge prose, not a diff. }

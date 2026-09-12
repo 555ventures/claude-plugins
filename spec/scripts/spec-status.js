@@ -24,7 +24,7 @@
 // stamped `brief: NN` → unplanned; any matching spec not done → in-flight; all matching
 // specs done → done. Nothing here writes; this is a viewer. Consumers: /spec:status
 // (render + --next section 2), /spec:doctor check 13 (drift report), /spec:plan Phase 0
-// (--brief dependency preflight), the /spec:review close-out Next pointer (--next), and
+// (--brief dependency preflight), the review stage's close-out Next pointer (--next), and
 // external `--json` consumers of the frozen --next --json shape.
 //
 // A `done` spec also carries a derived observation sub-state read from `.claude/spec-runs*.jsonl`
@@ -42,8 +42,8 @@
 // --next derives the recommended next command per open spec: draft → /spec:plan; hardened
 // (with or without `design: true`, `designed:` set or not) and implementing both → /spec:run
 // — the loop derives design-due, build, and review from disk itself, so this derivation offers
-// exactly one next-command per state (`/spec:design`, `/spec:build`, and `/spec:review` are
-// never emitted here). Closest-to-done first, blocked entries last,
+// exactly one next-command per state (the design, build, and review stages have no command of
+// their own to emit). Closest-to-done first, blocked entries last,
 // and when every spec is done the next ready unplanned brief becomes the /spec:plan pick.
 // Unblocked runner-up entries are annotated parallel-ok/serial relative to the top pick:
 // spec-level depends_on can never link two unblocked entries (a non-done dep is a blocker),
@@ -404,7 +404,7 @@ if (queueOverlay.on) {
 }
 
 // Unknown status: frontmatter carries a word outside the lifecycle. Without this, deriveNext's
-// else-branch would recommend /spec:build for it. `superseded` never reaches here — retirement
+// else-branch would recommend the build stage for it. `superseded` never reaches here — retirement
 // filtered it out above — so every hit is a typo or a hand-invented word, which has a real fix.
 for (const s of specs) {
   if (!KNOWN_STATUS.has(s.status)) {
@@ -522,7 +522,7 @@ function briefDepPath(a, b) {
   return false
 }
 
-// Shared by --next (the lean top-pick line, consumed verbatim by /spec:review close-out)
+// Shared by --next (the lean top-pick line, consumed verbatim by the review stage's close-out)
 // and the dashboard — one derivation, two renders.
 function deriveNext() {
   const entries = []

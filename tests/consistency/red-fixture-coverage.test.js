@@ -530,19 +530,23 @@ for (const leg of LEGS) {
 
 // ---- hooks.json handlers -------------------------------------------------------------------
 
-// spec-state-gate.sh: a spec declaring a nonzero open_markers counter must block /spec:build.
+// spec-state-gate.sh: a spec declaring a nonzero open_markers counter must block /spec:run.
+// specs/20260912/03-run-isolates-and-owns-the-stages.md D12: the fixture prompt is /spec:run,
+// not the retired stage command it used to name — that prompt no longer reaches the marker
+// gate at all, so it can no longer prove this hook engages. The behavioural pin for the
+// retirement lives in tests/state-gates.test.js, not here; this row is fixture currency only.
 function hookSpecState() {
   const dir = tmpdir('rfc-hook-specstate')
   fs.mkdirSync(path.join(dir, 'specs/20260820'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'specs/20260820/92-fixture.md'),
     '---\nstatus: hardened\nopen_markers: 2\n---\n# Fixture\nRED_FIXTURE_OPEN_MARKER body\n')
   const r = runBash('scripts/spec-state-gate.sh', [], {
-    input: JSON.stringify({ prompt: '/spec:build specs/20260820/92-fixture.md' }),
+    input: JSON.stringify({ prompt: '/spec:run specs/20260820/92-fixture.md' }),
     cwd: dir,
     env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
   })
   assert.strictEqual(r.status, 2,
-    'a spec declaring open_markers: 2 must block /spec:build at the prompt boundary: ' + r.stdout + r.stderr)
+    'a spec declaring open_markers: 2 must block /spec:run at the prompt boundary: ' + r.stdout + r.stderr)
   assert.match(r.stderr, /open_markers: 2/,
     'evidence the check engaged: stderr must echo the exact planted counter value (2) — a generic block ' +
     'message here would mean the gate never actually read the frontmatter: ' + r.stderr)
@@ -633,7 +637,7 @@ function hookSessionStamp() {
   fs.mkdirSync(path.join(specRoot, '.claude'), { recursive: true })
   const specPrompt = runBash('scripts/spec-session-stamp.sh', [], {
     input: JSON.stringify({
-      prompt: '/spec:build specs/x.md',
+      prompt: '/spec:run specs/x.md',
       session_id: 'RED_FIXTURE_SESSION_ID',
       transcript_path: '/red-fixture/transcript.jsonl',
       cwd: specRoot,

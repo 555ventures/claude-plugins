@@ -17,13 +17,13 @@ with a warning).
 Consumed as binding canon by `wf-design` workers via the `componentManifestPath` arg — a
 named block is bound or authored to fulfil its entry, never re-invented as a lookalike, and
 a `boundaries` contradiction is a fork (`blocked`), same standing as a token-value
-contradiction. `/spec:review`'s component-manifest check includes commitment entries in its
+contradiction. The review stage's component-manifest check includes commitment entries in its
 near-duplicate comparison, and an `author` decision fulfilling a commitment entry cites it
 as its justification.
 
 ## Design stage (2026-08-24, specs/20260824/02)
 
-`/spec:design` is a six-step command body, not a driver: **preflight** → **author** →
+The design stage is a six-step body, not a driver: **preflight** → **author** →
 **host gate** → **render gate** → **your look** (blocking) → **reconcile + `designed:`**.
 Step position is derived from disk on every invocation — there is no state file, no
 `.design/` sidecar lifecycle, and no workflow. Authoring is direct Sonnet dispatch, one
@@ -58,7 +58,7 @@ unknown name, region drift (named to the slot), own `<nav>`/`<header>` in conten
 link — as violations at `ratified`/`approved`/`--matrix` and warns at `sketch`.
 `shell adopt` (plan table, then `--apply`) migrates pre-shell mocks. The shell canon is
 extracted from the approved set at SCAFFOLD (spec 11); genesis authors `AppShell` from it and
-`/spec:design`'s worker envelope carries `shell`.
+the design stage's worker envelope carries `shell`.
 
 The kit is the shell's sibling canon family for the content slot: `design/kit/<name>.html` (root
 `data-kit-canon`, one `data-kit-primitive="<key>"` element per shared primitive with a
@@ -130,8 +130,8 @@ text by LCS over in-flow entries, reports `text-missing`/`text-extra`/`order`/`r
 `positioning`/`geometry` findings with tolerances `{dx 1%, dw 1%, dh 15%}` and `dyRel`
 disabled, auto-excuses static-control→link with a `📌` line, and never computes pixels.
 Story ids per mock state live in `.claude/design-coverage.json` claims (`stories`). The
-matrix is `design/targets.json`, fail-closed when absent. `/spec:review` runs the gate as an
-advisory evidence leg on designed specs when `design.render` is declared.
+matrix is `design/targets.json`, fail-closed when absent. The review stage runs the gate as
+an advisory evidence leg on designed specs when `design.render` is declared.
 
 ## Mock hygiene and marks (2026-08-24, specs/20260824/03)
 
@@ -170,7 +170,7 @@ rules over every component inventory when the host declares `design.rulesManifes
 print under the cell and fail the gate; no manifest prints one skip line — and its
 `--mocks <mock>…` mode captures mocks only (no ledger, no comparison) so `/spec:sketch` exit
 runs the same rules over the mock render. The Sonnet rule-checklist walk is retired from sketch
-exit, the design gate, and `/spec:review`'s design leg; the checklist survives only at the
+exit, the design gate, and the review stage's design leg; the checklist survives only at the
 explore stage, which precedes `design-rules.json` and so has no manifest to execute.
 The canon template's § Shells asks what each shell does at every declared viewport
 (specs/20260905/05 D8).

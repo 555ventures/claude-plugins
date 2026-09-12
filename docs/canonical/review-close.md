@@ -1,6 +1,6 @@
 # Review close
 
-The CLOSE phase of `/spec:review` writes into the repo — the spec's Canonical Delta lands in
+The CLOSE phase of the review stage writes into the repo — the spec's Canonical Delta lands in
 `docs/canonical/{area}.md`, the deviations fold lands in the host's pipeline rules — and it
 does so *after* the review's gate leg has already run over the diff. Until 2026-08-30 those
 writes were never re-checked, so the files the pipeline itself authored were the one surface

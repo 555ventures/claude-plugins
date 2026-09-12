@@ -4,12 +4,14 @@ const assert = require('node:assert')
 const { execFileSync } = require('node:child_process')
 const { read, ROOT } = require('./helpers')
 
-// Owner: spec/commands/design.md § Step 5 — Your look (+ shared § Design Atlas, look-stop rule).
-// Pins the human hand-off block (🎨 command, 🆕 names, fixed reply line) that every look stop
-// prints before ending the turn — never before an AskUserQuestion, which hides it.
+// Owner: spec/doctrine/stages/stage-design.md § Step 5 — Your look (+ shared § Design Atlas,
+// look-stop rule). Pins the human hand-off block (🎨 command, 🆕 names, fixed reply line) that
+// every look stop prints before ending the turn — never before an AskUserQuestion, which hides
+// it. specs/20260912/03-run-isolates-and-owns-the-stages.md AC-20260912-03-6: design.md's body
+// moves to spec/doctrine/stages/stage-design.md — repointed in place.
 
 function step5() {
-  const doc = read('spec/commands/design.md')
+  const doc = read('spec/doctrine/stages/stage-design.md')
   const start = doc.indexOf('## Step 5')
   const end = doc.indexOf('## Step 6')
   assert.ok(start > -1 && end > start,

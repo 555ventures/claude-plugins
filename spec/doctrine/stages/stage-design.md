@@ -1,8 +1,3 @@
----
-description: Optional UI design stage — direct Sonnet dispatch authors real, kept components per surface, gated by the host gate and the render gate, a blocking human catalog look once both are green, then the spec reconciled and stamped designed:
-argument-hint: <spec path>
----
-
 # Spec Design
 
 For UI-bearing specs (`design: true`) in hosts whose config declares a `design` block (component
@@ -117,7 +112,7 @@ owns every commit.
 ## Step 3 — Host gate
 
 `design.gateCommand` when declared, else the host `gateCommand` with `{testDirs}` substituted
-by the directories the author touched (the same substitution `/spec:build` applies). Red →
+by the directories the author touched (the same substitution the build stage applies). Red →
 re-dispatch that surface's worker with the gate output path, at most 3 rounds, then STOP.
 
 ## Step 4 — Render gate
@@ -187,7 +182,7 @@ touched. No reply → nothing moved; the Resume table lands here again on the ne
    --spec <spec> --components design/components.json` — exit 1 lists every AC a now-real
    component already satisfies. One dispatch reconciles each: tag `[pre-green: design-landed]`,
    or split its test row by mount and cite the AC id in a Decisions row. Never stamp over exit 1.
-5. Stamp `designed: YYYY-MM-DD` (`/spec:design` never moves `status`); checkpoint-commit spec,
+5. Stamp `designed: YYYY-MM-DD` (this stage never moves `status`); checkpoint-commit spec,
    ledger, manifest, components, stories.
 
 ## Report
@@ -212,5 +207,5 @@ Next: /spec:run specs/20260824/02-example.md
   is a fork), § Design Authoring Contracts (manifest discipline on every `author` decision;
   mock supremacy; a `built` surface re-entering design re-syncs its mock first), § Worker Git
   Ban, § MCP Policy, § Read-Only Surfaces.
-- **Components built here are real and kept** — `/spec:build` wires them, never rebuilds them.
+- **Components built here are real and kept** — the build stage wires them, never rebuilds them.
 - The `.design/` sidecar is **never created, read, or audited** (D13); a leftover on a host is inert.

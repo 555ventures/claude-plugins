@@ -72,7 +72,7 @@ Launch parallel Explore agents (`model: sonnet`) and read key files yourself:
 - **Component catalog:** present? A component-preview host (e.g. Storybook — web: `.storybook/`
   config, `storybook` script — or Widgetbook — Flutter: `widgetbook` in `pubspec.yaml`, a
   widgetbook entrypoint/sub-package — or an equivalent like Ladle or Histoire).
-  This decides the config `design` block and whether `/spec:design` ever runs here. If
+  This decides the config `design` block and whether the design stage ever runs here. If
   design-capable, also profile the **design language**: existing theme/token files, a base
   design system in the dependencies (shadcn/Radix, MUI, Material 3, Cupertino, …), and how
   consistently real screens follow it — input to Phase 6.
@@ -112,7 +112,7 @@ both files from what you author here. Two skills, one profiling pass:
   file in this repo — `package.json` scripts, the README, `docker-compose.yml`,
   Playwright/Cypress config, a seed script; where the repo is silent, write `[NEEDS
   CLARIFICATION: <question>]` rather than guess. State its consumers in the body:
-  `/spec:review`'s verifiers use it to exercise findings; critical-tier builds may use it for
+  the review stage's verifiers use it to exercise findings; critical-tier builds may use it for
   advisory behavioral checks of acceptance criteria — advisory only, it gates nothing until the
   run ledger (`.claude/spec-runs.jsonl`) shows its verdicts track real escapes.
 - **`profile.skills.run`** (written to `.claude/skills/run/SKILL.md`) — the session-facing
@@ -366,8 +366,8 @@ Exit codes:
 
 Session-authored, per the D2 boundary (Phase 4's `manifestExtras` records these rows — the
 script never sees this phase's output directly). Skip unless Phase 1's `config` wrote a
-`design` block. Goal: a **design foundation, not a design system** — the binding canon
-`/spec:design` reads (tokens + doctrine). The system itself grows later by extraction through
+`design` block. Goal: a **design foundation, not a design system** — the binding canon the
+design stage reads (tokens + doctrine). The system itself grows later by extraction through
 specs; do not invent components or tokens no planned surface needs yet.
 
 **Precedence — check for a genesis canon first.** If `.claude/genesis/status.json` exists
@@ -406,7 +406,7 @@ true** — type scale, spacing rhythm, color roles, density, dialog-vs-page habi
 empty-state tone. List the inconsistencies you found; do not resolve them. **Detect an existing
 base dir / barrel** (a directory of overlay shells — Sheet/Dialog/Popover/Drawer — behind an
 `index.*`); if one exists, **name it and the import-only rule in the doctrine** (the cross-session
-memory `/spec:design` imports from). If none exists, **record the gap** — do not scaffold one here;
+memory the design stage imports from). If none exists, **record the gap** — do not scaffold one here;
 the set is seeded by genesis or grows by extraction through specs.
 
 **Greenfield (no genesis canon, no real UI yet):** `AskUserQuestion` first — **adopt** a base design system

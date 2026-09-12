@@ -27,7 +27,14 @@ const CAP = 500
 // procedure). A4's own trigger fires — re-measure at build, never raise above the true
 // ceiling — so the entry restores that ceiling rather than cutting prose D13 protects and
 // spec 06's File Plan never named. Owner: specs/20260908/06-command-prose-states-contracts.md D12.
-const BUDGET = { build: 300, review: 340, run: 310, mocks: 325, replay: 450, design: 510, plan: 328, init: 735 }
+// specs/20260912/03-run-isolates-and-owns-the-stages.md D13 (AC-20260912-03-14): build, review
+// and design are retired from this table outright — those three stage commands are no longer
+// invokable (D7), so they carry no read-load budget at all. `run` rises from 310 to 334, the
+// value MEASURED at build once Step 0 landed (112 own + 222 shared), never a round number chosen
+// ahead of it: the loop is now the only entry into three stages, so it pays for Step 0's
+// isolation contract on top of what it already carried. A4's ratchet still binds — the entry may
+// only shrink from here.
+const BUDGET = { run: 334, mocks: 325, replay: 450, plan: 328, init: 735 }
 
 function lines(text) { return text.split('\n').length }
 
@@ -39,14 +46,41 @@ function readLoad(cmd) {
 
 const commands = fs.readdirSync(COMMANDS).filter(f => f.endsWith('.md')).map(f => f.replace(/\.md$/, ''))
 
-test('every /spec command has a read-load budget entry (a per-command BUDGET or the flat CAP)', () => {
+// AC-20260912-03-14 (specs/20260912/03-run-isolates-and-owns-the-stages.md D7/D13): the roster
+// and the two budget tables must agree in BOTH directions. build, review and design are retired
+// outright — their command files are deleted, so neither table may name them and the roster
+// itself must no longer list them. Genuinely red until spec/commands/{build,review,design}.md
+// are gone; the three stage files' own per-file line caps are pinned separately in
+// tests/consistency/stage-files.test.js (AC-20260912-03-15).
+test('every /spec command has a read-load budget entry (a per-command BUDGET or the flat CAP), and neither table nor roster names a retired stage command', () => {
   assert.ok(commands.length >= 10, 'expected the command roster, got ' + commands.length)
   for (const extra of Object.keys(BUDGET)) {
     assert.ok(commands.includes(extra), 'BUDGET names a command that no longer exists: ' + extra)
   }
+  for (const retired of ['build', 'review', 'design']) {
+    assert.ok(!Object.prototype.hasOwnProperty.call(BUDGET, retired),
+      'BUDGET must carry no "' + retired + '" key — that stage command is retired outright (D7), ' +
+      'not merely a command with no measured budget')
+    assert.ok(!Object.prototype.hasOwnProperty.call(SHARED_FOR, retired),
+      'SHARED_FOR must carry no "' + retired + '" key — its shared-for key falls open to the whole ' +
+      'doctrine fallback now (D13), so pinning a scoped section list for it is stale')
+    assert.ok(!commands.includes(retired),
+      'the read-load command roster (derived from spec/commands/*.md) must no longer list "' +
+      retired + '" — D7 deletes spec/commands/' + retired + '.md outright, so its continued ' +
+      'presence here means the command file was never actually removed')
+  }
 })
 
+// specs/20260912/03-run-isolates-and-owns-the-stages.md D7: build, review and design are mid-
+// retirement — their command files are still on disk in the pre-image this file is authored
+// against, but they are being deleted outright, not merely re-budgeted, so the generic CAP must
+// never apply to them as a stand-in budget (design.md's grandfathered 510-line ratchet would
+// otherwise fail against the flat 500-line CAP for a reason that has nothing to do with this
+// spec). Their retirement itself is pinned above, not re-tested per-command here.
+const RETIRED_STAGE_COMMANDS = ['build', 'review', 'design']
+
 for (const cmd of commands) {
+  if (RETIRED_STAGE_COMMANDS.includes(cmd)) continue
   const limit = BUDGET[cmd] || CAP
   test(`AC-20260908-06-1: read-load budget: /spec:${cmd} loads ≤ ${limit} lines (command file + shared-for sections)`, () => {
     const { own, shared, total } = readLoad(cmd)
@@ -82,17 +116,18 @@ test('AC-20260908-06-2: every spec/commands/*.md Rules section holds at most 8 b
 })
 
 // AC-20260908-06-3 (D6) `[pre-green: predicate-in-test]`: the exact `## ` section list
-// `spec-paths shared-for <cmd>` prints, parentheticals stripped, for all 17 command keys the
+// `spec-paths shared-for <cmd>` prints, parentheticals stripped, for the remaining scoped command keys the
 // script scopes plus `run-design`. Green on arrival by design — the spec changes no list;
 // a silent addition/removal to spec-paths's own SECTIONS is what this catches.
+// specs/20260912/03-run-isolates-and-owns-the-stages.md D13 (AC-20260912-03-14): build, review
+// and design keys are retired here too — their shared-for output is fail-open now, so pinning a
+// scoped section list for them is stale (the fail-open equivalence itself is pinned in
+// tests/spec-paths.test.js, AC-20260912-03-13).
 const SHARED_FOR = {
   plan: ['Host Grounding', 'Pipeline Entry', 'Tiers', 'Decomposition', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'MCP Policy', 'Canonical Docs Loop', 'Session Execution'],
-  design: ['Host Grounding', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Worker Git Ban', 'Read-Only Surfaces', 'MCP Policy', 'Session Execution', 'Design Canon', 'Design Authoring Contracts', 'Design Render Gate', 'Design Atlas'],
   atlas: ['Host Grounding', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Session Execution', 'Design Canon', 'Design Atlas'],
   sketch: ['Host Grounding', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Session Execution', 'Design Canon', 'Design Atlas'],
-  build: ['Host Grounding', 'Tiers', 'Incident Policy', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'On-Disk Handoff', 'Worker Git Ban', 'Read-Only Surfaces', 'MCP Policy', 'Session Execution'],
   run: ['Host Grounding', 'Tiers', 'Runtime Verification', 'Incident Policy', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'On-Disk Handoff', 'Worker Git Ban', 'Read-Only Surfaces', 'MCP Policy', 'Canonical Docs Loop', 'Session Execution'],
-  review: ['Host Grounding', 'Tiers', 'Runtime Verification', 'Incident Policy', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Worker Git Ban', 'Read-Only Surfaces', 'Canonical Docs Loop', 'Session Execution'],
   release: ['Host Grounding', 'Runtime Verification', 'Release Stage', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Canonical Docs Loop', 'Session Execution'],
   enforce: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Model Placement', 'Question Style', 'Console Output Style', 'Session Execution', 'Workflows Encode Shape, Not Judgment'],
   genesis: ['Host Grounding', 'Pipeline Entry', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Worker Git Ban', 'MCP Policy', 'Session Execution', 'Design Canon', 'Design Authoring Contracts', 'Design Atlas', 'Workflows Encode Shape, Not Judgment'],

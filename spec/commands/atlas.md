@@ -84,7 +84,7 @@ user's input; `sweep` as an argument only skips the gap confirmation.
    every dependent screen after. If a note contradicts the doctrine or a bound region (coverage
    ledger claim), that is a **fork**: `AskUserQuestion`, glossed in plain English with a
    consequence per option, recommended-first from how concrete the note is — a specific,
-   actionable note recommends "mock-and-spec both change" (route through `/spec:design`'s drift
+   actionable note recommends "mock-and-spec both change" (route through the design stage's drift
    handling for bound regions — the real fix, but reopens a spec); a vague or contested note
    recommends "withdraw the note" (nothing changes, but the concern stays unaddressed until it's
    sharper); never silently rewrite a bound mock. Then per mock edit: locate the file by
@@ -111,8 +111,8 @@ no-shell-canon bootstrap, and the grounding order); paths, not prose, are what a
 in the same pass cites. Run `shell sync` on the pass's mocks, then `{atlas} check`. Then
 rebuild and report — same ```report template as step 1 above, fresh slots from the post-sweep
 build, plus the `🎨 authored {N} in-session · {K} check-only dispatches` bullet (shared §
-Design Atlas) — the whole picture should always exist; polish arrives per-surface at
-`/spec:design`.
+Design Atlas) — the whole picture should always exist; polish arrives per-surface at the design
+stage.
 
 ## Rules
 
@@ -122,10 +122,10 @@ Design Atlas) — the whole picture should always exist; polish arrives per-surf
   `surfaces` block (and is a roadmap decision); a look change edits the mock. Never both homes
   for one fact.
 - Sketches are honest sketches: `data-status="sketch"` until a human's ruling promotes them —
-  `ratified` at a `/spec:sketch` exit confirmation, `approved` at `/spec:design` promotion or
+  `ratified` at a `/spec:sketch` exit confirmation, `approved` at design-stage promotion or
   an explicit atlas approval — never by the sweep itself.
 - Bound regions (coverage ledger) are contracts; changing their mocks without the fork ruling
   above is the drift the fidelity gate exists to catch.
 - **Mock-vs-built divergence on `built` surfaces is informational, never a task** (shared §
   mock-authority lifecycle): report it when visible (atlasRoutes side-by-side), escalate it only
-  when that surface enters a new spec's scope — where `/spec:design` re-syncs the mock first.
+  when that surface enters a new spec's scope — where the design stage re-syncs the mock first.

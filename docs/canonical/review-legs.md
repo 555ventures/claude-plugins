@@ -33,7 +33,7 @@ triggers the state. Honest labeling is the cheapest-to-reverse option; blocking 
 layered on later as a host knob.
 
 The product surface is a report warning, not a finding: when the ci row observes `sha-unseen`
-with a `branchConclusion` of `failure`, `timed_out`, or `cancelled`, `/spec:review` and
+with a `branchConclusion` of `failure`, `timed_out`, or `cancelled`, the review stage and
 `/spec:release` render one ⚠️ line naming the branch and conclusion. The deterministic
 carrier is the manifest row; the ⚠️ line is the render of it.
 

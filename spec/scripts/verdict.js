@@ -6,7 +6,7 @@
 //     [--retain <dir>] [--base-sha <40hex>] [--head-sha <40hex>] [--dirty]]
 //   [--profile release [--milestone <string>] [--briefs N,N,...]] [--require <leg> ...]
 //
-// Incident (spec review-evidence-manifest): /spec:review could print CLEAN with
+// Incident (spec review-evidence-manifest): the review stage could print CLEAN with
 // nothing executed — a zero-findings panel return WAS the CLEAN definition, and the "CLEAN
 // requires ..." sentence was prose a model applied, never a value a script computed. This is
 // the sole derivation: per-iteration evidence-manifest rows (one per executed Phase 0 leg) +

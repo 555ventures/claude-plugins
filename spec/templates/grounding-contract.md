@@ -16,8 +16,8 @@ only when the contract genuinely changes, and never edit it for wording alone.
 integration and on every repair round; `{testCommand}` substitutes the host's `testCommand`;
 absent = no post-gate),
 `testEnv` (array of `{"var": "<NAME>", "provision": "<command>"}` rows — suite-gating
-environment variables, checked by `env-preflight.js` before `/spec:build`'s and
-`/spec:design`'s gate/repair paths run; absent = legacy mode, no preflight),
+environment variables, checked by `env-preflight.js` before the build stage's and
+the design stage's gate/repair paths run; absent = legacy mode, no preflight),
 `testNameFilter` (a shell-argument fragment carrying `{name}`, e.g.
 `"--test-name-pattern={name}"` — `red-check.js` substitutes a `rewrites`/`reuses` AC's
 regex-escaped, anchored title and appends the fragment to `testCommand` ahead of the file path
@@ -33,7 +33,7 @@ genesis-handoff keys `genesisStackDescriptor` and `designRulesHash` (see § Gene
 ## Render gate
 
 `design.render` is optional — present when the host wants `render-gate.js`'s mock↔component
-fidelity check, which `/spec:review` runs as an advisory evidence leg on designed specs. The
+fidelity check, which the review stage runs as an advisory evidence leg on designed specs. The
 host declares how a URL becomes an inventory. In `--spec` mode, which renders the host's own
 components, the plugin never launches a browser; in mock-only `--mocks` mode a host that
 declares no `capture` falls back to the plugin's own dependency-free capture (ADR-0007), which
@@ -63,8 +63,8 @@ contract for the executed leg:
 
 The plugin's `smoke.sh` (`spec-paths smoke`) executes this contract deterministically: after
 readiness, it sends `runtime.stopSignal` and requires a bounded, clean exit
-(`stopTimeout`/`stopExitCodes`) — a hung or unclean shutdown fails the leg. `/spec:review` runs
-it as a verdict leg (CLEAN requires it), and `/spec:init` proves it once via the deliverable
+(`stopTimeout`/`stopExitCodes`) — a hung or unclean shutdown fails the leg. The review stage
+runs it as a verdict leg (CLEAN requires it), and `/spec:init` proves it once via the deliverable
 manifest before stamping.
 
 ## Deliverable manifest (required)
@@ -192,7 +192,7 @@ the same way in every agent:
 ```markdown
 ## Worker Contract (spec pipeline)
 
-When dispatched as a build worker by `/spec:build`:
+When dispatched as a build worker by the build stage:
 
 - The spec's **Decisions** table is authoritative — apply it verbatim. An unlocked design fork or stale spec assumption is a `blocked` return (kind, detail, options, recommendation), never a guess.
 - The rules file's `## Gotchas` section is hard context, not a suggestion — it is distilled from this repo's real failures.

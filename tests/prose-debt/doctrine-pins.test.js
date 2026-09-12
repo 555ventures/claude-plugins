@@ -15,7 +15,11 @@ const { ROOT } = require('../helpers')
 // only the SEPARATE (and unrelated) agent-memory disposal fates "carry, correct, or delete"
 // pinned by AC-20260821-02-10, which this test must not be satisfied by.
 
-const REVIEW = path.join(ROOT, 'spec/commands/review.md')
+// specs/20260912/03-run-isolates-and-owns-the-stages.md AC-20260912-03-6: review.md's body
+// moves to spec/doctrine/stages/stage-review.md with no command file left behind — repointed in
+// place, since the underlying invariant (the CLOSE step's eviction duty) still holds wherever
+// the prose now lives.
+const REVIEW = path.join(ROOT, 'spec/doctrine/stages/stage-review.md')
 const ESCAPE = path.join(ROOT, 'spec/commands/escape.md')
 
 // The three eviction fates must appear in this order (delete, then merge, then mechanize) —
@@ -26,7 +30,7 @@ const ESCAPE = path.join(ROOT, 'spec/commands/escape.md')
 const FATES_IN_ORDER = /delete[\s\S]{0,150}merge[\s\S]{0,200}mechanize/i
 
 test('AC-20260823-06-4: review.md\'s CLOSE step states the at-cap eviction duty naming all three fates (delete / merge / mechanize)', () => {
-  assert.ok(fs.existsSync(REVIEW), 'setup: spec/commands/review.md must exist for this pin to check anything')
+  assert.ok(fs.existsSync(REVIEW), 'setup: spec/doctrine/stages/stage-review.md must exist for this pin to check anything')
   const review = fs.readFileSync(REVIEW, 'utf8')
 
   const start = review.indexOf('**Close (the CLOSE step).**')

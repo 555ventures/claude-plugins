@@ -42,7 +42,7 @@ test('AC-20260901-02-1: WHEN the hook receives a /spec: prompt THE SYSTEM exits 
   const root = fs.realpathSync(tmpdir('sess-stamp-happy'))
   fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
   const r = runBash('scripts/spec-session-stamp.sh', [], {
-    input: hookInput({ prompt: '/spec:build specs/x.md', sessionId: 's1', transcriptPath: '/t/x.jsonl', cwd: root })
+    input: hookInput({ prompt: '/spec:run specs/x.md', sessionId: 's1', transcriptPath: '/t/x.jsonl', cwd: root })
   })
   assert.strictEqual(r.status, 0,
     'a /spec: prompt must exit 0 — this hook must never block a prompt, even on its own happy path: ' + r.stdout + r.stderr)
@@ -86,7 +86,7 @@ test('AC-20260901-02-1: WHEN <cwd>/.claude is not writable THE SYSTEM exits 0 an
   fs.chmodSync(claudeDir, 0o500)
   try {
     const r = runBash('scripts/spec-session-stamp.sh', [], {
-      input: hookInput({ prompt: '/spec:review specs/x.md', cwd: root })
+      input: hookInput({ prompt: '/spec:run specs/x.md', cwd: root })
     })
     assert.strictEqual(r.status, 0,
       'an unwritable .claude directory must still exit 0 — a stamp write failure must never surface as a blocked prompt: ' + r.stdout + r.stderr)
@@ -110,7 +110,7 @@ test('AC-20260901-02-1: WHEN jq is unavailable on PATH THE SYSTEM exits 0 and wr
   const realBash = require('child_process').execFileSync('bash', ['-c', 'command -v bash'], { encoding: 'utf8' }).trim()
   fs.symlinkSync(realBash, path.join(narrowPath, 'bash'))
   const r = runBash('scripts/spec-session-stamp.sh', [], {
-    input: hookInput({ prompt: '/spec:build specs/x.md', cwd: root }),
+    input: hookInput({ prompt: '/spec:run specs/x.md', cwd: root }),
     env: { PATH: narrowPath }
   })
   assert.strictEqual(r.status, 0, 'a missing jq must still exit 0 — the hook degrades to a no-op, never a blocked prompt: ' + r.stdout + r.stderr)
@@ -237,7 +237,7 @@ function manifestFixture() {
   return { manifest, workflow }
 }
 
-test('AC-20260901-02-3 (also AC-20260903-02-15, SHALL CONTINUE TO): verdict.js --via loop --model <id> on a review-profile ledger pass prints a row whose key order begins ts, spec, stage, tier, via, model, runId with the passed values', () => {
+test('AC-20260901-02-3 (also AC-20260903-02-15, AC-20260912-03-16, SHALL CONTINUE TO): verdict.js --via loop --model <id> on a review-profile ledger pass prints a row whose key order begins ts, spec, stage, tier, via, model, runId with the passed values', () => {
   const { manifest, workflow } = manifestFixture()
   const retainDir = fs.realpathSync(tmpdir('verdict-retain'))
   const r = runNode('scripts/verdict.js', [
@@ -254,7 +254,7 @@ test('AC-20260901-02-3 (also AC-20260903-02-15, SHALL CONTINUE TO): verdict.js -
   assert.strictEqual(row.model, 'claude-opus-5', 'the row must carry the passed --model value verbatim: ' + JSON.stringify(row))
 })
 
-test('AC-20260901-02-3: verdict.js with neither --via nor --model on a review-profile ledger pass defaults to via:"direct", model:null', () => {
+test('AC-20260901-02-3 (also AC-20260912-03-16, SHALL CONTINUE TO): verdict.js with neither --via nor --model on a review-profile ledger pass defaults to via:"direct", model:null', () => {
   const { manifest, workflow } = manifestFixture()
   const retainDir = fs.realpathSync(tmpdir('verdict-retain-default'))
   const r = runNode('scripts/verdict.js', [
@@ -267,7 +267,7 @@ test('AC-20260901-02-3: verdict.js with neither --via nor --model on a review-pr
   assert.strictEqual(row.model, null, 'omitting --model must default the row to model:null, never an absent key or empty string: ' + JSON.stringify(row))
 })
 
-test('AC-20260901-02-3: verdict.js --via manual exits 2 with no row printed', () => {
+test('AC-20260901-02-3 (also AC-20260912-03-16, SHALL CONTINUE TO): verdict.js --via manual exits 2 with no row printed', () => {
   const { manifest, workflow } = manifestFixture()
   const r = runNode('scripts/verdict.js', [
     '--manifest', manifest, '--workflow', workflow, '--ledger', '--spec', 'specs/x.md', '--tier', 'standard',

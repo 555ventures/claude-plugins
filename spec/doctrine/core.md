@@ -7,11 +7,10 @@ description: Core invariants of the spec pipeline — reference doctrine read by
 The full lifecycle: an optional **genesis stage** for greenfield repos (`/spec:genesis`) decides
 what to build with and how it should look, and its `HANDOFF` step grounds the repo itself;
 `/spec:init` grounds brownfield repos the same way (config, rules, agents; it ends by invoking
-`/spec:enforce`); then the per-feature pipeline: `/spec:plan` → `/spec:run` (design when due,
-then build, then review — each stage also has its own direct entry: `/spec:design`,
-`/spec:build`, `/spec:review`, the last the only one that flips `done`; on CLEAN it commits the
-close and merges back) → `/spec:release` (repeatable milestone gate). `/spec:atlas` keeps the
-whole-product design picture browsable at every stage.
+`/spec:enforce`); then the per-feature pipeline: `/spec:plan` → `/spec:run` (isolates in the
+spec's own worktree, then design when due, then build, then review — review is the only stage
+that flips `done`; on CLEAN it commits the close and merges back) → `/spec:release` (repeatable
+milestone gate). `/spec:atlas` keeps the whole-product design picture browsable at every stage.
 
 This file carries the invariants every command shares. Design-stage doctrine lives in
 `design.md` (via `spec-paths shared-for <design command>`); the genesis supplement is
@@ -93,7 +92,7 @@ reviews). The host config's
 required `runtime` block (`bootCommand` + `readyCheck`, or an explicit
 `{"inert": "<reason>"}`) is the contract; the plugin's deterministic `smoke.sh` executes it —
 boot to observed readiness AND a bounded clean stop on the declared signal (shutdown is where
-a service's state-corrupting defects live). `/spec:review` runs it as a required blocking
+a service's state-corrupting defects live). The review stage runs it as a required blocking
 verdict leg — CLEAN is unreachable without it; a host that gives review no way to boot is
 itself a hard finding. **Skipped tests are not passes**: the AC↔test reconciliation counts
 executed tests; a skipped mapped test is a hard finding unless the AC declares its
@@ -183,7 +182,7 @@ one repo's ledger says so.
 
 ## Decomposition
 
-A spec must fit one `/spec:build` run: roughly ≤15 File Plan rows, one primary area (plus any
+A spec must fit one build-stage run: roughly ≤15 File Plan rows, one primary area (plus any
 host-declared caps). Larger work splits into `##-` sibling specs sliced by **landing unit** —
 each spec independently leaves the system green — never by layer. Order via `depends_on`;
 build and review slices in dependency order.
@@ -192,12 +191,12 @@ build and review slices in dependency order.
 
 `draft → hardened → implementing → done`. Transitions owned by exactly one driver state each:
 `/spec:plan`'s lock → `hardened`; the build driver's preflight → `implementing`; the review
-driver's close → `done`. `/spec:run` runs design (when due), then both drivers in sequence;
-`/spec:build` and `/spec:review` remain each driver's direct entry; `superseded` is the
-terminal retire state. `/spec:design`
-never moves `status` — it sets the `designed:` date field only. Enforced by the plugin's
-`spec-state-gate.sh` hook — invoking a stage against a spec in the wrong state is blocked
-before the model sees it.
+driver's close → `done`. `/spec:run` is the only entry into any of these stages — it isolates,
+then runs design (when due), then both drivers in sequence; their bodies live under
+`spec/doctrine/stages/` as prose the loop executes, never invokable commands of their own;
+`superseded` is the terminal retire state. The design stage never moves `status` — it sets the
+`designed:` date field only. Enforced by the plugin's `spec-state-gate.sh` hook — invoking a
+stage against a spec in the wrong state is blocked before the model sees it.
 
 ## Model Placement
 
@@ -213,7 +212,7 @@ evidence is `REVIEWER_FAILED`, never a false `CLEAN`. The disposer inherits the 
 `effort: medium`; every verdict seat declares its effort. **Haiku** runs lookups and re-reads. Build
 surprises go to the user with the spec's own Rationale/Assumptions — no resident consultant seat;
 orchestrators pass paths, never raw file contents. `/spec:enforce` and genesis judgment seats run
-Opus; standalone `/spec:design` and `/spec:init` run on the invoker; an unavailable `Agent {model: "fable"}` falls back to `opus`.
+Opus; `/spec:init` runs on the invoker; an unavailable `Agent {model: "fable"}` falls back to `opus`.
 
 ## Decisions
 
@@ -304,7 +303,7 @@ before amending anything.
 
 ## Canonical Docs Loop
 
-`/spec:plan` reads `docs/canonical/{area}.md` during discovery; `/spec:review` applies the
+`/spec:plan` reads `docs/canonical/{area}.md` during discovery; the review stage applies the
 spec's Canonical Delta on `done`. Every landed spec makes more future work spec-free — this
 loop is what shrinks pipeline spend over time.
 

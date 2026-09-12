@@ -5,12 +5,13 @@ argument-hint: <spec path>
 
 # Enter Spec Worktree
 
-Provision and enter the isolated worktree for a spec, or re-enter an existing one. This is the
-**single owner** of the worktree's front half: it captures the originating branch, creates +
-enters + verifies the worktree, runs host setup, and writes `build_base` to the spec
-frontmatter. The spec stages own none of this — `/spec:build` just builds in whatever cwd it is
-in, and `/spec:review` reads `build_base` to merge back. If you never run this command, the
-pipeline runs **in place** on the current branch.
+This is the **manual repair surface** for a worktree `/spec:run`'s own Step 0 could not open, or
+for re-entering one by hand — it is no longer a documented pre-step, since `/spec:run` opens the
+worktree itself before anything else runs. It is the **single owner** of the worktree's front
+half: it captures the originating branch, creates + enters + verifies the worktree, runs host
+setup, and writes `build_base` to the spec frontmatter. The spec stages own none of this — the
+build stage just builds in whatever cwd it is in, and the review stage reads `build_base` to
+merge back.
 
 This command shells into the spec plugin's `merge-back.sh` and writes spec frontmatter, so the
 spec plugin must be installed.
@@ -25,21 +26,25 @@ spec plugin must be installed.
    `merge-back.sh` path; its `create` subcommand builds the worktree). Derive:
    - `{source} = "$({mergeBack} branch-for $ARGUMENTS)"` — `branch-for` is the sole owner of
      the `spec/<stem>` branch rule (e.g. `specs/20260810/07-per-sha-ci-legs.md` →
-     `spec/07-per-sha-ci-legs`); `/spec:build` disowns all worktree mechanics and has no branch
-     rule of its own.
+     `spec/07-per-sha-ci-legs`); the build stage disowns all worktree mechanics and has no
+     branch rule of its own.
    - `{name} = {source}` with `/`→`-` (e.g. `spec/checkout` → `spec-checkout`) — the exact
      rule `{mergeBack} create` applies.
    - `{root} =` the last stdout line of `{mergeBack} root` (the project root / main worktree).
    - `{worktree} = {root}/.claude/worktrees/{name}`.
 
-2. **Re-enter path (idempotent).** If `{worktree}` appears in `git worktree list --porcelain`,
-   it is already provisioned:
-   - `EnterWorktree {path: {worktree}}`.
-   - VERIFY: `git rev-parse --show-toplevel` (Bash) equals `{worktree}`. If not, echo the
-     `EnterWorktree` result and `git worktree list` so the cause is visible, then report as
-     **entry verification failed** (see ## Report) and stop.
-   - Do **not** run setup and do **not** touch `build_base` — both were done at create time.
-     Report as **re-entered** (see ## Report).
+2. **Re-enter path (idempotent).**
+   - **Already inside (short-circuit).** If `git rev-parse --show-toplevel` (Bash) already
+     equals `{worktree}`, the session is in it: report as **re-entered** and stop.
+     No `EnterWorktree` call, no setup, no `build_base` write — `/clear` and `/compact`
+     keep cwd, so this is the common resume.
+   - If `{worktree}` appears in `git worktree list --porcelain`, it is already provisioned:
+     - `EnterWorktree {path: {worktree}}`.
+     - VERIFY: `git rev-parse --show-toplevel` (Bash) equals `{worktree}`. If not, echo the
+       `EnterWorktree` result and `git worktree list` so the cause is visible, then report as
+       **entry verification failed** (see ## Report) and stop.
+     - Do **not** run setup and do **not** touch `build_base` — both were done at create time.
+       Report as **re-entered** (see ## Report).
 
 3. **Create path.** Else you are still on the originating branch — provision it:
    - **Capture the origin first, before any entry:** `{origin} = git rev-parse --abbrev-ref HEAD`

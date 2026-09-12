@@ -118,8 +118,10 @@ test('AC-20260815-05-7: doctor doctrine\'s check 6b invokes spec-paths env-prefl
 // never reach the author dispatch.
 // `wf-design` is not part of the oracle — a surviving reference
 // to a retired literal is exactly the Gotcha this repo's Assumptions call out.
+// specs/20260912/03-run-isolates-and-owns-the-stages.md AC-20260912-03-6: design.md's body
+// moves to spec/doctrine/stages/stage-design.md — repointed in place.
 test('AC-20260824-02-3 (AC-20260815-05-8 incident carried forward): design doctrine names env-preflight before the author dispatch step with STOP-on-miss semantics', () => {
-  const design = read('spec/commands/design.md')
+  const design = read('spec/doctrine/stages/stage-design.md')
   assert.match(design, /env-preflight[\s\S]{0,400}(Agent\s*\{model:\s*"sonnet"\}|dispatch)/,
     'design.md\'s six-step body must name env-preflight ahead of the author dispatch step (D3 before D4) ' +
     '— without it, an unprovisioned environment reaches the per-surface Sonnet dispatch exactly like the ' +

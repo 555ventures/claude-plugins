@@ -468,7 +468,7 @@ Land the test + CI skeleton — the enforcement half of the ops ADR, day zero:
 - one **example test per declared layer** (trivial but real — it exercises the runner and
   shows the convention the `tests`-kind agent will follow), and the **e2e harness stub** when
   the archetype warrants one (web/mobile/desktop): installed, one smoke test, wired into a
-  script — so `/spec:build`'s TDD never meets a repo where the harness itself is missing;
+  script — so the build stage's TDD never meets a repo where the harness itself is missing;
 - a **CI workflow** for the repo's forge (detect from the remote; **no remote → ask the
   user now**: connect one, or explicitly record CI-inert in the descriptor — a written
   workflow with no remote executes zero times, and "authored but never activated" is the
@@ -663,7 +663,7 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   `ledger.md`, `tokens.css`, and the approved journeys' screens. BRIEF never writes here — it
   only reads `status.json`/`ledger.md` for the precondition.
 - **`design/components.json`** (durable) — the component manifest, seeded by BRIEF's
-  ratification with the base primitives, extended by every `/spec:design` reconcile (shared §
+  ratification with the base primitives, extended by every design-stage reconcile (shared §
   Design Authoring Contracts, component manifest).
 - **`.claude/genesis/design-rules.json`** — design's output: category-only enforcement rules.
 - **`.claude/genesis/interview-research/{dimension}.json`** — the woven-loop option menus,

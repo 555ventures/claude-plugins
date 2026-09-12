@@ -8,7 +8,7 @@
 // captured everything after `key:` to end of line, inline `#` comment included. For `tier:` this
 // only polluted a value compared solely against the literal `critical` — cosmetic until it wasn't:
 // seven live review ledger rows now carry a whole sentence inside `tier`. For `build_base:` the
-// SAME mechanism made an entire comment part of a git ref and broke /spec:review's driver outright
+// SAME mechanism made an entire comment part of a git ref and broke the review stage's driver outright
 // (`fatal: invalid object name`, rv_e83659d49386, specs/20260822/02-init-generation-script.md
 // build-close correction). Two identical buggy copies is how one regex reached both drivers; this
 // module was the extraction so a third copy was never the next incident — it landed exporting only

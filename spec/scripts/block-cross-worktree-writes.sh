@@ -11,7 +11,7 @@
 # session in any repo where the plugin is enabled. It is topology-based and
 # fail-open: outside a worktree, or on any git/parse error, it allows the write,
 # so it is inert for ordinary single-checkout work and only bites genuine escapes.
-# This is the mechanical complement to /spec:build's worktree isolation and the
+# This is the mechanical complement to the build stage's worktree isolation and the
 # Worker Contract's git ban — workers run with cwd = their own worktree, so a
 # parallel worker that writes an absolute path into the root checkout is blocked.
 #

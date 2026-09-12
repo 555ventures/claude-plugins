@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deterministic merge-back mechanics for /spec:review Phase 4.
+# Deterministic merge-back mechanics for the review stage's Phase 4.
 #
 # WHY A SCRIPT (and what it deliberately does NOT do):
 #   A subprocess cannot move the harness session's working directory. Only an
@@ -25,7 +25,7 @@
 #                                stdout line. The caller passes that path to EnterWorktree
 #                                {path:} and VERIFIES entry. This is the front half of the
 #                                lifecycle: it fails LOUDLY (branch/path exists, bad base,
-#                                run-from-worktree) so /spec:build never silently lands on the
+#                                run-from-worktree) so the build stage never silently lands on the
 #                                root branch when isolation was requested. Defaults: base=HEAD,
 #                                name=S with '/'->'-'. Must run from the MAIN working tree.
 #                                --source is taken pre-derived; callers derive it via `branch-for`

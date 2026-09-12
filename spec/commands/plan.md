@@ -61,9 +61,9 @@ Write the spec per the template. `status: draft`. While drafting:
 
 - **Never guess — mark it.** Where information is missing, write
   `[NEEDS CLARIFICATION: <question>]` inline instead of something plausible. The state-gate
-  hook blocks `/spec:run`, `/spec:design`, `/spec:build`, and `/spec:review` while any marker
-  survives.
-- **Decomposition cap:** a spec must fit one `/spec:build` run — roughly ≤15 File Plan
+  hook blocks `/spec:run` while any marker survives — the design, build, and review stages are
+  reachable only through it.
+- **Decomposition cap:** a spec must fit one build-stage run — roughly ≤15 File Plan
   rows, one primary area. Bigger work splits into `##-` siblings sliced by **landing unit**
   (each leaves the system green on its own), never by layer; wire `depends_on`. A facade
   with no consumer in the same spec or its series is mis-sliced — fold it into the
@@ -79,7 +79,7 @@ Write the spec per the template. `status: draft`. While drafting:
 - **Decisions table is authoritative** — every fork's outcome lands there; zero open forks
   at lock. Fill **Assumptions** with each load-bearing assumption paired with its
   `if false →` fallback. Fill **Rationale** (for the cold-start reader) and **Canonical
-  Delta** (applied by `/spec:review` on CLEAN).
+  Delta** (applied by the review stage on CLEAN).
 - **`design:`** — only in hosts whose config declares a `design` block: `true` when the
   user should approve look/feel before build; record any `claude.ai/design` mockup URL or
   ratified mock path as `design_source:`. Hosts without a catalog never set the flag.

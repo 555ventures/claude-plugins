@@ -384,6 +384,12 @@ gate (disabled while any question or note is open). Plugin chrome — atlas, rev
 notes layer — is authored under the frontend-design skill in the shadcn idiom on `viewer.css`'s
 register (design.md § Design Canon), never on product tokens.
 
+The atlas renders one frame per screen, with the declared state count in the card's meta line
+(ADR-0016); a journey-owned card's preview links to that screen's board on the journey review page.
+Plugin chrome binds to a file: the atlas index answers to `design/chrome-mocks/atlas.html` and the
+journey review page to `design/chrome-mocks/review.html`, cited as `design_source` by any spec that
+edits them.
+
 ## Page notes (2026-09-03, specs/20260902/10)
 
 Feedback on mocks is written on the served pages, never in chat and never in mock markup.

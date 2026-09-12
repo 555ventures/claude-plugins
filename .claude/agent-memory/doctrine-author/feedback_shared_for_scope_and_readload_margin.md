@@ -3,6 +3,7 @@ name: shared-for-scope-and-readload-margin
 description: shared-for <cmd> only pulls sections from core.md/design.md, never from mocks.md/genesis.md; read-load budgets can have near-zero margin
 metadata:
   type: feedback
+  reviewed: 2026-09-12
 ---
 
 `spec-paths shared-for <cmd>` (in `spec/bin/spec-paths`) only ever reads `doctrine/core.md`

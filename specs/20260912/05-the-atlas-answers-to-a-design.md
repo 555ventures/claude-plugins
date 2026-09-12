@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: implementing
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -138,7 +138,8 @@ fragment is `#board-<label>` against the review page's own `id="board-<label>"`.
       contradicts the Decision it illustrates: D7(c) collapses only the two byte-identical route
       sites, leaving three semantically distinct `parseLedger(` uses untouched (a
       `nextClientLedgerId` wrap, a text-arg read-and-catch, and an `.assumptions.find`), so the
-      post-fix total is four. Per pipeline rules § Gotchas, an example that contradicts its
+      post-fix total is four CALL SITES — `grep -c` itself returns five, because `readLedgerRows`'s
+      own header comment spells the token too. Per pipeline rules § Gotchas, an example that contradicts its
       Decision is a defect in the example — the Decision governs and the clause is restated as
       D7(c)'s actual promise.
   → writes tests/design-atlas.test.js
@@ -203,6 +204,41 @@ primitive register in place: the audit found it has zero consumers anywhere in t
 conceptually duplicated by `page()`'s own hand-rolled `.card`/`.badge`/`.bar`, but that register is
 a locked promise of specs/20260902/09 D4, so retiring it is a third amendment and belongs to its own
 decision, queued rather than folded in here.
+
+**Build deviations (folded at close, 2026-09-12).** Six departures, all one-offs against classes the
+host's pipeline rules § Gotchas already carries — no entry was added to that section, which sits at
+its cap.
+
+- **Two spec-text defects, both self-contradictions the locked spec shipped with.** AC-5's
+  `grep -c 'parseLedger('` SHALL return `1` clause was impossible: the pre-image holds five such
+  lines and D7(c) collapses only the two byte-identical route sites, so the clause was restated as
+  D7(c)'s real promise — the `design/mocks/ledger.md` read-and-catch literal occurring once, inside
+  a single `readLedgerRows(` helper both former callers use. AC-1's `→` pointer verb said `rewrites`
+  while its text said SHALL CONTINUE TO throughout, which red-check hard-stops as `gutted-rewrite`;
+  the verb was corrected to `reuses`. Both are the "an example that contradicts its Decision is a
+  defect in the example" and "fix the verb at lock" rules, already carried.
+- **AC-5 under-covered the Decision it carries.** Its literal text spelled out D6 and D7(b)/(c)
+  only, while the Decisions table cites it for all of D7(a)–(d). D7(a)'s `esc` import swap and
+  D7(d)'s `joinQuestions` call were pinned too, so the whole Decision is covered rather than half.
+- **D7(b) is not byte-identical for a `</body>`-less document.** The pre-image's own fallback
+  emitted `html + '\n' + tag`; `insertBeforeBodyEnd`'s shared fallback emits `html + snippet`, so a
+  leading newline is dropped in that edge case alone. Every mock this route serves carries a
+  `</body>`, so nothing observes it; calling the helper twice to preserve the byte would break
+  AC-5's own "exactly once" call-count. The one-newline delta was accepted over the two-call form.
+- **D2's clause needed re-placing and the paragraph needed re-wrapping.** Appending it directly
+  after the bold lead-in produced a period followed immediately by an em dash; it now attaches after
+  "never on product tokens". The five-line form then pushed `/spec:init`'s read-load budget to
+  737 > 735 — `spec/doctrine/design.md` is budget-capped with no slack — so the paragraph was packed
+  back to three lines with every grepped literal kept whole on one line. No budget was raised.
+
+**Advisory findings recorded at review (CLEAN, 2026-09-12).** Three, none dispositioned. (1) AC-1's
+"builds byte-identically to today" clause is observed by the test as run-to-run determinism, not as
+identity with the pre-image — against the real pre-image the output differs by exactly the two CSS
+rules D6 deletes, so the clause is unsatisfiable as written and the pin proves the weaker property.
+(2) D7's "no behavior change" is not literally true, per the `</body>`-less newline above. (3) The
+superseded AC-5 sub-line says the post-fix `parseLedger(` total is four, which counts call sites;
+`grep -c` returns five because `readLedgerRows`'s own header comment spells the token. The amended
+promise itself holds in all three cases.
 
 ## Canonical Delta
 

@@ -180,6 +180,10 @@ const { readConfig } = require('./lib/host-config')
 const shellLib = require('./lib/shell-region')
 const notesLib = require('./lib/mocks-notes')
 const { parseLedger, setStatus, appendAssumption } = require('./lib/mocks-ledger')
+// specs/20260911/05-approval-is-bookkeeping.md D2: the walk-page GET route materializes exclusion
+// rows itself, on the client's own request — the same lib mocks-driver.js's `ledger derive`/
+// `client open`/`approved` call, so the server and the driver never carry two copies.
+const { materialize, setExclusionVerdict } = require('./lib/mocks-exclusions')
 const picksLib = require('./lib/mocks-picks.js')
 const { stylesheetTargets, linksWireRegister } = require('./lib/wire-register')
 const surfacesLib = require('./lib/surfaces')
@@ -2235,8 +2239,31 @@ function createRequestHandler(root, opts = {}) {
     // path already gets below.
     if (clientRoute) {
       const readWalkOrEmpty = () => { try { return walkLib.readWalk(rootAbs) } catch { return { journeys: {} } } }
+      const ledgerTextOrNull = () => {
+        try { return fs.readFileSync(path.join(rootAbs, 'design/mocks/ledger.md'), 'utf8') } catch { return null }
+      }
       const readLedgerRowsOrEmpty = () => {
-        try { return parseLedger(fs.readFileSync(path.join(rootAbs, 'design/mocks/ledger.md'), 'utf8')).assumptions } catch { return [] }
+        const text = ledgerTextOrNull()
+        try { return text === null ? [] : parseLedger(text).assumptions } catch { return [] }
+      }
+      // A1 (specs/20260910/05): `.claude/genesis/brief.md` may not exist yet — materialize's
+      // non-goal source simply yields nothing for a null brief.
+      const briefTextOrNull = () => {
+        try { return fs.readFileSync(path.join(rootAbs, '.claude/genesis/brief.md'), 'utf8') } catch { return null }
+      }
+      // specs/20260911/05-approval-is-bookkeeping.md D2: materializes exclusion rows over the
+      // CURRENT brief/notes/ledger and writes ledger.md only when something moved — a no-op
+      // request (nothing new to derive) leaves the file byte-identical, never rewritten.
+      const materializeExclusions = (notes) => {
+        const text = ledgerTextOrNull()
+        if (text === null) return
+        const result = materialize({
+          text, brief: briefTextOrNull(), notes, seedJourneys: parseSeedJourneys(rootAbs),
+          today: new Date().toISOString().slice(0, 10),
+        })
+        if (result.added + result.retired + result.reopened > 0) {
+          fs.writeFileSync(path.join(rootAbs, 'design/mocks/ledger.md'), result.text)
+        }
       }
 
       // specs/20260910/04-theme-before-the-client-walk.md D5/D7: the one signal both the index
@@ -2316,6 +2343,9 @@ function createRequestHandler(root, opts = {}) {
       if (walkPageMatch && req.method === 'GET') {
         let notes = []
         try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
+        // D2: materialize BEFORE building the page — the client's own first request is what
+        // derives the rows it then lists, with no session command in between.
+        materializeExclusions(notes)
         serveBuiltHtml(res, () => walkPageLib.buildWalkPage({
           seed: seedForReview(rootAbs), journey: walkPageMatch[1], notes, ledger: readLedgerRowsOrEmpty(),
           walk: readWalkOrEmpty(), prefix, theme: mocksTheme(),
@@ -2358,13 +2388,21 @@ function createRequestHandler(root, opts = {}) {
         return
       }
 
-      // specs/20260910/05-what-the-journey-does-not-do.md D5: the client's one agree per
-      // exclusion row — 400 on a row that is not `kind: "exclusion"`, 404 on an unknown id, else
-      // the row's own `confirmed <today>` write (the client route's one ledger write besides
-      // /__notes/answer's promoted row).
+      // specs/20260911/05-approval-is-bookkeeping.md D3: the client's verdict per exclusion row —
+      // 400 on a row that is not `kind: "exclusion"`, 404 on an unknown id, 400 on a verdict
+      // outside {agree, needed}; `verdict: 'agree'` (the default when absent — spec 20260910/05
+      // D5's caller shape keeps working) sets `confirmed <today>`, `verdict: 'needed'` sets
+      // `overridden <today>` and stamps `rejected: 'client-needed'` so a future `ledger derive`
+      // never reopens or re-adds it — the client's D4 answer is final (the client route's one
+      // ledger write besides /__notes/answer's promoted row).
       if (reqPath === '/__walk/exclusion' && req.method === 'POST') {
         readJsonBody(req).then((body) => {
           const id = body && body.id
+          const verdict = (body && body.verdict) || 'agree'
+          if (verdict !== 'agree' && verdict !== 'needed') {
+            jsonRes(res, 400, { error: 'verdict must be agree or needed (got "' + verdict + '")' })
+            return
+          }
           const ledgerPath = path.join(rootAbs, 'design/mocks/ledger.md')
           let ledgerText
           try { ledgerText = fs.readFileSync(ledgerPath, 'utf8') } catch (e) {
@@ -2377,11 +2415,12 @@ function createRequestHandler(root, opts = {}) {
             jsonRes(res, 400, { error: 'row "' + id + '" is not an exclusion (kind "' + row.kind + '")' })
             return
           }
-          const status = 'confirmed ' + new Date().toISOString().slice(0, 10)
+          const today = new Date().toISOString().slice(0, 10)
+          const status = (verdict === 'needed' ? 'overridden ' : 'confirmed ') + today
           let rewritten
-          try { rewritten = setStatus(ledgerText, id, status) } catch (e) { jsonRes(res, 400, { error: e.message }); return }
+          try { rewritten = setExclusionVerdict(ledgerText, id, verdict, today) } catch (e) { jsonRes(res, 400, { error: e.message }); return }
           fs.writeFileSync(ledgerPath, rewritten)
-          jsonRes(res, 200, { id, status })
+          jsonRes(res, 200, verdict === 'needed' ? { id, status, rejected: 'client-needed' } : { id, status })
         }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
         return
       }

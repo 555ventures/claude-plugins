@@ -70,10 +70,14 @@ test('a deviations sidecar and a non-spec file are skipped, never counted as a s
   const root = tmpdir()
   writeSpec(root, 'specs/20260911/04-every-criterion.md', 'hardened')
   writeSpec(root, 'specs/20260911/04-every-criterion-deviations.md', 'hardened')
+  // The build and review drivers write the sidecar with a DOT, not a hyphen — the shape that
+  // actually reaches this scan on every live build.
+  writeSpec(root, 'specs/20260911/04-every-criterion.deviations.md', 'hardened')
   fs.writeFileSync(path.join(root, 'specs/20260911/README.md'), '# not a spec\n')
   fs.writeFileSync(path.join(root, 'specs/20260911/04-every-criterion.review'), 'not markdown\n')
   const res = run(root)
-  assert.strictEqual(res.status, 0, `sidecars carry no ACs — got ${res.status}: ${res.stdout}`)
+  assert.strictEqual(res.status, 0,
+    `sidecars carry no ACs, in either separator form — a hyphen-only skip lets every live build's own <spec>.deviations.md read as a second spec and reddens this guard mid-build — got ${res.status}: ${res.stdout}`)
   assert.match(res.stdout, /clean — 1 specs across 1 date directories/, 'only the spec itself is counted')
 })
 

@@ -1,23 +1,39 @@
 'use strict'
 const { test } = require('node:test')
 const assert = require('node:assert')
-const { tmpdir, freePort, serveAtlas, postJson } = require('../helpers')
+const path = require('node:path')
+const { spawnSync } = require('node:child_process')
+const { tmpdir, freePort, serveAtlas, postJson, SPEC } = require('../helpers')
 const { parseLedger, gateVerdict, countsLine } = require('../../spec/scripts/lib/mocks-ledger')
 const { validateNotes } = require('../../spec/scripts/lib/mocks-notes')
-const { advanceToSeedDone, ledgerCmd, writeNotesFile, nowIso } = require('./mocks-driver-fixtures')
+const { advanceToSeedDone, ledgerCmd, writeNotesFile, writeFile, nowIso } = require('./mocks-driver-fixtures')
 
 // specs/20260910/05-what-the-journey-does-not-do.md D1 (the `exclusion` kind), D2
 // (`lib/mocks-exclusions.js`'s deriveExclusions), D3 (the withdraw `reason` enum). Every test
 // below is red until those land. AC-20260910-05-1, -2, -3.
 
 let deriveExclusions
+let materialize
 try {
   // eslint-disable-next-line global-require
-  ;({ deriveExclusions } = require('../../spec/scripts/lib/mocks-exclusions'))
+  ;({ deriveExclusions, materialize } = require('../../spec/scripts/lib/mocks-exclusions'))
 } catch (e) {
   const reason = 'spec/scripts/lib/mocks-exclusions.js does not exist yet (D2): ' + e.message
   deriveExclusions = () => { throw new Error(reason) }
 }
+if (typeof materialize !== 'function') {
+  const reason = 'lib/mocks-exclusions.js does not export materialize yet (specs/20260911/05 D1)'
+  materialize = () => { throw new Error(reason) }
+}
+
+function briefPath(dir) { return path.join(dir, '.claude/genesis/brief.md') }
+const EMPTY_LEDGER_TEXT = [
+  '# Provenance ledger — test', '', '## Assumptions', '',
+  '| id | step | kind | claim | tag | status | rejected | dependents | note |',
+  '| - | - | - | - | - | - | - | - | - |',
+  '', '## Misunderstandings', '',
+  '| id | what | step | cost | note |', '| - | - | - | - | - |', '',
+].join('\n')
 
 // ---------------------------------------------------------------------------
 // AC-20260910-05-1
@@ -254,4 +270,63 @@ test('AC-20260910-05-3: POST /client/__notes/resolve stores withdrawReason from 
   }])
   assert.ok(errors.some((e) => /withdrawReason/.test(e)),
     'AC-3: validateNotes must reject a withdrawReason outside the enum, naming the field — its absence means a bad value written straight to notes.json (bypassing the HTTP route) would go unnoticed: got ' + JSON.stringify(errors))
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260911/05-approval-is-bookkeeping.md D1: `materialize` moves
+// `deriveAndAppendExclusions`'s ledger-text transform into this lib, verbatim, so the walk-page
+// route (D2) can call the same code the driver does. AC-20260911-05-1, -2, -11.
+// ---------------------------------------------------------------------------
+test('AC-20260911-05-1: materialize appends E1/E2 as open rows from two non-goal brief lines with counts {total:2, added:2, retired:0, reopened:0}, and is byte-idempotent on a second run', () => {
+  const brief = "## Non-goals\n- SMS reminders — Later\n- Multi-currency — Won't-this-time\n"
+  const first = materialize({ text: EMPTY_LEDGER_TEXT, brief, notes: [], seedJourneys: new Map(), today: '2026-09-12' })
+  assert.deepStrictEqual(
+    { total: first.total, added: first.added, retired: first.retired, reopened: first.reopened },
+    { total: 2, added: 2, retired: 0, reopened: 0 },
+    'AC-1: the first materialize over two non-goal lines must return {total:2, added:2, retired:0, reopened:0} — a mismatch means the transform moved from deriveAndAppendExclusions changed shape: got ' + JSON.stringify(first))
+
+  const parsedFirst = parseLedger(first.text)
+  const e1 = parsedFirst.assumptions.find((a) => a.claim === 'SMS reminders')
+  const e2 = parsedFirst.assumptions.find((a) => a.claim === 'Multi-currency')
+  assert.ok(e1 && e1.id === 'E1' && e1.status === 'open' && e1.note === 'non-goal: SMS reminders',
+    'AC-1: the SMS reminders non-goal must land as row E1, open, noted "non-goal: SMS reminders": got ' + JSON.stringify(e1))
+  assert.ok(e2 && e2.id === 'E2' && e2.status === 'open' && e2.note === 'non-goal: Multi-currency',
+    'AC-1: the Multi-currency non-goal must land as row E2, open, noted "non-goal: Multi-currency": got ' + JSON.stringify(e2))
+
+  const second = materialize({ text: first.text, brief, notes: [], seedJourneys: new Map(), today: '2026-09-12' })
+  assert.strictEqual(second.text, first.text,
+    'AC-1: a second materialize over the same inputs must leave the ledger text byte-identical — any diff means the idempotence key broke moving the transform into the lib: got a diff of ' + second.text.length + ' vs ' + first.text.length + ' bytes')
+  assert.strictEqual(second.added, 0,
+    'AC-1: the second run must add nothing new: got ' + JSON.stringify(second))
+})
+
+test('AC-20260911-05-1: deriveExclusions never reopens or re-adds a row whose rejected cell is client-needed, even when its source is still live in the brief', () => {
+  const seedJourneys = new Map()
+  const brief = '## Non-goals\n- Multi-currency — Later\n'
+  const row = {
+    id: 'E2', step: 'CLIENT', kind: 'exclusion', claim: 'Multi-currency', tag: 'said-by-user',
+    status: 'overridden 2026-09-12', rejected: 'client-needed', dependents: null, note: 'non-goal: Multi-currency',
+  }
+  const result = deriveExclusions({ brief, notes: [], ledger: [row], seedJourneys })
+  assert.strictEqual(result.reopen.length, 0,
+    'AC-1: a client-needed row must never be reopened by a re-derive — the client\'s D4 answer is final: got ' + JSON.stringify(result.reopen))
+  assert.strictEqual(result.add.length, 0,
+    'AC-1: a client-needed row\'s source must also never become a fresh add entry — that would duplicate the claim: got ' + JSON.stringify(result.add))
+})
+
+test('AC-20260911-05-2: mocks-driver.js carries neither deriveAndAppendExclusions nor nextExclusionId — D1 moves both into lib/mocks-exclusions.js', () => {
+  const r = spawnSync('grep', ['-n', 'function deriveAndAppendExclusions\\|function nextExclusionId', path.join(SPEC, 'scripts/mocks-driver.js')])
+  assert.strictEqual(r.status, 1,
+    'AC-2: grep must find zero hits (exit 1) for deriveAndAppendExclusions/nextExclusionId in mocks-driver.js — their presence means D1\'s move into the lib is unbuilt: got status ' +
+    r.status + ' stdout=\n' + (r.stdout || '').toString())
+})
+
+test('AC-20260911-05-11: `ledger derive` CONTINUES TO print the total/new/retired counts line once the transform moves into lib/mocks-exclusions.js', () => {
+  const dir = tmpdir('excl-derive-continue-counts')
+  advanceToSeedDone(dir)
+  writeFile(briefPath(dir), "## Non-goals\n- SMS reminders — Later\n- Multi-currency — Won't-this-time\n")
+  const r = ledgerCmd(dir, 'derive')
+  assert.strictEqual(r.status, 0, 'AC-11: `ledger derive` must exit 0 on a valid host: ' + r.stderr)
+  assert.match(r.stdout, /📒 exclusions: 2 total · 2 new · 0 retired/,
+    'AC-11: `ledger derive` must CONTINUE TO print "📒 exclusions: 2 total · 2 new · 0 retired" — the caller-facing line must not change once D1 moves the transform into the lib: got ' + r.stdout)
 })

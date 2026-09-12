@@ -80,3 +80,42 @@ test('AC-20260910-05-9: spec/commands/mocks.md names exclusions.md', () => {
   assert.match(text, /exclusions\.md/,
     'AC-9: spec/commands/mocks.md must name "exclusions.md" — its absence leaves the D7 artifact undocumented for a session reading the command: got the full file with no match')
 })
+
+// ---------------------------------------------------------------------------
+// specs/20260911/05-approval-is-bookkeeping.md D6, AC-20260911-05-9: approval is bookkeeping,
+// never a gate on the client's consent — three doctrine/command sentences retire "refuses on
+// any" in favor of "agreed"/"not contested" language.
+// ---------------------------------------------------------------------------
+test('AC-20260911-05-9: spec/doctrine/mocks.md § Mocks: Client Player names "not contested" and "we need this", and carries no "refuses on any that are still" anywhere', () => {
+  const p = path.join(ROOT, 'spec/doctrine/mocks.md')
+  assert.ok(fs.existsSync(p), 'AC-9: spec/doctrine/mocks.md must exist: not found at ' + p)
+  const text = read('spec/doctrine/mocks.md')
+  const playerSec = section(text, 'Mocks: Client Player')
+  assert.ok(playerSec, 'AC-9: § Mocks: Client Player must exist in spec/doctrine/mocks.md')
+  assert.match(playerSec, /not contested/,
+    'AC-9: § Mocks: Client Player must name "not contested" — its absence means D6\'s bookkeeping-not-a-gate ruling is undocumented: got\n' + playerSec)
+  assert.match(playerSec, /we need this/,
+    'AC-9: § Mocks: Client Player must name "we need this" (the closing screen\'s "No — we need this" answer): got\n' + playerSec)
+  assert.doesNotMatch(text, /refuses on any that are still/,
+    'AC-9: spec/doctrine/mocks.md must carry no "refuses on any that are still" anywhere — D4 deletes the approve refusal this sentence describes: got a hit')
+})
+
+test('AC-20260911-05-9: spec/doctrine/genesis.md § Genesis: Roadmap Decomposition names "not contested"', () => {
+  const p = path.join(ROOT, 'spec/doctrine/genesis.md')
+  assert.ok(fs.existsSync(p), 'AC-9: spec/doctrine/genesis.md must exist: not found at ' + p)
+  const text = read('spec/doctrine/genesis.md')
+  const sec = section(text, 'Genesis: Roadmap Decomposition')
+  assert.ok(sec, 'AC-9: § Genesis: Roadmap Decomposition must exist in spec/doctrine/genesis.md')
+  assert.match(sec, /not contested/,
+    'AC-9: § Genesis: Roadmap Decomposition must name "not contested" — D5 widens the parking-lot fence to open (not-contested) rows, not confirmed-only: got\n' + sec)
+})
+
+test('AC-20260911-05-9: spec/commands/mocks.md names "not-contested" and carries no "refuses on any" anywhere', () => {
+  const p = path.join(ROOT, 'spec/commands/mocks.md')
+  assert.ok(fs.existsSync(p), 'AC-9: spec/commands/mocks.md must exist: not found at ' + p)
+  const text = read('spec/commands/mocks.md')
+  assert.match(text, /not-contested/,
+    'AC-9: spec/commands/mocks.md must name "not-contested" — its absence leaves D4\'s approval sentence undocumented: got the full file with no match')
+  assert.doesNotMatch(text, /refuses on any/,
+    'AC-9: spec/commands/mocks.md must carry no "refuses on any" anywhere — D4 deletes the approve refusal this sentence describes: got a hit')
+})

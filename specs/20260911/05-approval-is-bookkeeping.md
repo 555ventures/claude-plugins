@@ -1,6 +1,7 @@
 ---
 date: 2026-09-11
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: design-mocks
 design: false
@@ -9,6 +10,7 @@ depends_on: [specs/20260911/06-the-client-loop.md]
 depended_on_by: []
 brief: 22a
 open_markers: 0
+diff_base: b8673741aaa1713b7ab91b7fc68338a5cf85da4a
 ---
 
 # Approval is bookkeeping: exclusions reach the client from their first walk, the client can say "we do need this", and an item the client never answered lands in the parking lot as not contested

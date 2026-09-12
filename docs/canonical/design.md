@@ -199,7 +199,7 @@ counted on the fixed `📒 ledger:` line. A ledger that does not parse never ope
 lib is the one writer of rows: edits rewrite only the touched row and leave every other byte
 identical; a literal pipe inside a cell is written `\|`.
 
-### Exclusions (2026-09-11, specs/20260910/05)
+### Exclusions (2026-09-11, specs/20260910/05 + specs/20260911/05)
 
 An `exclusion` row is what the product will NOT do, and it is **derived, never typed**
 (`lib/mocks-exclusions.js`'s `deriveExclusions`, materialized by `mocks-driver.js ledger derive`;
@@ -213,13 +213,20 @@ than only appending: `deriveExclusions` returns `{add, retire}`, and a row whose
 was undone is set `overridden <today>` rather than deleted, since the `note` cell is the audit
 trail. Exclusion rows never block the gate and are counted on the `📒 ledger:` line.
 
-Three renders, one source. The client player's closing screen lists the journey's exclusions plus
-the project-wide ones, each agreed with one button, and holds the journey's confirm control
-disabled while any is open. `--mark approved` derives first, refuses on any still open, and writes
-`design/mocks/exclusions.md` stamped with the approval date — the snapshot a statement of work
-cites, never rewritten in place. `genesis-driver.js --mark roadmap-written` requires every
-confirmed exclusion's claim verbatim under `docs/roadmap/00-overview.md`'s `## Parking lot`, and
-the BRIEF step's derived-from line carries the confirmed count.
+Three renders, one source. Rows are materialized on the client's own walk-page request
+(`lib/mocks-exclusions.js`'s `materialize`, run by `ledger derive`, `client open`, the
+`GET /client/walk/<j>.html` route and `--mark approved`), so the closing screen lists them the
+first time anyone looks, with no session command run first. The client answers each one `Correct`
+or `No — we need this`; the latter sets the row `overridden` with `rejected: client-needed` and is
+never re-derived. The confirm control no longer waits on the list — approval is the session's own
+bookkeeping, not a gate on the client's consent to our rows. `--mark approved` derives once more,
+never refuses on an exclusion row, and writes `design/mocks/exclusions.md` stamped with the
+approval date under `## Agreed by the client` and `## Not contested` — the snapshot a statement of
+work cites, never rewritten in place. `genesis-driver.js --mark roadmap-written` requires every
+`confirmed` or `open` exclusion's claim verbatim under `docs/roadmap/00-overview.md`'s
+`## Parking lot`, naming an open one "not contested", so a client's silence can never silently
+unfence a non-goal; an `overridden` row is never required. The BRIEF step's derived-from line
+carries both counts.
 
 A client withdrawal carries `withdrawReason` (`not-needed | fixed-elsewhere | mistake`), validated
 on the client route and by `validateNotes`. The client-facing control ships (specs/20260911/04):

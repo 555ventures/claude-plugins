@@ -72,7 +72,11 @@ const STRINGS = {
   themePrompt: 'Pick a look',
   themePick: 'Pick this',
   themePicked: 'Picked',
-  exclAgree: 'This journey does not do this — correct?',
+  // specs/20260911/05-approval-is-bookkeeping.md D3: "No — we need this" is the client's own
+  // disagreement answer — an agree-only control could never record it. exclAgree (spec 20260910/05)
+  // is retired: no other reference remains once both labels render on their own buttons.
+  exclCorrect: 'Correct',
+  exclNeeded: 'No — we need this',
   // specs/20260911/06-the-client-loop.md D4: the journey row's derived-state text.
   notStarted: 'Not started',
   inProgress: 'In progress',
@@ -681,11 +685,20 @@ function exclusionsForJourney(journey, ledger, notes, journeys) {
   return out
 }
 
+// specs/20260911/05-approval-is-bookkeeping.md D3: an open row offers both verdicts side by
+// side — "Correct" and "No — we need this" — using the page's existing `.wk-verdicts`/`.wk-v`
+// side-by-side answer classes (renderMark's own verdict pattern), never a bespoke agree-only
+// control.
 function renderExclusion(row, s) {
   const open = row.status === 'open'
   return '<article class="wk-excl" data-wk="exclusion" data-id="' + esc(row.id) + '">' +
     '<p class="wk-excl-claim">' + esc(row.claim) + '</p>' +
-    (open ? '<button class="wk-excl-agree" data-wk="agree">' + esc(s.exclAgree) + '</button>' : '') +
+    (open
+      ? '<div class="wk-verdicts">' +
+        '<button class="wk-v" data-wk="agree">' + esc(s.exclCorrect) + '</button>' +
+        '<button class="wk-v" data-wk="needed">' + esc(s.exclNeeded) + '</button>' +
+        '</div>'
+      : '') +
     '</article>'
 }
 
@@ -776,7 +789,10 @@ function buildWalkPage(input) {
     requestNotes.map((n) => renderWalkRequest(n, s)).join('')
   const excl = renderExclusions(journey, ledger, notes, journeys, s)
   const title = (entry.title || journey) + ' · ' + (seed.product || 'Mocks')
-  const openCount = open.length + excl.openCount
+  // specs/20260911/05-approval-is-bookkeeping.md D3: the confirm control is no longer held
+  // disabled by exclusions — the closing screen asks, it does not block. `excl.openCount` still
+  // feeds `data-exclusions-open` on the rendered section (renderExclusions), just not this gate.
+  const openCount = open.length
   // D21: the "current" screen for the bar's own nav-button/step-indicator render is the last
   // reached label, or the journey's first declared screen on a cold record — the same rule
   // walk.browser.js's own `apply()` uses, so the static render and the post-fetch reconciliation

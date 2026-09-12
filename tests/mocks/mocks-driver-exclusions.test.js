@@ -3,15 +3,20 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir } = require('../helpers')
+const { spawnSync } = require('node:child_process')
+const { tmpdir, SPEC } = require('../helpers')
 const {
   advanceToSeedDone, advanceToThemePicked, confirmEveryJourney, decideLook,
-  ledgerCmd, mark, writeFile, writeJSON,
+  ledgerCmd, mark, writeFile, writeJSON, nowIso,
 } = require('./mocks-driver-fixtures')
 
-// specs/20260910/05-what-the-journey-does-not-do.md D4 (`ledger derive` and the `approved`
-// exclusion-confirmation gate) and D7 (`design/mocks/exclusions.md`, written at `approved`) do
-// not exist yet — every test below is red until they land. AC-20260910-05-4, -8.
+// specs/20260911/05-approval-is-bookkeeping.md D1/D4: `--mark approved` no longer refuses on an
+// open exclusion row — it derives once more, prints how many were agreed vs not contested, and
+// writes design/mocks/exclusions.md under two headings. AC-20260910-05-4's refusal-and-remedy
+// half is retired (D8) and rewritten under AC-20260911-05-6, which also folds in
+// AC-20260910-05-8's file-format coverage (superseded by D4's two-heading shape — the old
+// one-heading/"N exclusions" tail would otherwise go red the moment D4 lands, unpinned by any
+// named AC). AC-20260911-05-6, -7, -10.
 
 function ledgerPath(dir) { return path.join(dir, 'design/mocks/ledger.md') }
 function readLedger(dir) { return fs.readFileSync(ledgerPath(dir), 'utf8') }
@@ -31,7 +36,7 @@ function advanceToJustBeforeApproved(dir) {
 // ---------------------------------------------------------------------------
 // AC-20260910-05-4
 // ---------------------------------------------------------------------------
-test('AC-20260910-05-4: `ledger derive` appends new exclusion rows once, prints the total/new counts, is idempotent byte-for-byte on a second run, and `--mark approved` refuses an open exclusion row by claim naming the remedy', () => {
+test('AC-20260910-05-4: `ledger derive` appends new exclusion rows once and prints the total/new counts, and is idempotent byte-for-byte on a second run', () => {
   const dir = tmpdir('excl-derive')
   advanceToSeedDone(dir)
   writeFile(briefPath(dir), '## Non-goals\n- SMS reminders — Later\n')
@@ -64,50 +69,65 @@ test('AC-20260910-05-4: `ledger derive` appends new exclusion rows once, prints 
   const afterSecond = readLedger(dir)
   assert.strictEqual(afterSecond, afterFirst,
     'AC-4: ledger.md must be byte-identical after the idempotent second derive — any diff means the second run rewrote or duplicated a row: got a diff of ' + afterSecond.length + ' vs ' + afterFirst.length + ' bytes')
-
-  advanceToJustBeforeApproved(dir)
-  const approved = mark(dir, 'approved')
-  assert.strictEqual(approved.status, 2,
-    'AC-4: `--mark approved` must refuse while exclusion E2 is still open: got ' + approved.status + ' stdout=' + approved.stdout + ' stderr=' + approved.stderr)
-  assert.match(approved.stderr, /exclusion E2 \("not: a second insurer field"\) is not confirmed/,
-    'AC-4: the refusal must name the row by id and claim: got ' + approved.stderr)
-  assert.match(approved.stderr, /ledger set --id E2 --status confirmed/,
-    'AC-4: the refusal must name the session\'s own override remedy verbatim: got ' + approved.stderr)
 })
 
 // ---------------------------------------------------------------------------
-// AC-20260910-05-8
+// AC-20260911-05-6
 // ---------------------------------------------------------------------------
-test('AC-20260910-05-8: `--mark approved` writes design/mocks/exclusions.md from the confirmed exclusion rows, titled and dated, one bullet per row, and prints the exclusion count', () => {
-  const dir = tmpdir('excl-approved-file')
+test('AC-20260911-05-6: `--mark approved` accepts with an open exclusion row, prints the agreed/not-contested tail, and writes exclusions.md under two headings', () => {
+  const dir = tmpdir('excl-approved-bookkeeping')
   advanceToSeedDone(dir)
-  writeFile(briefPath(dir), '## Non-goals\n- SMS reminders — Later\n- Multi-currency — Won\'t-this-time\n')
+  writeFile(briefPath(dir), "## Non-goals\n- SMS reminders — Later\n- Multi-currency — Won't-this-time\n")
 
   const derive = ledgerCmd(dir, 'derive')
   assert.strictEqual(derive.status, 0, 'test setup requires `ledger derive` to accept the two non-goal lines: ' + derive.stderr)
-  for (const id of ['E1', 'E2']) {
-    const set = ledgerCmd(dir, 'set', ['--id', id, '--status', 'confirmed 2026-09-11'])
-    assert.strictEqual(set.status, 0, 'test setup requires `ledger set --id ' + id + '` to be accepted: ' + set.stderr)
-  }
+  const setE1 = ledgerCmd(dir, 'set', ['--id', 'E1', '--status', 'confirmed 2026-09-11'])
+  assert.strictEqual(setE1.status, 0, 'test setup requires `ledger set --id E1` to be accepted: ' + setE1.stderr)
+  // E2 is deliberately left `open` — this is the whole point of the AC: approval must neither
+  // refuse nor require the session to touch it.
 
   advanceToJustBeforeApproved(dir)
   const approved = mark(dir, 'approved')
   assert.strictEqual(approved.status, 0,
-    'AC-8: `--mark approved` must accept once every exclusion row is confirmed: ' + approved.stdout + approved.stderr)
-  const today = new Date().toISOString().slice(0, 10)
-  assert.match(approved.stdout, new RegExp('\\ud83d\\udce6 design/mocks/exclusions\\.md \\u2014 2 exclusions'),
-    'AC-8: the approval tail must print "📦 design/mocks/exclusions.md — 2 exclusions": got ' + approved.stdout)
+    'AC-6: `--mark approved` must exit 0 with exclusion E2 still `open` — spec 20260910/05\'s refusal on any open exclusion row is retired: got ' + approved.status + ' stdout=' + approved.stdout + ' stderr=' + approved.stderr)
+  assert.match(approved.stdout, /📦 design\/mocks\/exclusions\.md — 1 agreed · 1 not contested/,
+    'AC-6: the approval tail must print "📦 design/mocks/exclusions.md — 1 agreed · 1 not contested" — one confirmed row, one still-open row: got ' + approved.stdout)
 
-  const exclusionsPath = path.join(dir, 'design/mocks/exclusions.md')
-  assert.ok(fs.existsSync(exclusionsPath), 'AC-8: design/mocks/exclusions.md must exist after approved accepts: nothing was written')
-  const text = fs.readFileSync(exclusionsPath, 'utf8')
-  const lines = text.split('\n').filter((l) => l.trim() !== '')
-  assert.strictEqual(lines[0], '# Exclusions — Test Product — approved ' + today,
-    'AC-8: the title line must name the product and the approval date: got "' + lines[0] + '"')
-  assert.match(text, /^- SMS reminders \(project, non-goal: SMS reminders\)$/m,
-    'AC-8: a project-wide exclusion\'s bullet must read "- <claim> (project, <source>)", with source carrying the brief line per D2/AC-12: got\n' + text)
-  assert.match(text, /^- Multi-currency \(project, non-goal: Multi-currency\)$/m,
-    'AC-8: the second confirmed exclusion must render its own bullet, with source carrying the brief line: got\n' + text)
+  const text = fs.readFileSync(path.join(dir, 'design/mocks/exclusions.md'), 'utf8')
+  const today = new Date().toISOString().slice(0, 10)
+  const nonEmpty = text.split('\n').filter((l) => l.trim() !== '')
+  assert.deepStrictEqual(nonEmpty, [
+    '# Exclusions — Test Product — approved ' + today,
+    '## Agreed by the client',
+    '- SMS reminders (project, non-goal: SMS reminders)',
+    '## Not contested',
+    '- Multi-currency (project, non-goal: Multi-currency)',
+  ], 'AC-6: exclusions.md\'s non-blank lines must be exactly the title, "## Agreed by the client", its one bullet, "## Not contested", and its one bullet, in that order: got\n' + text)
+})
+
+test('AC-20260911-05-6: exclusions.md renders "- none" under a heading that carries zero rows', () => {
+  const dir = tmpdir('excl-approved-none')
+  advanceToSeedDone(dir)
+  writeFile(briefPath(dir), '## Non-goals\n- SMS reminders — Later\n')
+
+  const derive = ledgerCmd(dir, 'derive')
+  assert.strictEqual(derive.status, 0, 'test setup requires `ledger derive` to accept: ' + derive.stderr)
+  const setE1 = ledgerCmd(dir, 'set', ['--id', 'E1', '--status', 'confirmed 2026-09-11'])
+  assert.strictEqual(setE1.status, 0, 'test setup requires `ledger set --id E1` to be accepted: ' + setE1.stderr)
+
+  advanceToJustBeforeApproved(dir)
+  const approved = mark(dir, 'approved')
+  assert.strictEqual(approved.status, 0,
+    'AC-6: `--mark approved` must accept with one confirmed row and zero open ones: ' + approved.stdout + approved.stderr)
+  assert.match(approved.stdout, /📦 design\/mocks\/exclusions\.md — 1 agreed · 0 not contested/,
+    'AC-6: with nothing open, the tail must print "1 agreed · 0 not contested": got ' + approved.stdout)
+
+  const text = fs.readFileSync(path.join(dir, 'design/mocks/exclusions.md'), 'utf8')
+  const nonEmpty = text.split('\n').filter((l) => l.trim() !== '')
+  const idx = nonEmpty.indexOf('## Not contested')
+  assert.ok(idx !== -1, 'AC-6: "## Not contested" heading must be present even when nothing is open: got\n' + text)
+  assert.strictEqual(nonEmpty[idx + 1], '- none',
+    'AC-6: an empty section must render exactly "- none" — its absence contradicts "each heading present even when empty, with - none": got\n' + text)
 })
 
 // ---------------------------------------------------------------------------
@@ -138,10 +158,65 @@ test('AC-20260910-05-13: a row whose brief line is gone is retired to overridden
   advanceToJustBeforeApproved(dir)
   const approved = mark(dir, 'approved')
   assert.strictEqual(approved.status, 0,
-    'AC-13: a retired (overridden) exclusion row must NOT block `--mark approved` — only an `open` row blocks: ' + approved.stdout + approved.stderr)
+    'AC-13: a retired (overridden) exclusion row must NOT block `--mark approved` — only an `open` row ever mattered, and D4 retires that refusal too: ' + approved.stdout + approved.stderr)
 
   const exclusionsPath = path.join(dir, 'design/mocks/exclusions.md')
   const text = fs.existsSync(exclusionsPath) ? fs.readFileSync(exclusionsPath, 'utf8') : ''
   assert.ok(!/SMS reminders/.test(text),
-    'AC-13: a retired exclusion row must NOT appear in design/mocks/exclusions.md, which is written from confirmed rows only: got\n' + text)
+    'AC-13: a retired exclusion row must NOT appear in design/mocks/exclusions.md — it is neither confirmed (agreed) nor open (not contested): got\n' + text)
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260911-05-7
+// ---------------------------------------------------------------------------
+test('AC-20260911-05-7: `ledger derive` CONTINUES TO append one row per non-goal, one per invented-row "no", and one per not-needed withdrawal, excluding an inferred-row no and a mistake withdrawal, and stays byte-idempotent on a second run', () => {
+  const dir = tmpdir('excl-derive-continue-2')
+  advanceToSeedDone(dir)
+  writeFile(briefPath(dir), "## Non-goals\n- SMS reminders — Later\n- Multi-currency — Won't-this-time\n- Bookings — In\n")
+  const w9 = ledgerCmd(dir, 'add', [
+    '--id', 'W9', '--step', 'WIREFRAMES', '--kind', 'product', '--claim', 'a second insurer field',
+    '--tag', 'invented', '--status', 'overridden',
+  ])
+  assert.strictEqual(w9.status, 0, 'test setup requires the invented row W9 to be accepted: ' + w9.stderr)
+  const w10 = ledgerCmd(dir, 'add', [
+    '--id', 'W10', '--step', 'WIREFRAMES', '--kind', 'product', '--claim', 'something else',
+    '--tag', 'inferred', '--status', 'overridden',
+  ])
+  assert.strictEqual(w10.status, 0, 'test setup requires the inferred row W10 to be accepted: ' + w10.stderr)
+  writeJSON(notesPath(dir), [
+    { id: 'N014', kind: 'question', scope: 'mock', screen: 'signin', ledgerId: 'W9', status: 'resolved', answer: { verdict: 'no', text: 'not needed', by: 'client', at: nowIso() } },
+    { id: 'N015', kind: 'question', scope: 'mock', screen: 'invite', ledgerId: 'W10', status: 'resolved', answer: { verdict: 'no', text: 'also not needed', by: 'client', at: nowIso() } },
+    { id: 'N020', kind: 'note', scope: 'mock', screen: 'consent', origin: 'client', status: 'resolved', resolution: 'withdrawn', withdrawReason: 'not-needed', text: 'export bookings to CSV' },
+    { id: 'N021', kind: 'note', scope: 'mock', screen: 'consent', origin: 'client', status: 'resolved', resolution: 'withdrawn', withdrawReason: 'mistake', text: 'a mistaken withdrawal' },
+  ])
+
+  const first = ledgerCmd(dir, 'derive')
+  assert.strictEqual(first.status, 0, 'AC-7: `ledger derive` must exit 0: ' + first.stderr)
+  assert.match(first.stdout, /📒 exclusions: 4 total · 4 new · 0 retired/,
+    'AC-7: the four legitimate sources (2 non-goals, 1 invented-row no, 1 not-needed withdrawal) must derive "4 total · 4 new · 0 retired" — the inferred-row no and the mistake withdrawal must never count, and this must CONTINUE TO hold once D1 moves the transform into the lib: got ' + first.stdout)
+  const afterFirst = readLedger(dir)
+
+  const second = ledgerCmd(dir, 'derive')
+  assert.strictEqual(second.status, 0, 'AC-7: a second derive must also exit 0: ' + second.stderr)
+  assert.match(second.stdout, /📒 exclusions: 4 total · 0 new · 0 retired/,
+    'AC-7: a second derive over the same inputs must CONTINUE TO add nothing new: got ' + second.stdout)
+  assert.strictEqual(readLedger(dir), afterFirst,
+    'AC-7: ledger.md must CONTINUE TO be byte-identical after the idempotent second derive: got a diff')
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260911-05-10
+// ---------------------------------------------------------------------------
+test('AC-20260911-05-10: mocks-driver.js carries neither the retired approve-refusal sentence nor its ledger-set remedy, and walk.browser.js no longer gates confirm on the open-exclusion count — D8 deletes them, never leaves them dead', () => {
+  const r1 = spawnSync('grep', ['-n',
+    "is not confirmed — the client confirms it\\|ledger set --id ' + row.id + ' --status confirmed",
+    path.join(SPEC, 'scripts/mocks-driver.js')])
+  assert.strictEqual(r1.status, 1,
+    'AC-10: grep must find zero hits (exit 1) for the retired refusal sentence / its ledger-set remedy in mocks-driver.js — their presence means D8\'s deletion is unbuilt: got status ' +
+    r1.status + ' stdout=\n' + (r1.stdout || '').toString())
+
+  const r2 = spawnSync('grep', ['-n', 'exclOpen > 0', path.join(SPEC, 'scripts/lib/walk.browser.js')])
+  assert.strictEqual(r2.status, 1,
+    'AC-10: grep must find zero hits (exit 1) for "exclOpen > 0" in walk.browser.js — the confirm gate must be deleted, not merely bypassed elsewhere: got status ' +
+    r2.status + ' stdout=\n' + (r2.stdout || '').toString())
 })

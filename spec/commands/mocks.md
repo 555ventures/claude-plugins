@@ -80,7 +80,7 @@ Once every journey is walked, author two or three directions under `design/theme
 
 The terminal step, and the one loop that runs across closed sessions: `client open --address <url> [--port <n>]` exposes the running serve in the user's own terminal (§ Mocks: Look and Serve; refused outside CLIENT, without `--address`, against a dead address, or a non-localhost address with no `--port`). Every re-run is a pickup, not a fresh read of chat: run `node {driver} --root .`, read `📥 what the client left`, answer each line with its printed command (`notes address --id <id> --change "<what changed>"` after fixing the screen — plus `--screen <label>` or `--journey <j>` for a project-scope one, `notes reply` for a question back), then re-run.
 `notes waive --id <id> --reason "<r>"` releases one after seven days of silence. Only the client's page controls close a request (`Looks good` accepts, `Still not right` reopens with the client's text, § Mocks: Page Notes); a new request on an already-`ok` journey takes its confirmation back (§ Mocks: Client Player); `client log`/`client waive` are unchanged, and `--mark approved` refuses until every journey is `ok` or waived.
-Then `stop open signoff`; `decided approve` runs `{driver} --mark approved`, which first runs `ledger derive` and refuses on any `open` exclusion row, then prints `waived: N` plus each reason, writes `design/mocks/exclusions.md`, and stamps every top-level mock `data-status="approved"`.
+Then `stop open signoff`; `decided approve` runs `{driver} --mark approved`, which first runs `ledger derive`, then prints `waived: N` plus each reason, lists agreed and not-contested exclusions, writes `design/mocks/exclusions.md`, and stamps every top-level mock `data-status="approved"`.
 
 ## Report
 

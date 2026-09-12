@@ -9,11 +9,13 @@ const {
   writeConventionsArtifacts, writeBindingSubset,
 } = require('./tournament.fixtures.js')
 
-// specs/20260910/05-what-the-journey-does-not-do.md D6: `--mark roadmap-written` gains the
-// parking-lot requirement over every confirmed exclusion row. Does not exist yet — the AC-7
-// test below is red until it lands. AC-20260910-05-10 is a SHALL-CONTINUE-TO pin on the
-// pre-existing roadmap-written checks; it can pass in isolation today (nothing here changes the
-// baseline it pins) — this file's redness comes from its AC-7 sibling. AC-20260910-05-7, -10.
+// specs/20260910/05-what-the-journey-does-not-do.md D6: `--mark roadmap-written` carries the
+// parking-lot requirement over every fenced exclusion row. AC-20260910-05-10 is a
+// SHALL-CONTINUE-TO pin on the pre-existing roadmap-written checks.
+// specs/20260911/05-approval-is-bookkeeping.md D5 widens that fence to `open` (not-contested)
+// rows and retires the `exclusions confirmed: <n>` BRIEF line its predecessor pinned — that
+// pin is deleted here, its successor is the AC-20260911-05-8 test below.
+// AC-20260910-05-7, -10; AC-20260911-05-8.
 
 const DIM = 'hosting'
 
@@ -102,6 +104,25 @@ function writeConfirmedExclusion(dir, { id, claim, note }) {
   ].join('\n'))
 }
 
+// specs/20260911/05-approval-is-bookkeeping.md D5: `fencedExclusionRows` widens the parking-lot
+// requirement to every `confirmed` OR `open` row — this writes an arbitrary set of exclusion
+// rows (status/rejected included) so a single host can carry a mix (a confirmed "agreed" row, an
+// open "not contested" one, and an overridden "client-needed" one that must never be fenced).
+function writeExclusionRows(dir, rows) {
+  const ledgerPath = path.join(dir, 'design/mocks/ledger.md')
+  const lines = [
+    '# Provenance ledger — test project', '', '## Assumptions', '',
+    '| id | step | kind | claim | tag | status | rejected | dependents | note |',
+    '| - | - | - | - | - | - | - | - | - |',
+  ]
+  for (const r of rows) {
+    lines.push('| ' + r.id + ' | CLIENT | exclusion | ' + r.claim + ' | said-by-user | ' + r.status +
+      ' | ' + (r.rejected || '-') + ' | - | ' + r.note + ' |')
+  }
+  lines.push('', '## Misunderstandings', '', '| id | what | step | cost | note |', '| - | - | - | - | - |', '')
+  writeFile(ledgerPath, lines.join('\n'))
+}
+
 // ---------------------------------------------------------------------------
 // AC-20260910-05-7
 // ---------------------------------------------------------------------------
@@ -154,14 +175,50 @@ function advanceToVisualBrief(dir) {
   writeJSON(path.join(dir, 'design/mocks/status.json'), { schemaVersion: 1, state: 'APPROVED', journeys: {} })
 }
 
-test('AC-20260910-05-7: the BRIEF step\'s read-only "derived from" line carries the confirmed-exclusion count', () => {
-  const dir = tmpdir('roadmap-parking-lot-brief-count')
+// ---------------------------------------------------------------------------
+// specs/20260911/05-approval-is-bookkeeping.md D5: `fencedExclusionRows` widens the parking-lot
+// requirement from `confirmed`-only to `confirmed` OR `open` rows — an item the client never
+// answered is "not contested", not silently unfenced. AC-20260911-05-8.
+// ---------------------------------------------------------------------------
+test('AC-20260911-05-8: `--mark roadmap-written` also fences an `open` (not-contested) exclusion row, naming it "not contested" in the refusal, never requires an `overridden`/client-needed row, and the BRIEF step\'s count line reads "<a> agreed · <n> not contested"', () => {
+  const dir = tmpdir('roadmap-parking-lot-not-contested')
+  advanceToRoadmap(dir)
+  writeExclusionRows(dir, [
+    { id: 'E1', claim: 'SMS reminders', note: 'non-goal: SMS reminders', status: 'confirmed 2026-09-11' },
+    { id: 'E2', claim: 'Multi-currency', note: 'non-goal: Multi-currency', status: 'open' },
+    { id: 'E3', claim: 'Offline mode', note: 'non-goal: Offline mode', status: 'overridden 2026-09-11', rejected: 'client-needed' },
+  ])
+
+  // Only the confirmed row is fenced so far — the open row must ALSO be required, and the
+  // client-needed overridden row must never be.
+  writeRoadmap(dir, { parkingLotBody: '- SMS reminders\n' })
+  const missing = mark(dir, 'roadmap-written')
+  assert.strictEqual(missing.status, 2,
+    'AC-8: roadmap-written must refuse while the OPEN exclusion E2\'s claim is absent from the Parking lot — D5 widens the fence to open rows, not confirmed-only: got ' + missing.status + ' stdout=' + missing.stdout + ' stderr=' + missing.stderr)
+  assert.match(missing.stderr, /exclusion "Multi-currency" \(E2, not contested\) is not in the parking lot/,
+    'AC-8: the refusal for an open row must name it "not contested", distinguishing it from a confirmed (agreed) one: got ' + missing.stderr)
+  assert.ok(!/Offline mode/.test(missing.stderr),
+    'AC-8: the client-needed overridden row (E3) must never be named in the refusal — it is a feature the client asked for, fenced nowhere: got ' + missing.stderr)
+
+  writeRoadmap(dir, { parkingLotBody: '- SMS reminders\n- Multi-currency\n' })
+  const present = mark(dir, 'roadmap-written')
+  assert.strictEqual(present.status, 0,
+    'AC-8: once both the agreed and the not-contested claims are under Parking lot (with the client-needed row never required), roadmap-written must accept: got ' + present.status + ' stdout=' + present.stdout + ' stderr=' + present.stderr)
+})
+
+test('AC-20260911-05-8: the BRIEF step\'s count line reads "<a> agreed · <n> not contested" in place of "exclusions confirmed: <n>"', () => {
+  const dir = tmpdir('roadmap-parking-lot-brief-count-2')
   advanceToVisualBrief(dir)
-  writeConfirmedExclusion(dir, { id: 'E1', claim: 'SMS reminders', note: 'non-goal: SMS reminders' })
+  writeExclusionRows(dir, [
+    { id: 'E1', claim: 'SMS reminders', note: 'non-goal: SMS reminders', status: 'confirmed 2026-09-11' },
+    { id: 'E2', claim: 'Multi-currency', note: 'non-goal: Multi-currency', status: 'open' },
+  ])
 
   const brief = bare(dir)
   assert.match(brief.stdout, /## Step: brief/,
     'test setup requires the driver to still be sitting at BRIEF before brief-written is marked: got ' + brief.stdout)
-  assert.match(brief.stdout, /exclusions confirmed: 1/,
-    'AC-7: the BRIEF step\'s derived-from line must surface the confirmed-exclusion count (1 here) — its absence means D6\'s second half never landed: got ' + brief.stdout)
+  assert.match(brief.stdout, /· exclusions: 1 agreed · 1 not contested/,
+    'AC-8: the BRIEF step\'s derived-from line must read "1 agreed · 1 not contested" — the old "exclusions confirmed: <n>" phrasing counted only confirmed rows and is retired: got ' + brief.stdout)
+  assert.ok(!/exclusions confirmed:/.test(brief.stdout),
+    'AC-8: the retired "exclusions confirmed: <n>" phrasing must be gone, not merely joined by the new one: got ' + brief.stdout)
 })

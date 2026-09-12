@@ -1,6 +1,7 @@
 ---
 date: 2026-09-11
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: design-mocks
 design: false
@@ -9,6 +10,7 @@ depends_on: [specs/20260911/06-the-client-loop.md]
 depended_on_by: []
 brief: 22a
 open_markers: 0
+diff_base: b8673741aaa1713b7ab91b7fc68338a5cf85da4a
 ---
 
 # Approval is bookkeeping: exclusions reach the client from their first walk, the client can say "we do need this", and an item the client never answered lands in the parking lot as not contested
@@ -169,6 +171,36 @@ File Plan), `tests/consistency/genesis-doctrine.test.js` (no parking-lot literal
 `tests/design-atlas.test.js` (non-client routes), `tests/mocks/notes-layer-isolation.test.js`
 (Chrome-gated), `tests/consistency/retired-flags.test.js` (flag scan). `deriveAndAppendExclusions`
 is named in `tests/mocks/mocks-exclusions.test.js`'s comments only — in the File Plan, retagged.
+
+Build departures (folded from the deviations sidecar at close). Three were the same already-documented
+class — a retired literal asserted by a test outside this spec's File Plan (host pipeline rules
+§ Gotchas, the collision entry's fourth trigger, a predecessor's CONTINUE-TO pin). D8 named two such
+assertions; two more surfaced during the build and were retired the same way, never weakened:
+`tests/mocks/mocks-driver-exclusions.test.js`'s AC-20260910-05-8 pin on the OLD one-heading
+`exclusions.md` format and "N exclusions" tail (its coverage folded into the two new
+AC-20260911-05-6 tests), and `tests/genesis/roadmap-parking-lot.test.js`'s AC-20260910-05-7
+BRIEF-count sub-test asserting `exclusions confirmed: 1` — the exact line D5 retires, and which the
+sibling AC-20260911-05-8 test in the same file asserts is gone. No code satisfies both; the stale
+pin was deleted and the file's header retagged. The fourth departure widened scope by two files on
+JJ's ruling (2026-09-11, build repair round 1): `spec/scripts/spec-number-check.js` skipped the
+deviations sidecar under a `*-deviations.md` (hyphen) name while both drivers write
+`<spec>.deviations.md` (dot), so the guard read this build's own sidecar as a second spec numbered
+05 and reddened the post-gate on every live build. The skip now matches either separator and
+`tests/doctor/spec-number-check.test.js` covers the dot form the drivers actually write —
+a pre-existing defect (3d79c88), unrelated to this spec's behavior.
+
+Review fix (iteration 1, hard). D2 put `materialize` inside the client's own walk-page GET on a
+long-lived server, and its appender throws on a ledger with no Assumptions table header — so one
+hand-broken file killed the serve process where the pre-image answered 200. The route now takes the
+same swallow-and-serve posture its sibling reads already take, its ledger write is guarded too, and
+a behavioral test in `tests/mocks/exclusions-route.test.js` pins the path (executed red with the
+guard removed, green with it restored).
+
+Recorded advisory, not fixed (queued): the card carries no sentence framing what the client is being
+asked — the pre-image's single button was the only text that posed the question — and a row answered
+`No — we need this` renders on reload identical to an agreed one, so the client cannot see what they
+already pushed back on. Also advisory: `splitRow`/`escapeCell` are duplicated into
+`lib/mocks-exclusions.js` because `mocks-ledger.js` exports no per-cell writer.
 
 ## Canonical Delta
 

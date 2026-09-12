@@ -368,15 +368,19 @@ function seedFacts() {
   return facts
 }
 
-// specs/20260910/05-what-the-journey-does-not-do.md D6: every CONFIRMED exclusion row —
-// read/parse failure (no design/mocks/ledger.md at all, a non-visual host per AC-10) degrades to
-// [], the same posture as confirmedProductRows below, never a throw.
-function confirmedExclusionRows() {
+// specs/20260911/05-approval-is-bookkeeping.md D5: every FENCED exclusion row — `confirmed`
+// (agreed by the client) or `open` (never answered, "not contested") — widened from spec
+// 20260910/05 D6's confirmed-only set, since an unanswered row is fenced too now (an item the
+// client did not dispute goes to the parking lot, never silently unfenced). `overridden` rows (a
+// client's "needed" answer, or a retired source) are never required. Read/parse failure (no
+// design/mocks/ledger.md at all, a non-visual host per AC-10) degrades to [], the same posture as
+// confirmedProductRows below, never a throw.
+function fencedExclusionRows() {
   let text
   try { text = fs.readFileSync(mocksLedgerPath(), 'utf8') } catch (e) { return [] }
   const ledger = mocksLedgerLib.parseLedger(text)
   if (ledger.errors.length) return []
-  return ledger.assumptions.filter((r) => r.kind === 'exclusion' && r.status === 'confirmed')
+  return ledger.assumptions.filter((r) => r.kind === 'exclusion' && (r.status === 'confirmed' || r.status === 'open'))
 }
 
 // A4: the overview's own heading is `## Parking lot (deferred ideas — not scope, not backlog)`
@@ -1646,19 +1650,22 @@ function handleRoadmapWritten() {
       }
     }
   }
-  // specs/20260910/05-what-the-journey-does-not-do.md D6: every confirmed exclusion row's claim
-  // must appear verbatim as a bullet under the overview's own Parking lot heading — applies to
-  // every host regardless of archetype/status.brief.mocks (AC-10: zero rows is a no-op that
-  // still runs the pre-existing checks above).
+  // specs/20260911/05-approval-is-bookkeeping.md D5: every FENCED exclusion row's claim (agreed
+  // `confirmed`, or not-contested `open`) must appear verbatim as a bullet under the overview's
+  // own Parking lot heading — applies to every host regardless of archetype/status.brief.mocks
+  // (AC-10: zero rows is a no-op that still runs the pre-existing checks above). An `open` row's
+  // refusal names it "not contested", distinguishing it from an agreed (confirmed) one; an
+  // `overridden` row (client-needed, or a retired source) is never in this set at all.
   {
-    const exclusions = confirmedExclusionRows()
+    const exclusions = fencedExclusionRows()
     if (exclusions.length) {
       const overviewText = fs.readFileSync(path.join(root, 'docs/roadmap/00-overview.md'), 'utf8')
       const parking = parkingLotSection(overviewText) || ''
       const bullets = parking.split('\n').map((l) => l.trim())
       for (const row of exclusions) {
         if (!bullets.includes('- ' + row.claim)) {
-          die('exclusion "' + row.claim + '" (' + row.id + ') is not in the parking lot — add it under ## Parking lot, then re-mark')
+          const tag = row.status === 'open' ? ', not contested' : ''
+          die('exclusion "' + row.claim + '" (' + row.id + tag + ') is not in the parking lot — add it under ## Parking lot, then re-mark')
         }
       }
     }
@@ -2011,13 +2018,16 @@ const STEPS = {
       try {
         notesUnresolved = mocksNotesLib.readNotes(root).filter((n) => n && n.status !== 'resolved').length
       } catch (e) { notesUnresolved = 0 }
-      // D6: the same confirmed-exclusion count the parking-lot check (below, ROADMAP_WRITTEN)
-      // requires verbatim — read-only here, this step only surfaces the count.
-      const exclusionsConfirmed = confirmedExclusionRows().length
+      // specs/20260911/05-approval-is-bookkeeping.md D5: the same fenced-exclusion set the
+      // parking-lot check (below, ROADMAP_WRITTEN) requires verbatim — read-only here, this step
+      // only surfaces the split agreed/not-contested count in place of the old confirmed-only one.
+      const fenced = fencedExclusionRows()
+      const exclusionsAgreed = fenced.filter((r) => r.status === 'confirmed').length
+      const exclusionsNotContested = fenced.filter((r) => r.status === 'open').length
       lines.push('derived from: product ledger row(s) ' +
         (productRows.length ? productRows.map((r) => r.id).join(', ') : 'none') +
         ' · seed journeys: ' + seedCount + ' · notes unresolved: ' + notesUnresolved +
-        ' · exclusions confirmed: ' + exclusionsConfirmed +
+        ' · exclusions: ' + exclusionsAgreed + ' agreed · ' + exclusionsNotContested + ' not contested' +
         ' — write ## What I think you\'re building, ## Journeys, and ## Non-UI Coverage from these, never from the interview alone')
     }
     lines.push('Write docs/design/doctrine.md (one page, ## Dissents) and .claude/genesis/design-rules.json, then:')

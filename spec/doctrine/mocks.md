@@ -353,10 +353,14 @@ client-origin answer promotes.
 
 **The last screen names what the journey does not do.** `mocks-driver.js ledger derive`
 (§ Provenance Ledger) turns discovery non-goals, `no`-answered invented rows, and withdrawn
-notes into `exclusion` rows before the client ever sees the player; `approved` runs it
-automatically and refuses on any that are still `open`. On a journey's last label
-`buildWalkPage` lists every exclusion anchored to it plus every project-wide one, each agreed
-with one button; the approve control stays disabled until the listed count reaches zero.
+notes into `exclusion` rows; the client's own walk-page request materializes them too, so the
+last screen lists them the first time anyone looks, before any session command runs. On a
+journey's last label `buildWalkPage` lists every exclusion anchored to it plus every
+project-wide one, each with two buttons, `Correct` and `No — we need this` — the latter sets
+the row `overridden` with `rejected: client-needed`, final for the derivation, never
+re-added by a later `ledger derive`. The confirm control no longer waits on the list: approval
+is the session's own bookkeeping, not a gate on the client's consent, so `approved` lists what
+the client did not answer as not contested and never refuses on it.
 
 ## Mocks: Authoring Rules
 

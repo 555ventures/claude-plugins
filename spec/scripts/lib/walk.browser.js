@@ -237,7 +237,6 @@
   var signoffEl = q('[data-wk="signoff"]')
   var navBtn = q('[data-wk-role="nav"]')
   var exclSection = q('[data-wk="exclusions"]')
-  var exclOpen = exclSection ? (parseInt(exclSection.getAttribute('data-exclusions-open'), 10) || 0) : 0
   var lastLabel = steps.length ? steps[steps.length - 1].getAttribute('data-label') : null
 
   var currentLabel = steps.length ? steps[0].getAttribute('data-label') : null
@@ -306,9 +305,11 @@
     refreshNavDisabled()
   }
 
-  // D5: the nav button stays disabled while any listed exclusion or mark is still open, or any
-  // `[data-wk="request"]` on the journey is `open`/`addressed` — recomputed after every
-  // accept/reopen/answer. Meaningless (and never applied) while the button is in its `next` role.
+  // specs/20260911/05-approval-is-bookkeeping.md D3: the nav button no longer waits on
+  // exclusions — the closing screen asks, it does not block. It stays disabled while any listed
+  // mark is still open, or any `[data-wk="request"]` on the journey is `open`/`addressed` —
+  // recomputed after every accept/reopen/answer. Meaningless (and never applied) while the
+  // button is in its `next` role.
   function refreshNavDisabled() {
     if (!navBtn) return
     if (navBtn.getAttribute('data-wk') !== 'confirm') { navBtn.removeAttribute('disabled'); return }
@@ -316,7 +317,7 @@
       var st = a.getAttribute('data-status')
       return st === 'open' || st === 'addressed'
     })
-    if (leftCount > 0 || exclOpen > 0 || blocked) navBtn.setAttribute('disabled', '')
+    if (leftCount > 0 || blocked) navBtn.setAttribute('disabled', '')
     else navBtn.removeAttribute('disabled')
   }
 
@@ -437,19 +438,24 @@
     on(m.querySelector('[data-wk="no"]'), 'click', function () { answer('no') })
   })
 
-  // ---- exclusions: one agree posts /client/__walk/exclusion, lowers the open count on ok -----
+  // ---- exclusions: agree or needed posts a verdict; either disables both buttons on ok --------
+  // specs/20260911/05-approval-is-bookkeeping.md D3: an agree-only control cannot record
+  // disagreement — "No — we need this" posts {id, verdict:'needed'}, and the ok response sets
+  // data-verdict on the article and disables both buttons, exactly like the agree branch.
   qa('[data-wk="exclusion"]').forEach(function (art) {
     var id = art.getAttribute('data-id')
-    var btn = art.querySelector('[data-wk="agree"]')
-    on(btn, 'click', function () {
-      post('/client/__walk/exclusion', { id: id }).then(function (r) {
+    var agreeBtn = art.querySelector('[data-wk="agree"]')
+    var neededBtn = art.querySelector('[data-wk="needed"]')
+    function answer(verdict) {
+      post('/client/__walk/exclusion', { id: id, verdict: verdict }).then(function (r) {
         if (!r.ok) { showMsg('failed'); return }
-        if (btn && btn.parentNode) btn.setAttribute('disabled', '')
-        exclOpen = Math.max(0, exclOpen - 1)
-        if (exclSection) exclSection.setAttribute('data-exclusions-open', String(exclOpen))
-        updateLeft()
+        art.setAttribute('data-verdict', verdict)
+        if (agreeBtn) agreeBtn.setAttribute('disabled', '')
+        if (neededBtn) neededBtn.setAttribute('disabled', '')
       }).catch(function () { showMsg('failed') })
-    })
+    }
+    on(agreeBtn, 'click', function () { answer('agree') })
+    on(neededBtn, 'click', function () { answer('needed') })
   })
 
   // ---- request cards: accept/reopen, shared with the index's own cards ------------------------

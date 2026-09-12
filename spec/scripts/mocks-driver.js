@@ -214,9 +214,9 @@ const {
   readNotes, writeNotes, addNote, addressNote, replyNote, groupOpen, unresolvedFor, WALK_REASONS,
   originOf, waiveNote,
 } = require('./lib/mocks-notes')
-// specs/20260910/05-what-the-journey-does-not-do.md D2/D4: the pure derivation `ledger derive`
-// materializes into actual rows.
-const { deriveExclusions } = require('./lib/mocks-exclusions')
+// specs/20260911/05-approval-is-bookkeeping.md D1: the ledger-text transform itself now lives in
+// the lib (so design-atlas.js's walk-page route can share it) — this driver only calls it.
+const { materialize } = require('./lib/mocks-exclusions')
 const clientCaptureLib = require('./lib/client-capture')
 // specs/20260910/03-client-journey-player.md D4/D7: the one reader/writer of design/mocks/
 // walk.json and its pure per-journey transforms — `client waive`/`client log` and the `approved`
@@ -548,17 +548,6 @@ function nextLedgerId(parsed) {
   return 'P' + (max + 1)
 }
 
-// specs/20260910/05-what-the-journey-does-not-do.md D4: exclusion rows get their own "E<n>"
-// prefix, same derivation shape as nextLedgerId's own "P<n>".
-function nextExclusionId(parsed) {
-  let max = 0
-  for (const a of parsed.assumptions) {
-    const m = /^E(\d+)$/.exec(a.id)
-    if (m) max = Math.max(max, parseInt(m[1], 10))
-  }
-  return 'E' + (max + 1)
-}
-
 // A1: `.claude/genesis/brief.md` may not exist when mocks runs — deriveExclusions itself takes
 // `brief: null` and its non-goal source simply yields nothing.
 function briefTextOrNull() {
@@ -579,41 +568,18 @@ function journeyForExclusionRow(row, notes, seedJourneys) {
   return null
 }
 
-// D4: `ledger derive` — materializes deriveExclusions' pure `{add, retire, reopen}` output into
-// `ledger.md`. `add` entries are appended as new `exclusion` rows (`status: open`); `retire`
-// rows (an existing exclusion whose source decision was undone) are set to `overridden <today>`
-// via `setStatus` — NEVER deleted, the `note` cell is the audit trail. `reopen` rows (an
-// existing `overridden` exclusion whose source decision was reinstated) are set back to `open`
-// via `setStatus` on that SAME row/id — never appended as a new row, which would give one
-// `note` two rows and duplicate the claim on the player's last screen (mocks-exclusions.js).
-// Re-running over unchanged inputs appends, retires and reopens nothing (deriveExclusions' own
-// idempotence key, matched by `note`), so a second run's ledger.md is byte-identical to the
-// first.
-function deriveAndAppendExclusions() {
-  const notes = notesOrEmpty()
-  const seedJourneys = currentSeedJourneys()
-  let text = ledgerTextOrDie()
-  let parsed = parseLedger(text)
-  const { add, retire, reopen } = deriveExclusions({ brief: briefTextOrNull(), notes, ledger: parsed.assumptions, seedJourneys })
-  for (const e of add) {
-    const id = nextExclusionId(parsed)
-    text = appendAssumption(text, {
-      id, step: 'CLIENT', kind: 'exclusion', claim: e.claim, tag: 'said-by-user',
-      status: 'open', rejected: null, dependents: null, note: e.source,
-    })
-    parsed = parseLedger(text)
-  }
-  for (const row of reopen) {
-    text = setStatus(text, row.id, 'open')
-    parsed = parseLedger(text)
-  }
-  for (const row of retire) {
-    text = setStatus(text, row.id, 'overridden ' + todayIso())
-    parsed = parseLedger(text)
-  }
-  fs.writeFileSync(ledgerPath, text)
-  const total = parsed.assumptions.filter((a) => a.kind === 'exclusion').length
-  return { total, added: add.length, retired: retire.length, reopened: reopen.length }
+// specs/20260911/05-approval-is-bookkeeping.md D1: this driver's one call into
+// lib/mocks-exclusions.js's `materialize` — the ledger-text transform itself lives there now (so
+// design-atlas.js's walk-page route, D2, can share it); this wrapper only supplies the driver's
+// own sources (brief/notes/seed journeys/today) and performs the one write. Called by `ledger
+// derive`, `client open` (before recording `status.client`), and `approved`.
+function runMaterialize() {
+  const result = materialize({
+    text: ledgerTextOrDie(), brief: briefTextOrNull(), notes: notesOrEmpty(),
+    seedJourneys: currentSeedJourneys(), today: todayIso(),
+  })
+  fs.writeFileSync(ledgerPath, result.text)
+  return result
 }
 
 // D6/D7: the seed's own `# Seed — <name>` H1 — same derivation as design-atlas.js's
@@ -629,20 +595,31 @@ function productName() {
   return product
 }
 
-// D7: `design/mocks/exclusions.md`, regenerated on every `approved` from the confirmed exclusion
-// rows alone — an `open` row never reaches here (handleApproved refuses on any first).
+// specs/20260911/05-approval-is-bookkeeping.md D4: `design/mocks/exclusions.md`, regenerated on
+// every `approved` under two headings — a `confirmed` row is "agreed by the client", an `open`
+// row is "not contested" (the client never answered it and approval never refuses on it). An
+// `overridden` row (a client's "needed" answer, or a retired source) appears in neither heading.
+// Each heading is present even when it carries zero rows, rendered as its own single "- none"
+// bullet. parseLedger already normalizes a dated status cell ("confirmed 2026-09-11") down to
+// its bare word, so `a.status` is compared directly, same as every other status check in this
+// file.
 function writeExclusionsFile() {
   const parsed = parseLedger(ledgerTextOrDie())
-  const confirmed = parsed.assumptions.filter((a) => a.kind === 'exclusion' && a.status === 'confirmed')
+  const rows = parsed.assumptions.filter((a) => a.kind === 'exclusion')
+  const confirmed = rows.filter((a) => a.status === 'confirmed')
+  const notContested = rows.filter((a) => a.status === 'open')
   const notes = notesOrEmpty()
   const seedJourneys = currentSeedJourneys()
-  const lines = ['# Exclusions — ' + productName() + ' — approved ' + todayIso(), '']
-  for (const row of confirmed) {
+  const lineFor = (row) => {
     const jn = journeyForExclusionRow(row, notes, seedJourneys)
-    lines.push('- ' + row.claim + ' (' + (jn || 'project') + ', ' + row.note + ')')
+    return '- ' + row.claim + ' (' + (jn || 'project') + ', ' + row.note + ')'
   }
+  const section = (rowsIn) => (rowsIn.length ? rowsIn.map(lineFor) : ['- none'])
+  const lines = ['# Exclusions — ' + productName() + ' — approved ' + todayIso(), '']
+    .concat(['## Agreed by the client']).concat(section(confirmed))
+    .concat(['', '## Not contested']).concat(section(notContested))
   fs.writeFileSync(path.join(mocksDir, 'exclusions.md'), lines.join('\n') + '\n')
-  return confirmed.length
+  return { agreed: confirmed.length, notContested: notContested.length }
 }
 
 // ---------------------------------------------------------------------------
@@ -1165,6 +1142,10 @@ function cmdClient(sub, args) {
         designAtlasBin + ' serve --root ' + root + '` (or your own server) and expose it yourself — the plugin never opens a tunnel')
       return
     }
+    // specs/20260911/05-approval-is-bookkeeping.md D1: exclusion rows are materialized before
+    // status.client is recorded — the client's first walk-page GET (D2) can no longer be the
+    // very first materialize either, since this may run first.
+    runMaterialize()
     status.client = { address, port, openedAt: nowIso() }
     saveStatus()
     writeOut(1, 'client: open — ' + address + '/client/index.html\n')
@@ -1930,25 +1911,10 @@ function handleThemePicked(directionArg) {
 // carry data-status="approved" (D5 rationale: with no review loop nobody would ever set it by
 // hand).
 function handleApproved() {
-  // specs/20260910/05-what-the-journey-does-not-do.md D4: `ledger derive` runs before every
-  // other gate below, then any exclusion row still `open` refuses by id and claim — the client
-  // confirms it on the journey's last screen (D5), or the session overrides it directly.
-  deriveAndAppendExclusions()
-  {
-    const parsed = parseLedger(ledgerTextOrDie())
-    const openExclusions = parsed.assumptions.filter((a) => a.kind === 'exclusion' && a.status === 'open')
-    if (openExclusions.length) {
-      const notes = notesOrEmpty()
-      const seedJourneys = currentSeedJourneys()
-      for (const row of openExclusions) {
-        const jn = journeyForExclusionRow(row, notes, seedJourneys)
-        writeOut(2, 'mocks-driver: exclusion ' + row.id + ' ("' + row.claim + '") is not confirmed — ' +
-          'the client confirms it on the last screen of ' + (jn || 'its journey') +
-          ', or: ledger set --id ' + row.id + ' --status confirmed\n')
-      }
-      process.exit(2)
-    }
-  }
+  // specs/20260911/05-approval-is-bookkeeping.md D4: `ledger derive` runs before every other
+  // gate below — approval never refuses on an exclusion row (spec 20260910/05's refusal is
+  // retired); the tail below prints what got agreed and what is left not contested.
+  runMaterialize()
   for (const [jn] of currentSeedJourneys()) {
     const st = status.journeys[jn]
     if (!st || !st.approved) die('journey "' + jn + '" is not approved — mark journey-approved --journey ' + jn + ' first')
@@ -1987,10 +1953,11 @@ function handleApproved() {
     const html = fs.readFileSync(f, 'utf8')
     if (statusOf(html) === 'sketch') fs.writeFileSync(f, html.replace('data-status="sketch"', 'data-status="approved"'))
   }
-  // D7: written on every accepted `approved` — the confirmed exclusion set, dated by this
-  // approval, is what a statement of work cites.
-  const exclusionCount = writeExclusionsFile()
-  writeOut(1, '📦 design/mocks/exclusions.md — ' + exclusionCount + ' exclusions\n')
+  // D7/D4: written on every accepted `approved` — the agreed and not-contested exclusion sets,
+  // dated by this approval, are what a statement of work cites.
+  const exclusionCounts = writeExclusionsFile()
+  writeOut(1, '📦 design/mocks/exclusions.md — ' + exclusionCounts.agreed + ' agreed · ' +
+    exclusionCounts.notContested + ' not contested\n')
   status.decider = stop.decision.by
   status.marks.approved = nowIso()
   consumeStopAndSave(stop.id)
@@ -2231,7 +2198,7 @@ function cmdLedger(sub, args) {
     process.exit(0)
   }
   if (sub === 'derive') {
-    const result = deriveAndAppendExclusions()
+    const result = runMaterialize()
     writeOut(1, '📒 exclusions: ' + result.total + ' total · ' + result.added + ' new · ' + result.retired + ' retired\n')
     process.exit(0)
   }

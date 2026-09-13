@@ -2115,6 +2115,19 @@ function createRequestHandler(root, opts = {}) {
       }
     }
 
+    // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D3: the sign-off cut-off —
+    // `marks.approved` read fresh from design/mocks/status.json on every request. Returns the
+    // plain `YYYY-MM-DD` date (the ISO stamp's own date portion) or null when the work has not
+    // been signed off yet. q240 (2026-09-13): defined here, in the request handler's own scope,
+    // rather than inside the `clientRoute` block below — the client reopen route (above that
+    // block) is gated on it too, and a second copy would be a second place to change.
+    const approvedDate = () => {
+      try {
+        const marks = JSON.parse(fs.readFileSync(path.join(rootAbs, 'design/mocks/status.json'), 'utf8')).marks
+        return (marks && marks.approved) ? String(marks.approved).slice(0, 10) : null
+      } catch { return null }
+    }
+
     // ---- /__notes/* (D2) ------------------------------------------------------------------
     if (reqPath === '/__notes/notes.js' && req.method === 'GET') {
       fs.readFile(notesLibPath, (err, data) => {
@@ -2373,6 +2386,20 @@ function createRequestHandler(root, opts = {}) {
     // unmatched, to the shared /__notes/ 404 below.
     if (reqPath === '/__notes/reopen' && req.method === 'POST' && clientRoute) {
       readJsonBody(req).then((body) => {
+        // q240 (2026-09-13): the same sign-off cut-off the sibling /client/__walk/exclusion route
+        // enforces (specs/20260912/02 D3), applied here for the same reason — putting a withdrawn
+        // request back un-withdraws its note, and the next materialize retires the exclusion row
+        // derived from it, rewriting a list D3 froze as a record. Outranks every check below: once
+        // `marks.approved` is set, even a request that would otherwise 404 refuses 409 naming the
+        // date, and notes.json is never written. The page renders no control this would refuse
+        // (lib/walk-page.js's `renderPutback`), so a client only meets this from a stale tab.
+        const approved = approvedDate()
+        if (approved) {
+          jsonRes(res, 409, {
+            error: 'the work was signed off on ' + approved + ' — this list is now a record; tell us in the note box and we will come back to you',
+          })
+          return
+        }
         const id = body && body.id
         const text = String((body && body.text) || '').trim()
         let notes = []
@@ -2472,17 +2499,6 @@ function createRequestHandler(root, opts = {}) {
       const mocksTheme = () => {
         try { return JSON.parse(fs.readFileSync(path.join(rootAbs, 'design/mocks/status.json'), 'utf8')).theme || null } catch { return null }
       }
-      // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D3: the sign-off cut-off —
-      // `marks.approved` read fresh from design/mocks/status.json on every request, the same
-      // fresh-read shape `mocksTheme` above already uses (A3). Returns the plain `YYYY-MM-DD` date
-      // (the ISO stamp's own date portion) or null when the work has not been signed off yet.
-      const approvedDate = () => {
-        try {
-          const marks = JSON.parse(fs.readFileSync(path.join(rootAbs, 'design/mocks/status.json'), 'utf8')).marks
-          return (marks && marks.approved) ? String(marks.approved).slice(0, 10) : null
-        } catch { return null }
-      }
-
       // specs/20260911/06-the-client-loop.md D15: `ready` — the set of seed journeys every one
       // of whose declared screens has design/mocks/<label>.html on disk. `status.json`'s
       // `walked` flag is NOT consulted: it is a session work flag, cleared by --reopen while the
@@ -2505,6 +2521,7 @@ function createRequestHandler(root, opts = {}) {
         const html = walkPageLib.buildClientIndex({
           seed: seedForReview(rootAbs), notes, ledger: readLedgerRowsOrEmpty(), walk: readWalkOrEmpty(), prefix,
           themeOpen: !!(themeStop && themeStop.status === 'open'), ready: readyJourneys(),
+          approved: approvedDate(),
         })
         res.writeHead(200, { 'content-type': MIME['.html'], 'cache-control': 'no-store' })
         res.end(html)

@@ -511,6 +511,13 @@ function waiveNote(notes, id, opts) {
   found.status = 'resolved'
   found.resolvedBy = 'waiver'
   found.resolvedAt = at
+  // q240 (2026-09-13): `resolution` is what the client-facing surfaces read to say WHY a request
+  // closed (lib/walk-page.js's `renderIndexRequest`) — a waiver that set only `waived` fell
+  // through to the bare "Closed" a session-side resolve renders, so the one close the client
+  // never asked for was the one close that explained itself least. 'withdrawn'/'accepted' stay
+  // `resolveNote`'s alone; nothing keyed on those two (lib/mocks-exclusions.js's own derivation
+  // included) sees a waiver as either.
+  found.resolution = 'waived'
   found.waived = { at, reason: o.reason, by: o.by || 'session' }
   if (found.kind === 'question') {
     found.answer = { verdict: 'waived', text: o.reason, by: o.by || 'session', at }

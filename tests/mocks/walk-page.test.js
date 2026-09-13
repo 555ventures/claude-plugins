@@ -575,3 +575,183 @@ test('AC-20260912-02-15: viewer.css CONTINUES TO declare `.wk-req[data-status="r
     'AC-15: the general resolved-row rule must CONTINUE TO set display:none: got "' + body + '"')
 })
 
+
+
+// ---------------------------------------------------------------------------
+// q240 (direct fix, 2026-09-13) — the client request lifecycle, four defects on one surface:
+// (1) the sign-off cut-off reaches the request cards' own "Put it back"; (2) two in-session DOM
+// patches fell short of the reload render they claim to match; (3) a seven-day waiver closed a
+// request without saying why; (4) four client-player rules lost to `.wk a` on specificity.
+// Every test below is red against the pre-image.
+// ---------------------------------------------------------------------------
+
+// q240 (1): once the work is signed off, neither surface may offer a way back — the route behind
+// the control refuses 409, and the reload render must not print a control the server will refuse.
+test('q240: an approved index and walk page render no "Put it back" control on a withdrawn request, and no hidden one on an open request — while an unapproved page renders both', () => {
+  const seed = onboardingSeed([{ label: 'invite', states: [] }])
+  const withdrawn = clientNote({
+    id: 'N070', scope: 'mock', screen: 'invite', text: 'Add a dark mode', status: 'resolved',
+    resolution: 'withdrawn', withdrawReason: 'not-needed', resolvedBy: 'client', resolvedAt: NOW,
+  })
+  const open = clientNote({ id: 'N071', scope: 'mock', screen: 'invite', text: 'Rename the button', status: 'open' })
+  const base = { seed, notes: [withdrawn, open], ledger: [], walk: { journeys: {} }, prefix: '' }
+
+  const openIndex = buildClientIndex(Object.assign({}, base, { ready: new Set(['onboarding']) }))
+  assert.match(openIndex, /data-cl="putback"[^>]*>Put it back</,
+    'q240 setup: before sign-off the index must still offer "Put it back" on the withdrawn request: got\n' + openIndex)
+  assert.strictEqual((openIndex.match(/data-cl="putback"/g) || []).length, 3,
+    'q240 setup: before sign-off the index must carry exactly three putback controls — the withdrawn ' +
+    'row\'s visible one, the open row\'s hidden one, and the composer template\'s hidden one: got\n' + openIndex)
+
+  const approvedIndex = buildClientIndex(Object.assign({}, base, { ready: new Set(['onboarding']), approved: '2026-09-13' }))
+  // `data-putback-saved` on the shared msg slot is a RECEIPT string, not a control — the
+  // assertion names the control's own attribute so it cannot pass or fail on that.
+  assert.doesNotMatch(approvedIndex, /data-cl="putback"/,
+    'q240: once marks.approved is set, the index must render NO putback control at all — not the ' +
+    'withdrawn row\'s, not the open row\'s hidden one, not the template\'s — because ' +
+    'POST /client/__notes/reopen now refuses 409 and a control the server will refuse is not an offer: got\n' + approvedIndex)
+  assert.match(approvedIndex, /You took this back/,
+    'q240: the withdrawn request must CONTINUE TO explain itself after sign-off — only the control goes, ' +
+    'never the sentence: got\n' + approvedIndex)
+
+  const openWalk = buildWalkPage(Object.assign({}, base, { journey: 'onboarding' }))
+  assert.match(openWalk, /data-wk="putback"/,
+    'q240 setup: before sign-off the walk page must still offer "Put it back": got\n' + openWalk)
+  const approvedWalk = buildWalkPage(Object.assign({}, base, { journey: 'onboarding', approved: '2026-09-13' }))
+  const approvedWalkRequests = [...approvedWalk.matchAll(/<article[^>]*data-wk="request"[\s\S]*?<\/article>/g)].map((m) => m[0]).join('')
+  assert.doesNotMatch(approvedWalkRequests, /data-wk="putback"/,
+    'q240: the walk page\'s request cards must render no putback control once the work is signed off: got\n' + approvedWalkRequests)
+})
+
+// q240 (2a): the withdraw handler's in-session paint must equal the withdrawn shape a reload
+// renders — the pre-image stopped at data-status + the word "Closed" (a session resolve's render,
+// not a client withdrawal's), leaving the row a dead end until the next reload.
+test('q240: clicking "Never mind" on an open request paints the full withdrawn shape in place — data-resolution, the withdrawn sentence, the withdraw control gone and "Put it back" revealed', async () => {
+  const seed = onboardingSeed([{ label: 'invite', states: [] }])
+  const open = clientNote({ id: 'N072', scope: 'mock', screen: 'invite', text: 'Rename the button', status: 'open' })
+  const html = buildClientIndex({
+    seed, notes: [open], ledger: [], walk: { journeys: {} }, prefix: '', ready: new Set(['onboarding']),
+  })
+  const { document, posts } = runIndexBrowser(html, {})
+  const art = document.querySelector('[data-cl="request"][data-id="N072"]')
+  assert.ok(art, 'q240 setup: the open request must render as an index card: got\n' + html)
+  const putbackBtn = art.querySelector('[data-cl="putback"]')
+  assert.ok(putbackBtn && putbackBtn.hidden,
+    'q240: an OPEN request must ship its putback control hidden, so the withdraw handler can reveal it ' +
+    'rather than fabricate one (activation, never fabrication)')
+
+  art.querySelector('[data-cl="withdraw"]').click()
+  await flush()
+
+  assert.ok(posts.some((p) => p.url.includes('/client/__notes/resolve')),
+    'q240 setup: the withdraw click must CONTINUE TO post /client/__notes/resolve: got ' + JSON.stringify(posts))
+  assert.strictEqual(art.getAttribute('data-status'), 'resolved',
+    'q240: the withdrawn row must CONTINUE TO read data-status="resolved"')
+  assert.strictEqual(art.getAttribute('data-resolution'), 'withdrawn',
+    'q240: the withdrawn row must also read data-resolution="withdrawn" — viewer.css\'s more specific ' +
+    'override keys on it to keep this one closed row\'s controls visible at all')
+  assert.strictEqual(art.querySelector('.wk-req-status').textContent,
+    "You took this back — it's on the list of things we will not build.",
+    'q240: the status line must read the same withdrawn sentence a reload renders, never the bare "Closed" ' +
+    'a session-side resolve produces')
+  assert.ok(art.querySelector('[data-cl="withdraw"]').hidden,
+    'q240: the withdraw control must go once it has fired — a withdrawn request cannot be withdrawn again')
+  assert.ok(!putbackBtn.hidden,
+    'q240: "Put it back" must be revealed in place — without it the card the client just withdrew is a dead ' +
+    'end for the rest of the session')
+})
+
+// q240 (2b): the exclusion row's putback un-withdraws its source note, so the next materialize
+// retires the row — the in-session paint must stop offering verdicts on a claim that just went away.
+test('q240: clicking "Put it back" on an exclusion row drops the row in place — dropped verdict, no live verdict buttons, no "Change answer", and the dropped sentence activated from the section', async () => {
+  const seed = oneScreenSeed(['invite'])
+  const note = clientNote({
+    id: 'N073', scope: 'mock', screen: 'invite', text: 'Export bookings to CSV', status: 'resolved',
+    resolution: 'withdrawn', withdrawReason: 'not-needed', resolvedBy: 'client', resolvedAt: NOW,
+  })
+  const row = exclRow('E1', { claim: 'Export bookings to CSV', note: 'withdrawn: N073', status: 'open' })
+  const html = buildWalkPage({
+    seed, journey: 'onboarding', notes: [note], ledger: [row], walk: { journeys: {} }, prefix: '',
+  })
+  const section = /data-said-dropped="([^"]*)"/.exec(html)
+  assert.ok(section && section[1],
+    'q240: the exclusions section must carry data-said-dropped so the browser ACTIVATES the dropped ' +
+    'sentence rather than fabricating it, exactly as data-said-agree/needed already work: got\n' + html)
+
+  const { document, posts } = runWalkBrowserRouted(html, { reached: [], misses: [], confirmedAt: null, sentence: null, waived: null }, {})
+  await flush()
+  const art = document.querySelector('[data-wk="exclusion"][data-id="E1"]')
+  assert.ok(art, 'q240 setup: the withdrawn note must materialize as an exclusion row on the page: got\n' + html)
+
+  art.querySelector('[data-wk="putback"]').click()
+  await flush()
+
+  assert.ok(posts.some((p) => p.url.includes('/client/__notes/reopen')),
+    'q240 setup: the row\'s putback must CONTINUE TO post /client/__notes/reopen for the SOURCE note: got ' + JSON.stringify(posts))
+  assert.strictEqual(art.getAttribute('data-verdict'), 'dropped',
+    'q240: the row must read data-verdict="dropped" — the shape a reload renders once the next materialize ' +
+    'retires it, since its source decision has just been undone')
+  assert.ok(art.querySelector('.wk-verdicts').hidden,
+    'q240: the two verdict buttons must go — "Correct" / "No — we need this" on a claim that no longer ' +
+    'exists records an answer to a question nobody is asking')
+  const reconsider = art.querySelector('[data-wk="reconsider"]')
+  assert.ok(!reconsider || reconsider.hidden,
+    'q240: "Change answer" must go with them — there is no answer left to change')
+  assert.strictEqual(art.querySelector('.wk-excl-state-text').textContent, section[1],
+    'q240: the state sentence must be the section\'s own data-said-dropped text, activated in place')
+  assert.ok(!art.querySelector('.wk-excl-state').hidden,
+    'q240: the dropped sentence must be shown, not left hidden — the row has to say what just happened')
+})
+
+// q240 (3): the one close the client never asked for was the one close that explained itself
+// least — waiveNote stamped `waived` but no `resolution`, so the render fell through to "Closed".
+test('q240: waiveNote stamps resolution "waived" and the index renders its own sentence for it, distinct from a withdrawal and from a plain close', () => {
+  // eslint-disable-next-line global-require
+  const { waiveNote } = require('../../spec/scripts/lib/mocks-notes')
+  const silent = clientNote({
+    id: 'N074', scope: 'mock', screen: 'invite', text: 'Add a dark mode', status: 'open',
+    lastClientAt: '2026-09-01T00:00:00.000Z',
+  })
+  const waived = waiveNote([silent], 'N074', { now: new Date('2026-09-13T00:00:00.000Z'), reason: 'no reply in seven days' })
+  assert.strictEqual(waived.note.status, 'resolved',
+    'q240: a waiver must CONTINUE TO close the note')
+  assert.strictEqual(waived.note.resolution, 'waived',
+    'q240: a waiver must stamp resolution "waived" — it is what every client-facing surface reads to say ' +
+    'WHY a request closed')
+  assert.ok(waived.note.waived && waived.note.waived.reason,
+    'q240: the `waived` block must CONTINUE TO carry the reason')
+
+  const seed = onboardingSeed([{ label: 'invite', states: [] }])
+  const html = buildClientIndex({
+    seed, notes: waived.notes, ledger: [], walk: { journeys: {} }, prefix: '', ready: new Set(['onboarding']),
+  })
+  const art = [...html.matchAll(/<article[^>]*data-cl="request"[\s\S]*?<\/article>/g)].map((m) => m[0])
+    .find((a) => a.includes('data-id="N074"'))
+  assert.ok(art, 'q240 setup: the waived request must still render in the closed list: got\n' + html)
+  assert.match(art, /<p class="wk-req-status">Closed — we did not hear back<\/p>/,
+    'q240: a waived request must read its own sentence, never the bare "Closed" that says nothing about ' +
+    'a close the client never asked for: got\n' + art)
+  assert.doesNotMatch(art, /You took this back/,
+    'q240: a waiver is not a withdrawal — it must not borrow the withdrawn sentence: got\n' + art)
+})
+
+// q240 (4): the same defect class specs/20260912/06 D9 fixed on the review page — a bare
+// single-class rule (0,1,0) loses to `.wk a { color: inherit }` (0,1,1), so these links rendered
+// at --v-fg while their own rule declared --v-muted. The binding mock (design/client-mocks) styles
+// both as muted, so this is a straight defect fix, not a design change.
+test('q240: the four client-player link rules carry the `.wk ` ancestor prefix that beats `.wk a { color: inherit }`', () => {
+  const css = read('spec/templates/mocks/viewer.css')
+  assert.ok(cssRuleBody(css, '.wk a'),
+    'q240 setup: `.wk a { color: inherit }` — the rule these four lose to on specificity — must still exist')
+  for (const sel of ['.wk-home', '.wk-more', '.wk-j-cta', '.wk-req-link']) {
+    assert.ok(cssRuleBody(css, '.wk ' + sel),
+      'q240: `' + sel + '` must be declared as `.wk ' + sel + '` — at (0,1,0) the bare form loses every ' +
+      'colour it declares to `.wk a` (0,1,1), so the page ignores its own register: got no `.wk ' + sel + '` rule')
+    assert.ok(!new RegExp('(^|\\})\\s*' + sel.replace('.', '\\.') + '\\s*\\{').test(css.replace(/\n/g, '')),
+      'q240: no bare `' + sel + ' {` rule may remain — a second, unprefixed copy re-introduces the loss')
+  }
+  assert.match(cssRuleBody(css, '.wk .wk-home'), /color:\s*var\(--v-muted\)/,
+    'q240: the home link must CONTINUE TO declare the muted colour the binding mock renders it in')
+  assert.match(cssRuleBody(css, '.wk .wk-more'), /color:\s*var\(--v-muted\)/,
+    'q240: the "+N more" tile must CONTINUE TO declare the muted colour the binding mock renders it in')
+})

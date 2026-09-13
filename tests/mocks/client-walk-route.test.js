@@ -7,7 +7,7 @@ const http = require('node:http')
 const { tmpdir, freePort, serveAtlas, SPEC, getJson, postJson } = require('../helpers')
 const {
   advanceToSeedDone, JOURNEY, LABELS, writeNotesFile, readNotesFile, writeFile, writeJSON,
-  ledgerCmd, nowIso, stubNpxScreenshot,
+  ledgerCmd, nowIso, stubNpxScreenshot, patchStatus, statusJson, notesPath,
 } = require('./mocks-driver-fixtures')
 const walkLib = require('../../spec/scripts/lib/mocks-walk')
 const { appendAssumption, parseLedger } = require('../../spec/scripts/lib/mocks-ledger')
@@ -148,3 +148,61 @@ test('AC-20260912-02-10: POST /client/__notes/reopen CONTINUES TO 400 an open cl
   }
 })
 
+
+
+// ---------------------------------------------------------------------------
+// q240 (direct fix, 2026-09-13) — the sign-off cut-off reaches POST /client/__notes/reopen.
+// Its sibling POST /client/__walk/exclusion has refused 409 since specs/20260912/02 D3, but this
+// route had no gate at all: putting a withdrawn request back un-withdraws its note, and the next
+// materialize retires the exclusion row derived from it — rewriting, after sign-off, the very
+// list D3 froze as a record. Red against the pre-image (it answered 200 and wrote notes.json).
+// ---------------------------------------------------------------------------
+test('q240: once marks.approved is set, POST /client/__notes/reopen refuses 409 naming the date and writes nothing — and the same request 200s before sign-off', async () => {
+  const dir = tmpdir('client-reopen-signed-off')
+  advanceToSeedDone(dir)
+  const withdrawn = () => baseNote({
+    id: 'N040', status: 'resolved', origin: 'client', resolution: 'withdrawn',
+    withdrawReason: 'not-needed', resolvedBy: 'client', resolvedAt: nowIso(),
+  })
+  writeNotesFile(dir, [withdrawn()])
+
+  const port = await freePort()
+  const { stop } = await serveAtlas(dir, { port })
+  try {
+    const address = 'http://127.0.0.1:' + port
+
+    // Before sign-off the return leg is open — the control the page renders actually works.
+    const open = await postJson(address + '/client/__notes/reopen', { id: 'N040', by: 'client' })
+    assert.strictEqual(open.status, 200,
+      'q240 setup: before sign-off, putting a withdrawn request back must CONTINUE TO answer 200: got ' +
+      open.status + ' ' + JSON.stringify(open.body))
+    assert.strictEqual(readNotesFile(dir).find((n) => n.id === 'N040').status, 'open',
+      'q240 setup: the successful putback must CONTINUE TO leave the note open again')
+
+    // Sign off, then try the same thing from what is now a stale tab.
+    writeNotesFile(dir, [withdrawn()])
+    patchStatus(dir, { marks: Object.assign({}, statusJson(dir).marks, { approved: '2026-09-13T09:00:00.000Z' }) })
+    const before = fs.readFileSync(notesPath(dir), 'utf8')
+
+    const refused = await postJson(address + '/client/__notes/reopen', { id: 'N040', by: 'client' })
+    assert.strictEqual(refused.status, 409,
+      'q240: after sign-off the route must refuse 409, exactly as its /client/__walk/exclusion sibling ' +
+      'does — a putback un-withdraws the note and the next materialize retires the exclusion row it ' +
+      'produced, rewriting a list that is now a record: got ' + refused.status + ' ' + JSON.stringify(refused.body))
+    assert.match((refused.body && refused.body.error) || '', /signed off on 2026-09-13/,
+      'q240: the refusal must name the sign-off date, so the client reads why rather than "it broke": got ' +
+      JSON.stringify(refused.body))
+    assert.strictEqual(fs.readFileSync(notesPath(dir), 'utf8'), before,
+      'q240: a refused putback must leave notes.json byte-identical — the gate outranks the write, never ' +
+      'follows it')
+
+    // The cut-off outranks every other check on the route: even a request that would otherwise
+    // 404 gets the same 409, so no client can probe note ids past sign-off.
+    const missing = await postJson(address + '/client/__notes/reopen', { id: 'N999', by: 'client' })
+    assert.strictEqual(missing.status, 409,
+      'q240: after sign-off even an unknown note id must refuse 409, never 404 — the cut-off is checked ' +
+      'before the note is even looked up: got ' + missing.status + ' ' + JSON.stringify(missing.body))
+  } finally {
+    await stop()
+  }
+})

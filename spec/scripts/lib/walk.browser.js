@@ -172,12 +172,22 @@
         if (onChange) onChange()
       }).catch(function () { showMsg('failed') })
     })
+    // q240 (2026-09-13): a withdraw must leave the row in the SAME shape a reload renders for a
+    // withdrawn request (lib/walk-page.js's own `resolved`/`withdrawn` branch) — its own
+    // `data-resolution`, its own sentence, the withdraw control gone and "Put it back" revealed.
+    // The pre-image stopped at `data-status` + the bare word "Closed", which is what a session
+    // resolve renders, not a client withdrawal: the row lost its way back until the next reload.
+    // `data-resolution="withdrawn"` is also what viewer.css's own more specific override keys on
+    // to keep this one closed row's controls visible at all.
     on(withdrawBtn, 'click', function () {
       post('/client/__notes/resolve', { id: id, by: 'client', reason: 'not-needed' }).then(function (r) {
         if (!r.ok) { showMsg('failed'); return }
         art.setAttribute('data-status', 'resolved')
+        art.setAttribute('data-resolution', 'withdrawn')
         var statusEl = art.querySelector('.wk-req-status')
-        if (statusEl) statusEl.textContent = 'Closed'
+        if (statusEl) statusEl.textContent = "You took this back — it's on the list of things we will not build."
+        withdrawBtn.hidden = true
+        if (putbackBtn) putbackBtn.hidden = false
         if (onChange) onChange()
       }).catch(function () { showMsg('failed') })
     })
@@ -549,12 +559,23 @@
     // /client/__notes/reopen route the request cards' own putback uses. The row itself is not
     // rewritten here at all — the next materialize (the walk page's own GET) is what retires it,
     // per D5's Rationale ("nothing new is written to the ledger").
+    // q240 (2026-09-13): the row's source note has just gone back, so the next materialize
+    // retires this row — a reload paints it `data-verdict="dropped"`, its verdict buttons and
+    // "Change answer" gone and its own dropped sentence showing. The pre-image only hid the
+    // button that fired, leaving live "Correct" / "No — we need this" controls on a claim that no
+    // longer exists. The sentence is ACTIVATED from the section's own `data-said-dropped`
+    // attribute, never fabricated here, exactly as `answer()` above reads data-said-agree/needed.
     var putbackBtn = art.querySelector('[data-wk="putback"]')
     on(putbackBtn, 'click', function () {
       var noteId = putbackBtn.getAttribute('data-note-id')
       post('/client/__notes/reopen', { id: noteId, by: 'client' }).then(function (r) {
         if (!r.ok) { showMsg('failed'); return }
         putbackBtn.hidden = true
+        art.setAttribute('data-verdict', 'dropped')
+        if (verdictsEl) verdictsEl.hidden = true
+        if (reconsiderBtn) reconsiderBtn.hidden = true
+        if (stateTextEl && exclSection) stateTextEl.textContent = exclSection.getAttribute('data-said-dropped') || ''
+        if (stateEl) stateEl.hidden = false
         showMsg('putback-saved')
       }).catch(function () { showMsg('failed') })
     })

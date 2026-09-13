@@ -140,6 +140,11 @@ const STRINGS = {
   reqAgainPrefix: 'You said: ',
   reqClosed: 'Closed',
   reqClosedThanks: 'Closed — thank you',
+  // q240 (2026-09-13): a seven-day-silence waiver closes a request without the client ever
+  // answering — `mocks-notes.js`'s `waiveNote` stamps `resolution: 'waived'` so this surface
+  // can say WHY it closed, instead of falling through to the bare "Closed" a withdrawal-less
+  // session resolve renders.
+  reqClosedWaived: 'Closed — we did not hear back',
   reqDonePrefix: 'Done: ',
   reqAcceptIndex: 'Looks good',
   reqReopenIndex: 'Still not right',
@@ -277,10 +282,24 @@ function resolveJourneyForAddressed(note, journeysList) {
   return null
 }
 
+// q240 (2026-09-13): the request cards' "Put it back" control, shared by both surfaces.
+// `hidden` ships it on an OPEN request too — present but not offered — so walk.browser.js's own
+// withdraw handler can REVEAL the control a reload would render, instead of leaving the row the
+// client just withdrew a dead end for the rest of the session (activation, never fabrication —
+// the same discipline `wk-req-again` and the exclusion state line already follow).
+// `approved` (the sign-off date, falsy before it) omits the control entirely on every row: the
+// route behind it refuses 409 once the work is signed off, and a control the server will refuse
+// is never an offer (the same posture renderExclusion's own read-only record shape takes).
+function renderPutback(attr, s, approved, hidden) {
+  if (approved) return ''
+  return '<button class="wk-req-act" type="button" data-' + attr + '="putback"' +
+    (hidden ? ' hidden' : '') + '>' + esc(s.reqPutback) + '</button>'
+}
+
 // D4/D20: one request article for the client index — text, screen (mock-scope only), status
 // line, and (addressed only) the "See <journey>" link plus the accept/reopen pair. `closed`
 // (D20) marks a resolved article `hidden`/`data-closed` behind the "Show N closed" toggle.
-function renderIndexRequest(n, journeysList, prefix, s, closed) {
+function renderIndexRequest(n, journeysList, prefix, s, closed, approved) {
   const status = n.status
   let statusLine
   let extra = ''
@@ -294,6 +313,7 @@ function renderIndexRequest(n, journeysList, prefix, s, closed) {
     // mechanism withdrawNote/resolveNote already ship.
     extra = '<div class="wk-req-acts">' +
       '<button class="wk-req-act" type="button" data-cl="withdraw">' + esc(s.reqWithdraw) + '</button>' +
+      renderPutback('cl', s, approved, true) +
       '</div>'
   } else if (status === 'resolved') {
     // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D6: a withdrawn request
@@ -302,9 +322,12 @@ function renderIndexRequest(n, journeysList, prefix, s, closed) {
     // viewer.css's more specific override can un-hide only this one row's `.wk-req-acts`.
     if (n.resolution === 'withdrawn') {
       statusLine = s.reqWithdrawnLine
-      extra = '<div class="wk-req-acts">' +
-        '<button class="wk-req-act" type="button" data-cl="putback">' + esc(s.reqPutback) + '</button>' +
-        '</div>'
+      const put = renderPutback('cl', s, approved, false)
+      extra = put ? '<div class="wk-req-acts">' + put + '</div>' : ''
+    } else if (n.resolution === 'waived') {
+      // q240 (2026-09-13): a waiver is a close the client never asked for — it says so, rather
+      // than reading as the same bare "Closed" a session-side resolve renders.
+      statusLine = s.reqClosedWaived
     } else {
       statusLine = n.resolution === 'accepted' ? s.reqClosedThanks : s.reqClosed
     }
@@ -373,13 +396,14 @@ function renderAskForm(s) {
 // `renderIndexRequest`'s own `open` branch minus the id/text, which walk.browser.js fills in from
 // what it already has (the id from the server's response, the text from the textarea it is about
 // to clear) rather than re-deriving them.
-function renderIndexRequestTemplate(s) {
+function renderIndexRequestTemplate(s, approved) {
   return '<article class="wk-req" data-cl-template hidden>' +
     '<p class="wk-req-text"></p>' +
     '<span class="wk-req-where">' + esc(s.reqWhereProject) + '</span>' +
     '<p class="wk-req-status">' + esc(s.reqWatching) + '</p>' +
     '<div class="wk-req-acts">' +
     '<button class="wk-req-act" type="button" data-cl="withdraw">' + esc(s.reqWithdraw) + '</button>' +
+    renderPutback('cl', s, approved, true) +
     '</div>' +
     '</article>'
 }
@@ -388,12 +412,12 @@ function renderIndexRequestTemplate(s) {
 // (hidden, behind `[data-cl="show-closed"]`) — plus a hidden, unattached template article
 // walk.browser.js activates (by ADDING `data-cl="request"` and the id/status attributes) when the
 // ask form's own POST lands. The `<n> waiting` count is open+addressed only.
-function renderRequestsSection(notes, journeysList, prefix, s) {
+function renderRequestsSection(notes, journeysList, prefix, s, approved) {
   const all = clientRequestNotes(notes)
   const openOrAddressed = all.filter((n) => n.status !== 'resolved')
   const closed = all.filter((n) => n.status === 'resolved')
-  const openArticles = openOrAddressed.map((n) => renderIndexRequest(n, journeysList, prefix, s, false)).join('')
-  const closedArticles = closed.map((n) => renderIndexRequest(n, journeysList, prefix, s, true)).join('')
+  const openArticles = openOrAddressed.map((n) => renderIndexRequest(n, journeysList, prefix, s, false, approved)).join('')
+  const closedArticles = closed.map((n) => renderIndexRequest(n, journeysList, prefix, s, true, approved)).join('')
   const toggle = closed.length
     ? '<button type="button" class="wk-reqs-toggle" data-cl="show-closed" aria-expanded="false">' +
       esc(s.showClosed.replace('{n}', String(closed.length))) + '</button>'
@@ -402,7 +426,7 @@ function renderRequestsSection(notes, journeysList, prefix, s) {
     '<div class="wk-reqs-h"><h2 class="wk-reqs-title">' + esc(s.requestsHeading) + '</h2>' +
     '<span class="wk-reqs-n">' + esc(s.waitingCount.replace('{n}', String(openOrAddressed.length))) + '</span>' +
     toggle + '</div>' +
-    renderIndexRequestTemplate(s) + openArticles + closedArticles +
+    renderIndexRequestTemplate(s, approved) + openArticles + closedArticles +
     '</section>'
 }
 
@@ -412,7 +436,7 @@ function renderRequestsSection(notes, journeysList, prefix, s) {
 // label renders — walk.browser.js hides all but the current screen's. The addressed line reads
 // "Fixed: <change>" (not "Done:" — the walk page is where the fix is being CHECKED, the index is
 // where it is being REPORTED).
-function renderWalkRequest(n, s) {
+function renderWalkRequest(n, s, approved) {
   const status = n.status
   let statusLine
   let extra = ''
@@ -423,6 +447,7 @@ function renderWalkRequest(n, s) {
     // D16: the same take-back control as the index, keyed data-wk on this surface.
     extra = '<div class="wk-req-acts">' +
       '<button class="wk-req-act" type="button" data-wk="withdraw">' + esc(s.reqWithdraw) + '</button>' +
+      renderPutback('wk', s, approved, true) +
       '</div>'
   } else if (status === 'resolved' && n.resolution === 'withdrawn') {
     // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D6: the same withdrawn-only
@@ -430,9 +455,8 @@ function renderWalkRequest(n, s) {
     // resolved request the walk page's D20 "no resolved cards" filter does NOT drop
     // (buildWalkPage's own requestNotes filter), because it carries a live way back.
     statusLine = s.reqWithdrawnLine
-    extra = '<div class="wk-req-acts">' +
-      '<button class="wk-req-act" type="button" data-wk="putback">' + esc(s.reqPutback) + '</button>' +
-      '</div>'
+    const put = renderPutback('wk', s, approved, false)
+    extra = put ? '<div class="wk-req-acts">' + put + '</div>' : ''
   } else {
     const change = (n.addressed && n.addressed.change) || ''
     statusLine = s.reqFixedPrefix + change
@@ -600,7 +624,7 @@ function buildClientIndex(input) {
     themeLink +
     '<ul class="wk-journeys">' + cardsHtml + '</ul>' +
     renderAskForm(s) +
-    renderRequestsSection(notes, journeysList, prefix, s) +
+    renderRequestsSection(notes, journeysList, prefix, s, o.approved) +
     // D4: the shared receipt slot — every ask/accept/reopen save reports through it.
     // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D6: `data-putback-saved` is
     // its own receipt, distinct from `data-saved` — Put it back is not an ask/accept/reopen.
@@ -924,6 +948,7 @@ function renderExclusions(journey, ledger, notes, journeys, s, approved) {
     : ''
   const html = '<section class="wk-exclusions" data-wk="exclusions" data-exclusions-open="' + openCount + '"' +
     ' data-said-agree="' + esc(s.exclStateAgree) + '" data-said-needed="' + esc(s.exclStateNeeded) + '"' +
+    ' data-said-dropped="' + esc(s.exclStateDropped) + '"' +
     (approved ? ' data-recorded="' + esc(approved) + '"' : '') + ' hidden>' +
     head + articles + '</section>'
   return { html, openCount }
@@ -1011,7 +1036,7 @@ function buildWalkPage(input) {
     '<button class="wk-req-act" type="button" data-wk="withdraw">' + esc(s.reqWithdraw) + '</button>' +
     '</div>' +
     '</article>' +
-    requestNotes.map((n) => renderWalkRequest(n, s)).join('')
+    requestNotes.map((n) => renderWalkRequest(n, s, o.approved)).join('')
   const excl = renderExclusions(journey, ledger, notes, journeys, s, o.approved)
   const title = (entry.title || journey) + ' · ' + (seed.product || 'Mocks')
   // specs/20260911/05-approval-is-bookkeeping.md D3: the confirm control is no longer held

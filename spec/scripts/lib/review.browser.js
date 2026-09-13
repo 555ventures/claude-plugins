@@ -157,14 +157,16 @@
         approve.setAttribute('title', openScoped + ' open ' + plural(openScoped, 'item blocks', 'items block') + ' approval')
       } else { approve.removeAttribute('disabled'); approve.removeAttribute('title') }
     }
-    // D3: shown only while this journey is otherwise clean and a project item is still open —
-    // absent from the served bytes stays absent here too (setHidden/setText are both null-safe).
+    // D3: shown only while this journey is otherwise clean and a project item is still open. The
+    // server emits the element (hidden) whenever a project item is open, so resolving the last
+    // scoped note in-page reveals it without a reload (setHidden/setText are both null-safe).
     var projwait = q('[data-rv="projwait"]')
     if (projwait) {
       var showProjwait = !openScoped && openProjectCount > 0
       setHidden(projwait, !showProjwait)
       if (showProjwait) {
-        setText(projwait, openProjectCount + ' whole-product ' + plural(openProjectCount, 'note', 'notes') + ' still block sign-off')
+        setText(projwait, openProjectCount + ' whole-product ' + plural(openProjectCount, 'note', 'notes') +
+          ' still ' + plural(openProjectCount, 'blocks', 'block') + ' sign-off')
       }
     }
   }

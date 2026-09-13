@@ -81,6 +81,12 @@ function joinQuestions(notes, ledgerRows) {
 function isOpen(n) { return n.kind === 'question' ? n.answer == null : n.status !== 'resolved' }
 function isQuestion(n) { return n.kind === 'question' }
 function plural(n, one, many) { return n === 1 ? one : many }
+// One authored copy of the D3 waiting line; review.browser.js's recount() rebuilds the
+// same sentence client-side, so both inflect the verb with the count.
+function projwaitText(n) {
+  return n + ' whole-product ' + plural(n, 'note', 'notes') + ' still ' +
+    plural(n, 'blocks', 'block') + ' sign-off'
+}
 
 function pillText(stop) {
   const approved = stop && stop.status === 'decided' && stop.decision && stop.decision.verdict === 'approve'
@@ -270,9 +276,11 @@ function renderHeader(seed, journeyEntry, journeyIndex, items, stop, prefix) {
     })
     // D3: journey clean, product not — say so, directly beneath the enabled control. Absent
     // entirely (never an empty/zeroed line) once no project item is open (AC-20260912-07-2).
-    if (!openAll && openProject) {
-      control += '<p class="rv-projwait" data-rv="projwait">' + openProject + ' whole-product ' +
-        plural(openProject, 'note', 'notes') + ' still block sign-off</p>'
+    // Emitted (hidden) while the journey still has open items too: resolving the last scoped
+    // note in-page must reveal the line, and recount() can only reveal an element that exists.
+    if (openProject) {
+      control += '<p class="rv-projwait" data-rv="projwait"' + (openAll ? ' hidden' : '') + '>' +
+        projwaitText(openProject) + '</p>'
     }
   }
   // The decide script sits right beside the block it drives (spec 01 D9's literals, unchanged).

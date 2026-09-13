@@ -226,3 +226,40 @@ function renderScoped(notes) {
   return buildReviewPage({ journey: 'j1', seed: baseSeed(), notes, ledger: [], stops: [baseStop()], prefix: '' })
 }
 
+
+// q241 — the whole-product waiting line. specs/20260912/07's own test cases expired at that
+// spec's close, leaving the line with zero live coverage, an ungrammatical singular, and an
+// element the browser could never reveal because it was never served while the journey still
+// had open items. These three pins hold the fixed behavior: present-and-shown when the journey
+// is clean, present-but-hidden while it is not (so recount() has something to reveal), and
+// absent entirely once nothing whole-product is open.
+
+function projwaitOf(html) {
+  return /<p class="rv-projwait" data-rv="projwait"([^>]*)>([^<]*)<\/p>/.exec(html)
+}
+
+test('q241: with the journey clean and whole-product notes open, the waiting line is served shown and inflects its verb with the count', () => {
+  const one = projwaitOf(renderScoped(scopedCleanNotes('open', 'resolved')))
+  assert.ok(one, 'a clean journey with one open project note must serve the rv-projwait line')
+  assert.doesNotMatch(one[1], /hidden/, 'with no scoped item open the line must be served visible, never hidden')
+  assert.strictEqual(one[2], '1 whole-product note still blocks sign-off',
+    'the singular must read "1 whole-product note still blocks sign-off" — the verb inflects with the count, not just the noun')
+
+  const two = projwaitOf(renderScoped(scopedCleanNotes('open', 'open')))
+  assert.ok(two, 'two open project notes must still serve the line')
+  assert.strictEqual(two[2], '2 whole-product notes still block sign-off',
+    'the plural keeps the bare verb — "2 whole-product notes still block sign-off"')
+})
+
+test('q241: while the journey itself still has an open note, the waiting line is served hidden rather than omitted — so resolving that last note reveals it without a reload', () => {
+  const stillOpen = { id: 'm3', kind: 'note', scope: 'mock', screen: 'a', state: null, status: 'open', text: 'open on a', reason: 'other' }
+  const m = projwaitOf(renderScoped(scopedCleanNotes('open', 'resolved', stillOpen)))
+  assert.ok(m, 'the element must be in the served bytes even while a scoped note is open — recount() can only reveal an element that exists')
+  assert.match(m[1], /\bhidden\b/, 'it must carry the hidden attribute while the journey has its own open items')
+})
+
+test('q241: with nothing whole-product open, the waiting line is absent from the served bytes entirely — never an empty or zeroed line', () => {
+  const html = renderScoped(scopedCleanNotes('resolved', 'resolved'))
+  assert.strictEqual(projwaitOf(html), null, 'no open project note means no rv-projwait element at all')
+  assert.doesNotMatch(html, /sign-off/, 'and no orphaned copy of the sentence anywhere on the page')
+})

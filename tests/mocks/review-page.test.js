@@ -137,7 +137,7 @@ test('AC-20260912-06-3: the scope band states "Notes for" as DOM text, never as 
     'generated-content string is invisible to the served bytes and to any DOM-level assertion')
 })
 
-// AC-20260912-06-4 (sanctioned pin exception, green pre-change): ADR-0017 clause (a)'s breadcrumb
+// AC-20260912-06-4 (sanctioned pin exception, green pre-change): ADR-0018 clause (a)'s breadcrumb
 // fix already shipped in this pre-image; this pin is what keeps the promise honest at close (D6).
 test('AC-20260912-06-4: with an empty prefix, the breadcrumb carries exactly one a.rv-home linking to "/" and named after the product, with no "Mocks" segment', () => {
   const html = render()
@@ -152,7 +152,7 @@ test('AC-20260912-06-4: with an empty prefix, the breadcrumb carries exactly one
   assert.strictEqual(label, 'Product', 'a.rv-home\'s text must be the seed\'s product name: got ' + JSON.stringify(label))
   const crumbHtml = sliceCrumb(html)
   assert.doesNotMatch(crumbHtml, /Mocks/,
-    'the breadcrumb must carry no "Mocks" segment — the atlas index is now one hop away, not two (ADR-0017 clause a)')
+    'the breadcrumb must carry no "Mocks" segment — the atlas index is now one hop away, not two (ADR-0018 clause a)')
 })
 
 function rawInnerText(html, openMarker, closeMarker) {
@@ -198,18 +198,3 @@ test('AC-20260912-06-5: a screen declaring fourteen states renders fifteen tabs 
   assert.doesNotMatch(rule[1], /overflow:\s*hidden/, '.rv-tabs must never declare overflow: hidden — that would clip a wrapped, tall tab row')
 })
 
-test('AC-20260912-06-7: this spec\'s own design_source file exists and carries the review page\'s binding chrome literals', () => {
-  const specSrc = read('specs/20260912/06-the-review-page-answers-to-a-design.md')
-  const m = /^design_source:\s*(\S+)\s*$/m.exec(specSrc)
-  assert.ok(m, 'this spec\'s frontmatter must declare a design_source line')
-  assert.strictEqual(m[1], 'design/chrome-mocks/review.html',
-    'design_source must name design/chrome-mocks/review.html: got ' + m[1])
-  const chromeMockPath = path.join(ROOT, m[1])
-  assert.ok(fs.existsSync(chromeMockPath), 'the design_source file ' + m[1] + ' must exist on disk (D1)')
-  const chromeMock = fs.readFileSync(chromeMockPath, 'utf8')
-  for (const literal of ['data-rv="board"', 'data-screen="__project"', 'Looks good']) {
-    assert.ok(chromeMock.includes(literal),
-      'design/chrome-mocks/review.html must carry the literal ' + JSON.stringify(literal) +
-      ' — it is a faithful static of the approved review page, not a placeholder: missing it means the file cannot answer for the page it claims to bind')
-  }
-})

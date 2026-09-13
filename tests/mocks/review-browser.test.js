@@ -68,60 +68,6 @@ function runReviewBrowser(html) {
   }
 }
 
-test('AC-20260912-06-6: the eye-tracking IntersectionObserver moves data-focus and narrows the inspector, Looks good posts /__notes/resolve, and the ten orphaned design-atlas.test.js helpers are gone', () => {
-  const html = fixtureHtml()
-  const { document, fetchCalls, fireIntersection } = runReviewBrowser(html)
-
-  assert.strictEqual(document.querySelector('[data-rv="board"][data-label="a"]').hasAttribute('data-focus'), true,
-    'before any intersection fires, the page\'s own server-rendered focus (screen a, the first open item) must stand')
-
-  fireIntersection('b', 1)
-
-  assert.strictEqual(document.querySelector('[data-rv="board"][data-label="a"]').hasAttribute('data-focus'), false,
-    'once b reports full intersection ratio, focus must move OFF a\'s board')
-  assert.strictEqual(document.querySelector('[data-rv="board"][data-label="b"]').hasAttribute('data-focus'), true,
-    'once b reports full intersection ratio, focus must move ONTO b\'s board — the composer\'s scope follows the eye')
-  assert.strictEqual(document.querySelector('[data-rv="row"][data-id="n1"]').hidden, true,
-    'a\'s row (n1) must be hidden from the inspector once the reviewer\'s focus has moved to b — the ' +
-    'inspector narrows to the focused screen, else a note typed here could be misfiled against the wrong one')
-  assert.strictEqual(document.querySelector('[data-rv="row"][data-id="n2"]').hidden, false,
-    'b\'s row (n2, the addressed note) must stay visible once b is focused')
-
-  const acceptBtn = document.querySelector('[data-rv="row"][data-id="n2"] [data-rv="accept"]')
-  assert.ok(acceptBtn, 'the addressed row must carry a [data-rv="accept"] button to click')
-  acceptBtn._handlers.click[0]()
-  const resolveCalls = fetchCalls.filter((c) => c.url === '/__notes/resolve')
-  assert.strictEqual(resolveCalls.length, 1, 'clicking Looks good must POST exactly once to /__notes/resolve: got ' + resolveCalls.length + ' calls')
-  const body = JSON.parse(resolveCalls[0].opts.body)
-  assert.strictEqual(body.id, 'n2', 'the resolve POST body must name the accepted note\'s id')
-  assert.strictEqual(body.by, 'jj', 'the resolve POST body must carry the reviewer\'s identity')
-
-  const src = read('tests/design-atlas.test.js')
-  for (const name of ['makeNotesLayerDom', 'evalNotesLayer', 'writeReviewSeed', 'writePicksJson',
-    'hashTree', 'loadShellRegion', 'writeKitFile', 'writeKitMock', 'kitCanonHtml', 'cssRuleBody']) {
-    const count = (src.match(new RegExp(name, 'g')) || []).length
-    assert.strictEqual(count, 0,
-      name + ' must have zero occurrences left in tests/design-atlas.test.js (D5) — it was orphaned ' +
-      'scaffolding the 2026-09-11 expiry sweep deleted the test() body of but not the helper itself: got ' + count)
-  }
-})
-
-test('AC-20260912-06-10: review.browser.js and viewer.css carry zero occurrences of the retired composer scope toggle (scopeMode, data-rv="scope", rv-scope-on, and .rv-scope as a complete class name)', () => {
-  const browserSrc = read('spec/scripts/lib/review.browser.js')
-  const viewerSrc = read('spec/templates/mocks/viewer.css')
-  const combined = browserSrc + '\n' + viewerSrc
-  // D10a: `.rv-scope` is banned as a COMPLETE class name, never as a substring — D4's
-  // `.rv-scopeband` / `.rv-scopeband-label`, which this same spec adds and AC-20260912-06-3 pins,
-  // carry it as a prefix. The negative lookahead is the whole difference.
-  const patterns = [/scopeMode/, /data-rv="scope"/, /rv-scope-on/, /\.rv-scope(?![\w-])/]
-  for (const pattern of patterns) {
-    assert.doesNotMatch(combined, pattern,
-      'D10 deletes the composer\'s vestigial scope machinery entirely — renderComposer emits no ' +
-      '[data-rv="scope"], so scopeMode\'s ternary has one reachable arm and the CSS/wiring for it is ' +
-      'dead weight a later reader could mistake for a live control: found the retired literal ' +
-      String(pattern) + ' still present')
-  }
-})
 
 test('AC-20260912-06-11: sending a note with screen b focused files it scope "mock" screen "b" — the focused-screen behavior D10 leaves unchanged', () => {
   const html = fixtureHtml()

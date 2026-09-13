@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: implementing
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -128,9 +128,15 @@ reviewer sees a moment later.
   → writes tests/mocks/review-page.test.js
 - **AC-20260912-06-2**: WHEN that same fixture renders THE SYSTEM SHALL CONTINUE TO emit a rail row
   `[data-rv="count"][data-screen="__project"]` whose text is `1` and which carries no `data-zero`,
-  and the header's approve-block title SHALL CONTINUE TO name the same total it counts (`2 open
-  items block approval`); WHEN the fixture's project notes are both `resolved` THE SYSTEM SHALL
+  and the header's approve-block title SHALL CONTINUE TO name the same total it counts (`3 open
+  items block approval`); WHEN the fixture's project note is `resolved` THE SYSTEM SHALL
   CONTINUE TO emit that row with text `0` and `data-zero` present
+    - Amended at build: the locked bullet's worked parenthetical read `2 open items block approval`
+      and called the fixture's project notes plural. AC-1's fixture carries three items, one of
+      them `addressed`, and `isOpen()` counts an addressed note as still open — it still needs the
+      reviewer's own accept or reopen click — so the true total is three, and exactly one of the
+      three is project-scope. The invariant (the title names the same total the page computed) is
+      unchanged; only the worked numbers are corrected to the fixture they describe.
   → writes tests/mocks/review-page.test.js
 - **AC-20260912-06-3**: WHEN that same fixture renders THE SYSTEM SHALL CONTINUE TO emit inside
   `.rv-scopeband` an element carrying the literal text `Notes for` as DOM text, and
@@ -253,6 +259,20 @@ to the queue rather than folded in: the identical specificity defect on the clie
 `.wk-home` and `.wk-more` (that surface binds to `design/client-mocks/*.html` and is a different
 owner's look), and `viewer.css`'s `.v-*` primitive register, which has zero consumers anywhere in
 the repo but is a locked promise of specs/20260902/09 D4 and so needs its own amendment.
+
+**What the build found (folded from the deviations sidecar at close).** Four one-off departures,
+none of which changed a Decision's substance. D5's stated reason for keeping `assertChromeTokenized`
+and `loadDesignAtlas` — "they have live callers" — is false against the pre-image: both are
+call-site-orphaned exactly like the ten helpers D5 deletes. The prescribed action (keep, never
+delete) is unchanged either way, so both stayed; the rationale, not the instruction, was wrong.
+Re-anchoring `.rv-strip` under `.rv .rv-strip` for D9 raised it above the phone-width
+(`max-width: 480px`) override two-thirds down `viewer.css`, which was still bare `.rv-strip` and
+would have silently stopped winning — that override is prefixed too, restoring the
+equal-specificity/source-order tiebreak it depends on. The `other` wave's single row (D8's
+plugin.json bump) was executed by the orchestrator rather than dispatched, because the row names its
+own command and the only judgment in it is the changelog paragraph. And the design source's journey
+was authored as "First journey" where D1 says the fixture names this spec's tests use, so both
+occurrences read `j1`, matching the served page.
 
 ## Canonical Delta
 

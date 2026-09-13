@@ -173,8 +173,17 @@ upstream bug list. -->
   AC's genuinely-red assertions in a NEW sibling test while the pointer still names an existing
   green one gets the same `gutted-rewrite` — a failing sibling never satisfies the named case.
   Fold the assertions into the test the pointer names (usually their semantic home anyway) rather
-  than renaming tests to match a pattern. (specs/20260822/02-init-generation-script.md;
-  specs/20260907/10-client-review.md D15; specs/20260912/03-run-isolates-and-owns-the-stages.md)
+  than renaming tests to match a pattern. Third direction, the AC TEXT rather than the pointer: a
+  `SHALL CONTINUE TO` bullet is what SANCTIONS a file green, so an AC saying CONTINUE TO over a
+  measurement the pre-image contradicts classifies its own file green-expected and hard-stops at
+  `broken-pin` — the opposite refusal, same authoring error. It hides best where the measurement is
+  indirect (a computed style, a derived count): the spec's own Decision exists to FIX the thing, and
+  the AC still describes the fixed state as a continuation. Fix the verb, never the measurement —
+  and where the file must also survive close-time expiry, split the clauses that already hold into
+  their own CONTINUE-TO AC on the same file rather than keeping a false one.
+  (specs/20260822/02-init-generation-script.md; specs/20260907/10-client-review.md D15;
+  specs/20260912/03-run-isolates-and-owns-the-stages.md;
+  specs/20260912/06-the-review-page-answers-to-a-design.md D9a)
 - `[host]` A spec Decision naming a literal version-bump target can be stale by build time —
   concurrent sessions in this repo race the same semver. The build bumps to the next free
   version and records the deviation; the spec's literal number is a target, not a pin. Same class,
@@ -198,7 +207,8 @@ upstream bug list. -->
   hand, seeding the run in the same edit so the next bump can use the script.
   (specs/20260810/02-terminal-observable-acs.md D11; specs/20260901/08-corpus-derivation-and-kill-match.md D10;
   specs/20260907/08-walk-critic.md D11; specs/20260909/08-next-carries-the-lanes.md D6;
-  specs/20260912/03-run-isolates-and-owns-the-stages.md D17)
+  specs/20260912/03-run-isolates-and-owns-the-stages.md D17;
+  specs/20260912/06-the-review-page-answers-to-a-design.md D7)
 - `[host]` A locked Decision that retires or narrows a literal glyph, phrase, or claim from
   doctrine prose can leave a live assertion of the retired form **outside** the spec's File
   Plan — in test files (dense regex pins) or the doctrine corpus itself (paraphrased or
@@ -283,6 +293,15 @@ upstream bug list. -->
   when this one built — so the collision arrived undefended and reddened 16 tests across eight
   files. A deferral to a sibling is only real when the sibling's row is read and shown to write
   the exact state the refusal checks; otherwise price it as unclosed and enter the fix rows here.
+  Tenth trigger, the one where the collision is INSIDE one spec: a `zero occurrences of <literal>`
+  retirement sweep is a bare substring by default, so it also bans every name that merely starts the
+  same way — including a class the SAME spec's other Decision adds (`.rv-scope` banned,
+  `.rv-scopeband` required). Two Decisions can be self-contradictory at lock and no leg sees it,
+  because each is individually satisfiable. Fix the AC's boundary (`/\.rv-scope(?![\w-])/`), never
+  the code: the wave's first instinct — selecting the element by `[class="exact-value"]` so the
+  banned substring never appears — was rejected, since an exact-attribute selector breaks the moment
+  the element gains a second class and makes a grep pin's spelling a live rendering constraint. At
+  lock, run every ban literal's real regex against the spec's OWN new names, not just the pre-image.
   (specs/20260813/07-command-report-conformance.md D8; specs/20260813/09-model-placement-mechanics.md D4;
   specs/20260814/01-ac-matrix-script.md; specs/20260907/09-atlas-index-and-note-navigation.md;
   specs/20260907/07-mocks-retires-theme.md D12; specs/20260907/08-walk-critic.md D2/D6;
@@ -308,8 +327,13 @@ upstream bug list. -->
   enshrining it, every leg green. At lock, read each multi-clause Decision against its cited ACs
   clause by clause, and diff the Contracts block against the Decision it illustrates — an example
   that contradicts its Decision is a defect in the example, never a licence to change the Decision.
+  The cheapest instance of the same class is an AC's own WORKED PARENTHETICAL being arithmetically
+  wrong about the fixture two lines above it (`2 open items` where the fixture's own predicate counts
+  three, because an addressed item still counts as open). A worker either enshrines the wrong number
+  or pins the true one and leaves the spec lying; do the arithmetic on every worked example at lock.
   (specs/20260814/04-lock-signal-window.md; specs/20260815/03-ac-matrix-fail-closed.md;
-  specs/20260910/05-what-the-journey-does-not-do.md D1/D3)
+  specs/20260910/05-what-the-journey-does-not-do.md D1/D3;
+  specs/20260912/06-the-review-page-answers-to-a-design.md AC-2)
 - `[plugin]` A test worker editing a File Plan row that carries **no AC** still reaches for the
   spec template's AC-ID shape and writes the literal placeholder (`AC-<date>-NN-N`) into the
   test name and assert message. The token is not a valid AC-ID under `ac-matrix.js`'s grammar,
@@ -416,8 +440,12 @@ upstream bug list. -->
   stale `require` cache served pre-fix markup and nearly banked a false verdict. Where markup and
   stylesheet have different owners, check the seam explicitly: two defects here were a CSS rule and a
   script each believing it owned one element's visibility.
+  Related, and invisible at the default width: RAISING a selector's specificity to win one cascade
+  fight strands every narrower-breakpoint override of that same selector, which was written to win by
+  source order alone. Re-prefix the media-query rules in the same edit, or the defect reappears one
+  viewport down where nobody renders.
   (specs/20260910/03-client-journey-player.md; specs/20260911/01-the-page-waits-for-the-server.md;
-  specs/20260911/04-the-client-loop.md)
+  specs/20260911/04-the-client-loop.md; specs/20260912/06-the-review-page-answers-to-a-design.md D9)
 - `[plugin]` `tests/helpers.js`'s `runNode` is `spawnSync`, which blocks the parent Node event
   loop for the child's whole lifetime — so a test that stands up an **in-process**
   `http.createServer` stub and then `runNode`s the script under test against it can never

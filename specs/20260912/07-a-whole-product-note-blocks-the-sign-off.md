@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: implementing
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -52,7 +52,7 @@ decision this overturns carries an amendment record.
 | spec/scripts/mocks-driver.js | MODIFY | scripts | D4 `requireProjectNotesResolved` split out, called from `handleApproved` only |
 | spec/templates/mocks/viewer.css | MODIFY | scripts | D3 `.rv-projwait` styled on the muted/warn register, no new token |
 | design/chrome-mocks/review.html | MODIFY | doctrine | D6 the approve block carries the D3 line |
-| docs/adr/0019-a-whole-product-note-blocks-the-sign-off.md | CREATE | doctrine | D5 the amendment record, two Applies-to clauses |
+| docs/adr/0019-a-whole-product-note-blocks-the-sign-off.md | CREATE | doctrine | D5 the amendment record, three Applies-to clauses |
 | specs/20260902/10-page-notes-review-loop.md | MODIFY | doctrine | D5 one `Amended by: ADR-0019` line, no rewrite |
 | specs/20260906/04-journey-review-page.md | MODIFY | doctrine | D5 one `Amended by: ADR-0019` line, no rewrite |
 | specs/20260912/06-the-review-page-answers-to-a-design.md | MODIFY | doctrine | D5 clause (c) one `Amended by: ADR-0019` line, no rewrite |
@@ -114,7 +114,15 @@ questions, then unresolved notes, then the client-walk and gate checks.
 - **AC-20260912-07-2**: WHEN that first fixture renders THE SYSTEM SHALL emit exactly one
   `[data-rv="projwait"]` whose text is `2 whole-product notes still block sign-off`; WHEN the two
   project notes are `resolved` THE SYSTEM SHALL emit no `[data-rv="projwait"]` at all; WHEN the
-  journey also carries one open note on `a` THE SYSTEM SHALL emit none either
+  journey also carries one open note on `a` THE SYSTEM SHALL emit none either; and WHEN
+  `review.browser.js` runs under `vm` over that first markup THE SYSTEM SHALL, after `recount()`,
+  leave `[data-rv="projwait"]` shown reading `2 whole-product notes still block sign-off`, and
+  SHALL hide it once both project rows are marked resolved and `recount()` runs again
+    - Amended at review: the locked bullet pinned only the served bytes, while D3's own text also
+      promises that `review.browser.js`'s `recount()` shows and hides the line on the same two
+      counters. The browser half was unpinned, so an edit could have stopped the live line updating
+      with every leg still green. The final clause adds the `vm` pin D3 already promised; nothing
+      about the served-bytes clauses changes.
   → writes tests/mocks/review-page.test.js
 - **AC-20260912-07-3**: WHEN `mocks-driver.js --mark journey-approved --journey j1` runs on a
   fixture whose `j1` screens carry no unresolved note and whose store carries one open project note
@@ -172,6 +180,15 @@ ever mentioned it — trading one bad surprise for a worse one.
 **Why the mock is edited in the same spec.** This is the first change to a surface that now binds to
 a design artifact. Landing the element without updating the artifact would prove the binding
 decorative on the very first use.
+
+**Why the mock's fixture was restated, not just appended to (folded from the build's deviations).**
+D6 asks only that the approve block gain the D3 line, but that line renders only when this journey's
+own screens are clean, and the file's fixture carried two open screen-scoped notes. Showing the
+disabled state and the new line at once is not a state the page can reach. So `n1` and `n2` were
+resolved and the rail counts, board badges, open-count and progress text moved with them, while the
+project-scope `n3` stayed open with its `Looks good` / `Still not right` controls — the literals
+AC-20260912-06-7 pins. No test pins this file's bytes, and the served rendering is pinned
+independently by AC-20260912-07-2.
 
 ## Canonical Delta
 

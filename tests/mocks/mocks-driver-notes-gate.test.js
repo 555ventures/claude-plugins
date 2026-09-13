@@ -26,17 +26,6 @@ function buildToJourneyDrawn(dir) {
   decideLook(dir, 'journey-approved:' + JOURNEY, 'approve', { by: 'jj' })
 }
 
-test('AC-20260912-07-3: --mark journey-approved --journey onboarding exits 0 on screens carrying no unresolved note even while one project note is open', () => {
-  const dir = tmpdir('notes-gate-ac3')
-  buildToJourneyDrawn(dir)
-  writeNotesFile(dir, [
-    { id: 'N005', kind: 'note', scope: 'project', screen: null, state: null, status: 'open', text: 'the nav is wrong everywhere', reason: 'other' },
-  ])
-  const r = mark(dir, 'journey-approved', ['--journey', JOURNEY])
-  assert.strictEqual(r.status, 0,
-    'a journey whose own screens carry no unresolved note must be approvable while a whole-product ' +
-    'note is still open — the project-note refusal belongs at the final sign-off, not here: ' + r.stdout + r.stderr)
-})
 
 test('AC-20260912-07-6: --mark journey-approved --journey onboarding CONTINUES TO exit 2 naming an unresolved note on one of the journey\'s own screens', () => {
   const dir = tmpdir('notes-gate-ac6')

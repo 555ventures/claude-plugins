@@ -386,8 +386,10 @@ reads to know where a click went.
 The journey look surface is the review page `/review/<j>.html` (specs/20260906/04): screens rail ·
 artboards with state tabs (`?state=<s>` on the served mock) · question inspector answered in place
 with `J K Y N Esc \`; `stop open journey:<j>` points there; the approve control mirrors the on-disk
-gate (disabled while any question or note is open). Plugin chrome — atlas, review page, galleries,
-notes layer — is authored under the frontend-design skill in the shadcn idiom on `viewer.css`'s
+gate: a journey's approval is blocked by open questions and notes **on that journey's screens**, and
+a whole-product note blocks the final `approved` sign-off instead of every journey (ADR-0019); when
+a journey is clean and product-wide notes remain, the page says how many still block sign-off.
+Plugin chrome — atlas, review page, galleries, notes layer — is authored under the frontend-design skill in the shadcn idiom on `viewer.css`'s
 register (design.md § Design Canon), never on product tokens.
 
 The atlas renders one frame per screen, with the declared state count in the card's meta line

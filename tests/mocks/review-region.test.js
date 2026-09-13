@@ -234,7 +234,12 @@ test('AC-20260912-12-4: the board\'s visible frame paints .nl-region[data-id=N1]
     const url = 'http://127.0.0.1:' + port + '/review/j1.html'
     const result = await withChrome(chrome, async ({ navigate, evalJs }) => {
       await navigate(url)
-      const painted = await evalJs(
+      // The board's frame loads its own document, fetches the notes and resolves each anchor
+      // asynchronously, so "is it painted" is only meaningful once that work has had a chance to
+      // run. Poll for a bounded window rather than sampling once: a single sample makes this
+      // assertion a race against machine load, and a reveal-on-demand regression still fails it
+      // because no click happens anywhere in this loop.
+      const PAINT_PROBE =
         OVERLAY_SHADOW_JS +
         '(function () {' +
         'var board = document.querySelector(\'[data-rv="board"][data-label="a"]\');' +
@@ -244,7 +249,13 @@ test('AC-20260912-12-4: the board\'s visible frame paints .nl-region[data-id=N1]
         'if (!shadow) return { error: "no overlay shadow root in the frame" };' +
         'var box = shadow.querySelector(\'.nl-region[data-id="N1"]\');' +
         'return { paintedBeforeClick: !!box };' +
-        '})()')
+        '})()'
+      let painted = null
+      for (let i = 0; i < 20; i++) {
+        painted = await evalJs(PAINT_PROBE)
+        if (painted && painted.paintedBeforeClick) break
+        await new Promise((r) => setTimeout(r, 250))
+      }
       if (painted && painted.error) return painted
       const clicked = await evalJs(
         '(function () {' +

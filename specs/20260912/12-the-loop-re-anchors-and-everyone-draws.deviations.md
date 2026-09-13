@@ -71,3 +71,13 @@
   as D10 requires. Left the test untouched (not this worker's file to edit) and reported the
   defect rather than papering over it; AC-15 remains red on this one assertion until a
   tests-layer fix renames one of the two colliding keys.
+- AC-20260912-12-4's "painted before any click" probe sampled the board frame ONCE, immediately
+  after `navigate` returned. The frame loads its own document, fetches notes and resolves each
+  anchor asynchronously, so that single sample raced machine load: green on three local runs and
+  on the whole-suite run, red once under the review stage's own scoped gate
+  (`paintedBeforeClick:false` while `rowSelected`/`boardFocused`/`boxClass:"nl-region sel"` were
+  all correct — the behaviour was right, the sample was early). Replaced the single sample with a
+  bounded poll (20 × 250ms). The assertion is unchanged and NOT weakened: no click occurs anywhere
+  in the poll, so a reveal-on-demand regression still fails it; only the "has the async paint had a
+  chance to run" race is removed. Re-run three times in isolation plus the full scoped gate, green
+  each time.

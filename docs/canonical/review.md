@@ -200,6 +200,22 @@
   `diff_base` the review driver stamps into the spec frontmatter at every `status: done` flip.
   A spec closed before stamping existed, whose base no longer validates, is refused (exit 4)
   rather than measured against a distorted diff.
+  A review records the two commits bounding what it judged as refs under
+  `refs/spec-review/<runId>/` — `judged` at the close row's own head sha, `close` at the close
+  commit — written best-effort so a failed write can never block a close, and named for the
+  review rather than the harness so their presence signals nothing to a blind reviewer. The
+  replay harness reads that pair and derives neither: a commit identified by "the newest commit
+  touching the spec file" is a different commit as soon as anything else touches that file, and
+  a close commit found by walking descendants is unfindable once a rebasing merge-back has
+  orphaned the judged commit. A row missing either ref is refused, never partially measured, and
+  `replay.js --backfill-pins` is the one place the history walk survives — a run-once
+  reconstruction for reviews that closed before the refs existed. Because the pair need not
+  share a line of descent, `--setup`'s overlay guard refuses only an `--overlay` equal to or an
+  ancestor of `--commit`. `--setup` re-derives the target's own AC coverage against the tree it
+  assembled and refuses (exit 5) rather than printing a success line when the reassembly does
+  not hold; that refusal records `setup-failed` with a `pristine-red:ac-matrix` claim, so the
+  window stays due and the target leaves the candidate pool.
+  (specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md)
   Replay attributes red legs against the originating review's own recorded baseline
   (`--select` emits `baselineRed`/`baselineLegs` from the selected row; zero extra leg runs).
   Only newly-red legs trigger the authoring retry and `leg-caught`; reconcile is

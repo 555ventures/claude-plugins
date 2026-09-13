@@ -1,6 +1,6 @@
 ---
 date: 2026-09-13
-status: implementing
+status: done
 tier: standard
 area: replay
 design: false
@@ -53,6 +53,7 @@ check ends the setup with a diagnosis instead of a success line.
 | tests/review/review-driver-close-row.test.js | MODIFY | tests | AC-20260913-01-1, AC-20260913-01-2 |
 | tests/replay/replay-tree-identity.test.js | CREATE | tests | AC-20260913-01-4, AC-20260913-01-5, AC-20260913-01-6, AC-20260913-01-7, AC-20260913-01-9 |
 | tests/replay/replay.test.js | MODIFY | tests | AC-20260913-01-3, AC-20260913-01-8, AC-20260913-01-10, AC-20260913-01-11; plus fixture repair for the three `--setup --spec` tests whose synthetic hosts must now carry a coverable spec |
+| tests/review/review-driver-replay-record.test.js | MODIFY | tests | Fixture repair only, no AC: D1's `judged` ref makes the amend-based unresolvable-target trick resolvable, so the "due but no usable CLEAN target" fixture is rebuilt on D3's real missing-pair refusal; assertions unchanged |
 
 ## Contracts
 
@@ -285,6 +286,19 @@ replay.js's live output; `tests/replay/replay.fixtures.js`'s `pristine-red` hit 
 `writeRecordFixture`, on the `--record` path this spec does not touch; and
 `docs/canonical/review.md` is this spec's own Canonical Delta target, applied by the review stage
 at close and never a File Plan row.
+
+Deviations folded at close (2026-09-13), both the same shape — D2's deleted fallback and D1's
+new refs each stranded fixtures that predate the ref scheme, in files outside the File Plan.
+Eight `tests/replay/replay.test.js` cases hand-built ledger rows without ever writing the refs a
+real review now writes, so each hit the new exit-4 refusal; the repair gave every one of them the
+same `writeReviewRefs()` call the AC-20260913-01-3 test introduces, so each fixture rehearses what
+a real review does. One further case, `tests/review/review-driver-replay-record.test.js`'s
+AC-20260821-02-3, manufactured an unresolvable `--select` target by amending the close flip so the
+old parent-hop landed nowhere — a trick D1's ref defeats by design, since keeping an orphaned
+commit resolvable is the point. Its fixture was rebuilt on D3's real missing-pair refusal with the
+assertions untouched, and the file entered the File Plan as a no-AC fixture-repair row at the
+review's own direction. Assumption A5's count held exactly; no guard was weakened and no
+compatibility shim was added on the script side.
 
 Deliberately NOT in scope: re-auditing past `caught`/`missed` rows. A probe suggested many
 historical targets would resolve differently if replayed today, but that measures today's

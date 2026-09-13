@@ -534,15 +534,69 @@ test('AC-20260911-01-1: cited by a test whose only owner is readable and done', 
   }
 })
 
-test('AC-20260911-03-9: WHEN expire-tests.js --root . --all-done --json runs over this repository at HEAD THE SYSTEM reports retired:[] and applied:false', () => {
+// specs/20260912/15-the-close-stops-deleting-tests.md D1/D2: close no longer applies this
+// script's retirement — it only classifies and reports. That means every close from now on
+// deliberately LEAVES retirable tests behind until someone runs the `--all-done --apply` sweep,
+// so asserting `retired: []` at HEAD pins a state only a just-run sweep can produce and goes red
+// after every close that reports something retirable (as this spec's own close does, for the
+// three AC-20260912-15-7/-8 tests in tests/consistency/contract-stamp.test.js — correct behavior,
+// not drift). The rule itself is still worth pinning: every entry this script proposes to retire
+// must be legitimately retirable, i.e. every AC-ID it cites resolves to a spec whose frontmatter
+// status is `done` or `superseded` (allCitedDone's own contract). A test owned by a spec that is
+// still open must never appear in `retired` — that is the one drift this script must never commit.
+function specStatus(specRel) {
+  const text = fs.readFileSync(path.join(ROOT, specRel), 'utf8')
+  const fm = /^---\n([\s\S]*?)\n---/.exec(text)
+  if (!fm) return null
+  const m = /^status:\s*(\S+)/m.exec(fm[1])
+  return m ? m[1] : null
+}
+
+function ownerSpecsFor(acId) {
+  const specsDir = path.join(ROOT, 'specs')
+  const owners = []
+  const walk = (dir) => {
+    for (const name of fs.readdirSync(dir)) {
+      const full = path.join(dir, name)
+      if (fs.statSync(full).isDirectory()) walk(full)
+      else if (name.endsWith('.md')) {
+        const rel = path.relative(ROOT, full).split(path.sep).join('/')
+        const text = fs.readFileSync(full, 'utf8')
+        if (text.includes(acId)) owners.push(rel)
+      }
+    }
+  }
+  walk(specsDir)
+  return owners
+}
+
+test('AC-20260911-03-9: WHEN expire-tests.js --root . --all-done --json runs over this repository at HEAD THE SYSTEM reports applied:false and every retirable entry cites only AC-IDs owned by a done or superseded spec', () => {
   const r = runNode('scripts/expire-tests.js', ['--root', '.', '--all-done', '--json'], { cwd: ROOT, encoding: 'utf8' })
   assert.strictEqual(r.status, 0,
     'the live all-done dry run must succeed at HEAD, or /spec:doctor check 19 can never report a clean ' +
     'baseline: ' + r.stdout + r.stderr)
   const out = JSON.parse(r.stdout)
-  assert.deepStrictEqual(out.retired, [],
-    'D9/A2: the 2026-09-11 hand sweep already retired everything this rule would catch at HEAD — a non-empty ' +
-    'result here is a rule drift against the live repository, not a fixture concern: ' + JSON.stringify(out.retired))
   assert.strictEqual(out.applied, false,
     'a dry run (no --apply) must never report applied:true: ' + JSON.stringify(out))
+  // specs/20260912/15 D1/D2: close-time classification no longer deletes, so a non-empty
+  // `retired` here is the expected steady state between closes, not a rule drift — the drift
+  // this test guards against is this script proposing to retire a test that still belongs to a
+  // live (not done/superseded) spec.
+  for (const entry of out.retired) {
+    for (const acId of entry.acIds) {
+      const owners = ownerSpecsFor(acId)
+      assert.ok(owners.length > 0,
+        'expire-tests.js reported ' + entry.file + ' (' + entry.title + ') as retirable citing ' +
+        acId + ', but no spec under specs/ defines that AC-ID — a test can only be retirable if ' +
+        'its citation resolves to a real, closed owner: ' + JSON.stringify(entry))
+      for (const specRel of owners) {
+        const status = specStatus(specRel)
+        assert.ok(status === 'done' || status === 'superseded',
+          'expire-tests.js reported ' + entry.file + ' (' + entry.title + ') as retirable citing ' +
+          acId + ', owned by ' + specRel + ' whose frontmatter status is ' + JSON.stringify(status) +
+          ' — retiring a test whose owner is still open is the exact drift this pin exists to catch: ' +
+          JSON.stringify(entry))
+      }
+    }
+  }
 })

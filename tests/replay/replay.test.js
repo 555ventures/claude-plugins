@@ -3845,3 +3845,72 @@ test('direct fix: --pick-class skips the ids in spec.config.json replay.inapplic
   assert.strictEqual(all.status, 2, 'ruling out every class must refuse with exit 2: ' + all.stdout)
   assert.match(all.stderr, /every corpus class is listed .* nothing is left to pick/, all.stderr)
 })
+
+// Second recorded occurrence (rp_f4b4bac6fc38 and rp_270a62f331fb, both pristine-red:ac-matrix on
+// specs/20260912/04-softs-get-a-reader.md): a spec whose close-time expiry sweep deleted a test its
+// own ac-matrix leg counted as coverage can never be rebuilt into the state its CLEAN review
+// judged. The resulting setup-failed row is not a measurement, so it never advances the D5 window —
+// and --select, reading only the window, re-picked the same dead target on every run, burning a
+// full setup cycle each time and leaving the harness due forever. --select now skips any candidate
+// review run a pristine-red setup-failed row already names.
+test('--select skips a candidate review run already named by a pristine-red setup-failed replay row, selecting the next eligible target instead of re-picking the unreproducible one forever', () => {
+  const root = fs.realpathSync(tmpdir('replay-select-skips-unreproducible'))
+  gitRepo(root)
+  const ancestor = commitReal(root, 'lib/pre.js', 'a\n', 'pre')
+  commitSpecFlow(root, 'specs/a.md',
+    `---\ndiff_base: ${ancestor}\n---\n# a\n`,
+    `---\ndiff_base: ${ancestor}\nstatus: done\n---\n# a\n`)
+  // b closes LAST, so read-order tie-break would pick it if it were still eligible — the skip is
+  // what makes a.md win, never the ordering.
+  commitSpecFlow(root, 'specs/b.md',
+    `---\ndiff_base: ${ancestor}\n---\n# b\n`,
+    `---\ndiff_base: ${ancestor}\nstatus: done\n---\n# b\n`)
+  writeLedger(root, [
+    {
+      ts: '2026-09-10T00:00:00Z', stage: 'review', spec: 'specs/a.md', runId: 'rv_aaaaaaaaaaaa',
+      verdict: 'CLEAN', tier: 'standard', legs: [{ leg: 'ci', exit: 0 }],
+    },
+    {
+      ts: '2026-09-11T00:00:00Z', stage: 'review', spec: 'specs/b.md', runId: 'rv_bbbbbbbbbbbb',
+      verdict: 'CLEAN', tier: 'standard', legs: [{ leg: 'ci', exit: 0 }],
+    },
+    {
+      ts: '2026-09-12T00:00:00Z', stage: 'replay', spec: 'specs/b.md', runId: 'rp_111111111111',
+      reviewRunId: 'rv_bbbbbbbbbbbb', class: null, legs: 'pristine-red:ac-matrix',
+      outcome: 'setup-failed', tokens: 0, via: 'driver',
+    },
+  ])
+  const r = runNode(SCRIPT, ['--select'], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    'a live, reproducible candidate remains in the window, so --select must still print a selection: ' + r.stderr)
+  assert.match(r.stdout, /^spec=specs\/a\.md reviewRunId=rv_aaaaaaaaaaaa /,
+    'the target already declared unreproducible (rv_bbbbbbbbbbbb) must be skipped in favour of the next ' +
+    'eligible row — re-picking it burns a full --setup cycle and records another setup-failed, which itself ' +
+    'never advances the window, so the harness stays due on the same dead target forever: ' + r.stdout)
+})
+
+test('--select refuses with its own named exit-1 message, not the generic no-eligible-row one, when every candidate in the window already has a pristine-red setup-failed row', () => {
+  const root = fs.realpathSync(tmpdir('replay-select-all-unreproducible'))
+  gitRepo(root)
+  const ancestor = commitReal(root, 'lib/pre.js', 'a\n', 'pre')
+  commitSpecFlow(root, 'specs/a.md',
+    `---\ndiff_base: ${ancestor}\n---\n# a\n`,
+    `---\ndiff_base: ${ancestor}\nstatus: done\n---\n# a\n`)
+  writeLedger(root, [
+    {
+      ts: '2026-09-10T00:00:00Z', stage: 'review', spec: 'specs/a.md', runId: 'rv_aaaaaaaaaaaa',
+      verdict: 'CLEAN', tier: 'standard', legs: [{ leg: 'ci', exit: 0 }],
+    },
+    {
+      ts: '2026-09-12T00:00:00Z', stage: 'replay', spec: 'specs/a.md', runId: 'rp_111111111111',
+      reviewRunId: 'rv_aaaaaaaaaaaa', class: null, legs: 'pristine-red:ac-matrix',
+      outcome: 'setup-failed', tokens: 0, via: 'driver',
+    },
+  ])
+  const r = runNode(SCRIPT, ['--select'], { cwd: root })
+  assert.strictEqual(r.status, 1, 'nothing selectable remains, so --select must exit 1: ' + r.stdout)
+  assert.match(r.stderr, /rv_aaaaaaaaaaaa.*already/s,
+    'the refusal must NAME the skipped run and its cause — the generic "no eligible CLEAN review row" text ' +
+    'would send the reader looking for a missing review that is actually present and merely unreproducible: ' +
+    r.stderr)
+})

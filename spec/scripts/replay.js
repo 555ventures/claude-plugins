@@ -70,6 +70,13 @@
 // nothing qualifying is a named exit-4 refusal (stale-base cause + the stamped-at-close remedy,
 // spec-review-driver.js's diff_base stamp) rather than a silently wrong diff base.
 //
+// --select also SKIPS any candidate review run already named by a setup-failed replay row whose
+// --legs is `pristine-red:*` — a standing claim that the target's tree cannot be rebuilt into the
+// state its CLEAN review judged (a close-time expiry sweep deleting a test the review's coverage
+// leg counted is the recorded cause). Such rows are not measurements, so they never advance the D5
+// window; without the skip the same dead target is re-picked forever, each cycle burning a full
+// setup and recording another setup-failed. All candidates dead is its own named exit-1 message.
+//
 // specs/20260823/09-replay-baseline-attribution.md: ~1 in 4 selectable CLEAN rows closes with a
 // leg legitimately red for pre-existing, sanctioned reasons unrelated to the planted defect, so
 // (D1) --select derives a baseline straight from the selected review row's OWN `legs` array (zero
@@ -380,6 +387,21 @@ function reviewRowFor(rows, runId) {
   return matches.length ? matches[matches.length - 1] : null
 }
 
+// A replay row that recorded `pristine-red:<leg>` with outcome setup-failed is a standing claim
+// that the target's tree CANNOT be rebuilt into the state its CLEAN review judged (typically the
+// close-time expiry sweep deleted a test the review's own coverage leg counted). Such a row is not
+// a measurement, so it never advances the D5 window — without this filter --select re-picks the
+// same dead target on every run, burning a full setup cycle and recording setup-failed forever.
+function isUnreproducibleClaim(r) {
+  return r.stage === 'replay' && r.outcome === 'setup-failed' &&
+    typeof r.legs === 'string' && r.legs.startsWith('pristine-red:')
+}
+
+// The review run ids every such claim names — candidates --select must skip, whatever the window.
+function unreproducibleRunIds(rows) {
+  return new Set(rows.filter(isUnreproducibleClaim).map((r) => r.reviewRunId).filter(Boolean))
+}
+
 function cmdSelect() {
   const rows = readLedgerRows(root)
   let lastReplayIdx = -1
@@ -388,11 +410,22 @@ function cmdSelect() {
   // rather than restating "verdict === 'CLEAN'" here as a second, driftable copy of the rule.
   const runIdsInWindow = new Set()
   rows.forEach((r, i) => { if (i > lastReplayIdx && r.stage === 'review' && r.runId) runIdsInWindow.add(r.runId) })
-  const candidates = [...runIdsInWindow]
+  const dead = unreproducibleRunIds(rows)
+  const inWindow = [...runIdsInWindow]
     .map((runId) => reviewRowFor(rows, runId))
     .filter((r) => r && rows.indexOf(r) > lastReplayIdx)
+  const candidates = inWindow
+    .filter((r) => !dead.has(r.runId))
     .map((r) => ({ r, i: rows.indexOf(r) }))
   if (!candidates.length) {
+    const skipped = inWindow.filter((r) => dead.has(r.runId)).map((r) => r.runId)
+    if (skipped.length) {
+      console.error(`replay.js: every eligible CLEAN review row in the window (${skipped.join(', ')}) already ` +
+        'has a setup-failed replay row claiming pristine-red — their trees cannot be rebuilt into the state ' +
+        'the review judged, so replaying them would measure nothing; wait for the next review to close, or ' +
+        'pass --spec/--commit by hand to replay a target you know is reproducible')
+      process.exit(1)
+    }
     console.error('replay.js: no eligible CLEAN review row with a runId found in the window since the ' +
       'last measurement replay row — run /spec:run first, or check replay.js --due to confirm one is expected')
     process.exit(1)

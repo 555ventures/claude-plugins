@@ -312,7 +312,7 @@ test('AC-20260912-13-5: WHEN the host testCommand stays red both with the retire
     'left deleted, since the driver never leaves an interrupted mark holding a mutation it did not commit')
 })
 
-test('a close-time gate that goes red when expiry retired nothing carries no expiry note', () => {
+test('AC-20260912-13-7: WHEN the resolved host gate exits non-zero over the committed close tree THE SYSTEM SHALL CONTINUE TO refuse --mark closed with exit 2 and "gate red at close", SHALL CONTINUE TO leave the driver state at CLOSE, and SHALL CONTINUE TO print no expiry note when the close retired nothing', () => {
   const host = makeExpiryHost('rvdrv-expiry-gate-red-keep', { onlyPin: true })
   toReviewer(host)
   const r = run(host.root, host.spec, '--mark', 'reviewer-returned',
@@ -329,8 +329,13 @@ test('a close-time gate that goes red when expiry retired nothing carries no exp
   execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'close'], { encoding: 'utf8' })
 
   const closed = run(host.root, host.spec, '--mark', 'closed')
-  assert.strictEqual(closed.status, 2, 'setup precondition: the red gate must refuse the mark: ' + closed.stderr)
-  assert.doesNotMatch(closed.stderr, /CLOSE deleted/,
-    'a close that retired nothing must print no expiry note — an unconditional note would send every ordinary ' +
-    'red gate hunting a deletion that never happened: ' + closed.stderr)
+  assert.strictEqual(closed.status, 2, 'AC-20260912-13-7: a red gate over the committed close tree must refuse the mark: ' + closed.stderr)
+  assert.match(closed.stderr, /gate red at close/,
+    'AC-20260912-13-7: the refusal must carry its own literal anchor so a session can tell this apart from the ' +
+    'suite-red refusal: ' + closed.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
+    'AC-20260912-13-7: a refused closed mark must leave the driver state at CLOSE: ' + closed.stdout + closed.stderr)
+  assert.doesNotMatch(closed.stdout + closed.stderr, /⚠ expiry skipped/,
+    'AC-20260912-13-7: a close that retired nothing must print no expiry note — an unconditional note would send ' +
+    'every ordinary red gate hunting a deletion that never happened: ' + closed.stdout + closed.stderr)
 })

@@ -37,16 +37,27 @@ The standing rules:
   verdict, the ledger row, or mark acceptance. `/spec:doctor` check 17 is the same derivation's
   authoritative, browsable form; review's line only surfaces it at the moment new drift is
   created. (specs/20260907/01-mixed-pin-guard-and-drift-line.md D6)
-- **Tests expire at close.** The driver's close work runs `expire-tests.js --spec <spec> --apply`
+- **Tests expire at close.** The driver's close work runs `expire-tests.js --spec <spec>`
   after the authoritative verdict and before the ledger append: every test tagged with the
-  closing spec's AC-IDs is deleted unless its call text cites a ledger escape class, its file
+  closing spec's AC-IDs is retired unless its call text cites a ledger escape class, its file
   names a script in the derived invariants set (`lib/invariants.js`: the transitive closure of
   scripts reachable from the host's config commands, hook commands and the pipeline's four
   entrypoints), a cited AC is a `SHALL CONTINUE TO` pin in a spec dated on or after 20260911, or
   a cited AC belongs to a spec that is not done. An AC-ID defined by more than one spec counts as
   done only when every spec defining it is done — the fail-safe holds through a number collision.
-  Untagged tests are never touched. The review row records `tests:{born,kept,retired}`; the CLOSE
-  step prints one 🧹 line when anything was retired; the deletions ride the close commit that
-  `--mark closed`'s gate re-run certifies. A failing expiry refuses the close. `/spec:doctor`
-  check 20 runs the same rule as a dry run over every done spec and applies it only after one
-  question naming what it will delete.
+  Untagged tests are never touched. That close-time run is a **dry run** — it reports what will be
+  retired and which files that will empty, and writes nothing. The review row records
+  `tests:{born,kept,retired}` from it and the CLOSE step prints one 🧹 line when anything was
+  retired, naming the separate commit the deletions will arrive in. A failing or unparseable
+  classification refuses the close. The deletion itself happens inside `--mark closed`, after the
+  host gate has certified the committed close tree with the tests still present: the driver applies
+  the sweep, re-runs the host's whole suite over the result, and on green stages exactly the retired
+  and emptied paths and commits them as `chore(tests): expire <n> tests closed with <spec>`. That
+  second commit touches nothing under `specs/`, so `git log -1 -- <spec>` still resolves the close
+  commit and the replay harness rebuilds the tree the review actually judged. On red the driver
+  restores the deleted paths and re-runs the suite once more: green with them restored means the
+  deletion was the cause, so the close completes without its expiry and prints a warning naming the
+  count, the grounding contract's § Test expiry obligation and the `--all-done --apply` sweep; still
+  red means the close tree itself is broken and the mark refuses as before. A close that retires
+  nothing makes no commit. `/spec:doctor` check 20 runs the same rule as a dry run over every done
+  spec and applies it only after one question naming what it will delete.

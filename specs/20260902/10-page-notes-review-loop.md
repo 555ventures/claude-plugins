@@ -19,6 +19,10 @@ Amended by: ADR-0019 (specs/20260912/07-a-whole-product-note-blocks-the-sign-off
 project-note clause — `approved` refuses while any project note is not `resolved`, no longer
 `journey-approved` — see the ADR's Applies to)
 
+Amended by: docs/adr/0020-a-note-can-mark-an-area.md (specs/20260912/11-a-note-can-mark-an-area.md
+narrows D3's rationale and the Rationale section's element-anchor rejection — a mock-scope note
+may now carry an optional `region` marking part of a screen — see the ADR's Applies to)
+
 ## Goal
 
 Feedback is written on the served pages and stored beside the mocks, never in chat and never

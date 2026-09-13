@@ -68,26 +68,26 @@ body{margin:0;background:var(--v-muted-bg);color:var(--v-fg);font:15px/1.5 var(-
 .nl-overlay{position:absolute;inset:0;z-index:25;pointer-events:none;overflow:hidden;border-radius:12px}
 .device.marking .nl-overlay{pointer-events:auto;cursor:crosshair}
 .device.marking .nl-overlay::before{content:"";position:absolute;inset:0;background:rgba(10,10,10,.06)}
-.nl-box{position:absolute;border:1.5px solid var(--c);background:color-mix(in srgb,var(--c) 6%,transparent);border-radius:6px;pointer-events:auto;cursor:pointer;transition:opacity .15s,box-shadow .15s,left .25s,top .25s,width .25s,height .25s}
-.nl-box:hover{box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 18%,transparent)}
-.nl-box.sel{background:color-mix(in srgb,var(--c) 11%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 28%,transparent)}
-.nl-overlay.has-sel .nl-box:not(.sel){opacity:.4}
-.nl-box.outdated{border-style:dashed;background:repeating-linear-gradient(-45deg,transparent 0 6px,rgba(115,115,115,.07) 6px 12px)}
-.nl-box.pulse{animation:pulse .7s ease-out 1}
+.nl-region{position:absolute;border:1.5px solid var(--c);background:color-mix(in srgb,var(--c) 6%,transparent);border-radius:6px;pointer-events:auto;cursor:pointer;transition:opacity .15s,box-shadow .15s,left .25s,top .25s,width .25s,height .25s}
+.nl-region:hover{box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 18%,transparent)}
+.nl-region.sel{background:color-mix(in srgb,var(--c) 11%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 28%,transparent)}
+.nl-overlay.has-sel .nl-region:not(.sel){opacity:.4}
+.nl-region.outdated{border-style:dashed;background:repeating-linear-gradient(-45deg,transparent 0 6px,rgba(115,115,115,.07) 6px 12px)}
+.nl-region.pulse{animation:pulse .7s ease-out 1}
 @keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--c) 50%,transparent)}100%{box-shadow:0 0 0 16px transparent}}
-.nl-badge{position:absolute;left:-1.5px;top:-11px;display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px 0 6px;border-radius:999px;background:var(--c);color:#fff;font:600 11.5px/1 var(--v-font);letter-spacing:.02em;font-variant-numeric:tabular-nums;white-space:nowrap;box-shadow:0 0 0 2px var(--v-bg),0 1px 2px rgba(0,0,0,.15)}
-.nl-badge .g{display:inline-block;width:9px;height:9px;border-radius:50%;border:1.5px solid #fff;box-sizing:border-box;font-size:0}
-.nl-badge .g.open{background:transparent}
-.nl-badge .g.addressed{background:linear-gradient(90deg,#fff 50%,transparent 50%)}
-.nl-badge .g.resolved{background:#fff}
-.nl-badge .g.outdated,.nl-badge .g.withdrawn{border-style:dashed}
-.nl-box:focus-visible{outline:2px solid var(--v-ring);outline-offset:3px}
+.nl-region-badge{position:absolute;left:-1.5px;top:-11px;display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px 0 6px;border-radius:999px;background:var(--c);color:#fff;font:600 11.5px/1 var(--v-font);letter-spacing:.02em;font-variant-numeric:tabular-nums;white-space:nowrap;box-shadow:0 0 0 2px var(--v-bg),0 1px 2px rgba(0,0,0,.15)}
+.nl-region-badge .nl-region-glyph{display:inline-block;width:9px;height:9px;border-radius:50%;border:1.5px solid #fff;box-sizing:border-box;font-size:0}
+.nl-region-badge .nl-region-glyph.open{background:transparent}
+.nl-region-badge .nl-region-glyph.addressed{background:linear-gradient(90deg,#fff 50%,transparent 50%)}
+.nl-region-badge .nl-region-glyph.resolved{background:#fff}
+.nl-region-badge .nl-region-glyph.outdated,.nl-region-badge .nl-region-glyph.withdrawn{border-style:dashed}
+.nl-region:focus-visible{outline:2px solid var(--v-ring);outline-offset:3px}
 .nl-draft{position:absolute;border:1.5px solid var(--v-primary);border-radius:6px;pointer-events:none;box-shadow:0 0 0 9999px rgba(10,10,10,.28)}
 .nl-draft .sz{position:absolute;right:0;bottom:-24px;font:500 11.5px var(--v-font);color:var(--v-primary-fg);background:var(--v-primary);padding:3px 7px;border-radius:5px;font-variant-numeric:tabular-nums}
 
 .nl-card{position:absolute;z-index:40;width:328px;background:var(--v-bg);border:1px solid var(--v-border);border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 12px 32px -8px rgba(0,0,0,.18);padding:0;display:grid;font-size:14px;overflow:visible}
 .nl-card .hd{display:flex;align-items:center;gap:8px;color:var(--v-muted);font-size:12.5px;padding:10px 12px;border-bottom:1px solid var(--v-border);background:var(--v-muted-bg);border-radius:12px 12px 0 0}
-.nl-card .hd .nl-badge{position:static;box-shadow:none}
+.nl-card .hd .nl-region-badge{position:static;box-shadow:none}
 .nl-card .chip{border:1px solid var(--v-border);background:var(--v-bg);border-radius:999px;padding:2px 9px;font-size:11.5px;color:var(--v-fg)}
 .nl-card .th{display:grid;gap:12px;max-height:240px;overflow:auto;padding:12px 14px 4px}
 .nl-card .m{display:grid;gap:3px;line-height:1.45}
@@ -121,7 +121,7 @@ body{margin:0;background:var(--v-muted-bg);color:var(--v-fg);font:15px/1.5 var(-
 .nl-seg button[aria-pressed="true"]{background:var(--v-bg);color:var(--v-fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .nl-strip .n{display:flex;gap:12px;align-items:flex-start;padding:10px 8px;margin:0 -8px;border-radius:8px;cursor:pointer;transition:background .12s}
 .nl-strip .n:hover{background:var(--v-muted-bg)}
-.nl-strip .n .nl-badge{position:static;box-shadow:none;margin-top:1px}
+.nl-strip .n .nl-region-badge{position:static;box-shadow:none;margin-top:1px}
 .nl-strip .n .t{flex:1;max-width:80ch;line-height:1.45}
 .nl-strip .n small{display:block;color:var(--v-muted);font-size:12.5px;margin-top:2px}
 .nl-strip .n.dim .t{color:var(--v-muted)}
@@ -132,7 +132,7 @@ body{margin:0;background:var(--v-muted-bg);color:var(--v-fg);font:15px/1.5 var(-
 .nl-toast button{border:0;background:rgba(255,255,255,.14);color:inherit;font:600 12.5px var(--v-font);cursor:pointer;padding:5px 9px;border-radius:6px}
 .nl-toast button:hover{background:rgba(255,255,255,.24)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-@media (prefers-reduced-motion:reduce){.nl-box.pulse{animation:none}.device{transition:none}}
+@media (prefers-reduced-motion:reduce){.nl-region.pulse{animation:none}.device{transition:none}}
 </style>
 
 <div class="harness">
@@ -304,7 +304,7 @@ overlay.addEventListener('pointercancel', () => { clearTimeout(pressTimer); canc
 function cancelDraft() { draft = null; if (draftEl) draftEl.remove(); draftEl = null }
 
 function visible(n) { return n.state === activeState && n.status !== 'withdrawn' && (showResolved || n.status !== 'resolved') }
-function badge(status, id) { return '<span class="nl-badge" style="--c:' + STATUS_COLOR[status] + '"><span class="g ' + status + '"></span>' + id + '</span>' }
+function badge(status, id) { return '<span class="nl-region-badge" style="--c:' + STATUS_COLOR[status] + '"><span class="nl-region-glyph ' + status + '"></span>' + id + '</span>' }
 
 function render() {
   // bar
@@ -314,7 +314,7 @@ function render() {
   const mk = document.createElement('button'); mk.className = 'nl-btn' + (marking ? ' on' : ''); mk.textContent = marking ? 'Marking · Esc to stop' : 'Mark area'; mk.title = 'M'; mk.onclick = () => setMarking(!marking); bar.appendChild(mk)
   const sr = document.createElement('button'); sr.className = 'nl-btn ghost'; sr.textContent = showResolved ? 'Hide resolved' : 'Show resolved'; sr.onclick = () => { showResolved = !showResolved; render() }; bar.appendChild(sr)
   // overlay boxes
-  overlay.querySelectorAll('.nl-box').forEach(b => b.remove())
+  overlay.querySelectorAll('.nl-region').forEach(b => b.remove())
   overlay.classList.toggle('has-sel', !!selected)
   const base = mock.getBoundingClientRect(), off = { x: base.left - device.getBoundingClientRect().left, y: base.top - device.getBoundingClientRect().top }
   const rows = []
@@ -323,7 +323,7 @@ function render() {
     const res = Anchor.resolve(mock, n.anchor); const st = displayStatus(n, res)
     rows.push({ n, res, st })
     if (!res) return
-    const b = document.createElement('div'); b.className = 'nl-box' + (st === 'outdated' ? ' outdated' : '') + (selected === n.id ? ' sel' : ''); b.tabIndex = 0
+    const b = document.createElement('div'); b.className = 'nl-region' + (st === 'outdated' ? ' outdated' : '') + (selected === n.id ? ' sel' : ''); b.tabIndex = 0
     b.style.setProperty('--c', STATUS_COLOR[st]); Object.assign(b.style, { left: off.x + res.box.x + 'px', top: off.y + res.box.y + 'px', width: res.box.w + 'px', height: res.box.h + 'px' })
     b.style.zIndex = String(Math.round(1e6 / (res.box.w * res.box.h + 1)) + 1) // smaller on top
     b.innerHTML = badge(st, n.id); b.title = n.text || '(no text yet)' ; b.dataset.id = n.id
@@ -350,12 +350,12 @@ function render() {
   })
   if (card) positionCard()
 }
-function select(id, quiet) { selected = id; if (!quiet) render(); else overlay.querySelectorAll('.nl-box').forEach(b => b.classList.toggle('sel', b.dataset.id === id)) }
+function select(id, quiet) { selected = id; if (!quiet) render(); else overlay.querySelectorAll('.nl-region').forEach(b => b.classList.toggle('sel', b.dataset.id === id)) }
 function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])) }
 
 // ===================== card =====================
-function closeCard() { if (card) card.remove(); card = null; selected = null; overlay.classList.remove('has-sel'); overlay.querySelectorAll('.nl-box.sel').forEach(b => b.classList.remove('sel')) }
-document.addEventListener('pointerdown', e => { if (card && !card.contains(e.target) && !e.target.closest('.nl-box') && !e.target.closest('.nl-strip')) closeCard() })
+function closeCard() { if (card) card.remove(); card = null; selected = null; overlay.classList.remove('has-sel'); overlay.querySelectorAll('.nl-region.sel').forEach(b => b.classList.remove('sel')) }
+document.addEventListener('pointerdown', e => { if (card && !card.contains(e.target) && !e.target.closest('.nl-region') && !e.target.closest('.nl-strip')) closeCard() })
 function openCard(n) {
   if (card) card.remove()
   selected = n.id

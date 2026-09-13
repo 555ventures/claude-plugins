@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: hardened
+status: implementing
 tier: standard
 area: review-close
 design: false
@@ -10,6 +10,8 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-12
 open_markers: 0
+build_base: main
+diff_base: 87049cf31dfa9aecb6a8782da8c90fc2040e3f61
 ---
 
 # Expired tests leave in their own commit

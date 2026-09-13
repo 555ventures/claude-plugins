@@ -298,49 +298,52 @@ for (const file of testFiles) {
 }
 const tagged = retired.length + kept.class + kept.invariant + kept.pin + kept.open
 
-// ---- --apply: remove retired spans, collapse blank runs, delete emptied files/dirs -------------
+// ---- classify emptied on every run (D1, specs/20260912/13); disk writes stay behind --apply ----
+// The per-file span removal and blank-run collapse are an in-memory pass that always runs, so a
+// dry run reports the same `emptied` array an apply would (the close reads this count before it
+// applies). Only fs.writeFileSync / fs.unlinkSync / the empty-directory climb are gated on `apply`.
 const emptied = []
-if (apply) {
-  for (const [file, calls] of retiredByFile) {
-    const abs = path.join(root, file)
-    let src
-    try {
-      src = fs.readFileSync(abs, 'utf8')
-    } catch {
-      continue
+for (const [file, calls] of retiredByFile) {
+  const abs = path.join(root, file)
+  let src
+  try {
+    src = fs.readFileSync(abs, 'utf8')
+  } catch {
+    continue
+  }
+  const spans = calls
+    .map((c) => ({ start: c.start, end: src[c.end] === '\n' ? c.end + 1 : c.end }))
+    .sort((a, b) => b.start - a.start)
+  for (const { start, end } of spans) {
+    src = src.slice(0, start) + src.slice(end)
+  }
+  // Collapse a run of three-or-more blank lines down to one.
+  const lines = src.split('\n')
+  const collapsed = []
+  let blankRun = 0
+  for (const line of lines) {
+    if (line.trim() === '') {
+      blankRun++
+      if (blankRun <= 2) collapsed.push(line)
+    } else {
+      blankRun = 0
+      collapsed.push(line)
     }
-    const spans = calls
-      .map((c) => ({ start: c.start, end: src[c.end] === '\n' ? c.end + 1 : c.end }))
-      .sort((a, b) => b.start - a.start)
-    for (const { start, end } of spans) {
-      src = src.slice(0, start) + src.slice(end)
-    }
-    // Collapse a run of three-or-more blank lines down to one.
-    const lines = src.split('\n')
-    const collapsed = []
-    let blankRun = 0
-    for (const line of lines) {
-      if (line.trim() === '') {
-        blankRun++
-        if (blankRun <= 2) collapsed.push(line)
-      } else {
-        blankRun = 0
-        collapsed.push(line)
-      }
-    }
-    src = collapsed.join('\n')
+  }
+  src = collapsed.join('\n')
 
-    if (scanCalls(src).length === 0) {
+  if (scanCalls(src).length === 0) {
+    emptied.push(file)
+    if (apply) {
       fs.unlinkSync(abs)
-      emptied.push(file)
       let dir = path.dirname(abs)
       while (dir !== root && fs.existsSync(dir) && fs.readdirSync(dir).length === 0) {
         fs.rmdirSync(dir)
         dir = path.dirname(dir)
       }
-    } else {
-      fs.writeFileSync(abs, src)
     }
+  } else if (apply) {
+    fs.writeFileSync(abs, src)
   }
 }
 

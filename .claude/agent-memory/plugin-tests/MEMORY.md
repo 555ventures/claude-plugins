@@ -1,5 +1,6 @@
 # Memory index
 
+- [Spec 13 expired-tests-own-commit: gate-before-deletion + restore-retry pins](spec-20260912-13-expired-tests-own-commit.md) — grep-marker testCommand stand-in simulates apply/restore cycles; AC-6 (HEAD unchanged, nothing retired) is a sanctioned green-pre-change pin, no commit exists yet at --mark closed.
 - [Spec 01 card-explains-itself: expired-file recreation + shim class-match gap](spec-20260912-01-card-explains-itself.md) — design-doctrine.test.js recreated fresh (test-expiry sweep, not a fork); copied the class-selector repair into exclusions-route.test.js's own flat-DOM shim copy.
 - [Spec 02 answer-is-clients-until-signoff: marks.approved ISO shape + ledger cell index](spec-20260912-02-answer-is-clients-until-signoff.md) — status.json's marks.approved is a full ISO timestamp, sliced to a date; AC-9's observable is mechanism-agnostic (reopenNote never clears resolution); ledger row split-by-| has a leading empty cell (status is index 6, not 5).
 - [Spec 04 disposition-grammar tests: testGlobs:[null] crash + green-pre-change reconstruction](spec-20260911-04-disposition-grammar-tests.md) — force count-tests.js/scope-reconcile.js to crash via host config; AC-18's before/after count pin is legitimately green today, proven via a scratch-patched real-lib reconstruction, not skipped.

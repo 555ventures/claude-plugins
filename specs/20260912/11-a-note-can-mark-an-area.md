@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: design-mocks
@@ -41,7 +41,7 @@ reference for how it looks.
 | D3 | **Serve exposes the anchor and three verbs.** `design-atlas.js`'s serve: `GET /__notes/anchor.js` returns `notes-anchor.browser.js` verbatim (like `notes.js`); `injectNotesScript` emits the anchor tag BEFORE the notes tag; `POST /__notes/add` passes `region` through to `addNote`; `POST /__notes/region {id, region, by}` replaces the region on an `open` or `addressed` note and appends `{at, by, text:"re-placed the box"}` to `thread` (400 on `resolved`, 404 unknown); `POST /__notes/delete {id, by}` removes an `open`, `kind`-less note whose `thread` is empty (400 otherwise); `POST /__notes/reopen {id, text, by}` on the SESSION mount (today client-only) calls `reopenNote` on an `addressed` note (400 when `text` is empty or status is not `addressed`). The client mount is untouched here (specs/20260912/12 D4) (AC-20260912-11-6, -7, -8, -9) | Re-place, delete and the owner's reject-with-reason are the three card controls with no route today; each reuses an existing lib function or a two-line array filter, and each names its refusal so the card can show it. Delete is narrow on purpose: a note anyone has answered is history, and history is withdrawn (D6), never erased |
 | D4 | **The layer gains a third shadow host: the overlay.** `notes-layer.browser.js` mounts a full-page `position:absolute; inset:0; pointer-events:none` host over the mock root (`.nl-host` like the other two, viewer.css linked inside), paints one `.nl-region` box per note whose `region` resolves on the ACTIVE state, with `data-status` = the display status (`outdated` when `resolve` returns `null` and the note is not resolved; else the note's own status) and a `.nl-region-badge` pill (`<span class="nl-region-glyph {status}">` + id). Resolved boxes are hidden unless "Show resolved" is on. Re-paint runs on state-button click and on `resize`. The mock's own markup and styles are never touched — the isolation invariant holds byte-for-byte (AC-20260912-11-10, -11, -12) | Boxes are chrome; the isolation test is the contract that lets this layer exist on every host's mocks. A separate host keeps the overlay's pointer rules from leaking into the bar and strip |
 | D5 | **Drawing is a mode.** The bar gains a `Mark area` toggle (key `M`; label `Marking · Esc to stop` while on). While on, the overlay host takes `pointer-events:auto` and a crosshair, a drag paints a `.nl-draft` rectangle with a size readout, release below 12×12 px does nothing, and release otherwise calls `NotesAnchor.capture` and opens the composer card (D7) beside the box with a `draft` note in memory — nothing is posted until Save. Esc cancels a drag, then closes the card, then leaves the mode. The first time the mode is entered in a browser a one-line hint shows (`Drag over anything to leave a note`), stored under `nl-hint-seen` in localStorage (AC-20260912-11-10) | The owner approved the toggle on the prototype (2026-09-12) and it is the cheaper option to reverse: a plain-drag layer must arbitrate with the mock's own scroll and selection, a mode never does |
-| D6 | **One card per note, beside its box.** Click a box or its strip row → a `.nl-card` (328px, right of the box when there is room, else left; on viewports narrower than 640px a bottom sheet) showing the badge, reason chip, author, the thread (note text first, then `thread` entries, the session's marked with `.nl-card-me`), a reply field, and controls by status: `open` → `Reply`, `Resolve`; `addressed` → `Reply`, `Reject`, `Accept`; every status → an overflow menu with `Re-place the box` (only when `outdated`) and `Delete` (when D3's delete precondition holds) else `Withdraw`. `Accept` = `POST /__notes/resolve`; `Reject` reveals a one-line reason field and posts `/__notes/reopen` (a blank reason keeps the field focused, posts nothing); `Withdraw` = `/__notes/resolve` with the note's prior status `open` (the existing `withdrawn` derivation); `Delete` = `/__notes/delete`. Delete, Withdraw, Resolve and Accept show a 5-second `Undo` toast and POST only when the toast expires or is dismissed — Undo cancels the post. Keys on a focused box: Enter opens, `A` accepts, `R` rejects, Esc closes (AC-20260912-11-13, -14) | The research verdict: undo beats confirm, resolve rights stay with the author, and a rejection without a reason is what leaves the next fix blind. Deferring the POST is the whole undo implementation — no server undo, no new state |
+| D6 | **One card per note, beside its box.** Click a box or its strip row → a `.nl-card` (328px, right of the box when there is room, else left; on viewports narrower than 640px a bottom sheet) showing the badge, reason chip, author, the thread (note text first, then `thread` entries, the session's marked with `.nl-card-me`), and controls by status: `open` → `Resolve`; `addressed` → `Reject`, `Accept`; every status → an overflow menu with `Re-place the box` (only when `outdated`) and `Delete` (when D3's delete precondition holds) else `Withdraw`. `Accept` = `POST /__notes/resolve`; `Reject` reveals a one-line reason field and posts `/__notes/reopen` (a blank reason keeps the field focused, posts nothing); `Withdraw` = `/__notes/resolve` with the note's prior status `open` (the existing `withdrawn` derivation); `Delete` = `/__notes/delete`. Delete, Withdraw, Resolve and Accept show a 5-second `Undo` toast and POST only when the toast expires or is dismissed — Undo cancels the post. Keys on a focused box: Enter opens, `A` accepts, `R` rejects, Esc closes (AC-20260912-11-13, -14) | The research verdict: undo beats confirm, resolve rights stay with the author, and a rejection without a reason is what leaves the next fix blind. Deferring the POST is the whole undo implementation — no server undo, no new state |
 | D7 | **The composer at the box.** The D5 card variant for a draft: the four plain reason chips (`Other` selected), a textarea with focus, `Discard` (drops the draft, no post) and `Save note` (posts `/__notes/add {scope:'mock', screen, state, text, by, reason, region}`; Enter saves, Shift+Enter newlines). The strip's existing `+ Note on this state` composer stays for screen-level notes and posts no region (AC-20260912-11-10) | Focus already in the field and a default chip are the two things that make a comment tool feel fast; the screen-level composer keeps working for "this whole state is wrong" |
 | D8 | **The strip learns status.** Each `.n` row gains the same badge pill as its box and a `data-status`; the header gains a segmented filter `Needs you` (addressed) · `Open` · `All` · `Resolved`, default `Needs you`, stored under `nl-filter`; hovering a row pulses its box, clicking a row scrolls to the box and opens the card. An outdated row's `<small>` opens with `Outdated — the area it marked is gone.`; a row whose box resolved in `children` mode appends `· fitted to content on this size`. The bar's `N open` badge becomes `N open · M need you` (AC-20260912-11-11) | "Needs you" as the return view is the single biggest usability win the research found, and the two footnotes are how the owner learns the anchor's honesty without reading a spec |
 | D9 | **Colors and glyphs come from the register.** `viewer.css` gains the `.nl-region`, `.nl-region-badge`, `.nl-region-glyph`, `.nl-draft`, `.nl-card*`, `.nl-seg`, `.nl-toast` rules, written on `var(--v-danger)` (open), `var(--v-warn)` (addressed), `var(--v-ok)` (resolved), `var(--v-muted)` (outdated/withdrawn) via a per-box `--c`; each glyph is a shape as well as a color — hollow ring open, half-filled addressed, filled resolved, dashed ring outdated. No literal color outside `:host,:root`. The rules are authored from `design/chrome-mocks/notes.html` (D10) `[no-ac: appearance is design-stage exempt; reachability is pinned by AC-20260912-11-10/-11]` | Color alone fails one reader in twelve; the register is the only place a color may live (design.md § Design Canon) |
@@ -136,10 +136,11 @@ layer must reach, not how it looks.
   are focusable (`tabindex=0`), smaller boxes stack above larger ones. `.nl-draft` while dragging with a
   `.nl-draft-size` readout.
 - **Card** (`.nl-card`, mounted inside the overlay host): header band (badge, reason chip, author);
-  `.nl-card-outdated` notice when outdated; thread (`.nl-card-msg`, `.nl-card-me`); reply textarea;
+  `.nl-card-outdated` notice when outdated; thread (`.nl-card-msg`, `.nl-card-me`);
   action row per D6; `.nl-card-menu` overflow opening upward; `.nl-card-why` reject reason block.
   Draft variant per D7 with `.nl-chips`. Empty states: a draft with an empty textarea keeps focus on
-  Save; the reply button with an empty field focuses the field.
+  Save. (The reply textarea and its empty-field focus rule were withdrawn at review close — no
+  Contracts verb posts a reply; see Rationale.)
 - **Strip** (existing `.nl-strip`): rows gain the badge and `data-status`; `.nl-seg` filter with four
   buttons `aria-pressed`; empty text `Nothing waiting on you here.` (Needs you) or `No notes on this
   state yet. Drag over anything to add one.`
@@ -292,6 +293,43 @@ Fragile: the anchor's `snippet` equality is strict — a one-character copy edit
 flips a box to outdated. That is the conservative side (visible, re-placeable) and specs/20260912/12's
 re-anchor is the fix at the source. The Chrome-gated tests skip without `CHROME_BIN` per § Test Rules;
 the anchor module's Node tests over a fake DOM never skip.
+
+**Deviations folded at close (2026-09-12).** Five departures, all one-offs — none recurring-shaped
+enough to earn a Gotchas line, and two of them are recurrences of classes § Gotchas already records:
+
+- **The ADR took number 0020, not the 0019 D11 locked.** A concurrent session (specs/20260912/07)
+  landed 0019 first. Took the next free number and amended all six mentions in the same build. A
+  recurrence of the ADR-filename race § Gotchas already carries; no new entry.
+- **D6's reply field never had a route, and was withdrawn rather than given one.** The Contracts
+  HTTP block names exactly add/region/delete/reopen/resolve/answer, and D3's rationale names
+  re-place, delete and reject-with-reason as the three routeless controls a card needs. The build
+  shipped a Reply control that cleared the textarea and posted nothing; review found it, and the
+  disposer's binding closure was removal, not a fourth verb — that belongs to an amendment or to
+  specs/20260912/12. D6 and the UI section are amended above to match what shipped. The underlying
+  class — a Decision naming a control whose route no Contract carries — is the by-ID-never-by-clause
+  hole § Gotchas already records against `promise-sweep`.
+- **The approved prototype and this spec disagreed on class names.** `design/chrome-mocks/notes.html`
+  landed spelling its overlay classes `.nl-box` / `.nl-badge` / `.g`, while D9, the UI section, the
+  Contracts block and AC-20260912-11-15 all pin `.nl-region` / `.nl-region-badge` /
+  `.nl-region-glyph` — a lock-time self-contradiction no leg could see, since each half is
+  individually satisfiable. The doctrine worker correctly refused to edit the reference (D10 tells
+  workers to leave it) and returned blocked. Resolved by the orchestrator renaming the three classes
+  in the prototype and proving the file byte-identical modulo those names, so nothing approved by eye
+  changed. Loosening the AC was rejected: it would leave the binding reference permanently
+  mis-naming the feature it exists to bind. At lock, diff a design source's own class names against
+  the spec that cites it.
+- **Six render defects survived a green 1,148-test suite.** Every card control and the undo toast
+  were unreachable by a real pointer (the overlay host's `pointer-events:none` was overridden for
+  boxes only); the id pill painted transparent outside a box; the host was `position:fixed` against
+  D4's locked `absolute`, so boxes drifted by the scroll offset on any mock taller than the viewport;
+  the card never became a bottom sheet under 640px because inline positioning beat the media rule;
+  and two D8 strip clauses were never built. The tests missed all of them because they drive controls
+  with `element.click()`, which bypasses hit-testing. This is the § Gotchas entry about a
+  client-facing page's defects living in the render, recurring on a new surface — the fix pass and
+  the fix-delta review both verified with real CDP pointer input, a scrolled 3,088px page and a
+  390px render instead.
+- **Test expiry removed this spec's four new test files at close** (18 cases), per the opt-in pin
+  policy. The layer's fixed defects therefore carry no regression pin; queued.
 
 ## Canonical Delta
 

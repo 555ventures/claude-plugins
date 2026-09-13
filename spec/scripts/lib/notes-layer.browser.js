@@ -3,16 +3,18 @@
 // ?clean. specs/20260902/10-page-notes-review-loop.md D3; specs/20260905/01-picks-on-the-atlas-page.md D5.
 //
 // specs/20260912/11-a-note-can-mark-an-area.md D4-D8: a mock-scope page gains a third shadow
-// host, the overlay — `position:fixed;inset:0` over the whole viewport (never `position:relative`
-// on the mock root itself, which the isolation invariant forbids touching) — that paints one
-// `.nl-region` box per note whose `region` (NotesAnchor.resolve, from GET /__notes/anchor.js,
-// loaded before this script per D3) resolves on the active state. Box/card coordinates below are
-// therefore always computed as `rootEl.getBoundingClientRect()` (viewport px) plus the resolved,
-// root-relative box — the same coordinate space the fixed overlay host renders in, so no
-// translation is needed for drag or paint math. Reply has no server verb in this spec's Contracts
-// block (only add/region/delete/reopen/resolve/answer are exposed) — the reply field's empty-focus
-// rule is implemented, but a non-empty reply is a deliberate no-op pending a future spec; this is a
-// scope gap, not a bug (see the sidecar deviation).
+// host, the overlay — `position:absolute;inset:0` (D4, locked verbatim) over the mock root's
+// document flow (never `position:relative` on the mock root itself, which the isolation invariant
+// forbids touching) — that paints one `.nl-region` box per note whose `region` (NotesAnchor.resolve,
+// from GET /__notes/anchor.js, loaded before this script per D3) resolves on the active state.
+// Because the host is absolutely (not fixed) positioned, its own coordinate frame is page-relative,
+// not viewport-relative — box/card coordinates below are therefore always computed as
+// `rootEl.getBoundingClientRect()` (viewport px) PLUS the current scroll offset (`pageXOffset`/
+// `pageYOffset`) plus the resolved, root-relative box, so a box painted on a mock taller than the
+// viewport stays pinned to its element through scroll and re-paint (state-button click, `resize`)
+// alike. This spec's Contracts block exposes no reply-posting verb (only add/region/delete/reopen/
+// resolve/answer are named) — D6's card carries no Reply control or textarea for that reason; a
+// reply is out of scope, not a bug (see the sidecar deviation).
 //
 // specs/20260906/03-questions-on-the-wireframe.md D5: a note carrying kind:"question" renders as
 // a distinct row (id badge, "I assumed <claim>", "I rejected: <rejected>" when present) with
@@ -184,12 +186,15 @@
     stripAnchor.insertAdjacentElement('afterend', mount(strip))
   }
 
-  // D4: the overlay — a third .nl-host, mock scope only, `position:fixed;inset:0` over the whole
-  // viewport so its own coordinate frame matches getBoundingClientRect() for every element on the
-  // page (no scroll/relative-positioning math needed). `pointer-events` is toggled on the HOST
-  // itself as marking mode turns on/off; individual painted boxes/cards get their own inline
-  // `pointer-events:auto` so they stay clickable while the host is otherwise none (letting clicks
-  // pass through to the mock everywhere the overlay paints nothing).
+  // D4: the overlay — a third .nl-host, mock scope only, `position:absolute;inset:0` (locked
+  // verbatim) so it scrolls with the page instead of pinning to the viewport on a mock taller than
+  // it. `pointer-events` is toggled on the HOST itself as marking mode turns on/off; the boxes
+  // (renderOverlay, per-box inline `pointer-events:auto`) stay clickable while the host is
+  // otherwise none, letting clicks pass through to the mock everywhere the overlay paints nothing —
+  // but the card and toast are NOT boxes and sit directly in the overlay, so they get the same
+  // `auto` override on their own slot elements (cardSlot/toastSlot) below; without it every control
+  // inside them (Accept/Reject/Send back/the overflow menu/Undo) would inherit `none` from
+  // the host and fail hit-testing even though they render on top.
   var overlay = null
   var boxLayer = null
   var cardSlot = null
@@ -200,9 +205,11 @@
     boxLayer = document.createElement('div')
     cardSlot = document.createElement('div')
     toastSlot = document.createElement('div')
+    setStyle(cardSlot, { pointerEvents: 'auto' })
+    setStyle(toastSlot, { pointerEvents: 'auto' })
     overlay.appendChild(boxLayer); overlay.appendChild(cardSlot); overlay.appendChild(toastSlot)
     overlayHost = mount(overlay)
-    setStyle(overlayHost, { position: 'fixed', inset: '0', pointerEvents: 'none', zIndex: '9997' })
+    setStyle(overlayHost, { position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '9997' })
     document.body.appendChild(overlayHost)
   }
 
@@ -217,14 +224,24 @@
 
   // D4/D8: the display status a box/row/badge shows — the note's own status, except `outdated`
   // (resolve() === null on a non-resolved note) which is DERIVED here, never written to disk.
-  function regionStatusOf(n) {
-    if (!n.region || !rootEl || !window.NotesAnchor) return n.status
+  // `mode` ('exact'|'children'|null) rides along so D8's strip footnote can tell a
+  // fitted-to-content box apart from an exact one without a second resolve() call.
+  function regionInfo(n) {
+    if (!n.region || !rootEl || !window.NotesAnchor) return { status: n.status, mode: null }
     var resolved = window.NotesAnchor.resolve(rootEl, n.region)
-    return resolved === null && n.status !== 'resolved' ? 'outdated' : n.status
+    return {
+      status: resolved === null && n.status !== 'resolved' ? 'outdated' : n.status,
+      mode: resolved ? resolved.mode : null,
+    }
   }
+  function regionStatusOf(n) { return regionInfo(n).status }
 
+  // D9: `--c` is set on the badge itself, not inherited from an ancestor box — a badge painted
+  // without a box ancestor (D8 strip rows, D6 card header) would otherwise render transparent
+  // with near-white text, since custom properties only inherit down the DOM tree.
   function regionBadge(id, status) {
     var badge = document.createElement('span'); badge.className = 'nl-region-badge'
+    badge.style.setProperty('--c', colorFor(status))
     var glyph = document.createElement('span'); glyph.className = 'nl-region-glyph ' + status
     badge.appendChild(glyph)
     badge.appendChild(document.createTextNode(id))
@@ -237,6 +254,11 @@
     boxLayer.innerHTML = ''
     if (!rootEl || typeof rootEl.getBoundingClientRect !== 'function') return
     var rootRect = rootEl.getBoundingClientRect()
+    // The host is position:absolute (page-relative), not fixed (viewport-relative) — add the
+    // current scroll offset to the viewport rect so a box stays pinned to its element on a mock
+    // taller than the viewport instead of drifting by the scroll amount.
+    var scrollX = window.pageXOffset || 0
+    var scrollY = window.pageYOffset || 0
     mockNotes.forEach(function (n) {
       if (!n.region || n.state !== activeState) return
       var resolved = window.NotesAnchor ? window.NotesAnchor.resolve(rootEl, n.region) : null
@@ -250,8 +272,8 @@
       el.setAttribute('data-id', n.id)
       el.setAttribute('data-status', status)
       el.style.setProperty('--c', colorFor(status))
-      el.style.left = (rootRect.left + box.x) + 'px'
-      el.style.top = (rootRect.top + box.y) + 'px'
+      el.style.left = (rootRect.left + scrollX + box.x) + 'px'
+      el.style.top = (rootRect.top + scrollY + box.y) + 'px'
       el.style.width = Math.max(0, box.w) + 'px'
       el.style.height = Math.max(0, box.h) + 'px'
       el.style.pointerEvents = 'auto'
@@ -287,11 +309,18 @@
     if (cardSlot) cardSlot.innerHTML = ''
     render()
   }
+  // D6: beside the box on desktop (position:absolute, page-relative — same coordinate frame as
+  // the overlay host); below 640px viewer.css's own media rule turns `.nl-card` into a fixed
+  // bottom sheet (left:0;right:0;bottom:0) — setting inline left/top there would win over that
+  // rule regardless of specificity, so this leaves position AND left/top alone under the
+  // breakpoint and lets the sheet own its own layout entirely.
   function cardPosition(card, id) {
+    if (window.matchMedia && window.matchMedia('(max-width:640px)').matches) return
     var anchorRect = (boxLayer && boxLayer.querySelector('[data-id="' + id + '"]') || rootEl).getBoundingClientRect()
-    card.style.position = 'fixed'
-    card.style.left = Math.min(anchorRect.right + 12, window.innerWidth - 340) + 'px'
-    card.style.top = Math.max(8, anchorRect.top) + 'px'
+    var scrollX = window.pageXOffset || 0
+    var scrollY = window.pageYOffset || 0
+    card.style.left = Math.min(anchorRect.right + scrollX + 12, scrollX + window.innerWidth - 340) + 'px'
+    card.style.top = Math.max(scrollY + 8, anchorRect.top + scrollY) + 'px'
   }
   function openNoteCard(n) {
     openCardNoteId = n.id
@@ -325,19 +354,11 @@
     ;(Array.isArray(n.thread) ? n.thread : []).forEach(function (e) { msg(e.text, e.by) })
     card.appendChild(thread)
 
-    var replyTa = document.createElement('textarea'); replyTa.placeholder = 'Reply'
-    card.appendChild(replyTa)
-
+    // No Reply control here — the Contracts HTTP block names exactly add/region/delete/reopen/
+    // resolve/answer, a fourth (reply) verb is out of this spec's scope (see the sidecar
+    // deviation), and a pressable control with no route and no success sentence must not ship.
     var row = document.createElement('div'); row.className = 'nl-card-row'
     var sp = document.createElement('span'); sp.className = 'sp'; row.appendChild(sp)
-    var replyBtn = document.createElement('button'); replyBtn.className = 'nl-btn'; replyBtn.textContent = 'Reply'
-    replyBtn.onclick = function () {
-      if (!replyTa.value.trim()) { replyTa.focus(); return }
-      // No server verb replies this in the Contracts block (specs/20260912/11 scope) — the
-      // field's empty-focus rule is the one behavior this spec pins for Reply.
-      replyTa.value = ''
-    }
-    row.appendChild(replyBtn)
 
     if (n.status === 'open') {
       var resolveBtn = document.createElement('button'); resolveBtn.className = 'nl-btn primary'; resolveBtn.textContent = 'Resolve'
@@ -454,11 +475,18 @@
     card.appendChild(row)
 
     cardSlot.appendChild(card)
-    card.style.position = 'fixed'
-    var left = box ? box.x + box.w + rootEl.getBoundingClientRect().left + 12 : 40
-    var top = box ? box.y + rootEl.getBoundingClientRect().top : 40
-    card.style.left = Math.min(left, window.innerWidth - 340) + 'px'
-    card.style.top = Math.max(8, top) + 'px'
+    // Same positioning contract as cardPosition() above: leave position/left/top to viewer.css's
+    // own bottom-sheet media rule below 640px, otherwise place it page-relative (scroll offset
+    // included) since the overlay host is position:absolute, not fixed.
+    if (!(window.matchMedia && window.matchMedia('(max-width:640px)').matches)) {
+      var scrollX = window.pageXOffset || 0
+      var scrollY = window.pageYOffset || 0
+      var rootRect = rootEl.getBoundingClientRect()
+      var left = box ? box.x + box.w + rootRect.left + scrollX + 12 : scrollX + 40
+      var top = box ? box.y + rootRect.top + scrollY : scrollY + 40
+      card.style.left = Math.min(left, scrollX + window.innerWidth - 340) + 'px'
+      card.style.top = Math.max(scrollY + 8, top) + 'px'
+    }
     if (ta.focus) ta.focus()
   }
 
@@ -489,7 +517,11 @@
     if (!draftEl || !dragStart) return
     var left = Math.min(dragStart.x, x2), top = Math.min(dragStart.y, y2)
     var w = Math.abs(x2 - dragStart.x), h = Math.abs(y2 - dragStart.y)
-    draftEl.style.left = left + 'px'; draftEl.style.top = top + 'px'
+    // dragStart/x2/y2 are viewport-relative (clientX/clientY); the draft lives in the
+    // position:absolute (page-relative) overlay, so the current scroll offset must be added —
+    // same reasoning as renderOverlay's box placement above.
+    draftEl.style.left = (left + (window.pageXOffset || 0)) + 'px'
+    draftEl.style.top = (top + (window.pageYOffset || 0)) + 'px'
     draftEl.style.width = w + 'px'; draftEl.style.height = h + 'px'
     var sz = draftEl.querySelector('.nl-draft-size')
     if (sz) sz.textContent = Math.round(w) + '×' + Math.round(h)
@@ -592,7 +624,8 @@
     // D8: every row (region-carrying or not) gains data-id/data-status — the region-carrying
     // ones alone also swap the plain id badge for the box's own pill and gain the outdated
     // footnote; a plain screen+state note (no region) is unchanged from today.
-    var status = regionStatusOf(n)
+    var info = regionInfo(n)
+    var status = info.status
     d.className = 'n' + (n.status === 'resolved' ? ' done' : '')
     d.setAttribute('data-id', n.id)
     d.setAttribute('data-status', status)
@@ -608,11 +641,19 @@
     var footnote = status === 'outdated'
       ? 'Outdated — the area it marked is gone.'
       : esc(n.by) + (n.status === 'resolved' ? ' · resolved by ' + esc(n.resolvedBy) : '')
+    // D8: a box that resolved in `children` mode (union of surviving children, not the original
+    // exact element) gets this appended so the owner can tell the anchor fitted rather than found.
+    if (info.mode === 'children') footnote += ' · fitted to content on this size'
     t.innerHTML = esc(n.text) + '<small>' + footnote + '</small>'
     d.appendChild(t)
     if (n.region) {
       d.style.cursor = 'pointer'
-      d.onclick = function () { openNoteCard(n) }
+      d.onclick = function () {
+        // D8: clicking a strip row scrolls to its box, then opens the card.
+        var box = boxLayer && boxLayer.querySelector('[data-id="' + n.id + '"]')
+        if (box && box.scrollIntoView) box.scrollIntoView({ block: 'center' })
+        openNoteCard(n)
+      }
       d.addEventListener('mouseenter', function () {
         var box = boxLayer && boxLayer.querySelector('[data-id="' + n.id + '"]')
         if (box) { box.classList.add('pulse'); setTimeout(function () { box.classList.remove('pulse') }, 700) }

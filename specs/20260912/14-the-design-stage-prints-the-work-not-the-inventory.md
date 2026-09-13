@@ -1,6 +1,7 @@
 ---
 date: 2026-09-12
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: design
 design: false
@@ -10,6 +11,7 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-12
 open_markers: 0
+diff_base: 726ad6297196de94fed28242f85777b82e87d937
 ---
 
 # The design stage prints the work, not the inventory
@@ -130,7 +132,7 @@ currently discards.
 - **AC-20260912-14-6**: WHEN `notes open` runs on a root whose notes hold one open question and three answered questions THE SYSTEM SHALL print `answered: 3 — --all to list` and SHALL NOT print any `  <id> [<ledgerId>] yes` or `  <id> [<ledgerId>] no → "…"` row; WHEN no question has been answered it SHALL print no `answered` line at all → writes tests/mocks/bounded-output.test.js
 - **AC-20260912-14-7**: WHEN `notes open` runs on a root holding 25 open `scope:"mock"` notes spread over a journey's screens THE SYSTEM SHALL print exactly 20 note lines under the journey groups and then the line `… 5 more open note(s) — --all to list`, placed after the last note line and before the `⚠️ a project note is open` line when one is present, and SHALL print no journey, screen or state header that is followed by no note line → writes tests/mocks/bounded-output.test.js
 - **AC-20260912-14-8**: WHEN `notes open --all` runs on that same 25-note root with three answered questions THE SYSTEM SHALL print all 25 note lines, print the full `answered:` block with one row per answered question, and print no line containing `more open note(s)` or `--all to list` → writes tests/mocks/bounded-output.test.js
-- **AC-20260912-14-9**: WHEN `notes open` runs on a root with one open project note, two open mock notes on a seeded journey's screen, one addressed mock note and one open question THE SYSTEM SHALL CONTINUE TO print `❓ questions: 1 open` as its first line, SHALL CONTINUE TO print the counts line `📝 open notes: 3 (1 project · 2 mock) · addressed: 1`, SHALL CONTINUE TO print the `project` block with its note before any journey group, and SHALL CONTINUE TO end with `⚠️ a project note is open — answer it (canon change or new directions) before any mock note` → writes tests/mocks/bounded-output-pins.test.js
+- **AC-20260912-14-9**: WHEN `notes open` runs on a root with one open project note, two open mock notes on a seeded journey's screen, one addressed mock note and one open question THE SYSTEM SHALL CONTINUE TO print `❓ questions: 1 open` as its first line, SHALL CONTINUE TO print the counts line `📝 open notes: 4 (1 project · 3 mock) · addressed: 1`, SHALL CONTINUE TO print the `project` block with its note before any journey group, and SHALL CONTINUE TO end with `⚠️ a project note is open — answer it (canon change or new directions) before any mock note` → writes tests/mocks/bounded-output-pins.test.js
 
 ## Assumptions (escalation triggers)
 

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: hardened
+status: done
 tier: critical
 area: cross-cutting
 design: false
@@ -10,6 +10,8 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-12
 open_markers: 0
+build_base: main
+diff_base: 726ad6297196de94fed28242f85777b82e87d937
 ---
 
 # The close stops deleting tests
@@ -44,6 +46,7 @@ contract tells hosts the truth about when tests die.
 | D11 | AC-20260912-13-7's pin test is kept byte-identical, assertions included. Its third clause (no `⚠ expiry skipped` note when nothing retired) becomes vacuously true once that literal no longer exists; that is recorded in the amendment ADR, never fixed by editing the test. (AC-20260912-15-9) | A pin is never weakened to match a change; its first two clauses still discriminate, and the vacuous third costs nothing. |
 | D12 | The predecessor reversal is recorded as one amendment ADR, `docs/adr/0021-the-close-stops-deleting-tests.md`, whose `Applies to` names specs/20260911/03 D5/D6 and specs/20260912/13 D3–D7; `docs/adr/0020-expired-tests-leave-in-their-own-commit.md` gains the matching `Amended by` backlink. `[no-ac: roadmap-amendment bookkeeping has no runtime surface]` | The repo's amendment convention: a reversal is a backlinked decision, never a silent rewrite of a two-day-old spec. |
 | D13 | The ledger key `tests:{born,kept,retired}` and its shape are unchanged; only the meaning of `retired` shifts from "deleted by this close" to "retirable at this close". (AC-20260912-15-1) | Renaming the key would break every ledger consumer and rewrite history's meaning for a word change. |
+| D14 | `tests/review/review-driver.test.js`'s merge-strategy end-to-end test (AC-20260820-07-12 and its carried IDs) is added to the File Plan and its close-time deletion assertion is rewritten in place: the committed close tree MUST still carry the AC-tagged test file, and the close MUST add no commit. Nothing else in that test or that file changes. (AC-20260912-15-2) | User ruling 2026-09-13 on a gate failure outside the plan: the assertion pins the exact behavior D2 removes, so leaving it would make the suite assert a deletion that can no longer happen; rewriting it in place keeps the one end-to-end merge fixture intact rather than deleting the coverage with the claim. |
 
 ## File Plan
 
@@ -60,6 +63,7 @@ contract tells hosts the truth about when tests die.
 | tests/expiry/test-expiry.test.js | MODIFY | tests | AC-20260912-15-3, AC-20260912-15-4, AC-20260912-15-5 |
 | tests/review/review-driver-close-expiry.test.js | MODIFY | tests | AC-20260912-15-1, AC-20260912-15-2, AC-20260912-15-6, AC-20260912-15-9 — and DELETE the three tests whose subject is gone (titles in Behavior) |
 | tests/consistency/contract-stamp.test.js | CREATE | tests | AC-20260912-15-8 |
+| tests/review/review-driver.test.js | MODIFY | tests | D14 AC-20260912-15-2 — rewrite the close-time deletion assertion in the merge-strategy end-to-end test to assert the file survives and the close adds no commit |
 | spec/.claude-plugin/plugin.json | MODIFY | other | AC-20260912-15-10 version bump, written by `scripts/plugin-bump.js` |
 
 Orchestrator duties, outside the table: the `.claude/spec.config.json` re-stamp runs AFTER
@@ -293,6 +297,32 @@ Every other literals hit is a File Plan row.
 
 No `SHALL CONTINUE TO` pin beyond AC-20260912-15-9: this spec's promises are removals, and a
 removal's only durable assertion is the zero-hit literal check AC-20260912-15-6 already makes.
+
+Build-time record (folded from the deviations sidecar at close, 2026-09-13):
+
+The spec was renumbered from `14-` to `15-` before the build, and its 28 AC-IDs rewritten from
+the `AC-20260912-14-` prefix to `AC-20260912-15-`. A sibling spec locked the same day already
+held number 14, so both minted colliding AC-IDs — a fatal ambiguity for a spec whose own subject
+is AC-ID-keyed test ownership. The untracked, later-written file was the one renumbered.
+
+A5's lock-time verification read all seven tests in
+`tests/review/review-driver-close-expiry.test.js` for close-time-deletion assertions, but missed
+that `tests/review/review-driver.test.js`'s `AC-20260820-07-12` merge-strategy fixture also
+asserted `!existsSync('tests/foo.test.js')` — a live pin on the exact deletion D1/D2 remove. It
+surfaced as a gate failure outside the File Plan. The user ruled to fix it in this spec (D14, a
+new File Plan row); the assertion was rewritten in place to assert the file survives the close
+and the close adds no commit, leaving that fixture's merge/cleanup/verify coverage untouched. The
+narrower lesson for future lock-time verification: a literal sweep for a retired behavior must
+walk every test file that drives the changed script, not only the file whose name matches the
+behavior.
+
+D8's contract rewrite introduced a new `spec-paths test-expiry` call site inside
+`spec/templates/grounding-contract.md`, which forced an undeclared row into
+`spec/entrypoints.json` — out of the File Plan, waived at review under the standing
+exhaustive-live-file-pin rule. A second, unplanned repair fell out of the same edit: the
+entry-point guard scans `.js` files in two directions that disagree about comments, so
+`coverage-scope.js` could not both mention the `spec-paths` key in its WHY header and satisfy the
+manifest. Its comment names `expire-tests.js --all-done --apply` directly instead.
 
 ## Canonical Delta
 

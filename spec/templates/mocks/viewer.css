@@ -355,6 +355,18 @@ body {
 .rv .rv-badge[data-zero] { background: transparent; color: var(--v-muted); border-color: transparent; }
 .rv .rv-addnote { margin-left: 0; font-size: 14px; color: var(--v-muted); border-color: transparent; padding: 3px 9px; }
 .rv .rv-addnote:hover { color: var(--v-fg); border-color: var(--v-border); }
+/* D10: the per-board hide-marks eye — restated from design/chrome-mocks/review.html (missing here
+   rendered as an unstyled default button, the emoji glyph at body-text size with no hit target). */
+.rv .rv-pins { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border-color: transparent; color: var(--v-muted); font-size: 15px; line-height: 1; }
+.rv .rv-pins:hover { color: var(--v-fg); border-color: var(--v-border); }
+.rv .rv-pins[aria-pressed="false"] { color: var(--v-fg); background: var(--v-muted-bg); border-color: var(--v-border); }
+/* specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D11, disposed s2 (2026-09-13): the
+   composer's ghost action, restated the same way, PLUS its own pressed state — mark mode had no
+   visible signal on the review page at all once the framed mock's own bar went invisible. */
+.rv .rv-mark-area { display: inline-flex; align-items: center; gap: .5em; color: var(--v-muted); border-color: transparent; margin-left: auto; }
+.rv .rv-mark-area::before { content: ""; width: 11px; height: 8px; border: 1.5px dashed currentColor; border-radius: 2px; flex: none; }
+.rv .rv-mark-area:hover { color: var(--v-fg); border-color: var(--v-border); }
+.rv .rv-mark-area[aria-pressed="true"] { color: var(--v-primary-fg); background: var(--v-primary); border-color: var(--v-primary); }
 .rv-tabs { display: flex; flex-wrap: wrap; gap: 2px 4px; border: 0; border-radius: 0; overflow: visible; flex-basis: 100%; margin: 2px 0 0 -4px; }
 .rv-tabs button { border: 1px solid transparent; border-radius: 999px; padding: 3px 10px; font-size: 13px; color: var(--v-muted); background: transparent; }
 .rv-tabs button:hover { background: var(--v-bg); border-color: var(--v-border); color: var(--v-fg); }
@@ -396,11 +408,13 @@ body {
 .rv-inspector { border-left: 1px solid var(--v-border); background: var(--v-bg); position: sticky; top: var(--rv-bar); height: calc(100vh - var(--rv-bar)); display: flex; flex-direction: column; min-width: 0; }
 .rv-filters { display: flex; align-items: center; flex-wrap: nowrap; gap: var(--v-space-1); height: 52px; padding: 0 var(--v-space-4); border-bottom: 1px solid var(--v-border); }
 .rv-filters button { white-space: nowrap; flex: none; }
-/* Its own band, fixed height, so a long screen name can never move the header (D4). D15: one
-   sentence on one line — `gap`/`white-space:nowrap` restated from design/chrome-mocks/review.html
-   (missing here let the label spans wrap onto their own lines at desktop width instead of
-   reading as "On screen a plus the whole project"). */
-.rv-scopeband { display: flex; align-items: center; gap: .35em; height: 44px; padding: 0 var(--v-space-4); border-bottom: 1px solid var(--v-border); overflow: hidden; white-space: nowrap; }
+/* specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D15, disposed s3 (2026-09-13): the
+   band said what it filters only in the mock's own single-letter fixture — `white-space:nowrap`
+   plus `overflow:hidden` (structural, not fixture-clipped) truncated the real sentence mid-phrase
+   at a realistic screen name and desktop width ("On screen results plus the whole … All screens").
+   `flex-wrap:wrap` lets the sentence spill onto a second line instead of being cut; `min-height`
+   (not a fixed `height`) lets the band grow to fit that second line rather than clipping it. */
+.rv-scopeband { display: flex; align-items: center; flex-wrap: wrap; gap: .35em; min-height: 44px; padding: 8px var(--v-space-4); border-bottom: 1px solid var(--v-border); }
 .rv-filters button { border-color: transparent; color: var(--v-muted); font-size: 14px; padding: 4px 9px; display: inline-flex; align-items: center; gap: 6px; }
 .rv-filters button[aria-selected="true"] { background: var(--v-muted-bg); color: var(--v-fg); font-weight: 600; }
 .rv-filters .rv-count { margin-left: 0; }
@@ -408,19 +422,12 @@ body {
    `gap` on the band (above) is the one source of spacing now — no per-label margin, matching
    design/chrome-mocks/review.html's own rule, which carries none either. */
 .rv-scopeband-label { color: var(--v-muted); font-weight: 400; }
-/* Render-defect fix: at a real screen label's length ("results", not the mock's single-letter
-   fixture "a"), the trailing label ("plus the whole project") and the screen-name pill were the
-   only two elements able to shrink below their own content width (an element with overflow:hidden
-   gets an automatic flex min-size of 0; a plain label's default min-size is its own min-content,
-   so it never shrank at all) — every pixel of the deficit landed on the pill alone, collapsing
-   "results" down to an unreadable "re" with no room left even for the ellipsis dots. Letting the
-   trailing label share the same overflow:hidden/min-width:0 treatment as the pill splits the
-   deficit proportionally between the two, so a normal-length screen name keeps enough of both
-   sides to read as the one sentence D15 asks for. `:last-of-type` (not the class alone) reaches
-   only this second label — every span sibling counts for `:last-of-type` regardless of class, and
-   "On screen" is never the last span in `.rv-scopeband`'s children, so it is untouched and never
-   shrinks. */
-.rv-scopeband-label:last-of-type { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D15, disposed s3 (2026-09-13): the
+   band now wraps (above) rather than shrinking its labels to fit one line, so neither label needs
+   the ellipsis treatment a prior pass gave the trailing one — a wrapped second line is readable in
+   full, a mid-word ellipsis is not. The screen-name pill keeps its own overflow:hidden/ellipsis
+   below for the pathological case of a single name too long for the band's own width; it is the
+   only piece D15 ever sanctioned shrinking. */
 .rv-screenfilter { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; border-radius: 999px; background: var(--v-muted-bg); color: var(--v-fg); font-size: 13px; font-weight: 500; padding: 4px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* D15: "All screens" — restated from design/chrome-mocks/review.html (missing here left the
    button flush against the sentence instead of pinned to the band's right edge). */
@@ -639,6 +646,14 @@ body {
    original request above stays the louder line. It takes row 2 only while shown — the :has()
    shifts below move where/status/link/acts down one row, so a hidden line costs no gap. */
 .wk-req-again { margin: 2px 0 0; grid-column: 1 / 3; grid-row: 2; padding-left: var(--v-space-3); border-left: 2px solid var(--v-warn); color: var(--v-fg); font-size: 14px; max-width: 60ch; }
+/* specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D4, disposed s5 (2026-09-13): the
+   region badge + footnote row on a client request — no rule shipped for either class before this
+   pass. `.nl-region-badge`'s own rule is `position:absolute`, meant to ride a box's own corner
+   (D6/D12); nested in a static list row instead it floats at the page's initial containing block,
+   so this row demotes it to `static` and lays badge + text out as one flex line, the same fix
+   `.nl-card-hd .nl-region-badge` above already applies for the note card's own header. */
+.wk-req-outdated { margin: 2px 0 0; grid-column: 1 / 3; display: flex; align-items: center; gap: 6px; color: var(--v-muted); font-size: 14px; max-width: 60ch; }
+.wk-req-outdated .nl-region-badge { position: static; box-shadow: none; }
 .wk-req:has(.wk-req-again:not([hidden])) .wk-req-where { grid-row: 3; }
 .wk-req:has(.wk-req-again:not([hidden])) .wk-req-status { grid-row: 3; }
 .wk-req:has(.wk-req-again:not([hidden])) .wk-req-link { grid-row: 4; }
@@ -877,6 +892,14 @@ body {
 .nl-region-glyph.addressed { background: linear-gradient(90deg, var(--v-primary-fg) 50%, transparent 50%); }
 .nl-region-glyph.resolved { background: var(--v-primary-fg); }
 .nl-region-glyph.outdated, .nl-region-glyph.withdrawn { border-style: dashed; }
+
+/* specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D6: the atlas index card's derived
+   open/needs-you count — muted text behind one status dot, amber when data-needs is non-zero,
+   else red. This class is emitted by design-atlas.js's index render, never inside the notes
+   layer's own shadow roots, so it lives here rather than beside the layer's other rules above. */
+.nl-card-count { display: flex; align-items: center; gap: .45em; margin-top: .3rem; color: var(--v-muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.nl-card-count::before { content: ""; width: 7px; height: 7px; border-radius: 99px; flex: none; background: var(--v-danger); }
+.nl-card-count[data-needs]:not([data-needs="0"])::before { background: var(--v-warn); }
 
 .nl-draft {
   position: absolute;

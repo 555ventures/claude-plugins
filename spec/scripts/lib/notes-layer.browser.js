@@ -248,17 +248,16 @@
   // D9: color/glyph come from the register — a per-box `--c` custom property set to one of the
   // four role tokens, never a literal color.
   //
-  // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D12: `open` reads `--v-warn`, the
-  // same orange design/chrome-mocks/review.html's own `.rv-mark`/`.rv-pin` paint unconditionally —
-  // the owner's explicit ranking was to adopt the existing orange count-badge style so the box
-  // pin, the rail count and the tab count read as one system, never the danger-red an unaddressed
-  // note is not (it is not an error state, only an open one). `addressed`/`resolved`/`outdated`/
-  // `withdrawn` are unchanged — no test pins the prior red (grepped before this change).
+  // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D17 (owner ruling, 2026-09-13):
+  // this SHALL CONTINUE TO resolve specs/20260912/11 D9's four roles distinctly — open stays
+  // `--v-danger`, never collapsed onto `--v-warn`. The review page's own chrome (`.rv-pin`,
+  // `.rv-badge`, `.rv-tabpin`, the rail counts) carries the separate orange register D3 describes;
+  // that register binds only that chrome and never the box tint or its frame, which track status.
   function colorFor(status) {
     if (status === 'addressed') return 'var(--v-warn)'
     if (status === 'resolved') return 'var(--v-ok)'
     if (status === 'outdated' || status === 'withdrawn') return 'var(--v-muted)'
-    return 'var(--v-warn)' // open
+    return 'var(--v-danger)' // open
   }
 
   // D4/D8: the display status a box/row/badge shows — the note's own status, except `outdated`
@@ -557,7 +556,11 @@
       if (touchHoldTimer) clearTimeout(touchHoldTimer)
       touchHoldTimer = null; touchStart = null
     }
-    setStyle(overlayHost, { pointerEvents: on ? 'auto' : 'none' })
+    // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D11, disposed s2 (2026-09-13):
+    // a crosshair cursor over the frame while marking is the obvious affordance a hidden bar
+    // label alone never gave — set on the overlay host itself, the one element pointer-events
+    // is already toggled on for the duration of the drag.
+    setStyle(overlayHost, { pointerEvents: on ? 'auto' : 'none', cursor: on ? 'crosshair' : '' })
     // D5: a one-line hint the first time marking is entered in this browser.
     if (on) {
       var seen = false

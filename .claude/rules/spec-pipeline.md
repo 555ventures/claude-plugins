@@ -149,7 +149,14 @@ upstream bug list. -->
   is evadable by the exact thing it guards — classify by **location** (the directory walk) and
   admit everything inside it; any name-shape filter is a new hole, never a legitimate
   narrowing. A break attempt confined to the guard's own fixture envelope confirms nothing
-  about coverage outside it. (specs/20260820/04-entrypoint-conformance.md)
+  about coverage outside it. Second trigger, the same evadability from a code-structure
+  mechanism rather than a naming one: a new branch inserted ABOVE an existing invariant guard in
+  an if/else dispatch bypasses that guard entirely for every input that now reaches the new
+  branch first — the guard's own tests still pass, because they still exercise the one path that
+  still reaches it, so no leg sees the caller that no longer does. Restructure so the existing
+  guard's own check runs first and the new branch's work happens as ADDITIONAL work on the same
+  call, never a second, competing write ahead of it.
+  (specs/20260820/04-entrypoint-conformance.md; specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D1)
 - `[plugin]` `red-check.js` derives carried-AC expectation from **AC-ID occurrence anywhere in
   the file**, comments included. An edit-only File Plan row that mentions another AC's new
   behavioral home in a comment forces a false red expectation onto a file whose only change is
@@ -332,10 +339,15 @@ upstream bug list. -->
   wrong about the fixture two lines above it (`2 open items` where the fixture's own predicate counts
   three, because an addressed item still counts as open). A worker either enshrines the wrong number
   or pins the true one and leaves the spec lying; do the arithmetic on every worked example at lock.
+  A Decision written at a REVIEW-STAGE disposition step, rather than at lock, can cite an AC-ID
+  that does not exist yet — the same carried-by-ID drift this entry opens with, one pass later:
+  `promise-sweep` reports it as `orphan-decision`, not as anything the build's own legs could
+  have seen. Write the AC in the same disposition round that writes the Decision, never after.
   (specs/20260814/04-lock-signal-window.md; specs/20260815/03-ac-matrix-fail-closed.md;
   specs/20260910/05-what-the-journey-does-not-do.md D1/D3;
   specs/20260912/06-the-review-page-answers-to-a-design.md AC-2;
-  specs/20260912/14-the-design-stage-prints-the-work-not-the-inventory.md AC-9)
+  specs/20260912/14-the-design-stage-prints-the-work-not-the-inventory.md AC-9;
+  specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D17/AC-22)
 - `[plugin]` A test worker editing a File Plan row that carries **no AC** still reaches for the
   spec template's AC-ID shape and writes the literal placeholder (`AC-<date>-NN-N`) into the
   test name and assert message. The token is not a valid AC-ID under `ac-matrix.js`'s grammar,
@@ -446,8 +458,30 @@ upstream bug list. -->
   fight strands every narrower-breakpoint override of that same selector, which was written to win by
   source order alone. Re-prefix the media-query rules in the same edit, or the defect reappears one
   viewport down where nobody renders.
+  Third surface: a class or custom property defined only in the approved design mock's own
+  `<style>` block never reaches the shipped stylesheet. Five instances in one spec (`.rv-pin`,
+  `.rv-tabpin`, `.nl-card-count`, `.rv-pins`, `.rv-mark-area`) plus a sixth variant one file over:
+  `.nl-region-badge{background:var(--c)}` carries no fallback, and `--c` was set only inline by
+  the notes layer's own elements — invisible white-on-white the moment a second, server-rendered
+  file emits the same class without also setting the variable. All six passed a fully green
+  suite. Grep every `class="…"` literal a page emits against the shipped stylesheet before
+  marking a class-adding spec done, and grep for the custom property too when a class's rule
+  reads one instead of a literal value.
+  Fourth surface: a test that asserts through an element the page itself hides (a bar label the
+  code sets `display:none` on) passes while testing nothing about what the owner actually sees —
+  the assertion named the AC without testing its visible-signal promise. Keep the hidden check as
+  internal confirmation the underlying hook fired if useful, but make the load-bearing assertion
+  the visible state change (an `aria-pressed` flip, a class toggle) and the visible path back,
+  never text a real page never shows.
+  Fifth surface: a single sample of async work — one read taken immediately after `navigate`
+  returns, before the page's own fetch-and-render has had a chance to run — is a race, not an
+  assertion; green on isolated runs and the whole suite, red once under the review stage's own
+  scoped gate load. Replace the single sample with a bounded poll without weakening what it
+  asserts (no click occurs anywhere in the poll window), rather than accepting the flake or
+  loosening the check.
   (specs/20260910/03-client-journey-player.md; specs/20260911/01-the-page-waits-for-the-server.md;
-  specs/20260911/04-the-client-loop.md; specs/20260912/06-the-review-page-answers-to-a-design.md D9)
+  specs/20260911/04-the-client-loop.md; specs/20260912/06-the-review-page-answers-to-a-design.md D9;
+  specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D3/D4/D10/D11/AC-4/AC-17)
 - `[plugin]` `tests/helpers.js`'s `runNode` is `spawnSync`, which blocks the parent Node event
   loop for the child's whole lifetime — so a test that stands up an **in-process**
   `http.createServer` stub and then `runNode`s the script under test against it can never

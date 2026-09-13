@@ -6,14 +6,21 @@ const path = require('node:path')
 const { tmpdir, freePort, serveAtlas, postJson, withHandler, parseFlatDom, SPEC } = require('../helpers')
 const { findChrome, serve, withChrome } = require('./chrome-harness')
 
-// specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D4/D5/D6 — AC-20260912-12-5, -6
-// ([env: CHROME_BIN]), -7, -9, -10. POST /client/__notes/region does not exist as a client-only,
-// origin-checked route at all today (grep of design-atlas.js finds only the shared, unguarded
-// /__notes/region handler, which a client-mount request already reaches with no origin check —
-// AC-5's second clause is genuinely red). notes-layer.browser.js wires only mouse events — AC-6
-// is red. design-atlas.js's atlas card carries no .nl-card-count — AC-7 is red. walk-page.js's
-// renderWalkRequest emits no data-region/.nl-region-badge/footnote — AC-9 is red. AC-10 (refreshNavDisabled
-// blocking on data-status alone) is a SHALL CONTINUE TO, sanctioned green pre-image.
+// specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D4/D5/D6/D12/D17 — AC-20260912-12-5,
+// -6 ([env: CHROME_BIN]), -7, -9, -10, -18 ([env: CHROME_BIN]), -22 ([env: CHROME_BIN]), -23.
+// AC-22 and -23 were added at the review stage's second disposition round (2026-09-13): AC-22
+// carries D17's own citation (the Decision cited it before the bullet existed — a `promise-sweep`
+// orphan-decision finding); AC-23 covers the "fitted to content on this size" footnote D4 promised
+// but AC-9 never pinned. POST /client/__notes/region does not
+// exist as a client-only, origin-checked route at all today (grep of design-atlas.js finds only
+// the shared, unguarded /__notes/region handler, which a client-mount request already reaches
+// with no origin check — AC-5's second clause is genuinely red). notes-layer.browser.js wires
+// only mouse events — AC-6 is red. design-atlas.js's atlas card carries no .nl-card-count — AC-7
+// is red. walk-page.js's renderWalkRequest emits no data-region/.nl-region-badge/footnote — AC-9
+// is red. AC-10 (refreshNavDisabled blocking on data-status alone) is a SHALL CONTINUE TO,
+// sanctioned green pre-image. AC-18 (D12's computed two-part mark) was disposed s6 at the review
+// stage's disposition step (2026-09-13): its owning File Plan row promised this pin and it was
+// never written, leaving AC-20260912-12-18 uncovered though the behavior itself already worked.
 
 const { buildWalkPage } = require(path.join(SPEC, 'scripts/lib/walk-page.js'))
 
@@ -185,6 +192,103 @@ test('AC-20260912-12-10: refreshNavDisabled CONTINUES TO leave the confirm butto
 })
 
 // ---------------------------------------------------------------------------
+// AC-20260912-12-18 [env: CHROME_BIN] — D12's two-part mark, computed in a real headless Chrome
+// against a served mock carrying one region note. Same shadow-DOM traversal chrome-harness.js's
+// other callers use: the box lives inside a `.nl-host`'s shadow root, never in light DOM.
+// ---------------------------------------------------------------------------
+function buildRegionFixture() {
+  const dir = tmpdir('client-region-mark')
+  writeFileDeep(path.join(dir, 'design/mocks/a.html'),
+    '<main data-screen-label="a" data-status="sketch" style="padding:24px">a screen with content to mark</main>\n')
+  writeFileDeep(path.join(dir, 'design/mocks/notes.json'), JSON.stringify([
+    { id: 'N1', scope: 'mock', screen: 'a', state: null, text: 'marked area', by: 'jj', kind: 'note',
+      at: new Date().toISOString(), status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null,
+      region: trivialRegion() },
+  ], null, 2) + '\n')
+  return dir
+}
+
+test('AC-20260912-12-18: a served mock\'s marked region computes border-width:0px with a non-transparent background, and a dashed ::before inset -6px on every side; selecting it (class "sel") computes the ::before border-width as 2px, still dashed', { timeout: 45000 }, async (t) => {
+  const chrome = findChrome()
+  if (!chrome) { t.skip('no Chrome binary (set CHROME_BIN) — AC-18 only runs against real computed styles'); return }
+  const dir = buildRegionFixture()
+  const { ready, stop } = serve(dir)
+  try {
+    const { port } = await ready
+    const url = 'http://127.0.0.1:' + port + '/mocks/a.html'
+    const OVERLAY_SHADOW_JS =
+      'function findOverlayShadow() {' +
+      '  var hosts = Array.prototype.slice.call(document.querySelectorAll(".nl-host"));' +
+      '  for (var i = 0; i < hosts.length; i++) { if (hosts[i].shadowRoot && hosts[i].shadowRoot.querySelector(".nl-overlay")) return hosts[i].shadowRoot }' +
+      '  return null;' +
+      '}'
+    const PROBE =
+      OVERLAY_SHADOW_JS +
+      '(function () {' +
+      'var shadow = findOverlayShadow();' +
+      'if (!shadow) return { error: "no overlay shadow root — the layer never mounted" };' +
+      'var box = shadow.querySelector(\'.nl-region[data-id="N1"]\');' +
+      'if (!box) return { error: "no .nl-region[data-id=N1] painted" };' +
+      'var cs = getComputedStyle(box);' +
+      'var before = getComputedStyle(box, "::before");' +
+      'return {' +
+      '  found: true,' +
+      '  borderWidth: cs.borderTopWidth,' +
+      '  background: cs.backgroundColor,' +
+      '  beforeStyle: before.borderTopStyle,' +
+      '  beforeInsetTop: before.top, beforeInsetLeft: before.left, beforeInsetRight: before.right, beforeInsetBottom: before.bottom,' +
+      '  beforeWidth: before.borderTopWidth,' +
+      '  sel: box.className' +
+      '};' +
+      '})()'
+    const CLICK =
+      OVERLAY_SHADOW_JS +
+      '(function () {' +
+      'var shadow = findOverlayShadow();' +
+      'var box = shadow ? shadow.querySelector(\'.nl-region[data-id="N1"]\') : null;' +
+      'if (!box) return { error: "no box to click" };' +
+      'box.click();' +
+      'return { ok: true };' +
+      '})()'
+    const result = await withChrome(chrome, async ({ navigate, evalJs }) => {
+      await navigate(url)
+      let before = null
+      for (let i = 0; i < 20; i++) {
+        before = await evalJs(PROBE)
+        if (before && before.found) break
+        await new Promise((r) => setTimeout(r, 250))
+      }
+      if (!before || before.error) return before
+      const clicked = await evalJs(CLICK)
+      if (clicked && clicked.error) return Object.assign({}, before, clicked)
+      await new Promise((r) => setTimeout(r, 300))
+      const after = await evalJs(PROBE)
+      return { before, after }
+    })
+    assert.ok(!result.error, 'the mark must paint and be clickable: got ' + JSON.stringify(result))
+    const { before, after } = result
+    assert.strictEqual(before.borderWidth, '0px',
+      'D12: the mark itself must compute a border-width of 0px — it is a stroke-less tint, never an outline: got ' + JSON.stringify(before))
+    assert.notStrictEqual(before.background, 'rgba(0, 0, 0, 0)',
+      'D12: the mark must compute a non-transparent background (the highlighter tint): got ' + JSON.stringify(before))
+    assert.strictEqual(before.beforeStyle, 'dashed',
+      'D12: the mark\'s ::before frame must compute a dashed border style: got ' + JSON.stringify(before))
+    assert.strictEqual(before.beforeInsetTop, '-6px', 'D12: ::before must be inset -6px on top: got ' + JSON.stringify(before))
+    assert.strictEqual(before.beforeInsetLeft, '-6px', 'D12: ::before must be inset -6px on the left: got ' + JSON.stringify(before))
+    assert.strictEqual(before.beforeInsetRight, '-6px', 'D12: ::before must be inset -6px on the right: got ' + JSON.stringify(before))
+    assert.strictEqual(before.beforeInsetBottom, '-6px', 'D12: ::before must be inset -6px on the bottom: got ' + JSON.stringify(before))
+    assert.ok(!/\bsel\b/.test(before.sel), 'setup: the box must not already carry class "sel" before it is clicked: got ' + JSON.stringify(before))
+    assert.match(after.sel, /\bsel\b/, 'setup: clicking the box must select it (class "sel") so the selected treatment can be measured: got ' + JSON.stringify(after))
+    assert.strictEqual(after.beforeWidth, '2px',
+      'D12: a selected ("sel") mark must compute its ::before border-width as 2px, heavier than the unselected 1.5px: got ' + JSON.stringify(after))
+    assert.strictEqual(after.beforeStyle, 'dashed',
+      'D12: a selected mark\'s ::before must still compute a dashed border style — selection changes weight, never shape: got ' + JSON.stringify(after))
+  } finally {
+    await stop()
+  }
+})
+
+// ---------------------------------------------------------------------------
 // AC-20260912-12-6 [env: CHROME_BIN] — real pointer events dispatched on `document` (the same
 // target notes-layer.browser.js's current mousedown/mousemove/mouseup listen on) in a real
 // headless Chrome, over a served, non-clean mock so the layer (and its mark mode) is actually
@@ -249,4 +353,109 @@ test('AC-20260912-12-6: a touch pointerdown released after 100ms creates no draf
   } finally {
     await stop()
   }
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260912-12-22 [env: CHROME_BIN] — D17 (owner ruling, 2026-09-13): the build had once
+// collapsed `open` onto `--v-warn` to match the approved mock's orange, making an open box and an
+// addressed one identical on every served mock; the owner reinstated the four distinct roles and
+// ruled the fix must be pinned, never left as an unchecked code comment (the promise-sweep leg's
+// own "orphan-decision: no carrier" finding this AC closes). Executed over two real boxes in
+// headless Chrome — the strong form over a prose grep of colorFor's source.
+// ---------------------------------------------------------------------------
+function buildD17Fixture() {
+  const dir = tmpdir('client-region-d17')
+  writeFileDeep(path.join(dir, 'design/mocks/a.html'),
+    '<main data-screen-label="a" data-status="sketch" style="padding:24px">a screen with content to mark</main>\n')
+  writeFileDeep(path.join(dir, 'design/mocks/notes.json'), JSON.stringify([
+    { id: 'N1', scope: 'mock', screen: 'a', state: null, text: 'open mark', by: 'jj', kind: 'note',
+      at: new Date().toISOString(), status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null,
+      region: trivialRegion() },
+    { id: 'N2', scope: 'mock', screen: 'a', state: null, text: 'addressed mark', by: 'jj', kind: 'note',
+      at: new Date().toISOString(), status: 'addressed',
+      addressed: { at: new Date().toISOString(), change: 'x', ledgerRow: null }, reply: null, resolvedBy: null, resolvedAt: null,
+      region: trivialRegion() },
+  ], null, 2) + '\n')
+  return dir
+}
+
+test('AC-20260912-12-22: colorFor CONTINUES TO resolve an open box and an addressed box to distinct, correct colors (D17), and viewer.css\'s .nl-region comment block still describes the true four-role register', { timeout: 45000 }, async (t) => {
+  const chrome = findChrome()
+  if (!chrome) { t.skip('no Chrome binary (set CHROME_BIN) — AC-22 only runs against real computed colors'); return }
+  const cssSrc = fs.readFileSync(path.join(SPEC, 'templates/mocks/viewer.css'), 'utf8')
+  assert.match(cssSrc, /--v-danger open, --v-warn addressed, --v-ok\s+resolved, --v-muted outdated\/withdrawn/,
+    'D17: viewer.css\'s .nl-region comment block must still describe the true four-role register (never the collapsed-onto-warn register the build once shipped): got no match')
+  const dir = buildD17Fixture()
+  const { ready, stop } = serve(dir)
+  try {
+    const { port } = await ready
+    const url = 'http://127.0.0.1:' + port + '/mocks/a.html'
+    const OVERLAY_SHADOW_JS =
+      'function findOverlayShadow() {' +
+      '  var hosts = Array.prototype.slice.call(document.querySelectorAll(".nl-host"));' +
+      '  for (var i = 0; i < hosts.length; i++) { if (hosts[i].shadowRoot && hosts[i].shadowRoot.querySelector(".nl-overlay")) return hosts[i].shadowRoot }' +
+      '  return null;' +
+      '}'
+    const PROBE =
+      OVERLAY_SHADOW_JS +
+      '(function () {' +
+      'var shadow = findOverlayShadow();' +
+      'if (!shadow) return { error: "no overlay shadow root — the layer never mounted" };' +
+      'var openBadge = shadow.querySelector(\'.nl-region[data-id="N1"] .nl-region-badge\');' +
+      'var addrBadge = shadow.querySelector(\'.nl-region[data-id="N2"] .nl-region-badge\');' +
+      'if (!openBadge || !addrBadge) return { error: "not both badges painted", openFound: !!openBadge, addrFound: !!addrBadge };' +
+      'return { found: true, openBg: getComputedStyle(openBadge).backgroundColor, addressedBg: getComputedStyle(addrBadge).backgroundColor };' +
+      '})()'
+    const result = await withChrome(chrome, async ({ navigate, evalJs }) => {
+      await navigate(url)
+      let r = null
+      for (let i = 0; i < 20; i++) {
+        r = await evalJs(PROBE)
+        if (r && r.found) break
+        await new Promise((res) => setTimeout(res, 250))
+      }
+      return r
+    })
+    assert.ok(result && !result.error, 'both marks must paint their own badge: got ' + JSON.stringify(result))
+    assert.strictEqual(result.openBg, 'rgb(220, 38, 38)',
+      'D17: an open box\'s badge must compute var(--v-danger) as its background, never the review page\'s shared orange: got ' + JSON.stringify(result))
+    assert.strictEqual(result.addressedBg, 'rgb(217, 119, 6)',
+      'D17: an addressed box\'s badge must compute var(--v-warn) as its background: got ' + JSON.stringify(result))
+    assert.notStrictEqual(result.openBg, result.addressedBg,
+      'D17: open and addressed must never collapse onto the same color — that is the exact regression the owner\'s ruling exists to prevent: got ' + JSON.stringify(result))
+  } finally {
+    await stop()
+  }
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260912-12-23 — D4 promised the client walk page BOTH specs/20260912/11 D8 footnotes (the
+// outdated one AC-9 already pins, and this one); grep of tests/ for "fitted to content" found
+// nothing before this test, though the code path itself was fixed at the review stage's FIRST
+// disposition round (s5) — the gap was coverage, not behavior.
+// ---------------------------------------------------------------------------
+test('AC-20260912-12-23: a client-origin request row flagged addressed.reanchored:"children" carries a .nl-region-badge and the D8 fitted-to-content footnote, with data-status unchanged and no data-region attribute', () => {
+  const seed = { product: 'P', journeys: [{ name: 'onboarding', title: 'Onboarding', screens: [{ label: 'a', states: [] }] }] }
+  const fittedNote = {
+    id: 'N1', scope: 'mock', screen: 'a', state: null, text: 'the marked button', by: 'client', origin: 'client', kind: null,
+    at: new Date().toISOString(), status: 'addressed',
+    addressed: { at: new Date().toISOString(), change: 'moved the button', ledgerRow: null, reanchored: 'children' },
+    reply: null, resolvedBy: null, resolvedAt: null, region: trivialRegion(),
+  }
+  const html = buildWalkPage({ journey: 'onboarding', seed, notes: [fittedNote], ledger: [], walk: { journeys: {} }, prefix: '' })
+  const { document } = parseFlatDom(html)
+
+  const row = document.querySelector('[data-wk="request"][data-id="N1"]')
+  assert.ok(row, 'the fitted-region request must render a row at all')
+  assert.strictEqual(row.hasAttribute('data-region'), false,
+    'D4 (amended): a "children" reanchor is not "lost" — the row must carry no data-region attribute at all: got ' + JSON.stringify(row.getAttribute('data-region')))
+  assert.strictEqual(row.getAttribute('data-status'), 'addressed',
+    'D4 (amended): data-status must stay the note\'s own lifecycle status: got ' + JSON.stringify(row.getAttribute('data-status')))
+  assert.ok(row.querySelector('.nl-region-badge'),
+    'D4/D8: the fitted-region row must carry a .nl-region-badge, the same pill specs/20260912/11 D8 defines')
+  const rowStart = html.indexOf('data-id="N1"')
+  const rowEnd = html.indexOf('</article>', rowStart)
+  const rowHtml = html.slice(Math.max(0, html.lastIndexOf('<article', rowStart)), rowEnd)
+  assert.match(rowHtml, /Adjusted — fitted to content on this size\./,
+    'D4/D8: the fitted-region row must carry the exact footnote text: got ' + JSON.stringify(rowHtml))
 })

@@ -248,7 +248,11 @@ function renderComposer(prefix) {
     '<div class="rv-chips">' + chips + '</div>' +
     '<textarea data-rv="text" rows="3" placeholder="What should change, or what is missing?"></textarea>' +
     '<div class="rv-actions"><button type="submit" data-rv="send" class="rv-primary">Send</button><kbd>⌘</kbd><kbd>Enter</kbd>' +
-    '<button type="button" class="rv-mark-area" data-rv="mark-area" title="Draw a box on the screen, then write the note">Mark an area</button></div></form>'
+    // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D11, disposed s2 (2026-09-13):
+    // `aria-pressed` gives the button itself a visible active state — mark mode had no signal at
+    // all once the framed mock's own bar went invisible (marksOnly). review.browser.js flips it.
+    '<button type="button" class="rv-mark-area" data-rv="mark-area" aria-pressed="false" ' +
+    'title="Draw a box on the screen, then write the note">Mark an area</button></div></form>'
 }
 
 function renderInspector(items, prefix, selectedId) {

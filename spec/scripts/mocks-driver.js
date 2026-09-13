@@ -1057,16 +1057,18 @@ function cmdNotes(sub, args) {
     const notes = notesOrEmpty()
     const found = notes.find((n) => n.id === id)
     if (!found) die('notes address: no note with id "' + id + '"')
-    // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D1: a region note re-anchors
-    // ahead of every other address path (client-origin capture included) — the box the owner
-    // marked is what amber means, and it takes priority over origin.
-    if (found.region) {
-      if (!port) die('notes address: a region note requires --port <n> — run `node ' + designAtlasBin + ' serve --root ' + root + ' --port <n>` first')
+    // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D1, disposed s0 (2026-09-13):
+    // a region note re-anchors, but it is ADDITIONAL work over whatever address path its origin
+    // already owns — never a bypass of specs/20260907/10 D7's change-required guard. A
+    // client-origin mock-scope note that also carries a region must still fail the same
+    // `captured.hash === beforeHash` refusal a non-region client note fails; only once that guard
+    // clears does the region re-anchor run.
+    function finishRegionReanchor(baseOpts) {
       clientCaptureLib.resolveRegion({
         port, label: found.screen, state: found.state || null, viewport: captureViewport(), region: found.region,
       }).then((resolved) => {
         let result
-        try { result = addressNote(notes, id, { change, ledgerRow }) } catch (e) { die('notes address: ' + e.message); return }
+        try { result = addressNote(notes, id, baseOpts) } catch (e) { die('notes address: ' + e.message); return }
         if (resolved.mode === 'exact' || resolved.mode === 'children') {
           result.note.region = resolved.region
           result.note.addressed.reanchored = resolved.mode
@@ -1083,7 +1085,6 @@ function cmdNotes(sub, args) {
       }).catch((e) => {
         die('notes address: re-anchor failed: ' + e.message)
       })
-      return
     }
     // specs/20260907/10-client-review.md D7: a client-origin note re-captures through D5 before
     // it can be addressed — every other note (session-origin, walk, or --port simply omitted on
@@ -1102,9 +1103,16 @@ function cmdNotes(sub, args) {
           die('notes address: the screen has not changed — a client note closes on a visible change, a reply (`notes reply`), a client withdrawal, or a waiver (`notes waive`)')
           return
         }
+        const captureOpts = { change, ledgerRow, capture: { hash: captured.hash, file: 'captures/' + id + '.after.png' } }
+        // D1: the change is confirmed — the region re-anchor is additional work on top of the
+        // client capture, never instead of it.
+        if (found.region) {
+          finishRegionReanchor(captureOpts)
+          return
+        }
         let result
         try {
-          result = addressNote(notes, id, { change, ledgerRow, capture: { hash: captured.hash, file: 'captures/' + id + '.after.png' } })
+          result = addressNote(notes, id, captureOpts)
         } catch (e) { die('notes address: ' + e.message) }
         writeNotes(root, result.notes)
         writeOut(1, 'notes address: ' + id + ' → addressed\n')
@@ -1113,6 +1121,11 @@ function cmdNotes(sub, args) {
         try { fs.unlinkSync(outPath) } catch { /* best effort */ }
         die('notes address: re-capture failed: ' + e.message)
       })
+      return
+    }
+    if (found.region) {
+      if (!port) die('notes address: a region note requires --port <n> — run `node ' + designAtlasBin + ' serve --root ' + root + ' --port <n>` first')
+      finishRegionReanchor({ change, ledgerRow })
       return
     }
     // specs/20260911/06-the-client-loop.md D7: a client-origin project-scope note (a "something

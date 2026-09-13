@@ -406,7 +406,11 @@
       case 'k': case 'K': case 'ArrowUp': if (e.preventDefault) e.preventDefault(); move(-1); break
       case 'y': case 'Y': if (selectedId) answer(selectedId, 'yes'); break
       case 'n': case 'N': if (selectedId) openCorrection(selectedId); break
-      case 'Escape': select(null); break
+      // disposed s2 (2026-09-13): mark mode's own Escape exit takes priority over the existing
+      // deselect-on-Escape — clearing the row selection AND the board's data-focus underneath an
+      // active mark would have stranded `[data-rv="mark-area"]`'s next click with no focused
+      // board to re-enter mark mode on.
+      case 'Escape': if (markingFrame) { setMarkArea(false) } else { select(null) } break
       case '\\': setFolded(!folded); break
       default: break
     }
@@ -499,13 +503,37 @@
 
   // D11: the composer's ghost action puts the focused board's visible frame into mark mode — the
   // drag, the draft and the note itself stay entirely inside that frame's own layer.
-  on(q('[data-rv="mark-area"]'), 'click', function () {
-    var label = focusedLabel()
-    if (!label) return
-    var frame = q('[data-rv="board"][data-label="' + label + '"] [data-rv="frame"]:not([hidden])')
-    if (!frame) return
-    try { if (frame.contentWindow && frame.contentWindow.__nlMark) frame.contentWindow.__nlMark(true) } catch (e) { /* not loaded yet */ }
-  })
+  //
+  // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D11, disposed s2 (2026-09-13):
+  // marksOnly hides the framed mock's own bar entirely, so its "Marking · Esc to stop" text is
+  // invisible in every board frame — the review page itself must carry the only signal AND the
+  // only path back. `markingFrame` tracks which frame (if any) is currently in mark mode so the
+  // button reads as pressed and the same click, or Escape on this page, turns it back off.
+  var markingBtn = q('[data-rv="mark-area"]')
+  var markingFrame = null
+  function setMarkArea(on) {
+    if (!on && !markingFrame) return
+    if (on) {
+      var label = focusedLabel()
+      if (!label) return
+      var frame = q('[data-rv="board"][data-label="' + label + '"] [data-rv="frame"]:not([hidden])')
+      if (!frame) return
+      if (markingFrame && markingFrame !== frame) {
+        try { if (markingFrame.contentWindow && markingFrame.contentWindow.__nlMark) markingFrame.contentWindow.__nlMark(false) } catch (e) { /* not loaded yet */ }
+      }
+      markingFrame = frame
+      try { if (frame.contentWindow && frame.contentWindow.__nlMark) frame.contentWindow.__nlMark(true) } catch (e) { /* not loaded yet */ }
+    } else {
+      try { if (markingFrame.contentWindow && markingFrame.contentWindow.__nlMark) markingFrame.contentWindow.__nlMark(false) } catch (e) { /* not loaded yet */ }
+      markingFrame = null
+    }
+    if (markingBtn) markingBtn.setAttribute('aria-pressed', on ? 'true' : 'false')
+  }
+  on(markingBtn, 'click', function () { setMarkArea(!markingFrame) })
+  // PATH BACK: Escape is wired into the existing keydown switch above (it runs first in source
+  // order, so `markingFrame` and `setMarkArea` are already defined by the time any key fires) —
+  // the framed mock's own Escape handler (notes-layer.browser.js) only ever sees a key dispatched
+  // inside ITS document, so the review page needs its own exit rather than relying on that one.
 
   // D15: "All screens" clears the narrowing so every screen's rows show; scrolling to a board
   // re-applies it (focusBoard/the IntersectionObserver below).

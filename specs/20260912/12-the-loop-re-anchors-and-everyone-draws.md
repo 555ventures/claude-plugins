@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: implementing
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -41,7 +41,7 @@ counts.
 | D1 | **`notes address` re-anchors a region note.** In `mocks-driver.js`, when the found note carries `region`, the driver requires `--port` (the same fallback to `status.client.port` the client path uses) and calls `resolveRegion` (D2). Outcome `exact` or `children`: the region is REPLACED by a fresh `NotesAnchor.capture` over the resolved box (a new anchor for the edited markup) and `addressed.reanchored` = that mode; outcome `null`: the region is left as is and `addressed.reanchored` = `'lost'`, and the driver prints `notes address: <id> → addressed (box lost — the owner will be asked to re-place it)` on stdout, exit 0. `--port` missing on a region note → `die` naming the serve command, exactly like the client-origin refusal (AC-20260912-12-1, -2, -8) | Amber means "I changed it", and the change is what moves the anchor. Re-capturing over the resolved box turns a one-edit-old anchor into a current one, so the owner's `Needs you` view shows the box on the new content. A lost box is reported, never hidden and never guessed |
 | D2 | **`client-capture.js` gains `resolveRegion({port, label, state, viewport, region})`** → `Promise<{mode:'exact'|'children'|null, region: <fresh region>|null}>`: opens the served mock at the given state in headless Chrome (the same boot `captureScreen` uses, same `CHROME_BIN` discovery), evaluates `NotesAnchor.resolve(root, region)` in the page and, when it resolves, `NotesAnchor.capture(root, box)` over the returned box; returns both. No screenshot is taken (AC-20260912-12-2) | One Chrome boot path, one discovery rule — the capture lib already owns "run a served mock headless"; adding a second launcher in the driver is the duplication the host rules flag |
 | D3 (amended) | **The box is the note — the marks are always painted, and the row is the click target.** `review-page.js` renders a region note's `data-rv="row"` with `data-region="1"`, `data-state="<the state it was drawn on>"`, and the note id inside an orange `<span class="rv-pin">` where a whole-screen / whole-project row keeps its muted `<span class="rv-id">`; the note text leads in both and there is no other layout difference. The row itself is the click target (`.rv-row`, `cursor:pointer`, its left rule the selection accent — `data-selected`). There is NO `Show on the screen` control: `review-page.js` emits zero `button[data-rv="jump"]` and `review.browser.js` binds no `[data-rv="row"] [data-rv="jump"]` handler (the rail's `<select class="rv-jump" data-rv="jump">` screen picker is a different control and is unchanged). The boxes themselves keep being painted by the framed mock's own notes layer on every render, with no reveal step. `design/chrome-mocks/review.html` is the binding artifact and already carries this; workers read it and do not edit it (AC-20260912-12-3, -4) | The first cut made the owner ask for a box twice — once by drawing it, once by pressing a button to see it again. A mark that is always on the board is the note; a button to reveal it is a second thing to learn. Removing it also removes the only control on the row that was not the row |
-| D4 (amended) | **The client mount stores a region.** `/client/__notes/add`'s `addClientMockNote` passes `region` through to `addNote` (the before-capture is unchanged); `/client/__notes/region` mirrors the session route with `origin` checks like the client's other verbs; `walk-page.js`'s note rows gain the badge and the two footnotes from specs/20260912/11 D8, and carry the outdated fact on a NEW `data-region="outdated"` attribute — never on `data-status`, which keeps meaning the note's own lifecycle status — set when the row's region is flagged `addressed.reanchored:'lost'` or the walk page cannot resolve it; the client's `Not needed` (withdraw) and reopen controls are unchanged. The client index page shows `N open` per journey as today (AC-20260912-12-5, -9, -10) | Clients approve the journey preview; a client who cannot mark an area sends prose and the loop stays slow. The client's existing verbs already cover accept/withdraw/reopen, so only add and re-place are new. **Amended at build entry (2026-09-12):** `data-status` on `.wk-req` is load-bearing in two places an `outdated` value would silently break — viewer.css hides the action row on `resolved`, and `walk.browser.js`'s `refreshNavDisabled` counts only `open`/`addressed` rows as blocking, so an `outdated` row would stop blocking and the confirm button would enable with the request still unanswered. A separate attribute costs one selector and cannot unlock a sign-off |
+| D4 (amended) | **The client mount stores a region.** `/client/__notes/add`'s `addClientMockNote` passes `region` through to `addNote` (the before-capture is unchanged); `/client/__notes/region` mirrors the session route with `origin` checks like the client's other verbs; `walk-page.js`'s note rows gain the badge and the two footnotes from specs/20260912/11 D8, and carry the outdated fact on a NEW `data-region="outdated"` attribute — never on `data-status`, which keeps meaning the note's own lifecycle status — set when the row's region is flagged `addressed.reanchored:'lost'` or the walk page cannot resolve it; the client's `Not needed` (withdraw) and reopen controls are unchanged. The client index page shows `N open` per journey as today (AC-20260912-12-5, -9, -10, -23) | Clients approve the journey preview; a client who cannot mark an area sends prose and the loop stays slow. The client's existing verbs already cover accept/withdraw/reopen, so only add and re-place are new. **Amended at build entry (2026-09-12):** `data-status` on `.wk-req` is load-bearing in two places an `outdated` value would silently break — viewer.css hides the action row on `resolved`, and `walk.browser.js`'s `refreshNavDisabled` counts only `open`/`addressed` rows as blocking, so an `outdated` row would stop blocking and the confirm button would enable with the request still unanswered. A separate attribute costs one selector and cannot unlock a sign-off |
 | D5 | **Touch drawing and the focus hook in the layer.** `notes-layer.browser.js`: pointer events replace mouse events; a `pointerType:'touch'` press starts the draft only after a 350 ms hold without movement > 8 px (a scroll gesture never draws), the drag then follows the finger; `window.__nlFocus(id)` selects and pulses the box and opens its card; viewports under 640 px already render the card as a bottom sheet (specs/20260912/11 D6) (AC-20260912-12-4, -6) | Long-press is the one gesture that does not fight page scroll on a phone, and it is what every tool in the field uses |
 | D6 | **The atlas index cards carry counts.** `design-atlas.js`'s derived index renders, on each screen card, `<span class="nl-card-count" data-open="N" data-needs="M">N open · M need you</span>` computed server-side from notes.json (open = status `open` non-question notes on that screen; needs = status `addressed`), omitted entirely when both are zero. The count is added to `design/chrome-mocks/atlas.html`, the atlas index’s binding artifact (design.md § Design Canon), by the planning session; workers read it and do not edit it (AC-20260912-12-7) | The owner opens the atlas first; a count is how they know which screen to open. Server-derived so a `?clean` render and the browser agree |
 | D8 | **Selection is bidirectional, by direct same-origin call.** Row → box: `review.browser.js`'s `select(id, …)` focuses the row's board (`focusBoard`), switches that board's state tab to the row's `data-state` (D9), then calls `frame.contentWindow.__nlFocus(id)` on that board's visible `iframe[data-rv="frame"]`, retrying exactly once on the frame's `load` event if the frame has not loaded. Box → row: `notes-layer.browser.js`, when it is framed (`window.parent !== window`), calls `window.parent.__rvPick(id)` inside a `try` on a box click; `review.browser.js` defines `window.__rvPick = function (id) { … }` which scrolls that row into view and selects it. No postMessage in either direction, and no message listener on either side (AC-20260912-12-4, -11) | The frames are same-origin served mocks (A2, D16), so a direct function call is the whole bridge — a postMessage protocol would add a wire format, an origin check and an async hop to buy nothing. One exposed function per direction, both no-ops when the other side is absent |
@@ -53,6 +53,7 @@ counts.
 | D14 | **The caption count is inert.** `review-page.js` emits the board caption's count as `<span class="rv-badge" data-rv="badge" …>`, not a `<button>`, and `review.browser.js`'s `[data-rv="badge"]` click handler is deleted; `recount()`'s `[data-rv="badge"]` update is unchanged (a span takes the same attributes) (AC-20260912-12-19, -20) | It looked like the rail's link and did something else — it narrowed the panel to that screen, which scrolling the board already does. A number that is a number cannot mislead |
 | D15 | **The scope band says what it filters, and offers the way out.** `review-page.js` emits `<span class="rv-scopeband-label">On screen</span><span class="rv-screenfilter" data-rv="screenfilter">…</span><span class="rv-scopeband-label">plus the whole project</span><button class="rv-allscreens" data-rv="allscreens">All screens</button>`. `review.browser.js`'s `applyFilter` matches that sentence: with a screen-label `screenFilter`, a row shows when its `data-label` matches OR it carries no `data-label` (a project-scope row); `__project` is unchanged; `All screens` clears `screenFilter` and re-applies. SUCCESS is the panel widening to every screen's rows; PATH BACK is scrolling to a board (`focusBoard` re-narrows); the farthest artifact it reaches is the reviewer's own reading of the list — it posts nothing (AC-20260912-12-19, -20) | The band showed a screen name under a bare `Notes for` and silently hid every whole-project note, so a reviewer answering screen by screen never saw the notes that block sign-off. Saying the scope out loud and giving it a way out costs one button |
 | D16 | **The layer rides into a framed mock on its own opt-in flag.** `review-page.js`'s `frameSrc` requests `?clean&notes=1`; `design-atlas.js`'s mock route injects the notes-layer script only when the `notes` param is present, and `notes-layer.browser.js`'s own `location.search` guard checks the same flag. A bare `?clean` request — every other caller — still gets no layer at all, so the pinned isolation invariant is untouched (AC-20260912-12-21) | A2 was empirically false: `?clean` deliberately strips the layer, which is exactly what the screenshot path needs. Two independent flags let one caller ask for a clean chrome AND a live layer without widening `clean` for anybody else |
+| D17 (owner ruling, 2026-09-13) | **A box keeps its state colour; the orange register is the review page's chrome only.** `notes-layer.browser.js`'s `colorFor` SHALL CONTINUE TO resolve specs/20260912/11 D9's four roles distinctly — `var(--v-danger)` open, `var(--v-warn)` addressed, `var(--v-ok)` resolved, `var(--v-muted)` outdated/withdrawn — and this spec amends none of them. The orange badge register D3 and the UI section describe binds the review page's own chrome (`.rv-pin`, `.rv-badge`, `.rv-tabpin`, the rail counts) and never the box tint or its frame, which track status. `spec/templates/mocks/viewer.css`'s `.nl-region` comment block SHALL keep describing that register truthfully (AC-20260912-12-22) | The build collapsed `open` onto `var(--v-warn)` to match the approved mock, which made an open box and an addressed one identical on every served mock. The box colour is the only cue that tells the owner, scanning a screen, which marks still need them; the mock's orange was a register choice for the numbered pin, and the pin can carry it without the box following. Ruled by the owner at the review stage's disposition step, recorded here rather than in a code comment |
 | D7 | Plugin bump via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` `[no-ac: `--check` in the gate is the oracle]` | Version discipline from .claude/rules/spec-pipeline.md § Planning |
 
 ## File Plan
@@ -65,14 +66,14 @@ counts.
 | spec/templates/mocks/viewer.css | MODIFY | doctrine | D12 `.nl-region` two-part mark — stroke-less tint + `::before` dashed frame at `inset:-6px`; `.sel` changes weight inside the register; the `[data-status="outdated"]` dashed-border rule retires with the border |
 | spec/scripts/lib/review-page.js | MODIFY | scripts | D3 region row (`data-region`, `data-state`, `.rv-pin`), no `data-rv="jump"` button; D9 `.rv-tabpin` per state tab; D10 `.rv-pins` + `data-pins="on"`; D11 `.rv-mark-area`; D13 filter labels; D14 badge as `<span>`; D15 scope band + `All screens`; D16 `frameSrc` carries `&notes=1` |
 | spec/scripts/lib/review.browser.js | MODIFY | scripts | D3 the jump handler is deleted; D8 `select()` → focus board/tab → `__nlFocus`, and `window.__rvPick(id)` for the box→row direction; D9 tab switch on select; D10 pins toggle → `__nlPins`; D11 mark-area → `__nlMark`; D14 the badge click handler is deleted; D15 `applyFilter` admits project rows + `All screens` clears the filter |
-| spec/scripts/lib/walk-page.js | MODIFY | scripts | D4 badge, `data-region="outdated"`, footnotes on client note rows |
+| spec/scripts/lib/walk-page.js | MODIFY | scripts | D4 badge, `data-region="outdated"`, footnotes on client note rows; disposed s1 (2026-09-13): the badge's `--c` custom property is set inline (`regionColorVar`), fixing the transparent-background defect the shipped `.nl-region-badge{background:var(--c)}` rule has no fallback for |
 | spec/scripts/design-atlas.js | MODIFY | scripts | D4 client add passes `region`, `/client/__notes/region`; D6 index card counts; D16 the mock route injects the notes-layer script only when the `notes` param is present |
 | design/chrome-mocks/review.html | MODIFY | doctrine | D3/D8–D15 the accepted marks design — always-painted two-part marks with numbered pins, one row layout, state-tab counts, the eye toggle, `Mark an area`, and the three page fixes. Landed by the planning session; workers read it and leave it |
 | design/chrome-mocks/atlas.html | MODIFY | doctrine | D6 the `N open · M need you` count on a screen card — landed by the planning session; workers read it and leave it |
 | tests/mocks/review-page.test.js | MODIFY | tests | AC-20260912-12-19 — the `AC-20260912-06-3` pin asserts the scope band carries `>Notes for<` as DOM text, the literal D15 retires. Updated in place to the new band sentence (`>On screen<` … `>plus the whole project<`) and retagged; its second half (viewer.css carries no `content: "Notes for"`) is unchanged and still true. Never weakened, never left red |
 | tests/mocks/notes-reanchor.test.js | CREATE | tests | AC-20260912-12-1, -2, -8 (`-2 [env: CHROME_BIN]`) |
 | tests/mocks/review-region.test.js | CREATE | tests | AC-20260912-12-3, -4, -11, -12, -13, -14, -15, -16, -17, -19, -20, -21 (`-4, -11, -13, -15, -17, -20 [env: CHROME_BIN]`) |
-| tests/mocks/client-region.test.js | CREATE | tests | AC-20260912-12-5, -6 (`-6 [env: CHROME_BIN]`), -7, -9, -10, -18 (`-18 [env: CHROME_BIN]`) |
+| tests/mocks/client-region.test.js | CREATE | tests | AC-20260912-12-5, -6 (`-6 [env: CHROME_BIN]`), -7, -9, -10, -18 (`-18 [env: CHROME_BIN]`), -22 (`-22 [env: CHROME_BIN]`), -23 |
 | spec/.claude-plugin/plugin.json | MODIFY | other | D7 bump via `node scripts/plugin-bump.js --bump --plugin spec --changelog "…"` |
 
 ## Contracts
@@ -314,6 +315,21 @@ note addressed before this spec and on every non-region note. No migration.
   with `?clean&notes=1` THE SYSTEM SHALL serve markup containing the notes-layer script while the
   same route requested with `?clean` and no `notes` param SHALL serve markup containing none →
   writes tests/mocks/review-region.test.js
+- **AC-20260912-12-22** `[env: CHROME_BIN]` (added at the review stage's second disposition round,
+  2026-09-13 — D17 cited this AC before it existed, an orphan-decision `promise-sweep` finding):
+  WHEN a served mock paints two region notes on the same state, one carrying status `open` and one
+  `addressed`, THE SYSTEM SHALL CONTINUE TO resolve `notes-layer.browser.js`'s `colorFor` distinctly
+  per specs/20260912/11 D9's four roles — `open` to `var(--v-danger)` and `addressed` to
+  `var(--v-warn)`, each box's `.nl-region-badge` computing that literal background color — and
+  `spec/templates/mocks/viewer.css`'s `.nl-region` comment block SHALL CONTINUE TO describe the same
+  four-role register (`--v-danger` open, `--v-warn` addressed, `--v-ok` resolved, `--v-muted`
+  outdated/withdrawn) truthfully (D17) → writes tests/mocks/client-region.test.js
+- **AC-20260912-12-23** (added at the review stage's second disposition round, 2026-09-13 — D4
+  promised both specs/20260912/11 D8 footnotes and only AC-9 pinned one): WHEN `walk-page.js`
+  renders a client-origin request note whose region is flagged `addressed.reanchored:'children'`
+  THE SYSTEM SHALL emit its `.wk-req` article carrying a `.nl-region-badge` and the D8
+  fitted-to-content footnote text (`fitted to content on this size`), with `data-status` unchanged
+  and no `data-region` attribute → writes tests/mocks/client-region.test.js
 
 ## Assumptions (escalation triggers)
 
@@ -366,6 +382,57 @@ Fragile: the headless resolve depends on the mock rendering at the driver's `cap
 width; a mock that reflows at that width differently from the owner's browser resolves in `children`
 mode more often than expected — visible in the strip footnote, never wrong. Chrome-gated ACs skip
 without `CHROME_BIN`; the route, render and driver-refusal ACs never skip.
+
+**Build-time repairs, first pass.** A2's premise ("every artboard iframe already carries the
+layer") was false as coded — `?clean` deliberately stripped it — so `frameSrc` gained the
+independent `&notes=1` flag D16 records; the pinned isolation invariant never moved.
+`notes-layer.browser.js`'s state handling carried two related bugs: the strip/overlay filters
+compared a note's raw (often-null) `state` against a fallback-less `activeState`, and separately
+that fallback defaulted to whichever state a screen declared first rather than to `'happy'` —
+both fixed to match `mocks-notes.js`'s own `state || 'default'` convention and a `'happy'`
+default when any state is declared, the second exposed only once AC-4/-11 ran against a real
+served host. The touch-drag floor (the pre-existing 12×12px accidental-click guard) is skipped
+for a touch-originated drag, since the 350 ms hold is itself the deliberate gesture and AC-6's
+own fixture drags one axis only. The rail's screen-picker `<select>` carries a historical
+`data-rv="jump"` that collided with AC-3's blanket ban on `button[data-rv="jump"]`; renamed to
+`data-rv="screenjump"` rather than touch the test, since the Contracts block explicitly keeps the
+select's attribute verbatim. AC-15's own test merges two Chrome-eval results with
+`Object.assign`, and both carry a same-named `pinsAttr` key — the second write always wins, so
+`result.pinsAttr` can never read `'off'` regardless of implementation; D10's toggle correctness
+was verified via the test's own non-colliding fields instead, and the test itself left untouched
+since it is not this worker's file.
+
+**The owner's mid-build ruling.** The design consult that rejected D3 as locked and replaced it
+with the always-painted marks (recorded above) also produced `tests/mocks/review-region.test.js`
+authored against the superseded `Show on the screen` contract, rewritten to the new one by a
+separate worker in the same build — D3's rewrite and AC-3/-4 are the record of what changed; the
+test rewrite is the record of who caught it not matching.
+
+**Review disposition, first round.** D17's ruling that a box keeps its state colour (never the
+review page's orange) was under threat from the build's own earlier pass, which had collapsed
+`open` onto `--v-warn` to match the approved mock's badge colour — `colorFor('open')` is restored
+to `var(--v-danger)`; `viewer.css`'s comment block was never wrong, only the code had drifted
+from it. `[data-rv="mark-area"]` gained its own `aria-pressed` state (flipped by
+`review.browser.js`, styled in `viewer.css`) as mark mode's visible on-page signal, plus a
+crosshair cursor on the overlay host while marking; the mark-mode Escape key needed one listener,
+not two — the existing `case 'Escape':` switch already cleared row selection and board focus, so
+mark mode's own exit is folded into that same case, prioritized while marking, rather than a
+second listener that would have raced it and stripped focus on exit (which it did, on first try).
+`.rv-scopeband`'s truncating `nowrap`/`ellipsis` is replaced with `flex-wrap`/`min-height` so the
+scope sentence wraps rather than truncates, per D15. `walk-page.js` gained the missing
+`reanchored:'children'` footnote and, with it, a fix for `.nl-region-badge` riding
+`position:absolute` with no positioned ancestor inside a static `.wk-req` row — set
+`position:static` there, the same fix `.nl-card-hd .nl-region-badge` already needed.
+`tests/mocks/client-region.test.js` (AC-18) was written and executes against real headless
+Chrome rather than skipping, since `CHROME_BIN` is available in this environment.
+
+**Review disposition, second round.** AC-20260912-12-23 pins the `children`-flagged client row's
+footnote and badge — D4 promised both of specs/20260912/11 D8's footnotes and only AC-9 pinned
+one, caught by `grep -rn 'fitted to content' tests/` returning nothing. A whole-suite run
+reddened once on `tests/release-legs/e2e-unobserved.test.js` (AC-20260908-05-5), a file this spec
+touches nothing of; three isolated reruns of that leg and two full `npm test` runs were green
+throughout, so it is recorded here as a pre-existing load-sensitive flake and queued rather than
+fixed, per core § Session Execution.
 
 ## Canonical Delta
 

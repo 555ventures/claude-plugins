@@ -462,7 +462,14 @@ test('AC-20260912-12-15: clicking board a\'s [data-rv="pins"] flips data-pins to
   }
 })
 
-test('AC-20260912-12-17: clicking [data-rv="mark-area"] puts the focused board\'s visible frame into mark mode ("Marking · Esc to stop") and leaves every other board\'s frame out of it', { timeout: 45000 }, async (t) => {
+// disposed s2 (2026-09-13): the pre-image passed by querying the framed mock's own bar text
+// alone — a text that `marksOnly` (the `?clean&notes=1` framed context D16 creates) sets to
+// `display:none`, so the ONLY thing the pre-image asserted is invisible on the real page, and
+// the AC had neither a visible signal nor a working exit at all. This version keeps the bar-text
+// checks as internal confirmation that __nlMark actually fired, but the load-bearing assertions
+// are now the button's own `aria-pressed` (the visible "reads as pressed" signal § Planning
+// requires) and Escape on the REVIEW PAGE's own document (the path back) — never the hidden text.
+test('AC-20260912-12-17: clicking [data-rv="mark-area"] leaves it reading aria-pressed="true" and puts the focused board\'s frame into mark mode; Escape on the review page, or clicking the button again, exits mark mode on both the button and the frame', { timeout: 45000 }, async (t) => {
   const chrome = findChrome()
   if (!chrome) { t.skip('no Chrome binary (set CHROME_BIN) — AC-17 only runs against a real cascade'); return }
   const dir = buildFixture()
@@ -470,8 +477,34 @@ test('AC-20260912-12-17: clicking [data-rv="mark-area"] puts the focused board\'
   try {
     const { port } = await ready
     const url = 'http://127.0.0.1:' + port + '/review/j1.html'
+    const barTextFn =
+      'function findBarText(fdoc) {' +
+      '  var hosts = Array.prototype.slice.call(fdoc.querySelectorAll(".nl-host"));' +
+      '  for (var i = 0; i < hosts.length; i++) {' +
+      '    if (!hosts[i].shadowRoot) continue;' +
+      '    var btns = Array.prototype.slice.call(hosts[i].shadowRoot.querySelectorAll("button"));' +
+      '    var mark = btns.filter(function (b) { return /Mark area|Marking/.test(b.textContent) })[0];' +
+      '    if (mark) return mark.textContent;' +
+      '  }' +
+      '  return null;' +
+      '}'
+    const snapshot =
+      barTextFn +
+      '(function () {' +
+      'var btn = document.querySelector(\'[data-rv="mark-area"]\');' +
+      'var boardA = document.querySelector(\'[data-rv="board"][data-label="a"]\');' +
+      'var frameA = boardA ? boardA.querySelector(\'[data-rv="frame"]:not([hidden])\') : null;' +
+      'var boardB = document.querySelector(\'[data-rv="board"][data-label="b"]\');' +
+      'var frameB = boardB ? boardB.querySelector(\'[data-rv="frame"]:not([hidden])\') : null;' +
+      'return {' +
+      '  pressed: btn ? btn.getAttribute("aria-pressed") : null,' +
+      '  barA: frameA && frameA.contentDocument ? findBarText(frameA.contentDocument) : null,' +
+      '  barB: frameB && frameB.contentDocument ? findBarText(frameB.contentDocument) : null,' +
+      '};' +
+      '})()'
     const result = await withChrome(chrome, async ({ navigate, evalJs }) => {
       await navigate(url)
+      const before = await evalJs(snapshot)
       const clicked = await evalJs(
         '(function () {' +
         'var btn = document.querySelector(\'[data-rv="mark-area"]\');' +
@@ -481,35 +514,48 @@ test('AC-20260912-12-17: clicking [data-rv="mark-area"] puts the focused board\'
         '})()')
       if (clicked && clicked.error) return clicked
       await new Promise((r) => setTimeout(r, 300))
-      const barText =
-        'function findBarText(fdoc) {' +
-        '  var hosts = Array.prototype.slice.call(fdoc.querySelectorAll(".nl-host"));' +
-        '  for (var i = 0; i < hosts.length; i++) {' +
-        '    if (!hosts[i].shadowRoot) continue;' +
-        '    var btns = Array.prototype.slice.call(hosts[i].shadowRoot.querySelectorAll("button"));' +
-        '    var mark = btns.filter(function (b) { return /Mark area|Marking/.test(b.textContent) })[0];' +
-        '    if (mark) return mark.textContent;' +
-        '  }' +
-        '  return null;' +
-        '}'
-      return evalJs(
-        barText +
+      const during = await evalJs(snapshot)
+      // PATH BACK, first way: Escape dispatched on the review page's own document — the framed
+      // mock's own Escape handler only ever sees a key dispatched inside ITS document, so this is
+      // the only way the pre-image's D11 wiring could ever have exited mark mode from the page.
+      const escaped = await evalJs(
         '(function () {' +
-        'var boardA = document.querySelector(\'[data-rv="board"][data-label="a"]\');' +
-        'var frameA = boardA ? boardA.querySelector(\'[data-rv="frame"]:not([hidden])\') : null;' +
-        'var boardB = document.querySelector(\'[data-rv="board"][data-label="b"]\');' +
-        'var frameB = boardB ? boardB.querySelector(\'[data-rv="frame"]:not([hidden])\') : null;' +
-        'return {' +
-        '  barA: frameA && frameA.contentDocument ? findBarText(frameA.contentDocument) : null,' +
-        '  barB: frameB && frameB.contentDocument ? findBarText(frameB.contentDocument) : null,' +
-        '};' +
+        'document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));' +
+        'return { ok: true };' +
         '})()')
+      await new Promise((r) => setTimeout(r, 300))
+      const afterEscape = await evalJs(snapshot)
+      // PATH BACK, second way: clicking the same button again.
+      const reclicked = await evalJs(
+        '(function () {' +
+        'var btn = document.querySelector(\'[data-rv="mark-area"]\');' +
+        'btn.click();' +
+        'return { ok: true };' +
+        '})()')
+      await new Promise((r) => setTimeout(r, 300))
+      const duringAgain = await evalJs(snapshot)
+      const reclickedOff = await evalJs('(function () { document.querySelector(\'[data-rv="mark-area"]\').click(); return { ok: true }; })()')
+      await new Promise((r) => setTimeout(r, 300))
+      const afterButtonToggle = await evalJs(snapshot)
+      return { before, during, escaped, afterEscape, duringAgain, afterButtonToggle }
     })
     assert.ok(!result.error, '[data-rv="mark-area"] must exist to click: got ' + JSON.stringify(result))
-    assert.strictEqual(result.barA, 'Marking · Esc to stop',
-      'D11: the focused board\'s (a) visible frame must enter mark mode via __nlMark(true): got ' + JSON.stringify(result))
-    assert.notStrictEqual(result.barB, 'Marking · Esc to stop',
-      'D11: an unfocused board\'s (b) frame must NOT be put into mark mode: got ' + JSON.stringify(result))
+    assert.strictEqual(result.before.pressed, 'false',
+      'the button must read aria-pressed="false" before mark mode is ever entered: got ' + JSON.stringify(result.before))
+    assert.strictEqual(result.during.pressed, 'true',
+      'D11/s2: clicking Mark an area must leave the button itself reading aria-pressed="true" — the visible, on-page signal a hidden framed-mock bar label can never be: got ' + JSON.stringify(result.during))
+    assert.strictEqual(result.during.barA, 'Marking · Esc to stop',
+      'the focused board\'s (a) visible frame must actually enter mark mode via __nlMark(true) (checked here only as confirmation the wiring fired, not as the visible signal): got ' + JSON.stringify(result.during))
+    assert.notStrictEqual(result.during.barB, 'Marking · Esc to stop',
+      'D11: an unfocused board\'s (b) frame must NOT be put into mark mode: got ' + JSON.stringify(result.during))
+    assert.strictEqual(result.afterEscape.pressed, 'false',
+      'D11/s2: Escape on the review page\'s own document must exit mark mode, leaving the button aria-pressed="false" again — the PATH BACK § Planning requires: got ' + JSON.stringify(result.afterEscape))
+    assert.notStrictEqual(result.afterEscape.barA, 'Marking · Esc to stop',
+      'Escape must actually turn the frame\'s mark mode off (__nlMark(false)), not just flip the button\'s own attribute: got ' + JSON.stringify(result.afterEscape))
+    assert.strictEqual(result.duringAgain.pressed, 'true',
+      'setup: re-clicking Mark an area after Escape must re-enter mark mode so the second exit path can be tested: got ' + JSON.stringify(result.duringAgain))
+    assert.strictEqual(result.afterButtonToggle.pressed, 'false',
+      'D11/s2: clicking [data-rv="mark-area"] a second time (the other PATH BACK) must exit mark mode the same way Escape does: got ' + JSON.stringify(result.afterButtonToggle))
   } finally {
     await stop()
   }

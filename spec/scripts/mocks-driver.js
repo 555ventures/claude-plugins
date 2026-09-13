@@ -7,7 +7,11 @@
 //                              [--status <st>] [--rejected <r>] [--dependents <d>] [--note <n>]
 //                              [--screen <label>]
 // mocks-driver.js --root <dir> ledger ask --id <rowId> --screen <label>
-// mocks-driver.js --root <dir> notes open
+// mocks-driver.js --root <dir> notes open [--all]
+//                              specs/20260912/14 D3/D4: without --all, the answered-questions
+//                              block collapses to a count and the journey-listed note walk stops
+//                              after NOTE_LIST_CAP (20) lines, each with a "… <n> more … --all to
+//                              list" tail; --all reproduces the pre-change output in full.
 // mocks-driver.js --root <dir> notes add --scope mock|project [--screen <label>] [--state <s>]
 //                              --by <name> [--reason <r>] --text "<t>"
 // mocks-driver.js --root <dir> notes add --scope mock --screen <label> --state <s> --kind walk
@@ -889,7 +893,7 @@ function noteLine(n, indent) {
 // s0 fix: a question's open/answered split keys on `answer == null`, never `status` — the
 // session's own `notes address` follow-up (recording the redraw after a "no") sets status
 // "addressed" without touching `answer`, and that must never re-list an answered question as open.
-function questionLines(notes, seed) {
+function questionLines(notes, seed, all) {
   const questions = notes.filter((n) => n.kind === 'question')
   const open = questions.filter((n) => n.answer == null)
   const answered = questions.filter((n) => n.answer != null)
@@ -913,7 +917,12 @@ function questionLines(notes, seed) {
       for (const n of ns) lines.push('    ' + n.id + ' [' + n.ledgerId + '] ' + n.text)
     }
   }
-  if (answered.length) {
+  // specs/20260912/14 D3: without --all, the answered block collapses to one count line in the
+  // same position the "answered:" header prints today, and only when there is at least one
+  // answered question — the pre-change emptiness condition is unchanged.
+  if (answered.length && !all) {
+    lines.push('answered: ' + answered.length + ' — --all to list')
+  } else if (answered.length) {
     lines.push('answered:')
     for (const n of answered) {
       const verdictText = n.answer && n.answer.verdict === 'no' ? 'no → "' + (n.answer.text || '') + '"' : 'yes'
@@ -923,10 +932,15 @@ function questionLines(notes, seed) {
   return lines
 }
 
+// specs/20260912/14 D4: without --all, the journey-listed plain-note walk stops after this many
+// note lines; the questions block, the "📝 open notes:" counts line and the project-notes block
+// are never capped.
+const NOTE_LIST_CAP = 20
+
 // D4's `notes open` — exact shape: the D6 questions block first, then plain notes (project first,
 // with a ⚠️ tail while any is open, then journey -> screen -> state, derived from seed.md via
 // groupOpen); questions never appear twice — the plain listing below excludes them.
-function cmdNotesOpen() {
+function cmdNotesOpen(all) {
   const notes = notesOrEmpty()
   const seed = currentSeedJourneys()
   const plainNotes = notes.filter((n) => n.kind !== 'question')
@@ -935,21 +949,40 @@ function cmdNotesOpen() {
   const mockCount = notResolved.filter((n) => n.scope === 'mock').length
   const addressedCount = notResolved.filter((n) => n.status === 'addressed').length
 
-  const lines = questionLines(notes, seed)
+  const lines = questionLines(notes, seed, all)
   lines.push('📝 open notes: ' + notResolved.length + ' (' + project.length + ' project · ' + mockCount + ' mock) · addressed: ' + addressedCount)
   if (project.length) {
     lines.push('project')
     for (const n of project) lines.push(noteLine(n, '  '))
   }
+  // specs/20260912/14 D4: without --all, the walk breaks out of each of the three nested levels
+  // once `printed >= NOTE_LIST_CAP`, so a journey/screen/state header is never emitted without at
+  // least one note line printed under it; the omitted count is the total notes in `journeys`
+  // minus the number printed. With --all the cap never applies (pre-change walk, unchanged).
+  let printed = 0
+  let totalNoteLines = 0
+  for (const [, screens] of journeys) for (const [, states] of screens) for (const [, ns] of states) totalNoteLines += ns.length
+  outer:
   for (const [journeyName, screens] of journeys) {
-    lines.push(journeyName)
+    let journeyHeaderPushed = false
     for (const [screenLabel, states] of screens) {
-      lines.push('  ' + screenLabel)
+      let screenHeaderPushed = false
       for (const [stateLabel, ns] of states) {
-        lines.push('    ' + stateLabel)
-        for (const n of ns) lines.push(noteLine(n, '      '))
+        if (!all && printed >= NOTE_LIST_CAP) break outer
+        let stateHeaderPushed = false
+        for (const n of ns) {
+          if (!all && printed >= NOTE_LIST_CAP) break outer
+          if (!journeyHeaderPushed) { lines.push(journeyName); journeyHeaderPushed = true }
+          if (!screenHeaderPushed) { lines.push('  ' + screenLabel); screenHeaderPushed = true }
+          if (!stateHeaderPushed) { lines.push('    ' + stateLabel); stateHeaderPushed = true }
+          lines.push(noteLine(n, '      '))
+          printed++
+        }
       }
     }
+  }
+  if (!all && printed < totalNoteLines) {
+    lines.push('… ' + (totalNoteLines - printed) + ' more open note(s) — --all to list')
   }
   if (project.length) {
     lines.push('⚠️ a project note is open — answer it (canon change or new directions) before any mock note')
@@ -960,7 +993,7 @@ function cmdNotesOpen() {
 
 function cmdNotes(sub, args) {
   const narg = (name) => flagArg(args, name)
-  if (sub === 'open') { cmdNotesOpen(); return }
+  if (sub === 'open') { cmdNotesOpen(args.includes('--all')); return }
   if (sub === 'add') {
     // specs/20260907/08-walk-critic.md D4: the refusal narrows to "--kind accepts only walk" —
     // `--ledger-id` stays refused outright, and any `--kind` other than "walk" (question included)

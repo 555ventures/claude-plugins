@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // design-atlas: deterministic design-artifact tooling (no model, no deps) — shared § Design Atlas.
 //
-//   design-atlas.js check <file|dir> [...more] [--matrix] [--states]
+//   design-atlas.js check <file|dir> [...more] [--matrix] [--states] [--verbose]
 //                                                  harness gate: labels, tokens link, no off-token
 //                                                  colors; at data-status ratified|approved (or
 //                                                  --matrix, which also forces the static matrix
@@ -54,6 +54,12 @@
 //                                                  unabsorbed total) print AFTER the CHECK block,
 //                                                  informational only; no design/kit/ anywhere
 //                                                  above the mock = the rule never runs.
+//                                                  specs/20260912/14 D1/D2: without --verbose,
+//                                                  warn lines collapse to one
+//                                                  `⚠️ <n> warn(s) — --verbose to list` line and
+//                                                  the per-screen kit/bespoke ⓘ lines are omitted;
+//                                                  the unabsorbed-total ⓘ line is unchanged either
+//                                                  way. --verbose restores the pre-change output.
 //   design-atlas.js gallery <dir> [--out <file>]   comparison gallery over candidate subdirs (explore rounds)
 //   design-atlas.js build [--root <repo>] [--out <file>]
 //                                                  the atlas: mocks × roadmap `surfaces` blocks ×
@@ -470,7 +476,8 @@ function themeAndNotesViolations(f, html, label) {
 function cmdCheck(argv) {
   const forceMatrix = argv.includes('--matrix')
   const statesMode = argv.includes('--states')
-  const paths = argv.filter(a => a !== '--matrix' && a !== '--states')
+  const verbose = argv.includes('--verbose')
+  const paths = argv.filter(a => a !== '--matrix' && a !== '--states' && a !== '--verbose')
   if (!paths.length) die('check: need at least one file or directory')
   const violations = []
   const warnLines = []
@@ -615,7 +622,13 @@ function cmdCheck(argv) {
     }
   }
   if (!count) die('check: no .html files under ' + paths.join(', '))
-  for (const w of warnLines) process.stdout.write(w + '\n')
+  // specs/20260912/14 D1: without --verbose, warnLines collapse to one count line in the same
+  // position the warn lines print today; with --verbose, every warn line prints as before.
+  if (verbose) {
+    for (const w of warnLines) process.stdout.write(w + '\n')
+  } else if (warnLines.length) {
+    process.stdout.write('⚠️ ' + warnLines.length + ' warn(s) — --verbose to list\n')
+  }
   const failed = violations.length > 0
   if (failed) {
     process.stdout.write('CHECK FAIL (' + violations.length + ' violation(s) across ' + count + ' file(s)):\n')
@@ -625,8 +638,11 @@ function cmdCheck(argv) {
   }
   // specs/20260907/04-kit-canon-family.md D15: "the reason leads; the statistic follows" — the
   // informational kit/bespoke lines print AFTER the CHECK FAIL/PASS block, never before, so every
-  // consumer reads the refusal reason first and the count second.
-  for (const line of kitInfoLines) process.stdout.write(line + '\n')
+  // consumer reads the refusal reason first and the count second. specs/20260912/14 D2: the
+  // per-label lines print only under --verbose; the unabsorbed total line is unchanged.
+  if (verbose) {
+    for (const line of kitInfoLines) process.stdout.write(line + '\n')
+  }
   if (kitUnabsorbedTotal > 0) {
     process.stdout.write('  ⓘ unabsorbed total: ' + kitUnabsorbedTotal + ' across ' + kitScreensWithBespoke + ' screen(s)\n')
   }

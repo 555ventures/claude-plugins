@@ -116,13 +116,18 @@
   function recount() {
     var all = rows()
     var openTotal = 0
+    // D2: openScoped (rows carrying a data-label — this journey's own screens) gates the approve
+    // button; openTotal (every open row, mock + project) stays what the header total and the
+    // rail counts already were. openProjectCount is openTotal's project-scope share, for the
+    // rv-projwait line's own recount (D3).
+    var openScoped = 0, openProjectCount = 0
     var questions = 0, answered = 0, openNotes = 0
     var openByLabel = {}
     all.forEach(function (row) {
       var open = isOpenRow(row)
       var kind = row.getAttribute('data-kind')
       var label = row.getAttribute('data-label')
-      if (open) openTotal++
+      if (open) { openTotal++; if (label) openScoped++; else openProjectCount++ }
       if (kind === 'question') { questions++; if (!open) answered++ } else if (open) openNotes++
       var bucket = label || '__project'
       if (open) openByLabel[bucket] = (openByLabel[bucket] || 0) + 1
@@ -147,10 +152,20 @@
     }
     var approve = q('[data-rv="approve"]')
     if (approve) {
-      if (openTotal) {
+      if (openScoped) {
         approve.setAttribute('disabled', '')
-        approve.setAttribute('title', openTotal + ' open ' + plural(openTotal, 'item blocks', 'items block') + ' approval')
+        approve.setAttribute('title', openScoped + ' open ' + plural(openScoped, 'item blocks', 'items block') + ' approval')
       } else { approve.removeAttribute('disabled'); approve.removeAttribute('title') }
+    }
+    // D3: shown only while this journey is otherwise clean and a project item is still open —
+    // absent from the served bytes stays absent here too (setHidden/setText are both null-safe).
+    var projwait = q('[data-rv="projwait"]')
+    if (projwait) {
+      var showProjwait = !openScoped && openProjectCount > 0
+      setHidden(projwait, !showProjwait)
+      if (showProjwait) {
+        setText(projwait, openProjectCount + ' whole-product ' + plural(openProjectCount, 'note', 'notes') + ' still block sign-off')
+      }
     }
   }
 

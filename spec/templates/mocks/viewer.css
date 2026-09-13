@@ -318,6 +318,10 @@ body {
 .rv-stop { display: flex; align-items: center; flex-wrap: nowrap; gap: var(--v-space-2); }
 .rv-stop textarea { width: 14rem; min-height: 28px; height: 28px; padding: 3px 8px; resize: none; }
 .rv-stop .decide-msg { color: var(--v-danger); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 14rem; }
+/* specs/20260912/07-a-whole-product-note-blocks-the-sign-off.md D3: the enabled approve control's
+   own line saying the sign-off still waits on a whole-product note — muted/warn register, no new
+   token (--v-warn is the same "open doubt" accent .rv-count/.rv-badge already use). */
+.rv-projwait { margin: 0; color: var(--v-warn); font-size: 13px; white-space: nowrap; }
 
 /* panes */
 .rv-main { flex: 1; display: grid; grid-template-columns: var(--rv-rail) minmax(0, 1fr) var(--rv-pane); min-height: 0; }

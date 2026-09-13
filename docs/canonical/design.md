@@ -414,9 +414,10 @@ session addresses (`open → addressed`, with the change and an optional ledger 
 under the note) and replies; the author resolves on the page after a re-look; no driver
 subcommand resolves. Triage bins are a closed set — `mock detail`, `product understanding`,
 `question back`, `propose to decline` — and a note that hits a canon primitive changes
-`canon.md` first, every dependent screen after. Project notes outrank mock notes:
-`journey-approved` and `approved` refuse while any project note is unresolved or any note on
-the journey's screens is unresolved (`addressed` is not `resolved`); the client answers and
+`canon.md` first, every dependent screen after. Project notes outrank mock notes only at the
+product's own sign-off: `approved` refuses while any project note is unresolved or any note
+anywhere is unresolved; `journey-approved` refuses only while any note on that journey's own
+screens is unresolved (`addressed` is not `resolved`) (ADR-0019). The client answers and
 raises on the client route as the `CLIENT` state (specs/20260907/10, ADR-0012), on the clientâs own
 pages rather than the session's review page. A note carries `origin: walk|client|session`, set by the route it arrived on
 (`/client/__notes/*` stamps `client`, `/__notes/*` stamps `session`, `notes add --kind walk`

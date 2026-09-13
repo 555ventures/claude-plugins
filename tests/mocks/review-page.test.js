@@ -3,6 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const path = require('node:path')
 const fs = require('node:fs')
+const vm = require('node:vm')
 const { SPEC, ROOT, read, parseFlatDom } = require('../helpers')
 
 // specs/20260912/06-the-review-page-answers-to-a-design.md D1, D3, D4 — AC-20260912-06-1, -2, -3,
@@ -94,15 +95,19 @@ test('AC-20260912-06-2: the rail\'s __project count row equals the fixture\'s ow
   assert.strictEqual(projectRow.hasAttribute('data-zero'), false,
     'one open project note must render the row WITHOUT data-zero (the muted/zero treatment)')
   // The header's own block-title total is independent of the rail derivation this AC pins — it is
-  // asserted here only for the "names the same total it counts" invariant: whatever isOpen() counts
-  // as open across every item (mock + project; an addressed note still counts, since it still needs
-  // the reviewer's own accept/reopen click) is the number the disabled approve button's title names.
+  // asserted here only for the "names the same total it computed" invariant: whatever isOpen()
+  // counts as open across this journey's own mock-scope items (an addressed note still counts,
+  // since it still needs the reviewer's own accept/reopen click) is the number the disabled approve
+  // button's title names. specs/20260912/07-a-whole-product-note-blocks-the-sign-off.md D1/D9
+  // (ADR-0019, D5 clause (c)) narrows the title to this journey's own screens — a project-scope
+  // note no longer counts toward it, so this fixture's open project note (n3) is excluded here;
+  // the rail-row assertions above and below are untouched, since D9 leaves the __project count alone.
   // (The AC's own worked parenthetical, "2 open items block approval", undercounts this fixture's
-  // addressed note — see the deviations sidecar; this pin uses the fixture's true isOpen() total so
-  // it is never a fabricated number.)
-  const trueOpenTotal = baseNotes('open').filter((n) => n.status !== 'resolved').length
+  // addressed note — see the deviations sidecar; this pin uses the fixture's true mock-scope isOpen()
+  // total so it is never a fabricated number.)
+  const trueOpenTotal = baseNotes('open').filter((n) => n.scope === 'mock' && n.status !== 'resolved').length
   assert.match(openHtml, new RegExp(trueOpenTotal + ' open items? blocks? approval'),
-    'the approve control\'s title must name the same open-item total the page actually computed (' +
+    'the approve control\'s title must name the same mock-scope open-item total the page actually computed (' +
     trueOpenTotal + '): got no such title in the rendered header')
 
   const resolvedHtml = render('resolved')
@@ -196,5 +201,92 @@ test('AC-20260912-06-5: a screen declaring fourteen states renders fifteen tabs 
   assert.ok(rule, '.rv-tabs must have a rule in viewer.css to inspect')
   assert.match(rule[1], /flex-wrap:\s*wrap/, '.rv-tabs must declare flex-wrap: wrap, so a fourteen-state row wraps instead of being clipped')
   assert.doesNotMatch(rule[1], /overflow:\s*hidden/, '.rv-tabs must never declare overflow: hidden — that would clip a wrapped, tall tab row')
+})
+
+// specs/20260912/07-a-whole-product-note-blocks-the-sign-off.md D1, D2, D3 — AC-20260912-07-1, -2.
+// The owner's ruling: a journey's own approve gate counts only its screen-scoped items; a
+// whole-product note blocks the final sign-off instead, and the page says so when that is the
+// only thing still open. Fixture: journey j1, screens a and b, both resolved on their own screens'
+// notes, plus two project-scope notes whose openness each test below varies.
+
+const REVIEW_BROWSER = path.join(SPEC, 'scripts/lib/review.browser.js')
+
+function scopedCleanNotes(p1Status, p2Status, extraMockNote) {
+  const notes = [
+    { id: 'm1', kind: 'note', scope: 'mock', screen: 'a', state: null, status: 'resolved', text: 'was open on a', reason: 'other' },
+    { id: 'm2', kind: 'note', scope: 'mock', screen: 'b', state: null, status: 'resolved', text: 'was open on b', reason: 'other' },
+    { id: 'p1', kind: 'note', scope: 'project', screen: null, state: null, status: p1Status, text: 'proj 1', reason: 'other' },
+    { id: 'p2', kind: 'note', scope: 'project', screen: null, state: null, status: p2Status, text: 'proj 2', reason: 'other' },
+  ]
+  if (extraMockNote) notes.push(extraMockNote)
+  return notes
+}
+
+function renderScoped(notes) {
+  return buildReviewPage({ journey: 'j1', seed: baseSeed(), notes, ledger: [], stops: [baseStop()], prefix: '' })
+}
+
+test('AC-20260912-07-1: the approve control is enabled when this journey\'s own screens are clean, even with two open project notes', () => {
+  const html = renderScoped(scopedCleanNotes('open', 'open'))
+  const { document } = parseFlatDom(html)
+  const approve = document.querySelector('[data-rv="approve"]')
+  assert.ok(approve, 'the page must render [data-rv="approve"]')
+  assert.strictEqual(approve.hasAttribute('disabled'), false,
+    'a journey whose own screens\' notes are all resolved must render its approve control enabled — a whole-product note now blocks only the final sign-off, never this journey (D1): got disabled')
+})
+
+test('AC-20260912-07-1: the approve control is disabled and titled by this journey\'s own open-item count alone, ignoring the two open project notes', () => {
+  const withOpenA = scopedCleanNotes('open', 'open', null)
+  withOpenA[0] = Object.assign({}, withOpenA[0], { status: 'open' })
+  const html = renderScoped(withOpenA)
+  const { document } = parseFlatDom(html)
+  const approve = document.querySelector('[data-rv="approve"]')
+  assert.strictEqual(approve.hasAttribute('disabled'), true,
+    'one open note on screen a must still disable the approve control')
+  assert.strictEqual(approve.getAttribute('title'), '1 open item blocks approval',
+    'the title must name only this journey\'s own open item (1), never the two open project notes it must no longer count (D1): got ' + JSON.stringify(approve.getAttribute('title')))
+})
+
+test('AC-20260912-07-1: review.browser.js\'s recount() leaves the approve control enabled over the clean-journey markup, matching the server\'s own gate', () => {
+  const html = renderScoped(scopedCleanNotes('open', 'open'))
+  const { document } = parseFlatDom(html)
+  const sandbox = {
+    location: { pathname: '/review/j1.html', search: '' },
+    document,
+    window: { prompt: () => 'jj', addEventListener() {} },
+    localStorage: { getItem: (k) => (k === 'nl-author' ? 'jj' : null), setItem() {} },
+    fetch() { return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) },
+    setTimeout, clearTimeout,
+    IntersectionObserver: function (cb) { this.observe = function () {}; this.unobserve = function () {}; this.disconnect = function () {} },
+  }
+  vm.createContext(sandbox)
+  vm.runInContext(fs.readFileSync(REVIEW_BROWSER, 'utf8'), sandbox)
+  const approve = document.querySelector('[data-rv="approve"]')
+  assert.strictEqual(approve.hasAttribute('disabled'), false,
+    'review.browser.js\'s own recount(), run at load over the same markup the server rendered enabled, must leave the approve control enabled — its two open project notes must never re-disable a button the server already enabled (D2): got disabled with title ' + JSON.stringify(approve.getAttribute('title')))
+})
+
+test('AC-20260912-07-2: buildReviewPage emits exactly one [data-rv="projwait"] naming the two open project notes when the journey is clean', () => {
+  const html = renderScoped(scopedCleanNotes('open', 'open'))
+  const { document } = parseFlatDom(html)
+  const rows = document.querySelectorAll('[data-rv="projwait"]')
+  assert.strictEqual(rows.length, 1,
+    'exactly one [data-rv="projwait"] element must render when the journey is clean and project notes are open: got ' + rows.length)
+  assert.match(html, /<p class="rv-projwait" data-rv="projwait">2 whole-product notes still block sign-off<\/p>/,
+    'the line must read "2 whole-product notes still block sign-off" — an owner reading a clean, enabled journey must still be told sign-off is not yet reachable (D3): got no such line in ' + html)
+})
+
+test('AC-20260912-07-2: buildReviewPage emits no [data-rv="projwait"] once both project notes are resolved', () => {
+  const html = renderScoped(scopedCleanNotes('resolved', 'resolved'))
+  assert.doesNotMatch(html, /data-rv="projwait"/,
+    'once every project note is resolved the page must emit no [data-rv="projwait"] element at all — its absence, not an empty or zeroed line, is the served signal (D3): got one in ' + html)
+})
+
+test('AC-20260912-07-2: buildReviewPage emits no [data-rv="projwait"] when the journey itself still carries an open item', () => {
+  const openA = scopedCleanNotes('open', 'open', null)
+  openA[0] = Object.assign({}, openA[0], { status: 'open' })
+  const html = renderScoped(openA)
+  assert.doesNotMatch(html, /data-rv="projwait"/,
+    'the whole-product-note line is only for a journey that is otherwise clean — while this journey\'s own screen a is still open, the disabled button already says why, and the line must not also render (D3): got one in ' + html)
 })
 

@@ -270,6 +270,158 @@ function withHandler(root, prefixOrFn, maybeFn) {
   })
 }
 
+// specs/20260912/06-the-review-page-answers-to-a-design.md D5: the jsdom-free flat-DOM shim
+// tests/design-atlas.test.js wrote for review.browser.js — promoted here (its orphaned siblings
+// deleted in the same spec's row) since the review-page test files need it too. One addition
+// over the original: matchesCompound also matches a bare `.class` compound (`.rv-home`,
+// `a.rv-home`) — before, only `[class="…"]` matched, which no caller in this file's markup ever
+// emits. Nodes expose dataset/getAttribute-family/hidden/classList/addEventListener/closest/
+// querySelector(All) (single compound selectors, descendant combinators only) — never innerHTML
+// parsing, getBoundingClientRect, or MutationObserver, mirroring review.browser.js's own header
+// discipline.
+function parseFlatDom(html) {
+  const VOID = new Set(['input', 'br', 'img', 'link', 'meta', 'hr'])
+
+  function parseAttrs(str) {
+    const attrs = {}
+    const re = /([a-zA-Z_:][-\w:.]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g
+    let m
+    while ((m = re.exec(str))) {
+      const name = m[1]
+      const val = m[2] !== undefined ? m[2] : m[3] !== undefined ? m[3] : m[4] !== undefined ? m[4] : ''
+      attrs[name] = val
+    }
+    return attrs
+  }
+
+  function matchesCompound(node, compound) {
+    const tagM = compound.match(/^([a-zA-Z][\w-]*)/)
+    const tag = tagM && tagM[1]
+    if (tag && node.tagName !== tag.toUpperCase()) return false
+    const rest = tag ? compound.slice(tag.length) : compound
+    const attrRe = /\[([a-zA-Z_:][-\w:.]*)(?:="([^"]*)")?\]/g
+    let m
+    while ((m = attrRe.exec(rest))) {
+      const key = m[1]; const val = m[2]
+      if (!node.hasAttribute(key)) return false
+      if (val !== undefined && node.getAttribute(key) !== val) return false
+    }
+    // D5's one addition: a bare `.class` (or `tag.class`) compound, unreachable before this spec.
+    const classRe = /\.([-\w]+)/g
+    let cm
+    while ((cm = classRe.exec(rest))) {
+      if (!node.classList.contains(cm[1])) return false
+    }
+    return true
+  }
+
+  const allNodes = []
+  function descendants(node) {
+    const out = []
+    for (const c of node.children) { out.push(c); out.push(...descendants(c)) }
+    return out
+  }
+  function queryAll(scopeNode, sel) {
+    const parts = sel.trim().split(/\s+/)
+    const pool = scopeNode === null ? allNodes : descendants(scopeNode)
+    let matched = pool.filter((n) => matchesCompound(n, parts[0]))
+    for (let i = 1; i < parts.length; i++) {
+      const part = parts[i]
+      const next = []
+      for (const n of pool) {
+        if (!matchesCompound(n, part)) continue
+        let anc = n.parentNode
+        let ok = false
+        while (anc) { if (matched.includes(anc)) { ok = true; break } anc = anc.parentNode }
+        if (ok) next.push(n)
+      }
+      matched = next
+    }
+    return matched
+  }
+
+  function makeNode(tagName, attrs) {
+    const node = {
+      tagName: tagName.toUpperCase(),
+      attrs,
+      children: [],
+      parentNode: null,
+      value: '',
+      _handlers: {},
+      getAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attrs, k) ? this.attrs[k] : null },
+      setAttribute(k, v) { this.attrs[k] = String(v) },
+      removeAttribute(k) { delete this.attrs[k] },
+      hasAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attrs, k) },
+      addEventListener(type, fn) { (this._handlers[type] = this._handlers[type] || []).push(fn) },
+      focus() { this._focused = true },
+      closest(sel) {
+        let n = this
+        while (n) { if (matchesCompound(n, sel.trim())) return n; n = n.parentNode }
+        return null
+      },
+      querySelector(sel) { return queryAll(this, sel)[0] || null },
+      querySelectorAll(sel) { return queryAll(this, sel) },
+    }
+    Object.defineProperty(node, 'hidden', {
+      get() { return this.hasAttribute('hidden') },
+      set(v) { if (v) this.setAttribute('hidden', ''); else this.removeAttribute('hidden') },
+    })
+    Object.defineProperty(node, 'dataset', {
+      get() {
+        const out = {}
+        for (const k of Object.keys(this.attrs)) {
+          if (k.startsWith('data-')) out[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = this.attrs[k]
+        }
+        return out
+      },
+    })
+    Object.defineProperty(node, 'classList', {
+      get() {
+        const self = this
+        const classes = () => (self.attrs.class || '').split(/\s+/).filter(Boolean)
+        return {
+          add(c) { const cs = classes(); if (!cs.includes(c)) { cs.push(c); self.attrs.class = cs.join(' ') } },
+          remove(c) { self.attrs.class = classes().filter((x) => x !== c).join(' ') },
+          toggle(c, force) { const has = classes().includes(c); const want = force === undefined ? !has : force; if (want) this.add(c); else this.remove(c) },
+          contains(c) { return classes().includes(c) },
+        }
+      },
+    })
+    return node
+  }
+
+  const root = makeNode('#root', {})
+  const stack = [root]
+  const tagRe = /<(\/)?([a-zA-Z][\w-]*)((?:[^<>])*?)(\/)?>/g
+  let m
+  while ((m = tagRe.exec(html))) {
+    const closing = !!m[1]
+    const tagName = m[2]
+    const attrStr = m[3]
+    const selfClose = !!m[4] || VOID.has(tagName.toLowerCase())
+    if (closing) {
+      for (let i = stack.length - 1; i > 0; i--) {
+        if (stack[i].tagName === tagName.toUpperCase()) { stack.length = i; break }
+      }
+      continue
+    }
+    const attrs = parseAttrs(attrStr)
+    const node = makeNode(tagName, attrs)
+    node.parentNode = stack[stack.length - 1]
+    stack[stack.length - 1].children.push(node)
+    allNodes.push(node)
+    if (!selfClose) stack.push(node)
+  }
+
+  const document = {
+    querySelector(sel) { return queryAll(null, sel)[0] || null },
+    querySelectorAll(sel) { return queryAll(null, sel) },
+    addEventListener(type, fn) { (root._handlers[type] = root._handlers[type] || []).push(fn) },
+    _handlers: root._handlers,
+  }
+  return { document, allNodes }
+}
+
 // Minimal git repo factory for merge-back / gate tests.
 //
 // Seeding from scratch costs 5 git subprocesses (init, config x2, add, commit), and every repo
@@ -326,5 +478,5 @@ function gitRepo(dir, opts = {}) {
 
 module.exports = {
   ROOT, SPEC, read, extractFn, evalFns, checkWorkflowSyntax, tmpdir, runNode, runBash, gitRepo,
-  freePort, serveAtlas, getJson, postJson, withHandler,
+  freePort, serveAtlas, getJson, postJson, withHandler, parseFlatDom,
 }

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: hardened
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -12,6 +12,7 @@ brief: n/a
 build_base: main
 spiked: 2026-09-12
 open_markers: 0
+diff_base: 2319dab8d026af5e135b1b2613663639cccaa328
 ---
 
 # The review page answers to a design, and the page's own promises are pinned again
@@ -40,11 +41,13 @@ promises carry an amendment record instead of standing as text the code disagree
 | D3 | `renderRail`'s project count is derived, not looked up in a map that can never hold it. `buildReviewPage` counts open project-scope items directly (`items.filter((n) => n.scope === 'project' && isOpen(n)).length`) and passes that as `projectOpen`; the `openByLabel.get(null)` lookup is deleted. The rendered `data-screen="__project"` count, and its `data-zero` presence, SHALL equal what `review.browser.js`'s `recount()` computes for the same items (AC-20260912-06-2) | Executed 2026-09-12: with one open note on `a` and two open project notes, the header renders `3 open items block approval` while the rail's project row renders `0`. `openByLabel` skips every non-`mock` note by construction, so the lookup is dead in every case. The browser repairs it on load, which is why nobody saw it — and which is exactly why a capture, a `?clean` render, or any server-side assertion reads the wrong number |
 | D4 | The scope band states its scope in the DOM, not in CSS generated content. `viewer.css`'s `.rv-screenfilter::before { content: "Notes for"; … }` rule is deleted; `renderInspector` emits `<span class="rv-scopeband-label">Notes for</span>` inside `.rv-scopeband`, before the chip, and `review.browser.js`'s `setText(chip, name)` writes only the screen name. The label is hidden with the chip when no scope is set (AC-20260912-06-3) | A `::before` string is not in the accessibility tree, is not assertable from the served bytes, and is the reason the label ran into the screen name until a margin was added. The one rule that made this page's scope statement untestable |
 | D5 | `parseFlatDom` moves out of `tests/design-atlas.test.js` into `tests/helpers.js` as an exported helper, unchanged except for one addition: `matchesCompound` also matches a bare `.class` compound (today only `[class="…"]` matches — verified by spike). The orphaned helpers the 2026-09-11 sweep left behind in `tests/design-atlas.test.js` are DELETED in the same row: `makeNotesLayerDom`, `evalNotesLayer`, `writeReviewSeed`, `writePicksJson`, `hashTree`, `loadShellRegion`, `writeKitFile`, `writeKitMock`, `kitCanonHtml`, `cssRuleBody`. Each is verified to have exactly one occurrence (its own definition) before deletion; `assertChromeTokenized` and `loadDesignAtlas` STAY — they have live callers (AC-20260912-06-6) | The harness the review page needs already exists and already parses today's markup (spike below); rewriting it would be inventing a second one. The sweep deleted `test()` bodies and left their scaffolding, so ten dead helpers sit in the one file a future author would copy from — deleting them at touch-time is core § Doctrine Authoring, not a sweep |
-| D6 | Every criterion this spec writes except AC-20260912-06-6 and -7 is an opt-in `SHALL CONTINUE TO` pin, so its test survives expiry at close (specs/20260911/03). The pinned set is the page's load-bearing contract: the served route and its `?clean` arm, the rail/header count agreement, the scope band, the addressed-note controls, the breadcrumb link home, and the state-tab row for a many-state screen | specs/20260906/04's tests were not pinned and are gone; writing this spec's tests unpinned would put the page back to zero coverage the day it closes, which is the failure this spec exists to end. Pinned deliberately narrow — the skin is the design source's job, never a CSS literal in a test (the 7.89.0 mistake) |
-| D7 | `docs/adr/0017-the-review-page-departs-from-its-spec.md` is CREATED, `Applies to:` **specs/20260906/04-journey-review-page.md** — two clauses and no others: (a) D5's breadcrumb literal `<product> / Mocks / <n> · <journey title>` becomes `<product> / <n> · <journey title>`, the product name a link to the atlas index; (b) AC-20260906-04-6's final clause — `Send` with scope `Whole project` posting `{scope:"project", screen:null …}` from this page's composer — is retired: the review composer always files against the focused screen, and a project-scope note is raised from the notes layer's own composer, which keeps its toggle (specs/20260906/03 D5, unchanged and verified intact). specs/20260906/04 gains one `Amended by: ADR-0017` line and is not rewritten `[no-ac: an accepted record plus its backlink — prose the review stage's citations-check reads; no script in this repo adjudicates ADR shape, by the standing "ADR Applies-to integrity: watch, not work" ruling (0/41 dangling measured 2026-09-08; build the checker at dangling-reference:3)]` | Both promises are shipped text the code now contradicts, and AC-20260906-04-6's test expired, so nothing is red and nothing would ever say so. ADR-0015 is the model: the locked spec gains a backlink, the record carries the account |
+| D6 | Every criterion this spec writes except AC-20260912-06-6, -7 and -9 is an opt-in `SHALL CONTINUE TO` pin, so its test survives expiry at close (specs/20260911/03). The pinned set is the page's load-bearing contract: the served route and its `?clean` arm, the rail/header count agreement, the scope band, the addressed-note controls, the breadcrumb link home, and the state-tab row for a many-state screen | specs/20260906/04's tests were not pinned and are gone; writing this spec's tests unpinned would put the page back to zero coverage the day it closes, which is the failure this spec exists to end. Pinned deliberately narrow — the skin is the design source's job, never a CSS literal in a test (the 7.89.0 mistake) |
+| D7 | `docs/adr/0018-the-review-page-departs-from-its-spec.md` is CREATED, `Applies to:` **specs/20260906/04-journey-review-page.md** — two clauses and no others: (a) D5's breadcrumb literal `<product> / Mocks / <n> · <journey title>` becomes `<product> / <n> · <journey title>`, the product name a link to the atlas index; (b) AC-20260906-04-6's final clause — `Send` with scope `Whole project` posting `{scope:"project", screen:null …}` from this page's composer — is retired: the review composer always files against the focused screen, and a project-scope note is raised from the notes layer's own composer, which keeps its toggle (specs/20260906/03 D5, unchanged and verified intact). specs/20260906/04 gains one `Amended by: ADR-0018` line and is not rewritten `[no-ac: an accepted record plus its backlink — prose the review stage's citations-check reads; no script in this repo adjudicates ADR shape, by the standing "ADR Applies-to integrity: watch, not work" ruling (0/41 dangling measured 2026-09-08; build the checker at dangling-reference:3)]` | Both promises are shipped text the code now contradicts, and AC-20260906-04-6's test expired, so nothing is red and nothing would ever say so. ADR-0015 is the model: the locked spec gains a backlink, the record carries the account |
 | D9 | **Five controls on this page are silently unstyled and get their register back.** `.rv button` is `(0,1,1)`; a bare `.rv-badge` / `.rv-addnote` / `.rv-fold` / `.rv-keyhint` / `.rv-strip` is `(0,1,0)`, so the generic rule wins every property they share — background, colour, padding, border, border-radius — whatever the source order. Each of the five gains the `.rv ` ancestor prefix that `.rv .rv-chipbtn` already carries for exactly this reason. In the same row and at the same touch: the duplicate second `.rv-tabs button:hover` declaration is deleted, `.rv-count[data-zero]` and `.rv-badge[data-zero]` are reconciled to one `border-color` (both `transparent` — the muted, retreating treatment the zero state is for), and the file-header comment's reference to `tests/mocks/viewer-tokens.test.js`, which exists nowhere in this tree, is corrected to name the live pin (AC-20260912-06-9) | The same defect class as the `.rv-chipbtn` bug found by looking on 2026-09-12, found five more times by measurement. Every one of them means the chrome mock cannot be honoured: the file says a badge is a warn-tinted pill and the browser paints a plain bordered button. A design source that the stylesheet silently overrides is not binding |
 | D10 | **The composer's vestigial scope machinery is deleted.** `renderComposer` emits no `[data-rv="scope"]` (verified: zero occurrences), so `scopeMode` is permanently `'screen'`, its ternary at `send()` has one reachable arm, and the `[data-rv="scope"]` click wiring binds nothing. `setScope(mode, label)` becomes `setScopeLabel(label)`, `scopeMode` and the wiring go, and `viewer.css` loses `.rv-scope`, `.rv-scope button`, `.rv-scope button:first-child`, `.rv-scope button:nth-child(2)`, `.rv-scope .rv-scope-on` and the `:not(.rv-scope-on)` clause of the hover guard. Behavior is unchanged: a note still files against the focused screen (AC-20260912-06-10) | .claude memory rule "refactors delete the code and tests they retire". The 2026-09-12 session removed the toggle from the markup and left its state machine, its CSS and its event wiring behind — the shape that makes a later reader restore a control the page deliberately does not have |
 | D8 | `spec/.claude-plugin/plugin.json` bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` `[no-ac: plugin-bump.js --check is the oracle]` | Version discipline (.claude/rules/spec-pipeline.md § Planning) |
+| D10a | **Build-time amendment to AC-20260912-06-10's `.rv-scope` literal only; D10's substance is unchanged.** The retired-toggle sweep bans `.rv-scope` as a complete class name (`/\.rv-scope(?![\w-])/`), never as a substring. D4's `.rv-scopeband` and `.rv-scopeband-label` — which this same build ADDS and which AC-20260912-06-3 pins — contain `.rv-scope` as a prefix, so the substring form bans two class names the spec itself requires (AC-20260912-06-10) | The two Decisions are self-contradictory as written. Selecting the band by `[class="rv-scopeband"]` to dodge the grep was the wave's first fix and is rejected: an exact-attribute selector stops matching the moment the element gains a second class, so the sweep's own spelling would silently become a live rendering constraint |
+| D9a | **Build-time amendment to AC-20260912-06-9's verb only; D9's substance is unchanged.** The locked AC-9 asserted all four Chrome measurements as `SHALL CONTINUE TO`. Measured against the untouched pre-image, the badge's computed `color` is the page's `--v-fg` (not `--v-warn`) and `.rv-strip`'s computed `border-radius` is `8px` (not `0px`) — the two utilities D9's `.rv ` prefixes exist to make win. AC-9 keeps those two as a plain `SHALL`; the two measurements that already hold split out as AC-20260912-06-12, a `SHALL CONTINUE TO` pin on the same file, so the file still survives expiry at close per D6 (AC-20260912-06-9, -12) | A `SHALL CONTINUE TO` bullet over a measurement the pre-image contradicts classifies its file green-expected in `red-check.js` and hard-stops the build at `broken-pin`. The verb was a lock-time authoring error against D9's own Rationale ("a CSS specificity bug is a correctness bug here"); the fix is the verb, never weakening the measurement |
 
 ## File Plan
 
@@ -54,13 +57,13 @@ promises carry an amendment record instead of standing as text the code disagree
 | spec/scripts/lib/review-page.js | MODIFY | scripts | D3: project open count derived and passed to `renderRail`, dead `openByLabel.get(null)` lookup deleted; D4: `.rv-scopeband-label` emitted in `renderInspector` |
 | spec/scripts/lib/review.browser.js | MODIFY | scripts | D4: `setText(chip, …)` writes the screen name only, the label hides and shows with it; D10: `scopeMode` and the `[data-rv="scope"]` wiring deleted, `setScope` becomes `setScopeLabel` |
 | spec/templates/mocks/viewer.css | MODIFY | scripts | D4: `.rv-screenfilter::before` deleted, `.rv-scopeband-label` styled in its place; D9: five `.rv ` prefixes, duplicate hover line, `[data-zero]` reconciled, header reference corrected; D10: the `.rv-scope*` rules deleted |
-| docs/adr/0017-the-review-page-departs-from-its-spec.md | CREATE | doctrine | D7: the amendment record, two Applies-to clauses |
-| specs/20260906/04-journey-review-page.md | MODIFY | doctrine | D7: one `Amended by: ADR-0017` line, no rewrite |
+| docs/adr/0018-the-review-page-departs-from-its-spec.md | CREATE | doctrine | D7: the amendment record, two Applies-to clauses |
+| specs/20260906/04-journey-review-page.md | MODIFY | doctrine | D7: one `Amended by: ADR-0018` line, no rewrite |
 | tests/helpers.js | MODIFY | tests | D5: `parseFlatDom` exported, bare `.class` compound supported |
 | tests/design-atlas.test.js | MODIFY | tests | D5: the ten orphaned helpers deleted; `assertChromeTokenized` and `loadDesignAtlas` kept |
 | tests/mocks/review-page.test.js | CREATE | tests | AC-20260912-06-1, -2, -3, -4, -5 |
 | tests/mocks/review-browser.test.js | CREATE | tests | AC-20260912-06-6, -10, -11 |
-| tests/mocks/review-chrome.test.js | CREATE | tests | AC-20260912-06-9 |
+| tests/mocks/review-chrome.test.js | CREATE | tests | AC-20260912-06-9, -12 (D9a) |
 | spec/.claude-plugin/plugin.json | MODIFY | other | D8 bump |
 
 Orchestrator duty outside the table: before deleting each helper named in D5, run
@@ -125,9 +128,15 @@ reviewer sees a moment later.
   → writes tests/mocks/review-page.test.js
 - **AC-20260912-06-2**: WHEN that same fixture renders THE SYSTEM SHALL CONTINUE TO emit a rail row
   `[data-rv="count"][data-screen="__project"]` whose text is `1` and which carries no `data-zero`,
-  and the header's approve-block title SHALL CONTINUE TO name the same total it counts (`2 open
-  items block approval`); WHEN the fixture's project notes are both `resolved` THE SYSTEM SHALL
+  and the header's approve-block title SHALL CONTINUE TO name the same total it counts (`3 open
+  items block approval`); WHEN the fixture's project note is `resolved` THE SYSTEM SHALL
   CONTINUE TO emit that row with text `0` and `data-zero` present
+    - Amended at build: the locked bullet's worked parenthetical read `2 open items block approval`
+      and called the fixture's project notes plural. AC-1's fixture carries three items, one of
+      them `addressed`, and `isOpen()` counts an addressed note as still open — it still needs the
+      reviewer's own accept or reopen click — so the true total is three, and exactly one of the
+      three is project-scope. The invariant (the title names the same total the page computed) is
+      unchanged; only the worked numbers are corrected to the fixture they describe.
   → writes tests/mocks/review-page.test.js
 - **AC-20260912-06-3**: WHEN that same fixture renders THE SYSTEM SHALL CONTINUE TO emit inside
   `.rv-scopeband` an element carrying the literal text `Notes for` as DOM text, and
@@ -156,19 +165,32 @@ reviewer sees a moment later.
   literals `data-rv="board"`, `data-screen="__project"` and `Looks good`
   → writes tests/mocks/review-page.test.js
 - **AC-20260912-06-9** `[env: CHROME_BIN]`: WHEN the served review page for the AC-1 fixture is
-  opened in headless Chrome THE SYSTEM SHALL CONTINUE TO report, for the screen badge
-  (`.rv-badge` with a non-zero count), a computed `color` equal to the page's `--v-warn` role and a
-  computed `background-color` that is not the page's `--v-bg`; and for `.rv-strip`, a computed
-  `border-radius` of `0px` and a computed `border-left-width` of `1px`
+  opened in headless Chrome THE SYSTEM SHALL report, for the screen badge (`.rv-badge` with a
+  non-zero count), a computed `color` equal to the page's `--v-warn` role; and for `.rv-strip`, a
+  computed `border-radius` of `0px`
+    - Amended at build (D9a): the locked bullet read `SHALL CONTINUE TO` over all four measurements.
+      Measured against the pre-image in headless Chrome, two of them are false today — that is the
+      defect D9 exists to fix — so the two fixed measurements are a new promise here and the two
+      that already hold are pinned by AC-20260912-06-12.
   → writes tests/mocks/review-chrome.test.js
 - **AC-20260912-06-10**: WHEN `spec/scripts/lib/review.browser.js` and
   `spec/templates/mocks/viewer.css` are read THE SYSTEM SHALL contain zero occurrences of
-  `scopeMode`, `data-rv="scope"`, `.rv-scope` and `rv-scope-on`
+  `scopeMode`, `data-rv="scope"`, `rv-scope-on`, and `.rv-scope` as a complete class name
+  (`/\.rv-scope(?![\w-])/` — the retired toggle's own selector, never `.rv-scopeband`'s prefix)
+    - Amended at build (D10a): the locked bullet spelled `.rv-scope` as a bare substring, which
+      also matches `.rv-scopeband` and `.rv-scopeband-label` — the two class names D4 requires this
+      same build to KEEP. The retirement the AC exists to assert is unchanged; only the boundary
+      is stated.
   → writes tests/mocks/review-browser.test.js
 - **AC-20260912-06-11**: WHEN `review.browser.js` runs under `vm` over the AC-1 markup with screen
   `b` focused and `Send` pressed with the text `hi` THE SYSTEM SHALL CONTINUE TO issue
   `POST /__notes/add` with `screen` `"b"` and `scope` `"mock"`
   → writes tests/mocks/review-browser.test.js
+- **AC-20260912-06-12** `[env: CHROME_BIN]`: WHEN the served review page for the AC-1 fixture is
+  opened in headless Chrome THE SYSTEM SHALL CONTINUE TO report, for the screen badge (`.rv-badge`
+  with a non-zero count), a computed `background-color` that is not the page's `--v-bg`; and for
+  `.rv-strip`, a computed `border-left-width` of `1px`
+  → writes tests/mocks/review-chrome.test.js
 
 ## Assumptions (escalation triggers)
 
@@ -189,7 +211,7 @@ reviewer sees a moment later.
   disposition changes from `writes` to `rewrites` and the pre-image is read first.
 - **A4**: specs/20260906/03 D5's notes-layer scope toggle is intact and is NOT touched by this spec.
   **Verified by reading** `notes-layer.browser.js` (`allowProjectToggle`, the `Whole project`
-  button). **if false:** ADR-0017 gains a third Applies-to clause for that spec.
+  button). **if false:** ADR-0018 gains a third Applies-to clause for that spec.
 - **A6**: The five bare `.rv-*` utilities lose to `.rv button` by specificity arithmetic, not by
   source order — `(0,1,1)` beats `(0,1,0)` whichever comes last. **Verified by reading** the six
   declarations together (`viewer.css` `.rv button` and the five). The honest oracle is a rendered
@@ -237,6 +259,20 @@ to the queue rather than folded in: the identical specificity defect on the clie
 `.wk-home` and `.wk-more` (that surface binds to `design/client-mocks/*.html` and is a different
 owner's look), and `viewer.css`'s `.v-*` primitive register, which has zero consumers anywhere in
 the repo but is a locked promise of specs/20260902/09 D4 and so needs its own amendment.
+
+**What the build found (folded from the deviations sidecar at close).** Four one-off departures,
+none of which changed a Decision's substance. D5's stated reason for keeping `assertChromeTokenized`
+and `loadDesignAtlas` — "they have live callers" — is false against the pre-image: both are
+call-site-orphaned exactly like the ten helpers D5 deletes. The prescribed action (keep, never
+delete) is unchanged either way, so both stayed; the rationale, not the instruction, was wrong.
+Re-anchoring `.rv-strip` under `.rv .rv-strip` for D9 raised it above the phone-width
+(`max-width: 480px`) override two-thirds down `viewer.css`, which was still bare `.rv-strip` and
+would have silently stopped winning — that override is prefixed too, restoring the
+equal-specificity/source-order tiebreak it depends on. The `other` wave's single row (D8's
+plugin.json bump) was executed by the orchestrator rather than dispatched, because the row names its
+own command and the only judgment in it is the changelog paragraph. And the design source's journey
+was authored as "First journey" where D1 says the fixture names this spec's tests use, so both
+occurrences read `j1`, matching the served page.
 
 ## Canonical Delta
 

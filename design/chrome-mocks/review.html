@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>j1 · review · Fixture — chrome reference</title>
+<!--
+  design/chrome-mocks/review.html — the design source the journey review page answers to.
+  specs/20260912/06-the-review-page-answers-to-a-design.md D1, AC-20260912-06-7.
+
+  This is a REFERENCE ARTIFACT, sibling in kind to design/client-mocks/*.html
+  (specs/20260911/06 D18) and design/chrome-mocks/atlas.html (specs/20260912/05 D1): one static
+  file, never served by design-atlas.js and never shipped to a host. A spec that edits the
+  review page cites it as `design_source`; spec/doctrine/design.md § Design Canon's "Plugin
+  chrome is a designed surface" paragraph is where that binding is written down (specs/20260912/05
+  D2).
+
+  Authored FROM the shipped page, not as a fresh design pass — mock authority inverts at `built`
+  (design.md § Design Canon), so the review page the owner approved on 2026-09-12 is the truth
+  this file records. Hearwell's real data is replaced throughout by this spec's own fixture names
+  (product "Fixture", journey `j1`, screens `a`/`b`) — the chrome is the subject, the content is
+  scaffolding.
+
+  What it carries, per D1: the header bar, the rail with the Screens list and the `Whole project`
+  row, one artboard caption + state-tab row (screen `a`, which declares the `empty` state), the
+  inspector's filter row, the scope band, one open note row (on `a`), one addressed note row (on
+  `b`) with its two controls, and the composer. `data-rv="board"`, `data-screen="__project"` and
+  `Looks good` all appear below (AC-20260912-06-7).
+
+  What it deliberately does NOT carry: a served `?clean` frame, the notes layer's own shadow-root
+  UI, the picks/approve script's live behaviour, or the composer's scope toggle — that control is
+  retired at this same build (D10) because the composer never emitted `[data-rv="scope"]" to
+  begin with; a note here files against whichever screen the reviewer is looking at, silently.
+  The scope band's label is DOM text, not a `::before` string (D4) — the defect that made "Notes
+  for" collide with the screen name is exactly what this file must never reproduce.
+
+  The board frames are `srcdoc` iframes rather than `src="../mocks/*.html?clean"` ones so the file
+  renders standalone; the element, its classes and its place in the board are the shipped ones.
+-->
+<style>
+/* ---- palette: the viewer.css :root block, verbatim. No other color exists on this page. ---- */
+:root{
+  --v-bg:#ffffff; --v-fg:#0a0a0a; --v-muted:#737373; --v-muted-bg:#f5f5f5; --v-border:#e5e5e5;
+  --v-primary:#171717; --v-primary-fg:#fafafa; --v-ring:#a3a3a3; --v-accent:#f5f5f5;
+  --v-danger:#dc2626; --v-warn:#d97706; --v-ok:#16a34a;
+  --v-radius:8px; --v-space-1:4px; --v-space-2:8px; --v-space-3:12px; --v-space-4:16px; --v-space-6:24px;
+  --v-font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
+  --v-shadow:0 1px 2px rgba(0,0,0,.05),0 4px 12px rgba(0,0,0,.06);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)}
+
+/* ---- .rv-* — the journey review page's own register, restated here at the fixed chrome bugs
+   this spec closes (D4, D9, D10): the scope band's label is DOM text, five utilities carry the
+   `.rv ` ancestor prefix so `.rv button`'s specificity never wins over them, and there is no
+   `.rv-scope` rule because the composer this file shows has no scope toggle to style. ---- */
+.rv{--rv-bar:48px;--rv-rail:220px;--rv-pane:360px;--rv-strip:44px;font-size:13px;line-height:1.45;min-height:100vh;display:flex;flex-direction:column}
+.rv .rv-n{font-variant-numeric:tabular-nums;color:var(--v-muted);margin-right:var(--v-space-2)}
+.rv kbd{display:inline-block;min-width:1.5em;padding:0 5px;border:1px solid var(--v-border);border-bottom-width:2px;border-radius:4px;background:var(--v-muted-bg);color:var(--v-fg);font:600 11px/1.6 var(--v-font);text-align:center}
+.rv button{font:inherit;color:var(--v-fg);background:var(--v-bg);border:1px solid var(--v-border);border-radius:var(--v-radius);padding:4px 10px;cursor:pointer}
+.rv button:hover:not(.rv-primary):not(.rv-chip-on):not([aria-selected="true"]){background:var(--v-muted-bg)}
+.rv .rv-chip-on:hover{background:color-mix(in srgb, var(--v-primary) 88%, var(--v-bg))}
+.rv button:focus-visible,.rv a:focus-visible,.rv textarea:focus-visible,.rv [tabindex]:focus-visible{outline:2px solid var(--v-ring);outline-offset:1px}
+.rv button[disabled]{opacity:.5;cursor:not-allowed}
+.rv .rv-primary{background:var(--v-primary);color:var(--v-primary-fg);border-color:var(--v-primary)}
+.rv .rv-primary:hover{background:color-mix(in srgb, var(--v-primary) 88%, var(--v-bg))}
+.rv textarea{width:100%;font:inherit;color:var(--v-fg);background:var(--v-bg);border:1px solid var(--v-border);border-radius:var(--v-radius);padding:6px 8px;resize:vertical}
+.rv .rv-sep{color:var(--v-muted);margin:0 6px}
+
+.rv-bar{position:sticky;top:0;z-index:5;height:var(--rv-bar);display:flex;align-items:center;flex-wrap:nowrap;gap:var(--v-space-4);padding:0 var(--v-space-4);background:var(--v-bg);border-bottom:1px solid var(--v-border)}
+.rv-bar>*{min-width:0}
+.rv-bar button,.rv-bar a{white-space:nowrap}
+.rv-crumb{display:flex;align-items:center;white-space:nowrap;color:var(--v-muted);font-size:15px;flex:none}
+.rv-crumb strong{color:var(--v-fg);font-weight:600}
+.rv-home{color:var(--v-muted);text-decoration:none}
+.rv-home:hover{color:var(--v-fg);text-decoration:underline}
+.rv-pill{display:inline-flex;align-items:center;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;gap:.45em;border:0;border-radius:0;padding:0;font-size:14px;color:var(--v-muted);white-space:nowrap}
+.rv-pill::before{content:"";width:6px;height:6px;border-radius:99px;background:var(--v-warn);flex:none}
+.rv-progress{display:flex;align-items:center;gap:var(--v-space-2);margin-left:auto;flex:0 1 auto;overflow:hidden;white-space:nowrap;color:var(--v-muted);font-variant-numeric:tabular-nums}
+.rv-track{width:96px;height:4px;border-radius:2px;background:var(--v-muted-bg);overflow:hidden}
+.rv-fill{display:block;height:100%;background:var(--v-ok)}
+.rv-control{display:flex;align-items:center;gap:var(--v-space-2);flex:none}
+
+.rv-main{flex:1;display:grid;grid-template-columns:var(--rv-rail) minmax(0,1fr) var(--rv-pane);min-height:0}
+.rv-rail{border-right:1px solid var(--v-border);background:var(--v-bg);padding:var(--v-space-6) var(--v-space-4);position:sticky;top:var(--rv-bar);height:calc(100vh - var(--rv-bar));overflow:auto}
+.rv-rail h2{margin:var(--v-space-3) 0 var(--v-space-2);font-size:14px;font-weight:600;color:var(--v-fg)}
+.rv-list{list-style:none;margin:0 0 var(--v-space-3);padding:0}
+.rv-list a{display:flex;align-items:center;padding:6px 8px;border-radius:var(--v-radius);color:var(--v-fg);font-size:15px;text-decoration:none}
+.rv-list a:hover{background:var(--v-muted-bg)}
+.rv-list a.rv-cur{background:var(--v-muted-bg);font-weight:600}
+.rv-here{margin-left:auto;font-size:12px;font-weight:400;color:var(--v-muted);border:0;border-radius:0;padding:0}
+.rv-count{margin-left:auto;min-width:1.6em;text-align:center;border-radius:999px;padding:0 6px;font-size:12px;font-variant-numeric:tabular-nums;background:color-mix(in srgb, var(--v-warn) 14%, var(--v-bg));color:var(--v-warn);border:1px solid color-mix(in srgb, var(--v-warn) 40%, var(--v-bg))}
+.rv-count[data-zero]{background:transparent;color:var(--v-muted);border-color:transparent}
+.rv-project{margin-top:calc(-1 * var(--v-space-2))}
+.rv-project a{color:var(--v-muted)}
+.rv-project .rv-n{color:var(--v-muted)}
+
+.rv-canvas{padding:var(--v-space-6) 40px;background-color:var(--v-muted-bg);display:flex;flex-direction:column;gap:var(--v-space-6);min-width:0}
+.rv-board{background:var(--v-bg);border:1px solid var(--v-border);border-radius:calc(var(--v-radius) + 4px);box-shadow:var(--v-shadow);overflow:hidden;min-width:0}
+.rv-board[data-focus]{border-color:var(--v-primary);box-shadow:0 0 0 2px color-mix(in srgb, var(--v-primary) 25%, transparent), var(--v-shadow)}
+.rv-cap{display:flex;align-items:center;flex-wrap:wrap;gap:var(--v-space-2) var(--v-space-4);padding:10px var(--v-space-4);border-bottom:1px solid var(--v-border);background:color-mix(in srgb, var(--v-muted-bg) 60%, var(--v-bg));margin:0}
+.rv-of{color:var(--v-muted);font-weight:400;font-variant-numeric:tabular-nums;margin-left:.4em}
+.rv-cap h3{margin:0;font-size:15px;font-weight:600}
+.rv-vp{margin-left:auto;font-size:13px;color:var(--v-muted);font-variant-numeric:tabular-nums}
+.rv-stage{background:var(--v-muted-bg);padding:var(--v-space-6) var(--v-space-4)}
+.rv .rv-badge{min-width:1.8em;padding:0 6px;border-radius:999px;font-size:12px;font-variant-numeric:tabular-nums;background:color-mix(in srgb, var(--v-warn) 14%, var(--v-bg));color:var(--v-warn);border-color:color-mix(in srgb, var(--v-warn) 40%, var(--v-bg))}
+.rv-badge[data-zero]{background:transparent;color:var(--v-muted);border-color:transparent}
+.rv .rv-addnote{margin-left:0;font-size:14px;color:var(--v-muted);border-color:transparent;padding:3px 9px}
+.rv .rv-addnote:hover{color:var(--v-fg);border-color:var(--v-border)}
+.rv-tabs{display:flex;flex-wrap:wrap;gap:2px 4px;border:0;border-radius:0;overflow:visible;flex-basis:100%;margin:2px 0 0 -4px}
+.rv-tabs button{border:1px solid transparent;border-radius:999px;padding:3px 10px;font-size:13px;color:var(--v-muted);background:transparent}
+.rv-tabs button:hover{background:var(--v-bg);border-color:var(--v-border);color:var(--v-fg)}
+.rv-tabs button[aria-selected="true"]{background:var(--v-bg);color:var(--v-fg);border-color:var(--v-border);font-weight:500}
+.rv-tabs button[data-gray-first]{margin-left:6px}
+.rv-tabs button[data-gray-first]::before{content:"";display:inline-block;width:1px;height:14px;background:var(--v-border);margin-right:10px;vertical-align:-3px}
+.rv-shot{position:relative;overflow:hidden;border:0;background:transparent}
+.rv-shot iframe{border:0;display:block}
+
+.rv-inspector{border-left:1px solid var(--v-border);background:var(--v-bg);position:sticky;top:var(--rv-bar);height:calc(100vh - var(--rv-bar));display:flex;flex-direction:column;min-width:0}
+.rv-filters{display:flex;align-items:center;flex-wrap:nowrap;gap:var(--v-space-1);height:52px;padding:0 var(--v-space-4);border-bottom:1px solid var(--v-border)}
+.rv-filters button{white-space:nowrap;flex:none;border-color:transparent;color:var(--v-muted);font-size:14px;padding:4px 9px;display:inline-flex;align-items:center;gap:6px}
+.rv-filters button[aria-selected="true"]{background:var(--v-muted-bg);color:var(--v-fg);font-weight:600}
+.rv-filters .rv-count{margin-left:0}
+.rv-scopeband{display:flex;align-items:center;height:44px;padding:0 var(--v-space-4);border-bottom:1px solid var(--v-border);overflow:hidden}
+.rv-scopeband-label{color:var(--v-muted);font-weight:400;margin-right:.35em;font-size:13px}
+.rv-screenfilter{display:inline-flex;align-items:center;max-width:100%;min-width:0;border-radius:999px;background:var(--v-muted-bg);color:var(--v-fg);font-size:13px;font-weight:500;padding:4px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rv .rv-fold{margin-left:0;flex:none;font-size:16px;line-height:1;padding:0 6px;color:var(--v-muted)}
+.rv-rows{flex:1;overflow:auto;padding:var(--v-space-3) var(--v-space-4)}
+.rv-row{border-left:2px solid var(--v-border);padding:var(--v-space-2) var(--v-space-3);margin:0 0 var(--v-space-2);border-radius:0 var(--v-radius) var(--v-radius) 0;outline:0}
+.rv-row[data-status="open"]{border-left-color:var(--v-warn)}
+.rv-row[data-kind="note"][data-status="open"]{border-left-color:var(--v-primary)}
+.rv-row[data-selected]{background:var(--v-muted-bg);box-shadow:none}
+.rv-rowhead{display:flex;align-items:center;flex-wrap:wrap;gap:2px;font-size:14px;color:var(--v-muted)}
+.rv-id{font-weight:600;color:var(--v-fg);font-variant-numeric:tabular-nums;margin-right:var(--v-space-2)}
+.rv-who{color:var(--v-muted)}
+.rv-screen{color:var(--v-muted)}
+.rv-claim{margin:4px 0 0;color:var(--v-fg);font-size:15px}
+.rv-wait{margin:4px 0 0;font-size:14px;color:var(--v-muted)}
+.rv-answered{margin:4px 0 0;font-size:14px;color:var(--v-ok)}
+.rv-chip{display:inline-flex;border:0;border-radius:999px;padding:1px 9px;font-size:12px;color:var(--v-muted);background:var(--v-muted-bg);margin-left:6px}
+.rv-actions{display:flex;flex-wrap:wrap;align-items:center;gap:var(--v-space-1);margin-top:var(--v-space-2)}
+.rv-actions button{font-size:14px;padding:4px 10px}
+.rv-empty{margin:var(--v-space-4) 0;color:var(--v-muted);font-size:15px}
+.rv-composer{border-top:1px solid var(--v-border);padding:var(--v-space-4);display:flex;flex-direction:column;gap:var(--v-space-3)}
+.rv-chips{display:flex;flex-wrap:wrap;gap:var(--v-space-1)}
+.rv .rv-chipbtn{border:0;border-radius:999px;font-size:14px;padding:4px 12px;color:var(--v-muted);background:var(--v-muted-bg)}
+.rv-chipbtn.rv-chip-on{background:var(--v-primary);color:var(--v-primary-fg);border-color:var(--v-primary);font-weight:500}
+.rv-composer .rv-actions{margin-top:0}
+.rv-composer kbd{margin-left:2px}
+.rv .rv-keyhint{margin-left:auto;width:24px;height:24px;padding:0;border-radius:999px;border-color:transparent;color:var(--v-muted);font-size:13px;line-height:1}
+</style>
+</head>
+<body class="rv" data-journey="j1" data-prefix="">
+
+<header class="rv-bar">
+  <nav class="rv-crumb" aria-label="Breadcrumb">
+    <a class="rv-home" href="/" title="Every screen in this product">Fixture</a>
+    <span class="rv-sep">/</span><strong>1 · j1</strong>
+  </nav>
+  <span class="rv-pill" data-rv="pill">Wireframes · awaiting your answers</span>
+  <div class="rv-progress" data-rv="progress" data-answered="0" data-total="0">
+    <span class="rv-progress-text" data-rv="progress-text">0 of 0 answered · 3 notes for the session</span>
+    <span class="rv-track" aria-hidden="true"><span class="rv-fill" data-rv="fill" style="width:100%"></span></span>
+  </div>
+  <div class="rv-control" data-rv="control">
+    <div class="rv-stop">
+      <button type="button" data-rv="approve" class="rv-primary" disabled title="3 open items block approval">Approve journey</button>
+      <button type="button" data-rv="change">Request changes</button>
+    </div>
+  </div>
+</header>
+
+<div class="rv-main">
+
+  <nav class="rv-rail" data-rv="rail" aria-label="Journeys and screens">
+    <h2>Journeys</h2>
+    <ol class="rv-list rv-journeys">
+      <li><a data-rv="journey" data-journey="j1" class="rv-cur" href="#"><span class="rv-n">1</span>j1<span class="rv-here" aria-current="page">reviewing</span></a></li>
+    </ol>
+    <h2>Screens</h2>
+    <ol class="rv-list rv-screens">
+      <li><a data-rv="screen" data-screen="a" href="#board-a"><span class="rv-n">1</span>a<span class="rv-count" data-rv="count" data-screen="a">1</span></a></li>
+      <li><a data-rv="screen" data-screen="b" href="#board-b"><span class="rv-n">2</span>b<span class="rv-count" data-rv="count" data-screen="b">1</span></a></li>
+    </ol>
+    <ol class="rv-list rv-screens rv-project">
+      <li><a data-rv="screen" data-screen="__project" href="#"><span class="rv-n">·</span>Whole project<span class="rv-count" data-rv="count" data-screen="__project">1</span></a></li>
+    </ol>
+  </nav>
+
+  <main class="rv-canvas" data-rv="canvas">
+
+    <section class="rv-board" data-rv="board" data-label="a" id="board-a" data-focus>
+      <header class="rv-cap">
+        <h3>a<span class="rv-of">· 1 of 2</span></h3>
+        <span class="rv-vp">1280×800</span>
+        <button type="button" class="rv-badge" data-rv="badge" data-label="a" title="1 open on this screen">1</button>
+        <button type="button" class="rv-addnote" data-rv="addnote" data-label="a">+ note</button>
+        <div class="rv-tabs" role="tablist" aria-label="States of a">
+          <button type="button" role="tab" data-rv="tab" data-state="happy" aria-selected="true">happy</button>
+          <button type="button" role="tab" data-rv="tab" data-state="empty" data-gray data-gray-first aria-selected="false">empty</button>
+        </div>
+      </header>
+      <div class="rv-stage">
+        <div class="rv-shot" data-rv="shot">
+          <iframe data-rv="frame" data-label="a" data-state="happy" data-focus width="1280" height="200" scrolling="no" title="a · happy"
+            srcdoc="&lt;style&gt;body{margin:0;font:14px/1.5 ui-sans-serif,system-ui,sans-serif;color:#0a0a0a;background:#fff;padding:20px}h1{font-size:18px;margin:0}p{color:#737373}&lt;/style&gt;&lt;h1&gt;Screen a&lt;/h1&gt;&lt;p&gt;happy state&lt;/p&gt;"></iframe>
+        </div>
+      </div>
+    </section>
+
+    <section class="rv-board" data-rv="board" data-label="b" id="board-b">
+      <header class="rv-cap">
+        <h3>b<span class="rv-of">· 2 of 2</span></h3>
+        <span class="rv-vp">1280×800</span>
+        <button type="button" class="rv-badge" data-rv="badge" data-label="b" title="1 open on this screen">1</button>
+        <button type="button" class="rv-addnote" data-rv="addnote" data-label="b">+ note</button>
+        <div class="rv-tabs" role="tablist" aria-label="States of b">
+          <button type="button" role="tab" data-rv="tab" data-state="happy" aria-selected="true">happy</button>
+        </div>
+      </header>
+      <div class="rv-stage">
+        <div class="rv-shot" data-rv="shot">
+          <iframe data-rv="frame" data-label="b" data-state="happy" width="1280" height="200" scrolling="no" title="b · happy"
+            srcdoc="&lt;style&gt;body{margin:0;font:14px/1.5 ui-sans-serif,system-ui,sans-serif;color:#0a0a0a;background:#fff;padding:20px}h1{font-size:18px;margin:0}p{color:#737373}&lt;/style&gt;&lt;h1&gt;Screen b&lt;/h1&gt;&lt;p&gt;happy state&lt;/p&gt;"></iframe>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <aside class="rv-inspector" data-rv="inspector" aria-label="Questions and notes">
+    <div class="rv-filters" role="tablist">
+      <button type="button" data-rv="filter" data-filter="open" aria-selected="true">Open<span class="rv-count" data-rv="open-count">3</span></button>
+      <button type="button" data-rv="filter" data-filter="answered" aria-selected="false">Answered</button>
+      <button type="button" data-rv="filter" data-filter="all" aria-selected="false">All</button>
+      <button type="button" class="rv-keyhint" data-rv="keyhint" title="Keyboard shortcuts" aria-label="Keyboard shortcuts" aria-expanded="false">?</button>
+      <button type="button" class="rv-fold" data-rv="fold" title="Fold the inspector (\)" aria-label="Fold the inspector">›</button>
+    </div>
+    <div class="rv-scopeband"><span class="rv-scopeband-label">Notes for</span><span class="rv-screenfilter" data-rv="screenfilter">a</span></div>
+    <div class="rv-rows" data-rv="rows">
+
+      <article data-rv="row" data-id="n1" data-kind="note" data-status="open" class="rv-row rv-note" data-label="a" data-selected tabindex="-1">
+        <div class="rv-rowhead"><span class="rv-id">n1</span><span class="rv-who">You told JJ</span><span class="rv-sep">·</span><span class="rv-screen">a</span></div>
+        <p class="rv-claim">Something's off here</p>
+        <p class="rv-wait">Waiting for the session · blocks approval until addressed</p>
+      </article>
+
+      <article data-rv="row" data-id="n2" data-kind="note" data-status="open" class="rv-row rv-note" data-label="b" tabindex="-1">
+        <div class="rv-rowhead"><span class="rv-id">n2</span><span class="rv-who">You told JJ</span><span class="rv-sep">·</span><span class="rv-screen">b</span></div>
+        <p class="rv-claim">Should be shorter</p>
+        <p class="rv-wait">Addressed: did it</p>
+        <div class="rv-actions" data-rv="note-actions">
+          <button type="button" data-rv="accept">Looks good</button>
+          <button type="button" data-rv="reopen">Still not right</button>
+        </div>
+      </article>
+
+      <article data-rv="row" data-id="n3" data-kind="note" data-status="open" class="rv-row rv-note" tabindex="-1">
+        <div class="rv-rowhead"><span class="rv-id">n3</span><span class="rv-who">You told JJ</span><span class="rv-sep">·</span><span class="rv-screen">Whole project</span></div>
+        <p class="rv-claim">Overall pass looks good</p>
+        <p class="rv-wait">Waiting for the session · blocks approval until addressed</p>
+      </article>
+
+      <p class="rv-empty" data-rv="empty" hidden>Every question is answered. Approve the journey when the screens look right.</p>
+    </div>
+
+    <form class="rv-composer" data-rv="composer" data-prefix="" aria-label="Tell the session something">
+      <div class="rv-chips">
+        <button type="button" class="rv-chipbtn" data-rv="chip" data-value="missing-screen" aria-pressed="false">Missing screen</button>
+        <button type="button" class="rv-chipbtn" data-rv="chip" data-value="wrong-direction" aria-pressed="false">Wrong direction</button>
+        <button type="button" class="rv-chipbtn" data-rv="chip" data-value="wrong-words" aria-pressed="false">Wrong words</button>
+        <button type="button" class="rv-chipbtn rv-chip-on" data-rv="chip" data-value="other" aria-pressed="true">Other</button>
+      </div>
+      <textarea data-rv="text" rows="3" placeholder="What should change, or what is missing?"></textarea>
+      <div class="rv-actions"><button type="submit" data-rv="send" class="rv-primary">Send</button><kbd>⌘</kbd><kbd>Enter</kbd></div>
+    </form>
+  </aside>
+
+</div>
+
+</body>
+</html>

@@ -394,7 +394,8 @@ The atlas renders one frame per screen, with the declared state count in the car
 (ADR-0016); a journey-owned card's preview links to that screen's board on the journey review page.
 Plugin chrome binds to a file: the atlas index answers to `design/chrome-mocks/atlas.html` and the
 journey review page to `design/chrome-mocks/review.html`, cited as `design_source` by any spec that
-edits them.
+edits them (specs/20260912/05, /06). The review page's rail carries a `Whole project` row for the
+items that belong to no screen, and the server renders the same counts the page re-derives on load.
 
 ## Page notes (2026-09-03, specs/20260902/10)
 

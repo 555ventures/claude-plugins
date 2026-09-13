@@ -59,4 +59,21 @@ function linksWireRegister(html) {
   return stylesheetTargets(html).some((t) => WIRE_SEGMENT_RE.test(t))
 }
 
-module.exports = { stylesheetTargets, linksWireRegister }
+// Every `name="value"` / `name='value'` / `name=value` assignment anywhere in raw HTML — the
+// same three-quote-form completeness attrValue applies within one already-matched tag,
+// generalized for callers that scan a whole document rather than one parsed tag (D3's inline
+// style= sweep, specs/20260912/09-a-mock-may-not-invent.md). Anchored on a preceding whitespace
+// character (or start of string) so it never fires on a longer attribute merely ending in the
+// same word, e.g. `data-style=` when name is "style" — `\b` would still match there, since it
+// treats "-" as a boundary too (the same trap this module's header records for `wire`).
+function attrValuesOf(html, name) {
+  const re = new RegExp('(?:^|\\s)' + name + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s"\'>]+))', 'gi')
+  const out = []
+  let m
+  while ((m = re.exec(html))) {
+    out.push(m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3])
+  }
+  return out
+}
+
+module.exports = { stylesheetTargets, linksWireRegister, attrValuesOf }

@@ -149,7 +149,21 @@ upstream bug list. -->
   is evadable by the exact thing it guards — classify by **location** (the directory walk) and
   admit everything inside it; any name-shape filter is a new hole, never a legitimate
   narrowing. A break attempt confined to the guard's own fixture envelope confirms nothing
-  about coverage outside it. (specs/20260820/04-entrypoint-conformance.md)
+  about coverage outside it.
+  Second and third triggers, both hand-rolled readers over a text format that never normalized
+  the text first, and both shipped in one build. (i) A refusal spelled as one QUOTE FORM — an
+  inline-`style=` sweep written `/\sstyle\s*=\s*"[^"]*"/` — is evaded by retyping one quote
+  character, which is the exact thing the rule forbids; the AC's worked example is an example,
+  never a narrowing of its Decision. (ii) A count DERIVED FROM A FILE that does not strip
+  comments first reads that file's own prose as data: `wire.css`'s header comment made a cap
+  computed from its class names read 29 instead of 23, silently widening the very limit the
+  Decision existed to impose, and the same blindness recurred in the test's independent helper
+  and again in the shared attribute reader written to fix (i). Normalize before you parse —
+  strip comments, admit every quote form — and reuse the module that already does it rather
+  than growing a second reader; anchor an attribute name on whitespace, never `\b`, which
+  treats `-` as a boundary and so matches `data-style=` too.
+  (specs/20260820/04-entrypoint-conformance.md;
+  specs/20260912/09-a-mock-may-not-invent.md D3/D5)
 - `[plugin]` `red-check.js` derives carried-AC expectation from **AC-ID occurrence anywhere in
   the file**, comments included. An edit-only File Plan row that mentions another AC's new
   behavioral home in a comment forces a false red expectation onto a file whose only change is

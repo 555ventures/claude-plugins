@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: implementing
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -251,6 +251,33 @@ genesis-driver.test.js`'s mock fixtures link `../tokens.css` plus a shell styles
 the wire register, and `tests/mocks/notes-layer-isolation.test.js`'s probe links no stylesheet
 at all — it declares its own `:root` inline and runs through the Chrome harness, not through
 `check`. `hygieneViolations` occurs only in `design-atlas.js`, which is a File Plan row.
+
+**Build and review record (folded from the deviations sidecar at close, 2026-09-13).**
+
+- A5 was false: `0017` and every number through `0021` were claimed by siblings, so the ADR
+  shipped as `docs/adr/0022-a-mock-may-not-invent.md` and the File Plan row, A5 and every
+  citation moved with it in the same build — the row's own instruction, and the already-recorded
+  ADR-filename race.
+- A2's site counts ("five" and "six" wire-linking, style-bearing fixtures) were predictions, not
+  an inventory: exactly one genuine site existed in each file. Both were repaired as planned;
+  the others link the register but carry no `<style>` block to repair.
+- D9 names the hygiene spec as `specs/20260824/03-mock-hygiene-and-marks.md`, which does not
+  exist. The ADR's `Applies to` entry uses the real path, `03-mock-states-hygiene.md` — a
+  dangling backlink would have been worse than departing from the Decision's literal spelling.
+- Review found three hard defects, all fixed and re-verified by executed repro in the fix-delta
+  pass: the project-kit cap's violation-vs-warn tier was decided by whichever bound mock the
+  directory walk reached first, so filename order flipped the verdict (now decided after the
+  whole walk, from whether *any* bound mock in the family is bound-approved); D3's inline-style
+  refusal matched only double-quoted attributes, so one quote character evaded it; and D7's
+  measured line was printed but asserted by no test (now pinned behaviorally, once-per-project-
+  kit, with the cap derived from the template at run time).
+- The quote-form fix added a shared `attrValuesOf` to `spec/scripts/lib/wire-register.js`, a
+  file outside the File Plan. Kept there deliberately: that module exists precisely to stop a
+  fourth hand-rolled attribute reader, the change is additive and altered no existing call site.
+- Two advisory findings are queued, not fixed here: `attrValuesOf` scans the raw document rather
+  than matched tags, so screen copy containing `style =` and a commented-out fragment both read
+  as inline styles (it is the one function in that module that skips its own `stripComments`),
+  and the module's header usage line still names two of its now-three exports.
 
 ## Canonical Delta
 

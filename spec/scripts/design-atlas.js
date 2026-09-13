@@ -221,7 +221,7 @@ const readLedgerRows = (rootAbs) => {
 // `client open`/`approved` call, so the server and the driver never carry two copies.
 const { materialize, setExclusionVerdict } = require('./lib/mocks-exclusions')
 const picksLib = require('./lib/mocks-picks.js')
-const { stylesheetTargets, linksWireRegister } = require('./lib/wire-register')
+const { stylesheetTargets, linksWireRegister, attrValuesOf } = require('./lib/wire-register')
 // specs/20260912/09-a-mock-may-not-invent.md D4/D5/D6/D7: pure CSS-string readers behind the
 // project-kit rules below — classNamesIn/overrides/layoutShare, all comment-stripped internally.
 const kitLayersLib = require('./lib/kit-layers')
@@ -533,7 +533,11 @@ function mockOwnInventionFindings(f, html) {
   if (styleRuleCount > 0) {
     out.push(f + ': ' + styleRuleCount + ' <style> rule(s) — a screen carries no styles of its own; move them to design/wire/project.css or use a shared class')
   }
-  const styleAttrCount = (html.match(/\sstyle\s*=\s*"[^"]*"/g) || []).length
+  // D3: "no style= attribute" — every quote form (double, single, unquoted), read via
+  // lib/wire-register.js's attrValuesOf so this doesn't grow a third hand-rolled attribute
+  // parser; a double-quote-only regex was evadable by the exact thing D3 guards against
+  // (specs/20260912/09-a-mock-may-not-invent.md D3, AC-20260912-09-2).
+  const styleAttrCount = attrValuesOf(html, 'style').length
   if (styleAttrCount > 0) {
     out.push(f + ': ' + styleAttrCount + ' inline style= attribute(s) — a screen carries no styles of its own')
   }
@@ -575,8 +579,8 @@ function wireFamilyFindings(wireDir) {
 // project-kit classes exist".
 function markupClassesOf(html) {
   const out = new Set()
-  for (const m of html.matchAll(/\bclass="([^"]*)"/g)) {
-    for (const c of m[1].split(/\s+/)) if (c) out.add(c)
+  for (const value of attrValuesOf(html, 'class')) {
+    for (const c of value.split(/\s+/)) if (c) out.add(c)
   }
   return out
 }
@@ -627,12 +631,17 @@ function cmdCheck(argv) {
   }
   // specs/20260912/09-a-mock-may-not-invent.md D4/D5/D7 bookkeeping: wireFamilyCache dedupes the
   // project.css/wire.css read to once per resolved design/wire/ directory (checkedWireFamilies
-  // gates the PRINTED finding to once — the cache itself stays readable for every bound mock so
+  // gates the PRINTED info line to once — the cache itself stays readable for every bound mock so
   // D6's usage sweep below sees every one of them, not just the first per family). D6's own
   // accumulator (wireDir -> class -> Set(label)) and the run-wide bound-mock count feed the
   // cross-file sweep emitted AFTER the walk (Behavior: "fewer than two bound mocks emits nothing").
+  // wireFamilyAnyApproved (wireDir -> boolean) tracks whether ANY bound mock resolving that
+  // family was bound-approved — the tier (violation vs warn) is decided from this AFTER the
+  // whole walk, never from whichever mock in the family the directory walk happened to reach
+  // first (that was the D5/AC-20260912-09-4 defect: filename order flipping the verdict).
   const wireFamilyCache = new Map()
   const checkedWireFamilies = new Set()
+  const wireFamilyAnyApproved = new Map()
   const wireClassLabels = new Map()
   let inventionBoundCount = 0
   let count = 0
@@ -688,10 +697,11 @@ function cmdCheck(argv) {
           if (fam) {
             if (!checkedWireFamilies.has(wireDir)) {
               checkedWireFamilies.add(wireDir)
-              if (fam.dupeMsg) { if (boundApproved) violations.push(fam.dupeMsg); else warnLines.push('  ⚠️ ' + fam.dupeMsg) }
-              if (fam.overCap) { if (boundApproved) violations.push(fam.capMsg); else warnLines.push('  ⚠️ ' + fam.capMsg) }
               wireInfoLines.push(fam.infoLine)
             }
+            // Tier tracking only — the finding itself is emitted once, after the walk, once
+            // every bound mock resolving this family has been seen (see the loop below).
+            wireFamilyAnyApproved.set(wireDir, boundApproved || !!wireFamilyAnyApproved.get(wireDir))
             if (fam.projectClasses.size) {
               if (!wireClassLabels.has(wireDir)) wireClassLabels.set(wireDir, new Map())
               const perClass = wireClassLabels.get(wireDir)
@@ -782,6 +792,15 @@ function cmdCheck(argv) {
         }
       }
     }
+  }
+  // D4/D5 finding emission, deferred to here (after every file in the walk has been seen): the
+  // tier is decided from wireFamilyAnyApproved, i.e. whether ANY bound mock resolving this
+  // family was bound-approved — never from whichever mock the walk visited first.
+  for (const [wireDir, fam] of wireFamilyCache) {
+    if (!fam) continue
+    const tierApproved = !!wireFamilyAnyApproved.get(wireDir)
+    if (fam.dupeMsg) { if (tierApproved) violations.push(fam.dupeMsg); else warnLines.push('  ⚠️ ' + fam.dupeMsg) }
+    if (fam.overCap) { if (tierApproved) violations.push(fam.capMsg); else warnLines.push('  ⚠️ ' + fam.capMsg) }
   }
   // specs/20260912/09-a-mock-may-not-invent.md D6: the cross-file single-screen sweep — a
   // project-kit class used on exactly one of the bound mocks visited this run. Fewer than two

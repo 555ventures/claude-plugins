@@ -7,7 +7,7 @@ const { tmpdir, runNode, read } = require('../helpers')
 
 // Owner: specs/20260912/09-a-mock-may-not-invent.md
 // AC-20260912-09-1, AC-20260912-09-2, AC-20260912-09-3, AC-20260912-09-4, AC-20260912-09-5,
-// AC-20260912-09-7, AC-20260912-09-8.
+// AC-20260912-09-6, AC-20260912-09-7, AC-20260912-09-8.
 
 // The same no-CSS-parser class-name extraction design-atlas.js's own hygiene checks use
 // (flat `selector { declarations }` pairs, no @media/nesting) — used here only to derive the
@@ -184,4 +184,33 @@ test('AC-20260912-09-8: design-atlas.js check SHALL CONTINUE TO report the missi
   const r = runNode('scripts/design-atlas.js', ['check', path.join(dir, 'design/mocks')])
   assert.match(r.stdout, /no universal box-sizing: border-box rule/,
     'a bound mock outside the wire register still owes its own box-sizing reset — D8\'s new satisfying route binds only to a wire-register link, so this rule must keep firing here: ' + r.stdout)
+})
+
+// D7's promised measured line has no exec pin anywhere in the suite: AC-20260912-09-6's own
+// carrier (tests/mocks/kit-layers.test.js) asserts only layoutShare()'s pure return value, never
+// a process invocation, so the once-per-project-kit ⓘ line design-atlas.js check actually prints
+// can regress in shape, in whether it fires more than once per run, or in whether it prints at
+// all, with every gate green. This test execs the real check against a synthetic resolved
+// project kit and pins stdout directly.
+test('AC-20260912-09-6: design-atlas.js check prints exactly one ⓘ project kit: line per resolved project kit, stating the computed class count against the template-derived cap, the rule count, and the rounded-half-up layout share, even when the run visits several bound mocks', () => {
+  const dir = tmpdir('mock-invention-kit-line-')
+  // .a is layout-only (display), .b is styling-only (color), .c is layout-only (padding): 3
+  // rules, 2 of them layout, so layoutShare's rounded-half-up percent is Math.round(2/3*100) =
+  // 67 — a non-round fraction, so the pin cannot pass by coincidence of the numbers chosen.
+  writeFile(path.join(dir, 'design/wire/project.css'),
+    '.a { display: flex }\n.b { color: red }\n.c { padding: 4px }\n')
+  writeFile(path.join(dir, 'design/mocks/a.html'), boundMockHtml({ label: 'a' }))
+  writeFile(path.join(dir, 'design/mocks/b.html'), boundMockHtml({ label: 'b' }))
+  writeFile(path.join(dir, 'design/mocks/c.html'), boundMockHtml({ label: 'c' }))
+
+  const r = runNode('scripts/design-atlas.js', ['check', dir])
+  assert.strictEqual(r.status, 0,
+    'three classes over a 23-class cap with no shared-class redefinition must pass the check cleanly, so any non-zero exit means something else broke: ' + r.stdout + r.stderr)
+
+  const hits = r.stdout.match(/ⓘ project kit:.*$/gm) || []
+  assert.strictEqual(hits.length, 1,
+    'the run visits three bound mocks sharing one project kit; D7 promises the measured line once per resolved project kit, not once per screen, so anything other than exactly one hit means it either never printed or printed per screen: ' + r.stdout)
+  assert.strictEqual(hits[0],
+    'ⓘ project kit: 3/' + WIRE_CAP + ' classes · 3 rules · layout share 67% (2 of 3)',
+    'the line must state the project kit\'s own class count against the template-derived cap (never a hardcoded literal, computed here the same way from spec/templates/mocks/wire.css), the rule count, and the rounded-half-up layout share as D7 specifies it: ' + r.stdout)
 })

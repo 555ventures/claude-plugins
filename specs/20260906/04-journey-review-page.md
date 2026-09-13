@@ -14,6 +14,8 @@ diff_base: 16aea5f7c3c1e6731da9fa451550ffdc8a5a6e47
 
 # The journey review page: screens rail, artboards with state tabs, a question inspector with keyboard flow — the look surface for a journey
 
+Amended by: ADR-0018 (specs/20260912/06-the-review-page-answers-to-a-design.md narrows D5's breadcrumb literal and retires AC-20260906-04-6's final clause — see the ADR's Applies to)
+
 ## Goal
 
 `stop open journey:<j>` points at a page built for answering: a three-pane review page per journey served at `/review/<j>.html`. Left, the journeys and this journey's screens with open counts. Centre, one artboard per screen on a dotted canvas, each an iframe of the served mock with `happy | empty | loading | error` state tabs. Right, the inspector: every question and note on the journey, filtered Open / Answered / All, answered inline, a composer with scope and reason, foldable to a strip, driven by `J K Y N Esc \`. The header carries the breadcrumb, `k of n answered`, and the stop's Approve control, disabled while anything is open. The chrome is authored under the frontend-design skill in the shadcn idiom on the viewer's zinc register; the wireframes inside the iframes stay gray. Done means the journey look happens on this page, the atlas index links to it, and nothing about the endpoints or the stores changes.

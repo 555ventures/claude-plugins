@@ -31,7 +31,6 @@
   var folded = false
   var initial = q('[data-rv="row"][data-selected]')
   var selectedId = initial ? initial.getAttribute('data-id') : null
-  var scopeMode = 'screen'
   var scopeLabel = null
   var reason = 'other'
 
@@ -75,10 +74,12 @@
     })
     qa('[data-rv="filter"]').forEach(function (b) { b.setAttribute('aria-selected', b.getAttribute('data-filter') === filter ? 'true' : 'false') })
     var chip = q('[data-rv="screenfilter"]')
+    var scopeLabelEl = q('[data-rv="scopeband-label"]')
     if (chip) {
       var name = screenFilter === '__project' ? 'the whole project' : (screenFilter || '')
       setText(chip, name)
       setHidden(chip, !name)
+      setHidden(scopeLabelEl, !name)
     }
     setHidden(q('[data-rv="empty"]'), !(filter === 'open' && !anyOpen))
   }
@@ -210,15 +211,11 @@
   }
 
   // ---- composer -------------------------------------------------------------------------------
-  function setScope(mode, label) {
-    scopeMode = mode
+  // D10: a note always files against the focused screen — renderComposer emits no scope toggle
+  // control at all (verified: zero occurrences), so this only ever remembers which screen the
+  // composer is currently pinned to.
+  function setScopeLabel(label) {
     if (label) scopeLabel = label
-    qa('[data-rv="scope"]').forEach(function (b) {
-      var on = b.getAttribute('data-value') === mode
-      b.setAttribute('aria-pressed', on ? 'true' : 'false')
-      if (b.classList) b.classList.toggle('rv-scope-on', on)
-    })
-    setText(q('[data-rv="scope-label"]'), scopeLabel || focusedLabel() || '')
   }
   function focusedLabel() {
     var f = q('[data-rv="board"][data-focus]')
@@ -257,7 +254,7 @@
     var ta = q('[data-rv="text"]')
     var text = ta ? String(ta.value || '').trim() : ''
     if (!text) return Promise.resolve()
-    var label = scopeMode === 'screen' ? (scopeLabel || focusedLabel()) : null
+    var label = scopeLabel || focusedLabel()
     var body = label
       ? { scope: 'mock', screen: label, state: (function (s) { return s === 'happy' ? null : s })(activeStateOf(label)), reason: reason, text: text, by: author() }
       : { scope: 'project', screen: null, state: null, reason: reason, text: text, by: author() }
@@ -433,7 +430,7 @@
       qa('[data-rv="frame"]').concat(qa('[data-rv="board"]')).forEach(function (el) {
         if (el.getAttribute('data-label') === label) el.setAttribute('data-focus', ''); else el.removeAttribute('data-focus')
       })
-      setScope('screen', label)
+      setScopeLabel(label)
       var ta = q('[data-rv="text"]')
       if (ta && ta.focus) ta.focus()
     })
@@ -453,7 +450,6 @@
       })
     })
   })
-  qa('[data-rv="scope"]').forEach(function (b) { on(b, 'click', function () { setScope(b.getAttribute('data-value'), b.getAttribute('data-value') === 'screen' ? (scopeLabel || focusedLabel()) : null) }) })
   qa('[data-rv="chip"]').forEach(function (c) {
     on(c, 'click', function () {
       reason = c.getAttribute('data-value')
@@ -494,7 +490,7 @@
       if (el.getAttribute('data-label') === label) el.setAttribute('data-focus', '')
       else el.removeAttribute('data-focus')
     })
-    setScope(scopeMode, label)
+    setScopeLabel(label)
     screenFilter = label
     applyFilter()
   }
@@ -518,7 +514,7 @@
   screenFilter = focusedLabel()
   applyFilter()
   recount()
-  setScope(scopeMode, focusedLabel())
+  setScopeLabel(focusedLabel())
   if (selectedId && rowById(selectedId)) select(selectedId)
   fitAll()
   // The look stop's URL ends in #stop-<id>, whose target lives inside the sticky bar: the browser's

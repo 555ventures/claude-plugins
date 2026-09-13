@@ -290,8 +290,8 @@ body {
 .rv .rv-n { font-variant-numeric: tabular-nums; color: var(--v-muted); margin-right: var(--v-space-2); }
 .rv kbd { display: inline-block; min-width: 1.5em; padding: 0 5px; border: 1px solid var(--v-border); border-bottom-width: 2px; border-radius: 4px; background: var(--v-muted-bg); color: var(--v-fg); font: 600 11px/1.6 var(--v-font); text-align: center; }
 .rv button { font: inherit; color: var(--v-fg); background: var(--v-bg); border: 1px solid var(--v-border); border-radius: var(--v-radius); padding: 4px 10px; cursor: pointer; }
-.rv button:hover:not(.rv-primary):not(.rv-scope-on):not(.rv-chip-on):not([aria-selected="true"]) { background: var(--v-muted-bg); }
-.rv .rv-scope-on:hover, .rv .rv-chip-on:hover { background: color-mix(in srgb, var(--v-primary) 88%, var(--v-bg)); }
+.rv button:hover:not(.rv-primary):not(.rv-chip-on):not([aria-selected="true"]) { background: var(--v-muted-bg); }
+.rv .rv-chip-on:hover { background: color-mix(in srgb, var(--v-primary) 88%, var(--v-bg)); }
 .rv button:focus-visible, .rv a:focus-visible, .rv textarea:focus-visible, .rv select:focus-visible, .rv [tabindex]:focus-visible { outline: 2px solid var(--v-ring); outline-offset: 1px; }
 .rv button[disabled] { opacity: .5; cursor: not-allowed; }
 .rv .rv-primary { background: var(--v-primary); color: var(--v-primary-fg); border-color: var(--v-primary); }
@@ -347,14 +347,13 @@ body {
 /* The stage: the ground a screen is seen against, which is what a mock needs instead of a bezel.
    The ~200px either side of a centred phone stops being empty white and becomes canvas. */
 .rv-stage { background: var(--v-muted-bg); padding: var(--v-space-6) var(--v-space-4); }
-.rv-badge { min-width: 1.8em; padding: 0 6px; border-radius: 999px; font-size: 12px; font-variant-numeric: tabular-nums; background: color-mix(in srgb, var(--v-warn) 14%, var(--v-bg)); color: var(--v-warn); border-color: color-mix(in srgb, var(--v-warn) 40%, var(--v-bg)); }
-.rv-badge[data-zero] { background: transparent; color: var(--v-muted); border-color: var(--v-border); }
-.rv-addnote { margin-left: 0; font-size: 14px; color: var(--v-muted); border-color: transparent; padding: 3px 9px; }
-.rv-addnote:hover { color: var(--v-fg); border-color: var(--v-border); }
+.rv .rv-badge { min-width: 1.8em; padding: 0 6px; border-radius: 999px; font-size: 12px; font-variant-numeric: tabular-nums; background: color-mix(in srgb, var(--v-warn) 14%, var(--v-bg)); color: var(--v-warn); border-color: color-mix(in srgb, var(--v-warn) 40%, var(--v-bg)); }
+.rv .rv-badge[data-zero] { background: transparent; color: var(--v-muted); border-color: transparent; }
+.rv .rv-addnote { margin-left: 0; font-size: 14px; color: var(--v-muted); border-color: transparent; padding: 3px 9px; }
+.rv .rv-addnote:hover { color: var(--v-fg); border-color: var(--v-border); }
 .rv-tabs { display: flex; flex-wrap: wrap; gap: 2px 4px; border: 0; border-radius: 0; overflow: visible; flex-basis: 100%; margin: 2px 0 0 -4px; }
 .rv-tabs button { border: 1px solid transparent; border-radius: 999px; padding: 3px 10px; font-size: 13px; color: var(--v-muted); background: transparent; }
 .rv-tabs button:hover { background: var(--v-bg); border-color: var(--v-border); color: var(--v-fg); }
-.rv-tabs button:hover { color: var(--v-fg); }
 .rv-tabs button[aria-selected="true"] { background: var(--v-bg); color: var(--v-fg); border-color: var(--v-border); font-weight: 500; }
 /* empty / loading / error are craft checks, not content states: a rule sets them apart. */
 .rv-tabs button[data-gray-first] { margin-left: 6px; }
@@ -382,14 +381,15 @@ body {
 .rv-inspector { border-left: 1px solid var(--v-border); background: var(--v-bg); position: sticky; top: var(--rv-bar); height: calc(100vh - var(--rv-bar)); display: flex; flex-direction: column; min-width: 0; }
 .rv-filters { display: flex; align-items: center; flex-wrap: nowrap; gap: var(--v-space-1); height: 52px; padding: 0 var(--v-space-4); border-bottom: 1px solid var(--v-border); }
 .rv-filters button { white-space: nowrap; flex: none; }
-/* Its own band, fixed height, so a long screen name can never move the header. */
+/* Its own band, fixed height, so a long screen name can never move the header (D4). */
 .rv-scopeband { display: flex; align-items: center; height: 44px; padding: 0 var(--v-space-4); border-bottom: 1px solid var(--v-border); overflow: hidden; }
 .rv-filters button { border-color: transparent; color: var(--v-muted); font-size: 14px; padding: 4px 9px; display: inline-flex; align-items: center; gap: 6px; }
 .rv-filters button[aria-selected="true"] { background: var(--v-muted-bg); color: var(--v-fg); font-weight: 600; }
 .rv-filters .rv-count { margin-left: 0; }
+/* The label span carries the "Notes for" words as real DOM text, never CSS generated content (D4). */
+.rv-scopeband-label { margin-right: .35em; color: var(--v-muted); font-weight: 400; }
 .rv-screenfilter { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; border-radius: 999px; background: var(--v-muted-bg); color: var(--v-fg); font-size: 13px; font-weight: 500; padding: 4px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rv-screenfilter::before { content: "Notes for"; margin-right: .35em; color: var(--v-muted); font-weight: 400; }
-.rv-fold { margin-left: 0; flex: none; font-size: 16px; line-height: 1; padding: 0 6px; color: var(--v-muted); }
+.rv .rv-fold { margin-left: 0; flex: none; font-size: 16px; line-height: 1; padding: 0 6px; color: var(--v-muted); }
 .rv-rows { flex: 1; overflow: auto; padding: var(--v-space-3) var(--v-space-4); }
 .rv-row { border-left: 2px solid var(--v-border); padding: var(--v-space-2) var(--v-space-3); margin: 0 0 var(--v-space-2); border-radius: 0 var(--v-radius) var(--v-radius) 0; outline: 0; }
 .rv-row[data-status="open"] { border-left-color: var(--v-warn); }
@@ -409,21 +409,16 @@ body {
 .rv-correct { margin-top: var(--v-space-2); display: flex; flex-direction: column; gap: var(--v-space-1); align-items: flex-end; }
 .rv-empty { margin: var(--v-space-4) 0; color: var(--v-muted); font-size: 15px; }
 .rv-composer { border-top: 1px solid var(--v-border); padding: var(--v-space-4); display: flex; flex-direction: column; gap: var(--v-space-3); }
-.rv-scope { display: flex; align-items: center; gap: 0; }
-.rv-scope button { border-radius: 0; font-size: 14px; padding: 4px 10px; color: var(--v-muted); }
-.rv-scope button:first-child { border-radius: var(--v-radius) 0 0 var(--v-radius); }
-.rv-scope button:nth-child(2) { border-radius: 0 var(--v-radius) var(--v-radius) 0; border-left: 0; }
-.rv-scope .rv-scope-on { background: var(--v-primary); color: var(--v-primary-fg); border-color: var(--v-primary); }
 .rv-chips { display: flex; flex-wrap: wrap; gap: var(--v-space-1); }
 .rv .rv-chipbtn { border: 0; border-radius: 999px; font-size: 14px; padding: 4px 12px; color: var(--v-muted); background: var(--v-muted-bg); }
 .rv-chipbtn.rv-chip-on { background: var(--v-primary); color: var(--v-primary-fg); border-color: var(--v-primary); font-weight: 500; }
 .rv-composer .rv-actions { margin-top: 0; }
 .rv-composer kbd { margin-left: 2px; }
 .rv-keys { display: flex; flex-wrap: wrap; gap: var(--v-space-2) var(--v-space-3); padding: var(--v-space-3) var(--v-space-4); border-top: 1px solid var(--v-border); font-size: 12px; color: var(--v-muted); }
-.rv-keyhint { margin-left: auto; width: 24px; height: 24px; padding: 0; border-radius: 999px; border-color: transparent; color: var(--v-muted); font-size: 13px; line-height: 1; }
-.rv-keyhint[aria-expanded="true"] { background: var(--v-muted-bg); color: var(--v-fg); }
+.rv .rv-keyhint { margin-left: auto; width: 24px; height: 24px; padding: 0; border-radius: 999px; border-color: transparent; color: var(--v-muted); font-size: 13px; line-height: 1; }
+.rv .rv-keyhint[aria-expanded="true"] { background: var(--v-muted-bg); color: var(--v-fg); }
 .rv-keys kbd { margin-right: 3px; }
-.rv-strip { position: sticky; top: var(--rv-bar); height: calc(100vh - var(--rv-bar)); width: var(--rv-strip); border: 0; border-left: 1px solid var(--v-border); border-radius: 0; padding: var(--v-space-3) 0; display: flex; flex-direction: column; align-items: center; gap: var(--v-space-3); }
+.rv .rv-strip { position: sticky; top: var(--rv-bar); height: calc(100vh - var(--rv-bar)); width: var(--rv-strip); border: 0; border-left: 1px solid var(--v-border); border-radius: 0; padding: var(--v-space-3) 0; display: flex; flex-direction: column; align-items: center; gap: var(--v-space-3); }
 .rv-strip-arrow { font-size: 16px; color: var(--v-muted); }
 .rv-strip-count { writing-mode: vertical-rl; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--v-warn); }
 
@@ -444,7 +439,9 @@ body {
   .rv-jump { display: block; }
   .rv-canvas { padding: var(--v-space-3); padding-bottom: 50vh; }
   .rv-inspector { position: fixed; left: 0; right: 0; bottom: 0; top: auto; height: 45vh; border-left: 0; border-top: 1px solid var(--v-border); border-radius: var(--v-radius) var(--v-radius) 0 0; box-shadow: 0 -4px 16px color-mix(in srgb, var(--v-fg) 8%, transparent); z-index: 6; }
-  .rv-strip { position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: auto; height: var(--rv-strip); flex-direction: row; justify-content: center; border-left: 0; border-top: 1px solid var(--v-border); padding: 0; z-index: 6; }
+  /* .rv is kept here too: the base rule above is now .rv .rv-strip (D9), so this override needs
+     equal specificity to still win the cascade at this breakpoint. */
+  .rv .rv-strip { position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: auto; height: var(--rv-strip); flex-direction: row; justify-content: center; border-left: 0; border-top: 1px solid var(--v-border); padding: 0; z-index: 6; }
   .rv-strip-count { writing-mode: horizontal-tb; }
   .rv-keys { display: none; }
 }

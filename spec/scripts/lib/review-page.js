@@ -231,7 +231,7 @@ function renderInspector(items, prefix, selectedId) {
     '<button type="button" data-rv="filter" data-filter="all" aria-selected="false">All</button>' +
     '<button type="button" class="rv-keyhint" data-rv="keyhint" title="Keyboard shortcuts" aria-label="Keyboard shortcuts" aria-expanded="false">?</button>' +
     '<button type="button" class="rv-fold" data-rv="fold" title="Fold the inspector (\\)" aria-label="Fold the inspector">›</button></div>' +
-    '<div class="rv-scopeband"><span class="rv-screenfilter" data-rv="screenfilter"></span></div>' +
+    '<div class="rv-scopeband"><span class="rv-scopeband-label" data-rv="scopeband-label">Notes for</span><span class="rv-screenfilter" data-rv="screenfilter"></span></div>' +
     '<div class="rv-rows" data-rv="rows">' + rows + empty + '</div>' +
     renderComposer(prefix) +
     '<footer class="rv-keys" data-rv="keys" hidden><span><kbd>J</kbd><kbd>K</kbd> move</span><span><kbd>Y</kbd> yes</span><span><kbd>N</kbd> no, it\'s…</span><span><kbd>Esc</kbd> clear</span><span><kbd>\\</kbd> fold</span></footer>' +
@@ -333,10 +333,14 @@ function buildReviewPage(input) {
   if (o.clean) {
     return head + '<body class="rv rv-clean" data-journey="' + esc(journey) + '"><main class="rv-canvas" data-rv="canvas">' + boards + '</main></body></html>\n'
   }
+  // D3: the rail's project row is derived directly from the items themselves — never a lookup in
+  // openByLabel, which only ever buckets scope:'mock' notes and so always reads 0 for the null key.
+  const hasProjectItems = items.some((n) => n.scope === 'project')
+  const projectOpen = hasProjectItems ? items.filter((n) => n.scope === 'project' && isOpen(n)).length : null
+
   return head + '<body class="rv" data-journey="' + esc(journey) + '" data-prefix="' + esc(prefix) + '">' +
     renderHeader(seed, entry, jIndex, items, stop, prefix) +
-    '<div class="rv-main">' + renderRail(seed, journey, screens, openByLabel,
-      items.some((n) => !n.screen) ? (openByLabel.get(null) || 0) : null) +
+    '<div class="rv-main">' + renderRail(seed, journey, screens, openByLabel, projectOpen) +
     '<main class="rv-canvas" data-rv="canvas">' + boards + '</main>' +
     renderInspector(items, prefix, selectedId) + '</div>' +
     '<script src="' + esc(prefix) + '/__review/review.js"></script>' +

@@ -364,8 +364,11 @@ family sibling to `design/shell/` under the same marks and the same checker, gra
 skinned, signed off on the page via `stop open kit` / `--mark kit-signed`. Once a kit family
 resolves, every content region of a labeled mock is either `data-kit="<key>"` or
 `data-bespoke="<key>: <difference>"` (the key must name a primitive the family declares);
-`check` prints `ⓘ <label>: <n> kit, <m> bespoke` per screen plus an unabsorbed total after its
-CHECK PASS/FAIL block, warns at `sketch` and violates at `ratified`/`approved`/`--matrix`, and
+`check` prints a running `ⓘ unabsorbed total: <n> across <m> screen(s)` after its CHECK
+PASS/FAIL block on every run, and the per-screen `ⓘ <label>: <n> kit, <m> bespoke` breakdown
+under `--verbose` (specs/20260912/14); advisory findings at `sketch` collapse to one
+`⚠️ <n> warn(s) — --verbose to list` line, while violations always print in full. The rule still
+warns at `sketch` and violates at `ratified`/`approved`/`--matrix`, and
 `journey-approved` refuses on an unmarked region. A primitive key is unique per family, not per
 file. `--reopen kit` clears the kit sign-off and the terminal approval only, never a journey's
 own approval. A tree with no `design/kit/` is unaffected.
@@ -435,6 +438,10 @@ rename, never an in-place overwrite. Zero unresolved notes on a journey is its
 approval. The CLIENT step prints `Approval means "this is the product I understand" — the
 written brief, not these screens, holds scope`. `/spec:atlas` and `/spec:sketch` route their annotation loops
 through the same serve + `notes open`; the annotation-MCP discovery clause is retired.
+`mocks-driver.js notes open` summarises what it would otherwise repeat (specs/20260912/14):
+answered questions collapse to a count and the journey-listed open notes stop after twenty with
+a `… <n> more open note(s)` tail; `notes open --all` prints both in full. The questions block,
+the open-notes counts line and the project-notes block are never summarised.
 
 **Picks (specs/20260905/01).** A look stop is a record in `design/mocks/picks.json` (one
 writer, `lib/mocks-picks.js`: `readPicks`, `writePicks`, `validatePicks`, `openStop`,

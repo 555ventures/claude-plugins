@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: design
@@ -226,6 +226,19 @@ no live test, and this spec re-pins three of them rather than duplicating that i
 the same host and is the remaining design-stage surface whose printed size tracks project
 history, but nothing in it is a `check` or `notes open` concern and folding it in would make
 this a three-surface spec. It is queued.
+
+**Build departures (folded from the deviations sidecar at close, 2026-09-13).**
+AC-20260912-14-9's worked counts line was arithmetically wrong about its own fixture: it asked
+for `📝 open notes: 3 (1 project · 2 mock) · addressed: 1` from a fixture holding three
+mock-scope non-resolved notes, because `cmdNotesOpen`'s `mockCount` counts every non-resolved
+mock note, addressed included. The pin asserts the true pre-image line,
+`📝 open notes: 4 (1 project · 3 mock) · addressed: 1`, and the AC's literal was corrected in
+the same build so the two agree; no Decision moves, since D1–D4 never reach that line. D6's
+line-count constraint was paid for by reflowing five adjacent § Mocks: Page Notes paragraphs
+onto the wider line-width precedent already present in the file, recovering seven lines against
+the six added — no wording lost, no grepped literal split, 468 → 467 lines. Both departures are
+members of Gotchas classes that already exist, so each folded to a citation on its entry rather
+than a new one.
 
 ## Canonical Delta
 

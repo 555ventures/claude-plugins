@@ -309,7 +309,8 @@ upstream bug list. -->
   specs/20260909/05-fix-delta-reviewer-pass.md D2/D9;
   specs/20260910/02-click-to-advance-and-real-records.md A2;
   specs/20260912/02-an-answer-is-the-clients-until-sign-off.md;
-  specs/20260912/03-run-isolates-and-owns-the-stages.md D10)
+  specs/20260912/03-run-isolates-and-owns-the-stages.md D10;
+  specs/20260912/14-the-design-stage-prints-the-work-not-the-inventory.md D6)
 - `[plugin]` `ac-matrix.js` parses AC bullets as `^- \*\*(token)\*\*` and requires the token to
   fully match `AC-\d{8}-\d{2}[a-z]?-\d+`. A build-time amendment written the way the Decisions
   table writes one — a prime-suffixed successor (`AC-…-3′`) plus the superseded original left as
@@ -333,7 +334,8 @@ upstream bug list. -->
   or pins the true one and leaves the spec lying; do the arithmetic on every worked example at lock.
   (specs/20260814/04-lock-signal-window.md; specs/20260815/03-ac-matrix-fail-closed.md;
   specs/20260910/05-what-the-journey-does-not-do.md D1/D3;
-  specs/20260912/06-the-review-page-answers-to-a-design.md AC-2)
+  specs/20260912/06-the-review-page-answers-to-a-design.md AC-2;
+  specs/20260912/14-the-design-stage-prints-the-work-not-the-inventory.md AC-9)
 - `[plugin]` A test worker editing a File Plan row that carries **no AC** still reaches for the
   spec template's AC-ID shape and writes the literal placeholder (`AC-<date>-NN-N`) into the
   test name and assert message. The token is not a valid AC-ID under `ac-matrix.js`'s grammar,

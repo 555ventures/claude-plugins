@@ -139,6 +139,24 @@
 // way — every named leg must be recorded GREEN there, because the claim is precisely "the review
 // judged this leg green and the scratch tree cannot reproduce that".
 //
+// specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md: `--select` stops reconstructing the
+// pair of commits a review judged from history — spec-review-driver.js now writes both as refs
+// (refs/spec-review/<runId>/judged, .../close), and D2/D3 read that pair directly: `commit=` is
+// the run's own close ref with no fallback, `parent=` is the run's own judged ref falling back to
+// a resolvable `diff.head` only when absent, and the old `git log -1 -- <spec>` + `^` hop is
+// DELETED, not demoted. A row missing either identity is exit 4, naming the row's runId, the spec,
+// and the `--backfill-pins` remedy — never a partial or placeholder pair. `--backfill-pins` (D4) is
+// the one place the history walk survives: a run-once mode that reconstructs both refs for the
+// backlog of already-closed reviews, printing what it derived per row, refusing to overwrite an
+// existing ref, and exiting 0 even when a row is underivable. Because the pair need not share a
+// line of descent, `--setup --overlay`'s guard (D6) narrows from "not a strict descendant of
+// --commit" to "equal to --commit, or an ancestor of it" — an unrelated sha is now accepted. `--
+// setup` also stops trusting its own reassembly (D5): once the worktree stands (and after any
+// overlay commit), it re-runs the target spec's own ac-matrix.js coverage check against the
+// scratch tree whenever --spec was given, resolved as a __dirname sibling with --manifest written
+// to an OS temp path outside {dir} — ANY non-zero outcome (a findings exit 1 or a usage exit 2
+// alike) is exit 5 with a named diagnosis and no `setup dir=` line, never a leniency arm.
+//
 // What this deliberately does NOT do: derive review-legs verdicts, touch the main working tree
 // (--setup/--apply/--teardown only ever act on a --dir the caller supplies, or one --setup derives
 // itself from --spec (D1, specs/20260826/01) — --setup refuses a caller --dir that resolves inside
@@ -201,9 +219,12 @@
 // not print a `spec/<stem>` line (specs/20260826/01 D1), --select's target spec (read at the
 // CLOSE commit, specs/20260823/05 D4) carries no diff_base/build_base candidate that resolves to a
 // validated ancestor of the close commit's parent distinct from it — widened by D4 to also cover a
-// stale (moving-ref) candidate, not just an absent one — or --setup's --overlay does not resolve to
-// a strict descendant of --commit (specs/20260831/01 D4: an unrelated sha, an ancestor, or an equal
-// sha), refused before any worktree is created, naming the --select remedy, or --setup's call to
+// stale (moving-ref) candidate, not just an absent one — or --select's chosen row has no `close`
+// ref, or has neither a `judged` ref nor a `diff.head` that resolves (specs/20260913/01 D2/D3 —
+// stderr names the row's runId, the spec, and the `--backfill-pins` remedy; nothing prints on
+// stdout) — or --setup's --overlay is equal to --commit, or an ancestor of it (specs/20260913/01
+// D6, narrowed from "not a strict descendant of --commit" — an unrelated-by-descent sha is now
+// accepted), refused before any worktree is created, naming the --select remedy, or --setup's call to
 // the shared worktree-include.sh owner (spec/scripts/worktree-include.sh, D4 below) exits
 // anything other than 0 or 3 — the worktree is registered but unusable; the message names the
 // `git -C <root> worktree remove --force <dir>` remedy (specs/20260904/02 D4), or --apply's
@@ -219,7 +240,13 @@
 // than after the staging loop would let a hook that rewrites a mutated file unstaged sail
 // through the blob check and then be swept into the commit by that same loop), or a
 // `git add -- <path>` staging call fails
-// (specs/20260909/01-replay-build-shaped-mutation.md D1-D2/D13-D14 — nothing is committed).
+// (specs/20260909/01-replay-build-shaped-mutation.md D1-D2/D13-D14 — nothing is committed)
+// · 5 = --setup was given --spec and the scratch tree it stood up (after any --overlay commit)
+// does not satisfy `ac-matrix.js --spec <spec under dir> --root <dir>`'s own coverage check —
+// ANY non-zero ac-matrix outcome (a findings exit 1 or a usage/unreadable-spec exit 2 alike, no
+// leniency arm) — printing no `setup dir=` line on stdout and naming on stderr the spec, the
+// commit, the first ac-matrix finding line, and the `git -C <root> worktree remove --force <dir>`
+// remedy (specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md D5).
 //
 // specs/20260826/01-replay-scratch-path-blindness.md: a value whose correctness is load-bearing
 // for a measurement's validity must be derived by a script, never asserted in prose a session
@@ -234,6 +261,7 @@
 
 const fs = require('fs')
 const path = require('path')
+const os = require('os')
 const crypto = require('crypto')
 const { execFileSync, spawnSync } = require('child_process')
 const { readLedgerRows } = require('./lib/observation')
@@ -259,13 +287,13 @@ function usage() {
     'pristine-red:<leg>[,<leg>]|none ' +
     '--outcome caught|missed|leg-caught|unresolved|setup-failed [--class <id>] [--patch <file>] ' +
     '[--workflow <file>] [--tokens N] [--via driver|manual] | --stats | --pick-class [--root <path>] | ' +
-    '--teardown --dir <path>')
+    '--backfill-pins [--root <path>] | --teardown --dir <path>')
 }
 
 const MODE_FLAGS = {
   '--due': 'due', '--select': 'select', '--setup': 'setup', '--apply': 'apply',
   '--score': 'score', '--record': 'record', '--stats': 'stats', '--teardown': 'teardown',
-  '--pick-class': 'pickClass',
+  '--pick-class': 'pickClass', '--backfill-pins': 'backfillPins',
 }
 
 let mode = null
@@ -378,6 +406,17 @@ function deriveBaseline(row) {
   return { baselineRed, baselineLegs }
 }
 
+// D1/D2/D4 (specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md): the two refs a review's
+// own run writes — refs/spec-review/<runId>/judged (the row's diff.head at the close-row append)
+// and .../close (the close commit, at --mark closed). readReviewRef resolves one leaf to a full
+// sha or null (absent/unresolvable, never thrown); --select (D2/D3) and --backfill-pins (D4) both
+// read through it rather than each hand-rolling a `git rev-parse --verify` call.
+function readReviewRef(runId, leaf) {
+  const r = spawnSync('git', ['rev-parse', '--verify', `refs/spec-review/${runId}/${leaf}`], { cwd: root, encoding: 'utf8' })
+  if (r.status !== 0) return null
+  return r.stdout.trim()
+}
+
 // D3 (specs/20260909/02-replay-base-and-label-honesty.md): the one shared selector for what a
 // review run id MEANS, used by --select's derivation and --record's cross-check alike — among
 // ledger rows sharing this runId, the row with verdict "CLEAN" (last in read order when several);
@@ -440,32 +479,23 @@ function cmdSelect() {
     if (c.i >= best.i) best = c // same tier-class: later (read-order) wins the tie
   }
   const specPath = best.r.spec
-  let commitSha
-  try {
-    commitSha = execFileSync('git', ['log', '-1', '--format=%H', '--', specPath],
-      { cwd: root, encoding: 'utf8' }).trim()
-  } catch (e) {
-    console.error(`replay.js: git log failed for ${specPath} in ${root} — confirm ${root} is a git repo: ${e.message}`)
-    process.exit(4)
+  const runId = best.r.runId
+  // D2/D3 (specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md): the pair a review's own
+  // run wrote as refs — never a value derived by asking which commit last touched the spec FILE
+  // (the `git log -1` + `^` hop this replaces, DELETED, not demoted). `commit=` is the run's own
+  // `close` ref, with no fallback; `parent=` is the run's own `judged` ref, falling back to a
+  // resolvable `diff.head` only when the ref is absent. A row missing either identity is refused
+  // outright (D3) — there is no path on which this prints a partial or placeholder pair.
+  const commitSha = readReviewRef(runId, 'close')
+  let parent = readReviewRef(runId, 'judged')
+  if (!parent && best.r.diff && typeof best.r.diff.head === 'string' && best.r.diff.head) {
+    const verify = spawnSync('git', ['rev-parse', '--verify', `${best.r.diff.head}^{commit}`], { cwd: root, encoding: 'utf8' })
+    if (verify.status === 0) parent = verify.stdout.trim()
   }
-  if (!commitSha) {
-    console.error(`replay.js: no commit touches ${specPath} in ${root} — confirm the spec path is correct ` +
-      'and was actually committed')
-    process.exit(4)
-  }
-  // F3 (specs/20260831/01 D1-D7): the worktree must stand up at the
-  // CLOSE commit's PARENT, on the spec's pre-review base — not the close commit itself, which
-  // reads status: done and would leak "already reviewed" into the diff the blind reviewer is
-  // handed. --select prints `parent=` unchanged (D3: --select is deliberately untouched) — the
-  // range's true upper bound (the close commit itself, per range-identity spec 20260824/06 D3/D7)
-  // is materialized separately by --setup --overlay, which replay.md now always passes alongside
-  // this same `parent=`/`commit=` pair.
-  let parent
-  try {
-    parent = execFileSync('git', ['rev-parse', `${commitSha}^`], { cwd: root, encoding: 'utf8' }).trim()
-  } catch (e) {
-    console.error(`replay.js: git rev-parse ${commitSha}^ failed in ${root} — confirm ${commitSha} has a ` +
-      `parent commit: ${e.message}`)
+  if (!commitSha || !parent) {
+    console.error(`replay.js: review run ${runId} for ${specPath} has ` +
+      (!commitSha ? 'no close ref' : 'neither a judged ref nor a diff.head that resolves') +
+      ` — replay.js --backfill-pins reconstructs missing refs for the backlog; run it, then retry --select`)
     process.exit(4)
   }
   // D4 (specs/20260823/05): read frontmatter at the CLOSE commit itself, never its parent — the
@@ -510,8 +540,66 @@ function cmdSelect() {
     process.exit(4)
   }
   const { baselineRed, baselineLegs } = deriveBaseline(best.r)
-  console.log(`spec=${specPath} reviewRunId=${best.r.runId} commit=${commitSha} parent=${parent} ` +
+  console.log(`spec=${specPath} reviewRunId=${runId} commit=${commitSha} parent=${parent} ` +
     `diffBase=${diffBase} baselineRed=${baselineRed} baselineLegs=${baselineLegs}`)
+  process.exit(0)
+}
+
+// ---- D4 (specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md): --backfill-pins — the ONE --
+// ---- place the history walk this spec removes from --select still lives: a run-once ---------------
+// ---- reconstruction of both refs for the backlog of already-closed reviews. `judged` derives ------
+// ---- from a resolvable `diff.head` verbatim; `close` derives by walking commits reachable from ----
+// ---- HEAD that are strict descendants of `judged`, oldest first, picking the first whose OWN ------
+// ---- copy of the spec matches `^status: done$` — a later descendant that also reads done (because -
+// ---- nothing since touched the spec) must never be picked over an earlier one that already does. -
+
+function ancestryPathDescendants(judgedSha) {
+  const r = spawnSync('git', ['rev-list', '--ancestry-path', '--reverse', `${judgedSha}..HEAD`], { cwd: root, encoding: 'utf8' })
+  if (r.status !== 0) return []
+  return r.stdout.split('\n').filter(Boolean)
+}
+
+function findCloseByStatusDone(judgedSha, specPath) {
+  for (const sha of ancestryPathDescendants(judgedSha)) {
+    const show = spawnSync('git', ['show', `${sha}:${specPath}`], { cwd: root, encoding: 'utf8' })
+    if (show.status !== 0) continue
+    if (/^status: done$/m.test(show.stdout)) return sha
+  }
+  return null
+}
+
+// Best-effort, same shape as spec-review-driver.js's writeReviewRef, except a run-once backlog
+// reconstruction has no close/mark to protect — a write failure here just means the printed line
+// (still accurate about what was DERIVED) is not backed by a ref; nothing about --backfill-pins'
+// own exit-0 contract depends on the write itself succeeding.
+function writeReviewRefLenient(runId, leaf, sha) {
+  try { execFileSync('git', ['update-ref', `refs/spec-review/${runId}/${leaf}`, sha], { cwd: root, stdio: 'pipe' }) } catch { /* best-effort */ }
+}
+
+function cmdBackfillPins() {
+  const rows = readLedgerRows(root).filter((r) => r.stage === 'review' && r.verdict === 'CLEAN' && r.runId)
+  for (const row of rows) {
+    const runId = row.runId
+    const judgedExisting = readReviewRef(runId, 'judged')
+    const closeExisting = readReviewRef(runId, 'close')
+    if (judgedExisting && closeExisting) {
+      console.log(`${runId} ${row.spec} judged=${judgedExisting} close=${closeExisting} skipped: ref exists`)
+      continue
+    }
+    let judgedSha = judgedExisting
+    if (!judgedSha) {
+      const head = row.diff && typeof row.diff.head === 'string' ? row.diff.head : null
+      if (head) {
+        const verify = spawnSync('git', ['rev-parse', '--verify', `${head}^{commit}`], { cwd: root, encoding: 'utf8' })
+        if (verify.status === 0) judgedSha = verify.stdout.trim()
+      }
+    }
+    let closeSha = closeExisting
+    if (!closeSha && judgedSha) closeSha = findCloseByStatusDone(judgedSha, row.spec)
+    if (!judgedExisting && judgedSha) writeReviewRefLenient(runId, 'judged', judgedSha)
+    if (!closeExisting && closeSha) writeReviewRefLenient(runId, 'close', closeSha)
+    console.log(`${runId} ${row.spec} judged=${judgedSha || 'unresolvable'} close=${closeSha || 'underivable'}`)
+  }
   process.exit(0)
 }
 
@@ -636,6 +724,32 @@ function materializeOverlay(dirPath, commitSha, overlaySha, subject) {
   return materializable.length
 }
 
+// ---- D5 (specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md): after the worktree stands --
+// ---- up and after any --overlay commit, verify the tree carries the target spec's own work by ---
+// ---- re-running ac-matrix.js's coverage check against it. Every review replay selects closed -----
+// ---- CLEAN, and verdict.js requires ac-matrix in both review scopes, so a CLEAN row's tree always
+// ---- satisfied that check — the same check on the REASSEMBLED tree is a free, deterministic test
+// ---- that the reassembly held. ac-matrix.js is resolved as a __dirname sibling (never through ----
+// ---- spec-paths); --manifest writes to an OS temp path OUTSIDE {dir} so the verification's own ---
+// ---- scratch output never lands in the tree under review, and is best-effort cleaned up after. ---
+// ---- ANY non-zero ac-matrix outcome — a findings exit 1 or a usage/unreadable-spec exit 2 alike --
+// ---- — is exit 5 with a named diagnosis and no `setup dir=` line; there is no leniency arm. -------
+function verifySetupCoverage(dirPath, specRelPath, commitSha) {
+  const acMatrixBin = path.join(__dirname, 'ac-matrix.js')
+  const specInWorktree = path.join(dirPath, specRelPath)
+  const manifestTmp = path.join(os.tmpdir(), `replay-setup-ac-matrix-${crypto.randomBytes(6).toString('hex')}.jsonl`)
+  const r = spawnSync(process.execPath,
+    [acMatrixBin, '--spec', specInWorktree, '--root', dirPath, '--manifest', manifestTmp], { encoding: 'utf8' })
+  try { fs.unlinkSync(manifestTmp) } catch { /* best-effort — a scratch manifest outside {dir} is not load-bearing */ }
+  if (r.status === 0) return
+  const findingLine = (r.stdout || '').split('\n').find(Boolean) ||
+    (r.stderr || '').split('\n').find(Boolean) || '(no output)'
+  console.error(`replay.js: the scratch tree at ${dirPath} does not satisfy ${specRelPath}'s own ac-matrix.js ` +
+    `coverage at ${commitSha} — the reassembly does not hold: ${findingLine} — remove the tree with ` +
+    `git -C ${root} worktree remove --force ${dirPath}`)
+  process.exit(5)
+}
+
 // ---- --setup: derives {dir} from --spec via deriveScratchDir when --dir is omitted (D1); refuses --
 // ---- a caller-supplied --dir whose basename announces the harness (D2, exit 3, before any side -----
 // ---- effect); otherwise refuses a --dir that resolves inside the repo root UNLESS it resolves ------
@@ -659,19 +773,24 @@ function cmdSetup() {
       'that does not start with "replay", or omit it to use the default "build: follow-up"')
     process.exit(2)
   }
-  // D4: --overlay must resolve to a strict descendant of --commit — an unrelated sha, an ancestor,
-  // or an equal sha are all refused, before any worktree is created.
+  // D6 (specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md): narrowed from "not a strict
+  // descendant of --commit" to "equal to --commit, or an ancestor of it" — the pair no longer
+  // needs to share a line of descent (a rebasing merge-back legitimately leaves the close commit
+  // off the judged commit's line of descent), so an unrelated sha is now accepted; only the two
+  // shapes that would REVERT the work (an equal sha, or --overlay sitting behind --commit) stay
+  // refused, before any worktree is created.
   if (overlayArg) {
     if (overlayArg === commit) {
-      console.error(`replay.js: --overlay ${overlayArg} equals --commit ${commit} — --overlay must be a ` +
-        'strict descendant of --commit; re-run --select and pass its printed commit/parent pair')
+      console.error(`replay.js: --overlay ${overlayArg} equals --commit ${commit} — --overlay must not be ` +
+        'equal to --commit, which would revert the work rather than complete it; re-run --select and pass ' +
+        'its printed commit/parent pair')
       process.exit(4)
     }
-    const ancestor = spawnSync('git', ['merge-base', '--is-ancestor', commit, overlayArg], { cwd: root })
-    if (ancestor.status !== 0) {
-      console.error(`replay.js: --overlay ${overlayArg} is not a descendant of --commit ${commit} — confirm ` +
-        `both are valid commits in ${root} and that --overlay comes after --commit; re-run --select and pass ` +
-        'its printed commit/parent pair')
+    const isAncestor = spawnSync('git', ['merge-base', '--is-ancestor', overlayArg, commit], { cwd: root })
+    if (isAncestor.status === 0) {
+      console.error(`replay.js: --overlay ${overlayArg} is an ancestor of --commit ${commit} — --overlay must ` +
+        `not sit behind --commit, which would revert the work rather than complete it; confirm both are valid ` +
+        `commits in ${root}; re-run --select and pass its printed commit/parent pair`)
       process.exit(4)
     }
   }
@@ -772,6 +891,10 @@ function cmdSetup() {
   if (overlayArg) {
     const overlaid = materializeOverlay(resolvedDir, commit, overlayArg, overlaySubject)
     overlaySuffix = ` overlay=${overlayArg} overlaid=${overlaid}`
+  }
+  // D5: verification runs ONLY when --spec was supplied — a --dir-only setup runs none (AC-8).
+  if (specArg) {
+    verifySetupCoverage(resolvedDir, specArg, commit)
   }
   console.log(`setup dir=${resolvedDir} commit=${commit}${overlaySuffix}`)
   process.exit(0)
@@ -1554,6 +1677,7 @@ switch (mode) {
   case 'record': cmdRecord(); break
   case 'stats': cmdStats(); break
   case 'pickClass': cmdPickClass(); break
+  case 'backfillPins': cmdBackfillPins(); break
   case 'teardown': cmdTeardown(); break
   default: usage(); process.exit(2)
 }

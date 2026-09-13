@@ -199,6 +199,17 @@
 // a cycle the cap already forbids — the ESCALATE step's own waive/reject exit therefore names
 // `--mark dispositions --file <return.json>` (every entry `waive`/`reject`), never the retired
 // hand-typed `--waived N --rejected N --fix-dispatched 0` form.
+//
+// specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md D1: doCloseWork() writes
+// refs/spec-review/<runId>/judged at the close-row append, pointing at the exact sha the row
+// records as diff.head, and handleClosed() writes refs/spec-review/<runId>/close once the close
+// commit exists (HEAD, read right after the dirty-tree/gotchas-ratchet/close-gate refusals have
+// all passed). Both writes go through the shared writeReviewRef() helper, which is best-effort by
+// construction: a non-zero `git update-ref` (e.g. the `refs/spec-review` namespace already
+// occupied as a leaf ref) prints one warning line naming the ref and the driver continues exactly
+// as if the write had succeeded — a replay-measurement convenience must never be able to fail a
+// review, its close row, or its close commit (AC-20260913-01-1, AC-20260913-01-2). replay.js reads
+// this pair instead of reconstructing it from history.
 
 'use strict'
 const fs = require('fs')
@@ -1023,6 +1034,24 @@ function stampDiffBaseIfAbsent(text) {
   return text.slice(0, m.index) + '---\n' + lines.join('\n') + '\n---' + text.slice(m.index + m[0].length)
 }
 
+// ---- D1 (specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md): best-effort ref write ------
+// ---- for one of the two review-bound refs — refs/spec-review/<runId>/judged (written here, at ----
+// ---- the close-row append) and .../close (written at --mark closed, once the close commit -------
+// ---- exists). Neither write may ever block the close: a measurement convenience is never worth ---
+// ---- failing a review over (AC-20260913-01-2), so a non-zero `git update-ref` prints ONE warning -
+// ---- line naming the ref and the driver continues exactly as if the write had succeeded. ---------
+// ---- runChild still dies on a genuinely dead child (spawn failure/signal) — that is a real host ---
+// ---- defect, not the "ref already occupied" conflict this best-effort guard exists for.
+function writeReviewRef(runId, leaf, sha) {
+  const ref = 'refs/spec-review/' + runId + '/' + leaf
+  const r = runChild('git', ['-C', repoRoot, 'update-ref', ref, sha], { encoding: 'utf8' },
+    'git update-ref ' + ref)
+  if (r.status !== 0) {
+    process.stderr.write('spec-review-driver: failed to write ' + ref + ' (best-effort replay-measurement ' +
+      'ref) — ' + (r.stderr || '').trim() + ' — continuing without it\n')
+  }
+}
+
 // ---- CLOSE driver work: authoritative verdict + ledger append + status flip --------------------
 function doCloseWork(n) {
   const runId = ensureRunId()
@@ -1083,6 +1112,8 @@ function doCloseWork(n) {
   row.tests = testsRow
   lines[1] = JSON.stringify(row)
   appendLedger(lines[1])
+  // D1: best-effort — never blocks the close (AC-20260913-01-2).
+  writeReviewRef(runId, 'judged', row.diff.head)
 
   const newSpecText = specText.replace(/^status:\s*.*$/m, 'status: done')
   const stampedText = stampDiffBaseIfAbsent(newSpecText)
@@ -1803,6 +1834,13 @@ function handleClosed() {
   // mutation; a refused mark is always side-effect-free.
   runCloseTimeGate()
   restampBuildDeviations()
+  // D1: the close commit now exists (the dirty-tree check above already certified the tree is
+  // clean apart from the sidecar/ledger) — best-effort, never blocks the mark (AC-20260913-01-2).
+  if (marks.closeRunId) {
+    const closeSha = runChild('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' },
+      'git rev-parse HEAD').stdout.trim()
+    writeReviewRef(marks.closeRunId, 'close', closeSha)
+  }
   marks.closed = true
   saveSidecar()
   return null

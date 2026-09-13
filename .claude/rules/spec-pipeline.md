@@ -385,8 +385,15 @@ upstream bug list. -->
   15 files where the spec had changed 13, and the reconcile leg reported the sibling's two as
   out-of-plan. Correct the base to the rebase target (an exact sha narrows the range rather than
   emptying it) and record it; the leg finding is then a reject on executed evidence, not a waive.
+  Fourth trigger, the same class one layer up the stack: a harness that identifies a commit by
+  "the newest commit touching this path" is deriving a range the exact way `diff_base` used to,
+  and drifts the same way — a later ledger sweep, doc sync, or sibling backlink edit silently
+  becomes "the commit" the moment it lands. Write the two commits as refs at the moments the
+  writer already holds them and read the refs, never re-derive; a history walk is a legitimate
+  one-time backfill for rows that predate the refs, never a standing derivation.
   (specs/20260816/03-file-plan-table-scoped-parsing.md; specs/20260901/02-run-provenance.md D10;
-  specs/20260907/09-atlas-index-and-note-navigation.md)
+  specs/20260907/09-atlas-index-and-note-navigation.md;
+  specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md)
 - `[plugin]` **`orchestrator-compensation-during-live-worker`** (grep this
   slug to count recurrences). The harness fired completion notifications for build-stage
   workers still executing; the orchestrator read those as returns-with-no-work and began

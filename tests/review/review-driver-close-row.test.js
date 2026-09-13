@@ -348,3 +348,91 @@ test('gotchas ratchet: the CLOSE step names the over-cap count and the shrink re
   assert.match(r.stdout, /Gotchas cap: 20\/15 at verdict — OVER CAP/,
     'the printed CLOSE step must carry the number the close will be judged against — a session that learns it only from the refusal folds first and evicts second: ' + r.stdout)
 })
+
+// specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md D1 (AC-20260913-01-1/-2): a review
+// records the two commits bounding what it judged as refs — `judged` at the close row's own
+// diff.head, written inside doCloseWork() (before any close commit exists), and `close` at
+// --mark closed's own close commit. Both writes are best-effort: occupying the shared
+// `refs/spec-review` namespace itself as a leaf ref makes ANY nested `refs/spec-review/<x>/...`
+// write fail at git's own exit 128 (`'refs/spec-review' exists; cannot create ...`), regardless
+// of the run's random runId — the deterministic way to force a real git ref-write failure without
+// knowing the runId ahead of time.
+function refSha(root, ref) {
+  try {
+    return execFileSync('git', ['-C', root, 'rev-parse', '--verify', ref],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+  } catch {
+    return null
+  }
+}
+
+test('AC-20260913-01-1: WHEN the review driver writes a CLEAN review\'s close row THE SYSTEM creates refs/spec-review/<runId>/judged at the exact sha the row records as diff.head, and WHEN it later handles --mark closed THE SYSTEM creates refs/spec-review/<runId>/close at the close commit that now exists', () => {
+  const host = makeHost()
+  const g = (...a) => execFileSync('git', ['-C', host.root, ...a], { encoding: 'utf8' })
+  toReviewer(host)
+  const r = run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-refs-clean', CLEAN_RETURN))
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
+    'setup: a zero-survivor reviewer-returned mark must self-disposition to CLOSE before this AC can be exercised: ' + r.stdout + r.stderr)
+
+  const ledgerLines = fs.readFileSync(path.join(host.root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').filter(Boolean)
+  const row = JSON.parse(ledgerLines[ledgerLines.length - 1])
+
+  const judgedSha = refSha(host.root, 'refs/spec-review/' + row.runId + '/judged')
+  assert.strictEqual(judgedSha, row.diff.head,
+    'D1: the judged ref must be created at doCloseWork() pointing at the EXACT sha the close row records ' +
+    'as diff.head — a replay reading this ref for a since-rebased/orphaned commit must land on the tree the ' +
+    'review actually judged, not a missing or mismatched pointer: ' + JSON.stringify({ runId: row.runId, judgedSha, rowHead: row.diff.head }))
+
+  // The session's normal close commit — specific files only, never `add -A`.
+  const specRel = path.relative(host.root, host.spec)
+  g('add', specRel, 'tests/foo.test.js')
+  g('commit', '-q', '-m', 'close')
+  const closeSha = g('rev-parse', 'HEAD').trim()
+
+  const closedR = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(closedR.status, 0,
+    'setup: --mark closed must succeed once the tree is clean apart from the sidecar and the ledger: ' + closedR.stdout + closedR.stderr)
+
+  const closeRefSha = refSha(host.root, 'refs/spec-review/' + row.runId + '/close')
+  assert.strictEqual(closeRefSha, closeSha,
+    'D1: the close ref must be created at --mark closed pointing at the close commit that now exists — ' +
+    'without it a replay has no durable pointer to the commit that sweeps a review\'s own uncommitted fixes ' +
+    'into history: ' + JSON.stringify({ runId: row.runId, closeRefSha, closeSha }))
+})
+
+test('AC-20260913-01-2: WHEN a ref write fails because refs/spec-review is already occupied by a conflicting non-commit-shaped ref THE SYSTEM prints one warning line naming the ref and continues, leaving the close row, the close commit and the mark exactly as they are when the write succeeds', () => {
+  const host = makeHost()
+  const g = (...a) => execFileSync('git', ['-C', host.root, ...a], { encoding: 'utf8' })
+  const baseSha = g('rev-parse', 'HEAD').trim()
+  // Occupy the refs/spec-review namespace itself as a LEAF ref — any nested write under it
+  // (refs/spec-review/<anything>/judged or /close) then fails at git's own exit 128, regardless
+  // of which random runId this run picks, since a ref path cannot be both a leaf and a directory
+  // node (`git update-ref refs/spec-review/x/judged` -> "'refs/spec-review' exists").
+  g('update-ref', 'refs/spec-review', baseSha)
+
+  toReviewer(host)
+  const r = run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-refs-conflict', CLEAN_RETURN))
+  assert.strictEqual(r.status, 0,
+    'AC-2: a ref write failure must never block the close — the row and the mark must land exactly as if ' +
+    'the write had succeeded: ' + r.stdout + r.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
+    'AC-2: the close must still reach CLOSE despite the judged ref write failing')
+  assert.match(r.stderr, /refs\/spec-review/,
+    'AC-2: the failed ref write must print one warning line naming the ref, so a session can tell a ' +
+    'measurement convenience silently degraded rather than assume it landed: ' + r.stderr)
+
+  const ledgerLines = fs.readFileSync(path.join(host.root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').filter(Boolean)
+  const row = JSON.parse(ledgerLines[ledgerLines.length - 1])
+  assert.ok(row && row.verdict === 'CLEAN' && row.diff,
+    'AC-2: the close row must still be appended byte-for-byte as normal when the judged ref write fails: ' + JSON.stringify(row))
+
+  const specRel = path.relative(host.root, host.spec)
+  g('add', specRel, 'tests/foo.test.js')
+  g('commit', '-q', '-m', 'close')
+
+  const closedR = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(closedR.status, 0,
+    'AC-2: the close ref write failing at --mark closed must never block the mark itself: ' + closedR.stdout + closedR.stderr)
+  assert.match(closedR.stderr, /refs\/spec-review/,
+    'AC-2: the close-ref write failure at --mark closed must also print a warning line naming the ref: ' + closedR.stderr)
+})

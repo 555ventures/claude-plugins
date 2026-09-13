@@ -11,6 +11,11 @@ const { run, stateOf, toReviewer, returnFileWith, CLEAN_RETURN, ledgerRows } = r
 // doCloseWork() only classifies at CLOSE (never --apply); the deletion, the whole-suite re-run and
 // the driver's own path-scoped commit-or-restore all move inside --mark closed, after the
 // close-time gate has certified the tree with the tests still present.
+//
+// specs/20260912/15-the-close-stops-deleting-tests.md D1/D2/D4/D6, AC-20260912-15-1/-2/-6: that
+// commit-or-restore machinery is now gone entirely — CLOSE still classifies (nothing writes), the
+// 🧹 line is reworded to say nothing is deleted at close, and `--mark closed` never applies expiry,
+// commits, restores, or warns; it is gate + whole-suite re-run only.
 
 function expiryHostSpecBody({ diffBase, plainAcId, pinAcId, onlyPin }) {
   const plainDecision = onlyPin ? '' : `| D1 | foo() returns 42 (${plainAcId}) | why |\n`
@@ -85,7 +90,7 @@ function makeExpiryHost(prefix, { onlyPin = false } = {}) {
   return { root, spec, plainAcId, pinAcId }
 }
 
-test('AC-20260912-13-2: WHEN the review driver reaches CLOSE for a fixture spec whose two tagged tests are one pin and one plain test THE SYSTEM leaves both tests on disk (classification only, nothing written), records tests:{born:2,kept:1,retired:1} on the review row, still flips status to done, and prints the D3 deferred-commit 🧹 line naming zero files removed', () => {
+test('AC-20260912-15-1: WHEN the review driver reaches CLOSE for a fixture spec whose two tagged tests are one pin and one plain test THE SYSTEM leaves both test files byte-identical on disk, records tests:{born:2,kept:1,retired:1} on the review row, still flips status to done, and prints exactly the nothing-is-deleted 🧹 line naming the sweep command', () => {
   const host = makeExpiryHost('rvdrv-expiry-retire')
   toReviewer(host)
   const returnFile = returnFileWith('rvdrv-expiry-retire-clean', CLEAN_RETURN)
@@ -114,10 +119,11 @@ test('AC-20260912-13-2: WHEN the review driver reaches CLOSE for a fixture spec 
 
   assert.match(fs.readFileSync(host.spec, 'utf8'), /status:\s*done/,
     'CLOSE must still flip the spec to done once expiry classification is wired into doCloseWork()')
-  assert.match(r.stdout, /🧹 1 tests expire with this spec \(0 files removed\) — deleted in their own commit when you mark closed/,
-    'D3: the CLOSE step must print the new deferred-commit wording verbatim, naming what will happen when the ' +
-    'session marks closed — not the retired "part of the close commit" phrasing, which claims the deletion is ' +
-    'already inside this tree: ' + r.stdout)
+  assert.match(r.stdout,
+    /🧹 1 tests are retirable with this spec \(0 files would empty\) — nothing is deleted at close; sweep deliberately with: node "\$\(spec-paths test-expiry\)" --root \. --all-done --apply/,
+    'D4: the CLOSE step must print exactly this rewritten line — the old wording promised a deletion "in their ' +
+    'own commit when you mark closed", which no longer happens; a session reading the old wording would go ' +
+    'looking for a commit that was never made: ' + r.stdout)
 })
 
 test('AC-20260911-03-7: WHEN nothing is retired at CLOSE THE SYSTEM records tests:{born:1,kept:1,retired:0} on the review row and prints no 🧹 line', () => {
@@ -142,174 +148,75 @@ test('AC-20260911-03-7: WHEN nothing is retired at CLOSE THE SYSTEM records test
     'misreport a deletion that never happened: ' + r.stdout)
 })
 
-test('AC-20260912-13-6: WHEN a close retires nothing THE SYSTEM leaves git rev-parse HEAD byte-identical before and after --mark closed', () => {
-  const host = makeExpiryHost('rvdrv-expiry-mark-closed-nothing', { onlyPin: true })
+// specs/20260912/15-the-close-stops-deleting-tests.md D1/D2/D13, AC-20260912-15-2: `--mark closed`
+// no longer applies expiry, commits a deletion, or restores anything — a close that recorded
+// retired:1 and a close that recorded retired:0 must now behave identically with respect to the
+// tree and to `git rev-parse HEAD`.
+test('AC-20260912-15-2: WHEN --mark closed runs with a green gate and a green suite over a host whose close recorded retired: 1 THE SYSTEM exits 0, leaves git rev-parse HEAD byte-identical before and after the mark, and leaves the retirable test file byte-identical on disk', () => {
+  const host = makeExpiryHost('rvdrv-expiry-mark-closed-retired')
   toReviewer(host)
   const r = run(host.root, host.spec, '--mark', 'reviewer-returned',
-    '--file', returnFileWith('rvdrv-expiry-mark-closed-nothing-clean', CLEAN_RETURN))
+    '--file', returnFileWith('rvdrv-expiry-mark-closed-retired-clean', CLEAN_RETURN))
   assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
     'setup precondition: the clean reviewer return must reach CLOSE: ' + r.stdout + r.stderr)
 
   execFileSync('git', ['-C', host.root, 'add', '-A'], { encoding: 'utf8' })
   execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'close'], { encoding: 'utf8' })
   const closeSha = execFileSync('git', ['-C', host.root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const testFilePath = path.join(host.root, 'tests/foo.test.js')
+  const before = fs.readFileSync(testFilePath, 'utf8')
 
   const closed = run(host.root, host.spec, '--mark', 'closed')
   assert.strictEqual(closed.status, 0,
-    'a close that retires nothing must still succeed: ' + closed.stdout + closed.stderr)
+    'a close that recorded retired:1 must still let --mark closed succeed once close-time deletion is gone: ' +
+    closed.stdout + closed.stderr)
 
   const headSha = execFileSync('git', ['-C', host.root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
   assert.strictEqual(headSha, closeSha,
-    'D4: when retired is 0 the sequence collapses to exactly today\'s two runs and makes no commit at all — a ' +
-    'changed HEAD here means a commit was made (or attempted) with nothing to actually commit')
+    'D2/D13: --mark closed no longer applies expiry or makes a deletion commit — a close that retired 1 test ' +
+    'and a close that retired none must now leave git rev-parse HEAD identically untouched: a changed HEAD ' +
+    'here means the driver still committed a deletion')
+
+  const after = fs.readFileSync(testFilePath, 'utf8')
+  assert.strictEqual(after, before,
+    'D1/D2: the retirable test file must stay byte-identical across --mark closed — the deliberate sweep is ' +
+    'now the only thing that ever deletes it')
+  assert.ok(after.includes(host.plainAcId),
+    'D1/D2: the plain test tagged ' + host.plainAcId + ' must still be present on disk after --mark closed')
 })
 
-// specs/20260912/13-expired-tests-leave-in-their-own-commit.md D5: on a green whole-suite re-run
-// with an expiry applied, `--mark closed` itself deletes and commits the retired tests, path-scoped
-// to the union of retired[].file and emptied[] — never `git add -A`. That second commit must touch
-// nothing under specs/, so `git log -1 -- <spec>` keeps resolving the close commit that precedes it.
-test('AC-20260912-13-3: WHEN --mark closed runs over a host with a green gate and a green suite THE SYSTEM deletes the retired test, creates exactly one new commit naming the retired count and spec whose only changed path is that test file, and leaves git log -1 for the spec resolving to the close commit rather than the new one', () => {
-  const host = makeExpiryHost('rvdrv-expiry-mark-closed-green')
+// specs/20260912/15-the-close-stops-deleting-tests.md D2/D6, AC-20260912-15-6: none of the removed
+// deletion machinery's literals may survive a retiring close — no skip warning (nothing is ever
+// skipped, because nothing is ever attempted) and no expiry commit message, on stdout, stderr, or
+// in git history.
+test('AC-20260912-15-6: WHEN --mark closed completes over a retiring close THE SYSTEM prints neither ⚠ expiry skipped nor chore(tests): expire on stdout or stderr, and git log -1 --format=%s does not match ^chore\\(tests\\): expire', () => {
+  const host = makeExpiryHost('rvdrv-expiry-mark-closed-no-expire-commit')
   toReviewer(host)
   const r = run(host.root, host.spec, '--mark', 'reviewer-returned',
-    '--file', returnFileWith('rvdrv-expiry-mark-closed-green-clean', CLEAN_RETURN))
+    '--file', returnFileWith('rvdrv-expiry-mark-closed-no-expire-commit-clean', CLEAN_RETURN))
   assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
     'setup precondition: the clean reviewer return must reach CLOSE: ' + r.stdout + r.stderr)
 
-  const specRel = path.relative(host.root, host.spec).split(path.sep).join('/')
   execFileSync('git', ['-C', host.root, 'add', '-A'], { encoding: 'utf8' })
   execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'close'], { encoding: 'utf8' })
-  const closeSha = execFileSync('git', ['-C', host.root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
 
   const closed = run(host.root, host.spec, '--mark', 'closed')
   assert.strictEqual(closed.status, 0,
-    'a green gate and a green whole-suite re-run must let --mark closed succeed and commit the deletion ' +
-    'itself: ' + closed.stdout + closed.stderr)
+    'a green gate and a green whole-suite re-run must let --mark closed succeed with no expiry work at all: ' +
+    closed.stdout + closed.stderr)
 
-  const headSha = execFileSync('git', ['-C', host.root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
-  assert.notStrictEqual(headSha, closeSha,
-    'D5: --mark closed must create a NEW commit carrying the deletion — the deletion never folding into (or ' +
-    'being skipped past) the already-made close commit is the entire point of this spec')
+  const combined = closed.stdout + closed.stderr
+  assert.doesNotMatch(combined, /⚠ expiry skipped/,
+    'AC-20260912-15-6: nothing is ever applied at --mark closed, so nothing can ever be skipped — this literal ' +
+    'surviving means the removed restore-and-warn arm is still wired in: ' + combined)
+  assert.doesNotMatch(combined, /chore\(tests\): expire/,
+    'AC-20260912-15-6: --mark closed must never make an expiry commit or print its message — this literal ' +
+    'surviving means the deletion-and-commit machinery is still wired in: ' + combined)
 
-  const msg = execFileSync('git', ['-C', host.root, 'log', '-1', '--format=%s', headSha], { encoding: 'utf8' }).trim()
-  assert.strictEqual(msg, 'chore(tests): expire 1 tests closed with ' + specRel,
-    'D5: the expiry commit message must be exactly this literal — a session or the replay harness reading ' +
-    'history depends on it naming the retired count and the closing spec: ' + JSON.stringify(msg))
-
-  const changed = execFileSync('git', ['-C', host.root, 'diff', '--name-only', closeSha, headSha], { encoding: 'utf8' })
-    .trim().split('\n').filter(Boolean)
-  assert.deepStrictEqual(changed, ['tests/foo.test.js'],
-    'D5: the expiry commit must be staged path-scoped to the retired/emptied union, never `git add -A` — ' +
-    'anything else riding this commit (the ledger, retained evidence) would strand a linked worktree\'s ' +
-    'finishMerge() promotion: ' + JSON.stringify(changed))
-
-  const testFileText = fs.readFileSync(path.join(host.root, 'tests/foo.test.js'), 'utf8')
-  assert.ok(!testFileText.includes(host.plainAcId),
-    'the plain test must actually be deleted from disk by the expiry commit, not merely reported retired')
-  assert.ok(testFileText.includes(host.pinAcId), 'the pin test must survive the same sweep')
-
-  const specLogSha = execFileSync('git', ['-C', host.root, 'log', '-1', '--format=%H', '--', specRel],
-    { encoding: 'utf8' }).trim()
-  assert.strictEqual(specLogSha, closeSha,
-    'the whole point of this spec: git log -1 for the spec path must still resolve to the close commit, never ' +
-    'to the expiry commit that follows it — otherwise the replay harness rebuilds a tree missing coverage the ' +
-    'review just certified')
-})
-
-// specs/20260912/13-expired-tests-leave-in-their-own-commit.md D6/D7: the close-time gate now runs
-// BEFORE any deletion, so a gate observing the committed close tree never sees the tests gone — the
-// prax deadlock this once caused can no longer happen at the gate step. What CAN still go red is the
-// whole-suite re-run AFTER expiry applies; when restoring the deletion makes that suite green again,
-// the deletion is provably the cause, and the mark must succeed with a warning rather than deadlock.
-test('a close-time gate that goes red right after expiry deletes the retired test, and turns green again once it is restored, skips the expiry with a warning instead of refusing the mark', () => {
-  const host = makeExpiryHost('rvdrv-expiry-skip-warn')
-  toReviewer(host)
-  const r = run(host.root, host.spec, '--mark', 'reviewer-returned',
-    '--file', returnFileWith('rvdrv-expiry-skip-warn-clean', CLEAN_RETURN))
-  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
-    'setup precondition: the clean reviewer return must reach CLOSE: ' + r.stdout + r.stderr)
-
-  // Stands in for a host check demanding a test carrier per acceptance criterion: green while
-  // tests/foo.test.js still names the plain AC, red the instant expiry's --apply removes it.
-  fs.writeFileSync(path.join(host.root, 'check-test.sh'),
-    '#!/usr/bin/env bash\ngrep -q "' + host.plainAcId + '" tests/foo.test.js && exit 0 || exit 1\n')
-  const cfgPath = path.join(host.root, '.claude/spec.config.json')
-  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
-  cfg.testCommand = 'bash check-test.sh'
-  fs.writeFileSync(cfgPath, JSON.stringify(cfg))
-  execFileSync('git', ['-C', host.root, 'add', '-A'], { encoding: 'utf8' })
-  execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'close'], { encoding: 'utf8' })
-  const closeSha = execFileSync('git', ['-C', host.root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
-
-  const closed = run(host.root, host.spec, '--mark', 'closed')
-  assert.strictEqual(closed.status, 0,
-    'D6: a suite that is red only because of the deletion, and provably green once the deletion is undone, ' +
-    'must let the mark succeed rather than deadlock the close forever: ' + closed.stdout + closed.stderr)
-
-  assert.match(closed.stdout, /⚠ expiry skipped/,
-    'AC-4: the skip warning must carry its own literal anchor: ' + closed.stdout)
-  assert.match(closed.stdout, /deleting the 1 test\(s\) this close retired turns the suite red/,
-    'AC-4/D7: the warning must name the retired count so a session can tell which deletion is implicated: ' +
-    closed.stdout)
-  assert.match(closed.stdout, /§ Test expiry/,
-    'AC-4/D7: the warning must point at the grounding contract section carrying the host obligation: ' +
-    closed.stdout)
-  assert.match(closed.stdout, /--all-done --apply/,
-    'AC-4/D7: the warning must name the sweep remedy for a host whose own check silently never expires ' +
-    'anything: ' + closed.stdout)
-
-  const headSha = execFileSync('git', ['-C', host.root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
-  assert.strictEqual(headSha, closeSha,
-    'D6: skipping the expiry must make no commit at all — the close stays exactly at the tree the gate ' +
-    'certified')
-  const statusPorcelain = execFileSync('git', ['-C', host.root, 'status', '--porcelain'], { encoding: 'utf8' }).trim()
-  assert.strictEqual(statusPorcelain, '',
-    'D6: the restore (git checkout HEAD -- <paths>) must leave the working tree clean, not merely reverted ' +
-    'content that git still reports as a diff: ' + JSON.stringify(statusPorcelain))
-
-  const testFileText = fs.readFileSync(path.join(host.root, 'tests/foo.test.js'), 'utf8')
-  assert.ok(testFileText.includes(host.plainAcId),
-    'D6: the retired test must be restored on disk since its deletion was reverted')
-})
-
-// specs/20260912/13-expired-tests-leave-in-their-own-commit.md D6: the OTHER arm of the restored
-// re-run — still red once the deletion is undone means the close tree itself is broken for a reason
-// that has nothing to do with expiry, and the mark must refuse exactly as it always has.
-test('AC-20260912-13-5: WHEN the host testCommand stays red both with the retired test deleted and with it restored THE SYSTEM restores the file, creates no commit, refuses --mark closed with exit 2 and "suite red at close", and prints no expiry-skipped warning', () => {
-  const host = makeExpiryHost('rvdrv-expiry-suite-still-red')
-  toReviewer(host)
-  const r = run(host.root, host.spec, '--mark', 'reviewer-returned',
-    '--file', returnFileWith('rvdrv-expiry-suite-still-red-clean', CLEAN_RETURN))
-  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
-    'setup precondition: the clean reviewer return must reach CLOSE: ' + r.stdout + r.stderr)
-
-  fs.writeFileSync(path.join(host.root, 'always-red.sh'), '#!/usr/bin/env bash\nexit 1\n')
-  const cfgPath = path.join(host.root, '.claude/spec.config.json')
-  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
-  cfg.testCommand = 'bash always-red.sh'
-  fs.writeFileSync(cfgPath, JSON.stringify(cfg))
-  execFileSync('git', ['-C', host.root, 'add', '-A'], { encoding: 'utf8' })
-  execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'close'], { encoding: 'utf8' })
-  const closeSha = execFileSync('git', ['-C', host.root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
-
-  const closed = run(host.root, host.spec, '--mark', 'closed')
-  assert.strictEqual(closed.status, 2,
-    'a suite that is red for a reason unrelated to the deletion must still refuse the close, or a genuinely ' +
-    'broken close tree could be masked as an expiry skip: ' + closed.stdout + closed.stderr)
-  assert.match(closed.stderr, /suite red at close/,
-    'the existing close-time suite-red refusal must survive: ' + closed.stderr)
-  assert.doesNotMatch(closed.stdout + closed.stderr, /⚠ expiry skipped/,
-    'D6: the still-red arm is the broken-close-tree arm, not the deletion-is-the-cause arm — it must never ' +
-    'print the skip warning: ' + closed.stdout + closed.stderr)
-
-  const headSha = execFileSync('git', ['-C', host.root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
-  assert.strictEqual(headSha, closeSha, 'a refused mark must make no commit')
-  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE', 'a refused closed mark must leave the state at CLOSE')
-
-  const testFileText = fs.readFileSync(path.join(host.root, 'tests/foo.test.js'), 'utf8')
-  assert.ok(testFileText.includes(host.plainAcId),
-    'D6: even though this arm refuses, the retired test must have been restored back onto disk rather than ' +
-    'left deleted, since the driver never leaves an interrupted mark holding a mutation it did not commit')
+  const msg = execFileSync('git', ['-C', host.root, 'log', '-1', '--format=%s'], { encoding: 'utf8' }).trim()
+  assert.doesNotMatch(msg, /^chore\(tests\): expire/,
+    'AC-20260912-15-6: HEAD must never carry an expiry commit — its subject line matching the retired removed ' +
+    'commit shape means --mark closed made one anyway: ' + JSON.stringify(msg))
 })
 
 test('AC-20260912-13-7: WHEN the resolved host gate exits non-zero over the committed close tree THE SYSTEM SHALL CONTINUE TO refuse --mark closed with exit 2 and "gate red at close", SHALL CONTINUE TO leave the driver state at CLOSE, and SHALL CONTINUE TO print no expiry note when the close retired nothing', () => {

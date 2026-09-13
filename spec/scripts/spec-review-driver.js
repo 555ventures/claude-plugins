@@ -1047,15 +1047,14 @@ function doCloseWork(n) {
   if (r.status === 2) die('verdict.js (authoritative pass) failed: ' + (r.stdout + r.stderr).trim())
   const lines = r.stdout.split('\n')
 
-  // specs/20260911/03-tests-expire-at-close.md D5, narrowed by specs/20260912/13-expired-tests-
-  // leave-in-their-own-commit.md D2: expire-tests.js runs after the authoritative verdict and
-  // before the ledger append — every test tagged with this spec's own AC-IDs is classified
-  // (never applied here — D1's dry-run `emptied` reporting is what makes this classification-only
-  // call still tell CLOSE how many files the eventual `--mark closed` apply will remove). A
-  // non-zero exit or unparseable output refuses the close (status unchanged, no ledger append)
-  // rather than close over an unresolved expiry pass. The actual deletion moves to
-  // runCloseTimeGate() (D5/D6), which applies it only after the close-time gate has certified the
-  // tree with the tests still present.
+  // specs/20260912/15-the-close-stops-deleting-tests.md D1: expire-tests.js runs after the
+  // authoritative verdict and before the ledger append — every test tagged with this spec's own
+  // AC-IDs is classified, never applied (no `--apply` anywhere in this call or downstream of it).
+  // This is classification-only end to end: the dry-run `emptied` reporting is what tells CLOSE
+  // how many files a later deliberate sweep (`--all-done --apply`, run by a human via
+  // /spec:doctor check 20) would remove — nothing here or in runCloseTimeGate() ever writes to
+  // the tree. A non-zero exit or unparseable output refuses the close (status unchanged, no
+  // ledger append) rather than close over an unresolved expiry pass.
   const er = runChild(process.execPath, [testExpiryBin, '--root', repoRoot, '--spec', specRel,
     '--json'], { encoding: 'utf8' }, 'expire-tests.js (close-time expiry classification)')
   const expiryRemedy = 'node "$(spec-paths test-expiry)" --root . --spec ' + specRel
@@ -1666,70 +1665,12 @@ function tailLines(text, n) {
   if (lines.length && lines[lines.length - 1] === '') lines.pop()
   return lines.slice(-n).join('\n')
 }
-// specs/20260912/13-expired-tests-leave-in-their-own-commit.md D4/D7: the close-time gate now runs
-// BEFORE any deletion (D4 step 1), so a gate observing the committed close tree never sees the
-// tests gone — the prax deadlock the D7 hint text used to describe cannot happen at the gate step
-// any more. D7 retires expiryHint() outright: the text becomes the body of the D6 skip warning
-// below, the one arm whose facts actually imply it (expiry ran, its deletion is provably the
-// cause of a red suite, and the close proceeded without it).
-function expirySkipWarning(retired) {
-  return '⚠ expiry skipped — deleting the ' + retired + ' test(s) this close retired turns the ' +
-    'suite red, and the same suite is green with them restored, so the deletions were reverted and ' +
-    'this close carries none.\n' +
-    'If the failure names those tests, or reports this spec\'s acceptance criteria as uncovered, ' +
-    'then the host is enforcing per-AC coverage on a spec that is now done — that contradicts test ' +
-    'expiry and will refuse every future close in this repo. Fix the host check to exempt done ' +
-    'specs (grounding contract § Test expiry: a done spec owes a carrier only for a SHALL CONTINUE ' +
-    'TO criterion); never restore the tests, and never relabel the criteria. The failure could also ' +
-    'be a leftover empty test suite or a newly-unused import the deletion left behind (q222) — check ' +
-    'for that too.\n' +
-    'Sweep remedy: node "$(spec-paths test-expiry)" --root . --all-done --apply\n'
-}
-
-// D5: paths this close-time expiry commit/restore touches — the deduplicated union of
-// retired[].file and emptied[], repo-relative posix, always tracked (the dirty-tree refusal
-// immediately above this sequence in handleClosed() guarantees it).
-function expiryPathsFrom(expiry) {
-  return Array.from(new Set(expiry.retired.map((r) => r.file).concat(expiry.emptied)))
-}
-
-// D6: `git checkout HEAD -- <paths>` — used both to restore after a red post-expiry suite and,
-// per D5, to undo a partially-applied expiry whose commit itself failed.
-function restoreExpiryPaths(paths) {
-  const r = runChild('git', ['-C', repoRoot, 'checkout', 'HEAD', '--', ...paths],
-    { encoding: 'utf8' }, 'git checkout HEAD (restore close-time expiry)')
-  if (r.status !== 0) {
-    die('git checkout HEAD -- <expired paths> failed while restoring them (exit ' + r.status + '): ' +
-      (r.stderr || r.stdout).trim() + ' — the working tree may still be missing the expired test ' +
-      'file(s); restore by hand (git checkout HEAD -- ' + paths.join(' ') + '), commit if needed, ' +
-      'then re-run `node ' + __filename + ' ' + specPath + ' --mark closed`')
-  }
-}
-
-// D5: on a green post-expiry whole-suite re-run, the driver commits the deletion itself —
-// path-scoped `git add`, never `-A` (a linked worktree's deliberately-uncommitted ledger and
-// retained evidence must never ride this commit). `git add`'s "warning: could not open directory"
-// on a path whose directory the sweep removed is not a failure; exit status is the only signal.
-function commitExpiry(paths, retired) {
-  const addR = runChild('git', ['-C', repoRoot, 'add', '--', ...paths], { encoding: 'utf8' },
-    'git add (close-time expiry commit)')
-  if (addR.status !== 0) {
-    restoreExpiryPaths(paths)
-    die('git add failed while committing the close-time test expiry (exit ' + addR.status + '): ' +
-      (addR.stderr || addR.stdout).trim() + ' — the deleted paths were restored; fix and re-run ' +
-      '`node ' + __filename + ' ' + specPath + ' --mark closed`')
-  }
-  const msg = 'chore(tests): expire ' + retired + ' tests closed with ' + specRel
-  const commitR = runChild('git', ['-C', repoRoot, 'commit', '-m', msg], { encoding: 'utf8' },
-    'git commit (close-time expiry commit)')
-  if (commitR.status !== 0) {
-    restoreExpiryPaths(paths)
-    die('git commit failed while committing the close-time test expiry (exit ' + commitR.status +
-      '): ' + (commitR.stderr || commitR.stdout).trim() + ' — the deleted paths were restored; ' +
-      'fix and re-run `node ' + __filename + ' ' + specPath + ' --mark closed`')
-  }
-}
-
+// specs/20260912/15-the-close-stops-deleting-tests.md D2: runCloseTimeGate() is gate + whole-suite
+// only. The `--apply` invocation, commitExpiry(), restoreExpiryPaths(), expiryPathsFrom(),
+// expirySkipWarning() and the restore-and-re-run red arm all existed only to make a close-time
+// deletion safe — with no deletion left at close, they are dead code that touched `git commit`,
+// which is the worst kind to leave lying around. The one path that deletes a test is
+// /spec:doctor check 20's `--all-done --apply` remedy, run by a human outside this driver.
 function runCloseTimeGate() {
   const gateConfig = readConfig(repoRoot)
   const resolved = resolveGate(specText, gateConfig)
@@ -1741,8 +1682,8 @@ function runCloseTimeGate() {
   }
   const env = { ...process.env }
   delete env.NODE_TEST_CONTEXT
-  // D4 step 1: the resolved gate re-run — unchanged, and it now observes a tree that still holds
-  // the expired tests (the deletion has not happened yet).
+  // specs/20260903/02-whole-suite-review-leg.md D4: the resolved-gate re-run, then the
+  // testCommand whole-suite re-run — unconditional, in that order, and that is all.
   const r = runChild('bash', ['-c', resolved.gate], { cwd: repoRoot, encoding: 'utf8', env },
     'close-time host gate (' + resolved.gate + ')')
   if (r.status !== 0) {
@@ -1765,63 +1706,16 @@ function runCloseTimeGate() {
       ' ' + specPath + ' --mark closed`')
   }
 
-  // D4 step 2 (specs/20260912/13): only now, after the gate has certified the tree with the tests
-  // still present, does a retiring close apply the deletion — never before the gate above.
-  const retired = (marks.testsExpiry && marks.testsExpiry.retired) || 0
-  let expiryPaths = []
-  if (retired > 0) {
-    const expiryRemedy = 'node "$(spec-paths test-expiry)" --root . --spec ' + specRel
-    const er = runChild(process.execPath, [testExpiryBin, '--root', repoRoot, '--spec', specRel,
-      '--apply', '--json'], { encoding: 'utf8' }, 'expire-tests.js (close-time expiry apply)')
-    if (er.status !== 0) {
-      die('expire-tests.js --apply failed at close — the mark is refused, nothing was committed. ' +
-        'Remedy: ' + expiryRemedy + '\n' + (er.stdout + er.stderr).trim())
-    }
-    let expiry = null
-    try { expiry = JSON.parse(er.stdout) } catch { expiry = null }
-    if (!expiry || !Array.isArray(expiry.retired) || !Array.isArray(expiry.emptied)) {
-      die('expire-tests.js --apply printed unparseable output at close — the mark is refused. ' +
-        'Remedy: ' + expiryRemedy)
-    }
-    expiryPaths = expiryPathsFrom(expiry)
-  }
-
-  // D4 step 3: the host testCommand (whole suite) re-run, now over the tree the apply above may
-  // have just changed — this is the same run that used to precede any expiry, widened (D4) to be
-  // the one observation that covers both the files CLOSE itself writes and any expiry applied.
   const sr = runChild('bash', ['-c', gateConfig.testCommand], { cwd: repoRoot, encoding: 'utf8', env },
     'close-time whole-suite (' + gateConfig.testCommand + ')')
-
-  if (sr.status === 0) {
-    // D4 step 4, green: commit the expiry when one was applied; otherwise proceed exactly as
-    // before (no expiry applied — nothing to commit).
-    if (expiryPaths.length) commitExpiry(expiryPaths, retired)
-    return
-  }
+  if (sr.status === 0) return
 
   const output = (sr.stdout || '') + (sr.stderr || '')
-  const suiteRedMessage = (out) =>
-    'suite red at close — ' + gateConfig.testCommand + ' exited ' + out.status + ' over the ' +
+  die('suite red at close — ' + gateConfig.testCommand + ' exited ' + sr.status + ' over the ' +
     'committed close tree.\n' +
     'The files written at CLOSE (canonical doc, rules fold) are inside ' +
     'the host\'s rule surface; fix them, commit the fix, then re-run `node ' + __filename + ' ' +
-    specPath + ' --mark closed`.\n--- last 40 lines of suite output ---\n' + tailLines(out.text, 40)
-
-  if (!expiryPaths.length) {
-    // D4 step 4, red with nothing applied: the existing refusal, unchanged, no expiry note.
-    die(suiteRedMessage({ status: sr.status, text: output }))
-  }
-
-  // D6: red with an expiry applied — restore the deleted paths and re-run the suite once more.
-  // Green now means the deletion is the cause; still red means the close tree itself is broken.
-  restoreExpiryPaths(expiryPaths)
-  const sr2 = runChild('bash', ['-c', gateConfig.testCommand], { cwd: repoRoot, encoding: 'utf8', env },
-    'close-time whole-suite (post-restore, ' + gateConfig.testCommand + ')')
-  if (sr2.status === 0) {
-    process.stdout.write(expirySkipWarning(retired))
-    return
-  }
-  die(suiteRedMessage({ status: sr2.status, text: (sr2.stdout || '') + (sr2.stderr || '') }))
+    specPath + ' --mark closed`.\n--- last 40 lines of suite output ---\n' + tailLines(output, 40))
 }
 
 function handleClosed() {
@@ -2452,13 +2346,13 @@ const STEPS = {
         `running in a linked worktree (main root: ${mainRoot}), so the ledger and retained ` +
         `evidence are promoted there only once the merge lands, not committed from the worktree ` +
         `now; this is the close commit.\n` + gateRerunNote
-    // D3 (specs/20260912/13-expired-tests-leave-in-their-own-commit.md): the 🧹 line prints only
-    // when close-time classification (D2) found something retirable — nothing otherwise, so a
-    // clean close never claims a deletion that never happened. The wording tells the session what
-    // will happen AFTER the close commit, in the deletion's own separate commit — not "part of the
-    // close commit", which this spec exists to stop being true.
+    // specs/20260912/15-the-close-stops-deleting-tests.md D4: the 🧹 line prints only when
+    // close-time classification (D1) found something retirable — nothing otherwise, so a clean
+    // close never claims a deletion that never happened. The wording now states that nothing is
+    // deleted at close (there is no separate deletion commit any more) and names the sweep
+    // command that is the one path that deletes a test.
     const testsExpiredLine = (marks.testsExpiry && marks.testsExpiry.retired > 0)
-      ? `🧹 ${marks.testsExpiry.retired} tests expire with this spec (${marks.testsExpiry.filesRemoved} files removed) — deleted in their own commit when you mark closed\n`
+      ? `🧹 ${marks.testsExpiry.retired} tests are retirable with this spec (${marks.testsExpiry.filesRemoved} files would empty) — nothing is deleted at close; sweep deliberately with: node "$(spec-paths test-expiry)" --root . --all-done --apply\n`
       : ''
     return `## Step: close (the driver has already run the authoritative verdict and flipped status: done)\n` +
       `verdict: ${marks.dispositions.word}   runId: ${marks.closeRunId}   ` +

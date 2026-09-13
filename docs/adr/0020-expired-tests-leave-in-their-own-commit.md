@@ -11,7 +11,7 @@
   line changes from "part of the close commit" to naming a separate commit, and the deletion
   itself moves out of the close commit into `--mark closed`'s own sequence (gate over the tree
   with tests still present, apply, whole-suite re-run, commit-or-restore).
-- Amended by: —
+- Amended by: docs/adr/0021-the-close-stops-deleting-tests.md
 
 ## Context
 

@@ -378,6 +378,162 @@ test('AC-20260911-03-3/AC-20260911-03-5: control — WHEN two specs define the i
   assert.strictEqual(out.kept.open, 0, 'no clause should keep this test once both collided owners are done: ' + JSON.stringify(out.kept))
 })
 
+// specs/20260912/15-the-close-stops-deleting-tests.md D5/D6/D7, AC-20260912-15-3/-4/-5: a
+// `superseded` owner now counts as closed alongside `done`, and an unreadable spec file under
+// `specs/` is recorded as an unreadable owner (its path-derived AC-ID prefix held open, warned
+// on stderr, exit 0) rather than silently skipped as though it never existed.
+function isRootProcess() {
+  return !!(process.getuid && process.getuid() === 0)
+}
+
+test('AC-20260912-15-3: WHEN a tagged test cites one AC-ID owned by a done spec and by a superseded spec and by nothing else THE SYSTEM classifies it retired under --all-done --json', () => {
+  const root = tmpdir('expiry-superseded')
+  writeSpec(root, 'specs/20260911/01-alpha.md', `---
+status: done
+tier: standard
+diff_base: 0000000000000000000000000000000000000000
+---
+# Alpha
+
+## Acceptance Criteria
+
+- **AC-20260911-01-1**: THE SYSTEM defines this AC-ID from the done spec.
+`)
+  writeSpec(root, 'specs/20260911/01-alpha-twin.md', `---
+status: superseded
+tier: standard
+diff_base: 0000000000000000000000000000000000000000
+---
+# Alpha Twin
+
+## Acceptance Criteria
+
+- **AC-20260911-01-1**: THE SYSTEM defines the identical AC-ID from the superseded twin.
+`)
+  writeTest(root, 'tests/alpha.test.js', `'use strict'
+const { test } = require('node:test')
+const assert = require('node:assert')
+test('AC-20260911-01-1: cited by a test while a done spec and a superseded twin both define it', () => { assert.ok(true) })
+`)
+
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, 'a dry run over the done+superseded fixture must succeed: ' + r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.strictEqual(out.tagged, 1, 'the one citing test must be scanned as tagged: ' + JSON.stringify(out))
+  assert.deepStrictEqual(out.kept, { class: 0, invariant: 0, pin: 0, open: 0 },
+    'D5: a superseded owner must count as closed alongside done — no keep clause should fire and hold this test open: ' + JSON.stringify(out.kept))
+  assert.deepStrictEqual(out.retired, [{ file: 'tests/alpha.test.js', acIds: ['AC-20260911-01-1'], title: 'AC-20260911-01-1: cited by a test while a done spec and a superseded twin both define it' }],
+    'D5: with both owners of the collided AC-ID closed (done and superseded) the citing test must retire, not stay pinned open forever by the superseded twin: ' + JSON.stringify(out.retired))
+})
+
+test('AC-20260912-15-4: WHEN a spec file under specs/ cannot be read and a done twin at the same date and number defines the same AC-ID THE SYSTEM keeps the citing test, exits 0, and warns on stderr naming the file and its derived prefix', () => {
+  if (isRootProcess()) return // chmod 000 cannot deny a root-owned process; this pin cannot distinguish the fix from the bug under root
+
+  const root = tmpdir('expiry-unreadable-same-prefix')
+  writeSpec(root, 'specs/20260911/01-alpha.md', `---
+status: done
+tier: standard
+diff_base: 0000000000000000000000000000000000000000
+---
+# Alpha
+
+## Acceptance Criteria
+
+- **AC-20260911-01-1**: THE SYSTEM defines this AC-ID from the done spec.
+`)
+  const twinAbs = path.join(root, 'specs/20260911/01-alpha-twin.md')
+  writeSpec(root, 'specs/20260911/01-alpha-twin.md', `---
+status: implementing
+tier: standard
+diff_base: 0000000000000000000000000000000000000000
+---
+# Alpha Twin
+
+## Acceptance Criteria
+
+- **AC-20260911-01-1**: THE SYSTEM defines the identical AC-ID from the twin.
+`)
+  fs.chmodSync(twinAbs, 0o000)
+  writeTest(root, 'tests/alpha.test.js', `'use strict'
+const { test } = require('node:test')
+const assert = require('node:assert')
+test('AC-20260911-01-1: cited by a test while its twin owner is unreadable', () => { assert.ok(true) })
+`)
+
+  try {
+    const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--json'], { encoding: 'utf8' })
+    assert.strictEqual(r.status, 0,
+      'D6: an unreadable spec that is NOT the one named by --spec (there is no --spec here at all) must never change the exit code: ' + r.stdout + r.stderr)
+    const out = JSON.parse(r.stdout)
+    assert.strictEqual(out.tagged, 1, 'the citing test must still be scanned as tagged: ' + JSON.stringify(out))
+    assert.deepStrictEqual(out.kept, { class: 0, invariant: 0, pin: 0, open: 1 },
+      'D6: today the unreadable twin is silently skipped as though absent, so its readable done sibling alone ' +
+      'makes allCitedDone true and wrongly retires the test — the unreadable owner must instead hold the AC-ID ' +
+      'open: ' + JSON.stringify(out.kept))
+    assert.deepStrictEqual(out.retired, [],
+      'D6: the citing test must not be retired while one of its AC-ID\'s owners cannot be read: ' + JSON.stringify(out.retired))
+    assert.match(r.stderr, /specs\/20260911\/01-alpha-twin\.md/,
+      'D6: the stderr warning must name the unreadable spec file by path: ' + r.stderr)
+    assert.match(r.stderr, /AC-20260911-01-/,
+      'D6: the stderr warning must name the path-derived AC-ID prefix (AC-YYYYMMDD-NN[a]-) so an operator can find every id it holds open: ' + r.stderr)
+  } finally {
+    fs.chmodSync(twinAbs, 0o644)
+  }
+})
+
+test('AC-20260912-15-5: WHEN an unreadable spec\'s derived prefix does not match a cited AC-ID THE SYSTEM classifies that citation exactly as it would with the file absent, while still warning once on stderr about the unreadable file itself', () => {
+  if (isRootProcess()) return // chmod 000 cannot deny a root-owned process; this pin cannot distinguish the fix from the bug under root
+
+  const root = tmpdir('expiry-unreadable-other-prefix')
+  writeSpec(root, 'specs/20260911/01-alpha.md', `---
+status: done
+tier: standard
+diff_base: 0000000000000000000000000000000000000000
+---
+# Alpha
+
+## Acceptance Criteria
+
+- **AC-20260911-01-1**: THE SYSTEM defines this AC-ID, owned solely by this done spec.
+`)
+  const betaAbs = path.join(root, 'specs/20260911/02-beta.md')
+  writeSpec(root, 'specs/20260911/02-beta.md', `---
+status: implementing
+tier: standard
+diff_base: 0000000000000000000000000000000000000000
+---
+# Beta
+
+## Acceptance Criteria
+
+- **AC-20260911-02-1**: THE SYSTEM defines a wholly unrelated AC-ID, unread and irrelevant here.
+`)
+  fs.chmodSync(betaAbs, 0o000)
+  writeTest(root, 'tests/alpha.test.js', `'use strict'
+const { test } = require('node:test')
+const assert = require('node:assert')
+test('AC-20260911-01-1: cited by a test whose only owner is readable and done', () => { assert.ok(true) })
+`)
+
+  try {
+    const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--json'], { encoding: 'utf8' })
+    assert.strictEqual(r.status, 0,
+      'D7: an unreadable spec unrelated to the cited AC-ID must never change the exit code: ' + r.stdout + r.stderr)
+    const out = JSON.parse(r.stdout)
+    assert.deepStrictEqual(out.retired, [{ file: 'tests/alpha.test.js', acIds: ['AC-20260911-01-1'], title: 'AC-20260911-01-1: cited by a test whose only owner is readable and done' }],
+      'D7: the unreadable-owner rule is prefix-scoped, never global — an unrelated unreadable spec must not keep ' +
+      'this citation open, or a single stray unreadable file anywhere under specs/ would freeze the whole sweep: ' +
+      JSON.stringify(out.retired))
+    assert.match(r.stderr, /specs\/20260911\/02-beta\.md/,
+      'D6: the Contracts line promises one stderr warning per unreadable spec file regardless of whether that ' +
+      'file\'s prefix matters to this run\'s outcome — today no such warning is ever printed: ' + r.stderr)
+    assert.match(r.stderr, /AC-20260911-02-/,
+      'D6: the warning must name the derived prefix of the unrelated unreadable file, not the one that actually retired: ' + r.stderr)
+  } finally {
+    fs.chmodSync(betaAbs, 0o644)
+  }
+})
+
 test('AC-20260911-03-9: WHEN expire-tests.js --root . --all-done --json runs over this repository at HEAD THE SYSTEM reports retired:[] and applied:false', () => {
   const r = runNode('scripts/expire-tests.js', ['--root', '.', '--all-done', '--json'], { cwd: ROOT, encoding: 'utf8' })
   assert.strictEqual(r.status, 0,

@@ -2,22 +2,23 @@
 'use strict'
 // coverage-scope.js --root <r> [--json]
 //
-// WHY: specs/20260911/03-tests-expire-at-close.md made a spec's tests die at close — expire-tests.js
-// deletes every test tagged with the closing spec's own AC-IDs, then `--mark closed` re-runs the
-// host's gate over that tree. That behavior places an obligation on the host that spec never
-// stated: a check requiring a test carrier per acceptance criterion must scope its carriers to
-// specs that are NOT done (a done spec owes a carrier only for a `SHALL CONTINUE TO` criterion —
-// the plugin's own ac-drift.js applies exactly that rule). A host check that demands a carrier for
-// EVERY AC of a done spec contradicts expiry and deadlocks every close: the close deletes the
-// tests, the gate re-run reports the just-closed spec's criteria uncovered, and the close is
-// refused with no path forward. The grounding contract's § Test expiry now carries the obligation
-// and /spec:init names it while profiling; this script is that section's conformance probe for a
-// host initialized BEFORE the section existed — /spec:doctor's check 20 runs it.
+// WHY: specs/20260912/15-the-close-stops-deleting-tests.md made test expiry a deliberate, human-run
+// sweep (expire-tests.js --all-done --apply) rather than something a close ever applies —
+// expire-tests.js only classifies at close; the deletion happens later, at the operator's own
+// command. That still places an obligation on the host: a check requiring a test
+// carrier per acceptance criterion must scope its carriers to specs that are NOT done (a done spec
+// owes a carrier only for a `SHALL CONTINUE TO` criterion — the plugin's own ac-drift.js applies
+// exactly that rule). A host check that demands a carrier for EVERY AC of a done spec contradicts
+// expiry: after a sweep retires that spec's tests, the check reports its criteria uncovered and
+// goes red, and stays red — no close-time deadlock forces it, but the check is wrong from the sweep
+// onward regardless. The grounding contract's § Test expiry now carries the obligation and
+// /spec:init names it while profiling; this script is that section's conformance probe for a host
+// initialized BEFORE the section existed — /spec:doctor's check 20 runs it.
 //
 // Not a standing guard earned by recurrence (core § Incident Policy): the obligation is a logical
-// consequence of the close-time deletion, true in a host that has never once deadlocked. Its
-// population is finite and shrinking — hosts predating the contract section — so the kill
-// condition is migration-shaped: when no readable host reports a finding across a full major
+// consequence of the sweep-deletes-not-close model, true in a host that has never once run the
+// sweep. Its population is finite and shrinking — hosts predating the contract section — so the
+// kill condition is migration-shaped: when no readable host reports a finding across a full major
 // pipeline version, delete the script and the check.
 //
 // Named `coverage-scope.js`, never `test-*` — `node --test`'s default discovery matches

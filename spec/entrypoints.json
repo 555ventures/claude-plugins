@@ -306,7 +306,8 @@
   "spec/scripts/expire-tests.js": {
     "entryPoints": [
       "spec/scripts/spec-review-driver.js",
-      "spec/commands/doctor.md"
+      "spec/commands/doctor.md",
+      "spec/templates/grounding-contract.md"
     ]
   },
   "spec/scripts/count-tests.js": {

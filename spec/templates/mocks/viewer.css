@@ -765,3 +765,255 @@ body {
   .wk-ask-plus { transition: transform .15s ease; }
   .wk .wk-step, .wk .wk-states button, .wk-journey { transition: background .12s ease, border-color .12s ease; }
 }
+
+/* Notes layer — area marking. specs/20260912/11-a-note-can-mark-an-area.md D4/D5/D6/D7/D8/D9,
+   authored from the approved prototype design/chrome-mocks/notes.html. The overlay (a third
+   .nl-host, sibling to the bar and strip) paints one .nl-region box per note whose region
+   resolves on the active state; each box's color is a per-box `--c` custom property the layer
+   script sets to one of the four roles below (--v-danger open, --v-warn addressed, --v-ok
+   resolved, --v-muted outdated/withdrawn) — never a literal color here. A glyph distinguishes
+   status by shape as well as color (a11y): hollow ring (open), half-filled ring (addressed),
+   filled dot (resolved), dashed ring (outdated/withdrawn). No rule here targets the served
+   mock's own document — this file is linked only inside the layer's shadow roots (the isolation
+   invariant, tests/mocks/notes-layer-isolation.test.js). */
+.nl-overlay { position: absolute; inset: 0; }
+.nl-region {
+  position: absolute;
+  border: 1.5px solid var(--c);
+  background: color-mix(in srgb, var(--c) 6%, transparent);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: opacity .15s, box-shadow .15s, left .25s, top .25s, width .25s, height .25s;
+}
+.nl-region:hover { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent); }
+.nl-region:focus-visible { outline: 2px solid var(--v-ring); outline-offset: 2px; }
+.nl-region.sel {
+  background: color-mix(in srgb, var(--c) 11%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 28%, transparent);
+}
+.nl-region.dim { opacity: .45; }
+.nl-region[data-status="outdated"] { border-style: dashed; }
+
+.nl-region-badge {
+  position: absolute;
+  left: -1.5px;
+  top: -11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px 0 6px;
+  border-radius: 999px;
+  background: var(--c);
+  color: var(--v-primary-fg);
+  font: 600 11.5px/1 var(--v-font);
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  box-shadow: 0 0 0 2px var(--v-bg), var(--v-shadow);
+}
+.nl-region-glyph {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--v-primary-fg);
+  box-sizing: border-box;
+  font-size: 0;
+}
+.nl-region-glyph.open { background: transparent; }
+.nl-region-glyph.addressed { background: linear-gradient(90deg, var(--v-primary-fg) 50%, transparent 50%); }
+.nl-region-glyph.resolved { background: var(--v-primary-fg); }
+.nl-region-glyph.outdated, .nl-region-glyph.withdrawn { border-style: dashed; }
+
+.nl-draft {
+  position: absolute;
+  border: 1.5px solid var(--v-primary);
+  border-radius: 6px;
+  box-shadow: 0 0 0 9999px color-mix(in srgb, var(--v-fg) 28%, transparent);
+}
+.nl-draft-size {
+  position: absolute;
+  right: 0;
+  bottom: -24px;
+  font: 500 11.5px var(--v-font);
+  color: var(--v-primary-fg);
+  background: var(--v-primary);
+  padding: 3px 7px;
+  border-radius: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Card (.nl-card) — mounted inside the overlay host, positioned beside its box by the layer
+   script (left/top set inline); the phone breakpoint below turns it into a bottom sheet. */
+.nl-card {
+  position: absolute;
+  z-index: 40;
+  width: 328px;
+  background: var(--v-bg);
+  color: var(--v-fg);
+  border: 1px solid var(--v-border);
+  border-radius: 12px;
+  box-shadow: var(--v-shadow);
+  font-size: 14px;
+}
+.nl-card-hd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--v-muted);
+  font-size: 12.5px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--v-border);
+  background: var(--v-muted-bg);
+  border-radius: 12px 12px 0 0;
+}
+.nl-card-hd .nl-region-badge { position: static; box-shadow: none; }
+.nl-card-outdated {
+  margin: 12px 14px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--v-muted-bg);
+  color: var(--v-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.nl-card-thread { display: grid; gap: 12px; max-height: 240px; overflow: auto; padding: 12px 14px 4px; }
+.nl-card-msg { display: grid; gap: 3px; line-height: 1.45; }
+.nl-card-msg small { color: var(--v-muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.nl-card-msg small::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--v-border);
+  display: inline-block;
+}
+.nl-card-me { padding-left: 10px; border-left: 2px solid var(--v-border); }
+.nl-card-me small::before { background: var(--v-primary); }
+.nl-card textarea {
+  width: calc(100% - 28px);
+  margin: 8px 14px 0;
+  min-height: 56px;
+  font: 14px/1.45 var(--v-font);
+  color: var(--v-fg);
+  border: 1px solid var(--v-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  resize: vertical;
+  background: var(--v-bg);
+}
+.nl-card textarea:focus {
+  outline: none;
+  border-color: var(--v-ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--v-ring) 25%, transparent);
+}
+.nl-card-row { display: flex; gap: 6px; align-items: center; padding: 10px 14px 12px; }
+.nl-card-row .sp { flex: 1; }
+.nl-card-more { position: relative; }
+.nl-card-menu {
+  position: absolute;
+  right: 0;
+  bottom: 34px;
+  background: var(--v-bg);
+  border: 1px solid var(--v-border);
+  border-radius: 8px;
+  box-shadow: var(--v-shadow);
+  display: grid;
+  min-width: 170px;
+  z-index: 2;
+  padding: 4px;
+}
+.nl-card-menu button {
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 7px 10px;
+  font: 13.5px var(--v-font);
+  color: var(--v-fg);
+  cursor: pointer;
+  border-radius: 5px;
+}
+.nl-card-menu button:hover { background: var(--v-muted-bg); }
+.nl-card-why {
+  display: grid;
+  gap: 8px;
+  margin: 0 14px 12px;
+  padding: 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--v-warn) 8%, var(--v-bg));
+  border: 1px solid color-mix(in srgb, var(--v-warn) 35%, var(--v-border));
+}
+.nl-card-why textarea { margin: 0; width: 100%; }
+.nl-card-why .nl-card-row { padding: 0; }
+.nl-card .nl-chips { padding: 12px 14px 0; }
+.nl-card .nl-chips .nl-btn { height: 26px; padding: 0 10px; font-size: 12.5px; border-radius: 999px; }
+
+/* Strip filter (.nl-seg) — specs/20260912/11 D8: a segmented Needs-you/Open/All/Resolved
+   control; the pressed button lifts off the muted track like a native segmented control. */
+.nl-seg {
+  display: inline-flex;
+  background: var(--v-muted-bg);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+.nl-seg button {
+  border: 0;
+  background: transparent;
+  font: 500 12.5px var(--v-font);
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 6px;
+  color: var(--v-muted);
+  font-variant-numeric: tabular-nums;
+}
+.nl-seg button:hover { color: var(--v-fg); }
+.nl-seg button[aria-pressed="true"] {
+  background: var(--v-bg);
+  color: var(--v-fg);
+  box-shadow: var(--v-shadow);
+}
+
+/* Undo toast (.nl-toast) — specs/20260912/11 D6: Delete/Withdraw/Resolve/Accept defer their
+   POST for 5s behind this toast; Undo cancels it. */
+.nl-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 60;
+  background: var(--v-primary);
+  color: var(--v-primary-fg);
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  box-shadow: var(--v-shadow);
+  font-size: 13.5px;
+}
+.nl-toast button {
+  border: 0;
+  background: color-mix(in srgb, var(--v-primary-fg) 14%, transparent);
+  color: inherit;
+  font: 600 12.5px var(--v-font);
+  cursor: pointer;
+  padding: 5px 9px;
+  border-radius: 6px;
+}
+.nl-toast button:hover { background: color-mix(in srgb, var(--v-primary-fg) 24%, transparent); }
+
+@media (max-width: 640px) {
+  .nl-card {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    border-radius: 14px 14px 0 0;
+    max-height: 70vh;
+    overflow: auto;
+    box-shadow: var(--v-shadow);
+  }
+}

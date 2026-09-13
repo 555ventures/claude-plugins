@@ -20,6 +20,12 @@
 // {journey -> {labels}} map), or enforce D5's mark-gate rule — unresolvedFor is the primitive
 // the gate is built from; the refusal message and exit code live in mocks-driver.js.
 //
+// specs/20260912/11-a-note-can-mark-an-area.md D2/D3: `region` is an optional, validated field on
+// a mock-scope note only — regionShapeErrors is the one shared shape check addNote (throws, no
+// "note …:" prefix) and validateNotes (one "note …:" prefixed error per problem) both call;
+// replaceRegion/deleteNote are the two new primitives D3's served /__notes/region and
+// /__notes/delete routes call, each enforcing its own precondition before ever touching the note.
+//
 // specs/20260907/10-client-review.md D3: a note's `origin` (walk|client|session) is decided by
 // the route it arrived on, never by a typed name — ORIGINS/originOf are the shared enum/default;
 // addNote stamps `origin` from `input.origin` when the caller gives one (design-atlas.js's client
@@ -69,6 +75,38 @@ const LEDGER_ID_RE = /^[A-Z]+\d+[a-z]?$/
 // design-atlas.js's client `/__notes/resolve` route (which 400s a value outside this enum before
 // ever calling resolveNote).
 const WITHDRAW_REASONS = ['not-needed', 'fixed-elsewhere', 'mistake']
+
+// specs/20260912/11-a-note-can-mark-an-area.md D2, Contracts: one bare message per shape problem
+// (no "note …:" prefix, no "field" label omitted) — addNote joins these into its thrown Error;
+// validateNotes prefixes each with 'note "<label>": '. A region missing entirely is never called
+// with this function — both callers check `region != null` first.
+const ARRANGEMENTS = ['single', 'row', 'col', 'grid']
+function regionShapeErrors(region) {
+  const errs = []
+  if (!region || typeof region !== 'object') {
+    return ['region must be an object (field "region")']
+  }
+  const anchor = region.anchor
+  if (!anchor || !Array.isArray(anchor.path) || !anchor.path.every((n) => Number.isInteger(n) && n >= 0)) {
+    errs.push('region.anchor.path must be an array of non-negative integers (field "region.anchor.path")')
+  }
+  const frac = region.frac
+  const fracOk = !!frac && ['x', 'y', 'w', 'h'].every((k) => typeof frac[k] === 'number' && frac[k] >= 0 && frac[k] <= 1) &&
+    frac.w > 0 && frac.h > 0
+  if (!fracOk) errs.push('region.frac.{x,y,w,h} must be numbers in [0,1] with w,h > 0 (field "region.frac")')
+  const layout = region.layout
+  if (!layout || !ARRANGEMENTS.includes(layout.arrangement)) {
+    errs.push('region.layout.arrangement must be one of ' + ARRANGEMENTS.join('|') + ' (field "region.layout.arrangement")')
+  }
+  const touched = region.touched
+  const touchedOk = Array.isArray(touched) && touched.every((t) => t && Number.isInteger(t.i) && t.i >= 0 && typeof t.snippet === 'string')
+  if (!touchedOk) errs.push('region.touched must be an array of {i:integer>=0, snippet:string} (field "region.touched")')
+  const drawnAt = region.drawnAt
+  if (!drawnAt || !Number.isInteger(drawnAt.w) || drawnAt.w <= 0) {
+    errs.push('region.drawnAt.w must be a positive integer (field "region.drawnAt.w")')
+  }
+  return errs
+}
 
 function notesPath(root) { return path.join(root, 'design/mocks/notes.json') }
 
@@ -177,6 +215,16 @@ function validateNotes(notes) {
     if (n.thread != null && !Array.isArray(n.thread)) {
       errors.push('note "' + label + '": thread must be an array (field "thread")')
     }
+    // specs/20260912/11-a-note-can-mark-an-area.md D2: region is additive/optional — a present
+    // value is checked against scope first (a project-scope note may never carry one), then
+    // against its own shape via the shared regionShapeErrors.
+    if (n.region != null) {
+      if (n.scope !== 'mock') {
+        errors.push('note "' + label + '": region is allowed only on scope "mock" (field "region")')
+      } else {
+        for (const msg of regionShapeErrors(n.region)) errors.push('note "' + label + '": ' + msg)
+      }
+    }
   }
   return { errors }
 }
@@ -218,6 +266,12 @@ function addNote(notes, input) {
   } else if (body.reason != null && !PLAIN_REASONS.includes(body.reason)) {
     problems.push('reason must be one of ' + PLAIN_REASONS.join('|'))
   }
+  // specs/20260912/11-a-note-can-mark-an-area.md D2: region is accepted only on scope "mock" —
+  // a project-scope body carrying one is refused by name, never silently dropped.
+  if (body.region != null) {
+    if (body.scope !== 'mock') problems.push('region is allowed only on scope "mock" (field "region")')
+    else problems.push(...regionShapeErrors(body.region))
+  }
   if (problems.length) throw new Error(problems.join('; '))
 
   const note = {
@@ -244,6 +298,9 @@ function addNote(notes, input) {
   } else if (body.reason != null) {
     note.reason = body.reason
   }
+  // specs/20260912/11-a-note-can-mark-an-area.md D2: stored verbatim — the shape has already been
+  // validated above, and only ever on a mock-scope body (the project-scope case already threw).
+  if (body.scope === 'mock' && body.region != null) note.region = body.region
   // D3: origin from the caller when given (design-atlas.js's client route always passes
   // "client" explicitly), else originOf's own rule — a walk-kind note is "walk" by construction,
   // everything else (including a question) defaults "session".
@@ -351,6 +408,37 @@ function reopenNote(notes, id, opts) {
   return { notes: next, note: found }
 }
 
+// specs/20260912/11-a-note-can-mark-an-area.md D3's POST /__notes/region — re-places an open or
+// addressed note's box (a resolved note's box is history, never moved) and threads the re-place as
+// a card-visible event. Throws 'no note with id "…"' (the route's own 404), the status precondition
+// message (400), or a regionShapeErrors join (400) — never stores a malformed region.
+function replaceRegion(notes, id, region, by) {
+  const { next, found } = cloneFind(notes, id)
+  if (found.status === 'resolved') {
+    throw new Error('region can be re-placed only on an open or addressed note (status "resolved")')
+  }
+  const errs = regionShapeErrors(region)
+  if (errs.length) throw new Error(errs.join('; '))
+  found.region = region
+  found.thread = (Array.isArray(found.thread) ? found.thread.slice() : []).concat([
+    { at: new Date().toISOString(), text: 're-placed the box', by: by || 'session' },
+  ])
+  return { notes: next, note: found }
+}
+
+// specs/20260912/11-a-note-can-mark-an-area.md D3's POST /__notes/delete — narrow on purpose: a
+// note anyone has replied to, or one already addressed, or one carrying a `kind` (a question or a
+// walk finding) is history and is withdrawn, never erased. Throws 'no note with id "…"' (404) or
+// the withdraw-remedy message (400).
+function deleteNote(notes, id) {
+  const { next, found } = cloneFind(notes, id)
+  const threadEmpty = !Array.isArray(found.thread) || found.thread.length === 0
+  if (found.status !== 'open' || found.kind != null || !threadEmpty) {
+    throw new Error('only an open plain note nobody has replied to can be deleted — withdraw it instead')
+  }
+  return { notes: next.filter((n) => n.id !== id) }
+}
+
 // D4's `notes reply --id --text` — status is left unchanged (Contracts: "reply never changes status").
 function replyNote(notes, id, text) {
   const { next, found } = cloneFind(notes, id)
@@ -433,4 +521,5 @@ function waiveNote(notes, id, opts) {
 module.exports = {
   readNotes, writeNotes, validateNotes, addNote, resolveNote, answerQuestion, addressNote, replyNote,
   reopenNote, groupOpen, unresolvedFor, WALK_REASONS, ORIGINS, originOf, waiveNote, WITHDRAW_REASONS,
+  replaceRegion, deleteNote,
 }

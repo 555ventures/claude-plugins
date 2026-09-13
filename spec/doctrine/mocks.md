@@ -232,10 +232,13 @@ every served `.html` unless the request carries `?clean`; every write — HTTP o
 through `spec/scripts/lib/mocks-notes.js`, the one writer of `design/mocks/notes.json` (the
 ledger's pattern, § Provenance Ledger).
 
-**Two scopes, never an element.** A note is anchored to a screen + state (`scope: "mock"`,
-`screen`, `state` set) or to the whole product (`scope: "project"`, `screen`/`state` null) — the
-dry run's catches were all state-level; an element anchor is brittle across redraws and was
-rejected.
+**Two scopes, and a note may mark an area.** A note is anchored to a screen + state (`scope:
+"mock"`, `screen`, `state` set) or to the whole product (`scope: "project"`, `screen`/`state`
+null) — the dry run's catches were all state-level. A mock-scope note may also carry an optional
+`region`: the drawn box stored as fractions of its smallest containing element, with the covered
+children as the reflow fallback, drawn by the notes layer as a colored overlay and never as mock
+markup. Where the anchor no longer resolves the note shows as `outdated` — never moved, never
+guessed — and offers re-place (docs/adr/0020-a-note-can-mark-an-area.md).
 
 **Status is a three-step queue, asymmetric by design.** `open` → `addressed` (driver-only:
 `notes address --id <id> --change "<what changed>" [--ledger <rowId>]`, or a question-back reply

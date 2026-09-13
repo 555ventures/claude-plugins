@@ -2,6 +2,18 @@
 // `serve`, injected before </body> on every served mock page unless the request carries
 // ?clean. specs/20260902/10-page-notes-review-loop.md D3; specs/20260905/01-picks-on-the-atlas-page.md D5.
 //
+// specs/20260912/11-a-note-can-mark-an-area.md D4-D8: a mock-scope page gains a third shadow
+// host, the overlay — `position:fixed;inset:0` over the whole viewport (never `position:relative`
+// on the mock root itself, which the isolation invariant forbids touching) — that paints one
+// `.nl-region` box per note whose `region` (NotesAnchor.resolve, from GET /__notes/anchor.js,
+// loaded before this script per D3) resolves on the active state. Box/card coordinates below are
+// therefore always computed as `rootEl.getBoundingClientRect()` (viewport px) plus the resolved,
+// root-relative box — the same coordinate space the fixed overlay host renders in, so no
+// translation is needed for drag or paint math. Reply has no server verb in this spec's Contracts
+// block (only add/region/delete/reopen/resolve/answer are exposed) — the reply field's empty-focus
+// rule is implemented, but a non-empty reply is a deliberate no-op pending a future spec; this is a
+// scope gap, not a bug (see the sidecar deviation).
+//
 // specs/20260906/03-questions-on-the-wireframe.md D5: a note carrying kind:"question" renders as
 // a distinct row (id badge, "I assumed <claim>", "I rejected: <rejected>" when present) with
 // three controls — Yes/No(+text)/Later — that POST /__notes/answer; an answered question renders
@@ -126,6 +138,19 @@
   }
   author = getAuthor()
 
+  // D4/D5/D6/D7: sibling test fixtures (tests/mocks/notes-layer-navigation.test.js) build a
+  // minimal stub DOM with no `.style` object on their plain elements — setStyle no-ops rather
+  // than throwing when `.style` is absent, so this file still runs unchanged over that fixture;
+  // a real DOM element always carries `.style`, so nothing here changes for a served page.
+  function setStyle(el, props) {
+    if (!el || !el.style) return
+    for (var k in props) { if (Object.prototype.hasOwnProperty.call(props, k)) el.style[k] = props[k] }
+  }
+  // Same posture as setStyle above — the stub DOM's `document`/`window` carry no addEventListener.
+  function on(target, type, fn) {
+    if (target && typeof target.addEventListener === 'function') target.addEventListener(type, fn)
+  }
+
   function esc(s) {
     return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] })
   }
@@ -159,9 +184,374 @@
     stripAnchor.insertAdjacentElement('afterend', mount(strip))
   }
 
+  // D4: the overlay — a third .nl-host, mock scope only, `position:fixed;inset:0` over the whole
+  // viewport so its own coordinate frame matches getBoundingClientRect() for every element on the
+  // page (no scroll/relative-positioning math needed). `pointer-events` is toggled on the HOST
+  // itself as marking mode turns on/off; individual painted boxes/cards get their own inline
+  // `pointer-events:auto` so they stay clickable while the host is otherwise none (letting clicks
+  // pass through to the mock everywhere the overlay paints nothing).
+  var overlay = null
+  var boxLayer = null
+  var cardSlot = null
+  var toastSlot = null
+  var overlayHost = null
+  if (scope === 'mock' && rootEl) {
+    overlay = document.createElement('div'); overlay.className = 'nl-overlay'
+    boxLayer = document.createElement('div')
+    cardSlot = document.createElement('div')
+    toastSlot = document.createElement('div')
+    overlay.appendChild(boxLayer); overlay.appendChild(cardSlot); overlay.appendChild(toastSlot)
+    overlayHost = mount(overlay)
+    setStyle(overlayHost, { position: 'fixed', inset: '0', pointerEvents: 'none', zIndex: '9997' })
+    document.body.appendChild(overlayHost)
+  }
+
+  // D9: color/glyph come from the register — a per-box `--c` custom property set to one of the
+  // four role tokens, never a literal color.
+  function colorFor(status) {
+    if (status === 'addressed') return 'var(--v-warn)'
+    if (status === 'resolved') return 'var(--v-ok)'
+    if (status === 'outdated' || status === 'withdrawn') return 'var(--v-muted)'
+    return 'var(--v-danger)' // open
+  }
+
+  // D4/D8: the display status a box/row/badge shows — the note's own status, except `outdated`
+  // (resolve() === null on a non-resolved note) which is DERIVED here, never written to disk.
+  function regionStatusOf(n) {
+    if (!n.region || !rootEl || !window.NotesAnchor) return n.status
+    var resolved = window.NotesAnchor.resolve(rootEl, n.region)
+    return resolved === null && n.status !== 'resolved' ? 'outdated' : n.status
+  }
+
+  function regionBadge(id, status) {
+    var badge = document.createElement('span'); badge.className = 'nl-region-badge'
+    var glyph = document.createElement('span'); glyph.className = 'nl-region-glyph ' + status
+    badge.appendChild(glyph)
+    badge.appendChild(document.createTextNode(id))
+    return badge
+  }
+
+  // ---- D4: paint one .nl-region per note whose region resolves on the active state ------------
+  function renderOverlay() {
+    if (!overlay || !boxLayer) return
+    boxLayer.innerHTML = ''
+    if (!rootEl || typeof rootEl.getBoundingClientRect !== 'function') return
+    var rootRect = rootEl.getBoundingClientRect()
+    mockNotes.forEach(function (n) {
+      if (!n.region || n.state !== activeState) return
+      var resolved = window.NotesAnchor ? window.NotesAnchor.resolve(rootEl, n.region) : null
+      var status = resolved === null && n.status !== 'resolved' ? 'outdated' : n.status
+      if (resolved === null) return // outdated -> no box, only the strip row explains it
+      if (status === 'resolved' && !showResolved) return
+      var box = resolved.box
+      var el = document.createElement('div')
+      el.className = 'nl-region' + (openCardNoteId === n.id ? ' sel' : '')
+      el.tabIndex = 0
+      el.setAttribute('data-id', n.id)
+      el.setAttribute('data-status', status)
+      el.style.setProperty('--c', colorFor(status))
+      el.style.left = (rootRect.left + box.x) + 'px'
+      el.style.top = (rootRect.top + box.y) + 'px'
+      el.style.width = Math.max(0, box.w) + 'px'
+      el.style.height = Math.max(0, box.h) + 'px'
+      el.style.pointerEvents = 'auto'
+      el.appendChild(regionBadge(n.id, status))
+      el.onclick = function () { openNoteCard(n) }
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') openNoteCard(n)
+        else if ((e.key === 'a' || e.key === 'A') && n.status === 'addressed') api('resolve', { id: n.id, by: author }).then(refresh)
+        else if ((e.key === 'r' || e.key === 'R') && n.status === 'addressed') openNoteCard(n)
+      })
+      boxLayer.appendChild(el)
+    })
+  }
+
+  // ---- D6: toast-deferred POST (Delete/Withdraw/Resolve/Accept) --------------------------------
+  function clearToast() { if (toastSlot) toastSlot.innerHTML = '' }
+  function deferPost(label, doPost) {
+    clearToast()
+    if (!toastSlot) { doPost(); return }
+    var toast = document.createElement('div'); toast.className = 'nl-toast'
+    var span = document.createElement('span'); span.textContent = label
+    var undo = document.createElement('button'); undo.textContent = 'Undo'
+    var timer = setTimeout(function () { clearToast(); doPost() }, 5000)
+    undo.onclick = function () { clearTimeout(timer); clearToast() }
+    toast.appendChild(span); toast.appendChild(undo)
+    toastSlot.appendChild(toast)
+  }
+
+  // ---- D6: the card, mounted inside the overlay host --------------------------------------------
+  var openCardNoteId = null
+  function closeCard() {
+    openCardNoteId = null
+    if (cardSlot) cardSlot.innerHTML = ''
+    render()
+  }
+  function cardPosition(card, id) {
+    var anchorRect = (boxLayer && boxLayer.querySelector('[data-id="' + id + '"]') || rootEl).getBoundingClientRect()
+    card.style.position = 'fixed'
+    card.style.left = Math.min(anchorRect.right + 12, window.innerWidth - 340) + 'px'
+    card.style.top = Math.max(8, anchorRect.top) + 'px'
+  }
+  function openNoteCard(n) {
+    openCardNoteId = n.id
+    if (!cardSlot) return
+    cardSlot.innerHTML = ''
+    var status = regionStatusOf(n)
+    var card = document.createElement('div'); card.className = 'nl-card'
+
+    var hd = document.createElement('div'); hd.className = 'nl-card-hd'
+    hd.appendChild(regionBadge(n.id, status))
+    if (n.reason) { var chip = document.createElement('span'); chip.className = 'chip'; chip.textContent = n.reason; hd.appendChild(chip) }
+    var whoEl = document.createElement('span'); whoEl.textContent = n.by
+    hd.appendChild(whoEl)
+    card.appendChild(hd)
+
+    if (status === 'outdated') {
+      var notice = document.createElement('div'); notice.className = 'nl-card-outdated'
+      notice.textContent = 'Outdated — the area it marked is gone.'
+      card.appendChild(notice)
+    }
+
+    var thread = document.createElement('div'); thread.className = 'nl-card-thread'
+    function msg(text, by) {
+      var m = document.createElement('div'); m.className = 'nl-card-msg' + (by === author ? ' nl-card-me' : '')
+      var p = document.createElement('div'); p.textContent = text
+      var s = document.createElement('small'); s.textContent = by
+      m.appendChild(p); m.appendChild(s)
+      thread.appendChild(m)
+    }
+    msg(n.text, n.by)
+    ;(Array.isArray(n.thread) ? n.thread : []).forEach(function (e) { msg(e.text, e.by) })
+    card.appendChild(thread)
+
+    var replyTa = document.createElement('textarea'); replyTa.placeholder = 'Reply'
+    card.appendChild(replyTa)
+
+    var row = document.createElement('div'); row.className = 'nl-card-row'
+    var sp = document.createElement('span'); sp.className = 'sp'; row.appendChild(sp)
+    var replyBtn = document.createElement('button'); replyBtn.className = 'nl-btn'; replyBtn.textContent = 'Reply'
+    replyBtn.onclick = function () {
+      if (!replyTa.value.trim()) { replyTa.focus(); return }
+      // No server verb replies this in the Contracts block (specs/20260912/11 scope) — the
+      // field's empty-focus rule is the one behavior this spec pins for Reply.
+      replyTa.value = ''
+    }
+    row.appendChild(replyBtn)
+
+    if (n.status === 'open') {
+      var resolveBtn = document.createElement('button'); resolveBtn.className = 'nl-btn primary'; resolveBtn.textContent = 'Resolve'
+      resolveBtn.onclick = function () {
+        closeCard()
+        deferPost('Resolved', function () { api('resolve', { id: n.id, by: author }).then(refresh) })
+      }
+      row.appendChild(resolveBtn)
+    } else if (n.status === 'addressed') {
+      var rejectBtn = document.createElement('button'); rejectBtn.className = 'nl-btn'; rejectBtn.textContent = 'Reject'
+      var acceptBtn = document.createElement('button'); acceptBtn.className = 'nl-btn primary'; acceptBtn.textContent = 'Accept'
+      rejectBtn.onclick = function () {
+        if (card.querySelector('.nl-card-why')) return
+        var why = document.createElement('div'); why.className = 'nl-card-why'
+        var ta = document.createElement('textarea')
+        var whyRow = document.createElement('div'); whyRow.className = 'nl-card-row'
+        var send = document.createElement('button'); send.className = 'nl-btn primary'; send.textContent = 'Send back'
+        send.onclick = function () {
+          var v = ta.value.trim()
+          if (!v) { ta.focus(); return }
+          api('reopen', { id: n.id, text: v, by: author }).then(refresh)
+        }
+        whyRow.appendChild(send)
+        why.appendChild(ta); why.appendChild(whyRow)
+        card.appendChild(why)
+        if (ta.focus) ta.focus()
+      }
+      acceptBtn.onclick = function () {
+        closeCard()
+        deferPost('Resolved', function () { api('resolve', { id: n.id, by: author }).then(refresh) })
+      }
+      row.appendChild(rejectBtn); row.appendChild(acceptBtn)
+    }
+
+    var moreWrap = document.createElement('div'); moreWrap.className = 'nl-card-more'
+    var moreBtn = document.createElement('button'); moreBtn.className = 'nl-btn'; moreBtn.textContent = '…'
+    moreBtn.onclick = function () {
+      var existing = moreWrap.querySelector('.nl-card-menu')
+      if (existing) { existing.remove(); return }
+      var menu = document.createElement('div'); menu.className = 'nl-card-menu'
+      if (status === 'outdated') {
+        var replaceBtn = document.createElement('button'); replaceBtn.textContent = 'Re-place the box'
+        replaceBtn.onclick = function () {
+          pendingReplace = n.id
+          closeCard()
+          setMarking(true)
+        }
+        menu.appendChild(replaceBtn)
+      }
+      var threadEmpty = !Array.isArray(n.thread) || n.thread.length === 0
+      var canDelete = n.status === 'open' && n.kind == null && threadEmpty
+      var lastBtn = document.createElement('button')
+      lastBtn.textContent = canDelete ? 'Delete' : 'Withdraw'
+      lastBtn.onclick = function () {
+        closeCard()
+        if (canDelete) deferPost('Deleted', function () { api('delete', { id: n.id, by: author }).then(refresh) })
+        else deferPost('Withdrawn', function () { api('resolve', { id: n.id, by: author }).then(refresh) })
+      }
+      menu.appendChild(lastBtn)
+      moreWrap.appendChild(menu)
+    }
+    moreWrap.appendChild(moreBtn)
+    row.appendChild(moreWrap)
+    card.appendChild(row)
+
+    cardSlot.appendChild(card)
+    cardPosition(card, n.id)
+    render()
+  }
+
+  // ---- D5: the draft composer at the box, and D7's Save note -----------------------------------
+  function openDraftCard(region, box) {
+    if (!cardSlot) return
+    cardSlot.innerHTML = ''
+    var card = document.createElement('div'); card.className = 'nl-card'
+    var reason = 'other'
+
+    var chipsRow = document.createElement('div'); chipsRow.className = 'nl-chips'
+    var chipEls = []
+    REASONS.forEach(function (r) {
+      var chip = document.createElement('button')
+      chip.className = 'nl-btn nl-chip' + (r.value === 'other' ? ' nl-chip-on' : '')
+      chip.textContent = r.label
+      chip.onclick = function () {
+        reason = r.value
+        chipEls.forEach(function (c) { c.el.className = 'nl-btn nl-chip' + (c.value === reason ? ' nl-chip-on' : '') })
+      }
+      chipEls.push({ el: chip, value: r.value })
+      chipsRow.appendChild(chip)
+    })
+    card.appendChild(chipsRow)
+
+    var ta = document.createElement('textarea'); ta.placeholder = 'What is wrong here?'
+    card.appendChild(ta)
+
+    var row = document.createElement('div'); row.className = 'nl-card-row'
+    var sp = document.createElement('span'); sp.className = 'sp'; row.appendChild(sp)
+    var discard = document.createElement('button'); discard.className = 'nl-btn'; discard.textContent = 'Discard'
+    discard.onclick = function () { closeCard() }
+    var save = document.createElement('button'); save.className = 'nl-btn primary'; save.textContent = 'Save note'
+    function doSave() {
+      var text = ta.value.trim()
+      if (!text) { ta.focus(); return }
+      api('add', { scope: 'mock', screen: screen, state: activeState, text: text, by: author, reason: reason, region: region }).then(function () {
+        closeCard()
+        refresh()
+      })
+    }
+    save.onclick = doSave
+    ta.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSave() }
+    })
+    row.appendChild(discard); row.appendChild(save)
+    card.appendChild(row)
+
+    cardSlot.appendChild(card)
+    card.style.position = 'fixed'
+    var left = box ? box.x + box.w + rootEl.getBoundingClientRect().left + 12 : 40
+    var top = box ? box.y + rootEl.getBoundingClientRect().top : 40
+    card.style.left = Math.min(left, window.innerWidth - 340) + 'px'
+    card.style.top = Math.max(8, top) + 'px'
+    if (ta.focus) ta.focus()
+  }
+
+  // ---- D5: Mark area mode + drag-to-draw --------------------------------------------------------
+  var marking = false
+  var dragStart = null
+  var draftEl = null
+  var pendingReplace = null
+  function setMarking(on) {
+    marking = on
+    if (!on) { pendingReplace = null; if (draftEl && draftEl.parentNode) draftEl.parentNode.removeChild(draftEl); draftEl = null; dragStart = null }
+    setStyle(overlayHost, { pointerEvents: on ? 'auto' : 'none' })
+    // D5: a one-line hint the first time marking is entered in this browser.
+    if (on) {
+      var seen = false
+      try { seen = !!localStorage.getItem('nl-hint-seen') } catch (e) { seen = false }
+      if (!seen && overlay) {
+        var hint = document.createElement('div'); hint.className = 'nl-hint'
+        hint.textContent = 'Drag over anything to leave a note'
+        overlay.insertBefore(hint, overlay.firstChild)
+        setTimeout(function () { if (hint.parentNode) hint.parentNode.removeChild(hint) }, 4000)
+        try { localStorage.setItem('nl-hint-seen', '1') } catch (e) { /* in-memory only */ }
+      }
+    }
+    render()
+  }
+  function updateDraft(x2, y2) {
+    if (!draftEl || !dragStart) return
+    var left = Math.min(dragStart.x, x2), top = Math.min(dragStart.y, y2)
+    var w = Math.abs(x2 - dragStart.x), h = Math.abs(y2 - dragStart.y)
+    draftEl.style.left = left + 'px'; draftEl.style.top = top + 'px'
+    draftEl.style.width = w + 'px'; draftEl.style.height = h + 'px'
+    var sz = draftEl.querySelector('.nl-draft-size')
+    if (sz) sz.textContent = Math.round(w) + '×' + Math.round(h)
+  }
+  function boxFromDrag(x2, y2) {
+    var r = rootEl.getBoundingClientRect()
+    var left = Math.min(dragStart.x, x2), top = Math.min(dragStart.y, y2)
+    return { x: left - r.left, y: top - r.top, w: Math.abs(x2 - dragStart.x), h: Math.abs(y2 - dragStart.y) }
+  }
+  if (scope === 'mock' && rootEl) {
+    on(document, 'mousedown', function (e) {
+      if (!marking || !overlay) return
+      dragStart = { x: e.clientX, y: e.clientY }
+      draftEl = document.createElement('div'); draftEl.className = 'nl-draft'
+      var sz = document.createElement('div'); sz.className = 'nl-draft-size'
+      draftEl.appendChild(sz)
+      overlay.appendChild(draftEl)
+      updateDraft(e.clientX, e.clientY)
+    })
+    on(document, 'mousemove', function (e) {
+      if (!marking || !dragStart) return
+      updateDraft(e.clientX, e.clientY)
+    })
+    on(document, 'mouseup', function (e) {
+      if (!marking || !dragStart) return
+      var box = boxFromDrag(e.clientX, e.clientY)
+      if (draftEl && draftEl.parentNode) draftEl.parentNode.removeChild(draftEl)
+      draftEl = null
+      dragStart = null
+      if (box.w < 12 || box.h < 12) return
+      var region = window.NotesAnchor.capture(rootEl, box)
+      if (pendingReplace) {
+        var noteId = pendingReplace
+        pendingReplace = null
+        setMarking(false)
+        api('region', { id: noteId, region: region, by: author }).then(refresh)
+        return
+      }
+      openDraftCard(region, box)
+    })
+    on(document, 'keydown', function (e) {
+      var tag = document.activeElement && document.activeElement.tagName
+      var typing = tag === 'TEXTAREA' || tag === 'INPUT'
+      if (e.key === 'Escape') {
+        if (dragStart) { if (draftEl && draftEl.parentNode) draftEl.parentNode.removeChild(draftEl); draftEl = null; dragStart = null; return }
+        if (openCardNoteId != null || (cardSlot && cardSlot.firstChild)) { closeCard(); return }
+        if (marking) setMarking(false)
+        return
+      }
+      if (!typing && (e.key === 'm' || e.key === 'M')) setMarking(!marking)
+    })
+    // D4: re-paint the overlay on resize (a state click already calls render() via the existing
+    // stateButtons listener above).
+    on(window, 'resize', renderOverlay)
+  }
+
   var showResolved = false
   var mockNotes = []
   var projectNotes = []
+  // D8: the strip's segmented filter — persisted per browser, defaulting to "Needs you".
+  var filter = 'needsYou'
+  try { filter = localStorage.getItem('nl-filter') || 'needsYou' } catch (e) { filter = 'needsYou' }
 
   // D6/D7/D7′: the project panel now lists every open note, flat — a project-scope row keeps its
   // plain <b> id badge, and so does a mock-scope row EVERYWHERE EXCEPT the project panel itself
@@ -199,17 +589,35 @@
 
   function noteRow(n, isProject) {
     var d = document.createElement('div')
+    // D8: every row (region-carrying or not) gains data-id/data-status — the region-carrying
+    // ones alone also swap the plain id badge for the box's own pill and gain the outdated
+    // footnote; a plain screen+state note (no region) is unchanged from today.
+    var status = regionStatusOf(n)
     d.className = 'n' + (n.status === 'resolved' ? ' done' : '')
+    d.setAttribute('data-id', n.id)
+    d.setAttribute('data-status', status)
     if (isProject && n.scope === 'mock') {
       d.appendChild(mockAnchor(n))
+    } else if (n.region) {
+      d.appendChild(regionBadge(n.id, status))
     } else {
       var idBadge = document.createElement('b'); idBadge.textContent = n.id
       d.appendChild(idBadge)
     }
     var t = document.createElement('span'); t.className = 't'
-    t.innerHTML = esc(n.text) + '<small>' + esc(n.by) + (n.status === 'resolved' ? ' · resolved by ' + esc(n.resolvedBy) : '') + '</small>'
+    var footnote = status === 'outdated'
+      ? 'Outdated — the area it marked is gone.'
+      : esc(n.by) + (n.status === 'resolved' ? ' · resolved by ' + esc(n.resolvedBy) : '')
+    t.innerHTML = esc(n.text) + '<small>' + footnote + '</small>'
     d.appendChild(t)
-    if (n.status !== 'resolved') {
+    if (n.region) {
+      d.style.cursor = 'pointer'
+      d.onclick = function () { openNoteCard(n) }
+      d.addEventListener('mouseenter', function () {
+        var box = boxLayer && boxLayer.querySelector('[data-id="' + n.id + '"]')
+        if (box) { box.classList.add('pulse'); setTimeout(function () { box.classList.remove('pulse') }, 700) }
+      })
+    } else if (n.status !== 'resolved') {
       var resolveBtn = document.createElement('button')
       resolveBtn.className = 'nl-btn'; resolveBtn.textContent = 'Resolve'
       resolveBtn.onclick = function () { api('resolve', { id: n.id, by: author }).then(refresh) }
@@ -358,10 +766,14 @@
   function render() {
     var openMock = mockNotes.filter(isOpenNote).length
     var openProj = projectNotes.filter(isOpenNote).length
+    // D8: the mock-scope bar counter gains a "need you" (addressed) count alongside "open".
+    var needsYou = mockNotes.filter(function (n) { return n.status === 'addressed' }).length
 
     bar.innerHTML = ''
     var badge = document.createElement('span')
-    badge.textContent = (scope === 'project' ? openProj : openMock) + ' open'
+    badge.textContent = scope === 'project'
+      ? openProj + ' open'
+      : openMock + ' open' + (needsYou ? ' · ' + needsYou + ' need you' : '')
     bar.appendChild(badge)
     if (scope === 'project') {
       var addProjBtn = document.createElement('button'); addProjBtn.className = 'nl-btn primary'
@@ -371,6 +783,11 @@
       var addMockBtn = document.createElement('button'); addMockBtn.className = 'nl-btn primary'
       addMockBtn.textContent = '+ Note on this state'; addMockBtn.onclick = composeMock
       bar.appendChild(addMockBtn)
+      // D5: the Mark area toggle — mock scope only, since it draws a box against the mock root.
+      var markBtn = document.createElement('button'); markBtn.className = 'nl-btn' + (marking ? ' on' : '')
+      markBtn.textContent = marking ? 'Marking · Esc to stop' : 'Mark area'
+      markBtn.onclick = function () { setMarking(!marking) }
+      bar.appendChild(markBtn)
     }
     var showBtn = document.createElement('button'); showBtn.className = 'nl-btn'
     showBtn.textContent = showResolved ? 'Hide resolved' : 'Show resolved'
@@ -406,13 +823,46 @@
       upLink.textContent = 'Project notes ↗'
       upLink.href = __base + '/atlas/index.html#nl-notes'
       stripHead.appendChild(upLink)
+      // D8: the segmented filter — Needs you (addressed) · Open · All · Resolved, default Needs
+      // you, stored under nl-filter. Scoped to region-carrying notes only: a plain screen+state
+      // note (no region, predating this spec) keeps its old unconditional visibility so an
+      // existing host's non-region workflow never regresses.
+      var seg = document.createElement('div'); seg.className = 'nl-seg'
+      ;[['needsYou', 'Needs you'], ['open', 'Open'], ['all', 'All'], ['resolved', 'Resolved']].forEach(function (pair) {
+        var segBtn = document.createElement('button')
+        segBtn.textContent = pair[1]
+        segBtn.setAttribute('aria-pressed', filter === pair[0] ? 'true' : 'false')
+        segBtn.onclick = function () {
+          filter = pair[0]
+          try { localStorage.setItem('nl-filter', filter) } catch (e) { /* in-memory only */ }
+          render()
+        }
+        seg.appendChild(segBtn)
+      })
+      stripHead.appendChild(seg)
       strip.appendChild(stripHead)
-      mockNotes.filter(function (n) { return n.state === activeState && (n.kind === 'question' || showResolved || n.status !== 'resolved') })
-        .forEach(function (n) { strip.appendChild(n.kind === 'question' ? questionRow(n, false) : noteRow(n, false)) })
+      var stripRows = mockNotes.filter(function (n) {
+        if (n.state !== activeState) return false
+        if (n.kind === 'question') return true
+        if (!n.region) return showResolved || n.status !== 'resolved'
+        var status = regionStatusOf(n)
+        if (filter === 'resolved') return status === 'resolved'
+        if (filter === 'all') return showResolved || status !== 'resolved'
+        if (filter === 'open') return status === 'open' || status === 'outdated'
+        return status === 'addressed' || status === 'outdated' // needsYou (default)
+      })
+      if (!stripRows.length) {
+        var empty = document.createElement('p')
+        empty.textContent = filter === 'needsYou' ? 'Nothing waiting on you here.' : 'No notes on this state yet. Drag over anything to add one.'
+        strip.appendChild(empty)
+      } else {
+        stripRows.forEach(function (n) { strip.appendChild(n.kind === 'question' ? questionRow(n, false) : noteRow(n, false)) })
+      }
       var stripAdd = document.createElement('button'); stripAdd.className = 'nl-btn'; stripAdd.textContent = '+ Note on this state'
       stripAdd.onclick = composeMock
       strip.appendChild(stripAdd)
     }
+    renderOverlay()
   }
 
   // D5/D6: a page fetches only the list its declared scope owns — a mock page never fetches the

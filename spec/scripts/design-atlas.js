@@ -1852,8 +1852,12 @@ const MIME = {
 // all (never blocks serving a headless fragment). specs/20260905/01 D2: the page declares its
 // own scope (`mock` for a static file, `project` for the derived index) so the notes layer never
 // has to guess it.
+// specs/20260912/11-a-note-can-mark-an-area.md D3: the anchor script tag is emitted BEFORE the
+// notes script tag — notes-layer.browser.js calls into the NotesAnchor global at load, which must
+// already be defined.
 function injectNotesScript(html, scope, prefix) {
   const tag = '<meta name="notes-scope" content="' + scope + '">\n' +
+    '<script src="' + prefix + '/__notes/anchor.js"></script>\n' +
     '<script src="' + prefix + '/__notes/notes.js"></script>\n'
   return insertBeforeBodyEnd(html, tag)
 }
@@ -1979,6 +1983,7 @@ function createRequestHandler(root, opts = {}) {
   const rootAbs = path.resolve(root)
   const designRoot = path.join(rootAbs, 'design') + path.sep
   const notesLibPath = path.join(__dirname, 'lib', 'notes-layer.browser.js')
+  const notesAnchorLibPath = path.join(__dirname, 'lib', 'notes-anchor.browser.js')
   const viewerCssPath = path.join(__dirname, '..', 'templates', 'mocks', 'viewer.css')
   const reviewBrowserPath = path.join(__dirname, 'lib', 'review.browser.js')
   const walkBrowserPath = path.join(__dirname, 'lib', 'walk-mode.browser.js')
@@ -2097,6 +2102,16 @@ function createRequestHandler(root, opts = {}) {
     // ---- /__notes/* (D2) ------------------------------------------------------------------
     if (reqPath === '/__notes/notes.js' && req.method === 'GET') {
       fs.readFile(notesLibPath, (err, data) => {
+        if (err) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end('not found'); return }
+        res.writeHead(200, { 'content-type': 'text/javascript', 'cache-control': 'no-store' })
+        res.end(data)
+      })
+      return
+    }
+    // specs/20260912/11-a-note-can-mark-an-area.md D3: served verbatim like /__notes/notes.js —
+    // injectNotesScript emits this tag BEFORE the notes.js tag, so NotesAnchor is defined first.
+    if (reqPath === '/__notes/anchor.js' && req.method === 'GET') {
+      fs.readFile(notesAnchorLibPath, (err, data) => {
         if (err) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end('not found'); return }
         res.writeHead(200, { 'content-type': 'text/javascript', 'cache-control': 'no-store' })
         res.end(data)
@@ -2271,6 +2286,68 @@ function createRequestHandler(root, opts = {}) {
         try { result = notesLib.answerQuestion(notes, id, { verdict, text: (body && body.text) || '', by }) } catch (e) { jsonRes(res, 400, { error: e.message }); return }
         notesLib.writeNotes(rootAbs, result.notes)
         jsonRes(res, 200, promotedId ? Object.assign({}, result.note, { promoted: promotedId }) : result.note)
+      }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
+      return
+    }
+    // specs/20260912/11-a-note-can-mark-an-area.md D3: POST /__notes/region — the card's
+    // "Re-place the box" control. Refuses (400) a resolved note by name, and refuses (400) a
+    // malformed region; 404 on an unknown id. Threads "re-placed the box" via replaceRegion itself.
+    if (reqPath === '/__notes/region' && req.method === 'POST') {
+      readJsonBody(req).then((body) => {
+        let notes = []
+        try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
+        let result
+        try {
+          result = notesLib.replaceRegion(notes, body && body.id, body && body.region, body && body.by)
+        } catch (e) {
+          jsonRes(res, /^no note with id/.test(e.message) ? 404 : 400, { error: e.message })
+          return
+        }
+        notesLib.writeNotes(rootAbs, result.notes)
+        jsonRes(res, 200, result.note)
+      }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
+      return
+    }
+    // specs/20260912/11-a-note-can-mark-an-area.md D3: POST /__notes/delete — narrow on purpose
+    // (deleteNote's own precondition): an open, kind-less, unreplied note only; everything else
+    // 400s naming the withdraw remedy. 404 on an unknown id.
+    if (reqPath === '/__notes/delete' && req.method === 'POST') {
+      readJsonBody(req).then((body) => {
+        let notes = []
+        try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
+        let result
+        try {
+          result = notesLib.deleteNote(notes, body && body.id)
+        } catch (e) {
+          jsonRes(res, /^no note with id/.test(e.message) ? 404 : 400, { error: e.message })
+          return
+        }
+        notesLib.writeNotes(rootAbs, result.notes)
+        jsonRes(res, 200, { deleted: body && body.id })
+      }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
+      return
+    }
+    // specs/20260912/11-a-note-can-mark-an-area.md D3: POST /__notes/reopen on the SESSION mount
+    // (today client-only via /client/__notes/reopen below) — the card's Reject control. Its own
+    // message set is distinct from the client route's: 400 naming the exact precondition it
+    // failed, never the client route's wording. Never touches the client mount (clientRoute guard
+    // on the sibling block below is unchanged).
+    if (reqPath === '/__notes/reopen' && req.method === 'POST' && !clientRoute) {
+      readJsonBody(req).then((body) => {
+        const id = body && body.id
+        const text = String((body && body.text) || '').trim()
+        let notes = []
+        try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
+        const target = notes.find((n) => n.id === id)
+        if (!target) { jsonRes(res, 404, { error: 'no note with id "' + id + '"' }); return }
+        if (target.status !== 'addressed') {
+          jsonRes(res, 400, { error: 'a note is rejected only while addressed' })
+          return
+        }
+        if (!text) { jsonRes(res, 400, { error: 'say what is still wrong — text must be non-empty' }); return }
+        const result = notesLib.reopenNote(notes, id, { text, by: (body && body.by) || 'session' })
+        notesLib.writeNotes(rootAbs, result.notes)
+        jsonRes(res, 200, result.note)
       }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
       return
     }

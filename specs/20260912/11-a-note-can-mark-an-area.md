@@ -1,6 +1,7 @@
 ---
 date: 2026-09-12
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: design-mocks
 design: false
@@ -11,6 +12,7 @@ depended_on_by: [specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md]
 brief: n/a
 spiked: 2026-09-12
 open_markers: 0
+diff_base: 6fc70704bf04298ab68087b714000f7344493b5c
 ---
 
 # A note can mark an area
@@ -44,7 +46,7 @@ reference for how it looks.
 | D8 | **The strip learns status.** Each `.n` row gains the same badge pill as its box and a `data-status`; the header gains a segmented filter `Needs you` (addressed) · `Open` · `All` · `Resolved`, default `Needs you`, stored under `nl-filter`; hovering a row pulses its box, clicking a row scrolls to the box and opens the card. An outdated row's `<small>` opens with `Outdated — the area it marked is gone.`; a row whose box resolved in `children` mode appends `· fitted to content on this size`. The bar's `N open` badge becomes `N open · M need you` (AC-20260912-11-11) | "Needs you" as the return view is the single biggest usability win the research found, and the two footnotes are how the owner learns the anchor's honesty without reading a spec |
 | D9 | **Colors and glyphs come from the register.** `viewer.css` gains the `.nl-region`, `.nl-region-badge`, `.nl-region-glyph`, `.nl-draft`, `.nl-card*`, `.nl-seg`, `.nl-toast` rules, written on `var(--v-danger)` (open), `var(--v-warn)` (addressed), `var(--v-ok)` (resolved), `var(--v-muted)` (outdated/withdrawn) via a per-box `--c`; each glyph is a shape as well as a color — hollow ring open, half-filled addressed, filled resolved, dashed ring outdated. No literal color outside `:host,:root`. The rules are authored from `design/chrome-mocks/notes.html` (D10) `[no-ac: appearance is design-stage exempt; reachability is pinned by AC-20260912-11-10/-11]` | Color alone fails one reader in twelve; the register is the only place a color may live (design.md § Design Canon) |
 | D10 | **`design/chrome-mocks/notes.html` is the binding reference**, landed by the planning session from the owner-approved prototype (2026-09-12) — a self-contained static page carrying a fake booking screen, the bar, the overlay with one box per display status, the card in both variants, the strip, and a desktop/phone switch. `spec/doctrine/design.md` § Design Canon's plugin-chrome sentence gains `, and the notes layer to design/chrome-mocks/notes.html` inside its existing artifact clause. Workers read it and do not edit it (AC-20260912-11-15) | The same mechanism specs/20260912/05 and /06 gave the atlas and the review page; a layer with no artifact is how 54 specs drifted |
-| D11 | **Doctrine reverses one paragraph.** `spec/doctrine/mocks.md` § Mocks: Page Notes' `**Two scopes, never an element.**` paragraph is REPLACED by `**Two scopes, and a note may mark an area.**` — screen+state or project as before, plus an optional `region` on a mock-scope note: the box as fractions of its smallest containing element with the covered children as the reflow fallback, drawn by the layer, never by the mock, and shown as `outdated` (never moved, never guessed) when it no longer resolves. `docs/adr/0019-a-note-can-mark-an-area.md` records the reversal (Applies to specs/20260902/10 D3's anchor clause and its Rationale sentence); specs/20260902/10 gains the `Amended by` backlink (AC-20260912-11-15) | The old rule's stated reason — "brittle across redraws" — is exactly what D1's `outdated` state answers: a lost anchor degrades visibly instead of pointing wrong. Reversing a recorded decision needs a record, not a quiet edit (docs/roadmap amendment rule) |
+| D11 | **Doctrine reverses one paragraph.** `spec/doctrine/mocks.md` § Mocks: Page Notes' `**Two scopes, never an element.**` paragraph is REPLACED by `**Two scopes, and a note may mark an area.**` — screen+state or project as before, plus an optional `region` on a mock-scope note: the box as fractions of its smallest containing element with the covered children as the reflow fallback, drawn by the layer, never by the mock, and shown as `outdated` (never moved, never guessed) when it no longer resolves. `docs/adr/0020-a-note-can-mark-an-area.md` records the reversal (Applies to specs/20260902/10 D3's anchor clause and its Rationale sentence); specs/20260902/10 gains the `Amended by` backlink (AC-20260912-11-15) | The old rule's stated reason — "brittle across redraws" — is exactly what D1's `outdated` state answers: a lost anchor degrades visibly instead of pointing wrong. Reversing a recorded decision needs a record, not a quiet edit (docs/roadmap amendment rule) |
 | D12 | Plugin bump via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` `[no-ac: `--check` in the gate is the oracle]` | Version discipline from .claude/rules/spec-pipeline.md § Planning |
 
 ## File Plan
@@ -59,8 +61,8 @@ reference for how it looks.
 | design/chrome-mocks/notes.html | CREATE | doctrine | D10 the approved prototype as the binding reference — landed by the planning session; workers leave it |
 | spec/doctrine/design.md | MODIFY | doctrine | D10 § Design Canon plugin-chrome sentence names `design/chrome-mocks/notes.html` |
 | spec/doctrine/mocks.md | MODIFY | doctrine | D11 § Mocks: Page Notes paragraph replaced |
-| docs/adr/0019-a-note-can-mark-an-area.md | CREATE | doctrine | D11 amendment ADR — Applies to specs/20260902/10 D3 anchor clause + Rationale sentence |
-| specs/20260902/10-page-notes-review-loop.md | MODIFY | doctrine | D11 `Amended by: docs/adr/0019-a-note-can-mark-an-area.md` backlink under D3 |
+| docs/adr/0020-a-note-can-mark-an-area.md | CREATE | doctrine | D11 amendment ADR — Applies to specs/20260902/10 D3 anchor clause + Rationale sentence |
+| specs/20260902/10-page-notes-review-loop.md | MODIFY | doctrine | D11 `Amended by: docs/adr/0020-a-note-can-mark-an-area.md` backlink under D3 |
 | tests/mocks/notes-anchor.test.js | CREATE | tests | AC-20260912-11-1, -2, -3 — fake-DOM fixtures over the DOM interface `capture`/`resolve` read |
 | tests/mocks/notes-region-store.test.js | CREATE | tests | AC-20260912-11-4, -5, -6, -7, -8, -9 — lib + served routes |
 | tests/mocks/notes-layer-region.test.js | CREATE | tests | AC-20260912-11-10, -11, -13, -14 `[env: CHROME_BIN]` via tests/mocks/chrome-harness.js |
@@ -235,9 +237,9 @@ Status enum unchanged; `outdated` is DERIVED in the browser from `resolve() === 
   reads `status:"open"` with `wrong clinic` in `thread` → writes tests/mocks/notes-layer-region.test.js
 - **AC-20260912-11-15**: WHEN the tree is read THE SYSTEM SHALL have `spec/doctrine/mocks.md`
   containing `and a note may mark an area` and NOT containing `never an element`; `spec/doctrine/design.md`
-  containing `design/chrome-mocks/notes.html`; `docs/adr/0019-a-note-can-mark-an-area.md` existing with
+  containing `design/chrome-mocks/notes.html`; `docs/adr/0020-a-note-can-mark-an-area.md` existing with
   `Applies to: specs/20260902/10-page-notes-review-loop.md`; `specs/20260902/10-page-notes-review-loop.md`
-  containing `Amended by: docs/adr/0019-a-note-can-mark-an-area.md`; and `design/chrome-mocks/notes.html`
+  containing `Amended by: docs/adr/0020-a-note-can-mark-an-area.md`; and `design/chrome-mocks/notes.html`
   existing and containing `nl-region` → writes tests/mocks/notes-region-doctrine.test.js
 
 ## Assumptions (escalation triggers)
@@ -275,7 +277,7 @@ the one the prototype proved: the rectangle is the truth, the smallest containin
 ruler, fractions give the exact shape wherever the layout is unchanged, and the covered children give
 a tight outline wherever it reflowed. Where even that fails, the note says `outdated` and offers
 re-place; it never floats to a wrong spot, which is the failure the old "never an element" rule was
-written against (docs/adr/0019).
+written against (docs/adr/0020).
 
 Two alternatives were rejected. Plain drag with no mode: it must arbitrate with the mock's own scroll
 and text selection on every host mock, and the owner approved the toggle. A server-side undo: the

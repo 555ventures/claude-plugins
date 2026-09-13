@@ -20,6 +20,10 @@ const { findChrome, serve, withChrome } = require('./chrome-harness')
 // styles. The executed pin is environment-gated on a Chrome binary (CHROME_BIN, else the macOS
 // bundle, else `google-chrome`/`chromium` on PATH) and skips with the reason named when none is
 // found — the static pin never skips.
+//
+// AC-20260912-11-12 (specs/20260912/11-a-note-can-mark-an-area.md D4): the layer gains a third
+// shadow host, the overlay, mounted on every mock-scope page alongside the existing bar and strip
+// hosts — the executed pin's host count below moves from 2 to 3. `?clean` still carries none.
 
 const LIB = path.join(SPEC, 'scripts/lib/notes-layer.browser.js')
 const VIEWER = path.join(SPEC, 'templates/mocks/viewer.css')
@@ -77,7 +81,8 @@ test('notes layer (executed, headless Chrome): a served dark mock computes ident
       const injected = await evalAt(base)
       assert.strictEqual(clean.hosts, 0, '?clean must carry no layer at all: ' + JSON.stringify(clean))
       assert.strictEqual(clean.bodyBg, 'rgb(17, 17, 17)', 'the probe mock itself must render dark, else the pin proves nothing: ' + JSON.stringify(clean))
-      assert.strictEqual(injected.hosts, 2, 'the served page must carry the layer (bar host + strip host): ' + JSON.stringify(injected))
+      assert.strictEqual(injected.hosts, 3,
+        'AC-20260912-11-12: the served page must carry exactly three .nl-host elements (bar host + strip host + the D4 overlay host): ' + JSON.stringify(injected))
       assert.strictEqual(injected.headLinks, clean.headLinks, 'the layer must add no <link> to the served document\'s <head>: ' + JSON.stringify(injected))
       assert.deepStrictEqual(
         { bodyBg: injected.bodyBg, bodyColor: injected.bodyColor, boxSizing: injected.boxSizing, boxWidth: injected.boxWidth },

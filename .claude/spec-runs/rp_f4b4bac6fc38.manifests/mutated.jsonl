@@ -1,0 +1,10 @@
+{"leg":"reconcile","exit":3,"observed":{"outOfPlan":18,"files":["design/chrome-mocks/atlas.html","docs/adr/0013-client-rehearses-the-journey.md","docs/adr/0016-a-screen-appears-on-the-atlas-once.md","docs/adr/0017-the-register-is-the-whole-shadcn-set.md","docs/canonical/design.md","spec/commands/mocks.md","spec/doctrine/design.md","spec/doctrine/mocks.md","spec/scripts/design-atlas.js","spec/scripts/lib/wire-roles.js","spec/scripts/mocks-driver.js","spec/templates/mocks/viewer.css","spec/templates/mocks/wire-tokens.css","spec/templates/mocks/wire.css","tests/design-atlas.test.js","tests/mocks/atlas-card-height.test.js","tests/mocks/mocks-driver-fixtures.js","tests/mocks/wire-register.test.js"]},"scope":"full"}
+{"leg":"ci","exit":0,"observed":{"unavailable":"no-adapter"},"scope":"full"}
+{"leg":"gate","exit":0,"observed":{"skips":0,"todos":0,"testsExecuted":272},"scope":"full"}
+{"leg":"suite","exit":0,"observed":{"skips":0,"todos":0,"testsExecuted":1119},"scope":"full"}
+{"leg":"tests","exit":0,"observed":{"count":1093,"dispositions":{"writes":3,"rewrites":0,"reuses":1}},"scope":"full"}
+{"leg":"patterns","exit":0,"observed":{"matches":10},"scope":"full"}
+{"leg":"at-risk","exit":0,"observed":{"files":26,"testsExecuted":294},"scope":"full"}
+{"leg":"smoke","exit":4,"observed":{"result":"inert"},"scope":"full"}
+{"leg":"ac-matrix","exit":1,"observed":{"uncovered":1,"oracle":0,"preGreen":0}}
+{"leg":"skip-reconcile","exit":0,"observed":{"skipped":0,"sanctioned":0}}

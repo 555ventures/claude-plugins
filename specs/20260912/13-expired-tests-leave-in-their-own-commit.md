@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: hardened
+status: done
 tier: standard
 area: review-close
 design: false
@@ -10,6 +10,8 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-12
 open_markers: 0
+build_base: main
+diff_base: 87049cf31dfa9aecb6a8782da8c90fc2040e3f61
 ---
 
 # Expired tests leave in their own commit
@@ -263,6 +265,19 @@ merge like any other overlap. The sweep's `executes` leg was read rather than wa
 of its eleven driver-spawning files and the ten files that actually reach `--mark closed` is the
 set A1 grepped, and the seven that spawn the driver without ever marking closed cannot observe the
 added commit at all.
+
+Folded from the build's deviations sidecar (one-off): AC-20260912-13-6's test was green before the
+change rather than red, and deliberately so. `--mark closed` made no commit at all under the
+pre-image, so "HEAD byte-identical across a close that retires nothing" already held; the criterion
+pins the *absence* of D5's commit on the collapsed path and only becomes a live regression guard
+once D5 lands. It is a sanctioned green-pre-change pin, not a stale-assumption block.
+
+A1's watch item did bite, in the predicted shape but on a fixture rather than a rehearsal: the
+expiry fixture host carries no `.gitignore`, so its broad `git add -A` tracked the driver's
+`.review/` sidecar — something no real host does, since hosts exclude `specs/**/*.review/`. The
+first fix attempt bent the driver's terminal state with a tracked-sidecar special case no Decision
+authorises. It was reverted and the fixture was given the `.gitignore` a real host has. The rule
+the episode restates: when a test fails on state no real host produces, the fixture is the defect.
 
 The watch item during execution is the fixture blast radius in A1: this is the same class the host
 Gotchas file records as "a Decision that makes an existing step WRITE something strands every

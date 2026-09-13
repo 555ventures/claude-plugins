@@ -15,6 +15,9 @@ diff_base: b8673741aaa1713b7ab91b7fc68338a5cf85da4a
 
 # Tests expire at close
 
+Amended by: ADR-0020 (specs/20260912/13-expired-tests-leave-in-their-own-commit.md narrows D5's
+`--apply` clause and replaces D6 in full — see the ADR's Applies to)
+
 ## Goal
 
 A spec's tests die when the spec does. When `/spec:review` flips a spec to `done`, every test

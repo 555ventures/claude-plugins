@@ -10,7 +10,8 @@ const { tmpdir, runNode, ROOT } = require('../helpers')
 // classifies every AC-tagged test in a done spec's scope as class/invariant/pin/open/retired,
 // deletes only the retired ones under --apply without disturbing a byte of any neighbour, and at
 // HEAD over this repository itself reports nothing retirable (the 2026-09-11 hand sweep already
-// covers it).
+// covers it). specs/20260912/13-expired-tests-leave-in-their-own-commit.md D1, AC-20260912-13-1:
+// a dry run must classify `emptied` the same way an --apply run would, writing nothing.
 
 const CLASSIFY_SPEC_REL = 'specs/20260911/50-closing.md'
 
@@ -118,7 +119,7 @@ const CLASSIFY_KEPT_FILES = [
   'tests/kept-open.test.js', 'tests/untagged.test.js',
 ]
 
-test('AC-20260911-03-3: WHEN expire-tests.js --spec <done spec> --json runs (dry run) over a fixture host holding one test per outcome THE SYSTEM classifies 5 tagged tests as kept.class:1, kept.invariant:1, kept.pin:1, kept.open:1 and exactly one retired, leaves every file byte-identical, and reports applied:false', () => {
+test('AC-20260911-03-3 / AC-20260912-13-1: WHEN expire-tests.js --spec <done spec> --json runs (dry run) over a fixture host holding one test per outcome THE SYSTEM classifies 5 tagged tests as kept.class:1, kept.invariant:1, kept.pin:1, kept.open:1 and exactly one retired, reports the retired test\'s now-would-be-empty file under emptied exactly as an --apply run would, leaves every file byte-identical, and reports applied:false', () => {
   const root = makeClassifyHost('expiry-dry')
   const before = {}
   for (const f of CLASSIFY_KEPT_FILES.concat(['tests/old/gone.test.js'])) {
@@ -136,11 +137,16 @@ test('AC-20260911-03-3: WHEN expire-tests.js --spec <done spec> --json runs (dry
     JSON.stringify(out.kept))
   assert.strictEqual(out.retired.length, 1,
     'D3: exactly the plain test with no keep clause must be reported retired: ' + JSON.stringify(out.retired))
+  assert.ok(out.emptied.includes('tests/old/gone.test.js'),
+    'D1: a dry run must run the same in-memory span-removal and blank-run-collapse pass an --apply would and ' +
+    'push the file left with zero scanCalls hits onto emptied — a close reading emptied before it applies must ' +
+    'see the true count, not an always-empty array: ' + JSON.stringify(out.emptied))
   assert.strictEqual(out.applied, false, 'a dry run (no --apply) must never report applied:true: ' + JSON.stringify(out))
 
   for (const f of CLASSIFY_KEPT_FILES.concat(['tests/old/gone.test.js'])) {
     assert.strictEqual(fs.readFileSync(path.join(root, f), 'utf8'), before[f],
-      'a dry run must never write to disk — ' + f + ' changed: ' + JSON.stringify({ before: before[f] }))
+      'D1: emptied must be classified WITHOUT writing to disk — a dry run reporting the file under emptied ' +
+      'must still leave it byte-identical — ' + f + ' changed: ' + JSON.stringify({ before: before[f] }))
   }
 })
 

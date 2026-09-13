@@ -172,17 +172,18 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     from the server rather than choosing one (a host may wrap this in a shared test helper).
 20. **Expiry readiness** (deterministic, advisory) — two derivations, both run every time:
     (a) `node "$(spec-paths test-expiry)" --root . --all-done` (dry run) reports
-    `expired tests present: N in M files` (or `none`), naming each file. Remedy = the same
-    command with `--apply`, run only after one `AskUserQuestion` naming the count and the
-    files it will delete — never under `--fix`'s line-item path and never silently.
+    `expired tests present: N in M files` (or `none`), naming each file. This is the only
+    deletion path there is: the same command with `--apply`, run only after one
+    `AskUserQuestion` naming the count and the files it will delete — never under `--fix`'s
+    line-item path and never silently.
     (b) `node "$(spec-paths coverage-scope)" --root .` names each host file that parses
     acceptance-criterion ids alongside a `done` status yet never mentions `SHALL CONTINUE TO`.
-    A check demanding a carrier for every AC of a done spec contradicts close-time expiry and
-    deadlocks every close — the close deletes those tests, then the gate re-run calls the
-    just-closed spec's criteria uncovered. Remedy = scope the named check's carriers to specs
-    that are not `done` (grounding contract § Test expiry). A hit is a file to read, never a
-    verdict; run (b) even when (a) reports `none`, because the deadlock is a property of the
-    gate, not of today's retirable count.
+    A check demanding a carrier for every AC of a done spec contradicts close-time expiry: once
+    a sweep actually runs, that check goes red for every retired criterion of a done spec and
+    stays red, with no path forward short of rescoping it. Remedy = scope the named check's
+    carriers to specs that are not `done` (grounding contract § Test expiry). A hit is a file to
+    read, never a verdict; run (b) even when (a) reports `none`, because the hazard is a
+    property of the gate, not of today's retirable count.
 
 ## Semantic spot-check — small, bounded
 

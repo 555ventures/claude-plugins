@@ -69,18 +69,23 @@ manifest before stamping.
 
 ## Test expiry (required)
 
-A spec's tests die when the spec does. At review close the plugin deletes every test tagged with
-the closing spec's own AC-IDs, keeping only a test that cites a ledger
-escape class, exercises a script the pipeline itself runs, or pins an AC bullet carrying
-`SHALL CONTINUE TO` — the opt-in permanence marker. The host obligation follows from that:
+A spec's tests are classified at close, deleted only by a deliberate sweep. At review close the
+plugin runs `expire-tests.js` in dry-run mode over every test tagged with the closing spec's own
+AC-IDs, reporting which are retirable — a test that cites a ledger escape class, exercises a
+script the pipeline itself runs, or pins an AC bullet carrying `SHALL CONTINUE TO` (the opt-in
+permanence marker) stays kept. Close writes nothing to the tree, and `--mark closed` writes
+nothing either. The one path that deletes a test is
+`node "$(spec-paths test-expiry)" --root . --all-done --apply`, run deliberately after review, on
+one host at a time, never by the close itself. The host obligation follows from that:
 
 - **A check that requires a test carrier per acceptance criterion scopes its carriers to specs
   that are NOT `done`.** A `done` spec owes a carrier only for a criterion whose bullet says
-  `SHALL CONTINUE TO`; every other criterion of a done spec expired at close. This is exactly the
-  rule the plugin's own `ac-drift.js` applies repo-wide (`/spec:doctor` check 17).
-- A host check that demands a carrier for **every** AC of a done spec deadlocks every close: the
-  close deletes the tests, then `--mark closed` re-runs the host gate over that tree, which reports
-  the just-closed spec's criteria uncovered and refuses the close with no path forward.
+  `SHALL CONTINUE TO`; every other criterion of a done spec is retirable once classified. This is
+  exactly the rule the plugin's own `ac-drift.js` applies repo-wide (`/spec:doctor` check 17).
+- A host check that demands a carrier for **every** AC of a done spec goes red once the
+  deliberate sweep actually runs, and stays red: the sweep deletes the retirable tests, so a
+  check expecting a carrier for every criterion of a done spec finds none for the ones it
+  retired, with no path forward short of rescoping the check.
 - Relabelling a criterion `SHALL CONTINUE TO` to satisfy such a check is never the remedy — that
   phrase pins pre-existing behavior a spec must not break, never behavior the spec introduces.
 

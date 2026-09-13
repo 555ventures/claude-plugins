@@ -656,3 +656,27 @@ test('an [env:]-tagged AC whose suite genuinely fails against the pre-image stay
   assert.deepStrictEqual(out.findings, [],
     `an expected-red file observed red matches — no finding of any class belongs here: ${JSON.stringify(out.findings)}`)
 })
+
+// Field incident (salon-os, review run rv_eebf17f207bd): the same double-quote substitution defect
+// already hardened in runFilteredLeg was still live in runLeg, where the substituted value is the
+// FILE PATH. A host on file-based routing (TanStack: `customers.$memberId.note-role.test.tsx`) had
+// `$memberId` expanded away by bash, so the leg ran against a path that does not exist, exited
+// non-zero, and a passing sanctioned-green file was reported as a hard `broken-pin`.
+test('a sanctioned-green test file whose name carries a `$` segment runs against its real path and reports no finding', () => {
+  const { dir, base } = newHost('rcdollar')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  const rel = 'tests/customers.$memberId.note-role.test.js'
+  fs.writeFileSync(path.join(dir, rel),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260821-95-1: a passing pin under a $-bearing route filename', () => { assert.ok(true) })\n")
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260821-95-1**: WHEN x THE SYSTEM SHALL CONTINUE TO y → ' + rel],
+    ['| ' + rel + ' | CREATE | tests | sanctioned pin whose filename carries a shell-expandable segment |']))
+  const res = run(spec, dir, base, ['--json'])
+  const out = findings(res)
+  assert.deepStrictEqual(out.findings, [],
+    `the file passes its own run — a finding here means bash ate the \`$memberId\` segment and the leg targeted a path that does not exist, turning a green pin into a hard broken-pin: ${JSON.stringify(out.findings)}`)
+  assert.strictEqual(res.status, 0,
+    `exit 0 is the whole point: a host whose test filenames carry route params must not have every one of them reported as a failed sanctioned pin (stderr: ${res.stderr})`)
+})

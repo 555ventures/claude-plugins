@@ -280,3 +280,32 @@ test('AC-20260823-07-7: WHEN a committed deviations sidecar is unlinked from dis
   assert.ok((r.stdout + r.stderr).includes(relDeviations),
     'the dirty-tree refusal must name the sidecar\'s relative path among the unexpected paths, exactly like any other unexpected dirty path — the fold-completeness backstop must never carve deviations paths out of the pre-existing dirty-tree guard: ' + r.stdout + r.stderr)
 })
+
+// Field report (2026-09-12): the refusal named WHICH lines were malformed but never the rule, so a
+// session repairs the sidecar by trial. The rule the refusal states must be the parser's own — an
+// indented line is a continuation only while its bullet is still open, and a blank line closes the
+// bullet, so an indented line after a blank is malformed even though it is not flush-left.
+test('WHEN --mark closed is refused for malformed deviations lines THE SYSTEM states the entry grammar itself, and the grammar it states matches the parser for an indented line whose bullet a blank line already closed', () => {
+  const fixture = '# Deviations — grammar\n' +
+    '- a real bullet\n' +
+    '\n' +
+    '  indented, but its bullet was closed by the blank line above\n'
+  const host = makeHost({ deviations: fixture, specName: '08-dev-grammar-stated', acId: 'AC-20260823-97-8' })
+  walkToClose(host)
+
+  const marks = JSON.parse(fs.readFileSync(path.join(host.sidecar, 'review-state.json'), 'utf8'))
+  assert.deepStrictEqual(marks.deviations.malformed.map(m => m.line), [4],
+    'line 4 is malformed by the parser\'s own predicate — a blank line closes the bullet above it, so the indented line that follows continues nothing. A refusal may only state a rule the parser actually applies: ' + JSON.stringify(marks.deviations))
+
+  fs.rmSync(host.deviationsPath, { force: true })
+  const r = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(r.status, 2,
+    'the malformed line must still refuse the close: ' + r.stdout + r.stderr)
+  const out = r.stdout + r.stderr
+  assert.match(out, /well-formed only if it is blank, a `#` heading, a `- ` bullet, or an INDENTED continuation/,
+    'the refusal must lead with the grammar itself — naming only the offending lines leaves the session to rediscover the rule by repeated failed marks, which is the field defect this pins: ' + out)
+  assert.match(out, /blank line and a heading each close/,
+    'the stated grammar must include the closing rule, or a session repairing an indented-after-blank line reads the rule as permitting exactly what the parser rejects: ' + out)
+  assert.match(out, /^4: {3}indented, but its bullet was closed by the blank line above$/m,
+    'the offending lines must still be printed after the rule — stating the grammar must not displace the evidence: ' + out)
+})

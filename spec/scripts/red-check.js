@@ -261,11 +261,17 @@ const sanctionedById = new Map(wellFormed.map(b => [b.id, isSanctioned(b)]))
 // ---- D2: `{testCommand} <file>` (+ `{typecheckCommand} <file>` when declared) — exit codes only,
 // runner output is never parsed. NODE_TEST_CONTEXT is scrubbed so a nested `node --test` leg
 // behaves as a fresh top-level runner even when red-check.js itself runs inside one.
-
+//
+// `relPath` is substituted via `shellQuoteSingle` for the reason its own comment gives below —
+// the same substitution defect was found and fixed in `runFilteredLeg` and left standing here,
+// where the value at risk is the FILE PATH rather than the test title: a framework whose route
+// files carry a `$` segment (TanStack file routes, `customers.$memberId.note-role.test.tsx`) had
+// `$memberId` expanded away by bash, so the leg ran against a path that does not exist, exited
+// non-zero, and reported a passing sanctioned-green file as a hard `broken-pin`.
 function runLeg(cmd, relPath) {
   const env = { ...process.env }
   delete env.NODE_TEST_CONTEXT
-  const res = spawnSync('bash', ['-c', `${cmd} ${JSON.stringify(relPath)}`], { cwd: root, env, stdio: 'ignore' })
+  const res = spawnSync('bash', ['-c', `${cmd} ${shellQuoteSingle(relPath)}`], { cwd: root, env, stdio: 'ignore' })
   return res.status === null ? 1 : res.status
 }
 

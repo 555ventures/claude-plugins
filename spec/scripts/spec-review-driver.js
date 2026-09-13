@@ -489,8 +489,15 @@ observeDeviations()
 // Shared "<line>: <text>" renderer for both `closed` refusals (Contracts: "first 10, then `… and N
 // more`") — bare lines, no leading indentation, so a caller printing them straight (the refusal
 // messages) gets one evidence line per line-of-file; CLOSE's own enumeration below indents it.
+// The grammar itself leads the evidence: a refusal that names only WHICH lines are malformed
+// leaves the session to rediscover the rule by trial (field report, 2026-09-12). The rule is
+// observeDeviations()'s own predicate, stated once here for both refusals.
 function malformedLines(malformed) {
-  const shown = malformed.slice(0, 10).map((m) => m.line + ': ' + m.text)
+  const shown = ['a line is well-formed only if it is blank, a `#` heading, a `- ` bullet, or an ' +
+    'INDENTED continuation of a bullet that is still open — a blank line and a heading each close ' +
+    'the bullet above them, so an indented line that does not sit directly under its bullet is ' +
+    'malformed, as is any flush-left prose:']
+  for (const m of malformed.slice(0, 10)) shown.push(m.line + ': ' + m.text)
   if (malformed.length > 10) shown.push('… and ' + (malformed.length - 10) + ' more')
   return shown
 }

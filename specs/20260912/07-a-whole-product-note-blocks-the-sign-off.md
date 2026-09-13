@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: hardened
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -11,6 +11,7 @@ depended_on_by: []
 brief: n/a
 build_base: main
 open_markers: 0
+diff_base: 1c97c4cd5d030d09002d5c92b0f671b6893647e7
 ---
 
 # A whole-product note blocks the sign-off, not every journey
@@ -35,9 +36,12 @@ decision this overturns carries an amendment record.
 | D2 | **`review.browser.js`'s re-derivation matches.** `recount()` keeps `openTotal` as it is (every open row, which is what the header total and the rail counts are), and gates the approve button on a second counter, `openScoped` — rows carrying a `data-label`. The disabled title is built from `openScoped` (AC-20260912-07-1) | The browser recomputes the gate on every answer; if it recomputed the old rule the button would re-disable itself one keystroke after the server enabled it |
 | D3 | **When the journey is clean but the product is not, the page says so.** With an open stop, zero open scoped items and one or more open project items, `renderHeader` renders, inside the approve block and after the enabled control, `<p class="rv-projwait" data-rv="projwait"><n> whole-product note(s) still block sign-off</p>`; `review.browser.js`'s `recount()` shows and hides it on the same two counters. With no open project items the element is absent from the served bytes entirely (AC-20260912-07-2) | .claude/rules/spec-pipeline.md § Planning: a control whose only success signal is the control enabling has no sentence. Approving a journey while the product is still blocked is a real state, and an owner who is not told will meet the refusal later, at sign-off, with no memory of why |
 | D4 | **The driver's project-note refusal moves to the sign-off.** `mocks-driver.js`'s `requireNotesResolved(labels, journeyName)` loses its leading open-project check; that check becomes `requireProjectNotesResolved()`, with the message unchanged byte-for-byte (`project note(s) open: <ids> — answer the project note first`), called from `handleApproved()` only — immediately before its existing `requireNotesResolved(allDeclaredLabels(), null)`, preserving today's ordering and message precedence at that mark. `handleJourneyApproved` calls `requireNotesResolved` alone (AC-20260912-07-3, AC-20260912-07-4) | The page must never enable a button the command line then refuses. The `approved` mark already gathers every other product-wide precondition — every journey approved, every client walk closed, the render gate, the matrix check — and this belongs beside them |
-| D5 | `docs/adr/0018-a-whole-product-note-blocks-the-sign-off.md` is CREATED with two `Applies to:` clauses: (a) **specs/20260902/10-page-notes-review-loop.md** D5 and AC-20260902-10-6 — "`journey-approved` … refuse while any project note is not `resolved` (naming it first)" is narrowed to "`approved` refuses while any project note is not `resolved`"; `approved`'s own rule and the per-journey unresolved-note rule are unchanged; (b) **specs/20260906/04-journey-review-page.md** D5 — "disabled with title `<k> open item(s) block approval` while any question is unanswered or any note unresolved" is narrowed to "…while any question or note **on this journey's screens** is unanswered or unresolved". Each amended spec gains one `Amended by: ADR-0018` line and neither is rewritten `[no-ac: an accepted record plus its backlink — prose the review stage's citations-check reads; no script in this repo adjudicates ADR shape, by the standing "ADR Applies-to integrity: watch, not work" ruling (0/41 dangling measured 2026-09-08; build the checker at dangling-reference:3)]` | Both are locked decisions in closed specs, one of them with its own AC. ADR-0015 is the model. specs/20260906/04 will then carry two `Amended by` lines (ADR-0017 from specs/20260912/06, ADR-0018 from here) — the precedent is ADR-0010's own backlink set |
+| D5 | `docs/adr/0019-a-whole-product-note-blocks-the-sign-off.md` is CREATED with three `Applies to:` clauses: (a) **specs/20260902/10-page-notes-review-loop.md** D5 and AC-20260902-10-6 — "`journey-approved` … refuse while any project note is not `resolved` (naming it first)" is narrowed to "`approved` refuses while any project note is not `resolved`"; `approved`'s own rule and the per-journey unresolved-note rule are unchanged; (b) **specs/20260906/04-journey-review-page.md** D5 — "disabled with title `<k> open item(s) block approval` while any question is unanswered or any note unresolved" is narrowed to "…while any question or note **on this journey's screens** is unanswered or unresolved". ; (c) **specs/20260912/06-the-review-page-answers-to-a-design.md** AC-20260912-06-2 — its second clause, "the header's approve-block title SHALL CONTINUE TO name the same total it counts (`3 open items block approval`)", is narrowed to "…the same **journey-scoped** total it counts (`2 open items block approval` on that fixture)"; the invariant that the title names the total the page computed is unchanged, and the rail-row half of the AC is untouched. Each amended spec gains one `Amended by: ADR-0019` line and none is rewritten `[no-ac: an accepted record plus its backlink — prose the review stage's citations-check reads; no script in this repo adjudicates ADR shape, by the standing "ADR Applies-to integrity: watch, not work" ruling (0/41 dangling measured 2026-09-08; build the checker at dangling-reference:3)]` | Both are locked decisions in closed specs, one of them with its own AC. ADR-0015 is the model. specs/20260906/04 will then carry two `Amended by` lines (ADR-0018 from specs/20260912/06, ADR-0019 from here) — the precedent is ADR-0010's own backlink set |
 | D6 | `design/chrome-mocks/review.html` (created by specs/20260912/06 D1) gains the D3 line in its approve block, so the binding artifact still shows what the page renders `[no-ac: a reference file; the served rendering is pinned by AC-20260912-07-2]` | design.md § Design Canon: the mock is the design. A spec that adds a visible element to a bound surface and leaves the artifact behind re-opens the gap specs/20260912/05 and /06 exist to close — this row is the first proof the binding actually works |
 | D7 | `spec/.claude-plugin/plugin.json` bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` `[no-ac: plugin-bump.js --check is the oracle]` | Version discipline (.claude/rules/spec-pipeline.md § Planning) |
+| D8 | **This spec's ADR is numbered 0019, not 0018.** `docs/adr/0018-the-review-page-departs-from-its-spec.md` was created by specs/20260912/06 (this spec's `depends_on`) and already carries a backlink from specs/20260906/04, so D5's number was stale the moment it was locked. The ruling D5 records is unchanged; only its file name and the two backlink literals move to `ADR-0019` `[no-ac: a number, not a promise — D5's own `[no-ac]` reasoning carries]` | Session ruling, 2026-09-12 build, on the doctrine worker's `blocked` return. Two different records answering to one number is exactly the ambiguity the backlink is for |
+| D9 | **AC-20260912-06-2's title clause is amended, not worked around.** That pin asserts the approve title names `isOpen()`'s total across mock *and* project items (`3` on its fixture) — the exact rule D1 overturns. Its `tests/mocks/review-page.test.js` case is updated to count mock-scope items only (`2` on that fixture), keeping its own stated invariant ("the title names the same total the page computed") and leaving its rail-row assertions untouched; D5 gains clause (c) and specs/20260912/06 gains the backlink `[no-ac: the new rule is already pinned terminally by AC-20260912-07-1; this row is the retired assertion's disposition]` | Session ruling, 2026-09-12 build, on the scripts worker's collision report. A locked pin that contradicts a locked Decision is amended with a record, never deleted quietly and never left red |
+| D10 | **The live doctrine prose is corrected in this build.** `spec/doctrine/mocks.md`'s "Project notes block first" paragraph and `docs/canonical/design.md`'s parallel sentence both state the rule this spec overturns ("refuses every mock-note mark" / "`journey-approved` and `approved` refuse while any project note is unresolved"). Each is narrowed in place to say the project note blocks `approved` alone, citing ADR-0019; no other prose is touched `[no-ac: prose the citations-check reads, pinned terminally by AC-20260912-07-3 and -4]` | Session ruling, 2026-09-12 build, user-approved on an explicit scope question. The Goal says the doctrine must say the new rule and the File Plan omitted these two pages; doctrine that contradicts shipped behaviour is how the old gate gets re-implemented |
 
 ## File Plan
 
@@ -48,9 +52,12 @@ decision this overturns carries an amendment record.
 | spec/scripts/mocks-driver.js | MODIFY | scripts | D4 `requireProjectNotesResolved` split out, called from `handleApproved` only |
 | spec/templates/mocks/viewer.css | MODIFY | scripts | D3 `.rv-projwait` styled on the muted/warn register, no new token |
 | design/chrome-mocks/review.html | MODIFY | doctrine | D6 the approve block carries the D3 line |
-| docs/adr/0018-a-whole-product-note-blocks-the-sign-off.md | CREATE | doctrine | D5 the amendment record, two Applies-to clauses |
-| specs/20260902/10-page-notes-review-loop.md | MODIFY | doctrine | D5 one `Amended by: ADR-0018` line, no rewrite |
-| specs/20260906/04-journey-review-page.md | MODIFY | doctrine | D5 one `Amended by: ADR-0018` line, no rewrite |
+| docs/adr/0019-a-whole-product-note-blocks-the-sign-off.md | CREATE | doctrine | D5 the amendment record, three Applies-to clauses |
+| specs/20260902/10-page-notes-review-loop.md | MODIFY | doctrine | D5 one `Amended by: ADR-0019` line, no rewrite |
+| specs/20260906/04-journey-review-page.md | MODIFY | doctrine | D5 one `Amended by: ADR-0019` line, no rewrite |
+| specs/20260912/06-the-review-page-answers-to-a-design.md | MODIFY | doctrine | D5 clause (c) one `Amended by: ADR-0019` line, no rewrite |
+| spec/doctrine/mocks.md | MODIFY | doctrine | D10 the "Project notes block first" paragraph narrowed to `approved` |
+| docs/canonical/design.md | MODIFY | doctrine | D10 the parallel sentence narrowed to `approved` |
 | tests/mocks/review-page.test.js | MODIFY | tests | AC-20260912-07-1, -2 |
 | tests/mocks/mocks-driver-notes-gate.test.js | CREATE | tests | AC-20260912-07-3, -4, -6 |
 | spec/.claude-plugin/plugin.json | MODIFY | other | D7 bump |
@@ -107,7 +114,15 @@ questions, then unresolved notes, then the client-walk and gate checks.
 - **AC-20260912-07-2**: WHEN that first fixture renders THE SYSTEM SHALL emit exactly one
   `[data-rv="projwait"]` whose text is `2 whole-product notes still block sign-off`; WHEN the two
   project notes are `resolved` THE SYSTEM SHALL emit no `[data-rv="projwait"]` at all; WHEN the
-  journey also carries one open note on `a` THE SYSTEM SHALL emit none either
+  journey also carries one open note on `a` THE SYSTEM SHALL emit none either; and WHEN
+  `review.browser.js` runs under `vm` over that first markup THE SYSTEM SHALL, after `recount()`,
+  leave `[data-rv="projwait"]` shown reading `2 whole-product notes still block sign-off`, and
+  SHALL hide it once both project rows are marked resolved and `recount()` runs again
+    - Amended at review: the locked bullet pinned only the served bytes, while D3's own text also
+      promises that `review.browser.js`'s `recount()` shows and hides the line on the same two
+      counters. The browser half was unpinned, so an edit could have stopped the live line updating
+      with every leg still green. The final clause adds the `vm` pin D3 already promised; nothing
+      about the served-bytes clauses changes.
   → writes tests/mocks/review-page.test.js
 - **AC-20260912-07-3**: WHEN `mocks-driver.js --mark journey-approved --journey j1` runs on a
   fixture whose `j1` screens carry no unresolved note and whose store carries one open project note
@@ -133,7 +148,7 @@ questions, then unresolved notes, then the client-walk and gate checks.
 - **A2**: `journey-skinned` and `journey-reviewed`, which specs/20260902/10 D5 also named, are
   retired marks with no call site. **Verified by reading** the driver's mark dispatch, whose list is
   `seed-done, shape-picked, canon-written, kit-signed, journey-drawn, journey-approved,
-  journey-walked, theme-picked, approved`. **if false:** ADR-0018 clause (a) names them too and
+  journey-walked, theme-picked, approved`. **if false:** ADR-0019 clause (a) names them too and
   each gains the same narrowing.
 - **A3**: AC-20260902-10-6's test does not exist in this tree, so nothing needs rewriting for the
   driver half. **Verified by grep**: `tests/mocks/mocks-notes.test.js` is absent (retired by the
@@ -166,10 +181,19 @@ ever mentioned it — trading one bad surprise for a worse one.
 a design artifact. Landing the element without updating the artifact would prove the binding
 decorative on the very first use.
 
+**Why the mock's fixture was restated, not just appended to (folded from the build's deviations).**
+D6 asks only that the approve block gain the D3 line, but that line renders only when this journey's
+own screens are clean, and the file's fixture carried two open screen-scoped notes. Showing the
+disabled state and the new line at once is not a state the page can reach. So `n1` and `n2` were
+resolved and the rail counts, board badges, open-count and progress text moved with them, while the
+project-scope `n3` stayed open with its `Looks good` / `Still not right` controls — the literals
+AC-20260912-06-7 pins. No test pins this file's bytes, and the served rendering is pinned
+independently by AC-20260912-07-2.
+
 ## Canonical Delta
 
 `docs/canonical/design.md` § The mocks command: replace "the approve control mirrors the on-disk
 gate (disabled while any question or note is open)" with "the approve control mirrors the on-disk
 gate: a journey's approval is blocked by open questions and notes **on that journey's screens**, and
-a whole-product note blocks the final `approved` sign-off instead of every journey (ADR-0018); when
+a whole-product note blocks the final `approved` sign-off instead of every journey (ADR-0019); when
 a journey is clean and product-wide notes remain, the page says how many still block sign-off."

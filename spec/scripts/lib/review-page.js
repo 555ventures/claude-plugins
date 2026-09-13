@@ -244,7 +244,11 @@ function renderHeader(seed, journeyEntry, journeyIndex, items, stop, prefix) {
   const questions = items.filter(isQuestion)
   const answered = questions.filter((q) => q.answer != null).length
   const openNotes = items.filter((n) => !isQuestion(n) && isOpen(n)).length
-  const openAll = items.filter(isOpen).length
+  // D1: the approve gate counts this journey's own screen-scoped items only — a whole-product
+  // note blocks the final sign-off (mocks-driver.js's requireProjectNotesResolved), never this
+  // button. The header total and the rail's project row still count every open item (unchanged).
+  const openAll = items.filter((n) => n.scope === 'mock' && isOpen(n)).length
+  const openProject = items.filter((n) => n.scope === 'project' && isOpen(n)).length
   const progressText = answered + ' of ' + questions.length + ' answered' +
     (openNotes ? ' · ' + openNotes + ' ' + plural(openNotes, 'note', 'notes') + ' for the session' : '')
   const pct = questions.length ? Math.round((answered / questions.length) * 100) : 100
@@ -264,6 +268,12 @@ function renderHeader(seed, journeyEntry, journeyIndex, items, stop, prefix) {
       changeAttrs: 'data-rv="change"',
       noteAttrs: 'placeholder="What should change?" aria-label="What should change"',
     })
+    // D3: journey clean, product not — say so, directly beneath the enabled control. Absent
+    // entirely (never an empty/zeroed line) once no project item is open (AC-20260912-07-2).
+    if (!openAll && openProject) {
+      control += '<p class="rv-projwait" data-rv="projwait">' + openProject + ' whole-product ' +
+        plural(openProject, 'note', 'notes') + ' still block sign-off</p>'
+    }
   }
   // The decide script sits right beside the block it drives (spec 01 D9's literals, unchanged).
   return '<header class="rv-bar">' +

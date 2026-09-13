@@ -3,6 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const path = require('node:path')
 const fs = require('node:fs')
+const vm = require('node:vm')
 const { SPEC, ROOT, read, parseFlatDom } = require('../helpers')
 
 // specs/20260912/06-the-review-page-answers-to-a-design.md D1, D3, D4 — AC-20260912-06-1, -2, -3,
@@ -94,15 +95,19 @@ test('AC-20260912-06-2: the rail\'s __project count row equals the fixture\'s ow
   assert.strictEqual(projectRow.hasAttribute('data-zero'), false,
     'one open project note must render the row WITHOUT data-zero (the muted/zero treatment)')
   // The header's own block-title total is independent of the rail derivation this AC pins — it is
-  // asserted here only for the "names the same total it counts" invariant: whatever isOpen() counts
-  // as open across every item (mock + project; an addressed note still counts, since it still needs
-  // the reviewer's own accept/reopen click) is the number the disabled approve button's title names.
+  // asserted here only for the "names the same total it computed" invariant: whatever isOpen()
+  // counts as open across this journey's own mock-scope items (an addressed note still counts,
+  // since it still needs the reviewer's own accept/reopen click) is the number the disabled approve
+  // button's title names. specs/20260912/07-a-whole-product-note-blocks-the-sign-off.md D1/D9
+  // (ADR-0019, D5 clause (c)) narrows the title to this journey's own screens — a project-scope
+  // note no longer counts toward it, so this fixture's open project note (n3) is excluded here;
+  // the rail-row assertions above and below are untouched, since D9 leaves the __project count alone.
   // (The AC's own worked parenthetical, "2 open items block approval", undercounts this fixture's
-  // addressed note — see the deviations sidecar; this pin uses the fixture's true isOpen() total so
-  // it is never a fabricated number.)
-  const trueOpenTotal = baseNotes('open').filter((n) => n.status !== 'resolved').length
+  // addressed note — see the deviations sidecar; this pin uses the fixture's true mock-scope isOpen()
+  // total so it is never a fabricated number.)
+  const trueOpenTotal = baseNotes('open').filter((n) => n.scope === 'mock' && n.status !== 'resolved').length
   assert.match(openHtml, new RegExp(trueOpenTotal + ' open items? blocks? approval'),
-    'the approve control\'s title must name the same open-item total the page actually computed (' +
+    'the approve control\'s title must name the same mock-scope open-item total the page actually computed (' +
     trueOpenTotal + '): got no such title in the rendered header')
 
   const resolvedHtml = render('resolved')
@@ -197,4 +202,27 @@ test('AC-20260912-06-5: a screen declaring fourteen states renders fifteen tabs 
   assert.match(rule[1], /flex-wrap:\s*wrap/, '.rv-tabs must declare flex-wrap: wrap, so a fourteen-state row wraps instead of being clipped')
   assert.doesNotMatch(rule[1], /overflow:\s*hidden/, '.rv-tabs must never declare overflow: hidden — that would clip a wrapped, tall tab row')
 })
+
+// specs/20260912/07-a-whole-product-note-blocks-the-sign-off.md D1, D2, D3 — AC-20260912-07-1, -2.
+// The owner's ruling: a journey's own approve gate counts only its screen-scoped items; a
+// whole-product note blocks the final sign-off instead, and the page says so when that is the
+// only thing still open. Fixture: journey j1, screens a and b, both resolved on their own screens'
+// notes, plus two project-scope notes whose openness each test below varies.
+
+const REVIEW_BROWSER = path.join(SPEC, 'scripts/lib/review.browser.js')
+
+function scopedCleanNotes(p1Status, p2Status, extraMockNote) {
+  const notes = [
+    { id: 'm1', kind: 'note', scope: 'mock', screen: 'a', state: null, status: 'resolved', text: 'was open on a', reason: 'other' },
+    { id: 'm2', kind: 'note', scope: 'mock', screen: 'b', state: null, status: 'resolved', text: 'was open on b', reason: 'other' },
+    { id: 'p1', kind: 'note', scope: 'project', screen: null, state: null, status: p1Status, text: 'proj 1', reason: 'other' },
+    { id: 'p2', kind: 'note', scope: 'project', screen: null, state: null, status: p2Status, text: 'proj 2', reason: 'other' },
+  ]
+  if (extraMockNote) notes.push(extraMockNote)
+  return notes
+}
+
+function renderScoped(notes) {
+  return buildReviewPage({ journey: 'j1', seed: baseSeed(), notes, ledger: [], stops: [baseStop()], prefix: '' })
+}
 

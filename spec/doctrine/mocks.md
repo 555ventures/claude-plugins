@@ -263,11 +263,12 @@ misunderstanding traces back to a pinned question, a free-form note, or neither 
 from a catch row's `addressed.ledgerRow` link, never attested, and printed by `ledger counts`
 as `question · note · unlinked`.
 
-**Project notes block first.** Any note with `scope: "project"` not yet `resolved` refuses
-every mock-note mark (`journey-approved`, `approved`), naming the note id — a direction-level
-concern outranks any per-screen work until it is answered. Once no project note is open, a
-mark still refuses while any note on its own screens is unresolved; `approved` refuses while
-any note anywhere is unresolved. Zero open notes on a journey is that journey's approval mark.
+**Project notes block the sign-off.** Any note with `scope: "project"` not yet `resolved`
+refuses `approved`, naming the note id first — still ahead of the unanswered-question and
+unresolved-note lines — a direction-level concern outranks per-screen work at the product's own
+sign-off, not at any single journey's (ADR-0019). A mark still refuses while any note on its own
+screens is unresolved; `approved` refuses while any note anywhere is unresolved, project-scoped
+or not. Zero open notes on a journey is that journey's approval mark.
 
 **The client's page is the player** (`/client/index.html`, `/client/walk/<j>.html` — § Mocks:
 Client Player), not the session's own review page; its notes are the same notes machinery,

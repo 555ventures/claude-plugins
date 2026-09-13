@@ -386,8 +386,10 @@ reads to know where a click went.
 The journey look surface is the review page `/review/<j>.html` (specs/20260906/04): screens rail ·
 artboards with state tabs (`?state=<s>` on the served mock) · question inspector answered in place
 with `J K Y N Esc \`; `stop open journey:<j>` points there; the approve control mirrors the on-disk
-gate (disabled while any question or note is open). Plugin chrome — atlas, review page, galleries,
-notes layer — is authored under the frontend-design skill in the shadcn idiom on `viewer.css`'s
+gate: a journey's approval is blocked by open questions and notes **on that journey's screens**, and
+a whole-product note blocks the final `approved` sign-off instead of every journey (ADR-0019); when
+a journey is clean and product-wide notes remain, the page says how many still block sign-off.
+Plugin chrome — atlas, review page, galleries, notes layer — is authored under the frontend-design skill in the shadcn idiom on `viewer.css`'s
 register (design.md § Design Canon), never on product tokens.
 
 The atlas renders one frame per screen, with the declared state count in the card's meta line
@@ -414,9 +416,10 @@ session addresses (`open → addressed`, with the change and an optional ledger 
 under the note) and replies; the author resolves on the page after a re-look; no driver
 subcommand resolves. Triage bins are a closed set — `mock detail`, `product understanding`,
 `question back`, `propose to decline` — and a note that hits a canon primitive changes
-`canon.md` first, every dependent screen after. Project notes outrank mock notes:
-`journey-approved` and `approved` refuse while any project note is unresolved or any note on
-the journey's screens is unresolved (`addressed` is not `resolved`); the client answers and
+`canon.md` first, every dependent screen after. Project notes outrank mock notes only at the
+product's own sign-off: `approved` refuses while any project note is unresolved or any note
+anywhere is unresolved; `journey-approved` refuses only while any note on that journey's own
+screens is unresolved (`addressed` is not `resolved`) (ADR-0019). The client answers and
 raises on the client route as the `CLIENT` state (specs/20260907/10, ADR-0012), on the clientâs own
 pages rather than the session's review page. A note carries `origin: walk|client|session`, set by the route it arrived on
 (`/client/__notes/*` stamps `client`, `/__notes/*` stamps `session`, `notes add --kind walk`

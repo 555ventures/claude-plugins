@@ -829,12 +829,20 @@ function readWalkOrEmpty() {
 // screen, never the note id, and callers run this BEFORE requireGateOpen() (a question's ledger
 // row is by construction open+inferred, so requireGateOpen's own "provenance ledger is blocked"
 // message would otherwise fire first and the promised wording could never be reached).
+// specs/20260912/07-a-whole-product-note-blocks-the-sign-off.md D4: a whole-product note now
+// blocks only the final sign-off, not every journey — this sweep is carved out of
+// requireNotesResolved and called from handleApproved() alone, immediately before its existing
+// requireNotesResolved(allDeclaredLabels(), null), preserving today's ordering and message
+// precedence at that one mark. Message unchanged byte-for-byte.
+function requireProjectNotesResolved() {
+  const open = notesOrEmpty().filter((n) => n.scope === 'project' && n.status !== 'resolved')
+  if (open.length) {
+    die('project note(s) open: ' + open.map((n) => n.id).join(', ') + ' — answer the project note first')
+  }
+}
+
 function requireNotesResolved(labels, journeyName) {
   const notes = notesOrEmpty()
-  const openProject = notes.filter((n) => n.scope === 'project' && n.status !== 'resolved')
-  if (openProject.length) {
-    die('project note(s) open: ' + openProject.map((n) => n.id).join(', ') + ' — answer the project note first')
-  }
   if (labels && labels.length) {
     const unresolved = unresolvedFor(notes, labels)
     const where = journeyName ? ' on ' + journeyName : ''
@@ -2021,6 +2029,9 @@ function handleApproved() {
     const st = status.journeys[jn]
     if (!st || !st.approved) die('journey "' + jn + '" is not approved — mark journey-approved --journey ' + jn + ' first')
   }
+  // specs/20260912/07 D4: the whole-product note refusal now lives here, at the one true
+  // sign-off, immediately before the per-screen sweep below — same message, same precedence.
+  requireProjectNotesResolved()
   // specs/20260906/03: notes gate (question-aware) runs before requireGateOpen — same ordering
   // reason as handleJourneyApproved above.
   requireNotesResolved(allDeclaredLabels(), null)

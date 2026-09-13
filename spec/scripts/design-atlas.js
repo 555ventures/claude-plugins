@@ -60,6 +60,29 @@
 //                                                  the per-screen kit/bespoke ⓘ lines are omitted;
 //                                                  the unabsorbed-total ⓘ line is unchanged either
 //                                                  way. --verbose restores the pre-change output.
+//                                                  specs/20260912/09-a-mock-may-not-invent.md
+//                                                  D1-D8: on a labeled, non-canon mock that links
+//                                                  the wire register (lib/wire-register.js's
+//                                                  linksWireRegister) — a ⚠️ warn when unbound, a
+//                                                  violation at ratified/approved/--matrix: it may
+//                                                  link no stylesheet but wire/tokens.css,
+//                                                  wire/wire.css and wire/project.css (D1); it
+//                                                  carries no <style> block declaring a rule (an
+//                                                  @import-only block is permitted) and no style=
+//                                                  attribute (D3); the resolved design/wire/
+//                                                  project.css (once per family, walk-up like the
+//                                                  kit sweep) may not redefine a class
+//                                                  spec/templates/mocks/wire.css declares (D4) or
+//                                                  exceed that template's own class count, computed
+//                                                  at run time (D5). D6: across every bound mock
+//                                                  visited (2+ in the run, else silent), a
+//                                                  project-kit class used on exactly one screen
+//                                                  warns, at every stamp. D7: one ⓘ measured line
+//                                                  per resolved project kit (class count/cap, rule
+//                                                  count, layout share via lib/kit-layers.js). D8:
+//                                                  hygiene (a)'s border-box reset is satisfied by
+//                                                  linking the wire register (wire.css carries it),
+//                                                  in addition to the file's own <style> route.
 //   design-atlas.js gallery <dir> [--out <file>]   comparison gallery over candidate subdirs (explore rounds)
 //   design-atlas.js build [--root <repo>] [--out <file>]
 //                                                  the atlas: mocks × roadmap `surfaces` blocks ×
@@ -198,7 +221,10 @@ const readLedgerRows = (rootAbs) => {
 // `client open`/`approved` call, so the server and the driver never carry two copies.
 const { materialize, setExclusionVerdict } = require('./lib/mocks-exclusions')
 const picksLib = require('./lib/mocks-picks.js')
-const { stylesheetTargets, linksWireRegister } = require('./lib/wire-register')
+const { stylesheetTargets, linksWireRegister, attrValuesOf } = require('./lib/wire-register')
+// specs/20260912/09-a-mock-may-not-invent.md D4/D5/D6/D7: pure CSS-string readers behind the
+// project-kit rules below — classNamesIn/overrides/layoutShare, all comment-stripped internally.
+const kitLayersLib = require('./lib/kit-layers')
 const surfacesLib = require('./lib/surfaces')
 // specs/20260906/04-journey-review-page.md D1: the pure journey-review builder — the served
 // GET /review/<j>.html route below adapts parseSeedJourneys()/loadTargets() into its input shape
@@ -288,7 +314,10 @@ function hygieneViolations(f, html) {
   }
 
   // (a) a universal box-sizing: border-box rule, owed by every bound file (see the note above).
-  const hasReset = rules.some(r =>
+  // specs/20260912/09-a-mock-may-not-invent.md D8: linking the wire register also satisfies this
+  // — wire.css carries `* { box-sizing: border-box; }` itself — evaluated ALONGSIDE the file's
+  // own <style> route (D3 removed the only place a linking file could otherwise carry one).
+  const hasReset = linksWireRegister(html) || rules.some(r =>
     r.selector.split(',').some(s => /^\*(\b|::?|\s|$)/.test(s.trim())) &&
     /box-sizing\s*:\s*border-box/.test(r.decls))
   if (!hasReset) {
@@ -468,6 +497,94 @@ function themeAndNotesViolations(f, html, label) {
   return { hard, warn }
 }
 
+// ---- mock invention (specs/20260912/09-a-mock-may-not-invent.md D1-D8) ----------------------------
+// D2's binding predicate: a labeled, non-canon mock that links the wire register. Every rule
+// below is evaluated only when this is true, and tiers into `violations` (bound approved:
+// ratified/approved/--matrix) or `warnLines` (unbound) by the SAME boundApproved split the
+// kit/shell findings above already use — computed by the caller, not here.
+function isInventionBoundMock(isCanon, isKitCanon, label, html) {
+  return !isCanon && !isKitCanon && !!label && linksWireRegister(html)
+}
+
+// D1's three permitted stylesheet hrefs — built via the RegExp constructor (a plain string, no
+// regex-literal escaping) so this file's own source never spells the escaped "wire/" separator
+// the consistency pin bans, the same discipline mocks-driver.js's WIRE_TOKENS_CSS_RE/
+// WIRE_WIRE_CSS_RE already use.
+const WIRE_PERMITTED_HREF_RE = ['tokens', 'wire', 'project'].map((n) => new RegExp('(^|/)wire/' + n + '\\.css$'))
+const WIRE_TEMPLATE_CSS_PATH = path.join(__dirname, '..', 'templates', 'mocks', 'wire.css')
+
+// D1/D3: read directly over the mock's own markup — never over design/wire/project.css, which
+// D4/D5/D6/D7 read separately, once per family.
+function mockOwnInventionFindings(f, html) {
+  const out = []
+  for (const target of stylesheetTargets(html)) {
+    if (!WIRE_PERMITTED_HREF_RE.some((re) => re.test(target))) {
+      out.push(f + ': links ' + target + ' — a wireframe links only wire/tokens.css, wire/wire.css and wire/project.css')
+    }
+  }
+  // D3: a <style> block containing only @import statements, whitespace and comments is
+  // permitted — strip comments and @import statements first; anything left over is a declared
+  // rule. cssRulesOf is the same flat selector{decls} reader hygieneViolations(a)-(d) use.
+  let styleRuleCount = 0
+  for (const css of styleBlocksOf(html)) {
+    const stripped = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/@import[^;]*;/g, '')
+    styleRuleCount += cssRulesOf(stripped).length
+  }
+  if (styleRuleCount > 0) {
+    out.push(f + ': ' + styleRuleCount + ' <style> rule(s) — a screen carries no styles of its own; move them to design/wire/project.css or use a shared class')
+  }
+  // D3: "no style= attribute" — every quote form (double, single, unquoted), read via
+  // lib/wire-register.js's attrValuesOf so this doesn't grow a third hand-rolled attribute
+  // parser; a double-quote-only regex was evadable by the exact thing D3 guards against
+  // (specs/20260912/09-a-mock-may-not-invent.md D3, AC-20260912-09-2).
+  const styleAttrCount = attrValuesOf(html, 'style').length
+  if (styleAttrCount > 0) {
+    out.push(f + ': ' + styleAttrCount + ' inline style= attribute(s) — a screen carries no styles of its own')
+  }
+  return out
+}
+
+// D4/D5/D7: read once per resolved design/wire/ family (dedupe like checkedKitFamilies) — a
+// directory of ten bound screens prints the cap and the measured line once, not once per screen.
+// Absent design/wire/project.css = no project kit yet, nothing to report (same absence-invariant
+// resolveCanonDir's other families already use). Returns null on that absence.
+function wireFamilyFindings(wireDir) {
+  const projectCssPath = path.join(wireDir, 'project.css')
+  let projectCss
+  try { projectCss = fs.readFileSync(projectCssPath, 'utf8') } catch { return null }
+  let templateCss
+  try { templateCss = fs.readFileSync(WIRE_TEMPLATE_CSS_PATH, 'utf8') } catch { return null }
+
+  const dupes = kitLayersLib.overrides(projectCss, templateCss)
+  const dupeMsg = dupes.length
+    ? projectCssPath + ': redefines shared class(es) ' + dupes.map((c) => '.' + c).join(', ') +
+      ' — ' + WIRE_TEMPLATE_CSS_PATH + ' already declares them; delete the project rule or give the variant its own name'
+    : null
+
+  const projectClasses = kitLayersLib.classNamesIn(projectCss)
+  const cap = kitLayersLib.classNamesIn(templateCss).size
+  const overCap = projectClasses.size > cap
+  const capMsg = projectCssPath + ': ' + projectClasses.size + " classes, over the shared kit's own " + cap +
+    ' — fold the extras into shared classes before approving'
+
+  const share = kitLayersLib.layoutShare(projectCss)
+  const infoLine = '  ⓘ project kit: ' + projectClasses.size + '/' + cap + ' classes · ' + share.rules +
+    ' rules · layout share ' + share.percent + '% (' + share.layoutRules + ' of ' + share.rules + ')'
+
+  return { dupeMsg, overCap, capMsg, infoLine, projectClasses }
+}
+
+// D3's markup class="…" tokens (never the CSS these mocks are forbidden from carrying) — D6's
+// cross-file sweep asks "which bound mocks actually USE this project-kit class", not "which
+// project-kit classes exist".
+function markupClassesOf(html) {
+  const out = new Set()
+  for (const value of attrValuesOf(html, 'class')) {
+    for (const c of value.split(/\s+/)) if (c) out.add(c)
+  }
+  return out
+}
+
 // ---- check ---------------------------------------------------------------------------------------
 // The deterministic half of the design harness: every mock/tile/prototype passes this before a
 // human (or a critique round) sees it. Colors live in tokens.css and are consumed as var(--role);
@@ -488,6 +605,10 @@ function cmdCheck(argv) {
   // duplicate-primitive sweep to once per resolved design/kit/ directory, however many of its own
   // canon files the walk visits.
   const kitInfoLines = []
+  // specs/20260912/09-a-mock-may-not-invent.md D7: one ⓘ line per resolved design/wire/ family,
+  // printed AFTER the CHECK block alongside the kit ⓘ lines (D15's "the reason leads, the
+  // statistic follows"), unconditionally — never gated by --verbose or by any stamp.
+  const wireInfoLines = []
   let kitUnabsorbedTotal = 0
   let kitScreensWithBespoke = 0
   const checkedKitFamilies = new Set()
@@ -508,6 +629,21 @@ function cmdCheck(argv) {
       }
     }
   }
+  // specs/20260912/09-a-mock-may-not-invent.md D4/D5/D7 bookkeeping: wireFamilyCache dedupes the
+  // project.css/wire.css read to once per resolved design/wire/ directory (checkedWireFamilies
+  // gates the PRINTED info line to once — the cache itself stays readable for every bound mock so
+  // D6's usage sweep below sees every one of them, not just the first per family). D6's own
+  // accumulator (wireDir -> class -> Set(label)) and the run-wide bound-mock count feed the
+  // cross-file sweep emitted AFTER the walk (Behavior: "fewer than two bound mocks emits nothing").
+  // wireFamilyAnyApproved (wireDir -> boolean) tracks whether ANY bound mock resolving that
+  // family was bound-approved — the tier (violation vs warn) is decided from this AFTER the
+  // whole walk, never from whichever mock in the family the directory walk happened to reach
+  // first (that was the D5/AC-20260912-09-4 defect: filename order flipping the verdict).
+  const wireFamilyCache = new Map()
+  const checkedWireFamilies = new Set()
+  const wireFamilyAnyApproved = new Map()
+  const wireClassLabels = new Map()
+  let inventionBoundCount = 0
   let count = 0
   for (const t of paths) {
     if (!fs.existsSync(t)) die('check: no such path: ' + t)
@@ -543,6 +679,42 @@ function cmdCheck(argv) {
       const boundApproved = forceMatrix || status === 'ratified' || status === 'approved'
       const boundNow = boundApproved || isCanon
       if (boundNow) violations.push(...hygieneViolations(f, html))
+
+      // specs/20260912/09-a-mock-may-not-invent.md D2: the binding predicate for D1/D3-D8 —
+      // Ordering (Behavior): D3's rules read the mock itself, D4/D5/D6/D7 read the resolved
+      // project stylesheet, so an invented <style> block is named for that and not also for
+      // whatever the project kit is doing.
+      const label = labelOf(html)
+      if (isInventionBoundMock(isCanon, isKitCanon, label, html)) {
+        inventionBoundCount++
+        for (const msg of mockOwnInventionFindings(f, html)) {
+          if (boundApproved) violations.push(msg); else warnLines.push('  ⚠️ ' + msg)
+        }
+        const wireDir = shellLib.resolveCanonDir(f, 'wire')
+        if (wireDir) {
+          if (!wireFamilyCache.has(wireDir)) wireFamilyCache.set(wireDir, wireFamilyFindings(wireDir))
+          const fam = wireFamilyCache.get(wireDir)
+          if (fam) {
+            if (!checkedWireFamilies.has(wireDir)) {
+              checkedWireFamilies.add(wireDir)
+              wireInfoLines.push(fam.infoLine)
+            }
+            // Tier tracking only — the finding itself is emitted once, after the walk, once
+            // every bound mock resolving this family has been seen (see the loop below).
+            wireFamilyAnyApproved.set(wireDir, boundApproved || !!wireFamilyAnyApproved.get(wireDir))
+            if (fam.projectClasses.size) {
+              if (!wireClassLabels.has(wireDir)) wireClassLabels.set(wireDir, new Map())
+              const perClass = wireClassLabels.get(wireDir)
+              const used = markupClassesOf(html)
+              for (const c of fam.projectClasses) {
+                if (!used.has(c)) continue
+                if (!perClass.has(c)) perClass.set(c, new Set())
+                perClass.get(c).add(label)
+              }
+            }
+          }
+        }
+      }
 
       // specs/20260901/04: canon files get D1's own rule set (name match, own css link, content
       // slot, non-content slots' data-contract="none", off-token colors + hygiene(b) read over
@@ -621,6 +793,30 @@ function cmdCheck(argv) {
       }
     }
   }
+  // D4/D5 finding emission, deferred to here (after every file in the walk has been seen): the
+  // tier is decided from wireFamilyAnyApproved, i.e. whether ANY bound mock resolving this
+  // family was bound-approved — never from whichever mock the walk visited first.
+  for (const [wireDir, fam] of wireFamilyCache) {
+    if (!fam) continue
+    const tierApproved = !!wireFamilyAnyApproved.get(wireDir)
+    if (fam.dupeMsg) { if (tierApproved) violations.push(fam.dupeMsg); else warnLines.push('  ⚠️ ' + fam.dupeMsg) }
+    if (fam.overCap) { if (tierApproved) violations.push(fam.capMsg); else warnLines.push('  ⚠️ ' + fam.capMsg) }
+  }
+  // specs/20260912/09-a-mock-may-not-invent.md D6: the cross-file single-screen sweep — a
+  // project-kit class used on exactly one of the bound mocks visited this run. Fewer than two
+  // bound mocks in the run emits nothing at all (Behavior: "meaningless when only one screen was
+  // read"). A warn, never a violation, at every stamp — always warnLines, never violations.
+  if (inventionBoundCount >= 2) {
+    for (const perClass of wireClassLabels.values()) {
+      for (const [cls, labels] of perClass) {
+        if (labels.size === 1) {
+          const [onlyLabel] = labels
+          warnLines.push('  ⚠️ .' + cls + ': used on one screen only (' + onlyLabel +
+            ') — fold it into a shared class or into that screen\'s kit region')
+        }
+      }
+    }
+  }
   if (!count) die('check: no .html files under ' + paths.join(', '))
   // specs/20260912/14 D1: without --verbose, warnLines collapse to one count line in the same
   // position the warn lines print today; with --verbose, every warn line prints as before.
@@ -646,6 +842,9 @@ function cmdCheck(argv) {
   if (kitUnabsorbedTotal > 0) {
     process.stdout.write('  ⓘ unabsorbed total: ' + kitUnabsorbedTotal + ' across ' + kitScreensWithBespoke + ' screen(s)\n')
   }
+  // D7: unconditional — every check run over a resolved project kit prints this line, --verbose
+  // or not, pass or fail.
+  for (const line of wireInfoLines) process.stdout.write(line + '\n')
   if (failed) process.exit(1)
 }
 

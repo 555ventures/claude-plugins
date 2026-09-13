@@ -1640,6 +1640,10 @@ function handleCanonWritten() {
   const cssDest = path.join(wireDir, 'wire.css')
   if (!fs.existsSync(tokensDest)) fs.copyFileSync(path.join(tplDir, 'wire-tokens.css'), tokensDest)
   if (!fs.existsSync(cssDest)) fs.copyFileSync(path.join(tplDir, 'wire.css'), cssDest)
+  // specs/20260912/09-a-mock-may-not-invent.md D1: design/wire/project.css copied from its own
+  // stub exactly as the two register files above are — when-absent only, never overwritten.
+  const projectCssDest = path.join(wireDir, 'project.css')
+  if (!fs.existsSync(projectCssDest)) fs.copyFileSync(path.join(tplDir, 'project.css'), projectCssDest)
 
   status.marks.canonWritten = nowIso()
   saveStatus()
@@ -1733,6 +1737,15 @@ function handleJourneyDrawn(journeyName) {
     }
     for (const line of warnLines) writeOut(1, line + '\n')
   }
+  // specs/20260912/09-a-mock-may-not-invent.md D2: surface the mock-invention warns here — these
+  // mocks are still data-status="sketch" (unbound, D2's warn tier), so a single call over the
+  // whole journey (not one label at a time, as the per-label loop above ran) is what lets D6's
+  // cross-file single-screen sweep see more than one bound mock. --verbose expands the collapsed
+  // count line; never gates the mark (this call's exit status is not read).
+  const invWarnRes = runDesignAtlasCheck(['--verbose', ...j.labels.map(mockFile)])
+  for (const line of (invWarnRes.stdout || '').split('\n')) {
+    if (line.trim().startsWith('⚠️') || line.trim().startsWith('ⓘ')) writeOut(1, line + '\n')
+  }
   // specs/20260906/05-gray-states-on-every-wireframe.md D2: after every per-label closure check
   // above, run check --states over the journey's own top-level mocks — a violation refuses the
   // mark before journeys.<j>.drawn is ever recorded.
@@ -1772,6 +1785,15 @@ function handleJourneyApproved(journeyName) {
     if (kitRes.status !== 0) {
       die(childOutput(kitRes) + '\ninstantiate the missing kit primitive(s), or mark the region data-bespoke, then re-mark')
     }
+  }
+  // specs/20260912/09-a-mock-may-not-invent.md D2: journey-approved is where these mocks'
+  // sketch stamp graduates to the bound-approved tier for design-atlas.js check's own
+  // boundApproved split — --matrix forces the D1/D3-D8 mock-invention rules (the link
+  // restriction, no own <style>/style=, project.css redefinition and cap) into violations here;
+  // journey-drawn (above) only ever warned on the same mocks.
+  const invRes = runDesignAtlasCheck(['--matrix', ...(j ? j.labels : []).map(mockFile)])
+  if (invRes.status !== 0) {
+    die(childOutput(invRes) + '\nfix the mock-invention violation(s) above (design/wire/project.css, or the mock\'s own <style>/style=), then re-mark')
   }
   requireRenderGateMocks((j ? j.labels : []).map((l) => mockFile(l)), journeyName)
   const stop = requireStopDecision('journey-approved:' + journeyName, 'stop open journey:' + journeyName)

@@ -324,9 +324,11 @@ function writeMock(dir, html) {
 // red: cmdCheck today has no wire-register rule at all, so a ratified mock linking wire/wire.css
 // alongside tokens.css passes clean today and a sketch mock prints no warn line for it.
 function wireAfterThemeMock(status) {
+  // Fixture repair: the box-sizing reset dropped — the linked wire register (wire.css) already
+  // declares it, so this mock's own copy is now redundant.
   return mockHtml({
     status,
-    style: '* { box-sizing: border-box; }\n.screen { color: var(--text-body); }',
+    style: '.screen { color: var(--text-body); }',
     beforeRoot: '<link rel="stylesheet" href="../wire/wire.css">\n',
   })
 }

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: hardened
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +10,8 @@ depended_on_by: [specs/20260912/10-seeded-data-names-its-source.md]
 brief: n/a
 spiked: 2026-09-12
 open_markers: 0
+build_base: main
+diff_base: a6278edc7cfc71b25aa7d8158fca8390ff17a056
 ---
 
 # A mock may not invent
@@ -54,7 +56,7 @@ share.
 | spec/templates/mocks-kit.html | MODIFY | doctrine | D3/D8 its own `<style>` reset deleted — the linked register carries it now |
 | spec/doctrine/mocks.md | MODIFY | doctrine | D1–D7 one new § Mocks: Authoring Rules bullet ("A screen carries no styles of its own"), naming the three layers and the four checks |
 | docs/adr/0013-client-rehearses-the-journey.md | MODIFY | other | D9 `Amended by` backlink only |
-| docs/adr/0017-a-mock-may-not-invent.md | CREATE | other | D9 the amendment ADR. Take the next free number if 0017 is claimed by a sibling and amend every mention in this spec in the same build |
+| docs/adr/0022-a-mock-may-not-invent.md | CREATE | other | D9 the amendment ADR. Amended at build: 0017 was claimed by a sibling, so the next free number (0022) is taken and every mention in this spec moved with it |
 | tests/mocks/mock-invention.test.js | CREATE | tests | AC-20260912-09-1, AC-20260912-09-2, AC-20260912-09-3, AC-20260912-09-4, AC-20260912-09-5, AC-20260912-09-7, AC-20260912-09-8 |
 | tests/mocks/kit-layers.test.js | CREATE | tests | AC-20260912-09-6 |
 | tests/design-atlas.test.js | MODIFY | tests | Fixture repair: the five sites linking `wire/` drop their own `<style>` reset (D8 makes it redundant); the `@import`-in-`<style>` fixture is left exactly as it is and is the pre-image D3's permitted form is asserted against |
@@ -206,7 +208,7 @@ mock that has correctly externalised all of its CSS reports nothing at all.
   muted nav placeholder primary row screen sheet sm stack table title`. **If false** after
   spec 08's primitive re-draws change the set: nothing moves — the cap is computed from the
   template at run time and no literal is stored.
-- A5: `docs/adr/0017-*` is free. **If false** (a sibling claims it first): take the next free
+- A5: `docs/adr/0017-*` is free. **Executed 2026-09-13 at build: FALSE** — `0017-the-register-is-the-whole-shadcn-set.md` claims it, and `0018`–`0021` are claimed too, so the ADR is `docs/adr/0022-a-mock-may-not-invent.md` and the File Plan row was amended in this build. **If false** (a sibling claims it first): take the next free
   number and amend the File Plan row, D9 and every backlink in the same build.
 
 ## Rationale
@@ -249,6 +251,33 @@ genesis-driver.test.js`'s mock fixtures link `../tokens.css` plus a shell styles
 the wire register, and `tests/mocks/notes-layer-isolation.test.js`'s probe links no stylesheet
 at all — it declares its own `:root` inline and runs through the Chrome harness, not through
 `check`. `hygieneViolations` occurs only in `design-atlas.js`, which is a File Plan row.
+
+**Build and review record (folded from the deviations sidecar at close, 2026-09-13).**
+
+- A5 was false: `0017` and every number through `0021` were claimed by siblings, so the ADR
+  shipped as `docs/adr/0022-a-mock-may-not-invent.md` and the File Plan row, A5 and every
+  citation moved with it in the same build — the row's own instruction, and the already-recorded
+  ADR-filename race.
+- A2's site counts ("five" and "six" wire-linking, style-bearing fixtures) were predictions, not
+  an inventory: exactly one genuine site existed in each file. Both were repaired as planned;
+  the others link the register but carry no `<style>` block to repair.
+- D9 names the hygiene spec as `specs/20260824/03-mock-hygiene-and-marks.md`, which does not
+  exist. The ADR's `Applies to` entry uses the real path, `03-mock-states-hygiene.md` — a
+  dangling backlink would have been worse than departing from the Decision's literal spelling.
+- Review found three hard defects, all fixed and re-verified by executed repro in the fix-delta
+  pass: the project-kit cap's violation-vs-warn tier was decided by whichever bound mock the
+  directory walk reached first, so filename order flipped the verdict (now decided after the
+  whole walk, from whether *any* bound mock in the family is bound-approved); D3's inline-style
+  refusal matched only double-quoted attributes, so one quote character evaded it; and D7's
+  measured line was printed but asserted by no test (now pinned behaviorally, once-per-project-
+  kit, with the cap derived from the template at run time).
+- The quote-form fix added a shared `attrValuesOf` to `spec/scripts/lib/wire-register.js`, a
+  file outside the File Plan. Kept there deliberately: that module exists precisely to stop a
+  fourth hand-rolled attribute reader, the change is additive and altered no existing call site.
+- Two advisory findings are queued, not fixed here: `attrValuesOf` scans the raw document rather
+  than matched tags, so screen copy containing `style =` and a commented-out fragment both read
+  as inline styles (it is the one function in that module that skips its own `stripComments`),
+  and the module's header usage line still names two of its now-three exports.
 
 ## Canonical Delta
 

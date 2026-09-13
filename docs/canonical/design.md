@@ -158,6 +158,18 @@ out on the root (`data-no-state="<name>"`) with the product reason in the ledger
 driver at `journey-drawn` and `journey-approved`; the render gate captures every declared state
 as before.
 
+A wireframe carries no styles of its own (2026-09-13, specs/20260912/09). A mock that links the
+wire register links only `wire/tokens.css`, `wire/wire.css` and `wire/project.css`, carries no
+`<style>` block that declares a rule (an `@import`-only block is permitted) and no `style=`
+attribute. The project's own vocabulary lives in `design/wire/project.css` alone; it may not
+declare a class the shared kit declares, and it may not hold more distinct classes than the
+shared kit does — the cap is read from the shared kit at run time. A class used on exactly one
+screen is warned, never refused. The universal `box-sizing` rule hygiene requires is satisfied
+by linking the register, which carries it. Every run over a resolved project kit prints its
+class count against the cap, its rule count and its layout share — the proportion of rules whose
+declarations are all layout or spacing — which is the measurement the deferred component-kit
+decision reads.
+
 ## Executable design rules (2026-08-24, specs/20260824/04)
 
 `design-rules.json` entries may carry a `renderCheck` object with a closed `kind` set —

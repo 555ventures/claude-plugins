@@ -1718,6 +1718,44 @@ function runCloseTimeGate() {
     specPath + ' --mark closed`.\n--- last 40 lines of suite output ---\n' + tailLines(output, 40))
 }
 
+// ---- q242 (2026-09-13): re-stamp the build row's deviations count at close ---------------------
+// The build driver writes `deviations` at its COMMIT step, counting the sidecar as it stood
+// mid-build. A sidecar restated into countable `- ` bullets AFTER that row lands under-reports
+// permanently: the live row for specs/20260912/14 recorded 0 against two real entries restated one
+// commit later. The ledger is the pipeline's ground truth, so the number has to be the one that is
+// true when the sidecar is finally folded -- which is exactly here. `--mark closed` runs after the
+// fold, and marks.deviations is the LAST observation the file ever got (observeDeviations()
+// deliberately survives the file's own deletion), so the count is final at this point and nowhere
+// earlier. Re-stamped in place, never as a second row: one build has one deviations count, and two
+// rows carrying two counts would only move the choice onto every later reader. Narrow by
+// construction -- the LAST stage:"build" row for THIS spec, its `deviations` number only, and only
+// when it actually differs. Silent no-op when no build row is readable here (an in-place review of
+// a spec whose build row was promoted elsewhere): a close is never refused over a count.
+function restampBuildDeviations() {
+  if (!marks.deviations || typeof marks.deviations.entries !== 'number') return
+  const ledgerPath = path.join(repoRoot, '.claude/spec-runs.jsonl')
+  if (!fs.existsSync(ledgerPath)) return
+  // split/join round-trips the file byte-for-byte (a trailing newline becomes a final '' element),
+  // so an unparseable or unrelated line is preserved exactly as written.
+  const lines = fs.readFileSync(ledgerPath, 'utf8').split('\n')
+  let idx = -1
+  let row = null
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!lines[i].trim()) continue
+    let parsed
+    try { parsed = JSON.parse(lines[i]) } catch { continue }
+    if (parsed.stage === 'build' && parsed.spec === specRel) { idx = i; row = parsed; break }
+  }
+  if (idx === -1) return
+  const from = row.deviations
+  const to = marks.deviations.entries
+  if (from === to) return
+  row.deviations = to
+  lines[idx] = JSON.stringify(row)
+  fs.writeFileSync(ledgerPath, lines.join('\n'))
+  marks.deviationsRestamp = { from, to }
+}
+
 function handleClosed() {
   if (status !== 'done') {
     die('spec status is not yet "done" — re-run the driver with no mark first so CLOSE\'s ' +
@@ -1764,6 +1802,7 @@ function handleClosed() {
   // observes the exact committed close tree those checks just certified. die()s before any
   // mutation; a refused mark is always side-effect-free.
   runCloseTimeGate()
+  restampBuildDeviations()
   marks.closed = true
   saveSidecar()
   return null
@@ -2134,6 +2173,12 @@ const outDir = outDirFor(currentN)
 const waivedWarn = (marks.dispositions && marks.dispositions.waived > 0)
   ? `⚠ ${marks.dispositions.waived} finding(s) waived this run — confirm in the close report.\n`
   : ''
+// q242: a silent ledger correction is exactly the kind of change that must be visible once, live.
+// Read from marks, so a bare re-invocation parked at MERGE re-prints it.
+const restampLine = (marks.deviationsRestamp)
+  ? `📦 build ledger row re-stamped at close: deviations ${marks.deviationsRestamp.from} → ` +
+    `${marks.deviationsRestamp.to} (the sidecar's final entry count).\n`
+  : ''
 
 // D4 (specs/20260823/07-deviations-sidecar-backstop.md): the CLOSE enumeration reads entry
 // first-lines from the sidecar FILE itself, never a persisted key — at CLOSE-print time the fold
@@ -2381,7 +2426,9 @@ const STEPS = {
       // that happened not to run in a worktree owes the same measurement as one that did.
       marks.mergeConcluded = true
       saveSidecar()
-      replayEntry('review ran on the originating branch — MERGE skipped, nothing to merge.')
+      // q242: the merge-skipped arm never prints the MERGE step text, so the re-stamp note
+      // rides the replay entry note instead — the correction is printed on every close path.
+      replayEntry(restampLine + 'review ran on the originating branch — MERGE skipped, nothing to merge.')
     }
     const target = runChild('git', ['-C', mainRoot, 'symbolic-ref', '--short', 'HEAD'],
       { encoding: 'utf8' }, 'git symbolic-ref').stdout.trim()
@@ -2389,6 +2436,7 @@ const STEPS = {
       [mergeBackBin, 'inspect', '--root', mainRoot, '--target', target, '--source', source],
       { encoding: 'utf8' }, 'merge-back.sh inspect')
     return `## Step: merge strategy\n` + (inspect.stdout + inspect.stderr).trim() + '\n\n' +
+      restampLine +
       waivedWarn +
       `AskUserQuestion for the strategy (RECOMMEND above first). Then:\n` +
       `  node ${__filename} ${specPath} --mark merge-strategy <merge-commit|ff-only|squash|rebase-ff>\n` +

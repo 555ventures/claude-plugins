@@ -309,3 +309,74 @@ test('WHEN --mark closed is refused for malformed deviations lines THE SYSTEM st
   assert.match(out, /^4: {3}indented, but its bullet was closed by the blank line above$/m,
     'the offending lines must still be printed after the rule — stating the grammar must not displace the evidence: ' + out)
 })
+
+// q242 (confirmed 2026-09-13): the build driver writes its ledger row's `deviations` count at
+// COMMIT, reading the sidecar as it stood mid-build. specs/20260912/14's live row recorded 0 while
+// the sidecar was still flush-left prose; the sidecar was restated into two real bullets one commit
+// later, and the row — the pipeline's ground truth — stayed at 0 forever. The count is only final
+// once the fold happens, so the close re-stamps it from the last observation the sidecar ever got.
+function ledgerRows(root) {
+  const p = path.join(root, '.claude/spec-runs.jsonl')
+  return fs.readFileSync(p, 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l))
+}
+
+function seedBuildRow(host, deviations) {
+  const specRel = path.relative(host.root, host.spec)
+  const row = { ts: '2026-09-13T00:00:00.000Z', spec: specRel, stage: 'build', tier: 'standard',
+    via: 'direct', model: 'opus', runId: 'bd_seeded', diff: { files: 2, loc: 4 },
+    gate: { finalRounds: 1, postGate: false }, deviations, redCheck: 'none',
+    workers: { spawned: 1, continued: 0 }, incidents: [] }
+  fs.writeFileSync(path.join(host.root, '.claude/spec-runs.jsonl'), JSON.stringify(row) + '\n')
+  return specRel
+}
+
+function foldDeleteCommit(host) {
+  fs.rmSync(host.deviationsPath, { force: true })
+  execFileSync('git', ['-C', host.root, 'add', '-A'], { encoding: 'utf8' })
+  execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'fold deviations'], { encoding: 'utf8' })
+}
+
+test('WHEN the deviations sidecar gains countable entries after the build ledger row was written THE SYSTEM re-stamps that row\'s deviations count at --mark closed from the last observation, in place, and prints the correction once', () => {
+  const host = makeHost({ deviations: 'Recorded during build, flush-left and uncountable.\n',
+    specName: '09-dev-restamp', acId: 'AC-20260823-97-9' })
+  const specRel = seedBuildRow(host, 0) // the build row as COMMIT wrote it: zero countable bullets
+
+  // The restatement the real incident made one commit after the build row landed.
+  fs.writeFileSync(host.deviationsPath, '- the first real departure\n- the second real departure\n')
+  walkToClose(host)
+  foldDeleteCommit(host)
+
+  const r = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(r.status, 0,
+    'a well-formed, folded sidecar must still close cleanly — the re-stamp must never turn a correction into a refusal: ' + r.stdout + r.stderr)
+
+  const build = ledgerRows(host.root).filter((row) => row.stage === 'build' && row.spec === specRel)
+  assert.strictEqual(build.length, 1,
+    'the correction must re-stamp the existing build row in place — a second build row would leave every later reader to choose between two counts for one build: ' + JSON.stringify(build))
+  assert.strictEqual(build[0].deviations, 2,
+    'the build row must carry the sidecar\'s FINAL entry count (2), not the count as it stood mid-build (0) — the ledger is the pipeline\'s ground truth and a permanently under-reported row is exactly the confirmed q242 defect: ' + JSON.stringify(build[0]))
+  assert.strictEqual(build[0].runId, 'bd_seeded',
+    'only the deviations number may change — rewriting any other field of a landed build row would corrupt provenance the re-stamp has no business touching: ' + JSON.stringify(build[0]))
+
+  assert.match(r.stdout + r.stderr, /re-stamped at close: deviations 0 → 2/,
+    'the close must name the correction in the same output that reports the step after it — a silent ledger rewrite is precisely the kind of change the session must see once, live: ' + r.stdout + r.stderr)
+})
+
+test('WHEN the build ledger row already matches the sidecar\'s final entry count THE SYSTEM leaves the ledger line byte-identical and prints no correction', () => {
+  const host = makeHost({ deviations: '- the only departure\n', specName: '10-dev-restamp-noop',
+    acId: 'AC-20260823-97-10' })
+  seedBuildRow(host, 1)
+  const before = fs.readFileSync(path.join(host.root, '.claude/spec-runs.jsonl'), 'utf8')
+
+  walkToClose(host)
+  foldDeleteCommit(host)
+  const r = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(r.status, 0, 'the close must succeed: ' + r.stdout + r.stderr)
+
+  const after = fs.readFileSync(path.join(host.root, '.claude/spec-runs.jsonl'), 'utf8')
+  assert.ok(after.startsWith(before),
+    'an already-correct build row must be left byte-identical — rewriting a row that needs no correction turns every close into a needless ledger mutation, and a key-order or formatting change would show up as ledger churn in every diff: ' + after)
+
+  assert.ok(!/re-stamped at close/.test(r.stdout + r.stderr),
+    'no correction happened, so none may be announced — a "re-stamped" line over an untouched row tells the session a ledger rewrite happened when none did: ' + r.stdout + r.stderr)
+})

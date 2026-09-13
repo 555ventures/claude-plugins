@@ -59,6 +59,10 @@
   function setText(el, text) { if (el) el.textContent = text }
   function plural(n, one, many) { return n === 1 ? one : many }
 
+  // D15: with a screen-label screenFilter, a row shows when its data-label matches OR it carries
+  // no data-label at all (a whole-project row) — the band's own sentence, "On screen <name> plus
+  // the whole project". `__project` (the rail's Whole-project link) is unchanged: it narrows to
+  // project rows alone.
   function applyFilter() {
     var anyOpen = false
     rows().forEach(function (row) {
@@ -68,38 +72,71 @@
       if (show && screenFilter) {
         show = screenFilter === '__project'
           ? !row.getAttribute('data-label')
-          : row.getAttribute('data-label') === screenFilter
+          : (row.getAttribute('data-label') === screenFilter || !row.getAttribute('data-label'))
       }
       setHidden(row, !show)
     })
     qa('[data-rv="filter"]').forEach(function (b) { b.setAttribute('aria-selected', b.getAttribute('data-filter') === filter ? 'true' : 'false') })
     var chip = q('[data-rv="screenfilter"]')
-    var scopeLabelEl = q('[data-rv="scopeband-label"]')
-    if (chip) {
-      var name = screenFilter === '__project' ? 'the whole project' : (screenFilter || '')
-      setText(chip, name)
-      setHidden(chip, !name)
-      setHidden(scopeLabelEl, !name)
-    }
+    if (chip) setText(chip, screenFilter && screenFilter !== '__project' ? screenFilter : (focusedLabel() || ''))
     setHidden(q('[data-rv="empty"]'), !(filter === 'open' && !anyOpen))
   }
 
+  // D9: switches a board's state tab (the same mechanics the tab click handler below drives) —
+  // shared so select() can bring a box's own state forward without duplicating the tab/frame
+  // toggling. No-op when the board is already showing that state.
+  function switchTab(label, state) {
+    if (!label || !state) return
+    var board = q('[data-rv="board"][data-label="' + label + '"]')
+    if (!board) return
+    var tabs = qa('[data-rv="board"][data-label="' + label + '"] [data-rv="tab"]')
+    var current = tabs.filter(function (t) { return t.getAttribute('aria-selected') === 'true' })[0]
+    if (current && current.getAttribute('data-state') === state) return
+    tabs.forEach(function (t) { t.setAttribute('aria-selected', t.getAttribute('data-state') === state ? 'true' : 'false') })
+    board.querySelectorAll('[data-rv="frame"]').forEach(function (f) {
+      var show = f.getAttribute('data-state') === state
+      setHidden(f, !show)
+      if (show) { f.setAttribute('loading', 'eager'); fit(f) }
+    })
+  }
+
+  // D8: row → box is a direct same-origin call, no postMessage. Selecting a row focuses its
+  // board, switches that board's state tab to the row's own data-state (D9) if it differs, then
+  // calls __nlFocus(id) on the board's now-visible frame — retried exactly once on the frame's
+  // own `load` event if it has not finished loading yet.
   function select(id, reveal) {
     selectedId = id
     var label = null
+    var state = null
     rows().forEach(function (row) {
       var on = row.getAttribute('data-id') === id
-      if (on) { row.setAttribute('data-selected', ''); label = row.getAttribute('data-label') } else row.removeAttribute('data-selected')
+      if (on) { row.setAttribute('data-selected', ''); label = row.getAttribute('data-label'); state = row.getAttribute('data-state') } else row.removeAttribute('data-selected')
     })
-    qa('[data-rv="frame"]').concat(qa('[data-rv="board"]')).forEach(function (el) {
-      if (label && el.getAttribute('data-label') === label) el.setAttribute('data-focus', '')
-      else el.removeAttribute('data-focus')
-    })
+    if (label) {
+      focusBoard(label)
+      if (state) switchTab(label, state)
+    } else {
+      qa('[data-rv="frame"]').concat(qa('[data-rv="board"]')).forEach(function (el) { el.removeAttribute('data-focus') })
+    }
     var row = id ? rowById(id) : null
     if (row && row.focus) row.focus()
     if (reveal && label) {
       var board = q('[data-rv="board"][data-label="' + label + '"]')
       if (board && board.scrollIntoView) board.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    }
+    if (label && id) {
+      var frame = q('[data-rv="board"][data-label="' + label + '"] [data-rv="frame"]:not([hidden])')
+      if (frame) {
+        var tried = false
+        var callFocus = function () {
+          try {
+            if (frame.contentWindow && frame.contentWindow.__nlFocus) { frame.contentWindow.__nlFocus(id); tried = true }
+          } catch (e) { /* cross-origin or the frame document is not ready yet */ }
+        }
+        callFocus()
+        // If the frame has not loaded yet, retry exactly once on its own `load` event.
+        if (!tried) on(frame, 'load', callFocus)
+      }
     }
   }
 
@@ -371,7 +408,11 @@
       case 'k': case 'K': case 'ArrowUp': if (e.preventDefault) e.preventDefault(); move(-1); break
       case 'y': case 'Y': if (selectedId) answer(selectedId, 'yes'); break
       case 'n': case 'N': if (selectedId) openCorrection(selectedId); break
-      case 'Escape': select(null); break
+      // disposed s2 (2026-09-13): mark mode's own Escape exit takes priority over the existing
+      // deselect-on-Escape — clearing the row selection AND the board's data-focus underneath an
+      // active mark would have stranded `[data-rv="mark-area"]`'s next click with no focused
+      // board to re-enter mark mode on.
+      case 'Escape': if (markingFrame) { setMarkArea(false) } else { select(null) } break
       case '\\': setFolded(!folded); break
       default: break
     }
@@ -426,20 +467,6 @@
   qa('[data-rv="accept"]').forEach(function (b) { closeNote(b, '/__notes/resolve') })
   qa('[data-rv="reopen"]').forEach(function (b) { closeNote(b, '/__notes/reopen') })
 
-  qa('[data-rv="badge"]').forEach(function (b) {
-    on(b, 'click', function () {
-      setFolded(false)
-      var label = b.getAttribute('data-label')
-      screenFilter = label
-      var first = openRows().filter(function (r) { return r.getAttribute('data-label') === label })[0]
-      // A screen with nothing open still has something to show, so the status widens rather than
-      // leaving the reviewer with an empty panel.
-      if (!first) filter = 'all'
-      applyFilter()
-      var shown = rows().filter(function (r) { return !r.hidden })[0]
-      if (shown) select(shown.getAttribute('data-id'))
-    })
-  })
   qa('[data-rv="addnote"]').forEach(function (b) {
     on(b, 'click', function () {
       setFolded(false)
@@ -456,17 +483,63 @@
     on(tab, 'click', function () {
       var board = tab.closest ? tab.closest('[data-rv="board"]') : null
       if (!board) return
-      qa('[data-rv="board"][data-label="' + board.getAttribute('data-label') + '"] [data-rv="tab"]').forEach(function (t) {
-        t.setAttribute('aria-selected', t === tab ? 'true' : 'false')
-      })
-      var state = tab.getAttribute('data-state')
+      switchTab(board.getAttribute('data-label'), tab.getAttribute('data-state'))
+    })
+  })
+
+  // D10: the per-board hide-marks eye — flips data-pins/aria-pressed and calls __nlPins on EVERY
+  // frame of that board (not only the visible one), so a hidden state's frame does not resurface
+  // its marks unhidden when its tab is later selected. Not persisted.
+  qa('[data-rv="pins"]').forEach(function (btn) {
+    on(btn, 'click', function () {
+      var board = btn.closest ? btn.closest('[data-rv="board"]') : null
+      if (!board) return
+      var next = board.getAttribute('data-pins') === 'off'
+      board.setAttribute('data-pins', next ? 'on' : 'off')
+      btn.setAttribute('aria-pressed', next ? 'true' : 'false')
       board.querySelectorAll('[data-rv="frame"]').forEach(function (f) {
-        var show = f.getAttribute('data-state') === state
-        setHidden(f, !show)
-        if (show) { f.setAttribute('loading', 'eager'); fit(f) }
+        try { if (f.contentWindow && f.contentWindow.__nlPins) f.contentWindow.__nlPins(next) } catch (e) { /* not loaded yet */ }
       })
     })
   })
+
+  // D11: the composer's ghost action puts the focused board's visible frame into mark mode — the
+  // drag, the draft and the note itself stay entirely inside that frame's own layer.
+  //
+  // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D11, disposed s2 (2026-09-13):
+  // marksOnly hides the framed mock's own bar entirely, so its "Marking · Esc to stop" text is
+  // invisible in every board frame — the review page itself must carry the only signal AND the
+  // only path back. `markingFrame` tracks which frame (if any) is currently in mark mode so the
+  // button reads as pressed and the same click, or Escape on this page, turns it back off.
+  var markingBtn = q('[data-rv="mark-area"]')
+  var markingFrame = null
+  function setMarkArea(on) {
+    if (!on && !markingFrame) return
+    if (on) {
+      var label = focusedLabel()
+      if (!label) return
+      var frame = q('[data-rv="board"][data-label="' + label + '"] [data-rv="frame"]:not([hidden])')
+      if (!frame) return
+      if (markingFrame && markingFrame !== frame) {
+        try { if (markingFrame.contentWindow && markingFrame.contentWindow.__nlMark) markingFrame.contentWindow.__nlMark(false) } catch (e) { /* not loaded yet */ }
+      }
+      markingFrame = frame
+      try { if (frame.contentWindow && frame.contentWindow.__nlMark) frame.contentWindow.__nlMark(true) } catch (e) { /* not loaded yet */ }
+    } else {
+      try { if (markingFrame.contentWindow && markingFrame.contentWindow.__nlMark) markingFrame.contentWindow.__nlMark(false) } catch (e) { /* not loaded yet */ }
+      markingFrame = null
+    }
+    if (markingBtn) markingBtn.setAttribute('aria-pressed', on ? 'true' : 'false')
+  }
+  on(markingBtn, 'click', function () { setMarkArea(!markingFrame) })
+  // PATH BACK: Escape is wired into the existing keydown switch above (it runs first in source
+  // order, so `markingFrame` and `setMarkArea` are already defined by the time any key fires) —
+  // the framed mock's own Escape handler (notes-layer.browser.js) only ever sees a key dispatched
+  // inside ITS document, so the review page needs its own exit rather than relying on that one.
+
+  // D15: "All screens" clears the narrowing so every screen's rows show; scrolling to a board
+  // re-applies it (focusBoard/the IntersectionObserver below).
+  on(q('[data-rv="allscreens"]'), 'click', function () { screenFilter = null; applyFilter() })
   qa('[data-rv="chip"]').forEach(function (c) {
     on(c, 'click', function () {
       reason = c.getAttribute('data-value')
@@ -526,6 +599,15 @@
       if (best && bestRatio > 0) focusBoard(best)
     }, { threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] })
     qa('[data-rv="board"]').forEach(function (el) { io.observe(el) })
+  }
+
+  // D8: box → row. The framed layer calls this directly (same-origin, no postMessage) on a box
+  // click; a no-op on an id that has no row on this page.
+  window.__rvPick = function (id) {
+    var row = rowById(id)
+    if (!row) return
+    if (row.scrollIntoView) row.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    select(id)
   }
 
   screenFilter = focusedLabel()

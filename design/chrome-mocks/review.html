@@ -35,10 +35,45 @@
   note still blocking sign-off — the first proof the D1/D2/D3 binding renders a real, reachable
   state rather than a decorative one.
 
-  specs/20260912/12 D3 adds the region row: `n4` carries `data-region="1"` and the
-  `Show on the screen` control, the only row control a region note gets — a marked area is
-  judged on the screen, not in the list. The control is quiet on purpose (muted, borrowing the
-  row button base) because the loud control on this page is `Approve journey`.
+  specs/20260912/12 D3 — marked areas, as the owner accepted them on 2026-09-13 (design ruling,
+  superseding the spec's first draft of a `Show on the screen` button, which this file no longer
+  carries):
+  - The box IS the note. Every marked area is painted on its board at all times, and it is drawn
+    so that it can never be mistaken for the design's own borders — the first cut's thin solid
+    rounded outline read as a second card edge whenever it landed on a bordered element, which
+    `b`'s `error` card is the standing proof of. A mark is therefore TWO parts: a highlighter
+    tint filling exactly what the reviewer dragged (no stroke of its own, so nothing can nest
+    inside it), and a dashed frame held 6px OUTSIDE that tint (`.rv-mark::before`, no new markup)
+    so a gutter of untouched design always separates the annotation from what it surrounds. A
+    dashed warn-colored rule exists nowhere else in this register, so the frame has no lookalike
+    in any mock it is painted over. The numbered pin carrying the note id (`n4`, `n5`) rides the
+    frame's top-left corner, its ground-colored halo cutting the dash; it borrows the rail's
+    orange count badge, so the rail count, the caption badge, the tab count and the pin read as
+    one system. Selection changes weight inside that register, never back out of it: the frame
+    goes to a 2px full-strength stroke over a warn glow and the tint deepens. In the shipped page
+    the framed mock's own notes layer paints these (`.nl-region` + `.nl-region-badge`); here they
+    sit in a `.rv-marks` layer over the shot so the file renders standalone — the geometry is
+    illustrative, the register is binding, and the notes layer owes this same two-part treatment.
+  - Connection is by selection, both ways, with no row control: clicking a row focuses its board
+    and state tab and brings its box to full stroke; clicking a pin selects its row. The row's
+    left rule is the selection accent — dark when selected, faint otherwise. `n4` is selected
+    below so both halves of that state are visible at once.
+  - A region row and a whole-screen / whole-project row share ONE layout; the only difference is
+    that the region row's id sits in the orange pin (`.rv-pin`) where the plain row's id is muted
+    text. The note text leads in both. The `Whole project` scope chip stays.
+  - Boxes belong to the state tab they were drawn on: `b`'s `n5` was drawn on `error`, so that
+    tab carries the pin count and is the selected tab, and `happy` shows nothing. A tab count is
+    how a reviewer sees marks on a state they are not looking at.
+  - `Hide marks` — the eye button in each caption (`data-rv="pins"`, `aria-pressed`) — is the one
+    way to see the untouched design; `data-pins="off"` on the board hides its layer.
+  - `Mark an area` — the ghost action beside `Send` — is the composer's entry into drawing; the
+    drawing itself happens inside the frame's own layer, as before. Its glyph is a dashed
+    rectangle, the thing the button draws.
+  Three fixes landed in the same pass: the filter row reads `Needs you / Done / All` (an
+  addressed project note like `n3` waits on the reviewer, so it belongs under the first tab and
+  the old `Open` label lied about it); the caption count is an inert `<span>`, not a button that
+  looked like the rail's link; and the scope band says what it filters ("On screen a, plus the
+  whole project") with an `All screens` way out.
 
   What it deliberately does NOT carry: a served `?clean` frame, the notes layer's own shadow-root
   UI, the picks/approve script's live behaviour, or the composer's scope toggle — that control is
@@ -117,10 +152,17 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
 .rv-cap h3{margin:0;font-size:15px;font-weight:600}
 .rv-vp{margin-left:auto;font-size:13px;color:var(--v-muted);font-variant-numeric:tabular-nums}
 .rv-stage{background:var(--v-muted-bg);padding:var(--v-space-6) var(--v-space-4)}
-.rv .rv-badge{min-width:1.8em;padding:0 6px;border-radius:999px;font-size:12px;font-variant-numeric:tabular-nums;background:color-mix(in srgb, var(--v-warn) 14%, var(--v-bg));color:var(--v-warn);border-color:color-mix(in srgb, var(--v-warn) 40%, var(--v-bg))}
+.rv .rv-badge{display:inline-block;min-width:1.8em;text-align:center;padding:0 6px;border-radius:999px;font-size:12px;line-height:1.6;font-variant-numeric:tabular-nums;background:color-mix(in srgb, var(--v-warn) 14%, var(--v-bg));color:var(--v-warn);border:1px solid color-mix(in srgb, var(--v-warn) 40%, var(--v-bg))}
 .rv-badge[data-zero]{background:transparent;color:var(--v-muted);border-color:transparent}
 .rv .rv-addnote{margin-left:0;font-size:14px;color:var(--v-muted);border-color:transparent;padding:3px 9px}
 .rv .rv-addnote:hover{color:var(--v-fg);border-color:var(--v-border)}
+.rv .rv-pins{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border-color:transparent;color:var(--v-muted)}
+.rv .rv-pins:hover{color:var(--v-fg);border-color:var(--v-border)}
+.rv .rv-pins svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.rv .rv-pins[aria-pressed="false"]{color:var(--v-fg);background:var(--v-muted-bg);border-color:var(--v-border)}
+.rv .rv-pins .rv-eye-slash{display:none}
+.rv .rv-pins[aria-pressed="false"] .rv-eye-slash{display:block}
+.rv-tabpin{display:inline-block;min-width:1.5em;margin-left:6px;padding:0 5px;border-radius:999px;font-size:11px;line-height:1.5;font-weight:600;font-variant-numeric:tabular-nums;background:var(--v-warn);color:#fff;vertical-align:1px}
 .rv-tabs{display:flex;flex-wrap:wrap;gap:2px 4px;border:0;border-radius:0;overflow:visible;flex-basis:100%;margin:2px 0 0 -4px}
 .rv-tabs button{border:1px solid transparent;border-radius:999px;padding:3px 10px;font-size:13px;color:var(--v-muted);background:transparent}
 .rv-tabs button:hover{background:var(--v-bg);border-color:var(--v-border);color:var(--v-fg)}
@@ -129,23 +171,47 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
 .rv-tabs button[data-gray-first]::before{content:"";display:inline-block;width:1px;height:14px;background:var(--v-border);margin-right:10px;vertical-align:-3px}
 .rv-shot{position:relative;overflow:hidden;border:0;background:transparent}
 .rv-shot iframe{border:0;display:block}
+/* the marks layer — stands in for the frame's own notes layer (.nl-region / .nl-region-badge) */
+.rv-marks{position:absolute;inset:0;pointer-events:none}
+.rv-board[data-pins="off"] .rv-marks{display:none}
+/* A mark is drawn in TWO parts so it can never be read as a border belonging to the design
+   underneath it: the element itself is only a highlighter tint over exactly what the reviewer
+   dragged, and its `::before` is the dashed frame, held 6px OUTSIDE that tint so a gutter of
+   untouched design always separates the annotation from whatever it surrounds. Nothing in the
+   mock register is a dashed warn-colored rule, so the frame has no lookalike; the tint carries
+   no stroke of its own, so it cannot nest inside one. */
+.rv-mark{position:absolute;pointer-events:auto;cursor:pointer;border:0;border-radius:2px;background:color-mix(in srgb, var(--v-warn) 8%, transparent);transition:background-color .15s}
+.rv-mark::before{content:"";position:absolute;inset:-6px;border:1.5px dashed color-mix(in srgb, var(--v-warn) 65%, var(--v-bg));border-radius:5px;box-shadow:0 0 0 3px color-mix(in srgb, var(--v-bg) 55%, transparent);pointer-events:none;transition:border-color .15s,box-shadow .15s}
+.rv-mark:hover{background:color-mix(in srgb, var(--v-warn) 14%, transparent)}
+.rv-mark:hover::before{border-color:var(--v-warn)}
+/* selected: the frame thickens to a full-strength stroke and the tint deepens — a change of
+   weight within the annotation register, never a change back into a solid content-like edge */
+.rv-mark[data-sel]{background:color-mix(in srgb, var(--v-warn) 17%, transparent)}
+.rv-mark[data-sel]::before{border-width:2px;border-color:var(--v-warn);box-shadow:0 0 0 3px color-mix(in srgb, var(--v-warn) 26%, transparent)}
+.rv-mark:focus-visible{outline:2px solid var(--v-ring);outline-offset:8px}
+.rv-pin{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;background:var(--v-warn);color:#fff;font:600 11.5px/1 var(--v-font);font-variant-numeric:tabular-nums;letter-spacing:.02em;white-space:nowrap}
+/* the pin rides the frame's top-left corner, its ground-colored halo cutting the dash */
+.rv-mark .rv-pin{position:absolute;left:-8px;top:-17px;box-shadow:0 0 0 2px var(--v-bg),0 1px 2px rgba(0,0,0,.15)}
 
 .rv-inspector{border-left:1px solid var(--v-border);background:var(--v-bg);position:sticky;top:var(--rv-bar);height:calc(100vh - var(--rv-bar));display:flex;flex-direction:column;min-width:0}
 .rv-filters{display:flex;align-items:center;flex-wrap:nowrap;gap:var(--v-space-1);height:52px;padding:0 var(--v-space-4);border-bottom:1px solid var(--v-border)}
 .rv-filters button{white-space:nowrap;flex:none;border-color:transparent;color:var(--v-muted);font-size:14px;padding:4px 9px;display:inline-flex;align-items:center;gap:6px}
 .rv-filters button[aria-selected="true"]{background:var(--v-muted-bg);color:var(--v-fg);font-weight:600}
 .rv-filters .rv-count{margin-left:0}
-.rv-scopeband{display:flex;align-items:center;height:44px;padding:0 var(--v-space-4);border-bottom:1px solid var(--v-border);overflow:hidden}
-.rv-scopeband-label{color:var(--v-muted);font-weight:400;margin-right:.35em;font-size:13px}
+.rv-scopeband{display:flex;align-items:center;gap:.35em;height:44px;padding:0 var(--v-space-4);border-bottom:1px solid var(--v-border);overflow:hidden;white-space:nowrap}
+.rv-scopeband-label{color:var(--v-muted);font-weight:400;font-size:13px}
 .rv-screenfilter{display:inline-flex;align-items:center;max-width:100%;min-width:0;border-radius:999px;background:var(--v-muted-bg);color:var(--v-fg);font-size:13px;font-weight:500;padding:4px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rv .rv-allscreens{margin-left:auto;border-color:transparent;color:var(--v-muted);font-size:13px;padding:3px 8px}
+.rv .rv-allscreens:hover{color:var(--v-fg);border-color:var(--v-border)}
 .rv .rv-fold{margin-left:0;flex:none;font-size:16px;line-height:1;padding:0 6px;color:var(--v-muted)}
 .rv-rows{flex:1;overflow:auto;padding:var(--v-space-3) var(--v-space-4)}
-.rv-row{border-left:2px solid var(--v-border);padding:var(--v-space-2) var(--v-space-3);margin:0 0 var(--v-space-2);border-radius:0 var(--v-radius) var(--v-radius) 0;outline:0}
-.rv-row[data-status="open"]{border-left-color:var(--v-warn)}
-.rv-row[data-kind="note"][data-status="open"]{border-left-color:var(--v-primary)}
-.rv-row[data-selected]{background:var(--v-muted-bg);box-shadow:none}
-.rv-rowhead{display:flex;align-items:center;flex-wrap:wrap;gap:2px;font-size:14px;color:var(--v-muted)}
-.rv-id{font-weight:600;color:var(--v-fg);font-variant-numeric:tabular-nums;margin-right:var(--v-space-2)}
+/* the whole row is the click target; its left rule is the selection accent, nothing else */
+.rv-row{border-left:2px solid var(--v-border);padding:var(--v-space-2) var(--v-space-3);margin:0 0 var(--v-space-2);border-radius:0 var(--v-radius) var(--v-radius) 0;outline:0;cursor:pointer}
+.rv-row:hover{background:color-mix(in srgb, var(--v-muted-bg) 60%, var(--v-bg))}
+.rv-row[data-selected]{background:var(--v-muted-bg);border-left-color:var(--v-primary);box-shadow:none}
+.rv-rowhead{display:flex;align-items:center;flex-wrap:wrap;gap:2px;font-size:13px;color:var(--v-muted)}
+.rv-rowhead .rv-pin{margin-right:var(--v-space-2)}
+.rv-id{font-weight:400;color:var(--v-muted);font-variant-numeric:tabular-nums;margin-right:var(--v-space-2)}
 .rv-who{color:var(--v-muted)}
 .rv-screen{color:var(--v-muted)}
 .rv-claim{margin:4px 0 0;color:var(--v-fg);font-size:15px}
@@ -154,9 +220,9 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
 .rv-chip{display:inline-flex;border:0;border-radius:999px;padding:1px 9px;font-size:12px;color:var(--v-muted);background:var(--v-muted-bg);margin-left:6px}
 .rv-actions{display:flex;flex-wrap:wrap;align-items:center;gap:var(--v-space-1);margin-top:var(--v-space-2)}
 .rv-actions button{font-size:14px;padding:4px 10px}
-.rv .rv-jump{display:inline-flex;align-items:center;gap:.5em;color:var(--v-muted)}
-.rv .rv-jump::before{content:"";width:11px;height:8px;border:1.5px solid currentColor;border-radius:2px;flex:none}
-.rv .rv-jump:hover{color:var(--v-fg)}
+.rv .rv-mark-area{display:inline-flex;align-items:center;gap:.5em;color:var(--v-muted);border-color:transparent;margin-left:auto}
+.rv .rv-mark-area::before{content:"";width:11px;height:8px;border:1.5px dashed currentColor;border-radius:2px;flex:none}
+.rv .rv-mark-area:hover{color:var(--v-fg);border-color:var(--v-border)}
 .rv-empty{margin:var(--v-space-4) 0;color:var(--v-muted);font-size:15px}
 .rv-composer{border-top:1px solid var(--v-border);padding:var(--v-space-4);display:flex;flex-direction:column;gap:var(--v-space-3)}
 .rv-chips{display:flex;flex-wrap:wrap;gap:var(--v-space-1)}
@@ -176,7 +242,7 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
   </nav>
   <span class="rv-pill" data-rv="pill">Wireframes · awaiting your answers</span>
   <div class="rv-progress" data-rv="progress" data-answered="0" data-total="0">
-    <span class="rv-progress-text" data-rv="progress-text">0 of 0 answered · 2 notes for the session</span>
+    <span class="rv-progress-text" data-rv="progress-text">0 of 0 answered · 3 notes for the session</span>
     <span class="rv-track" aria-hidden="true"><span class="rv-fill" data-rv="fill" style="width:100%"></span></span>
   </div>
   <div class="rv-control" data-rv="control">
@@ -198,7 +264,7 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
     <h2>Screens</h2>
     <ol class="rv-list rv-screens">
       <li><a data-rv="screen" data-screen="a" href="#board-a"><span class="rv-n">1</span>a<span class="rv-count" data-rv="count" data-screen="a">1</span></a></li>
-      <li><a data-rv="screen" data-screen="b" href="#board-b"><span class="rv-n">2</span>b<span class="rv-count" data-rv="count" data-screen="b" data-zero>0</span></a></li>
+      <li><a data-rv="screen" data-screen="b" href="#board-b"><span class="rv-n">2</span>b<span class="rv-count" data-rv="count" data-screen="b">1</span></a></li>
     </ol>
     <ol class="rv-list rv-screens rv-project">
       <li><a data-rv="screen" data-screen="__project" href="#"><span class="rv-n">·</span>Whole project<span class="rv-count" data-rv="count" data-screen="__project">1</span></a></li>
@@ -207,39 +273,52 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
 
   <main class="rv-canvas" data-rv="canvas">
 
-    <section class="rv-board" data-rv="board" data-label="a" id="board-a">
+    <section class="rv-board" data-rv="board" data-label="a" id="board-a" data-focus data-pins="on">
       <header class="rv-cap">
         <h3>a<span class="rv-of">· 1 of 2</span></h3>
         <span class="rv-vp">1280×800</span>
-        <button type="button" class="rv-badge" data-rv="badge" data-label="a" title="1 open on this screen">1</button>
+        <span class="rv-badge" data-rv="badge" data-label="a" title="1 open on this screen">1</span>
         <button type="button" class="rv-addnote" data-rv="addnote" data-label="a">+ note</button>
+        <button type="button" class="rv-pins" data-rv="pins" data-label="a" aria-pressed="true" title="Hide marks" aria-label="Hide marks">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/><path class="rv-eye-slash" d="M4 20 20 4"/></svg>
+        </button>
         <div class="rv-tabs" role="tablist" aria-label="States of a">
-          <button type="button" role="tab" data-rv="tab" data-state="happy" aria-selected="true">happy</button>
+          <button type="button" role="tab" data-rv="tab" data-state="happy" aria-selected="true">happy<span class="rv-tabpin" title="1 marked area on this state">1</span></button>
           <button type="button" role="tab" data-rv="tab" data-state="empty" data-gray data-gray-first aria-selected="false">empty</button>
         </div>
       </header>
       <div class="rv-stage">
         <div class="rv-shot" data-rv="shot">
           <iframe data-rv="frame" data-label="a" data-state="happy" width="1280" height="200" scrolling="no" title="a · happy"
-            srcdoc="&lt;style&gt;body{margin:0;font:14px/1.5 ui-sans-serif,system-ui,sans-serif;color:#0a0a0a;background:#fff;padding:20px}h1{font-size:18px;margin:0}p{color:#737373}&lt;/style&gt;&lt;h1&gt;Screen a&lt;/h1&gt;&lt;p&gt;happy state&lt;/p&gt;"></iframe>
+            srcdoc="&lt;style&gt;body{margin:0;font:14px/1.5 ui-sans-serif,system-ui,sans-serif;color:#0a0a0a;background:#fff;padding:20px}h1{font-size:18px;margin:0 0 14px}.row{display:flex;gap:16px}.card{flex:0 0 220px;border:1px solid #e5e5e5;border-radius:8px;padding:12px 14px}.card b{display:block;margin-bottom:2px}.card span{color:#737373;font-size:13px}&lt;/style&gt;&lt;h1&gt;Screen a&lt;/h1&gt;&lt;div class=&quot;row&quot;&gt;&lt;div class=&quot;card&quot;&gt;&lt;b&gt;Clinic&lt;/b&gt;&lt;span&gt;Open today · 0.4 km&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;card&quot;&gt;&lt;b&gt;Clinic&lt;/b&gt;&lt;span&gt;Open today · 1.2 km&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;card&quot;&gt;&lt;b&gt;Pharmacy&lt;/b&gt;&lt;span&gt;Closes 18:00&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;"></iframe>
+          <div class="rv-marks" data-rv="marks" data-state="happy">
+            <div class="rv-mark" data-rv="mark" data-id="n4" data-sel tabindex="0" style="left:14px;top:56px;width:526px;height:78px" title="These two clinics read the same."><span class="rv-pin">n4</span></div>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="rv-board" data-rv="board" data-label="b" id="board-b">
+    <section class="rv-board" data-rv="board" data-label="b" id="board-b" data-pins="on">
       <header class="rv-cap">
         <h3>b<span class="rv-of">· 2 of 2</span></h3>
         <span class="rv-vp">1280×800</span>
-        <button type="button" class="rv-badge" data-rv="badge" data-label="b" data-zero title="nothing open on this screen">0</button>
+        <span class="rv-badge" data-rv="badge" data-label="b" title="1 open on this screen">1</span>
         <button type="button" class="rv-addnote" data-rv="addnote" data-label="b">+ note</button>
+        <button type="button" class="rv-pins" data-rv="pins" data-label="b" aria-pressed="true" title="Hide marks" aria-label="Hide marks">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/><path class="rv-eye-slash" d="M4 20 20 4"/></svg>
+        </button>
         <div class="rv-tabs" role="tablist" aria-label="States of b">
-          <button type="button" role="tab" data-rv="tab" data-state="happy" aria-selected="true">happy</button>
+          <button type="button" role="tab" data-rv="tab" data-state="happy" aria-selected="false">happy</button>
+          <button type="button" role="tab" data-rv="tab" data-state="error" data-gray data-gray-first aria-selected="true">error<span class="rv-tabpin" title="1 marked area on this state">1</span></button>
         </div>
       </header>
       <div class="rv-stage">
         <div class="rv-shot" data-rv="shot">
-          <iframe data-rv="frame" data-label="b" data-state="happy" width="1280" height="200" scrolling="no" title="b · happy"
-            srcdoc="&lt;style&gt;body{margin:0;font:14px/1.5 ui-sans-serif,system-ui,sans-serif;color:#0a0a0a;background:#fff;padding:20px}h1{font-size:18px;margin:0}p{color:#737373}&lt;/style&gt;&lt;h1&gt;Screen b&lt;/h1&gt;&lt;p&gt;happy state&lt;/p&gt;"></iframe>
+          <iframe data-rv="frame" data-label="b" data-state="error" width="1280" height="200" scrolling="no" title="b · error"
+            srcdoc="&lt;style&gt;body{margin:0;font:14px/1.5 ui-sans-serif,system-ui,sans-serif;color:#0a0a0a;background:#fff;padding:20px}h1{font-size:18px;margin:0 0 14px}.err{display:inline-block;border:1px solid #e5e5e5;border-left:3px solid #dc2626;border-radius:8px;padding:10px 14px;color:#0a0a0a}.err span{display:block;color:#737373;font-size:13px}&lt;/style&gt;&lt;h1&gt;Screen b&lt;/h1&gt;&lt;div class=&quot;err&quot;&gt;Something went wrong&lt;span&gt;Error 500&lt;/span&gt;&lt;/div&gt;"></iframe>
+          <div class="rv-marks" data-rv="marks" data-state="error">
+            <div class="rv-mark" data-rv="mark" data-id="n5" tabindex="0" style="left:14px;top:56px;width:196px;height:68px" title="This tells me nothing I can act on."><span class="rv-pin">n5</span></div>
+          </div>
         </div>
       </div>
     </section>
@@ -248,13 +327,13 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
 
   <aside class="rv-inspector" data-rv="inspector" aria-label="Questions and notes">
     <div class="rv-filters" role="tablist">
-      <button type="button" data-rv="filter" data-filter="open" aria-selected="true">Open<span class="rv-count" data-rv="open-count">2</span></button>
-      <button type="button" data-rv="filter" data-filter="answered" aria-selected="false">Answered</button>
+      <button type="button" data-rv="filter" data-filter="open" aria-selected="true">Needs you<span class="rv-count" data-rv="open-count">3</span></button>
+      <button type="button" data-rv="filter" data-filter="answered" aria-selected="false">Done</button>
       <button type="button" data-rv="filter" data-filter="all" aria-selected="false">All</button>
       <button type="button" class="rv-keyhint" data-rv="keyhint" title="Keyboard shortcuts" aria-label="Keyboard shortcuts" aria-expanded="false">?</button>
       <button type="button" class="rv-fold" data-rv="fold" title="Fold the inspector (\)" aria-label="Fold the inspector">›</button>
     </div>
-    <div class="rv-scopeband"><span class="rv-scopeband-label">Notes for</span><span class="rv-screenfilter" data-rv="screenfilter">a</span></div>
+    <div class="rv-scopeband"><span class="rv-scopeband-label">On screen</span><span class="rv-screenfilter" data-rv="screenfilter">a</span><span class="rv-scopeband-label">plus the whole project</span><button type="button" class="rv-allscreens" data-rv="allscreens">All screens</button></div>
     <div class="rv-rows" data-rv="rows">
 
       <article data-rv="row" data-id="n1" data-kind="note" data-status="resolved" class="rv-row rv-note" data-label="a" hidden tabindex="-1">
@@ -269,7 +348,7 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
         <p class="rv-answered">Addressed: did it</p>
       </article>
 
-      <article data-rv="row" data-id="n3" data-kind="note" data-status="open" class="rv-row rv-note" data-selected tabindex="-1">
+      <article data-rv="row" data-id="n3" data-kind="note" data-status="open" class="rv-row rv-note" tabindex="-1">
         <div class="rv-rowhead"><span class="rv-id">n3</span><span class="rv-who">You told JJ</span><span class="rv-sep">·</span><span class="rv-screen">Whole project</span></div>
         <p class="rv-claim">The navigation is wrong everywhere</p>
         <p class="rv-wait">Addressed: reworked the nav pattern</p>
@@ -279,12 +358,14 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
         </div>
       </article>
 
-      <article data-rv="row" data-id="n4" data-kind="note" data-status="open" data-region="1" class="rv-row rv-note" data-label="a" tabindex="-1">
-        <div class="rv-rowhead"><span class="rv-id">n4</span><span class="rv-who">You told JJ</span><span class="rv-sep">·</span><span class="rv-screen">a</span></div>
+      <article data-rv="row" data-id="n4" data-kind="note" data-status="open" data-region="1" class="rv-row rv-note" data-label="a" data-state="happy" data-selected tabindex="0" aria-selected="true">
+        <div class="rv-rowhead"><span class="rv-pin">n4</span><span class="rv-who">You told JJ</span><span class="rv-sep">·</span><span class="rv-screen">a</span></div>
         <p class="rv-claim">These two clinics read the same.</p>
-        <div class="rv-actions" data-rv="note-actions">
-          <button type="button" data-rv="jump" class="rv-jump">Show on the screen</button>
-        </div>
+      </article>
+
+      <article data-rv="row" data-id="n5" data-kind="note" data-status="open" data-region="1" class="rv-row rv-note" data-label="b" data-state="error" tabindex="-1">
+        <div class="rv-rowhead"><span class="rv-pin">n5</span><span class="rv-who">You told JJ</span><span class="rv-sep">·</span><span class="rv-screen">b</span><span class="rv-sep">·</span><span class="rv-screen">error</span></div>
+        <p class="rv-claim">This tells me nothing I can act on.</p>
       </article>
 
       <p class="rv-empty" data-rv="empty" hidden>Every question is answered. Approve the journey when the screens look right.</p>
@@ -298,7 +379,7 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
         <button type="button" class="rv-chipbtn rv-chip-on" data-rv="chip" data-value="other" aria-pressed="true">Other</button>
       </div>
       <textarea data-rv="text" rows="3" placeholder="What should change, or what is missing?"></textarea>
-      <div class="rv-actions"><button type="submit" data-rv="send" class="rv-primary">Send</button><kbd>⌘</kbd><kbd>Enter</kbd></div>
+      <div class="rv-actions"><button type="submit" data-rv="send" class="rv-primary">Send</button><kbd>⌘</kbd><kbd>Enter</kbd><button type="button" class="rv-mark-area" data-rv="mark-area" title="Draw a box on the screen, then write the note">Mark an area</button></div>
     </form>
   </aside>
 

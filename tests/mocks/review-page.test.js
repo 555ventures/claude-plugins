@@ -128,19 +128,6 @@ function cellText(html, screen) {
   return m ? m[1] : null
 }
 
-test('AC-20260912-06-3: the scope band states "Notes for" as DOM text, never as viewer.css generated content', () => {
-  const html = render()
-  const bandMatch = /<div class="rv-scopeband">([\s\S]*?)<\/div>/.exec(html)
-  assert.ok(bandMatch, 'the page must render a .rv-scopeband element to inspect')
-  assert.match(bandMatch[1], />Notes for</,
-    'the scope band must carry the literal text "Notes for" as an element\'s own DOM text content ' +
-    '(D4) — a reviewer reading the served bytes, or a test asserting on them, must be able to see ' +
-    'the scope statement without also loading viewer.css: got ' + JSON.stringify(bandMatch[1]))
-  const viewer = read('spec/templates/mocks/viewer.css')
-  assert.doesNotMatch(viewer, /content:\s*"Notes for"/,
-    'viewer.css must carry no ::before content: "Notes for" declaration once D4 lands — a CSS ' +
-    'generated-content string is invisible to the served bytes and to any DOM-level assertion')
-})
 
 // AC-20260912-06-4 (sanctioned pin exception, green pre-change): ADR-0018 clause (a)'s breadcrumb
 // fix already shipped in this pre-image; this pin is what keeps the promise honest at close (D6).

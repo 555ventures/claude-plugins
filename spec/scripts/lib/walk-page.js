@@ -430,6 +430,20 @@ function renderRequestsSection(notes, journeysList, prefix, s, approved) {
     '</section>'
 }
 
+// specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D17 (owner ruling)/D4, disposed s1
+// (2026-09-13): mirrors notes-layer.browser.js's own `colorFor` (specs/20260912/11 D9's four
+// roles) — this file is server-rendered HTML with no access to that browser-only function, and
+// viewer.css's shipped `.nl-region-badge{background:var(--c)}` rule has no fallback, so a badge
+// this file emits with no `--c` set at all computes a fully transparent background (disposer's
+// executed repro: `badgeBg: rgba(0,0,0,0)` on both a `lost` and a `children` row). Set inline,
+// never a second copy of the CSS rule.
+function regionColorVar(status) {
+  if (status === 'addressed') return 'var(--v-warn)'
+  if (status === 'resolved') return 'var(--v-ok)'
+  if (status === 'outdated' || status === 'withdrawn') return 'var(--v-muted)'
+  return 'var(--v-danger)' // open
+}
+
 // D5/D20: one request card per client-origin, non-question, mock-scope note on the journey that
 // is not `resolved` — a resolved request is never rendered on the walk page at all (D20; the
 // index's own log is where a closed request is still visible, hidden behind its toggle). Every
@@ -471,10 +485,30 @@ function renderWalkRequest(n, s, approved) {
   }
   const again = '<p class="wk-req-again"' + (reopenText != null ? '' : ' hidden') + '>' +
     (reopenText != null ? esc(s.reqAgainPrefix + reopenText) : '') + '</p>'
+  // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D4 (amended): a request whose
+  // region was flagged lost at the last re-anchor (mocks-driver.js's `notes address`, D1) carries
+  // its OWN `data-region="outdated"` attribute — never on `data-status`, which stays the note's
+  // own lifecycle status (viewer.css's action-row rules and walk.browser.js's
+  // `refreshNavDisabled` blocking count both read `data-status` and neither learns a new value).
+  const regionOutdated = !!(n.addressed && n.addressed.reanchored === 'lost')
+  // disposed s5 (2026-09-13): D4 promised BOTH specs/20260912/11 D8 footnotes, not only the
+  // outdated one — `notes-layer.browser.js`'s own strip appends "fitted to content on this size"
+  // whenever a region resolved in `children` mode (the anchor's surviving children, not the
+  // original exact element); the walk page carried only the `lost` half.
+  const regionFitted = !!(n.addressed && n.addressed.reanchored === 'children')
+  const outdatedHtml = regionOutdated
+    ? '<p class="wk-req-outdated"><span class="nl-region-badge" style="--c:' + regionColorVar('outdated') + '"><span class="nl-region-glyph outdated"></span></span>' +
+      'Outdated — the area it marked is gone.</p>'
+    : regionFitted
+      ? '<p class="wk-req-outdated"><span class="nl-region-badge" style="--c:' + regionColorVar(status) + '"><span class="nl-region-glyph ' + esc(status) + '"></span></span>' +
+        'Adjusted — fitted to content on this size.</p>'
+      : ''
   return '<article class="wk-req" data-wk="request" data-id="' + esc(n.id) + '" data-label="' + esc(n.screen) +
-    '" data-status="' + esc(status) + '"' + (n.resolution ? ' data-resolution="' + esc(n.resolution) + '"' : '') + ' hidden>' +
+    '" data-status="' + esc(status) + '"' + (n.resolution ? ' data-resolution="' + esc(n.resolution) + '"' : '') +
+    (regionOutdated ? ' data-region="outdated"' : '') + ' hidden>' +
     '<p class="wk-req-text">' + esc(n.text) + '</p>' +
     again +
+    outdatedHtml +
     '<p class="wk-req-status">' + esc(statusLine) + '</p>' +
     extra +
     '</article>'

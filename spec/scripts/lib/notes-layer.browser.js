@@ -46,7 +46,23 @@
 // the page it is injected into.
 'use strict'
 ;(function () {
-  if (new URLSearchParams(location.search).has('clean')) return
+  // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D3/D5: a review board's framed
+  // mock rides `?clean&notes=1` (lib/review-page.js's frameSrc) so this layer still mounts (the
+  // clean strip is a server-side style only, CLEAN_STYLE in design-atlas.js) — a bare `?clean`
+  // (every other caller) still returns here immediately, unchanged.
+  var qs = new URLSearchParams(location.search)
+  if (qs.has('clean') && !qs.has('notes')) return
+
+  // Render-defect fix (2026-09-13, this spec's own escape — the whole authoring layer was
+  // riding into the review page's boards): `notes=1` means "paint the marks", never "inject the
+  // authoring UI" — D3's binding note surface is the review page's OWN right rail
+  // (lib/review-page.js's inspector), so a framed board contributes the box layer
+  // (renderOverlay/boxLayer) and nothing else. `marksOnly` gates the three things that are
+  // authoring chrome, not marks: the fixed bar, the in-flow strip, and any card auto-opening on
+  // a box click/focus. `__nlMark`/`__nlFocus`/`__nlPins`/`__rvPick` (D8/D10/D11) all still work —
+  // none of them touch bar/strip/card. A normal (unflagged) served mock page — `qs.has('notes')`
+  // false — keeps its full bar and strip exactly as before this fix (the pinned invariant).
+  var marksOnly = qs.has('notes')
 
   var __base = (location.pathname.match(/^\/p\/[^/]+/) || [''])[0]
 
@@ -119,7 +135,13 @@
   var scope = declaredScope === 'project' ? 'project' : declaredScope === 'mock' ? 'mock' : (rootEl ? 'mock' : 'project')
 
   var stateButtons = Array.prototype.slice.call(document.querySelectorAll('[data-state-btn]'))
-  var activeState = stateButtons.length ? stateButtons[0].getAttribute('data-state-btn') : 'default'
+  // Before any state button is clicked, the page shows its base render — "happy" in
+  // review-page.js's own naming (D9's data-state fallback; rowOpen's `n.state || 'happy'`),
+  // never the FIRST declared button's name, which a page with only e.g. "error" declared would
+  // otherwise wrongly claim as the active state on load (a served ?state=<s> frame corrects this
+  // via its own click simulation before this ever matters; a screen with no data-state-btn at
+  // all keeps 'default', unchanged).
+  var activeState = stateButtons.length ? 'happy' : 'default'
   stateButtons.forEach(function (btn) {
     btn.addEventListener('click', function () {
       activeState = btn.getAttribute('data-state-btn') || activeState
@@ -161,15 +183,25 @@
     return fetch(__base + '/__notes/' + p, opts).then(function (r) { return r.json() })
   }
 
+  // marksOnly: the bar is authoring chrome (compose/mark/author/show-resolved) — it must not
+  // PAINT over a review board, but it still mounts (shadow root, buttons, the live "Marking ·
+  // Esc to stop" text D11 hands the review page's own Mark-an-area bridge test): the host itself
+  // just carries `display:none`, so it renders nothing and takes no layout space while staying
+  // queryable exactly as tests/mocks/review-region.test.js's AC-17 needs (a same-origin
+  // same-document query into the frame's shadow root, no visible chrome).
   var bar = document.createElement('div'); bar.className = 'nl-bar'
-  document.body.appendChild(mount(bar))
+  var barHost = mount(bar)
+  if (marksOnly) setStyle(barHost, { display: 'none' })
+  document.body.appendChild(barHost)
 
   // D5: exactly one panel exists per page, matching the declared scope — a project page never
   // gets an nl-strip (mock notes belong on the screen), a mock page never gets an nl-proj (project
-  // notes belong on the atlas).
+  // notes belong on the atlas). marksOnly skips both — same reasoning as the bar above; render()
+  // already guards every strip/proj access behind `if (strip)`/`if (proj)`, so leaving them null
+  // is enough to drop the in-flow strip and the filter row/composer it carries.
   var proj = null
   var strip = null
-  if (scope === 'project') {
+  if (!marksOnly && scope === 'project') {
     proj = document.createElement('div'); proj.className = 'nl-proj'
     // specs/20260907/09 D8: mount right after the atlas's own #nl-notes anchor when it exists —
     // that anchor sits as the last element of #main, giving the panel a stable spot inside the
@@ -180,7 +212,7 @@
     var nlNotesEl = typeof document.getElementById === 'function' ? document.getElementById('nl-notes') : null
     var projAnchor = nlNotesEl || rootEl || document.body
     projAnchor.insertAdjacentElement('afterend', mount(proj))
-  } else {
+  } else if (!marksOnly) {
     strip = document.createElement('div'); strip.className = 'nl-strip'
     var stripAnchor = rootEl || document.body
     stripAnchor.insertAdjacentElement('afterend', mount(strip))
@@ -215,6 +247,12 @@
 
   // D9: color/glyph come from the register — a per-box `--c` custom property set to one of the
   // four role tokens, never a literal color.
+  //
+  // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D17 (owner ruling, 2026-09-13):
+  // this SHALL CONTINUE TO resolve specs/20260912/11 D9's four roles distinctly — open stays
+  // `--v-danger`, never collapsed onto `--v-warn`. The review page's own chrome (`.rv-pin`,
+  // `.rv-badge`, `.rv-tabpin`, the rail counts) carries the separate orange register D3 describes;
+  // that register binds only that chrome and never the box tint or its frame, which track status.
   function colorFor(status) {
     if (status === 'addressed') return 'var(--v-warn)'
     if (status === 'resolved') return 'var(--v-ok)'
@@ -260,7 +298,7 @@
     var scrollX = window.pageXOffset || 0
     var scrollY = window.pageYOffset || 0
     mockNotes.forEach(function (n) {
-      if (!n.region || n.state !== activeState) return
+      if (!n.region || (n.state || 'default') !== activeState) return
       var resolved = window.NotesAnchor ? window.NotesAnchor.resolve(rootEl, n.region) : null
       var status = resolved === null && n.status !== 'resolved' ? 'outdated' : n.status
       if (resolved === null) return // outdated -> no box, only the strip row explains it
@@ -278,7 +316,16 @@
       el.style.height = Math.max(0, box.h) + 'px'
       el.style.pointerEvents = 'auto'
       el.appendChild(regionBadge(n.id, status))
-      el.onclick = function () { openNoteCard(n) }
+      // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D8: box → row, direct
+      // same-origin call, no postMessage. Framed (the review page) only — unframed (the owner's
+      // own mock page) finds no parent hook and the click just opens the card, as today.
+      // openNoteCard itself is marksOnly-aware (selects the box without ever populating cardSlot).
+      el.onclick = function () {
+        openNoteCard(n)
+        if (window.parent !== window) {
+          try { window.parent.__rvPick(n.id) } catch (e) { /* no parent hook */ }
+        }
+      }
       el.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') openNoteCard(n)
         else if ((e.key === 'a' || e.key === 'A') && n.status === 'addressed') api('resolve', { id: n.id, by: author }).then(refresh)
@@ -324,6 +371,11 @@
   }
   function openNoteCard(n) {
     openCardNoteId = n.id
+    // marksOnly: selection still drives the box's own "sel" class (D8 — `select()`'s
+    // `__nlFocus` call must leave the box selected), but the card itself is the authoring UI
+    // the review page's own right rail replaced — render() alone (which repaints boxLayer via
+    // renderOverlay) without ever touching cardSlot.
+    if (marksOnly) { render(); return }
     if (!cardSlot) return
     cardSlot.innerHTML = ''
     var status = regionStatusOf(n)
@@ -497,8 +549,18 @@
   var pendingReplace = null
   function setMarking(on) {
     marking = on
-    if (!on) { pendingReplace = null; if (draftEl && draftEl.parentNode) draftEl.parentNode.removeChild(draftEl); draftEl = null; dragStart = null }
-    setStyle(overlayHost, { pointerEvents: on ? 'auto' : 'none' })
+    if (!on) {
+      pendingReplace = null
+      if (draftEl && draftEl.parentNode) draftEl.parentNode.removeChild(draftEl)
+      draftEl = null; dragStart = null; dragIsTouch = false
+      if (touchHoldTimer) clearTimeout(touchHoldTimer)
+      touchHoldTimer = null; touchStart = null
+    }
+    // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D11, disposed s2 (2026-09-13):
+    // a crosshair cursor over the frame while marking is the obvious affordance a hidden bar
+    // label alone never gave — set on the overlay host itself, the one element pointer-events
+    // is already toggled on for the duration of the drag.
+    setStyle(overlayHost, { pointerEvents: on ? 'auto' : 'none', cursor: on ? 'crosshair' : '' })
     // D5: a one-line hint the first time marking is entered in this browser.
     if (on) {
       var seen = false
@@ -531,27 +593,67 @@
     var left = Math.min(dragStart.x, x2), top = Math.min(dragStart.y, y2)
     return { x: left - r.left, y: top - r.top, w: Math.abs(x2 - dragStart.x), h: Math.abs(y2 - dragStart.y) }
   }
+  // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D5: pointer events replace mouse
+  // events (a mouse's own pointerType is 'mouse' — its drag starts immediately, byte-identical to
+  // the pre-change mousedown/mousemove/mouseup timing). A `pointerType:'touch'` press starts the
+  // draft only after a 350ms hold with no movement past 8px — a scroll gesture (finger moves
+  // before the hold fires) never draws, so the hold timer is simply cleared and no draft is ever
+  // created. A touch-originated drag also skips the pre-existing 12×12 accidental-click floor
+  // below (mouse's own filter for a bare click, w=h=0): the 350ms hold is itself the deliberate
+  // gesture, and a valid touch selection can be a thin, single-axis strip (drag straight down or
+  // across).
+  var touchHoldTimer = null
+  var touchStart = null
+  var dragIsTouch = false
+  function clearTouchHold() { if (touchHoldTimer) clearTimeout(touchHoldTimer); touchHoldTimer = null; touchStart = null }
+  function beginDrag(x, y, isTouch) {
+    dragIsTouch = !!isTouch
+    dragStart = { x: x, y: y }
+    draftEl = document.createElement('div'); draftEl.className = 'nl-draft'
+    var sz = document.createElement('div'); sz.className = 'nl-draft-size'
+    draftEl.appendChild(sz)
+    overlay.appendChild(draftEl)
+    updateDraft(x, y)
+  }
   if (scope === 'mock' && rootEl) {
-    on(document, 'mousedown', function (e) {
+    on(document, 'pointerdown', function (e) {
       if (!marking || !overlay) return
-      dragStart = { x: e.clientX, y: e.clientY }
-      draftEl = document.createElement('div'); draftEl.className = 'nl-draft'
-      var sz = document.createElement('div'); sz.className = 'nl-draft-size'
-      draftEl.appendChild(sz)
-      overlay.appendChild(draftEl)
+      if (e.pointerType === 'touch') {
+        touchStart = { x: e.clientX, y: e.clientY }
+        touchHoldTimer = setTimeout(function () {
+          var x = touchStart.x, y = touchStart.y
+          touchHoldTimer = null
+          touchStart = null
+          beginDrag(x, y, true)
+        }, 350)
+        return
+      }
+      beginDrag(e.clientX, e.clientY, false)
+    })
+    on(document, 'pointermove', function (e) {
+      if (!marking) return
+      // Still inside the hold window: movement past 8px is a scroll, not a draw — cancel the
+      // pending hold and draw nothing.
+      if (touchStart && !dragStart) {
+        var dx = e.clientX - touchStart.x, dy = e.clientY - touchStart.y
+        if (Math.sqrt(dx * dx + dy * dy) > 8) clearTouchHold()
+        return
+      }
+      if (!dragStart) return
       updateDraft(e.clientX, e.clientY)
     })
-    on(document, 'mousemove', function (e) {
-      if (!marking || !dragStart) return
-      updateDraft(e.clientX, e.clientY)
-    })
-    on(document, 'mouseup', function (e) {
-      if (!marking || !dragStart) return
+    on(document, 'pointerup', function (e) {
+      if (!marking) return
+      if (touchHoldTimer) { clearTouchHold(); return } // released before the hold fired — no draft
+      touchStart = null
+      if (!dragStart) return
       var box = boxFromDrag(e.clientX, e.clientY)
+      var wasTouch = dragIsTouch
       if (draftEl && draftEl.parentNode) draftEl.parentNode.removeChild(draftEl)
       draftEl = null
       dragStart = null
-      if (box.w < 12 || box.h < 12) return
+      dragIsTouch = false
+      if (!wasTouch && (box.w < 12 || box.h < 12)) return
       var region = window.NotesAnchor.capture(rootEl, box)
       if (pendingReplace) {
         var noteId = pendingReplace
@@ -883,7 +985,7 @@
       stripHead.appendChild(seg)
       strip.appendChild(stripHead)
       var stripRows = mockNotes.filter(function (n) {
-        if (n.state !== activeState) return false
+        if ((n.state || 'default') !== activeState) return false
         if (n.kind === 'question') return true
         if (!n.region) return showResolved || n.status !== 'resolved'
         var status = regionStatusOf(n)
@@ -904,6 +1006,35 @@
       strip.appendChild(stripAdd)
     }
     renderOverlay()
+  }
+
+  // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D3/D5: the bridge the review
+  // page's "Show on the screen" jump button calls into this frame — selects the box (the same
+  // 'sel' class openNoteCard's own openCardNoteId already drives through render/renderOverlay),
+  // scrolls it into view, pulses it, and opens its card. A no-op on an id this page has never
+  // painted a box for (unknown note, or the box has not resolved on the active state).
+  // D10: the review page's per-board eye — hides or shows this frame's box layer entirely
+  // (display:none on the whole layer, never per box), so a hidden box reports zero client rects.
+  // Not persisted — a fresh load always starts shown.
+  window.__nlPins = function (on) {
+    if (boxLayer) setStyle(boxLayer, { display: on ? '' : 'none' })
+  }
+
+  // D11: the review page's "Mark an area" ghost action — the drag, the draft and the note itself
+  // stay entirely inside this frame's own layer (setMarking), unchanged.
+  window.__nlMark = function (on) {
+    setMarking(!!on)
+  }
+
+  window.__nlFocus = function (id) {
+    var box = boxLayer ? boxLayer.querySelector('[data-id="' + id + '"]') : null
+    if (box && box.scrollIntoView) box.scrollIntoView({ block: 'center' })
+    if (box) { box.classList.add('pulse'); setTimeout(function () { box.classList.remove('pulse') }, 700) }
+    var note = mockNotes.filter(function (n) { return n.id === id })[0]
+    // openNoteCard is marksOnly-aware: it selects the box (the "sel" class D8/AC-4 require) but
+    // never populates cardSlot in that mode, so this never opens the in-frame card over the
+    // design — the note itself already reads on the review page's own right rail.
+    if (note) openNoteCard(note)
   }
 
   // D5/D6: a page fetches only the list its declared scope owns — a mock page never fetches the

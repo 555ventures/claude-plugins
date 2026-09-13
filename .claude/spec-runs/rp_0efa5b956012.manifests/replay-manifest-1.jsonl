@@ -1,0 +1,10 @@
+{"leg":"reconcile","exit":3,"observed":{"outOfPlan":6,"files":[".claude/rules/spec-pipeline.md","docs/canonical/design.md","spec/doctrine/mocks.md","spec/scripts/design-atlas.js","spec/scripts/mocks-driver.js","tests/mocks/bounded-output-pins.test.js"]},"scope":"full"}
+{"leg":"ci","exit":0,"observed":{"unavailable":"no-adapter"},"scope":"full"}
+{"leg":"gate","exit":0,"observed":{"skips":0,"todos":0,"testsExecuted":413},"scope":"full"}
+{"leg":"suite","exit":0,"observed":{"skips":0,"todos":0,"testsExecuted":1138},"scope":"full"}
+{"leg":"tests","exit":0,"observed":{"count":1112,"dispositions":{"writes":7,"rewrites":2,"reuses":1}},"scope":"full"}
+{"leg":"patterns","exit":0,"observed":{"matches":10},"scope":"full"}
+{"leg":"at-risk","exit":0,"observed":{"files":19,"testsExecuted":175},"scope":"full"}
+{"leg":"smoke","exit":4,"observed":{"result":"inert"},"scope":"full"}
+{"leg":"ac-matrix","exit":1,"observed":{"uncovered":9,"oracle":1,"preGreen":0}}
+{"leg":"skip-reconcile","exit":0,"observed":{"skipped":0,"sanctioned":0}}

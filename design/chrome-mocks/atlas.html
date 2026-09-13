@@ -24,6 +24,11 @@
   `· N states` meta line, a gap chip for a declared screen nobody has drawn, and an orphan card
   for a mock no journey claims — and the stops index.
 
+  specs/20260912/12 D6 adds the per-screen note count: the `catalog` card carries
+  `2 open · 1 need you`, every other card carries none, because the count is omitted entirely
+  when both numbers are zero. It reads as a signal, not a badge — the owner opens the atlas to
+  find which screen wants them, and a card with nothing to say stays silent.
+
   What it deliberately does NOT carry: the lightbox overlay's open state, the compare panel, the
   notes layer, the theme/kit/shapes sections, and every behaviour that only exists when the page
   is served. Those are the served page's, not the look's.
@@ -139,6 +144,9 @@ a{color:inherit}
 .shot.clip::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4rem;pointer-events:none;background:linear-gradient(to bottom,transparent,var(--v-bg))}
 .frame{border:0;display:block;transform-origin:0 0;pointer-events:none;background:var(--v-muted-bg);width:100%}
 .meta{color:var(--v-muted);font-size:14px;margin-top:.4rem}
+.nl-card-count{display:flex;align-items:center;gap:.45em;margin-top:.3rem;color:var(--v-muted);font-size:14px;font-variant-numeric:tabular-nums}
+.nl-card-count::before{content:"";width:7px;height:7px;border-radius:99px;flex:none;background:var(--v-danger)}
+.nl-card-count[data-needs]:not([data-needs="0"])::before{background:var(--v-warn)}
 
 /* ---- gaps: a screen the product declares and nobody has drawn. A chip, never a card. ---- */
 .gaps{display:flex;flex-wrap:wrap;gap:.4rem;margin:1rem 0 0}
@@ -217,6 +225,7 @@ a{color:inherit}
             </div>
           </a>
           <div class="meta">journey: borrow · 3 states · spec: specs/20260912/05-the-atlas-answers-to-a-design.md</div>
+          <span class="nl-card-count" data-open="2" data-needs="1">2 open · 1 need you</span>
         </div>
 
         <!-- A journey-owned card declaring no states: the meta line carries no states clause at

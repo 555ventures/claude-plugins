@@ -35,6 +35,11 @@
   note still blocking sign-off — the first proof the D1/D2/D3 binding renders a real, reachable
   state rather than a decorative one.
 
+  specs/20260912/12 D3 adds the region row: `n4` carries `data-region="1"` and the
+  `Show on the screen` control, the only row control a region note gets — a marked area is
+  judged on the screen, not in the list. The control is quiet on purpose (muted, borrowing the
+  row button base) because the loud control on this page is `Approve journey`.
+
   What it deliberately does NOT carry: a served `?clean` frame, the notes layer's own shadow-root
   UI, the picks/approve script's live behaviour, or the composer's scope toggle — that control is
   retired at this same build (D10) because the composer never emitted `[data-rv="scope"]" to
@@ -149,6 +154,9 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
 .rv-chip{display:inline-flex;border:0;border-radius:999px;padding:1px 9px;font-size:12px;color:var(--v-muted);background:var(--v-muted-bg);margin-left:6px}
 .rv-actions{display:flex;flex-wrap:wrap;align-items:center;gap:var(--v-space-1);margin-top:var(--v-space-2)}
 .rv-actions button{font-size:14px;padding:4px 10px}
+.rv .rv-jump{display:inline-flex;align-items:center;gap:.5em;color:var(--v-muted)}
+.rv .rv-jump::before{content:"";width:11px;height:8px;border:1.5px solid currentColor;border-radius:2px;flex:none}
+.rv .rv-jump:hover{color:var(--v-fg)}
 .rv-empty{margin:var(--v-space-4) 0;color:var(--v-muted);font-size:15px}
 .rv-composer{border-top:1px solid var(--v-border);padding:var(--v-space-4);display:flex;flex-direction:column;gap:var(--v-space-3)}
 .rv-chips{display:flex;flex-wrap:wrap;gap:var(--v-space-1)}
@@ -168,7 +176,7 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
   </nav>
   <span class="rv-pill" data-rv="pill">Wireframes · awaiting your answers</span>
   <div class="rv-progress" data-rv="progress" data-answered="0" data-total="0">
-    <span class="rv-progress-text" data-rv="progress-text">0 of 0 answered · 1 note for the session</span>
+    <span class="rv-progress-text" data-rv="progress-text">0 of 0 answered · 2 notes for the session</span>
     <span class="rv-track" aria-hidden="true"><span class="rv-fill" data-rv="fill" style="width:100%"></span></span>
   </div>
   <div class="rv-control" data-rv="control">
@@ -189,7 +197,7 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
     </ol>
     <h2>Screens</h2>
     <ol class="rv-list rv-screens">
-      <li><a data-rv="screen" data-screen="a" href="#board-a"><span class="rv-n">1</span>a<span class="rv-count" data-rv="count" data-screen="a" data-zero>0</span></a></li>
+      <li><a data-rv="screen" data-screen="a" href="#board-a"><span class="rv-n">1</span>a<span class="rv-count" data-rv="count" data-screen="a">1</span></a></li>
       <li><a data-rv="screen" data-screen="b" href="#board-b"><span class="rv-n">2</span>b<span class="rv-count" data-rv="count" data-screen="b" data-zero>0</span></a></li>
     </ol>
     <ol class="rv-list rv-screens rv-project">
@@ -203,7 +211,7 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
       <header class="rv-cap">
         <h3>a<span class="rv-of">· 1 of 2</span></h3>
         <span class="rv-vp">1280×800</span>
-        <button type="button" class="rv-badge" data-rv="badge" data-label="a" data-zero title="nothing open on this screen">0</button>
+        <button type="button" class="rv-badge" data-rv="badge" data-label="a" title="1 open on this screen">1</button>
         <button type="button" class="rv-addnote" data-rv="addnote" data-label="a">+ note</button>
         <div class="rv-tabs" role="tablist" aria-label="States of a">
           <button type="button" role="tab" data-rv="tab" data-state="happy" aria-selected="true">happy</button>
@@ -240,7 +248,7 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
 
   <aside class="rv-inspector" data-rv="inspector" aria-label="Questions and notes">
     <div class="rv-filters" role="tablist">
-      <button type="button" data-rv="filter" data-filter="open" aria-selected="true">Open<span class="rv-count" data-rv="open-count">1</span></button>
+      <button type="button" data-rv="filter" data-filter="open" aria-selected="true">Open<span class="rv-count" data-rv="open-count">2</span></button>
       <button type="button" data-rv="filter" data-filter="answered" aria-selected="false">Answered</button>
       <button type="button" data-rv="filter" data-filter="all" aria-selected="false">All</button>
       <button type="button" class="rv-keyhint" data-rv="keyhint" title="Keyboard shortcuts" aria-label="Keyboard shortcuts" aria-expanded="false">?</button>
@@ -268,6 +276,14 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
         <div class="rv-actions" data-rv="note-actions">
           <button type="button" data-rv="accept">Looks good</button>
           <button type="button" data-rv="reopen">Still not right</button>
+        </div>
+      </article>
+
+      <article data-rv="row" data-id="n4" data-kind="note" data-status="open" data-region="1" class="rv-row rv-note" data-label="a" tabindex="-1">
+        <div class="rv-rowhead"><span class="rv-id">n4</span><span class="rv-who">You told JJ</span><span class="rv-sep">·</span><span class="rv-screen">a</span></div>
+        <p class="rv-claim">These two clinics read the same.</p>
+        <div class="rv-actions" data-rv="note-actions">
+          <button type="button" data-rv="jump" class="rv-jump">Show on the screen</button>
         </div>
       </article>
 

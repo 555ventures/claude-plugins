@@ -37,31 +37,32 @@ asked.
    `reviewsSince=N` as an advisory ("not due yet — N/5 reviews since the last replay") and STOP;
    no further phases run. Exit 0 → continue.
 2. Run `node "$(spec-paths replay)" --select` and parse `spec=… reviewRunId=… commit=…
-   parent=… diffBase=… baselineRed=… baselineLegs=…` from its stdout — `{baselineRed}` names the
-   selected review row's own pre-existing red legs (`none` when it closed all-green,
-   `unknown` when the row carries no `legs` array); `{baselineLegs}` names every leg the row
-   recorded (`unknown` exactly when `{baselineRed}` is). Both are step 7's attribution baseline —
-   zero extra leg runs. A non-zero exit (no eligible CLEAN row in the window) → report advisory,
-   STOP.
+   parent=… diffBase=… baselineRed=… baselineLegs=…` from stdout: `{baselineRed}` is the row's
+   pre-existing red legs (`none` all-green, `unknown` no `legs` array), `{baselineLegs}` every leg
+   it recorded (`unknown` iff `{baselineRed}` is) — step 7's attribution baseline, zero extra leg
+   runs. Exit 4 (row can't name its own bounds) → report the blockage, run `node "$(spec-paths
+   replay)" --backfill-pins`, retry `--select` once; a second exit 4 or any other non-zero exit
+   (including no eligible CLEAN row in the window) → report advisory, STOP.
 
 ## Phase 1 — Mutation authoring
 
 1. **Setup:** run `node "$(spec-paths replay)" --setup --commit {parent} --overlay {commit} --spec
-   {spec}` and read `{dir}` from the `dir=` value it prints — `--overlay {commit}` materializes
-   the judged range's true upper bound: a `diff.dirty:true` row's judged range is completed by the
-   close commit that follows it (range-identity spec 20260824/06 D3/D7), so the bare parent
-   under-states the range whenever fix-worker edits rode that close commit. `--setup` stands the
-   worktree up at `--commit`, re-applies the close commit's non-meta content as one build-shaped
-   commit (leaving the three review-outcome surfaces at the parent version, Rules § Blindness),
-   and derives `{dir}` from `{spec}` (build-shaped, under `<root>/.claude/worktrees/`,
-   random-suffixed), self-provisioning the host's ignore line when missing so the worktree stays
-   invisible to `git status` in the main tree — never a path a session could copy. `--dir <path>`
-   is the manual out-of-repo fallback when no `{spec}` is available; it wins verbatim over
-   derivation, and is refused with exit 3 when its basename opens with `replay` or (in-repo)
-   resolves outside `.claude/worktrees/` — the remedy is to omit `--dir` and pass `--spec`. Once
-   registered, `--setup` copies the host's `.worktreeinclude`-matched
-   gitignored files into `{dir}` (via `spec-paths worktree-include`) before the setup gate below
-   ever runs; a host with no manifest is unchanged.
+   {spec}` and read `{dir}` from `dir=` — `--overlay {commit}` materializes the judged range's true
+   upper bound: a `diff.dirty:true` row's range completes at its close commit (range-identity spec
+   20260824/06 D3/D7), so the bare parent under-states it when fix-worker edits rode that commit.
+   `--setup` stands the worktree up at `--commit`, re-applies the close commit's non-meta content as
+   one build-shaped commit (parent-version review-outcome surfaces, Rules § Blindness), derives
+   `{dir}` from `{spec}` (under `<root>/.claude/worktrees/`, random-suffixed), and self-provisions
+   the ignore line so the worktree stays invisible to `git status`. `--dir <path>` is the manual
+   out-of-repo fallback when no `{spec}` is available, winning verbatim over derivation; refused
+   (exit 3) when its basename opens `replay` or resolves outside `.claude/worktrees/` — omit
+   `--dir`, pass `--spec`. Once registered, `--setup` copies `.worktreeinclude`-matched gitignored
+   files into `{dir}` (`spec-paths worktree-include`) before the setup gate runs; no manifest leaves
+   this unchanged. Exit 5 (post-overlay AC coverage fails) → `node "$(spec-paths replay)" --teardown
+   --dir {dir}` then `node "$(spec-paths replay)" --record --spec {spec} --review-run-id
+   {reviewRunId} --legs pristine-red:ac-matrix --outcome setup-failed` (no
+   `--class`/`--patch`/`--workflow`), render Phase 5's `setup-failed` report, STOP — the harness
+   stays due.
 2. **Setup gate (D4):** read the host's `setupCommand` from `.claude/spec.config.json` and run it
    inside `{dir}` **without relocating the session** — a subshell or the tool's own directory
    flag, never a bare `cd` (Rules § The session never leaves the main root). Non-zero exit → run
@@ -103,14 +104,14 @@ asked.
    --patch-out {patchOutFile} --class {classId} --subject "{subject}" --spec {spec}`, where
    `{patchOutFile}` is a fresh `mktemp` path outside `{dir}` (which `--apply` refuses with exit 3)
    and becomes the canonical patch every later phase reads instead of `{patchFile}`, and
-   `{subject}` is a build-commit-shaped subject
-   derived from the target spec — never the class id and never a subject opening with `replay`,
-   both refused outright (a spec titled "replay" or "mutation" still derives a legal subject;
-   vocabulary is not the leak, provenance is). **The post-apply reconcile:** `--apply` always
-   takes `--spec {spec}` and, between `git apply --index` and the commit, runs the host's declared
-   post-apply reconcile (`replay.afterApply` in `.claude/spec.config.json`, read from the main
-   root) inside `{dir}`, staging only the declared paths — never the whole dirty tree — so the commit carries the same
-   derived-artifact reconciliation a real build commit carries, and excludes those paths from
+   `{subject}` is a build-commit-shaped subject derived from the target spec — never the class id
+   and never a subject opening with `replay`, both refused outright (a spec titled "replay" or
+   "mutation" still derives a legal subject; vocabulary is not the leak, provenance is). **The
+   post-apply reconcile:** `--apply` always takes `--spec {spec}` and, between `git apply --index`
+   and the commit, runs the host's declared post-apply reconcile (`replay.afterApply` in
+   `.claude/spec.config.json`, read from the main root) inside `{dir}`, staging only the declared
+   paths — never the whole dirty tree — so the commit carries the same derived-artifact
+   reconciliation a real build commit carries, and excludes those paths from
    `{patchOutFile}` so the reconcile never scores as part of the mutation. A host that declares
    none is unchanged: `--apply` behaves byte-for-byte as today. A refusal at the hook (nonzero
    exit, an undeclared path dirtied, a bad `--spec`/`afterApply` shape, or the hook touching a
@@ -253,14 +254,13 @@ Next: {spec-status --next, verbatim}
 
 ## Rules
 
-- **Blindness is the measurement's validity.** Nothing dispatched to the reviewer nor any
-  artifact the harness creates inside `{dir}` (file contents, prompt, branch name, worktree
-  **path**, marker filename, commit subject, `git status` entry) may reveal a replay is in
-  progress — a new leak surface is still a violation even unpoliced. The worktree path is
-  spec-derived and the marker neutrally named `scratch-worktree`
-  (specs/20260826/01-replay-scratch-path-blindness.md); the three review-outcome meta prefixes
-  (`specs/`, `.claude/`, `docs/canonical/`) never enter the tree except `.claude/agent-memory/`
-  (specs/20260831/01-replay-range-materialization.md).
+- **Blindness is the measurement's validity.** Nothing dispatched to the reviewer nor any artifact
+  the harness creates inside `{dir}` (file contents, prompt, branch name, worktree **path**, marker
+  filename, commit subject, `git status` entry) may reveal a replay is in progress — a new leak
+  surface is still a violation even unpoliced. The worktree path is spec-derived and the marker
+  neutrally named `scratch-worktree` (specs/20260826/01-replay-scratch-path-blindness.md); the three
+  review-outcome meta prefixes (`specs/`, `.claude/`, `docs/canonical/`) never enter the tree except
+  `.claude/agent-memory/` (specs/20260831/01-replay-range-materialization.md).
 - **The main tree is never in scope.** Every mutating step runs inside `{dir}`, a detached
   worktree isolated by three mechanisms together — the worktree itself, the ignore line
   `--setup` self-provisions when missing, and the `--setup`/`--teardown` marker guard.

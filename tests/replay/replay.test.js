@@ -314,19 +314,44 @@ test('AC-20260819-03-8: --due CONTINUES TO report not due and exit 1 when fewer 
     'and exit 1, or replay would fire before the Decision\'s own window closes: ' + r.stderr)
 })
 
-test('AC-20260819-02-2 (collision fix, specs/20260823/05): --select prints all five fields spec/reviewRunId/commit/parent/diffBase, preferring a critical-tier CLEAN row over a later standard-tier one, and ties resolve to the latest row', () => {
+// specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md D2/D3 (AC-20260913-01-3):
+// rewritten in place — `--select` no longer derives commit/parent by asking `git log -1 --
+// <spec>` which commit last touched the spec file and taking its first parent; it reads the
+// two refs a CLEAN review's run wrote (`refs/spec-review/<runId>/judged` for parent,
+// `refs/spec-review/<runId>/close` for commit). Scenario 1 below is the AC's own differentiator:
+// a later, wholly unrelated commit touches specs/a.md AFTER the row's own refs are written (a
+// ledger promotion or doc sync, exactly the class the Goal names) — the OLD derivation would
+// walk straight past the refs to that later commit and its parent; the refs must win regardless.
+function writeReviewRefs(root, runId, judgedSha, closeSha) {
+  execFileSync('git', ['-C', root, 'update-ref', `refs/spec-review/${runId}/judged`, judgedSha])
+  execFileSync('git', ['-C', root, 'update-ref', `refs/spec-review/${runId}/close`, closeSha])
+}
+
+test('AC-20260819-02-2 / AC-20260913-01-3 (rewritten): --select prints parent= from the run\'s judged ref and commit= from the run\'s close ref — never a value derived by walking "which commit last touched the spec file" — while still preferring a critical-tier CLEAN row over a later standard-tier one, and resolving same-tier ties to the latest row', () => {
   const root = fs.realpathSync(tmpdir('replay-select'))
   gitRepo(root)
-  // D4: every diff_base value below is now a REAL ancestor commit sha — the old
-  // fabricated hex ('aaaa000...aaaa') can never resolve under the new ancestry-validated --select.
+  // D4: every diff_base value below is a REAL ancestor commit sha — the ancestry-validated
+  // --select can never resolve a fabricated hex.
   const aAncestor = commitReal(root, 'lib/a-pre.js', 'a\n', 'pre a')
   const a = commitSpecFlow(root, 'specs/a.md',
     `---\ndiff_base: ${aAncestor}\n---\n# a\n`,
     `---\ndiff_base: ${aAncestor}\nstatus: done\n---\n# a\n`)
+  writeReviewRefs(root, 'rv_aaaaaaaaaaaa', a.parent, a.commit)
+  // The AC's own differentiator: an unrelated LATER commit touches specs/a.md after the row's
+  // refs already exist (e.g. a ledger sweep or doc sync) — `git log -1 -- specs/a.md` now
+  // answers with THIS commit, and its own parent is a.commit, not a.parent. The old derivation
+  // would print commit=aLater parent=a.commit; the ref-sourced derivation must ignore it entirely.
+  fs.writeFileSync(path.join(root, 'specs/a.md'), `---\ndiff_base: ${aAncestor}\nstatus: done\n---\n# a\n<!-- later ledger sweep -->\n`)
+  execFileSync('git', ['-C', root, 'add', '-A'])
+  execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'unrelated later touch to specs/a.md'])
+  const aLater = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  assert.notStrictEqual(aLater, a.commit, 'fixture sanity: the later touch must be its own commit, distinct from the close commit')
+
   const bAncestor = commitReal(root, 'lib/b-pre.js', 'b\n', 'pre b')
   const b = commitSpecFlow(root, 'specs/b.md',
     `---\ndiff_base: ${bAncestor}\n---\n# b\n`,
     `---\ndiff_base: ${bAncestor}\nstatus: done\n---\n# b\n`)
+  writeReviewRefs(root, 'rv_bbbbbbbbbbbb', b.parent, b.commit)
   writeLedger(root, [
     { ts: '2026-08-10T00:00:00Z', stage: 'review', spec: 'specs/a.md', runId: 'rv_aaaaaaaaaaaa', verdict: 'CLEAN', tier: 'critical' },
     { ts: '2026-08-11T00:00:00Z', stage: 'review', spec: 'specs/b.md', runId: 'rv_bbbbbbbbbbbb', verdict: 'CLEAN', tier: 'standard' },
@@ -338,18 +363,23 @@ test('AC-20260819-02-2 (collision fix, specs/20260823/05): --select prints all f
     'row bumping it out defeats the "critical-tier priority sampling" the Decision states: ' + r.stdout)
   assert.match(r.stdout, /reviewRunId=rv_aaaaaaaaaaaa/,
     'D3: the printed reviewRunId must be the selected row\'s own runId, not the other candidate\'s: ' + r.stdout)
-  assert.match(r.stdout, new RegExp('commit=' + a.commit),
-    'D3: commit must be the exact close commit for the SELECTED spec\'s path (`git log -1 --format=%H -- ' +
-    '<path>`), never HEAD or the other spec\'s commit — a wrong commit means --setup worktrees the wrong tree: ' +
-    r.stdout)
-  assert.match(r.stdout, new RegExp('parent=' + a.parent),
-    'F3 regression pin (2026-08-19 review): parent must be the close commit\'s OWN parent, printed as its ' +
-    'own field — the first review found the worktree standing up at the close commit itself, handing the ' +
-    'blind reviewer a ~3-line needle-only diff instead of the real base-to-HEAD diff a review judges: ' + r.stdout)
+  assert.match(r.stdout, new RegExp('commit=' + a.commit + '(\\s|$)'),
+    'D2/AC-20260913-01-3: commit= must be the run\'s own close ref sha — never aLater, the commit that ' +
+    '`git log -1 -- specs/a.md` would answer with once an unrelated later edit touches the same file: ' + r.stdout)
+  assert.doesNotMatch(r.stdout, new RegExp('commit=' + aLater),
+    'D2: the log-derived "newest commit touching the spec file" must never appear as commit= once a judged/' +
+    'close ref pair exists for the row — this is exactly the drift the Goal describes: ' + r.stdout)
+  assert.match(r.stdout, new RegExp('parent=' + a.parent + '(\\s|$)'),
+    'D2/AC-20260913-01-3: parent= must be the run\'s own judged ref sha, regardless of which commit last ' +
+    'touched the spec file — the old `<close commit>^` hop would print a.commit here instead, since aLater\'s ' +
+    'own parent is a.commit: ' + r.stdout)
+  assert.doesNotMatch(r.stdout, new RegExp('parent=' + a.commit + '(\\s|$)'),
+    'D2: parent= must never fall back to the close commit itself (aLater\'s parent) when a judged ref exists ' +
+    'for the row: ' + r.stdout)
   assert.match(r.stdout, new RegExp('diffBase=' + aAncestor),
     'D4 (2026-08-23): diffBase must be the validated ancestor sha read from the selected spec\'s ' +
-    'frontmatter AT THE CLOSE commit — reading a different commit or printing an unvalidated value would ' +
-    'drift from the base review.md itself diffed against: ' + r.stdout)
+    'frontmatter AT THE REF-SOURCED CLOSE commit — reading a different commit or printing an unvalidated ' +
+    'value would drift from the base review.md itself diffed against: ' + r.stdout)
 
   const root2 = fs.realpathSync(tmpdir('replay-select-tie'))
   gitRepo(root2)
@@ -357,10 +387,12 @@ test('AC-20260819-02-2 (collision fix, specs/20260823/05): --select prints all f
   const d = commitSpecFlow(root2, 'specs/d.md',
     `---\ndiff_base: ${dAncestor}\n---\n# d\n`,
     `---\ndiff_base: ${dAncestor}\nstatus: done\n---\n# d\n`)
+  writeReviewRefs(root2, 'rv_dddddddddddd', d.parent, d.commit)
   const cAncestor = commitReal(root2, 'lib/c-pre.js', 'c\n', 'pre c')
-  commitSpecFlow(root2, 'specs/c.md',
+  const c = commitSpecFlow(root2, 'specs/c.md',
     `---\ndiff_base: ${cAncestor}\n---\n# c\n`,
     `---\ndiff_base: ${cAncestor}\nstatus: done\n---\n# c\n`)
+  writeReviewRefs(root2, 'rv_cccccccccccc', c.parent, c.commit)
   writeLedger(root2, [
     { ts: '2026-08-10T00:00:00Z', stage: 'review', spec: 'specs/d.md', runId: 'rv_dddddddddddd', verdict: 'CLEAN', tier: 'standard' },
     { ts: '2026-08-11T00:00:00Z', stage: 'review', spec: 'specs/c.md', runId: 'rv_cccccccccccc', verdict: 'CLEAN', tier: 'standard' },
@@ -371,18 +403,24 @@ test('AC-20260819-02-2 (collision fix, specs/20260823/05): --select prints all f
     'D3: no critical row exists in this window, so the tie between two standard rows must resolve to the ' +
     'LATEST one — resolving to the earliest would replay the same stale spec forever: ' + r2.stdout)
 
+  // D3: a row whose run carries BOTH refs but whose spec's frontmatter (at the ref-sourced close
+  // commit) names neither diff_base nor build_base must still exit 4 on the diffBase-resolution
+  // failure — distinct from AC-20260913-01-5's own missing-ref exit 4, exercised in
+  // tests/replay/replay-tree-identity.test.js.
   const root4 = fs.realpathSync(tmpdir('replay-select-nobase'))
   gitRepo(root4)
-  commitSpecFlow(root4, 'specs/f.md',
+  const f = commitSpecFlow(root4, 'specs/f.md',
     '---\nstatus: implementing\n---\n# f\n',
     '---\nstatus: done\n---\n# f\n')
+  writeReviewRefs(root4, 'rv_ffffffffffff', f.parent, f.commit)
   writeLedger(root4, [
     { ts: '2026-08-10T00:00:00Z', stage: 'review', spec: 'specs/f.md', runId: 'rv_ffffffffffff', verdict: 'CLEAN' },
   ])
   const r4 = runNode(SCRIPT, ['--select'], { cwd: root4 })
   assert.strictEqual(r4.status, 4,
-    'D3/D4: a selected spec carrying NEITHER build_base nor diff_base at the close commit must exit 4 — ' +
-    'printing a blank or fabricated diffBase would hand --setup a base nobody can verify: ' + r4.stdout)
+    'D3/D4: a selected spec carrying NEITHER build_base nor diff_base at the ref-sourced close commit must ' +
+    'exit 4 even though both refs resolve — printing a blank or fabricated diffBase would hand --setup a ' +
+    'base nobody can verify: ' + r4.stdout)
   assert.strictEqual(r4.stdout.trim(), '',
     'D3: an unresolvable diffBase is a git-operation failure, not a partial selection — nothing must print ' +
     'on stdout: ' + JSON.stringify(r4.stdout))
@@ -399,9 +437,10 @@ test('AC-20260823-09-1: --select appends baselineRed naming the one pre-existing
   const root = fs.realpathSync(tmpdir('replay-select-baseline-red'))
   gitRepo(root)
   const ancestor = commitReal(root, 'lib/pre.js', 'a\n', 'pre')
-  commitSpecFlow(root, 'specs/a.md',
+  const a = commitSpecFlow(root, 'specs/a.md',
     `---\ndiff_base: ${ancestor}\n---\n# a\n`,
     `---\ndiff_base: ${ancestor}\nstatus: done\n---\n# a\n`)
+  writeReviewRefs(root, 'rv_aaaaaaaaaaaa', a.parent, a.commit)
   writeLedger(root, [
     {
       ts: '2026-08-10T00:00:00Z', stage: 'review', spec: 'specs/a.md', runId: 'rv_aaaaaaaaaaaa',
@@ -422,9 +461,10 @@ test('AC-20260823-09-2: --select emits baselineRed=none — not empty, not unkno
   const root = fs.realpathSync(tmpdir('replay-select-baseline-none'))
   gitRepo(root)
   const ancestor = commitReal(root, 'lib/pre.js', 'a\n', 'pre')
-  commitSpecFlow(root, 'specs/a.md',
+  const a = commitSpecFlow(root, 'specs/a.md',
     `---\ndiff_base: ${ancestor}\n---\n# a\n`,
     `---\ndiff_base: ${ancestor}\nstatus: done\n---\n# a\n`)
+  writeReviewRefs(root, 'rv_aaaaaaaaaaaa', a.parent, a.commit)
   writeLedger(root, [
     {
       ts: '2026-08-10T00:00:00Z', stage: 'review', spec: 'specs/a.md', runId: 'rv_aaaaaaaaaaaa',
@@ -445,9 +485,10 @@ test('AC-20260823-09-3: --select emits baselineRed=unknown baselineLegs=unknown 
   const root = fs.realpathSync(tmpdir('replay-select-baseline-unknown'))
   gitRepo(root)
   const ancestor = commitReal(root, 'lib/pre.js', 'a\n', 'pre')
-  commitSpecFlow(root, 'specs/a.md',
+  const a = commitSpecFlow(root, 'specs/a.md',
     `---\ndiff_base: ${ancestor}\n---\n# a\n`,
     `---\ndiff_base: ${ancestor}\nstatus: done\n---\n# a\n`)
+  writeReviewRefs(root, 'rv_aaaaaaaaaaaa', a.parent, a.commit)
   writeLedger(root, [
     { ts: '2026-08-10T00:00:00Z', stage: 'review', spec: 'specs/a.md', runId: 'rv_aaaaaaaaaaaa', verdict: 'CLEAN', tier: 'standard' },
   ])
@@ -462,9 +503,10 @@ test('AC-20260823-09-3: --select emits baselineRed=unknown baselineLegs=unknown 
   const root2 = fs.realpathSync(tmpdir('replay-select-baseline-unknown-empty'))
   gitRepo(root2)
   const ancestor2 = commitReal(root2, 'lib/pre2.js', 'a\n', 'pre')
-  commitSpecFlow(root2, 'specs/a.md',
+  const b2 = commitSpecFlow(root2, 'specs/a.md',
     `---\ndiff_base: ${ancestor2}\n---\n# a\n`,
     `---\ndiff_base: ${ancestor2}\nstatus: done\n---\n# a\n`)
+  writeReviewRefs(root2, 'rv_bbbbbbbbbbbb', b2.parent, b2.commit)
   writeLedger(root2, [
     { ts: '2026-08-10T00:00:00Z', stage: 'review', spec: 'specs/a.md', runId: 'rv_bbbbbbbbbbbb', verdict: 'CLEAN', tier: 'standard', legs: [] },
   ])
@@ -487,9 +529,10 @@ test('AC-20260909-02-8: a review run id resolves to its CLEAN row, not to a red 
   const root = fs.realpathSync(tmpdir('replay-review-row-selector'))
   gitRepo(root)
   const ancestor = commitReal(root, 'lib/pre.js', 'a\n', 'pre a')
-  commitSpecFlow(root, 'specs/a.md',
+  const a = commitSpecFlow(root, 'specs/a.md',
     `---\ndiff_base: ${ancestor}\n---\n# a\n`,
     `---\ndiff_base: ${ancestor}\nstatus: done\n---\n# a\n`)
+  writeReviewRefs(root, 'rv_a', a.parent, a.commit)
   writeLedger(root, [
     { ts: '2026-08-10T00:00:00Z', stage: 'review', spec: 'specs/a.md', runId: 'rv_a', verdict: 'GATE_RED', legs: [{ leg: 'suite', exit: 1 }] },
     { ts: '2026-08-10T00:01:00Z', stage: 'review', spec: 'specs/a.md', runId: 'rv_a', verdict: 'CLEAN', legs: [{ leg: 'suite', exit: 0 }] },
@@ -532,6 +575,7 @@ test('AC-20260823-05-5: --select tries diff_base BEFORE build_base — a validat
   const close = commitReal(root, 'specs/h.md',
     `---\nbuild_base: 0000000000000000000000000000000000dead\ndiff_base: ${ancestor}\nstatus: done\n---\n# h\n`,
     'close specs/h.md')
+  writeReviewRefs(root, 'rv_hhhhhhhhhhhh', parent, close)
   writeLedger(root, [
     { ts: '2026-08-23T00:00:00Z', stage: 'review', spec: 'specs/h.md', runId: 'rv_hhhhhhhhhhhh', verdict: 'CLEAN' },
   ])
@@ -550,10 +594,11 @@ test('AC-20260823-05-5: --select tries diff_base BEFORE build_base — a validat
   const root2 = fs.realpathSync(tmpdir('replay-select-priority-fallback'))
   gitRepo(root2)
   const ancestor2 = commitReal(root2, 'lib/pre.js', 'a\n', 'pre i')
-  commitReal(root2, 'specs/i.md', `---\nstatus: implementing\n---\n# i\n`, 'stub i')
+  const parent2 = commitReal(root2, 'specs/i.md', `---\nstatus: implementing\n---\n# i\n`, 'stub i')
   const close2 = commitReal(root2, 'specs/i.md',
     `---\nbuild_base: ${ancestor2}\nstatus: done\n---\n# i\n`,
     'close specs/i.md')
+  writeReviewRefs(root2, 'rv_iiiiiiiiiiii', parent2, close2)
   writeLedger(root2, [
     { ts: '2026-08-23T00:00:00Z', stage: 'review', spec: 'specs/i.md', runId: 'rv_iiiiiiiiiiii', verdict: 'CLEAN' },
   ])
@@ -580,6 +625,7 @@ test('AC-20260823-05-8: --select exits 4 naming the stale-base cause and the sta
   execFileSync('git', ['-C', root, 'checkout', '-q', 'main'])
   execFileSync('git', ['-C', root, 'merge', '-q', '--no-ff', '-m', 'merge feature', 'feature'])
   execFileSync('git', ['-C', root, 'branch', '-D', 'feature'])
+  writeReviewRefs(root, 'rv_jjjjjjjjjjjj', parent, close)
   writeLedger(root, [
     { ts: '2026-08-23T00:00:00Z', stage: 'review', spec: 'specs/j.md', runId: 'rv_jjjjjjjjjjjj', verdict: 'CLEAN' },
   ])
@@ -614,9 +660,10 @@ test('AC-20260819-03-9 (collision fix, specs/20260823/05): --select still select
   // --select can never resolve a fake sha, and this test's own claim (a successful selection)
   // would otherwise become unreachable.
   const gAncestor = commitReal(root, 'lib/g-pre.js', 'g\n', 'pre g')
-  commitSpecFlow(root, 'specs/g.md',
+  const g = commitSpecFlow(root, 'specs/g.md',
     `---\ndiff_base: ${gAncestor}\n---\n# g\n`,
     `---\ndiff_base: ${gAncestor}\nstatus: done\n---\n# g\n`)
+  writeReviewRefs(root, 'rv_gggggggggggg', g.parent, g.commit)
   writeLedger(root, [
     { ts: '2026-08-10T00:00:00Z', stage: 'review', spec: 'specs/g.md', runId: 'rv_gggggggggggg', verdict: 'CLEAN' },
     { ts: '2026-08-11T00:00:00Z', stage: 'replay', spec: 'specs/g.md', runId: 'rp_gggggggggggg',
@@ -640,7 +687,11 @@ test('AC-20260819-03-9 (collision fix, specs/20260823/05): --select still select
 // AC-6 (retagged verbatim, SHALL CONTINUE TO: the outside-repo accept path with all its
 // fix-iteration-2 regression pins intact, never weakened).
 
-test('AC-20260823-05-1: --setup accepts a --dir inside <root>/.claude/worktrees/ in a repo that already ignores that path, creating the marker-carrying detached worktree there and exiting 0; a follow-up --teardown removes it', () => {
+// specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md AC-20260913-01-8 (SHALL CONTINUE
+// TO, retagged in place, never weakened): D5's new post-setup ac-matrix verification runs only
+// when --setup was given --spec — this test's --dir-only call must keep creating the
+// marker-carrying worktree and running no verification at all.
+test('AC-20260823-05-1 / AC-20260913-01-8 (SHALL CONTINUE TO): --setup accepts a --dir inside <root>/.claude/worktrees/ in a repo that already ignores that path, creating the marker-carrying detached worktree there and exiting 0; a follow-up --teardown removes it', () => {
   const root = fs.realpathSync(tmpdir('replay-setup-wt-ok'))
   gitRepo(root) // gitRepo()'s own fixture .gitignore already covers .claude/worktrees/
   const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
@@ -780,6 +831,24 @@ test('AC-20260823-05-4: WHEN the repo\'s info/exclude already carries the .claud
 // sole owner of the `spec/<stem>` naming rule (pipeline rules § Risk Tiers) — rather than
 // hardcoding the transform, so a future change to that rule cannot silently desync this file.
 
+// specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md A5/D5: --setup now runs
+// ac-matrix.js against the scratch tree whenever --spec was supplied, and a synthetic --spec
+// host whose spec carries no ## Acceptance Criteria section reddens that verification
+// (ac-matrix exits 2) with no leniency arm — so every --setup --spec fixture below needs a REAL
+// coverable spec (one AC bullet, a File Plan tests row, and a matching test file mentioning that
+// AC-ID), committed at the exact sha --setup is given.
+function coverableSpecBody(title, acId) {
+  return `---\nstatus: implementing\n---\n# ${title}\n\n## File Plan\n\n| Path | Action | Layer | Summary |\n` +
+    `|------|--------|-------|---------|\n| tests/x.test.js | CREATE | tests | fixture coverage |\n\n` +
+    `## Acceptance Criteria\n\n- **${acId}**: fixture AC for ac-matrix coverage.\n`
+}
+function writeCoverableTestFile(root, acId) {
+  fs.mkdirSync(path.join(root, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'tests/x.test.js'),
+    `'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n` +
+    `test('${acId}: fixture coverage', () => { assert.ok(true) })\n`)
+}
+
 // AC-20260831-01-6 (SHALL CONTINUE TO, specs/20260831/01): --setup without --overlay must stay
 // byte-identical to today — this test already pins the exact two-token printed line and the
 // marker-carrying worktree that shape produces, so it is retagged in place rather than duplicated.
@@ -792,7 +861,8 @@ test('AC-20260826-01-1 / AC-20260831-01-6 / AC-20260904-02-11: --setup --commit 
   const relSpec = 'specs/20260825/02-genesis-consultant-discovery.md'
   const specFull = path.join(root, relSpec)
   fs.mkdirSync(path.dirname(specFull), { recursive: true })
-  fs.writeFileSync(specFull, '---\nstatus: implementing\n---\n# genesis consultant discovery\n')
+  fs.writeFileSync(specFull, coverableSpecBody('genesis consultant discovery', 'AC-20260825-97-1'))
+  writeCoverableTestFile(root, 'AC-20260825-97-1')
   execFileSync('git', ['-C', root, 'add', '-A'])
   execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'add spec'])
   const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
@@ -855,7 +925,8 @@ test('AC-20260826-01-2: two derived --setup --spec runs for the same spec coexis
   const relSpec = 'specs/20260825/02-genesis-consultant-discovery.md'
   const specFull = path.join(root, relSpec)
   fs.mkdirSync(path.dirname(specFull), { recursive: true })
-  fs.writeFileSync(specFull, '---\nstatus: implementing\n---\n# x\n')
+  fs.writeFileSync(specFull, coverableSpecBody('x', 'AC-20260825-98-1'))
+  writeCoverableTestFile(root, 'AC-20260825-98-1')
   execFileSync('git', ['-C', root, 'add', '-A'])
   execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'add spec'])
   const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
@@ -1124,7 +1195,10 @@ test('AC-20260831-01-2: --setup --overlay leaves every meta-prefix path (specs/,
     'prefix filter let a review-outcome surface leak into the diff the reviewer reads: ' + nameStatus)
 })
 
-test('AC-20260831-01-3: --setup --overlay whose close commit changes only meta-prefix paths creates no overlay commit, leaves the worktree HEAD at --commit, and prints overlaid=0', () => {
+// specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md AC-20260913-01-10 (SHALL CONTINUE
+// TO, retagged in place, never weakened): D6 relaxes the overlay-descendant refusal but leaves
+// the meta-only degenerate case — every row in --commit..--overlay meta-prefixed — untouched.
+test('AC-20260831-01-3 / AC-20260913-01-10 (SHALL CONTINUE TO): --setup --overlay whose close commit changes only meta-prefix paths creates no overlay commit, leaves the worktree HEAD at --commit, and prints overlaid=0', () => {
   const root = fs.realpathSync(tmpdir('replay-overlay-metaonly'))
   const { parent, close, dir } = setupOverlayHost(root, {
     parentFiles: {
@@ -1151,7 +1225,11 @@ test('AC-20260831-01-3: --setup --overlay whose close commit changes only meta-p
     '--commit, never gain an empty or meta-only commit: ' + head)
 })
 
-test('AC-20260831-01-4: --setup refuses an --overlay that is not a strict descendant of --commit — an ancestor or an equal sha — with exit 4 before creating any worktree, naming the --select remedy', () => {
+// specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md AC-20260913-01-11 (SHALL CONTINUE
+// TO, retagged in place, never weakened): D6 narrows the refusal population (an unrelated sha by
+// descent is now accepted) but keeps refusing exactly the two cases this test drives — an
+// --overlay equal to --commit, and one that is an ancestor of it.
+test('AC-20260831-01-4 / AC-20260913-01-11 (SHALL CONTINUE TO): --setup refuses an --overlay that is not a strict descendant of --commit — an ancestor or an equal sha — with exit 4 before creating any worktree, naming the --select remedy', () => {
   const root = fs.realpathSync(tmpdir('replay-overlay-nondescendant'))
   const { parent, close } = setupOverlayHost(root, {
     parentFiles: { 'lib/a.js': 'a\n' },
@@ -1228,7 +1306,8 @@ test('AC-20260904-02-9: --setup copies the host\'s .worktreeinclude-matched giti
   fs.writeFileSync(path.join(root, '.worktreeinclude'), 'app/.env.local\n')
   const relSpec = 'specs/x.md'
   fs.mkdirSync(path.join(root, 'specs'), { recursive: true })
-  fs.writeFileSync(path.join(root, relSpec), '---\nstatus: implementing\n---\n# x\n')
+  fs.writeFileSync(path.join(root, relSpec), coverableSpecBody('x', 'AC-20260904-97-1'))
+  writeCoverableTestFile(root, 'AC-20260904-97-1')
   g('add', '-A'); g('commit', '-q', '-m', 'manifest + spec')
   const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
   fs.mkdirSync(path.join(root, 'app'), { recursive: true })
@@ -3857,11 +3936,14 @@ test('--select skips a candidate review run already named by a pristine-red setu
   const root = fs.realpathSync(tmpdir('replay-select-skips-unreproducible'))
   gitRepo(root)
   const ancestor = commitReal(root, 'lib/pre.js', 'a\n', 'pre')
-  commitSpecFlow(root, 'specs/a.md',
+  const a = commitSpecFlow(root, 'specs/a.md',
     `---\ndiff_base: ${ancestor}\n---\n# a\n`,
     `---\ndiff_base: ${ancestor}\nstatus: done\n---\n# a\n`)
+  writeReviewRefs(root, 'rv_aaaaaaaaaaaa', a.parent, a.commit)
   // b closes LAST, so read-order tie-break would pick it if it were still eligible — the skip is
-  // what makes a.md win, never the ordering.
+  // what makes a.md win, never the ordering. b's row never reaches ref resolution (it is filtered
+  // out by the pristine-red skip before --select reads any ref), so it deliberately writes none —
+  // proving the skip itself, not merely a missing-ref refusal, is what removes it.
   commitSpecFlow(root, 'specs/b.md',
     `---\ndiff_base: ${ancestor}\n---\n# b\n`,
     `---\ndiff_base: ${ancestor}\nstatus: done\n---\n# b\n`)

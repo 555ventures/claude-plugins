@@ -16,11 +16,27 @@ const { GREEN_TEST, specBody, run, stateOf, returnFileWith, CLEAN_RETURN, fiveSe
 test('AC-20260821-02-3: WHEN due but --select resolves no usable CLEAN target THE SYSTEM transitions to DONE printing the harness\'s own advisory — a due-but-unmeasurable close is never parked', () => {
   // The exit-1 arm ("no eligible CLEAN row in the window") is structurally unreachable from
   // REPLAY: the driver's own close appends a CLEAN review row with a runId moments earlier, so a
-  // candidate always exists. The reachable arm is --select failing to RESOLVE that candidate
-  // (exit 4) — here because the spec's newest commit has no parent revision carrying the spec.
+  // candidate always exists. The reachable arm is --select RESOLVING that candidate at all failing
+  // outright — specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md D2/D3's own missing-ref
+  // exit 4 (AC-20260913-01-5), reproduced here by deleting the `judged` ref doCloseWork() just wrote
+  // and stripping the close row's own `diff.head` field (the only fallback D2 allows), leaving the
+  // row with a `close` ref but no way to name the parent it judged from. The old fixture instead
+  // amended the close flip into the implement commit to orphan the close commit from a resolvable
+  // parent — but the judged ref doCloseWork() writes BEFORE that amend keeps pointing at the
+  // (still-valid) pre-amend commit regardless of the amend, so under D1 --select now resolves it
+  // fine and the old trick no longer reproduces this arm (see the deviations sidecar).
   const host = makeReplayHost('rvdrvreplaynosel', { acId: 'AC-20260820-99-9', seedRows: fiveSeedReviews })
   driveToClose(host, 'rvdrv-replay-nosel-ret')
-  commitClose(host, { amend: true })
+  const runId = closeRunIdOf(host.root)
+  execFileSync('git', ['-C', host.root, 'update-ref', '-d', `refs/spec-review/${runId}/judged`])
+  const ledgerPath = path.join(host.root, '.claude/spec-runs.jsonl')
+  const rows = fs.readFileSync(ledgerPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+  const closeRow = rows.find((r) => r.stage === 'review' && r.runId === runId)
+  assert.ok(closeRow && closeRow.diff && closeRow.diff.head,
+    'fixture sanity: the close-row append must have recorded a diff.head to strip, or this test proves nothing about the fallback D2 removes')
+  delete closeRow.diff.head
+  fs.writeFileSync(ledgerPath, rows.map((r) => JSON.stringify(r)).join('\n') + '\n')
+  commitClose(host)
   const r = run(host.root, host.spec, '--mark', 'closed')
   assert.strictEqual(r.status, 0,
     'a close the harness cannot select a target for must still be accepted — an unmeasurable window may never fail a finished review: ' + r.stdout + r.stderr)

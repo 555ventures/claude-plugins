@@ -1,6 +1,6 @@
 ---
 date: 2026-09-13
-status: hardened
+status: implementing
 tier: standard
 area: replay
 design: false
@@ -9,7 +9,9 @@ depends_on: []
 depended_on_by: []
 brief: n/a
 spiked: 2026-09-13
+build_base: main
 open_markers: 0
+diff_base: 7f982694adf93c9919a2e83f69ff79a8ccab111c
 ---
 
 # The replay tree is the reviewed tree

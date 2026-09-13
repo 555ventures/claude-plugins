@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: implementing
+status: done
 tier: critical
 area: cross-cutting
 design: false
@@ -297,6 +297,32 @@ Every other literals hit is a File Plan row.
 
 No `SHALL CONTINUE TO` pin beyond AC-20260912-15-9: this spec's promises are removals, and a
 removal's only durable assertion is the zero-hit literal check AC-20260912-15-6 already makes.
+
+Build-time record (folded from the deviations sidecar at close, 2026-09-13):
+
+The spec was renumbered from `14-` to `15-` before the build, and its 28 AC-IDs rewritten from
+the `AC-20260912-14-` prefix to `AC-20260912-15-`. A sibling spec locked the same day already
+held number 14, so both minted colliding AC-IDs — a fatal ambiguity for a spec whose own subject
+is AC-ID-keyed test ownership. The untracked, later-written file was the one renumbered.
+
+A5's lock-time verification read all seven tests in
+`tests/review/review-driver-close-expiry.test.js` for close-time-deletion assertions, but missed
+that `tests/review/review-driver.test.js`'s `AC-20260820-07-12` merge-strategy fixture also
+asserted `!existsSync('tests/foo.test.js')` — a live pin on the exact deletion D1/D2 remove. It
+surfaced as a gate failure outside the File Plan. The user ruled to fix it in this spec (D14, a
+new File Plan row); the assertion was rewritten in place to assert the file survives the close
+and the close adds no commit, leaving that fixture's merge/cleanup/verify coverage untouched. The
+narrower lesson for future lock-time verification: a literal sweep for a retired behavior must
+walk every test file that drives the changed script, not only the file whose name matches the
+behavior.
+
+D8's contract rewrite introduced a new `spec-paths test-expiry` call site inside
+`spec/templates/grounding-contract.md`, which forced an undeclared row into
+`spec/entrypoints.json` — out of the File Plan, waived at review under the standing
+exhaustive-live-file-pin rule. A second, unplanned repair fell out of the same edit: the
+entry-point guard scans `.js` files in two directions that disagree about comments, so
+`coverage-scope.js` could not both mention the `spec-paths` key in its WHY header and satisfy the
+manifest. Its comment names `expire-tests.js --all-done --apply` directly instead.
 
 ## Canonical Delta
 

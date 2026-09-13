@@ -246,3 +246,34 @@ test('AC-20260912-13-7: WHEN the resolved host gate exits non-zero over the comm
     'AC-20260912-13-7: a close that retired nothing must print no expiry note — an unconditional note would send ' +
     'every ordinary red gate hunting a deletion that never happened: ' + closed.stdout + closed.stderr)
 })
+
+// specs/20260912/15-the-close-stops-deleting-tests.md D11, AC-20260912-15-9: the same gate-red
+// refusal carries over a CLOSE that classified a retirable test — since --mark closed no longer
+// deletes anything, a close whose classification recorded retired:1 must refuse identically to
+// one that recorded retired:0.
+test('AC-20260912-15-9: WHEN the resolved host gate exits non-zero over a committed close tree whose classification recorded a retirable test THE SYSTEM SHALL CONTINUE TO refuse --mark closed with exit 2 and "gate red at close", and SHALL CONTINUE TO leave the driver state at CLOSE', () => {
+  const host = makeExpiryHost('rvdrv-expiry-gate-red-retired')
+  toReviewer(host)
+  const r = run(host.root, host.spec, '--mark', 'reviewer-returned',
+    '--file', returnFileWith('rvdrv-expiry-gate-red-retired-clean', CLEAN_RETURN))
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
+    'setup precondition: the clean reviewer return must reach CLOSE: ' + r.stdout + r.stderr)
+
+  fs.writeFileSync(path.join(host.root, 'always-red.sh'), '#!/usr/bin/env bash\nexit 1\n')
+  const cfgPath = path.join(host.root, '.claude/spec.config.json')
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+  cfg.gateCommand = 'bash always-red.sh'
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg))
+  execFileSync('git', ['-C', host.root, 'add', '-A'], { encoding: 'utf8' })
+  execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'close'], { encoding: 'utf8' })
+
+  const closed = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(closed.status, 2,
+    'AC-20260912-15-9: a red gate over the committed close tree must refuse the mark even when the close recorded ' +
+    'a retirable test — refusal must not depend on whether anything was classified retirable: ' + closed.stderr)
+  assert.match(closed.stderr, /gate red at close/,
+    'AC-20260912-15-9: the refusal must carry its own literal anchor so a session can tell this apart from the ' +
+    'suite-red refusal: ' + closed.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
+    'AC-20260912-15-9: a refused closed mark must leave the driver state at CLOSE: ' + closed.stdout + closed.stderr)
+})

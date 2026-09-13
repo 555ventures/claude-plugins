@@ -429,6 +429,14 @@ half the driver cannot check, carried here as contract prose the authoring sessi
   sign-off are exempt by design, because the theme is picked after sign-off now, in
   `/spec:sketch`: an approved gray wireframe is the mocks stage's finished artifact, never a
   half-dressed screen (specs/20260907/07).
+- **A screen carries no styles of its own.** A bound mock links only the three named layers —
+  `wire/tokens.css` (the register), `wire/wire.css` (the shared kit) and `wire/project.css`
+  (the project kit, the one place a project adds vocabulary) — and carries no `<style>` block
+  declaring a rule and no `style=` attribute (an `@import`-only `<style>` block is a link, not
+  an invented style). `design-atlas.js check` refuses an unpermitted stylesheet, a project-kit
+  class redefining one the shared kit already declares, a project kit larger than the shared
+  kit's own class count, and warns on a project-kit class used on exactly one screen
+  (specs/20260912/09-a-mock-may-not-invent.md, docs/adr/0022-a-mock-may-not-invent.md).
 - **Mocks are authored under the `frontend-design` skill.** Every mock — shape, wireframe,
   theme direction, and every `/spec:sketch` draft or rework — is authored with the skill
   loaded (Skill tool) before the first edit; the pipeline never composes a screen or a token from

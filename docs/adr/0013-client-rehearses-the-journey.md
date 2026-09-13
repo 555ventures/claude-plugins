@@ -35,7 +35,9 @@
     pick on a shortlist, role-swap render); the retired `direction-composed` mechanics stay
     retired.
 - Amended by: ADR-0017 — the eleven-role register this record describes becomes shadcn's own
-  eighteen colour roles verbatim; this record's register wording is narrowed to match.
+  eighteen colour roles verbatim; this record's register wording is narrowed to match. ADR-0022
+  — the authoring rules for a labelled mock that links the wire register gain the invention bar
+  (one home for project CSS, no redefinition, a cap, a single-screen warn).
 
 ## Context
 

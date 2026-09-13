@@ -1,0 +1,15 @@
+/* Project class set — spec/doctrine/mocks.md § Mocks: Authoring Rules, "A screen carries no
+   styles of its own" (specs/20260912/09-a-mock-may-not-invent.md D1, amended into
+   docs/adr/0013-client-rehearses-the-journey.md by docs/adr/0022-a-mock-may-not-invent.md).
+   Copied verbatim into design/wire/project.css by `canon-written` when absent — the ONE place a
+   project adds vocabulary the shared kit (spec/templates/mocks/wire.css) does not already carry.
+   Three rules bind here, checked by `design-atlas.js check`:
+     1. No class this file declares may name a class spec/templates/mocks/wire.css already
+        declares — an override is indistinguishable from a redefinition once a screen is read
+        cold.
+     2. This file's count of distinct class names may not exceed wire.css's own, computed at
+        run time from the template — a project may not invent more vocabulary than the kit it
+        was given.
+     3. A class used on exactly one screen is warned, never refused — fold it into a shared
+        class or into that screen's own kit region.
+   No rules below this comment until a project actually needs one. */

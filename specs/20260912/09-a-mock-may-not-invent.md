@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: hardened
+status: implementing
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +10,8 @@ depended_on_by: [specs/20260912/10-seeded-data-names-its-source.md]
 brief: n/a
 spiked: 2026-09-12
 open_markers: 0
+build_base: main
+diff_base: a6278edc7cfc71b25aa7d8158fca8390ff17a056
 ---
 
 # A mock may not invent
@@ -54,7 +56,7 @@ share.
 | spec/templates/mocks-kit.html | MODIFY | doctrine | D3/D8 its own `<style>` reset deleted — the linked register carries it now |
 | spec/doctrine/mocks.md | MODIFY | doctrine | D1–D7 one new § Mocks: Authoring Rules bullet ("A screen carries no styles of its own"), naming the three layers and the four checks |
 | docs/adr/0013-client-rehearses-the-journey.md | MODIFY | other | D9 `Amended by` backlink only |
-| docs/adr/0017-a-mock-may-not-invent.md | CREATE | other | D9 the amendment ADR. Take the next free number if 0017 is claimed by a sibling and amend every mention in this spec in the same build |
+| docs/adr/0022-a-mock-may-not-invent.md | CREATE | other | D9 the amendment ADR. Amended at build: 0017 was claimed by a sibling, so the next free number (0022) is taken and every mention in this spec moved with it |
 | tests/mocks/mock-invention.test.js | CREATE | tests | AC-20260912-09-1, AC-20260912-09-2, AC-20260912-09-3, AC-20260912-09-4, AC-20260912-09-5, AC-20260912-09-7, AC-20260912-09-8 |
 | tests/mocks/kit-layers.test.js | CREATE | tests | AC-20260912-09-6 |
 | tests/design-atlas.test.js | MODIFY | tests | Fixture repair: the five sites linking `wire/` drop their own `<style>` reset (D8 makes it redundant); the `@import`-in-`<style>` fixture is left exactly as it is and is the pre-image D3's permitted form is asserted against |
@@ -206,7 +208,7 @@ mock that has correctly externalised all of its CSS reports nothing at all.
   muted nav placeholder primary row screen sheet sm stack table title`. **If false** after
   spec 08's primitive re-draws change the set: nothing moves — the cap is computed from the
   template at run time and no literal is stored.
-- A5: `docs/adr/0017-*` is free. **If false** (a sibling claims it first): take the next free
+- A5: `docs/adr/0017-*` is free. **Executed 2026-09-13 at build: FALSE** — `0017-the-register-is-the-whole-shadcn-set.md` claims it, and `0018`–`0021` are claimed too, so the ADR is `docs/adr/0022-a-mock-may-not-invent.md` and the File Plan row was amended in this build. **If false** (a sibling claims it first): take the next free
   number and amend the File Plan row, D9 and every backlink in the same build.
 
 ## Rationale

@@ -203,11 +203,13 @@ function writeWireframe(dir, label, opts = {}) {
   // bare text node, never a new top-level content-region element, so it stays invisible to the
   // kit family's unabsorbed-region rule (design-atlas.js's diagnoseKitRegions only walks
   // top-level ELEMENT children of the content region).
+  // Fixture repair: the box-sizing reset dropped — the linked wire register (wire.css) already
+  // declares it, so this file's own copy is now redundant weight the file would otherwise carry
+  // as a <style> block once a rule keeps a bound screen from declaring styles of its own.
   writeFile(path.join(dir, 'design/mocks', label + '.html'),
     '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
     '<link rel="stylesheet" href="../wire/tokens.css">\n' +
     '<link rel="stylesheet" href="../wire/wire.css">\n' +
-    '<style>* { box-sizing: border-box; }</style>\n' +
     '<main data-screen-label="' + label + '" data-status="sketch">' + label + ' Aoi Tanaka' + toHtml + stateBtnsHtml + '</main>\n')
 }
 

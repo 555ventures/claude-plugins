@@ -447,10 +447,22 @@ function renderWalkRequest(n, s) {
   }
   const again = '<p class="wk-req-again"' + (reopenText != null ? '' : ' hidden') + '>' +
     (reopenText != null ? esc(s.reqAgainPrefix + reopenText) : '') + '</p>'
+  // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D4 (amended): a request whose
+  // region was flagged lost at the last re-anchor (mocks-driver.js's `notes address`, D1) carries
+  // its OWN `data-region="outdated"` attribute — never on `data-status`, which stays the note's
+  // own lifecycle status (viewer.css's action-row rules and walk.browser.js's
+  // `refreshNavDisabled` blocking count both read `data-status` and neither learns a new value).
+  const regionOutdated = !!(n.addressed && n.addressed.reanchored === 'lost')
+  const outdatedHtml = regionOutdated
+    ? '<span class="nl-region-badge"><span class="nl-region-glyph outdated"></span></span>' +
+      '<p class="wk-req-outdated">Outdated — the area it marked is gone.</p>'
+    : ''
   return '<article class="wk-req" data-wk="request" data-id="' + esc(n.id) + '" data-label="' + esc(n.screen) +
-    '" data-status="' + esc(status) + '"' + (n.resolution ? ' data-resolution="' + esc(n.resolution) + '"' : '') + ' hidden>' +
+    '" data-status="' + esc(status) + '"' + (n.resolution ? ' data-resolution="' + esc(n.resolution) + '"' : '') +
+    (regionOutdated ? ' data-region="outdated"' : '') + ' hidden>' +
     '<p class="wk-req-text">' + esc(n.text) + '</p>' +
     again +
+    outdatedHtml +
     '<p class="wk-req-status">' + esc(statusLine) + '</p>' +
     extra +
     '</article>'

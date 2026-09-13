@@ -142,10 +142,15 @@ reviewer sees a moment later.
       three is project-scope. The invariant (the title names the same total the page computed) is
       unchanged; only the worked numbers are corrected to the fixture they describe.
   → writes tests/mocks/review-page.test.js
-- **AC-20260912-06-3**: WHEN that same fixture renders THE SYSTEM SHALL CONTINUE TO emit inside
+- **AC-20260912-06-3** `[retired: specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md]`:
+  WHEN that same fixture renders THE SYSTEM SHALL CONTINUE TO emit inside
   `.rv-scopeband` an element carrying the literal text `Notes for` as DOM text, and
   `spec/templates/mocks/viewer.css` SHALL CONTINUE TO contain no `content: "Notes for"` declaration
   → writes tests/mocks/review-page.test.js
+  - Retired at the owner's 2026-09-13 ruling: spec 12's D15 replaces the band's wording with a
+    self-describing sentence (`On screen <a> plus the whole project`). The criterion's SUBSTANCE —
+    the band's words are DOM text, never viewer.css generated content — is carried forward
+    unweakened by AC-20260912-12-19 in the same test file; only the literal string is retired.
 - **AC-20260912-06-4**: WHEN that same fixture renders with `prefix` `''` THE SYSTEM SHALL CONTINUE
   TO emit exactly one `a.rv-home` whose `href` is `/` and whose text is the seed's `product`, and
   the breadcrumb SHALL CONTINUE TO contain no `Mocks` segment

@@ -103,6 +103,9 @@ function renderRail(seed, journey, screens, openByLabel, projectOpen) {
     return '<li><a data-rv="screen" data-screen="' + esc(s.label) + '" href="#board-' + esc(s.label) + '"><span class="rv-n">' + (i + 1) + '</span>' +
       esc(s.label) + '<span class="rv-count" data-rv="count" data-screen="' + esc(s.label) + '"' + (open ? '' : ' data-zero') + '>' + open + '</span></a></li>'
   }).join('')
+  // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D3 (amended) retires the row's
+  // `Show on the screen` button but explicitly carves this control out: the rail's screen picker
+  // keeps data-rv="jump" and is unchanged. AC-3's ban is scoped to `button[data-rv="jump"]`.
   const select = '<select class="rv-jump" aria-label="Jump to a screen" data-rv="jump">' +
     screens.map((s, i) => '<option value="board-' + esc(s.label) + '">' + (i + 1) + '. ' + esc(s.label) + '</option>').join('') + '</select>'
   // Rendered whenever the journey carries any project-scope item, open or not, so the row does
@@ -120,38 +123,52 @@ function renderRail(seed, journey, screens, openByLabel, projectOpen) {
 // ---- artboards ----------------------------------------------------------------------------------
 // A raw `&` between query params (never `&amp;`) — the src is a URL the tests compare byte-for-byte;
 // label and state are URL-encoded, so only a double quote could ever break the attribute.
+// specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D3/D5: `&notes=1` rides alongside
+// `?clean` so design-atlas.js's mock route still injects the notes-layer script (D3's bridge
+// target, `window.__nlFocus`) even though the frame keeps the clean chrome strip (native
+// data-state-btn controls stay hidden — the review page's own tab bar replaces them) — a bare
+// `?clean` request (every OTHER caller of the mock route) carries no such flag and so still gets
+// no layer at all (tests/mocks/notes-layer-isolation.test.js's own pin).
 function frameSrc(prefix, label, state) {
-  return (prefix + '/mocks/' + encodeURIComponent(label) + '.html?clean' + (state ? '&state=' + encodeURIComponent(state) : '')).replace(/"/g, '%22')
+  return (prefix + '/mocks/' + encodeURIComponent(label) + '.html?clean&notes=1' + (state ? '&state=' + encodeURIComponent(state) : '')).replace(/"/g, '%22')
 }
 
 // One iframe per state tab (the tab shows its own frame; the others stay hidden and unloaded), so
 // a tab's src is a static attribute the page never rewrites. All of a focused board's frames carry
-// data-focus. width/height come from the primary viewport (A6 floor).
-function renderBoard(screen, i, vp, prefix, openCount, focused, total) {
+// data-focus. width/height come from the primary viewport (A6 floor). `regionCounts` (D9) is a
+// { state: count } map of region notes drawn on this screen, keyed the same way rowOpen's own
+// data-state falls back — absent/zero states render no rv-tabpin at all.
+function renderBoard(screen, i, vp, prefix, openCount, focused, total, regionCounts) {
   const label = screen.label
   const tabs = ['happy'].concat(screen.states || [])
   const GRAY = ['empty', 'loading', 'error']
   let firstGray = true
+  const counts = regionCounts || {}
   const tabsHtml = tabs.map((s, k) => {
     const gray = GRAY.indexOf(String(s).toLowerCase()) >= 0
     const mark = gray && firstGray ? ' data-gray data-gray-first' : (gray ? ' data-gray' : '')
     if (gray) firstGray = false
+    const n = counts[s] || 0
+    const tabpin = n ? '<span class="rv-tabpin">' + n + '</span>' : ''
     return '<button type="button" role="tab" data-rv="tab" data-state="' + esc(s) + '"' + mark +
-      ' aria-selected="' + (k === 0 ? 'true' : 'false') + '">' + esc(s) + '</button>'
+      ' aria-selected="' + (k === 0 ? 'true' : 'false') + '">' + esc(s) + tabpin + '</button>'
   }).join('')
   const framesHtml = tabs.map((s, k) =>
     '<iframe data-rv="frame" data-label="' + esc(label) + '" data-state="' + esc(s) + '"' + (focused ? ' data-focus' : '') + (k === 0 ? '' : ' hidden') +
     ' width="' + vp.width + '" height="' + vp.height + '" loading="lazy" scrolling="no" title="' + esc(label) + ' · ' + esc(s) +
     '" src="' + frameSrc(prefix, label, k === 0 ? null : s) + '"></iframe>').join('')
-  return '<section class="rv-board" data-rv="board" data-label="' + esc(label) + '" id="board-' + esc(label) + '"' + (focused ? ' data-focus' : '') + '>' +
+  return '<section class="rv-board" data-rv="board" data-label="' + esc(label) + '" id="board-' + esc(label) + '" data-pins="on"' + (focused ? ' data-focus' : '') + '>' +
     '<header class="rv-cap"><h3>' + esc(label) +
     '<span class="rv-of">· ' + (i + 1) + ' of ' + total + '</span></h3>' +
     '<span class="rv-vp">' + vp.width + '×' + vp.height + '</span>' +
-    // D3: the badge is the screen's OPEN count (the title carries the total); review.browser.js
-    // keeps it in step with the rail after every answer.
-    '<button type="button" class="rv-badge" data-rv="badge" data-label="' + esc(label) + '"' + (openCount ? '' : ' data-zero') +
-    ' title="' + (openCount ? openCount + ' open on this screen' : 'nothing open on this screen') + '">' + openCount + '</button>' +
+    // D14: the caption's count is inert — a span, never a button that looked like the rail's link.
+    '<span class="rv-badge" data-rv="badge" data-label="' + esc(label) + '"' + (openCount ? '' : ' data-zero') +
+    ' title="' + (openCount ? openCount + ' open on this screen' : 'nothing open on this screen') + '">' + openCount + '</span>' +
     '<button type="button" class="rv-addnote" data-rv="addnote" data-label="' + esc(label) + '">+ note</button>' +
+    // D10: the eye toggle — per board, not persisted; review.browser.js flips data-pins and calls
+    // __nlPins on every frame of this board.
+    '<button type="button" class="rv-pins" data-rv="pins" data-label="' + esc(label) + '" aria-pressed="true" ' +
+    'title="Hide marks" aria-label="Hide marks"><span aria-hidden="true">👁</span></button>' +
     '<div class="rv-tabs" role="tablist" aria-label="States of ' + esc(label) + '">' + tabsHtml + '</div></header>' +
     '<div class="rv-stage">' +
     '<div class="rv-shot" data-rv="shot" style="--rv-w:' + vp.width + ';--rv-h:' + vp.height + '">' + framesHtml + '</div>' +
@@ -161,8 +178,15 @@ function renderBoard(screen, i, vp, prefix, openCount, focused, total) {
 // ---- inspector ----------------------------------------------------------------------------------
 function tagText(n) { return n.ledgerMissing ? 'ledger row missing' : (n.tag || '') }
 
+// specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D3 (amended): a region note's row
+// carries data-region="1" and data-state="<the state it was drawn on, defaulting to happy>" — a
+// non-region note (every question, and a plain note with no drawn box) carries neither attribute
+// at all. D9: data-state is what review.browser.js's select() reads to switch that board's tab.
 function rowOpen(n, kind, status, extra) {
-  return '<article data-rv="row" data-id="' + esc(n.id) + '" data-kind="' + kind + '" data-status="' + status + '" class="rv-row rv-' + (kind === 'question' ? 'q' : 'note') + '"' +
+  var isRegion = kind === 'note' && n.region
+  return '<article data-rv="row" data-id="' + esc(n.id) + '" data-kind="' + kind + '" data-status="' + status + '"' +
+    (isRegion ? ' data-region="1" data-state="' + esc(n.state || 'happy') + '"' : '') +
+    ' class="rv-row rv-' + (kind === 'question' ? 'q' : 'note') + '"' +
     (n.scope === 'mock' && n.screen ? ' data-label="' + esc(n.screen) + '"' : '') + extra + ' tabindex="-1">'
 }
 
@@ -193,7 +217,10 @@ function renderNoteRow(n, selected) {
   const open = n.status !== 'resolved'
   const scopeText = n.scope === 'project' ? 'Whole project' : esc(n.screen || '') + (n.state ? ' · ' + esc(n.state) : '')
   const chip = n.reason ? '<span class="rv-chip" data-reason="' + esc(n.reason) + '">' + esc(REASON_LABELS[n.reason] || n.reason) + '</span>' : ''
-  const head = '<div class="rv-rowhead"><span class="rv-id">' + esc(n.id) + '</span><span class="rv-who">You told JJ</span>' +
+  // D3 (amended): a region note's id sits inside the orange pin; every other row keeps the muted
+  // id — never both on the same row.
+  const idSpan = n.region ? '<span class="rv-pin">' + esc(n.id) + '</span>' : '<span class="rv-id">' + esc(n.id) + '</span>'
+  const head = '<div class="rv-rowhead">' + idSpan + '<span class="rv-who">You told JJ</span>' +
     '<span class="rv-sep">·</span><span class="rv-screen">' + scopeText + '</span>' + chip + '</div>'
   const body = '<p class="rv-claim">' + esc(n.text) + '</p>'
   const addressed = open && n.status === 'addressed' && n.addressed
@@ -203,6 +230,8 @@ function renderNoteRow(n, selected) {
       : '<p class="rv-wait">Waiting for the session · blocks approval until addressed</p>')
     : '<p class="rv-answered">' + (n.addressed && n.addressed.change ? 'Addressed: ' + esc(n.addressed.change) : 'Addressed') + '</p>'
   // Only an addressed note is the reviewer's to close: one still waiting has nothing to accept.
+  // D3 (amended): there is no jump control on the row anymore — the box is always painted, so the
+  // row's actions are accept/reopen alone, and only once addressed.
   const noteActions = addressed
     ? '<div class="rv-actions" data-rv="note-actions"><button type="button" data-rv="accept">Looks good</button>' +
       '<button type="button" data-rv="reopen">Still not right</button></div>'
@@ -218,7 +247,8 @@ function renderComposer(prefix) {
   return '<form class="rv-composer" data-rv="composer" data-prefix="' + esc(prefix) + '" aria-label="Tell the session something">' +
     '<div class="rv-chips">' + chips + '</div>' +
     '<textarea data-rv="text" rows="3" placeholder="What should change, or what is missing?"></textarea>' +
-    '<div class="rv-actions"><button type="submit" data-rv="send" class="rv-primary">Send</button><kbd>⌘</kbd><kbd>Enter</kbd></div></form>'
+    '<div class="rv-actions"><button type="submit" data-rv="send" class="rv-primary">Send</button><kbd>⌘</kbd><kbd>Enter</kbd>' +
+    '<button type="button" class="rv-mark-area" data-rv="mark-area" title="Draw a box on the screen, then write the note">Mark an area</button></div></form>'
 }
 
 function renderInspector(items, prefix, selectedId) {
@@ -226,12 +256,19 @@ function renderInspector(items, prefix, selectedId) {
   const rows = items.map((n) => (isQuestion(n) ? renderQuestionRow(n, n.id === selectedId) : renderNoteRow(n, n.id === selectedId))).join('')
   const empty = '<p class="rv-empty" data-rv="empty"' + (openCount ? ' hidden' : '') + '>Every question is answered. Approve the journey when the screens look right.</p>'
   return '<aside class="rv-inspector" data-rv="inspector" aria-label="Questions and notes">' +
-    '<div class="rv-filters" role="tablist"><button type="button" data-rv="filter" data-filter="open" aria-selected="true">Open<span class="rv-count" data-rv="open-count">' + openCount + '</span></button>' +
-    '<button type="button" data-rv="filter" data-filter="answered" aria-selected="false">Answered</button>' +
+    // D13: the labels say who is waiting — the data-filter values (open/answered/all) never
+    // change so no consumer breaks.
+    '<div class="rv-filters" role="tablist"><button type="button" data-rv="filter" data-filter="open" aria-selected="true">Needs you<span class="rv-count" data-rv="open-count">' + openCount + '</span></button>' +
+    '<button type="button" data-rv="filter" data-filter="answered" aria-selected="false">Done</button>' +
     '<button type="button" data-rv="filter" data-filter="all" aria-selected="false">All</button>' +
     '<button type="button" class="rv-keyhint" data-rv="keyhint" title="Keyboard shortcuts" aria-label="Keyboard shortcuts" aria-expanded="false">?</button>' +
     '<button type="button" class="rv-fold" data-rv="fold" title="Fold the inspector (\\)" aria-label="Fold the inspector">›</button></div>' +
-    '<div class="rv-scopeband"><span class="rv-scopeband-label" data-rv="scopeband-label">Notes for</span><span class="rv-screenfilter" data-rv="screenfilter"></span></div>' +
+    // D15: the band says what it filters and offers the way out — the focused screen's rows plus
+    // every whole-project row are what the panel shows; "All screens" clears the narrowing.
+    '<div class="rv-scopeband"><span class="rv-scopeband-label">On screen</span>' +
+    '<span class="rv-screenfilter" data-rv="screenfilter"></span>' +
+    '<span class="rv-scopeband-label">plus the whole project</span>' +
+    '<button type="button" class="rv-allscreens" data-rv="allscreens">All screens</button></div>' +
     '<div class="rv-rows" data-rv="rows">' + rows + empty + '</div>' +
     renderComposer(prefix) +
     '<footer class="rv-keys" data-rv="keys" hidden><span><kbd>J</kbd><kbd>K</kbd> move</span><span><kbd>Y</kbd> yes</span><span><kbd>N</kbd> no, it\'s…</span><span><kbd>Esc</kbd> clear</span><span><kbd>\\</kbd> fold</span></footer>' +
@@ -321,9 +358,18 @@ function buildReviewPage(input) {
     })
 
   const openByLabel = new Map()
+  // D9: region notes drawn on this screen, bucketed by the state they were drawn on (defaulting
+  // to happy — the same fallback rowOpen's own data-state uses) — the rv-tabpin count source.
+  const regionCountsByLabel = new Map()
   for (const n of items) {
     if (n.scope !== 'mock') continue
     if (isOpen(n)) openByLabel.set(n.screen, (openByLabel.get(n.screen) || 0) + 1)
+    if (n.kind === 'note' && n.region) {
+      const byState = regionCountsByLabel.get(n.screen) || {}
+      const state = n.state || 'happy'
+      byState[state] = (byState[state] || 0) + 1
+      regionCountsByLabel.set(n.screen, byState)
+    }
   }
   const firstOpen = items.find(isOpen)
   const focusLabel = firstOpen && firstOpen.scope === 'mock' ? firstOpen.screen : null
@@ -334,7 +380,8 @@ function buildReviewPage(input) {
   const stop = live.open.find((s) => s.key === key) || live.decided.find((s) => s.key === key) || null
 
   const boards = screens.map((s, i) =>
-    renderBoard(s, i, vp, prefix, openByLabel.get(s.label) || 0, s.label === focusLabel, screens.length)).join('')
+    renderBoard(s, i, vp, prefix, openByLabel.get(s.label) || 0, s.label === focusLabel, screens.length,
+      regionCountsByLabel.get(s.label))).join('')
 
   const head = '<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
     '<title>' + esc(entry.title || journey) + ' · review · ' + esc(seed.product || 'Mocks') + '</title>' +

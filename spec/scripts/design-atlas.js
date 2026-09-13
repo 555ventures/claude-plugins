@@ -1380,6 +1380,29 @@ function buildAtlas(root, out) {
   // optional built routes: config design.atlasRoutes {label: url}
   const routes = ((readConfig(root).design || {}).atlasRoutes) || {}
 
+  // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D6: per-screen open/needs-you
+  // counts, derived from notes.json on every render (never cached, never stored) — a `?clean`
+  // render carries them too, since the count lives in the card markup buildAtlas emits here
+  // rather than in a separate injected script. open = status "open" non-question mock-scope
+  // notes on the screen; needs = status "addressed".
+  let notesForCounts = []
+  try { notesForCounts = notesLib.readNotes(root) } catch { notesForCounts = [] }
+  const noteCountsByScreen = new Map()
+  for (const n of notesForCounts) {
+    if (n.scope !== 'mock' || !n.screen || n.kind === 'question') continue
+    if (n.status !== 'open' && n.status !== 'addressed') continue
+    const c = noteCountsByScreen.get(n.screen) || { open: 0, needs: 0 }
+    if (n.status === 'open') c.open++
+    else c.needs++
+    noteCountsByScreen.set(n.screen, c)
+  }
+  function noteCountSpanFor(label) {
+    const c = noteCountsByScreen.get(label)
+    if (!c || (c.open === 0 && c.needs === 0)) return ''
+    return '<span class="nl-card-count" data-open="' + c.open + '" data-needs="' + c.needs + '">' +
+      c.open + ' open · ' + c.needs + ' need you</span>'
+  }
+
   const labels = [...new Set([...nodes.keys(), ...mocks.keys()])].sort()
   const outDir = path.dirname(out)
 
@@ -1461,7 +1484,8 @@ function buildAtlas(root, out) {
     return {
       label, primary, brief, chip: false,
       html: '<div class="card' + wide + '" id="s-' + esc(label) + '" data-st="' + primary + '"><h3>' +
-        esc(label) + '</h3>' + badgeHtml + body + builtFrame + '<div class="meta">' + meta + '</div></div>',
+        esc(label) + '</h3>' + badgeHtml + body + builtFrame + '<div class="meta">' + meta + '</div>' +
+        noteCountSpanFor(label) + '</div>',
     }
   })
 
@@ -2079,6 +2103,10 @@ function createRequestHandler(root, opts = {}) {
       }
       // D6: the read, addNote, rename, and write below are one synchronous chain — no `await`
       // between the read and the write.
+      // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D4: `region` (when the
+      // client's body carries one — a client draws inside the framed mock's own layer, mark
+      // mode) passes straight through to addNote exactly like every other body field; addNote
+      // itself validates its shape (mocks-notes.js's own regionShapeErrors) before it ever lands.
       const outcome = addNoteAndRespond(Object.assign({}, body, { origin: 'client' }), {
         onAddError: () => { try { fs.unlinkSync(pendingPath) } catch { /* best effort */ } },
         decorate: (note) => {
@@ -2305,16 +2333,45 @@ function createRequestHandler(root, opts = {}) {
       }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
       return
     }
-    // specs/20260912/11-a-note-can-mark-an-area.md D3: POST /__notes/region — the card's
-    // "Re-place the box" control. Refuses (400) a resolved note by name, and refuses (400) a
-    // malformed region; 404 on an unknown id. Threads "re-placed the box" via replaceRegion itself.
-    if (reqPath === '/__notes/region' && req.method === 'POST') {
+    // specs/20260912/11-a-note-can-mark-an-area.md D3: POST /__notes/region (session mount only —
+    // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D4 gives the client mount its
+    // own, origin-checked handler below) — the card's "Re-place the box" control. Refuses (400) a
+    // resolved note by name, and refuses (400) a malformed region; 404 on an unknown id. Threads
+    // "re-placed the box" via replaceRegion itself.
+    if (reqPath === '/__notes/region' && req.method === 'POST' && !clientRoute) {
       readJsonBody(req).then((body) => {
         let notes = []
         try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
         let result
         try {
           result = notesLib.replaceRegion(notes, body && body.id, body && body.region, body && body.by)
+        } catch (e) {
+          jsonRes(res, /^no note with id/.test(e.message) ? 404 : 400, { error: e.message })
+          return
+        }
+        notesLib.writeNotes(rootAbs, result.notes)
+        jsonRes(res, 200, result.note)
+      }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
+      return
+    }
+    // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D4: POST /client/__notes/region —
+    // mirrors the session route above (replaceRegion is the one writer either way) but with the
+    // same origin check every other client-only route carries: a client re-places only its own
+    // (client-origin) note's box — a session- or walk-origin note answers 400 naming the remedy
+    // wording verbatim, before replaceRegion's own generic checks ever run.
+    if (reqPath === '/__notes/region' && req.method === 'POST' && clientRoute) {
+      readJsonBody(req).then((body) => {
+        let notes = []
+        try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
+        const target = notes.find((n) => n.id === (body && body.id))
+        if (!target) { jsonRes(res, 404, { error: 'no note with id "' + (body && body.id) + '"' }); return }
+        if (notesLib.originOf(target) !== 'client') {
+          jsonRes(res, 400, { error: 'a client re-places only a client note' })
+          return
+        }
+        let result
+        try {
+          result = notesLib.replaceRegion(notes, body && body.id, body && body.region, (body && body.by) || 'client')
         } catch (e) {
           jsonRes(res, /^no note with id/.test(e.message) ? 404 : 400, { error: e.message })
           return
@@ -2802,8 +2859,14 @@ function createRequestHandler(root, opts = {}) {
         if (themeArg) body = applyThemeSwap(body, themeArg, rootAbs)
         if (state) body = insertBeforeBodyEnd(body, stateClickScript(state))
         if (urlObj.searchParams.has('walk')) body = insertBeforeBodyEnd(body, walkScriptTag(prefix))
-        if (urlObj.searchParams.has('clean')) body = insertBeforeBodyEnd(body, CLEAN_STYLE)
-        else body = injectNotesScript(body, 'mock', prefix)
+        // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D3/D5: a review board's
+        // framed mock rides `?clean&notes=1` (lib/review-page.js's frameSrc) — the clean strip
+        // still applies (native data-state-btn controls stay hidden), but the notes layer is
+        // injected too, so `window.__nlFocus` exists inside the frame the jump button targets. A
+        // bare `?clean` (every other caller) keeps carrying no layer at all.
+        const wantsClean = urlObj.searchParams.has('clean')
+        if (wantsClean) body = insertBeforeBodyEnd(body, CLEAN_STYLE)
+        if (!wantsClean || urlObj.searchParams.has('notes')) body = injectNotesScript(body, 'mock', prefix)
         res.writeHead(200, { 'content-type': contentType, 'cache-control': 'no-store' })
         res.end(body)
         return

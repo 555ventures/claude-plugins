@@ -1057,6 +1057,34 @@ function cmdNotes(sub, args) {
     const notes = notesOrEmpty()
     const found = notes.find((n) => n.id === id)
     if (!found) die('notes address: no note with id "' + id + '"')
+    // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D1: a region note re-anchors
+    // ahead of every other address path (client-origin capture included) — the box the owner
+    // marked is what amber means, and it takes priority over origin.
+    if (found.region) {
+      if (!port) die('notes address: a region note requires --port <n> — run `node ' + designAtlasBin + ' serve --root ' + root + ' --port <n>` first')
+      clientCaptureLib.resolveRegion({
+        port, label: found.screen, state: found.state || null, viewport: captureViewport(), region: found.region,
+      }).then((resolved) => {
+        let result
+        try { result = addressNote(notes, id, { change, ledgerRow }) } catch (e) { die('notes address: ' + e.message); return }
+        if (resolved.mode === 'exact' || resolved.mode === 'children') {
+          result.note.region = resolved.region
+          result.note.addressed.reanchored = resolved.mode
+        } else {
+          result.note.addressed.reanchored = 'lost'
+        }
+        writeNotes(root, result.notes)
+        if (resolved.mode === null) {
+          writeOut(1, 'notes address: ' + id + ' → addressed (box lost — the owner will be asked to re-place it)\n')
+        } else {
+          writeOut(1, 'notes address: ' + id + ' → addressed\n')
+        }
+        process.exit(0)
+      }).catch((e) => {
+        die('notes address: re-anchor failed: ' + e.message)
+      })
+      return
+    }
     // specs/20260907/10-client-review.md D7: a client-origin note re-captures through D5 before
     // it can be addressed — every other note (session-origin, walk, or --port simply omitted on
     // a note this driver has no capture opinion about) carries no capture field at all.

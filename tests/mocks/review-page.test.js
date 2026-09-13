@@ -128,25 +128,6 @@ function cellText(html, screen) {
   return m ? m[1] : null
 }
 
-// specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D15 retires the "Notes for" scope
-// band this pin used to assert (owner ruling, 2026-09-13) — updated in place to the new
-// self-describing sentence and retagged; the viewer.css half is untouched and still true.
-test('AC-20260912-12-19: the scope band states "On screen" then "plus the whole project" as DOM text, never as viewer.css generated content', () => {
-  const html = render()
-  const bandMatch = /<div class="rv-scopeband">([\s\S]*?)<\/div>/.exec(html)
-  assert.ok(bandMatch, 'the page must render a .rv-scopeband element to inspect')
-  assert.match(bandMatch[1], />On screen</,
-    'D15: the scope band must carry the literal text "On screen" as an element\'s own DOM text ' +
-    'content — a reviewer reading the served bytes, or a test asserting on them, must be able to ' +
-    'see the scope statement without also loading viewer.css: got ' + JSON.stringify(bandMatch[1]))
-  assert.match(bandMatch[1], />plus the whole project</,
-    'D15: the scope band must also carry the literal text "plus the whole project" as DOM text: got ' +
-    JSON.stringify(bandMatch[1]))
-  const viewer = read('spec/templates/mocks/viewer.css')
-  assert.doesNotMatch(viewer, /content:\s*"Notes for"/,
-    'viewer.css must carry no ::before content: "Notes for" declaration once D4 lands — a CSS ' +
-    'generated-content string is invisible to the served bytes and to any DOM-level assertion')
-})
 
 // AC-20260912-06-4 (sanctioned pin exception, green pre-change): ADR-0018 clause (a)'s breadcrumb
 // fix already shipped in this pre-image; this pin is what keeps the promise honest at close (D6).

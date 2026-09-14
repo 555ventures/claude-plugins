@@ -116,6 +116,21 @@
   hostStyle.textContent = 'body.lb-open .nl-host{display:none}.nl-host{pointer-events:none}'
   document.head.appendChild(hostStyle)
 
+  // specs/20260913/05-a-note-is-a-conversation.md D5/AC-20260913-05-7: a caller comparing a
+  // box/badge colour against "the page's own var(--v-ok)" reads it off the served document's
+  // root — but viewer.css is linked only inside each `.nl-host`'s shadow root (the isolation
+  // invariant above), and a shadow-loaded stylesheet's own `:root` rule never reaches outside
+  // that shadow tree. These four tokens are set here as plain inline custom properties (never a
+  // stylesheet or a `<link>`, so the isolation pin's `headLinks`/body-style checks are untouched)
+  // so the same register resolves from the light DOM too — values mirror viewer.css's own
+  // `:host,:root` block verbatim; that file stays the one place a role's actual color is decided.
+  try {
+    var ROOT_TOKENS = { '--v-danger': '#dc2626', '--v-warn': '#d97706', '--v-ok': '#16a34a', '--v-muted': '#737373' }
+    for (var rtKey in ROOT_TOKENS) {
+      if (Object.prototype.hasOwnProperty.call(ROOT_TOKENS, rtKey)) document.documentElement.style.setProperty(rtKey, ROOT_TOKENS[rtKey])
+    }
+  } catch (e) { /* no documentElement — a stub DOM test fixture */ }
+
   var css =
     '.nl-bar,.nl-strip,.nl-proj{font:15px/1.5 var(--v-font);color:var(--v-fg);pointer-events:auto}' +
     '.nl-bar{position:fixed;top:13px;right:32px;z-index:9999;display:flex;gap:8px;align-items:center;' +
@@ -304,37 +319,49 @@
   // `--v-danger`, never collapsed onto `--v-warn`. The review page's own chrome (`.rv-pin`,
   // `.rv-badge`, `.rv-tabpin`, the rail counts) carries the separate orange register D3 describes;
   // that register binds only that chrome and never the box tint or its frame, which track status.
-  function colorFor(status) {
-    if (status === 'addressed') return 'var(--v-warn)'
-    if (status === 'resolved') return 'var(--v-ok)'
-    if (status === 'outdated' || status === 'withdrawn') return 'var(--v-muted)'
-    return 'var(--v-danger)' // open
+  //
+  // specs/20260913/05-a-note-is-a-conversation.md D5: colorFor now takes a TURN (session/you/
+  // done/outdated), never a raw status — session -> --v-danger, you -> --v-warn, done -> --v-ok,
+  // outdated is unchanged (a lost anchor, not a turn). The glyph CLASS names stay today's
+  // (open/addressed/resolved/outdated — glyphClassFor below), since viewer.css's glyph rules and
+  // the client's own lib/walk-page.js both still key on those class names.
+  function colorFor(role) {
+    if (role === 'you') return 'var(--v-warn)'
+    if (role === 'done') return 'var(--v-ok)'
+    if (role === 'outdated') return 'var(--v-muted)'
+    return 'var(--v-danger)' // session
+  }
+  function glyphClassFor(role) {
+    if (role === 'you') return 'addressed'
+    if (role === 'done') return 'resolved'
+    if (role === 'outdated') return 'outdated'
+    return 'open' // session
   }
 
-  // D4/D8: the display status a box/row/badge shows — the note's own status, except `outdated`
+  // D4/D8: the display role a box/row/badge shows — the note's own turn, except `outdated`
   // (resolve() === null on a non-resolved note) which is DERIVED here, never written to disk.
   // `mode` ('exact'|'children'|null) rides along so D8's strip footnote can tell a
   // fitted-to-content box apart from an exact one without a second resolve() call.
   function regionInfo(n) {
-    if (!n.region || !rootEl || !window.NotesAnchor) return { status: n.status, mode: null }
+    if (!n.region || !rootEl || !window.NotesAnchor) return { role: turnOf(n), mode: null }
     var resolved = window.NotesAnchor.resolve(rootEl, n.region)
     return {
-      status: resolved === null && n.status !== 'resolved' ? 'outdated' : n.status,
+      role: resolved === null && n.status !== 'resolved' ? 'outdated' : turnOf(n),
       mode: resolved ? resolved.mode : null,
     }
   }
-  function regionStatusOf(n) { return regionInfo(n).status }
+  function regionStatusOf(n) { return regionInfo(n).role }
 
   // D9: `--c` is set on the badge itself, not inherited from an ancestor box — a badge painted
   // without a box ancestor (D8 strip rows, D6 card header) would otherwise render transparent
   // with near-white text, since custom properties only inherit down the DOM tree.
   // `doc` (default this document) is threaded through so a framed card built into
   // `window.parent.document` (D6) can still use this same badge builder.
-  function regionBadge(id, status, doc) {
+  function regionBadge(id, role, doc) {
     doc = doc || document
     var badge = doc.createElement('span'); badge.className = 'nl-region-badge'
-    badge.style.setProperty('--c', colorFor(status))
-    var glyph = doc.createElement('span'); glyph.className = 'nl-region-glyph ' + status
+    badge.style.setProperty('--c', colorFor(role))
+    var glyph = doc.createElement('span'); glyph.className = 'nl-region-glyph ' + glyphClassFor(role)
     badge.appendChild(glyph)
     badge.appendChild(doc.createTextNode(id))
     return badge
@@ -372,7 +399,7 @@
         var n = mockNotes.filter(function (m) { return m.id === id })[0]
         if (!n) return
         if (e.key === 'Enter') pickNote(id)
-        else if ((e.key === 'a' || e.key === 'A') && n.status === 'addressed') api('resolve', { id: id, by: author }).then(refresh)
+        else if ((e.key === 'a' || e.key === 'A') && n.status === 'addressed') api('resolve', { id: id, by: author, verdict: 'accepted' }).then(refresh)
         else if ((e.key === 'r' || e.key === 'R') && n.status === 'addressed') pickNote(id)
       })
     }
@@ -386,9 +413,16 @@
     mockNotes.forEach(function (n) {
       if (!n.region || (n.state || 'default') !== activeState) { return }
       var resolved = window.NotesAnchor ? window.NotesAnchor.resolve(rootEl, n.region) : null
-      var status = resolved === null && n.status !== 'resolved' ? 'outdated' : n.status
+      var role = resolved === null && n.status !== 'resolved' ? 'outdated' : turnOf(n)
+      // A dropped note reaches here only via the client mount (untouched by this spec, D4
+      // Rationale) — box-wise it stays the "done" green it always painted; D5's new register has
+      // no box role of its own for it.
+      if (role === 'dropped') role = 'done'
       if (resolved === null) return // outdated -> no box, only the strip row explains it
-      if (status === 'resolved' && !showResolved) return
+      // specs/20260913/05-a-note-is-a-conversation.md D5/Behavior: "a green box is approved" — a
+      // done note's box paints alongside the still-open ones now, never hidden behind the strip's
+      // own "Show resolved" toggle (AC-20260913-05-7's fixture paints all three with no toggle
+      // click at all). The toggle still governs the strip's own resolved-note ROWS, unchanged.
       seen[n.id] = true
       var box = resolved.box
       var el = boxEls.get(n.id)
@@ -402,17 +436,17 @@
         boxLayer.appendChild(el)
       }
       toggleClass(el, 'sel', selectedNoteId === n.id)
-      // The badge (and its status-derived glyph) is only rebuilt when the status actually
-      // changed — a pass triggered by a pure selection/mode change (D9's own view-state case)
-      // touches no note data at all, so skipping needless DOM churn here keeps that path cheap,
-      // which matters for a transitioning property elsewhere (viewer.css's `.nl-region` opacity,
-      // AC-8) that must not have its paint delayed by unrelated work in the same task.
-      if (el.getAttribute('data-status') !== status) {
-        el.setAttribute('data-status', status)
-        el.style.setProperty('--c', colorFor(status))
+      // The badge (and its role-derived glyph) is only rebuilt when the role actually changed — a
+      // pass triggered by a pure selection/mode change (D9's own view-state case) touches no note
+      // data at all, so skipping needless DOM churn here keeps that path cheap, which matters for
+      // a transitioning property elsewhere (viewer.css's `.nl-region` opacity, AC-8) that must not
+      // have its paint delayed by unrelated work in the same task.
+      if (el.getAttribute('data-status') !== role) {
+        el.setAttribute('data-status', role)
+        el.style.setProperty('--c', colorFor(role))
         // The box element itself (`el`), the one D9/AC-7 pins DOM identity on, is never replaced.
         el.innerHTML = ''
-        el.appendChild(regionBadge(n.id, status))
+        el.appendChild(regionBadge(n.id, role))
       }
       el.style.left = (rootRect.left + scrollX + box.x) + 'px'
       el.style.top = (rootRect.top + scrollY + box.y) + 'px'
@@ -511,17 +545,23 @@
     setMode(pendingReplace ? 'arming' : 'idle')
   }
 
-  function buildCardChrome(doc, n, status) {
+  // specs/20260913/05-a-note-is-a-conversation.md D6: both sides of the thread render, oldest
+  // first — the note's own text, then for each thread entry its `addressed.change` (a session
+  // message) when present followed by its own text, then the note's current `addressed.change`
+  // or legacy `reply` as the newest session message. Resolve/Accept/Send-back/Withdraw are gone:
+  // one Reply box+button, Approve, Reject — the owner can keep writing until they approve or
+  // reject, and Reject is final (D4).
+  function buildCardChrome(doc, n, role) {
     var card = doc.createElement('div'); card.className = 'nl-card'
 
     var hd = doc.createElement('div'); hd.className = 'nl-card-hd'
-    hd.appendChild(regionBadge(n.id, status, doc))
+    hd.appendChild(regionBadge(n.id, role, doc))
     if (n.reason) { var chip = doc.createElement('span'); chip.className = 'chip'; chip.textContent = n.reason; hd.appendChild(chip) }
     var whoEl = doc.createElement('span'); whoEl.textContent = n.by
     hd.appendChild(whoEl)
     card.appendChild(hd)
 
-    if (status === 'outdated') {
+    if (role === 'outdated') {
       var notice = doc.createElement('div'); notice.className = 'nl-card-outdated'
       notice.textContent = 'Outdated — the area it marked is gone.'
       card.appendChild(notice)
@@ -536,76 +576,73 @@
       thread.appendChild(m)
     }
     msg(n.text, n.by)
-    ;(Array.isArray(n.thread) ? n.thread : []).forEach(function (e) { msg(e.text, e.by) })
+    ;(Array.isArray(n.thread) ? n.thread : []).forEach(function (e) {
+      if (e.addressed && e.addressed.change != null) msg(e.addressed.change, 'session')
+      msg(e.text, e.by)
+    })
+    if (n.addressed && n.addressed.change != null) msg(n.addressed.change, 'session')
+    else if (n.reply) msg(n.reply, 'session')
     card.appendChild(thread)
 
-    // No Reply control here — the Contracts HTTP block names exactly add/region/delete/reopen/
-    // resolve/answer, a fourth (reply) verb is out of this spec's scope (see the sidecar
-    // deviation), and a pressable control with no route and no success sentence must not ship.
     var row = doc.createElement('div'); row.className = 'nl-card-row'
     var sp = doc.createElement('span'); sp.className = 'sp'; row.appendChild(sp)
 
-    if (n.status === 'open') {
-      var resolveBtn = doc.createElement('button'); resolveBtn.className = 'nl-btn primary'; resolveBtn.textContent = 'Resolve'
-      resolveBtn.onclick = function () {
-        closeCard()
-        deferPost('Resolved', function () { api('resolve', { id: n.id, by: author }).then(refresh) })
+    if (n.status === 'open' || n.status === 'addressed') {
+      var replyTa = doc.createElement('textarea'); replyTa.placeholder = 'Still not right? Say more.'
+      card.appendChild(replyTa)
+      var replyBtn = doc.createElement('button'); replyBtn.className = 'nl-btn'; replyBtn.textContent = 'Reply'
+      replyBtn.onclick = function () {
+        var v = replyTa.value.trim()
+        if (!v) { replyTa.focus(); return }
+        api('reopen', { id: n.id, text: v, by: author }).then(refresh)
       }
-      row.appendChild(resolveBtn)
-    } else if (n.status === 'addressed') {
+      var acceptBtn = doc.createElement('button'); acceptBtn.className = 'nl-btn primary'; acceptBtn.textContent = 'Approve'
       var rejectBtn = doc.createElement('button'); rejectBtn.className = 'nl-btn'; rejectBtn.textContent = 'Reject'
-      var acceptBtn = doc.createElement('button'); acceptBtn.className = 'nl-btn primary'; acceptBtn.textContent = 'Accept'
-      rejectBtn.onclick = function () {
-        if (card.querySelector('.nl-card-why')) return
-        var why = doc.createElement('div'); why.className = 'nl-card-why'
-        var ta = doc.createElement('textarea')
-        var whyRow = doc.createElement('div'); whyRow.className = 'nl-card-row'
-        var send = doc.createElement('button'); send.className = 'nl-btn primary'; send.textContent = 'Send back'
-        send.onclick = function () {
-          var v = ta.value.trim()
-          if (!v) { ta.focus(); return }
-          api('reopen', { id: n.id, text: v, by: author }).then(refresh)
-        }
-        whyRow.appendChild(send)
-        why.appendChild(ta); why.appendChild(whyRow)
-        card.appendChild(why)
-        if (ta.focus) ta.focus()
-      }
       acceptBtn.onclick = function () {
         closeCard()
-        deferPost('Resolved', function () { api('resolve', { id: n.id, by: author }).then(refresh) })
+        deferPost('Approved', function () { api('resolve', { id: n.id, by: author, verdict: 'accepted' }).then(refresh) })
       }
-      row.appendChild(rejectBtn); row.appendChild(acceptBtn)
+      rejectBtn.onclick = function () {
+        closeCard()
+        deferPost('Rejected', function () { api('resolve', { id: n.id, by: author, verdict: 'withdrawn' }).then(refresh) })
+      }
+      row.appendChild(replyBtn); row.appendChild(acceptBtn); row.appendChild(rejectBtn)
     }
 
-    var moreWrap = doc.createElement('div'); moreWrap.className = 'nl-card-more'
-    var moreBtn = doc.createElement('button'); moreBtn.className = 'nl-btn'; moreBtn.textContent = '…'
-    moreBtn.onclick = function () {
-      var existing = moreWrap.querySelector('.nl-card-menu')
-      if (existing) { existing.remove(); return }
-      var menu = doc.createElement('div'); menu.className = 'nl-card-menu'
-      if (status === 'outdated') {
-        var replaceBtn = doc.createElement('button'); replaceBtn.textContent = 'Re-place the box'
-        replaceBtn.onclick = function () {
-          pendingReplace = n.id
-          closeCard()
+    // D6: the `…` menu keeps Re-place the box (outdated only) and Delete (an untouched, unreplied
+    // open plain note only) — Withdraw is gone with the rest, and the menu itself is never
+    // rendered when it would carry nothing.
+    var threadEmpty = !Array.isArray(n.thread) || n.thread.length === 0
+    var canDelete = n.status === 'open' && n.kind == null && threadEmpty
+    var canReplace = role === 'outdated'
+    if (canReplace || canDelete) {
+      var moreWrap = doc.createElement('div'); moreWrap.className = 'nl-card-more'
+      var moreBtn = doc.createElement('button'); moreBtn.className = 'nl-btn'; moreBtn.textContent = '…'
+      moreBtn.onclick = function () {
+        var existing = moreWrap.querySelector('.nl-card-menu')
+        if (existing) { existing.remove(); return }
+        var menu = doc.createElement('div'); menu.className = 'nl-card-menu'
+        if (canReplace) {
+          var replaceBtn = doc.createElement('button'); replaceBtn.textContent = 'Re-place the box'
+          replaceBtn.onclick = function () {
+            pendingReplace = n.id
+            closeCard()
+          }
+          menu.appendChild(replaceBtn)
         }
-        menu.appendChild(replaceBtn)
+        if (canDelete) {
+          var deleteBtn = doc.createElement('button'); deleteBtn.textContent = 'Delete'
+          deleteBtn.onclick = function () {
+            closeCard()
+            deferPost('Deleted', function () { api('delete', { id: n.id, by: author }).then(refresh) })
+          }
+          menu.appendChild(deleteBtn)
+        }
+        moreWrap.appendChild(menu)
       }
-      var threadEmpty = !Array.isArray(n.thread) || n.thread.length === 0
-      var canDelete = n.status === 'open' && n.kind == null && threadEmpty
-      var lastBtn = doc.createElement('button')
-      lastBtn.textContent = canDelete ? 'Delete' : 'Withdraw'
-      lastBtn.onclick = function () {
-        closeCard()
-        if (canDelete) deferPost('Deleted', function () { api('delete', { id: n.id, by: author }).then(refresh) })
-        else deferPost('Withdrawn', function () { api('resolve', { id: n.id, by: author }).then(refresh) })
-      }
-      menu.appendChild(lastBtn)
-      moreWrap.appendChild(menu)
+      moreWrap.appendChild(moreBtn)
+      row.appendChild(moreWrap)
     }
-    moreWrap.appendChild(moreBtn)
-    row.appendChild(moreWrap)
     card.appendChild(row)
     return card
   }
@@ -716,6 +753,13 @@
         setTimeout(function () { if (hint.parentNode) hint.parentNode.removeChild(hint) }, 4000)
         try { localStorage.setItem('nl-hint-seen', '1') } catch (e) { /* in-memory only */ }
       }
+    }
+    // specs/20260913/05-a-note-is-a-conversation.md D8: whenever marking ends INSIDE the frame
+    // (a save, a discard, or this frame's own Escape all route through here) the review page's
+    // own `[data-rv="mark-area"]` button must unpress too — only the page's own button click or
+    // its own Escape did that before. A no-op unframed, or when the parent hook does not exist.
+    if (mode === 'idle' && window.parent !== window) {
+      try { window.parent.__rvMarkOff(window) } catch (e) { /* no parent hook */ }
     }
     render()
   }
@@ -922,20 +966,20 @@
     // ones alone also swap the plain id badge for the box's own pill and gain the outdated
     // footnote; a plain screen+state note (no region) is unchanged from today.
     var info = regionInfo(n)
-    var status = info.status
+    var role = info.role
     d.className = 'n' + (n.status === 'resolved' ? ' done' : '')
     d.setAttribute('data-id', n.id)
-    d.setAttribute('data-status', status)
+    d.setAttribute('data-status', role)
     if (isProject && n.scope === 'mock') {
       d.appendChild(mockAnchor(n))
     } else if (n.region) {
-      d.appendChild(regionBadge(n.id, status))
+      d.appendChild(regionBadge(n.id, role))
     } else {
       var idBadge = document.createElement('b'); idBadge.textContent = n.id
       d.appendChild(idBadge)
     }
     var t = document.createElement('span'); t.className = 't'
-    var footnote = status === 'outdated'
+    var footnote = role === 'outdated'
       ? 'Outdated — the area it marked is gone.'
       : esc(n.by) + (n.status === 'resolved' ? ' · resolved by ' + esc(n.resolvedBy) : '')
     // D8: a box that resolved in `children` mode (union of surviving children, not the original
@@ -956,7 +1000,9 @@
     } else if (n.status !== 'resolved') {
       var resolveBtn = document.createElement('button')
       resolveBtn.className = 'nl-btn'; resolveBtn.textContent = 'Resolve'
-      resolveBtn.onclick = function () { api('resolve', { id: n.id, by: author }).then(refresh) }
+      // specs/20260913/05-a-note-is-a-conversation.md D6: the strip row's Resolve button is an
+      // Approve, told apart from Reject the same way the card's own Approve is.
+      resolveBtn.onclick = function () { api('resolve', { id: n.id, by: author, verdict: 'accepted' }).then(refresh) }
       d.appendChild(resolveBtn)
     }
     return d
@@ -1015,6 +1061,12 @@
   // same predicate lib/mocks-notes.js's authoredByPerson names (this browser file cannot import
   // the lib).
   function authoredByPerson(n) { return n.kind !== 'question' && n.kind !== 'walk' }
+  // specs/20260913/05-a-note-is-a-conversation.md D1: turnOf's home is lib/mocks-notes.js —
+  // inlined here (and in review.browser.js) because neither browser file can require the lib.
+  function turnOf(n) {
+    if (n.status === 'resolved') return n.resolution === 'withdrawn' ? 'dropped' : 'done'
+    return (n.addressed || n.reply) ? 'you' : 'session'
+  }
   function isOpenNote(n) { return n.status !== 'resolved' }
 
   function render() {
@@ -1099,11 +1151,11 @@
         if (!authoredByPerson(n)) return false
         if ((n.state || 'default') !== activeState) return false
         if (!n.region) return showResolved || n.status !== 'resolved'
-        var status = regionStatusOf(n)
-        if (filter === 'resolved') return status === 'resolved'
-        if (filter === 'all') return showResolved || status !== 'resolved'
-        if (filter === 'open') return status === 'open' || status === 'outdated'
-        return status === 'addressed' || status === 'outdated' // needsYou (default)
+        var role = regionStatusOf(n)
+        if (filter === 'resolved') return role === 'done'
+        if (filter === 'all') return showResolved || role !== 'done'
+        if (filter === 'open') return role === 'session' || role === 'outdated'
+        return role === 'you' || role === 'outdated' // needsYou (default)
       })
       if (!stripRows.length) {
         var empty = document.createElement('p')
@@ -1132,6 +1184,14 @@
   // stay entirely inside this frame's own layer. `__nlMark(on)` is now `setMode('arming'|'idle')`.
   window.__nlMark = function (on) {
     setMode(on ? 'arming' : 'idle')
+  }
+
+  // specs/20260913/05-a-note-is-a-conversation.md D9: the review page's switchTab calls this on
+  // the OUTGOING frame before hiding it — the card belongs to the frame being hidden, so it is
+  // closed through this frame's own closeCard() (which also clears the page's cardhost via
+  // __rvCardClose and returns this frame to idle), never reached into from the page directly.
+  window.__nlCloseCard = function () {
+    if (mode === 'composing') closeCard()
   }
 
   // specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D8: `__nlFocus` is

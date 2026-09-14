@@ -120,10 +120,11 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    - **Intent/scope** (a capability added or dropped — "users can favorite items") → the brief's
      Scope / Out of scope; a change that crosses briefs is an amendment ADR (`Applies to` every
      touched brief, effects edited into each in this session — adr.md template); then the mock.
-   - **Question back** (the note needs the user, not a change) → `notes reply --id <id> --text
-     "<question>"`, status stays open. **Propose to decline** → never declined by this session,
-     print it for the user; a canon-primitive note edits canon.md first, every dependent screen
-     after. Resolve happens only on the page — this session never resolves a note.
+   - **Question back** (the note needs the user, not a change) → `notes address --id <id>
+     --change "<question>"`, the note becomes the author's turn. **Propose to decline** → never
+     declined by this session, print it for the user; a canon-primitive note edits canon.md
+     first, every dependent screen after. Resolve happens only on the page — this session never
+     resolves a note.
    - **Architecture-impacting** — before applying any scope/structure change, ask: *does this
      alter what the ADRs decided or assume* (new persistence, endpoint shape, auth surface,
      real-time requirement)? If yes, never silently absorb it: name the affected or missing

@@ -236,12 +236,23 @@ children as the reflow fallback, drawn by the notes layer as a colored overlay a
 markup. Where the anchor no longer resolves the note shows as `outdated` — never moved, never
 guessed — and offers re-place (docs/adr/0020-a-note-can-mark-an-area.md).
 
-**Status is a three-step queue, asymmetric by design.** `open` → `addressed` (driver-only:
-`notes address --id <id> --change "<what changed>" [--ledger <rowId>]`) → `resolved`
-(the page's `Resolve` button only, `by` = the browser's author name; an `open` note may also be
-withdrawn straight to `resolved` by its author). Nothing but the page can set `resolved` — no
-HTTP endpoint on a forwarded port may mark the session's own work done, and only the author who
-raised a note can judge that a re-look actually answered it.
+**Whose turn it is is one derivation, never a stored field.** `turnOf(n)` in
+`lib/mocks-notes.js` reads `session` (the session owes a word), `you` (the author owes a word —
+an `addressed` note, or one still carrying a legacy `reply`), `done` (`resolved`, `accepted` or
+`waived` alike, no clause of its own), or `dropped` (`resolved`, `withdrawn`) straight off
+`status`/`resolution`/`addressed`/`reply` on every read; `status` stays the one persisted field.
+The session answers with one verb — `notes address --id <id> --change "<what changed>"
+[--ledger <rowId>]` — whether the answer is a fix or a question back, and the note becomes the
+author's turn either way. The author may reply on the page as often as they like: `POST
+/__notes/reopen` accepts a reply on any note that is not `resolved`, folding a stored legacy
+`reply` into the thread the first time a note carrying one is reopened, and each reply returns
+the note to the session's turn. Nothing but the page can end a note — no HTTP endpoint on a
+forwarded port may mark the session's own work done, and only the author who raised a note can
+judge that a re-look actually answered it — and ending one now names which way: `POST
+/__notes/resolve` requires an explicit `verdict` of `accepted` or `withdrawn`, so Approve and
+Reject are told apart where they used to write the same record. Reject is final: `resolution:
+"withdrawn"` hides the note from every page it would otherwise render on, while leaving it on
+disk untouched — there is no path back, by design.
 
 **Nothing pins a question any more.** An assumption row is confirmed or overridden only by the
 human-run `ledger set --id <id> --status confirmed|overridden --tag said-by-user`, never by a
@@ -290,12 +301,15 @@ shows through the `notes-scope` meta tag the server stamps on it — `project` o
 on a screen — so the notes layer renders **one scope per page**, declared by the page, rather than
 guessing from document structure.
 
-**Read-back is summarised, not replayed.** `notes open` collapses settled history: the header
-line counts open and addressed notes (`📝 open notes: <n> (<p> project · <m> mock) · addressed:
-<a>`), and journey-listed open notes stop after 20 lines with a trailing `… <n> more open
-note(s) — --all to list`. `notes open --all` prints the full listing; the open-notes counts line
-and the project notes block are never summarised — a project note blocks every other note by
-design.
+**Read-back is summarised, not replayed, and lists only what waits on the session.** `notes
+open` filters to turn `session` before it groups or counts anything — a note the session already
+answered is the author's to read, and re-listing it is the re-read this rule exists to stop. The
+header line counts open and addressed notes (`📝 open notes: <n> (<p> project · <m> mock) ·
+addressed: <a>`), and journey-listed open notes stop after 20 lines with a trailing `… <n> more
+open note(s) — --all to list`; a note carrying a reply appends its newest thread entry
+(`   ↳ <by>: <text>`) rather than the retired `↳ changed:` line. `notes open --all` prints the
+full listing; the open-notes counts line and the project notes block are never summarised — a
+project note blocks every other note by design.
 
 ## Mocks: Client Player
 

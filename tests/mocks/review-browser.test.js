@@ -134,6 +134,70 @@ test('q241: resolving the journey\'s last scoped note reveals the hidden waiting
     'recount() must rewrite the text from the live row counts, not leave the seeded placeholder')
 })
 
+// specs/20260913/05-a-note-is-a-conversation.md D6 — AC-20260913-05-3, -10. review.browser.js
+// carries no reply/accept/reject wiring today (its rows only ever post to /__notes/add and
+// /__notes/resolve|reopen through the old addressed-only card, never from the row itself), so
+// every selector below is unreachable in the pre-image.
+
+function twoRowFixtureHtml() {
+  const seed = {
+    product: 'Product', viewportWidth: 1280, viewportHeight: 800,
+    journeys: [{ name: 'j1', title: 'J1', screens: [{ label: 'a', states: [] }] }],
+  }
+  const notes = [
+    { id: 'n1', kind: 'note', scope: 'mock', screen: 'a', state: null, status: 'open', text: 'open on a', reason: 'other' },
+    { id: 'n2', kind: 'note', scope: 'mock', screen: 'a', state: null, status: 'addressed', addressed: { change: 'did it' }, text: 'addr on a', reason: 'other' },
+  ]
+  return buildReviewPage({ journey: 'j1', seed, notes, ledger: [], stops: [], prefix: '' })
+}
+
+test('AC-20260913-05-3: clicking a row\'s Reply control then sending non-empty text posts to /__notes/reopen exactly once with that text, and sending an empty box posts nothing', () => {
+  const html = twoRowFixtureHtml()
+  const { document, fetchCalls } = runReviewBrowser(html)
+
+  const replyBtn = document.querySelector('[data-rv="row"][data-id="n1"] [data-rv="reply"]')
+  assert.ok(replyBtn, 'the row must render a [data-rv="reply"] control that unhides the reply box — none found: D6\'s row-level Reply is not built yet')
+  replyBtn._handlers.click[0]({ preventDefault() {} })
+
+  const textEl = document.querySelector('[data-rv="row"][data-id="n1"] [data-rv="reply-text"]')
+  assert.ok(textEl, 'the row must carry a [data-rv="reply-text"] textarea once unhidden')
+  const sendBtn = document.querySelector('[data-rv="row"][data-id="n1"] [data-rv="reply-send"]')
+  assert.ok(sendBtn, 'the row must carry a [data-rv="reply-send"] button')
+
+  textEl.value = 'still wrong'
+  sendBtn._handlers.click[0]({ preventDefault() {} })
+  const reopenCalls = fetchCalls.filter((c) => c.url === '/__notes/reopen')
+  assert.strictEqual(reopenCalls.length, 1,
+    'clicking reply-send with non-empty text must POST to /__notes/reopen exactly once: got ' + reopenCalls.length)
+  const body = JSON.parse(reopenCalls[0].opts.body)
+  assert.strictEqual(body.text, 'still wrong', 'the posted body\'s text must be the box\'s own text: got ' + JSON.stringify(body))
+
+  textEl.value = ''
+  sendBtn._handlers.click[0]({ preventDefault() {} })
+  assert.strictEqual(fetchCalls.filter((c) => c.url === '/__notes/reopen').length, 1,
+    'clicking reply-send with an empty box must post nothing — the count must stay at 1: got ' +
+    fetchCalls.filter((c) => c.url === '/__notes/reopen').length)
+})
+
+test('AC-20260913-05-10: clicking one row\'s accept control and another row\'s reject control post to /__notes/resolve with verdict accepted and withdrawn respectively', () => {
+  const html = twoRowFixtureHtml()
+  const { document, fetchCalls } = runReviewBrowser(html)
+
+  const acceptBtn = document.querySelector('[data-rv="row"][data-id="n1"] [data-rv="accept"]')
+  assert.ok(acceptBtn, 'the n1 row must carry a [data-rv="accept"] control (Approve): none found')
+  acceptBtn._handlers.click[0]({ preventDefault() {} })
+
+  const rejectBtn = document.querySelector('[data-rv="row"][data-id="n2"] [data-rv="reject"]')
+  assert.ok(rejectBtn, 'the n2 row must carry a [data-rv="reject"] control (Reject): none found')
+  rejectBtn._handlers.click[0]({ preventDefault() {} })
+
+  const resolveCalls = fetchCalls.filter((c) => c.url === '/__notes/resolve')
+  assert.strictEqual(resolveCalls.length, 2, 'both clicks must post to /__notes/resolve, exactly twice: got ' + resolveCalls.length)
+  const bodies = resolveCalls.map((c) => JSON.parse(c.opts.body))
+  assert.strictEqual(bodies[0].verdict, 'accepted', 'the accept control must post verdict:"accepted": got ' + JSON.stringify(bodies[0]))
+  assert.strictEqual(bodies[1].verdict, 'withdrawn', 'the reject control must post verdict:"withdrawn": got ' + JSON.stringify(bodies[1]))
+})
+
 test('q241: while a scoped note is still open, recount() hides the waiting line and leaves its text alone', () => {
   // Served state: one scoped note open, one project note open → the element exists but hidden.
   // Seed it visible, so only a recount that re-derives the branch can hide it again.

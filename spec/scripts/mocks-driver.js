@@ -14,7 +14,6 @@
 //                              --by <name> [--reason <r>] --text "<t>"
 // mocks-driver.js --root <dir> notes address --id <id> --change "<what changed>" [--ledger <rowId>]
 //                              [--port <n>]   (--port is required on a client-origin mock-scope note)
-// mocks-driver.js --root <dir> notes reply --id <id> --text "<question back>"
 // mocks-driver.js --root <dir> notes waive --id <id> --reason "<r>" [--by <who>]
 // mocks-driver.js --root <dir> client open --address <url>
 // mocks-driver.js --root <dir> client waive --journey <j> --reason "<r>"
@@ -168,9 +167,12 @@
 //     design/mocks/ledger.md, routed through spec/scripts/lib/mocks-ledger.js exactly as spec 06
 //     built it.
 //   - resolve a note (specs/20260902/10-page-notes-review-loop.md D4): `notes address` and
-//     `notes reply` are the only note writers this driver exposes; there is no `notes resolve`
-//     subcommand — resolving happens only from the served page (the Resolve button, POST
+//     `notes waive` are the only note writers this driver exposes; there is no `notes resolve`
+//     subcommand — resolving happens only from the served page (the Approve/Reject controls, POST
 //     /__notes/resolve), so a `notes resolve` invocation refuses (exit 2) naming the page.
+//     specs/20260913/05-a-note-is-a-conversation.md D3: the reply subcommand is deleted outright
+//     — the session answers with `notes address`, whether it fixed something or asks a question
+//     back; there is now exactly one verb for "the session said something".
 //   - migrate a legacy status.json: a root checkpointed at SKIN or REVIEW derives WIREFRAMES from
 //     its still-live marks on the very next invocation; the retired fields it still carries are
 //     ignored on read and dropped on the next write — there is nothing to migrate. A root already
@@ -224,8 +226,8 @@ const { spawnSync } = require('child_process')
 const { runChild, writeOut } = require('./lib/driver-io')
 const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, setStatus } = require('./lib/mocks-ledger')
 const {
-  readNotes, writeNotes, addNote, addressNote, replyNote, groupOpen, unresolvedFor,
-  originOf, waiveNote, authoredByPerson,
+  readNotes, writeNotes, addNote, addressNote, groupOpen, unresolvedFor,
+  originOf, waiveNote, authoredByPerson, turnOf,
 } = require('./lib/mocks-notes')
 // specs/20260911/05-approval-is-bookkeeping.md D1: the ledger-text transform itself now lives in
 // the lib (so design-atlas.js's walk-page route can share it) — this driver only calls it.
@@ -874,10 +876,18 @@ function noteTag(n) {
 // specs/20260913/07-the-critic-is-out.md D13: a note's per-note line carries only its id, status
 // tag, author and text — the reason tags a retired producer used to render alongside them go with
 // it; id, status tag, author and text are otherwise unchanged.
+// specs/20260913/05-a-note-is-a-conversation.md D7: the `↳ changed:` continuation (the session's
+// OWN answer) is retired — `notes open` lists only notes whose turn is the session's, so every
+// line it prints is one the session has NOT yet answered; what it needs instead is the owner's
+// newest reply, when the note carries a thread at all.
 function noteLine(n, indent) {
   let line = indent + n.id + ' [' + noteTag(n) + ']'
   line += ' ' + n.by + ' · ' + n.text
-  if (n.status === 'addressed' && n.addressed && n.addressed.change) line += '   ↳ changed: ' + n.addressed.change
+  const thread = Array.isArray(n.thread) ? n.thread : []
+  if (thread.length) {
+    const newest = thread[thread.length - 1]
+    line += '   ↳ ' + newest.by + ': ' + newest.text
+  }
   return line
 }
 
@@ -888,10 +898,14 @@ const NOTE_LIST_CAP = 20
 // D4's `notes open` — exact shape: plain notes (project first, with a ⚠️ tail while any is open,
 // then journey -> screen -> state, derived from seed.md via groupOpen). D8: `notes` is filtered
 // through `authoredByPerson` before anything below ever sees a note a person did not type.
+// specs/20260913/05-a-note-is-a-conversation.md D7: the listing itself is narrowed to turn
+// "session" — a note the session has already answered (turn "you") or closed (turn "done"/
+// "dropped") is the owner's to read, not the session's re-read; the counts line above it stays
+// computed over every non-resolved note, exactly as today.
 function cmdNotesOpen(all) {
   const notes = notesOrEmpty().filter(authoredByPerson)
   const seed = currentSeedJourneys()
-  const { project, journeys } = groupOpen(notes, seed)
+  const { project, journeys } = groupOpen(notes.filter((n) => turnOf(n) === 'session'), seed)
   const notResolved = notes.filter((n) => n.status !== 'resolved')
   const mockCount = notResolved.filter((n) => n.scope === 'mock').length
   const addressedCount = notResolved.filter((n) => n.status === 'addressed').length
@@ -1021,7 +1035,7 @@ function cmdNotes(sub, args) {
         const beforeHash = found.capture && found.capture.before && found.capture.before.hash
         if (captured.hash === beforeHash) {
           try { fs.unlinkSync(outPath) } catch { /* best effort */ }
-          die('notes address: the screen has not changed — a client note closes on a visible change, a reply (`notes reply`), a client withdrawal, or a waiver (`notes waive`)')
+          die('notes address: the screen has not changed — a client note closes on a visible change, a question back (`notes address --change`), a client withdrawal, or a waiver (`notes waive`)')
           return
         }
         const captureOpts = { change, ledgerRow, capture: { hash: captured.hash, file: 'captures/' + id + '.after.png' } }
@@ -1071,18 +1085,6 @@ function cmdNotes(sub, args) {
     writeOut(1, 'notes address: ' + id + ' → addressed\n')
     process.exit(0)
   }
-  if (sub === 'reply') {
-    const id = narg('--id')
-    const text = narg('--text')
-    if (!id) die('notes reply: --id <id> is required')
-    if (!text) die('notes reply: --text "<question back>" is required')
-    const notes = notesOrEmpty()
-    let result
-    try { result = replyNote(notes, id, text) } catch (e) { die('notes reply: ' + e.message) }
-    writeNotes(root, result.notes)
-    writeOut(1, 'notes reply: ' + id + ' → reply recorded\n')
-    process.exit(0)
-  }
   if (sub === 'waive') {
     // specs/20260907/10-client-review.md D8: the one release for a silent client — refused
     // (exit 2) on a note that is not client-origin, already resolved, or not yet silent seven
@@ -1113,7 +1115,7 @@ function cmdNotes(sub, args) {
     process.exit(0)
   }
   die('notes: no "' + sub + '" subcommand — resolving a note happens only on the served page ' +
-    '(the Resolve button); one of: open, add, address, reply, waive')
+    '(Approve/Reject); one of: open, add, address, waive')
 }
 
 // ---------------------------------------------------------------------------

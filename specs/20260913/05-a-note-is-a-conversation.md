@@ -1,6 +1,7 @@
 ---
 date: 2026-09-13
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +11,7 @@ depends_on: [specs/20260913/07-the-critic-is-out.md]
 depended_on_by: [specs/20260913/06-every-mock-has-a-page-you-can-mark.md]
 brief: n/a
 open_markers: 0
+diff_base: 27306bd260416fc7c7e085a30311e52f1fe54aaf
 ---
 
 # A note is a conversation

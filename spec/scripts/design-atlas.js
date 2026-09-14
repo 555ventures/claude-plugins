@@ -1565,17 +1565,20 @@ function buildAtlas(root, out) {
   // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D6: per-screen open/needs-you
   // counts, derived from notes.json on every render (never cached, never stored) — a `?clean`
   // render carries them too, since the count lives in the card markup buildAtlas emits here
-  // rather than in a separate injected script. open = status "open" mock-scope notes a person
-  // typed on the screen; needs = status "addressed". specs/20260913/07-the-critic-is-out.md D8: a
+  // rather than in a separate injected script. specs/20260913/07-the-critic-is-out.md D8: a
   // note a person did not type is never counted here — authoredByPerson is the predicate.
+  // specs/20260913/05-a-note-is-a-conversation.md D7: open/needs are counted by TURN, not status
+  // — a legacy `reply` (no `addressed`, status still "open") is turn "you" and so counts as
+  // "needs", not "open"; a note whose turn is "done"/"dropped" counts as neither.
   let notesForCounts = []
   try { notesForCounts = notesLib.readNotes(root) } catch { notesForCounts = [] }
   const noteCountsByScreen = new Map()
   for (const n of notesForCounts) {
     if (n.scope !== 'mock' || !n.screen || !notesLib.authoredByPerson(n)) continue
-    if (n.status !== 'open' && n.status !== 'addressed') continue
+    const turn = notesLib.turnOf(n)
+    if (turn !== 'session' && turn !== 'you') continue
     const c = noteCountsByScreen.get(n.screen) || { open: 0, needs: 0 }
-    if (n.status === 'open') c.open++
+    if (turn === 'session') c.open++
     else c.needs++
     noteCountsByScreen.set(n.screen, c)
   }
@@ -2385,6 +2388,12 @@ function createRequestHandler(root, opts = {}) {
       // plain note never appears there; the non-client route keeps returning every person-written
       // note, unchanged (AC-20260907-10-21).
       out = out.filter(notesLib.authoredByPerson)
+      // specs/20260913/05-a-note-is-a-conversation.md D4: a dropped (resolved+withdrawn) note is
+      // withheld from the SESSION mount's list only — it stays on disk, and never listed there,
+      // but the client mount (its own pages and routes, untouched by this spec — Rationale) keeps
+      // its existing withdrawn-note behavior (the client's own "put it back" reopen still needs
+      // to see it).
+      if (!clientRoute) out = out.filter((n) => notesLib.turnOf(n) !== 'dropped')
       if (clientRoute) out = out.filter((n) => notesLib.originOf(n) === 'client')
       jsonRes(res, 200, out)
       return
@@ -2453,9 +2462,18 @@ function createRequestHandler(root, opts = {}) {
           jsonRes(res, 400, { error: 'reason must be one of ' + notesLib.WITHDRAW_REASONS.join(', ') })
           return
         }
+        // specs/20260913/05-a-note-is-a-conversation.md D4: the session mount tells Approve and
+        // Reject apart — a `verdict` outside accepted/withdrawn (or missing) 400s naming the
+        // remedy before resolveNote ever writes anything. The client mount keeps deriving
+        // `resolution` from the note's prior status exactly as today (untouched below).
+        if (!clientRoute && (!body || (body.verdict !== 'accepted' && body.verdict !== 'withdrawn'))) {
+          jsonRes(res, 400, { error: 'verdict must be one of accepted, withdrawn' })
+          return
+        }
         let result
         try {
-          result = notesLib.resolveNote(notes, body.id, body.by, clientRoute ? { viaClient: true, reason: body.reason } : undefined)
+          result = notesLib.resolveNote(notes, body.id, body.by,
+            clientRoute ? { viaClient: true, reason: body.reason } : { verdict: body.verdict })
         } catch (e) { jsonRes(res, 404, { error: e.message }); return }
         notesLib.writeNotes(rootAbs, result.notes)
         jsonRes(res, 200, result.note)
@@ -2533,10 +2551,13 @@ function createRequestHandler(root, opts = {}) {
       return
     }
     // specs/20260912/11-a-note-can-mark-an-area.md D3: POST /__notes/reopen on the SESSION mount
-    // (today client-only via /client/__notes/reopen below) — the card's Reject control. Its own
-    // message set is distinct from the client route's: 400 naming the exact precondition it
-    // failed, never the client route's wording. Never touches the client mount (clientRoute guard
-    // on the sibling block below is unchanged).
+    // (today client-only via /client/__notes/reopen below) — the card's and the review row's own
+    // Reply control. Its own message set is distinct from the client route's: 400 naming the
+    // exact precondition it failed, never the client route's wording. Never touches the client
+    // mount (clientRoute guard on the sibling block below is unchanged).
+    // specs/20260913/05-a-note-is-a-conversation.md D2: a person may reply as often as they like
+    // to any note that is not resolved — the prior addressed-only refusal (a second reply had no
+    // path at all) is gone.
     if (reqPath === '/__notes/reopen' && req.method === 'POST' && !clientRoute) {
       readJsonBody(req).then((body) => {
         const id = body && body.id
@@ -2545,8 +2566,10 @@ function createRequestHandler(root, opts = {}) {
         try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
         const target = notes.find((n) => n.id === id)
         if (!target) { jsonRes(res, 404, { error: 'no note with id "' + id + '"' }); return }
-        if (target.status !== 'addressed') {
-          jsonRes(res, 400, { error: 'a note is rejected only while addressed' })
+        // specs/20260913/05-a-note-is-a-conversation.md D2: a person may reply to any note that
+        // is not resolved, as often as they like — the prior addressed-only refusal is gone.
+        if (target.status === 'resolved') {
+          jsonRes(res, 400, { error: 'a resolved note takes no reply' })
           return
         }
         if (!text) { jsonRes(res, 400, { error: 'say what is still wrong — text must be non-empty' }); return }

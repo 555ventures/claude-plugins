@@ -321,6 +321,10 @@ body {
    Without these the span renders unstyled and the id runs into the author name. */
 .rv-pin { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: var(--v-warn); color: #fff; font: 600 11.5px/1 var(--v-font); font-variant-numeric: tabular-nums; letter-spacing: .02em; white-space: nowrap; }
 .rv-rowhead .rv-pin { margin-right: var(--v-space-2); }
+/* D5: the pin's own background follows the row's turn, same register as the border above. */
+.rv-row[data-turn="session"] .rv-pin { background: var(--v-danger); }
+.rv-row[data-turn="you"] .rv-pin { background: var(--v-warn); }
+.rv-row[data-turn="done"] .rv-pin { background: var(--v-ok); }
 .rv-shot { --rv-scale: 1; position: relative; overflow: hidden; border: 0; background: transparent; height: calc(var(--rv-h) * var(--rv-scale) * 1px); }
 .rv-shot::after {
   content: "";
@@ -375,8 +379,13 @@ body {
 .rv .rv-fold { margin-left: 0; flex: none; font-size: 16px; line-height: 1; padding: 0 6px; color: var(--v-muted); }
 .rv-rows { flex: 1; overflow: auto; padding: var(--v-space-3) var(--v-space-4); }
 .rv-row { border-left: 2px solid var(--v-border); padding: var(--v-space-2) var(--v-space-3); margin: 0 0 var(--v-space-2); border-radius: 0 var(--v-radius) var(--v-radius) 0; outline: 0; }
-.rv-row[data-status="open"] { border-left-color: var(--v-warn); }
-.rv-row[data-kind="note"][data-status="open"] { border-left-color: var(--v-primary); }
+/* specs/20260913/05-a-note-is-a-conversation.md D5: the row's left border and its .rv-pin (the
+   region note's id badge, below) are now keyed on data-turn, not data-status — a dropped note
+   never renders a row at all (D4), so no rule exists for that turn. This reverses the chrome half
+   of specs/20260912/12 D17 for the row and its pin only; the box half (.nl-region, above) stands. */
+.rv-row[data-turn="session"] { border-left-color: var(--v-danger); }
+.rv-row[data-turn="you"] { border-left-color: var(--v-warn); }
+.rv-row[data-turn="done"] { border-left-color: var(--v-ok); }
 .rv-row[data-selected] { background: var(--v-muted-bg); box-shadow: none; }
 .rv-rowhead { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; font-size: 14px; color: var(--v-muted); }
 .rv-id { font-weight: 600; color: var(--v-fg); font-variant-numeric: tabular-nums; margin-right: var(--v-space-2); }
@@ -388,6 +397,12 @@ body {
 .rv-chip { display: inline-flex; border: 0; border-radius: 999px; padding: 1px 9px; font-size: 12px; color: var(--v-muted); background: var(--v-muted-bg); margin-left: 6px; }
 .rv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--v-space-1); margin-top: var(--v-space-2); }
 .rv-actions button { font-size: 14px; padding: 4px 10px; }
+/* specs/20260913/05-a-note-is-a-conversation.md D6: the row's own reply box, server-rendered
+   hidden and unhidden by its row's Reply control — `.rv [hidden]` (above) is what hides it, so
+   this only sets the shown shape. Keyed on the [data-rv] contract the Decision locks, not a class
+   this file would otherwise have to coordinate with review-page.js's own naming. */
+[data-rv="reply-box"] { display: flex; flex-direction: column; gap: var(--v-space-2); margin-top: var(--v-space-2); }
+[data-rv="reply-text"] { min-height: 72px; }
 .rv-empty { margin: var(--v-space-4) 0; color: var(--v-muted); font-size: 15px; }
 .rv-composer { border-top: 1px solid var(--v-border); padding: var(--v-space-4); display: flex; flex-direction: column; gap: var(--v-space-3); }
 .rv-composer textarea { min-height: 104px; }
@@ -737,12 +752,18 @@ body {
    authored from the approved prototype design/chrome-mocks/notes.html. The overlay (a third
    .nl-host, sibling to the bar and strip) paints one .nl-region box per note whose region
    resolves on the active state; each box's color is a per-box `--c` custom property the layer
-   script sets to one of the four roles below (--v-danger open, --v-warn addressed, --v-ok
-   resolved, --v-muted outdated/withdrawn) — never a literal color here. A glyph distinguishes
-   status by shape as well as color (a11y): hollow ring (open), half-filled ring (addressed),
-   filled dot (resolved), dashed ring (outdated/withdrawn). No rule here targets the served
-   mock's own document — this file is linked only inside the layer's shadow roots (the isolation
-   invariant, tests/mocks/notes-layer-isolation.test.js). */
+   script sets to one of the four roles below. specs/20260913/05-a-note-is-a-conversation.md D1/D5
+   replaced the three status-named roles with turnOf's turn register — the register is
+   --v-danger session, --v-warn you, --v-ok done, --v-muted outdated — because a note's colour is
+   now whose turn it is, not its raw status (a `resolved`+`waived` note is `done` like any other,
+   never a role of its own). The glyph a role paints keeps its pre-existing class name for the
+   same shape (session→open, you→addressed, done→resolved, outdated→outdated), so
+   `lib/walk-page.js`'s client rows — which still emit those literal status classes — render
+   identically without a second rule set here. A glyph distinguishes turn by shape as well as
+   color (a11y): hollow ring (session), half-filled ring (you), filled dot (done), dashed ring
+   (outdated). No rule here targets the served mock's own document — this file is linked only
+   inside the layer's shadow roots (the isolation invariant,
+   tests/mocks/notes-layer-isolation.test.js). */
 .nl-overlay { position: absolute; inset: 0; }
 /* specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D5: affordances derive
    from the overlay's own `data-mode` — the layer's only writer is `setMode`, and the imperative
@@ -1169,7 +1190,7 @@ h1{margin:0;font-size:26px;letter-spacing:-.01em}
 :is(button,a,input,textarea,summary):focus-visible{outline:2px solid var(--v-ring);outline-offset:2px}
 @media(max-width:640px){#main{padding:24px 16px 20vh}.grid{grid-template-columns:1fr}#journey{height:200px}.cmp{grid-template-columns:1fr}.chead{position:static}}
 </style></head><body>
-<div id="shell"><aside id="toc"><p class="tochdr">Index</p><input id="tocsearch" type="search" placeholder="Search screens   /"><nav id="toctree"><p class="tocempty" hidden>No screen matches.</p></nav></aside><div id="tocscrim"></div><div id="main"><div class="hdr"><h1>Design atlas</h1><span class="proj">spec-07-the-critic-is-out · no surfaces</span></div>
+<div id="shell"><aside id="toc"><p class="tochdr">Index</p><input id="tocsearch" type="search" placeholder="Search screens   /"><nav id="toctree"><p class="tocempty" hidden>No screen matches.</p></nav></aside><div id="tocscrim"></div><div id="main"><div class="hdr"><h1>Design atlas</h1><span class="proj">spec-05-a-note-is-a-conversation · no surfaces</span></div>
 
 <div class="bar"><button id="tocbtn" onclick="__tocToggle()">Index</button><button data-f class="on" onclick="__filter('all',this)">all 0</button></div>
 

@@ -423,6 +423,9 @@ body {
   .rv-control, .rv-stop { flex-wrap: wrap; width: 100%; }
   .rv-stop textarea { width: 100%; }
   .rv-main, .rv-folded .rv-main { grid-template-columns: minmax(0, 1fr); }
+  /* the screen page's own grid (.rv-screen .rv-main) outranks the rule above, so it is re-prefixed
+     here to still collapse to one column at this breakpoint. */
+  .rv-screen .rv-main, .rv-screen.rv-folded .rv-main { grid-template-columns: minmax(0, 1fr); }
   .rv-rail { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--v-border); padding: var(--v-space-2) var(--v-space-3); }
   .rv-rail h2, .rv-list { display: none; }
   .rv-jump { display: block; }

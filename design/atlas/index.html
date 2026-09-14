@@ -427,6 +427,9 @@ body {
   .rv-control, .rv-stop { flex-wrap: wrap; width: 100%; }
   .rv-stop textarea { width: 100%; }
   .rv-main, .rv-folded .rv-main { grid-template-columns: minmax(0, 1fr); }
+  /* the screen page's own grid (.rv-screen .rv-main) outranks the rule above, so it is re-prefixed
+     here to still collapse to one column at this breakpoint. */
+  .rv-screen .rv-main, .rv-screen.rv-folded .rv-main { grid-template-columns: minmax(0, 1fr); }
   .rv-rail { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--v-border); padding: var(--v-space-2) var(--v-space-3); }
   .rv-rail h2, .rv-list { display: none; }
   .rv-jump { display: block; }
@@ -1185,7 +1188,7 @@ h1{margin:0;font-size:26px;letter-spacing:-.01em}
 :is(button,a,input,textarea,summary):focus-visible{outline:2px solid var(--v-ring);outline-offset:2px}
 @media(max-width:640px){#main{padding:24px 16px 20vh}.grid{grid-template-columns:1fr}#journey{height:200px}.cmp{grid-template-columns:1fr}.chead{position:static}}
 </style></head><body>
-<div id="shell"><aside id="toc"><p class="tochdr">Index</p><input id="tocsearch" type="search" placeholder="Search screens   /"><nav id="toctree"><p class="tocempty" hidden>No screen matches.</p></nav></aside><div id="tocscrim"></div><div id="main"><div class="hdr"><h1>Design atlas</h1><span class="proj">spec-06-every-mock-has-a-page-you-can-mark · no surfaces</span></div>
+<div id="shell"><aside id="toc"><p class="tochdr">Index</p><input id="tocsearch" type="search" placeholder="Search screens   /"><nav id="toctree"><p class="tocempty" hidden>No screen matches.</p></nav></aside><div id="tocscrim"></div><div id="main"><div class="hdr"><h1>Design atlas</h1><span class="proj">claude-plugins · no surfaces</span></div>
 
 <div class="bar"><button id="tocbtn" onclick="__tocToggle()">Index</button><button data-f class="on" onclick="__filter('all',this)">all 0</button></div>
 

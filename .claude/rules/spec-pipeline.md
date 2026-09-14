@@ -311,7 +311,11 @@ upstream bug list. -->
   against a test file a previous close's expiry sweep already deleted, so the authoring wave finds
   nothing to modify. Recreate it fresh carrying only this spec's own pins — never restore the
   expired ones — and record the row's action as a deviation; at lock, stat every MODIFY row's path
-  rather than assuming a file named in an older spec still exists.
+  rather than assuming a file named in an older spec still exists. Recurred as a new non-zero
+  EXIT on a path that used to exit 0: a lock-time inventory that read only the pins asserting a
+  command's OUTPUT rows missed four that asserted its process STATUS (`r.status === 0`) or the
+  plain word the new exit retires — grep a command's status and verdict-word assertions across
+  `tests/`, not only its output shape (specs/20260913/08-silence-is-not-a-pass.md A2).
   Eighth trigger, the one where the grep itself was accurate and still missed: a lock-time
   assumption that grepped every caller matching a pattern and named the count (**seven** files
   calling `journey-drawn`/`journey-approved` over an inline mock, minus fixture users) is a

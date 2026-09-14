@@ -1,6 +1,6 @@
 ---
 date: 2026-09-13
-status: implementing
+status: done
 build_base: main
 tier: critical
 area: release
@@ -187,6 +187,22 @@ confirmed) — waived.
 **Fragile.** A3's caller count is a prediction; its remedy is written. `release.md` is prose the
 session executes — AC-8 pins the sentences that carry the reversal, squashed, because the file
 hard-wraps.
+
+**Close (2026-09-13, review rv_5251c01bed89 CLEAN).**
+- A3 was false: `writeRoadmap` in `tests/genesis/genesis-driver.test.js` had no caller reaching
+  `roadmap-written`; its row's fixture edit landed as a no-op and `first-light.test.js` drives its
+  own brief writer.
+- A2 was false: four pins outside its inventory reddened (`release-legs.test.js ::
+  AC-20260823-01-1`, `e2e-unobserved.test.js :: AC-20260908-05-4/-5` on stage exit 0 over a
+  no-adapter ci row; `review/verdict.test.js :: AC-20260813-02-4` on plain CLEAN). Repaired in
+  place per A2's remedy, retagged AC-20260913-08-5 / -2, and entered as build-time File Plan rows.
+  The class is folded into the pipeline rules' collision Gotcha.
+- D6's bump was run by the orchestrator in-session (one scripted command), `--workers 0`.
+- The Canonical Delta below said None, but `docs/canonical/release-pipeline.md` (exit alphabet)
+  and `docs/canonical/genesis.md` (`roadmap-written` refusals) carried pre-image claims the
+  reviewer flagged (soft); both were corrected at close.
+- Advisory, not acted on: the three repaired stage pins repeat the same status-1 +
+  `UNMEASURED:` assertion pair; a shared fixture helper would remove it.
 
 ## Canonical Delta
 

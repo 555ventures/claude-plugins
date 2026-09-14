@@ -113,7 +113,10 @@
   `primary-surface` and `platforms-horizon` rows above the framework dimension and prices every
   framework option against them (`wf-research` `contextPaths` include the seed).
   `roadmap-written` requires every seed label in exactly one brief's ```surfaces block and
-  refuses naming unplaced or double-placed labels. `skeleton-landed` requires the shell canon
+  refuses naming unplaced or double-placed labels, and refuses `first-light-missing` when the
+  `01-` brief's header (text before its first `## `) carries no `First light:` line — brief 01
+  is the first-light brief, one real record through the production path (no `01-` brief, no
+  refusal; specs/20260913/08-silence-is-not-a-pass.md D5). `skeleton-landed` requires the shell canon
   extracted from the densest composed screen (`design/shell/app.html` passing `check`), every
   top-level mock `data-shell`-stamped via `design-atlas.js shell adopt --apply`, a green
   `check --matrix design/mocks`, and a `design/components.json` entry per `canon.md` primitive.

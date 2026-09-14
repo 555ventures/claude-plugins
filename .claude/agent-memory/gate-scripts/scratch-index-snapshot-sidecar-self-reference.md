@@ -3,7 +3,7 @@ name: scratch-index-snapshot-sidecar-self-reference
 description: a GIT_INDEX_FILE scratch-index tree snapshot placed inside a driver's own sidecar dir must exclude that dir via a negative pathspec, or it captures its own churn and lock file
 metadata:
   type: project
-reviewed: 2026-09-10
+reviewed: 2026-09-13
 ---
 
 When a driver snapshots the working tree as a git tree object via `GIT_INDEX_FILE=<scratch> git

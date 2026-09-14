@@ -24,8 +24,14 @@ release.md's prose:
   `--require migrations` from the config itself, streams verdict.js's two lines verbatim, and
   exits with verdict.js's own exit.
 
-Exit alphabet, all three subcommands: 0 = green/recorded · 1 = red · 2 = usage or precondition
-failure, every 2 naming its remedy.
+Exit alphabet, all three subcommands: 0 = green/recorded · 1 = red, or (for `stage`) any leg
+unmeasured · 2 = usage or precondition failure, every 2 naming its remedy. A row that measured
+nothing — ci with no adapter, an unseen sha, or still in progress; a declined production
+promotion; a substrate manifest of only inert rows — keeps its exit-0 row shape, but `stage`
+prints it `⚪` plus an `UNMEASURED: <leg>:<reason>` line and exits 1, and `verdict.js
+--profile release` derives `UNVERIFIED` over it. Both read one derivation,
+`lib/release-unmeasured.js`; the review profile is untouched.
+(specs/20260913/08-silence-is-not-a-pass.md, done 2026-09-13)
 
 `record` being the sole verdict invocation point is the load-bearing property. Its predecessor
 was a prose rule — "the STOP still runs verdict.js … the same call runs again in Phase 4" —

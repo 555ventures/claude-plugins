@@ -1,6 +1,6 @@
 ---
 date: 2026-09-13
-status: implementing
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -190,6 +190,17 @@ shapes appear.
 Kit-stop cells stay previews because a kit candidate is a component sheet, not a screen, and no
 one asked to mark it. The gallery (`design-atlas.js gallery`) writes a standalone file that is not
 served; its cards simply stop opening the popup.
+
+Build departures (2026-09-14). A5 proved false: specs/20260913/05 had already taken `0026`, so the
+amendment ADR ships as `0027` and D6, its File Plan row, AC-20260913-06-9 and both `Amended by:`
+backlinks name it (the build first created a duplicate `0026`; review round 1 applied A5's remedy).
+D6 cites spec 01's D3 for "the lightbox bar's Pick this copy", which that spec describes under D4;
+the ADR's text names both, so the record holds either way. `lib/stop-block.js`'s `PICKS_SCRIPT`
+selector was respelled `[data-decide=pick]` (identical behavior) because AC-20260913-06-5's
+whole-document count of the quoted literal also matched the script's own source; the reviewer
+flagged this as a test shaped by a grep, advisory. Mid-build, the scripts wave deleted the journey
+heading's `Review →` link to satisfy an over-broad AC-20260913-06-4 pin; the pin was narrowed to
+card links (the AC's own wording) and the link restored before the wave closed.
 
 ## Canonical Delta
 

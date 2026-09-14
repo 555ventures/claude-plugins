@@ -1037,7 +1037,7 @@ function viewerCss() {
 
 // Review posture: every mock is shown WHOLE — full content height, scaled to the card width — so
 // the reviewer never pans inside a card (card iframes are pointer-inert; clicking opens the
-// lightbox at natural size). The page itself scrolls vertically only, at every width.
+// screen's own /screen/<label>.html page). The page itself scrolls vertically only, at every width.
 function page(title, bodyHtml, extraHead = '') {
   return '<!doctype html>\n<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">\n' +
     '<title>' + esc(title) + '</title>\n<style>\n' +
@@ -1101,11 +1101,11 @@ function page(title, bodyHtml, extraHead = '') {
     '.badge.candidate::before{background:var(--v-warn)}\n' +
     '.shotlink{display:block;text-decoration:none;color:inherit}\n' +
     '.shotlink .shot{cursor:pointer}\n' +
-    '.shot{overflow:hidden;border-radius:4px;background:var(--v-muted-bg);cursor:zoom-in;margin-top:0;' +
+    '.shot{overflow:hidden;border-radius:4px;background:var(--v-muted-bg);cursor:pointer;margin-top:0;' +
     'border:1px solid var(--v-border);box-shadow:none}\n' +
     '.frame{border:0;display:block;transform-origin:0 0;pointer-events:none;background:var(--v-muted-bg);width:100%}\n' +
     // Cards clamp to one fixed preview height (a tall mock must never make a tall card — the card is
-    // a thumbnail); the clipped remainder fades out and the click-to-inspect lightbox shows the full mock.
+    // a thumbnail); the clipped remainder fades out and the screen page shows the full mock.
     '.shot{position:relative;max-height:var(--v-shot-max,260px)}\n' +
     '.shot.clip::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4rem;pointer-events:none;' +
     'background:linear-gradient(to bottom,transparent,var(--v-bg))}\n' +

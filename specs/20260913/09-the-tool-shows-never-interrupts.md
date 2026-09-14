@@ -1,6 +1,6 @@
 ---
 date: 2026-09-13
-status: implementing
+status: done
 tier: critical
 area: review-status
 design: false
@@ -206,6 +206,28 @@ existing exports are unchanged; no fixture repair is planned.
 
 **Fragile.** A2 is a fixture-shape assumption with its remedy written. A5 is the ADR-number race
 the host Gotchas record three times.
+
+**Build departures (folded at close, 2026-09-14).** All one-offs; the recurring shapes are
+already Gotchas entries (the ADR-number race; the lock-time caller count as a prediction), and
+the section sits at its 15-entry cap, so nothing new is added there.
+- A5 false: 0024 was taken (`0024-the-critic-is-out.md`); the ADR shipped as 0025 and D6, its
+  File Plan row and AC-10 were amended before the build started.
+- A1 false in spirit: `spec/entrypoints.json` declared the review driver as an entry point of
+  `replay.js`; D1 deleted that call, the entrypoints pin reddened, and the row was removed.
+- A2 false: the reddened exact-footer pins were in `tests/status/red-alarm.test.js`, not
+  `status-diet.test.js`; both were rewritten to include the earned `· 1 done, never released`.
+- `specs/20260821/02` gained its `Amended by: ADR-0025` header line (the amendment convention).
+- Canonical Delta said None, but `docs/canonical/review.md` and `docs/canonical/pipeline.md`
+  still described the deleted close-time state as live; both were brought current.
+- The gate's one red was `tests/smoke-manifest.test.js :: AC-20260815-04-7` (SIGTERM exit 143
+  under whole-suite load); untouched by this range, 3/3 green alone, gate green on re-run.
+
+**Review advisories (rv_02c7150e7944, CLEAN, 4 soft).** `--select` still walks the
+last-measurement index itself rather than through `replayDueness` (the Contract returns no
+index); `replay.md` Phase 4 and two `replay.js` comments still name the driver's REPLAY step;
+A3 was false — `tests/review/merge-reentry.test.js` asserts `/DONE|REPLAY/` three times and was
+not retagged to DONE; stale REPLAY comments remain in `review-driver.fixtures.js` and
+`run-ledger.test.js`. Queued as one follow-up.
 
 ## Canonical Delta
 

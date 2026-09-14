@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: hardened
+status: implementing
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +10,8 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-12
 open_markers: 0
+build_base: main
+diff_base: cdef0d42f6ba03f7a53a128e74be9b0beabb2841
 ---
 
 # Seeded data names its source
@@ -36,6 +38,7 @@ drawn on placeholders" refusal still fires exactly as it does today.
 | D4 | The three rules bind on the same predicate spec 09 D2 establishes — a labelled, non-canon mock that links the wire register — as warns at `journey-drawn` and refusals at `journey-approved` `[no-ac: the predicate is spec 09's and carries its own criterion there; each rule it binds carries its own criterion here]` | One binding predicate across the mock gates, never a second one that drifts from the first |
 | D5 | The existing `recordValues`/`recordHits` journey-level checks are unchanged: a screen with zero hits still prints `⚠️ <label>: carries none of the seed's records`, and a journey whose every screen has zero hits still refuses. `recordHits` continues to read the mock's source (AC-20260912-10-5) | Binding does not replace the placeholder check — a journey drawn entirely on lorem ipsum binds nothing and would otherwise pass every new rule vacuously |
 | D6 | The ruling is recorded as an amendment ADR carrying an `Applies to` entry for `docs/adr/0013-client-rehearses-the-journey.md`, whose records paragraph is amended in place to say a screen names the record it shows; ADR-0013 gains the matching `Amended by` backlink `[no-ac: an ADR records a ruling; every behavioural half of it is carried by D1–D5]` | ADR-0013 currently says the check "is about drawing with the seeded data instead of lorem ipsum, never about where that data came from" — this spec overturns the second half |
+| D7 | AC-20260912-10-5 is corrected at build time to name `--mark journey-drawn`, the mark the journey-level record-hit check actually runs on, and its pointer verb to `reuses` — D5's "unchanged" governs, and the pre-image runs no record-hit check at `journey-approved` at all, so the original AC promised a CONTINUE-TO the pre-image contradicts (AC-20260912-10-5) | The Decisions table is authoritative over an AC that contradicts it; binding refusals move to `journey-approved` under D4, the untouched placeholder check does not |
 
 ## File Plan
 
@@ -46,7 +49,7 @@ drawn on placeholders" refusal still fires exactly as it does today.
 | spec/doctrine/mocks.md | MODIFY | doctrine | D1–D5 § Mocks: Authoring Rules' "Screens carry the seed's records" bullet gains the binding grammar and the three rules; § Mocks: Seed's `## Records` paragraph names the binding convention |
 | spec/templates/mocks-canon.md | MODIFY | doctrine | D1 one line in the rules section: a screen names the record it shows |
 | docs/adr/0013-client-rehearses-the-journey.md | MODIFY | other | D6 the records paragraph amended; an `Amended by` backlink added |
-| docs/adr/0018-seeded-data-names-its-source.md | CREATE | other | D6 the amendment ADR. Take the next free number if 0018 is claimed by a sibling and amend every mention in this spec in the same build |
+| docs/adr/0023-seeded-data-names-its-source.md | CREATE | other | D6 the amendment ADR. Take the next free number if 0018 is claimed by a sibling and amend every mention in this spec in the same build |
 | tests/mocks/record-binding.test.js | CREATE | tests | AC-20260912-10-1, AC-20260912-10-2, AC-20260912-10-3, AC-20260912-10-4 |
 | tests/mocks/mocks-driver-seed-records.test.js | MODIFY | tests | AC-20260912-10-5 — the journey-level placeholder refusal, currently unpinned |
 | tests/mocks/mocks-driver-fixtures.js | MODIFY | tests | `writeWireframe` and every fixture writing a screen that shows a record value bind it with `data-record`, so downstream callers stay green under D2/D3 |
@@ -148,13 +151,13 @@ the behaviour that keeps the rule usable on products whose records share vocabul
   test and `Reykjavík` occurs in more than one record — and a stray occurrence of `open` SHALL
   produce a `⚠️` warn rather than a violation
   → writes tests/mocks/record-binding.test.js
-- **AC-20260912-10-5**: WHEN `--mark journey-approved` runs over a journey whose every screen
+- **AC-20260912-10-5**: WHEN `--mark journey-drawn` runs over a journey whose every screen
   contains no value from any `design/mocks/records/*.json` THE SYSTEM SHALL CONTINUE TO refuse
   with `journey "<j>": no screen carries a value from design/mocks/records/*.json — draw with
   the seed's own records, then re-mark`, and WHEN exactly one screen of that journey carries a
   record value it SHALL CONTINUE TO print `⚠️ <label>: carries none of the seed's records` for
   each of the others and complete the mark
-  → rewrites tests/mocks/mocks-driver-seed-records.test.js :: seed-done accepts
+  → reuses tests/mocks/mocks-driver-seed-records.test.js :: journey-drawn refuses a journey whose every screen carries no seed record (D7)
 
 ## Assumptions (escalation triggers)
 
@@ -176,7 +179,7 @@ the behaviour that keeps the rule usable on products whose records share vocabul
   **If false** (a real journey shows one record value more than a handful of times per screen):
   narrow D3 to the first occurrence per value per screen and record the narrowing in Decisions
   — never drop the refusal to a warn, which is the option JJ ruled against at plan time.
-- A5: `docs/adr/0018-*` is free. **If false** (a sibling claims it first): take the next free
+- A5: `docs/adr/0023-*` is free (0018 was claimed by a sibling; 0023 is the next free number, taken at build per A5). **If false** (a sibling claims it first): take the next free
   number and amend the File Plan row, D6 and every backlink in the same build.
 - A6: `tests/mocks/mocks-driver-fixtures.js` is edited by all three specs in this series.
   **If false** — a sibling's edit lands differently than planned — re-read the file at build

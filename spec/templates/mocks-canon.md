@@ -28,6 +28,8 @@ mocks `data-narrow`. }
 becomes a card, how empty/loading/error states are shown, what "dense" means for this product.
 Taste rules the render check can't encode — binding by convention, not by script. }
 
+- A screen names the record it shows: bind a displayed seed value with `data-record="<entity>[<i>].<field>"` (spec/doctrine/mocks.md § Mocks: Authoring Rules), never a retyped copy.
+
 ## Grounding
 
 This canon is binding against `docs/design/research-brief.md` and `design/mocks/seed.md` — a

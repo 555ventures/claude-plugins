@@ -5,8 +5,9 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir } = require('../helpers')
 const {
-  CUSTOMER_RECORDS,
+  CUSTOMER_RECORDS, JOURNEY, LABELS,
   bare, mark, writeTargets, writeResearchBrief, confirmFacts, writeSeed,
+  advanceToCanonWritten, writeWireframe, statusJson,
 } = require('./mocks-driver-fixtures')
 
 // specs/20260910/06-real-records-and-two-dense-screens.md D2, as amended: `design/mocks/
@@ -79,4 +80,67 @@ test('seed-done refuses a records file that is not an array of at least three re
   assert.strictEqual(r.status, 0,
     'the same host must accept once the file holds three records — otherwise the refusals above ' +
     'are not reversible by following their own remedy: ' + r.stdout + r.stderr)
+})
+
+// specs/20260912/10-seeded-data-names-its-source.md D5/D7, AC-20260912-10-5 (corrected at build
+// time per D7 — see the deviations sidecar): the journey-level record-hit check is UNCHANGED
+// and stays on `journey-drawn` only; D4's new binding rules are what move to `journey-approved`,
+// not this pre-existing placeholder check. Both cases below pin behaviour the pre-image already
+// has — they are a `reuses` pointer, not new red pins.
+
+test('journey-drawn refuses a journey whose every screen carries no seed record', () => {
+  const dir = tmpdir('mocks-seed-records-drawn-refuses')
+  advanceToCanonWritten(dir)
+  // Overwrite the seed's records before drawing so none of these values appear anywhere in the
+  // wireframes (which otherwise only ever mention "Aoi Tanaka") — every screen has zero hits.
+  fs.writeFileSync(path.join(dir, 'design/mocks/records/customer.json'), JSON.stringify([
+    { name: 'Zora Quill', phone: '555-1010-2020', visits: 5 },
+    { name: 'Milo Fenn', phone: '', visits: 2 },
+    { name: 'Iris Vale', phone: '555-3030-4040', visits: 9 },
+  ]))
+  for (let i = 0; i < LABELS.length; i++) writeWireframe(dir, LABELS[i], { to: LABELS[i + 1] })
+  const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
+  const out = drawn.stdout + drawn.stderr
+  assert.strictEqual(drawn.status, 2,
+    'a journey whose every screen carries no value from design/mocks/records/*.json must be ' +
+    'refused at journey-drawn — a journey drawn entirely on placeholders binds nothing and would ' +
+    'otherwise reach approval unnoticed: ' + out)
+  assert.match(out, /journey "onboarding": no screen carries a value from design\/mocks\/records\/\*\.json — draw with the seed's own records, then re-mark/,
+    'the refusal must keep this exact wording — this check is unchanged by the spec, so a ' +
+    'drifted message here would mean the placeholder check was touched when it should not be: ' + out)
+})
+
+test('journey-drawn CONTINUES TO warn ⚠️ carries none of the seed\'s records for every screen but one, and completes the mark, once exactly one screen still carries a record value', () => {
+  const dir = tmpdir('mocks-seed-records-drawn-warns')
+  advanceToCanonWritten(dir)
+  for (let i = 0; i < LABELS.length; i++) writeWireframe(dir, LABELS[i], { to: LABELS[i + 1] })
+  // Strip the bound record mention from three of the four screens (leave LABELS[0] alone), so
+  // exactly one screen carries a seed record value by the time journey-drawn checks.
+  for (let i = 1; i < LABELS.length; i++) {
+    const file = path.join(dir, 'design/mocks', LABELS[i] + '.html')
+    const html = fs.readFileSync(file, 'utf8')
+    const stripped = html.replace(
+      '<span data-record="customer[0].name" data-bespoke="sheet: seeded record value">Aoi Tanaka</span>',
+      '<span data-bespoke="sheet: no seed value here">placeholder text only</span>')
+    assert.notStrictEqual(stripped, html,
+      'test setup requires the record-bearing span to be present in ' + LABELS[i] + '.html so it can be stripped: ' + html)
+    fs.writeFileSync(file, stripped)
+  }
+  const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
+  const out = drawn.stdout + drawn.stderr
+  assert.strictEqual(drawn.status, 0,
+    'a journey with at least one screen still carrying a seed record value must still complete ' +
+    'the mark — the journey-level check only refuses when EVERY screen has zero hits: ' + out)
+  for (let i = 1; i < LABELS.length; i++) {
+    assert.match(out, new RegExp('⚠️ ' + LABELS[i] + ": carries none of the seed's records"),
+      'each of the three screens that no longer carries any record value must be individually ' +
+      'warned by label, or an author has no way to find which screens need a real record: ' + out)
+  }
+  assert.ok(!out.includes('⚠️ ' + LABELS[0] + ':'),
+    'the one screen that still carries the seed\'s record value must not be warned alongside the ' +
+    'others: ' + out)
+  const st = statusJson(dir)
+  assert.ok(st.journeys[JOURNEY] && st.journeys[JOURNEY].drawn,
+    'the mark must actually complete (journeys.onboarding.drawn recorded) despite the warns — a ' +
+    'warn is not a refusal: ' + JSON.stringify(st.journeys[JOURNEY]))
 })

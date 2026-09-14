@@ -200,13 +200,21 @@ function advanceToRoadmap(dir, opts = {}) {
   return landed
 }
 
+// specs/20260913/08-silence-is-not-a-pass.md D5/A3: brief 01 is the first-light brief —
+// genesis-driver.js's roadmapCheck refuses --mark roadmap-written when a 01-*.md brief's header
+// has no "First light:" line. This shared writer defaults one onto any 01- brief so a caller
+// that doesn't care about first-light behavior (this file has none today — no AC tag, fixture
+// currency only) isn't refused by it; pass `firstLight: null` to omit the line deliberately.
 function writeRoadmap(dir, briefs) {
   writeFile(path.join(dir, 'docs/roadmap/00-overview.md'), '# Overview\n\nSee Sequence.\n')
   for (const b of briefs) {
+    const flLine = b.name.startsWith('01-') && b.firstLight !== null
+      ? `First light: ${b.firstLight || 'one real record observed by a person through the deployed path'}\n`
+      : ''
     writeFile(path.join(dir, 'docs/roadmap', b.name), `# ${b.name}
 
 Phase: P0 · Depends on: ${b.dependsOn}
-${b.surfaces ? '\n```surfaces\n' + b.surfaces.join('\n') + '\n```\n' : ''}
+${flLine}${b.surfaces ? '\n```surfaces\n' + b.surfaces.join('\n') + '\n```\n' : ''}
 ## Result
 Something observable.
 `)

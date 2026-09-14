@@ -23,7 +23,9 @@
 //   {"leg":"ci","exit":0|1,"observed":{"conclusion":"<v>"}|{"status":"in-progress"}|{"unavailable":"no-adapter"|"transient"}|
 //       {"unavailable":"sha-unseen","branch":"<v>","branchConclusion":"<v>"}}   (sha-unseen is always exit 0, even
 //       when branchConclusion is red — specs/20260830/03-ci-leg-honest-absence.md D4, the identical mapping
-//       review-legs.js's ci leg uses, copied verbatim so the two consumers never drift apart)
+//       review-legs.js's ci leg uses, copied verbatim so the two consumers never drift apart;
+//       verdict.js maps it UNVERIFIED on the release profile (lib/release-unmeasured.js),
+//       specs/20260913/08-silence-is-not-a-pass.md D1/D2/D4)
 //   {"leg":"e2e","exit":E,"observed":{"passed":N|{"unavailable":R},"failed":M|{"unavailable":R},
 //       "skipped":K|{"unavailable":R},"executed":N|{"unavailable":R}}}   where R =
 //       "no-format-declared"|"pattern-no-match" — executed is always present (specs/20260908/05-
@@ -43,7 +45,11 @@
 // config declares a runnable migrationsCheck) and `e2e` only after `ready` exits 0. A red
 // deploy/ready leaves dependent legs unrun — absent rows, never fabricated ones. Every leg is
 // blocking on the release profile (verdict.js's release profile treats all seven as required), so
-// any red row makes `stage` exit 1 with a `RED_BLOCKING:` summary line naming every red leg.
+// any red row makes `stage` exit 1 with a `RED_BLOCKING:` summary line naming every red leg. A
+// row that measured nothing (D1/D3, specs/20260913/08-silence-is-not-a-pass.md — no adapter, a
+// commit ci never saw, an all-inert substrate manifest) prints ⚪ instead of ✅ and is named on a
+// trailing `UNMEASURED: <leg>:<reason>[,…]` line; `stage` exits 1 on that alone, even when every
+// row it ran is individually exit 0 — the row shapes and their `exit` values are unchanged.
 // Child processes run via review-legs.js's `sh()` discipline (bash -c, cwd = --root,
 // NODE_TEST_CONTEXT scrubbed) and their output is retained under --out-dir — a red leg with no
 // retained output is undiagnosable.
@@ -65,10 +71,11 @@
 // individual check kinds (manifest-check.sh's job), touch promoteCommand/productionUrl (Phase 3
 // session concerns), or query an MCP server.
 //
-// Exit codes (all subcommands): 0 = green/recorded (stage: every leg it ran exited green; append:
-// the appended row is green; record: verdict.js printed CLEAN) - 1 = red (stage: >=1 leg red,
-// `RED_BLOCKING: <legs>` printed; append: the appended row is red; record: verdict.js printed
-// GATE_RED/UNVERIFIED) - 2 = usage or precondition failure (unreadable config, missing/incomplete
+// Exit codes (all subcommands): 0 = green/recorded (stage: every leg it ran exited green and
+// measured something; append: the appended row is green; record: verdict.js printed CLEAN) -
+// 1 = any leg red or unmeasured (stage: >=1 leg red and/or unmeasured, `RED_BLOCKING: <legs>`
+// and/or `UNMEASURED: <leg>:<reason>[,…]` printed; append: the appended row is red; record:
+// verdict.js printed GATE_RED/UNVERIFIED) - 2 = usage or precondition failure (unreadable config, missing/incomplete
 // release block, missing or invalid .claude/release-manifest.json, unmatched substrate sentinel,
 // non-empty --manifest on stage, duplicate leg or malformed --result on append, a spawned child
 // dying with a null exit status on record's verdict.js invocation) — every exit 2 names its
@@ -80,6 +87,9 @@ const os = require('os')
 const { spawn, spawnSync } = require('child_process')
 const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 const { computeTestsExecuted, computeSkips, isUnobserved } = require('./lib/count-observation')
+// One derivation of "this release leg measured nothing" shared with verdict.js's release-profile
+// derive() — specs/20260913/08-silence-is-not-a-pass.md D1/D3.
+const { unmeasuredReason } = require('./lib/release-unmeasured')
 
 function usage() {
   console.error('usage: release-legs.js stage  --root <dir> --manifest <path> [--out-dir <dir>]')
@@ -356,19 +366,28 @@ async function cmdStage(argv) {
   }
 
   // ---- summary: mirrors review-legs.js's per-leg line, RED_BLOCKING, manifest/outputs footer ----
+  // D3 (specs/20260913/08-silence-is-not-a-pass.md): a row that measured nothing prints ⚪
+  // instead of ✅ (never both — a leg cannot be reported measured and unmeasured at once) and
+  // its leg:reason pair is named on a trailing UNMEASURED: line, in row order, so a silent
+  // exit-0 row can no longer read as a passed release gate.
   const lines = []
   const blocked = []
+  const unmeasured = []
   for (const row of rows) {
     const red = row.exit !== 0
     if (red) blocked.push(row.leg)
-    lines.push(`${red ? '❌' : '✅'} ${row.leg.padEnd(11)} exit=${row.exit} ${JSON.stringify(row.observed)}`)
+    const reason = unmeasuredReason(row)
+    if (reason) unmeasured.push(reason) // reason already carries the leg prefix (D1: e.g. "ci:unavailable:no-adapter")
+    const glyph = reason ? '⚪' : (red ? '❌' : '✅')
+    lines.push(`${glyph} ${row.leg.padEnd(11)} exit=${row.exit} ${JSON.stringify(row.observed)}`)
   }
   lines.push(`manifest: ${manifest}`)
   const outFiles = fs.readdirSync(outDir).filter(f => f.endsWith('.txt')).sort()
   lines.push(`outputs: ${outDir}  (${outFiles.join(', ')})`)
   if (blocked.length) lines.push(`RED_BLOCKING: ${blocked.join(',')}`)
+  if (unmeasured.length) lines.push(`UNMEASURED: ${unmeasured.join(',')}`)
   writeAll(1, lines.join('\n') + '\n')
-  process.exit(blocked.length ? 1 : 0)
+  process.exit((blocked.length || unmeasured.length) ? 1 : 0)
 }
 
 // ================================================================================================

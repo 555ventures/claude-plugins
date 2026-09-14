@@ -83,7 +83,7 @@ test('AC-20260908-05-2: stage forces the e2e row red when the declared testCount
   }
 })
 
-test('AC-20260908-05-4: the e2e row carries executed:{"unavailable":"no-format-declared"} on every run, never omitted, when no testCountPattern is declared', async () => {
+test('AC-20260908-05-4 / AC-20260913-08-5: the e2e row carries executed:{"unavailable":"no-format-declared"} on every run, never omitted, when no testCountPattern is declared, though stage still exits 1 for the fixture\'s unrelated unmeasured ci leg', async () => {
   const host = await setupWorkingHost('rl-unobs4')
   try {
     const runManifest = path.join(host.dir, 'run-manifest.jsonl')
@@ -98,15 +98,19 @@ test('AC-20260908-05-4: the e2e row carries executed:{"unavailable":"no-format-d
       'with no declared testCountPattern, executed must be the typed no-format-declared ' +
       'unavailability, matching passed\'s own reason on this same undeclared-format host: ' +
       JSON.stringify(e2eRow.observed))
-    assert.strictEqual(r.status, 0,
-      'D4: no-format-declared never forces — a host that declared no count format made no ' +
-      'promise this run could contradict, so stage must still exit 0: ' + r.stdout + ' / ' + r.stderr)
+    assert.strictEqual(r.status, 1,
+      'D3 (spec 08): the fixture\'s ci leg has no adapter, so stage must exit 1 with an ' +
+      'UNMEASURED line even though this AC\'s own e2e row is unforced and green — a 0 here ' +
+      'means D3\'s exit-1-on-unmeasured rule silently stopped applying: ' + r.stdout + ' / ' + r.stderr)
+    assert.match(r.stdout, /UNMEASURED: ci:unavailable:no-adapter/,
+      'D3 (spec 08): the unmeasured ci leg must be named on the UNMEASURED: line regardless of ' +
+      'this AC\'s unrelated e2e assertions: ' + r.stdout)
   } finally {
     host.kill()
   }
 })
 
-test('AC-20260908-05-5: the e2e row\'s executed count is the LAST regex match, never a decoy line quoting the summary phrase that precedes the real one', async () => {
+test('AC-20260908-05-5 / AC-20260913-08-5: the e2e row\'s executed count is the LAST regex match, never a decoy line quoting the summary phrase that precedes the real one, though stage still exits 1 for the fixture\'s unrelated unmeasured ci leg', async () => {
   const host = await setupWorkingHost('rl-unobs5')
   try {
     const e2eScript = path.join(host.dir, 'e2e-decoy.sh')
@@ -130,7 +134,13 @@ test('AC-20260908-05-5: the e2e row\'s executed count is the LAST regex match, n
       'D2 (A1\'s measured drift): a test-name line quoting "executed 0 tests" precedes the real ' +
       'summary line "executed 5 tests" — computeTestsExecuted must read the LAST match (5), never ' +
       'the first (0), or a decoy quote would falsely force this run red: ' + JSON.stringify(e2eRow.observed))
-    assert.strictEqual(r.status, 0, 'a correctly-read nonzero executed count must leave stage green: ' + r.stdout + ' / ' + r.stderr)
+    assert.strictEqual(r.status, 1,
+      'D3 (spec 08): the fixture\'s ci leg has no adapter, so stage must exit 1 with an ' +
+      'UNMEASURED line even though this AC\'s own e2e row is correctly-read and green — a 0 ' +
+      'here means D3\'s exit-1-on-unmeasured rule silently stopped applying: ' + r.stdout + ' / ' + r.stderr)
+    assert.match(r.stdout, /UNMEASURED: ci:unavailable:no-adapter/,
+      'D3 (spec 08): the unmeasured ci leg must be named on the UNMEASURED: line regardless of ' +
+      'this AC\'s unrelated e2e assertions: ' + r.stdout)
   } finally {
     host.kill()
   }

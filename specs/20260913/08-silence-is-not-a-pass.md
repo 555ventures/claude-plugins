@@ -1,6 +1,7 @@
 ---
 date: 2026-09-13
-status: hardened
+status: implementing
+build_base: main
 tier: critical
 area: release
 design: false
@@ -9,6 +10,7 @@ depends_on: []
 depended_on_by: []
 brief: n/a
 open_markers: 0
+diff_base: ddf493d9d1da4f64463e25be07a93f50596fc093
 ---
 
 # Silence is not a pass
@@ -52,6 +54,9 @@ marked written without naming its first light.
 | tests/verdict-require-leg.test.js | MODIFY | tests | AC-20260913-08-4 tag on the existing all-measured CLEAN pin (reuse, unchanged assertions) |
 | tests/genesis/first-light.test.js | CREATE | tests | AC-20260913-08-9, AC-20260913-08-10 |
 | tests/genesis/genesis-driver.test.js | MODIFY | tests | A3 fixture currency: `writeRoadmap` adds a `First light:` header line to any brief whose name starts `01-`; no AC tag (the fixture edit is not this spec's behavior) |
+| tests/release-legs/release-legs.test.js | MODIFY | tests | A2 if-false (build-time addition): `AC-20260823-01-1` asserted `stage` exit 0 over a no-adapter ci leg — now expects exit 1 plus `UNMEASURED: ci:unavailable:no-adapter`, row assertions byte-identical; retagged AC-20260913-08-5 |
+| tests/release-legs/e2e-unobserved.test.js | MODIFY | tests | A2 if-false (build-time addition): `AC-20260908-05-4` / `-5` same no-adapter ci exit-0 assertion — exit 1 plus the `UNMEASURED:` line, e2e row assertions byte-identical; retagged AC-20260913-08-5 |
+| tests/review/verdict.test.js | MODIFY | tests | D2 retires the v7 "unmeasured ci still derives CLEAN" pin (`AC-20260813-02-4`) on the release profile — now asserts `UNVERIFIED`; retagged AC-20260913-08-2 |
 
 ## Contracts
 

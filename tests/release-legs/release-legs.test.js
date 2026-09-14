@@ -36,15 +36,19 @@ const {
 
 const SCRIPT = 'scripts/release-legs.js'
 
-test('AC-20260823-01-1: stage appends substrate, ci, deploy, ready, and e2e rows and exits 0 against a fully green host with no declared migrationsCheck', async () => {
+test('AC-20260823-01-1 / AC-20260913-08-5: stage appends substrate, ci, deploy, ready, and e2e rows against a fully green host with no declared migrationsCheck, but exits 1 with an UNMEASURED line because the fixture\'s ci leg has no adapter', async () => {
   const host = await setupWorkingHost('rl-ac1')
   try {
     const runManifest = path.join(host.dir, 'run-manifest.jsonl')
     const r = runNode(SCRIPT, ['stage', '--root', host.dir, '--manifest', runManifest, '--out-dir', path.join(host.dir, 'out')])
-    assert.strictEqual(r.status, 0,
-      'a fully green host (deploy passes, staging reachable, e2e passes, valid release manifest) ' +
-      'must make stage exit 0 — a nonzero exit here means a leg the fixture set up to pass is ' +
-      'being read as red: ' + r.stdout + ' / ' + r.stderr)
+    assert.strictEqual(r.status, 1,
+      'D3 makes stage exit 1 whenever a row is unmeasured — this fixture\'s ci leg has no ' +
+      'adapter (capabilities.forge is unset), so a 0 here means D3\'s exit-1-on-unmeasured rule ' +
+      'silently stopped applying: ' + r.stdout + ' / ' + r.stderr)
+    assert.match(r.stdout, /UNMEASURED: ci:unavailable:no-adapter/,
+      'D3 requires the UNMEASURED: line naming the unmeasured leg and its reason after the ' +
+      'summary — its absence means a session running stage over this host would see no signal ' +
+      'that ci measured nothing before promotion: ' + r.stdout)
     const rows = readRows(runManifest)
     for (const leg of ['substrate', 'ci', 'deploy', 'ready', 'e2e']) {
       assert.ok(rowFor(rows, leg), leg + ' row is missing from the manifest — a leg that ran ' +

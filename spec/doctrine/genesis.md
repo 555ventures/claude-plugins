@@ -597,6 +597,11 @@ written against real code. Never pre-plan the whole roadmap into specs.
    provisioning, partner asks) and the **parking lot** with the "Later / Won't-this-time"
    answers from discovery — recorded so they stop leaking into briefs; promotion out requires an amendment
    ADR applying to the receiving brief.
+
+   **Brief 01 is the first-light brief.** Its Result is one real record through the deployed
+   production path — created by a real actor, observed by a person, named in one `First light:`
+   header line (`First light: <the one record and where it is observed>`). One spec, one
+   acceptance criterion, no feature. Feature briefs start at 02.
 2. **Confirm the sequence.** One `AskUserQuestion` round presenting the proposed sequence table
    (brief names, phases, dependencies, milestone gates) before writing files. Dismissed → STOP.
 3. **Write** `docs/roadmap/00-overview.md` + one `NN-{kebab}.md` per brief. Post-genesis
@@ -607,7 +612,8 @@ written against real code. Never pre-plan the whole roadmap into specs.
 4. **Self-check (checklist, not a workflow):** no `depends_on` cycles; every ADR is carried by
    ≥1 brief's Grounding or is genuinely cross-cutting (note which); no two briefs claim the same
    scope; each milestone gate is satisfiable by the briefs sequenced before it; brief 01 depends
-   on nothing and is plannable immediately after `/spec:init` + `/spec:enforce`.
+   on nothing and is plannable immediately after `/spec:init` + `/spec:enforce`; brief 01 carries
+   `First light:`.
 
 **Journey placement (specs/20260902/11 D4, fresh mocks-set runs only).** Decomposition
 derives from `design/mocks/seed.md`'s journeys: the ROADMAP step text lists journeys →

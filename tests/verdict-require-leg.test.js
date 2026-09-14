@@ -25,6 +25,11 @@ const { tmpdir, runNode } = require('./helpers')
 // The RELEASE_SEVEN_GREEN fixture below is retyped in place; this file's existing three tests
 // key on `--require`'s presence/redness through exit codes alone and never inspect `observed`,
 // so none of their assertion text changes.
+//
+// specs/20260913/08-silence-is-not-a-pass.md D2 (AC-20260913-08-4): RELEASE_SEVEN_GREEN's seven
+// legs are all measured (no `unavailable`/`in-progress`/`skipped`/nothing-executed shape) — the
+// AC-20260815-07-3 test below is this spec's own regression floor, retagged in place: CLEAN must
+// stay CLEAN when every leg is genuinely measured, unchanged assertions.
 
 const SCRIPT = 'scripts/verdict.js'
 
@@ -69,7 +74,7 @@ test('AC-20260815-07-2: --profile release --require migrations with a red migrat
     'a GATE_RED word must exit non-zero — release.md gates promotion on this exit code: ' + r.stderr)
 })
 
-test('AC-20260815-07-3: --profile release with no --require flag and no migrations row derives exactly today\'s word — CLEAN, unchanged for legacy/declined hosts', () => {
+test('AC-20260913-08-4 / AC-20260815-07-3: --profile release with no --require flag and no migrations row derives exactly today\'s word — CLEAN, unchanged for legacy/declined hosts', () => {
   const dir = tmpdir('verdict-require')
   const manifest = writeManifest(dir, RELEASE_SEVEN_GREEN)
   const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release'])

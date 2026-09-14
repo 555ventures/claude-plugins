@@ -1073,24 +1073,24 @@ test('AC-20260902-05-12: WHEN verdict.js --profile release reads a green release
   assert.strictEqual(r.status, 0, 'CLEAN must exit 0: ' + r.stderr)
 })
 
-test('AC-20260813-02-4 (v7 retag): --profile release with six green legs and a ci row observed {"unavailable":"no-adapter"} (exit 0, structurally-absent verdict) derives plain CLEAN, records the typed observation in row.ci, and exits 0', () => {
+test('AC-20260813-02-4 (v7 retag) / AC-20260913-08-2: --profile release with six green legs and a ci row observed {"unavailable":"no-adapter"} now derives UNVERIFIED and exits 1, still recording the typed observation in row.ci', () => {
   const dir = tmpdir('verdict')
   const rows = RELEASE_SEVEN_LEGS.map(r => (r.leg === 'ci' ? { leg: 'ci', exit: 0, observed: { unavailable: 'no-adapter' } } : r))
   const manifest = writeManifest(dir, rows)
   const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release', '--ledger',
     '--milestone', 'v1.2.3', '--briefs', '12,13'])
   const lines = r.stdout.trim().split('\n')
-  assert.strictEqual(lines[0], 'CLEAN',
-    'v7: the qualifier word is retired — a release whose ci leg observed is typed unavailable derives plain ' +
-    'CLEAN; the structurally-absent observation stays durable in row.ci, never a distinct verdict word: ' +
-    r.stdout + ' / ' + r.stderr)
-  assert.strictEqual(r.status, 0, 'CLEAN must exit 0: ' + r.stderr)
+  assert.strictEqual(lines[0], 'UNVERIFIED',
+    'D2 (spec 08): a release whose ci leg observed is typed unavailable is an unmeasured required leg — ' +
+    'verdict.js must derive UNVERIFIED, not the v7 plain-CLEAN ruling this AC retires; a CLEAN here means ' +
+    'a release could promote over a commit CI never scored: ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 1, 'UNVERIFIED must exit 1: ' + r.stderr)
   let row
   assert.doesNotThrow(() => { row = JSON.parse(lines[1]) },
     '--ledger must still print a parseable JSON row on line 2: ' + r.stdout)
   assert.deepStrictEqual(row.ci, { unavailable: 'no-adapter' },
-    'D3: row.ci must record the typed unavailable observation VERBATIM — with the qualifier word retired ' +
-    'this field is the only durable carrier of "CI never delivered a verdict on this commit": ' +
+    'D3: row.ci must record the typed unavailable observation VERBATIM regardless of the derived word — ' +
+    'this field is the durable carrier of "CI never delivered a verdict on this commit": ' +
     JSON.stringify(row))
 })
 

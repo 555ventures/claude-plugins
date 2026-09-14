@@ -1600,9 +1600,11 @@ function roadmapCheck() {
   const briefs = briefFileNames()
   if (briefs.length === 0) return { ok: false, reason: 'no-briefs' }
   const graph = {}
+  const beforeFirstHeadingByFile = {}
   for (const f of briefs) {
     const text = fs.readFileSync(path.join(roadmapDir, f), 'utf8')
     const beforeFirstHeading = text.split(/^##\s/m)[0]
+    beforeFirstHeadingByFile[f] = beforeFirstHeading
     const phaseM = /Phase:\s*([^\n·]+)/m.exec(beforeFirstHeading)
     const dependsM = /Depends on:\s*([^\n]+)/m.exec(beforeFirstHeading)
     if (!phaseM || !dependsM) return { ok: false, reason: 'missing-headers', detail: f }
@@ -1612,6 +1614,15 @@ function roadmapCheck() {
       .filter((s) => s && s !== '—' && s !== '-' && s.toLowerCase() !== 'none')
       .map((s) => { const m2 = s.match(/\d\d/); return m2 ? m2[0] : s })
     graph[id] = deps
+  }
+  // specs/20260913/08-silence-is-not-a-pass.md D5: brief 01 is the first-light brief — its
+  // header (text before the first ## heading) must name the one real record through the
+  // deployed production path. Runs after missing-headers (every brief's header is already known
+  // well-formed here) and before cycle. A roadmap with no 01-*.md brief (legacy numbering) is
+  // not refused by this check.
+  const firstBrief = briefs.find((f) => /^01-.*\.md$/.test(f))
+  if (firstBrief && !/First light:\s*\S/.test(beforeFirstHeadingByFile[firstBrief])) {
+    return { ok: false, reason: 'first-light-missing', detail: firstBrief }
   }
   const cycle = findCycle(graph)
   if (cycle) return { ok: false, reason: 'cycle', detail: cycle }
@@ -1628,6 +1639,11 @@ function handleRoadmapWritten() {
     if (check.reason === 'no-briefs') die('no docs/roadmap/NN-*.md brief exists — decompose at least one, then re-mark roadmap-written')
     if (check.reason === 'missing-headers') {
       die('docs/roadmap/' + check.detail + ' is missing a Phase: or Depends on: header before its first ## heading — add both, then re-mark roadmap-written')
+    }
+    if (check.reason === 'first-light-missing') {
+      die('docs/roadmap/' + check.detail + ' has no "First light:" header — brief 01 is the ' +
+        'first-light brief: name the one real record that proves the production path end to ' +
+        'end (one line), then re-mark roadmap-written')
     }
     if (check.reason === 'cycle') {
       die('docs/roadmap has a Depends-on cycle: ' + check.detail.join(' -> ') + ' — break the cycle, then re-mark roadmap-written')
@@ -2165,7 +2181,9 @@ const STEPS = {
     'Read only: ' + descriptorRelPath() + ', docs/roadmap/',
     'Doctrine: spec/doctrine/genesis.md § Genesis: Roadmap Decomposition',
     'Write docs/roadmap/00-overview.md plus one or more docs/roadmap/NN-*.md briefs, each with ' +
-      'Phase: and Depends on: header lines before its first ## heading, acyclic. See ' +
+      'Phase: and Depends on: header lines before its first ## heading, acyclic. Brief 01 is the ' +
+      'first-light brief — its header also carries a First light: line naming the one real ' +
+      'record through the deployed production path, observed by a person. See ' +
       'spec/doctrine/genesis.md § Genesis: Roadmap Decomposition.',
     'Then:\n  node ' + __filename + ' --root ' + root + ' --mark roadmap-written',
   ].join('\n'),

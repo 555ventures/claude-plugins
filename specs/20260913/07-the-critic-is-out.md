@@ -1,6 +1,6 @@
 ---
 date: 2026-09-13
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: design-mocks
@@ -453,6 +453,24 @@ The zero-hit sweep (AC-22) covers `spec/`, `tests/`, `scripts/` and `design/` �
 test surface this File Plan owns — and excludes only the file that performs it. `docs/canonical/design.md`
 carries the retired names today and is corrected by the Canonical Delta at close; sweeping it at
 build time would redden the gate against text the build may not write.
+
+Build departures (folded from the deviations sidecar at close, 2026-09-14). (1) The File Plan row
+retagging the client confirm pin in `tests/mocks/client-walk-route.test.js` as AC-20 was wrong:
+AC-20 is a new promise owned by `human-authored-notes.test.js`, and its id on an unchanged green
+pin tripped red-check's unsanctioned-green; the pin keeps its predecessor id only. (2) The
+`reuses`/`rewrites` references resolve by test-title prefix, so the retagged titles lead with the
+predecessor prefix and name the new id after it. (3) The retired predecessor pin
+AC-20260911-01-8 was first kept "cited" by a comment in `walk-page.test.js`; review iteration 1
+replaced that with a `[retired:]` tag on its bullet in specs/20260911/01. (4) Assertions on the
+absence of AC-22's banned literals build them from fragments so the sweep never matches its own
+checks. (5) AC-2's red was set up over a host at `journey-approved` so the pre-image failure is
+the mark still working, not a missing journey. (6) Dead code left by D6's deletions went in the
+same edit: `nextClientLedgerId` and the `setStatus`/`appendAssumption` imports in
+`design-atlas.js`; `renderNavButton`'s `openCount` parameter, `STRINGS.yes/no/why` and `count()`
+in `walk-page.js` — the confirm button's disabled rule is now the request state alone, matching
+D7 server-side. (7) Review iteration 1 also added D5's missing half: `validateNotes` skips the
+answer shape check on a legacy note, pinned by a D5 test. The eight ADR-0023 backlinks follow
+each file's own `Amended by:` convention rather than the literal template in the File Plan.
 
 ## Canonical Delta
 

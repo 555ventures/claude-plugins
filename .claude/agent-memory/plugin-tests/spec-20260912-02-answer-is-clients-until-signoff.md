@@ -3,7 +3,7 @@ name: spec-20260912-02-answer-is-clients-until-signoff
 description: tests-layer authoring for the reconsider/sign-off-cutoff/put-back/confirm-receipt spec — status.json marks.approved shape and ledger cell-index gotchas
 metadata:
   type: project
-  reviewed: 2026-09-13
+  reviewed: 2026-09-14
 ---
 
 specs/20260912/02-an-answer-is-the-clients-until-sign-off.md's D3 sign-off cut-off reads

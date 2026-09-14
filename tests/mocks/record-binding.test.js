@@ -1,11 +1,28 @@
 'use strict'
 const { test } = require('node:test')
 const assert = require('node:assert')
+const fs = require('node:fs')
+const path = require('node:path')
+const { tmpdir } = require('../helpers')
+const {
+  JOURNEY, LABELS, mark, writeWireframe, decideLook, writeFixtureCapture, writeCaptureConfig,
+  advanceToCanonWritten, statusJson,
+} = require('./mocks-driver-fixtures')
 
 // Owner: specs/20260912/10-seeded-data-names-its-source.md D1-D4.
 // AC-20260912-10-1, AC-20260912-10-2, AC-20260912-10-3, AC-20260912-10-4.
 // spec/scripts/lib/mock-seed-checks.js is a pure module (no fs) — required directly, the same
 // pattern tests/mocks/kit-layers.test.js already uses for a plugin lib with no disk dependency.
+// The cases above call the pure library functions directly; the cases below (added by the
+// review round that found D4's gate wiring itself was unpinned) exec spec/scripts/mocks-driver.js
+// itself so the warn/refuse tier split and the bound-mock predicate are proven at the driver,
+// never only at the library.
+
+function approveJourneyAfterDrawn(dir) {
+  writeCaptureConfig(dir, writeFixtureCapture(dir))
+  decideLook(dir, 'journey-approved:' + JOURNEY, 'approve', { by: 'jj' })
+  return mark(dir, 'journey-approved', ['--journey', JOURNEY])
+}
 
 test('AC-20260912-10-1: resolveRecordRef refuses an out-of-range index naming the reference and the record count, and a misspelled field naming the missing field', () => {
   const { resolveRecordRef } = require('../../spec/scripts/lib/mock-seed-checks')
@@ -100,4 +117,100 @@ test('AC-20260912-10-4: distinctiveValues returns only the value that is 8+ char
     'a stray occurrence of a non-distinctive value ("open") must never be a violation: ' + JSON.stringify(violations))
   assert.ok(warns.some((w) => w.includes('⚠️') && w.includes('open') && w.includes('billing')),
     'a stray occurrence of a non-distinctive value must still produce a ⚠️ warn naming the value and the screen, so it stays visible without blocking the mark: ' + JSON.stringify(warns))
+})
+
+test('AC-20260912-10-1 (D4): an unresolvable data-record reference is a ⚠️ warn at journey-drawn (the mark still completes) but a refusal at journey-approved for the same screen', () => {
+  const dir = tmpdir('record-binding-tier-split')
+  advanceToCanonWritten(dir)
+  for (let i = 0; i < LABELS.length; i++) writeWireframe(dir, LABELS[i], { to: LABELS[i + 1] })
+  const brokenFile = path.join(dir, 'design/mocks', LABELS[0] + '.html')
+  const brokenHtml = fs.readFileSync(brokenFile, 'utf8')
+  const withBrokenRef = brokenHtml.replace('</main>',
+    '<span data-record="customer[9].name" data-bespoke="sheet: broken ref">Nope</span></main>')
+  assert.notStrictEqual(withBrokenRef, brokenHtml,
+    'test setup requires </main> to be present in the fixture so the broken binding can be injected before it: ' + brokenHtml)
+  fs.writeFileSync(brokenFile, withBrokenRef)
+
+  const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
+  const drawnOut = drawn.stdout + drawn.stderr
+  assert.strictEqual(drawn.status, 0,
+    'D4 binds a binding violation as a WARN at journey-drawn, never a refusal — the mark must still complete despite the unresolvable data-record reference: ' + drawnOut)
+  assert.match(drawnOut, /⚠️.*customer\[9\]\.name/,
+    'journey-drawn must print the unresolvable reference as a ⚠️ warn, or D4\'s warn tier is not actually wired into the driver: ' + drawnOut)
+
+  const approved = approveJourneyAfterDrawn(dir)
+  const approvedOut = approved.stdout + approved.stderr
+  assert.strictEqual(approved.status, 2,
+    'D4 binds the SAME violation as a REFUSAL at journey-approved — a mock carrying an unresolvable data-record reference must never reach approval: ' + approvedOut)
+  assert.match(approvedOut, /customer\[9\]\.name/,
+    'the journey-approved refusal must name the same broken reference the journey-drawn warn named, or the two tiers are not checking the same rule: ' + approvedOut)
+  const st = statusJson(dir)
+  assert.ok(!(st.journeys[JOURNEY] && st.journeys[JOURNEY].approved),
+    'the refusal must actually block the mark — journeys.onboarding.approved must not be recorded: ' + JSON.stringify(st.journeys[JOURNEY]))
+})
+
+test('D4: a mock that does not link the wire register carries none of the three binding rules at journey-approved, even when it holds an unresolvable data-record reference', () => {
+  const dir = tmpdir('record-binding-unbound-predicate')
+  advanceToCanonWritten(dir)
+  for (let i = 0; i < LABELS.length; i++) writeWireframe(dir, LABELS[i], { to: LABELS[i + 1] })
+  const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
+  assert.strictEqual(drawn.status, 0,
+    'test setup requires journey-drawn to be accepted on the unmodified fixture before the unbinding is introduced: ' + drawn.stdout + drawn.stderr)
+
+  // Unbind LABELS[1] AFTER it has already drawn clean: replace its two wire/*.css links with a
+  // single non-wire tokens.css link — design-atlas.js's own unconditional "does not link a
+  // tokens.css" check (spec/scripts/design-atlas.js, run again at journey-approved before the
+  // binding pass) still needs SOME tokens.css, but linksWireRegister(html)
+  // (spec/scripts/lib/wire-register.js) reads only whether a target has "wire" as a whole path
+  // segment — this is exactly the "theme picked, mock no longer wears the wireframe register"
+  // shape spec 09's own D2 predicate is designed to exclude. Then inject an otherwise-refusable
+  // broken reference: D4 binds all three rules to the SAME predicate spec 09 D2 establishes (a
+  // labelled, non-canon mock that links the wire register) — an unbound mock must carry none of
+  // them.
+  const label = LABELS[1]
+  const file = path.join(dir, 'design/mocks', label + '.html')
+  const html = fs.readFileSync(file, 'utf8')
+  // The box-sizing hygiene rule (design-atlas.js hygieneViolations (a)) is satisfied by
+  // linksWireRegister OR the mock's own universal reset rule — safe to add here only because an
+  // unbound mock (isInventionBoundMock requires linksWireRegister too) is exempt from the
+  // invention rule that would otherwise forbid a mock's own <style> block.
+  const unbound = html
+    .replace('<link rel="stylesheet" href="../wire/tokens.css">\n', '<link rel="stylesheet" href="../tokens.css">\n<style>* { box-sizing: border-box; }</style>\n')
+    .replace('<link rel="stylesheet" href="../wire/wire.css">\n', '')
+    .replace('</main>', '<span data-record="customer[9].name" data-bespoke="sheet: broken ref, unbound screen">Nope</span></main>')
+  assert.ok(!unbound.includes('../wire/tokens.css') && !unbound.includes('../wire/wire.css') && unbound.includes('../tokens.css'),
+    'test setup requires both wire register links to be replaced by a non-wire tokens.css link on ' + label + '.html, or the predicate this test exercises is never actually false: ' + unbound)
+  fs.writeFileSync(file, unbound)
+
+  const approved = approveJourneyAfterDrawn(dir)
+  const out = approved.stdout + approved.stderr
+  assert.strictEqual(approved.status, 0,
+    'a screen that does not link the wire register is outside D4\'s bound-mock predicate — journey-approved must accept the journey despite the unresolvable data-record reference on that screen: ' + out)
+  assert.ok(!out.includes('customer[9]'),
+    'the unresolvable reference on the unbound screen must never be reported at all — reporting it would mean the binding rules ran on a screen outside the predicate: ' + out)
+  const st = statusJson(dir)
+  assert.ok(st.journeys[JOURNEY] && st.journeys[JOURNEY].approved,
+    'the mark must actually complete once the only violation on the host sits on a screen outside the bound-mock predicate: ' + JSON.stringify(st.journeys[JOURNEY]))
+})
+
+test('review finding (D4 fix round): a mock file missing at journey-approved refuses cleanly at exit 2 naming the path, never an uncaught ENOENT crash at exit 1', () => {
+  const dir = tmpdir('record-binding-missing-mock-file')
+  advanceToCanonWritten(dir)
+  for (let i = 0; i < LABELS.length; i++) writeWireframe(dir, LABELS[i], { to: LABELS[i + 1] })
+  const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
+  assert.strictEqual(drawn.status, 0,
+    'test setup requires journey-drawn to be accepted before the mock file is deleted out from under journey-approved: ' + drawn.stdout + drawn.stderr)
+
+  const deletedLabel = LABELS[2]
+  const deletedFile = path.join(dir, 'design/mocks', deletedLabel + '.html')
+  fs.unlinkSync(deletedFile)
+
+  const approved = approveJourneyAfterDrawn(dir)
+  const out = approved.stdout + approved.stderr
+  assert.strictEqual(approved.status, 2,
+    'a screen deleted after journey-drawn must refuse journey-approved with a clean exit 2, precondition-style failure — an uncaught ENOENT exits 1 and prints a raw stack trace instead: ' + out)
+  assert.match(out, /no such path/,
+    'the refusal must come from design-atlas.js check\'s own fs.existsSync-backed "no such path" guard, run before the binding pass\'s unguarded fs.readFileSync: ' + out)
+  assert.ok(out.includes(deletedLabel + '.html'),
+    'the refusal must name the missing screen\'s path, or a session cannot tell which of the journey\'s screens was deleted: ' + out)
 })

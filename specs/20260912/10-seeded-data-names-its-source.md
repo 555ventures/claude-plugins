@@ -1,6 +1,6 @@
 ---
 date: 2026-09-12
-status: implementing
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -233,3 +233,16 @@ exactly one record — shown outside every bound element is refused; any other s
 warned. The rules warn at `journey-drawn` and refuse at `journey-approved`, on the same bound-mock
 predicate the invention checks use. The older journey-level checks are unchanged: a screen with
 no seeded value at all is warned, and a journey whose every screen has none is still refused.
+
+**Build-time departures (folded from the deviations sidecar at close, 2026-09-13).** Both are
+recurrences of classes the host's pipeline rules § Gotchas already carries, so neither earned a
+new entry there.
+
+- AC-20260912-10-5 was locked naming `--mark journey-approved` while D5 kept the journey-level
+  record-hit check unchanged, and the pre-image runs that check only at `journey-drawn` — a
+  `SHALL CONTINUE TO` over a surface the pre-image contradicts. Ruled at build as D7: the
+  Decisions table governs, the AC's mark and its pointer verb were corrected, and the two pins
+  moved to `journey-drawn`.
+- The amendment ADR was locked as `docs/adr/0018-…` and a sibling had already claimed 0018, so
+  the build took the next free number, 0023, and amended the File Plan row and assumption A5 to
+  it in the same build — A5's own stated remedy.

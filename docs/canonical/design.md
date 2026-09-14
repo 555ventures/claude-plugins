@@ -351,7 +351,14 @@ heading with one line continues to parse, so hosts already past SEED are untouch
 `journey-drawn` prints `⚠️ <label>: carries none of the seed's records` for every screen
 carrying no record value and refuses a journey where no screen carries one — a settings screen
 legitimately shows no record, a whole journey drawn on placeholders does not.
-`spec/scripts/lib/mock-seed-checks.js`'s `recordValues`/`recordHits` are that one derivation. Registers
+`spec/scripts/lib/mock-seed-checks.js`'s `recordValues`/`recordHits` are that one derivation. A screen also names the record it shows (specs/20260912/10, ADR-0023): an
+element displaying a seeded value carries `data-record="<entity>[i].<field>"` pointing into
+`design/mocks/records/<entity>.json`, the reference must resolve, and the element's visible text
+must equal the resolved value exactly. A distinctive seed value — one containing a space or at
+least eight characters long, occurring in exactly one record — shown outside every bound element
+is refused; any other stray seed value is warned. The three rules warn at `journey-drawn` and
+refuse at `journey-approved`, on the same bound-mock predicate the invention checks use, and the
+older journey-level checks above are unchanged. Registers
 are link signatures: a wireframe links `design/wire/tokens.css` + `wire.css` (copied from
 `spec/templates/mocks/` at `canon-written`), a composed direction screen links its
 direction's `tokens.css` and no `wire/` stylesheet. "Links" is one derivation for every

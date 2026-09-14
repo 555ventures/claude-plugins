@@ -144,6 +144,30 @@ test('AC-20260913-06-5: building the atlas over an open shape-picked stop wraps 
     'AC-5: each of the two candidate columns must still render its own data-decide="pick" button: got ' + pickButtons)
 })
 
+// AC-20260913-06-5
+test('AC-20260913-06-5: a shape-picked candidate whose shape file carries no data-screen-label gets its shotlink resolved to D1\'s basename fallback, not its candidate label', () => {
+  const dir = tmpdir('screen-page-pick-nolabel')
+  mk(dir, 'design/shapes/two.html', '<main>Two, unlabeled</main>\n')
+  mk(dir, 'design/mocks/picks.json', JSON.stringify([
+    {
+      id: 'P002', kind: 'pick', key: 'shape-picked', title: 'pick a shape', question: null,
+      candidates: [
+        { group: 'Option B', label: 'Option B', path: 'shapes/two.html' },
+      ],
+      url: null, openedAt: '2026-01-01T00:00:00.000Z', status: 'open', decision: null, previous: [],
+    },
+  ], null, 2) + '\n')
+
+  const res = atlas(['build'], { cwd: dir })
+  assert.strictEqual(res.status, 0, res.stdout + res.stderr)
+  const out = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')
+
+  assert.match(out, /<a class="shotlink" href="\/screen\/two\.html"/,
+    'D1/D3: with no data-screen-label on shapes/two.html, the compare cell\'s shotlink must fall back to the file\'s basename, /screen/two.html')
+  assert.doesNotMatch(out, /\/screen\/Option%20B\.html/,
+    'D1/D3: the shotlink must never be built from the candidate\'s label ("Option B") when the shape file carries no data-screen-label')
+})
+
 // AC-20260913-06-6
 test('AC-20260913-06-6: the built atlas and gallery, plus stop-block.js and notes-layer.browser.js, carry no lightbox or open-↗ remnant', () => {
   const dir = tmpdir('screen-page-lb')
@@ -176,11 +200,11 @@ test('AC-20260913-06-6: the built atlas and gallery, plus stop-block.js and note
 })
 
 // AC-20260913-06-9
-const ADR = path.join(ROOT, 'docs/adr/0026-every-mock-has-a-page-you-can-mark.md')
+const ADR = path.join(ROOT, 'docs/adr/0027-every-mock-has-a-page-you-can-mark.md')
 
-test('AC-20260913-06-9: docs/adr/0026-every-mock-has-a-page-you-can-mark.md is accepted, carries a Dissents section, and names both amended specs under Applies to', () => {
+test('AC-20260913-06-9: docs/adr/0027-every-mock-has-a-page-you-can-mark.md is accepted, carries a Dissents section, and names both amended specs under Applies to', () => {
   assert.ok(fs.existsSync(ADR),
-    'D6: docs/adr/0026-every-mock-has-a-page-you-can-mark.md must exist as the amendment ADR')
+    'D6: docs/adr/0027-every-mock-has-a-page-you-can-mark.md must exist as the amendment ADR')
   const adr = fs.existsSync(ADR) ? fs.readFileSync(ADR, 'utf8') : ''
   assert.match(adr, /Status:\s*accepted/, 'the ADR must be stamped Status: accepted')
   assert.match(adr, /^##\s*Dissents/m, 'the ADR must carry a ## Dissents section')

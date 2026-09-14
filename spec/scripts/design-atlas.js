@@ -1023,9 +1023,9 @@ function cmdShellAdopt(argv) {
 // the serve index) is a light page on the ONE token set — read from the plugin template once per
 // process and inlined verbatim ahead of the atlas's own rules, so every `--v-*` role (plus the
 // full register's `.v-*` classes) is available before the chrome rules below reference it. The
-// chrome rules consume ONLY `var(--v-*)` roles — no `#hex`/`rgb(`/`hsl(` literal survives here; the
-// one derived value (the lightbox backdrop, 85% of `--v-fg`) is composed with `color-mix()` over a
-// role, never a literal, so it still reads as "no literal" under the AC's own regex.
+// chrome rules consume ONLY `var(--v-*)` roles — no `#hex`/`rgb(`/`hsl(` literal survives here; any
+// derived value (e.g. the TOC scrim) is composed with `color-mix()` over a role, never a literal,
+// so it still reads as "no literal" under the AC's own regex.
 let __viewerCss = null
 function viewerCss() {
   if (__viewerCss === null) {
@@ -1476,9 +1476,9 @@ function renderCompareTable(stop, root, outDir, vp0, settled) {
       const frame = frameTag(rel, vp.width, vp.height)
       // specs/20260913/06-every-mock-has-a-page-you-can-mark.md D3: a candidate under mocks/ or
       // shapes/ frames a screen and is wrapped in the same shotlink an atlas card carries — its
-      // label resolved by D1's rule (labelOf(html), falling back to the candidate's own label).
+      // label resolved by D1's rule (labelOf(html), falling back to the candidate file's basename).
       const isScreen = /^(mocks|shapes)\//.test(cand.path)
-      const screenLabel = labelOf(html) || cand.label
+      const screenLabel = labelOf(html) || path.basename(cand.path, '.html')
       const body = isScreen
         ? '<a class="shotlink" href="/screen/' + encodeURIComponent(screenLabel) + '.html">' + frame + '</a>'
         : frame

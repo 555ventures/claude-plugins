@@ -14,6 +14,8 @@ diff_base: 5d36d7618837ae7f80cfd460df09ec82e5a707f7
 
 # Picks on the atlas page: candidate groups as a first-class atlas concept, decided on the page, read from disk
 
+- Amended by: ADR-0027 — specs/20260913/06 deletes the lightbox, its `open ↗` link and its bar's `Pick this` copy; the compare table's own `Pick this` stays
+
 ## Goal
 
 Every pick stage of the mocks flow — shapes (2–3 candidates), theme directions, and

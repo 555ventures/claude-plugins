@@ -35,7 +35,7 @@ atlas — screen or shape — opens a page where the owner can mark and write.
 | D3 | **Every card that frames a screen or a shape links to its screen page.** In `buildAtlas`, every mock card's frame is wrapped in `<a class="shotlink" href="/screen/<label>.html">` whether or not a journey owns it, replacing the `/review/<j>.html#board-<label>` form; every shape card's frame is wrapped the same way; and a compare-table cell whose candidate path starts `mocks/` or `shapes/` is wrapped the same way, its label resolved by D1's rule. Kit-stop cells and the `built` frame stay previews with no link. The column header's `Pick this` control is unchanged. (AC-20260913-06-4, AC-20260913-06-5) | The owner chose that shapes open a markable page too; while a shape pick is open, the shapes appear only as compare-table cells, so those cells need the same link. |
 | D4 | **The lightbox and every `open ↗` link are deleted.** From `design-atlas.js`: the `LIGHTBOX` constant and both uses (`buildAtlas`, `cmdGallery`); the `#lb`/`#lbbar` CSS rules; `__lbList`, `__lbIx`, `__lbShow`, `__lbOpen`, `__lbClose`; the lightbox keydown handler, click-outside handler, `lbframe` load handler and the `if(!s.closest("a.shotlink"))` click binding; `__full` and the `open ↗` anchor that `UI_SCRIPT` appends to a card heading (the `.vp` size span it appends stays); the server-rendered `open ↗` anchors in `renderKitStop` and `renderCompareTable`. From `lib/stop-block.js`: the `__lbOpen`/`__lbClose` wrapper block in `PICKS_SCRIPT`. From `notes-layer.browser.js`: the `body.lb-open .nl-host{display:none}` clause of its host style (`.nl-host{pointer-events:none}` stays). `UI_SCRIPT`'s `__fit`, `__measure`, `__still`, `__fitAll` and the `.shot`/`.clip` clamp are not touched. A gallery card becomes a preview with no click. (AC-20260913-06-6) | A popup with no notes and a link to a file with no notes are the two surfaces the owner cannot mark. |
 | D5 | **The project panel's jump pill is a link.** `notes-layer.browser.js`'s `mockAnchor` keeps its gate (the atlas has a card `#s-<screen>` containing an `iframe.frame`) and drops its `window.__lbOpen` condition; when the gate passes it renders `<a class="nl-anchor" href="<__base>/screen/<screen>.html">` with today's text, and otherwise today's `span.nl-anchor.plain`. (AC-20260913-06-7) | Without this, deleting `__lbOpen` would silently turn every pill into dead text. |
-| D6 | **One amendment ADR.** `docs/adr/0026-every-mock-has-a-page-you-can-mark.md` (CREATE) applies to `specs/20260912/05-the-atlas-answers-to-a-design.md` D4 (the journey-owned/other card split and the lightbox kept for the rest) and `specs/20260905/01-picks-on-the-atlas-page.md` D3 (the lightbox bar's `Pick this` copy). (AC-20260913-06-9) | Both locked Decisions describe the arrangement this spec removes. |
+| D6 | **One amendment ADR.** `docs/adr/0027-every-mock-has-a-page-you-can-mark.md` (CREATE) applies to `specs/20260912/05-the-atlas-answers-to-a-design.md` D4 (the journey-owned/other card split and the lightbox kept for the rest) and `specs/20260905/01-picks-on-the-atlas-page.md` D3 (the lightbox bar's `Pick this` copy). (AC-20260913-06-9) | Both locked Decisions describe the arrangement this spec removes. |
 
 ## File Plan
 
@@ -49,14 +49,14 @@ atlas — screen or shape — opens a page where the owner can mark and write.
 | design/chrome-mocks/atlas.html | MODIFY | doctrine | D3/D4: cards are links to their screen page; the `open ↗` buttons and the lightbox comments removed |
 | design/atlas/index.html | MODIFY | other | Regenerated with `node spec/scripts/design-atlas.js build --root .`; never hand-edited |
 | spec/doctrine/design.md | MODIFY | doctrine | D5: § Design Atlas's "opens it in the lightbox" becomes "links to that screen's page"; D3: a card opens its screen page |
-| docs/adr/0026-every-mock-has-a-page-you-can-mark.md | CREATE | doctrine | D6: the amendment ADR |
+| docs/adr/0027-every-mock-has-a-page-you-can-mark.md | CREATE | doctrine | D6: the amendment ADR |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | Version bump via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` |
 | tests/mocks/screen-page.test.js | CREATE | tests | AC-20260913-06-1, -2, -3, -5, -6, -9 |
 | tests/design-atlas.test.js | MODIFY | tests | AC-20260913-06-4 (rewrites the AC-20260912-05-2 card-link pin) |
 | tests/mocks/notes-layer-navigation.test.js | MODIFY | tests | AC-20260913-06-7 |
 | tests/mocks/review-browser.test.js | MODIFY | tests | AC-20260913-06-8 |
 
-**Orchestrator duty (outside the table).** Append one `- Amended by: ADR-0026 — <one line>` header
+**Orchestrator duty (outside the table).** Append one `- Amended by: ADR-0027 — <one line>` header
 line to each of `specs/20260912/05-the-atlas-answers-to-a-design.md` and
 `specs/20260905/01-picks-on-the-atlas-page.md`. No other text in those files changes.
 
@@ -142,7 +142,7 @@ column's `Pick this` still picks it. Nothing opens a popup, and no card offers a
   `Send` is clicked with `hi` typed THE SYSTEM SHALL post to `/__notes/add` exactly once with
   `scope:"mock"`, `screen:"a"` and `text:"hi"`
   → writes tests/mocks/review-browser.test.js
-- **AC-20260913-06-9**: WHEN `docs/adr/0026-every-mock-has-a-page-you-can-mark.md` is read THE SYSTEM
+- **AC-20260913-06-9**: WHEN `docs/adr/0027-every-mock-has-a-page-you-can-mark.md` is read THE SYSTEM
   SHALL find `Status: accepted`, a `## Dissents` section, and an `## Applies to` section naming
   `specs/20260912/05-the-atlas-answers-to-a-design.md` and
   `specs/20260905/01-picks-on-the-atlas-page.md`

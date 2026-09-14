@@ -1,4 +1,4 @@
-# 0026. Every mock has a page you can mark
+# 0027. Every mock has a page you can mark
 
 - Status: accepted
 - Date: 2026-09-13
@@ -48,7 +48,7 @@ applies here too.
   roadmap-amendment convention exists to prevent — both Decisions are pinned by executed tests
   (`AC-20260912-05-2`, `AC-20260905-01-9`) this spec's own build rewrites.
 - **C. One amendment ADR narrowing both in a single record**, each document gaining a single
-  `Amended by: ADR-0026 — <one line>` header line and neither otherwise rewritten. Adopted, for
+  `Amended by: ADR-0027 — <one line>` header line and neither otherwise rewritten. Adopted, for
   the same reason ADR-0024 and ADR-0025 give: both documents trace to one change (every card
   opens a markable screen page instead of a lightbox or a raw-file link) landed by one spec, so
   one record carries both.
@@ -74,7 +74,7 @@ applies here too.
   bar copy it carried) outright. The column header's own `data-decide="pick"` button — a
   separate control from the lightbox bar's copy — is untouched and still decides the pick.
 
-Each of the two gains a single `Amended by: ADR-0026 — <one line>` header line (an orchestrator
+Each of the two gains a single `Amended by: ADR-0027 — <one line>` header line (an orchestrator
 edit, per the amendment convention, not a worker's file-contract edit); neither is otherwise
 rewritten.
 

@@ -267,7 +267,7 @@ const { execFileSync, spawnSync } = require('child_process')
 // D2 (specs/20260913/09-the-tool-shows-never-interrupts.md): isMeasurementReplay/replayDueness
 // moved to lib/observation.js — spec-status.js's dashboard footer clause shares this exact
 // derivation now instead of a second copy of the "reviews since the last measurement replay" rule.
-const { readLedgerRows, isMeasurementReplay, replayDueness } = require('./lib/observation')
+const { readLedgerRows, isMeasurementReplay, lastMeasurementReplayIdx, replayDueness } = require('./lib/observation')
 // D1 (specs/20260901/08-corpus-derivation-and-kill-match.md): the one
 // parser for spec/doctrine/replay-corpus.md's class-heading grammar — --apply/--record's --class
 // validation (D2) and --pick-class's selection (D3) both key off it, never a second regex sweep.
@@ -441,8 +441,8 @@ function unreproducibleRunIds(rows) {
 
 function cmdSelect() {
   const rows = readLedgerRows(root)
-  let lastReplayIdx = -1
-  rows.forEach((r, i) => { if (isMeasurementReplay(r)) lastReplayIdx = i })
+  // specs/20260913/09 D2: the same window --due counts, from the one shared walk.
+  const lastReplayIdx = lastMeasurementReplayIdx(rows)
   // D3: resolve every runId seen in the window to reviewRowFor's row — the one shared selector —
   // rather than restating "verdict === 'CLEAN'" here as a second, driftable copy of the rule.
   const runIdsInWindow = new Set()

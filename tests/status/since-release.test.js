@@ -72,6 +72,25 @@ test('AC-20260913-09-5: WHEN replayDueness runs over the two Contracts worked ex
     'setup-failed is not a measurement outcome, so it must not reset the dueness window — the five following review rows must all count, crossing the >=5 threshold: ' + JSON.stringify(replayDueness(dueRows)))
 })
 
+test('lastMeasurementReplayIdx returns the read-order index of the last measurement replay row, skipping non-measurement replays, and replayDueness counts exactly the reviews after that index', () => {
+  const { lastMeasurementReplayIdx, replayDueness } = requireObservation()
+  const rows = [
+    { stage: 'review' },
+    { stage: 'replay', outcome: 'caught' },
+    { stage: 'review' },
+    { stage: 'replay', outcome: 'leg-caught' },
+    { stage: 'review' },
+    { stage: 'replay', outcome: 'setup-failed' },
+    { stage: 'review' },
+  ]
+  assert.strictEqual(lastMeasurementReplayIdx(rows), 3,
+    'the window edge must sit on the last caught/missed/leg-caught row — a setup-failed replay moving it would make replay.js --select skip reviews that --due still counts as owed')
+  assert.strictEqual(lastMeasurementReplayIdx([{ stage: 'review' }]), -1,
+    'a ledger with no measurement replay must open the window at -1, or --select would ignore the very first review row')
+  assert.strictEqual(replayDueness(rows).reviewsSince, rows.filter((r, i) => i > 3 && r.stage === 'review').length,
+    'replayDueness must count from the same edge --select picks from — a mismatch means the dashboard says "due" while --select finds nothing, or the reverse')
+})
+
 test('AC-20260913-09-6: WHEN sinceLastRelease runs over the two Contracts worked examples and an empty array THE SYSTEM returns {done:2, released:true}, {done:2, released:false}, and {done:0, released:false} respectively, counting distinct spec paths only', () => {
   const { sinceLastRelease } = requireObservation()
   assert.strictEqual(typeof sinceLastRelease, 'function',

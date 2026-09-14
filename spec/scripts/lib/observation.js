@@ -65,11 +65,19 @@ function isMeasurementReplay(row) {
   return row.stage === 'replay' && MEASUREMENT_OUTCOMES.has(row.outcome)
 }
 
+// The window's left edge: read-order index of the last measurement replay row, -1 when none.
+// replayDueness counts after it and replay.js's --select picks from after it — one walk, so the
+// count and the pick can never disagree about where the window starts.
+function lastMeasurementReplayIdx(rows) {
+  let idx = -1
+  rows.forEach((r, i) => { if (isMeasurementReplay(r)) idx = i })
+  return idx
+}
+
 // reviewsSince = count of stage:"review" rows in READ order after the last measurement replay
 // row (readLedgerRows already merges live+archives in that order); due = reviewsSince >= REPLAY_EVERY.
 function replayDueness(rows) {
-  let lastReplayIdx = -1
-  rows.forEach((r, i) => { if (isMeasurementReplay(r)) lastReplayIdx = i })
+  const lastReplayIdx = lastMeasurementReplayIdx(rows)
   const reviewsSince = rows.filter((r, i) => i > lastReplayIdx && r.stage === 'review').length
   return { reviewsSince, due: reviewsSince >= REPLAY_EVERY }
 }
@@ -90,5 +98,6 @@ function sinceLastRelease(rows) {
 }
 
 module.exports = {
-  readLedgerRows, qualifyingObservation, REPLAY_EVERY, isMeasurementReplay, replayDueness, sinceLastRelease,
+  readLedgerRows, qualifyingObservation, REPLAY_EVERY, isMeasurementReplay, lastMeasurementReplayIdx, replayDueness,
+  sinceLastRelease,
 }

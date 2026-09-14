@@ -387,3 +387,50 @@ test('AC-20260913-02-8: with one box selected, every unselected sibling box comp
     await stop()
   }
 })
+
+// specs/20260913/05-a-note-is-a-conversation.md D6 review advisory: refresh() rebuilt whichever
+// card was open after ANY landed POST. Approve closes its card and defers the POST ~5s, so a
+// reply typed into a SECOND note's card meanwhile was wiped when the first note's POST landed.
+// A rebuild is scoped to the note the POST touched.
+test('notes layer: a deferred Approve landing on one note leaves a reply draft typed into another note\'s open card untouched', { timeout: 45000 }, async (t) => {
+  if (!chrome) return t.skip('no Chrome binary (set CHROME_BIN) — this pin only runs against the real deferred POST and card rebuild')
+  const notes = [regionNote('D1', 0.05, 0.05, 0.2, 0.1), regionNote('D2', 0.5, 0.05, 0.2, 0.1)]
+  const dir = buildFixture(notes)
+  const { ready, stop } = serve(dir)
+  try {
+    const { port } = await ready
+    const url = 'http://127.0.0.1:' + port + '/mocks/a.html'
+    const CARD_JS = FIND_OVERLAY_JS +
+      'function btn(label){var o=overlayEl();var bs=Array.prototype.slice.call(o.querySelectorAll("button"));' +
+      'for(var i=0;i<bs.length;i++){if(bs[i].textContent===label)return bs[i]}return null}'
+    const result = await withPage(async ({ navigate, evalJs, setViewport, sleep }) => {
+      await setViewport(1440, 900)
+      await navigate(url)
+      let painted = false
+      for (let i = 0; i < 20 && !painted; i++) {
+        painted = await evalJs(FIND_OVERLAY_JS + '(function(){var o=overlayEl();return !!o&&o.querySelectorAll(".nl-region").length===2})()')
+        if (!painted) await sleep(150)
+      }
+      if (!painted) return { painted }
+      const approved = await evalJs(CARD_JS + '(function(){window.__nlSelect("D1",{reveal:false});var a=btn("Approve");if(!a)return false;a.click();return true})()')
+      const typed = await evalJs(CARD_JS + '(function(){window.__nlSelect("D2",{reveal:false});var ta=overlayEl().querySelector("textarea");if(!ta)return false;ta.value="half-typed reply";return true})()')
+      // The deferred POST fires at 5s; poll until D1's box turns done (the POST landed and the list
+      // re-rendered), then read the draft.
+      let landed = false
+      for (let i = 0; i < 40 && !landed; i++) {
+        await sleep(250)
+        landed = await evalJs(FIND_OVERLAY_JS + '(function(){var b=overlayEl().querySelector(\'.nl-region[data-id="D1"]\');return !!b&&b.getAttribute("data-status")==="done"})()')
+      }
+      const after = await evalJs(CARD_JS + '(function(){var ta=overlayEl().querySelector("textarea");return {value:ta?ta.value:null}})()')
+      return { painted, approved, typed, landed, after }
+    })
+    assert.ok(result.painted, 'setup: both boxes must paint: got ' + JSON.stringify(result))
+    assert.ok(result.approved, 'setup: D1\'s card must carry an Approve button: got ' + JSON.stringify(result))
+    assert.ok(result.typed, 'setup: D2\'s card must carry a reply textarea: got ' + JSON.stringify(result))
+    assert.ok(result.landed, 'setup: D1\'s deferred Approve must land and repaint its box as done: got ' + JSON.stringify(result))
+    assert.strictEqual(result.after.value, 'half-typed reply',
+      'a POST that touched D1 must never rebuild D2\'s open card — the reply draft typed into it was wiped: got ' + JSON.stringify(result.after))
+  } finally {
+    await stop()
+  }
+})

@@ -192,7 +192,7 @@ test('AC-20260913-05-7, AC-20260913-02-13: colorFor resolves a session, a you an
       'var youBadge = shadow.querySelector(\'.nl-region[data-id="N2"] .nl-region-badge\');' +
       'var doneBadge = shadow.querySelector(\'.nl-region[data-id="N3"] .nl-region-badge\');' +
       'if (!sessionBadge || !youBadge || !doneBadge) return { error: "not all three badges painted", sessionFound: !!sessionBadge, youFound: !!youBadge, doneFound: !!doneBadge };' +
-      'var probe = document.createElement("div"); probe.style.background = "var(--v-ok)"; document.body.appendChild(probe);' +
+      'var probe = document.createElement("div"); probe.style.background = "var(--v-ok)"; shadow.appendChild(probe);' +
       'var vOkColor = getComputedStyle(probe).backgroundColor; probe.remove();' +
       'return { found: true, sessionBg: getComputedStyle(sessionBadge).backgroundColor, youBg: getComputedStyle(youBadge).backgroundColor, doneBg: getComputedStyle(doneBadge).backgroundColor, vOkColor: vOkColor };' +
       '})()'
@@ -212,7 +212,7 @@ test('AC-20260913-05-7, AC-20260913-02-13: colorFor resolves a session, a you an
     assert.strictEqual(result.youBg, 'rgb(217, 119, 6)',
       'a you-turn box\'s badge must compute var(--v-warn) as its background: got ' + JSON.stringify(result))
     assert.strictEqual(result.doneBg, result.vOkColor,
-      'a done-turn box\'s badge must compute the page\'s own var(--v-ok) as its background: got badge=' + result.doneBg + ' page var(--v-ok)=' + result.vOkColor)
+      'a done-turn box\'s badge must compute viewer.css\'s shadow-scoped var(--v-ok) as its background: got badge=' + result.doneBg + ' shadow var(--v-ok)=' + result.vOkColor)
     assert.notStrictEqual(result.sessionBg, result.youBg,
       'session and you must never collapse onto the same color: got ' + JSON.stringify(result))
     assert.notStrictEqual(result.youBg, result.doneBg,

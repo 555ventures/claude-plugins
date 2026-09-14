@@ -116,21 +116,6 @@
   hostStyle.textContent = '.nl-host{pointer-events:none}'
   document.head.appendChild(hostStyle)
 
-  // specs/20260913/05-a-note-is-a-conversation.md D5/AC-20260913-05-7: a caller comparing a
-  // box/badge colour against "the page's own var(--v-ok)" reads it off the served document's
-  // root — but viewer.css is linked only inside each `.nl-host`'s shadow root (the isolation
-  // invariant above), and a shadow-loaded stylesheet's own `:root` rule never reaches outside
-  // that shadow tree. These four tokens are set here as plain inline custom properties (never a
-  // stylesheet or a `<link>`, so the isolation pin's `headLinks`/body-style checks are untouched)
-  // so the same register resolves from the light DOM too — values mirror viewer.css's own
-  // `:host,:root` block verbatim; that file stays the one place a role's actual color is decided.
-  try {
-    var ROOT_TOKENS = { '--v-danger': '#dc2626', '--v-warn': '#d97706', '--v-ok': '#16a34a', '--v-muted': '#737373' }
-    for (var rtKey in ROOT_TOKENS) {
-      if (Object.prototype.hasOwnProperty.call(ROOT_TOKENS, rtKey)) document.documentElement.style.setProperty(rtKey, ROOT_TOKENS[rtKey])
-    }
-  } catch (e) { /* no documentElement — a stub DOM test fixture */ }
-
   var css =
     '.nl-bar,.nl-strip,.nl-proj{font:15px/1.5 var(--v-font);color:var(--v-fg);pointer-events:auto}' +
     '.nl-bar{position:fixed;top:13px;right:32px;z-index:9999;display:flex;gap:8px;align-items:center;' +
@@ -399,7 +384,7 @@
         var n = mockNotes.filter(function (m) { return m.id === id })[0]
         if (!n) return
         if (e.key === 'Enter') pickNote(id)
-        else if ((e.key === 'a' || e.key === 'A') && n.status === 'addressed') api('resolve', { id: id, by: author, verdict: 'accepted' }).then(refresh)
+        else if ((e.key === 'a' || e.key === 'A') && n.status === 'addressed') api('resolve', { id: id, by: author, verdict: 'accepted' }).then(function () { return refresh(id) })
         else if ((e.key === 'r' || e.key === 'R') && n.status === 'addressed') pickNote(id)
       })
     }
@@ -594,17 +579,17 @@
       replyBtn.onclick = function () {
         var v = replyTa.value.trim()
         if (!v) { replyTa.focus(); return }
-        api('reopen', { id: n.id, text: v, by: author }).then(refresh)
+        api('reopen', { id: n.id, text: v, by: author }).then(function () { return refresh(n.id) })
       }
       var acceptBtn = doc.createElement('button'); acceptBtn.className = 'nl-btn primary'; acceptBtn.textContent = 'Approve'
       var rejectBtn = doc.createElement('button'); rejectBtn.className = 'nl-btn'; rejectBtn.textContent = 'Reject'
       acceptBtn.onclick = function () {
         closeCard()
-        deferPost('Approved', function () { api('resolve', { id: n.id, by: author, verdict: 'accepted' }).then(refresh) })
+        deferPost('Approved', function () { api('resolve', { id: n.id, by: author, verdict: 'accepted' }).then(function () { return refresh(n.id) }) })
       }
       rejectBtn.onclick = function () {
         closeCard()
-        deferPost('Rejected', function () { api('resolve', { id: n.id, by: author, verdict: 'withdrawn' }).then(refresh) })
+        deferPost('Rejected', function () { api('resolve', { id: n.id, by: author, verdict: 'withdrawn' }).then(function () { return refresh(n.id) }) })
       }
       row.appendChild(replyBtn); row.appendChild(acceptBtn); row.appendChild(rejectBtn)
     }
@@ -634,7 +619,7 @@
           var deleteBtn = doc.createElement('button'); deleteBtn.textContent = 'Delete'
           deleteBtn.onclick = function () {
             closeCard()
-            deferPost('Deleted', function () { api('delete', { id: n.id, by: author }).then(refresh) })
+            deferPost('Deleted', function () { api('delete', { id: n.id, by: author }).then(function () { return refresh(n.id) }) })
           }
           menu.appendChild(deleteBtn)
         }
@@ -887,7 +872,7 @@
         var noteId = pendingReplace
         pendingReplace = null
         setMode('idle')
-        api('region', { id: noteId, region: region, by: author }).then(refresh)
+        api('region', { id: noteId, region: region, by: author }).then(function () { return refresh(noteId) })
         return
       }
       setMode('composing')
@@ -1001,7 +986,7 @@
       resolveBtn.className = 'nl-btn'; resolveBtn.textContent = 'Resolve'
       // specs/20260913/05-a-note-is-a-conversation.md D6: the strip row's Resolve button is an
       // Approve, told apart from Reject the same way the card's own Approve is.
-      resolveBtn.onclick = function () { api('resolve', { id: n.id, by: author, verdict: 'accepted' }).then(refresh) }
+      resolveBtn.onclick = function () { api('resolve', { id: n.id, by: author, verdict: 'accepted' }).then(function () { return refresh(n.id) }) }
       d.appendChild(resolveBtn)
     }
     return d
@@ -1042,15 +1027,15 @@
   }
   function composeProject() {
     buildComposer(proj, 'Direction-level: what is wrong with the whole set, or where should it go?', false, function (text) {
-      api('add', { scope: 'project', screen: null, state: null, text: text, by: author }).then(refresh)
+      api('add', { scope: 'project', screen: null, state: null, text: text, by: author }).then(function () { return refresh() })
     })
   }
   function composeMock() {
     buildComposer(strip, 'What is wrong with "' + activeState + '", or what should change?', true, function (text, sendAsProject) {
       if (sendAsProject) {
-        api('add', { scope: 'project', screen: null, state: null, text: text, by: author }).then(refresh)
+        api('add', { scope: 'project', screen: null, state: null, text: text, by: author }).then(function () { return refresh() })
       } else {
-        api('add', { scope: 'mock', screen: screen, state: activeState, text: text, by: author }).then(refresh)
+        api('add', { scope: 'mock', screen: screen, state: activeState, text: text, by: author }).then(function () { return refresh() })
       }
     })
   }
@@ -1215,7 +1200,8 @@
   // project-wide list, a project page never fetches a per-screen list. D6: the project panel now
   // requests screen=** (every note, ledger-joined identically) so it can list a mock-scope note
   // too — screen=* would return only project-scope notes, the gap A1's micro-spike found.
-  function refresh() {
+  // `touchedId` names the note the landed POST changed (none for a fresh add or the initial load).
+  function refresh(touchedId) {
     if (scope === 'project') {
       return fetch(__base + '/__notes/list?screen=**').then(function (r) { return r.json() }).then(function (list) {
         projectNotes = list || []
@@ -1230,8 +1216,10 @@
       // (only open/compose paths do), so a card left open across this refresh (selectedNoteId
       // survives render()) is rebuilt here from the server's just-fetched answer, never from the
       // request that was sent. A refused POST never reaches this .then at all, so the box the
-      // owner typed into is left exactly as they left it.
-      if (selectedNoteId != null) {
+      // owner typed into is left exactly as they left it. The rebuild is scoped to the note the
+      // POST touched: a deferred Approve/Reject/Delete lands ~5s after its card closed, and
+      // rebuilding whatever card is open by then would wipe a draft typed into a different note.
+      if (selectedNoteId != null && selectedNoteId === touchedId) {
         var openNote = mockNotes.filter(function (n) { return n.id === selectedNoteId })[0]
         if (openNote) openNoteCard(openNote)
       }

@@ -17,6 +17,8 @@ diff_base: 851ede5aeb614417efb61b43ba46d18e8304120e
 
 # The loop re-anchors, and everyone draws
 
+- Amended by: ADR-0026 — specs/20260913/05 keeps D17's four-colour box but colours the row and pin by whose turn it is, not a fixed orange
+
 ## Goal
 
 specs/20260912/11 lets the owner mark an area on a served mock page and gives every other surface an

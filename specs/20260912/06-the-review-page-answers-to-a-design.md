@@ -17,6 +17,8 @@ diff_base: 2319dab8d026af5e135b1b2613663639cccaa328
 
 # The review page answers to a design, and the page's own promises are pinned again
 
+- Amended by: ADR-0026 — specs/20260913/05 replaces the note row's Looks good / Still not right controls with Reply, Approve and Reject
+
 Amended by: ADR-0019 (specs/20260912/07-a-whole-product-note-blocks-the-sign-off.md narrows
 AC-20260912-06-2's title clause to the journey-scoped total the page now computes — see the
 ADR's Applies to)

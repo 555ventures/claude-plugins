@@ -15,6 +15,8 @@ diff_base: c68d4d17147233f0b31db30ead9bd2f59ba7dac2
 
 # Review loop: page notes at two scopes, batch triage, author resolves
 
+- Amended by: ADR-0026 — specs/20260913/05 retires the driver's reply writer (D4) and makes the loop a conversation the author may reply to as often as they like
+
 Amended by: ADR-0019 (specs/20260912/07-a-whole-product-note-blocks-the-sign-off.md narrows D5's
 project-note clause — `approved` refuses while any project note is not `resolved`, no longer
 `journey-approved` — see the ADR's Applies to)

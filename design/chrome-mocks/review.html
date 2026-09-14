@@ -24,16 +24,24 @@
   What it carries, per D1: the header bar, the rail with the Screens list and the `Whole project`
   row, one artboard caption + state-tab row (screen `a`, which declares the `empty` state), the
   inspector's filter row, the scope band, and the composer. `data-rv="board"`,
-  `data-screen="__project"` and `Looks good` all appear below (AC-20260912-06-7).
+  `data-screen="__project"` and `data-rv="approve"` all appear below (AC-20260912-06-7).
 
   specs/20260912/07 D6 restates the note fixture to show the state its D3 introduces: both of
   this journey's own screens (`a`, `b`) now carry a resolved note, so the journey's own screens
-  are clean, while one project-scope note (`n3`) stays open — `addressed`, not yet `resolved`,
-  which is why it still carries the reviewer's `Looks good` / `Still not right` controls
-  (AC-20260912-06-1's pair, now on the project row instead of `b`'s). The `Approve journey`
-  button is therefore enabled, and the `rv-projwait` line beneath it names the one whole-product
-  note still blocking sign-off — the first proof the D1/D2/D3 binding renders a real, reachable
-  state rather than a decorative one.
+  are clean, while one project-scope note (`n3`) stays open — `addressed`, not yet `resolved`.
+  The `Approve journey` button is therefore enabled, and the `rv-projwait` line beneath it names
+  the one whole-product note still blocking sign-off — the first proof the D1/D2/D3 binding
+  renders a real, reachable state rather than a decorative one.
+
+  specs/20260913/05-a-note-is-a-conversation.md D5/D6 supersedes the paragraph above's
+  `Looks good` / `Still not right` pair (AC-20260912-06-1): the row is now coloured by
+  `data-turn` (`session`/`you`/`done`), not `data-status`, and every `session` or `you` row
+  carries `Reply`, `Approve` and `Reject` instead — `n3`'s pair is replaced below, and `n4`/`n5`
+  (plain `session`-turn region notes that never had row controls before) now carry the same
+  three. A `done` row (`n1`, `n2`) carries none; a dropped (Reject-final) note gets no row at
+  all, so no such fixture exists here. Each control row also carries a hidden
+  `[data-rv="reply-box"]` — `Reply` unhides it; it holds `[data-rv="reply-text"]` and
+  `[data-rv="reply-send"]`, exactly as the client-facing note card's own reply box does.
 
   specs/20260912/12 D3 — marked areas, as the owner accepted them on 2026-09-13 (design ruling,
   superseding the spec's first draft of a `Show on the screen` button, which this file no longer
@@ -204,9 +212,22 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
 /* the whole row is the click target; its left rule is the selection accent, nothing else */
 .rv-row{border-left:2px solid var(--v-border);padding:var(--v-space-2) var(--v-space-3);margin:0 0 var(--v-space-2);border-radius:0 var(--v-radius) var(--v-radius) 0;outline:0;cursor:pointer}
 .rv-row:hover{background:color-mix(in srgb, var(--v-muted-bg) 60%, var(--v-bg))}
+/* specs/20260913/05-a-note-is-a-conversation.md D5: the row's left border and its .rv-pin
+   (below) are keyed on data-turn, not data-status — the same turn register the note card and
+   the mock's own boxes read. */
+.rv-row[data-turn="session"]{border-left-color:var(--v-danger)}
+.rv-row[data-turn="you"]{border-left-color:var(--v-warn)}
+.rv-row[data-turn="done"]{border-left-color:var(--v-ok)}
+.rv-row[data-turn="session"] .rv-pin{background:var(--v-danger)}
+.rv-row[data-turn="you"] .rv-pin{background:var(--v-warn)}
+.rv-row[data-turn="done"] .rv-pin{background:var(--v-ok)}
 .rv-row[data-selected]{background:var(--v-muted-bg);border-left-color:var(--v-primary);box-shadow:none}
 .rv-rowhead{display:flex;align-items:center;flex-wrap:wrap;gap:2px;font-size:13px;color:var(--v-muted)}
 .rv-rowhead .rv-pin{margin-right:var(--v-space-2)}
+/* D6: the row's own reply box, hidden by default ([hidden] above forces display:none) and
+   unhidden by that row's Reply control. */
+.rv-reply{display:flex;flex-direction:column;gap:var(--v-space-2);margin-top:var(--v-space-2)}
+.rv-reply textarea{min-height:72px}
 .rv-id{font-weight:400;color:var(--v-muted);font-variant-numeric:tabular-nums;margin-right:var(--v-space-2)}
 .rv-who{color:var(--v-muted)}
 .rv-screen{color:var(--v-muted)}
@@ -326,36 +347,61 @@ body{margin:0;background:var(--v-bg);color:var(--v-fg);font-family:var(--v-font)
     <div class="rv-scopeband"><span class="rv-scopeband-label">On screen</span><span class="rv-screenfilter" data-rv="screenfilter">a</span><span class="rv-scopeband-label">plus the whole project</span><button type="button" class="rv-allscreens" data-rv="allscreens">All screens</button></div>
     <div class="rv-rows" data-rv="rows">
 
-      <article data-rv="row" data-id="n1" data-kind="note" data-status="resolved" class="rv-row rv-note" data-label="a" hidden tabindex="-1">
+      <article data-rv="row" data-id="n1" data-kind="note" data-turn="done" class="rv-row rv-note" data-label="a" hidden tabindex="-1">
         <div class="rv-rowhead"><span class="rv-id">n1</span><span class="rv-who">You told JJ</span><span class="rv-sep">·</span><span class="rv-screen">a</span></div>
         <p class="rv-claim">Something's off here</p>
         <p class="rv-answered">Addressed: tightened the copy</p>
       </article>
 
-      <article data-rv="row" data-id="n2" data-kind="note" data-status="resolved" class="rv-row rv-note" data-label="b" hidden tabindex="-1">
+      <article data-rv="row" data-id="n2" data-kind="note" data-turn="done" class="rv-row rv-note" data-label="b" hidden tabindex="-1">
         <div class="rv-rowhead"><span class="rv-id">n2</span><span class="rv-who">You told JJ</span><span class="rv-sep">·</span><span class="rv-screen">b</span></div>
         <p class="rv-claim">Should be shorter</p>
         <p class="rv-answered">Addressed: did it</p>
       </article>
 
-      <article data-rv="row" data-id="n3" data-kind="note" data-status="open" class="rv-row rv-note" tabindex="-1">
+      <article data-rv="row" data-id="n3" data-kind="note" data-turn="you" class="rv-row rv-note" tabindex="-1">
         <div class="rv-rowhead"><span class="rv-id">n3</span><span class="rv-who">You told JJ</span><span class="rv-sep">·</span><span class="rv-screen">Whole project</span></div>
         <p class="rv-claim">The navigation is wrong everywhere</p>
-        <p class="rv-wait">Addressed: reworked the nav pattern</p>
+        <p class="rv-answered">Addressed: reworked the nav pattern</p>
         <div class="rv-actions" data-rv="note-actions">
-          <button type="button" data-rv="accept">Looks good</button>
-          <button type="button" data-rv="reopen">Still not right</button>
+          <button type="button" data-rv="reply">Reply</button>
+          <button type="button" data-rv="accept">Approve</button>
+          <button type="button" data-rv="reject">Reject</button>
         </div>
+        <form class="rv-reply" data-rv="reply-box" hidden>
+          <textarea data-rv="reply-text" placeholder="Still not right? Say what's wrong."></textarea>
+          <div class="rv-actions"><button type="button" data-rv="reply-send" class="rv-primary">Send</button></div>
+        </form>
       </article>
 
-      <article data-rv="row" data-id="n4" data-kind="note" data-status="open" data-region="1" class="rv-row rv-note" data-label="a" data-state="happy" data-selected tabindex="0" aria-selected="true">
+      <article data-rv="row" data-id="n4" data-kind="note" data-turn="session" data-region="1" class="rv-row rv-note" data-label="a" data-state="happy" data-selected tabindex="0" aria-selected="true">
         <div class="rv-rowhead"><span class="rv-pin">n4</span><span class="rv-who">You told JJ</span><span class="rv-sep">·</span><span class="rv-screen">a</span></div>
         <p class="rv-claim">These two clinics read the same.</p>
+        <p class="rv-wait">Waiting for the session · blocks approval until addressed</p>
+        <div class="rv-actions" data-rv="note-actions">
+          <button type="button" data-rv="reply">Reply</button>
+          <button type="button" data-rv="accept">Approve</button>
+          <button type="button" data-rv="reject">Reject</button>
+        </div>
+        <form class="rv-reply" data-rv="reply-box" hidden>
+          <textarea data-rv="reply-text" placeholder="Still not right? Say what's wrong."></textarea>
+          <div class="rv-actions"><button type="button" data-rv="reply-send" class="rv-primary">Send</button></div>
+        </form>
       </article>
 
-      <article data-rv="row" data-id="n5" data-kind="note" data-status="open" data-region="1" class="rv-row rv-note" data-label="b" data-state="error" tabindex="-1">
+      <article data-rv="row" data-id="n5" data-kind="note" data-turn="session" data-region="1" class="rv-row rv-note" data-label="b" data-state="error" tabindex="-1">
         <div class="rv-rowhead"><span class="rv-pin">n5</span><span class="rv-who">You told JJ</span><span class="rv-sep">·</span><span class="rv-screen">b</span><span class="rv-sep">·</span><span class="rv-screen">error</span></div>
         <p class="rv-claim">This tells me nothing I can act on.</p>
+        <p class="rv-wait">Waiting for the session · blocks approval until addressed</p>
+        <div class="rv-actions" data-rv="note-actions">
+          <button type="button" data-rv="reply">Reply</button>
+          <button type="button" data-rv="accept">Approve</button>
+          <button type="button" data-rv="reject">Reject</button>
+        </div>
+        <form class="rv-reply" data-rv="reply-box" hidden>
+          <textarea data-rv="reply-text" placeholder="Still not right? Say what's wrong."></textarea>
+          <div class="rv-actions"><button type="button" data-rv="reply-send" class="rv-primary">Send</button></div>
+        </form>
       </article>
 
       <p class="rv-empty" data-rv="empty" hidden>No open notes on this journey. Approve it when the screens look right.</p>

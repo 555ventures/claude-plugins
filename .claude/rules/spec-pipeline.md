@@ -216,6 +216,11 @@ upstream bug list. -->
   the AC still describes the fixed state as a continuation. Fix the verb, never the measurement —
   and where the file must also survive close-time expiry, split the clauses that already hold into
   their own CONTINUE-TO AC on the same file rather than keeping a false one.
+  The same occurrence-anywhere reading also lives in `expire-tests.js`'s AC ownership map, which
+  walks EVERY `.md` under `specs/` — a build's `<spec>.deviations.md` sidecar included. A sidecar
+  bullet that spells a SIBLING spec's AC-ID makes the sidecar (no frontmatter, status null) that
+  AC's owner, and the whole-suite gate reddens on a sibling's tests being reported retirable. Name
+  a foreign AC in a sidecar by spec and number (`spec 02 AC 10`), never by its literal ID.
   (specs/20260822/02-init-generation-script.md; specs/20260907/10-client-review.md D15;
   specs/20260912/03-run-isolates-and-owns-the-stages.md;
   specs/20260912/06-the-review-page-answers-to-a-design.md D9a)
@@ -518,9 +523,18 @@ upstream bug list. -->
   scoped gate load. Replace the single sample with a bounded poll without weakening what it
   asserts (no click occurs anywhere in the poll window), rather than accepting the flake or
   loosening the check.
+  Sixth surface, two at once past a green suite and both a render seam: a control whose success
+  path is `post(...).then(refresh)` where `refresh` re-renders the LIST but never the open CARD the
+  click came from (the reply landed, the card kept the stale thread and the typed words), and a
+  server-rendered hidden box emitted INSIDE a `display:flex` actions row rather than as the mock's
+  next sibling, so unhiding it squeezed the field beside a button. Compare the emitted nesting to
+  the binding mock's, and after any post-then-refresh control, look at the surface that posted.
+  The first fix then rebuilt the open card on EVERY refresh, wiping a draft typed in another card
+  when an unrelated deferred POST landed — scope a rebuild to the note the POST touched.
   (specs/20260910/03-client-journey-player.md; specs/20260911/01-the-page-waits-for-the-server.md;
   specs/20260911/04-the-client-loop.md; specs/20260912/06-the-review-page-answers-to-a-design.md D9;
-  specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D3/D4/D10/D11/AC-4/AC-17)
+  specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D3/D4/D10/D11/AC-4/AC-17;
+  specs/20260913/05-a-note-is-a-conversation.md D6)
 - `[plugin]` `tests/helpers.js`'s `runNode` is `spawnSync`, which blocks the parent Node event
   loop for the child's whole lifetime — so a test that stands up an **in-process**
   `http.createServer` stub and then `runNode`s the script under test against it can never

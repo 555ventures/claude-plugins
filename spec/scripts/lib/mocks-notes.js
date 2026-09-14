@@ -215,6 +215,18 @@ function validateNotes(notes) {
   return { errors }
 }
 
+// specs/20260913/05-a-note-is-a-conversation.md D1: the one derivation of whose turn a note is
+// on — 'dropped' (resolved+withdrawn, hidden everywhere but disk), 'done' (every other resolved
+// note — a missing resolution and 'waived' both fall here, no special case), 'you' (the session
+// has answered: `addressed` set or a legacy `reply` present) or 'session' (nothing to read yet).
+// `status` stays the one persisted field; this is read-only and never stored.
+// notes-layer.browser.js and review.browser.js cannot import this lib — each inlines the same
+// four clauses with a comment naming this function as their home.
+function turnOf(n) {
+  if (n.status === 'resolved') return n.resolution === 'withdrawn' ? 'dropped' : 'done'
+  return (n.addressed || n.reply) ? 'you' : 'session'
+}
+
 function nextId(notes) {
   let max = 0
   for (const n of notes) {
@@ -292,6 +304,10 @@ function cloneFind(notes, id) {
 // `opts.viaClient`, is stored as `withdrawReason` on the note — the route validates it against
 // WITHDRAW_REASONS before ever calling this (a 400, not a thrown error, so the enum check has
 // only the one home); this function trusts an already-validated value.
+// specs/20260913/05-a-note-is-a-conversation.md D4: `opts.verdict` (the session-mount route only
+// — the route itself 400s any value outside accepted/withdrawn before this ever runs) is written
+// to `resolution` verbatim, the owner's Approve/Reject told apart at last. Given only alongside
+// `viaClient` never — the two are mutually exclusive callers.
 function resolveNote(notes, id, by, opts) {
   const { next, found } = cloneFind(notes, id)
   if (found.kind === 'question') throw new Error('note "' + id + '" was not written by a person and cannot be resolved')
@@ -304,6 +320,8 @@ function resolveNote(notes, id, by, opts) {
     found.resolution = priorStatus === 'addressed' ? 'accepted' : 'withdrawn'
     found.lastClientAt = found.resolvedAt
     if (o.reason != null) found.withdrawReason = o.reason
+  } else if (o.verdict != null) {
+    found.resolution = o.verdict
   }
   return { notes: next, note: found }
 }
@@ -344,15 +362,23 @@ function addressNote(notes, id, opts) {
 // next `materialize` would neither retire the derived row nor ever let the source register again.
 // Nulling both is a no-op for the pre-existing addressed-note arm (neither field is ever set on an
 // addressed note in the first place).
+// specs/20260913/05-a-note-is-a-conversation.md D2: a legacy `reply` (a session answer stored
+// before this spec, never in the thread) is folded into the SAME appended entry rather than lost
+// — the entry's own `addressed` is the prior `addressed` object when present, else
+// `{ change: <prior reply> }` when a `reply` string is present, else `null` (Contracts). `reply`
+// is then nulled — a stored reply is folded exactly once, on the next reply after this lands.
 function reopenNote(notes, id, opts) {
   const { next, found } = cloneFind(notes, id)
   const o = opts || {}
   const priorAddressed = found.addressed
+  const priorReply = found.reply
+  const foldedAddressed = priorAddressed || (priorReply ? { change: priorReply } : null)
   found.thread = (Array.isArray(found.thread) ? found.thread.slice() : []).concat([
-    { at: new Date().toISOString(), text: o.text, by: o.by || 'client', addressed: priorAddressed },
+    { at: new Date().toISOString(), text: o.text, by: o.by || 'client', addressed: foldedAddressed },
   ])
   found.status = 'open'
   found.addressed = null
+  found.reply = null
   found.resolution = null
   found.withdrawReason = null
   found.lastClientAt = new Date().toISOString()
@@ -388,13 +414,6 @@ function deleteNote(notes, id) {
     throw new Error('only an open plain note nobody has replied to can be deleted — withdraw it instead')
   }
   return { notes: next.filter((n) => n.id !== id) }
-}
-
-// D4's `notes reply --id --text` — status is left unchanged (Contracts: "reply never changes status").
-function replyNote(notes, id, text) {
-  const { next, found } = cloneFind(notes, id)
-  found.reply = text
-  return { notes: next, note: found }
 }
 
 // D4's `notes open` grouping primitive: project scope first, then mock-scope notes grouped
@@ -474,7 +493,7 @@ function waiveNote(notes, id, opts) {
 }
 
 module.exports = {
-  readNotes, writeNotes, validateNotes, addNote, resolveNote, addressNote, replyNote,
+  readNotes, writeNotes, validateNotes, addNote, resolveNote, addressNote,
   reopenNote, groupOpen, unresolvedFor, ORIGINS, originOf, waiveNote, WITHDRAW_REASONS,
-  replaceRegion, deleteNote, authoredByPerson,
+  replaceRegion, deleteNote, authoredByPerson, turnOf,
 }

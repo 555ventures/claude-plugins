@@ -85,7 +85,8 @@ function baseNote(overrides) {
 // resolution:'accepted') and predates this spec entirely. Sanctioned GREEN today, unlike every
 // other test in this file — this spec touches neither the capture path nor the accepted-
 // resolution write, and the pin exists so a future build can never silently regress either.
-test('AC-20260911-06-15: POST /client/__notes/add on a mock-scope client note CONTINUES TO capture the before-frame first and answer 201 with capture.before, and POST /client/__notes/resolve on an addressed client note CONTINUES TO record resolution:\'accepted\'', async () => {
+// Also carries specs/20260913/05-a-note-is-a-conversation.md AC-20260913-05-16 (SHALL CONTINUE TO).
+test('AC-20260911-06-15 (also AC-20260913-05-16, SHALL CONTINUE TO): POST /client/__notes/add on a mock-scope client note CONTINUES TO capture the before-frame first and answer 201 with capture.before, and POST /client/__notes/resolve on an addressed client note CONTINUES TO record resolution:\'accepted\'', async () => {
   const dir = tmpdir('client-continue-capture')
   advanceToSeedDone(dir)
   const stubPath = stubNpxScreenshot(dir, { bytes: Buffer.from('before-bytes') })

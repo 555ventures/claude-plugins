@@ -50,7 +50,13 @@
 
   // ---- rows ----------------------------------------------------------------------------------
   function rows() { return qa('[data-rv="row"]') }
-  function isOpenRow(row) { return row.getAttribute('data-status') === 'open' }
+  // specs/20260913/05-a-note-is-a-conversation.md D5: rows carry data-turn, never data-status —
+  // "open" (needs an actor) is whichever turn is not yet done: session (waiting on the session)
+  // or you (waiting on the owner). A dropped note never reaches this page at all (D4).
+  function isOpenRow(row) {
+    var t = row.getAttribute('data-turn')
+    return t === 'session' || t === 'you'
+  }
   function openRows() { return rows().filter(isOpenRow) }
   function rowById(id) { return q('[data-rv="row"][data-id="' + id + '"]') }
   function setHidden(el, hidden) { if (!el) return; el.hidden = !!hidden; if (hidden) el.setAttribute('hidden', ''); else el.removeAttribute('hidden') }
@@ -91,6 +97,14 @@
     var current = tabs.filter(function (t) { return t.getAttribute('aria-selected') === 'true' })[0]
     if (current && current.getAttribute('data-state') === state) return
     tabs.forEach(function (t) { t.setAttribute('aria-selected', t.getAttribute('data-state') === state ? 'true' : 'false') })
+    // specs/20260913/05-a-note-is-a-conversation.md D9: the card belongs to the frame being
+    // hidden — close it through the outgoing frame's OWN path (never this page's cardhost
+    // directly) before it disappears, so the frame returns to idle and the page's card host ends
+    // up empty either way.
+    var outgoing = board.querySelector('[data-rv="frame"]:not([hidden])')
+    if (outgoing) {
+      try { if (outgoing.contentWindow && outgoing.contentWindow.__nlCloseCard) outgoing.contentWindow.__nlCloseCard() } catch (e) { /* not loaded yet */ }
+    }
     board.querySelectorAll('[data-rv="frame"]').forEach(function (f) {
       var show = f.getAttribute('data-state') === state
       setHidden(f, !show)
@@ -462,18 +476,48 @@
   })
   on(q('[data-rv="fold"]'), 'click', function () { setFolded(true) })
   on(q('[data-rv="strip"]'), 'click', function () { setFolded(false) })
-  function closeNote(btn, pathname) {
-    on(btn, 'click', function () {
-      var row = btn.closest ? btn.closest('[data-rv="row"]') : null
-      if (!row) return
-      post(pathname, { id: row.getAttribute('data-id'), by: author() }).then(function () {
-        rememberPlace()
-        try { if (location.reload) location.reload() } catch (e) { /* vm harness */ }
-      }).catch(function () { /* the store refused or the server is gone — the row is unchanged */ })
-    })
+  // specs/20260913/05-a-note-is-a-conversation.md D6: the row posts immediately and reloads, as
+  // today — no toast is added here (the card keeps its own Undo toast; the row does not).
+  function reloadAfter(promise) {
+    promise.then(function () {
+      rememberPlace()
+      try { if (location.reload) location.reload() } catch (e) { /* vm harness */ }
+    }).catch(function () { /* the store refused or the server is gone — the row is unchanged */ })
   }
-  qa('[data-rv="accept"]').forEach(function (b) { closeNote(b, '/__notes/resolve') })
-  qa('[data-rv="reopen"]').forEach(function (b) { closeNote(b, '/__notes/reopen') })
+  qa('[data-rv="reply"]').forEach(function (b) {
+    on(b, 'click', function () {
+      var row = b.closest ? b.closest('[data-rv="row"]') : null
+      if (!row) return
+      var box = row.querySelector('[data-rv="reply-box"]')
+      setHidden(box, false)
+      var ta = row.querySelector('[data-rv="reply-text"]')
+      if (ta && ta.focus) ta.focus()
+    })
+  })
+  qa('[data-rv="reply-send"]').forEach(function (b) {
+    on(b, 'click', function () {
+      var row = b.closest ? b.closest('[data-rv="row"]') : null
+      if (!row) return
+      var ta = row.querySelector('[data-rv="reply-text"]')
+      var text = ta ? String(ta.value || '').trim() : ''
+      if (!text) return
+      reloadAfter(post('/__notes/reopen', { id: row.getAttribute('data-id'), by: author(), text: text }))
+    })
+  })
+  qa('[data-rv="accept"]').forEach(function (b) {
+    on(b, 'click', function () {
+      var row = b.closest ? b.closest('[data-rv="row"]') : null
+      if (!row) return
+      reloadAfter(post('/__notes/resolve', { id: row.getAttribute('data-id'), by: author(), verdict: 'accepted' }))
+    })
+  })
+  qa('[data-rv="reject"]').forEach(function (b) {
+    on(b, 'click', function () {
+      var row = b.closest ? b.closest('[data-rv="row"]') : null
+      if (!row) return
+      reloadAfter(post('/__notes/resolve', { id: row.getAttribute('data-id'), by: author(), verdict: 'withdrawn' }))
+    })
+  })
 
   qa('[data-rv="addnote"]').forEach(function (b) {
     on(b, 'click', function () {
@@ -540,6 +584,17 @@
     if (markingBtn) markingBtn.setAttribute('aria-pressed', on ? 'true' : 'false')
   }
   on(markingBtn, 'click', function () { setMarkArea(!markingFrame) })
+  // specs/20260913/05-a-note-is-a-conversation.md D8: the framed layer calls this whenever ITS
+  // OWN mode returns to idle — a save, a discard, or its own Escape all end marking without ever
+  // going through this page's own button click or Escape handler, so the button was left reading
+  // pressed. Only the frame currently in mark mode can turn it off (a stale call from a frame
+  // that lost the race is a no-op).
+  window.__rvMarkOff = function (win) {
+    if (markingFrame && markingFrame.contentWindow === win) {
+      markingFrame = null
+      if (markingBtn) markingBtn.setAttribute('aria-pressed', 'false')
+    }
+  }
   // PATH BACK: Escape is wired into the existing keydown switch above (it runs first in source
   // order, so `markingFrame` and `setMarkArea` are already defined by the time any key fires) —
   // the framed mock's own Escape handler (notes-layer.browser.js) only ever sees a key dispatched

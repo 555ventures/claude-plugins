@@ -78,10 +78,11 @@ user's input; `sweep` as an argument only skips the gap confirmation.
    missing journey edge, a flow that shouldn't exist) → fix the owning brief's `surfaces` block
    FIRST (cross-brief scope changes via an amendment ADR — adr.md template § Applies to), then
    the mock, then `notes address` with `--ledger <rowId>` — a pixel edit over a brief error
-   leaves the brief lying to every future planning session; **question back** → `notes reply
-   --id <id> --text "<question>"`, status stays open; **propose to decline** → never declined by
-   this session, print it for the user. A note hitting a canon primitive edits canon.md first,
-   every dependent screen after. If a note contradicts the doctrine or a bound region (coverage
+   leaves the brief lying to every future planning session; **question back** → `notes address
+   --id <id> --change "<question>"`, the note becomes the author's turn; **propose to decline** →
+   never declined by this session, print it for the user. A note hitting a canon primitive edits
+   canon.md first, every dependent screen after. If a note contradicts the doctrine or a bound
+   region (coverage
    ledger claim), that is a **fork**: `AskUserQuestion`, glossed in plain English with a
    consequence per option, recommended-first from how concrete the note is — a specific,
    actionable note recommends "mock-and-spec both change" (route through the design stage's drift

@@ -49,30 +49,51 @@ function render(projectStatus) {
   return buildReviewPage({ journey: 'j1', seed: baseSeed(), notes: baseNotes(projectStatus), ledger: [], stops: [baseStop()], prefix: '' })
 }
 
-// AC-20260912-06-1 (sanctioned pin exception, green pre-change): renderNoteRow already gates the
-// note-actions group on an addressed note only — this pin outlives the spec's close (D6) so the
-// invariant stays covered, not because D1/D3/D4/D9/D10 touch this behavior.
-test('AC-20260912-06-1: only the addressed note on b carries a note-actions group of Looks good / Still not right; the open note on a carries none', () => {
-  const html = render()
+// AC-20260913-05-8 (specs/20260913/05-a-note-is-a-conversation.md D5/D6) rewrites
+// AC-20260912-06-1: the row now carries data-turn (never data-status), and every session/you row
+// carries exactly three controls — Reply, Approve, Reject — replacing the addressed-only
+// Looks good/Still not right pair; a done row carries none.
+test('AC-20260913-05-8: an open, an addressed and a resolved note render data-turn session/you/done, no data-status anywhere, and Reply/Approve/Reject on the first two rows only', () => {
+  const seed = baseSeed()
+  const notes = [
+    { id: 'n1', kind: 'note', scope: 'mock', screen: 'a', state: null, status: 'open', text: 'open on a', reason: 'other' },
+    { id: 'n2', kind: 'note', scope: 'mock', screen: 'b', state: null, status: 'addressed', addressed: { change: 'did it' }, text: 'addr on b', reason: 'other' },
+    { id: 'n3', kind: 'note', scope: 'mock', screen: 'a', state: null, status: 'resolved', text: 'resolved one', reason: 'other' },
+  ]
+  const html = buildReviewPage({ journey: 'j1', seed, notes, ledger: [], stops: [], prefix: '' })
   const { document } = parseFlatDom(html)
-  const groups = document.querySelectorAll('[data-rv="note-actions"]')
-  assert.strictEqual(groups.length, 1,
-    'exactly one row (the addressed note) must carry [data-rv="note-actions"] — got ' + groups.length +
-    ': a reviewer must not be offered to close a note the session has not addressed, nor left without a way to close one it has')
-  const group = groups[0]
-  const row = group.closest('[data-rv="row"]')
-  assert.strictEqual(row && row.getAttribute('data-id'), 'n2',
-    'the note-actions group must sit on the addressed note (n2), not the still-open one (n1)')
-  const accept = group.querySelector('[data-rv="accept"]')
-  const reopen = group.querySelector('[data-rv="reopen"]')
-  assert.ok(accept, 'the addressed row must carry a [data-rv="accept"] button')
-  assert.ok(reopen, 'the addressed row must carry a [data-rv="reopen"] button')
-  const buttonTexts = group.querySelectorAll('button').map((b) => rawText(html, b))
-  assert.deepStrictEqual(buttonTexts, ['Looks good', 'Still not right'],
-    'the addressed row\'s two buttons must read exactly "Looks good" then "Still not right": got ' + JSON.stringify(buttonTexts))
-  const openRow = document.querySelector('[data-rv="row"][data-id="n1"]')
-  assert.strictEqual(openRow.querySelectorAll('[data-rv="note-actions"]').length, 0,
-    'the still-open note (n1) must carry no note-actions group — it has nothing addressed yet to accept')
+
+  assert.strictEqual(document.querySelector('[data-rv="row"][data-id="n1"]').getAttribute('data-turn'), 'session',
+    'the open note (nothing addressed, no reply) must render data-turn="session"')
+  assert.strictEqual(document.querySelector('[data-rv="row"][data-id="n2"]').getAttribute('data-turn'), 'you',
+    'the addressed note must render data-turn="you"')
+  assert.strictEqual(document.querySelector('[data-rv="row"][data-id="n3"]').getAttribute('data-turn'), 'done',
+    'the resolved note (no resolution field) must render data-turn="done"')
+  const withStatus = document.querySelectorAll('[data-rv="row"]').filter((r) => r.hasAttribute('data-status'))
+  assert.strictEqual(withStatus.length, 0,
+    'no [data-rv="row"] may carry data-status any more — D5 replaces it with data-turn everywhere: got ' + withStatus.length + ' row(s) still carrying it')
+
+  function rowSlice(id) {
+    const startRe = new RegExp('<article[^>]*data-id="' + id + '"[^>]*>')
+    const m = startRe.exec(html)
+    assert.ok(m, 'setup: a row for ' + id + ' must render')
+    const end = html.indexOf('</article>', m.index) + '</article>'.length
+    return html.slice(m.index, end)
+  }
+  function controlTexts(id) {
+    const slice = rowSlice(id).replace(/<button[^>]*data-rv="reply-send"[^>]*>[^<]*<\/button>/, '')
+    const texts = []
+    const re = /<button[^>]*>([^<]*)<\/button>/g
+    let m
+    while ((m = re.exec(slice))) texts.push(m[1])
+    return texts
+  }
+  assert.deepStrictEqual(controlTexts('n1'), ['Reply', 'Approve', 'Reject'],
+    'the session-turn row (n1) must carry exactly Reply, Approve, Reject, in that order: got ' + JSON.stringify(controlTexts('n1')))
+  assert.deepStrictEqual(controlTexts('n2'), ['Reply', 'Approve', 'Reject'],
+    'the you-turn row (n2) must carry exactly Reply, Approve, Reject, in that order: got ' + JSON.stringify(controlTexts('n2')))
+  assert.deepStrictEqual(controlTexts('n3'), [],
+    'the done-turn row (n3) must carry no controls at all: got ' + JSON.stringify(controlTexts('n3')))
 })
 
 // The flat-DOM shim (tests/helpers.js) exposes no textContent reader (nothing under test reads

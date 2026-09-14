@@ -103,9 +103,6 @@ body{margin:0;background:var(--v-muted-bg);color:var(--v-fg);font:15px/1.5 var(-
 .nl-card .menu{position:absolute;right:0;bottom:34px;background:var(--v-bg);border:1px solid var(--v-border);border-radius:8px;box-shadow:var(--v-shadow);display:grid;min-width:170px;z-index:2;padding:4px}
 .nl-card .menu button{text-align:left;border:0;background:none;padding:7px 10px;font:13.5px var(--v-font);cursor:pointer;border-radius:5px}
 .nl-card .menu button:hover{background:var(--v-muted-bg)}
-.nl-card .why{display:grid;gap:8px;margin:0 14px 12px;padding:10px;border-radius:8px;background:color-mix(in srgb,var(--v-warn) 8%,var(--v-bg));border:1px solid color-mix(in srgb,var(--v-warn) 35%,var(--v-border))}
-.nl-card .why textarea{margin:0;width:100%}
-.nl-card .why .row{padding:0}
 .nl-card .note-outdated{margin:12px 14px 0;padding:8px 10px;border-radius:8px;background:var(--v-muted-bg);color:var(--v-muted);font-size:13px;line-height:1.4}
 .nl-card .chips{display:flex;flex-wrap:wrap;gap:6px;padding:12px 14px 0}
 .nl-card .chips .nl-btn{height:26px;padding:0 10px;font-size:12.5px;border-radius:999px}
@@ -231,6 +228,11 @@ const Anchor = (() => {
 })()
 
 // ===================== store (status machine unchanged) =====================
+// specs/20260913/05-a-note-is-a-conversation.md D1/D5: this prototype's own `status` field
+// (open/addressed/resolved/outdated/withdrawn) already lines up one-to-one with turnOf's turn
+// register — open=session, addressed=you, resolved=done, outdated/withdrawn=outdated/dropped —
+// so STATUS_COLOR is now read as that turn map, not a status-named one, with the same four
+// colours production's turnOf derives.
 const STATUS_COLOR = { open: 'var(--v-danger)', addressed: 'var(--v-warn)', resolved: 'var(--v-ok)', outdated: 'var(--v-muted)', withdrawn: 'var(--v-muted)' }
 const GLYPH = { open: '○', addressed: '◐', resolved: '✓', outdated: '◌', withdrawn: '–' }
 let notes = [], seq = 0
@@ -274,7 +276,7 @@ document.addEventListener('keydown', e => {
   const n = notes.find(x => x.id === selected)
   if (e.key === 'Enter') openCard(n)
   if ((e.key === 'a' || e.key === 'A') && n.status === 'addressed') accept(n)
-  if ((e.key === 'r' || e.key === 'R') && n.status === 'addressed') { openCard(n); showReject(n) }
+  if ((e.key === 'r' || e.key === 'R') && n.status === 'addressed') reject(n)
 })
 
 // drag to draw (mouse + touch via pointer events; on phone a long-press starts the box)
@@ -384,7 +386,7 @@ function openCard(n) {
   const ta = card.querySelector('textarea')
   card.querySelector('[data-a=reply]').onclick = () => { if (!ta.value.trim()) { ta.focus(); return } n.thread.push({ by: 'JJ', text: ta.value.trim() }); openCard(n); render() }
   const acc = card.querySelector('[data-a=accept]'); if (acc) acc.onclick = () => accept(n)
-  const rej = card.querySelector('[data-a=reject]'); if (rej) rej.onclick = () => showReject(n)
+  const rej = card.querySelector('[data-a=reject]'); if (rej) rej.onclick = () => reject(n)
   const rs = card.querySelector('[data-a=resolve]'); if (rs) rs.onclick = () => { n.status = 'resolved'; closeCard(); render(); toast('Resolved ' + n.id, () => { n.status = 'open'; render() }) }
   card.querySelector('[data-a=more]').onclick = e => {
     e.stopPropagation(); const m = card.querySelector('.menu'); if (m) { m.remove(); return }
@@ -403,13 +405,11 @@ function openCard(n) {
 let pendingReplace = null
 overlay.addEventListener('pointerup', () => { if (pendingReplace && notes[notes.length - 1].draft) { const d = notes.pop(); seq--; pendingReplace.anchor = d.anchor; pendingReplace.status = 'open'; const n = pendingReplace; pendingReplace = null; closeCard(); setMarking(false); render(); toast('Re-placed ' + n.id) } }, true)
 function accept(n) { n.status = 'resolved'; closeCard(); render(); toast('Accepted ' + n.id, () => { n.status = 'addressed'; render() }) }
-function showReject(n) {
-  if (card.querySelector('.why')) return
-  card.insertAdjacentHTML('beforeend', '<div class="why"><span style="font-size:13px">What is still wrong? One line, so the next change lands.</span><textarea placeholder="Still wrong because…"></textarea><div class="row"><span class="sp"></span><button class="nl-btn" data-w="cancel">Cancel</button><button class="nl-btn primary" data-w="send">Send back</button></div></div>')
-  const ta = card.querySelector('.why textarea'); ta.focus()
-  card.querySelector('[data-w=cancel]').onclick = () => card.querySelector('.why').remove()
-  card.querySelector('[data-w=send]').onclick = () => { if (!ta.value.trim()) { ta.focus(); return } n.thread.push({ by: 'JJ', text: ta.value.trim() }); n.status = 'open'; closeCard(); render(); toast('Sent back ' + n.id) }
-}
+// specs/20260913/05-a-note-is-a-conversation.md D4/D6: Reject is told apart from Approve and is
+// final — no "why" box asking for a reason, no path back to "open" the way showReject used to
+// send a note. The same 5-second toast pattern as Accept gives an Undo window before the verdict
+// commits; once that window closes there is no way back, by design.
+function reject(n) { n.status = 'withdrawn'; closeCard(); render(); toast('Rejected ' + n.id, () => { n.status = 'addressed'; render() }) }
 function positionCard() {
   if (!card || device.classList.contains('phone')) return
   const n = notes.find(x => x.id === card.dataset.id), res = n && Anchor.resolve(mock, n.anchor)

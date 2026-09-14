@@ -133,40 +133,46 @@ function buildTouchFixture() {
 
 
 // ---------------------------------------------------------------------------
-// AC-20260912-12-22 [env: CHROME_BIN] — D17 (owner ruling, 2026-09-13): the build had once
-// collapsed `open` onto `--v-warn` to match the approved mock's orange, making an open box and an
-// addressed one identical on every served mock; the owner reinstated the four distinct roles and
-// ruled the fix must be pinned, never left as an unchecked code comment (the promise-sweep leg's
-// own "orphan-decision: no carrier" finding this AC closes). Executed over two real boxes in
-// headless Chrome — the strong form over a prose grep of colorFor's source.
-// AC-20260913-02-13 (a SHALL CONTINUE TO, reuses this case verbatim, unmodified by that spec's
-// own D1-D12): the layer's mode/pointer-capture/reconcile rewrite touches none of colorFor's role
-// derivation or viewer.css's `.nl-region` comment block, so this same case is this AC's own
-// coverage — sanctioned green pre- and post-change.
+// AC-20260913-05-7 [env: CHROME_BIN] (specs/20260913/05-a-note-is-a-conversation.md D1/D5)
+// rewrites AC-20260912-12-22: colorFor now takes a TURN (session/you/done/outdated), not a
+// literal status, and viewer.css's `.nl-region` comment block must name that register — the
+// pre-image's own comment still reads "--v-danger open, --v-warn addressed, --v-ok resolved" and
+// is genuinely red against the new register text. This same fixture (a plain open note = turn
+// "session", an addressed note = turn "you", a resolved note with no resolution = turn "done")
+// happens to paint the identical pixels the old open/addressed/resolved register did — D5 only
+// renames the roles for the box/badge, it never recolors them — so the color assertions below
+// hold, but the file is red as a whole on the comment-block assertion until D5 lands. This test
+// also carries forward AC-20260913-02-13 (specs/20260913/02-the-layer-owns-one-mode-and-the-page-
+// owns-the-card.md, a SHALL CONTINUE TO): the same register-colour case a session/you/done box
+// resolves to danger/warn/ok is the exact behavior AC-02-13 pinned before this spec renamed the
+// register's role names.
 // ---------------------------------------------------------------------------
-function buildD17Fixture() {
-  const dir = tmpdir('client-region-d17')
+function buildTurnFixture() {
+  const dir = tmpdir('client-region-turn')
   writeFileDeep(path.join(dir, 'design/mocks/a.html'),
     '<main data-screen-label="a" data-status="sketch" style="padding:24px">a screen with content to mark</main>\n')
   writeFileDeep(path.join(dir, 'design/mocks/notes.json'), JSON.stringify([
-    { id: 'N1', scope: 'mock', screen: 'a', state: null, text: 'open mark', by: 'jj', kind: 'note',
+    { id: 'N1', scope: 'mock', screen: 'a', state: null, text: 'session mark', by: 'jj', kind: 'note',
       at: new Date().toISOString(), status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null,
       region: trivialRegion() },
-    { id: 'N2', scope: 'mock', screen: 'a', state: null, text: 'addressed mark', by: 'jj', kind: 'note',
+    { id: 'N2', scope: 'mock', screen: 'a', state: null, text: 'you mark', by: 'jj', kind: 'note',
       at: new Date().toISOString(), status: 'addressed',
       addressed: { at: new Date().toISOString(), change: 'x', ledgerRow: null }, reply: null, resolvedBy: null, resolvedAt: null,
+      region: trivialRegion() },
+    { id: 'N3', scope: 'mock', screen: 'a', state: null, text: 'done mark', by: 'jj', kind: 'note',
+      at: new Date().toISOString(), status: 'resolved', addressed: null, reply: null, resolvedBy: 'jj', resolvedAt: new Date().toISOString(),
       region: trivialRegion() },
   ], null, 2) + '\n')
   return dir
 }
 
-test('AC-20260912-12-22, AC-20260913-02-13: colorFor CONTINUES TO resolve an open box and an addressed box to distinct, correct colors (D17), and viewer.css\'s .nl-region comment block still describes the true four-role register', { timeout: 45000 }, async (t) => {
+test('AC-20260913-05-7, AC-20260913-02-13: colorFor resolves a session, a you and a done box to danger/warn/ok respectively, and viewer.css\'s .nl-region comment block names the turn register', { timeout: 45000 }, async (t) => {
   const chrome = findChrome()
-  if (!chrome) { t.skip('no Chrome binary (set CHROME_BIN) — AC-22 only runs against real computed colors'); return }
+  if (!chrome) { t.skip('no Chrome binary (set CHROME_BIN) — AC-7 only runs against real computed colors'); return }
   const cssSrc = fs.readFileSync(path.join(SPEC, 'templates/mocks/viewer.css'), 'utf8')
-  assert.match(cssSrc, /--v-danger open, --v-warn addressed, --v-ok\s+resolved, --v-muted outdated\/withdrawn/,
-    'D17: viewer.css\'s .nl-region comment block must still describe the true four-role register (never the collapsed-onto-warn register the build once shipped): got no match')
-  const dir = buildD17Fixture()
+  assert.match(cssSrc, /--v-danger session, --v-warn you, --v-ok\s+done, --v-muted outdated/,
+    'D5: viewer.css\'s .nl-region comment block must name the turn register (--v-danger session, --v-warn you, --v-ok done, --v-muted outdated), never the old status-named register: got no match')
+  const dir = buildTurnFixture()
   const { ready, stop } = serve(dir)
   try {
     const { port } = await ready
@@ -182,10 +188,13 @@ test('AC-20260912-12-22, AC-20260913-02-13: colorFor CONTINUES TO resolve an ope
       '(function () {' +
       'var shadow = findOverlayShadow();' +
       'if (!shadow) return { error: "no overlay shadow root — the layer never mounted" };' +
-      'var openBadge = shadow.querySelector(\'.nl-region[data-id="N1"] .nl-region-badge\');' +
-      'var addrBadge = shadow.querySelector(\'.nl-region[data-id="N2"] .nl-region-badge\');' +
-      'if (!openBadge || !addrBadge) return { error: "not both badges painted", openFound: !!openBadge, addrFound: !!addrBadge };' +
-      'return { found: true, openBg: getComputedStyle(openBadge).backgroundColor, addressedBg: getComputedStyle(addrBadge).backgroundColor };' +
+      'var sessionBadge = shadow.querySelector(\'.nl-region[data-id="N1"] .nl-region-badge\');' +
+      'var youBadge = shadow.querySelector(\'.nl-region[data-id="N2"] .nl-region-badge\');' +
+      'var doneBadge = shadow.querySelector(\'.nl-region[data-id="N3"] .nl-region-badge\');' +
+      'if (!sessionBadge || !youBadge || !doneBadge) return { error: "not all three badges painted", sessionFound: !!sessionBadge, youFound: !!youBadge, doneFound: !!doneBadge };' +
+      'var probe = document.createElement("div"); probe.style.background = "var(--v-ok)"; document.body.appendChild(probe);' +
+      'var vOkColor = getComputedStyle(probe).backgroundColor; probe.remove();' +
+      'return { found: true, sessionBg: getComputedStyle(sessionBadge).backgroundColor, youBg: getComputedStyle(youBadge).backgroundColor, doneBg: getComputedStyle(doneBadge).backgroundColor, vOkColor: vOkColor };' +
       '})()'
     const result = await withChrome(chrome, async ({ navigate, evalJs }) => {
       await navigate(url)
@@ -197,13 +206,17 @@ test('AC-20260912-12-22, AC-20260913-02-13: colorFor CONTINUES TO resolve an ope
       }
       return r
     })
-    assert.ok(result && !result.error, 'both marks must paint their own badge: got ' + JSON.stringify(result))
-    assert.strictEqual(result.openBg, 'rgb(220, 38, 38)',
-      'D17: an open box\'s badge must compute var(--v-danger) as its background, never the review page\'s shared orange: got ' + JSON.stringify(result))
-    assert.strictEqual(result.addressedBg, 'rgb(217, 119, 6)',
-      'D17: an addressed box\'s badge must compute var(--v-warn) as its background: got ' + JSON.stringify(result))
-    assert.notStrictEqual(result.openBg, result.addressedBg,
-      'D17: open and addressed must never collapse onto the same color — that is the exact regression the owner\'s ruling exists to prevent: got ' + JSON.stringify(result))
+    assert.ok(result && !result.error, 'all three marks must paint their own badge: got ' + JSON.stringify(result))
+    assert.strictEqual(result.sessionBg, 'rgb(220, 38, 38)',
+      'a session-turn box\'s badge must compute var(--v-danger) as its background: got ' + JSON.stringify(result))
+    assert.strictEqual(result.youBg, 'rgb(217, 119, 6)',
+      'a you-turn box\'s badge must compute var(--v-warn) as its background: got ' + JSON.stringify(result))
+    assert.strictEqual(result.doneBg, result.vOkColor,
+      'a done-turn box\'s badge must compute the page\'s own var(--v-ok) as its background: got badge=' + result.doneBg + ' page var(--v-ok)=' + result.vOkColor)
+    assert.notStrictEqual(result.sessionBg, result.youBg,
+      'session and you must never collapse onto the same color: got ' + JSON.stringify(result))
+    assert.notStrictEqual(result.youBg, result.doneBg,
+      'you and done must never collapse onto the same color: got ' + JSON.stringify(result))
   } finally {
     await stop()
   }

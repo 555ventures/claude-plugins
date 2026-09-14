@@ -1,6 +1,7 @@
 ---
 date: 2026-09-13
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +11,7 @@ depends_on: [specs/20260913/07-the-critic-is-out.md]
 depended_on_by: [specs/20260913/06-every-mock-has-a-page-you-can-mark.md]
 brief: n/a
 open_markers: 0
+diff_base: 27306bd260416fc7c7e085a30311e52f1fe54aaf
 ---
 
 # A note is a conversation
@@ -43,7 +45,7 @@ a note until they approve or reject it, and the colour says whose turn it is.
 | D7 | **`notes open` lists only what waits on the session.** `cmdNotesOpen` filters its listing to `turnOf(n) === 'session'` before `groupOpen`; the counts line above it is computed exactly as today. `noteLine` drops the `↳ changed:` continuation and, when the note's thread is non-empty, appends `   ↳ <by>: <newest thread entry's text>`. The atlas index card's `nl-card-count` counts `open` from turn `session` and `needs` from turn `you` in place of status. (AC-20260913-05-11, AC-20260913-05-12) | A note the session answered is the owner's to read; listing it again is the re-read the owner asked to stop. The card count used status and so miscounted a legacy reply. |
 | D8 | **The `Mark an area` button unpresses whenever marking ends inside the frame.** A framed notes layer's `setMode` calls `window.parent.__rvMarkOff(window)` (guarded in `try`) whenever it enters `idle`. `review.browser.js` defines `__rvMarkOff(win)`: when `markingFrame` is the frame whose `contentWindow` is `win`, it sets `markingFrame = null` and `aria-pressed="false"` on the button. (AC-20260913-05-13) | Today only the page's own button and Escape unpress it; the frame's Escape, Save, Discard and card close all leave it looking pressed. |
 | D9 | **Switching a board's state tab closes that board's open card.** The notes layer exposes `window.__nlCloseCard()`, which runs `closeCard()` when `mode === 'composing'` and does nothing otherwise. `review.browser.js`'s `switchTab`, before it hides the outgoing frame, calls that frame's `__nlCloseCard` (guarded in `try`). (AC-20260913-05-14) | The card belongs to the frame being hidden; closing it through the frame's own path also clears the page's card host and returns the frame to idle. |
-| D10 | **One amendment ADR.** `docs/adr/0025-a-note-is-a-conversation.md` (CREATE) applies to `specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md` D17 (its chrome half, for the row and `.rv-pin` only; the box half stands), `specs/20260902/10-page-notes-review-loop.md` D4 (the `reply` verb and field), and `specs/20260912/06-the-review-page-answers-to-a-design.md`'s row controls and fixed-orange row/pin. (AC-20260913-05-15) | D17 reads as current and is pinned by an executed test; reversing half of it silently would leave the record contradicting the code. |
+| D10 | **One amendment ADR.** `docs/adr/0026-a-note-is-a-conversation.md` (CREATE) applies to `specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md` D17 (its chrome half, for the row and `.rv-pin` only; the box half stands), `specs/20260902/10-page-notes-review-loop.md` D4 (the `reply` verb and field), and `specs/20260912/06-the-review-page-answers-to-a-design.md`'s row controls and fixed-orange row/pin. (AC-20260913-05-15) | D17 reads as current and is pinned by an executed test; reversing half of it silently would leave the record contradicting the code. |
 
 ## File Plan
 
@@ -59,7 +61,7 @@ a note until they approve or reject it, and the colour says whose turn it is.
 | design/atlas/index.html | MODIFY | other | Regenerated with `node spec/scripts/design-atlas.js build --root .` after the viewer.css edit (it inlines the stylesheet); never hand-edited |
 | design/chrome-mocks/notes.html | MODIFY | doctrine | D5/D6: `STATUS_COLOR` becomes the turn map; the card's Reject is final and `showReject`'s Send back box is removed |
 | design/chrome-mocks/review.html | MODIFY | doctrine | D5/D6: rows carry `data-turn`; the row status line and `Reply`/`Approve`/`Reject` controls |
-| docs/adr/0025-a-note-is-a-conversation.md | CREATE | doctrine | D10: the amendment ADR |
+| docs/adr/0026-a-note-is-a-conversation.md | CREATE | doctrine | D10: the amendment ADR |
 | spec/commands/sketch.md | MODIFY | doctrine | D3: "Question back" names `notes address --change "<question>"`, not `notes reply` |
 | spec/commands/atlas.md | MODIFY | doctrine | D3: the same "question back" instruction |
 | spec/commands/mocks.md | MODIFY | doctrine | D3: the client-loop line's "`notes reply` for a question back" names `notes address` instead |
@@ -70,8 +72,9 @@ a note until they approve or reject it, and the colour says whose turn it is.
 | tests/mocks/review-page.test.js | MODIFY | tests | AC-20260913-05-8 (rewrites the AC-20260912-06-1 row-controls pin) |
 | tests/mocks/client-region.test.js | MODIFY | tests | AC-20260913-05-7 (rewrites the AC-20260912-12-22 colour pin to the turn register) |
 | tests/mocks/review-board-card.test.js | MODIFY | tests | AC-20260913-05-13, AC-20260913-05-14, AC-20260913-05-17 |
+| tests/mocks/client-walk-route.test.js | MODIFY | tests | AC-20260913-05-16 — the reused client-mount resolve pin carries this spec's carried-AC tag so the coverage matrix can see it (review fix, leg:ac-matrix) |
 
-**Orchestrator duty (outside the table).** Append one `- Amended by: ADR-0025 — <one line>`
+**Orchestrator duty (outside the table).** Append one `- Amended by: ADR-0026 — <one line>`
 header line to each of `specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md`,
 `specs/20260902/10-page-notes-review-loop.md` and
 `specs/20260912/06-the-review-page-answers-to-a-design.md`. No other text in those files changes.
@@ -230,7 +233,7 @@ reply.
 - **AC-20260913-05-14** `[env: CHROME_BIN]`: WHEN a note card is open on a board and that board's
   other state tab is clicked THE SYSTEM SHALL leave the board's `[data-rv="cardhost"]` empty
   → writes tests/mocks/review-board-card.test.js
-- **AC-20260913-05-15**: WHEN `docs/adr/0025-a-note-is-a-conversation.md` is read THE SYSTEM SHALL
+- **AC-20260913-05-15**: WHEN `docs/adr/0026-a-note-is-a-conversation.md` is read THE SYSTEM SHALL
   find `Status: accepted`, a `## Dissents` section, and an `## Applies to` section naming
   `specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md`,
   `specs/20260902/10-page-notes-review-loop.md` and
@@ -265,7 +268,7 @@ reply.
   the card's `Resolve`/`Accept`/`Withdraw`/`Send back` labels or the status glyph classes.** Grepped
   2026-09-13 across `tests/`: zero hits (the resolve callers found are all on the client mount). —
   **if false:** add the verdict or the new label to that test in the same batch; never weaken it.
-- A5: **`0025` is the next free ADR number.** `docs/adr/` ends at `0024-the-critic-is-out.md` on
+- A5: **`0026` is the next free ADR number (build took 0026: spec 09 claimed 0025 first).** `docs/adr/` ends at `0024-the-critic-is-out.md` on
   2026-09-13. — **if false:** take the next free number and amend D10, the File Plan row,
   AC-20260913-05-15 and every backlink in the same build.
 - A6: **The Chrome harness can drive both gap checks.** `tests/mocks/review-board-card.test.js`
@@ -306,6 +309,19 @@ AC-20260913-05-4 searches `spec/` only.
 The File Plan has 21 rows, over the usual 15. It is not split: every row edits the same note loop,
 and splitting would create two specs editing the same files — the reason specs 03 and 04 were
 merged into 07.
+
+Build and review departures (2026-09-14). The changelog paragraph was reworded so it does not
+spell the retired reply names AC-20260913-05-4 greps for. A worker's edit to the shared
+`tests/helpers.js` POST helper was reverted as out of plan; the new test parses its own JSON
+bodies instead. A done note's green box no longer hides behind the strip's Show-resolved toggle,
+since Behavior lists the green box among the three the owner sees. The four `--v-*` colour
+tokens are also set inline on the mock's root so a light-DOM probe resolves them — a duplicated
+register the reviewer flagged advisory and left queued. Spec 02's card click-through pin was
+retargeted from the removed `…` menu to the card's Reply button, and spec 02's register pin had its
+dropped carried-AC tag restored. Review found two render defects (card Reply never re-rendered;
+row reply box nested inside the actions row), both fixed, and added the missing File Plan row for
+the reused client resolve pin. The card-rebuild fix wipes a draft in another open card when an
+unrelated deferred POST lands (advisory, queued).
 
 ## Canonical Delta
 

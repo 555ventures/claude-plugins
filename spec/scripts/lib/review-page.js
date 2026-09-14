@@ -36,7 +36,7 @@
 
 const picksLib = require('./mocks-picks')
 const { renderApproveStop, PICKS_SCRIPT, esc } = require('./stop-block')
-const { authoredByPerson } = require('./mocks-notes')
+const { authoredByPerson, turnOf } = require('./mocks-notes')
 
 const REASON_LABELS = {
   'missing-screen': 'Missing screen',
@@ -182,16 +182,62 @@ function renderBoard(screen, i, vp, prefix, openCount, focused, total, regionCou
 // data-state is what review.browser.js's select() reads to switch that board's tab.
 // specs/20260913/07-the-critic-is-out.md D6: the note row is the one row template that remains —
 // `data-kind` is always "note", `class="rv-row rv-note"` always.
-function rowOpen(n, status, extra) {
+// specs/20260913/05-a-note-is-a-conversation.md D5: the row carries `data-turn`, never
+// `data-status` — every per-note surface is coloured by whose turn it is, not by the raw status.
+function rowOpen(n, turn, extra) {
   var isRegion = n.region
-  return '<article data-rv="row" data-id="' + esc(n.id) + '" data-kind="note" data-status="' + status + '"' +
+  return '<article data-rv="row" data-id="' + esc(n.id) + '" data-kind="note" data-turn="' + turn + '"' +
     (isRegion ? ' data-region="1" data-state="' + esc(n.state || 'happy') + '"' : '') +
     ' class="rv-row rv-note"' +
     (n.scope === 'mock' && n.screen ? ' data-label="' + esc(n.screen) + '"' : '') + extra + ' tabindex="-1">'
 }
 
+// specs/20260913/05-a-note-is-a-conversation.md D6: the row's newest-message line — the note's
+// own thread is what a person and the session have actually said, so this reads it, never the
+// bare status. `you`: the session's own newest answer (`addressed.change`, or a legacy `reply`
+// when there is no `addressed` yet). `session`: the owner's own newest reply, when the thread
+// carries one, else today's plain waiting line. `done`: whatever the session last answered, or
+// the bare "Addressed" today's row already fell back to.
+function messageLine(n, turn) {
+  if (turn === 'you') {
+    if (n.addressed && n.addressed.change != null) return '<p class="rv-wait">Addressed: ' + esc(n.addressed.change) + '</p>'
+    if (n.reply) return '<p class="rv-wait">Session: ' + esc(n.reply) + '</p>'
+    return '<p class="rv-wait">Addressed</p>'
+  }
+  if (turn === 'session') {
+    const thread = Array.isArray(n.thread) ? n.thread : []
+    if (thread.length) {
+      const newest = thread[thread.length - 1]
+      return '<p class="rv-wait">You: ' + esc(newest.text) + ' · waiting for the session</p>'
+    }
+    return '<p class="rv-wait">Waiting for the session · blocks approval until addressed</p>'
+  }
+  return '<p class="rv-answered">' + (n.addressed && n.addressed.change ? 'Addressed: ' + esc(n.addressed.change) : 'Addressed') + '</p>'
+}
+
+// specs/20260913/05-a-note-is-a-conversation.md D6: every `session`/`you` row carries one Reply
+// control (unhides a server-rendered, hidden `[data-rv="reply-box"]` holding
+// `[data-rv="reply-text"]`/`[data-rv="reply-send"]`), Approve (`[data-rv="accept"]`) and Reject
+// (`[data-rv="reject"]`) — a `done` row carries none. review.browser.js wires all four; the row
+// itself posts nothing.
+function rowControls(turn) {
+  if (turn !== 'session' && turn !== 'you') return ''
+  // design/chrome-mocks/review.html: the reply box is a SIBLING after `.rv-actions`, never a
+  // flex child inside it (a flex child there gets squeezed into whatever space the Reply button
+  // leaves, per that flex row's own wrap rule) — moved out here to match.
+  return '<div class="rv-actions" data-rv="note-actions">' +
+    '<button type="button" data-rv="reply">Reply</button>' +
+    '<button type="button" data-rv="accept">Approve</button>' +
+    '<button type="button" data-rv="reject">Reject</button>' +
+    '</div>' +
+    '<div class="rv-replybox" data-rv="reply-box" hidden>' +
+    '<textarea data-rv="reply-text"></textarea>' +
+    '<button type="button" data-rv="reply-send">Send</button>' +
+    '</div>'
+}
+
 function renderNoteRow(n, selected) {
-  const open = n.status !== 'resolved'
+  const turn = turnOf(n)
   const scopeText = n.scope === 'project' ? 'Whole project' : esc(n.screen || '') + (n.state ? ' · ' + esc(n.state) : '')
   const chip = n.reason ? '<span class="rv-chip" data-reason="' + esc(n.reason) + '">' + esc(REASON_LABELS[n.reason] || n.reason) + '</span>' : ''
   // D3 (amended): a region note's id sits inside the orange pin; every other row keeps the muted
@@ -200,21 +246,8 @@ function renderNoteRow(n, selected) {
   const head = '<div class="rv-rowhead">' + idSpan + '<span class="rv-who">You told JJ</span>' +
     '<span class="rv-sep">·</span><span class="rv-screen">' + scopeText + '</span>' + chip + '</div>'
   const body = '<p class="rv-claim">' + esc(n.text) + '</p>'
-  const addressed = open && n.status === 'addressed' && n.addressed
-  const status = open
-    ? (addressed
-      ? '<p class="rv-wait">Addressed: ' + esc(n.addressed.change) + '</p>'
-      : '<p class="rv-wait">Waiting for the session · blocks approval until addressed</p>')
-    : '<p class="rv-answered">' + (n.addressed && n.addressed.change ? 'Addressed: ' + esc(n.addressed.change) : 'Addressed') + '</p>'
-  // Only an addressed note is the reviewer's to close: one still waiting has nothing to accept.
-  // D3 (amended): there is no jump control on the row anymore — the box is always painted, so the
-  // row's actions are accept/reopen alone, and only once addressed.
-  const noteActions = addressed
-    ? '<div class="rv-actions" data-rv="note-actions"><button type="button" data-rv="accept">Looks good</button>' +
-      '<button type="button" data-rv="reopen">Still not right</button></div>'
-    : ''
-  return rowOpen(n, open ? 'open' : 'resolved', (selected ? ' data-selected' : '') + (open ? '' : ' hidden')) +
-    head + body + status + noteActions + '</article>'
+  return rowOpen(n, turn, (selected ? ' data-selected' : '') + (turn === 'done' ? ' hidden' : '')) +
+    head + body + messageLine(n, turn) + rowControls(turn) + '</article>'
 }
 
 // specs/20260913/07-the-critic-is-out.md D10: the composer's chip row is retired — the freed
@@ -327,6 +360,10 @@ function buildReviewPage(input) {
   const order = new Map(labels.map((l, i) => [l, i]))
   const items = (o.notes || [])
     .filter(authoredByPerson)
+    // specs/20260913/05-a-note-is-a-conversation.md D4: a dropped (resolved+withdrawn) note gets
+    // no row at all — not merely a hidden one — Reject is final and the note is gone from every
+    // page the owner uses.
+    .filter((n) => turnOf(n) !== 'dropped')
     .filter((n) => (n.scope === 'mock' && labelSet.has(n.screen)) || n.scope === 'project')
     .sort((a, b) => {
       const oa = a.scope === 'project' ? labels.length : order.get(a.screen)

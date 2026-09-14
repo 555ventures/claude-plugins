@@ -448,12 +448,12 @@ test('AC-20260911-06-21: buildWalkPage renders a step indicator and caption for 
 })
 
 
-// specs/20260913/07-the-critic-is-out.md D6/D12: AC-20260911-01-8 (a mark's yes button hiding
-// the mark and decrementing [data-wk="left"]) is a predecessor CONTINUE-TO pin whose whole
-// subject — the marks/yes-no "guesses" surface — this spec deletes outright (D6); there is no
-// successor behavior to pin, so the test that carried it is deleted rather than weakened. This
-// comment is AC-20260911-01-8's own citation (ac-drift.js's D6 remedy: "drop the SHALL CONTINUE
-// TO pin so the criterion expires" — the pin expires here, at the spec that retired its subject).
+// specs/20260913/07-the-critic-is-out.md D6/D12: the predecessor CONTINUE-TO pin covering a
+// mark's yes button (hiding the mark and decrementing [data-wk="left"]) is retired via a
+// [retired:] tag on its own AC bullet in specs/20260911/01-the-page-waits-for-the-server.md —
+// its whole subject, the marks/yes-no "guesses" surface, is deleted outright by this spec (D6),
+// so there is no successor behavior to pin and the test that carried it is deleted rather than
+// weakened or kept as placeholder coverage.
 //
 // ---------------------------------------------------------------------------
 // AC-20260913-07-21 (successor of AC-20260911-01-10 — a mark's yes/no controls and the whole

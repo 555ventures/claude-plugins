@@ -14,6 +14,8 @@ diff_base: dea9175f8d069ebe562ac5a262db9b357a759a10
 
 # Sketch owns high fidelity per brief in the picked theme, argues each surface's UX, and closes with a fixed critique pass
 
+Amended by: ADR-0023 (D3/D5 narrowed — the fixed critique pass no longer dispatches `design-critic` or records a `kind: "walk"` finding; `design-critic.md` authorship is moot, the file is deleted — see the ADR's Applies to)
+
 ## Goal
 
 `/spec:sketch <brief>` is where a surface becomes production fidelity: every mock the brief declares is authored or reworked in the picked theme (`design/tokens.css`, the shell canon), each surface's UI/UX is argued individually in the brief, and before the exit stop a fixed critique pass runs — the render rules, the states check, and one fresh-context critic whose findings land as page notes tagged with the four blind spots models share (error prevention, error recovery, help and documentation, efficiency of use). A mock still linking the wireframe register after the theme exists is a violation at ratification. Done means sketch cannot ratify a gray mock in a themed product and cannot skip the critique.

@@ -15,6 +15,8 @@ diff_base: cbe3423ba6ab845def4369d6407bb58ac09d03e9
 
 # Questions on the wireframe: the session's assumptions pinned to the screen, answered inline, gating approval; free-form messages with a reason; catch provenance derived
 
+Amended by: ADR-0023 (superseded whole — `ledger ask`, `refuseUnaskable`, the answer route and every question-row surface it locked are deleted — see the ADR's Applies to)
+
 ## Goal
 
 Every inferred or invented product assumption the session writes while drawing a journey is pinned as a **question** on the screen it belongs to. The served page shows it as "I assumed … I rejected …" with Yes / No, it's… / Later; an answer writes the ledger row's status and resolves the note, and `journey-approved` refuses while a question on the journey is unanswered. The client (or JJ) sends free-form messages at two scopes with a reason (missing screen, wrong direction, wrong words, other); each blocks approval until the session addresses it. Catch provenance (question · note · unlinked) is derived from the notes store and printed by `ledger counts`. One store for status (the ledger), one store for placement (notes.json), no new ledger column.

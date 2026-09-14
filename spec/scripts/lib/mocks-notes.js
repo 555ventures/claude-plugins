@@ -176,7 +176,7 @@ function validateNotes(notes) {
     } else if (!isLegacy && n.reason != null && !PLAIN_REASONS.includes(n.reason)) {
       errors.push('note "' + label + '": reason must be one of ' + PLAIN_REASONS.join('|') + ' (field "reason")')
     }
-    if (n.answer != null) {
+    if (!isLegacy && n.answer != null) {
       // specs/20260907/10-client-review.md D8: the verdict enum gains "waived" — a waived
       // question keeps its answer non-null (every existing "unanswered" derivation closes with
       // no edit), and like "no" it requires non-empty text (the waiver's reason).

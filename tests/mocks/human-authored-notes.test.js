@@ -9,6 +9,7 @@ const {
   nowIso, isoDaysAgo, patchStatus, advanceToSeedDone, advanceToCanonWritten, writeWireframe,
   writeCaptureConfig, writeFixtureCapture, decideLook,
 } = require('./mocks-driver-fixtures')
+const { validateNotes } = require('../../spec/scripts/lib/mocks-notes')
 
 // specs/20260913/07-the-critic-is-out.md D5-D10: nothing but a person's note is ever created,
 // shown, or gated on; the answer flow is deleted; a legacy question/walk note stays on disk but
@@ -287,4 +288,31 @@ test('AC-20260913-07-24: notes waive --id N1 --reason "silent" on a host whose n
     'the refusal must print the client-origin-only message: got ' + JSON.stringify(r.stderr))
   assert.deepStrictEqual(readNotesFile(dir), beforeNotes, 'notes.json must be byte-identical after the refused waive: got a diff')
   assert.strictEqual(readLedger(dir), beforeLedger, 'ledger.md must be byte-identical after the refused waive: got a diff')
+})
+
+// specs/20260913/07-the-critic-is-out.md D5: validateNotes "accepts a legacy note of either kind
+// with whatever ledgerId, answer or reason it carries (no format check on a value nothing
+// produces)" — a kind:"question" note's off-enum answer.verdict, and a "no"/"waived" answer with
+// empty text, must both pass since nothing alive produces either shape any more. A plain
+// (kind:"note"/absent) note keeps the full answer check.
+test('D5: validateNotes accepts a legacy question note whose answer.verdict is off-enum or whose "no"/"waived" text is empty, but still rejects the same shapes on a plain note', () => {
+  const base = {
+    id: 'N001', scope: 'mock', screen: 'a', state: null, ledgerId: 'not-a-valid-id',
+    text: 'a legacy machine guess', by: 'session', at: nowIso(), status: 'open',
+    addressed: null, reply: null, resolvedBy: null, resolvedAt: null,
+  }
+
+  const offEnum = validateNotes([{ ...base, kind: 'question', answer: { verdict: 'later' } }])
+  assert.deepStrictEqual(offEnum.errors, [],
+    'a legacy question with an off-enum answer.verdict must produce no errors: got ' + JSON.stringify(offEnum.errors))
+
+  const emptyText = validateNotes([{ ...base, kind: 'walk', answer: { verdict: 'no', text: '' } }])
+  assert.deepStrictEqual(emptyText.errors, [],
+    'a legacy walk note with an empty-text "no" answer must produce no errors: got ' + JSON.stringify(emptyText.errors))
+
+  const plainOffEnum = validateNotes([{ ...base, kind: 'note', answer: { verdict: 'later' } }])
+  assert.strictEqual(plainOffEnum.errors.length, 1,
+    'a plain note with an off-enum answer.verdict must still be rejected: got ' + JSON.stringify(plainOffEnum.errors))
+  assert.match(plainOffEnum.errors[0], /answer\.verdict must be "yes", "no" or "waived"/,
+    'the plain-note rejection must name the answer.verdict enum: got ' + JSON.stringify(plainOffEnum.errors))
 })

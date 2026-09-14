@@ -16,350 +16,307 @@ open_markers: 0
 
 ## Goal
 
-A note is already a conversation in the store and nowhere else. Every note carries a `thread`
-array, the server route that appends to it already demands the person say what is still wrong,
-and the mock page's card already renders the whole exchange — but the review page's own
-`Still not right` button posts the click without the words, so the server refuses it and the
-page swallows the error; a second, dead `reply` field carries seven of this host's messages
-with no reader anywhere; approving and rejecting a note write byte-identical records, so
-"rejected" cannot be hidden; and the page's rows, pins and tabs use a fixed orange that never
-tracks state, so an answered note and an unanswered one look the same. This spec makes the
-thread the whole conversation, gives both sides an unlimited turn, makes approve and reject
-distinguishable and terminal, puts one colour register on every surface, and cuts the AI's
-sweep to the messages it has not read. Done means the owner can keep writing on a note until
-they are satisfied, the colour tells them whose turn it is at a glance, and no message is ever
-read into a session twice.
+A note already stores a conversation — every reply is appended to its `thread` — but the owner
+cannot hold one. The review page's `Still not right` button posts no words, so the server refuses
+it and the page swallows the refusal: that control has never worked. The note card shows only the
+person's side of the thread, never what the session answered. A person can reply only to a note
+the session has already addressed. Approve and Reject write identical records on the owner's
+route, so a rejected note cannot be hidden. The box, its badge, the row and its pin each colour a
+note by a different rule. And `notes open` lists notes the session already answered, so a fresh
+session re-reads its own words. This spec makes the owner able to reply as often as they like,
+shows both sides of the thread, makes Reject final and hidden, colours every per-note surface by
+whose turn it is, and lists for the session only the notes waiting on it. It also closes the two
+gaps specs/20260913/02 left: the `Mark an area` button stays pressed after marking ends, and a
+note card stays open after its board switches state tab. Done means the owner can keep writing on
+a note until they approve or reject it, and the colour says whose turn it is.
 
 ## Decisions (locked — workers apply verbatim, never override)
 
 | ID | Decision | One-line rationale |
 |----|----------|--------------------|
-| D1 | **Whoever spoke last owns the other's turn.** `lib/mocks-notes.js` exports one derivation and every surface reads it: `turnOf(n)` returns `'dropped'` when `status === 'resolved' && resolution === 'withdrawn'`, `'done'` when `status === 'resolved'`, `'you'` when the session has spoken since the person did (`n.addressed` or a legacy `n.reply` is present), and `'session'` otherwise. `status` stays the persisted field and the writers keep it true; nothing else derives a state. (AC-20260913-05-1) | Four words for four situations, computed from what is already on disk, with no migration and no timestamps — measured (A1), the legacy `reply` half of the expression classifies the five open notes the AI answered and the owner never came back to, which are the owner's turn and which today read as the AI's. |
-| D2 | **A person replies as often as they like, and a reply always hands the turn back.** `POST /__notes/reopen` accepts a note in ANY status (the `status !== 'addressed'` refusal is deleted; the non-empty-text refusal stays), appends `{at, text, by, addressed}` to `thread`, sets `status: 'open'` and nulls `addressed`, `reply`, `resolution` and `withdrawReason`. The review page's `Still not right` control sends the person's text — today it posts `{id, by}` with no text, the route answers `400`, and `review.browser.js`'s own `.catch()` discards it, so the control has never once worked (A2, executed). (AC-20260913-05-2, AC-20260913-05-3, AC-20260913-05-9) | One rule covers the first complaint, the tenth, and taking back an approval: the person's words are always the last word and always leave the note waiting on the session. Rejected: a separate `reply` route beside `reopen` — two verbs that append to the same array and set the same status. |
-| D3 | **The session has one verb.** `notes reply`, `replyNote` and the `reply` field's writer are deleted; `notes address --id --change` is the only way the session speaks, whether it fixed something or is asking a follow-up question, and it sets `status: 'addressed'` as it already does. A legacy `reply` string is READ as the session's message — `turnOf` counts it (D1) and the card and row render it as the newest session message — and is never written again. (AC-20260913-05-4, AC-20260913-05-5) | Measured (A3): `replyNote` has zero readers anywhere in the repo and no note in the real host carries both a `reply` and an `addressed`, so the field is dead on the write side and unambiguous on the read side. Two verbs for "the session said something" is the duplication the owner keeps naming. |
-| D4 | **Approve and Reject are the only terminal actions, and they are told apart.** `POST /__notes/resolve` on the session route takes `verdict: 'accepted' \| 'withdrawn'` and writes `resolution` accordingly — today it writes neither, so the two are byte-identical records (A4, executed). A `'withdrawn'` note is hidden everywhere the owner looks: no box, no inspector row, no rail count, no tab pin, no `notes open` line. It stays on disk. Only a person may call either; the session has no route or verb that resolves, which is unchanged. (AC-20260913-05-6, AC-20260913-05-7) | "Green is approved, rejected just disappears" is not expressible today because the store cannot tell the two apart; the client's own route has recorded `accepted`/`withdrawn` since it shipped, so this is one route catching up to its sibling, not a new concept. |
-| D5 | **One colour register, on every surface, derived from `turnOf`.** `'session'` → `var(--v-danger)`, `'you'` → `var(--v-warn)`, `'done'` → `var(--v-ok)`, `'dropped'` → not rendered. `notes-layer.browser.js`'s `colorFor` takes a turn instead of a status. `review-page.js`'s `rowOpen` emits `data-turn="session\|you\|done"` (its `data-status`, which folded `addressed` into `open`, is retired), and viewer.css's `.rv-row`, `.rv-pin`, `.rv-badge` and `.rv-tabpin` key on it instead of carrying a fixed `var(--v-warn)`. A COUNT badge follows the rule the atlas card already ships (`.nl-card-count`): `var(--v-warn)` when at least one of its notes needs the person, `var(--v-danger)` otherwise, absent at zero. The client's own request rows (`.wk-req[data-status="open|addressed|resolved"]`, rendered by `lib/walk-page.js`, whose comment says it mirrors `colorFor`) are OUT OF SCOPE and keep their existing register — a different audience reading their own requests on their own pages — and no worker touches that file under this spec. This reverses the chrome half of `specs/20260912/12` D17; that ruling's box half — a box tracks its own state and never the chrome's flat orange — is what this spec extends to the chrome, not what it overturns. (AC-20260913-05-8, AC-20260913-05-10, AC-20260913-05-11) | The owner's report is that the same note is a different colour in three places. One derivation with one mapping is the only arrangement that cannot drift, and the count rule is not invented here — it is already shipped and approved one file over. |
-| D6 | **`outdated` is not a fourth state.** A region whose anchor no longer resolves keeps today's `var(--v-muted)` box and its `Re-place the box` action, and its card and its inspector row keep showing the note's own turn colour. No token, class or enum value is added for it. `[no-ac: an absence-of-change ruling; AC-20260913-05-8's register assertion goes red if a fourth colour is introduced]` | Settled with the owner: a lost anchor is "we cannot draw this any more", not a fifth thing to learn. Muting the box is the existing treatment for exactly that and already ships. |
-| D7 | **The card and the row carry the conversation.** The notes-layer card renders the thread (it already does) and gains a `Reply` textarea and button on every non-terminal note, replacing the reject-only `Send back` box. The review page's inspector row shows the newest message, a `+<n> earlier` count when the thread is longer, and three controls — `Reply`, `Approve`, `Reject`. `design/chrome-mocks/notes.html` and `design/chrome-mocks/review.html` are edited to carry the same, and stay the binding design sources. (AC-20260913-05-9, AC-20260913-05-12) | The conversation exists and the owner cannot see or join it from the page they actually use. The card is not rebuilt — specs/20260913/02 D6 already re-homed it and it already renders `n.thread`. |
-| D8 | **Every message is read exactly once.** `notes open` lists only notes where `turnOf(n) === 'session'`; it prints, per note, the id, the author and the newest message, plus ` (+<n> earlier)` when the thread holds more, and the `↳ changed:` continuation is deleted. `notes show --id <id>` (new) prints one note's whole thread oldest-first for a session that deliberately needs its history. `NOTE_LIST_CAP = 20` is unchanged. (AC-20260913-05-13, AC-20260913-05-14, AC-20260913-05-15) | Measured (A5): today's sweep on the real host is 64 lines / 10,300 bytes, of which 34% is the session re-reading its own prior message on notes that are now the owner's turn; after this rule the same host prints 2 notes. A fresh session remembers nothing, so `notes show` is what keeps "read once" honest rather than lossy. |
-| D9 | **One amendment ADR.** `docs/adr/0025-a-note-is-a-conversation.md` (CREATE) applies to `specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md` D17 (the chrome half only, reversed — recorded as the owner's own reversal of their own 2026-09-13 ruling, with the box half restated as still standing), `specs/20260902/10-page-notes-review-loop.md` D4 (the `reply` verb and field), and `specs/20260912/06-the-review-page-answers-to-a-design.md`'s fixed-orange row/pin/tab register. (AC-20260913-05-16) | D17 is a same-day owner ruling recorded at a review-stage disposition step and pinned by an executed test; reversing it silently would leave the tree contradicting a document that reads as current. |
+| D1 | **One derivation of whose turn it is.** `lib/mocks-notes.js` exports `turnOf(n)`: `'dropped'` when `status === 'resolved' && resolution === 'withdrawn'`; `'done'` for every other `resolved` note (a missing `resolution`, `'accepted'` and `'waived'` alike — no special case); `'you'` when `n.addressed` or a legacy `n.reply` is present; `'session'` otherwise. `status` stays the one persisted field; the turn is derived on every read and never stored. `notes-layer.browser.js` and `review.browser.js` cannot import the lib, so `notes-layer.browser.js` inlines the same four-clause function with a comment naming `lib/mocks-notes.js` as its home, the way it already inlines `authoredByPerson`. (AC-20260913-05-1) | One expression over data already on disk: no migration, no timestamps. A waived client note is simply finished — nothing new is built for it. |
+| D2 | **A person may reply to any note that is not resolved, as often as they like.** The session mount of `POST /__notes/reopen` (design-atlas.js) replaces its `target.status !== 'addressed'` refusal with `target.status === 'resolved'` → `400 {"error":"a resolved note takes no reply"}`; the empty-text refusal stays, unchanged. `reopenNote` folds a legacy `reply` into the appended thread entry before nulling it: the entry's `addressed` is the prior `addressed` object when present, else `{ change: <prior reply> }` when a `reply` string is present, else `null`; the note's `reply` is then set to `null`. The client mount of `/__notes/reopen` is untouched. (AC-20260913-05-2, AC-20260913-05-3) | The route's addressed-only rule is what made a second complaint impossible; the fold keeps the seven legacy session replies in the thread instead of erasing them. |
+| D3 | **The session has one verb.** The `notes reply` subcommand, `replyNote` and its export are deleted; `notes address --id --change` is how the session answers, whether it fixed something or asks a question back. `mocks-driver.js`'s `notes` refusal enumerates `open, add, address, waive`; the `notes address` unchanged-screen refusal and the header comments stop naming `notes reply`. The "question back" instruction in `spec/commands/sketch.md`, `spec/commands/atlas.md` and `spec/commands/mocks.md` becomes `notes address --id <id> --change "<question>"`, and its "status stays open" clause becomes "the note becomes the author's turn". A stored `reply` is only ever read (D1, D6) and folded (D2). (AC-20260913-05-4) | Two verbs for "the session said something" was the duplication; the `reply` field has no reader of its value outside this spec's own read. |
+| D4 | **Approve and Reject are told apart, and Reject is final.** The session mount of `POST /__notes/resolve` requires `verdict` ∈ `accepted`, `withdrawn` and otherwise answers `400 {"error":"verdict must be one of accepted, withdrawn"}` before writing; `resolveNote` gains `opts.verdict`, written to `resolution` when given. The client mount keeps deriving `resolution` from prior status exactly as today. A `dropped` note (D1) is removed from the session mount's `GET /__notes/list` response and from the review page's rows; it stays on disk. There is no path back from Reject — by design, the note is not wanted. (AC-20260913-05-5, AC-20260913-05-6) | The owner's route never wrote a resolution, so "rejected" could not be hidden. The client route already records both values and is left alone. |
+| D5 | **Every per-note surface is coloured by turn.** `session` → `var(--v-danger)`, `you` → `var(--v-warn)`, `done` → `var(--v-ok)`. The surfaces are exactly: the region box and its badge on a mock page, the note card's header badge, the review page row's left border, and the row's `.rv-pin`. `notes-layer.browser.js`'s `colorFor` takes a role (`session`/`you`/`done`/`outdated`), where `outdated` is today's derived lost-anchor case and keeps `var(--v-muted)` with no box drawn; the badge glyph keeps today's class names and viewer.css glyph rules, which the client's `lib/walk-page.js` also emits: a role maps to a class as `session` → `open`, `you` → `addressed`, `done` → `resolved`, `outdated` → `outdated`. `review-page.js`'s `rowOpen` emits `data-turn` in place of `data-status`; viewer.css keys the row border and `.rv-pin` on it. Count chips (`.rv-count`, `.rv-badge`, `.rv-tabpin`, `.nl-card-count`) are not per-note and keep their colours. `review.browser.js`'s `isOpenRow` reads `data-turn` ∈ `session`, `you`, so the `Needs you` filter, row movement, the rail counts and the approve gate keep today's membership. This reverses the chrome half of `specs/20260912/12` D17 for the row and its pin only. (AC-20260913-05-7, AC-20260913-05-8) | The owner's complaint was the same note in different colours; a count is not a note and has no single turn. |
+| D6 | **Both sides of the thread are shown.** The note card (`notes-layer.browser.js`'s `buildCardChrome`) renders, oldest first: the note's text; for each thread entry, its `addressed.change` as a session message when present, then its own text; then the note's current `addressed.change`, or its legacy `reply`, as the newest session message. The card's controls on a note whose status is `open` or `addressed` are one `Reply` textarea with a `Reply` button (posts `reopen {id, text, by}`, empty text focuses the box and posts nothing), `Approve` (the existing 5-second `deferPost` toast, `Approved`, then `resolve {verdict:"accepted"}`) and `Reject` (same toast, `Rejected`, `verdict:"withdrawn"`). The card's `Resolve`, `Accept`, reject-only `Send back` box and the `…` menu's `Withdraw` item are deleted; the `…` menu keeps `Re-place the box` and `Delete` and is not rendered when it would be empty. The box-layer `a` key and the strip row's `Resolve` button post `verdict:"accepted"`. The review page row replaces its status line with the newest message — `Addressed: <change>` or `Session: <reply>` on a `you` note, `You: <text> · waiting for the session` when a `session` note's thread is non-empty, today's waiting line otherwise — and on every `session` or `you` row carries `Reply` (unhides a server-rendered, hidden `[data-rv="reply-box"]` holding `[data-rv="reply-text"]` and `[data-rv="reply-send"]`), `Approve` (`[data-rv="accept"]`) and `Reject` (`[data-rv="reject"]`). The row posts immediately and reloads, as today; no toast is added to the row. (AC-20260913-05-3, AC-20260913-05-9, AC-20260913-05-10, AC-20260913-05-17) | The card already renders the thread and already has the toast; this adds the missing session side and one reply box, and deletes the controls that duplicated Reply and Reject. |
+| D7 | **`notes open` lists only what waits on the session.** `cmdNotesOpen` filters its listing to `turnOf(n) === 'session'` before `groupOpen`; the counts line above it is computed exactly as today. `noteLine` drops the `↳ changed:` continuation and, when the note's thread is non-empty, appends `   ↳ <by>: <newest thread entry's text>`. The atlas index card's `nl-card-count` counts `open` from turn `session` and `needs` from turn `you` in place of status. (AC-20260913-05-11, AC-20260913-05-12) | A note the session answered is the owner's to read; listing it again is the re-read the owner asked to stop. The card count used status and so miscounted a legacy reply. |
+| D8 | **The `Mark an area` button unpresses whenever marking ends inside the frame.** A framed notes layer's `setMode` calls `window.parent.__rvMarkOff(window)` (guarded in `try`) whenever it enters `idle`. `review.browser.js` defines `__rvMarkOff(win)`: when `markingFrame` is the frame whose `contentWindow` is `win`, it sets `markingFrame = null` and `aria-pressed="false"` on the button. (AC-20260913-05-13) | Today only the page's own button and Escape unpress it; the frame's Escape, Save, Discard and card close all leave it looking pressed. |
+| D9 | **Switching a board's state tab closes that board's open card.** The notes layer exposes `window.__nlCloseCard()`, which runs `closeCard()` when `mode === 'composing'` and does nothing otherwise. `review.browser.js`'s `switchTab`, before it hides the outgoing frame, calls that frame's `__nlCloseCard` (guarded in `try`). (AC-20260913-05-14) | The card belongs to the frame being hidden; closing it through the frame's own path also clears the page's card host and returns the frame to idle. |
+| D10 | **One amendment ADR.** `docs/adr/0025-a-note-is-a-conversation.md` (CREATE) applies to `specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md` D17 (its chrome half, for the row and `.rv-pin` only; the box half stands), `specs/20260902/10-page-notes-review-loop.md` D4 (the `reply` verb and field), and `specs/20260912/06-the-review-page-answers-to-a-design.md`'s row controls and fixed-orange row/pin. (AC-20260913-05-15) | D17 reads as current and is pinned by an executed test; reversing half of it silently would leave the record contradicting the code. |
 
 ## File Plan
 
 | Path | Action | Layer | Summary |
 |------|--------|-------|---------|
-| spec/scripts/lib/mocks-notes.js | MODIFY | scripts | D1: `turnOf` added and exported. D2: `reopenNote` drops its status precondition and nulls `reply`/`resolution`/`withdrawReason`. D3: `replyNote` and its export deleted; `reply` stays a readable legacy field. D4: `resolveNote` takes an explicit `verdict` on both routes and always writes `resolution`; `groupOpen` and `unresolvedFor` drop `'dropped'` notes |
-| spec/scripts/mocks-driver.js | MODIFY | scripts | D3: the `notes reply` subcommand deleted. D8: `cmdNotesOpen` filters on `turnOf(n) === 'session'`; `noteLine` prints the newest message and `(+<n> earlier)` and loses `↳ changed:`; `notes show --id <id>` added; `pickupLinesFor` filters the same way |
-| spec/scripts/design-atlas.js | MODIFY | scripts | D2: `POST /__notes/reopen`'s session arm loses its `status !== 'addressed'` refusal and keeps the non-empty-text one. D4: `POST /__notes/resolve` takes and validates `verdict`. D4: `GET /__notes/list` drops `'dropped'` notes |
-| spec/scripts/lib/notes-layer.browser.js | MODIFY | scripts | D5: `colorFor` takes a turn; `regionInfo` returns it. D6: the outdated box and its Re-place action unchanged. D7: the card's reject-only `Send back` box becomes a `Reply` box present on every non-terminal note; `Accept`/`Reject` post an explicit verdict |
-| spec/scripts/lib/review-page.js | MODIFY | scripts | D5: `rowOpen` emits `data-turn`, `data-status` retired; the rail and tab counts derive their colour from whether any note needs the person. D7: the row renders the newest message, `+<n> earlier`, and `Reply`/`Approve`/`Reject` |
-| spec/scripts/lib/review.browser.js | MODIFY | scripts | D2: the reply control sends the person's text to `/__notes/reopen` (today it posts no text and the refusal is swallowed). D4: `Approve`/`Reject` post an explicit verdict. D5: `recount` re-derives counts and their colour from `data-turn` |
-| spec/templates/mocks/viewer.css | MODIFY | doctrine | D5: `.rv-row`, `.rv-pin`, `.rv-badge`, `.rv-tabpin` key on `data-turn` instead of a fixed `var(--v-warn)`; the `.nl-region` comment block is rewritten to describe the turn register truthfully. D7: the card's reply box and the row's `+<n> earlier` line |
-| design/chrome-mocks/notes.html | MODIFY | doctrine | D7: the card's `Reply` box on every non-terminal note; `Reject` becomes the terminal hide and a `Send back` reply is the reply box; the prototype's `STATUS_COLOR` map becomes the turn map |
-| design/chrome-mocks/review.html | MODIFY | doctrine | D5/D7: the row's turn colours, the newest-message line, `+<n> earlier`, and the three row controls |
-| docs/adr/0025-a-note-is-a-conversation.md | CREATE | doctrine | D9: the amendment ADR |
-| spec/doctrine/mocks.md | MODIFY | doctrine | D1-D8: the page-notes paragraph's asymmetric-loop sentence, the `reply` verb, the resolve verdict, the turn register, and the `notes open` summarisation rule |
-| tests/mocks/note-conversation.test.js | CREATE | tests | AC-20260913-05-1, AC-20260913-05-2, AC-20260913-05-4, AC-20260913-05-5, AC-20260913-05-6, AC-20260913-05-7, AC-20260913-05-11, AC-20260913-05-13, AC-20260913-05-14, AC-20260913-05-15, AC-20260913-05-16 |
-| tests/mocks/client-region.test.js | MODIFY | tests | AC-20260913-05-8 — the executed four-role colour check, extended to every role and re-pointed at the turn register (closes q259) |
-| tests/mocks/review-chrome.test.js | MODIFY | tests | AC-20260913-05-10 — the screen badge's colour now answers "does this need me" |
-| tests/mocks/review-page.test.js | MODIFY | tests | AC-20260913-05-12 — the row's newest message, `+<n> earlier` and three controls |
-| tests/mocks/review-browser.test.js | MODIFY | tests | AC-20260913-05-3, AC-20260913-05-9 — the reply control carries text; the counts re-derive from `data-turn` |
-| tests/mocks/client-walk-route.test.js | MODIFY | tests | D4: the client route's own `resolution: 'accepted'` pin, retagged to the shared verdict contract |
-| tests/mocks/walk-page.test.js | MODIFY | tests | D4: the client index's withdrawn/waived sentences, unchanged in substance, re-pointed at the explicit verdict |
+| spec/scripts/lib/mocks-notes.js | MODIFY | scripts | D1: `turnOf` added and exported. D2: `reopenNote` folds a legacy `reply` into the thread entry's `addressed` and nulls `reply`. D3: `replyNote` and its export deleted. D4: `resolveNote` writes `opts.verdict` to `resolution` when given |
+| spec/scripts/mocks-driver.js | MODIFY | scripts | D3: `notes reply` subcommand, its import, header lines and refusal mentions deleted. D7: `cmdNotesOpen` lists only turn `session`; `noteLine` loses `↳ changed:` and gains the newest-reply continuation |
+| spec/scripts/design-atlas.js | MODIFY | scripts | D2: session `/__notes/reopen` refuses only a resolved note. D4: session `/__notes/resolve` requires `verdict`; session `/__notes/list` drops `dropped` notes. D7: `nl-card-count` counts by turn |
+| spec/scripts/lib/notes-layer.browser.js | MODIFY | scripts | D1: inline `turnOf`. D5: `colorFor` and the glyph class take a role. D6: card thread shows session messages; Reply box, Approve and Reject replace Resolve/Accept/Send back/Withdraw; `a` key and strip Resolve post `accepted`. D8: `setMode('idle')` calls `__rvMarkOff`. D9: `__nlCloseCard` |
+| spec/scripts/lib/review-page.js | MODIFY | scripts | D4: rows drop `dropped` notes. D5: `rowOpen` emits `data-turn`, not `data-status`. D6: the row's newest-message line, hidden reply box, and `Reply`/`Approve`/`Reject` on every `session`/`you` row |
+| spec/scripts/lib/review.browser.js | MODIFY | scripts | D5: `isOpenRow` reads `data-turn`. D6: `Reply` unhides the reply box, `reply-send` posts `reopen {id, by, text}`, `accept`/`reject` post `resolve` with a verdict. D8: `__rvMarkOff`. D9: `switchTab` calls the outgoing frame's `__nlCloseCard` |
+| spec/templates/mocks/viewer.css | MODIFY | doctrine | D5: `.rv-row` border and `.rv-pin` background keyed on `data-turn`; glyph rules unchanged; the `.nl-region` comment block describes the turn register and the role → glyph-class map. D6: the row's reply box |
+| design/atlas/index.html | MODIFY | other | Regenerated with `node spec/scripts/design-atlas.js build --root .` after the viewer.css edit (it inlines the stylesheet); never hand-edited |
+| design/chrome-mocks/notes.html | MODIFY | doctrine | D5/D6: `STATUS_COLOR` becomes the turn map; the card's Reject is final and `showReject`'s Send back box is removed |
+| design/chrome-mocks/review.html | MODIFY | doctrine | D5/D6: rows carry `data-turn`; the row status line and `Reply`/`Approve`/`Reject` controls |
+| docs/adr/0025-a-note-is-a-conversation.md | CREATE | doctrine | D10: the amendment ADR |
+| spec/commands/sketch.md | MODIFY | doctrine | D3: "Question back" names `notes address --change "<question>"`, not `notes reply` |
+| spec/commands/atlas.md | MODIFY | doctrine | D3: the same "question back" instruction |
+| spec/commands/mocks.md | MODIFY | doctrine | D3: the client-loop line's "`notes reply` for a question back" names `notes address` instead |
+| spec/doctrine/mocks.md | MODIFY | doctrine | D1–D7: the "Status is a three-step queue" paragraph becomes the turn rule, Reject is final, `notes reply` is gone, and the read-back paragraph says `notes open` lists only turn `session` |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | Version bump via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` |
+| tests/mocks/note-conversation.test.js | CREATE | tests | AC-20260913-05-1, -2, -4, -5, -6, -9, -11, -12, -15 |
+| tests/mocks/review-browser.test.js | MODIFY | tests | AC-20260913-05-3, AC-20260913-05-10 |
+| tests/mocks/review-page.test.js | MODIFY | tests | AC-20260913-05-8 (rewrites the AC-20260912-06-1 row-controls pin) |
+| tests/mocks/client-region.test.js | MODIFY | tests | AC-20260913-05-7 (rewrites the AC-20260912-12-22 colour pin to the turn register) |
+| tests/mocks/review-board-card.test.js | MODIFY | tests | AC-20260913-05-13, AC-20260913-05-14, AC-20260913-05-17 |
 
 **Orchestrator duty (outside the table).** Append one `- Amended by: ADR-0025 — <one line>`
 header line to each of `specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md`,
 `specs/20260902/10-page-notes-review-loop.md` and
-`specs/20260912/06-the-review-page-answers-to-a-design.md`. No other text in those three files
-changes.
+`specs/20260912/06-the-review-page-answers-to-a-design.md`. No other text in those files changes.
 
 ## Contracts
 
 ```js
-// lib/mocks-notes.js — the one derivation every surface reads.
-// 'session' waiting on the AI · 'you' waiting on the person · 'done' approved · 'dropped' rejected
+// lib/mocks-notes.js — the one derivation (D1)
 function turnOf(n) {
   if (n.status === 'resolved') return n.resolution === 'withdrawn' ? 'dropped' : 'done'
   return (n.addressed || n.reply) ? 'you' : 'session'
 }
+// Export added: turnOf. Export removed: replyNote.
+
+// reopenNote's appended entry (D2)
+{ at, text, by, addressed: priorAddressed || (priorReply ? { change: priorReply } : null) }
+// then: status 'open', addressed null, reply null, resolution null, withdrawReason null
 ```
 
-Exports removed: `replyNote`. Export added: `turnOf`.
-
 ```
-turn      colour token      where it shows
-session   var(--v-danger)   box tint · box badge · row border · pin · tab pin
-you       var(--v-warn)     the same four
-done      var(--v-ok)       the same four
-dropped   —                 not rendered anywhere
-
-count badge   var(--v-warn) when any note under it is turn 'you'
-              var(--v-danger) otherwise · absent at zero
+turn      colour            per-note surfaces
+session   var(--v-danger)   box · box badge · card badge · row border · row pin
+you       var(--v-warn)     same
+done      var(--v-ok)       same
+dropped   —                 not listed on the session mount, not rendered on the review page
+outdated  var(--v-muted)    badge only, no box (unchanged; a lost anchor, not a turn)
 ```
 
-HTTP, changed bodies only:
+HTTP, session mount only (the client mount is unchanged):
 
 ```
-POST /__notes/reopen  { id, by, text }             # text required; any prior status accepted
-POST /__notes/resolve { id, by, verdict }          # verdict: "accepted" | "withdrawn"
+POST /__notes/reopen  { id, by, text }      # 400 "a resolved note takes no reply"; text required
+POST /__notes/resolve { id, by, verdict }   # verdict: "accepted" | "withdrawn", else 400
+GET  /__notes/list                          # omits notes whose turn is 'dropped'
 ```
 
-CLI, changed verbs only:
+CLI:
 
 ```
-notes address --id <id> --change "<what changed, or what I am asking>" [--ledger <row>] [--port <n>]
-notes show --id <id>        # one note's whole thread, oldest first
-notes open                  # only notes whose turn is the session's
-# `notes reply` is deleted
+notes open      # lists only notes whose turn is 'session'; counts line unchanged
+                # a note with replies: "<id> [open] <by> · <text>   ↳ <by>: <newest reply>"
+notes reply     # deleted — refuses as an unknown subcommand
 ```
 
 ## UI
 
-`design_source: design/chrome-mocks/notes.html` (the note card) and
-`design/chrome-mocks/review.html` (the inspector row) are both edited by this spec and stay the
-binding references.
+`design_source: design/chrome-mocks/notes.html` (the card) and `design/chrome-mocks/review.html`
+(the row) are both edited and stay the binding references.
 
-**The note card** (notes layer, shadow root; rendered by `notes-layer.browser.js`'s
-`openNoteCard`, posted by its own `api()` helper). Header badge in the turn colour · the thread,
-oldest first, the person's messages and the session's distinguished as today · a `Reply`
-textarea and button on every non-terminal note · `Approve` and `Reject` on a note whose turn is
-`you` · the `…` menu keeping `Re-place the box` on an outdated note and `Delete` on an
-untouched one.
+**The note card** — rendered by `notes-layer.browser.js`'s `buildCardChrome`, posted by its own
+`api()`. Header badge in the turn colour · the thread oldest first with the session's messages
+included · on an `open` or `addressed` note: a `Reply` box and button, `Approve`, `Reject` · the
+`…` menu with `Re-place the box` (outdated) and `Delete` (an untouched note), hidden when empty.
 
-**The inspector row** (review page, light DOM; rendered by `review-page.js`'s `renderNoteRow`,
-posted by `review.browser.js`). The note's own words · the newest message beneath them ·
-`+<n> earlier` when the thread holds more · `Reply`, `Approve`, `Reject`.
+**The review row** — rendered by `review-page.js`'s `renderNoteRow`, posted by `review.browser.js`.
+Pin and border in the turn colour · the note's text · the newest-message line · on a `session` or
+`you` row: `Reply`, `Approve`, `Reject`.
 
-**The three controls, specified three ways** (pipeline rules § Planning):
-
-| control | the sentence on success | the path back | farthest artifact reached |
+| control | sentence on success | path back | farthest artifact |
 |---|---|---|---|
-| `Reply` | the card re-renders with your words as the newest message and the note turns red — `Sent to the session` | reply again, or approve or reject the note | `design/mocks/notes.json`'s `thread` array — no dated or contractual artifact |
-| `Approve` | `Approved <id>` with an `Undo` for five seconds | after the undo window, `Reply` un-approves the note and hands it back to the session (D2 accepts any prior status) | the note's `resolution: "accepted"`; a journey's approval gate counts unresolved notes, so this can unblock `--mark journey-approved` |
-| `Reject` | `Rejected <id> — it stays in the file` with an `Undo` for five seconds | after the undo window, `Reply` brings it back (same rule); the record is never erased | the note's `resolution: "withdrawn"`; same gate consequence as Approve |
-
-**Empty state.** An inspector filtered to `Needs you` with nothing waiting shows the existing
-empty state; no new copy is authored.
+| `Reply` (card or row) | card: re-renders with your words as the newest message; row: the page reloads with `You: <text> · waiting for the session` | reply again | `design/mocks/notes.json` `thread` |
+| `Approve` | card: `Approved` toast with `Undo` for five seconds (existing); row: the page reloads with the note under `Done` | none needed — the card's Undo window; after that it is approved | `resolution: "accepted"`; can unblock `--mark journey-approved` |
+| `Reject` | card: `Rejected` toast with `Undo` for five seconds (existing); row: the page reloads without the note | none — final by design (D4) | `resolution: "withdrawn"`; can unblock `--mark journey-approved` |
+| `Mark an area` (D8) | the button shows unpressed the moment marking ends | press it again | none |
 
 ## Data Model
 
-`design/mocks/notes.json` — no note is rewritten, moved or deleted by this spec, and no
-migration runs.
-
-- `thread` becomes the whole conversation. Its element shape is unchanged:
-  `{ at, text, by, addressed? }`.
-- `reply` stops being written. The seven notes on the real host that carry one keep it, and it
-  is read as the session's newest message (D3). Measured (A3): no note anywhere carries both a
-  `reply` and an `addressed`, so no ordering is ambiguous.
-- `resolution` is written on every session-route resolve from now on. Notes resolved before this
-  spec carry none; `turnOf` reads a missing `resolution` as `'done'`, which is what the five
-  already-resolved notes on the real host are.
-- `status` is unchanged in shape and stays the persisted field; `turnOf` is derived on every
-  read and never stored.
+`design/mocks/notes.json` — no migration runs and no note is rewritten except by the actions
+above. `reply` is never written again; a stored one is read (D1, D6) and moved into the thread on
+the next reply (D2). `resolution` is written on every session-mount resolve from now on; a note
+resolved before this spec carries none and reads as `done`.
 
 ## Behavior
 
-The owner opens a screen. A red box is one the session has not answered; an amber box is one
-where the session answered and is waiting on them; a green box is approved; a rejected one is
-not drawn at all. The same three colours carry the inspector row, its pin, and the state tab's
-count, and a screen's count badge is amber exactly when something on it needs them.
+The owner opens a screen. A red box is waiting on the session, an amber box is waiting on them, a
+green box is approved; the row and its pin use the same colour. They click a box: the card shows
+the whole exchange, both sides, with a reply box. They type and send; the note turns red. They can
+do this as often as they like. When satisfied they press Approve and it turns green. If they do
+not want the note, Reject removes it from every page they use.
 
-They click a box. The card shows the whole exchange oldest-first with a reply box under it.
-They type and send: their words become the newest message, the note turns red, and the session
-owns the turn. They can do this as many times as they like; nothing caps a thread and nothing
-refuses a second reply.
+While marking an area, the `Mark an area` button stays pressed; the moment they save, discard or
+press Escape inside the screen, it unpresses. Switching the board to another state closes the card.
 
-When they are satisfied they press `Approve` and the note turns green. If they decide the note
-was wrong, `Reject` and it disappears from every surface — still on disk, still recoverable by
-replying to it, never shown again unless they do.
-
-The session runs `notes open`. It gets only the notes where the turn is its own, one line each,
-carrying the newest message it has not read. A note it replied to or fixed is not in that list
-and stays out of it until the owner writes again. When it needs one note's history it asks for
-that note by id.
+The session runs `notes open` and sees only the notes waiting on it, each with the owner's newest
+reply.
 
 ## Acceptance Criteria
 
 - **AC-20260913-05-1**: WHEN `turnOf` is called THE SYSTEM SHALL return `'session'` for
-  `{status:'open'}`, `'you'` for `{status:'open', addressed:{change:'x'}}`, `'you'` for
-  `{status:'open', reply:'x'}`, `'you'` for `{status:'addressed', addressed:{change:'x'}}`,
-  `'done'` for `{status:'resolved'}`, `'done'` for `{status:'resolved', resolution:'accepted'}`
-  and `'dropped'` for `{status:'resolved', resolution:'withdrawn'}`
+  `{status:'open'}`, `'you'` for `{status:'open', reply:'x'}`, `'you'` for
+  `{status:'addressed', addressed:{change:'x'}}`, `'done'` for `{status:'resolved'}`, `'done'` for
+  `{status:'resolved', resolution:'waived'}` and `'dropped'` for
+  `{status:'resolved', resolution:'withdrawn'}`
   → writes tests/mocks/note-conversation.test.js
-- **AC-20260913-05-2**: WHEN `POST /__notes/reopen {id, by, text:"still wrong"}` is requested
-  against a note whose status is `open`, then again against the same note, then against a note
-  whose status is `resolved` THE SYSTEM SHALL answer `200` each time, leave each note
-  `status:"open"` with `addressed`, `reply`, `resolution` and `withdrawReason` all null, and
-  grow that note's `thread` by exactly one entry per call
+- **AC-20260913-05-2**: WHEN the session mount receives `POST /__notes/reopen {id, by, text:"still wrong"}`
+  for an `open` note, then again for the same note, and then for a `resolved` note THE SYSTEM SHALL
+  answer `200`, `200`, then `400` with `a resolved note takes no reply`; the first note SHALL end
+  `status:"open"` with a two-entry `thread`; and a note carrying `{status:"open", reply:"we changed it"}`
+  reopened the same way SHALL end with `reply:null` and its new entry's `addressed` equal to
+  `{"change":"we changed it"}`
   → writes tests/mocks/note-conversation.test.js
-- **AC-20260913-05-3**: WHEN the review page's reply control is clicked with text in its box
-  THE SYSTEM SHALL post a body carrying a non-empty `text` field to `/__notes/reopen`
-  → rewrites tests/mocks/review-browser.test.js :: AC-20260912-06-11:
-- **AC-20260913-05-4**: WHEN `notes reply --id N001 --text "x"` runs THE SYSTEM SHALL exit 2
-  with a refusal naming the accepted `notes` subcommands, which SHALL NOT include `reply`
+- **AC-20260913-05-3**: WHEN the review page's `Reply` control is clicked on a row and
+  `[data-rv="reply-send"]` is clicked with `still wrong` in `[data-rv="reply-text"]` THE SYSTEM
+  SHALL post to `/__notes/reopen` exactly once with a body whose `text` is `still wrong`, and WHEN
+  `[data-rv="reply-send"]` is clicked with an empty box THE SYSTEM SHALL post nothing
+  → writes tests/mocks/review-browser.test.js
+- **AC-20260913-05-4**: WHEN `notes reply --id N001 --text "x"` runs THE SYSTEM SHALL exit 2 with
+  a refusal whose subcommand list is `open, add, address, waive`; and WHEN every tracked file under
+  `spec/` is searched THE SYSTEM SHALL find no occurrence of `replyNote` or `notes reply`
   → writes tests/mocks/note-conversation.test.js
-- **AC-20260913-05-5**: WHEN a note carrying `{status:'open', reply:'we changed it'}` and no
-  `addressed` is rendered THE SYSTEM SHALL show `we changed it` as its newest message, and
-  `design/mocks/notes.json` SHALL still carry that note's `reply` string, byte-identical, after
-  the render
+- **AC-20260913-05-5**: WHEN the session mount receives `POST /__notes/resolve` with
+  `verdict:"accepted"` for one note and `verdict:"withdrawn"` for another THE SYSTEM SHALL write
+  `resolution:"accepted"` and `resolution:"withdrawn"` respectively; and a body with no `verdict`, or
+  `verdict:"maybe"`, SHALL answer `400` with `verdict must be one of accepted, withdrawn` and leave
+  `design/mocks/notes.json` byte-identical
   → writes tests/mocks/note-conversation.test.js
-- **AC-20260913-05-6**: WHEN `POST /__notes/resolve {id, by, verdict:"accepted"}` and
-  `POST /__notes/resolve {id, by, verdict:"withdrawn"}` are each requested against a note THE
-  SYSTEM SHALL write `resolution:"accepted"` and `resolution:"withdrawn"` respectively, and a
-  body carrying no `verdict` or an unrecognised one SHALL answer `400` naming both accepted
-  values
+- **AC-20260913-05-6**: WHEN a store holds one `{status:"resolved", resolution:"withdrawn"}` mock
+  note and one `open` mock note on the same screen THE SYSTEM SHALL return only the open note from
+  the session mount's `GET /__notes/list?screen=**`, and the review page SHALL render exactly one
+  `[data-rv="row"]`, for the open note
   → writes tests/mocks/note-conversation.test.js
-- **AC-20260913-05-7**: WHEN a store holds one `resolution:"withdrawn"` note and one open note
-  THE SYSTEM SHALL return only the open note from `GET /__notes/list?screen=**`, print only the
-  open note from `notes open`, and count only the open note in the review page's rail
+- **AC-20260913-05-7** `[env: CHROME_BIN]`: WHEN a served mock page paints region boxes for a
+  `session` note, a `you` note and a `done` note THE SYSTEM SHALL compute their badge backgrounds as
+  `rgb(220, 38, 38)`, `rgb(217, 119, 6)` and the page's own computed `var(--v-ok)` respectively, and
+  viewer.css's `.nl-region` comment block SHALL name the register `--v-danger session, --v-warn you,
+  --v-ok done, --v-muted outdated`
+  → rewrites tests/mocks/client-region.test.js :: AC-20260912-12-22,
+- **AC-20260913-05-8**: WHEN the review page renders an `open` note, an `addressed` note and a
+  `resolved` note THE SYSTEM SHALL emit `data-turn="session"`, `data-turn="you"` and
+  `data-turn="done"` on their rows, no `data-status` on any `[data-rv="row"]`, and on each of the
+  first two rows exactly three controls reading `Reply`, `Approve`, `Reject`, and none on the third
+  → rewrites tests/mocks/review-page.test.js :: AC-20260912-06-1:
+- **AC-20260913-05-9**: WHEN the review page renders a note `{status:"addressed", addressed:{change:"moved the button"}}`,
+  a note `{status:"open", reply:"which button?"}`, and a note `{status:"open", thread:[{text:"bigger", by:"jj"}]}`
+  THE SYSTEM SHALL show `Addressed: moved the button`, `Session: which button?` and
+  `You: bigger · waiting for the session` on those rows respectively
   → writes tests/mocks/note-conversation.test.js
-- **AC-20260913-05-8** `[env: CHROME_BIN]`: WHEN a served mock page paints its region boxes THE
-  SYSTEM SHALL resolve each turn to a distinct colour — `session` → `rgb(220, 38, 38)`,
-  `you` → `rgb(217, 119, 6)`, `done` → `rgb(22, 163, 74)` — SHALL draw no box for a `dropped`
-  note, and SHALL use exactly these three tokens, no fourth, for a box whose anchor no longer
-  resolves (which keeps `rgb(115, 115, 115)`, the existing muted treatment, and is not a turn)
-  → rewrites tests/mocks/client-region.test.js :: AC-20260912-12-22:
-- **AC-20260913-05-9**: WHEN a note whose turn is `you` is rendered in the review page's
-  inspector THE SYSTEM SHALL emit a reply control, an approve control and a reject control on
-  that row, and clicking approve SHALL post `verdict:"accepted"`
-  → rewrites tests/mocks/review-browser.test.js :: q241: resolving
-- **AC-20260913-05-10** `[env: CHROME_BIN]`: WHEN a screen carries at least one note whose turn
-  is `you` THE SYSTEM SHALL paint that screen's rail badge in `var(--v-warn)`; WHEN its notes
-  are all turn `session` THE SYSTEM SHALL paint it `var(--v-danger)`; WHEN it carries none THE
-  SYSTEM SHALL render no badge
-  → rewrites tests/mocks/review-chrome.test.js :: AC-20260912-06-9,
-- **AC-20260913-05-11**: WHEN the review page is rendered THE SYSTEM SHALL emit each note row
-  with a `data-turn` attribute of `session`, `you` or `done`, and SHALL emit no `data-status`
-  attribute on a note row
-  → writes tests/mocks/note-conversation.test.js
-- **AC-20260913-05-12**: WHEN a note whose thread holds three messages is rendered in the
-  inspector THE SYSTEM SHALL show the newest message's text and the literal `+2 earlier`, and
-  WHEN a note's thread is empty THE SYSTEM SHALL show no `earlier` count at all
-  → rewrites tests/mocks/review-page.test.js :: AC-20260912-06-1
-- **AC-20260913-05-13**: WHEN `notes open` runs on a store holding one note whose turn is
-  `session`, one whose turn is `you`, one `done` and one `dropped` THE SYSTEM SHALL print
-  exactly one note line, for the `session` one, and its output SHALL contain no occurrence of
+- **AC-20260913-05-10**: WHEN a row's `[data-rv="accept"]` and another row's `[data-rv="reject"]`
+  are clicked on the review page THE SYSTEM SHALL post to `/__notes/resolve` bodies carrying
+  `verdict:"accepted"` and `verdict:"withdrawn"` respectively
+  → writes tests/mocks/review-browser.test.js
+- **AC-20260913-05-11**: WHEN `notes open` runs on a store holding an `open` note, an `addressed`
+  note, an `open` note carrying `reply`, and an `open` note whose thread's newest entry is
+  `{text:"bigger", by:"jj"}` THE SYSTEM SHALL list exactly two note lines — the plain open note and
+  the threaded one, the latter ending `   ↳ jj: bigger` — and its output SHALL contain no
   `↳ changed:`
   → writes tests/mocks/note-conversation.test.js
-- **AC-20260913-05-14**: WHEN `notes open` prints a note whose thread holds four messages THE
-  SYSTEM SHALL print that note's newest message text followed by ` (+3 earlier)`, and WHEN it
-  prints a note with an empty thread THE SYSTEM SHALL print the note's own text with no
-  `earlier` suffix
+- **AC-20260913-05-12**: WHEN the atlas index is built over a screen holding one `open` note and one
+  `{status:"open", reply:"x"}` note THE SYSTEM SHALL emit that screen's `nl-card-count` with
+  `data-open="1"` and `data-needs="1"`
   → writes tests/mocks/note-conversation.test.js
-- **AC-20260913-05-15**: WHEN `notes show --id N001` runs THE SYSTEM SHALL print that note's own
-  text first and then every thread entry oldest-first, one per line, each naming its author
+- **AC-20260913-05-13** `[env: CHROME_BIN]`: WHEN the review page's `Mark an area` button is
+  pressed, a box is drawn on the focused board, and the draft card is discarded THE SYSTEM SHALL
+  show the button with `aria-pressed="false"`
+  → writes tests/mocks/review-board-card.test.js
+- **AC-20260913-05-14** `[env: CHROME_BIN]`: WHEN a note card is open on a board and that board's
+  other state tab is clicked THE SYSTEM SHALL leave the board's `[data-rv="cardhost"]` empty
+  → writes tests/mocks/review-board-card.test.js
+- **AC-20260913-05-15**: WHEN `docs/adr/0025-a-note-is-a-conversation.md` is read THE SYSTEM SHALL
+  find `Status: accepted`, a `## Dissents` section, and an `## Applies to` section naming
+  `specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md`,
+  `specs/20260902/10-page-notes-review-loop.md` and
+  `specs/20260912/06-the-review-page-answers-to-a-design.md`
   → writes tests/mocks/note-conversation.test.js
-- **AC-20260913-05-16**: WHEN every tracked file under `spec/`, `tests/`, `scripts/` and
-  `design/` is searched THE SYSTEM SHALL yield zero occurrences of `replyNote` or of the
-  driver subcommand literal `notes reply`; and `docs/adr/0025-a-note-is-a-conversation.md` SHALL
-  parse with `Status: accepted`, a non-empty `## Dissents` section, and an `## Applies to`
-  section naming `specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md`
-  → writes tests/mocks/note-conversation.test.js
+- **AC-20260913-05-17** `[env: CHROME_BIN]`: WHEN the box of a note
+  `{status:"addressed", text:"too small", thread:[{text:"still small", by:"jj", addressed:{change:"made it 14px"}}], addressed:{change:"made it 16px"}}`
+  is clicked on a review board THE SYSTEM SHALL render a card whose messages read, in order,
+  `too small`, `made it 14px`, `still small`, `made it 16px`; whose buttons include `Reply`,
+  `Approve` and `Reject`; and which contains no button reading `Resolve`, `Accept`, `Send back` or
+  `Withdraw`
+  → writes tests/mocks/review-board-card.test.js
+- **AC-20260913-05-16**: WHEN `POST /client/__notes/resolve` is sent for an addressed client note
+  with no `verdict` THE SYSTEM SHALL CONTINUE TO record `resolution:'accepted'`
+  → reuses tests/mocks/client-walk-route.test.js :: AC-20260911-06-15:
 
 ## Assumptions (escalation triggers)
 
-- A1: **The legacy half of `turnOf` classifies real data correctly.** Executed 2026-09-13 over
-  `/Users/jj/Projects/hearwell/design/mocks/notes.json`: of the 21 person-written notes, 14
-  carry an `addressed`, 5 carry a `reply` with `status:"open"`, 2 are resolved and 2 are
-  untouched — so `turnOf` puts 17 on the owner, 2 on the session and 2 done, which matches what
-  a reader of those notes would say. — **if false:** a note is classified onto the wrong side
-  and the owner sees a colour that lies; STOP, ask the user before changing the expression.
-- A2: **The review page's reject control has never worked.** Executed 2026-09-13 against a real
-  `design-atlas.js serve` on a one-note fixture: `POST /__notes/reopen {id, by}` → `400
-  {"error":"say what is still wrong — text must be non-empty"}`; the same body with
-  `text:"still wrong"` → `200`, `status` `addressed`→`open`, thread grown by one entry carrying
-  the prior `addressed` object. `review.browser.js`'s `closeNote` posts `{id, by}` and swallows
-  the rejection in a comment-only `.catch()`. — **if false:** the control works by some path
-  not read here; keep the text field anyway, since D2 needs the words.
-- A3: **`reply` is dead on the write side and unambiguous on the read side.** Executed
-  2026-09-13: a repo-wide search finds no reader of `.reply`'s value outside fixture literals
-  carrying `reply: null`; over the real host, notes carrying both `addressed` and `reply` = 0,
-  `reply` only = 7, `addressed` only = 14. — **if false:** a note with both needs an order the
-  data cannot supply; render `addressed` last (it is the only one with a timestamp) and record
-  the deviation.
-- A4: **Approve and Reject are byte-identical today on the session route.** Executed
-  2026-09-13 against `resolveNote` directly: resolving an `addressed` note and an `open` note
-  with no options both yield `{status:"resolved", resolution:absent, withdrawReason:absent}`;
-  the same two calls with `viaClient:true` yield `accepted` and `withdrawn`. — **if false:**
-  some caller already passes a verdict; reuse it rather than adding a parameter.
-- A5: **The sweep's measured baseline and its measured result.** Executed 2026-09-13:
-  `notes open` on the real host prints 64 lines / 10,300 bytes for 34 notes, of which the
-  questions block is 25 lines / 3,908 bytes (deleted by specs/20260913/04) and the
-  `↳ changed:` continuations are 3,474 bytes across 12 notes (34% of the whole). Applying D8's
-  filter to the 21 person-written notes leaves 2 notes on the session's turn, 17 on the
-  owner's, 2 done. — **if false:** the filter is keeping more than intended; the numbers are
-  evidence for the Decision, not a promise, so record the real figure and continue.
-- A6: **`0025` is the next free ADR number once 03's `0023` and 04's `0024` land.** — **if
-  false:** take the next free number and amend D9, the File Plan row, AC-20260913-05-16 and
-  every backlink in the same build.
+- A1: **The addressed-only reply refusal lives in the route, not the lib.** Read 2026-09-13:
+  `reopenNote` has no precondition; the session mount of `/__notes/reopen` in `design-atlas.js`
+  refuses `target.status !== 'addressed'`, and the client mount carries its own. — **if false:** a
+  second copy exists; change it the same way and record the deviation.
+- A2: **The row's `Still not right` control has never worked.** Read 2026-09-13:
+  `review.browser.js`'s `closeNote` posts `{id, by}` with no `text`, the route answers 400 on empty
+  text, and the `.catch()` discards it. The original lock executed the same 400 against a served
+  page. — **if false:** the control reached the server by another path; keep the reply box anyway.
+- A3: **No stored note carries both `reply` and `addressed`.** Measured 2026-09-13 on the owner's
+  host store (7 `reply` only, 14 `addressed` only, 0 both; not present on this machine). — **if
+  false:** D2's fold keeps `addressed` and drops the `reply` text for that note; STOP and ask before
+  building, since that loses a message.
+- A4: **No test posts to the session mount's `/__notes/resolve` without a verdict, and none pins
+  the card's `Resolve`/`Accept`/`Withdraw`/`Send back` labels or the status glyph classes.** Grepped
+  2026-09-13 across `tests/`: zero hits (the resolve callers found are all on the client mount). —
+  **if false:** add the verdict or the new label to that test in the same batch; never weaken it.
+- A5: **`0025` is the next free ADR number.** `docs/adr/` ends at `0024-the-critic-is-out.md` on
+  2026-09-13. — **if false:** take the next free number and amend D10, the File Plan row,
+  AC-20260913-05-15 and every backlink in the same build.
+- A6: **The Chrome harness can drive both gap checks.** `tests/mocks/review-board-card.test.js`
+  already opens a served review page, dispatches real drags and clicks, and reads the card host;
+  `/usr/bin/chromium` is on this machine. — **if false:** the two ACs skip under
+  `[env: CHROME_BIN]` as sanctioned; never replace them with a source grep.
 
 ## Rationale
 
-Almost everything this spec promises is already in the tree; what is missing is one wire, one
-parameter and one register. The thread exists, is append-only, and is already rendered by the
-mock page's card and by the client's own pages. The route that appends to it already insists the
-person say what is wrong. What has never existed is a way to reach it from the review page —
-the control is there, posts the click without the words, and the refusal is discarded by a
-`.catch()` with a comment in it. That is why the owner's recollection that "Reply already
-exists" and my own reading that it did not were both right about different halves.
+This is a re-plan. The first lock of this spec predated specs/20260913/07, which removed the
+critic, question notes and reason chips and touched 13 of the files this spec edits; several of
+its premises no longer held (the reply refusal it deleted was in the route, not the lib; the card
+it described had more controls than it named; its `turnOf` ignored `waived`; one of its test
+pointers stopped resolving). The re-plan also dropped what the owner judged over-built: `notes
+show`, a `+<n> earlier` counter, a colour rule for count chips, any way back from Reject, and any
+handling for a client who goes quiet. What remains is the smallest set that makes the conversation
+work and the colours agree.
 
-D1 is the load-bearing choice. A derived turn, rather than a fourth persisted status, means no
-migration, no timestamps on the legacy replies (which have none), and one expression every
-surface reads. It also makes the register honest: the colour answers "whose turn is it", which
-is the question the owner actually asked, rather than "what status word is stored", which is
-the question the page answers today and gets wrong by folding `addressed` into `open`.
+`waived` falls under `done` without a clause of its own because nothing new should happen for a
+silent client. Reject hides and does not delete: deleting would need a new write path and is not
+what the owner asked for. The card keeps its existing Undo toast because it is already built; the
+row gets no toast because adding one is new machinery.
 
-D4 exists because the store physically cannot express what the owner asked for. A4 measured
-that approving and rejecting write identical records on the session route while the client's
-route has recorded the difference since it shipped — so hiding rejected notes is not a new
-concept to design, it is one route catching up.
+The client's own pages and routes are untouched: the client reopen and resolve routes keep their
+rules, and `lib/walk-page.js`'s request rows keep their own colours. AC-20260913-05-16 pins the one
+client behaviour the resolve change could most easily break.
 
-D5 reverses half of a ruling made the same day. The box half of D17 — that a box tracks its own
-state rather than the chrome's flat orange — is correct and is exactly what this spec extends;
-what reverses is the other half, that the chrome may keep a fixed orange that tracks nothing.
-Recording that in an ADR rather than quietly editing matters because D17 is pinned by an
-executed test and reads as current.
+`kind:"note"` notes still cannot be deleted from the card (`canDelete` keys on `kind == null`), and
+the notes layer's own strip filter and bar counter still read `status`. Both are left as they are:
+no production writer stamps `kind:"note"`, and the strip is not a surface the owner raised.
 
-Adversarial check, rejected: a reviewer could argue `turnOf` should be persisted so a store is
-readable without the library. Rejected — a derived value that is also stored is a value that can
-disagree with itself, and this exact class of drift is what made an addressed note and an open
-note the same colour in the first place.
+Lock-time collision sweep: `lib/walk-page.js` emits the same `nl-region-glyph` status classes on
+the client's pages, so D5 maps roles onto those classes instead of renaming them; three command
+files told the session to use `notes reply` and are in the File Plan. `docs/canonical/design.md`
+also names `replyNote` and is corrected by the Canonical Delta at close, which is why
+AC-20260913-05-4 searches `spec/` only.
 
-Two lock-time sweep results are recorded here rather than fixed. `data-status` is not a retired
-literal and is deliberately absent from AC-20260913-05-16's ban list: the same attribute name
-carries a mock's own `data-status="ratified|approved"` on 30-odd files that have nothing to do
-with notes, so AC-20260913-05-11 bans it only on a note row and a worker must not widen that to
-a repo-wide sweep. `lib/walk-page.js` mentions `colorFor` in a comment and keeps a parallel
-register for the client's own request rows; D5 states explicitly that it is out of scope, so the
-hit is a recorded waive, not a gap.
-
-The zero-hit sweep (AC-20260913-05-16) covers `spec/`, `tests/`, `scripts/` and `design/` — the
-executable and test surface this spec's File Plan owns. The retired names in
-`docs/canonical/design.md` are corrected by the Canonical Delta below, which the review
-stage applies at close; sweeping that file at build time would redden the gate against text
-the build is not allowed to write.
+The File Plan has 21 rows, over the usual 15. It is not split: every row edits the same note loop,
+and splitting would create two specs editing the same files — the reason specs 03 and 04 were
+merged into 07.
 
 ## Canonical Delta
 
 `docs/canonical/design.md` § Page notes: replace "The loop is asymmetric: the session addresses
 (`open → addressed`, with the change and an optional ledger row recorded under the note) and
 replies; the author resolves on the page after a re-look; no driver subcommand resolves" with —
-"The loop is a conversation with one rule: whoever speaks last hands the turn to the other. The
-session speaks with `notes address` (its one verb — a fix or a follow-up question, recorded
-under the note with an optional ledger row) and the note becomes the author's turn; the author
-replies on the page as often as they like and the note becomes the session's turn again; only
-the author ends it, with Approve (`resolution: "accepted"`, green) or Reject
-(`resolution: "withdrawn"`, hidden from every surface and kept on disk). No driver subcommand
-resolves and the session has no route that does. `turnOf(n)` in `lib/mocks-notes.js` is the one
-derivation of that state — `session` red, `you` amber, `done` green, `dropped` not drawn — and
-every surface reads it: the box, its badge, the inspector row, its pin and the state tab's
-count. A count badge is amber exactly when one of its notes needs the author. A region whose
-anchor no longer resolves keeps the existing muted box and its Re-place action and is not a
-fourth state. `reply` is retired as a verb and a field; a stored one is read as the session's
-message and never written again." In the same section, replace the `notes open` summarisation
-sentence with — "`notes open` lists only the notes whose turn is the session's, one line each
-carrying the newest message plus `(+<n> earlier)`; a note the session has answered leaves the
-list until the author writes again, so every message is read exactly once. `notes show --id
-<id>` prints one note's whole thread for a session that needs its history." Update the writer
-list: `replyNote` out, `turnOf` in.
+"The loop is a conversation. The session answers with `notes address` (a fix or a question back)
+and the note becomes the author's turn; the author replies on the page as often as they like and
+the note becomes the session's turn again; the author ends it with Approve (`resolution:
+"accepted"`) or Reject (`resolution: "withdrawn"`, final, hidden from the owner's pages and kept on
+disk). `turnOf(n)` in `lib/mocks-notes.js` derives the turn — `session` red, `you` amber, `done`
+green — and every per-note surface (box, badge, card, row, pin) uses it; count chips keep their
+own colours. `notes open` lists only the notes whose turn is the session's." Remove `reply` from
+the driver verb list and `replyNote` from both writer lists; add `turnOf`.

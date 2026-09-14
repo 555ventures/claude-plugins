@@ -100,10 +100,75 @@
     })
   }
 
+  // specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D6: locate the
+  // `[data-rv="frame"]` whose `.contentWindow` is the given frame window — the reverse lookup
+  // `__rvCardOpen`/`__rvCardClose` need to find a board from the frame that called them (same-
+  // origin only; a cross-origin frame's `contentWindow` still compares by reference, never throws).
+  function frameElFor(win) {
+    var frames = qa('[data-rv="frame"]')
+    for (var i = 0; i < frames.length; i++) { if (frames[i].contentWindow === win) return frames[i] }
+    return null
+  }
+
+  // D7: flip-then-shift, restated here for the host-placed card (the unframed layer implements
+  // the identical rule for its own overlay-mounted card — one rule, two placements, since this
+  // repo ships no shared browser-script module system). `boxRect` is the box's already-scaled
+  // on-screen rectangle (viewport pixels); the card is placed in PAGE pixels (scroll added) since
+  // `.nl-card` is `position:absolute` with no positioned ancestor between it and the page.
+  function placeHostCard(card, boxRect) {
+    var gap = 12
+    var scrollX = window.pageXOffset || 0
+    var scrollY = window.pageYOffset || 0
+    var vw = window.innerWidth, vh = window.innerHeight
+    var cw = card.offsetWidth || 328
+    var ch = card.offsetHeight || 200
+    var left = boxRect.right + gap
+    if (left + cw > vw) {
+      var flipped = boxRect.left - gap - cw
+      left = flipped >= 0 ? flipped : Math.max(0, vw - cw)
+    }
+    var top = boxRect.top
+    if (top + ch > vh) top = Math.max(0, vh - ch)
+    if (top < 0) top = 0
+    card.style.left = (left + scrollX) + 'px'
+    card.style.top = (top + scrollY) + 'px'
+  }
+
+  // D6: the frame hands up a card element it built in THIS document (`window.parent.document`)
+  // plus its own frame-local, pre-scale box — the host is the only side that knows the board's
+  // scale (fit()'s own `--rv-scale`), so it alone converts. One card at a time per board: opening
+  // a new one in the same board's host replaces whatever was there.
+  window.__rvCardOpen = function (cardEl, box, frameWin) {
+    var frame = frameElFor(frameWin)
+    var board = frame && frame.closest ? frame.closest('[data-rv="board"]') : null
+    var host = board && board.querySelector('[data-rv="cardhost"]')
+    if (!host) return
+    host.innerHTML = ''
+    host.appendChild(cardEl)
+    var ir = frame.getBoundingClientRect()
+    var scale = frame.offsetWidth ? ir.width / frame.offsetWidth : 1
+    var bx = box || { x: 0, y: 0, w: 0, h: 0 }
+    var boxRect = {
+      left: ir.left + (bx.x || 0) * scale,
+      top: ir.top + (bx.y || 0) * scale,
+      right: ir.left + ((bx.x || 0) + (bx.w || 0)) * scale,
+      bottom: ir.top + ((bx.y || 0) + (bx.h || 0)) * scale,
+    }
+    placeHostCard(cardEl, boxRect)
+  }
+  window.__rvCardClose = function (frameWin) {
+    var frame = frameElFor(frameWin)
+    var board = frame && frame.closest ? frame.closest('[data-rv="board"]') : null
+    var host = board && board.querySelector('[data-rv="cardhost"]')
+    if (host) host.innerHTML = ''
+  }
+
   // D8: row → box is a direct same-origin call, no postMessage. Selecting a row focuses its
   // board, switches that board's state tab to the row's own data-state (D9) if it differs, then
-  // calls __nlFocus(id) on the board's now-visible frame — retried exactly once on the frame's
-  // own `load` event if it has not finished loading yet.
+  // calls __nlSelect(id, {reveal}) on the board's now-visible frame — retried exactly once on the
+  // frame's own `load` event if it has not finished loading yet. `select` is the one writer of
+  // selection (D8); `reveal` (scroll + pulse) fires only when the caller says the selection did
+  // not originate at that box (a rail-row click, keyboard move — never a box click itself).
   function select(id, reveal) {
     selectedId = id
     var label = null
@@ -130,7 +195,7 @@
         var tried = false
         var callFocus = function () {
           try {
-            if (frame.contentWindow && frame.contentWindow.__nlFocus) { frame.contentWindow.__nlFocus(id); tried = true }
+            if (frame.contentWindow && frame.contentWindow.__nlSelect) { frame.contentWindow.__nlSelect(id, { reveal: !!reveal }); tried = true }
           } catch (e) { /* cross-origin or the frame document is not ready yet */ }
         }
         callFocus()
@@ -602,7 +667,9 @@
   }
 
   // D8: box → row. The framed layer calls this directly (same-origin, no postMessage) on a box
-  // click; a no-op on an id that has no row on this page.
+  // click; a no-op on an id that has no row on this page. `select(id)` (reveal omitted, so
+  // falsy) is what keeps this a SELECT-without-REVEAL — the box the reviewer just clicked is
+  // already under the cursor, so nothing scrolls or pulses back down through `__nlSelect`.
   window.__rvPick = function (id) {
     var row = rowById(id)
     if (!row) return

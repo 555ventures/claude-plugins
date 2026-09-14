@@ -42,6 +42,18 @@
 // button is its one caller; address/reply are driver-only and unreachable from here), touch mock
 // markup, or run at all when ?clean is present (screenshot capture stays clean).
 //
+// specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D1-D9,D12: the overlay
+// holds exactly one `mode` — 'idle'|'arming'|'drawing'|'composing' — written only through
+// `setMode`, mirrored onto `data-mode` for viewer.css to derive cursor/pointer-events/scrim from
+// (D5) and onto the overlay's own light-DOM host via an `nl-live` class (see mount() below) so a
+// click can still fall through to the mock underneath at idle/composing with zero inline
+// pointer-events/cursor writes anywhere. The drag binds `pointerdown`/`pointermove`/`pointerup`/
+// `pointercancel`/`lostpointercapture` on the overlay element itself and captures the pointer
+// there (D2) — never on `document`. `renderOverlay` keeps an id→element Map and reconciles it
+// (D9); selection is a class toggle (`.sel`/`has-sel`) that never re-enters it. When framed
+// (`window.parent !== window`), a card is built into `window.parent.document` and handed up via
+// `__rvCardOpen`/`__rvCardClose` (D6) — there remains exactly one card renderer.
+//
 // This is a browser script, not a Node module — no `require`, no `module.exports`, evaluated by
 // the page it is injected into.
 'use strict'
@@ -53,15 +65,27 @@
   var qs = new URLSearchParams(location.search)
   if (qs.has('clean') && !qs.has('notes')) return
 
+  // D4: the mock document's own extent, captured BEFORE this layer mounts anything of its own —
+  // the in-flow strip this script inserts after `rootEl` (mock scope, unframed) grows
+  // `document.documentElement.scrollHeight` past the mock's own content height, and a clamp taken
+  // live at drag time would clamp against that self-inflated bound instead of the mock's own.
+  // Feature-detected: sibling test fixtures (tests/mocks/notes-layer-navigation.test.js) build a
+  // minimal stub `document` with no `documentElement` at all — this file still runs unchanged
+  // over that fixture (the same posture as setStyle/on below), and a real DOM always carries it.
+  var pristineDocW = document.documentElement ? document.documentElement.scrollWidth : 0
+  var pristineDocH = document.documentElement ? document.documentElement.scrollHeight : 0
+
   // Render-defect fix (2026-09-13, this spec's own escape — the whole authoring layer was
   // riding into the review page's boards): `notes=1` means "paint the marks", never "inject the
   // authoring UI" — D3's binding note surface is the review page's OWN right rail
   // (lib/review-page.js's inspector), so a framed board contributes the box layer
-  // (renderOverlay/boxLayer) and nothing else. `marksOnly` gates the three things that are
-  // authoring chrome, not marks: the fixed bar, the in-flow strip, and any card auto-opening on
-  // a box click/focus. `__nlMark`/`__nlFocus`/`__nlPins`/`__rvPick` (D8/D10/D11) all still work —
-  // none of them touch bar/strip/card. A normal (unflagged) served mock page — `qs.has('notes')`
-  // false — keeps its full bar and strip exactly as before this fix (the pinned invariant).
+  // (renderOverlay/boxLayer) and nothing else. `marksOnly` gates the two things that remain
+  // authoring chrome: the fixed bar and the in-flow strip — specs/20260913/02's D6 retires the
+  // third (a card auto-opening on a box click/focus never populated cardSlot in a framed board);
+  // the card now always builds, placed by the host when framed (D6/D8). `__nlMark`/`__nlSelect`/
+  // `__nlPins`/`__rvPick` (D8/D10/D11) all still work regardless of `marksOnly`. A normal
+  // (unflagged) served mock page — `qs.has('notes')` false — keeps its full bar and strip exactly
+  // as before this fix (the pinned invariant).
   var marksOnly = qs.has('notes')
 
   var __base = (location.pathname.match(/^\/p\/[^/]+/) || [''])[0]
@@ -77,7 +101,19 @@
   var hostStyle = document.createElement('style')
   // D5: while the lightbox is open, the served page's own bar/panel are hidden — the framed
   // mock's own bar (inside the lightbox iframe, a different document) is the only one visible.
-  hostStyle.textContent = 'body.lb-open .nl-host{display:none}'
+  //
+  // specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D2/D5: the overlay's
+  // own light-DOM host (`.nl-overlay-host`, a second class alongside the shared `.nl-host`) spans
+  // `inset:0` over the whole page, so its own computed pointer-events must fall through to the
+  // mock underneath everywhere the overlay itself isn't hit-testable — an ancestor's box is a
+  // separate hit-test candidate from a `pointer-events:none` descendant (the classic "icon inside
+  // a button" pattern), so the overlay's own `data-mode`-derived pointer-events alone is not
+  // enough. `nl-live` mirrors "arming or drawing" (never written on any other `.nl-host`, so this
+  // rule reaches only the overlay's own), keeping every cursor/pointer-events write for the
+  // overlay itself out of inline style (AC-6) while still deriving from a stylesheet, never an
+  // imperative `setStyle` call.
+  hostStyle.textContent = 'body.lb-open .nl-host{display:none}' +
+    '.nl-overlay-host{pointer-events:none}.nl-overlay-host.nl-live{pointer-events:auto}'
   document.head.appendChild(hostStyle)
 
   var css =
@@ -174,6 +210,16 @@
   function on(target, type, fn) {
     if (target && typeof target.addEventListener === 'function') target.addEventListener(type, fn)
   }
+  // Same posture again — the stub DOM's elements carry no `.classList`. A real DOM element always
+  // does, so this takes the cheap `classList` path there and only falls back to plain `className`
+  // string surgery for the fixture.
+  function toggleClass(el, cls, on) {
+    if (!el) return
+    if (el.classList) { el.classList.toggle(cls, !!on); return }
+    var kept = String(el.className || '').split(/\s+/).filter(function (c) { return c && c !== cls })
+    if (on) kept.push(cls)
+    el.className = kept.join(' ')
+  }
 
   function esc(s) {
     return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] })
@@ -220,13 +266,15 @@
 
   // D4: the overlay — a third .nl-host, mock scope only, `position:absolute;inset:0` (locked
   // verbatim) so it scrolls with the page instead of pinning to the viewport on a mock taller than
-  // it. `pointer-events` is toggled on the HOST itself as marking mode turns on/off; the boxes
-  // (renderOverlay, per-box inline `pointer-events:auto`) stay clickable while the host is
-  // otherwise none, letting clicks pass through to the mock everywhere the overlay paints nothing —
-  // but the card and toast are NOT boxes and sit directly in the overlay, so they get the same
-  // `auto` override on their own slot elements (cardSlot/toastSlot) below; without it every control
-  // inside them (Accept/Reject/Send back/the overflow menu/Undo) would inherit `none` from
-  // the host and fail hit-testing even though they render on top.
+  // it. specs/20260913/02 D5: `pointer-events` on the overlay ITSELF derives from `data-mode` in
+  // viewer.css (never an imperative write); the light-DOM host's own `pointer-events` mirrors
+  // "arming or drawing" through the `nl-live` class (see mount() above) so a click still falls
+  // through to the mock at idle/composing with zero inline style anywhere. The boxes (renderOverlay,
+  // per-box inline `pointer-events:auto`) stay clickable regardless of mode — but the card and
+  // toast are NOT boxes and sit directly in the overlay, so they get the same `auto` override on
+  // their own slot elements (cardSlot/toastSlot) below; without it every control inside them
+  // (Accept/Reject/Send back/the overflow menu/Undo) would inherit the overlay's own `none` at
+  // idle/composing and fail hit-testing even though they render on top.
   var overlay = null
   var boxLayer = null
   var cardSlot = null
@@ -241,8 +289,10 @@
     setStyle(toastSlot, { pointerEvents: 'auto' })
     overlay.appendChild(boxLayer); overlay.appendChild(cardSlot); overlay.appendChild(toastSlot)
     overlayHost = mount(overlay)
-    setStyle(overlayHost, { position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '9997' })
+    toggleClass(overlayHost, 'nl-overlay-host', true)
+    setStyle(overlayHost, { position: 'absolute', inset: '0', zIndex: '9997' })
     document.body.appendChild(overlayHost)
+    overlay.setAttribute('data-mode', 'idle')
   }
 
   // D9: color/glyph come from the register — a per-box `--c` custom property set to one of the
@@ -277,62 +327,112 @@
   // D9: `--c` is set on the badge itself, not inherited from an ancestor box — a badge painted
   // without a box ancestor (D8 strip rows, D6 card header) would otherwise render transparent
   // with near-white text, since custom properties only inherit down the DOM tree.
-  function regionBadge(id, status) {
-    var badge = document.createElement('span'); badge.className = 'nl-region-badge'
+  // `doc` (default this document) is threaded through so a framed card built into
+  // `window.parent.document` (D6) can still use this same badge builder.
+  function regionBadge(id, status, doc) {
+    doc = doc || document
+    var badge = doc.createElement('span'); badge.className = 'nl-region-badge'
     badge.style.setProperty('--c', colorFor(status))
-    var glyph = document.createElement('span'); glyph.className = 'nl-region-glyph ' + status
+    var glyph = doc.createElement('span'); glyph.className = 'nl-region-glyph ' + status
     badge.appendChild(glyph)
-    badge.appendChild(document.createTextNode(id))
+    badge.appendChild(doc.createTextNode(id))
     return badge
   }
 
-  // ---- D4: paint one .nl-region per note whose region resolves on the active state ------------
+  // ---- D8: the box → row intent, and the local (unframed) fallback -----------------------------
+  // A box click/Enter never selects locally by itself (D8) — framed, it emits the intent upward;
+  // unframed, there is no parent hook, so it takes the SAME path a `__nlSelect` call from the host
+  // would: select without revealing (the box is already under the cursor).
+  function pickNote(id) {
+    if (window.parent !== window) {
+      try { window.parent.__rvPick(id); return } catch (e) { /* no parent hook */ }
+    }
+    window.__nlSelect(id, { reveal: false })
+  }
+
+  // ---- D9: a data change reconciles an id -> element Map; a view-state change (selection) only
+  // ever toggles `.sel`/`has-sel` and never re-enters this function. One delegated click listener
+  // on boxLayer (data-id) replaces the old per-box `el.onclick`.
+  var boxEls = new Map()
+  var boxClickWired = false
   function renderOverlay() {
     if (!overlay || !boxLayer) return
-    boxLayer.innerHTML = ''
     if (!rootEl || typeof rootEl.getBoundingClientRect !== 'function') return
+    if (!boxClickWired) {
+      boxClickWired = true
+      boxLayer.addEventListener('click', function (e) {
+        var el = e.target && e.target.closest ? e.target.closest('[data-id]') : null
+        if (el) pickNote(el.getAttribute('data-id'))
+      })
+      boxLayer.addEventListener('keydown', function (e) {
+        var el = e.target && e.target.closest ? e.target.closest('[data-id]') : null
+        if (!el) return
+        var id = el.getAttribute('data-id')
+        var n = mockNotes.filter(function (m) { return m.id === id })[0]
+        if (!n) return
+        if (e.key === 'Enter') pickNote(id)
+        else if ((e.key === 'a' || e.key === 'A') && n.status === 'addressed') api('resolve', { id: id, by: author }).then(refresh)
+        else if ((e.key === 'r' || e.key === 'R') && n.status === 'addressed') pickNote(id)
+      })
+    }
     var rootRect = rootEl.getBoundingClientRect()
     // The host is position:absolute (page-relative), not fixed (viewport-relative) — add the
     // current scroll offset to the viewport rect so a box stays pinned to its element on a mock
     // taller than the viewport instead of drifting by the scroll amount.
     var scrollX = window.pageXOffset || 0
     var scrollY = window.pageYOffset || 0
+    var seen = {}
     mockNotes.forEach(function (n) {
-      if (!n.region || (n.state || 'default') !== activeState) return
+      if (!n.region || (n.state || 'default') !== activeState) { return }
       var resolved = window.NotesAnchor ? window.NotesAnchor.resolve(rootEl, n.region) : null
       var status = resolved === null && n.status !== 'resolved' ? 'outdated' : n.status
       if (resolved === null) return // outdated -> no box, only the strip row explains it
       if (status === 'resolved' && !showResolved) return
+      seen[n.id] = true
       var box = resolved.box
-      var el = document.createElement('div')
-      el.className = 'nl-region' + (openCardNoteId === n.id ? ' sel' : '')
-      el.tabIndex = 0
-      el.setAttribute('data-id', n.id)
-      el.setAttribute('data-status', status)
-      el.style.setProperty('--c', colorFor(status))
+      var el = boxEls.get(n.id)
+      if (!el) {
+        el = document.createElement('div')
+        el.className = 'nl-region'
+        el.tabIndex = 0
+        el.setAttribute('data-id', n.id)
+        el.style.pointerEvents = 'auto'
+        boxEls.set(n.id, el)
+        boxLayer.appendChild(el)
+      }
+      toggleClass(el, 'sel', selectedNoteId === n.id)
+      // The badge (and its status-derived glyph) is only rebuilt when the status actually
+      // changed — a pass triggered by a pure selection/mode change (D9's own view-state case)
+      // touches no note data at all, so skipping needless DOM churn here keeps that path cheap,
+      // which matters for a transitioning property elsewhere (viewer.css's `.nl-region` opacity,
+      // AC-8) that must not have its paint delayed by unrelated work in the same task.
+      if (el.getAttribute('data-status') !== status) {
+        el.setAttribute('data-status', status)
+        el.style.setProperty('--c', colorFor(status))
+        // The box element itself (`el`), the one D9/AC-7 pins DOM identity on, is never replaced.
+        el.innerHTML = ''
+        el.appendChild(regionBadge(n.id, status))
+      }
       el.style.left = (rootRect.left + scrollX + box.x) + 'px'
       el.style.top = (rootRect.top + scrollY + box.y) + 'px'
       el.style.width = Math.max(0, box.w) + 'px'
       el.style.height = Math.max(0, box.h) + 'px'
-      el.style.pointerEvents = 'auto'
-      el.appendChild(regionBadge(n.id, status))
-      // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D8: box → row, direct
-      // same-origin call, no postMessage. Framed (the review page) only — unframed (the owner's
-      // own mock page) finds no parent hook and the click just opens the card, as today.
-      // openNoteCard itself is marksOnly-aware (selects the box without ever populating cardSlot).
-      el.onclick = function () {
-        openNoteCard(n)
-        if (window.parent !== window) {
-          try { window.parent.__rvPick(n.id) } catch (e) { /* no parent hook */ }
-        }
-      }
-      el.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') openNoteCard(n)
-        else if ((e.key === 'a' || e.key === 'A') && n.status === 'addressed') api('resolve', { id: n.id, by: author }).then(refresh)
-        else if ((e.key === 'r' || e.key === 'R') && n.status === 'addressed') openNoteCard(n)
-      })
-      boxLayer.appendChild(el)
     })
+    boxEls.forEach(function (el, id) {
+      if (!seen[id]) { if (el.parentNode) el.parentNode.removeChild(el); boxEls.delete(id) }
+    })
+  }
+
+  // ---- D8/D9: selection is state, toggled by class alone — never a renderOverlay re-entry.
+  var selectedNoteId = null
+  function setSelectedBox(id) {
+    if (selectedNoteId === id) return
+    var prevEl = selectedNoteId != null ? boxEls.get(selectedNoteId) : null
+    toggleClass(prevEl, 'sel', false)
+    selectedNoteId = id
+    var curEl = id != null ? boxEls.get(id) : null
+    toggleClass(curEl, 'sel', true)
+    toggleClass(overlay, 'has-sel', id != null)
   }
 
   // ---- D6: toast-deferred POST (Delete/Withdraw/Resolve/Accept) --------------------------------
@@ -349,56 +449,73 @@
     toastSlot.appendChild(toast)
   }
 
-  // ---- D6: the card, mounted inside the overlay host --------------------------------------------
-  var openCardNoteId = null
-  function closeCard() {
-    openCardNoteId = null
-    if (cardSlot) cardSlot.innerHTML = ''
-    render()
+  // ---- D6: the card — built into the framed document when framed, into this overlay's own
+  // shadow root otherwise; there is exactly one card renderer either way. ------------------------
+  function framed() { return window.parent !== window }
+  function cardDoc() { return framed() ? window.parent.document : document }
+
+  // D7: flip-then-shift, in VIEWPORT coordinates (the caller converts to page coordinates once,
+  // after this decides left/top) — beside the box on the side with room, flipped to the other
+  // flank when there is none, shifted along the cross axis to stay in the viewport, never
+  // overlapping the box's own rectangle. `boxRect` is {left,top,right,bottom} in the SAME
+  // coordinate space as `vw`/`vh` (viewport pixels). Shared in substance with review.browser.js's
+  // `placeHostCard` — the identical rule, restated because this repo ships no shared
+  // browser-script module system for two independently-served scripts to import from.
+  function flipThenShift(cw, ch, boxRect, vw, vh, gap) {
+    gap = gap == null ? 12 : gap
+    var left = boxRect.right + gap
+    if (left + cw > vw) {
+      var flipped = boxRect.left - gap - cw
+      left = flipped >= 0 ? flipped : Math.max(0, vw - cw)
+    }
+    var top = boxRect.top
+    if (top + ch > vh) top = Math.max(0, vh - ch)
+    if (top < 0) top = 0
+    return { left: left, top: top }
   }
-  // D6: beside the box on desktop (position:absolute, page-relative — same coordinate frame as
-  // the overlay host); below 640px viewer.css's own media rule turns `.nl-card` into a fixed
-  // bottom sheet (left:0;right:0;bottom:0) — setting inline left/top there would win over that
-  // rule regardless of specificity, so this leaves position AND left/top alone under the
-  // breakpoint and lets the sheet own its own layout entirely.
-  function cardPosition(card, id) {
+  // Places a LOCAL (unframed) card beside `boxRect` (a viewport-relative rect, e.g. from
+  // `getBoundingClientRect()`) — below 640px viewer.css's own media rule turns `.nl-card` into a
+  // fixed bottom sheet (left:0;right:0;bottom:0), so left/top are left alone under that
+  // breakpoint and the sheet owns its own layout entirely.
+  function placeCardBeside(card, boxRect) {
     if (window.matchMedia && window.matchMedia('(max-width:640px)').matches) return
-    var anchorRect = (boxLayer && boxLayer.querySelector('[data-id="' + id + '"]') || rootEl).getBoundingClientRect()
     var scrollX = window.pageXOffset || 0
     var scrollY = window.pageYOffset || 0
-    card.style.left = Math.min(anchorRect.right + scrollX + 12, scrollX + window.innerWidth - 340) + 'px'
-    card.style.top = Math.max(scrollY + 8, anchorRect.top + scrollY) + 'px'
+    var pos = flipThenShift(card.offsetWidth || 328, card.offsetHeight || 200, boxRect, window.innerWidth, window.innerHeight)
+    card.style.left = (pos.left + scrollX) + 'px'
+    card.style.top = (pos.top + scrollY) + 'px'
   }
-  function openNoteCard(n) {
-    openCardNoteId = n.id
-    // marksOnly: selection still drives the box's own "sel" class (D8 — `select()`'s
-    // `__nlFocus` call must leave the box selected), but the card itself is the authoring UI
-    // the review page's own right rail replaced — render() alone (which repaints boxLayer via
-    // renderOverlay) without ever touching cardSlot.
-    if (marksOnly) { render(); return }
-    if (!cardSlot) return
-    cardSlot.innerHTML = ''
-    var status = regionStatusOf(n)
-    var card = document.createElement('div'); card.className = 'nl-card'
 
-    var hd = document.createElement('div'); hd.className = 'nl-card-hd'
-    hd.appendChild(regionBadge(n.id, status))
-    if (n.reason) { var chip = document.createElement('span'); chip.className = 'chip'; chip.textContent = n.reason; hd.appendChild(chip) }
-    var whoEl = document.createElement('span'); whoEl.textContent = n.by
+  function closeCard() {
+    var wasFramed = framed()
+    if (cardSlot) cardSlot.innerHTML = ''
+    if (wasFramed) { try { window.parent.__rvCardClose(window) } catch (e) { /* no parent hook */ } }
+    setSelectedBox(null)
+    // D1: closing a card returns to idle, or to arming when a re-place was pending.
+    setMode(pendingReplace ? 'arming' : 'idle')
+  }
+
+  function buildCardChrome(doc, n, status) {
+    var card = doc.createElement('div'); card.className = 'nl-card'
+
+    var hd = doc.createElement('div'); hd.className = 'nl-card-hd'
+    hd.appendChild(regionBadge(n.id, status, doc))
+    if (n.reason) { var chip = doc.createElement('span'); chip.className = 'chip'; chip.textContent = n.reason; hd.appendChild(chip) }
+    var whoEl = doc.createElement('span'); whoEl.textContent = n.by
     hd.appendChild(whoEl)
     card.appendChild(hd)
 
     if (status === 'outdated') {
-      var notice = document.createElement('div'); notice.className = 'nl-card-outdated'
+      var notice = doc.createElement('div'); notice.className = 'nl-card-outdated'
       notice.textContent = 'Outdated — the area it marked is gone.'
       card.appendChild(notice)
     }
 
-    var thread = document.createElement('div'); thread.className = 'nl-card-thread'
+    var thread = doc.createElement('div'); thread.className = 'nl-card-thread'
     function msg(text, by) {
-      var m = document.createElement('div'); m.className = 'nl-card-msg' + (by === author ? ' nl-card-me' : '')
-      var p = document.createElement('div'); p.textContent = text
-      var s = document.createElement('small'); s.textContent = by
+      var m = doc.createElement('div'); m.className = 'nl-card-msg' + (by === author ? ' nl-card-me' : '')
+      var p = doc.createElement('div'); p.textContent = text
+      var s = doc.createElement('small'); s.textContent = by
       m.appendChild(p); m.appendChild(s)
       thread.appendChild(m)
     }
@@ -409,25 +526,25 @@
     // No Reply control here — the Contracts HTTP block names exactly add/region/delete/reopen/
     // resolve/answer, a fourth (reply) verb is out of this spec's scope (see the sidecar
     // deviation), and a pressable control with no route and no success sentence must not ship.
-    var row = document.createElement('div'); row.className = 'nl-card-row'
-    var sp = document.createElement('span'); sp.className = 'sp'; row.appendChild(sp)
+    var row = doc.createElement('div'); row.className = 'nl-card-row'
+    var sp = doc.createElement('span'); sp.className = 'sp'; row.appendChild(sp)
 
     if (n.status === 'open') {
-      var resolveBtn = document.createElement('button'); resolveBtn.className = 'nl-btn primary'; resolveBtn.textContent = 'Resolve'
+      var resolveBtn = doc.createElement('button'); resolveBtn.className = 'nl-btn primary'; resolveBtn.textContent = 'Resolve'
       resolveBtn.onclick = function () {
         closeCard()
         deferPost('Resolved', function () { api('resolve', { id: n.id, by: author }).then(refresh) })
       }
       row.appendChild(resolveBtn)
     } else if (n.status === 'addressed') {
-      var rejectBtn = document.createElement('button'); rejectBtn.className = 'nl-btn'; rejectBtn.textContent = 'Reject'
-      var acceptBtn = document.createElement('button'); acceptBtn.className = 'nl-btn primary'; acceptBtn.textContent = 'Accept'
+      var rejectBtn = doc.createElement('button'); rejectBtn.className = 'nl-btn'; rejectBtn.textContent = 'Reject'
+      var acceptBtn = doc.createElement('button'); acceptBtn.className = 'nl-btn primary'; acceptBtn.textContent = 'Accept'
       rejectBtn.onclick = function () {
         if (card.querySelector('.nl-card-why')) return
-        var why = document.createElement('div'); why.className = 'nl-card-why'
-        var ta = document.createElement('textarea')
-        var whyRow = document.createElement('div'); whyRow.className = 'nl-card-row'
-        var send = document.createElement('button'); send.className = 'nl-btn primary'; send.textContent = 'Send back'
+        var why = doc.createElement('div'); why.className = 'nl-card-why'
+        var ta = doc.createElement('textarea')
+        var whyRow = doc.createElement('div'); whyRow.className = 'nl-card-row'
+        var send = doc.createElement('button'); send.className = 'nl-btn primary'; send.textContent = 'Send back'
         send.onclick = function () {
           var v = ta.value.trim()
           if (!v) { ta.focus(); return }
@@ -445,24 +562,23 @@
       row.appendChild(rejectBtn); row.appendChild(acceptBtn)
     }
 
-    var moreWrap = document.createElement('div'); moreWrap.className = 'nl-card-more'
-    var moreBtn = document.createElement('button'); moreBtn.className = 'nl-btn'; moreBtn.textContent = '…'
+    var moreWrap = doc.createElement('div'); moreWrap.className = 'nl-card-more'
+    var moreBtn = doc.createElement('button'); moreBtn.className = 'nl-btn'; moreBtn.textContent = '…'
     moreBtn.onclick = function () {
       var existing = moreWrap.querySelector('.nl-card-menu')
       if (existing) { existing.remove(); return }
-      var menu = document.createElement('div'); menu.className = 'nl-card-menu'
+      var menu = doc.createElement('div'); menu.className = 'nl-card-menu'
       if (status === 'outdated') {
-        var replaceBtn = document.createElement('button'); replaceBtn.textContent = 'Re-place the box'
+        var replaceBtn = doc.createElement('button'); replaceBtn.textContent = 'Re-place the box'
         replaceBtn.onclick = function () {
           pendingReplace = n.id
           closeCard()
-          setMarking(true)
         }
         menu.appendChild(replaceBtn)
       }
       var threadEmpty = !Array.isArray(n.thread) || n.thread.length === 0
       var canDelete = n.status === 'open' && n.kind == null && threadEmpty
-      var lastBtn = document.createElement('button')
+      var lastBtn = doc.createElement('button')
       lastBtn.textContent = canDelete ? 'Delete' : 'Withdraw'
       lastBtn.onclick = function () {
         closeCard()
@@ -475,23 +591,44 @@
     moreWrap.appendChild(moreBtn)
     row.appendChild(moreWrap)
     card.appendChild(row)
+    return card
+  }
 
+  function openNoteCard(n) {
+    setSelectedBox(n.id)
+    setMode('composing')
+    var status = regionStatusOf(n)
+    var doc = cardDoc()
+    var card = buildCardChrome(doc, n, status)
+    if (framed()) {
+      var resolved = n.region && window.NotesAnchor ? window.NotesAnchor.resolve(rootEl, n.region) : null
+      // A frame-local box in the framed mock's own document coordinates, before the board's scale
+      // (D6's Contracts). A note with no drawn box (a plain screen+state note, no region) has
+      // nothing for the host to place beside — fall back to the root element's own frame-local
+      // rect so the card still lands somewhere sane rather than throwing.
+      var box = resolved ? resolved.box : (rootEl ? (function () {
+        var r = rootEl.getBoundingClientRect()
+        return { x: 0, y: 0, w: r.width, h: Math.min(r.height, 40) }
+      })() : { x: 0, y: 0, w: 0, h: 0 })
+      try { window.parent.__rvCardOpen(card, box, window) } catch (e) { /* no parent hook */ }
+      return
+    }
+    if (!cardSlot) return
+    cardSlot.innerHTML = ''
     cardSlot.appendChild(card)
-    cardPosition(card, n.id)
-    render()
+    var anchorEl = (boxLayer && boxLayer.querySelector('[data-id="' + n.id + '"]')) || rootEl
+    placeCardBeside(card, anchorEl.getBoundingClientRect())
   }
 
   // ---- D5: the draft composer at the box, and D7's Save note -----------------------------------
-  function openDraftCard(region, box) {
-    if (!cardSlot) return
-    cardSlot.innerHTML = ''
-    var card = document.createElement('div'); card.className = 'nl-card'
+  function buildDraftCard(doc, region, box) {
+    var card = doc.createElement('div'); card.className = 'nl-card'
     var reason = 'other'
 
-    var chipsRow = document.createElement('div'); chipsRow.className = 'nl-chips'
+    var chipsRow = doc.createElement('div'); chipsRow.className = 'nl-chips'
     var chipEls = []
     REASONS.forEach(function (r) {
-      var chip = document.createElement('button')
+      var chip = doc.createElement('button')
       chip.className = 'nl-btn nl-chip' + (r.value === 'other' ? ' nl-chip-on' : '')
       chip.textContent = r.label
       chip.onclick = function () {
@@ -503,14 +640,14 @@
     })
     card.appendChild(chipsRow)
 
-    var ta = document.createElement('textarea'); ta.placeholder = 'What is wrong here?'
+    var ta = doc.createElement('textarea'); ta.placeholder = 'What is wrong here?'
     card.appendChild(ta)
 
-    var row = document.createElement('div'); row.className = 'nl-card-row'
-    var sp = document.createElement('span'); sp.className = 'sp'; row.appendChild(sp)
-    var discard = document.createElement('button'); discard.className = 'nl-btn'; discard.textContent = 'Discard'
+    var row = doc.createElement('div'); row.className = 'nl-card-row'
+    var sp = doc.createElement('span'); sp.className = 'sp'; row.appendChild(sp)
+    var discard = doc.createElement('button'); discard.className = 'nl-btn'; discard.textContent = 'Discard'
     discard.onclick = function () { closeCard() }
-    var save = document.createElement('button'); save.className = 'nl-btn primary'; save.textContent = 'Save note'
+    var save = doc.createElement('button'); save.className = 'nl-btn primary'; save.textContent = 'Save note'
     function doSave() {
       var text = ta.value.trim()
       if (!text) { ta.focus(); return }
@@ -525,44 +662,46 @@
     })
     row.appendChild(discard); row.appendChild(save)
     card.appendChild(row)
-
-    cardSlot.appendChild(card)
-    // Same positioning contract as cardPosition() above: leave position/left/top to viewer.css's
-    // own bottom-sheet media rule below 640px, otherwise place it page-relative (scroll offset
-    // included) since the overlay host is position:absolute, not fixed.
-    if (!(window.matchMedia && window.matchMedia('(max-width:640px)').matches)) {
-      var scrollX = window.pageXOffset || 0
-      var scrollY = window.pageYOffset || 0
-      var rootRect = rootEl.getBoundingClientRect()
-      var left = box ? box.x + box.w + rootRect.left + scrollX + 12 : scrollX + 40
-      var top = box ? box.y + rootRect.top + scrollY : scrollY + 40
-      card.style.left = Math.min(left, scrollX + window.innerWidth - 340) + 'px'
-      card.style.top = Math.max(scrollY + 8, top) + 'px'
+    return { card: card, ta: ta }
+  }
+  function openDraftCard(region, box) {
+    var doc = cardDoc()
+    var built = buildDraftCard(doc, region, box)
+    if (framed()) {
+      try { window.parent.__rvCardOpen(built.card, box, window) } catch (e) { /* no parent hook */ }
+      if (built.ta.focus) built.ta.focus()
+      return
     }
-    if (ta.focus) ta.focus()
+    if (!cardSlot) return
+    cardSlot.innerHTML = ''
+    cardSlot.appendChild(built.card)
+    // Same positioning contract as placeCardBeside() above: leave position/left/top to
+    // viewer.css's own bottom-sheet media rule below 640px, otherwise place it beside the drawn
+    // box (D7) — box/rootRect are viewport-relative, matching placeCardBeside's own input.
+    var rootRect = rootEl.getBoundingClientRect()
+    var boxRect = box
+      ? { left: rootRect.left + box.x, top: rootRect.top + box.y, right: rootRect.left + box.x + box.w, bottom: rootRect.top + box.y + box.h }
+      : { left: rootRect.left, top: rootRect.top, right: rootRect.left, bottom: rootRect.top }
+    placeCardBeside(built.card, boxRect)
+    if (built.ta.focus) built.ta.focus()
   }
 
-  // ---- D5: Mark area mode + drag-to-draw --------------------------------------------------------
-  var marking = false
+  // ---- D1-D4: the mode machine, pointer capture on the overlay, and drag-to-draw ----------------
+  // specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D1: one mode at a
+  // time — 'idle'|'arming'|'drawing'|'composing' — changed only through setMode. The `marking`
+  // boolean and the dragStart/draftEl/dragIsTouch/touchStart flags that used to encode mode
+  // implicitly are retired as mode carriers; the drag's own geometry (dragStart/draftEl/etc.)
+  // stays, since it is geometry, not mode.
+  var mode = 'idle'
   var dragStart = null
   var draftEl = null
   var pendingReplace = null
-  function setMarking(on) {
-    marking = on
-    if (!on) {
-      pendingReplace = null
-      if (draftEl && draftEl.parentNode) draftEl.parentNode.removeChild(draftEl)
-      draftEl = null; dragStart = null; dragIsTouch = false
-      if (touchHoldTimer) clearTimeout(touchHoldTimer)
-      touchHoldTimer = null; touchStart = null
-    }
-    // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D11, disposed s2 (2026-09-13):
-    // a crosshair cursor over the frame while marking is the obvious affordance a hidden bar
-    // label alone never gave — set on the overlay host itself, the one element pointer-events
-    // is already toggled on for the duration of the drag.
-    setStyle(overlayHost, { pointerEvents: on ? 'auto' : 'none', cursor: on ? 'crosshair' : '' })
-    // D5: a one-line hint the first time marking is entered in this browser.
-    if (on) {
+  function setMode(next) {
+    mode = next
+    if (overlay) overlay.setAttribute('data-mode', mode)
+    toggleClass(overlayHost, 'nl-live', mode === 'arming' || mode === 'drawing')
+    // D5: a one-line hint the first time arming is entered in this browser.
+    if (mode === 'arming') {
       var seen = false
       try { seen = !!localStorage.getItem('nl-hint-seen') } catch (e) { seen = false }
       if (!seen && overlay) {
@@ -574,6 +713,10 @@
       }
     }
     render()
+  }
+  function removeDraftEl() {
+    if (draftEl && draftEl.parentNode) draftEl.parentNode.removeChild(draftEl)
+    draftEl = null; dragStart = null; dragIsTouch = false
   }
   function updateDraft(x2, y2) {
     if (!draftEl || !dragStart) return
@@ -588,10 +731,20 @@
     var sz = draftEl.querySelector('.nl-draft-size')
     if (sz) sz.textContent = Math.round(w) + '×' + Math.round(h)
   }
+  // D4: both corners clamp to the mock document's own [0,scrollWidth]×[0,scrollHeight] box before
+  // NotesAnchor.capture ever sees them — a release past the document's own edges must never
+  // produce a region no re-anchor pass can resolve.
   function boxFromDrag(x2, y2) {
     var r = rootEl.getBoundingClientRect()
-    var left = Math.min(dragStart.x, x2), top = Math.min(dragStart.y, y2)
-    return { x: left - r.left, y: top - r.top, w: Math.abs(x2 - dragStart.x), h: Math.abs(y2 - dragStart.y) }
+    var docW = pristineDocW
+    var docH = pristineDocH
+    var clamp = function (v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
+    var x1c = clamp(dragStart.x - r.left, 0, docW)
+    var y1c = clamp(dragStart.y - r.top, 0, docH)
+    var x2c = clamp(x2 - r.left, 0, docW)
+    var y2c = clamp(y2 - r.top, 0, docH)
+    var left = Math.min(x1c, x2c), top = Math.min(y1c, y2c)
+    return { x: left, y: top, w: Math.abs(x2c - x1c), h: Math.abs(y2c - y1c) }
   }
   // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D5: pointer events replace mouse
   // events (a mouse's own pointerType is 'mouse' — its drag starts immediately, byte-identical to
@@ -605,6 +758,10 @@
   var touchHoldTimer = null
   var touchStart = null
   var dragIsTouch = false
+  // D3: `lostpointercapture` aborts a drag ONLY when no `pointerup` has been seen for that
+  // pointer id — it fires on every ordinary release too (measured, A3), so treating it
+  // unconditionally as a cancel would discard every completed drag.
+  var sawPointerUp = false
   function clearTouchHold() { if (touchHoldTimer) clearTimeout(touchHoldTimer); touchHoldTimer = null; touchStart = null }
   function beginDrag(x, y, isTouch) {
     dragIsTouch = !!isTouch
@@ -615,9 +772,31 @@
     overlay.appendChild(draftEl)
     updateDraft(x, y)
   }
+  // D1: toggling arming with the 'm' key (or `__nlMark`) is a no-op mid-drag/mid-card — only
+  // idle<->arming is reachable by the toggle.
+  function toggleArming() {
+    if (mode === 'idle') setMode('arming')
+    else if (mode === 'arming') setMode('idle')
+  }
   if (scope === 'mock' && rootEl) {
-    on(document, 'pointerdown', function (e) {
-      if (!marking || !overlay) return
+    // D2: pointerdown/pointermove/pointerup/pointercancel/lostpointercapture all bind on the
+    // overlay ELEMENT — never `document` — and the handler calls `setPointerCapture` on that same
+    // element, so every subsequent event for this pointer targets the overlay regardless of what
+    // the layer's own chrome (`.nl-bar`, sitting above it in stacking order) or the mock underneath
+    // would otherwise have received. The uncommitted click-swallowing shield this replaces is
+    // deleted with the document listeners it used to guard.
+    overlay.addEventListener('pointerdown', function (e) {
+      if (mode !== 'arming') return
+      // A mouse drag that crosses the viewport's own bottom/right edge (D4's own scenario — a
+      // press near the corner, released past the document) can otherwise trigger the browser's
+      // NATIVE text-selection auto-scroll, which moves the page under the drag between press and
+      // release and desyncs `dragStart` (captured in the pre-scroll viewport frame) from the
+      // release-time `getBoundingClientRect()` (the new, scrolled frame) — `preventDefault` here
+      // suppresses that native selection/auto-scroll without affecting the pointer events
+      // themselves (capture already keeps this element the sole target).
+      if (e.preventDefault) e.preventDefault()
+      try { overlay.setPointerCapture(e.pointerId) } catch (err) { /* already released, or unsupported */ }
+      sawPointerUp = false
       if (e.pointerType === 'touch') {
         touchStart = { x: e.clientX, y: e.clientY }
         touchHoldTimer = setTimeout(function () {
@@ -625,55 +804,68 @@
           touchHoldTimer = null
           touchStart = null
           beginDrag(x, y, true)
+          setMode('drawing')
         }, 350)
         return
       }
       beginDrag(e.clientX, e.clientY, false)
+      setMode('drawing')
     })
-    on(document, 'pointermove', function (e) {
-      if (!marking) return
-      // Still inside the hold window: movement past 8px is a scroll, not a draw — cancel the
-      // pending hold and draw nothing.
+    overlay.addEventListener('pointermove', function (e) {
+      // Still inside the touch hold window: movement past 8px is a scroll, not a draw — cancel
+      // the pending hold and draw nothing (mode stays 'arming').
       if (touchStart && !dragStart) {
         var dx = e.clientX - touchStart.x, dy = e.clientY - touchStart.y
         if (Math.sqrt(dx * dx + dy * dy) > 8) clearTouchHold()
         return
       }
-      if (!dragStart) return
+      if (mode !== 'drawing') return
       updateDraft(e.clientX, e.clientY)
     })
-    on(document, 'pointerup', function (e) {
-      if (!marking) return
-      if (touchHoldTimer) { clearTouchHold(); return } // released before the hold fired — no draft
-      touchStart = null
-      if (!dragStart) return
+    overlay.addEventListener('pointerup', function (e) {
+      sawPointerUp = true
+      if (touchHoldTimer) { clearTouchHold(); return } // released before the hold fired — no draft, mode stays 'arming'
+      if (mode !== 'drawing') return
       var box = boxFromDrag(e.clientX, e.clientY)
       var wasTouch = dragIsTouch
-      if (draftEl && draftEl.parentNode) draftEl.parentNode.removeChild(draftEl)
-      draftEl = null
-      dragStart = null
-      dragIsTouch = false
-      if (!wasTouch && (box.w < 12 || box.h < 12)) return
+      removeDraftEl()
+      // D3: under 12×12 it is a click, not a box — the draft is removed (above) and mode returns
+      // to 'arming', never 'idle' or 'drawing'. A touch-originated drag skips this floor (the
+      // 350ms hold is itself the deliberate gesture).
+      if (!wasTouch && (box.w < 12 || box.h < 12)) { setMode('arming'); return }
       var region = window.NotesAnchor.capture(rootEl, box)
       if (pendingReplace) {
         var noteId = pendingReplace
         pendingReplace = null
-        setMarking(false)
+        setMode('idle')
         api('region', { id: noteId, region: region, by: author }).then(refresh)
         return
       }
+      setMode('composing')
       openDraftCard(region, box)
+    })
+    overlay.addEventListener('pointercancel', function (e) {
+      if (mode !== 'drawing') return
+      removeDraftEl()
+      clearTouchHold()
+      setMode('arming')
+    })
+    overlay.addEventListener('lostpointercapture', function (e) {
+      if (mode !== 'drawing' || sawPointerUp) return
+      removeDraftEl()
+      clearTouchHold()
+      setMode('arming')
     })
     on(document, 'keydown', function (e) {
       var tag = document.activeElement && document.activeElement.tagName
       var typing = tag === 'TEXTAREA' || tag === 'INPUT'
       if (e.key === 'Escape') {
-        if (dragStart) { if (draftEl && draftEl.parentNode) draftEl.parentNode.removeChild(draftEl); draftEl = null; dragStart = null; return }
-        if (openCardNoteId != null || (cardSlot && cardSlot.firstChild)) { closeCard(); return }
-        if (marking) setMarking(false)
+        if (mode === 'drawing') { removeDraftEl(); clearTouchHold(); setMode('arming'); return }
+        if (mode === 'composing') { closeCard(); return }
+        if (mode === 'arming') { setMode('idle'); return }
         return
       }
-      if (!typing && (e.key === 'm' || e.key === 'M')) setMarking(!marking)
+      if (!typing && (e.key === 'm' || e.key === 'M')) toggleArming()
     })
     // D4: re-paint the overlay on resize (a state click already calls render() via the existing
     // stateButtons listener above).
@@ -750,12 +942,10 @@
     d.appendChild(t)
     if (n.region) {
       d.style.cursor = 'pointer'
-      d.onclick = function () {
-        // D8: clicking a strip row scrolls to its box, then opens the card.
-        var box = boxLayer && boxLayer.querySelector('[data-id="' + n.id + '"]')
-        if (box && box.scrollIntoView) box.scrollIntoView({ block: 'center' })
-        openNoteCard(n)
-      }
+      // D8: clicking the mock's OWN strip row is a reveal (the box may be off-screen) — the same
+      // `__nlSelect(id, {reveal:true})` path a review-page rail row drives, restated locally since
+      // there is no parent host here to call it through.
+      d.onclick = function () { window.__nlSelect(n.id, { reveal: true }) }
       d.addEventListener('mouseenter', function () {
         var box = boxLayer && boxLayer.querySelector('[data-id="' + n.id + '"]')
         if (box) { box.classList.add('pulse'); setTimeout(function () { box.classList.remove('pulse') }, 700) }
@@ -927,9 +1117,10 @@
       addMockBtn.textContent = '+ Note on this state'; addMockBtn.onclick = composeMock
       bar.appendChild(addMockBtn)
       // D5: the Mark area toggle — mock scope only, since it draws a box against the mock root.
-      var markBtn = document.createElement('button'); markBtn.className = 'nl-btn' + (marking ? ' on' : '')
-      markBtn.textContent = marking ? 'Marking · Esc to stop' : 'Mark area'
-      markBtn.onclick = function () { setMarking(!marking) }
+      var isArming = mode === 'arming' || mode === 'drawing'
+      var markBtn = document.createElement('button'); markBtn.className = 'nl-btn' + (isArming ? ' on' : '')
+      markBtn.textContent = isArming ? 'Marking · Esc to stop' : 'Mark area'
+      markBtn.onclick = function () { toggleArming() }
       bar.appendChild(markBtn)
     }
     var showBtn = document.createElement('button'); showBtn.className = 'nl-btn'
@@ -1008,32 +1199,36 @@
     renderOverlay()
   }
 
-  // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D3/D5: the bridge the review
-  // page's "Show on the screen" jump button calls into this frame — selects the box (the same
-  // 'sel' class openNoteCard's own openCardNoteId already drives through render/renderOverlay),
-  // scrolls it into view, pulses it, and opens its card. A no-op on an id this page has never
-  // painted a box for (unknown note, or the box has not resolved on the active state).
   // D10: the review page's per-board eye — hides or shows this frame's box layer entirely
   // (display:none on the whole layer, never per box), so a hidden box reports zero client rects.
-  // Not persisted — a fresh load always starts shown.
+  // Not persisted — a fresh load always starts shown. Hiding marks while a card is open closes
+  // the card — a card with no visible box has no anchor.
   window.__nlPins = function (on) {
     if (boxLayer) setStyle(boxLayer, { display: on ? '' : 'none' })
+    if (!on && mode === 'composing') closeCard()
   }
 
   // D11: the review page's "Mark an area" ghost action — the drag, the draft and the note itself
-  // stay entirely inside this frame's own layer (setMarking), unchanged.
+  // stay entirely inside this frame's own layer. `__nlMark(on)` is now `setMode('arming'|'idle')`.
   window.__nlMark = function (on) {
-    setMarking(!!on)
+    setMode(on ? 'arming' : 'idle')
   }
 
-  window.__nlFocus = function (id) {
+  // specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D8: `__nlFocus` is
+  // RETIRED — its two behaviors (select, reveal) are separated here. `opts.reveal` gates the
+  // scroll+pulse; selection itself (the 'sel'/'has-sel' toggle) and opening the card happen
+  // through `openNoteCard` -> `setSelectedBox` regardless of `reveal`. A no-op on an id this page
+  // has never painted a box for (unknown note, or the box has not resolved on the active state) —
+  // the note may still exist (a plain screen+state note with no region), so the card can still
+  // open even when `box` below is null.
+  window.__nlSelect = function (id, opts) {
+    opts = opts || {}
     var box = boxLayer ? boxLayer.querySelector('[data-id="' + id + '"]') : null
-    if (box && box.scrollIntoView) box.scrollIntoView({ block: 'center' })
-    if (box) { box.classList.add('pulse'); setTimeout(function () { box.classList.remove('pulse') }, 700) }
+    if (opts.reveal) {
+      if (box && box.scrollIntoView) box.scrollIntoView({ block: 'center' })
+      if (box) { box.classList.add('pulse'); setTimeout(function () { box.classList.remove('pulse') }, 700) }
+    }
     var note = mockNotes.filter(function (n) { return n.id === id })[0]
-    // openNoteCard is marksOnly-aware: it selects the box (the "sel" class D8/AC-4 require) but
-    // never populates cardSlot in that mode, so this never opens the in-frame card over the
-    // design — the note itself already reads on the review page's own right rail.
     if (note) openNoteCard(note)
   }
 

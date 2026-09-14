@@ -85,14 +85,17 @@ function serve(dir, port = 0) {
   return { child, ready, stop }
 }
 
-// A minimal DevTools client: launch headless Chrome, attach one page session, and expose a
-// navigate()/evalJs()/setViewport()/sleep() quartet a caller composes into its own flow (e.g. an
-// evalAt(url) that navigates then evaluates one fixed probe expression). Every dialog (the notes
-// layer's window.prompt on a fresh profile, A3) is answered as it opens — a pending dialog holds
-// the load event forever otherwise. `opts.deadlineMs` (default 15000, D4) bounds every DevTools
-// `send` and `navigate`'s load wait; the 15s DevTools-endpoint launch wait and the 2s
-// `Browser.close` race are unchanged.
-async function withChrome(chrome, fn, opts = {}) {
+// launchChrome(chrome, opts) → { send, rawSend, listeners, deadlineMs, close } — spawns headless
+// Chrome ONCE and opens its DevTools socket, with no page/target yet. `openPage` (below) opens one
+// target/session against an already-launched instance; `withChrome` composes launchChrome +
+// openPage + one call for a single-page caller, unchanged in behavior from before this split.
+// specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D13 amendment (review
+// finding, 2026-09-13): a file with N `[env: CHROME_BIN]` tests calling `withChrome` N times
+// spawns N chrome PROCESSES — `node --test`'s default concurrency multiplies that into a thrash
+// that starves unrelated wall-clock-bounded tests. `launchChrome`/`openPage` let a file spawn one
+// process (in a `before` hook) and open one target per test (cheap — a new tab in the same
+// process), closed per test, with the process itself closed once in `after`.
+async function launchChrome(chrome, opts = {}) {
   const deadlineMs = opts.deadlineMs || 15000
   const child = spawn(chrome, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
@@ -127,49 +130,93 @@ async function withChrome(chrome, fn, opts = {}) {
     ws.send(JSON.stringify(Object.assign({ id, method, params: params || {} }, sessionId ? { sessionId } : {})))
   })
   const send = (method, params, sessionId) => withDeadline(rawSend(method, params, sessionId), deadlineMs, 'DevTools ' + method)
-  const waitFor = (method, sessionId) => new Promise((resolve) => {
-    listeners.push(function l(msg) { if (msg.method === method && msg.sessionId === sessionId) { listeners.splice(listeners.indexOf(l), 1); resolve(msg.params) } })
-  })
-  try {
-    const { targetId } = await send('Target.createTarget', { url: 'about:blank' })
-    const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true })
-    await send('Page.enable', {}, sessionId)
-    await send('Runtime.enable', {}, sessionId)
-    // The notes layer asks the reviewer's name through window.prompt on a fresh profile
-    // (notes-layer-isolation.test.js A3); a pending dialog holds the load event forever, so
-    // every dialog is answered as it opens.
-    listeners.push((msg) => {
-      if (msg.method === 'Page.javascriptDialogOpening' && msg.sessionId === sessionId) {
-        rawSend('Page.handleJavaScriptDialog', { accept: true, promptText: 'reviewer' }, sessionId).catch(() => {})
-      }
-    })
-    const navigate = async (url) => {
-      const loaded = withDeadline(waitFor('Page.loadEventFired', sessionId), deadlineMs, 'load of ' + url)
-      // A rejected `loaded` racing ahead of `send`'s own deadline (both started in the same tick)
-      // must never surface as an unhandled rejection before the `await loaded` line below reaches
-      // it — attach a no-op catch immediately and let the real await re-raise it in order.
-      loaded.catch(() => {})
-      await send('Page.navigate', { url }, sessionId)
-      await loaded
-      await new Promise((r) => setTimeout(r, 300))
-    }
-    const evalJs = async (expr) => {
-      const { result, exceptionDetails } = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }, sessionId)
-      if (exceptionDetails) {
-        throw new Error('page eval threw (the markup/script under test is likely still missing): ' +
-          (exceptionDetails.exception && exceptionDetails.exception.description || JSON.stringify(exceptionDetails)))
-      }
-      return result.value
-    }
-    const setViewport = (width, height) => send('Emulation.setDeviceMetricsOverride',
-      { width, height, deviceScaleFactor: 1, mobile: false }, sessionId)
-    const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-    return await fn({ navigate, evalJs, setViewport, sleep, send, sessionId })
-  } finally {
+  const close = async () => {
     try { await Promise.race([rawSend('Browser.close'), new Promise((r) => setTimeout(r, 2000))]) } catch (e) { /* closing anyway */ }
     try { ws.close() } catch (e) { /* closed */ }
     try { child.kill('SIGKILL') } catch (e) { /* gone */ }
   }
+  return { send, rawSend, listeners, deadlineMs, close }
 }
 
-module.exports = { findChrome, serve, withChrome, withDeadline }
+// openPage(launch) → { navigate, evalJs, setViewport, sleep, send, sessionId, close } — one new
+// target/session on an already-launched instance (`launchChrome`'s return). `close()` closes only
+// this target, leaving the shared browser process running for the caller's next test.
+async function openPage(launch) {
+  const { send, rawSend, listeners, deadlineMs } = launch
+  const { targetId } = await send('Target.createTarget', { url: 'about:blank' })
+  const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true })
+  await send('Page.enable', {}, sessionId)
+  await send('Runtime.enable', {}, sessionId)
+  const waitFor = (method) => new Promise((resolve) => {
+    listeners.push(function l(msg) { if (msg.method === method && msg.sessionId === sessionId) { listeners.splice(listeners.indexOf(l), 1); resolve(msg.params) } })
+  })
+  // The notes layer asks the reviewer's name through window.prompt on a fresh profile
+  // (notes-layer-isolation.test.js A3); a pending dialog holds the load event forever, so
+  // every dialog is answered as it opens.
+  listeners.push((msg) => {
+    if (msg.method === 'Page.javascriptDialogOpening' && msg.sessionId === sessionId) {
+      rawSend('Page.handleJavaScriptDialog', { accept: true, promptText: 'reviewer' }, sessionId).catch(() => {})
+    }
+  })
+  const navigate = async (url) => {
+    const loaded = withDeadline(waitFor('Page.loadEventFired'), deadlineMs, 'load of ' + url)
+    // A rejected `loaded` racing ahead of `send`'s own deadline (both started in the same tick)
+    // must never surface as an unhandled rejection before the `await loaded` line below reaches
+    // it — attach a no-op catch immediately and let the real await re-raise it in order.
+    loaded.catch(() => {})
+    await send('Page.navigate', { url }, sessionId)
+    await loaded
+    await new Promise((r) => setTimeout(r, 300))
+  }
+  const evalJs = async (expr) => {
+    const { result, exceptionDetails } = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }, sessionId)
+    if (exceptionDetails) {
+      throw new Error('page eval threw (the markup/script under test is likely still missing): ' +
+        (exceptionDetails.exception && exceptionDetails.exception.description || JSON.stringify(exceptionDetails)))
+    }
+    return result.value
+  }
+  const setViewport = (width, height) => send('Emulation.setDeviceMetricsOverride',
+    { width, height, deviceScaleFactor: 1, mobile: false }, sessionId)
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const close = async () => { try { await send('Target.closeTarget', { targetId }) } catch (e) { /* browser may already be closing */ } }
+  return { navigate, evalJs, setViewport, sleep, send, sessionId, close }
+}
+
+// A minimal DevTools client, single-page shape: launch headless Chrome, attach one page session,
+// run `fn` against it, and tear the whole browser down — for a file with exactly one (or few)
+// `[env: CHROME_BIN]` tests, where a per-file shared launch (`launchChrome`/`openPage`) would be
+// more machinery than the file needs. `opts.deadlineMs` (default 15000, D4) bounds every DevTools
+// `send` and `navigate`'s load wait; the 15s DevTools-endpoint launch wait and the 2s
+// `Browser.close` race are unchanged.
+async function withChrome(chrome, fn, opts = {}) {
+  const launch = await launchChrome(chrome, opts)
+  try {
+    const page = await openPage(launch)
+    return await fn(page)
+  } finally {
+    await launch.close()
+  }
+}
+
+// drag(send, sessionId, from, to, opts): a real `Input.dispatchMouseEvent` press / N moves /
+// release — never a script-dispatched PointerEvent, which pointer capture and click-suppression
+// cannot observe (only a genuine input event routes through the browser's own hit-testing and
+// capture machinery). `from`/`to` are `{x, y}` in the page's own viewport CSS pixels; `opts.steps`
+// (default 8) sets the move count, `opts.button` (default 'left'). Four of this repo's interaction
+// tests need the identical sequence — specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-
+// the-card.md D13 (AC-20260913-02-2).
+async function drag(send, sessionId, from, to, opts) {
+  opts = opts || {}
+  const steps = opts.steps || 8
+  const button = opts.button || 'left'
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: from.x, y: from.y, button, clickCount: 1 }, sessionId)
+  for (let i = 1; i <= steps; i++) {
+    const x = from.x + (to.x - from.x) * (i / steps)
+    const y = from.y + (to.y - from.y) * (i / steps)
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button, buttons: 1 }, sessionId)
+  }
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: to.x, y: to.y, button, clickCount: 1 }, sessionId)
+}
+
+module.exports = { findChrome, serve, withChrome, withDeadline, drag, launchChrome, openPage }

@@ -131,7 +131,7 @@ function renderRail(seed, journey, screens, openByLabel, projectOpen) {
 // label and state are URL-encoded, so only a double quote could ever break the attribute.
 // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D3/D5: `&notes=1` rides alongside
 // `?clean` so design-atlas.js's mock route still injects the notes-layer script (D3's bridge
-// target, `window.__nlFocus`) even though the frame keeps the clean chrome strip (native
+// target, `window.__nlSelect`) even though the frame keeps the clean chrome strip (native
 // data-state-btn controls stay hidden — the review page's own tab bar replaces them) — a bare
 // `?clean` request (every OTHER caller of the mock route) carries no such flag and so still gets
 // no layer at all (tests/mocks/notes-layer-isolation.test.js's own pin).
@@ -178,6 +178,12 @@ function renderBoard(screen, i, vp, prefix, openCount, focused, total, regionCou
     '<div class="rv-tabs" role="tablist" aria-label="States of ' + esc(label) + '">' + tabsHtml + '</div></header>' +
     '<div class="rv-stage">' +
     '<div class="rv-shot" data-rv="shot" style="--rv-w:' + vp.width + ';--rv-h:' + vp.height + '">' + framesHtml + '</div>' +
+    // specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D6: a per-board card
+    // host, a SIBLING of `.rv-shot` (never inside it, which clips) — review.browser.js's
+    // __rvCardOpen/__rvCardClose place and remove a frame-built card here at full size, in the
+    // review page's own document, using the board's own iframe scale to convert the frame-local
+    // box the framed layer hands up.
+    '<div class="rv-cardhost" data-rv="cardhost"></div>' +
     '</div></section>'
 }
 

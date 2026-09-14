@@ -3078,7 +3078,7 @@ function createRequestHandler(root, opts = {}) {
         // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D3/D5: a review board's
         // framed mock rides `?clean&notes=1` (lib/review-page.js's frameSrc) — the clean strip
         // still applies (native data-state-btn controls stay hidden), but the notes layer is
-        // injected too, so `window.__nlFocus` exists inside the frame the jump button targets. A
+        // injected too, so `window.__nlSelect` exists inside the frame the jump button targets. A
         // bare `?clean` (every other caller) keeps carrying no layer at all.
         const wantsClean = urlObj.searchParams.has('clean')
         if (wantsClean) body = insertBeforeBodyEnd(body, CLEAN_STYLE)

@@ -399,9 +399,12 @@ body {
   pointer-events: none;
 }
 .rv-clean .rv-shot::after { display: none; }
-.rv-shot iframe { border: 0; display: block; transform-origin: 0 0; transform: scale(var(--rv-scale)); pointer-events: none; }
+/* specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D12: pointer-events
+   stays auto on every board frame — scaled or clean — because a framed layer's own drag and box
+   click (D2, D8) must reach it; nothing else lets a marked-up board be interactive at all. */
+.rv-shot iframe { border: 0; display: block; transform-origin: 0 0; transform: scale(var(--rv-scale)); pointer-events: auto; }
 .rv-clean .rv-shot { overflow: auto; height: auto; }
-.rv-clean .rv-shot iframe { transform: none; pointer-events: auto; }
+.rv-clean .rv-shot iframe { transform: none; }
 .rv-clean .rv-addnote, .rv-clean .rv-badge { display: none; }
 
 /* inspector */
@@ -825,6 +828,29 @@ body {
    mock's own document — this file is linked only inside the layer's shadow roots (the isolation
    invariant, tests/mocks/notes-layer-isolation.test.js). */
 .nl-overlay { position: absolute; inset: 0; }
+/* specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D5: affordances derive
+   from the overlay's own `data-mode` — the layer's only writer is `setMode`, and the imperative
+   `setStyle(overlayHost, {pointerEvents, cursor})` calls it used to make are deleted with this
+   rule. `idle`/`composing` are inert (a card open takes no drag); `arming`/`drawing` turn on
+   pointer-events, the crosshair and touch-action:none together, plus the 6%-ink scrim
+   `design/chrome-mocks/notes.html` declares as `.device.marking .nl-overlay::before` — restated
+   here as `color-mix(in srgb, var(--v-fg) 6%, transparent)` rather than the prototype's literal
+   `rgba(10,10,10,.06)`, since this stylesheet never carries a literal color. */
+.nl-overlay[data-mode="idle"],
+.nl-overlay[data-mode="composing"] { pointer-events: none; }
+.nl-overlay[data-mode="arming"],
+.nl-overlay[data-mode="drawing"] { pointer-events: auto; cursor: crosshair; touch-action: none; }
+.nl-overlay[data-mode="arming"]::before,
+.nl-overlay[data-mode="drawing"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--v-fg) 6%, transparent);
+}
+/* D10: the view-state dim the prototype declares (`.nl-overlay.has-sel .nl-region:not(.sel)`)
+   but the shipped stylesheet never carried — the layer set `has-sel` on the overlay with nothing
+   here to answer it, so the treatment has never rendered until now. */
+.nl-overlay.has-sel .nl-region:not(.sel) { opacity: .45; }
 /* specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D12: a mark is two parts — a
    stroke-less highlighter tint over exactly the dragged area, and a dashed frame held 6px
    OUTSIDE that tint (::before) so a gutter of untouched design always separates the annotation
@@ -859,7 +885,18 @@ body {
   border-color: var(--c);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 26%, transparent);
 }
-.nl-region.dim { opacity: .45; }
+/* specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D11: the reveal
+   animation the prototype declares (`design/chrome-mocks/notes.html`'s `pulse` keyframes) but
+   the shipped stylesheet never carried — `__nlSelect`'s reveal path has added the `.pulse` class
+   since it shipped, with no rule here to answer it. Guarded so a reduced-motion viewer sees the
+   selection state change with no animation at all. */
+@media (prefers-reduced-motion: no-preference) {
+  .nl-region.pulse { animation: pulse .7s ease-out 1; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 50%, transparent); }
+    100% { box-shadow: 0 0 0 16px transparent; }
+  }
+}
 
 .nl-region-badge {
   position: absolute;

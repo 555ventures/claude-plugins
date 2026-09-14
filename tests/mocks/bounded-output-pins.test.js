@@ -57,7 +57,11 @@ test('AC-20260912-14-5: check --states over two mocks each declaring only "empty
   }
 })
 
-test('AC-20260912-14-9: notes open on a small queue (one open project note, two open mock notes, one addressed mock note, one open question) CONTINUES TO print the questions line first, the counts line, the project block before any journey group, and the project-note warning last', () => {
+// specs/20260913/07-the-critic-is-out.md D8/AC-20260913-07-11: `notes open` never produces a
+// questions block at all once nothing but a person types a note — the same small queue as
+// AC-20260912-14-9 (now folded into this AC) prints its counts line first, with no "❓" line and
+// no mention of the legacy question note's own id anywhere in the output.
+test('AC-20260912-14-9: (rewritten as AC-20260913-07-11) notes open on a store holding one open project note, two open mock notes, one addressed mock note and one open kind:"question" note prints the counts line first, no "❓" line, and no mention of the question\'s id', () => {
   const dir = tmpdir('pins-notes-small')
   writeSeed(dir)
   writeNotesFile(dir, [
@@ -75,19 +79,18 @@ test('AC-20260912-14-9: notes open on a small queue (one open project note, two 
   const r = notesOpen(dir)
   assert.strictEqual(r.status, 0, 'notes open must still exit 0 on a small queue: ' + r.stderr)
   const lines = r.stdout.split('\n')
-  assert.strictEqual(lines[0], '❓ questions: 1 open',
-    'the questions line must still print first: got ' + JSON.stringify(r.stdout))
   // The addressed mock note is still "not resolved" (status "addressed" !== "resolved") and is
   // still counted into both the total and the mock sub-count, exactly as it is today — the
   // literal "3 (1 project · 2 mock)" a first reading of the spec's own worked example suggests
   // undercounts the addressed note; see this spec's deviations sidecar.
-  assert.ok(lines.includes('📝 open notes: 4 (1 project · 3 mock) · addressed: 1'),
-    'the counts line must still count the addressed mock note into both totals, unchanged: got ' + JSON.stringify(r.stdout))
-  // "onboarding" also opens the questions block above the project block (the open question's own
-  // journey group), so the journey index under test is the LAST occurrence — the plain-note
-  // listing's own journey group, which must still follow "project".
+  assert.strictEqual(lines[0], '📝 open notes: 4 (1 project · 3 mock) · addressed: 1',
+    'the counts line must be the FIRST line once no questions block exists: got ' + JSON.stringify(r.stdout))
+  assert.ok(!r.stdout.includes('❓'),
+    'a legacy kind:"question" note must never surface a "❓" line — nothing but a person\'s note is ever counted or listed: got ' + JSON.stringify(r.stdout))
+  assert.ok(!r.stdout.includes('N020') && !r.stdout.includes('single-use link?'),
+    'a legacy question\'s id and text must never appear anywhere in the output: got ' + JSON.stringify(r.stdout))
   const projectIx = lines.indexOf('project')
-  const journeyIx = lines.lastIndexOf('onboarding')
+  const journeyIx = lines.indexOf('onboarding')
   assert.ok(projectIx !== -1 && journeyIx !== -1 && projectIx < journeyIx,
     'the project block must still print before any journey group: got ' + JSON.stringify(r.stdout))
   assert.strictEqual(lines[lines.length - 2],

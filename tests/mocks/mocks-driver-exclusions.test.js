@@ -36,8 +36,11 @@ function advanceToJustBeforeApproved(dir) {
 
 // ---------------------------------------------------------------------------
 // AC-20260911-05-7
+// specs/20260913/07-the-critic-is-out.md D9 — AC-20260913-07-25: `invalidatedAnswerEntries` (the
+// answered-`no`-question exclusion source below) stays a legacy reader over the now-retired
+// `kind: "question"` shape — assertions unchanged, retagged in place.
 // ---------------------------------------------------------------------------
-test('AC-20260911-05-7: `ledger derive` CONTINUES TO append one row per non-goal, one per invented-row "no", and one per not-needed withdrawal, excluding an inferred-row no and a mistake withdrawal, and stays byte-idempotent on a second run', () => {
+test('AC-20260911-05-7: (reused by AC-20260913-07-25) `ledger derive` CONTINUES TO append one row per non-goal, one per invented-row "no", and one per not-needed withdrawal, excluding an inferred-row no and a mistake withdrawal, and stays byte-idempotent on a second run', () => {
   const dir = tmpdir('excl-derive-continue-2')
   advanceToSeedDone(dir)
   writeFile(briefPath(dir), "## Non-goals\n- SMS reminders — Later\n- Multi-currency — Won't-this-time\n- Bookings — In\n")

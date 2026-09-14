@@ -19,7 +19,7 @@ identical.
 note`:
 
 - `id` — `^[A-Z]+\d+[a-z]?$`, unique across the table.
-- `step` — `^[A-Z][A-Z-]*$` (`SEED`, `SHAPES`, `KIT`, `WIREFRAMES`, `WALK`, `CLIENT`, `SKETCH`,
+- `step` — `^[A-Z][A-Z-]*$` (`SEED`, `SHAPES`, `KIT`, `WIREFRAMES`, `CLIENT`, `SKETCH`,
   `GENESIS`, …); rows written under retired step names (`SKIN`, `REVIEW`, `THEME`, `SIGNOFF`)
   still match the pattern and keep parsing.
 - `kind` — one fixed word: `product`, `process`, or `exclusion`.
@@ -49,9 +49,6 @@ every `process` row never block — a fact the user ratified as prose stays coun
 and is re-tested on the screen that renders it, never re-asked as a question. A ledger that
 fails to parse never opens a gate (parse errors are reported, not silently passed).
 
-A row pinned as a question (§ Mocks: Page Notes, **Questions**) is answered on the page; the
-answer writes the row's status.
-
 **Counts line.** Every mark prints one fixed line:
 
 ```
@@ -71,20 +68,17 @@ removed) the derivation lands earlier and demands the mark again. The order is f
 (the 13 facts, journeys, dense screen, research brief) → **SHAPES** (one shape kebab picked
 from 2–3 candidates) → **KIT** (the shared-primitive canon named and signed off, before any
 screen) → **WIREFRAMES** (canon written, then every seed journey drawn and
-approved) → **WALK** (one fresh-context critic walks each declared journey once, flow breaks
-only) → **THEME** (the user authors two or three directions under `design/theme/<kebab>/`,
+approved) → **THEME** (the user authors two or three directions under `design/theme/<kebab>/`,
 `theme shortlist` opens a client pick over the seed's dense screens served with
 `?theme=<kebab>` — a link swap of the wire register's token file, never a redraw — and
 `--mark theme-picked` adopts the client's pick, copying its tokens the way `theme adopt` once
 did) → **CLIENT** (the client player, exposed by the user, where the client walks each
 journey by its real controls, answers the session's guesses, raises notes and confirms with one
-sentence; closes when every journey is `ok` or waived, every client-visible question
-answered-or-waived and every client note resolved-or-waived) → **APPROVED** (terminal).
-WIREFRAMES carries a sub-mark per
+sentence; closes when every journey is `ok` or waived and every client note resolved-or-waived)
+→ **APPROVED** (terminal). WIREFRAMES carries a sub-mark per
 journey so no single conversation ever has to hold more than one journey's state —
 a seed journey added mid-WIREFRAMES reappears as `0/N drawn` and reopens the state rather than
-silently completing; a journey added after WALK already ran on the others reopens WALK the same
-way.
+silently completing.
 
 **The gate rides every advancing mark.** `seed-done`, `shape-picked`, `kit-signed`,
 `canon-written`, `journey-approved`, and `approved` each
@@ -93,17 +87,16 @@ gate refuses (exit 2) naming the offending rows and the remedy (`ledger set --id
 confirmed --tag said-by-user`, or `--status overridden`). `journey-approved` and `approved`
 additionally run the rendered adaptation gate (§ Design Render Gate, `render-gate --mocks`),
 falling back to the plugin's own capture when the host declares none, and refuse the mark on
-any finding or on a machine with no browser. `journey-drawn` and `journey-walked`
-run no gate — drawing and walking are how open questions get found, not
+any finding or on a machine with no browser. `journey-drawn`
+runs no gate — drawing is how an assumption gets pinned to the ledger, not
 resolved. Process rows never surface as something to resolve; they are counted, not asked.
 
-**Reopening never deletes.** `--reopen journey:<j>` clears that journey's `approved` mark
-(and the terminal `approved`), and additionally clears that journey's `walked`, naming
-`walk:<j>` among what it invalidated; `--reopen walk:<j>` clears that journey's `walked`, the
-terminal `approved`, and the sign-off decider, leaving every journey's own `approved` untouched;
-`--reopen shapes` clears the shape pick and every downstream mark, including every journey's
-`walked`; `--reopen kit` clears the kit sign-off and `approved`, never a journey's own approval
-or its `walked`. Every reopen appends one row to
+**Reopening never deletes.** `--reopen journey:<j>` clears that journey's own `approved` mark,
+the terminal `approved`, and takes back the client's own confirmation of that journey on
+`walk.json` (§ Mocks: Client Player); `--reopen shapes` clears the shape pick and every
+downstream mark, including every journey's own approval; `--reopen kit` clears the kit
+sign-off and `approved`, never a journey's own approval; `--reopen theme` clears the theme
+pick and `approved`. Every reopen appends one row to
 `status.reopens` naming what it invalidated and leaves every file on disk byte-identical — the
 next derivation lands on the earliest state whose marks are now missing.
 
@@ -172,7 +165,7 @@ starting it is idempotent. This makes `serve` the session's own tool: before the
 stop of a `/spec:mocks`, `/spec:sketch`, or `/spec:atlas` run, the session starts
 `node "$(spec-paths design-atlas)" serve --root . [--port <n>]` as a
 **tracked background task** (D4, specs/20260905/04) through the authoring states — SHAPES, KIT,
-WIREFRAMES, WALK, THEME — leaves it running across that run's look stops, and stops the task at
+WIREFRAMES, THEME — leaves it running across that run's look stops, and stops the task at
 sign-off or when the session ends — no script ever spawns a detached server, writes a pid file,
 or runs a registry; the serve command itself is never printed to the user. **In CLIENT the
 server is the user's own process**: started once in the user's terminal, kept running until
@@ -185,7 +178,7 @@ address shared across projects.
 
 **The journey look surface is the review page.** `stop open journey:<j>` points the stop's URL
 at `/review/<j>.html`, served by `design-atlas.js` alongside the atlas index — screens rail,
-per-screen artboards with state tabs, and a question/note inspector answered in place. Its
+per-screen artboards with state tabs, and a note inspector answered in place. Its
 chrome follows the plugin-chrome rule, one binding home: design.md § Design Canon.
 
 **The session's own look** is `mocks-driver.js look <label> [--state <s>] [--port <n>] [--out
@@ -241,33 +234,25 @@ markup. Where the anchor no longer resolves the note shows as `outdated` — nev
 guessed — and offers re-place (docs/adr/0020-a-note-can-mark-an-area.md).
 
 **Status is a three-step queue, asymmetric by design.** `open` → `addressed` (driver-only:
-`notes address --id <id> --change "<what changed>" [--ledger <rowId>]`, or a question-back reply
-via `notes reply --id <id> --text "<question>"`, which leaves status unchanged) → `resolved`
+`notes address --id <id> --change "<what changed>" [--ledger <rowId>]`) → `resolved`
 (the page's `Resolve` button only, `by` = the browser's author name; an `open` note may also be
 withdrawn straight to `resolved` by its author). Nothing but the page can set `resolved` — no
 HTTP endpoint on a forwarded port may mark the session's own work done, and only the author who
 raised a note can judge that a re-look actually answered it.
 
-**Questions.** A question is a note whose text is a ledger claim: it exists only because a `product` row
-in § Provenance Ledger was written `inferred` or `invented`, and only the session can create one —
-`ledger add … --screen <label>` pins the assumption row and its question note in one call as the row is
-written, and `ledger ask --id <rowId> --screen <label>` pins an existing open row after the fact — both
-pin to a screen and refuse `--state`: a question never sits on an empty/loading/error state, because a
-gray state is craft, not a client decision (ADR-0013). Neither the client nor whoever signs off can
-author a question; a human free-form message is a note (optionally carrying `reason`), never a question.
-A question is answered only on the served page — `Yes, that's right` or `No, it's…` plus a one-line
-correction — never in chat and never through `notes resolve`; the answer writes the ledger row's status
-(`confirmed` for yes, `overridden` for no, both dated today) before it resolves the note, so the ledger
-is true the moment the human clicks and the note write is placement catching up. An unanswered question
-gates `journey-approved` (and `approved`) exactly as an unresolved note does, named on its own line
-first. Catch provenance — whether a fixed misunderstanding traces back to a pinned question, a free-form
-note, or neither — is derived from a catch row's `addressed.ledgerRow` link, never attested, and printed
-by `ledger counts` as `question · note · unlinked`.
+**Nothing pins a question any more.** An assumption row is confirmed or overridden only by the
+human-run `ledger set --id <id> --status confirmed|overridden --tag said-by-user`, never by a
+note the pipeline files on its own (docs/adr/0023-the-critic-is-out.md). A note with
+`kind: "question"` on disk is a record left by that retired producer, never listed, grouped,
+counted or gated on again; its stored `ledgerId` and `answer` are read only by two legacy
+paths — `lib/mocks-exclusions.js`'s `invalidatedAnswerEntries`, deriving an exclusion row from a
+stored `no` answer on an `invented` row, and `ledger counts`'s catch-provenance line, which still
+prints a fixed misunderstanding's `addressed.ledgerRow` link as `question · note · unlinked`.
 
 **Project notes block the sign-off.** Any note with `scope: "project"` not yet `resolved`
-refuses `approved`, naming the note id first — still ahead of the unanswered-question and
-unresolved-note lines — a direction-level concern outranks per-screen work at the product's own
-sign-off, not at any single journey's (ADR-0019). A mark still refuses while any note on its own
+refuses `approved`, naming the note id first — still ahead of the unresolved-note line — a
+direction-level concern outranks per-screen work at the product's own sign-off, not at any
+single journey's (ADR-0019). A mark still refuses while any note on its own
 screens is unresolved; `approved` refuses while any note anywhere is unresolved, project-scoped
 or not. Zero open notes on a journey is that journey's approval mark.
 
@@ -278,23 +263,14 @@ walk, client or session — is set by the server from the route it arrived on, n
 client-origin note captures its screen when raised; a fix is recorded only when the re-captured screen
 differs. Only the client resolves a client note — withdrawing an `open` one records `resolution:
 "withdrawn"`, accepting an `addressed` one records `resolution: "accepted"` — or `notes waive --id
---reason` releases it after seven days of client silence, a question's ledger row becoming `waived
-<date>`. The page carries the client's only two controls on an addressed note: `Looks good` accepts it,
+--reason` releases it after seven days of client silence. The page carries the client's only two
+controls on an addressed note: `Looks good` accepts it,
 `Still not right` reopens it with the client's own text appended to `thread`, never a second note. A
 project-scope request (no screen of its own) is answered the same way the session answers any note,
 naming where the answer lives: `notes address --id <id> --change "<what changed>" --screen <label>` or
 `--journey <j>`, so the client's "Done" line links straight to the screen or journey that answers it. The
 `CLIENT` step's printed text carries the fixed approval line: `Approval means "this is the product I
 understand" — the written brief, not these screens, holds scope`.
-
-**Walk findings.** A note with `kind: "walk"` is the journey critic's own lane (§ Mocks: State Machine,
-WALK) — one of the six flow breaks (`no-path-back`, `no-path-forward`, `dead-end-state`, `missing-data`,
-`ambiguous-control`, `unrecoverable-error`), always `scope: "mock"`, always cited to a screen and one of
-that screen's declared states, never both absent. The session closes one the same way it closes any other
-note — `notes address --id <id> --change "<what changed>"` — but closing is not resolving: only the
-served page's `Resolve` button, clicked by the human who looked, actually resolves it; `journey-walked`
-(§ Mocks: State Machine) refuses while one anchored to its journey's labels is still `open`, and the
-terminal `approved` mark still refuses while one anywhere is unresolved, `addressed` included.
 
 **Picks.** A pick stage of the flow — shapes, theme directions, per-surface variants — is recorded as a
 look stop in `design/mocks/picks.json`, written only by `spec/scripts/lib/mocks-picks.js` (`openStop`,
@@ -311,11 +287,12 @@ shows through the `notes-scope` meta tag the server stamps on it — `project` o
 on a screen — so the notes layer renders **one scope per page**, declared by the page, rather than
 guessing from document structure.
 
-**Read-back is summarised, not replayed.** `notes open` collapses settled history: answered
-questions print `answered: <n> — --all to list`, and journey-listed open notes stop after 20
-lines with a trailing `… <n> more open note(s) — --all to list`. `notes open --all` prints both
-in full; the questions block, the open-notes counts line, and the project notes block are never
-summarised — a project note blocks every other note by design.
+**Read-back is summarised, not replayed.** `notes open` collapses settled history: the header
+line counts open and addressed notes (`📝 open notes: <n> (<p> project · <m> mock) · addressed:
+<a>`), and journey-listed open notes stop after 20 lines with a trailing `… <n> more open
+note(s) — --all to list`. `notes open --all` prints the full listing; the open-notes counts line
+and the project notes block are never summarised — a project note blocks every other note by
+design.
 
 ## Mocks: Client Player
 

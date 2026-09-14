@@ -28,6 +28,10 @@ function readWalkJson(dir) {
 
 // ---------------------------------------------------------------------------
 // AC-20260911-01-9
+// specs/20260913/07-the-critic-is-out.md D7 (this spec's criterion 20): the unanswered-guess 409 this
+// test already proves absent from the plain no-notes case is deleted outright; the 400/200/409
+// shapes below are unaffected (the new 200-over-a-legacy-question case lives in
+// tests/mocks/human-authored-notes.test.js), so this pin is retagged in place, unchanged.
 // ---------------------------------------------------------------------------
 // D5 adds a refusal in front of confirmJourney; it must add no NEW refusal reason and change
 // none of the 400/200/409 shapes for a journey that already carries zero unanswered questions

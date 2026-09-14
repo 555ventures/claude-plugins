@@ -16,7 +16,8 @@
 //   buildClientIndex({ seed, notes, ledger, walk, prefix, themeOpen, ready }) → html
 //     seed    { product, journeys: [{ name, title, screens: [{ label, states }] }] } in seed
 //             order — design-atlas.js's seedForReview builds it
-//     notes   notes.json array, raw — joined onto `ledger` exactly as review-page.js joins it
+//     notes   notes.json array, raw — a person-typed note only (D8: authoredByPerson); `ledger`
+//             backs the exclusion rows this page renders, never a note join
 //     ledger  parseLedger(...).assumptions
 //     walk    design/mocks/walk.json, raw ({ journeys: { <j>: { reached, misses, confirmedAt,
 //             sentence, waived } } }) — lib/mocks-walk.js is its only writer
@@ -48,7 +49,7 @@
 // Exit codes: none — this is a library, not an executable.
 
 const { esc } = require('./stop-block')
-const { originOf } = require('./mocks-notes')
+const { originOf, authoredByPerson } = require('./mocks-notes')
 const walkLib = require('./mocks-walk')
 
 // Every visible string in the player's own chrome, flat — one language, because the declared
@@ -59,14 +60,8 @@ const STRINGS = {
   next: 'Next',
   states: 'Other states',
   happy: 'Normal',
-  yes: "That's right",
-  no: "That's not right",
-  why: 'What should it be instead?',
   noteLabel: 'Anything else about this screen?',
   noteSend: 'Send',
-  leftNone: 'Nothing left to check',
-  leftOne: '1 thing still to check',
-  leftMany: '{n} things still to check',
   approveLead: 'Describe what you just did, in one sentence.',
   sentence: 'In one sentence…',
   confirm: 'Confirm this journey',
@@ -180,21 +175,6 @@ const STRINGS = {
   moreScreens: '{n} more screens: {list}',
 }
 
-function count(s, none, one, many, n) {
-  return n === 0 ? s[none] : n === 1 ? s[one] : s[many].replace('{n}', String(n))
-}
-
-// A question is open until it carries an answer — the same rule lib/review-page.js applies, so
-// the session's page and the client's page never disagree about what is still outstanding.
-function isOpenQuestion(n) { return n && n.kind === 'question' && n.answer == null }
-
-// Questions joined onto their ledger rows, exactly as /__notes/list joins them: the row supplies
-// the claim the client actually reads. A question whose row is gone carries its own text.
-function claimOf(note, ledgerRows) {
-  const row = (ledgerRows || []).find((r) => r.id === note.ledgerId)
-  return (row && row.claim) || note.text || ''
-}
-
 // specs/20260911/06-the-client-loop.md D23: a raw kebab screen label is never a client-facing
 // word — every DISPLAY occurrence (thumbnail title/caption, step label, card description) reads
 // its first word capitalized and its hyphens turned to spaces; `data-label` keeps the raw label
@@ -213,14 +193,15 @@ function recordOf(walk, journey) {
   return js[journey] || null
 }
 
-// specs/20260911/06-the-client-loop.md D1/D4/D5: the client-origin, non-question requests a
-// journey's labels carry — the set journeyState's own "changes-requested"/"fixed" derivation
-// counts, restated here so buildWalkPage/buildClientIndex's own N counts and request cards never
-// disagree with the state word painted beside them.
+// specs/20260911/06-the-client-loop.md D1/D4/D5: the client-origin requests a journey's labels
+// carry — the set journeyState's own "changes-requested"/"fixed" derivation counts, restated here
+// so buildWalkPage/buildClientIndex's own N counts and request cards never disagree with the
+// state word painted beside them. specs/20260913/07-the-critic-is-out.md D8: a note a person did
+// not type is never counted here — authoredByPerson.
 function journeyRequestsOn(notes, labels) {
   const set = labels instanceof Set ? labels : new Set(labels || [])
   return (notes || []).filter((n) => n && n.scope === 'mock' && set.has(n.screen) &&
-    n.kind !== 'question' && originOf(n) === 'client')
+    authoredByPerson(n) && originOf(n) === 'client')
 }
 
 // specs/20260911/06-the-client-loop.md D16 (amended)/AC-20260911-06-26: the latest client reopen
@@ -236,10 +217,10 @@ function latestReopenText(note) {
   return null
 }
 
-// D4: every client-origin, non-question note (project AND mock scope) — the index's own "Your
+// D4: every client-origin note a person typed (project AND mock scope) — the index's own "Your
 // requests" list, newest first.
 function clientRequestNotes(notes) {
-  return (notes || []).filter((n) => n && n.kind !== 'question' && originOf(n) === 'client')
+  return (notes || []).filter((n) => n && authoredByPerson(n) && originOf(n) === 'client')
     .slice().sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
 }
 
@@ -575,11 +556,6 @@ function renderCardSlots(screens, statusByLabel, currentLabel, prefix, href, s) 
 function renderJourneyCard(entry, notes, walk, prefix, s) {
   const screens = screensOf(entry)
   const labels = screens.map((sc) => sc.label)
-  const labelSet = new Set(labels)
-  // CONTINUE-TO (specs/20260911/01-the-page-waits-for-the-server.md): `data-guesses` is the
-  // open-QUESTION count (a session's own unanswered guess), unrelated to the client-request
-  // states below — kept byte-identical so the predecessor spec's own pin never regresses.
-  const openGuesses = notes.filter((n) => isOpenQuestion(n) && n.scope === 'mock' && labelSet.has(n.screen)).length
   const rec = recordOf(walk, entry.name)
   const state = walkLib.journeyState(rec, notes, labels)
   const reqs = journeyRequestsOn(notes, labels)
@@ -604,7 +580,7 @@ function renderJourneyCard(entry, notes, walk, prefix, s) {
   // `+n more` tile's own `<a>` inside a card-wide `<a>` was invalid HTML and shattered the card
   // in every browser).
   const html = '<li class="wk-journey" data-cl="journey"' +
-    ' data-guesses="' + openGuesses + '" data-confirmed="' + (confirmed ? 'true' : 'false') + '"' +
+    ' data-confirmed="' + (confirmed ? 'true' : 'false') + '"' +
     ' data-state="' + esc(state) + '">' +
     '<ul class="wk-slots">' + slots + '</ul>' +
     '<div class="wk-j-text">' +
@@ -778,17 +754,6 @@ function renderSteps(screens, reached, currentLabel) {
   }).join('')
 }
 
-function renderMark(note, ledger, s) {
-  return '<article class="wk-mark" data-wk="mark" data-id="' + esc(note.id) + '" data-label="' + esc(note.screen) + '" hidden>' +
-    '<p class="wk-claim">' + esc(claimOf(note, ledger)) + '</p>' +
-    '<div class="wk-verdicts">' +
-    '<button class="wk-v" data-wk="yes">' + esc(s.yes) + '</button>' +
-    '<button class="wk-v" data-wk="no">' + esc(s.no) + '</button>' +
-    '</div>' +
-    '<textarea class="wk-why" data-wk="why" rows="2" placeholder="' + esc(s.why) + '" hidden></textarea>' +
-    '</article>'
-}
-
 // specs/20260910/05-what-the-journey-does-not-do.md D5: the exclusion rows this journey shows —
 // every project-wide one (an unanchored `non-goal:` row) plus every one anchored (via its own D1
 // `note` grammar, `answer: <noteId>` / `withdrawn: <noteId>`) to a screen THIS journey declares.
@@ -886,9 +851,9 @@ function renderExclPutback(row, note, s) {
 }
 
 // specs/20260911/05-approval-is-bookkeeping.md D3: an open row offers both verdicts side by
-// side — "Correct" and "No — we need this" — using the page's existing `.wk-verdicts`/`.wk-v`
-// side-by-side answer classes (renderMark's own verdict pattern), never a bespoke agree-only
-// control. specs/20260912/01-the-card-explains-itself.md D1-D4: the card head, the provenance
+// side — "Correct" and "No — we need this" — using the page's own `.wk-verdicts`/`.wk-v`
+// side-by-side answer classes, never a bespoke agree-only control.
+// specs/20260912/01-the-card-explains-itself.md D1-D4: the card head, the provenance
 // line, the `not: ` strip and the reload-trace state line — `entry` is `{ row, note }` from
 // `exclusionsForJourney`.
 // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D3/D4/D6: `approved` (the sign-off
@@ -1015,9 +980,10 @@ function renderSignoff(rec, s, state) {
 
 // D21: the bar's own nav button — `Next` while the current screen is not the journey's last
 // declared one, `[data-wk="confirm"]` reading `Confirm this journey` once it is; its disabled
-// rule is unchanged (D5's state gate: any open mark/exclusion, or a `changes-requested`/`fixed`
-// journeyState). A confirmed ("ok") journey needs no action at all.
-function renderNavButton(rec, state, openCount, s, isLast) {
+// rule is a `changes-requested`/`fixed` journeyState alone now — specs/20260913/07-the-critic-is-out.md
+// D6/D7: nothing produces a guess to leave unanswered any more, so the mark-gate half of D5's
+// state gate is gone with it. A confirmed ("ok") journey needs no action at all.
+function renderNavButton(rec, state, s, isLast) {
   if (rec && rec.confirmedAt && state === 'ok') return ''
   const nextLabel = esc(s.next)
   const confirmLabel = esc(s.confirm)
@@ -1025,7 +991,7 @@ function renderNavButton(rec, state, openCount, s, isLast) {
     return '<button type="button" class="wk-arrow" data-wk-role="nav" data-wk="next"' +
       ' data-next-label="' + nextLabel + '" data-confirm-label="' + confirmLabel + '">' + nextLabel + '</button>'
   }
-  const disabled = openCount > 0 || state === 'changes-requested' || state === 'fixed'
+  const disabled = state === 'changes-requested' || state === 'fixed'
   return '<button type="button" class="wk-arrow wk-confirm" data-wk-role="nav" data-wk="confirm"' +
     ' data-next-label="' + nextLabel + '" data-confirm-label="' + confirmLabel + '"' +
     (disabled ? ' disabled' : '') + '>' + confirmLabel + '</button>'
@@ -1048,7 +1014,6 @@ function buildWalkPage(input) {
   const reached = (rec && Array.isArray(rec.reached)) ? rec.reached : []
   const ledger = o.ledger || []
   const notes = o.notes || []
-  const open = notes.filter((n) => isOpenQuestion(n) && n.scope === 'mock' && labels.has(n.screen))
   const state = walkLib.journeyState(rec, notes, labels)
   // D20: the panel never renders a resolved request — closed items live only in the index's log.
   // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D6: EXCEPT a resolved/withdrawn
@@ -1056,7 +1021,6 @@ function buildWalkPage(input) {
   // list and the derived exclusion row.
   const requestNotes = journeyRequestsOn(notes, labels).filter((n) => n.status !== 'resolved' || n.resolution === 'withdrawn')
 
-  const marks = open.map((n) => renderMark(n, ledger, s)).join('')
   // D6: the note form's own free-text save appends a request article for the current screen — one
   // hidden, unattached template article (same activation-not-fabrication discipline as the index's
   // own template) walk.browser.js labels/reveals rather than the script ever building a new DOM
@@ -1076,7 +1040,6 @@ function buildWalkPage(input) {
   // specs/20260911/05-approval-is-bookkeeping.md D3: the confirm control is no longer held
   // disabled by exclusions — the closing screen asks, it does not block. `excl.openCount` still
   // feeds `data-exclusions-open` on the rendered section (renderExclusions), just not this gate.
-  const openCount = open.length
   // D21: the "current" screen for the bar's own nav-button/step-indicator render is the last
   // reached label, or the journey's first declared screen on a cold record — the same rule
   // walk.browser.js's own `apply()` uses, so the static render and the post-fetch reconciliation
@@ -1084,7 +1047,7 @@ function buildWalkPage(input) {
   const currentLabel = reached.length ? reached[reached.length - 1] : (screens.length ? screens[0].label : null)
   const lastLabel = screens.length ? screens[screens.length - 1].label : null
   const isLast = currentLabel !== null && currentLabel === lastLabel
-  const navButton = renderNavButton(rec, state, openCount, s, isLast)
+  const navButton = renderNavButton(rec, state, s, isLast)
   const signoff = renderSignoff(rec, s, state)
   const currentIx = screens.findIndex((sc) => sc.label === currentLabel)
   // D21: "<Screen label> · <i> of <n>", 1-indexed — rendered server-side (walk.browser.js's own
@@ -1113,10 +1076,6 @@ function buildWalkPage(input) {
     '</figure>' +
     '</section>' +
     '<aside class="wk-side">' +
-    '<div class="wk-marks">' + marks + '</div>' +
-    '<p class="wk-left"><span data-wk="left" data-count="' + open.length + '"' +
-    ' data-none="' + esc(s.leftNone) + '" data-one="' + esc(s.leftOne) + '" data-many="' + esc(s.leftMany) + '">' +
-    esc(count(s, 'leftNone', 'leftOne', 'leftMany', open.length)) + '</span></p>' +
     '<section class="wk-reqs" data-wk="requests">' + requestsHtml + '</section>' +
     '<form class="wk-note" data-wk="note">' +
     '<label class="wk-note-label">' + esc(s.noteLabel) +

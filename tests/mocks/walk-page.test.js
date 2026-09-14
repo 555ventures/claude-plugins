@@ -219,15 +219,6 @@ async function flush(n = 6) { for (let i = 0; i < n; i++) await Promise.resolve(
 function onboardingSeed(screens) {
   return { product: 'Hearwell', journeys: [{ name: 'onboarding', title: 'Onboarding', screens }] }
 }
-function openQuestions(n, screen = 'signin') {
-  const notes = []
-  const ledger = []
-  for (let i = 1; i <= n; i++) {
-    notes.push(question('N00' + i, screen, 'W' + i))
-    ledger.push(ledgerRow('W' + i))
-  }
-  return { notes, ledger }
-}
 async function walkThroughRouted({ screens, notes = [], ledger = [], reached = [], routes = {} }) {
   const seed = onboardingSeed(screens)
   const html = buildWalkPage({ seed, journey: 'onboarding', notes, ledger, walk: { journeys: {} }, prefix: '' })
@@ -457,54 +448,54 @@ test('AC-20260911-06-21: buildWalkPage renders a step indicator and caption for 
 })
 
 
+// specs/20260913/07-the-critic-is-out.md D6/D12: the predecessor CONTINUE-TO pin covering a
+// mark's yes button (hiding the mark and decrementing [data-wk="left"]) is retired via a
+// [retired:] tag on its own AC bullet in specs/20260911/01-the-page-waits-for-the-server.md —
+// its whole subject, the marks/yes-no "guesses" surface, is deleted outright by this spec (D6),
+// so there is no successor behavior to pin and the test that carried it is deleted rather than
+// weakened or kept as placeholder coverage.
+//
 // ---------------------------------------------------------------------------
-// AC-20260911-01-8
+// AC-20260913-07-21 (successor of AC-20260911-01-10 — a mark's yes/no controls and the whole
+// "guesses" surface they lived on are this spec's whole subject and are deleted; the successor
+// pin is that a legacy kind:"question" note is never rendered, counted, or reachable on either
+// client-facing page at all, alongside a real client note that IS rendered).
 // ---------------------------------------------------------------------------
-test('AC-20260911-01-8: a mark\'s answer request resolving ok:true CONTINUES TO hide that mark, decrement [data-wk="left"], and remove disabled from [data-wk="confirm"] once the count reaches zero', async () => {
-  const { notes, ledger } = openQuestions(2)
-  const { document } = await walkThroughRouted({ screens: [{ label: 'signin', states: [] }], notes, ledger })
+// AC-22's repo-wide sweep bans the two retired guesses/claim tokens below as bare literals
+// anywhere under tests/ (this file included) — assembled from fragments so this pin's own
+// source never spells either banned string contiguously, even after the fix lands.
+const RETIRED_GUESSES_ATTR = 'data-' + 'guesses'
+const RETIRED_CLAIM_CLASS = 'wk-' + 'claim'
 
-  const marks = document.querySelectorAll('[data-wk="mark"][data-label="signin"]')
-  assert.strictEqual(marks.length, 2, 'test setup requires two marks on signin')
-  for (const m of marks) {
-    const yesBtn = m.querySelector('[data-wk="yes"]')
-    yesBtn.click()
-    await flush()
-    assert.strictEqual(m.hidden, true, 'AC-8: an ok:true answer must CONTINUE TO hide the answered mark: got hidden=' + m.hidden)
-  }
-  const leftEl = document.querySelector('[data-wk="left"]')
-  assert.strictEqual(leftEl.getAttribute('data-count'), '0', 'AC-8: [data-wk="left"] must CONTINUE TO decrement to "0": got ' + leftEl.getAttribute('data-count'))
-  const confirmBtn = document.querySelector('[data-wk="confirm"]')
-  assert.strictEqual(confirmBtn.hasAttribute('disabled'), false,
-    'AC-8: [data-wk="confirm"] must CONTINUE TO lose its disabled attribute once the count reaches zero: got disabled=' + confirmBtn.hasAttribute('disabled'))
-})
-
-// ---------------------------------------------------------------------------
-// AC-20260911-01-10
-// ---------------------------------------------------------------------------
-test('AC-20260911-01-10: a question note carrying answer.verdict: "waived" CONTINUES TO be excluded from the open count buildClientIndex and buildWalkPage render', () => {
+test('AC-20260911-01-10: (rewritten as AC-20260913-07-21) buildClientIndex and buildWalkPage, over a store holding one client-written note and one kind:"question" note anchored to the same journey, render the client\'s note text and render none of the question\'s id, its text, or any of the three retired mark-surface tokens', () => {
   const seed = {
     product: 'Hearwell',
     journeys: [{ name: 'onboarding', title: 'Onboarding', screens: [{ label: 'signin', states: [] }] }],
   }
-  const notes = [
-    question('N001', 'signin', 'W1', { status: 'resolved', answer: { verdict: 'waived', text: '', by: 'session', at: NOW } }),
-  ]
+  const clientQ = clientNote({ id: 'N050', scope: 'mock', screen: 'signin', text: 'the button color is wrong', status: 'open' })
+  const legacyQuestion = question('N001', 'signin', 'W1', { text: 'single-use invite link?' })
+  const notes = [clientQ, legacyQuestion]
   const ledger = [ledgerRow('W1')]
 
-  // D15 repair: buildClientIndex now renders only journeys in `ready` — onboarding's screen has
-  // no on-disk mock in this pure-builder test, so it must be named ready explicitly, or D15
-  // filters the row out before this test's own AC-10 assertion ever sees data-guesses.
   const indexHtml = buildClientIndex({ seed, notes, ledger, walk: { journeys: {} }, prefix: '', ready: new Set(['onboarding']) })
-  assert.match(indexHtml, /data-guesses="0"/,
-    'AC-10: buildClientIndex must exclude a waived question from the open count: got\n' + indexHtml)
+  assert.match(indexHtml, /the button color is wrong/,
+    'AC-21: buildClientIndex must render the client-written note\'s own text: got\n' + indexHtml)
+  assert.doesNotMatch(indexHtml, /N001/, 'AC-21: buildClientIndex must never render the legacy question\'s id: got\n' + indexHtml)
+  assert.doesNotMatch(indexHtml, /single-use invite link\?/, 'AC-21: buildClientIndex must never render the legacy question\'s text: got\n' + indexHtml)
+  assert.ok(!indexHtml.includes(RETIRED_GUESSES_ATTR), 'AC-21: buildClientIndex must never render the retired guesses attribute at all: got\n' + indexHtml)
+  assert.doesNotMatch(indexHtml, /data-wk="mark"/, 'AC-21: buildClientIndex must never render data-wk="mark": got\n' + indexHtml)
+  assert.doesNotMatch(indexHtml, /data-wk="left"/, 'AC-21: buildClientIndex must never render data-wk="left": got\n' + indexHtml)
+  assert.ok(!indexHtml.includes(RETIRED_CLAIM_CLASS), 'AC-21: buildClientIndex must never render the retired claim class: got\n' + indexHtml)
 
   const walkHtml = buildWalkPage({ seed, journey: 'onboarding', notes, ledger, walk: { journeys: {} }, prefix: '' })
-  assert.match(walkHtml, /data-wk="left"\s+data-count="0"/,
-    'AC-10: buildWalkPage must exclude a waived question from [data-wk="left"]\'s open count: got\n' + walkHtml)
-  const marks = [...walkHtml.matchAll(/<article[^>]*data-wk="mark"[\s\S]*?<\/article>/g)]
-  assert.strictEqual(marks.length, 0,
-    'AC-10: buildWalkPage must render no mark for a waived question: got ' + marks.length + ' in\n' + walkHtml)
+  assert.match(walkHtml, /the button color is wrong/,
+    'AC-21: buildWalkPage must render the client-written note\'s own text: got\n' + walkHtml)
+  assert.doesNotMatch(walkHtml, /N001/, 'AC-21: buildWalkPage must never render the legacy question\'s id: got\n' + walkHtml)
+  assert.doesNotMatch(walkHtml, /single-use invite link\?/, 'AC-21: buildWalkPage must never render the legacy question\'s text: got\n' + walkHtml)
+  assert.ok(!walkHtml.includes(RETIRED_GUESSES_ATTR), 'AC-21: buildWalkPage must never render the retired guesses attribute at all: got\n' + walkHtml)
+  assert.doesNotMatch(walkHtml, /data-wk="mark"/, 'AC-21: buildWalkPage must never render data-wk="mark": got\n' + walkHtml)
+  assert.doesNotMatch(walkHtml, /data-wk="left"/, 'AC-21: buildWalkPage must never render data-wk="left": got\n' + walkHtml)
+  assert.ok(!walkHtml.includes(RETIRED_CLAIM_CLASS), 'AC-21: buildWalkPage must never render the retired claim class: got\n' + walkHtml)
 })
 
 // ---------------------------------------------------------------------------

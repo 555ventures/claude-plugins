@@ -29,8 +29,8 @@ user for data.
    `Doctrine:` line naming the governing section.
 2. Do that step and record it with the step's own printed `--mark …` line — verified before
    advancing; missing/failing artifacts are demanded again. While drawing a journey, pin every
-   inferred product assumption as written (`ledger add … --screen <label>`, or `ledger ask`
-   after — § Mocks: Page Notes, **Questions**). Draw empty/loading/error states with the happy
+   inferred product assumption with `ledger add` as written; a human confirms or overrides it
+   with `ledger set` (§ Mocks: Page Notes). Draw empty/loading/error states with the happy
    path, or opt one out with its reason in the ledger (§ Mocks: Authoring Rules). While drawing
    a WIREFRAMES screen, put `data-to="<label>"` on the control that actually leads to the next
    screen — the seed's edges are checked against it at `journey-drawn`, which refuses any edge
@@ -70,13 +70,9 @@ alone.
 
 (a pick stop — SHAPES — offers `pick <name>` in place of `approve`). Decided on the served atlas page, or `node {driver} stop decide <P…> --verdict approve|pick|change [--pick <group>] [--note <n>] --by chat`; the next bare run reads the decision and advances via its `--mark`, or `change` starts a fresh round.
 
-## Walk (WALK state)
-
-For the first journey with no `walked`: dispatch `Agent {subagent_type: 'design-critic'}` once — mock paths in declared order plus the seed path, never file contents (shared § Model Placement) — fresh context; it returns findings `{screen, state, break, finding, severity}`, flow breaks only (§ Mocks: State Machine). Record each with `node {driver} notes add --scope mock --screen <label> --state <s> --kind walk --reason <break> --by walk-critic --text "<finding>"`, then `--mark journey-walked --journey <j>` — refused on an `open` finding, naming each id and `notes address --id <id> --change "<what changed>"`; empty findings walk straight to the mark. WALK opens no look stop or render/look probe — fix a finding through `--reopen walk:<j>` or `--reopen journey:<j>`, both landing on states that already carry the look machinery.
-
 ## Theme (THEME state)
 
-Once every journey is walked, author two or three directions under `design/theme/<k>/` and run `theme compose`, `theme shortlist --directions <a,b[,c]>`, and `--mark theme-picked [--direction <k>]` — the driver's own printed steps carry the exact invocations and stop shape (§ Mocks: State Machine). Contract: the mark refuses an undecided stop or a disagreeing `--direction`; once adopted, every mock the client walks is served `?theme=<k>` while the session's own pages stay neutral; a host already past WALK with `design/tokens.css` byte-equal to a direction may skip the stop (the legacy path).
+Once every journey is approved, author two or three directions under `design/theme/<k>/` and run `theme compose`, `theme shortlist --directions <a,b[,c]>`, and `--mark theme-picked [--direction <k>]` — the driver's own printed steps carry the exact invocations and stop shape (§ Mocks: State Machine). Contract: the mark refuses an undecided stop or a disagreeing `--direction`; once adopted, every mock the client walks is served `?theme=<k>` while the session's own pages stay neutral; a host already past WIREFRAMES with `design/tokens.css` byte-equal to a direction may skip the stop (the legacy path).
 
 ## Client review (CLIENT state)
 
@@ -106,4 +102,4 @@ Printed once the driver reaches `APPROVED`. Assemble the slots (shared § Consol
   reference under `design/` — by `node {driver} --refresh-register`, before KIT or any screen is
   drawn; idempotent, exit 0 whether it rewrites or finds the register already current (§ Mocks:
   Authoring Rules).
-- **canon before screens, kit before wireframes, screens walked before sign-off.**
+- **canon before screens, kit before wireframes.**

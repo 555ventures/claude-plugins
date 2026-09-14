@@ -69,18 +69,11 @@ states via `data-state-btn`), linking the wireframe register and never skinned
 Fidelity lives in sketch (specs/20260906/06): `/spec:mocks` ends gray; `/spec:sketch` authors
 each brief's surfaces at production fidelity in the picked theme, reworks the brief's
 wireframes into it, writes a three-line UX argument per surface into the brief, and closes
-with the fixed critique pass — `check --states`, `render-gate --mocks`, and the journey walk
-(specs/20260907/08): one fresh-context `design-critic` (Opus, read-only) per journey — per brief
-at sketch — reading the journey's screens in declared order with the gray empty/loading/error
-states entered as branches at the step where they occur, reporting only the six flow breaks (no
-path back, no path forward, a state with no exit, a step needing data no earlier step collected,
-a control meaning two things across screens, an error state with no recovery), each cited to a
-screen and one of that screen's declared states or refused. Findings are page notes carrying
-`kind: "walk"`; the session closes one with `notes address`, only the served page resolves it,
-and no journey is marked walked while one of its findings is still open.
+with the states-presence check and the render gate, every round — `check --states`,
+`render-gate --mocks`.
 `design-atlas.js check` flags a mock linking `wire/` after `design/tokens.css` exists: warn at
 `sketch`, violation at `ratified` only — `approved` gray wireframes from mocks sign-off are
-exempt — and flags a `ratified` mock with unresolved notes on its label (critic or human) the
+exempt — and flags a `ratified` mock with unresolved notes on its label the
 same way.
 
 The theme is already picked when sketch runs: specs/20260910/04 (ADR-0013) returns the pick to
@@ -282,7 +275,7 @@ ordinary action button on the index's closed list, per the two approved mocks.
 ## The mocks command (2026-09-02, specs/20260902/07)
 
 `/spec:mocks` is the standalone design stage. `spec/scripts/mocks-driver.js` (`spec-paths
-mocks-driver`) derives `SEED → SHAPES → KIT → WIREFRAMES → WALK → THEME → CLIENT → APPROVED`
+mocks-driver`) derives `SEED → SHAPES → KIT → WIREFRAMES → THEME → CLIENT → APPROVED`
 (specs/20260907/10, ADR-0012; specs/20260907/04, ADR-0010 amending ADR-0008) from `design/mocks/status.json`
 (schemaVersion 1) plus the artifacts on disk: the skin and review states are retired; a
 wireframe is never skinned inside mocks — `/spec:sketch` owns fidelity per brief. The driver
@@ -292,12 +285,13 @@ saved (<prev> → <next>); safe to /clear and re-run /spec:mocks`, preceded by t
 counts line), gates every advance on the provenance ledger (`gateVerdict`, refusing on
 `open:false` and naming the rows), and records a sub-mark per journey (`journey-drawn`,
 `journey-approved`), and
-`--reopen journey:<j>|walk:<j>|shapes|kit|theme` (recorded, printed, nothing deleted). WALK sits
-between WIREFRAMES and THEME (specs/20260907/08): each declared journey is walked once by a
-fresh critic and stamped with `journey-walked --journey <j>`, which refuses while any walk
-finding on that journey is still open, so the stage cannot close on a journey nobody
-walked. Mocks are authored gray and end themed (specs/20260907/07; specs/20260910/04, ADR-0013): THEME
-sits between WALK and CLIENT, the user authors directions under `design/theme/<kebab>/`, `theme
+`--reopen journey:<j>|shapes|kit|theme` (recorded, printed, nothing deleted). There is no critic
+pass between wireframes and theme: the design-review queue carries only what a person wrote. The
+marks the driver accepts are `seed-done`, `shape-picked`, `canon-written`, `kit-signed`,
+`journey-drawn`, `journey-approved`, `theme-picked` and `approved`; a redrawn journey still
+clears that journey's approval, the product sign-off, and the client's own confirmation of it
+on `walk.json`. Mocks are authored gray and end themed (specs/20260907/07; specs/20260910/04, ADR-0013): THEME
+sits between WIREFRAMES and CLIENT, the user authors directions under `design/theme/<kebab>/`, `theme
 shortlist` opens a client pick whose candidates are the seed's two dense screens served in each
 direction's roles, the client picks on `/client/theme.html`, and `--mark theme-picked` adopts —
 setting `status.marks.themePicked` and `status.theme` alongside the `design/tokens.css` copy.
@@ -399,9 +393,9 @@ with no parent frame the script installs nothing. This is the mechanism an embed
 reads to know where a click went.
 
 The journey look surface is the review page `/review/<j>.html` (specs/20260906/04): screens rail ·
-artboards with state tabs (`?state=<s>` on the served mock) · question inspector answered in place
-with `J K Y N Esc \`; `stop open journey:<j>` points there; the approve control mirrors the on-disk
-gate: a journey's approval is blocked by open questions and notes **on that journey's screens**, and
+artboards with state tabs · note inspector with `J K Esc \`; `stop open journey:<j>` points there;
+the approve control mirrors the on-disk gate: a journey's approval is blocked by open notes
+**on that journey's screens**, and
 a whole-product note blocks the final `approved` sign-off instead of every journey (ADR-0019); when
 a journey is clean and product-wide notes remain, the page says how many still block sign-off.
 Plugin chrome — atlas, review page, galleries, notes layer — is authored under the frontend-design skill in the shadcn idiom on `viewer.css`'s
@@ -436,24 +430,21 @@ product's own sign-off: `approved` refuses while any project note is unresolved 
 anywhere is unresolved; `journey-approved` refuses only while any note on that journey's own
 screens is unresolved (`addressed` is not `resolved`) (ADR-0019). The client answers and
 raises on the client route as the `CLIENT` state (specs/20260907/10, ADR-0012), on the clientâs own
-pages rather than the session's review page. A note carries `origin: walk|client|session`, set by the route it arrived on
-(`/client/__notes/*` stamps `client`, `/__notes/*` stamps `session`, `notes add --kind walk`
-stamps `walk`) and never accepted from a body. A client's mock-scope note captures its screen at
+pages rather than the session's review page. A note carries `origin: client|session`, set by the route it arrived on
+(`/client/__notes/*` stamps `client`, `/__notes/*` stamps `session`) and never accepted from a body. A client's mock-scope note captures its screen at
 raise through `lib/client-capture.js` — the look command's URL form and first-declared viewport,
 `captures/<id>.before.png` beside `notes.json`, sha256 on the note; `notes address --port <n>`
 re-captures and refuses when the hash is unchanged, else stores the after image and moves the
 note to `addressed`. Only the client route resolves a client note — `withdrawn` from `open`,
-`accepted` from `addressed` — and a session-route resolve is a 403. `notes waive --id --reason`
-releases a client note or a question after seven days of client silence (a question's ledger row
-becomes `waived <date>`; the note's `answer.verdict` is `waived`). `writeNotes` is a tmp-file
+`accepted` from `addressed` — and a session-route resolve is a 403. `notes waive --id
+--reason` releases a client note after seven days of client silence. `writeNotes` is a tmp-file
 rename, never an in-place overwrite. Zero unresolved notes on a journey is its
 approval. The CLIENT step prints `Approval means "this is the product I understand" — the
 written brief, not these screens, holds scope`. `/spec:atlas` and `/spec:sketch` route their annotation loops
 through the same serve + `notes open`; the annotation-MCP discovery clause is retired.
 `mocks-driver.js notes open` summarises what it would otherwise repeat (specs/20260912/14):
-answered questions collapse to a count and the journey-listed open notes stop after twenty with
-a `… <n> more open note(s)` tail; `notes open --all` prints both in full. The questions block,
-the open-notes counts line and the project-notes block are never summarised.
+the journey-listed open notes stop after twenty with
+a `… <n> more open note(s)` tail; `notes open --all` prints both in full. The open-notes counts line and the project-notes block are never summarised.
 
 **Picks (specs/20260905/01).** A look stop is a record in `design/mocks/picks.json` (one
 writer, `lib/mocks-picks.js`: `readPicks`, `writePicks`, `validatePicks`, `openStop`,
@@ -491,15 +482,15 @@ the serve command is never printed to them. Picks on the page, the two-line hand
 refusing without a decided stop, and the derived `rejected` cell are unchanged from specs
 20260905/01–02.
 
-**Questions (specs/20260906/03).** A note with `kind: "question"` is a ledger assumption row
-pinned to a screen by the session (`ledger add … --screen`, `ledger ask`); the page answers it
-(`/__notes/answer` yes/no + text), and the answer writes the row's status (`confirmed` /
-`overridden` + date) before resolving the note. `journey-approved` (and
-`approved`) refuse while a question on the journey is unanswered, naming the ledger ids — the
-question-aware notes gate runs ahead of the generic ledger gate, so that line is the first one
-printed. Free-form notes carry an optional `reason` (missing-screen · wrong-direction ·
-wrong-words · other). Catch provenance is derived from `addressed.ledgerRow` and printed by
-`ledger counts` as question · note · unlinked — never a ledger column.
+**Only a person writes a note.** Every note in the store was typed by a person. Nothing in the
+pipeline creates one; a note carrying `kind: "question"` or `kind: "walk"` is a record left by a
+retired producer and is never listed, grouped, counted or gated on, though it stays on disk and
+a stored `no` answer still derives its exclusion row. A free-form note carries no reason the
+composer authored — an older note's `reason` still renders as a badge. The writer list is
+`readNotes`, `validateNotes`, `writeNotes`, `addNote`, `authoredByPerson`, `resolveNote`,
+`addressNote`, `replyNote`, `reopenNote`, `groupOpen`, `unresolvedFor`, `waiveNote`,
+`replaceRegion`, `deleteNote`; the routes are `GET /__notes/notes.js|anchor.js|viewer.css|list`
+and `POST /__notes/add|resolve|region|delete|reopen`.
 
 
 **Client player (specs/20260910/03).** The client route serves the client's own two pages —
@@ -515,10 +506,7 @@ record shows the journey's last screen reached, stays disabled while any guess i
 records one typed sentence. Both halves are enforced twice: the page never advances its own
 state ahead of a save — a mark hides, the open count drops, a note clears and a reached label
 counts only on a response the server actually returned, and any refusal or network failure
-leaves the page as it was and says so in `[data-wk="msg"]` — and `POST /client/__walk/confirm`
-independently refuses with `409` while any question anchored to the journey's screens is
-unanswered, so a stale tab or a player script that failed to load cannot record an approval
-over an open question. The player's own chrome is English for every client; the mocks inside
+leaves the page as it was and says so in `[data-wk="msg"]`. The player's own chrome is English for every client; the mocks inside
 the frame stay in whatever language the client's product is written in, and everything the
 client types — sentences, notes, reasons — is stored and re-rendered verbatim. A client's `no`
 with a reason promotes to a `said-by-user` ledger

@@ -6,7 +6,6 @@ const path = require('node:path')
 const { read, tmpdir, runNode } = require('../helpers')
 const {
   SCRIPT, mark, writeFile, decideLook,
-  advanceToJourneyWalked,
 } = require('./mocks-driver-fixtures')
 
 // Owner: specs/20260912/08-the-register-is-the-whole-shadcn-set.md

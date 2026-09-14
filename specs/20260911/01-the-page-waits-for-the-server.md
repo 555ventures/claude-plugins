@@ -158,7 +158,7 @@ none of them is touched by D1 — a test asserting that a Japanese sentence roun
 - **AC-20260911-01-8**: WHEN a mark's answer request resolves with `ok: true` THE SYSTEM SHALL
   CONTINUE TO hide that mark, SHALL CONTINUE TO decrement `[data-wk="left"]`'s `data-count`, and
   SHALL CONTINUE TO remove `disabled` from `[data-wk="confirm"]` once the count reaches zero →
-  `AC-20260911-01-8` in `tests/mocks/walk-page.test.js`
+  `AC-20260911-01-8` in `tests/mocks/walk-page.test.js` [retired: specs/20260913/07-the-critic-is-out.md]
 - **AC-20260911-01-9**: WHEN `POST /client/__walk/confirm` names a declared journey with no
   unanswered question on its screens THE SYSTEM SHALL CONTINUE TO answer `400` on an empty
   sentence, SHALL CONTINUE TO answer `200` recording `confirmedAt` and the sentence verbatim on a

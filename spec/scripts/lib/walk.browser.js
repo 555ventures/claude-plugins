@@ -2,36 +2,36 @@
 // every page lib/walk-page.js builds (never injected into a mock itself — walk-mode.browser.js's
 // own postMessage reporter, injected into the mock under `?walk`, is the other half of this
 // pair; this script only listens for its messages).
-// specs/20260910/03-client-journey-player.md D3 (this script's own behavior — the frame src, the
-// mark visibility, the walk-to-unlock check, the four POST routes it drives), D1 (the markup
-// contract it reads); specs/20260911/01-the-page-waits-for-the-server.md D4 (every save acts
-// only on the server's answer, never before it — see the Behavior table); specs/20260911/04-the-
-// client-loop.md D6/D16/D17 (the return-leg controls) and D21 (the step indicator replacing the
-// old screen spine, the caption text, and the one nav button that reads Next or Confirm).
+// specs/20260910/03-client-journey-player.md D3 (this script's own behavior — the frame src and
+// the walk-to-unlock check), D1 (the markup contract it reads); specs/20260911/01-the-page-waits-
+// for-the-server.md D4 (every save acts only on the server's answer, never before it — see the
+// Behavior table); specs/20260911/04-the-client-loop.md D6/D16/D17 (the return-leg controls) and
+// D21 (the step indicator replacing the old screen spine, the caption text, and the one nav
+// button that reads Next or Confirm).
 // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D4 ("Change answer" — an exclusion
 // row's own reversal, posting `verdict:'reconsider'`), D6 ("Put it back" — the shared
 // wireRequestCard putback arm plus the exclusion row's own inline one, both posting
 // /client/__notes/reopen with no text), D7 (the confirm handler's in-place swap to the sign-off
 // block's confirmed shape, dropping the bar's confirm control).
+// specs/20260913/07-the-critic-is-out.md D6: the guesses card (a mark's yes/no) is retired — the
+// index card loses its guesses count and this script no longer posts an answer for one.
 //
 // On load: fetches <prefix>/client/__walk/state?journey=<j> (the server's own walk record — the
 // one source of truth for what survives a reload) and derives the current screen from the last
 // reached label, or the journey's first declared screen on a cold record. The step rail,
 // back/next, arrow keys and the states switcher all move locally with no POST; only a
 // `{walk:'to'|'miss'}` postMessage relayed from the embedded mock ever posts
-// /client/__walk/event, a mark's yes/no or the note form ever posts /client/__notes/*, and
-// confirm ever posts /client/__walk/confirm. Walk-to-unlock (whether the sign-off block may
-// show) is tracked from the fetched record plus every "to" message seen since, so a walk that
-// reaches the last screen in one session unlocks it without forcing a reload — never the other
-// way around (nothing here ever shrinks the server's own reached list).
+// /client/__walk/event, the note form ever posts to the notes routes, and confirm ever posts
+// /client/__walk/confirm. Walk-to-unlock (whether the sign-off block may show) is tracked from
+// the fetched record plus every "to" message seen since, so a walk that reaches the last screen
+// in one session unlocks it without forcing a reload — never the other way around (nothing here
+// ever shrinks the server's own reached list).
 //
-// D4: local state follows the server's answer, it never precedes it. A mark's "no" with an empty
-// [data-wk="why"] posts nothing at all and shows the slot's own data-why text. Every other save
-// posts, and only on `ok === true` performs its local effect (a mark hides and decrements
-// [data-wk="left"]; the note textarea clears; a "to" message's from/to enter reachedSoFar and the
-// unlock check re-runs); on a non-ok response or a rejected fetch the local effect does NOT
-// happen and the slot shows its own data-failed text. The frame still moves on a "to" message
-// either way — navigating the prototype is local, per spec 03 D3.
+// D4: local state follows the server's answer, it never precedes it. Every save posts, and only
+// on `ok === true` performs its local effect (the note textarea clears; a "to" message's from/to
+// enter reachedSoFar and the unlock check re-runs); on a non-ok response or a rejected fetch the
+// local effect does NOT happen and the slot shows its own data-failed text. The frame still moves
+// on a "to" message either way — navigating the prototype is local, per spec 03 D3.
 //
 // specs/20260911/06-the-client-loop.md D6: this same script also drives the CLIENT INDEX page
 // (no `[data-journey]` root at all) — the "something missing?" composer (`[data-cl="ask"]`, now
@@ -268,7 +268,6 @@
   var steps = qa('[data-wk="step"]')
   var statesEl = q('[data-wk="states"]')
   var captionEl = q('[data-wk="caption"]')
-  var leftEl = q('[data-wk="left"]')
   var signoffEl = q('[data-wk="signoff"]')
   var navBtn = q('[data-wk-role="nav"]')
   var exclSection = q('[data-wk="exclusions"]')
@@ -277,8 +276,6 @@
   var currentLabel = steps.length ? steps[0].getAttribute('data-label') : null
   var currentState = null
   var reachedSoFar = []
-  var answered = {}
-  var leftCount = qa('[data-wk="mark"]').length
   // specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D7: set the moment a confirm
   // succeeds — `updateNav()` (below) checks this FIRST so a later `apply()` (the initial
   // `/client/__walk/state` fetch can resolve after the confirm click's own, shorter promise
@@ -305,13 +302,6 @@
       html += '<button type="button" data-state-opt="' + list[i] + '" aria-selected="' + (selected ? 'true' : 'false') + '">' + list[i] + '</button>'
     }
     statesEl.innerHTML = html
-  }
-
-  function renderMarks(label) {
-    qa('[data-wk="mark"]').forEach(function (m) {
-      var id = m.getAttribute('data-id')
-      m.hidden = answered[id] === true || m.getAttribute('data-label') !== label
-    })
   }
 
   // D21: the caption reads "<Screen label> · <i> of <n>", 1-indexed.
@@ -353,10 +343,11 @@
   }
 
   // specs/20260911/05-approval-is-bookkeeping.md D3: the nav button no longer waits on
-  // exclusions — the closing screen asks, it does not block. It stays disabled while any listed
-  // mark is still open, or any `[data-wk="request"]` on the journey is `open`/`addressed` —
-  // recomputed after every accept/reopen/answer. Meaningless (and never applied) while the
-  // button is in its `next` role.
+  // exclusions — the closing screen asks, it does not block. specs/20260913/07-the-critic-is-out.md
+  // D6/D7: nothing produces a guess to leave unanswered any more, so this keys on open requests
+  // alone now — it stays disabled while any `[data-wk="request"]` on the journey is
+  // `open`/`addressed`, recomputed after every accept/reopen. Meaningless (and never applied)
+  // while the button is in its `next` role.
   function refreshNavDisabled() {
     if (!navBtn) return
     if (navBtn.getAttribute('data-wk') !== 'confirm') { navBtn.removeAttribute('disabled'); return }
@@ -364,22 +355,8 @@
       var st = a.getAttribute('data-status')
       return st === 'open' || st === 'addressed'
     })
-    if (leftCount > 0 || blocked) navBtn.setAttribute('disabled', '')
+    if (blocked) navBtn.setAttribute('disabled', '')
     else navBtn.removeAttribute('disabled')
-  }
-
-  // D21/AC-22: the label is always a sentence read off the slot's own data-none/data-one/
-  // data-many attributes — never a bare count overwrite.
-  function leftText(n) {
-    if (!leftEl) return ''
-    if (n === 0) return leftEl.getAttribute('data-none') || ''
-    if (n === 1) return leftEl.getAttribute('data-one') || ''
-    return (leftEl.getAttribute('data-many') || '').replace('{n}', String(n))
-  }
-
-  function updateLeft() {
-    if (leftEl) { leftEl.setAttribute('data-count', String(leftCount)); leftEl.textContent = leftText(leftCount) }
-    refreshNavDisabled()
   }
 
   // D6: a request card is visible only when its data-label is the current screen.
@@ -408,7 +385,6 @@
       if (currentState) src += '&state=' + encodeURIComponent(currentState)
       frame.src = src
     }
-    renderMarks(currentLabel)
     renderRequests(currentLabel)
     renderStates(currentLabel)
     updateSteps()
@@ -476,29 +452,6 @@
     if (tag === 'TEXTAREA' || tag === 'INPUT') return
     if (e.key === 'ArrowLeft') step(-1)
     else if (e.key === 'ArrowRight') step(1)
-  })
-
-  // ---- marks: yes/no post the answer, by:'client', no author prompt --------------------------
-  // D4: local state follows the server's answer, never precedes it — a "no" with an empty reason
-  // posts nothing at all; every other answer posts and only an ok response hides the mark.
-  qa('[data-wk="mark"]').forEach(function (m) {
-    var id = m.getAttribute('data-id')
-    function answer(verdict) {
-      var whyEl = m.querySelector('[data-wk="why"]')
-      // D24: "That's not right" reveals its own why box first — a click that finds it still
-      // hidden unhides and focuses it rather than posting, the same shape as D23's reopen box.
-      if (verdict === 'no' && whyEl && whyEl.hidden) { whyEl.hidden = false; whyEl.focus(); return }
-      var text = whyEl ? String(whyEl.value || '').trim() : ''
-      if (verdict === 'no' && !text) { showMsg('why'); return }
-      post('/client/__notes/answer', { id: id, verdict: verdict, text: text, by: 'client' }).then(function (r) {
-        if (!r.ok) { showMsg('failed'); return }
-        if (!answered[id]) { answered[id] = true; leftCount = Math.max(0, leftCount - 1); updateLeft() }
-        m.hidden = true
-        checkUnlock()
-      }).catch(function () { showMsg('failed') })
-    }
-    on(m.querySelector('[data-wk="yes"]'), 'click', function () { answer('yes') })
-    on(m.querySelector('[data-wk="no"]'), 'click', function () { answer('no') })
   })
 
   // ---- exclusions: agree or needed posts a verdict; an ok answer activates the row's own -------
@@ -649,7 +602,6 @@
     var reached = (state && state.reached) || []
     reachedSoFar = reached.slice()
     if (reached.length) currentLabel = reached[reached.length - 1]
-    updateLeft()
     checkUnlock()
     render()
   }

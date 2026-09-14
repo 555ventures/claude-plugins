@@ -5,10 +5,9 @@
 //
 // Talks only to /__notes/* and /__picks/* under the page's own base (the path before
 // `/review/<j>.html` — '' or a `/p/<name>` mount), through the spec 03 endpoints unchanged:
-// POST /__notes/answer {id, verdict, text?, by} and POST /__notes/add {scope, screen, state,
-// reason, text, by}. The approve/change buttons are handled by the stop block's own picks
-// script (lib/stop-block.js), never here — this file only keeps the approve button's disabled
-// state in step with what is still open.
+// POST /__notes/add {scope, screen, state, text, by}. The approve/change buttons are handled by
+// the stop block's own picks script (lib/stop-block.js), never here — this file only keeps the
+// approve button's disabled state in step with what is still open.
 //
 // Written against the jsdom-free `vm` shim discipline the spec's Rationale states: only
 // `[data-rv="…"]` selectors (with `[data-id]`/`[data-label]` qualifiers), dataset, attributes,
@@ -32,7 +31,6 @@
   var initial = q('[data-rv="row"][data-selected]')
   var selectedId = initial ? initial.getAttribute('data-id') : null
   var scopeLabel = null
-  var reason = 'other'
 
   // ---- identity ------------------------------------------------------------------------------
   function author() {
@@ -226,7 +224,9 @@
     select(list[next].getAttribute('data-id'), true)
   }
 
-  // ---- counts (rail, badges, progress, approve) ----------------------------------------------
+  // ---- counts (rail, badges, approve) ----------------------------------------------------------
+  // specs/20260913/07-the-critic-is-out.md D6: the progress bar measured answered-over-asked
+  // questions and has no other meaning — its own recount arithmetic is deleted with it.
   function recount() {
     var all = rows()
     var openTotal = 0
@@ -235,14 +235,11 @@
     // rail counts already were. openProjectCount is openTotal's project-scope share, for the
     // rv-projwait line's own recount (D3).
     var openScoped = 0, openProjectCount = 0
-    var questions = 0, answered = 0, openNotes = 0
     var openByLabel = {}
     all.forEach(function (row) {
       var open = isOpenRow(row)
-      var kind = row.getAttribute('data-kind')
       var label = row.getAttribute('data-label')
       if (open) { openTotal++; if (label) openScoped++; else openProjectCount++ }
-      if (kind === 'question') { questions++; if (!open) answered++ } else if (open) openNotes++
       var bucket = label || '__project'
       if (open) openByLabel[bucket] = (openByLabel[bucket] || 0) + 1
     })
@@ -256,14 +253,6 @@
     })
     setText(q('[data-rv="open-count"]'), String(openTotal))
     setText(q('[data-rv="strip-count"]'), String(openTotal))
-    var progress = q('[data-rv="progress"]')
-    if (progress) {
-      progress.setAttribute('data-answered', String(answered)); progress.setAttribute('data-total', String(questions))
-      setText(q('[data-rv="progress-text"]'), answered + ' of ' + questions + ' answered' +
-        (openNotes ? ' · ' + openNotes + ' ' + plural(openNotes, 'note', 'notes') + ' for the session' : ''))
-      var fill = q('[data-rv="fill"]')
-      if (fill && fill.style) fill.style.width = (questions ? Math.round(answered / questions * 100) : 100) + '%'
-    }
     var approve = q('[data-rv="approve"]')
     if (approve) {
       if (openScoped) {
@@ -283,54 +272,6 @@
           ' still ' + plural(openProjectCount, 'blocks', 'block') + ' sign-off')
       }
     }
-  }
-
-  // ---- answering ------------------------------------------------------------------------------
-  function markAnswered(row, verdict, text) {
-    row.setAttribute('data-status', 'answered')
-    setHidden(row.querySelector('[data-rv="actions"]'), true)
-    setHidden(row.querySelector('[data-rv="correct"]'), true)
-    var done = row.querySelector('[data-rv="answered"]')
-    if (done) { setText(done, verdict === 'no' ? 'You corrected: ' + text : 'You confirmed'); setHidden(done, false) }
-    row.setAttribute('data-verdict', verdict)
-  }
-  function answer(id, verdict, text) {
-    var row = rowById(id)
-    if (!row || row.getAttribute('data-kind') !== 'question' || !isOpenRow(row)) return Promise.resolve()
-    var body = { id: id, verdict: verdict, by: author() }
-    if (verdict === 'no') body.text = text
-    // Optimistic: the row leaves the Open filter at once; a refusal (409/404, server gone) puts it
-    // back exactly as it was — the store, not the page, is the truth on the next GET.
-    markAnswered(row, verdict, text)
-    var nextOpen = openRows()
-    applyFilter(); recount()
-    if (nextOpen.length) {
-      var after = null
-      for (var i = 0; i < nextOpen.length; i++) if (nextOpen[i].getAttribute('data-id') > id && !after) after = nextOpen[i]
-      select((after || nextOpen[0]).getAttribute('data-id'))
-    } else select(null)
-    return post('/__notes/answer', body).catch(function () {
-      row.setAttribute('data-status', 'open'); row.removeAttribute('data-verdict')
-      setHidden(row.querySelector('[data-rv="actions"]'), false)
-      var done = row.querySelector('[data-rv="answered"]'); if (done) { setText(done, ''); setHidden(done, true) }
-      applyFilter(); recount(); select(id, true)
-    })
-  }
-  function openCorrection(id) {
-    var row = rowById(id)
-    if (!row || !isOpenRow(row)) return
-    select(id, true)
-    var box = row.querySelector('[data-rv="correct"]')
-    setHidden(box, false)
-    var ta = row.querySelector('[data-rv="correction"]')
-    if (ta && ta.focus) ta.focus()
-  }
-  function saveCorrection(id) {
-    var row = rowById(id)
-    var ta = row && row.querySelector('[data-rv="correction"]')
-    var text = ta ? String(ta.value || '').trim() : ''
-    if (!text) return
-    answer(id, 'no', text)
   }
 
   // ---- fold -----------------------------------------------------------------------------------
@@ -387,8 +328,8 @@
     if (!text) return Promise.resolve()
     var label = scopeLabel || focusedLabel()
     var body = label
-      ? { scope: 'mock', screen: label, state: (function (s) { return s === 'happy' ? null : s })(activeStateOf(label)), reason: reason, text: text, by: author() }
-      : { scope: 'project', screen: null, state: null, reason: reason, text: text, by: author() }
+      ? { scope: 'mock', screen: label, state: (function (s) { return s === 'happy' ? null : s })(activeStateOf(label)), text: text, by: author() }
+      : { scope: 'project', screen: null, state: null, text: text, by: author() }
     return post('/__notes/add', body).then(function () {
       if (ta) ta.value = ''
       // The new row exists on disk; the next GET renders it. Reload so the rail, badges, and the
@@ -470,11 +411,7 @@
     var t = e.target
     var tag = t && t.tagName ? String(t.tagName).toUpperCase() : ''
     if (TEXT_TAGS[tag]) {
-      // Enter inside a correction box saves it; every other key belongs to the textarea.
-      if (e.key === 'Enter' && !e.shiftKey && t.getAttribute && t.getAttribute('data-rv') === 'correction') {
-        var row = t.closest ? t.closest('[data-rv="row"]') : null
-        if (row) { if (e.preventDefault) e.preventDefault(); saveCorrection(row.getAttribute('data-id')) }
-      } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && t.getAttribute && t.getAttribute('data-rv') === 'text') {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && t.getAttribute && t.getAttribute('data-rv') === 'text') {
         if (e.preventDefault) e.preventDefault(); send()
       }
       return
@@ -483,8 +420,6 @@
     switch (e.key) {
       case 'j': case 'J': case 'ArrowDown': if (e.preventDefault) e.preventDefault(); move(1); break
       case 'k': case 'K': case 'ArrowUp': if (e.preventDefault) e.preventDefault(); move(-1); break
-      case 'y': case 'Y': if (selectedId) answer(selectedId, 'yes'); break
-      case 'n': case 'N': if (selectedId) openCorrection(selectedId); break
       // disposed s2 (2026-09-13): mark mode's own Escape exit takes priority over the existing
       // deselect-on-Escape — clearing the row selection AND the board's data-focus underneath an
       // active mark would have stranded `[data-rv="mark-area"]`'s next click with no focused
@@ -499,10 +434,6 @@
   function on(el, ev, fn) { if (el && el.addEventListener) el.addEventListener(ev, fn) }
   rows().forEach(function (row) {
     var id = row.getAttribute('data-id')
-    on(row.querySelector('[data-rv="yes"]'), 'click', function () { answer(id, 'yes') })
-    on(row.querySelector('[data-rv="no"]'), 'click', function () { openCorrection(id) })
-    on(row.querySelector('[data-rv="later"]'), 'click', function () { select(id, true); move(1) })
-    on(row.querySelector('[data-rv="save"]'), 'click', function () { saveCorrection(id) })
     on(row, 'click', function (e) {
       var t = e && e.target
       var tag = t && t.tagName ? String(t.tagName).toUpperCase() : ''
@@ -617,16 +548,6 @@
   // D15: "All screens" clears the narrowing so every screen's rows show; scrolling to a board
   // re-applies it (focusBoard/the IntersectionObserver below).
   on(q('[data-rv="allscreens"]'), 'click', function () { screenFilter = null; applyFilter() })
-  qa('[data-rv="chip"]').forEach(function (c) {
-    on(c, 'click', function () {
-      reason = c.getAttribute('data-value')
-      qa('[data-rv="chip"]').forEach(function (x) {
-        var onChip = x === c
-        x.setAttribute('aria-pressed', onChip ? 'true' : 'false')
-        if (x.classList) x.classList.toggle('rv-chip-on', onChip)
-      })
-    })
-  })
   on(q('[data-rv="send"]'), 'click', function (e) { if (e && e.preventDefault) e.preventDefault(); send() })
   on(q('[data-rv="composer"]'), 'submit', function (e) { if (e && e.preventDefault) e.preventDefault(); send() })
   on(q('[data-rv="jump"]'), 'change', function (e) {

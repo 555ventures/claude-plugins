@@ -1,6 +1,6 @@
 ---
 date: 2026-09-13
-status: hardened
+status: implementing
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +10,7 @@ depends_on: [specs/20260913/05-a-note-is-a-conversation.md]
 depended_on_by: []
 brief: n/a
 open_markers: 0
+diff_base: 1b922791e18ec9521ff302285c3b86eede272e35
 ---
 
 # Every mock has a page you can mark

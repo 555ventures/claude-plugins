@@ -123,6 +123,41 @@ test('D7′(a): a mock-scope page\'s strip renders a note row with its plain <b>
     JSON.stringify(strip.created.map((el) => ({ tag: el.tagName, cls: el.className }))))
 })
 
+// specs/20260913/06-every-mock-has-a-page-you-can-mark.md D5, AC-20260913-06-7: mockAnchor keeps
+// its card+iframe.frame gate but drops the window.__lbOpen condition entirely — when the gate
+// passes it renders an `<a class="nl-anchor" href="<__base>/screen/<screen>.html">` (today's
+// text), never a button wired to __lbOpen; the no-card branch is unchanged (span.nl-anchor.plain).
+// Static/vm pin, no browser needed (mirrors the file's AC-9/-12/-13 discipline) — note the fixture
+// below deliberately passes NO `lbOpen`, since D5's whole point is that the anchor renders with no
+// window.__lbOpen at all.
+test('AC-20260913-06-7: a mock note on screen a with a drawn card+iframe.frame renders an <a class="nl-anchor"> whose href ends /screen/a.html, with no window.__lbOpen involved', async () => {
+  const note = { id: 'N1', scope: 'mock', screen: 'a', state: null, status: 'open', text: 'x', by: 'jj', resolvedBy: null }
+  const panel = await evalNotesLayer({
+    pathname: '/', metaContent: 'project', elementIds: ['s-a'], frameElementIds: ['s-a'],
+    listResponse: [note],
+  })
+  const anchor = panel.created.find((el) => el.tagName === 'A' && classes(el).includes('nl-anchor'))
+  assert.ok(anchor,
+    'D5: the project panel must render an <a class="nl-anchor"> for a mock note whose screen carries a drawn card+iframe.frame — got ' +
+    JSON.stringify(panel.created.map((el) => ({ tag: el.tagName, cls: el.className }))))
+  assert.match(String(anchor.href || ''), /\/screen\/a\.html$/,
+    'D5: the anchor\'s href must end "/screen/a.html": got ' + JSON.stringify(anchor.href))
+})
+
+test('AC-20260913-06-7: a mock note whose screen has no drawn card renders span.nl-anchor.plain, unchanged', async () => {
+  const note = { id: 'N2', scope: 'mock', screen: 'gone', state: null, status: 'open', text: 'x', by: 'jj', resolvedBy: null }
+  const panel = await evalNotesLayer({
+    pathname: '/', metaContent: 'project', elementIds: [], frameElementIds: [],
+    listResponse: [note],
+  })
+  const span = panel.created.find((el) => el.tagName === 'SPAN' && classes(el).includes('nl-anchor') && classes(el).includes('plain'))
+  assert.ok(span,
+    'a mock note with no drawn card must still render span.nl-anchor.plain: got ' +
+    JSON.stringify(panel.created.map((el) => ({ tag: el.tagName, cls: el.className }))))
+  assert.ok(!panel.created.some((el) => el.tagName === 'A' && classes(el).includes('nl-anchor')),
+    'no card means no <a class="nl-anchor"> may render at all')
+})
+
 // ---- executed, headless Chrome (AC-10) -- findChrome/serve/withChrome are imported above from
 // tests/mocks/chrome-harness.js, the one shared home for this trio.
 

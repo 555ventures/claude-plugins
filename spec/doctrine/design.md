@@ -134,10 +134,13 @@ blocks, `.claude/design-coverage.json`, and spec frontmatter — zero-token.
   filter the index and the cards together, so the two never disagree. The index is a map, never
   a second status surface: one status dot and a label per row, the badges stay on the card.
 - **A note names the screen it belongs to.** The atlas's project panel lists every open note; a
-  note written on one screen shows that screen and state and opens it in the lightbox, or reads
-  as plain text when the screen is not drawn. A served mock page's notes strip links back to
-  that panel. There is no deep link into a state — the screen is the unit of navigation. Chrome
-  for all of it follows § Design Canon; no rule is restated here.
+  note written on one screen shows that screen and state and links to that screen's page, or
+  reads as plain text when the screen is not drawn. A served mock page's notes strip links back
+  to that panel. There is no deep link into a state — the screen is the unit of navigation.
+  Every card — screen or shape — opens its screen page at `/screen/<label>.html`: one board,
+  that screen's notes, the whole-project notes and the composer; there is no lightbox and no
+  link to a raw mock file. Chrome for all of it follows § Design Canon; no rule is restated
+  here.
 **Authorship, shared home for every mock pass.** Every mock — wireframe or themed, atlas gap,
 sketch surface, or `/spec:mocks` screen — is authored and edited in-session by one hand;
 no `Agent` dispatch ever writes a mock at any stage or tier (subagents run judgment-free

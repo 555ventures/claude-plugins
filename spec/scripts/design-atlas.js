@@ -261,6 +261,26 @@ const viewportOf = (html) => {
   const m = html.match(/data-viewport\s*=\s*"(\d+)\s*x\s*(\d+)"/)
   return m ? { width: +m[1], height: +m[2] } : null
 }
+// specs/20260913/06-every-mock-has-a-page-you-can-mark.md D1: label -> file resolution shared by
+// GET /screen/<label>.html and D3's compare-cell shotlinks — the first design/mocks/**/*.html
+// whose label is <label>, else the first design/shapes/*.html whose label is <label>, where a
+// file's label is labelOf(html) || basename (the same rule buildAtlas already uses for mocks).
+// Returns { file, src } (src is the file's path relative to design/, e.g. 'shapes/one.html') or
+// null when nothing matches.
+function resolveScreenFile(rootAbs, label) {
+  for (const dir of ['design/mocks', 'design/shapes']) {
+    const abs = path.join(rootAbs, dir)
+    if (!fs.existsSync(abs)) continue
+    for (const f of htmlFilesUnder(abs)) {
+      const html = fs.readFileSync(f, 'utf8')
+      if ((labelOf(html) || path.basename(f, '.html')) === label) {
+        return { file: f, src: path.relative(path.join(rootAbs, 'design'), f).split(path.sep).join('/') }
+      }
+    }
+  }
+  return null
+}
+
 // scrolling="no" + data-w/h: the page script sizes each frame to full content height and scales it
 // to the card, so the frame itself never scrolls.
 const frameTag = (src, w, h) =>
@@ -1060,14 +1080,12 @@ function page(title, bodyHtml, extraHead = '') {
     '.card:hover{border-color:var(--v-ring);box-shadow:var(--v-shadow);transform:none}\n' +
     '.card.wide{grid-column:1/-1}\n' +
     '.card h3{margin:0 0 .5rem;font-size:15px;font-weight:600;display:flex;align-items:center;flex-wrap:wrap;gap:.15em}\n' +
-    '.card h3 .open{margin-left:auto}\n' +
     // The states a screen declares, as links that open the mock already in that state — the
     // chip shape the filter bar uses, so a state reads as something to click, not a caption.
 
     '.vp{color:var(--v-muted);font-size:12px;font-weight:400;margin-left:.5em;font-variant-numeric:tabular-nums}\n' +
-    '.open{float:none;margin-left:auto;font-size:14px;font-weight:500;color:var(--v-fg);text-decoration:none;' +
-    'border:1px solid var(--v-border);border-radius:var(--v-radius);padding:.25em .7em}\n' +
-    '.open:hover{background:var(--v-muted-bg)}\n' +
+    // specs/20260913/06-every-mock-has-a-page-you-can-mark.md D4: the `.open`/`.card h3 .open`
+    // rules that styled the deleted "open ↗" anchor go with it — nothing emits class="open" now.
     // Six tinted uppercase pills become one shape: a dot in the role color, then the word in the
     // meta voice. The dot register is the client index's .j-state dot, unchanged in meaning.
     '.badge{display:inline-flex;align-items:center;gap:.45em;border:0;border-radius:0;padding:0;font-size:12px;font-weight:400;' +
@@ -1170,14 +1188,6 @@ function page(title, bodyHtml, extraHead = '') {
     '@media(prefers-reduced-motion:reduce){#toc{transition:none}}\n' +
     // The graph is a pane, not a card: a fill and a radius, no border and no shadow.
     '#journey{height:280px;border:0;border-radius:calc(var(--v-radius) + 4px);margin-bottom:1.5rem;background:var(--v-muted-bg);box-shadow:none}\n' +
-    '#lb{position:fixed;inset:0;z-index:10;background:color-mix(in srgb, var(--v-fg) 85%, transparent);display:none;overflow:auto;padding:3.2rem 1rem 1rem}\n' +
-    '#lb.on{display:block}\n' +
-    '#lb iframe{border:0;display:block;margin:0 auto;background:var(--v-bg);border-radius:var(--v-radius);box-shadow:var(--v-shadow)}\n' +
-    '#lbbar{position:fixed;top:.75rem;right:1rem;z-index:11;display:flex;gap:.5rem;align-items:center}\n' +
-    '#lbbar span{color:var(--v-bg);font-size:15px;font-weight:500;margin-right:.5em}\n' +
-    '#lbbar button,#lbbar a{background:var(--v-bg);color:var(--v-fg);border:1px solid var(--v-border);border-radius:var(--v-radius);' +
-    'padding:.35em .9em;cursor:pointer;font:inherit;font-size:14px;text-decoration:none}\n' +
-    '#lbbar a:hover,#lbbar button:hover{background:var(--v-muted-bg)}\n' +
     // specs/20260905/01-picks-on-the-atlas-page.md D3(c): the compare table — #stops is links
     // only (D3a), .cmp is a CSS grid with one column per group (--cols, set inline per stop),
     // .chead stays visible while its steps scroll, .step spans every column as a row label, and
@@ -1236,10 +1246,10 @@ function page(title, bodyHtml, extraHead = '') {
 
 // Always-on page behavior: wrap each frame in a .shot, measure the mock's FULL content height
 // (same-origin when served; falls back to the declared device height on file://), scale to the
-// card width, clamp the card to one fixed preview height (the rest fades; the lightbox shows all),
-// and open the click-to-inspect lightbox. No scrollbars in cards, ever.
+// card width, and clamp the card to one fixed preview height (the rest fades; every card is now a
+// link to that screen's own page, D3/D4 — there is no in-page inspector to show the rest). No
+// scrollbars in cards, ever.
 const UI_SCRIPT = '<script>\n' +
-  'function __full(src){return String(src||"").replace(/[?&]clean$/,"")}\n' +
   'function __sel(btn,attr){document.querySelectorAll("button["+attr+"]").forEach(function(b){b.classList.toggle("on",b===btn)})}\n' +
   'function __measure(f){try{var d=f.contentDocument;if(!d||!d.documentElement)return 0;' +
   'var h=d.documentElement.scrollHeight||0;if(d.body&&d.body.scrollHeight>h)h=d.body.scrollHeight;return h}catch(e){return 0}}\n' +
@@ -1255,52 +1265,22 @@ const UI_SCRIPT = '<script>\n' +
   's.style.height=cap+"px";s.classList.toggle("clip",full>cap)}\n' +
   'function __fitAll(){document.querySelectorAll("iframe.frame").forEach(function(f){__still(f);__fit(f)})}\n' +
   // Grid mocks pause every CSS animation (infinite pulse/shimmer loops across ~20 iframes burn
-  // 25%+ renderer CPU at idle); the lightbox iframe is separate and stays live.
+  // 25%+ renderer CPU at idle).
   'function __still(f){try{var d=f.contentDocument;if(!d||!d.head||d.__stilled)return;d.__stilled=1;' +
   'var st=d.createElement("style");st.textContent="*,*::before,*::after{animation-play-state:paused!important}";' +
   'd.head.appendChild(st)}catch(e){}}\n' +
-  'var __lbList=[],__lbIx=0;\n' +
-  'function __lbShow(i){var fr=document.getElementById("lbframe");if(!fr||!__lbList.length)return;' +
-  'if(i<0)i=__lbList.length-1;if(i>=__lbList.length)i=0;__lbIx=i;var f=__lbList[i];' +
-  'var w=+f.dataset.w||390;fr.style.width=Math.min(w,window.innerWidth-32)+"px";' +
-  'fr.style.height=(parseInt(f.style.height)||+f.dataset.h||844)+"px";fr.src=__full(f.getAttribute("src"));' +
-  'var card=f.closest(".card"),h3=card&&card.querySelector("h3");' +
-  'document.getElementById("lbtitle").textContent=h3?h3.childNodes[0].textContent:"";' +
-  'document.getElementById("lbopen").href=__full(f.getAttribute("src"));' +
-  'document.getElementById("lb").classList.add("on")}\n' +
-  'function __lbOpen(f){__lbList=[].slice.call(document.querySelectorAll("iframe.frame")).filter(function(x){' +
-  'var c=x.closest(".card");return !c||!c.hidden});__lbShow(__lbList.indexOf(f))}\n' +
-  'function __lbClose(){var lb=document.getElementById("lb");if(lb)lb.classList.remove("on");' +
-  'var fr=document.getElementById("lbframe");if(fr)fr.src="about:blank"}\n' +
-  'document.addEventListener("keydown",function(e){var lb=document.getElementById("lb");' +
-  'if(!lb||!lb.classList.contains("on"))return;if(e.key==="Escape")__lbClose();' +
-  'if(e.key==="ArrowRight")__lbShow(__lbIx+1);if(e.key==="ArrowLeft")__lbShow(__lbIx-1)});\n' +
   'var __rzT;window.addEventListener("resize",function(){clearTimeout(__rzT);__rzT=setTimeout(__fitAll,150)});\n' +
   'window.addEventListener("DOMContentLoaded",function(){\n' +
   '  document.querySelectorAll("iframe.frame").forEach(function(f){\n' +
   '    var s=document.createElement("div");s.className="shot";f.parentNode.insertBefore(s,f);s.appendChild(f);\n' +
   '    var card=s.closest(".card"),h3=card&&card.querySelector("h3");\n' +
   '    if(h3&&!h3.querySelector(".vp"))h3.insertAdjacentHTML("beforeend",' +
-  '"<span class=\\"vp\\">"+(+f.dataset.w||390)+"\\u00d7"+(+f.dataset.h||844)+"</span> ' +
-  '<a class=\\"open\\" href=\\""+__full(f.getAttribute("src"))+"\\" target=\\"_blank\\">open \\u2197</a>");\n' +
+  '"<span class=\\"vp\\">"+(+f.dataset.w||390)+"\\u00d7"+(+f.dataset.h||844)+"</span>");\n' +
   '    f.addEventListener("load",function(){__still(f);__fit(f);setTimeout(function(){__fit(f)},250)});\n' +
-  '    if(!s.closest("a.shotlink"))s.addEventListener("click",function(){__lbOpen(f)});\n' +
   '  });\n' +
-  '  var lb=document.getElementById("lb");if(lb)lb.addEventListener("click",function(e){if(e.target===lb)__lbClose()});\n' +
-  '  var lf=document.getElementById("lbframe");if(lf)lf.addEventListener("load",function(){' +
-  'var h=__measure(lf);if(h)lf.style.height=h+"px";' +
-  'try{var sw=lf.contentDocument.documentElement.scrollWidth;' +
-  'if(sw>parseInt(lf.style.width))lf.style.width=Math.min(sw,window.innerWidth-32)+"px"}catch(e){}});\n' +
   '  __fitAll();\n' +
   '});\n' +
   '</script>'
-
-const LIGHTBOX = '<div id="lb"><div id="lbbar"><span id="lbtitle"></span>' +
-  '<button onclick="__lbShow(__lbIx-1)" title="previous">‹</button>' +
-  '<button onclick="__lbShow(__lbIx+1)" title="next">›</button>' +
-  '<a id="lbopen" href="#" target="_blank">open ↗</a>' +
-  '<button onclick="__lbClose()" title="close">✕</button></div>' +
-  '<iframe id="lbframe" scrolling="no" src="about:blank"></iframe></div>'
 
 // Viewport/theme toolbar from targets.json: viewport buttons re-frame every mock at that device
 // width (mocks are responsive single files) and re-measure; theme buttons stamp data-theme on each
@@ -1363,7 +1343,7 @@ function cmdGallery(argv) {
   const html = page('Design candidates — ' + path.basename(dir),
     '<h1>Candidates (' + candidates.length + ')</h1>\n' +
     (bar.buttons ? '<div class="bar">' + bar.buttons + '</div>\n' : '') +
-    '<div class="grid">\n' + cards + '\n</div>\n' + LIGHTBOX + '\n' + UI_SCRIPT + bar.script)
+    '<div class="grid">\n' + cards + '\n</div>\n' + UI_SCRIPT + bar.script)
   fs.mkdirSync(outDir, { recursive: true })
   fs.writeFileSync(out, html)
   process.stdout.write('gallery: ' + candidates.length + ' candidate(s) → ' + out + '\n')
@@ -1431,9 +1411,11 @@ function stopHome(key) {
 
 // specs/20260907/04-kit-canon-family.md D14: "the kit is signed off on a page that shows the
 // kit" — a dedicated renderer (never renderApproveStop alone) so the #kit section frames every
-// candidate of the kit-signed stop, one .card per candidate carrying its name, an open ↗ link and
-// a frameTag at the file's own viewport (exactly as renderCompareTable frames a pick candidate),
-// BEFORE the approve/change block.
+// candidate of the kit-signed stop, one .card per candidate carrying its name and a frameTag at
+// the file's own viewport (exactly as renderCompareTable frames a pick candidate), BEFORE the
+// approve/change block. specs/20260913/06-every-mock-has-a-page-you-can-mark.md D3/D4: a kit
+// candidate is a component sheet, not a screen — it stays a preview with no link at all (never a
+// shotlink), and its open ↗ anchor is deleted along with every other one.
 function renderKitStop(stop, root, outDir, vp0) {
   const cards = (stop.candidates || []).map((cand) => {
     const filePath = path.join(root, 'design', cand.path)
@@ -1442,8 +1424,7 @@ function renderKitStop(stop, root, outDir, vp0) {
     const vp = viewportOf(html) || vp0
     const rel = path.relative(outDir, filePath).split(path.sep).join('/')
     return '<div class="card"><h3>' + esc(cand.label) +
-      '<span class="vp">' + vp.width + '×' + vp.height + '</span>' +
-      '<a class="open" title="open ↗" href="' + esc(rel) + '" target="_blank">open ↗</a></h3>' +
+      '<span class="vp">' + vp.width + '×' + vp.height + '</span></h3>' +
       frameTag(rel, vp.width, vp.height) + '</div>'
   }).join('')
   return '<div class="grid">' + cards + '</div>' + renderApproveStop(stop)
@@ -1492,12 +1473,20 @@ function renderCompareTable(stop, root, outDir, vp0, settled) {
       try { html = fs.readFileSync(filePath, 'utf8') } catch { html = '' }
       const vp = viewportOf(html) || vp0
       const rel = path.relative(outDir, filePath).split(path.sep).join('/')
-      // D4's lightbox wiring resolves "same step, other candidate" and "which group is this
-      // card" purely from these two attributes — never from a page-wide frame index.
+      const frame = frameTag(rel, vp.width, vp.height)
+      // specs/20260913/06-every-mock-has-a-page-you-can-mark.md D3: a candidate under mocks/ or
+      // shapes/ frames a screen and is wrapped in the same shotlink an atlas card carries — its
+      // label resolved by D1's rule (labelOf(html), falling back to the candidate's own label).
+      const isScreen = /^(mocks|shapes)\//.test(cand.path)
+      const screenLabel = labelOf(html) || cand.label
+      const body = isScreen
+        ? '<a class="shotlink" href="/screen/' + encodeURIComponent(screenLabel) + '.html">' + frame + '</a>'
+        : frame
+      // data-group/data-step used to be how D4's deleted lightbox wiring found "same step, other
+      // candidate" — left in place as harmless identity markers, read by nothing now.
       return '<div class="card" data-group="' + esc(g) + '" data-step="' + (i + 1) + '"><h3>' + esc(cand.label) +
-        '<span class="vp">' + vp.width + '×' + vp.height + '</span>' +
-        '<a class="open" title="open ↗" href="' + esc(rel) + '" target="_blank">open ↗</a></h3>' +
-        frameTag(rel, vp.width, vp.height) + '</div>'
+        '<span class="vp">' + vp.width + '×' + vp.height + '</span></h3>' +
+        body + '</div>'
     }).join('')
     return '<div class="step">step ' + (i + 1) + (label ? ' · ' + esc(label) : '') + '</div>' + cells
   }).join('')
@@ -1647,13 +1636,11 @@ function buildAtlas(root, out) {
     // frames carried moves onto those links, so anything resolving "which screen, which state"
     // still finds it.
     const mockRel = path.relative(outDir, mock.file)
-    const journeyOf = rawBrief && rawBrief.startsWith('seed:') ? rawBrief.slice(5) : null
     const frameHtml = frameTag(mockRel, mock.vp.width, mock.vp.height)
-    const body = journeyOf
-      ? '<a class="shotlink" href="/review/' + encodeURIComponent(journeyOf) + '.html#board-' +
-        encodeURIComponent(label) + '" title="Review ' + esc(label) + ' on the ' + esc(journeyOf) + ' journey">' +
-        frameHtml + '</a>'
-      : frameHtml
+    // specs/20260913/06-every-mock-has-a-page-you-can-mark.md D3: every mock card — journey-owned
+    // or not — links to its own screen page; the journey-owned form is retired (the screen page
+    // is that screen's one destination now, whichever journey claims it).
+    const body = '<a class="shotlink" href="/screen/' + encodeURIComponent(label) + '.html">' + frameHtml + '</a>'
     const builtFrame = routes[label]
       ? '\n<h3>built</h3>' + frameTag(routes[label], mock.vp.width, mock.vp.height)
       : ''
@@ -1769,10 +1756,16 @@ function buildAtlas(root, out) {
       const shapeCards = shapeFiles.map((f, i) => {
         const kebab = path.basename(f, '.html')
         const filePath = path.join(shapesDir, f)
-        const vp = viewportOf(fs.readFileSync(filePath, 'utf8')) || vp0
+        const shapeHtml = fs.readFileSync(filePath, 'utf8')
+        const vp = viewportOf(shapeHtml) || vp0
+        // specs/20260913/06-every-mock-has-a-page-you-can-mark.md D3: every shape card links to
+        // its own screen page — D1's label rule (labelOf(html) || basename).
+        const shapeLabel = labelOf(shapeHtml) || kebab
+        const frame = '<a class="shotlink" href="/screen/' + encodeURIComponent(shapeLabel) + '.html">' +
+          frameTag(path.relative(outDir, filePath), vp.width, vp.height) + '</a>'
         return '<div class="card' + (vp.width >= 700 ? ' wide' : '') + '"><h3><span class="num">' + (i + 1) + '</span>' + esc(kebab) + '</h3>' +
           '<span class="badge candidate">candidate</span>' +
-          frameTag(path.relative(outDir, filePath), vp.width, vp.height) + '</div>'
+          frame + '</div>'
       }).join('\n')
       // D2: "shapes" is first in the toc's render order. id="j-shapes" gives the heading a jump
       // target/current-section marker exactly like a journey section's <h2> does; the group
@@ -2046,7 +2039,7 @@ function buildAtlas(root, out) {
     '<div id="main">' + mainBodyHtml + '</div></div>'
   const html = page('Design atlas',
     shellHtml + '\n' +
-    LIGHTBOX + '\n' + UI_SCRIPT + bar.style + bar.script + filterScript + TOC_SCRIPT + PICKS_SCRIPT)
+    UI_SCRIPT + bar.style + bar.script + filterScript + TOC_SCRIPT + PICKS_SCRIPT)
   fs.mkdirSync(outDir, { recursive: true })
   fs.writeFileSync(out, html)
   return { html, out, count: labels.length, summary }
@@ -2971,6 +2964,29 @@ function createRequestHandler(root, opts = {}) {
         root: rootAbs, journey, prefix, seed: seedForReview(rootAbs), notes, ledger: ledgerRows, stops,
         clean: urlObj.searchParams.has('clean'),
       }))
+      return
+    }
+
+    // specs/20260913/06-every-mock-has-a-page-you-can-mark.md D1: GET /screen/<label>.html — the
+    // one page every atlas card (screen or shape) now opens. resolveScreenFile applies D1's
+    // mock-then-shape resolution; a miss throws 'unknown screen <label>', which serveBuiltHtml
+    // answers as 404 text/plain (AC-20260913-06-3).
+    const screenMatch = /^\/screen\/([^/]+)\.html$/.exec(reqPath)
+    if (screenMatch && req.method === 'GET') {
+      const label = screenMatch[1]
+      let screenNotes = []
+      try { screenNotes = notesLib.readNotes(rootAbs) } catch { screenNotes = [] }
+      serveBuiltHtml(res, () => {
+        const found = resolveScreenFile(rootAbs, label)
+        if (!found) throw new Error('unknown screen ' + label)
+        const html = fs.readFileSync(found.file, 'utf8')
+        const seed = seedForReview(rootAbs)
+        return reviewPageLib.buildScreenPage({
+          label, src: found.src, states: reviewPageLib.statesOf(html),
+          product: seed.product, viewportWidth: seed.viewportWidth, viewportHeight: seed.viewportHeight,
+          notes: screenNotes, prefix,
+        })
+      })
       return
     }
 

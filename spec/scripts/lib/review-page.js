@@ -222,14 +222,17 @@ function messageLine(n, turn) {
 // itself posts nothing.
 function rowControls(turn) {
   if (turn !== 'session' && turn !== 'you') return ''
+  // design/chrome-mocks/review.html: the reply box is a SIBLING after `.rv-actions`, never a
+  // flex child inside it (a flex child there gets squeezed into whatever space the Reply button
+  // leaves, per that flex row's own wrap rule) — moved out here to match.
   return '<div class="rv-actions" data-rv="note-actions">' +
     '<button type="button" data-rv="reply">Reply</button>' +
+    '<button type="button" data-rv="accept">Approve</button>' +
+    '<button type="button" data-rv="reject">Reject</button>' +
+    '</div>' +
     '<div class="rv-replybox" data-rv="reply-box" hidden>' +
     '<textarea data-rv="reply-text"></textarea>' +
     '<button type="button" data-rv="reply-send">Send</button>' +
-    '</div>' +
-    '<button type="button" data-rv="accept">Approve</button>' +
-    '<button type="button" data-rv="reject">Reject</button>' +
     '</div>'
 }
 

@@ -424,13 +424,16 @@ the driver's look and the render gate's capture append. Notes live in `design/mo
 at two scopes — a mock note is anchored to a screen + state, a project note to the whole
 product, never to an element — and are written only through `lib/mocks-notes.js`
 (`readNotes`, `validateNotes`, `writeNotes`, `addNote`, `resolveNote`, `addressNote`,
-`replyNote`, `groupOpen`, `unresolvedFor`). The server binds loopback only and exposes
+`turnOf`, `groupOpen`, `unresolvedFor`). The server binds loopback only and exposes
 `GET /__notes/notes.js|viewer.css|list?screen=<label>|*` and `POST /__notes/add|resolve`;
-`address` and `reply` are driver-only file writes (`mocks-driver.js notes open|address|reply`),
-never HTTP, so a page can never mark the session's work done. The loop is asymmetric: the
-session addresses (`open → addressed`, with the change and an optional ledger row recorded
-under the note) and replies; the author resolves on the page after a re-look; no driver
-subcommand resolves. Triage bins are a closed set — `mock detail`, `product understanding`,
+`address` is a driver-only file write (`mocks-driver.js notes open|address`),
+never HTTP, so a page can never mark the session's work done. The loop is a conversation. The session answers with `notes address` (a fix or a question back)
+and the note becomes the author's turn; the author replies on the page as often as they like and
+the note becomes the session's turn again; the author ends it with Approve (`resolution:
+"accepted"`) or Reject (`resolution: "withdrawn"`, final, hidden from the owner's pages and kept on
+disk). `turnOf(n)` in `lib/mocks-notes.js` derives the turn — `session` red, `you` amber, `done`
+green — and every per-note surface (box, badge, card, row, pin) uses it; count chips keep their
+own colours. `notes open` lists only the notes whose turn is the session's (specs/20260913/05). Triage bins are a closed set — `mock detail`, `product understanding`,
 `question back`, `propose to decline` — and a note that hits a canon primitive changes
 `canon.md` first, every dependent screen after. Project notes outrank mock notes only at the
 product's own sign-off: `approved` refuses while any project note is unresolved or any note
@@ -495,7 +498,7 @@ retired producer and is never listed, grouped, counted or gated on, though it st
 a stored `no` answer still derives its exclusion row. A free-form note carries no reason the
 composer authored — an older note's `reason` still renders as a badge. The writer list is
 `readNotes`, `validateNotes`, `writeNotes`, `addNote`, `authoredByPerson`, `resolveNote`,
-`addressNote`, `replyNote`, `reopenNote`, `groupOpen`, `unresolvedFor`, `waiveNote`,
+`addressNote`, `turnOf`, `reopenNote`, `groupOpen`, `unresolvedFor`, `waiveNote`,
 `replaceRegion`, `deleteNote`; the routes are `GET /__notes/notes.js|anchor.js|viewer.css|list`
 and `POST /__notes/add|resolve|region|delete|reopen`.
 

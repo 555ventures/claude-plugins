@@ -1,6 +1,6 @@
 ---
 date: 2026-09-13
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: design-mocks
@@ -72,6 +72,7 @@ a note until they approve or reject it, and the colour says whose turn it is.
 | tests/mocks/review-page.test.js | MODIFY | tests | AC-20260913-05-8 (rewrites the AC-20260912-06-1 row-controls pin) |
 | tests/mocks/client-region.test.js | MODIFY | tests | AC-20260913-05-7 (rewrites the AC-20260912-12-22 colour pin to the turn register) |
 | tests/mocks/review-board-card.test.js | MODIFY | tests | AC-20260913-05-13, AC-20260913-05-14, AC-20260913-05-17 |
+| tests/mocks/client-walk-route.test.js | MODIFY | tests | AC-20260913-05-16 — the reused client-mount resolve pin carries this spec's carried-AC tag so the coverage matrix can see it (review fix, leg:ac-matrix) |
 
 **Orchestrator duty (outside the table).** Append one `- Amended by: ADR-0025 — <one line>`
 header line to each of `specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md`,
@@ -308,6 +309,19 @@ AC-20260913-05-4 searches `spec/` only.
 The File Plan has 21 rows, over the usual 15. It is not split: every row edits the same note loop,
 and splitting would create two specs editing the same files — the reason specs 03 and 04 were
 merged into 07.
+
+Build and review departures (2026-09-14). The changelog paragraph was reworded so it does not
+spell the retired reply names AC-20260913-05-4 greps for. A worker's edit to the shared
+`tests/helpers.js` POST helper was reverted as out of plan; the new test parses its own JSON
+bodies instead. A done note's green box no longer hides behind the strip's Show-resolved toggle,
+since Behavior lists the green box among the three the owner sees. The four `--v-*` colour
+tokens are also set inline on the mock's root so a light-DOM probe resolves them — a duplicated
+register the reviewer flagged advisory and left queued. Spec 02's card click-through pin was
+retargeted from the removed `…` menu to the card's Reply button, and spec 02's register pin had its
+dropped carried-AC tag restored. Review found two render defects (card Reply never re-rendered;
+row reply box nested inside the actions row), both fixed, and added the missing File Plan row for
+the reused client resolve pin. The card-rebuild fix wipes a draft in another open card when an
+unrelated deferred POST lands (advisory, queued).
 
 ## Canonical Delta
 

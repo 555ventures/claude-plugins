@@ -1226,6 +1226,16 @@
     return fetch(__base + '/__notes/list?screen=' + encodeURIComponent(screen || '')).then(function (r) { return r.json() }).then(function (list) {
       mockNotes = list || []
       render()
+      // specs/20260913/05-a-note-is-a-conversation.md UI table: "Reply (card or row) | card:
+      // re-renders with your words as the newest message" — render() never touches cardSlot
+      // (only open/compose paths do), so a card left open across this refresh (selectedNoteId
+      // survives render()) is rebuilt here from the server's just-fetched answer, never from the
+      // request that was sent. A refused POST never reaches this .then at all, so the box the
+      // owner typed into is left exactly as they left it.
+      if (selectedNoteId != null) {
+        var openNote = mockNotes.filter(function (n) { return n.id === selectedNoteId })[0]
+        if (openNote) openNoteCard(openNote)
+      }
     })
   }
   refresh()

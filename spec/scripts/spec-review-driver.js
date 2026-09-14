@@ -1999,9 +1999,37 @@ function relocateSidecar(wt, mainRootDir) {
   replaySpecPath = path.join(mainRootDir, path.relative(wt, resolvedSpecPath))
 }
 
+// Promotion writes the ledger rows and retained evidence into the main root AFTER the merge
+// landed, so nothing else ever commits them — the NEXT spec's `merge-back.sh merge` then died on
+// assert_clean_root (seen twice on 2026-09-14: 20260913/09's rows blocked 05's merge, and 05's own
+// rows needed the same hand commit). Commit exactly the two evidence paths, pathspec-limited so an
+// unrelated staged or dirty path on main is never swept in. An ignored path (a host that keeps its
+// ledger out of git) is skipped, and nothing staged means no commit. A failed commit dies loudly;
+// a re-run is safe because the already-landed detection resumes straight at finishMerge.
+function commitPromotedEvidence(mainRootDir, wt) {
+  const git = (args, what) => runChild('git', ['-C', mainRootDir, ...args], { encoding: 'utf8' }, what)
+  const paths = ['.claude/spec-runs.jsonl', '.claude/spec-runs'].filter((p) =>
+    fs.existsSync(path.join(mainRootDir, p)) &&
+    git(['check-ignore', '-q', '--', p], 'git check-ignore ' + p).status !== 0)
+  if (!paths.length) return
+  const add = git(['add', '--', ...paths], 'git add promoted evidence')
+  if (add.status !== 0) die('staging promoted evidence failed in ' + mainRootDir + ': ' + (add.stdout + add.stderr).trim())
+  if (git(['diff', '--cached', '--quiet', '--', ...paths], 'git diff --cached').status === 0) return
+  const specRelInWt = path.relative(wt, resolvedSpecPath)
+  const m = /^specs\/(\d{8}\/\d+)-/.exec(specRelInWt.split(path.sep).join('/'))
+  const label = m ? m[1] : path.basename(specRelInWt, '.md')
+  const c = git(['commit', '-q', '-m', 'chore(ledger): record ' + label + ' build and review rows', '--', ...paths],
+    'git commit promoted evidence')
+  if (c.status !== 0) {
+    die('committing promoted evidence failed in ' + mainRootDir + ' — commit ' + paths.join(' and ') +
+      ' by hand, then re-run this mark: ' + (c.stdout + c.stderr).trim())
+  }
+}
+
 function finishMerge(mainRootDir, source, wt) {
   if (wt) {
     promoteEvidenceAndClean(wt, mainRootDir)
+    commitPromotedEvidence(mainRootDir, wt)
     relocateSidecar(wt, mainRootDir)
   }
   const cleanupArgs = ['cleanup', '--root', mainRootDir, '--source', source]

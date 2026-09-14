@@ -266,3 +266,31 @@ test('promotion clears an untracked subdirectory completely, leaving no file to 
   assert.ok(!fs.existsSync(wt),
     'a leftover untracked file at any depth makes `git worktree remove` refuse at exit 128 (the recorded A1 deadlock), so the worktree being gone is the only proof the walk reached every level')
 })
+
+// Promotion writes the ledger rows and retained evidence into the main root AFTER the merge lands,
+// and nothing committed them — so the NEXT spec's `merge-back.sh merge` died on assert_clean_root
+// ("root working tree is dirty"). Seen twice on 2026-09-14 (20260913/09 then 20260913/05). An
+// empty `git status --porcelain` on main is exactly the precondition that refusal checks.
+test('a worktree merge commits the promoted ledger rows and evidence on main, so main is clean for the next spec\'s merge', () => {
+  const { root, wt, spec } = driveToMerge('ledgercommit', 'AC-20260823-99-9')
+  fs.mkdirSync(path.join(wt, '.claude/spec-runs'), { recursive: true })
+  fs.writeFileSync(path.join(wt, '.claude/spec-runs/rv_ledgercommit.jsonl'), '{"kind":"retained"}\n')
+
+  const merged = run(root, spec, '--mark', 'merge-strategy', 'ff-only')
+  assert.strictEqual(merged.status, 0, 'the merge must conclude: ' + merged.stdout + merged.stderr)
+  assert.ok(!fs.existsSync(wt), 'setup: the worktree merge must have run its promotion and cleanup')
+
+  const git = (...a) => execFileSync('git', ['-C', root, ...a], { encoding: 'utf8' })
+  assert.strictEqual(git('status', '--porcelain').trim(), '',
+    'main must be clean after the merge — any leftover promoted row or evidence file makes the next spec\'s merge refuse with "root working tree is dirty"')
+  assert.match(git('log', '-1', '--format=%s').trim(), /^chore\(ledger\): record 20260823\/99 build and review rows$/,
+    'the promoted evidence must land in its own ledger commit naming the spec')
+  const files = git('show', '--name-only', '--format=', 'HEAD').trim().split('\n')
+  for (const p of ['.claude/spec-runs.jsonl', '.claude/spec-runs/rv_ledgercommit.jsonl']) {
+    assert.ok(files.includes(p), 'the ledger commit must carry the promoted ' + p + ': ' + JSON.stringify(files))
+  }
+  for (const p of files) {
+    assert.ok(p === '.claude/spec-runs.jsonl' || p.startsWith('.claude/spec-runs/'),
+      'the ledger commit must hold only promoted evidence paths, never anything else on main: ' + p)
+  }
+})

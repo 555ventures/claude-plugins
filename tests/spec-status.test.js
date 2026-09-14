@@ -1072,7 +1072,7 @@ test('AC-20260902-11-6: WHEN spec-status.js runs on a root whose design/mocks/le
 // AC-20260903-05-9 (retag): this is the --json/--next --json top-level key-set pin the spec's
 // D6 (frozen surfaces) targets — the additive `audience` field lands on individual anomaly
 // objects, never on the top-level key set pinned here.
-test('AC-20260902-11-7 / AC-20260903-05-9 / AC-20260909-08-8: WHEN spec-status.js --json and --next --json run on a root whose ledger has catches THE SYSTEM CONTINUES TO emit the same top-level keys as before this spec, with no misunderstandings key', () => {
+test('AC-20260902-11-7 / AC-20260903-05-9 / AC-20260909-08-8 / AC-20260913-09-9: WHEN spec-status.js --json and --next --json run on a root whose ledger has catches THE SYSTEM CONTINUES TO emit the same top-level keys as before this spec, with no misunderstandings key', () => {
   const dir = host({
     briefs: BRIEFS,
     specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01' },

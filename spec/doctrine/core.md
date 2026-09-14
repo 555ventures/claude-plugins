@@ -141,15 +141,15 @@ signals corroborates it. This is what makes a CLEAN verdict falsifiable rather t
 
 **Replay cadence** is `replay.js --due` policy, never a session's memory: due every 5th
 review and at minimum once per major pipeline version, sampling critical-tier targets first
-when one is available in the window. Execution is review's own close, never a printed
-reminder: the review driver's REPLAY state (between MERGE and DONE) runs the dueness and
-selection checks itself and refuses to conclude the review until a `stage:"replay"` row for
-the selected target exists. The printed-reminder form was tried and measured to fail — a
-checklist line printing on every CLEAN report was skipped through 12+ reviews before being
-replaced (specs/20260821/02-replay-review-phase.md D5). `/spec:replay` remains the manual surface and the retry path after a
-non-measurement outcome. A sustained replay miss-rate is the evidence that reopens the
-second-reviewer question core § Tiers currently rules against — not a hunch, not a single bad
-run.
+when one is available in the window. Execution is `/spec:replay`, run on demand — the review
+driver never parks a close on it; a merged review prints `DONE` every time. Dueness is seen on
+the dashboard footer's `replay due` clause instead, printed by `/spec:status` every run
+whether or not anyone acts on it. The blocking form (a REPLAY state parking CLEAN closes until
+a measurement landed) was retired by `docs/adr/0025`: a block on an already-finished review is
+bypassed anyway, and the interrupt's surprise was the real cost. The earlier printed-reminder
+form's own measured failure — a checklist line skipped through 12+ reviews — is still why
+dueness lives on the dashboard rather than in a report. A sustained replay miss-rate reopens
+the second-reviewer question core § Tiers rules against — not a hunch, not one bad run.
 
 ## Incident Policy
 

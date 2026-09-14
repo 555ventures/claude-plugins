@@ -119,8 +119,9 @@ findings, grouped by effective class with the joined recurrence count and a poin
 (`escape:<repo>:<ts>:<file>`, a replay run id, or a feedback finding id) cited in a landed
 test, a doctrine file, or a `done` spec marks it fixed; a citation in an unfinished spec marks
 it in-flight. Host reports end with the row key and nothing else — no handoff prompt is
-composed; the owed query is the consumer. Replay rows carry `via` (`driver` when the review
-driver's REPLAY step handed the target, `manual` otherwise), so `replay.js --stats`'s `by-via`
+composed; the owed query is the consumer. Replay rows carry `via` (`driver` on historical rows the
+review driver's retired close-time replay step handed the target — ADR-0025 — `manual`
+otherwise), so `replay.js --stats`'s `by-via`
 line counts the manual path. (specs/20260903/01-owed-query-and-row-handoff.md, done 2026-09-03)
 
 Commit-time escape coverage is a derived number, never asserted:

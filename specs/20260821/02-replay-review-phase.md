@@ -14,6 +14,8 @@ brief: 14
 
 # Replay as a review-close phase: the driver's REPLAY state
 
+Amended by: ADR-0025 (D1/D2/D5 retired — the REPLAY state, its `replay-recorded` mark and the "state instead of a print" ruling are deleted; `/spec:replay` runs on demand and dueness shows on the `/spec:status` footer — see the ADR's Applies to)
+
 ## Goal
 
 The reviewer-replay harness (specs/20260819/02) is the pipeline's only controlled-denominator

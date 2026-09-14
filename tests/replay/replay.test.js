@@ -268,7 +268,7 @@ function patchOutPath(prefix) {
   return path.join(fs.realpathSync(tmpdir(prefix)), 'mutation-out.patch')
 }
 
-test('AC-20260819-02-1: --due exits 0 printing "due reviewsSince=N" once N review rows have landed after the last replay row, and exits 1 below the threshold', () => {
+test('AC-20260819-02-1 / AC-20260913-09-4: --due exits 0 printing "due reviewsSince=N" once N review rows have landed after the last replay row, and exits 1 below the threshold', () => {
   const dueDir = fs.realpathSync(tmpdir('replay-due'))
   writeLedger(dueDir, [1, 2, 3, 4, 5].map(n => reviewRow(n)))
   const due = runNode(SCRIPT, ['--due'], { cwd: dueDir })

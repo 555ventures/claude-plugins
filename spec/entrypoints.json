@@ -206,8 +206,7 @@
   },
   "spec/scripts/replay.js": {
     "entryPoints": [
-      "spec/commands/replay.md",
-      "spec/scripts/spec-review-driver.js"
+      "spec/commands/replay.md"
     ]
   },
   "spec/scripts/report-render.js": {

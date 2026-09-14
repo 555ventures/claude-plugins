@@ -178,36 +178,35 @@ test('AC-20260912-05-1: build renders one <iframe> per screen for a journey with
     'D3: a mock declaring no states must render a meta line with no "states" clause at all, not "0 states"')
 })
 
-// AC-20260912-05-2/D4: a journey-owned card's frame is wrapped in <a class="shotlink" href=
-// "/review/<journey>.html#board-<label>">, and a design/shapes/*.html candidate — which has no
-// declaring journey — gets no shotlink wrapper at all and keeps the plain lightbox. The lightbox
-// binding itself must skip any .shot nested in a shotlink (`if(!s.closest("a.shotlink"))`), or a
-// journey-owned card's click would open BOTH the review page navigation and the lightbox.
-test('AC-20260912-05-2: a journey-owned card wraps its frame in a shotlink to the review page, a shapes candidate gets no shotlink, and the lightbox binding skips shotlinked frames', () => {
-  const dir = tmpdir('atlas-ac2')
+// AC-20260913-06-4/D3 (rewrites AC-20260912-05-2): every card's frame — a journey-owned mock, an
+// unclaimed mock, and a shape candidate alike — is wrapped in <a class="shotlink" href=
+// "/screen/<label>.html">, resolved by D1's label rule; no CARD link's href may contain
+// "/review/" any more (the review-page anchor form this spec retires) — Contracts keep
+// GET /review/<j>.html itself unchanged, and the journey section heading's own "Review →" link
+// (<a class="rv-review" href="/review/<j>.html">) is untouched, so the ban is scoped to shotlink
+// anchors only, never the whole document.
+test('AC-20260913-06-4: every card — journey-owned mock, unclaimed mock, and shape — wraps its frame in a shotlink to its own /screen/<label>.html, and no card link points at /review/', () => {
+  const dir = tmpdir('atlas-ac4')
   const mk = (rel, c) => { const p = path.join(dir, rel); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, c) }
-  mk('design/mocks/seed.md', '# Seed — Fixture\n\n## Journeys\n### j1\nMika moves through a short flow.\n```surfaces\na -> b\n```\n')
+  mk('design/mocks/seed.md', '# Seed — Fixture\n\n## Journeys\n### j1\nMika moves through a short flow.\n```surfaces\na\n```\n')
   mk('design/mocks/a.html', '<main data-screen-label="a">A</main>\n')
-  mk('design/mocks/b.html', '<main data-screen-label="b">B</main>\n')
+  mk('design/mocks/o.html', '<main data-screen-label="o">O</main>\n')
   mk('design/shapes/one.html', '<main data-screen-label="one">One</main>\n')
 
   const res = atlas(['build'], { cwd: dir })
   assert.strictEqual(res.status, 0, res.stdout + res.stderr)
   const out = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')
 
-  assert.match(out, /<a class="shotlink" href="\/review\/j1\.html#board-a"/,
-    'D4: a\'s journey-owned card must wrap its frame in a shotlink pointing at the review page\'s board-a anchor')
-  assert.match(out, /<a class="shotlink" href="\/review\/j1\.html#board-b"/,
-    'D4: b\'s journey-owned card must wrap its frame in a shotlink pointing at the review page\'s board-b anchor')
+  assert.match(out, /<a class="shotlink" href="\/screen\/a\.html"/,
+    'D3: a\'s journey-owned card must wrap its frame in a shotlink to /screen/a.html')
+  assert.match(out, /<a class="shotlink" href="\/screen\/o\.html"/,
+    'D3: o\'s unclaimed card must wrap its frame in a shotlink to /screen/o.html too — every card gets a shotlink now, journey-owned or not')
+  assert.match(out, /<a class="shotlink" href="\/screen\/one\.html"/,
+    'D3: the shapes candidate\'s card must wrap its frame in a shotlink to /screen/one.html — a shape opens a markable page too')
 
-  const shapesStart = out.indexOf('id="shapes"')
-  assert.notStrictEqual(shapesStart, -1, 'a design/shapes/*.html candidate must render its own "shapes" section')
-  const shapesSection = out.slice(shapesStart, out.indexOf('</section>', shapesStart))
-  assert.doesNotMatch(shapesSection, /shotlink/,
-    'D4: a shapes candidate has no declaring journey and must get NO shotlink wrapper at all — it keeps the plain lightbox')
-
-  assert.match(out, /if\(!s\.closest\("a\.shotlink"\)\)/,
-    'D4: the lightbox click binding must skip any .shot nested inside a shotlink, or a journey-owned card would open both the review page and the lightbox on click')
+  assert.doesNotMatch(out, /<a class="shotlink" href="\/review\//,
+    'D4: no card\'s shotlink may point at /review/ any more — the review-page anchor form is retired ' +
+    '(the section heading\'s own "Review →" link to /review/j1.html is a different, untouched anchor)')
 })
 
 test('build: a ledger-claimed mock is NOT an orphan even when no brief declares it (standalone-spec mocks)', () => {

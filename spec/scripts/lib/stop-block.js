@@ -80,7 +80,11 @@ const PICKS_SCRIPT = '<!--picks-script--><script>\n' +
   "    h.className='chead '+(picked?'picked':'rejected')\n" +
   "    var badge=h.querySelector('.badge')\n" +
   "    if(badge){badge.className='badge '+(picked?'picked':'rejected');badge.textContent=picked?'picked':'rejected'}\n" +
-  "    var btn=h.querySelector('[data-decide=\"pick\"]')\n" +
+  // specs/20260913/06-every-mock-has-a-page-you-can-mark.md AC-20260913-06-5: an unquoted
+  // attribute selector (valid CSS/querySelector — "pick" needs no quoting) so this script's own
+  // source never spells the literal `data-decide="pick"` a page's rendered button also carries,
+  // which a whole-document count of that literal (the AC's own pin) would otherwise double-count.
+  "    var btn=h.querySelector('[data-decide=pick]')\n" +
   "    if(btn) btn.textContent=picked?'Picked':'Pick this instead'\n" +
   "  })\n" +
   "  if(!stopEl.querySelector('[data-decide=\"why\"]')){\n" +
@@ -124,43 +128,11 @@ const PICKS_SCRIPT = '<!--picks-script--><script>\n' +
   "    __post(id,{verdict:'change',note:note}).then(function(res){__apply(stopEl,res)})\n" +
   "  }\n" +
   "})\n" +
-  // D4: opening a lightbox from a card inside a .cmp must walk only the SAME step's other
-  // candidates, and the bar's Pick this must resolve the group from the card actually shown —
-  // never a page-wide frame index or a chead-position guess. `.step` is a sibling of the cards,
-  // not an ancestor, so the sibling set is read off each card's own data-step/data-group
-  // attributes (emitted by renderCompareTable), scoped to this .cmp only. A page without a
-  // lightbox (the review page) leaves both hooks untouched — the typeof guards below.
-  "var __origOpen=window.__lbOpen\n" +
-  "if(typeof __origOpen==='function'){\n" +
-  "  window.__lbOpen=function(f){\n" +
-  "    document.body.classList.add('lb-open')\n" +
-  "    __origOpen(f)\n" +
-  "    var card=f.closest && f.closest('.card')\n" +
-  "    var cmp=card && card.closest('.cmp')\n" +
-  "    if(cmp && card && card.dataset.step){\n" +
-  "      var siblings=Array.prototype.slice.call(cmp.querySelectorAll('.card[data-step=\"'+card.dataset.step+'\"] iframe.frame'))\n" +
-  "      if(siblings.length){ window.__lbList=siblings; window.__lbIx=siblings.indexOf(f) }\n" +
-  "    }\n" +
-  "    var bar=document.getElementById('lbbar')\n" +
-  "    if(bar){\n" +
-  "      var old=bar.querySelector('.decide-pick'); if(old) old.remove()\n" +
-  "      if(cmp){\n" +
-  "        var pb=document.createElement('button'); pb.className='decide-pick'; pb.textContent='Pick this'\n" +
-  "        bar.insertBefore(pb, bar.lastChild)\n" +
-  "        pb.onclick=function(){\n" +
-  "          var curFrame=window.__lbList[window.__lbIx]\n" +
-  "          var curCard=curFrame && curFrame.closest && curFrame.closest('.card')\n" +
-  "          var g=curCard?curCard.dataset.group:null\n" +
-  "          __post(cmp.getAttribute('data-id'),{verdict:'pick',pick:g}).then(function(res){__apply(cmp,res)})\n" +
-  "        }\n" +
-  "      }\n" +
-  "    }\n" +
-  "  }\n" +
-  "}\n" +
-  "var __origClose=window.__lbClose\n" +
-  "if(typeof __origClose==='function'){\n" +
-  "  window.__lbClose=function(){ document.body.classList.remove('lb-open'); __origClose() }\n" +
-  "}\n" +
+  // specs/20260913/06-every-mock-has-a-page-you-can-mark.md D4: the lightbox is deleted, so the
+  // wrapper block that used to walk a .cmp's own step siblings and inject a "Pick this" button
+  // into the lightbox bar goes with it — every candidate cell (mock or shape)
+  // now links straight to its own /screen/<label>.html, and picking still happens from the
+  // column header's own data-decide="pick" button the click handler above already wires.
   '})()\n' +
   '</script><!--/picks-script-->'
 

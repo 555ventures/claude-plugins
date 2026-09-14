@@ -409,7 +409,10 @@ Plugin chrome — atlas, review page, galleries, notes layer — is authored und
 register (design.md § Design Canon), never on product tokens.
 
 The atlas renders one frame per screen, with the declared state count in the card's meta line
-(ADR-0016); a journey-owned card's preview links to that screen's board on the journey review page.
+(ADR-0016); every card's preview, screen or shape, links to that screen's own page,
+`/screen/<label>.html`: one board with its state tabs and live notes layer, this screen's notes, the
+whole-project notes and the composer. There is no lightbox and no link to a raw mock file;
+`lib/review-page.js` exports `buildScreenPage` beside `buildReviewPage`.
 Plugin chrome binds to a file: the atlas index answers to `design/chrome-mocks/atlas.html` and the
 journey review page to `design/chrome-mocks/review.html`, cited as `design_source` by any spec that
 edits them (specs/20260912/05, /06). The review page's rail carries a `Whole project` row for the
@@ -469,7 +472,7 @@ column headers) with a one-click **Pick this** per group and an optional why-lin
 re-pickable until the mocks driver consumes it; a new `openStop` with the same key supersedes the
 old one. The notes layer shows one scope per page, declared by the server's
 `<meta name="notes-scope" content="project|mock">`: project notes on the atlas index, mock notes
-on a screen, and the index's bar hides while the lightbox is open (`body.lb-open`). `design-atlas.js`
+on a screen. `design-atlas.js`
 exports `buildAtlas`, `page`, `frameTag`, `createRequestHandler(root, {prefix})` — one handler,
 mountable under a prefix — and runs its CLI only as a main module.
 

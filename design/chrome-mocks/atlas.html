@@ -6,7 +6,9 @@
 <title>Design atlas — chrome reference</title>
 <!--
   design/chrome-mocks/atlas.html — the design source the atlas index answers to.
-  specs/20260912/05-the-atlas-answers-to-a-design.md D1/D2, AC-20260912-05-6.
+  specs/20260912/05-the-atlas-answers-to-a-design.md D1/D2, AC-20260912-05-6; card links updated
+  by specs/20260913/06-every-mock-has-a-page-you-can-mark.md D3/D4 (every card links to its own
+  screen page; the lightbox and the `open ↗` link are deleted).
 
   This is a REFERENCE ARTIFACT, sibling in kind to design/client-mocks/*.html
   (specs/20260911/06 D18): one static file, never served by design-atlas.js and never shipped to
@@ -29,9 +31,10 @@
   when both numbers are zero. It reads as a signal, not a badge — the owner opens the atlas to
   find which screen wants them, and a card with nothing to say stays silent.
 
-  What it deliberately does NOT carry: the lightbox overlay's open state, the compare panel, the
-  notes layer, the theme/kit/shapes sections, and every behaviour that only exists when the page
-  is served. Those are the served page's, not the look's.
+  What it deliberately does NOT carry: the compare panel, the notes layer, the theme/kit/shapes
+  sections, and every behaviour that only exists when the page is served. Those are the served
+  page's, not the look's. There is no lightbox on this page at all — specs/20260913/06 D4 deletes
+  it from the served page too, so every card, journey-owned or not, is a link and nothing more.
 
   The previews are `srcdoc` iframes rather than `src="../mocks/*.html?clean"` ones so the file
   renders standalone; the element, its classes and its place in the card are the shipped ones.
@@ -123,9 +126,6 @@ a{color:inherit}
 .card{border:1px solid var(--v-border);border-radius:calc(var(--v-radius) + 4px);padding:1rem;background:var(--v-bg);box-shadow:var(--v-shadow);min-width:0;height:100%;transition:border-color .15s}
 .card:hover{border-color:var(--v-ring)}
 .card h3{margin:0 0 .5rem;font-size:15px;font-weight:600;display:flex;align-items:center;flex-wrap:wrap;gap:.15em}
-.card h3 .open{margin-left:auto}
-.card h3 .open button{background:none;border:0;color:var(--v-muted);font-size:14px;cursor:pointer;padding:0}
-.card h3 .open button:hover{color:var(--v-fg)}
 .badge{display:inline-flex;align-items:center;gap:.45em;font-size:12px;margin-right:.7em;color:var(--v-muted)}
 .badge::before{content:"";width:6px;height:6px;border-radius:99px;background:var(--v-muted);flex:none}
 .badge.sketch::before{background:var(--v-warn)}
@@ -136,11 +136,11 @@ a{color:inherit}
 .badge.orphan{color:var(--v-danger)}
 .badge.orphan::before{background:var(--v-danger)}
 
-/* ---- the preview. A journey-owned preview is a link to that screen's board on the review page;
-   a mock no journey claims keeps the lightbox instead, so the two never both fire on one click. */
+/* ---- the preview. Every card — journey-owned or not, screen or shape — is a link to that
+   screen's own page, /screen/<label>.html. There is no other destination a click can reach. */
 .shotlink{display:block;text-decoration:none;color:inherit}
 .shotlink .shot{cursor:pointer}
-.shot{position:relative;overflow:hidden;border-radius:4px;background:var(--v-muted-bg);cursor:zoom-in;border:1px solid var(--v-border);max-height:var(--v-shot-max,260px)}
+.shot{position:relative;overflow:hidden;border-radius:4px;background:var(--v-muted-bg);cursor:pointer;border:1px solid var(--v-border);max-height:var(--v-shot-max,260px)}
 .shot.clip::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4rem;pointer-events:none;background:linear-gradient(to bottom,transparent,var(--v-bg))}
 .frame{border:0;display:block;transform-origin:0 0;pointer-events:none;background:var(--v-muted-bg);width:100%}
 .meta{color:var(--v-muted);font-size:14px;margin-top:.4rem}
@@ -217,8 +217,8 @@ a{color:inherit}
         <!-- A journey-owned card. Three declared states, ONE frame: the count is the pointer to
              the review page, where each state gets its own tab. -->
         <div class="card" id="s-catalog" data-st="approved">
-          <h3>catalog<span class="badge approved">approved</span><span class="open"><button>open ↗</button></span></h3>
-          <a class="shotlink" href="/review/borrow.html#board-catalog" title="Review catalog on the borrow journey">
+          <h3>catalog<span class="badge approved">approved</span></h3>
+          <a class="shotlink" href="/screen/catalog.html" title="Open catalog's screen page">
             <div class="shot clip">
               <iframe class="frame" scrolling="no" height="360" title="catalog"
                 srcdoc="&lt;style&gt;*{box-sizing:border-box}body{margin:0;font:13px/1.45 ui-sans-serif,system-ui,sans-serif;color:#0a0a0a;background:#fff;padding:14px}h1{font-size:17px;margin:0 0 2px}p{margin:0 0 14px;color:#737373}.r{display:flex;gap:10px;align-items:center;border-top:1px solid #e5e5e5;padding:9px 0}.t{width:38px;height:38px;border-radius:6px;background:#f5f5f5;flex:none}.n{flex:1}.n b{display:block;font-weight:600}.n span{color:#737373;font-size:12px}.q{color:#737373;font-variant-numeric:tabular-nums}&lt;/style&gt;&lt;h1&gt;What&amp;#39;s on the shelf&lt;/h1&gt;&lt;p&gt;214 varieties, all grown within forty miles.&lt;/p&gt;&lt;div class=&quot;r&quot;&gt;&lt;div class=&quot;t&quot;&gt;&lt;/div&gt;&lt;div class=&quot;n&quot;&gt;&lt;b&gt;Cherokee Trail of Tears&lt;/b&gt;&lt;span&gt;pole bean · 2024 harvest&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;q&quot;&gt;18 left&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;r&quot;&gt;&lt;div class=&quot;t&quot;&gt;&lt;/div&gt;&lt;div class=&quot;n&quot;&gt;&lt;b&gt;Lemon Drop&lt;/b&gt;&lt;span&gt;tomato · 2025 harvest&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;q&quot;&gt;4 left&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;r&quot;&gt;&lt;div class=&quot;t&quot;&gt;&lt;/div&gt;&lt;div class=&quot;n&quot;&gt;&lt;b&gt;Painted Mountain&lt;/b&gt;&lt;span&gt;flour corn · 2025 harvest&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;q&quot;&gt;31 left&lt;/div&gt;&lt;/div&gt;"></iframe>
@@ -231,8 +231,8 @@ a{color:inherit}
         <!-- A journey-owned card declaring no states: the meta line carries no states clause at
              all, never "0 states". -->
         <div class="card" id="s-pickup" data-st="ratified">
-          <h3>pickup<span class="badge ratified">ratified</span><span class="open"><button>open ↗</button></span></h3>
-          <a class="shotlink" href="/review/borrow.html#board-pickup" title="Review pickup on the borrow journey">
+          <h3>pickup<span class="badge ratified">ratified</span></h3>
+          <a class="shotlink" href="/screen/pickup.html" title="Open pickup's screen page">
             <div class="shot clip">
               <iframe class="frame" scrolling="no" height="230" title="pickup"
                 srcdoc="&lt;style&gt;*{box-sizing:border-box}body{margin:0;font:13px/1.45 ui-sans-serif,system-ui,sans-serif;color:#0a0a0a;background:#fff;padding:14px}h1{font-size:17px;margin:0 0 2px}p{margin:0 0 14px;color:#737373}.b{border:1px solid #e5e5e5;border-radius:8px;padding:12px;margin-bottom:10px}.b b{display:block}.b span{color:#737373;font-size:12px}button{font:inherit;background:#171717;color:#fafafa;border:0;border-radius:8px;padding:8px 14px}&lt;/style&gt;&lt;h1&gt;Ready at the desk&lt;/h1&gt;&lt;p&gt;Bring a jar. We&amp;#39;ll label it.&lt;/p&gt;&lt;div class=&quot;b&quot;&gt;&lt;b&gt;Cherokee Trail of Tears&lt;/b&gt;&lt;span&gt;held until Saturday&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;b&quot;&gt;&lt;b&gt;Painted Mountain&lt;/b&gt;&lt;span&gt;held until Saturday&lt;/span&gt;&lt;/div&gt;&lt;button&gt;I picked these up&lt;/button&gt;"></iframe>
@@ -252,14 +252,16 @@ a{color:inherit}
       <h2 id="j-no-declaring-brief">no declaring brief<span class="count">1 mocked</span></h2>
       <div class="grid">
 
-        <!-- An orphan: a mock no journey declares and no spec claims. No shotlink — there is no
-             review page to send it to — so it keeps the lightbox. -->
+        <!-- An orphan: a mock no journey declares and no spec claims. It still gets a screen
+             page — every card is a link now, claimed or not. -->
         <div class="card" id="s-receipt" data-st="sketch">
-          <h3>receipt<span class="badge sketch">sketch</span><span class="badge orphan">orphan</span><span class="open"><button>open ↗</button></span></h3>
-          <div class="shot clip">
-            <iframe class="frame" scrolling="no" height="200" title="receipt"
-              srcdoc="&lt;style&gt;*{box-sizing:border-box}body{margin:0;font:13px/1.45 ui-sans-serif,system-ui,sans-serif;color:#0a0a0a;background:#fff;padding:14px}h1{font-size:17px;margin:0 0 2px}p{margin:0 0 14px;color:#737373}dl{margin:0;border-top:1px solid #e5e5e5}div{display:flex;justify-content:space-between;border-bottom:1px solid #e5e5e5;padding:8px 0}dt{color:#737373}dd{margin:0}&lt;/style&gt;&lt;h1&gt;Borrowed&lt;/h1&gt;&lt;p&gt;Return twice what you took, next autumn.&lt;/p&gt;&lt;dl&gt;&lt;div&gt;&lt;dt&gt;Taken&lt;/dt&gt;&lt;dd&gt;2 varieties&lt;/dd&gt;&lt;/div&gt;&lt;div&gt;&lt;dt&gt;Due back&lt;/dt&gt;&lt;dd&gt;October 2027&lt;/dd&gt;&lt;/div&gt;&lt;/dl&gt;"></iframe>
-          </div>
+          <h3>receipt<span class="badge sketch">sketch</span><span class="badge orphan">orphan</span></h3>
+          <a class="shotlink" href="/screen/receipt.html" title="Open receipt's screen page">
+            <div class="shot clip">
+              <iframe class="frame" scrolling="no" height="200" title="receipt"
+                srcdoc="&lt;style&gt;*{box-sizing:border-box}body{margin:0;font:13px/1.45 ui-sans-serif,system-ui,sans-serif;color:#0a0a0a;background:#fff;padding:14px}h1{font-size:17px;margin:0 0 2px}p{margin:0 0 14px;color:#737373}dl{margin:0;border-top:1px solid #e5e5e5}div{display:flex;justify-content:space-between;border-bottom:1px solid #e5e5e5;padding:8px 0}dt{color:#737373}dd{margin:0}&lt;/style&gt;&lt;h1&gt;Borrowed&lt;/h1&gt;&lt;p&gt;Return twice what you took, next autumn.&lt;/p&gt;&lt;dl&gt;&lt;div&gt;&lt;dt&gt;Taken&lt;/dt&gt;&lt;dd&gt;2 varieties&lt;/dd&gt;&lt;/div&gt;&lt;div&gt;&lt;dt&gt;Due back&lt;/dt&gt;&lt;dd&gt;October 2027&lt;/dd&gt;&lt;/div&gt;&lt;/dl&gt;"></iframe>
+            </div>
+          </a>
           <div class="meta">no declaring brief</div>
         </div>
 

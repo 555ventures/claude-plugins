@@ -11,7 +11,8 @@ const { SPEC, ROOT, read, parseFlatDom } = require('../helpers')
 // it is run under vm over the flat-DOM shim, exactly as the spec's "AC-6 harness contract" build
 // note requires.
 
-const { buildReviewPage } = require(path.join(SPEC, 'scripts/lib/review-page.js'))
+const reviewPageLib = require(path.join(SPEC, 'scripts/lib/review-page.js'))
+const { buildReviewPage } = reviewPageLib
 const REVIEW_BROWSER = path.join(SPEC, 'scripts/lib/review.browser.js')
 const VIEWER_CSS = path.join(SPEC, 'templates/mocks/viewer.css')
 const DESIGN_ATLAS_TEST = path.join(ROOT, 'tests/design-atlas.test.js')
@@ -36,11 +37,11 @@ function fixtureHtml() {
 // window.prompt is ever reached), and a fake IntersectionObserver whose registered callback is
 // handed back so the caller can fire it directly (headless — no real intersection geometry exists
 // in this shim).
-function runReviewBrowser(html) {
+function runReviewBrowser(html, pathname) {
   const { document } = parseFlatDom(html)
   const fetchCalls = []
   const sandbox = {
-    location: { pathname: '/review/j1.html', search: '' },
+    location: { pathname: pathname || '/review/j1.html', search: '' },
     document,
     window: { prompt: () => 'jj', addEventListener() {} },
     localStorage: { getItem: (k) => (k === 'nl-author' ? 'jj' : null), setItem() {} },
@@ -196,6 +197,36 @@ test('AC-20260913-05-10: clicking one row\'s accept control and another row\'s r
   const bodies = resolveCalls.map((c) => JSON.parse(c.opts.body))
   assert.strictEqual(bodies[0].verdict, 'accepted', 'the accept control must post verdict:"accepted": got ' + JSON.stringify(bodies[0]))
   assert.strictEqual(bodies[1].verdict, 'withdrawn', 'the reject control must post verdict:"withdrawn": got ' + JSON.stringify(bodies[1]))
+})
+
+// specs/20260913/06-every-mock-has-a-page-you-can-mark.md D2, AC-20260913-06-8: review.browser.js
+// runs unmodified on lib/review-page.js's new buildScreenPage output (A3: no journey rail, no
+// approve control) — the one board it renders carries data-focus (D2: focused true), so send()'s
+// existing focusedLabel()/scopeLabel logic files the composer's note as scope "mock" against that
+// screen with no code path change at all. buildScreenPage does not exist on the pre-image
+// (review-page.js exports only buildReviewPage/statesOf/viewportOf), so this throws red.
+test('AC-20260913-06-8: on the screen page for a, typing hi into the composer and clicking Send posts to /__notes/add exactly once with scope "mock", screen "a", text "hi"', () => {
+  assert.strictEqual(typeof reviewPageLib.buildScreenPage, 'function',
+    'lib/review-page.js must export buildScreenPage({label, src, states, product, viewportWidth, viewportHeight, notes, prefix}) — D1/D2')
+  const html = reviewPageLib.buildScreenPage({
+    label: 'a', src: 'mocks/a.html', states: [], product: 'Product',
+    viewportWidth: 1280, viewportHeight: 800, notes: [], prefix: '',
+  })
+  const { document, fetchCalls } = runReviewBrowser(html, '/screen/a.html')
+
+  const ta = document.querySelector('[data-rv="text"]')
+  assert.ok(ta, 'the screen page\'s composer must render a [data-rv="text"] textarea')
+  ta.value = 'hi'
+  const sendBtn = document.querySelector('[data-rv="send"]')
+  assert.ok(sendBtn, 'the screen page\'s composer must render a [data-rv="send"] button')
+  sendBtn._handlers.click[0]({ preventDefault() {} })
+
+  const addCalls = fetchCalls.filter((c) => c.url === '/__notes/add')
+  assert.strictEqual(addCalls.length, 1, 'Send must POST exactly once to /__notes/add: got ' + addCalls.length)
+  const body = JSON.parse(addCalls[0].opts.body)
+  assert.strictEqual(body.scope, 'mock', 'the screen page has one focused board, so the posted note must file scope "mock": got ' + JSON.stringify(body))
+  assert.strictEqual(body.screen, 'a', 'the posted note must file against screen "a": got ' + JSON.stringify(body))
+  assert.strictEqual(body.text, 'hi', 'the posted note must carry the composer\'s own text: got ' + JSON.stringify(body))
 })
 
 test('q241: while a scoped note is still open, recount() hides the waiting line and leaves its text alone', () => {

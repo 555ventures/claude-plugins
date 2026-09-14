@@ -98,8 +98,8 @@
   // (tests/mocks/notes-layer-isolation.test.js): a served mock computes the same styles with and
   // without this layer attached.
   var hostStyle = document.createElement('style')
-  // D5: while the lightbox is open, the served page's own bar/panel are hidden — the framed
-  // mock's own bar (inside the lightbox iframe, a different document) is the only one visible.
+  // specs/20260913/06-every-mock-has-a-page-you-can-mark.md D4: the lightbox is gone, so the
+  // clause that hid the served page's own bar/panel while it was open goes with it.
   //
   // specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D2/D5: every `.nl-host`
   // (bar/strip/proj/overlay alike) is permanently `pointer-events:none` here — a SINGLE bare
@@ -113,7 +113,7 @@
   // needed. Every OTHER host restores `auto` on its own shadow-scoped root below (`.nl-bar`,
   // `.nl-strip`, `.nl-proj` — the `css` string every host's shadow root carries), which
   // pointer-events then inherits down to their buttons exactly as it did before this rule existed.
-  hostStyle.textContent = 'body.lb-open .nl-host{display:none}.nl-host{pointer-events:none}'
+  hostStyle.textContent = '.nl-host{pointer-events:none}'
   document.head.appendChild(hostStyle)
 
   // specs/20260913/05-a-note-is-a-conversation.md D5/AC-20260913-05-7: a caller comparing a
@@ -932,27 +932,26 @@
   // plain <b> id badge, and so does a mock-scope row EVERYWHERE EXCEPT the project panel itself
   // (D7′(a): the swap is scoped to `isProject` — a served mock page's own strip keeps the plain
   // badge, since D8 gives the strip one thing only, the "Project notes ↗" link). Inside the
-  // project panel, a mock-scope row swaps that badge for a `.nl-anchor` control: a button
-  // (labelled "<screen> · <state>") when the screen's card AND its iframe.frame AND
-  // window.__lbOpen all exist, or an inert `.nl-anchor.plain` span ("<screen> · not drawn")
+  // project panel, a mock-scope row swaps that badge for a `.nl-anchor` control: an `<a>` link to
+  // the note's screen page (labelled "<screen> · <state>") when the screen's card AND its
+  // iframe.frame both exist, or an inert `.nl-anchor.plain` span ("<screen> · not drawn")
   // otherwise — D7′(b): a gap chip carries id="s-<label>" with no iframe.frame, so the frame
-  // itself (not merely the card id) is the button's gate, keeping a gap screen's pill inert. The
-  // button targets that SAME iframe.frame, the one a card click opens — never a navigation (D9:
-  // no query-string state deep link anywhere in this file).
+  // itself (not merely the card id) is the anchor's gate, keeping a gap screen's pill inert.
+  // specs/20260913/06-every-mock-has-a-page-you-can-mark.md D5: the lightbox is gone, so this no
+  // longer opens the deleted lightbox — it links straight to /screen/<n.screen>.html, the one page
+  // every screen now has.
   function mockAnchor(n) {
     var target = document.getElementById('s-' + n.screen)
     var frame = target && target.querySelector && target.querySelector('iframe.frame')
-    if (frame && window.__lbOpen) {
-      var btn = document.createElement('button')
-      btn.className = 'nl-anchor'
+    if (frame) {
+      var a = document.createElement('a')
+      a.className = 'nl-anchor'
+      a.href = __base + '/screen/' + encodeURIComponent(n.screen) + '.html'
       // mocks-driver.js's `--state` is optional (a question can be asked with none) — n.state is
       // then null, and "<screen> · null" is not a state. Name the screen alone rather than invent
       // a state that was never declared.
-      btn.textContent = n.state ? (n.screen + ' · ' + n.state) : n.screen
-      btn.onclick = function () {
-        if (window.__lbOpen) window.__lbOpen(frame)
-      }
-      return btn
+      a.textContent = n.state ? (n.screen + ' · ' + n.state) : n.screen
+      return a
     }
     var span = document.createElement('span')
     span.className = 'nl-anchor plain'

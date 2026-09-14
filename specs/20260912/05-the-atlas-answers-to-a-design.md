@@ -16,6 +16,8 @@ diff_base: f0a9d25ad70dd113d1a5f9c6fac4ad2009df068e
 
 # The atlas answers to a design, and a screen appears on it once
 
+- Amended by: ADR-0027 — specs/20260913/06 links every card, screen or shape, to its own screen page and deletes the lightbox D4 kept for the rest
+
 ## Goal
 
 The design atlas — the page that shows a whole product's screens at a glance — has never had a

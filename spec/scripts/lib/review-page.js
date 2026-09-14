@@ -123,8 +123,12 @@ function renderRail(seed, journey, screens, openByLabel, projectOpen) {
 // data-state-btn controls stay hidden — the review page's own tab bar replaces them) — a bare
 // `?clean` request (every OTHER caller of the mock route) carries no such flag and so still gets
 // no layer at all (tests/mocks/notes-layer-isolation.test.js's own pin).
-function frameSrc(prefix, label, state) {
-  return (prefix + '/mocks/' + encodeURIComponent(label) + '.html?clean&notes=1' + (state ? '&state=' + encodeURIComponent(state) : '')).replace(/"/g, '%22')
+// specs/20260913/06-every-mock-has-a-page-you-can-mark.md D1/D2: an optional `src` (the file's
+// path relative to `design/`, e.g. `shapes/one.html`) frames that file directly instead of
+// assuming `/mocks/<label>.html` — the screen page's own route for a shape.
+function frameSrc(prefix, label, state, src) {
+  const path = src ? '/' + src : '/mocks/' + encodeURIComponent(label) + '.html'
+  return (prefix + path + '?clean&notes=1' + (state ? '&state=' + encodeURIComponent(state) : '')).replace(/"/g, '%22')
 }
 
 // One iframe per state tab (the tab shows its own frame; the others stay hidden and unloaded), so
@@ -150,7 +154,7 @@ function renderBoard(screen, i, vp, prefix, openCount, focused, total, regionCou
   const framesHtml = tabs.map((s, k) =>
     '<iframe data-rv="frame" data-label="' + esc(label) + '" data-state="' + esc(s) + '"' + (focused ? ' data-focus' : '') + (k === 0 ? '' : ' hidden') +
     ' width="' + vp.width + '" height="' + vp.height + '" loading="lazy" scrolling="no" title="' + esc(label) + ' · ' + esc(s) +
-    '" src="' + frameSrc(prefix, label, k === 0 ? null : s) + '"></iframe>').join('')
+    '" src="' + frameSrc(prefix, label, k === 0 ? null : s, screen.src) + '"></iframe>').join('')
   return '<section class="rv-board" data-rv="board" data-label="' + esc(label) + '" id="board-' + esc(label) + '" data-pins="on"' + (focused ? ' data-focus' : '') + '>' +
     '<header class="rv-cap"><h3>' + esc(label) +
     '<span class="rv-of">· ' + (i + 1) + ' of ' + total + '</span></h3>' +
@@ -266,10 +270,13 @@ function renderComposer(prefix) {
 
 // specs/20260913/07-the-critic-is-out.md D6: the inspector holds one row template — the note row
 // — and its own aria-label and empty-state copy stop naming a producer this spec retires.
-function renderInspector(items, prefix, selectedId) {
+// specs/20260913/06-every-mock-has-a-page-you-can-mark.md D2: an optional `emptyText` overrides
+// the journey-review default sentence — the screen page passes "No open notes on this screen."
+function renderInspector(items, prefix, selectedId, emptyText) {
   const openCount = items.filter(isOpen).length
   const rows = items.map((n) => renderNoteRow(n, n.id === selectedId)).join('')
-  const empty = '<p class="rv-empty" data-rv="empty"' + (openCount ? ' hidden' : '') + '>No open notes on this journey. Approve it when the screens look right.</p>'
+  const empty = '<p class="rv-empty" data-rv="empty"' + (openCount ? ' hidden' : '') + '>' +
+    esc(emptyText || 'No open notes on this journey. Approve it when the screens look right.') + '</p>'
   return '<aside class="rv-inspector" data-rv="inspector" aria-label="Notes">' +
     // D13: the labels say who is waiting — the data-filter values (open/answered/all) never
     // change so no consumer breaks.
@@ -419,4 +426,63 @@ function buildReviewPage(input) {
     '</body></html>\n'
 }
 
-module.exports = { buildReviewPage, statesOf, viewportOf }
+// ---- screen page ----------------------------------------------------------------------------
+// specs/20260913/06-every-mock-has-a-page-you-can-mark.md D1/D2: buildScreenPage({label, src,
+// states, product, viewportWidth, viewportHeight, notes, prefix}) — the page every atlas card
+// (screen or shape) now opens: a breadcrumb, one focused board over the resolved file (D1's
+// mock-then-shape rule; `src` is the caller's own resolution, never re-derived here), and the
+// inspector over this screen's notes plus every whole-project note. No journey rail, no approve
+// control — this page has no journey to rail against or approve.
+function buildScreenPage(input) {
+  const o = input || {}
+  const label = o.label
+  if (!label) throw new Error('buildScreenPage needs {label}')
+  const prefix = o.prefix || ''
+  const product = o.product || ''
+  const screen = { label, states: Array.isArray(o.states) ? o.states : [], src: o.src }
+  const vp = {
+    width: o.viewportWidth > 0 ? o.viewportWidth | 0 : DEFAULT_VIEWPORT.width,
+    height: o.viewportHeight > 0 ? o.viewportHeight | 0 : DEFAULT_VIEWPORT.height,
+  }
+
+  // D2: notes whose scope is project, or mock with screen === label — the same filters
+  // buildReviewPage applies (authoredByPerson, and specs/20260913/05 D4's dropped-note filter).
+  const items = (o.notes || [])
+    .filter(authoredByPerson)
+    .filter((n) => turnOf(n) !== 'dropped')
+    .filter((n) => (n.scope === 'mock' && n.screen === label) || n.scope === 'project')
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+
+  const openCount = items.filter((n) => n.scope === 'mock' && isOpen(n)).length
+  const regionCounts = {}
+  for (const n of items) {
+    if (n.scope === 'mock' && n.kind === 'note' && n.region) {
+      const state = n.state || 'happy'
+      regionCounts[state] = (regionCounts[state] || 0) + 1
+    }
+  }
+  const firstOpen = items.find(isOpen)
+  const selectedId = firstOpen ? firstOpen.id : null
+
+  const board = renderBoard(screen, 0, vp, prefix, openCount, true, 1, regionCounts)
+
+  const header = '<header class="rv-bar">' +
+    '<nav class="rv-crumb" aria-label="Breadcrumb">' +
+    '<a class="rv-home" href="' + esc(prefix + '/') + '" title="Every screen in this product">' +
+    esc(product || 'Product') + '</a>' +
+    '<span class="rv-sep">/</span><strong>' + esc(label) + '</strong></nav></header>'
+
+  const head = '<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<title>' + esc(label) + ' · ' + esc(product || 'Mocks') + '</title>' +
+    '<link rel="stylesheet" href="' + esc(prefix) + '/__notes/viewer.css">' +
+    '</head>'
+
+  return head + '<body class="rv rv-screen" data-prefix="' + esc(prefix) + '">' +
+    header +
+    '<div class="rv-main"><main class="rv-canvas" data-rv="canvas">' + board + '</main>' +
+    renderInspector(items, prefix, selectedId, 'No open notes on this screen.') + '</div>' +
+    '<script src="' + esc(prefix) + '/__review/review.js"></script>' +
+    '</body></html>\n'
+}
+
+module.exports = { buildReviewPage, buildScreenPage, statesOf, viewportOf }

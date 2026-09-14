@@ -181,12 +181,12 @@ body {
 }
 
 /* Note-anchor chrome (.nl-anchor/.nl-up) — specs/20260907/09-atlas-index-and-note-navigation.md
-   D7/D9/D10. A mock-scope note in the project panel replaces its plain `<b>` id badge with
-   this pill: a `button.nl-anchor` when the note's screen is drawn on the served atlas and
-   `window.__lbOpen` exists (activating it opens that screen's lightbox), or an inert
-   `span.nl-anchor.plain` when the screen has no card. `.nl-up` is the strip heading's link
-   back to the atlas's project panel. Every color is an existing --v-* role — no new token, no
-   literal. */
+   D7/D9/D10, updated by specs/20260913/06-every-mock-has-a-page-you-can-mark.md D5. A
+   mock-scope note in the project panel replaces its plain `<b>` id badge with this pill: an
+   `a.nl-anchor` when the note's screen is drawn on the served atlas (linking to that screen's
+   own page, `/screen/<screen>.html`), or an inert `span.nl-anchor.plain` when the screen has no
+   card. `.nl-up` is the strip heading's link back to the atlas's project panel. Every color is
+   an existing --v-* role — no new token, no literal. */
 .nl-anchor {
   display: inline-flex;
   align-items: center;
@@ -262,6 +262,11 @@ body {
 /* panes */
 .rv-main { flex: 1; display: grid; grid-template-columns: var(--rv-rail) minmax(0, 1fr) var(--rv-pane); min-height: 0; }
 .rv-folded .rv-main { grid-template-columns: var(--rv-rail) minmax(0, 1fr) var(--rv-strip); }
+/* specs/20260913/06-every-mock-has-a-page-you-can-mark.md D2: the screen page (.rv-screen) has
+   no rail — one board plus the inspector, so its grid drops the rail column entirely rather than
+   collapsing it to zero width. */
+.rv-screen .rv-main { grid-template-columns: minmax(0, 1fr) var(--rv-pane); }
+.rv-screen.rv-folded .rv-main { grid-template-columns: minmax(0, 1fr) var(--rv-strip); }
 .rv-rail { border-right: 1px solid var(--v-border); background: var(--v-bg); padding: var(--v-space-6) var(--v-space-4); position: sticky; top: var(--rv-bar); height: calc(100vh - var(--rv-bar)); overflow: auto; }
 .rv-rail h2 { margin: var(--v-space-3) 0 var(--v-space-2); font-size: 14px; font-weight: 600; color: var(--v-fg); }
 .rv-list { list-style: none; margin: 0 0 var(--v-space-3); padding: 0; }
@@ -1087,10 +1092,7 @@ h1{margin:0;font-size:26px;letter-spacing:-.01em}
 .card:hover{border-color:var(--v-ring);box-shadow:var(--v-shadow);transform:none}
 .card.wide{grid-column:1/-1}
 .card h3{margin:0 0 .5rem;font-size:15px;font-weight:600;display:flex;align-items:center;flex-wrap:wrap;gap:.15em}
-.card h3 .open{margin-left:auto}
 .vp{color:var(--v-muted);font-size:12px;font-weight:400;margin-left:.5em;font-variant-numeric:tabular-nums}
-.open{float:none;margin-left:auto;font-size:14px;font-weight:500;color:var(--v-fg);text-decoration:none;border:1px solid var(--v-border);border-radius:var(--v-radius);padding:.25em .7em}
-.open:hover{background:var(--v-muted-bg)}
 .badge{display:inline-flex;align-items:center;gap:.45em;border:0;border-radius:0;padding:0;font-size:12px;font-weight:400;margin-right:.7em;text-transform:none;letter-spacing:0;background:none;color:var(--v-muted)}
 .badge::before{content:"";width:6px;height:6px;border-radius:99px;background:var(--v-muted);flex:none}
 .badge.gap::before{background:var(--v-danger)}
@@ -1102,7 +1104,7 @@ h1{margin:0;font-size:26px;letter-spacing:-.01em}
 .badge.candidate::before{background:var(--v-warn)}
 .shotlink{display:block;text-decoration:none;color:inherit}
 .shotlink .shot{cursor:pointer}
-.shot{overflow:hidden;border-radius:4px;background:var(--v-muted-bg);cursor:zoom-in;margin-top:0;border:1px solid var(--v-border);box-shadow:none}
+.shot{overflow:hidden;border-radius:4px;background:var(--v-muted-bg);cursor:pointer;margin-top:0;border:1px solid var(--v-border);box-shadow:none}
 .frame{border:0;display:block;transform-origin:0 0;pointer-events:none;background:var(--v-muted-bg);width:100%}
 .shot{position:relative;max-height:var(--v-shot-max,260px)}
 .shot.clip::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4rem;pointer-events:none;background:linear-gradient(to bottom,transparent,var(--v-bg))}
@@ -1151,13 +1153,6 @@ h1{margin:0;font-size:26px;letter-spacing:-.01em}
 @media(min-width:1200px){#toc{position:sticky;top:0;height:100vh}}
 @media(prefers-reduced-motion:reduce){#toc{transition:none}}
 #journey{height:280px;border:0;border-radius:calc(var(--v-radius) + 4px);margin-bottom:1.5rem;background:var(--v-muted-bg);box-shadow:none}
-#lb{position:fixed;inset:0;z-index:10;background:color-mix(in srgb, var(--v-fg) 85%, transparent);display:none;overflow:auto;padding:3.2rem 1rem 1rem}
-#lb.on{display:block}
-#lb iframe{border:0;display:block;margin:0 auto;background:var(--v-bg);border-radius:var(--v-radius);box-shadow:var(--v-shadow)}
-#lbbar{position:fixed;top:.75rem;right:1rem;z-index:11;display:flex;gap:.5rem;align-items:center}
-#lbbar span{color:var(--v-bg);font-size:15px;font-weight:500;margin-right:.5em}
-#lbbar button,#lbbar a{background:var(--v-bg);color:var(--v-fg);border:1px solid var(--v-border);border-radius:var(--v-radius);padding:.35em .9em;cursor:pointer;font:inherit;font-size:14px;text-decoration:none}
-#lbbar a:hover,#lbbar button:hover{background:var(--v-muted-bg)}
 #stops{margin:0 0 2rem;padding:0;border:0;border-radius:0;background:none;box-shadow:none}
 #stops h2{margin:0 0 .5rem;font-size:15px;font-weight:600}#stops h2~h2{margin-top:1.5rem}
 #stops ol{margin:0;padding:0;list-style:none;font-size:15px}
@@ -1190,7 +1185,7 @@ h1{margin:0;font-size:26px;letter-spacing:-.01em}
 :is(button,a,input,textarea,summary):focus-visible{outline:2px solid var(--v-ring);outline-offset:2px}
 @media(max-width:640px){#main{padding:24px 16px 20vh}.grid{grid-template-columns:1fr}#journey{height:200px}.cmp{grid-template-columns:1fr}.chead{position:static}}
 </style></head><body>
-<div id="shell"><aside id="toc"><p class="tochdr">Index</p><input id="tocsearch" type="search" placeholder="Search screens   /"><nav id="toctree"><p class="tocempty" hidden>No screen matches.</p></nav></aside><div id="tocscrim"></div><div id="main"><div class="hdr"><h1>Design atlas</h1><span class="proj">spec-05-a-note-is-a-conversation · no surfaces</span></div>
+<div id="shell"><aside id="toc"><p class="tochdr">Index</p><input id="tocsearch" type="search" placeholder="Search screens   /"><nav id="toctree"><p class="tocempty" hidden>No screen matches.</p></nav></aside><div id="tocscrim"></div><div id="main"><div class="hdr"><h1>Design atlas</h1><span class="proj">spec-06-every-mock-has-a-page-you-can-mark · no surfaces</span></div>
 
 <div class="bar"><button id="tocbtn" onclick="__tocToggle()">Index</button><button data-f class="on" onclick="__filter('all',this)">all 0</button></div>
 
@@ -1199,30 +1194,20 @@ h1{margin:0;font-size:26px;letter-spacing:-.01em}
 
 <div class="empty">Nothing drawn yet. Shapes appear here after the SHAPES step, screens after the first journey is drawn.</div>
 <div id="nl-notes"></div></div></div>
-<div id="lb"><div id="lbbar"><span id="lbtitle"></span><button onclick="__lbShow(__lbIx-1)" title="previous">‹</button><button onclick="__lbShow(__lbIx+1)" title="next">›</button><a id="lbopen" href="#" target="_blank">open ↗</a><button onclick="__lbClose()" title="close">✕</button></div><iframe id="lbframe" scrolling="no" src="about:blank"></iframe></div>
 <script>
-function __full(src){return String(src||"").replace(/[?&]clean$/,"")}
 function __sel(btn,attr){document.querySelectorAll("button["+attr+"]").forEach(function(b){b.classList.toggle("on",b===btn)})}
 function __measure(f){try{var d=f.contentDocument;if(!d||!d.documentElement)return 0;var h=d.documentElement.scrollHeight||0;if(d.body&&d.body.scrollHeight>h)h=d.body.scrollHeight;return h}catch(e){return 0}}
 function __fit(f){var s=f.parentNode;if(!s||!s.classList||!s.classList.contains("shot"))return;var w=+f.dataset.w||390,cw=s.clientWidth||w;f.style.width=w+"px";var vh=+f.dataset.h||844;if(!f.style.height||parseInt(f.style.height)<vh)f.style.height=vh+"px";var h=Math.max(__measure(f)||0,vh);f.style.height=h+"px";var sc=Math.min(1,cw/w);f.style.transform="scale("+sc+")";f.style.margin=sc<1?"0":"0 auto";var full=Math.round(h*sc),cap=parseInt(getComputedStyle(s).maxHeight)||full;s.style.height=cap+"px";s.classList.toggle("clip",full>cap)}
 function __fitAll(){document.querySelectorAll("iframe.frame").forEach(function(f){__still(f);__fit(f)})}
 function __still(f){try{var d=f.contentDocument;if(!d||!d.head||d.__stilled)return;d.__stilled=1;var st=d.createElement("style");st.textContent="*,*::before,*::after{animation-play-state:paused!important}";d.head.appendChild(st)}catch(e){}}
-var __lbList=[],__lbIx=0;
-function __lbShow(i){var fr=document.getElementById("lbframe");if(!fr||!__lbList.length)return;if(i<0)i=__lbList.length-1;if(i>=__lbList.length)i=0;__lbIx=i;var f=__lbList[i];var w=+f.dataset.w||390;fr.style.width=Math.min(w,window.innerWidth-32)+"px";fr.style.height=(parseInt(f.style.height)||+f.dataset.h||844)+"px";fr.src=__full(f.getAttribute("src"));var card=f.closest(".card"),h3=card&&card.querySelector("h3");document.getElementById("lbtitle").textContent=h3?h3.childNodes[0].textContent:"";document.getElementById("lbopen").href=__full(f.getAttribute("src"));document.getElementById("lb").classList.add("on")}
-function __lbOpen(f){__lbList=[].slice.call(document.querySelectorAll("iframe.frame")).filter(function(x){var c=x.closest(".card");return !c||!c.hidden});__lbShow(__lbList.indexOf(f))}
-function __lbClose(){var lb=document.getElementById("lb");if(lb)lb.classList.remove("on");var fr=document.getElementById("lbframe");if(fr)fr.src="about:blank"}
-document.addEventListener("keydown",function(e){var lb=document.getElementById("lb");if(!lb||!lb.classList.contains("on"))return;if(e.key==="Escape")__lbClose();if(e.key==="ArrowRight")__lbShow(__lbIx+1);if(e.key==="ArrowLeft")__lbShow(__lbIx-1)});
 var __rzT;window.addEventListener("resize",function(){clearTimeout(__rzT);__rzT=setTimeout(__fitAll,150)});
 window.addEventListener("DOMContentLoaded",function(){
   document.querySelectorAll("iframe.frame").forEach(function(f){
     var s=document.createElement("div");s.className="shot";f.parentNode.insertBefore(s,f);s.appendChild(f);
     var card=s.closest(".card"),h3=card&&card.querySelector("h3");
-    if(h3&&!h3.querySelector(".vp"))h3.insertAdjacentHTML("beforeend","<span class=\"vp\">"+(+f.dataset.w||390)+"\u00d7"+(+f.dataset.h||844)+"</span> <a class=\"open\" href=\""+__full(f.getAttribute("src"))+"\" target=\"_blank\">open \u2197</a>");
+    if(h3&&!h3.querySelector(".vp"))h3.insertAdjacentHTML("beforeend","<span class=\"vp\">"+(+f.dataset.w||390)+"\u00d7"+(+f.dataset.h||844)+"</span>");
     f.addEventListener("load",function(){__still(f);__fit(f);setTimeout(function(){__fit(f)},250)});
-    if(!s.closest("a.shotlink"))s.addEventListener("click",function(){__lbOpen(f)});
   });
-  var lb=document.getElementById("lb");if(lb)lb.addEventListener("click",function(e){if(e.target===lb)__lbClose()});
-  var lf=document.getElementById("lbframe");if(lf)lf.addEventListener("load",function(){var h=__measure(lf);if(h)lf.style.height=h+"px";try{var sw=lf.contentDocument.documentElement.scrollWidth;if(sw>parseInt(lf.style.width))lf.style.width=Math.min(sw,window.innerWidth-32)+"px"}catch(e){}});
   __fitAll();
 });
 </script><script>
@@ -1342,7 +1327,7 @@ function __renderPick(stopEl,stop){
     h.className='chead '+(picked?'picked':'rejected')
     var badge=h.querySelector('.badge')
     if(badge){badge.className='badge '+(picked?'picked':'rejected');badge.textContent=picked?'picked':'rejected'}
-    var btn=h.querySelector('[data-decide="pick"]')
+    var btn=h.querySelector('[data-decide=pick]')
     if(btn) btn.textContent=picked?'Picked':'Pick this instead'
   })
   if(!stopEl.querySelector('[data-decide="why"]')){
@@ -1386,37 +1371,6 @@ document.addEventListener('click',function(e){
     __post(id,{verdict:'change',note:note}).then(function(res){__apply(stopEl,res)})
   }
 })
-var __origOpen=window.__lbOpen
-if(typeof __origOpen==='function'){
-  window.__lbOpen=function(f){
-    document.body.classList.add('lb-open')
-    __origOpen(f)
-    var card=f.closest && f.closest('.card')
-    var cmp=card && card.closest('.cmp')
-    if(cmp && card && card.dataset.step){
-      var siblings=Array.prototype.slice.call(cmp.querySelectorAll('.card[data-step="'+card.dataset.step+'"] iframe.frame'))
-      if(siblings.length){ window.__lbList=siblings; window.__lbIx=siblings.indexOf(f) }
-    }
-    var bar=document.getElementById('lbbar')
-    if(bar){
-      var old=bar.querySelector('.decide-pick'); if(old) old.remove()
-      if(cmp){
-        var pb=document.createElement('button'); pb.className='decide-pick'; pb.textContent='Pick this'
-        bar.insertBefore(pb, bar.lastChild)
-        pb.onclick=function(){
-          var curFrame=window.__lbList[window.__lbIx]
-          var curCard=curFrame && curFrame.closest && curFrame.closest('.card')
-          var g=curCard?curCard.dataset.group:null
-          __post(cmp.getAttribute('data-id'),{verdict:'pick',pick:g}).then(function(res){__apply(cmp,res)})
-        }
-      }
-    }
-  }
-}
-var __origClose=window.__lbClose
-if(typeof __origClose==='function'){
-  window.__lbClose=function(){ document.body.classList.remove('lb-open'); __origClose() }
-}
 })()
 </script><!--/picks-script-->
 </body></html>

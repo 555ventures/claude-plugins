@@ -177,12 +177,12 @@ body {
 }
 
 /* Note-anchor chrome (.nl-anchor/.nl-up) — specs/20260907/09-atlas-index-and-note-navigation.md
-   D7/D9/D10. A mock-scope note in the project panel replaces its plain `<b>` id badge with
-   this pill: a `button.nl-anchor` when the note's screen is drawn on the served atlas and
-   `window.__lbOpen` exists (activating it opens that screen's lightbox), or an inert
-   `span.nl-anchor.plain` when the screen has no card. `.nl-up` is the strip heading's link
-   back to the atlas's project panel. Every color is an existing --v-* role — no new token, no
-   literal. */
+   D7/D9/D10, updated by specs/20260913/06-every-mock-has-a-page-you-can-mark.md D5. A
+   mock-scope note in the project panel replaces its plain `<b>` id badge with this pill: an
+   `a.nl-anchor` when the note's screen is drawn on the served atlas (linking to that screen's
+   own page, `/screen/<screen>.html`), or an inert `span.nl-anchor.plain` when the screen has no
+   card. `.nl-up` is the strip heading's link back to the atlas's project panel. Every color is
+   an existing --v-* role — no new token, no literal. */
 .nl-anchor {
   display: inline-flex;
   align-items: center;
@@ -258,6 +258,11 @@ body {
 /* panes */
 .rv-main { flex: 1; display: grid; grid-template-columns: var(--rv-rail) minmax(0, 1fr) var(--rv-pane); min-height: 0; }
 .rv-folded .rv-main { grid-template-columns: var(--rv-rail) minmax(0, 1fr) var(--rv-strip); }
+/* specs/20260913/06-every-mock-has-a-page-you-can-mark.md D2: the screen page (.rv-screen) has
+   no rail — one board plus the inspector, so its grid drops the rail column entirely rather than
+   collapsing it to zero width. */
+.rv-screen .rv-main { grid-template-columns: minmax(0, 1fr) var(--rv-pane); }
+.rv-screen.rv-folded .rv-main { grid-template-columns: minmax(0, 1fr) var(--rv-strip); }
 .rv-rail { border-right: 1px solid var(--v-border); background: var(--v-bg); padding: var(--v-space-6) var(--v-space-4); position: sticky; top: var(--rv-bar); height: calc(100vh - var(--rv-bar)); overflow: auto; }
 .rv-rail h2 { margin: var(--v-space-3) 0 var(--v-space-2); font-size: 14px; font-weight: 600; color: var(--v-fg); }
 .rv-list { list-style: none; margin: 0 0 var(--v-space-3); padding: 0; }

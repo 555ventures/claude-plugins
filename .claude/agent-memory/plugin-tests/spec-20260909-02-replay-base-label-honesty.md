@@ -3,6 +3,7 @@ name: spec-20260909-02-replay-base-label-honesty
 description: File Plan citations for review-legs/plugin-bump/replay tests can overstate what's on disk — verify with grep before retagging or vacuously matching.
 metadata:
   type: feedback
+  reviewed: 2026-09-13
 ---
 
 Two File Plan citations in specs/20260909/02-replay-base-and-label-honesty.md did not match the

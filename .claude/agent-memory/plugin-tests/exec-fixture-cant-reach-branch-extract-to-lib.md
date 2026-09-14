@@ -3,8 +3,12 @@ name: exec-fixture-cant-reach-branch-extract-to-lib
 description: When an AC's exec-a-script fixture structurally cannot produce the input shape the AC names (a real binary always emits a superset), extract the parser to spec/scripts/lib/ and prove the branch with a direct test instead of patching the exec fixture.
 metadata:
   type: feedback
-  reviewed: 2026-09-13
+  reviewed: 2026-09-14
 ---
+
+> Corrected 2026-09-14: the worked example's subjects are gone — ADR-0025
+> (specs/20260913/09) deleted the review driver's REPLAY state, `lib/parse-selection.js` and its
+> test. The extract-to-lib lesson below still holds; read the example as history.
 
 Finding pattern (2026-08-24, specs/20260823/09-replay-baseline-attribution.md
 AC-20260823-09-8): a driver test claimed to prove a five-token selection line (baseline

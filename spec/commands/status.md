@@ -83,7 +83,11 @@ The default screen is exactly four blocks, in order:
   {short blocker}`; else `🟢 next is ready` with clauses; else `⬜ nothing waits` with
   clauses. Clauses print only when non-zero: how many more specs are open below the top pick
   (`· {n} more open`, or `· nothing else open` on the `🟢` head at `n = 0`), how many more
-  decide lines exist (`--all`), how many hygiene findings exist (`/spec:doctor`).
+  decide lines exist (`--all`), how many hygiene findings exist (`/spec:doctor`), how many specs
+  have closed CLEAN since the last release (`· {n} done since last release`, or `· {n} done,
+  never released` when no release row exists yet), and whether a reviewer replay is due
+  (`· replay due ({reviewsSince}/5) — /spec:replay`) — the review driver never blocks on this
+  one, it is only ever seen here.
 
 Nothing else prints by default — no anomaly-fold tag trailing the Next line, no separate
 anomalies section, no `🕓`/`⛔` section, no observation block, no headline

@@ -88,38 +88,38 @@ test('union driver resolves concurrent worktree appends under squash merge', () 
 // review surfaces (the host Gotchas record exactly that class).
 const squash = (s) => s.replace(/\s+/g, ' ')
 
-test('AC-20260821-02-8: review.md names the driver\'s REPLAY state as what executes a due replay at CLEAN close, via replay.md\'s phases, and no longer carries the retired advisory warn', () => {
+test('AC-20260821-02-8 / AC-20260913-09-10: stage-review.md carries no REPLAY token and no replay-recorded mention — D5 deletes the "parks at REPLAY" sentence and the due-replay Rules bullet', () => {
   const review = squash(read('doctrine/stages/stage-review.md'))
-  assert.match(review, /REPLAY/,
-    'review.md must name the REPLAY state — the shell is where the session learns it owes the ' +
-    'measurement before the review can conclude, and a shell silent about it leaves the driver ' +
-    'printing a step with no doctrine behind it')
-  assert.match(review, /replay\.md/,
-    'review.md must point at spec/commands/replay.md as the executor of the phases — restating ' +
-    'those phases here instead would fork the one executor into two copies that drift, the ' +
-    'collision class this repo\'s Gotchas already record twice')
-  assert.match(review, /replay-recorded/,
-    'review.md must name the replay-recorded mark the session returns with, or the loop it ' +
-    'describes has no way back into the driver')
-  assert.doesNotMatch(review, /reviewer replay due/,
-    'the retired advisory warn must not survive anywhere in review.md — a printed reminder is ' +
-    'the mechanism this spec exists to replace, measured to be skipped through 12+ reviews')
+  assert.doesNotMatch(review, /REPLAY/,
+    'D5: stage-review.md must lose every mention of the REPLAY token — D1 deletes the state from ' +
+    'the driver, and doctrine that still names a state the driver no longer has sends the next ' +
+    'session to look for a step that never prints: ' + review)
+  assert.doesNotMatch(review, /replay-recorded/,
+    'D5: stage-review.md must lose the replay-recorded mark reference alongside the REPLAY state ' +
+    'it belonged to — the mark itself is deleted from the driver by D1: ' + review)
+
+  const replayCmd = squash(read('commands/replay.md'))
+  assert.match(replayCmd, /One entry point/,
+    'D5: replay.md\'s "Two entry points, one executor" paragraph must become "One entry point" — ' +
+    'the driver no longer invokes Phases 1-5 itself, so /spec:replay is the only entry point left: ' + replayCmd)
 })
 
-test('AC-20260821-02-9: core § Feedback Loop names the driver\'s REPLAY state as the cadence\'s executor and /spec:replay as the manual/retry surface', () => {
+test('AC-20260821-02-9 / AC-20260913-09-10: core § Feedback Loop states the cadence is replay.js --due policy executed on demand by /spec:replay, names the dashboard footer\'s "replay due" clause as where dueness is seen, and cites docs/adr/0025 for the retirement of the blocking form', () => {
   const core = read('doctrine/core.md')
   const section = squash(core.slice(core.indexOf('## Feedback Loop'), core.indexOf('## Incident Policy')))
   assert.ok(section.length > 0, 'setup: core.md must still carry a § Feedback Loop section ahead of § Incident Policy')
-  assert.match(section, /REPLAY/,
-    '§ Feedback Loop must record that the review driver\'s REPLAY state executes the cadence — ' +
-    'doctrine that only states the policy leaves the next session to re-litigate who runs it ' +
-    'from memory, which is how the advisory form survived 12+ skipped reviews')
-  assert.match(section, /\/spec:replay/,
-    '§ Feedback Loop must still name /spec:replay as the manual and retry surface — a ' +
-    'non-measurement outcome leaves the harness due and someone has to be told where to retry it')
   assert.match(section, /replay\.js --due/,
-    'the cadence itself is unchanged and must stay stated as replay.js --due policy, never a ' +
-    'session\'s memory')
+    'D5: the cadence itself is unchanged and must stay stated as replay.js --due policy, never a ' +
+    'session\'s memory: ' + section)
+  assert.match(section, /\/spec:replay/,
+    'D5: § Feedback Loop must name /spec:replay as the executor, run on demand — the review ' +
+    'driver never parks a close any more: ' + section)
+  assert.match(section, /replay due/,
+    'D5: § Feedback Loop must name the dashboard footer\'s "replay due" clause as where dueness ' +
+    'is seen now that the driver no longer parks a close on it: ' + section)
+  assert.match(section, /docs\/adr\/0025/,
+    'D5/D6: § Feedback Loop must cite docs/adr/0025 as the record of the blocking form\'s ' +
+    'retirement — a reversal of a measured ruling must be findable from the doctrine it changed: ' + section)
 })
 
 // specs/20260821/02-replay-review-phase.md D10: core § Feedback Loop states the pipeline

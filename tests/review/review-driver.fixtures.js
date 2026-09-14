@@ -161,8 +161,6 @@ const seedReviewRow = (i) => ({
   verdict: 'CLEAN', runId: `rv_seed00000${i}`, tier: 'standard', survived: 0,
 })
 
-const fiveSeedReviews = [1, 2, 3, 4, 5].map(seedReviewRow)
-
 // The REPLAY fixtures are makeHost()'s shape with two additions the replay harness needs: a
 // seeded ledger (which decides dueness) and an optional base-less spec frontmatter (which makes
 // `replay.js --select` fail at exit 4, the only reachable "due but nothing selectable" arm —
@@ -245,4 +243,4 @@ function rulesWithGotchas(root, n) {
     '# Rules\n\n## Review Checks\n\n- none\n\n## Gotchas (evidence-cited)\n\n' + entries.join('\n') + '\n')
 }
 
-module.exports = { DRIVER, GREEN_TEST, specBody, makeHost, run, stateOf, toReviewer, returnFileWith, oneFixReturnFile, CLEAN_RETURN, SURVIVOR_RETURN, seedReplayRow, seedReviewRow, fiveSeedReviews, makeReplayHost, driveToClose, commitClose, ledgerRows, closeRunIdOf, rulesWithGotchas }
+module.exports = { DRIVER, GREEN_TEST, specBody, makeHost, run, stateOf, toReviewer, returnFileWith, oneFixReturnFile, CLEAN_RETURN, SURVIVOR_RETURN, seedReplayRow, seedReviewRow, makeReplayHost, driveToClose, commitClose, ledgerRows, closeRunIdOf, rulesWithGotchas }

@@ -253,9 +253,9 @@ test('AC-20260913-05-12: the atlas index card\'s nl-card-count counts turn "sess
     'data-needs must count turn "you" notes (the note carrying a reply): got ' + JSON.stringify(m))
 })
 
-test('AC-20260913-05-15: docs/adr/0025-a-note-is-a-conversation.md exists, is accepted, and names all three amended specs', () => {
-  const adrPath = path.join(ROOT, 'docs/adr/0025-a-note-is-a-conversation.md')
-  assert.ok(fs.existsSync(adrPath), 'docs/adr/0025-a-note-is-a-conversation.md must exist (D10\'s amendment ADR): got no such file')
+test('AC-20260913-05-15: docs/adr/0026-a-note-is-a-conversation.md exists, is accepted, and names all three amended specs', () => {
+  const adrPath = path.join(ROOT, 'docs/adr/0026-a-note-is-a-conversation.md')
+  assert.ok(fs.existsSync(adrPath), 'docs/adr/0026-a-note-is-a-conversation.md must exist (D10\'s amendment ADR): got no such file')
   const text = fs.readFileSync(adrPath, 'utf8')
   assert.match(text, /Status: accepted/, 'the ADR must carry "Status: accepted": got no match')
   assert.match(text, /## Dissents/, 'the ADR must carry a "## Dissents" section: got no match')

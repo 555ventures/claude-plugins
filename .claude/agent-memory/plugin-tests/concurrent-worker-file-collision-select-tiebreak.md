@@ -3,7 +3,7 @@ name: concurrent-worker-file-collision-select-tiebreak
 description: Edit tool's "modified on disk since you last read it" warning means STOP and re-Read in full before trusting your own draft — the concurrent editor is usually the ORCHESTRATOR that dispatched you (its completion notification can fire early), so report what you found and never stand down as "already done"; also, replay.js --select's own tie-break means a driver CLOSE's own just-appended CLEAN+runId row is always a self-selectable candidate
 metadata:
   type: feedback
-  reviewed: 2026-09-10
+  reviewed: 2026-09-14
 ---
 
 Dispatched 2026-08-21 to author tests/review/review-driver.test.js (AC-20260821-02-1..7 — those
@@ -52,7 +52,12 @@ done and stand down — report what you found and let the orchestrator adjudicat
 `node --test <your files>` regardless of which version wins, to confirm red/green status is what
 the spec's TDD contract expects before reporting completion.
 
-**The specific bug this caught** (worth its own note for future replay-phase fixture authors):
+> Corrected 2026-09-14: ADR-0025 (specs/20260913/09) deleted the review driver's REPLAY state,
+> so no REPLAY-phase fixture exists any more. The tie-break below still applies whenever
+> `replay.js --select` runs right after a review close appended its own CLEAN row (for example
+> `/spec:replay` run immediately after a merge).
+
+**The specific bug this caught** (historical — the REPLAY-phase fixtures are gone):
 spec-review-driver.js's `doCloseWork()` appends its OWN authoritative verdict.js pass as a
 `stage:"review"` ledger row for the SPEC UNDER TEST ITSELF, carrying `verdict:"CLEAN"` and a
 fresh `runId` — moments before REPLAY's own `--due`/`--select` run. That row is therefore

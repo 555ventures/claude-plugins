@@ -1,6 +1,6 @@
 ---
 date: 2026-09-13
-status: hardened
+status: done
 tier: critical
 area: review-status
 design: false
@@ -9,6 +9,8 @@ depends_on: []
 depended_on_by: []
 brief: n/a
 open_markers: 0
+build_base: main
+diff_base: 27306bd260416fc7c7e085a30311e52f1fe54aaf
 ---
 
 # The tool shows, never interrupts
@@ -34,7 +36,7 @@ time without ever blocking anything.
 | D3 | **Specs done since the last release.** `lib/observation.js` exports `sinceLastRelease(rows) → { done, released }`: `released` is true when any `stage:"release"` row with `verdict:"CLEAN"` exists; `done` is the number of distinct `spec` values among `stage:"review"` rows with `verdict:"CLEAN"` positioned after the last such release row (after none when `released` is false). (AC-20260913-09-6) | Distinct paths, not rows: a spec that needed a fix round has two review rows and closed once. A non-CLEAN release row released nothing. |
 | D4 | **Two footer clauses, nothing else.** `spec-status.js`'s footer appends, after the hygiene clause and in this order: `· {N} done since last release` when `released` and `N ≥ 1`, or `· {N} done, never released` when not `released` and `N ≥ 1`; then `· replay due ({r}/5) — /spec:replay` when `due`. Zero `N` and not-due print nothing. Identical under `--all`. `--json` and `--next` are unchanged (the four frozen top-level keys stay). No new block: the default screen is still exactly four. (AC-20260913-09-7, AC-20260913-09-8, AC-20260913-09-9) | The owner asked for a line they can ignore. A fifth block would change the four-block contract `status.md` and its pins fix; a clause rides on a line that already exists. |
 | D5 | **Doctrine says show, not park.** `core.md` § Feedback Loop's replay-cadence paragraph is rewritten: cadence stays `replay.js --due` policy; execution is `/spec:replay`, run on demand — the review driver never parks a close; the dashboard footer's `replay due` clause is where dueness is seen; one sentence records that the blocking form (specs/20260821/02 D5) was retired by ADR because a block on a finished review is bypassed and its interrupt is the cost, and that the earlier printed-reminder measurement (12+ skipped) stands as the reason the count now lives on the dashboard rather than in a report. `stage-review.md` loses its "parks at `REPLAY`" sentence and its "The due replay (the REPLAY step)" Rules bullet. `replay.md`'s "Two entry points, one executor" paragraph becomes "One entry point": this command is the executor; Phase 0's not-due STOP is unchanged. `status.md`'s footer clause list names the two new clauses. (AC-20260913-09-10) | Doctrine that still names a state the driver no longer has sends the next session to look for a step that never prints. |
-| D6 | **One amendment ADR.** `docs/adr/0024-replay-runs-on-demand.md` (CREATE; the next free number at build if 0024 is taken — amend every mention here in the same build) applies to specs/20260821/02-replay-review-phase.md D1/D2/D5 (the REPLAY state, its mark, and the "state instead of a print" ruling — all retired) and to `core.md` § Feedback Loop. `[no-ac: durable record; AC-20260913-09-10 pins the doctrine it explains]` | A measured ruling is being reversed on the owner's stated grounds; the reversal must be findable from the spec that made the ruling. |
+| D6 | **One amendment ADR.** `docs/adr/0025-replay-runs-on-demand.md` (CREATE; amended from 0024 at build — 0024 was taken by `0024-the-critic-is-out.md`) applies to specs/20260821/02-replay-review-phase.md D1/D2/D5 (the REPLAY state, its mark, and the "state instead of a print" ruling — all retired) and to `core.md` § Feedback Loop. `[no-ac: durable record; AC-20260913-09-10 pins the doctrine it explains]` | A measured ruling is being reversed on the owner's stated grounds; the reversal must be findable from the spec that made the ruling. |
 | D7 | **Tests follow the surfaces.** `tests/review/review-driver-replay-entry.test.js` and `tests/review/review-driver-replay-record.test.js` are deleted (every pin's subject is the deleted state); `fiveSeedReviews` leaves `tests/review/review-driver.fixtures.js`'s exports (its two users are gone) while `seedReplayRow`/`seedReviewRow`/`makeReplayHost` stay for the new test. `tests/run-ledger.test.js :: AC-20260821-02-8` and `:: AC-20260821-02-9` are rewritten to pin the D5 text. `[no-ac: test-harness plumbing; the ACs below run through the repaired chain]` | A pin whose subject is gone is retired, never weakened. |
 | D8 | **Plugin bump.** `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` after the last edit. `[no-ac: scripts/plugin-bump.js --check in the gate is the oracle]` | Repo rule. |
 
@@ -51,7 +53,7 @@ time without ever blocking anything.
 | spec/doctrine/stages/stage-review.md | MODIFY | doctrine | D5: "parks at REPLAY" sentence and the due-replay Rules bullet deleted |
 | spec/commands/replay.md | MODIFY | doctrine | D5: "One entry point" paragraph |
 | spec/commands/status.md | MODIFY | doctrine | D5: footer clause list gains the two clauses |
-| docs/adr/0024-replay-runs-on-demand.md | CREATE | other | D6 |
+| docs/adr/0025-replay-runs-on-demand.md | CREATE | other | D6 |
 | spec/.claude-plugin/plugin.json | MODIFY | other | D8: `node scripts/plugin-bump.js --bump --plugin spec --changelog "…"` |
 | tests/review/review-driver-replay-entry.test.js | DELETE | tests | D7 |
 | tests/review/review-driver-replay-record.test.js | DELETE | tests | D7 |
@@ -62,6 +64,11 @@ time without ever blocking anything.
 | tests/replay/replay.test.js | MODIFY | tests | AC-20260913-09-4 tag on the existing `--due` pin (reuse, unchanged assertions) |
 | tests/spec-status.test.js | MODIFY | tests | AC-20260913-09-9 tag on the existing frozen-keys pin (reuse, unchanged assertions) |
 | tests/run-ledger.test.js | MODIFY | tests | AC-20260913-09-10 (rewrites the two REPLAY doctrine pins) |
+| spec/entrypoints.json | MODIFY | scripts | D1 (A1 remedy, added at build): `replay.js`'s `spec-review-driver.js` entry point removed — the driver no longer invokes it |
+| specs/20260821/02-replay-review-phase.md | MODIFY | other | D6 (added at build): the ADR amendment convention's one `Amended by: ADR-0025` header line — an orchestrator edit |
+| docs/canonical/review.md | MODIFY | other | D5 (added at build): the replay-cadence passage still described the deleted close-time state; brought current |
+| docs/canonical/pipeline.md | MODIFY | other | D5 (added at build): the `via` sentence names the retired driver step as historical |
+| tests/status/red-alarm.test.js | MODIFY | tests | D4 (A2 remedy, added at build): two exact-footer pins whose fixture carries one CLEAN review row and no release row now end with `· 1 done, never released` |
 
 ## Contracts
 
@@ -143,7 +150,7 @@ sub-state; no second ledger read.
   CONTINUE TO emit exactly the top-level keys `anomalies, briefs, specs, superseded` and `next` → reuses tests/spec-status.test.js :: AC-20260902-11-7 / AC-20260903-05-9 / AC-20260909-08-8
 - **AC-20260913-09-10**: WHEN `spec/doctrine/core.md` § Feedback Loop, `stage-review.md` and
   `replay.md` are read (whitespace squashed) THE SYSTEM SHALL find `replay.js --due`, `/spec:replay`
-  and `replay due` in § Feedback Loop, `docs/adr/0024` in § Feedback Loop, no `REPLAY` token and no
+  and `replay due` in § Feedback Loop, `docs/adr/0025` in § Feedback Loop, no `REPLAY` token and no
   `replay-recorded` in `stage-review.md`, and `One entry point` in `replay.md` → rewrites tests/run-ledger.test.js :: AC-20260821-02-8
 
 ## Assumptions (escalation triggers)
@@ -161,7 +168,7 @@ sub-state; no second ledger read.
 - A4 (executed): this repo's own ledger has no `stage:"release"` row and 181 distinct CLEAN
   review specs — the dashboard here will read `· 181 done, never released`; `replay.js --due`
   prints `not due reviewsSince=3`. **if false:** nothing changes; the numbers are illustrative.
-- A5: `docs/adr/0024` is free at build time. **if false:** take the next free number and amend
+- A5 (false at build — 0024 taken; amended to 0025): `docs/adr/0024` is free at build time. **if false:** take the next free number and amend
   D6, the File Plan row and AC-10's literal in the same build (host Gotchas, ADR race).
 
 ## Rationale
@@ -199,6 +206,28 @@ existing exports are unchanged; no fixture repair is planned.
 
 **Fragile.** A2 is a fixture-shape assumption with its remedy written. A5 is the ADR-number race
 the host Gotchas record three times.
+
+**Build departures (folded at close, 2026-09-14).** All one-offs; the recurring shapes are
+already Gotchas entries (the ADR-number race; the lock-time caller count as a prediction), and
+the section sits at its 15-entry cap, so nothing new is added there.
+- A5 false: 0024 was taken (`0024-the-critic-is-out.md`); the ADR shipped as 0025 and D6, its
+  File Plan row and AC-10 were amended before the build started.
+- A1 false in spirit: `spec/entrypoints.json` declared the review driver as an entry point of
+  `replay.js`; D1 deleted that call, the entrypoints pin reddened, and the row was removed.
+- A2 false: the reddened exact-footer pins were in `tests/status/red-alarm.test.js`, not
+  `status-diet.test.js`; both were rewritten to include the earned `· 1 done, never released`.
+- `specs/20260821/02` gained its `Amended by: ADR-0025` header line (the amendment convention).
+- Canonical Delta said None, but `docs/canonical/review.md` and `docs/canonical/pipeline.md`
+  still described the deleted close-time state as live; both were brought current.
+- The gate's one red was `tests/smoke-manifest.test.js :: AC-20260815-04-7` (SIGTERM exit 143
+  under whole-suite load); untouched by this range, 3/3 green alone, gate green on re-run.
+
+**Review advisories (rv_02c7150e7944, CLEAN, 4 soft).** `--select` still walks the
+last-measurement index itself rather than through `replayDueness` (the Contract returns no
+index); `replay.md` Phase 4 and two `replay.js` comments still name the driver's REPLAY step;
+A3 was false — `tests/review/merge-reentry.test.js` asserts `/DONE|REPLAY/` three times and was
+not retagged to DONE; stale REPLAY comments remain in `review-driver.fixtures.js` and
+`run-ledger.test.js`. Queued as one follow-up.
 
 ## Canonical Delta
 

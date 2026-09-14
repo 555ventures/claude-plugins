@@ -31,8 +31,7 @@ before the ref: `diff_base` → `build_base` → `merge-base HEAD main|master`.
 `STOPPED` (a `RED_BLOCKING` gate failure) and `ESCALATE` (a third `fix-applied`, cap 2) are
 terminal states the driver's own printed step names in full — remedy and exits included; read
 that text, never guess one. Every pass's ledger line lands in `.claude/spec-runs.jsonl`,
-appended by the driver, never hand-appended. A CLEAN close whose replay window is due parks at
-`REPLAY` until a measurement lands (the due-replay Rules bullet below).
+appended by the driver, never hand-appended.
 
 When the driver prints `DONE`, report (core § Console Output Style) from slots it captured —
 `outcome` (✅ `CLEAN — merged`, or its one-line MERGE-skip note), `warns` (derived by this
@@ -118,11 +117,3 @@ never a driver slot — plus `📎 N advisory finding(s) recorded` when the retu
   mechanical pick. Relocate before marking `merge-strategy` — `ExitWorktree(action="keep")` if
   entered via `EnterWorktree`, else `cd` to the driver-named root — then pass the driver the
   **worktree's absolute spec path**. Never push; that is an explicit user action.
-- **The due replay (the REPLAY step).** Once MERGE has concluded, the driver runs the replay
-  harness's own dueness/selection checks and either lands `DONE` or prints the REPLAY
-  execution step; when it does, execute `spec/commands/replay.md`'s **Phases 1–5** in this
-  session with the `--select` values it inlined — those phases live in `replay.md` alone,
-  never restated here. The ambiguous-score adjudication (`AskUserQuestion`) happens with the
-  user present. Return with `node {driver} <spec> --mark replay-recorded` — any recorded
-  outcome concludes the review; `unresolved`/`setup-failed` leaves the harness due for the
-  NEXT review. `/spec:replay` stays the manual and retry surface.

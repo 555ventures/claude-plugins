@@ -1,4 +1,4 @@
-# 0025. A note is a conversation
+# 0026. A note is a conversation
 
 - Status: accepted
 - Date: 2026-09-13
@@ -57,7 +57,7 @@ ADR-0024) applies here too.
   pinned by an executed test (`AC-20260912-12-22`) whose own assertion this spec rewrites —
   leaving D17's prose unmarked would have it contradict the test that once proved it.
 - **C. One amendment ADR narrowing or reversing all three in a single record**, each document
-  gaining a single `Amended by: ADR-0025` line and none otherwise rewritten. Adopted, for the
+  gaining a single `Amended by: ADR-0026` line and none otherwise rewritten. Adopted, for the
   same reason ADR-0024 gives: the documents trace to one change (turnOf's turn register) landed
   by one spec, so one record carries all three.
 
@@ -97,7 +97,7 @@ ADR-0024) applies here too.
   `design_source`, never served, never shipped — is untouched; the file is edited again under
   this spec's own File Plan, not superseded.
 
-Each of the three gains a single `Amended by: ADR-0025 — <one line>` header line (an
+Each of the three gains a single `Amended by: ADR-0026 — <one line>` header line (an
 orchestrator edit, per the amendment convention, not a worker's file-contract edit); none is
 otherwise rewritten.
 

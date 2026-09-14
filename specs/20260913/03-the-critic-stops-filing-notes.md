@@ -1,6 +1,7 @@
 ---
 date: 2026-09-13
-status: hardened
+status: superseded
+superseded_by: specs/20260913/07-the-critic-is-out.md
 tier: standard
 area: design-mocks
 design: false

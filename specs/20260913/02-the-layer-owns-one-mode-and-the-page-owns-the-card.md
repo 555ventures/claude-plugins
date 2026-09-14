@@ -6,7 +6,7 @@ area: design-mocks
 design: false
 breaking: false
 depends_on: [specs/20260912/11-a-note-can-mark-an-area.md, specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md]
-depended_on_by: [specs/20260913/03-the-critic-stops-filing-notes.md]
+depended_on_by: [specs/20260913/07-the-critic-is-out.md]
 brief: n/a
 spiked: 2026-09-13
 open_markers: 0

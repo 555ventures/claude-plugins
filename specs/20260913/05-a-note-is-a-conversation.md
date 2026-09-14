@@ -6,7 +6,7 @@ area: design-mocks
 design: false
 design_source: design/chrome-mocks/notes.html
 breaking: true
-depends_on: [specs/20260913/04-only-a-person-starts-a-note.md]
+depends_on: [specs/20260913/07-the-critic-is-out.md]
 depended_on_by: [specs/20260913/06-every-mock-has-a-page-you-can-mark.md]
 brief: n/a
 open_markers: 0

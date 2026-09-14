@@ -526,3 +526,28 @@ row; the session's own review page keeps today's behavior and is the session's s
 `--mark approved` refuses while any journey is neither confirmed nor waived
 (`client waive --journey <j> --reason "<r>"`, after seven days), and `client log` prints each
 journey's sentence or its reached count and misses. The client route never asks who they are.
+
+## The marks layer's interaction core (2026-09-13, specs/20260913/02)
+
+**The marks layer holds one mode at a time.** The region-note layer is in exactly one of
+`idle`, `arming`, `drawing` or `composing`, written only through `setMode`. Entering
+`composing` is how drawing ends, so no caller turns drawing off by hand. The drag binds on the
+overlay and holds the pointer with `setPointerCapture` — never on `document`, never behind a
+`closest()` guard, and never behind a click-swallowing shield: capture alone keeps the mock
+underneath inert. Drag geometry clamps to the mock document's own box before it is captured,
+because a region outside the document can never re-anchor.
+
+**Affordances are derived from the mode, not written.** The overlay carries `data-mode` and
+viewer.css derives cursor, pointer-events, touch-action and the marking scrim from it.
+
+**Geometry scales with the board; chrome does not.** A framed board's marks are painted by the
+frame's own layer and scale with it. The note card must not: the frame builds it in the host
+page's document and hands it up with the box's frame-local coordinates, and the host — which
+alone knows the board's scale — places it at full size beside the box, outside the clipping
+shot. There is one card renderer, wherever the card lands.
+
+**Selection is state and reveal is an effect.** The host page is the only writer of selection;
+the framed layer emits intents up and receives state down. Scrolling a box into view and
+pulsing it fire only when the selection came from somewhere other than that box, so clicking a
+box never animates the box under the cursor. A data change reconciles the box layer by id; a
+view-state change toggles one class. The layer is never rebuilt to move a highlight.

@@ -194,11 +194,32 @@ body {
 }
 .nl-q-text { color: var(--v-muted); font-size: 14px; }
 
-/* The mock-page scope toggle (.nl-scope) — same D5. It reads as .v-badge does; the selected
-   state borrows the one filled-button treatment (.v-btn.primary) rather than inventing a new
-   fill. The composer's reason chips (.nl-chips/.nl-chip/.nl-chip-on) stood here until
-   2026-09-13 and were removed with the control itself — see notes-layer.browser.js's
-   buildComposer. */
+/* Composer reason chips (.nl-chips/.nl-chip) and the mock-page scope toggle (.nl-scope) —
+   same D5. Unselected chips/scope read as .v-badge does; the selected state borrows the one
+   filled-button treatment (.v-btn.primary) rather than inventing a new fill. */
+.nl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--v-space-1);
+  margin: var(--v-space-1) 0;
+}
+.nl-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--v-muted-bg);
+  color: var(--v-muted);
+  padding: 4px var(--v-space-3);
+  font-size: 14px;
+  cursor: pointer;
+}
+.nl-chip-on {
+  border-color: var(--v-primary);
+  background: var(--v-primary);
+  color: var(--v-primary-fg);
+  font-weight: 500;
+}
 .nl-scope {
   display: inline-flex;
   border: 1px solid var(--v-border);
@@ -269,7 +290,8 @@ body {
 .rv .rv-n { font-variant-numeric: tabular-nums; color: var(--v-muted); margin-right: var(--v-space-2); }
 .rv kbd { display: inline-block; min-width: 1.5em; padding: 0 5px; border: 1px solid var(--v-border); border-bottom-width: 2px; border-radius: 4px; background: var(--v-muted-bg); color: var(--v-fg); font: 600 11px/1.6 var(--v-font); text-align: center; }
 .rv button { font: inherit; color: var(--v-fg); background: var(--v-bg); border: 1px solid var(--v-border); border-radius: var(--v-radius); padding: 4px 10px; cursor: pointer; }
-.rv button:hover:not(.rv-primary):not([aria-selected="true"]) { background: var(--v-muted-bg); }
+.rv button:hover:not(.rv-primary):not(.rv-chip-on):not([aria-selected="true"]) { background: var(--v-muted-bg); }
+.rv .rv-chip-on:hover { background: color-mix(in srgb, var(--v-primary) 88%, var(--v-bg)); }
 .rv button:focus-visible, .rv a:focus-visible, .rv textarea:focus-visible, .rv select:focus-visible, .rv [tabindex]:focus-visible { outline: 2px solid var(--v-ring); outline-offset: 1px; }
 .rv button[disabled] { opacity: .5; cursor: not-allowed; }
 .rv .rv-primary { background: var(--v-primary); color: var(--v-primary-fg); border-color: var(--v-primary); }
@@ -377,11 +399,9 @@ body {
   pointer-events: none;
 }
 .rv-clean .rv-shot::after { display: none; }
-/* specs/20260912/12 D11 escape (2026-09-13): the frame takes pointer input so the marks layer
-   inside it can be used at all — a mark drag has to reach it, and a box click is how a mark
-   opens its note card and selects its row (design/chrome-mocks/notes.html). The design
-   underneath stays inert: the notes layer mounts a shield over the mock, so only the boxes and
-   the drag itself ever receive a click. */
+/* specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D12: pointer-events
+   stays auto on every board frame — scaled or clean — because a framed layer's own drag and box
+   click (D2, D8) must reach it; nothing else lets a marked-up board be interactive at all. */
 .rv-shot iframe { border: 0; display: block; transform-origin: 0 0; transform: scale(var(--rv-scale)); pointer-events: auto; }
 .rv-clean .rv-shot { overflow: auto; height: auto; }
 .rv-clean .rv-shot iframe { transform: none; }
@@ -436,9 +456,9 @@ body {
 .rv-correct { margin-top: var(--v-space-2); display: flex; flex-direction: column; gap: var(--v-space-1); align-items: flex-end; }
 .rv-empty { margin: var(--v-space-4) 0; color: var(--v-muted); font-size: 15px; }
 .rv-composer { border-top: 1px solid var(--v-border); padding: var(--v-space-4); display: flex; flex-direction: column; gap: var(--v-space-3); }
-/* The reason chips above this box were removed 2026-09-13 (nothing downstream read a plain
-   note's reason); the box takes the height they held. */
-.rv-composer textarea { min-height: 104px; }
+.rv-chips { display: flex; flex-wrap: wrap; gap: var(--v-space-1); }
+.rv .rv-chipbtn { border: 0; border-radius: 999px; font-size: 14px; padding: 4px 12px; color: var(--v-muted); background: var(--v-muted-bg); }
+.rv-chipbtn.rv-chip-on { background: var(--v-primary); color: var(--v-primary-fg); border-color: var(--v-primary); font-weight: 500; }
 .rv-composer .rv-actions { margin-top: 0; }
 .rv-composer kbd { margin-left: 2px; }
 .rv-keys { display: flex; flex-wrap: wrap; gap: var(--v-space-2) var(--v-space-3); padding: var(--v-space-3) var(--v-space-4); border-top: 1px solid var(--v-border); font-size: 12px; color: var(--v-muted); }
@@ -808,6 +828,29 @@ body {
    mock's own document — this file is linked only inside the layer's shadow roots (the isolation
    invariant, tests/mocks/notes-layer-isolation.test.js). */
 .nl-overlay { position: absolute; inset: 0; }
+/* specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D5: affordances derive
+   from the overlay's own `data-mode` — the layer's only writer is `setMode`, and the imperative
+   `setStyle(overlayHost, {pointerEvents, cursor})` calls it used to make are deleted with this
+   rule. `idle`/`composing` are inert (a card open takes no drag); `arming`/`drawing` turn on
+   pointer-events, the crosshair and touch-action:none together, plus the 6%-ink scrim
+   `design/chrome-mocks/notes.html` declares as `.device.marking .nl-overlay::before` — restated
+   here as `color-mix(in srgb, var(--v-fg) 6%, transparent)` rather than the prototype's literal
+   `rgba(10,10,10,.06)`, since this stylesheet never carries a literal color. */
+.nl-overlay[data-mode="idle"],
+.nl-overlay[data-mode="composing"] { pointer-events: none; }
+.nl-overlay[data-mode="arming"],
+.nl-overlay[data-mode="drawing"] { pointer-events: auto; cursor: crosshair; touch-action: none; }
+.nl-overlay[data-mode="arming"]::before,
+.nl-overlay[data-mode="drawing"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--v-fg) 6%, transparent);
+}
+/* D10: the view-state dim the prototype declares (`.nl-overlay.has-sel .nl-region:not(.sel)`)
+   but the shipped stylesheet never carried — the layer set `has-sel` on the overlay with nothing
+   here to answer it, so the treatment has never rendered until now. */
+.nl-overlay.has-sel .nl-region:not(.sel) { opacity: .45; }
 /* specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D12: a mark is two parts — a
    stroke-less highlighter tint over exactly the dragged area, and a dashed frame held 6px
    OUTSIDE that tint (::before) so a gutter of untouched design always separates the annotation
@@ -842,7 +885,18 @@ body {
   border-color: var(--c);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 26%, transparent);
 }
-.nl-region.dim { opacity: .45; }
+/* specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D11: the reveal
+   animation the prototype declares (`design/chrome-mocks/notes.html`'s `pulse` keyframes) but
+   the shipped stylesheet never carried — `__nlSelect`'s reveal path has added the `.pulse` class
+   since it shipped, with no rule here to answer it. Guarded so a reduced-motion viewer sees the
+   selection state change with no animation at all. */
+@media (prefers-reduced-motion: no-preference) {
+  .nl-region.pulse { animation: pulse .7s ease-out 1; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 50%, transparent); }
+    100% { box-shadow: 0 0 0 16px transparent; }
+  }
+}
 
 .nl-region-badge {
   position: absolute;
@@ -951,10 +1005,8 @@ body {
 .nl-card-me small::before { background: var(--v-primary); }
 .nl-card textarea {
   width: calc(100% - 28px);
-  /* The chips that sat above this box are gone (2026-09-13); the note's own words are the whole
-     input now, so the box opens at roughly five lines instead of three. */
-  margin: 12px 14px 0;
-  min-height: 104px;
+  margin: 8px 14px 0;
+  min-height: 56px;
   font: 14px/1.45 var(--v-font);
   color: var(--v-fg);
   border: 1px solid var(--v-border);
@@ -1006,6 +1058,8 @@ body {
 }
 .nl-card-why textarea { margin: 0; width: 100%; }
 .nl-card-why .nl-card-row { padding: 0; }
+.nl-card .nl-chips { padding: 12px 14px 0; }
+.nl-card .nl-chips .nl-btn { height: 26px; padding: 0 10px; font-size: 12.5px; border-radius: 999px; }
 
 /* Strip filter (.nl-seg) — specs/20260912/11 D8: a segmented Needs-you/Open/All/Resolved
    control; the pressed button lifts off the muted track like a native segmented control. */
@@ -1073,15 +1127,5 @@ body {
     max-height: 70vh;
     overflow: auto;
     box-shadow: var(--v-shadow);
-  }
-  /* A review board's frame is phone-width but is not a phone — its card is placed beside the box
-     by the notes layer, so the sheet's own fixed/right/bottom/width must not apply there. */
-  .nl-overlay.nl-marks .nl-card {
-    position: absolute;
-    right: auto;
-    bottom: auto;
-    width: 328px;
-    max-height: none;
-    border-radius: 12px;
   }
 }

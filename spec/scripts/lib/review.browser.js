@@ -6,8 +6,7 @@
 // Talks only to /__notes/* and /__picks/* under the page's own base (the path before
 // `/review/<j>.html` — '' or a `/p/<name>` mount), through the spec 03 endpoints unchanged:
 // POST /__notes/answer {id, verdict, text?, by} and POST /__notes/add {scope, screen, state,
-// text, by} — the optional `reason` the store still accepts is no longer authored here (the
-// composer's chips are gone, 2026-09-13: nothing downstream ever read a plain note's reason). The approve/change buttons are handled by the stop block's own picks
+// reason, text, by}. The approve/change buttons are handled by the stop block's own picks
 // script (lib/stop-block.js), never here — this file only keeps the approve button's disabled
 // state in step with what is still open.
 //
@@ -33,6 +32,7 @@
   var initial = q('[data-rv="row"][data-selected]')
   var selectedId = initial ? initial.getAttribute('data-id') : null
   var scopeLabel = null
+  var reason = 'other'
 
   // ---- identity ------------------------------------------------------------------------------
   function author() {
@@ -100,10 +100,87 @@
     })
   }
 
+  // specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D6: locate the
+  // `[data-rv="frame"]` whose `.contentWindow` is the given frame window — the reverse lookup
+  // `__rvCardOpen`/`__rvCardClose` need to find a board from the frame that called them (same-
+  // origin only; a cross-origin frame's `contentWindow` still compares by reference, never throws).
+  function frameElFor(win) {
+    var frames = qa('[data-rv="frame"]')
+    for (var i = 0; i < frames.length; i++) { if (frames[i].contentWindow === win) return frames[i] }
+    return null
+  }
+
+  // D7: flip-then-shift, restated here for the host-placed card (the unframed layer implements
+  // the identical rule for its own overlay-mounted card — one rule, two placements, since this
+  // repo ships no shared browser-script module system). `boxRect` is the box's already-scaled
+  // on-screen rectangle (viewport pixels); the card is placed in PAGE pixels (scroll added) since
+  // `.nl-card` is `position:absolute` with no positioned ancestor between it and the page. D7
+  // carries no escape clause for "neither flank has room": clamping the flipped side back into
+  // the viewport (the retired right-edge clamp, under a new name) would put the card ON TOP of
+  // its own box, which D7 forbids outright. When neither side fits, this falls back to the OTHER
+  // axis instead — below the box, else above — shifted horizontally to stay in the viewport.
+  function placeHostCard(card, boxRect) {
+    var gap = 12
+    var scrollX = window.pageXOffset || 0
+    var scrollY = window.pageYOffset || 0
+    var vw = window.innerWidth, vh = window.innerHeight
+    var cw = card.offsetWidth || 328
+    var ch = card.offsetHeight || 200
+    var right = boxRect.right + gap
+    var left = boxRect.left - gap - cw
+    var x, y
+    if (right + cw <= vw || left >= 0) {
+      x = right + cw <= vw ? right : left
+      y = boxRect.top
+      if (y + ch > vh) y = Math.max(0, vh - ch)
+      if (y < 0) y = 0
+    } else {
+      var below = boxRect.bottom + gap
+      var above = boxRect.top - gap - ch
+      y = below + ch <= vh ? below : (above >= 0 ? above : Math.max(0, vh - ch))
+      x = boxRect.left
+      if (x + cw > vw) x = Math.max(0, vw - cw)
+      if (x < 0) x = 0
+    }
+    card.style.left = (x + scrollX) + 'px'
+    card.style.top = (y + scrollY) + 'px'
+  }
+
+  // D6: the frame hands up a card element it built in THIS document (`window.parent.document`)
+  // plus its own frame-local, pre-scale box — the host is the only side that knows the board's
+  // scale (fit()'s own `--rv-scale`), so it alone converts. One card at a time per board: opening
+  // a new one in the same board's host replaces whatever was there.
+  window.__rvCardOpen = function (cardEl, box, frameWin) {
+    var frame = frameElFor(frameWin)
+    var board = frame && frame.closest ? frame.closest('[data-rv="board"]') : null
+    var host = board && board.querySelector('[data-rv="cardhost"]')
+    if (!host) return
+    host.innerHTML = ''
+    host.appendChild(cardEl)
+    var ir = frame.getBoundingClientRect()
+    var scale = frame.offsetWidth ? ir.width / frame.offsetWidth : 1
+    var bx = box || { x: 0, y: 0, w: 0, h: 0 }
+    var boxRect = {
+      left: ir.left + (bx.x || 0) * scale,
+      top: ir.top + (bx.y || 0) * scale,
+      right: ir.left + ((bx.x || 0) + (bx.w || 0)) * scale,
+      bottom: ir.top + ((bx.y || 0) + (bx.h || 0)) * scale,
+    }
+    placeHostCard(cardEl, boxRect)
+  }
+  window.__rvCardClose = function (frameWin) {
+    var frame = frameElFor(frameWin)
+    var board = frame && frame.closest ? frame.closest('[data-rv="board"]') : null
+    var host = board && board.querySelector('[data-rv="cardhost"]')
+    if (host) host.innerHTML = ''
+  }
+
   // D8: row → box is a direct same-origin call, no postMessage. Selecting a row focuses its
   // board, switches that board's state tab to the row's own data-state (D9) if it differs, then
-  // calls __nlFocus(id) on the board's now-visible frame — retried exactly once on the frame's
-  // own `load` event if it has not finished loading yet.
+  // calls __nlSelect(id, {reveal}) on the board's now-visible frame — retried exactly once on the
+  // frame's own `load` event if it has not finished loading yet. `select` is the one writer of
+  // selection (D8); `reveal` (scroll + pulse) fires only when the caller says the selection did
+  // not originate at that box (a rail-row click, keyboard move — never a box click itself).
   function select(id, reveal) {
     selectedId = id
     var label = null
@@ -130,7 +207,7 @@
         var tried = false
         var callFocus = function () {
           try {
-            if (frame.contentWindow && frame.contentWindow.__nlFocus) { frame.contentWindow.__nlFocus(id); tried = true }
+            if (frame.contentWindow && frame.contentWindow.__nlSelect) { frame.contentWindow.__nlSelect(id, { reveal: !!reveal }); tried = true }
           } catch (e) { /* cross-origin or the frame document is not ready yet */ }
         }
         callFocus()
@@ -310,8 +387,8 @@
     if (!text) return Promise.resolve()
     var label = scopeLabel || focusedLabel()
     var body = label
-      ? { scope: 'mock', screen: label, state: (function (s) { return s === 'happy' ? null : s })(activeStateOf(label)), text: text, by: author() }
-      : { scope: 'project', screen: null, state: null, text: text, by: author() }
+      ? { scope: 'mock', screen: label, state: (function (s) { return s === 'happy' ? null : s })(activeStateOf(label)), reason: reason, text: text, by: author() }
+      : { scope: 'project', screen: null, state: null, reason: reason, text: text, by: author() }
     return post('/__notes/add', body).then(function () {
       if (ta) ta.value = ''
       // The new row exists on disk; the next GET renders it. Reload so the rail, badges, and the
@@ -540,6 +617,16 @@
   // D15: "All screens" clears the narrowing so every screen's rows show; scrolling to a board
   // re-applies it (focusBoard/the IntersectionObserver below).
   on(q('[data-rv="allscreens"]'), 'click', function () { screenFilter = null; applyFilter() })
+  qa('[data-rv="chip"]').forEach(function (c) {
+    on(c, 'click', function () {
+      reason = c.getAttribute('data-value')
+      qa('[data-rv="chip"]').forEach(function (x) {
+        var onChip = x === c
+        x.setAttribute('aria-pressed', onChip ? 'true' : 'false')
+        if (x.classList) x.classList.toggle('rv-chip-on', onChip)
+      })
+    })
+  })
   on(q('[data-rv="send"]'), 'click', function (e) { if (e && e.preventDefault) e.preventDefault(); send() })
   on(q('[data-rv="composer"]'), 'submit', function (e) { if (e && e.preventDefault) e.preventDefault(); send() })
   on(q('[data-rv="jump"]'), 'change', function (e) {
@@ -592,7 +679,9 @@
   }
 
   // D8: box → row. The framed layer calls this directly (same-origin, no postMessage) on a box
-  // click; a no-op on an id that has no row on this page.
+  // click; a no-op on an id that has no row on this page. `select(id)` (reveal omitted, so
+  // falsy) is what keeps this a SELECT-without-REVEAL — the box the reviewer just clicked is
+  // already under the cursor, so nothing scrolls or pulses back down through `__nlSelect`.
   window.__rvPick = function (id) {
     var row = rowById(id)
     if (!row) return

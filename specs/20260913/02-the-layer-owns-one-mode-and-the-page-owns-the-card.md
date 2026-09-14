@@ -1,6 +1,6 @@
 ---
 date: 2026-09-13
-status: hardened
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +10,8 @@ depended_on_by: [specs/20260913/03-the-critic-stops-filing-notes.md]
 brief: n/a
 spiked: 2026-09-13
 open_markers: 0
+build_base: main
+diff_base: e232a7eef4bff691d1e42935dfc3a3ec65fafe17
 ---
 
 # The layer owns one mode and the page owns the card
@@ -59,6 +61,8 @@ a stray rectangle, a double repaint, or 5px text — and real-browser tests hold
 | tests/mocks/chrome-harness.js | MODIFY | tests | D13: export `drag(send, sessionId, from, to, opts)` |
 | tests/mocks/notes-layer-interaction.test.js | CREATE | tests | AC-20260913-02-1, AC-20260913-02-2, AC-20260913-02-3, AC-20260913-02-4, AC-20260913-02-5, AC-20260913-02-6, AC-20260913-02-7, AC-20260913-02-8 |
 | tests/mocks/review-board-card.test.js | CREATE | tests | AC-20260913-02-9, AC-20260913-02-10, AC-20260913-02-11, AC-20260913-02-12 |
+| tests/mocks/client-region.test.js | MODIFY | tests | AC-20260913-02-13 — the reused four-role badge/comment pin carries this spec's carried-AC tag so the coverage matrix can see it |
+| tests/mocks/notes-layer-isolation.test.js | MODIFY | tests | AC-20260913-02-14 — the reused isolation pin carries this spec's carried-AC tag, and its extraction reads every emitted document-level literal rather than only the first single-quoted one |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | Version bump via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` |
 
 ## Contracts
@@ -290,6 +294,68 @@ What to watch: the keyed reconcile (D9) is where a rewrite most easily regresses
 entry in the Map after a state-tab switch would paint a box for a note that no longer resolves.
 The `has-sel`/`sel` toggles must never re-enter `renderOverlay`, or the round trip returns
 wearing different clothes. And D14's tree cleanup must happen before Phase 0, not after.
+
+**What the build and review actually met** (folded from the deviations sidecar at close).
+
+D14's cleanup could not run as written: the working tree it names had already been committed
+(`cb1bd33`) before the build started, so "returned to HEAD" was unreachable by discarding
+changes. It ran as a revert commit on the spec branch instead (`e232a7ee`, restoring the five
+files to their `e96fd62` content), and `diff_base` was corrected at Phase 0 from the driver's
+own pre-revert stamp to that commit, so the judged range carries this spec's re-authoring and
+not the undo of a superseded draft. The reason-chip retirement stayed queued outside this diff
+as D14 requires. `design/atlas/index.html` was committed in the same earlier commit although
+the Rationale above records it as an untracked generated render; it is outside D14's five files
+and outside the File Plan, so it was left alone rather than untracked mid-build.
+
+D4's clamp bound is the mock document's `scrollWidth`/`scrollHeight` captured ONCE before this
+layer mounts anything of its own, not read live at drag time. Live, the layer clamps against a
+bound its own in-flow strip has already inflated — a 1440×900 fixture reads 1065 high once the
+strip panel mounts, and AC-3's own drag then clamps to `h:265` against its stated `≤100`.
+A2's and A3's executed measurements, and the AC's worked example, all assume the mock's own
+box, not the box plus this layer's chrome.
+
+Two ACs were red for reasons in their own fixtures rather than in the code. AC-2's press point
+was hardcoded at (900,28), which lands on the layer's own toolbar — measured rect
+`{left:795, right:1393, top:13, bottom:45}`, wider than assumed because the fixture presses `m`
+first and the mark button then reads "Marking · Esc to stop" — so `pointerdown` never reached
+the overlay and capture never engaged. It now measures the bar's rect live and derives a press
+clear of it with the drag still crossing its full width. AC-8 sampled a transitioning opacity
+exactly 150ms after the click against a `.15s` transition, reading 0.4538–0.4539 rather than
+0.45 on every correct implementation; it now polls with a bound and asserts the same two exact
+values. Neither assertion was weakened.
+
+The two new test files each spawned a headless browser PER TEST — 12 process launches across
+the pair, where every other browser-driving file in `tests/mocks` needs one. Under `node --test`'s
+default concurrency that thrashed the machine: the whole suite went from 42927ms with these two
+files moved aside to 974438ms with them present, starving two unrelated wall-clock-bounded tests
+(`release-legs.test.js` AC-20260823-01-3, `render-gate.test.js` AC-20260824-01-12) into measuring
+~930s for work that takes seconds, and timing out this spec's own AC-7 at 45s with 928s elapsed —
+pure resource starvation, no behavior change anywhere. `tests/mocks/chrome-harness.js` now splits
+`launchChrome(chrome, opts)` from `openPage(launch)` (its `withChrome` export unchanged in
+behavior, now implemented on top of the two), and each file launches once in a `before` hook while
+every test still opens its own page against its own fresh fixture. Whole suite afterwards: 1186 /
+1186, 44432ms. The per-file test-duration budget cannot see this class — each file is cheap alone
+and expensive only beside its siblings.
+
+Review dispositioned three findings `fix`, all confirmed on executed evidence. D7's
+"neither flank has room" fallback had reinstated the retired right-edge clamp under a new name,
+placing the card over its own box; both placements now fall back to the cross axis. The layer's
+added `.nl-overlay-host` document-level rules could not satisfy AC-14's `.nl-host` boundary —
+a compound class selector never can — so the class-toggle mechanism was dropped for a single
+permanent `.nl-host{pointer-events:none}`, with the overlay's own `data-mode` pointer-events
+overriding it as a descendant and the other hosts' `pointer-events:auto` restored inside the
+shadow-scoped rule they already carry. AC-13 and AC-14 reported zero coverage because their
+`reuses` targets were not File Plan rows; both were added as MODIFY rows and both reused cases
+now carry the tags, still green. The D7 duplication across the two browser scripts is kept
+deliberately: they are served independently with no shared module system, which is the same
+reason D7 states one rule for two placements.
+
+The reviewer seat ran on Opus rather than Fable — the first dispatch terminated on an API
+`rate_limit` (HTTP 429, "out of usage credits" for `claude-fable-5-1`) before producing any
+finding, and `spec/doctrine/core.md` § Model Placement names Opus as the sanctioned fallback.
+The cross-family independence that seat normally buys is therefore absent for this review, since
+the build session is also Opus; blind dispatch, fresh context and the executed-evidence standard
+all still held, and the fallback still returned three hard findings across two passes.
 
 ## Canonical Delta
 

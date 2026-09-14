@@ -43,6 +43,7 @@ const REASON_LABELS = {
   'wrong-words': 'Wrong words',
   other: 'Other',
 }
+const REASONS = ['missing-screen', 'wrong-direction', 'wrong-words', 'other']
 const DEFAULT_VIEWPORT = { width: 1280, height: 800 }
 
 // Every data-state-btn value a mock declares, in declared order (none → []). A declared `happy`
@@ -130,7 +131,7 @@ function renderRail(seed, journey, screens, openByLabel, projectOpen) {
 // label and state are URL-encoded, so only a double quote could ever break the attribute.
 // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D3/D5: `&notes=1` rides alongside
 // `?clean` so design-atlas.js's mock route still injects the notes-layer script (D3's bridge
-// target, `window.__nlFocus`) even though the frame keeps the clean chrome strip (native
+// target, `window.__nlSelect`) even though the frame keeps the clean chrome strip (native
 // data-state-btn controls stay hidden — the review page's own tab bar replaces them) — a bare
 // `?clean` request (every OTHER caller of the mock route) carries no such flag and so still gets
 // no layer at all (tests/mocks/notes-layer-isolation.test.js's own pin).
@@ -177,6 +178,12 @@ function renderBoard(screen, i, vp, prefix, openCount, focused, total, regionCou
     '<div class="rv-tabs" role="tablist" aria-label="States of ' + esc(label) + '">' + tabsHtml + '</div></header>' +
     '<div class="rv-stage">' +
     '<div class="rv-shot" data-rv="shot" style="--rv-w:' + vp.width + ';--rv-h:' + vp.height + '">' + framesHtml + '</div>' +
+    // specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D6: a per-board card
+    // host, a SIBLING of `.rv-shot` (never inside it, which clips) — review.browser.js's
+    // __rvCardOpen/__rvCardClose place and remove a frame-built card here at full size, in the
+    // review page's own document, using the board's own iframe scale to convert the frame-local
+    // box the framed layer hands up.
+    '<div class="rv-cardhost" data-rv="cardhost"></div>' +
     '</div></section>'
 }
 
@@ -245,14 +252,13 @@ function renderNoteRow(n, selected) {
     head + body + status + noteActions + '</article>'
 }
 
-// The composer carries no reason chips (2026-09-13): a plain note's `reason` was written, stored
-// and rendered as a badge, and nothing downstream ever read it — no filter, no grouping, no
-// routing. The note's own words carry the why. REASON_LABELS below still renders the badge on an
-// existing note so a host's older notes.json keeps displaying, and mocks-notes.js still accepts
-// the value; only the authoring control is gone. The textarea takes the freed height.
 function renderComposer(prefix) {
+  const chips = REASONS.map((r, i) =>
+    '<button type="button" class="rv-chipbtn' + (i === REASONS.length - 1 ? ' rv-chip-on' : '') + '" data-rv="chip" data-value="' + r +
+    '" aria-pressed="' + (i === REASONS.length - 1 ? 'true' : 'false') + '">' + REASON_LABELS[r] + '</button>').join('')
   return '<form class="rv-composer" data-rv="composer" data-prefix="' + esc(prefix) + '" aria-label="Tell the session something">' +
-    '<textarea data-rv="text" rows="5" placeholder="What should change, or what is missing?"></textarea>' +
+    '<div class="rv-chips">' + chips + '</div>' +
+    '<textarea data-rv="text" rows="3" placeholder="What should change, or what is missing?"></textarea>' +
     '<div class="rv-actions"><button type="submit" data-rv="send" class="rv-primary">Send</button><kbd>⌘</kbd><kbd>Enter</kbd>' +
     // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D11, disposed s2 (2026-09-13):
     // `aria-pressed` gives the button itself a visible active state — mark mode had no signal at

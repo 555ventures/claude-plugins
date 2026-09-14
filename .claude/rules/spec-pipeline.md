@@ -169,9 +169,22 @@ upstream bug list. -->
   so no leg sees the caller that no longer does. Restructure so the existing guard's own check
   runs first and the new branch's work happens as ADDITIONAL work on the same call, never a
   second, competing write ahead of it.
+  Fifth trigger, the same reader blindness twice in one review, each fix reproducing the hole one
+  token deeper: a pin extracting a script's emitted document-level CSS read only the FIRST
+  single-quoted literal of `x.textContent = '…'`, so a second literal concatenated onto that
+  assignment was invisible; the fix widened it to every quote form but bounded the capture with
+  `[^\n;]+`, which stops at the first newline — and the offending source wrapped its `+` onto the
+  next line, so the widened pin passed on the very defect it was written to catch. Point a
+  widened reader at the pre-fix source and watch it go RED before believing the widening: a
+  guard that only works because the fix happened to collapse the expression onto one line is
+  still the original hole. A `+`-chain across newlines and comments cannot be bounded by any
+  single regex without effectively parsing it, so the terminal fix is a token scanner that walks
+  segments, skipping comments and admitting every quote form — and it states in its own comment
+  which shapes (a literal reached through a variable, a non-`+` expression) it still cannot see.
   (specs/20260820/04-entrypoint-conformance.md;
   specs/20260912/09-a-mock-may-not-invent.md D3/D5;
-  specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D1)
+  specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D1;
+  specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md AC-20260913-02-14)
 - `[plugin]` `red-check.js` derives carried-AC expectation from **AC-ID occurrence anywhere in
   the file**, comments included. An edit-only File Plan row that mentions another AC's new
   behavioral home in a comment forces a false red expectation onto a file whose only change is

@@ -214,3 +214,47 @@ test('review finding (D4 fix round): a mock file missing at journey-approved ref
   assert.ok(out.includes(deletedLabel + '.html'),
     'the refusal must name the missing screen\'s path, or a session cannot tell which of the journey\'s screens was deleted: ' + out)
 })
+
+// Owner: the advisory finding recorded by run rv_1994883f484a's reviewer against
+// specs/20260912/10-seeded-data-names-its-source.md, fixed directly (JJ 2026-09-13).
+// An element whose close tag is absent — HTML lets `<td>`, `<li>`, `<p>` and friends be closed
+// implicitly, and a void or self-closing element has no close tag at all — must not swallow the
+// rest of the document as its own text: doing so both compares the record against the whole page
+// and masks every stray seed value after it from the D3 sweep, which fails silently rather than
+// loudly. The spec's own Contracts example binds a `<td>`.
+test('boundBindings ends an implicitly closed element at the next close tag rather than at the end of the document', () => {
+  const { boundBindings } = require('../../spec/scripts/lib/mock-seed-checks')
+  const html = '<table><tr><td data-record="customers[0].name">Ada Lovelace</tr></table>' +
+    '<p>Ada Lovelace</p>'
+  const bindings = boundBindings(html)
+  assert.strictEqual(bindings.length, 1,
+    'the one data-record element must still be found when its close tag is omitted, or an implicitly closed binding stops being checked at all: ' + JSON.stringify(bindings))
+  assert.strictEqual(bindings[0].text, 'Ada Lovelace',
+    'an implicitly closed element\'s text must stop at the next close tag, never run to the end of the document — otherwise the record is compared against the whole rest of the page and every mismatch reads as a false refusal: ' + JSON.stringify(bindings[0]))
+})
+
+test('a distinctive seed value retyped after an implicitly closed binding is still refused', () => {
+  const { recordBindingViolations } = require('../../spec/scripts/lib/mock-seed-checks')
+  const recordsByEntity = {
+    customers: [
+      { name: 'Ada Lovelace' },
+      { name: 'Bo Diallo' },
+      { name: 'Cleo Reyes' },
+    ],
+  }
+  const html = '<table><tr><td data-record="customers[0].name">Ada Lovelace</tr></table>' +
+    '<p>Bo Diallo</p>'
+  const { violations } = recordBindingViolations(html, 'orders', recordsByEntity)
+  assert.ok(violations.some((v) => v.includes('"Bo Diallo" appears outside any data-record element')),
+    'a distinctive record value typed outside every bound element must still be refused when an earlier binding omitted its close tag, or one implicitly closed cell silently switches the whole rest of the screen off: ' + JSON.stringify(violations))
+})
+
+test('a void or self-closing element carrying data-record binds empty text rather than the rest of the document', () => {
+  const { boundBindings } = require('../../spec/scripts/lib/mock-seed-checks')
+  const html = '<img data-record="customers[0].name"><p>Ada Lovelace</p>'
+  const bindings = boundBindings(html)
+  assert.strictEqual(bindings.length, 1,
+    'a void element carrying data-record must still be reported, or a nonsensical binding goes unchecked: ' + JSON.stringify(bindings))
+  assert.strictEqual(bindings[0].text, '',
+    'a void element has no text, so its bound text must be empty and fail the equality check loudly, never absorb the following markup and mask the stray sweep: ' + JSON.stringify(bindings[0]))
+})

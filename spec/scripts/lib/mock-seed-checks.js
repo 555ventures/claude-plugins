@@ -202,6 +202,12 @@ function dataRecordRef(attrs) {
   return m[2] !== undefined ? m[2] : m[3] !== undefined ? m[3] : m[4]
 }
 
+// An element with no content of its own: HTML's void elements, which never carry a close tag.
+const VOID_TAGS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param',
+  'source', 'track', 'wbr',
+])
+
 function boundBindings(html) {
   const stripped = stripComments(html)
   const out = []
@@ -213,14 +219,33 @@ function boundBindings(html) {
     const ref = dataRecordRef(attrs)
     if (ref === null) continue
     const contentStart = openRe.lastIndex
+    // A void element and a self-closing tag hold nothing: an empty text fails the equality check
+    // loudly rather than absorbing the markup that follows (rv_1994883f484a's advisory finding).
+    if (VOID_TAGS.has(tag.toLowerCase()) || /\/\s*$/.test(attrs)) {
+      out.push({ ref, text: '', start: m.index, end: contentStart })
+      openRe.lastIndex = contentStart
+      continue
+    }
     const tagRe = new RegExp('<(/?)' + tag + '\\b[^>]*>', 'gi')
     tagRe.lastIndex = contentStart
     let depth = 1
-    let closeStart = stripped.length
-    let closeEnd = stripped.length
+    let closeStart = null
+    let closeEnd = null
     let mm
     while ((mm = tagRe.exec(stripped))) {
       if (mm[1]) { depth -= 1; if (depth === 0) { closeStart = mm.index; closeEnd = tagRe.lastIndex; break } } else depth += 1
+    }
+    if (closeStart === null) {
+      // HTML lets `<td>`, `<li>`, `<p>` and friends be closed implicitly, so a missing close tag
+      // is legal markup, not a broken page. End the element at the next close tag of ANY name —
+      // the enclosing element's own — never at the end of the document: swallowing the remainder
+      // both compares the record against the whole page and masks every stray seed value after
+      // it from the D3 sweep, which fails silently instead of loudly.
+      const implicit = /<\/[a-zA-Z]/g
+      implicit.lastIndex = contentStart
+      const next = implicit.exec(stripped)
+      closeStart = next ? next.index : stripped.length
+      closeEnd = closeStart
     }
     const text = collapseWs(stripTags(stripped.slice(contentStart, closeStart)))
     out.push({ ref, text, start: m.index, end: closeEnd })

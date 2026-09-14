@@ -264,7 +264,10 @@ const path = require('path')
 const os = require('os')
 const crypto = require('crypto')
 const { execFileSync, spawnSync } = require('child_process')
-const { readLedgerRows } = require('./lib/observation')
+// D2 (specs/20260913/09-the-tool-shows-never-interrupts.md): isMeasurementReplay/replayDueness
+// moved to lib/observation.js — spec-status.js's dashboard footer clause shares this exact
+// derivation now instead of a second copy of the "reviews since the last measurement replay" rule.
+const { readLedgerRows, isMeasurementReplay, replayDueness } = require('./lib/observation')
 // D1 (specs/20260901/08-corpus-derivation-and-kill-match.md): the one
 // parser for spec/doctrine/replay-corpus.md's class-heading grammar — --apply/--record's --class
 // validation (D2) and --pick-class's selection (D3) both key off it, never a second regex sweep.
@@ -343,12 +346,8 @@ const root = (() => {
 
 // ---- D5: a "measurement" replay row is one whose outcome actually answers caught/missed/scores --
 // ---- the reviewer against a real leg (leg-caught) — unresolved/setup-failed never reset the -----
-// ---- --due/--select window, since neither produced a truth value. --------------------------------
-
-const MEASUREMENT_OUTCOMES = new Set(['caught', 'missed', 'leg-caught'])
-function isMeasurementReplay(r) {
-  return r.stage === 'replay' && MEASUREMENT_OUTCOMES.has(r.outcome)
-}
+// ---- --due/--select window, since neither produced a truth value. isMeasurementReplay is now ----
+// ---- lib/observation.js's own export (specs/20260913/09 D2) — imported above, never redefined. --
 
 // ---- D2: --apply/--record's --class refusal — a class value absent from the corpus keys ---------
 // ---- --stats' per-class catch-rate; one typo forks a class's history into two rows nobody joins. -
@@ -367,14 +366,13 @@ function validateClass(value) {
 }
 
 // ---- --due: reviewsSince = count of stage:"review" rows in READ order after the last MEASUREMENT -
-// ---- stage:"replay" row (readLedgerRows already merges live+archives in that order) --------------
+// ---- stage:"replay" row — lib/observation.js's replayDueness() is now the one shared derivation --
+// ---- (specs/20260913/09 D2), also read by spec-status.js's dashboard footer clause. ---------------
 
 function cmdDue() {
   const rows = readLedgerRows(root)
-  let lastReplayIdx = -1
-  rows.forEach((r, i) => { if (isMeasurementReplay(r)) lastReplayIdx = i })
-  const reviewsSince = rows.filter((r, i) => i > lastReplayIdx && r.stage === 'review').length
-  if (reviewsSince >= 5) {
+  const { reviewsSince, due } = replayDueness(rows)
+  if (due) {
     console.log(`due reviewsSince=${reviewsSince}`)
     process.exit(0)
   }

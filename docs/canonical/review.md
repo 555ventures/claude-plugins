@@ -133,15 +133,16 @@
   `setup-failed`) is visible in the totals, absent from the rate, and leaves the harness
   due, so the next review session retries rather than waiting five more.
   Cadence is `replay.js --due` policy (every 5th review, at least once per major version) and
-  execution is review's own close: the review driver's REPLAY state, between MERGE and DONE,
-  runs the dueness and selection checks itself and refuses to conclude the review until a
-  `stage:"replay"` row for the selected target exists. Any outcome concludes the state;
-  non-measurement outcomes leave the harness due and retry at the next review. REPLAY never
-  re-derives or gates the review verdict — CLOSE has committed and MERGE has concluded before
-  it runs, so it measures the reviewer while the verdict measures the diff. `/spec:replay`
-  remains the manual and retry surface. The printed-advisory form it replaces was tried and
-  measured to fail: shipped 2026-08-19, due at 5 reviews, skipped through 12+ reviews in ~48
-  hours.
+  execution is `/spec:replay`, run on demand — the review driver never parks a close, and a
+  merged review prints `DONE`. Dueness is seen on the `/spec:status` footer's
+  `· replay due (r/5) — /spec:replay` clause, derived by `lib/observation.js`'s
+  `replayDueness` (the same derivation `replay.js --due` prints); non-measurement outcomes
+  leave the harness due. A replay never re-derives or gates a review verdict — it measures the
+  reviewer while the verdict measures the diff. The blocking close-time state
+  (specs/20260821/02) was retired by ADR-0025: a block on a finished review is bypassed anyway
+  and its interrupt is the cost. The printed-advisory form before it was measured to fail
+  (skipped through 12+ reviews), which is why the count lives on the dashboard, not in a report.
+  (specs/20260913/09-the-tool-shows-never-interrupts.md)
   A sustained miss-rate is the evidence that reopens the second-reviewer question.
   The scratch worktree lives at `<root>/.claude/worktrees/spec-<stem>-<6hex>` — a path
   `replay.js --setup --spec` derives from the target spec (the build-worktree naming rule

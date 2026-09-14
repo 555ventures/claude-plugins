@@ -87,8 +87,9 @@ test('AC-20260807-01-7 / AC-20260903-05-6: a red latest observation turns the he
   assert.match(dashNonEmpty[dashNonEmpty.length - 1], /^🔴/,
     'D1: a red latest observation is a dashboard-level alarm — the bottom-anchored headline glyph must turn 🔴')
   assert.strictEqual(dashNonEmpty[dashNonEmpty.length - 1],
-    '🔴 CI is red on specs/20260701/01-auth-core.md — main@deadbee (https://github.com/x/y/actions/runs/9)',
-    'AC-20260903-05-6/D8: the 📡 block is deleted — the red alarm now lives entirely in the footer, carrying the spec path, branch, sha, and url as its last line')
+    '🔴 CI is red on specs/20260701/01-auth-core.md — main@deadbee (https://github.com/x/y/actions/runs/9) · 1 done, never released',
+    'AC-20260903-05-6/D8: the 📡 block is deleted — the red alarm now lives entirely in the footer, carrying the spec path, branch, sha, and url as its last line; ' +
+    'AC-20260913-09-7 (specs/20260913/09): this fixture\'s one CLEAN review row with no release row earns the "done, never released" clause after it')
   assert.doesNotMatch(dash.stdout, /📡/, 'AC-20260903-05-6/D8: the 📡 Observation block must never render — the alarm is the footer line alone')
 
   const j = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
@@ -130,8 +131,9 @@ test('AC-20260807-01-10 / AC-20260903-05-6 / AC-20260903-05-8: the qualifying ro
   // this test guards is that a green-resolved observation never turns that footer red.
   assert.doesNotMatch(nonEmpty[nonEmpty.length - 1], /^🔴/,
     'AC-20260903-05-6/D8: a green-resolved observation must never turn the bottom-anchored footer red')
-  assert.strictEqual(nonEmpty[nonEmpty.length - 1], '⬜ nothing waits',
-    'AC-20260903-05-8/D4: zero open entries is the nothing-next case — the footer is exactly ⬜ nothing waits, unqualified')
+  assert.strictEqual(nonEmpty[nonEmpty.length - 1], '⬜ nothing waits · 1 done, never released',
+    'AC-20260903-05-8/D4: zero open entries is the nothing-next case — the footer head is exactly ⬜ nothing waits, unqualified; ' +
+    'AC-20260913-09-7 (specs/20260913/09): this fixture\'s one CLEAN review row with no release row earns the "done, never released" clause after it')
 })
 
 // (sanctioned pin exception, green pre-change): lib/observation.js's runAt-tie red-wins rule is

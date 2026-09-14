@@ -154,10 +154,10 @@ function extractSection(src, heading) {
   return m ? m[1] : null
 }
 
-test('AC-20260913-07-23: docs/adr/0023-the-critic-is-out.md exists, parses with Status: accepted, a non-empty ## Dissents section, and an ## Applies to section naming all seven amended documents', () => {
-  const p = path.join(ROOT, 'docs/adr/0023-the-critic-is-out.md')
+test('AC-20260913-07-23: docs/adr/0024-the-critic-is-out.md exists, parses with Status: accepted, a non-empty ## Dissents section, and an ## Applies to section naming all seven amended documents', () => {
+  const p = path.join(ROOT, 'docs/adr/0024-the-critic-is-out.md')
   assert.strictEqual(fs.existsSync(p), true,
-    'docs/adr/0023-the-critic-is-out.md must exist — this spec\'s D11 creates it: it does not exist pre-change')
+    'docs/adr/0024-the-critic-is-out.md must exist — this spec\'s D11 creates it: it does not exist pre-change')
   const src = fs.readFileSync(p, 'utf8')
   assert.match(src, /Status:\s*accepted/, 'the ADR must declare Status: accepted: got\n' + src)
   const dissents = extractSection(src, 'Dissents')

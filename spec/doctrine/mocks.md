@@ -119,7 +119,10 @@ URL, or `- none`; anything under `design/mocks/references/` is picked up automat
 path relative to `design/mocks/`; each file a JSON array of at least three record objects, which
 **the session derives and asks nobody for** — from the seed's own Product and Facts,
 `docs/design/research-brief.md` and anything under `design/mocks/references/`, inventing the
-awkward cases (the customer with no surname) a client would have supplied. `seed-done` refuses a
+awkward cases (the customer with no surname) a client would have supplied. A drawn screen names
+the exact record it shows for every such value, `data-record="<entity>[<i>].<field>"` on the
+element that displays it (§ Mocks: Authoring Rules), so a retyped ninth copy cannot silently
+diverge from the record it was drawn from. `seed-done` refuses a
 missing section, a `- none` line, and a path that is missing, does not parse, is not an array, or
 holds fewer than three records, naming the entity and that one remedy), `## Journeys` (one `### <journey-kebab>` per journey, a
 persona line, and one fenced ` ```surfaces ``` ` block in the roadmap-brief grammar — names and
@@ -242,7 +245,7 @@ raised a note can judge that a re-look actually answered it.
 
 **Nothing pins a question any more.** An assumption row is confirmed or overridden only by the
 human-run `ledger set --id <id> --status confirmed|overridden --tag said-by-user`, never by a
-note the pipeline files on its own (docs/adr/0023-the-critic-is-out.md). A note with
+note the pipeline files on its own (docs/adr/0024-the-critic-is-out.md). A note with
 `kind: "question"` on disk is a record left by that retired producer, never listed, grouped,
 counted or gated on again; its stored `ledgerId` and `answer` are read only by two legacy
 paths — `lib/mocks-exclusions.js`'s `invalidatedAnswerEntries`, deriving an exclusion row from a
@@ -371,8 +374,28 @@ half the driver cannot check, carried here as contract prose the authoring sessi
   `⚠️ <label>: carries none of the seed's records`, and a journey where every screen has zero
   hits refuses, `journey "<j>": no screen carries a value from design/mocks/records/*.json —
   draw with the seed's own records, then re-mark` (ADR-0013). A settings screen legitimately
-  shows none; a whole journey drawn on placeholders does not. This check is about drawing with
-  the seeded data instead of lorem ipsum, never about where that data came from.
+  shows none; a whole journey drawn on placeholders does not. This journey-level check is about
+  drawing with the seeded data instead of lorem ipsum, never about where that data came from —
+  it is unchanged by the binding rules below and neither replaces nor is replaced by them
+  (specs/20260912/10-seeded-data-names-its-source.md D5). An element displaying a seeded value
+  can go further and name the exact record it shows: `data-record="<entity>[<i>].<field>"` on
+  the element, `<entity>` the basename of a `design/mocks/records/<entity>.json` file, `<i>` a
+  zero-based index into that array, `<field>` a dot-and-bracket path into the record object
+  (`address.city`, `tags[1]`), the first segment always the bracketed index. Three rules bind
+  wherever a mock is already bound for the invention rules above — a labelled, non-canon mock
+  that links the wire register (`lib/wire-register.js`'s `linksWireRegister`,
+  specs/20260912/09-a-mock-may-not-invent.md D2) — as `⚠️` warns at `journey-drawn` and
+  refusals at `journey-approved`: a reference that does not resolve to a string or number is
+  refused, naming the reference and the first failing segment; a bound element's text (its inner
+  HTML with tags stripped, whitespace collapsed, trimmed) must equal the resolved value exactly,
+  or the mismatch is refused printing both strings; and a **distinctive** seed value — containing
+  a space or at least eight characters, and occurring in exactly one record across every record
+  file — found in a bound mock's text outside every bound element is refused naming the value
+  and the screen, while any other stray seed value is a `⚠️` warn instead.
+  `lib/mock-seed-checks.js`'s `resolveRecordRef`, `boundBindings`, `distinctiveValues` and
+  `recordBindingViolations` carry the mechanism
+  (specs/20260912/10-seeded-data-names-its-source.md,
+  docs/adr/0023-seeded-data-names-its-source.md).
 - **Name the shared parts before the screens.** Once a kit family (`design/kit/`) resolves,
   every content region of a labeled mock carries `data-kit="<key>"` naming the primitive it
   instantiates, or `data-bespoke="<key>: <difference>"` naming the primitive it is *not* and

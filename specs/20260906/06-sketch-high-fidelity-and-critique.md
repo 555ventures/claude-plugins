@@ -14,7 +14,7 @@ diff_base: dea9175f8d069ebe562ac5a262db9b357a759a10
 
 # Sketch owns high fidelity per brief in the picked theme, argues each surface's UX, and closes with a fixed critique pass
 
-Amended by: ADR-0023 (D3/D5 narrowed — the fixed critique pass no longer dispatches `design-critic` or records a `kind: "walk"` finding; `design-critic.md` authorship is moot, the file is deleted — see the ADR's Applies to)
+Amended by: ADR-0024 (D3/D5 narrowed — the fixed critique pass no longer dispatches `design-critic` or records a `kind: "walk"` finding; `design-critic.md` authorship is moot, the file is deleted — see the ADR's Applies to)
 
 ## Goal
 

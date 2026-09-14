@@ -21,7 +21,7 @@ Amended by: ADR-0019 (specs/20260912/07-a-whole-product-note-blocks-the-sign-off
 AC-20260912-06-2's title clause to the journey-scoped total the page now computes — see the
 ADR's Applies to)
 
-Amended by: ADR-0023 (the design source it binds to no longer carries a question row, a
+Amended by: ADR-0024 (the design source it binds to no longer carries a question row, a
 progress bar or composer chips; the note row's own `.rv-claim`, `.rv-answered` and `.rv-chip`
 stand — see the ADR's Applies to)
 

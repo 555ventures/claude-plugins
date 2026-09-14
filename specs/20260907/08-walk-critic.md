@@ -16,7 +16,7 @@ diff_base: 5e4aa870b0e399a1a839f4b4e5f7f8fb1fe0f680
 
 # `/spec:mocks` gains WALK: one fresh-context critic per journey, flow breaks only, cited to a screen and a state or refused
 
-Amended by: ADR-0023 (superseded whole — the WALK state, `journey-walked` mark, `walk:<j>` reopen target and the `design-critic` agent are all deleted — see the ADR's Applies to)
+Amended by: ADR-0024 (superseded whole — the WALK state, `journey-walked` mark, `walk:<j>` reopen target and the `design-critic` agent are all deleted — see the ADR's Applies to)
 
 ## Goal
 

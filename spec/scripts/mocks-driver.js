@@ -243,7 +243,7 @@ const { parseSeedJourneys } = require('./lib/surfaces')
 // map and its one-pass renameRoles() live in lib/wire-roles.js, shared with the tests, never
 // spelled twice here.
 const wireRolesLib = require('./lib/wire-roles')
-const { edgeGaps, recordValues, recordHits } = require('./lib/mock-seed-checks')
+const { edgeGaps, recordValues, recordHits, recordBindingViolations } = require('./lib/mock-seed-checks')
 
 function die(msg) { writeOut(2, 'mocks-driver: ' + msg + '\n'); process.exit(2) }
 function nowIso() { return new Date().toISOString() }
@@ -591,6 +591,24 @@ function collectRecordValues(text) {
     for (const v of recordValues(parsed)) if (!values.includes(v)) values.push(v)
   }
   return values
+}
+
+// specs/20260912/10-seeded-data-names-its-source.md D1-D4: the same `## Records` entities
+// collectRecordValues walks, but keyed by entity basename and holding the parsed records
+// themselves — what `lib/mock-seed-checks.js`'s `resolveRecordRef`/`recordBindingViolations`
+// resolve `data-record="<entity>[i].<field>"` references against. A2/seed-done's own
+// `requireRecords` already refuses a missing/unparseable/undersized records file before a
+// journey can be drawn, so an entity that still fails to parse here is treated as an empty
+// array rather than crashing the mark (A3).
+function collectRecordsByEntity(text) {
+  const { entities } = parseRecordsSection(text)
+  const byEntity = {}
+  for (const [entity, relPath] of entities) {
+    let parsed
+    try { parsed = JSON.parse(fs.readFileSync(path.join(mocksDir, relPath), 'utf8')) } catch { parsed = [] }
+    byEntity[entity] = Array.isArray(parsed) ? parsed : []
+  }
+  return byEntity
 }
 
 function seedTextOr(fallback) {
@@ -1638,6 +1656,25 @@ function handleJourneyDrawn(journeyName) {
     }
     die(lines.join('\n') + '\nre-mark journey-drawn --journey ' + journeyName)
   }
+  // specs/20260912/10-seeded-data-names-its-source.md D4: the per-screen binding pass — a
+  // mock's data-record bindings must resolve, must match the record's exact text, and no
+  // distinctive seed value may sit outside every bound element (D1-D3). Runs after the edge-gap
+  // check above and before the (unchanged, D5) record-hit check below, so a screen is named for
+  // its worst problem first. This is the warn tier — journey-drawn never refuses on these
+  // violations; the same recordBindingViolations refuses at journey-approved instead
+  // (handleJourneyApproved below). Bound to spec 09 D2's own predicate (a labelled, non-canon
+  // mock that links the wire register, lib/wire-register.js's linksWireRegister) — the same
+  // predicate the invention checks use, never a second one.
+  {
+    const recordsByEntity = collectRecordsByEntity(stripComments(seedTextOr('')))
+    for (const label of j.labels) {
+      const html = fs.readFileSync(mockFile(label), 'utf8')
+      if (!linksWireRegister(html)) continue
+      const { violations, warns } = recordBindingViolations(html, label, recordsByEntity)
+      for (const v of violations) writeOut(1, '⚠️ ' + v + '\n')
+      for (const w of warns) writeOut(1, w + '\n')
+    }
+  }
   // specs/20260910/06-real-records-and-two-dense-screens.md D3: runs after the edge-gap check
   // above (a placeholder-drawn journey is refused for its missing controls first). Every
   // declared entity's record values (collectRecordValues, over lib/mock-seed-checks.js's
@@ -1691,9 +1728,36 @@ function handleJourneyApproved(journeyName) {
   requireGateOpen()
   // D2: re-run check --states before the render gate — a redrawn screen cannot lose a state
   // between journey-drawn and journey-approved.
+  //
+  // specs/20260912/10-seeded-data-names-its-source.md D4: this runs BEFORE the binding pass
+  // below (moved down from its original position immediately after requireGateOpen()) so a
+  // journey screen deleted after drawing is still caught by this check's own
+  // `fs.existsSync(t)`-backed "check: no such path" refusal (design-atlas.js's `check`) instead
+  // of an unguarded fs.readFileSync in the binding pass crashing uncaught — a screen is still
+  // named for its worst problem first, and a missing file is the worst problem there is.
   const statesRes = runDesignAtlasCheck(['--states', ...(j ? j.labels : []).map(mockFile)])
   if (statesRes.status !== 0) {
     die(childOutput(statesRes) + '\ndraw the missing states in the wireframe register, then re-mark')
+  }
+  // specs/20260912/10-seeded-data-names-its-source.md D4: the same per-screen binding pass as
+  // journey-drawn, but the refusal tier — journey-drawn (above) only ever warned on these same
+  // violations. D5/D7: this does NOT duplicate the journey-level record-hit check, which stays
+  // on journey-drawn alone. Bound to spec 09 D2's own predicate (a labelled, non-canon mock that
+  // links the wire register, lib/wire-register.js's linksWireRegister) — a screen whose
+  // ../wire/*.css links were stripped after drawing is unbound and carries none of these rules.
+  {
+    const recordsByEntity = collectRecordsByEntity(stripComments(seedTextOr('')))
+    const bindingViolations = []
+    for (const label of (j ? j.labels : [])) {
+      const html = fs.readFileSync(mockFile(label), 'utf8')
+      if (!linksWireRegister(html)) continue
+      const { violations, warns } = recordBindingViolations(html, label, recordsByEntity)
+      for (const v of violations) bindingViolations.push(v)
+      for (const w of warns) writeOut(1, w + '\n')
+    }
+    if (bindingViolations.length) {
+      die(bindingViolations.join('\n') + '\nfix the binding violation(s) above, then re-mark journey-approved --journey ' + journeyName)
+    }
   }
   // specs/20260907/04-kit-canon-family.md D9: once a kit family resolves, every content region of
   // this journey's own screens must already be kit-tagged or bespoke-marked — --matrix forces the

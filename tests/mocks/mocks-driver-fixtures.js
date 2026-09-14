@@ -198,19 +198,29 @@ function writeWireframe(dir, label, opts = {}) {
   // exactly like the state-button switcher stays invisible to it via data-contract="none".
   const toHtml = to ? '<a data-to="' + to + '" data-bespoke="sheet: synthetic edge control for tests" href="#">Next</a>' : ''
   // specs/20260910/06-real-records-and-two-dense-screens.md D3/D5: every
-  // wireframe carries a plain-text mention of "Aoi Tanaka" (CUSTOMER_RECORDS[0].name above) so
-  // `journey-drawn`'s future record-hit check finds a hit on every screen once D3 lands — a
+  // wireframe carries a mention of "Aoi Tanaka" (CUSTOMER_RECORDS[0].name above) so
+  // `journey-drawn`'s record-hit check finds a hit on every screen — a
   // bare text node, never a new top-level content-region element, so it stays invisible to the
   // kit family's unabsorbed-region rule (design-atlas.js's diagnoseKitRegions only walks
   // top-level ELEMENT children of the content region).
   // Fixture repair: the box-sizing reset dropped — the linked wire register (wire.css) already
   // declares it, so this file's own copy is now redundant weight the file would otherwise carry
   // as a <style> block once a rule keeps a bound screen from declaring styles of its own.
+  // specs/20260912/10-seeded-data-names-its-source.md File Plan: the "Aoi Tanaka" mention above
+  // is now wrapped in a `data-record="customer[0].name"` span rather than sitting as a bare text
+  // node — once the binding rules land, an unbound distinctive value ("Aoi Tanaka" is 10
+  // characters and occurs in exactly one record) would itself be a stray-value refusal; every
+  // caller of writeWireframe stays green under D2/D3 because the value is bound, not retyped.
+  // The span is a new top-level content-region element (unlike the bare text node it replaces),
+  // so it also carries data-bespoke="sheet: …" (the same escape hatch `toHtml` above uses) —
+  // otherwise design-atlas.js's kit unabsorbed-region rule (specs/20260907/04 D5/D6) counts it
+  // as an uninstantiated region once a kit family resolves above these mocks.
+  const recordSpan = '<span data-record="customer[0].name" data-bespoke="sheet: seeded record value">Aoi Tanaka</span>'
   writeFile(path.join(dir, 'design/mocks', label + '.html'),
     '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
     '<link rel="stylesheet" href="../wire/tokens.css">\n' +
     '<link rel="stylesheet" href="../wire/wire.css">\n' +
-    '<main data-screen-label="' + label + '" data-status="sketch">' + label + ' Aoi Tanaka' + toHtml + stateBtnsHtml + '</main>\n')
+    '<main data-screen-label="' + label + '" data-status="sketch">' + label + ' ' + recordSpan + toHtml + stateBtnsHtml + '</main>\n')
 }
 
 // ---------------------------------------------------------------------------

@@ -26,7 +26,30 @@
 // in first-seen order. `recordHits` is the pure substring test against one mock's HTML source
 // mocks-driver.js's `journey-drawn` runs per screen. Both are pure: no `fs`, no path policy.
 //
+// resolveRecordRef/boundBindings/distinctiveValues/recordBindingViolations:
+// specs/20260912/10-seeded-data-names-its-source.md D1-D3 (AC-20260912-10-1..4) — a screen names
+// the record it shows via `data-record="<entity>[<i>].<field>"`. `resolveRecordRef` walks
+// `recordsByEntity` (keyed by the entity basename `mocks-driver.js` already derives from
+// `## Records`) and resolves a reference to `{value}` or names the first failing segment as
+// `{error}`. `boundBindings` finds every element carrying `data-record` — matched as
+// `data-record\s*=`, anchored on a preceding whitespace/tag-open boundary rather than `\b`, so
+// the client walk page's own `data-recorded="<date>"` stamp (lib/walk-page.js) is never misread
+// as a binding — and returns its reference, its visible text (tags stripped, whitespace
+// collapsed, trimmed) and its `[start,end)` span in the source, comments already stripped.
+// `distinctiveValues` computes, over every record across every entity, the set of values that
+// contain a space or are >= 8 characters long AND occur in exactly one record; every other seed
+// value stays a warn rather than a refusal (D3). `recordBindingViolations` composes all three: an
+// unresolved or mismatched binding is always a violation; a distinctive value found in the mock's
+// text outside every bound element's span is a violation, and every other stray seed value is a
+// `⚠️` warn. All four are pure: no `fs`, no path policy — the caller reads the mock's HTML and
+// builds `recordsByEntity` from disk.
+//
 // Exit codes: n/a (library, not an entrypoint).
+
+// D1: comments stripped before anything is derived from a mock's text — a commented-out
+// `data-record="…"` must never bind, and a value sitting only inside a comment must never trip
+// the stray-value sweep.
+function stripComments(html) { return String(html).replace(/<!--[\s\S]*?-->/g, '') }
 
 function findRootHtml(html, label) {
   const openRe = /<([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g
@@ -118,4 +141,194 @@ function recordHits(values, html) {
   return (values || []).filter((v) => text.includes(v))
 }
 
-module.exports = { edgeGaps, recordValues, recordHits }
+// D1: parses "<entity>[<i>].<field>" — entity `[a-z0-9][a-z0-9-]*`, the first segment always a
+// bracketed top-level index, the rest a run of `.<key>` / `[<n>]` segments — and walks
+// `recordsByEntity[entity][i]` one segment at a time, returning `{value}` (stringified) or
+// `{reason}` naming the first segment that failed. Internal: `resolveRecordRef` below wraps
+// `reason` with the reference text for the exported `{error}` shape; `recordBindingViolations`
+// uses this directly so it never has to re-parse `error` back apart.
+function resolveRefCore(recordsByEntity, ref) {
+  const m = /^([a-z0-9][a-z0-9-]*)\[(\d+)\](.*)$/.exec(String(ref || ''))
+  if (!m) return { reason: 'is not a valid data-record reference — expected <entity>[<i>].<field>' }
+  const entity = m[1]
+  const index = Number(m[2])
+  const rest = m[3]
+  const list = Array.isArray(recordsByEntity && recordsByEntity[entity]) ? recordsByEntity[entity] : []
+  if (index < 0 || index >= list.length) {
+    return { reason: 'records/' + entity + '.json holds ' + list.length + ' record' + (list.length === 1 ? '' : 's') }
+  }
+  let node = list[index]
+  const segRe = /\.([a-zA-Z0-9_]+)|\[(\d+)\]/g
+  let sm
+  let consumed = 0
+  while ((sm = segRe.exec(rest))) {
+    consumed = segRe.lastIndex
+    if (sm[1] !== undefined) {
+      const key = sm[1]
+      if (node === null || typeof node !== 'object' || Array.isArray(node) || !Object.prototype.hasOwnProperty.call(node, key)) {
+        return { reason: 'the record has no field "' + key + '"' }
+      }
+      node = node[key]
+    } else {
+      const idx = Number(sm[2])
+      if (!Array.isArray(node) || idx < 0 || idx >= node.length) {
+        return { reason: 'the record has no index [' + idx + ']' }
+      }
+      node = node[idx]
+    }
+  }
+  if (consumed !== rest.length) {
+    return { reason: 'is not a valid data-record reference — expected <entity>[<i>].<field>' }
+  }
+  if (typeof node === 'string' || typeof node === 'number') return { value: String(node) }
+  return { reason: 'the resolved value is not a string or number' }
+}
+
+function resolveRecordRef(recordsByEntity, ref) {
+  const r = resolveRefCore(recordsByEntity, ref)
+  if (r.value !== undefined) return { value: r.value }
+  return { error: ref + ' does not resolve — ' + r.reason }
+}
+
+function stripTags(s) { return String(s).replace(/<[^>]*>/g, '') }
+function collapseWs(s) { return String(s).replace(/\s+/g, ' ').trim() }
+
+// D1: matches `data-record\s*=` anchored on a preceding whitespace/tag-open boundary (never
+// `\b`, which "record" immediately followed by "ed" would already survive but a stray prefixed
+// attribute would not) — admits double, single and unquoted values.
+function dataRecordRef(attrs) {
+  const m = /(^|\s)data-record\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/.exec(attrs)
+  if (!m) return null
+  return m[2] !== undefined ? m[2] : m[3] !== undefined ? m[3] : m[4]
+}
+
+// An element with no content of its own: HTML's void elements, which never carry a close tag.
+const VOID_TAGS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param',
+  'source', 'track', 'wbr',
+])
+
+function boundBindings(html) {
+  const stripped = stripComments(html)
+  const out = []
+  const openRe = /<([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g
+  let m
+  while ((m = openRe.exec(stripped))) {
+    const tag = m[1]
+    const attrs = m[2]
+    const ref = dataRecordRef(attrs)
+    if (ref === null) continue
+    const contentStart = openRe.lastIndex
+    // A void element and a self-closing tag hold nothing: an empty text fails the equality check
+    // loudly rather than absorbing the markup that follows (rv_1994883f484a's advisory finding).
+    if (VOID_TAGS.has(tag.toLowerCase()) || /\/\s*$/.test(attrs)) {
+      out.push({ ref, text: '', start: m.index, end: contentStart })
+      openRe.lastIndex = contentStart
+      continue
+    }
+    const tagRe = new RegExp('<(/?)' + tag + '\\b[^>]*>', 'gi')
+    tagRe.lastIndex = contentStart
+    let depth = 1
+    let closeStart = null
+    let closeEnd = null
+    let mm
+    while ((mm = tagRe.exec(stripped))) {
+      if (mm[1]) { depth -= 1; if (depth === 0) { closeStart = mm.index; closeEnd = tagRe.lastIndex; break } } else depth += 1
+    }
+    if (closeStart === null) {
+      // HTML lets `<td>`, `<li>`, `<p>` and friends be closed implicitly, so a missing close tag
+      // is legal markup, not a broken page. End the element at the next close tag of ANY name —
+      // the enclosing element's own — never at the end of the document: swallowing the remainder
+      // both compares the record against the whole page and masks every stray seed value after
+      // it from the D3 sweep, which fails silently instead of loudly.
+      const implicit = /<\/[a-zA-Z]/g
+      implicit.lastIndex = contentStart
+      const next = implicit.exec(stripped)
+      closeStart = next ? next.index : stripped.length
+      closeEnd = closeStart
+    }
+    const text = collapseWs(stripTags(stripped.slice(contentStart, closeStart)))
+    out.push({ ref, text, start: m.index, end: closeEnd })
+    openRe.lastIndex = closeEnd
+  }
+  return out
+}
+
+// D3: per-record string sets (reusing `walkRecordValues`'s length->=3, dedup-within-node walk,
+// but fresh per record so a value's count is "how many records", not "how many entities").
+function stringsInRecord(rec) {
+  const out = []
+  walkRecordValues(rec, out, new Set())
+  return out
+}
+
+function distinctiveValues(recordsByEntity) {
+  const counts = new Map()
+  for (const entity of Object.keys(recordsByEntity || {})) {
+    const list = Array.isArray(recordsByEntity[entity]) ? recordsByEntity[entity] : []
+    for (const rec of list) {
+      for (const v of stringsInRecord(rec)) counts.set(v, (counts.get(v) || 0) + 1)
+    }
+  }
+  const out = new Set()
+  for (const [v, n] of counts) {
+    if (n === 1 && (v.includes(' ') || v.length >= 8)) out.add(v)
+  }
+  return out
+}
+
+function allSeedValues(recordsByEntity) {
+  const out = []
+  const seen = new Set()
+  for (const entity of Object.keys(recordsByEntity || {})) {
+    const list = Array.isArray(recordsByEntity[entity]) ? recordsByEntity[entity] : []
+    for (const v of recordValues(list)) if (!seen.has(v)) { seen.add(v); out.push(v) }
+  }
+  return out
+}
+
+function maskSpans(text, spans) {
+  const chars = text.split('')
+  for (const span of spans) {
+    for (let i = span[0]; i < span[1] && i < chars.length; i++) chars[i] = ' '
+  }
+  return chars.join('')
+}
+
+function recordBindingViolations(html, label, recordsByEntity) {
+  const stripped = stripComments(html)
+  const bindings = boundBindings(stripped)
+  const violations = []
+  const warns = []
+
+  for (const b of bindings) {
+    const r = resolveRefCore(recordsByEntity, b.ref)
+    if (r.value === undefined) {
+      violations.push(label + ': data-record="' + b.ref + '" does not resolve — ' + r.reason)
+      continue
+    }
+    if (b.text !== r.value) {
+      violations.push(label + ': data-record="' + b.ref + '" shows "' + b.text +
+        '" but the record says "' + r.value + '" — bind the record, never a retyped copy')
+    }
+  }
+
+  const masked = maskSpans(stripped, bindings.map((b) => [b.start, b.end]))
+  const outsideText = stripTags(masked)
+  const distinctive = distinctiveValues(recordsByEntity)
+  for (const v of allSeedValues(recordsByEntity)) {
+    if (!outsideText.includes(v)) continue
+    if (distinctive.has(v)) {
+      violations.push(label + ': "' + v + '" appears outside any data-record element — a screen names the record it shows')
+    } else {
+      warns.push('⚠️ ' + label + ': "' + v + '" appears outside any data-record element — bind it if it is the record\'s value rather than the product\'s own word')
+    }
+  }
+
+  return { violations, warns }
+}
+
+module.exports = {
+  edgeGaps, recordValues, recordHits,
+  resolveRecordRef, boundBindings, distinctiveValues, recordBindingViolations,
+}

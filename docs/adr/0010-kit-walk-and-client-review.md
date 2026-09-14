@@ -9,7 +9,7 @@
   capture taken when the client note is raised; session resolve refused; dated waiver); ADR-0013 (the client
   rehearses the journey in a player — the served review page is no longer the client surface, the
   theme pick returns to mocks between WALK and CLIENT as a client pick on the user's shortlist);
-  ADR-0023 (the WALK clause narrows: "every journey is walked then client-reviewed before
+  ADR-0024 (the WALK clause narrows: "every journey is walked then client-reviewed before
   approval" becomes "every journey is drawn, approved and client-reviewed before product
   approval" — see the ADR's Applies to)
 - Applies to: ADR-0008's order (`SEED → SHAPES → WIREFRAMES → THEME → SIGNOFF → APPROVED`)

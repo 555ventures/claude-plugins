@@ -18,7 +18,7 @@ Amended by: ADR-0018 (specs/20260912/06-the-review-page-answers-to-a-design.md n
 
 Amended by: ADR-0019 (specs/20260912/07-a-whole-product-note-blocks-the-sign-off.md narrows D5's disabled-title clause to open items on this journey's screens only — see the ADR's Applies to)
 
-Amended by: ADR-0023 (D5's question-inspector clause and progress-bar clause are both deleted; the note-row, breadcrumb, stage-pill and stop-control clauses stand — see the ADR's Applies to)
+Amended by: ADR-0024 (D5's question-inspector clause and progress-bar clause are both deleted; the note-row, breadcrumb, stage-pill and stop-control clauses stand — see the ADR's Applies to)
 
 ## Goal
 

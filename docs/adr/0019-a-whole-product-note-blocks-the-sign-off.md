@@ -16,7 +16,7 @@
   items block approval`)", is narrowed to name the same **journey-scoped** total it counts
   (`2 open items block approval` on that fixture); the invariant that the title names the total
   the page computed is unchanged, and the AC's rail-row half is untouched.
-- Amended by: ADR-0023 (`approved`'s and `journey-approved`'s refusals both lose their
+- Amended by: ADR-0024 (`approved`'s and `journey-approved`'s refusals both lose their
   "question or" clause — a screen or the whole product is blocked by an unresolved note alone —
   see the ADR's Applies to)
 

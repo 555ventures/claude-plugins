@@ -37,7 +37,9 @@
 - Amended by: ADR-0017 — the eleven-role register this record describes becomes shadcn's own
   eighteen colour roles verbatim; this record's register wording is narrowed to match. ADR-0022
   — the authoring rules for a labelled mock that links the wire register gain the invention bar
-  (one home for project CSS, no redefinition, a cap, a single-screen warn).
+  (one home for project CSS, no redefinition, a cap, a single-screen warn). ADR-0023 — the
+  records paragraph is narrowed: a screen names the record it shows, never a derived value with
+  no traceable source.
 
 ## Context
 
@@ -141,8 +143,12 @@ session derives for itself from the brief, the research and the references on di
 wireframe draws them. (Amended: this decision originally read *the client's real records*, which
 a pre-launch product cannot supply and which sent the session to the user for data. A mock's
 records are drawing material, not evidence; the gate asks for three records and nothing about
-where they came from.) The seed's dense screen becomes two dense screens, the pair every theme
-candidate is judged on.
+where they came from.) A screen names the record it shows: an element displaying a seeded value
+carries `data-record="<entity>[i].<field>"` pointing into the record the seed derived, the
+reference must resolve, and the element's visible text must equal the resolved value exactly
+(ADR-0023 — this record's original wording asked only whether a screen carried *some* seed
+value, never whether the value shown was the one the record held). The seed's dense screen
+becomes two dense screens, the pair every theme candidate is judged on.
 
 **What the journey does not do is derived, never typed.** Exclusion rows accumulate from decisions
 already made — discovery non-goals marked Later / Won't-this-time, a client's 違う on an

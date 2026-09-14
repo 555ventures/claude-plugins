@@ -15,7 +15,7 @@ diff_base: cbe3423ba6ab845def4369d6407bb58ac09d03e9
 
 # Questions on the wireframe: the session's assumptions pinned to the screen, answered inline, gating approval; free-form messages with a reason; catch provenance derived
 
-Amended by: ADR-0023 (superseded whole — `ledger ask`, `refuseUnaskable`, the answer route and every question-row surface it locked are deleted — see the ADR's Applies to)
+Amended by: ADR-0024 (superseded whole — `ledger ask`, `refuseUnaskable`, the answer route and every question-row surface it locked are deleted — see the ADR's Applies to)
 
 ## Goal
 

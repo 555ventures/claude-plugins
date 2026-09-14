@@ -1,4 +1,4 @@
-# 0023. The critic is out
+# 0024. The critic is out
 
 - Status: accepted
 - Date: 2026-09-13
@@ -68,7 +68,7 @@ row's status is the human-run `ledger set`.
   specs/20260906/03) are whole specs whose entire subject is retired — leaving them unmarked
   reads as if the pipeline still dispatches a critic and still asks a question.
 - **C. One amendment ADR narrowing or superseding all seven in a single record**, each document
-  gaining a single `Amended by: ADR-0023` line and none otherwise rewritten. Adopted — the
+  gaining a single `Amended by: ADR-0024` line and none otherwise rewritten. Adopted — the
   precedent this repo's amendment convention already sets (ADR-0018's own account: the amended
   document "gains a single `Amended by:` line and is not otherwise rewritten"), extended here
   to cover two whole-spec supersessions alongside five narrowings in one record because all
@@ -124,7 +124,7 @@ row's status is the human-run `ledger set`.
   narrowed clauses on specs/20260902/10, specs/20260906/04 and specs/20260912/06, all
   concerning project-note scope) is reopened.
 
-Each of the seven gains a single `Amended by: ADR-0023 — <one line>` header line (an
+Each of the seven gains a single `Amended by: ADR-0024 — <one line>` header line (an
 orchestrator edit, per the amendment convention, not a worker's file-contract edit); none is
 otherwise rewritten.
 

@@ -73,7 +73,7 @@ approved) → **THEME** (the user authors two or three directions under `design/
 `?theme=<kebab>` — a link swap of the wire register's token file, never a redraw — and
 `--mark theme-picked` adopts the client's pick, copying its tokens the way `theme adopt` once
 did) → **CLIENT** (the client player, exposed by the user, where the client walks each
-journey by its real controls, answers the session's guesses, raises notes and confirms with one
+journey by its real controls, raises notes and confirms with one
 sentence; closes when every journey is `ok` or waived and every client note resolved-or-waived)
 → **APPROVED** (terminal). WIREFRAMES carries a sub-mark per
 journey so no single conversation ever has to hold more than one journey's state —
@@ -262,7 +262,7 @@ or not. Zero open notes on a journey is that journey's approval mark.
 **The client's page is the player** (`/client/index.html`, `/client/walk/<j>.html` — § Mocks: Client
 Player), not the session's own review page; its notes are the same notes machinery, served on the client
 route as the `CLIENT` state (ADR-0012), every one raised there carrying `by: 'client'`. A note's origin —
-walk, client or session — is set by the server from the route it arrived on, never from the typed name. A
+client or session — is set by the server from the route it arrived on, never from the typed name. A
 client-origin note captures its screen when raised; a fix is recorded only when the re-captured screen
 differs. Only the client resolves a client note — withdrawing an `open` one records `resolution:
 "withdrawn"`, accepting an `addressed` one records `resolution: "accepted"` — or `notes waive --id
@@ -300,9 +300,9 @@ design.
 ## Mocks: Client Player
 
 The client's surface is two pages, `lib/walk-page.js`'s `buildClientIndex` (`/client/index.html`
-— every journey, how many of the session's guesses are still open on it, whether it is
+— every journey and whether it is
 confirmed) and `buildWalkPage` (`/client/walk/<j>.html` — one screen at a time in a frame,
-advanced by the mock's own `data-to` control, the session's guesses beside it as marks, a free
+advanced by the mock's own `data-to` control, a free
 note box, the gray states one click away, and an approve control that appears only once the
 last screen is reached). `lib/walk.browser.js`, served at `GET /__walk/player.js`, drives it:
 it moves the frame on a real click and records the move, and records — never shows the client —

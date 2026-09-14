@@ -2844,10 +2844,9 @@ function createRequestHandler(root, opts = {}) {
           let openNotes = []
           try { openNotes = notesLib.readNotes(rootAbs) } catch { openNotes = [] }
           const labels = declared.get(journey).labels
-          // specs/20260911/06-the-client-loop.md D2: the derived-state gate runs BEFORE the
-          // unanswered-guess check above's sibling below — a `changes-requested`/`fixed` journey
-          // (an open or addressed client request) refuses 409 naming how many, regardless of
-          // whether any session guess is also open.
+          // specs/20260911/06-the-client-loop.md D2: the derived-state gate runs first — a
+          // `changes-requested`/`fixed` journey (an open or addressed client request) refuses 409
+          // naming how many.
           const rec = (readWalkOrEmpty().journeys || {})[journey]
           const derived = walkLib.journeyState(rec, openNotes, labels)
           if (derived === 'changes-requested' || derived === 'fixed') {

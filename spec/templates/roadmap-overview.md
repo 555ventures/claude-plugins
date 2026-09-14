@@ -69,7 +69,7 @@ Run `/spec:atlas` to see every declared surface, its mock, and the journey graph
 
 ## Conventions carried by every brief
 
-- Decomposition caps: the host's /spec:plan caps (≤15 File Plan rows per spec, one primary
-  area per spec); a brief that can't be told in ≤1 page of Scope splits into two briefs.
+- Decomposition caps: the host's /spec:plan caps (≤8 source-layer File Plan rows per spec,
+  tests/docs/ledger rows uncounted, one primary area per spec); a brief that can't be told in ≤1 page of Scope splits into two briefs.
 - { project-specific conventions every planning session must honor — invariants, review
   triggers, do-not-build entries }

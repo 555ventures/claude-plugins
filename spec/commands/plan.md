@@ -63,8 +63,8 @@ Write the spec per the template. `status: draft`. While drafting:
   `[NEEDS CLARIFICATION: <question>]` inline instead of something plausible. The state-gate
   hook blocks `/spec:run` while any marker survives — the design, build, and review stages are
   reachable only through it.
-- **Decomposition cap:** a spec must fit one build-stage run — roughly ≤15 File Plan
-  rows, one primary area. Bigger work splits into `##-` siblings sliced by **landing unit**
+- **Decomposition cap:** a spec must fit one build-stage run — roughly ≤8 source-layer File
+  Plan rows (tests/docs/ledger rows uncounted), one primary area. Bigger work splits into `##-` siblings sliced by **landing unit**
   (each leaves the system green on its own), never by layer; wire `depends_on`. A facade
   with no consumer in the same spec or its series is mis-sliced — fold it into the
   consumer's spec.

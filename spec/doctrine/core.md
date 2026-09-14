@@ -182,8 +182,9 @@ one repo's ledger says so.
 
 ## Decomposition
 
-A spec must fit one build-stage run: roughly ≤15 File Plan rows, one primary area (plus any
-host-declared caps). Larger work splits into `##-` sibling specs sliced by **landing unit** —
+A spec must fit one build-stage run: roughly ≤8 source-layer File Plan rows (`tests`,
+`other`, docs, and ledger rows are not counted — the cost of a run is source files gaining
+new behavior, not row count), one primary area (plus any host-declared caps). Larger work splits into `##-` sibling specs sliced by **landing unit** —
 each spec independently leaves the system green — never by layer. Order via `depends_on`;
 build and review slices in dependency order.
 

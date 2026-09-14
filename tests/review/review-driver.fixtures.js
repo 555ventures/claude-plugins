@@ -139,14 +139,10 @@ const SURVIVOR_RETURN = {
 // specs/20260821/02-replay-review-phase.md (brief 14): the reviewer-replay harness shipped
 // as an ADVISORY — review's CLEAN close printed `replay is DUE — run /spec:replay` and
 // nothing ran it. This repo went due at 5 reviews and skipped the reminder
-// through 12+ reviews in ~48 hours; advisory visibility is measured to be insufficient. The
-// driver therefore gains a REPLAY state between MERGE's conclusion and DONE (D1): it runs
-// `replay.js --due` and `--select` ITSELF (the session never hand-derives dueness) and refuses to
-// conclude the review until a `stage:"replay"` ledger row exists for the SELECTED target's
-// reviewRunId (D2) — while never re-deriving, re-opening, or gating the already-committed verdict
-// (D3). D8 (build ruling) retires the driver's own copy of the measured-to-fail advisory: the
-// CLOSE-time `--due` probe and its `replay is DUE — run /spec:replay` line are gone, REPLAY's
-// entry `--due` being the single dueness derivation. AC-20260821-02-1 … -7 below.
+// through 12+ reviews in ~48 hours. specs/20260913/09-the-tool-shows-never-interrupts.md (ADR-0025)
+// keeps the driver out of it: MERGE concludes straight into DONE, /spec:replay is the one
+// executor, and dueness shows as a /spec:status footer clause. The helpers below seed the ledger
+// rows those replay-cadence tests read.
 
 // A recorded measurement replay (caught|missed|leg-caught) is what closes the dueness window;
 // review rows appearing AFTER it are what `--due` counts.
@@ -161,7 +157,7 @@ const seedReviewRow = (i) => ({
   verdict: 'CLEAN', runId: `rv_seed00000${i}`, tier: 'standard', survived: 0,
 })
 
-// The REPLAY fixtures are makeHost()'s shape with two additions the replay harness needs: a
+// The replay fixtures are makeHost()'s shape with two additions the replay harness needs: a
 // seeded ledger (which decides dueness) and an optional base-less spec frontmatter (which makes
 // `replay.js --select` fail at exit 4, the only reachable "due but nothing selectable" arm —
 // see AC-20260821-02-3's own note).
@@ -202,7 +198,7 @@ function makeReplayHost(prefix, { seedRows = [], withBase = true, acId } = {}) {
 function driveToClose(host, scratchName) {
   run(host.root, host.spec)
   assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER',
-    'setup precondition: the replay fixture must reach REVIEWER on green legs before any REPLAY AC can be exercised')
+    'setup precondition: the replay fixture must reach REVIEWER on green legs before any close-path AC can be exercised')
   run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith(scratchName, CLEAN_RETURN))
   const r = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
   assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',

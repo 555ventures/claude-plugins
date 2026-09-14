@@ -100,7 +100,7 @@ function driveToMerge(label, acId, { trackLedger = false } = {}) {
   // merge-back.sh branch-for derives the branch name deterministically from the spec's own
   // filename stem (`spec/<stem>`, no argument) — the branch created here MUST match that
   // derivation exactly, or sourceBranchFor()'s branchExists() check reads it as "no branch to
-  // merge" and the driver short-circuits straight past MERGE into REPLAY/DONE, which would make
+  // merge" and the driver short-circuits straight past MERGE into DONE, which would make
   // every assertion below vacuous.
   const specStem = `99-${label}`
   const branch = 'spec/' + specStem
@@ -144,7 +144,7 @@ function dirtyRootWithPromotedEvidence(root) {
   fs.writeFileSync(path.join(root, '.claude/spec-runs.jsonl'), '{"stage":"close","runId":"rv_partial_promotion"}\n')
 }
 
-test('AC-20260823-04-5: WHEN --mark merge-strategy re-runs after the source branch is already fully contained in the target (rev-list --count target..source = 0) THE SYSTEM skips the merge invocation and proceeds to evidence promotion and cleanup even when the main root carries uncommitted promoted evidence — no "root working tree is dirty" death, and the driver reaches its REPLAY/DONE tail', () => {
+test('AC-20260823-04-5: WHEN --mark merge-strategy re-runs after the source branch is already fully contained in the target (rev-list --count target..source = 0) THE SYSTEM skips the merge invocation and proceeds to evidence promotion and cleanup even when the main root carries uncommitted promoted evidence — no "root working tree is dirty" death, and the driver reaches DONE', () => {
   const { root, wt, spec, branch } = driveToMerge('ac5', 'AC-20260823-99-5')
 
   // Simulate the recorded wedge directly: the merge already landed (as the driver's own first
@@ -161,8 +161,8 @@ test('AC-20260823-04-5: WHEN --mark merge-strategy re-runs after the source bran
     'a re-entrant merge-strategy mark, issued after the source is already fully contained in the target, must not die on the root\'s own dirty state from a prior partial promotion — accepting the old unconditional die() here is exactly rv_6825fa48c98d\'s permanent MERGE-state wedge: ' + merged.stdout + merged.stderr)
   assert.doesNotMatch(merged.stdout + merged.stderr, /root working tree is dirty/,
     'D4 requires the driver to SKIP merge-back.sh merge (and therefore its assert_clean_root) once the source is already contained in the target — this exact refusal text reaching the caller means the skip never happened: ' + merged.stdout + merged.stderr)
-  assert.match(merged.stdout, /DONE|REPLAY/,
-    'a successful re-entrant merge-strategy call must reach its REPLAY/DONE tail, resuming at promotion/cleanup rather than staying wedged at MERGE with no recorded mark: ' + merged.stdout)
+  assert.match(merged.stdout, /DONE/,
+    'a successful re-entrant merge-strategy call must reach DONE, resuming at promotion/cleanup rather than staying wedged at MERGE with no recorded mark: ' + merged.stdout)
   assert.ok(!fs.existsSync(wt),
     'a concluded re-entrant merge must still remove the now-unused worktree — a lingering worktree here means the skip short-circuited past cleanup entirely instead of resuming it')
 })
@@ -200,7 +200,7 @@ test('AC-20260823-04-6: WHEN evidence promotion clears a worktree copy of .claud
     'deleting a tracked file (today\'s fs.rmSync) guarantees `git worktree remove` refuses (spiked exit 128 per A1) — merge-back.sh cleanup then dies and the whole mark exits 2; a restore instead of a delete is the only way this exits 0: ' + merged.stdout + merged.stderr)
   assert.ok(!fs.existsSync(wt),
     'the worktree must be gone after a successful merge-strategy mark — its removal is proof that `git worktree remove <wt>` (merge-back.sh cleanup NEVER passes --force, per merge-back.sh\'s own cleanup subcommand) exited 0, which is only possible if `git -C <wt> status --porcelain` was empty at that moment')
-  assert.match(merged.stdout, /DONE|REPLAY/, 'a successful merge-strategy mark must reach its REPLAY/DONE tail: ' + merged.stdout)
+  assert.match(merged.stdout, /DONE/, 'a successful merge-strategy mark must reach DONE: ' + merged.stdout)
 
   const promotedLedger = fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8')
   const promotedLines = promotedLedger.split('\n').filter(Boolean)
@@ -235,8 +235,8 @@ test('a subdirectory under .claude/spec-runs/ is promoted and cleared instead of
   const merged = run(root, spec, '--mark', 'merge-strategy', 'ff-only')
   assert.strictEqual(merged.status, 0,
     'a directory entry under .claude/spec-runs/ must not abort promotion — the merge has already landed at this point, so a throw here strands the run with a dirty main root and no ledger commit: ' + merged.stdout + merged.stderr)
-  assert.match(merged.stdout, /DONE|REPLAY/,
-    'the mark must reach its REPLAY/DONE tail rather than dying mid-promotion: ' + merged.stdout)
+  assert.match(merged.stdout, /DONE/,
+    'the mark must reach DONE rather than dying mid-promotion: ' + merged.stdout)
 
   assert.ok(fs.existsSync(path.join(root, '.claude/spec-runs/render/99-acdir/frame.png')),
     'the subdirectory\'s contents must be promoted into the main root, not skipped — evidence that is dropped instead of copied is evidence this review can never produce again')

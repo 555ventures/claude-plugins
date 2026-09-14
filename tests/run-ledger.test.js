@@ -78,11 +78,9 @@ test('union driver resolves concurrent worktree appends under squash merge', () 
   assert.deepStrictEqual(lines.sort(), ['{"spec":"b"}', '{"spec":"base"}', '{"spec":"c"}'])
 })
 
-// specs/20260821/02-replay-review-phase.md D1-D5: the reviewer-replay harness is advisory —
-// review's CLEAN close must not merely PRINT that a replay is due while nothing runs it.
-// Execution moves into the review driver's own REPLAY state (D1-D3); review.md gains the
-// judgment step that executes
-// replay.md's phases (D4) and core § Feedback Loop records who executes the cadence (D5). Both
+// specs/20260913/09-the-tool-shows-never-interrupts.md D5 (ADR-0025, amending
+// specs/20260821/02-replay-review-phase.md): the review driver has no REPLAY state — /spec:replay
+// is the one executor and core § Feedback Loop records that the dashboard shows dueness. Both
 // pins normalize whitespace first: these files hard-wrap at ~90 columns, so a load-bearing
 // sentence is split across lines and a contiguous-text regex would be red for a reason no diff
 // review surfaces (the host Gotchas record exactly that class).

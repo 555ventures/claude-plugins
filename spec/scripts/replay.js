@@ -107,9 +107,9 @@
 // class-id half of --apply's F2 refusal does not apply here, since no --class exists at setup
 // time. (D7) --setup without --overlay is unaffected; the overlay is additive.
 // specs/20260903/01-owed-query-and-row-handoff.md: (D8) --record gains --via driver|manual —
-// exactly "driver" stamps via:"driver" on the row and the retained artifact (the review driver's
-// REPLAY step is the only caller that knows a run was driver-handed, so it prints the flag in
-// the command the session copies); absent or any other value stamps the honest default
+// exactly "driver" stamps via:"driver" on the row and the retained artifact (kept so rows already
+// labeled driver-handed stay valid — ADR-0025 leaves /spec:replay as the one executor, so no
+// current caller passes it); absent or any other value stamps the honest default
 // "manual", mirroring build/review's own --via rule so no pre-change --record caller reddens.
 // stdout becomes `recorded runId=<rp_…> via=<driver|manual>`. (D9) --stats gains one
 // `by-via driver=N manual=N unknown=N` line (unknown = no via field at all) after `catch-rate`
@@ -1494,8 +1494,8 @@ function cmdRecord() {
   const runId = 'rp_' + crypto.randomBytes(6).toString('hex')
   const ts = new Date().toISOString()
   // D8 (specs/20260903/01-owed-query-and-row-handoff.md): mirrors build/review's --via rule —
-  // exactly "driver" stamps "driver" (the review driver's REPLAY step is the only caller that
-  // knows the run was driver-handed); absent or any other value stamps the honest default
+  // exactly "driver" stamps "driver" (no current caller passes it — ADR-0025); absent or any
+  // other value stamps the honest default
   // "manual", so every pre-change --record caller keeps working unchanged.
   const via = viaArg === 'driver' ? 'driver' : 'manual'
   const row = {

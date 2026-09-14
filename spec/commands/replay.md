@@ -204,9 +204,9 @@ nothing (D10's rationale).
 1. Run `node "$(spec-paths replay)" --record --spec {spec} --review-run-id {reviewRunId} --legs
    green|baseline-red:<leg>[,<leg>]|red:<leg>|none --outcome
    caught|missed|leg-caught|unresolved|setup-failed [--class {classId}] [--patch {patchOutFile}]
-   [--workflow {workflowReturnFile}] --tokens {N} --via driver|manual` — `--via driver` when this
-   run's target came from the review driver's REPLAY step, `--via manual` when Phase 0 ran here
-   (the manual surface). D2/D3's restated validation matrix:
+   [--workflow {workflowReturnFile}] --tokens {N} --via manual` — this command is the one
+   executor (ADR-0025), so every run it records is `manual`; the script still accepts `driver`
+   only so earlier driver-handed rows keep their label. D2/D3's restated validation matrix:
 
    | `--outcome` | `--legs` accepted | `--patch` | `--workflow` |
    |---|---|---|---|

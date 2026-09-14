@@ -2,7 +2,7 @@
 
 <!-- Authored by /spec:genesis (its driver's ROADMAP state — or hand-authored from this
      template in brownfield repos). Each numbered file in this directory is one planning brief:
-     one brief → one /spec:plan session → 1–4 sibling specs wired via depends_on.
+     one brief → one /spec:plan session → one spec (siblings via depends_on only when forced).
      Briefs are stable intent; specs are perishable execution detail — briefs are hydrated
      into specs lazily, one at a time, when "Current state" can be written against real code.
      NEVER write per-brief status into this file: status is derived from specs' `brief:`
@@ -69,7 +69,8 @@ Run `/spec:atlas` to see every declared surface, its mock, and the journey graph
 
 ## Conventions carried by every brief
 
-- Decomposition caps: the host's /spec:plan caps (≤8 source-layer File Plan rows per spec,
-  tests/docs/ledger rows uncounted, one primary area per spec); a brief that can't be told in ≤1 page of Scope splits into two briefs.
+- Decomposition caps: one brief → one spec by default; /spec:plan splits only past ~12
+  source-layer File Plan rows (tests/docs/ledger uncounted) or a second primary area; a
+  brief that can't be told in ≤1 page of Scope splits into two briefs.
 - { project-specific conventions every planning session must honor — invariants, review
   triggers, do-not-build entries }

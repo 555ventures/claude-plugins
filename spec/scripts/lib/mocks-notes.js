@@ -2,23 +2,26 @@
 // lib/mocks-notes.js — the one validated reader/writer for design/mocks/notes.json plus the
 // pure note-array transforms every caller (design-atlas.js's serve endpoints, mocks-driver.js's
 // `notes` subcommands and mark gates) shares. specs/20260902/10-page-notes-review-loop.md D1/D4,
-// AC-20260902-10-1/-5/-6/-10. specs/20260906/03-questions-on-the-wireframe.md D1, AC-20260906-03-1:
-// a note gains optional `kind: "note"|"question"` (absent = "note"), optional `reason` (notes
-// only), and for questions `ledgerId` + `answer`; answerQuestion is the one writer of `answer`.
+// AC-20260902-10-1/-5/-6/-10.
+//
+// specs/20260913/07-the-critic-is-out.md D5/D8: nothing in this pipeline stamps `kind:
+// "question"` or `kind: "walk"` any more — a note is what a person typed. `authoredByPerson(n)`
+// is the one predicate every reader now filters through; `kind: "note"` and an absent kind are
+// both a person's note, and a legacy note of either retired kind stays on disk exactly as it is
+// (readNotes/writeNotes never filter) but stops being listed, grouped, counted or gated on.
 //
 // Ids are "N001"-style, assigned by addNote — never handed in by a caller. resolveNote exists
 // for the HTTP layer only (D2: the served page's Resolve button is the sole caller); the driver
 // never calls it — D4 deliberately has no `notes resolve` subcommand, so the caller-side refusal
-// (exit 2, naming the page) lives in mocks-driver.js, not here. resolveNote refuses a question
-// outright (D1: "answered, never resolved") — a question is resolved only by answerQuestion,
-// called from design-atlas.js's POST /__notes/answer.
+// (exit 2, naming the page) lives in mocks-driver.js, not here. resolveNote keeps refusing a
+// legacy question by id outright — it was never resolved this way even while its producer lived,
+// and the producer is gone now.
 //
-// Does NOT: touch design/mocks/status.json or design/mocks/ledger.md (design-atlas.js's
-// /__notes/answer is the one caller that rewrites the ledger, via lib/mocks-ledger.js's
-// setStatus, before calling answerQuestion here — mocks-driver.js's `notes waive` does the same
-// for a waived question's row), parse seed.md itself (groupOpen takes the caller's already-parsed
-// {journey -> {labels}} map), or enforce D5's mark-gate rule — unresolvedFor is the primitive
-// the gate is built from; the refusal message and exit code live in mocks-driver.js.
+// Does NOT: touch design/mocks/status.json or design/mocks/ledger.md (mocks-driver.js's
+// `notes waive` is the one caller that rewrites a waived legacy question's ledger row), parse
+// seed.md itself (groupOpen takes the caller's already-parsed {journey -> {labels}} map), or
+// enforce D5's mark-gate rule — unresolvedFor is the primitive the gate is built from; the
+// refusal message and exit code live in mocks-driver.js.
 //
 // specs/20260912/11-a-note-can-mark-an-area.md D2/D3: `region` is an optional, validated field on
 // a mock-scope note only — regionShapeErrors is the one shared shape check addNote (throws, no
@@ -42,34 +45,34 @@
 const fs = require('fs')
 const path = require('path')
 
-// D3: absent = "session" (a legacy note carrying no origin field), except a walk-kind note which
-// is always "walk" by construction — a client note is only ever "client" by an explicit stamp
-// (never inferred), since nothing else on a note's own shape implies a client wrote it.
-const ORIGINS = ['walk', 'client', 'session']
+// D3: absent = "session" (a legacy note carrying no origin field) — a client note is only ever
+// "client" by an explicit stamp (never inferred), since nothing else on a note's own shape
+// implies a client wrote it. 'walk' stays a legal value only because a pre-retirement note on
+// disk may still carry it; nothing produces it any more.
+const ORIGINS = ['walk', 'client', 'session']   // 'walk' is legacy-accept only; nothing produces it
 function originOf(n) {
   if (n && n.origin != null) return n.origin
-  if (n && n.kind === 'walk') return 'walk'
   return 'session'
 }
+
+// specs/20260913/07-the-critic-is-out.md D8: a note a person did not type is one a retired
+// producer stamped with a kind. `kind: "note"` and an absent kind are both a person's note. The
+// predicate is the one rule; the note itself is never filtered out of readNotes/writeNotes, so no
+// read-modify-write path can erase a hidden note's history.
+function authoredByPerson(n) { return n.kind !== 'question' && n.kind !== 'walk' }
 
 const SCOPES = ['mock', 'project']
 const STATUSES = ['open', 'addressed', 'resolved']
 const ID_RE = /^N\d+$/
-const KINDS = ['note', 'question', 'walk']
+const KINDS = ['note', 'question', 'walk']      // 'question' and 'walk' are legacy-accept only
 // specs/20260906/06-sketch-high-fidelity-and-critique.md D4: the enum gains the four fixed
 // critique blind spots (error-prevention, error-recovery, help, efficiency) alongside the
 // original client-message reasons — one enum shared by a critic finding and a client message,
-// which differ only in `by` and `reason`. PLAIN_REASONS is that eight-item set, kept separate
-// from REASONS below because specs/20260907/08-walk-critic.md D3 requires a plain note's
-// optional `reason` to reject a walk reason even though REASONS (the merged export) contains it —
-// the four blind-spot reasons stay in PLAIN_REASONS/REASONS unproduced (their critic pass is
-// retired by that same spec) purely so an existing host's notes.json keeps validating.
+// which differ only in `by` and `reason`. specs/20260913/07-the-critic-is-out.md D5: the
+// producer that could cite a retired flow-break reason is gone, so REASONS collapses to this one
+// set — no composer authors a reason outside it.
 const PLAIN_REASONS = ['missing-screen', 'wrong-direction', 'wrong-words', 'other', 'error-prevention', 'error-recovery', 'help', 'efficiency']
-// specs/20260907/08-walk-critic.md D3: the six flow breaks a walk finding may cite — no other
-// reason is ever valid on a `kind: "walk"` note, and no plain note may cite one of these either.
-const WALK_REASONS = ['no-path-back', 'no-path-forward', 'dead-end-state', 'missing-data', 'ambiguous-control', 'unrecoverable-error']
-const REASONS = PLAIN_REASONS.concat(WALK_REASONS)
-const LEDGER_ID_RE = /^[A-Z]+\d+[a-z]?$/
+const REASONS = PLAIN_REASONS                    // legacy retired-reason enum retired; no composer authors one outside PLAIN_REASONS
 // specs/20260910/05-what-the-journey-does-not-do.md D3: the optional `reason` a client gives when
 // withdrawing a note through the client route — stored as `withdrawReason`, validated here and by
 // design-atlas.js's client `/__notes/resolve` route (which 400s a value outside this enum before
@@ -161,33 +164,16 @@ function validateNotes(notes) {
     if (!STATUSES.includes(n.status)) {
       errors.push('note "' + label + '": status must be one of ' + STATUSES.join('|') + ' (field "status")')
     }
-    // D1: kind/reason/ledgerId/answer — additive to the shape above, never a stricter version of it.
-    // specs/20260907/08-walk-critic.md D3: validation now splits three ways by kind — a question
-    // (ledgerId required, no reason), a walk finding (scope "mock", a non-empty state, a reason
-    // from WALK_REASONS), or a plain note (an optional reason drawn from PLAIN_REASONS only — a
-    // walk reason on a plain note is an error, never silently accepted via the merged REASONS set).
-    const isQuestion = n.kind === 'question'
-    const isWalk = n.kind === 'walk'
+    // D1: kind/reason — additive to the shape above, never a stricter version of it.
+    // specs/20260913/07-the-critic-is-out.md D5: nothing produces a `kind: "question"` or
+    // `kind: "walk"` note any more, so a note of either kind is accepted with whatever ledgerId,
+    // answer or reason it already carries — no format check on a value nothing produces. Only a
+    // plain note (kind "note" or absent) still has its optional `reason` checked, against
+    // PLAIN_REASONS.
+    const isLegacy = n.kind === 'question' || n.kind === 'walk'
     if (n.kind != null && !KINDS.includes(n.kind)) {
       errors.push('note "' + label + '": kind must be one of ' + KINDS.join('|') + ' (field "kind")')
-    } else if (isQuestion) {
-      if (typeof n.ledgerId !== 'string' || !LEDGER_ID_RE.test(n.ledgerId)) {
-        errors.push('note "' + label + '": a question requires a ledgerId matching ^[A-Z]+\\d+[a-z]?$ (field "ledgerId")')
-      }
-      if (n.reason != null) {
-        errors.push('note "' + label + '": reason is not allowed on a question (field "reason")')
-      }
-    } else if (isWalk) {
-      if (n.scope !== 'mock') {
-        errors.push('note "' + label + '": a walk finding requires scope "mock" (field "scope")')
-      }
-      if (n.state == null || n.state === '') {
-        errors.push('note "' + label + '": a walk finding requires a non-empty state (field "state")')
-      }
-      if (!WALK_REASONS.includes(n.reason)) {
-        errors.push('note "' + label + '": reason must be one of ' + WALK_REASONS.join('|') + ' (field "reason")')
-      }
-    } else if (n.reason != null && !PLAIN_REASONS.includes(n.reason)) {
+    } else if (!isLegacy && n.reason != null && !PLAIN_REASONS.includes(n.reason)) {
       errors.push('note "' + label + '": reason must be one of ' + PLAIN_REASONS.join('|') + ' (field "reason")')
     }
     if (n.answer != null) {
@@ -239,12 +225,11 @@ function nextId(notes) {
 }
 
 // D2's POST /__notes/add — assigns id/at/status; refuses (throws) a body missing text/by, an
-// unrecognized scope, or a mock-scope body with no screen. specs/20260906/03 D1: also accepts
-// `kind: "question"` (with a required `ledgerId`) or a plain note's optional `reason` — the HTTP
-// layer (design-atlas.js) refuses a client body carrying kind/ledgerId before ever reaching here
-// (D3: "questions are session-authored"); this function itself has no opinion on the caller —
-// mocks-driver.js's `ledger add --screen`/`ledger ask` call it directly with kind:"question".
-// Never mutates the input array.
+// unrecognized scope, or a mock-scope body with no screen. specs/20260913/07-the-critic-is-out.md
+// D5: `kind`/`ledgerId` are retired inputs — the caller (mocks-driver.js's `notes add`,
+// design-atlas.js's POST /__notes/add) refuses a body naming either before this is ever called, so
+// this function stamps every note it writes as a person's plain note, with `reason` (when given)
+// checked against PLAIN_REASONS. Never mutates the input array.
 function addNote(notes, input) {
   const problems = []
   const body = input || {}
@@ -252,18 +237,7 @@ function addNote(notes, input) {
   if (!String(body.by || '').trim()) problems.push('by must be non-empty')
   if (!SCOPES.includes(body.scope)) problems.push('scope must be one of ' + SCOPES.join('|'))
   else if (body.scope === 'mock' && !body.screen) problems.push('scope "mock" requires a screen')
-  const isQuestion = body.kind === 'question'
-  const isWalk = body.kind === 'walk'
-  if (isQuestion) {
-    if (typeof body.ledgerId !== 'string' || !LEDGER_ID_RE.test(body.ledgerId)) problems.push('a question requires a valid ledgerId')
-  } else if (isWalk) {
-    // specs/20260907/08-walk-critic.md D3/D4: mocks-driver.js's `notes add` already checks the
-    // screen/state pair against disk before ever calling this — the state-non-empty check here is
-    // this library's own floor, never a second copy of that disk check.
-    if (body.scope !== 'mock') problems.push('a walk finding requires scope "mock"')
-    if (!String(body.state || '').trim()) problems.push('a walk finding requires a non-empty state')
-    if (!WALK_REASONS.includes(body.reason)) problems.push('reason must be one of ' + WALK_REASONS.join('|'))
-  } else if (body.reason != null && !PLAIN_REASONS.includes(body.reason)) {
+  if (body.reason != null && !PLAIN_REASONS.includes(body.reason)) {
     problems.push('reason must be one of ' + PLAIN_REASONS.join('|'))
   }
   // specs/20260912/11-a-note-can-mark-an-area.md D2: region is accepted only on scope "mock" —
@@ -288,22 +262,12 @@ function addNote(notes, input) {
     resolvedBy: null,
     resolvedAt: null,
   }
-  if (isQuestion) {
-    note.kind = 'question'
-    note.ledgerId = body.ledgerId
-    note.answer = null
-  } else if (isWalk) {
-    note.kind = 'walk'
-    note.reason = body.reason
-  } else if (body.reason != null) {
-    note.reason = body.reason
-  }
+  if (body.reason != null) note.reason = body.reason
   // specs/20260912/11-a-note-can-mark-an-area.md D2: stored verbatim — the shape has already been
   // validated above, and only ever on a mock-scope body (the project-scope case already threw).
   if (body.scope === 'mock' && body.region != null) note.region = body.region
   // D3: origin from the caller when given (design-atlas.js's client route always passes
-  // "client" explicitly), else originOf's own rule — a walk-kind note is "walk" by construction,
-  // everything else (including a question) defaults "session".
+  // "client" explicitly), else originOf's own rule ("session" for every note this function writes).
   note.origin = body.origin != null ? body.origin : originOf(note)
   return { notes: notes.concat([note]), note }
 }
@@ -316,8 +280,10 @@ function cloneFind(notes, id) {
 }
 
 // D2's POST /__notes/resolve — the page's Resolve button is the only caller; mocks-driver.js
-// never calls this (D4: no `notes resolve` subcommand exists). specs/20260906/03 D1: a question
-// is never resolved this way — it throws, naming the only path that closes a question.
+// never calls this (D4: no `notes resolve` subcommand exists). specs/20260913/07-the-critic-is-out.md
+// D6: a legacy note carrying `kind: "question"` was never written by a person and cannot be
+// resolved through this route — it throws, naming why, whether or not its retired producer still
+// exists.
 // specs/20260907/10-client-review.md D4: `opts.viaClient` (design-atlas.js's client-route
 // /__notes/resolve only) derives `resolution` from the note's prior status — "withdrawn" from
 // "open", "accepted" from "addressed" — and stamps `lastClientAt`; the non-client route (the
@@ -328,7 +294,7 @@ function cloneFind(notes, id) {
 // only the one home); this function trusts an already-validated value.
 function resolveNote(notes, id, by, opts) {
   const { next, found } = cloneFind(notes, id)
-  if (found.kind === 'question') throw new Error('question "' + id + '" is answered, never resolved')
+  if (found.kind === 'question') throw new Error('note "' + id + '" was not written by a person and cannot be resolved')
   const o = opts || {}
   const priorStatus = found.status
   found.status = 'resolved'
@@ -339,21 +305,6 @@ function resolveNote(notes, id, by, opts) {
     found.lastClientAt = found.resolvedAt
     if (o.reason != null) found.withdrawReason = o.reason
   }
-  return { notes: next, note: found }
-}
-
-// specs/20260906/03-questions-on-the-wireframe.md D1/D3: the one writer of `answer` — called by
-// design-atlas.js's POST /__notes/answer AFTER it has already rewritten the ledger row's status
-// (setStatus), so a crash between the two writes leaves an answered row with a still-open note
-// (a harmless re-ask), never a resolved note over an open row. Sets status "resolved" directly —
-// an answered question is never "addressed", only ever open or resolved.
-function answerQuestion(notes, id, opts) {
-  const { next, found } = cloneFind(notes, id)
-  const o = opts || {}
-  found.answer = { verdict: o.verdict, text: o.text || '', by: o.by || 'session', at: new Date().toISOString() }
-  found.status = 'resolved'
-  found.resolvedBy = o.by || 'session'
-  found.resolvedAt = found.answer.at
   return { notes: next, note: found }
 }
 
@@ -450,7 +401,8 @@ function replyNote(notes, id, text) {
 // journey -> screen -> state via the caller-supplied {journey -> {labels}} map (mocks-driver.js's
 // own seed.md parse — this module never reads seed.md itself). A screen no journey declares
 // groups under "unassigned". Only non-resolved notes are grouped (open and addressed both stay
-// visible until the author resolves them from the page).
+// visible until the author resolves them from the page). specs/20260913/07-the-critic-is-out.md
+// D8: a note a person did not type is never grouped, whatever its status.
 function groupOpen(notes, seed) {
   const labelToJourney = new Map()
   if (seed) {
@@ -458,7 +410,7 @@ function groupOpen(notes, seed) {
       for (const label of (j && j.labels) || []) labelToJourney.set(label, journeyName)
     }
   }
-  const notResolved = (notes || []).filter((n) => n.status !== 'resolved')
+  const notResolved = (notes || []).filter((n) => n.status !== 'resolved' && authoredByPerson(n))
   const project = notResolved.filter((n) => n.scope === 'project')
   const mock = notResolved.filter((n) => n.scope === 'mock')
 
@@ -477,14 +429,13 @@ function groupOpen(notes, seed) {
 }
 
 // D5's mark-gate primitive: mock-scope notes anchored to any of `labels` that are not resolved
-// (open or addressed both count — only `resolved` clears a gate). specs/20260906/03 s0 fix: a
-// question's "unresolved" is `answer == null`, never `status`'s "resolved" word — the session's
-// own follow-up (`notes address` after a "no" answer) sets a question's status to "addressed" to
-// record the redraw, and that must never flip an already-answered question back to unanswered.
+// (open or addressed both count — only `resolved` clears a gate). specs/20260913/07-the-critic-is-out.md
+// D7/D8: no gate counts a note a person did not type, whatever its status — every note this
+// function returns is judged by `status !== 'resolved'` alone now.
 function unresolvedFor(notes, labels) {
   const set = new Set(labels || [])
   return (notes || []).filter((n) => n.scope === 'mock' && set.has(n.screen) &&
-    (n.kind === 'question' ? n.answer == null : n.status !== 'resolved'))
+    authoredByPerson(n) && n.status !== 'resolved')
 }
 
 const DAY_MS = 86400000
@@ -519,14 +470,11 @@ function waiveNote(notes, id, opts) {
   // included) sees a waiver as either.
   found.resolution = 'waived'
   found.waived = { at, reason: o.reason, by: o.by || 'session' }
-  if (found.kind === 'question') {
-    found.answer = { verdict: 'waived', text: o.reason, by: o.by || 'session', at }
-  }
   return { notes: next, note: found }
 }
 
 module.exports = {
-  readNotes, writeNotes, validateNotes, addNote, resolveNote, answerQuestion, addressNote, replyNote,
-  reopenNote, groupOpen, unresolvedFor, WALK_REASONS, ORIGINS, originOf, waiveNote, WITHDRAW_REASONS,
-  replaceRegion, deleteNote,
+  readNotes, writeNotes, validateNotes, addNote, resolveNote, addressNote, replyNote,
+  reopenNote, groupOpen, unresolvedFor, ORIGINS, originOf, waiveNote, WITHDRAW_REASONS,
+  replaceRegion, deleteNote, authoredByPerson,
 }

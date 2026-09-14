@@ -36,6 +36,7 @@
 
 const picksLib = require('./mocks-picks')
 const { renderApproveStop, PICKS_SCRIPT, esc } = require('./stop-block')
+const { authoredByPerson } = require('./mocks-notes')
 
 const REASON_LABELS = {
   'missing-screen': 'Missing screen',
@@ -43,7 +44,6 @@ const REASON_LABELS = {
   'wrong-words': 'Wrong words',
   other: 'Other',
 }
-const REASONS = ['missing-screen', 'wrong-direction', 'wrong-words', 'other']
 const DEFAULT_VIEWPORT = { width: 1280, height: 800 }
 
 // Every data-state-btn value a mock declares, in declared order (none → []). A declared `happy`
@@ -67,19 +67,7 @@ function viewportOf(targets) {
   }
 }
 
-// /__notes/list's join, restated over the caller's already-parsed ledger rows.
-function joinQuestions(notes, ledgerRows) {
-  const rows = Array.isArray(ledgerRows) ? ledgerRows : []
-  return (notes || []).map((n) => {
-    if (n.kind !== 'question') return n
-    const row = rows.find((a) => a.id === n.ledgerId)
-    if (!row) return Object.assign({}, n, { ledgerMissing: true })
-    return Object.assign({}, n, { claim: row.claim, rejected: row.rejected, tag: row.tag, status: row.status })
-  })
-}
-
-function isOpen(n) { return n.kind === 'question' ? n.answer == null : n.status !== 'resolved' }
-function isQuestion(n) { return n.kind === 'question' }
+function isOpen(n) { return n.status !== 'resolved' }
 function plural(n, one, many) { return n === 1 ? one : many }
 // One authored copy of the D3 waiting line; review.browser.js's recount() rebuilds the
 // same sentence client-side, so both inflect the verb with the count.
@@ -188,41 +176,18 @@ function renderBoard(screen, i, vp, prefix, openCount, focused, total, regionCou
 }
 
 // ---- inspector ----------------------------------------------------------------------------------
-function tagText(n) { return n.ledgerMissing ? 'ledger row missing' : (n.tag || '') }
-
 // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D3 (amended): a region note's row
 // carries data-region="1" and data-state="<the state it was drawn on, defaulting to happy>" — a
-// non-region note (every question, and a plain note with no drawn box) carries neither attribute
-// at all. D9: data-state is what review.browser.js's select() reads to switch that board's tab.
-function rowOpen(n, kind, status, extra) {
-  var isRegion = kind === 'note' && n.region
-  return '<article data-rv="row" data-id="' + esc(n.id) + '" data-kind="' + kind + '" data-status="' + status + '"' +
+// non-region note (a plain note with no drawn box) carries neither attribute at all. D9:
+// data-state is what review.browser.js's select() reads to switch that board's tab.
+// specs/20260913/07-the-critic-is-out.md D6: the note row is the one row template that remains —
+// `data-kind` is always "note", `class="rv-row rv-note"` always.
+function rowOpen(n, status, extra) {
+  var isRegion = n.region
+  return '<article data-rv="row" data-id="' + esc(n.id) + '" data-kind="note" data-status="' + status + '"' +
     (isRegion ? ' data-region="1" data-state="' + esc(n.state || 'happy') + '"' : '') +
-    ' class="rv-row rv-' + (kind === 'question' ? 'q' : 'note') + '"' +
+    ' class="rv-row rv-note"' +
     (n.scope === 'mock' && n.screen ? ' data-label="' + esc(n.screen) + '"' : '') + extra + ' tabindex="-1">'
-}
-
-function renderQuestionRow(n, selected) {
-  const open = n.answer == null
-  const who = n.by === 'session' ? 'I assumed' : 'A fresh reader asked'
-  const head = '<div class="rv-rowhead"><span class="rv-id">' + esc(n.ledgerId || n.id) + '</span>' +
-    '<span class="rv-who">' + who + '</span>' +
-    (n.screen ? '<span class="rv-sep">·</span><span class="rv-screen">' + esc(n.screen) + '</span>' : '') +
-    (tagText(n) ? '<span class="rv-sep">·</span><span class="rv-tag">' + esc(tagText(n)) + '</span>' : '') + '</div>'
-  const claim = '<p class="rv-claim">' + esc(n.claim != null ? n.claim : n.text) + '</p>' +
-    (n.rejected ? '<p class="rv-rejected">Rejected: ' + esc(n.rejected) + '</p>' : '')
-  const answered = !open
-    ? '<p class="rv-answered" data-rv="answered" data-verdict="' + esc(n.answer.verdict) + '">' +
-      (n.answer.verdict === 'no' ? 'You corrected: ' + esc(n.answer.text) : 'You confirmed') + '</p>'
-    : '<p class="rv-answered" data-rv="answered" hidden></p>'
-  const controls = open
-    ? '<div class="rv-actions" data-rv="actions"><button type="button" data-rv="yes">Yes, that\'s right</button>' +
-      '<button type="button" data-rv="no">No, it\'s…</button><button type="button" data-rv="later">Later</button></div>' +
-      '<div class="rv-correct" data-rv="correct" hidden><textarea data-rv="correction" rows="2" placeholder="What is actually true?"></textarea>' +
-      '<button type="button" data-rv="save">Save correction</button></div>'
-    : ''
-  return rowOpen(n, 'question', open ? 'open' : 'answered', (selected ? ' data-selected' : '') + (open ? '' : ' hidden')) +
-    head + claim + answered + controls + '</article>'
 }
 
 function renderNoteRow(n, selected) {
@@ -248,17 +213,16 @@ function renderNoteRow(n, selected) {
     ? '<div class="rv-actions" data-rv="note-actions"><button type="button" data-rv="accept">Looks good</button>' +
       '<button type="button" data-rv="reopen">Still not right</button></div>'
     : ''
-  return rowOpen(n, 'note', open ? 'open' : 'resolved', (selected ? ' data-selected' : '') + (open ? '' : ' hidden')) +
+  return rowOpen(n, open ? 'open' : 'resolved', (selected ? ' data-selected' : '') + (open ? '' : ' hidden')) +
     head + body + status + noteActions + '</article>'
 }
 
+// specs/20260913/07-the-critic-is-out.md D10: the composer's chip row is retired — the freed
+// height goes to the textarea (rows="5"). REASON_LABELS and the .rv-chip badge stay, rendering an
+// existing note's stored reason.
 function renderComposer(prefix) {
-  const chips = REASONS.map((r, i) =>
-    '<button type="button" class="rv-chipbtn' + (i === REASONS.length - 1 ? ' rv-chip-on' : '') + '" data-rv="chip" data-value="' + r +
-    '" aria-pressed="' + (i === REASONS.length - 1 ? 'true' : 'false') + '">' + REASON_LABELS[r] + '</button>').join('')
   return '<form class="rv-composer" data-rv="composer" data-prefix="' + esc(prefix) + '" aria-label="Tell the session something">' +
-    '<div class="rv-chips">' + chips + '</div>' +
-    '<textarea data-rv="text" rows="3" placeholder="What should change, or what is missing?"></textarea>' +
+    '<textarea data-rv="text" rows="5" placeholder="What should change, or what is missing?"></textarea>' +
     '<div class="rv-actions"><button type="submit" data-rv="send" class="rv-primary">Send</button><kbd>⌘</kbd><kbd>Enter</kbd>' +
     // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D11, disposed s2 (2026-09-13):
     // `aria-pressed` gives the button itself a visible active state — mark mode had no signal at
@@ -267,11 +231,13 @@ function renderComposer(prefix) {
     'title="Draw a box on the screen, then write the note">Mark an area</button></div></form>'
 }
 
+// specs/20260913/07-the-critic-is-out.md D6: the inspector holds one row template — the note row
+// — and its own aria-label and empty-state copy stop naming a producer this spec retires.
 function renderInspector(items, prefix, selectedId) {
   const openCount = items.filter(isOpen).length
-  const rows = items.map((n) => (isQuestion(n) ? renderQuestionRow(n, n.id === selectedId) : renderNoteRow(n, n.id === selectedId))).join('')
-  const empty = '<p class="rv-empty" data-rv="empty"' + (openCount ? ' hidden' : '') + '>Every question is answered. Approve the journey when the screens look right.</p>'
-  return '<aside class="rv-inspector" data-rv="inspector" aria-label="Questions and notes">' +
+  const rows = items.map((n) => renderNoteRow(n, n.id === selectedId)).join('')
+  const empty = '<p class="rv-empty" data-rv="empty"' + (openCount ? ' hidden' : '') + '>No open notes on this journey. Approve it when the screens look right.</p>'
+  return '<aside class="rv-inspector" data-rv="inspector" aria-label="Notes">' +
     // D13: the labels say who is waiting — the data-filter values (open/answered/all) never
     // change so no consumer breaks.
     '<div class="rv-filters" role="tablist"><button type="button" data-rv="filter" data-filter="open" aria-selected="true">Needs you<span class="rv-count" data-rv="open-count">' + openCount + '</span></button>' +
@@ -293,18 +259,14 @@ function renderInspector(items, prefix, selectedId) {
 }
 
 // ---- header -------------------------------------------------------------------------------------
+// specs/20260913/07-the-critic-is-out.md D6: the progress bar measured answered-over-asked
+// questions and has no other meaning — it is deleted, and nothing replaces it.
 function renderHeader(seed, journeyEntry, journeyIndex, items, stop, prefix) {
-  const questions = items.filter(isQuestion)
-  const answered = questions.filter((q) => q.answer != null).length
-  const openNotes = items.filter((n) => !isQuestion(n) && isOpen(n)).length
   // D1: the approve gate counts this journey's own screen-scoped items only — a whole-product
   // note blocks the final sign-off (mocks-driver.js's requireProjectNotesResolved), never this
   // button. The header total and the rail's project row still count every open item (unchanged).
   const openAll = items.filter((n) => n.scope === 'mock' && isOpen(n)).length
   const openProject = items.filter((n) => n.scope === 'project' && isOpen(n)).length
-  const progressText = answered + ' of ' + questions.length + ' answered' +
-    (openNotes ? ' · ' + openNotes + ' ' + plural(openNotes, 'note', 'notes') + ' for the session' : '')
-  const pct = questions.length ? Math.round((answered / questions.length) * 100) : 100
   const title = (journeyIndex + 1) + ' · ' + (journeyEntry.title || journeyEntry.name)
   let control
   if (!stop) {
@@ -337,9 +299,6 @@ function renderHeader(seed, journeyEntry, journeyIndex, items, stop, prefix) {
     esc(seed.product || 'Product') + '</a>' +
     '<span class="rv-sep">/</span><strong>' + esc(title) + '</strong></nav>' +
     '<span class="rv-pill" data-rv="pill">' + pillText(stop) + '</span>' +
-    '<div class="rv-progress" data-rv="progress" data-answered="' + answered + '" data-total="' + questions.length + '">' +
-    '<span class="rv-progress-text" data-rv="progress-text">' + progressText + '</span>' +
-    '<span class="rv-track" aria-hidden="true"><span class="rv-fill" data-rv="fill" style="width:' + pct + '%"></span></span></div>' +
     '<div class="rv-control" data-rv="control">' + control + '</div>' + (stop ? PICKS_SCRIPT : '') + '</header>'
 }
 
@@ -362,11 +321,12 @@ function buildReviewPage(input) {
     height: seed.viewportHeight > 0 ? seed.viewportHeight | 0 : DEFAULT_VIEWPORT.height,
   }
 
-  const joined = joinQuestions(o.notes || [], o.ledger || [])
-  // D4: rows = the journey's questions and mock notes on its labels + every project note, sorted
-  // screen order (project scope last) then id.
+  // D4: rows = the journey's mock notes on its labels + every project note, sorted screen order
+  // (project scope last) then id. specs/20260913/07-the-critic-is-out.md D8: a note a person did
+  // not type is never an item here — authoredByPerson.
   const order = new Map(labels.map((l, i) => [l, i]))
-  const items = joined
+  const items = (o.notes || [])
+    .filter(authoredByPerson)
     .filter((n) => (n.scope === 'mock' && labelSet.has(n.screen)) || n.scope === 'project')
     .sort((a, b) => {
       const oa = a.scope === 'project' ? labels.length : order.get(a.screen)
@@ -422,4 +382,4 @@ function buildReviewPage(input) {
     '</body></html>\n'
 }
 
-module.exports = { buildReviewPage, joinQuestions, statesOf, viewportOf }
+module.exports = { buildReviewPage, statesOf, viewportOf }

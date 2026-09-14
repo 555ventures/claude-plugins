@@ -105,25 +105,23 @@
 //                                                  response gets the page-notes layer script
 //                                                  injected before </body> unless the request
 //                                                  carries ?clean; /__notes/* exposes
-//                                                  notes.js, viewer.css, list, add, resolve, answer
-//                                                  (address/reply are driver-only, never HTTP).
-//                                                  specs/20260906/03 D3: /__notes/list joins
-//                                                  claim/rejected/tag/status from the ledger row
-//                                                  onto every question note it returns; POST
-//                                                  /__notes/answer is the one path that both
-//                                                  rewrites the ledger row's status (confirmed/
-//                                                  overridden <today>) and resolves the question;
-//                                                  /__notes/resolve 400s a question, naming
-//                                                  /__notes/answer; /__notes/add 400s a body
-//                                                  carrying kind/ledgerId (questions are
-//                                                  session-authored).
+//                                                  notes.js, viewer.css, list, add, resolve, region,
+//                                                  delete, reopen (address/reply are driver-only,
+//                                                  never HTTP).
+//                                                  specs/20260913/07-the-critic-is-out.md D6/D8:
+//                                                  /__notes/list returns only notes a person typed
+//                                                  (authoredByPerson); /__notes/resolve refuses a
+//                                                  legacy question by its own message; the retired
+//                                                  answer route is gone — a request to it falls
+//                                                  through, unmatched, to the shared /__notes/ 404;
+//                                                  /__notes/add 400s a body carrying kind/ledgerId.
 //                                                  specs/20260907/10-client-review.md D4: every
 //                                                  /__notes/* route above is also mounted at
 //                                                  /client/__notes/* — the client route strips the
 //                                                  leading /client segment and re-dispatches
 //                                                  identically, except origin stamping ("client"
 //                                                  instead of "session") and /client/__notes/list's
-//                                                  question-plus-client-origin-only filter.
+//                                                  own additional origin-"client" filter.
 //                                                  specs/20260905/01 D2: every served page also
 //                                                  carries a <meta name="notes-scope"> tag (mock
 //                                                  for a static file, project for the derived
@@ -208,7 +206,7 @@ const path = require('node:path')
 const { readConfig } = require('./lib/host-config')
 const shellLib = require('./lib/shell-region')
 const notesLib = require('./lib/mocks-notes')
-const { parseLedger, setStatus, appendAssumption } = require('./lib/mocks-ledger')
+const { parseLedger } = require('./lib/mocks-ledger')
 // D7(c): the byte-identical design/mocks/ledger.md read-and-catch shared by the /__notes/list
 // and /review/<journey>.html route handlers — the only two sites that need every ledger row for
 // a request, read fresh (never cached). The three other parseLedger( call sites read a different
@@ -1415,21 +1413,6 @@ function seedForReview(root) {
   return { product, viewportWidth: vp.width, viewportHeight: vp.height, journeys }
 }
 
-// specs/20260910/03-client-journey-player.md D6: the promoted said-by-user row's own id — A2
-// (false, per the spec's own escalation): lib/mocks-ledger.js's appendAssumption does not derive
-// an id itself (the caller always supplies one), so the client route derives its own next free
-// "C<n>" the same way mocks-driver.js's nextLedgerId derives "P<n>" for its own picks-originated
-// rows — a distinct prefix keeps a client-promoted row's id from ever colliding with one the
-// session assigns through `ledger add`.
-function nextClientLedgerId(parsed) {
-  let max = 0
-  for (const a of parsed.assumptions) {
-    const m = /^C(\d+)$/.exec(a.id)
-    if (m) max = Math.max(max, parseInt(m[1], 10))
-  }
-  return 'C' + (max + 1)
-}
-
 // ---- picks (specs/20260905/01-picks-on-the-atlas-page.md D3/D4) ----------------------------------
 // A look stop's key says where it renders (D3b): shape-picked -> the shapes section, theme-picked
 // -> a dedicated theme section right after shapes, journey-approved:<j> -> the <j>
@@ -1582,13 +1565,14 @@ function buildAtlas(root, out) {
   // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D6: per-screen open/needs-you
   // counts, derived from notes.json on every render (never cached, never stored) — a `?clean`
   // render carries them too, since the count lives in the card markup buildAtlas emits here
-  // rather than in a separate injected script. open = status "open" non-question mock-scope
-  // notes on the screen; needs = status "addressed".
+  // rather than in a separate injected script. open = status "open" mock-scope notes a person
+  // typed on the screen; needs = status "addressed". specs/20260913/07-the-critic-is-out.md D8: a
+  // note a person did not type is never counted here — authoredByPerson is the predicate.
   let notesForCounts = []
   try { notesForCounts = notesLib.readNotes(root) } catch { notesForCounts = [] }
   const noteCountsByScreen = new Map()
   for (const n of notesForCounts) {
-    if (n.scope !== 'mock' || !n.screen || n.kind === 'question') continue
+    if (n.scope !== 'mock' || !n.screen || !notesLib.authoredByPerson(n)) continue
     if (n.status !== 'open' && n.status !== 'addressed') continue
     const c = noteCountsByScreen.get(n.screen) || { open: 0, needs: 0 }
     if (n.status === 'open') c.open++
@@ -2395,25 +2379,24 @@ function createRequestHandler(root, opts = {}) {
         : screen === '*'
           ? notes.filter((n) => n.scope === 'project')
           : notes.filter((n) => n.scope === 'mock' && n.screen === screen)
-      // specs/20260907/10-client-review.md D4: the client route's own /__notes/list returns
-      // questions plus client-origin notes only — a walk or session-origin plain note never
-      // appears there; the non-client route keeps returning everything, unchanged (AC-20260907-10-21).
-      if (clientRoute) out = out.filter((n) => n.kind === 'question' || notesLib.originOf(n) === 'client')
-      // specs/20260906/03 D3: a question note is joined against its ledger row on every request
-      // (never cached) — claim/rejected/tag/status come from the row, ledgerMissing:true when the
-      // row is gone. Read at most once per request, lazily (most lists carry no question).
-      const ledgerRows = out.some((n) => n.kind === 'question') ? readLedgerRows(rootAbs) : null
-      const joined = reviewPageLib.joinQuestions(out, ledgerRows)
-      jsonRes(res, 200, joined)
+      // specs/20260913/07-the-critic-is-out.md D8: a note a person did not type is never listed —
+      // authoredByPerson filters both mounts. specs/20260907/10-client-review.md D4: the client
+      // route's own /__notes/list additionally returns client-origin notes only — a session-origin
+      // plain note never appears there; the non-client route keeps returning every person-written
+      // note, unchanged (AC-20260907-10-21).
+      out = out.filter(notesLib.authoredByPerson)
+      if (clientRoute) out = out.filter((n) => notesLib.originOf(n) === 'client')
+      jsonRes(res, 200, out)
       return
     }
     if (reqPath === '/__notes/add' && req.method === 'POST') {
       readJsonBody(req).then((body) => {
-        // D3: questions are session-authored only — a client body naming kind/ledgerId is
-        // rejected before it ever reaches addNote (which itself accepts those fields for
-        // mocks-driver.js's own direct, non-HTTP callers).
+        // specs/20260913/07-the-critic-is-out.md D5: a note is what a person typed — a body
+        // naming kind/ledgerId is rejected before it ever reaches addNote (which itself accepts
+        // those fields for mocks-driver.js's own direct, non-HTTP callers, which now refuse them
+        // outright too).
         if (body && (body.kind != null || body.ledgerId != null)) {
-          jsonRes(res, 400, { error: 'questions are session-authored — kind/ledgerId are not accepted here' })
+          jsonRes(res, 400, { error: 'kind and ledgerId are retired — a note is what a person typed' })
           return
         }
         // specs/20260907/10-client-review.md D4: origin is decided by the route alone, never
@@ -2444,13 +2427,10 @@ function createRequestHandler(root, opts = {}) {
       readJsonBody(req).then((body) => {
         let notes = []
         try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
-        // D3: a question is never resolved this way — the refusal names the one path that closes
-        // it (POST /__notes/answer), checked before resolveNote's own generic "no note" 404.
         const target = notes.find((n) => n.id === (body && body.id))
-        if (target && target.kind === 'question') {
-          jsonRes(res, 400, { error: 'a question is answered, never resolved — answer it (/__notes/answer)' })
-          return
-        }
+        // specs/20260913/07-the-critic-is-out.md D6: the question pre-check that named the now-
+        // deleted answer route is gone — resolveNote's own refusal (below) is the one message for
+        // a legacy question, whether or not its producer still exists.
         // specs/20260907/10-client-review.md D4: only a client-origin note is ever resolved on
         // the client route (400 naming the offending origin otherwise); the non-client route
         // refuses a client-origin note outright (403, naming the client route and `notes waive`)
@@ -2482,69 +2462,9 @@ function createRequestHandler(root, opts = {}) {
       }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
       return
     }
-    if (reqPath === '/__notes/answer' && req.method === 'POST') {
-      readJsonBody(req).then((body) => {
-        const id = body && body.id
-        const verdict = body && body.verdict
-        const by = (body && body.by) || 'session'
-        if (!id || (verdict !== 'yes' && verdict !== 'no')) {
-          jsonRes(res, 400, { error: 'answer needs {id, verdict: "yes"|"no", by}' })
-          return
-        }
-        if (verdict === 'no' && !String((body && body.text) || '').trim()) {
-          jsonRes(res, 400, { error: 'a "no" answer requires non-empty text' })
-          return
-        }
-        let notes = []
-        try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
-        const target = notes.find((n) => n.id === id)
-        if (!target) { jsonRes(res, 404, { error: 'no note with id "' + id + '"' }); return }
-        if (target.kind !== 'question') { jsonRes(res, 400, { error: 'note "' + id + '" is not a question' }); return }
-        // s0 fix: "already answered" keys on `answer != null`, never `status` — a question's
-        // status can move to "addressed" later (the session's own `notes address` follow-up
-        // recording a redraw after a "no") without ever being re-answerable.
-        if (target.answer != null) { jsonRes(res, 409, { error: 'question "' + id + '" is already answered' }); return }
-
-        // D3 Rationale: the ledger write happens FIRST — a crash between the two writes leaves an
-        // answered row with a still-open note (a harmless re-ask), never a resolved note over an
-        // open row.
-        const ledgerPath = path.join(rootAbs, 'design/mocks/ledger.md')
-        let ledgerText
-        try { ledgerText = fs.readFileSync(ledgerPath, 'utf8') } catch (e) { jsonRes(res, 400, { error: 'design/mocks/ledger.md does not exist: ' + e.message }); return }
-        const today = new Date().toISOString().slice(0, 10)
-        const newStatus = (verdict === 'yes' ? 'confirmed ' : 'overridden ') + today
-        let rewritten
-        try { rewritten = setStatus(ledgerText, target.ledgerId, newStatus) } catch (e) { jsonRes(res, 400, { error: e.message }); return }
-        fs.writeFileSync(ledgerPath, rewritten)
-
-        // specs/20260910/03-client-journey-player.md D6: a client's "no" WITH text is a fact the
-        // client said, not merely the session's own guess being corrected — it promotes to a new
-        // said-by-user row, right after the row it corrects flips to overridden. The non-client
-        // route (D6 CONTINUES TO) never runs this: the session correcting its own guess is not the
-        // client saying something.
-        let promotedId = null
-        if (clientRoute) {
-          const claimText = String((body && body.text) || '').trim()
-          if (claimText) {
-            let promotedLedger
-            try {
-              promotedId = nextClientLedgerId(parseLedger(rewritten))
-              promotedLedger = appendAssumption(rewritten, {
-                id: promotedId, step: 'CLIENT', kind: 'product', claim: claimText, tag: 'said-by-user',
-                status: 'confirmed ' + today, rejected: null, dependents: null, note: 'corrects ' + target.ledgerId,
-              })
-            } catch (e) { jsonRes(res, 400, { error: e.message }); return }
-            fs.writeFileSync(ledgerPath, promotedLedger)
-          }
-        }
-
-        let result
-        try { result = notesLib.answerQuestion(notes, id, { verdict, text: (body && body.text) || '', by }) } catch (e) { jsonRes(res, 400, { error: e.message }); return }
-        notesLib.writeNotes(rootAbs, result.notes)
-        jsonRes(res, 200, promotedId ? Object.assign({}, result.note, { promoted: promotedId }) : result.note)
-      }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
-      return
-    }
+    // specs/20260913/07-the-critic-is-out.md D6: the retired answer route (both mounts) is
+    // deleted — nothing produces a question to answer any more, so a request here falls through,
+    // unmatched, to the shared /__notes/ 404 below.
     // specs/20260912/11-a-note-can-mark-an-area.md D3: POST /__notes/region (session mount only —
     // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D4 gives the client mount its
     // own, origin-checked handler below) — the card's "Re-place the box" control. Refuses (400) a
@@ -2868,7 +2788,7 @@ function createRequestHandler(root, opts = {}) {
       // derive` never reopens or re-adds it, and `verdict: 'reconsider'`
       // (specs/20260912/02-an-answer-is-the-clients-until-sign-off.md D1/D2) is the inverse — it
       // sets `open` and clears `rejected` — the client's D4 answer is final only until the client
-      // reconsiders (the client route's one ledger write besides /__notes/answer's promoted row).
+      // reconsiders (the client route's one remaining ledger write).
       // D3: the sign-off cut-off outranks every check below — once `marks.approved` is set, every
       // verdict (even one that would otherwise 400 or 404) refuses 409 naming the date, and the
       // ledger is never even read, let alone rewritten. The page never renders a control the 409
@@ -2921,11 +2841,6 @@ function createRequestHandler(root, opts = {}) {
             jsonRes(res, 400, { error: 'confirm needs {journey, sentence} naming a declared journey' })
             return
           }
-          // specs/20260911/01-the-page-waits-for-the-server.md D5: the backstop under the
-          // browser's own gate — a stale tab, a player script that failed to load, or a
-          // hand-made request cannot record an approval while the journey still carries an
-          // unanswered guess. Same rule lib/walk-page.js's isOpenQuestion applies (a waived
-          // question carries answer.verdict:'waived', so `answer == null` already excludes it).
           let openNotes = []
           try { openNotes = notesLib.readNotes(rootAbs) } catch { openNotes = [] }
           const labels = declared.get(journey).labels
@@ -2943,14 +2858,9 @@ function createRequestHandler(root, opts = {}) {
             })
             return
           }
-          const openCount = openNotes.filter((n) => n && n.kind === 'question' && n.answer == null &&
-            n.scope === 'mock' && labels.includes(n.screen)).length
-          if (openCount > 0) {
-            jsonRes(res, 409, {
-              error: 'journey "' + journey + '" still has ' + openCount + ' unanswered guess(es) — answer them on /client/walk/' + journey + '.html before confirming',
-            })
-            return
-          }
+          // specs/20260913/07-the-critic-is-out.md D7: the unanswered-guess 409 is deleted —
+          // nothing produces a guess to leave unanswered any more. The open-request 409 above,
+          // the already-confirmed 409 and the empty-sentence 400 below are untouched.
           let next
           try {
             next = walkLib.confirmJourney(readWalkOrEmpty(), { journey, sentence: body && body.sentence, at: new Date().toISOString() })

@@ -11,6 +11,9 @@ const {
 // requireProjectNotesResolved is carved out of requireNotesResolved and called from
 // handleApproved() only; handleJourneyApproved keeps requireNotesResolved alone, so a journey
 // with clean screens can now be marked approved while a project note is still open.
+//
+// specs/20260913/07-the-critic-is-out.md D7 — AC-20260913-07-13, -26: both pins below already use
+// a `kind: "note"` fixture, so the assertions are unchanged by the retirement; retagged in place.
 
 // Builds a host through `journey-drawn` for JOURNEY/LABELS (advanceToCanonWritten plus the
 // journey's own wireframes and a decided journey-approved:<journey> stop), the same steps
@@ -27,7 +30,7 @@ function buildToJourneyDrawn(dir) {
 }
 
 
-test('AC-20260912-07-6: --mark journey-approved --journey onboarding CONTINUES TO exit 2 naming an unresolved note on one of the journey\'s own screens', () => {
+test('AC-20260912-07-6: (reused by AC-20260913-07-13) --mark journey-approved --journey onboarding CONTINUES TO exit 2 naming an unresolved note on one of the journey\'s own screens', () => {
   const dir = tmpdir('notes-gate-ac6')
   buildToJourneyDrawn(dir)
   writeNotesFile(dir, [
@@ -40,7 +43,7 @@ test('AC-20260912-07-6: --mark journey-approved --journey onboarding CONTINUES T
     'the refusal must still name the unresolved screen-scoped note by id, unchanged by the project-note carve-out: got ' + r.stderr)
 })
 
-test('AC-20260912-07-4: --mark approved CONTINUES TO exit 2 with the project-note-open message, printed before any unresolved screen-scoped note it would also find', () => {
+test('AC-20260912-07-4: (reused by AC-20260913-07-26) --mark approved CONTINUES TO exit 2 with the project-note-open message, printed before any unresolved screen-scoped note it would also find', () => {
   const dir = tmpdir('notes-gate-ac4')
   advanceToThemePicked(dir)
   confirmEveryJourney(dir)

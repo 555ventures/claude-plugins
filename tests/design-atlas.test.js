@@ -535,31 +535,6 @@ test('atlas card previews clamp to one fixed height (7.89.0): page() ships the .
     '__fit must mark a card .clip only when the scaled height exceeds the cap — got no toggle')
 })
 
-// ---------------------------------------------------------------------------
-// specs/20260906/03-questions-on-the-wireframe.md — TDD red: D3's /__notes/list ledger join,
-// /__notes/answer, the /__notes/resolve question refusal, and /__notes/add's reason/kind handling
-// do not exist yet on design-atlas.js; D5's question-row rendering, its three controls, and the
-// composer's reason chips + scope toggle do not exist yet on lib/notes-layer.browser.js.
-// ---------------------------------------------------------------------------
-
-function writeQuestionLedger(dir, rows) {
-  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
-  const rowLines = rows.map((r) => `| ${r.id} | ${r.step} | ${r.kind} | ${r.claim} | ${r.tag} | ${r.status} | ${r.rejected || '-'} | - | - |`).join('\n')
-  fs.writeFileSync(path.join(dir, 'design/mocks/ledger.md'), `# Provenance ledger — { project }
-
-## Assumptions
-
-| id | step | kind | claim | tag | status | rejected | dependents | note |
-| - | - | - | - | - | - | - | - | - |
-${rowLines}
-
-## Misunderstandings
-
-| id | what | step | cost | note |
-| - | - | - | - | - |
-`)
-}
-
 function writeQuestionNotes(dir, notes) {
   fs.writeFileSync(path.join(dir, 'design/mocks/notes.json'), JSON.stringify(notes, null, 2) + '\n')
 }
@@ -588,14 +563,6 @@ function assertLedgerOnlyRowChanged(before, after, id, expectedRowRegex, message
     }
   }
   assert.ok(sawRow, 'test setup requires the ' + id + ' row to exist in the before-snapshot, or this comparison proves nothing')
-}
-
-function baseQuestion(id, screen, ledgerId) {
-  return {
-    id, scope: 'mock', screen, state: null, kind: 'question', ledgerId,
-    text: 'claim', by: 'session', at: new Date().toISOString(), status: 'open',
-    addressed: null, reply: null, resolvedBy: null, resolvedAt: null, answer: null,
-  }
 }
 
 // =============================================================================================

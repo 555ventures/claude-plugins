@@ -63,6 +63,7 @@
 // Exit codes: none — this is a library, not an executable.
 
 const { parseLedger, appendAssumption, setStatus } = require('./mocks-ledger')
+const { authoredByPerson } = require('./mocks-notes')
 
 // Row-level split/escape, duplicated (not imported — mocks-ledger.js exports no per-cell writer
 // beyond `setStatus`'s status/tag pair) so `setExclusionVerdict` below can rewrite an EXISTING
@@ -113,6 +114,10 @@ function journeyForScreen(seedJourneys, screen) {
   return null
 }
 
+// specs/20260913/07-the-critic-is-out.md D9: legacy reader — nothing produces a `kind: "question"`
+// note any more, but a stored `no` answer on one already on disk still derives this exclusion
+// row; `ledger derive` retires an active row whose source stops deriving, so removing this source
+// would retire a row a client already decided on a real host.
 function invalidatedAnswerEntries(notes, ledger, seedJourneys) {
   const rows = ledger || []
   const out = []
@@ -134,7 +139,7 @@ function invalidatedAnswerEntries(notes, ledger, seedJourneys) {
 function withdrawnNotNeededEntries(notes, seedJourneys) {
   const out = []
   for (const n of (notes || [])) {
-    if (n.kind === 'question' || n.kind === 'walk') continue
+    if (!authoredByPerson(n)) continue
     if (n.origin !== 'client') continue
     if (n.resolution !== 'withdrawn' || n.withdrawReason !== 'not-needed') continue
     out.push({

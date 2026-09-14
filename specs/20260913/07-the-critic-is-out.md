@@ -1,6 +1,7 @@
 ---
 date: 2026-09-13
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +11,7 @@ depended_on_by: [specs/20260913/05-a-note-is-a-conversation.md]
 brief: n/a
 supersedes: [specs/20260913/03-the-critic-stops-filing-notes.md, specs/20260913/04-only-a-person-starts-a-note.md]
 open_markers: 0
+diff_base: 26a222450f4e0c1047343a9256c87384136b30f2
 ---
 
 # The critic is out

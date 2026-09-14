@@ -153,73 +153,9 @@ body {
   padding: var(--v-space-2) var(--v-space-3);
 }
 
-/* Question row (.nl-q*) — specs/20260906/03-questions-on-the-wireframe.md D5. A note row whose
-   text is a pinned ledger claim, rendered inside the notes layer's existing shadow roots
-   (notes-layer.browser.js mounts this file there, never into a served mock). Every color is an
-   existing --v-* role — no new token, no literal. */
-.nl-q {
-  border-top: 1px solid var(--v-border);
-  border-left: 2px solid var(--v-warn);
-  padding: var(--v-space-3) 0 var(--v-space-3) var(--v-space-3);
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 10px;
-}
-.nl-q-actions { margin-left: auto; flex: none; }
-.nl-q:first-of-type { border-top: 0; }
-.nl-q-id {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--v-fg);
-  font-variant-numeric: tabular-nums;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  flex: none;
-  align-self: flex-start;
-}
-.nl-q-claim { color: var(--v-fg); }
-.nl-q-rejected { color: var(--v-muted); font-size: 14px; }
-.nl-q-actions {
-  display: flex;
-  gap: var(--v-space-2);
-  justify-content: flex-end;
-}
-/* An answered question loses its warn accent and its controls — the same "done" treatment
-   .nl-strip/.nl-proj already give a resolved note. */
-.nl-q-answered {
-  border-left-color: var(--v-border);
-  color: var(--v-muted);
-}
-.nl-q-text { color: var(--v-muted); font-size: 14px; }
-
-/* Composer reason chips (.nl-chips/.nl-chip) and the mock-page scope toggle (.nl-scope) —
-   same D5. Unselected chips/scope read as .v-badge does; the selected state borrows the one
-   filled-button treatment (.v-btn.primary) rather than inventing a new fill. */
-.nl-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--v-space-1);
-  margin: var(--v-space-1) 0;
-}
-.nl-chip {
-  display: inline-flex;
-  align-items: center;
-  border: 0;
-  border-radius: 999px;
-  background: var(--v-muted-bg);
-  color: var(--v-muted);
-  padding: 4px var(--v-space-3);
-  font-size: 14px;
-  cursor: pointer;
-}
-.nl-chip-on {
-  border-color: var(--v-primary);
-  background: var(--v-primary);
-  color: var(--v-primary-fg);
-  font-weight: 500;
-}
+/* The mock-page scope toggle (.nl-scope) — specs/20260906/03-questions-on-the-wireframe.md D5.
+   Reads as .v-badge does; the selected state borrows the one filled-button treatment
+   (.v-btn.primary) rather than inventing a new fill. */
 .nl-scope {
   display: inline-flex;
   border: 1px solid var(--v-border);
@@ -290,8 +226,7 @@ body {
 .rv .rv-n { font-variant-numeric: tabular-nums; color: var(--v-muted); margin-right: var(--v-space-2); }
 .rv kbd { display: inline-block; min-width: 1.5em; padding: 0 5px; border: 1px solid var(--v-border); border-bottom-width: 2px; border-radius: 4px; background: var(--v-muted-bg); color: var(--v-fg); font: 600 11px/1.6 var(--v-font); text-align: center; }
 .rv button { font: inherit; color: var(--v-fg); background: var(--v-bg); border: 1px solid var(--v-border); border-radius: var(--v-radius); padding: 4px 10px; cursor: pointer; }
-.rv button:hover:not(.rv-primary):not(.rv-chip-on):not([aria-selected="true"]) { background: var(--v-muted-bg); }
-.rv .rv-chip-on:hover { background: color-mix(in srgb, var(--v-primary) 88%, var(--v-bg)); }
+.rv button:hover:not(.rv-primary):not([aria-selected="true"]) { background: var(--v-muted-bg); }
 .rv button:focus-visible, .rv a:focus-visible, .rv textarea:focus-visible, .rv select:focus-visible, .rv [tabindex]:focus-visible { outline: 2px solid var(--v-ring); outline-offset: 1px; }
 .rv button[disabled] { opacity: .5; cursor: not-allowed; }
 .rv .rv-primary { background: var(--v-primary); color: var(--v-primary-fg); border-color: var(--v-primary); }
@@ -310,9 +245,6 @@ body {
 .rv-home:hover { color: var(--v-fg); text-decoration: underline; }
 .rv-pill { display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; gap: .45em; border: 0; border-radius: 0; padding: 0; font-size: 14px; color: var(--v-muted); white-space: nowrap; }
 .rv-pill::before { content: ""; width: 6px; height: 6px; border-radius: 99px; background: var(--v-warn); flex: none; }
-.rv-progress { display: flex; align-items: center; gap: var(--v-space-2); margin-left: auto; flex: 0 1 auto; overflow: hidden; white-space: nowrap; color: var(--v-muted); font-variant-numeric: tabular-nums; }
-.rv-track { width: 96px; height: 4px; border-radius: 2px; background: var(--v-muted-bg); overflow: hidden; }
-.rv-fill { display: block; height: 100%; background: var(--v-ok); transition: width .2s ease; }
 .rv-control { display: flex; align-items: center; gap: var(--v-space-2); flex: none; }
 .rv-nostop { margin: 0; color: var(--v-muted); font-size: 14px; }
 .rv-stop { display: flex; align-items: center; flex-wrap: nowrap; gap: var(--v-space-2); }
@@ -449,16 +381,12 @@ body {
 .rv-rejected { margin: 2px 0 0; font-size: 14px; color: var(--v-muted); }
 .rv-wait { margin: 4px 0 0; font-size: 14px; color: var(--v-muted); }
 .rv-answered { margin: 4px 0 0; font-size: 14px; color: var(--v-ok); }
-.rv-answered[data-verdict="no"] { color: var(--v-primary); }
 .rv-chip { display: inline-flex; border: 0; border-radius: 999px; padding: 1px 9px; font-size: 12px; color: var(--v-muted); background: var(--v-muted-bg); margin-left: 6px; }
 .rv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--v-space-1); margin-top: var(--v-space-2); }
 .rv-actions button { font-size: 14px; padding: 4px 10px; }
-.rv-correct { margin-top: var(--v-space-2); display: flex; flex-direction: column; gap: var(--v-space-1); align-items: flex-end; }
 .rv-empty { margin: var(--v-space-4) 0; color: var(--v-muted); font-size: 15px; }
 .rv-composer { border-top: 1px solid var(--v-border); padding: var(--v-space-4); display: flex; flex-direction: column; gap: var(--v-space-3); }
-.rv-chips { display: flex; flex-wrap: wrap; gap: var(--v-space-1); }
-.rv .rv-chipbtn { border: 0; border-radius: 999px; font-size: 14px; padding: 4px 12px; color: var(--v-muted); background: var(--v-muted-bg); }
-.rv-chipbtn.rv-chip-on { background: var(--v-primary); color: var(--v-primary-fg); border-color: var(--v-primary); font-weight: 500; }
+.rv-composer textarea { min-height: 104px; }
 .rv-composer .rv-actions { margin-top: 0; }
 .rv-composer kbd { margin-left: 2px; }
 .rv-keys { display: flex; flex-wrap: wrap; gap: var(--v-space-2) var(--v-space-3); padding: var(--v-space-3) var(--v-space-4); border-top: 1px solid var(--v-border); font-size: 12px; color: var(--v-muted); }
@@ -469,15 +397,9 @@ body {
 .rv-strip-arrow { font-size: 16px; color: var(--v-muted); }
 .rv-strip-count { writing-mode: vertical-rl; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--v-warn); }
 
-/* The bar sheds, rather than truncates, when the window cannot hold it. */
-@media (max-width: 1200px) {
-  .rv-progress-text { display: none; }
-}
-
 /* phone */
 @media (max-width: 480px) {
   .rv-bar { height: auto; flex-wrap: wrap; padding: var(--v-space-2) var(--v-space-3); gap: var(--v-space-2); }
-  .rv-progress { margin-left: 0; }
   .rv-control, .rv-stop { flex-wrap: wrap; width: 100%; }
   .rv-stop textarea { width: 100%; }
   .rv-main, .rv-folded .rv-main { grid-template-columns: minmax(0, 1fr); }
@@ -492,7 +414,6 @@ body {
   .rv-strip-count { writing-mode: horizontal-tb; }
   .rv-keys { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { .rv-fill { transition: none; } }
 
 /* Client journey player (.wk-*) — specs/20260910/03-client-journey-player.md D8, amended by
    specs/20260911/06-the-client-loop.md D18-D22 (design/client-mocks/index.html and walk.html,
@@ -735,19 +656,10 @@ body {
 .wk-sentence-in { min-height: 44px; }
 .wk-sentence { margin: 0; padding-left: var(--v-space-3); border-left: 2px solid var(--v-ok); color: var(--v-fg); }
 
-/* ---- panel: what this screen needs from the client — our guesses, their requests, a note ----
-   Each is one card; inside a card, rows are hairlines. The side's own gap is carried by the
-   cards' margins so the guesses card can be drawn from two siblings (.wk-marks + .wk-left). */
+/* ---- panel: what this screen needs from the client — their requests, a note ----
+   Each is one card; inside a card, rows are hairlines. */
 .wk-side { display: flex; flex-direction: column; gap: 0; position: sticky; top: calc(var(--wk-bar) + var(--v-space-6)); min-width: 0; }
-.wk-marks { display: flex; flex-direction: column; background: var(--v-bg); border: 1px solid var(--v-border); border-bottom: 0; border-radius: var(--wk-card-r) var(--wk-card-r) 0 0; box-shadow: var(--v-shadow); padding: var(--v-space-4) var(--v-space-4) 0; }
-.wk-marks:not(:has(.wk-mark:not([hidden]))) { display: none; }
-.wk-mark { padding: 0 0 var(--v-space-3); margin: 0 0 var(--v-space-3); border-bottom: 1px solid var(--v-border); }
-.wk-mark:not(:has(~ .wk-mark:not([hidden]))) { border-bottom: 0; padding-bottom: 0; }
-.wk-claim { margin: 0 0 var(--v-space-2); }
 .wk-verdicts { display: flex; gap: var(--v-space-2); flex-wrap: wrap; }
-.wk-why { margin-top: var(--v-space-2); }
-.wk-left { margin: 0 0 var(--v-space-4); padding: 0 var(--v-space-4) var(--v-space-4); color: var(--v-muted); font-size: 14px; background: var(--v-bg); border: 1px solid var(--v-border); border-top: 0; border-radius: 0 0 var(--wk-card-r) var(--wk-card-r); box-shadow: var(--v-shadow); }
-.wk-marks:not(:has(.wk-mark:not([hidden]))) + .wk-left { border-top: 1px solid var(--v-border); border-radius: var(--wk-card-r); padding-top: var(--v-space-4); }
 .wk-side .wk-reqs { margin: 0 0 var(--v-space-4); background: var(--v-bg); border: 1px solid var(--v-border); border-radius: var(--wk-card-r); box-shadow: var(--v-shadow); padding: var(--v-space-2) var(--v-space-4); }
 .wk-side .wk-reqs:not(:has(.wk-req:not([hidden]))) { display: none; }
 .wk-side .wk-req { grid-template-columns: minmax(0, 1fr); border-top: 0; border-bottom: 1px solid var(--v-border); }
@@ -1006,7 +918,7 @@ body {
 .nl-card textarea {
   width: calc(100% - 28px);
   margin: 8px 14px 0;
-  min-height: 56px;
+  min-height: 104px;
   font: 14px/1.45 var(--v-font);
   color: var(--v-fg);
   border: 1px solid var(--v-border);
@@ -1058,8 +970,6 @@ body {
 }
 .nl-card-why textarea { margin: 0; width: 100%; }
 .nl-card-why .nl-card-row { padding: 0; }
-.nl-card .nl-chips { padding: 12px 14px 0; }
-.nl-card .nl-chips .nl-btn { height: 26px; padding: 0 10px; font-size: 12.5px; border-radius: 999px; }
 
 /* Strip filter (.nl-seg) — specs/20260912/11 D8: a segmented Needs-you/Open/All/Resolved
    control; the pressed button lifts off the muted track like a native segmented control. */

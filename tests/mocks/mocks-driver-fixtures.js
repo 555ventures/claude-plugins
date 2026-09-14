@@ -492,41 +492,27 @@ function advanceToJourneyApproved(dir, journeyName = JOURNEY, labels = LABELS) {
   return approved
 }
 
-// specs/20260907/08-walk-critic.md orchestrator duty: WALK sits between WIREFRAMES and
-// SIGNOFF — advanceToJourneyWalked runs advanceToJourneyApproved (idempotent, per the
-// readStatusOrEmpty guard above) then records the real `--mark journey-walked --journey <j>`,
-// so every fixture that reaches SIGNOFF or APPROVED walks first, through the real binary, the
-// same executed-proof discipline every other advanceTo* helper in this file already carries.
-function advanceToJourneyWalked(dir, journeyName = JOURNEY) {
-  const already = readStatusOrEmpty(dir)
-  if (already.journeys && already.journeys[journeyName] && already.journeys[journeyName].walked) return
-  advanceToJourneyApproved(dir, journeyName)
-  const r = mark(dir, 'journey-walked', ['--journey', journeyName])
-  assert.strictEqual(r.status, 0, 'test setup requires journey-walked to be accepted once the journey is approved and carries no open walk finding: ' + r.stderr)
-  return r
-}
-
 // D11: the SKIN/REVIEW states are retired — approved now stamps the wireframes produced at
 // journey-drawn/journey-approved straight through, with no intervening skin step.
 //
 // specs/20260907/07-mocks-retires-theme.md orchestrator duty (superseded below, specs/20260910/04):
 // the mocks state machine had no THEME step for a while — that spec's WIREFRAMES -> SIGNOFF ->
-// APPROVED chain is what advanceToJourneyApproved/advanceToJourneyWalked still build.
+// APPROVED chain is what advanceToJourneyApproved still builds.
 //
-// specs/20260907/08-walk-critic.md orchestrator duty: WALK now sits ahead of SIGNOFF —
-// advanceToApproved routes through advanceToJourneyWalked (which itself routes through
-// advanceToJourneyApproved) in place of its prior direct call, so every caller reaching
-// APPROVED has walked its journey first.
+// specs/20260913/07-the-critic-is-out.md D1/D12 orchestrator duty: the critic's own state leaves
+// the chain — advanceToThemePicked now chains straight from advanceToJourneyApproved (the prior
+// intervening helper, which recorded the now-deleted critic-walk mark, is itself deleted; that
+// mark no longer exists).
 //
 // specs/20260910/04-theme-before-the-client-walk.md D3/D6 orchestrator duty (ADR-0013): THEME
-// returns, between WALK and CLIENT — advanceToThemePicked composes two directions (every current
-// wire role, D2) over the walked host's own design/kit/, decides the theme-picked pick stop
-// (bypassing the served `theme shortlist` step exactly as every other advanceTo* bypasses its own
-// "open" step) and runs the real `--mark theme-picked --direction <k>`, the one executed-proof
+// sits between WIREFRAMES and CLIENT — advanceToThemePicked composes two directions (every
+// current wire role, D2) over the approved host's own design/kit/, decides the theme-picked pick
+// stop (bypassing the served `theme shortlist` step exactly as every other advanceTo* bypasses its
+// own "open" step) and runs the real `--mark theme-picked --direction <k>`, the one executed-proof
 // write every later stage's fixture now depends on.
 function advanceToThemePicked(dir, opts = {}) {
   if (readMarksOrEmpty(dir).themePicked) return
-  advanceToJourneyWalked(dir)
+  advanceToJourneyApproved(dir)
   const kebab = opts.kebab || 'a'
   const others = opts.others || ['b']
   const primitives = opts.primitives || [{ key: 'sheet', purpose: 'a modal panel for one focused task' }]
@@ -659,7 +645,7 @@ module.exports = {
   decideLook, openLook, freePort, startServe, stopServe, getBody,
   writeFixtureCapture, writeCaptureConfig,
   advanceToSeedDone, advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToJourneyApproved,
-  advanceToJourneyWalked, advanceToThemePicked, advanceToApproved, confirmEveryJourney,
+  advanceToThemePicked, advanceToApproved, confirmEveryJourney,
   writeShortSeed, advanceToShortJourneyDrawn,
   stubNpx,
 }

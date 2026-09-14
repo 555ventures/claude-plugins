@@ -106,9 +106,10 @@ this doc does not restate them. Its own summary (per-leg pass/fail lines, `RED_B
 <legs>` when any leg is red) is the evidence a STOP report below quotes.
 
 - **Exit 0:** every leg it ran was green — continue to journey walks below.
-- **Exit 1:** at least one leg red — **STOP.** Never promote over a red staging or a red
-  release-commit CI run. Skip straight to Phase 4's `record` (below); it is the only path to a
-  report from here.
+- **Exit 1:** at least one leg red **or unmeasured** (a `⚪` row and a final `UNMEASURED:`
+  line) — **STOP**; never promote over a leg that observed nothing, whether it is a red
+  staging, a red release-commit CI run, or a leg the summary marks unmeasured. Skip straight to
+  Phase 4's `record` (below); it is the only path to a report from here.
 - **Exit 2:** a usage or precondition failure (unreadable config, a missing `release` block or
   required key, a missing/invalid `.claude/release-manifest.json`, a non-empty `--manifest`) —
   the printed remedy names the fix (Phase 0's interview, or Phase 1's manifest). Same STOP path
@@ -142,10 +143,12 @@ Next: route the defect to the normal flow — direct fix or a spec, or /spec:esc
 
 ## Phase 3 — Promote (explicitly confirmed, never autonomous)
 
-A milestone whose only gap is a `ci` leg that structurally never delivered a verdict (`stage`'s
-summary flags this) still derives plain `CLEAN` (v7: the qualifier word is retired) and
-promotes normally, carrying that observation into the promote question's context and the
-Phase 4 report — the ledger row's `ci` field is the durable carrier of the observation.
+A milestone whose only gap is a `ci` leg that structurally never delivered a verdict does
+**not** promote: `unmeasuredReason` (spec/scripts/lib/release-unmeasured.js) marks that leg
+unmeasured, `stage`'s `UNMEASURED:` line names it, and Phase 2's exit 1 STOPs the flow before
+this phase is ever reached — an unmeasured `ci` leg is an `UNVERIFIED` stop like any other,
+never a silent promote. There is no path from here that carries it into a promotion; the
+ledger row's `ci` field is still the durable carrier of the observation.
 
 1. `AskUserQuestion`: promote this build to production? (Include the Phase 2 observation
    summary in the question context.) Dismissed or declined → record the decline (exit 0 — a
@@ -189,18 +192,19 @@ Phase 4 report — the ledger row's `ci` field is the durable carrier of the obs
    pushing remains theirs.
 
 3. **Release report:** assemble the slots object — `outcome` (✅ `milestone green — {N} specs
-   composed, staging + e2e passed, promoted` on CLEAN; 🚫 `{what blocked
-   promotion}` otherwise), `bullets` (`- shipped: {briefs + specs}`, `- observed: {deploy,
+   composed, staging + e2e passed, promoted` on CLEAN; 🚫 `UNVERIFIED — {the unmeasured legs,
+   verbatim off stage's UNMEASURED: line}` when `record` derived UNVERIFIED over one or more
+   unmeasured legs; 🚫 `UNVERIFIED — nothing was measured in production` when the promote
+   question was dismissed or declined; 🚫 `{what blocked promotion}` for every other STOP),
+   `bullets` (`- shipped: {briefs + specs}`, `- observed: {deploy,
    ready, migrations (pass/fail, when the leg ran), e2e counts, journeys walked with outcomes,
    ci verdict — one line each, read off `stage`'s and `append`'s own output}`,
    `- substrate: {rows checked / inert-declared} · production: {verification result}`),
-   `warns` (`ci never delivered a verdict on this commit` when the ci leg observed no
-   `conclusion`, plus "CI has not seen this commit; origin `<branch>`'s latest run:
-   `<conclusion>`" when the ci leg observed `sha-unseen` with a `branchConclusion` of
-   `failure`, `timed_out`, or `cancelled` (the leg itself stays exit 0 — this is a
-   report-only warning, never a finding), plus
-   `yours / the client's to do: {inert rows, verbatim — one line each}` whenever inert rows
-   exist), and `next` — **unconditional, branched by outcome** (never the old
+   `warns` (`yours / the client's to do: {inert rows, verbatim — one line each}` whenever inert
+   rows exist — a `ci` leg that observed no `conclusion`, or `sha-unseen` with a failing branch,
+   is never a report-only warning any more: it is an unmeasured leg, named on `stage`'s
+   `UNMEASURED:` line and carried into the 🚫 outcome above), and `next` — **unconditional,
+   branched by outcome** (never the old
    "(optional)" framing): on CLEAN, the verbatim output of
    `node "$(spec-paths spec-status)" --root . --next` as `{kind: 'status-verbatim'}`;
    `{kind:'command', text: the remedy for what blocked promotion}` on 🚫. Write the slots to a temp file and run
@@ -208,12 +212,12 @@ Phase 4 report — the ledger row's `ci` field is the durable carrier of the obs
 
    ```report
    ✅ **milestone green — {N} specs composed, staging + e2e passed, promoted**
+      (or: 🚫 **UNVERIFIED — ci:unavailable:no-adapter, production:skipped**  — the UNMEASURED: legs, verbatim)
+      (or: 🚫 **UNVERIFIED — nothing was measured in production**  — a declined promotion)
       (or: 🚫 **{what blocked promotion}**)
    - shipped: {briefs + specs}
    - observed: {deploy, ready, migrations (pass/fail, when the leg ran), e2e counts, journeys walked with outcomes, ci verdict — one line each}
    - substrate: {rows checked / inert-declared} · production: {verification result}
-   ⚠️ ci never delivered a verdict on this commit    (when the ci leg observed no conclusion)
-   ⚠️ CI has not seen this commit; origin `main`'s latest run: `failure`    (when the ci leg observed sha-unseen with a failing/timed-out/cancelled branch conclusion)
    ⚠️ yours / the client's to do: {inert rows, verbatim — one line each}
    Next: {spec-status --next, verbatim}    (or, on 🚫: the remedy for what blocked promotion)
    ```

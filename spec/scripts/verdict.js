@@ -13,6 +13,8 @@
 // the wf-review workflow return + disposition counts -> exactly one verdict word, first-match-
 // wins (spec Decisions D2/D3). --profile release runs the same shape against release.md's
 // legs (D7) — no --workflow, no dispositions, word restricted to CLEAN|GATE_RED|UNVERIFIED.
+// UNVERIFIED also when a required leg is unmeasured (lib/release-unmeasured.js,
+// specs/20260913/08-silence-is-not-a-pass.md D1/D2).
 // The --ledger row is additive to review.md/release.md's documented templates: review's
 // runId/smoke/testsSkipped/findings are derived here (D2 — smoke and testsSkipped come FROM
 // manifest rows' typed observed fields, never asserted); release's milestone/briefs are
@@ -251,6 +253,9 @@ const crypto = require('crypto')
 // The leg-finding count is shared with spec-review-driver.js's disposition tally — one derivation
 // of the unit both callers count in (lib/leg-findings.js header carries the ruling).
 const { countLegFinding } = require('./lib/leg-findings')
+// One derivation of "this release leg measured nothing" shared with release-legs.js's summary —
+// specs/20260913/08-silence-is-not-a-pass.md D1/D2.
+const { unmeasuredReason } = require('./lib/release-unmeasured')
 
 function usage() {
   console.error('usage: verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] ' +
@@ -630,7 +635,13 @@ function derive() {
   if (profile !== 'release' && workflow && workflow.verdict === 'REVIEWER_FAILED') return 'REVIEWER_FAILED'
   if (!manifestValid || requiredLegs.some(l => !legRows.has(l))) return 'UNVERIFIED'
   if ([...blockingLegs].some(legIsRed)) return 'GATE_RED'
-  if (profile === 'release') return 'CLEAN'
+  if (profile === 'release') {
+    // D1/D2: a required leg that measured nothing (no ci adapter, a commit ci never saw, an
+    // all-inert substrate manifest, a declined production promotion) must not fall through to a
+    // silent CLEAN — GATE_RED (checked above) is the more actionable fact and still outranks this.
+    if (requiredLegs.some(l => unmeasuredReason(legRows.get(l)))) return 'UNVERIFIED'
+    return 'CLEAN'
+  }
   if (fixDispatched > 0) return 'FINDINGS' // a dispatched fix is non-terminal; the ONLY meaning FINDINGS carries (D2)
   // D1: the pool is hard survivors + leg findings only — a soft survivor never contributes and
   // never blocks CLEAN.
@@ -644,13 +655,22 @@ const word = derive()
 // D3 (specs/20260902/05-manifest-stamped-scope.md): UNVERIFIED prints exactly one stderr line
 // naming its cause — the word alone gave a caller nothing to act on. `manifestValid` is false
 // only for the two `invalidCause` sources set above (an unparseable row, or the scope
-// disagreement/enum violation); any other UNVERIFIED comes from `requiredLegs.some` finding an
-// absent row against a structurally-valid manifest, whose scope was therefore derived above.
+// disagreement/enum violation); a missing required row comes from `requiredLegs.some` finding an
+// absent row against a structurally-valid manifest, whose scope was therefore derived above; on
+// the release profile a fully-present manifest can still derive UNVERIFIED when a required leg's
+// `unmeasuredReason` is non-null (D1/D2, specs/20260913/08-silence-is-not-a-pass.md).
 if (word === 'UNVERIFIED') {
+  const missingLegs = requiredLegs.filter(l => !legRows.has(l))
+  // unmeasuredReason already carries the leg prefix (D1: e.g. "ci:unavailable:no-adapter").
+  const unmeasuredLegs = profile === 'release'
+    ? requiredLegs.map(l => legRows.has(l) && unmeasuredReason(legRows.get(l))).filter(Boolean)
+    : []
   const cause = !manifestValid
     ? 'manifest invalid: ' + (invalidCause || 'unparseable manifest')
-    : 'missing required legs: ' + requiredLegs.filter(l => !legRows.has(l)).join(', ') +
-      (profile === 'release' ? '' : ' (scope ' + scope + ')')
+    : missingLegs.length > 0
+      ? 'missing required legs: ' + missingLegs.join(', ') +
+        (profile === 'release' ? '' : ' (scope ' + scope + ')')
+      : 'unmeasured required legs: ' + unmeasuredLegs.join(', ')
   console.error('verdict.js: UNVERIFIED — ' + cause)
 }
 

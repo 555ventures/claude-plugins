@@ -1,6 +1,7 @@
 ---
 date: 2026-09-13
-status: hardened
+status: done
+build_base: main
 tier: critical
 area: release
 design: false
@@ -9,6 +10,7 @@ depends_on: []
 depended_on_by: []
 brief: n/a
 open_markers: 0
+diff_base: ddf493d9d1da4f64463e25be07a93f50596fc093
 ---
 
 # Silence is not a pass
@@ -52,6 +54,9 @@ marked written without naming its first light.
 | tests/verdict-require-leg.test.js | MODIFY | tests | AC-20260913-08-4 tag on the existing all-measured CLEAN pin (reuse, unchanged assertions) |
 | tests/genesis/first-light.test.js | CREATE | tests | AC-20260913-08-9, AC-20260913-08-10 |
 | tests/genesis/genesis-driver.test.js | MODIFY | tests | A3 fixture currency: `writeRoadmap` adds a `First light:` header line to any brief whose name starts `01-`; no AC tag (the fixture edit is not this spec's behavior) |
+| tests/release-legs/release-legs.test.js | MODIFY | tests | A2 if-false (build-time addition): `AC-20260823-01-1` asserted `stage` exit 0 over a no-adapter ci leg — now expects exit 1 plus `UNMEASURED: ci:unavailable:no-adapter`, row assertions byte-identical; retagged AC-20260913-08-5 |
+| tests/release-legs/e2e-unobserved.test.js | MODIFY | tests | A2 if-false (build-time addition): `AC-20260908-05-4` / `-5` same no-adapter ci exit-0 assertion — exit 1 plus the `UNMEASURED:` line, e2e row assertions byte-identical; retagged AC-20260913-08-5 |
+| tests/review/verdict.test.js | MODIFY | tests | D2 retires the v7 "unmeasured ci still derives CLEAN" pin (`AC-20260813-02-4`) on the release profile — now asserts `UNVERIFIED`; retagged AC-20260913-08-2 |
 
 ## Contracts
 
@@ -182,6 +187,22 @@ confirmed) — waived.
 **Fragile.** A3's caller count is a prediction; its remedy is written. `release.md` is prose the
 session executes — AC-8 pins the sentences that carry the reversal, squashed, because the file
 hard-wraps.
+
+**Close (2026-09-13, review rv_5251c01bed89 CLEAN).**
+- A3 was false: `writeRoadmap` in `tests/genesis/genesis-driver.test.js` had no caller reaching
+  `roadmap-written`; its row's fixture edit landed as a no-op and `first-light.test.js` drives its
+  own brief writer.
+- A2 was false: four pins outside its inventory reddened (`release-legs.test.js ::
+  AC-20260823-01-1`, `e2e-unobserved.test.js :: AC-20260908-05-4/-5` on stage exit 0 over a
+  no-adapter ci row; `review/verdict.test.js :: AC-20260813-02-4` on plain CLEAN). Repaired in
+  place per A2's remedy, retagged AC-20260913-08-5 / -2, and entered as build-time File Plan rows.
+  The class is folded into the pipeline rules' collision Gotcha.
+- D6's bump was run by the orchestrator in-session (one scripted command), `--workers 0`.
+- The Canonical Delta below said None, but `docs/canonical/release-pipeline.md` (exit alphabet)
+  and `docs/canonical/genesis.md` (`roadmap-written` refusals) carried pre-image claims the
+  reviewer flagged (soft); both were corrected at close.
+- Advisory, not acted on: the three repaired stage pins repeat the same status-1 +
+  `UNMEASURED:` assertion pair; a shared fixture helper would remove it.
 
 ## Canonical Delta
 

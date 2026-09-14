@@ -139,6 +139,10 @@ function buildTouchFixture() {
 // ruled the fix must be pinned, never left as an unchecked code comment (the promise-sweep leg's
 // own "orphan-decision: no carrier" finding this AC closes). Executed over two real boxes in
 // headless Chrome — the strong form over a prose grep of colorFor's source.
+// AC-20260913-02-13 (a SHALL CONTINUE TO, reuses this case verbatim, unmodified by that spec's
+// own D1-D12): the layer's mode/pointer-capture/reconcile rewrite touches none of colorFor's role
+// derivation or viewer.css's `.nl-region` comment block, so this same case is this AC's own
+// coverage — sanctioned green pre- and post-change.
 // ---------------------------------------------------------------------------
 function buildD17Fixture() {
   const dir = tmpdir('client-region-d17')
@@ -156,7 +160,7 @@ function buildD17Fixture() {
   return dir
 }
 
-test('AC-20260912-12-22: colorFor CONTINUES TO resolve an open box and an addressed box to distinct, correct colors (D17), and viewer.css\'s .nl-region comment block still describes the true four-role register', { timeout: 45000 }, async (t) => {
+test('AC-20260912-12-22, AC-20260913-02-13: colorFor CONTINUES TO resolve an open box and an addressed box to distinct, correct colors (D17), and viewer.css\'s .nl-region comment block still describes the true four-role register', { timeout: 45000 }, async (t) => {
   const chrome = findChrome()
   if (!chrome) { t.skip('no Chrome binary (set CHROME_BIN) — AC-22 only runs against real computed colors'); return }
   const cssSrc = fs.readFileSync(path.join(SPEC, 'templates/mocks/viewer.css'), 'utf8')

@@ -114,7 +114,11 @@
   // the identical rule for its own overlay-mounted card — one rule, two placements, since this
   // repo ships no shared browser-script module system). `boxRect` is the box's already-scaled
   // on-screen rectangle (viewport pixels); the card is placed in PAGE pixels (scroll added) since
-  // `.nl-card` is `position:absolute` with no positioned ancestor between it and the page.
+  // `.nl-card` is `position:absolute` with no positioned ancestor between it and the page. D7
+  // carries no escape clause for "neither flank has room": clamping the flipped side back into
+  // the viewport (the retired right-edge clamp, under a new name) would put the card ON TOP of
+  // its own box, which D7 forbids outright. When neither side fits, this falls back to the OTHER
+  // axis instead — below the box, else above — shifted horizontally to stay in the viewport.
   function placeHostCard(card, boxRect) {
     var gap = 12
     var scrollX = window.pageXOffset || 0
@@ -122,16 +126,24 @@
     var vw = window.innerWidth, vh = window.innerHeight
     var cw = card.offsetWidth || 328
     var ch = card.offsetHeight || 200
-    var left = boxRect.right + gap
-    if (left + cw > vw) {
-      var flipped = boxRect.left - gap - cw
-      left = flipped >= 0 ? flipped : Math.max(0, vw - cw)
+    var right = boxRect.right + gap
+    var left = boxRect.left - gap - cw
+    var x, y
+    if (right + cw <= vw || left >= 0) {
+      x = right + cw <= vw ? right : left
+      y = boxRect.top
+      if (y + ch > vh) y = Math.max(0, vh - ch)
+      if (y < 0) y = 0
+    } else {
+      var below = boxRect.bottom + gap
+      var above = boxRect.top - gap - ch
+      y = below + ch <= vh ? below : (above >= 0 ? above : Math.max(0, vh - ch))
+      x = boxRect.left
+      if (x + cw > vw) x = Math.max(0, vw - cw)
+      if (x < 0) x = 0
     }
-    var top = boxRect.top
-    if (top + ch > vh) top = Math.max(0, vh - ch)
-    if (top < 0) top = 0
-    card.style.left = (left + scrollX) + 'px'
-    card.style.top = (top + scrollY) + 'px'
+    card.style.left = (x + scrollX) + 'px'
+    card.style.top = (y + scrollY) + 'px'
   }
 
   // D6: the frame hands up a card element it built in THIS document (`window.parent.document`)

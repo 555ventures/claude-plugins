@@ -45,9 +45,12 @@
 // specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D1-D9,D12: the overlay
 // holds exactly one `mode` — 'idle'|'arming'|'drawing'|'composing' — written only through
 // `setMode`, mirrored onto `data-mode` for viewer.css to derive cursor/pointer-events/scrim from
-// (D5) and onto the overlay's own light-DOM host via an `nl-live` class (see mount() below) so a
-// click can still fall through to the mock underneath at idle/composing with zero inline
-// pointer-events/cursor writes anywhere. The drag binds `pointerdown`/`pointermove`/`pointerup`/
+// (D5), with zero inline pointer-events/cursor writes anywhere — the overlay's own light-DOM host
+// carries a permanent, unconditional `pointer-events:none` (see hostStyle in mount() below) so a
+// click always falls through it to the mock underneath; the overlay ELEMENT's own explicit
+// per-mode value (auto during arming/drawing) is what makes it hit-testable then; an explicit
+// descendant value always wins over whatever an ancestor's own value is, so the host never needs
+// its own toggle. The drag binds `pointerdown`/`pointermove`/`pointerup`/
 // `pointercancel`/`lostpointercapture` on the overlay element itself and captures the pointer
 // there (D2) — never on `document`. `renderOverlay` keeps an id→element Map and reconciles it
 // (D9); selection is a class toggle (`.sel`/`has-sel`) that never re-enters it. When framed
@@ -102,22 +105,23 @@
   // D5: while the lightbox is open, the served page's own bar/panel are hidden — the framed
   // mock's own bar (inside the lightbox iframe, a different document) is the only one visible.
   //
-  // specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D2/D5: the overlay's
-  // own light-DOM host (`.nl-overlay-host`, a second class alongside the shared `.nl-host`) spans
-  // `inset:0` over the whole page, so its own computed pointer-events must fall through to the
-  // mock underneath everywhere the overlay itself isn't hit-testable — an ancestor's box is a
-  // separate hit-test candidate from a `pointer-events:none` descendant (the classic "icon inside
-  // a button" pattern), so the overlay's own `data-mode`-derived pointer-events alone is not
-  // enough. `nl-live` mirrors "arming or drawing" (never written on any other `.nl-host`, so this
-  // rule reaches only the overlay's own), keeping every cursor/pointer-events write for the
-  // overlay itself out of inline style (AC-6) while still deriving from a stylesheet, never an
-  // imperative `setStyle` call.
-  hostStyle.textContent = 'body.lb-open .nl-host{display:none}' +
-    '.nl-overlay-host{pointer-events:none}.nl-overlay-host.nl-live{pointer-events:auto}'
+  // specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md D2/D5: every `.nl-host`
+  // (bar/strip/proj/overlay alike) is permanently `pointer-events:none` here — a SINGLE bare
+  // `.nl-host` selector, so this stays the layer's one document-level rule, scoped, and AC-6's "no
+  // inline pointer-events anywhere" holds with no per-host toggle at all. The overlay host spans
+  // `inset:0` over the whole page, so without this an ancestor box would independently swallow
+  // clicks that pass through a `pointer-events:none` .nl-overlay descendant (the classic "icon
+  // inside a button" pattern) — but an explicit descendant value always wins over WHATEVER value
+  // its ancestor carries, so the overlay's own `data-mode`-derived pointer-events (auto during
+  // arming/drawing, viewer.css) still makes it directly hit-testable with no host-level exception
+  // needed. Every OTHER host restores `auto` on its own shadow-scoped root below (`.nl-bar`,
+  // `.nl-strip`, `.nl-proj` — the `css` string every host's shadow root carries), which
+  // pointer-events then inherits down to their buttons exactly as it did before this rule existed.
+  hostStyle.textContent = 'body.lb-open .nl-host{display:none}.nl-host{pointer-events:none}'
   document.head.appendChild(hostStyle)
 
   var css =
-    '.nl-bar,.nl-strip,.nl-proj{font:15px/1.5 var(--v-font);color:var(--v-fg)}' +
+    '.nl-bar,.nl-strip,.nl-proj{font:15px/1.5 var(--v-font);color:var(--v-fg);pointer-events:auto}' +
     '.nl-bar{position:fixed;top:13px;right:32px;z-index:9999;display:flex;gap:8px;align-items:center;' +
     'background:none;border:0;border-radius:0;' +
     'padding:0;box-shadow:none}' +
@@ -267,9 +271,11 @@
   // D4: the overlay — a third .nl-host, mock scope only, `position:absolute;inset:0` (locked
   // verbatim) so it scrolls with the page instead of pinning to the viewport on a mock taller than
   // it. specs/20260913/02 D5: `pointer-events` on the overlay ITSELF derives from `data-mode` in
-  // viewer.css (never an imperative write); the light-DOM host's own `pointer-events` mirrors
-  // "arming or drawing" through the `nl-live` class (see mount() above) so a click still falls
-  // through to the mock at idle/composing with zero inline style anywhere. The boxes (renderOverlay,
+  // viewer.css (never an imperative write); the host's own permanent `pointer-events:none`
+  // (hostStyle, above) is what lets a click fall through to the mock at idle/composing with zero
+  // inline style anywhere — the overlay's own explicit per-mode value overrides it directly
+  // whenever the overlay itself must be hit-testable (arming/drawing), no host-level exception
+  // needed. The boxes (renderOverlay,
   // per-box inline `pointer-events:auto`) stay clickable regardless of mode — but the card and
   // toast are NOT boxes and sit directly in the overlay, so they get the same `auto` override on
   // their own slot elements (cardSlot/toastSlot) below; without it every control inside them
@@ -289,7 +295,6 @@
     setStyle(toastSlot, { pointerEvents: 'auto' })
     overlay.appendChild(boxLayer); overlay.appendChild(cardSlot); overlay.appendChild(toastSlot)
     overlayHost = mount(overlay)
-    toggleClass(overlayHost, 'nl-overlay-host', true)
     setStyle(overlayHost, { position: 'absolute', inset: '0', zIndex: '9997' })
     document.body.appendChild(overlayHost)
     overlay.setAttribute('data-mode', 'idle')
@@ -461,17 +466,32 @@
   // coordinate space as `vw`/`vh` (viewport pixels). Shared in substance with review.browser.js's
   // `placeHostCard` — the identical rule, restated because this repo ships no shared
   // browser-script module system for two independently-served scripts to import from.
+  // D7: beside the box on the side with room, flipped to the other flank when there is none,
+  // shifted along the cross axis to stay in the viewport — but D7 carries no escape clause for
+  // "neither flank has room": clamping the flipped side back into the viewport (the retired
+  // `Math.min(anchorRect.right + 12, innerWidth - 340)` shape, under a new name) would put the
+  // card ON TOP of its own box, which D7 forbids outright. When neither side fits, this falls
+  // back to the OTHER axis instead — below the box, else above — shifted horizontally to stay in
+  // the viewport, so the card is placed beside the box on whichever axis actually has room rather
+  // than ever clamped over it.
   function flipThenShift(cw, ch, boxRect, vw, vh, gap) {
     gap = gap == null ? 12 : gap
-    var left = boxRect.right + gap
-    if (left + cw > vw) {
-      var flipped = boxRect.left - gap - cw
-      left = flipped >= 0 ? flipped : Math.max(0, vw - cw)
+    var right = boxRect.right + gap
+    var left = boxRect.left - gap - cw
+    if (right + cw <= vw || left >= 0) {
+      var x = right + cw <= vw ? right : left
+      var y = boxRect.top
+      if (y + ch > vh) y = Math.max(0, vh - ch)
+      if (y < 0) y = 0
+      return { left: x, top: y }
     }
-    var top = boxRect.top
-    if (top + ch > vh) top = Math.max(0, vh - ch)
-    if (top < 0) top = 0
-    return { left: left, top: top }
+    var below = boxRect.bottom + gap
+    var above = boxRect.top - gap - ch
+    var y2 = below + ch <= vh ? below : (above >= 0 ? above : Math.max(0, vh - ch))
+    var x2 = boxRect.left
+    if (x2 + cw > vw) x2 = Math.max(0, vw - cw)
+    if (x2 < 0) x2 = 0
+    return { left: x2, top: y2 }
   }
   // Places a LOCAL (unframed) card beside `boxRect` (a viewport-relative rect, e.g. from
   // `getBoundingClientRect()`) — below 640px viewer.css's own media rule turns `.nl-card` into a
@@ -698,8 +718,11 @@
   var pendingReplace = null
   function setMode(next) {
     mode = next
+    // The overlay's own `data-mode` is the only write here — the host's own pointer-events is a
+    // permanent `none` (hostStyle) that the overlay's explicit per-mode value always overrides
+    // when the overlay itself needs to be hit-testable, so no host-level class ever needs to
+    // track mode.
     if (overlay) overlay.setAttribute('data-mode', mode)
-    toggleClass(overlayHost, 'nl-live', mode === 'arming' || mode === 'drawing')
     // D5: a one-line hint the first time arming is entered in this browser.
     if (mode === 'arming') {
       var seen = false

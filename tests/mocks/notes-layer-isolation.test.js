@@ -28,7 +28,71 @@ const { findChrome, serve, withChrome } = require('./chrome-harness')
 const LIB = path.join(SPEC, 'scripts/lib/notes-layer.browser.js')
 const VIEWER = path.join(SPEC, 'templates/mocks/viewer.css')
 
-test('notes layer: viewer.css is linked only inside shadow roots, tokens resolve on :host, and the sole document-level rule is .nl-host-scoped', () => {
+// Review finding round 2 (2026-09-13): a regex-bounded capture of the assignment's RHS
+// (`[^\n;]+`) stops at the first newline, so a concatenation the source wraps onto a second line
+// (`'a' +\n  'b'`) was invisible past `'a'` — this repo's own recorded gotcha class again, one
+// line break deeper than round 1's one-quote-form blindness. A single regex cannot bound "the
+// whole expression" without effectively parsing it (a `+`-chain can wrap arbitrarily many lines,
+// carry comments between segments, and mix quote forms segment to segment), so this is a small
+// hand-rolled scanner rather than a wider regex: from each `hostStyle.textContent =`/`+=` site it
+// walks forward, skipping whitespace and comments (`//...` and `/*...*/`) and admitting every
+// quote form (`'`, `"`, `` ` ``) with backslash-escape awareness, concatenating literal contents,
+// and continuing across a `+` (through any whitespace/comments/newlines around it) until the next
+// non-whitespace, non-comment token is not `+` — i.e. the expression has ended. Every assignment
+// site in the source is scanned this way and concatenated in source order.
+//
+// What this still cannot see (say so plainly rather than overclaiming): a literal built through
+// indirection — `var s = '...'; hostStyle.textContent = s` — carries no quote at the assignment
+// site itself and is invisible to a lexical scanner that never evaluates the program; a
+// non-`+`-chain expression (a ternary, a function call, a template literal's own `${...}`
+// interpolation) ends the scan at the first non-literal, non-`+` token, so any literal AFTER such
+// a construct in the same expression is missed too — none of these shapes appear in this file
+// today, and any of them appearing would itself be worth a human's attention, not a wider parser.
+function extractConcatenatedLiterals(src, propName) {
+  const siteRe = new RegExp(propName.replace(/\./g, '\\.') + '\\s*\\+?=\\s*', 'g')
+  const combined = []
+  let site
+  while ((site = siteRe.exec(src))) {
+    let i = site.index + site[0].length
+    let expectingLiteral = true
+    while (i < src.length) {
+      // Skip whitespace and comments between tokens.
+      let skipped = true
+      while (skipped) {
+        skipped = false
+        while (i < src.length && /\s/.test(src[i])) { i++; skipped = true }
+        if (src.startsWith('//', i)) { const nl = src.indexOf('\n', i); i = nl === -1 ? src.length : nl; skipped = true }
+        if (src.startsWith('/*', i)) { const close = src.indexOf('*/', i + 2); i = close === -1 ? src.length : close + 2; skipped = true }
+      }
+      if (i >= src.length) break
+      const ch = src[i]
+      if (expectingLiteral && (ch === "'" || ch === '"' || ch === '`')) {
+        let j = i + 1
+        let lit = ''
+        while (j < src.length && src[j] !== ch) {
+          if (src[j] === '\\') { lit += src[j] + (src[j + 1] || ''); j += 2 } else { lit += src[j]; j++ }
+        }
+        combined.push(lit)
+        i = j + 1
+        expectingLiteral = false
+      } else if (!expectingLiteral && ch === '+') {
+        i++
+        expectingLiteral = true
+      } else {
+        break // expression ended (a non-`+` after a literal, or a non-literal where one was expected)
+      }
+    }
+    siteRe.lastIndex = i
+  }
+  return combined.join('')
+}
+
+// AC-20260913-02-14 (specs/20260913/02-the-layer-owns-one-mode-and-the-page-owns-the-card.md, a
+// SHALL CONTINUE TO, reuses this case verbatim): that spec's mode/pointer-capture/reconcile
+// rewrite touches the overlay's own in-shadow chrome, never the viewer.css link discipline or the
+// one document-level `.nl-host` style below, so this same static case is this AC's own coverage
+// too — sanctioned green pre- and post-change.
+test('notes layer: viewer.css is linked only inside shadow roots, tokens resolve on :host, and the sole document-level rule is .nl-host-scoped, AC-20260913-02-14', () => {
   const src = fs.readFileSync(LIB, 'utf8')
   const viewer = fs.readFileSync(VIEWER, 'utf8')
   assert.match(viewer, /^:host,:root\s*\{/m,
@@ -39,9 +103,16 @@ test('notes layer: viewer.css is linked only inside shadow roots, tokens resolve
   const headAppends = [...src.matchAll(/document\.head\.appendChild\((\w+)\)/g)].map((m) => m[1])
   assert.deepStrictEqual(headAppends, ['hostStyle'],
     'the layer may append exactly one element to the served document\'s <head> (its .nl-host hide rule): got ' + JSON.stringify(headAppends))
-  const hostRule = src.match(/hostStyle\.textContent = '([^']*)'/)
-  assert.ok(hostRule, 'hostStyle must carry a literal rule string')
-  for (const sel of hostRule[1].split('}').filter(Boolean).map((r) => r.split('{')[0].trim())) {
+  // Review finding, round 1 (2026-09-13): reading only the FIRST single-quoted `hostStyle.
+  // textContent = '...'` literal was evadable by a second concatenated literal (any quote form).
+  // Round 2 (2026-09-13): the round-1 fix's own assignment-site capture stopped at the first
+  // newline, so a concatenation the source wraps onto a second line was equally invisible.
+  // `extractConcatenatedLiterals` (above) fixes both: it never bounds the expression by a regex
+  // at all, walking token-by-token across whatever whitespace, comments, and quote forms the
+  // source actually uses until the `+`-chain ends.
+  const combinedRule = extractConcatenatedLiterals(src, 'hostStyle.textContent')
+  assert.ok(combinedRule.length > 0, 'hostStyle\'s assignment(s) must carry at least one string literal to extract')
+  for (const sel of combinedRule.split('}').filter(Boolean).map((r) => r.split('{')[0].trim())) {
     assert.match(sel, /(^|\s)\.nl-host(\s|$|,)/,
       'every document-level selector the layer adds must target .nl-host: got "' + sel + '"')
   }

@@ -19,9 +19,8 @@
 // specs/20260906/03-questions-on-the-wireframe.md D5: a note carrying kind:"question" renders as
 // a distinct row (id badge, "I assumed <claim>", "I rejected: <rejected>" when present) with
 // three controls — Yes/No(+text)/Later — that POST /__notes/answer; an answered question renders
-// "You confirmed"/"You corrected: <text>" and no controls. The mock-page composer alone gains a
-// "Whole project" scope toggle (the reason chip row both scopes once carried was removed
-// 2026-09-13 — see buildComposer). New
+// "You confirmed"/"You corrected: <text>" and no controls. The composer on both scopes gains a
+// reason chip row; the mock-page composer alone gains a "Whole project" scope toggle. New
 // question-specific chrome carries `nl-q`-prefixed classes so spec/templates/mocks/viewer.css (a
 // parallel doctrine change, never touched here) can style it — this file adds no new local CSS
 // rule for them.
@@ -54,15 +53,15 @@
   var qs = new URLSearchParams(location.search)
   if (qs.has('clean') && !qs.has('notes')) return
 
-  // Render-defect fix (2026-09-13, this spec's own escape — the whole PAGE-LEVEL chrome was
-  // riding into the review page's boards): `notes=1` means "this layer is a marks layer on a
-  // board", so `marksOnly` drops the two pieces that belong to a served page and duplicate what
-  // the review page already carries — the fixed bar and the in-flow strip. The marks themselves
-  // and everything reached THROUGH a mark stay: the box layer, and the card a box click opens
-  // (design/chrome-mocks/notes.html — the thread, Accept/Reject or Resolve, and the overflow
-  // menu's Delete/Withdraw/Re-place the box), which is the only place those verbs exist.
-  // `__nlMark`/`__nlFocus`/`__nlPins`/`__rvPick` all work unchanged. A normal (unflagged) served
-  // mock page — `qs.has('notes')` false — keeps its full bar and strip (the pinned invariant).
+  // Render-defect fix (2026-09-13, this spec's own escape — the whole authoring layer was
+  // riding into the review page's boards): `notes=1` means "paint the marks", never "inject the
+  // authoring UI" — D3's binding note surface is the review page's OWN right rail
+  // (lib/review-page.js's inspector), so a framed board contributes the box layer
+  // (renderOverlay/boxLayer) and nothing else. `marksOnly` gates the three things that are
+  // authoring chrome, not marks: the fixed bar, the in-flow strip, and any card auto-opening on
+  // a box click/focus. `__nlMark`/`__nlFocus`/`__nlPins`/`__rvPick` (D8/D10/D11) all still work —
+  // none of them touch bar/strip/card. A normal (unflagged) served mock page — `qs.has('notes')`
+  // false — keeps its full bar and strip exactly as before this fix (the pinned invariant).
   var marksOnly = qs.has('notes')
 
   var __base = (location.pathname.match(/^\/p\/[^/]+/) || [''])[0]
@@ -103,7 +102,7 @@
     'font-variant-numeric:tabular-nums;border:0;border-radius:0;padding:0;flex:none}' +
     '.nl-strip .n .t,.nl-proj .n .t{flex:1;max-width:80ch}' +
     '.nl-strip .n small,.nl-proj .n small{display:block;color:var(--v-muted);font-size:14px;margin-top:2px}' +
-    '.nl-strip textarea,.nl-proj textarea{width:100%;box-sizing:border-box;min-height:104px;' +
+    '.nl-strip textarea,.nl-proj textarea{width:100%;box-sizing:border-box;min-height:64px;' +
     'font:15px/1.5 var(--v-font);color:var(--v-fg);border:1px solid var(--v-border);' +
     'border-radius:var(--v-radius);padding:8px 10px;margin:10px 0;resize:vertical;max-width:60ch}' +
     '.nl-row{display:flex;gap:8px;justify-content:flex-end}'
@@ -234,26 +233,12 @@
   var toastSlot = null
   var overlayHost = null
   if (scope === 'mock' && rootEl) {
-    overlay = document.createElement('div')
-    // `.nl-marks` tells viewer.css this is a framed review board — the one context where a
-    // phone-width viewport is a frame on a desktop page, not a phone.
-    overlay.className = 'nl-overlay' + (marksOnly ? ' nl-marks' : '')
+    overlay = document.createElement('div'); overlay.className = 'nl-overlay'
     boxLayer = document.createElement('div')
     cardSlot = document.createElement('div')
     toastSlot = document.createElement('div')
     setStyle(cardSlot, { pointerEvents: 'auto' })
     setStyle(toastSlot, { pointerEvents: 'auto' })
-    if (marksOnly) {
-      // A review board is a picture with live marks on it: the marks take pointer input, the
-      // design underneath never does. viewer.css makes the frame itself interactive so a box
-      // click and a mark drag can reach this layer at all; this shield is what keeps the mock
-      // inert underneath it, swallowing every click that is not a box. It sits BEFORE boxLayer,
-      // so the boxes still paint and hit-test above it.
-      var shield = document.createElement('div')
-      setStyle(shield, { position: 'absolute', inset: '0', pointerEvents: 'auto' })
-      on(shield, 'click', function (e) { if (e.preventDefault) e.preventDefault() })
-      overlay.appendChild(shield)
-    }
     overlay.appendChild(boxLayer); overlay.appendChild(cardSlot); overlay.appendChild(toastSlot)
     overlayHost = mount(overlay)
     setStyle(overlayHost, { position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '9997' })
@@ -334,7 +319,7 @@
       // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D8: box → row, direct
       // same-origin call, no postMessage. Framed (the review page) only — unframed (the owner's
       // own mock page) finds no parent hook and the click just opens the card, as today.
-      // Both doors: the box opens its own card here, and the review page selects its row.
+      // openNoteCard itself is marksOnly-aware (selects the box without ever populating cardSlot).
       el.onclick = function () {
         openNoteCard(n)
         if (window.parent !== window) {
@@ -377,45 +362,20 @@
   // rule regardless of specificity, so this leaves position AND left/top alone under the
   // breakpoint and lets the sheet own its own layout entirely.
   function cardPosition(card, id) {
-    // marksOnly (a framed board) is phone-width but is not a phone — viewer.css's `.nl-marks`
-    // rule keeps it off the bottom sheet, so this places it there too.
-    if (!marksOnly && window.matchMedia && window.matchMedia('(max-width:640px)').matches) return
+    if (window.matchMedia && window.matchMedia('(max-width:640px)').matches) return
     var anchorRect = (boxLayer && boxLayer.querySelector('[data-id="' + id + '"]') || rootEl).getBoundingClientRect()
     var scrollX = window.pageXOffset || 0
     var scrollY = window.pageYOffset || 0
-    placeClear(card, { x: anchorRect.left + scrollX, y: anchorRect.top + scrollY, w: anchorRect.width, h: anchorRect.height })
-  }
-  // A card never covers the box it belongs to — the box is the reason the card is open, and the
-  // reviewer has to see what was marked while they read or write about it. Beside it when the
-  // page is wide enough (a desktop mock), otherwise below it, and above it when the room below
-  // runs out — a phone-width mock, framed or real, always takes one of the two vertical spots.
-  // Page-relative throughout, matching the absolutely-positioned overlay host.
-  var CARD_W = 328
-  var CARD_H_EST = 210
-  var GAP = 12
-  function placeClear(card, r) {
-    var scrollX = window.pageXOffset || 0
-    var scrollY = window.pageYOffset || 0
-    var vw = window.innerWidth || 0
-    var docH = Math.max(document.documentElement ? document.documentElement.scrollHeight : 0, rootEl ? rootEl.offsetHeight : 0)
-    var left, top
-    var leftFlank = r.x - GAP - CARD_W
-    if (r.x + r.w + GAP + CARD_W <= scrollX + vw - GAP) { left = r.x + r.w + GAP; top = r.y }
-    else if (leftFlank >= scrollX + GAP) { left = leftFlank; top = r.y }
-    else {
-      left = Math.min(Math.max(scrollX + GAP, r.x), scrollX + Math.max(GAP, vw - CARD_W - GAP))
-      var below = r.y + r.h + GAP
-      top = (below + CARD_H_EST <= docH) ? below : Math.max(scrollY + GAP, r.y - GAP - CARD_H_EST)
-    }
-    card.style.left = Math.round(left) + 'px'
-    card.style.top = Math.round(Math.max(scrollY + 8, top)) + 'px'
+    card.style.left = Math.min(anchorRect.right + scrollX + 12, scrollX + window.innerWidth - 340) + 'px'
+    card.style.top = Math.max(scrollY + 8, anchorRect.top + scrollY) + 'px'
   }
   function openNoteCard(n) {
     openCardNoteId = n.id
-    // The card opens on a framed review board exactly as it does on a served mock — clicking a
-    // box IS how a note is read and acted on (design/chrome-mocks/notes.html: the thread, Accept/
-    // Reject or Resolve, and the overflow menu's Delete/Withdraw/Re-place the box). The review
-    // page's right rail lists the same notes; it does not replace this.
+    // marksOnly: selection still drives the box's own "sel" class (D8 — `select()`'s
+    // `__nlFocus` call must leave the box selected), but the card itself is the authoring UI
+    // the review page's own right rail replaced — render() alone (which repaints boxLayer via
+    // renderOverlay) without ever touching cardSlot.
+    if (marksOnly) { render(); return }
     if (!cardSlot) return
     cardSlot.innerHTML = ''
     var status = regionStatusOf(n)
@@ -526,6 +486,22 @@
     if (!cardSlot) return
     cardSlot.innerHTML = ''
     var card = document.createElement('div'); card.className = 'nl-card'
+    var reason = 'other'
+
+    var chipsRow = document.createElement('div'); chipsRow.className = 'nl-chips'
+    var chipEls = []
+    REASONS.forEach(function (r) {
+      var chip = document.createElement('button')
+      chip.className = 'nl-btn nl-chip' + (r.value === 'other' ? ' nl-chip-on' : '')
+      chip.textContent = r.label
+      chip.onclick = function () {
+        reason = r.value
+        chipEls.forEach(function (c) { c.el.className = 'nl-btn nl-chip' + (c.value === reason ? ' nl-chip-on' : '') })
+      }
+      chipEls.push({ el: chip, value: r.value })
+      chipsRow.appendChild(chip)
+    })
+    card.appendChild(chipsRow)
 
     var ta = document.createElement('textarea'); ta.placeholder = 'What is wrong here?'
     card.appendChild(ta)
@@ -538,7 +514,7 @@
     function doSave() {
       var text = ta.value.trim()
       if (!text) { ta.focus(); return }
-      api('add', { scope: 'mock', screen: screen, state: activeState, text: text, by: author, region: region }).then(function () {
+      api('add', { scope: 'mock', screen: screen, state: activeState, text: text, by: author, reason: reason, region: region }).then(function () {
         closeCard()
         refresh()
       })
@@ -554,12 +530,14 @@
     // Same positioning contract as cardPosition() above: leave position/left/top to viewer.css's
     // own bottom-sheet media rule below 640px, otherwise place it page-relative (scroll offset
     // included) since the overlay host is position:absolute, not fixed.
-    if (marksOnly || !(window.matchMedia && window.matchMedia('(max-width:640px)').matches)) {
+    if (!(window.matchMedia && window.matchMedia('(max-width:640px)').matches)) {
       var scrollX = window.pageXOffset || 0
       var scrollY = window.pageYOffset || 0
       var rootRect = rootEl.getBoundingClientRect()
-      if (box) placeClear(card, { x: box.x + rootRect.left + scrollX, y: box.y + rootRect.top + scrollY, w: box.w, h: box.h })
-      else { card.style.left = (scrollX + 40) + 'px'; card.style.top = (scrollY + 40) + 'px' }
+      var left = box ? box.x + box.w + rootRect.left + scrollX + 12 : scrollX + 40
+      var top = box ? box.y + rootRect.top + scrollY : scrollY + 40
+      card.style.left = Math.min(left, scrollX + window.innerWidth - 340) + 'px'
+      card.style.top = Math.max(scrollY + 8, top) + 'px'
     }
     if (ta.focus) ta.focus()
   }
@@ -791,16 +769,39 @@
     return d
   }
 
+  // D5: the reason chip row shared by both scopes' composers — "Other" is the default until a
+  // different chip is clicked.
+  var REASONS = [
+    { label: 'Missing screen', value: 'missing-screen' },
+    { label: 'Wrong direction', value: 'wrong-direction' },
+    { label: 'Wrong words', value: 'wrong-words' },
+    { label: 'Other', value: 'other' },
+  ]
+
   // `allowProjectToggle` (mock composer only) adds a "This screen | Whole project" scope toggle;
-  // `onSave(text, sendAsProject)` is called only when the textarea is non-empty. The reason chip
-  // row this composer used to open with is gone (2026-09-13) — a plain note's `reason` was never
-  // read by anything downstream, so the chips cost a decision and bought nothing; the textarea
-  // takes the height they held. Class names below are the exact `.nl-scope`/`.nl-scope-on`
+  // `onSave(text, reason, sendAsProject)` is called only when the textarea is non-empty.
+  // Class names below are the exact `.nl-chips`/`.nl-chip`/`.nl-chip-on`/`.nl-scope`/`.nl-scope-on`
   // register spec/templates/mocks/viewer.css declares (a parallel doctrine change, never touched
   // here) — this layer emits only those names, never an invented sibling.
   function buildComposer(container, placeholder, allowProjectToggle, onSave) {
     var box = document.createElement('div')
+    var reason = 'other'
     var sendAsProject = false
+
+    var chipsRow = document.createElement('div'); chipsRow.className = 'nl-chips'
+    var chipEls = []
+    REASONS.forEach(function (r) {
+      var chip = document.createElement('button')
+      chip.className = 'nl-btn nl-chip' + (r.value === 'other' ? ' nl-chip-on' : '')
+      chip.textContent = r.label
+      chip.onclick = function () {
+        reason = r.value
+        chipEls.forEach(function (c) { c.el.className = 'nl-btn nl-chip' + (c.value === reason ? ' nl-chip-on' : '') })
+      }
+      chipEls.push({ el: chip, value: r.value })
+      chipsRow.appendChild(chip)
+    })
+    box.appendChild(chipsRow)
 
     if (allowProjectToggle) {
       var toggleRow = document.createElement('div'); toggleRow.className = 'nl-scope'
@@ -819,23 +820,23 @@
     var cancel = document.createElement('button'); cancel.className = 'nl-btn'; cancel.textContent = 'Cancel'
     var save = document.createElement('button'); save.className = 'nl-btn primary'; save.textContent = 'Save'
     cancel.onclick = render
-    save.onclick = function () { if (ta.value.trim()) onSave(ta.value.trim(), sendAsProject) }
+    save.onclick = function () { if (ta.value.trim()) onSave(ta.value.trim(), reason, sendAsProject) }
     row.appendChild(cancel); row.appendChild(save)
     box.appendChild(ta); box.appendChild(row)
     container.appendChild(box)
     if (ta.focus) ta.focus()
   }
   function composeProject() {
-    buildComposer(proj, 'Direction-level: what is wrong with the whole set, or where should it go?', false, function (text) {
-      api('add', { scope: 'project', screen: null, state: null, text: text, by: author }).then(refresh)
+    buildComposer(proj, 'Direction-level: what is wrong with the whole set, or where should it go?', false, function (text, reason) {
+      api('add', { scope: 'project', screen: null, state: null, text: text, by: author, reason: reason }).then(refresh)
     })
   }
   function composeMock() {
-    buildComposer(strip, 'What is wrong with "' + activeState + '", or what should change?', true, function (text, sendAsProject) {
+    buildComposer(strip, 'What is wrong with "' + activeState + '", or what should change?', true, function (text, reason, sendAsProject) {
       if (sendAsProject) {
-        api('add', { scope: 'project', screen: null, state: null, text: text, by: author }).then(refresh)
+        api('add', { scope: 'project', screen: null, state: null, text: text, by: author, reason: reason }).then(refresh)
       } else {
-        api('add', { scope: 'mock', screen: screen, state: activeState, text: text, by: author }).then(refresh)
+        api('add', { scope: 'mock', screen: screen, state: activeState, text: text, by: author, reason: reason }).then(refresh)
       }
     })
   }
@@ -1030,8 +1031,9 @@
     if (box && box.scrollIntoView) box.scrollIntoView({ block: 'center' })
     if (box) { box.classList.add('pulse'); setTimeout(function () { box.classList.remove('pulse') }, 700) }
     var note = mockNotes.filter(function (n) { return n.id === id })[0]
-    // The card opens here too — a row click on the review page and a box click on the board are
-    // two doors into the same note, and both land on the card that carries its verbs.
+    // openNoteCard is marksOnly-aware: it selects the box (the "sel" class D8/AC-4 require) but
+    // never populates cardSlot in that mode, so this never opens the in-frame card over the
+    // design — the note itself already reads on the review page's own right rail.
     if (note) openNoteCard(note)
   }
 

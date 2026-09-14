@@ -6,8 +6,7 @@
 // Talks only to /__notes/* and /__picks/* under the page's own base (the path before
 // `/review/<j>.html` — '' or a `/p/<name>` mount), through the spec 03 endpoints unchanged:
 // POST /__notes/answer {id, verdict, text?, by} and POST /__notes/add {scope, screen, state,
-// text, by} — the optional `reason` the store still accepts is no longer authored here (the
-// composer's chips are gone, 2026-09-13: nothing downstream ever read a plain note's reason). The approve/change buttons are handled by the stop block's own picks
+// reason, text, by}. The approve/change buttons are handled by the stop block's own picks
 // script (lib/stop-block.js), never here — this file only keeps the approve button's disabled
 // state in step with what is still open.
 //
@@ -33,6 +32,7 @@
   var initial = q('[data-rv="row"][data-selected]')
   var selectedId = initial ? initial.getAttribute('data-id') : null
   var scopeLabel = null
+  var reason = 'other'
 
   // ---- identity ------------------------------------------------------------------------------
   function author() {
@@ -310,8 +310,8 @@
     if (!text) return Promise.resolve()
     var label = scopeLabel || focusedLabel()
     var body = label
-      ? { scope: 'mock', screen: label, state: (function (s) { return s === 'happy' ? null : s })(activeStateOf(label)), text: text, by: author() }
-      : { scope: 'project', screen: null, state: null, text: text, by: author() }
+      ? { scope: 'mock', screen: label, state: (function (s) { return s === 'happy' ? null : s })(activeStateOf(label)), reason: reason, text: text, by: author() }
+      : { scope: 'project', screen: null, state: null, reason: reason, text: text, by: author() }
     return post('/__notes/add', body).then(function () {
       if (ta) ta.value = ''
       // The new row exists on disk; the next GET renders it. Reload so the rail, badges, and the
@@ -540,6 +540,16 @@
   // D15: "All screens" clears the narrowing so every screen's rows show; scrolling to a board
   // re-applies it (focusBoard/the IntersectionObserver below).
   on(q('[data-rv="allscreens"]'), 'click', function () { screenFilter = null; applyFilter() })
+  qa('[data-rv="chip"]').forEach(function (c) {
+    on(c, 'click', function () {
+      reason = c.getAttribute('data-value')
+      qa('[data-rv="chip"]').forEach(function (x) {
+        var onChip = x === c
+        x.setAttribute('aria-pressed', onChip ? 'true' : 'false')
+        if (x.classList) x.classList.toggle('rv-chip-on', onChip)
+      })
+    })
+  })
   on(q('[data-rv="send"]'), 'click', function (e) { if (e && e.preventDefault) e.preventDefault(); send() })
   on(q('[data-rv="composer"]'), 'submit', function (e) { if (e && e.preventDefault) e.preventDefault(); send() })
   on(q('[data-rv="jump"]'), 'change', function (e) {

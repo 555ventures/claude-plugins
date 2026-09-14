@@ -1,6 +1,6 @@
 ---
 date: 2026-09-13
-status: hardened
+status: implementing
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +10,8 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-13
 open_markers: 0
+build_base: main
+diff_base: cb1bd33a194a7a31b07ee5bb533304d74e22cbd8
 ---
 
 # The layer owns one mode and the page owns the card

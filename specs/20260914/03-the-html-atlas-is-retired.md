@@ -1,6 +1,6 @@
 ---
 date: 2026-09-14
-status: implementing
+status: done
 tier: critical
 area: design
 design: false
@@ -169,6 +169,21 @@ second) — an intermediate tree with orphan tests is exactly what the consisten
 The File Plan exceeds the decomposition cap by row count; every row above the cap is a DELETE
 with no authored content, and one batch is the only shape in which the consistency suite can
 stay green (Behavior).
+
+Waived 2026-09-15 (user, review round 1): the reconcile leg's two out-of-plan files —
+`docs/spikes/23-atlas-index-nav/.claude/spec-session.json` (D7 deletes the directory whole; the
+File Plan glob did not match its dotdir file) and `tests/consistency/read-load.test.js` (A2's
+if-false remedy removed its `atlas` row).
+
+Build departures (folded from the deviations sidecar, 2026-09-15): four `tests/mocks/` DELETE
+rows (`client-walk-route`, `exclusions-route`, `notes-reanchor`, `wire-register`) were already
+absent pre-image and stay in AC-6's absence list. A2 fired false and its remedy removed the
+`atlas` row from `tests/consistency/read-load.test.js`. `parseFlatDom` in `tests/helpers.js` is
+left with no caller because D5 does not name it (review soft). A1 fired false (D11): the
+genesis driver spawned both deleted scripts by path. Deleting the atlas tests orphaned 18
+criteria of seven done specs, each tagged `[retired:]` to this spec; the class is folded into
+the retired-literal Gotcha as its twelfth trigger. Two workers ran read-only git despite the
+worker git ban, and one used `rm -r` after `rm -rf` was denied, for the same File Plan deletions.
 
 ## Canonical Delta
 

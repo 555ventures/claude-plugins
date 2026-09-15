@@ -3,6 +3,7 @@ name: spec-20260911-04-disposition-grammar-tests
 description: Test-authoring patterns for spec 20260911/04 (every-criterion-declares-its-test) — forcing count-tests.js/scope-reconcile.js crashes via testGlobs:[null], and a legitimate green-pre-change reconstruction pin.
 metadata:
   type: project
+  reviewed: 2026-09-15
 ---
 
 specs/20260911/04-every-criterion-declares-its-test.md (disposition grammar: writes/rewrites/reuses

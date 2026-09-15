@@ -519,6 +519,9 @@ function writeTree(root, files) {
 // AC-20260820-04-1 / AC-20260820-04-6: live-repo pins.
 // ---------------------------------------------------------------------------
 
+// specs/20260914/03-the-html-atlas-is-retired.md AC-20260914-03-8 (reuse, tag only): reuses this
+// case to pin that the executable inventory still matches spec/entrypoints.json after the
+// HTML-atlas deletion batch.
 test('AC-20260820-04-1: every executable in spec/scripts/*.js|*.sh and spec/workflows/*.js, excluding spec/scripts/lib/, has a spec/entrypoints.json entry', () => {
   const manifestPath = path.join(ROOT, 'spec/entrypoints.json')
   assert.ok(fs.existsSync(manifestPath),

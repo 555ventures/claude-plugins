@@ -118,6 +118,8 @@ cost. This brief replaces the gate and deletes what only existed to feed it.
 
 ## Grounding
 
+Amended by ADR-0028 — superseded: there is one artifact (the mock is the app), so no render-time fidelity judgment remains (brief 26).
+
 - Amended by ADR-0002 — fidelity is judged at the render, not in the source; the source
   gate, extract sidecar, skeletons, and delta rows lose their consumer.
 - Amended by ADR-0001 — design authoring stays local-first; quality via `frontend-design` +

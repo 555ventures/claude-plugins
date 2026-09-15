@@ -42,3 +42,4 @@ fences off belongs to its owning brief.
 | 23 | closed-feedback-loop *(hosts emit rows, the plugin reads them: fleet-reader `--owed`, row-as-handoff report lines, replay `via`)* |
 | 24 | status-and-queue-diet *(status = roadmap + one paste + ≤3 decisions; hygiene anomalies move to doctor; queue positional with one `move` verb, no accept step)* |
 | 25 | commit-time-escape-coverage *(measure the share of host fix commits that record a row; widen the commit-time offer if that is the leak)* |
+| 26 | react-mock-system *(successor to 22a via ADR-0028: the mock is the product's own React + shadcn source, a separate reviewer package behind one contract, SEED → SHELL → SCREENS → THEME → CLIENT → APPROVED; the HTML atlas, notes layer, client player, kit, render gate and /spec:atlas are deleted)* |

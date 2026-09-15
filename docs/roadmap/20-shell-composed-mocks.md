@@ -147,6 +147,8 @@ authorship rule lives in one restored shared paragraph both commands cite.
 
 ## Grounding
 
+Amended by ADR-0028 — superseded: the shell is a React component every screen imports; no region sync exists (brief 26).
+
 - ADR-0003 — sketch coherence is a canonical shell, sketch authorship is the planning seat;
   reverses specs/20260810/01 D8. Applies-to lists this brief as 02's successor carrier.
 - `spec/doctrine/core.md` § Model Placement (expensive model authors the contract; `fable` →

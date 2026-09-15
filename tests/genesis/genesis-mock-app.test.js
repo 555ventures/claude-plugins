@@ -117,6 +117,20 @@ test('AC-20260914-02-5: WHEN MENUS runs on a host whose design/mocks/status.json
   const bw = mark(dir, 'brief-written')
   assert.strictEqual(bw.status, 0, 'test setup requires brief-written to be accepted immediately for backend-api (DESIGN_SKIPPED_ARCHETYPES owe nothing beyond discovery): ' + bw.stderr)
 
+  // test-runner is the one dimension the mock app never fixes, so it needs its own menu+pick
+  // before menus-done can close — written here, ahead of the first bare() call, so the
+  // driver's own auto-pick write (below) never collides with this fixture's own writeBrief
+  // rewrite.
+  fs.mkdirSync(path.join(dir, '.claude/genesis/interview-research'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/genesis/interview-research/test-runner.json'),
+    JSON.stringify({ dimension: 'test-runner', options: [{ label: 'vitest', packages: [] }] }, null, 2))
+  const menuWritten = mark(dir, 'menu-written', 'interview-research/test-runner.json')
+  assert.strictEqual(menuWritten.status, 0, 'test setup requires menu-written to be accepted for test-runner: ' + menuWritten.stderr)
+  writeBrief(dir, {
+    dims: { framework: 'open', language: 'open', 'package-manager': 'open', 'test-runner': 'open' },
+    picks: ['- archetype: backend-api', '- test-runner: vitest'],
+  })
+
   const r = bare(dir)
   assert.strictEqual(r.status, 0, 'a bare invocation at MENUS on a mock-app host must exit 0: ' + r.stderr)
   assert.match(r.stdout, /📌 Auto-picked vite-react — the mock app is the product's frontend \(ADR-0028\)/,
@@ -139,6 +153,64 @@ test('AC-20260914-02-5: WHEN MENUS runs on a host whose design/mocks/status.json
     'D6(c): status.tournament must be recorded as { "skipped": "mock-app" } as soon as MENUS ' +
     'observes the mock app — its absence means a tournament archetype (backend-api here) will ' +
     'still race scaffolds against an app that already exists: ' + JSON.stringify(status.tournament))
+
+  // D6(b): "record those three as decided" means writing the pick, not merely excluding the
+  // dimension from the open set — brief.md's ## Picks section must carry the three auto-picked
+  // lines in brief.md's own kebab-case dimension-key grammar, alongside test-runner's untouched
+  // session-written pick.
+  const briefAfterMenus = fs.readFileSync(path.join(dir, '.claude/genesis/brief.md'), 'utf8')
+  assert.match(briefAfterMenus, /^- framework: vite-react$/m,
+    'D6(b): brief.md\'s ## Picks section must carry "- framework: vite-react" the instant MENUS ' +
+    'observes the mock app — its absence means a later ## Picks reader (decideCheck\'s ADR-naming ' +
+    'check, a resumed session) never sees framework recorded as decided, only as no-longer-open: ' + briefAfterMenus)
+  assert.match(briefAfterMenus, /^- language: typescript$/m,
+    'D6(b): brief.md\'s ## Picks section must carry "- language: typescript": ' + briefAfterMenus)
+  assert.match(briefAfterMenus, /^- package-manager: npm$/m,
+    'D6(b): brief.md\'s ## Picks section must carry "- package-manager: npm": ' + briefAfterMenus)
+  assert.match(briefAfterMenus, /^- test-runner: vitest$/m,
+    'D6(b): test-runner\'s own session-written pick must survive the mock-app auto-pick write ' +
+    'untouched — test-runner is governed by its own pick, never overwritten by the auto-pick ' +
+    'mechanism that only owns framework/language/package-manager: ' + briefAfterMenus)
+
+  // D6(b): re-rendering MENUS a second time (a bare re-run, the normal /clear-and-resume path)
+  // must not re-append the same three auto-picked lines — the write must be idempotent.
+  const r2 = bare(dir)
+  assert.strictEqual(r2.status, 0, 'a second bare invocation at MENUS on a mock-app host must exit 0: ' + r2.stderr)
+  const briefAfterSecondMenus = fs.readFileSync(path.join(dir, '.claude/genesis/brief.md'), 'utf8')
+  for (const line of ['- framework: vite-react', '- language: typescript', '- package-manager: npm']) {
+    const occurrences = briefAfterSecondMenus.split('\n').filter((l) => l === line).length
+    assert.strictEqual(occurrences, 1,
+      'D6(b): re-running the bare driver at MENUS must not duplicate the auto-written "' + line +
+      '" Picks line — found ' + occurrences + ' occurrences, which means the auto-pick write is ' +
+      'not idempotent and brief.md\'s ## Picks would grow one duplicate line per re-run: ' + briefAfterSecondMenus)
+  }
+
+  // D6(c): once the tournament is recorded skipped at MENUS, closing menus-done must route
+  // straight to DECIDE — backend-api is a TOURNAMENT_ARCHETYPES member, so a next-state
+  // computation that ignores status.tournament.skipped would still print FINALISTS here.
+  const menusDone = mark(dir, 'menus-done')
+  assert.strictEqual(menusDone.status, 0,
+    'test setup requires menus-done to be accepted once framework/language/package-manager are ' +
+    'auto-decided and test-runner carries its own menu+pick: ' + menusDone.stderr)
+  assert.doesNotMatch(menusDone.stdout, /FINALISTS/,
+    'D6(c): --mark menus-done\'s own output must never mention FINALISTS for a mock-app host — ' +
+    'backend-api is a TOURNAMENT_ARCHETYPES member, so a next-state computation that does not ' +
+    'consult status.tournament.skipped would print the FINALISTS step text and a ' +
+    '"(MENUS → FINALISTS)" checkpoint line even though the tournament was already recorded ' +
+    'skipped at MENUS: ' + menusDone.stdout)
+
+  const st = state(dir)
+  assert.strictEqual(st.status, 0, '--state must exit 0 after menus-done on a mock-app host: ' + st.stderr)
+  assert.match(st.stdout, /\bDECIDE\b/,
+    'D6(c): --state must print DECIDE once menus-done is accepted on a mock-app host — the ' +
+    'tournament was recorded skipped at MENUS, so the derived state must fall straight through ' +
+    'FINALISTS/RACE/PROBE/PICK to DECIDE: ' + st.stdout)
+  for (const forbidden of ['FINALISTS', 'RACE', 'PROBE', 'PICK']) {
+    assert.ok(!st.stdout.includes(forbidden),
+      'D6(c): --state must never print ' + forbidden + ' after menus-done on a mock-app host — ' +
+      'its presence means the tournament ran (or was about to run) despite status.tournament.skipped ' +
+      'already being recorded at MENUS: ' + st.stdout)
+  }
 
   // AC-13's negative control lives in the same test (cheap, on the same fixture family): a
   // mock-app-free host must show framework still open, no auto-pick line at all. Genuinely

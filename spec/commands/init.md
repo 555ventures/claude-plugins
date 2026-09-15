@@ -406,8 +406,7 @@ Both modes also:
   `targetCategory`-tagged entries so `/spec:enforce` can mechanize them; where no enforcer will
   fit, they fall to pipeline rules § Review Checks — `/spec:enforce` owns that decision, not
   this phase.
-- Keep the doctrine doc to **one page**; record its path as `design.doctrine` in
-  `profile.config`.
+- Keep the doctrine doc to **one page**.
 - Add a `manifestExtras` row (Phase 4) for every artifact this phase lands — the doctrine doc,
   each landed/overridden token file, the showcase catalog entry.
 

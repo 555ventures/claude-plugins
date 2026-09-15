@@ -332,8 +332,6 @@ const canonicalTarget = (() => {
 })()
 const buildBase = fmVal(BASE_KEYS[1])
 const diffBaseFm = fmVal('diff_base')
-const designFlag = fmVal('design') === 'true'
-const designSource = fmVal('design_source')
 
 if (!['implementing', 'done'].includes(status)) {
   die('spec status is "' + (status || '<missing>') + '" — spec-review-driver requires ' +
@@ -2229,9 +2227,6 @@ const STEPS = {
   // to re-verify closure, never the whole diff again (AC-20260909-05-5) — AC-20260902-05-13 bans
   // the word "scope" from this step's text outright, so neither variant below prints it.
   REVIEWER: () => {
-    const designBlock = (designFlag || designSource)
-      ? '  design specs also get the component-manifest audit agent alongside the reviewer.\n'
-      : ''
     const tail = `Write its structured return ({verdict, survivors, killed, reviewerCount, tokens}) to ` +
       `a file, then:\n  node ${__filename} ${specPath} --mark reviewer-returned --file <return.json>\n` +
       `REVIEWER_FAILED is a failed run, never CLEAN — re-dispatch before marking.`
@@ -2246,13 +2241,13 @@ const STEPS = {
         `  prior reviewer return: ${priorReviewer}\n` +
         `  prior disposer return: ${priorDisposer}\n` +
         `  manifest: ${manifestPath}\n  outputs: ${outDir}\n` +
-        designBlock + tail
+        tail
     }
     return `## Step: dispatch the reviewer\n` +
       `Legs are green. Dispatch ONE Agent {subagent_type: "spec:reviewer"} with the spec path, ` +
       `diff base ${base}, root ${repoRoot}, and this run's evidence:\n` +
       `  manifest: ${manifestPath}\n  outputs: ${outDir}\n` +
-      designBlock + tail
+      tail
   },
 
   // D2/D3 (specs/20260901/09-disposer-gate.md): dispositionPools(n) is the SAME derivation

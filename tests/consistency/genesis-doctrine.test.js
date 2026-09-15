@@ -1033,7 +1033,7 @@ test('AC-20260902-08-10: spec/doctrine/genesis.md carries a "## Genesis: Brief S
     'D9: deleting two doctrine sections and adding one must not orphan any "§ Genesis: ..." citation elsewhere in spec/ — a nonzero MISS here means some command or doctrine file still points at a heading this spec renamed or removed: ' + check.stdout)
 })
 
-test('AC-20260902-08-11: spec/commands/genesis.md is <=120 lines, contains the literal "/spec:mocks → /spec:genesis → /spec:enforce", and does not contain "/spec:atlas sweep"; spec/commands/init.md contains "ratified" within its design precedence list', () => {
+test('AC-20260902-08-11 / AC-20260914-02-14: spec/commands/genesis.md is <=120 lines, contains the literal "/spec:mocks → /spec:genesis → /spec:enforce", and does not contain "/spec:atlas sweep"; spec/commands/init.md contains "ratified" within its design precedence list', () => {
   const genesisCmd = read('spec/commands/genesis.md')
   const lineCount = genesisCmd.split('\n').length
   assert.ok(lineCount <= 120,
@@ -1151,7 +1151,7 @@ test('AC-20260902-09-3: mocks.md carries a "## Mocks: Authoring Rules" heading w
     'spec-paths shared-mocks must SHALL CONTINUE TO print a path ending in doctrine/mocks.md: ' + shared.stdout)
 })
 
-test('AC-20260902-08-17: spec-paths shared-for genesis SHALL CONTINUE TO serve its scoped sections (Design Canon, Design Authoring Contracts, Host Grounding)', () => {
+test('AC-20260902-08-17 / AC-20260914-02-15: spec-paths shared-for genesis SHALL CONTINUE TO serve its scoped sections (Design Canon, Design Authoring Contracts, Host Grounding)', () => {
   const genesisShared = runBash('bin/spec-paths', ['shared-for', 'genesis'])
   assert.strictEqual(genesisShared.status, 0,
     'shared-for genesis must CONTINUE TO exit 0 — this spec\'s doctrine section deletions/additions must not break the resolver: ' + genesisShared.stderr)

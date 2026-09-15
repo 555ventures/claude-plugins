@@ -354,6 +354,28 @@ function openDimensionKeys() {
 function picks() { const t = briefText(); return t === null ? {} : parsePicks(t) }
 function hasMenuFile(key) { return fs.existsSync(path.join(genesisDir, 'interview-research', key + '.json')) }
 
+// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(b): MENUS records the mock
+// app's fixed dimensions as decided by appending `- <key>: <value>` lines to brief.md's own
+// `## Picks` section — the same section a session's own research-backed picks live in — so a
+// re-run never duplicates a line already present (checked by the caller via `picks()` before
+// calling this). Idempotent by construction: `pairs` never includes an already-recorded key.
+function appendDerivedPicksToBrief(pairs) {
+  if (!pairs.length) return
+  const text = briefText()
+  if (text === null) return
+  const headingRe = /^## Picks\s*$/m
+  const m = headingRe.exec(text)
+  if (!m) return
+  const afterHeading = m.index + m[0].length
+  const rest = text.slice(afterHeading)
+  const nextRel = rest.search(/^## /m)
+  const sectionEnd = nextRel === -1 ? text.length : afterHeading + nextRel
+  const before = text.slice(0, sectionEnd).replace(/\s+$/, '\n\n')
+  const after = text.slice(sectionEnd)
+  const newLines = pairs.map(([k, v]) => '- ' + k + ': ' + v).join('\n') + '\n\n'
+  fs.writeFileSync(briefPath(), before + newLines + after)
+}
+
 // ---------------------------------------------------------------------------
 // specs/20260902/11-brief-from-approved-set.md D1-D3: design/mocks/seed.md and
 // design/mocks/ledger.md readers shared by BRIEF's journey/coverage derivation (D1/D2), MENUS'
@@ -632,8 +654,12 @@ function handleMenusDone() {
   status.marks.menusDone = true
   saveStatus()
   const archetype = status.archetype
+  // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(c): once the mock app
+  // exists the tournament is recorded skipped at MENUS and FINALISTS/RACE/PROBE/PICK are never
+  // derived — the tournament-archetype branch below still runs first (the existing guard), this
+  // only narrows which archetypes it actually routes into the tournament.
   let next
-  if (isTournamentArchetype(archetype)) next = 'FINALISTS'
+  if (isTournamentArchetype(archetype) && !(status.tournament && status.tournament.skipped)) next = 'FINALISTS'
   else next = 'DECIDE'
   return { prev: 'MENUS', next }
 }
@@ -886,6 +912,12 @@ function handleFinalistsSkipped() {
     die('archetype "' + status.archetype + '" is not a tournament archetype (' +
       TOURNAMENT_ARCHETYPES.join(', ') + ') — finalists-skipped only applies once a tournament archetype has reached FINALISTS')
   }
+  // D6(c): a mock-app host records the tournament skipped at MENUS and never derives FINALISTS —
+  // there is nothing left for finalists-skipped to do; DECIDE is already the next step.
+  if (status.tournament && status.tournament.skipped) {
+    die('the tournament was already skipped for this host (' + JSON.stringify(status.tournament.skipped) +
+      ') — the mock app fixes the frontend dimensions and FINALISTS is never reached; run --mark decided instead')
+  }
   status.tournament = Object.assign({}, status.tournament, { skipped: true, at: new Date().toISOString() })
   saveStatus()
   return { prev: 'FINALISTS', next: 'DECIDE' }
@@ -896,6 +928,11 @@ function handleFinalistsWritten() {
   if (!isTournamentArchetype(status.archetype)) {
     die('archetype "' + status.archetype + '" is not a tournament archetype (' +
       TOURNAMENT_ARCHETYPES.join(', ') + ') — finalists-written only applies once a tournament archetype has reached FINALISTS')
+  }
+  // D6(c): same refusal as finalists-skipped above — a mock-app host never reaches FINALISTS.
+  if (status.tournament && status.tournament.skipped) {
+    die('the tournament was already skipped for this host (' + JSON.stringify(status.tournament.skipped) +
+      ') — the mock app fixes the frontend dimensions and FINALISTS is never reached; run --mark decided instead')
   }
   if (!FILE) die('--mark finalists-written needs --file <finalists.json> (relative to .claude/genesis/, or an absolute path)')
   const resolved = path.isAbsolute(FILE) ? FILE : path.join(genesisDir, FILE)
@@ -1013,6 +1050,13 @@ function safeReadFile(p) { try { return fs.readFileSync(p, 'utf8') } catch (e) {
 // the benchmark. A finalist whose scaffold failed owes no probe.json — D5's "nothing further is
 // spent" extends through PROBE.
 function handleProbeDone() {
+  // D6(c): a mock-app host records the tournament skipped and never derives finalists — name that
+  // remedy before falling into the generic "not raced yet" message, which would point at a state
+  // (RACE/PROBE) this host never reaches.
+  if (status.tournament && status.tournament.skipped) {
+    die('the tournament was skipped for this host (' + JSON.stringify(status.tournament.skipped) +
+      ') — the mock app fixes the frontend dimensions and PROBE is never reached; run --mark decided instead')
+  }
   if (!(status.tournament && status.tournament.finalists)) die('the finalists have not been raced yet — reach RACE/PROBE first')
   const race = status.tournament.race || {}
   const archetype = status.archetype
@@ -1178,6 +1222,11 @@ function writeBenchmark() {
 // to also validate (specs/20260827/02's EXPLORE tile winner) is retired outright — the design
 // canon is ratified at BRIEF, before the tournament ever runs, so PICK is a stack-only decision.
 function handlePicked() {
+  // D6(c): same remedy as handleProbeDone's guard above — a skipped tournament never reaches PICK.
+  if (status.tournament && status.tournament.skipped) {
+    die('the tournament was skipped for this host (' + JSON.stringify(status.tournament.skipped) +
+      ') — the mock app fixes the frontend dimensions and PICK is never reached; run --mark decided instead')
+  }
   if (!(status.tournament && status.tournament.finalists)) die('the tournament has not reached PICK yet')
   const finalistDefs = status.tournament.finalistDefs || []
   const matches = finalistDefs.filter(finalistMatchesCurrentPicks)
@@ -2020,11 +2069,14 @@ const STEPS = {
     // nothing further for it) and record the tournament as skipped for this host.
     if (mockAppExists()) {
       const rawOpen = new Set(rawOpenDimensionKeys())
+      const toRecord = []
       for (const [dim, value] of Object.entries(MOCK_APP_FIXED_DIMS)) {
         if (rawOpen.has(dim)) {
           lines.push('📌 Auto-picked ' + value + ' — the mock app is the product\'s frontend (ADR-0028) (veto anytime)')
+          if (!(dim in pks)) toRecord.push([dim, value])
         }
       }
+      appendDerivedPicksToBrief(toRecord)
       if (!(status.tournament && status.tournament.skipped)) {
         status.tournament = { skipped: 'mock-app' }
         saveStatus()
@@ -2145,7 +2197,7 @@ const STEPS = {
     const check = decideCheck()
     const lines = [
       '## Step: record the stack descriptor and decision records',
-      'Read only: ' + genesisRel('brief.md') + ' (## Open Dimensions), ' + descriptorRelPath(),
+      'Read only: ' + genesisRel('brief.md') + ' (## Open Dimensions, ## Picks), ' + descriptorRelPath(),
       'Doctrine: spec/doctrine/genesis.md § Genesis: Decision Record (one proposer)',
     ]
     if (!check.ok) lines.push(describeDecideGap(check) + '.')

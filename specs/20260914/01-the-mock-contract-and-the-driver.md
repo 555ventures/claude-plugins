@@ -1,6 +1,6 @@
 ---
 date: 2026-09-14
-status: implementing
+status: done
 build_base: main
 tier: critical
 area: mocks
@@ -75,6 +75,9 @@ ships calls them.
 | tests/mocks/mock-driver-ledger.test.js | CREATE | tests | AC-20260914-01-16 (SHALL CONTINUE TO pin), AC-20260914-01-24 |
 | tests/consistency/mocks-doctrine.test.js | CREATE | tests | AC-20260914-01-19 |
 | tests/spec-paths.test.js | MODIFY | tests | AC-20260914-01-17 (reuse), AC-20260914-01-18 (rewrite) |
+| tests/consistency/read-load.test.js | MODIFY | tests | collision with D14: the pinned `/spec:mocks` section list drops § Design Atlas |
+| tests/consistency/genesis-doctrine.test.js | MODIFY | tests | collision with D12/D13: the Authoring Rules wireframe-literal checks retire with their subject (heading and shared-mocks pins kept) |
+| tests/expiry/test-expiry.test.js | MODIFY | tests | user ruling 2026-09-14: the live-repo expiry pin reads AC owners by defining bullet, as `expire-tests.js` does, plus one fixture test |
 | tests/mocks/mocks-driver-fixtures.js | DELETE | tests | replaced by mock-app-fixtures.js |
 | tests/mocks/mocks-driver-exclusions.test.js | DELETE | tests | pinned the retired `ledger derive` / exclusions path |
 | tests/mocks/mocks-driver-look-stops-2.test.js | DELETE | tests | pinned `stop open` and the frontend-design line |
@@ -267,6 +270,26 @@ fewer surface); a build-time `mock-review` fixture package (a stub executable is
 keeps this repo dependency-free); keeping `ledger derive` (it derived exclusions from client
 answers on `walk.json`, which no longer exists). Fragile: the retired-verb sweep (A6) and the
 survivor test set (A5) are predictions priced with their remedies.
+
+Build departures (folded from the deviations sidecar at close, 2026-09-14):
+- `## Records` line syntax was unspecified; fixtures and `--mark seed-done` use one bare `- <entity>`
+  line per entity.
+- AC-7's "no ledger gate" proof appends a ledger row directly, isolating it from `ledger add`'s exit.
+- Red-check: a fixture comment naming a carried AC by ID was reworded; AC-18's `rewrites` pointer now
+  names the renamed test.
+- A5 falsified: `client-walk-route`, `exclusions-route`, `notes-reanchor` and `wire-register` still
+  drove the retired driver path; deleted per A5's remedy and added as DELETE rows.
+- Whole-suite collisions: the read-load section pin dropped § Design Atlas (D14); the genesis-doctrine
+  Authoring Rules wireframe literals retired with their subject (D12/D13); 22 criteria across 13 done
+  specs orphaned by the deleted tests were tagged `[retired: …]` to this spec.
+- User ruling 2026-09-14 (Fable second opinion): a pre-existing red from spec 02's pointer at a done
+  spec's test was fixed in the expiry pin, which now reads AC owners by defining bullet as
+  `expire-tests.js` does; spec 02 was not edited.
+- Review (3 iterations, CLEAN): every driver and `mock-cli.js` refusal now ends with `remedy:`, and
+  accepted marks print the ledger counts line plus the checkpoint line (§ Mocks: Checkpoint contract).
+  Advisory, not fixed: a missing `ledger.md` makes an accepted mark save and then exit 2 with a remedy
+  that does not recreate the file; `ledger check` grammar errors carry no `remedy:`; `spawnEnv` falls
+  back to `/usr/bin:/bin` on an empty PATH; a seed with no journeys skips SCREENS.
 
 ## Canonical Delta
 

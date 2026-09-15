@@ -472,6 +472,9 @@ test('AC-20260823-01-16: spec-paths release-legs resolves to spec/scripts/releas
 
 // specs/20260902/07-mocks-command-driver.md D16 (TDD red): spec-paths has no `mocks-driver` key
 // and no `mocks` entry in the `shared-for` SECTIONS map yet — /spec:mocks would resolve nothing.
+// Reused by specs/20260914/01-the-mock-contract-and-the-driver.md AC-20260914-01-17 (SHALL
+// CONTINUE TO: spec-paths mocks-driver keeps resolving to the rewritten driver) — this test is
+// that criterion's reuse pointer target; its title stays byte-identical.
 test('AC-20260902-07-15: spec-paths mocks-driver resolves to spec/scripts/mocks-driver.js, an existing absolute path', () => {
   const fs = require('node:fs')
   const mocksDriverPath = run('mocks-driver').trim()

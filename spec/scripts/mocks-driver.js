@@ -96,7 +96,7 @@ const root = path.resolve(flagArg(argv, '--root') || process.cwd())
 const rest = withoutFlagPair(argv, '--root')
 
 if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
-  die('--root ' + root + ' is not a directory — pass a real project root, or omit --root to use the current directory')
+  die('--root ' + root + ' is not a directory — remedy: pass a real project root, or omit --root to use the current directory')
 }
 
 const mocksDir = path.join(root, 'design/mocks')
@@ -177,7 +177,7 @@ function loadStatus() {
   try {
     raw = JSON.parse(fs.readFileSync(statusPath, 'utf8'))
   } catch (e) {
-    die('design/mocks/status.json is not valid JSON (' + e.message + ') — restore it from git history, or delete it (a fresh root is a valid starting point) and re-run')
+    die('design/mocks/status.json is not valid JSON (' + e.message + ') — remedy: restore it from git history, or delete it (a fresh root is a valid starting point) and re-run')
     return null // unreachable
   }
   if (raw.schemaVersion !== 2) {
@@ -236,7 +236,7 @@ function parseRecordEntities(text) {
 // ---------------------------------------------------------------------------
 function ledgerTextOrDie() {
   try { return fs.readFileSync(ledgerPath, 'utf8') } catch {
-    die('design/mocks/ledger.md does not exist — run the driver once with --root ' + root + ' to create it')
+    die('design/mocks/ledger.md does not exist — remedy: run the driver once with --root ' + root + ' to create it')
     return null // unreachable
   }
 }
@@ -246,7 +246,7 @@ function ledgerTextOrDie() {
 function requireGateOpen() {
   const parsed = parseLedger(ledgerTextOrDie())
   if (parsed.errors.length) {
-    die('design/mocks/ledger.md has grammar error(s): ' + parsed.errors.map((e) => e.message).join('; ') + ' — fix the ledger and re-run')
+    die('design/mocks/ledger.md has grammar error(s): ' + parsed.errors.map((e) => e.message).join('; ') + ' — remedy: fix the ledger and re-run')
   }
   const verdict = gateVerdict(parsed)
   if (!verdict.open) {
@@ -263,13 +263,13 @@ function requireGateOpen() {
 // ---------------------------------------------------------------------------
 function readNotesRaw() {
   try { return JSON.parse(fs.readFileSync(path.join(appDir(), 'design/notes.json'), 'utf8')) } catch (e) {
-    die('design/notes.json is not valid JSON (' + e.message + ') — restore it from git history, or delete it (no notes is a valid starting point) and re-run')
+    die('design/notes.json is not valid JSON (' + e.message + ') — remedy: restore it from git history, or delete it (no notes is a valid starting point) and re-run')
     return null // unreachable
   }
 }
 function readApprovalRaw() {
   try { return JSON.parse(fs.readFileSync(path.join(appDir(), 'design/approval.json'), 'utf8')) } catch (e) {
-    die('design/approval.json is not valid JSON (' + e.message + ') — restore it from git history, or delete it (no approval is a valid starting point) and re-run')
+    die('design/approval.json is not valid JSON (' + e.message + ') — remedy: restore it from git history, or delete it (no approval is a valid starting point) and re-run')
     return null // unreachable
   }
 }
@@ -293,14 +293,28 @@ function deriveState() {
 }
 
 // ---------------------------------------------------------------------------
+// spec/doctrine/mocks.md § Mocks: Checkpoint contract (D13, unchanged, binding): every accepted
+// `--mark` prints, as its last two non-blank lines, the ledger's counts line and the checkpoint
+// line naming the derived state before and after the mark — the sole signal that disk, not chat
+// context, is now the source of truth.
+// ---------------------------------------------------------------------------
+function printAcceptedTail(prevState, nextState) {
+  const parsed = parseLedger(ledgerTextOrDie())
+  writeOut(1, countsLine(parsed) + '\n')
+  writeOut(1, '✅ checkpoint — mocks state saved (' + prevState + ' → ' + nextState + '); safe to /clear and re-run /spec:mocks\n')
+  process.exit(0)
+}
+
+// ---------------------------------------------------------------------------
 // --mark seed-done (D4).
 // ---------------------------------------------------------------------------
 function cmdSeedDone() {
   contractOrDie(appDir())
+  const prevState = deriveState()
   const seedText = seedTextOrNull() || ''
   const entities = parseRecordEntities(seedText)
   if (entities === null) {
-    die('design/mocks/seed.md is missing "## Records" — add one "- <entity>" line per entity the product handles, then write app/src/records/<entity>.ts for each')
+    die('design/mocks/seed.md is missing "## Records" — remedy: add one "- <entity>" line per entity the product handles, then write app/src/records/<entity>.ts for each')
   }
   for (const entity of entities) {
     const rel = path.posix.join(status.app, 'src/records', entity + '.ts')
@@ -316,7 +330,7 @@ function cmdSeedDone() {
   status.marks.seedDone = nowIso()
   saveStatus()
   writeOut(1, '✅ seed-done recorded\n')
-  process.exit(0)
+  printAcceptedTail(prevState, deriveState())
 }
 
 // ---------------------------------------------------------------------------
@@ -324,19 +338,21 @@ function cmdSeedDone() {
 // ---------------------------------------------------------------------------
 function cmdShellDrawn() {
   contractOrDie(appDir())
+  const prevState = deriveState()
   const check = checkJson(appDir())
   if (!check.ok) {
     const errs = (check.findings || []).filter((f) => f.severity === 'error')
-    die(errs.map((f) => f.file + ': ' + f.message).join('; ') || 'check --json reports ok:false')
+    die((errs.map((f) => f.file + ': ' + f.message).join('; ') || 'check --json reports ok:false') +
+      ' — remedy: fix the finding(s) above, then re-run `--mark shell-drawn`')
   }
   const hasExamples = (check.shells || []).some((s) => Array.isArray(s.examples) && s.examples.length > 0)
   if (!hasExamples) {
-    die('no shell in check --json carries a non-empty examples list — draw the shell with at least one example first')
+    die('no shell in check --json carries a non-empty examples list — remedy: add an example to a shell in src/, then re-run `--mark shell-drawn`')
   }
   status.marks.shellDrawn = nowIso()
   saveStatus()
   writeOut(1, '✅ shell-drawn recorded\n')
-  process.exit(0)
+  printAcceptedTail(prevState, deriveState())
 }
 
 // ---------------------------------------------------------------------------
@@ -344,10 +360,11 @@ function cmdShellDrawn() {
 // ---------------------------------------------------------------------------
 function cmdJourneyDrawn(journeyArg) {
   contractOrDie(appDir())
-  if (!journeyArg) die('--mark journey-drawn needs --journey <j>')
+  if (!journeyArg) die('--mark journey-drawn needs --journey <j> — remedy: --mark journey-drawn --journey <j>')
+  const prevState = deriveState()
   const seedJourneys = currentSeedJourneys()
   if (!seedJourneys.has(journeyArg)) {
-    die('--journey ' + journeyArg + ' is not declared in design/mocks/seed.md — seed journeys: ' + [...seedJourneys.keys()].join(', '))
+    die('--journey ' + journeyArg + ' is not declared in design/mocks/seed.md — remedy: use one of the seed journeys: ' + [...seedJourneys.keys()].join(', '))
   }
   const check = checkJson(appDir())
   const cj = (check.journeys || []).find((j) => j.id === journeyArg)
@@ -356,13 +373,14 @@ function cmdJourneyDrawn(journeyArg) {
   }
   if (!cj.resolved) {
     const lines = (cj.unresolved || []).map((u) => 'step ' + u.from + ' → ' + u.to + ': ' + u.reason)
-    die('journey ' + journeyArg + ' has unresolved edge(s):\n' + lines.join('\n'))
+    die('journey ' + journeyArg + ' has unresolved edge(s):\n' + lines.join('\n') +
+      '\nremedy: resolve the edge(s) in src/journeys.ts, then re-run `--mark journey-drawn --journey ' + journeyArg + '`')
   }
   status.journeys[journeyArg] = status.journeys[journeyArg] || { drawn: null, approved: null }
   status.journeys[journeyArg].drawn = nowIso()
   saveStatus()
   writeOut(1, '✅ journey-drawn recorded for ' + journeyArg + '\n')
-  process.exit(0)
+  printAcceptedTail(prevState, deriveState())
 }
 
 // ---------------------------------------------------------------------------
@@ -370,41 +388,42 @@ function cmdJourneyDrawn(journeyArg) {
 // ---------------------------------------------------------------------------
 function cmdJourneyApproved(journeyArg) {
   contractOrDie(appDir())
-  if (!journeyArg) die('--mark journey-approved needs --journey <j>')
+  if (!journeyArg) die('--mark journey-approved needs --journey <j> — remedy: --mark journey-approved --journey <j>')
+  const prevState = deriveState()
   const check = checkJson(appDir())
   const cj = (check.journeys || []).find((j) => j.id === journeyArg)
-  if (!cj) die('check --json lists no journey with id ' + journeyArg)
+  if (!cj) die('check --json lists no journey with id ' + journeyArg + ' — remedy: add journey ' + journeyArg + ' to src/journeys.ts')
   const approval = readApprovalRaw()
   const jApproval = (approval.journeys && approval.journeys[journeyArg]) || {}
   if (!jApproval.approvedAt) {
-    die('approval.journeys["' + journeyArg + '"].approvedAt is missing — approve the journey on the served page first')
+    die('approval.journeys["' + journeyArg + '"].approvedAt is missing — remedy: approve the journey on the served page (`npx mock-review serve`), then re-run `--mark journey-approved --journey ' + journeyArg + '`')
   }
   const screens = (cj.steps || []).map((s) => s.screen)
   for (const screen of screens) {
     const sApproval = (approval.screens && approval.screens[screen]) || {}
     if (!sApproval.approvedAt) {
-      die('screen "' + screen + '" (a step on journey ' + journeyArg + ') is missing approval.screens["' + screen + '"].approvedAt — approve it on the served page first')
+      die('screen "' + screen + '" (a step on journey ' + journeyArg + ') is missing approval.screens["' + screen + '"].approvedAt — remedy: approve it on the served page (`npx mock-review serve`), then re-run `--mark journey-approved --journey ' + journeyArg + '`')
     }
   }
   const notes = readNotesRaw()
   const openOnScreen = (notes.notes || []).find((n) => n.status === 'open' && screens.includes(n.screen))
   if (openOnScreen) {
-    die('note ' + openOnScreen.id + ' is open on screen "' + openOnScreen.screen + '" — resolve it before approving journey ' + journeyArg)
+    die('note ' + openOnScreen.id + ' is open on screen "' + openOnScreen.screen + '" — remedy: resolve it (`npx mock-review answer`), then re-run `--mark journey-approved --journey ' + journeyArg + '`')
   }
   const openProject = (notes.notes || []).find((n) => n.project === true && n.status === 'open')
   if (openProject) {
-    die('project note ' + openProject.id + ' is open — resolve it before approving journey ' + journeyArg)
+    die('project note ' + openProject.id + ' is open — remedy: resolve it (`npx mock-review answer`), then re-run `--mark journey-approved --journey ' + journeyArg + '`')
   }
   const journeyThread = (notes.journeys && notes.journeys[journeyArg]) || {}
   if (journeyThread.status === 'open') {
-    die('the conversation on journey ' + journeyArg + ' is still open — resolve it before approving')
+    die('the conversation on journey ' + journeyArg + ' is still open — remedy: resolve it (`npx mock-review answer`), then re-run `--mark journey-approved --journey ' + journeyArg + '`')
   }
   requireGateOpen()
   status.journeys[journeyArg] = status.journeys[journeyArg] || { drawn: null, approved: null }
   status.journeys[journeyArg].approved = nowIso()
   saveStatus()
   writeOut(1, '✅ journey-approved recorded for ' + journeyArg + '\n')
-  process.exit(0)
+  printAcceptedTail(prevState, deriveState())
 }
 
 // ---------------------------------------------------------------------------
@@ -412,21 +431,22 @@ function cmdJourneyApproved(journeyArg) {
 // ---------------------------------------------------------------------------
 function cmdThemePicked() {
   contractOrDie(appDir())
+  const prevState = deriveState()
   const approval = readApprovalRaw()
   const k = approval.theme
-  if (!k) die('approval.theme is missing — pick a theme on the served page first')
+  if (!k) die('approval.theme is missing — remedy: pick a theme on the served page (`npx mock-review serve`), then re-run `--mark theme-picked`')
   const check = checkJson(appDir())
   if (!check.config || check.config.theme !== k) {
     die('remedy: set theme: "' + k + '" in mock.config.ts')
   }
   if (!Array.isArray(check.themes) || !check.themes.includes(k)) {
-    die('theme "' + k + '" is not listed under check --json\'s themes — author src/themes/' + k + '.css first')
+    die('theme "' + k + '" is not listed under check --json\'s themes — remedy: author src/themes/' + k + '.css, then re-run `--mark theme-picked`')
   }
   requireGateOpen()
   status.marks.themePicked = nowIso()
   saveStatus()
   writeOut(1, '✅ theme-picked recorded\n')
-  process.exit(0)
+  printAcceptedTail(prevState, deriveState())
 }
 
 // ---------------------------------------------------------------------------
@@ -434,6 +454,7 @@ function cmdThemePicked() {
 // ---------------------------------------------------------------------------
 function cmdApproved() {
   contractOrDie(appDir())
+  const prevState = deriveState()
   const approval = readApprovalRaw()
   for (const [name] of currentSeedJourneys()) {
     const jApproval = (approval.journeys && approval.journeys[name]) || {}
@@ -443,14 +464,14 @@ function cmdApproved() {
   }
   const notes = readNotesRaw()
   const openNote = (notes.notes || []).find((n) => n.status === 'open')
-  if (openNote) die('note ' + openNote.id + ' is open — resolve it before approving')
+  if (openNote) die('note ' + openNote.id + ' is open — remedy: resolve it (`npx mock-review answer`), then re-run `--mark approved`')
   const badProject = (notes.notes || []).find((n) => n.project === true && n.status !== 'approved')
-  if (badProject) die('project note ' + badProject.id + ' is not approved — resolve it before approving')
+  if (badProject) die('project note ' + badProject.id + ' is not approved — remedy: resolve it (`npx mock-review answer`), then re-run `--mark approved`')
   requireGateOpen()
   status.marks.approved = nowIso()
   saveStatus()
   writeOut(1, '✅ approved recorded\n')
-  process.exit(0)
+  printAcceptedTail(prevState, deriveState())
 }
 
 // ---------------------------------------------------------------------------
@@ -488,7 +509,7 @@ function cmdReopen(target) {
     writeOut(1, '↩ reopened ' + target + ' — cleared: ' + cleared.join(', ') + '\n')
     process.exit(0)
   }
-  die('--reopen must be journey:<j>, shell, or theme')
+  die('--reopen must be journey:<j>, shell, or theme — remedy: --reopen journey:<j>|shell|theme')
 }
 
 // ---------------------------------------------------------------------------
@@ -504,13 +525,13 @@ function cmdLedger(sub, args) {
         tag: larg('--tag'), status: larg('--status'), rejected: larg('--rejected'),
         dependents: larg('--dependents'), note: larg('--note'),
       })
-    } catch (e) { die('ledger add: ' + e.message) }
+    } catch (e) { die('ledger add: ' + e.message + ' — remedy: fix the `ledger add` flags (--id/--step/--kind/--claim/--tag/--status) and re-run') }
     fs.writeFileSync(ledgerPath, out)
     process.exit(0)
   }
   if (sub === 'set') {
     let out
-    try { out = setStatus(ledgerTextOrDie(), larg('--id'), larg('--status'), larg('--tag')) } catch (e) { die('ledger set: ' + e.message) }
+    try { out = setStatus(ledgerTextOrDie(), larg('--id'), larg('--status'), larg('--tag')) } catch (e) { die('ledger set: ' + e.message + ' — remedy: fix the `ledger set` flags (--id/--status/--tag) and re-run') }
     fs.writeFileSync(ledgerPath, out)
     process.exit(0)
   }
@@ -518,7 +539,7 @@ function cmdLedger(sub, args) {
     let out
     try {
       out = appendCatch(ledgerTextOrDie(), { id: larg('--id'), what: larg('--what'), step: larg('--step'), cost: larg('--cost'), note: larg('--note') })
-    } catch (e) { die('ledger catch: ' + e.message) }
+    } catch (e) { die('ledger catch: ' + e.message + ' — remedy: fix the `ledger catch` flags (--id/--what/--step/--cost) and re-run') }
     fs.writeFileSync(ledgerPath, out)
     process.exit(0)
   }
@@ -540,7 +561,7 @@ function cmdLedger(sub, args) {
     writeOut(1, countsLine(parsed) + '\n')
     process.exit(0)
   }
-  die('ledger: unknown subcommand "' + sub + '" — one of: add, set, catch, check, counts')
+  die('ledger: unknown subcommand "' + sub + '" — remedy: use one of: add, set, catch, check, counts')
 }
 
 // ---------------------------------------------------------------------------
@@ -549,7 +570,7 @@ function cmdLedger(sub, args) {
 function cmdClientOpen() {
   contractOrDie(appDir())
   const state = deriveState()
-  if (state !== 'CLIENT') die('client open only runs in CLIENT (current state: ' + state + ')')
+  if (state !== 'CLIENT') die('client open only runs in CLIENT (current state: ' + state + ') — remedy: re-run `node ' + __filename + ' --root ' + root + '` bare and complete the printed step until state reaches CLIENT')
   const check = checkJson(appDir())
   if (!check.serve || check.serve.url === null) die('remedy: npx mock-review serve')
   const token = check.config && check.config.client && check.config.client.token
@@ -558,8 +579,8 @@ function cmdClientOpen() {
 }
 
 function cmdClientWaive(journeyArg, reason) {
-  if (!journeyArg) die('client waive needs --journey <j>')
-  if (!reason) die('client waive needs --reason <r>')
+  if (!journeyArg) die('client waive needs --journey <j> — remedy: client waive --journey <j> --reason <r>')
+  if (!reason) die('client waive needs --reason <r> — remedy: client waive --journey <j> --reason <r>')
   const approval = readApprovalRaw()
   approval.journeys = approval.journeys || {}
   approval.journeys[journeyArg] = Object.assign({}, approval.journeys[journeyArg], {
@@ -700,13 +721,13 @@ if (rest[0] === '--mark') {
   else if (mark === 'journey-approved') cmdJourneyApproved(journeyArg)
   else if (mark === 'theme-picked') cmdThemePicked()
   else if (mark === 'approved') cmdApproved()
-  else die('--mark ' + mark + ' is unknown')
+  else die('--mark ' + mark + ' is unknown — remedy: --mark seed-done|shell-drawn|journey-drawn|journey-approved|theme-picked|approved')
 }
 
 if (rest[0] === 'client') {
   if (rest[1] === 'open') cmdClientOpen()
   else if (rest[1] === 'waive') cmdClientWaive(flagArg(rest, '--journey'), flagArg(rest, '--reason'))
-  else die('client: unknown subcommand "' + rest[1] + '"')
+  else die('client: unknown subcommand "' + rest[1] + '" — remedy: use `client open` or `client waive --journey <j> --reason <r>`')
 }
 
 // Bare run: print exactly one step block for the current state.

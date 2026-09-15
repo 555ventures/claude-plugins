@@ -26,6 +26,23 @@ function seedMarks(overrides) {
   return { seedDone: null, shellDrawn: null, themePicked: null, approved: null, ...overrides }
 }
 
+// spec/doctrine/mocks.md § Mocks: Checkpoint contract and the Behavior section's refusal
+// contract ("Refusal text always ends with `remedy: <command>` and goes to stderr"): both the
+// accepted-mark checkpoint output and every refusal's stderr are read by their trailing
+// non-blank lines, never the whole blob, so an unrelated earlier line can't mask a missing one.
+function lastNonBlankLines(text, n) {
+  const lines = text.split('\n').filter((l) => l.trim() !== '')
+  return lines.slice(-n)
+}
+
+// The Behavior section only requires refusal text to END with `remedy: <command>` — the landed
+// driver appends it as a trailing " — remedy: ..." clause on the same line for most refusals,
+// and as its own trailing line for at least one (the unresolved-edge refusal), so this checks
+// the tail of the whole trimmed stream rather than assuming either shape.
+function endsWithRemedy(text) {
+  return /remedy: \S.*$/.test(text.replace(/\s+$/, ''))
+}
+
 test('AC-20260914-01-4: a cold root creates status.json schemaVersion 2 / app "app" and prints the SEED block in the pinned line order with no Skill: line', () => {
   const root = tmpdir('states-ac4')
   fx.writeSeed(root, { records: ['client'], journeys: ['first-visit'] })
@@ -100,6 +117,8 @@ test('AC-20260914-01-6: `--mark shell-drawn` refuses on an error finding, record
   assert.strictEqual(bad.status, 2, 'an error-severity finding must refuse shell-drawn: ' + bad.stderr)
   assert.match(bad.stderr, /src\/screens\/home\.tsx/, 'the refusal must print the finding\'s file: ' + bad.stderr)
   assert.match(bad.stderr, /imports @\/review\/store/, 'the refusal must print the finding\'s message: ' + bad.stderr)
+  assert.ok(endsWithRemedy(bad.stderr),
+    'the shell-drawn ok:false refusal must end with a `remedy: <command>` line — a diagnosis with no remedy leaves the session with no next command: ' + bad.stderr)
 
   stub.setCheck({
     ...fx.checkOk(),
@@ -111,6 +130,13 @@ test('AC-20260914-01-6: `--mark shell-drawn` refuses on an error finding, record
   const good = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'shell-drawn'], { env: stub.env() })
   assert.strictEqual(good.status, 0, 'a warn-only finding with a non-empty shell examples entry must never refuse shell-drawn: ' + good.stderr)
   assert.ok(fx.readStatus(root).marks.shellDrawn, 'marks.shellDrawn must be recorded after a successful shell-drawn mark')
+  const goodLines = lastNonBlankLines(good.stdout, 2)
+  assert.strictEqual(goodLines[0],
+    '📒 ledger: 0 said-by-user · 0 ratified-doc · 0 inferred (0 open) · 0 invented (0 open) · 0 process · 0 catches · 0 exclusions',
+    'an accepted shell-drawn mark must print the ledger\'s countsLine as its second-to-last non-blank line (§ Provenance Ledger) — without it a session has no signal of the ledger state before clearing: ' + good.stdout)
+  assert.strictEqual(goodLines[1],
+    '✅ checkpoint — mocks state saved (SHELL → SCREENS); safe to /clear and re-run /spec:mocks',
+    'an accepted shell-drawn mark must print the exact § Mocks: Checkpoint contract line as its last non-blank line, naming the SHELL → SCREENS transition — its absence means the command\'s own /clear-safe promise (spec/commands/mocks.md) is false: ' + good.stdout)
   const drawFirst = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
   assert.match(drawFirst.stdout, /draw journey first-visit/, 'the next run must print the first seed journey to draw: ' + drawFirst.stdout)
 
@@ -148,6 +174,8 @@ test('AC-20260914-01-7: `--mark journey-drawn` refuses an unknown check journey,
   assert.strictEqual(notSeed.status, 2, 'a --journey not declared in the seed must refuse: ' + notSeed.stderr)
   assert.match(notSeed.stderr, /first-visit/, 'the refusal must name the seed journeys so the session can pick a real one: ' + notSeed.stderr)
   assert.match(notSeed.stderr, /daily-check/, 'the refusal must name every seed journey: ' + notSeed.stderr)
+  assert.ok(endsWithRemedy(notSeed.stderr),
+    'the out-of-seed --journey refusal must end with a `remedy: <command>` line — a session that typos a journey name still needs a next command, not just the seed list: ' + notSeed.stderr)
 
   stub.setCheck({
     ...fx.checkOk(),
@@ -156,6 +184,8 @@ test('AC-20260914-01-7: `--mark journey-drawn` refuses an unknown check journey,
   const unresolved = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'journey-drawn', '--journey', 'first-visit'], { env: stub.env() })
   assert.strictEqual(unresolved.status, 2, 'an unresolved edge must refuse journey-drawn: ' + unresolved.stderr)
   assert.match(unresolved.stderr, /step 1 → 2: no control with text "Account" in ConsoleShell/, 'the refusal must print the exact unresolved-edge line: ' + unresolved.stderr)
+  assert.ok(endsWithRemedy(unresolved.stderr),
+    'the unresolved-edge refusal must end with a `remedy: <command>` line — a journey stuck on an unresolved edge needs a next command, not just a diagnosis: ' + unresolved.stderr)
 
   stub.setCheck({
     ...fx.checkOk(),
@@ -254,6 +284,8 @@ test('AC-20260914-01-9: `--mark theme-picked` refuses a missing approval.theme, 
   let r = mark()
   assert.strictEqual(r.status, 2, 'a missing approval.theme must refuse theme-picked: ' + r.stderr)
   assert.match(r.stderr, /approval\.theme/, 'the refusal must name approval.theme: ' + r.stderr)
+  assert.ok(endsWithRemedy(r.stderr),
+    'the missing-approval.theme refusal must end with a `remedy: <command>` line — a session with no theme picked yet still needs a next command named: ' + r.stderr)
 
   fx.writeApproval(root, { ...fx.defaultApproval(), theme: 'warm' })
   r = mark()
@@ -462,6 +494,14 @@ test('AC-20260914-01-15: every retired verb refuses exit 2 with its exact D11 re
     assert.strictEqual(r.status, 2, `retired verb ${c.argv.join(' ')} must refuse exit 2: ` + r.stderr)
     assert.ok(r.stderr.includes(c.text), `retired verb ${c.argv.join(' ')} must name its D11 replacement text "${c.text}": ` + r.stderr)
   }
+
+  // A genuinely unknown --mark (never a retired D11 spelling) refuses through the driver's
+  // generic dispatch fallthrough, not the D11 table above — pinned here because it exercises the
+  // same `--mark <value>` dispatch path as the cases above, and it too must end in a remedy line.
+  const unknownMark = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'totally-bogus'], { env: stub.env() })
+  assert.strictEqual(unknownMark.status, 2, 'an unknown --mark value must refuse exit 2: ' + unknownMark.stderr)
+  assert.ok(endsWithRemedy(unknownMark.stderr),
+    'the unknown-`--mark` refusal must end with a `remedy: <command>` line — a session that typos a mark name still needs a next command, not just "is unknown": ' + unknownMark.stderr)
 })
 
 test('AC-20260914-01-23: a schemaVersion 1 status.json refuses exit 2 naming the reset remedy and writes nothing', () => {

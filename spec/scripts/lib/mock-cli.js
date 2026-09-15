@@ -42,13 +42,13 @@ function loadContract() {
   try {
     raw = fs.readFileSync(CONTRACT_PATH, 'utf8')
   } catch (e) {
-    die('spec/templates/mock/contract.json could not be read (' + e.message + ') — the plugin install is broken; reinstall it')
+    die('spec/templates/mock/contract.json could not be read (' + e.message + ') — remedy: reinstall the plugin')
     return null // unreachable
   }
   try {
     return JSON.parse(raw)
   } catch (e) {
-    die('spec/templates/mock/contract.json is not valid JSON (' + e.message + ') — the plugin install is broken; reinstall it')
+    die('spec/templates/mock/contract.json is not valid JSON (' + e.message + ') — remedy: reinstall the plugin')
     return null // unreachable
   }
 }
@@ -139,13 +139,14 @@ function runJson(appDir, verb, args = [], contract) {
   const r = run(appDir, verb, [...args, '--json'])
   if (r.error) {
     if (r.error.code === 'ENOENT') dieEnoent()
-    die(verb + ' --json failed to run: ' + r.error.message)
+    die(verb + ' --json failed to run: ' + r.error.message + ' — remedy: verify `mock-review` is installed and executable in node_modules/.bin, then re-run')
   }
   let obj
   try {
     obj = JSON.parse(r.stdout)
   } catch (e) {
-    die(verb + ' --json printed non-JSON stdout (' + e.message + '): ' + (r.stdout || '').slice(0, 200))
+    die(verb + ' --json printed non-JSON stdout (' + e.message + '): ' + (r.stdout || '').slice(0, 200) +
+      ' — remedy: run `mock-review ' + verb + ' --json` directly in the app dir to see the raw error, fix it, then re-run')
     return null // unreachable
   }
   return validateShape(verb, obj, contract || loadContract())

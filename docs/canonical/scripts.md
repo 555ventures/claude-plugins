@@ -53,6 +53,16 @@ fuller incident write-ups live in each cited spec's history.
   fail-closed child runner from `lib/driver-io.js`, like every other driver.
   (specs/20260908/02-driver-dedupe-onto-lib.md)
 
+- **`spec/scripts/lib/mock-cli.js` is the sole caller of the separate `@555/mock-review`
+  package.** `contractOrDie(appDir)` runs `contract --json` first and refuses on a
+  `contractVersion` mismatch or an ENOENT spawn, each naming its install remedy; `run(appDir,
+  verb, args)` spawns with `cwd: appDir`, `shell: false`, and the app's own
+  `node_modules/.bin` prepended to the inherited PATH. Every JSON verb's stdout is parsed and
+  validated key-presence-only against `spec/templates/mock/contract.json`'s own `shapes` map
+  before any caller reads it — no library, no type checks, `null` counts as present — so a
+  shape addition in the contract needs no matching code change here.
+  (specs/20260914/01-the-mock-contract-and-the-driver.md D1, D2)
+
 ## Prose budgets
 
 The host rules' § Gotchas section is capped at 15 entries, enforced by `prose-cap.js` (review

@@ -18,8 +18,8 @@
 //
 // `readConfigStrict(root)` is the fail-loud sibling (specs/20260815/01-recurrence-carriers.md
 // D5): the divergence across this repo's config readers was always the ERROR POLICY, never the
-// read — strict-flavored consumers (ci-gate-parity.js, render-gate.js) structurally
-// could not call `readConfig` and read the file privately instead, which is what recurred the
+// read — strict-flavored consumers (ci-gate-parity.js, a now-retired design-render gate script)
+// structurally could not call `readConfig` and read the file privately instead, which is what recurred the
 // config-read class a day after its second paydown. It throws on absent/unreadable/unparsable
 // and otherwise returns the parsed value VERBATIM — object, array, scalar, or null, with no
 // shape coercion and no non-object throw: every caller's existing guard

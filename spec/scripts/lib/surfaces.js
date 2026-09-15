@@ -1,21 +1,21 @@
 'use strict'
 // lib/surfaces.js — the one parser of the ```surfaces line grammar (a bare label, an `a -> b`
-// edge, a `#` comment), shared by design-atlas.js and genesis-driver.js
-// (specs/20260908/02-driver-dedupe-onto-lib.md D1). The drivers fold over it differently and
+// edge, a `#` comment), shared by the retired HTML atlas's build and genesis-driver.js
+// (specs/20260908/02-driver-dedupe-onto-lib.md D1). The two callers folded over it differently and
 // both folds ship here: genesis's placement check tracks every declaring brief and returns no
-// edges (it must catch a double-placement), design-atlas's build keeps only the first declaring
-// brief and returns edges (it renders a journey graph). Exported: the grammar itself,
+// edges (it must catch a double-placement), the retired atlas build kept only the first declaring
+// brief and returns edges (it rendered a journey graph). Exported: the grammar itself,
 // `parseSurfaceLines`, plus three folds over it — `parseSeedJourneys` (design/mocks/seed.md's
-// `### <journey>` blocks), `parseSurfaces` (design-atlas's first-brief-wins-with-edges fold over
-// docs/roadmap/**.md), and `parseSurfacesPlacement` (genesis's every-brief-without-edges fold
+// `### <journey>` blocks), `parseSurfaces` (the retired atlas's first-brief-wins-with-edges fold
+// over docs/roadmap/**.md), and `parseSurfacesPlacement` (genesis's every-brief-without-edges fold
 // over the same directory).
 //
 // What this deliberately does NOT do: read any file itself for `parseSurfaceLines` or
 // `parseSeedJourneys` — `parseSeedJourneys` takes the seed's already-read text (`null` on a cold
 // root) so this module stays free of path policy; only `parseSurfaces`/`parseSurfacesPlacement`
-// take a directory, because both drivers already agree roadmap briefs live at
+// take a directory, because both callers already agree roadmap briefs live at
 // `docs/roadmap/**.md`. Does not merge or reconcile the two roadmap folds into one shape —
-// `parseSurfaces`'s `node.brief` is an absolute path (design-atlas's cards link to it),
+// `parseSurfaces`'s `node.brief` is an absolute path (the retired atlas's cards link to it),
 // `parseSurfacesPlacement`'s values are file *names* (genesis's placement check reports them by
 // name) — collapsing them would silently change one caller's semantics.
 //
@@ -70,9 +70,9 @@ function parseSeedJourneys(text) {
   return journeys
 }
 
-// design-atlas's fold: every fenced ```surfaces block across docs/roadmap/**.md (sorted file
-// order), keeping the FIRST declaring brief per label and every edge seen. A missing roadmap dir
-// returns empty structures, never throws.
+// The retired atlas build's fold: every fenced ```surfaces block across docs/roadmap/**.md
+// (sorted file order), keeping the FIRST declaring brief per label and every edge seen. A
+// missing roadmap dir returns empty structures, never throws.
 function parseSurfaces(roadmapDir) {
   const nodes = new Map()   // label -> {brief: absolutePath}
   const edges = []          // [from, to]

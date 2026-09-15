@@ -104,7 +104,7 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-enforce',
-    'wf-research', 'design-atlas', 'merge-back',
+    'wf-research', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'build-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check',
     'registry-check', 'genesis-driver', 'escape-row', 'mocks-driver', 'commit-coverage',
@@ -223,7 +223,7 @@ test('shared-for: every mapped section name still exists as a core.md or design.
 // carry are retired along with their subject, never weakened into passing.
 test('shared-for: scoped output carries its sections and is smaller than the full doc, and the three retired stage keys fall open to it (incl. AC-20260820-05-17: escape keeps serving Incident Policy; AC-20260823-01-19: release keeps Release Stage/Runtime Verification and drops Feedback Loop; AC-20260912-03-13: design, build and review print the fail-open whole doctrine)', () => {
   const full = run('shared-for', 'no-such-command')
-  for (const cmd of ['plan', 'release', 'enforce', 'atlas', 'sketch', 'escape', 'doctor', 'replay', 'queue']) {
+  for (const cmd of ['plan', 'release', 'enforce', 'sketch', 'escape', 'doctor', 'replay', 'queue']) {
     const out = run('shared-for', cmd)
     assert.ok(out.length < full.length, cmd + ' output should be a strict subset')
     assert.match(out, /## Host Grounding/, cmd + ' must keep Host Grounding')
@@ -233,7 +233,11 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
   // S2): each retired list is an exact subset of `shared-for run` ∪ `shared-for run-design`, so
   // no session loses doctrine by the retirement.
   const fallbackLines = full.split('\n').length
-  for (const cmd of ['design', 'build', 'review']) {
+  // specs/20260914/03-the-html-atlas-is-retired.md D2: the `atlas` command (and its shared-for
+  // key) is deleted along with the retired command it named — it joins the design/build/review
+  // fail-open group rather than keeping its own scoped-output assertions, whose subject (a
+  // dedicated `atlas` SECTIONS map) is gone. Retired, never weakened into passing.
+  for (const cmd of ['design', 'build', 'review', 'atlas']) {
     const got = run('shared-for', cmd).split('\n').length
     assert.strictEqual(got, fallbackLines,
       'D13: shared-for ' + cmd + ' must retire to the exact fail-open line count once its SECTIONS ' +
@@ -241,16 +245,6 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
       'was left half-wired, which `shared-for` "silently drops" instead of erroring on ' +
       '(§ Review Checks): got ' + got + ', fallback is ' + fallbackLines)
   }
-  // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D10 deletes § Design Atlas
-  // from design.md outright (the whole-product view it described is a retired command, spec 03)
-  // — retargeted from a positive Design Atlas assertion to a negative one, never weakened, since
-  // the section this pin once proved atlas was served no longer exists anywhere to be served.
-  assert.match(run('shared-for', 'atlas'), /## Design Canon/,
-    'atlas consumes bound/approved semantics — the ledger definition lives in Design Canon')
-  assert.ok(!/## Design Atlas/.test(run('shared-for', 'atlas')),
-    'D10: atlas must not pay for § Design Atlas — the section is deleted from design.md outright')
-  assert.ok(!/## Design Render Gate/.test(run('shared-for', 'atlas')),
-    'atlas must not pay for the render gate — design-only doctrine')
   // specs/20260827/02-genesis-explore-state.md D10: the retired explore command's own
   // shared-for entry is deleted and `genesis` gains Design Canon instead (the driver runs the
   // taste funnel end-to-end from the entry point). Retargeted to `genesis` in place, tagged
@@ -471,6 +465,36 @@ test('AC-20260905-04-1: spec-paths design-hub exits 1 with the generic usage lin
   assert.strictEqual(r.stdout, '', 'a refused key must print nothing on stdout — a caller resolving a path must never read a real-looking value for a deleted script: ' + JSON.stringify(r.stdout))
   assert.match(r.stderr, /^usage: spec-paths /, 'the refusal must print the generic usage line on stderr: ' + JSON.stringify(r.stderr))
   assert.doesNotMatch(r.stderr, /design-hub/, 'the usage line must not list "design-hub" among the valid keys — the hub script and its key are both gone: ' + JSON.stringify(r.stderr))
+})
+
+// specs/20260914/03-the-html-atlas-is-retired.md D2/AC-20260914-03-1: the eight retired keys
+// (design-atlas, components-check, and the six render-* / design-ac-reconcile keys spec
+// 20260914/02 D14 already dropped) must each behave exactly like design-hub above — exit 1, the
+// generic usage line on stderr, naming none of the eight. design-atlas and components-check
+// still resolve to real paths today (TDD red); the other six are already refused by the
+// pre-image script (D14 landed first), so this pin also proves the sweep does not regress them.
+test('AC-20260914-03-1: spec-paths design-atlas, components-check, render-gate, render-capture, render-compare, render-inventory, render-rules, and design-ac-reconcile all exit 1 with the generic usage line on stderr, and that usage line names none of the eight retired keys', () => {
+  const { spawnSync } = require('node:child_process')
+  const RETIRED_KEYS = ['design-atlas', 'components-check', 'render-gate', 'render-capture',
+    'render-compare', 'render-inventory', 'render-rules', 'design-ac-reconcile']
+  for (const key of RETIRED_KEYS) {
+    const r = spawnSync('bash', [BIN, key], { encoding: 'utf8' })
+    assert.strictEqual(r.status, 1,
+      `D1/D2: \`spec-paths ${key}\` must exit 1 now that the eight retired keys are gone — a ` +
+      `still-resolving key means the script that key names is still reachable: ${JSON.stringify(r)}`)
+    assert.strictEqual(r.stdout, '',
+      `D2: a refused key must print nothing on stdout — a caller resolving a path must never ` +
+      `read a real-looking value for a deleted script: ${JSON.stringify(r.stdout)}`)
+    assert.match(r.stderr, /^usage: spec-paths /,
+      `D2: the refusal must print the generic usage line on stderr, exactly like any other ` +
+      `unrecognized key: ${JSON.stringify(r.stderr)}`)
+  }
+  const { stderr } = spawnSync('bash', [BIN, 'no-such-key-xyz'], { encoding: 'utf8' })
+  for (const key of RETIRED_KEYS) {
+    assert.doesNotMatch(stderr, new RegExp('(^|[|[])' + key + '($|[|\\]])'),
+      `D2: the usage line must not list "${key}" among the valid keys — the script and its key ` +
+      `are both gone: ${JSON.stringify(stderr)}`)
+  }
 })
 
 // specs/20260914/01-the-mock-contract-and-the-driver.md D14, AC-20260914-01-18: `/spec:mocks`

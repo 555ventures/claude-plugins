@@ -10,7 +10,8 @@ what to build with and how it should look, and its `HANDOFF` step grounds the re
 `/spec:enforce`); then the per-feature pipeline: `/spec:plan` → `/spec:run` (isolates in the
 spec's own worktree, then design when due, then build, then review — review is the only stage
 that flips `done`; on CLEAN it commits the close and merges back) → `/spec:release` (repeatable
-milestone gate). `/spec:atlas` keeps the whole-product design picture browsable at every stage.
+milestone gate). The reviewer's Screens and Journeys tabs keep the whole-product design picture
+browsable at every stage.
 
 This file carries the invariants every command shares. Design-stage doctrine lives in
 `design.md` (via `spec-paths shared-for <design command>`); the genesis supplement is
@@ -205,7 +206,7 @@ stage against a spec in the wrong state is blocked before the model sees it.
 review independence comes from fresh-context, blind-to-author dispatch, executed evidence, and a
 reviewer from a different model family than the builder.** Concretely: the planning session (Fable,
 or the best available model) authors specs and holds the roadmap-level design seats (genesis position
-briefs, atlas direction rounds, sketch brainstorms, and every mock, wireframe or themed, authored in-session
+briefs, sketch brainstorms, and every mock, wireframe or themed, authored in-session
 — design.md § Design Canon). **Sonnet** orchestrates build and review and is every worker. **The
 reviewer seat is Fable at `effort: low`** (`agents/reviewer.md`), a different family from the Opus
 session that builds; low holds because every finding and kill needs an executed repro, so skipped

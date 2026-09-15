@@ -135,7 +135,7 @@ reviewer sees a moment later.
   return HTML in which exactly one `[data-rv="row"]` carries `[data-rv="note-actions"]` — the
   addressed one — holding exactly two buttons whose text is `Looks good` (`data-rv="accept"`) and
   `Still not right` (`data-rv="reopen"`), and the open row SHALL CONTINUE TO carry none
-  → writes tests/mocks/review-page.test.js
+  → writes tests/mocks/review-page.test.js [retired: specs/20260914/03-the-html-atlas-is-retired.md]
 - **AC-20260912-06-2**: WHEN that same fixture renders THE SYSTEM SHALL CONTINUE TO emit a rail row
   `[data-rv="count"][data-screen="__project"]` whose text is `1` and which carries no `data-zero`,
   and the header's approve-block title SHALL CONTINUE TO name the same total it counts (`3 open
@@ -147,7 +147,7 @@ reviewer sees a moment later.
       reviewer's own accept or reopen click — so the true total is three, and exactly one of the
       three is project-scope. The invariant (the title names the same total the page computed) is
       unchanged; only the worked numbers are corrected to the fixture they describe.
-  → writes tests/mocks/review-page.test.js
+  → writes tests/mocks/review-page.test.js [retired: specs/20260914/03-the-html-atlas-is-retired.md]
 - **AC-20260912-06-3** `[retired: specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md]`:
   WHEN that same fixture renders THE SYSTEM SHALL CONTINUE TO emit inside
   `.rv-scopeband` an element carrying the literal text `Notes for` as DOM text, and
@@ -160,12 +160,12 @@ reviewer sees a moment later.
 - **AC-20260912-06-4**: WHEN that same fixture renders with `prefix` `''` THE SYSTEM SHALL CONTINUE
   TO emit exactly one `a.rv-home` whose `href` is `/` and whose text is the seed's `product`, and
   the breadcrumb SHALL CONTINUE TO contain no `Mocks` segment
-  → writes tests/mocks/review-page.test.js
+  → writes tests/mocks/review-page.test.js [retired: specs/20260914/03-the-html-atlas-is-retired.md]
 - **AC-20260912-06-5**: WHEN screen `a` declares fourteen `data-state-btn` states THE SYSTEM SHALL
   CONTINUE TO render fifteen tabs (`happy` plus each declared state) inside one
   `[role="tablist"]`, each with its own iframe `src`, and `spec/templates/mocks/viewer.css`'s
   `.rv-tabs` rule SHALL CONTINUE TO declare `flex-wrap: wrap` and no `overflow: hidden`
-  → writes tests/mocks/review-page.test.js
+  → writes tests/mocks/review-page.test.js [retired: specs/20260914/03-the-html-atlas-is-retired.md]
 - **AC-20260912-06-6**: WHEN `review.browser.js` runs under `vm` over the AC-1 markup parsed by
   `tests/helpers.js`'s `parseFlatDom`, with a stubbed `fetch`, a `localStorage` holding the reviewer
   name, and a fake `IntersectionObserver` whose callback the test fires with screen `b` at ratio
@@ -200,12 +200,12 @@ reviewer sees a moment later.
 - **AC-20260912-06-11**: WHEN `review.browser.js` runs under `vm` over the AC-1 markup with screen
   `b` focused and `Send` pressed with the text `hi` THE SYSTEM SHALL CONTINUE TO issue
   `POST /__notes/add` with `screen` `"b"` and `scope` `"mock"`
-  → writes tests/mocks/review-browser.test.js
+  → writes tests/mocks/review-browser.test.js [retired: specs/20260914/03-the-html-atlas-is-retired.md]
 - **AC-20260912-06-12** `[env: CHROME_BIN]`: WHEN the served review page for the AC-1 fixture is
   opened in headless Chrome THE SYSTEM SHALL CONTINUE TO report, for the screen badge (`.rv-badge`
   with a non-zero count), a computed `background-color` that is not the page's `--v-bg`; and for
   `.rv-strip`, a computed `border-left-width` of `1px`
-  → writes tests/mocks/review-chrome.test.js
+  → writes tests/mocks/review-chrome.test.js [retired: specs/20260914/03-the-html-atlas-is-retired.md]
 
 ## Assumptions (escalation triggers)
 

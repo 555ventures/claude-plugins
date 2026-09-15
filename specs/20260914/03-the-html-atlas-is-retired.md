@@ -1,14 +1,16 @@
 ---
 date: 2026-09-14
-status: hardened
+status: implementing
 tier: critical
 area: design
 design: false
 breaking: true
+build_base: main
 depends_on: [specs/20260914/01-the-mock-contract-and-the-driver.md, specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md]
 depended_on_by: []
 brief: 26
 open_markers: 0
+diff_base: 5391703f6e2455fd9415834b1cee3da5f45e3649
 ---
 
 # The HTML atlas is retired
@@ -37,6 +39,7 @@ artifact.
 | D8 | `docs/canonical/design.md` is rewritten to spec 02's Canonical Delta (one artifact; the design stage's four steps; sketch's sweep loop; genesis and the mock app) and `docs/canonical/scripts.md` drops the deleted scripts' rows and adds `lib/mock-cli.js`; both are File Plan rows here because the delete and the rewrite must land in one commit. [no-ac: docs; AC-20260914-03-4 pins the literals] | The canonical doc must not describe deleted code for even one commit. |
 | D9 | Before the deletion commit the orchestrator runs `git tag atlas-html-final <the build's diff_base sha>` and pushes the tag with the merge-back; the tag is the only surviving reference to the HTML system. [no-ac: git operation; the orchestrator duty line below] | Git keeps the old system; main carries one model. |
 | D10 | `lib/mocks-ledger.js` and `lib/surfaces.js` load and behave unchanged; the 🧭 misunderstandings line in `spec-status.js` continues to print. (AC-20260914-03-7) | The two survivors are pinned so the delete cannot take them by accident. |
+| D11 | Build ruling (A1 false, applied per its own if-false clause): `genesis-driver.js`'s no-mock-app `skeleton-landed` branch still spawned `components-check.js` and `design-atlas.js check`/`check --matrix`; that branch's components.json duplicate check, design/shell/app.html check, data-shell check and matrix check are removed outright (no reimplementation, no shim), so a host with no mock app lands the skeleton with no HTML-design checks. The tests pinning those checks in `tests/genesis/genesis-driver.test.js` are retired with their subject; the comment-only mentions in `lib/surfaces.js`, `lib/glob-match.js`, `lib/host-config.js` are reworded to satisfy D6. (AC-20260914-03-4, AC-20260914-03-6) | A1's if-false clause: the requiring file is a fix row in the same batch, never a shim. |
 
 ## File Plan
 
@@ -63,6 +66,10 @@ artifact.
 | spec/scripts/lib/wire-roles.js | DELETE | scripts | D1 |
 | spec/scripts/lib/walk-mode.browser.js | DELETE | scripts | D1 |
 | spec/bin/spec-paths | MODIFY | scripts | D2 |
+| spec/scripts/genesis-driver.js | MODIFY | scripts | D11: no-mock-app skeleton-landed HTML checks removed |
+| spec/scripts/lib/surfaces.js | MODIFY | scripts | D11: comment wording (D6) |
+| spec/scripts/lib/glob-match.js | MODIFY | scripts | D11: comment wording (D6) |
+| spec/scripts/lib/host-config.js | MODIFY | scripts | D11: comment wording (D6) |
 | spec/entrypoints.json | MODIFY | other | D3 |
 | spec/commands/atlas.md | DELETE | doctrine | D4 |
 | spec/doctrine/core.md | MODIFY | doctrine | D4: § Model Placement wording |
@@ -108,6 +115,7 @@ artifact.
 | tests/consistency/entrypoints.test.js | MODIFY | tests | AC-20260914-03-2 (rewrite) |
 | tests/consistency/atlas-retired.test.js | CREATE | tests | AC-20260914-03-3, AC-20260914-03-4, AC-20260914-03-6 |
 | tests/spec-status.test.js | MODIFY | tests | AC-20260914-03-7 (reuse, tag only) |
+| tests/genesis/genesis-driver.test.js | MODIFY | tests | D11: pins of the removed no-mock-app HTML checks retired |
 
 Orchestrator duties (outside the table): `git tag atlas-html-final <diff_base>` before the
 deletion commit (D9); `node scripts/plugin-bump.js --check` green after the bump;

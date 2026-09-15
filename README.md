@@ -36,7 +36,7 @@ build resumes instead of restarting.
 | `git` | everything — worktrees, diffs, the state the pipeline derives | nothing works |
 | `node` (18+) | every deterministic gate and driver script | nothing works |
 | `jq` | the hook-enforced state machine and the plugin's own path helper | **stage-order enforcement stops running** — install it before you rely on the gates |
-| Chrome or Chromium | design capture (`/spec:mocks`, `/spec:sketch`, `/spec:atlas`) only | set `CHROME_BIN` to your binary; discovery probes macOS app paths first |
+| Chrome or Chromium | design capture (`/spec:mocks`, `/spec:sketch`) only | set `CHROME_BIN` to your binary; discovery probes macOS app paths first |
 | `gh` | optional PR conveniences | degrades with a named fallback |
 
 ## Set up a repo (once)
@@ -124,8 +124,6 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
   change (init runs it the first time).
 - **`/spec:escape`** — record a defect that slipped past review; `/git:commit` offers to capture
   one automatically on fix-shaped commits. This keeps the review layer honest.
-- **`/spec:atlas`** — whole-product design view: every mock at device size, arranged by journey,
-  gap cards for unmocked surfaces. Zero tokens, never required.
 
 ## Command reference
 
@@ -138,7 +136,6 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 | `/spec:plan` | Author + adversarially harden a spec | Per feature |
 | `/spec:run` | Isolates in the spec's own worktree, then runs the whole feature: design when due, then test-first implementation behind the host gate, then independent executed review, commits/merges and flips `done`; resumable, stopping only for decisions — the only way into the design, build, and review stages | Per feature |
 | `/spec:release` | Staging deploy → executed checks → confirmed promote | Per milestone |
-| `/spec:atlas` | Whole-product design view + annotation loop | Anytime |
 | `/spec:status` | Where the work stands + the one command to paste next; `--all` adds lanes, blocked list, hygiene | Anytime you are lost |
 | `/spec:queue` | Your intended work order across briefs and specs — the one thing the pipeline cannot derive | When the order matters |
 | `/spec:replay` | Blind mutation replay: injects a known defect and measures whether review catches it | Occasionally, to keep review honest |

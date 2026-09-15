@@ -8,8 +8,7 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const { execFileSync, spawnSync, spawn } = require('child_process')
-const http = require('http')
+const { execFileSync, spawnSync } = require('child_process')
 
 const ROOT = path.join(__dirname, '..')
 const SPEC = path.join(ROOT, 'spec')
@@ -97,44 +96,8 @@ function runBash(script, argv, opts = {}) {
     { encoding: 'utf8', ...opts })
 }
 
-// specs/20260909/06-ephemeral-serve-ports.md D2: the one port-binding pair every serve-backed
-// getJson(url) / postJson(url, payload): the one JSON-over-HTTP pair every serve-backed test
-// speaks to a served route through, so a second copy never drifts from the first. Both resolve
-// rather than reject on a non-2xx — a route test asserts on the status code, so a 400 or a 404
-// is the subject under test, never an error. The resolved shape is the superset every caller
-// needs: `status`, `headers`, the parsed `body` (null when the payload is not JSON, which is
-// itself assertable), and the raw `text`. Network-level failures still reject.
-function readJsonResponse(res, resolve) {
-  const chunks = []
-  res.on('data', (c) => chunks.push(c))
-  res.on('end', () => {
-    const text = Buffer.concat(chunks).toString('utf8')
-    let body = null
-    try { body = JSON.parse(text) } catch { body = null }
-    resolve({ status: res.statusCode, headers: res.headers, body, text })
-  })
-}
-
-function getJson(url) {
-  return new Promise((resolve, reject) => {
-    http.get(url, (res) => readJsonResponse(res, resolve)).on('error', reject)
-  })
-}
-
-function postJson(url, payload) {
-  return new Promise((resolve, reject) => {
-    const data = Buffer.from(JSON.stringify(payload))
-    const req = http.request(new URL(url), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'content-length': data.length },
-    }, (res) => readJsonResponse(res, resolve))
-    req.on('error', reject)
-    req.write(data)
-    req.end()
-  })
-}
-
-// test uses — no test in this repo chooses a port number itself. freePort() binds :0, reads the
+// specs/20260909/06-ephemeral-serve-ports.md D2/D4's one legitimate use — no test in this
+// repo chooses a port number itself. freePort() binds :0, reads the
 // bound number, and closes so the caller can hand it to a process that will bind it for real
 // (D4's one legitimate use: two cooperating processes — a serve child and a second CLI
 // invocation, or a deliberate reuse probe — that must agree on the same port ahead of time).
@@ -146,126 +109,6 @@ function freePort() {
     srv.listen(0, '127.0.0.1', () => {
       const { port } = srv.address()
       srv.close((err) => (err ? reject(err) : resolve(port)))
-    })
-  })
-}
-
-// serveAtlas(root, {port, script, env} = {}): spawns design-atlas.js (or `script`, a test seam
-// for AC-20260909-06-4's stub) `serve --root <root> --port <port ?? 0>` and resolves once the
-// child's first stdout line names a bound port (`http://localhost:(\d+)/` — the banner verb is
-// deliberately not part of the parse, D4/AC-20260909-06-6), or rejects after 5000 ms with the
-// child's accumulated stderr, having already SIGKILLed the child and attached it to the
-// rejection as `err.child` so a caller can assert the timed-out child actually exited
-// (AC-20260909-06-4). `stop()` sends SIGTERM, then SIGKILL after 5000 ms if the child has not
-// exited, and resolves once it has.
-// specs/20260911/06-the-client-loop.md D12: `env`, when given, is passed to `spawn` verbatim
-// (replacing the default inherited environment) — the served process's own `npx playwright
-// screenshot` re-capture (lib/client-capture.js, run from inside this same child) needs a PATH
-// carrying a stub `npx` ahead of the real one; omitting `env` keeps the prior default (the
-// child inherits this process's environment unmodified).
-function serveAtlas(root, opts = {}) {
-  const scriptPath = opts.script || path.join(SPEC, 'scripts/design-atlas.js')
-  const port = opts.port
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath,
-      [scriptPath, 'serve', '--root', root, '--port', String(port == null ? 0 : port)],
-      opts.env ? { env: opts.env } : {})
-    let stdoutBuf = ''
-    let stderrBuf = ''
-    let settled = false
-    const timer = setTimeout(() => {
-      if (settled) return
-      settled = true
-      const rejectWithChild = () => {
-        const err = new Error('serveAtlas: no banner within 5000 ms\n' + stderrBuf)
-        err.child = child
-        reject(err)
-      }
-      if (child.exitCode !== null || child.signalCode !== null) { rejectWithChild(); return }
-      child.once('exit', rejectWithChild)
-      child.kill('SIGKILL')
-    }, 5000)
-    const finish = (fn) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      fn()
-    }
-    child.stdout.on('data', (chunk) => {
-      stdoutBuf += chunk.toString('utf8')
-      const m = stdoutBuf.match(/http:\/\/localhost:(\d+)\//)
-      if (!m) return
-      finish(() => {
-        const boundPort = Number(m[1])
-        resolve({
-          port: boundPort,
-          url: 'http://localhost:' + boundPort,
-          child,
-          stop() {
-            return new Promise((res) => {
-              if (child.exitCode !== null || child.signalCode !== null) { res(); return }
-              const killer = setTimeout(() => { try { child.kill('SIGKILL') } catch { /* already gone */ } }, 5000)
-              child.once('exit', () => { clearTimeout(killer); res() })
-              child.kill('SIGTERM')
-            })
-          },
-        })
-      })
-    })
-    child.stderr.on('data', (chunk) => { stderrBuf += chunk.toString('utf8') })
-    child.on('error', (err) => finish(() => reject(err)))
-  })
-}
-
-// specs/20260910/04-theme-before-the-client-walk.md D12 (clean-up round): the in-process
-// createRequestHandler HTTP harness — get/post against design-atlas.js's own request handler,
-// mounted on a real ephemeral-port http.createServer with no child process and no port race
-// (the A4 discipline specs/20260910/02-click-to-advance-and-real-records.md set for this exact
-// shape) — one home for what was three drifting copies (tests/design-atlas.test.js,
-// tests/mocks/walk-mode.test.js, tests/mocks/theme-serve.test.js). Every caller's
-// own require-cache-busting `loadDesignAtlas()`-style helper (needed for OTHER, non-HTTP re-require
-// cases those files still have) is untouched — this function does its own cache bust internally,
-// so a test that mutates a fixture on disk between calls always drives the current module.
-// Signature: withHandler(root, fn) or withHandler(root, prefix, fn) — design-atlas.test.js's own
-// call sites already pass a string prefix positionally; callers that never mount under a prefix
-// omit it.
-function withHandler(root, prefixOrFn, maybeFn) {
-  const prefix = typeof prefixOrFn === 'string' ? prefixOrFn : ''
-  const fn = typeof prefixOrFn === 'function' ? prefixOrFn : maybeFn
-  const scriptPath = path.join(SPEC, 'scripts/design-atlas.js')
-  delete require.cache[scriptPath]
-  const mod = require(scriptPath)
-  if (!mod || typeof mod.createRequestHandler !== 'function') {
-    throw new Error('design-atlas.js must export createRequestHandler(root,{prefix})')
-  }
-  const server = http.createServer(mod.createRequestHandler(root, { prefix }))
-  return new Promise((resolve, reject) => {
-    server.listen(0, '127.0.0.1', () => {
-      const port = server.address().port
-      const get = (p) => new Promise((res2, rej2) => {
-        http.get({ host: '127.0.0.1', port, path: p }, (r) => {
-          let body = ''
-          r.on('data', (c) => { body += c })
-          r.on('end', () => res2({ status: r.statusCode, headers: r.headers, body }))
-        }).on('error', rej2)
-      })
-      const post = (p, obj) => new Promise((res2, rej2) => {
-        const data = typeof obj === 'string' ? obj : JSON.stringify(obj)
-        const req = http.request({
-          host: '127.0.0.1', port, path: p, method: 'POST',
-          headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) },
-        }, (r) => {
-          let body = ''
-          r.on('data', (c) => { body += c })
-          r.on('end', () => res2({ status: r.statusCode, headers: r.headers, body }))
-        })
-        req.on('error', rej2)
-        req.end(data)
-      })
-      Promise.resolve(fn({ get, post, port })).then(
-        (v) => server.close(() => resolve(v)),
-        (e) => server.close(() => reject(e)),
-      )
     })
   })
 }
@@ -478,5 +321,5 @@ function gitRepo(dir, opts = {}) {
 
 module.exports = {
   ROOT, SPEC, read, extractFn, evalFns, checkWorkflowSyntax, tmpdir, runNode, runBash, gitRepo,
-  freePort, serveAtlas, getJson, postJson, withHandler, parseFlatDom,
+  freePort, parseFlatDom,
 }

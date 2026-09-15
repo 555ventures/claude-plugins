@@ -47,16 +47,6 @@
       "git/commands/commit.md"
     ]
   },
-  "spec/scripts/components-check.js": {
-    "entryPoints": [
-      "spec/scripts/genesis-driver.js"
-    ]
-  },
-  "spec/scripts/design-atlas.js": {
-    "entryPoints": [
-      "spec/commands/atlas.md"
-    ]
-  },
   "spec/scripts/env-preflight.js": {
     "entryPoints": [
       "spec/commands/doctor.md",
@@ -115,7 +105,6 @@
   },
   "spec/scripts/mocks-driver.js": {
     "entryPoints": [
-      "spec/commands/atlas.md",
       "spec/commands/mocks.md",
       "spec/commands/sketch.md",
       "spec/templates/mocks-ledger.md",
@@ -176,7 +165,6 @@
       "spec/commands/replay.md",
       "spec/commands/init.md",
       "spec/commands/release.md",
-      "spec/commands/atlas.md",
       "spec/doctrine/stages/stage-build.md",
       "spec/commands/run.md",
       "spec/commands/genesis.md",

@@ -167,7 +167,7 @@ none of them is touched by D1 — a test asserting that a Japanese sentence roun
   `tests/mocks/client-walk-route.test.js` [retired: specs/20260914/01-the-mock-contract-and-the-driver.md]
 - **AC-20260911-01-10**: WHEN a `question` note carries `answer.verdict: "waived"` THE SYSTEM SHALL
   CONTINUE TO exclude it from the open count `buildClientIndex` and `buildWalkPage` render →
-  `AC-20260911-01-10` in `tests/mocks/walk-page.test.js`
+  `AC-20260911-01-10` in `tests/mocks/walk-page.test.js` [retired: specs/20260914/03-the-html-atlas-is-retired.md]
 - **AC-20260911-01-11**: WHEN `spec/doctrine/mocks.md` § Mocks: Client Player is read THE SYSTEM
   SHALL contain no character in the ranges `぀-ヿ` or `一-龯` →
   `AC-20260911-01-11` in `tests/consistency/design-doctrine.test.js`

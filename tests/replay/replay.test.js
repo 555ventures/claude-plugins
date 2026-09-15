@@ -3996,3 +3996,37 @@ test('--select refuses with its own named exit-1 message, not the generic no-eli
     'would send the reader looking for a missing review that is actually present and merely unreproducible: ' +
     r.stderr)
 })
+
+// Doctor check 21 (queue item, no spec): --audit-claims re-checks every recorded baseline-red
+// claim against reviewRowFor's CLEAN row with isBaselineLegRed — the five historical rows that
+// slipped past (or predated) --record's cross-check were relabeled by hand, so this pins the
+// detector that keeps new ones from hiding.
+test('replay --audit-claims flags a baseline-red claim whose CLEAN review row records the leg green, absent, or has no CLEAN row, and never flags a pristine-red row', () => {
+  const dir = fs.realpathSync(tmpdir('replay-audit-claims'))
+  const legs = [{ leg: 'gate', exit: 1 }, { leg: 'reconcile', exit: 0 }, { leg: 'smoke', exit: 4 }]
+  writeLedger(dir, [
+    reviewRow(1, { verdict: 'BLOCKED', legs: [{ leg: 'reconcile', exit: 1 }] }),
+    reviewRow(1, { legs }),
+    replayLedgerRow(2, { reviewRunId: reviewRow(1).runId, legs: 'baseline-red:gate' }),
+    replayLedgerRow(3, { reviewRunId: reviewRow(1).runId, legs: 'baseline-red:reconcile' }),
+    replayLedgerRow(4, { reviewRunId: reviewRow(1).runId, legs: 'baseline-red:smoke,coverage' }),
+    replayLedgerRow(5, { reviewRunId: 'rv_nosuchrun000', legs: 'baseline-red:gate' }),
+    replayLedgerRow(6, { reviewRunId: reviewRow(1).runId, legs: 'pristine-red:reconcile', outcome: 'setup-failed', class: null }),
+  ])
+  const r = runNode(SCRIPT, ['--audit-claims'], { cwd: dir })
+  assert.strictEqual(r.status, 1, 'contradicted claims must exit 1: ' + r.stderr)
+  const lines = r.stdout.trim().split('\n')
+  assert.deepStrictEqual(lines.map(l => l.split(' ').slice(0, 2).join(' ')), [
+    'rp_000000000003 legs', 'rp_000000000004 legs', 'rp_000000000004 legs', 'rp_000000000005 legs',
+  ], 'only the green reconcile (from the CLEAN row, not the red BLOCKED iteration), the inert-green smoke, ' +
+    'the absent coverage leg and the missing CLEAN row are contradictions; gate exit 1 is honest and ' +
+    'pristine-red is expected disagreement: ' + r.stdout)
+  assert.match(lines[0], /baseline-red:reconcile .*records reconcile exit 0/)
+  assert.match(lines[2], /does not record coverage/)
+  assert.match(lines[3], /names no CLEAN review row/)
+
+  writeLedger(dir, [reviewRow(1, { legs }), replayLedgerRow(2, { reviewRunId: reviewRow(1).runId, legs: 'baseline-red:gate' })])
+  const clean = runNode(SCRIPT, ['--audit-claims'], { cwd: dir })
+  assert.strictEqual(clean.status, 0, clean.stderr)
+  assert.match(clean.stdout, /^baseline-red claims consistent$/m)
+})

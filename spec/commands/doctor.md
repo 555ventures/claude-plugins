@@ -184,6 +184,14 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     carriers to specs that are not `done` (grounding contract § Test expiry). A hit is a file to
     read, never a verdict; run (b) even when (a) reports `none`, because the hazard is a
     property of the gate, not of today's retirable count.
+21. **Replay baseline-red honesty** (deterministic, broken — never advisory) — run
+    `node "$(spec-paths replay)" --audit-claims --root .`. Each printed line names one replay
+    row whose `baseline-red:<leg>` claim contradicts its review's own CLEAN row (the leg is
+    recorded green there, absent, or the review has no CLEAN row). Such a row excuses a caught
+    or missed outcome with a leg that was never red, so `--stats` counts it on a false premise.
+    `pristine-red` rows are never flagged — disagreeing with the CLEAN row is that claim's
+    meaning. Remedy = relabel the row's `legs` to `green` (or `red:<leg>` if the mutation
+    reddened it) — a hand edit to the ledger, outside `--fix`'s grounding-layer scope.
 
 ## Semantic spot-check — small, bounded
 

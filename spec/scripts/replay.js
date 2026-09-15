@@ -10,6 +10,7 @@
 //                     [--class <id>] [--patch <file>] [--workflow <file>] [--tokens N]
 //                     [--via driver|manual]
 //         | --stats
+//         | --audit-claims
 //         | --teardown --dir <path>
 //         [--root <path>]  # repo root for every ledger/git read+append; defaults to cwd
 //
@@ -290,13 +291,13 @@ function usage() {
     'pristine-red:<leg>[,<leg>]|none ' +
     '--outcome caught|missed|leg-caught|unresolved|setup-failed [--class <id>] [--patch <file>] ' +
     '[--workflow <file>] [--tokens N] [--via driver|manual] | --stats | --pick-class [--root <path>] | ' +
-    '--backfill-pins [--root <path>] | --teardown --dir <path>')
+    '--backfill-pins [--root <path>] | --audit-claims [--root <path>] | --teardown --dir <path>')
 }
 
 const MODE_FLAGS = {
   '--due': 'due', '--select': 'select', '--setup': 'setup', '--apply': 'apply',
   '--score': 'score', '--record': 'record', '--stats': 'stats', '--teardown': 'teardown',
-  '--pick-class': 'pickClass', '--backfill-pins': 'backfillPins',
+  '--pick-class': 'pickClass', '--backfill-pins': 'backfillPins', '--audit-claims': 'auditClaims',
 }
 
 let mode = null
@@ -1666,7 +1667,39 @@ function cmdTeardown() {
   process.exit(0)
 }
 
+// ---- --audit-claims: doctor's read-only re-check of every recorded baseline-red claim -----------
+// ---- against reviewRowFor's row, under the same isBaselineLegRed predicate --record enforces. ----
+// ---- A row recorded before that cross-check existed (or hand-edited since) can still claim a ----
+// ---- leg the CLEAN review recorded green. pristine-red rows are expected disagreement (the ------
+// ---- claim IS "green at review, unreproducible now") and are never audited here. Exit 1 prints --
+// ---- one line per contradicted leg; exit 0 prints `baseline-red claims consistent`. -------------
+
+function cmdAuditClaims() {
+  const rows = readLedgerRows(root)
+  const faults = []
+  for (const r of rows) {
+    if (r.stage !== 'replay' || typeof r.legs !== 'string' || !BASELINE_RED_RE.test(r.legs)) continue
+    const review = reviewRowFor(rows, r.reviewRunId)
+    const names = r.legs.slice(r.legs.indexOf(':') + 1).split(',')
+    for (const name of names) {
+      const rec = review && Array.isArray(review.legs) ? review.legs.find((l) => l.leg === name) : null
+      if (rec && isBaselineLegRed(rec)) continue
+      const why = !review ? 'names no CLEAN review row'
+        : !Array.isArray(review.legs) ? 'whose CLEAN row records no legs array'
+        : rec ? `whose CLEAN row records ${name} exit ${rec.exit}` : `whose CLEAN row does not record ${name}`
+      faults.push(`${r.runId} legs baseline-red:${name} contradicts review ${r.reviewRunId}, ${why}`)
+    }
+  }
+  if (!faults.length) {
+    console.log('baseline-red claims consistent')
+    process.exit(0)
+  }
+  for (const f of faults) console.log(f)
+  process.exit(1)
+}
+
 switch (mode) {
+  case 'auditClaims': cmdAuditClaims(); break
   case 'due': cmdDue(); break
   case 'select': cmdSelect(); break
   case 'setup': cmdSetup(); break

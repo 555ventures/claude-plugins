@@ -1,6 +1,6 @@
 ---
 date: 2026-09-14
-status: draft
+status: hardened
 tier: critical
 area: design
 design: false
@@ -8,6 +8,7 @@ breaking: true
 depends_on: [specs/20260914/01-the-mock-contract-and-the-driver.md, specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md]
 depended_on_by: []
 brief: 26
+open_markers: 0
 ---
 
 # The HTML atlas is retired
@@ -18,7 +19,7 @@ Every script, library, test, template, fixture and chrome mock of the HTML desig
 deleted, together with `/spec:atlas`, the spec-paths keys and entrypoints rows that named them,
 and the test harness that served them. The commit before the deletion is tagged
 `atlas-html-final`. Done means: the retired-literal sweep over the plugin, the README and the
-canonical docs finds nothing; the whole suite is green with 83 fewer files; the provenance
+canonical docs finds nothing; the whole suite is green with every File Plan DELETE row gone; the provenance
 ledger and the `surfaces` grammar still load; `docs/canonical/design.md` describes one
 artifact.
 
@@ -84,13 +85,14 @@ artifact.
 | docs/spikes/23-atlas-index-nav/* | DELETE | other | D7 |
 | docs/canonical/design.md | MODIFY | other | D8 rewrite |
 | docs/canonical/scripts.md | MODIFY | other | D8 rows |
+| docs/canonical/genesis.md | MODIFY | other | D8: the `design-atlas.js` mention in the skeleton passage removed |
+| spec/templates/roadmap-overview.md | MODIFY | doctrine | D4: the `/spec:atlas` journey-map sentence removed |
 | tests/helpers.js | MODIFY | tests | D5 |
 | tests/mocks/atlas-card-height.test.js | DELETE | tests | D5 |
 | tests/mocks/client-region.test.js | DELETE | tests | D5 |
 | tests/mocks/client-walk-route.test.js | DELETE | tests | D5 |
 | tests/mocks/exclusions-route.test.js | DELETE | tests | D5 |
 | tests/mocks/kit-layers.test.js | DELETE | tests | D5 |
-| tests/mocks/mocks-exclusions.test.js | DELETE | tests | D5 |
 | tests/mocks/notes-layer-interaction.test.js | DELETE | tests | D5 |
 | tests/mocks/notes-layer-isolation.test.js | DELETE | tests | D5 |
 | tests/mocks/notes-layer-navigation.test.js | DELETE | tests | D5 |
@@ -142,7 +144,7 @@ gate's own proof that nothing dangles.
 - **AC-20260914-03-3**: WHEN `tests/helpers.js` is required THE SYSTEM SHALL export neither `serveAtlas` nor `withHandler` and its source SHALL contain no `client-capture` → writes tests/consistency/atlas-retired.test.js
 - **AC-20260914-03-4**: WHEN every file under `spec/`, `README.md` and `docs/canonical/` is scanned with the D6 boundary regex THE SYSTEM SHALL report zero occurrences of each D6 literal (e.g. `spec/commands/mocks.md` containing `design-atlas.js check` → one finding naming the file and literal; the post-change tree → none) → writes tests/consistency/atlas-retired.test.js
 - **AC-20260914-03-5**: WHEN `spec-paths shared-mocks` runs THE SYSTEM SHALL CONTINUE TO resolve to `spec/doctrine/mocks.md` carrying a `## Provenance Ledger` heading → reuses tests/spec-paths.test.js :: AC-20260902-06-9
-- **AC-20260914-03-6**: WHEN the repository tree is listed THE SYSTEM SHALL contain none of the paths the File Plan marks DELETE (a checked list of 68 paths) and SHALL still contain `spec/scripts/lib/mocks-ledger.js`, `spec/scripts/lib/surfaces.js`, `spec/templates/mocks-ledger.md`, `spec/templates/mocks-seed.md`, `spec/templates/mock/contract.json` → writes tests/consistency/atlas-retired.test.js
+- **AC-20260914-03-6**: WHEN the repository tree is listed THE SYSTEM SHALL contain none of the paths the File Plan marks DELETE (the list generated from this File Plan at build) and SHALL still contain `spec/scripts/lib/mocks-ledger.js`, `spec/scripts/lib/surfaces.js`, `spec/templates/mocks-ledger.md`, `spec/templates/mocks-seed.md`, `spec/templates/mock/contract.json` → writes tests/consistency/atlas-retired.test.js
 - **AC-20260914-03-7**: WHEN `spec-status.js` runs on a root whose `design/mocks/ledger.md` carries catches THE SYSTEM SHALL CONTINUE TO print the 🧭 misunderstandings line → reuses tests/spec-status.test.js :: AC-20260902-11-6
 
 ## Assumptions (escalation triggers)
@@ -150,13 +152,14 @@ gate's own proof that nothing dangles.
 - A1: After specs 01 and 02 land, no file outside the File Plan requires any deleted script or lib (grep 2026-09-14 of `require(` across `spec/scripts` and `tests/`: the only survivors touching the set are `tests/helpers.js` and `genesis-driver.js`, both rewired by 02/03). — **if false:** the requiring file is a fix row in the same batch; never a shim.
 - A2: `tests/consistency/read-load.test.js`'s roster derives the command list from `spec/commands/*.md`, so deleting `atlas.md` needs no roster edit. — **if false:** remove `atlas` from its table in the same batch.
 - A3: The retired-literal sweep's exemption list matches the existing sweep's `waivedPrefixes` (`specs/`, `docs/roadmap/`, `docs/audit/`, `docs/adr/`) plus `docs/spikes/`; `docs/canonical/` is deliberately NOT exempt (pipeline rules § Gotchas, last entry). — **if false:** never widen the exemption; fix the doc.
-- A4: 68 DELETE rows: 8 scripts + 18 libs + 1 command + 8 templates (mocks/ counted as 4) + 6 chrome mocks + 4 spike files + 22 test files + 1 fixture — the checked list AC-6 pins is generated from this File Plan at build. — **if false:** the list is corrected to the tree; the count is not a contract.
+- Collision closure (executed at lock over `design-atlas`, `render-capture`, `notes-layer`, `walk.json`, `picks.json`, `data-screen-label`, `viewer.css`, `serveAtlas`, `withHandler`, `client-capture`, `spec:atlas`, `mocks-exclusions`, `mocks-notes`): fix rows entered — `docs/canonical/genesis.md`, `spec/templates/roadmap-overview.md`; `spec/templates/roadmap-brief.md`'s `data-screen-label` clause is carried by spec 02's row for that file. Waived as comment text: `tests/host-config/config-read.test.js`, `tests/genesis/genesis-driver.test.js` (comments naming `design-atlas.js check` as the fixture's provenance; no test spawns it), `tests/consistency/genesis-doctrine.test.js` (the AC-20260902-08-11 case asserts genesis.md does NOT contain `/spec:atlas sweep` — a negative pin that stays true). Every other hit is a file this spec or spec 01/02 deletes or rewrites, or history under `specs/`, `docs/adr/`, `docs/roadmap/`, `docs/audit/`, `docs/spikes/` or a stale `.claude/worktrees/` tree.
+- A4: the list AC-6 pins is generated from this File Plan's DELETE rows at build (glob rows expanded against the tree), never hand-counted. — **if false:** the list is corrected to the tree.
 
 ## Rationale
 
 This spec is the deletion the first two made safe. It is a separate landing unit because a
 tree with the new driver and the old atlas is green, while a tree with neither is not, and
-because a 68-file delete reviewed together with a driver rewrite would hide either. Every
+because a delete this size reviewed together with a driver rewrite would hide either. Every
 decision here is mechanical except the literal sweep, which is the guard that the next
 session's memory or a doctrine paragraph cannot resurrect a deleted script by name. The tag
 replaces every argument for keeping a parallel directory: the history is one checkout away.

@@ -565,22 +565,6 @@ test('AC-20260820-04-1 / D11: every spec-paths key resolving under spec/scripts/
     'deliberately separate from the shape-based checks above: ' + JSON.stringify(violations))
 })
 
-// specs/20260905/06-plugin-owned-capture-at-approval.md D7: spec/entrypoints.json gains a
-// spec/scripts/render-capture.js row naming spec/scripts/render-gate.js as an entry point — like
-// every other bundled script it needs a manifest row, or this repo's own conformance guard
-// treats the new script as an orphan (§ Risk Tiers, spec-paths: "an unregistered script is
-// invisible to the conformance guard").
-test('AC-20260905-06-10: spec/entrypoints.json carries a spec/scripts/render-capture.js row naming spec/scripts/render-gate.js among its entry points', () => {
-  const manifestPath = path.join(ROOT, 'spec/entrypoints.json')
-  assert.ok(fs.existsSync(manifestPath), 'spec/entrypoints.json does not exist — D7 needs it seeded before this row can be checked')
-  const manifest = readManifest(ROOT)
-  const row = manifest['spec/scripts/render-capture.js']
-  assert.ok(row && Array.isArray(row.entryPoints),
-    'the manifest must carry a "spec/scripts/render-capture.js" key with an entryPoints array — its absence means render-capture.js ships as an orphan the conformance guard never sees: ' + JSON.stringify(row))
-  assert.ok(row.entryPoints.includes('spec/scripts/render-gate.js'),
-    'render-capture.js\'s entryPoints must include spec/scripts/render-gate.js — that is the only caller (D3\'s --which/--batch fallback), and its absence would mean the guard cannot see the real invocation edge: ' + JSON.stringify(row.entryPoints))
-})
-
 // specs/20260907/01-mixed-pin-guard-and-drift-line.md D8: the lock step (plan.md) now opens with
 // an ac-matrix.js --lint run, and the review driver's CLOSE step (spec-review-driver.js) now runs
 // ac-drift.js via runChild — two new invocation edges onto two already-manifested scripts.
@@ -627,9 +611,6 @@ test('AC-20260912-03-7: spec/entrypoints.json\'s former spec/commands/{build,rev
   // The twelve script rows the spec's own File Plan derivation names (D7 File Plan Summary):
   // each old entry point must have been replaced by its exact stage-file counterpart.
   const EXPECTED = {
-    'spec/scripts/components-check.js': ['spec/doctrine/stages/stage-design.md'],
-    'spec/scripts/design-ac-reconcile.js': ['spec/doctrine/stages/stage-design.md'],
-    'spec/scripts/design-atlas.js': ['spec/doctrine/stages/stage-design.md'],
     'spec/scripts/env-preflight.js': ['spec/doctrine/stages/stage-design.md'],
     'spec/scripts/memory-sweep.js': ['spec/doctrine/stages/stage-review.md'],
     'spec/scripts/prose-cap.js': ['spec/doctrine/stages/stage-review.md'],
@@ -647,13 +628,9 @@ test('AC-20260912-03-7: spec/entrypoints.json\'s former spec/commands/{build,rev
         JSON.stringify(entry.entryPoints))
     }
   }
-  // render-gate.js, report-render.js and spec-status.js each had TWO or THREE old entries
-  // collapsing onto stage-review.md/stage-build.md/stage-design.md — checked by set membership
-  // rather than exact arrays, since other unrelated entry points on these rows are untouched.
-  const renderGate = manifest['spec/scripts/render-gate.js']
-  assert.ok(renderGate && renderGate.entryPoints.includes('spec/doctrine/stages/stage-review.md') &&
-    renderGate.entryPoints.includes('spec/doctrine/stages/stage-design.md'),
-    'render-gate.js must be an entry point of both stage-review.md and stage-design.md: ' + JSON.stringify(renderGate))
+  // report-render.js and spec-status.js each had TWO or THREE old entries collapsing onto
+  // stage-review.md/stage-build.md/stage-design.md — checked by set membership rather than
+  // exact arrays, since other unrelated entry points on these rows are untouched.
   const reportRender = manifest['spec/scripts/report-render.js']
   assert.ok(reportRender &&
     ['stage-build.md', 'stage-design.md', 'stage-review.md'].every((f) =>

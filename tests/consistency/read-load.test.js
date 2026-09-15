@@ -123,14 +123,19 @@ test('AC-20260908-06-2: every spec/commands/*.md Rules section holds at most 8 b
 // and design keys are retired here too — their shared-for output is fail-open now, so pinning a
 // scoped section list for them is stale (the fail-open equivalence itself is pinned in
 // tests/spec-paths.test.js, AC-20260912-03-13).
+// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D10: § Design Render Gate and
+// § Design Atlas are deleted from design.md outright, and spec-paths' D10 SECTIONS-list edits
+// (spec/bin/spec-paths) fold Design Canon in earlier for atlas/sketch/genesis rather than
+// appending it — the atlas/sketch/genesis/run-design rows below follow the landed lists in
+// place, never weakened; every other row is untouched.
 const SHARED_FOR = {
   plan: ['Host Grounding', 'Pipeline Entry', 'Tiers', 'Decomposition', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'MCP Policy', 'Canonical Docs Loop', 'Session Execution'],
-  atlas: ['Host Grounding', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Session Execution', 'Design Canon', 'Design Atlas'],
-  sketch: ['Host Grounding', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Session Execution', 'Design Canon', 'Design Atlas'],
+  atlas: ['Host Grounding', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Session Execution', 'Design Canon'],
+  sketch: ['Host Grounding', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Session Execution', 'Design Canon'],
   run: ['Host Grounding', 'Tiers', 'Runtime Verification', 'Incident Policy', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'On-Disk Handoff', 'Worker Git Ban', 'Read-Only Surfaces', 'MCP Policy', 'Canonical Docs Loop', 'Session Execution'],
   release: ['Host Grounding', 'Runtime Verification', 'Release Stage', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Canonical Docs Loop', 'Session Execution'],
   enforce: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Model Placement', 'Question Style', 'Console Output Style', 'Session Execution', 'Workflows Encode Shape, Not Judgment'],
-  genesis: ['Host Grounding', 'Pipeline Entry', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Worker Git Ban', 'MCP Policy', 'Session Execution', 'Design Canon', 'Design Authoring Contracts', 'Design Atlas', 'Workflows Encode Shape, Not Judgment'],
+  genesis: ['Host Grounding', 'Pipeline Entry', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Worker Git Ban', 'MCP Policy', 'Session Execution', 'Design Canon', 'Design Authoring Contracts', 'Workflows Encode Shape, Not Judgment'],
   // specs/20260914/01-the-mock-contract-and-the-driver.md D14: § Design Atlas dropped from /spec:mocks.
   mocks: ['Host Grounding', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'MCP Policy', 'Session Execution', 'Design Canon'],
   status: ['Host Grounding', 'State Machine', 'Question Style', 'Console Output Style', 'Session Execution'],
@@ -139,7 +144,7 @@ const SHARED_FOR = {
   doctor: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Tiers', 'Runtime Verification', 'Feedback Loop', 'State Machine', 'Question Style', 'Console Output Style', 'Session Execution'],
   replay: ['Host Grounding', 'Tiers', 'Feedback Loop', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Session Execution'],
   init: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Pipeline Entry', 'Tiers', 'Runtime Verification', 'Release Stage', 'Model Placement', 'Question Style', 'Console Output Style', 'Canonical Docs Loop', 'Session Execution', 'Design Canon'],
-  'run-design': ['Design Canon', 'Design Authoring Contracts', 'Design Render Gate', 'Design Atlas'],
+  'run-design': ['Design Canon', 'Design Authoring Contracts'],
 }
 
 test('AC-20260908-06-3: spec-paths shared-for prints exactly the pinned `## ` section list, in order, for every scoped command plus run-design', () => {

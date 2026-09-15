@@ -6,31 +6,36 @@ const path = require('node:path')
 const crypto = require('node:crypto')
 const { read, runBash, ROOT } = require('../helpers')
 
-// specs/20260912/15-the-close-stops-deleting-tests.md D8/D9, AC-20260912-15-7/-8: the grounding
-// contract's § Test expiry, doctor.md check 20 and coverage-scope.js's WHY header stop telling
-// hosts that a close deletes tests or that an every-AC coverage check deadlocks every close, and
-// this repo's own contractHash is re-stamped over the rewritten contract.
+// specs/20260912/15-the-close-stops-deleting-tests.md D8/D9, AC-20260912-15-8: doctor.md check 20
+// and coverage-scope.js's WHY header stop telling hosts that an every-AC coverage check deadlocks
+// every close, and this repo's own contractHash is re-stamped over the rewritten contract.
+// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D1, AC-20260914-02-1 (rewrites
+// AC-20260912-15-7 in place): the contract's `design` block collapses to the single `app`
+// sub-key and § Render gate is deleted whole; AC-20260914-02-2 reuses AC-20260912-15-8's
+// contractHash-restamp pin unchanged.
 
 const CONTRACT_REL = 'spec/templates/grounding-contract.md'
 const DOCTOR_REL = 'spec/commands/doctor.md'
 const COVERAGE_SCOPE_REL = 'spec/scripts/coverage-scope.js'
 
-test('AC-20260912-15-7: WHEN spec/templates/grounding-contract.md is read THE SYSTEM contains neither the literal "At review close the plugin deletes" nor "deadlocks every close", and contains the sentence naming --all-done --apply as the deletion path', () => {
+test('AC-20260914-02-1: WHEN spec/templates/grounding-contract.md is read THE SYSTEM SHALL describe "design" with the single sub-key "app" and contain none of storyFormat, rulesManifest, atlasRoutes, copyCatalogs, "## Render gate"', () => {
   assert.ok(fs.existsSync(path.join(ROOT, CONTRACT_REL)), CONTRACT_REL + ' must exist for this pin to mean anything')
   const text = read(CONTRACT_REL)
 
-  assert.doesNotMatch(text, /At review close the plugin deletes/,
-    'D8: the contract must stop claiming a close deletes tests — that sentence is now false, since close-time ' +
-    'expiry is classification-only end to end: ' + text.slice(0, 400))
-  assert.doesNotMatch(text, /deadlocks every close/,
-    'D8: the deadlock paragraph describes a sequence (close deletes, then the gate re-run reports the just-' +
-    'closed spec uncovered) that can no longer occur once the close never deletes: ' + text.slice(0, 800))
-  assert.match(text, /--all-done --apply/,
-    'D8: the rewritten § Test expiry must name --all-done --apply as the one deletion path — a session reading ' +
-    'the contract must be told where deletion actually happens now')
-  assert.match(text, /scopes its carriers to specs\s+that are NOT `done`/,
-    'D8: the host obligation itself is unchanged by this spec — a check requiring a carrier per AC still scopes ' +
-    'those carriers to specs that are NOT done; this literal must survive the rewrite')
+  assert.match(text, /`design`\s*\n?\(`\{ "app": "<dir/,
+    'D1: the required-config-keys paragraph must describe `design` as `{ "app": "<dir...>" }` and ' +
+    'nothing else — a session reading this contract needs to know the design block is now a ' +
+    'single directory pointer, not the old tool/command/storyFormat/render bundle: ' + text.slice(0, 1200))
+  for (const retired of ['storyFormat', 'rulesManifest', 'atlasRoutes', 'copyCatalogs']) {
+    assert.doesNotMatch(text, new RegExp(retired),
+      'D1: the retired design sub-key "' + retired + '" must not appear anywhere in the contract — ' +
+      'its survival here would keep telling /spec:init to generate a key the driver and stage ' +
+      'doctrine no longer read, and would keep it in every host\'s grounding forever')
+  }
+  assert.doesNotMatch(text, /^## Render gate$/m,
+    'D1: the "## Render gate" section must be deleted whole — it documented a second-artifact ' +
+    'fidelity check (design.render/capture/url/ready/boot) that has no home once the design ' +
+    'block carries only "app"')
 })
 
 test('AC-20260912-15-7: WHEN spec/commands/doctor.md check 20 and spec/scripts/coverage-scope.js are read THE SYSTEM contains neither of them carrying the literal "deadlocks every close"', () => {

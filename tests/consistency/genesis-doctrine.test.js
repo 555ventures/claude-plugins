@@ -740,14 +740,14 @@ test('AC-20260902-08-17: spec-paths shared-for genesis serves Design Canon and c
     'AC-20260827-02-8 SHALL CONTINUE TO: /spec:genesis must keep being served § Host Grounding — D10 only ADDS Design Canon to the section list, it never drops the grounding doctrine every command carries')
 
   // D10: the retired command's own shared-for map entry is gone entirely — a scoped call now
-  // falls back to the `*)` arm (full doctrine), which the OLD scoped list never served
-  // (## Design Render Gate is design-family doctrine the old genesis-explore SECTIONS list
-  // deliberately excluded, per spec-paths.test.js's own prior pin).
+  // falls back to the `*)` arm (full doctrine), which the OLD scoped list never served. § Design
+  // Render Gate no longer exists at all (D10 deletes it from design.md outright), so the fallback
+  // proof retargets onto § Design Canon, which design.md still carries.
   const exploreFallback = runBash('bin/spec-paths', ['shared-for', 'genesis-explore'])
   assert.strictEqual(exploreFallback.status, 0,
     'D10: `spec-paths shared-for genesis-explore` must still exit 0 even with its map entry gone — the `*)` fallback arm (A5) serves the full doctrine rather than erroring: ' + exploreFallback.stderr)
-  assert.match(exploreFallback.stdout, /## Design Render Gate/,
-    'AC-20260827-02-8/D10: a genesis-explore call must now fall back to the FULL doctrine, which contains § Design Render Gate — a scoped output still narrower than the full doc here means the map entry was not actually removed')
+  assert.match(exploreFallback.stdout, /## Design Canon/,
+    'AC-20260827-02-8/D10: a genesis-explore call must now fall back to the FULL doctrine, which contains § Design Canon — its absence here means the map entry was not actually removed, or the fallback arm serves something narrower than the full doc')
 
   assert.strictEqual(fs.existsSync(path.join(SPEC, 'commands/genesis-explore.md')), false,
     'D10: spec/commands/genesis-explore.md must be deleted (worker file deletion, no git) — its continued presence means the retired command is still reachable even though its hook arm and shared-for entry are gone')
@@ -1163,72 +1163,58 @@ test('AC-20260902-08-17: spec-paths shared-for genesis SHALL CONTINUE TO serve i
     'shared-for genesis must CONTINUE TO serve § Host Grounding — a section map broken by this spec\'s doctrine edits would mean the command reads no grounding doctrine at all')
 })
 
-// specs/20260902/11-brief-from-approved-set.md D7: spec/commands/status.md names the new 🧭
-// misunderstandings line; spec/doctrine/genesis.md's three touched sections (§ Genesis: Brief
-// State, § Genesis: Roadmap Decomposition, § Genesis: Day-Zero Skeleton — all three headings
-// already exist, migrated by earlier specs; D7 only adds prose inside them) gain the D1/D4/D5
-// derivation rules; spec/commands/genesis.md stays <=120 lines; citations-check.js still reports
-// MISS=0 over the repo. None of the three literal phrases below exist anywhere in genesis.md
-// today (grep-confirmed at test-authoring time), so this test is red until D7 lands.
+// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D7 retargets this AC-ID: § Genesis:
+// Tournament of Scaffolds and § Genesis: Day-Zero Skeleton each gain a paragraph stating D6
+// (b)-(d) (the derived-framework auto-picks, the skipped tournament, and the check-gated
+// skeleton mark); § Genesis: Brief State names design/approval.json as a BRIEF derivation
+// source (spec 20260902/11's own D1 wiring); none of the retired second-artifact mechanics
+// (shell adopt, check --matrix, data-shell, design/components.json) may survive anywhere in the
+// file. All four literals are present in genesis.md today (grep-confirmed at test-authoring
+// time — components.json/shell-adopt/check --matrix/data-shell all still live in § Day-Zero
+// Skeleton), so this test is red until D7 lands.
 
-test('AC-20260902-11-8: spec/commands/status.md names the 🧭 misunderstandings line, genesis.md\'s three named sections carry D1/D4/D5\'s new prose, genesis.md stays <=120 lines, and citations-check.js reports MISS=0', () => {
-  const statusCmd = read('spec/commands/status.md')
-  assert.match(statusCmd, /🧭 misunderstandings/,
-    'D7: spec/commands/status.md must name "🧭 misunderstandings" — its absence means the ' +
-    'command doc never tells the session the new pipeline-record count line exists, even though ' +
-    'D6 makes spec-status.js print it unconditionally whenever the ledger has catches')
-
+test('AC-20260914-02-7: WHEN spec/doctrine/genesis.md is read THE SYSTEM SHALL name mock-review check under Day-Zero Skeleton, skipped: "mock-app" under Tournament of Scaffolds, design/approval.json under Brief State, and contain none of shell adopt, check --matrix, data-shell, design/components.json', () => {
   const doctrineSrc = read('spec/doctrine/genesis.md')
 
   const briefStateMatch = doctrineSrc.match(/^## Genesis: Brief State$/m)
   assert.ok(briefStateMatch,
     'the "## Genesis: Brief State" heading (migrated by specs/20260902/08) must still exist as ' +
-    'the section boundary D7 adds D1\'s derivation rules inside')
+    'the section boundary D7 adds design/approval.json\'s derivation source inside')
   const afterBriefState = doctrineSrc.slice(briefStateMatch.index + briefStateMatch[0].length)
   const briefStateSection = afterBriefState.slice(0, (afterBriefState.match(/^## /m) || { index: afterBriefState.length }).index)
-  assert.match(briefStateSection, /Non-UI Coverage/,
-    'D7: § Genesis: Brief State must contain "Non-UI Coverage" — its absence means D1\'s six-key ' +
-    'screen-less-facts checklist rule has no doctrine home even though the driver (once D1 lands) ' +
-    'already enforces it')
+  assert.match(briefStateSection, /design\/approval\.json/,
+    'D7: § Genesis: Brief State must name "design/approval.json" as a BRIEF derivation source — ' +
+    'its absence means the section still describes the driver reading journeys some other way ' +
+    'even though D6(a) makes briefPreconditionCheck read them straight from this file')
 
-  const roadmapMatch = doctrineSrc.match(/^## Genesis: Roadmap Decomposition$/m)
-  assert.ok(roadmapMatch,
-    'the "## Genesis: Roadmap Decomposition" heading (migrated by specs/20260825/04) must still ' +
-    'exist as the section boundary D7 adds D4\'s journey-placement rule inside')
-  const afterRoadmap = doctrineSrc.slice(roadmapMatch.index + roadmapMatch[0].length)
-  const roadmapSection = afterRoadmap.slice(0, (afterRoadmap.match(/^## /m) || { index: afterRoadmap.length }).index)
-  assert.match(roadmapSection, /exactly one brief/,
-    'D7: § Genesis: Roadmap Decomposition must contain "exactly one brief" — its absence means ' +
-    'D4\'s rule (every seed-declared label lands in exactly one brief\'s surfaces block) has no ' +
-    'doctrine home even though roadmap-written (once D4 lands) already enforces it')
+  const tournamentMatch = doctrineSrc.match(/^## Genesis: Tournament of Scaffolds$/m)
+  assert.ok(tournamentMatch,
+    'the "## Genesis: Tournament of Scaffolds" heading must still exist as the section boundary ' +
+    'D7 adds D6(b)-(c)\'s skipped-tournament paragraph inside')
+  const afterTournament = doctrineSrc.slice(tournamentMatch.index + tournamentMatch[0].length)
+  const tournamentSection = afterTournament.slice(0, (afterTournament.match(/^## /m) || { index: afterTournament.length }).index)
+  assert.match(tournamentSection, /skipped:\s*"mock-app"/,
+    'D7: § Genesis: Tournament of Scaffolds must state D6(c)\'s skipped: "mock-app" rule — its ' +
+    'absence leaves the section describing a tournament that always runs, even on a host whose ' +
+    'mock app already fixes the frontend dimensions')
 
   const skeletonMatch = doctrineSrc.match(/^## Genesis: Day-Zero Skeleton$/m)
   assert.ok(skeletonMatch,
     'the "## Genesis: Day-Zero Skeleton" heading (migrated by specs/20260825/04) must still ' +
-    'exist as the section boundary D7 adds D5\'s extraction rule inside')
+    'exist as the section boundary D7 adds D6(d)\'s check-gated mark rule inside')
   const afterSkeleton = doctrineSrc.slice(skeletonMatch.index + skeletonMatch[0].length)
   const skeletonSection = afterSkeleton.slice(0, (afterSkeleton.match(/^## /m) || { index: afterSkeleton.length }).index)
-  assert.match(skeletonSection, /shell adopt --apply/,
-    'D7: § Genesis: Day-Zero Skeleton must contain "shell adopt --apply" — its absence means D5\'s ' +
-    'extraction instruction (author the shell from the densest composed screen, then run ' +
-    '`design-atlas.js shell adopt --apply` over design/mocks/) has no doctrine home even though ' +
-    'skeleton-landed (once D5 lands) already closes on it')
+  assert.match(skeletonSection, /mock-review check/,
+    'D7: § Genesis: Day-Zero Skeleton must name "mock-review check" — its absence means the ' +
+    'section still describes the retired data-shell/design-atlas gate instead of the ' +
+    '--mark skeleton-landed precondition D6(d) actually enforces once the mock app exists')
 
-  const cmdSrc = read('spec/commands/genesis.md')
-  const cmdLines = cmdSrc.split('\n').length
-  assert.ok(cmdLines <= 120,
-    'D7: spec/commands/genesis.md must stay at most 120 lines (AC-20260825-04-9\'s own pin, ' +
-    'carried forward) — found ' + cmdLines + '; a command that grew past this bound means the ' +
-    'BRIEF derivation note D7 adds crept the choreography back into the command instead of ' +
-    'staying a shell over the driver')
-
-  const check = runNode('scripts/citations-check.js', [], { cwd: ROOT })
-  assert.strictEqual(check.status, 0,
-    'citations-check.js must exit 0 (advisory scan, never a usage error) over the repo root: ' + check.stderr)
-  assert.match(check.stdout, /\bMISS=0\b/,
-    'D7: adding prose to three existing doctrine sections and a new command command-doc line ' +
-    'must not orphan any "§ Genesis: ..." citation elsewhere in spec/ — a nonzero MISS here means ' +
-    'some command or doctrine file points at a heading this spec\'s edits broke: ' + check.stdout)
+  for (const retired of ['shell adopt', 'check --matrix', 'data-shell', 'design/components.json']) {
+    assert.ok(!doctrineSrc.includes(retired),
+      'D7: spec/doctrine/genesis.md must contain none of the retired second-artifact mechanics — ' +
+      'found "' + retired + '", which describes a check this repo no longer runs once the mock ' +
+      'app is the day-zero skeleton and design/components.json is retired (D6(d), D12)')
+  }
 })
 
 // specs/20260907/05-genesis-drops-the-theme-gates.md D6: § Genesis: Brief State and the

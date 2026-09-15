@@ -27,7 +27,7 @@ artifact.
 
 | ID | Decision | One-line rationale |
 |----|----------|--------------------|
-| D1 | The eight top-level scripts (`design-atlas.js`, `render-gate.js`, `render-rules.js`, `render-capture.js`, `render-compare.js`, `render-inventory.browser.js`, `components-check.js`, `design-ac-reconcile.js`) and the eighteen libraries under `spec/scripts/lib/` listed in the File Plan are deleted outright — never stubbed, never left as a refusing shim. `lib/mocks-ledger.js`, `lib/surfaces.js`, `port-check.js` and `env-preflight.js` stay. (AC-20260914-03-4, AC-20260914-03-6) | A shim would be a third artifact; specs 01 and 02 already removed every caller. |
+| D1 | The eight top-level scripts (`design-atlas.js`, `render-gate.js`, `render-rules.js`, `render-capture.js`, `render-compare.js`, `render-inventory.browser.js`, `components-check.js`, `design-ac-reconcile.js`; amended: spec 20260914/02 D14 already deleted the six render-* and design-ac-reconcile scripts, their tests and spec-paths keys, so this spec deletes only `design-atlas.js` and `components-check.js` of the eight) and the eighteen libraries under `spec/scripts/lib/` listed in the File Plan are deleted outright — never stubbed, never left as a refusing shim. `lib/mocks-ledger.js`, `lib/surfaces.js`, `port-check.js` and `env-preflight.js` stay. (AC-20260914-03-4, AC-20260914-03-6) | A shim would be a third artifact; specs 01 and 02 already removed every caller. |
 | D2 | `spec/bin/spec-paths` drops the keys `design-atlas`, `components-check`, `render-gate`, `render-capture`, `render-compare`, `render-inventory`, `render-rules`, `design-ac-reconcile` and the `atlas` case of `shared-for`; the usage line names none of them. A retired key exits 1 with the generic usage line, exactly as `design-hub` does today. (AC-20260914-03-1, AC-20260914-03-5) | A wrong key breaks commands silently; a removed key must fail loudly. |
 | D3 | `spec/entrypoints.json` drops the rows of every deleted script and removes `spec/commands/atlas.md` from every `entryPoints` list it appears in (`mocks-driver.js`, `report-render.js`, and any other); `spec/doctrine/stages/stage-design.md` and `spec/commands/sketch.md` stay as entry points where they still invoke the script. (AC-20260914-03-2, AC-20260914-03-8) | The manifest is the inventory the consistency suite trusts. |
 | D4 | `spec/commands/atlas.md` is deleted; `README.md`, `spec/.claude-plugin/plugin.json`'s description and `spec/doctrine/core.md` (§ Model Placement's "atlas direction rounds") stop naming `/spec:atlas`; the reviewer's Screens and Journeys tabs are the product map. (AC-20260914-03-4) | The map is the served app now. |
@@ -43,13 +43,7 @@ artifact.
 | Path | Action | Layer | Summary |
 |------|--------|-------|---------|
 | spec/scripts/design-atlas.js | DELETE | scripts | D1 |
-| spec/scripts/render-gate.js | DELETE | scripts | D1 |
-| spec/scripts/render-rules.js | DELETE | scripts | D1 |
-| spec/scripts/render-capture.js | DELETE | scripts | D1 |
-| spec/scripts/render-compare.js | DELETE | scripts | D1 |
-| spec/scripts/render-inventory.browser.js | DELETE | scripts | D1 |
 | spec/scripts/components-check.js | DELETE | scripts | D1 |
-| spec/scripts/design-ac-reconcile.js | DELETE | scripts | D1 |
 | spec/scripts/lib/notes-layer.browser.js | DELETE | scripts | D1 |
 | spec/scripts/lib/walk-page.js | DELETE | scripts | D1 |
 | spec/scripts/lib/review.browser.js | DELETE | scripts | D1 |
@@ -106,12 +100,8 @@ artifact.
 | tests/mocks/walk-page.test.js | DELETE | tests | D5 |
 | tests/mocks/wire-register.test.js | DELETE | tests | D5 |
 | tests/mocks/chrome-harness.js | DELETE | tests | D5 |
-| tests/render/render-gate.test.js | DELETE | tests | D5 |
-| tests/render/render-compare.test.js | DELETE | tests | D5 |
-| tests/render/render-rules.test.js | DELETE | tests | D5 |
 | tests/design-atlas.test.js | DELETE | tests | D5 |
 | tests/design-atlas-index.test.js | DELETE | tests | D5 |
-| tests/design-ac-reconcile.test.js | DELETE | tests | D5 |
 | tests/fixtures/mocks-notes/notes.sample.json | DELETE | tests | D5 |
 | tests/consistency/retired-flags.test.js | MODIFY | tests | D5: three cases removed |
 | tests/spec-paths.test.js | MODIFY | tests | AC-20260914-03-1 (rewrite), AC-20260914-03-5 (reuse) |
@@ -138,8 +128,8 @@ gate's own proof that nothing dangles.
 
 ## Acceptance Criteria
 
-- **AC-20260914-03-1**: WHEN `spec-paths render-capture` (and each of the other seven retired keys) runs THE SYSTEM SHALL exit 1 with the generic usage line on stderr naming none of the eight keys → rewrites tests/spec-paths.test.js :: AC-20260905-06-10: spec-paths render-capture prints
-- **AC-20260914-03-2**: WHEN `spec/entrypoints.json` is read THE SYSTEM SHALL carry no row whose key is one of the eight deleted scripts and no `entryPoints` entry equal to `spec/commands/atlas.md` → rewrites tests/consistency/entrypoints.test.js :: AC-20260905-06-10
+- **AC-20260914-03-1**: WHEN `spec-paths design-atlas` (and each of the other seven retired keys) runs THE SYSTEM SHALL exit 1 with the generic usage line on stderr naming none of the eight keys → writes tests/spec-paths.test.js (amended: spec 20260914/02 D14 deleted the render-capture key test this pointer used to rewrite)
+- **AC-20260914-03-2**: WHEN `spec/entrypoints.json` is read THE SYSTEM SHALL carry no row whose key is one of the eight deleted scripts and no `entryPoints` entry equal to `spec/commands/atlas.md` → writes tests/consistency/entrypoints.test.js (amended: spec 20260914/02 D14 deleted the render-capture entrypoints test this pointer used to rewrite)
 - **AC-20260914-03-8**: WHEN the manifest inventory check runs over the post-deletion tree THE SYSTEM SHALL CONTINUE TO pass in both directions (every executable has a row, every row names an existing file) → reuses tests/consistency/entrypoints.test.js :: AC-20260820-04-1:
 - **AC-20260914-03-3**: WHEN `tests/helpers.js` is required THE SYSTEM SHALL export neither `serveAtlas` nor `withHandler` and its source SHALL contain no `client-capture` → writes tests/consistency/atlas-retired.test.js
 - **AC-20260914-03-4**: WHEN every file under `spec/`, `README.md` and `docs/canonical/` is scanned with the D6 boundary regex THE SYSTEM SHALL report zero occurrences of each D6 literal (e.g. `spec/commands/mocks.md` containing `design-atlas.js check` → one finding naming the file and literal; the post-change tree → none) → writes tests/consistency/atlas-retired.test.js

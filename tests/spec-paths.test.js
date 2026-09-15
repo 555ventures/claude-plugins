@@ -59,21 +59,6 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // coverage}.test.js), so it carries no AC-ID of its own (same additive-collision class as
 // AC-20260819-02-10 above).
 
-// specs/20260824/01-render-gate.md D17 (spec/bin/spec-paths row): the new render-gate.js,
-// render-compare.js, and render-inventory.browser.js scripts need spec-paths keys like every
-// other bundled script — a missing key breaks review.md's render-gate advisory leg (D16) and
-// render-gate.js's own resolution of render-compare/render-inventory silently (§ Risk Tiers,
-// spec-paths). D17 marks this row [no-ac]: it is enforced fail-closed by this existing suite
-// guard (and by tests/consistency/entrypoints.test.js; same additive-collision class as
-// AC-20260819-02-10 above).
-
-// specs/20260824/04-render-rules.md D9 (spec/bin/spec-paths row): the new render-rules.js script
-// needs a spec-paths key like every other bundled script — a missing key breaks render-gate.js's
-// own resolution of render-rules.js (D5) silently (§ Risk Tiers, spec-paths). D9 marks this row
-// [no-ac: suite guards]: it is enforced fail-closed by this existing suite guard (and by
-// tests/consistency/entrypoints.test.js; same additive-collision class as AC-20260819-02-10
-// above).
-
 // specs/20260824/05-design-doctrine-cut.md D5: dc-extract.js and fidelity-check.js (and their
 // spec-paths keys) are deleted with the source-grep fidelity gate they served — a still-
 // resolving key here would mean the retirement never actually landed. `dc-extract` is removed
@@ -121,8 +106,8 @@ test('every documented key resolves to an existing path', () => {
   for (const key of ['root', 'workflows', 'wf-enforce',
     'wf-research', 'design-atlas', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
-    'review-driver', 'build-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
-    'render-inventory', 'render-rules', 'render-capture', 'registry-check', 'genesis-driver', 'escape-row', 'mocks-driver', 'commit-coverage',
+    'review-driver', 'build-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check',
+    'registry-check', 'genesis-driver', 'escape-row', 'mocks-driver', 'commit-coverage',
     'worktree-include', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
@@ -153,23 +138,6 @@ test('AC-20260904-02-12: spec-paths worktree-include resolves to spec/scripts/wo
   assert.match(r.stderr, /^usage: spec-paths \[.*\|worktree-include\|.*\]/,
     'D5: spec-paths\' own usage line (stderr) must list `worktree-include` alongside every other bundled key, or a ' +
     'session reading the usage line to discover keys never learns this one exists: ' + JSON.stringify(r.stderr))
-})
-
-// AC-20260905-06-10: specs/20260905/06-plugin-owned-capture-at-approval.md D7 adds
-// spec/scripts/render-capture.js to the bundle (a new `render-capture` key) — like every other
-// bundled script it needs a spec-paths key, or render-gate.js's own D3 fallback resolution
-// (`render-capture.js --which`) and any manual invocation find nothing (§ Risk Tiers,
-// spec-paths: "a wrong key breaks commands silently").
-test('AC-20260905-06-10: spec-paths render-capture prints an absolute path ending in spec/scripts/render-capture.js', () => {
-  const { spawnSync } = require('node:child_process')
-  const r = spawnSync('bash', [BIN, 'render-capture'], { encoding: 'utf8' })
-  assert.strictEqual(r.status, 0,
-    'D7: `spec-paths render-capture` must resolve and exit 0 — a non-zero exit means the key is missing, leaving render-gate.js\'s own fallback resolution to find nothing: ' + JSON.stringify({ status: r.status, stdout: r.stdout, stderr: r.stderr }))
-  const resolved = r.stdout.trim()
-  assert.ok(path.isAbsolute(resolved),
-    'D7: the resolved path must be absolute, the same contract every other spec-paths key honours: got ' + JSON.stringify(resolved))
-  assert.match(resolved, /\/spec\/scripts\/render-capture\.js$/,
-    'D7: the resolved path must end in spec/scripts/render-capture.js, or a caller resolving this key gets the wrong script: got ' + JSON.stringify(resolved))
 })
 
 // AC-20260901-07-15
@@ -273,9 +241,14 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
       'was left half-wired, which `shared-for` "silently drops" instead of erroring on ' +
       '(§ Review Checks): got ' + got + ', fallback is ' + fallbackLines)
   }
-  assert.match(run('shared-for', 'atlas'), /## Design Atlas/)
+  // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D10 deletes § Design Atlas
+  // from design.md outright (the whole-product view it described is a retired command, spec 03)
+  // — retargeted from a positive Design Atlas assertion to a negative one, never weakened, since
+  // the section this pin once proved atlas was served no longer exists anywhere to be served.
   assert.match(run('shared-for', 'atlas'), /## Design Canon/,
     'atlas consumes bound/approved semantics — the ledger definition lives in Design Canon')
+  assert.ok(!/## Design Atlas/.test(run('shared-for', 'atlas')),
+    'D10: atlas must not pay for § Design Atlas — the section is deleted from design.md outright')
   assert.ok(!/## Design Render Gate/.test(run('shared-for', 'atlas')),
     'atlas must not pay for the render gate — design-only doctrine')
   // specs/20260827/02-genesis-explore-state.md D10: the retired explore command's own
@@ -335,31 +308,29 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
     'D12: /spec:queue must be served § Console Output Style — the list\'s numbered-pending render and its ⏳ gate marker must follow the shared narration doctrine')
 })
 
-// AC-20260912-03-20 (retargeted in place from AC-20260824-05-3, SHALL CONTINUE TO): D1 of
-// specs/20260824/05-design-doctrine-cut.md renamed the design shared-for SECTIONS map entry from
-// "Design Binding Pipeline" to "Design Render Gate", and D4 dropped "Workflows Encode Shape, Not
-// Judgment" from the design-command list specifically. specs/20260912/03's D13 retires the
-// `design` key itself (its own subject moves to the fail-open pin above), but `run-design` — the
-// design-only delta /spec:run's Design stage loads on top of `shared-for run` — still serves
-// exactly this section, so the regression pin moves onto it rather than being deleted with its
-// former host key (rules § Gotchas: a pin whose subject is gone is retired, but here the subject
-// — the Design Render Gate section itself — is still genuinely served, just through a different
-// key).
-test('AC-20260912-03-20 (also AC-20260824-05-3, SHALL CONTINUE TO): spec-paths shared-for run-design emits ## Design Render Gate, never ## Design Binding Pipeline, and no longer emits Workflows Encode Shape, Not Judgment', () => {
+// AC-20260914-02-11 (rewrites AC-20260912-03-20 in place): specs/20260914/02-genesis-run-and-
+// sketch-read-the-mock-app.md D10 deletes design.md's § Design Render Gate and § Design Atlas
+// sections outright (the second-artifact mechanics they described no longer exist), keeping
+// only § Design Canon and § Design Authoring Contracts as the sections `run-design` — the
+// design-only delta /spec:run's Design stage loads on top of `shared-for run` — is served.
+test('AC-20260914-02-11: WHEN spec-paths shared-for run-design runs THE SYSTEM SHALL emit Design Canon and Design Authoring Contracts and never Design Render Gate or Design Atlas', () => {
   const out = run('shared-for', 'run-design')
-  assert.match(out, /## Design Render Gate/,
-    'D1/D4 (SHALL CONTINUE TO): design.md\'s renamed section must still be served under its new ' +
-    'heading — a shared-for map still pointing at the old name means /spec:run\'s Design stage ' +
-    'reads no doctrine at all for the render gate it now runs on (§ Risk Tiers, spec-paths: "a ' +
-    'wrong key breaks commands silently")')
-  assert.ok(!/## Design Binding Pipeline/.test(out),
-    'the old heading name must never be emitted again once D1 renames the section — a surviving ' +
-    'citation here means the map still points at a heading that no longer exists in design.md, ' +
-    'which shared-for "silently drops" rather than erroring on (§ Review Checks)')
-  assert.ok(!/## Workflows Encode Shape, Not Judgment/.test(out),
-    'D4 (SHALL CONTINUE TO): the design-stage SECTIONS list drops Workflows Encode Shape, Not ' +
-    'Judgment specifically — a surviving citation here means the design stage still pays for ' +
-    'doctrine its own section map was supposed to stop serving it')
+  assert.match(out, /## Design Canon/,
+    'D10: design.md\'s surviving § Design Canon section must be served to run-design — a ' +
+    'shared-for map that drops it means /spec:run\'s Design stage reads no doctrine at all for ' +
+    'the one-artifact model (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently")')
+  assert.match(out, /## Design Authoring Contracts/,
+    'D10: design.md\'s surviving § Design Authoring Contracts section must be served to ' +
+    'run-design — the Design stage\'s preflight/reconcile/look/stamp steps need the three ' +
+    'import-layer and approval-record rules this section states')
+  assert.ok(!/## Design Render Gate/.test(out),
+    'D10: § Design Render Gate is deleted from design.md outright — a surviving citation here ' +
+    'means the map still points at a heading describing a fidelity check against a second ' +
+    'artifact that no longer exists')
+  assert.ok(!/## Design Atlas/.test(out),
+    'D10: § Design Atlas is deleted from design.md outright — a surviving citation here means ' +
+    'the Design stage is still served doctrine for a whole-product view spec 03 retires the ' +
+    'command for')
 })
 
 test('AC-20260819-02-10: spec-paths replay and spec-paths replay-corpus resolve to the D14 script and corpus paths', () => {
@@ -559,7 +530,11 @@ test('shared-for run-design: the design-only delta, disjoint from shared-for run
   const runOut = run('shared-for', 'run')
   const headings = (s) => [...s.matchAll(/^## (.+)$/gm)].map(m => m[1])
   const d = headings(delta)
-  assert.deepStrictEqual(d.map(h => h.replace(/ \(.*$/, '')), ['Design Canon', 'Design Authoring Contracts', 'Design Render Gate', 'Design Atlas'])
+  // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D10: § Design Render Gate and
+  // § Design Atlas are deleted from design.md outright, so run-design's SECTIONS list shrinks to
+  // the two surviving sections — retargeted in place, never weakened (the disjoint-from-run
+  // property below is unchanged and still asserted against the full delta).
+  assert.deepStrictEqual(d.map(h => h.replace(/ \(.*$/, '')), ['Design Canon', 'Design Authoring Contracts'])
   for (const h of d) assert.ok(!headings(runOut).includes(h), `run-design re-emits "${h}", which shared-for run already serves — the delta exists to avoid exactly that`)
   // AC-20260912-03-13: `shared-for design` itself is retired to the fail-open fallback (D13), so
   // it can no longer stand in for "design.md's own section list" — read design.md directly.

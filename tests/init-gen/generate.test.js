@@ -775,3 +775,28 @@ test('AC-20260902-04-1: generate renders the minimal-host fixture profile\'s rul
   assert.ok(!rulesFile.includes('dated'),
     'D1: the rendered Gotchas header must not contain the word "dated" — the retired grammar ("a dated incident") is exactly what this generator must stop planting on every fresh host: ' + rulesFile)
 })
+
+// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D11, AC-20260914-02-12: the
+// `mock-authoring` skill (spec 01) replaced the frontend-design install offer, so init-gen.js's
+// probe subcommand must stop reporting on it at all and spec/commands/init.md must stop offering
+// to install it. probeFrontendDesign() still runs and stamps `out.frontendDesign` today
+// (init-gen.js ~136/147), and init.md's install-offer passage (lines ~211-226) still exists, so
+// this test is red until D11 lands.
+test('AC-20260914-02-12: WHEN init-gen.js probe runs on the minimal-host fixture THE SYSTEM SHALL print JSON with no frontendDesign key, and spec/commands/init.md SHALL contain no frontend-design', () => {
+  const dir = newHost('init-gen-probe-no-frontend-design')
+
+  const r = runNode('scripts/init-gen.js', ['probe', '--root', dir])
+  assert.strictEqual(r.status, 0, 'D11: probe must CONTINUE TO exit 0 on a clean synthetic host — dropping the frontend-design probe must not turn probe into a usage error: ' + r.stderr)
+
+  const out = JSON.parse(r.stdout)
+  assert.ok(!('frontendDesign' in out),
+    'D11: probe\'s JSON output must carry no "frontendDesign" key — probeFrontendDesign() and the ' +
+    'field it stamps are retired outright now that the mock-authoring skill (spec 01) replaced ' +
+    'the frontend-design plugin install offer: ' + r.stdout)
+
+  const initCmd = read('spec/commands/init.md')
+  assert.ok(!initCmd.includes('frontend-design'),
+    'D11: spec/commands/init.md must contain no "frontend-design" literal anywhere — the install-' +
+    'offer passage (probe result branch, install command, and its interactive-fallback prose) ' +
+    'must be deleted whole, not just left unreachable')
+})

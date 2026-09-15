@@ -21,15 +21,15 @@ path to a roadmap planning brief (`docs/roadmap/NN-*.md`).
 
 ## Entry
 
-- **Roadmap brief:** read the brief, `docs/roadmap/00-overview.md`, and every ADR the
-  brief's Grounding cites (including each `Amended by ADR-NNNN`). Run
-  `node "$(spec-paths spec-status)" --root . --brief NN` — exit 1 means a `Depends on`
-  brief has no spec at `implementing`/`done`: warn and confirm before proceeding. Every
-  spec this session produces gets `brief: NN` in frontmatter (that stamp is how roadmap
-  status is derived); an ad-hoc spec gets `brief: n/a`. The brief's Out of scope section
-  is binding. UI-bearing briefs (a `surfaces` block): read each surface's mock under
-  `design/mocks/`; a missing or un-ratified mock → offer `/spec:sketch <brief>` first
-  (warn, don't block); a mock↔brief mismatch becomes a user question, never a silent pick.
+- **Roadmap brief:** read the brief, `docs/roadmap/00-overview.md`, and every ADR the brief's
+  Grounding cites (including each `Amended by ADR-NNNN`). Run
+  `node "$(spec-paths spec-status)" --root . --brief NN` — exit 1 means a `Depends on` brief has
+  no spec at `implementing`/`done`: warn and confirm before proceeding. Every spec this session
+  produces gets `brief: NN` in frontmatter (that stamp is how roadmap status is derived); an
+  ad-hoc spec gets `brief: n/a`. The brief's Out of scope section is binding. UI-bearing briefs
+  (a `surfaces` block): read each surface's screen under `src/screens/` and its
+  `design/approval.json` entry; a label not approved-and-current there → offer
+  `/spec:sketch <brief>` first (warn, don't block); a mismatch is a user question, never silent.
 - **Tier:** `standard` for almost everything; `critical` when the work touches
   irreversible or high-blast-radius surfaces — auth/security boundaries, data migrations,
   money, deletion of user data, or whatever the host's pipeline rules add. State the tier
@@ -81,8 +81,8 @@ Write the spec per the template. `status: draft`. While drafting:
   `if false →` fallback. Fill **Rationale** (for the cold-start reader) and **Canonical
   Delta** (applied by the review stage on CLEAN).
 - **`design:`** — only in hosts whose config declares a `design` block: `true` when the
-  user should approve look/feel before build; record any `claude.ai/design` mockup URL or
-  ratified mock path as `design_source:`. Hosts without a catalog never set the flag.
+  user should approve look/feel before build; record the approved screen path as
+  `design_source: src/screens/<label>.tsx` (or `src/screens` for several).
 
 ## Lock
 

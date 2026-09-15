@@ -232,12 +232,10 @@ const { runChild, writeOut, appendLedger: appendLedgerLib, loadSidecar, saveSide
 // fmVal renamed fmValue (D8/D9 — no alias survives); fmBlock replaces this file's own
 // `/^---\n([\s\S]*?)\n---/` block regex below.
 const { fmBlock, fmValue } = require('./lib/frontmatter')
-// specs/20260824/01-render-gate.md D16: the REVIEWER step's printed text names the advisory
-// render-gate run when the host config declares design.render — text only, this driver never
-// runs the render gate itself (review.md's own dispatch line does; the DESIGN render gate is a
-// distinct, advisory-only surface from the close-time host gateCommand re-run below). readConfig
-// degrades to {} on an absent/unreadable config, which reads as "not declared" here, same as
-// every other caller.
+// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D5: the REVIEWER step's printed
+// text no longer names an advisory fidelity-check run against a second, rendered artifact — the
+// mocks are the components now, so there is nothing left for review.md's dispatch line to
+// describe beyond the reviewer itself. readConfig still backs the close-time gateCommand re-run below.
 const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 // specs/20260830/02-close-gate-rerun.md D1/D3: the close-time
 // host-gate re-run in handleClosed() shares the exact {testDirs}/{scopeDirs} resolution
@@ -336,11 +334,6 @@ const buildBase = fmVal(BASE_KEYS[1])
 const diffBaseFm = fmVal('diff_base')
 const designFlag = fmVal('design') === 'true'
 const designSource = fmVal('design_source')
-// D16: read once, at entry — repoRoot is already resolved above, and this is a pure text-only
-// read (no state written), so it is safe to compute unconditionally rather than only inside the
-// REVIEWER step closure.
-const hostDesignConfig = readConfig(repoRoot).design
-const renderGateDeclared = !!(hostDesignConfig && hostDesignConfig.render)
 
 if (!['implementing', 'done'].includes(status)) {
   die('spec status is "' + (status || '<missing>') + '" — spec-review-driver requires ' +
@@ -1888,7 +1881,7 @@ function isTrackedInWorktree(wt, relPath) {
   return r.status === 0
 }
 // A DIRECTORY IS WALKED, NEVER REMOVED WHOLE. `.claude/spec-runs/` holds files at its top level
-// AND subdirectories (render-gate writes `render/<spec>/` when given --out). An un-recursive
+// AND subdirectories (other scripts write their own per-spec subdirectories here). An un-recursive
 // `rmSync` raises ERR_FS_EISDIR on a directory entry, and this function runs inside
 // promoteEvidenceAndClean — AFTER the merge lands and BEFORE the ledger commit — so a raise here
 // leaves the main root dirty and the run unfinished. (Re-running `--mark merge-strategy` is safe:
@@ -2237,12 +2230,7 @@ const STEPS = {
   // the word "scope" from this step's text outright, so neither variant below prints it.
   REVIEWER: () => {
     const designBlock = (designFlag || designSource)
-      ? '  design specs also get the component-manifest audit agent alongside the reviewer' +
-        (renderGateDeclared
-          ? '; also run the advisory render gate review.md names (design.render is declared — its ' +
-            'run now carries the design-rules.json renderCheck pass too) and hand its report path ' +
-            'to the reviewer as evidence.\n'
-          : ' (design.render is not declared — skip the advisory render-gate run).\n')
+      ? '  design specs also get the component-manifest audit agent alongside the reviewer.\n'
       : ''
     const tail = `Write its structured return ({verdict, survivors, killed, reviewerCount, tokens}) to ` +
       `a file, then:\n  node ${__filename} ${specPath} --mark reviewer-returned --file <return.json>\n` +

@@ -133,26 +133,11 @@ if (sub === 'ignore-check') {
 
 if (sub === 'probe') {
   const out = {}
-  out.frontendDesign = probeFrontendDesign()
   if (testCommandArg) out.testCommand = probeTestCommand(testCommandArg, root)
   const atRisk = probeAtRisk(root, sample)
   if (atRisk) out.atRisk = atRisk
   process.stdout.write(JSON.stringify(out, null, 2) + '\n')
   process.exit(0)
-}
-
-// D7/A1: `claude plugin list --json` reports an array of rows carrying id (name@marketplace),
-// scope, enabled. `claude` absent from PATH -> typed no-claude-cli (never a probe failure).
-// An unparseable/non-array response -> typed unparseable-plugin-list (A1's escalation arm).
-function probeFrontendDesign() {
-  const r = spawnSync('claude', ['plugin', 'list', '--json'], { encoding: 'utf8' })
-  if (r.error) return { unavailable: 'no-claude-cli' }
-  let rows
-  try { rows = JSON.parse(r.stdout) } catch { return { unavailable: 'unparseable-plugin-list' } }
-  if (!Array.isArray(rows)) return { unavailable: 'unparseable-plugin-list' }
-  const row = rows.find((x) => x && typeof x.id === 'string' && x.id.split('@')[0] === 'frontend-design')
-  if (!row) return { installed: false }
-  return { installed: true, enabled: !!row.enabled, scope: row.scope }
 }
 
 // D8: executes `<cmd> <generated nonexistent path>` in the host root. exit 0 means the runner

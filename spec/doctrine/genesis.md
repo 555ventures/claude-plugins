@@ -130,6 +130,11 @@ approved on real screens (or, for a legacy run, on its existing explore/design a
 and tells the session to `run /spec:mocks`. `backend-api`, `data-ml`, `conversational-bot`, and
 `cli-devtool` never owe this precondition — they proceed straight to ratification.
 
+**Derivation sources.** The BRIEF step reads `design/approval.json`'s `journeys` keys for the
+seed journey count and `design/notes.json` (notes and journey conversations alike, `status ===
+"open"`) for the open-note count, printed as `seed journeys: N · notes open: N` — plain `fs` +
+JSON, never `lib/mocks-notes`.
+
 **Ratification (`--mark brief-written`), tiered by archetype:**
 
 - `backend-api` / `data-ml` — nothing beyond DISCOVERY; the mark records `design: "skipped"`.
@@ -167,11 +172,6 @@ ratification checks above) and records `brief.legacy: true`; every downstream le
 valid, so the run lands on its real next state — MENUS, DECIDE, SCAFFOLD, SKELETON, GATE,
 ROADMAP, or HANDOFF — after this one mark, never a forced re-run of MENUS.
 
-**Components check relocates.** `--mark skeleton-landed` (archetypes that own a mocks set)
-additionally requires `design/components.json` to exist and `components-check.js` to exit 0 —
-the session seeds this manifest at SKELETON from the approved set's primitives, until spec 11's
-extraction lands.
-
 **Brief generation is derived, never guessed (specs/20260902/11 D1–D2).** On a fresh run
 that owes a mocks set, `.claude/genesis/brief.md` gains two sections after `## Picks`:
 `## Journeys` (one `### <journey>` block per seed journey — persona line, the seed's
@@ -195,6 +195,18 @@ Between `MENUS` and `DECIDE`, **tournament archetypes** (`web-app`, `realtime-tr
 argument alone: `FINALISTS` → `RACE` (driver-only) → `PROBE` → `PICK`. Every other archetype
 derives `MENUS → DECIDE` unchanged and writes no `.claude/genesis/tournament/`; a skipped race
 (`--mark finalists-skipped`) records `tournament.skipped` and advances the same way.
+
+**The mock app pre-empts the tournament.** When `<status.app>/mock.config.ts` exists at
+`MENUS`, `framework`, `language`, and `packageManager` are already fixed by the app the user
+approved in `/spec:mocks` — each auto-picked (`vite-react` / `typescript` / `npm`), printed once
+per run while its dimension is open (`📌 Auto-picked <value> — the mock app is the product's
+frontend (ADR-0028) (veto anytime)`), and recorded decided; `testRunner` and every other
+dimension stay open, priced the ordinary way. The tournament is never raced against an app that
+already exists — racing scaffolds would either overwrite it or be theater — and the state is
+recorded `tournament: { skipped: "mock-app" }` at `MENUS` itself, never reaching `FINALISTS`,
+`RACE`, `PROBE`, or `PICK`; `DECIDE` proceeds straight on the derived dimensions. A host with no
+`<status.app>/mock.config.ts` runs the tournament exactly as described below — no behavior
+change on brownfield hosts, which never reach genesis anyway.
 
 **FINALISTS.** The session composes 2–3 finalist stack combinations from the menus (a
 finalist is a combination the session composes, never a single option); at least one must
@@ -408,12 +420,11 @@ The output is `docs/design/research-brief.md` (template: `ux-research-brief.md` 
 
 Mechanizable rules flow into `design-rules.json` categories at BRIEF's ratification mark
 (§ Genesis: Brief State); the rest bind every `/spec:mocks` session and every later
-mock-authoring or build session — not by being read and remembered, but by being checked. A
-rule that carries a `renderCheck` is executed by `render-rules.js` over the render inventory
-(shared § Design Canon), never walked by a model; the **rule-checklist pass** runs during
-`/spec:mocks`' review, which precedes `design-rules.json` and so has no manifest to execute
-yet: a checker walks the admitted rules against each candidate before approval, citing rule
-IDs. The falsifiable phrasing above is what makes both possible.
+mock-authoring or build session — not by being read and remembered, but by being checked. The
+**rule-checklist pass** runs during `/spec:mocks`' review, which precedes `design-rules.json`
+and so has no manifest to execute yet: a checker walks the admitted rules against each
+candidate before approval, citing rule IDs. The falsifiable phrasing above is what makes this
+possible.
 
 ## Genesis: Executed Assumptions (dependency-adjudicated claims never lock by argument)
 
@@ -487,18 +498,14 @@ Land the test + CI skeleton — the enforcement half of the ops ADR, day zero:
   ≤150-line file naming the gate command and the test tree, the primary artifact a fresh agent
   actually reads.
 
-**Shell and inventory extraction (specs/20260902/11 D5, fresh mocks-set runs only).** The
-SKELETON step text instructs the session to author `design/shell/app.html` + `app.css` from
-the seed's `## Dense screen` — the densest composed screen's chrome — and then run
-`design-atlas.js shell adopt --apply` over `design/mocks/` to stamp every mock with the
-extracted shell (brief 20's mechanism, now fed from extraction instead of authored blind at
-day zero; ADR-0006 reverses ADR-0003's bootstrap order). `--mark skeleton-landed` additionally
-requires: `design/shell/app.html` exists and passes `check`; every top-level
-`design/mocks/*.html` declares `data-shell`; `design-atlas.js check --matrix design/mocks`
-exits 0; and `design/components.json` carries one entry named for every primitive bullet in
-`design/mocks/canon.md ## Primitives` (`components-check.js` exit 0, § Genesis: Brief State's
-components check). Each refusal names the exact missing item — the file, the un-stamped mock,
-or the missing primitive — never a generic "extraction incomplete".
+**The mock app is the day-zero skeleton (fresh mocks-set runs only).** When `<status.app>/
+mock.config.ts` exists, `SCAFFOLD` runs no `scaffoldCommand` — the app the user already
+approved in `/spec:mocks` is the skeleton, so racing or re-scaffolding it would either overwrite
+work or be theater — and records `status.scaffold = { skipped: "mock-app" }`. `--mark
+skeleton-landed` then refuses unless `mock-review check` reports `ok: true` (via `lib/
+mock-cli.js`) and the zero-day gate is green; the refusal names whichever failed. There is no
+separate shell-extraction pass and no second component manifest here — the screens already
+carry their own shells and states, checked structurally by `mock-review check` itself.
 
 ## Genesis: Conventions Probe Suite
 
@@ -668,9 +675,6 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   approved-set workspace BRIEF reads directly: `seed.md`, `canon.md`, `status.json`,
   `ledger.md`, `tokens.css`, and the approved journeys' screens. BRIEF never writes here — it
   only reads `status.json`/`ledger.md` for the precondition.
-- **`design/components.json`** (durable) — the component manifest, seeded by BRIEF's
-  ratification with the base primitives, extended by every design-stage reconcile (shared §
-  Design Authoring Contracts, component manifest).
 - **`.claude/genesis/design-rules.json`** — design's output: category-only enforcement rules.
 - **`.claude/genesis/interview-research/{dimension}.json`** — the woven-loop option menus,
   each surviving option stamped with a `currency` block and each menu carrying any

@@ -1,169 +1,83 @@
 ---
-description: Design-stage doctrine — Design Canon, Authoring Contracts, Render Gate, and Atlas; fidelity is judged at the render (ADR-0002)
+description: Design-stage doctrine — one artifact, the mock app itself; Design Canon and Authoring Contracts
 ---
 
 # Spec Pipeline: Design Doctrine
-## Design Canon (mocks, tokens, harness)
-The design stage runs only on hosts with a component catalog; it is tool-agnostic. The host
-config's `design` block declares `tool`/`command`/`storyFormat`/`doctrine`/`render` (§ Render
-gate, `grounding-contract.md`), optional `rulesManifest`/`atlasRoutes`/`gateCommand`,
-legacy-tolerated unread `copyCatalogs`/`screenshot` (the render gate judges painted text, never
-source copy or pixels). A UI-bearing spec on such a host defaults to `design: true`
-frontmatter, routed through the design stage between plan and build; the catalog and § Design
-Render Gate gate UI **appearance**, TDD gates logic, **reachability is never exempt**
-(`plan.md` Phase 2) — skipping design is the user's call, never the model's.
 
-**Local mock canon (the `design/` dir).** Mocks are **repo files** — plain HTML on the repo's own tokens, never an external-tool export:
-- **`tokens.css`** — the mock-side consumption surface of the token canon, value-identical to
-  the framework-native surface by construction.
-- **`targets.json`** — the theme × viewport matrix owed. **One responsive mock per surface,
-  never per-device/per-theme variants.** Direction iterates on the single most-constrained
-  viewport, light theme; the full matrix is owed and confirmed only once approved —
-  `approved` always means a human saw the whole matrix. Roadmap mocks confirm both at
-  `/spec:sketch`'s exit — **`ratified` = `approved`, one stamp**. **Fidelity lives in sketch.** `/spec:mocks` ends themed — the theme itself is picked in `/spec:mocks`'s THEME state by the client on the two dense screens, candidates the signed-off gray kit re-rendered per direction at `design/theme/<kebab>/kit.html`, the picked direction's kit page the fidelity reference every later surface is built from; `/spec:sketch` authors each brief's surfaces at production fidelity in the picked theme and closes with the fixed critique pass (states check · render rules · one fresh-context critic walking the brief's surfaces in declared order, flow breaks only) whose findings are page notes.
-- **`mocks/<label>.html`** — one screen per file, root `data-screen-label="<label>"`. IS the
-  `design_source` — the render gate resolves it directly, no extraction. `data-status`:
-  `sketch` (default) | `ratified` | `approved`; declares `data-shell="<name>"`/`"none"`, its
-  root inner then a `data-shell-region` retag of the shell canon, owning only the content
-  slot's inner and an optional `data-active="<nav key>"`.
-- **`shell/<name>.html`** — the canonical app shell (root `data-shell-canon`, named
-  `data-slot`s, one empty `data-slot="content"`, other slots `data-contract="none"`) plus a
-  linked `shell/<name>.css`; chrome, never a surface. `shell sync` rewrites a declaring mock's
-  region from canon, byte-equal, active-nav derived (`built` mocks skipped by default); `shell
-  adopt` migrates pre-shell mocks via a confirmed plan. `check` binds a shell family once
-  `shell/` exists, warn at `sketch`, violation at `ratified`/`approved`/`--matrix`.
-- **`kit/<name>.html`** — the shared-primitive canon (`data-kit-canon` root, `data-kit-primitive="<key>"` + `data-purpose`), gray, never skinned; sibling to `shell/<name>.html`, same marks/checker (`data-kit`/`data-bespoke`, § Mocks: Authoring Rules).
-- **`explore/`** — genesis explore-state candidates, pruned once locked; **`atlas/`** — generated output (§ Design Atlas), never hand-edited.
-**Mock authority has a lifecycle — it expires at `built`.** Sketch → ratified → approved →
-bound: the mock is authority, code is held to it. Once the claiming spec is `done`,
-**authority inverts: shipped code is truth, the mock a historical contract allowed to go
-stale** — displayed (the atlas `built` badge), never owed; re-sync (`shell sync` included) is
-lazy, at the next design touch. Litmus: a design-contract change goes to the mock first, else code only.
-**Design harness.** Every mock-authoring pass declares the marks the gate reads — `data-screen-label`
-(root), `data-status`, `data-state-btn="<state>"`, `data-contract="none"` (non-contract subtree),
-`data-positioned` (data-placed children), `data-shell`/`data-active` (shell declaration), `data-narrow`
-(narrow root), `data-no-state="<name>[,<name>]"` (declared-absent state, root) — then runs `design-atlas.js check` (`spec-paths design-atlas`) fail-closed, enforced at
-`ratified`/`approved` or `--matrix` (viewport-meta/dark-block/shell checks are static preconditions);
-`render-gate --mocks` at `/spec:sketch`'s exit, and at `/spec:mocks`'s `journey-approved`/
-`approved` marks (plugin capture when undeclared), verifies matrix adaptation. **Render rules pass:**
-`render-rules.js` (`spec-paths render-rules`) runs every design-rules-genesis `renderCheck` rule, newest
-`desktop-fill` (content span vs `page.clientWidth`), over the render inventory before approval —
-measured, taste advisory; § Design Authoring Contracts' grounded-vs-taste rules apply too, mocks' copy the contract code is later held to.
-**Cross-spec consistency**, strongest first: token/theme files in code (a code-side
-`off-token-color` rule wired by `/spec:enforce`; near-matches reuse, never fork the scale); the
-design doctrine doc (taste tokens can't encode, binding like a locked Decision); the living showcase catalog (composes every landed spec's surfaces, drift visible with zero tooling).
-**Plugin chrome is a designed surface.** Every page the plugin serves for a look — atlas index, journey review page, galleries, the notes layer — is authored under the `frontend-design` skill in the shadcn idiom on `viewer.css`'s
-register (the Neutral roles byte-equal to `wire-tokens.css`), never on product tokens — the atlas index binds to `design/chrome-mocks/atlas.html`, the journey review page to `design/chrome-mocks/review.html`, and the notes layer to `design/chrome-mocks/notes.html`; a spec that edits
-either cites it as `design_source`. The wireframe inside a frame stays gray.
+## Design Canon (the mock app is the one artifact)
+
+The design stage runs only on hosts whose config declares a `design` block —
+`{ "app": "<dir holding mock.config.ts, relative to the repo root>" }`, nothing else. There is
+no second artifact: the mock app `/spec:mocks` and `/spec:sketch` author and approve **is** the
+product's frontend, never a catalog a build stage renders against separately. A UI-bearing spec
+on such a host defaults to `design: true` frontmatter, routed through the design stage between
+plan and build; the app gates UI **appearance**, TDD gates logic, **reachability is never
+exempt** (`plan.md` Phase 2) — skipping design is the user's call, never the model's.
+
+**Three import layers, one direction.** A screen (`src/screens/<label>.tsx`, under
+`design.app`) composes from exactly three layers and nothing else: `@/components/ui` (the
+shadcn primitives), `@/components` + `@/shells` (project components and shells built on top of
+them), and `@/records` (`src/records` under `design.app` — typed data, the only source a screen may
+read; never a hand-typed literal standing in for what a record should supply). `react` is the
+runtime, not a layer. An
+import outside these five specifiers is a `layer`-kind error finding (`mock-review check`).
+
+**Screens carry `meta` and named states.** A screen's `meta` export names its states; each
+state renders exactly what the seed or the journey's step demands — no unbound branch, no
+paraphrase. A project component or shell carries one `/** … */` doc line above its export and a
+named `examples` export; a screen missing either is a `doc`-kind error finding, and a component
+with neither is invisible to `mock-review sweep`'s own worklist.
+
+**`design/approval.json` is the canon, one authority lifecycle.** `approval.screens[<label>]`
+carries `approvedAt` and a `hash`; a spec's `design_source` resolves, under `<design.app>/`, to
+one `src/screens/<label>.tsx` or the directory `src/screens`. A named screen is **approved**
+once `approvedAt` is set and its `hash` equals `check --json`'s current `hash` for that screen —
+**stale** the moment the hash differs (an edit after approval, never silently re-bound). Once
+the claiming spec is `done`, authority **inverts to built**: shipped code is truth, the screen a
+historical contract allowed to go stale, re-synced lazily at the next design touch, never owed.
+
+**Look stops are never questions.** Every look this doctrine governs — the design stage's own
+look step, `/spec:sketch`'s exit — prints `🎨 ready for review —
+<check.serve.url>/#/<screen>`, one line per surface, then the fixed reply line, then **ends the
+turn**; only the literal `approve` accepts. The reviewer page (the mock app's own served UI) is
+the one viewer; a session never screenshots a screen to judge it in this doctrine's place.
+
 ## Design Authoring Contracts
-Consumed by the design stage and genesis's design ratification (genesis.md § Genesis: Brief State),
-authored against § Design Canon.
-**Grounded vs taste (mock supremacy):** each ruling is tagged `grounded` (external anchor —
-contrast/a11y, legal/brand, destructive-action safety) or `taste` (aesthetic), authored into
-the rule itself, not judged per conflict; an untagged legacy ruling defaults to `taste` unless
-it names an anchor. With a mockup as canon, `taste` yields silently; `grounded` binds the
-value, not the intent — snap to what the constraint permits, honor the mock's intent
-otherwise; a mock's omission is never evidence against it. With no mockup, doctrine is canon; a
-contradicting note is a fork — local exception or doctrine change, never silent override.
-**Base primitives.** Overlay shells (Sheet/Dialog/Popover/Drawer), the **AppShell**, and the
-**Toast host** are **system foundation** — created once behind a barrel (`base/index.*`), never
-re-implemented per surface, never improvised. A mock needing an absent primitive surfaces the
-nearest primitive and its coverage (author as foundation / reuse), default-authoring when no
-near-match exists. The `containment` tag drives extraction — a containment shell's `usedBy` is
-structurally ≤1; `/spec:enforce` mechanizes `base-primitive-containment` as a build error for a
-hand-rolled overlay outside the base dir. **The AppShell is authored from the shell canon
-mock** (§ Design Canon): its nav/header slots become the primitive's slots, its content slot
-the render region — surfaces are implemented into it, never around it.
-**Component manifest + author-justification gate.** Duplication is a default model failure —
-prose is not enforcement. `design/components.json` (`name`, `purpose`, `props`, `mockRefs`,
-plus `authorJustification` for `author` decisions) is extended at reconcile from each worker's
-receipt, read at preflight before any bind-vs-author call. Every `author` decision returns the
-nearest manifest entry and why it fails — absence is a gate failure (base primitives, seeded by
-the genesis design state, owe none) — verified by the review stage's component-manifest check;
-creating a component must cost strictly more than reusing one.
-**Component vocabulary (commitment entries).** The genesis design state also seeds
-`design/components.json` with **commitment entries** — `name`, `purpose`, optional
-`boundaries` — distinguished from a landed entry by having no `props`/`mockRefs` yet.
-`spec/scripts/components-check.js` (`spec-paths components-check`) is the manifest's schema
-authority (`name`+`purpose` required, `boundaries` an array when present, no duplicate `name`s)
-— fail-closed at the genesis design state's `skeleton-landed` mark, advisory at the design
-stage's preflight. Authoring dispatches read it as binding canon like tokens: bind/import or
-author to fulfil an entry, never re-invent a lookalike; a `boundaries` contradiction is a fork,
-and the review stage treats commitment entries as first-class near-duplicate targets.
-## Design Render Gate
-`render-gate.js` is the deterministic fidelity judge — fidelity is measured **at the render**
-(painted text, in-flow order, bound-region geometry), never by diffing source (ADR-0002);
-consumed by the design stage's render-gate step and `/spec:sketch`'s exit, stating invariants
-only, never the sequencing those commands own. **Inputs & exclusions:** the mock
-(`design_source`, read directly from disk), one story per declared state, and the theme ×
-viewport **targets matrix** when declared; `--mocks <mock>…` runs mock-only, no component
-side, no ledger read. An unbound state (`data-state-btn` with no ledger-claimed story) is a
-precondition failure, never a comparison finding. Findings/tolerances are owned by
-`render-gate.js`'s/`render-compare.js`'s own header comments — read those, never restate the
-numbers here. `data-contract="none"` subtrees never enter comparison; out-of-flow/
-screen-reader-only entries match by text presence only, exempt from order; `data-positioned`
-children are exempt from geometry; a matched pair whose mock role is `button`/`text` and
-component role `link` is auto-excused, never a `role` finding. When `design.rulesManifest` is
-declared, every component inventory (never the mock side, `--spec` mode) also runs
-`render-rules.js`; a rule finding fails the gate like a fidelity finding.
-**Ledger binding.** `.claude/design-coverage.json` records, per mock path and screen label, the
-bound `stories` (state → story id) plus `spec`/`at` — written as surfaces are authored, read as
-the `--spec`-mode precondition (an unclaimed state STOPs, never silently skips) and by the
-atlas/`/spec:sketch` to show what remains unbound. **Fail-closed:** no comparison target, a
-missing owed matrix, or a non-zero capture command is never a pass — the gate STOPs naming the
-failure; a capture failure is never green.
-## Design Atlas
-The whole-product design view — catching what per-screen review misses (cross-screen incoherence,
-orphaned surfaces, drift). One derived artifact, `design/atlas/index.html`, regenerated by
-**`design-atlas.js`** (`spec-paths design-atlas`) from `design/mocks/`, briefs' `## Surfaces`
-blocks, `.claude/design-coverage.json`, and spec frontmatter — zero-token.
 
-- **Journey view + status badges, derived never declared.** Briefs declare surfaces/edges in a
-  fenced ` ```surfaces ` block — names and arrows only, pixels are the mocks'. Badges: `gap`
-  (declared, no mock) · `sketch`/`ratified`/`approved` (`data-status`) · `bound` (ledger claim) ·
-  `built` (claiming spec `done`) · `orphan` (neither declared nor claimed). Unmocked = **gap cards**.
-- **`/spec:atlas`** regenerates the artifact and processes **annotations**, triaged by root cause
-  before any edit: **mock-detail** (edit the mock) vs **product-understanding** (fix the owning
-  brief's `surfaces` block first, cross-brief via an amendment ADR).
-- **`/spec:sketch <brief>`** is the per-brief workbench whose exit coherence readout sets the brief's
-  sketches to `ratified`; never required — `/spec:plan` warns on an unratified UI brief, never blocks.
-- **Built surfaces join the atlas** when the host declares `design.atlasRoutes`; else badge only.
-- **The index is part of the page.** `design/atlas/index.html` carries a screen index — one row
-  per journey, screen and candidate, with a search box — persistent as a left column at wide
-  widths and an overlay below 1200px. Search filters the index only; the page's status chips
-  filter the index and the cards together, so the two never disagree. The index is a map, never
-  a second status surface: one status dot and a label per row, the badges stay on the card.
-- **A note names the screen it belongs to.** The atlas's project panel lists every open note; a
-  note written on one screen shows that screen and state and links to that screen's page, or
-  reads as plain text when the screen is not drawn. A served mock page's notes strip links back
-  to that panel. There is no deep link into a state — the screen is the unit of navigation.
-  Every card — screen or shape — opens its screen page at `/screen/<label>.html`: one board,
-  that screen's notes, the whole-project notes and the composer; there is no lightbox and no
-  link to a raw mock file. Chrome for all of it follows § Design Canon; no rule is restated
-  here.
-**Authorship, shared home for every mock pass.** Every mock — wireframe or themed, atlas gap,
-sketch surface, or `/spec:mocks` screen — is authored and edited in-session by one hand;
-no `Agent` dispatch ever writes a mock at any stage or tier (subagents run judgment-free
-checks only). No shell canon → author one in-session first (§ Design Canon); `shell sync`
-runs on the pass's mocks before `check`. Grounding order: `design/mocks/seed.md` →
-`design/mocks/canon.md` → research brief → owning brief → doctrine → `tokens.css` → shell
-canon (a repo with no seed starts at the research brief). Both commands' reports add one
-line: `🎨 authored {N} in-session · {K} check-only dispatches`.
-**Look stops are never questions — two shapes.** catalog stops (Storybook) print 🎨 the viewer command in a fenced block,
-🆕 one sidebar path per item (`<title> / <story name>`, never a component name), ↻ `Storybook already running?
-restart it so the sidebar re-indexes.`, then end the turn. mock stops (mocks-driver/sketch/atlas) print exactly two lines — `🎨 ready for review — <url>` and `Reply ✅ approve —
-or — ✏️ change <what looks wrong>` (`✅ pick <name>` for a pick) — no server command/file path/item list — then
-end the turn too; decided on the served atlas page or via `stop decide --by chat`.
+Consumed by the design stage's reconcile step and genesis's design ratification (genesis.md
+§ Genesis: Brief State), authored against § Design Canon above.
+
+**Grounded vs taste (mock supremacy).** Each ruling is tagged `grounded` (external anchor —
+contrast/a11y, legal/brand, destructive-action safety) or `taste` (aesthetic), authored into the
+rule itself, not judged per conflict; an untagged legacy ruling defaults to `taste` unless it
+names an anchor. With an approved screen as canon, `taste` yields silently; `grounded` binds the
+value, not the intent — snap to what the constraint permits, honor the screen's intent
+otherwise; a screen's omission is never evidence against it. With no approved screen, doctrine
+is canon; a contradicting note is a fork — local exception or doctrine change, never a silent
+override.
+
+**Base primitives.** Overlay shells (Sheet/Dialog/Popover/Drawer), the **AppShell**, and the
+**Toast host** are **system foundation** — authored once behind a barrel, never re-implemented
+per screen, never improvised. A screen needing an absent primitive surfaces the nearest
+primitive and its coverage (author as foundation / reuse), default-authoring when no near-match
+exists.
+
+**Reconcile is a fold, never a re-invention.** The design stage's own reconcile step folds the
+spec's UI section to `check --json`'s screens, states and shells for the named surfaces; an AC
+that names a state no screen exports is a fork — `AskUserQuestion` (add the state / amend the
+AC), never a silent pass.
 
 ## Workflows Encode Shape, Not Judgment
+
 The plugin's `wf-build.js`, `wf-review.js`, `wf-enforce.js` (and genesis `wf-research.js`) own
 ordering, schemas, retry caps, kill rules — deterministic control flow; judgment stays in the
-main loop. Design-stage component authoring is **direct dispatch**: a warm Sonnet per surface
-authors against the mock behind the host gate and the render gate — no workflow owns it, and
-taste (fork adjudication, iteration rulings, visual review) never enters one. Never
+main loop. Screen authoring — `/spec:mocks`, `/spec:sketch` — is direct, in-session dispatch,
+never a workflow: no `Agent` dispatch ever writes a screen (subagents run judgment-free checks
+only), and taste (fork adjudication, iteration rulings, visual review) never enters one. Never
 prompt-engineer findings into existence — an empty findings list is a valid outcome. **No free
 text in `args`:** a workflow's `args` is a control channel — paths, ids, enums, booleans, the
 host gate command only; prose lives on disk, Read there.
+
 **On-disk handoff** (core § On-Disk Handoff, unchanged here): every cross-stage handoff is a
 file, never conversation context — the spec for the per-feature pipeline, genesis's own
 artifact spine otherwise; scratch intermediates go to the session scratchpad, never `specs/`.

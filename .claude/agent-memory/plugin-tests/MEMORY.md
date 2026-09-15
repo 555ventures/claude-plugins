@@ -1,5 +1,6 @@
 # Memory index
 
+- [Spec 02 render-gate cleanup: dispatch count off-by-one + expanded EXPECTED table drops](spec-20260914-02-render-gate-cleanup.md) — design-ac-reconcile.js had no spec-paths key (5 not 6); entrypoints AC-20260912-03-7 EXPECTED table also needed components-check.js/design-atlas.js rows dropped, not just render-gate.js/design-ac-reconcile.js.
 - [Spec 01 mock contract and driver: stub-via-env-dir fixture + PATH='' ENOENT trick](spec-20260914-01-mock-contract-and-driver.md) — mock-review stub reads MOCK_STUB_DIR (rides process.env spreads for free); PATH='' reliably reproduces binary-not-found without breaking runNode itself; seed.md Records line syntax logged as a deviation, not guessed silently.
 
 - [Spec 13 expired-tests-own-commit: gate-before-deletion + restore-retry pins](spec-20260912-13-expired-tests-own-commit.md) — grep-marker testCommand stand-in simulates apply/restore cycles; AC-6 (HEAD unchanged, nothing retired) is a sanctioned green-pre-change pin, no commit exists yet at --mark closed.

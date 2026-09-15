@@ -60,8 +60,9 @@ function globMatch(glob, filePath) {
 // `.claude/agent-memory/**` (D6, specs/20260823/04-review-close-hardening.md): worker memory
 // writes are structurally out-of-plan on every dispatching build; see the header above.
 // `.claude/spec-runs/**`: the retained-evidence directory the review driver itself
-// writes via its mandatory `--retain` on every hard-stop/escalation/close (and render-gate.js's
-// default `--out` fallback) — core.md § Feedback Loop names it a pipeline carrier. Same class as
+// writes via its mandatory `--retain` on every hard-stop/escalation/close (and a now-retired
+// design-render gate script's default `--out` fallback) — core.md § Feedback Loop names it a
+// pipeline carrier. Same class as
 // the agent-memory omission, one directory over; observed as four spurious out-of-plan waives
 // on a real host's close.
 const BASELINE_GLOBS = ['specs/**', '.claude/spec-runs.jsonl', '.claude/spec-runs/**', '.claude/agent-memory/**']

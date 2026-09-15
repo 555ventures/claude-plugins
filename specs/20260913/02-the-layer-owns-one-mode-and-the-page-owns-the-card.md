@@ -214,11 +214,11 @@ open closes the card — a card with no visible box has no anchor.
   on a served mock, THE SYSTEM SHALL CONTINUE TO resolve their badges to distinct role colors —
   open `rgb(220, 38, 38)`, addressed `rgb(217, 119, 6)` — and viewer.css SHALL CONTINUE TO
   describe the true four-role register in its `.nl-region` comment block
-  → reuses tests/mocks/client-region.test.js :: AC-20260912-12-22
+  → reuses tests/mocks/client-region.test.js :: AC-20260912-12-22 [retired: specs/20260914/03-the-html-atlas-is-retired.md]
 - **AC-20260913-02-14**: WHEN the layer is loaded on a served mock page, THE SYSTEM SHALL
   CONTINUE TO link viewer.css only inside its own shadow roots and SHALL CONTINUE TO emit
   `.nl-host-scoped` as its sole document-level rule
-  → reuses tests/mocks/notes-layer-isolation.test.js :: notes layer:
+  → reuses tests/mocks/notes-layer-isolation.test.js :: notes layer: [retired: specs/20260914/03-the-html-atlas-is-retired.md]
 
 ## Assumptions (escalation triggers)
 

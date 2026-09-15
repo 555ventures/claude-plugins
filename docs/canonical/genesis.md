@@ -116,11 +116,11 @@
   refuses naming unplaced or double-placed labels, and refuses `first-light-missing` when the
   `01-` brief's header (text before its first `## `) carries no `First light:` line — brief 01
   is the first-light brief, one real record through the production path (no `01-` brief, no
-  refusal; specs/20260913/08-silence-is-not-a-pass.md D5). `skeleton-landed` requires the shell canon
-  extracted from the densest composed screen (`design/shell/app.html` passing `check`), every
-  top-level mock `data-shell`-stamped via `design-atlas.js shell adopt --apply`, a green
-  `check --matrix design/mocks`, and a `design/components.json` entry per `canon.md` primitive.
-  Legacy runs and non-visual archetypes see none of the new refusals.
+  refusal; specs/20260913/08-silence-is-not-a-pass.md D5). `skeleton-landed` used to require the
+  shell canon extracted from the densest composed screen, every top-level mock stamped via the
+  shell-adopt step, a green mocks matrix check, and a `design/components.json` entry per
+  primitive — retired outright by specs/20260914/03 (below). Legacy runs and non-visual
+  archetypes saw none of those refusals.
   (specs/20260902/11-brief-from-approved-set.md, done 2026-09-03)
 
 - Since specs/20260914/02 the BRIEF step's derivation sources are `design/approval.json` (the
@@ -138,3 +138,9 @@
   shell-adopt and matrix-expansion checks that used to gate it are retired. A host with no mock
   app runs the tournament and scaffold exactly as before.
   (specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md, done 2026-09-14)
+
+- Since specs/20260914/03 the no-mock-app `skeleton-landed` branch's HTML-design checks — the
+  `design/components.json` duplicate check, the `design/shell/app.html` check, the per-mock
+  shell-stamp check, and the mocks matrix check — are removed outright with the scripts that ran
+  them; a host with no mock app now lands the skeleton with no HTML-design checks at all.
+  (specs/20260914/03-the-html-atlas-is-retired.md D11)

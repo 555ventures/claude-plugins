@@ -46,11 +46,11 @@ Milestone gates:
 ## Journey map
 
 <!-- Derived view, never authored here: each UI-bearing brief declares its surfaces + journey
-     edges in its own `surfaces` block (roadmap-brief.md template); `/spec:atlas` composes
-     them into the whole-product journey graph at design/atlas/index.html. Delete this section
+     edges in its own `surfaces` block (roadmap-brief.md template); `mock-review serve` composes
+     them into the whole-product journey graph. Delete this section
      for non-visual archetypes. -->
 
-Run `/spec:atlas` to see every declared surface, its mock, and the journey graph.
+Run `mock-review serve` to see every declared surface, its mock, and the journey graph.
 
 ## Ops track (external clocks — no code, start immediately, not specs)
 

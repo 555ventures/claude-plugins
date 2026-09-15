@@ -356,6 +356,12 @@ upstream bug list. -->
   CONTINUE-TO pin naming them. At lock, for every caller a Decision removes, check the script keeps
   another live caller in `spec/entrypoints.json`; if none, move the script's deletion (and every
   script only it calls) into the same spec.
+  Twelfth trigger, deleting a TEST FILE rather than a literal: a done spec's criterion whose only
+  citing test is deleted reddens `ac-drift-clean.test.js` as uncovered, in a spec file no File Plan
+  names. At lock, grep every AC-ID inside each test file a spec deletes across `specs/`; each hit is
+  tagged `[retired: <this spec>]` on its pointer line in the same batch. The same lock grep also
+  catches the script-level form: a surviving script that spawns a deleted script BY PATH
+  (`path.join(__dirname, …)`) escapes a `require(` grep entirely.
   (specs/20260813/07-command-report-conformance.md D8; specs/20260813/09-model-placement-mechanics.md D4;
   specs/20260814/01-ac-matrix-script.md; specs/20260907/09-atlas-index-and-note-navigation.md;
   specs/20260907/07-mocks-retires-theme.md D12; specs/20260907/08-walk-critic.md D2/D6;

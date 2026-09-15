@@ -519,6 +519,9 @@ function writeTree(root, files) {
 // AC-20260820-04-1 / AC-20260820-04-6: live-repo pins.
 // ---------------------------------------------------------------------------
 
+// specs/20260914/03-the-html-atlas-is-retired.md AC-20260914-03-8 (reuse, tag only): reuses this
+// case to pin that the executable inventory still matches spec/entrypoints.json after the
+// HTML-atlas deletion batch.
 test('AC-20260820-04-1: every executable in spec/scripts/*.js|*.sh and spec/workflows/*.js, excluding spec/scripts/lib/, has a spec/entrypoints.json entry', () => {
   const manifestPath = path.join(ROOT, 'spec/entrypoints.json')
   assert.ok(fs.existsSync(manifestPath),
@@ -1231,4 +1234,39 @@ test('AC-20260820-04-1 / D11: checkKeyReachability fails naming a spec-paths key
   assert.match(violations[0], /ghost/,
     'the violation must name the dead key or its target so a reader can find and fix the stale ' +
     'spec-paths case-table row: ' + violations[0])
+})
+
+// specs/20260914/03-the-html-atlas-is-retired.md D3/AC-20260914-03-2: the manifest drops the
+// row for every one of the eight retired scripts (design-atlas.js and components-check.js are
+// still live rows today, TDD red; the six render-*/design-ac-reconcile rows were already
+// dropped by spec 20260914/02 D14) and no surviving row's entryPoints still names
+// spec/commands/atlas.md (that file is deleted outright — design-atlas.js's own row, plus
+// mocks-driver.js's and report-render.js's rows, all name it today).
+test('AC-20260914-03-2: spec/entrypoints.json carries no row for any of the eight D1-retired scripts, and no entryPoints array anywhere still names spec/commands/atlas.md', () => {
+  const manifest = readManifest(ROOT)
+  const RETIRED_SCRIPTS = [
+    'spec/scripts/design-atlas.js',
+    'spec/scripts/components-check.js',
+    'spec/scripts/render-gate.js',
+    'spec/scripts/render-capture.js',
+    'spec/scripts/render-compare.js',
+    'spec/scripts/render-inventory.browser.js',
+    'spec/scripts/render-rules.js',
+    'spec/scripts/design-ac-reconcile.js',
+  ]
+  const stillPresent = RETIRED_SCRIPTS.filter((s) => Object.prototype.hasOwnProperty.call(manifest, s))
+  assert.deepStrictEqual(stillPresent, [],
+    'D1/D3: every one of the eight retired scripts must have its manifest row removed along ' +
+    'with the file — a surviving row documents an entry point for a script that no longer ' +
+    'exists on disk: ' + JSON.stringify(stillPresent))
+
+  const stillNamingAtlasCommand = []
+  for (const [script, entry] of Object.entries(manifest)) {
+    const eps = Array.isArray(entry.entryPoints) ? entry.entryPoints : []
+    if (eps.includes('spec/commands/atlas.md')) stillNamingAtlasCommand.push(script)
+  }
+  assert.deepStrictEqual(stillNamingAtlasCommand, [],
+    'D3/D4: spec/commands/atlas.md is deleted outright — any manifest row still naming it as an ' +
+    'entry point overclaims a call site to a file that no longer exists: ' +
+    JSON.stringify(stillNamingAtlasCommand))
 })

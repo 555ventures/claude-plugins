@@ -110,12 +110,12 @@ fragment is `#board-<label>` against the review page's own `id="board-<label>"`.
   persona line and exactly one `<iframe>` for `a` and one for `b`; `a`'s card meta line SHALL
   CONTINUE TO contain `2 states` and `b`'s SHALL CONTINUE TO contain no `states` clause; a root
   with roadmap surfaces and no seed SHALL CONTINUE TO build byte-identically to today
-  → reuses tests/design-atlas.test.js :: build: a mock with no brief AND no claim is an orphan
+  → reuses tests/design-atlas.test.js :: build: a mock with no brief AND no claim is an orphan [retired: specs/20260914/03-the-html-atlas-is-retired.md]
 - **AC-20260912-05-2**: WHEN that same build runs THE SYSTEM SHALL CONTINUE TO wrap `a`'s frame in
   `<a class="shotlink" href="/review/j1.html#board-a"` and `b`'s in the same shape for `b`, and
   SHALL CONTINUE TO wrap a `design/shapes/*.html` card's frame in no `shotlink` at all; the page's
   lightbox binding SHALL CONTINUE TO contain the literal `if(!s.closest("a.shotlink"))`
-  → writes tests/design-atlas.test.js
+  → writes tests/design-atlas.test.js [retired: specs/20260914/03-the-html-atlas-is-retired.md]
 - **AC-20260912-05-3**: WHEN `GET /mocks/a.html?clean` runs against a served fixture whose `a.html`
   carries both a `<header data-contract="none">` with no state buttons and a
   `<div data-contract="none">` wrapping its `[data-state-btn]` buttons THE SYSTEM SHALL CONTINUE TO
@@ -123,12 +123,12 @@ fragment is `#board-<label>` against the review page's own `id="board-<label>"`.
   `[data-contract="none"]:has(>[data-state-btn]){display:none!important}`, and SHALL CONTINUE TO
   return the `<header data-contract="none">` markup intact; `GET /mocks/a.html` with no `clean`
   SHALL CONTINUE TO contain neither rule
-  → writes tests/design-atlas.test.js
+  → writes tests/design-atlas.test.js [retired: specs/20260914/03-the-html-atlas-is-retired.md]
 - **AC-20260912-05-4** `[env: CHROME_BIN]`: WHEN the built atlas for a root whose `j1` declares a
   390×844 mock and a 1280×2000 mock is opened in headless Chrome THE SYSTEM SHALL CONTINUE TO
   report an identical rendered `.shot` height for both cards, and an identical rendered `.card`
   height for two cards in the same grid row
-  → writes tests/mocks/atlas-card-height.test.js
+  → writes tests/mocks/atlas-card-height.test.js [retired: specs/20260914/03-the-html-atlas-is-retired.md]
 - **AC-20260912-05-5**: WHEN `spec/scripts/design-atlas.js` is read THE SYSTEM SHALL contain zero
   occurrences of `stepLabelsOf`, `gapcard` and `statelabel`, exactly one occurrence of
   `insertBeforeBodyEnd(` outside its own definition being reachable from `injectNotesScript`, and

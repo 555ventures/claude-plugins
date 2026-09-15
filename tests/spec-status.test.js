@@ -1009,6 +1009,10 @@ const THIRTEEN_CATCH_ROWS = [
   '| M14 | the dispatcher misread as an agency, not a solo operator | THEME | medium | corrected the copy across every screen |',
 ]
 
+// specs/20260914/03-the-html-atlas-is-retired.md AC-20260914-03-7 (D10, reuse, tag only): D10
+// pins lib/mocks-ledger.js and lib/surfaces.js as survivors of the HTML-atlas deletion batch
+// specifically so this 🧭 misunderstandings line — which reads design/mocks/ledger.md through
+// lib/mocks-ledger.js — keeps printing unchanged. No assertion below is edited for this spec.
 test('AC-20260902-11-6: WHEN spec-status.js runs on a root whose design/mocks/ledger.md carries 13 catches (latest M14 at THEME) THE SYSTEM prints the 🧭 misunderstandings line between 🗺️ Roadmap and the anomalies section, and omits it with no ledger, an unparsable ledger, or zero catches', () => {
   const withLedger = host({
     briefs: BRIEFS,

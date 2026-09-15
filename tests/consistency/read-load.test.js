@@ -125,12 +125,15 @@ test('AC-20260908-06-2: every spec/commands/*.md Rules section holds at most 8 b
 // tests/spec-paths.test.js, AC-20260912-03-13).
 // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D10: § Design Render Gate and
 // § Design Atlas are deleted from design.md outright, and spec-paths' D10 SECTIONS-list edits
-// (spec/bin/spec-paths) fold Design Canon in earlier for atlas/sketch/genesis rather than
-// appending it — the atlas/sketch/genesis/run-design rows below follow the landed lists in
+// (spec/bin/spec-paths) fold Design Canon in earlier for sketch/genesis rather than
+// appending it — the sketch/genesis/run-design rows below follow the landed lists in
 // place, never weakened; every other row is untouched.
+// specs/20260914/03-the-html-atlas-is-retired.md D2/A2 (if-false remedy): the `atlas` command
+// and its spec-paths key are deleted outright, so this table's `atlas` row is retired along
+// with its subject rather than left to assert a scoped list no key produces anymore — its
+// fail-open equivalence is pinned instead in tests/spec-paths.test.js.
 const SHARED_FOR = {
   plan: ['Host Grounding', 'Pipeline Entry', 'Tiers', 'Decomposition', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'MCP Policy', 'Canonical Docs Loop', 'Session Execution'],
-  atlas: ['Host Grounding', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Session Execution', 'Design Canon'],
   sketch: ['Host Grounding', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Session Execution', 'Design Canon'],
   run: ['Host Grounding', 'Tiers', 'Runtime Verification', 'Incident Policy', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'On-Disk Handoff', 'Worker Git Ban', 'Read-Only Surfaces', 'MCP Policy', 'Canonical Docs Loop', 'Session Execution'],
   release: ['Host Grounding', 'Runtime Verification', 'Release Stage', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Canonical Docs Loop', 'Session Execution'],

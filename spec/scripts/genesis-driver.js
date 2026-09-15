@@ -105,9 +105,9 @@
 //     artifact init-gen needs (config.genesisStackDescriptor, config.design).
 //
 // specs/20260901/04-shell-composed-mocks.md D7: `--mark tokens-landed` (visual
-// archetypes) additionally requires `design/shell/app.html` to exist and
-// `design-atlas.js check design/shell` to exit 0, refused naming the missing file or carrying the
-// check's own output otherwise — the navigation shell is the mock-side artifact of the same
+// archetypes) additionally requires `design/shell/app.html` to exist and its shell check to
+// exit 0, refused naming the missing file or carrying the check's own output otherwise — the
+// navigation shell is the mock-side artifact of the same
 // decision `tokens.css` already gates here, checked by the same driver so the mark cannot pass
 // without it. The check runs alongside the tokens.css checks (both validate a CANON file), ahead
 // of the approved-mock/matrix checks that validate the MOCKS.
@@ -151,12 +151,13 @@
 // to pass `check`, every top-level design/mocks/*.html to declare `data-shell`,
 // `check --matrix design/mocks` to exit 0, and design/components.json to name every
 // design/mocks/canon.md primitive (D5).
+// NOTE: D5's skeleton-landed HTML-design checks are retired outright by
+// specs/20260914/03-the-html-atlas-is-retired.md D11 — kept here only as history for D1-D4,
+// which still apply; `handleSkeletonLanded` no longer runs any of D5's checks.
 //
-// What the D1-D5 additions deliberately do NOT do:
-//   - author brief.md's prose, the shell canon, or the component manifest — those stay session
+// What the D1-D4 additions deliberately do NOT do:
+//   - author brief.md's prose or the mocks approval itself — those stay session
 //     judgment; the driver only closes each mark once the artifacts exist and cover the seed.
-//   - run `design-atlas.js shell adopt --apply` itself — SKELETON's step text instructs the
-//     session to run it; `skeleton-landed` only verifies its result.
 //
 // Fixing that overflow only at the child's own capture is insufficient: `logTail`, which builds the
 // SCAFFOLD_RED/GATE_RED excerpt embedded in the driver's OWN stdout, bounds its excerpt by BYTES,
@@ -483,9 +484,9 @@ function briefNonUiCheck(text) {
 }
 
 // D4: every seed-declared label placed in exactly one brief's ```surfaces block.
-// surfacesLib.parseSurfacesPlacement tracks EVERY brief declaring a label (design-atlas.js's own
-// parseSurfaces keeps only the first) since D4 must also catch a double-placement, not just an
-// absence.
+// surfacesLib.parseSurfacesPlacement tracks EVERY brief declaring a label (the retired HTML
+// atlas's own parseSurfaces kept only the first) since D4 must also catch a double-placement,
+// not just an absence.
 function journeyPlacementCheck() {
   const seedJourneys = seedJourneysMap()
   const seedLabels = []
@@ -1546,9 +1547,9 @@ function handleSkeletonLanded() {
   if (mockAppExists()) {
     // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(d): once the mock app
     // exists, the day-zero skeleton gate IS `mock-review check --json` reporting `ok: true` (via
-    // lib/mock-cli.js, contract refusal first) — the data-shell scan, design-atlas.js check
-    // --matrix, shell adopt and design/components.json checks below are retired outright for
-    // this host (they described the HTML mock set the app itself replaces).
+    // lib/mock-cli.js, contract refusal first) — the data-shell scan, shell-canon matrix check,
+    // shell adopt and design/components.json checks that once ran here for the retired HTML mock
+    // set are gone outright (specs/20260914/03-the-html-atlas-is-retired.md D11).
     const mockCli = require('./lib/mock-cli')
     const appDir = mockAppDir()
     mockCli.contractOrDie(appDir)
@@ -1560,77 +1561,12 @@ function handleSkeletonLanded() {
       saveStatus()
       die('mock-review check --json reported ok: false — resolve the finding(s), then re-mark skeleton-landed:\n' + findingLines)
     }
-  } else {
-    // specs/20260902/08-genesis-shrink-brief-state.md D5: the components manifest check
-    // relocates here from the retired DESIGN state's tokens-landed/rules-locked marks — the
-    // manifest is a skeleton artifact (spec 11 will make SCAFFOLD extract it from the approved
-    // mocks set; until then the session seeds it here per the surviving doctrine, Assumption A2).
-    // Kept only for a host with no mock app (Behavior: no change on a brownfield/legacy host).
-    if (isVisualArchetype(status.archetype)) {
-      if (!fs.existsSync(componentsJsonPath())) {
-        die('design/components.json does not exist — seed the component vocabulary, then re-mark skeleton-landed')
-      }
-      const componentsCheckBin = path.join(__dirname, 'components-check.js')
-      const r = runChild(process.execPath, [componentsCheckBin, componentsJsonPath()],
-        { encoding: 'utf8' }, 'components-check.js (design/components.json)')
-      if (r.status !== 0) {
-        die('components-check.js failed for design/components.json: ' + (r.stdout || r.stderr || '').trim())
-      }
-    }
-    // specs/20260902/11-brief-from-approved-set.md D5: on a fresh visual run (status.brief.mocks
-    // set — Behavior: Applicability), the shell canon and the component inventory must be
-    // EXTRACTED from the composed set: design/shell/app.html passes `check`, every top-level
-    // design/mocks/*.html declares data-shell, `check --matrix design/mocks` exits 0, and
-    // design/components.json carries an entry for every canon.md primitive. Runs after the
-    // pre-existing components.json existence/duplicate-name check above so a missing manifest is
-    // still reported by that check's own message, never masked by this block's primitive-coverage
-    // read of the same file.
-    if (status.brief && status.brief.mocks) {
-      const designAtlasBin = path.join(__dirname, 'design-atlas.js')
-      const shellHtmlPath = path.join(root, 'design/shell/app.html')
-      if (!fs.existsSync(shellHtmlPath)) {
-        die('design/shell/app.html does not exist — author it from the densest composed screen, then run design-atlas.js shell adopt --apply')
-      }
-      const shellCheck = runChild(process.execPath, [designAtlasBin, 'check', shellHtmlPath],
-        { encoding: 'utf8' }, 'design-atlas.js check (design/shell/app.html)')
-      if (shellCheck.status !== 0) {
-        die('design/shell/app.html failed design-atlas.js check: ' + (shellCheck.stdout || shellCheck.stderr || '').trim())
-      }
-
-      const mocksDirPath = path.join(root, 'design/mocks')
-      let mockFiles = []
-      try { mockFiles = fs.readdirSync(mocksDirPath).filter((f) => f.endsWith('.html')) } catch (e) { mockFiles = [] }
-      const undeclared = mockFiles.filter((f) => !/data-shell\s*=\s*"[^"]*"/.test(fs.readFileSync(path.join(mocksDirPath, f), 'utf8')))
-      if (undeclared.length) {
-        die('mock(s) without data-shell: ' + undeclared.join(', ') + ' — run design-atlas.js shell adopt --apply, then re-mark skeleton-landed')
-      }
-
-      const matrixCheck = runChild(process.execPath, [designAtlasBin, 'check', '--matrix', mocksDirPath],
-        { encoding: 'utf8' }, 'design-atlas.js check --matrix (design/mocks)')
-      if (matrixCheck.status !== 0) {
-        die('design-atlas.js check --matrix design/mocks failed: ' + (matrixCheck.stdout || matrixCheck.stderr || '').trim())
-      }
-
-      let canonText = null
-      try { canonText = fs.readFileSync(path.join(root, 'design/mocks/canon.md'), 'utf8') } catch (e) { canonText = null }
-      if (canonText !== null) {
-        const primSec = section(canonText, 'Primitives') || ''
-        const primitives = []
-        for (const raw of primSec.split('\n')) {
-          const m = raw.trim().match(/^-\s+\*\*(.+?)\*\*/)
-          if (m) primitives.push(m[1])
-        }
-        let manifest = []
-        try { manifest = JSON.parse(fs.readFileSync(componentsJsonPath(), 'utf8')) } catch (e) { manifest = [] }
-        const manifestNames = new Set((Array.isArray(manifest) ? manifest : []).map((c) => c && c.name))
-        const missingPrimitives = primitives.filter((p) => !manifestNames.has(p))
-        if (missingPrimitives.length) {
-          die('components.json is missing primitive(s) from canon.md: ' + missingPrimitives.join(', ') +
-            ' — add them, then re-mark skeleton-landed')
-        }
-      }
-    }
   }
+  // specs/20260914/03-the-html-atlas-is-retired.md D11: the no-mock-app branch's HTML-design
+  // checks (components.json existence/duplicate-name, design/shell/app.html check, data-shell
+  // scan, check --matrix, canon.md primitives vs components.json) described the retired HTML
+  // mock set and are removed outright — a host with no mock app lands the skeleton with no
+  // HTML-design checks (no reimplementation, no shim).
   status.marks.skeletonLanded = true
   saveStatus()
   const g = runGateIfDue()
@@ -1830,7 +1766,6 @@ const DOCTRINE_LINE_CAP = 120
 const DESIGN_RULE_CATEGORIES = ['color', 'typography', 'i18n', 'structure', 'a11y', 'density', 'layout']
 
 function doctrinePath() { return path.join(root, 'docs/design/doctrine.md') }
-function componentsJsonPath() { return path.join(root, 'design/components.json') }
 function designRulesPath() { return path.join(genesisDir, 'design-rules.json') }
 
 // D4: design-rules.json's rules[] must carry only the seven closed targetCategory values and

@@ -260,7 +260,7 @@ note addressed before this spec and on every non-region note. No migration.
   no `data-region` → writes tests/mocks/client-region.test.js
 - **AC-20260912-12-10**: WHEN `walk.browser.js`’s `refreshNavDisabled` runs over a walk page whose
   only `[data-wk="request"]` article carries `data-region="outdated"` and `data-status="open"` THE
-  SYSTEM SHALL CONTINUE TO leave the journey’s confirm button `disabled` → writes tests/mocks/client-region.test.js
+  SYSTEM SHALL CONTINUE TO leave the journey’s confirm button `disabled` → writes tests/mocks/client-region.test.js [retired: specs/20260914/03-the-html-atlas-is-retired.md]
 - **AC-20260912-12-7**: WHEN the atlas index is derived with notes.json holding two `open` and one
   `addressed` note on screen `a` and none on screen `b` THE SYSTEM SHALL render `a`'s card with
   `<span class="nl-card-count" data-open="2" data-needs="1">2 open · 1 need you</span>` and `b`'s card
@@ -325,7 +325,7 @@ note addressed before this spec and on every non-region note. No migration.
   `var(--v-warn)`, each box's `.nl-region-badge` computing that literal background color — and
   `spec/templates/mocks/viewer.css`'s `.nl-region` comment block SHALL CONTINUE TO describe the same
   four-role register (`--v-danger` open, `--v-warn` addressed, `--v-ok` resolved, `--v-muted`
-  outdated/withdrawn) truthfully (D17) → writes tests/mocks/client-region.test.js
+  outdated/withdrawn) truthfully (D17) → writes tests/mocks/client-region.test.js [retired: specs/20260914/03-the-html-atlas-is-retired.md]
 - **AC-20260912-12-23** (added at the review stage's second disposition round, 2026-09-13 — D4
   promised both specs/20260912/11 D8 footnotes and only AC-9 pinned one): WHEN `walk-page.js`
   renders a client-origin request note whose region is flagged `addressed.reanchored:'children'`

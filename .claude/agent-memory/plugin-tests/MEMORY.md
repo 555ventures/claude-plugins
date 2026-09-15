@@ -1,5 +1,6 @@
 # Memory index
 
+- [Reused-AC retag idiom + genesis brief fixture ordering](spec-20260914-02-review-fix-retag-and-menus-done-fix-already-landed.md) — `AC-OLD / AC-NEW:` name retag, ac-matrix uncovered:0 oracle; pre-resolve dimensions before the first bare run since writeBrief() regenerates brief.md.
 - [Spec 01 mock contract and driver: stub-via-env-dir fixture + PATH='' ENOENT trick](spec-20260914-01-mock-contract-and-driver.md) — mock-review stub reads MOCK_STUB_DIR (rides process.env spreads for free); PATH='' reliably reproduces binary-not-found without breaking runNode itself; seed.md Records line syntax logged as a deviation, not guessed silently.
 
 - [Spec 13 expired-tests-own-commit: gate-before-deletion + restore-retry pins](spec-20260912-13-expired-tests-own-commit.md) — grep-marker testCommand stand-in simulates apply/restore cycles; AC-6 (HEAD unchanged, nothing retired) is a sanctioned green-pre-change pin, no commit exists yet at --mark closed.

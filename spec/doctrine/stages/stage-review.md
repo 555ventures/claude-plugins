@@ -54,13 +54,7 @@ never a driver slot — plus `📎 N advisory finding(s) recorded` when the retu
 - **Reviewer dispatch (the REVIEWER step).** Dispatch **one** `Agent {subagent_type:
   'spec:reviewer'}` (read-only; doctrine `spec/agents/reviewer.md`) with the spec path, diff
   base, root (or frozen worktree), pipeline-rules path, and the evidence paths the driver's
-  step prints — blind to the build session, artifacts on disk only. **Design legs** (specs
-  with `design: true`/`design_source`): alongside it, dispatch the component-manifest audit
-  (`design/components.json` `authorJustification` — missing or near-duplicate is a finding;
-  advisory, never blocking; non-UI specs skip it silently); when `design.render` is declared
-  also run `node "$(spec-paths render-gate)" --spec <spec> --out <evidence dir>` and hand its
-  report to the reviewer as evidence (shared § Design Canon: a rule a script can check is never
-  checked by an LLM at runtime), else print one skip line naming the key. Write the reviewer's
+  step prints — blind to the build session, artifacts on disk only. Write the reviewer's
   structured return to the file the driver names, then mark `reviewer-returned --file <json>`.
   `REVIEWER_FAILED` is a failed run, never CLEAN — re-dispatch before marking. It may
   create/delete its own repro file; fixes are always separate dispatches, no execution side

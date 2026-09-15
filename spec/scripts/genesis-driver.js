@@ -102,7 +102,7 @@
 //     gateCommand, not checkable from here), or whether CLAUDE.md's content is the right subset
 //     (existence and the two required literals are checked; content is judgment).
 //   - read status.json a second time inside init-gen — the profile itself carries every genesis
-//     artifact init-gen needs (config.genesisStackDescriptor, design.rulesManifest).
+//     artifact init-gen needs (config.genesisStackDescriptor, config.design).
 //
 // specs/20260901/04-shell-composed-mocks.md D7: `--mark tokens-landed` (visual
 // archetypes) additionally requires `design/shell/app.html` to exist and
@@ -183,10 +183,10 @@ const fs = require('fs')
 const path = require('path')
 const { CONFIG_RELPATH } = require('./lib/host-config')
 const mocksLedgerLib = require('./lib/mocks-ledger')
-// specs/20260902/11-brief-from-approved-set.md D2: the BRIEF step text's "notes unresolved"
-// derivation source reads design/mocks/notes.json through the same validated reader
-// design-atlas.js's serve endpoints and mocks-driver.js's `notes` subcommands share.
-const mocksNotesLib = require('./lib/mocks-notes')
+// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(a): the BRIEF step text's
+// "seed journeys"/"notes open" counts read design/approval.json and design/notes.json directly
+// (under the mock app directory, status.app) through fs + JSON — never lib/mocks-notes, which is
+// retired with the HTML mock set (spec 03 deletes the module for good).
 const surfacesLib = require('./lib/surfaces')
 const driverIo = require('./lib/driver-io')
 
@@ -338,9 +338,43 @@ function briefPath() { return path.join(genesisDir, 'brief.md') }
 function briefText() { try { return fs.readFileSync(briefPath(), 'utf8') } catch { return null } }
 function openDimensions() { const t = briefText(); return t === null ? {} : parseOpenDimensions(t) }
 function allDimensionKeys() { return Object.keys(openDimensions()) }
-function openDimensionKeys() { const d = openDimensions(); return Object.keys(d).filter((k) => d[k] === 'open') }
+// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(b): once the mock app exists,
+// the dimensions it already fixes (framework/language/packageManager) are derived, never
+// menu-researched — they drop out of the open-dimension set the moment the app is found, so
+// neither MENUS' noMenu/noPick lists nor menus-done's closure check ever wait on them.
+// Dimension keys in brief.md's ## Open Dimensions are kebab-case (parseOpenDimensions's
+// `/^- ([a-z0-9-]+):/`) — package-manager, never the stack-descriptor's camelCase packageManager.
+const MOCK_APP_FIXED_DIMS = { framework: 'vite-react', language: 'typescript', 'package-manager': 'npm' }
+function rawOpenDimensionKeys() { const d = openDimensions(); return Object.keys(d).filter((k) => d[k] === 'open') }
+function openDimensionKeys() {
+  const keys = rawOpenDimensionKeys()
+  if (!mockAppExists()) return keys
+  return keys.filter((k) => !(k in MOCK_APP_FIXED_DIMS))
+}
 function picks() { const t = briefText(); return t === null ? {} : parsePicks(t) }
 function hasMenuFile(key) { return fs.existsSync(path.join(genesisDir, 'interview-research', key + '.json')) }
+
+// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(b): MENUS records the mock
+// app's fixed dimensions as decided by appending `- <key>: <value>` lines to brief.md's own
+// `## Picks` section — the same section a session's own research-backed picks live in — so a
+// re-run never duplicates a line already present (checked by the caller via `picks()` before
+// calling this). Idempotent by construction: `pairs` never includes an already-recorded key.
+function appendDerivedPicksToBrief(pairs) {
+  if (!pairs.length) return
+  const text = briefText()
+  if (text === null) return
+  const headingRe = /^## Picks\s*$/m
+  const m = headingRe.exec(text)
+  if (!m) return
+  const afterHeading = m.index + m[0].length
+  const rest = text.slice(afterHeading)
+  const nextRel = rest.search(/^## /m)
+  const sectionEnd = nextRel === -1 ? text.length : afterHeading + nextRel
+  const before = text.slice(0, sectionEnd).replace(/\s+$/, '\n\n')
+  const after = text.slice(sectionEnd)
+  const newLines = pairs.map(([k, v]) => '- ' + k + ': ' + v).join('\n') + '\n\n'
+  fs.writeFileSync(briefPath(), before + newLines + after)
+}
 
 // ---------------------------------------------------------------------------
 // specs/20260902/11-brief-from-approved-set.md D1-D3: design/mocks/seed.md and
@@ -620,8 +654,12 @@ function handleMenusDone() {
   status.marks.menusDone = true
   saveStatus()
   const archetype = status.archetype
+  // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(c): once the mock app
+  // exists the tournament is recorded skipped at MENUS and FINALISTS/RACE/PROBE/PICK are never
+  // derived — the tournament-archetype branch below still runs first (the existing guard), this
+  // only narrows which archetypes it actually routes into the tournament.
   let next
-  if (isTournamentArchetype(archetype)) next = 'FINALISTS'
+  if (isTournamentArchetype(archetype) && !(status.tournament && status.tournament.skipped)) next = 'FINALISTS'
   else next = 'DECIDE'
   return { prev: 'MENUS', next }
 }
@@ -641,6 +679,40 @@ function mocksStatusPath() { return path.join(root, 'design/mocks/status.json') 
 function mocksLedgerPath() { return path.join(root, 'design/mocks/ledger.md') }
 function readMocksStatus() {
   try { return JSON.parse(fs.readFileSync(mocksStatusPath(), 'utf8')) } catch (e) { return null }
+}
+
+// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(a)/(b)/(d): the app directory
+// is `status.app` from design/mocks/status.json ("app" by default), and "the mock app exists"
+// means `<root>/<status.app>/mock.config.ts` exists. design/approval.json and design/notes.json
+// (the reviewer-owned records) live under that same directory.
+function mockAppDir() {
+  const st = readMocksStatus()
+  const appRel = (st && typeof st.app === 'string' && st.app) || 'app'
+  return path.join(root, appRel)
+}
+function mockAppExists() { return fs.existsSync(path.join(mockAppDir(), 'mock.config.ts')) }
+function designApprovalPath() { return path.join(mockAppDir(), 'design/approval.json') }
+function designNotesPath() { return path.join(mockAppDir(), 'design/notes.json') }
+function readDesignApproval() {
+  try { return JSON.parse(fs.readFileSync(designApprovalPath(), 'utf8')) } catch (e) { return null }
+}
+function readDesignNotes() {
+  try { return JSON.parse(fs.readFileSync(designNotesPath(), 'utf8')) } catch (e) { return null }
+}
+// D6(a): journey count off design/approval.json's `journeys` keys.
+function approvalJourneyCount() {
+  const a = readDesignApproval()
+  return (a && a.journeys && typeof a.journeys === 'object') ? Object.keys(a.journeys).length : 0
+}
+// D6(a): open-note count off design/notes.json — `status === "open"`, notes and journey
+// conversations alike.
+function notesOpenCount() {
+  const n = readDesignNotes()
+  if (!n) return 0
+  const notesOpen = Array.isArray(n.notes) ? n.notes.filter((x) => x && x.status === 'open').length : 0
+  const journeysOpen = (n.journeys && typeof n.journeys === 'object')
+    ? Object.values(n.journeys).filter((j) => j && j.status === 'open').length : 0
+  return notesOpen + journeysOpen
 }
 
 // D3: design/mocks/status.json must exist, be APPROVED, and its own provenance ledger must have
@@ -840,6 +912,12 @@ function handleFinalistsSkipped() {
     die('archetype "' + status.archetype + '" is not a tournament archetype (' +
       TOURNAMENT_ARCHETYPES.join(', ') + ') — finalists-skipped only applies once a tournament archetype has reached FINALISTS')
   }
+  // D6(c): a mock-app host records the tournament skipped at MENUS and never derives FINALISTS —
+  // there is nothing left for finalists-skipped to do; DECIDE is already the next step.
+  if (status.tournament && status.tournament.skipped) {
+    die('the tournament was already skipped for this host (' + JSON.stringify(status.tournament.skipped) +
+      ') — the mock app fixes the frontend dimensions and FINALISTS is never reached; run --mark decided instead')
+  }
   status.tournament = Object.assign({}, status.tournament, { skipped: true, at: new Date().toISOString() })
   saveStatus()
   return { prev: 'FINALISTS', next: 'DECIDE' }
@@ -850,6 +928,11 @@ function handleFinalistsWritten() {
   if (!isTournamentArchetype(status.archetype)) {
     die('archetype "' + status.archetype + '" is not a tournament archetype (' +
       TOURNAMENT_ARCHETYPES.join(', ') + ') — finalists-written only applies once a tournament archetype has reached FINALISTS')
+  }
+  // D6(c): same refusal as finalists-skipped above — a mock-app host never reaches FINALISTS.
+  if (status.tournament && status.tournament.skipped) {
+    die('the tournament was already skipped for this host (' + JSON.stringify(status.tournament.skipped) +
+      ') — the mock app fixes the frontend dimensions and FINALISTS is never reached; run --mark decided instead')
   }
   if (!FILE) die('--mark finalists-written needs --file <finalists.json> (relative to .claude/genesis/, or an absolute path)')
   const resolved = path.isAbsolute(FILE) ? FILE : path.join(genesisDir, FILE)
@@ -967,6 +1050,13 @@ function safeReadFile(p) { try { return fs.readFileSync(p, 'utf8') } catch (e) {
 // the benchmark. A finalist whose scaffold failed owes no probe.json — D5's "nothing further is
 // spent" extends through PROBE.
 function handleProbeDone() {
+  // D6(c): a mock-app host records the tournament skipped and never derives finalists — name that
+  // remedy before falling into the generic "not raced yet" message, which would point at a state
+  // (RACE/PROBE) this host never reaches.
+  if (status.tournament && status.tournament.skipped) {
+    die('the tournament was skipped for this host (' + JSON.stringify(status.tournament.skipped) +
+      ') — the mock app fixes the frontend dimensions and PROBE is never reached; run --mark decided instead')
+  }
   if (!(status.tournament && status.tournament.finalists)) die('the finalists have not been raced yet — reach RACE/PROBE first')
   const race = status.tournament.race || {}
   const archetype = status.archetype
@@ -1132,6 +1222,11 @@ function writeBenchmark() {
 // to also validate (specs/20260827/02's EXPLORE tile winner) is retired outright — the design
 // canon is ratified at BRIEF, before the tournament ever runs, so PICK is a stack-only decision.
 function handlePicked() {
+  // D6(c): same remedy as handleProbeDone's guard above — a skipped tournament never reaches PICK.
+  if (status.tournament && status.tournament.skipped) {
+    die('the tournament was skipped for this host (' + JSON.stringify(status.tournament.skipped) +
+      ') — the mock app fixes the frontend dimensions and PICK is never reached; run --mark decided instead')
+  }
   if (!(status.tournament && status.tournament.finalists)) die('the tournament has not reached PICK yet')
   const finalistDefs = status.tournament.finalistDefs || []
   const matches = finalistDefs.filter(finalistMatchesCurrentPicks)
@@ -1347,8 +1442,18 @@ function runShell(cmd, logPath, opts) {
   return runLogged('bash', ['-c', cmd], logPath, Object.assign({ what: 'shell command "' + cmd + '"' }, opts))
 }
 
+// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(d): a scaffold record is
+// "succeeded" either the old way (scaffoldCommand exited 0) or the mock-app way (skipped
+// outright, since the app is the day-zero skeleton already).
+function scaffoldSucceeded(s) { return !!(s && (s.exit === 0 || s.skipped)) }
+
 function runScaffoldIfDue() {
-  if (status.scaffold && status.scaffold.exit === 0) return status.scaffold
+  if (scaffoldSucceeded(status.scaffold)) return status.scaffold
+  if (mockAppExists()) {
+    status.scaffold = { skipped: 'mock-app' }
+    saveStatus()
+    return status.scaffold
+  }
   const desc = readStackDescriptor()
   const r = runShell(desc.scaffoldCommand, scaffoldLogPath())
   status.scaffold = { exit: r.status, at: new Date().toISOString() }
@@ -1425,7 +1530,7 @@ function describeBindingSubsetGap(check) {
 
 function handleSkeletonLanded() {
   if (!status.marks.decided) die('decided has not been recorded yet — mark decided first')
-  if (!(status.scaffold && status.scaffold.exit === 0)) {
+  if (!scaffoldSucceeded(status.scaffold)) {
     die('the scaffold has not completed successfully yet — resolve SCAFFOLD/SCAFFOLD_RED before marking skeleton-landed')
   }
   if (status.architect === 'scaffold-complete') {
@@ -1438,71 +1543,91 @@ function handleSkeletonLanded() {
   if (!pc.ok) die(describeProbeGap(pc) + ' — land it, then re-mark skeleton-landed')
   const bc = bindingSubsetCheck(desc, testTree)
   if (!bc.ok) die(describeBindingSubsetGap(bc) + ' — fix it, then re-mark skeleton-landed')
-  // specs/20260902/08-genesis-shrink-brief-state.md D5: the components manifest check
-  // relocates here from the retired DESIGN state's tokens-landed/rules-locked marks — the
-  // manifest is a skeleton artifact (spec 11 will make SCAFFOLD extract it from the approved
-  // mocks set; until then the session seeds it here per the surviving doctrine, Assumption A2).
-  if (isVisualArchetype(status.archetype)) {
-    if (!fs.existsSync(componentsJsonPath())) {
-      die('design/components.json does not exist — seed the component vocabulary, then re-mark skeleton-landed')
+  if (mockAppExists()) {
+    // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(d): once the mock app
+    // exists, the day-zero skeleton gate IS `mock-review check --json` reporting `ok: true` (via
+    // lib/mock-cli.js, contract refusal first) — the data-shell scan, design-atlas.js check
+    // --matrix, shell adopt and design/components.json checks below are retired outright for
+    // this host (they described the HTML mock set the app itself replaces).
+    const mockCli = require('./lib/mock-cli')
+    const appDir = mockAppDir()
+    mockCli.contractOrDie(appDir)
+    const check = mockCli.checkJson(appDir)
+    if (!check.ok) {
+      const findingLines = (Array.isArray(check.findings) ? check.findings : [])
+        .map((f) => (f && f.file) + ': ' + (f && f.message)).join('\n')
+      status.marks.skeletonLanded = null
+      saveStatus()
+      die('mock-review check --json reported ok: false — resolve the finding(s), then re-mark skeleton-landed:\n' + findingLines)
     }
-    const componentsCheckBin = path.join(__dirname, 'components-check.js')
-    const r = runChild(process.execPath, [componentsCheckBin, componentsJsonPath()],
-      { encoding: 'utf8' }, 'components-check.js (design/components.json)')
-    if (r.status !== 0) {
-      die('components-check.js failed for design/components.json: ' + (r.stdout || r.stderr || '').trim())
-    }
-  }
-  // specs/20260902/11-brief-from-approved-set.md D5: on a fresh visual run (status.brief.mocks
-  // set — Behavior: Applicability), the shell canon and the component inventory must be
-  // EXTRACTED from the composed set: design/shell/app.html passes `check`, every top-level
-  // design/mocks/*.html declares data-shell, `check --matrix design/mocks` exits 0, and
-  // design/components.json carries an entry for every canon.md primitive. Runs after the
-  // pre-existing components.json existence/duplicate-name check above so a missing manifest is
-  // still reported by that check's own message, never masked by this block's primitive-coverage
-  // read of the same file.
-  if (status.brief && status.brief.mocks) {
-    const designAtlasBin = path.join(__dirname, 'design-atlas.js')
-    const shellHtmlPath = path.join(root, 'design/shell/app.html')
-    if (!fs.existsSync(shellHtmlPath)) {
-      die('design/shell/app.html does not exist — author it from the densest composed screen, then run design-atlas.js shell adopt --apply')
-    }
-    const shellCheck = runChild(process.execPath, [designAtlasBin, 'check', shellHtmlPath],
-      { encoding: 'utf8' }, 'design-atlas.js check (design/shell/app.html)')
-    if (shellCheck.status !== 0) {
-      die('design/shell/app.html failed design-atlas.js check: ' + (shellCheck.stdout || shellCheck.stderr || '').trim())
-    }
-
-    const mocksDirPath = path.join(root, 'design/mocks')
-    let mockFiles = []
-    try { mockFiles = fs.readdirSync(mocksDirPath).filter((f) => f.endsWith('.html')) } catch (e) { mockFiles = [] }
-    const undeclared = mockFiles.filter((f) => !/data-shell\s*=\s*"[^"]*"/.test(fs.readFileSync(path.join(mocksDirPath, f), 'utf8')))
-    if (undeclared.length) {
-      die('mock(s) without data-shell: ' + undeclared.join(', ') + ' — run design-atlas.js shell adopt --apply, then re-mark skeleton-landed')
-    }
-
-    const matrixCheck = runChild(process.execPath, [designAtlasBin, 'check', '--matrix', mocksDirPath],
-      { encoding: 'utf8' }, 'design-atlas.js check --matrix (design/mocks)')
-    if (matrixCheck.status !== 0) {
-      die('design-atlas.js check --matrix design/mocks failed: ' + (matrixCheck.stdout || matrixCheck.stderr || '').trim())
-    }
-
-    let canonText = null
-    try { canonText = fs.readFileSync(path.join(root, 'design/mocks/canon.md'), 'utf8') } catch (e) { canonText = null }
-    if (canonText !== null) {
-      const primSec = section(canonText, 'Primitives') || ''
-      const primitives = []
-      for (const raw of primSec.split('\n')) {
-        const m = raw.trim().match(/^-\s+\*\*(.+?)\*\*/)
-        if (m) primitives.push(m[1])
+  } else {
+    // specs/20260902/08-genesis-shrink-brief-state.md D5: the components manifest check
+    // relocates here from the retired DESIGN state's tokens-landed/rules-locked marks — the
+    // manifest is a skeleton artifact (spec 11 will make SCAFFOLD extract it from the approved
+    // mocks set; until then the session seeds it here per the surviving doctrine, Assumption A2).
+    // Kept only for a host with no mock app (Behavior: no change on a brownfield/legacy host).
+    if (isVisualArchetype(status.archetype)) {
+      if (!fs.existsSync(componentsJsonPath())) {
+        die('design/components.json does not exist — seed the component vocabulary, then re-mark skeleton-landed')
       }
-      let manifest = []
-      try { manifest = JSON.parse(fs.readFileSync(componentsJsonPath(), 'utf8')) } catch (e) { manifest = [] }
-      const manifestNames = new Set((Array.isArray(manifest) ? manifest : []).map((c) => c && c.name))
-      const missingPrimitives = primitives.filter((p) => !manifestNames.has(p))
-      if (missingPrimitives.length) {
-        die('components.json is missing primitive(s) from canon.md: ' + missingPrimitives.join(', ') +
-          ' — add them, then re-mark skeleton-landed')
+      const componentsCheckBin = path.join(__dirname, 'components-check.js')
+      const r = runChild(process.execPath, [componentsCheckBin, componentsJsonPath()],
+        { encoding: 'utf8' }, 'components-check.js (design/components.json)')
+      if (r.status !== 0) {
+        die('components-check.js failed for design/components.json: ' + (r.stdout || r.stderr || '').trim())
+      }
+    }
+    // specs/20260902/11-brief-from-approved-set.md D5: on a fresh visual run (status.brief.mocks
+    // set — Behavior: Applicability), the shell canon and the component inventory must be
+    // EXTRACTED from the composed set: design/shell/app.html passes `check`, every top-level
+    // design/mocks/*.html declares data-shell, `check --matrix design/mocks` exits 0, and
+    // design/components.json carries an entry for every canon.md primitive. Runs after the
+    // pre-existing components.json existence/duplicate-name check above so a missing manifest is
+    // still reported by that check's own message, never masked by this block's primitive-coverage
+    // read of the same file.
+    if (status.brief && status.brief.mocks) {
+      const designAtlasBin = path.join(__dirname, 'design-atlas.js')
+      const shellHtmlPath = path.join(root, 'design/shell/app.html')
+      if (!fs.existsSync(shellHtmlPath)) {
+        die('design/shell/app.html does not exist — author it from the densest composed screen, then run design-atlas.js shell adopt --apply')
+      }
+      const shellCheck = runChild(process.execPath, [designAtlasBin, 'check', shellHtmlPath],
+        { encoding: 'utf8' }, 'design-atlas.js check (design/shell/app.html)')
+      if (shellCheck.status !== 0) {
+        die('design/shell/app.html failed design-atlas.js check: ' + (shellCheck.stdout || shellCheck.stderr || '').trim())
+      }
+
+      const mocksDirPath = path.join(root, 'design/mocks')
+      let mockFiles = []
+      try { mockFiles = fs.readdirSync(mocksDirPath).filter((f) => f.endsWith('.html')) } catch (e) { mockFiles = [] }
+      const undeclared = mockFiles.filter((f) => !/data-shell\s*=\s*"[^"]*"/.test(fs.readFileSync(path.join(mocksDirPath, f), 'utf8')))
+      if (undeclared.length) {
+        die('mock(s) without data-shell: ' + undeclared.join(', ') + ' — run design-atlas.js shell adopt --apply, then re-mark skeleton-landed')
+      }
+
+      const matrixCheck = runChild(process.execPath, [designAtlasBin, 'check', '--matrix', mocksDirPath],
+        { encoding: 'utf8' }, 'design-atlas.js check --matrix (design/mocks)')
+      if (matrixCheck.status !== 0) {
+        die('design-atlas.js check --matrix design/mocks failed: ' + (matrixCheck.stdout || matrixCheck.stderr || '').trim())
+      }
+
+      let canonText = null
+      try { canonText = fs.readFileSync(path.join(root, 'design/mocks/canon.md'), 'utf8') } catch (e) { canonText = null }
+      if (canonText !== null) {
+        const primSec = section(canonText, 'Primitives') || ''
+        const primitives = []
+        for (const raw of primSec.split('\n')) {
+          const m = raw.trim().match(/^-\s+\*\*(.+?)\*\*/)
+          if (m) primitives.push(m[1])
+        }
+        let manifest = []
+        try { manifest = JSON.parse(fs.readFileSync(componentsJsonPath(), 'utf8')) } catch (e) { manifest = [] }
+        const manifestNames = new Set((Array.isArray(manifest) ? manifest : []).map((c) => c && c.name))
+        const missingPrimitives = primitives.filter((p) => !manifestNames.has(p))
+        if (missingPrimitives.length) {
+          die('components.json is missing primitive(s) from canon.md: ' + missingPrimitives.join(', ') +
+            ' — add them, then re-mark skeleton-landed')
+        }
       }
     }
   }
@@ -1847,10 +1972,10 @@ function deriveState(opts) {
   const decide = decideCheck()
   if (!status.marks.decided || (!legacyTrusted && !decide.ok)) return 'DECIDE'
 
-  if (!(status.scaffold && status.scaffold.exit === 0)) {
+  if (!scaffoldSucceeded(status.scaffold)) {
     if (peek) return status.scaffold ? 'SCAFFOLD_RED' : 'SCAFFOLD'
     const s = runScaffoldIfDue()
-    return s.exit === 0 ? 'SKELETON' : 'SCAFFOLD_RED'
+    return scaffoldSucceeded(s) ? 'SKELETON' : 'SCAFFOLD_RED'
   }
 
   if (status.architect !== 'scaffold-complete') {
@@ -1939,6 +2064,24 @@ const STEPS = {
       'Doctrine: spec/doctrine/genesis.md § Genesis: Discovery Interview']
     if (noMenu.length) lines.push('open, no menu yet: ' + noMenu.join(', '))
     if (noPick.length) lines.push('open, menu written, no pick: ' + noPick.join(', '))
+    // D6(b)/(c): once the mock app exists, print one auto-pick line per dimension it already
+    // fixes (still listed "open" in brief.md — a re-run after the pick has landed prints
+    // nothing further for it) and record the tournament as skipped for this host.
+    if (mockAppExists()) {
+      const rawOpen = new Set(rawOpenDimensionKeys())
+      const toRecord = []
+      for (const [dim, value] of Object.entries(MOCK_APP_FIXED_DIMS)) {
+        if (rawOpen.has(dim)) {
+          lines.push('📌 Auto-picked ' + value + ' — the mock app is the product\'s frontend (ADR-0028) (veto anytime)')
+          if (!(dim in pks)) toRecord.push([dim, value])
+        }
+      }
+      appendDerivedPicksToBrief(toRecord)
+      if (!(status.tournament && status.tournament.skipped)) {
+        status.tournament = { skipped: 'mock-app' }
+        saveStatus()
+      }
+    }
     for (const k of openKeys) {
       const rec = status.menus[k]
       if (!rec) continue
@@ -2029,11 +2172,10 @@ const STEPS = {
       // sections — every confirmed product ledger row by id, and the seed's own journey count —
       // read from the seed and the ledger, never from the discovery interview alone.
       const productRows = confirmedProductRows()
-      const seedCount = seedJourneysMap().size
-      let notesUnresolved = 0
-      try {
-        notesUnresolved = mocksNotesLib.readNotes(root).filter((n) => n && n.status !== 'resolved').length
-      } catch (e) { notesUnresolved = 0 }
+      // D6(a): "seed journeys" and "notes open" now derive from design/approval.json and
+      // design/notes.json under the mock app directory — never seed.md or lib/mocks-notes.
+      const seedCount = approvalJourneyCount()
+      const notesOpen = notesOpenCount()
       // specs/20260911/05-approval-is-bookkeeping.md D5: the same fenced-exclusion set the
       // parking-lot check (below, ROADMAP_WRITTEN) requires verbatim — read-only here, this step
       // only surfaces the split agreed/not-contested count in place of the old confirmed-only one.
@@ -2042,7 +2184,7 @@ const STEPS = {
       const exclusionsNotContested = fenced.filter((r) => r.status === 'open').length
       lines.push('derived from: product ledger row(s) ' +
         (productRows.length ? productRows.map((r) => r.id).join(', ') : 'none') +
-        ' · seed journeys: ' + seedCount + ' · notes unresolved: ' + notesUnresolved +
+        ' · seed journeys: ' + seedCount + ' · notes open: ' + notesOpen +
         ' · exclusions: ' + exclusionsAgreed + ' agreed · ' + exclusionsNotContested + ' not contested' +
         ' — write ## What I think you\'re building, ## Journeys, and ## Non-UI Coverage from these, never from the interview alone')
     }
@@ -2055,7 +2197,7 @@ const STEPS = {
     const check = decideCheck()
     const lines = [
       '## Step: record the stack descriptor and decision records',
-      'Read only: ' + genesisRel('brief.md') + ' (## Open Dimensions), ' + descriptorRelPath(),
+      'Read only: ' + genesisRel('brief.md') + ' (## Open Dimensions, ## Picks), ' + descriptorRelPath(),
       'Doctrine: spec/doctrine/genesis.md § Genesis: Decision Record (one proposer)',
     ]
     if (!check.ok) lines.push(describeDecideGap(check) + '.')
@@ -2207,6 +2349,13 @@ const STEPS = {
     ]
     if (fs.existsSync(designRulesPath())) readFiles.push(genesisRel('design-rules.json'))
     readFiles.push('docs/adr/')
+    // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D1: HANDOFF writes the
+    // contract's design block from status.app when it stamps spec.config.json — { "app":
+    // "<status.app>" } and nothing else, present only on a host the mocks stage actually ran on.
+    const mocksStatus = readMocksStatus()
+    const designLine = (mocksStatus && mocksStatus.app)
+      ? 'config.design set to { "app": "' + mocksStatus.app + '" } (D1); '
+      : ''
     return [
       '## Step: handoff — author the init profile; the driver grounds the repo',
       'Read only: ' + readFiles.join(', '),
@@ -2216,7 +2365,7 @@ const STEPS = {
       'ADR count: ' + adrCount,
       'brief count: ' + briefFileNames().length,
       'Write ' + genesisRel('init-profile.json') + ' (init.md Phase 4\'s shape; ' +
-        'config.genesisStackDescriptor and design.rulesManifest set from the genesis artifacts; ' +
+        'config.genesisStackDescriptor set from the genesis artifacts; ' + designLine +
         'manifestExtras claiming the skeleton\'s substrate and the probe suite), then:',
       '  node ' + __filename + ' --root ' + root + ' --mark profile-written --file ' + genesisRel('init-profile.json'),
     ].join('\n')

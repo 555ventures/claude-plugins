@@ -92,7 +92,7 @@ step. Skip its own `spec-paths shared-for review` line for the same reason as bu
 
 Every stop of the loop — a checkpoint, a judgment step, or the terminal `DONE` — prints one
 report (core § Console Output Style); a look stop's printed block replaces the report (shared
-§ Design Atlas). Assemble slots from whichever driver's state produced the stop — `outcome`
+§ Design Canon). Assemble slots from whichever driver's state produced the stop — `outcome`
 (✅/⚠️), `bullets` (one line per escalation), `next` (the literal re-run command at a
 checkpoint, or `spec-status --next` verbatim at the review driver's own `DONE`). Run `node
 "$(spec-paths report-render)" --slots <file>` and print it verbatim.

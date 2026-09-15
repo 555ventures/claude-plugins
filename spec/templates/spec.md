@@ -10,7 +10,7 @@ depended_on_by: []
 # brief: NN              # roadmap-planned specs only: the docs/roadmap/NN-*.md brief this spec hydrates; /spec:status (and /spec:doctor check 14) derive roadmap status from this stamp
 # spiked: YYYY-MM-DD     # only if a spike ran during /spec:plan
 # designed: YYYY-MM-DD   # set by the design stage on user approval (design-capable hosts)
-# design_source: design/mocks/<label>.html  # optional, single path/URL: the repo's local mock (or a Claude Design escape-hatch URL) — read-first binding canon the render gate resolves directly
+# design_source: src/screens/<label>.tsx  # optional: the mock app's screen file(s) under design.app — src/screens/<label>.tsx for one surface, src/screens for several
 # build_base: <branch>   # set by /git:enter-worktree; read by the review stage as the merge-back target
 # diff_base: <sha>       # set by the build stage for in-place builds; read by the review stage as the diff base when build_base is absent
 # The host's pipeline rules may declare extra flags (e.g. migration: true) — include them when they apply.
@@ -60,11 +60,10 @@ depended_on_by: []
 
 { Screens, components, dialogs; their props and states (empty / loading / error / edge).
   Embed Component API References here — registry + library excerpts gathered at plan time.
-  In the design stage this section is the component inventory workers author against; the mock
-  (`design_source`) is the authored canon, held to by the render gate, and the reconcile step
-  folds this section to the approved design (final APIs + states). Sonnet workers (and the
-  build stage) build from the spec + mock and never query MCPs. Omit section if no UI changes
-  (then design: false). }
+  In the design stage this section folds to the approved screen(s) named by `design_source` —
+  the mock app's screens, states and shells (`mock-review check --json`) are the authored
+  canon this section reconciles to. Sonnet workers (and the build stage) build from the spec +
+  screen and never query MCPs. Omit section if no UI changes (then design: false). }
 
 ## Data Model
 

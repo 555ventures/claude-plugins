@@ -5,13 +5,15 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, freePort, serveAtlas } = require('../helpers')
 
-// Pins: specs/20260906/01-ac-drift-doctor-check.md D8, AC-20260906-01-11 .. AC-20260906-01-14.
-// Four parsed-but-never-passed flags are deleted (render-gate.js --no-boot, registry-check.js
-// --timeout-ms, design-atlas.js stop open --question) or already never had a live consumer
-// (promise-sweep.js --applies-from — its SHALL CONTINUE TO not-applicable pin is retagged in
+// Pins: specs/20260906/01-ac-drift-doctor-check.md D8, AC-20260906-01-12 .. AC-20260906-01-14.
+// Parsed-but-never-passed flags are deleted (registry-check.js --timeout-ms, design-atlas.js
+// stop open --question) or already never had a live consumer (promise-sweep.js
+// --applies-from — its SHALL CONTINUE TO not-applicable pin is retagged in
 // tests/review/promise-sweep.test.js; its refusal and the V7_APPLIES_FROM export live here,
 // AC-20260906-01-10, because that file is green-expected under red-check.js). Every
 // assertion below observes the flag's own script directly against a synthetic host.
+// render-gate.js is deleted (specs/20260914/02 D14); its --no-boot case (AC-20260906-01-11)
+// and the render-gate half of AC-20260906-01-14 are retired with it.
 
 // specs/20260909/06-ephemeral-serve-ports.md D2/D3: freePort() comes from tests/helpers.js now
 // — this test needs a specific port up front because the `stop open --port <p>` CLI argument
@@ -26,53 +28,6 @@ async function withServeAt(dir, port, fn) {
     await s.stop()
   }
 }
-
-test('AC-20260906-01-11: render-gate.js --mocks <mock> --no-boot boots exactly as without the flag — the pid file design.render.boot writes exists after the run', () => {
-  const dir = tmpdir('retired-no-boot')
-  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
-  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
-
-  const capture = path.join(dir, 'fake-capture.js')
-  fs.writeFileSync(capture,
-    "#!/usr/bin/env node\n'use strict'\nconst fs = require('fs')\nconst args = process.argv.slice(2)\n" +
-    "const flag = (n) => { const i = args.indexOf('--' + n); return i > -1 ? args[i + 1] : undefined }\n" +
-    "fs.writeFileSync(flag('out'), JSON.stringify({ schemaVersion: 1, theme: flag('theme') || null, " +
-    "state: flag('state') === '-' ? null : flag('state'), root: 'body', entries: [] }))\n")
-
-  const flagFile = path.join(dir, 'ready.flag')
-  const pidFile = path.join(dir, 'boot.pid')
-  const bootScript = path.join(dir, 'boot.sh')
-  fs.writeFileSync(bootScript,
-    '#!/usr/bin/env bash\n' +
-    'echo $$ > ' + JSON.stringify(pidFile) + '\n' +
-    'touch ' + JSON.stringify(flagFile) + '\n' +
-    'sleep 5\n')
-  fs.chmodSync(bootScript, 0o755)
-
-  const render = {
-    capture: 'node ' + capture,
-    url: 'http://localhost:6006/iframe.html?id={story}&theme={theme}',
-    ready: 'test -f ' + flagFile,
-    boot: 'bash ' + bootScript,
-    readyTimeout: 20,
-  }
-  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({ design: { render } }))
-  fs.writeFileSync(path.join(dir, 'design/targets.json'), JSON.stringify({ themes: ['light'], viewports: [{ width: 390, height: 844 }] }))
-  fs.writeFileSync(path.join(dir, 'design/tokens.css'), ':root{}\n')
-  const mockPath = path.join(dir, 'design/mocks/screen.html')
-  fs.writeFileSync(mockPath, '<html><body><div data-screen-label="Screen"><button data-state-btn="a">a</button><p>Hi</p></div></body></html>')
-
-  const outDir = path.join(dir, 'out')
-  fs.mkdirSync(outDir, { recursive: true })
-  const res = runNode('scripts/render-gate.js',
-    ['--mocks', mockPath, '--root', dir, '--out', outDir, '--no-boot'],
-    { cwd: dir, timeout: 8000 })
-
-  assert.ok(fs.existsSync(pidFile),
-    `D8: --no-boot is deleted — the boot spawn must fire whenever design.render.boot is declared and ready ` +
-    `initially fails, with no opt-out flag left to suppress it, so the fake boot's own pid file must exist ` +
-    `after the run whether or not --no-boot is on the command line (status ${res.status}, stderr: ${res.stderr})`)
-})
 
 test('AC-20260906-01-12: registry-check.js --menu <m> --timeout-ms 5 exits 2 with a usage line naming --timeout-ms as an unknown argument and carrying no --timeout-ms <n> segment', () => {
   const res = runNode('scripts/registry-check.js', ['--menu', 'menu.json', '--timeout-ms', '5'])
@@ -105,14 +60,7 @@ test('AC-20260906-01-13: design-atlas.js stop open --question "which?" writes th
   })
 })
 
-test('AC-20260906-01-14: render-gate.js\'s usage names [--json] and no --no-boot; promise-sweep.js\'s usage names no --applies-from; design-atlas.js stop open\'s bare usage names "stop open" and no --question', () => {
-  const renderGateRes = runNode('scripts/render-gate.js', [])
-  assert.strictEqual(renderGateRes.status, 2, `render-gate.js with no arguments must refuse with exit 2 — got ${renderGateRes.status}`)
-  assert.ok(renderGateRes.stderr.includes('[--json]'),
-    `render-gate.js's usage line must still name [--json] — got ${JSON.stringify(renderGateRes.stderr)}`)
-  assert.ok(!renderGateRes.stderr.includes('--no-boot'),
-    `D8: render-gate.js's usage line must no longer mention --no-boot at all once it is deleted — got ${JSON.stringify(renderGateRes.stderr)}`)
-
+test('AC-20260906-01-14: promise-sweep.js\'s usage names no --applies-from; design-atlas.js stop open\'s bare usage names "stop open" and no --question', () => {
   const promiseSweepRes = runNode('scripts/promise-sweep.js', [])
   assert.strictEqual(promiseSweepRes.status, 2, `promise-sweep.js with no arguments must refuse with exit 2 — got ${promiseSweepRes.status}`)
   assert.ok(!promiseSweepRes.stderr.includes('--applies-from'),

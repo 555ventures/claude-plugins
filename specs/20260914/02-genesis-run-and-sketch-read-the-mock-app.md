@@ -1,14 +1,16 @@
 ---
 date: 2026-09-14
-status: hardened
+status: done
 tier: critical
 area: design
 design: false
 breaking: true
+build_base: main
 depends_on: [specs/20260914/01-the-mock-contract-and-the-driver.md]
 depended_on_by: [specs/20260914/03-the-html-atlas-is-retired.md]
 brief: 26
 open_markers: 0
+diff_base: 1d564a46b691fcf773fdf1325c429baa6a9a360c
 ---
 
 # Genesis, run and sketch read the mock app
@@ -43,6 +45,8 @@ contract hash is restamped. The HTML scripts still exist until spec 03; nothing 
 | D10 | `spec/doctrine/design.md` keeps § Design Canon and § Design Authoring Contracts (bodies rewritten: the three import layers, screens with `meta` + named states, project components and shells with a doc line and `examples`, records as the only data, `design/approval.json` as the canon with authority lifecycle approved → built when the claiming spec is `done`, stale when the hash differs), deletes § Design Render Gate and § Design Atlas, keeps § Workflows Encode Shape, Not Judgment; the file stays ≤160 lines. `spec-paths shared-for` lists for `genesis`, `sketch`, `init`, `run-design` and `atlas` drop `Design Atlas`, `Design Render Gate`; `run-design` = `Design Canon\|Design Authoring Contracts`. Every `§ Design Atlas` / `§ Design Render Gate` citation in `spec/commands/*.md`, `spec/doctrine/**` and `spec/templates/*.md` is rewritten to the surviving section or removed — the closure at lock found `spec/commands/run.md`, `spec/doctrine/core.md` § Model Placement and `spec/templates/roadmap-brief.md`'s surfaces comment (whose "data-screen-label anchors" clause becomes "screen file names under src/screens") (`citations-check.js` is the oracle). (AC-20260914-02-10, AC-20260914-02-11, AC-20260914-02-15) | Heading names cited elsewhere survive; the two sections about the second artifact do not. |
 | D11 | `spec/commands/init.md`'s frontend-design install offer (lines ~211–226) is deleted and `spec/scripts/init-gen.js` drops `probeFrontendDesign` and the `frontendDesign` field from its output. (AC-20260914-02-12) | The `mock-authoring` skill replaced it in spec 01. |
 | D12 | `.claude/design-coverage.json`, `design/components.json`, `design/targets.json`, `design/tokens.css` and story ids are no longer read or written by any command or stage; a leftover on a host is inert. [no-ac: absence; AC-20260914-02-3 and AC-20260914-02-10 pin the doctrine names none of them] | All four were bindings between the two artifacts. |
+| D13 | Build-time scope ruling (JJ, 2026-09-14, "fix them here"): three out-of-plan collisions with D2/D10's deletions join this spec — `spec/entrypoints.json` drops every declared entry point naming a doctrine/command file that no longer invokes `components-check.js`, `design-ac-reconcile.js`, `design-atlas.js`, `render-gate.js` or `render-rules.js` (the scripts themselves stay until spec 03); `tests/consistency/read-load.test.js`'s pinned `shared-for` table follows `spec/bin/spec-paths`' D10 lists; `spec/commands/atlas.md`'s `§ Design Atlas` citations re-point to `§ Design Canon`. The genesis handoff's `design.rulesManifest` pointer is retired with the rest of D1's sub-keys, never renamed: no new top-level key, and `spec/commands/init.md` and `genesis-driver.js`'s HANDOFF text stop naming it. [no-ac: reference repair; the existing entrypoints, read-load and citations pins are the oracle] | Each fix only removes or re-points a reference to something D2/D10 deleted; an invented replacement key would be a contract change no Decision locked. |
+| D14 | Build-time scope ruling (JJ, 2026-09-14, "delete them here"): D2/D5/D13 leave `render-gate.js` and `design-ac-reconcile.js` with zero callers, and the entrypoints guard has no sanctioned orphan form, so spec 03 D1's deletion of `render-gate.js`, `render-rules.js`, `render-capture.js`, `render-compare.js`, `render-inventory.browser.js` and `design-ac-reconcile.js` lands here: the six scripts, their `spec-paths` keys and usage-line names, their `spec/entrypoints.json` rows, `tests/render/render-{gate,compare,rules}.test.js`, `tests/design-ac-reconcile.test.js`, the two render-gate cases in `tests/consistency/retired-flags.test.js`, the six keys in `tests/spec-paths.test.js`'s key inventory and its `render-capture` key test; `tests/consistency/entrypoints.test.js` AC-20260912-03-7 keeps asserting no retired command path survives and drops its rows for deleted scripts; `spec/doctrine/genesis.md`'s `render-rules.js` sentence goes. Spec 03's File Plan loses those rows. `design-atlas.js`, `components-check.js` and every `lib/` file stay for spec 03. [no-ac: deletion; the entrypoints, spec-paths and dependency-free pins are the oracle] | Deleting early is the one honest shape — a caller-less script either gets a fabricated caller or a guard exception, and both are worse than landing a planned deletion one spec sooner. |
 
 ## File Plan
 
@@ -66,6 +70,21 @@ contract hash is restamped. The HTML scripts still exist until spec 03; nothing 
 | spec/scripts/spec-review-driver.js | MODIFY | scripts | D5: REVIEWER step text drops the render-gate clause |
 | spec/commands/init.md | MODIFY | doctrine | D11 |
 | spec/scripts/init-gen.js | MODIFY | scripts | D11 |
+| spec/entrypoints.json | MODIFY | doctrine | D13 |
+| spec/commands/atlas.md | MODIFY | doctrine | D13 |
+| tests/consistency/read-load.test.js | MODIFY | tests | D13 (pin follows D10) |
+| spec/scripts/render-gate.js | DELETE | scripts | D14 |
+| spec/scripts/render-rules.js | DELETE | scripts | D14 |
+| spec/scripts/render-capture.js | DELETE | scripts | D14 |
+| spec/scripts/render-compare.js | DELETE | scripts | D14 |
+| spec/scripts/render-inventory.browser.js | DELETE | scripts | D14 |
+| spec/scripts/design-ac-reconcile.js | DELETE | scripts | D14 |
+| tests/render/render-gate.test.js | DELETE | tests | D14 |
+| tests/render/render-compare.test.js | DELETE | tests | D14 |
+| tests/render/render-rules.test.js | DELETE | tests | D14 |
+| tests/design-ac-reconcile.test.js | DELETE | tests | D14 |
+| tests/consistency/retired-flags.test.js | MODIFY | tests | D14: two render-gate cases removed |
+| tests/consistency/entrypoints.test.js | MODIFY | tests | D14: AC-20260912-03-7 drops deleted-script rows |
 | spec/.claude-plugin/plugin.json | MODIFY | other | `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` |
 | tests/consistency/design-stage-doctrine.test.js | CREATE | tests | AC-20260914-02-3, AC-20260914-02-8, AC-20260914-02-9, AC-20260914-02-10, AC-20260914-02-16 |
 | tests/consistency/contract-stamp.test.js | MODIFY | tests | AC-20260914-02-1 (rewrite), AC-20260914-02-2 (reuse) |
@@ -151,6 +170,20 @@ Rejected: keeping `.claude/design-coverage.json` as the claim ledger (a second r
 same fact as `approval.json`); an `atlas` command rewrite (the reviewer's Screens and Journeys
 tabs are the map — spec 03 deletes the command); letting the design stage edit screens itself
 on a change reply without re-approval on the page (would make the hash rule hollow).
+
+Build departures (folded from the deviations sidecar, 2026-09-15): D6(d)'s deletions apply only
+on the mock-app arm — a host without `<status.app>/mock.config.ts` keeps its skeleton checks, per
+the Behavior line. The AC-5 fixture uses `brief.md`'s kebab-case dimension keys
+(`package-manager`, `test-runner`), since only those parse as open dimensions; the auto-picked
+dimensions are recorded as `## Picks` lines in that same grammar. After AC-6's check refusal,
+`marks.skeletonLanded` is written as explicit `null`. AC-13's negative control was green before
+the change by construction. A first-round rename of the genesis rules-manifest pointer to a new
+top-level key was undone by D13 (retired, never renamed). `plan.md` now sits exactly at its
+328-line read-load budget. The `other` wave (contract restamp, plugin bump) ran as orchestrator
+commands. D13 and D14 are build-time scope rulings: D14 moved spec 03's render-gate and
+design-ac-reconcile deletions here, and spec 03's D1, File Plan and AC-1/-2 pointers were amended
+in this branch. Review round 1 fixed four hard findings: the menus-done route, the picks record,
+the retired audit instruction, and `init.md`'s `design.doctrine`. It also retagged AC-14/-15.
 
 ## Canonical Delta
 

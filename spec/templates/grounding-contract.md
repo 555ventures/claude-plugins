@@ -22,27 +22,13 @@ the design stage's gate/repair paths run; absent = legacy mode, no preflight),
 `"--test-name-pattern={name}"` — `red-check.js` substitutes a `rewrites`/`reuses` AC's
 regex-escaped, anchored title and appends the fragment to `testCommand` ahead of the file path
 to verify that one declared test rather than its whole file; absent = every file keeps today's
-per-file classification), `design`
-(`tool`/`command`/`storyFormat`/`doctrine`/`render` — see § Render gate; optional
-`rulesManifest`, `atlasRoutes`, `gateCommand`; legacy-tolerated and unread: `copyCatalogs`,
-`screenshot`),
+per-file classification),
+`design`
+(`{ "app": "<dir holding mock.config.ts, relative to the repo root>" }` and nothing else —
+present = design-capable host; the value equals `design/mocks/status.json`'s own `app`),
 `release` (see § Release), `capabilities` (see § Capabilities), the rule-enforcement keys
 `enforcementManifest` and `rulesEnforcementHash` (see § Rule enforcement), and the
 genesis-handoff keys `genesisStackDescriptor` and `designRulesHash` (see § Genesis handoff).
-
-## Render gate
-
-`design.render` is optional — present when the host wants `render-gate.js`'s mock↔component
-fidelity check, which the review stage runs as an advisory evidence leg on designed specs. The
-host declares how a URL becomes an inventory. In `--spec` mode, which renders the host's own
-components, the plugin never launches a browser; in mock-only `--mocks` mode a host that
-declares no `capture` falls back to the plugin's own dependency-free capture (ADR-0007), which
-fails closed when no browser is found. Sub-keys:
-`capture` (REQUIRED) — the host's command that turns one `--url` into an inventory JSON, invoked
-once per side × state × theme × viewport; `url` (REQUIRED) — the component render URL, with
-`{story}`/`{theme}`/`{width}`/`{height}`/`{state}` placeholders; `ready` (optional) — a command
-that exits 0 once the render server serves; `boot` (optional) — started detached when `ready`
-fails, killed on exit; `readyTimeout` (optional, seconds, default 120).
 
 ## Runtime verification (required)
 
@@ -171,7 +157,6 @@ on-disk artifacts instead of re-deciding:
 
 - `genesisStackDescriptor` — path to `.claude/genesis/stack-descriptor.json` (archetype, stack,
   `designCatalog`, resolved `gateCommand`). Optional; absent in repos not seeded by the genesis stage.
-- `design.rulesManifest` — path to `.claude/genesis/design-rules.json`.
 - `designRulesHash` — hash of the rules manifest, stamped by `/spec:init`; `/spec:doctor`
   recomputes it and warns when the design rules changed but enforcement was not regenerated.
 

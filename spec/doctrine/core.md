@@ -206,7 +206,7 @@ review independence comes from fresh-context, blind-to-author dispatch, executed
 reviewer from a different model family than the builder.** Concretely: the planning session (Fable,
 or the best available model) authors specs and holds the roadmap-level design seats (genesis position
 briefs, atlas direction rounds, sketch brainstorms, and every mock, wireframe or themed, authored in-session
-— design.md § Design Atlas). **Sonnet** orchestrates build and review and is every worker. **The
+— design.md § Design Canon). **Sonnet** orchestrates build and review and is every worker. **The
 reviewer seat is Fable at `effort: low`** (`agents/reviewer.md`), a different family from the Opus
 session that builds; low holds because every finding and kill needs an executed repro, so skipped
 evidence is `REVIEWER_FAILED`, never a false `CLEAN`. The disposer inherits the session model at

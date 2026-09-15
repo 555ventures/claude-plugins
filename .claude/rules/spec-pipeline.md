@@ -348,6 +348,14 @@ upstream bug list. -->
   banned substring never appears — was rejected, since an exact-attribute selector breaks the moment
   the element gains a second class and makes a grep pin's spelling a live rendering constraint. At
   lock, run every ban literal's real regex against the spec's OWN new names, not just the pre-image.
+  Eleventh trigger, the staged-pair shape the entrypoints manifest cannot hold: a spec that deletes
+  the last doctrine or command CALLER of a script — while a later sibling owns deleting the script —
+  leaves that script with zero entry points. `entrypoints.test.js` has no sanctioned orphan form, so
+  the build cannot go green, and every repair either fabricates a caller or weakens the guard. The
+  same removal also strands the in-plan doctrine files' old manifest rows and each predecessor
+  CONTINUE-TO pin naming them. At lock, for every caller a Decision removes, check the script keeps
+  another live caller in `spec/entrypoints.json`; if none, move the script's deletion (and every
+  script only it calls) into the same spec.
   (specs/20260813/07-command-report-conformance.md D8; specs/20260813/09-model-placement-mechanics.md D4;
   specs/20260814/01-ac-matrix-script.md; specs/20260907/09-atlas-index-and-note-navigation.md;
   specs/20260907/07-mocks-retires-theme.md D12; specs/20260907/08-walk-critic.md D2/D6;
@@ -356,7 +364,8 @@ upstream bug list. -->
   specs/20260910/02-click-to-advance-and-real-records.md A2;
   specs/20260912/02-an-answer-is-the-clients-until-sign-off.md;
   specs/20260912/03-run-isolates-and-owns-the-stages.md D10;
-  specs/20260912/14-the-design-stage-prints-the-work-not-the-inventory.md D6)
+  specs/20260912/14-the-design-stage-prints-the-work-not-the-inventory.md D6;
+  specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D14)
 - `[plugin]` `ac-matrix.js` parses AC bullets as `^- \*\*(token)\*\*` and requires the token to
   fully match `AC-\d{8}-\d{2}[a-z]?-\d+`. A build-time amendment written the way the Decisions
   table writes one — a prime-suffixed successor (`AC-…-3′`) plus the superseded original left as

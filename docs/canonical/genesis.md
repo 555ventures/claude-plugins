@@ -122,3 +122,19 @@
   `check --matrix design/mocks`, and a `design/components.json` entry per `canon.md` primitive.
   Legacy runs and non-visual archetypes see none of the new refusals.
   (specs/20260902/11-brief-from-approved-set.md, done 2026-09-03)
+
+- Since specs/20260914/02 the BRIEF step's derivation sources are `design/approval.json` (the
+  seed journey count, its `journeys` keys) and `design/notes.json` (the open-note count,
+  `status === "open"` across notes and journey conversations alike) — read directly through
+  `fs` + JSON, never a notes module — printed as `seed journeys: N · notes open: N`; the
+  `design/components.json` entry-per-primitive check at `skeleton-landed` is retired with it.
+  When the mock app exists (`<status.app>/mock.config.ts`), MENUS auto-picks `framework`,
+  `language`, and `packageManager` from it (`vite-react` / `typescript` / `npm`, each recorded
+  decided and printed once per run while its dimension stays open) and records
+  `tournament: { skipped: "mock-app" }`, so `FINALISTS`/`RACE`/`PROBE`/`PICK` are never reached
+  and `DECIDE` proceeds on the derived dimensions; `SCAFFOLD` runs no `scaffoldCommand` against
+  it and records `scaffold: { skipped: "mock-app" }`, and `--mark skeleton-landed` refuses
+  unless `mock-review check --json` reports `ok: true` and the zero-day gate is green — the
+  shell-adopt and matrix-expansion checks that used to gate it are retired. A host with no mock
+  app runs the tournament and scaffold exactly as before.
+  (specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md, done 2026-09-14)

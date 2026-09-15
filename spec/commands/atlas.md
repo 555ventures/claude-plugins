@@ -10,7 +10,7 @@ gates on, or waits for the atlas; `design/atlas/` is regenerated from scratch on
 there is no staleness to maintain and nothing to "keep updated." Run this when you want to see
 or change the product's design as a whole — the pipeline never asks for it. The one scheduled
 appearance is greenfield: the full sweep + holistic review after `/spec:genesis`, before
-the first UI-bearing brief is planned (shared § Design Atlas).
+the first UI-bearing brief is planned (shared § Design Canon).
 
 The roadmap-level design view: every mock rendered at device size, arranged by the roadmap's
 declared journeys, status-badged, with declared-but-unmocked surfaces as explicit gap cards.
@@ -20,7 +20,7 @@ design-brainstorm on one brief's surfaces (mock + brief co-evolve, exit ratifica
 there; the atlas is for seeing the whole product and applying cross-cutting notes.
 
 **Intended model: the session model.** Regeneration and serving are zero-judgment; the sweep
-runs entirely in-session, every mock authored and edited by one hand (shared § Design Atlas's
+runs entirely in-session, every mock authored and edited by one hand (shared § Design Canon's
 authorship paragraph, core § Model Placement) — no `Agent` dispatch ever writes a mock.
 **Change rounds that are direction-level** (new journey shape, a surface's whole posture,
 cross-screen coherence rulings) are the roadmap-level taste seat — recommend the user run them
@@ -43,7 +43,7 @@ user's input; `sweep` as an argument only skips the gap confirmation.
    - `outcome`: anchor `✅` text `atlas rebuilt — {N} surfaces ({M} bound, {K} gaps)`.
    - `bullets`: `- orphan: {mock path} — declare in {owning brief} or delete` (one per orphan);
      plus the `🎨 authored {N} in-session · {K} check-only dispatches` line (shared § Design
-     Atlas) after a sweep authored any mocks.
+     Canon) after a sweep authored any mocks.
    - `warns`: `{bound-but-drifted suspicion the user raised}`, when raised.
    - `artifacts`: `design/atlas/index.html`.
    - `next`: two arms (A5) — `{kind:'command', text:'/spec:atlas sweep — fill the {K} gap
@@ -72,7 +72,7 @@ user's input; `sweep` as an argument only skips the gap confirmation.
    injected notes layer, `?clean` skips it) and read back with `node {driver} notes open`,
    grouped project → journey → screen → state (spec/doctrine/mocks.md § Mocks: Page Notes owns
    the note shape and mark refusals). When several are open, present the grouped list before
-   applying anything. **Triage every note by root cause first** (shared § Design Atlas) into one
+   applying anything. **Triage every note by root cause first** (shared § Design Canon) into one
    of four bins: **mock-detail** (spacing, copy, emphasis) → edit the mock file, then `notes
    address --id <id> --change "<what changed>"`; **product-understanding** (wrong surface set,
    missing journey edge, a flow that shouldn't exist) → fix the owning brief's `surfaces` block
@@ -99,20 +99,20 @@ user's input; `sweep` as an argument only skips the gap confirmation.
 ## The sweep — fill the gaps at sketch tier
 
 **The full sweep + the user's holistic review is a named pipeline stage on greenfield** (shared
-§ Design Atlas; the genesis hand-off chain places it after `/spec:genesis`, before the first UI
+§ Design Canon; the genesis hand-off chain places it after `/spec:genesis`, before the first UI
 brief is planned): sketches are the product-understanding contract, and this review is where
 the user audits the model's grasp of the whole product at sketch-edit prices. Later invocations
 are incremental gap-filling.
 
 Every `gap` surface is authored at **sketch tier** (`data-status="sketch"`; structure, real
 copy tone, token roles — no polish pass, no screenshot loop) under the harness check,
-following the shared authorship + grounding rule **in full** (shared § Design Atlas's
+following the shared authorship + grounding rule **in full** (shared § Design Canon's
 authorship paragraph — one hand, in-session, no dispatch ever writes a mock; the
 no-shell-canon bootstrap, and the grounding order); paths, not prose, are what a later mock
 in the same pass cites. Run `shell sync` on the pass's mocks, then `{atlas} check`. Then
 rebuild and report — same ```report template as step 1 above, fresh slots from the post-sweep
 build, plus the `🎨 authored {N} in-session · {K} check-only dispatches` bullet (shared §
-Design Atlas) — the whole picture should always exist; polish arrives per-surface at the design
+Design Canon) — the whole picture should always exist; polish arrives per-surface at the design
 stage.
 
 ## Rules

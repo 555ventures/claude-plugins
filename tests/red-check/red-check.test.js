@@ -680,3 +680,29 @@ test('a sanctioned-green test file whose name carries a `$` segment runs against
   assert.strictEqual(res.status, 0,
     `exit 0 is the whole point: a host whose test filenames carry route params must not have every one of them reported as a failed sanctioned pin (stderr: ${res.stderr})`)
 })
+
+// Field incident (mock-review spec 20260914/01 red-check): walkAll pushed every non-directory
+// Dirent as a file, so a fixture's `node_modules` symlink to a directory matched a globbed tests
+// row and readFileSync threw EISDIR, killing the whole run before any JSON was printed.
+test('a directory symlink under a globbed tests row is never listed as a test file, so red-check completes instead of crashing on EISDIR', () => {
+  const { dir, base } = newHost('rcdirlink')
+  fs.mkdirSync(path.join(dir, 'tests/mocks/host'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'vendor/pkg'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'vendor/pkg/index.js'), "'use strict'\n")
+  fs.symlinkSync(path.join(dir, 'vendor'), path.join(dir, 'tests/mocks/host/node_modules'), 'dir')
+  fs.writeFileSync(path.join(dir, 'tests/mocks/real.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260821-96-1: a passing sanctioned pin beside a linked fixture dir', () => { assert.ok(true) })\n")
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260821-96-1**: WHEN x THE SYSTEM SHALL CONTINUE TO y → tests/mocks/real.test.js'],
+    ['| tests/mocks/** | CREATE | tests | globbed row whose subtree holds a fixture node_modules dir symlink |']))
+  const res = run(spec, dir, base, ['--json'])
+  const out = findings(res)
+  assert.ok(!out.files.some(f => f.path.startsWith('tests/mocks/host/')),
+    `a directory symlink listed as a test file is read with readFileSync and throws EISDIR, taking down every other file's check with it: ${JSON.stringify(out.files)}`)
+  assert.ok(out.files.some(f => f.path === 'tests/mocks/real.test.js'),
+    `the real test file beside the link must still be checked, or skipping links has silently emptied the glob expansion: ${JSON.stringify(out.files)}`)
+  assert.strictEqual(res.status, 0,
+    `the only real file is a passing sanctioned pin, so any non-zero exit means the link still leaked into the run (stderr: ${res.stderr})`)
+})

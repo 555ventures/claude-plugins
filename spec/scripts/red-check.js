@@ -204,8 +204,11 @@ function walkAll(dir, rootDir, out = []) {
   for (const e of entries) {
     if (e.name === '.git') continue
     const full = path.join(dir, e.name)
+    // Only regular files are pushed: a symlink (a fixture's `node_modules` link to a directory),
+    // socket, or FIFO matched by a glob row would throw EISDIR at readFileSync and kill the run.
+    // A literal tests row is never walked, so a bad literal path still fails loudly there.
     if (e.isDirectory()) walkAll(full, rootDir, out)
-    else out.push(path.relative(rootDir, full).split(path.sep).join('/'))
+    else if (e.isFile()) out.push(path.relative(rootDir, full).split(path.sep).join('/'))
   }
   return out
 }

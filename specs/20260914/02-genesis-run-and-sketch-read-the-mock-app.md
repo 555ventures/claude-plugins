@@ -1,6 +1,6 @@
 ---
 date: 2026-09-14
-status: implementing
+status: done
 tier: critical
 area: design
 design: false
@@ -170,6 +170,20 @@ Rejected: keeping `.claude/design-coverage.json` as the claim ledger (a second r
 same fact as `approval.json`); an `atlas` command rewrite (the reviewer's Screens and Journeys
 tabs are the map — spec 03 deletes the command); letting the design stage edit screens itself
 on a change reply without re-approval on the page (would make the hash rule hollow).
+
+Build departures (folded from the deviations sidecar, 2026-09-15): D6(d)'s deletions apply only
+on the mock-app arm — a host without `<status.app>/mock.config.ts` keeps its skeleton checks, per
+the Behavior line. The AC-5 fixture uses `brief.md`'s kebab-case dimension keys
+(`package-manager`, `test-runner`), since only those parse as open dimensions; the auto-picked
+dimensions are recorded as `## Picks` lines in that same grammar. After AC-6's check refusal,
+`marks.skeletonLanded` is written as explicit `null`. AC-13's negative control was green before
+the change by construction. A first-round rename of the genesis rules-manifest pointer to a new
+top-level key was undone by D13 (retired, never renamed). `plan.md` now sits exactly at its
+328-line read-load budget. The `other` wave (contract restamp, plugin bump) ran as orchestrator
+commands. D13 and D14 are build-time scope rulings: D14 moved spec 03's render-gate and
+design-ac-reconcile deletions here, and spec 03's D1, File Plan and AC-1/-2 pointers were amended
+in this branch. Review round 1 fixed four hard findings: the menus-done route, the picks record,
+the retired audit instruction, and `init.md`'s `design.doctrine`. It also retagged AC-14/-15.
 
 ## Canonical Delta
 

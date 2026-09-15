@@ -5,10 +5,9 @@
 
 ## The two subcommands
 
-- **`probe`** — read-only findings JSON. Reports `frontend-design` plugin presence, the
-  `testCommand` no-match behavior (a runner that exits 0 on a nonexistent path), and
-  at-risk-leg applicability. Exits 0 even on adverse findings: findings are data for the
-  interview, never a probe failure.
+- **`probe`** — read-only findings JSON. Reports the `testCommand` no-match behavior (a runner
+  that exits 0 on a nonexistent path) and at-risk-leg applicability. Exits 0 even on adverse
+  findings: findings are data for the interview, never a probe failure.
 - **`generate`** — profile in, files out. The **sole writer** of the grounding layer:
   `.claude/spec.config.json`, the pipeline rules file, `.claude/rules/conventions/*.md`,
   `.claude/agents/*.md`, both skills, the `.claude/settings.json` permissions merge,

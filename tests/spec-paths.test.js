@@ -472,6 +472,9 @@ test('AC-20260823-01-16: spec-paths release-legs resolves to spec/scripts/releas
 
 // specs/20260902/07-mocks-command-driver.md D16 (TDD red): spec-paths has no `mocks-driver` key
 // and no `mocks` entry in the `shared-for` SECTIONS map yet — /spec:mocks would resolve nothing.
+// Reused by specs/20260914/01-the-mock-contract-and-the-driver.md AC-20260914-01-17 (SHALL
+// CONTINUE TO: spec-paths mocks-driver keeps resolving to the rewritten driver) — this test is
+// that criterion's reuse pointer target; its title stays byte-identical.
 test('AC-20260902-07-15: spec-paths mocks-driver resolves to spec/scripts/mocks-driver.js, an existing absolute path', () => {
   const fs = require('node:fs')
   const mocksDriverPath = run('mocks-driver').trim()
@@ -499,7 +502,12 @@ test('AC-20260905-04-1: spec-paths design-hub exits 1 with the generic usage lin
   assert.doesNotMatch(r.stderr, /design-hub/, 'the usage line must not list "design-hub" among the valid keys — the hub script and its key are both gone: ' + JSON.stringify(r.stderr))
 })
 
-test('AC-20260902-07-15: spec-paths shared-for mocks serves exactly the D16 section set — Design Canon and Design Atlas present, Design Render Gate absent', () => {
+// specs/20260914/01-the-mock-contract-and-the-driver.md D14, AC-20260914-01-18: `/spec:mocks`
+// no longer builds or reads the HTML atlas (the mock app is its own product), so `shared-for
+// mocks` drops § Design Atlas from the section set the old AC-20260902-07-15 pin asserted —
+// superseding that pin's Design Atlas assertion rather than weakening it (the old pin's other
+// assertions all still hold and are kept verbatim below).
+test('AC-20260914-01-18: spec-paths shared-for mocks serves exactly the D14 section set — Design Canon present, Design Atlas and Design Render Gate both absent', () => {
   const out = run('shared-for', 'mocks')
   const full = run('shared-for', 'no-such-command')
   assert.ok(out.length < full.length, '`shared-for mocks` output must be a strict subset of the full doctrine, or the scoping map has no mocks entry at all')
@@ -510,7 +518,8 @@ test('AC-20260902-07-15: spec-paths shared-for mocks serves exactly the D16 sect
   assert.match(out, /## Console Output Style/, 'mocks must be served § Console Output Style — the checkpoint/ledger-counts glyph lines follow the shared narration doctrine')
   assert.match(out, /## MCP Policy/, 'mocks must be served § MCP Policy — the look-via browser path tells the session to ToolSearch for a browser MCP')
   assert.match(out, /## Design Canon/, 'mocks must be served § Design Canon — the seed/canon/wireframe grammar it enforces lives there')
-  assert.match(out, /## Design Atlas/, 'mocks must be served § Design Atlas — the atlas build the driver reuses for state frames and shapes')
+  assert.ok(!/## Design Atlas/.test(out),
+    'D14: mocks must NOT be served § Design Atlas — /spec:mocks no longer builds or reads the HTML atlas, so paying for that doctrine would be dead weight: ' + out)
   assert.ok(!/## Design Render Gate/.test(out),
     'mocks must NOT be served § Design Render Gate — the driver authors and approves screens, it never binds a spec against one, so paying for the render-gate doctrine would be dead weight')
 })

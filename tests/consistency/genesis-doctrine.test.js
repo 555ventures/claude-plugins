@@ -1137,16 +1137,11 @@ test('AC-20260902-09-3: mocks.md carries a "## Mocks: Authoring Rules" heading w
     'wireframe/theme rules the dry run converged on (LEDGER standing rules + M11/M13/M14 + ' +
     'A6/A7) have no doctrine home for the driver-unenforced half of the contract')
 
-  const bodyStart = headingMatch.index + headingMatch[0].length
-  const nextHeading = src.slice(bodyStart).search(/^## /m)
-  const body = nextHeading === -1 ? src.slice(bodyStart) : src.slice(bodyStart, bodyStart + nextHeading)
-
-  for (const literal of ['never a half-styled middle', 'gray until confirmed']) {
-    assert.ok(body.includes(literal),
-      'D3: the "## Mocks: Authoring Rules" section body must contain the literal "' + literal +
-      '" — its absence means one of the two remaining checkable rules (one honest wireframe or ' +
-      'the full theme, AI-reworded text stays gray until confirmed) is missing from the section')
-  }
+  // The mock-app spec at specs/20260914/01-the-mock-contract-and-the-driver.md retired the
+  // half-styled-middle and gray-until-confirmed literals along with their subject: wireframes
+  // and gray placeholder text no longer exist in this doctrine. The section's replacement
+  // authoring rules are pinned by tests/consistency/mocks-doctrine.test.js. This test keeps
+  // only the heading and shared-mocks-key pins below.
 
   const shared = runBash('bin/spec-paths', ['shared-mocks'])
   assert.strictEqual(shared.status, 0,

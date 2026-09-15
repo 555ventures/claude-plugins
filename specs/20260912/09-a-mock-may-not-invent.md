@@ -183,7 +183,7 @@ mock that has correctly externalised all of its CSS reports nothing at all.
 - **AC-20260912-09-8**: WHEN `design-atlas.js check` reads a labelled approved mock that links
   neither `wire/tokens.css` nor `wire/wire.css` and carries no `<style>` block THE SYSTEM SHALL
   CONTINUE TO report `no universal box-sizing: border-box rule` for it
-  → writes tests/mocks/mock-invention.test.js
+  → writes tests/mocks/mock-invention.test.js [retired: specs/20260914/01-the-mock-contract-and-the-driver.md]
 
 ## Assumptions (escalation triggers)
 

@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { tmpdir, runNode, ROOT } = require('../helpers')
+const { extractSection, parseAcBullets } = require('../../spec/scripts/lib/spec-sections')
 
 // specs/20260911/03-tests-expire-at-close.md D3/D4, AC-20260911-03-3/-4/-5/-6/-9: expire-tests.js
 // classifies every AC-tagged test in a done spec's scope as class/invariant/pin/open/retired,
@@ -426,6 +427,48 @@ test('AC-20260911-01-1: cited by a test while a done spec and a superseded twin 
     'D5: with both owners of the collided AC-ID closed (done and superseded) the citing test must retire, not stay pinned open forever by the superseded twin: ' + JSON.stringify(out.retired))
 })
 
+// Incident fix (specs/20260914/01-the-mock-contract-and-the-driver.md build): a hardened spec whose
+// AC points `rewrites <file> :: <title>` at a done spec's test mentions that test's AC-ID without
+// defining it. The mention must never hold the test open — the live-repo pin below reads owners the
+// same way, so the two can never disagree about who owns an ID.
+test('AC-20260911-03-9: WHEN a hardened spec only mentions a done spec\'s AC-ID in a rewrites pointer THE SYSTEM still classifies the citing test retired under --all-done --json', () => {
+  const root = tmpdir('expiry-pointer-mention')
+  writeSpec(root, 'specs/20260911/01-alpha.md', `---
+status: done
+tier: standard
+diff_base: 0000000000000000000000000000000000000000
+---
+# Alpha
+
+## Acceptance Criteria
+
+- **AC-20260911-01-1**: THE SYSTEM defines this AC-ID from the done spec.
+`)
+  writeSpec(root, 'specs/20260914/02-beta.md', `---
+status: hardened
+tier: standard
+---
+# Beta
+
+## Acceptance Criteria
+
+- **AC-20260914-02-1**: THE SYSTEM replaces the old check → rewrites tests/alpha.test.js :: AC-20260911-01-1: cited by a test
+`)
+  writeTest(root, 'tests/alpha.test.js', `'use strict'
+const { test } = require('node:test')
+const assert = require('node:assert')
+test('AC-20260911-01-1: cited by a test whose AC a hardened sibling only points at', () => { assert.ok(true) })
+`)
+
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, 'a dry run over the pointer-mention fixture must succeed: ' + r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.strictEqual(out.kept.open, 0,
+    'a spec that only points at an AC-ID must not count as its open owner — otherwise every hardened spec that rewrites a done spec\'s test keeps that test alive: ' + JSON.stringify(out.kept))
+  assert.deepStrictEqual(out.retired.map(e => e.acIds), [['AC-20260911-01-1']],
+    'the test whose only defining owner is done must be reported retirable despite the sibling\'s pointer mention: ' + JSON.stringify(out.retired))
+})
+
 test('AC-20260912-15-4: WHEN a spec file under specs/ cannot be read and a done twin at the same date and number defines the same AC-ID THE SYSTEM keeps the citing test, exits 0, and warns on stderr naming the file and its derived prefix', () => {
   if (isRootProcess()) return // chmod 000 cannot deny a root-owned process; this pin cannot distinguish the fix from the bug under root
 
@@ -552,6 +595,10 @@ function specStatus(specRel) {
   return m ? m[1] : null
 }
 
+// An owner is a spec whose `## Acceptance Criteria` DEFINES the AC-ID — the same reading
+// expire-tests.js's own ownership map applies. A spec that merely mentions the ID (a later spec's
+// `rewrites <file> :: <title>` pointer at a done spec's test) is not an owner; counting it by
+// occurrence reddened this pin on every hardened spec that rewrites a done spec's test.
 function ownerSpecsFor(acId) {
   const specsDir = path.join(ROOT, 'specs')
   const owners = []
@@ -561,8 +608,8 @@ function ownerSpecsFor(acId) {
       if (fs.statSync(full).isDirectory()) walk(full)
       else if (name.endsWith('.md')) {
         const rel = path.relative(ROOT, full).split(path.sep).join('/')
-        const text = fs.readFileSync(full, 'utf8')
-        if (text.includes(acId)) owners.push(rel)
+        const section = extractSection(fs.readFileSync(full, 'utf8'), 'Acceptance Criteria')
+        if (section !== null && parseAcBullets(section).some(b => !b.malformed && b.id === acId)) owners.push(rel)
       }
     }
   }

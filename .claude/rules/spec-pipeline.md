@@ -216,14 +216,16 @@ upstream bug list. -->
   the AC still describes the fixed state as a continuation. Fix the verb, never the measurement —
   and where the file must also survive close-time expiry, split the clauses that already hold into
   their own CONTINUE-TO AC on the same file rather than keeping a false one.
-  The same occurrence-anywhere reading also lives in `expire-tests.js`'s AC ownership map, which
-  walks EVERY `.md` under `specs/` — a build's `<spec>.deviations.md` sidecar included. A sidecar
-  bullet that spells a SIBLING spec's AC-ID makes the sidecar (no frontmatter, status null) that
-  AC's owner, and the whole-suite gate reddens on a sibling's tests being reported retirable. Name
-  a foreign AC in a sidecar by spec and number (`spec 02 AC 10`), never by its literal ID.
+  AC OWNERSHIP is the opposite: `expire-tests.js` and the live-repo expiry pin both read an AC's
+  owner from DEFINING `## Acceptance Criteria` bullets only, so a spec that merely mentions a
+  foreign AC-ID (a `rewrites <file> :: <title>` pointer at a done spec's test) is never its owner.
+  Any new ownership reader keeps that definition — an occurrence-anywhere reader reddens the gate
+  on every hardened spec that rewrites a done spec's test. Still name a foreign AC in a sidecar by
+  spec and number (`spec 02 AC 10`), never by its literal ID, for red-check's sake.
   (specs/20260822/02-init-generation-script.md; specs/20260907/10-client-review.md D15;
   specs/20260912/03-run-isolates-and-owns-the-stages.md;
-  specs/20260912/06-the-review-page-answers-to-a-design.md D9a)
+  specs/20260912/06-the-review-page-answers-to-a-design.md D9a;
+  specs/20260914/01-the-mock-contract-and-the-driver.md)
 - `[host]` A spec Decision naming a literal version-bump target can be stale by build time —
   concurrent sessions in this repo race the same semver. The build bumps to the next free
   version and records the deviation; the spec's literal number is a target, not a pin. Same class,

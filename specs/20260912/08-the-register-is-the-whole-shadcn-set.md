@@ -244,7 +244,7 @@ reddens.
   `tokens.css` whose values are `oklch(…)` THE SYSTEM SHALL CONTINUE TO report no off-token
   colour violation for that mock — the colour-literal sweep reads the mock's own markup and
   inline styles, never the linked register `[pre-green: absence-invariant]`
-  → writes tests/mocks/wire-register.test.js
+  → writes tests/mocks/wire-register.test.js [retired: specs/20260914/01-the-mock-contract-and-the-driver.md]
 
 ## Assumptions (escalation triggers)
 

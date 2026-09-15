@@ -233,7 +233,7 @@ sees and raises their own notes.
   `j1` as confirmed by the client THE SYSTEM SHALL CONTINUE TO clear that journey's own approval,
   SHALL CONTINUE TO clear the product `approved` mark, and SHALL CONTINUE TO write `walk.json` with
   `j1`'s client confirmation taken back (`confirmedAt` null after the run)
-  → writes tests/mocks/walk-state-retired.test.js
+  → writes tests/mocks/walk-state-retired.test.js [retired: specs/20260914/01-the-mock-contract-and-the-driver.md]
 - **AC-20260913-07-5**: WHEN `--reopen journey:j1` runs THE SYSTEM SHALL print `↩ reopened
   journey:j1 — invalidated: approved, approved(all)`, and WHEN `--reopen shapes` runs THE SYSTEM
   SHALL print `↩ reopened shapes — invalidated: shape, canon, kit, journeys(all), approved(all)` —
@@ -274,7 +274,7 @@ sees and raises their own notes.
   → writes tests/mocks/human-authored-notes.test.js
 - **AC-20260913-07-13**: WHEN `--mark journey-approved --journey onboarding` runs on a host whose
   screen carries one `kind: "note"` note that is not resolved THE SYSTEM SHALL CONTINUE TO exit 2
-  naming that note's id → reuses tests/mocks/mocks-driver-notes-gate.test.js :: AC-20260912-07-6:
+  naming that note's id → reuses tests/mocks/mocks-driver-notes-gate.test.js :: AC-20260912-07-6: [retired: specs/20260914/01-the-mock-contract-and-the-driver.md]
 - **AC-20260913-07-14**: WHEN `notes open` runs on a store holding one person-written open note and
   one `kind: "question"` note THE SYSTEM SHALL print the person's note and SHALL NOT print the
   question's id or its text, and `design/mocks/notes.json` SHALL still contain both notes,
@@ -293,7 +293,7 @@ sees and raises their own notes.
 - **AC-20260913-07-18**: WHEN `POST /__notes/add` is requested with a body carrying `reason`
   THE SYSTEM SHALL CONTINUE TO store the note with that reason, and the rendered review page SHALL
   CONTINUE TO show its `REASON_LABELS` badge (`{"reason":"wrong-direction"}` → a row containing
-  `Wrong direction`) → writes tests/mocks/human-authored-notes.test.js
+  `Wrong direction`) → writes tests/mocks/human-authored-notes.test.js [retired: specs/20260914/01-the-mock-contract-and-the-driver.md]
 - **AC-20260913-07-19**: WHEN the review page is rendered for a journey over a store holding one
   plain note and one `kind: "question"` note on its screens THE SYSTEM SHALL emit markup containing
   none of `rv-progress`, `rv-track`, `rv-fill`, `rv-correct`, `rv-q`, `data-kind="question"`, the
@@ -340,11 +340,11 @@ sees and raises their own notes.
   `kind: "question"` note on an `invented` row, one on an `inferred` row, one `kind: "note"`
   client withdrawal tagged `not-needed` and one tagged `mistake` THE SYSTEM SHALL CONTINUE TO
   derive `4 total · 4 new · 0 retired` and SHALL CONTINUE TO stay byte-idempotent on a second run
-  → reuses tests/mocks/mocks-driver-exclusions.test.js :: AC-20260911-05-7:
+  → reuses tests/mocks/mocks-driver-exclusions.test.js :: AC-20260911-05-7: [retired: specs/20260914/01-the-mock-contract-and-the-driver.md]
 - **AC-20260913-07-26**: WHEN `--mark approved` runs on a host carrying one open `kind: "note"`
   project note THE SYSTEM SHALL CONTINUE TO exit 2 with the project-note-open message, printed
   before any unresolved screen-scoped note it would also find
-  → reuses tests/mocks/mocks-driver-notes-gate.test.js :: AC-20260912-07-4:
+  → reuses tests/mocks/mocks-driver-notes-gate.test.js :: AC-20260912-07-4: [retired: specs/20260914/01-the-mock-contract-and-the-driver.md]
 
 ## Assumptions (escalation triggers)
 

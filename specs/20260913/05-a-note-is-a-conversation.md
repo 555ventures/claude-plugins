@@ -248,7 +248,7 @@ reply.
   → writes tests/mocks/review-board-card.test.js
 - **AC-20260913-05-16**: WHEN `POST /client/__notes/resolve` is sent for an addressed client note
   with no `verdict` THE SYSTEM SHALL CONTINUE TO record `resolution:'accepted'`
-  → reuses tests/mocks/client-walk-route.test.js :: AC-20260911-06-15:
+  → reuses tests/mocks/client-walk-route.test.js :: AC-20260911-06-15: [retired: specs/20260914/01-the-mock-contract-and-the-driver.md]
 
 ## Assumptions (escalation triggers)
 

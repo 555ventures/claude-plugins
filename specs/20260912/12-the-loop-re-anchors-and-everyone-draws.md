@@ -224,7 +224,7 @@ note addressed before this spec and on every non-region note. No migration.
   `requires --port` and leave notes.json unchanged → writes tests/mocks/notes-reanchor.test.js
 - **AC-20260912-12-8**: WHEN `notes address` runs on a NON-region session note THE SYSTEM SHALL
   CONTINUE TO address it with no Chrome launched and an `addressed` object carrying no `reanchored`
-  field → writes tests/mocks/notes-reanchor.test.js
+  field → writes tests/mocks/notes-reanchor.test.js [retired: specs/20260914/01-the-mock-contract-and-the-driver.md]
 - **AC-20260912-12-2** `[env: CHROME_BIN]`: WHEN a served fixture mock's markup is edited so the
   region's anchor element keeps its snippet but the row becomes a column, and `notes address --port`
   runs THE SYSTEM SHALL write `addressed.reanchored` = `children` and a `region` whose

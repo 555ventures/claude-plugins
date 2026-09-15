@@ -131,7 +131,8 @@ const SHARED_FOR = {
   release: ['Host Grounding', 'Runtime Verification', 'Release Stage', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Canonical Docs Loop', 'Session Execution'],
   enforce: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Model Placement', 'Question Style', 'Console Output Style', 'Session Execution', 'Workflows Encode Shape, Not Judgment'],
   genesis: ['Host Grounding', 'Pipeline Entry', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Worker Git Ban', 'MCP Policy', 'Session Execution', 'Design Canon', 'Design Authoring Contracts', 'Design Atlas', 'Workflows Encode Shape, Not Judgment'],
-  mocks: ['Host Grounding', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'MCP Policy', 'Session Execution', 'Design Canon', 'Design Atlas'],
+  // specs/20260914/01-the-mock-contract-and-the-driver.md D14: § Design Atlas dropped from /spec:mocks.
+  mocks: ['Host Grounding', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'MCP Policy', 'Session Execution', 'Design Canon'],
   status: ['Host Grounding', 'State Machine', 'Question Style', 'Console Output Style', 'Session Execution'],
   queue: ['Host Grounding', 'State Machine', 'Question Style', 'Console Output Style', 'Session Execution'],
   escape: ['Host Grounding', 'Feedback Loop', 'Incident Policy', 'Question Style', 'Console Output Style', 'Session Execution'],

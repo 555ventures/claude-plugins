@@ -272,43 +272,55 @@ journey swaps the sign-off block to its confirmed render in place and answers in
 Both way-back controls render inline inside the sentence they belong to on the walk page, and as an
 ordinary action button on the index's closed list, per the two approved mocks.
 
-## The mocks command (2026-09-02, specs/20260902/07)
+## The mocks command (2026-09-14, specs/20260914/01)
 
-`/spec:mocks` is the standalone design stage. `spec/scripts/mocks-driver.js` (`spec-paths
-mocks-driver`) derives `SEED → SHAPES → KIT → WIREFRAMES → THEME → CLIENT → APPROVED`
-(specs/20260907/10, ADR-0012; specs/20260907/04, ADR-0010 amending ADR-0008) from `design/mocks/status.json`
-(schemaVersion 1) plus the artifacts on disk: the skin and review states are retired; a
-wireframe is never skinned inside mocks — `/spec:sketch` owns fidelity per brief. The driver
-prints exactly one step
-(`Read only:` + `Doctrine:` lines), checkpoints every accepted mark (`✅ checkpoint — mocks state
-saved (<prev> → <next>); safe to /clear and re-run /spec:mocks`, preceded by the `📒 ledger:`
-counts line), gates every advance on the provenance ledger (`gateVerdict`, refusing on
-`open:false` and naming the rows), and records a sub-mark per journey (`journey-drawn`,
-`journey-approved`), and
-`--reopen journey:<j>|shapes|kit|theme` (recorded, printed, nothing deleted). There is no critic
-pass between wireframes and theme: the design-review queue carries only what a person wrote. The
-marks the driver accepts are `seed-done`, `shape-picked`, `canon-written`, `kit-signed`,
-`journey-drawn`, `journey-approved`, `theme-picked` and `approved`; a redrawn journey still
-clears that journey's approval, the product sign-off, and the client's own confirmation of it
-on `walk.json`. Mocks are authored gray and end themed (specs/20260907/07; specs/20260910/04, ADR-0013): THEME
-sits between WIREFRAMES and CLIENT, the user authors directions under `design/theme/<kebab>/`, `theme
-shortlist` opens a client pick whose candidates are the seed's two dense screens served in each
-direction's roles, the client picks on `/client/theme.html`, and `--mark theme-picked` adopts —
-setting `status.marks.themePicked` and `status.theme` alongside the `design/tokens.css` copy.
-From then on every mock the client walks is served with `?theme=<kebab>`, a link swap that
-exchanges the wire register's token file for the direction's in the served HTML only; the
-session's own pages — the atlas index, the review page, every non-client route — stay neutral,
-and `check` stops warning on wire links once the theme is picked. CLIENT (specs/20260907/10, ADR-0012)
-replaces the one-look sign-off as the stage's single human gate: the session exposes its own
-running serve and records the address with `client open --address <url>`, refused unless
-`<url>/client/__notes/list` answers — the plugin never opens a tunnel itself. `--mark approved`
-keeps the decided `approved` stop as the decider ceremony, prints `waived: N` plus one reason
-line per waived note, and closes on the ledger and the notes alone: a waived note or a
-`waived <date>` ledger row satisfies the same gates a resolved note or a confirmed row does.
-It stamps every top-level mock
-`data-status="approved"` and records the stop's decider, so a mock approved by `/spec:mocks` is
-always a gray wireframe and the atlas's wire-register rule exempts it by design.
-`--reopen journey:<j>` clears that journey's approval and the terminal approval.
+`/spec:mocks` drives a greenfield product's own Vite + React + shadcn app instead of gray HTML
+wireframes (ADR-0028). `spec/scripts/mocks-driver.js` (`spec-paths mocks-driver`) derives
+`SEED → SHELL → SCREENS → THEME → CLIENT → APPROVED` on every run from three sources: disk
+(`design/mocks/status.json`, schemaVersion 2), and the separate reviewer package's own
+`mock-review check --json`, `design/notes.json` and `design/approval.json` — never a second,
+hand-rolled read of any of the three. It writes only `design/mocks/status.json`
+(`marks {seedDone, shellDrawn, themePicked, approved}`, `journeys {<id>: {drawn, approved}}`,
+`reopens []`); a `schemaVersion: 1` file refuses outright (`remedy: rm design/mocks/status.json`
+— no host holds data on the old path). SEED holds until `seedDone`; SHELL until `shellDrawn`;
+SCREENS until every journey the seed's `### <journey>` blocks declare is both drawn and
+approved (a journey added mid-SCREENS reopens the state); THEME until `themePicked`; CLIENT
+until `approved`; then APPROVED. The driver prints exactly one step block (`Read only:` +
+`Doctrine:` lines, plus `Skill: mock-authoring — load it before the first edit` at SHELL,
+SCREENS and THEME), the provenance ledger's counts line and the checkpoint line on every
+accepted mark, and gates every mark that used to run `gateVerdict` — `seed-done`,
+`journey-approved`, `theme-picked`, `approved` — on the ledger exactly as before. `--reopen
+journey:<j>|shell|theme` clears state, cascades (a shell reopen invalidates the theme and every
+journey's approval; a re-picked theme invalidates every approval), and appends one `reopens` row
+without deleting a file; `--reopen shapes|kit` refuses naming the retired state.
+
+The contract between this plugin and the separate reviewer package is one file,
+`spec/templates/mock/contract.json` (`spec-paths mock-contract`): `contractVersion`, the
+package name and bin, the verb list (`contract`, `sweep`, `answer`, `check`, `serve`), the host
+layout, and the JSON shapes of `notes.json`, `approval.json`, `decisions.json`, `check --json`
+and `sweep --json` as required-key lists the driver validates by hand. `spec/scripts/lib/mock-
+cli.js` is the sole caller of the package, spawning `mock-review <verb> …` with the app's own
+`node_modules/.bin` prepended to PATH. A `contractVersion` mismatch between the installed
+package and the template refuses (exit 2) naming both numbers with `remedy: npm i -D
+@555/mock-review@<major>`; an unreachable `mock-review` refuses with `remedy: npm i -D
+@555/mock-review`; a JSON verb's stdout failing the contract's shape check refuses naming the
+verb and the missing key. Every refusal ends with `remedy: <command>`.
+
+SEED prints, in order: `Read only: design/mocks/seed.md`; the scaffold command verbatim
+(a `npx shadcn … init` invocation that creates the app subdirectory the driver tracks as
+`status.app` and resolves every later host-app path through); the package install line; one
+`cp` line per scaffold template (`mock.config.ts`, `src/journeys.ts`, and two example files
+under `design/examples/` that sit outside every contract host glob so the reviewer never lists
+them as a screen or a records file). `--mark seed-done` refuses on a `## Records` entity with no
+matching `src/records/<entity>.ts` file, a missing `mock.config.ts`, or a contract refusal — it
+never asks the user for data.
+
+Retired verbs refuse (exit 2) naming their replacement: the old `notes`/`stop`/`theme
+state|compose|shortlist`/`look`/`look-probe`/`look-via` verbs point at the package's own
+`sweep`/`answer`/`check --look` commands and at authoring `src/themes/<k>.css` directly;
+`--refresh-register`, `--mark kit-signed|shape-picked|canon-written`, `ledger derive` and
+`client log` are retired outright. SHAPES and KIT no longer exist: stock shadcn is the kit, and
+a single app's journeys already fix the structure a shape pick used to name.
 
 CLIENT is a loop, not a one-way form (specs/20260911/04). A journey's state is derived from the
 client's own requests, never stored — `lib/mocks-walk.js journeyState` returns `unseen | walking |

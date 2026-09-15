@@ -131,12 +131,12 @@ questions, then unresolved notes, then the client-walk and gate checks.
 - **AC-20260912-07-6**: WHEN `mocks-driver.js --mark journey-approved --journey j1` runs on a
   fixture carrying an unresolved note `N001` on a screen of `j1` THE SYSTEM SHALL CONTINUE TO exit
   2 with `unresolved note(s) on j1: N001`
-  → writes tests/mocks/mocks-driver-notes-gate.test.js
+  → writes tests/mocks/mocks-driver-notes-gate.test.js [retired: specs/20260914/01-the-mock-contract-and-the-driver.md]
 - **AC-20260912-07-4**: WHEN `mocks-driver.js --mark approved` runs on a fixture with every journey
   approved, every journey confirmed by the client, and one open project note `N005` THE SYSTEM
   SHALL CONTINUE TO exit 2 with `project note(s) open: N005 — answer the project note first`, and
   SHALL CONTINUE TO print it before any unanswered-question or unresolved-note line
-  → writes tests/mocks/mocks-driver-notes-gate.test.js
+  → writes tests/mocks/mocks-driver-notes-gate.test.js [retired: specs/20260914/01-the-mock-contract-and-the-driver.md]
 
 ## Assumptions (escalation triggers)
 

@@ -1,251 +1,80 @@
 #!/usr/bin/env node
 // mocks-driver.js [--root <dir>] [--state]
-// mocks-driver.js --root <dir> --mark <mark> [--journey <j>] [--shape <k>]
-// mocks-driver.js --root <dir> --reopen journey:<j>|shapes|kit|theme
-// mocks-driver.js --root <dir> ledger (add|set|catch|check|counts|derive) [flags]
-// mocks-driver.js --root <dir> ledger add --id <i> --step <s> --kind <k> --claim <c> [--tag <t>]
-//                              [--status <st>] [--rejected <r>] [--dependents <d>] [--note <n>]
-// mocks-driver.js --root <dir> notes open [--all]
-//                              specs/20260912/14 D3/D4: without --all, the journey-listed note
-//                              walk stops after NOTE_LIST_CAP (20) lines, each with a "… <n> more
-//                              … --all to list" tail; --all reproduces the pre-change output in
-//                              full.
-// mocks-driver.js --root <dir> notes add --scope mock|project [--screen <label>] [--state <s>]
-//                              --by <name> [--reason <r>] --text "<t>"
-// mocks-driver.js --root <dir> notes address --id <id> --change "<what changed>" [--ledger <rowId>]
-//                              [--port <n>]   (--port is required on a client-origin mock-scope note)
-// mocks-driver.js --root <dir> notes waive --id <id> --reason "<r>" [--by <who>]
-// mocks-driver.js --root <dir> client open --address <url>
-// mocks-driver.js --root <dir> client waive --journey <j> --reason "<r>"
-// mocks-driver.js --root <dir> client log [--journey <j>]
-// mocks-driver.js --root <dir> look <label> [--state <s>] [--out <png>] [--port <n>]
-// mocks-driver.js --root <dir> look-probe | look-via <playwright|browser>
-// mocks-driver.js --root <dir> stop open <step> [--port <n>]   shapes | kit | journey:<j> | signoff
-// mocks-driver.js --root <dir> stop decide <P…> --verdict pick|approve|change [--pick <g>] [--note <n>] --by <who>
-// mocks-driver.js --root <dir> theme state
-// mocks-driver.js --root <dir> theme compose --direction <kebab>
-// mocks-driver.js --root <dir> theme shortlist --directions <a,b[,c]> [--port <n>]
-// mocks-driver.js --root <dir> --mark theme-picked [--direction <kebab>]
-// mocks-driver.js --root <dir> --refresh-register
+// mocks-driver.js --root <dir> --mark seed-done|shell-drawn|journey-drawn|journey-approved|theme-picked|approved [--journey <j>]
+// mocks-driver.js --root <dir> --reopen journey:<j>|shell|theme
+// mocks-driver.js --root <dir> ledger (add|set|catch|check|counts) [flags]
+// mocks-driver.js --root <dir> client open | client waive --journey <j> --reason <r>
 //
-// specs/20260907/06-theme-pick-moves-to-sketch.md: `theme state|compose` is a SECOND theme
-// producer that lives entirely outside the mocks state machine above — `/spec:sketch`'s own
-// first run, not a mocks stage. `state` derives absent/picked from design/tokens.css alone
-// (refusing outright when it is the wireframe gray register byte-for-byte) and writes nothing,
-// not even status.json; `compose` validates one design/theme/<kebab>/ candidate (the signed-off
-// kit re-rendered at production fidelity, plus specs/20260910/04's own D2 role-completeness leg)
-// against design/kit/'s own primitive set.
-// specs/20260910/04-theme-before-the-client-walk.md (ADR-0013) reinstates `/spec:mocks`'s own
-// THEME state between WIREFRAMES and CLIENT: `theme shortlist` opens a client-facing pick stop
-// over the seed's own dense screens (never the kit page `theme open` — now retired — opened), and
-// `--mark theme-picked` (the `theme adopt` — now retired — body verbatim, plus the mocks-state
-// write adopt never had) adopts the client's pick and advances the chain. `--reopen theme` is
-// this path's own reopen, unlike the pre-existing `theme state`/`theme compose` pair above (which
-// still has none — they live outside the state machine, D1's "no state-machine step" rationale
-// unchanged for them).
+// WHY: specs/20260914/01-the-mock-contract-and-the-driver.md (ADR-0028) — `/spec:mocks` drives a
+// greenfield product's own Vite + React + shadcn app instead of gray HTML wireframes. This driver
+// derives SEED -> SHELL -> SCREENS -> THEME -> CLIENT -> APPROVED on every invocation from
+// design/mocks/status.json (schemaVersion 2) plus the reviewer package's own `check --json`,
+// `design/notes.json` and `design/approval.json` — never from a second, hand-rolled read of any
+// of those three. `lib/mock-cli.js` is the only caller of the package (`@555/mock-review`); this
+// driver never spawns it directly. The provenance ledger (spec/scripts/lib/mocks-ledger.js) and
+// its verbs/gate are kept verbatim (D16) — this file is the only thing rewritten.
 //
-// specs/20260907/10-client-review.md D1/ADR-0012: CLIENT is the state that follows THEME, the
-// served journey pages, exposed by the user, where a client leaves notes; `client open --address
-// <url>` records the address once the exposed serve answers its own `/client/__notes/list` (D2),
-// and the terminal `--mark approved` still closes on the ledger and the notes alone (D9),
-// unchanged in every precondition. D3/D4: a note's `origin` (client|session) is decided by the
-// route it arrived on — `/client/__notes/*` stamps "client", `/__notes/*` stamps "session" —
-// never by a typed name. D5/D6: a client's mock-scope note captures its screen at raise
-// (lib/client-capture.js, the look command's own URL form and first-declared viewport); D7:
-// `notes address --port <n>` re-captures and refuses when the hash is unchanged, else stores the
-// after image and moves the note to "addressed". D8: `notes waive --id --reason` releases a
-// client-origin note after seven days of client silence.
+// D3: SEED until `marks.seedDone` (no run spawns the package while it is null — `contractOrDie`
+// first runs at `--mark seed-done`); SHELL until `marks.shellDrawn`; SCREENS until every journey
+// the seed declares (`### <journey>` blocks, in seed order, via lib/surfaces.js's
+// `parseSeedJourneys`) is both drawn and approved — a journey added to the seed mid-SCREENS
+// reopens the state; THEME until `marks.themePicked`; CLIENT until `marks.approved`; then
+// APPROVED. A status.json carrying `schemaVersion: 1` refuses outright (ADR-0028: no host holds
+// data on the old path) rather than being reinterpreted.
 //
-// specs/20260910/03-client-journey-player.md D7: `--mark approved` additionally refuses (before
-// the ledger gate) while any seed journey is neither confirmed nor waived in design/mocks/
-// walk.json (lib/mocks-walk.js's isClosed) — `client waive --journey <j> --reason "<r>"` is the
-// remedy the refusal names, mirroring `notes waive`'s own seven-day-silence clock but over a
-// whole journey; `client log [--journey <j>]` prints each journey's confirmed sentence or its
-// reached/total count, then its misses grouped and counted. The accepted `approved` tail gains
-// one `client: <j> — "<sentence>"` line per confirmed journey and a `waived journeys: <n>` line,
-// both before the existing `waived: N` (notes) line.
-//
-// WHY: specs/20260902/07-mocks-command-driver.md — `/spec:mocks` is the standalone design
-// stage; this driver derives SEED -> SHAPES -> KIT -> WIREFRAMES -> THEME -> CLIENT -> APPROVED
-// on every invocation from `design/mocks/status.json` plus the artifacts actually on disk (a
-// recorded mark whose artifact vanished is demanded again), prints exactly one step, gates every
-// advancing mark on the provenance ledger (spec 06, lib/mocks-ledger.js), and checkpoints every
-// accepted mark so a run survives any number of `/clear`s (the genesis driver's discipline
-// verbatim — spec/scripts/genesis-driver.js). specs/20260906/02-mocks-ends-at-wireframes.md
-// retires the SKIN and REVIEW states along with the `journey-skinned`, `review-opened`,
-// `journey-reviewed` marks and the `--decider` flag. specs/20260910/04-theme-before-the-client-walk.md
-// (ADR-0013) reinstates THEME between WIREFRAMES and CLIENT — the client picks it now, from the
-// user's own shortlist over the seed's two dense screens, `theme shortlist` + `--mark
-// theme-picked`; the terminal `approved` mark is still the one sign-off — it stamps every
-// top-level mock `data-status="approved"` itself and records the decider from the sign-off
-// stop's own "by". specs/20260913/07-the-critic-is-out.md D1: there is no critic pass between
-// wireframes and theme — the design-review queue carries only what a person wrote, so the chain
-// above has nothing left to gate between WIREFRAMES and THEME.
-//
-// specs/20260907/04-kit-canon-family.md D1: `KIT` sits between `SHAPES` and `WIREFRAMES`,
-// gated on `marks.kitSignedOff` exactly like every other step in the chain. `--mark kit-signed`
-// (D7) requires a decided `kit-signed` look stop, a non-empty `design/kit/`, and a passing
-// `design-atlas.js check design/kit`; `--reopen kit` (D10) clears the sign-off and the terminal
-// approval only, never a journey's own approval, and `--reopen shapes` widens to clear it too
-// (a re-picked shape invalidates whatever the kit was authored against).
-//
-// specs/20260905/04-per-project-look-server.md D3: `stop open <step> [--port <n>]` derives the
-// candidate set for the step's look from disk and delegates to design-atlas.js (sibling path,
-// never spec-paths) `stop open`, printing only the verified link plus the fixed reply line;
-// `stop decide` passes an id + verdict straight through to the same script (the chat channel for
-// a decision, `--by chat`). There is no per-machine hub — each project serves its own look stops
-// (specs/20260905/02's design-review-hub-and-look-stops.md D6-D8 established the delegation
-// shape; spec 04 retargets it at design-atlas.js). The three gated marks (shape-picked,
-// journey-approved, approved) read their verdict from the newest non-superseded
-// look stop for the mark's key (lib/mocks-picks.js, spec 01) instead of trusting the session's
-// own judgment — a session can never mark past a look. A pick mark's `--shape`/`--direction` flag
-// is optional (the page's pick is the value); a given flag that disagrees with the pick refuses.
-//
-// specs/20260906/04-journey-review-page.md D6: `stop open journey:<j>` passes design-atlas.js's
-// `stop open` a `--page /review/<j>.html` override, so the stop's url/probe target is that
-// journey's own review page (http://localhost:<port>/review/<j>.html#stop-<id>) instead of the
-// atlas index — every other step (shapes, theme, signoff) omits `--page` and keeps the atlas URL.
-//
-// specs/20260906/05-gray-states-on-every-wireframe.md D2: `journey-drawn` and `journey-approved`
-// each run design-atlas.js's `check --states` over the journey's own top-level mocks (after the
-// existing per-label closure checks at drawn; before the render gate at approved) and refuse the
-// mark on any violation, naming the file, the missing/unknown state(s), and the redraw remedy. D3:
-// the "draw journey <j>" step's printed Then: block carries the same states/data-no-state prompt.
-//
-// specs/20260906/06-sketch-high-fidelity-and-critique.md D3/D4: `notes add` is the one CLI writer
-// of a note — a client message on the page routes through it with its own `--by`. It refuses
-// `--scope mock` with no `--screen`, and an unknown `--reason` (naming the eight-value plain enum
-// via lib/mocks-notes.js's own validation). specs/20260913/07-the-critic-is-out.md D5: `--kind`
-// and `--ledger-id` are retired inputs — nothing produces a note this driver did not get typed by
-// a person, so `notes add` refuses either by name, naming the one remedy ("a note is what a
-// person typed"). A legacy note already on disk still renders its stored `reason` tag when it
-// carries one; nothing new stamps one outside PLAIN_REASONS.
-//
-// specs/20260910/06-real-records-and-two-dense-screens.md D1/D2/D3: `## Dense screens` (plural)
-// carries one or two `- <label>` lines, each already declared in a journey — `seed-done` refuses
-// zero lines, more than two, or an undeclared label; the singular `## Dense screen` heading with
-// one line still parses (legacy hosts, AC-20260910-06-5). D2: `## Records` names one
-// `- <entity>: records/<entity>.json` line per entity the product handles — `seed-done` refuses
-// a missing section, a `- none` line, or a records file that is missing, unparseable, not an
-// array, or holding fewer than three records, naming the entity and the remedy; when the seed's
-// own text carries no entity to name (section missing or `- none`), the entity named in the
-// refusal falls back to whatever `design/mocks/records/*.json` already holds on disk, so the
-// remedy is never silent about which file to author. The file is a JSON array of record objects
-// the session derives; where the data came from is neither checked nor recorded, and every
-// refusal points at deriving it, never at asking the user for it. D3: `journey-drawn` collects every declared entity's record
-// values (`lib/mock-seed-checks.js` `recordValues`) and, after the D1/D2 edge-gap check above,
-// warns per screen carrying no record value and refuses the whole journey when no screen carries
-// one — never before the edge-gap check, so a placeholder-drawn journey is refused for its
-// missing controls first.
-//
-// specs/20260912/08-the-register-is-the-whole-shadcn-set.md D5: `--refresh-register` moves a
-// host repo already holding the retired eleven-role wireframe register onto the current
-// eighteen-colour-role shadcn Neutral one. It keys on the role NAMES `design/wire/tokens.css`
-// declares (never byte identity — `canon-written`'s own copy-only-when-absent leaves every host
-// that already has a register frozen on whatever it wrote first), classifying PRE-RENAME/
-// CURRENT/neither exactly as Contracts § `mocks-driver.js --refresh-register` orders it. It is
-// deliberately OUTSIDE the mark chain — neither gated on a mark nor itself writing one, and
-// dispatched before `loadStatus()` (alongside `theme state`, above) so it touches nothing under
-// design/mocks/ on a host that has no status.json yet. `spec/scripts/lib/wire-roles.js` (D6)
-// owns the retired-to-current map and the one-pass `renameRoles()` this arm calls over every
-// `design/**/*.html` and `design/wire/*.css` (tokens.css and wire.css excepted — the template
-// copy already replaced them).
+// D4: the SEED step block prints the scaffold command, the install line and one `cp` line per
+// template file (spec/templates/mock/*), verbatim and in that order; `--mark seed-done` refuses
+// on a missing `## Records` entity file or a missing `mock.config.ts`, never asks the user for
+// data. D5: `--mark shell-drawn` refuses on an error-severity `check --json` finding, else
+// accepts (warn findings never refuse) once some shell carries a non-empty `examples` list. D6:
+// `--mark journey-drawn` refuses an out-of-seed `--journey`, a journey `check --json` does not
+// list, or an unresolved edge; it runs no ledger gate. D7: `--mark journey-approved` walks the
+// approvedAt/screen/notes/project-note/journey-thread chain before running the ledger gate and
+// recording. D8: `--mark theme-picked` refuses until `mock.config.ts`'s applied theme matches the
+// page's pick. D9: `--mark approved` refuses on any journey lacking a client verdict or any note
+// not resolved the way its kind requires; `client open` prints the served URL with the client
+// token, `client waive` is the only write this driver makes to `approval.json`. D10: `--reopen`
+// clears marks (and cascades — a shell reopen invalidates the theme and every approval; a re-
+// picked theme invalidates every approval too) and appends one `reopens` row; it never deletes a
+// file. D11: every retired verb refuses (exit 2) with a one-line replacement, checked before
+// anything else runs — a retired verb spawns nothing and touches no file. D12: SHELL, SCREENS and
+// THEME print the mock-authoring skill line; SEED, CLIENT and APPROVED never do. D16: the ledger
+// subcommand and the `gateVerdict` calls before seed-done/journey-approved/theme-picked/approved
+// keep their exact flags, output and exit codes — the ledger is a plain text file, untouched by
+// the package.
 //
 // What this deliberately does NOT do:
-//   - author the seed, canon, screens, theme directions, or the sign-off itself — those stay
-//     session judgment; the driver only closes each mark once the artifact exists and validates
-//     under D2-D10's closure checks.
-//   - gate `--refresh-register` on any mark, or write one itself (D5) — a host between
-//     canon-written and approved needs the fix equally, and refusing it until some later step is
-//     reached would strand exactly the repos that need it.
-//   - judge taste — every check is a closure on an artifact (a heading, a label, a linked
-//     stylesheet, a status attribute, a ledger row), never an opinion on which screen is right.
-//   - relocate the session CWD, delete a file on `--reopen` (D11 — marks are cleared, disk is
-//     never touched), or run the look probe / write status.json beyond first-run creation on a
-//     `--state` peek (a read-only derivation).
+//   - author the seed, the shell, screens, theme candidates, or run the scaffold itself — those
+//     stay session judgment; this driver only closes each mark once `check --json` and the
+//     reviewer's own JSON files agree the artifact is there.
+//   - read `sweep` — the driver reads `check --json`, `design/notes.json` and
+//     `design/approval.json` only; the sweep is the session's own loop (Behavior).
+//   - write into the host's `src/` (the theme pick is applied by the session editing one config
+//     line, D8) or delete a file on `--reopen` (marks are cleared, disk is never touched).
+//   - relocate the session CWD, or migrate a legacy status.json (a schemaVersion 1 host refuses
+//     outright — there is nothing to migrate to, ADR-0028).
 //   - hand-write a ledger row: `ledger add/set/catch` are the only writers of
-//     design/mocks/ledger.md, routed through spec/scripts/lib/mocks-ledger.js exactly as spec 06
-//     built it.
-//   - resolve a note (specs/20260902/10-page-notes-review-loop.md D4): `notes address` and
-//     `notes waive` are the only note writers this driver exposes; there is no `notes resolve`
-//     subcommand — resolving happens only from the served page (the Approve/Reject controls, POST
-//     /__notes/resolve), so a `notes resolve` invocation refuses (exit 2) naming the page.
-//     specs/20260913/05-a-note-is-a-conversation.md D3: the reply subcommand is deleted outright
-//     — the session answers with `notes address`, whether it fixed something or asks a question
-//     back; there is now exactly one verb for "the session said something".
-//   - migrate a legacy status.json: a root checkpointed at SKIN or REVIEW derives WIREFRAMES from
-//     its still-live marks on the very next invocation; the retired fields it still carries are
-//     ignored on read and dropped on the next write — there is nothing to migrate. A root already
-//     past THEME (marks.themePicked set) derives CLIENT the same way; D3's own legacy path
-//     (`--mark theme-picked --direction <k>` with no stop, design/tokens.css already byte-equal)
-//     is the one exception that DOES write — the one true migration this driver performs, for the
-//     two hosts that picked a theme before this state existed at all.
-//   - open a tunnel or expose anything itself (D2): `client open --address <url>` only probes
-//     and records an address the session has already exposed on its own.
-//   - pin an assumption row to a screen (specs/20260913/07-the-critic-is-out.md D5): `ledger add
-//     --screen` is a retired input, refused by name — an assumption row is confirmed only by
-//     `ledger set --id <id> --status confirmed --tag said-by-user`, never pinned as a note.
-//
-// Deviation (specs/20260902/07-mocks-command-driver.deviations.md): D8 names "theme-directions"
-// and "theme" product ledger rows without pinning their identification shape (ledger ids are
-// `^[A-Z]+\d+[a-z]?$`, so neither can literally be the id). This driver identifies them by a
-// confirmed said-by-user product row whose `claim` cell is exactly `theme-directions: <kebab>` /
-// `theme: <kebab>` — the same shape is reused for the SHAPES stage's `shape: <kebab>` row.
+//     design/mocks/ledger.md, routed through spec/scripts/lib/mocks-ledger.js exactly as before.
 //
 // Exit codes:
 //   0  a bare invocation printed the current step (or `--state` printed the state name), an
-//      accepted `--mark` (theme-picked included) recorded its result and printed the checkpoint
-//      line, a `--reopen` (theme included) printed what it invalidated, a ledger/look/notes
-//      subcommand succeeded, `stop open` printed the link + reply line, `stop decide` recorded a
-//      decision, `theme state` printed `absent` or `picked`, `theme compose`/`theme shortlist`
-//      accepted its candidate(s), or `client open` recorded `status.client` and printed the open
-//      line, or `--refresh-register` found the register already current or refreshed it (D5).
-//   1  `ledger check` found a blocked gate (rows printed), or `--refresh-register` refused
-//      because `design/wire/tokens.css` declares neither register in full, or is absent (D5).
-//   2  a refused mark (an unknown mark or the retired `--decider` flag included), a failed
-//      precondition (missing artifact, blocked gate, unreachable look probe, undeclared/undrawn
-//      journey for `stop open`, a `look --state` value the mock does not declare), a usage error,
-//      `ledger check` grammar errors, a dead child process (runChild's fail-closed refusal),
-//      `theme state` naming design/tokens.css as the wireframe gray register byte-for-byte,
-//      `theme compose`/`theme shortlist` refusing a candidate direction (a D2 violation, the
-//      two-direction floor, or an undeclared dense screen), `--mark theme-picked` refusing a
-//      missing/disagreeing/still-open theme-picked stop, a D2 violation, or the legacy path's own
-//      unmatched tokens.css, `theme open`/`theme adopt` (retired — both always exit 2 naming their
-//      replacement), `client open` outside CLIENT / with no `--address` / against an address whose
-//      `/client/__notes/list` never answers, `notes address` on a client-origin note with no
-//      `--port` or an unchanged re-capture, `notes address` on a client-origin project-scope note,
-//      or `notes waive` on a note that is not client-origin, already resolved, or not yet silent
-//      seven days.
-//   3  `stop open`/`stop decide` failed inside design-atlas.js itself (its own stderr forwarded).
+//      accepted `--mark` recorded its result, a `--reopen` printed what it invalidated, a ledger
+//      subcommand succeeded, `client open` printed the served URL, or `client waive` recorded a
+//      waiver.
+//   1  `ledger check` found a blocked gate (rows printed).
+//   2  a refused mark (an unknown or retired mark, or a failed D3-D9 precondition), a
+//      `contractOrDie`/spawn refusal (a `contractVersion` mismatch or no `mock-review` reachable),
+//      a shape-invalid `check`/`contract` response, a schemaVersion 1 status.json, an unknown
+//      `--reopen`/`ledger`/`client` subcommand, `ledger check` grammar errors, or any retired verb
+//      (D11).
 
 'use strict'
 const fs = require('fs')
 const path = require('path')
-const http = require('http')
-const { spawnSync } = require('child_process')
-const { runChild, writeOut } = require('./lib/driver-io')
+const { writeOut } = require('./lib/driver-io')
 const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, setStatus } = require('./lib/mocks-ledger')
-const {
-  readNotes, writeNotes, addNote, addressNote, groupOpen, unresolvedFor,
-  originOf, waiveNote, authoredByPerson, turnOf,
-} = require('./lib/mocks-notes')
-// specs/20260911/05-approval-is-bookkeeping.md D1: the ledger-text transform itself now lives in
-// the lib (so design-atlas.js's walk-page route can share it) — this driver only calls it.
-const { materialize } = require('./lib/mocks-exclusions')
-const clientCaptureLib = require('./lib/client-capture')
-// specs/20260910/03-client-journey-player.md D4/D7: the one reader/writer of design/mocks/
-// walk.json and its pure per-journey transforms — `client waive`/`client log` and the `approved`
-// gate's new precondition all share it, never hand-parsing the file themselves.
-const walkLib = require('./lib/mocks-walk')
-const picksLib = require('./lib/mocks-picks.js')
-const shellLib = require('./lib/shell-region')
-const { stylesheetTargets, linksWireRegister } = require('./lib/wire-register')
 const { parseSeedJourneys } = require('./lib/surfaces')
-// specs/20260912/08-the-register-is-the-whole-shadcn-set.md D5/D6: the retired-to-current role
-// map and its one-pass renameRoles() live in lib/wire-roles.js, shared with the tests, never
-// spelled twice here.
-const wireRolesLib = require('./lib/wire-roles')
-const { edgeGaps, recordValues, recordHits, recordBindingViolations } = require('./lib/mock-seed-checks')
+const { contractOrDie, checkJson } = require('./lib/mock-cli')
 
 function die(msg) { writeOut(2, 'mocks-driver: ' + msg + '\n'); process.exit(2) }
 function nowIso() { return new Date().toISOString() }
@@ -274,52 +103,72 @@ const mocksDir = path.join(root, 'design/mocks')
 const statusPath = path.join(mocksDir, 'status.json')
 const ledgerPath = path.join(mocksDir, 'ledger.md')
 const seedPath = path.join(mocksDir, 'seed.md')
-const designAtlasBin = path.join(__dirname, 'design-atlas.js')
-const templatesDir = path.join(__dirname, '..', 'templates')
+const templatesRoot = path.join(__dirname, '..', 'templates')
+const mockTemplatesDir = path.join(templatesRoot, 'mock')
 
-const FACT_KEYS = [
-  'primary-surface', 'platforms-horizon', 'tenancy', 'offline', 'realtime', 'ai-in-loop',
-  'residency', 'payer', 'day-one-integrations', 'scale-outage', 'vendor-limits', 'retention',
-  'legal-floor',
+// D4: source file -> destination relative to the app dir, in the order the SEED block prints
+// them. Both examples land under design/examples/ — outside every contract host glob (D4) — never
+// under src/.
+const TEMPLATE_FILES = [
+  { src: 'mock.config.ts', dest: 'mock.config.ts' },
+  { src: 'journeys.ts', dest: 'src/journeys.ts' },
+  { src: 'screen.example.tsx', dest: 'design/examples/screen.example.tsx' },
+  { src: 'records.example.ts', dest: 'design/examples/records.example.ts' },
 ]
 
+const SKILL_LINE = 'Skill: mock-authoring — load it before the first edit'
+
 // ---------------------------------------------------------------------------
-// status.json (schemaVersion 1) — created fresh on a cold root; `state` is re-derived and
-// re-stamped on every save, never trusted from a prior write alone.
+// D11: retired verbs refuse before anything else — no status load, no spawn, no write. Checked
+// first so a stale command in a doctrine file or a memory fails loudly with the new spelling.
+// ---------------------------------------------------------------------------
+function checkRetired() {
+  if (rest[0] === 'notes') {
+    die('notes are read with `npx mock-review sweep` and answered with `npx mock-review answer`')
+  }
+  if (rest[0] === 'stop') {
+    die('approvals are recorded on the served page')
+  }
+  if (rest[0] === 'theme' && ['state', 'compose', 'shortlist'].includes(rest[1])) {
+    die('author `src/themes/<k>.css`, pick on the page, then `--mark theme-picked`')
+  }
+  if (rest[0] === 'look' || rest[0] === 'look-probe' || rest[0] === 'look-via') {
+    die('npx mock-review check --look <screen>')
+  }
+  if (rest.includes('--refresh-register')) {
+    die('--refresh-register is retired (ADR-0028)')
+  }
+  if (rest[0] === '--mark' && ['kit-signed', 'shape-picked', 'canon-written'].includes(rest[1])) {
+    die('--mark ' + rest[1] + ' is retired (ADR-0028)')
+  }
+  if (rest[0] === 'ledger' && rest[1] === 'derive') {
+    die('ledger derive is retired (ADR-0028)')
+  }
+  if (rest[0] === 'client' && rest[1] === 'log') {
+    die('client log is retired (ADR-0028)')
+  }
+  if (rest[0] === '--reopen' && ['kit', 'shapes'].includes(rest[1])) {
+    die('--reopen ' + rest[1] + ' is retired (ADR-0028)')
+  }
+}
+checkRetired()
+
+// ---------------------------------------------------------------------------
+// status.json (schemaVersion 2).
 // ---------------------------------------------------------------------------
 function freshStatus() {
   return {
-    schemaVersion: 1, state: 'SEED',
-    marks: { seedDone: null, shapePicked: null, kitSignedOff: null, canonWritten: null, themePicked: null, approved: null },
-    shape: null, decider: null, look: 'playwright',
+    schemaVersion: 2, state: 'SEED', app: 'app',
+    marks: { seedDone: null, shellDrawn: null, themePicked: null, approved: null },
     journeys: {}, reopens: [], lastUpdated: null,
   }
-}
-
-// D1: a status.json written by a pre-20260906/02 driver may still carry `marks.reviewOpened` and
-// `journeys[j].skinned`/`.reviewed` (the retired SKIN/REVIEW marks) — these are read and then
-// discarded in memory so state derivation never sees them and the next save never writes them
-// back. specs/20260910/04-theme-before-the-client-walk.md D3 (ADR-0013) reinstates
-// `marks.themePicked` and top-level `theme` as LIVE fields (merged forward by loadStatus's own
-// Object.assign, never dropped here); `directions` stays dropped — the retired mocks-driver THEME
-// step's own candidate-discovery field, superseded by this spec's fresh-from-disk `--directions`
-// argument. `decider` stays a live top-level field (the terminal `approved` mark still sets it
-// from the sign-off stop's own "by"), so it is never stripped either.
-function dropLegacyFields(merged) {
-  delete merged.marks.reviewOpened
-  delete merged.directions
-  for (const j of Object.keys(merged.journeys)) {
-    delete merged.journeys[j].skinned
-    delete merged.journeys[j].reviewed
-  }
-  return merged
 }
 
 function loadStatus() {
   if (!fs.existsSync(statusPath)) {
     fs.mkdirSync(mocksDir, { recursive: true })
-    if (!fs.existsSync(ledgerPath)) fs.copyFileSync(path.join(templatesDir, 'mocks-ledger.md'), ledgerPath)
-    if (!fs.existsSync(seedPath)) fs.copyFileSync(path.join(templatesDir, 'mocks-seed.md'), seedPath)
+    if (!fs.existsSync(ledgerPath)) fs.copyFileSync(path.join(templatesRoot, 'mocks-ledger.md'), ledgerPath)
+    if (!fs.existsSync(seedPath)) fs.copyFileSync(path.join(templatesRoot, 'mocks-seed.md'), seedPath)
     const f = freshStatus()
     fs.writeFileSync(statusPath, JSON.stringify(f, null, 2) + '\n')
     return f
@@ -331,120 +180,34 @@ function loadStatus() {
     die('design/mocks/status.json is not valid JSON (' + e.message + ') — restore it from git history, or delete it (a fresh root is a valid starting point) and re-run')
     return null // unreachable
   }
-  const merged = Object.assign(freshStatus(), raw)
-  merged.marks = Object.assign({}, freshStatus().marks, raw.marks || {})
-  merged.journeys = Object.assign({}, raw.journeys || {})
-  merged.reopens = Array.isArray(raw.reopens) ? raw.reopens : []
-  return dropLegacyFields(merged)
+  if (raw.schemaVersion !== 2) {
+    die('design/mocks/status.json carries schemaVersion ' + raw.schemaVersion +
+      ' — remedy: rm design/mocks/status.json — no host holds data on the old path (ADR-0028)')
+  }
+  raw.marks = Object.assign({}, freshStatus().marks, raw.marks || {})
+  raw.journeys = Object.assign({}, raw.journeys || {})
+  raw.reopens = Array.isArray(raw.reopens) ? raw.reopens : []
+  return raw
 }
 
+let status = loadStatus()
+
+function appDir() { return path.join(root, status.app) }
+
 function saveStatus() {
-  status.schemaVersion = 1
+  status.schemaVersion = 2
   status.state = deriveState()
   status.lastUpdated = nowIso()
   fs.writeFileSync(statusPath, JSON.stringify(status, null, 2) + '\n')
 }
 
-// specs/20260907/06-theme-pick-moves-to-sketch.md D1: `theme state` is a read-only derivation
-// over design/tokens.css alone — it must write nothing at all, not even design/mocks/status.json
-// (loadStatus() below creates that file, plus ledger.md/seed.md, the instant it runs on a cold
-// root). So this one subcommand is dispatched HERE, before `let status = loadStatus()` ever
-// executes, and never touches mocksDir/ledgerPath/statusPath itself. `compose`/`open`/`adopt`
-// need no such guarantee (their own Contracts name only tokens.css/ledger.md/picks.json as
-// writes) and are dispatched normally, after status is loaded, alongside every other subcommand.
-function cmdThemeState() {
-  const tokensCssPath = path.join(root, 'design/tokens.css')
-  if (!fs.existsSync(tokensCssPath)) { writeOut(1, 'absent\n'); process.exit(0) }
-  let written
-  try { written = fs.readFileSync(tokensCssPath) } catch (e) { die('design/tokens.css could not be read: ' + e.message) }
-  const template = fs.readFileSync(path.join(templatesDir, 'mocks', 'wire-tokens.css'))
-  if (Buffer.compare(written, template) === 0) {
-    die('design/tokens.css is the wireframe gray register byte-for-byte — no theme was ever picked; compose candidate directions, then run: theme open')
-  }
-  writeOut(1, 'picked\n')
-  process.exit(0)
-}
-if (rest[0] === 'theme' && rest[1] === 'state') cmdThemeState()
-
-// specs/20260912/08-the-register-is-the-whole-shadcn-set.md D5: `--refresh-register`, dispatched
-// here for the same reason `theme state` is above — it must create no design/mocks/ artifact on
-// a host that only wants its wireframe register fixed, and it is deliberately outside the mark
-// chain (Behavior), so it needs no `status` at all. `rootRoles` (defined further below, but
-// function declarations hoist) reads only the FIRST `:root{…}` block, exactly as
-// `composeViolations` already does.
-//
-// D6's kept-name roles (`border`, `primary`, `ring`, `radius`, `font`, `shadow`) are the same
-// under both registers, so classification cannot key on their presence; RETIRED_KEYS (the five
-// renamed roles) and NEW_ONLY_NAMES (the fifteen shadcn roles the retired register never had at
-// all, in any spelling) are what actually discriminate PRE-RENAME from CURRENT from neither.
-const RETIRED_KEYS = Object.keys(wireRolesLib.RETIRED_TO_CURRENT)
-const KEPT_ROLE_NAMES = ['border', 'primary', 'ring', 'radius', 'font', 'shadow']
-const NEW_ONLY_ROLE_NAMES = wireRolesLib.CURRENT_ROLES.filter(
-  (r) => !RETIRED_KEYS.includes(r) && !KEPT_ROLE_NAMES.includes(r))
-
-function walkFilesUnder(dir, matches, out) {
-  let entries
-  try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
-  for (const e of entries) {
-    const p = path.join(dir, e.name)
-    if (e.isDirectory()) walkFilesUnder(p, matches, out)
-    else if (matches(e.name)) out.push(p)
-  }
-}
-
-function cmdRefreshRegister() {
-  const wireDir = path.join(root, 'design/wire')
-  const tokensPath = path.join(wireDir, 'tokens.css')
-  if (!fs.existsSync(tokensPath)) {
-    writeOut(2, 'mocks-driver: design/wire/tokens.css does not exist — mark canon-written first\n')
-    process.exit(1)
-  }
-  const declared = new Set(rootRoles(fs.readFileSync(tokensPath, 'utf8')))
-  const isCurrent = wireRolesLib.CURRENT_ROLES.every((r) => declared.has(r))
-  const isPreRename = RETIRED_KEYS.every((r) => declared.has(r)) &&
-    !NEW_ONLY_ROLE_NAMES.some((r) => declared.has(r))
-
-  if (isCurrent) {
-    writeOut(1, '✅ register is already the current one — nothing to refresh\n')
-    process.exit(0)
-  }
-  if (!isPreRename) {
-    writeOut(2, 'mocks-driver: design/wire/tokens.css declares neither the retired nor the ' +
-      'current register — re-copy it from spec/templates/mocks/wire-tokens.css by hand, then re-run\n')
-    process.exit(1)
-  }
-
-  const tplDir = path.join(templatesDir, 'mocks')
-  fs.copyFileSync(path.join(tplDir, 'wire-tokens.css'), tokensPath)
-  fs.copyFileSync(path.join(tplDir, 'wire.css'), path.join(wireDir, 'wire.css'))
-
-  const targets = []
-  walkFilesUnder(path.join(root, 'design'), (name) => name.toLowerCase().endsWith('.html'), targets)
-  walkFilesUnder(wireDir, (name) => name.endsWith('.css') && name !== 'tokens.css' && name !== 'wire.css', targets)
-
-  let count = 0
-  for (const file of targets) {
-    const before = fs.readFileSync(file, 'utf8')
-    const after = wireRolesLib.renameRoles(before)
-    if (after !== before) {
-      fs.writeFileSync(file, after)
-      count++
-    }
-  }
-  writeOut(1, '✅ register refreshed — ' + count + ' file(s) rewritten\n')
-  process.exit(0)
-}
-if (rest.includes('--refresh-register')) cmdRefreshRegister()
-
-let status = loadStatus()
-
 // ---------------------------------------------------------------------------
-// seed.md parsing (D3/D4) — HTML-comment stripped once; sections read by `## ` boundary;
-// journeys are read as `### <kebab>` blocks ANYWHERE in the file (not confined to the
-// `## Journeys` slice), so a journey block accidentally placed after another `## ` heading is
-// still found and its labels still collide-checked, rather than silently ignored.
+// seed.md — the journey set (D3): `### <journey>` blocks, in seed order, via lib/surfaces.js.
 // ---------------------------------------------------------------------------
-function stripComments(t) { return String(t).replace(/<!--[\s\S]*?-->/g, '') }
+function seedTextOrNull() {
+  try { return fs.readFileSync(seedPath, 'utf8') } catch { return null }
+}
+function currentSeedJourneys() { return parseSeedJourneys(seedTextOrNull()) }
 
 function sectionOf(text, name) {
   const re = new RegExp('^## ' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'm')
@@ -455,187 +218,21 @@ function sectionOf(text, name) {
   return next === -1 ? rest2 : rest2.slice(0, next)
 }
 
-function parseFacts(text) {
-  const sec = sectionOf(text, 'Facts') || ''
-  const map = {}
-  for (const raw of sec.split('\n')) {
-    const line = raw.trim()
-    const m = line.match(/^- ([a-z0-9-]+):\s*(\S+)/)
-    if (m) map[m[1]] = m[2]
-  }
-  return map
-}
-
-function parseJourneysSeed(fullText) {
-  const journeys = new Map()
-  const starts = []
-  const re = /^### ([a-z0-9-]+)\s*$/gm
-  let m
-  while ((m = re.exec(fullText))) starts.push({ name: m[1], index: m.index, headerEnd: m.index + m[0].length })
-  for (let i = 0; i < starts.length; i++) {
-    const body = fullText.slice(starts[i].headerEnd, i + 1 < starts.length ? starts[i + 1].index : fullText.length)
-    const lines = body.split('\n')
-    let persona = ''
-    for (const l of lines) { if (l.trim()) { persona = l.trim(); break } }
-    const surfMatch = body.match(/```surfaces\n([\s\S]*?)```/)
-    const labels = []
-    if (surfMatch) {
-      for (const raw of surfMatch[1].split('\n')) {
-        const line = raw.trim()
-        if (!line || line.startsWith('#')) continue
-        const edge = line.split('->').map((s) => s.trim())
-        if (edge.length === 2 && edge[0] && edge[1]) {
-          for (const l of edge) if (!labels.includes(l)) labels.push(l)
-        } else if (/^[\w][\w-]*$/.test(line) && !labels.includes(line)) {
-          labels.push(line)
-        }
-      }
-    }
-    journeys.set(starts[i].name, { persona, labels })
-  }
-  return journeys
-}
-
-// D1: `## Dense screens` (plural) carries one or two `- <label>` lines; a host still on the
-// singular `## Dense screen` heading (one line) keeps parsing — `sectionOf`'s anchored `\s*$`
-// match never confuses the two headings (the plural's trailing "s" fails the singular's regex
-// and vice versa), so the plural section is tried first and the singular is a pure fallback.
-function parseDenseScreens(text) {
-  const plural = sectionOf(text, 'Dense screens')
-  const sec = plural !== null ? plural : (sectionOf(text, 'Dense screen') || '')
+// D4/deviations sidecar: `## Records` carries one bare `- <entity>` line per entity; returns null
+// when the section itself is missing (never when it is merely empty).
+function parseRecordEntities(text) {
+  const sec = sectionOf(text, 'Records')
+  if (sec === null) return null
   const out = []
   for (const raw of sec.split('\n')) {
-    const line = raw.trim()
-    const m = line.match(/^- (.+)$/)
-    if (m) out.push(m[1].trim())
+    const m = raw.trim().match(/^- ([a-z0-9-]+)\s*$/)
+    if (m) out.push(m[1])
   }
   return out
 }
 
-// D2: the records directory listing (`design/mocks/records/*.json` basenames) — the fallback
-// entity source for a `## Records` refusal when the seed's own text names no entity at all (the
-// section is missing, or its one line is `- none`), so the refusal still names a concrete file to
-// author instead of a bare "no entity declared".
-function recordsDir() { return path.join(mocksDir, 'records') }
-function existingRecordEntities() {
-  let files = []
-  try { files = fs.readdirSync(recordsDir()).filter((f) => f.endsWith('.json')) } catch { return [] }
-  return files.map((f) => path.basename(f, '.json')).sort()
-}
-
-// D2: `## Records` — one `- <entity>: records/<entity>.json` line per entity; `- none` parses as
-// declaring zero entities (never as an entity named "none"). Returns { missing, entities } where
-// `entities` is a Map(entity -> relative path).
-function parseRecordsSection(text) {
-  const sec = sectionOf(text, 'Records')
-  const entities = new Map()
-  if (sec === null) return { missing: true, entities }
-  for (const raw of sec.split('\n')) {
-    const line = raw.trim()
-    if (!line || line === '- none') continue
-    const m = line.match(/^- ([a-z0-9-]+):\s*(\S+)$/)
-    if (m) entities.set(m[1], m[2])
-  }
-  return { missing: false, entities }
-}
-
-// The records-file shape, and the one remedy every refusal shares: a JSON array of record
-// objects the session derives, asking nobody.
-function recordsRemedy(entity) {
-  return 'derive at least three ' + entity + ' records from docs/design/research-brief.md, ' +
-    'design/mocks/seed.md and anything under design/mocks/references/, and save them as ' +
-    'design/mocks/records/' + entity + '.json — a JSON array of record objects. Invent them; ' +
-    'this is a mock, so never ask the user for data'
-}
-
-// D2: refuses seed-done on a missing ## Records section, a "- none"-only section, or a records
-// file that is missing, not valid JSON, not an array, or holding fewer than three records —
-// naming the entity and the remedy every branch shares.
-function requireRecords(text) {
-  const { missing, entities } = parseRecordsSection(text)
-  if (missing || entities.size === 0) {
-    const entity = existingRecordEntities()[0]
-    if (!entity) {
-      die('design/mocks/seed.md is missing "## Records" — add one "- <entity>: records/<entity>.json" line per entity the product handles, then ' + recordsRemedy('<entity>'))
-    }
-    die('design/mocks/seed.md ## Records must declare "' + entity + '" — ' + recordsRemedy(entity))
-  }
-  for (const [entity, relPath] of entities) {
-    const remedy = recordsRemedy(entity)
-    const names = 'design/mocks/seed.md ## Records names "' + entity + '" but ' + relPath + ' '
-    const filePath = path.join(mocksDir, relPath)
-    let raw
-    try { raw = fs.readFileSync(filePath, 'utf8') } catch {
-      die(names + 'does not exist — ' + remedy)
-    }
-    let parsed
-    try { parsed = JSON.parse(raw) } catch (e) {
-      die(names + 'is not valid JSON (' + e.message + ') — ' + remedy)
-    }
-    if (!Array.isArray(parsed)) die(names + 'does not hold a JSON array of records — ' + remedy)
-    if (parsed.length < 3) {
-      die(names + 'holds only ' + parsed.length + ' record(s) (three are required) — ' + remedy)
-    }
-  }
-}
-
-// D3: every entity's record values, combined and deduplicated — the values `journey-drawn`
-// screens a journey's screens against. Missing/invalid records files contribute nothing here
-// (that precondition is `seed-done`'s job, via requireRecords above); this is a read-only
-// derivation over whatever is currently on disk.
-function collectRecordValues(text) {
-  const { entities } = parseRecordsSection(text)
-  const values = []
-  for (const relPath of entities.values()) {
-    let parsed
-    try { parsed = JSON.parse(fs.readFileSync(path.join(mocksDir, relPath), 'utf8')) } catch { continue }
-    if (!Array.isArray(parsed)) continue
-    for (const v of recordValues(parsed)) if (!values.includes(v)) values.push(v)
-  }
-  return values
-}
-
-// specs/20260912/10-seeded-data-names-its-source.md D1-D4: the same `## Records` entities
-// collectRecordValues walks, but keyed by entity basename and holding the parsed records
-// themselves — what `lib/mock-seed-checks.js`'s `resolveRecordRef`/`recordBindingViolations`
-// resolve `data-record="<entity>[i].<field>"` references against. A2/seed-done's own
-// `requireRecords` already refuses a missing/unparseable/undersized records file before a
-// journey can be drawn, so an entity that still fails to parse here is treated as an empty
-// array rather than crashing the mark (A3).
-function collectRecordsByEntity(text) {
-  const { entities } = parseRecordsSection(text)
-  const byEntity = {}
-  for (const [entity, relPath] of entities) {
-    let parsed
-    try { parsed = JSON.parse(fs.readFileSync(path.join(mocksDir, relPath), 'utf8')) } catch { parsed = [] }
-    byEntity[entity] = Array.isArray(parsed) ? parsed : []
-  }
-  return byEntity
-}
-
-function seedTextOr(fallback) {
-  try { return fs.readFileSync(seedPath, 'utf8') } catch { return fallback }
-}
-function currentSeedJourneys() { return parseJourneysSeed(stripComments(seedTextOr(''))) }
-
-function loadTargetsOrNull() {
-  try { return JSON.parse(fs.readFileSync(path.join(root, 'design/targets.json'), 'utf8')) } catch { return null }
-}
-
-// D5: the same viewport rule lib/review-page.js's viewportOf(loadTargets(root)) derives — the
-// first declared design/targets.json viewport, 1280×800 when none — restated over this driver's
-// own root-relative loadTargetsOrNull() rather than importing the served-page library.
-function captureViewport() {
-  const targets = loadTargetsOrNull()
-  const vp = targets && Array.isArray(targets.viewports) && targets.viewports[0]
-  return {
-    width: vp && vp.width > 0 ? vp.width | 0 : 1280,
-    height: vp && vp.height > 0 ? vp.height | 0 : 800,
-  }
-}
-
 // ---------------------------------------------------------------------------
-// Ledger I/O (spec 06's lib is the one writer — this module never hand-builds a row).
+// Ledger I/O — lib/mocks-ledger.js is the one writer (D16, verbatim).
 // ---------------------------------------------------------------------------
 function ledgerTextOrDie() {
   try { return fs.readFileSync(ledgerPath, 'utf8') } catch {
@@ -644,166 +241,8 @@ function ledgerTextOrDie() {
   }
 }
 
-function findAssumption(pred) {
-  const parsed = parseLedger(ledgerTextOrDie())
-  return parsed.assumptions.find(pred) || null
-}
-
-function todayIso() { return nowIso().slice(0, 10) }
-
-// specs/20260905/02-design-review-hub-and-look-stops.md D7: the driver derives, never asks the
-// session to re-type, the id for a ledger row it appends on the page's behalf (shape:/theme:
-// picks) — picks the next unused "P<n>" the way lib/mocks-picks.js's own nextId does for stops.
-function nextLedgerId(parsed) {
-  let max = 0
-  for (const a of parsed.assumptions) {
-    const m = /^P(\d+)$/.exec(a.id)
-    if (m) max = Math.max(max, parseInt(m[1], 10))
-  }
-  return 'P' + (max + 1)
-}
-
-// A1: `.claude/genesis/brief.md` may not exist when mocks runs — deriveExclusions itself takes
-// `brief: null` and its non-goal source simply yields nothing.
-function briefTextOrNull() {
-  try { return fs.readFileSync(path.join(root, '.claude/genesis/brief.md'), 'utf8') } catch { return null }
-}
-
-// D2/D4: the journey (or null, project-wide) an exclusion row is anchored to — parsed straight
-// off its own D1 `note` grammar (`answer: <noteId>` / `withdrawn: <noteId>`), never a second
-// dedicated field; a `non-goal:` row carries no note id and so is always project-wide.
-function journeyForExclusionRow(row, notes, seedJourneys) {
-  const m = /^(?:answer|withdrawn): (\S+)/.exec(row.note || '')
-  if (!m) return null
-  const note = (notes || []).find((n) => n.id === m[1])
-  if (!note || !note.screen) return null
-  for (const [name, j] of seedJourneys) {
-    if (((j && j.labels) || []).includes(note.screen)) return name
-  }
-  return null
-}
-
-// specs/20260911/05-approval-is-bookkeeping.md D1: this driver's one call into
-// lib/mocks-exclusions.js's `materialize` — the ledger-text transform itself lives there now (so
-// design-atlas.js's walk-page route, D2, can share it); this wrapper only supplies the driver's
-// own sources (brief/notes/seed journeys/today) and performs the one write. Called by `ledger
-// derive`, `client open` (before recording `status.client`), and `approved`.
-function runMaterialize() {
-  const result = materialize({
-    text: ledgerTextOrDie(), brief: briefTextOrNull(), notes: notesOrEmpty(),
-    seedJourneys: currentSeedJourneys(), today: todayIso(),
-  })
-  fs.writeFileSync(ledgerPath, result.text)
-  return result
-}
-
-// D6/D7: the seed's own `# Seed — <name>` H1 — same derivation as design-atlas.js's
-// seedForReview, restated here (this driver never imports that module) so exclusions.md's title
-// line and the seed-review page never disagree about the product name.
-function productName() {
-  let product = path.basename(root)
-  try {
-    const seedText = fs.readFileSync(seedPath, 'utf8')
-    const m = /^# Seed — (.+)$/m.exec(seedText)
-    if (m) product = m[1].trim()
-  } catch { /* no seed.md yet — fall back to the root dir's basename */ }
-  return product
-}
-
-// specs/20260911/05-approval-is-bookkeeping.md D4: `design/mocks/exclusions.md`, regenerated on
-// every `approved` under two headings — a `confirmed` row is "agreed by the client", an `open`
-// row is "not contested" (the client never answered it and approval never refuses on it). An
-// `overridden` row (a client's "needed" answer, or a retired source) appears in neither heading.
-// Each heading is present even when it carries zero rows, rendered as its own single "- none"
-// bullet. parseLedger already normalizes a dated status cell ("confirmed 2026-09-11") down to
-// its bare word, so `a.status` is compared directly, same as every other status check in this
-// file.
-function writeExclusionsFile() {
-  const parsed = parseLedger(ledgerTextOrDie())
-  const rows = parsed.assumptions.filter((a) => a.kind === 'exclusion')
-  const confirmed = rows.filter((a) => a.status === 'confirmed')
-  const notContested = rows.filter((a) => a.status === 'open')
-  const notes = notesOrEmpty()
-  const seedJourneys = currentSeedJourneys()
-  const lineFor = (row) => {
-    const jn = journeyForExclusionRow(row, notes, seedJourneys)
-    return '- ' + row.claim + ' (' + (jn || 'project') + ', ' + row.note + ')'
-  }
-  const section = (rowsIn) => (rowsIn.length ? rowsIn.map(lineFor) : ['- none'])
-  const lines = ['# Exclusions — ' + productName() + ' — approved ' + todayIso(), '']
-    .concat(['## Agreed by the client']).concat(section(confirmed))
-    .concat(['', '## Not contested']).concat(section(notContested))
-  fs.writeFileSync(path.join(mocksDir, 'exclusions.md'), lines.join('\n') + '\n')
-  return { agreed: confirmed.length, notContested: notContested.length }
-}
-
-// ---------------------------------------------------------------------------
-// Look stops (specs/20260905/02-design-review-hub-and-look-stops.md D5-D8). picks.json's one
-// validated reader/writer is lib/mocks-picks.js (spec 01) — this module never hand-edits a stop.
-// ---------------------------------------------------------------------------
-function readStopsOrEmpty() {
-  try { return picksLib.readPicks(root) } catch (e) {
-    die('design/mocks/picks.json is not valid JSON (' + e.message + ') — restore it from git history, or delete it (no stops is a valid starting point) and re-run')
-    return [] // unreachable
-  }
-}
-
-// The newest non-superseded, non-consumed stop carrying `key`, or null.
-function liveStopFor(key) {
-  const live = readStopsOrEmpty().filter((s) => s.key === key && s.status !== 'superseded' && s.status !== 'consumed')
-  if (!live.length) return null
-  live.sort((a, b) => (a.openedAt < b.openedAt ? 1 : a.openedAt > b.openedAt ? -1 : 0))
-  return live[0]
-}
-
-// D7: refuses (exit 2) unless the key's live stop is decided approve/pick; returns that stop.
-function requireStopDecision(key, remedyCmd) {
-  const stop = liveStopFor(key)
-  if (!stop) die('no look stop for ' + key + ' — run `' + remedyCmd + '` first')
-  if (stop.status === 'open') die('waiting on ' + stop.url + ' — the decision has not been taken yet')
-  if (stop.decision.verdict === 'change') {
-    die('change requested by ' + stop.decision.by + ': "' + stop.decision.note + '"' +
-      ' — address it, then `' + remedyCmd + '`')
-  }
-  return stop
-}
-
-// consumeStop in the SAME write as status.json (D7) — callers set their own status fields, then
-// call this right before saveStatus() so both writes land together.
-function consumeStopAndSave(stopId) {
-  const stops = readStopsOrEmpty()
-  let result
-  try { result = picksLib.consumeStop(stops, stopId) } catch (e) { die('could not consume stop "' + stopId + '": ' + e.message) }
-  picksLib.writePicks(root, result.stops)
-  saveStatus()
-}
-
-// D8: the bare step's `look:` line plus its derived `Then:` line, for the five look-gated marks.
-// `mapAccept(pickValue?)` renders the accept-branch Then command with the picked value filled in
-// when the stop is a pick stop.
-function lookLineAndThen(key, step, mapAccept) {
-  const openCmd = 'stop open ' + step
-  const stop = liveStopFor(key)
-  if (!stop) return { look: 'look: none — `' + openCmd + '` next', then: [openCmd] }
-  if (stop.status === 'open') {
-    return { look: 'look: ⏳ waiting — ' + stop.url, then: ['end the turn; re-run after the decision'] }
-  }
-  if (stop.decision.verdict === 'change') {
-    return {
-      look: 'look: ✏️ change requested by ' + stop.decision.by + ': ' + stop.decision.note,
-      then: ['address it, then ' + openCmd],
-    }
-  }
-  const who = stop.decision.by
-  const at = stop.decision.at
-  if (stop.kind === 'pick') {
-    return { look: 'look: ✅ picked "' + stop.decision.pick + '" by ' + who + ' at ' + at, then: [mapAccept(stop.decision.pick)] }
-  }
-  return { look: 'look: ✅ approved by ' + who + ' at ' + at, then: [mapAccept()] }
-}
-
-// D2: every advancing mark first runs gateVerdict and refuses (exit 2) naming the offending
-// rows and the remedy — journey-drawn never calls this.
+// D16: seed-done, journey-approved, theme-picked and approved all run this before recording —
+// the remedy names the exact blocking row so a session never has to look the id up itself.
 function requireGateOpen() {
   const parsed = parseLedger(ledgerTextOrDie())
   if (parsed.errors.length) {
@@ -811,1421 +250,258 @@ function requireGateOpen() {
   }
   const verdict = gateVerdict(parsed)
   if (!verdict.open) {
-    const rows = verdict.blocking.map((b) => b.id + ' ' + b.tag + ' ' + b.status).join(', ')
-    die('provenance ledger is blocked: ' + rows + ' — remedy: `ledger set --id <id> --status confirmed --tag said-by-user` (or `--status overridden`)')
+    const remedies = verdict.blocking.map((b) =>
+      b.id + ' ' + b.tag + ' ' + b.status +
+      ' — remedy: `ledger set --id ' + b.id + ' --status confirmed --tag said-by-user` (or `--status overridden`)'
+    ).join('; ')
+    die('provenance ledger is blocked: ' + remedies)
   }
 }
 
 // ---------------------------------------------------------------------------
-// Page notes (specs/20260902/10-page-notes-review-loop.md D4/D5). notesPath's own reader/writer
-// and pure transforms live in lib/mocks-notes.js — this file owns only the gate rule, the CLI
-// surface, and the printed shapes.
+// The app-side reviewer files (D1 host layout): design/notes.json, design/approval.json.
 // ---------------------------------------------------------------------------
-function notesOrEmpty() {
-  try { return readNotes(root) } catch (e) { die('design/mocks/notes.json is not valid JSON (' + e.message + ') — restore it from git history, or delete it (no notes is a valid starting point) and re-run') }
-  return [] // unreachable
-}
-
-// specs/20260910/03-client-journey-player.md D4/D7: design/mocks/walk.json's one reader —
-// {journeys:{}} on a cold root is a valid starting point (lib/mocks-walk.js's own readWalk
-// posture), a malformed file is a hard refusal naming the remedy, same shape as notesOrEmpty.
-function readWalkOrEmpty() {
-  try { return walkLib.readWalk(root) } catch (e) { die('design/mocks/walk.json is not valid JSON (' + e.message + ') — restore it from git history, or delete it (no walk record is a valid starting point) and re-run') }
-  return { journeys: {} } // unreachable
-}
-
-// D5: any open (not-resolved) project note blocks every advancing mark, named first; then, when
-// `labels` is given, an unresolved note on any of those screens blocks it too. `approved` calls
-// this with every declared label (D5: "any unresolved note anywhere").
-// specs/20260912/07-a-whole-product-note-blocks-the-sign-off.md D4: a whole-product note now
-// blocks only the final sign-off, not every journey — this sweep is carved out of
-// requireNotesResolved and called from handleApproved() alone, immediately before its existing
-// requireNotesResolved(allDeclaredLabels(), null), preserving today's ordering and message
-// precedence at that one mark. Message unchanged byte-for-byte.
-function requireProjectNotesResolved() {
-  const open = notesOrEmpty().filter((n) => n.scope === 'project' && n.status !== 'resolved')
-  if (open.length) {
-    die('project note(s) open: ' + open.map((n) => n.id).join(', ') + ' — answer the project note first')
+function readNotesRaw() {
+  try { return JSON.parse(fs.readFileSync(path.join(appDir(), 'design/notes.json'), 'utf8')) } catch (e) {
+    die('design/notes.json is not valid JSON (' + e.message + ') — restore it from git history, or delete it (no notes is a valid starting point) and re-run')
+    return null // unreachable
   }
 }
-
-// specs/20260913/07-the-critic-is-out.md D7: no gate counts a note a person did not type —
-// unresolvedFor already judges every note it returns by `status !== 'resolved'` alone
-// (lib/mocks-notes.js's authoredByPerson filter), so this collapses to the one refusal.
-function requireNotesResolved(labels, journeyName) {
-  const notes = notesOrEmpty()
-  if (labels && labels.length) {
-    const unresolved = unresolvedFor(notes, labels)
-    const where = journeyName ? ' on ' + journeyName : ''
-    if (unresolved.length) {
-      die('unresolved note(s)' + where + ': ' + unresolved.map((n) => n.id).join(', ') + ' — the author resolves after a re-look')
-    }
+function readApprovalRaw() {
+  try { return JSON.parse(fs.readFileSync(path.join(appDir(), 'design/approval.json'), 'utf8')) } catch (e) {
+    die('design/approval.json is not valid JSON (' + e.message + ') — restore it from git history, or delete it (no approval is a valid starting point) and re-run')
+    return null // unreachable
   }
 }
-
-function allDeclaredLabels() {
-  const labels = []
-  for (const [, j] of currentSeedJourneys()) for (const l of j.labels) if (!labels.includes(l)) labels.push(l)
-  return labels
-}
-
-function noteTag(n) {
-  if (n.status === 'addressed' && n.addressed && n.addressed.ledgerRow) return 'addressed → ' + n.addressed.ledgerRow
-  return n.status
-}
-// specs/20260913/07-the-critic-is-out.md D13: a note's per-note line carries only its id, status
-// tag, author and text — the reason tags a retired producer used to render alongside them go with
-// it; id, status tag, author and text are otherwise unchanged.
-// specs/20260913/05-a-note-is-a-conversation.md D7: the `↳ changed:` continuation (the session's
-// OWN answer) is retired — `notes open` lists only notes whose turn is the session's, so every
-// line it prints is one the session has NOT yet answered; what it needs instead is the owner's
-// newest reply, when the note carries a thread at all.
-function noteLine(n, indent) {
-  let line = indent + n.id + ' [' + noteTag(n) + ']'
-  line += ' ' + n.by + ' · ' + n.text
-  const thread = Array.isArray(n.thread) ? n.thread : []
-  if (thread.length) {
-    const newest = thread[thread.length - 1]
-    line += '   ↳ ' + newest.by + ': ' + newest.text
-  }
-  return line
-}
-
-// specs/20260912/14 D4: without --all, the journey-listed note walk stops after this many note
-// lines; the "📝 open notes:" counts line and the project-notes block are never capped.
-const NOTE_LIST_CAP = 20
-
-// D4's `notes open` — exact shape: plain notes (project first, with a ⚠️ tail while any is open,
-// then journey -> screen -> state, derived from seed.md via groupOpen). D8: `notes` is filtered
-// through `authoredByPerson` before anything below ever sees a note a person did not type.
-// specs/20260913/05-a-note-is-a-conversation.md D7: the listing itself is narrowed to turn
-// "session" — a note the session has already answered (turn "you") or closed (turn "done"/
-// "dropped") is the owner's to read, not the session's re-read; the counts line above it stays
-// computed over every non-resolved note, exactly as today.
-function cmdNotesOpen(all) {
-  const notes = notesOrEmpty().filter(authoredByPerson)
-  const seed = currentSeedJourneys()
-  const { project, journeys } = groupOpen(notes.filter((n) => turnOf(n) === 'session'), seed)
-  const notResolved = notes.filter((n) => n.status !== 'resolved')
-  const mockCount = notResolved.filter((n) => n.scope === 'mock').length
-  const addressedCount = notResolved.filter((n) => n.status === 'addressed').length
-
-  const lines = ['📝 open notes: ' + notResolved.length + ' (' + project.length + ' project · ' + mockCount + ' mock) · addressed: ' + addressedCount]
-  if (project.length) {
-    lines.push('project')
-    for (const n of project) lines.push(noteLine(n, '  '))
-  }
-  // specs/20260912/14 D4: without --all, the walk breaks out of each of the three nested levels
-  // once `printed >= NOTE_LIST_CAP`, so a journey/screen/state header is never emitted without at
-  // least one note line printed under it; the omitted count is the total notes in `journeys`
-  // minus the number printed. With --all the cap never applies (pre-change walk, unchanged).
-  let printed = 0
-  let totalNoteLines = 0
-  for (const [, screens] of journeys) for (const [, states] of screens) for (const [, ns] of states) totalNoteLines += ns.length
-  outer:
-  for (const [journeyName, screens] of journeys) {
-    let journeyHeaderPushed = false
-    for (const [screenLabel, states] of screens) {
-      let screenHeaderPushed = false
-      for (const [stateLabel, ns] of states) {
-        if (!all && printed >= NOTE_LIST_CAP) break outer
-        let stateHeaderPushed = false
-        for (const n of ns) {
-          if (!all && printed >= NOTE_LIST_CAP) break outer
-          if (!journeyHeaderPushed) { lines.push(journeyName); journeyHeaderPushed = true }
-          if (!screenHeaderPushed) { lines.push('  ' + screenLabel); screenHeaderPushed = true }
-          if (!stateHeaderPushed) { lines.push('    ' + stateLabel); stateHeaderPushed = true }
-          lines.push(noteLine(n, '      '))
-          printed++
-        }
-      }
-    }
-  }
-  if (!all && printed < totalNoteLines) {
-    lines.push('… ' + (totalNoteLines - printed) + ' more open note(s) — --all to list')
-  }
-  if (project.length) {
-    lines.push('⚠️ a project note is open — answer it (canon change or new directions) before any mock note')
-  }
-  writeOut(1, lines.join('\n') + '\n')
-  process.exit(0)
-}
-
-function cmdNotes(sub, args) {
-  const narg = (name) => flagArg(args, name)
-  if (sub === 'open') { cmdNotesOpen(args.includes('--all')); return }
-  if (sub === 'add') {
-    // specs/20260913/07-the-critic-is-out.md D5: `--kind` and `--ledger-id` are retired inputs —
-    // this driver reads flags positionally and never refuses an unknown one on its own (A3), so
-    // a silent ignore here would file whatever was meant as a retired-kind note as a plain one
-    // instead. Refuse outright, naming the one true rule.
-    if (narg('--kind') != null || narg('--ledger-id') != null) {
-      die('notes add: --kind and --ledger-id are retired — a note is what a person typed')
-    }
-    if (!narg('--by')) die('notes add: --by <name> is required')
-    const screenArg = narg('--screen')
-    const stateArg = narg('--state')
-    const reasonArg = narg('--reason')
-    const notes = notesOrEmpty()
-    let result
-    try {
-      result = addNote(notes, {
-        scope: narg('--scope'), screen: screenArg, state: stateArg,
-        by: narg('--by'), reason: reasonArg, text: narg('--text'),
-      })
-    } catch (e) { die('notes add: ' + e.message) }
-    writeNotes(root, result.notes)
-    writeOut(1, 'notes add: ' + result.note.id + ' → added\n')
-    process.exit(0)
-  }
-  if (sub === 'address') {
-    const id = narg('--id')
-    const change = narg('--change')
-    const ledgerRow = narg('--ledger')
-    // specs/20260911/06-the-client-loop.md D7: --port falls back to status.client.port (recorded
-    // by `client open`) when the flag is absent — the flag still wins when given.
-    const port = narg('--port') || (status.client && status.client.port ? String(status.client.port) : null)
-    const screenArg = narg('--screen')
-    const journeyArg = narg('--journey')
-    if (!id) die('notes address: --id <id> is required')
-    if (!change) die('notes address: --change "<what changed>" is required')
-    const notes = notesOrEmpty()
-    const found = notes.find((n) => n.id === id)
-    if (!found) die('notes address: no note with id "' + id + '"')
-    // specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D1, disposed s0 (2026-09-13):
-    // a region note re-anchors, but it is ADDITIONAL work over whatever address path its origin
-    // already owns — never a bypass of specs/20260907/10 D7's change-required guard. A
-    // client-origin mock-scope note that also carries a region must still fail the same
-    // `captured.hash === beforeHash` refusal a non-region client note fails; only once that guard
-    // clears does the region re-anchor run.
-    function finishRegionReanchor(baseOpts) {
-      clientCaptureLib.resolveRegion({
-        port, label: found.screen, state: found.state || null, viewport: captureViewport(), region: found.region,
-      }).then((resolved) => {
-        let result
-        try { result = addressNote(notes, id, baseOpts) } catch (e) { die('notes address: ' + e.message); return }
-        if (resolved.mode === 'exact' || resolved.mode === 'children') {
-          result.note.region = resolved.region
-          result.note.addressed.reanchored = resolved.mode
-        } else {
-          result.note.addressed.reanchored = 'lost'
-        }
-        writeNotes(root, result.notes)
-        if (resolved.mode === null) {
-          writeOut(1, 'notes address: ' + id + ' → addressed (box lost — the owner will be asked to re-place it)\n')
-        } else {
-          writeOut(1, 'notes address: ' + id + ' → addressed\n')
-        }
-        process.exit(0)
-      }).catch((e) => {
-        die('notes address: re-anchor failed: ' + e.message)
-      })
-    }
-    // specs/20260907/10-client-review.md D7: a client-origin note re-captures through D5 before
-    // it can be addressed — every other note (session-origin, walk, or --port simply omitted on
-    // a note this driver has no capture opinion about) carries no capture field at all.
-    if (originOf(found) === 'client' && found.scope === 'mock') {
-      if (!port) die('notes address: a client-origin mock-scope note requires --port <n> — run `node ' + designAtlasBin + ' serve --root ' + root + ' --port <n>` first')
-      const capturesDir = path.join(mocksDir, 'captures')
-      fs.mkdirSync(capturesDir, { recursive: true })
-      const outPath = path.join(capturesDir, id + '.after.png')
-      clientCaptureLib.captureScreen({
-        port, label: found.screen, state: found.state || null, viewport: captureViewport(), out: outPath,
-      }).then((captured) => {
-        const beforeHash = found.capture && found.capture.before && found.capture.before.hash
-        if (captured.hash === beforeHash) {
-          try { fs.unlinkSync(outPath) } catch { /* best effort */ }
-          die('notes address: the screen has not changed — a client note closes on a visible change, a question back (`notes address --change`), a client withdrawal, or a waiver (`notes waive`)')
-          return
-        }
-        const captureOpts = { change, ledgerRow, capture: { hash: captured.hash, file: 'captures/' + id + '.after.png' } }
-        // D1: the change is confirmed — the region re-anchor is additional work on top of the
-        // client capture, never instead of it.
-        if (found.region) {
-          finishRegionReanchor(captureOpts)
-          return
-        }
-        let result
-        try {
-          result = addressNote(notes, id, captureOpts)
-        } catch (e) { die('notes address: ' + e.message) }
-        writeNotes(root, result.notes)
-        writeOut(1, 'notes address: ' + id + ' → addressed\n')
-        process.exit(0)
-      }).catch((e) => {
-        try { fs.unlinkSync(outPath) } catch { /* best effort */ }
-        die('notes address: re-capture failed: ' + e.message)
-      })
-      return
-    }
-    if (found.region) {
-      if (!port) die('notes address: a region note requires --port <n> — run `node ' + designAtlasBin + ' serve --root ' + root + ' --port <n>` first')
-      finishRegionReanchor({ change, ledgerRow })
-      return
-    }
-    // specs/20260911/06-the-client-loop.md D7: a client-origin project-scope note (a "something
-    // missing?" ask) is addressed by naming where the session pointed it — a mock (`--screen`, a
-    // label already on disk) or a journey (`--journey`, a declared seed journey) — never both
-    // omitted; the client index's own "Done" line resolves its link from whichever is given.
-    if (originOf(found) === 'client' && found.scope === 'project') {
-      if (!screenArg && !journeyArg) {
-        die('notes address: a client-origin project-scope note requires --screen <label> or --journey <j> — say where it was answered')
-      }
-      if (screenArg && !fs.existsSync(mockFile(screenArg))) die('notes address: design/mocks/' + screenArg + '.html does not exist')
-      if (journeyArg && !currentSeedJourneys().has(journeyArg)) die('notes address: unknown journey "' + journeyArg + '"')
-      let result
-      try { result = addressNote(notes, id, { change, ledgerRow, screen: screenArg || undefined, journey: journeyArg || undefined }) } catch (e) { die('notes address: ' + e.message) }
-      writeNotes(root, result.notes)
-      writeOut(1, 'notes address: ' + id + ' → addressed\n')
-      process.exit(0)
-    }
-    let result
-    try { result = addressNote(notes, id, { change, ledgerRow }) } catch (e) { die('notes address: ' + e.message) }
-    writeNotes(root, result.notes)
-    writeOut(1, 'notes address: ' + id + ' → addressed\n')
-    process.exit(0)
-  }
-  if (sub === 'waive') {
-    // specs/20260907/10-client-review.md D8: the one release for a silent client — refused
-    // (exit 2) on a note that is not client-origin, already resolved, or not yet silent seven
-    // full days; the seven-day clock itself is measured by lib/mocks-notes.js's waiveNote — this
-    // command only derives WHERE that clock starts. specs/20260913/07-the-critic-is-out.md D6: a
-    // legacy question note carries no ledger writeback here any more — the answer route this
-    // command's own writeback fed is gone, and nothing waivable is ever kind "question" now.
-    const id = narg('--id')
-    const reason = narg('--reason')
-    const by = narg('--by') || 'session'
-    if (!id) die('notes waive: --id <id> is required')
-    if (!reason) die('notes waive: --reason "<r>" is required')
-    const notes = notesOrEmpty()
-    const found = notes.find((n) => n.id === id)
-    if (!found) die('notes waive: no note with id "' + id + '"')
-    if (originOf(found) !== 'client') {
-      die('notes waive: only client-origin notes are waivable (note "' + id + '" is kind "' +
-        (found.kind || 'note') + '", origin "' + originOf(found) + '")')
-    }
-    if (found.status === 'resolved') die('notes waive: note "' + id + '" is already resolved')
-    const lastClientAt = found.lastClientAt || found.at
-    let result
-    try {
-      result = waiveNote(notes, id, { reason, by, now: new Date(), lastClientAt })
-    } catch (e) { die('notes waive: ' + e.message) }
-    writeNotes(root, result.notes)
-    writeOut(1, 'notes waive: ' + id + ' → waived\n')
-    process.exit(0)
-  }
-  die('notes: no "' + sub + '" subcommand — resolving a note happens only on the served page ' +
-    '(Approve/Reject); one of: open, add, address, waive')
+function writeApprovalRaw(obj) {
+  fs.writeFileSync(path.join(appDir(), 'design/approval.json'), JSON.stringify(obj, null, 2) + '\n')
 }
 
 // ---------------------------------------------------------------------------
-// client open --address <url> (D2). The plugin never exposes anything itself — this only probes
-// an address the session has already exposed on its own (ADR-0012, memory: hub base is optional,
-// never ask for Tailscale).
+// D3: state derivation — the only place SEED/SHELL/SCREENS/THEME/CLIENT/APPROVED is decided.
 // ---------------------------------------------------------------------------
-function probeClientNotesList(address, scheme) {
-  return new Promise((resolve) => {
-    let settled = false
-    const finish = (ok) => { if (!settled) { settled = true; resolve(ok) } }
-    const mod = scheme === 'https:' ? require('https') : http
-    let req
-    try {
-      req = mod.get(address + '/client/__notes/list', { timeout: 3000 }, (res) => {
-        let raw = ''
-        res.on('data', (c) => { raw += c })
-        res.on('end', () => {
-          if (res.statusCode !== 200) { finish(false); return }
-          try { finish(Array.isArray(JSON.parse(raw))) } catch { finish(false) }
-        })
-      })
-    } catch { finish(false); return }
-    req.on('timeout', () => { req.destroy(); finish(false) })
-    req.on('error', () => finish(false))
-  })
-}
-
-// specs/20260910/03-client-journey-player.md D7: `client waive --journey <j> --reason <r>` —
-// the whole-journey counterpart to `notes waive`, over the SAME `status.client.openedAt` floor
-// (A3: a journey the client never opened is silent from `client open`, never from its own first
-// event) — lib/mocks-walk.js's waiveJourney runs the actual seven-day clock; this command only
-// derives WHERE that clock starts and reports its own refusal/acceptance.
-function cmdClientWaive(args) {
-  const journey = flagArg(args, '--journey')
-  const reason = flagArg(args, '--reason')
-  const by = flagArg(args, '--by') || 'session'
-  if (!journey) die('client waive: --journey <j> is required')
-  if (!reason) die('client waive: --reason "<r>" is required')
-  const openedAt = status.client && status.client.openedAt
-  if (!openedAt) die('client waive: no client has ever been opened for this project — run `client open --address <url>` first')
-  let result
-  try {
-    result = walkLib.waiveJourney(readWalkOrEmpty(), { journey, reason, by, now: new Date(), openedAt })
-  } catch (e) { die('client waive: ' + e.message) }
-  walkLib.writeWalk(root, result)
-  writeOut(1, 'client waive: ' + journey + ' → waived\n')
-  process.exit(0)
-}
-
-// specs/20260910/03-client-journey-player.md D7: the one-line-per-journey status form `client
-// log` and the CLIENT step block both print — `confirmed <date> — "<sentence>"` once the client
-// has confirmed, else `open — reached <n>/<total>`.
-function journeyWalkStatusLine(jn, rec, total) {
-  if (rec && rec.confirmedAt) return jn + ': confirmed ' + String(rec.confirmedAt).slice(0, 10) + ' — "' + (rec.sentence || '') + '"'
-  return jn + ': open — reached ' + ((rec && rec.reached) || []).length + '/' + total
-}
-
-// specs/20260910/03-client-journey-player.md D7: `client log [--journey <j>]` — the misses and
-// the sentence are the two signals the client pass exists to collect; this prints them exactly
-// where the session already looks, grouped/counted by {from,target} pair, first-seen order.
-function cmdClientLog(args) {
-  const only = flagArg(args, '--journey')
-  const walk = readWalkOrEmpty()
-  for (const [jn, j] of currentSeedJourneys()) {
-    if (only && jn !== only) continue
-    const rec = (walk.journeys || {})[jn] || { reached: [], misses: [], confirmedAt: null, sentence: null }
-    writeOut(1, journeyWalkStatusLine(jn, rec, j.labels.length) + '\n')
-    const groups = new Map() // insertion-ordered "from target" -> count
-    for (const m of rec.misses || []) {
-      const key = JSON.stringify([m.from, m.target])
-      groups.set(key, (groups.get(key) || 0) + 1)
-    }
-    for (const [key, count] of groups) {
-      const [from, target] = JSON.parse(key)
-      writeOut(1, '  ' + from + ': ' + target + ' (' + count + '×)\n')
-    }
-  }
-  process.exit(0)
-}
-
-function cmdClient(sub, args) {
-  if (sub === 'waive') return cmdClientWaive(args)
-  if (sub === 'log') return cmdClientLog(args)
-  if (sub !== 'open') die('client: unknown subcommand "' + sub + '" — one of: open, waive, log')
-  const state = deriveState()
-  if (state !== 'CLIENT') {
-    die('client open: the state is "' + state + '", not CLIENT — client open only runs once the theme is picked, before approval')
-  }
-  const addressArg = flagArg(args, '--address')
-  if (!addressArg) die('client open: --address <url> is required')
-  const address = addressArg.replace(/\/+$/, '')
-  // Scheme is normalized once (WHATWG URL lowercases protocol) ahead of both the guard below and
-  // the transport selection in probeClientNotesList — checking address.startsWith('https:') twice
-  // let an uppercase scheme (e.g. "HTTPS://") pass the guard but pick the wrong http/https module.
-  let scheme
-  let hostname
-  let urlPort
-  try { const u = new URL(address); scheme = u.protocol; hostname = u.hostname; urlPort = u.port } catch { scheme = null }
-  if (scheme !== 'http:' && scheme !== 'https:') {
-    die('client open: --address <url> must start with "http:" or "https:" (got "' + address + '")')
-  }
-  // specs/20260911/06-the-client-loop.md D7: `--port` names the server's OWN local port (the
-  // capture's own address, always 127.0.0.1/localhost) — derived automatically off a localhost
-  // address, else required outright, since a tunnel/tailscale hostname carries no port a capture
-  // could ever reach.
-  const portArg = flagArg(args, '--port')
-  let port
-  if (portArg) {
-    port = parseInt(portArg, 10)
-  } else if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    port = urlPort ? parseInt(urlPort, 10) : (scheme === 'https:' ? 443 : 80)
-  } else {
-    die('client open: ' + address + ' is not a localhost address — pass --port <n> (the server\'s local port, which the capture needs)')
-  }
-  probeClientNotesList(address, scheme).then((ok) => {
-    if (!ok) {
-      die('client open: ' + address + '/client/__notes/list did not answer 200 with a JSON array within 3s — run `node ' +
-        designAtlasBin + ' serve --root ' + root + '` (or your own server) and expose it yourself — the plugin never opens a tunnel')
-      return
-    }
-    // specs/20260911/05-approval-is-bookkeeping.md D1: exclusion rows are materialized before
-    // status.client is recorded — the client's first walk-page GET (D2) can no longer be the
-    // very first materialize either, since this may run first.
-    runMaterialize()
-    status.client = { address, port, openedAt: nowIso() }
-    saveStatus()
-    writeOut(1, 'client: open — ' + address + '/client/index.html\n')
-    process.exit(0)
-  })
-}
-
-// ---------------------------------------------------------------------------
-// HTML mock helpers (D6).
-// ---------------------------------------------------------------------------
-function labelOf(html) { const m = html.match(/data-screen-label\s*=\s*"([^"]+)"/); return m ? m[1] : null }
-function statusOf(html) { const m = html.match(/data-status\s*=\s*"([^"]+)"/); return m ? m[1] : 'sketch' }
-function mockFile(label) { return path.join(mocksDir, label + '.html') }
-function mocksTopLevelHtmlFiles() {
-  let entries = []
-  try { entries = fs.readdirSync(mocksDir) } catch { return [] }
-  return entries.filter((f) => f.endsWith('.html') && !f.startsWith('.')).sort().map((f) => path.join(mocksDir, f))
-}
-function runDesignAtlasCheck(args) {
-  return runChild(process.execPath, [designAtlasBin, 'check', ...args], { encoding: 'utf8' }, 'design-atlas.js check')
-}
-function childOutput(r) { return ((r.stdout || '') + (r.stderr || '')).trim() }
-
-// specs/20260905/06-plugin-owned-capture-at-approval.md (D5): journey-approved and approved
-// both run render-gate.js --mocks over their own mock set and refuse the mark on any finding
-// (gate exit 1) or capture-family failure (gate exit 2/3) — never on a pass. A plain spawnSync
-// (via runChild) is safe here, unlike render-gate.js's OWN capture calls: render-gate.js's D8
-// mock HTTP server lives inside THAT child process, never in this one, so this call carries
-// none of the async-vs-spawnSync deadlock its own header guards against.
-const renderGateBin = path.join(__dirname, 'render-gate.js')
-function requireRenderGateMocks(mockPaths, journeyName) {
-  const args = []
-  for (const p of mockPaths) args.push('--mocks', p)
-  args.push('--root', root)
-  const r = runChild(process.execPath, [renderGateBin, ...args], { encoding: 'utf8' }, 'render-gate.js --mocks')
-  if (r.status === 1) {
-    const subject = journeyName ? 'journey "' + journeyName + '"' : 'the mock set'
-    die(subject + ' fails the rendered adaptation gate:\n' + (r.stdout || '').trim())
-  }
-  if (r.status !== 0) {
-    die('render-gate --mocks could not run: ' + ((r.stderr || r.stdout || '').trim()))
-  }
-}
-
-// ---------------------------------------------------------------------------
-// stop open <step> [--port <n>] (specs/20260905/04-per-project-look-server.md D3) — the driver
-// derives every candidate set from disk and delegates to design-atlas.js (sibling path, never
-// spec-paths) `stop open`/`stop decide` for writing/probing the stop; there is no hub to register
-// with.
-// ---------------------------------------------------------------------------
-function candidatesArgOf(candidates) {
-  return candidates.map((c) => (c.group != null ? c.group + '/' : '') + c.label + '=' + c.path).join(',')
-}
-
-function buildShapesStopSpec() {
-  const shapesDir = path.join(root, 'design/shapes')
-  let files = []
-  try { files = fs.readdirSync(shapesDir).filter((f) => f.endsWith('.html')) } catch { /* none yet */ }
-  const kebabs = files.map((f) => path.basename(f, '.html'))
-  if (kebabs.length < 2 || kebabs.length > 3) die('stop open shapes: design/shapes/ has ' + kebabs.length + ' candidate(s) — 2-3 are required before opening a look stop')
-  return { kind: 'pick', key: 'shape-picked', title: 'pick a shape', candidates: kebabs.map((k) => ({ group: k, label: k, path: 'shapes/' + k + '.html' })) }
-}
-
-function buildJourneyStopSpec(journeyName) {
-  const j = currentSeedJourneys().get(journeyName)
-  if (!j) die('stop open journey:' + journeyName + ': journey "' + journeyName + '" is not declared in design/mocks/seed.md')
-  for (const label of j.labels) {
-    if (!fs.existsSync(mockFile(label))) die('stop open journey:' + journeyName + ': design/mocks/' + label + '.html does not exist — mark journey-drawn --journey ' + journeyName + ' first')
-  }
-  return {
-    kind: 'approve', key: 'journey-approved:' + journeyName, title: 'approve journey ' + journeyName,
-    candidates: j.labels.map((l) => ({ group: null, label: l, path: 'mocks/' + l + '.html' })),
-    // specs/20260906/04-journey-review-page.md D6: the journey look happens on its own review
-    // page now, not the atlas index — every other stop spec omits `page` and keeps the atlas URL.
-    page: '/review/' + journeyName + '.html',
-  }
-}
-
-// specs/20260907/04-kit-canon-family.md D7: `stop open kit`'s candidate derivation — one
-// candidate per design/kit/*.html file, "<name>=kit/<name>.html".
-function buildKitStopSpec() {
-  const kitDir = path.join(root, 'design/kit')
-  const files = shellLib.htmlFilesIn(kitDir)
-  if (!files.length) die('stop open kit: design/kit/ holds no .html file — author the kit page first')
-  const kebabs = files.map((f) => path.basename(f, '.html')).sort()
-  return {
-    kind: 'approve', key: 'kit-signed', title: 'sign off the kit',
-    candidates: kebabs.map((k) => ({ group: null, label: k, path: 'kit/' + k + '.html' })),
-  }
-}
-
-function buildSignoffStopSpec() {
-  return {
-    kind: 'approve', key: 'approved', title: 'sign off',
-    candidates: allDeclaredLabels().map((l) => ({ group: null, label: l, path: 'mocks/' + l + '.html' })),
-  }
-}
-
-function buildStopSpec(step) {
-  if (step === 'shapes') return buildShapesStopSpec()
-  if (step === 'kit') return buildKitStopSpec()
-  if (step === 'signoff') return buildSignoffStopSpec()
-  let m
-  if ((m = /^journey:(.+)$/.exec(step))) return buildJourneyStopSpec(m[1])
-  die('stop open: unknown step "' + step + '" — one of: shapes, kit, journey:<j>, signoff')
-  return null // unreachable
-}
-
-function runDesignAtlasStopOpen(spec, port) {
-  const args = ['stop', 'open', '--root', root, '--kind', spec.kind, '--key', spec.key,
-    '--title', spec.title, '--candidates', candidatesArgOf(spec.candidates)]
-  if (port) args.push('--port', port)
-  if (spec.page) args.push('--page', spec.page)
-  const r = spawnSync(process.execPath, [designAtlasBin, ...args], { encoding: 'utf8' })
-  if (r.error || r.status === null) {
-    die('design-atlas.js died without an exit code (' + (r.error ? r.error.message : 'no status') + ')')
-  }
-  if (r.status !== 0) {
-    writeOut(2, (r.stderr || r.stdout || 'design-atlas.js failed with no output') + '\n')
-    process.exit(3)
-  }
-  return (r.stdout || '').trim()
-}
-
-function cmdStopOpen(step, args) {
-  const spec = buildStopSpec(step)
-  const port = flagArg(args, '--port')
-  const url = runDesignAtlasStopOpen(spec, port)
-  const replyLine = spec.kind === 'pick'
-    ? 'Reply  ✅ pick <name>  — or —  ✏️ change <what looks wrong>'
-    : 'Reply  ✅ approve  — or —  ✏️ change <what looks wrong>'
-  writeOut(1, '🎨 ready for review — ' + url + '\n' + replyLine + '\n')
-  process.exit(0)
-}
-
-function cmdStopDecide(id, args) {
-  if (!id) die('stop decide: needs a stop id, e.g. `stop decide P001 --verdict approve --by chat`')
-  const r = spawnSync(process.execPath, [designAtlasBin, 'stop', 'decide', '--root', root, '--id', id, ...args], { encoding: 'utf8' })
-  if (r.error || r.status === null) {
-    die('design-atlas.js died without an exit code (' + (r.error ? r.error.message : 'no status') + ')')
-  }
-  if (r.stdout) writeOut(1, r.stdout)
-  if (r.stderr) writeOut(2, r.stderr)
-  process.exit(r.status)
-}
-
-// ---------------------------------------------------------------------------
-// State derivation (D2, Behavior "Derivation order") — a pure function of `status` + disk,
-// never trusting a recorded mark whose artifact vanished.
-// ---------------------------------------------------------------------------
-function shapeValid() {
-  return !!(status.shape && fs.existsSync(path.join(root, 'design/shapes', status.shape + '.html')))
-}
-function allJourneysApproved() {
-  const journeys = currentSeedJourneys()
-  if (journeys.size === 0) return false
-  for (const [jn] of journeys) { const st = status.journeys[jn]; if (!st || !st.approved) return false }
-  return true
-}
-// D1: SEED -> SHAPES -> KIT (`!marks.kitSignedOff`) -> WIREFRAMES -> THEME
-// (`!marks.themePicked`) -> CLIENT (`!marks.approved`) -> APPROVED — SKIN and REVIEW stay
-// retired. specs/20260910/04-theme-before-the-client-walk.md D3 (ADR-0013) reinstates THEME
-// between WIREFRAMES and CLIENT: once every journey is approved, the state is THEME until
-// `marks.themePicked` is set (by `--mark theme-picked`), then CLIENT.
-// specs/20260907/04-kit-canon-family.md D1: KIT sits between SHAPES and WIREFRAMES, gated on one
-// mark exactly like every other step in this chain — never on design/kit/ existing on disk, so a
-// half-authored kit never silently advances the state. specs/20260913/07-the-critic-is-out.md D1:
-// the state a critic pass alone gated leaves the chain — a state whose only content was a
-// dispatch nobody can act on has nothing left to gate.
 function deriveState() {
   if (!status.marks.seedDone) return 'SEED'
-  if (!shapeValid()) return 'SHAPES'
-  if (!status.marks.kitSignedOff) return 'KIT'
-  if (!(status.marks.canonWritten && allJourneysApproved())) return 'WIREFRAMES'
+  if (!status.marks.shellDrawn) return 'SHELL'
+  for (const [name] of currentSeedJourneys()) {
+    const st = status.journeys[name]
+    if (!st || !st.drawn || !st.approved) return 'SCREENS'
+  }
   if (!status.marks.themePicked) return 'THEME'
   if (!status.marks.approved) return 'CLIENT'
   return 'APPROVED'
 }
 
 // ---------------------------------------------------------------------------
-// Mark handlers (D2-D10). Each mutates `status` and calls saveStatus(); doMark() computes
-// prev/next state around the call and prints the D1 checkpoint tail.
+// --mark seed-done (D4).
 // ---------------------------------------------------------------------------
-function handleSeedDone() {
-  requireGateOpen()
-  const raw = seedTextOr(null)
-  if (raw === null) die('design/mocks/seed.md does not exist — write it from spec/templates/mocks-seed.md, then re-mark seed-done')
-  const text = stripComments(raw)
-
-  const productLines = (sectionOf(text, 'Product') || '').split('\n').map((l) => l.trim()).filter(Boolean)
-  if (productLines.length < 3) die('design/mocks/seed.md ## Product needs at least 3 non-blank lines (what it is · who it is for · the one job)')
-
-  const facts = parseFacts(text)
-  const ledgerParsed = parseLedger(ledgerTextOrDie())
-  for (const key of FACT_KEYS) {
-    const id = facts[key]
-    if (!id) die('design/mocks/seed.md ## Facts is missing the "' + key + '" key — add "- ' + key + ': <ledger id>", then re-mark seed-done')
-    const row = ledgerParsed.assumptions.find((a) => a.id === id)
-    if (!row) die('design/mocks/seed.md ## Facts names "' + id + '" for "' + key + '" but no such row exists in design/mocks/ledger.md')
-    if (row.kind !== 'product') die('ledger row "' + id + '" for fact "' + key + '" must be a product row (found "' + row.kind + '")')
-    if (row.status !== 'confirmed') die('ledger row "' + id + '" for fact "' + key + '" must be confirmed (found "' + row.status + '") — run `ledger set --id ' + id + ' --status confirmed --tag said-by-user`')
-    if (!['said-by-user', 'ratified-doc'].includes(row.tag)) die('ledger row "' + id + '" for fact "' + key + '" must be tagged said-by-user or ratified-doc (found "' + row.tag + '")')
+function cmdSeedDone() {
+  contractOrDie(appDir())
+  const seedText = seedTextOrNull() || ''
+  const entities = parseRecordEntities(seedText)
+  if (entities === null) {
+    die('design/mocks/seed.md is missing "## Records" — add one "- <entity>" line per entity the product handles, then write app/src/records/<entity>.ts for each')
   }
-
-  const journeys = parseJourneysSeed(text)
-  if (journeys.size === 0) die('design/mocks/seed.md ## Journeys needs at least one ### journey block')
-  const labelOwners = new Map()
-  for (const [jn, j] of journeys) {
-    if (!j.persona) die('journey "' + jn + '" is missing its persona line')
-    if (!j.labels.length) die('journey "' + jn + '" declares no labels in its ```surfaces block')
-    for (const l of j.labels) {
-      if (labelOwners.has(l)) die('label "' + l + '" is declared in two journeys ("' + labelOwners.get(l) + '" and "' + jn + '") — every label must belong to exactly one journey')
-      labelOwners.set(l, jn)
+  for (const entity of entities) {
+    const rel = path.posix.join(status.app, 'src/records', entity + '.ts')
+    if (!fs.existsSync(path.join(root, status.app, 'src/records', entity + '.ts'))) {
+      die('design/mocks/seed.md ## Records names "' + entity + '" but ' + rel + ' does not exist — remedy: write ' + rel)
     }
   }
-
-  const denseScreens = parseDenseScreens(text)
-  if (denseScreens.length === 0) {
-    die('design/mocks/seed.md ## Dense screens has 0 lines — name one or two labels already declared in a journey')
+  if (!fs.existsSync(path.join(appDir(), 'mock.config.ts'))) {
+    const rel = path.posix.join(status.app, 'mock.config.ts')
+    die(rel + ' does not exist — remedy: cp "$(spec-paths templates)"/mock/mock.config.ts ' + rel)
   }
-  if (denseScreens.length > 2) {
-    die('design/mocks/seed.md ## Dense screens has ' + denseScreens.length + ' lines — one or two labels are allowed')
-  }
-  for (const label of denseScreens) {
-    if (!labelOwners.has(label)) die('design/mocks/seed.md ## Dense screens names "' + label + '" which is not declared in a journey')
-  }
-
-  requireRecords(text)
-
-  const targets = loadTargetsOrNull()
-  if (!targets) die('design/targets.json does not exist or is not valid JSON')
-  if (!Array.isArray(targets.themes) || !targets.themes.length) die('design/targets.json has an empty or missing "themes" array')
-  if (!Array.isArray(targets.viewports) || !targets.viewports.length) die('design/targets.json has an empty or missing "viewports" array')
-
-  const briefPath = path.join(root, 'docs/design/research-brief.md')
-  if (!fs.existsSync(briefPath)) die('docs/design/research-brief.md does not exist — author it per spec/doctrine/genesis.md § Genesis: Fresh UX Research, then re-mark seed-done')
-  const briefText = fs.readFileSync(briefPath, 'utf8')
-  if (!briefText.trim()) die('docs/design/research-brief.md is empty — author it, then re-mark seed-done')
-  if (!/^##\s/m.test(briefText)) die('docs/design/research-brief.md has no "## " heading — add one, then re-mark seed-done')
-
+  requireGateOpen()
   status.marks.seedDone = nowIso()
   saveStatus()
-}
-
-function handleShapePicked(shapeArg) {
-  requireGateOpen()
-  if (!status.marks.seedDone) die('seed-done has not been marked yet — mark seed-done first')
-  const stop = requireStopDecision('shape-picked', 'stop open shapes')
-  const pick = stop.decision.pick
-  if (shapeArg && shapeArg !== pick) die('--shape ' + shapeArg + ' disagrees with the page pick "' + pick + '" (stop ' + stop.id + ')')
-  const shapeChosen = pick
-
-  const shapesDir = path.join(root, 'design/shapes')
-  let files = []
-  try { files = fs.readdirSync(shapesDir).filter((f) => f.endsWith('.html')) } catch { /* none yet */ }
-  const kebabs = files.map((f) => path.basename(f, '.html'))
-  if (kebabs.length < 2 || kebabs.length > 3) die('design/shapes/ has ' + kebabs.length + ' candidate(s) — 2-3 are required before a pick')
-  if (!kebabs.includes(shapeChosen)) die('"' + shapeChosen + '" is not among the shape candidates (' + kebabs.join(', ') + ')')
-
-  const text = stripComments(seedTextOr(''))
-  const denseScreens = parseDenseScreens(text)
-  const journeys = parseJourneysSeed(text)
-  const allLabels = new Set()
-  for (const [, j] of journeys) for (const l of j.labels) allLabels.add(l)
-  for (const f of files) {
-    const html = fs.readFileSync(path.join(shapesDir, f), 'utf8')
-    const label = labelOf(html)
-    if (!label || (!denseScreens.includes(label) && !allLabels.has(label))) die(f + ': data-screen-label must equal a dense screen or a declared journey label')
-    const kebab = path.basename(f, '.html')
-    const m = html.match(/data-shape\s*=\s*"([^"]+)"/)
-    if (!m || m[1] !== kebab) die(f + ': data-shape must equal "' + kebab + '"')
-  }
-
-  const row = findAssumption((a) => a.kind === 'product' && a.tag === 'said-by-user' && a.status === 'confirmed' && a.claim === 'shape: ' + shapeChosen)
-  const others = kebabs.filter((k) => k !== shapeChosen)
-  if (!row) {
-    // D7: the page's radio exclusivity already names every rejected group — the driver appends
-    // the row itself rather than ask the session to re-type it.
-    let out
-    try {
-      out = appendAssumption(ledgerTextOrDie(), {
-        id: nextLedgerId(parseLedger(ledgerTextOrDie())), step: 'SHAPES', kind: 'product',
-        claim: 'shape: ' + shapeChosen, tag: 'said-by-user', status: 'confirmed ' + todayIso(),
-        rejected: others.join(', '), note: stop.decision.note || 'picked on the page',
-      })
-    } catch (e) { die('could not append the shape ledger row: ' + e.message) }
-    fs.writeFileSync(ledgerPath, out)
-  } else {
-    const rejectedTokens = (row.rejected || '').split(/[,\s]+/).filter(Boolean)
-    const missing = others.filter((o) => !rejectedTokens.includes(o))
-    if (missing.length) die('the "shape: ' + shapeChosen + '" ledger row\'s rejected cell does not name every other shape candidate — missing: ' + missing.join(', '))
-  }
-
-  status.shape = shapeChosen
-  status.marks.shapePicked = nowIso()
-  consumeStopAndSave(stop.id)
-}
-
-// specs/20260907/04-kit-canon-family.md D7: `--mark kit-signed` requires a decided look stop
-// keyed kit-signed, requires design/kit/ to hold at least one .html file, and requires
-// design-atlas.js check design/kit to exit 0 — in that order, so the refusal always names the
-// most immediate missing precondition. spec/doctrine/mocks.md "The gate rides every advancing
-// mark" lists kit-signed among the gated marks, so this opens with requireGateOpen() exactly as
-// handleShapePicked does.
-function handleKitSignedOff() {
-  requireGateOpen()
-  const stop = requireStopDecision('kit-signed', 'stop open kit')
-  const kitDir = path.join(root, 'design/kit')
-  const files = shellLib.htmlFilesIn(kitDir)
-  if (!files.length) die('design/kit/ holds no .html file — author the kit page first')
-  const r = runDesignAtlasCheck([kitDir])
-  if (r.status !== 0) die('design-atlas.js check design/kit failed: ' + childOutput(r))
-  status.marks.kitSignedOff = nowIso()
-  consumeStopAndSave(stop.id)
-}
-
-function handleCanonWritten() {
-  requireGateOpen()
-  if (!status.marks.shapePicked) die('shape-picked has not been marked yet — mark shape-picked first')
-  const canonPath = path.join(mocksDir, 'canon.md')
-  if (!fs.existsSync(canonPath)) die('design/mocks/canon.md does not exist — write it from spec/templates/mocks-canon.md, then re-mark canon-written')
-  const text = stripComments(fs.readFileSync(canonPath, 'utf8'))
-  for (const heading of ['Shells', 'Primitives', 'Rules', 'Grounding']) {
-    if (sectionOf(text, heading) === null) die('design/mocks/canon.md is missing "## ' + heading + '"')
-  }
-  const primitives = sectionOf(text, 'Primitives') || ''
-  if (!/^- \*\*.+\*\*\s*—/m.test(primitives)) die('design/mocks/canon.md ## Primitives needs at least one "- **name** — purpose" bullet')
-  const grounding = sectionOf(text, 'Grounding') || ''
-  if (!grounding.includes('docs/design/research-brief.md')) die('design/mocks/canon.md ## Grounding must contain the literal "docs/design/research-brief.md"')
-  if (!/\bbinding\b/.test(grounding)) die('design/mocks/canon.md ## Grounding must contain the word "binding"')
-
-  const existingMocks = mocksTopLevelHtmlFiles()
-  if (existingMocks.length) die('design/mocks/' + path.basename(existingMocks[0]) + ' already exists — canon must be written before any screen (canon first)')
-
-  const wireDir = path.join(root, 'design/wire')
-  fs.mkdirSync(wireDir, { recursive: true })
-  const tplDir = path.join(templatesDir, 'mocks')
-  const tokensDest = path.join(wireDir, 'tokens.css')
-  const cssDest = path.join(wireDir, 'wire.css')
-  if (!fs.existsSync(tokensDest)) fs.copyFileSync(path.join(tplDir, 'wire-tokens.css'), tokensDest)
-  if (!fs.existsSync(cssDest)) fs.copyFileSync(path.join(tplDir, 'wire.css'), cssDest)
-  // specs/20260912/09-a-mock-may-not-invent.md D1: design/wire/project.css copied from its own
-  // stub exactly as the two register files above are — when-absent only, never overwritten.
-  const projectCssDest = path.join(wireDir, 'project.css')
-  if (!fs.existsSync(projectCssDest)) fs.copyFileSync(path.join(tplDir, 'project.css'), projectCssDest)
-
-  status.marks.canonWritten = nowIso()
-  saveStatus()
-}
-
-function ensureJourneyRecord(j) {
-  status.journeys[j] = Object.assign({ drawn: null, approved: null }, status.journeys[j] || {})
-  return status.journeys[j]
-}
-
-// specs/20260908/07-one-wire-register-predicate.md D6: journey-drawn's two "must link the
-// register" checks below read lib/wire-register.js's stylesheetTargets(html) instead of a bare
-// substring scan of the whole page — a commented-out mention stops satisfying the check, and a
-// register applied only through CSS @import starts satisfying it. Built via the RegExp
-// constructor (a plain string, no regex-literal escaping) so this file's own source never spells
-// the escaped wire/ separator the consistency pin bans — AC-20260908-07-7.
-const WIRE_TOKENS_CSS_RE = new RegExp('(^|/)wire/tokens\\.css$')
-const WIRE_WIRE_CSS_RE = new RegExp('(^|/)wire/wire\\.css$')
-
-function handleJourneyDrawn(journeyName) {
-  if (!status.marks.canonWritten) die('canon-written has not been marked yet — mark canon-written first')
-  if (!journeyName) die('--journey <name> is required')
-  const journeys = currentSeedJourneys()
-  const j = journeys.get(journeyName)
-  if (!j) die('journey "' + journeyName + '" is not declared in design/mocks/seed.md — add it under ## Journeys, then re-mark journey-drawn')
-  for (const label of j.labels) {
-    const file = mockFile(label)
-    if (!fs.existsSync(file)) die('design/mocks/' + label + '.html does not exist — draw it, then re-mark journey-drawn --journey ' + journeyName)
-    const html = fs.readFileSync(file, 'utf8')
-    // AC-20260902-07-6: every D6 failure mode (ratified status, no wire/tokens.css link, an
-    // off-token color literal) must exit 2 carrying BOTH the failing label and design-atlas.js
-    // check's own line — so the atlas check runs once, up front, and its output (when it fails)
-    // rides along on whichever die() below actually fires for this label, not only the branch
-    // that reads the atlas exit code directly.
-    const r = runDesignAtlasCheck([file])
-    const atlasSuffix = r.status !== 0 ? ' — design-atlas.js check: ' + childOutput(r) : ''
-    if (labelOf(html) !== label) die(file + ': data-screen-label must equal "' + label + '"' + atlasSuffix)
-    if (statusOf(html) !== 'sketch') die(file + ': data-status must be "sketch" at journey-drawn time' + atlasSuffix)
-    if (!stylesheetTargets(html).some((t) => WIRE_TOKENS_CSS_RE.test(t))) die(file + ': does not link ../wire/tokens.css' + atlasSuffix)
-    if (!stylesheetTargets(html).some((t) => WIRE_WIRE_CSS_RE.test(t))) die(file + ': does not link ../wire/wire.css' + atlasSuffix)
-    if (r.status !== 0) die(file + ': design-atlas.js check failed for label "' + label + '": ' + childOutput(r))
-  }
-  // specs/20260910/02-click-to-advance-and-real-records.md D1/D2: every seed edge needs a
-  // matching data-to control and every data-to must name a screen declared in ANY seed
-  // journey — edges come from lib/surfaces.js's parseSeedJourneys (A1: this driver's own
-  // parseJourneysSeed stays labels-only), never mocks-driver.js's own parser. `declared` is the
-  // repo-wide union of every seed journey's labels, computed here (not in the library) since
-  // only this driver knows the full journey set — a `data-to` naming a screen owned by a
-  // DIFFERENT seed journey is still a real, drawable edge and must not refuse. The screens
-  // scanned and the `missing` loop stay this journey's own `j.labels`. Runs after the per-label
-  // closure checks above and before check --states (the same posture the states gate already
-  // has), and never records journeys.<j>.drawn on a refusal.
-  const allSeedJourneys = parseSeedJourneys(seedTextOr(null))
-  const surfJourney = allSeedJourneys.get(journeyName)
-  const declared = []
-  for (const jrn of allSeedJourneys.values()) {
-    for (const label of jrn.labels) if (!declared.includes(label)) declared.push(label)
-  }
-  const gaps = edgeGaps({ labels: j.labels, edges: surfJourney ? surfJourney.edges : [], declared },
-    (label) => { try { return fs.readFileSync(mockFile(label), 'utf8') } catch { return '' } })
-  if (gaps.missing.length || gaps.unknown.length) {
-    const lines = []
-    for (const g of gaps.missing) {
-      lines.push(g.from + '.html: no control carries data-to="' + g.to + '" — the seed edge ' +
-        g.from + ' -> ' + g.to + ' has no clickable path; add data-to="' + g.to +
-        '" to the control that leads there')
-    }
-    for (const g of gaps.unknown) {
-      lines.push(g.from + '.html: data-to="' + g.to + '" names a screen no journey declares')
-    }
-    die(lines.join('\n') + '\nre-mark journey-drawn --journey ' + journeyName)
-  }
-  // specs/20260912/10-seeded-data-names-its-source.md D4: the per-screen binding pass — a
-  // mock's data-record bindings must resolve, must match the record's exact text, and no
-  // distinctive seed value may sit outside every bound element (D1-D3). Runs after the edge-gap
-  // check above and before the (unchanged, D5) record-hit check below, so a screen is named for
-  // its worst problem first. This is the warn tier — journey-drawn never refuses on these
-  // violations; the same recordBindingViolations refuses at journey-approved instead
-  // (handleJourneyApproved below). Bound to spec 09 D2's own predicate (a labelled, non-canon
-  // mock that links the wire register, lib/wire-register.js's linksWireRegister) — the same
-  // predicate the invention checks use, never a second one.
-  {
-    const recordsByEntity = collectRecordsByEntity(stripComments(seedTextOr('')))
-    for (const label of j.labels) {
-      const html = fs.readFileSync(mockFile(label), 'utf8')
-      if (!linksWireRegister(html)) continue
-      const { violations, warns } = recordBindingViolations(html, label, recordsByEntity)
-      for (const v of violations) writeOut(1, '⚠️ ' + v + '\n')
-      for (const w of warns) writeOut(1, w + '\n')
-    }
-  }
-  // specs/20260910/06-real-records-and-two-dense-screens.md D3: runs after the edge-gap check
-  // above (a placeholder-drawn journey is refused for its missing controls first). Every
-  // declared entity's record values (collectRecordValues, over lib/mock-seed-checks.js's
-  // recordValues) are screened against each of the journey's own top-level mocks; a screen with
-  // zero hits warns (never refuses — a settings screen legitimately shows no record) and the
-  // whole journey refuses only when every screen has zero hits.
-  const recordVals = collectRecordValues(stripComments(seedTextOr('')))
-  if (recordVals.length) {
-    const warnLines = []
-    let anyHit = false
-    for (const label of j.labels) {
-      const html = fs.readFileSync(mockFile(label), 'utf8')
-      if (recordHits(recordVals, html).length) anyHit = true
-      else warnLines.push('⚠️ ' + label + ': carries none of the seed\'s records')
-    }
-    if (!anyHit) {
-      die('journey "' + journeyName + '": no screen carries a value from design/mocks/records/*.json — ' +
-        'draw with the seed\'s own records, then re-mark')
-    }
-    for (const line of warnLines) writeOut(1, line + '\n')
-  }
-  // specs/20260912/09-a-mock-may-not-invent.md D2: surface the mock-invention warns here — these
-  // mocks are still data-status="sketch" (unbound, D2's warn tier), so a single call over the
-  // whole journey (not one label at a time, as the per-label loop above ran) is what lets D6's
-  // cross-file single-screen sweep see more than one bound mock. --verbose expands the collapsed
-  // count line; never gates the mark (this call's exit status is not read).
-  const invWarnRes = runDesignAtlasCheck(['--verbose', ...j.labels.map(mockFile)])
-  for (const line of (invWarnRes.stdout || '').split('\n')) {
-    if (line.trim().startsWith('⚠️') || line.trim().startsWith('ⓘ')) writeOut(1, line + '\n')
-  }
-  // specs/20260906/05-gray-states-on-every-wireframe.md D2: after every per-label closure check
-  // above, run check --states over the journey's own top-level mocks — a violation refuses the
-  // mark before journeys.<j>.drawn is ever recorded.
-  const statesRes = runDesignAtlasCheck(['--states', ...j.labels.map(mockFile)])
-  if (statesRes.status !== 0) {
-    die(childOutput(statesRes) + '\ndraw the missing states in the wireframe register, then re-mark')
-  }
-  ensureJourneyRecord(journeyName).drawn = nowIso()
-  saveStatus()
-}
-
-function handleJourneyApproved(journeyName) {
-  if (!journeyName) die('--journey <name> is required')
-  const st = status.journeys[journeyName]
-  if (!st || !st.drawn) die('journey "' + journeyName + '" has not been drawn yet — mark journey-drawn --journey ' + journeyName + ' first')
-  const j = currentSeedJourneys().get(journeyName)
-  // specs/20260906/03-questions-on-the-wireframe.md's ruling on D4: the notes gate (question-aware)
-  // runs BEFORE requireGateOpen — otherwise a question's own open/inferred ledger row trips the
-  // generic ledger-blocked message first and the question wording is never reached.
-  requireNotesResolved(j ? j.labels : [], journeyName)
-  requireGateOpen()
-  // D2: re-run check --states before the render gate — a redrawn screen cannot lose a state
-  // between journey-drawn and journey-approved.
-  //
-  // specs/20260912/10-seeded-data-names-its-source.md D4: this runs BEFORE the binding pass
-  // below (moved down from its original position immediately after requireGateOpen()) so a
-  // journey screen deleted after drawing is still caught by this check's own
-  // `fs.existsSync(t)`-backed "check: no such path" refusal (design-atlas.js's `check`) instead
-  // of an unguarded fs.readFileSync in the binding pass crashing uncaught — a screen is still
-  // named for its worst problem first, and a missing file is the worst problem there is.
-  const statesRes = runDesignAtlasCheck(['--states', ...(j ? j.labels : []).map(mockFile)])
-  if (statesRes.status !== 0) {
-    die(childOutput(statesRes) + '\ndraw the missing states in the wireframe register, then re-mark')
-  }
-  // specs/20260912/10-seeded-data-names-its-source.md D4: the same per-screen binding pass as
-  // journey-drawn, but the refusal tier — journey-drawn (above) only ever warned on these same
-  // violations. D5/D7: this does NOT duplicate the journey-level record-hit check, which stays
-  // on journey-drawn alone. Bound to spec 09 D2's own predicate (a labelled, non-canon mock that
-  // links the wire register, lib/wire-register.js's linksWireRegister) — a screen whose
-  // ../wire/*.css links were stripped after drawing is unbound and carries none of these rules.
-  {
-    const recordsByEntity = collectRecordsByEntity(stripComments(seedTextOr('')))
-    const bindingViolations = []
-    for (const label of (j ? j.labels : [])) {
-      const html = fs.readFileSync(mockFile(label), 'utf8')
-      if (!linksWireRegister(html)) continue
-      const { violations, warns } = recordBindingViolations(html, label, recordsByEntity)
-      for (const v of violations) bindingViolations.push(v)
-      for (const w of warns) writeOut(1, w + '\n')
-    }
-    if (bindingViolations.length) {
-      die(bindingViolations.join('\n') + '\nfix the binding violation(s) above, then re-mark journey-approved --journey ' + journeyName)
-    }
-  }
-  // specs/20260907/04-kit-canon-family.md D9: once a kit family resolves, every content region of
-  // this journey's own screens must already be kit-tagged or bespoke-marked — --matrix forces the
-  // D5 stamp gate's violation tier onto these mocks even though journey-approved's mocks sit at
-  // data-status="sketch" (A3). Bound only when a kit family actually resolves above these mocks
-  // (D5's absence-invariant — the same resolveCanonDir walk-up `check` itself uses, so a
-  // design/kit/ sitting above `root` binds here exactly as it binds `check`).
-  if (shellLib.resolveCanonDir(mocksDir, 'kit')) {
-    const journeyLabelFiles = (j ? j.labels : []).map(mockFile)
-    const kitRes = runDesignAtlasCheck(['--matrix', ...journeyLabelFiles])
-    if (kitRes.status !== 0) {
-      die(childOutput(kitRes) + '\ninstantiate the missing kit primitive(s), or mark the region data-bespoke, then re-mark')
-    }
-  }
-  // specs/20260912/09-a-mock-may-not-invent.md D2: journey-approved is where these mocks'
-  // sketch stamp graduates to the bound-approved tier for design-atlas.js check's own
-  // boundApproved split — --matrix forces the D1/D3-D8 mock-invention rules (the link
-  // restriction, no own <style>/style=, project.css redefinition and cap) into violations here;
-  // journey-drawn (above) only ever warned on the same mocks.
-  const invRes = runDesignAtlasCheck(['--matrix', ...(j ? j.labels : []).map(mockFile)])
-  if (invRes.status !== 0) {
-    die(childOutput(invRes) + '\nfix the mock-invention violation(s) above (design/wire/project.css, or the mock\'s own <style>/style=), then re-mark')
-  }
-  requireRenderGateMocks((j ? j.labels : []).map((l) => mockFile(l)), journeyName)
-  const stop = requireStopDecision('journey-approved:' + journeyName, 'stop open journey:' + journeyName)
-  st.approved = nowIso()
-  consumeStopAndSave(stop.id)
-}
-
-// ---------------------------------------------------------------------------
-// specs/20260907/06-theme-pick-moves-to-sketch.md: `theme state`/`theme compose` — a SECOND
-// theme producer, outside the mocks state machine above (`/spec:sketch`'s own legacy path for a
-// host with no design/kit/ family at all). `theme state` is dispatched earlier, before `status`
-// is even loaded (cmdThemeState).
-// specs/20260910/04-theme-before-the-client-walk.md (ADR-0013) reinstates the mocks state
-// machine's OWN theme producer between WIREFRAMES and CLIENT: `composeViolations` below (D2, gained the
-// role-completeness leg) backs both `theme compose` and the new `theme shortlist`/`--mark
-// theme-picked` pair — `theme shortlist` opens the client's own pick stop over the seed's two
-// dense screens, `handleThemePicked` (near handleApproved) reads and writes
-// `status.marks.themePicked`/`status.theme`, and `--reopen theme` clears them. `theme open`/
-// `theme adopt` (the atlas-kit pick and its adopt, specs/20260907/06's own originals) are retired
-// outright — `cmdThemeOpen`/`cmdThemeAdopt` below always exit 2 naming their replacement.
-// ---------------------------------------------------------------------------
-
-// specs/20260908/07-one-wire-register-predicate.md D1/D5: linksWireRegister(html) below is
-// lib/wire-register.js's shared authority, not a private copy — D2's "a `wire/` stylesheet link"
-// (link/import-anchored, gated on a stylesheet rel, "wire" as a whole path segment never a `\b`
-// boundary) is now read the same way by every call site instead of being spelled per consumer.
-
-// D2: the one shared validator `compose`/`shortlist`/`--mark theme-picked` all run over a single
-// candidate directory, in the Contracts block's exact refusal order. Returns `{ ok: true, count }`
-// on success or `{ message }` (the exact refusal text, sans the `mocks-driver: ` prefix `die()`
-// adds) on the first violation found.
-// specs/20260910/04-theme-before-the-client-walk.md D2: every wire role wire-tokens.css declares
-// under :root — read from the template at run time, never a hard-coded list — must be re-valued
-// by the candidate's own tokens.css :root block. Reads only the FIRST `:root{…}` block (never the
-// dark variant, which composeViolations does not otherwise gate) so a candidate whose light block
-// drops a role still refuses even when the dark block happens to keep it.
-function rootRoles(cssText) {
-  const m = /:root\s*\{([^}]*)\}/.exec(cssText || '')
-  if (!m) return []
-  const roles = []
-  const re = /--([a-zA-Z0-9-]+)\s*:/g
-  let mm
-  while ((mm = re.exec(m[1]))) if (!roles.includes(mm[1])) roles.push(mm[1])
-  return roles
-}
-
-function composeViolations(kebab) {
-  const kitDir = shellLib.resolveCanonDir(root, 'kit')
-  if (!kitDir) return { message: 'design/kit/ does not exist — run /spec:mocks to KIT and sign the kit off first' }
-  const dir = path.join(root, 'design/theme', kebab)
-  const tokensCssPath = path.join(dir, 'tokens.css')
-  if (!fs.existsSync(tokensCssPath)) return { message: 'design/theme/' + kebab + '/tokens.css does not exist' }
-  const templateRoles = rootRoles(fs.readFileSync(path.join(templatesDir, 'mocks', 'wire-tokens.css'), 'utf8'))
-  const candidateRoles = rootRoles(fs.readFileSync(tokensCssPath, 'utf8'))
-  const missingRoles = templateRoles.filter((r) => !candidateRoles.includes(r))
-  if (missingRoles.length) {
-    return {
-      message: 'design/theme/' + kebab + '/tokens.css: missing role(s) ' +
-        missingRoles.map((r) => '--' + r).join(', ') + ' — every wire role must be re-valued',
-    }
-  }
-  const kitHtmlPath = path.join(dir, 'kit.html')
-  if (!fs.existsSync(kitHtmlPath)) return { message: 'design/theme/' + kebab + '/kit.html does not exist — re-render the kit in this direction\'s tokens' }
-  const html = fs.readFileSync(kitHtmlPath, 'utf8')
-  if (!shellLib.isKitCanonFile(html)) {
-    return { message: 'design/theme/' + kebab + '/kit.html is not a kit canon page — its root must carry data-kit-canon before any data-screen-label' }
-  }
-  if (linksWireRegister(html)) {
-    return { message: 'design/theme/' + kebab + '/kit.html links the wireframe register (wire/) — a candidate direction is the kit at production fidelity' }
-  }
-  const kitPrimitives = shellLib.kitPrimitivesInDir(kitDir)
-  const themePrimitives = shellLib.kitPrimitivesInDir(dir)
-  const missing = [...kitPrimitives.keys()].filter((k) => !themePrimitives.has(k))
-  if (missing.length) {
-    return { message: 'design/theme/' + kebab + '/kit.html omits primitive(s) ' + missing.join(', ') + ' — every primitive the kit names is re-rendered in every candidate direction' }
-  }
-  const r = runDesignAtlasCheck([dir])
-  if (r.status !== 0) return { message: 'design-atlas.js check design/theme/' + kebab + ' failed: ' + childOutput(r) }
-  const row = findAssumption((a) => a.kind === 'product' && a.tag === 'said-by-user' && a.status === 'confirmed' && a.claim === 'theme-directions: ' + kebab)
-  if (!row) {
-    return { message: 'design/mocks/ledger.md has no confirmed said-by-user product row with claim "theme-directions: ' + kebab + '" — record the direction interview pick first' }
-  }
-  return { ok: true, count: kitPrimitives.size }
-}
-
-// Every design/theme/<kebab>/ directory on disk, sorted — the discovery this whole family uses
-// instead of status.directions (which belongs to the retired mocks THEME step alone).
-function themeDirsOnDisk() {
-  try {
-    return fs.readdirSync(path.join(root, 'design/theme'), { withFileTypes: true })
-      .filter((e) => e.isDirectory()).map((e) => e.name).sort()
-  } catch { return [] }
-}
-
-function cmdThemeCompose(args) {
-  const kebab = flagArg(args, '--direction')
-  if (!kebab) die('theme compose: --direction <kebab> is required')
-  const v = composeViolations(kebab)
-  if (v.message) die(v.message)
-  writeOut(1, '✅ direction "' + kebab + '" composes — ' + v.count + ' primitive(s) re-rendered\n')
+  writeOut(1, '✅ seed-done recorded\n')
   process.exit(0)
 }
 
-// specs/20260910/04-theme-before-the-client-walk.md D4 (ADR-0013): the client-facing shortlist —
-// every named direction must compose (D2), at least two, then a `pick` stop over the seed's own
-// dense screens (never the kit page — the client sees the product, not a kit) is opened on the
-// client's own theme page. Retires `theme open` (the atlas-kit pick, below).
-function cmdThemeShortlist(args) {
-  const dirsArg = flagArg(args, '--directions')
-  if (!dirsArg) die('theme shortlist: --directions <a,b[,c]> is required')
-  const dirs = dirsArg.split(',').map((s) => s.trim()).filter(Boolean)
-  for (const kebab of dirs) {
-    const v = composeViolations(kebab)
-    if (v.message) die(v.message)
+// ---------------------------------------------------------------------------
+// --mark shell-drawn (D5).
+// ---------------------------------------------------------------------------
+function cmdShellDrawn() {
+  contractOrDie(appDir())
+  const check = checkJson(appDir())
+  if (!check.ok) {
+    const errs = (check.findings || []).filter((f) => f.severity === 'error')
+    die(errs.map((f) => f.file + ': ' + f.message).join('; ') || 'check --json reports ok:false')
   }
-  if (dirs.length < 2) {
-    die('theme shortlist: only ' + dirs.length + ' direction(s) named — at least 2 are required')
+  const hasExamples = (check.shells || []).some((s) => Array.isArray(s.examples) && s.examples.length > 0)
+  if (!hasExamples) {
+    die('no shell in check --json carries a non-empty examples list — draw the shell with at least one example first')
   }
-  const denseScreens = parseDenseScreens(stripComments(seedTextOr('')))
-  if (!denseScreens.length) {
-    die('theme shortlist: design/mocks/seed.md declares no dense screen(s) — name one or two under ## Dense screens first')
-  }
-  // D4: one candidate per (direction × dense screen), directions in --directions order, dense
-  // screens in seed order — direction-major, so a client scanning left to right compares one
-  // direction across both screens before the next.
-  const candidates = []
-  for (const kebab of dirs) {
-    for (const dense of denseScreens) candidates.push({ group: kebab, label: dense, path: 'mocks/' + dense + '.html?theme=' + kebab })
-  }
-  const spec = {
-    kind: 'pick', key: 'theme-picked', title: 'pick the theme', candidates,
-    // D4/D5: the client's own theme page, never the atlas index every other stop keeps.
-    page: '/client/theme.html',
-  }
-  const port = flagArg(args, '--port')
-  const url = runDesignAtlasStopOpen(spec, port)
-  writeOut(1, '🎨 ready for review — ' + url + '\nReply  ✅ pick <name>  — or —  ✏️ change <what looks wrong>\n')
+  status.marks.shellDrawn = nowIso()
+  saveStatus()
+  writeOut(1, '✅ shell-drawn recorded\n')
   process.exit(0)
 }
 
-// D4: `theme open` (the atlas-kit pick) is retired outright — `theme shortlist` (above) replaces
-// it, over the client's own dense screens rather than the kit page.
-function cmdThemeOpen() {
-  die('theme open is retired — the client picks over the seed\'s own dense screens now: `theme shortlist --directions <a,b[,c]>`')
+// ---------------------------------------------------------------------------
+// --mark journey-drawn --journey <j> (D6) — no ledger gate.
+// ---------------------------------------------------------------------------
+function cmdJourneyDrawn(journeyArg) {
+  contractOrDie(appDir())
+  if (!journeyArg) die('--mark journey-drawn needs --journey <j>')
+  const seedJourneys = currentSeedJourneys()
+  if (!seedJourneys.has(journeyArg)) {
+    die('--journey ' + journeyArg + ' is not declared in design/mocks/seed.md — seed journeys: ' + [...seedJourneys.keys()].join(', '))
+  }
+  const check = checkJson(appDir())
+  const cj = (check.journeys || []).find((j) => j.id === journeyArg)
+  if (!cj) {
+    die('check --json lists no journey with id ' + journeyArg + ' — remedy: add journey ' + journeyArg + ' to src/journeys.ts')
+  }
+  if (!cj.resolved) {
+    const lines = (cj.unresolved || []).map((u) => 'step ' + u.from + ' → ' + u.to + ': ' + u.reason)
+    die('journey ' + journeyArg + ' has unresolved edge(s):\n' + lines.join('\n'))
+  }
+  status.journeys[journeyArg] = status.journeys[journeyArg] || { drawn: null, approved: null }
+  status.journeys[journeyArg].drawn = nowIso()
+  saveStatus()
+  writeOut(1, '✅ journey-drawn recorded for ' + journeyArg + '\n')
+  process.exit(0)
 }
 
-// D6: `theme adopt` is retired outright — its byte-copy/ledger-append/supersede mechanics live on
-// verbatim as `--mark theme-picked`'s handler (handleThemePicked, below), which additionally sets
-// the mocks-state mark and `status.theme` that `theme adopt` never touched.
-function cmdThemeAdopt() {
-  die('theme adopt is retired — `--mark theme-picked` adopts now (the same ledger/tokens.css discipline, plus the mocks-state mark)')
+// ---------------------------------------------------------------------------
+// --mark journey-approved --journey <j> (D7).
+// ---------------------------------------------------------------------------
+function cmdJourneyApproved(journeyArg) {
+  contractOrDie(appDir())
+  if (!journeyArg) die('--mark journey-approved needs --journey <j>')
+  const check = checkJson(appDir())
+  const cj = (check.journeys || []).find((j) => j.id === journeyArg)
+  if (!cj) die('check --json lists no journey with id ' + journeyArg)
+  const approval = readApprovalRaw()
+  const jApproval = (approval.journeys && approval.journeys[journeyArg]) || {}
+  if (!jApproval.approvedAt) {
+    die('approval.journeys["' + journeyArg + '"].approvedAt is missing — approve the journey on the served page first')
+  }
+  const screens = (cj.steps || []).map((s) => s.screen)
+  for (const screen of screens) {
+    const sApproval = (approval.screens && approval.screens[screen]) || {}
+    if (!sApproval.approvedAt) {
+      die('screen "' + screen + '" (a step on journey ' + journeyArg + ') is missing approval.screens["' + screen + '"].approvedAt — approve it on the served page first')
+    }
+  }
+  const notes = readNotesRaw()
+  const openOnScreen = (notes.notes || []).find((n) => n.status === 'open' && screens.includes(n.screen))
+  if (openOnScreen) {
+    die('note ' + openOnScreen.id + ' is open on screen "' + openOnScreen.screen + '" — resolve it before approving journey ' + journeyArg)
+  }
+  const openProject = (notes.notes || []).find((n) => n.project === true && n.status === 'open')
+  if (openProject) {
+    die('project note ' + openProject.id + ' is open — resolve it before approving journey ' + journeyArg)
+  }
+  const journeyThread = (notes.journeys && notes.journeys[journeyArg]) || {}
+  if (journeyThread.status === 'open') {
+    die('the conversation on journey ' + journeyArg + ' is still open — resolve it before approving')
+  }
+  requireGateOpen()
+  status.journeys[journeyArg] = status.journeys[journeyArg] || { drawn: null, approved: null }
+  status.journeys[journeyArg].approved = nowIso()
+  saveStatus()
+  writeOut(1, '✅ journey-approved recorded for ' + journeyArg + '\n')
+  process.exit(0)
 }
 
-// specs/20260910/04-theme-before-the-client-walk.md D6 (ADR-0013): `--mark theme-picked
-// [--direction <k>]` — requires the decided `theme-picked` stop (remedy `theme shortlist`), a
-// `--direction` that disagrees refuses; then the retired `theme adopt`'s own body verbatim
-// (compose check, supersede other `theme:` rows, append the confirmed said-by-user `theme: <k>`
-// row naming the rejected siblings, copy tokens.css byte-for-byte), plus the mocks-state write
-// `theme adopt` never had: `status.marks.themePicked` and `status.theme`.
-// D3/AC-20260910-04-9: the legacy path — a host with no stop at all (it picked at sketch, before
-// this spec existed) accepts `--direction <k>` with no stop when design/tokens.css is already
-// present, NON-wire (byte-different from the wire template — D3's own "present and non-wire"
-// precondition, never inferred from the direction's own tokens.css alone), and byte-equal to
-// design/theme/<k>/tokens.css, skipping the compose/ledger/copy work since there is nothing left
-// to write; any other no-stop shape (no `--direction`, still the wire template, an unmatched byte
-// compare) refuses naming `theme shortlist` — the one remedy for "you have not really picked yet".
-function handleThemePicked(directionArg) {
-  const stop = liveStopFor('theme-picked')
-  if (!stop) {
-    if (!directionArg) die('no look stop for theme-picked — run `theme shortlist` first')
-    const tokensCssPath = path.join(root, 'design/tokens.css')
-    if (!fs.existsSync(tokensCssPath)) die('no look stop for theme-picked — run `theme shortlist` first')
-    const written = fs.readFileSync(tokensCssPath)
-    const wireTemplate = fs.readFileSync(path.join(templatesDir, 'mocks', 'wire-tokens.css'))
-    if (Buffer.compare(written, wireTemplate) === 0) {
-      die('design/tokens.css is the wireframe gray register byte-for-byte — no theme was ever picked; run `theme shortlist` first')
-    }
-    const candidatePath = path.join(root, 'design/theme', directionArg, 'tokens.css')
-    if (!fs.existsSync(candidatePath)) die('design/theme/' + directionArg + '/tokens.css does not exist')
-    const candidate = fs.readFileSync(candidatePath)
-    if (Buffer.compare(written, candidate) !== 0) {
-      die('design/tokens.css does not match design/theme/' + directionArg + '/tokens.css byte-for-byte — run `theme shortlist` first')
-    }
-    status.marks.themePicked = nowIso()
-    status.theme = directionArg
-    saveStatus()
-    return
+// ---------------------------------------------------------------------------
+// --mark theme-picked (D8).
+// ---------------------------------------------------------------------------
+function cmdThemePicked() {
+  contractOrDie(appDir())
+  const approval = readApprovalRaw()
+  const k = approval.theme
+  if (!k) die('approval.theme is missing — pick a theme on the served page first')
+  const check = checkJson(appDir())
+  if (!check.config || check.config.theme !== k) {
+    die('remedy: set theme: "' + k + '" in mock.config.ts')
   }
-  if (stop.status === 'open') die('waiting on ' + stop.url + ' — the decision has not been taken yet')
-  if (stop.decision.verdict === 'change') {
-    die('change requested by ' + stop.decision.by + ': "' + stop.decision.note + '"' +
-      ' — address it, then `theme shortlist`')
+  if (!Array.isArray(check.themes) || !check.themes.includes(k)) {
+    die('theme "' + k + '" is not listed under check --json\'s themes — author src/themes/' + k + '.css first')
   }
-  const pick = stop.decision.pick
-  if (directionArg && directionArg !== pick) die('--direction ' + directionArg + ' disagrees with the page pick "' + pick + '" (stop ' + stop.id + ')')
-  const kebab = pick
-  const v = composeViolations(kebab)
-  if (v.message) die(v.message)
-  // Review finding (specs/20260907/06 build, inherited verbatim): "every other composed
-  // direction" means every sibling that itself composes, not every directory merely present on
-  // disk — a stale or half-authored design/theme/<k>/ that never passed D2 must not be recorded
-  // as rejected.
-  const others = themeDirsOnDisk().filter((k) => k !== kebab).filter((k) => composeViolations(k).ok)
-
-  // D10/D12 (specs/20260907/06 review rulings, inherited verbatim): the whole ledger update below
-  // is a sequence of pure string transforms on one in-memory `text`, followed by a single
-  // fs.writeFileSync — a throw partway through leaves the file untouched. An incomplete/stale
-  // "theme: <kebab>" row is superseded, never a dead end; adopting <kebab> ALSO supersedes every
-  // OTHER confirmed "theme: <other>" row — exactly one confirmed theme: row must exist across all
-  // directions at any time. `sameRows` is every confirmed same-kebab row, not just the first, so
-  // re-picking `<kebab>` collapses all of them; the fresh row's id is computed AFTER every
-  // supersede write, so ids never collide.
-  let text = ledgerTextOrDie()
-  const parsed = parseLedger(text)
-  const isConfirmedThemeRow = (a) => a.kind === 'product' && a.tag === 'said-by-user' && a.status === 'confirmed' && a.claim.startsWith('theme: ')
-  const confirmedThemeRows = parsed.assumptions.filter(isConfirmedThemeRow)
-  const sameRows = confirmedThemeRows.filter((a) => a.claim === 'theme: ' + kebab)
-  const crossRows = confirmedThemeRows.filter((a) => a.claim !== 'theme: ' + kebab)
-  const rejectedTokens = sameRows.length === 1 ? (sameRows[0].rejected || '').split(/[,\s]+/).filter(Boolean) : []
-  const missing = sameRows.length === 1 ? others.filter((o) => !rejectedTokens.includes(o)) : []
-  const sameRowsNeedSupersede = sameRows.length !== 1 || missing.length > 0
-  const needsFreshRow = sameRowsNeedSupersede
-
-  try {
-    if (sameRowsNeedSupersede) for (const same of sameRows) text = setStatus(text, same.id, 'overridden ' + todayIso())
-    for (const cross of crossRows) text = setStatus(text, cross.id, 'overridden ' + todayIso())
-    if (needsFreshRow) {
-      text = appendAssumption(text, {
-        id: nextLedgerId(parseLedger(text)), step: 'SKETCH', kind: 'product',
-        claim: 'theme: ' + kebab, tag: 'said-by-user', status: 'confirmed ' + todayIso(),
-        rejected: others.join(', '), note: stop.decision.note || 'picked on the page',
-      })
-    }
-  } catch (e) { die('could not update the theme ledger row(s): ' + e.message) }
-  if (needsFreshRow || crossRows.length) fs.writeFileSync(ledgerPath, text)
-
-  fs.copyFileSync(path.join(root, 'design/theme', kebab, 'tokens.css'), path.join(root, 'design/tokens.css'))
+  requireGateOpen()
   status.marks.themePicked = nowIso()
-  status.theme = kebab
-  consumeStopAndSave(stop.id)
-}
-
-// D5: `approved` is the one sign-off — SKIN and REVIEW (and the journey-skinned/review-opened/
-// journey-reviewed marks that gated them) are retired.
-// `approved` requires every declared journey approved, notes resolved, a decided `approved` stop,
-// and the existing render-gate/matrix checks; on accept it is the mark's OWN write that stamps
-// every top-level mock `data-status="approved"` (attribute-only, byte-identical otherwise) and
-// records the decider from the stop's own "by" — there is no precondition that a mock already
-// carry data-status="approved" (D5 rationale: with no review loop nobody would ever set it by
-// hand).
-function handleApproved() {
-  // specs/20260911/05-approval-is-bookkeeping.md D4: `ledger derive` runs before every other
-  // gate below — approval never refuses on an exclusion row (spec 20260910/05's refusal is
-  // retired); the tail below prints what got agreed and what is left not contested.
-  runMaterialize()
-  for (const [jn] of currentSeedJourneys()) {
-    const st = status.journeys[jn]
-    if (!st || !st.approved) die('journey "' + jn + '" is not approved — mark journey-approved --journey ' + jn + ' first')
-  }
-  // specs/20260912/07 D4: the whole-product note refusal now lives here, at the one true
-  // sign-off, immediately before the per-screen sweep below — same message, same precedence.
-  requireProjectNotesResolved()
-  // specs/20260906/03: notes gate (question-aware) runs before requireGateOpen — same ordering
-  // reason as handleJourneyApproved above.
-  requireNotesResolved(allDeclaredLabels(), null)
-  // specs/20260910/03-client-journey-player.md D7: every seed journey must be confirmed by the
-  // client, or waived after seven days of silence, before the ledger gate ever runs.
-  {
-    const walk = readWalkOrEmpty()
-    for (const [jn] of currentSeedJourneys()) {
-      if (!walkLib.isClosed(walk, jn)) {
-        die('journey "' + jn + '" is not confirmed by the client — the client walks it to the end and confirms on ' +
-          '/client/walk/' + jn + '.html, or after seven days: client waive --journey ' + jn + ' --reason "<r>"')
-      }
-    }
-  }
-  requireGateOpen()
-  const stop = requireStopDecision('approved', 'stop open signoff')
-
-  const files = mocksTopLevelHtmlFiles()
-  const targets = loadTargetsOrNull()
-  if (targets && Array.isArray(targets.viewports) && targets.viewports.length) {
-    for (const f of files) {
-      const html = fs.readFileSync(f, 'utf8')
-      if (!/<meta[^>]+name="viewport"/.test(html)) die(path.basename(f) + ': no <meta name="viewport"> — every mock is one responsive file')
-    }
-  }
-  const r = runDesignAtlasCheck([mocksDir, '--matrix'])
-  if (r.status !== 0) die('design-atlas.js check --matrix design/mocks failed: ' + childOutput(r))
-
-  requireRenderGateMocks(files, null)
-
-  for (const f of files) {
-    const html = fs.readFileSync(f, 'utf8')
-    if (statusOf(html) === 'sketch') fs.writeFileSync(f, html.replace('data-status="sketch"', 'data-status="approved"'))
-  }
-  // D7/D4: written on every accepted `approved` — the agreed and not-contested exclusion sets,
-  // dated by this approval, are what a statement of work cites.
-  const exclusionCounts = writeExclusionsFile()
-  writeOut(1, '📦 design/mocks/exclusions.md — ' + exclusionCounts.agreed + ' agreed · ' +
-    exclusionCounts.notContested + ' not contested\n')
-  status.decider = stop.decision.by
-  status.marks.approved = nowIso()
-  consumeStopAndSave(stop.id)
-}
-
-// ---------------------------------------------------------------------------
-// doMark / printAcceptedTail (D1, AC-20260902-07-2).
-// ---------------------------------------------------------------------------
-// D9: the accepted `approved` mark prints `waived: N` and one `  <id> — <reason>` line per
-// waived note (a waived client note or a waived question both count — the note's own `waived`
-// field is set by D8's waiveNote either way), before the checkpoint line — every other mark's
-// tail prints only the counts line and the checkpoint line, unchanged.
-function printAcceptedTail(prev, next, mark) {
-  const parsed = parseLedger(ledgerTextOrDie())
-  writeOut(1, countsLine(parsed) + '\n\n')
-  if (mark === 'approved') {
-    // specs/20260910/03-client-journey-player.md D7: one `client: <j> — "<sentence>"` line per
-    // confirmed seed journey, then `waived journeys: <n>`, both before the existing waived-notes
-    // block below.
-    const walk = readWalkOrEmpty()
-    let waivedJourneys = 0
-    for (const [jn] of currentSeedJourneys()) {
-      const rec = (walk.journeys || {})[jn]
-      if (rec && rec.confirmedAt) writeOut(1, 'client: ' + jn + ' — "' + (rec.sentence || '') + '"\n')
-      if (rec && rec.waived) waivedJourneys++
-    }
-    writeOut(1, 'waived journeys: ' + waivedJourneys + '\n\n')
-
-    const waived = notesOrEmpty().filter((n) => n.waived != null)
-    writeOut(1, 'waived: ' + waived.length + '\n')
-    for (const n of waived) writeOut(1, '  ' + n.id + ' — ' + n.waived.reason + '\n')
-    writeOut(1, '\n')
-  }
-  writeOut(1, '✅ checkpoint — mocks state saved (' + prev + ' → ' + next + '); safe to /clear and re-run /spec:mocks\n')
+  saveStatus()
+  writeOut(1, '✅ theme-picked recorded\n')
   process.exit(0)
 }
 
-function doMark(mark, opts) {
-  const prevState = deriveState()
-  switch (mark) {
-    case 'seed-done': handleSeedDone(); break
-    case 'shape-picked': handleShapePicked(opts.shape); break
-    case 'kit-signed': handleKitSignedOff(); break
-    case 'canon-written': handleCanonWritten(); break
-    case 'journey-drawn': handleJourneyDrawn(opts.journey); break
-    case 'journey-approved': handleJourneyApproved(opts.journey); break
-    case 'theme-picked': handleThemePicked(opts.direction); break
-    case 'approved': handleApproved(); break
-    default: die('unknown mark "' + mark + '" — one of: seed-done, shape-picked, canon-written, kit-signed, journey-drawn, journey-approved, theme-picked, approved')
+// ---------------------------------------------------------------------------
+// --mark approved (D9).
+// ---------------------------------------------------------------------------
+function cmdApproved() {
+  contractOrDie(appDir())
+  const approval = readApprovalRaw()
+  for (const [name] of currentSeedJourneys()) {
+    const jApproval = (approval.journeys && approval.journeys[name]) || {}
+    if (jApproval.client !== 'ok' && jApproval.client !== 'waived') {
+      die('journey "' + name + '" has no recorded client verdict — remedy: client waive --journey <j> --reason <r>')
+    }
   }
-  const nextState = deriveState()
-  printAcceptedTail(prevState, nextState, mark)
+  const notes = readNotesRaw()
+  const openNote = (notes.notes || []).find((n) => n.status === 'open')
+  if (openNote) die('note ' + openNote.id + ' is open — resolve it before approving')
+  const badProject = (notes.notes || []).find((n) => n.project === true && n.status !== 'approved')
+  if (badProject) die('project note ' + badProject.id + ' is not approved — resolve it before approving')
+  requireGateOpen()
+  status.marks.approved = nowIso()
+  saveStatus()
+  writeOut(1, '✅ approved recorded\n')
+  process.exit(0)
 }
 
 // ---------------------------------------------------------------------------
-// --reopen (D11) — clears marks, deletes nothing on disk.
+// --reopen journey:<j>|shell|theme (D10). kit/shapes are handled by checkRetired above.
 // ---------------------------------------------------------------------------
-// D7: `--reopen` never deletes and never over-clears.
-function doReopen(target) {
+function cmdReopen(target) {
   const at = nowIso()
-  let m
-  if ((m = /^journey:(.+)$/.exec(target))) {
-    const j = m[1]
-    const st = ensureJourneyRecord(j)
-    st.approved = null
-    status.marks.approved = null
-    status.decider = null
-    // specs/20260911/06-the-client-loop.md D8: a redrawn journey is a different journey to OK
-    // too — take back any client confirmation on walk.json (a no-op when it was never confirmed).
-    walkLib.writeWalk(root, walkLib.unconfirmJourney(readWalkOrEmpty(), { journey: j, at, cause: 'reopen' }))
-    const invalidated = ['approved', 'approved(all)']
-    status.reopens.push({ at, target: 'journey:' + j, invalidated })
-    saveStatus()
-    writeOut(1, '↩ reopened journey:' + j + ' — invalidated: ' + invalidated.join(', ') + '\n')
-    process.exit(0)
-  } else if (target === 'shapes') {
-    status.shape = null
-    status.marks.shapePicked = null
-    // specs/20260907/04-kit-canon-family.md D10: `--reopen shapes` additionally clears
-    // marks.kitSignedOff — KIT sits after SHAPES in the chain, so a re-picked shape invalidates
-    // whatever the kit was authored against.
-    status.marks.kitSignedOff = null
-    status.marks.canonWritten = null
-    for (const j of Object.keys(status.journeys || {})) {
-      const st = status.journeys[j]
-      st.drawn = null; st.approved = null
-    }
-    status.decider = null
-    status.marks.approved = null
-    const invalidated = ['shape', 'canon', 'kit', 'journeys(all)', 'approved(all)']
-    status.reopens.push({ at, target: 'shapes', invalidated })
-    saveStatus()
-    writeOut(1, '↩ reopened shapes — invalidated: ' + invalidated.join(', ') + '\n')
-    process.exit(0)
-  } else if (target === 'kit') {
-    status.marks.kitSignedOff = null
-    status.marks.approved = null
-    status.decider = null
-    const invalidated = ['kit', 'approved(all)']
-    status.reopens.push({ at, target: 'kit', invalidated })
-    saveStatus()
-    writeOut(1, '↩ reopened kit — invalidated: ' + invalidated.join(', ') + '\n')
-    process.exit(0)
-  } else if (target === 'theme') {
-    // specs/20260910/04-theme-before-the-client-walk.md D3 (ADR-0013): clears themePicked plus
-    // the same approved(all)/decider cascade every other reopen already carries — a re-picked
-    // theme invalidates whatever was signed off in the old look.
+  if (target === 'shell') {
+    const cleared = ['shellDrawn', 'themePicked', 'approved']
+    status.marks.shellDrawn = null
     status.marks.themePicked = null
     status.marks.approved = null
-    status.decider = null
-    const invalidated = ['theme', 'approved(all)']
-    status.reopens.push({ at, target: 'theme', invalidated })
+    for (const j of Object.keys(status.journeys)) status.journeys[j].approved = null
+    status.reopens.push({ at, target: 'shell', cleared })
     saveStatus()
-    writeOut(1, '↩ reopened theme — invalidated: ' + invalidated.join(', ') + '\n')
+    writeOut(1, '↩ reopened shell — cleared: ' + cleared.join(', ') + '\n')
     process.exit(0)
-  } else {
-    die('--reopen must be journey:<j>, shapes, kit, or theme')
   }
+  if (target === 'theme') {
+    const cleared = ['themePicked', 'approved']
+    status.marks.themePicked = null
+    status.marks.approved = null
+    status.reopens.push({ at, target: 'theme', cleared })
+    saveStatus()
+    writeOut(1, '↩ reopened theme — cleared: ' + cleared.join(', ') + '\n')
+    process.exit(0)
+  }
+  if (target && target.startsWith('journey:')) {
+    const j = target.slice('journey:'.length)
+    const cleared = ['approved', 'approved(all)']
+    if (status.journeys[j]) status.journeys[j].approved = null
+    status.marks.approved = null
+    status.reopens.push({ at, target, cleared })
+    saveStatus()
+    writeOut(1, '↩ reopened ' + target + ' — cleared: ' + cleared.join(', ') + '\n')
+    process.exit(0)
+  }
+  die('--reopen must be journey:<j>, shell, or theme')
 }
 
 // ---------------------------------------------------------------------------
-// ledger subcommand (D14).
+// ledger subcommand (D16, verbatim over the mock-app host).
 // ---------------------------------------------------------------------------
 function cmdLedger(sub, args) {
   const larg = (name) => flagArg(args, name)
   if (sub === 'add') {
-    const screenArg = larg('--screen')
-    const kind = larg('--kind')
-    const tag = larg('--tag')
-    const claim = larg('--claim')
-    const id = larg('--id')
-    // specs/20260910/05-what-the-journey-does-not-do.md D1: exclusion rows are derived, never
-    // hand-authored — the refusal text is the Decision's own remedy, verbatim.
-    if (kind === 'exclusion') die('ledger add: exclusion rows are derived — run ledger derive')
-    // specs/20260913/07-the-critic-is-out.md D5: `--screen` pinned an assumption row to a screen
-    // as a note a retired producer read — refused by name, before anything is written, naming
-    // the one remedy that closes a row now.
-    if (screenArg) die('ledger add: --screen is retired — an assumption row is confirmed with ledger set, never pinned to a screen')
     let out
     try {
       out = appendAssumption(ledgerTextOrDie(), {
-        id, step: larg('--step'), kind, claim,
-        tag, status: larg('--status'), rejected: larg('--rejected'),
+        id: larg('--id'), step: larg('--step'), kind: larg('--kind'), claim: larg('--claim'),
+        tag: larg('--tag'), status: larg('--status'), rejected: larg('--rejected'),
         dependents: larg('--dependents'), note: larg('--note'),
       })
     } catch (e) { die('ledger add: ' + e.message) }
@@ -2261,127 +537,45 @@ function cmdLedger(sub, args) {
   }
   if (sub === 'counts') {
     const parsed = parseLedger(ledgerTextOrDie())
-    writeOut(1, countsLine(parsed) + '\n' + catchProvenanceLine(parsed) + '\n')
+    writeOut(1, countsLine(parsed) + '\n')
     process.exit(0)
   }
-  if (sub === 'derive') {
-    const result = runMaterialize()
-    writeOut(1, '📒 exclusions: ' + result.total + ' total · ' + result.added + ' new · ' + result.retired + ' retired\n')
-    process.exit(0)
-  }
-  die('ledger: unknown subcommand "' + sub + '" — one of: add, set, catch, check, counts, derive')
-}
-
-// specs/20260906/03-questions-on-the-wireframe.md D6: derived, never attested — a catch row
-// counts as "question" when some question note's addressed.ledgerRow names it, "note" when some
-// plain note's addressed.ledgerRow does, "unlinked" otherwise.
-function catchProvenanceLine(parsed) {
-  const notes = notesOrEmpty()
-  let question = 0; let note = 0; let unlinked = 0
-  for (const c of parsed.catches) {
-    const byQuestion = notes.some((n) => n.kind === 'question' && n.addressed && n.addressed.ledgerRow === c.id)
-    const byNote = notes.some((n) => n.kind !== 'question' && n.addressed && n.addressed.ledgerRow === c.id)
-    if (byQuestion) question++
-    else if (byNote) note++
-    else unlinked++
-  }
-  return '📎 catches: ' + parsed.catches.length + ' — question ' + question + ' · note ' + note + ' · unlinked ' + unlinked
+  die('ledger: unknown subcommand "' + sub + '" — one of: add, set, catch, check, counts')
 }
 
 // ---------------------------------------------------------------------------
-// look / look-probe / look-via (D12/D13).
+// client open | client waive (D9).
 // ---------------------------------------------------------------------------
-function probeOk() {
-  const r = spawnSync('npx', ['--no-install', 'playwright', '--version'], { encoding: 'utf8' })
-  return !r.error && r.status === 0
-}
-function dieProbeFailed() {
-  die('look reachability probe failed (`npx --no-install playwright --version` did not succeed) — run `npx playwright install chromium`, or record `look-via browser` once a browser MCP is available')
-}
-function cmdLookProbe() {
-  if (probeOk()) { writeOut(1, 'look-probe: ok\n'); process.exit(0) }
-  dieProbeFailed()
-}
-function cmdLookVia(mode) {
-  if (!['playwright', 'browser'].includes(mode)) die('look-via needs "playwright" or "browser"')
-  status.look = mode
-  saveStatus()
-  writeOut(1, 'look-via: recorded "' + mode + '"\n')
+function cmdClientOpen() {
+  contractOrDie(appDir())
+  const state = deriveState()
+  if (state !== 'CLIENT') die('client open only runs in CLIENT (current state: ' + state + ')')
+  const check = checkJson(appDir())
+  if (!check.serve || check.serve.url === null) die('remedy: npx mock-review serve')
+  const token = check.config && check.config.client && check.config.client.token
+  writeOut(1, check.serve.url + '/?client=' + token + '\n')
   process.exit(0)
 }
-// specs/20260906/04-journey-review-page.md D2 (review fix round F4): `--port <n>` prefers the
-// served URL's `?state=` (design-atlas.js's own state injection, D2) over this command's own
-// file:// sibling-with-injected-script path — the same mock served instead of a throwaway copy.
-// No `--port` leaves the file:// path byte-identical to before.
-function cmdLook(label, args) {
-  if (!label) die('look needs a <label>')
-  const file = mockFile(label)
-  if (!fs.existsSync(file)) die('design/mocks/' + label + '.html does not exist')
-  const stateArg = flagArg(args, '--state')
-  const outArg = flagArg(args, '--out')
-  const portArg = flagArg(args, '--port')
-  const mockHtml = fs.readFileSync(file, 'utf8')
 
-  // review fix round F9: a state design-atlas.js's ?state= would silently drop (invalid chars) or
-  // a state the mock never declares both produce, silently, a state-named PNG of the HAPPY state
-  // — refuse BEFORE any target is built, one rule for both the file:// and served paths.
-  if (stateArg) {
-    const declared = [...new Set([...mockHtml.matchAll(/data-state-btn\s*=\s*"([^"]+)"/g)].map((m) => m[1]))]
-    if (!/^[A-Za-z0-9_-]+$/.test(stateArg) || !declared.includes(stateArg)) {
-      die('look: state "' + stateArg + '" is not declared by design/mocks/' + label + '.html — use --state <one of: ' +
-        (declared.join(', ') || 'none declared') + '> or omit it for happy')
-    }
-  }
-
-  const targets = loadTargetsOrNull()
-  const vp = (targets && Array.isArray(targets.viewports) && targets.viewports[0]) || { width: 390, height: 844 }
-  const outPath = outArg ? path.resolve(outArg) : path.join(mocksDir, '.looks', label + (stateArg ? '.' + stateArg : '') + '.png')
-  fs.mkdirSync(path.dirname(outPath), { recursive: true })
-
-  let target
-  let siblingPath = null
-  if (portArg) {
-    target = 'http://localhost:' + portArg + '/mocks/' + encodeURIComponent(label) + '.html?clean' + (stateArg ? '&state=' + encodeURIComponent(stateArg) : '')
-  } else {
-    siblingPath = path.join(mocksDir, '.look-' + label + '.html')
-    let content = mockHtml
-    if (stateArg) {
-      const script = '<script>document.addEventListener(\'DOMContentLoaded\',function(){var b=document.querySelector(\'[data-state-btn="' + stateArg + '"]\');if(b)b.click()})</script>'
-      content = /<\/body>/i.test(content) ? content.replace(/<\/body>/i, script + '</body>') : content + script
-    }
-    fs.writeFileSync(siblingPath, content)
-    target = 'file://' + siblingPath
-  }
-  try {
-    const screenshotArgs = ['--no-install', 'playwright', 'screenshot', '--viewport-size=' + (vp.width | 0) + ',' + (vp.height | 0), target, outPath]
-    const r = spawnSync('npx', screenshotArgs, { encoding: 'utf8' })
-    if (r.error || r.status !== 0) {
-      die('look: playwright screenshot of ' + target + ' failed: ' + (childOutput(r) || (r.error && r.error.message) || 'unknown error'))
-    }
-  } finally {
-    if (siblingPath) { try { fs.unlinkSync(siblingPath) } catch { /* best-effort cleanup */ } }
-  }
-  writeOut(1, 'look: wrote ' + outPath + '\n')
+function cmdClientWaive(journeyArg, reason) {
+  if (!journeyArg) die('client waive needs --journey <j>')
+  if (!reason) die('client waive needs --reason <r>')
+  const approval = readApprovalRaw()
+  approval.journeys = approval.journeys || {}
+  approval.journeys[journeyArg] = Object.assign({}, approval.journeys[journeyArg], {
+    client: 'waived', reason, at: nowIso(),
+  })
+  writeApprovalRaw(approval)
+  writeOut(1, '✅ client waive recorded for ' + journeyArg + '\n')
   process.exit(0)
 }
 
 // ---------------------------------------------------------------------------
-// Bare-invocation step printer (D1's checkpoint contract skeleton, verbatim shape).
+// Bare-invocation step printer — one step block per run.
 // ---------------------------------------------------------------------------
-function openRowsLine() {
-  const parsed = parseLedger(ledgerTextOrDie())
-  const open = parsed.assumptions.filter((a) => a.kind === 'product' && a.status === 'open')
-  if (!open.length) return 'open product rows: 0'
-  return 'open product rows: ' + open.length + ' (' + open.map((r) => r.id + ' ' + r.tag).join(', ') + ')'
-}
+function driverCmd(extra) { return 'node ' + __filename + ' --root ' + root + ' ' + extra }
 
-// D8: one constant feeds both the skill line (printStepBlock) and the look-probe precondition
-// (doBareStep) — CLIENT is not an authoring state (it asks the user to look, not to draw), so
-// it prints no skill line even though its own look probe still runs.
-// specs/20260910/04-theme-before-the-client-walk.md D3: THEME joins the set — authoring a
-// direction's tokens/kit re-render is drawing, and its own look probe runs the same way.
-const AUTHORING_STATES = new Set(['SHAPES', 'KIT', 'WIREFRAMES', 'THEME'])
-function printStepBlock(state, title, readOnlyList, doctrineSection, progressLine, thenLines) {
+function printStepBlock(state, title, readOnlyList, doctrineSection, thenLines, withSkill) {
   const lines = []
   lines.push('[mocks-driver] state: ' + state + '  root: ' + root)
   lines.push('(re-run this driver after completing the step; it verifies artifacts and prints the next one)')
@@ -2389,295 +583,137 @@ function printStepBlock(state, title, readOnlyList, doctrineSection, progressLin
   lines.push('## Step: ' + title)
   lines.push('Read only: ' + readOnlyList.join(', '))
   lines.push('Doctrine: spec/doctrine/mocks.md § ' + doctrineSection)
-  lines.push('print: spec-paths shared-mocks --section "' + doctrineSection.replace(/^Mocks: /, '') + '"')
-  if (AUTHORING_STATES.has(state)) lines.push(skillLine())
-  if (progressLine) lines.push(progressLine)
+  if (withSkill) lines.push(SKILL_LINE)
   lines.push('Then:')
   for (const t of thenLines) lines.push('  ' + t)
   writeOut(1, lines.join('\n') + '\n')
   process.exit(0)
 }
 
-function driverCmd(extra) { return 'node ' + __filename + ' --root ' + root + ' ' + extra }
-
 function printSeedStep() {
-  printStepBlock('SEED', 'seed the product — facts before screens',
-    ['design/mocks/seed.md', 'design/mocks/ledger.md', 'docs/design/research-brief.md', 'design/targets.json', 'design/mocks/references/'],
-    'Mocks: Seed', openRowsLine(),
-    ['derive every ## Records file from the brief, the research and the references on disk — invent the records; this is a mock, so never ask the user for data',
-      driverCmd('--mark seed-done')])
-}
-
-function printShapesStep() {
-  const look = lookLineAndThen('shape-picked', 'shapes', (pick) => driverCmd('--mark shape-picked --shape ' + pick))
-  printStepBlock('SHAPES', 'pick a shape — 2 to 3 candidates, one wins',
-    ['design/mocks/seed.md', 'design/shapes/*.html', 'design/mocks/ledger.md'],
-    'Mocks: State Machine', openRowsLine() + '\n' + look.look,
-    look.then)
-}
-
-// specs/20260907/04-kit-canon-family.md D8: the KIT step's own printStepBlock invocation — the
-// fixed instantiate-not-invent line is the authoring seed, and (like CLIENT's D10) the Then:
-// command stays pinned to `--mark kit-signed` regardless of the look stop's own state; only the
-// look: progress line varies (none/waiting/change/approved).
-function printKitStep() {
-  const look = lookLineAndThen('kit-signed', 'kit', () => driverCmd('--mark kit-signed'))
-  printStepBlock('KIT', 'name the shared parts — one page, every state, before any screen',
-    ['design/mocks/seed.md', 'design/shapes/<shape>.html'],
-    'Mocks: State Machine',
-    'Every wireframe is instantiated from this page — name a primitive once here or it gets invented once per screen.' + '\n' + look.look,
-    [driverCmd('--mark kit-signed')])
-}
-
-function journeysProgressLine(journeys) {
-  const total = journeys.size
-  let drawn = 0; let approved = 0
-  for (const [jn] of journeys) {
-    const st = status.journeys[jn]
-    if (st && st.drawn) drawn++
-    if (st && st.approved) approved++
-  }
-  return 'journeys: ' + drawn + '/' + total + ' drawn · ' + approved + '/' + total + ' approved · ' + openRowsLine()
-}
-
-function printWireframesStep() {
-  if (!status.marks.canonWritten) {
-    printStepBlock('WIREFRAMES', 'write the canon — one hand before any screen',
-      ['design/mocks/canon.md', 'docs/design/research-brief.md', 'design/mocks/seed.md'],
-      'Mocks: State Machine', openRowsLine(),
-      [driverCmd('--mark canon-written')])
-    return
-  }
-  const journeys = currentSeedJourneys()
-  for (const [jn] of journeys) {
-    const st = status.journeys[jn]
-    if (!st || !st.drawn) {
-      printStepBlock('WIREFRAMES', 'draw journey ' + jn + ' — one screen at a time, canon first',
-        ['design/mocks/seed.md (## Journeys › ' + jn + ')', 'design/mocks/canon.md', 'docs/design/research-brief.md', 'design/mocks/ledger.md'],
-        'Mocks: State Machine', journeysProgressLine(journeys),
-        [driverCmd('--mark journey-drawn --journey ' + jn),
-          'states: empty, loading, error on every screen (data-state-btn) — or data-no-state="<name>" with the product reason in the ledger',
-          'record every inferred/invented product assumption you write while drawing: ledger add …'])
-      return
-    }
-  }
-  for (const [jn] of journeys) {
-    const st = status.journeys[jn]
-    if (!st.approved) {
-      const look = lookLineAndThen('journey-approved:' + jn, 'journey:' + jn, () => driverCmd('--mark journey-approved --journey ' + jn))
-      printStepBlock('WIREFRAMES', 'approve journey ' + jn + ' — look, then approve',
-        ['design/mocks/ledger.md'],
-        'Mocks: State Machine', journeysProgressLine(journeys) + '\n' + look.look,
-        look.then)
-      return
-    }
-  }
-}
-
-// specs/20260910/04-theme-before-the-client-walk.md D3/Behavior: the THEME step's own
-// printStepBlock invocation — author two or three directions, compose each, then open the
-// client's shortlist; the Then: command stays `theme shortlist` (AC-20260910-04-3's own literal)
-// regardless of how many directions are already composed on disk.
-function printThemeStep() {
-  printStepBlock('THEME', 'pick the theme — the client chooses from a shortlist you compose',
-    ['design/mocks/seed.md (## Dense screens)', 'design/kit/kit.html', 'design/theme/<kebab>/'],
-    'Mocks: State Machine', openRowsLine(),
-    ['author two or three directions under design/theme/<kebab>/ (tokens.css re-valuing the twenty-two wire roles, plus kit.html)',
-      driverCmd('theme compose --direction <kebab>'),
-      driverCmd('theme shortlist --directions <a,b[,c]>')])
-}
-
-// specs/20260911/06-the-client-loop.md D7: the client-origin, non-question requests a journey's
-// labels carry — the same set lib/mocks-walk.js's journeyState derives its "changes-requested"/
-// "fixed" verdict from, restated here so the printed N count and the state word never disagree.
-function requestsOnLabels(notes, labels) {
-  const set = new Set(labels || [])
-  return (notes || []).filter((n) => n.scope === 'mock' && set.has(n.screen) && n.kind !== 'question' && originOf(n) === 'client')
-}
-
-// D7: the server-answering line — "server: answering — <address>/client/index.html" (probed live,
-// the same 3s /client/__notes/list probe `client open` runs) or "server: NOT answering — …"
-// naming the serve command with its recorded port; "client: not opened — …" when `status.client`
-// is absent, unchanged.
-function clientOpenedLineAsync() {
-  if (!status.client) {
-    return Promise.resolve('client: not opened — expose the served atlas yourself, then: ' + driverCmd('client open --address <url>'))
-  }
-  const address = status.client.address
-  let scheme
-  try { scheme = new URL(address).protocol } catch { scheme = 'http:' }
-  return probeClientNotesList(address, scheme).then((ok) => {
-    if (ok) return 'server: answering — ' + address + '/client/index.html'
-    const port = status.client.port
-    return 'server: NOT answering — start it in your own terminal and keep it running until approval: node ' +
-      designAtlasBin + ' serve --root ' + root + (port ? ' --port ' + port : '')
-  })
-}
-
-// D7: one `<j>: <state>` line per seed journey, `journeyState`-derived — never a second
-// derivation of what the client's own requests mean.
-function journeyStateLinesFor() {
-  const notes = notesOrEmpty()
-  const walk = readWalkOrEmpty()
   const lines = []
-  for (const [jn, j] of currentSeedJourneys()) {
-    const rec = (walk.journeys || {})[jn]
-    const labels = j.labels
-    const state = walkLib.journeyState(rec, notes, labels)
-    let word
-    if (state === 'unseen') word = 'not started'
-    else if (state === 'walking') word = 'walking ' + ((rec && rec.reached) || []).length + '/' + labels.length
-    else if (state === 'changes-requested') word = 'changes requested (' + requestsOnLabels(notes, labels).filter((n) => n.status === 'open').length + ')'
-    else if (state === 'fixed') word = 'fixed — waiting for the client (' + requestsOnLabels(notes, labels).filter((n) => n.status === 'addressed').length + ')'
-    else if (state === 'ok') word = 'ok — "' + ((rec && rec.sentence) || '') + '"'
-    else if (state === 'waived') word = 'skipped — ' + ((rec && rec.waived && rec.waived.reason) || '')
-    else word = state
-    lines.push(jn + ': ' + word)
+  lines.push('[mocks-driver] state: SEED  root: ' + root)
+  lines.push('(re-run this driver after completing the step; it verifies artifacts and prints the next one)')
+  lines.push('')
+  lines.push('## Step: seed the product — scaffold the app, then declare records')
+  lines.push('Read only: design/mocks/seed.md')
+  lines.push('Doctrine: spec/doctrine/mocks.md § Mocks: Seed')
+  lines.push('')
+  lines.push('npx shadcn@4.21.0 init -t vite -b radix -p nova -n app -y -s')
+  lines.push('cd app && npm i -D @555/mock-review')
+  for (const f of TEMPLATE_FILES) {
+    lines.push('cp "$(spec-paths templates)"/mock/' + f.src + ' app/' + f.dest)
   }
-  return lines.join('\n')
-}
-
-// D7: "📥 what the client left" — one line per client-origin, non-question, not-yet-resolved
-// note, and (for an open one only) the exact remedy command on the following line. Replaces the
-// retired counts line one-for-one; this is the pickup surface JJ asked for.
-function pickupLinesFor() {
-  const notes = notesOrEmpty().filter((n) => n.kind !== 'question' && originOf(n) === 'client' && n.status !== 'resolved')
-  const lines = ['📥 what the client left:']
-  if (!notes.length) { lines.push('  nothing new'); return lines.join('\n') }
-  for (const n of notes) {
-    const where = n.scope === 'mock' ? n.screen : 'project'
-    lines.push('  ' + n.id + ' ' + n.status + ' · ' + where + ' · "' + n.text + '"')
-    if (n.status === 'open') {
-      const hint = n.scope === 'project' ? ' --screen <label> | --journey <j>' : ''
-      lines.push('      notes address --id ' + n.id + ' --change "<what changed>"' + hint)
-    }
-  }
-  return lines.join('\n')
-}
-
-// D10: CLIENT is one look over the atlas index — the terminal `approved` mark is the one
-// sign-off, replacing the retired sign-off state one-for-one minus the decider ceremony (the
-// decider now comes from the `approved` stop's own "by", set by handleApproved). Unlike every
-// other look-gated step, D9's rationale pins the Then: line to the literal `--mark approved`
-// regardless of the stop's own state (the `look:` progress line still varies —
-// none/waiting/change/approved — the same as any other look-gated step; only the Then: command
-// itself is unconditional here). The `approved` stop key and the `signoff` stop step NAME are
-// both kept unchanged (D9 rationale — AC-20260907-08-12's pin and the `stop open` enumeration
-// both still name "signoff").
-// specs/20260911/06-the-client-loop.md D7: the server-answering/journey-state/pickup lines above
-// replace the retired per-journey `confirmed/open — reached` form and the counts line one-for-one
-// — the driver never starts or stops the client server itself, only probes it (Rationale).
-function printClientStep() {
-  const look = lookLineAndThen('approved', 'signoff', () => driverCmd('--mark approved'))
-  clientOpenedLineAsync().then((topLine) => {
-    printStepBlock('CLIENT', 'client review — the product I understand',
-      ['design/atlas/index.html', 'design/mocks/notes.json'], 'Mocks: State Machine',
-      topLine + '\n' + journeyStateLinesFor() + '\n' +
-      'Approval means "this is the product I understand" — the written brief, not these screens, holds scope.' + '\n' +
-      pickupLinesFor() + '\n' + look.look,
-      [driverCmd('--mark approved')])
-  })
-}
-
-function printApprovedTerminal() {
-  writeOut(1, '[mocks-driver] state: APPROVED  root: ' + root + '\n\n## Step: done — every journey approved, signed off by ' +
-    status.decider + '\nnext: /spec:genesis\n')
+  lines.push('')
+  lines.push('Once every "## Records" entity in design/mocks/seed.md has a matching app/src/records/<entity>.ts and app/mock.config.ts exists, run:')
+  lines.push('  ' + driverCmd('--mark seed-done'))
+  writeOut(1, lines.join('\n') + '\n')
   process.exit(0)
 }
 
-function doBareStep() {
-  const state = deriveState()
-  if ((AUTHORING_STATES.has(state) || state === 'CLIENT') && status.look !== 'browser' && !probeOk()) {
-    dieProbeFailed()
-  }
-  if (state === 'SEED') return printSeedStep()
-  if (state === 'SHAPES') return printShapesStep()
-  if (state === 'KIT') return printKitStep()
-  if (state === 'WIREFRAMES') return printWireframesStep()
-  if (state === 'THEME') return printThemeStep()
-  if (state === 'CLIENT') return printClientStep()
-  return printApprovedTerminal()
+function printShellStep() {
+  printStepBlock('SHELL', 'draw the shell — one component, every screen imports it',
+    ['design/mocks/seed.md'],
+    'Mocks: State Machine',
+    [driverCmd('--mark shell-drawn')],
+    true)
 }
 
-// ---------------------------------------------------------------------------
-// frontend-design skill check (doctrine/mocks.md § Mocks: Authoring Rules). Every authoring
-// step block carries skillLine(); `skill-check` prints it alone (sketch's setup runs it). Never
-// blocks: exit 0 on every outcome. Probe: `claude plugin list --json` (same read as
-// init-gen.js probe D7); the CLI absent or unparseable is reported, never guessed installed.
-// ---------------------------------------------------------------------------
-function probeSkill() {
-  const r = spawnSync('claude', ['plugin', 'list', '--json'], { encoding: 'utf8' })
-  if (r.error) return { unavailable: 'no-claude-cli' }
-  let rows
-  try { rows = JSON.parse(r.stdout) } catch { return { unavailable: 'unparseable-plugin-list' } }
-  if (!Array.isArray(rows)) return { unavailable: 'unparseable-plugin-list' }
-  const row = rows.find((x) => x && typeof x.id === 'string' && x.id.split('@')[0] === 'frontend-design')
-  if (!row) return { installed: false }
-  return { installed: true, enabled: row.enabled !== false }
+function printScreensStep(journeys) {
+  for (const [name] of journeys) {
+    const st = status.journeys[name]
+    if (!st || !st.drawn) {
+      printStepBlock('SCREENS', 'draw journey ' + name,
+        ['design/mocks/seed.md (### ' + name + ')'],
+        'Mocks: State Machine',
+        [driverCmd('--mark journey-drawn --journey ' + name)],
+        true)
+      return
+    }
+  }
+  for (const [name] of journeys) {
+    const st = status.journeys[name]
+    if (!st.approved) {
+      printStepBlock('SCREENS', 'approve journey ' + name,
+        ['design/notes.json', 'design/approval.json'],
+        'Mocks: State Machine',
+        [driverCmd('--mark journey-approved --journey ' + name)],
+        true)
+      return
+    }
+  }
 }
-function skillLine() {
-  const p = probeSkill()
-  if (p.installed && p.enabled) return '🎨 Load the `frontend-design` skill (Skill tool) before the first edit — every mock is authored under it'
-  if (p.installed) return '⚠️ frontend-design skill installed but disabled — authoring without it; enable: /plugin (toggle frontend-design)'
-  if (p.unavailable) return '⚠️ frontend-design skill could not be verified (' + p.unavailable + ') — load it via the Skill tool if present; install: /plugin install frontend-design'
-  return '⚠️ frontend-design skill not installed — authoring without it; install: /plugin install frontend-design'
+
+function printThemeStep() {
+  printStepBlock('THEME', 'pick a theme',
+    ['mock.config.ts'],
+    'Mocks: State Machine',
+    ['author two src/themes/<k>.css candidates',
+      'pick a theme on the served page, then set theme: "<k>" in mock.config.ts',
+      driverCmd('--mark theme-picked')],
+    true)
 }
-function cmdSkillCheck() { writeOut(1, skillLine() + '\n'); process.exit(0) }
+
+function printClientStep() {
+  printStepBlock('CLIENT', 'walk the client role',
+    ['design/approval.json'],
+    'Mocks: Client Player',
+    [driverCmd('client open'), driverCmd('--mark approved')],
+    false)
+}
+
+function printApprovedStep() {
+  writeOut(1, '[mocks-driver] state: APPROVED  root: ' + root + '\nmocks are approved — nothing further to do.\n')
+  process.exit(0)
+}
 
 // ---------------------------------------------------------------------------
 // Dispatch.
 // ---------------------------------------------------------------------------
-// D2: `--decider` is retired outright — on ANY invocation (bare or `--mark`) it exits 2, never a
-// silent no-op. The sign-off stop's own "by" is the decider now (handleApproved).
-if (rest.includes('--decider')) {
-  die('--decider is retired — the sign-off stop\'s "by" is the decider')
-}
-if (rest[0] === 'skill-check') {
-  cmdSkillCheck()
-} else if (rest[0] === 'ledger') {
+// D16: the ledger subcommand is a plain text-file operation, untouched by the package — dispatch
+// it before any contract check, exactly like the "while seedDone is null no run spawns the
+// package" carve-out below.
+if (rest[0] === 'ledger') {
   cmdLedger(rest[1], rest.slice(2))
-} else if (rest[0] === 'notes') {
-  cmdNotes(rest[1], rest.slice(2))
-} else if (rest[0] === 'client') {
-  cmdClient(rest[1], rest.slice(2))
-} else if (rest[0] === 'look-probe') {
-  cmdLookProbe()
-} else if (rest[0] === 'look-via') {
-  cmdLookVia(rest[1])
-} else if (rest[0] === 'look') {
-  cmdLook(rest[1], rest.slice(2))
-} else if (rest[0] === 'stop' && rest[1] === 'open') {
-  cmdStopOpen(rest[2], rest.slice(3))
-} else if (rest[0] === 'stop' && rest[1] === 'decide') {
-  cmdStopDecide(rest[2], rest.slice(3))
-} else if (rest[0] === 'stop') {
-  die('stop: unknown subcommand "' + rest[1] + '" — one of: open, decide')
-} else if (rest[0] === 'theme' && rest[1] === 'compose') {
-  cmdThemeCompose(rest.slice(2))
-} else if (rest[0] === 'theme' && rest[1] === 'shortlist') {
-  cmdThemeShortlist(rest.slice(2))
-} else if (rest[0] === 'theme' && rest[1] === 'open') {
-  cmdThemeOpen()
-} else if (rest[0] === 'theme' && rest[1] === 'adopt') {
-  cmdThemeAdopt()
-} else if (rest[0] === 'theme') {
-  die('theme: unknown subcommand "' + rest[1] + '" — one of: state, compose, shortlist')
-} else {
-  const REOPEN = flagArg(rest, '--reopen')
-  const MARK = flagArg(rest, '--mark')
-  const STATE_ONLY = rest.includes('--state')
-  if (REOPEN) {
-    doReopen(REOPEN)
-  } else if (MARK) {
-    doMark(MARK, {
-      journey: flagArg(rest, '--journey'),
-      shape: flagArg(rest, '--shape'),
-      direction: flagArg(rest, '--direction'),
-    })
-  } else if (STATE_ONLY) {
-    writeOut(1, deriveState() + '\n')
-    process.exit(0)
-  } else {
-    doBareStep()
-  }
 }
+
+// D3: from --mark seed-done on, a contractOrDie refusal precedes every other refusal in a run;
+// `--mark seed-done` itself runs contractOrDie as its own first step (below), so this generic
+// gate only fires for every OTHER command once seedDone is already recorded.
+if (status.marks.seedDone) contractOrDie(appDir())
+
+if (rest.includes('--state')) {
+  writeOut(1, deriveState() + '\n')
+  process.exit(0)
+}
+
+if (rest[0] === '--reopen') {
+  cmdReopen(rest[1])
+}
+
+if (rest[0] === '--mark') {
+  const mark = rest[1]
+  const journeyArg = flagArg(rest, '--journey')
+  if (mark === 'seed-done') cmdSeedDone()
+  else if (mark === 'shell-drawn') cmdShellDrawn()
+  else if (mark === 'journey-drawn') cmdJourneyDrawn(journeyArg)
+  else if (mark === 'journey-approved') cmdJourneyApproved(journeyArg)
+  else if (mark === 'theme-picked') cmdThemePicked()
+  else if (mark === 'approved') cmdApproved()
+  else die('--mark ' + mark + ' is unknown')
+}
+
+if (rest[0] === 'client') {
+  if (rest[1] === 'open') cmdClientOpen()
+  else if (rest[1] === 'waive') cmdClientWaive(flagArg(rest, '--journey'), flagArg(rest, '--reason'))
+  else die('client: unknown subcommand "' + rest[1] + '"')
+}
+
+// Bare run: print exactly one step block for the current state.
+const state = deriveState()
+if (state === 'SEED') printSeedStep()
+else if (state === 'SHELL') printShellStep()
+else if (state === 'SCREENS') printScreensStep(currentSeedJourneys())
+else if (state === 'THEME') printThemeStep()
+else if (state === 'CLIENT') printClientStep()
+else printApprovedStep()

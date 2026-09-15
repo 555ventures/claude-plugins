@@ -62,80 +62,76 @@ only under the spec that owns it.
 ## Mocks: State Machine
 
 `mocks-driver.js` derives the current state on every invocation from
-`design/mocks/status.json` plus the artifacts on disk — a recorded mark is never trusted
-alone; if its artifact vanished (a journey's screen deleted, a direction's tokens file
-removed) the derivation lands earlier and demands the mark again. The order is fixed: **SEED**
-(the 13 facts, journeys, dense screen, research brief) → **SHAPES** (one shape kebab picked
-from 2–3 candidates) → **KIT** (the shared-primitive canon named and signed off, before any
-screen) → **WIREFRAMES** (canon written, then every seed journey drawn and
-approved) → **THEME** (the user authors two or three directions under `design/theme/<kebab>/`,
-`theme shortlist` opens a client pick over the seed's dense screens served with
-`?theme=<kebab>` — a link swap of the wire register's token file, never a redraw — and
-`--mark theme-picked` adopts the client's pick, copying its tokens the way `theme adopt` once
-did) → **CLIENT** (the client player, exposed by the user, where the client walks each
-journey by its real controls, raises notes and confirms with one
-sentence; closes when every journey is `ok` or waived and every client note resolved-or-waived)
-→ **APPROVED** (terminal). WIREFRAMES carries a sub-mark per
-journey so no single conversation ever has to hold more than one journey's state —
-a seed journey added mid-WIREFRAMES reappears as `0/N drawn` and reopens the state rather than
-silently completing.
+`design/mocks/status.json` (schemaVersion 2) plus the artifacts on disk — a recorded mark is
+never trusted alone; if its governing artifact no longer supports it (a journey removed from
+the seed, `check --json` reporting a finding the mark should have caught) the derivation lands
+earlier and demands the mark again. The order is fixed:
 
-**The gate rides every advancing mark.** `seed-done`, `shape-picked`, `kit-signed`,
-`canon-written`, `journey-approved`, and `approved` each
-run the provenance ledger's `gateVerdict` (§ Provenance Ledger) before recording; a blocked
-gate refuses (exit 2) naming the offending rows and the remedy (`ledger set --id <id> --status
-confirmed --tag said-by-user`, or `--status overridden`). `journey-approved` and `approved`
-additionally run the rendered adaptation gate (§ Design Render Gate, `render-gate --mocks`),
-falling back to the plugin's own capture when the host declares none, and refuse the mark on
-any finding or on a machine with no browser. `journey-drawn`
-runs no gate — drawing is how an assumption gets pinned to the ledger, not
-resolved. Process rows never surface as something to resolve; they are counted, not asked.
+**SEED → SHELL → SCREENS → THEME → CLIENT → APPROVED**
 
-**Reopening never deletes.** `--reopen journey:<j>` clears that journey's own `approved` mark,
-the terminal `approved`, and takes back the client's own confirmation of that journey on
-`walk.json` (§ Mocks: Client Player); `--reopen shapes` clears the shape pick and every
-downstream mark, including every journey's own approval; `--reopen kit` clears the kit
-sign-off and `approved`, never a journey's own approval; `--reopen theme` clears the theme
-pick and `approved`. Every reopen appends one row to
-`status.reopens` naming what it invalidated and leaves every file on disk byte-identical — the
-next derivation lands on the earliest state whose marks are now missing.
+SEED authors `design/mocks/seed.md`, runs the printed scaffold, lands the template files, and
+writes every declared `## Records` entity as a typed source file. SHELL closes once `check
+--json` reports `ok: true` and at least one shell with a non-empty `examples` export — there is
+no separate human stop; the first journey's approval is the shell's. SCREENS closes once every
+journey the seed declares is drawn and approved, in seed order. THEME closes once the user
+authors color candidates, the pick is recorded on the served page, and one `mock.config.ts`
+line adopts it. CLIENT closes once the client walks the served app through a token link, raising
+and resolving notes, waiving or confirming each journey. APPROVED is terminal. A `status.json`
+carrying `schemaVersion: 1` refuses (exit 2, `remedy: rm design/mocks/status.json` — ADR-0028)
+rather than being silently reinterpreted; no host holds data on the old shape.
+
+**Marks.** `seed-done` records once every declared records file exists and `mock.config.ts` is
+present (§ Mocks: Seed). `shell-drawn` records once `check --json` reports no `error`-severity
+finding and at least one shell entry with a non-empty `examples` list; a warn-only finding never
+refuses. `journey-drawn --journey <j>` records once `check --json` lists `<j>` with
+`resolved: true`, refusing on an unknown id, an out-of-seed id, or any unresolved edge (named
+`step <from> → <to>: <reason>`) — no ledger gate runs here, drawing is how an assumption gets
+pinned, not resolved. `journey-approved --journey <j>` records once `approval.json`'s own
+`approvedAt` for the journey, every step screen's own approval, and every note on those screens
+and on the journey's own conversation are clear (§ Mocks: Page Notes), then runs the ledger's
+`gateVerdict` (§ Provenance Ledger) before recording. `theme-picked` records once
+`approval.theme` names a theme `check --json` also reports under `config.theme`. `approved`
+records once every journey's `approval.journeys[j].client` is `ok` or `waived` and nothing
+anywhere is open, running `gateVerdict` first. Process rows never surface as something to
+resolve; they are counted, not asked.
+
+**Reopening never deletes.** `--reopen journey:<j>` clears that journey's own `approved` mark
+and the terminal `approved`; `--reopen shell` clears `shellDrawn`, `themePicked`, `approved`,
+and every journey's own `approved` — every screen renders inside the shell, so its reopening
+cascades; `--reopen theme` clears `themePicked` and `approved`. Every reopen appends
+`{at, target, cleared: [...]}` to `status.reopens` and leaves every other file on disk
+byte-identical — the next derivation lands on the earliest state whose marks are now missing.
+`--reopen shapes` and `--reopen kit` are refused, naming the retirement (ADR-0028) — the two
+states behind them no longer exist.
 
 ## Mocks: Seed
 
-SEED is the one state where facts are established, not drawn — screens exist only after
-`primary-surface` and `platforms-horizon` (the framework lesson: know the surface and the
-device horizon before a pixel). The seed closes on 13 keys, each naming a `confirmed` product
-row in the ledger: `primary-surface platforms-horizon tenancy offline realtime ai-in-loop
-residency payer day-one-integrations scale-outage vendor-limits retention legal-floor`.
-`retention` and `legal-floor` generalize the two facts that caught real misunderstandings in
-the dry run (audio-retention limits; a regulation constraining a core mechanic) — every product
-has some data lifetime and some regulatory floor worth naming even when the answer is "none".
+SEED is the one state where the host app doesn't exist yet. `design/mocks/seed.md` (template
+`spec/templates/mocks-seed.md`) names the product in three sentences, one `## Records` entity
+per kind of data the product handles, and one `### <journey-kebab>` block per journey — a
+persona line and a fenced ` ```surfaces ``` ` block in the roadmap-brief grammar (names and
+arrows only, one line per edge). Journeys exist before the first screen because no roadmap
+exists yet to derive them from; `lib/surfaces.js`'s `parseSeedJourneys` returns them in seed
+order, and that order is the order SCREENS draws them in.
 
-`design/mocks/seed.md` (template `spec/templates/mocks-seed.md`) carries six sections in
-order: `## Product` (three sentences — what it is, who it is for, the one job), `## Facts`
-(one `- <key>: <ledger id>` line per key above, each id `confirmed`), `## References` (a path,
-URL, or `- none`; anything under `design/mocks/references/` is picked up automatically),
-`## Records` (one `- <entity>: records/<entity>.json` line per entity the product handles, the
-path relative to `design/mocks/`; each file a JSON array of at least three record objects, which
-**the session derives and asks nobody for** — from the seed's own Product and Facts,
-`docs/design/research-brief.md` and anything under `design/mocks/references/`, inventing the
-awkward cases (the customer with no surname) a client would have supplied. A drawn screen names
-the exact record it shows for every such value, `data-record="<entity>[<i>].<field>"` on the
-element that displays it (§ Mocks: Authoring Rules), so a retyped ninth copy cannot silently
-diverge from the record it was drawn from. `seed-done` refuses a
-missing section, a `- none` line, and a path that is missing, does not parse, is not an array, or
-holds fewer than three records, naming the entity and that one remedy), `## Journeys` (one `### <journey-kebab>` per journey, a
-persona line, and one fenced ` ```surfaces ``` ` block in the roadmap-brief grammar — names and
-arrows only, one line per edge, every label declared in exactly one journey), and
-`## Dense screens` (one or two labels already declared in a journey — the screen(s) every
-theme candidate is judged on; `seed-done` refuses zero lines, more than two, or an undeclared
-label; the singular `## Dense screen` heading with one line still parses, for hosts seeded
-before this grammar). `design/targets.json` must parse with non-empty `themes`/`viewports`;
-`docs/design/research-brief.md` must exist and be non-empty (authored via genesis.md § Genesis:
-Fresh UX Research — the method is fixed there, this command only names the step). Journeys
-exist before the first screen because no roadmap exists yet to derive them from; the same
-surfaces grammar lets the atlas render journeys today and a later spec derive roadmap briefs
-from them.
+The SEED step block prints, in order: `Read only: design/mocks/seed.md`; the scaffold command
+verbatim — `npx shadcn@4.21.0 init -t vite -b radix -p nova -n app -y -s` (the scaffold creates
+`app/`, so `status.app` is the literal `"app"`, written once on the cold-root create; every
+later host-app path — `mock.config.ts`, `src/`, `design/*.json` — resolves through
+`path.join(root, status.app)`, while `design/mocks/` itself stays at the root); then `cd app &&
+npm i -D @555/mock-review`; then one `cp "$(spec-paths templates)"/mock/<file> app/<dest>` line
+per template file (`mock.config.ts`, `src/journeys.ts`, and the two examples under
+`design/examples/`, outside every contract host glob so the reviewer never lists them as a real
+screen or records file).
+
+Records are typed source, not seeded JSON: each `## Records` entity in the seed maps to
+`app/src/records/<entity>.ts`, a file the session writes by hand from the seed's own Product
+sentence and any references under `design/mocks/references/` — inventing the awkward cases (the
+customer with no surname) a client would have supplied, since this is a mock and nobody is
+asked for data. `--mark seed-done` refuses a `seed.md` with no `## Records` section, any
+declared entity missing its `src/records/<entity>.ts` file (naming the exact missing path and
+`remedy: write <path>`), a missing `app/mock.config.ts`, or a `contractOrDie` refusal — never
+anything about the file's contents, and never a question back to the user.
 
 ## Mocks: Checkpoint contract
 
@@ -160,319 +156,83 @@ recovering from a `/clear` can check where it left off before doing anything.
 
 ## Mocks: Look and Serve
 
-Every mock is a static file; nothing requires a running app. `design-atlas.js serve [--root
-<r>] [--port <n>]` serves `<root>/design/` read-only with no cache (`cache-control: no-store`,
-path traversal outside the root answers 404) and exits cleanly on SIGINT/SIGTERM; its busy-port
-branch answers `already serving` when a previous session's server is still up on that port, so
-starting it is idempotent. This makes `serve` the session's own tool: before the first look
-stop of a `/spec:mocks`, `/spec:sketch`, or `/spec:atlas` run, the session starts
-`node "$(spec-paths design-atlas)" serve --root . [--port <n>]` as a
-**tracked background task** (D4, specs/20260905/04) through the authoring states — SHAPES, KIT,
-WIREFRAMES, THEME — leaves it running across that run's look stops, and stops the task at
-sign-off or when the session ends — no script ever spawns a detached server, writes a pid file,
-or runs a registry; the serve command itself is never printed to the user. **In CLIENT the
-server is the user's own process**: started once in the user's terminal, kept running until
-`approved`, never started, stopped, or probed for liveness by any script except the CLIENT
-step's own answering/not-answering line (§ Mocks: State Machine, § Mocks: Client Player). **The
-user's path is the look link**: a look stop's `🎨 ready for review —
-<url>` line is that project's own served atlas page, `http://localhost:<port>/atlas/index.html
-#stop-<id>` — never a per-project port the user forwards by hand, and never a machine-wide
-address shared across projects.
+The mock is a real running app, not a static file — nothing about it can be judged from source
+alone. `npx mock-review serve` (D2's contract verb) is started once, as a **tracked background
+task** (specs/20260905/04 D4), the moment SEED lands `app/`; it stays up through SHELL, SCREENS
+and THEME, and in CLIENT the server is the user's own process, started once in their terminal
+and kept running until `approved` — no script starts, stops, or probes it there except the
+CLIENT step's own `client open`/`client waive` lines.
 
-**The journey look surface is the review page.** `stop open journey:<j>` points the stop's URL
-at `/review/<j>.html`, served by `design-atlas.js` alongside the atlas index — screens rail,
-per-screen artboards with state tabs, and a note inspector answered in place. Its
-chrome follows the plugin-chrome rule, one binding home: design.md § Design Canon.
-
-**The session's own look** is `mocks-driver.js look <label> [--state <s>] [--port <n>] [--out
-<png>]`: with `--port` it captures the served `http://localhost:<port>/mocks/<label>.html?clean[&state=<s>]`
-(`design-atlas.js`'s own `?state=` injection, § Mocks: Look and Serve) and writes no sibling file;
-without `--port` it writes a sibling `.look-<label>.html` (the mock plus an inline script that
-clicks `[data-state-btn="<s>"]` on load when `--state` is given), captures it with the Playwright
-CLI at the first declared viewport in `design/targets.json`, and deletes the sibling in a
-`finally` — the repo never accumulates look scratch files. `look-probe` exits 0 exactly when `npx
---no-install playwright --version` exits 0; this is the reachability signal because
-`require.resolve('playwright')` does not resolve from a host repo even when the CLI works.
-
-**Reachability is a precondition, not an afterthought.** Before printing SHAPES, WIREFRAMES,
-or CLIENT — every state that asks the session to look at a screen — the driver runs the
-look probe unless `status.look` is already `"browser"`; a failed probe refuses (exit 2) naming
-`npx playwright install chromium` rather than silently proceeding into a state no one can
-verify. `mocks-driver.js look-via <playwright|browser>` records the session's declared path:
-`browser` means a browser MCP the command told the session to `ToolSearch` for, which cannot be
-probed from a script and so is declared once and trusted thereafter.
-
-**Theme mode is a link swap, not a redraw.** `GET /mocks/<label>.html?theme=<kebab>` rewrites,
-in the served HTML only, every stylesheet target `linksWireRegister` recognizes as
-`wire/tokens.css` to `theme/<kebab>/tokens.css`, when `design/theme/<kebab>/tokens.css` exists
-on disk; an unknown or malformed `kebab` leaves the response byte-identical, the same
-fail-quiet discipline as `?state`. `?theme` composes with `?clean`, `?walk`, and `?state=`. Only
-the client route (`/client/walk/<j>.html`) appends `?theme=<k>` once `status.theme` is set; the
-session's own atlas index and review pages serve no `?theme` — the session always judges the
-neutral register.
-
-**Walk mode is a query token, not a separate route.** `GET /mocks/<label>.html?walk` injects
-`<script src="<prefix>/__walk/walk.js"></script>` before the last `</body>` (after the state
-click script when `?state=` is also present), and `GET /__walk/walk.js` serves
-`spec/scripts/lib/walk-mode.browser.js` verbatim, `no-store`. `?walk` composes with `?clean` and
-`?state=`; `?clean` strips the notes layer but never the walk script. Inside the frame, a click
-on the `[data-to]` control reports `{walk:'to', from, to}` to the parent; any other click reports
-`{walk:'miss', from, target}` — the mechanism spec 03's journey player reads to know where a
-client's click went (ADR-0013).
+**The look is the human's, on the served app.** The session never screenshots a screen to judge
+it — `mock-review check --json`'s structural read (screens, shells, journeys, themes, findings)
+is the only signal a driver mark reads. Claude captures a screenshot in exactly two cases:
+`mock-review check --look <screen> [--state <s>]` at `--mark journey-drawn`, to confirm a state
+renders before recording the mark, and again whenever raising a layout note on the served page
+— never as a substitute for the human's own look at the running app.
 
 ## Mocks: Page Notes
 
-Feedback on served mocks is written on the page, never in chat and never in mock markup.
-`design-atlas.js serve` injects a notes layer (`spec/scripts/lib/notes-layer.browser.js`) into
-every served `.html` unless the request carries `?clean`; every write — HTTP or driver — goes
-through `spec/scripts/lib/mocks-notes.js`, the one writer of `design/mocks/notes.json` (the
-ledger's pattern, § Provenance Ledger).
+Feedback lives on the served reviewer page, never in chat and never in mock source. A note's
+`status` is one of three colors: `open` (red — the session's turn), `answered` (yellow — the
+session has spoken, the author's turn to look again), or `approved` (blue — done). The session
+answers red items with `npx mock-review answer (--note <id> | --journey <id>) --text <t>
+[--decision <d>]`, which flips the item to `answered`; only the served page's own controls —
+approve, reject, delete — end a note or a journey conversation, never an HTTP call the driver
+makes and never a hand-edit of `design/notes.json`.
 
-**Two scopes, and a note may mark an area.** A note is anchored to a screen + state (`scope:
-"mock"`, `screen`, `state` set) or to the whole product (`scope: "project"`, `screen`/`state`
-null) — the dry run's catches were all state-level. A mock-scope note may also carry an optional
-`region`: the drawn box stored as fractions of its smallest containing element, with the covered
-children as the reflow fallback, drawn by the notes layer as a colored overlay and never as mock
-markup. Where the anchor no longer resolves the note shows as `outdated` — never moved, never
-guessed — and offers re-place (docs/adr/0020-a-note-can-mark-an-area.md).
+**The sweep is the session's worklist, never the driver's.** `npx mock-review sweep` lists only
+`open` (red) items, grouped by file, journey requests first, then component/screen notes — the
+driver never reads it, only `check --json`, `notes.json` and `approval.json`, so a change to the
+sweep's wording can never break a mark. The authoring loop inside SCREENS is: run `sweep`,
+answer every item top to bottom, run `check`, re-sweep until it prints one line, then mark.
 
-**Whose turn it is is one derivation, never a stored field.** `turnOf(n)` in
-`lib/mocks-notes.js` reads `session` (the session owes a word), `you` (the author owes a word —
-an `addressed` note, or one still carrying a legacy `reply`), `done` (`resolved`, `accepted` or
-`waived` alike, no clause of its own), or `dropped` (`resolved`, `withdrawn`) straight off
-`status`/`resolution`/`addressed`/`reply` on every read; `status` stays the one persisted field.
-The session answers with one verb — `notes address --id <id> --change "<what changed>"
-[--ledger <rowId>]` — whether the answer is a fix or a question back, and the note becomes the
-author's turn either way. The author may reply on the page as often as they like: `POST
-/__notes/reopen` accepts a reply on any note that is not `resolved`, folding a stored legacy
-`reply` into the thread the first time a note carrying one is reopened, and each reply returns
-the note to the session's turn. Nothing but the page can end a note — no HTTP endpoint on a
-forwarded port may mark the session's own work done, and only the author who raised a note can
-judge that a re-look actually answered it — and ending one now names which way: `POST
-/__notes/resolve` requires an explicit `verdict` of `accepted` or `withdrawn`, so Approve and
-Reject are told apart where they used to write the same record. Reject is final: `resolution:
-"withdrawn"` hides the note from every page it would otherwise render on, while leaving it on
-disk untouched — there is no path back, by design.
-
-**Nothing pins a question any more.** An assumption row is confirmed or overridden only by the
-human-run `ledger set --id <id> --status confirmed|overridden --tag said-by-user`, never by a
-note the pipeline files on its own (docs/adr/0024-the-critic-is-out.md). A note with
-`kind: "question"` on disk is a record left by that retired producer, never listed, grouped,
-counted or gated on again; its stored `ledgerId` and `answer` are read only by two legacy
-paths — `lib/mocks-exclusions.js`'s `invalidatedAnswerEntries`, deriving an exclusion row from a
-stored `no` answer on an `invented` row, and `ledger counts`'s catch-provenance line, which still
-prints a fixed misunderstanding's `addressed.ledgerRow` link as `question · note · unlinked`.
-
-**Project notes block the sign-off.** Any note with `scope: "project"` not yet `resolved`
-refuses `approved`, naming the note id first — still ahead of the unresolved-note line — a
-direction-level concern outranks per-screen work at the product's own sign-off, not at any
-single journey's (ADR-0019). A mark still refuses while any note on its own
-screens is unresolved; `approved` refuses while any note anywhere is unresolved, project-scoped
-or not. Zero open notes on a journey is that journey's approval mark.
-
-**The client's page is the player** (`/client/index.html`, `/client/walk/<j>.html` — § Mocks: Client
-Player), not the session's own review page; its notes are the same notes machinery, served on the client
-route as the `CLIENT` state (ADR-0012), every one raised there carrying `by: 'client'`. A note's origin —
-client or session — is set by the server from the route it arrived on, never from the typed name. A
-client-origin note captures its screen when raised; a fix is recorded only when the re-captured screen
-differs. Only the client resolves a client note — withdrawing an `open` one records `resolution:
-"withdrawn"`, accepting an `addressed` one records `resolution: "accepted"` — or `notes waive --id
---reason` releases it after seven days of client silence. The page carries the client's only two
-controls on an addressed note: `Looks good` accepts it,
-`Still not right` reopens it with the client's own text appended to `thread`, never a second note. A
-project-scope request (no screen of its own) is answered the same way the session answers any note,
-naming where the answer lives: `notes address --id <id> --change "<what changed>" --screen <label>` or
-`--journey <j>`, so the client's "Done" line links straight to the screen or journey that answers it. The
-`CLIENT` step's printed text carries the fixed approval line: `Approval means "this is the product I
-understand" — the written brief, not these screens, holds scope`.
-
-**Picks.** A pick stage of the flow — shapes, theme directions, per-surface variants — is recorded as a
-look stop in `design/mocks/picks.json`, written only by `spec/scripts/lib/mocks-picks.js` (`openStop`,
-`decideStop`, `consumeStop`, `pending`; the `picks.json` pattern mirrors the ledger's one-writer rule, §
-Provenance Ledger). A stop is one of two kinds: `pick`, choosing among candidate groups — a group is one
-flow, its screens in candidate order — or `approve`, a single-flow yes/note-and-change. The served atlas
-renders every open or decided stop **in place**, in the section its own screens already live in, never on
-a separate page. A `pick` stop renders as a **compare table**: one row per step, one column per candidate
-group, full cards, with an exclusive one-click `Pick this` button per column; picking a group
-auto-rejects the rest, and the decision stays re-pickable (`Pick this instead`) until the mocks driver
-consumes it, so a second look that changes the user's mind is never stuck behind a session round-trip. An
-`approve` stop offers `Approve` or `Change` with a note. Every served page declares which notes bar it
-shows through the `notes-scope` meta tag the server stamps on it — `project` on the atlas index, `mock`
-on a screen — so the notes layer renders **one scope per page**, declared by the page, rather than
-guessing from document structure.
-
-**Read-back is summarised, not replayed, and lists only what waits on the session.** `notes
-open` filters to turn `session` before it groups or counts anything — a note the session already
-answered is the author's to read, and re-listing it is the re-read this rule exists to stop. The
-header line counts open and addressed notes (`📝 open notes: <n> (<p> project · <m> mock) ·
-addressed: <a>`), and journey-listed open notes stop after 20 lines with a trailing `… <n> more
-open note(s) — --all to list`; a note carrying a reply appends its newest thread entry
-(`   ↳ <by>: <text>`) rather than the retired `↳ changed:` line. `notes open --all` prints the
-full listing; the open-notes counts line and the project notes block are never summarised — a
-project note blocks every other note by design.
+**Project notes outrank a single screen's.** A note with `project: true` blocks
+`journey-approved` and `approved` alike while it is `open`, named ahead of any per-screen note
+(ADR-0019) — a direction-level concern is never settled by clearing one journey's own notes. A
+journey's own conversation thread (`notes.journeys[<j>].status`) blocks its own
+`journey-approved` the same way a note does; `approved` refuses while any note anywhere,
+project-scoped or not, is still `open`.
 
 ## Mocks: Client Player
 
-The client's surface is two pages, `lib/walk-page.js`'s `buildClientIndex` (`/client/index.html`
-— every journey and whether it is
-confirmed) and `buildWalkPage` (`/client/walk/<j>.html` — one screen at a time in a frame,
-advanced by the mock's own `data-to` control, a free
-note box, the gray states one click away, and an approve control that appears only once the
-last screen is reached). `lib/walk.browser.js`, served at `GET /__walk/player.js`, drives it:
-it moves the frame on a real click and records the move, and records — never shows the client —
-a click on anything else as a miss.
+The client walks the same served app, never a separate build. `mock-review serve`'s URL plus
+`?client=<config.client.token>` (`client open`, D9) opens the client role: every journey and
+every screen, the same controls a real user has, a note box on each screen, and nothing else —
+no delete, no reject, and no Components page, because those are the session's own review tools,
+not the client's. A client-raised note is the same `notes.json` row the session's own review
+writes, distinguished only by who raised it.
 
-**Walk-to-unlock is a server record, not a page state.** `design/mocks/walk.json`
-(`lib/mocks-walk.js`, the one writer — § Provenance Ledger's pattern) holds, per journey, the
-labels reached in first-reached order, the misses, and — once the client reaches the last label
-with every guess answered and writes one sentence — `confirmedAt` and that sentence. A reload
-returns the client to the last screen they reached, never to the first; a confirmed journey
-shows its sentence and no controls. `approved` refuses while any seed journey is neither
-confirmed nor waived (`client waive --journey <j> --reason "<r>"`, the same seven-day clock as a
-note's waiver); `client log` prints each journey's confirmation sentence or its open count and
-misses.
-
-**The journey's state is derived, never stored.** `lib/mocks-walk.js`'s `journeyState` reads
-`walk.json` and `notes.json` and returns one of six words: `unseen`, `walking`,
-`changes-requested` (an open client request outranks a set `confirmedAt`), `fixed` (every client
-request on it addressed, none open), `ok` (`confirmedAt` set, nothing open or waiting), or
-`waived`. A new client request on an `ok` journey takes the OK back — `unconfirmJourney` nulls
-`confirmedAt` and its sentence into `history` — because pressing `Looks good` on one thing and
-raising `Still not right` on another cannot leave the journey reading `ok`; the confirm control
-itself stays disabled while the state is `changes-requested` or `fixed`, and only a fresh
-confirmation, after the client's own accept or reopen clears every open and addressed request,
-reopens it.
-
-**A client's `no` promotes.** Answering a mark `That's not right` with a reason does what an
-`overridden` status alone does not: it also writes a new `said-by-user` row to the provenance ledger,
-`note: "corrects <rowId>"` — the client's own correction becomes a fact the next round can build
-on, never just a flipped status. The session's own review page keeps today's behavior; only a
-client-origin answer promotes.
-
-**The last screen names what the journey does not do.** `mocks-driver.js ledger derive`
-(§ Provenance Ledger) turns discovery non-goals, `no`-answered invented rows, and withdrawn
-notes into `exclusion` rows; the client's own walk-page request materializes them too, so the
-last screen lists them the first time anyone looks, before any session command runs. On a
-journey's last label `buildWalkPage` lists every exclusion anchored to it plus every
-project-wide one, each with two buttons, `Correct` and `No — we need this` — the latter sets
-the row `overridden` with `rejected: client-needed`, final for the derivation, never
-re-added by a later `ledger derive`. The confirm control no longer waits on the list: approval
-is the session's own bookkeeping, not a gate on the client's consent, so `approved` lists what
-the client did not answer as not contested and never refuses on it. The card itself states what
-it is, why each row is listed, and what the client answered, and an unanswered row's own text
-warns the client that its silence is recorded as not contested when the work is signed off.
-
-**An exclusion answer is the client's until sign-off.** Every answered row carries a way back
-(`Change answer` returns it to `open`, its `rejected` cell cleared) — the answer is the client's
-to change until the work is signed off. Once `--mark approved` writes the dated
-`exclusions.md`, the card becomes that date's read-only record — no verdict control renders,
-and the answer route refuses every write, naming the date, because the ledger and the dated
-snapshot a statement of work cites must never diverge (specs/20260912/02).
+**A journey's client verdict is `ok` or `waived`, nothing else.** The client's own confirm
+control on a journey sets `approval.journeys[j].client = "ok"`; `--mark approved` refuses any
+journey whose `client` key is absent, naming it and `remedy: client waive --journey <j> --reason
+<r>` — the one write this driver makes to `approval.json` besides what the served page itself
+writes. `client waive` is the session's own escape hatch for an absent client, dated and
+reasoned; `client log` is retired (ADR-0028) — the served page is now the client's whole
+record.
 
 ## Mocks: Authoring Rules
 
-The six rules the dry run converged on (LEDGER standing rules + M11/M13/M14 + A6/A7) — the
-half the driver cannot check, carried here as contract prose the authoring session applies:
+Four rules the authoring session applies, carried here as contract prose the driver cannot
+check by itself (the checkable half lives in `mock-review check`'s own findings):
 
-- **Every edge is a real control.** The element whose click leads to the next screen carries
-  `data-to="<label>"` naming a screen declared in a seed journey — one screen may carry several
-  (a menu screen with three exits). `journey-drawn` refuses, after the per-label checks and before
-  `check --states`, any seed edge with no `data-to` control and any `data-to` naming an
-  undeclared screen (`lib/mock-seed-checks.js`'s `edgeGaps`, ADR-0013). `data-to` is an
-  attribute, not a link — a wireframe never carries an `href` to another mock.
-- **Screens carry the seed's records.** After the edge check, `journey-drawn` compares every
-  drawn screen's HTML against the seed's `## Records` values (`lib/mock-seed-checks.js`'s
-  `recordValues` — every string value of length ≥ 3 in any record object, nested objects and
-  arrays walked, numbers stringified, deduplicated — and
-  `recordHits`, the values a screen's HTML contains): a screen with zero hits prints
-  `⚠️ <label>: carries none of the seed's records`, and a journey where every screen has zero
-  hits refuses, `journey "<j>": no screen carries a value from design/mocks/records/*.json —
-  draw with the seed's own records, then re-mark` (ADR-0013). A settings screen legitimately
-  shows none; a whole journey drawn on placeholders does not. This journey-level check is about
-  drawing with the seeded data instead of lorem ipsum, never about where that data came from —
-  it is unchanged by the binding rules below and neither replaces nor is replaced by them
-  (specs/20260912/10-seeded-data-names-its-source.md D5). An element displaying a seeded value
-  can go further and name the exact record it shows: `data-record="<entity>[<i>].<field>"` on
-  the element, `<entity>` the basename of a `design/mocks/records/<entity>.json` file, `<i>` a
-  zero-based index into that array, `<field>` a dot-and-bracket path into the record object
-  (`address.city`, `tags[1]`), the first segment always the bracketed index. Three rules bind
-  wherever a mock is already bound for the invention rules above — a labelled, non-canon mock
-  that links the wire register (`lib/wire-register.js`'s `linksWireRegister`,
-  specs/20260912/09-a-mock-may-not-invent.md D2) — as `⚠️` warns at `journey-drawn` and
-  refusals at `journey-approved`: a reference that does not resolve to a string or number is
-  refused, naming the reference and the first failing segment; a bound element's text (its inner
-  HTML with tags stripped, whitespace collapsed, trimmed) must equal the resolved value exactly,
-  or the mismatch is refused printing both strings; and a **distinctive** seed value — containing
-  a space or at least eight characters, and occurring in exactly one record across every record
-  file — found in a bound mock's text outside every bound element is refused naming the value
-  and the screen, while any other stray seed value is a `⚠️` warn instead.
-  `lib/mock-seed-checks.js`'s `resolveRecordRef`, `boundBindings`, `distinctiveValues` and
-  `recordBindingViolations` carry the mechanism
-  (specs/20260912/10-seeded-data-names-its-source.md,
-  docs/adr/0023-seeded-data-names-its-source.md).
-- **Name the shared parts before the screens.** Once a kit family (`design/kit/`) resolves,
-  every content region of a labeled mock carries `data-kit="<key>"` naming the primitive it
-  instantiates, or `data-bespoke="<key>: <difference>"` naming the primitive it is *not* and
-  the one structural difference preventing reuse — a bare flag with no difference is a rubber
-  stamp, not an escape. `design-atlas.js check` prints the running `ⓘ unabsorbed total: <n>
-  across <m> screen(s)` on every run, the per-screen `ⓘ <label>: <n> kit, <m> bespoke` count
-  under `--verbose`, and `journey-approved` refuses on any region carrying neither mark.
-- **Wireframes are neutral but carry every graphic that IS structure.** The register is shadcn's
-  Neutral component look on shadcn's own eighteen colour roles (ADR-0013, amended by
-  docs/adr/0017-the-register-is-the-whole-shadcn-set.md) — filled-by-default buttons on
-  `--primary`, cards with a soft shadow, a raised-pill tab row, real tables — and a theme is the
-  same roles re-valued, swapped in at serve time for the client route; no screen is ever redrawn
-  to be themed. A state is shown as the product's map or a slice, never described in a caption;
-  text is reserved for what someone actually said (copy, labels), never for narrating what a
-  picture should be doing instead.
-- **Every wireframe carries its states.** Behind `data-state-btn="<name>"` switches, drawn as
-  gray boxes, a wireframe shows its `empty`, `loading`, and `error` states alongside the happy
-  path — happy path alone is a finding, not a wireframe. A screen the product truly has no such
-  state for declares it on the labeled root, `data-no-state="<name>[,<name>]"`, naming the
-  states it lacks; the opt-out is visible in the source, and the product reason it stands on
-  lives as a row in the ledger (§ Provenance Ledger), never asserted silently. `design-atlas.js
-  check --states` is the presence check — it judges only that the states exist, never what they
-  say — run by the mocks driver at `journey-drawn` and `journey-approved`.
-- **One honest wireframe or the full theme, never a half-styled middle.** A screen is either
-  the neutral register on `wire/` or the themed register at production fidelity on
-  `design/tokens.css` — a screen linking product tokens while its neighbors stay on the wire
-  register is neither register and misleads a reviewer about what has actually been judged. `design-atlas.js check`
-  (`spec-paths design-atlas`) makes this mechanical at the stamp that matters: a labeled mock
-  still linking `wire/` once `design/tokens.css` exists above it is a violation at
-  `data-status="ratified"`, a `⚠️` warn at `sketch` — `approved` wireframes from `/spec:mocks`
-  sign-off are exempt by design, because the theme is picked after sign-off now, in
-  `/spec:sketch`: an approved gray wireframe is the mocks stage's finished artifact, never a
-  half-dressed screen (specs/20260907/07).
-- **A screen carries no styles of its own.** A bound mock links only the three named layers —
-  `wire/tokens.css` (the register), `wire/wire.css` (the shared kit) and `wire/project.css`
-  (the project kit, the one place a project adds vocabulary) — and carries no `<style>` block
-  declaring a rule and no `style=` attribute (an `@import`-only `<style>` block is a link, not
-  an invented style). `design-atlas.js check` refuses an unpermitted stylesheet, a project-kit
-  class redefining one the shared kit already declares, a project kit larger than the shared
-  kit's own class count, and warns on a project-kit class used on exactly one screen
-  (specs/20260912/09-a-mock-may-not-invent.md, docs/adr/0022-a-mock-may-not-invent.md).
-- **Mocks are authored under the `frontend-design` skill.** Every mock — shape, wireframe,
-  theme direction, and every `/spec:sketch` draft or rework — is authored with the skill
-  loaded (Skill tool) before the first edit; the pipeline never composes a screen or a token from
-  the session's unaided taste. The mocks driver prints the skill line on every authoring step
-  and as `skill-check`: a probe result, never a guess — installed (load it), not installed or
-  disabled (one `⚠️` line naming the install/enable remedy, then continue), unverifiable (the
-  reason, then continue). Never a stop.
-- **AI-reworded text stays gray until confirmed.** Copy the model rewrote or invented reads as
-  visibly provisional (the gray/unconfirmed treatment) until a human confirms it — a themed
-  screen never launders invented copy into something that reads as final.
-- **A persistent recording indicator on any capture surface.** Any screen whose product
-  purpose includes recording (audio, video, screen) shows a persistent, undismissable
-  indicator while active — never a state a wireframe or theme omits as an implementation
-  detail.
-- **Equal-weight verdict controls survive every theme.** Where a screen offers a binary or
-  multi-way verdict (approve/reject, accept/decline), every theme direction keeps the options
-  visually equal-weight — no direction may imply an outcome by making one option louder than
-  its alternatives.
-- **A new primitive names the nearest existing one and why it fails.** Before authoring a
-  primitive not already in the component vocabulary, the authoring pass names the nearest
-  existing entry and states specifically why it does not fit — silence is a gate failure, the
-  same bar § Design Authoring Contracts sets for the built-code side.
+- **A screen imports only from `react`, `@/components/ui`, `@/components`, `@/shells` and
+  `@/records`.** Any other import is a `layer`-kind error finding — the shell and the components
+  it composes are the only shared surface a screen may reach into.
+- **Every project component and shell carries one `/** … */` doc line above its export and a
+  named `examples` export.** A missing doc line or `examples` export is a `doc`-kind error
+  finding; `mock-review sweep`'s inventory is built from these doc lines, so a component with
+  neither is invisible to the session's own worklist.
+- **Screens take their data from `src/records`, never literals.** A screen composes its content
+  from the typed arrays under `src/records/`, the same files SEED demanded — never a hand-typed
+  string standing in for what a record should supply.
+- **Read the shadcn component's official example source before composing.** The two seeded
+  files under `design/examples/` — `screen.example.tsx` and `records.example.ts` — are starting
+  shapes to copy from, never to edit in place; they sit outside every contract host glob so the
+  reviewer never mistakes them for a real screen or records file.
+
+`mock-review check` also warns, never refuses, past two structural thresholds: `size` on a
+screen past 150 lines, and `twin` on a component whose shadcn imports match another's closely
+enough to suggest one should be reused instead of two nearly-identical ones.
 
 ## Product-Stage Exemption (question-style-gate.js)
 

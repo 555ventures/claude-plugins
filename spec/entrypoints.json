@@ -63,10 +63,7 @@
       "spec/commands/sketch.md",
       "spec/commands/atlas.md",
       "spec/doctrine/stages/stage-design.md",
-      "spec/doctrine/design.md",
-      "spec/scripts/mocks-driver.js",
-      "spec/doctrine/mocks.md",
-      "spec/commands/mocks.md"
+      "spec/doctrine/design.md"
     ]
   },
   "spec/scripts/env-preflight.js": {

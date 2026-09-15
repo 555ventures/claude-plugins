@@ -164,7 +164,7 @@ none of them is touched by D1 — a test asserting that a Japanese sentence roun
   sentence, SHALL CONTINUE TO answer `200` recording `confirmedAt` and the sentence verbatim on a
   real one — including a Japanese sentence, which is client content and unaffected by D1 — and
   SHALL CONTINUE TO answer `409` on an already-confirmed journey → `AC-20260911-01-9` in
-  `tests/mocks/client-walk-route.test.js`
+  `tests/mocks/client-walk-route.test.js` [retired: specs/20260914/01-the-mock-contract-and-the-driver.md]
 - **AC-20260911-01-10**: WHEN a `question` note carries `answer.verdict: "waived"` THE SYSTEM SHALL
   CONTINUE TO exclude it from the open count `buildClientIndex` and `buildWalkPage` render →
   `AC-20260911-01-10` in `tests/mocks/walk-page.test.js`

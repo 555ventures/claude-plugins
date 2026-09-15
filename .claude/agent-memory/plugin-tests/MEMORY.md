@@ -1,5 +1,7 @@
 # Memory index
 
+- [Spec 01 mock contract and driver: stub-via-env-dir fixture + PATH='' ENOENT trick](spec-20260914-01-mock-contract-and-driver.md) — mock-review stub reads MOCK_STUB_DIR (rides process.env spreads for free); PATH='' reliably reproduces binary-not-found without breaking runNode itself; seed.md Records line syntax logged as a deviation, not guessed silently.
+
 - [Spec 13 expired-tests-own-commit: gate-before-deletion + restore-retry pins](spec-20260912-13-expired-tests-own-commit.md) — grep-marker testCommand stand-in simulates apply/restore cycles; AC-6 (HEAD unchanged, nothing retired) is a sanctioned green-pre-change pin, no commit exists yet at --mark closed.
 - [Spec 01 card-explains-itself: expired-file recreation + shim class-match gap](spec-20260912-01-card-explains-itself.md) — design-doctrine.test.js recreated fresh (test-expiry sweep, not a fork); copied the class-selector repair into exclusions-route.test.js's own flat-DOM shim copy.
 - [Spec 02 answer-is-clients-until-signoff: marks.approved ISO shape + ledger cell index](spec-20260912-02-answer-is-clients-until-signoff.md) — status.json's marks.approved is a full ISO timestamp, sliced to a date; AC-9's observable is mechanism-agnostic (reopenNote never clears resolution); ledger row split-by-| has a leading empty cell (status is index 6, not 5).

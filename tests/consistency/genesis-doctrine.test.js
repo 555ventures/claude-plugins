@@ -1141,12 +1141,13 @@ test('AC-20260902-09-3: mocks.md carries a "## Mocks: Authoring Rules" heading w
   const nextHeading = src.slice(bodyStart).search(/^## /m)
   const body = nextHeading === -1 ? src.slice(bodyStart) : src.slice(bodyStart, bodyStart + nextHeading)
 
-  for (const literal of ['never a half-styled middle', 'gray until confirmed']) {
-    assert.ok(body.includes(literal),
-      'D3: the "## Mocks: Authoring Rules" section body must contain the literal "' + literal +
-      '" — its absence means one of the two remaining checkable rules (one honest wireframe or ' +
-      'the full theme, AI-reworded text stays gray until confirmed) is missing from the section')
-  }
+  // Retired by specs/20260914/01-the-mock-contract-and-the-driver.md D12/D13: the section body now
+  // states the mock-app authoring rules (wireframes and gray text no longer exist), and those rules
+  // are pinned by tests/consistency/mocks-doctrine.test.js — the two HTML-wireframe literals retire
+  // with their subject, while the heading and the shared-mocks key keep their pins here.
+  assert.ok(body.trim().length > 0,
+    'the "## Mocks: Authoring Rules" section body must not be empty — an empty body means the ' +
+    'driver-unenforced half of the authoring contract has no doctrine home at all')
 
   const shared = runBash('bin/spec-paths', ['shared-mocks'])
   assert.strictEqual(shared.status, 0,

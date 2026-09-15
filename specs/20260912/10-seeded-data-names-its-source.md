@@ -157,7 +157,7 @@ the behaviour that keeps the rule usable on products whose records share vocabul
   the seed's own records, then re-mark`, and WHEN exactly one screen of that journey carries a
   record value it SHALL CONTINUE TO print `⚠️ <label>: carries none of the seed's records` for
   each of the others and complete the mark
-  → reuses tests/mocks/mocks-driver-seed-records.test.js :: journey-drawn refuses a journey whose every screen carries no seed record (D7)
+  → reuses tests/mocks/mocks-driver-seed-records.test.js :: journey-drawn refuses a journey whose every screen carries no seed record (D7) [retired: specs/20260914/01-the-mock-contract-and-the-driver.md]
 
 ## Assumptions (escalation triggers)
 

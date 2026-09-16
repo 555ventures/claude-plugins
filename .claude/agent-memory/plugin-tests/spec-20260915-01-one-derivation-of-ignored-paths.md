@@ -3,6 +3,7 @@ name: spec-20260915-01-one-derivation-of-ignored-paths
 description: Mixed red/green-pre-change AC batch for a shared ignored-paths derivation; sandbox denies multi-line bash scripts touching paths outside the worktree — probe fixtures one Write/single-line-git call at a time.
 metadata:
   type: feedback
+  reviewed: 2026-09-16
 ---
 
 Spec 20260915/01 lifts red-check.js's wildcard-tests-row walk to prune git-ignored paths via a

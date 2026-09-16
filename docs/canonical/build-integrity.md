@@ -76,7 +76,10 @@ or `broken-pin` for that file. The same predicate is a hard lint finding at `/sp
 already-built specs, so replay against older specs whose bullets predate the guard stays a fair
 measurement. (specs/20260907/01-mixed-pin-guard-and-drift-line.md D1/D2/D3) The kill condition
 and the rejected per-AC mutation mandate (with its reopen condition) are recorded in
-specs/20260821/01-red-check.md D12/Rationale.
+specs/20260821/01-red-check.md D12/Rationale. A wildcard File Plan tests row is expanded by a
+tree walk that prunes git-ignored paths through the shared derivation, an exact-path row is
+resolved directly and is never pruned, and a wildcard row that expands to zero files raises a
+warning rather than a finding. (specs/20260915/01-one-derivation-of-ignored-paths.md D2/D3/D4)
 
 **AC-grammar tags are position-anchored.** `[oracle:]`, `[env:]`, and `[pre-green:]` are
 recognized in exactly two positions on an AC bullet — the declaration slot (first line, between

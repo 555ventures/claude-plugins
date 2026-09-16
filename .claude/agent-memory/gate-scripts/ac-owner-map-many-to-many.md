@@ -3,6 +3,7 @@ name: ac-owner-map-many-to-many
 description: expire-tests.js's AC-ID ownership map must be many-to-many (array per id), not first-writer-wins, whenever a fail-safe "done" check reads it
 metadata:
   type: feedback
+  reviewed: 2026-09-16
 ---
 
 Fixing a first-writer-wins `Map<acId, singleOwner>` for a collision-prone key (here, AC-IDs

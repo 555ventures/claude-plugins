@@ -1,14 +1,16 @@
 ---
 date: 2026-09-14
-status: hardened
+status: done
 tier: critical
 area: design
 design: false
 breaking: true
+build_base: main
 depends_on: [specs/20260914/01-the-mock-contract-and-the-driver.md, specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md]
 depended_on_by: []
 brief: 26
 open_markers: 0
+diff_base: 5391703f6e2455fd9415834b1cee3da5f45e3649
 ---
 
 # The HTML atlas is retired
@@ -27,7 +29,7 @@ artifact.
 
 | ID | Decision | One-line rationale |
 |----|----------|--------------------|
-| D1 | The eight top-level scripts (`design-atlas.js`, `render-gate.js`, `render-rules.js`, `render-capture.js`, `render-compare.js`, `render-inventory.browser.js`, `components-check.js`, `design-ac-reconcile.js`) and the eighteen libraries under `spec/scripts/lib/` listed in the File Plan are deleted outright — never stubbed, never left as a refusing shim. `lib/mocks-ledger.js`, `lib/surfaces.js`, `port-check.js` and `env-preflight.js` stay. (AC-20260914-03-4, AC-20260914-03-6) | A shim would be a third artifact; specs 01 and 02 already removed every caller. |
+| D1 | The eight top-level scripts (`design-atlas.js`, `render-gate.js`, `render-rules.js`, `render-capture.js`, `render-compare.js`, `render-inventory.browser.js`, `components-check.js`, `design-ac-reconcile.js`; amended: spec 20260914/02 D14 already deleted the six render-* and design-ac-reconcile scripts, their tests and spec-paths keys, so this spec deletes only `design-atlas.js` and `components-check.js` of the eight) and the eighteen libraries under `spec/scripts/lib/` listed in the File Plan are deleted outright — never stubbed, never left as a refusing shim. `lib/mocks-ledger.js`, `lib/surfaces.js`, `port-check.js` and `env-preflight.js` stay. (AC-20260914-03-4, AC-20260914-03-6) | A shim would be a third artifact; specs 01 and 02 already removed every caller. |
 | D2 | `spec/bin/spec-paths` drops the keys `design-atlas`, `components-check`, `render-gate`, `render-capture`, `render-compare`, `render-inventory`, `render-rules`, `design-ac-reconcile` and the `atlas` case of `shared-for`; the usage line names none of them. A retired key exits 1 with the generic usage line, exactly as `design-hub` does today. (AC-20260914-03-1, AC-20260914-03-5) | A wrong key breaks commands silently; a removed key must fail loudly. |
 | D3 | `spec/entrypoints.json` drops the rows of every deleted script and removes `spec/commands/atlas.md` from every `entryPoints` list it appears in (`mocks-driver.js`, `report-render.js`, and any other); `spec/doctrine/stages/stage-design.md` and `spec/commands/sketch.md` stay as entry points where they still invoke the script. (AC-20260914-03-2, AC-20260914-03-8) | The manifest is the inventory the consistency suite trusts. |
 | D4 | `spec/commands/atlas.md` is deleted; `README.md`, `spec/.claude-plugin/plugin.json`'s description and `spec/doctrine/core.md` (§ Model Placement's "atlas direction rounds") stop naming `/spec:atlas`; the reviewer's Screens and Journeys tabs are the product map. (AC-20260914-03-4) | The map is the served app now. |
@@ -37,19 +39,14 @@ artifact.
 | D8 | `docs/canonical/design.md` is rewritten to spec 02's Canonical Delta (one artifact; the design stage's four steps; sketch's sweep loop; genesis and the mock app) and `docs/canonical/scripts.md` drops the deleted scripts' rows and adds `lib/mock-cli.js`; both are File Plan rows here because the delete and the rewrite must land in one commit. [no-ac: docs; AC-20260914-03-4 pins the literals] | The canonical doc must not describe deleted code for even one commit. |
 | D9 | Before the deletion commit the orchestrator runs `git tag atlas-html-final <the build's diff_base sha>` and pushes the tag with the merge-back; the tag is the only surviving reference to the HTML system. [no-ac: git operation; the orchestrator duty line below] | Git keeps the old system; main carries one model. |
 | D10 | `lib/mocks-ledger.js` and `lib/surfaces.js` load and behave unchanged; the 🧭 misunderstandings line in `spec-status.js` continues to print. (AC-20260914-03-7) | The two survivors are pinned so the delete cannot take them by accident. |
+| D11 | Build ruling (A1 false, applied per its own if-false clause): `genesis-driver.js`'s no-mock-app `skeleton-landed` branch still spawned `components-check.js` and `design-atlas.js check`/`check --matrix`; that branch's components.json duplicate check, design/shell/app.html check, data-shell check and matrix check are removed outright (no reimplementation, no shim), so a host with no mock app lands the skeleton with no HTML-design checks. The tests pinning those checks in `tests/genesis/genesis-driver.test.js` are retired with their subject; the comment-only mentions in `lib/surfaces.js`, `lib/glob-match.js`, `lib/host-config.js` are reworded to satisfy D6. (AC-20260914-03-4, AC-20260914-03-6) | A1's if-false clause: the requiring file is a fix row in the same batch, never a shim. |
 
 ## File Plan
 
 | Path | Action | Layer | Summary |
 |------|--------|-------|---------|
 | spec/scripts/design-atlas.js | DELETE | scripts | D1 |
-| spec/scripts/render-gate.js | DELETE | scripts | D1 |
-| spec/scripts/render-rules.js | DELETE | scripts | D1 |
-| spec/scripts/render-capture.js | DELETE | scripts | D1 |
-| spec/scripts/render-compare.js | DELETE | scripts | D1 |
-| spec/scripts/render-inventory.browser.js | DELETE | scripts | D1 |
 | spec/scripts/components-check.js | DELETE | scripts | D1 |
-| spec/scripts/design-ac-reconcile.js | DELETE | scripts | D1 |
 | spec/scripts/lib/notes-layer.browser.js | DELETE | scripts | D1 |
 | spec/scripts/lib/walk-page.js | DELETE | scripts | D1 |
 | spec/scripts/lib/review.browser.js | DELETE | scripts | D1 |
@@ -69,6 +66,10 @@ artifact.
 | spec/scripts/lib/wire-roles.js | DELETE | scripts | D1 |
 | spec/scripts/lib/walk-mode.browser.js | DELETE | scripts | D1 |
 | spec/bin/spec-paths | MODIFY | scripts | D2 |
+| spec/scripts/genesis-driver.js | MODIFY | scripts | D11: no-mock-app skeleton-landed HTML checks removed |
+| spec/scripts/lib/surfaces.js | MODIFY | scripts | D11: comment wording (D6) |
+| spec/scripts/lib/glob-match.js | MODIFY | scripts | D11: comment wording (D6) |
+| spec/scripts/lib/host-config.js | MODIFY | scripts | D11: comment wording (D6) |
 | spec/entrypoints.json | MODIFY | other | D3 |
 | spec/commands/atlas.md | DELETE | doctrine | D4 |
 | spec/doctrine/core.md | MODIFY | doctrine | D4: § Model Placement wording |
@@ -106,18 +107,15 @@ artifact.
 | tests/mocks/walk-page.test.js | DELETE | tests | D5 |
 | tests/mocks/wire-register.test.js | DELETE | tests | D5 |
 | tests/mocks/chrome-harness.js | DELETE | tests | D5 |
-| tests/render/render-gate.test.js | DELETE | tests | D5 |
-| tests/render/render-compare.test.js | DELETE | tests | D5 |
-| tests/render/render-rules.test.js | DELETE | tests | D5 |
 | tests/design-atlas.test.js | DELETE | tests | D5 |
 | tests/design-atlas-index.test.js | DELETE | tests | D5 |
-| tests/design-ac-reconcile.test.js | DELETE | tests | D5 |
 | tests/fixtures/mocks-notes/notes.sample.json | DELETE | tests | D5 |
 | tests/consistency/retired-flags.test.js | MODIFY | tests | D5: three cases removed |
 | tests/spec-paths.test.js | MODIFY | tests | AC-20260914-03-1 (rewrite), AC-20260914-03-5 (reuse) |
 | tests/consistency/entrypoints.test.js | MODIFY | tests | AC-20260914-03-2 (rewrite) |
 | tests/consistency/atlas-retired.test.js | CREATE | tests | AC-20260914-03-3, AC-20260914-03-4, AC-20260914-03-6 |
 | tests/spec-status.test.js | MODIFY | tests | AC-20260914-03-7 (reuse, tag only) |
+| tests/genesis/genesis-driver.test.js | MODIFY | tests | D11: pins of the removed no-mock-app HTML checks retired |
 
 Orchestrator duties (outside the table): `git tag atlas-html-final <diff_base>` before the
 deletion commit (D9); `node scripts/plugin-bump.js --check` green after the bump;
@@ -138,8 +136,8 @@ gate's own proof that nothing dangles.
 
 ## Acceptance Criteria
 
-- **AC-20260914-03-1**: WHEN `spec-paths render-capture` (and each of the other seven retired keys) runs THE SYSTEM SHALL exit 1 with the generic usage line on stderr naming none of the eight keys → rewrites tests/spec-paths.test.js :: AC-20260905-06-10: spec-paths render-capture prints
-- **AC-20260914-03-2**: WHEN `spec/entrypoints.json` is read THE SYSTEM SHALL carry no row whose key is one of the eight deleted scripts and no `entryPoints` entry equal to `spec/commands/atlas.md` → rewrites tests/consistency/entrypoints.test.js :: AC-20260905-06-10
+- **AC-20260914-03-1**: WHEN `spec-paths design-atlas` (and each of the other seven retired keys) runs THE SYSTEM SHALL exit 1 with the generic usage line on stderr naming none of the eight keys → writes tests/spec-paths.test.js (amended: spec 20260914/02 D14 deleted the render-capture key test this pointer used to rewrite)
+- **AC-20260914-03-2**: WHEN `spec/entrypoints.json` is read THE SYSTEM SHALL carry no row whose key is one of the eight deleted scripts and no `entryPoints` entry equal to `spec/commands/atlas.md` → writes tests/consistency/entrypoints.test.js (amended: spec 20260914/02 D14 deleted the render-capture entrypoints test this pointer used to rewrite)
 - **AC-20260914-03-8**: WHEN the manifest inventory check runs over the post-deletion tree THE SYSTEM SHALL CONTINUE TO pass in both directions (every executable has a row, every row names an existing file) → reuses tests/consistency/entrypoints.test.js :: AC-20260820-04-1:
 - **AC-20260914-03-3**: WHEN `tests/helpers.js` is required THE SYSTEM SHALL export neither `serveAtlas` nor `withHandler` and its source SHALL contain no `client-capture` → writes tests/consistency/atlas-retired.test.js
 - **AC-20260914-03-4**: WHEN every file under `spec/`, `README.md` and `docs/canonical/` is scanned with the D6 boundary regex THE SYSTEM SHALL report zero occurrences of each D6 literal (e.g. `spec/commands/mocks.md` containing `design-atlas.js check` → one finding naming the file and literal; the post-change tree → none) → writes tests/consistency/atlas-retired.test.js
@@ -171,6 +169,21 @@ second) — an intermediate tree with orphan tests is exactly what the consisten
 The File Plan exceeds the decomposition cap by row count; every row above the cap is a DELETE
 with no authored content, and one batch is the only shape in which the consistency suite can
 stay green (Behavior).
+
+Waived 2026-09-15 (user, review round 1): the reconcile leg's two out-of-plan files —
+`docs/spikes/23-atlas-index-nav/.claude/spec-session.json` (D7 deletes the directory whole; the
+File Plan glob did not match its dotdir file) and `tests/consistency/read-load.test.js` (A2's
+if-false remedy removed its `atlas` row).
+
+Build departures (folded from the deviations sidecar, 2026-09-15): four `tests/mocks/` DELETE
+rows (`client-walk-route`, `exclusions-route`, `notes-reanchor`, `wire-register`) were already
+absent pre-image and stay in AC-6's absence list. A2 fired false and its remedy removed the
+`atlas` row from `tests/consistency/read-load.test.js`. `parseFlatDom` in `tests/helpers.js` is
+left with no caller because D5 does not name it (review soft). A1 fired false (D11): the
+genesis driver spawned both deleted scripts by path. Deleting the atlas tests orphaned 18
+criteria of seven done specs, each tagged `[retired:]` to this spec; the class is folded into
+the retired-literal Gotcha as its twelfth trigger. Two workers ran read-only git despite the
+worker git ban, and one used `rm -r` after `rm -rf` was denied, for the same File Plan deletions.
 
 ## Canonical Delta
 

@@ -199,6 +199,46 @@ test('field report 2026-09-02 (build already DONE): WHEN invoked on a status:imp
   assert.strictEqual(fs.readFileSync(host.spec, 'utf8'), specText, 'the spec must be byte-identical after a refusal')
 })
 
+// Owner: escape row stale-terminal-state-reopened (reviewRunId rv_11524a603748) — the same class
+// through the other admission branch. The first fix guarded only the `implementing` resume, so a
+// closed spec whose document was reverted to `hardened` still re-entered the build, and the
+// hardened branch's own writes (status flip, diff_base stamped at the current HEAD) re-pinned
+// red-check and dirtyNonTestsPaths onto a tree that already contained the shipped work, leaving
+// every downstream purity check satisfied by construction.
+test('a hardened spec named by a stage:"build" ledger row is refused before any write — its closed state was reverted, so the driver must not flip status, must not stamp diff_base, and must not open a sidecar', () => {
+  const host = makeHost()
+  fs.writeFileSync(host.spec, specBody({ status: 'hardened' }))
+  const specText = fs.readFileSync(host.spec, 'utf8')
+  const ledger = path.join(host.root, '.claude/spec-runs.jsonl')
+  const specRel = path.relative(host.root, host.spec)
+  const doneRow = { ts: '2026-09-02T10:00:00.000Z', spec: specRel, stage: 'build', tier: 'standard', via: 'loop', model: null, runId: 'bd_9fbf227320f3', diff: { files: 1, loc: 1 }, gate: { finalRounds: 1 }, deviations: 0, redCheck: 'green', workers: { spawned: 1, continued: 0 } }
+
+  // Negative arm: a row naming another spec must leave the ordinary hardened admission untouched —
+  // the refusal may not cost a genuinely unbuilt spec its build.
+  fs.writeFileSync(ledger, JSON.stringify({ ...doneRow, spec: 'specs/20260901/00-elsewhere.md' }) + '\nnot json at all\n')
+  const rOther = run(host.root, host.spec)
+  assert.strictEqual(rOther.status, 0, 'a build row for a different spec must not refuse a hardened spec: ' + rOther.stdout + rOther.stderr)
+  assert.ok(fs.existsSync(host.sidecar), 'a hardened spec with no build row of its own must still open its sidecar')
+  assert.match(fs.readFileSync(host.spec, 'utf8'), /^status: implementing$/m, 'the ordinary hardened admission must still flip status — the refusal must not have swallowed the normal path')
+  fs.rmSync(host.sidecar, { recursive: true, force: true })
+  fs.writeFileSync(host.spec, specText)
+
+  // The same row naming THIS spec: a hardened spec that the ledger says was already built is a
+  // reverted closure, never a fresh build.
+  fs.appendFileSync(ledger, JSON.stringify(doneRow) + '\n')
+  for (const args of [[], ['--state']]) {
+    const r = run(host.root, host.spec, ...args)
+    assert.strictEqual(r.status, 2, 'a hardened spec carrying its own build row must be refused (args ' + JSON.stringify(args) + '): ' + r.stdout + r.stderr)
+    assert.match(r.stderr, /build already DONE/, 'the refusal must say the build is already DONE: ' + r.stderr)
+    assert.match(r.stderr, /bd_9fbf227320f3/, 'the refusal must name the ledger row that proves the build ran: ' + r.stderr)
+    assert.match(r.stderr, /status: hardened/, 'the refusal must name the reverted status, or the session reads it as an ordinary resume and never suspects the document: ' + r.stderr)
+    assert.match(r.stderr, /superseded/, 'the refusal must name the only legitimate route to a from-scratch rebuild: ' + r.stderr)
+    assert.strictEqual(fs.readFileSync(host.spec, 'utf8'), specText,
+      'the spec must be byte-identical after the refusal — a status flip or a diff_base stamp here re-pins every purity check onto the post-ship tree, which is what made the rebuild invisible (args ' + JSON.stringify(args) + ')')
+    assert.ok(!fs.existsSync(host.sidecar), 'a refused hardened run must never open a sidecar: ' + JSON.stringify(args))
+  }
+})
+
 // Owner: specs/20260902/02-plugin-code-sweep.md D10 — a tests-layer File Plan row may be a glob,
 // expanded through lib/glob-match.js exactly as red-check.js and scope-reconcile.js expand one.
 // Deliberately carries no AC-ID: red-check reads an AC-ID anywhere in a file, comments included,

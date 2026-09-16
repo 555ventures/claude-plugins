@@ -148,6 +148,38 @@ if (status !== 'hardened' && status !== 'implementing') {
     ' is the owning command')
 }
 
+const sidecarExisted = fs.existsSync(sidecarDir)
+
+// ---- build already DONE (class stale-terminal-state-reopened) --------------------------------
+// The sidecar is removed at DONE, so "status: implementing, no sidecar" is also the state a
+// finished build leaves behind until the review driver opens its own sidecar. The ledger is the
+// one on-disk fact that tells the two apart: a stage:"build" row is written only at DONE, so its
+// presence for this spec IS the terminal outcome — no extra outcome field is needed.
+//
+// This refusal covers BOTH admission branches and runs before the hardened branch's own writes,
+// never only the `implementing` resume. A `hardened` spec carrying a build row is not a spec that
+// was never built — it is a closed spec whose document was reverted, and letting it through is
+// worse than a wasted rebuild: the hardened branch flips status and stamps `diff_base` at the
+// CURRENT HEAD, which already contains the shipped work, so every downstream purity check
+// (red-check's pre-image, dirtyNonTestsPaths) is satisfied by construction and the rebuild
+// proceeds blind. Refused before any write and before any sidecar is opened — state unchanged on
+// both paths.
+if (!sidecarExisted) {
+  const doneRow = ledgerBuildRow(repoRoot, specRel)
+  if (doneRow && status === 'hardened') {
+    die('build already DONE for ' + specRel + ' (ledger row ' + doneRow.runId + ', ' + doneRow.ts +
+      ') but the spec reads status: hardened — its closed state was reverted, not never built. ' +
+      'Restore it: `git log -S\'status: done\' -- ' + specRel + '` names the close commit, then ' +
+      '`git checkout <sha> -- ' + specRel + '`. A deliberate from-scratch rebuild is a new spec — ' +
+      'mark this one superseded instead')
+  }
+  if (doneRow) {
+    die('build already DONE for ' + specRel + ' (ledger row ' + doneRow.runId + ', ' + doneRow.ts +
+      ') — run the review driver: node ' + path.join(PLUGIN, 'scripts/spec-review-driver.js') + ' ' +
+      specPath)
+  }
+}
+
 let justFlipped = false
 if (status === 'hardened') {
   // ---- design admission (D2) ---------------------------------------------------------------
@@ -280,22 +312,6 @@ function dirtyNonTestsPaths(base) {
   return nonTestsPaths.filter((p) => changed.has(p))
 }
 
-const sidecarExisted = fs.existsSync(sidecarDir)
-
-// ---- build already DONE ----------------------------------------
-// The sidecar is removed at DONE, so "status: implementing, no sidecar" is also the state a
-// finished build leaves behind until the review driver opens its own sidecar. The ledger is the
-// one on-disk fact that tells the two apart: a stage:"build" row is written only at DONE, so its
-// presence for this spec IS the terminal outcome — no extra outcome field is needed. Refused
-// before any sidecar is opened (state unchanged), remedy = the review driver.
-if (!sidecarExisted && !justFlipped) {
-  const doneRow = ledgerBuildRow(repoRoot, specRel)
-  if (doneRow) {
-    die('build already DONE for ' + specRel + ' (ledger row ' + doneRow.runId + ', ' + doneRow.ts +
-      ') — run the review driver: node ' + path.join(PLUGIN, 'scripts/spec-review-driver.js') + ' ' +
-      specPath)
-  }
-}
 function ledgerBuildRow(root, rel) {
   let text = ''
   try { text = fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8') } catch { return null }

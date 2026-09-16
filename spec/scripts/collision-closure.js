@@ -41,6 +41,7 @@ const fs = require('fs')
 const path = require('path')
 const { parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch, pipelineOwnedGlobs } = require('./lib/glob-match')
+const { getIgnoredPaths } = require('./lib/ignored-paths')
 
 const HONESTY_LINE = 'likely/mentions tier is a lexical proxy; mentions may contain closed pins; an executes hit names a runnable file the test spawns, loads, or cites — not distinguished; the build-time suite check adjudicates'
 const REMEDY_LINE = "remedy: add each literals hit as a File Plan row, or record the waive in the spec's Rationale; an `executes` hit names a test that runs a script you are changing — if the change alters that script's observable behavior, widen the File Plan or plan the fixture repair now; `likely` and `mentions` hits are visibility only and owe no waive line"
@@ -165,8 +166,17 @@ function literalPrefix(glob) {
 // D5: repo-root walk excluding .git, node_modules, and pipelineOwnedGlobs(root) — pruned at
 // directory level where possible (perf, A2/A7) and re-checked per file (correctness: a glob
 // like `.claude/spec-runs.jsonl` names a single file, not a directory to prune).
+//
+// Ignored-path prune (D1, specs/20260915/01-one-derivation-of-ignored-paths.md): a git-ignored
+// working copy (`.claude/worktrees/**`, a `*.build/` scratch dir) is a second copy of files this
+// repo already owns, so a literals hit naming one is never a real collateral-damage site. The
+// ignored set is the ONE derivation in `lib/ignored-paths.js` — shared with scope-reconcile.js's
+// at-risk walk and red-check.js's wildcard tests-row expansion, never re-implemented here. That
+// library owns the top-level guard and the empty-set fallback (refusing to filter is safe; an
+// unfiltered walk is byte-identical to the pre-prune behavior).
 function walkForLiterals(base, ownedGlobs) {
   const dirPrefixes = ownedGlobs.map(literalPrefix).filter(p => p.endsWith('/')).map(p => p.slice(0, -1))
+  const ignored = getIgnoredPaths(base)
   const out = []
   function rec(dir) {
     let entries
@@ -180,8 +190,12 @@ function walkForLiterals(base, ownedGlobs) {
       const rel = toRel(full, base)
       if (e.isDirectory()) {
         if (e.name === '.git' || e.name === 'node_modules' || dirPrefixes.includes(rel)) continue
+        // D1: a fully-ignored directory arrives from ls-files as its path plus a trailing slash —
+        // pruning here means the subtree is never descended, an ignored second checkout included.
+        if (ignored.has(`${rel}/`)) continue
         rec(full)
       } else if (e.isFile()) {
+        if (ignored.has(rel)) continue
         if (ownedGlobs.some(g => globMatch(g, rel))) continue
         out.push(rel)
       }

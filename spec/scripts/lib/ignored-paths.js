@@ -2,8 +2,9 @@
 // lib/ignored-paths.js — getIgnoredPaths(root) → Set<string>, the ONE derivation of a root's
 // git-ignored path set (specs/20260915/01-one-derivation-of-ignored-paths.md D1, carrying over
 // the D1/D2 contract of specs/20260907/03-ignored-paths-and-unobserved-count.md unchanged in
-// substance). scope-reconcile.js's at-risk walk and red-check.js's wildcard tests-row expansion
-// are its two consumers — a second private copy of this derivation is the exact class
+// substance). scope-reconcile.js's at-risk walk, red-check.js's wildcard tests-row expansion and
+// collision-closure.js's literals leg are its three consumers — a second private copy of this
+// derivation is the exact class
 // lib/glob-match.js and lib/host-config.js were each extracted to stop.
 //
 // The set is derived only when `git -C <root> rev-parse --show-prefix` exits 0 printing an empty

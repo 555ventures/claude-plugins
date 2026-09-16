@@ -65,8 +65,8 @@ fuller incident write-ups live in each cited spec's history.
   set.** `getIgnoredPaths(root)` NUL-splits `git ls-files -o -i --exclude-standard --directory`
   behind a `rev-parse --show-prefix` top-level guard, falling back to an empty set — an
   unfiltered walk — on any other outcome, since `ls-files` paths are root-relative and a
-  mismatched prefix would prune real directories. Its two consumers are `scope-reconcile.js`'s
-  at-risk walk and `red-check.js`'s wildcard expansion.
+  mismatched prefix would prune real directories. Its three consumers are `scope-reconcile.js`'s
+  at-risk walk, `red-check.js`'s wildcard expansion, and `collision-closure.js`'s literals leg.
   (specs/20260915/01-one-derivation-of-ignored-paths.md D1)
 
 ## Prose budgets

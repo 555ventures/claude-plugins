@@ -46,8 +46,9 @@ Milestone gates:
 ## Journey map
 
 <!-- Derived view, never authored here: each UI-bearing brief declares its surfaces + journey
-     edges in its own `surfaces` block (roadmap-brief.md template); `mock-review serve` composes
-     them into the whole-product journey graph. Delete this section
+     edges in its own `surfaces` block (roadmap-brief.md template), which SEED parses into the
+     mock app's `journeys.ts`; `mock-review serve` hosts the running app so the resulting
+     whole-product journey graph can be seen. Delete this section
      for non-visual archetypes. -->
 
 Run `mock-review serve` to see every declared surface, its mock, and the journey graph.

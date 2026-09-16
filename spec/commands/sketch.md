@@ -7,7 +7,8 @@ argument-hint: "<roadmap brief path | screen label> [optional first change instr
 
 The pre-plan seat for roadmap-level design iteration, scoped **by construction to one brief**.
 The mock app (`/spec:mocks`'s own product) already exists; this command sweeps its open items
-for the brief's labels, applies changes in-session, and ratifies each surface's approval —
+for the brief's labels, applies changes in-session, and offers each surface for approval on
+the served page —
 every applied change lands in its binding home *in the same round*, so `/spec:plan` on that
 brief later reads files that are already true. Sits between the roadmap (genesis-authored or
 hand-authored) and `/spec:plan`; owns no spec state and never edits `specs/**`.

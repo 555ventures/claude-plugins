@@ -1,6 +1,6 @@
 ---
 date: 2026-09-15
-status: hardened
+status: implementing
 tier: critical
 area: gate-scripts
 design: false
@@ -9,7 +9,9 @@ depends_on: []
 depended_on_by: []
 brief: n/a
 spiked: 2026-09-15
+build_base: main
 open_markers: 0
+diff_base: da0ef15c0940fbe7c608cdb315568259f3f5c273
 ---
 
 # One derivation of git-ignored paths, shared by both repo walks

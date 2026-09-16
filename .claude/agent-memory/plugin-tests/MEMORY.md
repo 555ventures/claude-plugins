@@ -1,5 +1,6 @@
 # Memory index
 
+- [Spec 01 ignored-paths: mixed red/green-pre-change AC batch + sandbox multi-line/rm-rf denial on out-of-worktree paths](spec-20260915-01-one-derivation-of-ignored-paths.md) — verify each AC empirically rather than trusting a dispatch's blanket "(new, red)" label; probe fixtures one single-line git command / one Write call at a time.
 - [Spec 03 html-atlas-retired: if-false remedies are pre-authorized + ac-drift collateral is not tests-worker scope](spec-20260914-03-html-atlas-retired.md) — execute a fired Assumption's stated if-false remedy literally; foreign-spec AC-drift caused by deleting a shared covering test is doctrine-author/orchestrator work, report don't fix.
 - [Reused-AC retag idiom + genesis brief fixture ordering](spec-20260914-02-review-fix-retag-and-menus-done-fix-already-landed.md) — `AC-OLD / AC-NEW:` name retag, ac-matrix uncovered:0 oracle; pre-resolve dimensions before the first bare run since writeBrief() regenerates brief.md.
 - [Spec 01 mock contract and driver: stub-via-env-dir fixture + PATH='' ENOENT trick](spec-20260914-01-mock-contract-and-driver.md) — mock-review stub reads MOCK_STUB_DIR (rides process.env spreads for free); PATH='' reliably reproduces binary-not-found without breaking runNode itself; seed.md Records line syntax logged as a deviation, not guessed silently.

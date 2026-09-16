@@ -706,3 +706,170 @@ test('a directory symlink under a globbed tests row is never listed as a test fi
   assert.strictEqual(res.status, 0,
     `the only real file is a passing sanctioned pin, so any non-zero exit means the link still leaked into the run (stderr: ${res.stderr})`)
 })
+
+// specs/20260915/01-one-derivation-of-ignored-paths.md D2/D3/D4: walkAll's wildcard expansion now
+// prunes through the shared spec/scripts/lib/ignored-paths.js derivation (the same one
+// scope-reconcile.js's walkTestFiles uses) — a directory whose repo-relative path plus `/` is
+// ignored is never descended, a file whose repo-relative path is ignored is never pushed, and an
+// exact-path (non-wildcard) tests row is never walked or pruned at all. A wildcard row that
+// resolves zero files pushes exactly one warning naming the row. AC-20260915-01-1/-01-2/-01-5/
+// -01-6/-01-7 fail on current code, which has no prune at all and emits no empty-expansion
+// warning (confirmed by direct execution against HEAD). AC-20260915-01-3 and AC-20260915-01-4 pin
+// invariants D3/D1's fail-safe guard already hold true against the untouched pre-image (a literal
+// row and a mismatched-prefix --root are both unaffected by there being no prune yet) and must
+// keep holding once the prune lands — confirmed empirically both ways before and cannot regress.
+
+test('AC-20260915-01-1: WHEN red-check\'s walk expands a wildcard tests row over a repository whose .gitignore fully ignores a directory holding a duplicate passing test file, THE SYSTEM SHALL list only the tracked copy in files and SHALL NOT resolve any path under the ignored directory', () => {
+  const { dir, base } = newHost('one1')
+  fs.appendFileSync(path.join(dir, '.gitignore'), 'ignored/\n')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'ignored/copy/tests'), { recursive: true })
+  const passing = "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260915-91-1: sanctioned regression pin', () => { assert.ok(true) })\n"
+  fs.writeFileSync(path.join(dir, 'tests/real.test.js'), passing)
+  fs.writeFileSync(path.join(dir, 'ignored/copy/tests/real.test.js'), passing)
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260915-91-1**: WHEN x THE SYSTEM SHALL CONTINUE TO y → tests/real.test.js'],
+    ['| **/*.test.js | CREATE | tests | wildcard row over a repo with a fully-ignored duplicate directory |']))
+  const res = run(spec, dir, base, ['--json'])
+  const out = findings(res)
+  assert.deepStrictEqual(out.files.map(f => f.path), ['tests/real.test.js'],
+    `walkAll must prune the git-ignored ignored/ directory before ever descending into it — today's unfiltered walk also resolves ignored/copy/tests/real.test.js, colour-classifying and executing a file that lives inside a git-ignored checkout as if the File Plan had named it: ${JSON.stringify(out.files)}`)
+})
+
+test('AC-20260915-01-2: WHEN a wildcard tests row is expanded over a repository whose .gitignore names a single untracked FILE rather than a directory, THE SYSTEM SHALL prune only that ignored file — the prune is ignored-path shaped, never directory-name shaped', () => {
+  const { dir, base } = newHost('one2')
+  fs.appendFileSync(path.join(dir, '.gitignore'), 'tests/legacy.test.js\n')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  const passing = "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260915-91-2: sanctioned regression pin', () => { assert.ok(true) })\n"
+  fs.writeFileSync(path.join(dir, 'tests/real.test.js'), passing)
+  fs.writeFileSync(path.join(dir, 'tests/legacy.test.js'), passing)
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260915-91-2**: WHEN x THE SYSTEM SHALL CONTINUE TO y → tests/real.test.js'],
+    ['| tests/** | CREATE | tests | wildcard row over a repo whose .gitignore names a single plain file |']))
+  const res = run(spec, dir, base, ['--json'])
+  const out = findings(res)
+  assert.deepStrictEqual(out.files.map(f => f.path), ['tests/real.test.js'],
+    `git-ignoring a single plain FILE (not a directory pattern) must still prune it from the wildcard walk — a directory-name-shaped skip alone would leave tests/legacy.test.js resolved and executed, colour-classified as if the File Plan had named it: ${JSON.stringify(out.files)}`)
+})
+
+test('AC-20260915-01-3: WHEN a File Plan tests row is the exact path of a file inside a git-ignored directory, THE SYSTEM SHALL CONTINUE TO resolve, execute and colour-classify it, and SHALL CONTINUE TO report missing-test-file for an absent exact row naming a sibling path in that same directory', () => {
+  const { dir, base } = newHost('one3')
+  fs.appendFileSync(path.join(dir, '.gitignore'), 'ignored/\n')
+  fs.mkdirSync(path.join(dir, 'ignored/copy/tests'), { recursive: true })
+  const passing = "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260915-91-3: sanctioned regression pin inside an ignored directory', () => { assert.ok(true) })\n"
+  fs.writeFileSync(path.join(dir, 'ignored/copy/tests/real.test.js'), passing)
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260915-91-3**: WHEN x THE SYSTEM SHALL CONTINUE TO y → ignored/copy/tests/real.test.js'],
+    ['| ignored/copy/tests/real.test.js | CREATE | tests | exact path inside a git-ignored directory — must still resolve |',
+      '| ignored/copy/tests/absent.test.js | CREATE | tests | exact path inside a git-ignored directory that does not exist on disk |']))
+  const res = run(spec, dir, base, ['--json'])
+  const out = findings(res)
+  const row = out.files.find(f => f.path === 'ignored/copy/tests/real.test.js')
+  assert.ok(row && row.expected === 'green' && row.observed === 'green',
+    `an exact-path tests row is never walked and never tested against the ignored set — pruning applies only to wildcard expansion — so a literal row pointing inside a git-ignored directory must still resolve, run and be colour-classified exactly as before: ${JSON.stringify(out.files)}`)
+  assert.ok(out.findings.some(f => f.class === 'missing-test-file' && f.path === 'ignored/copy/tests/absent.test.js'),
+    `an exact row naming a file that does not exist must still report missing-test-file even when the path sits inside a git-ignored directory — silently dropping it because git ignores that location would turn a plan defect into a green build, the precise failure this spec exists to remove, pointed the other way: ${JSON.stringify(out.findings)}`)
+})
+
+test('AC-20260915-01-4: WHEN red-check runs with --root pointing at a SUBDIRECTORY of a repository, THE SYSTEM SHALL fall back to the unfiltered walk — files contains BOTH the tracked test file and the one under a git-ignored directory — and SHALL exit without a git error on stderr', () => {
+  const outerDir = tmpdir('one4')
+  const g = gitRepo(outerDir)
+  fs.writeFileSync(path.join(outerDir, '.gitignore'), 'sub/ignored/\n')
+  fs.mkdirSync(path.join(outerDir, 'sub/tests'), { recursive: true })
+  fs.mkdirSync(path.join(outerDir, 'sub/ignored/copy/tests'), { recursive: true })
+  const passing = "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260915-91-4: sanctioned regression pin', () => { assert.ok(true) })\n"
+  fs.writeFileSync(path.join(outerDir, 'sub/tests/real.test.js'), passing)
+  fs.writeFileSync(path.join(outerDir, 'sub/ignored/copy/tests/real.test.js'), passing)
+  g('add', '-A'); g('commit', '-q', '-m', 'seed sub')
+  const base = g('rev-parse', 'HEAD').trim()
+  const dir = path.join(outerDir, 'sub')
+  writeConfig(dir, { testCommand: 'node --test' })
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260915-91-4**: WHEN x THE SYSTEM SHALL CONTINUE TO y → tests/real.test.js'],
+    ['| **/*.test.js | CREATE | tests | wildcard row with --root at a repository subdirectory |']))
+  const res = run(spec, dir, base, ['--json'])
+  const out = findings(res)
+  assert.deepStrictEqual(out.files.map(f => f.path).sort(),
+    ['ignored/copy/tests/real.test.js', 'tests/real.test.js'],
+    `--root below the repository top level means git ls-files paths (always relative to the true top level) would compare against a mismatched prefix — the guard must refuse to filter and fall back to today's unfiltered walk, resolving BOTH files, rather than silently shrinking what red-check checks: ${JSON.stringify(out.files)}`)
+  assert.strictEqual(res.stderr, '',
+    `refusing to filter must never surface a git error to the caller — a visible git error here means the guard leaked instead of falling back cleanly: ${res.stderr}`)
+})
+
+test('AC-20260915-01-5: WHEN red-check --json runs with --root pointing at a git worktree whose tree holds an ignored duplicate test file, THE SYSTEM SHALL emit files containing only the tracked copy — the prune is active in the worktrees the build and review stages actually run red-check in', () => {
+  const outerDir = tmpdir('one5')
+  const g = gitRepo(outerDir)
+  fs.writeFileSync(path.join(outerDir, '.gitignore'), 'ignored/\n')
+  fs.mkdirSync(path.join(outerDir, 'tests'), { recursive: true })
+  const passing = "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260915-91-5: sanctioned regression pin', () => { assert.ok(true) })\n"
+  fs.writeFileSync(path.join(outerDir, 'tests/real.test.js'), passing)
+  g('add', '-A'); g('commit', '-q', '-m', 'seed base')
+  const base = g('rev-parse', 'HEAD').trim()
+  const wtDir = tmpdir('one5-wt')
+  fs.rmdirSync(wtDir) // `git worktree add` refuses an existing target directory, even an empty one
+  g('worktree', 'add', '-q', wtDir, '-b', 'wt-one5')
+  fs.mkdirSync(path.join(wtDir, 'ignored/copy/tests'), { recursive: true })
+  fs.writeFileSync(path.join(wtDir, 'ignored/copy/tests/real.test.js'), passing)
+  writeConfig(wtDir, { testCommand: 'node --test' })
+  const spec = path.join(wtDir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260915-91-5**: WHEN x THE SYSTEM SHALL CONTINUE TO y → tests/real.test.js'],
+    ['| **/*.test.js | CREATE | tests | wildcard row with --root at a git worktree |']))
+  const res = run(spec, wtDir, base, ['--json'])
+  const out = findings(res)
+  assert.deepStrictEqual(out.files.map(f => f.path), ['tests/real.test.js'],
+    `a git worktree root satisfies the top-level guard exactly as an ordinary repository does — the prune must be active there too, or the build and review stages' own worktree-rooted red-check runs would still descend into every git-ignored checkout: ${JSON.stringify(out.files)}`)
+})
+
+test('AC-20260915-01-6: WHEN a File Plan tests row is a wildcard that matches no file on disk, THE SYSTEM SHALL emit exactly one warnings entry naming the row and "expanded to 0 files", SHALL emit no findings entry for that row, and SHALL exit 0', () => {
+  const { dir, base } = newHost('one6')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  const passing = "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260915-91-6: sanctioned regression pin', () => { assert.ok(true) })\n"
+  fs.writeFileSync(path.join(dir, 'tests/real.test.js'), passing)
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260915-91-6**: WHEN x THE SYSTEM SHALL CONTINUE TO y → tests/real.test.js'],
+    ['| tests/real.test.js | CREATE | tests | present, sanctioned |',
+      '| tests/nothing/** | CREATE | tests | wildcard row matching zero files on disk |']))
+  const res = run(spec, dir, base, ['--json'])
+  const out = findings(res)
+  assert.strictEqual(res.status, 0,
+    `an empty wildcard expansion is parity with red-check's existing "carries zero AC-IDs" sanction — a warning, never a hard finding — a nonzero exit here means it was wrongly promoted to a hard finding: ${JSON.stringify(out)}`)
+  const empties = out.warnings.filter(w => w.startsWith('tests/nothing/**:') && w.includes('expanded to 0 files'))
+  assert.strictEqual(empties.length, 1,
+    `a wildcard row expanding to zero files must push exactly one warnings entry naming the row and "expanded to 0 files" — today's total silence on this case is exactly the gap this spec closes: ${JSON.stringify(out.warnings)}`)
+  assert.ok(!out.findings.some(f => f.path === 'tests/nothing/**'),
+    `a row that resolves nothing has no colour to report — it must never surface as a findings entry, only as a warning: ${JSON.stringify(out.findings)}`)
+})
+
+test('AC-20260915-01-7: WHEN a File Plan carries both an empty wildcard row and a wildcard row that resolves real files, THE SYSTEM SHALL emit exactly one "expanded to 0 files" warning in the whole run and SHALL NOT emit one naming the row that resolved files', () => {
+  const { dir, base } = newHost('one7')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  const passing = "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260915-91-7: sanctioned regression pin', () => { assert.ok(true) })\n"
+  fs.writeFileSync(path.join(dir, 'tests/real.test.js'), passing)
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260915-91-7**: WHEN x THE SYSTEM SHALL CONTINUE TO y → tests/real.test.js'],
+    ['| tests/nothing/** | CREATE | tests | wildcard row matching zero files on disk |',
+      '| tests/** | CREATE | tests | wildcard row that resolves tests/real.test.js |']))
+  const res = run(spec, dir, base, ['--json'])
+  const out = findings(res)
+  const empties = out.warnings.filter(w => w.includes('expanded to 0 files'))
+  assert.strictEqual(empties.length, 1,
+    `exactly one row in this File Plan resolves nothing — a second, missing, or duplicated "expanded to 0 files" warning means the pruned-path counter or the warning trigger is not scoped per-row: ${JSON.stringify(out.warnings)}`)
+  assert.ok(empties[0].startsWith('tests/nothing/**:'),
+    `the one warning must name the empty row tests/nothing/**, never the row that matched files: ${JSON.stringify(out.warnings)}`)
+  assert.ok(!out.warnings.some(w => w.startsWith('tests/**:') && w.includes('expanded to 0 files')),
+    `tests/** resolved tests/real.test.js — a row that resolved files must never be warned about: ${JSON.stringify(out.warnings)}`)
+})

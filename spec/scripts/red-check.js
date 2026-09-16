@@ -78,6 +78,19 @@
 // AC-ID and the split remedy, no colour classification runs for that file in this pass (no
 // `unsanctioned-green`/`broken-pin`), and the `{testCommand} <file>` run still executes and is
 // logged — only the colour verdict is withheld, never the observation.
+//
+// specs/20260915/01-one-derivation-of-ignored-paths.md D2/D3/D4: `walkAll`'s WILDCARD expansion
+// prunes through `lib/ignored-paths.js`'s `getIgnoredPaths` — the one derivation
+// scope-reconcile.js's at-risk walk already used privately, now shared. A directory whose
+// repo-relative path plus `/` is ignored is never descended; a file whose repo-relative path is
+// ignored is never pushed; both increment a pruned-path counter. The existing `.git` name skip
+// and `isFile()` filter run first and are untouched. The prune applies to wildcard rows only — a
+// literal (no `*`) tests row is never walked and never tested against the ignored set, so it
+// still resolves, executes, colour-classifies, and still reports `missing-test-file` when absent,
+// even when it names a path inside a git-ignored directory (D3). A wildcard row that expands to
+// zero files pushes exactly one `warnings` entry naming the row and the pruned-path count (D4) —
+// cause-agnostic (the row may have matched nothing with or without a prune); no finding, no exit
+// code change, no `--json` key change. A row that resolves >=1 file pushes nothing.
 
 const fs = require('fs')
 const path = require('path')
@@ -86,6 +99,7 @@ const { parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
 const { readConfig } = require('./lib/host-config')
 const { scanCalls } = require('./lib/scan-test-calls')
+const { getIgnoredPaths } = require('./lib/ignored-paths')
 const {
   extractSection, parseAcBullets, PRE_GREEN_REASONS, acIdOccurs, rejectedTrailingTagDetail,
   normalizeForPinCheck, pinShape, parseDisposition,
@@ -194,7 +208,11 @@ const testsRowEntries = filePlanRows
     return r.paths.map(p => ({ p, isDelete }))
   })
 
-function walkAll(dir, rootDir, out = []) {
+// D2 (specs/20260915/01-one-derivation-of-ignored-paths.md): prunes through the shared
+// `getIgnoredPaths` derivation — a directory whose repo-relative path plus `/` is ignored is
+// never descended, a file whose repo-relative path is ignored is never pushed. `prunedCounter` is
+// a single-field object (not a return value) so the recursive calls can share one running count.
+function walkAll(dir, rootDir, out = [], ignored, prunedCounter) {
   let entries
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true })
@@ -204,22 +222,47 @@ function walkAll(dir, rootDir, out = []) {
   for (const e of entries) {
     if (e.name === '.git') continue
     const full = path.join(dir, e.name)
+    const rel = path.relative(rootDir, full).split(path.sep).join('/')
     // Only regular files are pushed: a symlink (a fixture's `node_modules` link to a directory),
     // socket, or FIFO matched by a glob row would throw EISDIR at readFileSync and kill the run.
     // A literal tests row is never walked, so a bad literal path still fails loudly there.
-    if (e.isDirectory()) walkAll(full, rootDir, out)
-    else if (e.isFile()) out.push(path.relative(rootDir, full).split(path.sep).join('/'))
+    if (e.isDirectory()) {
+      if (ignored.has(`${rel}/`)) { prunedCounter.count++; continue }
+      walkAll(full, rootDir, out, ignored, prunedCounter)
+    } else if (e.isFile()) {
+      if (ignored.has(rel)) { prunedCounter.count++; continue }
+      out.push(rel)
+    }
   }
   return out
 }
 
+// Declared ahead of the wildcard-expansion loop below (D4) so its zero-expansion warning can
+// push directly onto the same array the later per-file loop and output section use — a second,
+// throwaway array here would need merging later for no benefit.
+const warnings = []
+
 const testFiles = new Set()
 let allFilesCache = null
+let prunedCount = 0
 for (const { p, isDelete } of testsRowEntries) {
   if (isDelete) continue // D2: a DELETE row is satisfied by the file's planned absence
   if (p.includes('*')) {
-    if (allFilesCache === null) allFilesCache = walkAll(root, root)
-    for (const f of allFilesCache) if (globMatch(p, f)) testFiles.add(f)
+    if (allFilesCache === null) {
+      const ignored = getIgnoredPaths(root)
+      const prunedCounter = { count: 0 }
+      allFilesCache = walkAll(root, root, [], ignored, prunedCounter)
+      prunedCount = prunedCounter.count
+    }
+    const matches = allFilesCache.filter(f => globMatch(p, f))
+    for (const f of matches) testFiles.add(f)
+    // D4: a wildcard row that resolves nothing pushes exactly one warning naming the row and
+    // the walk's pruned-path count — cause-agnostic (the row may have matched nothing with or
+    // without a prune); a row that matched >=1 file pushes nothing.
+    if (matches.length === 0) {
+      warnings.push(`${p}: File Plan tests row expanded to 0 files (${prunedCount} ignored ` +
+        `path(s) pruned from the repo walk)`)
+    }
   } else {
     testFiles.add(p)
   }
@@ -282,7 +325,6 @@ const expectGreenSet = new Set(expectGreenPaths)
 
 const files = []
 const findings = []
-const warnings = []
 
 for (const relPath of [...testFiles].sort()) {
   const fullPath = path.join(root, relPath)

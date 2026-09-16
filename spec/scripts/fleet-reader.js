@@ -49,6 +49,7 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
+const { execFileSync } = require('child_process')
 const { configExists } = require('./lib/host-config')
 const { validateEscapeRow, validateAmendmentRow, joinAmendments, escapeKey } = require('./lib/escape-row')
 const { CORPUS_BAR, corpusPath, parseCorpus } = require('./lib/replay-corpus')
@@ -63,7 +64,25 @@ function printUsage(message) {
 
 // ---- arg parsing (hand-rolled, no library) ----------------------------------------------------
 
-let reposRoot = path.join(os.homedir(), 'Projects')
+// The fleet is the checkouts that sit beside the one this run was invoked from, so the default
+// repos-root is derived from the invoking repository — `git rev-parse --show-toplevel`'s parent —
+// never a hardcoded directory name. A hardcoded `~/Projects` is wrong on any host that spells the
+// directory differently, and wrong SILENTLY where a same-named empty directory happens to exist:
+// discovery finds no repo, every query answers zero, and the run still exits 0 because zero repos
+// is a legitimate derived answer (see Exit codes). `~/Projects` survives only as the fallback for
+// a run started outside any repository, where there is nothing to derive from.
+function defaultReposRoot() {
+  try {
+    const top = execFileSync('git', ['rev-parse', '--show-toplevel'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    if (top) return path.dirname(top)
+  } catch {
+    // Not a repository, or git unavailable — fall through to the homedir default.
+  }
+  return path.join(os.homedir(), 'Projects')
+}
+
+let reposRoot = defaultReposRoot()
 let json = false
 let owedFlag = false
 const argv = process.argv.slice(2)

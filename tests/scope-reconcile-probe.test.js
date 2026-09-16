@@ -20,6 +20,11 @@ const { tmpdir, runNode, gitRepo } = require('./helpers')
 // this test fails on current code, which has no prune at all yet. D2 (AC-20260907-03-3) pins the
 // prune's safety guard (no repository -> empty ignored set, byte-identical to today) — this is a
 // CONTINUE-TO pin, already green pre-image because no prune exists to misfire.
+//
+// specs/20260915/01-one-derivation-of-ignored-paths.md D1 (AC-20260915-01-9): the AC-20260907-03-4
+// test below is retagged in place — the walkTestFiles body it exercises now reaches the prune via
+// the shared spec/scripts/lib/ignored-paths.js import, but its own assertions and fixture are
+// unweakened.
 
 const SCRIPT = 'scripts/scope-reconcile.js'
 
@@ -79,7 +84,7 @@ test('AC-20260907-03-3 (SHALL CONTINUE TO): --probe-at-risk with --root pointing
     'pre-change behaviour: ' + r.stdout)
 })
 
-test('AC-20260907-03-4: --probe-at-risk reuses the same git-ignore prune as the main derivation — an identical test file living under a git-ignored directory is not double-counted in testFiles', () => {
+test('AC-20260907-03-4 [AC-20260915-01-9 regression pin]: --probe-at-risk reuses the same git-ignore prune as the main derivation — an identical test file living under a git-ignored directory is not double-counted in testFiles', () => {
   const dir = tmpdir('scope-reconcile-probe')
   const g = gitRepo(dir) // gitRepo's init commit already seeds and commits a root .gitignore containing .claude/worktrees/
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })

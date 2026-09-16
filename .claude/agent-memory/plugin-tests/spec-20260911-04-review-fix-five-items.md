@@ -3,6 +3,7 @@ name: spec-20260911-04-review-fix-five-items
 description: Five review-fix pins for spec 20260911/04 (tests layer) — vacuous D18 rebuild, missing AC-17 pin, AC-16 retag, shell-quoting fix, arrow-in-prefix fix
 metadata:
   type: project
+  reviewed: 2026-09-16
 ---
 
 Review-fix pass on specs/20260911/04-every-criterion-declares-its-test.md's test layer, no

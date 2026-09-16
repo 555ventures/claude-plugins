@@ -1,6 +1,6 @@
 ---
 date: 2026-09-15
-status: hardened
+status: done
 tier: critical
 area: gate-scripts
 design: false
@@ -9,7 +9,9 @@ depends_on: []
 depended_on_by: []
 brief: n/a
 spiked: 2026-09-15
+build_base: main
 open_markers: 0
+diff_base: da0ef15c0940fbe7c608cdb315568259f3f5c273
 ---
 
 # One derivation of git-ignored paths, shared by both repo walks
@@ -232,6 +234,17 @@ row is `tests/mocks/**` and whose subtree carries a `node_modules` directory sym
 matches real files, so it never trips the new warning — but if the fixture's tree ever becomes
 fully ignored, that test's expectation changes, and the change would be the prune working rather
 than a regression.
+
+**Deviation folded at close (2026-09-16).** The tests wave found AC-20260915-01-3 and
+AC-20260915-01-4 green against the untouched pre-image rather than red. Neither is a fixture
+defect: AC-3 is a `SHALL CONTINUE TO` pin on the exact-path exemption (D3) and AC-4 pins D1's
+fail-safe fallback, and both invariants already hold because the pre-image carries no prune at
+all that could misfire them — the same shape as this repo's existing `AC-20260907-03-9` and
+`AC-20260907-03-3` pins. No assertion was weakened; both were authored from the AC text and
+verified true against the base by direct execution before being added. One-off, already covered
+by red-check's own CONTINUE-TO sanction, so no Gotchas entry is earned. D5's bump landed on
+spec 7.193.0, derived by `plugin-bump.js --bump` rather than any literal, exactly as the
+standing moving-target rule intends.
 
 **Collision closure (run at lock, 2026-09-15, `--literal getIgnoredPaths --literal
 ignoredPathsCache`).** Ten literals hits, all waived, none widening the File Plan. Both symbols

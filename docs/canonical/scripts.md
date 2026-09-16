@@ -61,6 +61,14 @@ fuller incident write-ups live in each cited spec's history.
   shape addition in the contract needs no matching code change here.
   (specs/20260914/01-the-mock-contract-and-the-driver.md D1, D2)
 
+- **`spec/scripts/lib/ignored-paths.js` is the one derivation of a root's git-ignored path
+  set.** `getIgnoredPaths(root)` NUL-splits `git ls-files -o -i --exclude-standard --directory`
+  behind a `rev-parse --show-prefix` top-level guard, falling back to an empty set — an
+  unfiltered walk — on any other outcome, since `ls-files` paths are root-relative and a
+  mismatched prefix would prune real directories. Its two consumers are `scope-reconcile.js`'s
+  at-risk walk and `red-check.js`'s wildcard expansion.
+  (specs/20260915/01-one-derivation-of-ignored-paths.md D1)
+
 ## Prose budgets
 
 The host rules' § Gotchas section is capped at 15 entries, enforced by `prose-cap.js` (review

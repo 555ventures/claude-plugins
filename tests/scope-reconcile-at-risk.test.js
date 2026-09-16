@@ -30,6 +30,10 @@ const { tmpdir, runNode, gitRepo } = require('./helpers')
 // instead of — the four existing name skips. AC-1 and AC-2 fail on current code, which has no
 // git-ignore-based pruning at all; AC-9 (the four name skips surviving unchanged) is a
 // CONTINUE-TO pin already green pre-image.
+//
+// specs/20260915/01-one-derivation-of-ignored-paths.md D1 (AC-20260915-01-8): the AC-20260907-03-1
+// test below is retagged in place — the private getIgnoredPaths/walkTestFiles body it exercises
+// moves into spec/scripts/lib/ignored-paths.js, but its own assertions and fixture are unweakened.
 
 const SCRIPT = 'scripts/scope-reconcile.js'
 
@@ -303,7 +307,7 @@ test('AC-20260903-07-7: a stem match under a fixtures/ or __fixtures__/ director
     'it appears in atRisk, review is being told to RUN a non-test file as a suite: ' + JSON.stringify(out))
 })
 
-test('AC-20260907-03-1: a test file under a git-ignored directory (.claude/worktrees/) is pruned from atRisk while an identical tracked test file elsewhere is still listed', () => {
+test('AC-20260907-03-1 [AC-20260915-01-8 regression pin]: a test file under a git-ignored directory (.claude/worktrees/) is pruned from atRisk while an identical tracked test file elsewhere is still listed', () => {
   const dir = tmpdir('scope-reconcile-at-risk')
   const g = gitRepo(dir) // gitRepo's init commit already seeds and commits a root .gitignore containing .claude/worktrees/
 

@@ -519,3 +519,30 @@ test('AC-20260914-01-23: a schemaVersion 1 status.json refuses exit 2 naming the
   assert.match(r.stderr, /remedy: rm design\/mocks\/status\.json/, 'the refusal must name the exact reset remedy: ' + r.stderr)
   assert.strictEqual(fs.readFileSync(statusPath(root), 'utf8'), before, 'a schemaVersion 1 refusal must write nothing — status.json must be byte-identical to before the run')
 })
+
+// Review rv_25e5d4359af0: deriveState's SCREENS loop iterates the seed's journeys, so a seed
+// declaring none makes SCREENS unreachable — the driver walked SEED → SHELL → THEME → CLIENT →
+// APPROVED and approved a mock with no screen ever drawn. seed-done is the one gate that can
+// still see the empty journey set as an error rather than as a satisfied loop.
+test('`--mark seed-done` refuses a seed.md that declares no journeys, naming the remedy and leaving the mark unset', () => {
+  const root = tmpdir('states-no-journeys')
+  fx.writeSeed(root, { records: ['client'], journeys: [] })
+  fx.writeLedger(root)
+  fx.writeStatus(root, { marks: seedMarks() })
+  fx.writeApp(root, { records: ['client'] })
+  const stub = fx.installStub(path.join(root, 'stub-bin'), path.join(root, 'stub-state'))
+  stub.setContract(fx.contractOk())
+  stub.setCheck(fx.checkOk())
+
+  const r = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'seed-done'], { env: stub.env() })
+  assert.strictEqual(r.status, 2, 'a seed declaring no journeys must refuse seed-done rather than let the mock reach APPROVED with no screen drawn: ' + r.stderr)
+  assert.match(r.stderr, /declares no journeys/, 'the refusal must name the empty journey set as the cause: ' + r.stderr)
+  assert.ok(endsWithRemedy(r.stderr), 'the refusal must end with a remedy naming what to add: ' + r.stderr)
+  assert.match(r.stderr, /### <journey>/, 'the remedy must name the exact seed grammar to add: ' + r.stderr)
+  assert.strictEqual(fx.readStatus(root).marks.seedDone, null, 'a refused seed-done must leave marks.seedDone unset')
+
+  fx.appendSeedJourney(root, 'first-visit')
+  const ok = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'seed-done'], { env: stub.env() })
+  assert.strictEqual(ok.status, 0, 'once the seed declares a journey, seed-done must record as before — the new guard must not block a well-formed seed: ' + ok.stderr)
+  assert.ok(fx.readStatus(root).marks.seedDone, 'marks.seedDone must be recorded once a journey is declared')
+})

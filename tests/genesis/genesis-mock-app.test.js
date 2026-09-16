@@ -322,3 +322,39 @@ test('AC-20260914-02-6: WHEN --mark skeleton-landed runs on a host with app/mock
   assert.strictEqual(statusOf(greenDir).marks.skeletonLanded, true,
     'D6(d): marks.skeletonLanded must be recorded true on success: ' + JSON.stringify(statusOf(greenDir).marks))
 })
+
+// Spec 02 review advisory: appendDerivedPicksToBrief returned silently when brief.md carried no
+// "## Picks" heading. The dimension stopped being listed open (MENUS excludes what the mock app
+// fixes) but nothing recorded it as decided, so every later Picks reader — decideCheck's
+// ADR-naming check, a resumed session — saw it as neither, with no error anywhere.
+test('MENUS on a mock-app host whose brief.md has no "## Picks" heading refuses by name instead of silently losing the derived picks', () => {
+  const dir = tmpdir('genesis-mock-app-no-picks')
+
+  mockApp.writeStatus(dir, { state: 'SEED' })
+  mockApp.writeApp(dir)
+
+  writeBrief(dir, {
+    dims: { framework: 'open', language: 'open', 'package-manager': 'open', 'test-runner': 'open' },
+    picks: ['- archetype: backend-api'],
+  })
+  const disco = mark(dir, 'discovery-done')
+  assert.strictEqual(disco.status, 0, 'test setup requires discovery-done to be accepted: ' + disco.stderr)
+  const bw = mark(dir, 'brief-written')
+  assert.strictEqual(bw.status, 0, 'test setup requires brief-written to be accepted for backend-api: ' + bw.stderr)
+
+  // The heading is removed only now, after the marks that read it: this pins the state a brief
+  // hand-edited (or written from an older template) lands in, not a malformed fixture.
+  const briefPath = path.join(dir, '.claude/genesis/brief.md')
+  const stripped = fs.readFileSync(briefPath, 'utf8').replace(/^## Picks[\s\S]*$/m, '')
+  fs.writeFileSync(briefPath, stripped)
+
+  const r = bare(dir)
+  assert.strictEqual(r.status, 2,
+    'MENUS must refuse when the derived picks have no "## Picks" heading to land under — exiting 0 ' +
+    'here means the picks were dropped silently and the dimensions read as neither open nor decided: ' + r.stdout + r.stderr)
+  assert.match(r.stderr, /## Picks/, 'the refusal must name the missing heading: ' + r.stderr)
+  assert.match(r.stderr, /remedy: add a "## Picks" heading/, 'the refusal must name the exact remedy: ' + r.stderr)
+  assert.match(r.stderr, /framework/, 'the refusal must name at least one pick that had nowhere to land: ' + r.stderr)
+  assert.strictEqual(fs.readFileSync(briefPath, 'utf8'), stripped,
+    'a refused MENUS render must leave brief.md byte-identical — a partial write is how the picks get lost in a second shape')
+})

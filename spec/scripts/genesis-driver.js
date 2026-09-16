@@ -366,7 +366,14 @@ function appendDerivedPicksToBrief(pairs) {
   if (text === null) return
   const headingRe = /^## Picks\s*$/m
   const m = headingRe.exec(text)
-  if (!m) return
+  // Returning silently here loses the derived picks with no trace: the dimension stops being
+  // listed open, but nothing records it as decided, so every later Picks reader sees it as
+  // neither. The brief must have the heading these lines belong under.
+  if (!m) {
+    die(genesisRel('brief.md') + ' has no "## Picks" heading, so the derived pick(s) ' +
+      pairs.map(([k]) => k).join(', ') + ' have nowhere to land — remedy: add a "## Picks" heading to ' +
+      genesisRel('brief.md') + ', then re-run')
+  }
   const afterHeading = m.index + m[0].length
   const rest = text.slice(afterHeading)
   const nextRel = rest.search(/^## /m)

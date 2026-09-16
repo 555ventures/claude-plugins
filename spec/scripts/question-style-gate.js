@@ -7,27 +7,42 @@
 // or buys, a "(Recommended)" label must come with a stated reason, and question text
 // may not lean on code identifiers.
 //
-// Tier 2 (judge): questions that pass tier 1 are reviewed by a fast model against the
-// ten-second cold test — could a non-technical product owner who has never seen this
+// Tier 2 (judge, ADVISORY): questions that pass tier 1 are reviewed by a fast model against
+// the ten-second cold test — could a non-technical product owner who has never seen this
 // repo answer correctly from the question text alone? The judge also screens for
 // questions the codebase/session/ledger could answer without the user (verdict
 // "derive"). Concept load is a judgment property no regex measures.
 // The judge fails open on every error path (no CLI, timeout, unparseable output) and
 // is disabled with SPEC_QUESTION_JUDGE=off.
 //
+// Why tier 2 never blocks (field incident 2026-09-15): the judge is NON-DETERMINISTIC — one
+// byte-identical question submitted eight times returned "rewrite" once, "pass" six times, and
+// once produced no output at all. A hard `exit 2` on that coin flip is unescapable by design:
+// the block text says "rewrite and resubmit", so every retry is DIFFERENT text drawing a fresh
+// independent flip. The field failure was three rejected rewrites, then abandoning the tool for
+// prose — which core § Decisions counts as a dismissed question that STOPS the run. A false
+// "derive" block was worse: its text told the model to auto-pick, i.e. to invent the answer the
+// user never gave. So tier 2 allows the call and returns its verdict as `additionalContext`.
+// Tier 1 keeps `exit 2`: deterministic, so an authoring fix always clears it.
+//
 // Shipped by the spec plugin (wired in hooks/hooks.json), so it fires for every
 // AskUserQuestion in any repo where the plugin is enabled — plugin commands and
 // plain sessions alike.
 //
-// Contract: reads PreToolUse JSON on stdin. exit 0 = allow, exit 2 = block with the
-// corrective rewrite instruction on stderr (fed back to the model, which re-authors).
+// Contract: reads PreToolUse JSON on stdin. exit 2 = block with the corrective rewrite
+// instruction on stderr (tier 1 only; stderr on exit 2 is fed back to the model, which
+// re-authors). exit 0 = allow — silently when there is nothing to say, or printing a
+// PreToolUse `permissionDecision: "allow"` + `additionalContext` object when tier 2 has advice.
+// The JSON object is the only channel available on an allow: stderr from a hook that exits 0
+// goes to the debug log and the model never sees it.
 // Fail-open: any parse failure or unexpected shape allows the call (never wedge).
 //
 // specs/20260902/06-mocks-provenance-ledger.md D5/D6: while a mocks run (design/mocks/
 // status.json, state !== APPROVED) or a genesis run (.claude/genesis/status.json, handoff
 // null) is live under the resolved root, a "derive" judge verdict is treated as pass — every
-// question inside those runs is a user decision by construction. "rewrite" and every tier-1
-// check are unchanged. The judge prompt also carries one added rule sentence: a document that
+// question inside those runs is a user decision by construction, so the session is not even
+// handed the advisory (an unrebutted "you could derive this" is what pushes a model to
+// auto-pick). "rewrite" and every tier-1 check are unchanged. The judge prompt also carries one added rule sentence: a document that
 // cites a subject is never the user deciding it. Root resolution and stage reads fail open on
 // any error (missing/unparsable file => not in a product stage, never a block).
 
@@ -128,7 +143,9 @@ function judgePrompt(questions) {
   ].join('\n')
 }
 
-// Returns null to allow, or a stderr message string to block. Fail-open throughout.
+// Returns null when there is nothing to say, or an advisory string to hand back to the model
+// alongside an ALLOWED call. Never blocks — see the "why tier 2 never blocks" note above.
+// Fail-open throughout.
 // D5: `input` is the parsed hook JSON, used only to resolve productStageRoot for the derive
 // exemption; `rewrite` verdicts and tier-1 are unaffected by it.
 function judge(questions, input) {
@@ -156,9 +173,9 @@ function judge(questions, input) {
   const problems = Array.isArray(verdict.problems) ? verdict.problems.filter((p) => typeof p === 'string') : []
   if (verdict.verdict === 'rewrite') {
     return (
-      'BLOCKED — a review model judged this question unanswerable in ten seconds by a product owner with zero context on this repo.\n' +
+      '[question-style-gate] ADVISORY (the question was NOT blocked and is being asked now) — a fast review model judged it hard to answer in ten seconds by a product owner with zero context on this repo:\n' +
       problems.map((p) => `- ${p}`).join('\n') +
-      '\nRewrite and resubmit: one plain sentence of outcome (what the product does differently), every option phrased as what the owner gains or loses in product terms or in attention / defect-risk / rework terms. Technical terms are fine only when the decision itself is technical — never mechanism framing where an outcome framing exists, never implementation effort.\n'
+      '\nThis judge is non-deterministic and known to false-flag questions whose decision is genuinely pipeline-internal (merge strategy, waive/reject), for which no product-behavior sentence exists — weigh the complaint, do not obey it reflexively. If it is fair, the better next question states one plain outcome (what the product does differently) and phrases every option as what the owner gains or loses in product / attention / defect-risk / rework terms. If it is not, let the answer stand. Never re-ask the same decision twice to satisfy this advisory.\n'
     )
   }
   if (verdict.verdict === 'derive') {
@@ -168,9 +185,9 @@ function judge(questions, input) {
       // fail-open toward the existing derive-block behavior below
     }
     return (
-      'BLOCKED — this looks answerable without the user (the codebase, session, or decision records already hold the answer).\n' +
+      '[question-style-gate] ADVISORY (the question was NOT blocked and is being asked now) — a fast review model thinks this may be answerable without the user, from the codebase, session, or decision records:\n' +
       problems.map((p) => `- ${p}`).join('\n') +
-      '\nDerive the answer yourself; if genuinely ambiguous, take the option cheapest to reverse later. Announce it in one console line — `📌 Auto-picked <choice> — <one-line reason it was derivable> (veto anytime)` — and log it. Re-ask ONLY what remains genuinely underivable, rewritten to the same plain-outcome standard.\n'
+      '\nIf you can genuinely derive it, prefer that next time: announce the pick in one console line — `📌 Auto-picked <choice> — <one-line reason it was derivable> (veto anytime)` — and log it. But the user is being asked RIGHT NOW: take the answer they give. Never discard it and substitute your own, and never treat this advisory as permission to invent an answer the user did not give.\n'
     )
   }
   return null
@@ -206,15 +223,28 @@ function main() {
   // Tier 2: only questions that pass the deterministic floor reach the judge.
   const questions = input && input.tool_input && input.tool_input.questions
   if (!Array.isArray(questions) || questions.length === 0) process.exit(0)
-  let blockMessage = null
+  let advice = null
   try {
-    blockMessage = judge(questions, input)
+    advice = judge(questions, input)
   } catch {
     process.exit(0) // fail-open
   }
-  if (!blockMessage) process.exit(0)
-  process.stderr.write(blockMessage)
-  process.exit(2)
+  if (!advice) process.exit(0)
+  // Allow the call and carry the judge's verdict to the model as context. `additionalContext`
+  // is the only channel that reaches the model on an allow (exit-0 stderr is debug-log only),
+  // and it is paired with an explicit `permissionDecision: "allow"` because that pairing is the
+  // documented shape; AskUserQuestion has no permission surface for the allow to widen.
+  process.stdout.write(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'allow',
+        permissionDecisionReason: 'question-style advisory attached; the question itself is allowed',
+        additionalContext: advice,
+      },
+    })
+  )
+  process.exit(0)
 }
 
 main()

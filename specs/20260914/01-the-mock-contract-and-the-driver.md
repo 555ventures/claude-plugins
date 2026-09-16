@@ -1,7 +1,6 @@
 ---
 date: 2026-09-14
-status: done
-build_base: main
+status: hardened
 tier: critical
 area: mocks
 design: false
@@ -11,7 +10,6 @@ depended_on_by: [specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md, 
 brief: 26
 open_markers: 0
 spiked: 2026-09-14
-diff_base: c636be83d55786631e2e12a19cfe06f770290bdc
 ---
 
 # The mock contract and the driver
@@ -75,9 +73,6 @@ ships calls them.
 | tests/mocks/mock-driver-ledger.test.js | CREATE | tests | AC-20260914-01-16 (SHALL CONTINUE TO pin), AC-20260914-01-24 |
 | tests/consistency/mocks-doctrine.test.js | CREATE | tests | AC-20260914-01-19 |
 | tests/spec-paths.test.js | MODIFY | tests | AC-20260914-01-17 (reuse), AC-20260914-01-18 (rewrite) |
-| tests/consistency/read-load.test.js | MODIFY | tests | collision with D14: the pinned `/spec:mocks` section list drops § Design Atlas |
-| tests/consistency/genesis-doctrine.test.js | MODIFY | tests | collision with D12/D13: the Authoring Rules wireframe-literal checks retire with their subject (heading and shared-mocks pins kept) |
-| tests/expiry/test-expiry.test.js | MODIFY | tests | user ruling 2026-09-14: the live-repo expiry pin reads AC owners by defining bullet, as `expire-tests.js` does, plus one fixture test |
 | tests/mocks/mocks-driver-fixtures.js | DELETE | tests | replaced by mock-app-fixtures.js |
 | tests/mocks/mocks-driver-exclusions.test.js | DELETE | tests | pinned the retired `ledger derive` / exclusions path |
 | tests/mocks/mocks-driver-look-stops-2.test.js | DELETE | tests | pinned `stop open` and the frontend-design line |
@@ -91,10 +86,6 @@ ships calls them.
 | tests/mocks/note-conversation.test.js | DELETE | tests | pinned the driver's `notes` reply model over HTML notes |
 | tests/design-look-handoff.test.js | DELETE | tests | pinned `look` / `look-probe` |
 | tests/mocks/mocks-exclusions.test.js | DELETE | tests | execs the retired `ledger derive` through the driver (collision closure at lock) |
-| tests/mocks/client-walk-route.test.js | DELETE | tests | A5 survivor: drives the old seed grammar through `--mark seed-done` via the deleted fixtures; deleted per A5's remedy, never weakened |
-| tests/mocks/exclusions-route.test.js | DELETE | tests | A5 survivor: drives the old seed grammar through `--mark seed-done` via the deleted fixtures; deleted per A5's remedy, never weakened |
-| tests/mocks/notes-reanchor.test.js | DELETE | tests | A5 survivor: execs the retired driver `notes address` verb; deleted per A5's remedy, never weakened |
-| tests/mocks/wire-register.test.js | DELETE | tests | A5 survivor: imports the deleted mocks-driver fixtures; deleted per A5's remedy, never weakened |
 
 Orchestrator duty (outside the table): after the plugin.json bump, `node scripts/plugin-bump.js
 --check` is green.
@@ -227,7 +218,7 @@ run spawns the package (D3).
 - **AC-20260914-01-16**: WHEN `ledger add --id A1 --step SCREENS --kind product --claim "x" --tag invented --status open` then `ledger counts` run on the mock-app fixture host (schemaVersion 2 `status.json` present) THE SYSTEM SHALL CONTINUE TO exit 0, append the row `| A1 | SCREENS | product | x | invented | open | - | - | - |`, print a counts line containing `1 invented (1 open)`, and leave `status.json` byte-identical → writes tests/mocks/mock-driver-ledger.test.js
 - **AC-20260914-01-24**: WHEN `--mark journey-approved --journey first-visit` runs with every D7 condition satisfied and the ledger row `A1` still `open` THE SYSTEM SHALL exit 2 naming `A1` and the `ledger set --id A1 --status confirmed --tag said-by-user` remedy → writes tests/mocks/mock-driver-ledger.test.js
 - **AC-20260914-01-17**: WHEN `spec-paths mocks-driver` runs THE SYSTEM SHALL CONTINUE TO resolve to `spec/scripts/mocks-driver.js` → reuses tests/spec-paths.test.js :: AC-20260902-07-15: spec-paths mocks-driver resolves
-- **AC-20260914-01-18**: WHEN `spec-paths shared-for mocks` runs THE SYSTEM SHALL emit `## Design Canon` and `## Session Execution` and never `## Design Atlas` → rewrites tests/spec-paths.test.js :: AC-20260914-01-18: spec-paths shared-for mocks serves exactly the D14 section set — Design Canon present, Design Atlas and Design Render Gate both absent
+- **AC-20260914-01-18**: WHEN `spec-paths shared-for mocks` runs THE SYSTEM SHALL emit `## Design Canon` and `## Session Execution` and never `## Design Atlas` → rewrites tests/spec-paths.test.js :: AC-20260902-07-15: spec-paths shared-for mocks serves exactly the D16 section set
 - **AC-20260914-01-19**: WHEN `spec/doctrine/mocks.md`, `spec/commands/mocks.md` and `spec/skills/mock-authoring/SKILL.md` are read THE SYSTEM SHALL satisfy: mocks.md § Mocks: State Machine names `SEED → SHELL → SCREENS → THEME → CLIENT → APPROVED` and none of `KIT`, `WIREFRAMES`, `SHAPES`; § Mocks: Authoring Rules names `@/components/ui`, `/**`, `examples`, `src/records`; mocks.md's `## Provenance Ledger` body is byte-identical to the pre-change body; commands/mocks.md contains none of `design-atlas`, `tokens.css`, `data-status`, `exclusions.md`, `frontend-design`; SKILL.md's frontmatter has `name: mock-authoring` → writes tests/consistency/mocks-doctrine.test.js
 - **AC-20260914-01-22**: WHEN the SEED block's four `cp` lines are parsed THE SYSTEM SHALL name only files that exist under `spec/templates/mock/` (`mock.config.ts`, `journeys.ts`, `screen.example.tsx`, `records.example.ts`), and no `cp` destination for `screen.example.tsx` or `records.example.ts` SHALL fall under `src/` (both land in `app/design/examples/`) → writes tests/mocks/mock-contract.test.js
 - **AC-20260914-01-23**: WHEN `design/mocks/status.json` carries `schemaVersion: 1` THE SYSTEM SHALL exit 2 with stderr containing `schemaVersion 1` and `remedy: rm design/mocks/status.json` and write nothing → writes tests/mocks/mock-driver-states.test.js
@@ -270,26 +261,6 @@ fewer surface); a build-time `mock-review` fixture package (a stub executable is
 keeps this repo dependency-free); keeping `ledger derive` (it derived exclusions from client
 answers on `walk.json`, which no longer exists). Fragile: the retired-verb sweep (A6) and the
 survivor test set (A5) are predictions priced with their remedies.
-
-Build departures (folded from the deviations sidecar at close, 2026-09-14):
-- `## Records` line syntax was unspecified; fixtures and `--mark seed-done` use one bare `- <entity>`
-  line per entity.
-- AC-7's "no ledger gate" proof appends a ledger row directly, isolating it from `ledger add`'s exit.
-- Red-check: a fixture comment naming a carried AC by ID was reworded; AC-18's `rewrites` pointer now
-  names the renamed test.
-- A5 falsified: `client-walk-route`, `exclusions-route`, `notes-reanchor` and `wire-register` still
-  drove the retired driver path; deleted per A5's remedy and added as DELETE rows.
-- Whole-suite collisions: the read-load section pin dropped § Design Atlas (D14); the genesis-doctrine
-  Authoring Rules wireframe literals retired with their subject (D12/D13); 22 criteria across 13 done
-  specs orphaned by the deleted tests were tagged `[retired: …]` to this spec.
-- User ruling 2026-09-14 (Fable second opinion): a pre-existing red from spec 02's pointer at a done
-  spec's test was fixed in the expiry pin, which now reads AC owners by defining bullet as
-  `expire-tests.js` does; spec 02 was not edited.
-- Review (3 iterations, CLEAN): every driver and `mock-cli.js` refusal now ends with `remedy:`, and
-  accepted marks print the ledger counts line plus the checkpoint line (§ Mocks: Checkpoint contract).
-  Advisory, not fixed: a missing `ledger.md` makes an accepted mark save and then exit 2 with a remedy
-  that does not recreate the file; `ledger check` grammar errors carry no `remedy:`; `spawnEnv` falls
-  back to `/usr/bin:/bin` on an empty PATH; a seed with no journeys skips SCREENS.
 
 ## Canonical Delta
 

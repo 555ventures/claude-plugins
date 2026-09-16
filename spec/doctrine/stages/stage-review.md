@@ -104,10 +104,11 @@ never a driver slot — plus `📎 N advisory finding(s) recorded` when the retu
   --root <root> --diff <files>` surfaces; a **carry** stamps `reviewed: YYYY-MM-DD`. Commit
   everything still uncommitted per the driver's printed instruction for what the close commit
   includes. Never `--no-verify`.
-- **Merge strategy and non-trivial conflicts always go through `AskUserQuestion`** (the MERGE
-  step) — the driver runs `merge-back` inspect and prints its `RECOMMEND` line, but the choice
-  (merge-commit / ff-only / squash / rebase-ff) is this session's call, `RECOMMEND` first.
-  Resolve conflicts by intent; a non-trivial conflict is always `AskUserQuestion`, never a
-  mechanical pick. Relocate before marking `merge-strategy` — `ExitWorktree(action="keep")` if
-  entered via `EnterWorktree`, else `cd` to the driver-named root — then pass the driver the
-  **worktree's absolute spec path**. Never push; that is an explicit user action.
+- **Merge strategy is derived, never asked; non-trivial conflicts always go through
+  `AskUserQuestion`** (the MERGE step). Take `merge-back` inspect's `RECOMMEND` (absent or
+  contradicted: `merge-commit`, cheapest to reverse), print `📌 Auto-picked <strategy> —
+  <reason> (veto anytime)`, mark it — strategy has no product consequence and its delivery
+  consequence is in the printed history, so § Question Style derives it. Resolve conflicts by
+  intent, never a mechanical pick. Relocate before marking `merge-strategy` —
+  `ExitWorktree(action="keep")` if entered via `EnterWorktree`, else `cd` to the driver-named
+  root — then pass the **worktree's absolute spec path**. Never push; that is the user's action.

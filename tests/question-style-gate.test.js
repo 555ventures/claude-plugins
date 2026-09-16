@@ -125,20 +125,52 @@ const TIER1_CLEAN = ask([
   },
 ])
 
-test('AC-20260902-06-7: judge rewrite verdict blocks with the stated problem', () => {
+// Field incident 2026-09-15 (measured): the tier-2 judge is non-deterministic — one
+// byte-identical question submitted eight times returned "rewrite" once, "pass" six times, and
+// once produced no output at all. While `rewrite` was a hard exit 2, that ~1-in-7 flip put the
+// session in an unwinnable loop: the block text says "rewrite and resubmit", so every retry was
+// different text drawing a fresh flip, and the observed field failure was three rejected
+// rewrites followed by abandoning AskUserQuestion for prose — which core § Decisions counts as a
+// dismissed question that STOPS the run. Tier 2 is therefore advisory: it ALLOWS the call and
+// returns its verdict as PreToolUse `additionalContext`. Tier 1 stays a hard block (deterministic,
+// so an authoring fix always clears it).
+function advisoryOf(res) {
+  assert.strictEqual(res.status, 0, 'tier 2 must never block: ' + res.stderr)
+  let parsed
+  try {
+    parsed = JSON.parse(res.stdout)
+  } catch {
+    assert.fail('tier-2 advice must be emitted as PreToolUse JSON on stdout, got: ' + JSON.stringify(res.stdout))
+  }
+  assert.strictEqual(parsed.hookSpecificOutput.hookEventName, 'PreToolUse')
+  assert.strictEqual(parsed.hookSpecificOutput.permissionDecision, 'allow',
+    'the question must be allowed through — the advisory rides along with it, it never replaces it')
+  return parsed.hookSpecificOutput.additionalContext
+}
+
+test('AC-20260902-06-7: a judge rewrite verdict allows the question and returns the problem as advice, never a block', () => {
   const res = runJudged(TIER1_CLEAN, '{"verdict":"rewrite","problems":["\\"fixed list\\" assumes the owner knows what feeds the list"]}')
-  assert.strictEqual(res.status, 2)
-  assert.match(res.stderr, /ten seconds/)
-  assert.match(res.stderr, /assumes the owner knows/)
-  assert.match(res.stderr, /gains or loses/)
+  const advice = advisoryOf(res)
+  assert.match(advice, /ADVISORY/)
+  assert.match(advice, /NOT blocked/)
+  assert.match(advice, /ten seconds/)
+  assert.match(advice, /assumes the owner knows/, 'the judge\'s own complaint must reach the model verbatim — advisory changes the force of the verdict, not its content')
+  assert.match(advice, /gains or loses/)
+  assert.doesNotMatch(advice, /^BLOCKED/m,
+    'a non-deterministic judge must never phrase its verdict as a block: the field incident was a session rewriting three times against a coin flip')
+  assert.strictEqual(res.stderr, '',
+    'nothing may go to stderr on an allow — exit-0 stderr reaches the debug log only, so advice written there would reach nobody')
 })
 
-test('judge derive verdict blocks with the auto-pick announcement instruction', () => {
+test('a judge derive verdict allows the question and advises deriving next time, never instructs the session to invent this answer', () => {
   const res = runJudged(TIER1_CLEAN, '{"verdict":"derive","problems":["the failing test already names the notice list"]}')
-  assert.strictEqual(res.status, 2)
-  assert.match(res.stderr, /answerable without the user/)
-  assert.match(res.stderr, /📌 Auto-picked/)
-  assert.match(res.stderr, /cheapest to reverse/)
+  const advice = advisoryOf(res)
+  assert.match(advice, /ADVISORY/)
+  assert.match(advice, /answerable without the user/)
+  assert.match(advice, /📌 Auto-picked/)
+  assert.match(advice, /take the answer they give/,
+    'a false derive verdict used to block with an auto-pick instruction — i.e. it told the session to invent the answer the user never gave, which core § Decisions forbids outright')
+  assert.doesNotMatch(advice, /^BLOCKED/m)
 })
 
 test('judge pass verdict allows', () => {
@@ -201,7 +233,7 @@ function runStage(payload, envOverrides) {
 
 const DERIVE_JSON = '{"verdict":"derive","problems":["x"]}'
 
-test('AC-20260902-06-6: a derive verdict is allowed while CLAUDE_PROJECT_DIR points at a non-APPROVED mocks run or a handoff-less genesis run, still blocked once mocks is APPROVED with no genesis file, and allowed via the hook input\'s cwd when CLAUDE_PROJECT_DIR is unset', () => {
+test('AC-20260902-06-6: a derive verdict is silenced while CLAUDE_PROJECT_DIR points at a non-APPROVED mocks run or a handoff-less genesis run, advises again once mocks is APPROVED with no genesis file, and is silenced via the hook input\'s cwd when CLAUDE_PROJECT_DIR is unset', () => {
   const wireframes = stageDir()
   writeMocksStatus(wireframes, 'WIREFRAMES')
   const inWireframes = runStage(TIER1_CLEAN, {
@@ -209,6 +241,8 @@ test('AC-20260902-06-6: a derive verdict is allowed while CLAUDE_PROJECT_DIR poi
   })
   assert.strictEqual(inWireframes.status, 0,
     'a mocks run with state !== APPROVED must exempt a derive verdict — every question inside a mocks run is a user decision by construction (D5), so blocking it here defeats the exemption: ' + inWireframes.stderr)
+  assert.strictEqual(inWireframes.stdout, '',
+    'inside the stage window the exemption suppresses the derive advisory entirely — an unrebutted "you could derive this" is exactly what pushes a session to auto-pick a product fact that was the user\'s to state')
 
   const genesis = stageDir()
   writeGenesisStatus(genesis, null)
@@ -223,10 +257,10 @@ test('AC-20260902-06-6: a derive verdict is allowed while CLAUDE_PROJECT_DIR poi
   const inApproved = runStage(TIER1_CLEAN, {
     SPEC_QUESTION_JUDGE: '', SPEC_QUESTION_JUDGE_BIN: fakeJudge(DERIVE_JSON), CLAUDE_PROJECT_DIR: approved,
   })
-  assert.strictEqual(inApproved.status, 2,
-    'once mocks/status.json says APPROVED (and no genesis file exists) the stage window is closed — a derive verdict here must block exactly as it always has, or the exemption leaks past the mocks run it is scoped to: ' + inApproved.stderr)
-  assert.match(inApproved.stderr, /BLOCKED — this looks answerable without the user/,
-    'the blocked message outside the stage window must be the existing derive-block text — the exemption changes WHEN derive blocks, never the message it blocks with')
+  assert.strictEqual(inApproved.status, 0,
+    'tier 2 never blocks, in or out of the stage window')
+  assert.match(advisoryOf(inApproved), /answerable without the user/,
+    'once mocks/status.json says APPROVED (and no genesis file exists) the stage window is closed, so the derive advisory is emitted again — the exemption changes WHETHER the advice is sent, never the tool call\'s outcome')
 
   const cwdPayload = { ...TIER1_CLEAN, cwd: wireframes }
   const viaCwd = runStage(cwdPayload, {
@@ -236,7 +270,7 @@ test('AC-20260902-06-6: a derive verdict is allowed while CLAUDE_PROJECT_DIR poi
     'with CLAUDE_PROJECT_DIR unset, D5\'s root resolution falls back to the hook input\'s own `cwd` field — a session without that env var still gets the exemption inside a mocks run: ' + viaCwd.stderr)
 })
 
-test('AC-20260902-06-7: rewrite and tier-1 continue to block exactly as before inside the product-stage window too', () => {
+test('AC-20260902-06-7: a rewrite verdict still advises inside the product-stage window, and tier-1 still blocks there', () => {
   const wireframes = stageDir()
   writeMocksStatus(wireframes, 'WIREFRAMES')
 
@@ -244,9 +278,8 @@ test('AC-20260902-06-7: rewrite and tier-1 continue to block exactly as before i
     SPEC_QUESTION_JUDGE: '', SPEC_QUESTION_JUDGE_BIN: fakeJudge('{"verdict":"rewrite","problems":["x"]}'),
     CLAUDE_PROJECT_DIR: wireframes,
   })
-  assert.strictEqual(rewriteInStage.status, 2,
-    'D5 exempts only the derive verdict — a rewrite verdict must still block inside a mocks run, or the tier-2 cold-test floor silently disappears for the entire stage: ' + rewriteInStage.stderr)
-  assert.match(rewriteInStage.stderr, /ten seconds/)
+  assert.match(advisoryOf(rewriteInStage), /ten seconds/,
+    'D5 exempts only the derive verdict — a rewrite verdict still delivers its cold-test advice inside a mocks run, or the tier-2 floor silently disappears for the entire stage')
 
   const tier1InStage = runStage(
     ask([

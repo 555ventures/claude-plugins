@@ -37,7 +37,7 @@ test('AC-20260823-06-4: review.md\'s CLOSE step states the at-cap eviction duty 
   assert.ok(start !== -1,
     'setup: review.md must still carry its "Close (the CLOSE step)" bullet — without this ' +
     'anchor the eviction duty has nowhere defined to live')
-  const end = review.indexOf('**Merge strategy and non-trivial conflicts', start)
+  const end = review.indexOf('**Merge strategy is derived', start)
   assert.ok(end !== -1,
     'setup: review.md must still carry the MERGE-step bullet immediately after CLOSE, used ' +
     'here only to bound the CLOSE section being checked')

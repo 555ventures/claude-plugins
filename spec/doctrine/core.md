@@ -253,9 +253,9 @@ that reader:
 - **Product facts are asked, never derived.** A citing document is never the user deciding
   it; the mocks/genesis product-stage exemption (`spec-paths shared-mocks`) is the mechanism.
 
-The floor is enforced by the `question-style-gate.js` PreToolUse hook: tier 1 deterministic
-(consequence-bearing descriptions, reasoned recommendations, identifier density), tier 2 a
-fast-model judge against the cold test (fails open; `SPEC_QUESTION_JUDGE=off` disables).
+The floor is enforced by the `question-style-gate.js` PreToolUse hook: tier 1 blocks (deterministic —
+a rewrite always clears it), tier 2 only advises, via `additionalContext` on an allowed call
+(`SPEC_QUESTION_JUDGE=off` disables). A coin-flip judge holds no veto: never re-ask one decision to satisfy it, never read `derive` as licence to answer for the user.
 
 ## Console Output Style (progress narration and end-of-run reports)
 

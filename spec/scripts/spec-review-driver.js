@@ -2391,7 +2391,11 @@ const STEPS = {
     return `## Step: merge strategy\n` + (inspect.stdout + inspect.stderr).trim() + '\n\n' +
       restampLine +
       waivedWarn +
-      `AskUserQuestion for the strategy (RECOMMEND above first). Then:\n` +
+      `Derive the strategy — take RECOMMEND above (merge-commit when it is absent or the ` +
+      `history contradicts it: it is the cheapest to reverse). Print one line ` +
+      `\`📌 Auto-picked <strategy> — <RECOMMEND's reason> (veto anytime)\` and do NOT ask: a ` +
+      `merge strategy has no product consequence and its delivery consequence is in the history ` +
+      `printed above. Then:\n` +
       `  node ${__filename} ${specPath} --mark merge-strategy <merge-commit|ff-only|squash|rebase-ff>\n` +
       `Relocate first if needed: ExitWorktree(action="keep") if this session entered the worktree, ` +
       `else \`cd ${mainRoot}\` in the main session — the mark is refused while the driver's ` +

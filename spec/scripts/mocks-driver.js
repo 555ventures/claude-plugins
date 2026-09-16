@@ -322,6 +322,12 @@ function cmdSeedDone() {
       die('design/mocks/seed.md ## Records names "' + entity + '" but ' + rel + ' does not exist — remedy: write ' + rel)
     }
   }
+  // deriveState's SCREENS loop iterates the seed's journeys, so a seed that declares none makes
+  // SCREENS unreachable — the mock would walk straight to APPROVED with no screen ever drawn.
+  // Refuse here rather than let an empty journey set read as a satisfied one.
+  if (parseSeedJourneys(seedText).size === 0) {
+    die('design/mocks/seed.md declares no journeys — remedy: add one "### <journey>" block per journey the product supports under "## Journeys", then re-run `--mark seed-done`')
+  }
   if (!fs.existsSync(path.join(appDir(), 'mock.config.ts'))) {
     const rel = path.posix.join(status.app, 'mock.config.ts')
     die(rel + ' does not exist — remedy: cp "$(spec-paths templates)"/mock/mock.config.ts ' + rel)

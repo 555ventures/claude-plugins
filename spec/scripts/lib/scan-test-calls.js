@@ -33,37 +33,17 @@ const fs = require('fs')
 const path = require('path')
 const { readConfig, DEFAULT_TEST_GLOBS } = require('./host-config')
 const { globMatch } = require('./glob-match')
+const { walkFiles } = require('./walk-files')
 
-// D2's skip set. `.claude/worktrees` is matched by RELATIVE path (a directory named
-// "worktrees" anywhere else in the tree is not skipped) — everything else is a bare name match,
-// same as ac-drift.js's own SKIP_DIRS.
-const SKIP_DIR_NAMES = new Set(['.git', 'node_modules', 'fixtures', '__fixtures__'])
-
-function walk(dir, root, out) {
-  let entries
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true })
-  } catch {
-    return
-  }
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) {
-      const rel = path.relative(root, full).split(path.sep).join('/')
-      if (SKIP_DIR_NAMES.has(entry.name) || rel === '.claude/worktrees') continue
-      walk(full, root, out)
-    } else if (entry.isFile()) {
-      out.push(full)
-    }
-  }
-}
+// D2's skip set and the walk that applies it live in lib/walk-files.js — the one copy
+// lib/invariants.js's universe shares, so the two can never disagree about which files exist
+// (they once did: only one of them resolved symlinks).
 
 function listTestFiles(root, config) {
   const cfg = config || {}
   const configTestGlobs = cfg.testGlobs
   const testGlobs = Array.isArray(configTestGlobs) ? configTestGlobs : DEFAULT_TEST_GLOBS
-  const all = []
-  walk(root, root, all)
+  const all = walkFiles(root)
   const relPosix = (abs) => path.relative(root, abs).split(path.sep).join('/')
   return all.filter((f) => testGlobs.some((g) => globMatch(g, relPosix(f))))
 }

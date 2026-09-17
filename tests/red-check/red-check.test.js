@@ -707,6 +707,32 @@ test('a directory symlink under a globbed tests row is never listed as a test fi
     `the only real file is a passing sanctioned pin, so any non-zero exit means the link still leaked into the run (stderr: ${res.stderr})`)
 })
 
+// The other half of the same entry-type filter: skipping every symlink outright dropped a test
+// file that is itself a link out of wildcard expansion, and the AC it pins then read as uncovered
+// with nothing in the output to say why. A link whose target is a regular file is safe to read.
+test('a test file that is itself a symlink to a regular file still expands under a globbed tests row', () => {
+  const { dir, base } = newHost('rcfilelink')
+  fs.mkdirSync(path.join(dir, 'tests/mocks'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'shared'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'shared/ac.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260821-97-1: a passing sanctioned pin reached through a file symlink', () => { assert.ok(true) })\n")
+  fs.symlinkSync(path.join(dir, 'shared/ac.test.js'), path.join(dir, 'tests/mocks/linked.test.js'), 'file')
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260821-97-1**: WHEN x THE SYSTEM SHALL CONTINUE TO y → tests/mocks/linked.test.js'],
+    ['| tests/mocks/** | CREATE | tests | globbed row whose only test file is a symlink to a regular file |']))
+  const res = run(spec, dir, base, ['--json'])
+  const out = findings(res)
+  const linked = out.files.find(f => f.path === 'tests/mocks/linked.test.js')
+  assert.ok(linked,
+    `a symlink to a regular file is readable and must expand like any other test file — dropping it reports the AC it pins as uncovered with no hint why: ${JSON.stringify(out.files)}`)
+  assert.ok((linked.carriedAcs || []).includes('AC-20260821-97-1'),
+    `expanding the link is only half the point — the AC pinned inside it must be carried, or the row is listed but its coverage claim is still lost: ${JSON.stringify(linked)}`)
+  assert.strictEqual(res.status, 0,
+    `the linked file is a passing sanctioned pin, so a non-zero exit means the expansion lost it (stderr: ${res.stderr})`)
+})
+
 // specs/20260915/01-one-derivation-of-ignored-paths.md D2/D3/D4: walkAll's wildcard expansion now
 // prunes through the shared spec/scripts/lib/ignored-paths.js derivation (the same one
 // scope-reconcile.js's walkTestFiles uses) — a directory whose repo-relative path plus `/` is

@@ -373,13 +373,15 @@ const D10_KEYWORD_BEFORE =
   'const REGEX_OPENING_KEYWORD_RE = /(^|[^A-Za-z0-9_$])(return)$/'
 
 // Builds a requireable copy of lib/scan-test-calls.js at `srcText` (rewritten to the given
-// `outPath`), with its relative sibling requires re-pointed at the real host-config/glob-match
-// libs so only the regex-context logic under test differs from HEAD.
+// `outPath`), with its relative sibling requires re-pointed at the real host-config/glob-match/
+// walk-files libs so only the regex-context logic under test differs from HEAD. A sibling require
+// added to the scanner without a line here fails as MODULE_NOT_FOUND from the copy's directory.
 function writeScanLibVariant(outPath, srcText) {
   const libDir = path.dirname(testScanPath)
   const patched = srcText
     .replace("require('./host-config')", `require(${JSON.stringify(path.join(libDir, 'host-config.js'))})`)
     .replace("require('./glob-match')", `require(${JSON.stringify(path.join(libDir, 'glob-match.js'))})`)
+    .replace("require('./walk-files')", `require(${JSON.stringify(path.join(libDir, 'walk-files.js'))})`)
   fs.writeFileSync(outPath, patched)
   delete require.cache[outPath]
   return require(outPath)

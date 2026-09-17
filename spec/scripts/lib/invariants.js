@@ -39,8 +39,8 @@ const fs = require('fs')
 const path = require('path')
 const { readConfig, DEFAULT_TEST_GLOBS } = require('./host-config')
 const { globMatch } = require('./glob-match')
+const { walkFiles } = require('./walk-files')
 
-const SKIP_DIR_NAMES = new Set(['.git', 'node_modules', 'fixtures', '__fixtures__'])
 const TRACKED_EXT_RE = /\.(js|mjs|cjs|ts|sh)$/
 const PIPELINE_ENTRYPOINTS = ['review-legs.js', 'spec-review-driver.js', 'spec-build-driver.js', 'verdict.js']
 
@@ -48,24 +48,9 @@ function relPosix(root, abs) {
   return path.relative(root, abs).split(path.sep).join('/')
 }
 
-function walk(dir, root, out) {
-  let entries
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true })
-  } catch {
-    return
-  }
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) {
-      const rel = relPosix(root, full)
-      if (SKIP_DIR_NAMES.has(entry.name) || rel === '.claude/worktrees') continue
-      walk(full, root, out)
-    } else if (entry.isFile()) {
-      out.push(full)
-    }
-  }
-}
+// The universe's walk and its skip set live in lib/walk-files.js — the one copy
+// lib/scan-test-calls.js's `listTestFiles` (D2) shares, so the two can never disagree about which
+// files exist (they once did: only one of them resolved symlinks).
 
 // Recursively collects every string value found anywhere inside `value` (an object, array, or
 // scalar) into `out` — the one traversal `runtime`/`design`/hook-command trees share.
@@ -141,8 +126,7 @@ const IMPORT_RE = /import\s+[^;'"]*?from\s+(['"])(\.[^'"]+)\1/g
 
 function deriveInvariants(root, config) {
   const absRoot = path.resolve(root)
-  const allFiles = []
-  walk(absRoot, absRoot, allFiles)
+  const allFiles = walkFiles(absRoot)
 
   const cfg = config || {}
   const configTestGlobs = Array.isArray(cfg.testGlobs) ? cfg.testGlobs : DEFAULT_TEST_GLOBS

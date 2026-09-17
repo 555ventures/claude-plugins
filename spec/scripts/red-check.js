@@ -84,7 +84,9 @@
 // scope-reconcile.js's at-risk walk already used privately, now shared. A directory whose
 // repo-relative path plus `/` is ignored is never descended; a file whose repo-relative path is
 // ignored is never pushed; both increment a pruned-path counter. The existing `.git` name skip
-// and `isFile()` filter run first and are untouched. The prune applies to wildcard rows only — a
+// runs first and is untouched, as does the entry-type filter: only a path that resolves to a
+// regular file is pushed (a symlink resolved through `statSync`, never descended), and every
+// entry skipped for its type increments the same pruned-path counter. The prune applies to wildcard rows only — a
 // literal (no `*`) tests row is never walked and never tested against the ignored set, so it
 // still resolves, executes, colour-classifies, and still reports `missing-test-file` when absent,
 // even when it names a path inside a git-ignored directory (D3). A wildcard row that expands to
@@ -223,14 +225,29 @@ function walkAll(dir, rootDir, out = [], ignored, prunedCounter) {
     if (e.name === '.git') continue
     const full = path.join(dir, e.name)
     const rel = path.relative(rootDir, full).split(path.sep).join('/')
-    // Only regular files are pushed: a symlink (a fixture's `node_modules` link to a directory),
-    // socket, or FIFO matched by a glob row would throw EISDIR at readFileSync and kill the run.
+    // Only paths that resolve to a regular file are pushed: a socket, FIFO, or symlink to a
+    // directory (a fixture's `node_modules` link) matched by a glob row would throw EISDIR at
+    // readFileSync and kill the run. A symlink is resolved with `statSync` rather than dropped,
+    // so a test file that is itself a link still expands; a link to a directory is skipped and
+    // never descended, because the ignored-path prune keys on the link's own repo-relative path,
+    // not its target, and following one would walk a whole linked `node_modules`. Every skip
+    // increments the pruned counter so the zero-expansion warning's count stays truthful.
     // A literal tests row is never walked, so a bad literal path still fails loudly there.
     if (e.isDirectory()) {
       if (ignored.has(`${rel}/`)) { prunedCounter.count++; continue }
       walkAll(full, rootDir, out, ignored, prunedCounter)
     } else if (e.isFile()) {
       if (ignored.has(rel)) { prunedCounter.count++; continue }
+      out.push(rel)
+    } else if (e.isSymbolicLink()) {
+      let target
+      try {
+        target = fs.statSync(full)
+      } catch {
+        prunedCounter.count++
+        continue
+      }
+      if (!target.isFile() || ignored.has(rel)) { prunedCounter.count++; continue }
       out.push(rel)
     }
   }
@@ -260,8 +277,8 @@ for (const { p, isDelete } of testsRowEntries) {
     // the walk's pruned-path count — cause-agnostic (the row may have matched nothing with or
     // without a prune); a row that matched >=1 file pushes nothing.
     if (matches.length === 0) {
-      warnings.push(`${p}: File Plan tests row expanded to 0 files (${prunedCount} ignored ` +
-        `path(s) pruned from the repo walk)`)
+      warnings.push(`${p}: File Plan tests row expanded to 0 files (${prunedCount} ` +
+        `path(s) pruned from the repo walk: git-ignored, or not a regular file)`)
     }
   } else {
     testFiles.add(p)

@@ -30,8 +30,8 @@ note`:
   `product` row does not parse.
 - `rejected`, `dependents`, `note` — free text; `-` means empty.
 
-An `exclusion` row is derived, never hand-typed — `ledger add --kind exclusion` refuses,
-naming `ledger derive`. Its `tag` is always `said-by-user`; its `note` grammar is fixed —
+An `exclusion` row is written by `--mark approved` from each deferred note (`note` =
+`deferred: <id>`); a hand-typed row passes through `ledger add`. Its `tag` is always `said-by-user`; its `note` grammar is fixed —
 `non-goal: <brief line>` | `answer: <noteId>` | `withdrawn: <noteId>` — naming the discovery
 non-goal, invented-row answer, or withdrawn client note it derives from. It never blocks the
 gate and counts separately in the counts line's ` · <E> exclusions` tail.
@@ -67,33 +67,53 @@ never trusted alone; if its governing artifact no longer supports it (a journey 
 the seed, `check --json` reporting a finding the mark should have caught) the derivation lands
 earlier and demands the mark again. The order is fixed:
 
-**SEED → SHELL → SCREENS → THEME → CLIENT → APPROVED**
+**SEED → SHELL → SCREENS → THEME → APPROVED**
 
 SEED authors `design/mocks/seed.md`, runs the printed scaffold, lands the template files, and
 writes every declared `## Records` entity as a typed source file. SHELL closes once `check
 --json` reports `ok: true` and at least one shell with a non-empty `examples` export — there is
 no separate human stop; the first journey's approval is the shell's. SCREENS closes once every
-journey the seed declares is drawn and approved, in seed order. THEME closes once the user
-authors color candidates, the pick is recorded on the served page, and one `mock.config.ts`
-line adopts it. CLIENT closes once the client walks the served app through a token link, raising
-and resolving notes, waiving or confirming each journey. APPROVED is terminal. A `status.json`
-carrying `schemaVersion: 1` refuses (exit 2, `remedy: rm design/mocks/status.json` — ADR-0028)
-rather than being silently reinterpreted; no host holds data on the old shape.
+journey the seed declares is drawn and approved, in seed order — the client walks the served app
+during SCREENS, journey by journey, so there is no separate state whose only step is "walk the
+client role". THEME closes once the user authors color candidates and one `mock.config.ts` line
+adopts one; its own close block then waits on every journey's client verdict and records
+`approved`. APPROVED is terminal. A `status.json` carrying `schemaVersion: 1` refuses (exit 2,
+`remedy: rm design/mocks/status.json` — ADR-0028) rather than being silently reinterpreted; no
+host holds data on the old shape.
 
 **Marks.** `seed-done` records once every declared records file exists and `mock.config.ts` is
-present (§ Mocks: Seed). `shell-drawn` records once `check --json` reports no `error`-severity
-finding and at least one shell entry with a non-empty `examples` list; a warn-only finding never
-refuses. `journey-drawn --journey <j>` records once `check --json` lists `<j>` with
-`resolved: true`, refusing on an unknown id, an out-of-seed id, or any unresolved edge (named
-`step <from> → <to>: <reason>`) — no ledger gate runs here, drawing is how an assumption gets
-pinned, not resolved. `journey-approved --journey <j>` records once `approval.json`'s own
-`approvedAt` for the journey, every step screen's own approval, and every note on those screens
-and on the journey's own conversation are clear (§ Mocks: Page Notes), then runs the ledger's
-`gateVerdict` (§ Provenance Ledger) before recording. `theme-picked` records once
-`approval.theme` names a theme `check --json` also reports under `config.theme`. `approved`
-records once every journey's `approval.journeys[j].client` is `ok` or `waived` and nothing
-anywhere is open, running `gateVerdict` first. Process rows never surface as something to
-resolve; they are counted, not asked.
+present (§ Mocks: Seed), refusing (exit 2) a `malformed` beat line or a journey with zero beats,
+naming the journey, the first offending line, and `remedy: rewrite the block as numbered
+"sentence" -> screen[@state] lines (§ Mocks: Seed)`. `shell-drawn` records once `check --json`
+reports no `error`-severity finding and at least one shell entry with a non-empty `examples`
+list; a warn-only finding never refuses. `journey-drawn --journey <j>` records once `check
+--json` lists `<j>` with `resolved: true` and its `steps` equal the seed's own beats — same
+length, and at every index the same `beat`, `screen` and `state` (an absent state on either side
+equals `null`) — refusing on an unknown id, an out-of-seed id, an unresolved edge (named `step
+<from> → <to>: <reason>`), or the first differing beat (`beat <n>: seed "<sentence>" ->
+<screen>[@<state>], journeys.ts "<sentence>" -> <screen>[@<state>] — remedy: copy the seed's
+beats verbatim into src/journeys.ts`) — no ledger gate runs here, drawing is how an assumption
+gets pinned, not resolved. `journey-approved --journey <j>` records once: `<j>` is declared in
+the seed; `check --json` lists it `resolved: true`; its steps still equal the seed's beats;
+`notes.journeys[<j>].status` is not `open`; and `approval.journeys[<j>].client` is `ok` or
+`waived` with `approval.journeys[<j>].beats` equal to `beatHash` of the seed's current beats for
+`<j>` (§ Mocks: Client Player) — a missing verdict names `remedy: client open (send the link; the
+client confirms the journey) or client waive --journey <j> --reason <r>`, a stale hash names both
+hashes — then runs the ledger's `gateVerdict` (§ Provenance Ledger) before recording
+`status.journeys[<j>].beats = <hash>`. A journey whose stored hash no longer matches the seed's
+current beats is derived as not approved, landing back on SCREENS ("approve journey `<j>`") —
+editing the seed is how a journey's own conversation note gets answered, since the edit changes
+the hash and reopens the confirmation mechanically. `theme-picked` records once `check
+--json`'s `config.theme` is a non-empty string listed under `themes`; a null theme names
+`remedy: set theme: "<k>" in mock.config.ts, naming an authored src/themes/<k>.css`. `approved`
+refuses any note in `notes.notes` whose status is `open` or `answered` (`remedy: the client
+approves or defers it on the link`) and any `project: true` note whose status is neither
+`approved` nor `deferred`; the per-journey client-verdict refusal stays. Before recording, every
+note and journey conversation with status `deferred` and no ledger row yet gets one exclusion row
+(§ Provenance Ledger) appended; a row whose `note` already names that id is never written twice.
+It then records once every journey's `approval.journeys[j].client` is `ok` or `waived`, running
+`gateVerdict` first. Process rows never surface as something to resolve; they are counted, not
+asked.
 
 **Reopening never deletes.** `--reopen journey:<j>` clears that journey's own `approved` mark
 and the terminal `approved`; `--reopen shell` clears `shellDrawn`, `themePicked`, `approved`,
@@ -109,10 +129,18 @@ states behind them no longer exist.
 SEED is the one state where the host app doesn't exist yet. `design/mocks/seed.md` (template
 `spec/templates/mocks-seed.md`) names the product in three sentences, one `## Records` entity
 per kind of data the product handles, and one `### <journey-kebab>` block per journey — a
-persona line and a fenced ` ```surfaces ``` ` block in the roadmap-brief grammar (names and
-arrows only, one line per edge). Journeys exist before the first screen because no roadmap
-exists yet to derive them from; `lib/surfaces.js`'s `parseSeedJourneys` returns them in seed
-order, and that order is the order SCREENS draws them in.
+persona line followed by numbered **beats**, one per line: `N. "client sentence" ->
+screen[@state]`. Quotes are mandatory, `N` runs contiguously from 1, `screen` and `state` match
+`^[\w][\w-]*$`, and `@state` is optional; alternates ("if X then Y") are separate journey
+blocks, and the same sentence or the same screen may appear in any number of journeys. Journeys
+exist before the first screen because no roadmap exists yet to derive them from;
+`lib/surfaces.js`'s `parseSeedJourneys` returns `beats` in seed order — the order SCREENS draws
+them in — plus `malformed` (every non-blank body line after the persona that is not a beat, and
+one `numbering: expected <k>, got <n>` entry per gap) and, derived from the beats, `labels`
+(screen targets deduplicated in beat order) and `edges` (every consecutive beat pair whose
+screens differ). `beatHash(beats)` is the one hash of a journey's story — the first 12 hex of
+sha256 over its canonical `<beat> -> <screen>[@<state>]` lines — shared by the driver and the
+client page (§ Mocks: Client Player).
 
 The SEED step block prints, in order: `Read only: design/mocks/seed.md`; the scaffold command
 verbatim — `npx shadcn@4.21.0 init -t vite -b radix -p nova -n app -y -s` (the scaffold creates
@@ -159,9 +187,8 @@ recovering from a `/clear` can check where it left off before doing anything.
 The mock is a real running app, not a static file — nothing about it can be judged from source
 alone. `npx mock-review serve` (D2's contract verb) is started once, as a **tracked background
 task** (specs/20260905/04 D4), the moment SEED lands `app/`; it stays up through SHELL, SCREENS
-and THEME, and in CLIENT the server is the user's own process, started once in their terminal
-and kept running until `approved` — no script starts, stops, or probes it there except the
-CLIENT step's own `client open`/`client waive` lines.
+and THEME, kept running until `approved` — no script starts, stops, or probes it beyond THEME's
+close block's own `client open`/`client waive` lines.
 
 **The look is the human's, on the served app.** The session never screenshots a screen to judge
 it — `mock-review check --json`'s structural read (screens, shells, journeys, themes, findings)
@@ -173,12 +200,17 @@ renders before recording the mark, and again whenever raising a layout note on t
 ## Mocks: Page Notes
 
 Feedback lives on the served reviewer page, never in chat and never in mock source. A note's
-`status` is one of three colors: `open` (red — the session's turn), `answered` (yellow — the
-session has spoken, the author's turn to look again), or `approved` (blue — done). The session
+`status` is one of four colors: `open` (red — the session's turn), `answered` (yellow — the
+session has spoken, the author's turn to look again), `approved` (blue — done), or `deferred`
+(a valid point, not now — it blocks nothing and is never lost, since `--mark approved` turns
+every newly deferred item into a ledger exclusion row, § Provenance Ledger). The session
 answers red items with `npx mock-review answer (--note <id> | --journey <id>) --text <t>
 [--decision <d>]`, which flips the item to `answered`; only the served page's own controls —
-approve, reject, delete — end a note or a journey conversation, never an HTTP call the driver
-makes and never a hand-edit of `design/notes.json`.
+approve, defer, reject, delete — end a note or a journey conversation, never an HTTP call the
+driver makes and never a hand-edit of `design/notes.json`. A journey's own conversation is
+**workflow**: order, a missing or wrong step — answered by editing the seed's beats, which
+changes the beat hash and reopens the journey (§ Mocks: State Machine), never by a driver-side
+status write. A screen's own notes are **design and fields**: they never touch the seed.
 
 **The sweep is the session's worklist, never the driver's.** `npx mock-review sweep` lists only
 `open` (red) items, grouped by file, journey requests first, then component/screen notes — the
@@ -195,20 +227,27 @@ project-scoped or not, is still `open`.
 
 ## Mocks: Client Player
 
-The client walks the same served app, never a separate build. `mock-review serve`'s URL plus
-`?client=<config.client.token>` (`client open`, D9) opens the client role: every journey and
-every screen, the same controls a real user has, a note box on each screen, and nothing else —
-no delete, no reject, and no Components page, because those are the session's own review tools,
-not the client's. A client-raised note is the same `notes.json` row the session's own review
-writes, distinguished only by who raised it.
+On the served page there are only two actors: the client and the AI session (as the reviewer
+role) — every control that once existed for a third page role (screen approve, journey approve,
+theme pick, a Components page) is gone with it, because the operator running `/spec:mocks` works
+from files and the CLI, never from the page. The client walks the same served app, never a
+separate build. `mock-review serve`'s URL plus `?client=<config.client.token>` (`client open`,
+requires at least one `status.journeys[*].drawn`, else `remedy: --mark journey-drawn --journey
+<j>`) opens the client role: every drawn journey and every screen, the same controls a real user
+has, a note box on each screen, and nothing else — no delete, no reject. A client-raised note is
+the same `notes.json` row the session's own review writes, distinguished only by who raised it;
+the client ends their own notes — approve or defer them — the session never does.
 
-**A journey's client verdict is `ok` or `waived`, nothing else.** The client's own confirm
-control on a journey sets `approval.journeys[j].client = "ok"`; `--mark approved` refuses any
-journey whose `client` key is absent, naming it and `remedy: client waive --journey <j> --reason
-<r>` — the one write this driver makes to `approval.json` besides what the served page itself
-writes. `client waive` is the session's own escape hatch for an absent client, dated and
-reasoned; `client log` is retired (ADR-0028) — the served page is now the client's whole
-record.
+**The confirm control is the one human gate in the whole mock stage.** SUCCESS: `Confirmed —
+story <hash>` printed on the journey once the client's confirm writes
+`approval.journeys[j] = {client: "ok", beats: <beatHash of the beats they read>, at}`. PATH BACK:
+a workflow note on the journey — the session edits the seed's beats, the hash changes, the
+confirmation is void, and the journey reopens (§ Mocks: State Machine) with no human re-typing
+anything. ARTIFACT: `design/approval.json`, the farthest thing the click reaches. `client waive
+--journey <j> --reason <r>` is the session's own escape hatch for an absent client, writing
+`{client: "waived", reason, at, beats: <beatHash of the seed's current beats>}` — the one write
+this driver makes to `approval.json` besides what the served page itself writes; `client log` is
+retired (ADR-0028) — the served page is now the client's whole record.
 
 ## Mocks: Authoring Rules
 

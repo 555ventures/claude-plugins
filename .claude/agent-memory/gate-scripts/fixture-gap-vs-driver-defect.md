@@ -3,6 +3,7 @@ name: fixture-gap-vs-driver-defect
 description: before patching a shared terminal-state function to satisfy one new assertion, check whether a synthetic test host is just missing a real host's own .gitignore entry
 metadata:
   type: feedback
+  reviewed: 2026-09-17
 ---
 
 Chased a `printDoneNow()` (spec-review-driver.js) test failure — a new D6 skip-warning AC asserted

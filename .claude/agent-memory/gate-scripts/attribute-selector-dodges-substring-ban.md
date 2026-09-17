@@ -3,6 +3,7 @@ name: attribute-selector-dodges-substring-ban
 description: an over-broad "zero occurrences" literal ban that collides with a class name the same spec requires is an AC-boundary defect — amend the AC's literal, never contort the selector to dodge the grep
 metadata:
   type: feedback
+  reviewed: 2026-09-17
 ---
 
 A test's "zero occurrences of `<literal>`" ban over a whole file is usually a bare substring

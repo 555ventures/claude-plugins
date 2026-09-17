@@ -24,10 +24,13 @@
 // laundered into "confirmed") without ever tripping the gate.
 //
 // specs/20260910/05-what-the-journey-does-not-do.md D1: KINDS gains "exclusion" — a row kind
-// derived by `lib/mocks-exclusions.js` + mocks-driver.js's `ledger derive`, never hand-authored
-// (the caller-side refusal on `ledger add --kind exclusion` lives in mocks-driver.js, not here).
-// gateVerdict already never blocks on it (its loop only ever inspects `kind === "product"` rows);
-// countsLine gains a trailing ` · <n> exclusions` segment.
+// written by mocks-driver.js's `--mark approved`, one row per note or journey conversation newly
+// left `deferred` (`note` = `deferred: <id>`), never hand-authored end to end — a hand-typed
+// exclusion row still passes through `ledger add --kind exclusion` the same as any other kind
+// (specs/20260917/01-the-client-confirms-the-story.md D7/A3: the doctrine sentence claiming
+// `ledger add --kind exclusion` refuses was stale — it does not, and this module never refuses on
+// `kind`). gateVerdict already never blocks on it (its loop only ever inspects `kind === "product"`
+// rows); countsLine gains a trailing ` · <n> exclusions` segment.
 //
 // Exit codes: none — this is a library, not an executable.
 

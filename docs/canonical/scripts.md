@@ -44,12 +44,17 @@ fuller incident write-ups live in each cited spec's history.
   `tests/<topic>/<family>.fixtures.js` module (never executed as a test by either the bare or
   the glob form). (specs/20260903/06-test-suite-critical-path.md)
 
-- **`spec/scripts/lib/surfaces.js` is the one parser of the ```surfaces grammar** (a bare
-  label, an `a -> b` edge, a `#` comment); `genesis-driver.js` is the one fold over it and never
-  re-implements it. `parseSurfacesPlacement` returns every declaring brief and no edges, so
-  genesis can catch a double-placement. `genesis-driver.js` takes its synchronous writer and
+- **`spec/scripts/lib/surfaces.js` is the one parser of the roadmap ```surfaces grammar** (a bare
+  label, an `a -> b` edge, a `#` comment) **and of the seed's beat grammar**
+  (`N. "sentence" -> screen[@state]`); `genesis-driver.js` is the one fold over it and never
+  re-implements it. `parseSeedJourneys` returns `beats`, `malformed`, and the genesis-consumed
+  `labels`/`edges` derived from the beats; `beatHash` is the one hash of a journey's story,
+  shared by the driver and the client page. `parseSurfacesPlacement` returns every declaring
+  brief and no edges, so genesis can catch a double-placement; the atlas's own first-brief-wins
+  fold is gone with the atlas. `genesis-driver.js` takes its synchronous writer and
   fail-closed child runner from `lib/driver-io.js`, like every other driver.
-  (specs/20260908/02-driver-dedupe-onto-lib.md)
+  (specs/20260908/02-driver-dedupe-onto-lib.md;
+  specs/20260917/01-the-client-confirms-the-story.md)
 
 - **`spec/scripts/lib/mock-cli.js` is the sole caller of the separate `@555-ventures/mock-review`
   package.** `contractOrDie(appDir)` runs `contract --json` first and refuses on a

@@ -40,6 +40,17 @@ one line per surface, then the fixed reply line, then ends the turn; only the li
 accepts. The reviewer page (the mock app's own served UI) is the one viewer; a session never
 screenshots a screen to judge it in this doctrine's place.
 
+## The mock stage's actors and chain (specs/20260917/01)
+
+On the served page there are only two actors: the **client** and the AI session. The person
+running `/spec:mocks` works from files and the CLI, never from a page control. The chain is
+`SEED → SHELL → SCREENS → THEME → APPROVED`. A seed journey is a numbered list of the client's
+own sentences (`N. "sentence" -> screen[@state]`), copied verbatim into the app; a journey is
+approved by the client's confirm against the hash of those exact sentences, so editing a beat
+voids the confirmation and reopens the journey. Note statuses are `open`, `answered`,
+`approved` and `deferred`; every deferred item becomes a ledger exclusion row at `--mark
+approved` and surfaces in genesis's parking lot.
+
 ## Design Stage: preflight → reconcile → look → stamp (specs/20260914/02)
 
 The design stage is four steps, resumed from disk on every invocation, never a state file:

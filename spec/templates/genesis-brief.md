@@ -40,7 +40,7 @@
 
 ## Journeys
 { generated from design/mocks/seed.md — one block per journey, machine-read by genesis-driver.js:
-  `### <journey>` · persona line · the seed's ```surfaces block verbatim · one `states: <label>: a, b, c` line per screen }
+  `### <journey>` · persona line · one `label -> label` line per beat edge, derived from the seed's beats · one `states: <label>: a, b, c` line per screen }
 
 ## Non-UI Coverage
 - jobs: dark

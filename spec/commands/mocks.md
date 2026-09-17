@@ -31,9 +31,9 @@ own Product sentence and anything under `design/mocks/references/`.
    advancing; a missing or failing artifact is demanded again.
 3. Re-run. Repeat until `APPROVED`.
 
-Every SHELL, SCREENS or THEME step block carries `Skill: mock-authoring — load it before the
-first edit` (spec/skills/mock-authoring/SKILL.md); load it before touching a screen, component
-or shell. SEED, CLIENT and APPROVED never carry that line.
+Every SHELL, SCREENS or THEME pick-block step carries `Skill: mock-authoring — load it before
+the first edit` (spec/skills/mock-authoring/SKILL.md); load it before touching a screen,
+component or shell. SEED, THEME's close block and the APPROVED line never carry that line.
 
 ## SEED
 
@@ -51,28 +51,26 @@ own approval in SCREENS is the shell's approval too.
 
 ## SCREENS
 
-One journey at a time, in the seed's own order. Draw the journey's screens and shell wiring,
-then loop: run `npx mock-review sweep`, act on the queue top to bottom (journey requests first,
-then notes grouped by file), answer each with `npx mock-review answer`, run `npx mock-review
-check`, and re-sweep until it prints one line. Then `node {driver} --root . --mark
-journey-drawn --journey <j>` and, once every screen and the journey's own conversation are
-approved on the served page, `--mark journey-approved --journey <j>`. A journey added to the
-seed mid-SCREENS reopens the state rather than letting it silently complete.
+One journey at a time, in the seed's own order. Copy the journey's beats verbatim into
+`src/journeys.ts` — one `{screen, beat, state?}` step per seed line, in order; assign only edge
+labels and `data-to` wiring, never invent or paraphrase a step. Then loop: run `npx mock-review
+sweep`, act on the queue top to bottom (journey requests first, then notes grouped by file),
+answer each with `npx mock-review answer`, run `npx mock-review check`, and re-sweep until it
+prints one line. Then `node {driver} --root . --mark journey-drawn --journey <j>` — the driver
+refuses unless `check --json`'s steps equal the seed's beats exactly — and the client link is
+then usable (`client open`). Once the client confirms the journey (or `client waive`) and the
+journey's own conversation is not open, `--mark journey-approved --journey <j>`. A workflow note
+on the journey is answered by editing the seed's beats; the next bare run lands back on "approve
+journey `<j>`" because the stored hash no longer matches, and the client re-confirms. A journey
+added to the seed mid-SCREENS reopens the state rather than letting it silently complete.
 
 ## THEME
 
-Author two or three `src/themes/<k>.css` candidates, wait for the pick recorded on the served
-page (`approval.theme`), set `theme: "<k>"` in `app/mock.config.ts`, then `node {driver} --root
-. --mark theme-picked`.
-
-## CLIENT
-
-`npx mock-review serve` is the user's own process here, started once in their terminal. `client
-open` prints the client's URL (`<serve.url>/?client=<config.client.token>`); the client walks
-the app, raises notes and confirms each journey. Answer client notes the way you answer any
-other (`npx mock-review answer`), `client waive --journey <j> --reason <r>` releases a journey
-with no client, and `node {driver} --root . --mark approved` records once every journey is `ok`
-or waived and nothing is open.
+Author two or three `src/themes/<k>.css` candidates and set `theme: "<k>"` in
+`app/mock.config.ts`, then `node {driver} --root . --mark theme-picked`. Once picked, the next
+bare run prints the close block instead: `client open` for any journey still unconfirmed, then
+`node {driver} --root . --mark approved`, which records once every journey's client verdict is
+`ok` or `waived` and nothing anywhere is open.
 
 ## Report
 

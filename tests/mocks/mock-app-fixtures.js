@@ -22,10 +22,18 @@ function mkdirp(p) {
   fs.mkdirSync(p, { recursive: true })
 }
 
-// design/mocks/seed.md — the new grammar (D4/File Plan spec/templates/mocks-seed.md row): a
+// design/mocks/seed.md — the beat grammar (D1/File Plan spec/templates/mocks-seed.md row): a
 // `## Records` section naming entities by bare label (mapped by the driver to
 // `<app>/src/records/<entity>.ts`), then one `### <journey-kebab>` block per journey in seed
-// order (the order parseSeedJourneys — spec/scripts/lib/surfaces.js — returns).
+// order (the order parseSeedJourneys — spec/scripts/lib/surfaces.js — returns), each a persona
+// line followed by numbered `N. "sentence" -> screen[@state]` beats. Every fixture journey here
+// carries the one beat `1. "A fixture persona opens the app" -> home` — its beatHash is
+// `eff77e5a1211` (sha256 of `A fixture persona opens the app -> home`, first 12 hex; see
+// DEFAULT_BEAT_HASH below), so any test needing a journey's stored/confirmed hash to match this
+// fixture's own seed can use that constant instead of recomputing it.
+const DEFAULT_BEAT_TEXT = 'A fixture persona opens the app'
+const DEFAULT_BEAT_HASH = 'eff77e5a1211'
+
 function writeSeed(root, { records = [], journeys = [] } = {}) {
   mkdirp(path.join(root, 'design/mocks'))
   let body = '# Seed — Fixture Product\n\n## Records\n'
@@ -33,7 +41,7 @@ function writeSeed(root, { records = [], journeys = [] } = {}) {
   body += '\n## Journeys\n\n'
   for (const j of journeys) {
     body += `### ${j}\nA fixture persona does the one thing this journey is for.\n` +
-      '```surfaces\nhome\n```\n\n'
+      `1. "${DEFAULT_BEAT_TEXT}" -> home\n\n`
   }
   fs.writeFileSync(path.join(root, 'design/mocks/seed.md'), body)
 }
@@ -42,7 +50,7 @@ function appendSeedJourney(root, journey) {
   const p = path.join(root, 'design/mocks/seed.md')
   const cur = fs.readFileSync(p, 'utf8')
   fs.writeFileSync(p, cur + `### ${journey}\nA fixture persona does the one thing this journey is for.\n` +
-    '```surfaces\nhome\n```\n\n')
+    `1. "${DEFAULT_BEAT_TEXT}" -> home\n\n`)
 }
 
 function writeLedger(root) {
@@ -85,7 +93,7 @@ function defaultNotes(overrides = {}) {
 }
 
 function defaultApproval(overrides = {}) {
-  return { contractVersion: 1, screens: {}, journeys: {}, theme: null, ...overrides }
+  return { contractVersion: 1, screens: {}, journeys: {}, ...overrides }
 }
 
 // The app-side host: mock.config.ts, one src/records/<r>.ts per record entity, and the two
@@ -227,7 +235,7 @@ function installStub(binDir, stateDir, { shebang = 'bash' } = {}) {
 // PATH (not the app bin — mock-cli.test.js exercises the app-bin-only case directly) answering
 // a default `contractVersion: 1` and a default green `check --json`.
 function contractOk(overrides = {}) {
-  return { contractVersion: 1, package: '@555-ventures/mock-review', version: '1.0.0', ...overrides }
+  return { contractVersion: 2, package: '@555-ventures/mock-review', version: '1.0.0', ...overrides }
 }
 
 function checkOk(overrides = {}) {
@@ -247,6 +255,8 @@ function checkOk(overrides = {}) {
 
 module.exports = {
   APP,
+  DEFAULT_BEAT_TEXT,
+  DEFAULT_BEAT_HASH,
   writeSeed,
   appendSeedJourney,
   writeLedger,

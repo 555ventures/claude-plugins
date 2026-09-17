@@ -3,11 +3,14 @@ name: spec-20260914-01-mock-contract-and-driver
 description: Fixture design for the mock-app driver rewrite (SEED..APPROVED) — stub mock-review via env-pointed state dir, PATH='' for ENOENT/refusal proofs, underspecified seed.md Records syntax
 metadata:
   type: project
-  reviewed: 2026-09-14
+  reviewed: 2026-09-17
 ---
 
 Spec 01 (specs/20260914/01-the-mock-contract-and-the-driver.md) retires the HTML-mock driver
-states (SHAPES/KIT/WIREFRAMES) for a six-state machine (SEED→SHELL→SCREENS→THEME→CLIENT→APPROVED)
+states (SHAPES/KIT/WIREFRAMES) for a state machine that was six states at the time
+(SEED→SHELL→SCREENS→THEME→CLIENT→APPROVED); specs/20260917/01 later collapsed CLIENT, so the
+live chain is SEED→SHELL→SCREENS→THEME→APPROVED and the fixtures now emit the beat grammar and
+`contractVersion: 2`. The stub mechanics below are unchanged and still current. The machine is
 driven by a separate `@555/mock-review` package the repo never installs. Test fixture
 (`tests/mocks/mock-app-fixtures.js`) stubs that package as a bash executable that reads its
 canned `contract.json`/`check.json`/`sweep.{json,txt}`/`serve-url.txt` from a directory named by

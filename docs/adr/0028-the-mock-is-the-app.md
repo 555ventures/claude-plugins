@@ -14,7 +14,8 @@
   (c) 20-shell-composed-mocks — superseded: the shell is a React component every screen
   imports, and no region sync exists. (d) 08-design-thinning — superseded: fidelity is no
   longer judged at a render of two artifacts, because there is one artifact.
-- Amended by: —
+- Amended by: ADR-0029 — the state chain drops CLIENT; the client's walk and confirm happen
+  during SCREENS, bound to a hash of the seed's beats.
 
 ## Context
 

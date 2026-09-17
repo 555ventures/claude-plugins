@@ -46,14 +46,13 @@ test('AC-20260914-01-24: `--mark journey-approved` refuses naming an open ledger
   fx.writeApp(root, {
     records: [],
     approval: fx.defaultApproval({
-      screens: { 'console-home': { hash: 'h1', approvedAt: '2026-09-14T00:00:00.000Z', states: [], viewports: [], schemes: [], screenshots: [] } },
-      journeys: { 'first-visit': { approvedAt: '2026-09-14T00:00:00.000Z', client: null } },
+      journeys: { 'first-visit': { client: 'ok', beats: fx.DEFAULT_BEAT_HASH } },
     }),
   })
   const stub = fx.installStub(path.join(root, 'stub-bin'), path.join(root, 'stub-state'))
   stub.setContract(fx.contractOk())
   stub.setCheck(fx.checkOk({
-    journeys: [{ id: 'first-visit', title: 'First visit', steps: [{ screen: 'console-home' }], edges: [], resolved: true, unresolved: [] }],
+    journeys: [{ id: 'first-visit', title: 'First visit', steps: [{ screen: 'home', beat: fx.DEFAULT_BEAT_TEXT, state: null }], edges: [], resolved: true, unresolved: [] }],
   }))
 
   const add = runNode('scripts/mocks-driver.js',

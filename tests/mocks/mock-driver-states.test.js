@@ -6,10 +6,15 @@ const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 const fx = require('./mock-app-fixtures')
 
-// specs/20260914/01-the-mock-contract-and-the-driver.md D3-D12, D16: mocks-driver.js rewritten
-// over SEED -> SHELL -> SCREENS -> THEME -> CLIENT -> APPROVED, deriving state from
-// design/mocks/status.json (schemaVersion 2) plus disk. Each test below pins one AC's exact
-// WHEN/THEN chain; the pre-image driver has none of this state machine, so every case is red.
+// specs/20260917/01-the-client-confirms-the-story.md D3-D11: mocks-driver.js rewritten onto the
+// seed's beat grammar and the SEED -> SHELL -> SCREENS -> THEME -> APPROVED chain (CLIENT
+// retired, D5's beats-equality and beat-hash confirm replacing the old approvedAt chain). Cases
+// below still tagged AC-20260914-01-4/5/6/12/15/23 and "no journeys" are untouched by this spec
+// (specs/20260914/01-the-mock-contract-and-the-driver.md remains their owner) and are expected
+// to fail only incidentally, from the D12 fixture-currency edits rippling ahead of the rest of
+// this build's own File Plan rows landing.
+
+const iso = '2026-09-14T00:00:00.000Z'
 
 function statusPath(root) {
   return path.join(root, 'design/mocks/status.json')
@@ -24,6 +29,21 @@ function patchStatus(root, fn) {
 
 function seedMarks(overrides) {
   return { seedDone: null, shellDrawn: null, themePicked: null, approved: null, ...overrides }
+}
+
+// D1's beat grammar, written directly (bypassing fx.writeSeed's single default beat) so each
+// test below can pin its own beat text/screen/state — and, via beatHash, its own confirmed hash.
+function writeBeatSeed(root, journeys) {
+  fs.mkdirSync(path.join(root, 'design/mocks'), { recursive: true })
+  let body = '# Seed — Fixture Product\n\n## Records\n\n## Journeys\n\n'
+  for (const j of journeys) {
+    body += `### ${j.name}\n${j.persona}\n`
+    j.beats.forEach((b, i) => {
+      body += `${i + 1}. "${b.beat}" -> ${b.screen}${b.state ? '@' + b.state : ''}\n`
+    })
+    body += '\n'
+  }
+  fs.writeFileSync(path.join(root, 'design/mocks/seed.md'), body)
 }
 
 // spec/doctrine/mocks.md § Mocks: Checkpoint contract and the Behavior section's refusal
@@ -101,7 +121,7 @@ test('AC-20260914-01-6: `--mark shell-drawn` refuses on an error finding, record
   fx.writeSeed(root, { records: [], journeys: ['first-visit', 'daily-check'] })
   fx.writeLedger(root)
   fx.writeStatus(root, {
-    marks: seedMarks({ seedDone: '2026-09-14T00:00:00.000Z' }),
+    marks: seedMarks({ seedDone: iso }),
     journeys: { 'first-visit': { drawn: null, approved: null }, 'daily-check': { drawn: null, approved: null } },
   })
   fx.writeApp(root, { records: [] })
@@ -141,8 +161,8 @@ test('AC-20260914-01-6: `--mark shell-drawn` refuses on an error finding, record
   assert.match(drawFirst.stdout, /draw journey first-visit/, 'the next run must print the first seed journey to draw: ' + drawFirst.stdout)
 
   patchStatus(root, (s) => {
-    s.journeys['first-visit'] = { drawn: '2026-09-14T00:00:00.000Z', approved: '2026-09-14T00:00:00.000Z' }
-    s.journeys['daily-check'] = { drawn: '2026-09-14T00:00:00.000Z', approved: '2026-09-14T00:00:00.000Z' }
+    s.journeys['first-visit'] = { drawn: iso, approved: iso }
+    s.journeys['daily-check'] = { drawn: iso, approved: iso }
   })
   fx.appendSeedJourney(root, 'onboarding')
   const state = runNode('scripts/mocks-driver.js', ['--root', root, '--state'], { env: stub.env() })
@@ -151,14 +171,50 @@ test('AC-20260914-01-6: `--mark shell-drawn` refuses on an error finding, record
   assert.match(drawOnboarding.stdout, /draw journey onboarding/, 'the plain run must print the newly added journey to draw: ' + drawOnboarding.stdout)
 })
 
-test('AC-20260914-01-7: `--mark journey-drawn` refuses an unknown check journey, an out-of-seed --journey, and an unresolved edge, then records drawn with no ledger gate', () => {
-  const root = tmpdir('states-ac7')
-  fx.writeSeed(root, { records: [], journeys: ['first-visit', 'daily-check'] })
+test('AC-20260917-01-4: `--mark seed-done` refuses a seed journey still carrying a ```surfaces block (zero beats), naming the journey, the first offending line and a remedy citing § Mocks: Seed, then records the mark over a well-formed beat-grammar seed', () => {
+  const root = tmpdir('states-ac4-new')
+  fs.mkdirSync(path.join(root, 'design/mocks'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'design/mocks/seed.md'),
+    '# Seed — Fixture Product\n\n## Records\n\n## Journeys\n\n' +
+    '### first-visit\nAnn opens the app.\n```surfaces\nhome\n```\n\n')
+  fx.writeLedger(root)
+  fx.writeStatus(root, { marks: seedMarks() })
+  fx.writeApp(root, { records: [] })
+  const stub = fx.installStub(path.join(root, 'stub-bin'), path.join(root, 'stub-state'))
+  stub.setContract(fx.contractOk())
+  stub.setCheck(fx.checkOk())
+
+  const bad = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'seed-done'], { env: stub.env() })
+  assert.strictEqual(bad.status, 2, 'a journey with zero beats (still carrying the retired ```surfaces block) must refuse seed-done: ' + bad.stderr)
+  assert.match(bad.stderr, /first-visit/, 'the refusal must name the offending journey: ' + bad.stderr)
+  assert.match(bad.stderr, /```surfaces/, 'the refusal must quote the first offending line, or a session cannot find what to fix: ' + bad.stderr)
+  assert.match(bad.stderr, /remedy:.*§ Mocks: Seed/, 'the refusal must cite § Mocks: Seed as its remedy: ' + bad.stderr)
+  assert.strictEqual(fx.readStatus(root).marks.seedDone, null, 'a refused seed-done must leave marks.seedDone unset')
+
+  writeBeatSeed(root, [{ name: 'first-visit', persona: 'Ann opens the app.', beats: [{ beat: 'I open the app', screen: 'home', state: null }] }])
+  const ok = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'seed-done'], { env: stub.env() })
+  assert.strictEqual(ok.status, 0, 'a well-formed beat-grammar seed must record seed-done: ' + ok.stderr)
+  assert.ok(fx.readStatus(root).marks.seedDone, 'marks.seedDone must be recorded once the seed carries real beats')
+})
+
+test('AC-20260917-01-5: `--mark journey-drawn` refuses an unknown check journey, an out-of-seed --journey, an unresolved edge, then a beats mismatch against the seed, before recording drawn once the steps copy the seed verbatim', () => {
+  const root = tmpdir('states-ac5-new')
+  writeBeatSeed(root, [
+    {
+      name: 'first-visit',
+      persona: 'Ann opens the app.',
+      beats: [
+        { beat: 'I open the app', screen: 'home', state: null },
+        { beat: 'I tap Sign in', screen: 'login', state: 'empty' },
+      ],
+    },
+    { name: 'daily-check', persona: 'Ann checks in daily.', beats: [{ beat: 'I open the app', screen: 'home', state: null }] },
+  ])
   fx.writeLedger(root)
   fs.appendFileSync(path.join(root, 'design/mocks/ledger.md'),
     '| A1 | SCREENS | product | invented claim | invented | open | - | - | - |\n')
   fx.writeStatus(root, {
-    marks: seedMarks({ seedDone: '2026-09-14T00:00:00.000Z', shellDrawn: '2026-09-14T00:00:00.000Z' }),
+    marks: seedMarks({ seedDone: iso, shellDrawn: iso }),
     journeys: { 'first-visit': { drawn: null, approved: null }, 'daily-check': { drawn: null, approved: null } },
   })
   fx.writeApp(root, { records: [] })
@@ -175,105 +231,148 @@ test('AC-20260914-01-7: `--mark journey-drawn` refuses an unknown check journey,
   assert.match(notSeed.stderr, /first-visit/, 'the refusal must name the seed journeys so the session can pick a real one: ' + notSeed.stderr)
   assert.match(notSeed.stderr, /daily-check/, 'the refusal must name every seed journey: ' + notSeed.stderr)
   assert.ok(endsWithRemedy(notSeed.stderr),
-    'the out-of-seed --journey refusal must end with a `remedy: <command>` line — a session that typos a journey name still needs a next command, not just the seed list: ' + notSeed.stderr)
+    'the out-of-seed --journey refusal must end with a `remedy: <command>` line: ' + notSeed.stderr)
 
   stub.setCheck({
     ...fx.checkOk(),
     journeys: [{ id: 'first-visit', title: 'First visit', steps: [], edges: [], resolved: false, unresolved: [{ from: 1, to: 2, reason: 'no control with text "Account" in ConsoleShell' }] }],
   })
   const unresolved = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'journey-drawn', '--journey', 'first-visit'], { env: stub.env() })
-  assert.strictEqual(unresolved.status, 2, 'an unresolved edge must refuse journey-drawn: ' + unresolved.stderr)
+  assert.strictEqual(unresolved.status, 2, 'an unresolved edge must refuse journey-drawn before any beats comparison runs: ' + unresolved.stderr)
   assert.match(unresolved.stderr, /step 1 → 2: no control with text "Account" in ConsoleShell/, 'the refusal must print the exact unresolved-edge line: ' + unresolved.stderr)
   assert.ok(endsWithRemedy(unresolved.stderr),
-    'the unresolved-edge refusal must end with a `remedy: <command>` line — a journey stuck on an unresolved edge needs a next command, not just a diagnosis: ' + unresolved.stderr)
+    'the unresolved-edge refusal must end with a `remedy: <command>` line: ' + unresolved.stderr)
 
   stub.setCheck({
     ...fx.checkOk(),
-    journeys: [{ id: 'first-visit', title: 'First visit', steps: [], edges: [], resolved: true, unresolved: [] }],
+    journeys: [{
+      id: 'first-visit', title: 'First visit', resolved: true, unresolved: [], edges: [],
+      steps: [{ screen: 'home', beat: 'I open the app', state: null }, { screen: 'login', beat: 'I sign in', state: 'empty' }],
+    }],
+  })
+  const mismatch = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'journey-drawn', '--journey', 'first-visit'], { env: stub.env() })
+  assert.strictEqual(mismatch.status, 2, 'a journey whose check --json steps paraphrase the seed beats must refuse journey-drawn: ' + mismatch.stderr)
+  assert.match(mismatch.stderr, /beat 2: seed "I tap Sign in" -> login@empty, journeys\.ts "I sign in" -> login/,
+    'the refusal must print the D4-pinned mismatch line exactly, both sides: ' + mismatch.stderr)
+  assert.match(mismatch.stderr, /remedy: copy the seed's beats verbatim into src\/journeys\.ts/, 'the refusal must name the exact remedy: ' + mismatch.stderr)
+
+  stub.setCheck({
+    ...fx.checkOk(),
+    journeys: [{
+      id: 'first-visit', title: 'First visit', resolved: true, unresolved: [], edges: [],
+      // the first step deliberately omits `state` entirely — D4: undefined/null state are equal.
+      steps: [{ screen: 'home', beat: 'I open the app' }, { screen: 'login', beat: 'I tap Sign in', state: 'empty' }],
+    }],
   })
   const ledgerBefore = fs.readFileSync(path.join(root, 'design/mocks/ledger.md'), 'utf8')
   const resolved = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'journey-drawn', '--journey', 'first-visit'], { env: stub.env() })
-  assert.strictEqual(resolved.status, 0, 'a resolved journey must record drawn: ' + resolved.stderr)
+  assert.strictEqual(resolved.status, 0, 'once the steps equal the seed beats exactly (an absent state equal to state: null), journey-drawn must record: ' + resolved.stderr)
   assert.ok(fx.readStatus(root).journeys['first-visit'].drawn, 'journeys["first-visit"].drawn must be recorded')
   const ledgerAfter = fs.readFileSync(path.join(root, 'design/mocks/ledger.md'), 'utf8')
   assert.strictEqual(ledgerAfter, ledgerBefore, 'journey-drawn must run no ledger gate — an open invented row must neither refuse nor be rewritten')
 })
 
-test('AC-20260914-01-8: `--mark journey-approved` refuses through the approvedAt/screen/notes/project-note/journey-thread chain, then records approved once every condition clears', () => {
-  const root = tmpdir('states-ac8')
-  fx.writeSeed(root, { records: [], journeys: ['first-visit'] })
+test('AC-20260917-01-6: `--mark journey-approved` refuses through resolved/beats/journey-thread/absent-verdict/stale-hash in D5 order, then records the client-confirmed beats hash with no approvedAt and no screens entry ever written or read', () => {
+  const root = tmpdir('states-ac6-new')
+  writeBeatSeed(root, [{
+    name: 'first-visit',
+    persona: 'Ann opens the app.',
+    beats: [
+      { beat: 'I open the app', screen: 'home', state: null },
+      { beat: 'I tap Sign in', screen: 'login', state: 'empty' },
+    ],
+  }])
   fx.writeLedger(root)
   fx.writeStatus(root, {
-    marks: seedMarks({ seedDone: '2026-09-14T00:00:00.000Z', shellDrawn: '2026-09-14T00:00:00.000Z' }),
-    journeys: { 'first-visit': { drawn: '2026-09-14T00:00:00.000Z', approved: null } },
+    marks: seedMarks({ seedDone: iso, shellDrawn: iso }),
+    journeys: { 'first-visit': { drawn: iso, approved: null } },
+  })
+  fx.writeApp(root, { records: [] })
+  const openScreenNote = { id: 'N1', screen: 'home', state: null, component: null, key: null, snippet: null, status: 'open', thread: [] }
+  fx.writeNotes(root, fx.defaultNotes({ notes: [openScreenNote] }))
+  const stub = fx.installStub(path.join(root, 'stub-bin'), path.join(root, 'stub-state'))
+  stub.setContract(fx.contractOk())
+  const mark = () => runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'journey-approved', '--journey', 'first-visit'], { env: stub.env() })
+
+  stub.setCheck({ ...fx.checkOk(), journeys: [{ id: 'first-visit', title: 'First visit', resolved: false, unresolved: [{ from: 1, to: 2, reason: 'x' }], steps: [], edges: [] }] })
+  let r = mark()
+  assert.strictEqual(r.status, 2, 'resolved:false must refuse journey-approved before any later D5 check: ' + r.stderr)
+
+  const mismatchedSteps = [{ screen: 'home', beat: 'I open the app', state: null }, { screen: 'login', beat: 'I sign in', state: 'empty' }]
+  stub.setCheck({ ...fx.checkOk(), journeys: [{ id: 'first-visit', title: 'First visit', resolved: true, unresolved: [], steps: mismatchedSteps, edges: [] }] })
+  r = mark()
+  assert.strictEqual(r.status, 2, 'a beats mismatch must refuse journey-approved before the journey-thread or approval checks: ' + r.stderr)
+  assert.match(r.stderr, /beat 2:/, 'the beats-mismatch refusal must name the first differing beat index: ' + r.stderr)
+
+  const okSteps = [{ screen: 'home', beat: 'I open the app', state: null }, { screen: 'login', beat: 'I tap Sign in', state: 'empty' }]
+  stub.setCheck({ ...fx.checkOk(), journeys: [{ id: 'first-visit', title: 'First visit', resolved: true, unresolved: [], steps: okSteps, edges: [] }] })
+
+  fx.writeNotes(root, { ...fx.defaultNotes({ notes: [openScreenNote] }), journeys: { 'first-visit': { status: 'open', thread: [] } } })
+  r = mark()
+  assert.strictEqual(r.status, 2, 'an open journey conversation must refuse even once the beats match exactly: ' + r.stderr)
+  assert.match(r.stderr, /first-visit/, 'the open-thread refusal must name the journey: ' + r.stderr)
+
+  fx.writeNotes(root, { ...fx.defaultNotes({ notes: [openScreenNote] }), journeys: { 'first-visit': { status: 'approved', thread: [] } } })
+  r = mark()
+  assert.strictEqual(r.status, 2, 'a missing client verdict must refuse, naming both client open and client waive as remedies: ' + r.stderr)
+  assert.match(r.stderr, /client open/, 'the absent-verdict refusal must name client open: ' + r.stderr)
+  assert.match(r.stderr, /client waive --journey first-visit/, 'the absent-verdict refusal must name the exact client waive remedy: ' + r.stderr)
+
+  fx.writeApproval(root, { ...fx.defaultApproval(), journeys: { 'first-visit': { client: 'ok', beats: 'deadbeef0000' } } })
+  r = mark()
+  assert.strictEqual(r.status, 2, 'a client-ok verdict whose stored hash no longer matches the seed must refuse, naming both hashes: ' + r.stderr)
+  assert.match(r.stderr, /deadbeef0000/, 'the stale-hash refusal must name the stored (stale) hash: ' + r.stderr)
+  assert.match(r.stderr, /7c0be20327a0/, 'the stale-hash refusal must name the current seed hash: ' + r.stderr)
+
+  fx.writeApproval(root, { ...fx.defaultApproval(), journeys: { 'first-visit': { client: 'ok', beats: '7c0be20327a0' } } })
+  r = mark()
+  assert.strictEqual(r.status, 0, 'once the client-ok hash matches the current seed beats, journey-approved must record: ' + r.stderr)
+  assert.strictEqual(fx.readStatus(root).journeys['first-visit'].beats, '7c0be20327a0', 'status.json must store the confirmed beats hash, or a later seed edit has nothing to compare against')
+  const approvalAfter = fx.readApproval(root)
+  assert.strictEqual(approvalAfter.journeys['first-visit'].approvedAt, undefined, 'D5 no longer reads or writes approvedAt on a journey approval')
+  assert.deepStrictEqual(approvalAfter.screens, {}, 'D5 never reads or writes a screens entry — a stray one means the driver still depends on the retired screen-approve control')
+  assert.strictEqual(fx.readNotes(root).notes[0].status, 'open', 'an open note on a step screen must never block or be touched by journey-approved, proving the D5 chain never reads it')
+})
+
+test('AC-20260917-01-7: editing an approved journey\'s beat after the client confirms voids the stored hash and reopens SCREENS to re-approve; an unchanged seed derives THEME instead', () => {
+  const root = tmpdir('states-ac7-new')
+  const confirmed = [
+    { beat: 'I open the app', screen: 'home', state: null },
+    { beat: 'I tap Sign in', screen: 'login', state: 'empty' },
+  ]
+  writeBeatSeed(root, [{ name: 'first-visit', persona: 'Ann opens the app.', beats: confirmed }])
+  fx.writeLedger(root)
+  fx.writeStatus(root, {
+    marks: seedMarks({ seedDone: iso, shellDrawn: iso }),
+    journeys: { 'first-visit': { drawn: iso, approved: iso, beats: '7c0be20327a0' } },
   })
   fx.writeApp(root, { records: [] })
   const stub = fx.installStub(path.join(root, 'stub-bin'), path.join(root, 'stub-state'))
   stub.setContract(fx.contractOk())
-  stub.setCheck({
-    ...fx.checkOk(),
-    journeys: [{ id: 'first-visit', title: 'First visit', steps: [{ screen: 'console-home' }], edges: [], resolved: true, unresolved: [] }],
-  })
-  const mark = () => runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'journey-approved', '--journey', 'first-visit'], { env: stub.env() })
+  stub.setCheck(fx.checkOk())
 
-  let r = mark()
-  assert.strictEqual(r.status, 2, 'missing approval.journeys["first-visit"].approvedAt must refuse: ' + r.stderr)
-  assert.match(r.stderr, /approvedAt/, 'the refusal must name the missing key: ' + r.stderr)
+  writeBeatSeed(root, [{
+    name: 'first-visit',
+    persona: 'Ann opens the app.',
+    beats: [{ beat: 'I open the app', screen: 'home', state: null }, { beat: 'I tap Log in', screen: 'login', state: 'empty' }],
+  }])
+  const state = runNode('scripts/mocks-driver.js', ['--root', root, '--state'], { env: stub.env() })
+  assert.match(state.stdout, /SCREENS/, 'a beat edit after client confirmation must reopen SCREENS, or a silently stale confirmation stands: ' + state.stdout)
+  const bare = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
+  assert.match(bare.stdout, /## Step: approve journey first-visit/, 'the bare run over a voided hash must print the approve-journey step again: ' + bare.stdout)
 
-  fx.writeApproval(root, fx.defaultApproval({ journeys: { 'first-visit': { approvedAt: '2026-09-14T00:00:00.000Z', client: null } } }))
-  r = mark()
-  assert.strictEqual(r.status, 2, 'a step screen missing its own approvedAt must still refuse: ' + r.stderr)
-  assert.match(r.stderr, /console-home/, 'the refusal must name the unapproved screen: ' + r.stderr)
-
-  fx.writeApproval(root, {
-    ...fx.readApproval(root),
-    screens: { 'console-home': { hash: 'h1', approvedAt: '2026-09-14T00:00:00.000Z', states: [], viewports: [], schemes: [], screenshots: [] } },
-  })
-  fx.writeNotes(root, fx.defaultNotes({ notes: [{ id: 'N002', screen: 'console-home', state: null, component: null, key: null, snippet: null, status: 'open', thread: [] }] }))
-  r = mark()
-  assert.strictEqual(r.status, 2, 'an open note on one of the approved journey\'s screens must refuse: ' + r.stderr)
-  assert.match(r.stderr, /N002/, 'the refusal must name the open note\'s id: ' + r.stderr)
-
-  fx.writeNotes(root, fx.defaultNotes({
-    notes: [
-      { id: 'N002', screen: 'console-home', state: null, component: null, key: null, snippet: null, status: 'answered', thread: [] },
-      { id: 'P1', screen: null, state: null, component: null, key: null, snippet: null, status: 'open', thread: [], project: true },
-    ],
-  }))
-  r = mark()
-  assert.strictEqual(r.status, 2, 'an open project:true note must refuse regardless of which screen it sits on: ' + r.stderr)
-  assert.match(r.stderr, /P1/, 'the refusal must name the open project note\'s id: ' + r.stderr)
-
-  fx.writeNotes(root, fx.defaultNotes({
-    notes: [
-      { id: 'N002', screen: 'console-home', state: null, component: null, key: null, snippet: null, status: 'answered', thread: [] },
-      { id: 'P1', screen: null, state: null, component: null, key: null, snippet: null, status: 'approved', thread: [], project: true },
-    ],
-    journeys: { 'first-visit': { status: 'open', thread: [] } },
-  }))
-  r = mark()
-  assert.strictEqual(r.status, 2, 'an open journey conversation thread must refuse even with every screen and note otherwise clear: ' + r.stderr)
-  assert.match(r.stderr, /first-visit/, 'the refusal must name the open journey: ' + r.stderr)
-
-  fx.writeNotes(root, fx.defaultNotes({
-    notes: [
-      { id: 'N002', screen: 'console-home', state: null, component: null, key: null, snippet: null, status: 'answered', thread: [] },
-      { id: 'P1', screen: null, state: null, component: null, key: null, snippet: null, status: 'approved', thread: [], project: true },
-    ],
-    journeys: { 'first-visit': { status: 'approved', thread: [] } },
-  }))
-  r = mark()
-  assert.strictEqual(r.status, 0, 'once every D7 condition clears, journey-approved must record: ' + r.stderr)
-  assert.ok(fx.readStatus(root).journeys['first-visit'].approved, 'journeys["first-visit"].approved must be recorded')
+  writeBeatSeed(root, [{ name: 'first-visit', persona: 'Ann opens the app.', beats: confirmed }])
+  const bare2 = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
+  assert.match(bare2.stdout, /THEME/, 'an unchanged seed whose beats still hash to the stored value must derive THEME, not re-open SCREENS: ' + bare2.stdout)
 })
 
-test('AC-20260914-01-9: `--mark theme-picked` refuses a missing approval.theme, then a config theme mismatch, then records the mark and the next run is a CLIENT block with no Skill: line', () => {
-  const root = tmpdir('states-ac9')
-  fx.writeSeed(root, { records: [], journeys: ['first-visit'] })
+test('AC-20260917-01-8: `--mark theme-picked` reads no approval.json — it refuses a null config.theme, then a theme absent from check --json themes, then records once the applied theme is listed, and the next run prints THEME\'s close block with no Skill: line', () => {
+  const root = tmpdir('states-ac8-new')
+  writeBeatSeed(root, [{ name: 'first-visit', persona: 'Ann opens the app.', beats: [{ beat: 'I open the app', screen: 'home', state: null }] }])
   fx.writeLedger(root)
   fx.writeStatus(root, {
-    marks: seedMarks({ seedDone: '2026-09-14T00:00:00.000Z', shellDrawn: '2026-09-14T00:00:00.000Z' }),
-    journeys: { 'first-visit': { drawn: '2026-09-14T00:00:00.000Z', approved: '2026-09-14T00:00:00.000Z' } },
+    marks: seedMarks({ seedDone: iso, shellDrawn: iso }),
+    journeys: { 'first-visit': { drawn: iso, approved: iso, beats: 'b87021072adb' } },
   })
   fx.writeApp(root, { records: [] })
   const stub = fx.installStub(path.join(root, 'stub-bin'), path.join(root, 'stub-state'))
@@ -282,56 +381,89 @@ test('AC-20260914-01-9: `--mark theme-picked` refuses a missing approval.theme, 
 
   stub.setCheck(fx.checkOk({ config: { ...fx.checkOk().config, theme: null }, themes: [] }))
   let r = mark()
-  assert.strictEqual(r.status, 2, 'a missing approval.theme must refuse theme-picked: ' + r.stderr)
-  assert.match(r.stderr, /approval\.theme/, 'the refusal must name approval.theme: ' + r.stderr)
-  assert.ok(endsWithRemedy(r.stderr),
-    'the missing-approval.theme refusal must end with a `remedy: <command>` line — a session with no theme picked yet still needs a next command named: ' + r.stderr)
+  assert.strictEqual(r.status, 2, 'a null config.theme must refuse theme-picked: ' + r.stderr)
+  assert.match(r.stderr, /mock\.config\.ts/, 'the null-theme refusal must name mock.config.ts: ' + r.stderr)
+  assert.match(r.stderr, /src\/themes\//, 'the null-theme refusal must name src/themes/: ' + r.stderr)
 
-  fx.writeApproval(root, { ...fx.defaultApproval(), theme: 'warm' })
+  stub.setCheck(fx.checkOk({ config: { ...fx.checkOk().config, theme: 'warm' }, themes: [] }))
   r = mark()
-  assert.strictEqual(r.status, 2, 'a picked theme not yet applied in mock.config.ts (config.theme still null) must refuse: ' + r.stderr)
-  assert.match(r.stderr, /remedy: set theme: "warm" in mock\.config\.ts/, 'the refusal must name the exact remedy: ' + r.stderr)
+  assert.strictEqual(r.status, 2, 'a theme applied in mock.config.ts but not listed under check --json themes must refuse, naming it: ' + r.stderr)
+  assert.match(r.stderr, /warm/, 'the refusal must name the unlisted theme: ' + r.stderr)
 
   stub.setCheck(fx.checkOk({ config: { ...fx.checkOk().config, theme: 'warm' }, themes: ['warm'] }))
+  fs.unlinkSync(path.join(root, fx.APP, 'design/approval.json'))
   r = mark()
-  assert.strictEqual(r.status, 0, 'once config.theme matches the approved theme, theme-picked must record: ' + r.stderr)
+  assert.strictEqual(r.status, 0, 'once check --json reports a listed, non-null theme, theme-picked must record without ever reading approval.json (deleted above): ' + r.stderr)
   assert.ok(fx.readStatus(root).marks.themePicked, 'marks.themePicked must be recorded')
   const next = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
-  assert.match(next.stdout, /CLIENT/, 'the next run must print the CLIENT block: ' + next.stdout)
-  assert.doesNotMatch(next.stdout, /Skill:/, 'D12: CLIENT never carries a Skill: line: ' + next.stdout)
+  assert.match(next.stdout, /client open/, "THEME's close block must print client open: " + next.stdout)
+  assert.match(next.stdout, /--mark approved/, "THEME's close block must print --mark approved: " + next.stdout)
+  assert.doesNotMatch(next.stdout, /Skill:/, "D12: THEME's close block must never carry a Skill: line: " + next.stdout)
 })
 
-test('AC-20260914-01-10: `--mark approved` refuses a journey with no client verdict, then an open note, then records approved and --state prints APPROVED', () => {
-  const root = tmpdir('states-ac10')
-  fx.writeSeed(root, { records: [], journeys: ['first-visit'] })
+test('AC-20260917-01-9: `--mark approved` refuses an open note, an answered note, and an answered project note, then on a deferred note and an approved project note records the mark, appends exactly one exclusion row, and a second approved mark after a reopen writes no duplicate', () => {
+  const root = tmpdir('states-ac9-new')
+  writeBeatSeed(root, [{ name: 'first-visit', persona: 'Ann opens the app.', beats: [{ beat: 'I open the app', screen: 'home', state: null }] }])
   fx.writeLedger(root)
   fx.writeStatus(root, {
-    marks: seedMarks({ seedDone: '2026-09-14T00:00:00.000Z', shellDrawn: '2026-09-14T00:00:00.000Z', themePicked: '2026-09-14T00:00:00.000Z' }),
-    journeys: { 'first-visit': { drawn: '2026-09-14T00:00:00.000Z', approved: '2026-09-14T00:00:00.000Z' } },
+    marks: seedMarks({ seedDone: iso, shellDrawn: iso, themePicked: iso }),
+    journeys: { 'first-visit': { drawn: iso, approved: iso, beats: 'b87021072adb' } },
   })
-  fx.writeApp(root, { records: [], theme: 'warm' })
+  fx.writeApp(root, {
+    records: [],
+    theme: 'warm',
+    approval: fx.defaultApproval({ journeys: { 'first-visit': { client: 'ok', beats: 'b87021072adb' } } }),
+  })
   const stub = fx.installStub(path.join(root, 'stub-bin'), path.join(root, 'stub-state'))
   stub.setContract(fx.contractOk())
-  stub.setCheck(fx.checkOk({ config: { ...fx.checkOk().config, theme: 'warm' } }))
+  stub.setCheck(fx.checkOk({ config: { ...fx.checkOk().config, theme: 'warm' }, themes: ['warm'] }))
   const mark = () => runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'approved'], { env: stub.env() })
 
-  fx.writeApproval(root, { ...fx.defaultApproval(), journeys: { 'first-visit': { approvedAt: '2026-09-14T00:00:00.000Z', client: null } }, theme: 'warm' })
+  fx.writeNotes(root, fx.defaultNotes({ notes: [{ id: 'n1', screen: 'home', state: null, component: null, key: null, snippet: null, status: 'open', thread: [{ text: 'Export the care plan as PDF' }] }] }))
   let r = mark()
-  assert.strictEqual(r.status, 2, 'a journey with no recorded client verdict must refuse approved: ' + r.stderr)
-  assert.match(r.stderr, /first-visit/, 'the refusal must name the journey missing a client verdict: ' + r.stderr)
-  assert.match(r.stderr, /remedy: client waive --journey <j> --reason <r>/, 'the refusal must name the exact waive remedy: ' + r.stderr)
+  assert.strictEqual(r.status, 2, 'note n1 open must refuse approved: ' + r.stderr)
+  assert.match(r.stderr, /n1/, 'the refusal must name the open note: ' + r.stderr)
+  assert.match(r.stderr, /remedy: the client approves or defers it on the link/, 'the open-note refusal must name the exact D7 remedy: ' + r.stderr)
 
-  fx.writeApproval(root, { ...fx.readApproval(root), journeys: { 'first-visit': { approvedAt: '2026-09-14T00:00:00.000Z', client: 'ok' } } })
-  fx.writeNotes(root, fx.defaultNotes({ notes: [{ id: 'N009', screen: 'console-home', state: null, component: null, key: null, snippet: null, status: 'open', thread: [] }] }))
+  fx.writeNotes(root, fx.defaultNotes({ notes: [{ id: 'n1', screen: 'home', state: null, component: null, key: null, snippet: null, status: 'answered', thread: [{ text: 'Export the care plan as PDF' }] }] }))
   r = mark()
-  assert.strictEqual(r.status, 2, 'an open note anywhere must refuse approved even with every journey client-verdicted: ' + r.stderr)
-  assert.match(r.stderr, /N009/, 'the refusal must name the open note: ' + r.stderr)
+  assert.strictEqual(r.status, 2, 'note n1 answered (not yet resolved by the client) must still refuse approved: ' + r.stderr)
+  assert.match(r.stderr, /remedy: the client approves or defers it on the link/, 'the answered-note refusal must name the exact D7 remedy: ' + r.stderr)
 
-  fx.writeNotes(root, fx.defaultNotes())
+  fx.writeNotes(root, fx.defaultNotes({
+    notes: [
+      { id: 'n1', screen: 'home', state: null, component: null, key: null, snippet: null, status: 'deferred', thread: [{ text: 'Export the care plan as PDF' }] },
+      { id: 'n2', screen: null, state: null, component: null, key: null, snippet: null, status: 'answered', thread: [], project: true },
+    ],
+  }))
   r = mark()
-  assert.strictEqual(r.status, 0, 'with every journey client-verdicted and nothing open, approved must record: ' + r.stderr)
+  assert.strictEqual(r.status, 2, 'an answered project:true note n2 must refuse approved: ' + r.stderr)
+  assert.match(r.stderr, /n2/, 'the refusal must name the open project note: ' + r.stderr)
+
+  fx.writeNotes(root, fx.defaultNotes({
+    notes: [
+      { id: 'n1', screen: 'home', state: null, component: null, key: null, snippet: null, status: 'deferred', thread: [{ text: 'Export the care plan as PDF' }] },
+      { id: 'n2', screen: null, state: null, component: null, key: null, snippet: null, status: 'approved', thread: [], project: true },
+    ],
+  }))
+  const today = new Date().toISOString().slice(0, 10)
+  r = mark()
+  assert.strictEqual(r.status, 0, 'a deferred note and an approved project note must let approved record: ' + r.stderr)
+  const ledger = fs.readFileSync(path.join(root, 'design/mocks/ledger.md'), 'utf8')
+  assert.ok(ledger.includes('| X1 | APPROVED | exclusion | Export the care plan as PDF | said-by-user | confirmed ' + today + ' | - | - | deferred: n1 |'),
+    'a deferred note must append exactly the D7-pinned exclusion row: ' + ledger)
   const state = runNode('scripts/mocks-driver.js', ['--root', root, '--state'], { env: stub.env() })
   assert.match(state.stdout, /APPROVED/, '--state must print APPROVED once marks.approved is recorded: ' + state.stdout)
+
+  const reopen = runNode('scripts/mocks-driver.js', ['--root', root, '--reopen', 'theme'], { env: stub.env() })
+  assert.strictEqual(reopen.status, 0, '--reopen theme must succeed to set up the re-approve leg: ' + reopen.stderr)
+  const rePick = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'theme-picked'], { env: stub.env() })
+  assert.strictEqual(rePick.status, 0, 're-picking the theme must succeed: ' + rePick.stderr)
+  const second = mark()
+  assert.strictEqual(second.status, 0, 'a second approved mark after --reopen theme must record again: ' + second.stderr)
+  const ledgerAfter = fs.readFileSync(path.join(root, 'design/mocks/ledger.md'), 'utf8')
+  const rows = ledgerAfter.split('\n').filter((l) => l.includes('deferred: n1'))
+  assert.strictEqual(rows.length, 1, 'a second --mark approved for the same already-deferred note must never append a duplicate exclusion row: ' + ledgerAfter)
 })
 
 test('AC-20260914-01-12: `--reopen shell` on an APPROVED root cascades marks and journey approvals, appends a reopens row, and leaves notes/approval byte-identical; `--reopen kit` refuses as retired', () => {
@@ -339,8 +471,8 @@ test('AC-20260914-01-12: `--reopen shell` on an APPROVED root cascades marks and
   fx.writeSeed(root, { records: [], journeys: ['first-visit'] })
   fx.writeLedger(root)
   fx.writeStatus(root, {
-    marks: seedMarks({ seedDone: '2026-09-14T00:00:00.000Z', shellDrawn: '2026-09-14T00:00:00.000Z', themePicked: '2026-09-14T00:00:00.000Z', approved: '2026-09-14T00:00:00.000Z' }),
-    journeys: { 'first-visit': { drawn: '2026-09-14T00:00:00.000Z', approved: '2026-09-14T00:00:00.000Z' } },
+    marks: seedMarks({ seedDone: iso, shellDrawn: iso, themePicked: iso, approved: iso }),
+    journeys: { 'first-visit': { drawn: iso, approved: iso } },
   })
   fx.writeApp(root, { records: [] })
   const notesBefore = fs.readFileSync(path.join(root, fx.APP, 'design/notes.json'), 'utf8')
@@ -372,9 +504,9 @@ test('AC-20260914-01-12: `--reopen shell` on an APPROVED root cascades marks and
   assert.match(kit.stderr, /retired \(ADR-0028\)/, 'the refusal must name the retirement: ' + kit.stderr)
 })
 
-test('AC-20260914-01-13: SHELL, SCREENS and THEME blocks carry the mock-authoring Skill line; SEED, CLIENT and APPROVED never do', () => {
-  const root = tmpdir('states-ac13')
-  fx.writeSeed(root, { records: [], journeys: ['first-visit'] })
+test('AC-20260917-01-10: once every journey is approved the bare run derives THEME both before and after `--mark theme-picked` — never CLIENT — and only SHELL, both SCREENS steps and THEME\'s pick block carry the Skill line', () => {
+  const root = tmpdir('states-ac10-new')
+  writeBeatSeed(root, [{ name: 'first-visit', persona: 'Ann opens the app.', beats: [{ beat: 'I open the app', screen: 'home', state: null }] }])
   fx.writeLedger(root)
   fx.writeApp(root, { records: [] })
   const stub = fx.installStub(path.join(root, 'stub-bin'), path.join(root, 'stub-state'))
@@ -386,55 +518,84 @@ test('AC-20260914-01-13: SHELL, SCREENS and THEME blocks carry the mock-authorin
   fx.writeStatus(root, { marks: seedMarks() })
   const seed = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
   assert.doesNotMatch(seed.stdout, /Skill:/, 'SEED must never print a Skill: line: ' + seed.stdout)
+  assert.doesNotMatch(seed.stdout, /\bCLIENT\b/, 'SEED must never mention the retired CLIENT state: ' + seed.stdout)
 
-  fx.writeStatus(root, { marks: seedMarks({ seedDone: '2026-09-14T00:00:00.000Z' }) })
+  fx.writeStatus(root, { marks: seedMarks({ seedDone: iso }) })
   const shell = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
   assert.ok(shell.stdout.includes(skillLine), 'SHELL must print the exact Skill line: ' + shell.stdout)
 
   fx.writeStatus(root, {
-    marks: seedMarks({ seedDone: '2026-09-14T00:00:00.000Z', shellDrawn: '2026-09-14T00:00:00.000Z' }),
+    marks: seedMarks({ seedDone: iso, shellDrawn: iso }),
     journeys: { 'first-visit': { drawn: null, approved: null } },
   })
-  const screens = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
-  assert.ok(screens.stdout.includes(skillLine), 'SCREENS must print the exact Skill line: ' + screens.stdout)
+  const draw = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
+  assert.ok(draw.stdout.includes(skillLine), 'SCREENS (draw step) must print the exact Skill line: ' + draw.stdout)
 
   fx.writeStatus(root, {
-    marks: seedMarks({ seedDone: '2026-09-14T00:00:00.000Z', shellDrawn: '2026-09-14T00:00:00.000Z' }),
-    journeys: { 'first-visit': { drawn: '2026-09-14T00:00:00.000Z', approved: '2026-09-14T00:00:00.000Z' } },
+    marks: seedMarks({ seedDone: iso, shellDrawn: iso }),
+    journeys: { 'first-visit': { drawn: iso, approved: null } },
   })
-  const theme = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
-  assert.ok(theme.stdout.includes(skillLine), 'THEME must print the exact Skill line: ' + theme.stdout)
+  const approve = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
+  assert.ok(approve.stdout.includes(skillLine), 'SCREENS (approve step) must print the exact Skill line: ' + approve.stdout)
 
   fx.writeStatus(root, {
-    marks: seedMarks({ seedDone: '2026-09-14T00:00:00.000Z', shellDrawn: '2026-09-14T00:00:00.000Z', themePicked: '2026-09-14T00:00:00.000Z' }),
-    journeys: { 'first-visit': { drawn: '2026-09-14T00:00:00.000Z', approved: '2026-09-14T00:00:00.000Z' } },
+    marks: seedMarks({ seedDone: iso, shellDrawn: iso }),
+    journeys: { 'first-visit': { drawn: iso, approved: iso, beats: 'b87021072adb' } },
   })
-  const client = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
-  assert.doesNotMatch(client.stdout, /Skill:/, 'CLIENT must never print a Skill: line: ' + client.stdout)
+  const themePick = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
+  assert.match(themePick.stdout, /THEME/, 'once every journey is approved the bare run must derive THEME, never CLIENT: ' + themePick.stdout)
+  assert.doesNotMatch(themePick.stdout, /\bCLIENT\b/, 'THEME must never mention the retired CLIENT state: ' + themePick.stdout)
+  assert.ok(themePick.stdout.includes(skillLine), "THEME's pick block must print the exact Skill line: " + themePick.stdout)
 
   fx.writeStatus(root, {
-    marks: seedMarks({ seedDone: '2026-09-14T00:00:00.000Z', shellDrawn: '2026-09-14T00:00:00.000Z', themePicked: '2026-09-14T00:00:00.000Z', approved: '2026-09-14T00:00:00.000Z' }),
-    journeys: { 'first-visit': { drawn: '2026-09-14T00:00:00.000Z', approved: '2026-09-14T00:00:00.000Z' } },
+    marks: seedMarks({ seedDone: iso, shellDrawn: iso, themePicked: iso }),
+    journeys: { 'first-visit': { drawn: iso, approved: iso, beats: 'b87021072adb' } },
+  })
+  const themeClose = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
+  assert.match(themeClose.stdout, /THEME/, 'once the theme is picked but not approved, the bare run must still derive THEME, never CLIENT: ' + themeClose.stdout)
+  assert.doesNotMatch(themeClose.stdout, /\bCLIENT\b/, "THEME's close block must never mention the retired CLIENT state: " + themeClose.stdout)
+  assert.doesNotMatch(themeClose.stdout, /Skill:/, "THEME's close block must never carry a Skill: line: " + themeClose.stdout)
+  assert.match(themeClose.stdout, /client open/, "THEME's close block must print client open: " + themeClose.stdout)
+  assert.match(themeClose.stdout, /--mark approved/, "THEME's close block must print --mark approved: " + themeClose.stdout)
+
+  fx.writeStatus(root, {
+    marks: seedMarks({ seedDone: iso, shellDrawn: iso, themePicked: iso, approved: iso }),
+    journeys: { 'first-visit': { drawn: iso, approved: iso, beats: 'b87021072adb' } },
   })
   const approvedBlock = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
   assert.doesNotMatch(approvedBlock.stdout, /Skill:/, 'APPROVED must never print a Skill: line: ' + approvedBlock.stdout)
 })
 
-test('AC-20260914-01-14: `client open` prints the served URL with the config token, refuses when serve.url is null or run outside CLIENT, and `client waive` writes only that journey\'s client verdict', () => {
-  const root = tmpdir('states-ac14')
-  fx.writeSeed(root, { records: [], journeys: ['first-visit', 'daily-check'] })
+test('AC-20260917-01-11: `client open` requires only one drawn journey (never a CLIENT state), prints the served URL with the config token, refuses on a missing serve URL, and `client waive` writes only that journey\'s client verdict, reason, timestamp and beat hash', () => {
+  const root = tmpdir('states-ac11-new')
+  writeBeatSeed(root, [{
+    name: 'first-visit',
+    persona: 'Ann opens the app.',
+    beats: [
+      { beat: 'I open the app', screen: 'home', state: null },
+      { beat: 'I tap Sign in', screen: 'login', state: 'empty' },
+    ],
+  }])
   fx.writeLedger(root)
   fx.writeApp(root, { records: [] })
   const stub = fx.installStub(path.join(root, 'stub-bin'), path.join(root, 'stub-state'))
   stub.setContract(fx.contractOk())
 
   fx.writeStatus(root, {
-    marks: seedMarks({ seedDone: '2026-09-14T00:00:00.000Z', shellDrawn: '2026-09-14T00:00:00.000Z', themePicked: '2026-09-14T00:00:00.000Z' }),
-    journeys: { 'first-visit': { drawn: '2026-09-14T00:00:00.000Z', approved: '2026-09-14T00:00:00.000Z' }, 'daily-check': { drawn: '2026-09-14T00:00:00.000Z', approved: '2026-09-14T00:00:00.000Z' } },
+    marks: seedMarks({ seedDone: iso, shellDrawn: iso }),
+    journeys: { 'first-visit': { drawn: null, approved: null } },
   })
-  stub.setCheck(fx.checkOk({ serve: { url: 'http://127.0.0.1:45980' }, config: { ...fx.checkOk().config, client: { token: 'k9' } } }))
+  stub.setCheck(fx.checkOk({ serve: { url: 'http://127.0.0.1:45980' } }))
+  const noDrawn = runNode('scripts/mocks-driver.js', ['--root', root, 'client', 'open'], { env: stub.env() })
+  assert.strictEqual(noDrawn.status, 2, 'client open with no journey drawn must refuse: ' + noDrawn.stderr)
+  assert.match(noDrawn.stderr, /remedy: --mark journey-drawn --journey/, 'the refusal must name the exact remedy: ' + noDrawn.stderr)
+
+  fx.writeStatus(root, {
+    marks: seedMarks({ seedDone: iso, shellDrawn: iso }),
+    journeys: { 'first-visit': { drawn: iso, approved: null } },
+  })
   const opened = runNode('scripts/mocks-driver.js', ['--root', root, 'client', 'open'], { env: stub.env() })
-  assert.strictEqual(opened.status, 0, 'client open with a running serve URL must succeed: ' + opened.stderr)
+  assert.strictEqual(opened.status, 0, 'client open with at least one drawn journey (while --state is SCREENS) must succeed: ' + opened.stderr)
   assert.match(opened.stdout, /http:\/\/127\.0\.0\.1:45980\/\?client=k9/, 'client open must print the exact served URL with the client token query param: ' + opened.stdout)
 
   stub.setCheck(fx.checkOk({ serve: { url: null } }))
@@ -442,28 +603,16 @@ test('AC-20260914-01-14: `client open` prints the served URL with the config tok
   assert.strictEqual(notServing.status, 2, 'client open with no running serve process must refuse: ' + notServing.stderr)
   assert.match(notServing.stderr, /remedy: npx mock-review serve/, 'the refusal must name the exact serve remedy: ' + notServing.stderr)
 
-  fx.writeStatus(root, {
-    marks: seedMarks({ seedDone: '2026-09-14T00:00:00.000Z', shellDrawn: '2026-09-14T00:00:00.000Z' }),
-    journeys: { 'first-visit': { drawn: null, approved: null }, 'daily-check': { drawn: null, approved: null } },
-  })
-  const wrongState = runNode('scripts/mocks-driver.js', ['--root', root, 'client', 'open'], { env: stub.env() })
-  assert.strictEqual(wrongState.status, 2, 'client open outside CLIENT must refuse: ' + wrongState.stderr)
-  assert.match(wrongState.stderr, /CLIENT/, 'the refusal must name the CLIENT state it requires: ' + wrongState.stderr)
-
-  fx.writeStatus(root, {
-    marks: seedMarks({ seedDone: '2026-09-14T00:00:00.000Z', shellDrawn: '2026-09-14T00:00:00.000Z', themePicked: '2026-09-14T00:00:00.000Z' }),
-    journeys: { 'first-visit': { drawn: '2026-09-14T00:00:00.000Z', approved: '2026-09-14T00:00:00.000Z' }, 'daily-check': { drawn: '2026-09-14T00:00:00.000Z', approved: '2026-09-14T00:00:00.000Z' } },
-  })
-  const approvalBefore = fx.defaultApproval({ journeys: { 'first-visit': { approvedAt: '2026-09-14T00:00:00.000Z', client: 'ok' } }, theme: 'warm' })
-  fx.writeApproval(root, approvalBefore)
-  const waive = runNode('scripts/mocks-driver.js', ['--root', root, 'client', 'waive', '--journey', 'daily-check', '--reason', 'no reply in 7 days'], { env: stub.env() })
-  assert.strictEqual(waive.status, 0, 'client waive with a valid seed journey must succeed: ' + waive.stderr)
+  stub.setCheck(fx.checkOk({ serve: { url: 'http://127.0.0.1:45980' } }))
+  const waive = runNode('scripts/mocks-driver.js', ['--root', root, 'client', 'waive', '--journey', 'first-visit', '--reason', 'no client'], { env: stub.env() })
+  assert.strictEqual(waive.status, 0, 'client waive over the Contracts seed journey must succeed: ' + waive.stderr)
   const approvalAfter = fx.readApproval(root)
-  assert.strictEqual(approvalAfter.journeys['daily-check'].client, 'waived', 'client waive must set that journey\'s client to "waived"')
-  assert.strictEqual(approvalAfter.journeys['daily-check'].reason, 'no reply in 7 days', 'client waive must record the given reason')
-  assert.ok(approvalAfter.journeys['daily-check'].at, 'client waive must record a timestamp')
-  assert.deepStrictEqual(approvalAfter.journeys['first-visit'], approvalBefore.journeys['first-visit'], 'client waive must leave every other journey\'s approval untouched')
-  assert.strictEqual(approvalAfter.theme, 'warm', 'client waive must leave every other top-level key of approval.json untouched')
+  assert.deepStrictEqual(approvalAfter, {
+    contractVersion: 1,
+    screens: {},
+    journeys: { 'first-visit': { client: 'waived', reason: 'no client', at: approvalAfter.journeys['first-visit'].at, beats: '7c0be20327a0' } },
+  }, 'client waive must write exactly {client, reason, at, beats} for that journey and touch nothing else in approval.json: ' + JSON.stringify(approvalAfter))
+  assert.ok(approvalAfter.journeys['first-visit'].at, 'client waive must record a timestamp')
 })
 
 test('AC-20260914-01-15: every retired verb refuses exit 2 with its exact D11 replacement text', () => {
@@ -501,7 +650,7 @@ test('AC-20260914-01-15: every retired verb refuses exit 2 with its exact D11 re
   const unknownMark = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'totally-bogus'], { env: stub.env() })
   assert.strictEqual(unknownMark.status, 2, 'an unknown --mark value must refuse exit 2: ' + unknownMark.stderr)
   assert.ok(endsWithRemedy(unknownMark.stderr),
-    'the unknown-`--mark` refusal must end with a `remedy: <command>` line — a session that typos a mark name still needs a next command, not just "is unknown": ' + unknownMark.stderr)
+    'the unknown-`--mark` refusal must end with a `remedy: <command>` line: ' + unknownMark.stderr)
 })
 
 test('AC-20260914-01-23: a schemaVersion 1 status.json refuses exit 2 naming the reset remedy and writes nothing', () => {
@@ -545,4 +694,33 @@ test('`--mark seed-done` refuses a seed.md that declares no journeys, naming the
   const ok = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'seed-done'], { env: stub.env() })
   assert.strictEqual(ok.status, 0, 'once the seed declares a journey, seed-done must record as before — the new guard must not block a well-formed seed: ' + ok.stderr)
   assert.ok(fx.readStatus(root).marks.seedDone, 'marks.seedDone must be recorded once a journey is declared')
+})
+
+test('AC-20260917-01-19: two seed journeys sharing the identical beat "I open the app" -> home both record seed-done and journey-drawn, never refusing on a shared sentence or a shared screen', () => {
+  const root = tmpdir('states-ac19')
+  writeBeatSeed(root, [
+    { name: 'first-visit', persona: 'Ann opens the app.', beats: [{ beat: 'I open the app', screen: 'home', state: null }] },
+    { name: 'daily-check', persona: 'Ann checks in daily.', beats: [{ beat: 'I open the app', screen: 'home', state: null }] },
+  ])
+  fx.writeLedger(root)
+  fx.writeStatus(root, { marks: seedMarks() })
+  fx.writeApp(root, { records: [] })
+  const stub = fx.installStub(path.join(root, 'stub-bin'), path.join(root, 'stub-state'))
+  stub.setContract(fx.contractOk())
+  stub.setCheck(fx.checkOk())
+
+  const seedDone = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'seed-done'], { env: stub.env() })
+  assert.strictEqual(seedDone.status, 0, 'two journeys sharing the identical beat sentence and screen must never refuse seed-done: ' + seedDone.stderr)
+
+  fx.writeStatus(root, {
+    marks: seedMarks({ seedDone: iso, shellDrawn: iso }),
+    journeys: { 'first-visit': { drawn: null, approved: null }, 'daily-check': { drawn: null, approved: null } },
+  })
+  const step = { screen: 'home', beat: 'I open the app', state: null }
+  for (const j of ['first-visit', 'daily-check']) {
+    stub.setCheck(fx.checkOk({ journeys: [{ id: j, title: j, resolved: true, unresolved: [], steps: [step], edges: [] }] }))
+    const drawn = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'journey-drawn', '--journey', j], { env: stub.env() })
+    assert.strictEqual(drawn.status, 0, `journey-drawn for ${j} must never refuse on a shared sentence or a shared screen: ` + drawn.stderr)
+    assert.ok(fx.readStatus(root).journeys[j].drawn, `journeys["${j}"].drawn must be recorded: ` + j)
+  }
 })

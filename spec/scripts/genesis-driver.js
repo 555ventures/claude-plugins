@@ -779,7 +779,7 @@ function handleBriefWritten() {
     if (!jCheck.ok) {
       if (jCheck.reason === 'missing-journey') {
         die('## Journeys is missing journey ' + jCheck.journey + ' — add a `### ' + jCheck.journey +
-          '` block (persona line, the seed\'s surfaces block verbatim, one states: line per screen), ' +
+          '` block (persona line, one `label -> label` line per beat edge, one states: line per screen), ' +
           'then re-mark brief-written')
       }
       if (jCheck.reason === 'missing-label') {

@@ -21,7 +21,7 @@ test('AC-20260914-01-3: `spec-paths mock-contract` prints an absolute path to a 
   assert.ok(fs.existsSync(printed), 'the resolved contract.json must actually exist on disk: ' + printed)
   const contract = JSON.parse(fs.readFileSync(printed, 'utf8'))
   assert.strictEqual(contract.contractVersion, 1, 'D1 pins contractVersion: 1 — a drifted version here silently changes what every mismatch check compares against')
-  assert.strictEqual(contract.package, '@555/mock-review', 'D1 pins the exact package name every install remedy prints')
+  assert.strictEqual(contract.package, '@555-ventures/mock-review', 'D1 pins the exact package name every install remedy prints')
   assert.strictEqual(contract.bin, 'mock-review', 'D1 pins the exact bin name every spawn resolves')
   assert.deepStrictEqual(contract.verbs, ['contract', 'sweep', 'answer', 'check', 'serve'],
     'D1 pins the exact verb list in this exact order — a caller iterating verbs must see the same list this contract enumerates')

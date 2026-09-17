@@ -2,7 +2,7 @@
 // specs/20260914/01-the-mock-contract-and-the-driver.md D15: the synthetic mock-app host every
 // mocks-driver.js exec test builds against, plus a stub `mock-review` executable that answers
 // `contract --json`, `check --json` and `sweep [--json]` from fixture files the test itself
-// writes and rewrites between driver runs. The package (`@555/mock-review`) is never installed
+// writes and rewrites between driver runs. The package (`@555-ventures/mock-review`) is never installed
 // in this repo — the stub is the only "package" any test here ever spawns.
 //
 // Layout mirrors the contract's host section (spec/templates/mock/contract.json, D1): the
@@ -161,7 +161,7 @@ case "$VERB" in
 esac
 `
 
-// The same stub behaviour behind the shebang the real `@555/mock-review` bin uses. A shebang
+// The same stub behaviour behind the shebang the real `@555-ventures/mock-review` bin uses. A shebang
 // interpreter is resolved against the spawn's own PATH, so this variant is the one that can
 // tell whether spawnEnv's empty-PATH fallback still reaches the node that is already running.
 const NODE_STUB_SCRIPT = `#!/usr/bin/env node
@@ -227,7 +227,7 @@ function installStub(binDir, stateDir, { shebang = 'bash' } = {}) {
 // PATH (not the app bin — mock-cli.test.js exercises the app-bin-only case directly) answering
 // a default `contractVersion: 1` and a default green `check --json`.
 function contractOk(overrides = {}) {
-  return { contractVersion: 1, package: '@555/mock-review', version: '1.0.0', ...overrides }
+  return { contractVersion: 1, package: '@555-ventures/mock-review', version: '1.0.0', ...overrides }
 }
 
 function checkOk(overrides = {}) {

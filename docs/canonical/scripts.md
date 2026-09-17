@@ -51,7 +51,7 @@ fuller incident write-ups live in each cited spec's history.
   fail-closed child runner from `lib/driver-io.js`, like every other driver.
   (specs/20260908/02-driver-dedupe-onto-lib.md)
 
-- **`spec/scripts/lib/mock-cli.js` is the sole caller of the separate `@555/mock-review`
+- **`spec/scripts/lib/mock-cli.js` is the sole caller of the separate `@555-ventures/mock-review`
   package.** `contractOrDie(appDir)` runs `contract --json` first and refuses on a
   `contractVersion` mismatch or an ENOENT spawn, each naming its install remedy; `run(appDir,
   verb, args)` spawns with `cwd: appDir`, `shell: false`, and the app's own

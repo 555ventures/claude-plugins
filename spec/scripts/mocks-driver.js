@@ -586,8 +586,9 @@ function cmdApproved() {
   const today = nowIso().slice(0, 10)
   for (const target of deferredExclusionTargets(notes)) {
     const noteTag = 'deferred: ' + target.id
-    if (ledgerText.includes(noteTag)) continue
-    const id = nextExclusionId(parseLedger(ledgerText))
+    const parsed = parseLedger(ledgerText)
+    if (parsed.assumptions.some((row) => row.note === noteTag)) continue
+    const id = nextExclusionId(parsed)
     ledgerText = appendAssumption(ledgerText, {
       id, step: 'APPROVED', kind: 'exclusion', claim: target.claim,
       tag: 'said-by-user', status: 'confirmed ' + today, note: noteTag,

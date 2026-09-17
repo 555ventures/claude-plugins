@@ -464,6 +464,55 @@ test('AC-20260917-01-9: `--mark approved` refuses an open note, an answered note
   const ledgerAfter = fs.readFileSync(path.join(root, 'design/mocks/ledger.md'), 'utf8')
   const rows = ledgerAfter.split('\n').filter((l) => l.includes('deferred: n1'))
   assert.strictEqual(rows.length, 1, 'a second --mark approved for the same already-deferred note must never append a duplicate exclusion row: ' + ledgerAfter)
+
+  // Prefix-collision regression: "deferred: n1" is a substring of "deferred: n10" — a bare
+  // text.includes() test on the raw ledger wrongly treats n10's already-written row as covering
+  // n1 too, silently dropping n1's exclusion row. This must run on a FRESH ledger with n10
+  // ordered ahead of n1, so n10's row is written first and n1's guard check runs against a
+  // ledger that already contains "deferred: n10" — the exact ordering the substring guard gets
+  // wrong (a root that already carries n1's own row first makes both guards agree, which is
+  // why reusing `root` here would be an inert pin).
+  const root2 = tmpdir('states-ac9-collision')
+  writeBeatSeed(root2, [{ name: 'first-visit', persona: 'Ann opens the app.', beats: [{ beat: 'I open the app', screen: 'home', state: null }] }])
+  fx.writeLedger(root2)
+  fx.writeStatus(root2, {
+    marks: seedMarks({ seedDone: iso, shellDrawn: iso, themePicked: iso }),
+    journeys: { 'first-visit': { drawn: iso, approved: iso, beats: 'b87021072adb' } },
+  })
+  fx.writeApp(root2, {
+    records: [],
+    theme: 'warm',
+    approval: fx.defaultApproval({ journeys: { 'first-visit': { client: 'ok', beats: 'b87021072adb' } } }),
+  })
+  const stub2 = fx.installStub(path.join(root2, 'stub-bin'), path.join(root2, 'stub-state'))
+  stub2.setContract(fx.contractOk())
+  stub2.setCheck(fx.checkOk({ config: { ...fx.checkOk().config, theme: 'warm' }, themes: ['warm'] }))
+  const mark2 = () => runNode('scripts/mocks-driver.js', ['--root', root2, '--mark', 'approved'], { env: stub2.env() })
+
+  fx.writeNotes(root2, fx.defaultNotes({
+    notes: [
+      { id: 'n10', screen: 'home', state: null, component: null, key: null, snippet: null, status: 'deferred', thread: [{ text: 'Print a weekly summary' }] },
+      { id: 'n1', screen: 'home', state: null, component: null, key: null, snippet: null, status: 'deferred', thread: [{ text: 'Export the care plan as PDF' }] },
+      { id: 'n2', screen: null, state: null, component: null, key: null, snippet: null, status: 'approved', thread: [], project: true },
+    ],
+  }))
+  const collision = mark2()
+  assert.strictEqual(collision.status, 0, 'a deferred n10 written ahead of a deferred n1 must let approved record: ' + collision.stderr)
+  const ledgerCollision = fs.readFileSync(path.join(root2, 'design/mocks/ledger.md'), 'utf8')
+  assert.match(ledgerCollision, /\| deferred: n1 \|/, 'n1 must get its own exclusion row even though "deferred: n1" is a substring of the already-written "deferred: n10": ' + ledgerCollision)
+  assert.match(ledgerCollision, /\| deferred: n10 \|/, 'n10 must also get its exclusion row: ' + ledgerCollision)
+
+  const reopen3 = runNode('scripts/mocks-driver.js', ['--root', root2, '--reopen', 'theme'], { env: stub2.env() })
+  assert.strictEqual(reopen3.status, 0, '--reopen theme must succeed to set up the no-duplicate-after-collision leg: ' + reopen3.stderr)
+  const rePick3 = runNode('scripts/mocks-driver.js', ['--root', root2, '--mark', 'theme-picked'], { env: stub2.env() })
+  assert.strictEqual(rePick3.status, 0, 're-picking the theme must succeed for the no-duplicate-after-collision leg: ' + rePick3.stderr)
+  const collisionAgain = mark2()
+  assert.strictEqual(collisionAgain.status, 0, 'a second approved mark with n1 and n10 still deferred must record again: ' + collisionAgain.stderr)
+  const ledgerCollisionAfter = fs.readFileSync(path.join(root2, 'design/mocks/ledger.md'), 'utf8')
+  const n1Rows = ledgerCollisionAfter.split('\n').filter((l) => l.includes('| deferred: n1 |'))
+  const n10Rows = ledgerCollisionAfter.split('\n').filter((l) => l.includes('| deferred: n10 |'))
+  assert.strictEqual(n1Rows.length, 1, 'n1 must never get a duplicate exclusion row on a later approved mark: ' + ledgerCollisionAfter)
+  assert.strictEqual(n10Rows.length, 1, 'n10 must never get a duplicate exclusion row on a later approved mark: ' + ledgerCollisionAfter)
 })
 
 test('AC-20260914-01-12: `--reopen shell` on an APPROVED root cascades marks and journey approvals, appends a reopens row, and leaves notes/approval byte-identical; `--reopen kit` refuses as retired', () => {

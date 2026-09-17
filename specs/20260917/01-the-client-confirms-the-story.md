@@ -1,6 +1,6 @@
 ---
 date: 2026-09-17
-status: implementing
+status: done
 tier: standard
 area: mocks
 design: false
@@ -186,6 +186,25 @@ export type Journey = { id: string; title: string; persona?: string; steps: Step
 ## Rationale
 
 The whole spec follows from one actor model the user fixed after ten rounds: on the served page there are only the client and the AI session; the person running `/spec:mocks` works from files and the CLI. Every control that existed only for a third page role — screen approve, journey approve, theme pick, the component page — is therefore not a gate here, and the driver stops reading what they wrote. The one gate left is the client's confirm, and it is only meaningful if it binds to the exact sentences the client read, hence the hash. Beats live on `Step`, not `Edge`: a journey with N steps has N beats but N−1 edges, and the opening beat would have nowhere to live. The driver may not read `src/journeys.ts` (the reviewer is the one structural reader), so the beats must travel through `check --json`, which forces the contract bump — and the spike showed the current reviewer build would reject them at its strict parse anyway, so a version-1 reviewer must refuse loudly rather than crash. `labels`/`edges` survive because genesis consumes them; a Fable consult first proposed dropping them and was disproved by reading genesis. `deferred` lands on the ledger's exclusion kind because that kind already has the exact downstream (the parking-lot check) and had lost its only writer; the doctrine claim that hand-typed exclusion rows are refused turned out false when executed, so the spec corrects the sentence instead of building the refusal. The CLIENT state collapses because the client's walk now happens during SCREENS; keeping a state whose only step was "walk the client role" would print a step with nothing to do. Refusing `answered` notes at the final mark is deliberate: an answer the client never looked at is the class spec 20260912/02 forbade closing silently; the escape for an absent client stays `client waive` at journey level, and a stranded note is a question to the client, not a silent close. Only one CONTINUE-TO pin (AC-19): every other pre-image behaviour this spec touches is a shape it retires. Rejected: keeping a `surfaces` block as "build scope" (a second grammar with no reader); a driver-side note status write (the page owns note lifecycle); refusing a shared beat sentence (the user's explicit veto). Fragile: the reviewer's half is a separate spec in the sibling repo; until it lands, a real run stops at `contractOrDie` with the install remedy, which is the intended loud failure.
+
+Build departures (deviations fold, 2026-09-17). **AC-18's hash was pinned before its prose
+existed.** The criterion pins a sha256 of § Provenance Ledger's post-change body, so the test
+author had to reconstruct that body offline and the doctrine author then had to match the
+reconstruction byte-for-byte — including its line wrap — rather than write the prose and derive
+the hash from it. The substance was fully specified by D10's quoted substitution, so nothing
+drifted, but the dependency ran backwards: a hash pin over prose that does not yet exist makes
+the pin the author of the wording. A byte-identity AC on unwritten prose should quote the exact
+target body in Contracts, or pin content predicates instead of a hash. **The AC-9 fixture gap:**
+the fixture set a theme without listing it under the stub's available themes, so a re-pick leg
+refused correctly and the test failed; fixed in the fixture, no Decision touched. **The
+`journeys.ts` beats travelled as planned** — no assumption falsified; A1's hash, A3's `ledger
+add` behaviour and A7's genesis count all held as spiked.
+
+Review waive 2026-09-17 (`leg:reconcile`, out-of-plan `docs/adr/0028-the-mock-is-the-app.md`): D10
+requires ADR-0029 to amend ADR-0028, and this repo's ADR convention carries the `Amended by:`
+backlink on the amended record, so the one-line header edit is part of the CREATE row's
+obligation rather than scope creep — content-only, no doctrine or behavior change. Rejecting it
+would leave ADR-0028 stating a state chain ADR-0029 has already retired. User-confirmed.
 
 Collision-closure waives (literals leg, run at lock over `CLIENT`, `approval.theme`, `approvedAt`, `parseSurfaces`, `names and arrows`, `ledger derive`): every `CLIENT` hit outside the File Plan is the lowercase word `client` or an unrelated genesis/replay/release token, not the mocks state; `approvedAt` in `docs/canonical/design.md`, `spec/commands/sketch.md`, `spec/doctrine/design.md`, `spec/doctrine/stages/stage-design.md` and `tests/consistency/design-stage-doctrine.test.js` is the design stage's screen approval, explicitly out of scope (Contracts, obligation 5); `tests/genesis/genesis-mock-app.test.js` spells `approvedAt` in a fixture genesis never reads (A7); `names and arrows` in `spec/doctrine/genesis.md` and `spec/templates/roadmap-brief.md` describes the roadmap grammar, which is unchanged; `parseSurfaces` in `genesis-driver.js` is a historical comment about the retired atlas and `docs/canonical/scripts.md` is covered by the Canonical Delta; `ledger derive` in `tests/review/*` is the unrelated phrase "--ledger derives"; the `ledger derive is retired` refusal text in `mocks-driver.js` stays (spec 20260914/01 AC 15 pins it).
 

@@ -106,7 +106,9 @@
 
 - **Brief from the approved set (specs/20260902/11).** BRIEF generates `## Journeys` and
   `## Non-UI Coverage` from `design/mocks/seed.md` and the ledger — `--mark brief-written`
-  checks that every seed journey and label appears under `## Journeys` and that the six non-UI
+  checks that every seed journey and label appears under `## Journeys` — which carries one
+  `label -> label` line per seed beat edge, derived, never the seed's own block copied across
+  (specs/20260917/01) — and that the six non-UI
   keys (`jobs notifications retention integrations admin pricing`) are `covered`/`n/a`, never
   `dark`; the BRIEF step prints its derivation sources (confirmed `product` ledger rows by id,
   journey and label counts, unresolved page-note count). MENUS prints the seed's

@@ -89,17 +89,17 @@ critical; this ruling governs future capacity, not its admission.
 **No verdict may rest on static legs alone.** Typecheck, lint, mocked unit tests, pattern
 sweeps, and citation-checked reviews can all pass on a program that cannot start (a host once
 had every gate task green while its root route returned 500 on every commit, across two CLEAN
-reviews). The host config's
-required `runtime` block (`bootCommand` + `readyCheck`, or an explicit
-`{"inert": "<reason>"}`) is the contract; the plugin's deterministic `smoke.sh` executes it —
-boot to observed readiness AND a bounded clean stop on the declared signal (shutdown is where
-a service's state-corrupting defects live). The review stage runs it as a required blocking
-verdict leg — CLEAN is unreachable without it; a host that gives review no way to boot is
-itself a hard finding. **Skipped tests are not passes**: the AC↔test reconciliation counts
-executed tests; a skipped mapped test is a hard finding unless the AC declares its
-environment gate. **Authored ≠ activated**: verification infrastructure counts only once its
-execution is demonstrated or its inertness declared — the deliverable manifest
-(`manifest-check.sh`) and `/spec:doctor` enforce this.
+reviews). The host config's required `runtime` block (`bootCommand` + `readyCheck`, or an
+explicit `{"inert": "<reason>"}`) is the contract; the plugin's deterministic `smoke.sh`
+executes it — boot to observed readiness AND a bounded clean stop on the declared signal
+(shutdown is where a service's state-corrupting defects live). The review stage runs it as a
+required blocking verdict leg — CLEAN is unreachable without it; a host that gives review no
+way to boot is itself a hard finding. **Skipped tests are not passes**: the AC↔test
+reconciliation counts executed tests; a skipped mapped test is a hard finding unless the AC
+declares its environment gate. **Authored ≠ activated**: verification infrastructure counts
+only once its execution is demonstrated or its inertness declared — the deliverable manifest
+(`manifest-check.sh`) and `/spec:doctor` enforce this. **A stub is not its dependency**: a leg that
+passed only against a stub for an out-of-scope dependency is reported unverified until re-run for real.
 
 ## Release Stage
 

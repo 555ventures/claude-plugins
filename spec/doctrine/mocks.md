@@ -32,8 +32,9 @@ note`:
 
 An `exclusion` row is written by `--mark approved` from each deferred note (`note` =
 `deferred: <id>`); a hand-typed row passes through `ledger add`. Its `tag` is always `said-by-user`; its `note` grammar is fixed —
-`non-goal: <brief line>` | `answer: <noteId>` | `withdrawn: <noteId>` — naming the discovery
-non-goal, invented-row answer, or withdrawn client note it derives from. It never blocks the
+`deferred: <id>` | `non-goal: <brief line>` | `answer: <noteId>` | `withdrawn: <noteId>` — naming
+the deferred note or journey, discovery non-goal, invented-row answer, or withdrawn client note
+it derives from. It never blocks the
 gate and counts separately in the counts line's ` · <E> exclusions` tail.
 
 **Misunderstandings** table — `id · what · step · cost · note`: `id` is `^M\d+$`, unique;

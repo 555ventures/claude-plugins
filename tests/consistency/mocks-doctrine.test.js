@@ -21,7 +21,13 @@ const { ROOT, read } = require('../helpers')
 // `deferred: <id>`); a hand-typed row passes through `ledger add`.", every other byte unchanged.
 // Computed 2026-09-17 against that reconstructed body; the doctrine-authoring wave lands the
 // prose and the orchestrator reconciles this constant if the landed wording differs.
-const PROVENANCE_LEDGER_SHA256 = 'b4d1d346b0b44ee55c3abee4d9e7585fef50e23fe1654e409939c82adeccdc50'
+//
+// Reconciled 2026-09-17 after the landed body was corrected: D10 mandated only the first-sentence
+// substitution, so the section's next sentence still fixed the `note` grammar to three forms
+// (`non-goal:` | `answer:` | `withdrawn:`) that exclude the `deferred: <id>` form the same
+// sentence — and the driver — now write. The grammar list gains `deferred: <id>`; every other
+// byte of the section is unchanged, and this constant is recomputed from the corrected body.
+const PROVENANCE_LEDGER_SHA256 = '558c6a1d0c094bac5e3fccdc7b18416a903dc1108ecd23321c74f9ab5b5ae627'
 
 function extractSection(src, heading) {
   const start = src.indexOf('## ' + heading)

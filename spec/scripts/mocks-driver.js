@@ -806,7 +806,7 @@ function printThemeStep() {
       ['mock.config.ts'],
       'Mocks: State Machine',
       ['author two src/themes/<k>.css candidates',
-        'pick a theme on the served page, then set theme: "<k>" in mock.config.ts',
+        'pick one and set theme: "<k>" in mock.config.ts',
         driverCmd('--mark theme-picked')],
       true)
     return

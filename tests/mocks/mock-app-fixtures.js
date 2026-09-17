@@ -161,15 +161,46 @@ case "$VERB" in
 esac
 `
 
+// The same stub behaviour behind the shebang the real `@555/mock-review` bin uses. A shebang
+// interpreter is resolved against the spawn's own PATH, so this variant is the one that can
+// tell whether spawnEnv's empty-PATH fallback still reaches the node that is already running.
+const NODE_STUB_SCRIPT = `#!/usr/bin/env node
+'use strict'
+const fs = require('node:fs')
+const path = require('node:path')
+const [verb, ...rest] = process.argv.slice(2)
+const state = process.env.MOCK_STUB_DIR || ''
+if (!state) { console.error('mock-review: MOCK_STUB_DIR unset'); process.exit(2) }
+const cat = (name, fallback) => {
+  const p = path.join(state, name)
+  if (fs.existsSync(p)) { process.stdout.write(fs.readFileSync(p, 'utf8')); return }
+  if (fallback === undefined) { console.error('mock-review: missing ' + name); process.exit(2) }
+  process.stdout.write(fallback)
+}
+switch (verb) {
+  case 'contract': cat('contract.json'); break
+  case 'check': cat('check.json'); break
+  case 'sweep':
+    if (rest.includes('--json')) cat('sweep.json', '{"contractVersion":1,"inventory":[],"queue":[]}')
+    else cat('sweep.txt', 'queue empty')
+    break
+  case 'answer': break
+  case 'serve': cat('serve-url.txt', 'http://127.0.0.1:0'); break
+  default:
+    console.error('mock-review: unknown verb ' + verb)
+    process.exit(2)
+}
+`
+
 // Installs the stub executable at `binDir/mock-review` (caller decides whether that's the app's
 // own node_modules/.bin, per the mock-cli test's "only found in the app bin" case, or a scratch
 // PATH directory) and returns helpers to (re)write the JSON/text the stub answers with, plus an
 // `env()` that prepends `binDir` to PATH and threads `MOCK_STUB_DIR`.
-function installStub(binDir, stateDir) {
+function installStub(binDir, stateDir, { shebang = 'bash' } = {}) {
   mkdirp(binDir)
   mkdirp(stateDir)
   const bin = path.join(binDir, 'mock-review')
-  fs.writeFileSync(bin, STUB_SCRIPT)
+  fs.writeFileSync(bin, shebang === 'node' ? NODE_STUB_SCRIPT : STUB_SCRIPT)
   fs.chmodSync(bin, 0o755)
   const writeJson = (name, obj) => fs.writeFileSync(path.join(stateDir, name), JSON.stringify(obj))
   return {

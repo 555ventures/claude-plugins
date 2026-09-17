@@ -69,3 +69,22 @@ test('AC-20260914-01-2: `--mark seed-done` refuses exit 2 with the install remed
   assert.doesNotMatch(found.stderr, /mock-review not found/,
     'once the app-bin executable is found, the run must not repeat the not-found refusal: ' + found.stderr)
 })
+
+test('AC-20260914-01-2: an app-bin mock-review carrying the real package\'s `#!/usr/bin/env node` shebang is still executable when the inherited PATH is empty', () => {
+  const root = tmpdir('mock-cli-node-shebang')
+  fx.writeSeed(root, { records: ['client'], journeys: ['first-visit'] })
+  fx.writeLedger(root)
+  fx.writeStatus(root)
+  fx.writeApp(root, { records: ['client'] })
+  const appBin = fx.installStub(path.join(root, fx.APP, 'node_modules/.bin'),
+    path.join(root, 'stub-state'), { shebang: 'node' })
+  appBin.setContract(fx.contractOk())
+  appBin.setCheck(fx.checkOk())
+
+  const r = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'seed-done'],
+    { env: { ...process.env, PATH: '', MOCK_STUB_DIR: appBin.stateDir } })
+  assert.doesNotMatch(r.stderr, /mock-review not found/,
+    'the empty-PATH fallback must reach the node already running this driver, or a version-managed node (nvm, mise, volta) leaves the shipped bin\'s `env node` shebang unresolvable and every verb reads as an uninstalled package: ' + JSON.stringify(r))
+  assert.notStrictEqual(r.status, 2,
+    'a node-shebang bin present in the app bin must run, not refuse: ' + JSON.stringify(r))
+})

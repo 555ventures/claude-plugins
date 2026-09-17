@@ -57,13 +57,17 @@ function loadContract() {
 // on PATH by itself, and a stub earlier on PATH still wins (A2). `shell: false` throughout, so
 // Node's own PATH-searching spawn (posix_spawnp) is what actually finds the executable.
 // A2: when the inherited PATH is empty (a caller simulating "nothing else on PATH", never a
-// real session's own environment), fall back to the same bare POSIX default `execvp` itself uses
-// when PATH is unset (confstr(_CS_PATH), "/bin:/usr/bin" on Linux) — an explicit empty PATH
-// string (unlike an absent PATH key) disables that fallback at the OS level, which would
-// otherwise strand any `#!/usr/bin/env <interpreter>` shebang the installed bin uses.
+// real session's own environment), fall back to the directory of the node running this driver
+// followed by the same bare POSIX default `execvp` itself uses when PATH is unset
+// (confstr(_CS_PATH), "/bin:/usr/bin" on Linux) — an explicit empty PATH string (unlike an
+// absent PATH key) disables that fallback at the OS level, which would otherwise strand the
+// installed bin's `#!/usr/bin/env node` shebang. The running node's own directory comes first:
+// a version-managed node (nvm, mise, volta) lives nowhere on the bare default, and where a
+// system `/usr/bin/node` does exist it is a different major than the one already executing.
 function spawnEnv(appDir) {
   const bin = path.join(appDir, 'node_modules', '.bin')
-  const base = process.env.PATH || '/usr/bin:/bin'
+  const fallback = path.dirname(process.execPath) + path.delimiter + '/usr/bin:/bin'
+  const base = process.env.PATH || fallback
   return { ...process.env, PATH: bin + path.delimiter + base }
 }
 

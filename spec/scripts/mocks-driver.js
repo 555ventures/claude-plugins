@@ -10,7 +10,7 @@
 // derives SEED -> SHELL -> SCREENS -> THEME -> CLIENT -> APPROVED on every invocation from
 // design/mocks/status.json (schemaVersion 2) plus the reviewer package's own `check --json`,
 // `design/notes.json` and `design/approval.json` — never from a second, hand-rolled read of any
-// of those three. `lib/mock-cli.js` is the only caller of the package (`@555/mock-review`); this
+// of those three. `lib/mock-cli.js` is the only caller of the package (`@555-ventures/mock-review`); this
 // driver never spawns it directly. The provenance ledger (spec/scripts/lib/mocks-ledger.js) and
 // its verbs/gate are kept verbatim (D16) — this file is the only thing rewritten.
 //
@@ -74,7 +74,7 @@ const path = require('path')
 const { writeOut } = require('./lib/driver-io')
 const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, setStatus } = require('./lib/mocks-ledger')
 const { parseSeedJourneys } = require('./lib/surfaces')
-const { contractOrDie, checkJson } = require('./lib/mock-cli')
+const { contractOrDie, checkJson, loadContract } = require('./lib/mock-cli')
 
 function die(msg) { writeOut(2, 'mocks-driver: ' + msg + '\n'); process.exit(2) }
 function nowIso() { return new Date().toISOString() }
@@ -627,7 +627,7 @@ function printSeedStep() {
   lines.push('Doctrine: spec/doctrine/mocks.md § Mocks: Seed')
   lines.push('')
   lines.push('npx shadcn@4.21.0 init -t vite -b radix -p nova -n app -y -s')
-  lines.push('cd app && npm i -D @555/mock-review')
+  lines.push('cd app && npm i -D ' + loadContract().package)
   for (const f of TEMPLATE_FILES) {
     lines.push('cp "$(spec-paths templates)"/mock/' + f.src + ' app/' + f.dest)
   }

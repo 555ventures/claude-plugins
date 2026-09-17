@@ -6,7 +6,7 @@ const { tmpdir, runNode } = require('../helpers')
 const fx = require('./mock-app-fixtures')
 
 // specs/20260914/01-the-mock-contract-and-the-driver.md D2, AC-20260914-01-1, AC-20260914-01-2:
-// lib/mock-cli.js is the only caller of the `@555/mock-review` package — every JSON verb's
+// lib/mock-cli.js is the only caller of the `@555-ventures/mock-review` package — every JSON verb's
 // stdout is validated, a `contractVersion` mismatch refuses with both numbers and a remedy, and
 // an ENOENT spawn refuses naming the install remedy.
 
@@ -18,7 +18,7 @@ test('AC-20260914-01-1: a contractVersion 2 stub against the contractVersion 1 t
   fx.writeApp(root, { records: [] })
 
   const stub = fx.installStub(path.join(root, 'stub-bin'), path.join(root, 'stub-state'))
-  stub.setContract({ contractVersion: 2, package: '@555/mock-review', version: '2.0.0' })
+  stub.setContract({ contractVersion: 2, package: '@555-ventures/mock-review', version: '2.0.0' })
   stub.setCheck(fx.checkOk())
 
   const mismatch = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
@@ -26,10 +26,10 @@ test('AC-20260914-01-1: a contractVersion 2 stub against the contractVersion 1 t
     'a contractVersion mismatch must refuse (exit 2), or a stale reviewer package silently misreads every JSON shape this driver depends on: ' + mismatch.stderr)
   assert.match(mismatch.stderr, /contract 2 ≠ 1/,
     'D2: the refusal must print both contractVersion numbers so the session can see the skew at a glance: ' + mismatch.stderr)
-  assert.match(mismatch.stderr, /remedy: npm i -D @555\/mock-review@1/,
+  assert.match(mismatch.stderr, /remedy: npm i -D @555-ventures\/mock-review@1/,
     'D2: the refusal must name the exact pinned-major install remedy, or the session has no path back to a working contract: ' + mismatch.stderr)
 
-  stub.setContract({ contractVersion: 1, package: '@555/mock-review', version: '1.0.0' })
+  stub.setContract({ contractVersion: 1, package: '@555-ventures/mock-review', version: '1.0.0' })
   const ok = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
   assert.strictEqual(ok.status, 0,
     'matching contractVersion 1 on both sides must never refuse — the run must print the next step block: ' + ok.stderr)
@@ -50,7 +50,7 @@ test('AC-20260914-01-2: `--mark seed-done` refuses exit 2 with the install remed
     'with no mock-review reachable on PATH or the app bin, `--mark seed-done` must refuse rather than crash on an ENOENT spawn: ' + JSON.stringify(notFound))
   assert.match(notFound.stderr, /mock-review not found/,
     'the refusal must say the binary was not found, or the session cannot tell an ENOENT from a records-file refusal: ' + notFound.stderr)
-  assert.match(notFound.stderr, /remedy: npm i -D @555\/mock-review/,
+  assert.match(notFound.stderr, /remedy: npm i -D @555-ventures\/mock-review/,
     'the refusal must name the install remedy so the session knows exactly what to run: ' + notFound.stderr)
 
   const root2 = tmpdir('mock-cli-app-bin')

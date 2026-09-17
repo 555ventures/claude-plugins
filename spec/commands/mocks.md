@@ -7,7 +7,7 @@ argument-hint: (no arguments — the driver derives everything from disk; SEED p
 
 The standalone design-stage entry point, ahead of `/spec:genesis` and any roadmap. `/spec:mocks`
 drives a real Vite + React + shadcn app through a separate reviewer package
-(`@555/mock-review`), never a static HTML wireframe. `mocks-driver.js` (`spec-paths
+(`@555-ventures/mock-review`), never a static HTML wireframe. `mocks-driver.js` (`spec-paths
 mocks-driver`) owns the state's sequencing, printing exactly one step at a time for this
 session's judgment. A thin shell: it names where each step's doctrine lives and assembles the
 APPROVED report. **Intended model: Sonnet** (Opus only for a hard-to-reverse product-facts
@@ -39,7 +39,7 @@ or shell. SEED, CLIENT and APPROVED never carry that line.
 
 The driver prints, in order, `Read only: design/mocks/seed.md`, the scaffold command
 (`npx shadcn@4.21.0 init -t vite -b radix -p nova -n app -y -s`), `cd app && npm i -D
-@555/mock-review`, and one `cp` line per template file landing `mock.config.ts`, `src/journeys.ts`
+@555-ventures/mock-review`, and one `cp` line per template file landing `mock.config.ts`, `src/journeys.ts`
 and the two starting examples under `app/design/examples/`. Write each seed `## Records` entity
 by hand as `app/src/records/<entity>.ts`, then run `node {driver} --root . --mark seed-done`.
 

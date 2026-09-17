@@ -119,7 +119,7 @@ verbatim — `npx shadcn@4.21.0 init -t vite -b radix -p nova -n app -y -s` (the
 `app/`, so `status.app` is the literal `"app"`, written once on the cold-root create; every
 later host-app path — `mock.config.ts`, `src/`, `design/*.json` — resolves through
 `path.join(root, status.app)`, while `design/mocks/` itself stays at the root); then `cd app &&
-npm i -D @555/mock-review`; then one `cp "$(spec-paths templates)"/mock/<file> app/<dest>` line
+npm i -D @555-ventures/mock-review`; then one `cp "$(spec-paths templates)"/mock/<file> app/<dest>` line
 per template file (`mock.config.ts`, `src/journeys.ts`, and the two examples under
 `design/examples/`, outside every contract host glob so the reviewer never lists them as a real
 screen or records file).

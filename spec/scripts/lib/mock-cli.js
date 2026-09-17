@@ -1,5 +1,5 @@
 'use strict'
-// lib/mock-cli.js — the one caller of the separate `@555/mock-review` package this plugin never
+// lib/mock-cli.js — the one caller of the separate `@555-ventures/mock-review` package this plugin never
 // depends on directly. specs/20260914/01-the-mock-contract-and-the-driver.md D1/D2,
 // AC-20260914-01-1, AC-20260914-01-2: `run(appDir, verb, args)` spawns `mock-review <verb> …`
 // with `cwd: appDir` and `shell: false`, prepending `<appDir>/node_modules/.bin` to the inherited
@@ -83,7 +83,7 @@ function run(appDir, verb, args = []) {
 }
 
 function dieEnoent() {
-  die('mock-review not found — remedy: npm i -D @555/mock-review')
+  die('mock-review not found — remedy: npm i -D ' + loadContract().package)
 }
 
 // key-presence check only: returns the first missing key, or null. A non-array `keys` value
@@ -98,7 +98,7 @@ function firstMissingKey(obj, keys) {
 }
 
 function dieShape(verb, path_) {
-  die(verb + ' --json response is missing "' + path_ + '" — the installed @555/mock-review build disagrees with this plugin\'s contract; remedy: npm i -D @555/mock-review@' + (loadContract().contractVersion))
+  die(verb + ' --json response is missing "' + path_ + '" — the installed ' + loadContract().package + ' build disagrees with this plugin\'s contract; remedy: npm i -D ' + loadContract().package + '@' + (loadContract().contractVersion))
 }
 
 // D1: walk the contract's own `shapes[verb]` entry — `required` (top-level keys), `<field>[]`
@@ -164,7 +164,7 @@ function contractOrDie(appDir) {
   const reported = runJson(appDir, 'contract', [], template)
   if (reported.contractVersion !== template.contractVersion) {
     die('contract ' + reported.contractVersion + ' ≠ ' + template.contractVersion +
-      ' — remedy: npm i -D @555/mock-review@' + template.contractVersion)
+      ' — remedy: npm i -D ' + template.package + '@' + template.contractVersion)
   }
   return reported
 }

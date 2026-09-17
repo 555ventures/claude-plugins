@@ -59,11 +59,11 @@ test('AC-20260914-01-4: a cold root creates status.json schemaVersion 2 / app "a
   const out = r.stdout
   const idxRead = out.indexOf('Read only: design/mocks/seed.md')
   const idxScaffold = out.indexOf('npx shadcn@4.21.0 init -t vite -b radix -p nova -n app -y -s')
-  const idxInstall = out.indexOf('npm i -D @555/mock-review')
+  const idxInstall = out.indexOf('npm i -D @555-ventures/mock-review')
   const idxCp = out.indexOf('cp ')
   assert.ok(idxRead !== -1, 'the SEED block must print "Read only: design/mocks/seed.md": ' + out)
   assert.ok(idxScaffold !== -1, 'D4: the SEED block must print the exact scaffold command verbatim: ' + out)
-  assert.ok(idxInstall !== -1, 'D4: the SEED block must print the exact `npm i -D @555/mock-review` line: ' + out)
+  assert.ok(idxInstall !== -1, 'D4: the SEED block must print the exact `npm i -D @555-ventures/mock-review` line: ' + out)
   assert.ok(idxCp !== -1, 'D4: the SEED block must print at least one `cp` template line: ' + out)
   assert.ok(idxRead < idxScaffold && idxScaffold < idxInstall && idxInstall < idxCp,
     'the four SEED lines must print in this exact order — Read only, scaffold, install, then the cp lines: ' + out)

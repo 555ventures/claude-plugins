@@ -13,6 +13,13 @@ const fx = require('./mock-app-fixtures')
 // (specs/20260914/01-the-mock-contract-and-the-driver.md remains their owner) and are expected
 // to fail only incidentally, from the D12 fixture-currency edits rippling ahead of the rest of
 // this build's own File Plan rows landing.
+//
+// specs/20260918/01-mock-contract-v3.md D2, AC-20260918-01-2, AC-20260918-01-3: `client waive`
+// stops writing design/approval.json itself and instead calls the package's own `waive` verb —
+// the AC-20260917-01-11 case below is rewritten onto that contract, and a new case pins the
+// non-zero-exit refusal path. Every other case in this file that sets up a stub via
+// fx.contractOk() is expected to fail incidentally in the interim, same as the note above: the
+// stub's default contract answer moves to contractVersion 3 (D5) ahead of the template's own bump.
 
 const iso = '2026-09-14T00:00:00.000Z'
 
@@ -615,7 +622,7 @@ test('AC-20260917-01-10: once every journey is approved the bare run derives THE
   assert.doesNotMatch(approvedBlock.stdout, /Skill:/, 'APPROVED must never print a Skill: line: ' + approvedBlock.stdout)
 })
 
-test('AC-20260917-01-11: `client open` requires only one drawn journey (never a CLIENT state), prints the served URL with the config token, refuses on a missing serve URL, and `client waive` writes only that journey\'s client verdict, reason, timestamp and beat hash', () => {
+test('AC-20260917-01-11 / AC-20260918-01-2: `client open` requires only one drawn journey (never a CLIENT state), prints the served URL with the config token, refuses on a missing serve URL, and `client waive` invokes the package\'s waive verb with --journey/--reason/--beats and never itself writes design/approval.json', () => {
   const root = tmpdir('states-ac11-new')
   writeBeatSeed(root, [{
     name: 'first-visit',
@@ -653,15 +660,54 @@ test('AC-20260917-01-11: `client open` requires only one drawn journey (never a 
   assert.match(notServing.stderr, /remedy: npx mock-review serve/, 'the refusal must name the exact serve remedy: ' + notServing.stderr)
 
   stub.setCheck(fx.checkOk({ serve: { url: 'http://127.0.0.1:45980' } }))
+  const approvalBefore = fx.readApproval(root)
   const waive = runNode('scripts/mocks-driver.js', ['--root', root, 'client', 'waive', '--journey', 'first-visit', '--reason', 'no client'], { env: stub.env() })
   assert.strictEqual(waive.status, 0, 'client waive over the Contracts seed journey must succeed: ' + waive.stderr)
   const approvalAfter = fx.readApproval(root)
-  assert.deepStrictEqual(approvalAfter, {
-    contractVersion: 1,
-    screens: {},
-    journeys: { 'first-visit': { client: 'waived', reason: 'no client', at: approvalAfter.journeys['first-visit'].at, beats: '7c0be20327a0' } },
-  }, 'client waive must write exactly {client, reason, at, beats} for that journey and touch nothing else in approval.json: ' + JSON.stringify(approvalAfter))
-  assert.ok(approvalAfter.journeys['first-visit'].at, 'client waive must record a timestamp')
+  assert.deepStrictEqual(approvalAfter, approvalBefore,
+    'D2: client waive must never write design/approval.json itself — that write now belongs to the package\'s own waive verb, behind its lock, and a driver-side write here would race it: ' +
+    JSON.stringify({ before: approvalBefore, after: approvalAfter }))
+  const waiveArgv = stub.readWaiveArgv()
+  assert.deepStrictEqual(waiveArgv, ['--journey', 'first-visit', '--reason', 'no client', '--beats', '7c0be20327a0'],
+    'D2: client waive must invoke the package\'s waive verb with exactly --journey, --reason and --beats (the seed\'s current beat hash) — a missing or malformed flag leaves the package unable to record who waived which journey and why: ' +
+    JSON.stringify(waiveArgv))
+})
+
+test('AC-20260918-01-3: WHEN the waive verb exits non-zero THE SYSTEM SHALL surface its stderr as the driver\'s refusal rather than reporting the journey waived', () => {
+  const root = tmpdir('states-ac1801-3')
+  writeBeatSeed(root, [{
+    name: 'first-visit',
+    persona: 'Ann opens the app.',
+    beats: [
+      { beat: 'I open the app', screen: 'home', state: null },
+      { beat: 'I tap Sign in', screen: 'login', state: 'empty' },
+    ],
+  }])
+  fx.writeLedger(root)
+  fx.writeApp(root, { records: [] })
+  const stub = fx.installStub(path.join(root, 'stub-bin'), path.join(root, 'stub-state'))
+  stub.setContract(fx.contractOk())
+  stub.setCheck(fx.checkOk({ serve: { url: 'http://127.0.0.1:45980' } }))
+  stub.setWaiveExit(2)
+  stub.setWaiveStderr('mock-review: waive: journey first-visit is already confirmed by the client — remedy: nothing, it is already recorded\n')
+
+  fx.writeStatus(root, {
+    marks: seedMarks({ seedDone: iso, shellDrawn: iso }),
+    journeys: { 'first-visit': { drawn: iso, approved: null } },
+  })
+  const approvalBefore = fx.readApproval(root)
+
+  const r = runNode('scripts/mocks-driver.js', ['--root', root, 'client', 'waive', '--journey', 'first-visit', '--reason', 'no client'], { env: stub.env() })
+  assert.strictEqual(r.status, 2,
+    'a non-zero exit from the waive verb must surface as the driver\'s own refusal, not a reported success: ' + JSON.stringify(r))
+  assert.match(r.stderr, /journey first-visit is already confirmed by the client/,
+    'the waive verb\'s own stderr text must reach the session, or the refusal gives no reason at all: ' + r.stderr)
+  assert.doesNotMatch(r.stdout, /waive recorded/,
+    'a refused waive must never print the success line — that would tell the session the journey waived when it did not: ' + r.stdout)
+  const approvalAfter = fx.readApproval(root)
+  assert.deepStrictEqual(approvalAfter, approvalBefore,
+    'D2: the driver must never write design/approval.json itself on a refused waive either — the package is the only writer, success or failure: ' +
+    JSON.stringify({ before: approvalBefore, after: approvalAfter }))
 })
 
 test('AC-20260914-01-15: every retired verb refuses exit 2 with its exact D11 replacement text', () => {
@@ -676,8 +722,8 @@ test('AC-20260914-01-15: every retired verb refuses exit 2 with its exact D11 re
 
   const cases = [
     { argv: ['notes', 'open'], text: 'npx mock-review sweep' },
-    { argv: ['stop', 'open', 'shapes'], text: 'approvals are recorded on the served page' },
-    { argv: ['theme', 'compose', '--direction', 'a'], text: 'author `src/themes/<k>.css`, pick on the page, then `--mark theme-picked`' },
+    { argv: ['stop', 'open', 'shapes'], text: 'client waive --journey <j> --reason <r> (the client confirms on the served page)' },
+    { argv: ['theme', 'compose', '--direction', 'a'], text: 'author `src/themes/<k>.css`, set theme: "<k>" in mock.config.ts, then `--mark theme-picked`' },
     { argv: ['look', 'home'], text: 'npx mock-review check --look <screen>' },
     { argv: ['look-probe'], text: 'npx mock-review check --look <screen>' },
     { argv: ['--refresh-register'], text: 'retired (ADR-0028)' },

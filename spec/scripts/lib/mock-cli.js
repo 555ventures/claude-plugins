@@ -17,8 +17,9 @@
 // needs no matching code change here.
 //
 // What this deliberately does NOT do: retry a dead or mismatched spawn, cache a verb's result
-// across calls, call any verb the driver does not need (`sweep`/`answer`/`serve` are the
-// session's own `npx mock-review …` invocations, never this module's), or read/write anything
+// across calls, call any verb the driver does not need (`sweep`/`answer`/`approve`/`serve` are
+// the session's own `npx mock-review …` invocations, never this module's — `waive` is the one
+// write verb the driver itself calls, mocks-driver.js's `client waive`), or read/write anything
 // under design/mocks/ or the app's own `design/notes.json` / `design/approval.json` — this module
 // only ever runs the package's CLI and validates its stdout.
 //

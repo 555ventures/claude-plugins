@@ -1,6 +1,6 @@
 ---
 date: 2026-09-18
-status: hardened
+status: implementing
 tier: standard
 area: mocks
 design: false
@@ -9,6 +9,8 @@ depends_on: []
 depended_on_by: []
 brief: n/a
 open_markers: 0
+build_base: main
+diff_base: ae0336ba8118233bdbbd93335005f970a032dade
 ---
 
 # Mock contract v3

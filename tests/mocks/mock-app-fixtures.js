@@ -13,6 +13,15 @@
 // What this deliberately does NOT do: parse or validate anything it writes against the
 // contract's shapes — that validation is `lib/mock-cli.js`'s own job and is exercised by
 // mock-cli.test.js against these same fixtures, not re-proved here.
+//
+// specs/20260918/01-mock-contract-v3.md D5: the stub's `contract` answer (contractOk) and the
+// defaultApproval/defaultNotes documents move to contractVersion 3 alongside the package's own
+// bump — defaultApproval carries no `theme` key. The stub binary also gains a `waive` branch
+// (D2): it records its argv to `<stateDir>/waive-argv.txt` (one arg per line), writes
+// `<stateDir>/waive-stderr.txt` to its own stderr when that file exists, and exits the code in
+// `<stateDir>/waive-exit.txt` (default 0) — so a caller can prove both what the driver passed the
+// verb and how the driver reacts to a non-zero exit, without writing anything to
+// design/approval.json itself.
 const fs = require('fs')
 const path = require('path')
 
@@ -89,11 +98,11 @@ function readStatus(root) {
 }
 
 function defaultNotes(overrides = {}) {
-  return { contractVersion: 1, notes: [], journeys: {}, ...overrides }
+  return { contractVersion: 3, notes: [], journeys: {}, ...overrides }
 }
 
 function defaultApproval(overrides = {}) {
-  return { contractVersion: 1, screens: {}, journeys: {}, ...overrides }
+  return { contractVersion: 3, screens: {}, journeys: {}, ...overrides }
 }
 
 // The app-side host: mock.config.ts, one src/records/<r>.ts per record entity, and the two
@@ -159,6 +168,12 @@ case "$VERB" in
   answer)
     exit 0
     ;;
+  waive)
+    printf '%s\\n' "$@" > "$STATE/waive-argv.txt"
+    if [ -f "$STATE/waive-stderr.txt" ]; then cat "$STATE/waive-stderr.txt" >&2; fi
+    if [ -f "$STATE/waive-exit.txt" ]; then exit "$(cat "$STATE/waive-exit.txt")"; fi
+    exit 0
+    ;;
   serve)
     if [ -f "$STATE/serve-url.txt" ]; then cat "$STATE/serve-url.txt"; else echo "http://127.0.0.1:0"; fi
     ;;
@@ -193,6 +208,14 @@ switch (verb) {
     else cat('sweep.txt', 'queue empty')
     break
   case 'answer': break
+  case 'waive': {
+    fs.writeFileSync(path.join(state, 'waive-argv.txt'), rest.join('\\n'))
+    const stderrP = path.join(state, 'waive-stderr.txt')
+    if (fs.existsSync(stderrP)) process.stderr.write(fs.readFileSync(stderrP, 'utf8'))
+    const exitP = path.join(state, 'waive-exit.txt')
+    process.exit(fs.existsSync(exitP) ? parseInt(fs.readFileSync(exitP, 'utf8'), 10) : 0)
+    break
+  }
   case 'serve': cat('serve-url.txt', 'http://127.0.0.1:0'); break
   default:
     console.error('mock-review: unknown verb ' + verb)
@@ -220,6 +243,13 @@ function installStub(binDir, stateDir, { shebang = 'bash' } = {}) {
     setSweepJson(obj) { writeJson('sweep.json', obj) },
     setSweepText(text) { fs.writeFileSync(path.join(stateDir, 'sweep.txt'), text) },
     setServeUrl(url) { fs.writeFileSync(path.join(stateDir, 'serve-url.txt'), url) },
+    setWaiveExit(code) { fs.writeFileSync(path.join(stateDir, 'waive-exit.txt'), String(code)) },
+    setWaiveStderr(text) { fs.writeFileSync(path.join(stateDir, 'waive-stderr.txt'), text) },
+    readWaiveArgv() {
+      const p = path.join(stateDir, 'waive-argv.txt')
+      if (!fs.existsSync(p)) return null
+      return fs.readFileSync(p, 'utf8').split('\n').filter((l) => l.length > 0)
+    },
     env(extra = {}) {
       return {
         ...process.env,
@@ -235,7 +265,7 @@ function installStub(binDir, stateDir, { shebang = 'bash' } = {}) {
 // PATH (not the app bin — mock-cli.test.js exercises the app-bin-only case directly) answering
 // a default `contractVersion: 1` and a default green `check --json`.
 function contractOk(overrides = {}) {
-  return { contractVersion: 2, package: '@555-ventures/mock-review', version: '1.0.0', ...overrides }
+  return { contractVersion: 3, package: '@555-ventures/mock-review', version: '3.0.0', ...overrides }
 }
 
 function checkOk(overrides = {}) {

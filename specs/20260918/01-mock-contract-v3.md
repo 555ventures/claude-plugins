@@ -1,6 +1,6 @@
 ---
 date: 2026-09-18
-status: implementing
+status: done
 tier: standard
 area: mocks
 design: false
@@ -147,6 +147,32 @@ carried here.
 What to watch: D2's failure path. The driver currently cannot fail at this step — a `writeFileSync`
 either works or throws — whereas a child process can exit 2 with a sentence. AC-20260918-01-3 exists
 because the obvious implementation ignores the status and reports the journey waived.
+
+Deviations fold (2026-09-19). One-off, no Gotchas entry earned: D5's shared-fixture bump moved
+`contractOk()`/`defaultApproval()`/`defaultNotes()` to `contractVersion: 3` ahead of D1's own bump to
+`spec/templates/mock/contract.json`, so every test merely borrowing those fixtures went red on the
+version handshake mid-wave — including `tests/mocks/mock-driver-ledger.test.js` and
+`tests/genesis/genesis-mock-app.test.js`, outside this File Plan. All of them carry no version
+literal of their own and returned to green the moment the full wave landed together; no assertion
+was weakened anywhere. This is the ordinary shape of a handshake-version bump landing across two
+File Plan rows, not a recurring class.
+
+Review-stage correction (2026-09-19). The doctrine wave's first pass over `spec/doctrine/mocks.md`
+also retired the **client's** own-note closers, which D4 never sanctioned — D4 scopes the page-control
+retirement to exactly two items, screen approve and theme pick. The shipped package still gives the
+client Approve and Defer on a note they raised (its spec 02 D8, and `src/ui/notes/notes-ui.tsx`'s
+role table), so the pre-image sentence was the accurate one. Restored at the fix step, keeping D4's
+loopback-human role definition alongside it: the client closes notes they raised, and every other
+close reaches only the owner-only surface.
+
+Canonical Delta departures (2026-09-19). Two, both applied deliberately. (i) The Delta's clause "the
+page carries no operator-only control" was NOT written into `docs/canonical/design.md`: it is the
+same overreach the review correction above removed from the doctrine, and ADR-0029's owner-only
+conversation closers and Components page are live surface in the shipped package. The canon instead
+names the loopback human's owner-only surface and says screen approve and theme pick are not page
+controls at all. (ii) The Delta names `docs/canonical/genesis.md`, but that file's only theme
+sentence is about BRIEF's retired theme preconditions and carries no approval, `decisions.json` or
+served-page claim — nothing in it was false, so it is unchanged.
 
 ## Canonical Delta
 

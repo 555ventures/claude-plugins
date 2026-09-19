@@ -206,9 +206,11 @@ session has spoken, the author's turn to look again), `approved` (blue — done)
 (a valid point, not now — it blocks nothing and is never lost, since `--mark approved` turns
 every newly deferred item into a ledger exclusion row, § Provenance Ledger). The session
 answers red items with `npx mock-review answer (--note <id> | --journey <id>) --text <t>`, which
-flips the item to `answered`; only the served page's own owner-only controls — approve, defer,
-reject, delete — end a note or a journey conversation (§ Mocks: Client Player), never an HTTP
-call the driver makes and never a hand-edit of `design/notes.json`. A journey's own conversation is
+flips the item to `answered`; only the served page's own controls end a note or a journey
+conversation — the client closes a note they raised (approve or defer, never delete or reject)
+and the loopback human's owner-only surface closes everything else (approve, defer, reject,
+delete) (§ Mocks: Client Player) — never an HTTP call the driver makes and never a hand-edit of
+`design/notes.json`. A journey's own conversation is
 **workflow**: order, a missing or wrong step — answered by editing the seed's beats, which
 changes the beat hash and reopens the journey (§ Mocks: State Machine), never by a driver-side
 status write. A screen's own notes are **design and fields**: they never touch the seed.
@@ -241,8 +243,9 @@ requires at least one `status.journeys[*].drawn`, else `remedy: --mark journey-d
 <j>`) opens the client role: every drawn journey and every screen, the same controls a real user
 has, a note box on each screen, and nothing else — no delete, no reject. A client-raised note is
 the same `notes.json` row the session's own review writes, distinguished only by who raised it;
-the loopback human ends notes — approve or defer them — from the owner-only surface, never the
-client and never this driver.
+the client ends their own notes — approve or defer them — the session never does. Every other
+close (reject, delete, or approve/defer on a note the client did not raise) reaches only the
+loopback human's owner-only surface, never the client and never this driver.
 
 **The confirm control is the one human gate in the whole mock stage.** SUCCESS: `Confirmed —
 story <hash>` printed on the journey once the client's confirm writes

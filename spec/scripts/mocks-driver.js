@@ -45,7 +45,9 @@
 // (never a duplicate for one already carrying that `note` field). D8: THEME prints a "pick a
 // theme" block until `marks.themePicked`, then a "close the mock" block (`client open` and
 // `--mark approved`, no Skill line) until `marks.approved`; `client open`'s only guard is at
-// least one drawn journey; `client waive` stores `{client: 'waived', reason, at, beats}`. D10:
+// least one drawn journey; `client waive` calls the package's own `waive` verb with `--journey`,
+// `--reason` and `--beats` (the seed's current beat hash) — the driver itself never writes
+// `design/approval.json` (D2). D10:
 // `--reopen` clears marks (and cascades — a shell reopen invalidates the theme and every
 // approval; a re-picked theme invalidates every approval too) and appends one `reopens` row; it
 // never deletes a file. D11: every retired verb refuses (exit 2) with a one-line replacement,
@@ -90,7 +92,7 @@ const path = require('path')
 const { writeOut } = require('./lib/driver-io')
 const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, setStatus } = require('./lib/mocks-ledger')
 const { parseSeedJourneys, beatHash } = require('./lib/surfaces')
-const { contractOrDie, checkJson, loadContract } = require('./lib/mock-cli')
+const { run, contractOrDie, checkJson, loadContract } = require('./lib/mock-cli')
 
 function die(msg) { writeOut(2, 'mocks-driver: ' + msg + '\n'); process.exit(2) }
 function nowIso() { return new Date().toISOString() }
@@ -143,10 +145,10 @@ function checkRetired() {
     die('notes are read with `npx mock-review sweep` and answered with `npx mock-review answer`')
   }
   if (rest[0] === 'stop') {
-    die('approvals are recorded on the served page')
+    die('client waive --journey <j> --reason <r> (the client confirms on the served page)')
   }
   if (rest[0] === 'theme' && ['state', 'compose', 'shortlist'].includes(rest[1])) {
-    die('author `src/themes/<k>.css`, pick on the page, then `--mark theme-picked`')
+    die('author `src/themes/<k>.css`, set theme: "<k>" in mock.config.ts, then `--mark theme-picked`')
   }
   if (rest[0] === 'look' || rest[0] === 'look-probe' || rest[0] === 'look-via') {
     die('npx mock-review check --look <screen>')
@@ -331,10 +333,6 @@ function readApprovalRaw() {
     return null // unreachable
   }
 }
-function writeApprovalRaw(obj) {
-  fs.writeFileSync(path.join(appDir(), 'design/approval.json'), JSON.stringify(obj, null, 2) + '\n')
-}
-
 // ---------------------------------------------------------------------------
 // D3: state derivation — the only place SEED/SHELL/SCREENS/THEME/APPROVED is decided (CLIENT is
 // retired: the client's walk happens during SCREENS, and THEME carries the final close step).
@@ -707,7 +705,12 @@ function cmdClientOpen() {
   process.exit(0)
 }
 
+// D2: the driver no longer writes design/approval.json for a waiver itself — that write now
+// belongs to the package's own `waive` verb, behind its lock, so a driver-side write here would
+// race it. `contractOrDie` runs first, before the seed lookup or the spawn, so a version-skewed
+// or missing `mock-review` refuses before anything else is even checked.
 function cmdClientWaive(journeyArg, reason) {
+  contractOrDie(appDir())
   if (!journeyArg) die('client waive needs --journey <j> — remedy: client waive --journey <j> --reason <r>')
   if (!reason) die('client waive needs --reason <r> — remedy: client waive --journey <j> --reason <r>')
   const seedJourneys = currentSeedJourneys()
@@ -715,12 +718,15 @@ function cmdClientWaive(journeyArg, reason) {
   if (!seedJourney) {
     die('--journey ' + journeyArg + ' is not declared in design/mocks/seed.md — remedy: use one of the seed journeys: ' + [...seedJourneys.keys()].join(', '))
   }
-  const approval = readApprovalRaw()
-  approval.journeys = approval.journeys || {}
-  approval.journeys[journeyArg] = Object.assign({}, approval.journeys[journeyArg], {
-    client: 'waived', reason, at: nowIso(), beats: beatHash(seedJourney.beats),
-  })
-  writeApprovalRaw(approval)
+  const hash = beatHash(seedJourney.beats)
+  const r = run(appDir(), 'waive', ['--journey', journeyArg, '--reason', reason, '--beats', hash])
+  if (r.error) {
+    if (r.error.code === 'ENOENT') die('mock-review not found — remedy: npm i -D ' + loadContract().package)
+    die('waive failed to run: ' + r.error.message + ' — remedy: verify `mock-review` is installed and executable in node_modules/.bin, then re-run')
+  }
+  if (r.status !== 0) {
+    die((r.stderr || '').trim() || 'waive exited ' + r.status + ' with no stderr — remedy: run `mock-review waive --journey ' + journeyArg + ' --reason "' + reason + '" --beats ' + hash + '` directly in the app dir to see the raw error')
+  }
   writeOut(1, '✅ client waive recorded for ' + journeyArg + '\n')
   process.exit(0)
 }

@@ -30,7 +30,9 @@ carries `approvedAt` and a `hash`; a spec's `design_source` resolves, under `<de
 one `src/screens/<label>.tsx` or the directory `src/screens`. A named screen is **approved**
 once `approvedAt` is set and its `hash` equals `check --json`'s current `hash` for that screen —
 **stale** the moment the hash differs (an edit after approval is a STOP, never a silent
-re-bind). Once the claiming spec is `done`, authority **inverts to built**: shipped code is
+re-bind). Per-screen approval is recorded by `mock-review approve --screen <name>`, run by the
+session on the user's explicit `approve` — never by a control on the served page, and never by a
+script in this repo. Once the claiming spec is `done`, authority **inverts to built**: shipped code is
 truth, the screen a historical contract allowed to go stale, re-synced lazily at the next design
 touch, never owed.
 
@@ -43,13 +45,22 @@ screenshots a screen to judge it in this doctrine's place.
 ## The mock stage's actors and chain (specs/20260917/01)
 
 On the served page there are only two actors: the **client** and the AI session. The person
-running `/spec:mocks` works from files and the CLI, never from a page control. The chain is
+running `/spec:mocks` works from files and the CLI; the one page surface they still reach is the
+owner-only one — the conversation closers and the Components page — as the loopback human at the
+machine running `serve`. Screen approve and theme pick are not page controls at all. The chain is
 `SEED → SHELL → SCREENS → THEME → APPROVED`. A seed journey is a numbered list of the client's
 own sentences (`N. "sentence" -> screen[@state]`), copied verbatim into the app; a journey is
 approved by the client's confirm against the hash of those exact sentences, so editing a beat
 voids the confirmation and reopens the journey. Note statuses are `open`, `answered`,
 `approved` and `deferred`; every deferred item becomes a ledger exclusion row at `--mark
 approved` and surfaces in genesis's parking lot.
+
+**Contract 3: the package is the only writer.** The host↔`mock-review` handshake is
+`contractVersion: 3`, compared on every driver entry and refused on any difference. It retires
+`design/decisions.json` and `approval.theme` — the theme a host renders is the one its
+`mock.config.ts` declares. `client waive` calls the package's `waive` verb rather than writing
+`design/approval.json` itself, so no script in this repo writes a design document and every write
+goes through the package's cross-process lock.
 
 ## Design Stage: preflight → reconcile → look → stamp (specs/20260914/02)
 
@@ -67,12 +78,13 @@ mismatch → "changed since approval") — **the hash rule**; `mock-review check
 shells for the named surfaces — an AC naming a state no screen exports is a fork, never a
 silent pass — plus the affordance ↔ contract reconcile. **Look** prints the ready-for-review
 block and ends the turn; a change reply is one in-session edit round under the `mock-authoring`
-skill, then `check`, then re-approval **on the served page** (the hash changes, so the page must
-re-stamp `approval.json` before the next preflight passes — this stage never edits it itself).
+skill, then `check`, then re-approval via `mock-review approve --screen <name>` (the hash
+changes, so the verb must re-stamp `approval.json` before the next preflight passes — this stage
+never edits it itself).
 **Stamp** writes `designed: YYYY-MM-DD` and checkpoint-commits.
 
 A standalone spec with no brief and no `design_source` authors its screens in-session under the
-`mock-authoring` skill, approves them on the served page, and persists
+`mock-authoring` skill, approves them with `mock-review approve --screen <name>`, and persists
 `design_source: src/screens/<label>.tsx` before continuing at preflight; roadmap specs never
 take this path.
 
@@ -103,7 +115,8 @@ until every brief label is clean or fenced.
 
 Exit is the look: every brief label approved and current in `design/approval.json`, every
 journey through them approved, one ready-for-review line per label, then the turn ends. There is
-no separate ratify stamp — approval on the served page is the whole of it.
+no separate ratify stamp — `mock-review approve --screen <name>` on the user's `approve` reply is
+the whole of it.
 
 ## Genesis and the mock app (specs/20260914/02)
 

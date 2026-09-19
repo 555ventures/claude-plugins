@@ -10,7 +10,10 @@ const fx = require('./mock-app-fixtures')
 // stdout is validated, a `contractVersion` mismatch refuses with both numbers and a remedy, and
 // an ENOENT spawn refuses naming the install remedy.
 
-test('AC-20260914-01-1: a contractVersion 3 stub against the contractVersion 2 template refuses exit 2 naming both numbers and the pinned-major remedy; a matching version 2 stub prints the next step block', () => {
+// specs/20260918/01-mock-contract-v3.md D1: the template bumps to contractVersion 3, so this
+// pin's own numbers invert — a 4-vs-3 mismatch, a 3-vs-3 match, the pinned remedy naming @3.
+
+test('AC-20260914-01-1: a contractVersion 4 stub against the contractVersion 3 template refuses exit 2 naming both numbers and the pinned-major remedy; a matching version 3 stub prints the next step block', () => {
   const root = tmpdir('mock-cli-contract')
   fx.writeSeed(root, { records: [], journeys: ['first-visit'] })
   fx.writeLedger(root)
@@ -18,21 +21,21 @@ test('AC-20260914-01-1: a contractVersion 3 stub against the contractVersion 2 t
   fx.writeApp(root, { records: [] })
 
   const stub = fx.installStub(path.join(root, 'stub-bin'), path.join(root, 'stub-state'))
-  stub.setContract({ contractVersion: 3, package: '@555-ventures/mock-review', version: '3.0.0' })
+  stub.setContract({ contractVersion: 4, package: '@555-ventures/mock-review', version: '4.0.0' })
   stub.setCheck(fx.checkOk())
 
   const mismatch = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
   assert.strictEqual(mismatch.status, 2,
     'a contractVersion mismatch must refuse (exit 2), or a stale reviewer package silently misreads every JSON shape this driver depends on: ' + mismatch.stderr)
-  assert.match(mismatch.stderr, /contract 3 ≠ 2/,
+  assert.match(mismatch.stderr, /contract 4 ≠ 3/,
     'D2: the refusal must print both contractVersion numbers so the session can see the skew at a glance: ' + mismatch.stderr)
-  assert.match(mismatch.stderr, /remedy: npm i -D @555-ventures\/mock-review@2/,
+  assert.match(mismatch.stderr, /remedy: npm i -D @555-ventures\/mock-review@3/,
     'D2: the refusal must name the exact pinned-major install remedy, or the session has no path back to a working contract: ' + mismatch.stderr)
 
-  stub.setContract({ contractVersion: 2, package: '@555-ventures/mock-review', version: '2.0.0' })
+  stub.setContract({ contractVersion: 3, package: '@555-ventures/mock-review', version: '3.0.0' })
   const ok = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
   assert.strictEqual(ok.status, 0,
-    'matching contractVersion 2 on both sides must never refuse — the run must print the next step block: ' + ok.stderr)
+    'matching contractVersion 3 on both sides must never refuse — the run must print the next step block: ' + ok.stderr)
   assert.doesNotMatch(ok.stderr + ok.stdout, /contract \d+ ≠ \d+/,
     'a matching contract must never carry the mismatch text — the run prints only the step block: ' + ok.stdout + ok.stderr)
 })

@@ -205,10 +205,12 @@ Feedback lives on the served reviewer page, never in chat and never in mock sour
 session has spoken, the author's turn to look again), `approved` (blue — done), or `deferred`
 (a valid point, not now — it blocks nothing and is never lost, since `--mark approved` turns
 every newly deferred item into a ledger exclusion row, § Provenance Ledger). The session
-answers red items with `npx mock-review answer (--note <id> | --journey <id>) --text <t>
-[--decision <d>]`, which flips the item to `answered`; only the served page's own controls —
-approve, defer, reject, delete — end a note or a journey conversation, never an HTTP call the
-driver makes and never a hand-edit of `design/notes.json`. A journey's own conversation is
+answers red items with `npx mock-review answer (--note <id> | --journey <id>) --text <t>`, which
+flips the item to `answered`; only the served page's own controls end a note or a journey
+conversation — the client closes a note they raised (approve or defer, never delete or reject)
+and the loopback human's owner-only surface closes everything else (approve, defer, reject,
+delete) (§ Mocks: Client Player) — never an HTTP call the driver makes and never a hand-edit of
+`design/notes.json`. A journey's own conversation is
 **workflow**: order, a missing or wrong step — answered by editing the seed's beats, which
 changes the beat hash and reopens the journey (§ Mocks: State Machine), never by a driver-side
 status write. A screen's own notes are **design and fields**: they never touch the seed.
@@ -228,16 +230,22 @@ project-scoped or not, is still `open`.
 
 ## Mocks: Client Player
 
-On the served page there are only two actors: the client and the AI session (as the reviewer
-role) — every control that once existed for a third page role (screen approve, journey approve,
-theme pick, a Components page) is gone with it, because the operator running `/spec:mocks` works
-from files and the CLI, never from the page. The client walks the same served app, never a
+The served page has two remote actors — the client and the AI session (as the reviewer role) —
+plus one role that never leaves the machine: the loopback human at the terminal running `npx
+mock-review serve` (ADR-0029), who alone reaches the page's owner-only surface: the conversation
+closers (approve, defer, reject, delete on a note or a journey conversation) and the Components
+page. Screen approve, journey approve and theme pick are retired from every actor's page controls
+— per-screen approval is now `mock-review approve --screen <name>`, run by the session on the
+user's literal `approve` reply (§ Design Canon), and the theme is set once by editing
+`mock.config.ts` directly, never on the page. The client walks the same served app, never a
 separate build. `mock-review serve`'s URL plus `?client=<config.client.token>` (`client open`,
 requires at least one `status.journeys[*].drawn`, else `remedy: --mark journey-drawn --journey
 <j>`) opens the client role: every drawn journey and every screen, the same controls a real user
 has, a note box on each screen, and nothing else — no delete, no reject. A client-raised note is
 the same `notes.json` row the session's own review writes, distinguished only by who raised it;
-the client ends their own notes — approve or defer them — the session never does.
+the client ends their own notes — approve or defer them — the session never does. Every other
+close (reject, delete, or approve/defer on a note the client did not raise) reaches only the
+loopback human's owner-only surface, never the client and never this driver.
 
 **The confirm control is the one human gate in the whole mock stage.** SUCCESS: `Confirmed —
 story <hash>` printed on the journey once the client's confirm writes
@@ -245,10 +253,12 @@ story <hash>` printed on the journey once the client's confirm writes
 a workflow note on the journey — the session edits the seed's beats, the hash changes, the
 confirmation is void, and the journey reopens (§ Mocks: State Machine) with no human re-typing
 anything. ARTIFACT: `design/approval.json`, the farthest thing the click reaches. `client waive
---journey <j> --reason <r>` is the session's own escape hatch for an absent client, writing
-`{client: "waived", reason, at, beats: <beatHash of the seed's current beats>}` — the one write
-this driver makes to `approval.json` besides what the served page itself writes; `client log` is
-retired (ADR-0028) — the served page is now the client's whole record.
+--journey <j> --reason <r>` is the session's own escape hatch for an absent client: the driver
+invokes `mock-review waive --journey <j> --reason <r> --beats <beatHash of the seed's current
+beats>`, and the package writes `{client: "waived", reason, at, beats}` under its own lock — this
+driver itself never writes `design/approval.json`; every write to it goes through the served
+page's owner-only controls or the `waive` verb. `client log` is retired (ADR-0028) — the served
+page is now the client's whole record.
 
 ## Mocks: Authoring Rules
 

@@ -82,11 +82,13 @@ questions). The user looks at the served app, never this session:
 
   Reply  ✅ approve  — or —  ✏️ change <what looks wrong>
 
-Only the literal `approve` accepts → Step 4. Any other reply is a change round: one in-session
-edit under the `mock-authoring` skill, then `mock-review check`, then re-approve **on the
-served page** — the hash changes on edit, so `approval.json` must be re-stamped by the page
-before the next preflight passes; this stage never edits `approval.json` itself. No reply →
-nothing moved; the Resume table lands here again on the next invocation.
+Only the literal `approve` accepts → Step 4, which runs `mock-review approve --screen <name>`
+(once per named surface) — the served page carries no screen-approve control. Any other reply is
+a change round: one in-session edit under the `mock-authoring` skill, then `mock-review check`,
+then re-approve via `mock-review approve --screen <name>` — the hash changes on edit, so
+`approval.json` must be re-stamped by the verb before the next preflight passes; this stage never
+hand-edits `approval.json` itself. No reply → nothing moved; the Resume table lands here again on
+the next invocation.
 
 ## Step 4 — Stamp
 

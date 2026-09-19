@@ -11,6 +11,10 @@ const { ROOT, read, runNode } = require('../helpers')
 // and spec-review-driver.js drops the advisory render-gate clause. None of these rewrites exist
 // yet, so every test below is red against the pre-image (grep-confirmed at authoring time: every
 // retired literal is still present in its named file, every new literal absent).
+//
+// specs/20260918/01-mock-contract-v3.md D4, AC-20260918-01-5: the AC-20260914-02-8 case below is
+// extended to pin the served-page approve/waive doctrine rewrite across sketch.md,
+// stage-design.md, design.md, mocks.md, mocks-driver.js and mock.config.ts.
 
 const STAGE_DESIGN_REL = 'spec/doctrine/stages/stage-design.md'
 const STAGE_REVIEW_REL = 'spec/doctrine/stages/stage-review.md'
@@ -19,6 +23,9 @@ const PLAN_REL = 'spec/commands/plan.md'
 const SPEC_TEMPLATE_REL = 'spec/templates/spec.md'
 const DESIGN_DOCTRINE_REL = 'spec/doctrine/design.md'
 const REVIEW_DRIVER_REL = 'spec/scripts/spec-review-driver.js'
+const MOCKS_DOCTRINE_REL = 'spec/doctrine/mocks.md'
+const MOCK_CONFIG_REL = 'spec/templates/mock/mock.config.ts'
+const MOCKS_DRIVER_REL = 'spec/scripts/mocks-driver.js'
 
 // ---------------------------------------------------------------------------
 // AC-20260914-02-3
@@ -64,7 +71,7 @@ test('AC-20260914-02-16: WHEN spec/scripts/spec-review-driver.js is read THE SYS
 // AC-20260914-02-8
 // ---------------------------------------------------------------------------
 
-test('AC-20260914-02-8: WHEN spec/commands/sketch.md is read THE SYSTEM SHALL name npx mock-review sweep, npx mock-review check, design/approval.json, "# job:", "# risk:", "# choice:", and contain none of data-screen-label, data-status, design-atlas, tokens.css, theme compose, frontend-design, ratified, render-gate, check --matrix', () => {
+test('AC-20260914-02-8 / AC-20260918-01-5: WHEN spec/commands/sketch.md is read THE SYSTEM SHALL name npx mock-review sweep, npx mock-review check, design/approval.json, "# job:", "# risk:", "# choice:", and contain none of data-screen-label, data-status, design-atlas, tokens.css, theme compose, frontend-design, ratified, render-gate, check --matrix; AND the consistency suite finds "mock-review approve --screen" in both sketch.md (command) and stage-design.md (doctrine), and finds none of the retired phrases "approvals are recorded on the served page", "pick on the page" or "--decision" anywhere across sketch.md, stage-design.md, design.md, mocks.md, mocks-driver.js and mock.config.ts', () => {
   assert.ok(fs.existsSync(path.join(ROOT, SKETCH_REL)), SKETCH_REL + ' must exist for this pin to mean anything')
   const text = read(SKETCH_REL)
 
@@ -79,6 +86,40 @@ test('AC-20260914-02-8: WHEN spec/commands/sketch.md is read THE SYSTEM SHALL na
       'D8: spec/commands/sketch.md must contain none of the retired second-artifact mechanics — ' +
       'found "' + retired + '", which describes a mock-HTML-era mechanism the reviewer page ' +
       '(the mock app\'s own approval hash) replaces')
+  }
+
+  // specs/20260918/01-mock-contract-v3.md D4, AC-20260918-01-5: the served page no longer carries
+  // a screen-approve control — the writer is now `mock-review approve --screen <name>`, and both
+  // the command that names it and the doctrine that governs the stage must say so, or the next
+  // reader re-derives the retired page-control surface.
+  const stageDesignText = read(STAGE_DESIGN_REL)
+  for (const [label, docText] of [['sketch.md (command)', text], ['stage-design.md (doctrine)', stageDesignText]]) {
+    assert.ok(docText.includes('mock-review approve --screen'),
+      'D4: ' + label + ' must name "mock-review approve --screen" — its absence means this file ' +
+      'still describes screen approval as a served-page control rather than the package verb ' +
+      'that is now the only writer of design/approval.json')
+  }
+
+  const mocksDoctrineText = read(MOCKS_DOCTRINE_REL)
+  const designDoctrineText = read(DESIGN_DOCTRINE_REL)
+  const mocksDriverText = read(MOCKS_DRIVER_REL)
+  const mockConfigText = read(MOCK_CONFIG_REL)
+  const retiredPhraseSurfaces = [
+    ['sketch.md', text],
+    ['stage-design.md', stageDesignText],
+    ['design.md', designDoctrineText],
+    ['mocks.md', mocksDoctrineText],
+    ['mocks-driver.js', mocksDriverText],
+    ['mock.config.ts', mockConfigText],
+  ]
+  for (const [label, docText] of retiredPhraseSurfaces) {
+    for (const retired of ['approvals are recorded on the served page', 'pick on the page', '--decision']) {
+      assert.ok(!docText.includes(retired),
+        'D4: ' + label + ' must contain none of the retired phrases naming the removed served-' +
+        'page controls — found "' + retired + '", which describes a screen-approve/theme-pick/' +
+        'notes-decision control the served page no longer carries once `mock-review approve` ' +
+        'and `waive` are the only writers')
+    }
   }
 })
 

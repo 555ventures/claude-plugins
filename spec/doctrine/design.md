@@ -28,7 +28,9 @@ paraphrase. A project component or shell carries one `/** … */` doc line above
 named `examples` export; a screen missing either is a `doc`-kind error finding, and a component
 with neither is invisible to `mock-review sweep`'s own worklist.
 
-**`design/approval.json` is the canon, one authority lifecycle.** `approval.screens[<label>]`
+**`design/approval.json` is the canon, one authority lifecycle.** `mock-review approve --screen
+<name>` is the only writer — run by the session on the user's literal `approve` reply at a look
+stop, never a served-page control (the page carries no screen-approve surface). `approval.screens[<label>]`
 carries `approvedAt` and a `hash`; a spec's `design_source` resolves, under `<design.app>/`, to
 one `src/screens/<label>.tsx` or the directory `src/screens`. A named screen is **approved**
 once `approvedAt` is set and its `hash` equals `check --json`'s current `hash` for that screen —

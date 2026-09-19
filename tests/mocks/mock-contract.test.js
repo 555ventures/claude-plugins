@@ -11,8 +11,12 @@ const fx = require('./mock-app-fixtures')
 // grammar, theme removed, a top-level `fields` documentation key) and
 // spec/templates/mock/journeys.ts's Step.beat becomes required. AC-20260914-01-22 (the SEED
 // block's cp lines) is untouched by this spec and stays below.
+//
+// specs/20260918/01-mock-contract-v3.md D1, AC-20260918-01-1, AC-20260918-01-6: contract.json
+// bumps again to contractVersion 3 (approve/waive join verbs, host and shapes drop decisions),
+// and the stub's own defaultApproval/defaultNotes fixtures move to 3 with no theme key.
 
-test('AC-20260917-01-15: `spec-paths mock-contract` prints an absolute path to a contract.json carrying contractVersion 2, a top-level fields object pinning check.journeys[].steps[], shapes.approval["journeys{}"] equal to ["client","beats"] and no shapes.approval.theme; and `--mark seed-done` against a stub reporting contractVersion 1 exits 2 naming "1 ≠ 2"', () => {
+test('AC-20260917-01-15 / AC-20260918-01-1: `spec-paths mock-contract` prints an absolute path to a contract.json carrying contractVersion 3, verbs gaining approve and waive, no host.decisions or shapes.decisions, a top-level fields object pinning check.journeys[].steps[], shapes.approval["journeys{}"] equal to ["client","beats"] and no shapes.approval.theme; and `contractOrDie` proceeds against a stub reporting contractVersion 3 while one reporting 2 dies naming "contract 2 ≠ 3"', () => {
   const r = runBash('bin/spec-paths', ['mock-contract'])
   assert.strictEqual(r.status, 0, 'spec-paths mock-contract must resolve, or every caller of D1\'s contract silently gets nothing: ' + r.stderr)
   const printed = r.stdout.trim()
@@ -21,11 +25,15 @@ test('AC-20260917-01-15: `spec-paths mock-contract` prints an absolute path to a
     'the key must resolve to spec/templates/mock/contract.json exactly, per D1: ' + printed)
   assert.ok(fs.existsSync(printed), 'the resolved contract.json must actually exist on disk: ' + printed)
   const contract = JSON.parse(fs.readFileSync(printed, 'utf8'))
-  assert.strictEqual(contract.contractVersion, 2, 'D9 bumps contractVersion to 2 — a drifted version here silently changes what every mismatch check compares against')
+  assert.strictEqual(contract.contractVersion, 3, 'specs/20260918/01 D1 bumps contractVersion to 3 — a drifted version here silently changes what every mismatch check compares against')
   assert.strictEqual(contract.package, '@555-ventures/mock-review', 'D1 pins the exact package name every install remedy prints')
   assert.strictEqual(contract.bin, 'mock-review', 'D1 pins the exact bin name every spawn resolves')
-  assert.deepStrictEqual(contract.verbs, ['contract', 'sweep', 'answer', 'check', 'serve'],
-    'D1 pins the exact verb list in this exact order — a caller iterating verbs must see the same list this contract enumerates')
+  assert.deepStrictEqual(contract.verbs, ['contract', 'sweep', 'answer', 'approve', 'waive', 'check', 'serve'],
+    'D1 pins the exact verb list in this exact order, now carrying approve and waive — a caller iterating verbs must see the same list this contract enumerates')
+  assert.strictEqual(contract.host.decisions, undefined,
+    'D1: the host block must drop "decisions" — design/decisions.json is retired, and a surviving key here would tell the next reader it still exists: ' + JSON.stringify(contract.host))
+  assert.strictEqual(contract.shapes.decisions, undefined,
+    'D1: the shapes block must drop "decisions" — validateShape would otherwise keep enforcing a shape for a document the package no longer writes: ' + JSON.stringify(Object.keys(contract.shapes)))
   assert.ok(contract.fields && typeof contract.fields === 'object' && !Array.isArray(contract.fields),
     'D9 requires a top-level `fields` key (never under `shapes`, so validateShape never walks it): ' + JSON.stringify(contract.fields))
   assert.deepStrictEqual(contract.fields && contract.fields['check.journeys[].steps[]'], ['screen', 'beat', 'state?'],
@@ -38,14 +46,40 @@ test('AC-20260917-01-15: `spec-paths mock-contract` prints an absolute path to a
   const root = tmpdir('mock-contract-mismatch')
   fx.writeSeed(root, { records: [], journeys: ['first-visit'] })
   fx.writeLedger(root)
-  fx.writeStatus(root)
+  fx.writeStatus(root, { marks: { seedDone: '2026-09-18T00:00:00.000Z', shellDrawn: null, themePicked: null, approved: null } })
   fx.writeApp(root, { records: [] })
   const stub = fx.installStub(path.join(root, 'stub-bin'), path.join(root, 'stub-state'))
-  stub.setContract({ contractVersion: 1, package: '@555-ventures/mock-review', version: '1.0.0' })
+  stub.setContract({ contractVersion: 2, package: '@555-ventures/mock-review', version: '2.0.0' })
   stub.setCheck(fx.checkOk())
-  const mismatch = runNode('scripts/mocks-driver.js', ['--root', root, '--mark', 'seed-done'], { env: stub.env() })
-  assert.strictEqual(mismatch.status, 2, 'a stub reporting the retired contractVersion 1 against the now-2 template must refuse: ' + mismatch.stderr)
-  assert.match(mismatch.stderr, /1 ≠ 2/, 'the refusal must print both contractVersion numbers, retired-vs-current: ' + mismatch.stderr)
+  const mismatch = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
+  assert.strictEqual(mismatch.status, 2, 'a stub reporting the retired contractVersion 2 against the now-3 template must refuse: ' + mismatch.stderr)
+  assert.match(mismatch.stderr, /contract 2 ≠ 3/, 'the refusal must print both contractVersion numbers, retired-vs-current: ' + mismatch.stderr)
+
+  stub.setContract({ contractVersion: 3, package: '@555-ventures/mock-review', version: '3.0.0' })
+  const proceed = runNode('scripts/mocks-driver.js', ['--root', root], { env: stub.env() })
+  assert.strictEqual(proceed.status, 0, 'a stub reporting the current contractVersion 3 must let the run proceed to the step block, not refuse on a phantom mismatch: ' + proceed.stderr)
+  assert.doesNotMatch(proceed.stderr + proceed.stdout, /contract \d+ ≠ \d+/,
+    'a matching contract must never carry the mismatch text: ' + proceed.stdout + proceed.stderr)
+})
+
+test('AC-20260918-01-6: WHEN a host is scaffolded via writeApp THE SYSTEM SHALL write design/approval.json and design/notes.json carrying contractVersion 3 and no theme key', () => {
+  assert.strictEqual(fx.defaultApproval().contractVersion, 3,
+    'D5: the fixtures\' own defaultApproval document must report contractVersion 3, or every host this suite scaffolds still looks like a retired-version document to the package\'s plugin-shapes guard: ' + JSON.stringify(fx.defaultApproval()))
+  assert.strictEqual(fx.defaultApproval().theme, undefined,
+    'D5: defaultApproval must carry no theme key — the page pick control it described is gone: ' + JSON.stringify(fx.defaultApproval()))
+  assert.strictEqual(fx.defaultNotes().contractVersion, 3,
+    'D5: the fixtures\' own defaultNotes document must report contractVersion 3 for the same reason as defaultApproval: ' + JSON.stringify(fx.defaultNotes()))
+
+  const root = tmpdir('mock-contract-fixtures-v3')
+  fx.writeApp(root, { records: [] })
+  const approval = fx.readApproval(root)
+  const notes = fx.readNotes(root)
+  assert.strictEqual(approval.contractVersion, 3,
+    'the design/approval.json a scaffolded host actually carries on disk must be contractVersion 3, not just the in-memory default: ' + JSON.stringify(approval))
+  assert.strictEqual(approval.theme, undefined,
+    'the design/approval.json a scaffolded host actually carries on disk must carry no theme key: ' + JSON.stringify(approval))
+  assert.strictEqual(notes.contractVersion, 3,
+    'the design/notes.json a scaffolded host actually carries on disk must be contractVersion 3: ' + JSON.stringify(notes))
 })
 
 test('AC-20260917-01-16: spec/templates/mock/journeys.ts declares beat: string inside Step with no ?, and no longer claims "the plugin itself never reads them"', () => {

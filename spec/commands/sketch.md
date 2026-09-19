@@ -110,10 +110,11 @@ Exit when every brief label is approved and current in `design/approval.json`
   Reply  ✅ approve  — or —  ✏️ change <what looks wrong>
 
 then **end the turn** — never `AskUserQuestion` (shared § Design Canon: look stops are never
-questions). Only the literal `approve`, made on the served page, advances; a change reply is
-one more round of the sweep loop, then a fresh look. There is no separate approval stamp, no
-theme step, no whole-product build, no matrix expansion — approval on the served page is the
-whole of it.
+questions). Only the literal `approve` advances, and this session runs `mock-review approve
+--screen <name>` for every named surface — the served page carries no screen-approve control; a
+change reply is one more round of the sweep loop, then a fresh look. There is no separate
+approval stamp, no theme step, no whole-product build, no matrix expansion — `mock-review approve
+--screen` is the whole of it.
 
 ## Report
 
@@ -136,7 +137,8 @@ Next: /spec:plan docs/roadmap/09-checkout.md
 - **The brief is a write target of this session** — Scope, Out of scope, `surfaces` all evolve
   here. One binding home per fact still holds: pixels never in the brief, structure never only
   in the screen.
-- **Approval is set only by the served page** — never by this session, never implicitly.
+- **Approval is set only by `mock-review approve --screen <name>`, run by this session on the
+  user's literal `approve` reply** — never by a served-page control, never implicitly.
 - Never edits `specs/**`; never touches surfaces another brief owns (Out-of-scope fences are
   binding here too).
 - Claimed surfaces are contracts; the fork ruling lives in the design stage, not here.

@@ -51,22 +51,15 @@ approved` and surfaces in genesis's parking lot.
 `design/approval.json` itself, so no script in this repo writes a design document and every write
 goes through the package's cross-process lock.
 
-## Genesis and the mock app (specs/20260914/02)
+## Genesis and the mock app (specs/20260914/02, specs/20260926/04)
 
-The mock app pre-empts genesis's tournament and scaffold race. When `<status.app>/mock.config.ts`
-exists at `MENUS`, `framework`, `language`, and `packageManager` are already fixed by the app the
-user approved in `/spec:mocks` — each auto-picked (`vite-react` / `typescript` / `npm`) and
-recorded decided, printed once per run while its dimension stays open; every other dimension
-(`testRunner`, …) stays open and priced the ordinary way. The tournament is recorded
-`tournament: { skipped: "mock-app" }` at `MENUS` itself, never reaching `FINALISTS`, `RACE`,
-`PROBE`, or `PICK`; `DECIDE` proceeds straight on the derived dimensions. A host with no
-`<status.app>/mock.config.ts` runs the tournament exactly as before — no behavior change on
-brownfield hosts, which never reach genesis anyway.
-
-The mock app is the day-zero skeleton: `SCAFFOLD` runs no `scaffoldCommand` against it, recording
-`status.scaffold = { skipped: "mock-app" }`. `--mark skeleton-landed` then refuses unless
-`mock-review check --json` reports `ok: true` and the zero-day gate is green — the precondition
-that replaces every shell-extraction and component-manifest check that used to run here.
+The mock app is a gray wireframe, never the product (specs/20260926/04 D9, ADR-0030 (j)).
+Genesis always picks the stack and scaffolds the real app: `MENUS` auto-picks nothing and records
+no skipped tournament on the mock app's account, a tournament archetype reaches `FINALISTS` like
+any other, `SCAFFOLD` runs the winner's `scaffoldCommand`, and `--mark skeleton-landed` runs the
+probe, binding-subset and zero-day gate checks only — it never spawns `mock-review`. (From
+specs/20260914/02 until this spec, the mock app pre-empted the tournament and the scaffold and
+gated the skeleton on its own review check.)
 
 BRIEF's derivation sources are `design/approval.json` (the seed journey count, from its
 `journeys` keys) and `design/notes.json` (the open-note count, `status === "open"` across notes
@@ -93,3 +86,10 @@ raw colours, arbitrary values, restyles of kit components, primitive imports fro
 kit, and a declared state with no story. `/spec:enforce` gives each stack whose host has a
 `design` block one `kit-discipline` cell, and the genesis design enum folds `color | typography |
 density` into it.
+
+Genesis's design stage authors the intent-to-pattern and naming tables at `DESIGN_BRIEF`, before
+any `design` block exists; `design-contract-check` therefore accepts `--rules --kit --tokens`
+overrides (all three together, else exit 2) that bypass the config and run the same findings
+over the named paths. At that mark only `table-missing`, `table-empty` and
+`naming-section-missing` refuse; `kit-missing`, `tokens-missing` and `composite-missing` are
+tolerated until the kit lands. (specs/20260926/04-the-design-brief.md D7)

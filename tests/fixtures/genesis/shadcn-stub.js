@@ -5,12 +5,15 @@
 // design-brief.md D4, A9). `node shadcn-stub.js info --json` prints a canned info payload whose
 // `links.components` is a `file:` URL into a fixture docs directory, and bumps a call-count file
 // so a caller (AC-9) can assert the real inventory script never re-runs it. Configurable via env
-// (STUB_COMPONENTS csv, STUB_DOCS_DIR, STUB_COUNTER) or a stub-config.json in cwd — no argument
-// parsing beyond the one `info --json` invocation catalog-inventory.js ever makes.
+// (STUB_COMPONENTS csv, STUB_DOCS_DIR, STUB_COUNTER, STUB_EXIT_CODE) or a stub-config.json in
+// cwd — no argument parsing beyond the one `info --json` invocation catalog-inventory.js ever
+// makes. STUB_EXIT_CODE forces a non-zero exit on `info --json` (a shadcn CLI failure) while
+// STILL bumping the counter first — the counter always reflects "was this stub invoked", never
+// "did the invocation succeed" (review finding s0, specs/20260926/04-the-design-brief.md D5).
 //
 // Does NOT: implement any other shadcn subcommand, hit the network, or validate its own config.
 //
-// Exit codes: 0 on `info --json` · 2 on any other invocation.
+// Exit codes: 0 on `info --json` (or STUB_EXIT_CODE when set) · 2 on any other invocation.
 
 const fs = require('fs')
 const path = require('path')
@@ -40,6 +43,11 @@ const { components, docsDir, counterPath } = loadConfig()
 
 if (sub === 'info' && rest.includes('--json')) {
   bumpCounter(counterPath)
+  const forcedExit = process.env.STUB_EXIT_CODE
+  if (forcedExit) {
+    process.stderr.write('shadcn-stub: forced failure (STUB_EXIT_CODE=' + forcedExit + ')\n')
+    process.exit(parseInt(forcedExit, 10))
+  }
   const linksBase = 'file://' + path.resolve(docsDir) + '/'
   process.stdout.write(JSON.stringify({
     components,

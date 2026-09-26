@@ -3,7 +3,7 @@ name: contract-example-string-already-prefixed
 description: a Decision's "<leg>:<reason>" print-format prose can describe a string a sibling Contracts-block derivation ALREADY returns fully formed — don't re-prepend the leg name
 metadata:
   type: feedback
-reviewed: 2026-09-13
+  reviewed: 2026-09-26
 ---
 
 When a Decision's line-format prose reads like a template — e.g. D3 in

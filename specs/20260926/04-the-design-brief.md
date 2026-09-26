@@ -1,6 +1,6 @@
 ---
 date: 2026-09-26
-status: implementing
+status: done
 build_base: design-retool
 tier: critical
 area: genesis
@@ -286,6 +286,17 @@ ratification (they feed `/spec:enforce`'s categories today; adjacent, not this b
 
 Critical tier: `spec/bin/spec-paths` is a listed trigger; every AC carries a literal example
 and JJ confirms the lock.
+
+Build and review record (2026-09-26). The first AC-16 test draft left framework, language and
+package-manager unresolved at `menus-done`, which passed only while the D9-retired narrowing
+survived under a new name; the orchestrator held D9's "like any other" binding, the narrowing was
+deleted, and the setup now menus and picks those three dimensions like any host. The
+catalog-inventory test's local `run()` helper dropped its `{ env }` argument, so the stub cases
+never saw their fixture paths; fixed in the same build. D13 (the scoped gate ran fixture files
+as tests) was a user ruling at repair round 1. Review took two fix rounds: round 1 fixed an
+unrecorded inventory failure, the missing Session-line parenthetical and a non-integer port;
+its no-retry fix gated on the record alone and overwrote a pre-existing catalog, which round 2
+restored to the file-absent-and-unrecorded conjunction.
 
 ## Canonical Delta
 

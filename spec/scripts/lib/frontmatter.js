@@ -18,7 +18,7 @@
 // close's tier field corrupted across seven ledger rows): this build widens the module to close the
 // remaining two copies (spec-status.js and replay.js each carried a byte-identical private
 // `frontmatter()` kv loop whose `.replace(/\s*#.*$/, '')` stripped at ANY `#`, not just a
-// whitespace-preceded one — corrupting an unspaced value like `design_source:
+// whitespace-preceded one — corrupting an unspaced value like `source_url:
 // https://x/p#frag`). Per D8's orchestrator reconciliation ruling, `fmVal` is renamed to `fmValue`
 // — no alias survives, because a second name for one derivation is the exact drift this module
 // exists to end (D9 updates tests/frontmatter.test.js's pin to the new name in place, never

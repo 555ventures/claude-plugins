@@ -1,5 +1,5 @@
 ---
-description: Carry a hardened spec to done — opens the spec's own git worktree by default, then the loop derives the next stage from disk and runs design (when due), then the build driver, then the review driver in sequence, stopping only for the judgments only this session can make; `--in-place` opts out of isolation
+description: Carry a hardened spec to done — opens the spec's own git worktree by default, then the loop derives the next stage from disk and runs the build driver, then the review driver in sequence, stopping only for the judgments only this session can make; `--in-place` opts out of isolation
 argument-hint: <spec path>
 ---
 
@@ -42,31 +42,17 @@ failure text is `create: run from the main working tree`, the session is inside 
 spec's worktree: stop and say to exit that worktree first. Any other failure: stop, print the
 error, and name `--in-place` as the deliberate opt-out.
 
-The render server must run from `{worktree}` — the design stage's render gate adopts a server
-by port, not by root, so one left running at the main root would capture the wrong tree.
-
 ## Routing — derived from disk, in this order
 
-1. `status: hardened`, `design: true`, no `designed:` date, and the host config declares a
-   `design` block → execute `spec/doctrine/stages/stage-design.md`'s steps unchanged in this
-   session, then re-derive from step 1.
-2. `hardened`, or `implementing` with no `<spec>.review/` sidecar and no `stage: "build"`
+1. `hardened`, or `implementing` with no `<spec>.review/` sidecar and no `stage: "build"`
    ledger row for this spec → run the **build stage** below (`node {driver} <spec> --via loop`)
    to `DONE`. (A build row means build is already `DONE`; the driver refuses a re-run.)
-3. `implementing` or `done` → run the **review stage** below
+2. `implementing` or `done` → run the **review stage** below
    (`node {review-driver} <spec> --via loop`) until it prints a judgment step or `DONE`.
-4. `done` with no review sidecar → the review driver's own cold path prints `DONE` with
+3. `done` with no review sidecar → the review driver's own cold path prints `DONE` with
    `spec-status --next` — the loop's no-op resume.
 
 This is `spec-status.js`'s own `deriveNext` order, restated — never skip a rung.
-
-## Design stage
-
-Execute `spec/doctrine/stages/stage-design.md`'s steps unchanged, with one substitution: in
-place of its Setup's `spec-paths shared-for design` run `spec-paths shared-for run-design` —
-`shared-for run` already carries the rest. Its look (Step 5) is a printed stop that ends the
-turn — `approve` continues stage-design.md's Step 6 next turn, then re-derive from Routing
-step 1.
 
 ## Build stage
 

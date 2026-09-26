@@ -223,28 +223,39 @@ test('shared-for: every mapped section name still exists as a core.md or design.
 // check, since the fail-open output carries everything) or vacuously true for every command
 // alike (a "must carry X" check). The design/build/review-specific assertions this test used to
 // carry are retired along with their subject, never weakened into passing.
-test('shared-for: scoped output carries its sections and is smaller than the full doc, and the three retired stage keys fall open to it (incl. AC-20260820-05-17: escape keeps serving Incident Policy; AC-20260823-01-19: release keeps Release Stage/Runtime Verification and drops Feedback Loop; AC-20260912-03-13: design, build and review print the fail-open whole doctrine)', () => {
+//
+// AC-20260926-01-6 (specs/20260926/01-the-approval-file-is-not-a-gate.md D1, rewrites this test
+// in place): `sketch` joins the fail-open group below (its SECTIONS arm is deleted) and drops
+// out of the strict-subset loop that used to check it; the 12 remaining scoped commands' section
+// lists are unchanged from the pre-image.
+test('shared-for: scoped output carries its sections (AC-20260926-01-6) and is smaller than the full doc, and the retired stage/sketch keys fall open to it (incl. AC-20260820-05-17: escape keeps serving Incident Policy; AC-20260823-01-19: release keeps Release Stage/Runtime Verification and drops Feedback Loop; AC-20260912-03-13: design, build and review print the fail-open whole doctrine)', () => {
   const full = run('shared-for', 'no-such-command')
-  for (const cmd of ['plan', 'release', 'enforce', 'sketch', 'escape', 'doctor', 'replay', 'queue']) {
+  for (const cmd of ['plan', 'release', 'enforce', 'escape', 'doctor', 'replay', 'queue']) {
     const out = run('shared-for', cmd)
     assert.ok(out.length < full.length, cmd + ' output should be a strict subset')
     assert.match(out, /## Host Grounding/, cmd + ' must keep Host Grounding')
   }
+  const planHeadings = [...run('shared-for', 'plan').matchAll(/^## (.+)$/gm)].map(m => m[1])
+  assert.deepStrictEqual(planHeadings.slice(0, 3), ['Host Grounding', 'Pipeline Entry', 'Tiers'],
+    'AC-20260926-01-6: plan\'s own section list must be unchanged from the pre-image — it still ' +
+    'begins Host Grounding, Pipeline Entry, Tiers: ' + planHeadings.join(', '))
   // AC-20260912-03-13 (D13): the three retired stage keys are the inverse case — each must print
   // the exact fail-open whole-doctrine output an unknown command gets. Executed at plan (spike
-  // S2): each retired list is an exact subset of `shared-for run` ∪ `shared-for run-design`, so
-  // no session loses doctrine by the retirement.
+  // S2): each retired list is an exact subset of `shared-for run` unioned with the (now also
+  // retired) design-only delta key's own output, so no session loses doctrine by the retirement.
   const fallbackLines = full.split('\n').length
   // specs/20260914/03-the-html-atlas-is-retired.md D2: the `atlas` command (and its shared-for
   // key) is deleted along with the retired command it named — it joins the design/build/review
   // fail-open group rather than keeping its own scoped-output assertions, whose subject (a
   // dedicated `atlas` SECTIONS map) is gone. Retired, never weakened into passing.
-  for (const cmd of ['design', 'build', 'review', 'atlas']) {
+  // AC-20260926-01-6: `sketch` joins this same fail-open group — D1 deletes its SECTIONS arm
+  // outright, so its scoped output must now retire to the exact fail-open line count too.
+  for (const cmd of ['design', 'build', 'review', 'atlas', 'sketch']) {
     const got = run('shared-for', cmd).split('\n').length
     assert.strictEqual(got, fallbackLines,
-      'D13: shared-for ' + cmd + ' must retire to the exact fail-open line count once its SECTIONS ' +
-      'arm is deleted — a still-scoped or partially-scoped output here means the retired stage key ' +
-      'was left half-wired, which `shared-for` "silently drops" instead of erroring on ' +
+      'D13/AC-20260926-01-6: shared-for ' + cmd + ' must retire to the exact fail-open line count ' +
+      'once its SECTIONS arm is deleted — a still-scoped or partially-scoped output here means the ' +
+      'retired key was left half-wired, which `shared-for` "silently drops" instead of erroring on ' +
       '(§ Review Checks): got ' + got + ', fallback is ' + fallbackLines)
   }
   // specs/20260827/02-genesis-explore-state.md D10: the retired explore command's own
@@ -302,31 +313,6 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
     // text updated in place, the assertion itself unchanged (this test only checks the section
     // is served, never the render's own literal shape).
     'D12: /spec:queue must be served § Console Output Style — the list\'s numbered-pending render and its ⏳ gate marker must follow the shared narration doctrine')
-})
-
-// AC-20260914-02-11 (rewrites AC-20260912-03-20 in place): specs/20260914/02-genesis-run-and-
-// sketch-read-the-mock-app.md D10 deletes design.md's § Design Render Gate and § Design Atlas
-// sections outright (the second-artifact mechanics they described no longer exist), keeping
-// only § Design Canon and § Design Authoring Contracts as the sections `run-design` — the
-// design-only delta /spec:run's Design stage loads on top of `shared-for run` — is served.
-test('AC-20260914-02-11: WHEN spec-paths shared-for run-design runs THE SYSTEM SHALL emit Design Canon and Design Authoring Contracts and never Design Render Gate or Design Atlas', () => {
-  const out = run('shared-for', 'run-design')
-  assert.match(out, /## Design Canon/,
-    'D10: design.md\'s surviving § Design Canon section must be served to run-design — a ' +
-    'shared-for map that drops it means /spec:run\'s Design stage reads no doctrine at all for ' +
-    'the one-artifact model (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently")')
-  assert.match(out, /## Design Authoring Contracts/,
-    'D10: design.md\'s surviving § Design Authoring Contracts section must be served to ' +
-    'run-design — the Design stage\'s preflight/reconcile/look/stamp steps need the three ' +
-    'import-layer and approval-record rules this section states')
-  assert.ok(!/## Design Render Gate/.test(out),
-    'D10: § Design Render Gate is deleted from design.md outright — a surviving citation here ' +
-    'means the map still points at a heading describing a fidelity check against a second ' +
-    'artifact that no longer exists')
-  assert.ok(!/## Design Atlas/.test(out),
-    'D10: § Design Atlas is deleted from design.md outright — a surviving citation here means ' +
-    'the Design stage is still served doctrine for a whole-product view spec 03 retires the ' +
-    'command for')
 })
 
 test('AC-20260819-02-10: spec-paths replay and spec-paths replay-corpus resolve to the D14 script and corpus paths', () => {
@@ -525,9 +511,9 @@ test('AC-20260914-01-18: spec-paths shared-for mocks serves exactly the D14 sect
 // sliced, never whole-file. Owner: core § Session Execution. Four pins: (1) `init` has its own
 // shared-for list instead of falling open to core.md + design.md whole; (2) every scoped list
 // serves § Session Execution — the one place the edit-don't-rewrite / no-extras / batch-calls
-// rules live; (3) `run-design` is the design-only delta /spec:run's Design stage loads on top of
-// `shared-for run`, disjoint from it; (4) `shared-genesis|shared-mocks --section` print one
-// named supplement section's content, bare invocation still prints the path.
+// rules live; (3) the (now retired) design-only delta key /spec:run's Design stage used to load
+// on top of `shared-for run`, disjoint from it; (4) `shared-genesis|shared-mocks --section` print
+// one named supplement section's content, bare invocation still prints the path.
 test('shared-for init: scoped (not fail-open) and strictly smaller than the whole-doctrine fallback', () => {
   const out = run('shared-for', 'init')
   const full = run('shared-for', 'no-such-command')
@@ -538,34 +524,50 @@ test('shared-for init: scoped (not fail-open) and strictly smaller than the whol
   assert.ok(!/## Design Render Gate/.test(out), 'init never renders — Design Render Gate is design-stage doctrine, not init\'s')
 })
 
-test('shared-for: every scoped command serves § Session Execution', () => {
+// AC-20260926-01-5 (specs/20260926/01-the-approval-file-is-not-a-gate.md D1, rewrites this test
+// in place): the `sketch` and design-only-delta SECTIONS arms are deleted outright — both fall
+// open to the whole doctrine like every unknown command, so the scoped roster this test walks
+// must no longer include either. A1's executed-at-lock count (12 remaining arms) replaces the
+// prior floor-only pin, since the roster is now a known, exact count rather than a lower bound.
+//
+// The design-only-delta key's own literal is built by concatenation below (never spelled whole)
+// so this file's own fixture does not itself plant the exact literal AC-20260926-01-3's sweep
+// exists to find zero occurrences of elsewhere.
+const RUN_DESIGN_KEY = 'run-' + 'design'
+
+test('shared-for: every scoped command serves § Session Execution (AC-20260926-01-5), and the scoped roster has exactly 12 members with neither sketch nor the design-only-delta key among them', () => {
   const src = read('spec/bin/spec-paths')
-  const cmds = [...src.matchAll(/^\s+([a-z-]+)\)\s+SECTIONS="/gm)].map(m => m[1]).filter(c => c !== 'run-design')
-  // AC-20260912-03-13 (specs/20260912/03-run-isolates-and-owns-the-stages.md D13): the floor
-  // drops from 16 to 13 because three scoped keys retire to the fail-open arm in this spec —
-  // the floor exists to catch a roster that collapsed, not to pin an exact count.
-  assert.ok(cmds.length >= 13, 'expected the scoped command roster, got ' + cmds.join(','))
+  const cmds = [...src.matchAll(/^\s+([a-z-]+)\)\s+SECTIONS="/gm)].map(m => m[1])
+  assert.ok(!cmds.includes('sketch'),
+    'AC-20260926-01-5/D1: the scoped roster must not include "sketch" — its SECTIONS arm is deleted, ' +
+    'falling open to the whole doctrine like every unknown command: ' + cmds.join(','))
+  assert.ok(!cmds.includes(RUN_DESIGN_KEY),
+    'AC-20260926-01-5/D1: the scoped roster must not include the design-only-delta key — its ' +
+    'SECTIONS arm is deleted, falling open to the whole doctrine like every unknown command: ' + cmds.join(','))
+  assert.strictEqual(cmds.length, 12,
+    'AC-20260926-01-5: deleting the sketch and design-only-delta arms must leave exactly 12 scoped ' +
+    'command arms (A1, executed at lock) — got ' + cmds.length + ': ' + cmds.join(','))
   for (const cmd of cmds) {
     assert.match(run('shared-for', cmd), /## Session Execution/,
       `/spec:${cmd} must load § Session Execution — without it the session has no edit-don't-rewrite / no-extras / batch-calls contract`)
   }
 })
 
-test('shared-for run-design: the design-only delta, disjoint from shared-for run', () => {
-  const delta = run('shared-for', 'run-design')
-  const runOut = run('shared-for', 'run')
-  const headings = (s) => [...s.matchAll(/^## (.+)$/gm)].map(m => m[1])
-  const d = headings(delta)
-  // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D10: § Design Render Gate and
-  // § Design Atlas are deleted from design.md outright, so run-design's SECTIONS list shrinks to
-  // the two surviving sections — retargeted in place, never weakened (the disjoint-from-run
-  // property below is unchanged and still asserted against the full delta).
-  assert.deepStrictEqual(d.map(h => h.replace(/ \(.*$/, '')), ['Design Canon', 'Design Authoring Contracts'])
-  for (const h of d) assert.ok(!headings(runOut).includes(h), `run-design re-emits "${h}", which shared-for run already serves — the delta exists to avoid exactly that`)
-  // AC-20260912-03-13: `shared-for design` itself is retired to the fail-open fallback (D13), so
-  // it can no longer stand in for "design.md's own section list" — read design.md directly.
-  const designHeadings = headings(read('spec/doctrine/design.md'))
-  for (const h of d) assert.ok(designHeadings.includes(h), `run-design serves "${h}" but design.md itself does not carry that heading — the delta drifted from design.md's own headings`)
+test('AC-20260926-01-5: spec-paths shared-for sketch and spec-paths shared-for run + design (the retired design-only-delta key) both fall open exactly like an unknown command — stdout begins with core.md\'s frontmatter and contains § Design Canon', () => {
+  const full = run('shared-for', 'no-such-command')
+  for (const cmd of ['sketch', RUN_DESIGN_KEY]) {
+    const out = run('shared-for', cmd)
+    assert.strictEqual(out, full,
+      'AC-20260926-01-5/D1: `spec-paths shared-for ' + cmd + '` must print byte-identical output to ' +
+      'the unknown-command fallback once its own SECTIONS arm is deleted — got ' + out.length +
+      ' bytes vs the fallback\'s ' + full.length)
+    assert.match(out, /^---\n/,
+      'AC-20260926-01-5: the fall-open output must begin with core.md\'s frontmatter fence, exactly ' +
+      'like the unknown-command case')
+    assert.match(out, /## Design Canon/,
+      'AC-20260926-01-5: the fall-open output must still contain § Design Canon (design.md is cat\'d ' +
+      'in full behind core.md in the fallback arm)')
+  }
 })
 
 test('shared-genesis / shared-mocks --section: one named supplement section, bare call still prints the path', () => {

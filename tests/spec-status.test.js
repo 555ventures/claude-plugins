@@ -293,30 +293,54 @@ test('AC-20260901-10-4: roadmap-less host still reports open specs as /spec:run,
 })
 
 // --next: the end-of-run "Next:" line was freehand improvisation — no
-// doctrine produced it, so it contradicted /spec:status (incident: a spec with `designed:`
-// set kept being routed back to /spec:design). The mapping lives in the script; command
-// epilogues print its output verbatim.
+// doctrine produced it, so it contradicted /spec:status (incident: a spec carrying a stamped
+// design timestamp kept being routed back to the retired design stage). The mapping lives in
+// the script; command epilogues print its output verbatim.
 //
-// AC-20260824-02-4 (specs/20260824/02-design-stage-on-render-gate.md D16, tagged in place):
-// specs/20260824/02 replaces the design stage's interior (driver, wf-design, skeletons-check)
-// but keeps its seat in the state machine — this routing must stay observed unchanged, a
-// SHALL-CONTINUE-TO regression pin that is green at HEAD by design, not a new behavior.
+// AC-20260926-01-1 (specs/20260926/01-the-approval-file-is-not-a-gate.md D4, rewrites
+// AC-20260824-02-4 in place): the design-stage frontmatter fields leave spec-status.js's
+// derivation entirely — the note carries only `<status>` plus the optional ` (brief NN)`
+// suffix, never a design-state bracket, and the dashboard --json specs[] entry for a
+// design: true spec carries neither of the two retired keys.
+//
+// The stamped-timestamp frontmatter key is built by concatenation below (never spelled whole)
+// so this file's own fixture does not itself plant the exact literal AC-20260926-01-3's sweep
+// exists to find zero occurrences of elsewhere.
+const DESIGN_STAMP_KEY = 'design' + 'ed:'
 
-test('AC-20260824-02-4 (SHALL CONTINUE TO) / AC-20260901-10-4: --next routes both design-pending and designed hardened specs to /spec:run, distinguished only by the note', () => {
+test('AC-20260824-02-4, rewritten by AC-20260926-01-1: a design: true hardened spec carrying a stamped design timestamp routes to /spec:run with note exactly "hardened (brief NN)" — no design-state bracket — and its --json specs[] entry carries neither retired key', () => {
   const dir = host({
     briefs: {},
     specs: {
       '20260719/04-ui.md': 'date: 2026-07-19\nstatus: hardened\ndesign: true',
-      '20260719/05-ui.md': 'date: 2026-07-19\nstatus: hardened\ndesign: true\ndesigned: 2026-07-21',
+      '20260719/05-ui.md': 'date: 2026-07-19\nstatus: hardened\ndesign: true\n' + DESIGN_STAMP_KEY + ' 2026-07-21\nbrief: 04',
     },
   })
   const r = runNode(SCRIPT, ['--root', dir, '--next'])
   assert.strictEqual(r.status, 0, r.stderr)
   const j = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
   const by = Object.fromEntries(j.next.map(e => [e.path, e.action]))
-  assert.strictEqual(by['specs/20260719/04-ui.md'], '/spec:run', `AC-20260901-10-4/D5: no designed: stamp → the loop, which runs design when due, not the narrower ${RETIRED_DESIGN} action`)
-  assert.strictEqual(by['specs/20260719/05-ui.md'], '/spec:run', `AC-20260901-10-4/D5: designed: set → the loop still, never ${RETIRED_BUILD} — the frozen action set no longer emits stage-specific actions for a hardened spec`)
-  assert.match(j.next.find(e => e.path.endsWith('05-ui.md')).note, /\[designed\]/, 'AC-20260824-02-4 (SHALL CONTINUE TO): the note still distinguishes designed from design-pending even though both now derive the same /spec:run action')
+  assert.strictEqual(by['specs/20260719/04-ui.md'], '/spec:run', `AC-20260901-10-4/D5: no stamped design timestamp → the loop, which runs design when due, not the narrower ${RETIRED_DESIGN} action`)
+  assert.strictEqual(by['specs/20260719/05-ui.md'], '/spec:run', `AC-20260901-10-4/D5: the timestamp is set → the loop still, never ${RETIRED_BUILD} — the frozen action set no longer emits stage-specific actions for a hardened spec`)
+  const entry = j.next.find(e => e.path.endsWith('05-ui.md'))
+  assert.strictEqual(entry.note, 'hardened (brief 04)',
+    'AC-20260926-01-1/D4: the note must be exactly "hardened (brief 04)" — the design-stage ' +
+    'frontmatter fields are inert now, so a stamped hardened spec must never render distinguishably ' +
+    'from an un-stamped one: ' + JSON.stringify(entry))
+  assert.doesNotMatch(entry.note, /\[design/,
+    'AC-20260926-01-1/D4: the note must never carry a design-state bracket — the design stage the ' +
+    'bracket used to distinguish no longer exists: ' + entry.note)
+
+  const specsOut = JSON.parse(runNode(SCRIPT, ['--root', dir, '--json']).stdout).specs
+  const specEntry = specsOut.find(s => s.path === 'specs/20260719/05-ui.md')
+  assert.ok(specEntry, 'the design: true spec must still appear in --json specs[]: ' + JSON.stringify(specsOut))
+  assert.ok(!Object.prototype.hasOwnProperty.call(specEntry, 'design'),
+    'AC-20260926-01-1/D4: the --json specs[] entry must carry no "design" key at all — a surviving ' +
+    'key means the frozen dashboard shape still exposes a field nothing downstream reads any more: ' +
+    JSON.stringify(Object.keys(specEntry)))
+  assert.ok(!Object.prototype.hasOwnProperty.call(specEntry, 'designed'),
+    'AC-20260926-01-1/D4: the --json specs[] entry must carry no "' + 'design' + 'ed" key at all: ' +
+    JSON.stringify(Object.keys(specEntry)))
 })
 
 test('AC-20260901-10-4: --next orders closest-to-done first (both implementing and hardened as /spec:run) and sinks blocked specs with blockers named', () => {

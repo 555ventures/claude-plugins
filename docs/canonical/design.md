@@ -2,12 +2,8 @@
 
 ## Design Canon: one artifact (specs/20260914/01, specs/20260914/02)
 
-The design stage runs only on hosts whose config declares a `design` block —
-`{ "app": "<dir holding mock.config.ts, relative to the repo root>" }`, nothing else. There is
-no second artifact: the mock app `/spec:mocks` and `/spec:sketch` author and approve **is** the
-product's frontend, never a catalog a build stage renders against separately. A UI-bearing spec
-on such a host defaults to `design: true` frontmatter, routed through the design stage between
-plan and build; the app gates UI appearance, TDD gates logic, reachability is never exempt.
+There is no second artifact: the mock app `/spec:mocks` authors and approves **is** the
+product's frontend, never a catalog a build stage renders against separately.
 
 **Three import layers, one direction.** A screen (`src/screens/<label>.tsx`, under
 `design.app`) composes from exactly three layers and nothing else: `@/components/ui` (the
@@ -25,22 +21,15 @@ finding, and a component with neither is invisible to `mock-review sweep`'s own 
 **Records are the only data.** `src/records` under `design.app` holds the typed fixtures every
 screen state reads from; nothing else on a screen stands in for what a record should supply.
 
-**`design/approval.json` is the canon, one authority lifecycle.** `approval.screens[<label>]`
-carries `approvedAt` and a `hash`; a spec's `design_source` resolves, under `<design.app>/`, to
-one `src/screens/<label>.tsx` or the directory `src/screens`. A named screen is **approved**
-once `approvedAt` is set and its `hash` equals `check --json`'s current `hash` for that screen —
-**stale** the moment the hash differs (an edit after approval is a STOP, never a silent
-re-bind). Per-screen approval is recorded by `mock-review approve --screen <name>`, run by the
-session on the user's explicit `approve` — never by a control on the served page, and never by a
-script in this repo. Once the claiming spec is `done`, authority **inverts to built**: shipped code is
-truth, the screen a historical contract allowed to go stale, re-synced lazily at the next design
-touch, never owed.
+**`design/approval.json` is the canon.** `approval.screens[<label>]` carries `approvedAt` and a
+`hash`, written only by `mock-review approve --screen <name>` on the user's literal `approve` —
+never by a control on the served page, and never by a script in this repo.
 
-**Look stops are never questions.** Every look this doctrine governs — the design stage's own
-look step, `/spec:sketch`'s exit — prints `🎨 ready for review — <check.serve.url>/#/<screen>`,
-one line per surface, then the fixed reply line, then ends the turn; only the literal `approve`
-accepts. The reviewer page (the mock app's own served UI) is the one viewer; a session never
-screenshots a screen to judge it in this doctrine's place.
+**Look stops are never questions.** Every look this doctrine governs prints
+`🎨 ready for review — <check.serve.url>/#/<screen>`, one line per surface, then the fixed reply
+line, then ends the turn; only the literal `approve` accepts. The reviewer page (the mock app's
+own served UI) is the one viewer; a session never screenshots a screen to judge it in this
+doctrine's place.
 
 ## The mock stage's actors and chain (specs/20260917/01)
 
@@ -61,62 +50,6 @@ approved` and surfaces in genesis's parking lot.
 `mock.config.ts` declares. `client waive` calls the package's `waive` verb rather than writing
 `design/approval.json` itself, so no script in this repo writes a design document and every write
 goes through the package's cross-process lock.
-
-## Design Stage: preflight → reconcile → look → stamp (specs/20260914/02)
-
-The design stage is four steps, resumed from disk on every invocation, never a state file:
-`designed:` set → done; every named surface approved and current → look; else preflight.
-
-**Preflight**, in order: `design.app` declared (else STOP naming the JSON to add); when
-`design/mocks/status.json` exists and its `app` differs from `design.app`, STOP naming both
-values (the driver's value wins — it is the one the scaffold wrote); env-preflight;
-`status: hardened`; `design_source` resolves, under `<design.app>/`, to one screen file or the
-`src/screens` directory — every named screen must carry `approval.screens[<name>].approvedAt`
-and a matching `hash`, else STOP naming `/spec:sketch <brief>` (missing → "not approved";
-mismatch → "changed since approval") — **the hash rule**; `mock-review check --json` reports
-`ok: true`. **Reconcile** folds the spec's UI section to `check --json`'s screens, states and
-shells for the named surfaces — an AC naming a state no screen exports is a fork, never a
-silent pass — plus the affordance ↔ contract reconcile. **Look** prints the ready-for-review
-block and ends the turn; a change reply is one in-session edit round under the `mock-authoring`
-skill, then `check`, then re-approval via `mock-review approve --screen <name>` (the hash
-changes, so the verb must re-stamp `approval.json` before the next preflight passes — this stage
-never edits it itself).
-**Stamp** writes `designed: YYYY-MM-DD` and checkpoint-commits.
-
-A standalone spec with no brief and no `design_source` authors its screens in-session under the
-`mock-authoring` skill, approves them with `mock-review approve --screen <name>`, and persists
-`design_source: src/screens/<label>.tsx` before continuing at preflight; roadmap specs never
-take this path.
-
-**Design Authoring Contracts.** Grounded-vs-taste (mock supremacy): each ruling is tagged
-`grounded` (external anchor) or `taste` (aesthetic); with an approved screen as canon, `taste`
-yields silently and `grounded` binds the value, not the intent. Overlay shells, the AppShell,
-and the Toast host are system foundation — authored once behind a barrel, never re-implemented
-per screen.
-
-## Sketch: the sweep loop (specs/20260914/02)
-
-`/spec:sketch` is the per-brief design workbench on the mock app `/spec:mocks` already produced
-— it sweeps one roadmap brief's open items, applies changes in-session, and ratifies each
-surface's approval, scoped by construction to the owning brief's labels. A surface claimed by a
-`done` spec (its `design_source` names it) is a contract; drift routes to `/spec:run`, never to
-sketch.
-
-The loop: run the sweep, act on the brief's labels only (a red item on a screen another brief
-owns is an Out-of-scope fence, reported not fixed); triage every change by root cause into one
-of five bins before touching anything — **mock-detail** (edited in-session, answered),
-**structure** (the brief's `surfaces` block first, then the screen), **intent/scope**
-(the brief's Scope, or a cross-brief amendment ADR), a **question back** (answered, resolved
-only on the served page), and **architecture-impacting** (never silently absorbed — the
-affected or missing ADR is named); every surface touched gains a three-line UX argument
-(`# job:`, `# risk:`, `# choice:`) in the brief's `surfaces` block. Critique runs `check` — a
-screen missing a seed-required state is a warn finding, never a gate flip. The loop re-sweeps
-until every brief label is clean or fenced.
-
-Exit is the look: every brief label approved and current in `design/approval.json`, every
-journey through them approved, one ready-for-review line per label, then the turn ends. There is
-no separate ratify stamp — `mock-review approve --screen <name>` on the user's `approve` reply is
-the whole of it.
 
 ## Genesis and the mock app (specs/20260914/02)
 

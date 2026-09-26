@@ -1,26 +1,23 @@
 ---
-description: Design-stage doctrine — one artifact, the mock app itself; Design Canon and Authoring Contracts
+description: Mock-app doctrine for /spec:mocks and genesis — Design Canon and Authoring Contracts
 ---
 
 # Spec Pipeline: Design Doctrine
 
 ## Design Canon (the mock app is the one artifact)
 
-The design stage runs only on hosts whose config declares a `design` block —
-`{ "app": "<dir holding mock.config.ts, relative to the repo root>" }`, nothing else. There is
-no second artifact: the mock app `/spec:mocks` and `/spec:sketch` author and approve **is** the
-product's frontend, never a catalog a build stage renders against separately. A UI-bearing spec
-on such a host defaults to `design: true` frontmatter, routed through the design stage between
-plan and build; the app gates UI **appearance**, TDD gates logic, **reachability is never
-exempt** (`plan.md` Phase 2) — skipping design is the user's call, never the model's.
+`/spec:mocks` authors the mock app on a host whose config declares a `design` block —
+`{ "app": "<dir holding mock.config.ts, relative to the repo root>" }` — and genesis ratifies it
+at `BRIEF`. There is no second artifact: the mock app **is** the product's frontend, never a
+catalog a later stage renders against separately.
 
 **Three import layers, one direction.** A screen (`src/screens/<label>.tsx`, under
 `design.app`) composes from exactly three layers and nothing else: `@/components/ui` (the
 shadcn primitives), `@/components` + `@/shells` (project components and shells built on top of
-them), and `@/records` (`src/records` under `design.app` — typed data, the only source a screen may
-read; never a hand-typed literal standing in for what a record should supply). `react` is the
-runtime, not a layer. An
-import outside these five specifiers is a `layer`-kind error finding (`mock-review check`).
+them), and `@/records` (`src/records` under `design.app` — typed data, the only source a screen
+may read; never a hand-typed literal standing in for what a record should supply). `react` is
+the runtime, not a layer. An import outside these five specifiers is a `layer`-kind error
+finding (`mock-review check`).
 
 **Screens carry `meta` and named states.** A screen's `meta` export names its states; each
 state renders exactly what the seed or the journey's step demands — no unbound branch, no
@@ -28,26 +25,23 @@ paraphrase. A project component or shell carries one `/** … */` doc line above
 named `examples` export; a screen missing either is a `doc`-kind error finding, and a component
 with neither is invisible to `mock-review sweep`'s own worklist.
 
-**`design/approval.json` is the canon, one authority lifecycle.** `mock-review approve --screen
-<name>` is the only writer — run by the session on the user's literal `approve` reply at a look
-stop, never a served-page control (the page carries no screen-approve surface). `approval.screens[<label>]`
-carries `approvedAt` and a `hash`; a spec's `design_source` resolves, under `<design.app>/`, to
-one `src/screens/<label>.tsx` or the directory `src/screens`. A named screen is **approved**
-once `approvedAt` is set and its `hash` equals `check --json`'s current `hash` for that screen —
-**stale** the moment the hash differs (an edit after approval, never silently re-bound). Once
-the claiming spec is `done`, authority **inverts to built**: shipped code is truth, the screen a
-historical contract allowed to go stale, re-synced lazily at the next design touch, never owed.
+**`design/approval.json` is the canon, one writer.** `mock-review approve --screen <name>` is
+the only writer — run by the session on the user's literal `approve` reply at a look stop, never
+a served-page control (the page carries no screen-approve surface). `approval.screens[<label>]`
+carries `approvedAt` and a `hash`; a named screen is **approved** once `approvedAt` is set and
+its `hash` equals `check --json`'s current `hash` for that screen — **stale** the moment the
+hash differs (an edit after approval, never silently re-bound).
 
-**Look stops are never questions.** Every look this doctrine governs — the design stage's own
-look step, `/spec:sketch`'s exit — prints `🎨 ready for review —
-<check.serve.url>/#/<screen>`, one line per surface, then the fixed reply line, then **ends the
-turn**; only the literal `approve` accepts. The reviewer page (the mock app's own served UI) is
-the one viewer; a session never screenshots a screen to judge it in this doctrine's place.
+**Look stops are never questions.** Every look this doctrine governs prints `🎨 ready for
+review — <check.serve.url>/#/<screen>`, one line per surface, then the fixed reply line, then
+**ends the turn**; only the literal `approve` accepts. The reviewer page (the mock app's own
+served UI) is the one viewer; a session never screenshots a screen to judge it in this
+doctrine's place.
 
 ## Design Authoring Contracts
 
-Consumed by the design stage's reconcile step and genesis's design ratification (genesis.md
-§ Genesis: Brief State), authored against § Design Canon above.
+Authored against § Design Canon above, consumed by `/spec:mocks`'s own review step and
+genesis's design ratification (genesis.md § Genesis: Brief State).
 
 **Grounded vs taste (mock supremacy).** Each ruling is tagged `grounded` (external anchor —
 contrast/a11y, legal/brand, destructive-action safety) or `taste` (aesthetic), authored into the
@@ -64,21 +58,16 @@ per screen, never improvised. A screen needing an absent primitive surfaces the 
 primitive and its coverage (author as foundation / reuse), default-authoring when no near-match
 exists.
 
-**Reconcile is a fold, never a re-invention.** The design stage's own reconcile step folds the
-spec's UI section to `check --json`'s screens, states and shells for the named surfaces; an AC
-that names a state no screen exports is a fork — `AskUserQuestion` (add the state / amend the
-AC), never a silent pass.
-
 ## Workflows Encode Shape, Not Judgment
 
 The plugin's `wf-build.js`, `wf-review.js`, `wf-enforce.js` (and genesis `wf-research.js`) own
 ordering, schemas, retry caps, kill rules — deterministic control flow; judgment stays in the
-main loop. Screen authoring — `/spec:mocks`, `/spec:sketch` — is direct, in-session dispatch,
-never a workflow: no `Agent` dispatch ever writes a screen (subagents run judgment-free checks
-only), and taste (fork adjudication, iteration rulings, visual review) never enters one. Never
-prompt-engineer findings into existence — an empty findings list is a valid outcome. **No free
-text in `args`:** a workflow's `args` is a control channel — paths, ids, enums, booleans, the
-host gate command only; prose lives on disk, Read there.
+main loop. Screen authoring — `/spec:mocks` — is direct, in-session dispatch, never a workflow:
+no `Agent` dispatch ever writes a screen (subagents run judgment-free checks only), and taste
+(fork adjudication, iteration rulings, visual review) never enters one. Never prompt-engineer
+findings into existence — an empty findings list is a valid outcome. **No free text in `args`:**
+a workflow's `args` is a control channel — paths, ids, enums, booleans, the host gate command
+only; prose lives on disk, Read there.
 
 **On-disk handoff** (core § On-Disk Handoff, unchanged here): every cross-stage handoff is a
 file, never conversation context — the spec for the per-feature pipeline, genesis's own

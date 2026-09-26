@@ -109,28 +109,6 @@ test('AC-20260815-05-7: doctor doctrine\'s check 6b invokes spec-paths env-prefl
     'only the prose obligation')
 })
 
-// AC-20260824-02-3 (specs/20260824/02-design-stage-on-render-gate.md D15, retagged in place
-// from AC-20260815-05-8): the driver-stepped body dies with the design-driver state machine —
-// D1 rebuilds /spec:design as six steps (preflight → author (direct Sonnet dispatch) → host
-// gate → render gate → look → reconcile), so the old `wf-design` invocation step this pin
-// named is retired along with the workflow file itself (D2). The pin carries
-// AC-20260815-05-8's incident forward onto the new step: an unprovisioned environment must
-// never reach the author dispatch.
-// `wf-design` is not part of the oracle — a surviving reference
-// to a retired literal is exactly the Gotcha this repo's Assumptions call out.
-// specs/20260912/03-run-isolates-and-owns-the-stages.md AC-20260912-03-6: design.md's body
-// moves to spec/doctrine/stages/stage-design.md — repointed in place.
-test('AC-20260824-02-3 (AC-20260815-05-8 incident carried forward): design doctrine names env-preflight before the author dispatch step with STOP-on-miss semantics', () => {
-  const design = read('spec/doctrine/stages/stage-design.md')
-  assert.match(design, /env-preflight[\s\S]{0,400}(Agent\s*\{model:\s*"sonnet"\}|dispatch)/,
-    'design.md\'s six-step body must name env-preflight ahead of the author dispatch step (D3 before D4) ' +
-    '— without it, an unprovisioned environment reaches the per-surface Sonnet dispatch exactly like the ' +
-    'original salon-os incident on build (AC-20260815-05-8)')
-  assert.match(design, /env-preflight[\s\S]{0,400}STOP/,
-    'the env-preflight mention must carry STOP-on-miss semantics — a preflight named with no STOP remedy ' +
-    'nearby lets an unprovisioned environment continue past it into the author dispatch anyway')
-})
-
 // The same incident class, through a hole in this module: a variable that is SET but points at
 // the wrong place is invisible to a presence check. The gate runs as a non-interactive `bash -c`,
 // which no shell hook fires for, so a build in a worktree silently inherits the MAIN root's

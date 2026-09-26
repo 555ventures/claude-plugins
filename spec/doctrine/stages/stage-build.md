@@ -19,10 +19,10 @@ isolation is not build's concern** — `/spec:run`'s Step 0 opens the spec's wor
 stage ever runs; the driver never creates/enters/leaves one itself, preferring its own stamped
 `diff_base` pin over `build_base`.
 
-**A design-landed component is not stub residue.** The design stage commits real components
-before the build starts, so a non-tests `CREATE` row already in the pre-image is legitimate —
-`red-attributed` refuses only paths that DIFFER from base; an already-tracked `CREATE` row
-earns a WARN naming it, never a refusal or a hand-edit of the File Plan.
+**A pin beats the ref: a tracked component is not stub residue.** A non-tests `CREATE` row
+already tracked in the pre-image is legitimate — `red-attributed` refuses only paths that
+DIFFER from base; an already-tracked `CREATE` row earns a WARN naming it, never a refusal or a
+hand-edit of the File Plan.
 
 ## Build stage — the build driver owns this part of the state machine
 

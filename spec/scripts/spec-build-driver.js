@@ -182,13 +182,6 @@ if (!sidecarExisted) {
 
 let justFlipped = false
 if (status === 'hardened') {
-  // ---- design admission (D2) ---------------------------------------------------------------
-  const hostDesignConfig = hostConfig.design
-  if (hostDesignConfig && fmVal('design') === 'true' && !fmVal('designed')) {
-    die('spec declares design: true with no designed: in a host whose config declares a design ' +
-      'block — run /spec:run ' + specPath + ' first')
-  }
-
   // ---- PREFLIGHT (driver-only) -------------------------------------------------------------
   const pre = runChild(process.execPath, [envPreflightBin, '--root', repoRoot], { encoding: 'utf8' },
     'env-preflight.js')
@@ -234,9 +227,9 @@ if (status === 'hardened') {
 // contradiction ran twelve lines: the stamp block above pins `diff_base` unconditionally and its
 // comment says "consumers already prefer the pin (replay.js, and now spec-review-driver.js's
 // resolveBase)", while this function was the one consumer that did not. The field symptom was
-// red-check refusing "pre-image is not pure" over the very files the design stage had just
-// legitimately committed — with the ref winning, the purity set was computed against `main`
-// rather than against post-design HEAD.
+// red-check refusing "pre-image is not pure" over files legitimately committed to the
+// pre-image before the build started — with the ref winning, the purity set was computed
+// against `main` rather than against the true post-image HEAD.
 //
 // THE VALIDITY PREDICATE HERE IS ANCESTRY, NOT NON-DEGENERACY. spec-review-driver.js refuses
 // `base === HEAD` because an empty range at review time IS the false-CLEAN failure. Porting that
@@ -293,8 +286,7 @@ function resolveBase() {
 // refusal — the two must agree, because a path red-check calls impure is exactly a path this
 // driver must call dirty (handleRedAttributed's former private `fs.existsSync` test was a third,
 // cruder spelling of the same question, and it disagreed: it called a file dirty for EXISTING,
-// which is true of every component the design stage legitimately committed before the build
-// started).
+// which is true of every component already committed to the pre-image before the build started).
 function changedSinceBase(base) {
   const trackedR = runChild('git', ['-C', repoRoot, 'diff', '--name-only', base], { encoding: 'utf8' },
     'git diff --name-only')
@@ -603,12 +595,11 @@ function handleTestsAuthored() {
 
 // Residue is "differs from base", never "exists on disk".
 //
-// The former predicate was a bare `fs.existsSync` per CREATE path, and it contradicted the design
-// stage's own published promise — spec/doctrine/stages/stage-design.md: components built there are
-// real and kept, wired by the build stage rather than rebuilt. A design-landed component is committed
-// BEFORE the build starts, so it is in the pre-image, so it exists on disk, so every design:true
-// spec had to hand-edit its File Plan CREATE -> MODIFY to get past this mark. Two stages of the
-// same pipeline disagreed about what a CREATE row means.
+// The former predicate was a bare `fs.existsSync` per CREATE path, and it contradicted an
+// already-tracked CREATE row's own on-disk reality: a component already committed to the pre-image
+// before the build starts is in the pre-image, so it exists on disk, so a plan that still called it
+// CREATE had to be hand-edited to MODIFY to get past this mark. The File Plan's own action verb and
+// the tree's own history disagreed about what a CREATE row means.
 //
 // This is a DELETION, not a new rule: `changedSinceBase()` is the predicate red-check.js already
 // applies for its pre-image purity refusal, and the one this driver already applies in
@@ -657,7 +648,7 @@ function handleRedAttributed() {
   if (trackedAtBase.length) {
     process.stdout.write('[spec-build-driver] WARN: File Plan CREATE row(s) already tracked at ' +
       'the build base: ' + trackedAtBase.join(', ') + ' — the pre-image is clean, so the build ' +
-      'continues; the row is likely stale (a design-stage component the plan still calls CREATE). ' +
+      'continues; the row is likely stale (an already-tracked component the plan still calls CREATE). ' +
       'Consider MODIFY. If a stale stub is what these are, red-check\'s vacuity check is what ' +
       'catches it.\n')
   }

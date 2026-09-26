@@ -1240,7 +1240,7 @@ test('AC-20260907-05-8: spec/doctrine/genesis.md\'s § Genesis: Brief State sect
 
   assert.ok(!briefStateSection.includes('design/tokens.css'),
     'D6: § Genesis: Brief State must name no `brief-written` precondition on `design/tokens.css` ' +
-    '— the theme pick moved to /spec:sketch, which runs after genesis, so this file no longer ' +
+    '— the theme pick moved to /spec:mocks, which runs after genesis, so this file no longer ' +
     'exists when BRIEF runs and a surviving mention here documents a precondition the driver no ' +
     'longer enforces (D1)')
   assert.ok(!briefStateSection.includes('composed-but-unpicked'),

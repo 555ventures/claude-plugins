@@ -26,34 +26,32 @@ path to a roadmap planning brief (`docs/roadmap/NN-*.md`).
   `node "$(spec-paths spec-status)" --root . --brief NN` — exit 1 means a `Depends on` brief has
   no spec at `implementing`/`done`: warn and confirm before proceeding. Every spec this session
   produces gets `brief: NN` in frontmatter (that stamp is how roadmap status is derived); an
-  ad-hoc spec gets `brief: n/a`. The brief's Out of scope section is binding. UI-bearing briefs
-  (a `surfaces` block): read each surface's screen under `src/screens/` and its
-  `design/approval.json` entry; a label not approved-and-current there → offer
-  `/spec:sketch <brief>` first (warn, don't block); a mismatch is a user question, never silent.
-- **Tier:** `standard` for almost everything; `critical` when the work touches
-  irreversible or high-blast-radius surfaces — auth/security boundaries, data migrations,
-  money, deletion of user data, or whatever the host's pipeline rules add. State the tier
-  and why. Work too small to need delegation (Sonnet workers building while you only plan)
-  or durability (scope spanning sessions) gets no spec — say so and stop.
-- **Explore before asking.** Ground every claim in current code (parallel Explore agents
-  where the surface is wide; `docs/canonical/{area}.md` when present). Run the pre-emptive
-  lookups the host's pipeline rules § Planning declares (Context7 for third-party APIs the
-  spec relies on) and embed the excerpts that matter into Contracts/UI — downstream workers
-  never query MCPs. Then put the genuine forks to the user via `AskUserQuestion`, options
-  grounded in what you found; never ask what the codebase can answer.
+  ad-hoc spec gets `brief: n/a`. The brief's Out of scope section is binding; a `surfaces`
+  block is structure only — labels and journey edges, never checked against approval.
+- **Tier:** `standard` for almost everything; `critical` when the work touches irreversible or
+  high-blast-radius surfaces — auth/security boundaries, data migrations, money, deletion of
+  user data, or whatever the host's pipeline rules add. State the tier and why. Work too small
+  to need delegation (Sonnet workers building while you only plan) or durability (scope
+  spanning sessions) gets no spec — say so and stop.
+- **Explore before asking.** Ground every claim in current code (parallel Explore agents where
+  the surface is wide; `docs/canonical/{area}.md` when present). Run the pre-emptive lookups
+  the host's pipeline rules § Planning declares (Context7 for third-party APIs the spec relies
+  on) and embed the excerpts that matter into Contracts/UI — downstream workers never query
+  MCPs. Put genuine forks to the user via `AskUserQuestion`, options grounded in what you
+  found; never ask what the codebase can answer.
 
 ## Micro-spikes (mandatory — the shape triggers it, never felt uncertainty)
 
 Any claim the draft will lock whose truth a **third-party dependency adjudicates** —
 name/format constraints, cron strings, config keys, DSL fragments, version-specific API
-shapes — is falsifiable in one executed line, and that line MUST run before the claim
-enters a Decision, Contract, or AC (scratch file against the installed dependency; run,
-observe, delete). This includes **negative claims**: an assertion that a named mutation or
-misconfiguration will make a named check fail is dependency-adjudicated identically —
-execute it and observe the red before locking it. Record the executed check + observed
-output in Assumptions. For a genuinely high-unknown area (unfamiliar API, risky
-integration), run a full throwaway spike in an isolated worktree
-(`Agent {isolation: 'worktree'}`) and fold the findings in; set `spiked: YYYY-MM-DD`.
+shapes — is falsifiable in one executed line, and that line MUST run before the claim enters a
+Decision, Contract, or AC (scratch file against the installed dependency; run, observe,
+delete), the check and its output recorded in Assumptions. This includes **negative claims**:
+an assertion that a named mutation or misconfiguration will make a named check fail is
+dependency-adjudicated identically — execute it and observe the red before locking it. For a
+genuinely high-unknown area (unfamiliar API, risky integration), run a full throwaway spike in
+an isolated worktree (`Agent {isolation: 'worktree'}`) and fold the findings in; set
+`spiked: YYYY-MM-DD`.
 
 ## Draft
 
@@ -61,28 +59,23 @@ Write the spec per the template. `status: draft`. While drafting:
 
 - **Never guess — mark it.** Where information is missing, write
   `[NEEDS CLARIFICATION: <question>]` inline instead of something plausible. The state-gate
-  hook blocks `/spec:run` while any marker survives — the design, build, and review stages are
-  reachable only through it.
-- **Decomposition cap:** one brief → one spec by default; never split for tidiness. Split
-  only past ~12 source-layer File Plan rows (tests/docs/ledger uncounted) or a second primary
-  area, into `##-` siblings by **landing unit** (each leaves the system green), never by layer. A facade
-  with no consumer in the same spec or its series is mis-sliced — fold it into the
-  consumer's spec.
+  hook blocks `/spec:run` while any marker survives — build and review are reachable only
+  through it.
+- **Decomposition cap:** one brief → one spec by default; never split for tidiness. Split only
+  past ~12 source-layer File Plan rows (tests/docs/ledger uncounted) or a second primary area,
+  into `##-` siblings by **landing unit** (each leaves the system green), never by layer. A
+  facade with no consumer in the spec or its series is mis-sliced — fold it into the consumer's.
 - **File Plan row grammar:** every touched file gets its own row (Path | Action | Layer |
-  Summary; Layer ∈ the host's layerGroups flattened, plus `tests` and `other`). A row that
-  bundles an edit to a different file inside its Summary hands a worker a file its contract
-  forbids touching — bundled edits get their own row or an explicit orchestrator-duty line
-  outside the table.
+  Summary; Layer ∈ the host's layerGroups flattened, plus `tests` and `other`). A row bundling
+  an edit to a different file inside its Summary hands a worker a file its contract forbids
+  touching — bundled edits get their own row, or a note outside the table.
 - **ACs** follow `spec/templates/spec.md`'s `## Acceptance Criteria` comment verbatim — shape,
   tag grammar (`env`/`oracle`/`pre-green`), the terminal-observable rule, and the regression-pin
   grammar all live there, the one binding home; this command never restates it.
-- **Decisions table is authoritative** — every fork's outcome lands there; zero open forks
-  at lock. Fill **Assumptions** with each load-bearing assumption paired with its
-  `if false →` fallback. Fill **Rationale** (for the cold-start reader) and **Canonical
-  Delta** (applied by the review stage on CLEAN).
-- **`design:`** — only in hosts whose config declares a `design` block: `true` when the
-  user should approve look/feel before build; record the approved screen path as
-  `design_source: src/screens/<label>.tsx` (or `src/screens` for several).
+- **Decisions table is authoritative** — every fork's outcome lands there; zero open forks at
+  lock. Fill **Assumptions** with each load-bearing assumption paired with its `if false →`
+  fallback, **Rationale** (for the cold-start reader), and **Canonical Delta** (applied by the
+  review stage on CLEAN).
 
 ## Lock
 
@@ -150,6 +143,5 @@ Write the spec per the template. `status: draft`. While drafting:
 
 ## Rules
 
-- Genuine forks go to the user — never silently decided.
-- The spec must be executable by an orchestrator that was not in this conversation —
-  unstated context goes in Rationale.
+- Genuine forks go to the user — never silently decided; the spec must be executable by an
+  orchestrator that was not in this conversation, so unstated context goes in Rationale.

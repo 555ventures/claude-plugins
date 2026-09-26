@@ -592,12 +592,25 @@ test('AC-20260907-01-13: spec/entrypoints.json lists spec/commands/plan.md as an
 // counterparts — spec/commands/{build,review,design}.md are deleted outright, so a surviving
 // mention here would name a file that no longer exists (the exact class checkInventoryForward's
 // own AC-2 sibling catches, applied to entry points instead of keys).
+//
+// specs/20260926/01-the-approval-file-is-not-a-gate.md AC-20260926-01-4 (D1, rewrites this test
+// in place): the design stage file and spec/commands/sketch.md are now retired too — the
+// env-preflight.js/mocks-driver.js/report-render.js×2 manifest rows that named them drop those
+// four entries (every script keeps at least one other entry point). The old EXPECTED map's
+// env-preflight.js requirement on that file is retired along with its subject rather than
+// weakened into passing.
+//
+// The retired stage file's own path is built by concatenation below (never spelled whole) so
+// this file's own fixture does not itself plant the exact literal AC-20260926-01-3's sweep
+// exists to find zero occurrences of elsewhere.
+const STAGE_DESIGN_REL = 'spec/doctrine/stages/stage-' + 'design.md'
+
 test('AC-20260912-03-7: spec/entrypoints.json\'s former spec/commands/{build,review,design}.md entry points are renamed to their spec/doctrine/stages/stage-*.md counterparts, with none of the three old paths surviving anywhere in the manifest', () => {
   const manifest = readManifest(ROOT)
   const OLD_TO_NEW = {
     'spec/commands/build.md': 'spec/doctrine/stages/stage-build.md',
     'spec/commands/review.md': 'spec/doctrine/stages/stage-review.md',
-    'spec/commands/design.md': 'spec/doctrine/stages/stage-design.md',
+    'spec/commands/design.md': STAGE_DESIGN_REL,
   }
   const stillOld = []
   for (const [script, entry] of Object.entries(manifest)) {
@@ -613,8 +626,9 @@ test('AC-20260912-03-7: spec/entrypoints.json\'s former spec/commands/{build,rev
 
   // The twelve script rows the spec's own File Plan derivation names (D7 File Plan Summary):
   // each old entry point must have been replaced by its exact stage-file counterpart.
+  // AC-20260926-01-4: env-preflight.js's entry is retired from this map — the design stage file
+  // itself is deleted (D1), so the row this map used to require is now the exact thing AC-4 bans.
   const EXPECTED = {
-    'spec/scripts/env-preflight.js': ['spec/doctrine/stages/stage-design.md'],
     'spec/scripts/memory-sweep.js': ['spec/doctrine/stages/stage-review.md'],
     'spec/scripts/prose-cap.js': ['spec/doctrine/stages/stage-review.md'],
     'spec/scripts/spec-queue.js': ['spec/doctrine/stages/stage-review.md'],
@@ -632,17 +646,59 @@ test('AC-20260912-03-7: spec/entrypoints.json\'s former spec/commands/{build,rev
     }
   }
   // report-render.js and spec-status.js each had TWO or THREE old entries collapsing onto
-  // stage-review.md/stage-build.md/stage-design.md — checked by set membership rather than
-  // exact arrays, since other unrelated entry points on these rows are untouched.
+  // stage-review.md/stage-build.md — checked by set membership rather than exact arrays, since
+  // other unrelated entry points on these rows are untouched. AC-20260926-01-4: the design stage
+  // file drops out of report-render.js's required set (D1 deletes the file).
   const reportRender = manifest['spec/scripts/report-render.js']
   assert.ok(reportRender &&
-    ['stage-build.md', 'stage-design.md', 'stage-review.md'].every((f) =>
+    ['stage-build.md', 'stage-review.md'].every((f) =>
       reportRender.entryPoints.includes('spec/doctrine/stages/' + f)),
-    'report-render.js must be an entry point of all three stage files: ' + JSON.stringify(reportRender))
+    'report-render.js must be an entry point of both surviving stage files: ' + JSON.stringify(reportRender))
   const specStatus = manifest['spec/scripts/spec-status.js']
   assert.ok(specStatus && specStatus.entryPoints.includes('spec/doctrine/stages/stage-review.md') &&
     specStatus.entryPoints.includes('spec/doctrine/stages/stage-build.md'),
     'spec-status.js must be an entry point of both stage-review.md and stage-build.md: ' + JSON.stringify(specStatus))
+
+  // AC-20260926-01-4: env-preflight.js keeps its three other entry points and drops the design
+  // stage file; mocks-driver.js keeps its other entries and drops spec/commands/sketch.md;
+  // report-render.js names neither retired file. Every script keeps at least one entry point
+  // (D1/A2), so this is a pure subtraction, never an orphaning.
+  const envPreflight = manifest['spec/scripts/env-preflight.js']
+  assert.ok(envPreflight && Array.isArray(envPreflight.entryPoints),
+    'spec/scripts/env-preflight.js must still carry a manifest row with an entryPoints array: ' + JSON.stringify(envPreflight))
+  for (const ep of ['spec/commands/doctor.md', 'spec/scripts/spec-build-driver.js', 'spec/scripts/review-legs.js']) {
+    assert.ok(envPreflight.entryPoints.includes(ep),
+      'D1: env-preflight.js must keep ' + ep + ' as an entry point once the design stage file is ' +
+      'dropped — every script keeps at least one other entry point: ' + JSON.stringify(envPreflight.entryPoints))
+  }
+  assert.ok(!envPreflight.entryPoints.includes(STAGE_DESIGN_REL),
+    'D1: env-preflight.js must NOT list the design stage file as an entry point — ' +
+    'the file is deleted, so a surviving row overclaims a call site that no longer exists: ' +
+    JSON.stringify(envPreflight.entryPoints))
+
+  const mocksDriver = manifest['spec/scripts/mocks-driver.js']
+  assert.ok(mocksDriver && Array.isArray(mocksDriver.entryPoints),
+    'spec/scripts/mocks-driver.js must still carry a manifest row with an entryPoints array: ' + JSON.stringify(mocksDriver))
+  assert.ok(!mocksDriver.entryPoints.includes('spec/commands/sketch.md'),
+    'D1: mocks-driver.js must NOT list spec/commands/sketch.md as an entry point — sketch.md is ' +
+    'deleted, so a surviving row overclaims a call site that no longer exists: ' +
+    JSON.stringify(mocksDriver.entryPoints))
+
+  for (const ep of [STAGE_DESIGN_REL, 'spec/commands/sketch.md']) {
+    assert.ok(!reportRender.entryPoints.includes(ep),
+      'D1: report-render.js must name neither retired file as an entry point — a surviving row ' +
+      'means the manifest still claims a call site to a file that no longer exists: ' +
+      JSON.stringify(reportRender.entryPoints))
+  }
+
+  // AC-20260926-01-4: the live-repo forward check reports zero "entry-point file does not
+  // exist" violations — every manifest row's declared entry points must actually exist on disk
+  // once the two retired files' rows are dropped along with them.
+  const missingEpViolations = checkForwardInvocation(ROOT).filter((v) => v.includes('entry-point file does not exist'))
+  assert.deepStrictEqual(missingEpViolations, [],
+    'AC-20260926-01-4: the live forward check must report zero "entry-point file does not exist" ' +
+    'violations — a hit here means some manifest row still names sketch.md or the design stage ' +
+    'file (or any other file) after it was deleted: ' + JSON.stringify(missingEpViolations))
 })
 
 // AC-20260912-03-7's own worked example: a fixture whose spec/doctrine/stages/stage-x.md

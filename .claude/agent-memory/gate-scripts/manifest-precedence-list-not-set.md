@@ -3,6 +3,7 @@ name: manifest-precedence-list-not-set
 description: when a spec's D-decision lists several manifest filenames for one stack (e.g. python's pyproject.toml | setup.py | requirements.txt), pick by an if/else-if chain in the decision's own listing order, never a Set/object lookup that could reorder
 metadata:
   type: feedback
+  reviewed: 2026-09-26
 ---
 
 A D-decision that lists several candidate manifests for one stack, in prose order, is specifying

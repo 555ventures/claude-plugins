@@ -74,6 +74,16 @@ fuller incident write-ups live in each cited spec's history.
   at-risk walk, `red-check.js`'s wildcard expansion, and `collision-closure.js`'s literals leg.
   (specs/20260915/01-one-derivation-of-ignored-paths.md D1)
 
+- **`spec/scripts/workspace-scan.js` is the one derivation of a host's workspaces**
+  (`spec-paths workspace-scan --root <dir> [--json] [--depth N]`, default depth 4). Every
+  directory holding a package manifest is a workspace `{root, stack, manifest}`, sorted by root,
+  `.` for the tree's own root; vendored and build-output directories (`node_modules`, `dist`,
+  `.claude`, …) are never walked, and a directory with several manifests resolves by D1's listing
+  order. Exit 0 on any readable root — `[]` is a valid scan — and 2 on usage or an unreadable
+  root. It reads no config and no manifest contents, and names no tool: picking a checker per
+  workspace is `/spec:enforce`'s discovery (docs/canonical/enforce.md).
+  (specs/20260926/03-gates-per-workspace.md D1)
+
 ## Prose budgets
 
 The host rules' § Gotchas section is capped at 15 entries, enforced by `prose-cap.js` (review

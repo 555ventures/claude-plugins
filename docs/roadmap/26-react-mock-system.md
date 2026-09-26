@@ -78,8 +78,9 @@ are sound and stay. The spike proved the two load-bearing mechanics by execution
 - .claude/rules/spec-pipeline.md § Worker Rules — zero dependencies in this repo's scripts and
   tests; the reason the reviewer is a separate package.
 
-- Amended by ADR-0030 — narrowed: `design/approval.json` stops gating plan, run and review
-  (brief 27); the reviewer package and contract v3 are retired for a hosted service (brief 29).
+- Amended by ADR-0030 — superseded in premise: `design/approval.json` stops gating plan, run and
+  review (brief 27); the mock app, the reviewer package and contract v3 retire when brief 29's
+  walkthrough service runs, and wireframes become json-render specs rendered by the service.
 
 ## Open questions for planning
 

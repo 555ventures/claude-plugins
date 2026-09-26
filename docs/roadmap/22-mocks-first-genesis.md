@@ -206,7 +206,7 @@ Order is binding: the ledger and gate land first so every later stage is already
 ## Grounding
 
 Amended by ADR-0028 — narrowed: genesis reads the mock app's `design/approval.json` and `mock-review check --json`, never `status.json` marks or `data-*` attributes (brief 26).
-Amended by ADR-0030 — narrowed: the roadmap derives from the designed journey set after a second client gate; the wireframe's approval record is read at the design stage's entry only (brief 30).
+Amended by ADR-0030 — narrowed: the roadmap derives from the designed journey set after JJ approves the design in Storybook (no client gate); the wireframe's approval record is read at the design stage's entry only (brief 30).
 
 - `~/Projects/hearwell/design/wireframes/LEDGER.md` — the executed evidence: seed rows P1–P13,
   journey rows W/O/R/D/V, theme rows T1–T6, process rows A2–A8, catches M1–M14, and the six

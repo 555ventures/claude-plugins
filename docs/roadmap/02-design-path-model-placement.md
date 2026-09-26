@@ -59,9 +59,8 @@ This brief carries the genesis-design and design-stage halves of that ruling.
   keeping expansion delegated; this brief grounds and reviews it, never in-sources it.
 - Retiring the sketch overflow valve or changing sketch tier fidelity.
 
-- Amended by ADR-0030 — design authorship (design brief, kit, journey stories) is the strongest
-  available model; drawing screens from the brief may be Sonnet (brief 30). `/spec:sketch` is
-  retired by brief 27.
+- Amended by ADR-0030 — design authorship (design brief, naming tables, kit) is Fable; journey
+  screens may be drawn by Sonnet only after the kit exists, all journeys in one session (brief 30).
 
 ## Open questions
 

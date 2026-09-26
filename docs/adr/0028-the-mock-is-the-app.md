@@ -1,6 +1,6 @@
 # 0028. The mock is the app
 
-- Status: accepted
+- Status: superseded by ADR-0030 (2026-09-24 — no mock app exists before genesis once wireframes render in the walkthrough service; the approval record stops gating)
 - Date: 2026-09-14
 - Archetype: n/a (amendment ADR for this plugin repo) · Audience: n/a
 - Deciders: JJ + session (docs/roadmap/26-react-mock-system.md; the 2026-09-13/14 spike under

@@ -65,7 +65,7 @@ test('AC-20260914-02-8 / AC-20260918-01-5: the consistency suite finds none of t
 // AC-20260914-02-10
 // ---------------------------------------------------------------------------
 
-test('AC-20260914-02-10: WHEN spec/doctrine/design.md is read THE SYSTEM SHALL carry ## Design Canon, ## Design Authoring Contracts, ## Workflows Encode Shape, Not Judgment, neither ## Design Render Gate nor ## Design Atlas, name design/approval.json, src/records, examples, @/components/ui, be <=160 lines, and citations-check.js exits 0', () => {
+test('AC-20260914-02-10 / AC-20260926-01-8: WHEN spec/doctrine/design.md is read THE SYSTEM SHALL carry ## Design Canon, ## Design Authoring Contracts, ## Workflows Encode Shape, Not Judgment, neither ## Design Render Gate nor ## Design Atlas, name design/approval.json, src/records, examples, @/components/ui, be <=160 lines, and citations-check.js exits 0', () => {
   assert.ok(fs.existsSync(path.join(ROOT, DESIGN_DOCTRINE_REL)), DESIGN_DOCTRINE_REL + ' must exist for this pin to mean anything')
   const text = read(DESIGN_DOCTRINE_REL)
 

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-26
-status: implementing
+status: done
 tier: critical
 area: design
 breaking: true
@@ -199,6 +199,13 @@ Collision closure at lock (`collision-closure --literal design_source --literal 
 
 Not queued as separate work: q245 ("surfaces blocks declare flow order, and sketch refuses an
 unordered one") is voided by D1 and is marked done at lock with that reason.
+
+Build-time one-offs (2026-09-26): the test author retitled the tests the `→ rewrites` pointers
+name, and red-check resolves a pointer by title prefix, so the orchestrator restored each pointed
+title as the prefix with the new AC-ID following it. The two out-of-plan edits (red-check's
+`invalid-pre-green` detail; the 20260912/03 AC 20 retired tag) were recorded as D13 on the user's
+add-to-scope ruling. Review iteration 1 found AC-8 uncovered by ID (the `reuses` pointer does not
+count for ac-matrix); the fix tagged the reused test's title, and the fix-delta pass was CLEAN.
 
 ## Canonical Delta
 

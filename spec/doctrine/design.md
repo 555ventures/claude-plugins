@@ -11,6 +11,11 @@ description: Mock-app doctrine for /spec:mocks and genesis — Design Canon and 
 at `BRIEF`. There is no second artifact: the mock app **is** the product's frontend, never a
 catalog a later stage renders against separately.
 
+The wireframe's approval record (`design/approval.json`) is read by genesis exactly once more,
+at `DESIGN_BRIEF` (spec/doctrine/genesis.md § Genesis: Design Stage); the design contract that
+follows — the intent-to-pattern and naming tables, checked by `design-contract-check.js` — is
+code, never a second hand-kept copy of what the mock app already showed.
+
 **Three import layers, one direction.** A screen (`src/screens/<label>.tsx`, under
 `design.app`) composes from exactly three layers and nothing else: `@/components/ui` (the
 shadcn primitives), `@/components` + `@/shells` (project components and shells built on top of

@@ -27,6 +27,12 @@
       "spec/scripts/release-legs.js"
     ]
   },
+  "spec/scripts/catalog-inventory.js": {
+    "entryPoints": [
+      "spec/commands/genesis.md",
+      "spec/commands/doctor.md"
+    ]
+  },
   "spec/scripts/citations-check.js": {
     "entryPoints": [
       "spec/commands/doctor.md"

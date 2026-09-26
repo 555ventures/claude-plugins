@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "kit": "src/components/kit",
+  "tokens": "src/styles/tokens.css",
+  "rules": ".claude/rules/design.md",
+  "primitives": "src/components/ui",
+  "primitivesAlias": "@/components/ui",
+  "journeys": "src/journeys",
+  "storybook": {
+    "port": 6006,
+    "buildCommand": "npx storybook build --test --quiet -o .claude/genesis/storybook-static",
+    "staticDir": ".claude/genesis/storybook-static"
+  }
+}

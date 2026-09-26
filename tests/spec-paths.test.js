@@ -116,6 +116,13 @@ test('AC-20260926-03-8: spec-paths workspace-scan resolves to spec/scripts/works
 // so this is a pure removal, not a rename; the key list below is updated in place, never a
 // parallel exhaustive pin.
 
+// specs/20260926/04-the-design-brief.md D12: three new bundled keys — `catalog-inventory`
+// (D4's script), `design-brief-template` and `design-paths-template` (D6/D3's templates) — like
+// every other bundled asset they need spec-paths keys, or the genesis driver's own
+// `spec-paths catalog-inventory` invocation and every doc-authoring step's template read resolve
+// nothing (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently"; same additive-
+// collision class as AC-20260819-02-10 above; the key list below is updated in place, never a
+// parallel exhaustive pin).
 test('AC-20260926-03-8: every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-enforce',
@@ -124,7 +131,8 @@ test('AC-20260926-03-8: every documented key resolves to an existing path', () =
     'review-driver', 'build-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check',
     'registry-check', 'genesis-driver', 'escape-row', 'mocks-driver', 'commit-coverage',
     'worktree-include', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract',
-    'design-contract-check', 'design-rules-template', 'workspace-scan']) {
+    'design-contract-check', 'design-rules-template', 'workspace-scan',
+    'catalog-inventory', 'design-brief-template', 'design-paths-template']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }

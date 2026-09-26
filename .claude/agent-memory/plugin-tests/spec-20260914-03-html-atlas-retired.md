@@ -3,7 +3,7 @@ name: spec-20260914-03-html-atlas-retired
 description: A-clause "if false" remedies must be executed literally when they fire; ac-drift-clean flags cross-spec collateral from deleted test files, closed by a lock-time grep + retag, not by a tests-layer worker mid-build.
 metadata:
   type: project
-  reviewed: 2026-09-15
+  reviewed: 2026-09-26
 ---
 
 Spec 20260914/03 (retiring the HTML atlas) deleted `tests/design-atlas.test.js` and

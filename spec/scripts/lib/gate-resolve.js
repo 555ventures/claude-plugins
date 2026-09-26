@@ -16,6 +16,15 @@
 //   - no File Plan test rows to resolve either placeholder -> { gate: null, reason: 'no File Plan
 //     test rows to resolve {testDirs}' }
 //
+// specs/20260926/04-the-design-brief.md D13 (AC-20260926-04-23): every path under a `fixtures/`
+// directory (`/(^|\/)fixtures\//`) is dropped from the File Plan's test rows before either
+// placeholder is derived — a fixture is never a test entry point, and `node --test`'s own glob
+// matching would otherwise execute it as one (the scoped gate reddened on
+// `tests/fixtures/genesis/shadcn-stub.js` and `tests/fixtures/genesis/catalog-docs/card.md`,
+// neither of which `node --test`'s default whole-suite discovery ever matches). A File Plan
+// whose test rows are fixtures only resolves to the same `{ gate: null, reason }` form as a File
+// Plan with no test rows at all.
+//
 // What this deliberately does NOT do: read the host config itself (the caller passes it — this
 // module has no opinion on config-read error policy, readConfig vs readConfigStrict), run the
 // resolved command, or validate that config.gateCommand is a non-empty string (a caller with no
@@ -33,7 +42,7 @@ function resolveGate(specText, config) {
     .filter(r => r.layer && /^tests?$/i.test(r.layer.trim())).flatMap(r => r.paths)
   const heuristic = parseFilePlan(specText)
     .filter(f => /(^|\/)tests?\//.test(f) || /\.(test|spec)\.[a-z]+$/.test(f))
-  const testFiles = [...new Set([...layerTests, ...heuristic])]
+  const testFiles = [...new Set([...layerTests, ...heuristic])].filter(f => !/(^|\/)fixtures\//.test(f))
   if (!testFiles.length) return { gate: null, reason: 'no File Plan test rows to resolve {testDirs}' }
   const globs = new Set()
   for (const f of testFiles) {

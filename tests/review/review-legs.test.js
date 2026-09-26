@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runNode, gitRepo } = require('../helpers')
+const { tmpdir, runNode, gitRepo, SPEC } = require('../helpers')
 const { makeReviewLegsHost, reviewLegsSpecBody } = require('./review-legs.fixtures')
 
 // review-legs.js replaces /spec:review's hand-performed Phase 0 — it runs every deterministic
@@ -250,6 +250,109 @@ test('AC-20260903-02-12 (also, SHALL CONTINUE TO): the green manifest feeds verd
   assert.strictEqual(v.stdout.split('\n')[0], 'CLEAN',
     'review-legs.js rows must satisfy verdict.js\'s required-leg and greenness derivation end-to-end — ' +
     'UNVERIFIED here means a leg name or row shape drifted between the two scripts: ' + v.stdout + ' / ' + v.stderr)
+})
+
+// specs/20260926/04-the-design-brief.md D13 (AC-20260926-04-23): lib/gate-resolve.js's
+// resolveGate() must drop every File Plan test path under a `fixtures/` directory before
+// deriving `{testDirs}`/`{scopeDirs}` — a fixture is never a test entry point. The synthetic
+// host's File Plan tests rows are exactly `tests/a.test.js` (a real, trivially-passing test),
+// `tests/fixtures/x/stub.js` (a non-test script that exits 1 when run bare) and
+// `tests/fixtures/x/docs/page.md` (not valid JavaScript at all) — pre-fix, resolveGate() folds
+// both fixture paths into the glob set (`tests/fixtures/x/*.js`, `tests/fixtures/x/docs/*.md`),
+// so `node --test` tries to execute the stub and the markdown file as test files and the gate
+// leg reddens. The manifest's own row shape (`{leg, exit, observed, scope}`, review-legs.js
+// appendRow()) carries no resolved-command field, so the "does not match /fixtures\//" half of
+// this AC is proved by calling the exact same resolveGate(specText, config) the real run uses,
+// against the identical spec text and config this host writes to disk — never a second,
+// paraphrased derivation.
+const { resolveGate } = require(path.join(SPEC, 'scripts/lib/gate-resolve.js'))
+
+function makeFixtureFilterHost() {
+  const dir = tmpdir('review-legs-fixture-filter')
+  const g = gitRepo(dir)
+  const config = {
+    gateCommand: 'node --test {testDirs}',
+    testCommand: 'node --test',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' },
+  }
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify(config))
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const base = g('rev-parse', 'HEAD').trim()
+
+  const acId = 'AC-20260926-04-23'
+  const specText = `---
+status: implementing
+tier: standard
+---
+# Fixture-filtered gate resolution test spec
+
+## Decisions
+
+| ID | Decision | One-line rationale |
+|----|----------|--------------------|
+| D1 | foo() returns 42 (${acId}) | why |
+
+## File Plan
+
+| File | Action | Layer |
+|---|---|---|
+| src/foo.js | edit | scripts |
+| tests/a.test.js | create | tests |
+| tests/fixtures/x/stub.js | create | tests |
+| tests/fixtures/x/docs/page.md | create | tests |
+
+## Acceptance Criteria
+
+- **${acId}**: foo() returns 42.
+`
+  // This file's shared run() helper always passes --spec specs/20260817/99-test.md (the same
+  // path every other host in this file uses) — the spec's own AC-ID label is independent of
+  // that path, so this host keeps it rather than growing run() a second spec-path parameter.
+  fs.mkdirSync(path.join(dir, 'specs/20260817'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'specs/20260817/99-test.md'), specText)
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 42\n')
+  fs.mkdirSync(path.join(dir, 'tests/fixtures/x/docs'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/a.test.js'), `'use strict'
+const { test } = require('node:test')
+const assert = require('node:assert')
+const foo = require('../src/foo.js')
+test('${acId}: foo() returns 42', () => { assert.strictEqual(foo(), 42) })
+`)
+  // A non-test script that fails when run bare — proving the gate never treats it as a test file.
+  fs.writeFileSync(path.join(dir, 'tests/fixtures/x/stub.js'), '#!/usr/bin/env node\nprocess.exit(1)\n')
+  // Not valid JavaScript at all — proving the gate never even attempts to execute it.
+  fs.writeFileSync(path.join(dir, 'tests/fixtures/x/docs/page.md'), '# Not JS\n\nThis is prose, not a script.\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'implement')
+  return { dir, base, config, specText }
+}
+
+test('AC-20260926-04-23: resolveGate() drops fixtures/ File Plan paths before deriving {testDirs}, so the gate leg exits 0 and the resolved command names no fixtures/ glob', () => {
+  const { dir, base, config, specText } = makeFixtureFilterHost()
+
+  const resolved = resolveGate(specText, config)
+  assert.ok(resolved.gate,
+    'D13: resolveGate() must still resolve a real gate command — a whole-row unresolvable result ' +
+    'here means the fixture-exclusion filter dropped every test row, including the genuine tests/a.test.js one: ' +
+    JSON.stringify(resolved))
+  assert.doesNotMatch(resolved.gate, /fixtures\//,
+    'D13: the resolved gate command must name no glob containing "fixtures/" — its presence means ' +
+    'gate-resolve.js is still deriving {testDirs} globs from a directory that is never a test entry ' +
+    'point, the exact class that reddened the scoped gate on tests/fixtures/genesis/shadcn-stub.js ' +
+    'and catalog-docs/card.md: ' + JSON.stringify(resolved))
+
+  const { r, byLeg } = run(dir, base)
+  const gateRow = byLeg.get('gate')
+  assert.ok(gateRow,
+    'the manifest must carry a "gate" row at all — its absence means the gate leg never ran: ' +
+    JSON.stringify([...byLeg.keys()]) + ' / ' + r.stdout + r.stderr)
+  assert.strictEqual(gateRow.exit, 0,
+    'D13: the gate leg must exit 0 once fixtures/ paths are excluded from {testDirs} — a nonzero exit ' +
+    'means the resolved gate still tried to run tests/fixtures/x/stub.js (exits 1 bare) or ' +
+    'tests/fixtures/x/docs/page.md (not valid JavaScript) as a test file: ' + JSON.stringify(gateRow))
 })
 
 test('a red gate exits 1 and names RED_BLOCKING — the review hard-stops before any reviewer spend', () => {

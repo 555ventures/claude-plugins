@@ -52,6 +52,12 @@ already safe on disk. Every accepted mark prints `✅ checkpoint — genesis sta
 `/clear` after any checkpoint and re-invoke `/spec:genesis` cold — it re-derives everything
 from disk, never from chat context.
 
+A visual archetype on a Storybook stack stops once more, at `DESIGN_BRIEF` between the green
+gate and `ROADMAP` (spec/doctrine/genesis.md § Genesis: Design Stage). That step's own printed
+`Session:` line names a fresh session and Fable — start one before doing that step's work. The
+driver runs `spec-paths catalog-inventory` itself at that step's first print; to refresh a stale
+catalog by hand: `node "$(spec-paths catalog-inventory)" --root . --out docs/design/catalog.md`.
+
 ## HANDOFF report
 
 Printed once the driver reaches `GROUNDED` — the terminal state; `HANDOFF` itself is a

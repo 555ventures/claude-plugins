@@ -198,6 +198,8 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     meaning. Remedy = relabel the row's `legs` to `green` (or `red:<leg>` if the mutation
     reddened it) — a hand edit to the ledger, outside `--fix`'s grounding-layer scope.
 
+22. **Catalog currency** (deterministic, advisory) — only when `docs/design/catalog.md` exists, run `node "$(spec-paths catalog-inventory)" --root . --out docs/design/catalog.md --check`; exit 1 → one ⚠️ line naming the added/removed components and the remedy (re-run the same command without `--check`). A host with no catalog file yet is not a finding — it has never reached `DESIGN_BRIEF` (spec/doctrine/genesis.md § Genesis: Design Stage).
+
 ## Semantic spot-check — small, bounded
 
 For 2–3 agents (prioritize any with stale citations), read one cited exemplar each and judge

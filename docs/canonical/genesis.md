@@ -139,10 +139,32 @@
   unless `mock-review check --json` reports `ok: true` and the zero-day gate is green — the
   shell-adopt and matrix-expansion checks that used to gate it are retired. A host with no mock
   app runs the tournament and scaffold exactly as before.
-  (specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md, done 2026-09-14)
+  (specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md, done 2026-09-14; the
+  mock-app auto-pick, tournament skip, scaffold skip and skeleton review check retired by
+  specs/20260926/04, below)
 
 - Since specs/20260914/03 the no-mock-app `skeleton-landed` branch's HTML-design checks — the
   `design/components.json` duplicate check, the `design/shell/app.html` check, the per-mock
   shell-stamp check, and the mocks matrix check — are removed outright with the scripts that ran
   them; a host with no mock app now lands the skeleton with no HTML-design checks at all.
   (specs/20260914/03-the-html-atlas-is-retired.md D11)
+
+- Since specs/20260926/04 the chain gains `DESIGN_BRIEF` between the green gate and `ROADMAP`
+  for visual archetypes whose stack descriptor names `designCatalog: "storybook"`; every other
+  host records `status.designStage = { skipped: "non-visual" | "non-storybook", at }` and goes
+  straight to `ROADMAP`. At `DESIGN_BRIEF` the driver generates `docs/design/catalog.md` once —
+  only when the file is absent and no run is recorded — from shadcn `info --json` plus each
+  component's `## Composition` section (`catalog-inventory.js`; a failure is recorded and printed
+  as a warning, never retried per print, never blocking), and prints a fresh-session line naming
+  Fable and the `design-brief` skill. `--mark design-brief-written` verifies
+  `docs/design/brief.md` (heading order, one `JTBD: When ` line per approved journey, no entity
+  section, a non-empty composites table equal to the rules file's composite column, used
+  components present in the inventory), `.claude/genesis/design-paths.json` (every path key, an
+  integer Storybook port 1024–65535), and the rules file's tables via `design-contract-check
+  --rules --kit --tokens`; acceptance records `status.designStage` and routes to `ROADMAP` until
+  spec 05's `DESIGN_KIT` lands. The mock app is no longer the product: MENUS auto-picks nothing,
+  the tournament and scaffold run for every host, and `skeleton-landed` runs no mock review
+  check; BRIEF still requires the mocks set `APPROVED` and reads `design/approval.json` for the
+  journey count, and `DESIGN_BRIEF`'s step is the last read of that record. `/spec:doctor` check
+  22 re-runs the inventory with `--check` when `docs/design/catalog.md` exists.
+  (specs/20260926/04-the-design-brief.md, done 2026-09-26)

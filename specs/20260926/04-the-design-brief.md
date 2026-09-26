@@ -1,6 +1,7 @@
 ---
 date: 2026-09-26
-status: hardened
+status: done
+build_base: design-retool
 tier: critical
 area: genesis
 breaking: true
@@ -9,6 +10,7 @@ depended_on_by: [specs/20260926/05-the-kit-and-the-journey-stories.md]
 brief: 30
 spiked: 2026-09-26
 open_markers: 0
+diff_base: 26b5c1e7e13d61c4bdc0232a1651666e972f3489
 ---
 
 # The design brief
@@ -45,6 +47,8 @@ a `data-ml` run passes through untouched.
 | D11 | `spec/doctrine/genesis.md` gains `## Genesis: Design Stage` (the states, marks, files and the fresh-session rule; the section name is never `Design State`, which a live pin bans), the § Genesis: State Machine chain becomes `… → GATE_RED \| DESIGN_BRIEF → [DESIGN_KIT → DESIGN_JOURNEYS → AWAITING_DESIGN_APPROVAL, specs 05/06] → ROADMAP → …` with the skip rule, § Genesis: On-disk Handoff gains rows for `design-paths.json`, `docs/design/brief.md` and `docs/design/catalog.md`, and the ADR-0028 sentence in § Genesis: Brief State is reworded so BRIEF still names `design/approval.json` as its journey-count source (a live pin requires the literal). `spec/commands/genesis.md` names the design stage in its chain sentence and adds the fresh-session rule in ≤3 lines, staying ≤120 lines (live pin) and within the 500-line read-load budget (324 today). `spec/doctrine/design.md` § Design Canon gains one sentence: the wireframe's approval record is read by genesis at `DESIGN_BRIEF` only; the design contract that follows is code (brief 27). [no-ac: prose; `citations-check`, the ≤120 pin and the read-load pin are the oracles] | Doctrine follows the driver; the line caps and the banned heading are inherited pins the File Plan must respect. |
 | D12 | Bump via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"`; `spec-paths` gains `catalog-inventory`, `design-brief-template`, `design-paths-template`; `spec/entrypoints.json` gains a row for `catalog-inventory.js` (entry points `spec/commands/genesis.md`, `spec/commands/doctor.md`); `docs/adr/0006-mocks-first-genesis.md` gains the missing `Amended by ADR-0030` backlink line under its Applies to; the session's research is recorded once at `docs/spikes/20260926-design-stage/research.md` (Storybook 10.6 CSF and CLI facts, shadcn 4.21 CLI facts, the salon-os static-build finding). (AC-20260926-04-20) | New-surface checklist (pipeline rules § Planning); brief 30 § Grounding asks spec 01 to copy the research notes under docs/spikes/. |
 
+| D13 | User ruling at build (2026-09-26, REPAIR round 1): `spec/scripts/lib/gate-resolve.js` drops every File Plan path under a `fixtures/` directory (`/(^\|\/)fixtures\//`) before deriving `{testDirs}` globs and `{scopeDirs}`; a fixture is never a test entry point. A File Plan whose only test rows are fixtures resolves to the existing `{ gate: null, reason }` form. (AC-20260926-04-23) | The scoped gate ran `tests/fixtures/genesis/shadcn-stub.js` and `catalog-docs/card.md` as test files and reddened on both; specs 05 and 06 add fixture rows of the same shape. The whole-suite post-gate never matches them (node's default discovery), so only the scoped glob needs the filter. |
+
 ## File Plan
 
 | Path | Action | Layer | Summary |
@@ -52,6 +56,7 @@ a `data-ml` run passes through untouched.
 | spec/scripts/genesis-driver.js | MODIFY | scripts | D1 state + predicate + `status.designStage`; D2 step text with Session/Model/Skill/catalog/journey lines; D3 design-paths read + validation; D5 inventory run at print; D6 brief grammar checks; D7 contract check via overrides; D8 mark record; D9 deletions (auto-pick, scaffold skip, check --json branch, mock-cli require); usage list names the new mark; header comment updated (owner citation, exit codes unchanged) |
 | spec/scripts/catalog-inventory.js | CREATE | scripts | D4 — shadcn inventory with `## Composition` excerpts, `file:` + `https:` sources, `--check`, `--json`; header cites this spec; exit codes 0/1/2 |
 | spec/scripts/design-contract-check.js | MODIFY | scripts | D7 — `--rules --kit --tokens` overrides bypassing the config; header usage line and Does-NOT list updated |
+| spec/scripts/lib/gate-resolve.js | MODIFY | scripts | D13 — exclude `fixtures/` paths from `{testDirs}`/`{scopeDirs}` derivation; header comment names the rule |
 | spec/bin/spec-paths | MODIFY | scripts | D12 — keys `catalog-inventory`, `design-brief-template`, `design-paths-template` |
 | spec/entrypoints.json | MODIFY | scripts | D12 — row for `spec/scripts/catalog-inventory.js` |
 | spec/templates/design-brief.md | CREATE | doctrine | D6 — the brief grammar with one HTML comment per section saying what the driver checks |
@@ -72,6 +77,7 @@ a `data-ml` run passes through untouched.
 | tests/consistency/design-stage-genesis.test.js | CREATE | tests | AC-20260926-04-10, AC-20260926-04-19, AC-20260926-04-20 |
 | tests/spec-paths.test.js | MODIFY | tests | AC-20260926-04-20 (the exhaustive key pin gains the three keys) |
 | tests/consistency/genesis-doctrine.test.js | MODIFY | tests | AC-20260926-04-22 — the AC-20260914-02-7 test rewritten: absence of the two retired paragraphs, `design/approval.json` under Brief State kept |
+| tests/review/review-legs.test.js | MODIFY | tests | AC-20260926-04-23 — a synthetic host whose File Plan carries a non-JS fixture row and a stub `.js` fixture row alongside a real test row: the resolved gate names no `fixtures/` glob and the gate leg exits 0 |
 | tests/fixtures/genesis/shadcn-stub.js | CREATE | tests | a stub `shadcn` command printing a canned `info --json` whose `links.components` is a `file:` URL into the fixture dir; used by AC-6/AC-7/AC-9 |
 | tests/fixtures/genesis/catalog-docs/card.md | CREATE | tests | a component page with a `## Composition` section and an `## API Reference` after it |
 
@@ -228,6 +234,7 @@ scaffold; `skeleton-landed` never spawns `mock-review`. BRIEF still requires the
 - **AC-20260926-04-19**: WHEN `spec/skills/design-brief/SKILL.md` is read THE SYSTEM SHALL exist with frontmatter `name: design-brief`, and its body SHALL name `JTBD`, `frequency`, `docs/design/catalog.md`, `## Intent to pattern` and `## Naming` (e.g. `/^name:\s*design-brief\s*$/m` matches) → writes tests/consistency/design-stage-genesis.test.js
 - **AC-20260926-04-20**: WHEN `spec-paths catalog-inventory`, `spec-paths design-brief-template` and `spec-paths design-paths-template` run THE SYSTEM SHALL print `spec/scripts/catalog-inventory.js`, `spec/templates/design-brief.md` and `spec/templates/design-paths.json` respectively, each an existing file; and `spec/doctrine/genesis.md` SHALL contain the heading `## Genesis: Design Stage` and never `## Genesis: Design State`; and `spec/commands/genesis.md` SHALL contain `DESIGN_BRIEF` → writes tests/consistency/design-stage-genesis.test.js
 - **AC-20260926-04-22**: WHEN `spec/doctrine/genesis.md` is read THE SYSTEM SHALL name `design/approval.json` under `## Genesis: Brief State`, contain none of `shell adopt`, `check --matrix`, `data-shell`, `design/components.json`, and contain neither `skipped: "mock-app"` nor `mock-review check` anywhere (e.g. `/skipped:\s*"mock-app"/` → no match in the whole file) → rewrites tests/consistency/genesis-doctrine.test.js :: AC-20260914-02-7
+- **AC-20260926-04-23**: WHEN `review-legs.js` resolves `gateCommand: "node --test {testDirs}"` for a spec whose File Plan tests rows are `tests/a.test.js`, `tests/fixtures/x/stub.js` and `tests/fixtures/x/docs/page.md` THE SYSTEM SHALL run a gate naming only `'tests/*.test.js'` (no glob containing `fixtures/`) and the gate leg SHALL exit 0 on a host where `stub.js` exits 1 when run bare and `page.md` is not valid JavaScript (e.g. the manifest's gate row carries `exit: 0`, and `resolveGate()`'s returned `gate` string for the same spec text and config does not match `/fixtures\//` — the manifest row records no command string) → writes tests/review/review-legs.test.js
 - **AC-20260926-04-21**: WHEN genesis-driver.js runs at BRIEF on a host whose `design/mocks/status.json` is APPROVED, whose `design/approval.json` has journeys `first-visit` and `daily-check`, and whose `design/notes.json` has one open note and one open journey conversation THE SYSTEM SHALL CONTINUE TO print `seed journeys: 2 · notes open: 2` → reuses tests/genesis/genesis-mock-app.test.js :: AC-20260914-02-4:
 
 ## Assumptions (escalation triggers)
@@ -279,6 +286,17 @@ ratification (they feed `/spec:enforce`'s categories today; adjacent, not this b
 
 Critical tier: `spec/bin/spec-paths` is a listed trigger; every AC carries a literal example
 and JJ confirms the lock.
+
+Build and review record (2026-09-26). The first AC-16 test draft left framework, language and
+package-manager unresolved at `menus-done`, which passed only while the D9-retired narrowing
+survived under a new name; the orchestrator held D9's "like any other" binding, the narrowing was
+deleted, and the setup now menus and picks those three dimensions like any host. The
+catalog-inventory test's local `run()` helper dropped its `{ env }` argument, so the stub cases
+never saw their fixture paths; fixed in the same build. D13 (the scoped gate ran fixture files
+as tests) was a user ruling at repair round 1. Review took two fix rounds: round 1 fixed an
+unrecorded inventory failure, the missing Session-line parenthetical and a non-integer port;
+its no-retry fix gated on the record alone and overwrote a pre-existing catalog, which round 2
+restored to the file-absent-and-unrecorded conjunction.
 
 ## Canonical Delta
 

@@ -51,7 +51,6 @@
     "entryPoints": [
       "spec/commands/doctor.md",
       "spec/scripts/spec-build-driver.js",
-      "spec/doctrine/stages/stage-design.md",
       "spec/scripts/review-legs.js"
     ]
   },
@@ -106,7 +105,6 @@
   "spec/scripts/mocks-driver.js": {
     "entryPoints": [
       "spec/commands/mocks.md",
-      "spec/commands/sketch.md",
       "spec/templates/mocks-ledger.md",
       "spec/templates/mocks-seed.md"
     ]
@@ -162,7 +160,6 @@
   "spec/scripts/report-render.js": {
     "entryPoints": [
       "spec/commands/doctor.md",
-      "spec/commands/sketch.md",
       "spec/commands/replay.md",
       "spec/commands/init.md",
       "spec/commands/release.md",
@@ -170,7 +167,6 @@
       "spec/commands/run.md",
       "spec/commands/genesis.md",
       "spec/commands/enforce.md",
-      "spec/doctrine/stages/stage-design.md",
       "spec/commands/escape.md",
       "spec/commands/mocks.md",
       "spec/doctrine/stages/stage-review.md",

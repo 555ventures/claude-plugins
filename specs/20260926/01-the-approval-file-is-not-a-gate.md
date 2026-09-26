@@ -1,13 +1,15 @@
 ---
 date: 2026-09-26
-status: hardened
+status: done
 tier: critical
 area: design
 breaking: true
 depends_on: []
+build_base: design-retool
 depended_on_by: [specs/20260926/02-the-design-contract-is-code.md, specs/20260926/03-gates-per-workspace.md]
 brief: 27
 open_markers: 0
+diff_base: f4aa18c824fe28e60238ab9714284e9180e0abb0
 ---
 
 # The approval file is not a gate
@@ -39,6 +41,7 @@ without a `designed:` stamp; the status dashboard derives nothing from design fi
 | D10 | Retired-literal sweep: across `spec/`, `git/`, `scripts/`, `tests/`, `README.md`, `docs/canonical/` and `.claude/rules/` (never `specs/`, `docs/roadmap/`, `docs/adr/`, `docs/audit/`, `docs/spikes/`, `.claude/spec-runs*`, `.claude/worktrees/`, `node_modules/`) the literals `design_source`, `designed:`, `stage-design`, `spec:sketch`, `inverts to built` and `run-design` occur zero times, and neither deleted file exists. The sweeping test builds each literal by concatenation so it never matches itself. (AC-20260926-01-3) | Brief 27 scope 1's zero-hit AC. `docs/canonical/` is live surface the repo-wide retired-name sweep walks (pipeline rules Gotchas), so its edits are File Plan rows, not a Canonical Delta paragraph. The two frontmatter parser tests that used `design_source:` as a fixture key are retagged to a neutral key with no AC (fixture currency, never a red). |
 | D11 | Done specs whose only citing test is deleted get `[retired: specs/20260926/01-the-approval-file-is-not-a-gate.md]` on that AC's pointer line: specs/20260914/02 AC 3, AC 9, AC 11 and specs/20260824/02 AC 3. Tests edited in place keep their AC-IDs (specs/20260914/02 AC 8 and AC 10 survive on their remaining assertions). (AC-20260926-01-3) [no-ac: sidecar edits to done specs; the live `ac-drift-clean` pin is the oracle] | Twelfth collision trigger in the pipeline rules Gotchas: an uncited done-spec AC reddens `ac-drift-clean.test.js` in a file no File Plan names. |
 | D12 | The spec plugin bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"`; its description no longer names `/spec:sketch` or "design when due". README loses the sketch row, the sketch quickstart line and the Chrome note's sketch mention. [no-ac: `plugin-bump.js --check` in the gate is the oracle; README is covered by AC-20260926-01-3's sweep] | Pipeline rules § Planning version-bump discipline. |
+| D13 | Build-time ruling (user, 2026-09-26): two out-of-plan edits join scope. `spec/scripts/red-check.js`'s `invalid-pre-green` detail names the out-of-enum reason(s) and lists `PRE_GREEN_REASONS` (class, exit code and shape unchanged) — AC-7 promises that message and no File Plan row delivered it. `specs/20260912/03-run-isolates-and-owns-the-stages.md` AC 20's pointer line gets the D11 `[retired: …]` tag — the deleted spec-paths test was its only citation (the D11 lock grep missed it). (AC-20260926-01-7) | Both are forced by this spec's own promises; the user ruled add-to-scope over pause. |
 
 ## File Plan
 
@@ -62,6 +65,7 @@ without a `designed:` stamp; the status dashboard derives nothing from design fi
 | spec/scripts/lib/spec-sections.js | MODIFY | scripts | D5 — `PRE_GREEN_REASONS` loses `design-landed`; its explanatory comment deleted |
 | spec/scripts/lib/frontmatter.js | MODIFY | scripts | D10 — comment example `design_source:` → a neutral key |
 | spec/scripts/spec-review-driver.js | MODIFY | scripts | D9 — header comment "design-leg dispatch" reworded (comment only) |
+| spec/scripts/red-check.js | MODIFY | scripts | D13 — `invalid-pre-green` detail names the bad reason and the valid set |
 | spec/entrypoints.json | MODIFY | other | D1 — remove the four rows naming sketch.md / stage-design.md |
 | README.md | MODIFY | other | D12 — sketch row, quickstart line, Chrome note, run row wording |
 | docs/canonical/design.md | MODIFY | other | D10 — § Design Canon trimmed to the D8 shape; § Design Stage and § Sketch sections deleted; § mock stage and § Genesis sections untouched |
@@ -69,6 +73,7 @@ without a `designed:` stamp; the status dashboard derives nothing from design fi
 | docs/canonical/build-integrity.md | MODIFY | other | D10 — the `design-landed` sentence deleted |
 | specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md | MODIFY | other | D11 — `[retired: …]` tag on AC 3, AC 9, AC 11 pointer lines |
 | specs/20260824/02-design-stage-on-render-gate.md | MODIFY | other | D11 — `[retired: …]` tag on AC 3's pointer line |
+| specs/20260912/03-run-isolates-and-owns-the-stages.md | MODIFY | other | D13 — `[retired: …]` tag on AC 20's pointer line |
 | tests/consistency/design-canon-retired.test.js | CREATE | tests | AC-20260926-01-3 |
 | tests/spec-status.test.js | MODIFY | tests | AC-20260926-01-1 (rewrite the two design-note tests; the `[designed]` assertion goes) |
 | tests/build/build-driver-design-admission.test.js | CREATE | tests | AC-20260926-01-2 (uses `build-driver.fixtures.js`'s `specBody({design:'true'})` and `makeHost`, adding a `design` block to the host config) |
@@ -142,7 +147,7 @@ existing `invalid-pre-green` finding fires, naming the three valid reasons.
 - **AC-20260926-01-4**: WHEN `spec/entrypoints.json` is read THE SYSTEM SHALL list `spec/scripts/env-preflight.js` with entry points `spec/commands/doctor.md`, `spec/scripts/spec-build-driver.js`, `spec/scripts/review-legs.js` and no `stage-design.md`; `spec/scripts/mocks-driver.js` with no `sketch.md`; `spec/scripts/report-render.js` with `stage-build.md` and `stage-review.md` present and neither retired file — and the live-repo forward check SHALL report zero "entry-point file does not exist" violations → rewrites tests/consistency/entrypoints.test.js :: AC-20260912-03-7: spec/entrypoints.json's former
 - **AC-20260926-01-5**: WHEN `spec-paths shared-for sketch` or `spec-paths shared-for run-design` runs THE SYSTEM SHALL fall open exactly like an unknown command — stdout begins with core.md's frontmatter and contains `## Design Canon` — and the scoped roster (every `<cmd>) SECTIONS=` arm) SHALL have exactly 12 members, none of them `sketch` or `run-design` → rewrites tests/spec-paths.test.js :: shared-for: every scoped command serves § Session Execution
 - **AC-20260926-01-6**: WHEN `spec-paths shared-for <cmd>` runs for every scoped command THE SYSTEM SHALL print exactly the pinned section list per command with `sketch` and `run-design` absent from the pinned table, and the 12 remaining commands' lists SHALL be unchanged from the pre-image (e.g. `plan` still begins `Host Grounding, Pipeline Entry, Tiers`) → rewrites tests/spec-paths.test.js :: shared-for: scoped output carries its sections
-- **AC-20260926-01-7**: WHEN `red-check.js` reads a tests-layer File Plan row whose carried AC bullet is `- **AC-20260821-95-1** [pre-green: design-landed]: WHEN x THE SYSTEM SHALL y → writes tests/x9.test.js` THE SYSTEM SHALL exit 1 with one `invalid-pre-green` finding naming `design-landed` and the three valid reasons `fallback-rejection`, `absence-invariant`, `predicate-in-test`; and `PRE_GREEN_REASONS` SHALL export exactly those three → rewrites tests/red-check/red-check.test.js :: AC-20260821-01-1: a tests-layer file whose carried AC declares [pre-green: design-landed]
+- **AC-20260926-01-7**: WHEN `red-check.js` reads a tests-layer File Plan row whose carried AC bullet `AC-20260821-95-1` carries a pre-green tag with the reason `design-landed` (the bullet written in the test's own fixture spec) THE SYSTEM SHALL exit 1 with one `invalid-pre-green` finding naming `design-landed` and the three valid reasons `fallback-rejection`, `absence-invariant`, `predicate-in-test`; and `PRE_GREEN_REASONS` SHALL export exactly those three → rewrites tests/red-check/red-check.test.js :: AC-20260821-01-1: a tests-layer file whose carried AC declares the design-landed pre-green reason
 - **AC-20260926-01-8**: WHEN `spec/doctrine/design.md` is read THE SYSTEM SHALL CONTINUE TO carry `## Design Canon`, `## Design Authoring Contracts`, `## Workflows Encode Shape, Not Judgment`, name `design/approval.json`, `src/records`, `examples`, `@/components/ui`, stay ≤160 lines, and `citations-check.js` SHALL CONTINUE TO exit 0 → reuses tests/consistency/design-stage-doctrine.test.js :: AC-20260914-02-10
 
 ## Assumptions (escalation triggers)
@@ -194,6 +199,13 @@ Collision closure at lock (`collision-closure --literal design_source --literal 
 
 Not queued as separate work: q245 ("surfaces blocks declare flow order, and sketch refuses an
 unordered one") is voided by D1 and is marked done at lock with that reason.
+
+Build-time one-offs (2026-09-26): the test author retitled the tests the `→ rewrites` pointers
+name, and red-check resolves a pointer by title prefix, so the orchestrator restored each pointed
+title as the prefix with the new AC-ID following it. The two out-of-plan edits (red-check's
+`invalid-pre-green` detail; the 20260912/03 AC 20 retired tag) were recorded as D13 on the user's
+add-to-scope ruling. Review iteration 1 found AC-8 uncovered by ID (the `reuses` pointer does not
+count for ac-matrix); the fix tagged the reused test's title, and the fix-delta pass was CLEAN.
 
 ## Canonical Delta
 

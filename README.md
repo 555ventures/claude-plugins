@@ -36,7 +36,7 @@ build resumes instead of restarting.
 | `git` | everything — worktrees, diffs, the state the pipeline derives | nothing works |
 | `node` (18+) | every deterministic gate and driver script | nothing works |
 | `jq` | the hook-enforced state machine and the plugin's own path helper | **stage-order enforcement stops running** — install it before you rely on the gates |
-| Chrome or Chromium | design capture (`/spec:mocks`, `/spec:sketch`) only | set `CHROME_BIN` to your binary; discovery probes macOS app paths first |
+| Chrome or Chromium | design capture (`/spec:mocks`) only | set `CHROME_BIN` to your binary; discovery probes macOS app paths first |
 | `gh` | optional PR conveniences | degrades with a named fallback |
 
 ## Set up a repo (once)
@@ -83,28 +83,24 @@ no `docs/roadmap/`, so describe the feature in prose — briefs only exist if ge
 if you write them yourself. With briefs, the same loop reads:
 
 ```
-/spec:sketch docs/roadmap/01-*.md            # optional, UI briefs: mock + brainstorm, ratify
 /spec:plan   docs/roadmap/01-*.md            # write + harden the spec (asks the hard questions)
 /spec:run    specs/20260716/01-foo.md        # hardened → done: build driver, then review driver
 ```
 
 - `plan` prints the spec path — paste it into the commands that follow. It also tells you when a
   change is too small to bother; small work should just be asked for directly.
-- `sketch` only matters for UI-bearing work. It mocks ONE brief before planning and triages every
-  brainstorm change into its binding home (mock / brief / scope / ADR); plan warns if you skipped
-  it, never blocks.
 - `/spec:run` opens the spec's own worktree first, then carries a hardened spec the rest of the
-  way itself: design when due, then test-first implementation behind the host gate, then
-  independent executed review. It stops only for decisions — a worktree it cannot create,
-  design approval, findings the disposition agent wants to let stand, merge strategy, and the
-  step out of the worktree before merge — and never for a `/clear`.
+  way itself: test-first implementation behind the host gate, then independent executed review.
+  It stops only for decisions — a worktree it cannot create, findings the disposition agent
+  wants to let stand, merge strategy, and the step out of the worktree before merge — and never
+  for a `/clear`.
 - Requirement changed mid-build? Write the ruling into the spec's Decisions table — that is
   where workers read it — and re-run `/spec:run`; it resumes by skipping File Plan rows the
   diff already shows landed.
 
 Each stage refuses to run out of order (`draft → hardened → implementing → done` is enforced by
 a hook); `/spec:run` itself is admitted on `hardened`, `implementing`, and `done` since one
-invocation now spans design through review. A wrong command still costs you an error message,
+invocation now spans build through review. A wrong command still costs you an error message,
 not a mess.
 
 ## Ship a milestone
@@ -132,9 +128,8 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 | `/spec:mocks` | Driver-stepped design entry point, run to an approved mock set — the current stage chain lives in [`docs/canonical/design.md`](docs/canonical/design.md) | Greenfield only, before genesis |
 | `/spec:genesis` | Stack + scaffold + roadmap + rendered design candidates in your browser; ratify the pick | Greenfield only, before init |
 | `/spec:init` | Profile the repo, generate the grounding layer, run enforce | Once per repo |
-| `/spec:sketch` | Mock + brainstorm one roadmap brief; ratify mock↔brief agreement | Before planning a UI-bearing brief |
 | `/spec:plan` | Author + adversarially harden a spec | Per feature |
-| `/spec:run` | Isolates in the spec's own worktree, then runs the whole feature: design when due, then test-first implementation behind the host gate, then independent executed review, commits/merges and flips `done`; resumable, stopping only for decisions — the only way into the design, build, and review stages | Per feature |
+| `/spec:run` | Isolates in the spec's own worktree, then runs the whole feature: test-first implementation behind the host gate, then independent executed review, commits/merges and flips `done`; resumable, stopping only for decisions — the only way into the build and review stages | Per feature |
 | `/spec:release` | Staging deploy → executed checks → confirmed promote | Per milestone |
 | `/spec:status` | Where the work stands + the one command to paste next; `--all` adds lanes, blocked list, hygiene | Anytime you are lost |
 | `/spec:queue` | Your intended work order across briefs and specs — the one thing the pipeline cannot derive | When the order matters |

@@ -24,7 +24,7 @@ const DOC = '---\n' +
   'status: implementing\n' +
   'tier: critical           # touches spec/bin/spec-paths (key-set edit)\n' +
   'area: "notes # misc"\n' +
-  'design_source: https://claude.ai/design/p/x#frag\n' +
+  'source_url: https://claude.ai/design/p/x#frag\n' +
   '---\n\n' +
   '# Some Spec\n\n' +
   'Body text unrelated to frontmatter — fmValue/fmBlock/fmMap must never read past the closing fence.\n'
@@ -32,7 +32,7 @@ const DOC = '---\n' +
 const DOC_BLOCK = 'status: implementing\n' +
   'tier: critical           # touches spec/bin/spec-paths (key-set edit)\n' +
   'area: "notes # misc"\n' +
-  'design_source: https://claude.ai/design/p/x#frag'
+  'source_url: https://claude.ai/design/p/x#frag'
 
 test('AC-20260823-04-1: WHEN fmValue reads a key whose unquoted value carries a whitespace-preceded inline comment, entered with FULL document text (not a pre-extracted block), THE SYSTEM returns only the value ("tier: critical           # touches spec/bin/spec-paths (key-set edit)" -> "critical")', () => {
   assert.strictEqual(fmValue(DOC, 'tier'), 'critical',
@@ -44,9 +44,9 @@ test('AC-20260823-04-2: WHEN fmValue reads a quoted value entered with full docu
     'a quoted value must never be truncated at its internal "#" — treating it as a comment start would silently corrupt any quoted value that legitimately contains one, and the Contracts block is explicit that a matched-quote value "unwraps verbatim (never stripped)": got ' + JSON.stringify(fmValue(DOC, 'area')))
 })
 
-test('AC-20260823-04-3: WHEN fmValue reads an unquoted value whose "#" has no preceding whitespace, entered with full document text THE SYSTEM returns the value whole ("design_source: https://claude.ai/design/p/x#frag" -> unchanged)', () => {
-  assert.strictEqual(fmValue(DOC, 'design_source'), 'https://claude.ai/design/p/x#frag',
-    'YAML comments require PRECEDING WHITESPACE before "#" — an unspaced "#" (a URL fragment here) is content, not a comment; stripping it would corrupt design_source every time a design URL carries a fragment, and this is the exact literal that rv_e83659d49386\'s fix must never regress: got ' + JSON.stringify(fmValue(DOC, 'design_source')))
+test('AC-20260823-04-3: WHEN fmValue reads an unquoted value whose "#" has no preceding whitespace, entered with full document text THE SYSTEM returns the value whole ("source_url: https://claude.ai/design/p/x#frag" -> unchanged)', () => {
+  assert.strictEqual(fmValue(DOC, 'source_url'), 'https://claude.ai/design/p/x#frag',
+    'YAML comments require PRECEDING WHITESPACE before "#" — an unspaced "#" (a URL fragment here) is content, not a comment; stripping it would corrupt the value every time a URL carries a fragment, and this is the exact literal that rv_e83659d49386\'s fix must never regress: got ' + JSON.stringify(fmValue(DOC, 'source_url')))
 })
 
 test('AC-20260823-04-1/2/3 (sanity + absent key): fmValue on a key with no comment returns it unchanged, and an absent key returns ""', () => {
@@ -74,7 +74,7 @@ test('AC-20260823-04-1/2/3 (fmMap facet): fmMap over full document text returns 
   assert.strictEqual(map.status, 'implementing', 'fmMap must carry the plain unquoted status value unchanged: ' + JSON.stringify(map))
   assert.strictEqual(map.tier, 'critical', 'fmMap must strip the whitespace-preceded comment on tier exactly like fmValue does — a second, divergent stripping path here is the same class of bug this module exists to close: ' + JSON.stringify(map))
   assert.strictEqual(map.area, 'notes # misc', 'fmMap must preserve a quoted value\'s internal "#" verbatim: ' + JSON.stringify(map))
-  assert.strictEqual(map.design_source, 'https://claude.ai/design/p/x#frag', 'fmMap must preserve an unspaced "#" inside an unquoted value: ' + JSON.stringify(map))
+  assert.strictEqual(map.source_url, 'https://claude.ai/design/p/x#frag', 'fmMap must preserve an unspaced "#" inside an unquoted value: ' + JSON.stringify(map))
 })
 
 // ---- AC-20260823-04-4: driver exec path — build_base with a trailing inline comment ------------

@@ -130,8 +130,7 @@ the report's display line).
 ## Not findings
 
 Check suspected violations against the spec's **Decisions** table (explicit trade-offs are
-sanctioned), design-stage approvals (`designed:` set — don't report visual choices on
-approved components), and exceptions in the rule files. Scope/over-engineering opinions are
+sanctioned) and exceptions in the rule files. Scope/over-engineering opinions are
 the user's call. Deliverables owned by stages that run after your verdict — the Canonical
 Delta application and the `status` flip — are expected preconditions, never findings.
 

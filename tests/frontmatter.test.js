@@ -37,7 +37,7 @@ test('AC-20260823-03-9 / AC-20260823-04-10: WHEN fmValue reads a quoted value TH
     `a double-quoted value must return exactly the content up to the matching closing quote, with the trailing comment discarded entirely — the driver-local fmVal this module replaces already mishandled this exact shape (its own quote-detection regex requires the value to END in the quote character, which a trailing comment breaks) — got ${JSON.stringify(fmValue('tier: "critical" # note', 'tier'))}`)
 })
 
-test('AC-20260823-03-10 / AC-20260823-04-10: WHEN a value contains "#" with no preceding whitespace THE SYSTEM SHALL CONTINUE TO return it intact ("design_source: https://x/p?f=A#sec" -> "https://x/p?f=A#sec")', () => {
-  assert.strictEqual(fmValue('design_source: https://x/p?f=A#sec', 'design_source'), 'https://x/p?f=A#sec',
-    `YAML comments require PRECEDING WHITESPACE before "#" — an unspaced "#" inside a value (a URL fragment here) is part of the value, not a comment, and stripping it would corrupt a real design_source URL every time one carries a fragment — got ${JSON.stringify(fmValue('design_source: https://x/p?f=A#sec', 'design_source'))}`)
+test('AC-20260823-03-10 / AC-20260823-04-10: WHEN a value contains "#" with no preceding whitespace THE SYSTEM SHALL CONTINUE TO return it intact ("source_url: https://x/p?f=A#sec" -> "https://x/p?f=A#sec")', () => {
+  assert.strictEqual(fmValue('source_url: https://x/p?f=A#sec', 'source_url'), 'https://x/p?f=A#sec',
+    `YAML comments require PRECEDING WHITESPACE before "#" — an unspaced "#" inside a value (a URL fragment here) is part of the value, not a comment, and stripping it would corrupt a real URL every time one carries a fragment — got ${JSON.stringify(fmValue('source_url: https://x/p?f=A#sec', 'source_url'))}`)
 })

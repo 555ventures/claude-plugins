@@ -19,7 +19,7 @@
 // is no plain human render anymore.
 //
 // The single source of truth for "where is the work": specs/** frontmatter (`status:`,
-// `brief:`, `depends_on:`, `design:`, `designed:`) and docs/roadmap/NN-*.md headers
+// `brief:`, `depends_on:`) and docs/roadmap/NN-*.md headers
 // (`Depends on:`). Roadmap brief status is DERIVED per /spec:doctor check 13 — no specs
 // stamped `brief: NN` → unplanned; any matching spec not done → in-flight; all matching
 // specs done → done. Nothing here writes; this is a viewer. Consumers: /spec:status
@@ -39,11 +39,10 @@
 // (specs/20260903/05-status-diet.md D8) — the sole render of the alarm; there is no separate
 // observation section.
 //
-// --next derives the recommended next command per open spec: draft → /spec:plan; hardened
-// (with or without `design: true`, `designed:` set or not) and implementing both → /spec:run
-// — the loop derives design-due, build, and review from disk itself, so this derivation offers
-// exactly one next-command per state (the design, build, and review stages have no command of
-// their own to emit). Closest-to-done first, blocked entries last,
+// --next derives the recommended next command per open spec: draft → /spec:plan; hardened and
+// implementing both → /spec:run — the loop derives build and review from disk itself, so this
+// derivation offers exactly one next-command per state (the build and review stages have no
+// command of their own to emit). Closest-to-done first, blocked entries last,
 // and when every spec is done the next ready unplanned brief becomes the /spec:plan pick.
 // Unblocked runner-up entries are annotated parallel-ok/serial relative to the top pick:
 // spec-level depends_on can never link two unblocked entries (a non-done dep is a blocker),
@@ -104,7 +103,7 @@ const {
 } = require('./lib/queue')
 // D2 (specs/20260823/04-review-close-hardening.md, rv_6825fa48c98d): the local frontmatter() kv
 // loop this replaced stripped a trailing comment at the FIRST "#" regardless of what preceded it,
-// corrupting an unspaced value like `design_source: https://x/p#frag` — the sole shared derivation
+// corrupting an unspaced value like `source_url: https://x/p#frag` — the sole shared derivation
 // strips only a whitespace-preceded "#", per YAML unquoted-scalar semantics.
 const { fmMap } = require('./lib/frontmatter')
 // specs/20260902/11-brief-from-approved-set.md D6: the 🧭 misunderstandings line reads
@@ -198,8 +197,6 @@ for (const file of walkMd(path.join(root, 'specs'))) {
     brief: fm.brief && !BRIEFLESS.test(fm.brief.trim()) ? normBrief(fm.brief) : null,
     area: fm.area || null,
     date: fm.date || null,
-    design: fm.design === 'true',
-    designed: fm.designed || null,
     depends_on: parseList(fm.depends_on),
     superseded_by: fm.superseded_by || null,
     filePlan: parseFilePlan(text),
@@ -531,8 +528,7 @@ function deriveNext() {
   const entries = []
   for (const s of specs) {
     if (DONE(s.status) || !KNOWN_STATUS.has(s.status)) continue
-    // hardened (any design state) and implementing both route through the loop — the loop derives
-    // design-due itself, so this derivation treats them identically (D5).
+    // hardened and implementing both route through the loop (D5).
     const action = s.status === 'draft' ? '/spec:plan' : '/spec:run'
     const blockers = []
     for (const d of s.depends_on) {
@@ -553,8 +549,7 @@ function deriveNext() {
     const rank = s.status === 'implementing' ? 0 : s.status === 'hardened' ? 1 : 2
     entries.push({
       action, path: s.path, status: s.status, brief: s.brief, blockers,
-      note: s.status + (s.design ? (s.designed ? ' [designed]' : ' [design]') : '')
-        + (s.brief ? ` (brief ${s.brief})` : ''),
+      note: s.status + (s.brief ? ` (brief ${s.brief})` : ''),
       rank,
     })
   }

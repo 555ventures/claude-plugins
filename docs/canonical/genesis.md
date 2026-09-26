@@ -83,7 +83,7 @@
   an open ledger gate, and `--mark brief-written` ratifies the one-page doctrine (`## Dissents`
   present and non-empty, recording the minority positions the doctrine rejects) plus
   category-only design-rules (`design: "ratified"`; `backend-api`/`data-ml` record
-  `design: "skipped"`). BRIEF has no theme precondition: the theme is picked in `/spec:sketch`,
+  `design: "skipped"`). BRIEF has no theme precondition: the theme is picked in `/spec:mocks`,
   which runs after genesis, so `design/tokens.css` does not exist while genesis runs and is
   never checked here. The tournament's tile probe task and the discovery sketch are retired; the
   `design/components.json` check moves to `skeleton-landed`. A legacy status past MENUS

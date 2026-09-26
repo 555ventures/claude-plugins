@@ -8,14 +8,14 @@ The full lifecycle: an optional **genesis stage** for greenfield repos (`/spec:g
 what to build with and how it should look, and its `HANDOFF` step grounds the repo itself;
 `/spec:init` grounds brownfield repos the same way (config, rules, agents; it ends by invoking
 `/spec:enforce`); then the per-feature pipeline: `/spec:plan` → `/spec:run` (isolates in the
-spec's own worktree, then design when due, then build, then review — review is the only stage
-that flips `done`; on CLEAN it commits the close and merges back) → `/spec:release` (repeatable
-milestone gate). The reviewer's Screens and Journeys tabs keep the whole-product design picture
-browsable at every stage.
+spec's own worktree, then build, then review — review is the only stage that flips `done`; on
+CLEAN it commits the close and merges back) → `/spec:release` (repeatable milestone gate). The
+reviewer's Screens and Journeys tabs keep the whole-product design picture browsable at every
+stage.
 
-This file carries the invariants every command shares. Design-stage doctrine lives in
-`design.md` (via `spec-paths shared-for <design command>`); the genesis supplement is
-`genesis.md`. Genesis is greenfield-only.
+This file carries the invariants every command shares. Mock-app doctrine lives in `design.md`
+(via `spec-paths shared-for <mocks command>`); the genesis supplement is `genesis.md`. Genesis
+is greenfield-only.
 
 ## Host Grounding
 
@@ -65,6 +65,15 @@ gated by the host's `gateCommand` and standards docs. Enter only when the work n
 **delegation** (execution large enough that workers build while the session only plans) or
 **durability** (scope spans sessions; the spec is the re-entrant state). A new product
 surface is a normal spec (usually a `depends_on` series) — no separate pipeline.
+
+Changes travel one of three lanes, chosen by the shape of the ask. **Direct**: a change
+stated in one sentence with no behaviour or data change (copy, spacing, a token value, a
+component variant) is made on main through the host's `gateCommand` — no spec, no branch;
+the commit-time escape offer still runs. **Behaviour**: a behaviour change starts as a
+prototype (the prototype command once it exists; a spec until then). **Structural**: a schema
+or API change is planned first — a spec. A spec branch lands only through the review stage's
+merge-back; a direct change never has a branch, which is how the lanes are told apart at
+commit time.
 
 ## Tiers
 
@@ -194,11 +203,10 @@ order via `depends_on`.
 `draft → hardened → implementing → done`. Transitions owned by exactly one driver state each:
 `/spec:plan`'s lock → `hardened`; the build driver's preflight → `implementing`; the review
 driver's close → `done`. `/spec:run` is the only entry into any of these stages — it isolates,
-then runs design (when due), then both drivers in sequence; their bodies live under
-`spec/doctrine/stages/` as prose the loop executes, never invokable commands of their own;
-`superseded` is the terminal retire state. The design stage never moves `status` — it sets the
-`designed:` date field only. Enforced by the plugin's `spec-state-gate.sh` hook — invoking a
-stage against a spec in the wrong state is blocked before the model sees it.
+then runs both drivers in sequence; their bodies live under `spec/doctrine/stages/` as prose
+the loop executes, never invokable commands of their own; `superseded` is the terminal retire
+state. Enforced by the plugin's `spec-state-gate.sh` hook — invoking a stage against a spec in
+the wrong state is blocked before the model sees it.
 
 ## Model Placement
 
@@ -206,7 +214,7 @@ stage against a spec in the wrong state is blocked before the model sees it.
 review independence comes from fresh-context, blind-to-author dispatch, executed evidence, and a
 reviewer from a different model family than the builder.** Concretely: the planning session (Fable,
 or the best available model) authors specs and holds the roadmap-level design seats (genesis position
-briefs, sketch brainstorms, and every mock, wireframe or themed, authored in-session
+briefs, and every mock, wireframe or themed, authored in-session
 — design.md § Design Canon). **Sonnet** orchestrates build and review and is every worker. **The
 reviewer seat is Fable at `effort: low`** (`agents/reviewer.md`), a different family from the Opus
 session that builds; low holds because every finding and kill needs an executed repro, so skipped

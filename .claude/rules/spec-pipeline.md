@@ -359,7 +359,9 @@ upstream bug list. -->
   Twelfth trigger, deleting a TEST FILE rather than a literal: a done spec's criterion whose only
   citing test is deleted reddens `ac-drift-clean.test.js` as uncovered, in a spec file no File Plan
   names. At lock, grep every AC-ID inside each test file a spec deletes across `specs/`; each hit is
-  tagged `[retired: <this spec>]` on its pointer line in the same batch. The same lock grep also
+  tagged `[retired: <this spec>]` on its pointer line in the same batch. Deleting one test CASE
+  inside a surviving file bites the same way, and a comment is a citation: an AC-ID named only in
+  a deleted case's header comment (`rewrites AC-…`) was a third spec's sole cover. The same lock grep also
   catches the script-level form: a surviving script that spawns a deleted script BY PATH
   (`path.join(__dirname, …)`) escapes a `require(` grep entirely.
   (specs/20260813/07-command-report-conformance.md D8; specs/20260813/09-model-placement-mechanics.md D4;
@@ -371,7 +373,8 @@ upstream bug list. -->
   specs/20260912/02-an-answer-is-the-clients-until-sign-off.md;
   specs/20260912/03-run-isolates-and-owns-the-stages.md D10;
   specs/20260912/14-the-design-stage-prints-the-work-not-the-inventory.md D6;
-  specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D14)
+  specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D14;
+  specs/20260926/01-the-approval-file-is-not-a-gate.md D13)
 - `[plugin]` `ac-matrix.js` parses AC bullets as `^- \*\*(token)\*\*` and requires the token to
   fully match `AC-\d{8}-\d{2}[a-z]?-\d+`. A build-time amendment written the way the Decisions
   table writes one — a prime-suffixed successor (`AC-…-3′`) plus the superseded original left as
@@ -397,11 +400,16 @@ upstream bug list. -->
   that does not exist yet — the same carried-by-ID drift this entry opens with, one pass later:
   `promise-sweep` reports it as `orphan-decision`, not as anything the build's own legs could
   have seen. Write the AC in the same disposition round that writes the Decision, never after.
+  An AC whose TEXT quotes tag syntax as its worked example (`[pre-green: x]` in the body or at the
+  end of its `→` pointer) is parsed as tagging ITSELF — describe the tag in words, never in bracket
+  form. And a `reuses <file> :: <title>` pointer covers nothing in `ac-matrix`, which counts the
+  new AC-ID's occurrence: put the ID in the reused test's title after the resolving prefix.
   (specs/20260814/04-lock-signal-window.md; specs/20260815/03-ac-matrix-fail-closed.md;
   specs/20260910/05-what-the-journey-does-not-do.md D1/D3;
   specs/20260912/06-the-review-page-answers-to-a-design.md AC-2;
   specs/20260912/14-the-design-stage-prints-the-work-not-the-inventory.md AC-9;
-  specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D17/AC-22)
+  specs/20260912/12-the-loop-re-anchors-and-everyone-draws.md D17/AC-22;
+  specs/20260926/01-the-approval-file-is-not-a-gate.md AC-7/AC-8)
 - `[plugin]` A test worker editing a File Plan row that carries **no AC** still reaches for the
   spec template's AC-ID shape and writes the literal placeholder (`AC-<date>-NN-N`) into the
   test name and assert message. The token is not a valid AC-ID under `ac-matrix.js`'s grammar,

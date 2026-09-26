@@ -98,9 +98,7 @@ already printed reprints there.
 
 1. **After the block, narrate in one or two sentences** what the dashboard means for the
    user's next hour — name the paste line and, only when a decide line printed, the one
-   question it asks. Tags worth knowing in the roadmap rows: `[design]` routes through the
-   design stage first; `[designed]` means that stage already ran and the Next line is
-   `/spec:run`.
+   question it asks.
 2. **Decide lines** — narrate each printed `⚠️` pair in plain language: `skipped-brief` means
    a later brief moved on while an earlier dependency was never planned; `out-of-order` means
    a later brief moved while an earlier one is still unplanned — both name the exact

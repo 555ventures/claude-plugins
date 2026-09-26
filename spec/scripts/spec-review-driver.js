@@ -10,9 +10,9 @@
 // This driver, on specs/20260820/07-review-driver.md's driver-stepped contract, EXECUTES every deterministic
 // step itself (base derivation, the per-iteration manifest lifecycle, review-legs.js, all three
 // verdict.js passes, both ledger appends, the implementing->done flip, the merge-back sequence)
-// and prints ONLY the step that needs this session's judgment (reviewer + design-leg dispatch,
-// dispositions, the Canonical Delta + deviations fold, the close commit, merge strategy, and
-// conflict resolution). State is re-derived from spec frontmatter + the <spec>.review/
+// and prints ONLY the step that needs this session's judgment (reviewer dispatch, dispositions,
+// the Canonical Delta + deviations fold, the close commit, merge strategy, and conflict
+// resolution). State is re-derived from spec frontmatter + the <spec>.review/
 // sidecar + on-disk artifacts on EVERY invocation — a mark whose artifact vanished is demanded
 // again, and the fix-iteration cap is counted from manifest-<n>.jsonl files actually present on
 // disk plus this spec's uncleared `escalated:true` ledger rows, never a sidecar counter

@@ -121,7 +121,7 @@ states: ["default"|…], storyFormat, componentDir}`; return
 - **AC-20260824-02-3**: WHEN `spec/commands/design.md` is read THE SYSTEM SHALL name
   `env-preflight` within 400 characters before the first occurrence of the author dispatch
   step (`Agent {model: "sonnet"}` or the word `dispatch`) with STOP semantics →
-  `tests/env-preflight.test.js` (retagged from AC-20260815-05-8, updated in place)
+  `tests/env-preflight.test.js` (retagged from AC-20260815-05-8, updated in place) [retired: specs/20260926/01-the-approval-file-is-not-a-gate.md]
 - **AC-20260824-02-4**: WHEN `spec-status.js --next` reads a `hardened` spec with `design:
   true` and no `designed:` THE SYSTEM SHALL CONTINUE TO route it to `/spec:design`, and WHEN
   `designed:` is set SHALL CONTINUE TO route it to `/spec:build` → `tests/spec-status.test.js`

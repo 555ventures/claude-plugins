@@ -3,14 +3,11 @@ date: { YYYY-MM-DD }
 status: draft            # draft → hardened → implementing → done (hook-enforced); to retire a preserved spec: superseded (terminal — drops out of /spec:status silently; optional superseded_by: <what replaced it> is free-form provenance)
 tier: standard           # standard | critical (critical: irreversible/high-blast-radius surfaces — auth, migrations, money, data deletion). Work too small to need a spec gets none.
 area: { area-name }      # primary feature/domain/module; "cross-cutting" if none
-design: false            # design-capable hosts only (config design block): true → the design stage gates before the build stage
 breaking: false
 depends_on: []
 depended_on_by: []
 # brief: NN              # roadmap-planned specs only: the docs/roadmap/NN-*.md brief this spec hydrates; /spec:status (and /spec:doctor check 14) derive roadmap status from this stamp
 # spiked: YYYY-MM-DD     # only if a spike ran during /spec:plan
-# designed: YYYY-MM-DD   # set by the design stage on user approval (design-capable hosts)
-# design_source: src/screens/<label>.tsx  # optional: the mock app's screen file(s) under design.app — src/screens/<label>.tsx for one surface, src/screens for several
 # build_base: <branch>   # set by /git:enter-worktree; read by the review stage as the merge-back target
 # diff_base: <sha>       # set by the build stage for in-place builds; read by the review stage as the diff base when build_base is absent
 # The host's pipeline rules may declare extra flags (e.g. migration: true) — include them when they apply.
@@ -60,10 +57,8 @@ depended_on_by: []
 
 { Screens, components, dialogs; their props and states (empty / loading / error / edge).
   Embed Component API References here — registry + library excerpts gathered at plan time.
-  In the design stage this section folds to the approved screen(s) named by `design_source` —
-  the mock app's screens, states and shells (`mock-review check --json`) are the authored
-  canon this section reconciles to. Sonnet workers (and the build stage) build from the spec +
-  screen and never query MCPs. Omit section if no UI changes (then design: false). }
+  Sonnet workers build from the spec alone and never query MCPs. Omit section if no UI
+  changes. }
 
 ## Data Model
 
@@ -99,12 +94,10 @@ depended_on_by: []
      red or absent oracle leg is a hard finding, identical in standing to an uncovered AC. One
      oracle per AC; an AC never carries both a test mapping and an `[oracle:]` tag. An AC whose
      test is legitimately green pre-implementation declares `[pre-green: <reason>]` — closed
-     enum `fallback-rejection` | `absence-invariant` | `predicate-in-test` | `design-landed`,
-     sibling syntax to
+     enum `fallback-rejection` | `absence-invariant` | `predicate-in-test`, sibling syntax to
      `[env:]`/`[oracle:]`: tag a rejection criterion a pre-existing generic fallback already
-     satisfies, an absence invariant an inert stub already satisfies, a predicate that IS the
-     deliverable living inside a test file, or a UI promise whose component the design stage
-     already authored and kept (design.md: build treats landed components as done inputs). Verify against the pre-image before tagging at plan
+     satisfies, an absence invariant an inert stub already satisfies, or a predicate that IS the
+     deliverable living inside a test file. Verify against the pre-image before tagging at plan
      time — build's red-check reads the tag as a sanction to test at Phase 1, never an
      attestation taken on faith, and it never launders coverage (a tagged AC with zero test hits
      still counts uncovered in ac-matrix). A Decision that

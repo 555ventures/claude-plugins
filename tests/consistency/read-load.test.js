@@ -116,8 +116,8 @@ test('AC-20260908-06-2: every spec/commands/*.md Rules section holds at most 8 b
 })
 
 // AC-20260908-06-3 (D6) `[pre-green: predicate-in-test]`: the exact `## ` section list
-// `spec-paths shared-for <cmd>` prints, parentheticals stripped, for the remaining scoped command keys the
-// script scopes plus `run-design`. Green on arrival by design — the spec changes no list;
+// `spec-paths shared-for <cmd>` prints, parentheticals stripped, for the remaining scoped
+// command keys. Green on arrival by design — the spec changes no list;
 // a silent addition/removal to spec-paths's own SECTIONS is what this catches.
 // specs/20260912/03-run-isolates-and-owns-the-stages.md D13 (AC-20260912-03-14): build, review
 // and design keys are retired here too — their shared-for output is fail-open now, so pinning a
@@ -125,16 +125,20 @@ test('AC-20260908-06-2: every spec/commands/*.md Rules section holds at most 8 b
 // tests/spec-paths.test.js, AC-20260912-03-13).
 // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D10: § Design Render Gate and
 // § Design Atlas are deleted from design.md outright, and spec-paths' D10 SECTIONS-list edits
-// (spec/bin/spec-paths) fold Design Canon in earlier for sketch/genesis rather than
-// appending it — the sketch/genesis/run-design rows below follow the landed lists in
+// (spec/bin/spec-paths) fold Design Canon in earlier for genesis rather than
+// appending it — the genesis row below follows the landed list in
 // place, never weakened; every other row is untouched.
 // specs/20260914/03-the-html-atlas-is-retired.md D2/A2 (if-false remedy): the `atlas` command
 // and its spec-paths key are deleted outright, so this table's `atlas` row is retired along
 // with its subject rather than left to assert a scoped list no key produces anymore — its
 // fail-open equivalence is pinned instead in tests/spec-paths.test.js.
+//
+// specs/20260926/01-the-approval-file-is-not-a-gate.md D1: `sketch`'s
+// SECTIONS arm is deleted outright — it falls open to the whole doctrine now, so its scoped-list
+// row is retired along with its subject rather than left to assert a section list no key
+// produces anymore; the fail-open equivalence is pinned instead in tests/spec-paths.test.js.
 const SHARED_FOR = {
   plan: ['Host Grounding', 'Pipeline Entry', 'Tiers', 'Decomposition', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'MCP Policy', 'Canonical Docs Loop', 'Session Execution'],
-  sketch: ['Host Grounding', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Session Execution', 'Design Canon'],
   run: ['Host Grounding', 'Tiers', 'Runtime Verification', 'Incident Policy', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'On-Disk Handoff', 'Worker Git Ban', 'Read-Only Surfaces', 'MCP Policy', 'Canonical Docs Loop', 'Session Execution'],
   release: ['Host Grounding', 'Runtime Verification', 'Release Stage', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Canonical Docs Loop', 'Session Execution'],
   enforce: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Model Placement', 'Question Style', 'Console Output Style', 'Session Execution', 'Workflows Encode Shape, Not Judgment'],
@@ -147,10 +151,9 @@ const SHARED_FOR = {
   doctor: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Tiers', 'Runtime Verification', 'Feedback Loop', 'State Machine', 'Question Style', 'Console Output Style', 'Session Execution'],
   replay: ['Host Grounding', 'Tiers', 'Feedback Loop', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Session Execution'],
   init: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Pipeline Entry', 'Tiers', 'Runtime Verification', 'Release Stage', 'Model Placement', 'Question Style', 'Console Output Style', 'Canonical Docs Loop', 'Session Execution', 'Design Canon'],
-  'run-design': ['Design Canon', 'Design Authoring Contracts'],
 }
 
-test('AC-20260908-06-3: spec-paths shared-for prints exactly the pinned `## ` section list, in order, for every scoped command plus run-design', () => {
+test('AC-20260908-06-3: spec-paths shared-for prints exactly the pinned `## ` section list, in order, for every scoped command', () => {
   for (const [cmd, expected] of Object.entries(SHARED_FOR)) {
     const out = execFileSync(SPEC_PATHS, ['shared-for', cmd], { encoding: 'utf8' })
     const headings = out.split('\n').filter((l) => l.startsWith('## '))

@@ -387,10 +387,11 @@ for (const relPath of [...testFiles].sort()) {
 
   const invalidAcs = carriedAcs.filter(id => preGreenValidity.get(id) === 'invalid')
   if (invalidAcs.length) {
+    const reasons = [...new Set(invalidAcs.map(id => bulletById.get(id).preGreen))]
     findings.push({
       class: 'invalid-pre-green', path: relPath, acs: invalidAcs,
-      detail: `${relPath}: [pre-green:] reason outside PRE_GREEN_REASONS for ${invalidAcs.join(', ')} ` +
-        `— stays red-expected (fail closed)`,
+      detail: `${relPath}: [pre-green: ${reasons.join(', ')}] for ${invalidAcs.join(', ')} is not one ` +
+        `of the valid reasons (${PRE_GREEN_REASONS.join(', ')}) — stays red-expected (fail closed)`,
     })
   }
 

@@ -83,7 +83,6 @@ case "${1:-root}" in
     DESIGN="$ROOT/doctrine/design.md"
     case "$CMD" in
       plan)    SECTIONS="Host Grounding|Pipeline Entry|Tiers|Decomposition|State Machine|Model Placement|Decisions|Question Style|Console Output Style|MCP Policy|Canonical Docs Loop|Session Execution" ;;
-      sketch)  SECTIONS="Host Grounding|State Machine|Design Canon|Model Placement|Decisions|Question Style|Console Output Style|Session Execution" ;;
       run)     SECTIONS="Host Grounding|Tiers|State Machine|Runtime Verification|Model Placement|Incident Policy|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|MCP Policy|On-Disk Handoff|Canonical Docs Loop|Session Execution" ;;
       release) SECTIONS="Host Grounding|Runtime Verification|Release Stage|Model Placement|Decisions|Question Style|Console Output Style|Canonical Docs Loop|Session Execution" ;;
       enforce) SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Model Placement|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Session Execution" ;;
@@ -95,12 +94,6 @@ case "${1:-root}" in
       doctor)  SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Runtime Verification|Feedback Loop|Tiers|State Machine|Question Style|Console Output Style|Session Execution" ;;
       replay)  SECTIONS="Host Grounding|Tiers|Model Placement|Decisions|Question Style|Console Output Style|Feedback Loop|Session Execution" ;;
       init)    SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Pipeline Entry|Tiers|Runtime Verification|Release Stage|Model Placement|Question Style|Console Output Style|Canonical Docs Loop|Design Canon|Session Execution" ;;
-      # run-design: the design-only delta /spec:run's Design stage loads on top of `shared-for run`
-      # (design.md's own Setup line is skipped inside the loop — never re-emit run's sections).
-      # specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D10: Design Render Gate and
-      # Design Atlas are deleted from design.md outright — the surviving delta is Design Canon
-      # plus Design Authoring Contracts only.
-      run-design) SECTIONS="Design Canon|Design Authoring Contracts" ;;
       *) cat "$CORE" "$DESIGN"; exit 0 ;;
     esac
     echo "<!-- shared invariants scoped to /spec:${CMD} — full doctrine: $CORE + $DESIGN -->"

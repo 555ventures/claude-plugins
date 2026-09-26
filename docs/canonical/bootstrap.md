@@ -55,6 +55,10 @@
   the grounding contract states the duty and `/spec:doctor` check 16 enforces it in every
   host's rules layer. The narration baseline that ratcheted the plugin's own sweep is gone;
   the standing scan runs at zero.
+- **A UI host's design contract is code, checked for presence only.** A host with a UI stack
+  declares `design: {kit, tokens, rules}`; init seeds the rules file from the plugin template
+  when absent and never authors components or tokens; `design-contract-check.js` is the
+  presence oracle and doctor check 8 runs it (specs/20260926/02-the-design-contract-is-code.md).
 
 ## Exit codes (`generate`)
 

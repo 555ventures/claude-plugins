@@ -12,6 +12,11 @@
 // for composites when the kit directory itself does not exist; re-derive an enforcer (that is
 // /spec:enforce's job — this script only reports presence).
 //
+// A `design` block that is present but missing `kit`, `tokens`, or `rules` (D1: all three are
+// required once the block exists) reports the same *-missing kind as a missing path would, with
+// no `path` (there is no configured value to point at) and a remedy naming the key to add — it
+// never crashes and never invents a new finding kind.
+//
 // Exit codes: 0 clean or skipped (no design block) · 1 one or more findings · 2 usage error
 // (missing --root)
 
@@ -156,25 +161,31 @@ function run(root) {
     return { ok: true, findings: [], skipped: 'no-design-block' }
   }
 
-  const tokensRel = design.tokens
-  const kitRel = design.kit
-  const rulesRel = design.rules
+  const isNonEmptyString = v => typeof v === 'string' && v.length > 0
 
-  const tokensAbs = path.join(root, tokensRel)
-  const kitAbs = path.join(root, kitRel)
-  const rulesAbs = path.join(root, rulesRel)
+  const tokensRel = isNonEmptyString(design.tokens) ? design.tokens : null
+  const kitRel = isNonEmptyString(design.kit) ? design.kit : null
+  const rulesRel = isNonEmptyString(design.rules) ? design.rules : null
 
-  const tokensExists = fs.existsSync(tokensAbs) && fs.statSync(tokensAbs).isFile()
-  const kitExists = fs.existsSync(kitAbs) && fs.statSync(kitAbs).isDirectory()
-  const rulesExists = fs.existsSync(rulesAbs) && fs.statSync(rulesAbs).isFile()
+  const tokensExists = tokensRel !== null && fs.existsSync(path.join(root, tokensRel)) && fs.statSync(path.join(root, tokensRel)).isFile()
+  const kitAbs = kitRel !== null ? path.join(root, kitRel) : null
+  const kitExists = kitRel !== null && fs.existsSync(kitAbs) && fs.statSync(kitAbs).isDirectory()
+  const rulesAbs = rulesRel !== null ? path.join(root, rulesRel) : null
+  const rulesExists = rulesRel !== null && fs.existsSync(rulesAbs) && fs.statSync(rulesAbs).isFile()
 
-  if (!tokensExists) {
+  if (tokensRel === null) {
+    findings.push({ kind: 'tokens-missing', remedy: 'add design.tokens (repo-relative path to the design token file) to the host config\'s design block' })
+  } else if (!tokensExists) {
     findings.push({ kind: 'tokens-missing', path: tokensRel, remedy: `create ${tokensRel} (the token file design.tokens names)` })
   }
-  if (!kitExists) {
+  if (kitRel === null) {
+    findings.push({ kind: 'kit-missing', remedy: 'add design.kit (repo-relative path to the kit directory) to the host config\'s design block' })
+  } else if (!kitExists) {
     findings.push({ kind: 'kit-missing', path: kitRel, remedy: `create ${kitRel} (the kit directory design.kit names)` })
   }
-  if (!rulesExists) {
+  if (rulesRel === null) {
+    findings.push({ kind: 'rules-missing', remedy: 'add design.rules (repo-relative path to the design rules file) to the host config\'s design block' })
+  } else if (!rulesExists) {
     findings.push({ kind: 'rules-missing', path: rulesRel, remedy: `seed ${rulesRel} from $(spec-paths design-rules-template)` })
   }
 

@@ -206,3 +206,56 @@ test('AC-20260926-02-10: WHEN a host is seeded by copying spec/templates/design-
   assert.ok(out.findings.every(f => f.kind !== 'table-missing' && f.kind !== 'naming-section-missing'),
     'the seeded template carries every heading and table, only empty — a table-missing or naming-section-missing finding here means the check cannot tell "absent" from "present but empty": ' + JSON.stringify(out.findings))
 })
+
+test('AC-20260926-02-5: WHEN a present design block lacks one or more of kit, tokens, rules THE SYSTEM SHALL report the matching *-missing kind for exactly the absent keys, each with a non-empty remedy naming the key, and never crash', () => {
+  const oneMissing = tmpdir('design-contract-ac5-config-rules-absent')
+  writeHost(oneMissing, {
+    config: { design: { kit: 'src/kit', tokens: 'src/tokens.css' } },
+    rules: null,
+  })
+  const rOne = runCheck(oneMissing)
+  assert.strictEqual(rOne.status, 1,
+    'a design block missing only design.rules must exit 1, not crash — a TypeError here means a host whose config simply forgot one key gets an uncaught stack trace instead of a finding: ' + rOne.stderr + rOne.stdout)
+  let outOne
+  try {
+    outOne = JSON.parse(rOne.stdout)
+  } catch {
+    assert.fail('the run must still print parseable JSON when a required design key is absent — a crash prints a stack trace to stdout instead: ' + JSON.stringify(rOne.stdout))
+  }
+  assert.strictEqual(outOne.findings.length, 1,
+    'kit and tokens are both present and point at real paths, so only the missing rules key may produce a finding: ' + JSON.stringify(outOne.findings))
+  assert.strictEqual(outOne.findings[0].kind, 'rules-missing',
+    'the one finding must be the existing rules-missing kind, not a new kind invented for a missing config key: ' + JSON.stringify(outOne.findings[0]))
+  assert.match(outOne.findings[0].remedy, /rules/,
+    'the remedy must name "rules" as the missing key, or a session reading it has no idea which config key to add: ' + JSON.stringify(outOne.findings[0]))
+  assert.notStrictEqual(outOne.findings[0].remedy.length, 0,
+    'the remedy must be a non-empty string: ' + JSON.stringify(outOne.findings[0]))
+
+  const allThreeConfigs = [
+    { label: 'empty design block', design: {} },
+    { label: 'design block with only an unrelated app key', design: { app: 'web' } },
+  ]
+  for (const { label, design } of allThreeConfigs) {
+    const dir = tmpdir('design-contract-ac5-config-all-absent')
+    writeHost(dir, { config: { design }, rules: null, kitFiles: null, tokens: null })
+    const r = runCheck(dir)
+    assert.strictEqual(r.status, 1,
+      `a ${label} is missing all three required keys and must exit 1, not crash: ` + r.stderr + r.stdout)
+    let out
+    try {
+      out = JSON.parse(r.stdout)
+    } catch {
+      assert.fail(`a ${label} must still print parseable JSON instead of a stack trace: ` + JSON.stringify(r.stdout))
+    }
+    const kinds = out.findings.map(f => f.kind).sort()
+    assert.deepStrictEqual(kinds, ['kit-missing', 'rules-missing', 'tokens-missing'],
+      `a ${label} must yield exactly the three existing *-missing kinds, one per absent required key, and no other kind (such as a crash-derived generic error): ` + JSON.stringify(out.findings))
+    for (const key of ['kit', 'tokens', 'rules']) {
+      const finding = out.findings.find(f => f.kind === `${key}-missing`)
+      assert.ok(finding.remedy && finding.remedy.length > 0,
+        `the ${key}-missing finding for a ${label} must carry a non-empty remedy: ` + JSON.stringify(finding))
+      assert.match(finding.remedy, new RegExp(key),
+        `the ${key}-missing finding's remedy must name "${key}" so a session knows which config key to add: ` + JSON.stringify(finding))
+    }
+  }
+})

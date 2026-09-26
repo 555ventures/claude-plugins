@@ -179,10 +179,15 @@ Review-Check prose rule — never silently dropped.
 `gateCommand`, and records its choices in a manifest. The contract:
 
 - `enforcementManifest` — path to `.claude/rules/enforcement.json`: one entry per
-  `(stack × category)` cell carrying the chosen enforcer (or fallback), the discovery citation,
-  the verified run command, and the gate wiring — plus, for a ratchet category, a `baseline`
-  field (`path`, `establishCmd`) recording the once-established quarantine snapshot. Provenance
-  — never plugin prose.
+  `(workspace × stack × category)` cell carrying the chosen enforcer (or fallback), the discovery
+  citation, the verified run command, and the gate wiring — plus, for a ratchet category, a
+  `baseline` field (`path`, `establishCmd`) recording the once-established quarantine snapshot.
+  Provenance — never plugin prose. Every entry carries `workspace`, a repo-relative directory
+  (`.` for the root workspace); the id grammar is `<workspace>:<stack>:<category>[/<layer>]`,
+  with the `<workspace>:` prefix omitted when the workspace is `.` (e.g. `api:python:naming/schema`
+  for a nested workspace, `python:module-boundary` for the root). For `category: "naming"` only,
+  an entry also carries `layer`, one of the four naming layers `code`, `schema`, `routes`, `wire`
+  (the host naming table's own section list) — a `layer` on any other category is refused.
 - `rulesEnforcementHash` — hash of that manifest, stamped by `/spec:enforce`; `/spec:doctor`
   recomputes it and warns when rules changed but enforcement was not regenerated.
 - The reserved, language-neutral category taxonomy is `module-boundary | naming | forbidden-symbol | structural-pattern | datetime | schema-validation | format | duplication | cycle | kit-discipline`. Tool

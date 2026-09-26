@@ -273,6 +273,11 @@
       "spec/scripts/release-legs.js"
     ]
   },
+  "spec/scripts/workspace-scan.js": {
+    "entryPoints": [
+      "spec/commands/enforce.md"
+    ]
+  },
   "spec/scripts/worktree-include.sh": {
     "entryPoints": [
       "spec/scripts/merge-back.sh",

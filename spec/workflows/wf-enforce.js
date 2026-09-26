@@ -1,9 +1,9 @@
 export const meta = {
   name: 'wf-enforce',
-  description: 'Discover a deterministic enforcer per (stack x rule category) against live sources, with citations',
-  whenToUse: 'Invoked by /spec:enforce for the read-only research fan-out over a runtime-classified (stack x category) work list',
+  description: 'Discover a deterministic enforcer per (workspace x stack x rule category) against live sources, with citations',
+  whenToUse: 'Invoked by /spec:enforce for the read-only research fan-out over a runtime-classified (workspace x stack x category) work list',
   phases: [
-    { title: 'Research', detail: 'one web-enabled agent per (stack x category) cell — discover-only, never from training memory' },
+    { title: 'Research', detail: 'one web-enabled agent per (workspace x stack x category) cell — discover-only, never from training memory' },
   ],
 }
 
@@ -49,10 +49,13 @@ if (!args || typeof args !== 'object' || !Array.isArray(args.cells)) {
 //   pipelineRulesPath: string,      // host pipeline rules file ('' if none)
 //   stackDescriptorPath: string,    // .claude/genesis/stack-descriptor.json, or '' (brownfield / no genesis stage)
 //   enforcementManifestPath: string,// existing .claude/rules/enforcement.json to reconcile against, or ''
-//   cells: [{                       // the (stack x category) work list — classified by the COMMAND
-//     id: string,                   // stable cell id, e.g. "python:module-boundary"
+//   cells: [{                       // the (workspace x stack x category) work list — classified by the COMMAND
+//     id: string,                   // stable cell id, e.g. "python:module-boundary" (root workspace)
+//                                   // or "api:python:naming/schema" (nested workspace + naming layer)
+//     workspace: string,            // repo-relative dir, "." for the root — defaults to "." when omitted
 //     stack: string,                // detected stack key (e.g. "python","typescript","dart","rust")
 //     category: string,             // ONE of the reserved categories (see CATEGORIES below)
+//     layer: string,                // ONLY for category "naming": one of code|schema|routes|wire
 //     ruleRefs: [string],           // PATHS (rule doc files) or rule ids the agent Reads for clause text
 //   }],
 // }
@@ -74,6 +77,7 @@ const CANDIDATE = {
   type: 'object',
   properties: {
     id: { type: 'string', description: 'echo the cell id' },
+    workspace: { type: 'string', description: 'repo-relative workspace dir the cell was classified against; "." for the root' },
     stack: { type: 'string' },
     category: { type: 'string' },
     candidates: {
@@ -113,7 +117,7 @@ const CANDIDATE = {
       description: 'required (may be "" only when this category needed no fallback): one line consumed verbatim by the report\'s ⚠️ fallback line — why this fallback, or what makes the category hard here',
     },
   },
-  required: ['id', 'stack', 'category', 'candidates', 'fallback', 'notes'],
+  required: ['id', 'workspace', 'stack', 'category', 'candidates', 'fallback', 'notes'],
 }
 
 function researchPrompt(cell) {
@@ -121,9 +125,12 @@ function researchPrompt(cell) {
   const stackDesc = args.stackDescriptorPath
     ? `Read ${args.stackDescriptorPath} for the chosen stack/toolchain (a HINT — verify it against the repo, do not assume it covers this category).`
     : `There is no genesis stack descriptor (brownfield repo) — confirm the stack from ${args.configPath} and the repo's manifest files.`
+  const layerNote = cell.category === 'naming' && cell.layer
+    ? ` layer=${cell.layer} — the host naming table's own matching \`###\` section is this cell's rule text; discover an enforcer for this layer only.`
+    : ''
   return [
-    `You are researching ONE deterministic enforcer cell: stack=${cell.stack}, category=${cell.category}.`,
-    `Goal: find a DETERMINISTIC mechanism (linter / arch-tool / structural matcher / schema validator) that can check this rule category on THIS repo's stack — so the check runs in CI, not as a runtime LLM judgment.`,
+    `You are researching ONE deterministic enforcer cell: stack=${cell.stack} in workspace ${cell.workspace}, category=${cell.category}.${layerNote}`,
+    `Goal: find a DETERMINISTIC mechanism (linter / arch-tool / structural matcher / schema validator) that can check this rule category on THIS repo's stack, scoped to the ${cell.workspace} workspace — so the check runs in CI, not as a runtime LLM judgment.`,
     `## The rules this cell must enforce\nRead these host rule sources for the actual clauses (do not paraphrase from memory):\n${refs}`,
     `## Stack\n${stackDesc} Confirm the package manager and the existing gate command from ${args.configPath}.`,
     args.enforcementManifestPath
@@ -143,9 +150,13 @@ function researchPrompt(cell) {
 }
 
 // Pure, top-level, dependency-injected (no closure over CATEGORIES/sandbox `log`) so
-// tests/enforce/taxonomy.test.js can extract and evaluate it standalone via extractFn/evalFns,
-// which only matches named top-level functions and runs them without module scope.
+// tests/enforce/taxonomy.test.js and tests/enforce/cells.test.js can extract and evaluate it
+// standalone via extractFn/evalFns, which only matches named top-level functions and runs them
+// without module scope. The naming-layer enum — the host naming table's own section list
+// (spec 20260926/02 D3) — lives inline so the lifted function needs no second injected
+// dependency; a layer is only meaningful on a `naming` cell.
 function validateCells(cells, categories, log) {
+  const namingLayers = ['code', 'schema', 'routes', 'wire']
   const skipped = []
   // Never silently drop a cell: every cell the command sent is accounted for in the return —
   // either accepted, or listed in `skipped` with a reason the command can reconcile against its
@@ -156,8 +167,18 @@ function validateCells(cells, categories, log) {
       skipped.push({ id: c.id || '?', category: c.category, reason: 'unknown-category' })
       return false
     }
+    if (c.category !== 'naming' && c.layer) {
+      log(`skipping cell ${c.id || '?'}: 'layer' is only meaningful on a naming cell`)
+      skipped.push({ id: c.id || '?', category: c.category, reason: 'layer-on-non-naming' })
+      return false
+    }
+    if (c.category === 'naming' && c.layer && !namingLayers.includes(c.layer)) {
+      log(`skipping cell ${c.id || '?'}: unknown layer '${c.layer}' (not one of ${namingLayers.join('|')})`)
+      skipped.push({ id: c.id || '?', category: c.category, reason: 'unknown-layer' })
+      return false
+    }
     return true
-  })
+  }).map(c => (c.workspace ? c : { ...c, workspace: '.' }))
   return { accepted, skipped }
 }
 

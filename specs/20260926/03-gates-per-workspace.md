@@ -1,6 +1,7 @@
 ---
 date: 2026-09-26
-status: hardened
+status: done
+build_base: design-retool
 tier: critical
 area: enforce
 breaking: false
@@ -8,6 +9,7 @@ depends_on: [specs/20260926/02-the-design-contract-is-code.md]
 depended_on_by: []
 brief: 27
 open_markers: 0
+diff_base: 0995b4ec914d09d24213e38fce6848614413ee74
 ---
 
 # Gates, per workspace

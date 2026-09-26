@@ -87,11 +87,14 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
    `docs/adr/*.md` and the design doctrine has a `## Dissents` section (presence only).
 10. **Rule enforcement** (only if the config has an `enforcementManifest`) — recompute the
     manifest hash vs `rulesEnforcementHash` (mismatch → "re-run /spec:enforce"); every
-    entry's `category` is in the reserved taxonomy; each entry's enforcer wiring still
-    resolves (config/checker path exists and the `gateCommand` or hook orchestrator invokes
-    it) or the entry records a `sweep`/`review-check` fallback; a `duplication`/`cycle`
-    entry whose `baseline.path` is missing fails the same way. Never re-derive an enforcer
-    here — recommend `/spec:enforce`.
+    entry's `category` is in the reserved taxonomy; each entry's `workspace` directory
+    resolves (missing → the same "re-run /spec:enforce" remedy) and, when the entry carries
+    a `layer`, it is one of the four naming layers `code | schema | routes | wire` (any other
+    value, or a `layer` on a non-`naming` entry, is flagged); each entry's enforcer wiring
+    still resolves (config/checker path exists and the `gateCommand` or hook orchestrator
+    invokes it, from that entry's own workspace root) or the entry records a
+    `sweep`/`review-check` fallback; a `duplication`/`cycle` entry whose `baseline.path` is
+    missing fails the same way. Never re-derive an enforcer here — recommend `/spec:enforce`.
 11. **Spec-dir hygiene** — sweep `specs/**`:
     - frontmatter `status` ∈ `draft | hardened | implementing | done | superseded`
       (`superseded` is terminal and silent by design — never flag one);

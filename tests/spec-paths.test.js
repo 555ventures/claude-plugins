@@ -89,6 +89,21 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // nothing (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently"; same
 // additive-collision class as AC-20260819-02-10 above).
 
+// AC-20260926-03-8: specs/20260926/03-gates-per-workspace.md D1/D7 adds
+// spec/scripts/workspace-scan.js to the bundle (a new `workspace-scan` key) — like every other
+// bundled script it needs a spec-paths key, or /spec:enforce's Phase 1 `workspace-scan --root .
+// --json` invocation resolves nothing (§ Risk Tiers, spec-paths: "a wrong key breaks commands
+// silently"; same additive-collision class as AC-20260819-02-10 above).
+test('AC-20260926-03-8: spec-paths workspace-scan resolves to spec/scripts/workspace-scan.js, an existing file', () => {
+  const fs = require('node:fs')
+  const workspaceScanPath = run('workspace-scan').trim()
+  assert.strictEqual(workspaceScanPath, path.join(SPEC, 'scripts/workspace-scan.js'),
+    'D1/D7: `spec-paths workspace-scan` must resolve to spec/scripts/workspace-scan.js — a wrong or ' +
+    'missing key breaks /spec:enforce\'s Phase 1 scan invocation silently (§ Risk Tiers, spec-paths: ' +
+    '"a wrong key breaks commands silently")')
+  assert.ok(fs.existsSync(workspaceScanPath), 'the resolved workspace-scan.js path must actually exist on disk: ' + workspaceScanPath)
+})
+
 // AC-20260904-02-12: specs/20260904/02-worktree-include-shared-owner.md D5 adds
 // spec/scripts/worktree-include.sh to the bundle (a new `worktree-include` key) — like every
 // other bundled script it needs a spec-paths key, or replay.js's sibling-resolution fallback and
@@ -101,7 +116,7 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // so this is a pure removal, not a rename; the key list below is updated in place, never a
 // parallel exhaustive pin.
 
-test('every documented key resolves to an existing path', () => {
+test('AC-20260926-03-8: every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-enforce',
     'wf-research', 'merge-back',
@@ -109,7 +124,7 @@ test('every documented key resolves to an existing path', () => {
     'review-driver', 'build-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check',
     'registry-check', 'genesis-driver', 'escape-row', 'mocks-driver', 'commit-coverage',
     'worktree-include', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract',
-    'design-contract-check', 'design-rules-template']) {
+    'design-contract-check', 'design-rules-template', 'workspace-scan']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }

@@ -1,5 +1,5 @@
 ---
-description: Generate deterministic, stack-appropriate enforcement for the host's full rule set — classify rules by category, discover+verify an enforcer per (stack × category), wire into the gate, record provenance
+description: Generate deterministic, stack-appropriate enforcement for the host's full rule set — classify rules by category, discover+verify an enforcer per (workspace × stack × category), wire into the gate from each workspace's own root, record provenance
 argument-hint: [focus — optional, e.g. a category or rule-doc path to re-enforce]
 ---
 
@@ -20,7 +20,9 @@ change (frequent), not when the repo is re-profiled (rare), and the work is expe
 invariants). Read the host's `.claude/spec.config.json` (its pipeline rules load with that
 Read — path-scoped, never re-read). If either is missing, STOP: tell the user to run
 `/spec:init` first. Also run `spec-paths wf-enforce` once and keep the printed absolute path —
-it is the `scriptPath` for the research workflow below.
+it is the `scriptPath` for the research workflow below. Then run
+`node "$(spec-paths workspace-scan)" --root . --json` once, before classification — its output
+is the workspace list Phase 1 classifies cells against.
 
 ## Input
 
@@ -70,29 +72,42 @@ anti-pattern this command exists to kill.
 
 ## Phase 1 — Classify (interactive command, not the workflow)
 
-Read the host's full rule surface — `pipelineRules`, everything under `.claude/rules/` and
-`docs/rules|standards/`, `AGENTS.md` / `CLAUDE.md`, and `.claude/genesis/design-rules.json` if present.
-For each clause decide one of:
+Take the `workspace-scan --json` list from Setup — an empty result means one root workspace
+whose stack is confirmed from the config and manifests as today, exactly as before this cell
+grammar existed. Read the host's full rule surface — `pipelineRules`, everything under
+`.claude/rules/` and `docs/rules|standards/`, `AGENTS.md` / `CLAUDE.md`, and
+`.claude/genesis/design-rules.json` if present. For each clause decide one of:
 
 - **mechanizable** → assign a category + the detected stack(s) it applies to, and the rule-doc
   path(s) carrying its text. (Detect stacks from the config + repo manifests; a polyglot repo has
-  more than one.)
+  more than one — the scan's own `stack` field per workspace is the detection.)
 - **judgment residue / pure-process** → route to pipeline rules § Review Checks; it is NOT a
   research cell.
 
-Build the **(stack × category) work list**: one cell per distinct pair that has at least one
-mechanizable clause. Each cell is `{id, stack, category, ruleRefs}` — `ruleRefs` are PATHS/ids,
-never the clause prose (prose lives in the rule docs the agent Reads; free text in `args` corrupts
-its JSON — shared § Workflows Encode Shape).
+Build the **(workspace × stack × category) work list**: one cell per distinct triple, per
+workspace, that has at least one mechanizable clause. Each cell is `{id, workspace, stack,
+category, ruleRefs}`, id `<workspace>:<stack>:<category>` (the `<workspace>:` prefix omitted when
+the workspace is `.`, so a single-package repo's ids look exactly as before) — `ruleRefs` are
+PATHS/ids, never the clause prose (prose lives in the rule docs the agent Reads; free text in
+`args` corrupts its JSON — shared § Workflows Encode Shape).
+
+**Naming, per layer.** For `category: "naming"`, build one cell **per workspace per layer**
+(`code | schema | routes | wire`) that has a non-empty matching `###` section in the host's
+naming table (`design.rules` § Naming — present after the design contract spec; a host without a
+`design` block gets a single `<workspace>:<stack>:naming/code` cell from its pipeline rules, as
+today). Each such cell's id carries the layer suffix: `<workspace>:<stack>:naming/<layer>` (e.g.
+`api:python:naming/schema`), and its `layer` field names that layer — the layers have different
+oracles (a code linter, a schema definition, a route table, a wire document), so each section
+gets its own discovered checker with its own citation.
 
 When the host config (`$(spec-paths contract)` § Required config keys) carries a `design` block,
-add one `<stack>:kit-discipline` cell per stack the host has a UI for, with `ruleRefs` set to
-`[design.rules]` — the check script (`design-contract-check.js`, doctor check 8) is the presence
-oracle; this cell is the enforcement side, discovering a real mechanical check (raw-color/
-arbitrary-value/restyle/primitive-import/missing-state-story) over the same kit directory and
-rules file. Restyle enforcement is blocked until the host has folded its overrides into
-variants — until then the discovered candidate falls back to `review-check` for that one rule,
-which the manifest already allows per cell.
+add one `<workspace>:<stack>:kit-discipline` cell **per workspace that owns the `design.kit`
+directory**, with `ruleRefs` set to `[design.rules]` — the check script (`design-contract-check.js`,
+doctor check 8) is the presence oracle; this cell is the enforcement side, discovering a real
+mechanical check (raw-color/arbitrary-value/restyle/primitive-import/missing-state-story) over
+the same kit directory and rules file. Restyle enforcement is blocked until the host has folded
+its overrides into variants — until then the discovered candidate falls back to `review-check`
+for that one rule, which the manifest already allows per cell.
 
 If the work list is large, this is the workflow-shaped part (Phase 2). If it is tiny (a focused
 `$ARGUMENTS` re-run, a handful of cells), skip the workflow and research inline — do not fan out
@@ -116,9 +131,11 @@ genesis `stack-descriptor` is passed only as a stack-identity **hint**; the work
 researches (this is why enforce works on brownfield repos the genesis stage never touched).
 
 **Return shape:** `{stage: "researched", cells: [...], skipped: [{id, category, reason}],
-tokens}`. `skipped` accounts for every cell that was NOT researched (`unknown-category` or
-`agent-failed`) — reconcile it against the Phase 1 work list and re-research those cells (inline
-for a handful) before Phase 3; a skipped cell is unfinished work, never a silent drop.
+tokens}`. `skipped` accounts for every cell that was NOT researched (`unknown-category`,
+`agent-failed`, or — for a malformed cell the workflow itself refuses before dispatch —
+`layer-on-non-naming` / `unknown-layer`) — reconcile it against the Phase 1 work list and
+re-research those cells (inline for a handful) before Phase 3; a skipped cell is unfinished
+work, never a silent drop.
 
 For a `duplication` or `cycle` cell, the extra candidate requirement applies: the discovered tool
 must support a baseline / known-violations / ignore-file mode, and the citations must demonstrate
@@ -148,10 +165,20 @@ via the tool's documented mode → re-run → the re-run must exit green over th
 baseline. A candidate that cannot go green over its own baseline fails verify for these
 categories and falls back per the order above.
 
+**`kit-discipline` verify requires a red probe.** A wired palette lint can pass raw colors when
+the theme never resets the default palette — a verify step that only checks the tool runs would
+adopt that hole. So for a `kit-discipline` candidate, verify additionally writes a scratch file
+inside the workspace carrying one raw palette class and one arbitrary value; the candidate's run
+command must exit non-zero against it. A candidate that stays green over that scratch file fails
+verify for this category and falls back per the order above.
+
 ## Phase 4 — Generate & wire (into the gate)
 
-For each verified enforcer, emit the machine-enforceable artifact and wire it so it runs in the
-host's `gateCommand`:
+For each verified enforcer, emit the machine-enforceable artifact and wire it so it runs **from
+its own cell's workspace root**, chained into the host's one `gateCommand` (the driver's gate
+string is unchanged in shape — a per-workspace invocation is a `cd <workspace> && …` segment
+inside the same one string, exactly what a host orchestrator would write by hand). A root-workspace
+(`.`) cell wires exactly as before, with no `cd` segment:
 
 - **Native linter / arch-tool / schema validator** → write its config/contract file; add its
   invocation to the gate (or to the host's existing hook orchestrator if it has one — discover
@@ -225,7 +252,8 @@ Write `.claude/rules/enforcement.json` — the enforcement manifest (one entry p
   "generatedBy": "spec@<spec-paths version>",
   "entries": [
     {
-      "id": "python:module-boundary",        // cell id (stack:category)
+      "id": "python:module-boundary",        // cell id (workspace omitted: root workspace ".")
+      "workspace": ".",                      // repo-relative dir, "." for the root
       "stack": "python",
       "category": "module-boundary",
       "ruleRefs": ["docs/rules/domain-boundaries.md"],
@@ -243,6 +271,16 @@ Write `.claude/rules/enforcement.json` — the enforcement manifest (one entry p
         }
       },
       "fallback": "none"                       // "none" | "sweep" | "review-check"
+    },
+    {
+      "id": "api:python:naming/schema",       // nested workspace + naming layer
+      "workspace": "api",
+      "stack": "python",
+      "category": "naming",
+      "layer": "schema",                      // naming only: code | schema | routes | wire
+      "ruleRefs": ["design.rules"],
+      "enforcer": null,
+      "fallback": "review-check"
     }
   ]
 }

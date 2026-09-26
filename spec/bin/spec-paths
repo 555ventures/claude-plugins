@@ -52,6 +52,8 @@ case "${1:-root}" in
   prose-cap)      echo "$ROOT/scripts/prose-cap.js" ;;
   memory-sweep)   echo "$ROOT/scripts/memory-sweep.js" ;;
   comment-narration) echo "$ROOT/scripts/comment-narration.js" ;;
+  design-contract-check) echo "$ROOT/scripts/design-contract-check.js" ;;
+  design-rules-template)  echo "$ROOT/templates/design-rules.md" ;;
   shared)         echo "$ROOT/doctrine/core.md" ;;
   shared-design)  echo "$ROOT/doctrine/design.md" ;;
   shared-genesis|shared-mocks)
@@ -119,7 +121,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|registry-check|port-check|spec-number-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|ac-drift|test-expiry|coverage-scope|count-tests|replay|escape-row|fleet-reader|comment-narration|shared|shared-design|shared-for <command>|shared-genesis [--section <names>]|shared-mocks [--section <names>]|replay-corpus|template|templates|mock-contract|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|registry-check|port-check|spec-number-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|ac-drift|test-expiry|coverage-scope|count-tests|replay|escape-row|fleet-reader|comment-narration|design-contract-check|design-rules-template|shared|shared-design|shared-for <command>|shared-genesis [--section <names>]|shared-mocks [--section <names>]|replay-corpus|template|templates|mock-contract|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

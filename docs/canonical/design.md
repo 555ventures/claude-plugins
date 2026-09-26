@@ -72,3 +72,24 @@ BRIEF's derivation sources are `design/approval.json` (the seed journey count, f
 `journeys` keys) and `design/notes.json` (the open-note count, `status === "open"` across notes
 and journey conversations alike) — read directly through `fs` + JSON, never a notes module —
 printed as `seed journeys: N · notes open: N`.
+
+## The design contract is code (specs/20260926/02)
+
+A host with a UI stack carries a `design` block of three repo-relative paths — `kit` (a
+directory of intent-named composite components), `tokens` (one token file), and `rules` (one
+auto-loaded rule file) — plus an optional `app` for the mock app. All three paths are required
+once the block exists; a block missing one reports that path as missing, naming the key to add.
+
+The rules file holds two tables. `## Intent to pattern` maps each intent to a pattern and the
+composite that implements it (`Intent | Pattern | Composite`). `## Naming` has one subsection per
+layer — `### code`, `### schema`, `### routes`, `### wire` — each a `Kind | Convention | Example`
+table. A composite is present when a file under the kit directory is named after it (PascalCase
+or kebab-case, extension stripped) or exports it by name; a pattern row without its composite is
+a finding. `design-contract-check.js` checks presence only and never judges whether a rule is
+right.
+
+The rules those tables imply are enforced under the `kit-discipline` category, not by prose:
+raw colours, arbitrary values, restyles of kit components, primitive imports from outside the
+kit, and a declared state with no story. `/spec:enforce` gives each stack whose host has a
+`design` block one `kit-discipline` cell, and the genesis design enum folds `color | typography |
+density` into it.

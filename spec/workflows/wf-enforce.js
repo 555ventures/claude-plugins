@@ -62,7 +62,7 @@ if (!args || typeof args !== 'object' || !Array.isArray(args.cells)) {
 // the actual tool at runtime against live sources.
 const CATEGORIES = [
   'module-boundary', 'naming', 'forbidden-symbol', 'structural-pattern',
-  'datetime', 'schema-validation', 'format', 'duplication', 'cycle',
+  'datetime', 'schema-validation', 'format', 'duplication', 'cycle', 'kit-discipline',
 ]
 
 // Ratchet categories: a per-host baseline snapshot quarantines existing violations at wiring

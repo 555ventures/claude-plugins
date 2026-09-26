@@ -24,8 +24,12 @@ regex-escaped, anchored title and appends the fragment to `testCommand` ahead of
 to verify that one declared test rather than its whole file; absent = every file keeps today's
 per-file classification),
 `design`
-(`{ "app": "<dir holding mock.config.ts, relative to the repo root>" }` and nothing else —
-present = design-capable host; the value equals `design/mocks/status.json`'s own `app`),
+(`{ "kit": "<dir>", "tokens": "<file>", "rules": "<file>", "app"?: "<dir>" }` — present = the
+host has a UI stack; `kit` (the directory of intent-named composite components), `tokens` (the
+token file — a Tailwind 4 `@theme` block or the stack's equivalent) and `rules` (the
+auto-loaded rule file holding the intent-to-pattern table and the naming-convention table) are
+repo-relative and required when the block is present; `app` stays optional — the mock app dir,
+written by `/spec:mocks` and genesis, and equal to `design/mocks/status.json`'s own `app`),
 `release` (see § Release), `capabilities` (see § Capabilities), the rule-enforcement keys
 `enforcementManifest` and `rulesEnforcementHash` (see § Rule enforcement), and the
 genesis-handoff keys `genesisStackDescriptor` and `designRulesHash` (see § Genesis handoff).
@@ -163,9 +167,11 @@ on-disk artifacts instead of re-deciding:
 **Decide vs implement.** The manifest's rules carry a `targetCategory` **enum only** — a category,
 never a tool name. `/spec:enforce` owns the single category→enforcer selection per detected stack
 and is the sole enforcement generator (`/spec:init` ends by invoking it). The design enum
-(`color | typography | i18n | structure | a11y | density | layout`) folds into the enforcement category taxonomy as a
-pre-classified input. A category with no mechanical enforcer on the stack becomes a Review-Check
-prose rule — never silently dropped.
+(`color | typography | i18n | structure | a11y | density | layout`) folds into the enforcement
+category taxonomy as a pre-classified input — `color | typography | density` fold into
+`kit-discipline`, since a kit-backed host mechanizes those through the same rules-file check that
+walks its kit directory. A category with no mechanical enforcer on the stack becomes a
+Review-Check prose rule — never silently dropped.
 
 ## Rule enforcement (optional — present after `/spec:enforce` has run)
 
@@ -179,8 +185,7 @@ prose rule — never silently dropped.
   — never plugin prose.
 - `rulesEnforcementHash` — hash of that manifest, stamped by `/spec:enforce`; `/spec:doctor`
   recomputes it and warns when rules changed but enforcement was not regenerated.
-- The reserved, language-neutral category taxonomy is `module-boundary | naming | forbidden-symbol
-  | structural-pattern | datetime | schema-validation | format | duplication | cycle`. Tool
+- The reserved, language-neutral category taxonomy is `module-boundary | naming | forbidden-symbol | structural-pattern | datetime | schema-validation | format | duplication | cycle | kit-discipline`. Tool
   selection is **two-stage and runtime**: DISCOVER against live sources with citations (never
   training memory), then VERIFY the tool installs and runs against the repo before adoption.
   **No plugin file names a specific linter/formatter/arch-tool/hook-runner** — a named tool

@@ -33,7 +33,12 @@ Classify every mechanizable clause into ONE language-neutral category. These are
 *tools* are not, so they are discovered at runtime, never written into this prose:
 
 `module-boundary` · `naming` · `forbidden-symbol` · `structural-pattern` · `datetime` ·
-`schema-validation` · `format` · `duplication` · `cycle`.
+`schema-validation` · `format` · `duplication` · `cycle` · `kit-discipline`.
+
+`kit-discipline` covers a host's whole design contract as one enforcer cell — raw colors,
+arbitrary values, restyles of kit components, primitive imports outside the kit directory, and a
+missing state story per declared state — the way a single lint config bundles several rules. It
+is not a ratchet category.
 
 This is the operational copy of the canonical taxonomy in the grounding contract (`spec-paths
 contract`); they must stay in sync — the contract is the single source of truth, this file is the
@@ -47,10 +52,10 @@ categories — the existing fallback order (sweep → review-check) applies.
 
 Genesis-seeded repos also carry `.claude/genesis/design-rules.json` whose rules use a design enum
 (`color | typography | i18n | structure | a11y | density | layout`). Fold these in as **pre-classified
-inputs**: `structure → module-boundary`; `color | typography | i18n | density | layout → forbidden-symbol`
-or `structural-pattern`; `a11y → structural-pattern` (or judgment residue if no AST check fits). No
-design category folds into the ratchet categories (`duplication`, `cycle`) — they arrive only via a
-written host rule or the Phase 5 propose flow.
+inputs**: `structure → module-boundary`; `color | typography | density → kit-discipline`;
+`i18n | layout → forbidden-symbol` or `structural-pattern`; `a11y → structural-pattern` (or
+judgment residue if no AST check fits). No design category folds into the ratchet categories
+(`duplication`, `cycle`) — they arrive only via a written host rule or the Phase 5 propose flow.
 
 ## The judgment residue (do NOT mechanize — compose over, don't duplicate)
 
@@ -79,6 +84,15 @@ Build the **(stack × category) work list**: one cell per distinct pair that has
 mechanizable clause. Each cell is `{id, stack, category, ruleRefs}` — `ruleRefs` are PATHS/ids,
 never the clause prose (prose lives in the rule docs the agent Reads; free text in `args` corrupts
 its JSON — shared § Workflows Encode Shape).
+
+When the host config (`$(spec-paths contract)` § Required config keys) carries a `design` block,
+add one `<stack>:kit-discipline` cell per stack the host has a UI for, with `ruleRefs` set to
+`[design.rules]` — the check script (`design-contract-check.js`, doctor check 8) is the presence
+oracle; this cell is the enforcement side, discovering a real mechanical check (raw-color/
+arbitrary-value/restyle/primitive-import/missing-state-story) over the same kit directory and
+rules file. Restyle enforcement is blocked until the host has folded its overrides into
+variants — until then the discovered candidate falls back to `review-check` for that one rule,
+which the manifest already allows per cell.
 
 If the work list is large, this is the workflow-shaped part (Phase 2). If it is tiny (a focused
 `$ARGUMENTS` re-run, a handful of cells), skip the workflow and research inline — do not fan out

@@ -108,7 +108,8 @@ test('every documented key resolves to an existing path', () => {
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'build-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check',
     'registry-check', 'genesis-driver', 'escape-row', 'mocks-driver', 'commit-coverage',
-    'worktree-include', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract']) {
+    'worktree-include', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract',
+    'design-contract-check', 'design-rules-template']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }
@@ -187,6 +188,26 @@ test('AC-20260902-06-10: spec-paths with no arguments continues to print the plu
   const noArgs = execFileSync('bash', [BIN], { encoding: 'utf8' }).trim()
   assert.strictEqual(noArgs, run('root').trim(),
     'AC-10: spec-paths with no arguments must CONTINUE TO print the plugin root exactly as `spec-paths root` does — adding the shared-mocks key must never change the zero-argument default')
+})
+
+// AC-20260926-02-11: specs/20260926/02-the-design-contract-is-code.md D10 adds
+// spec/scripts/design-contract-check.js and spec/templates/design-rules.md to the bundle (two new
+// keys, `design-contract-check` and `design-rules-template`) — like every other bundled
+// script/template addition it needs spec-paths keys, or /spec:doctor check 8's script invocation
+// and /spec:init Phase 6's seed-from-template step resolve nothing (§ Risk Tiers, spec-paths: "a
+// wrong key breaks commands silently"; same additive-collision class as AC-20260819-02-10 above;
+// the key list above is updated in place, never a parallel exhaustive pin).
+test('AC-20260926-02-11: spec-paths design-contract-check and design-rules-template resolve to spec/scripts/design-contract-check.js and spec/templates/design-rules.md, both existing files', () => {
+  const fs = require('node:fs')
+  const checkPath = run('design-contract-check').trim()
+  assert.strictEqual(checkPath, path.join(SPEC, 'scripts/design-contract-check.js'),
+    'D2/D10: `spec-paths design-contract-check` must resolve to spec/scripts/design-contract-check.js — a wrong or missing key breaks /spec:doctor check 8\'s invocation silently (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently")')
+  assert.ok(fs.existsSync(checkPath), 'the resolved design-contract-check.js path must actually exist on disk: ' + checkPath)
+
+  const templatePath = run('design-rules-template').trim()
+  assert.strictEqual(templatePath, path.join(SPEC, 'templates/design-rules.md'),
+    'D4/D10: `spec-paths design-rules-template` must resolve to spec/templates/design-rules.md — a wrong or missing key breaks /spec:init Phase 6\'s seed-from-template step silently (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently")')
+  assert.ok(fs.existsSync(templatePath), 'the resolved design-rules.md path must actually exist on disk: ' + templatePath)
 })
 
 test('shared-for: every mapped section name still exists as a core.md or design.md heading', () => {

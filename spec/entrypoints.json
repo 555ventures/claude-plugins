@@ -47,6 +47,12 @@
       "git/commands/commit.md"
     ]
   },
+  "spec/scripts/design-contract-check.js": {
+    "entryPoints": [
+      "spec/commands/doctor.md",
+      "spec/commands/init.md"
+    ]
+  },
   "spec/scripts/env-preflight.js": {
     "entryPoints": [
       "spec/commands/doctor.md",

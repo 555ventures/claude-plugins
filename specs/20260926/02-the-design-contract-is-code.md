@@ -1,6 +1,7 @@
 ---
 date: 2026-09-26
-status: hardened
+status: implementing
+build_base: design-retool
 tier: critical
 area: design
 breaking: true
@@ -8,6 +9,7 @@ depends_on: [specs/20260926/01-the-approval-file-is-not-a-gate.md]
 depended_on_by: [specs/20260926/03-gates-per-workspace.md]
 brief: 27
 open_markers: 0
+diff_base: a4775a0078aecdc601309e697fcc457465946e09
 ---
 
 # The design contract is code

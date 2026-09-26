@@ -22,8 +22,7 @@ answer is `/spec:init`, not a drift report.
 Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
 
 1. **Config integrity** — `.claude/spec.config.json` parses; required keys present per the
-   contract file's § Required config keys; legacy keys (`storybook: true`,
-   `storybookCommand`) flagged for migration to the `design` block.
+   contract file's § Required config keys.
 2. **Contract stamp** — config `contractHash` equals `$(spec-paths contract-hash)`. A
    mismatch is a lead, not a verdict — checks 3–6 test the *current* contract (Read
    `$(spec-paths contract)`) directly and decide whether the drift is real. Also flag an
@@ -45,8 +44,8 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
    must match ≥1 tracked file — a zero-match glob is a rule that silently never loads.
 6. **Scripts & commands** — `patternsScript` exists, is executable, exits 0; `driftScript`
    (if declared) exists; each command referenced by `gateCommand` / `testCommand` /
-   `setupCommand` / `design.command` / `design.screenshot` resolves by name (never run the
-   gate here). Session grounding: `.claude/settings.json` parses; its `permissions` allow
+   `setupCommand` resolves by name (never run the gate here). Session grounding:
+   `.claude/settings.json` parses; its `permissions` allow
    entries still resolve; a *missing* deny on `.env*` reads is a flag;
    `.claude/skills/run/SKILL.md` exists and agrees with the config `runtime` block.
 
@@ -74,8 +73,11 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
    prefix), resolving each against the file set its sentence implies; a path-shaped regex
    alone silently passes every directory-less reference (specs/20260810/09-stale-reference-sweep.md
    D7). Stale citations are the most common drift and are individually patchable.
-8. **Design foundation** (only if the config has a `design` block) — `design.doctrine`
-   exists and is ~one page; token files and the living-showcase entry it names exist.
+8. **Design contract** (only if the config has a `design` block) — run
+   `node "$(spec-paths design-contract-check)" --root . --json`. Each finding is a ⚠️ advisory
+   naming the script's own remedy — a missing token file or kit directory, a missing composite,
+   an absent naming subsection, or an empty table. Never re-derives an enforcer here — that's
+   `/spec:enforce`'s job, not this check's.
 9. **Genesis handoff** (only if `.claude/genesis/status.json` exists) — the consume-side
    contract is intact: `genesisStackDescriptor` (when recorded) exists and parses;
    `design-rules.json` hash matches `designRulesHash` (mismatch → "re-run /spec:enforce");

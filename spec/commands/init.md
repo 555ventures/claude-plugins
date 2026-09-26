@@ -17,7 +17,7 @@ init-gen`) is the **sole writer** of every grounding-layer deliverable it owns �
 the manifest-check→stamp ordering in code, so a session interrupted mid-run can never leave a
 stamped-but-unverified config. Session flow: Phase 1 profiling → Phase 1.5 substrate
 authoring → `init-gen probe` → interview → author the profile JSON in your scratchpad →
-`init-gen generate` → Phase 6 design foundation → report → Phase 8 `/spec:enforce` handoff.
+`init-gen generate` → Phase 6 design contract → report → Phase 8 `/spec:enforce` handoff.
 
 **Intended model: Fable or Opus.** Run `spec-paths shared-for init` and read its output —
 the core sections the grounding layer must satisfy (never the whole doctrine file).
@@ -47,8 +47,9 @@ record them into the profile's `manifestExtras` so the manifest still carries a 
 6. `.claude/settings.json` `permissions` block — allow entries for the exact toolchain
    commands the config declares, deny entries for destructive ops and secrets reads; merged
    into any existing block, never clobbered
-7. Design-capable hosts only: the **design foundation** — token files verified/landed, a
-   one-page design doctrine doc, the living showcase catalog entry (Phase 6)
+7. UI-stack hosts only: the **design contract record** — `design: {kit, tokens, rules}` written
+   into config, the rules file seeded from the template when absent, and the presence check run
+   (Phase 6)
 8. `.claude/skills/spec-verify/SKILL.md` and `.claude/skills/run/SKILL.md` — the per-host
    **verify** and **run** skills: how to launch, seed, and observe this app, both derived
    from Phase 1's profiling
@@ -69,13 +70,12 @@ Launch parallel Explore agents (`model: sonnet`) and read key files yourself:
   typechecker, codegen tools. Extract the real commands from `package.json` scripts /
   `Makefile` / `pyproject.toml` — never guess (`make check`? `bun typecheck && bun lint &&
   bun test:run`? `uv run pytest`?).
-- **Component catalog:** present? A component-preview host (e.g. Storybook — web: `.storybook/`
-  config, `storybook` script — or Widgetbook — Flutter: `widgetbook` in `pubspec.yaml`, a
-  widgetbook entrypoint/sub-package — or an equivalent like Ladle or Histoire).
-  This decides the config `design` block and whether the design stage ever runs here. If
-  design-capable, also profile the **design language**: existing theme/token files, a base
-  design system in the dependencies (shadcn/Radix, MUI, Material 3, Cupertino, …), and how
-  consistently real screens follow it — input to Phase 6.
+- **UI stack:** present? A UI framework or component library in the dependencies (React/Vue/
+  Flutter/…, plus a base design system such as shadcn/Radix, MUI, Material 3, Cupertino).
+  This decides whether the config carries a `design` block at all. If present, also profile the
+  **design language**: existing theme/token files, the directory holding intent-named composite
+  components (an existing `components/base` or barrel counts as the kit), and how consistently
+  real screens follow it — input to Phase 6.
 - **Architecture:** how is code organized (features? domains? modules?), what are the layer
   boundaries, which surfaces are generated/managed (codegen outputs, lockfile-like catalogs,
   translation files), what CI enforces (import linters, purity checks) — a check requiring a test carrier per
@@ -305,9 +305,9 @@ Field-by-field, tracing each back to the phase that grounds it:
   verbatim into the generated harness.
 - **`sourceRoot`** — the patterns script's default scope and the at-risk probe's sampling root.
 - **`manifestExtras`** — one row per deliverable the script does NOT itself write: every
-  Phase 1.5 substrate item you created (or declared `inert`) and every Phase 6 design-foundation
-  artifact (doctrine doc, token files, showcase catalog entry) — the D2 boundary line: those
-  stay session-authored, but the manifest must still claim each of them.
+  Phase 1.5 substrate item you created (or declared `inert`) and the Phase 6 rules-file seed copy
+  (`.claude/rules/design.md`, when Phase 6 copied it from the template) — the D2 boundary line:
+  those stay session-authored, but the manifest must still claim each of them.
 - **`probeOutcomes`** — Phase 3's rulings, verbatim.
 
 ## Phase 5 — Generate (`init-gen generate`)
@@ -339,76 +339,60 @@ Exit codes:
   exception: it always merge-preserves in both modes (every existing entry kept; an existing
   deny covering a would-be allow stays, reported, never overridden).
 
-## Phase 6 — Design foundation (design-capable hosts only)
+## Phase 6 — Design contract (UI-stack hosts only)
 
 Session-authored, per the D2 boundary (Phase 4's `manifestExtras` records these rows — the
-script never sees this phase's output directly). Skip unless Phase 1's `config` wrote a
-`design` block. Goal: a **design foundation, not a design system** — the binding canon the
-design stage reads (tokens + doctrine). The system itself grows later by extraction through
-specs; do not invent components or tokens no planned surface needs yet.
+script never sees this phase's output directly). Skip unless Phase 1 found a UI stack. Goal:
+**locate, seed, record, check** — the design contract is code (tokens, kit, rules file); init
+never authors a component or a token, it only records where the three pieces live and verifies
+their presence.
 
 **Precedence — check for a genesis canon first.** If `.claude/genesis/status.json` exists
 (the genesis stage seeded this repo), branch four ways on its `design` value:
 
 - `ratified`, `rules-locked`, or `skipped` → **consume, never re-prompt.** The canon already
-  exists: the genesis BRIEF state authored the doctrine + token files and
-  `.claude/genesis/design-rules.json`. Do NOT run the adopt/craft `AskUserQuestion` below —
-  extract from what's there (treat it like brownfield), and record `genesisStackDescriptor` in
-  `profile.config` (enforcement is generated later by `/spec:enforce`, Phase 8). On `skipped`
-  (headless archetype) write no `design` block at all.
-  Report mode `genesis` in Phase 7.
+  exists: the genesis BRIEF state authored the kit, tokens, and rules file (or
+  `.claude/genesis/design-rules.json` on the legacy path). Extract from what's there (treat it
+  like brownfield below), and record `genesisStackDescriptor` in `profile.config` (enforcement
+  is generated later by `/spec:enforce`, Phase 8). On `skipped` (headless archetype) write no
+  `design` block at all. Report mode `genesis` in Phase 7.
 - `doctrine-drafted` / `tokens-landed` (legacy partial canon) → **STOP.** Tell the user to
   finish the genesis BRIEF state (re-run `/spec:genesis` to reach BRIEF and ratify it) first;
   the state gate also blocks this. Do not half-adopt.
 - `pending`, or any value outside the three arms above → **warn and proceed** — matching
   genesis.md's own gate for this state ("warned, proceeds"). Write **no** `design` block (the
-  canon isn't ready to consume, and adopt/craft here would mint a second canon that the genesis
-  BRIEF state later contradicts); name **re-run `/spec:genesis`** as the pending finisher in
-  both the warning and the Phase 7 report. Never run the adopt/craft `AskUserQuestion` below for
-  this arm.
-- (no `.claude/genesis/` at all) → the greenfield adopt/craft path below.
+  canon isn't ready to consume); name **re-run `/spec:genesis`** as the pending finisher in
+  both the warning and the Phase 7 report.
+- (no `.claude/genesis/` at all) → the brownfield-or-greenfield path below.
 
 **Enforcement is generated by `/spec:enforce`, not here.** This phase does NOT emit linters,
 contracts, or hooks for the design rules (or any other rules). It records the consume-side keys
 (`genesisStackDescriptor`, `designRulesHash`) in `profile.config` and
 leaves the actual category→enforcer selection — discovered and verified at runtime, never from
 a hardcoded mapping — to the dedicated command. Init **ends by invoking `/spec:enforce`**
-(Phase 8), which mechanizes the design rules together with the rest of the host's rule set in
-one pass. This keeps a single enforcement brain on its own cadence (rules/tooling drift, not
-repo re-profiling).
+(Phase 8), which mechanizes the design rules (including the `kit-discipline` cell the `design`
+block earns) together with the rest of the host's rule set in one pass.
 
-**Brownfield (the repo has real UI):** extract, don't invent. Locate the theme/token files;
-read representative screens; write the doctrine doc as a description of what is **already
-true** — type scale, spacing rhythm, color roles, density, dialog-vs-page habits,
-empty-state tone. List the inconsistencies you found; do not resolve them. **Detect an existing
-base dir / barrel** (a directory of overlay shells — Sheet/Dialog/Popover/Drawer — behind an
-`index.*`); if one exists, **name it and the import-only rule in the doctrine** (the cross-session
-memory the design stage imports from). If none exists, **record the gap** — do not scaffold one here;
-the set is seeded by genesis or grows by extraction through specs.
+**Brownfield (the repo has real UI, no genesis canon):** locate, don't invent.
 
-**Greenfield (no genesis canon, no real UI yet):** `AskUserQuestion` first — **adopt** a base design system
-(recommended; offer the real candidates for this stack, e.g. shadcn/Radix or Material on
-web, Material 3 / Cupertino on Flutter) or **craft** a custom direction.
-
-- *Adopt:* doctrine = "«base system» defaults except …" plus the deviation list (brand
-  palette, radius, density); land the matching minimal theme/token overrides.
-- *Craft:* author 2–3 distinct directions, each as a north-star composition rendered as a
-  catalog entry (type scale, color temperature, density, motion feel); the user picks with
-  their eyes; land the chosen direction's token skeleton, delete the losers. Crafting is
-  Fable work — taste is the product here.
-
-Both modes also:
-
-- Create the **living showcase** catalog entry (composes real surfaces; every later design
-  run extends it — the visible cross-spec drift detector) and name its path in the doctrine
-  doc, along with the token-file paths.
-- Record the design rules (ban raw colors / magic values in UI files, etc.) as
-  `targetCategory`-tagged entries so `/spec:enforce` can mechanize them; where no enforcer will
-  fit, they fall to pipeline rules § Review Checks — `/spec:enforce` owns that decision, not
-  this phase.
-- Keep the doctrine doc to **one page**.
-- Add a `manifestExtras` row (Phase 4) for every artifact this phase lands — the doctrine doc,
-  each landed/overridden token file, the showcase catalog entry.
+1. **Locate** the token file (theme/tokens CSS, or the stack's equivalent) and the kit
+   directory — the directory holding intent-named composite components (an existing
+   `components/base` or barrel counts).
+2. **Locate the rules file.** When one already exists (recorded by a prior init, or hand-authored),
+   use it as-is. When none exists, copy `spec/templates/design-rules.md`
+   (`$(spec-paths design-rules-template)`) to `.claude/rules/design.md` unchanged except its
+   `paths:` frontmatter, which points at the located kit directory and the screen directory (the
+   template's own globs are a starting default); record this copy as a `manifestExtras` row
+   (Phase 4). Init never fills in the tables — genesis's design stage or a brownfield author does,
+   by hand.
+3. **Record** `design: {kit, tokens, rules}` (repo-relative paths) into `profile.config` (Phase 4).
+   A host with no UI stack at all writes no `design` block — greenfield with nothing to record yet
+   is told to run `/spec:genesis` instead of adopting or crafting here.
+4. **Check.** After `init-gen generate` stamps the config, run
+   `node "$(spec-paths design-contract-check)" --root .` and fold its findings into Phase 7's
+   `warns` — missing composites, empty seeded tables, absent naming subsections. Nothing here
+   blocks: a brownfield host arrives with real gaps, and the check exists to surface them, not to
+   gate init.
 
 ## Phase 7 — Report
 
@@ -424,10 +408,10 @@ Both modes also:
    - `bullets`: two plain-language lines, replacing the old `{kind → name}`/glob dumps with
      meaning (§ Console Output Style's "meaning over dumps") — (1) what was generated: agent
      count, the verify + run skills, convention-file count, the critical-tier triggers chosen, and the
-     permissions entries landed; (2) runtime + design-foundation state: boot/ready commands
-     or a declared-inert reason, and the design foundation status — genesis / extracted /
-     adopted / crafted / pending (name **re-run `/spec:genesis`** as the finisher when pending) —
-     with its doctrine path
+     permissions entries landed; (2) runtime + design-contract state: boot/ready commands
+     or a declared-inert reason, and the design contract status — genesis / located / pending
+     (name **re-run `/spec:genesis`** as the finisher when pending) — with the check's findings
+     folded into `warns`
    - `warns`: one line per unresolved item from step 1, plus anything Phase 1's citations
      couldn't be spot-checked against the repo
    - `next`: `{kind: 'status-verbatim', text: <captured output of
@@ -438,8 +422,9 @@ Both modes also:
    ```report
    ✅ **initialized — 14 files, gate verified, stamped**
    - generated 6 implementer agents, the verify + run skills, 3 convention rule files, and the tier/permissions grounding this repo needs to run the pipeline safely
-   - runtime ready (`bun dev`, health-checked) · design foundation adopted — docs/design/doctrine.md
+   - runtime ready (`bun dev`, health-checked) · design contract located — src/components/kit, src/styles/tokens.css, .claude/rules/design.md
    ⚠️ manifest-check found one unverified row — settings.json permissions merge kept an existing deny in place, surfaced for review
+   ⚠️ design-contract-check: 2 findings — composite-missing RecordEditSheet under src/components/kit, table-empty ### wire in .claude/rules/design.md
    {spec-status --next, verbatim}
    ```
 

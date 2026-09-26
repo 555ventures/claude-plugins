@@ -339,50 +339,13 @@ function briefPath() { return path.join(genesisDir, 'brief.md') }
 function briefText() { try { return fs.readFileSync(briefPath(), 'utf8') } catch { return null } }
 function openDimensions() { const t = briefText(); return t === null ? {} : parseOpenDimensions(t) }
 function allDimensionKeys() { return Object.keys(openDimensions()) }
-// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(b): once the mock app exists,
-// the dimensions it already fixes (framework/language/packageManager) are derived, never
-// menu-researched — they drop out of the open-dimension set the moment the app is found, so
-// neither MENUS' noMenu/noPick lists nor menus-done's closure check ever wait on them.
 // Dimension keys in brief.md's ## Open Dimensions are kebab-case (parseOpenDimensions's
 // `/^- ([a-z0-9-]+):/`) — package-manager, never the stack-descriptor's camelCase packageManager.
-const MOCK_APP_FIXED_DIMS = { framework: 'vite-react', language: 'typescript', 'package-manager': 'npm' }
-function rawOpenDimensionKeys() { const d = openDimensions(); return Object.keys(d).filter((k) => d[k] === 'open') }
-function openDimensionKeys() {
-  const keys = rawOpenDimensionKeys()
-  if (!mockAppExists()) return keys
-  return keys.filter((k) => !(k in MOCK_APP_FIXED_DIMS))
-}
+// specs/20260926/04-the-design-brief.md D9: the mock app no longer fixes any dimension — MENUS
+// treats a mock-app host like any other, so this is just the brief's own open set, unfiltered.
+function openDimensionKeys() { const d = openDimensions(); return Object.keys(d).filter((k) => d[k] === 'open') }
 function picks() { const t = briefText(); return t === null ? {} : parsePicks(t) }
 function hasMenuFile(key) { return fs.existsSync(path.join(genesisDir, 'interview-research', key + '.json')) }
-
-// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(b): MENUS records the mock
-// app's fixed dimensions as decided by appending `- <key>: <value>` lines to brief.md's own
-// `## Picks` section — the same section a session's own research-backed picks live in — so a
-// re-run never duplicates a line already present (checked by the caller via `picks()` before
-// calling this). Idempotent by construction: `pairs` never includes an already-recorded key.
-function appendDerivedPicksToBrief(pairs) {
-  if (!pairs.length) return
-  const text = briefText()
-  if (text === null) return
-  const headingRe = /^## Picks\s*$/m
-  const m = headingRe.exec(text)
-  // Returning silently here loses the derived picks with no trace: the dimension stops being
-  // listed open, but nothing records it as decided, so every later Picks reader sees it as
-  // neither. The brief must have the heading these lines belong under.
-  if (!m) {
-    die(genesisRel('brief.md') + ' has no "## Picks" heading, so the derived pick(s) ' +
-      pairs.map(([k]) => k).join(', ') + ' have nowhere to land — remedy: add a "## Picks" heading to ' +
-      genesisRel('brief.md') + ', then re-run')
-  }
-  const afterHeading = m.index + m[0].length
-  const rest = text.slice(afterHeading)
-  const nextRel = rest.search(/^## /m)
-  const sectionEnd = nextRel === -1 ? text.length : afterHeading + nextRel
-  const before = text.slice(0, sectionEnd).replace(/\s+$/, '\n\n')
-  const after = text.slice(sectionEnd)
-  const newLines = pairs.map(([k, v]) => '- ' + k + ': ' + v).join('\n') + '\n\n'
-  fs.writeFileSync(briefPath(), before + newLines + after)
-}
 
 // ---------------------------------------------------------------------------
 // specs/20260902/11-brief-from-approved-set.md D1-D3: design/mocks/seed.md and
@@ -647,6 +610,296 @@ function isVisualArchetype(a) { return VISUAL_ARCHETYPES.includes(a) }
 const DESIGN_SKIPPED_ARCHETYPES = ['backend-api', 'data-ml']
 function isDesignSkipped(a) { return DESIGN_SKIPPED_ARCHETYPES.includes(a) }
 
+// ---------------------------------------------------------------------------
+// DESIGN_BRIEF (specs/20260926/04-the-design-brief.md D1): sits between the green zero-day gate
+// and ROADMAP, for a visual archetype whose stack descriptor names Storybook as its design
+// catalog. Applicability is recomputed on every call (never cached) so a descriptor edited after
+// the gate is still read correctly; only the SKIP outcome is persisted (once), since "applies"
+// has nothing to record until the mark itself lands (D8).
+// ---------------------------------------------------------------------------
+function designStageApplies() {
+  const desc = readStackDescriptor() || {}
+  return isVisualArchetype(status.archetype) && desc.designCatalog === 'storybook'
+}
+
+// Called exactly at the two places the zero-day gate first turns green (handleSkeletonLanded's
+// mark acceptance, and deriveState's own bare-run gate branch) — never from a `--state` peek,
+// so this never violates the "peek writes nothing" contract. A no-op once status.designStage is
+// already set (either this skip record, or the full D8 record a later mark writes).
+function recordDesignStageSkipIfNeeded() {
+  if (status.designStage) return
+  if (designStageApplies()) return
+  const reason = isVisualArchetype(status.archetype) ? 'non-storybook' : 'non-visual'
+  status.designStage = { skipped: reason, at: new Date().toISOString() }
+  saveStatus()
+}
+
+function designPathsJsonPath() { return path.join(genesisDir, 'design-paths.json') }
+function readDesignPathsJson() {
+  try { return JSON.parse(fs.readFileSync(designPathsJsonPath(), 'utf8')) } catch (e) { return null }
+}
+function designBriefMdPath() { return path.join(root, 'docs/design/brief.md') }
+function catalogMdPath() { return path.join(root, 'docs/design/catalog.md') }
+
+// D3: design-paths.json's required shape — every top-level path key non-empty, plus
+// storybook.port (integer 1024-65535), storybook.buildCommand, storybook.staticDir. Walked in
+// the Contracts' own key order so the refusal names the first missing/invalid key.
+const DESIGN_PATHS_REQUIRED_KEYS = ['kit', 'tokens', 'rules', 'primitives', 'primitivesAlias', 'journeys']
+
+function designPathsCheck() {
+  if (!fs.existsSync(designPathsJsonPath())) return { ok: false, reason: 'missing' }
+  let parsed
+  try {
+    parsed = JSON.parse(fs.readFileSync(designPathsJsonPath(), 'utf8'))
+  } catch (e) {
+    return { ok: false, reason: 'unparseable', detail: e.message }
+  }
+  for (const k of DESIGN_PATHS_REQUIRED_KEYS) {
+    if (typeof parsed[k] !== 'string' || !parsed[k].trim()) return { ok: false, reason: 'missing-key', key: k }
+  }
+  if (!parsed.storybook || typeof parsed.storybook !== 'object') return { ok: false, reason: 'missing-key', key: 'storybook' }
+  if (typeof parsed.storybook.port !== 'number' || parsed.storybook.port < 1024 || parsed.storybook.port > 65535) {
+    return { ok: false, reason: 'bad-port', key: 'storybook.port' }
+  }
+  if (typeof parsed.storybook.buildCommand !== 'string' || !parsed.storybook.buildCommand.trim()) {
+    return { ok: false, reason: 'missing-key', key: 'storybook.buildCommand' }
+  }
+  if (typeof parsed.storybook.staticDir !== 'string' || !parsed.storybook.staticDir.trim()) {
+    return { ok: false, reason: 'missing-key', key: 'storybook.staticDir' }
+  }
+  return { ok: true, parsed }
+}
+
+// D5: runs catalog-inventory.js once, exactly when docs/design/catalog.md is absent — the
+// GENESIS_SHADCN_COMMAND env override (A9) is threaded to the child's --shadcn flag when set.
+// Returns null on success (status.designStage.catalog recorded) or { failed, exit } on a
+// non-zero exit (never blocking — the caller prints a warning and moves on).
+function ensureCatalogGenerated() {
+  if (fs.existsSync(catalogMdPath())) return null
+  const catalogInventoryBin = path.join(__dirname, 'catalog-inventory.js')
+  const args = [catalogInventoryBin, '--root', root, '--out', catalogMdPath(), '--json']
+  const shadcnOverride = process.env.GENESIS_SHADCN_COMMAND
+  if (shadcnOverride) args.push('--shadcn', shadcnOverride)
+  const r = runChild(process.execPath, args, { encoding: 'utf8' }, 'catalog-inventory.js')
+  if (r.status !== 0) return { failed: true, exit: r.status }
+  let parsed = null
+  try { parsed = JSON.parse(r.stdout) } catch (e) { parsed = null }
+  let components = 0
+  let unavailable = 0
+  if (parsed && parsed.catalog === 'shadcn' && Array.isArray(parsed.components)) {
+    components = parsed.components.length
+    unavailable = parsed.unavailable || 0
+  }
+  status.designStage = Object.assign({}, status.designStage, {
+    catalog: { exit: r.status, components, unavailable, at: new Date().toISOString() },
+  })
+  saveStatus()
+  return null
+}
+
+// D6: a small markdown-table reader shared by designBriefCheck below — the same shape
+// design-contract-check.js's own findTable() reads, kept as a second small copy here (this
+// driver has never required() that script, and doing so now would couple a CLI script's argv
+// parsing into a library role neither file wants).
+function findMdTableRows(text) {
+  const lines = text.split('\n')
+  let start = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*\|.*\|\s*$/.test(lines[i])) { start = i; break }
+  }
+  if (start === -1) return []
+  let end = start
+  while (end < lines.length && /^\s*\|.*\|\s*$/.test(lines[end])) end++
+  const tableLines = lines.slice(start, end)
+  if (tableLines.length < 2) return []
+  const dataLines = tableLines.slice(2)
+  return dataLines.map((line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim()))
+}
+
+function extractMdSubHeading(text, name) {
+  const re = new RegExp('^### ' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'm')
+  const m = re.exec(text)
+  if (!m) return null
+  const rest = text.slice(m.index + m[0].length)
+  const next = rest.search(/^(### |## )/m)
+  return next === -1 ? rest : rest.slice(0, next)
+}
+
+// D6: docs/design/brief.md's grammar — heading presence/order, one JTBD line per seed journey,
+// no entity-shaped heading, a non-empty ## Composites table equal to the rules file's own
+// Composite column, and every ### Used name present in docs/design/catalog.md when that
+// inventory lists any. Returns { ok: true } or { ok: false, message } naming the FIRST failure,
+// in the order D6 lists them.
+const DESIGN_BRIEF_REQUIRED_HEADINGS = ['## Users and context', '## Journeys', '## Navigation', '## Catalog', '## Composites', '## Contract']
+
+function designBriefCheck(paths) {
+  if (!fs.existsSync(designBriefMdPath())) {
+    return { ok: false, message: 'docs/design/brief.md does not exist — write it (template: design-brief.md via spec-paths templates), then re-mark design-brief-written' }
+  }
+  const text = fs.readFileSync(designBriefMdPath(), 'utf8')
+
+  const positions = DESIGN_BRIEF_REQUIRED_HEADINGS.map((h) => text.indexOf(h))
+  for (let i = 0; i < DESIGN_BRIEF_REQUIRED_HEADINGS.length; i++) {
+    if (positions[i] === -1) {
+      return { ok: false, message: 'docs/design/brief.md is missing heading "' + DESIGN_BRIEF_REQUIRED_HEADINGS[i] + '" — add it in order, then re-mark design-brief-written' }
+    }
+  }
+  for (let i = 1; i < positions.length; i++) {
+    if (positions[i] < positions[i - 1]) {
+      return {
+        ok: false,
+        message: 'docs/design/brief.md has "' + DESIGN_BRIEF_REQUIRED_HEADINGS[i] + '" out of order (before "' +
+          DESIGN_BRIEF_REQUIRED_HEADINGS[i - 1] + '") — fix the order, then re-mark design-brief-written',
+      }
+    }
+  }
+  const entityHeading = /^## (Entities|Records|Data model)/im.exec(text)
+  if (entityHeading) {
+    return {
+      ok: false,
+      message: 'docs/design/brief.md has a heading "## ' + entityHeading[1] +
+        '" — journeys are locked before any entity, remove it, then re-mark design-brief-written',
+    }
+  }
+
+  const seedJourneys = seedJourneysMap()
+  const journeysSection = section(text, 'Journeys') || ''
+  for (const [name] of seedJourneys) {
+    const re = new RegExp('^### ' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'm')
+    const m = re.exec(journeysSection)
+    if (!m) {
+      return {
+        ok: false,
+        message: 'docs/design/brief.md ## Journeys is missing journey "' + name +
+          '" — add a "### ' + name + '" block with a "JTBD: When " line, then re-mark design-brief-written',
+      }
+    }
+    const rest = journeysSection.slice(m.index + m[0].length)
+    const next = rest.search(/^### /m)
+    const block = next === -1 ? rest : rest.slice(0, next)
+    if (!/^JTBD: When /m.test(block)) {
+      return {
+        ok: false,
+        message: 'docs/design/brief.md journey "' + name + '" has no line starting "JTBD: When " — add one, then re-mark design-brief-written',
+      }
+    }
+  }
+
+  const rulesRel = paths.rules
+  let rulesText = ''
+  try { rulesText = fs.readFileSync(path.join(root, rulesRel), 'utf8') } catch (e) { rulesText = '' }
+  const intentSection = section(rulesText, 'Intent to pattern')
+  const rulesComposites = intentSection === null ? [] : findMdTableRows(intentSection).map((r) => r[2]).filter(Boolean)
+
+  const compositesSection = section(text, 'Composites') || ''
+  const briefComposites = findMdTableRows(compositesSection).map((r) => r[0]).filter(Boolean)
+
+  if (briefComposites.length === 0) {
+    return { ok: false, message: 'docs/design/brief.md ## Composites table is empty — add at least one row, then re-mark design-brief-written' }
+  }
+  for (const c of rulesComposites) {
+    if (!briefComposites.includes(c)) {
+      return {
+        ok: false,
+        message: 'docs/design/brief.md ## Composites is missing "' + c +
+          '" (present in the rules file\'s Composite column) — add it, then re-mark design-brief-written',
+      }
+    }
+  }
+  for (const c of briefComposites) {
+    if (!rulesComposites.includes(c)) {
+      return {
+        ok: false,
+        message: 'docs/design/brief.md ## Composites names "' + c +
+          '" which is not in the rules file\'s Composite column — fix one side, then re-mark design-brief-written',
+      }
+    }
+  }
+
+  const catalogSection = section(text, 'Catalog') || ''
+  const usedSection = extractMdSubHeading(catalogSection, 'Used') || ''
+  const usedNames = usedSection.split('\n').map((l) => l.trim()).filter((l) => l.startsWith('- ')).map((l) => l.slice(2).trim())
+  let catalogText = ''
+  try { catalogText = fs.readFileSync(catalogMdPath(), 'utf8') } catch (e) { catalogText = '' }
+  const catalogNames = [...catalogText.matchAll(/^### (.+)$/gm)].map((m) => m[1].trim())
+  if (catalogNames.length) {
+    for (const u of usedNames) {
+      if (!catalogNames.includes(u)) {
+        return {
+          ok: false,
+          message: 'docs/design/brief.md ### Used names "' + u + '" which is not in docs/design/catalog.md — fix it, then re-mark design-brief-written',
+        }
+      }
+    }
+  }
+
+  return { ok: true }
+}
+
+// D7: findings blocking the mark — table-missing/table-empty/naming-section-missing; the
+// others (kit-missing, tokens-missing, composite-missing) are tolerated at this mark (the kit
+// lands in spec 05's own build).
+const DESIGN_CONTRACT_BLOCKING_KINDS = ['table-missing', 'table-empty', 'naming-section-missing']
+
+function handleDesignBriefWritten() {
+  if (!designStageApplies()) {
+    const desc = readStackDescriptor() || {}
+    die('the design stage does not apply to this host (archetype "' + status.archetype +
+      '", designCatalog "' + (desc.designCatalog || 'unset') + '") — nothing to mark here')
+  }
+  const dp = designPathsCheck()
+  if (!dp.ok) {
+    if (dp.reason === 'missing') {
+      die(genesisRel('design-paths.json') + ' does not exist — write it (template: spec-paths design-paths-template), then re-mark design-brief-written')
+    }
+    if (dp.reason === 'unparseable') {
+      die(genesisRel('design-paths.json') + ' is not valid JSON (' + dp.detail + ') — fix it, then re-mark design-brief-written')
+    }
+    if (dp.reason === 'missing-key') {
+      die(genesisRel('design-paths.json') + ' is missing required key "' + dp.key + '" — add it, then re-mark design-brief-written')
+    }
+    if (dp.reason === 'bad-port') {
+      die(genesisRel('design-paths.json') + '\'s storybook.port is out of the 1024–65535 range — fix it, then re-mark design-brief-written')
+    }
+    return null // unreachable, die() exits
+  }
+  const paths = dp.parsed
+
+  const briefCheck = designBriefCheck(paths)
+  if (!briefCheck.ok) die(briefCheck.message)
+
+  const contractCheckBin = path.join(__dirname, 'design-contract-check.js')
+  const r = runChild(process.execPath, [
+    contractCheckBin, '--root', root,
+    '--rules', paths.rules, '--kit', paths.kit, '--tokens', paths.tokens, '--json',
+  ], { encoding: 'utf8' }, 'design-contract-check.js')
+  if (![0, 1].includes(r.status)) {
+    die('design-contract-check.js exited unexpected code ' + r.status + ': ' + (r.stderr || r.stdout || '').trim())
+  }
+  let result
+  try {
+    result = JSON.parse(r.stdout)
+  } catch (e) {
+    die('design-contract-check.js printed unparseable JSON: ' + (r.stdout || '').trim())
+    return null // unreachable
+  }
+  const blocking = (result.findings || []).filter((f) => DESIGN_CONTRACT_BLOCKING_KINDS.includes(f.kind))
+  if (blocking.length) {
+    const f = blocking[0]
+    die('design contract check found ' + f.kind + (f.layer ? ' (' + f.layer + ')' : '') + ' in ' +
+      f.path + ' — ' + f.remedy + ', then re-mark design-brief-written')
+  }
+
+  status.marks.designBriefWritten = true
+  status.designStage = Object.assign({}, status.designStage, {
+    paths: genesisRel('design-paths.json'),
+    brief: 'docs/design/brief.md',
+    briefAt: new Date().toISOString(),
+  })
+  saveStatus()
+  return { prev: 'DESIGN_BRIEF', next: 'ROADMAP' }
+}
+
 function handleMenusDone() {
   if (!status.marks.discoveryDone) die('discovery-done has not been marked yet — mark discovery-done first')
   if (!status.marks.briefWritten) die('brief-written has not been marked yet — mark brief-written first')
@@ -698,7 +951,6 @@ function mockAppDir() {
   const appRel = (st && typeof st.app === 'string' && st.app) || 'app'
   return path.join(root, appRel)
 }
-function mockAppExists() { return fs.existsSync(path.join(mockAppDir(), 'mock.config.ts')) }
 function designApprovalPath() { return path.join(mockAppDir(), 'design/approval.json') }
 function designNotesPath() { return path.join(mockAppDir(), 'design/notes.json') }
 function readDesignApproval() {
@@ -1450,18 +1702,12 @@ function runShell(cmd, logPath, opts) {
   return runLogged('bash', ['-c', cmd], logPath, Object.assign({ what: 'shell command "' + cmd + '"' }, opts))
 }
 
-// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(d): a scaffold record is
-// "succeeded" either the old way (scaffoldCommand exited 0) or the mock-app way (skipped
-// outright, since the app is the day-zero skeleton already).
-function scaffoldSucceeded(s) { return !!(s && (s.exit === 0 || s.skipped)) }
+// specs/20260926/04-the-design-brief.md D9: the mock app no longer pre-empts the scaffold — a
+// scaffold record is "succeeded" only the one way now (scaffoldCommand exited 0).
+function scaffoldSucceeded(s) { return !!(s && s.exit === 0) }
 
 function runScaffoldIfDue() {
   if (scaffoldSucceeded(status.scaffold)) return status.scaffold
-  if (mockAppExists()) {
-    status.scaffold = { skipped: 'mock-app' }
-    saveStatus()
-    return status.scaffold
-  }
   const desc = readStackDescriptor()
   const r = runShell(desc.scaffoldCommand, scaffoldLogPath())
   status.scaffold = { exit: r.status, at: new Date().toISOString() }
@@ -1551,33 +1797,15 @@ function handleSkeletonLanded() {
   if (!pc.ok) die(describeProbeGap(pc) + ' — land it, then re-mark skeleton-landed')
   const bc = bindingSubsetCheck(desc, testTree)
   if (!bc.ok) die(describeBindingSubsetGap(bc) + ' — fix it, then re-mark skeleton-landed')
-  if (mockAppExists()) {
-    // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(d): once the mock app
-    // exists, the day-zero skeleton gate IS `mock-review check --json` reporting `ok: true` (via
-    // lib/mock-cli.js, contract refusal first) — the data-shell scan, shell-canon matrix check,
-    // shell adopt and design/components.json checks that once ran here for the retired HTML mock
-    // set are gone outright (specs/20260914/03-the-html-atlas-is-retired.md D11).
-    const mockCli = require('./lib/mock-cli')
-    const appDir = mockAppDir()
-    mockCli.contractOrDie(appDir)
-    const check = mockCli.checkJson(appDir)
-    if (!check.ok) {
-      const findingLines = (Array.isArray(check.findings) ? check.findings : [])
-        .map((f) => (f && f.file) + ': ' + (f && f.message)).join('\n')
-      status.marks.skeletonLanded = null
-      saveStatus()
-      die('mock-review check --json reported ok: false — resolve the finding(s), then re-mark skeleton-landed:\n' + findingLines)
-    }
-  }
-  // specs/20260914/03-the-html-atlas-is-retired.md D11: the no-mock-app branch's HTML-design
-  // checks (components.json existence/duplicate-name, design/shell/app.html check, data-shell
-  // scan, check --matrix, canon.md primitives vs components.json) described the retired HTML
-  // mock set and are removed outright — a host with no mock app lands the skeleton with no
-  // HTML-design checks (no reimplementation, no shim).
+  // specs/20260926/04-the-design-brief.md D9: the mock app no longer pre-empts the day-zero
+  // skeleton gate — every host lands the skeleton through the probe/binding-subset checks above
+  // only (no HTML-design checks, no mock-review check --json, no reimplementation, no shim).
   status.marks.skeletonLanded = true
   saveStatus()
   const g = runGateIfDue()
-  return { prev: 'SKELETON', next: g.exit === 0 ? 'ROADMAP' : 'GATE_RED' }
+  if (g.exit !== 0) return { prev: 'SKELETON', next: 'GATE_RED' }
+  recordDesignStageSkipIfNeeded()
+  return { prev: 'SKELETON', next: designStageApplies() ? 'DESIGN_BRIEF' : 'ROADMAP' }
 }
 
 // Caps the byte window logTail reads off disk before it ever looks at lines. A few KB is enough
@@ -1924,7 +2152,18 @@ function deriveState(opts) {
     if (!status.marks.skeletonLanded) return 'SKELETON'
     if (peek) return status.zeroDayGate ? 'GATE_RED' : 'GATE'
     const g = runGateIfDue()
-    return g.exit === 0 ? 'ROADMAP' : 'GATE_RED'
+    if (g.exit !== 0) return 'GATE_RED'
+    recordDesignStageSkipIfNeeded()
+    return designStageApplies() ? 'DESIGN_BRIEF' : 'ROADMAP'
+  }
+
+  // specs/20260926/04-the-design-brief.md D1: DESIGN_BRIEF sits between the green gate and
+  // ROADMAP for a design-stage-applicable host — re-derived while the mark is unset or its own
+  // artifacts (the brief file, design-paths.json) have vanished, never trusted from the mark
+  // alone.
+  if (designStageApplies() &&
+      (!status.marks.designBriefWritten || !fs.existsSync(designBriefMdPath()) || !fs.existsSync(designPathsJsonPath()))) {
+    return 'DESIGN_BRIEF'
   }
 
   const rm = roadmapCheck()
@@ -2006,24 +2245,9 @@ const STEPS = {
       'Doctrine: spec/doctrine/genesis.md § Genesis: Discovery Interview']
     if (noMenu.length) lines.push('open, no menu yet: ' + noMenu.join(', '))
     if (noPick.length) lines.push('open, menu written, no pick: ' + noPick.join(', '))
-    // D6(b)/(c): once the mock app exists, print one auto-pick line per dimension it already
-    // fixes (still listed "open" in brief.md — a re-run after the pick has landed prints
-    // nothing further for it) and record the tournament as skipped for this host.
-    if (mockAppExists()) {
-      const rawOpen = new Set(rawOpenDimensionKeys())
-      const toRecord = []
-      for (const [dim, value] of Object.entries(MOCK_APP_FIXED_DIMS)) {
-        if (rawOpen.has(dim)) {
-          lines.push('📌 Auto-picked ' + value + ' — the mock app is the product\'s frontend (ADR-0028) (veto anytime)')
-          if (!(dim in pks)) toRecord.push([dim, value])
-        }
-      }
-      appendDerivedPicksToBrief(toRecord)
-      if (!(status.tournament && status.tournament.skipped)) {
-        status.tournament = { skipped: 'mock-app' }
-        saveStatus()
-      }
-    }
+    // specs/20260926/04-the-design-brief.md D9: the mock app no longer auto-picks or prints
+    // anything here, and never records the tournament skipped on its account — MENUS treats a
+    // mock-app host like any other now (openDimensionKeys' own narrowing, above, is silent).
     for (const k of openKeys) {
       const rec = status.menus[k]
       if (!rec) continue
@@ -2260,6 +2484,38 @@ const STEPS = {
     '  node ' + __filename + ' --root ' + root,
   ].join('\n'),
 
+  // specs/20260926/04-the-design-brief.md D2: the fresh-session/model line, the design-brief
+  // skill line, one journey line per seed journey, and the catalog line D5 records — the last
+  // read of the mock app's own approval record (design/approval.json).
+  DESIGN_BRIEF: () => {
+    const catalogFail = ensureCatalogGenerated()
+    const seedJourneys = seedJourneysMap()
+    const dp = readDesignPathsJson()
+    const rulesFile = (dp && typeof dp.rules === 'string' && dp.rules) || '.claude/rules/design.md'
+    const lines = [
+      '## Step: write the design brief',
+      'Read only: design/mocks/seed.md, design/approval.json (journeys — last read), ' +
+        genesisRel('brief.md') + ' (## Journeys), docs/design/catalog.md, ' +
+        genesisRel('design-paths.json') + ', ' + rulesFile,
+      'Doctrine: spec/doctrine/genesis.md § Genesis: Design Stage',
+      'Session: start a fresh session for this step — Model: Fable',
+      'Skill: design-brief — load it before the first line',
+    ]
+    if (catalogFail) {
+      lines.push('⚠️ catalog inventory failed (exit ' + catalogFail.exit + ') — write ## Catalog by hand from the installed components')
+    } else if (status.designStage && status.designStage.catalog) {
+      const c = status.designStage.catalog
+      lines.push('catalog: ' + c.components + ' components · ' + c.unavailable + ' compositions unavailable')
+    }
+    for (const [name, j] of seedJourneys) {
+      lines.push('journey: ' + name + ' (' + j.beats.length + ' beats)')
+    }
+    lines.push('Write docs/design/brief.md (template: design-brief.md via spec-paths templates), ' +
+      genesisRel('design-paths.json') + ' (template: design-paths.json), and fill ## Intent to pattern and ## Naming in the rules file.')
+    lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark design-brief-written')
+    return lines.join('\n')
+  },
+
   ROADMAP: () => [
     '## Step: decompose the roadmap',
     'Read only: ' + descriptorRelPath() + ', docs/roadmap/',
@@ -2374,6 +2630,7 @@ function handleMark() {
     case 'picked': result = handlePicked(); break
     case 'decided': result = handleDecided(); break
     case 'skeleton-landed': result = handleSkeletonLanded(); break
+    case 'design-brief-written': result = handleDesignBriefWritten(); break
     case 'roadmap-written': result = handleRoadmapWritten(); break
     case 'profile-written': result = handleProfileWritten(); break
     default:
@@ -2383,7 +2640,7 @@ function handleMark() {
       }
       die('unknown mark "' + MARK + '" (discovery-done | brief-written [--legacy] | menu-written --file <f> | ' +
         'menus-done | finalists-written --file <f> | finalists-skipped | probe-done | picked | ' +
-        'decided | skeleton-landed | roadmap-written | profile-written --file <f> [--refresh])')
+        'decided | skeleton-landed | design-brief-written | roadmap-written | profile-written --file <f> [--refresh])')
       return
   }
   writeOut(1, acceptedOutput(result))

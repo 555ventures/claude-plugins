@@ -1,39 +1,48 @@
 #!/usr/bin/env node
 'use strict'
-// design-contract-check.js --root <dir> [--json] — presence oracle for a host's design
-// contract: the token file, the kit directory of intent-named composites, and the auto-loaded
-// rules file holding the intent-to-pattern table and the four naming subsections.
+// design-contract-check.js --root <dir> [--json] [--rules <file> --kit <dir> --tokens <file>] —
+// presence oracle for a host's design contract: the token file, the kit directory of
+// intent-named composites, and the auto-loaded rules file holding the intent-to-pattern table
+// and the four naming subsections.
 //
 // Owner: specs/20260926/02-the-design-contract-is-code.md D2/D3 (AC-20260926-02-1 through
-// AC-20260926-02-6, AC-20260926-02-10).
+// AC-20260926-02-6, AC-20260926-02-10); specs/20260926/04-the-design-brief.md D7 adds the
+// --rules/--kit/--tokens override flags (AC-20260926-04-15) — all three together, repo-relative
+// to --root, bypass `.claude/spec.config.json` entirely and run the same findings over the named
+// paths, for genesis's `--mark design-brief-written` (no `design` block exists in the config at
+// that point yet).
 //
 // Does NOT: author tables, components, or tokens; validate anything about a host whose
-// `.claude/spec.config.json` carries no `design` block (that host is reported `skipped`); walk
-// for composites when the kit directory itself does not exist; re-derive an enforcer (that is
-// /spec:enforce's job — this script only reports presence).
+// `.claude/spec.config.json` carries no `design` block and no override flags are given (that
+// host is reported `skipped`); walk for composites when the kit directory itself does not
+// exist; re-derive an enforcer (that is /spec:enforce's job — this script only reports
+// presence).
 //
 // A `design` block that is present but missing `kit`, `tokens`, or `rules` (D1: all three are
 // required once the block exists) reports the same *-missing kind as a missing path would, with
 // no `path` (there is no configured value to point at) and a remedy naming the key to add — it
 // never crashes and never invents a new finding kind.
 //
-// Exit codes: 0 clean or skipped (no design block) · 1 one or more findings · 2 usage error
-// (missing --root)
+// Exit codes: 0 clean or skipped (no design block, no overrides) · 1 one or more findings ·
+// 2 usage error (missing --root, or exactly one or two of --rules/--kit/--tokens given)
 
 const fs = require('node:fs')
 const path = require('node:path')
 const { readConfig } = require('./lib/host-config')
 
 function usage() {
-  process.stderr.write('usage: design-contract-check.js --root <dir> [--json]\n')
+  process.stderr.write('usage: design-contract-check.js --root <dir> [--json] [--rules <file> --kit <dir> --tokens <file>]\n')
 }
 
 function parseArgs(argv) {
-  const out = { root: null, json: false }
+  const out = { root: null, json: false, rules: null, kit: null, tokens: null }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--root') { out.root = argv[++i]; continue }
     if (a === '--json') { out.json = true; continue }
+    if (a === '--rules') { out.rules = argv[++i]; continue }
+    if (a === '--kit') { out.kit = argv[++i]; continue }
+    if (a === '--tokens') { out.tokens = argv[++i]; continue }
   }
   return out
 }
@@ -153,19 +162,17 @@ function checkNamingLayer(namingSection, layer, rulesRelPath, findings) {
   }
 }
 
-function run(root) {
+// D7: the shared check body, run either from a host config's `design` block (run(), below) or
+// from the --rules/--kit/--tokens override flags (main()) — the same findings either way, since
+// a bypassed config is just a different source for the same three paths.
+function runWithPaths(root, { tokens, kit, rules } = {}) {
   const findings = []
-  const config = readConfig(root)
-  const design = config.design
-  if (!design) {
-    return { ok: true, findings: [], skipped: 'no-design-block' }
-  }
 
   const isNonEmptyString = v => typeof v === 'string' && v.length > 0
 
-  const tokensRel = isNonEmptyString(design.tokens) ? design.tokens : null
-  const kitRel = isNonEmptyString(design.kit) ? design.kit : null
-  const rulesRel = isNonEmptyString(design.rules) ? design.rules : null
+  const tokensRel = isNonEmptyString(tokens) ? tokens : null
+  const kitRel = isNonEmptyString(kit) ? kit : null
+  const rulesRel = isNonEmptyString(rules) ? rules : null
 
   const tokensExists = tokensRel !== null && fs.existsSync(path.join(root, tokensRel)) && fs.statSync(path.join(root, tokensRel)).isFile()
   const kitAbs = kitRel !== null ? path.join(root, kitRel) : null
@@ -233,6 +240,15 @@ function run(root) {
   return { ok: findings.length === 0, findings }
 }
 
+function run(root) {
+  const config = readConfig(root)
+  const design = config.design
+  if (!design) {
+    return { ok: true, findings: [], skipped: 'no-design-block' }
+  }
+  return runWithPaths(root, { tokens: design.tokens, kit: design.kit, rules: design.rules })
+}
+
 function renderHuman(result) {
   if (result.skipped) return 'skipped: no design block\n'
   if (result.findings.length === 0) return 'design contract: ok\n'
@@ -246,7 +262,15 @@ function main() {
     process.exitCode = 2
     return
   }
-  const result = run(args.root)
+  const overridesGiven = [args.rules, args.kit, args.tokens].filter((v) => v !== null)
+  if (overridesGiven.length > 0 && overridesGiven.length < 3) {
+    process.stderr.write('usage: --rules, --kit and --tokens go together\n')
+    process.exitCode = 2
+    return
+  }
+  const result = overridesGiven.length === 3
+    ? runWithPaths(args.root, { tokens: args.tokens, kit: args.kit, rules: args.rules })
+    : run(args.root)
   const text = args.json ? JSON.stringify(result) + '\n' : renderHuman(result)
   writeOut(1, text)
   process.exitCode = result.findings.length === 0 ? 0 : 1

@@ -196,17 +196,11 @@ argument alone: `FINALISTS` → `RACE` (driver-only) → `PROBE` → `PICK`. Eve
 derives `MENUS → DECIDE` unchanged and writes no `.claude/genesis/tournament/`; a skipped race
 (`--mark finalists-skipped`) records `tournament.skipped` and advances the same way.
 
-**The mock app pre-empts the tournament.** When `<status.app>/mock.config.ts` exists at
-`MENUS`, `framework`, `language`, and `packageManager` are already fixed by the app the user
-approved in `/spec:mocks` — each auto-picked (`vite-react` / `typescript` / `npm`), printed once
-per run while its dimension is open (`📌 Auto-picked <value> — the mock app is the product's
-frontend (ADR-0028) (veto anytime)`), and recorded decided; `testRunner` and every other
-dimension stay open, priced the ordinary way. The tournament is never raced against an app that
-already exists — racing scaffolds would either overwrite it or be theater — and the state is
-recorded `tournament: { skipped: "mock-app" }` at `MENUS` itself, never reaching `FINALISTS`,
-`RACE`, `PROBE`, or `PICK`; `DECIDE` proceeds straight on the derived dimensions. A host with no
-`<status.app>/mock.config.ts` runs the tournament exactly as described below — no behavior
-change on brownfield hosts, which never reach genesis anyway.
+**The mock app is not the product.** A host with `<status.app>/mock.config.ts` on disk runs
+`MENUS`, the tournament, and `SCAFFOLD` exactly like any other host — no dimension is
+auto-picked, no `tournament.skipped` is recorded, and no scaffold is skipped on its account.
+`design/approval.json`'s journey record still governs `BRIEF`'s precondition (§ Genesis: Brief
+State); it is never read again after `DESIGN_BRIEF` (§ Genesis: Design Stage).
 
 **FINALISTS.** The session composes 2–3 finalist stack combinations from the menus (a
 finalist is a combination the session composes, never a single option); at least one must
@@ -498,14 +492,10 @@ Land the test + CI skeleton — the enforcement half of the ops ADR, day zero:
   ≤150-line file naming the gate command and the test tree, the primary artifact a fresh agent
   actually reads.
 
-**The mock app is the day-zero skeleton (fresh mocks-set runs only).** When `<status.app>/
-mock.config.ts` exists, `SCAFFOLD` runs no `scaffoldCommand` — the app the user already
-approved in `/spec:mocks` is the skeleton, so racing or re-scaffolding it would either overwrite
-work or be theater — and records `status.scaffold = { skipped: "mock-app" }`. `--mark
-skeleton-landed` then refuses unless `mock-review check` reports `ok: true` (via `lib/
-mock-cli.js`) and the zero-day gate is green; the refusal names whichever failed. There is no
-separate shell-extraction pass and no second component manifest here — the screens already
-carry their own shells and states, checked structurally by `mock-review check` itself.
+**The mock app is not the skeleton.** `SCAFFOLD` runs its `scaffoldCommand` for every host,
+mock app or not — the wireframe the user approved in `/spec:mocks` is a throwaway, never the
+day-zero skeleton. `--mark skeleton-landed` refuses on the probe, binding-subset, and
+zero-day-gate checks above only; it runs no check against the mock app.
 
 ## Genesis: Conventions Probe Suite
 
@@ -537,7 +527,9 @@ disk — never from the enum alone; a mark whose named artifact vanished is dema
 states: `DISCOVERY` → `BRIEF` (mark-driven, § Genesis: Brief State) → `MENUS` →
 [`FINALISTS` → `RACE` (driver-only) → `PROBE` → `PICK`, tournament archetypes only, § Genesis:
 Tournament of Scaffolds] → `DECIDE` → `SCAFFOLD` (driver-only) → `SKELETON` → `GATE`
-(driver-only) → `GATE_RED` | `ROADMAP` → `HANDOFF` → `GROUNDED` (terminal for this stage).
+(driver-only) → `GATE_RED` | `DESIGN_BRIEF` → [`DESIGN_KIT` → `DESIGN_JOURNEYS` →
+`AWAITING_DESIGN_APPROVAL`, specs 05/06, § Genesis: Design Stage] → `ROADMAP` → `HANDOFF` →
+`GROUNDED` (terminal for this stage).
 `HANDOFF` is itself a judgment step — the session authors `.claude/genesis/init-profile.json`
 and the driver runs `init-gen.js generate` against it (§ Genesis: Enforcement Handoff to the
 spec pipeline) — never the terminal print itself; `GROUNDED` is reached only once that run
@@ -557,6 +549,9 @@ text opens with `Read only:` followed by the files that step needs — never the
   `doctrine-drafted` or `tokens-landed` — § Genesis: Brief State's legacy resume
 - `brief`: `null` until `--mark brief-written`, then `{mocks, legacy, ratifiedAt}`
   (§ Genesis: Brief State)
+- `designStage`: `null` until the first derivation past the green gate, then either
+  `{ skipped: 'non-visual' | 'non-storybook', at }` or `{ paths, brief, catalog, briefAt }`
+  once `design-brief-written` is accepted (§ Genesis: Design Stage)
 
 The roadmap (the driver's `ROADMAP` state, § Genesis: Roadmap Decomposition) deliberately has
 **no enum value of its own**: nothing downstream gates on it (design and init don't depend on
@@ -573,6 +568,48 @@ resumes there with its existing explore/design artifacts rather than being force
 warned when `design` is still `pending`. **Re-entry verifies the named artifacts physically
 exist — never trust the phase enum alone** (a phase can be set while a side-effect was rolled
 back).
+
+## Genesis: Design Stage
+
+`DESIGN_BRIEF` is derived after the zero-day gate is green (`architect: scaffold-complete`) and
+before `ROADMAP`, on a host where `designStageApplies()` holds: the archetype is visual
+(§ Genesis: Archetype Registry) **and** the stack descriptor's `designCatalog === 'storybook'`.
+Any other host — `data-ml`, `backend-api`, a visual archetype on a non-Storybook catalog —
+records `status.designStage = { skipped: 'non-visual' | 'non-storybook', at }` on the first
+derivation past the gate and continues straight to `ROADMAP`; no new mark is ever demanded of
+it. `DESIGN_BRIEF` is re-derived whenever `marks.designBriefWritten` is unset or either
+`docs/design/brief.md` or `.claude/genesis/design-paths.json` has vanished from disk — the same
+artifact-over-enum discipline § Genesis: State Machine states for every other step.
+
+**The mock app's last read.** `DESIGN_BRIEF`'s step is the last point genesis reads
+`design/approval.json` — the wireframe's journey record. From here on the design stage works
+against the real scaffolded app; the wireframe is a throwaway that has done its job (§ Genesis:
+Tournament of Scaffolds, § Genesis: Day-Zero Skeleton).
+
+**Session and model.** The driver's printed step names a fresh session and Fable as the model:
+`DESIGN_BRIEF` is authored by the seat that writes taste and prose, never carried inside the
+architect session's own context. The step also names the `design-brief` skill
+(`spec/skills/design-brief/SKILL.md`) to load before the first line, and prints one
+`catalog: N components · M compositions unavailable` line and one `journey: <name> (<beats>
+beats)` line per approved journey.
+
+**The catalog inventory.** When `docs/design/catalog.md` is absent at the step's first print,
+the driver runs `catalog-inventory.js` itself and records the
+counts under `status.designStage.catalog`; a non-zero exit degrades to a warning and never
+blocks the mark — the brief's `## Catalog` section can still be written from the component list
+alone. `/spec:doctor` re-runs the same script with `--check` to flag a catalog gone stale
+against the installed kit.
+
+**`--mark design-brief-written`** verifies three artifacts, refusing by name on the first
+failure: `.claude/genesis/design-paths.json` (schema-complete, `storybook.port` an integer
+1024–65535); `docs/design/brief.md` (heading order, one JTBD line per journey, no entity
+section, a non-empty `## Composites` table whose `Composite` column equals the rules file's own
+`## Intent to pattern` column, every `### Used` name present in `docs/design/catalog.md`); and
+the rules file's `## Intent to pattern`/`## Naming` tables via `design-contract-check.js`'s
+`--rules --kit --tokens` overrides (a missing kit or tokens file is tolerated here — the kit
+lands in a later spec). On success the mark records `status.designStage = { paths, brief,
+catalog, briefAt }` and the run advances to `ROADMAP` (or `DESIGN_KIT` once a later spec adds
+it).
 
 ## Genesis: Roadmap Decomposition
 
@@ -676,6 +713,17 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   `ledger.md`, `tokens.css`, and the approved journeys' screens. BRIEF never writes here — it
   only reads `status.json`/`ledger.md` for the precondition.
 - **`.claude/genesis/design-rules.json`** — design's output: category-only enforcement rules.
+- **`.claude/genesis/design-paths.json`** — `DESIGN_BRIEF`'s session-authored path map (template
+  `spec/templates/design-paths.json`, § Genesis: Design Stage): `kit`, `tokens`, `rules`,
+  `primitives`, `primitivesAlias`, `journeys`, `storybook`. Read by every later design mark and
+  by `HANDOFF`; `--mark design-brief-written` refuses when it is missing a required key.
+- **`docs/design/brief.md`** — `DESIGN_BRIEF`'s authored brief (template
+  `spec/templates/design-brief.md`, § Genesis: Design Stage): users and context, one JTBD line
+  per journey, navigation, the catalog split into used/excluded, one composite per intent, and
+  the `## Contract` line naming the rules file.
+- **`docs/design/catalog.md`** (durable) — the driver-generated shadcn inventory
+  (`catalog-inventory.js`, § Genesis: Design Stage), refreshed by `/spec:doctor`'s currency
+  check when the installed kit changes.
 - **`.claude/genesis/interview-research/{dimension}.json`** — the woven-loop option menus,
   each surviving option stamped with a `currency` block and each menu carrying any
   `droppedForCurrency` entries `registry-check.js` removed.

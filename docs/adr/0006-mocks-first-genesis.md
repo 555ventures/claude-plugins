@@ -27,6 +27,10 @@
   - specs/20260901/04 — D7, D9, D10 superseded (shell required before mocks; Fable dispatch
     authorship; position-brief grounding), D8 narrowed (AppShell rule survives under BRIEF/SKELETON).
   - specs/20260810/01 — D3, D4, D8 superseded (already retargeted twice; no live seat remains).
+- Amended by: ADR-0030 — genesis still reads an approved journey set first, but the roadmap now
+  derives from the designed set only after JJ's design approval; the mock app stops being the
+  product this record describes.
+
 ## Context
 
 The current genesis order commits the framework, scaffold, roadmap and design lock before

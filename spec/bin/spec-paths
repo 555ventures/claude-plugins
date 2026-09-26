@@ -55,6 +55,9 @@ case "${1:-root}" in
   comment-narration) echo "$ROOT/scripts/comment-narration.js" ;;
   design-contract-check) echo "$ROOT/scripts/design-contract-check.js" ;;
   design-rules-template)  echo "$ROOT/templates/design-rules.md" ;;
+  catalog-inventory)      echo "$ROOT/scripts/catalog-inventory.js" ;;
+  design-brief-template)  echo "$ROOT/templates/design-brief.md" ;;
+  design-paths-template)  echo "$ROOT/templates/design-paths.json" ;;
   shared)         echo "$ROOT/doctrine/core.md" ;;
   shared-design)  echo "$ROOT/doctrine/design.md" ;;
   shared-genesis|shared-mocks)

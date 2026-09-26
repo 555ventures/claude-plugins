@@ -259,3 +259,50 @@ test('AC-20260926-02-5: WHEN a present design block lacks one or more of kit, to
     }
   }
 })
+
+// specs/20260926/04-the-design-brief.md D7: at genesis time no `.claude/spec.config.json`
+// `design` block exists yet — `--mark design-brief-written` runs design-contract-check.js
+// against design-paths.json's own three paths via new override flags that bypass the config
+// entirely. This file owns AC-20260926-04-15.
+
+test('AC-20260926-04-15: WHEN design-contract-check.js --root <r> --rules <f> --kit <d> --tokens <t> --json runs on a root with NO .claude/spec.config.json THE SYSTEM reports findings for the named paths instead of skipped', () => {
+  const dir = tmpdir('design-contract-ac15-overrides')
+  fs.mkdirSync(path.join(dir, 'src/tokens-dir'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'src/tokens-dir/tokens.css'), '@theme {}\n')
+  fs.mkdirSync(path.join(dir, '.claude/rules'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/rules/design.md'), FULL_RULES)
+  // no src/kit at all — kit-missing must be the one finding a design block would also report
+
+  const r = runNode(SCRIPT, [
+    '--root', dir,
+    '--rules', '.claude/rules/design.md',
+    '--kit', 'src/kit',
+    '--tokens', 'src/tokens-dir/tokens.css',
+    '--json',
+  ])
+  assert.strictEqual(r.status, 1,
+    'a root with no .claude/spec.config.json at all must still report findings once --rules/--kit/--tokens are all given — an exit other than 1 means the overrides never engaged and the run fell back to the (nonexistent) config: ' + r.stderr + r.stdout)
+  let out
+  try {
+    out = JSON.parse(r.stdout)
+  } catch {
+    assert.fail('the overridden run must print parseable JSON: ' + JSON.stringify(r.stdout))
+  }
+  assert.notStrictEqual(out.skipped, 'no-design-block',
+    'the overridden run must never report skipped:"no-design-block" — that value means the script fell back to reading .claude/spec.config.json instead of the --rules/--kit/--tokens paths: ' + JSON.stringify(out))
+  const kinds = out.findings.map(f => f.kind)
+  assert.ok(kinds.includes('kit-missing'),
+    'src/kit does not exist on this host, so the overridden run must report kit-missing exactly as a config-driven run would for the same absent path: ' + JSON.stringify(out.findings))
+  const kitFinding = out.findings.find(f => f.kind === 'kit-missing')
+  assert.strictEqual(kitFinding.path, 'src/kit',
+    'the kit-missing finding must name the --kit path verbatim: ' + JSON.stringify(kitFinding))
+})
+
+test('AC-20260926-04-15: WHEN only --rules is passed (without --kit and --tokens) THE SYSTEM exits 2 with stderr naming "--rules, --kit and --tokens go together"', () => {
+  const dir = tmpdir('design-contract-ac15-partial')
+  const r = runNode(SCRIPT, ['--root', dir, '--rules', '.claude/rules/design.md'])
+  assert.strictEqual(r.status, 2,
+    'passing only one of the three override flags must exit 2 (usage) — silently ignoring the partial override and falling through to a config read would validate the wrong host: ' + r.stderr + r.stdout)
+  assert.match(r.stderr, /--rules, --kit and --tokens go together/,
+    'the usage refusal must name the exact remedy phrase so a caller knows all three flags are required together: ' + r.stderr)
+})

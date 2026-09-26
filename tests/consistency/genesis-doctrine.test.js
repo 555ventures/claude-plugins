@@ -1163,57 +1163,44 @@ test('AC-20260902-08-17 / AC-20260914-02-15: spec-paths shared-for genesis SHALL
     'shared-for genesis must CONTINUE TO serve § Host Grounding — a section map broken by this spec\'s doctrine edits would mean the command reads no grounding doctrine at all')
 })
 
-// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D7 retargets this AC-ID: § Genesis:
-// Tournament of Scaffolds and § Genesis: Day-Zero Skeleton each gain a paragraph stating D6
-// (b)-(d) (the derived-framework auto-picks, the skipped tournament, and the check-gated
-// skeleton mark); § Genesis: Brief State names design/approval.json as a BRIEF derivation
-// source (spec 20260902/11's own D1 wiring); none of the retired second-artifact mechanics
-// (shell adopt, check --matrix, data-shell, design/components.json) may survive anywhere in the
-// file. All four literals are present in genesis.md today (grep-confirmed at test-authoring
-// time — components.json/shell-adopt/check --matrix/data-shell all still live in § Day-Zero
-// Skeleton), so this test is red until D7 lands.
+// specs/20260926/04-the-design-brief.md D9/AC-20260926-04-22 rewrites this AC-ID in place: D9
+// retires the mock app's product-precedence branches outright (the auto-pick, the
+// tournament/scaffold skips, skeleton-landed's mock-review gate), and with them the two doctrine
+// paragraphs that described the shortcut ("The mock app pre-empts the tournament" under §
+// Tournament of Scaffolds, "The mock app is the day-zero skeleton" under § Day-Zero Skeleton).
+// This test's own former assertions — that those two paragraphs (naming skipped: "mock-app" and
+// "mock-review check") EXIST — are exactly backwards now; it asserts their absence ANYWHERE in
+// the file instead, while keeping its other two clauses (design/approval.json under Brief State,
+// the shell-adopt/check --matrix/data-shell/components.json ban) untouched, since D9 does not
+// touch either.
 
-test('AC-20260914-02-7: WHEN spec/doctrine/genesis.md is read THE SYSTEM SHALL name mock-review check under Day-Zero Skeleton, skipped: "mock-app" under Tournament of Scaffolds, design/approval.json under Brief State, and contain none of shell adopt, check --matrix, data-shell, design/components.json', () => {
+test('AC-20260914-02-7/AC-20260926-04-22: WHEN spec/doctrine/genesis.md is read THE SYSTEM SHALL name design/approval.json under Brief State, contain neither skipped: "mock-app" nor mock-review check anywhere, and contain none of shell adopt, check --matrix, data-shell, design/components.json', () => {
   const doctrineSrc = read('spec/doctrine/genesis.md')
 
   const briefStateMatch = doctrineSrc.match(/^## Genesis: Brief State$/m)
   assert.ok(briefStateMatch,
     'the "## Genesis: Brief State" heading (migrated by specs/20260902/08) must still exist as ' +
-    'the section boundary D7 adds design/approval.json\'s derivation source inside')
+    'the section boundary design/approval.json\'s derivation source lives inside')
   const afterBriefState = doctrineSrc.slice(briefStateMatch.index + briefStateMatch[0].length)
   const briefStateSection = afterBriefState.slice(0, (afterBriefState.match(/^## /m) || { index: afterBriefState.length }).index)
   assert.match(briefStateSection, /design\/approval\.json/,
-    'D7: § Genesis: Brief State must name "design/approval.json" as a BRIEF derivation source — ' +
-    'its absence means the section still describes the driver reading journeys some other way ' +
-    'even though D6(a) makes briefPreconditionCheck read them straight from this file')
+    'AC-20260926-04-22: § Genesis: Brief State must still name "design/approval.json" as BRIEF\'s ' +
+    'journey-count source — its absence means the section no longer documents where ' +
+    'briefPreconditionCheck reads journeys from, even though D9 leaves that read unchanged')
 
-  const tournamentMatch = doctrineSrc.match(/^## Genesis: Tournament of Scaffolds$/m)
-  assert.ok(tournamentMatch,
-    'the "## Genesis: Tournament of Scaffolds" heading must still exist as the section boundary ' +
-    'D7 adds D6(b)-(c)\'s skipped-tournament paragraph inside')
-  const afterTournament = doctrineSrc.slice(tournamentMatch.index + tournamentMatch[0].length)
-  const tournamentSection = afterTournament.slice(0, (afterTournament.match(/^## /m) || { index: afterTournament.length }).index)
-  assert.match(tournamentSection, /skipped:\s*"mock-app"/,
-    'D7: § Genesis: Tournament of Scaffolds must state D6(c)\'s skipped: "mock-app" rule — its ' +
-    'absence leaves the section describing a tournament that always runs, even on a host whose ' +
-    'mock app already fixes the frontend dimensions')
-
-  const skeletonMatch = doctrineSrc.match(/^## Genesis: Day-Zero Skeleton$/m)
-  assert.ok(skeletonMatch,
-    'the "## Genesis: Day-Zero Skeleton" heading (migrated by specs/20260825/04) must still ' +
-    'exist as the section boundary D7 adds D6(d)\'s check-gated mark rule inside')
-  const afterSkeleton = doctrineSrc.slice(skeletonMatch.index + skeletonMatch[0].length)
-  const skeletonSection = afterSkeleton.slice(0, (afterSkeleton.match(/^## /m) || { index: afterSkeleton.length }).index)
-  assert.match(skeletonSection, /mock-review check/,
-    'D7: § Genesis: Day-Zero Skeleton must name "mock-review check" — its absence means the ' +
-    'section still describes the retired data-shell/design-atlas gate instead of the ' +
-    '--mark skeleton-landed precondition D6(d) actually enforces once the mock app exists')
+  assert.ok(!/skipped:\s*"mock-app"/.test(doctrineSrc),
+    'D9/AC-20260926-04-22: spec/doctrine/genesis.md must contain no `skipped: "mock-app"` ' +
+    'literal anywhere — its presence means the doctrine still describes the retired mock-app ' +
+    'tournament/scaffold-skip paragraph ("The mock app pre-empts the tournament") that D9 deletes')
+  assert.ok(!doctrineSrc.includes('mock-review check'),
+    'D9/AC-20260926-04-22: spec/doctrine/genesis.md must contain no "mock-review check" literal ' +
+    'anywhere — its presence means the doctrine still describes the retired day-zero-skeleton ' +
+    'paragraph ("The mock app is the day-zero skeleton") that D9 deletes')
 
   for (const retired of ['shell adopt', 'check --matrix', 'data-shell', 'design/components.json']) {
     assert.ok(!doctrineSrc.includes(retired),
-      'D7: spec/doctrine/genesis.md must contain none of the retired second-artifact mechanics — ' +
-      'found "' + retired + '", which describes a check this repo no longer runs once the mock ' +
-      'app is the day-zero skeleton and design/components.json is retired (D6(d), D12)')
+      'spec/doctrine/genesis.md must CONTINUE TO contain none of the retired second-artifact ' +
+      'mechanics — found "' + retired + '", which describes a check this repo no longer runs')
   }
 })
 

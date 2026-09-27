@@ -159,6 +159,31 @@
 //   - author brief.md's prose or the mocks approval itself — those stay session
 //     judgment; the driver only closes each mark once the artifacts exist and cover the seed.
 //
+// specs/20260926/05-the-kit-and-the-journey-stories.md D1: two more design-stage states,
+// DESIGN_KIT and DESIGN_JOURNEYS, sit between DESIGN_BRIEF and ROADMAP for a design-stage-
+// applicable host. DESIGN_KIT closes with `--mark kit-landed` once every brief composite has a
+// fixture story per declared state, proven by an EXECUTED Storybook static build (`runStorybookBuild`,
+// D3) and lib/storybook-index.js's index reader (D2) — a build that exits 0 with no `iframe.html`
+// (the salon-os TanStack Start spike) is still a refusal, never a pass on exit code alone.
+// DESIGN_JOURNEYS closes with `--mark journeys-drawn` once every seed journey has a story that
+// imports the driver's own `<journeys>/<j>.beats.json` derivation (written at this state's own
+// print, D6) and calls `step()` per beat, contains no import of a primitive (D8's ban walks every
+// file under `<journeys>` by location, never by filename shape), and the rebuilt index tags it
+// `journey`+`play-fn`. Both marks re-derive their state from disk on every invocation — a
+// deleted `.storybook/main.*` or journey story file is demanded again, never trusted from the
+// recorded mark alone (D1).
+//
+// What the D1-D9 additions deliberately do NOT do:
+//   - author the kit, the tokens, the shell, or a single journey screen — those stay session
+//     (Fable, then Sonnet) judgment; the driver only closes each mark once the artifacts exist,
+//     compile, and the executed build proves it.
+//   - parse `step()` call sites out of a journey story's source to verify it "matches" the seed's
+//     beats — the story imports the beats file and iterates it, so equality holds by
+//     construction; the mark proves the import and the literal `step(` call, never the steps'
+//     content.
+//   - execute a story's `play` function at either mark — Storybook's own build only compiles and
+//     indexes stories; walking a journey is the human review at the approval stop (spec 06).
+//
 // Fixing that overflow only at the child's own capture is insufficient: `logTail`, which builds the
 // SCAFFOLD_RED/GATE_RED excerpt embedded in the driver's OWN stdout, bounds its excerpt by BYTES,
 // not lines (`text.split('\n').slice(-n)` cannot: a caller's buffer is measured in bytes). A single
@@ -190,6 +215,7 @@ const mocksLedgerLib = require('./lib/mocks-ledger')
 // retired with the HTML mock set (spec 03 deletes the module for good).
 const surfacesLib = require('./lib/surfaces')
 const driverIo = require('./lib/driver-io')
+const storybookIndexLib = require('./lib/storybook-index')
 
 // The 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in full
 // at spec/scripts/lib/driver-io.js's writeOut. Callers here pass unterminated lines.
@@ -671,6 +697,39 @@ function designPathsCheck() {
   return { ok: true, parsed }
 }
 
+// specs/20260926/05-the-kit-and-the-journey-stories.md D5/D8: design-paths.json is re-validated
+// (never trusted from design-brief-written's earlier pass alone) at both kit-landed and
+// journeys-drawn — shares designPathsCheck()'s reasons and design-brief-written's own wording,
+// parameterized by the mark name so the remedy names the right re-mark command.
+function requireDesignPaths(markName) {
+  const dp = designPathsCheck()
+  if (dp.ok) return dp.parsed
+  if (dp.reason === 'missing') {
+    die(genesisRel('design-paths.json') + ' does not exist — write it (template: spec-paths design-paths-template), then re-mark ' + markName)
+  }
+  if (dp.reason === 'unparseable') {
+    die(genesisRel('design-paths.json') + ' is not valid JSON (' + dp.detail + ') — fix it, then re-mark ' + markName)
+  }
+  if (dp.reason === 'missing-key') {
+    die(genesisRel('design-paths.json') + ' is missing required key "' + dp.key + '" — add it, then re-mark ' + markName)
+  }
+  if (dp.reason === 'bad-port') {
+    die(genesisRel('design-paths.json') + '\'s storybook.port is out of the 1024–65535 range — fix it, then re-mark ' + markName)
+  }
+  return null // unreachable, die() exits
+}
+
+// docs/design/brief.md's own ## Composites table — one composite per row, `{ composite, states }`
+// in brief order, states split on `,` and trimmed. Shared by the DESIGN_KIT step text (D4) and
+// kit-landed's stateStoriesCheck call (D5).
+function briefCompositesWithStates() {
+  const text = fs.readFileSync(designBriefMdPath(), 'utf8')
+  const sec = section(text, 'Composites') || ''
+  return findMdTableRows(sec)
+    .filter((r) => r[0])
+    .map((r) => ({ composite: r[0], states: (r[2] || '').split(',').map((s) => s.trim()).filter(Boolean) }))
+}
+
 // D5: runs catalog-inventory.js at most once per host, and only when docs/design/catalog.md is
 // BOTH absent AND unrecorded — D5's own trigger is the file's absence, so a file already on the
 // host (never generated by this driver) is left untouched, never overwritten, and never re-run
@@ -909,7 +968,261 @@ function handleDesignBriefWritten() {
     briefAt: new Date().toISOString(),
   })
   saveStatus()
-  return { prev: 'DESIGN_BRIEF', next: 'ROADMAP' }
+  // specs/20260926/05-the-kit-and-the-journey-stories.md D1: design-brief-written now hands off
+  // to DESIGN_KIT, never straight to ROADMAP — the kit and the journey stories land first.
+  return { prev: 'DESIGN_BRIEF', next: 'DESIGN_KIT' }
+}
+
+// ---------------------------------------------------------------------------
+// DESIGN_KIT / DESIGN_JOURNEYS (specs/20260926/05-the-kit-and-the-journey-stories.md D1/D3/D5/D6/
+// D8): two more design-stage states between DESIGN_BRIEF and ROADMAP. Shared plumbing first —
+// runStorybookBuild (D3), the Storybook main-config check, the journey-story-file finder, the
+// primitive ban's directory walk, and the beats-file writer (D6) — then the two mark handlers.
+// ---------------------------------------------------------------------------
+
+function storybookBuildLogPath() { return path.join(genesisDir, 'storybook-build.log') }
+
+const STORYBOOK_MAIN_EXTS = ['ts', 'js', 'mts', 'mjs', 'cjs']
+function storybookMainExists() {
+  return STORYBOOK_MAIN_EXTS.some((ext) => fs.existsSync(path.join(root, '.storybook', 'main.' + ext)))
+}
+
+// D3: runs `design-paths.storybook.buildCommand` through the existing runShell idiom (streamed to
+// storybook-build.log, never a Node pipe — A6), writes `<staticDir>/.gitignore` containing `*`
+// before every attempt (AC-20260926-05-7: the file must exist after ANY attempt, successful or
+// not, so the static export is never accidentally committed), and returns `{ exit, ms, index }`.
+// Refusing on the result is the caller's job (refuseOnStorybookBuild, below) — both marks share
+// the exact same refusal wording.
+function runStorybookBuild(paths) {
+  const staticDir = path.join(root, paths.storybook.staticDir)
+  fs.mkdirSync(staticDir, { recursive: true })
+  fs.writeFileSync(path.join(staticDir, '.gitignore'), '*\n')
+  const logPath = storybookBuildLogPath()
+  const start = Date.now()
+  const r = runShell(paths.storybook.buildCommand, logPath)
+  const ms = Date.now() - start
+  const index = storybookIndexLib.readIndex(staticDir)
+  return { exit: r.status, ms, index }
+}
+
+// Shared by kit-landed (D5) and journeys-drawn (D8): a non-zero exit quotes the log's tail and
+// names "storybook build"; an ok:false index names whichever file readIndex found missing —
+// `iframe.html` (the salon-os false-pass class this whole design exists to catch) or
+// `index.json`.
+function refuseOnStorybookBuild(build, markName) {
+  if (build.exit !== 0) {
+    die('storybook build exited ' + build.exit + ' — ' + logTail(storybookBuildLogPath()) +
+      '\nfix the build, then re-mark ' + markName)
+  }
+  if (!build.index.ok) {
+    if (build.index.reason === 'no-iframe') {
+      die('storybook build succeeded but wrote no iframe.html under the static export — a builder ' +
+        'that drops the iframe input (e.g. a TanStack Start host) needs it restored in ' +
+        '.storybook/main.ts viteFinal, then re-mark ' + markName)
+    }
+    die('storybook build wrote no readable index.json under the static export — check ' +
+      'the build command, then re-mark ' + markName)
+  }
+}
+
+// D8's journey-story finder: exactly one file matching `<journeysDir>/<name>.journey.stories.*`.
+function findJourneyStoryFile(journeysAbsDir, name) {
+  let files = []
+  try { files = fs.readdirSync(journeysAbsDir) } catch (e) { files = [] }
+  const re = new RegExp('^' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.journey\\.stories\\.[^.]+$')
+  const matches = files.filter((f) => re.test(f))
+  return matches.length === 1 ? path.join(journeysAbsDir, matches[0]) : null
+}
+
+function walkFilesRecursive(dir) {
+  let out = []
+  let entries
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch (e) { return out }
+  for (const e of entries) {
+    const p = path.join(dir, e.name)
+    if (e.isDirectory()) out = out.concat(walkFilesRecursive(p))
+    else if (e.isFile()) out.push(p)
+  }
+  return out
+}
+
+// D8's primitive ban: every `.ts/.tsx/.js/.jsx` file under `<journeysDir>` (classified by
+// LOCATION — the directory walk — never by filename shape, per the pipeline rules' own recorded
+// gotcha) is scanned for an import specifier that equals `primitivesAlias`, starts with
+// `primitivesAlias + '/'`, or (a relative specifier) resolves inside `primitives`. Returns the
+// first `{ file, specifier }` hit (repo-relative file path), or `null`.
+function primitiveBanCheck(journeysAbsDir, primitivesAlias, primitivesAbs) {
+  const files = walkFilesRecursive(journeysAbsDir).filter((f) => /\.(ts|tsx|js|jsx)$/.test(f)).sort()
+  for (const f of files) {
+    let text
+    try { text = fs.readFileSync(f, 'utf8') } catch (e) { continue }
+    for (const s of storybookIndexLib.importSpecifiers(text)) {
+      let hit = s === primitivesAlias || s.startsWith(primitivesAlias + '/')
+      if (!hit && s.startsWith('.')) {
+        const resolved = path.resolve(path.dirname(f), s)
+        const rel = path.relative(primitivesAbs, resolved)
+        hit = rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
+      }
+      if (hit) return { file: path.relative(root, f), specifier: s }
+    }
+  }
+  return null
+}
+
+// D6: `<journeysDir>/<name>.beats.json` — the driver's own derivation of a journey's story,
+// never the story's declaration (see the header's rationale paragraph). Called only from
+// STEPS.DESIGN_JOURNEYS's print (never from `--state`, which never side-effects): creates the
+// journeys directory, rewrites a file whose recorded `beatHash` no longer matches the seed's own
+// hash, and never touches one that still matches.
+function beatsFilePath(journeysRel, name) { return path.join(root, journeysRel, name + '.beats.json') }
+
+function writeBeatsFilesIfNeeded(journeysRel) {
+  if (!journeysRel) return
+  fs.mkdirSync(path.join(root, journeysRel), { recursive: true })
+  for (const [name, j] of seedJourneysMap()) {
+    const hash = surfacesLib.beatHash(j.beats)
+    const p = beatsFilePath(journeysRel, name)
+    let existingHash = null
+    try { existingHash = JSON.parse(fs.readFileSync(p, 'utf8')).beatHash } catch (e) { existingHash = null }
+    if (existingHash === hash) continue
+    const beats = j.beats.map((b) => ({ n: b.n, sentence: b.beat, screen: b.screen, state: b.state }))
+    fs.writeFileSync(p, JSON.stringify({ journey: name, beatHash: hash, beats }, null, 2) + '\n')
+  }
+}
+
+// D1: a journey story file vanishing after journeys-drawn re-derives DESIGN_JOURNEYS — checked
+// against design-paths.json's own journeys dir, never cached.
+function anyJourneyStoryVanished() {
+  const dp = readDesignPathsJson()
+  if (!dp || typeof dp.journeys !== 'string') return true
+  const journeysAbsDir = path.join(root, dp.journeys)
+  for (const [name] of seedJourneysMap()) {
+    if (!findJourneyStoryFile(journeysAbsDir, name)) return true
+  }
+  return false
+}
+
+// D5: `--mark kit-landed` — design-paths.json valid, then design-contract-check.js's full check
+// (every composite present, tables filled, tokens file present) exits 0, then .storybook/main.*
+// exists, then D3's build succeeds, then D2's stateStoriesCheck finds every declared state.
+function handleKitLanded() {
+  if (!status.marks.designBriefWritten) die('design-brief-written has not been marked yet — mark design-brief-written first')
+  if (!designStageApplies()) {
+    const desc = readStackDescriptor() || {}
+    die('the design stage does not apply to this host (archetype "' + status.archetype +
+      '", designCatalog "' + (desc.designCatalog || 'unset') + '") — nothing to mark here')
+  }
+  const paths = requireDesignPaths('kit-landed')
+
+  const contractCheckBin = path.join(__dirname, 'design-contract-check.js')
+  const cr = runChild(process.execPath, [
+    contractCheckBin, '--root', root,
+    '--rules', paths.rules, '--kit', paths.kit, '--tokens', paths.tokens, '--json',
+  ], { encoding: 'utf8' }, 'design-contract-check.js')
+  if (![0, 1].includes(cr.status)) {
+    die('design-contract-check.js exited unexpected code ' + cr.status + ': ' + (cr.stderr || cr.stdout || '').trim())
+  }
+  let cresult
+  try {
+    cresult = JSON.parse(cr.stdout)
+  } catch (e) {
+    die('design-contract-check.js printed unparseable JSON: ' + (cr.stdout || '').trim())
+    return null // unreachable
+  }
+  if (cresult.findings && cresult.findings.length) {
+    const f = cresult.findings[0]
+    die('design contract check found ' + f.kind + (f.layer ? ' (' + f.layer + ')' : '') + ' — ' +
+      f.remedy + ', then re-mark kit-landed')
+  }
+
+  if (!storybookMainExists()) {
+    die('.storybook/main.{ts,js,mts,mjs,cjs} does not exist — run the init recipe ' +
+      '(storybook@latest init --yes --no-dev …), then re-mark kit-landed')
+  }
+
+  const build = runStorybookBuild(paths)
+  refuseOnStorybookBuild(build, 'kit-landed')
+
+  const missing = storybookIndexLib.stateStoriesCheck(build.index.entries, briefCompositesWithStates(), paths.kit)
+  if (missing) {
+    die('composite ' + missing.composite + ': no state story ' + missing.state + ' under ' + paths.kit +
+      ' — export a story named ' + missing.state + ' in ' + missing.composite + '.stories.tsx')
+  }
+
+  status.marks.kitLanded = true
+  status.designStage = Object.assign({}, status.designStage, {
+    kit: { build: { exit: build.exit, ms: build.ms, stories: build.index.entries.length }, at: new Date().toISOString() },
+  })
+  saveStatus()
+  return { prev: 'DESIGN_KIT', next: 'DESIGN_JOURNEYS' }
+}
+
+// D8: `--mark journeys-drawn` — per seed journey, D6's hash still holds, exactly one story file,
+// it imports its own beats.json and calls step(), then the primitive ban over the whole journeys
+// directory, then D3's build and D2's journeyStoriesCheck.
+function handleJourneysDrawn() {
+  if (!status.marks.kitLanded) die('kit-landed has not been marked yet — mark kit-landed first')
+  if (!designStageApplies()) {
+    const desc = readStackDescriptor() || {}
+    die('the design stage does not apply to this host (archetype "' + status.archetype +
+      '", designCatalog "' + (desc.designCatalog || 'unset') + '") — nothing to mark here')
+  }
+  const paths = requireDesignPaths('journeys-drawn')
+  const journeysAbsDir = path.join(root, paths.journeys)
+  const primitivesAbs = path.join(root, paths.primitives)
+  const seedJourneys = seedJourneysMap()
+
+  for (const [name, j] of seedJourneys) {
+    const expectedHash = surfacesLib.beatHash(j.beats)
+    let storedHash = null
+    try { storedHash = JSON.parse(fs.readFileSync(beatsFilePath(paths.journeys, name), 'utf8')).beatHash } catch (e) { storedHash = null }
+    if (storedHash !== expectedHash) {
+      die('beats for ' + name + ' changed since the last print — re-run the driver, then re-draw')
+    }
+
+    const storyFile = findJourneyStoryFile(journeysAbsDir, name)
+    if (!storyFile) {
+      die('journey ' + name + ': no journey story found matching ' + paths.journeys + '/' + name +
+        '.journey.stories.* — draw it, then re-mark journeys-drawn')
+    }
+    const relStoryFile = path.relative(root, storyFile)
+    const text = fs.readFileSync(storyFile, 'utf8')
+    const specs = storybookIndexLib.importSpecifiers(text)
+    const wantExact = './' + name + '.beats.json'
+    const wantSuffix = '/' + name + '.beats.json'
+    if (!specs.some((s) => s === wantExact || s.endsWith(wantSuffix))) {
+      die('journey file ' + relStoryFile + ' does not import ./' + name + '.beats.json — import it ' +
+        'and call step() per beat, then re-mark journeys-drawn')
+    }
+    if (!/\bstep\s*\(/.test(storybookIndexLib.stripComments(text))) {
+      die('journey file ' + relStoryFile + ' has no step( call in its play function — add one per ' +
+        'beat, then re-mark journeys-drawn')
+    }
+  }
+
+  const banHit = primitiveBanCheck(journeysAbsDir, paths.primitivesAlias, primitivesAbs)
+  if (banHit) {
+    die('journey file ' + banHit.file + ' imports a primitive (' + banHit.specifier +
+      ') — import composites from ' + paths.kit + ' only')
+  }
+
+  const build = runStorybookBuild(paths)
+  refuseOnStorybookBuild(build, 'journeys-drawn')
+  const jCheck = storybookIndexLib.journeyStoriesCheck(build.index.entries, [...seedJourneys.keys()], paths.journeys)
+  if (!jCheck.ok) {
+    die('journey ' + jCheck.journey + ': no story tagged journey with a play function in the index')
+  }
+
+  status.marks.journeysDrawn = true
+  status.designStage = Object.assign({}, status.designStage, {
+    journeys: {
+      build: { exit: build.exit, ms: build.ms, stories: build.index.entries.length },
+      stories: jCheck.stories,
+      at: new Date().toISOString(),
+    },
+  })
+  saveStatus()
+  return { prev: 'DESIGN_JOURNEYS', next: 'ROADMAP' }
 }
 
 function handleMenusDone() {
@@ -2178,6 +2491,15 @@ function deriveState(opts) {
     return 'DESIGN_BRIEF'
   }
 
+  // specs/20260926/05-the-kit-and-the-journey-stories.md D1: DESIGN_KIT while
+  // `marks.designBriefWritten && !marks.kitLanded`, or a vanished `.storybook/main.*`; then
+  // DESIGN_JOURNEYS while `!marks.journeysDrawn`, or a vanished journey story — both re-derived
+  // from disk on every call, never trusted from the mark alone.
+  if (designStageApplies()) {
+    if (!status.marks.kitLanded || !storybookMainExists()) return 'DESIGN_KIT'
+    if (!status.marks.journeysDrawn || anyJourneyStoryVanished()) return 'DESIGN_JOURNEYS'
+  }
+
   const rm = roadmapCheck()
   if (!status.marks.roadmapWritten || (!legacyTrusted && !rm.ok)) return 'ROADMAP'
 
@@ -2528,6 +2850,63 @@ const STEPS = {
     return lines.join('\n')
   },
 
+  // specs/20260926/05-the-kit-and-the-journey-stories.md D4: the fresh-session/model line, the
+  // frontend-design skill line (warn, never block — the standing theme-authoring skill), one
+  // composite line per brief row, the Storybook setup recipe (Contracts), and --mark kit-landed.
+  DESIGN_KIT: () => {
+    const dp = readDesignPathsJson() || {}
+    const rulesFile = typeof dp.rules === 'string' ? dp.rules : '.claude/rules/design.md'
+    const lines = [
+      '## Step: author the tokens, the shell and the kit',
+      'Read only: docs/design/brief.md, docs/design/catalog.md, ' + rulesFile + ', ' + genesisRel('design-paths.json'),
+      'Doctrine: spec/doctrine/genesis.md § Genesis: Design Stage',
+      'Session: start a fresh session for this step — Model: Fable (authors tokens, shell and composites)',
+      'Skill: frontend-design — load it if installed; ⚠️ missing = warn and continue',
+    ]
+    for (const c of briefCompositesWithStates()) {
+      lines.push('composite: ' + c.composite + ' — states: ' + c.states.join(', '))
+    }
+    lines.push(
+      'Storybook setup:',
+      '  npx -y storybook@latest init --yes --no-dev --features docs test --disable-telemetry --package-manager <pm> </dev/null',
+      '    -> .storybook/main.ts + preview.tsx, scripts "storybook"/"build-storybook", example stories under src/stories/ (delete them)',
+      '  Add `import \'<tokens css or app css>\'` to .storybook/preview.tsx (init does not import the app\'s CSS).',
+      '  Re-pin the devDependencies init left at "latest" (@chromatic-com/storybook, vitest, playwright, @vitest/browser-playwright, @vitest/coverage-v8).',
+      '  TanStack Start hosts: if the build emits no iframe.html, restore builder-vite\'s iframe.html input in .storybook/main.ts viteFinal.',
+    )
+    lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark kit-landed')
+    return lines.join('\n')
+  },
+
+  // specs/20260926/05-the-kit-and-the-journey-stories.md D7/D6: the fresh-session/model line
+  // naming Sonnet, one journey line per seed journey (beat count and the story's target path),
+  // the primitive-ban rule, the CSF/router recipe (Contracts), and --mark journeys-drawn. D6's
+  // beats-file writer runs here, at this step's own print — never from `--state`.
+  DESIGN_JOURNEYS: () => {
+    const dp = readDesignPathsJson() || {}
+    const journeysRel = typeof dp.journeys === 'string' ? dp.journeys : 'src/journeys'
+    writeBeatsFilesIfNeeded(journeysRel)
+    const rulesFile = typeof dp.rules === 'string' ? dp.rules : '.claude/rules/design.md'
+    const seedJourneys = seedJourneysMap()
+    const beatsFiles = [...seedJourneys.keys()].map((name) => journeysRel + '/' + name + '.beats.json')
+    const lines = [
+      '## Step: rebuild every approved journey as a journey story',
+      'Read only: docs/design/brief.md, ' + rulesFile + ', ' + beatsFiles.join(', ') + ', ' + (dp.kit || 'src/components/kit'),
+      'Doctrine: spec/doctrine/genesis.md § Genesis: Design Stage',
+      'Session: start a fresh session for this step — Model: Sonnet may draw the journey screens from the brief; all journeys in this one session',
+    ]
+    for (const [name, j] of seedJourneys) {
+      lines.push('journey: ' + name + ' — ' + j.beats.length + ' beats → ' + journeysRel + '/' + name + '.journey.stories.tsx')
+    }
+    lines.push(
+      'Rules: import composites from ' + (dp.kit || 'the kit') + ' only, never ' + (dp.primitivesAlias || 'the primitives alias') + '.',
+      "meta: title: 'Journeys/<j>', tags: ['journey']; import beats from './<j>.beats.json'; " +
+        'play iterates beats calling step(b.sentence, …); the host\'s real router in memory mode; fixtures from the records.',
+    )
+    lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark journeys-drawn')
+    return lines.join('\n')
+  },
+
   ROADMAP: () => [
     '## Step: decompose the roadmap',
     'Read only: ' + descriptorRelPath() + ', docs/roadmap/',
@@ -2562,10 +2941,20 @@ const STEPS = {
     // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D1: HANDOFF writes the
     // contract's design block from status.app when it stamps spec.config.json — { "app":
     // "<status.app>" } and nothing else, present only on a host the mocks stage actually ran on.
+    // specs/20260926/05-the-kit-and-the-journey-stories.md D9: once the design stage landed a
+    // kit, the line reads design-paths.json instead — { "kit", "tokens", "rules" }, plus "app"
+    // when the mocks status still carries one. A skipped or never-reached stage is unchanged.
     const mocksStatus = readMocksStatus()
-    const designLine = (mocksStatus && mocksStatus.app)
-      ? 'config.design set to { "app": "' + mocksStatus.app + '" } (D1); '
-      : ''
+    let designLine = ''
+    if (status.designStage && status.designStage.kit) {
+      const dp = readDesignPathsJson() || {}
+      readFiles.push(genesisRel('design-paths.json'))
+      let inner = '"kit": "' + dp.kit + '", "tokens": "' + dp.tokens + '", "rules": "' + dp.rules + '"'
+      if (mocksStatus && mocksStatus.app) inner += ', "app": "' + mocksStatus.app + '"'
+      designLine = 'config.design set to { ' + inner + ' }; '
+    } else if (mocksStatus && mocksStatus.app) {
+      designLine = 'config.design set to { "app": "' + mocksStatus.app + '" } (D1); '
+    }
     return [
       '## Step: handoff — author the init profile; the driver grounds the repo',
       'Read only: ' + readFiles.join(', '),
@@ -2643,6 +3032,8 @@ function handleMark() {
     case 'decided': result = handleDecided(); break
     case 'skeleton-landed': result = handleSkeletonLanded(); break
     case 'design-brief-written': result = handleDesignBriefWritten(); break
+    case 'kit-landed': result = handleKitLanded(); break
+    case 'journeys-drawn': result = handleJourneysDrawn(); break
     case 'roadmap-written': result = handleRoadmapWritten(); break
     case 'profile-written': result = handleProfileWritten(); break
     default:
@@ -2652,7 +3043,8 @@ function handleMark() {
       }
       die('unknown mark "' + MARK + '" (discovery-done | brief-written [--legacy] | menu-written --file <f> | ' +
         'menus-done | finalists-written --file <f> | finalists-skipped | probe-done | picked | ' +
-        'decided | skeleton-landed | design-brief-written | roadmap-written | profile-written --file <f> [--refresh])')
+        'decided | skeleton-landed | design-brief-written | kit-landed | journeys-drawn | ' +
+        'roadmap-written | profile-written --file <f> [--refresh])')
       return
   }
   writeOut(1, acceptedOutput(result))

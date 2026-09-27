@@ -607,9 +607,41 @@ section, a non-empty `## Composites` table whose `Composite` column equals the r
 `## Intent to pattern` column, every `### Used` name present in `docs/design/catalog.md`); and
 the rules file's `## Intent to pattern`/`## Naming` tables via `design-contract-check.js`'s
 `--rules --kit --tokens` overrides (a missing kit or tokens file is tolerated here — the kit
-lands in a later spec). On success the mark records `status.designStage = { paths, brief,
-catalog, briefAt }` and the run advances to `ROADMAP` (or `DESIGN_KIT` once a later spec adds
-it).
+lands at `DESIGN_KIT`, next). On success the mark records `status.designStage = { paths, brief,
+catalog, briefAt }` and the run advances to `DESIGN_KIT`.
+
+**The kit (`DESIGN_KIT`).** Derived once `marks.designBriefWritten` holds and re-derived whenever
+`marks.kitLanded` is unset or `.storybook/main.*` has vanished from disk — the same
+artifact-over-enum discipline as every other step. The step names a fresh session and Fable as
+the model, the same taste-and-prose seat as `DESIGN_BRIEF`: Fable authors the tokens, the shell,
+and one intent-named composite per pattern row with a fixture story per declared state; the
+`frontend-design` skill loads first if installed, warning and continuing when it is not. The
+Storybook setup recipe (the non-interactive init, the preview CSS import, the example-stories
+deletion, the pinned-`latest` devDependency re-pin, the TanStack Start iframe-input fix) is
+printed by the step itself via `spec-paths shared-genesis --section "Design Stage"` — this
+section states the rule, never a second copy of the recipe text. `--mark kit-landed` runs
+`design-contract-check`'s `--rules --kit --tokens` overrides, requires `.storybook/main.*` and a
+green Storybook build, and refuses by composite and state name the first declared state with no
+matching story — a kit is landed only once every composite the brief named carries a story for
+every state the brief declared.
+
+**The journeys (`DESIGN_JOURNEYS`).** Derived once `marks.kitLanded` holds and re-derived
+whenever `marks.journeysDrawn` is unset or a journey story has vanished from disk. **The
+beats-file contract:** at every print the driver derives `<journeys>/<journey>.beats.json` from
+the seed's own beats (`{ journey, beatHash, beats: [{ n, sentence, screen, state }] }`),
+rewriting only a file whose hash no longer matches the seed — a journey story imports this file
+and iterates it in its `play` function, so "a story whose steps equal the seed's beats" holds by
+construction; `journeys-drawn` only has to prove the import and the recomputed hash, never parse
+step literals out of source (pipeline rules § Gotchas records that class of regex-over-prose
+fragility). **The primitive ban:** no file under the journeys directory may import a primitive —
+by specifier equal to or under `primitivesAlias`, or by relative path resolving into
+`primitives` — a journey composes kit composites only; the refusal names the file and the
+specifier. **Model placement:** the step names Sonnet as the model that may draw the journey
+screens from the brief, once the kit exists and never before it, and names every approved journey
+in this one session — never a session per journey. `--mark journeys-drawn` proves, via the
+rebuilt Storybook index, that every journey carries a story tagged both `journey` and `play-fn`
+with a passing build; on success the run advances to `ROADMAP` (spec 06 interposes an approval
+stop between them).
 
 ## Genesis: Roadmap Decomposition
 
@@ -717,6 +749,16 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   `spec/templates/design-paths.json`, § Genesis: Design Stage): `kit`, `tokens`, `rules`,
   `primitives`, `primitivesAlias`, `journeys`, `storybook`. Read by every later design mark and
   by `HANDOFF`; `--mark design-brief-written` refuses when it is missing a required key.
+- **`<journeys>/<journey>.beats.json`** (durable, driver-written at every `DESIGN_JOURNEYS`
+  print, § Genesis: Design Stage) — the derived beats a journey story imports and iterates;
+  rewritten only when its `beatHash` no longer matches the seed.
+- **`<kit>/<Composite>.stories.*`** and **`<journeys>/<journey>.journey.stories.*`** (durable,
+  session-authored at `DESIGN_KIT`/`DESIGN_JOURNEYS`) — the state stories that prove a composite's
+  declared states and the journey stories the beats files feed; both are proved by the rebuilt
+  Storybook index at their own mark, never by a separate assertion of file existence.
+- **`.claude/genesis/storybook-static/`** (transient, gitignored) — the Storybook static export
+  `runStorybookBuild` rebuilds at every `kit-landed`/`journeys-drawn` attempt; never committed,
+  never read after the mark that built it.
 - **`docs/design/brief.md`** — `DESIGN_BRIEF`'s authored brief (template
   `spec/templates/design-brief.md`, § Genesis: Design Stage): users and context, one JTBD line
   per journey, navigation, the catalog split into used/excluded, one composite per intent, and

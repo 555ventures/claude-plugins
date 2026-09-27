@@ -93,3 +93,7 @@ overrides (all three together, else exit 2) that bypass the config and run the s
 over the named paths. At that mark only `table-missing`, `table-empty` and
 `naming-section-missing` refuse; `kit-missing`, `tokens-missing` and `composite-missing` are
 tolerated until the kit lands. (specs/20260926/04-the-design-brief.md D7)
+
+Composites' state stories are the living showcase, gated by `kit-discipline`; journey stories
+are a genesis artifact that walks the seed's beats against the real kit and router.
+(specs/20260926/05-the-kit-and-the-journey-stories.md D10)

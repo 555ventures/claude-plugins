@@ -1,0 +1,29 @@
+{
+  "v": 5,
+  "entries": {
+    "kit-bookingsheet--idle": {
+      "type": "story", "id": "kit-bookingsheet--idle", "title": "Kit/BookingSheet", "name": "Idle",
+      "importPath": "./src/components/kit/BookingSheet.stories.tsx", "tags": ["dev", "test", "manifest"]
+    },
+    "kit-bookingsheet--saving": {
+      "type": "story", "id": "kit-bookingsheet--saving", "title": "Kit/BookingSheet", "name": "Saving",
+      "importPath": "./src/components/kit/BookingSheet.stories.tsx", "tags": ["dev", "test", "manifest"]
+    },
+    "kit-destructiveconfirmdialog--idle": {
+      "type": "story", "id": "kit-destructiveconfirmdialog--idle", "title": "Kit/DestructiveConfirmDialog", "name": "Idle",
+      "importPath": "./src/components/kit/DestructiveConfirmDialog.stories.tsx", "tags": ["dev", "test", "manifest"]
+    },
+    "kit-destructiveconfirmdialog--confirming": {
+      "type": "story", "id": "kit-destructiveconfirmdialog--confirming", "title": "Kit/DestructiveConfirmDialog", "name": "Confirming",
+      "importPath": "./src/components/kit/DestructiveConfirmDialog.stories.tsx", "tags": ["dev", "test", "manifest"]
+    },
+    "journeys-first-visit--default": {
+      "type": "story", "id": "journeys-first-visit--default", "title": "Journeys/first-visit", "name": "Default",
+      "importPath": "./src/journeys/first-visit.journey.stories.tsx", "tags": ["dev", "test", "manifest", "journey", "play-fn"]
+    },
+    "journeys-daily-check--default": {
+      "type": "story", "id": "journeys-daily-check--default", "title": "Journeys/daily-check", "name": "Default",
+      "importPath": "./src/journeys/daily-check.journey.stories.tsx", "tags": ["dev", "test", "manifest", "journey", "play-fn"]
+    }
+  }
+}

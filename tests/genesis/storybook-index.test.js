@@ -72,4 +72,8 @@ test('AC-20260926-05-5: importSpecifiers returns every import/require specifier 
   const specs = importSpecifiers(text)
   assert.deepStrictEqual(specs, ['@/components/ui/button', './a.json', '@/components/kit/BookingSheet', './lazy'],
     'D2: importSpecifiers must return exactly these four specifiers in source order — a commented-out import must never be counted (it would falsely trip the primitive ban), and both single- and double-quoted forms must be admitted: ' + JSON.stringify(specs))
+
+  const bareSideEffect = importSpecifiers("import '@/components/ui/button'\nimport x from './a.json'\n")
+  assert.deepStrictEqual(bareSideEffect, ['@/components/ui/button', './a.json'],
+    'D2: importSpecifiers must return a bare side-effect import\'s specifier too, not just a `from`-form import\'s — missing it would let a journey file smuggle a bare `import \'@/components/ui/button\'` past the primitive ban entirely: ' + JSON.stringify(bareSideEffect))
 })

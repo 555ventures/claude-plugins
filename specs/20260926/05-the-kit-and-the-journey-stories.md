@@ -1,6 +1,6 @@
 ---
 date: 2026-09-26
-status: implementing
+status: done
 tier: standard
 area: genesis
 breaking: false
@@ -202,6 +202,22 @@ mechanically can return on a measured need.
 Rejected: a story-only router switch (the brief's default is the real router in memory mode,
 and the spike confirmed it works); parsing steps from the built preview (Storybook exposes no
 step names outside the runtime); a per-journey Sonnet session (the brief's default is one).
+
+Build notes (2026-09-27, folded from the deviations sidecar and the build/review rounds):
+- The stub build's call counter is the `STORYBOOK_BUILD_CALL_COUNTER` env var (unset = no
+  counter), mirroring `shadcn-stub.js`'s `STUB_COUNTER`; the driver never knows about it.
+- `journeyStoriesCheck`'s internal return shape is unpinned by design — AC-14/16/17 pin only its
+  observable effect through `--mark journeys-drawn`.
+- D12 was a user ruling at build: spec 04's brief-written checkpoint pin was the predecessor
+  CONTINUE-TO collision D1 retires; updated in place, spec-04 tag kept.
+- The whole-suite gate's `dependency-free` scanner read a comment's `require('…')` placeholder
+  and a test input line as package imports; the comment was reworded and the input literal split,
+  runtime string unchanged.
+- Review iteration 1 fixed two hard findings: `importSpecifiers` dropped a bare side-effect
+  import followed by a from-import (the lazy from-clause alternative spanned it — bare is now
+  tried first, and AC-5's test pins the case), and the missing-state refusal lacked D5's remedy
+  tail (AC-11 now pins the full string). One advisory soft stands: the "design stage does not
+  apply" refusal is copied three times in the driver.
 
 ## Canonical Delta
 

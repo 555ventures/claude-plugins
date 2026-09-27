@@ -123,9 +123,19 @@ function stripComments(text) {
 // require(<specifier>) call, and a dynamic import(<specifier>) call, after stripComments,
 // admitting both quote forms, in source order. One combined regex (rather than four separate
 // passes merged and re-sorted) so source order falls out of a single left-to-right `exec` walk
-// for free.
+// for free. The bare-import alternative is tried BEFORE the from-clause alternative: the
+// from-clause alternative's `[\s\S]*?` span is lazy but unbounded, so if it were tried first at a
+// bare import's own `import` keyword it would keep expanding right past that whole statement
+// looking for the next `from` anywhere later in the file — silently swallowing a bare import that
+// precedes an `import … from` statement (repro: `import '@/x'\nimport y from './a.json'`, which
+// would report only `./a.json`). Trying the bare form first means it wins outright whenever
+// `import` is directly followed by a quote, so the from-clause alternative only ever fires when no
+// bare form matches at that position. What this still cannot see: a `from`-clause statement whose
+// own span (no bare import in between) has to cross into a LATER statement because the word
+// `from` never appears before then — not expected in real import statements, but a contrived
+// multi-import block engineered to lack an early `from` could still mis-scan.
 const IMPORT_SPECIFIER_RE =
-  /import\s*\(\s*(['"])([^'"]+)\1\s*\)|require\s*\(\s*(['"])([^'"]+)\3\s*\)|import\s+[\s\S]*?\bfrom\s+(['"])([^'"]+)\5|import\s+(['"])([^'"]+)\7/g
+  /import\s*\(\s*(['"])([^'"]+)\1\s*\)|require\s*\(\s*(['"])([^'"]+)\3\s*\)|import\s+(['"])([^'"]+)\5|import\s+[\s\S]*?\bfrom\s+(['"])([^'"]+)\7/g
 
 function importSpecifiers(text) {
   const stripped = stripComments(text)

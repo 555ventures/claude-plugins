@@ -467,8 +467,9 @@ test('AC-20260926-05-11: WHEN the build succeeds against the missing-state fixtu
   prepareKitArtifacts(dir, { index: FIXTURE_MISSING_STATE })
   const missing = mark(dir, 'kit-landed')
   assert.strictEqual(missing.status, 2, 'D5: a built index missing a declared state must refuse kit-landed: ' + missing.stdout)
-  assert.match(missing.stderr, /composite BookingSheet: no state story Error under src\/components\/kit/,
-    'D5: the refusal must read "composite BookingSheet: no state story Error under src/components/kit": ' + missing.stderr)
+  assert.match(missing.stderr,
+    /composite BookingSheet: no state story Error under src\/components\/kit — export a story named Error in BookingSheet\.stories\.tsx/,
+    'D5: the refusal must read "composite BookingSheet: no state story Error under src/components/kit — export a story named Error in BookingSheet.stories.tsx" — a shortened message dropping the remedy tail would leave the operator with no idea which file to fix: ' + missing.stderr)
 
   setBuildCommand(dir, { index: FIXTURE_KIT_JOURNEYS })
   const accepted = mark(dir, 'kit-landed')

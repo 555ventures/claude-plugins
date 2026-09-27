@@ -1145,7 +1145,8 @@ function handleKitLanded() {
 
   const missing = storybookIndexLib.stateStoriesCheck(build.index.entries, briefCompositesWithStates(), paths.kit)
   if (missing) {
-    die('composite ' + missing.composite + ': no state story ' + missing.state + ' under ' + paths.kit)
+    die('composite ' + missing.composite + ': no state story ' + missing.state + ' under ' + paths.kit +
+      ' — export a story named ' + missing.state + ' in ' + missing.composite + '.stories.tsx')
   }
 
   status.marks.kitLanded = true

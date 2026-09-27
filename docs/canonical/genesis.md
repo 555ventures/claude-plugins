@@ -161,10 +161,28 @@
   section, a non-empty composites table equal to the rules file's composite column, used
   components present in the inventory), `.claude/genesis/design-paths.json` (every path key, an
   integer Storybook port 1024–65535), and the rules file's tables via `design-contract-check
-  --rules --kit --tokens`; acceptance records `status.designStage` and routes to `ROADMAP` until
-  spec 05's `DESIGN_KIT` lands. The mock app is no longer the product: MENUS auto-picks nothing,
+  --rules --kit --tokens`; acceptance records `status.designStage` and routes to `DESIGN_KIT`. The mock app is no longer the product: MENUS auto-picks nothing,
   the tournament and scaffold run for every host, and `skeleton-landed` runs no mock review
   check; BRIEF still requires the mocks set `APPROVED` and reads `design/approval.json` for the
   journey count, and `DESIGN_BRIEF`'s step is the last read of that record. `/spec:doctor` check
   22 re-runs the inventory with `--check` when `docs/design/catalog.md` exists.
   (specs/20260926/04-the-design-brief.md, done 2026-09-26)
+
+- Since specs/20260926/05, after `DESIGN_BRIEF` the chain runs `DESIGN_KIT` then
+  `DESIGN_JOURNEYS`. At `DESIGN_KIT` Fable authors the tokens, the shell and one composite per
+  pattern row with a story per declared state; Storybook is installed by the printed recipe (the
+  driver never runs init). `kit-landed` runs `design-contract-check` with path overrides, requires
+  `.storybook/main.*`, runs the paths file's `buildCommand`, requires `iframe.html` and
+  `index.json` in the static export (a build that exits 0 without `iframe.html` is refused), and
+  checks every declared state has a story. At `DESIGN_JOURNEYS`'s print the driver writes
+  `<journeys>/<j>.beats.json` from the seed (rewritten only when its `beatHash` changes); journey
+  stories import it and `step()` each beat, so the story's steps equal the seed's beats by
+  construction. `journeys-drawn` checks the hash, one story per journey importing its beats file
+  and calling `step(`, the primitive ban over every source file under the journeys directory
+  (comment-stripped import specifiers, bare side-effect imports included), and a `journey` +
+  `play-fn` index entry per journey in the rebuilt export. Each mark builds Storybook exactly once
+  into the gitignored `.claude/genesis/storybook-static/`; a vanished `.storybook/main.*` or
+  journey story re-derives its state. HANDOFF stamps `design: {kit, tokens, rules}` (plus `app`
+  when the mocks status carries one) from the paths file. Play functions are not executed at the
+  marks — the approval stop is where they are walked.
+  (specs/20260926/05-the-kit-and-the-journey-stories.md, done 2026-09-27)

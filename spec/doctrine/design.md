@@ -37,6 +37,12 @@ carries `approvedAt` and a `hash`; a named screen is **approved** once `approved
 its `hash` equals `check --json`'s current `hash` for that screen — **stale** the moment the
 hash differs (an edit after approval, never silently re-bound).
 
+**The design contract is code, twice over.** Once the design stage lands a kit (genesis.md
+§ Genesis: Design Stage), a composite's own state stories are the living showcase of the
+intent-to-pattern table — gated by brief 27's `kit-discipline`, never a hand-kept screenshot doc.
+A journey story is a genesis artifact, not a mock-app one: it walks the seed's beats against the
+real kit and router, once the mock app's wireframe has already done its job.
+
 **Look stops are never questions.** Every look this doctrine governs prints `🎨 ready for
 review — <check.serve.url>/#/<screen>`, one line per surface, then the fixed reply line, then
 **ends the turn**; only the literal `approve` accepts. The reviewer page (the mock app's own

@@ -485,7 +485,7 @@ test('AC-20260926-04-9 (review finding s0): WHEN the catalog inventory itself fa
 // AC-20260926-04-11
 // ---------------------------------------------------------------------------
 
-test('AC-20260926-04-11: WHEN --mark design-brief-written runs with a complete brief, a valid design-paths.json, and a rules file whose Composite column matches and whose four naming tables each carry a row THE SYSTEM exits 0, records the marks and status, and prints (DESIGN_BRIEF → ROADMAP)', () => {
+test('AC-20260926-04-11: WHEN --mark design-brief-written runs with a complete brief, a valid design-paths.json, and a rules file whose Composite column matches and whose four naming tables each carry a row THE SYSTEM exits 0, records the marks and status, and prints (DESIGN_BRIEF → DESIGN_KIT)', () => {
   const { dir } = setupValidDesignHost('design-stage-ac11')
   const accepted = mark(dir, 'design-brief-written')
   assert.strictEqual(accepted.status, 0,
@@ -494,8 +494,8 @@ test('AC-20260926-04-11: WHEN --mark design-brief-written runs with a complete b
   assert.strictEqual(st.marks.designBriefWritten, true, 'D8: marks.designBriefWritten must be true: ' + JSON.stringify(st.marks))
   assert.strictEqual(st.designStage.brief, 'docs/design/brief.md', 'D8: status.designStage.brief must name docs/design/brief.md: ' + JSON.stringify(st.designStage))
   assert.ok(st.designStage.briefAt, 'D8: status.designStage.briefAt must be an ISO timestamp: ' + JSON.stringify(st.designStage))
-  assert.match(accepted.stdout, /\(DESIGN_BRIEF → ROADMAP\)/,
-    'D8: the checkpoint line must read "(DESIGN_BRIEF → ROADMAP)": ' + accepted.stdout)
+  assert.match(accepted.stdout, /\(DESIGN_BRIEF → DESIGN_KIT\)/,
+    'D8: the checkpoint line must read "(DESIGN_BRIEF → DESIGN_KIT)": ' + accepted.stdout)
 })
 
 // ---------------------------------------------------------------------------

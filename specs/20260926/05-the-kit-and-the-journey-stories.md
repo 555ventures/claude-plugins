@@ -1,6 +1,6 @@
 ---
 date: 2026-09-26
-status: hardened
+status: implementing
 tier: standard
 area: genesis
 breaking: false
@@ -8,7 +8,9 @@ depends_on: [specs/20260926/04-the-design-brief.md]
 depended_on_by: [specs/20260926/06-the-approval-stop-and-the-roadmap.md]
 brief: 30
 spiked: 2026-09-26
+build_base: design-retool
 open_markers: 0
+diff_base: d1a54dd1de7027602dc6960a144fd09da42ee5f7
 ---
 
 # The kit and the journey stories
@@ -41,6 +43,7 @@ and HANDOFF stamps brief 27's `design` block from the design paths.
 | D8 | `--mark journeys-drawn` requires, per seed journey: exactly one file matching `<journeys>/<j>.journey.stories.*`; its comment-stripped text contains an import specifier ending `/<j>.beats.json` or equal to `./<j>.beats.json`, and matches `/\bstep\s*\(/`; D6's hash holds; then the primitive ban over every `.ts/.tsx/.js/.jsx` under `<journeys>`: no `importSpecifiers` entry equals `primitivesAlias`, starts with `primitivesAlias + '/'`, or (relative) resolves inside `<primitives>` — refusal `journey file <f> imports a primitive (<specifier>) — import composites from <kit> only`; then D3's build and D2's `journeyStoriesCheck` (refusal `journey <j>: no story tagged journey with a play function in the index`). On success `marks.journeysDrawn = true`, `status.designStage.journeys = { build, stories: { <j>: <story id> }, at }`. (AC-20260926-05-14, AC-20260926-05-15, AC-20260926-05-16, AC-20260926-05-17) | ADR-0030 (g): journey screens import composites only — the primitive ban applies here first; the `journey` + `play-fn` tags in the index prove the story exists and walks. |
 | D9 | HANDOFF's `config.design` line reads `design-paths.json` when `status.designStage.kit` exists: `config.design set to { "kit": "<kit>", "tokens": "<tokens>", "rules": "<rules>" }` plus `, "app": "<status.app>"` when the mocks status carries `app`; when the stage was skipped or never reached, the existing `{ "app": … }` line (or none) is unchanged. The `Read only:` list adds `design-paths.json`. (AC-20260926-05-18) | Brief 27's contract: `kit`, `tokens`, `rules` are required once the block exists; genesis is the one place that knows them before `/spec:init` would. |
 | D10 | `spec/doctrine/genesis.md` § Genesis: Design Stage grows the kit and journey rules (the Storybook setup recipe by pointer to `spec-paths shared-genesis --section`, the beats-file contract, the primitive ban, the model placement: Fable authors tokens/shell/kit, Sonnet may draw journeys after the kit, all in one session), the § State Machine chain names `DESIGN_KIT → DESIGN_JOURNEYS`, and § On-disk Handoff gains rows for `<journeys>/<j>.beats.json`, the stories and `.claude/genesis/storybook-static/` (gitignored). `spec/doctrine/design.md` § Design Canon gains: composites' state stories are the living showcase, gated by brief 27's `kit-discipline`; journey stories are a genesis artifact. [no-ac: prose; `citations-check` and the ≤160 pin are the oracles] | Doctrine follows the driver. |
+| D12 | User ruling at build (2026-09-27): spec 04's `tests/genesis/design-stage-brief.test.js` pins the retired `(DESIGN_BRIEF → ROADMAP)` checkpoint that D1 replaces; it enters this File Plan as a fix row — its checkpoint literal becomes `(DESIGN_BRIEF → DESIGN_KIT)`, its test title follows, and every other assertion and its spec-04 tag stay unchanged. [no-ac: collision fix of a predecessor pin; D1's own AC carries the new transition] | A predecessor CONTINUE-TO pin on a surface this spec retires is updated in place, never weakened (pipeline rules § Gotchas, fourth trigger). |
 | D11 | Bump via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"`. [no-ac: bump — `plugin-bump.js --check` is the oracle] | Version discipline. |
 
 ## File Plan
@@ -53,6 +56,7 @@ and HANDOFF stamps brief 27's `design` block from the design paths.
 | spec/doctrine/design.md | MODIFY | doctrine | D10 — living showcase vs genesis artifact sentences; ≤160 lines, AC-20260926-01-8 literals kept |
 | spec/.claude-plugin/plugin.json | MODIFY | other | D11 — `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` |
 | tests/genesis/design-stage-kit.test.js | CREATE | tests | AC-20260926-05-1, AC-20260926-05-2, AC-20260926-05-6, AC-20260926-05-7, AC-20260926-05-8, AC-20260926-05-9, AC-20260926-05-10, AC-20260926-05-11, AC-20260926-05-12, AC-20260926-05-13, AC-20260926-05-14, AC-20260926-05-15, AC-20260926-05-16, AC-20260926-05-17, AC-20260926-05-18 |
+| tests/genesis/design-stage-brief.test.js | MODIFY | tests | D12 — spec 04's brief-written checkpoint pin now expects `(DESIGN_BRIEF → DESIGN_KIT)`; nothing else changes |
 | tests/genesis/storybook-index.test.js | CREATE | tests | AC-20260926-05-3, AC-20260926-05-4, AC-20260926-05-5 |
 | tests/fixtures/genesis/storybook-build-stub.js | CREATE | tests | a stub build: copies a named fixture `index.json` into the `-o` dir and writes `iframe.html`; flags `--no-iframe` and `--fail` |
 | tests/fixtures/genesis/storybook-index/kit-and-journeys.json | CREATE | tests | a `v: 5` index with `Kit/BookingSheet` `Idle`/`Saving`/`Error`, `Kit/DestructiveConfirmDialog` `Idle`/`Confirming`, `Journeys/first-visit` and `Journeys/daily-check` tagged `journey`,`play-fn` |

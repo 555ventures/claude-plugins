@@ -537,8 +537,8 @@ function computeCleanByVia(reposList) {
 // failure increments a named reason bucket. Unparseable lines are counted separately (per
 // repo, at parse time) and never reach this classifier.
 
-const STAGES = new Set(['plan', 'build', 'review', 'escape', 'escape-class', 'replay', 'observe', 'release'])
-const SPEC_STAGES = new Set(['plan', 'build', 'review', 'escape', 'escape-class', 'replay'])
+const STAGES = new Set(['plan', 'build', 'review', 'escape', 'escape-class', 'replay', 'observe', 'release', 'prototype'])
+const SPEC_STAGES = new Set(['plan', 'build', 'review', 'escape', 'escape-class', 'replay', 'prototype'])
 const TIERS = new Set(['standard', 'critical'])
 
 // D5 (specs/20260901/07-escape-class-contract.md): the drift census routes every escape and

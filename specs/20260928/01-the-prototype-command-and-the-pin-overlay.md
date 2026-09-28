@@ -1,6 +1,7 @@
 ---
 date: 2026-09-28
-status: hardened
+status: implementing
+build_base: design-retool
 tier: critical
 area: prototype
 breaking: false
@@ -9,6 +10,7 @@ depended_on_by: [specs/20260928/02-freeze-export-and-the-contract.md, specs/2026
 brief: 28
 spiked: 2026-09-28
 open_markers: 0
+diff_base: 98db1571c97a5965e5e9cb65ee6a62ea9ef02bf0
 ---
 
 # The prototype command and the pin overlay

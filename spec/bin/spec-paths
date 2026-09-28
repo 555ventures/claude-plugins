@@ -31,6 +31,7 @@ case "${1:-root}" in
   build-driver)   echo "$ROOT/scripts/spec-build-driver.js" ;;
   genesis-driver) echo "$ROOT/scripts/genesis-driver.js" ;;
   mocks-driver)   echo "$ROOT/scripts/mocks-driver.js" ;;
+  prototype-driver) echo "$ROOT/scripts/prototype-driver.js" ;;
   report-render)  echo "$ROOT/scripts/report-render.js" ;;
   spec-status)    echo "$ROOT/scripts/spec-status.js" ;;
   spec-queue)     echo "$ROOT/scripts/spec-queue.js" ;;
@@ -100,6 +101,7 @@ case "${1:-root}" in
       doctor)  SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Runtime Verification|Feedback Loop|Tiers|State Machine|Question Style|Console Output Style|Session Execution" ;;
       replay)  SECTIONS="Host Grounding|Tiers|Model Placement|Decisions|Question Style|Console Output Style|Feedback Loop|Session Execution" ;;
       init)    SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Pipeline Entry|Tiers|Runtime Verification|Release Stage|Model Placement|Question Style|Console Output Style|Canonical Docs Loop|Design Canon|Session Execution" ;;
+      prototype) SECTIONS="Host Grounding|Pipeline Entry|Model Placement|Decisions|Question Style|Console Output Style|Worker Git Ban|MCP Policy|On-Disk Handoff|Session Execution" ;;
       *) cat "$CORE" "$DESIGN"; exit 0 ;;
     esac
     echo "<!-- shared invariants scoped to /spec:${CMD} — full doctrine: $CORE + $DESIGN -->"
@@ -125,7 +127,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|workspace-scan|registry-check|port-check|spec-number-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|ac-drift|test-expiry|coverage-scope|count-tests|replay|escape-row|fleet-reader|comment-narration|design-contract-check|design-rules-template|shared|shared-design|shared-for <command>|shared-genesis [--section <names>]|shared-mocks [--section <names>]|replay-corpus|template|templates|mock-contract|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|workspace-scan|registry-check|port-check|spec-number-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|prototype-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|ac-drift|test-expiry|coverage-scope|count-tests|replay|escape-row|fleet-reader|comment-narration|design-contract-check|design-rules-template|shared|shared-design|shared-for <command>|shared-genesis [--section <names>]|shared-mocks [--section <names>]|replay-corpus|template|templates|mock-contract|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

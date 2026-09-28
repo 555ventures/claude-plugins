@@ -2,7 +2,7 @@
 
 Phase: { P0 } · Depends on: { NN, NN | — } · Primary workspaces: { areas } ·
 Risk: { T2 | T3 } ({ one-line reason }) · Design stage: { yes | no } ·
-Expected specs: { 1–4 }
+Lane: { behaviour | structural } · Expected specs: { 1–4 }
 
 First light: { brief 01 only — the one real record through the production path, and where a
 person observes it }
@@ -10,7 +10,10 @@ person observes it }
 <!-- One brief = one /spec:plan session = 1–4 sibling specs. A brief is stable intent
      grounded in ADRs — it names WHAT and WHY and where the ground truth lives; the specs it
      hydrates into own HOW. Anything execution-shaped (file plans, function signatures, test
-     lists) belongs in the specs, not here. -->
+     lists) belongs in the specs, not here. Lane is absent = structural; a brief minted
+     "Lane: behaviour" is the shape of ask known at mint time — it sends /spec:plan's Entry to
+     /spec:prototype instead of hydrating into a spec directly (spec/doctrine/core.md
+     § Pipeline Entry). -->
 
 ## Result
 

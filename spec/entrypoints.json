@@ -131,6 +131,12 @@
       "spec/commands/doctor.md"
     ]
   },
+  "spec/scripts/prototype-driver.js": {
+    "entryPoints": [
+      "spec/commands/prototype.md",
+      "spec/commands/doctor.md"
+    ]
+  },
   "spec/scripts/promise-sweep.js": {
     "entryPoints": [
       "spec/commands/plan.md",

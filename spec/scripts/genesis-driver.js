@@ -184,6 +184,31 @@
 //   - execute a story's `play` function at either mark — Storybook's own build only compiles and
 //     indexes stories; walking a journey is the human review at the approval stop (spec 06).
 //
+// specs/20260926/06-the-approval-stop-and-the-roadmap.md D1-D5: one more design-stage state,
+// AWAITING_DESIGN_APPROVAL, sits between DESIGN_JOURNEYS and ROADMAP — the one look stop where JJ
+// approves the designed set in Storybook. It probes the live dev server's own `/index.json` (or
+// `design-paths.storybook.indexUrl`, D2) through `curl`, proving by CONTENT that every seed
+// journey's story is served — never by a story URL's HTTP status, since Storybook answers 200 for
+// a story id that does not exist (Assumption A1). `--mark design-approved` (D3), run only on the
+// user's literal `approve` — the driver cannot see the conversation, so doctrine binds the session
+// to that one word — re-runs the build and both journey/state checks against a fresh index, then
+// freezes the designed set into `docs/design/approval.json`: journeys with their story id, file,
+// beats hash and screens, composites with their states, and deliberately no per-file hash (frozen
+// after approval, never gated later — recording a hash would invite exactly that gate). ROADMAP
+// (D4) then derives from that record: it prints one `approved:` line per approved journey, and
+// `roadmap-written`'s placement check reads its label set from the record's `screens` once it
+// exists, falling back to the seed only for a legacy or skipped-stage host. D5: no driver code
+// path reads the WIREFRAME's own `<mockAppDir>/design/approval.json` after `DESIGN_BRIEF`'s
+// print — that file and this spec's `docs/design/approval.json` are two different records with
+// two different owners.
+//
+// What the D1-D5 additions deliberately do NOT do:
+//   - walk a journey story's `play` function, or judge whether JJ actually reviewed each one —
+//     the probe proves the index serves the story; JJ's own literal `approve` is the only mark
+//     the driver ever accepts as that review having happened.
+//   - push a screenshot round from this stop — brief 29's own spec already owns that as an
+//     optional caller; there is no consumer here yet (D6).
+//
 // Fixing that overflow only at the child's own capture is insufficient: `logTail`, which builds the
 // SCAFFOLD_RED/GATE_RED excerpt embedded in the driver's OWN stdout, bounds its excerpt by BYTES,
 // not lines (`text.split('\n').slice(-n)` cannot: a caller's buffer is measured in bytes). A single
@@ -479,16 +504,28 @@ function briefNonUiCheck(text) {
   return { missing }
 }
 
-// D4: every seed-declared label placed in exactly one brief's ```surfaces block.
+// D4: every declared label placed in exactly one brief's ```surfaces block.
 // surfacesLib.parseSurfacesPlacement tracks EVERY brief declaring a label (the retired HTML
 // atlas's own parseSurfaces kept only the first) since D4 must also catch a double-placement,
-// not just an absence.
+// not just an absence. specs/20260926/06-the-approval-stop-and-the-roadmap.md D4: once
+// docs/design/approval.json exists, its own journeys' `screens` are the label source — the seed
+// is no longer read here (a journey the seed gains AFTER approval froze must never re-enter this
+// check); a legacy or skipped-stage host with no approval record falls back to the seed, unchanged.
 function journeyPlacementCheck() {
-  const seedJourneys = seedJourneysMap()
+  const approval = readDocsDesignApproval()
   const seedLabels = []
   const seen = new Set()
-  for (const [, j] of seedJourneys) {
-    for (const l of j.labels) { if (!seen.has(l)) { seen.add(l); seedLabels.push(l) } }
+  if (approval && approval.journeys && typeof approval.journeys === 'object') {
+    for (const j of Object.values(approval.journeys)) {
+      for (const l of (Array.isArray(j.screens) ? j.screens : [])) {
+        if (!seen.has(l)) { seen.add(l); seedLabels.push(l) }
+      }
+    }
+  } else {
+    const seedJourneys = seedJourneysMap()
+    for (const [, j] of seedJourneys) {
+      for (const l of j.labels) { if (!seen.has(l)) { seen.add(l); seedLabels.push(l) } }
+    }
   }
   const byLabel = surfacesLib.parseSurfacesPlacement(path.join(root, 'docs/roadmap'))
   const unplaced = seedLabels.filter((l) => !byLabel.has(l) || byLabel.get(l).length === 0)
@@ -666,6 +703,16 @@ function readDesignPathsJson() {
 }
 function designBriefMdPath() { return path.join(root, 'docs/design/brief.md') }
 function catalogMdPath() { return path.join(root, 'docs/design/catalog.md') }
+
+// specs/20260926/06-the-approval-stop-and-the-roadmap.md D3/D5: the designed-set record JJ's
+// `approve` freezes — distinct from designApprovalPath() above (the WIREFRAME's own
+// <mockAppDir>/design/approval.json, read only at/before BRIEF, per D5 never again). This one
+// lives at docs/design/, is written once by design-approved, and is what AWAITING_DESIGN_APPROVAL
+// (D1's re-derivation), ROADMAP (D4) and roadmap-written's placement check (D4) all read.
+function docsDesignApprovalPath() { return path.join(root, 'docs/design/approval.json') }
+function readDocsDesignApproval() {
+  try { return JSON.parse(fs.readFileSync(docsDesignApprovalPath(), 'utf8')) } catch (e) { return null }
+}
 
 // D3: design-paths.json's required shape — every top-level path key non-empty, plus
 // storybook.port (integer 1024-65535), storybook.buildCommand, storybook.staticDir. Walked in
@@ -1222,7 +1269,118 @@ function handleJourneysDrawn() {
     },
   })
   saveStatus()
-  return { prev: 'DESIGN_JOURNEYS', next: 'ROADMAP' }
+  // specs/20260926/06-the-approval-stop-and-the-roadmap.md D1: journeys-drawn hands off to the
+  // approval stop now, never straight to ROADMAP.
+  return { prev: 'DESIGN_JOURNEYS', next: 'AWAITING_DESIGN_APPROVAL' }
+}
+
+// ---------------------------------------------------------------------------
+// AWAITING_DESIGN_APPROVAL (specs/20260926/06-the-approval-stop-and-the-roadmap.md D1-D3): the
+// one look stop where JJ approves the designed set in Storybook. The probe proves by CONTENT —
+// index.json's own entries — never by a story URL's HTTP status: Assumption A1 (spiked
+// 2026-09-26) is that Storybook answers 200 for a story id that does not exist, so a URL-status
+// check would point JJ at a page that may show nothing.
+// ---------------------------------------------------------------------------
+
+// D2: `curl -sf -m 3 <url>` routed through runChild — a genuine spawn failure or signal death is
+// runChild's own fail-closed refusal (exit 2); a reachable-but-erroring server, a closed port, or
+// a `file:` URL to a missing fixture all come back as an ordinary non-zero curl exit, read here as
+// 'unreachable'. A3: curl reads `file:` URLs natively, so this same code path serves both the real
+// dev server and this spec's own `indexUrl`-pointed test fixtures.
+function probeStorybookIndex(url) {
+  const r = runChild('curl', ['-sf', '-m', '3', url], { encoding: 'utf8' }, 'curl ' + url)
+  if (r.status !== 0) return { ok: false, reason: 'unreachable' }
+  let parsed
+  try { parsed = JSON.parse(r.stdout) } catch (e) { parsed = null }
+  if (!parsed || !parsed.entries || typeof parsed.entries !== 'object') return { ok: false, reason: 'unparseable' }
+  return { ok: true, entriesById: parsed.entries }
+}
+
+// D2: `design-paths.storybook.indexUrl` when set, else the port URL.
+function storybookIndexUrl(paths) {
+  const sb = paths.storybook || {}
+  return (typeof sb.indexUrl === 'string' && sb.indexUrl) || ('http://127.0.0.1:' + sb.port + '/index.json')
+}
+
+// D2: the journey story ids the served index must carry — journeys-drawn's own recorded result
+// (status.designStage.journeys.stories), in seed order (the object's own insertion order, since
+// handleJourneysDrawn built it by walking seedJourneysMap() in file order).
+function requiredJourneyStoryIds() {
+  return (status.designStage && status.designStage.journeys && status.designStage.journeys.stories) || {}
+}
+
+// D2: the full serving check the look stop and the refusal both need — probes the index, then
+// walks the required journey ids in seed order so the result names the FIRST journey the served
+// index does not carry.
+function checkStorybookServingJourneys(paths) {
+  const probe = probeStorybookIndex(storybookIndexUrl(paths))
+  if (!probe.ok) return probe
+  const stories = requiredJourneyStoryIds()
+  for (const [name, id] of Object.entries(stories)) {
+    if (!probe.entriesById[id]) return { ok: false, reason: 'missing-story', story: id, journey: name }
+  }
+  return { ok: true, entriesById: probe.entriesById }
+}
+
+// D3: `--mark design-approved` — re-runs spec 05's own build + journeyStoriesCheck +
+// stateStoriesCheck against a FRESH index (never trusted from journeys-drawn's earlier pass
+// alone), then freezes the designed set into docs/design/approval.json. No per-file hash is
+// recorded (D3's own rationale: "frozen after approval, never gated later" — recording one would
+// invite exactly the gate that forbids).
+function handleDesignApproved() {
+  if (!status.marks.journeysDrawn) die('journeys-drawn has not been marked yet — mark journeys-drawn first')
+  if (!designStageApplies()) {
+    const desc = readStackDescriptor() || {}
+    die('the design stage does not apply to this host (archetype "' + status.archetype +
+      '", designCatalog "' + (desc.designCatalog || 'unset') + '") — nothing to mark here')
+  }
+  const paths = requireDesignPaths('design-approved')
+
+  const build = runStorybookBuild(paths)
+  refuseOnStorybookBuild(build, 'design-approved')
+
+  const composites = briefCompositesWithStates()
+  const missingState = storybookIndexLib.stateStoriesCheck(build.index.entries, composites, paths.kit)
+  if (missingState) {
+    die('composite ' + missingState.composite + ': no state story ' + missingState.state + ' under ' +
+      paths.kit + ' — export a story named ' + missingState.state + ' in ' + missingState.composite + '.stories.tsx')
+  }
+
+  const seedJourneys = seedJourneysMap()
+  const jCheck = storybookIndexLib.journeyStoriesCheck(build.index.entries, [...seedJourneys.keys()], paths.journeys)
+  if (!jCheck.ok) {
+    die('journey ' + jCheck.journey + ': no story tagged journey with a play function in the index')
+  }
+
+  const journeysOut = {}
+  for (const [name, j] of seedJourneys) {
+    let beatHash = null
+    try { beatHash = JSON.parse(fs.readFileSync(beatsFilePath(paths.journeys, name), 'utf8')).beatHash } catch (e) { beatHash = null }
+    const storyFile = findJourneyStoryFile(path.join(root, paths.journeys), name)
+    journeysOut[name] = {
+      story: jCheck.stories[name],
+      file: storyFile ? path.relative(root, storyFile) : null,
+      beats: beatHash,
+      screens: j.labels.slice(),
+    }
+  }
+  const compositesOut = {}
+  for (const c of composites) compositesOut[c.composite] = c.states.slice()
+
+  const record = {
+    schemaVersion: 1,
+    approvedAt: new Date().toISOString(),
+    storybook: { port: paths.storybook.port },
+    journeys: journeysOut,
+    composites: compositesOut,
+  }
+  fs.mkdirSync(path.dirname(docsDesignApprovalPath()), { recursive: true })
+  fs.writeFileSync(docsDesignApprovalPath(), JSON.stringify(record, null, 2) + '\n')
+
+  status.marks.designApproved = true
+  status.designStage = Object.assign({}, status.designStage, { approvedAt: record.approvedAt })
+  saveStatus()
+  return { prev: 'AWAITING_DESIGN_APPROVAL', next: 'ROADMAP' }
 }
 
 function handleMenusDone() {
@@ -2498,6 +2656,10 @@ function deriveState(opts) {
   if (designStageApplies()) {
     if (!status.marks.kitLanded || !storybookMainExists()) return 'DESIGN_KIT'
     if (!status.marks.journeysDrawn || anyJourneyStoryVanished()) return 'DESIGN_JOURNEYS'
+    // specs/20260926/06-the-approval-stop-and-the-roadmap.md D1: re-derived from disk on every
+    // call, same as every other design-stage mark — a `designApproved` mark whose own
+    // docs/design/approval.json vanished is demanded again, never trusted from the mark alone.
+    if (!status.marks.designApproved || !fs.existsSync(docsDesignApprovalPath())) return 'AWAITING_DESIGN_APPROVAL'
   }
 
   const rm = roadmapCheck()
@@ -2907,17 +3069,89 @@ const STEPS = {
     return lines.join('\n')
   },
 
-  ROADMAP: () => [
-    '## Step: decompose the roadmap',
-    'Read only: ' + descriptorRelPath() + ', docs/roadmap/',
-    'Doctrine: spec/doctrine/genesis.md § Genesis: Roadmap Decomposition',
-    'Write docs/roadmap/00-overview.md plus one or more docs/roadmap/NN-*.md briefs, each with ' +
-      'Phase: and Depends on: header lines before its first ## heading, acyclic. Brief 01 is the ' +
-      'first-light brief — its header also carries a First light: line naming the one real ' +
-      'record through the deployed production path, observed by a person. See ' +
-      'spec/doctrine/genesis.md § Genesis: Roadmap Decomposition.',
-    'Then:\n  node ' + __filename + ' --root ' + root + ' --mark roadmap-written',
-  ].join('\n'),
+  // specs/20260926/06-the-approval-stop-and-the-roadmap.md D2: the one look stop where JJ
+  // approves the designed set in Storybook. On a served index carrying every journey story
+  // (Contracts): the 🎨 line naming the first journey's own verified URL, one `journey:` line per
+  // journey in seed order, the composite count, the reply line, and `--mark design-approved`. On
+  // any probe failure: the refusal naming the port and the reason, a `Session:` line for the
+  // background command, and no URL — the spike (A1) showed Storybook answering 200 for a story id
+  // that does not exist, so a URL here would point JJ at a page that may show nothing.
+  AWAITING_DESIGN_APPROVAL: () => {
+    const paths = readDesignPathsJson() || {}
+    const port = paths.storybook && paths.storybook.port
+    const desc = readStackDescriptor() || {}
+    const pm = (typeof desc.packageManager === 'string' && desc.packageManager) || 'npm'
+    const check = checkStorybookServingJourneys(paths)
+    if (!check.ok) {
+      const reasonText = check.reason === 'unreachable' ? 'unreachable'
+        : check.reason === 'unparseable' ? 'index unparseable'
+        : 'missing story ' + check.story
+      return [
+        '## Step: JJ approves the designed set in Storybook',
+        'Storybook is not serving the journey stories on port ' + port + ' — ' + reasonText,
+        'Session: start it in the background and re-run the driver: ' + pm +
+          ' exec storybook dev -p ' + port + ' --ci --no-open',
+      ].join('\n')
+    }
+    const stories = requiredJourneyStoryIds()
+    const names = Object.keys(stories)
+    const total = Object.keys(check.entriesById).length
+    const composites = Math.max(0, total - names.length)
+    const lines = [
+      '## Step: JJ approves the designed set in Storybook',
+      'Read only: docs/design/brief.md, ' + genesisRel('design-paths.json'),
+      'Doctrine: spec/doctrine/genesis.md § Genesis: Design Stage',
+    ]
+    if (names.length) {
+      lines.push('🎨 ready for review — http://localhost:' + port + '/?path=/story/' + stories[names[0]])
+      for (const name of names) {
+        lines.push('journey: ' + name + ' → http://localhost:' + port + '/?path=/story/' + stories[name])
+      }
+    }
+    lines.push(
+      'composites: ' + composites + ' state stories',
+      'Reply `approve` to record the approval; anything else is a note for this session to act on, then re-run the driver.',
+      'Then (only on the literal `approve`):\n  node ' + __filename + ' --root ' + root + ' --mark design-approved',
+    )
+    return lines.join('\n')
+  },
+
+  ROADMAP: () => {
+    const lines = [
+      '## Step: decompose the roadmap',
+      'Read only: ' + descriptorRelPath() + ', docs/roadmap/, docs/design/approval.json, docs/design/brief.md',
+      'Doctrine: spec/doctrine/genesis.md § Genesis: Roadmap Decomposition',
+    ]
+    // specs/20260926/06-the-approval-stop-and-the-roadmap.md D4/D4a: the roadmap derives from
+    // the approved set once docs/design/approval.json exists — a legacy or skipped-stage host
+    // (the file never written) prints no `approved:` line at all. D4a: this prefix replaced an
+    // earlier word the plugin's own retired-literal sweep (spec 01) bans under spec/ and tests/.
+    const approval = readDocsDesignApproval()
+    if (approval && approval.journeys && typeof approval.journeys === 'object') {
+      const dp = readDesignPathsJson() || {}
+      for (const [name, j] of Object.entries(approval.journeys)) {
+        const screens = Array.isArray(j.screens) ? j.screens : []
+        let beatCount = screens.length
+        if (typeof dp.journeys === 'string') {
+          try {
+            const b = JSON.parse(fs.readFileSync(beatsFilePath(dp.journeys, name), 'utf8'))
+            if (Array.isArray(b.beats)) beatCount = b.beats.length
+          } catch (e) { /* fall back to screens.length above */ }
+        }
+        lines.push('approved: ' + name + ' — ' + beatCount + ' beats · screens: ' + screens.join(', ') +
+          ' · story: ' + j.story)
+      }
+    }
+    lines.push(
+      'Write docs/roadmap/00-overview.md plus one or more docs/roadmap/NN-*.md briefs, each with ' +
+        'Phase: and Depends on: header lines before its first ## heading, acyclic. Brief 01 is the ' +
+        'first-light brief — its header also carries a First light: line naming the one real ' +
+        'record through the deployed production path, observed by a person. See ' +
+        'spec/doctrine/genesis.md § Genesis: Roadmap Decomposition.',
+      'Then:\n  node ' + __filename + ' --root ' + root + ' --mark roadmap-written',
+    )
+    return lines.join('\n')
+  },
 
   // specs/20260902/08-genesis-shrink-brief-state.md D9: the DESIGN state (its own
   // doctrine-drafted -> tokens-landed -> rules-locked progression) is retired — the design canon
@@ -3034,6 +3268,7 @@ function handleMark() {
     case 'design-brief-written': result = handleDesignBriefWritten(); break
     case 'kit-landed': result = handleKitLanded(); break
     case 'journeys-drawn': result = handleJourneysDrawn(); break
+    case 'design-approved': result = handleDesignApproved(); break
     case 'roadmap-written': result = handleRoadmapWritten(); break
     case 'profile-written': result = handleProfileWritten(); break
     default:
@@ -3044,7 +3279,7 @@ function handleMark() {
       die('unknown mark "' + MARK + '" (discovery-done | brief-written [--legacy] | menu-written --file <f> | ' +
         'menus-done | finalists-written --file <f> | finalists-skipped | probe-done | picked | ' +
         'decided | skeleton-landed | design-brief-written | kit-landed | journeys-drawn | ' +
-        'roadmap-written | profile-written --file <f> [--refresh])')
+        'design-approved | roadmap-written | profile-written --file <f> [--refresh])')
       return
   }
   writeOut(1, acceptedOutput(result))

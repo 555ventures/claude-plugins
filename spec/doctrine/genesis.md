@@ -640,8 +640,32 @@ specifier. **Model placement:** the step names Sonnet as the model that may draw
 screens from the brief, once the kit exists and never before it, and names every approved journey
 in this one session — never a session per journey. `--mark journeys-drawn` proves, via the
 rebuilt Storybook index, that every journey carries a story tagged both `journey` and `play-fn`
-with a passing build; on success the run advances to `ROADMAP` (spec 06 interposes an approval
-stop between them).
+with a passing build; on success the run advances to `AWAITING_DESIGN_APPROVAL`, the approval
+stop below, never straight to `ROADMAP`.
+
+**The approval stop (`AWAITING_DESIGN_APPROVAL`).** JJ approves the designed set in Storybook
+itself — no client gate exists at this stop. The step probes the live index
+(`storybook.indexUrl` when set, else `http://127.0.0.1:<port>/index.json`) rather than a story
+URL's status: Storybook answers 200 for a story id that does not exist, so only the index's own
+`entries` content proves a journey story is actually served. On success it prints one verified
+`🎨 ready for review` URL plus one `journey: <j> → <url>` line per journey in seed order and the
+composite-state count, ending the turn on a reply line inviting the one literal word
+**`approve`** — the same contract `/spec:mocks` uses for the client's screens, since the driver
+cannot hear the conversation and doctrine alone binds the session to run the mark only on that
+word. On failure it names the port and the reason (`unreachable` | `index unparseable` |
+`missing story <id>`) and a `Session:` line to start Storybook in the background, never a URL.
+
+Only the literal `approve` runs `--mark design-approved`, which re-verifies the fresh index and
+writes `docs/design/approval.json`: per journey its story id, source file, beats hash, and
+screens in beat order; per composite its declared states. No per-file or per-screen hash is
+recorded — **frozen after approval, never gated later**: recording a hash would invite exactly
+the gate this stop refuses to become, since nothing downstream may compare a story to what JJ
+saw. On success the run advances to `ROADMAP`, which reads this record (§ Genesis: Roadmap
+Decomposition).
+
+**No PNG round is pushed from this stop.** Brief 29's spec 03 already owns "genesis's design
+stop can push a PNG sequence as a `screenshots` round, optional, never a gate"; until that client
+exists there is no consumer, and a hook with no caller is a mis-slice.
 
 ## Genesis: Roadmap Decomposition
 
@@ -692,13 +716,18 @@ written against real code. Never pre-plan the whole roadmap into specs.
    `First light:`.
 
 **Journey placement (specs/20260902/11 D4, fresh mocks-set runs only).** Decomposition
-derives from `design/mocks/seed.md`'s journeys: the ROADMAP step text lists journeys →
-suggested brief slices, one brief per journey by default, splitting a journey whose Scope
-exceeds a page. `--mark roadmap-written` additionally requires every label `seed.md` declares
-to appear in **exactly one brief**'s `## Surfaces` block — a label placed in zero briefs is
+derives from the designed set: once `docs/design/approval.json` exists (§ Genesis: Design
+Stage), the ROADMAP step prints one `approved: <j> — <n> beats · screens: <a, b, c> · story:
+<id>` line per approved journey read straight from that record, and `--mark roadmap-written`'s
+placement check reads its label set from the record's `screens` — the seed is no longer the
+source once the approval record exists. A host whose design stage never reaches approval (a
+legacy run, or a skipped stage) falls back to `design/mocks/seed.md`'s journeys unchanged: the
+step text lists journeys → suggested brief slices, one brief per journey by default, splitting a
+journey whose Scope exceeds a page. Either way, `--mark roadmap-written` requires every declared
+label to appear in **exactly one brief**'s `## Surfaces` block — a label placed in zero briefs is
 unplaced scope, a label placed in two is duplicated scope, and both refuse by name. An extra
 label a brief declares that no journey names is allowed (new scope discovered while slicing);
-only a seed-declared label is checked for placement. This is what makes the design atlas's
+only a source-declared label is checked for placement. This is what makes the design atlas's
 gap/orphan badges mean what they say from day one, instead of drifting the moment a journey's
 screens land in the wrong brief.
 
@@ -763,6 +792,11 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   `spec/templates/design-brief.md`, § Genesis: Design Stage): users and context, one JTBD line
   per journey, navigation, the catalog split into used/excluded, one composite per intent, and
   the `## Contract` line naming the rules file.
+- **`docs/design/approval.json`** (durable, written once by `--mark design-approved` on JJ's
+  literal `approve`, § Genesis: Design Stage) — `schemaVersion`, `approvedAt`, `storybook.port`,
+  per journey `{ story, file, beats, screens }` (beats in beat order, no per-file hash), and
+  `composites: { <Composite>: [<states>] }`. Frozen after approval, never gated later; ROADMAP
+  reads its `journeys` for the `approved:` lines and the placement check's label set.
 - **`docs/design/catalog.md`** (durable) — the driver-generated shadcn inventory
   (`catalog-inventory.js`, § Genesis: Design Stage), refreshed by `/spec:doctor`'s currency
   check when the installed kit changes.

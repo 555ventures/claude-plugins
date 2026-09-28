@@ -68,12 +68,12 @@ commands assemble slots and print its output verbatim):
 - `outcome`: `✅ architected + grounded — scaffold green, {N} ADRs, {P} convention probes,
   roadmap of {M} briefs`.
 - `bullets`: `{archetype} for {audience}; gate: {resolved gate command}`; one
-  `{decision made — ADR path}` entry per decision; a chain entry rendered above the close so the
-  whole sequence is visible before the one recommended next step. For an archetype that owed a
-  mocks set (§ Genesis: Archetype Registry): `Chain: /spec:mocks → /spec:genesis →
-  /spec:enforce → /spec:plan docs/roadmap/01-*.md`. For one that owed no set (`design` written
-  `skipped` or non-visual): `Chain: /spec:genesis → /spec:enforce →
-  /spec:plan docs/roadmap/01-*.md`.
+  `{decision made — ADR path}` entry per decision; `designed set: {J} journeys approved <date>`
+  when `docs/design/approval.json` exists; a chain entry rendered above the close so the whole
+  sequence is visible before the one recommended next step. For an archetype that owed a mocks
+  set (§ Genesis: Archetype Registry): `Chain: /spec:mocks → /spec:genesis → /spec:enforce →
+  /spec:plan docs/roadmap/01-*.md`. For one that owed no set (`design` written `skipped` or
+  non-visual): `Chain: /spec:genesis → /spec:enforce → /spec:plan docs/roadmap/01-*.md`.
 - `warns`: one `dissent recorded: {one-phrase summary}` entry per dissent (drop if none).
 - `next`: `{kind: 'command', text: '/spec:enforce'}` — every archetype. The `HANDOFF` step
   (spec/doctrine/genesis.md § Genesis: Conventions Probe Suite) already grounded the repo

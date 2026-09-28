@@ -315,7 +315,7 @@ function writeMinimalRoadmap(dir, { briefName = '02-fixture.md', surfaces = [] }
 // AC-20260926-05-1
 // ---------------------------------------------------------------------------
 
-test('AC-20260926-05-1: WHEN design-brief-written, kit-landed and journeys-drawn are each accepted in turn THE SYSTEM prints (DESIGN_BRIEF → DESIGN_KIT), then (DESIGN_KIT → DESIGN_JOURNEYS), then (DESIGN_JOURNEYS → ROADMAP), and --state prints DESIGN_KIT between the first two', () => {
+test('AC-20260926-05-1: WHEN design-brief-written, kit-landed and journeys-drawn are each accepted in turn THE SYSTEM prints (DESIGN_BRIEF → DESIGN_KIT), then (DESIGN_KIT → DESIGN_JOURNEYS), then (DESIGN_JOURNEYS → AWAITING_DESIGN_APPROVAL), and --state prints DESIGN_KIT between the first two', () => {
   const dir = tmpdir('design-stage-kit-ac1')
   advanceToDesignBrief(dir, { archetype: 'web-app', designCatalog: 'storybook', journeys: JOURNEYS_FOR_RATIFY })
   writeDesignPathsJson(dir)
@@ -344,8 +344,8 @@ test('AC-20260926-05-1: WHEN design-brief-written, kit-landed and journeys-drawn
   writeCleanJourneyStory(dir, 'src/journeys', 'daily-check')
   const journeysDrawn = mark(dir, 'journeys-drawn')
   assert.strictEqual(journeysDrawn.status, 0, 'D8: journeys-drawn must be accepted once every journey story is clean and the build proves it: ' + journeysDrawn.stderr)
-  assert.match(journeysDrawn.stdout, /\(DESIGN_JOURNEYS → ROADMAP\)/,
-    'D1: the checkpoint line must read "(DESIGN_JOURNEYS → ROADMAP)" once journeys-drawn is accepted: ' + journeysDrawn.stdout)
+  assert.match(journeysDrawn.stdout, /\(DESIGN_JOURNEYS → AWAITING_DESIGN_APPROVAL\)/,
+    'D1 (specs/20260926/06-the-approval-stop-and-the-roadmap.md D1): the checkpoint line must read "(DESIGN_JOURNEYS → AWAITING_DESIGN_APPROVAL)" once journeys-drawn is accepted — journeys-drawn now hands to the approval stop, never straight to ROADMAP: ' + journeysDrawn.stdout)
 })
 
 // ---------------------------------------------------------------------------
@@ -631,7 +631,7 @@ test('AC-20260926-05-16: WHEN every journey file is clean and the build runs aga
   assert.strictEqual(st.marks.journeysDrawn, true, 'D8: marks.journeysDrawn must be true once accepted: ' + JSON.stringify(st.marks))
 })
 
-test('AC-20260926-05-17: WHEN journeys-drawn is accepted THE SYSTEM has run the build exactly once during that mark, and the checkpoint line reads (DESIGN_JOURNEYS → ROADMAP)', () => {
+test('AC-20260926-05-17: WHEN journeys-drawn is accepted THE SYSTEM has run the build exactly once during that mark, and the checkpoint line reads (DESIGN_JOURNEYS → AWAITING_DESIGN_APPROVAL)', () => {
   const dir = setupAtDesignJourneys('design-stage-kit-ac17')
   writeCleanJourneyStory(dir, 'src/journeys', 'first-visit')
   writeCleanJourneyStory(dir, 'src/journeys', 'daily-check')
@@ -641,8 +641,8 @@ test('AC-20260926-05-17: WHEN journeys-drawn is accepted THE SYSTEM has run the 
   assert.strictEqual(r.status, 0, 'test setup requires journeys-drawn to be accepted: ' + r.stderr)
   assert.strictEqual(readCounter(counterPath), '1',
     'D8: the build must run exactly once during a single journeys-drawn mark — a higher count means the driver rebuilds redundantly (once for the primitive-ban gate, once for the journey-story check, say): ' + readCounter(counterPath))
-  assert.match(r.stdout, /\(DESIGN_JOURNEYS → ROADMAP\)/,
-    'D1: the checkpoint line must read "(DESIGN_JOURNEYS → ROADMAP)": ' + r.stdout)
+  assert.match(r.stdout, /\(DESIGN_JOURNEYS → AWAITING_DESIGN_APPROVAL\)/,
+    'D1 (specs/20260926/06-the-approval-stop-and-the-roadmap.md D1): the checkpoint line must read "(DESIGN_JOURNEYS → AWAITING_DESIGN_APPROVAL)" — journeys-drawn now hands to the approval stop, never straight to ROADMAP: ' + r.stdout)
 })
 
 // ---------------------------------------------------------------------------
@@ -655,6 +655,12 @@ test('AC-20260926-05-18: WHEN HANDOFF prints on a host whose design stage landed
   writeCleanJourneyStory(dir, 'src/journeys', 'daily-check')
   const drawn = mark(dir, 'journeys-drawn')
   assert.strictEqual(drawn.status, 0, 'test setup requires journeys-drawn to be accepted: ' + drawn.stderr)
+
+  // specs/20260926/06-the-approval-stop-and-the-roadmap.md D1: journeys-drawn now hands to
+  // AWAITING_DESIGN_APPROVAL, not ROADMAP — reaching HANDOFF needs design-approved marked first,
+  // against the same build stub/index fixture journeys-drawn already accepted.
+  const approved = mark(dir, 'design-approved')
+  assert.strictEqual(approved.status, 0, 'test setup requires design-approved to be accepted: ' + approved.stderr)
 
   writeMinimalRoadmap(dir, { surfaces: ['home', 'booking', 'today'] })
   const roadmapWritten = mark(dir, 'roadmap-written')

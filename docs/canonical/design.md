@@ -97,3 +97,6 @@ tolerated until the kit lands. (specs/20260926/04-the-design-brief.md D7)
 Composites' state stories are the living showcase, gated by `kit-discipline`; journey stories
 are a genesis artifact that walks the seed's beats against the real kit and router.
 (specs/20260926/05-the-kit-and-the-journey-stories.md D10)
+
+JJ approves the designed set in Storybook; there is no client gate. Journey stories are frozen at
+approval and never gated later. (specs/20260926/06-the-approval-stop-and-the-roadmap.md D7)

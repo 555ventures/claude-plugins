@@ -201,3 +201,52 @@ test('AC-20260823-04-9 (CONTINUE TO) [pre-green: predicate-in-test]: a changed f
     'predicate\'s BLIND SPOT (agent-memory only) without ever widening the exclusion itself to ' +
     'swallow an ordinary unplanned file: ' + JSON.stringify(out))
 })
+
+function specWithDirPlan(dir, relPath, row) {
+  const full = path.join(dir, relPath)
+  fs.mkdirSync(path.dirname(full), { recursive: true })
+  fs.writeFileSync(full,
+    '---\nstatus: implementing\n---\n\n## File Plan\n\n' +
+    '| Path | Action | Layer | Summary |\n|---|---|---|---|\n' +
+    `| \`${row}\` | CREATE | tests | fixture tree |\n` +
+    '| `src/planned.js` | CREATE | src | planned row |\n')
+  return relPath
+}
+
+test('a File Plan row ending in / covers every file beneath it — nested files stay out of outOfPlan and the row is realized', () => {
+  const dir = tmpdir('scope-reconcile-glob')
+  const g = gitRepo(dir)
+  const base = g('rev-parse', 'HEAD').trim()
+  const specRel = specWithDirPlan(dir, 'specs/20260929/01-x.md', 'tests/fixtures/host/')
+  fs.mkdirSync(path.join(dir, 'tests/fixtures/host/app'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/fixtures/host/package.json'), '{}\n')
+  fs.writeFileSync(path.join(dir, 'tests/fixtures/host/app/page.js'), '\n')
+  fs.mkdirSync(path.join(dir, 'tests/fixtures/hostile'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/fixtures/hostile/x.js'), '\n')
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'src/planned.js'), '\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'fixture tree')
+
+  const r = runNode(SCRIPT, ['--root', dir, '--base', base, '--spec', specRel, '--json'])
+  const out = JSON.parse(r.stdout)
+  assert.deepStrictEqual(out.outOfPlan, ['tests/fixtures/hostile/x.js'],
+    'files under the directory row are planned; a sibling directory sharing its name prefix is not: ' +
+    JSON.stringify(out))
+  assert.ok(!out.unrealized.includes('tests/fixtures/host/'),
+    'a directory row with a changed file beneath it is realized: ' + JSON.stringify(out))
+})
+
+test('a File Plan row ending in / with no changed file beneath it stays unrealized', () => {
+  const dir = tmpdir('scope-reconcile-glob')
+  const g = gitRepo(dir)
+  const base = g('rev-parse', 'HEAD').trim()
+  const specRel = specWithDirPlan(dir, 'specs/20260929/02-x.md', 'tests/fixtures/host/')
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'src/planned.js'), '\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'no fixture')
+
+  const r = runNode(SCRIPT, ['--root', dir, '--base', base, '--spec', specRel, '--json'])
+  const out = JSON.parse(r.stdout)
+  assert.deepStrictEqual(out.unrealized, ['tests/fixtures/host/'], JSON.stringify(out))
+  assert.deepStrictEqual(out.outOfPlan, [], JSON.stringify(out))
+})

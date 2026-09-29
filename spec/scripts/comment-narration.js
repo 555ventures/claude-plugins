@@ -268,16 +268,17 @@ function runRulesMode(hostRoot, baseline, hostRes, peopleRes, jsonMode) {
     } catch (e) {
       usageError(`.claude/rules/enforcement.json is not valid JSON (${e.message})`)
     }
-    if (Array.isArray(parsed)) {
-      parsed.forEach((entry, idx) => {
-        if (entry && typeof entry.notes === 'string') {
-          const pseudo = `.claude/rules/enforcement.json#${entry.id}`
-          const classes = classify(entry.notes, hostRes, peopleRes)
-          if (classes.length) findings.push({ file: pseudo, line: idx + 1, classes, text: entry.notes.trim() })
-          files[pseudo] = classes.length ? 1 : 0
-        }
-      })
-    }
+    // The manifest /spec:enforce writes is {schemaVersion, generatedBy, entries: [...]}; each
+    // entry's notes field is required by wf-enforce.js's schema.
+    const entries = Array.isArray(parsed?.entries) ? parsed.entries : []
+    entries.forEach((entry, idx) => {
+      if (entry && typeof entry.notes === 'string') {
+        const pseudo = `.claude/rules/enforcement.json#${entry.id ?? idx}`
+        const classes = classify(entry.notes, hostRes, peopleRes)
+        if (classes.length) findings.push({ file: pseudo, line: idx + 1, classes, text: entry.notes.trim() })
+        files[pseudo] = classes.length ? 1 : 0
+      }
+    })
   }
 
   finishScan('rules', findings, files, baseline, jsonMode)

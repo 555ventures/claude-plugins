@@ -183,18 +183,21 @@ const realizedRenamedTo = new Set(
 
 // ---- glob-row expansion (D2): a File Plan row with *, ?, or [ is a pattern, not a literal ----
 
-const isGlobRow = (p) => /[*?[]/.test(p)
+// A row ending in `/` names a directory and covers every file beneath it — matched as `<row>**`.
+// Trailing slash only, never an on-disk isDirectory() probe: a deleted directory no longer exists.
+const toPattern = (p) => (p.endsWith('/') ? p + '**' : p)
+const isGlobRow = (p) => /[*?[]/.test(toPattern(p))
 const globRows = [...filePlanPaths].filter(isGlobRow)
 const concreteRows = new Set([...filePlanPaths].filter(p => !isGlobRow(p)))
 const nonExcludedChanged = [...changed].filter(p => !excludedSet.has(p))
 
 const outOfPlan = [...changed]
-  .filter(p => !concreteRows.has(p) && !globRows.some(g => globMatch(g, p)) &&
+  .filter(p => !concreteRows.has(p) && !globRows.some(g => globMatch(toPattern(g), p)) &&
     !excludedSet.has(p) && !renamedFrom.has(p) && !realizedRenamedTo.has(p))
   .sort()
 const unrealized = [
   ...[...concreteRows].filter(p => !changed.has(p)),
-  ...globRows.filter(g => !nonExcludedChanged.some(p => globMatch(g, p)))
+  ...globRows.filter(g => !nonExcludedChanged.some(p => globMatch(toPattern(g), p)))
 ].sort()
 
 // ---- at-risk derivation (D1/D2/D5, specs/20260815/02-at-risk-pins.md) ----------------------
@@ -233,7 +236,7 @@ const filePlanTestsPaths = parseFilePlanRows(specText)
   .filter(r => r.layer && /^tests?$/i.test(r.layer))
   .flatMap(r => r.paths)
 const isResolvedByTestsRows = (p) =>
-  filePlanTestsPaths.some(row => (isGlobRow(row) ? globMatch(row, p) : row === p))
+  filePlanTestsPaths.some(row => (isGlobRow(row) ? globMatch(toPattern(row), p) : row === p))
 
 // classifyFn defaults to the config-derived isTestClassified above (evaluated only when the
 // argument is omitted, so the --probe-at-risk branch above — which calls this before that const

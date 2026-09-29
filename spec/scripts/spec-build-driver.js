@@ -5,9 +5,24 @@
 // spec-build-driver <spec.md> --mark <mark> [args]     -> verify artifacts, record, print next step
 //   marks: tests-authored | red-attributed |
 //          wave-done --wave <label> --workers <n> | integrated |
-//          repair-applied --continued <n> --spawned <n> | committed
+//          repair-applied --continued <n> --spawned <n> | committed |
+//          harden-merged | captured | capture-accepted --route <r> --state <s>
+//            (the last three apply only to a lane: behaviour spec — specs/20260928/03-the-
+//            build-reads-the-freeze.md)
 // spec-build-driver <spec.md> --state                  -> print the state name only (scripting)
 //
+// specs/20260928/03-the-build-reads-the-freeze.md (D1-D4): a spec carrying a `brief:` is refused
+// before PREFLIGHT while that brief's `proto/<NN>-*` branch is still open (the prototype must be
+// frozen first). A `lane: behaviour` spec (written by the prototype freeze) gains two extra
+// states never seen by any other lane: HARDEN_MERGE, first after PREFLIGHT — the session merges
+// `harden/<stem>` (the freeze's exported data/API layer) and `--mark harden-merged` verifies
+// ancestry — and CAPTURE, derived after the gate is green and before COMMIT — the driver captures
+// and diffs every contract route x state via `proto-capture.js` (PROTO_CAPTURE_BIN, default
+// spec 02's own copy) and either advances straight to COMMIT (every pair at zero diffs) or
+// reprints as a look stop the session clears with the literal `accept <route> <state>` reply,
+// marked `--mark capture-accepted --route <r> --state <s>`. The build row gains `capture: {pairs,
+// diffs, accepted}` for this lane only, derived from `<spec>.build/capture-state.json` at
+// `committed`, absent otherwise.
 // specs/20260912/03-run-isolates-and-owns-the-stages.md (D10): `via` is recorded as "loop" once,
 // at sidecar creation, regardless of argv — /spec:run is the only entry point left, so the flag
 // that once chose between it and a direct invocation is gone; `via` itself stays a measurement
@@ -15,9 +30,10 @@
 // immediately after `tier` — model derived at row-write time by lib/session-stamp.js's
 // sessionModel(repoRoot), `null` on a host with no .claude/spec-session.json stamp.
 //
-// States: PREFLIGHT (driver-only) -> TESTS -> RED_CHECK (driver-only) -> RED_FINDINGS? ->
-//   RED_ATTRIBUTION? -> WAVE:<label>... -> INTEGRATION -> GATE (driver-only) ->
-//   REPAIR? (cap 3; 4th -> ESCALATE, terminal) -> COMMIT -> DONE (terminal)
+// States: PREFLIGHT (driver-only) -> HARDEN_MERGE? (lane: behaviour only) -> TESTS ->
+//   RED_CHECK (driver-only) -> RED_FINDINGS? -> RED_ATTRIBUTION? -> WAVE:<label>... ->
+//   INTEGRATION -> GATE (driver-only) -> REPAIR? (cap 3; 4th -> ESCALATE, terminal) ->
+//   CAPTURE? (lane: behaviour only, after a green gate) -> COMMIT -> DONE (terminal)
 //
 // specs/20260910/07-post-gate-command.md: a host's optional `postGateCommand` config key is
 // chained into runGate()'s ONE bash -c child after the resolved scoped gate
@@ -67,7 +83,16 @@
 //                 sidecar is opened, remedy = the review driver; and a non-zero exit from the
 //                 `git ls-files`/`git add -N` intent-to-add staging that now runs before the gate
 //                 child (stderr names the failing command and its exit code; no gate child is
-//                 spawned and no gateRuns entry is recorded — specs/20260910/08 D5).
+//                 spawned and no gateRuns entry is recorded — specs/20260910/08 D5); and
+//                 (specs/20260928/03 D1-D3) a spec carrying `brief: <NN>` while
+//                 `proto/<NN>-*` is still an open branch (stderr names the branch and the brief,
+//                 remedy `/spec:prototype`, refused before PREFLIGHT and before any write), a
+//                 `lane: behaviour` spec's `--mark harden-merged` run before `harden/<stem>` is
+//                 merged into HEAD (names `harden/<stem> is not merged into HEAD`) or while
+//                 `harden/<stem>` does not exist at all (names `/spec:prototype`), and
+//                 `--mark captured`/`--mark capture-accepted` refusals: the capture stub exiting
+//                 non-zero (forwards its stderr verbatim, writes no capture-state.json) or
+//                 `capture-accepted` naming a pair with `diffs: 0` (names "has no diffs").
 
 'use strict'
 const fs = require('fs')
@@ -96,7 +121,11 @@ if (!fs.existsSync(specPath)) die('spec not found: ' + specPath)
 const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : null }
 const markIdx = argv.indexOf('--mark')
 const MARK = markIdx > -1 ? argv[markIdx + 1] : null
-const STATE_ONLY = argv.includes('--state')
+// specs/20260928/03-the-build-reads-the-freeze.md D3: `--mark capture-accepted --route <r>
+// --state <s>` puts the literal token `--state` inside a marked invocation's own argv — scoped
+// to a bare (no --mark) invocation so that mark's own flag can never be mistaken for the driver's
+// scripting flag.
+const STATE_ONLY = !MARK && argv.includes('--state')
 
 const PLUGIN = path.resolve(__dirname, '..')
 const redCheckBin = path.join(PLUGIN, 'scripts/red-check.js')
@@ -120,6 +149,9 @@ const fmVal = (k) => fmValue(specText, k)
 
 let status = fmVal('status')
 const tier = fmVal('tier') || 'standard'
+// specs/20260928/03-the-build-reads-the-freeze.md D2: `lane:` is never touched by the hardened
+// flip (only status/diff_base are), so it is safe to read once, here.
+const isBehaviourLane = fmVal('lane') === 'behaviour'
 const specRel = path.relative(repoRoot, resolvedSpecPath) || resolvedSpecPath
 const sidecarDir = resolvedSpecPath.replace(/\.md$/, '.build')
 const sidecarRel = path.relative(repoRoot, sidecarDir)
@@ -146,6 +178,22 @@ if (status !== 'hardened' && status !== 'implementing') {
   die('spec status is "' + (status || '<missing>') + '" — spec-build-driver requires status: ' +
     'hardened (or implementing to resume); ' + (OWNING_COMMAND[status] || '/spec:status') +
     ' is the owning command')
+}
+
+// ---- D1 (specs/20260928/03-the-build-reads-the-freeze.md): a spec carrying a real brief is
+// refused while that brief's proto/ branch is still open — before PREFLIGHT, before any write.
+// The branch list is repo-wide (git branch --list), so it holds from a worktree exactly as ADR-
+// 0030 (h) requires. `brief: n/a` (or no brief: line at all) is never scoped by this check.
+const briefFm = fmVal('brief')
+if (briefFm && briefFm !== 'n/a') {
+  const protoListR = runChild('git', ['-C', repoRoot, 'branch', '--list', 'proto/' + briefFm + '-*'],
+    { encoding: 'utf8' }, 'git branch --list (open prototype check)')
+  const openProtoBranches = (protoListR.stdout || '').split('\n')
+    .map((l) => l.replace(/^\*/, '').trim()).filter(Boolean)
+  if (openProtoBranches.length) {
+    die('prototype ' + openProtoBranches[0] + ' is still open for brief ' + briefFm +
+      ' — freeze it first: /spec:prototype docs/roadmap/' + briefFm + '-*.md')
+  }
 }
 
 const sidecarExisted = fs.existsSync(sidecarDir)
@@ -321,6 +369,10 @@ function ledgerBuildRow(root, rel) {
 }
 
 let marks = loadSidecar(sidecarDir, 'build-state.json')
+// D2/D3: set only by handleHardenMerged/handleCaptured/handleCaptureAccepted when their own mark
+// resolves the state they were printed at — never a generic transition log for every mark (A2:
+// every other mark's printed shape is unchanged).
+let transitionNote = ''
 let resumeDirtyWarning = ''
 
 function saveSidecar() { saveSidecarLib(sidecarDir, 'build-state.json', marks) }
@@ -549,6 +601,162 @@ function recordIncident(cls, exit, source) {
   marks.incidents.push({ ts: new Date().toISOString(), class: cls, exit, source })
   process.stderr.write('spec-build-driver: incident recorded automatically (' + cls + ', exit ' + exit +
     ', ' + source + ') — ' + marks.incidents.length + ' on this build; it lands on the stage:"build" ledger row at DONE\n')
+}
+
+// ---- behaviour lane (specs/20260928/03-the-build-reads-the-freeze.md D2-D4) ----------------------
+// `<stem>` is the brief's stem, taken from the single `docs/roadmap/<NN>-*.md` file the freeze
+// itself wrote (spec 02) — never invented here, so a missing freeze names the exact remedy.
+function stemFor() {
+  if (!briefFm || briefFm === 'n/a') {
+    die('lane: behaviour requires a real brief: <NN> in the spec frontmatter to derive <stem>')
+  }
+  const roadmapDir = path.join(repoRoot, 'docs/roadmap')
+  let entries = []
+  try { entries = fs.readdirSync(roadmapDir) } catch { entries = [] }
+  const re = new RegExp('^' + briefFm + '-.*\\.md$')
+  const match = entries.find((f) => re.test(f))
+  if (!match) {
+    die('no docs/roadmap/' + briefFm + '-*.md found — the prototype must be frozen first: ' +
+      '/spec:prototype docs/roadmap/' + briefFm + '-*.md')
+  }
+  return match.replace(/\.md$/, '')
+}
+function branchExistsLocal(branch) {
+  const r = runChild('git', ['-C', repoRoot, 'rev-parse', '--verify', '-q', 'refs/heads/' + branch],
+    { encoding: 'utf8' }, 'git rev-parse --verify (branch existence check)')
+  return r.status === 0
+}
+function readCaptureState() {
+  const p = path.join(sidecarDir, 'capture-state.json')
+  if (!fs.existsSync(p)) return null
+  try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return null }
+}
+// A pair is resolved once it either never diffed or the user has cleared it with the literal
+// `accept <route> <state>` reply (capture-accepted) — the ONE predicate both deriveState() and
+// the two mark handlers below share, so they can never disagree about what COMMIT is waiting on.
+function captureResolved(doc) {
+  return (doc.pairs || []).every((p) => p.diffs === 0 || p.accepted)
+}
+// marks.captureDetails carries the url/entries each pair needs for the look-stop render —
+// deliberately NOT part of capture-state.json, whose on-disk shape is pinned verbatim by this
+// spec's own Contracts block ({ pairs: [{route, state, diffs, accepted}] }).
+function detailFor(route, stateName) {
+  return (marks.captureDetails || []).find((d) => d.route === route && d.state === stateName) || {}
+}
+function renderCaptureVal(v) {
+  return Array.isArray(v) ? JSON.stringify(v) : String(v)
+}
+function renderCaptureEntry(e) {
+  const kindCol = (e.kind || '').padEnd(7) + ' '
+  if (e.kind === 'changed') {
+    return '  ' + kindCol + e.id + ' ' + e.field + ' ' + renderCaptureVal(e.before) + ' → ' +
+      renderCaptureVal(e.after)
+  }
+  return '  ' + kindCol + e.id
+}
+
+function handleHardenMerged() {
+  const stem = stemFor()
+  const branch = 'harden/' + stem
+  if (!branchExistsLocal(branch)) {
+    die(branch + ' does not exist — freeze the prototype first: /spec:prototype docs/roadmap/' +
+      stem + '.md')
+  }
+  const anc = runChild('git', ['-C', repoRoot, 'merge-base', '--is-ancestor', branch, 'HEAD'],
+    { encoding: 'utf8' }, 'git merge-base --is-ancestor (harden merge check)')
+  if (anc.status !== 0) {
+    die(branch + ' is not merged into HEAD — run: git merge --no-ff ' + branch + ' -m "merge ' +
+      branch + ': data and API layer from the prototype"')
+  }
+  marks.hardenMerged = true
+  saveSidecar()
+  transitionNote = '(HARDEN_MERGE → ' + deriveState() + ')'
+  return null
+}
+
+// D3: every route x state pair in the contract is captured (PROTO_CAPTURE_BIN, default spec 02's
+// own proto-capture.js) and diffed against its frozen baseline. capture-state.json is written
+// ONLY once every pair has been captured and diffed — a capture failure partway through must
+// leave no partial file for a later mark to mistake for a completed run.
+function handleCaptured() {
+  const stem = stemFor()
+  const designDir = path.join(repoRoot, 'design/prototypes', stem)
+  const contractPath = path.join(designDir, 'contract.json')
+  let contract
+  try {
+    contract = JSON.parse(fs.readFileSync(contractPath, 'utf8'))
+  } catch (e) {
+    die('cannot read ' + contractPath + ': ' + e.message)
+  }
+  const protoCaptureBin = process.env.PROTO_CAPTURE_BIN || path.join(PLUGIN, 'scripts/proto-capture.js')
+  const composites = (contract.composites || []).join(',')
+  const viewport = contract.viewport || { width: 1280, height: 800 }
+  const capturesDir = path.join(sidecarDir, 'captures')
+  fs.mkdirSync(capturesDir, { recursive: true })
+
+  const pairs = []
+  const details = []
+  for (const [route, states] of Object.entries(contract.routes || {})) {
+    for (const [stateName, entry] of Object.entries(states)) {
+      const baselinePath = path.join(designDir, entry.capture)
+      const currentPath = path.join(capturesDir, path.basename(entry.capture))
+      const capR = runChild(process.execPath,
+        [protoCaptureBin, '--host', repoRoot, '--url', entry.url, '--out', currentPath,
+          '--composites', composites, '--viewport', viewport.width + 'x' + viewport.height],
+        { encoding: 'utf8' }, 'proto-capture.js (capture)')
+      if (capR.status !== 0) {
+        die('proto-capture.js capture failed for ' + route + ' (' + stateName + '): ' +
+          (capR.stdout + capR.stderr).trim())
+      }
+      const diffR = runChild(process.execPath, [protoCaptureBin, '--diff', baselinePath, currentPath],
+        { encoding: 'utf8' }, 'proto-capture.js --diff')
+      if (diffR.status !== 0 && diffR.status !== 1) {
+        die('proto-capture.js --diff failed for ' + route + ' (' + stateName + '): ' +
+          (diffR.stdout + diffR.stderr).trim())
+      }
+      let parsed = { entries: [] }
+      try { parsed = JSON.parse(diffR.stdout) } catch { /* treated as a zero-diff, empty pair */ }
+      const entries = parsed.entries || []
+      pairs.push({ route, state: stateName, diffs: entries.length, accepted: false })
+      details.push({ route, state: stateName, url: entry.url, entries })
+    }
+  }
+
+  fs.mkdirSync(sidecarDir, { recursive: true })
+  fs.writeFileSync(path.join(sidecarDir, 'capture-state.json'), JSON.stringify({ pairs }, null, 2) + '\n')
+  marks.captureDetails = details
+  saveSidecar()
+  transitionNote = captureResolved({ pairs }) ? '(CAPTURE → ' + deriveState() + ')' : ''
+  return null
+}
+
+function handleCaptureAccepted() {
+  const route = flag('--route')
+  const stateName = flag('--state')
+  if (typeof route !== 'string' || typeof stateName !== 'string') {
+    die('--mark capture-accepted needs --route <r> --state <s>')
+  }
+  const capPath = path.join(sidecarDir, 'capture-state.json')
+  if (!fs.existsSync(capPath)) {
+    die('capture-accepted refused — no ' + capPath + ' on disk; run `--mark captured` first')
+  }
+  let doc
+  try {
+    doc = JSON.parse(fs.readFileSync(capPath, 'utf8'))
+  } catch (e) {
+    die(capPath + ' is not valid JSON: ' + e.message)
+  }
+  const pair = (doc.pairs || []).find((p) => p.route === route && p.state === stateName)
+  if (!pair) {
+    die('capture-accepted refused — no pair ' + route + ' (' + stateName + ') in ' + capPath)
+  }
+  if (pair.diffs === 0) {
+    die('capture-accepted refused — ' + route + ' (' + stateName + ') has no diffs to accept')
+  }
+  pair.accepted = true
+  fs.writeFileSync(capPath, JSON.stringify(doc, null, 2) + '\n')
+  transitionNote = captureResolved(doc) ? '(CAPTURE → ' + deriveState() + ')' : ''
+  return null
 }
 
 // ---- mark handlers --------------------------------------------------------------------------------
@@ -877,6 +1085,16 @@ function handleCommitted() {
     workers,
     incidents: marks.incidents || [],
   }
+  // D4: capture counts land on the build row for the behaviour lane only — every other spec's
+  // row shape is byte-for-byte unaffected (AC-20260928-03-5).
+  if (isBehaviourLane) {
+    const cap = readCaptureState() || { pairs: [] }
+    row.capture = {
+      pairs: cap.pairs.length,
+      diffs: cap.pairs.reduce((s, p) => s + (p.diffs || 0), 0),
+      accepted: cap.pairs.filter((p) => p.accepted).length,
+    }
+  }
   appendLedger(repoRoot, JSON.stringify(row))
   fs.rmSync(sidecarDir, { recursive: true, force: true })
   printDoneNow()
@@ -899,6 +1117,9 @@ const MARK_STATE = {
   'repair-applied': (s) => s === 'REPAIR',
   'committed': (s) => s === 'COMMIT',
   'incident': (s) => s !== 'DONE',   // any live step — an incident has no state of its own
+  'harden-merged': (s) => s === 'HARDEN_MERGE',
+  'captured': (s) => s === 'CAPTURE',
+  'capture-accepted': (s) => s === 'CAPTURE',
 }
 function admitMark() {
   const admits = MARK_STATE[MARK]
@@ -920,10 +1141,14 @@ function handleMark() {
     case 'repair-applied': return handleRepairApplied()
     case 'committed': return handleCommitted() // exits the process itself
     case 'incident': return handleIncident()
+    case 'harden-merged': return handleHardenMerged()
+    case 'captured': return handleCaptured()
+    case 'capture-accepted': return handleCaptureAccepted()
     default:
       die('unknown mark "' + MARK + '" (tests-authored | red-attributed | wave-done --wave ' +
         '<label> --workers <n> | integrated | repair-applied --continued <n> --spawned <n> | committed | ' +
-        'incident --class <id> [--exit <n>])')
+        'incident --class <id> [--exit <n>] | harden-merged | captured | capture-accepted --route ' +
+        '<r> --state <s>)')
   }
 }
 
@@ -937,6 +1162,9 @@ function afterWaves() {
   return fs.existsSync(gateCapPath) ? 'ESCALATE' : 'REPAIR'
 }
 function deriveState() {
+  // D2: a lane: behaviour spec's very first state, ahead of TESTS — every other lane's ordering
+  // below is untouched (A2).
+  if (isBehaviourLane && !marks.hardenMerged) return 'HARDEN_MERGE'
   if (hasTestsRows) {
     if (!marks.testsAuthored) return 'TESTS'
     if (!(marks.redCheck === 'green' || marks.redCheck === 'skipped-resume')) {
@@ -946,7 +1174,13 @@ function deriveState() {
   }
   const w = pendingWave()
   if (w) return 'WAVE:' + w.label
-  return afterWaves()
+  const after = afterWaves()
+  // D3: derived only once the gate is actually green — REPAIR/ESCALATE are unaffected.
+  if (isBehaviourLane && after === 'COMMIT') {
+    const cap = readCaptureState()
+    if (!cap || !captureResolved(cap)) return 'CAPTURE'
+  }
+  return after
 }
 
 // ---- run -------------------------------------------------------------------------------------------
@@ -1068,7 +1302,58 @@ function commitStepBody() {
     `checkpoint commit.\n` +
     `Then: node ${__filename} ${specPath} --mark committed`
 }
+// D2: the harden merge is a session git call — the driver only names it and verifies it happened.
+function hardenMergeStepBody() {
+  const stem = stemFor()
+  const branch = 'harden/' + stem
+  return `## Step: merge the harden branch — the prototype's exported data/API layer\n` +
+    `Session: git merge --no-ff ${branch} -m "merge ${branch}: data and API layer from the prototype"\n` +
+    `Then: node ${__filename} ${specPath} --mark harden-merged`
+}
+// D3: before any capture has run this prints the invitation (boot the app, then --mark
+// captured); once capture-state.json exists and still carries an unresolved pair it re-prints as
+// the look stop — same state, different render, exactly as the Decision names it.
+function captureStepBody() {
+  const stem = stemFor()
+  const designDir = path.join(repoRoot, 'design/prototypes', stem)
+  const contractRel = path.relative(repoRoot, path.join(designDir, 'contract.json'))
+  const cap = readCaptureState()
+  if (!cap) {
+    const boot = (hostConfig.runtime && hostConfig.runtime.bootCommand) ||
+      '(no runtime.bootCommand declared in the host config)'
+    return `## Step: the rebuilt screens against the frozen capture\n` +
+      `Read only: ${contractRel}\n` +
+      `Session: start the app in the background (tracked): ${boot}\n` +
+      `Then: node ${__filename} ${specPath} --mark captured`
+  }
+  const capRel = path.relative(repoRoot, path.join(sidecarDir, 'capture-state.json'))
+  const lines = [
+    `## Step: the rebuilt screens against the frozen capture`,
+    `Read only: ${contractRel}, ${capRel}`,
+  ]
+  const unresolved = []
+  for (const p of cap.pairs) {
+    if (p.diffs === 0) {
+      lines.push(`route ${p.route} (${p.state}): 0 diffs`)
+      continue
+    }
+    const d = detailFor(p.route, p.state)
+    lines.push(`🎨 route ${p.route} (${p.state}): ${p.diffs} diffs — ${d.url || ''}`)
+    for (const e of (d.entries || []).slice(0, 5)) lines.push(renderCaptureEntry(e))
+    if (!p.accepted) unresolved.push(p)
+  }
+  for (const p of unresolved) {
+    lines.push(`Reply \`accept ${p.route} ${p.state}\` to accept a pair as the new baseline; ` +
+      `anything else is a fix for this session, then:`)
+    lines.push(`  node ${__filename} ${specPath} --mark captured`)
+    lines.push(`Then (only on the literal accept):`)
+    lines.push(`  node ${__filename} ${specPath} --mark capture-accepted --route ${p.route} ` +
+      `--state ${p.state}`)
+  }
+  return lines.join('\n')
+}
 function stepBody(s) {
+  if (s === 'HARDEN_MERGE') return hardenMergeStepBody()
   if (s === 'TESTS') return testsStepBody()
   if (s === 'RED_FINDINGS') return redFindingsStepBody()
   if (s === 'RED_ATTRIBUTION') return redAttributionStepBody()
@@ -1076,11 +1361,13 @@ function stepBody(s) {
   if (s === 'INTEGRATION') return integrationStepBody()
   if (s === 'REPAIR') return repairStepBody()
   if (s === 'ESCALATE') return escalateStepBody()
+  if (s === 'CAPTURE') return captureStepBody()
   if (s === 'COMMIT') return commitStepBody()
   die('internal error: no step body for state ' + s)
 }
 
 writeOut(1, `[spec-build-driver] state: ${state}  spec: ${specPath}\n` +
+  (transitionNote ? transitionNote + '\n' : '') +
   `(re-run this driver after completing the step; it verifies artifacts and prints the next one)\n\n` +
   stepBody(state) + '\n')
 process.exit(0)

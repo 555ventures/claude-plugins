@@ -38,6 +38,19 @@ A red-expected file that passed (`unsanctioned-green`), a carried AC mixing a pr
 pin (`mixed-pin` — split the AC, re-run), or a red run recorded `redCheck: "skipped-resume"`
 is diagnosed with the user before the next mark, never laundered past.
 
+## Behaviour lane
+
+A spec whose frontmatter carries `lane: behaviour` (written by the prototype freeze) inserts two
+states around the ordinary sequence, derived only for that lane. First, `HARDEN_MERGE`, before
+`TESTS`: the session runs `git merge --no-ff harden/<stem>` and the mark verifies the branch is
+now an ancestor of HEAD — the merged data and API layer then rides through TESTS, the rebuild,
+and the host gate like any other change. Second, `CAPTURE`, after a green gate and before
+`COMMIT`: the driver boots the app, captures every contract route × state, and diffs each
+against the frozen baseline. Zero diffs advance straight to `COMMIT`; any diff prints a look
+stop and the turn ends — the user's literal `accept <route> <state>` marks that pair as the new
+baseline, anything else is a fix for this session followed by a re-capture. The build ledger row
+for this lane carries `capture: { pairs, diffs, accepted }`.
+
 ## Worker Contract — every dispatch this session makes
 
 Every worker prompt carries only the spec path, the pipeline-rules path, and the worker's file

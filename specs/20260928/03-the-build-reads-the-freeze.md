@@ -1,6 +1,7 @@
 ---
 date: 2026-09-28
-status: hardened
+status: implementing
+build_base: design-retool
 tier: standard
 area: prototype
 breaking: false
@@ -9,6 +10,7 @@ depended_on_by: []
 brief: 28
 spiked: 2026-09-28
 open_markers: 0
+diff_base: 610a6d71426159c1756055deef81ec4569b19c2a
 ---
 
 # The build reads the freeze

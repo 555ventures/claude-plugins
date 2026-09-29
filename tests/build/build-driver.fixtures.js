@@ -12,11 +12,59 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 
 const DRIVER = 'scripts/spec-build-driver.js'
 
-function specBody({ status = 'hardened', tier = 'standard', design = null, diffBase = null, acId = 'AC-20260901-01-1' }) {
+// specs/20260928/03-the-build-reads-the-freeze.md D3/D4's test seam: a PROTO_CAPTURE_BIN stand-in
+// that never touches a browser. Unlike spec 02's own capture-stub.js (which writes a canned
+// capture and only ever forces a whole-capture failure), this one also answers `--diff <baseline>
+// <current>` — scripted per URL via a PROTO_CAPTURE_SCRIPT JSON map file ({ "<url>": { entries }
+// | { exit2 } | { exit2capture } }) — so a build-driver-lane test can dictate exactly which
+// route/state pair diffs and by how much, without a real structural comparison.
+const PROTO_CAPTURE_STUB_SRC = `#!/usr/bin/env node
+'use strict'
+const fs = require('fs')
+const path = require('path')
+const argv = process.argv.slice(2)
+function flag(name) { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : null }
+function scriptMap() {
+  const p = process.env.PROTO_CAPTURE_SCRIPT
+  if (!p) return {}
+  try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return {} }
+}
+if (argv[0] === '--diff') {
+  const currentPath = argv[2]
+  let cur
+  try { cur = JSON.parse(fs.readFileSync(currentPath, 'utf8')) } catch (e) {
+    process.stderr.write('proto-capture-stub: cannot read current capture ' + currentPath + ': ' + e.message + '\\n')
+    process.exit(2)
+  }
+  const rule = scriptMap()[cur.url] || {}
+  if (rule.exit2) { process.stderr.write(rule.exit2 + '\\n'); process.exit(2) }
+  const entries = rule.entries || []
+  const summary = {
+    missing: entries.filter((e) => e.kind === 'missing').length,
+    extra: entries.filter((e) => e.kind === 'extra').length,
+    changed: entries.filter((e) => e.kind === 'changed').length,
+  }
+  process.stdout.write(JSON.stringify({ summary, entries }, null, 2) + '\\n')
+  process.exit(entries.length === 0 ? 0 : 1)
+}
+const url = flag('--url')
+const out = flag('--out')
+if (!url || !out) {
+  process.stderr.write('proto-capture-stub: usage error — --url/--out required\\n')
+  process.exit(2)
+}
+const rule = scriptMap()[url] || {}
+if (rule.exit2capture) { process.stderr.write(rule.exit2capture + '\\n'); process.exit(2) }
+fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true })
+fs.writeFileSync(out, JSON.stringify({ schemaVersion: 1, url, entries: [] }, null, 2) + '\\n')
+process.exit(0)
+`
+
+function specBody({ status = 'hardened', tier = 'standard', design = null, diffBase = null, acId = 'AC-20260901-01-1', brief = null, lane = null }) {
   return `---
 status: ${status}
 tier: ${tier}
-${design !== null ? `design: ${design}\n` : ''}${diffBase ? `diff_base: ${diffBase}\n` : ''}---
+${design !== null ? `design: ${design}\n` : ''}${diffBase ? `diff_base: ${diffBase}\n` : ''}${brief !== null ? `brief: ${brief}\n` : ''}${lane !== null ? `lane: ${lane}\n` : ''}---
 # Build Driver Test Spec
 
 ## Decisions
@@ -52,7 +100,17 @@ test('AC-20260901-01-1: foo() returns ${expected}', () => { assert.strictEqual(f
 // fooValue=42: the pre-image already computes the "future correct" answer — the
 // unsanctioned-green shape AC-4 needs. src/bar.js (a non-tests CREATE row) never exists at base,
 // which is what drives RED_ATTRIBUTION once the test itself is made red (AC-3/4/5).
-function makeHost({ fooValue = 42 } = {}) {
+//
+// specs/20260928/03-the-build-reads-the-freeze.md File Plan row: `{ lane: 'behaviour', brief,
+// contract }` options, additive — every existing caller (no lane/brief) is byte-for-byte
+// unaffected. `lane: 'behaviour'` also writes `docs/roadmap/<brief>-functional-prototype.md` (so
+// `<stem>` derives the same way the real freeze does), `design/prototypes/<stem>/contract.json`
+// plus two baseline capture files for the `/women` route (default/empty — the spec's own Contract
+// example), a `prototype.url` + `runtime.bootCommand` host config block, and a PROTO_CAPTURE_BIN
+// stub (+ a PROTO_CAPTURE_SCRIPT map file the caller can rewrite via `host.setCaptureScript`) so
+// AC-3/AC-4 can script diffs per URL without a browser. `contract` overrides nothing yet — reserved
+// for a future host needing a different route/state shape; every current test uses the default.
+function makeHost({ fooValue = 42, brief = null, lane = null, contract = null } = {}) {
   const root = fs.realpathSync(tmpdir('blddrv'))
   const g = gitRepo(root)
   fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
@@ -67,14 +125,63 @@ function makeHost({ fooValue = 42 } = {}) {
     agentMap: { tests: 'plugin-tests', scripts: 'gate-scripts', other: 'general-purpose', default: 'general-purpose' },
     pipelineRules: '.claude/rules/spec-pipeline.md',
   }
+
+  let stem = null
+  let captureEnv = null
+  let scriptPath = null
+  if (lane === 'behaviour') {
+    if (brief === null) throw new Error('makeHost({ lane: "behaviour" }) requires a brief number')
+    stem = `${brief}-functional-prototype`
+    cfg.prototype = { url: 'http://localhost:3000' }
+    cfg.runtime.bootCommand = 'node scripts/dev-server.js'
+  }
+
   fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify(cfg))
   fs.writeFileSync(path.join(root, 'src/foo.js'), `module.exports = () => ${fooValue}\n`)
   fs.writeFileSync(path.join(root, 'other.txt'), 'pre-image other\n')
+
+  if (lane === 'behaviour') {
+    fs.mkdirSync(path.join(root, 'docs/roadmap'), { recursive: true })
+    fs.writeFileSync(path.join(root, `docs/roadmap/${stem}.md`),
+      'Phase: 1\nDepends on: none\n\n# Functional Prototype\n')
+    const designDir = path.join(root, 'design/prototypes', stem)
+    const capturesDir = path.join(designDir, 'captures')
+    fs.mkdirSync(capturesDir, { recursive: true })
+    const doc = contract || {
+      schemaVersion: 1,
+      brief: String(brief),
+      stem,
+      viewport: { width: 1280, height: 800 },
+      composites: ['WomenList', 'WomanRow'],
+      routes: {
+        '/women': {
+          default: { url: 'http://localhost:3000/women', capture: 'captures/women--default.json' },
+          empty: { url: 'http://localhost:3000/women?proto=empty', capture: 'captures/women--empty.json' },
+        },
+      },
+    }
+    fs.writeFileSync(path.join(designDir, 'contract.json'), JSON.stringify(doc, null, 2) + '\n')
+    for (const [, states] of Object.entries(doc.routes)) {
+      for (const [, s] of Object.entries(states)) {
+        fs.writeFileSync(path.join(designDir, s.capture),
+          JSON.stringify({ schemaVersion: 1, url: s.url, entries: [] }, null, 2) + '\n')
+      }
+    }
+    const stubPath = path.join(root, '.proto-capture-stub.js')
+    fs.writeFileSync(stubPath, PROTO_CAPTURE_STUB_SRC)
+    scriptPath = path.join(root, '.proto-capture-script.json')
+    fs.writeFileSync(scriptPath, JSON.stringify({}))
+    captureEnv = { PROTO_CAPTURE_BIN: stubPath, PROTO_CAPTURE_SCRIPT: scriptPath }
+  }
+
   g('add', '-A'); g('commit', '-q', '-m', 'base')
   fs.mkdirSync(path.join(root, 'specs/20260901'), { recursive: true })
   const spec = path.join(root, 'specs/20260901/99-bd-test.md')
-  fs.writeFileSync(spec, specBody({}))
-  return { root, spec, sidecar: spec.replace(/\.md$/, '.build'), g }
+  fs.writeFileSync(spec, specBody({ brief, lane }))
+  return {
+    root, spec, sidecar: spec.replace(/\.md$/, '.build'), g, stem, captureEnv,
+    setCaptureScript: (map) => fs.writeFileSync(scriptPath, JSON.stringify(map)),
+  }
 }
 
 // A File Plan with no tests-layer rows at all (AC-12) and a flag-controlled gate.sh

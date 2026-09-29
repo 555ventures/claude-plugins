@@ -28,8 +28,11 @@ the working tree.
 Read, in order: the host's `.claude/rules/` one-pagers (the pipeline rules file's
 **§ Review Checks** carries this repo's severity calibrations — apply as written; its
 **§ Gotchas** is distilled from real failures), `CLAUDE.md`, `docs/canonical/{area}.md` for
-the touched areas, `AGENTS.md` files where present, and the spec itself (File Plan,
-Contracts, UI, Decisions, Acceptance Criteria).
+the touched areas, `AGENTS.md` files where present, the host's `design.rules` file (the
+intent-to-pattern and naming tables) where present, and the spec itself (File Plan, Contracts,
+UI, Decisions, Acceptance Criteria). A finding may cite a `design.rules` table row as
+supporting evidence, but a table row never scores a finding alone — it still needs the
+evidence standard below.
 
 ## Scope identity: the range is what you were handed
 

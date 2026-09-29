@@ -264,14 +264,18 @@ let allFilesCache = null
 let prunedCount = 0
 for (const { p, isDelete } of testsRowEntries) {
   if (isDelete) continue // D2: a DELETE row is satisfied by the file's planned absence
-  if (p.includes('*')) {
+  // A row naming a directory (trailing `/`, or an existing dir) expands like `<dir>/**`: read as
+  // one file it crashed the whole run on EISDIR (specs/20260928/01-the-prototype-command-and-the-pin-overlay.md build).
+  const isDirRow = p.endsWith('/') || (fs.existsSync(path.join(root, p)) && fs.statSync(path.join(root, p)).isDirectory())
+  if (p.includes('*') || isDirRow) {
     if (allFilesCache === null) {
       const ignored = getIgnoredPaths(root)
       const prunedCounter = { count: 0 }
       allFilesCache = walkAll(root, root, [], ignored, prunedCounter)
       prunedCount = prunedCounter.count
     }
-    const matches = allFilesCache.filter(f => globMatch(p, f))
+    const dirPrefix = p.endsWith('/') ? p : p + '/'
+    const matches = allFilesCache.filter(f => isDirRow ? f.startsWith(dirPrefix) : globMatch(p, f))
     for (const f of matches) testFiles.add(f)
     // D4: a wildcard row that resolves nothing pushes exactly one warning naming the row and
     // the walk's pruned-path count — cause-agnostic (the row may have matched nothing with or

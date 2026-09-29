@@ -21,13 +21,13 @@ path to a roadmap planning brief (`docs/roadmap/NN-*.md`).
 
 ## Entry
 
-- **Roadmap brief:** read the brief, `docs/roadmap/00-overview.md`, and every ADR the brief's
-  Grounding cites (including each `Amended by ADR-NNNN`). Run
-  `node "$(spec-paths spec-status)" --root . --brief NN` — exit 1 means a `Depends on` brief has
-  no spec at `implementing`/`done`: warn and confirm before proceeding. Every spec this session
-  produces gets `brief: NN` in frontmatter (that stamp is how roadmap status is derived); an
-  ad-hoc spec gets `brief: n/a`. The brief's Out of scope section is binding; a `surfaces`
-  block is structure only — labels and journey edges, never checked against approval.
+- **Roadmap brief:** read the brief, `docs/roadmap/00-overview.md`, and every ADR the brief's Grounding cites (including
+  each `Amended by ADR-NNNN`). Run `node "$(spec-paths spec-status)" --root . --brief NN` — exit 1 means a `Depends on`
+  brief has no spec at `implementing`/`done`: warn and confirm before proceeding. Every spec this session produces gets
+  `brief: NN` in frontmatter (that stamp is how roadmap status is derived); an ad-hoc spec gets `brief: n/a`. The
+  brief's Out of scope section is binding; a `surfaces` block is structure only — labels and journey edges, never
+  checked against approval. A `Lane: behaviour` brief (absent = structural) STOPs: run `/spec:prototype <brief>` instead
+  — it carries no plan document, the freeze writes its spec.
 - **Tier:** `standard` for almost everything; `critical` when the work touches irreversible or
   high-blast-radius surfaces — auth/security boundaries, data migrations, money, deletion of
   user data, or whatever the host's pipeline rules add. State the tier and why. Work too small

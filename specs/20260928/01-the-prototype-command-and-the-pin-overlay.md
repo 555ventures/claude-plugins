@@ -1,6 +1,7 @@
 ---
 date: 2026-09-28
-status: hardened
+status: done
+build_base: design-retool
 tier: critical
 area: prototype
 breaking: false
@@ -9,6 +10,7 @@ depended_on_by: [specs/20260928/02-freeze-export-and-the-contract.md, specs/2026
 brief: 28
 spiked: 2026-09-28
 open_markers: 0
+diff_base: 98db1571c97a5965e5e9cb65ee6a62ea9ef02bf0
 ---
 
 # The prototype command and the pin overlay
@@ -66,6 +68,7 @@ is spec 02.
 | tests/prototype/stable-id.test.js | CREATE | tests | AC-20260928-01-9 |
 | tests/prototype/prototype-check.test.js | CREATE | tests | AC-20260928-01-10 |
 | tests/prototype/ledger-stage.test.js | CREATE | tests | AC-20260928-01-11 |
+| tests/prototype/fixture.js | CREATE | tests | shared setup for the five prototype test files (copy the fixture host into a tmp git repo, read/write status/states/pins, driver wrappers); not a `*.test.js` file, so never run alone — added at review (leg:reconcile disposition) |
 | tests/fixtures/prototype/host/ | CREATE | tests | a synthetic host: `.claude/spec.config.json` with `prototype` + `runtime`, `src/main.js` importing `./proto-overlay.js`, one tracked file per export glob, `dbCreate` = a script that writes `db-created` into the worktree |
 
 Note (outside the table): `tests/consistency/entrypoints.test.js` and `read-load.test.js` are
@@ -203,6 +206,23 @@ to declare the behaviour lane: `spec-status.js` is untouched (its action strings
 API), so `--next` still prints `/spec:plan` for such a brief and plan's Entry redirects — a
 follow-up may teach `spec-status` the lane once a second behaviour brief exists. No
 `SHALL CONTINUE TO` pin: this spec adds surfaces and changes no existing behaviour.
+
+Build and review notes (2026-09-29, folded from the deviations sidecar):
+- red-check crashed on EISDIR reading the directory row `tests/fixtures/prototype/host/` as one
+  file. JJ ruled "fix it in this spec": a directory row now expands like `<dir>/**`, landed with
+  its test as commit 98db1571, and `diff_base` moved from 8d7f83ed to 98db1571 because red-check's
+  purity check refuses any non-tests change inside the judged range. scope-reconcile still reads a
+  directory row literally (review soft; queued).
+- `tests/prototype/fixture.js`, the shared setup for the five prototype test files, was added by
+  the test author and given its own File Plan row at review.
+- The overlay-import check (D3) also skips `.git`, `.claude` and the two copied templates:
+  `.claude/spec.config.json` always carries `prototype.overlay`'s path (D1) and each template names
+  its own basename, so the literal grep could never refuse.
+- Review fixes: `check` also runs brief-less (`prototype-driver check [--root <dir>] [--json]`),
+  which is the form doctor check 23 invokes — the D2 grammar's `<brief> check` form still works;
+  `serve` on a taken port exits 2 naming the port instead of crashing; refusals answer JSON
+  `{ "error" }` and the overlay shows that message; queued anchored pins carry a numbered badge,
+  drawn when the pin is added to the queue.
 
 ## Canonical Delta
 

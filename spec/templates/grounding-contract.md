@@ -30,9 +30,10 @@ token file — a Tailwind 4 `@theme` block or the stack's equivalent) and `rules
 auto-loaded rule file holding the intent-to-pattern table and the naming-convention table) are
 repo-relative and required when the block is present; `app` stays optional — the mock app dir,
 written by `/spec:mocks` and genesis, and equal to `design/mocks/status.json`'s own `app`),
-`release` (see § Release), `capabilities` (see § Capabilities), the rule-enforcement keys
-`enforcementManifest` and `rulesEnforcementHash` (see § Rule enforcement), and the
-genesis-handoff keys `genesisStackDescriptor` and `designRulesHash` (see § Genesis handoff).
+`release` (see § Release), `prototype` (see § Prototype), `capabilities` (see § Capabilities),
+the rule-enforcement keys `enforcementManifest` and `rulesEnforcementHash` (see § Rule
+enforcement), and the genesis-handoff keys `genesisStackDescriptor` and `designRulesHash`
+(see § Genesis handoff).
 
 ## Runtime verification (required)
 
@@ -123,6 +124,21 @@ checked-in permissions, generated project skills):
 exits 0 iff every journaled migration is applied on the just-deployed staging database; the
 literal `"none"` records an explicit decline, absent = legacy). All host-declared at
 init/first-release time — the plugin never invents deploy mechanics.
+
+## Prototype (optional — present when the host declares a functional-prototype path)
+
+`prototype` — the grounding `/spec:prototype` runs a throwaway branch against
+(specs/20260928/01-the-prototype-command-and-the-pin-overlay.md D1): `url` (the dev server's
+base URL), `overlay` (the worktree-relative file the driver writes the pin overlay to; the
+host's dev entry imports it behind its own dev flag), `e2eFile` (a path template carrying
+`{brief}`, where the freeze stage's derived tests land), `e2eList` (a shell string carrying
+`{file}` that lists the tests in one file and exits 0), `export` (a non-empty array of git
+pathspec globs naming the data and API layer the freeze exports off the prototype branch),
+optional `dbCreate` / `dbDestroy` (shell strings run with cwd = the prototype worktree and env
+`PROTO_BRANCH`, `PROTO_WORKTREE`, `PROTO_BRIEF`), optional `gate` (the command the freeze runs
+on the prototype tree when the host `gateCommand` carries a `{testDirs}`/`{scopeDirs}`
+placeholder). Absent block = the host has never declared a prototype path — the driver refuses
+naming this block and `/spec:doctor`.
 
 ## Capabilities (optional — declares stack-shaped facts the pipeline would otherwise assume)
 

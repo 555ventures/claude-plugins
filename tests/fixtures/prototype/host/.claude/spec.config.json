@@ -1,0 +1,23 @@
+{
+  "generatedBy": "spec@5.0.0",
+  "contractHash": "000000000000",
+  "gateCommand": "true",
+  "testCommand": "true",
+  "setupCommand": "true",
+  "patternsScript": "scripts/spec-patterns.sh",
+  "layerGroups": { "app": ["src/**"] },
+  "agentMap": { "tests": "tests", "default": "default" },
+  "pipelineRules": ".claude/rules/spec-pipeline.md",
+  "runtime": {
+    "bootCommand": "node scripts/dev-server.js",
+    "readyCheck": "true"
+  },
+  "prototype": {
+    "url": "http://127.0.0.1:1",
+    "overlay": "src/proto-overlay.js",
+    "e2eFile": "e2e/proto-{brief}.smoke.spec.ts",
+    "e2eList": "true {file}",
+    "export": ["src/db/**"],
+    "dbCreate": "node scripts/create-db.js"
+  }
+}

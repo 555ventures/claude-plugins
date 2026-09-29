@@ -123,7 +123,16 @@ test('AC-20260926-03-8: spec-paths workspace-scan resolves to spec/scripts/works
 // nothing (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently"; same additive-
 // collision class as AC-20260819-02-10 above; the key list below is updated in place, never a
 // parallel exhaustive pin).
-test('AC-20260926-03-8: every documented key resolves to an existing path', () => {
+// AC-20260928-01-2: specs/20260928/01-the-prototype-command-and-the-pin-overlay.md D2 adds
+// spec/scripts/prototype-driver.js to the bundle (a new `prototype-driver` key) and D9 gives
+// /spec:prototype its own `shared-for` arm — like every other bundled script it needs a
+// spec-paths key, or /spec:prototype's driver invocation resolves nothing (§ Risk Tiers,
+// spec-paths: "a wrong key breaks commands silently"; same additive-collision class as
+// AC-20260819-02-10 above). The key list below is updated in place, never a parallel exhaustive
+// pin, and the new `shared-for prototype` assertions are folded into this test per the AC's own
+// `rewrites tests/spec-paths.test.js :: AC-20260926-03-8: every documented key resolves to an
+// existing path` pointer.
+test('AC-20260926-03-8: every documented key resolves to an existing path (AC-20260928-01-2)', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-enforce',
     'wf-research', 'merge-back',
@@ -132,12 +141,18 @@ test('AC-20260926-03-8: every documented key resolves to an existing path', () =
     'registry-check', 'genesis-driver', 'escape-row', 'mocks-driver', 'commit-coverage',
     'worktree-include', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract',
     'design-contract-check', 'design-rules-template', 'workspace-scan',
-    'catalog-inventory', 'design-brief-template', 'design-paths-template']) {
+    'catalog-inventory', 'design-brief-template', 'design-paths-template', 'prototype-driver']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }
   assert.match(run('version').trim(), /^\d+\.\d+\.\d+$/)
   assert.match(run('contract-hash').trim(), /^[0-9a-f]{12}$/)
+
+  const prototypeScoped = run('shared-for', 'prototype')
+  assert.match(prototypeScoped, /\/spec:prototype/,
+    'D9: `spec-paths shared-for prototype` must print a section-scoped header naming /spec:prototype — a missing arm falls open to the whole doctrine instead: ' + prototypeScoped.slice(0, 200))
+  assert.ok(prototypeScoped.split('\n').length < 400,
+    'D9/A6: the prototype shared-for arm must stay under the flat 400-line read-load cap: got ' + prototypeScoped.split('\n').length + ' lines')
 })
 
 // AC-20260904-02-12 pins the usage line spec-paths prints on an UNKNOWN key (the only
@@ -579,7 +594,7 @@ test('shared-for init: scoped (not fail-open) and strictly smaller than the whol
 // exists to find zero occurrences of elsewhere.
 const RUN_DESIGN_KEY = 'run-' + 'design'
 
-test('shared-for: every scoped command serves § Session Execution (AC-20260926-01-5), and the scoped roster has exactly 12 members with neither sketch nor the design-only-delta key among them', () => {
+test('shared-for: every scoped command serves § Session Execution (AC-20260926-01-5; AC-20260928-01-2 adds prototype), and the scoped roster has exactly 13 members with neither sketch nor the design-only-delta key among them', () => {
   const src = read('spec/bin/spec-paths')
   const cmds = [...src.matchAll(/^\s+([a-z-]+)\)\s+SECTIONS="/gm)].map(m => m[1])
   assert.ok(!cmds.includes('sketch'),
@@ -588,8 +603,8 @@ test('shared-for: every scoped command serves § Session Execution (AC-20260926-
   assert.ok(!cmds.includes(RUN_DESIGN_KEY),
     'AC-20260926-01-5/D1: the scoped roster must not include the design-only-delta key — its ' +
     'SECTIONS arm is deleted, falling open to the whole doctrine like every unknown command: ' + cmds.join(','))
-  assert.strictEqual(cmds.length, 12,
-    'AC-20260926-01-5: deleting the sketch and design-only-delta arms must leave exactly 12 scoped ' +
+  assert.strictEqual(cmds.length, 13,
+    'AC-20260926-01-5 + AC-20260928-01-2: with the sketch and design-only-delta arms deleted and the prototype arm added, exactly 13 scoped ' +
     'command arms (A1, executed at lock) — got ' + cmds.length + ': ' + cmds.join(','))
   for (const cmd of cmds) {
     assert.match(run('shared-for', cmd), /## Session Execution/,

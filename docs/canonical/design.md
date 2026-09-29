@@ -100,3 +100,14 @@ are a genesis artifact that walks the seed's beats against the real kit and rout
 
 JJ approves the designed set in Storybook; there is no client gate. Journey stories are frozen at
 approval and never gated later. (specs/20260926/06-the-approval-stop-and-the-roadmap.md D7)
+
+## Prototypes (specs/20260928/01)
+
+`/spec:prototype <brief>` runs a functional prototype on `proto/<stem>` in
+`.claude/worktrees/proto-<stem>`. The host declares a `prototype` config block (`url`,
+`overlay`, `e2eFile`, `e2eList`, `export`, optional `dbCreate`/`dbDestroy`/`gate`). Rounds, pins
+and declared states live under `design/prototypes/<stem>/` on main; nothing on `proto/*` is read
+after close. A pin is one record with an optional anchor whose id is the keyed owner chain plus an
+ordinal (`Row[w_01]<List<Screen#0`); the source location rides along as metadata only. The pin
+endpoint runs only during a round. A brief whose header says `Lane: behaviour` goes to this
+command instead of `/spec:plan`.

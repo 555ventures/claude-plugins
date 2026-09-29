@@ -200,6 +200,8 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
 
 22. **Catalog currency** (deterministic, advisory) — only when `docs/design/catalog.md` exists, run `node "$(spec-paths catalog-inventory)" --root . --out docs/design/catalog.md --check`; exit 1 → one ⚠️ line naming the added/removed components and the remedy (re-run the same command without `--check`). A host with no catalog file yet is not a finding — it has never reached `DESIGN_BRIEF` (spec/doctrine/genesis.md § Genesis: Design Stage).
 
+23. **Prototype config** (deterministic, advisory) — only when the config has a `prototype` block, run `node "$(spec-paths prototype-driver)" check --json`. It verifies every `export` glob matches at least one tracked file, `overlay`'s path is not itself covered by any `export` glob, `e2eFile` contains `{brief}`, and `e2eList` contains `{file}`; each finding is one ⚠️ line naming the failing key, remedy = fix that value in `.claude/spec.config.json`. Exit 0 when clean or when the block is absent — a host that has never declared `prototype` is not a finding.
+
 ## Semantic spot-check — small, bounded
 
 For 2–3 agents (prioritize any with stale citations), read one cited exemplar each and judge

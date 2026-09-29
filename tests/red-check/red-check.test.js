@@ -719,6 +719,31 @@ test('a directory symlink under a globbed tests row is never listed as a test fi
     `the only real file is a passing sanctioned pin, so any non-zero exit means the link still leaked into the run (stderr: ${res.stderr})`)
 })
 
+// Incident in specs/20260928/01-the-prototype-command-and-the-pin-overlay.md's build: a tests row
+// naming a fixture DIRECTORY (`tests/fixtures/prototype/host/`) was read with readFileSync and the
+// whole red-check crashed on EISDIR before classifying any file.
+test('a tests row naming a directory expands to the regular files under it, so red-check completes instead of crashing on EISDIR', () => {
+  const { dir, base } = newHost('rcdirrow')
+  fs.mkdirSync(path.join(dir, 'tests/fixtures/host/src'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/fixtures/host/src/main.js'), "'use strict'\n")
+  fs.writeFileSync(path.join(dir, 'tests/real.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260821-95-1: a passing sanctioned pin beside a fixture dir row', () => { assert.ok(true) })\n")
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260821-95-1**: WHEN x THE SYSTEM SHALL CONTINUE TO y → tests/real.test.js'],
+    ['| tests/real.test.js | CREATE | tests | the pin |',
+     '| tests/fixtures/host/ | CREATE | tests | a fixture directory row |']))
+  const res = run(spec, dir, base, ['--json'])
+  const out = findings(res)
+  assert.ok(out.files.some(f => f.path === 'tests/fixtures/host/src/main.js'),
+    `a directory row must expand to its files, or every file a fixture dir holds escapes the pre-image check: ${JSON.stringify(out.files)}`)
+  assert.ok(!out.files.some(f => f.path === 'tests/fixtures/host/'),
+    `the directory itself listed as a file is what crashed red-check on EISDIR: ${JSON.stringify(out.files)}`)
+  assert.strictEqual(res.status, 0,
+    `the only executed file is a passing sanctioned pin, so a non-zero exit means the directory row still broke the run (stderr: ${res.stderr})`)
+})
+
 // The other half of the same entry-type filter: skipping every symlink outright dropped a test
 // file that is itself a link out of wildcard expansion, and the AC it pins then read as uncovered
 // with nothing in the output to say why. A link whose target is a regular file is safe to read.

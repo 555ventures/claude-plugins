@@ -48,6 +48,29 @@ test('AC-20260926-02-7: WHEN spec/templates/grounding-contract.md is read THE SY
   }
 })
 
+// specs/20260929/01-the-walkthrough-contract-and-the-client.md D1, AC-20260929-01-19: the contract
+// gains the optional `walkthrough` block and its own section, in the series' one contract edit.
+test('AC-20260929-01-19: WHEN spec/templates/grounding-contract.md is read THE SYSTEM SHALL list "walkthrough" among the optional keys of § Required config keys and carry a "## Walkthrough" section naming baseUrl, project, tokenEnv and that an absent block sends nothing', () => {
+  assert.ok(fs.existsSync(path.join(ROOT, CONTRACT_REL)), CONTRACT_REL + ' must exist for this pin to mean anything')
+  const text = read(CONTRACT_REL)
+
+  const required = text.split(/^## Required config keys.*$/m)[1]
+  assert.ok(required !== undefined, 'the contract must keep its "## Required config keys" section')
+  const requiredSection = required.split(/^## /m)[0]
+  const optional = requiredSection.split('Optional:')[1] || ''
+  assert.match(optional, /`walkthrough`/,
+    'D1: `walkthrough` must be named in the optional list of § Required config keys — a host author reading the contract would never learn the block exists')
+
+  const section = text.split(/^## Walkthrough.*$/m)[1]
+  assert.ok(section !== undefined, 'D1: the contract must carry a "## Walkthrough" section — the one place the block\'s keys are defined')
+  const body = section.split(/^## /m)[0]
+  for (const key of ['baseUrl', 'project', 'tokenEnv']) {
+    assert.ok(body.includes(key), 'D1: the Walkthrough section must name `' + key + '` — a host would guess the key set and /spec:doctor could not check it')
+  }
+  assert.match(body, /[Aa]bsent\s+block[\s\S]{0,200}sends\s+nothing/,
+    'D1: the section must say an absent block sends nothing — without it a project that does not use the service cannot tell the client is safe to leave unconfigured')
+})
+
 test('AC-20260912-15-7: WHEN spec/commands/doctor.md check 20 and spec/scripts/coverage-scope.js are read THE SYSTEM contains neither of them carrying the literal "deadlocks every close"', () => {
   assert.ok(fs.existsSync(path.join(ROOT, DOCTOR_REL)), DOCTOR_REL + ' must exist for this pin to mean anything')
   assert.ok(fs.existsSync(path.join(ROOT, COVERAGE_SCOPE_REL)), COVERAGE_SCOPE_REL + ' must exist for this pin to mean anything')

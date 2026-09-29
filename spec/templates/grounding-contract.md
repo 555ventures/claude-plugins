@@ -30,7 +30,7 @@ token file — a Tailwind 4 `@theme` block or the stack's equivalent) and `rules
 auto-loaded rule file holding the intent-to-pattern table and the naming-convention table) are
 repo-relative and required when the block is present; `app` stays optional — the mock app dir,
 written by `/spec:mocks` and genesis, and equal to `design/mocks/status.json`'s own `app`),
-`release` (see § Release), `prototype` (see § Prototype), `capabilities` (see § Capabilities),
+`release` (see § Release), `prototype` (see § Prototype), `walkthrough` (see § Walkthrough), `capabilities` (see § Capabilities),
 the rule-enforcement keys `enforcementManifest` and `rulesEnforcementHash` (see § Rule
 enforcement), and the genesis-handoff keys `genesisStackDescriptor` and `designRulesHash`
 (see § Genesis handoff).
@@ -139,6 +139,14 @@ optional `dbCreate` / `dbDestroy` (shell strings run with cwd = the prototype wo
 on the prototype tree when the host `gateCommand` carries a `{testDirs}`/`{scopeDirs}`
 placeholder). Absent block = the host has never declared a prototype path — the driver refuses
 naming this block and `/spec:doctor`.
+
+## Walkthrough (optional — present when the project reviews wireframes on the hosted service)
+
+`walkthrough` — `baseUrl` (the service's address; `https:` unless the host is `localhost`,
+`127.0.0.1` or `[::1]`), `project` (the project id on the service), `tokenEnv` (the name of the
+environment variable that holds the project's token; the token itself is never written to a
+file). Absent block = the project does not use the service: the client sends nothing, writes
+nothing and exits 0.
 
 ## Capabilities (optional — declares stack-shaped facts the pipeline would otherwise assume)
 

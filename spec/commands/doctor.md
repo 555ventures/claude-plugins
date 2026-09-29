@@ -202,6 +202,8 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
 
 23. **Prototype config** (deterministic, advisory) — only when the config has a `prototype` block, run `node "$(spec-paths prototype-driver)" check --json`. It verifies every `export` glob matches at least one tracked file, `overlay`'s path is not itself covered by any `export` glob, `e2eFile` contains `{brief}`, and `e2eList` contains `{file}`; each finding is one ⚠️ line naming the failing key, remedy = fix that value in `.claude/spec.config.json`. Exit 0 when clean or when the block is absent — a host that has never declared `prototype` is not a finding.
 
+24. **Walkthrough config** (deterministic, advisory) — only when the config has a `walkthrough` block, run `node "$(spec-paths walkthrough)" check --json`. It inspects the config only and opens no connection: each missing or empty key, a `project` that fails the name shape, an insecure `baseUrl` (plain `http:` to a host other than `localhost`, `127.0.0.1` or `[::1]`) and an unset token variable is one ⚠️ line naming the key or the variable's name, remedy = fix that value in `.claude/spec.config.json` or export the variable. Exit 0 when clean or when the block is absent — a project that never declared `walkthrough` is not a finding.
+
 ## Semantic spot-check — small, bounded
 
 For 2–3 agents (prioritize any with stale citations), read one cited exemplar each and judge

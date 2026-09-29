@@ -1,6 +1,7 @@
 ---
 date: 2026-09-29
-status: hardened
+status: implementing
+build_base: design-retool
 tier: critical
 area: design
 breaking: false
@@ -9,6 +10,7 @@ depended_on_by: []
 brief: 29
 spiked: 2026-09-29
 open_markers: 0
+diff_base: 5cc9cda7e9625855db69f9bc0d7033936ced6691
 ---
 
 # The walkthrough contract and the client

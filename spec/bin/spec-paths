@@ -117,6 +117,9 @@ case "${1:-root}" in
   template)    echo "$ROOT/templates/spec.md" ;;
   templates)   echo "$ROOT/templates" ;;
   mock-contract) echo "$ROOT/templates/mock/contract.json" ;;
+  walkthrough)   echo "$ROOT/scripts/walkthrough.js" ;;
+  walkthrough-contract) echo "$ROOT/templates/walkthrough/contract.json" ;;
+  walkthrough-catalog)  echo "$ROOT/templates/walkthrough/catalog.json" ;;
   version)     jq -r '.version // empty' "$ROOT/.claude-plugin/plugin.json" ;;
   contract)    echo "$ROOT/templates/grounding-contract.md" ;;
   contract-hash)
@@ -127,7 +130,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|workspace-scan|registry-check|port-check|spec-number-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|prototype-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|ac-drift|test-expiry|coverage-scope|count-tests|replay|escape-row|fleet-reader|comment-narration|design-contract-check|design-rules-template|shared|shared-design|shared-for <command>|shared-genesis [--section <names>]|shared-mocks [--section <names>]|replay-corpus|template|templates|mock-contract|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|workspace-scan|registry-check|port-check|spec-number-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|prototype-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|ac-drift|test-expiry|coverage-scope|count-tests|replay|escape-row|fleet-reader|comment-narration|design-contract-check|design-rules-template|shared|shared-design|shared-for <command>|shared-genesis [--section <names>]|shared-mocks [--section <names>]|replay-corpus|template|templates|mock-contract|walkthrough|walkthrough-contract|walkthrough-catalog|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

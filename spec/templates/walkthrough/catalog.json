@@ -1,0 +1,413 @@
+{
+  "catalogVersion": 1,
+  "containers": [
+    "Stack",
+    "Row",
+    "Grid",
+    "Card",
+    "List",
+    "Nav",
+    "Tabs"
+  ],
+  "actions": {
+    "navigate": {
+      "params": "navigateParams"
+    }
+  },
+  "shapes": {
+    "Stack": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gap": {
+          "$ref": "#/shapes/number"
+        },
+        "padding": {
+          "$ref": "#/shapes/number"
+        },
+        "align": {
+          "enum": [
+            "start",
+            "center",
+            "end",
+            "stretch"
+          ]
+        }
+      }
+    },
+    "Row": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gap": {
+          "$ref": "#/shapes/number"
+        },
+        "align": {
+          "enum": [
+            "start",
+            "center",
+            "end",
+            "stretch"
+          ]
+        },
+        "justify": {
+          "enum": [
+            "start",
+            "center",
+            "end",
+            "between"
+          ]
+        },
+        "wrap": {
+          "$ref": "#/shapes/boolean"
+        }
+      }
+    },
+    "Grid": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "columns": {
+          "$ref": "#/shapes/number"
+        },
+        "gap": {
+          "$ref": "#/shapes/number"
+        }
+      }
+    },
+    "Card": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "$ref": "#/shapes/text"
+        },
+        "description": {
+          "$ref": "#/shapes/text"
+        }
+      }
+    },
+    "Divider": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "$ref": "#/shapes/text"
+        }
+      }
+    },
+    "Heading": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "$ref": "#/shapes/text"
+        },
+        "level": {
+          "enum": [
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      }
+    },
+    "Text": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "$ref": "#/shapes/text"
+        },
+        "size": {
+          "enum": [
+            "sm",
+            "md",
+            "lg"
+          ]
+        },
+        "muted": {
+          "$ref": "#/shapes/boolean"
+        }
+      }
+    },
+    "Badge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "$ref": "#/shapes/text"
+        }
+      }
+    },
+    "Alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title"
+      ],
+      "properties": {
+        "title": {
+          "$ref": "#/shapes/text"
+        },
+        "text": {
+          "$ref": "#/shapes/text"
+        }
+      }
+    },
+    "Button": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label"
+      ],
+      "properties": {
+        "label": {
+          "$ref": "#/shapes/text"
+        },
+        "variant": {
+          "enum": [
+            "primary",
+            "secondary",
+            "ghost"
+          ]
+        }
+      }
+    },
+    "Field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label"
+      ],
+      "properties": {
+        "label": {
+          "$ref": "#/shapes/text"
+        },
+        "placeholder": {
+          "$ref": "#/shapes/text"
+        },
+        "value": {
+          "$ref": "#/shapes/text"
+        },
+        "hint": {
+          "$ref": "#/shapes/text"
+        },
+        "multiline": {
+          "$ref": "#/shapes/boolean"
+        }
+      }
+    },
+    "Select": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "options"
+      ],
+      "properties": {
+        "options": {
+          "$ref": "#/shapes/texts"
+        },
+        "label": {
+          "$ref": "#/shapes/text"
+        },
+        "value": {
+          "$ref": "#/shapes/text"
+        },
+        "placeholder": {
+          "$ref": "#/shapes/text"
+        }
+      }
+    },
+    "Checkbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label"
+      ],
+      "properties": {
+        "label": {
+          "$ref": "#/shapes/text"
+        },
+        "checked": {
+          "$ref": "#/shapes/boolean"
+        }
+      }
+    },
+    "Tabs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tabs"
+      ],
+      "properties": {
+        "tabs": {
+          "$ref": "#/shapes/texts"
+        },
+        "active": {
+          "$ref": "#/shapes/text"
+        }
+      }
+    },
+    "Nav": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "brand": {
+          "$ref": "#/shapes/text"
+        },
+        "items": {
+          "$ref": "#/shapes/texts"
+        },
+        "active": {
+          "$ref": "#/shapes/text"
+        },
+        "vertical": {
+          "$ref": "#/shapes/boolean"
+        }
+      }
+    },
+    "List": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "$ref": "#/shapes/texts"
+        },
+        "ordered": {
+          "$ref": "#/shapes/boolean"
+        }
+      }
+    },
+    "Table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "columns",
+        "rows"
+      ],
+      "properties": {
+        "columns": {
+          "$ref": "#/shapes/texts"
+        },
+        "rows": {
+          "$ref": "#/shapes/rows"
+        }
+      }
+    },
+    "Image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "$ref": "#/shapes/text"
+        },
+        "height": {
+          "$ref": "#/shapes/number"
+        }
+      }
+    },
+    "Avatar": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/shapes/text"
+        },
+        "size": {
+          "enum": [
+            "sm",
+            "md",
+            "lg"
+          ]
+        }
+      }
+    },
+    "expression": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^\\$"
+      },
+      "minProperties": 1
+    },
+    "text": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/shapes/expression"
+        }
+      ]
+    },
+    "number": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "$ref": "#/shapes/expression"
+        }
+      ]
+    },
+    "boolean": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "$ref": "#/shapes/expression"
+        }
+      ]
+    },
+    "texts": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/shapes/text"
+          }
+        },
+        {
+          "$ref": "#/shapes/expression"
+        }
+      ]
+    },
+    "rows": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/shapes/texts"
+          }
+        },
+        {
+          "$ref": "#/shapes/expression"
+        }
+      ]
+    },
+    "navigateParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "to"
+      ],
+      "properties": {
+        "to": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

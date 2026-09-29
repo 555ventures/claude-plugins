@@ -1,0 +1,9 @@
+{
+  "kind": "screenshots",
+  "journeys": [],
+  "screens": [
+    { "name": "owner-intro", "width": 390, "file": "captures/owner-intro-390.png" },
+    { "name": "owner-intro", "width": 1280, "file": "captures/owner-intro-1280.png" },
+    { "name": "roster-confirm", "state": "empty", "width": 390, "file": "captures/roster-empty-390.png" }
+  ]
+}

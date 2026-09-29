@@ -291,6 +291,11 @@
       "spec/scripts/release-legs.js"
     ]
   },
+  "spec/scripts/walkthrough.js": {
+    "entryPoints": [
+      "spec/commands/doctor.md"
+    ]
+  },
   "spec/scripts/workspace-scan.js": {
     "entryPoints": [
       "spec/commands/enforce.md"

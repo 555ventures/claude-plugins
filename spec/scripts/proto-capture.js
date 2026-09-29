@@ -1,0 +1,231 @@
+#!/usr/bin/env node
+// proto-capture.js --host <hostRoot> --url <u> --out <file> --composites <csv>
+//   [--viewport WxH] [--root <selector>]
+// proto-capture.js --diff <baseline> <current>
+//
+// WHY: specs/20260928/02-freeze-export-and-the-contract.md D1, AC-20260928-02-2, AC-20260928-
+// 02-3 — spawned by the prototype driver's `--mark frozen` step (and, per spec 03, by the build
+// driver's capture gate), never imported. Loads `@playwright/test` through
+// `createRequire(<hostRoot>/package.json)` so the plugin itself carries zero browser
+// dependencies — the host owns Playwright, this script only borrows it. Opens Chromium at the
+// given viewport (default 1280x800, DPR 1, `reducedMotion: reduce`), waits for `load`, injects
+// animation-off CSS, awaits `document.fonts.ready` plus a 150ms settle (the 2026-09-23 spike's
+// own mitigations, docs/spikes/20260923-design-retool/spike-structdiff.md), injects
+// `spec/templates/proto-stable-id.js` and `spec/templates/proto-capture-page.js` via
+// `page.addScriptTag`, then calls the injected `captureComposites(root, composites, props)` and
+// writes its result as a capture document. `--diff` compares two capture files by `id` with no
+// browser involved at all.
+//
+// The 27 longhand computed properties are the spike's own enumerated PROPS list
+// (docs/spikes/20260923-design-retool/structsnap.mjs) — the set measured to catch a one-step
+// padding change and a one-token colour change with zero cross-run noise.
+//
+// What this deliberately does NOT do: decide which routes/states to capture (the driver reads
+// states.json and calls this once per route x state), retry a failed navigation or capture, or
+// own the browser-side walk itself (that lives in the injected, no-import
+// spec/templates/proto-capture-page.js so the overlay, the capture and the derived tests share
+// one algorithm).
+//
+// Exit codes:
+//   0  --out written (capture mode), or an empty diff (--diff mode)
+//   1  --diff mode found a non-empty diff (summary printed as JSON on stdout)
+//   2  usage error; @playwright/test unresolvable from --host (names it); --url unreachable;
+//      no element carries a React fiber ("no fibers — the dev server must run a development
+//      build"); zero composite elements found ("no composite on <url> — screens import
+//      composites only")
+
+'use strict'
+const fs = require('fs')
+const path = require('path')
+const { createRequire } = require('module')
+
+function die(msg) {
+  writeOut(2, 'proto-capture: ' + msg + '\n')
+  process.exit(2)
+}
+
+function writeOut(fd, text) {
+  const buf = Buffer.from(text, 'utf8')
+  let off = 0
+  while (off < buf.length) {
+    try {
+      off += fs.writeSync(fd, buf, off, buf.length - off)
+    } catch (e) {
+      if (e.code === 'EAGAIN') continue
+      throw e
+    }
+  }
+}
+
+// The 2026-09-23 spike's own PROPS list (docs/spikes/20260923-design-retool/structsnap.mjs) —
+// the set this repo measured, not an invented one.
+const PROPS = [
+  'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+  'row-gap', 'column-gap',
+  'font-size', 'font-weight', 'line-height',
+  'color', 'background-color',
+  'border-top-left-radius', 'border-top-right-radius',
+  'border-bottom-left-radius', 'border-bottom-right-radius',
+  'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+  'display', 'flex-direction', 'align-items', 'justify-content',
+]
+
+const argv = process.argv.slice(2)
+function flagArg(name) { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : null }
+
+// ---------------------------------------------------------------------------
+// --diff <baseline> <current> — pure, no browser.
+// ---------------------------------------------------------------------------
+function loadCaptureFile(p) {
+  let raw
+  try {
+    raw = fs.readFileSync(p, 'utf8')
+  } catch (e) {
+    die('cannot read capture file ' + p + ' (' + e.message + ')')
+  }
+  try {
+    return JSON.parse(raw)
+  } catch (e) {
+    die(p + ' is not valid JSON (' + e.message + ')')
+  }
+  return null // unreachable
+}
+
+function diffCaptures(a, b) {
+  const aEntries = new Map((a.entries || []).map((e) => [e.id, e]))
+  const bEntries = new Map((b.entries || []).map((e) => [e.id, e]))
+  const entries = []
+  let missing = 0
+  let extra = 0
+  let changed = 0
+
+  function pushChanged(id, field, before, after) {
+    entries.push({ id, kind: 'changed', field, before, after })
+    changed++
+  }
+
+  for (const [id, ea] of aEntries) {
+    const eb = bEntries.get(id)
+    if (!eb) {
+      entries.push({ id, kind: 'missing' })
+      missing++
+      continue
+    }
+    if (ea.tag !== eb.tag) pushChanged(id, 'tag', ea.tag, eb.tag)
+    if (ea.text !== eb.text) pushChanged(id, 'text', ea.text, eb.text)
+    if (JSON.stringify(ea.box) !== JSON.stringify(eb.box)) pushChanged(id, 'box', ea.box, eb.box)
+    const sa = ea.styles || {}
+    const sb = eb.styles || {}
+    const styleKeys = new Set([...Object.keys(sa), ...Object.keys(sb)])
+    for (const key of styleKeys) {
+      if (sa[key] !== sb[key]) pushChanged(id, 'styles.' + key, sa[key], sb[key])
+    }
+  }
+  for (const [id] of bEntries) {
+    if (!aEntries.has(id)) {
+      entries.push({ id, kind: 'extra' })
+      extra++
+    }
+  }
+  return { summary: { missing, extra, changed }, entries }
+}
+
+if (argv[0] === '--diff') {
+  const baselinePath = argv[1]
+  const currentPath = argv[2]
+  if (!baselinePath || !currentPath) die('--diff needs two paths: --diff <baseline> <current>')
+  const result = diffCaptures(loadCaptureFile(baselinePath), loadCaptureFile(currentPath))
+  const clean = result.summary.missing === 0 && result.summary.extra === 0 && result.summary.changed === 0
+  writeOut(1, JSON.stringify(result, null, 2) + '\n')
+  process.exit(clean ? 0 : 1)
+}
+
+// ---------------------------------------------------------------------------
+// Capture mode — usage validation first (never depends on @playwright/test resolving).
+// ---------------------------------------------------------------------------
+const host = flagArg('--host')
+const url = flagArg('--url')
+const out = flagArg('--out')
+const compositesArg = flagArg('--composites')
+const viewportArg = flagArg('--viewport')
+const rootSelector = flagArg('--root')
+
+if (!host) die('--host <hostRoot> is required — usage: proto-capture.js --host <hostRoot> --url <u> --out <file> --composites <csv>')
+if (!url) die('--url <u> is required — usage: proto-capture.js --host <hostRoot> --url <u> --out <file> --composites <csv>')
+if (!out) die('--out <file> is required — usage: proto-capture.js --host <hostRoot> --url <u> --out <file> --composites <csv>')
+if (!compositesArg) die('--composites <csv> is required — usage: proto-capture.js --host <hostRoot> --url <u> --out <file> --composites <csv>')
+
+let viewport = { width: 1280, height: 800 }
+if (viewportArg) {
+  const m = /^(\d+)x(\d+)$/.exec(viewportArg)
+  if (!m) die('--viewport must be WxH (e.g. 1280x800), got: ' + viewportArg)
+  viewport = { width: parseInt(m[1], 10), height: parseInt(m[2], 10) }
+}
+const composites = compositesArg.split(',').map((s) => s.trim()).filter(Boolean)
+
+let playwrightTest
+try {
+  const req = createRequire(path.join(path.resolve(host), 'package.json'))
+  playwrightTest = req('@playwright/test')
+} catch (e) {
+  die('@playwright/test is not resolvable from ' + host + ' (' + e.message +
+    ') — remedy: install it in the host (`npm i -D @playwright/test` or the host\'s equivalent), then re-run')
+}
+
+;(async () => {
+  const { chromium } = playwrightTest
+  const browser = await chromium.launch()
+  let page
+  try {
+    page = await browser.newPage({ viewport, deviceScaleFactor: 1, reducedMotion: 'reduce' })
+    try {
+      await page.goto(url, { waitUntil: 'load', timeout: 15000 })
+    } catch (e) {
+      await browser.close()
+      die('cannot reach ' + url + ' (' + e.message + ') — remedy: confirm the dev server is running at prototype.url, then re-run')
+      return
+    }
+    await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; }' })
+    await page.evaluate(() => document.fonts && document.fonts.ready)
+    await page.waitForTimeout(150)
+
+    const stableIdPath = path.join(__dirname, '..', 'templates', 'proto-stable-id.js')
+    const capturePagePath = path.join(__dirname, '..', 'templates', 'proto-capture-page.js')
+    await page.addScriptTag({ path: stableIdPath, type: 'module' })
+    await page.addScriptTag({ path: capturePagePath })
+
+    const result = await page.evaluate(({ composites, props, rootSelector }) => {
+      const allEls = Array.from(document.querySelectorAll('*'))
+      const hasFiber = allEls.some((el) => Object.keys(el).some((k) => k.indexOf('__reactFiber$') === 0))
+      if (!hasFiber) return { error: 'no-fibers' }
+      const root = rootSelector ? document.querySelector(rootSelector) : document.body
+      if (!root) return { error: 'root-not-found' }
+      const api = (window.__protoCapture && window.__protoCapture.captureComposites) ? window.__protoCapture : window
+      return { entries: api.captureComposites(root, composites, props) }
+    }, { composites, props: PROPS, rootSelector })
+
+    await browser.close()
+
+    if (result.error === 'no-fibers') {
+      die('no fibers — the dev server must run a development build')
+      return
+    }
+    if (result.error === 'root-not-found') {
+      die('--root ' + rootSelector + ' matched no element on ' + url)
+      return
+    }
+    if (!result.entries || result.entries.length === 0) {
+      die('no composite on ' + url + ' — screens import composites only')
+      return
+    }
+
+    const doc = { schemaVersion: 1, url, viewport, composites, entries: result.entries }
+    fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true })
+    fs.writeFileSync(out, JSON.stringify(doc, null, 2) + '\n')
+    process.exit(0)
+  } catch (e) {
+    try { await browser.close() } catch { /* best-effort */ }
+    die('capture failed: ' + e.message)
+  }
+})()

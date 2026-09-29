@@ -1,0 +1,6 @@
+{
+  "composites": {
+    "WomenList": { "approved": true },
+    "WomanRow": { "approved": true }
+  }
+}

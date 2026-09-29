@@ -1,5 +1,5 @@
 ---
-description: Opens a throwaway worktree on proto/<brief stem> from the host's main branch, wires a dev-only pin overlay into the running app, and iterates pin rounds across sessions until the user replies approve — driver-stepped, /clear-safe, no freeze in this version
+description: Opens a throwaway worktree on proto/<brief stem> from the host's main branch, wires a dev-only pin overlay into the running app, iterates pin rounds across sessions until the user replies approve, then freezes — captures every route and state, derives one end-to-end test per behaviour pin, exports the data/API layer to harden/<stem>, writes the behaviour-lane spec, and deletes the worktree — driver-stepped, /clear-safe
 argument-hint: <roadmap brief path — docs/roadmap/NN-*.md>
 ---
 
@@ -35,7 +35,7 @@ prior invocation's memory.
    demands before advancing; a missing or malformed one is refused and demanded again. Every
    accepted mark prints `✅ checkpoint — prototype state saved (<prev> → <next>); safe to
    /clear and re-run /spec:prototype <brief>`.
-4. Re-run. Repeat until the printed state is `APPROVED`.
+4. Re-run. Repeat until the printed state is `CLOSED`.
 
 ## OPEN
 
@@ -67,9 +67,42 @@ how "nothing more to change" gets recorded).
 
 ## APPROVED
 
-The driver prints `## Step: freeze — not available in this version` and no `Then:` line — spec
-02's freeze stage owns everything past this point in a later version of this command. Nothing
-here polls for it or invents a substitute step.
+Read only: `design/prototypes/<stem>/pins.json`, `docs/design/approval.json` (or the kit
+directory when it is absent).
+
+Run `node {driver} <brief path> --root . --mark frozen`. The driver refuses in order — not yet
+approved; no composites declared (the kit must exist first, brief 30); no behaviour pins (a
+prototype with none is the direct lane in disguise — mark a pin behaviour or close by hand); the
+kit gates red on `proto/<stem>` (`design/prototypes/<stem>/gate.log` names the failure);
+`prototype.gate` undeclared while `gateCommand` carries an unresolved placeholder; a capture
+child's own stderr — each refusal names its own remedy and writes nothing further. On success the
+driver has captured every declared route × state, written `contract.json`, and reserved this
+freeze's spec path and AC ids; it prints `(APPROVED → TESTS)` and advances.
+
+## TESTS
+
+Read only: `design/prototypes/<stem>/contract.json`, `design/prototypes/<stem>/pins.json`.
+
+The driver's printed step lists one `pin <id> → <AC-ID>` line per behaviour pin, in pin order,
+each carrying its screen, state and note, plus the target file (`prototype.e2eFile`, substituted,
+authored on **main**) and a `Session:` line. Write one end-to-end test per line — title grammar
+`<AC-ID> pin <id>: <note>` — that fails on main today; this session authors them, the driver only
+verifies they exist and are counted by the host's own runner. Then run `node {driver} <brief
+path> --root . --mark tests-derived`. The driver refuses naming the e2e file when it is missing, a
+still-uncounted reserved AC id when the file carries only some of them, or `e2eList` plus the
+under-reported id when the file lists every id but the host's runner does not; a refusal after
+export or spec-write has already succeeded leaves both in place and resumes at the first undone
+step on re-run. On success it exports `harden/<stem>`, appends the brief's sub-plan, writes and
+lints the behaviour-lane spec, destroys the prototype database, deletes the worktree and branch,
+appends the ledger row, and advances straight to `CLOSED`.
+
+## CLOSED
+
+The driver prints `Read only: contract.json, <generated spec path>` and `Next:` —
+`spec-status --next` verbatim, now naming `/spec:run <generated spec>`. Commit
+`design/prototypes/<stem>/`, the e2e file, the brief and the generated spec on **main** directly
+(direct lane — no build worker touches these). Nothing under `proto/<stem>` is read again; only
+`harden/<stem>` and this commit survive.
 
 ## Rules
 

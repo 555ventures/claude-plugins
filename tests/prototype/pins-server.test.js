@@ -2,6 +2,7 @@
 const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
+const net = require('node:net')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
 const { SPEC, freePort } = require('../helpers')
@@ -161,5 +162,33 @@ test('AC-20260928-01-8: a pin whose anchor carries loc without id is refused 400
   } finally {
     child.kill('SIGTERM')
     await waitForExit(child).catch(() => {})
+  }
+})
+
+// Review fix round 1: `serve --port N` on an already-bound port must refuse loudly (exit 2, a
+// named remedy) rather than crash on an unhandled 'error' event (the old default: exit 1, a raw
+// Node stack, no remedy).
+test('AC-20260928-01-7: serve --port N on an already-bound port exits 2 naming the port, with no "Unhandled" crash stack', async () => {
+  const dir = setupHost()
+  const port = await freePort()
+  const holder = net.createServer()
+  await new Promise((resolve, reject) => {
+    holder.on('error', reject)
+    holder.listen(port, '127.0.0.1', resolve)
+  })
+  const child = startServe(dir, port)
+  const out = captureOutput(child)
+  try {
+    const { code, signal } = await waitForExit(child)
+    assert.strictEqual(code, 2,
+      'an already-bound port must be refused with exit 2 (a precondition failure), not crash with node\'s default uncaught-exception exit 1: got code=' + code + ' signal=' + signal + ' stderr=' + out.stderr)
+    assert.match(out.stderr, new RegExp(String(port)),
+      'the refusal must name the exact port number so the remedy is discoverable: ' + out.stderr)
+    assert.doesNotMatch(out.stderr, /Unhandled/,
+      'the refusal must be a deliberate die(), never an unhandled EADDRINUSE "error" event crash printing a raw Node stack trace: ' + out.stderr)
+  } finally {
+    child.kill('SIGTERM')
+    await waitForExit(child).catch(() => {})
+    await new Promise((resolve) => holder.close(resolve))
   }
 })

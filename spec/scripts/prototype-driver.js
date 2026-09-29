@@ -3,6 +3,8 @@
 // prototype-driver.js <brief path> [--root <dir>] --mark opened|round-done|approved
 // prototype-driver.js <brief path> [--root <dir>] serve --port <n>
 // prototype-driver.js <brief path> [--root <dir>] check [--json]
+// prototype-driver.js check [--root <dir>] [--json]   (brief-less: doctor check 23's own
+//   invocation has no brief — a host-wide config check needs none)
 //
 // WHY: specs/20260928/01-the-prototype-command-and-the-pin-overlay.md D2-D5/D8 — /spec:prototype
 // derives OPEN -> ROUND -> APPROVED from design/prototypes/<stem>/status.json plus disk and the
@@ -43,7 +45,9 @@
 //      array).
 //   2  usage error, a missing/invalid `prototype` config block (naming `prototype` or
 //      `prototype.export`), a refused `--mark` precondition (stale branch, empty states.json,
-//      missing overlay import), or a malformed status.json/states.json.
+//      missing overlay import), a malformed status.json/states.json, or `serve --port N`
+//      refusing an already-bound port (named, with a remedy — never an unhandled EADDRINUSE
+//      crash).
 
 'use strict'
 const fs = require('fs')
@@ -70,35 +74,19 @@ function withoutFlagPair(arr, name) {
 }
 
 if (argv.length === 0) {
-  die('usage: prototype-driver <brief path> [--root <dir>] [--state] [--mark opened|round-done|approved] [serve --port <n>] [check [--json]]')
+  die('usage: prototype-driver <brief path> [--root <dir>] [--state] [--mark opened|round-done|approved] [serve --port <n>] [check [--json]] | prototype-driver check [--root <dir>] [--json]')
 }
-const briefPath = argv[0]
-let rest = argv.slice(1)
+// `check` is the one subcommand doctor check 23 invokes with no brief (a host-wide config check
+// has no brief to derive a stem/branch/worktree from) — every other form still needs one.
+const briefLess = argv[0] === 'check'
+const briefPath = briefLess ? null : argv[0]
+let rest = briefLess ? argv.slice(0) : argv.slice(1)
 const root = path.resolve(flagArg(rest, '--root') || process.cwd())
 rest = withoutFlagPair(rest, '--root')
 
 if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
   die('--root ' + root + ' is not a directory — remedy: pass a real project root, or omit --root to use the current directory')
 }
-
-// ---------------------------------------------------------------------------
-// Derived paths (D2) — all on the MAIN tree, never the prototype branch.
-// ---------------------------------------------------------------------------
-const stem = path.basename(briefPath, path.extname(briefPath))
-const briefNumMatch = stem.match(/^(\d+)/)
-const brief = briefNumMatch ? briefNumMatch[1] : stem
-const branch = 'proto/' + stem
-const worktreeName = 'proto-' + stem
-const worktreeRel = '.claude/worktrees/' + worktreeName
-const worktreePath = path.join(root, '.claude/worktrees', worktreeName)
-const designDir = path.join(root, 'design/prototypes', stem)
-const statusPath = path.join(designDir, 'status.json')
-const statesPath = path.join(designDir, 'states.json')
-const pinsPath = path.join(designDir, 'pins.json')
-const statusRel = 'design/prototypes/' + stem + '/status.json'
-const statesRel = 'design/prototypes/' + stem + '/states.json'
-const pinsRel = 'design/prototypes/' + stem + '/pins.json'
-const driverAbs = path.resolve(__filename)
 
 // ---------------------------------------------------------------------------
 // Host config (D1).
@@ -182,6 +170,30 @@ function cmdCheck(args) {
 }
 
 if (rest[0] === 'check') cmdCheck(rest.slice(1))
+
+// Every other subcommand needs a brief path — `check` above is the sole brief-less form.
+if (briefLess) {
+  die('usage: prototype-driver check [--root <dir>] [--json] — every other subcommand needs a brief path: prototype-driver <brief path> [--root <dir>] ...')
+}
+
+// ---------------------------------------------------------------------------
+// Derived paths (D2) — all on the MAIN tree, never the prototype branch.
+// ---------------------------------------------------------------------------
+const stem = path.basename(briefPath, path.extname(briefPath))
+const briefNumMatch = stem.match(/^(\d+)/)
+const brief = briefNumMatch ? briefNumMatch[1] : stem
+const branch = 'proto/' + stem
+const worktreeName = 'proto-' + stem
+const worktreeRel = '.claude/worktrees/' + worktreeName
+const worktreePath = path.join(root, '.claude/worktrees', worktreeName)
+const designDir = path.join(root, 'design/prototypes', stem)
+const statusPath = path.join(designDir, 'status.json')
+const statesPath = path.join(designDir, 'states.json')
+const pinsPath = path.join(designDir, 'pins.json')
+const statusRel = 'design/prototypes/' + stem + '/status.json'
+const statesRel = 'design/prototypes/' + stem + '/states.json'
+const pinsRel = 'design/prototypes/' + stem + '/pins.json'
+const driverAbs = path.resolve(__filename)
 
 // Every other subcommand needs the block.
 requirePrototypeConfig(cfg)
@@ -450,6 +462,14 @@ function validatePin(p) {
   return null
 }
 
+// One shape for every POST /pins refusal: JSON `{ "error": "<message>" }`, content-type
+// application/json (the overlay reads `body.error`; the message text itself is unchanged, so
+// every existing "the 400 body must name X" pin still matches it as a substring of the JSON).
+function refuse400(res, message) {
+  res.writeHead(400, { 'content-type': 'application/json' })
+  res.end(JSON.stringify({ error: message }))
+}
+
 function cmdServe(args) {
   const portArg = flagArg(args, '--port')
   const port = parseInt(portArg, 10)
@@ -478,22 +498,16 @@ function cmdServe(args) {
         try {
           batch = JSON.parse(body)
         } catch (e) {
-          res.writeHead(400, { 'content-type': 'text/plain' })
-          res.end('invalid JSON body: ' + e.message)
+          refuse400(res, 'invalid JSON body: ' + e.message)
           return
         }
         if (!Array.isArray(batch)) {
-          res.writeHead(400, { 'content-type': 'text/plain' })
-          res.end('body must be a JSON array of pins')
+          refuse400(res, 'body must be a JSON array of pins')
           return
         }
         for (const p of batch) {
           const err = validatePin(p)
-          if (err) {
-            res.writeHead(400, { 'content-type': 'text/plain' })
-            res.end(err.message)
-            return
-          }
+          if (err) { refuse400(res, err.message); return }
         }
         const doc = loadPinsDoc()
         doc.schemaVersion = doc.schemaVersion || 1
@@ -521,6 +535,17 @@ function cmdServe(args) {
     }
     res.writeHead(404)
     res.end()
+  })
+
+  // An already-bound port is a routine condition (a stale round's serve still running, a second
+  // session racing the same round) — never an unhandled 'error' event crash. die() exits 2 and
+  // names both the port and a real remedy.
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      die('port ' + port + ' is already in use — stop whatever is holding it (e.g. `lsof -i :' + port +
+        '`), then re-run: node ' + driverAbs + ' ' + briefPath + ' serve --port ' + port)
+    }
+    die('serve --port ' + port + ' failed: ' + err.message)
   })
 
   server.listen(port, '127.0.0.1')

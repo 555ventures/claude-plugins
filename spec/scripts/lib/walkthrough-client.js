@@ -407,10 +407,8 @@ async function uploadPictures(c, body, prepared, uploaded) {
 // else { round, kind, status, pictures? }.
 async function push(c, opts) {
   const { round, dir } = readRoundFile(opts.roundFile)
-  if (round.kind === 'wireframe') {
-    const findings = checkRoundFile(c.contract, opts.catalog, round)
-    if (findings.length) return { findings }
-  }
+  const findings = checkRoundFile(c.contract, opts.catalog, round)
+  if (findings.length) return { findings }
   const prepared = round.kind === 'screenshots' ? preparePictures(c.contract, round, dir) : null
 
   const resume = opts.resume !== undefined ? positiveInt(opts.resume, '--resume') : null

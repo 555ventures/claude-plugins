@@ -118,3 +118,18 @@ behaviour pin on main, and the host runner must list every reserved AC id → `h
 created from `git diff base...proto -- <export globs>` → the generated behaviour-lane spec →
 `dbDestroy`, then the worktree and branch are deleted → one `stage: prototype` ledger row. The
 brief carries a `## Data/API sub-plan` block. `proto-capture.js --diff` is the one comparison.
+
+## The walkthrough client (specs/20260929/01)
+
+A project opts into the hosted review service with a `walkthrough` config block (`baseUrl`,
+`project`, `tokenEnv`); a project without it sends nothing and exits 0. `spec-paths walkthrough`
+is the one script that talks to the service, with the verbs `self-check`, `validate`, `check`,
+`hello`, `push`, `pull-notes`, `pull-approvals`, `reply` and `mark`, and the exit codes 0 done or
+not configured, 1 refused, 2 usage or config, 3 no answer. The contract is `spec-paths
+walkthrough-contract` (seven calls, one error shape, limits, the version rule) and the wireframe
+vocabulary is `spec-paths walkthrough-catalog` (19 gray components, one action); both are plain
+JSON in a fixed subset of JSON Schema, read by `lib/json-shape.js`. The plugin owns the round
+number; every round, wireframe or picture, passes the offline round check before anything is
+sent; every answer is checked against the contract before it is written; rounds, notes and
+approvals land under `design/rounds/<n>/`; the token is read from the named environment variable
+and never written or printed.

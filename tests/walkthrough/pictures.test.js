@@ -142,3 +142,23 @@ test('AC-20260929-01-11: a picture file of 8,000,001 bytes exits 1 with too-larg
   assert.match(r.stderr, /8000000/, 'the refusal must name the limit: ' + r.stderr)
   assert.deepStrictEqual(stub.log(), [], 'files are checked before any request')
 })
+
+test('AC-20260929-01-9: push of a picture round that D5 refuses — two screens sharing name, state and width, or a screen named owner--intro — exits 1 with duplicate-screen / bad-name and the stub log stays empty', async (t) => {
+  const { work, roundFile } = makePictureWork()
+  const stub = await startStub(t, { 'GET /v1': [HELLO_OK], 'POST /v1/projects/hearwell/rounds': [pushed] })
+  const host = makeHost(block(stub.url))
+  const cases = [
+    ['duplicate-screen', (round) => { round.screens[1].width = round.screens[0].width }],
+    ['bad-name', (round) => { round.screens[0].name = 'owner--intro' }],
+  ]
+  for (const [code, mutate] of cases) {
+    const round = loadJson(roundFile)
+    mutate(round)
+    const file = path.join(work, code + '-round.json')
+    writeJson(file, round)
+    const r = await runWalkthrough(host, ['push', '--round-file', file])
+    assert.strictEqual(r.status, 1, 'a picture round the D5 check refuses (' + code + ') must exit 1, or a round validate rejects is still sent: ' + JSON.stringify(r))
+    assert.match(r.stderr, new RegExp(code), 'the refusal must print the D5 code ' + code + ' so the author can find the fault: ' + r.stderr)
+    assert.deepStrictEqual(stub.log(), [], 'nothing may be sent for a refused picture round (' + code + ') — the service would be handed a round the plugin itself rejects')
+  }
+})

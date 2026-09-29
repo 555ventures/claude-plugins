@@ -1,6 +1,6 @@
 ---
 date: 2026-09-29
-status: implementing
+status: done
 build_base: design-retool
 tier: critical
 area: design
@@ -415,6 +415,25 @@ later spec of brief 29, once the service runs; the facade has its consumer in th
 No `SHALL CONTINUE TO` pin: this spec adds surfaces and changes no existing behaviour.
 Fragile and worth watching at build: the token-secrecy assertion must search every file under
 the host, not only `round.json`; and the stub must be a child process.
+
+Build record (2026-09-29), folded from the deviations sidecar — all one-off, none recurring:
+- The PNG fixture bytes are written by `tests/walkthrough/fixture.js`, not by the stub, whose
+  three-argument command line has no picture role; no binary file is committed.
+- The stub binds port `0` and prints `PORT <n>`; its answers file also supports `raw`, `hang`
+  and a `$contentHash` token, and repeats the last scripted answer once a list is used up.
+- The spec named no stream for `validate`/`check` findings: they go to stderr as refusal-style
+  lines, verdict lines (`round ok: …`, `contract ok: …`) to stdout; the tests read both streams.
+- D13's usage-string membership is asserted inside the rewritten AC-18 test.
+- The build gate passes every tests-layer File Plan path to `node --test`, so the stub exits 0
+  when loaded by the test runner with no argv (`NODE_TEST_CONTEXT`); a direct bare run still
+  prints usage and exits 2.
+
+Review (2026-09-29, CLEAN after one fix): `push` ran the D5 round check for wireframe rounds only,
+so a picture round `validate` refuses was still sent; fixed so every round kind is checked before
+any request, pinned by a picture-round refusal test. Advisory, not fixed: the script emits local
+codes the Contracts refusal list does not name (`no-round`, `bad-resume`, `resume-mismatch`,
+`bad-text-file`, `usage`, `script-error`), and that refusal test is labelled with AC-9 although
+the promise is D9's.
 
 ## Canonical Delta
 

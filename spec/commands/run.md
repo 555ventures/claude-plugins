@@ -31,7 +31,9 @@ print its report — its `Next: nothing needs you` line is wrong mid-loop. Two s
 derived, each printed as one line:
 
 - `--in-place` → skip.
-- `status:` past `hardened` AND `{worktree}` absent from `git worktree list --porcelain` → skip.
+- `status:` past `hardened` AND `{worktree}` absent from `git worktree list --porcelain` AND no
+  `refs/heads/{source}` branch → skip (the build really ran in place; an existing branch is a
+  parked worktree build, which Step 3 re-attaches).
   An in-flight build keeps its marks in an untracked `<spec>.build/` sidecar and its workers'
   output uncommitted; `git worktree add` carries neither, so a new worktree would restart the
   build against an empty tree while the half-built work stays behind. This fires on a `/clear`

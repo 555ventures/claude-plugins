@@ -19,7 +19,7 @@
 #                                precondition. The sole owner of the build-branch naming rule;
 #                                `create`'s --source is derived by callers via this subcommand
 #                                (see create's own note below), never re-derived inline.
-#   create   --source S [--root R] [--base REF] [--name N]
+#   create   --source S [--attach] [--root R] [--base REF] [--name N]
 #                             -> deterministically `git worktree add` the build tree under
 #                                .claude/worktrees/, then print its ABSOLUTE path as the LAST
 #                                stdout line. The caller passes that path to EnterWorktree
@@ -33,6 +33,10 @@
 #                                The .worktreeinclude copy step is delegated to the shared owner
 #                                spec/scripts/worktree-include.sh (spec-paths worktree-include) —
 #                                see specs/20260904/02-worktree-include-shared-owner.md D3.
+#                                --attach re-attaches an EXISTING branch whose worktree directory
+#                                is gone (a parked build): same path, same include copy, no -b and
+#                                no --base. Without it an existing branch still dies — a caller
+#                                never silently resumes a dead branch.
 #   root     [--worktree W]   -> prints the absolute PROJECT root (the main worktree), so the
 #                                caller cd's to a verified path and never guesses "root".
 #                                Project root != $HOME. Run from inside the worktree if no W.
@@ -51,7 +55,7 @@ set -u
 die()  { echo "merge-back: $*" >&2; exit 2; }
 note() { echo "$*"; }
 
-ROOT=""; TARGET=""; SOURCE=""; STRATEGY=""; WORKTREE=""; BASE=""; NAME=""
+ROOT=""; TARGET=""; SOURCE=""; STRATEGY=""; WORKTREE=""; BASE=""; NAME=""; ATTACH=""
 SUB="${1:-}"; shift || true
 
 # branch-for is pure string derivation (no git ops, no --root precondition) — it must be
@@ -71,6 +75,8 @@ fi
 while [ $# -gt 0 ]; do
   # Every flag REQUIRES a value; a trailing/valueless flag dies loudly. (The old `shift 2` on a
   # 1-arg tail shifted nothing and spun this loop forever.)
+  # --attach is the one valueless flag (create only).
+  if [ "$1" = "--attach" ]; then ATTACH=1; shift; continue; fi
   case "$1" in
     --root|--target|--source|--strategy|--worktree|--base|--name)
       [ $# -ge 2 ] || die "flag $1 requires a value"
@@ -121,12 +127,22 @@ case "$SUB" in
     # (not after the build) and don't auto-edit .gitignore — that would itself dirty the root.
     git -C "$CROOT" check-ignore -q ".claude/worktrees/$NAME" || \
       die "create: '.claude/worktrees/' is not gitignored — the worktree would dirty the root tree and break merge-back's clean-root gate. Add '.claude/worktrees/' to .gitignore and commit it once, then retry."
-    git -C "$CROOT" rev-parse --verify -q "refs/heads/$SOURCE" >/dev/null 2>&1 && \
-      die "create: branch '$SOURCE' already exists — pick a new spec branch name or finish/clean up the prior build"
+    # A registration whose directory is gone carries nothing; drop it so neither mode trips on it.
+    git -C "$CROOT" worktree prune >&2 2>/dev/null || true
     [ -e "$WT" ] && die "create: worktree path already exists ($WT) — remove it or pass a different --name"
-    BASE="${BASE:-HEAD}"
-    git -C "$CROOT" rev-parse --verify -q "$BASE" >/dev/null 2>&1 || die "create: base ref '$BASE' not found"
-    git -C "$CROOT" worktree add -b "$SOURCE" "$WT" "$BASE" >&2 || die "create: 'git worktree add' failed"
+    if [ -n "$ATTACH" ]; then
+      [ -z "$BASE" ] || die "create --attach: --base does not apply — the existing branch is checked out as-is"
+      git -C "$CROOT" rev-parse --verify -q "refs/heads/$SOURCE" >/dev/null 2>&1 || \
+        die "create --attach: branch '$SOURCE' does not exist — drop --attach to create it"
+      git -C "$CROOT" worktree add "$WT" "$SOURCE" >&2 || die "create --attach: 'git worktree add' failed (is '$SOURCE' checked out in another worktree?)"
+      BASE="(attached)"
+    else
+      git -C "$CROOT" rev-parse --verify -q "refs/heads/$SOURCE" >/dev/null 2>&1 && \
+        die "create: branch '$SOURCE' already exists — pass --attach to re-attach a parked build, or pick a new spec branch name"
+      BASE="${BASE:-HEAD}"
+      git -C "$CROOT" rev-parse --verify -q "$BASE" >/dev/null 2>&1 || die "create: base ref '$BASE' not found"
+      git -C "$CROOT" worktree add -b "$SOURCE" "$WT" "$BASE" >&2 || die "create: 'git worktree add' failed"
+    fi
     # `git worktree add` materializes only TRACKED files, so gitignored runtime config
     # (.env*, local overrides) never arrives and worktree builds boot env-less. Honor
     # .worktreeinclude (Claude Code's native manifest: gitignore-syntax patterns at the

@@ -38,7 +38,8 @@ spec plugin must be installed.
      equals `{worktree}`, the session is in it: report as **re-entered** and stop.
      No `EnterWorktree` call, no setup, no `build_base` write — `/clear` and `/compact`
      keep cwd, so this is the common resume.
-   - If `{worktree}` appears in `git worktree list --porcelain`, it is already provisioned:
+   - If `{worktree}` appears in `git worktree list --porcelain` **and the directory exists**, it
+     is already provisioned (a listed entry whose directory is gone falls through to step 3):
      - `EnterWorktree {path: {worktree}}`.
      - VERIFY: `git rev-parse --show-toplevel` (Bash) equals `{worktree}`. If not, echo the
        `EnterWorktree` result and `git worktree list` so the cause is visible, then report as
@@ -50,8 +51,11 @@ spec plugin must be installed.
    - **Capture the origin first, before any entry:** `{origin} = git rev-parse --abbrev-ref HEAD`
      (Bash). Once a worktree is entered, `HEAD` is the build branch and the origin stops being
      recoverable from the session.
-   - **Create:** `{mergeBack} create --source {source}`. It branches from the current HEAD (=
-     origin) and does the `git worktree add`. Capture its **last stdout line** as `{worktree}`
+   - **Create:** `{mergeBack} create --source {source}`, adding `--attach` when
+     `git rev-parse --verify -q refs/heads/{source}` succeeds (a parked build: branch kept,
+     worktree directory gone). It branches from the current HEAD (= origin), or re-attaches the
+     existing branch, and does the `git worktree add` plus the `.worktreeinclude` copy — never
+     substitute a bare `git worktree add`, which skips that copy. Capture its **last stdout line** as `{worktree}`
      (the absolute path). Non-zero exit (branch/path exists, unborn HEAD, run from a worktree,
      `.claude/worktrees/` not gitignored — see `merge-back.sh`) → show the user its stderr, then
      report as **create failed** (see ## Report) and stop. Do **not** fall back to in-place; the
@@ -66,7 +70,8 @@ spec plugin must be installed.
    - **Setup:** run the host's `setupCommand` (from `.claude/spec.config.json`) once inside
      `{worktree}` — a fresh worktree has no installed deps.
    - **Write `build_base` — but never over a pin:** write `build_base: {origin}` into the spec
-     frontmatter. This is the sole writer of that field; a fresh create is the only time it runs.
+     frontmatter. This is the sole writer of that field; a fresh create is the only time it runs (never on
+     `--attach`).
      **Skip the write entirely** when the spec already carries a `diff_base:` line, or when its
      `status:` is past `hardened` (`implementing` or `done`) — both mean a build has already
      pinned the true pre-image, and `{origin}` is a moving ref that will name the wrong tree the
@@ -75,7 +80,8 @@ spec plugin must be installed.
      When skipped, say so in the report and name the pin that won. `spec-review-driver.js` prefers
      the pin and refuses an empty range regardless — that is the deterministic backstop; this is
      the ordering guard that keeps the two writers from racing in the first place.
-   - Report as **created** (see ## Report).
+   - Report as **created** (see ## Report); on `--attach` its text reads `worktree attached at
+     {worktree}`.
 
 ## Report
 

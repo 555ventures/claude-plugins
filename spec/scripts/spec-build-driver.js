@@ -180,17 +180,20 @@ if (!sidecarExisted) {
   }
 }
 
+// ---- PREFLIGHT (driver-only) — every invocation, not only the hardened flip ----------------
+// A resume can land in a re-created worktree whose env differs from the one the build started in
+// (salon-os 2026-09-29: a bare `git worktree add` skipped the .worktreeinclude copy and direnv
+// loaded main's env). Side-effect free, so rerunning it on `implementing` costs nothing.
+const pre = runChild(process.execPath, [envPreflightBin, '--root', repoRoot], { encoding: 'utf8' },
+  'env-preflight.js')
+if (pre.status !== 0) {
+  if (pre.stdout) writeOut(1, pre.stdout)
+  if (pre.stderr) process.stderr.write(pre.stderr)
+  process.exit(2)
+}
+
 let justFlipped = false
 if (status === 'hardened') {
-  // ---- PREFLIGHT (driver-only) -------------------------------------------------------------
-  const pre = runChild(process.execPath, [envPreflightBin, '--root', repoRoot], { encoding: 'utf8' },
-    'env-preflight.js')
-  if (pre.status !== 0) {
-    if (pre.stdout) writeOut(1, pre.stdout)
-    if (pre.stderr) process.stderr.write(pre.stderr)
-    process.exit(2)
-  }
-
   // ---- stamp diff_base whenever it is absent (specs/20260901/01-build-driver.md) ---
   // Absent-only stamping in BOTH fields would leave a spec already carrying `build_base` unpinned,
   // on the reasoning that build_base already answered "what is this built against". It does not —

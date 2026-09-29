@@ -292,3 +292,63 @@ test('cleanup still refuses a branch carrying content the target does not have',
     ['-C', dir, 'branch', '--list', 'spec/unmerged'], { encoding: 'utf8' })
   assert.match(branches, /spec\/unmerged/, 'the unmerged branch survives')
 })
+
+// salon-os 2026-09-29: a parked spec branch (worktree directory removed) could not be re-attached
+// through create, and the bare `git worktree add` used instead skipped the .worktreeinclude copy.
+function parkedBranch() {
+  const dir = tmpdir('mbattach')
+  const g = gitRepo(dir)
+  fs.appendFileSync(path.join(dir, '.gitignore'), '.env\n')
+  fs.writeFileSync(path.join(dir, '.worktreeinclude'), '.env\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'manifest')
+  fs.writeFileSync(path.join(dir, '.env'), 'KEY=1\n')
+  const created = runBash(SCRIPT, ['create', '--source', 'spec/x', '--root', dir])
+  assert.strictEqual(created.status, 0, 'setup: create must succeed: ' + created.stderr)
+  const wt = created.stdout.trim().split('\n').pop()
+  fs.writeFileSync(path.join(wt, 'work.txt'), 'w\n')
+  g('-C', wt, 'add', 'work.txt'); g('-C', wt, 'commit', '-q', '-m', 'work')
+  fs.rmSync(wt, { recursive: true, force: true })        // parked: branch kept, directory gone, entry NOT pruned
+  return { dir, g, wt }
+}
+
+test('create --attach re-attaches a parked branch whose worktree directory is gone, keeping its commits and copying .worktreeinclude files', () => {
+  const { dir, g, wt } = parkedBranch()
+
+  const plain = runBash(SCRIPT, ['create', '--source', 'spec/x', '--root', dir])
+  assert.strictEqual(plain.status, 2, 'plain create must still refuse an existing branch: ' + plain.stderr)
+  assert.match(plain.stderr, /already exists — pass --attach/, 'the refusal must name the --attach remedy: ' + plain.stderr)
+
+  const r = runBash(SCRIPT, ['create', '--attach', '--source', 'spec/x', '--root', dir])
+  assert.strictEqual(r.status, 0, 'create --attach must succeed on a parked branch with a stale entry: ' + r.stderr)
+  const got = r.stdout.trim().split('\n').pop()
+  assert.strictEqual(got, fs.realpathSync(wt), 'attach must print the same worktree path as the original create')
+  assert.strictEqual(g('-C', got, 'rev-parse', '--abbrev-ref', 'HEAD').trim(), 'spec/x')
+  assert.match(g('-C', got, 'log', '--format=%s'), /^work$/m, 'the branch\'s own commits must survive the re-attach')
+  assert.strictEqual(fs.readFileSync(path.join(got, '.env'), 'utf8'), 'KEY=1\n', '.env must be copied on attach')
+  assert.match(r.stderr, /copied 1 \.worktreeinclude-matched file/, 'attach must run the shared include copy: ' + r.stderr)
+  const entries = g('worktree', 'list', '--porcelain').split('\n').filter((l) => l === 'worktree ' + got)
+  assert.strictEqual(entries.length, 1, 'exactly one registration for the re-attached path')
+})
+
+test('create --attach refuses a missing branch, an existing path, a --base, and a branch checked out elsewhere', () => {
+  const { dir, g } = parkedBranch()
+
+  const missing = runBash(SCRIPT, ['create', '--attach', '--source', 'spec/nope', '--root', dir])
+  assert.strictEqual(missing.status, 2, missing.stderr)
+  assert.match(missing.stderr, /does not exist — drop --attach/)
+
+  const withBase = runBash(SCRIPT, ['create', '--attach', '--source', 'spec/x', '--base', 'HEAD', '--root', dir])
+  assert.strictEqual(withBase.status, 2, withBase.stderr)
+  assert.match(withBase.stderr, /--base does not apply/)
+
+  const ok = runBash(SCRIPT, ['create', '--attach', '--source', 'spec/x', '--root', dir])
+  assert.strictEqual(ok.status, 0, ok.stderr)
+  const again = runBash(SCRIPT, ['create', '--attach', '--source', 'spec/x', '--root', dir])
+  assert.strictEqual(again.status, 2, 'a second attach must refuse the existing path: ' + again.stderr)
+  assert.match(again.stderr, /worktree path already exists/)
+
+  const elsewhere = runBash(SCRIPT, ['create', '--attach', '--source', 'spec/x', '--name', 'other', '--root', dir])
+  assert.strictEqual(elsewhere.status, 2, 'a branch checked out in another worktree must refuse: ' + elsewhere.stderr)
+  assert.match(elsewhere.stderr, /checked out in another worktree/)
+  assert.ok(g('branch', '--list', 'spec/x').trim(), 'no refusal may delete the branch')
+})

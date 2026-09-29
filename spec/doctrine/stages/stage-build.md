@@ -45,8 +45,8 @@ states around the ordinary sequence, derived only for that lane. First, `HARDEN_
 `TESTS`: the session runs `git merge --no-ff harden/<stem>` and the mark verifies the branch is
 now an ancestor of HEAD — the merged data and API layer then rides through TESTS, the rebuild,
 and the host gate like any other change. Second, `CAPTURE`, after a green gate and before
-`COMMIT`: the driver boots the app, captures every contract route × state, and diffs each
-against the frozen baseline. Zero diffs advance straight to `COMMIT`; any diff prints a look
+`COMMIT`: the session boots the app, then the driver captures every contract route × state
+and diffs each against the frozen baseline. Zero diffs advance straight to `COMMIT`; any diff prints a look
 stop and the turn ends — the user's literal `accept <route> <state>` marks that pair as the new
 baseline, anything else is a fix for this session followed by a re-capture. The build ledger row
 for this lane carries `capture: { pairs, diffs, accepted }`.

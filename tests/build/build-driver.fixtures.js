@@ -38,6 +38,7 @@ if (argv[0] === '--diff') {
   }
   const rule = scriptMap()[cur.url] || {}
   if (rule.exit2) { process.stderr.write(rule.exit2 + '\\n'); process.exit(2) }
+  if (rule.diffRaw) { process.stdout.write(rule.diffRaw + '\\n'); process.exit(1) }
   const entries = rule.entries || []
   const summary = {
     missing: entries.filter((e) => e.kind === 'missing').length,

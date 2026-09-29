@@ -2051,6 +2051,10 @@ function finishMerge(mainRootDir, source, wt) {
       const del = runChild('git', ['-C', mainRootDir, 'branch', '-D', 'harden/' + stem],
         { encoding: 'utf8' }, 'git branch -D (harden branch cleanup)')
       if (del.status === 0) doneNote = 'harden/' + stem + ' deleted\n' + doneNote
+      else {
+        doneNote = '⚠️ harden/' + stem + ' could not be deleted (' + (del.stdout + del.stderr).trim() +
+          ') — remove it by hand: git branch -D harden/' + stem + '\n' + doneNote
+      }
     }
   }
   marks.mergeConcluded = true

@@ -148,6 +148,27 @@ test('AC-20260928-03-6: WHEN the review driver\'s merge concludes for a lane: be
   assert.ok(!fs.existsSync(wt), 'a concluded merge must still remove the worktree exactly as it does today: ' + wt)
 })
 
+// Review finding rv_347ba49bed5d (queue q294): a refused `git branch -D harden/<stem>` was silent —
+// the merge reported DONE with the branch still present and no one told to remove it.
+test('WHEN harden/<stem> cannot be deleted after the merge THE SYSTEM still concludes but warns, naming the manual remedy', () => {
+  const brief = 28
+  const stem = `${brief}-functional-prototype`
+  const { root, spec } = driveToMerge('lanefail', 'AC-20260928-99-8', { brief, lane: 'behaviour' })
+  execFileSync('git', ['-C', root, 'branch', 'harden/' + stem], { encoding: 'utf8' })
+  // A branch checked out in a linked worktree refuses `git branch -D`.
+  const holder = tmpdir('harden-holder')
+  fs.rmSync(holder, { recursive: true, force: true })
+  execFileSync('git', ['-C', root, 'worktree', 'add', holder, 'harden/' + stem], { encoding: 'utf8', stdio: 'pipe' })
+
+  const merged = run(root, spec, '--mark', 'merge-strategy', 'ff-only')
+  assert.strictEqual(merged.status, 0, 'a failed branch cleanup must not fail an already-landed merge: ' + merged.stdout + merged.stderr)
+  assert.match(merged.stdout, /DONE/, 'the merge must still conclude: ' + merged.stdout)
+  assert.doesNotMatch(merged.stdout, new RegExp('harden/' + stem + ' deleted'),
+    'the driver must never claim a deletion that did not happen: ' + merged.stdout)
+  assert.match(merged.stdout, new RegExp('⚠️ harden/' + stem + ' could not be deleted[\\s\\S]*git branch -D harden/' + stem),
+    'the driver must warn and name the command to remove it by hand, or the spent branch lingers unnoticed: ' + merged.stdout)
+})
+
 test('AC-20260928-03-6: WHEN the spec has no lane: THE SYSTEM leaves an unrelated harden/x branch in place', () => {
   const { root, wt, spec } = driveToMerge('nolane', 'AC-20260928-99-7', {})
   execFileSync('git', ['-C', root, 'branch', 'harden/unrelated'], { encoding: 'utf8' })

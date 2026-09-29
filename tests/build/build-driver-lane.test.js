@@ -292,6 +292,53 @@ test('AC-20260928-03-4: WHEN the capture stub exits 2 THE SYSTEM exits 2 forward
     'a refused capture run must write no capture-state.json — a partial file here would let a later mark believe the gate ran cleanly: ' + host.sidecar)
 })
 
+// Review finding rv_347ba49bed5d (queue q294): a --diff that exits 1 (a diff exists) but prints no
+// readable JSON was recorded as a zero-diff pair and the gate advanced — fail-open.
+test('WHEN the capture tool\'s --diff exits 1 but prints no readable result THE SYSTEM refuses the mark instead of counting the pair as zero diffs', () => {
+  const host = makeHost({ lane: 'behaviour', brief: 28 })
+  toCaptureWithDiff(host)
+  host.setCaptureScript({
+    'http://localhost:3000/women?proto=empty': { diffRaw: 'diff: 3 entries changed (not json)' },
+  })
+
+  const r = runB(host, '--mark', 'captured')
+  assert.strictEqual(r.status, 2,
+    'a diff the driver cannot read must refuse — counting it as zero lets a changed screen through the gate unseen: ' + r.stdout + r.stderr)
+  assert.match(r.stdout + r.stderr, /proto-capture\.js --diff .*\/women \(empty\).*no readable result/,
+    'the refusal must name the tool and the pair, so the session knows which comparison to fix: ' + r.stdout + r.stderr)
+  assert.ok(!fs.existsSync(path.join(host.sidecar, 'capture-state.json')),
+    'a refused capture run must write no capture-state.json, or a later mark could treat the gate as run: ' + host.sidecar)
+  assert.strictEqual(stateOfB(host), 'CAPTURE',
+    'a refused capture must leave the build at CAPTURE, never advance to COMMIT: ' + stateOfB(host))
+})
+
+// Review finding rv_347ba49bed5d (queue q294): the look stop repeated the whole Reply/Then block
+// once per diffing pair; the spec's Contracts block renders it once.
+test('WHEN two pairs diff THE SYSTEM prints the reply line and the Then header once, with one capture-accepted command per diffing pair', () => {
+  const host = makeHost({ lane: 'behaviour', brief: 28 })
+  toCaptureWithDiff(host)
+  host.setCaptureScript({
+    'http://localhost:3000/women?proto=empty': { entries: [{ id: 'A#0', kind: 'extra' }] },
+    'http://localhost:3000/women': { entries: [{ id: 'B#0', kind: 'missing' }] },
+  })
+
+  const r = runB(host, '--mark', 'captured')
+  assert.strictEqual(r.status, 0, 'a diffing capture is the look stop, exit 0: ' + r.stdout + r.stderr)
+  const count = (re) => (r.stdout.match(re) || []).length
+  assert.strictEqual(count(/^Reply /gm), 1,
+    'the reply instruction must print once, not once per screen, or several diffs bury the stop in repeats: ' + r.stdout)
+  assert.strictEqual(count(/^Then \(only on the literal accept\):/gm), 1,
+    'the Then header must print once: ' + r.stdout)
+  assert.strictEqual(count(/--mark captured$/gm), 1,
+    'the re-capture command must print once: ' + r.stdout)
+  assert.match(r.stdout, /--mark capture-accepted --route \/women --state default/,
+    'the default pair must keep its own accept command: ' + r.stdout)
+  assert.match(r.stdout, /--mark capture-accepted --route \/women --state empty/,
+    'the empty pair must keep its own accept command: ' + r.stdout)
+  assert.match(r.stdout, /`accept \/women default`/, 'the reply line must name the default pair\'s accept phrase: ' + r.stdout)
+  assert.match(r.stdout, /`accept \/women empty`/, 'the reply line must name the empty pair\'s accept phrase: ' + r.stdout)
+})
+
 test('AC-20260928-03-5: WHEN a behaviour-lane build reaches committed after an accepted diffing pair THE SYSTEM appends a build row carrying capture: { pairs: 2, diffs: 3, accepted: 1 }', () => {
   const host = makeHost({ lane: 'behaviour', brief: 28 })
   toCaptureWithDiff(host)

@@ -715,9 +715,16 @@ function handleCaptured() {
         die('proto-capture.js --diff failed for ' + route + ' (' + stateName + '): ' +
           (diffR.stdout + diffR.stderr).trim())
       }
-      let parsed = { entries: [] }
-      try { parsed = JSON.parse(diffR.stdout) } catch { /* treated as a zero-diff, empty pair */ }
-      const entries = parsed.entries || []
+      // Exit 0 is a clean pair whatever it prints; exit 1 claims a diff, so a result the driver
+      // cannot read is refused rather than counted as zero (fail-closed on the gate's own signal).
+      let parsed = null
+      try { parsed = JSON.parse(diffR.stdout) } catch { parsed = null }
+      const entries = (parsed && Array.isArray(parsed.entries)) ? parsed.entries : []
+      if (diffR.status === 1 && entries.length === 0) {
+        die('proto-capture.js --diff reported a diff for ' + route + ' (' + stateName +
+          ') but printed no readable result — check PROTO_CAPTURE_BIN, then re-run --mark captured: ' +
+          (diffR.stdout + diffR.stderr).trim())
+      }
       pairs.push({ route, state: stateName, diffs: entries.length, accepted: false })
       details.push({ route, state: stateName, url: entry.url, entries })
     }
@@ -1343,13 +1350,16 @@ function captureStepBody() {
     for (const e of (d.entries || []).slice(0, 5)) lines.push(renderCaptureEntry(e))
     if (!p.accepted) unresolved.push(p)
   }
-  for (const p of unresolved) {
-    lines.push(`Reply \`accept ${p.route} ${p.state}\` to accept a pair as the new baseline; ` +
+  if (unresolved.length) {
+    const phrases = unresolved.map((p) => `\`accept ${p.route} ${p.state}\``).join(' or ')
+    lines.push(`Reply ${phrases} to accept a pair as the new baseline; ` +
       `anything else is a fix for this session, then:`)
     lines.push(`  node ${__filename} ${specPath} --mark captured`)
     lines.push(`Then (only on the literal accept):`)
-    lines.push(`  node ${__filename} ${specPath} --mark capture-accepted --route ${p.route} ` +
-      `--state ${p.state}`)
+    for (const p of unresolved) {
+      lines.push(`  node ${__filename} ${specPath} --mark capture-accepted --route ${p.route} ` +
+        `--state ${p.state}`)
+    }
   }
   return lines.join('\n')
 }

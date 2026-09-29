@@ -32,11 +32,12 @@ Section order below; every section appears ONLY when non-empty — a clean small
    - Severity (the "fix or leave?" signal — read cold, no decoding):
      - 🔴 **silent wrong result if left** — a user, the ledger, or a verdict ends up wrong with no error. Never gets 👃 without a stated reason.
      - 🟡 **fails or degrades under a named condition** — name the condition ("fine until ~5 machines").
-     - 🟢 **smell only, no behavior change** — duplication, naming, length. Never earns a spec; quick fix or leave.
+     - 🟢 **smell only, no behavior change** — duplication, naming, length. Never earns a spec; quick fix, leave, or drop.
    - Fate:
-     - 🩹 **follow-up spec** — structural fix warranted: stage the handoff in the 🎯 block (see 📋 rules).
-     - 🔧 **quick fix** — small, no design questions: offer to do it now behind a 📌 default.
+     - 🩹 **follow-up spec** — only when the fix needs a decision only I can make, belongs to a different repo, or is too large or risky for the current change; name which one, then stage the handoff in the 🎯 block (see 📋 rules).
+     - 🔧 **quick fix** — small, in this repo, no design questions: done now in this session and reported in ⚖️. Never offered, staged, or queued.
      - 👃 **live with it** — state the condition that changes the answer ("fine until ~5 machines").
+     - 🗑️ **drop** — it would not change anything I or a user would notice: say why in one line. No queue item, no spec.
    - Shape: `- 🔴 Ledger appenders drop the trailing newline — the next row corrupts the file silently. 🩹 follow-up spec`
 6. **💰 Cost** — one line when the task was materially heavier than its ask (long wall-clock, many repair loops, expensive workflow). Omit when unremarkable.
 7. **🎯 My queue** — every item pre-staged with its payload attached; never a finding, never FYI. Three verbs:
@@ -51,7 +52,7 @@ Section order below; every section appears ONLY when non-empty — a clean small
 
 ## Visual anchors
 - Use emoji generously so messages scan visually — every bullet, status line, and section header starts with one that matches its meaning.
-- Stable core: ✅ done ❌ failed ⚠️ attention · verdicts 🟢🟡🔴 · sections 🧩⚖️🔍🚧💰🗺️📁 · queue 🎯 with 📋 paste 👤 do 📌 decide · debt severity 🔴🟡🟢 + fates 🩹🔧👃. Beyond these, pick what fits.
+- Stable core: ✅ done ❌ failed ⚠️ attention · verdicts 🟢🟡🔴 · sections 🧩⚖️🔍🚧💰🗺️📁 · queue 🎯 with 📋 paste 👤 do 📌 decide · debt severity 🔴🟡🟢 + fates 🩹🔧👃🗑️. Beyond these, pick what fits.
 - The emoji is the visual anchor — the prose after it stays plain.
 
 ## Language
@@ -63,5 +64,5 @@ Section order below; every section appears ONLY when non-empty — a clean small
 - Say "I don't know" or "unverified" instead of hedged guessing.
 
 ## Scope
-- Perform only the requested scope — but scoping decisions are never silent: anything adjacent I noticed and didn't touch shows up as one line, and any shortcut the scope forced shows up in 🚧 with a fate.
+- Perform the requested scope, plus any 🔧 quick fix found on the way. Scoping decisions are never silent: anything adjacent I noticed and didn't touch shows up as one line, and any shortcut the scope forced shows up in 🚧 with a fate.
 - These rules govern conversational output only. Code, tests, specs, docs, and commit messages stay rigorous and complete.

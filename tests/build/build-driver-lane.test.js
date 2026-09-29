@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { runNode } = require('../helpers')
+const { runNode, tmpdir } = require('../helpers')
 const {
   DRIVER, makeHost, run, stateOf, toIntegration, implementScriptsWave,
 } = require('./build-driver.fixtures')
@@ -65,6 +65,27 @@ test('AC-20260928-03-1: WHEN the build driver runs on a hardened spec with brief
   const after = fs.readFileSync(host.spec, 'utf8')
   assert.strictEqual(after, before,
     'a refused admission must flip no status and stamp no diff_base — the spec file must be byte-identical to before the run: ' + JSON.stringify({ before, after }))
+})
+
+test('AC-20260928-03-1: WHEN branch proto/28-functional-prototype is checked out in a linked worktree THE SYSTEM still refuses it, not just a `git branch --list` `*`-prefixed checkout', () => {
+  const host = makeHost({ brief: 28 })
+  host.g('branch', 'proto/28-functional-prototype')
+  const wt = tmpdir('blddrv-wt')
+  fs.rmdirSync(wt)
+  host.g('worktree', 'add', wt, 'proto/28-functional-prototype')
+  const before = fs.readFileSync(host.spec, 'utf8')
+
+  const r = run(host.root, host.spec)
+  assert.strictEqual(r.status, 2,
+    'a branch checked out in a linked worktree prints with a `+ ` prefix in `git branch --list`, not `*` — stripping only `*` misses this and admits an open prototype: ' + r.stdout + r.stderr)
+  assert.match(r.stdout + r.stderr, /prototype proto\/28-functional-prototype is still open for brief 28/,
+    'the refusal must name the open branch and the brief literally even when it is checked out in a worktree rather than the host repo itself: ' + r.stdout + r.stderr)
+  assert.doesNotMatch(r.stdout + r.stderr, /\+ proto\//,
+    'the refusal must not leak the raw `git branch --list` worktree-checkout marker (`+ `) into the message — only the branch name: ' + r.stdout + r.stderr)
+
+  const after = fs.readFileSync(host.spec, 'utf8')
+  assert.strictEqual(after, before,
+    'a refused admission from a worktree-checked-out proto/ branch must flip no status and stamp no diff_base — the spec file must be byte-identical to before the run: ' + JSON.stringify({ before, after }))
 })
 
 test('AC-20260928-03-1: WHEN branch proto/<NN>-* is absent THE SYSTEM admits the spec as today', () => {

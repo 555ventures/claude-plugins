@@ -186,10 +186,11 @@ if (status !== 'hardened' && status !== 'implementing') {
 // 0030 (h) requires. `brief: n/a` (or no brief: line at all) is never scoped by this check.
 const briefFm = fmVal('brief')
 if (briefFm && briefFm !== 'n/a') {
-  const protoListR = runChild('git', ['-C', repoRoot, 'branch', '--list', 'proto/' + briefFm + '-*'],
+  const protoListR = runChild('git',
+    ['-C', repoRoot, 'branch', '--list', '--format=%(refname:short)', 'proto/' + briefFm + '-*'],
     { encoding: 'utf8' }, 'git branch --list (open prototype check)')
   const openProtoBranches = (protoListR.stdout || '').split('\n')
-    .map((l) => l.replace(/^\*/, '').trim()).filter(Boolean)
+    .map((l) => l.trim()).filter(Boolean)
   if (openProtoBranches.length) {
     die('prototype ' + openProtoBranches[0] + ' is still open for brief ' + briefFm +
       ' — freeze it first: /spec:prototype docs/roadmap/' + briefFm + '-*.md')

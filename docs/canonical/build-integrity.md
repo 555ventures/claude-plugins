@@ -132,6 +132,16 @@ three and inflated the row's `workers` sums. Derive state from the observation f
 markers only to disambiguate what the observation leaves open, and execute before recording so
 an exit-2 refusal is genuinely state-unchanged.
 
+## Behaviour lane
+
+A spec stamped `lane: behaviour` (written by the prototype freeze) starts with `HARDEN_MERGE`:
+the session merges `harden/<stem>` and the mark verifies ancestry. After a green gate it runs
+`CAPTURE`: the driver captures every contract route × state and diffs each against the freeze.
+A diff is either accepted by the user's literal `accept <route> <state>` or fixed and
+re-captured. The build row records `capture: { pairs, diffs, accepted }`. Any spec carrying a
+brief is refused while `proto/<NN>-*` exists; the review driver deletes `harden/<stem>` after
+merge-back; `/git:merge` refuses `proto/*`. (specs/20260928/03-the-build-reads-the-freeze.md)
+
 ## Run provenance
 
 Build and review rows carry `via` (`loop` when produced by `/spec:run`,

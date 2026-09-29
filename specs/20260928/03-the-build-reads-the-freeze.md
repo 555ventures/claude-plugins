@@ -1,6 +1,6 @@
 ---
 date: 2026-09-28
-status: implementing
+status: done
 build_base: design-retool
 tier: standard
 area: prototype
@@ -138,6 +138,15 @@ critical-tier script's exit alphabet stays untouched. `/git:merge`'s refusal is 
 command is prose; a script would be a guard with zero recurrences (Incident Policy). No
 `SHALL CONTINUE TO` pin: the default lane's behaviour is unchanged and already pinned by the build
 and review suites.
+
+Build departures (folded from the deviations sidecar, one-offs): the fixture's capture stub is
+scripted per URL through a `PROTO_CAPTURE_SCRIPT` env var naming a JSON map file (the File Plan
+fixed no shape); the fixture stem is `<brief>-functional-prototype`, following the Contracts
+example; A4 fired as stated — `driveToMerge` is not exported, so the harden cleanup test builds
+its own worktree/merge harness from the same recipe. Review found the D1 refusal stripped only
+`*` from `git branch --list`, so a proto branch checked out in the prototype's own worktree
+(`+ ` prefix) leaked the marker into the message; the driver now reads
+`--format=%(refname:short)` and a linked-worktree case pins it.
 
 ## Canonical Delta
 

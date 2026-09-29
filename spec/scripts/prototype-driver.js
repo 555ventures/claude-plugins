@@ -1,23 +1,28 @@
 #!/usr/bin/env node
 // prototype-driver.js <brief path> [--root <dir>] [--state]
-// prototype-driver.js <brief path> [--root <dir>] --mark opened|round-done|approved
+// prototype-driver.js <brief path> [--root <dir>] --mark opened|round-done|approved|frozen|tests-derived
 // prototype-driver.js <brief path> [--root <dir>] serve --port <n>
 // prototype-driver.js <brief path> [--root <dir>] check [--json]
 // prototype-driver.js check [--root <dir>] [--json]   (brief-less: doctor check 23's own
 //   invocation has no brief — a host-wide config check needs none)
 //
-// WHY: specs/20260928/01-the-prototype-command-and-the-pin-overlay.md D2-D5/D8 — /spec:prototype
-// derives OPEN -> ROUND -> APPROVED from design/prototypes/<stem>/status.json plus disk and the
-// host's declared `prototype` config block (spec/templates/grounding-contract.md), the way
-// genesis-driver.js and mocks-driver.js derive their own state machines. The brief STEM is the
-// brief path's basename without extension; branch `proto/<stem>`; worktree
+// WHY: specs/20260928/01-the-prototype-command-and-the-pin-overlay.md D2-D5/D8, extended by
+// specs/20260928/02-freeze-export-and-the-contract.md D3-D8 — /spec:prototype derives
+// OPEN -> ROUND -> APPROVED -> TESTS -> CLOSED from design/prototypes/<stem>/status.json plus
+// disk and the host's declared `prototype` config block (spec/templates/grounding-contract.md),
+// the way genesis-driver.js and mocks-driver.js derive their own state machines. The brief STEM
+// is the brief path's basename without extension; branch `proto/<stem>`; worktree
 // `.claude/worktrees/proto-<stem>` (created through merge-back.sh create, which owns the
-// worktree path and the .worktreeinclude manifest); status/pins/states all live under
+// worktree path and the .worktreeinclude manifest); status/pins/states/contract all live under
 // `design/prototypes/<stem>/` in the MAIN working tree, never on the prototype branch (ADR-0030 h
-// — nothing on proto/* is read after close).
+// — nothing on proto/* is read after close). The freeze's own step primitives (gate, composite
+// discovery, capture, contract/spec write, export, deletion, ledger) live in lib/freeze.js — this
+// file owns only the ordering, status.json/marks bookkeeping, and the printed steps.
 //
 // D3: OPEN while marks.opened is unset OR the worktree is absent from `git worktree list
-// --porcelain`; ROUND while opened and not yet approved; APPROVED once marks.approved. `--mark
+// --porcelain`; ROUND while opened and not yet approved; APPROVED once marks.approved but not yet
+// frozen; TESTS once frozen but not yet closed; CLOSED once marks.closed (checked FIRST in
+// deriveState, before the worktree-registration probe — by CLOSED the worktree is gone). `--mark
 // opened` refuses a stale branch (proto/<stem> exists, status.json absent), refuses an empty
 // states.json, THEN creates the worktree, bakes the pins URL into the copied overlay + stable-id
 // module, runs dbCreate, and refuses if no tracked file in the worktree imports the overlay's
@@ -29,13 +34,24 @@
 // check 23 (advisory) — a host with no `prototype` block reads as clean, unlike every other
 // subcommand which refuses without one.
 //
+// `--mark frozen` (spec 02 D3) runs the gate on the prototype tree, captures every declared
+// route x state, writes contract.json, and reserves the generated spec's number and AC ids —
+// each ordered precondition refuses loudly and writes nothing past its own failure point.
+// `--mark tests-derived` (spec 02 D4-D8) refuses until the session's own derived e2e file on
+// main carries every reserved AC id AND the host's own e2eList command reports it (the runner is
+// the oracle, never the file content alone), then runs the export, the generated spec + its
+// lints, the prototype's deletion, and the ledger row in that order — each step re-checks its own
+// postcondition first, so a re-run after a partial failure (e.g. a dirty worktree at deletion)
+// resumes at the first undone step rather than repeating already-committed work.
+//
 // What this deliberately does NOT do:
 //   - author states.json, wire the dev-entry import, run the host's dev server, or decide when a
 //     round is "done" — those stay session judgment; the driver only verifies artifacts already on
 //     disk and records the marks a session asks it to record.
-//   - write spec/templates/proto-overlay.js or proto-stable-id.js — it only copies them (D6).
-//   - relocate the session CWD, delete the prototype branch, or run the freeze — spec 02 owns
-//     FROZEN/CLOSED; this driver's APPROVED step prints "not available in this version".
+//   - write spec/templates/proto-overlay.js, proto-stable-id.js or proto-capture-page.js — it only
+//     copies/injects them (D6).
+//   - author the derived e2e tests themselves — the session writes them; the driver only verifies
+//     every reserved AC id is present and listed by the host's own runner (D4).
 //
 // Exit codes:
 //   0  a bare run printed the current step, --state printed the state name, an accepted --mark
@@ -45,17 +61,22 @@
 //      array).
 //   2  usage error, a missing/invalid `prototype` config block (naming `prototype` or
 //      `prototype.export`), a refused `--mark` precondition (stale branch, empty states.json,
-//      missing overlay import), a malformed status.json/states.json, or `serve --port N`
-//      refusing an already-bound port (named, with a remedy — never an unhandled EADDRINUSE
-//      crash).
+//      missing overlay import, unapproved/unfrozen prototype, red gate, no composites, no
+//      behaviour pins, a failed capture, a missing/incomplete derived e2e file, a pre-existing
+//      `harden/<stem>` with marks.exported unset, a lint/sweep finding on the generated spec, or a
+//      dirty prototype worktree at deletion), a malformed status.json/states.json/contract.json,
+//      or `serve --port N` refusing an already-bound port (named, with a remedy — never an
+//      unhandled EADDRINUSE crash).
 
 'use strict'
 const fs = require('fs')
 const path = require('path')
 const http = require('http')
 const { spawnSync } = require('child_process')
-const { writeOut } = require('./lib/driver-io')
+const { writeOut, appendLedger } = require('./lib/driver-io')
 const { readConfigStrict, CONFIG_RELPATH } = require('./lib/host-config')
+const { globMatch } = require('./lib/glob-match')
+const freeze = require('./lib/freeze')
 
 function die(msg) { writeOut(2, 'prototype-driver: ' + msg + '\n'); process.exit(2) }
 function nowIso() { return new Date().toISOString() }
@@ -74,7 +95,7 @@ function withoutFlagPair(arr, name) {
 }
 
 if (argv.length === 0) {
-  die('usage: prototype-driver <brief path> [--root <dir>] [--state] [--mark opened|round-done|approved] [serve --port <n>] [check [--json]] | prototype-driver check [--root <dir>] [--json]')
+  die('usage: prototype-driver <brief path> [--root <dir>] [--state] [--mark opened|round-done|approved|frozen|tests-derived] [serve --port <n>] [check [--json]] | prototype-driver check [--root <dir>] [--json]')
 }
 // `check` is the one subcommand doctor check 23 invokes with no brief (a host-wide config check
 // has no brief to derive a stem/branch/worktree from) — every other form still needs one.
@@ -182,6 +203,7 @@ if (briefLess) {
 const stem = path.basename(briefPath, path.extname(briefPath))
 const briefNumMatch = stem.match(/^(\d+)/)
 const brief = briefNumMatch ? briefNumMatch[1] : stem
+const briefSlug = stem.replace(/^\d+-/, '')
 const branch = 'proto/' + stem
 const worktreeName = 'proto-' + stem
 const worktreeRel = '.claude/worktrees/' + worktreeName
@@ -190,9 +212,11 @@ const designDir = path.join(root, 'design/prototypes', stem)
 const statusPath = path.join(designDir, 'status.json')
 const statesPath = path.join(designDir, 'states.json')
 const pinsPath = path.join(designDir, 'pins.json')
+const contractPath = path.join(designDir, 'contract.json')
 const statusRel = 'design/prototypes/' + stem + '/status.json'
 const statesRel = 'design/prototypes/' + stem + '/states.json'
 const pinsRel = 'design/prototypes/' + stem + '/pins.json'
+const contractRel = 'design/prototypes/' + stem + '/contract.json'
 const driverAbs = path.resolve(__filename)
 
 // Every other subcommand needs the block.
@@ -264,9 +288,13 @@ function worktreeIsRegistered() {
 }
 
 function deriveState(status) {
+  // marks.closed is checked FIRST and short-circuits the worktreeIsRegistered() probe below —
+  // by CLOSED the prototype worktree is gone (D7), so testing for it would misreport OPEN.
+  if (status && status.marks && status.marks.closed) return 'CLOSED'
   if (!status || !status.marks || !status.marks.opened || !worktreeIsRegistered()) return 'OPEN'
   if (!status.marks.approved) return 'ROUND'
-  return 'APPROVED'
+  if (!status.marks.frozen) return 'APPROVED'
+  return 'TESTS'
 }
 
 function printCheckpoint(prevState, nextState) {
@@ -443,11 +471,241 @@ function cmdMarkApproved() {
   printCheckpoint(prevState, nextState)
 }
 
+// ---------------------------------------------------------------------------
+// --mark frozen (D3, specs/20260928/02-freeze-export-and-the-contract.md).
+// ---------------------------------------------------------------------------
+function readContractOrDie() {
+  let raw
+  try {
+    raw = fs.readFileSync(contractPath, 'utf8')
+  } catch (e) {
+    die(contractRel + ' does not exist (' + e.message + ') — remedy: run --mark frozen first')
+    return null // unreachable
+  }
+  try {
+    return JSON.parse(raw)
+  } catch (e) {
+    die(contractRel + ' is not valid JSON (' + e.message + ')')
+    return null // unreachable
+  }
+}
+
+function cmdMarkFrozen() {
+  const status = loadStatus()
+  if (!status) die(statusRel + ' does not exist — remedy: run --mark opened first')
+  if (!status.marks || !status.marks.approved) {
+    die('prototype is not yet approved — remedy: run --mark round-done then --mark approved before freezing')
+  }
+  const prevState = deriveState(status)
+
+  // D3(2): composites.
+  const composites = freeze.compositeNames(root, cfg)
+  if (composites.length === 0) {
+    die('no composites declared — the kit must exist before a prototype (brief 30)')
+  }
+
+  // D3(3): at least one behaviour pin.
+  const pinsDoc = loadPinsDoc()
+  const pins = pinsDoc.pins || []
+  const behaviourPins = pins.filter((p) => p.kind === 'behaviour')
+  if (behaviourPins.length === 0) {
+    die('no behaviour pins — a prototype that changed no behaviour is the direct lane; mark a pin behaviour or close the prototype by hand')
+  }
+  const lookPins = pins.filter((p) => p.kind !== 'behaviour')
+
+  // D3(4): gate.
+  const gateResult = freeze.gateCheck({ root, worktreePath, config: cfg, designDir, stem })
+  if (!gateResult.ok) die(gateResult.message)
+
+  // D3(5): prototype.url is probed with curl -sf -m 3 — informational only (mirrors the ROUND
+  // step's own probe, D4: "never a driver crash on an unreachable dev server"). The real
+  // reachability gate is proto-capture.js's own navigation failure in D3(6) below: a driver-level
+  // refusal here would duplicate that check with a different, less precise error and would make
+  // a PROTO_CAPTURE_BIN test seam (which never touches the network) spuriously refuse.
+  probeUrl(proto.url)
+
+  // D3(6): captures.
+  const statesDoc = loadStatesOrNull()
+  if (!statesHasRoutes(statesDoc)) {
+    die(statesRel + ' has no routes — remedy: author it with at least one route carrying at least one state')
+  }
+  const captureResult = freeze.captureAll({ root, designDir, config: cfg, statesDoc, composites })
+  if (!captureResult.ok) die(captureResult.message)
+
+  // D3(8): reserve the spec number and this freeze's AC ids, before D3(7) writes the contract.
+  const reserved = freeze.reserveSpec(root, brief, briefSlug, behaviourPins.map((p) => p.id))
+  const e2eFile = (proto.e2eFile || '').split('{brief}').join(brief)
+
+  // D3(7): contract.json.
+  freeze.writeContract({
+    designDir, brief, stem, base: status.base,
+    viewport: (statesDoc && statesDoc.viewport) || { width: 1280, height: 800 },
+    routes: captureResult.routes, composites, ids: captureResult.ids,
+    pinsTest: behaviourPins.map((p) => p.id), pinsLook: lookPins.map((p) => p.id),
+    spec: reserved.specPath, e2eFile, tests: reserved.tests,
+  })
+
+  // D3(9).
+  status.marks.frozen = nowIso()
+  saveStatus(status)
+  const nextState = deriveState(status)
+  printCheckpoint(prevState, nextState)
+}
+
+// ---------------------------------------------------------------------------
+// --mark tests-derived (D4-D8).
+// ---------------------------------------------------------------------------
+const OVERLAY_BASENAMES_CACHE = () => {
+  const names = new Set(['proto-stable-id.js'])
+  if (proto.overlay) names.add(path.basename(proto.overlay))
+  return names
+}
+
+function buildFilePlanRows(base, exportFiles, exportGlobs) {
+  const exportPaths = new Set(exportFiles.map((f) => f.path))
+  const overlayNames = OVERLAY_BASENAMES_CACHE()
+  const rows = exportFiles.map((f) => ({
+    path: f.path,
+    action: f.status === 'A' ? 'CREATE' : f.status === 'D' ? 'DELETE' : 'MODIFY',
+    layer: 'other',
+  }))
+  const full = spawnSync('git', ['-C', root, 'diff', '--name-status', base + '...' + branch], { encoding: 'utf8' })
+  const lines = (full.stdout || '').trim().split('\n').filter(Boolean)
+  for (const line of lines) {
+    const [status, ...rest] = line.split('\t')
+    const p = rest.join('\t')
+    if (exportPaths.has(p)) continue
+    if (overlayNames.has(path.basename(p))) continue
+    if ((exportGlobs || []).some((g) => globMatch(g, p))) continue
+    // D6: outside-export proto/<stem> edits take their action from the diff status too.
+    const st = status.charAt(0)
+    rows.push({ path: p, action: st === 'A' ? 'CREATE' : st === 'D' ? 'DELETE' : 'MODIFY', layer: 'other' })
+  }
+  return rows
+}
+
+function cmdMarkTestsDerived() {
+  const status = loadStatus()
+  if (!status) die(statusRel + ' does not exist — remedy: run --mark opened first')
+  if (!status.marks || !status.marks.frozen) {
+    die('prototype is not yet frozen — remedy: run --mark frozen first')
+  }
+  const prevState = deriveState(status)
+  const contract = readContractOrDie()
+
+  // D4: the e2e file must exist on main and carry every reserved AC id.
+  const e2eAbs = path.join(root, contract.e2eFile)
+  if (!fs.existsSync(e2eAbs)) {
+    die(contract.e2eFile + ' does not exist on main — remedy: write the derived tests at ' + contract.e2eFile + ' (see the TESTS step), then re-run --mark tests-derived')
+  }
+  const e2eText = fs.readFileSync(e2eAbs, 'utf8')
+  for (const t of contract.tests) {
+    if (!e2eText.includes(t.ac)) {
+      die(contract.e2eFile + ' does not carry ' + t.ac + ' — remedy: add a derived test whose title includes ' + t.ac + ', then re-run --mark tests-derived')
+    }
+  }
+  if (typeof proto.e2eList !== 'string' || !proto.e2eList) {
+    die('prototype.e2eList is not declared — remedy: declare it (spec/templates/grounding-contract.md § Required config keys)')
+  }
+  const listCmd = proto.e2eList.split('{file}').join(contract.e2eFile)
+  const listRun = spawnSync('bash', ['-c', listCmd], { cwd: root, encoding: 'utf8' })
+  const listedOut = listRun.stdout || ''
+  if (listRun.status !== 0) {
+    die('e2eList (' + listCmd + ') exited ' + listRun.status + ': ' + ((listedOut) + (listRun.stderr || '')).trim())
+  }
+  for (const t of contract.tests) {
+    if (!listedOut.includes(t.ac)) {
+      die('e2eList (' + listCmd + ') did not report ' + t.ac + ' as listed — the host runner is the oracle, not the file content: confirm ' + contract.e2eFile + ' matches the runner\'s own test-discovery pattern')
+    }
+  }
+
+  // D5: export.
+  const alreadyExported = !!(status.marks.exported)
+  const briefAbsPath = path.join(root, briefPath)
+  const exportResult = freeze.exportHarden({
+    root, branch, stem, base: status.base, exportGlobs: proto.export || [], alreadyExported, briefPath: briefAbsPath,
+  })
+  if (exportResult.ok === false) die(exportResult.message)
+  if (!exportResult.skipped) {
+    status.marks.exported = nowIso()
+    status.exported = { files: exportResult.files.map((f) => f.path), commit: exportResult.commit }
+    saveStatus(status)
+  }
+
+  // D6: the generated spec — written once (idempotent by file existence), then lint-checked.
+  const specAbs = path.join(root, contract.spec)
+  if (!fs.existsSync(specAbs)) {
+    const exportFiles = (status.exported && status.exported.files) || []
+    const exportFileObjs = exportFiles.map((p) => {
+      const found = (exportResult.files || []).find((f) => f.path === p)
+      return found || { path: p, status: 'M' }
+    })
+    const filePlanRows = buildFilePlanRows(status.base, exportFileObjs, proto.export || [])
+    const briefText = fs.existsSync(briefAbsPath) ? fs.readFileSync(briefAbsPath, 'utf8') : ''
+    const pinsDoc = loadPinsDoc()
+    const pinsById = {}
+    for (const p of pinsDoc.pins || []) pinsById[p.id] = p
+    freeze.writeSpec({
+      root, specPath: contract.spec, brief, briefSlug, briefText, contract,
+      filePlanRows, e2eFile: contract.e2eFile, pinsById,
+    })
+    const lint = spawnSync(process.execPath, [path.join(__dirname, 'ac-matrix.js'), '--spec', contract.spec, '--lint', '--resolve-root', root], { cwd: root, encoding: 'utf8' })
+    if (lint.status !== 0) {
+      die('ac-matrix.js --lint refused the generated spec ' + contract.spec + ' (left on disk for inspection): ' + ((lint.stdout || '') + (lint.stderr || '')).trim())
+    }
+    const sweep = spawnSync(process.execPath, [path.join(__dirname, 'promise-sweep.js'), '--spec', contract.spec], { cwd: root, encoding: 'utf8' })
+    if (sweep.status !== 0) {
+      die('promise-sweep.js refused the generated spec ' + contract.spec + ' (left on disk for inspection): ' + ((sweep.stdout || '') + (sweep.stderr || '')).trim())
+    }
+  }
+
+  // D7: deletion, then D8: the ledger row — only once, guarded by marks.closed. dbDestroy is
+  // recorded as its own postcondition (marks.dbDestroyed), persisted immediately after it
+  // succeeds and BEFORE worktree removal is attempted, so a resume after a dirty-worktree
+  // refusal never re-invokes a non-idempotent dbDestroy a second time.
+  if (!status.marks.closed) {
+    const dbResult = freeze.runDbDestroy({
+      config: cfg, worktreePath, branch, brief, alreadyRan: !!(status.marks && status.marks.dbDestroyed),
+    })
+    if (!dbResult.ok) die(dbResult.message)
+    if (dbResult.ran) {
+      status.marks.dbDestroyed = nowIso()
+      saveStatus(status)
+    }
+    const deleteResult = freeze.removeProtoWorktreeAndBranch({ root, worktreePath, branch, stem })
+    if (!deleteResult.ok) die(deleteResult.message)
+
+    let routeCount = 0
+    let stateCount = 0
+    for (const states of Object.values(contract.routes || {})) {
+      routeCount++
+      stateCount += Object.keys(states || {}).length
+    }
+    const row = freeze.ledgerRow({
+      specPath: contract.spec, brief, branch, rounds: (status.rounds || []).length,
+      pinsTotal: contract.pins.test.length + contract.pins.look.length,
+      pinsBehaviour: contract.pins.test.length, pinsLook: contract.pins.look.length,
+      routes: routeCount, states: stateCount, captures: stateCount,
+      exportedFiles: ((status.exported && status.exported.files) || []).length,
+      exportedCommit: (status.exported && status.exported.commit) || null,
+      hardenBranch: 'harden/' + stem,
+    })
+    appendLedger(root, JSON.stringify(row))
+    status.marks.closed = nowIso()
+    saveStatus(status)
+  }
+
+  const nextState = deriveState(status)
+  printCheckpoint(prevState, nextState)
+}
+
 function cmdMark(name) {
   if (name === 'opened') return cmdMarkOpened()
   if (name === 'round-done') return cmdMarkRoundDone()
   if (name === 'approved') return cmdMarkApproved()
-  die('--mark ' + name + ' is unknown — remedy: --mark opened|round-done|approved')
+  if (name === 'frozen') return cmdMarkFrozen()
+  if (name === 'tests-derived') return cmdMarkTestsDerived()
+  die('--mark ' + name + ' is unknown — remedy: --mark opened|round-done|approved|frozen|tests-derived')
 }
 
 // ---------------------------------------------------------------------------
@@ -611,8 +869,58 @@ function printRoundStep(status) {
 }
 
 function printApprovedStep() {
-  writeOut(1, '[prototype-driver] state: APPROVED  brief: ' + briefPath + '\n' +
-    '## Step: freeze — not available in this version\n')
+  const lines = []
+  lines.push('[prototype-driver] state: APPROVED  brief: ' + briefPath)
+  lines.push('## Step: freeze')
+  lines.push('Session: on the literal `approve` this prototype is ready to freeze — the driver refuses ' +
+    'unless the kit gates are green on ' + branch + ', then captures every declared route x state and ' +
+    'reserves the derived behaviour-lane spec.')
+  lines.push('Then:')
+  lines.push('  node ' + driverAbs + ' ' + briefPath + ' --mark frozen')
+  writeOut(1, lines.join('\n') + '\n')
+  process.exit(0)
+}
+
+// ---------------------------------------------------------------------------
+// TESTS bare-run printer (D4).
+// ---------------------------------------------------------------------------
+function printTestsStep() {
+  const contract = readContractOrDie()
+  const pinsDoc = loadPinsDoc()
+  const pinsById = {}
+  for (const p of pinsDoc.pins || []) pinsById[p.id] = p
+
+  const lines = []
+  lines.push('[prototype-driver] state: TESTS  brief: ' + briefPath)
+  lines.push('## Step: derive one end-to-end test per behaviour pin')
+  lines.push('Read only: ' + contractRel + ', ' + pinsRel)
+  for (const t of contract.tests) {
+    const p = pinsById[t.pin] || {}
+    const anchorId = p.anchor && p.anchor.id ? p.anchor.id : 'screen note'
+    lines.push('pin ' + t.pin + ' → ' + t.ac + ' · ' + (p.screen || '?') + ' (' + (p.state || '?') + ') · ' +
+      anchorId + ' · "' + (p.note || '') + '"')
+  }
+  lines.push('File: ' + contract.e2eFile + ' (main working tree) · title: `<AC-ID> pin <id>: <note>`')
+  lines.push('Session: write one test per line above; it must fail on main today.')
+  lines.push('Then:')
+  lines.push('  node ' + driverAbs + ' ' + briefPath + ' --mark tests-derived')
+  writeOut(1, lines.join('\n') + '\n')
+  process.exit(0)
+}
+
+// ---------------------------------------------------------------------------
+// CLOSED bare-run printer (D8): `Read only:` + `Next:` (spec-status --next, verbatim).
+// ---------------------------------------------------------------------------
+function printClosedStep() {
+  const contract = readContractOrDie()
+  const lines = []
+  lines.push('[prototype-driver] state: CLOSED  brief: ' + briefPath)
+  lines.push('Read only: ' + contractRel + ', ' + contract.spec)
+  const specStatusPath = path.join(__dirname, 'spec-status.js')
+  const r = spawnSync(process.execPath, [specStatusPath, '--root', root, '--next'], { encoding: 'utf8' })
+  lines.push('Next:')
+  lines.push((r.stdout || '').trim() || '(spec-status --next produced no output)')
+  writeOut(1, lines.join('\n') + '\n')
   process.exit(0)
 }
 
@@ -633,5 +941,7 @@ if (rest[0] === 'serve') {
   const state = deriveState(status)
   if (state === 'OPEN') printOpenStep()
   else if (state === 'ROUND') printRoundStep(status)
-  else printApprovedStep()
+  else if (state === 'APPROVED') printApprovedStep()
+  else if (state === 'TESTS') printTestsStep()
+  else printClosedStep()
 }

@@ -226,7 +226,7 @@ test('AC-20260928-01-6: --mark approved refuses naming round-done when no round 
     'the refusal must name round-done as the missing precondition: ' + r.stderr)
 })
 
-test('AC-20260928-01-6: --mark approved is accepted after a round and the next bare run reports state APPROVED with the not-available freeze step', () => {
+test('AC-20260928-01-6: --mark approved is accepted after a round and the next bare run reports state APPROVED with the freeze step naming --mark frozen', () => {
   const dir = setupHost()
   advanceToRound(dir)
   const rd = mark(dir, 'round-done')
@@ -240,8 +240,8 @@ test('AC-20260928-01-6: --mark approved is accepted after a round and the next b
   const next = bare(dir)
   assert.strictEqual(next.status, 0, JSON.stringify(next))
   assert.match(next.stdout, /state:\s*APPROVED/, 'once approved, every subsequent bare run must report state APPROVED: ' + next.stdout)
-  assert.match(next.stdout, /## Step: freeze — not available in this version/,
-    'the APPROVED step must print the exact not-available freeze line and no Then: line — spec 02 owns the freeze (D3): ' + next.stdout)
-  assert.ok(!/\nThen:/.test(next.stdout),
-    'the APPROVED step must carry no "Then:" line in this version: ' + next.stdout)
+  assert.match(next.stdout, /## Step: freeze\n/,
+    'the APPROVED step must print the freeze step (specs/20260928/02 D3) — without it the session has no way from approve to the contract: ' + next.stdout)
+  assert.match(next.stdout, /\nThen:\n\s+node \S+ \S+ --mark frozen/,
+    'the APPROVED step must name --mark frozen as its Then: line — without it the session cannot tell which mark freezes the prototype: ' + next.stdout)
 })

@@ -1,6 +1,7 @@
 ---
 date: 2026-09-28
-status: hardened
+status: done
+build_base: design-retool
 tier: critical
 area: prototype
 breaking: false
@@ -9,6 +10,7 @@ depended_on_by: [specs/20260928/03-the-build-reads-the-freeze.md]
 brief: 28
 spiked: 2026-09-28
 open_markers: 0
+diff_base: 5b344310222a6089c2f6af513ea0c46852e6b802
 ---
 
 # Freeze, export and the contract
@@ -57,6 +59,7 @@ lints, and leaves no `proto/<stem>` behind.
 | tests/prototype/capture-page.test.js | CREATE | tests | AC-20260928-02-1 |
 | tests/prototype/proto-capture.test.js | CREATE | tests | AC-20260928-02-2, AC-20260928-02-3 |
 | tests/prototype/freeze.test.js | CREATE | tests | AC-20260928-02-4, AC-20260928-02-5, AC-20260928-02-6, AC-20260928-02-7, AC-20260928-02-8, AC-20260928-02-9, AC-20260928-02-10, AC-20260928-02-11 |
+| tests/prototype/prototype-driver.test.js | MODIFY | tests | predecessor pin (spec 01's APPROVED-step case) asserted the retired "freeze — not available" step; updated in place to assert D3's freeze step and its `--mark frozen` line (build-time collision fix) |
 | tests/fixtures/prototype/host/ | MODIFY | tests | the spec 01 fixture gains: `docs/design/approval.json` with two composites, a `capture-stub.js` the tests substitute for the real capture through `PROTO_CAPTURE_BIN` (writes a canned capture per url), a red-gate switch (`gateCommand` = `node gate.js`, red when `GATE_RED=1`), an `e2eList` stub (`node list-tests.js {file}` printing the file's test titles) |
 
 Note (outside the table): `PROTO_CAPTURE_BIN` is a test seam read by the driver only when set —
@@ -186,6 +189,21 @@ zero behaviour pins is refused because it is the direct lane in disguise. The li
 has no `[env: CHROME_BIN]` test: the capture needs the host's Playwright, which this repo does
 not carry; the executed spike is the evidence and the first real freeze on salon-os is the
 measurement ADR-0030 asks for.
+
+Build departures (folded from the deviations sidecar at close). A capture's URL is
+`prototype.url` joined with the state's `states.json` path by plain concatenation. D9's
+entrypoints row names `spec/scripts/lib/freeze.js` as proto-capture.js's caller, because D2 puts
+the spawn inside `captureAll`. D3(5)'s URL probe is advisory; an unreachable dev server is still
+refused before anything later runs, by D3(6)'s capture exiting 2 on navigation failure. D7's
+`deleteProto` shipped as two functions, `runDbDestroy` (skipped once `marks.dbDestroyed` is set)
+and `removeProtoWorktreeAndBranch` (each step checks the worktree or branch still exists), so a
+resume never destroys the database twice. Outside-export File Plan rows take their action from
+the diff status, as D6 says. The fixture host's `gateCommand`, `e2eList` and `dbDestroy` became
+the stubs the File Plan row names, while its `prototype.export` stays `["src/db/**"]` (the export
+cases widen it on their own copy) so spec 01's clean-fixture check holds; the fixture also gains a
+base `src/ui/a.js` so the export case genuinely modifies it. Spec 01's APPROVED-step pin asserted
+the retired not-available freeze step and was updated in place to assert the freeze step and its
+`--mark frozen` line.
 
 ## Canonical Delta
 

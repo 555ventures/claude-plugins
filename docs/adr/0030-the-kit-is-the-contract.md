@@ -144,6 +144,21 @@ Vibe Annotations reference note, and a client-side prototype of the walk+map pag
 - Prototype and product share one database engine, so what the prototype settles in the schema
   is what ships.
 
+## Corrections to (f), ratified by JJ on 2026-09-29
+
+After a running prototype of the service (docs/spikes/20260929-walkthrough/FINDINGS.md) and
+hands-on trials of six stacks, three points of clause (f) read differently. Clause (h) and its
+Neon dev branch for a host's prototype are untouched.
+
+- The service is a fresh build in its own repository, `555ventures/walkthrough`. `mock-review`
+  is not retooled or renamed; it keeps the prototype on its branch `proto/walkthrough` as the
+  reference the build is judged against.
+- The service's database is Postgres on Railway, not Neon: it runs all day beside the app and
+  uses nothing that makes Neon different.
+- The service is optional per project, and the plugin's client has seven calls, not four
+  (specs/20260929/01-the-walkthrough-contract-and-the-client.md, whose own amendment record
+  carries the detail).
+
 ## Applies to
 
 - 26-react-mock-system — superseded in premise when brief 29's service runs: the mock app, the

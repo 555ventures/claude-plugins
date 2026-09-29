@@ -112,6 +112,24 @@ on the user's laptop, and the service must not depend on the product's stack.
   > journey approval + the four calls; map, multi-project and staff accounts at hosting time.
   > No dashboards, no notifications, no self-signup, no regeneration.
 
+## Corrections (2026-09-29, from the prototype — docs/spikes/20260929-walkthrough/FINDINGS.md)
+
+These override the text above where they differ. Spec 01 is
+specs/20260929/01-the-walkthrough-contract-and-the-client.md.
+
+- The service is optional per project. A host with no `walkthrough` block sends nothing and
+  confirms journeys in the terminal (JJ, 2026-09-29).
+- The client has seven calls, not four: `hello`, `pushRound`, `putImage`, `pullNotes`,
+  `replyNote`, `pullApprovals`, `markRound`. The plugin owns the round number.
+- A journey may carry `actor` and `variantOf`. A step or screen without a state omits the key.
+- The vocabulary file is plain JSON in a subset of JSON Schema, not Zod-shaped.
+- The old reviewer has no thumbnail map, and its client confirm showed nothing after the
+  press. The client view was redesigned as a storyboard, approved by JJ on 2026-09-29.
+- Scope 3 needs a picture producer first: neither the prototype freeze nor the genesis design
+  stop writes PNG files today (the freeze writes structural JSON at one width).
+- The handoff prompt below is replaced by docs/handoff/walkthrough-service-brief.md.
+- Specs 02 and 03 are planned only when the service's first version runs.
+
 ## Open questions for planning
 
 - Whether the gray catalog's Zod schema lives in the plugin (versioned with the contract) or

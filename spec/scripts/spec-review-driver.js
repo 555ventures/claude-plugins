@@ -1141,6 +1141,17 @@ function branchExists(root, branch) {
     { encoding: 'utf8' }, 'git rev-parse --verify')
   return r.status === 0
 }
+// specs/20260928/03-the-build-reads-the-freeze.md D5: `<stem>` is the brief's stem, taken from
+// the single `docs/roadmap/<NN>-*.md` file the freeze itself wrote (spec 02) — read from
+// mainRootDir, the same root the branch deletion below runs against. Returns null rather than
+// dying: a missing roadmap file here must never abort a merge that already landed.
+function stemForHarden(root, briefVal) {
+  let entries = []
+  try { entries = fs.readdirSync(path.join(root, 'docs/roadmap')) } catch { entries = [] }
+  const re = new RegExp('^' + briefVal + '-.*\\.md$')
+  const match = entries.find((f) => re.test(f))
+  return match ? match.replace(/\.md$/, '') : null
+}
 function findWorktreeForBranch(root, branch) {
   const r = runChild('git', ['-C', root, 'worktree', 'list', '--porcelain'], { encoding: 'utf8' },
     'git worktree list')
@@ -2028,9 +2039,23 @@ function finishMerge(mainRootDir, source, wt) {
   const c = runChild('bash', [mergeBackBin, ...cleanupArgs], { encoding: 'utf8' }, 'merge-back.sh cleanup')
   if (c.status !== 0) die('merge-back.sh cleanup failed: ' + (c.stdout + c.stderr).trim())
   runChild('bash', [mergeBackBin, 'verify', '--root', mainRootDir], { encoding: 'utf8' }, 'merge-back.sh verify')
+  // D5: harden/<stem> is the only survivor of the prototype and is spent once merged — deleted
+  // here, from the main root, as a plain git call (A3: merge-back.sh's own exit alphabet is
+  // untouched). Scoped to a lane: behaviour spec whose branch still exists; any other spec's
+  // harden/x branch (or one already cleaned up by hand) is left exactly as it is.
+  let doneNote = 'merged ' + source + ' into the target branch; worktree and branch cleaned up.'
+  if (fmVal('lane') === 'behaviour') {
+    const briefVal = fmVal('brief')
+    const stem = briefVal && briefVal !== 'n/a' ? stemForHarden(mainRootDir, briefVal) : null
+    if (stem && branchExists(mainRootDir, 'harden/' + stem)) {
+      const del = runChild('git', ['-C', mainRootDir, 'branch', '-D', 'harden/' + stem],
+        { encoding: 'utf8' }, 'git branch -D (harden branch cleanup)')
+      if (del.status === 0) doneNote = 'harden/' + stem + ' deleted\n' + doneNote
+    }
+  }
   marks.mergeConcluded = true
   saveSidecar()
-  printDoneNow('merged ' + source + ' into the target branch; worktree and branch cleaned up.')
+  printDoneNow(doneNote)
 }
 
 function handleMark() {

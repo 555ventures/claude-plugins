@@ -16,6 +16,16 @@ If the user provided a branch name as an argument, use it. Otherwise, run **in p
 
 If the source branch is still ambiguous, use `AskUserQuestion` with concrete branch options pulled from `git branch -vv`. Do NOT guess.
 
+**Refusals, before any inspection runs:**
+
+- Source matches `proto/*` → STOP: a prototype branch is never merged — `harden/<stem>` is what
+  lands, through `/spec:run`'s own merge-back. Report `outcome: {anchor:'🚫', text:'<source> is a
+  prototype branch — it is never merged'}`, `next: {kind:'command', text:'/spec:prototype
+  <brief> — freeze it; harden/<stem> is what lands'}`.
+- Source matches `harden/*` and this command was not dispatched by the review driver's own
+  merge-back → STOP: `outcome: {anchor:'🚫', text:'harden/<stem> lands through /spec:run, not by
+  hand'}`, `next: {kind:'none', reason:'the review driver merges this branch at close'}`.
+
 ## Step 2: Pre-Merge Inspection (ONE APPROVAL)
 
 Run **in parallel in a single message**:
@@ -105,6 +115,7 @@ JSON to the scratch dir first), printing its output verbatim:
 - **Dirty working tree** (Step 2): `outcome: {anchor:'🚫', text:'working tree is dirty — cannot
   inspect or merge safely'}`, `next: {kind:'command', text:'/git:commit — commit the dirty tree
   (or run \`git stash -u\` to shelve it), then retry the merge'}`.
+- **Prototype/harden refusal** (Step 1): the slots named above under Refusals.
 
 ```report
 ✅ **merged spec/checkout into main**
@@ -114,6 +125,11 @@ Next: nothing needs you — merge landed
 ```report
 🚫 **working tree is dirty — cannot inspect or merge safely**
 Next: /git:commit — commit the dirty tree (or run `git stash -u` to shelve it), then retry the merge
+```
+
+```report
+🚫 **proto/28-functional-prototype is a prototype branch — it is never merged**
+Next: /spec:prototype docs/roadmap/28-functional-prototype.md — freeze it; harden/28-functional-prototype is what lands
 ```
 
 ## NON-NEGOTIABLE RULES

@@ -6,6 +6,8 @@
 - Deciders: JJ + session (docs/roadmap/27–30; the 2026-09-23/24 research sweeps and executed
   spikes under docs/spikes/20260923-design-retool/; every clause below was ratified by JJ
   item by item on 2026-09-24)
+- Amended by: ADR-0031 (clause (f): the client's seven calls, the plugin-owned round number, the
+  optional service, the contract and vocabulary files in the plugin)
 
 ## Context
 

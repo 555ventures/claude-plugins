@@ -1,0 +1,1094 @@
+{
+  "apiVersion": 1,
+  "revision": 1,
+  "prefix": "/v1",
+  "auth": {
+    "scheme": "bearer",
+    "scope": "project",
+    "header": "authorization",
+    "minTokenLength": 32
+  },
+  "compatibility": {
+    "additive": [
+      "a new optional request field",
+      "a new response field",
+      "a new call",
+      "a new error code"
+    ],
+    "breaking": [
+      "a removed or renamed field",
+      "a changed type or meaning",
+      "an optional field made required",
+      "a published limit lowered"
+    ],
+    "additiveRaises": "revision",
+    "breakingRaises": "apiVersion",
+    "overlapDays": 90
+  },
+  "limits": {
+    "pushBytes": 2000000,
+    "imageBytes": 8000000,
+    "screens": 300,
+    "journeys": 100,
+    "steps": 60,
+    "replyChars": 4000,
+    "pickedTextChars": 40,
+    "actorChars": 60,
+    "requestsPerMinute": 120
+  },
+  "errors": {
+    "bad-request": 400,
+    "bad-spec": 400,
+    "bad-journey": 400,
+    "beats-mismatch": 400,
+    "unknown-variant-of": 400,
+    "chained-variant": 400,
+    "not-png": 400,
+    "checksum-mismatch": 400,
+    "bad-cursor": 400,
+    "bad-token": 401,
+    "wrong-project": 403,
+    "unknown-project": 404,
+    "unknown-round": 404,
+    "unknown-picture": 404,
+    "unknown-note": 404,
+    "unknown-api-version": 404,
+    "round-exists": 409,
+    "not-screenshots": 409,
+    "round-uploading": 409,
+    "too-large": 413,
+    "rate-limited": 429,
+    "internal": 500
+  },
+  "calls": {
+    "hello": {
+      "method": "GET",
+      "path": "/v1",
+      "auth": false,
+      "success": 200,
+      "response": "hello",
+      "errors": [
+        "unknown-api-version"
+      ]
+    },
+    "pushRound": {
+      "method": "POST",
+      "path": "/v1/projects/{project}/rounds",
+      "auth": true,
+      "success": 201,
+      "request": "roundPush",
+      "response": "roundPushed",
+      "errors": [
+        "bad-request",
+        "bad-spec",
+        "bad-journey",
+        "beats-mismatch",
+        "unknown-variant-of",
+        "chained-variant",
+        "round-exists",
+        "too-large"
+      ]
+    },
+    "putImage": {
+      "method": "PUT",
+      "path": "/v1/projects/{project}/rounds/{round}/images/{image}",
+      "auth": true,
+      "success": 200,
+      "body": "image/png",
+      "headers": {
+        "x-content-sha256": "sha256"
+      },
+      "response": "imageStored",
+      "errors": [
+        "not-png",
+        "checksum-mismatch",
+        "unknown-round",
+        "unknown-picture",
+        "not-screenshots",
+        "too-large"
+      ]
+    },
+    "pullNotes": {
+      "method": "GET",
+      "path": "/v1/projects/{project}/notes",
+      "auth": true,
+      "success": 200,
+      "query": {
+        "since": "cursor",
+        "round": "roundNumber"
+      },
+      "response": "notesPulled",
+      "errors": [
+        "bad-request",
+        "bad-cursor"
+      ]
+    },
+    "replyNote": {
+      "method": "POST",
+      "path": "/v1/projects/{project}/notes/{note}/reply",
+      "auth": true,
+      "success": 200,
+      "request": "replyRequest",
+      "response": "replied",
+      "errors": [
+        "bad-request",
+        "unknown-note"
+      ]
+    },
+    "pullApprovals": {
+      "method": "GET",
+      "path": "/v1/projects/{project}/approvals",
+      "auth": true,
+      "success": 200,
+      "response": "approvalsPulled",
+      "errors": []
+    },
+    "markRound": {
+      "method": "POST",
+      "path": "/v1/projects/{project}/rounds/{round}/mark",
+      "auth": true,
+      "success": 200,
+      "request": "markRequest",
+      "response": "marked",
+      "errors": [
+        "bad-request",
+        "unknown-round",
+        "round-uploading"
+      ]
+    }
+  },
+  "commonErrors": [
+    "bad-token",
+    "wrong-project",
+    "unknown-project",
+    "rate-limited",
+    "internal"
+  ],
+  "shapes": {
+    "name": {
+      "type": "string",
+      "pattern": "^(?!.*--)[A-Za-z0-9_.-]{1,80}$"
+    },
+    "hash12": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{12}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "time": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}"
+    },
+    "cursor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "roundNumber": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "roundStatus": {
+      "enum": [
+        "uploading",
+        "open",
+        "answered",
+        "closed"
+      ]
+    },
+    "noteStatus": {
+      "enum": [
+        "open",
+        "answered",
+        "approved",
+        "deferred"
+      ]
+    },
+    "error": {
+      "type": "object",
+      "required": [
+        "error",
+        "detail",
+        "apiVersion"
+      ],
+      "properties": {
+        "error": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "apiVersion": {
+          "const": 1
+        }
+      }
+    },
+    "hello": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "revision",
+        "sunset"
+      ],
+      "properties": {
+        "apiVersion": {
+          "type": "integer"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sunset": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "beat",
+        "screen"
+      ],
+      "properties": {
+        "beat": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "screen": {
+          "$ref": "#/shapes/name"
+        },
+        "state": {
+          "$ref": "#/shapes/name"
+        }
+      }
+    },
+    "journey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "beats",
+        "steps"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/shapes/name"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "persona": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "beats": {
+          "$ref": "#/shapes/hash12"
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 60,
+          "items": {
+            "$ref": "#/shapes/step"
+          }
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "variantOf": {
+          "$ref": "#/shapes/name"
+        }
+      }
+    },
+    "wireframeScreen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "spec"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/shapes/name"
+        },
+        "state": {
+          "$ref": "#/shapes/name"
+        },
+        "spec": {
+          "type": "object",
+          "required": [
+            "root",
+            "elements"
+          ]
+        }
+      }
+    },
+    "pictureScreen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "width",
+        "sha256",
+        "bytes"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/shapes/name"
+        },
+        "state": {
+          "$ref": "#/shapes/name"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 240,
+          "maximum": 3840
+        },
+        "sha256": {
+          "$ref": "#/shapes/sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8000000
+        }
+      }
+    },
+    "wireframePush": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "round",
+        "kind",
+        "contentHash",
+        "journeys",
+        "screens"
+      ],
+      "properties": {
+        "round": {
+          "$ref": "#/shapes/roundNumber"
+        },
+        "kind": {
+          "const": "wireframe"
+        },
+        "contentHash": {
+          "$ref": "#/shapes/sha256"
+        },
+        "journeys": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/shapes/journey"
+          }
+        },
+        "screens": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 300,
+          "items": {
+            "$ref": "#/shapes/wireframeScreen"
+          }
+        }
+      }
+    },
+    "picturePush": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "round",
+        "kind",
+        "contentHash",
+        "journeys",
+        "screens"
+      ],
+      "properties": {
+        "round": {
+          "$ref": "#/shapes/roundNumber"
+        },
+        "kind": {
+          "const": "screenshots"
+        },
+        "contentHash": {
+          "$ref": "#/shapes/sha256"
+        },
+        "journeys": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/shapes/journey"
+          }
+        },
+        "screens": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 300,
+          "items": {
+            "$ref": "#/shapes/pictureScreen"
+          }
+        }
+      }
+    },
+    "roundPush": {
+      "oneOf": [
+        {
+          "$ref": "#/shapes/wireframePush"
+        },
+        {
+          "$ref": "#/shapes/picturePush"
+        }
+      ]
+    },
+    "roundPushed": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "round",
+        "kind",
+        "status",
+        "journeys"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": 1
+        },
+        "round": {
+          "$ref": "#/shapes/roundNumber"
+        },
+        "kind": {
+          "enum": [
+            "wireframe",
+            "screenshots"
+          ]
+        },
+        "status": {
+          "enum": [
+            "uploading",
+            "open"
+          ]
+        },
+        "journeys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "beats"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/shapes/name"
+              },
+              "beats": {
+                "$ref": "#/shapes/hash12"
+              }
+            }
+          }
+        }
+      }
+    },
+    "roundExists": {
+      "type": "object",
+      "required": [
+        "contentHash",
+        "status"
+      ],
+      "properties": {
+        "contentHash": {
+          "$ref": "#/shapes/sha256"
+        },
+        "status": {
+          "$ref": "#/shapes/roundStatus"
+        }
+      }
+    },
+    "imageStored": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "round",
+        "image",
+        "bytes",
+        "remaining",
+        "status"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": 1
+        },
+        "round": {
+          "$ref": "#/shapes/roundNumber"
+        },
+        "image": {
+          "type": "string"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "remaining": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "status": {
+          "enum": [
+            "uploading",
+            "open"
+          ]
+        }
+      }
+    },
+    "nodeAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "index"
+      ],
+      "properties": {
+        "node": {
+          "type": "string",
+          "minLength": 1
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "pictureAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "width"
+      ],
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 240,
+          "maximum": 3840
+        }
+      }
+    },
+    "anchor": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/shapes/nodeAnchor"
+        },
+        {
+          "$ref": "#/shapes/pictureAnchor"
+        }
+      ]
+    },
+    "threadEntry": {
+      "type": "object",
+      "required": [
+        "by",
+        "text",
+        "at"
+      ],
+      "properties": {
+        "by": {
+          "enum": [
+            "client",
+            "owner",
+            "session"
+          ]
+        },
+        "who": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "at": {
+          "$ref": "#/shapes/time"
+        }
+      }
+    },
+    "note": {
+      "type": "object",
+      "required": [
+        "id",
+        "round",
+        "screen",
+        "anchor",
+        "pickedText",
+        "status",
+        "text",
+        "author",
+        "thread",
+        "at"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "round": {
+          "$ref": "#/shapes/roundNumber"
+        },
+        "screen": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "$ref": "#/shapes/name"
+        },
+        "anchor": {
+          "$ref": "#/shapes/anchor"
+        },
+        "pickedText": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 40
+        },
+        "status": {
+          "$ref": "#/shapes/noteStatus"
+        },
+        "text": {
+          "type": "string"
+        },
+        "author": {
+          "enum": [
+            "client",
+            "owner",
+            "session"
+          ]
+        },
+        "thread": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/shapes/threadEntry"
+          }
+        },
+        "at": {
+          "$ref": "#/shapes/time"
+        }
+      }
+    },
+    "journeyThread": {
+      "type": "object",
+      "required": [
+        "id",
+        "status",
+        "thread"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/shapes/name"
+        },
+        "status": {
+          "$ref": "#/shapes/noteStatus"
+        },
+        "thread": {
+          "type": "array",
+          "items": {
+            "$ref": "#/shapes/threadEntry"
+          }
+        }
+      }
+    },
+    "notesPulled": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "notes",
+        "journeys",
+        "cursor"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": 1
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/shapes/note"
+          }
+        },
+        "journeys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/shapes/journeyThread"
+          }
+        },
+        "cursor": {
+          "$ref": "#/shapes/cursor"
+        }
+      }
+    },
+    "replyRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      }
+    },
+    "replied": {
+      "type": "object",
+      "required": [
+        "apiVersion"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": 1
+        },
+        "note": {
+          "$ref": "#/shapes/note"
+        },
+        "journey": {
+          "$ref": "#/shapes/journeyThread"
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "required": [
+        "journey",
+        "by",
+        "round",
+        "beats",
+        "at"
+      ],
+      "properties": {
+        "journey": {
+          "$ref": "#/shapes/name"
+        },
+        "by": {
+          "enum": [
+            "client",
+            "owner"
+          ]
+        },
+        "who": {
+          "type": "string"
+        },
+        "round": {
+          "$ref": "#/shapes/roundNumber"
+        },
+        "beats": {
+          "$ref": "#/shapes/hash12"
+        },
+        "at": {
+          "$ref": "#/shapes/time"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "approvalsPulled": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "approvals"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": 1
+        },
+        "approvals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/shapes/approval"
+          }
+        }
+      }
+    },
+    "markRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "open",
+            "answered",
+            "closed"
+          ]
+        }
+      }
+    },
+    "marked": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "round",
+        "status"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": 1
+        },
+        "round": {
+          "$ref": "#/shapes/roundNumber"
+        },
+        "status": {
+          "$ref": "#/shapes/roundStatus"
+        }
+      }
+    }
+  },
+  "examples": {
+    "hello": {
+      "response": {
+        "apiVersion": 1,
+        "revision": 1,
+        "sunset": null
+      }
+    },
+    "pushRound": {
+      "request": {
+        "round": 3,
+        "kind": "wireframe",
+        "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "journeys": [
+          {
+            "id": "owner-onboarding",
+            "title": "Owner onboarding",
+            "persona": "Mika (clinic owner) is invited, confirms her roster, and ends at the brief.",
+            "beats": "08363cd98ef8",
+            "steps": [
+              {
+                "beat": "I open the invitation",
+                "screen": "owner-intro"
+              },
+              {
+                "beat": "I see nobody is listed yet",
+                "screen": "roster-confirm",
+                "state": "empty"
+              }
+            ]
+          }
+        ],
+        "screens": [
+          {
+            "name": "owner-intro",
+            "spec": {
+              "root": "page",
+              "elements": {
+                "page": {
+                  "type": "Stack",
+                  "props": {
+                    "gap": 16
+                  },
+                  "children": [
+                    "title"
+                  ]
+                },
+                "title": {
+                  "type": "Heading",
+                  "props": {
+                    "text": "You are invited to Hearwell",
+                    "level": 1
+                  },
+                  "children": []
+                }
+              }
+            }
+          },
+          {
+            "name": "roster-confirm",
+            "state": "empty",
+            "spec": {
+              "root": "page",
+              "elements": {
+                "page": {
+                  "type": "Stack",
+                  "props": {
+                    "gap": 16
+                  },
+                  "children": [
+                    "title"
+                  ]
+                },
+                "title": {
+                  "type": "Heading",
+                  "props": {
+                    "text": "You are invited to Hearwell",
+                    "level": 1
+                  },
+                  "children": []
+                }
+              }
+            }
+          }
+        ]
+      },
+      "response": {
+        "apiVersion": 1,
+        "round": 3,
+        "kind": "wireframe",
+        "status": "open",
+        "journeys": [
+          {
+            "id": "owner-onboarding",
+            "beats": "08363cd98ef8"
+          }
+        ]
+      }
+    },
+    "putImage": {
+      "response": {
+        "apiVersion": 1,
+        "round": 1,
+        "image": "owner-intro--390",
+        "bytes": 200008,
+        "remaining": 2,
+        "status": "uploading"
+      }
+    },
+    "pullNotes": {
+      "response": {
+        "apiVersion": 1,
+        "notes": [
+          {
+            "id": "n1",
+            "round": 1,
+            "screen": "owner-intro",
+            "anchor": {
+              "node": "start",
+              "index": 0
+            },
+            "pickedText": null,
+            "status": "open",
+            "text": "Move the button up",
+            "author": "client",
+            "thread": [
+              {
+                "by": "client",
+                "text": "Move the button up",
+                "at": "2026-09-29T10:00:00Z"
+              }
+            ],
+            "at": "2026-09-29T10:00:00Z"
+          },
+          {
+            "id": "n2",
+            "round": 2,
+            "screen": null,
+            "anchor": null,
+            "pickedText": null,
+            "status": "answered",
+            "text": "Looks good overall",
+            "author": "client",
+            "thread": [
+              {
+                "by": "client",
+                "text": "Looks good overall",
+                "at": "2026-09-29T10:05:00Z"
+              },
+              {
+                "by": "session",
+                "text": "Thanks",
+                "at": "2026-09-29T10:06:00Z"
+              }
+            ],
+            "at": "2026-09-29T10:05:00Z"
+          }
+        ],
+        "journeys": [],
+        "cursor": "c-1"
+      }
+    },
+    "replyNote": {
+      "request": {
+        "text": "Moved the button up."
+      },
+      "response": {
+        "apiVersion": 1,
+        "note": {
+          "id": "n1",
+          "round": 1,
+          "screen": "owner-intro",
+          "anchor": {
+            "node": "start",
+            "index": 0
+          },
+          "pickedText": null,
+          "status": "answered",
+          "text": "Move the button up",
+          "author": "client",
+          "thread": [
+            {
+              "by": "client",
+              "text": "Move the button up",
+              "at": "2026-09-29T10:00:00Z"
+            },
+            {
+              "by": "session",
+              "text": "Moved the button up.",
+              "at": "2026-09-29T10:10:00Z"
+            }
+          ],
+          "at": "2026-09-29T10:00:00Z"
+        }
+      }
+    },
+    "pullApprovals": {
+      "response": {
+        "apiVersion": 1,
+        "approvals": [
+          {
+            "journey": "owner-onboarding",
+            "by": "client",
+            "round": 2,
+            "beats": "08363cd98ef8",
+            "at": "2026-09-29T10:00:00Z"
+          }
+        ]
+      }
+    },
+    "markRound": {
+      "request": {
+        "status": "answered"
+      },
+      "response": {
+        "apiVersion": 1,
+        "round": 2,
+        "status": "answered"
+      }
+    }
+  }
+}

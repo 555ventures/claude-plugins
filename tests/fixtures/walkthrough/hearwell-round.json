@@ -1,0 +1,98 @@
+{
+  "kind": "wireframe",
+  "journeys": [
+    {
+      "id": "owner-onboarding",
+      "title": "Owner onboarding",
+      "persona": "Mika (clinic owner) is invited, confirms her roster, and ends at the brief.",
+      "steps": [
+        { "beat": "I open the invitation", "screen": "owner-intro" },
+        { "beat": "I check who is on my team", "screen": "roster-confirm" },
+        { "beat": "I see nobody is listed yet", "screen": "roster-confirm", "state": "empty" },
+        { "beat": "I read what happens next", "screen": "reciprocity-brief" }
+      ]
+    }
+  ],
+  "screens": [
+    {
+      "name": "owner-intro",
+      "spec": {
+        "root": "page",
+        "elements": {
+          "page": { "type": "Stack", "props": { "gap": 16, "padding": 24 }, "children": ["title", "start"] },
+          "title": { "type": "Heading", "props": { "text": "You are invited to Hearwell", "level": 1 }, "children": [] },
+          "start": {
+            "type": "Button",
+            "props": { "label": "Check my team" },
+            "children": [],
+            "on": { "press": { "action": "navigate", "params": { "to": "roster-confirm" } } }
+          }
+        }
+      }
+    },
+    {
+      "name": "roster-confirm",
+      "spec": {
+        "root": "page",
+        "elements": {
+          "page": { "type": "Stack", "props": { "gap": 16, "padding": 24 }, "children": ["title", "intro", "team", "next"] },
+          "title": { "type": "Heading", "props": { "text": "Is this your team?", "level": 1 }, "children": [] },
+          "intro": { "type": "Text", "props": { "text": "We found these people on your clinic's account.", "muted": true }, "children": [] },
+          "team": {
+            "type": "Table",
+            "props": { "columns": ["Name", "Role"], "rows": [["Aiko Tanaka", "Audiologist"], ["Ben Ortiz", "Front desk"]] },
+            "children": []
+          },
+          "next": {
+            "type": "Button",
+            "props": { "label": "Yes, that is my team", "variant": "primary" },
+            "children": [],
+            "on": { "press": { "action": "navigate", "params": { "to": "reciprocity-brief" } } }
+          }
+        }
+      }
+    },
+    {
+      "name": "roster-confirm",
+      "state": "empty",
+      "spec": {
+        "root": "page",
+        "elements": {
+          "page": { "type": "Stack", "props": { "gap": 16, "padding": 24 }, "children": ["title", "notice", "add", "skip"] },
+          "title": { "type": "Heading", "props": { "text": "Nobody is listed yet", "level": 1 }, "children": [] },
+          "notice": { "type": "Alert", "props": { "title": "No team members", "text": "Add the people who should receive reciprocity briefs." }, "children": [] },
+          "add": { "type": "Button", "props": { "label": "Add a person", "variant": "secondary" }, "children": [] },
+          "skip": {
+            "type": "Button",
+            "props": { "label": "Skip for now", "variant": "ghost" },
+            "children": [],
+            "on": { "press": { "action": "navigate", "params": { "to": "reciprocity-brief" } } }
+          }
+        }
+      }
+    },
+    {
+      "name": "reciprocity-brief",
+      "spec": {
+        "root": "page",
+        "elements": {
+          "page": { "type": "Stack", "props": { "gap": 16, "padding": 24 }, "children": ["title", "badge", "body", "steps", "done"] },
+          "title": { "type": "Heading", "props": { "text": "What happens next", "level": 1 }, "children": [] },
+          "badge": { "type": "Badge", "props": { "text": "Reciprocity brief" }, "children": [] },
+          "body": { "type": "Text", "props": { "text": "Each person on your team gets a short brief." }, "children": [] },
+          "steps": {
+            "type": "List",
+            "props": { "items": ["We send a short brief to each person", "They answer in two minutes", "You see the results here"], "ordered": true },
+            "children": []
+          },
+          "done": {
+            "type": "Button",
+            "props": { "label": "Back to the start" },
+            "children": [],
+            "on": { "press": { "action": "navigate", "params": { "to": "owner-intro" } } }
+          }
+        }
+      }
+    }
+  ]
+}

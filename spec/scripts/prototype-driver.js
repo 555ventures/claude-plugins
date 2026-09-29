@@ -659,9 +659,20 @@ function cmdMarkTestsDerived() {
     }
   }
 
-  // D7: deletion, then D8: the ledger row — only once, guarded by marks.closed.
+  // D7: deletion, then D8: the ledger row — only once, guarded by marks.closed. dbDestroy is
+  // recorded as its own postcondition (marks.dbDestroyed), persisted immediately after it
+  // succeeds and BEFORE worktree removal is attempted, so a resume after a dirty-worktree
+  // refusal never re-invokes a non-idempotent dbDestroy a second time.
   if (!status.marks.closed) {
-    const deleteResult = freeze.deleteProto({ root, config: cfg, worktreePath, branch, stem, brief })
+    const dbResult = freeze.runDbDestroy({
+      config: cfg, worktreePath, branch, brief, alreadyRan: !!(status.marks && status.marks.dbDestroyed),
+    })
+    if (!dbResult.ok) die(dbResult.message)
+    if (dbResult.ran) {
+      status.marks.dbDestroyed = nowIso()
+      saveStatus(status)
+    }
+    const deleteResult = freeze.removeProtoWorktreeAndBranch({ root, worktreePath, branch, stem })
     if (!deleteResult.ok) die(deleteResult.message)
 
     let routeCount = 0

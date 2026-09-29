@@ -242,9 +242,18 @@ function writeSubPlan(briefPath, files, exportGlobs) {
   } catch {
     brief = ''
   }
-  const headingRe = /^## Data\/API sub-plan\n[\s\S]*?(?=\n## |$)/m
-  if (headingRe.test(brief)) {
-    brief = brief.replace(headingRe, section)
+  // A previous section is replaced WHOLE, up to the next `## ` heading or end of file — never
+  // just its heading line. `/^## Data\/API sub-plan\n[\s\S]*?(?=\n## |$)/m` looks like it does
+  // that, but the `m` flag also makes `$` match end-of-LINE, so the lazy `[\s\S]*?` stops at the
+  // first line break inside the section instead of the next heading, leaving the stale block's
+  // own content behind. Locating the heading and the next heading as plain string searches
+  // (never anchoring `$` under `m`) avoids that trap.
+  const headingMatch = /^## Data\/API sub-plan\n/m.exec(brief)
+  if (headingMatch) {
+    const afterHeading = headingMatch.index + headingMatch[0].length
+    const nextHeadingAt = brief.indexOf('\n## ', afterHeading)
+    const sectionEnd = nextHeadingAt === -1 ? brief.length : nextHeadingAt
+    brief = brief.slice(0, headingMatch.index) + section + brief.slice(sectionEnd)
   } else {
     brief = brief.replace(/\n*$/, '\n') + '\n' + section
   }
@@ -299,26 +308,52 @@ function exportHarden({ root, branch, stem, base, exportGlobs, alreadyExported, 
 }
 
 // ---------------------------------------------------------------------------
-// D7: deleteProto.
+// D7: deletion — split into two postcondition-checking steps so the driver can persist
+// status.json between them. dbDestroy is not assumed idempotent (a resume after a dirty-
+// worktree refusal must not run it twice), so the driver records `marks.dbDestroyed` right
+// after `runDbDestroy` succeeds, before ever attempting `removeProtoWorktreeAndBranch` — and
+// passes `alreadyRan` back in on every subsequent call so a re-run skips it. Worktree removal
+// and branch deletion each re-check their own postcondition first (registered / exists) so a
+// re-run after either one already succeeded is a no-op rather than the wrong remedy.
 // ---------------------------------------------------------------------------
-function deleteProto({ root, config, worktreePath, branch, stem, brief }) {
-  if (config.prototype && config.prototype.dbDestroy) {
-    const env = Object.assign({}, process.env, { PROTO_BRANCH: branch, PROTO_WORKTREE: worktreePath, PROTO_BRIEF: brief })
-    const r = spawnSync('bash', ['-c', config.prototype.dbDestroy], { cwd: worktreePath, encoding: 'utf8', env })
-    if (r.status !== 0) {
-      return { ok: false, message: 'prototype.dbDestroy failed (exit ' + r.status + '): ' + ((r.stdout || '') + (r.stderr || '')).trim() }
+function worktreeIsRegistered(root, worktreePath) {
+  const r = spawnSync('git', ['-C', root, 'worktree', 'list', '--porcelain'], { encoding: 'utf8' })
+  if (r.status !== 0 || !r.stdout) return false
+  const realpath = (p) => { try { return fs.realpathSync(p) } catch { return path.resolve(p) } }
+  const target = realpath(worktreePath)
+  for (const line of r.stdout.split('\n')) {
+    if (!line.startsWith('worktree ')) continue
+    if (realpath(line.slice('worktree '.length)) === target) return true
+  }
+  return false
+}
+
+function runDbDestroy({ config, worktreePath, branch, brief, alreadyRan }) {
+  if (alreadyRan) return { ok: true, ran: false }
+  if (!(config.prototype && config.prototype.dbDestroy)) return { ok: true, ran: false }
+  const env = Object.assign({}, process.env, { PROTO_BRANCH: branch, PROTO_WORKTREE: worktreePath, PROTO_BRIEF: brief })
+  const r = spawnSync('bash', ['-c', config.prototype.dbDestroy], { cwd: worktreePath, encoding: 'utf8', env })
+  if (r.status !== 0) {
+    return { ok: false, message: 'prototype.dbDestroy failed (exit ' + r.status + '): ' + ((r.stdout || '') + (r.stderr || '')).trim() }
+  }
+  return { ok: true, ran: true }
+}
+
+function removeProtoWorktreeAndBranch({ root, worktreePath, branch, stem }) {
+  if (worktreeIsRegistered(root, worktreePath)) {
+    const remove = spawnSync('git', ['-C', root, 'worktree', 'remove', worktreePath], { encoding: 'utf8' })
+    if (remove.status !== 0) {
+      return {
+        ok: false,
+        message: 'commit or discard on proto/' + stem + ', then re-run the mark — git worktree remove failed: ' + (remove.stderr || '').trim(),
+      }
     }
   }
-  const remove = spawnSync('git', ['-C', root, 'worktree', 'remove', worktreePath], { encoding: 'utf8' })
-  if (remove.status !== 0) {
-    return {
-      ok: false,
-      message: 'commit or discard on proto/' + stem + ', then re-run the mark — git worktree remove failed: ' + (remove.stderr || '').trim(),
+  if (gitBranchExists(root, branch)) {
+    const del = spawnSync('git', ['-C', root, 'branch', '-D', branch], { encoding: 'utf8' })
+    if (del.status !== 0) {
+      return { ok: false, message: 'git branch -D ' + branch + ' failed: ' + (del.stderr || '').trim() }
     }
-  }
-  const del = spawnSync('git', ['-C', root, 'branch', '-D', branch], { encoding: 'utf8' })
-  if (del.status !== 0) {
-    return { ok: false, message: 'git branch -D ' + branch + ' failed: ' + (del.stderr || '').trim() }
   }
   return { ok: true }
 }
@@ -349,10 +384,21 @@ function ledgerRow({ specPath, brief, branch, rounds, pinsTotal, pinsBehaviour, 
 // D6: writeSpec — token substitution into spec/templates/prototype-spec.md, whose header
 // comment is the sole grammar authority for every {{…}} token below (never restated here).
 // ---------------------------------------------------------------------------
+// D6: the brief's `## Result` first paragraph, whole — up to the blank line that ends it or the
+// next `## ` heading. The previous single regex (`/^## Result\n+([\s\S]*?)(?:\n\n|\n## |$)/m`)
+// truncated a hard-wrapped paragraph to its first line: the `m` flag needed for `^` to match a
+// heading mid-file also makes `$` match end-of-LINE, so the lazy capture group stopped at the
+// first line break rather than the paragraph's real end. Locating the heading and the
+// paragraph's end as plain string/non-`m` searches avoids that trap.
 function briefFirstResultParagraph(briefText) {
-  const m = /^## Result\n+([\s\S]*?)(?:\n\n|\n## |$)/m.exec(briefText || '')
-  if (m) return m[1].trim().replace(/\n/g, ' ')
-  return null
+  const text = briefText || ''
+  const headingMatch = /^## Result\n+/m.exec(text)
+  if (!headingMatch) return null
+  const rest = text.slice(headingMatch.index + headingMatch[0].length)
+  const endMatch = /\n[ \t]*\n|\n## /.exec(rest)
+  const paragraph = endMatch ? rest.slice(0, endMatch.index) : rest
+  const trimmed = paragraph.trim()
+  return trimmed ? trimmed.replace(/\n/g, ' ') : null
 }
 
 function titleCase(briefSlug) {
@@ -361,7 +407,7 @@ function titleCase(briefSlug) {
 }
 
 // pinsById: { [pinId]: { note, screen, state } } — read fresh from pins.json by the caller
-// (still on disk at tests-derived time, before deleteProto runs).
+// (still on disk at tests-derived time, before runDbDestroy/removeProtoWorktreeAndBranch run).
 function writeSpec({ root, specPath, brief, briefSlug, briefText, contract, filePlanRows, e2eFile, pinsById }) {
   const templatePath = path.join(__dirname, '..', '..', 'templates', 'prototype-spec.md')
   let template = fs.readFileSync(templatePath, 'utf8')
@@ -432,6 +478,7 @@ module.exports = {
   todayStamp,
   exportHarden,
   writeSpec,
-  deleteProto,
+  runDbDestroy,
+  removeProtoWorktreeAndBranch,
   ledgerRow,
 }

@@ -308,6 +308,97 @@ test('AC-20260928-02-8: --mark tests-derived creates harden/<stem> holding exact
   assert.strictEqual(shaAfter, shaBefore, 'a second tests-derived run with marks.exported already set must not touch harden/<stem> again: ' + JSON.stringify(second))
 })
 
+test('AC-20260928-02-8: --mark tests-derived replaces a whole previous Data/API sub-plan section, not just its heading line, when one already exists on the brief', () => {
+  const dir = setupHost()
+  const briefAbsPath = path.join(dir, 'docs/roadmap/28-functional-prototype.md')
+  const existingBrief = fs.readFileSync(briefAbsPath, 'utf8')
+  fs.writeFileSync(briefAbsPath, existingBrief.replace(/\n*$/, '\n') + '\n' +
+    '## Data/API sub-plan\n\n```harden\nsrc/old/**\n  M src/old/stale.js\n  A src/old/another-stale.js\n```\n')
+  const { r } = driveToTestsDerived(dir)
+  assert.strictEqual(r.status, 0, 'test setup requires a full tests-derived run to succeed: ' + JSON.stringify(r))
+
+  const brief = fs.readFileSync(briefAbsPath, 'utf8')
+  const blocks = brief.match(/```harden[\s\S]*?```/g) || []
+  assert.strictEqual(blocks.length, 1,
+    'a re-export must replace a previous Data/API sub-plan section wholesale (D5: "replacing a previous one"), not leave a stale ```harden block stacked beneath a truncated new heading: ' + brief)
+  assert.ok(!brief.includes('src/old/stale.js'),
+    'the stale sub-plan\'s content (not just its heading line) must be gone once the section is replaced — a heading-only replace regex leaves this line behind: ' + brief)
+  assert.ok(!brief.includes('src/old/another-stale.js'),
+    'the stale sub-plan\'s second content line must also be gone: ' + brief)
+  for (const p of ['src/db/schema.js', 'drizzle/0001.sql', 'src/db/old.js']) {
+    assert.ok(brief.includes(p), 'the new sub-plan must still list the freshly exported path ' + p + ': ' + brief)
+  }
+})
+
+test('AC-20260928-02-9: the generated spec\'s Goal carries the brief\'s whole hard-wrapped ## Result first paragraph, not just its first line', () => {
+  const dir = setupHost()
+  const briefAbsPath = path.join(dir, 'docs/roadmap/28-functional-prototype.md')
+  const existingBrief = fs.readFileSync(briefAbsPath, 'utf8')
+  fs.writeFileSync(briefAbsPath, existingBrief.replace(/\n*$/, '\n') +
+    '\n## Result\n\n' +
+    'The functional prototype proves the women list can be filtered live\n' +
+    'and every filtered row still opens its own record sheet correctly.\n\n' +
+    '## Another section\n\nunrelated content that must never reach the Goal\n')
+  const { r, contract } = driveToTestsDerived(dir)
+  assert.strictEqual(r.status, 0, 'test setup requires a full tests-derived run to succeed: ' + JSON.stringify(r))
+  const specText = fs.readFileSync(path.join(dir, contract.spec), 'utf8')
+  const goalMatch = /## Goal\n\n([^\n]*)\n/.exec(specText)
+  assert.ok(goalMatch, 'the generated spec must carry a ## Goal section with a one-line paragraph: ' + specText.slice(0, 400))
+  assert.match(goalMatch[1], /filtered live/,
+    'the Goal must carry the first line of the brief\'s ## Result paragraph: ' + goalMatch[1])
+  assert.match(goalMatch[1], /record sheet correctly/,
+    'the Goal must also carry the SECOND line of the hard-wrapped ## Result paragraph (D6: "the brief\'s ## Result first paragraph") — a regex that stops at the first line break truncates it: ' + goalMatch[1])
+  assert.ok(!/unrelated content/.test(goalMatch[1]),
+    'the Goal must stop at the blank line ending the paragraph and never pull in the next section\'s content: ' + goalMatch[1])
+})
+
+test('AC-20260928-02-10: a dbDestroy that fails on a second invocation still reaches CLOSED after a dirty-worktree resume, because dbDestroy runs at most once', () => {
+  const dir = setupHost()
+  fs.writeFileSync(path.join(dir, 'src/db/old.js'), 'module.exports = { legacy: true }\n')
+  execFileSync('git', ['-C', dir, 'add', '-A'], { encoding: 'utf8' })
+  execFileSync('git', ['-C', dir, 'commit', '-q', '-m', 'seed src/db/old.js on base'], { encoding: 'utf8' })
+  advanceToApproved(dir, TWO_ROUTE_STATES, threePins())
+  patchConfig(dir, (cfg) => {
+    cfg.prototype.export = ['src/db/**', 'drizzle/**']
+    // A non-idempotent stand-in for prototype.dbDestroy (patched on this test's own host copy,
+    // never the shared fixture script): it exits 1 if its own marker already exists, so a
+    // driver that re-invokes dbDestroy on a resumed --mark tests-derived run fails the resume.
+    cfg.prototype.dbDestroy =
+      'root="$(cd "$PROTO_WORKTREE/../../.." && pwd)"; ' +
+      'if [ -f "$root/db-dropped" ]; then echo "dbDestroy is not idempotent -- db-dropped already exists" >&2; exit 1; fi; ' +
+      'node scripts/destroy-db.js'
+  })
+  const frozen = markFrozen(dir)
+  assert.strictEqual(frozen.status, 0, frozen.stderr)
+  const contract = readContract(dir)
+  const wt = worktreePath(dir)
+  fs.appendFileSync(path.join(wt, 'src/db/schema.js'), '// modified\n')
+  fs.rmSync(path.join(wt, 'src/db/old.js'))
+  execFileSync('git', ['-C', wt, 'add', '-A'], { encoding: 'utf8' })
+  execFileSync('git', ['-C', wt, 'commit', '-q', '-m', 'exported edits'], { encoding: 'utf8' })
+  const e2eAbs = path.join(dir, 'e2e/proto-28.smoke.spec.ts')
+  fs.mkdirSync(path.dirname(e2eAbs), { recursive: true })
+  fs.writeFileSync(e2eAbs,
+    "test('" + contract.tests[0].ac + " pin " + contract.tests[0].pin + ": n1', () => {})\n" +
+    "test('" + contract.tests[1].ac + " pin " + contract.tests[1].pin + ": n3', () => {})\n")
+  // Dirty the worktree AFTER the export-worthy commit, so the deletion step (which runs
+  // dbDestroy first) refuses on the worktree-remove step, after dbDestroy has already run once.
+  fs.writeFileSync(path.join(wt, 'src/ui-scratch.txt'), 'uncommitted\n')
+
+  const first = markTestsDerived(dir)
+  assert.strictEqual(first.status, 2, 'a dirty prototype worktree at the deletion step must still refuse: ' + JSON.stringify(first))
+  assert.match(first.stderr, /commit or discard on proto\//, 'the refusal must carry the literal phrase "commit or discard on proto/<stem>": ' + first.stderr)
+  assert.ok(fs.existsSync(path.join(dir, 'db-dropped')), 'dbDestroy must have run once before the dirty-worktree refusal: ' + dir)
+
+  fs.rmSync(path.join(wt, 'src/ui-scratch.txt'))
+  const second = markTestsDerived(dir)
+  assert.strictEqual(second.status, 0,
+    'a re-run after cleaning the dirty worktree must resume at the undone deletion step without re-invoking the already-succeeded, non-idempotent dbDestroy a second time (D7: "each step checks its own postcondition first"): ' + JSON.stringify(second))
+  const state = runNode(DRIVER, [BRIEF_REL, '--root', dir, '--state'])
+  assert.strictEqual(state.stdout, 'CLOSED\n',
+    'the resumed run must reach CLOSED once deletion completes without dbDestroy erroring on its non-idempotent second call: ' + JSON.stringify(state))
+})
+
 test('AC-20260928-02-8: --mark tests-derived exits 2 containing "harden/<stem> exists" when the branch pre-exists with marks.exported unset', () => {
   const dir = setupHost()
   advanceToApproved(dir, TWO_ROUTE_STATES, threePins())

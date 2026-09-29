@@ -101,7 +101,7 @@ are a genesis artifact that walks the seed's beats against the real kit and rout
 JJ approves the designed set in Storybook; there is no client gate. Journey stories are frozen at
 approval and never gated later. (specs/20260926/06-the-approval-stop-and-the-roadmap.md D7)
 
-## Prototypes (specs/20260928/01)
+## Prototypes (specs/20260928/01, specs/20260928/02)
 
 `/spec:prototype <brief>` runs a functional prototype on `proto/<stem>` in
 `.claude/worktrees/proto-<stem>`. The host declares a `prototype` config block (`url`,
@@ -111,3 +111,10 @@ after close. A pin is one record with an optional anchor whose id is the keyed o
 ordinal (`Row[w_01]<List<Screen#0`); the source location rides along as metadata only. The pin
 endpoint runs only during a round. A brief whose header says `Lane: behaviour` goes to this
 command instead of `/spec:plan`.
+
+Freeze, on approve: the kit gates run green on the prototype tree → one capture per route × state
+keyed by kit-composite instance → `contract.json` → the session writes one derived e2e test per
+behaviour pin on main, and the host runner must list every reserved AC id → `harden/<stem>` is
+created from `git diff base...proto -- <export globs>` → the generated behaviour-lane spec →
+`dbDestroy`, then the worktree and branch are deleted → one `stage: prototype` ledger row. The
+brief carries a `## Data/API sub-plan` block. `proto-capture.js --diff` is the one comparison.

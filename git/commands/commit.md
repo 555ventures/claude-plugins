@@ -45,14 +45,14 @@ otherwise skip with zero output.
 3. Otherwise offer once via `AskUserQuestion` (skippable, never blocking the commit): record a
    `/spec:escape` row for the defect this commit fixes? Name `landed[0].specs[0].spec` and its
    `reviewRunId`, the count of landed files, and the count of distinct landing specs (when
-   more than one, say `/spec:escape` will confirm the spec with you). Question style: plain
+   more than one, say `/spec:escape` will derive the spec and print it for veto). Question style: plain
    language, self-contained, consequences per option, recommended pick first.
 4. Yes → run `/spec:escape <that spec path>` (it owns the row schema; tell it the invocation
    is commit-driven so the row carries `via:"commit"`). No → proceed silently.
 
 ## Step 4: Report
 
-report contract: spec shared.md § Console Output Style — rendered via `spec-paths report-render`
+report contract: spec core.md § Console Output Style — rendered via `spec-paths report-render`
 
 Assemble slots and run `node "$(spec-paths report-render)" --slots <file>` (write the JSON to
 the scratch dir first), printing its output verbatim:

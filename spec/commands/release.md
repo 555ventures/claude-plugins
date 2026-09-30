@@ -105,15 +105,10 @@ retained output, and row shapes documented in `spec-paths release-legs`'s own he
 this doc does not restate them. Its own summary (per-leg pass/fail lines, `RED_BLOCKING:
 <legs>` when any leg is red) is the evidence a STOP report below quotes.
 
-- **Exit 0:** every leg it ran was green — continue to journey walks below.
-- **Exit 1:** at least one leg red **or unmeasured** (a `⚪` row and a final `UNMEASURED:`
-  line) — **STOP**; never promote over a leg that observed nothing, whether it is a red
-  staging, a red release-commit CI run, or a leg the summary marks unmeasured. Skip straight to
+- **Exit 0:** continue to journey walks below.
+- **Non-zero:** **STOP** — never promote over a leg that observed nothing (a red leg, or a
+  `⚪` row with a final `UNMEASURED:` line); the printed remedy names the fix. Skip straight to
   Phase 4's `record` (below); it is the only path to a report from here.
-- **Exit 2:** a usage or precondition failure (unreadable config, a missing `release` block or
-  required key, a missing/invalid `.claude/release-manifest.json`, a non-empty `--manifest`) —
-  the printed remedy names the fix (Phase 0's interview, or Phase 1's manifest). Same STOP path
-  as exit 1.
 
 **Journey walks** (session judgment — `release-legs.js` does not walk journeys): for each brief
 shipped this milestone, walk its primary journey against staging (the brief's milestone-gate
@@ -158,7 +153,7 @@ ledger row's `ci` field is still the durable carrier of the observation.
    ```
    then **STOP** to Phase 4's `record`; staging stands, nothing promoted.
 2. On yes: run `promoteCommand` (or instruct the user through their CI-on-tag flow when
-   promotion is tag-driven and the tag push is theirs to make — **never push for them**).
+   promotion is tag-driven and the tag push is theirs to make).
 3. **Verify production serves:** ready check against `productionUrl` + `healthPath`, and
    confirm the deployed version/build id is the one staged (the health endpoint's version
    field, or the platform's deployment id). A promote that cannot be verified serving is a
@@ -188,8 +183,7 @@ ledger row's `ci` field is still the durable carrier of the observation.
    is the manifest's observed data, carried through unchanged. A null-status child death exits
    2 naming the remedy — never a silent pass.
 
-2. **Tag** the release (`git tag`) when the user confirmed promotion — never push the tag;
-   pushing remains theirs.
+2. **Tag** the release (`git tag`) when the user confirmed promotion.
 
 3. **Release report:** assemble the slots object — `outcome` (✅ `milestone green — {N} specs
    composed, staging + e2e passed, promoted` on CLEAN; 🚫 `UNVERIFIED — {the unmeasured legs,

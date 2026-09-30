@@ -59,11 +59,9 @@ contents (core § Model Placement). Workers Read Decisions, Contracts, UI, and t
 Plan rows themselves. Every worker applies this contract:
 
 - Apply the Decisions table verbatim — nobody overrides it; only this session adds entries,
-  recording a user ruling.
-- Never run git (core § Worker Git Ban) — no checkout/stash/restore/reset/clean/add/commit.
-  This session owns all git and the checkpoint commit.
-- Never query MCPs (core § MCP Policy); read-only/generated surfaces change only via their
-  declared tool (core § Read-Only Surfaces).
+  recording a user ruling or a printed auto-pick.
+- Never run git or query MCPs (core § Worker Git Ban, § MCP Policy); read-only surfaces
+  change only via their declared tool (core § Read-Only Surfaces).
 - Return `blocked` naming the assumption instead of improvising on a genuine fork or scope
   change.
 - Append forced-but-unblocking departures to the deviations sidecar the driver's step prints
@@ -76,14 +74,16 @@ routed per the driver's own step (`--workers`/`--continued`/`--spawned` land on 
 
 ## `blocked` returns
 
-Resolve against the spec's Rationale/Assumptions when the intent is clear; a genuine fork or
-scope change goes to the user via `AskUserQuestion` with the consequence of each option
-(core § Question Style). Write the ruling **into the spec's Decisions table**, then
+Resolve against the spec's Rationale/Assumptions when the intent is clear; a genuine fork
+goes to the user via `AskUserQuestion` with the consequence of each option (core § Question
+Style); the out-of-plan gate failure below is auto-picked. Write the ruling **into the spec's Decisions table**, then
 re-dispatch that worker. A ruling that adds or changes an observable promise updates its
 terminal-observable AC in the same spec edit. A gate failure implicating a file outside the
-File Plan is never silently widened — ask: add to scope / file separately / pause. A gate
-failure inside the File Plan routes to the owning worker per the Worker Contract above.
-`AskUserQuestion` dismissed → STOP.
+File Plan widens scope — a File Plan row plus a Decisions entry naming the gate line, then the
+owning worker — printing `📌 Auto-picked add to scope — <file, gate line> (veto anytime)`; ask
+(add to scope / file separately / pause) only when the spec is `tier: critical` or what the
+file does falls under a pipeline rules § Risk Tiers trigger. A gate failure inside the File Plan
+routes to the owning worker per the Worker Contract above.
 
 ## Report
 
@@ -103,6 +103,5 @@ If in a worktree, stay in it. Every ledger row lands in `.claude/spec-runs.jsonl
 
 ## Rules
 
-- **The Worker Contract above is binding** (git ban, MCP ban, Decisions-table authority) on every
-  dispatch. **The driver never dispatches agents, writes the Decisions table, renders a report, or
+- **The Worker Contract above is binding** on every dispatch. **The driver never dispatches agents, writes the Decisions table, renders a report, or
   runs a git write beyond the gate-time intent-to-add (ADR-0015)** — those stay this session's, always.

@@ -70,7 +70,7 @@ Changes travel one of three lanes, chosen by the shape of the ask. **Direct**: a
 stated in one sentence with no behaviour or data change (copy, spacing, a token value, a
 component variant) is made on main through the host's `gateCommand` — no spec, no branch;
 the commit-time escape offer still runs. **Behaviour**: a behaviour change starts as a
-prototype (the prototype command once it exists; a spec until then). **Structural**: a schema
+prototype (`/spec:prototype`). **Structural**: a schema
 or API change is planned first — a spec. A spec branch lands only through the review stage's
 merge-back; a direct change never has a branch, which is how the lanes are told apart at
 commit time.
@@ -154,11 +154,8 @@ review and at minimum once per major pipeline version, sampling critical-tier ta
 when one is available in the window. Execution is `/spec:replay`, run on demand — the review
 driver never parks a close on it; a merged review prints `DONE` every time. Dueness is seen on
 the dashboard footer's `replay due` clause instead, printed by `/spec:status` every run
-whether or not anyone acts on it. The blocking form (a REPLAY state parking CLEAN closes until
-a measurement landed) was retired by `docs/adr/0025`: a block on an already-finished review is
-bypassed anyway, and the interrupt's surprise was the real cost. The earlier printed-reminder
-form's own measured failure — a checklist line skipped through 12+ reviews — is still why
-dueness lives on the dashboard rather than in a report. A sustained replay miss-rate reopens
+whether or not anyone acts on it. The blocking REPLAY state was retired by `docs/adr/0025`. A
+sustained replay miss-rate reopens
 the second-reviewer question core § Tiers rules against — not a hunch, not one bad run.
 
 ## Incident Policy
@@ -326,8 +323,7 @@ How the session spends tokens — the seat reading this is the expensive one.
 - **Act on enough information.** Never re-derive facts already established in the session or
   re-litigate a decision the user made; when weighing a choice, give one recommendation.
 - **No extras.** Only what the step or spec asks — no unrequested refactors, features, or
-  tests; a pre-existing bug found on the way is reported, not fixed. Scratch checks run once
-  and are discarded, never promoted to permanent test files.
+  tests. Scratch checks run once and are discarded, never promoted to permanent test files.
 - **Batch independent calls.** Before each tool turn, list what is needed next and request
   every item that does not depend on another's result in that one response.
 - **Load doctrine by section.** `spec-paths shared-for <cmd>` and the supplements' `--section`

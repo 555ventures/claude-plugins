@@ -60,8 +60,8 @@ past the round. Print the driver's step verbatim, including the `🎨 ready for 
 
 JJ Alt+clicks elements in the running app; each pin lands in `pins.json` through the endpoint
 the driver just started. On the literal `approve` reply, run `--mark approved`. On anything
-else, treat it as a change to apply on `proto/<stem>` — ordinary commits on that branch, worker
-git ban included (this session owns the branch's git, no build workers touch it) — then run
+else, treat it as a change to apply on `proto/<stem>` — ordinary commits on that branch, this
+session's git only — then run
 `--mark round-done` and re-enter the loop; a round that lands zero new pins still marks (it is
 how "nothing more to change" gets recorded).
 
@@ -114,6 +114,5 @@ The driver prints `Read only: contract.json, <generated spec path>` and `Next:` 
   `proto/<stem>` is read once that branch closes (design.md § Design Canon).
 - The pin endpoint (`serve --port <pinsPort>`) runs only while a round is open; never leave it,
   or the host's dev server, resident past the turn that started them.
-- A dismissed `AskUserQuestion` STOPs the run — state is already safe on disk; re-invoke cold.
 - The Tailscale share line the driver prints is printed, never run — sharing a running round is
   always this session's explicit choice, never automatic.

@@ -1,6 +1,6 @@
 {
   "name": "style",
-  "version": "1.7.0",
+  "version": "1.9.0",
   "description": "Cross-machine communication style: ships an output style (outcome-first, emoji-anchored, plain-English response rules) that auto-applies wherever the plugin is enabled — no per-machine CLAUDE.md edits",
   "author": {
     "name": "JJ",

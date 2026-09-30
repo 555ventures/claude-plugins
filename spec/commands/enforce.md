@@ -67,8 +67,6 @@ deterministic coverage: **data-flow ordering** (event-emit vs commit), **semanti
 function's parameters, **naming tense** (imperative vs past), **sentinel usage** in control flow,
 **cross-file N+1 / batch-variant** reasoning, and **"is this a sanctioned carve-out."**
 **Pure-process** rules (review neutrality, agent model-routing) are not about source code at all.
-Never emit a probabilistic LLM check for something a linter already covers — that is the
-anti-pattern this command exists to kill.
 
 ## Phase 1 — Classify (interactive command, not the workflow)
 
@@ -332,10 +330,6 @@ re-inventory them here.
 - **Never name a specific linter/formatter/arch-tool/hook-runner in any plugin file.** Encode the
   method + category here; discover the tool at runtime. A named tool anchors the agent and goes
   stale faster than the rules do.
-- **Two-stage selection is mandatory:** DISCOVER against live sources with citations (never
-  training memory), then VERIFY it installs and runs against THIS repo before adopting it.
-- **Deterministic first.** A category goes to a Review-Check prose rule only when it is genuine
-  judgment — never because research was skipped.
 - **Propose, never auto-author** rules (Phase 5). A dismissed `AskUserQuestion` STOPS the run.
 - **Edits stay in the host grounding/gate layer** — config, rule docs, gate/hook wiring, the
   pattern-sweep script, generated checker scripts. Never edit application source here — sole

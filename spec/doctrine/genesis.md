@@ -5,7 +5,7 @@ description: Genesis-stage supplement to the spec pipeline's shared invariants �
 # Spec Pipeline: Genesis-Stage Supplement
 
 Genesis-stage supplement — read by `/spec:genesis` (whose driver loop owns discovery through
-the `BRIEF` ratification, § Genesis: Brief State), in addition to `shared.md`.
+the `BRIEF` ratification, § Genesis: Brief State), in addition to `core.md`.
 
 ## Genesis: Discovery Interview (the intake posture)
 
@@ -258,8 +258,7 @@ rule below.
 
 A hard fork — two menu options within one rank of each other, or a user hesitation signal — is an
 `AskUserQuestion`: options verbatim from the menu, `tradeoff` in each description, rank 1 first
-labeled "(Recommended)" with `why_recommended` as the reason. Dismissed → STOP (shared § Decisions),
-never invent the declined answer.
+labeled "(Recommended)" with `why_recommended` as the reason.
 
 `## Dissents` carries every non-picked ranked option, every `is_minority` option, and every
 user-rejected option — MAINTAINED DISSENT survives the collapse: a correct minority view is
@@ -427,9 +426,7 @@ of the research menus on disk, user rulings. That is the right bar for taste and
 architecture forks, and the **wrong** bar for any claim a third-party dependency
 adjudicates: naming/format conventions the dependency validates, cron/schedule strings,
 config keys, DSL fragments, version-pinned API shapes.
-Those are falsifiable in one executed line, and no volume of reading substitutes: a host
-once bound a naming convention its own same-day-pinned dependency rejects at runtime —
-argued through and research-backed, and wrong; the app could never boot.
+Those are falsifiable in one executed line, and no volume of reading substitutes.
 
 **Rule: before an ADR locks, every dependency-adjudicated convention it binds is executed
 once against the pinned dependency** — a scratch file in the scaffold (or a throwaway
@@ -437,7 +434,7 @@ once against the pinned dependency** — a scratch file in the scaffold (or a th
 check and its observed output in its evidence, alongside the research citations. A convention
 that cannot be cheaply executed is recorded as an open risk in the ADR, never silently
 trusted. The per-feature pipeline applies the same rule at plan time (`/spec:plan`
-Phase 1.5's shape-triggered micro-spike); genesis is where it matters most, because init
+§ Micro-spikes); genesis is where it matters most, because init
 distills ADRs into binding doctrine with no downstream re-verification.
 
 ## Genesis: Enforcement Handoff to the spec pipeline
@@ -650,9 +647,7 @@ URL's status: Storybook answers 200 for a story id that does not exist, so only 
 `entries` content proves a journey story is actually served. On success it prints one verified
 `🎨 ready for review` URL plus one `journey: <j> → <url>` line per journey in seed order and the
 composite-state count, ending the turn on a reply line inviting the one literal word
-**`approve`** — the same contract `/spec:mocks` uses for the client's screens, since the driver
-cannot hear the conversation and doctrine alone binds the session to run the mark only on that
-word. On failure it names the port and the reason (`unreachable` | `index unparseable` |
+**`approve`** (design.md § Design Canon's look-stop contract). On failure it names the port and the reason (`unreachable` | `index unparseable` |
 `missing story <id>`) and a `Session:` line to start Storybook in the background, never a URL.
 
 Only the literal `approve` runs `--mark design-approved`, which re-verifies the fresh index and
@@ -703,7 +698,7 @@ written against real code. Never pre-plan the whole roadmap into specs.
    header line (`First light: <the one record and where it is observed>`). One spec, one
    acceptance criterion, no feature. Feature briefs start at 02.
 2. **Confirm the sequence.** One `AskUserQuestion` round presenting the proposed sequence table
-   (brief names, phases, dependencies, milestone gates) before writing files. Dismissed → STOP.
+   (brief names, phases, dependencies, milestone gates) before writing files.
 3. **Write** `docs/roadmap/00-overview.md` + one `NN-{kebab}.md` per brief. Post-genesis
    product-shape decisions are amendment ADRs whose effects are edited into the briefs they
    name at decision time (the overview states the rule; adr.md template § Applies to) — no
@@ -823,8 +818,3 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   `generate` run; a refused mark quotes its tail, the full log survives on disk for a deeper
   read.
 
-## Genesis: Dismissed Questions
-
-The shared Decisions rule (`shared.md` § Decisions) holds for genesis too: a dismissed genesis
-`AskUserQuestion` STOPS the run — never invent the declined answer; state is safely on disk,
-re-invoke to continue. Genuine hard-to-reverse forks always go to the user, never silently decided.

@@ -44,10 +44,6 @@ unique prompt-payload substring, or an item id. Pass everything after the subcom
 through — never reparse or validate `<ref>`/`--when`/`--after-*` shapes yourself; the
 script's usage/ambiguity errors already name the fix.
 
-The verb set is exactly `next`, `list`, `add`, `move`, `done`, `show`. Anything outside it — `bump`,
-`defer`, `ok`, `add --after <ref>`, `add --brief` — exits 2 naming the replacement (`move`, or `--at`/`--top` at add time); relay that message
-verbatim rather than translating it.
-
 ## Run
 
 One script run per invocation, subcommand forwarded verbatim:
@@ -56,25 +52,12 @@ One script run per invocation, subcommand forwarded verbatim:
 node "$(spec-paths spec-queue)" <subcommand> [args…]
 ```
 
-If the run exits non-zero, print its stderr and stop — never reconstruct the intended
-ordering, a gate's readiness, or an item's position by hand. Exit codes carry their own
-remedy: `2` (usage error, an unresolvable/ambiguous/already-done `<ref>`, a duplicate
-brief/spec on `add`, a missing `--after-*` target, or a removed verb) always names the fix in
-its own message; `3` (not a git repository) means run inside the repo; `0` covers both a
-successful mutation and "nothing to say."
+If the run exits non-zero, print its stderr verbatim and stop — every exit names its own
+fix; never reconstruct ordering, readiness, or position by hand.
 
 ## Render (Console Output Style — the script output IS the render)
 
-Print the script's stdout **verbatim**. `list` renders one line per pending item —
-`{n}  {id}  {desc}` — the id column being the item's own `<ref>` for `move`/`done`/`show`, `—`
-on a virtually reconciled item that has none yet — with a trailing `  ⏳ after <target>
-(<state>)` on a gated, not-ready item, the whole row cut to one terminal line (a trailing `…`
-marks a cut payload; `show <ref>` prints it whole) —
-followed by a footer `— {d} done · move: spec-queue move <ref> <n> · full text: spec-queue
-show <ref>`, or `✨ nothing pending ·
-{d} done` when nothing is pending; reproduce it as printed, never rebuilt as a markdown table
-or re-sorted by hand. For `next`, the top line is the paste-ready pick — a brief's derived
-`/spec:plan`/`/spec:run` line, or a prompt item's payload verbatim with no `@path` suffix.
+Print the script's stdout **verbatim** — never a markdown table, never re-sorted.
 After the block, add only what the script cannot: one sentence naming what changed
 (`add`/`move`/`done`) or, for `next`/`list`, one sentence naming the top pick's relationship
 to the rest of the pipeline (e.g. "this jumps ahead of the closest-to-done ranking because

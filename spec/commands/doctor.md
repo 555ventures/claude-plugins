@@ -196,7 +196,7 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     or missed outcome with a leg that was never red, so `--stats` counts it on a false premise.
     `pristine-red` rows are never flagged — disagreeing with the CLEAN row is that claim's
     meaning. Remedy = relabel the row's `legs` to `green` (or `red:<leg>` if the mutation
-    reddened it) — a hand edit to the ledger, outside `--fix`'s grounding-layer scope.
+    reddened it) — a `--fix` patch (before → after row shown).
 
 22. **Catalog currency** (deterministic, advisory) — only when `docs/design/catalog.md` exists, run `node "$(spec-paths catalog-inventory)" --root . --out docs/design/catalog.md --check`; exit 1 → one ⚠️ line naming the added/removed components and the remedy (re-run the same command without `--check`). A host with no catalog file yet is not a finding — it has never reached `DESIGN_BRIEF` (spec/doctrine/genesis.md § Genesis: Design Stage).
 
@@ -223,11 +223,13 @@ grounding entry that teaches a verified bug. The bar, per patch — all three, n
    before → after text and evidence; every patch needs its own explicit yes.
 3. **Scope: line-item only, inside the grounding layer** (pipeline rules file, convention
    rules, generated agents, generated skills, the settings `permissions` block, config
-   values, `scripts/spec-patterns.sh`). Structural drift is `/spec:init`'s job — `--fix`
+   values, `scripts/spec-patterns.sh`), plus check 18's renumber of the not-yet-built spec and
+   check 21's `legs` relabel. Structural drift is `/spec:init`'s job — `--fix`
    refuses it and says why.
 
 After patching: re-run the affected checks, re-stamp `contractHash`/`generatedBy`, and
-append the correction as a Gotchas entry citing the evidence.
+append the correction as a Gotchas entry citing the evidence — checks 18 and 21 patch the
+spec and the ledger row directly and skip the re-stamp and the Gotchas append.
 
 ## Report & recommendation
 
@@ -256,7 +258,8 @@ naming the findings that drove the call).
 ## Rules
 
 - Read-only by default; every edit is user-approved, targeted, and inside the grounding
-  layer. `--fix` widens what may be patched, never who approves or where.
+  layer, plus the check 18 renumber and the check 21 ledger relabel. `--fix` widens what may
+  be patched, never who approves or where.
 - Never run the host's `gateCommand`/`testCommand`/`setupCommand` — verify they resolve
   (exceptions: `manifest-check` in the activation check; a single falsifying line when
   `--fix` evidence demands it).

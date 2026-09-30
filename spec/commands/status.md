@@ -58,43 +58,8 @@ connectors survive — every visual judgment (emoji, ordering, the paste lines, 
 glyph) lives in the script; never re-derive, reorder, restyle, or embellish its lines, and
 never rebuild it as a markdown table. Then add the one thing the script can't: narration.
 
-The default screen is exactly four blocks, in order:
-
-- **🗺️ Roadmap** — unchanged: rows, collapse, and the `🧭 misunderstandings: {N} caught
-  before build (latest {id} at {step})` line when `design/mocks/ledger.md` has ≥1 catch.
-- **🎯 Next** — every startable command, in one block, in both this render and `--all`: first
-  every `/spec:escape` entry, one bare command line each; then the lane render from the same
-  fan-out derivation that has always computed it — `⚡ {n} parallel lanes — first stays on
-  main, each other lane gets a worktree (/git:enter-worktree):` plus one command line per
-  admitted lane and `🔶` merge-conflict branch lines when more than one lane is admitted, or
-  the single lane's command plus `   └─ 🚦 solo` when other work waits behind it; when nothing
-  is unblocked, the top entry's command plus its `⏳` blocker branch lines instead. Every
-  command line — escape, lane, or blocked top pick — renders as one terminal line; a queue
-  prompt entry leads with its queue id (the handle `spec-queue move|done|show` takes),
-  whitespace flattened and cut to width with a trailing `…`, while a row that is a command
-  stays bare and id-free so it survives a copy.
-- **Up to three decide lines** — `⚠️ {line}` then `   {ask}  {paste}`, one anomaly whose
-  remedy is a choice the user makes (`skipped-brief`, `out-of-order`). Overflow beyond three
-  moves to the footer's `· {k} more to decide (--all)` clause — never a truncation notice of
-  its own.
-- **The footer** — one line, glyph + one sentence, always the last non-empty line: `🔴 CI is
-  red on {path} — {branch}@{sha} ({url})` when any done spec's observation is red (the Next
-  line above is already the `/spec:escape` entry); else `🟠 next is blocked · waiting on
-  {short blocker}`; else `🟢 next is ready` with clauses; else `⬜ nothing waits` with
-  clauses. Clauses print only when non-zero: how many more specs are open below the top pick
-  (`· {n} more open`, or `· nothing else open` on the `🟢` head at `n = 0`), how many more
-  decide lines exist (`--all`), how many hygiene findings exist (`/spec:doctor`), how many specs
-  have closed CLEAN since the last release (`· {n} done since last release`, or `· {n} done,
-  never released` when no release row exists yet), and whether a reviewer replay is due
-  (`· replay due ({reviewsSince}/5) — /spec:replay`) — the review driver never blocks on this
-  one, it is only ever seen here.
-
-Nothing else prints by default — no anomaly-fold tag trailing the Next line, no separate
-anomalies section, no `🕓`/`⛔` section, no observation block, no headline
-verdict line above the roadmap. The anomaly-fold tag, the observation block and the headline
-verdict line are deleted outright — they print nowhere, not even under `--all`; only the
-`🕓`/`⛔` sections and the hygiene catalogue move behind `--all` — nothing the `🎯 Next` block
-already printed reprints there.
+The script's output defines the four blocks — roadmap, `🎯 Next`, up to three `⚠️` decide
+lines, footer — never reprint, reorder or add to them.
 
 1. **After the block, narrate in one or two sentences** what the dashboard means for the
    user's next hour — name the paste line and, only when a decide line printed, the one
@@ -109,20 +74,10 @@ already printed reprints there.
 
 ## `--all` (everything the default screen omits)
 
-`--all` prints the same Roadmap and Next blocks, then two sections the default screen never
-shows — inserted directly after the `🎯 Next` block's own lines and before the decide
-lines — then every decide line (cap lifted), then the hygiene catalogue, then the same
-footer: Roadmap → Next → `🕓 after that:` → `⛔ blocked:` → decide lines → Hygiene → footer.
+`--all` adds the `🕓 after that:` and `⛔ blocked:` sections (what isn't startable now), lifts the
+decide cap, and appends the hygiene catalogue — narrate them only when asked what else is coming
+or what is stuck.
 
-- **`🕓 after that:`** — serial runner-ups: work that isn't blocked but also didn't admit into
-  a lane, each with its `⛓️`/`🤷` branch line, text unchanged from today.
-- **`⛔ blocked:`** — entries with unmet dependencies, each with its `⏳` branch line, text
-  unchanged from today. When the `🎯 Next` block's own top pick is itself the blocked entry
-  (branch (c) of the Next block — nothing is unblocked), that entry is filtered out of this
-  section so it never reprints; the whole section is skipped when nothing survives the filter.
-  Narrate both sections exactly as before when the user asks "what else is coming" or "what's
-  stuck" — this is what isn't startable now, which is the only thing `--all` adds beyond the
-  hygiene catalogue and the lifted decide cap.
 - **`🧹 Hygiene ({h}) — /spec:doctor`** — one `[kind] {detail}` line per hygiene-audience
   anomaly. These describe a file to fix, not a choice — the full catalogue of hygiene kinds
   lives in `/spec:doctor` check 13; this list is `--all`'s pointer to it, never a second

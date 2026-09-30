@@ -56,9 +56,8 @@ never a driver slot — plus `📎 N advisory finding(s) recorded` when the retu
   base, root (or frozen worktree), pipeline-rules path, and the evidence paths the driver's
   step prints — blind to the build session, artifacts on disk only. Write the reviewer's
   structured return to the file the driver names, then mark `reviewer-returned --file <json>`.
-  `REVIEWER_FAILED` is a failed run, never CLEAN — re-dispatch before marking. It may
-  create/delete its own repro file; fixes are always separate dispatches, no execution side
-  effects on shared stateful substrates. Iteration ≥ 2 is the fix-delta pass: hand over the
+  `REVIEWER_FAILED` is a failed run, never CLEAN — re-dispatch before marking. Fixes are
+  always separate dispatches. Iteration ≥ 2 is the fix-delta pass: hand over the
   delta file and the prior reviewer and disposer returns the step names — that delta file, not
   the whole diff, is the range (`spec/agents/reviewer.md` § The fix-delta pass).
 - **The evidence standard is executed, not argued:** every non-soft finding carries a repro
@@ -81,13 +80,10 @@ never a driver slot — plus `📎 N advisory finding(s) recorded` when the retu
   An empty hard pool the driver dispositions itself at `reviewer-returned` — no mark, no disposer.
 - **The verdict word is derived by `verdict.js`, never asserted in prose** — the driver runs
   every verdict pass and prints its word. Never hand-write the word; a CLEAN row with non-zero
-  `survived` records dispositioned findings, never ignored ones. review-legs runs the host's
-  env preflight first; an unset declared var stops
-  the run before any leg (exit 2, provision command named, no manifest rows) — provision it
-  and re-run.
+  `survived` records dispositioned findings, never ignored ones.
 - **Close (the CLOSE step).** Apply the spec's Canonical Delta to `docs/canonical/{area}.md`.
   Fold the deviations sidecar: recurring-shaped entries become one-line Gotchas entries
-  (tagged `[host]`/`[plugin]`; tag + rule + one owner citation — never dates, people, hosts, versions, or prior behavior);
+  (format per the host Gotchas section's header comment);
   one-offs go to the spec's Rationale; delete the sidecar. Queue
   any follow-up the fold or the Rationale surfaces, never leave it narrated: `node
   "$(spec-paths spec-queue)" add …`, listed under the DONE report's `queued` slot. Follow the
@@ -97,7 +93,7 @@ never a driver slot — plus `📎 N advisory finding(s) recorded` when the retu
   choosing one of exactly three fates per entry: **delete** (wrong, dead-cited, or
   mechanized), **merge** (durable truth → `docs/canonical/{area}.md`), or **mechanize** (a
   recurring class → a script per core § Incident Policy) — record each eviction as one
-  Rationale line; the ratchet only tightens, never a flag day. **Dispose every
+  Rationale line. **Dispose every
   `.claude/agent-memory/` file this spec's diff touched** (carry, correct, or delete, judged on
   what it teaches, never on who wrote it — an unnamed "concurrent process" attribution or a
   stood-down claim is corrected or dropped) plus what `node "$(spec-paths memory-sweep)"

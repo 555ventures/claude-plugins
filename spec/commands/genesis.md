@@ -46,8 +46,7 @@ DISCOVERY step fills the gaps.
    of the loop's steps (author `.claude/genesis/init-profile.json`, then `--mark
    profile-written`), not the stop condition.
 
-A dismissed `AskUserQuestion` STOPS the run — never invent the declined answer; state is
-already safe on disk. Every accepted mark prints `✅ checkpoint — genesis state saved
+State is always safe on disk. Every accepted mark prints `✅ checkpoint — genesis state saved
 (<prev> → <next>); safe to /clear and re-run /spec:genesis` as its last line: the session may
 `/clear` after any checkpoint and re-invoke `/spec:genesis` cold — it re-derives everything
 from disk, never from chat context.
@@ -108,7 +107,6 @@ passes `--refresh` to `init-gen generate` the same way any other regeneration do
   `--mark menu-written --file <f>` is the whole step: the driver runs the registry check itself
   and records its exit. A second hand-run would re-probe registries the driver already resolved
   and write a currency stamp nothing recorded.
-- Greenfield-only: a populated repo → STOP, point to `/spec:init`.
 - Hard-to-reverse forks always go to the user; never synthesized away.
 - `args` to `wf-research` is a control channel — paths, enum keys, booleans only.
 - Every `Agent`/workflow `model:` is explicit (Opus session is the sole proposer — shared §

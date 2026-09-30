@@ -294,3 +294,49 @@ test('a worktree merge commits the promoted ledger rows and evidence on main, so
       'the ledger commit must hold only promoted evidence paths, never anything else on main: ' + p)
   }
 })
+
+// finishMerge's ledger commit lands on main BEFORE cleanup, so after a squash main's tree is not
+// the branch's tree. A cleanup that demands tree identity refuses the branch delete there, the
+// driver dies short of DONE, and the relocated sidecar stays behind in the main checkout.
+test('a squash worktree merge reaches DONE with the branch deleted, although the ledger commit lands on main before cleanup', () => {
+  const { root, wt, spec, branch } = driveToMerge('squashclose', 'AC-20260823-99-8')
+
+  const merged = run(root, spec, '--mark', 'merge-strategy', 'squash')
+  assert.strictEqual(merged.status, 0,
+    'a squash close must conclude — a cleanup refusal here leaves the spec closed but never recorded as merged: ' +
+    merged.stdout + merged.stderr)
+  assert.match(merged.stdout, /DONE/, 'the squash close must reach DONE: ' + merged.stdout)
+  assert.ok(!fs.existsSync(wt), 'the worktree must be removed')
+
+  const git = (...a) => execFileSync('git', ['-C', root, ...a], { encoding: 'utf8' })
+  assert.strictEqual(git('branch', '--list', branch).trim(), '',
+    'the squash-merged spec branch must be deleted, not left for a hand `branch -D`')
+  assert.match(git('log', '-1', '--format=%s').trim(), /^chore\(ledger\): record 20260823\/99 build and review rows$/,
+    'setup: the ledger commit must be what sits on top of the squash, or this test is not exercising the moved-target path')
+  assert.strictEqual(git('status', '--porcelain').trim(), '',
+    'main must be clean after DONE — a leftover review sidecar in the main checkout is the residue of a close that stopped early')
+})
+
+// The squash twin of AC-20260823-04-5: a landed squash leaves rev-list --count target..source above
+// zero, so the ancestry test alone sends a retry back into merge-back.sh merge and its dirty-root
+// refusal.
+test('a merge-strategy retry after a landed squash skips the merge and reaches DONE, even with promoted evidence dirtying the main root', () => {
+  const { root, wt, spec, branch } = driveToMerge('squashretry', 'AC-20260823-99-6')
+
+  execFileSync('git', ['-C', root, 'merge', '--squash', branch], { encoding: 'utf8' })
+  execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'squash'], { encoding: 'utf8' })
+  const ahead = execFileSync('git', ['-C', root, 'rev-list', '--count', `main..${branch}`], { encoding: 'utf8' }).trim()
+  assert.notStrictEqual(ahead, '0',
+    'setup precondition: after a squash git must still count the source as ahead of the target, or this fixture is exercising the ancestry path AC-20260823-04-5 already pins')
+  dirtyRootWithPromotedEvidence(root)
+
+  const merged = run(root, spec, '--mark', 'merge-strategy', 'squash')
+  assert.strictEqual(merged.status, 0,
+    'a retry after a landed squash must conclude — dying here wedges the spec at MERGE with no way forward but hand cleanup: ' + merged.stdout + merged.stderr)
+  assert.doesNotMatch(merged.stdout + merged.stderr, /root working tree is dirty/,
+    'the driver must skip merge-back.sh merge once the squash is on the target — this refusal text means it re-ran the merge: ' + merged.stdout + merged.stderr)
+  assert.match(merged.stdout, /DONE/, 'the retry must reach DONE: ' + merged.stdout)
+  assert.ok(!fs.existsSync(wt), 'the concluded retry must remove the worktree')
+  assert.strictEqual(execFileSync('git', ['-C', root, 'branch', '--list', branch], { encoding: 'utf8' }).trim(), '',
+    'the concluded retry must delete the squash-merged branch')
+})

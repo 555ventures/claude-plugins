@@ -273,6 +273,64 @@ test('cleanup deletes a squash-merged branch, whose content is on the target but
   assert.strictEqual(branches.trim(), '', 'the branch is actually gone')
 })
 
+// The target moves on after a squash (spec-review-driver's finishMerge commits the promoted ledger
+// rows there before it calls cleanup), so tree identity no longer holds although the branch has
+// nothing left to give. Containment is then proven by the merge itself changing nothing.
+test('cleanup deletes a squash-merged branch after the target gained a commit the branch never had', () => {
+  const dir = tmpdir('mbsqmoved')
+  const g = gitRepo(dir)
+  g('checkout', '-q', '-b', 'spec/sqm')
+  fs.writeFileSync(path.join(dir, 'one.txt'), '1\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'first')
+  fs.writeFileSync(path.join(dir, 'two.txt'), '2\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'second')
+  g('checkout', '-q', 'main')
+
+  const merge = runBash(SCRIPT, ['merge', '--root', dir, '--target', 'main', '--source', 'spec/sqm',
+    '--strategy', 'squash'])
+  assert.strictEqual(merge.status, 0, merge.stderr)
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/spec-runs.jsonl'), '{"stage":"review"}\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'chore(ledger): rows')
+
+  const cleanup = runBash(SCRIPT, ['cleanup', '--root', dir, '--source', 'spec/sqm'], { cwd: dir })
+  assert.strictEqual(cleanup.status, 0,
+    'a ledger commit on the target after the squash must not strand the branch — the review driver ' +
+    'makes exactly that commit before cleanup, so a refusal here stops every squash close short of DONE: ' +
+    cleanup.stderr)
+  assert.match(cleanup.stdout, /squash-merged/,
+    'the success line must still say why the safe delete was bypassed: ' + cleanup.stdout)
+  const branches = require('child_process').execFileSync('git',
+    ['-C', dir, 'branch', '--list', 'spec/sqm'], { encoding: 'utf8' })
+  assert.strictEqual(branches.trim(), '', 'the branch is actually gone')
+})
+
+test('cleanup still refuses a squash-merged branch that gained a commit after the squash', () => {
+  const dir = tmpdir('mbsqlate')
+  const g = gitRepo(dir)
+  g('checkout', '-q', '-b', 'spec/late')
+  fs.writeFileSync(path.join(dir, 'one.txt'), '1\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'first')
+  g('checkout', '-q', 'main')
+  const merge = runBash(SCRIPT, ['merge', '--root', dir, '--target', 'main', '--source', 'spec/late',
+    '--strategy', 'squash'])
+  assert.strictEqual(merge.status, 0, merge.stderr)
+  fs.writeFileSync(path.join(dir, 'ledger.txt'), 'row\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'target moves on')
+  g('checkout', '-q', 'spec/late')
+  fs.writeFileSync(path.join(dir, 'late.txt'), 'late\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'late work')
+  g('checkout', '-q', 'main')
+
+  const cleanup = runBash(SCRIPT, ['cleanup', '--root', dir, '--source', 'spec/late'], { cwd: dir })
+  assert.strictEqual(cleanup.status, 2,
+    'work committed on the branch after its squash is on no other ref — deleting the branch would lose it: ' +
+    cleanup.stdout)
+  const branches = require('child_process').execFileSync('git',
+    ['-C', dir, 'branch', '--list', 'spec/late'], { encoding: 'utf8' })
+  assert.match(branches, /spec\/late/, 'the branch with late work survives')
+})
+
 test('cleanup still refuses a branch carrying content the target does not have', () => {
   const dir = tmpdir('mbunm')
   const g = gitRepo(dir)

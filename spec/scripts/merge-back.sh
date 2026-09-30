@@ -289,13 +289,30 @@ case "$SUB" in
         # thing `-d` was protecting (it compares the whole tree, not one merge-base walk), so the
         # safety property is preserved — a branch carrying ANY content the target lacks still
         # falls through to the refusal below, untouched.
+        #
+        # Tree identity alone is too narrow: the target legitimately moves on after a squash (the
+        # review driver commits the promoted ledger rows there before it calls cleanup, and a
+        # sibling spec may have landed while this one ran), so the two trees differ although the
+        # branch has nothing left to give. The second proof is the one a squash itself would give
+        # on a re-run — merging the source into the target produces the target's own tree, i.e.
+        # "nothing to squash". A conflicted or changing merge proves nothing and still refuses, and so
+        # does a git without `merge-tree --write-tree`.
         CLEAN_TARGET="$(git -C "$ROOT" symbolic-ref --short -q HEAD || true)"
-        if [ -n "$CLEAN_TARGET" ] && git -C "$ROOT" diff --quiet "$CLEAN_TARGET" "$SOURCE" -- 2>/dev/null; then
+        CONTAINED=""
+        if [ -n "$CLEAN_TARGET" ]; then
+          if git -C "$ROOT" diff --quiet "$CLEAN_TARGET" "$SOURCE" -- 2>/dev/null; then
+            CONTAINED="its tree is identical to $CLEAN_TARGET"
+          elif MERGED_TREE="$(git -C "$ROOT" merge-tree --write-tree "$CLEAN_TARGET" "$SOURCE" 2>/dev/null)" \
+            && [ "$(printf '%s\n' "$MERGED_TREE" | head -n 1)" = "$(git -C "$ROOT" rev-parse "$CLEAN_TARGET^{tree}")" ]; then
+            CONTAINED="merging it into $CLEAN_TARGET changes nothing"
+          fi
+        fi
+        if [ -n "$CONTAINED" ]; then
           git -C "$ROOT" branch -D "$SOURCE" \
-            || die "branch -D '$SOURCE' failed after its content was verified identical to $CLEAN_TARGET — inspect 'git -C $ROOT branch -vv' manually"
-          note "deleted branch $SOURCE (squash-merged: no ancestry link, but its tree is identical to $CLEAN_TARGET)"
+            || die "branch -D '$SOURCE' failed after its content was verified present on $CLEAN_TARGET — inspect 'git -C $ROOT branch -vv' manually"
+          note "deleted branch $SOURCE (squash-merged: no ancestry link, but $CONTAINED)"
         else
-          die "branch -d '$SOURCE' refused and its tree is NOT identical to the target — the branch still carries unmerged content; verify with 'git -C $ROOT diff ${CLEAN_TARGET:-HEAD} $SOURCE', then 'git -C $ROOT branch -D $SOURCE' only if intended"
+          die "branch -d '$SOURCE' refused, its tree is NOT identical to the target, and merging it would still change the target — the branch still carries unmerged content; verify with 'git -C $ROOT diff ${CLEAN_TARGET:-HEAD} $SOURCE', then 'git -C $ROOT branch -D $SOURCE' only if intended"
         fi
       fi
     else

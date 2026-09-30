@@ -1834,6 +1834,22 @@ function handleMergeStrategy() {
     finishMerge(mainRoot, source, wt)
     return
   }
+  // A squash links no ancestry, so the count above never reaches 0 for one that landed. Its
+  // content proof is the one merge-back.sh cleanup uses: merging source into target yields the
+  // target's own tree. Without it a retry after a landed squash re-invokes merge-back.sh merge and
+  // dies on assert_clean_root against the sidecar finishMerge relocated into the main root.
+  const mergedTreeR = runChild('git', ['-C', mainRoot, 'merge-tree', '--write-tree', target, source],
+    { encoding: 'utf8' }, 'git merge-tree --write-tree')
+  const targetTreeR = runChild('git', ['-C', mainRoot, 'rev-parse', target + '^{tree}'],
+    { encoding: 'utf8' }, 'git rev-parse ^{tree}')
+  if (mergedTreeR.status === 0 && targetTreeR.status === 0 &&
+      mergedTreeR.stdout.split('\n')[0].trim() === targetTreeR.stdout.trim()) {
+    process.stdout.write('[spec-review-driver] merging ' + source + ' into ' + target +
+      ' changes nothing — the squash already landed; skipping merge-back.sh merge and resuming at ' +
+      'promotion/cleanup.\n')
+    finishMerge(mainRoot, source, wt)
+    return
+  }
 
   const mergeArgs = ['merge', '--root', mainRoot, '--target', target, '--source', source, '--strategy', strategy]
   if (wt) mergeArgs.push('--worktree', wt)

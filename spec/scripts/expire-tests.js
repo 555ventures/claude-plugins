@@ -41,8 +41,9 @@
 //
 // `--apply` removes each retired test's span (its comment block through the call's closing paren,
 // trailing `;` and newline all included — lib/scan-test-calls.js's own `start`/`end`, widened here
-// by one more character when a trailing newline follows), collapses a run of three-or-more blank
-// lines down to one, deletes a file left with zero remaining test() calls, and climbs to delete
+// by one more character when a trailing newline follows), removes a line-start `describe(` that
+// held a retired test and is left with no test/it/describe token (`emptiedSuites`), collapses a
+// run of three-or-more blank lines down to one, deletes a file left with zero remaining test() calls, and climbs to delete
 // any directory the deletion leaves empty. A dry run mutates nothing on disk, and — since
 // specs/20260912/15 D1/D2 — this script's own `--apply` flag is the ONLY way anything it derives
 // reaches the tree: the close-time review driver never passes `--apply` and never will; a human
@@ -60,7 +61,7 @@
 
 const fs = require('fs')
 const path = require('path')
-const { listTestFiles, scanCalls } = require('./lib/scan-test-calls')
+const { listTestFiles, scanCalls, scanDescribes } = require('./lib/scan-test-calls')
 const { deriveInvariants } = require('./lib/invariants')
 const { extractSection, parseAcBullets, AC_ID_RE_GLOBAL, normalizeForPinCheck } = require('./lib/spec-sections')
 const { fmValue } = require('./lib/frontmatter')
@@ -344,6 +345,7 @@ const tagged = retired.length + kept.class + kept.invariant + kept.pin + kept.op
 // dry run reports the same `emptied` array an apply would (the close reads this count before it
 // applies). Only fs.writeFileSync / fs.unlinkSync / the empty-directory climb are gated on `apply`.
 const emptied = []
+const emptiedSuites = [] // [{ file, title }] — describes this pass leaves with zero cases
 for (const [file, calls] of retiredByFile) {
   const abs = path.join(root, file)
   let src
@@ -352,8 +354,33 @@ for (const [file, calls] of retiredByFile) {
   } catch {
     continue
   }
-  const spans = calls
-    .map((c) => ({ start: c.start, end: src[c.end] === '\n' ? c.end + 1 : c.end }))
+  // A line-start describe( that held a retired span and, once every removal inside it is cut,
+  // holds no test/it/describe token at all is removed too (inner first, so an outer describe
+  // emptied only by an emptied inner one goes as well) — the same invariant as the whole-file
+  // deletion below, one level down: vitest fails an empty suite. Any stray token keeps it.
+  const removals = calls.map((c) => ({ start: c.start, end: c.end }))
+  const retiredOnly = removals.slice()
+  for (const d of scanDescribes(src).sort((a, b) => b.start - a.start)) {
+    const inside = (r) => r.start >= d.start && r.end <= d.end
+    if (!retiredOnly.some(inside)) continue
+    const callStart = src.indexOf('describe(', d.start + d.commentAbove.length)
+    const callEnd = callStart + d.callText.length
+    let body = ''
+    let pos = callStart + 'describe('.length
+    for (const cut of removals.filter(inside).sort((a, b) => a.start - b.start)) {
+      if (cut.start < pos) continue
+      body += src.slice(pos, cut.start)
+      pos = cut.end
+    }
+    body += src.slice(pos, callEnd)
+    if (/\b(test|it|describe)\s*[.(]/.test(body)) continue
+    removals.push({ start: d.start, end: d.end })
+    emptiedSuites.push({ file, title: d.title })
+  }
+  const spans = removals
+    .filter((r) => !removals.some((o) => o !== r && o.start <= r.start && o.end >= r.end &&
+      (o.start < r.start || o.end > r.end)))
+    .map((r) => ({ start: r.start, end: src[r.end] === '\n' ? r.end + 1 : r.end }))
     .sort((a, b) => b.start - a.start)
   for (const { start, end } of spans) {
     src = src.slice(0, start) + src.slice(end)
@@ -390,7 +417,7 @@ for (const [file, calls] of retiredByFile) {
 
 // ---- render --------------------------------------------------------------------------------------
 const scope = closingSpecRel !== null ? 'spec:' + closingSpecRel : 'all-done'
-const result = { scope, scanned, tagged, kept, retired, emptied, applied: apply }
+const result = { scope, scanned, tagged, kept, retired, emptied, emptiedSuites, applied: apply }
 
 if (asJson) {
   writeOut(1, JSON.stringify(result))

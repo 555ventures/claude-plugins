@@ -282,6 +282,65 @@ test('${neighbourTitle}', () => {
     'AC-6: the file left behind after removing the retired test\'s span must still be syntactically valid JS')
 })
 
+test('WHEN --apply retires every case inside a describe THE SYSTEM removes that describe (nested ones included) and lists it under emptiedSuites, while a describe that keeps a live case survives and the file still passes node --check', () => {
+  const root = tmpdir('expiry-describe')
+  const specRel = 'specs/20260911/80-closing4.md'
+  writeSpec(root, specRel, `---
+status: done
+tier: standard
+diff_base: 0000000000000000000000000000000000000000
+---
+# Closing Fixture Spec 4
+
+## Acceptance Criteria
+
+- **AC-20260911-80-1**: THE SYSTEM has nothing keeping these tests alive.
+`)
+  // tests/expiry/*.test.js hold zero describe( calls of their own, so the fixture builds them.
+  const fileRel = 'tests/suites.test.js'
+  writeTest(root, fileRel, `'use strict'
+const { describe, test } = require('node:test')
+const assert = require('node:assert')
+
+// the suite this pass must empty out
+describe('only retired', () => {
+  test('AC-20260911-80-1: retired alone', () => { assert.ok(true) })
+})
+
+describe('mixed', () => {
+  test('AC-20260911-80-1: retired beside a live one', () => { assert.ok(true) })
+  test('a live case that keeps this suite', () => { assert.ok(true) })
+})
+
+describe('outer', () => {
+  describe('inner', () => {
+    it('AC-20260911-80-1: retired deep', () => { assert.ok(true) })
+  })
+})
+
+test('a top-level live case', () => { assert.ok(true) })
+`)
+
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--spec', specRel, '--apply', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, 'applying the describe fixture must succeed: ' + r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.strictEqual(out.retired.length, 3, 'all three tagged cases must be retired: ' + JSON.stringify(out.retired))
+  assert.deepStrictEqual(out.emptiedSuites.map((e) => e.title).sort(), ['inner', 'only retired', 'outer'],
+    'every describe left with zero cases — the inner one and the outer it empties — must be reported: ' +
+    JSON.stringify(out.emptiedSuites))
+  assert.deepStrictEqual(out.emptied, [], 'the file still holds live cases, so it must not be emptied')
+
+  const after = fs.readFileSync(path.join(root, fileRel), 'utf8')
+  for (const gone of ["'only retired'", "'outer'", "'inner'", 'the suite this pass must empty out', 'AC-20260911-80-1']) {
+    assert.ok(!after.includes(gone), 'the emptied suite text ' + gone + ' must be gone: ' + JSON.stringify(after))
+  }
+  for (const kept of ["describe('mixed'", 'a live case that keeps this suite', 'a top-level live case']) {
+    assert.ok(after.includes(kept), 'live text ' + kept + ' must survive: ' + JSON.stringify(after))
+  }
+  assert.doesNotThrow(() => execFileSync(process.execPath, ['--check', path.join(root, fileRel)]),
+    'the file left behind must still be syntactically valid JS')
+})
+
 // Collision fixture: two specs define the identical AC-ID (spec-number-check.js's job to refuse
 // at the gate, not this script's — D3's fail-safe rule must still hold in its presence). One
 // citing test keyed to the collided ID must be kept `open` whenever ANY of its collided ID's

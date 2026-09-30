@@ -4,7 +4,8 @@
 // skipping `.git`, `node_modules`, `fixtures`, `__fixtures__`, `.claude/worktrees`),
 // `scanCalls(src)` (every line-start `test(`/`it(` call in one source string), and
 // `countCases(root, config)` (the two composed). count-tests.js and ac-drift.js's expiry sweep
-// both import this so the two never disagree about what a test case is. Named away from the
+// both import this so the two never disagree about what a test case is. `scanDescribes(src)`
+// finds line-start `describe(` calls with the same walk (expire-tests.js's empty-suite pass). Named away from the
 // `test-*` prefix (the amendment's forcing incident: `node --test`'s default discovery matches
 // `**/test-*.js` anywhere under the root and would execute this library as a test file).
 //
@@ -214,6 +215,20 @@ function findCommentAbove(src, lineStart) {
 // scanCalls(src) -> [{ start, end, callText, title, commentAbove }] — see the Contracts block
 // in specs/20260911/02-tests-have-a-ceiling.md for the field shapes.
 function scanCalls(src) {
+  return scanLineStartCalls(src, ['test', 'it'], true)
+}
+
+// scanDescribes(src) -> the same record shape for every line-start `describe(` call, nested ones
+// included (a describe's body is walked, never skipped). Never a case: expire-tests.js reads it
+// only to delete a describe its own removals left empty. `describe.each(` never matches.
+function scanDescribes(src) {
+  return scanLineStartCalls(src, ['describe'], false)
+}
+
+// The one opaque-span-aware walk behind both: `names` are the call names matched at line start;
+// `skipBody` jumps past a matched call's own closing paren (cases never nest), otherwise the
+// walk continues into the body so a nested match is found too.
+function scanLineStartCalls(src, names, skipBody) {
   const calls = []
   const n = src.length
   let i = 0
@@ -240,13 +255,12 @@ function scanCalls(src) {
       i++
       continue
     }
-    const isTest = c === 't' && src.startsWith('test(', i)
-    const isIt = c === 'i' && src.startsWith('it(', i)
-    if (isTest || isIt) {
+    const name = names.find((nm) => c === nm[0] && src.startsWith(nm + '(', i))
+    if (name) {
       const lineStart = src.lastIndexOf('\n', i - 1) + 1
       const before = src.slice(lineStart, i)
       if (/^\s*$/.test(before)) {
-        const openParen = i + (isTest ? 4 : 2)
+        const openParen = i + name.length
         const callEnd = findCallEnd(src, openParen)
         const title = extractTitle(src, openParen)
         // D10 (specs/20260911/04-every-criterion-declares-its-test.md): only a trailing `;` is
@@ -266,10 +280,12 @@ function scanCalls(src) {
           title,
           commentAbove: src.slice(findCommentAbove(src, lineStart), lineStart),
         })
-        i = end
-        sig = ')'
-        lastCloseWasKeyword = false
-        continue
+        if (skipBody) {
+          i = end
+          sig = ')'
+          lastCloseWasKeyword = false
+          continue
+        }
       }
     }
     sig = (sig + c).slice(-24)
@@ -289,4 +305,4 @@ function countCases(root, config) {
   return { count, files }
 }
 
-module.exports = { listTestFiles, scanCalls, countCases }
+module.exports = { listTestFiles, scanCalls, scanDescribes, countCases }

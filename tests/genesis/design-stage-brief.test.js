@@ -391,6 +391,14 @@ test('AC-20260926-04-9: WHEN the bare run first prints DESIGN_BRIEF on a host wi
   assert.strictEqual(second.status, 0, 'a second bare invocation at DESIGN_BRIEF must exit 0: ' + second.stderr)
   assert.strictEqual(fs.readFileSync(counter, 'utf8').trim(), '1',
     'D5: a second bare invocation must NOT re-run the inventory — the stub call-counter staying at 1 is the proof; any higher count means the driver re-fetches the catalog on every print')
+
+  fs.rmSync(path.join(dir, 'docs/design/catalog.md'))
+  const third = bare(dir, { env })
+  assert.strictEqual(third.status, 0, 'a bare invocation after deleting the catalog must exit 0: ' + third.stderr)
+  assert.ok(fs.existsSync(path.join(dir, 'docs/design/catalog.md')),
+    'D5: a catalog.md deleted after a successful run must be regenerated — only a recorded failure blocks the re-run')
+  assert.strictEqual(fs.readFileSync(counter, 'utf8').trim(), '2',
+    'the regeneration must invoke the shadcn stub exactly once more: ' + fs.readFileSync(counter, 'utf8'))
 })
 
 // review finding (reviewer-2.json survivor): the s0 fix moved the inventory's run-gate from

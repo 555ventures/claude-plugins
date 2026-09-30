@@ -21,7 +21,9 @@
 // Exit codes:
 //   0  the file was written (including the no-components.json case), or --check found the
 //      on-disk catalog current.
-//   1  --check found the on-disk catalog stale or missing, or the shadcn command itself failed.
+//   1  --check found the on-disk catalog stale or missing, or the shadcn command itself failed
+//      (--check then reports the failure by name, never a stale verdict listing every component
+//      as removed).
 //   2  usage error (missing --root or --out).
 
 const fs = require('fs')
@@ -155,10 +157,20 @@ async function main() {
       return
     }
     const existingNames = parseExistingNames(fs.readFileSync(outPath, 'utf8'))
+    // --check compares names only — `info --json` lists them, so no doc page is fetched here.
     let liveNames = []
     if (hasComponentsJson) {
-      const catalog = await buildCatalog(root, args.shadcn)
-      if (catalog.ok) liveNames = catalog.components.map((c) => c.name)
+      const info = readShadcnInfo(args.shadcn, root)
+      if (!info || !Array.isArray(info.components)) {
+        const text = args.json
+          ? JSON.stringify({ ok: false, status: 'shadcn-failed' }) + '\n'
+          : 'unknown — ' + args.shadcn + ' info --json failed or printed unparseable output; ' +
+            'fix the shadcn command, or pass --shadcn "<working command>", then re-run --check\n'
+        writeOut(1, text)
+        process.exitCode = 1
+        return
+      }
+      liveNames = info.components
     }
     const added = liveNames.filter((n) => !existingNames.includes(n))
     const removed = existingNames.filter((n) => !liveNames.includes(n))

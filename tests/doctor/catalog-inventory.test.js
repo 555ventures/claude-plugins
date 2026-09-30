@@ -101,6 +101,14 @@ test('AC-20260926-04-7: WHEN --check runs against an existing inventory whose ##
   assert.match(stale.stdout + stale.stderr, /stale/, 'the stale case must print the word "stale": ' + stale.stdout + stale.stderr)
   assert.match(stale.stdout + stale.stderr, /added:\s*sheet/,
     'the stale case must name the added component "sheet" so a session knows what changed: ' + stale.stdout + stale.stderr)
+
+  const env4 = Object.assign({}, env2, { STUB_EXIT_CODE: '1', STUB_COUNTER: path.join(dir, 'c4.txt') })
+  const failed = run(['--root', dir, '--out', out, '--check', '--shadcn', shadcnArg()], { env: env4 })
+  assert.strictEqual(failed.status, 1, '--check with a failing shadcn command must exit 1: ' + failed.stderr + failed.stdout)
+  assert.match(failed.stdout, /info --json failed/,
+    'a failing shadcn command must be named as the failure: ' + failed.stdout)
+  assert.doesNotMatch(failed.stdout, /removed/,
+    'a failing shadcn command must never read as every component removed: ' + failed.stdout)
 })
 
 test('AC-20260926-04-8: WHEN catalog-inventory.js runs without --root or without --out THE SYSTEM exits 2 with a usage line on stderr', () => {

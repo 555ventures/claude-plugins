@@ -16,19 +16,12 @@ at `DESIGN_BRIEF` (spec/doctrine/genesis.md § Genesis: Design Stage); the desig
 follows — the intent-to-pattern and naming tables, checked by `design-contract-check.js` — is
 code, never a second hand-kept copy of what the mock app already showed.
 
-**Three import layers, one direction.** A screen (`src/screens/<label>.tsx`, under
-`design.app`) composes from exactly three layers and nothing else: `@/components/ui` (the
-shadcn primitives), `@/components` + `@/shells` (project components and shells built on top of
-them), and `@/records` (`src/records` under `design.app` — typed data, the only source a screen
-may read; never a hand-typed literal standing in for what a record should supply). `react` is
-the runtime, not a layer. An import outside these five specifiers is a `layer`-kind error
-finding (`mock-review check`).
+**Import layers and doc lines** follow mocks.md § Mocks: Authoring Rules —
+`@/components/ui`, `src/records`, `examples` exports; `mock-review check` flags a break.
 
 **Screens carry `meta` and named states.** A screen's `meta` export names its states; each
 state renders exactly what the seed or the journey's step demands — no unbound branch, no
-paraphrase. A project component or shell carries one `/** … */` doc line above its export and a
-named `examples` export; a screen missing either is a `doc`-kind error finding, and a component
-with neither is invisible to `mock-review sweep`'s own worklist.
+paraphrase.
 
 **`design/approval.json` is the canon, one writer.** `mock-review approve --screen <name>` is
 the only writer — run by the session on the user's literal `approve` reply at a look stop, never

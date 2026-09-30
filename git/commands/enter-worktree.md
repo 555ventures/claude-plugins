@@ -85,7 +85,7 @@ spec plugin must be installed.
 
 ## Report
 
-report contract: spec shared.md § Console Output Style — rendered via `spec-paths report-render`
+report contract: spec core.md § Console Output Style — rendered via `spec-paths report-render`
 
 Assemble a slots object and run `node "$(spec-paths report-render)" --slots <file>` (write the
 JSON to the scratch dir first), printing its output verbatim:

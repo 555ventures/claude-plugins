@@ -18,10 +18,7 @@ identical.
 **Assumptions** table — `id · step · kind · claim · tag · status · rejected · dependents ·
 note`:
 
-- `id` — `^[A-Z]+\d+[a-z]?$`, unique across the table.
-- `step` — `^[A-Z][A-Z-]*$` (`SEED`, `SHAPES`, `KIT`, `WIREFRAMES`, `CLIENT`, `SKETCH`,
-  `GENESIS`, …); rows written under retired step names (`SKIN`, `REVIEW`, `THEME`, `SIGNOFF`)
-  still match the pattern and keep parsing.
+- `id` — unique across the table; `step` — the step name (grammar enforced by `lib/mocks-ledger.js`).
 - `kind` — one fixed word: `product`, `process`, or `exclusion`.
 - `claim` — free text; the assumption itself.
 - `tag` — one fixed word: `said-by-user`, `ratified-doc`, `inferred`, or `invented`.
@@ -40,9 +37,8 @@ gate and counts separately in the counts line's ` · <E> exclusions` tail.
 **Misunderstandings** table — `id · what · step · cost · note`: `id` is `^M\d+$`, unique;
 `note` names an originating note id or `-`.
 
-Free text lives only in `claim`, `rejected`, and `note`. A literal pipe inside any cell is
-written escaped (`\|`) and read back unescaped — every other cell is one fixed word, never
-prose, so a script can gate on it without parsing English.
+Free text lives only in `claim`, `rejected`, and `note`; every other cell is one fixed word.
+Rows are written via `ledger add`, never by hand.
 
 **Gate rule.** A ledger is **blocked** when any `product` row carries tag `invented` with
 status other than `overridden`, or tag `inferred` with status `open`. `ratified-doc` rows and
@@ -82,39 +78,8 @@ adopts one; its own close block then waits on every journey's client verdict and
 `remedy: rm design/mocks/status.json` — ADR-0028) rather than being silently reinterpreted; no
 host holds data on the old shape.
 
-**Marks.** `seed-done` records once every declared records file exists and `mock.config.ts` is
-present (§ Mocks: Seed), refusing (exit 2) a `malformed` beat line or a journey with zero beats,
-naming the journey, the first offending line, and `remedy: rewrite the block as numbered
-"sentence" -> screen[@state] lines (§ Mocks: Seed)`. `shell-drawn` records once `check --json`
-reports no `error`-severity finding and at least one shell entry with a non-empty `examples`
-list; a warn-only finding never refuses. `journey-drawn --journey <j>` records once `check
---json` lists `<j>` with `resolved: true` and its `steps` equal the seed's own beats — same
-length, and at every index the same `beat`, `screen` and `state` (an absent state on either side
-equals `null`) — refusing on an unknown id, an out-of-seed id, an unresolved edge (named `step
-<from> → <to>: <reason>`), or the first differing beat (`beat <n>: seed "<sentence>" ->
-<screen>[@<state>], journeys.ts "<sentence>" -> <screen>[@<state>] — remedy: copy the seed's
-beats verbatim into src/journeys.ts`) — no ledger gate runs here, drawing is how an assumption
-gets pinned, not resolved. `journey-approved --journey <j>` records once: `<j>` is declared in
-the seed; `check --json` lists it `resolved: true`; its steps still equal the seed's beats;
-`notes.journeys[<j>].status` is not `open`; and `approval.journeys[<j>].client` is `ok` or
-`waived` with `approval.journeys[<j>].beats` equal to `beatHash` of the seed's current beats for
-`<j>` (§ Mocks: Client Player) — a missing verdict names `remedy: client open (send the link; the
-client confirms the journey) or client waive --journey <j> --reason <r>`, a stale hash names both
-hashes — then runs the ledger's `gateVerdict` (§ Provenance Ledger) before recording
-`status.journeys[<j>].beats = <hash>`. A journey whose stored hash no longer matches the seed's
-current beats is derived as not approved, landing back on SCREENS ("approve journey `<j>`") —
-editing the seed is how a journey's own conversation note gets answered, since the edit changes
-the hash and reopens the confirmation mechanically. `theme-picked` records once `check
---json`'s `config.theme` is a non-empty string listed under `themes`; a null theme names
-`remedy: set theme: "<k>" in mock.config.ts, naming an authored src/themes/<k>.css`. `approved`
-refuses any note in `notes.notes` whose status is `open` or `answered` (`remedy: the client
-approves or defers it on the link`) and any `project: true` note whose status is neither
-`approved` nor `deferred`; the per-journey client-verdict refusal stays. Before recording, every
-note and journey conversation with status `deferred` and no ledger row yet gets one exclusion row
-(§ Provenance Ledger) appended; a row whose `note` already names that id is never written twice.
-It then records once every journey's `approval.journeys[j].client` is `ok` or `waived`, running
-`gateVerdict` first. Process rows never surface as something to resolve; they are counted, not
-asked.
+**Marks.** Each `--mark` verifies its own artifacts and refuses naming the remedy — act on the
+printed refusal, never pre-check it in prose.
 
 **Reopening never deletes.** `--reopen journey:<j>` clears that journey's own `approved` mark
 and the terminal `approved`; `--reopen shell` clears `shellDrawn`, `themePicked`, `approved`,

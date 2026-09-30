@@ -27,7 +27,9 @@ const { ROOT, read } = require('../helpers')
 // (`non-goal:` | `answer:` | `withdrawn:`) that exclude the `deferred: <id>` form the same
 // sentence — and the driver — now write. The grammar list gains `deferred: <id>`; every other
 // byte of the section is unchanged, and this constant is recomputed from the corrected body.
-const PROVENANCE_LEDGER_SHA256 = '558c6a1d0c094bac5e3fccdc7b18416a903dc1108ecd23321c74f9ab5b5ae627'
+// Recomputed 2026-09-30 after the id/step grammar lines shrank to a pointer at mocks-ledger.js
+// (the enforcing script); the deferred: <id> grammar and the Gate rule are unchanged.
+const PROVENANCE_LEDGER_SHA256 = 'c1c3890169fd695ce3e82476a715ce1c6451c7790e7be8efbf16753819cb5e8d'
 
 function extractSection(src, heading) {
   const start = src.indexOf('## ' + heading)

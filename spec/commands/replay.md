@@ -12,11 +12,9 @@ blind to the fact that anything is being tested. Catch/miss/leg-caught lands as 
 `stage:"replay"` ledger row with retained evidence — the number that makes the pipeline's
 one-reviewer bet falsifiable (shared § Feedback Loop).
 
-**One entry point.** This command is the sole executor of Phases 1–5 below — the review
-driver never parks a close on a due replay; a merged review prints `DONE` every time, and
-dueness surfaces instead on the `/spec:status` footer's `replay due` clause. Run it whenever
-due, ad-hoc or as the retry after a non-measurement outcome (`unresolved`/`setup-failed`).
-Phase 0's STOP-on-not-due is unchanged.
+**One entry point.** This command is the sole executor of Phases 1–5 below; dueness is
+shared § Feedback Loop's policy. Run it whenever due, ad-hoc or as the retry after a
+non-measurement outcome (`unresolved`/`setup-failed`). Phase 0's STOP-on-not-due is unchanged.
 
 **Setup:** run `spec-paths shared-for replay` and read its output. Read the host's
 `.claude/spec.config.json` (pipeline rules load with that Read — path-scoped). Either missing →
@@ -206,22 +204,10 @@ nothing (D10's rationale).
    caught|missed|leg-caught|unresolved|setup-failed [--class {classId}] [--patch {patchOutFile}]
    [--workflow {workflowReturnFile}] --tokens {N} --via manual` — this command is the one
    executor (ADR-0025), so every run it records is `manual`; the script still accepts `driver`
-   only so earlier driver-handed rows keep their label. D2/D3's restated validation matrix:
-
-   | `--outcome` | `--legs` accepted | `--patch` | `--workflow` |
-   |---|---|---|---|
-   | caught / missed | `green` \| `baseline-red:<leg>[,<leg>]` | required | required |
-   | unresolved | `green` \| `baseline-red:<leg>[,<leg>]` | required | required |
-   | unresolved | `red:<leg>` | required | **refused** |
-   | leg-caught | `red:<leg>` (newly-red only — doctrine-enforced) | required | not required (unchanged) |
-   | setup-failed | `none` \| `pristine-red:<leg>[,<leg>]` | refused | refused |
-
-   `caught`/`missed` and Phase 3's `unresolved` accept `green`/`baseline-red:<leg>[,<leg>]`
-   requiring `--patch`+`--workflow`; step 7's dismissed-question `unresolved` instead carries
-   `red:<leg>` and **refuses** `--workflow` — the reviewer never ran, so nothing to fabricate.
-   `setup-failed` is recorded and torn down at three Phase 1 sites — step 2's setup-gate refusal,
-   step 5's post-apply hook refusal, and step 7 rung 3's deterministic pristine still-red (`--legs
-   pristine-red:<leg>[,<leg>]`) — none reaches this phase.
+   only so earlier driver-handed rows keep their label. `--record` refuses any flag combination it does not accept, naming the flag;
+   `leg-caught` takes only a newly-red leg (the session verifies newly-red; the script checks
+   shape), `setup-failed` only `--legs none` or
+   `pristine-red:<leg>[,<leg>]`.
 2. Run `node "$(spec-paths replay)" --teardown --dir {dir}` — the worktree is removed
    unconditionally at this point, success or failure; the main tree was never touched at any
    point in this command.

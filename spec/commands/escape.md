@@ -22,9 +22,8 @@ with no commit in the loop to trigger the offer.
 
 **Derive, don't interview.** The dominant invocation is mid-session, while the defect is
 already being diagnosed or fixed — the session holds the defective file, the diagnosis, and
-often the fix diff. Every classification field is derived from that evidence first; the user
-is asked to *confirm or correct* the derivation in one call, never to supply answers the
-context already contains. `killedMatch` (step 4) derives the same way when the correlated
+often the fix diff. Every classification field is derived from that evidence first and
+printed for veto; only the gaps are asked, never answers the context already contains. `killedMatch` (step 4) derives the same way when the correlated
 review's retained evidence artifact exists; user memory is the fallback, used only when it
 does not. Recording friction is a measurement bug: an escape too annoying to
 record never lands, and "zero escapes" silently becomes false evidence that reviews work.
@@ -45,16 +44,14 @@ defective file — that is the only unrecoverable input.
 1. **Locate the spec.** If a spec path was given, use it. Otherwise take the defective
    file (from arguments, else from session context) and grep `specs/**` for its path
    (File Plan / manifest sections). The defective file is the one whose spec-landed lines
-   held the wrong behavior — where the bug *lived*, not every file the fix touched; if the
-   session's fix spans several files and doesn't disambiguate, fold the file choice into
-   this step's confirmation. One hit → that spec. Multiple hits are by definition genuine
-   ambiguity → derive the most likely candidate (File Plan ownership of the exact path
-   outranks review-row recency when they disagree) and ALWAYS confirm via `AskUserQuestion`
-   with it as the recommended option. Zero hits → the code wasn't spec-built; say so and
-   STOP (the ledger measures the pipeline, not the repo — nothing to correlate).
-2. **Check for a duplicate:** grep `.claude/spec-runs.jsonl` for an existing
-   `"stage":"escape"` row with the same spec + file pair. If one exists, show it and STOP
-   unless the user confirms this is a distinct defect.
+   held the wrong behavior — where the bug *lived*, not every file the fix touched; a fix
+   spanning several files auto-picks the file the same way, or rides the same ask. One hit →
+   that spec. Multiple hits → derive the most likely candidate (File Plan ownership of the
+   exact path, then review-row recency) and print `📌 Auto-picked <spec> — <reason> (veto
+   anytime)`; ask only when ownership and recency name different specs. Zero hits → the code
+   wasn't spec-built; say so and STOP (the ledger measures the pipeline, not the repo — nothing to correlate).
+2. **Duplicates** are refused by `escape-row.js` at append (exit 3, step 5) — never grep
+   for them.
 3. **Correlate the review run.** From `.claude/spec-runs.jsonl`, take the LAST row with
    `stage:"review"` and this spec path (jq/grep — never read the ledger into context):
    `reviewRunId` = that row's `runId`; `null` if no review row exists or it predates the
@@ -67,15 +64,12 @@ defective file — that is the only unrecoverable input.
    D4), those name the reviewed range and `diff.dirty: true` means the close commit that
    follows the row completes it; older rows carry neither, and this step proceeds exactly
    as today.
-4. **Classify — derive from context, confirm in ONE call.** Derive every field from the
-   evidence in hand (the session's diagnosis and fix work, the defective file, the given
-   description, the correlated review row), then confirm in a single `AskUserQuestion`
-   call. **"One call" is the budget, not "one question"** — the call carries one question
-   per field (up to five ride together): each field's derived value is the FIRST option,
-   marked "(Recommended)", with its one-line derivation reasoning in the option
-   description and the other enum values as alternates. The user's time goes into
-   correcting a visible wrong derivation, never into a field-by-field interview across
-   multiple calls.
+4. **Classify — derive, print, ask only the gaps.** Derive every field from the evidence
+   in hand (the session's diagnosis and fix work, the defective file, the given description,
+   the correlated review row). Each derived field prints one
+   `📌 Auto-picked <field>=<value> — <derivation> (veto anytime)` line; only fields that
+   come out null or ambiguous ride ONE `AskUserQuestion` call (derived-first options, up to
+   five questions in it). `killedMatch` stays `null` when ambiguous, never a guessed value.
    - `severity`: `hard` (wrong behavior, data loss, security) | `soft` (cosmetic, naming,
      docs). Derive from what the defect *does*.
    - `foundBy`: `user` | `later-spec` | `production`. Derive: invoked mid-build/review of a
@@ -92,7 +86,7 @@ defective file — that is the only unrecoverable input.
      when underivable — unknown is null, never a guess.
    - `unclassedReason` — set only when `class` is null: `no-fix-diff` when no diagnosis or
      fix diff exists in session context to derive a class from; `deferred` when the user
-     declines to class it at the confirm call; null otherwise (a defect not yet examined
+     vetoes the derived class or declines it at the gap call; null otherwise (a defect not yet examined
      enough to classify stays `class: null, unclassedReason: null`, same null-when-
      underivable rule as `class`).
    - `preventedBy` — the **prevention delta**: what change would have caught this defect
@@ -112,10 +106,9 @@ defective file — that is the only unrecoverable input.
      with claim/evidence then confirming the match against this defect's behavior → `true`;
      a `file:null` entry compares by claim/evidence as before; the artifact present with
      `reviewer.killed[]` non-empty but nothing matching by file or claim → `false`; genuinely
-     ambiguous even with the evidence in hand → `null`. It rides as its own
-     question in the same call, the derived value first and marked "(Recommended)" with its
-     reasoning citing the matched claim — the user CONFIRMS or corrects it, same as every
-     other field (derive-don't-interview). **Fallback path (no artifact — an older review
+     ambiguous even with the evidence in hand → `null`. It prints as an auto-pick like every
+     other field, its reasoning citing the matched claim; only the fallback path asks.
+     **Fallback path (no artifact — an older review
      predating retention, or `reviewRunId` is `null`):** if the correlated review row had
      `findings.killed > 0`, ask from memory, never derived: "Does this defect match a
      finding that review killed?" Yes → `true`, no → `false`, can't recall → `null`. Either
@@ -132,8 +125,7 @@ defective file — that is the only unrecoverable input.
      value is an absolute build-worktree path, is the candidate, with claim/evidence then
      confirming the match → `true`; a `file:null` entry compares by claim/evidence; softs
      present but nothing matching → `false`; genuinely ambiguous even with the evidence in
-     hand → `null`. It rides as its own question in the same call, the derived value first
-     and marked "(Recommended)".
+     hand → `null`. It prints as an auto-pick like every other field.
 5. **Append exactly ONE row** via `node "$(spec-paths escape-row)" --append --root . --row
    '<json>'`:
 
@@ -145,24 +137,22 @@ defective file — that is the only unrecoverable input.
    description belongs in whatever fixes it, not in the ledger). `via` is optional: omit
    it or set `"manual"` when this command was invoked directly; `/git:commit`'s escape
    check sets `"commit"` when it drove the append. Exit 3 (a `stage:"escape"` row already
-   in the ledger with this spec+file) → back to step 2's distinct-defect confirm, then
-   re-run with `--allow-duplicate`; exit 1 (validation reasons printed one per line) means a
+   in the ledger with this spec+file) → compare its `class` and `ts` to this diagnosis, print
+   `📌 Auto-picked <distinct|duplicate> — <reason> (veto anytime)`, ask only when unclear;
+   distinct → re-run with `--allow-duplicate`, duplicate → STOP; exit 1 (validation reasons printed one per line) means a
    field above was derived wrong — fix it and re-run, never hand-append around the refusal.
    The confirmation line carries a trailing ` key=escape:<repo>:<ts>:<file>` — that is the
    row's key, derived by the script; step 7 reports it verbatim, never re-composed.
 6. **Close the loop on the prevention delta** (the one write beyond the ledger row, and the
    only one): by `preventedBy` value —
-   - `doctrine` → **draft the one-line Gotchas entry as tag + rule + one owner citation
-     (the spec path whose review the defect escaped, plus the spec path that fixes it once one
-     exists) — never dates, people, hosts, versions, or prior behavior**
-     (pipeline rules § Gotchas; tag `[host]` or `[plugin]` by where the wrong assumption
-     came from). **Never cite the escape row's own id here**: its `<ts>` segment is a date, so
+   - `doctrine` → **draft the one-line Gotchas entry in the format the host Gotchas section's
+     header comment states** (header absent → tag + rule + owner citation; never dates, people,
+     hosts, versions), citing the spec path whose review the defect escaped plus the spec path
+     that fixes it once one exists. **Never cite the escape row's own id here**: its `<ts>` segment is a date, so
      the narration sweep that polices this very section refuses the entry — the row stays
      reachable by spec path through the ledger, which is what a reader follows anyway. Check whether the target section is at cap:
      `node "$(spec-paths prose-cap)" --file <host pipelineRules> --section Gotchas`; exit 1
-     means it is — evict before appending (on a legacy over-cap host the next review close
-     is ratcheted against its verdict-time count, so the append must be paired with at least
-     one eviction here, never a net growth), naming one of exactly three fates: **delete**
+     means it is — evict exactly one entry per append, naming one of exactly three fates: **delete**
      (wrong, dead-cited, or mechanized), **merge** (durable engineering truth →
      `docs/canonical/{area}.md`), or **mechanize** (a recurring class → a script). At cap,
      present the drafted entry **together with the eviction it displaces** in the same
@@ -248,13 +238,13 @@ written for the planning-seat session, never a per-repo build.
 
 - Read-only except the single ledger append and the user-approved one-line prevention-delta
   entry (step 6). Never edits code, specs, or dispositions.
-- One row per defect. Step 2's duplicate check runs before every append.
-- At most TWO `AskUserQuestion` calls in the main path: the step-4 classification call
-  (all field questions ride in it, `killedMatch` included) and the step-6 drafted-line
-  approval (only when `preventedBy` is `doctrine` or `review-check`). The only other
-  permitted asks: step 1's candidate/file confirmation (multiple grep hits or an ambiguous
-  defective file), step 2's duplicate check, and the Input section's defective-file
-  fallback when the session holds no defect at all.
+- One row per defect; `escape-row.js` refuses duplicates (exit 3).
+- At most TWO `AskUserQuestion` calls in the main path: the step-4 gap call (only when a
+  field is null or ambiguous) and the step-6 drafted-line approval (only when `preventedBy`
+  is `doctrine` or `review-check`). The only other permitted asks: step 1's candidate/file
+  confirmation (ownership and recency disagree, or an ambiguous defective file), step 5's
+  distinct-or-duplicate call when unclear, and the Input section's defective-file fallback
+  when the session holds no defect at all.
 - Derived values are shown with their reasoning before the append — the user corrects what
   they can see; a silent wrong derivation is worse than a question.
 - `AskUserQuestion` dismissed → STOP, append nothing.

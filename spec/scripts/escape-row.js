@@ -159,7 +159,7 @@ if (mode === 'append') {
   if (duplicate && !allowDuplicate) {
     console.error(
       `escape-row.js: an escape row with spec=${row.spec} file=${row.file} already exists in ${root}'s ledger — ` +
-      'run escape.md step 2\'s grep to confirm this is really the same distinct defect, then re-run with --allow-duplicate'
+      'compare the existing row to this diagnosis (escape.md step 5); a distinct defect re-runs with --allow-duplicate'
     )
     process.exit(3)
   }

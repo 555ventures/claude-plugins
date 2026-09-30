@@ -41,9 +41,7 @@ Section order below; every section appears ONLY when non-empty — a clean small
    - Shape: `- 🔴 Ledger appenders drop the trailing newline — the next row corrupts the file silently. 🩹 follow-up spec`
 6. **💰 Cost** — one line when the task was materially heavier than its ask (long wall-clock, many repair loops, expensive workflow). Omit when unremarkable.
 7. **🎯 My queue** — every item pre-staged with its payload attached; never a finding, never FYI. Three verbs:
-   - 📋 **Paste this** — the exact command, preceded by one plain sentence saying what pasting it does — I should never need to read the payload. For structural fixes: root cause in 1-2 sentences, then the handoff — I invoke `/spec:plan` myself, never pre-stage the plan command. Two cases:
-     - Fix belongs to THIS session's repo: a ready-to-paste `/compact <prompt>` distilling this session to what the plan needs — I compact first, then plan.
-     - Fix belongs to a DIFFERENT repo: `/compact` is meaningless there (a fresh session has nothing to compact) — never emit it. Hand off a plain prompt for a new session in that repo, ≤15 lines: name the repo, cite what to re-derive, state conclusions — never inline this session's full context.
+   - 📋 **Paste this** — the exact command, preceded by one plain sentence saying what pasting it does — I should never need to read the payload. For structural fixes: root cause in 1-2 sentences — I run `/spec:plan` here myself, no `/compact` prompt. Fix belongs to a DIFFERENT repo: hand off a plain prompt for a new session there, ≤15 lines: name the repo, cite what to re-derive, state conclusions — never inline this session's full context.
    - 👤 **Do this** — human-only steps (logins, dashboard clicks, approvals): numbered, one action per step, exact command/URL/click path.
    - 📌 **Decide this** — "Default: X — say yes or override", with enough context to decide without scrolling up. Never a symmetric options list.
    - Cap: 3 items. More means the work isn't finished — reduce it, don't dump it. Empty queue is explicit: "✅ Nothing needs you."

@@ -319,12 +319,6 @@ invocation is the brownfield first-run, or a refresh of a genesis-grounded repo.
 node "$(spec-paths init-gen)" generate --root . --profile <scratchpad profile path> [--refresh]
 ```
 
-Ordering is enforced in code, not prose: validate the profile → refuse-or-refresh scan → write
-every script-owned artifact → assemble the manifest (script rows plus your `manifestExtras`) →
-run `manifest-check.sh` → stamp `generatedBy`/`contractHash` only on green. An interrupted run,
-or one that exits non-zero, leaves the config exactly as it was before — the same "either no
-row or a complete one" property the run ledger's own contract relies on.
-
 Exit codes:
 
 - **0** — generated, `manifest-check.sh` green, config stamped.

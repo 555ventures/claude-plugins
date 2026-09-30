@@ -23,22 +23,22 @@ path to a roadmap planning brief (`docs/roadmap/NN-*.md`).
 
 - **Roadmap brief:** read the brief, `docs/roadmap/00-overview.md`, and every ADR the brief's Grounding cites (including
   each `Amended by ADR-NNNN`). Run `node "$(spec-paths spec-status)" --root . --brief NN` — exit 1 means a `Depends on`
-  brief has no spec at `implementing`/`done`: warn and confirm before proceeding. Every spec this session produces gets
+  brief has no spec at `implementing`/`done`: print `📌 Auto-picked proceed — <dep NN> at <status>; planning is
+  reversible (veto anytime)` and continue; claims resting on the unbuilt dependency cite its spec's
+  Contracts as Assumptions, never spiked. Every spec this session produces gets
   `brief: NN` in frontmatter (that stamp is how roadmap status is derived); an ad-hoc spec gets `brief: n/a`. The
   brief's Out of scope section is binding; a `surfaces` block is structure only — labels and journey edges, never
   checked against approval. A `Lane: behaviour` brief (absent = structural) STOPs: run `/spec:prototype <brief>` instead
   — it carries no plan document, the freeze writes its spec.
-- **Tier:** `standard` for almost everything; `critical` when the work touches irreversible or
-  high-blast-radius surfaces — auth/security boundaries, data migrations, money, deletion of
-  user data, or whatever the host's pipeline rules add. State the tier and why. Work too small
-  to need delegation (Sonnet workers building while you only plan) or durability (scope
-  spanning sessions) gets no spec — say so and stop.
+- **Tier:** per core § Tiers — state it and why. Work failing core § Pipeline Entry gets no
+  spec: say so and make it on the direct lane when it qualifies; a behaviour change names its
+  lane and stops; a structural change gets a spec whatever its size.
 - **Explore before asking.** Ground every claim in current code (parallel Explore agents where
   the surface is wide; `docs/canonical/{area}.md` when present). Run the pre-emptive lookups
   the host's pipeline rules § Planning declares (Context7 for third-party APIs the spec relies
-  on) and embed the excerpts that matter into Contracts/UI — downstream workers never query
-  MCPs. Put genuine forks to the user via `AskUserQuestion`, options grounded in what you
-  found; never ask what the codebase can answer.
+  on) and embed the excerpts that matter into Contracts/UI (core § MCP Policy). Put genuine
+  forks to the user via `AskUserQuestion`, options grounded in what you found; never ask what
+  the codebase can answer.
 
 ## Micro-spikes (mandatory — the shape triggers it, never felt uncertainty)
 
@@ -58,13 +58,9 @@ an isolated worktree (`Agent {isolation: 'worktree'}`) and fold the findings in;
 Write the spec per the template. `status: draft`. While drafting:
 
 - **Never guess — mark it.** Where information is missing, write
-  `[NEEDS CLARIFICATION: <question>]` inline instead of something plausible. The state-gate
-  hook blocks `/spec:run` while any marker survives — build and review are reachable only
-  through it.
-- **Decomposition cap:** one brief → one spec by default; never split for tidiness. Split only
-  past ~12 source-layer File Plan rows (tests/docs/ledger uncounted) or a second primary area,
-  into `##-` siblings by **landing unit** (each leaves the system green), never by layer. A
-  facade with no consumer in the spec or its series is mis-sliced — fold it into the consumer's.
+  `[NEEDS CLARIFICATION: <question>]` inline instead of something plausible.
+- **Decomposition cap:** core § Decomposition. A facade with no consumer in the spec or its
+  series is mis-sliced — fold it into the consumer's.
 - **File Plan row grammar:** every touched file gets its own row (Path | Action | Layer |
   Summary; Layer ∈ the host's layerGroups flattened, plus `tests` and `other`). A row bundling
   an edit to a different file inside its Summary hands a worker a file its contract forbids

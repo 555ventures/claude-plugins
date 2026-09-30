@@ -80,10 +80,12 @@
   HANDOFF → GROUNDED (`status.json` schemaVersion 3, `brief` record, no `explore`).
   `discovery-done` requires `- archetype: <registry key>` in `## Picks` and hands off to
   `/spec:mocks` for visual archetypes. BRIEF requires `design/mocks/status.json` APPROVED with
-  an open ledger gate, and `--mark brief-written` ratifies the one-page doctrine (`## Dissents`
-  present and non-empty, recording the minority positions the doctrine rejects) plus
-  category-only design-rules (`design: "ratified"`; `backend-api`/`data-ml` record
-  `design: "skipped"`). BRIEF has no theme precondition: the theme is picked in `/spec:mocks`,
+  an open ledger gate. `--mark brief-written` records `design: "ratified"` once the mocks
+  precondition and the brief's `## Journeys` / `## Non-UI Coverage` checks pass. `backend-api`,
+  `data-ml`, `conversational-bot` and `cli-devtool` record `design: "skipped"`. Since
+  specs/20260930/01 there is no BRIEF doctrine or rules manifest: the design contract is the
+  rules file DESIGN_BRIEF writes, mechanized by `/spec:enforce`'s `kit-discipline` and naming
+  cells. BRIEF has no theme precondition: the theme is picked in `/spec:mocks`,
   which runs after genesis, so `design/tokens.css` does not exist while genesis runs and is
   never checked here. The tournament's tile probe task and the discovery sketch are retired; the
   `design/components.json` check moves to `skeleton-landed`. A legacy status past MENUS

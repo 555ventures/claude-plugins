@@ -663,9 +663,9 @@ function isTournamentArchetype(a) { return TOURNAMENT_ARCHETYPES.includes(a) }
 const VISUAL_ARCHETYPES = ['web-app', 'realtime-trading', 'mobile-app', 'desktop-app']
 function isVisualArchetype(a) { return VISUAL_ARCHETYPES.includes(a) }
 
-// specs/20260827/03-genesis-design-state.md D1: backend-api/data-ml never enter DESIGN at all —
-// design: "skipped" is written by handleRoadmapWritten the moment roadmap-written is accepted for
-// them (the "first derivation past ROADMAP"). Every other archetype (visual or not) enters DESIGN.
+// specs/20260930/01-the-brief-stops-ratifying-prose.md D2: these four archetypes carry no design
+// record at all — handleBriefWritten records design: "skipped" and brief.mocks: null for them.
+// Every other archetype is visual and ratifies at BRIEF behind the mocks precondition.
 const DESIGN_SKIPPED_ARCHETYPES = ['backend-api', 'data-ml', 'conversational-bot', 'cli-devtool']
 function isDesignSkipped(a) { return DESIGN_SKIPPED_ARCHETYPES.includes(a) }
 
@@ -2691,7 +2691,7 @@ const STEPS = {
   // MENUS. A legacy resume (status.marks.menusDone already true, briefWritten not yet) opens with
   // `legacy:` and names `--legacy`; DESIGN_SKIPPED_ARCHETYPES owe nothing beyond DISCOVERY; a
   // visual archetype whose mocks set is not yet APPROVED is sent to `/spec:mocks`; otherwise the
-  // step renders D4's ratification instructions (Contracts' "BRIEF step text" example).
+  // step prints the brief-written mark command (specs/20260930/01 D3).
   BRIEF: () => {
     const archetype = status.archetype
     const doctrineLine = 'Doctrine: spec/doctrine/genesis.md § Genesis: Brief State'

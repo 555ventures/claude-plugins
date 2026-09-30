@@ -1,6 +1,6 @@
 ---
 date: 2026-09-30
-status: implementing
+status: done
 build_base: design-retool
 tier: critical
 area: genesis
@@ -203,6 +203,10 @@ nothing reads is noise); keeping `designRulesHash` as a deprecated contract key 
 no consumer).
 
 Collision closure at lock (literals leg, 5 files outside the File Plan, all waived): `docs/adr/0007-plugin-owned-capture.md`, `docs/roadmap/08-design-thinning.md` and `docs/audit/style-audit-2026-08-13.md` are historical records under waived prefixes; `tests/consistency/atlas-retired.test.js` names `spec/templates/design-rules.json` only to assert that already-deleted template stays deleted; `tests/genesis/genesis-driver.test.js` names `DESIGN_SKIPPED_ARCHETYPES` only in comments about `data-ml`, which stays in the set.
+
+Review 2026-09-30 (rv_a23fc5647ebe, CLEAN): the reviewer's two soft findings — two stale
+comments in `genesis-driver.js` still describing the two-entry skipped set and the retired
+BRIEF write instruction — were fixed comment-only in the close commit; no behavior changed.
 
 Fragile: genesis.md's § Genesis: Brief State is sliced by `genesis-doctrine.test.js`
 (AC-20260907-05-8). The rewrite must not introduce `design/tokens.css` or the literal `skin`.

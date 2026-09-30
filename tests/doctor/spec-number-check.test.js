@@ -73,6 +73,8 @@ test('a deviations sidecar and a non-spec file are skipped, never counted as a s
   // The build and review drivers write the sidecar with a DOT, not a hyphen — the shape that
   // actually reaches this scan on every live build.
   writeSpec(root, 'specs/20260911/04-every-criterion.deviations.md', 'hardened')
+  // Any other dotted sidecar too: hosts still track the retired render gate's evidence file.
+  fs.writeFileSync(path.join(root, 'specs/20260911/04-every-criterion.render.md'), '# render evidence\n')
   fs.writeFileSync(path.join(root, 'specs/20260911/README.md'), '# not a spec\n')
   fs.writeFileSync(path.join(root, 'specs/20260911/04-every-criterion.review'), 'not markdown\n')
   const res = run(root)

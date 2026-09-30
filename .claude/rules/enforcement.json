@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "spec@7.215.0",
+  "entries": [
+    {
+      "id": "javascript:forbidden-symbol",
+      "workspace": ".",
+      "stack": "javascript",
+      "category": "forbidden-symbol",
+      "ruleRefs": [
+        ".claude/rules/spec-pipeline.md",
+        ".claude/rules/conventions/scripts.md"
+      ],
+      "enforcer": {
+        "tool": "in-repo node:test pin (no third-party tool: the repo's zero-dependency rule refuses every package candidate)",
+        "mechanism": "checker-script",
+        "configPath": "tests/consistency/dependency-free.test.js",
+        "gateWiring": "gateCommand runs tests/** via node --test",
+        "citations": [],
+        "verifiedRun": "node --test --test-timeout=45000 --test-force-exit tests/consistency/dependency-free.test.js"
+      },
+      "fallback": "none"
+    },
+    {
+      "id": "javascript:structural-pattern",
+      "workspace": ".",
+      "stack": "javascript",
+      "category": "structural-pattern",
+      "ruleRefs": [
+        ".claude/rules/spec-pipeline.md",
+        ".claude/rules/conventions/scripts.md",
+        ".claude/rules/conventions/tests.md",
+        ".claude/rules/conventions/doctrine.md"
+      ],
+      "enforcer": {
+        "tool": "in-repo node:test pins (version bump against the merge base; every executable has a live entry point)",
+        "mechanism": "checker-script",
+        "configPath": "tests/consistency/plugin-bump.test.js",
+        "gateWiring": "gateCommand runs tests/** via node --test (plugin-bump.test.js and entrypoints.test.js)",
+        "citations": [],
+        "verifiedRun": "node --test --test-timeout=45000 --test-force-exit tests/consistency/plugin-bump.test.js tests/consistency/entrypoints.test.js"
+      },
+      "fallback": "review-check"
+    },
+    {
+      "id": "javascript:naming/code",
+      "workspace": ".",
+      "stack": "javascript",
+      "category": "naming",
+      "layer": "code",
+      "ruleRefs": [
+        ".claude/rules/spec-pipeline.md",
+        ".claude/rules/conventions/tests.md"
+      ],
+      "enforcer": null,
+      "fallback": "review-check"
+    }
+  ]
+}

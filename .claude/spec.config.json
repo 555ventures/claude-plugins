@@ -42,5 +42,7 @@
       "server-code-in-client-bundle",
       "scoped-gate-blind-spot"
     ]
-  }
+  },
+  "enforcementManifest": ".claude/rules/enforcement.json",
+  "rulesEnforcementHash": "f333e8050707"
 }

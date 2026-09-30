@@ -69,13 +69,17 @@ function startStagingServer(dir) {
   return { child, portFile }
 }
 
+// Polls until the file holds a real port, not merely exists: the stub's writeFileSync creates
+// the file before it writes the number, so an early read sees '' → port 0, every ready probe
+// fails, and no e2e row is ever appended (the whole-suite-load flake on AC-20260908-05-5).
 async function waitForPort(portFile, timeoutMs = 5000) {
   const start = Date.now()
-  while (!fs.existsSync(portFile)) {
+  for (;;) {
+    const port = fs.existsSync(portFile) ? Number(fs.readFileSync(portFile, 'utf8').trim()) : 0
+    if (port > 0) return port
     if (Date.now() - start > timeoutMs) throw new Error('staging stub server never became ready: ' + portFile)
     await new Promise(r => setTimeout(r, 20))
   }
-  return Number(fs.readFileSync(portFile, 'utf8').trim())
 }
 
 // A working synthetic host: git repo (release-legs' ci leg shells `git rev-parse HEAD`), a

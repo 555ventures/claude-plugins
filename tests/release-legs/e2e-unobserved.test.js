@@ -127,6 +127,8 @@ test('AC-20260908-05-5 / AC-20260913-08-5: the e2e row\'s executed count is the 
     const r = runNode(SCRIPT, ['stage', '--root', host.dir, '--manifest', runManifest, '--out-dir', path.join(host.dir, 'out')])
     const rows = readRows(runManifest)
     const e2eRow = rowFor(rows, 'e2e')
+    assert.ok(e2eRow, 'the e2e leg must have run and appended a row — a missing row means an ' +
+      'earlier leg (usually ready) went red: ' + JSON.stringify(rows) + ' / ' + r.stdout)
     assert.strictEqual(e2eRow.exit, 0,
       'D2: the last-match read (5) is a real nonzero observation — it must never force the row ' +
       'red: ' + JSON.stringify(e2eRow))

@@ -1,6 +1,7 @@
 ---
 date: 2026-09-30
-status: hardened
+status: implementing
+build_base: design-retool
 tier: critical
 area: genesis
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 depended_on_by: []
 brief: n/a
 open_markers: 0
+diff_base: d6248b5036abb271eb7882efc3597e3b69d58c57
 ---
 
 # The brief stops ratifying prose

@@ -121,20 +121,17 @@
 // SKELETON -> GATE -> ROADMAP -> HANDOFF -> GROUNDED. DISCOVERY now also names the archetype
 // (`- archetype: <registry key>` in `## Picks`, moved here from menus-done) and hands off to
 // `/spec:mocks` for a visual archetype. BRIEF sits between DISCOVERY and MENUS: for
-// DESIGN_SKIPPED_ARCHETYPES (backend-api/data-ml) it is a pass-through (D4); every other
-// archetype ratifies a design canon there — doctrine + category-only design-rules for every
-// archetype, plus (visual only) `design/mocks/status.json` APPROVED with an open provenance
-// ledger (D3, spec 06's lib). The pick record lives
+// DESIGN_SKIPPED_ARCHETYPES (backend-api/data-ml/conversational-bot/cli-devtool) it is a
+// pass-through (D4); a visual archetype records design: "ratified" once `design/mocks/status.json`
+// is APPROVED with an open provenance ledger (D3, spec 06's lib) and the brief's journey checks pass. The pick record lives
 // in the mocks status (`status.brief`) — RETIRED_MARKS (below) all refuse with exit 2 naming
 // `/spec:mocks` as the remedy. A legacy `status.json` past MENUS with no `marks.briefWritten`
 // resumes at BRIEF and accepts `--mark brief-written --legacy`, which skips the mocks
-// precondition (D3) but still ratifies D4's doctrine/design-rules artifacts, requiring only a
-// non-empty `## Dissents` (there is no pick record for a legacy run to name candidates from).
+// precondition (D3) and records design: "ratified" with nothing further.
 //
 // What the BRIEF addition deliberately does NOT do:
-//   - author the doctrine, the design-rules manifest, or approve a mocks set itself — those stay
-//     session (or `/spec:mocks`) judgment; the driver only closes brief-written once the
-//     artifacts exist and validate.
+//   - approve a mocks set itself — that stays session (or `/spec:mocks`) judgment; the driver
+//     only closes brief-written once the preconditions validate.
 //   - re-derive whether a mocks set was ever needed after DISCOVERY — that fact is fixed the
 //     moment discovery-done records `status.archetype`.
 //
@@ -287,7 +284,6 @@ function freshStatus() {
     architect: 'pending', design: 'pending',
     archetype: null, localeScope: null, brief: null,
     stackDescriptorPath: '.claude/genesis/stack-descriptor.json',
-    designManifestPath: '.claude/genesis/design-rules.json',
     gateCommand: null, lastUpdated: null,
     marks: {}, menus: {}, scaffold: null, zeroDayGate: null,
     handoff: null,
@@ -670,7 +666,7 @@ function isVisualArchetype(a) { return VISUAL_ARCHETYPES.includes(a) }
 // specs/20260827/03-genesis-design-state.md D1: backend-api/data-ml never enter DESIGN at all —
 // design: "skipped" is written by handleRoadmapWritten the moment roadmap-written is accepted for
 // them (the "first derivation past ROADMAP"). Every other archetype (visual or not) enters DESIGN.
-const DESIGN_SKIPPED_ARCHETYPES = ['backend-api', 'data-ml']
+const DESIGN_SKIPPED_ARCHETYPES = ['backend-api', 'data-ml', 'conversational-bot', 'cli-devtool']
 function isDesignSkipped(a) { return DESIGN_SKIPPED_ARCHETYPES.includes(a) }
 
 // ---------------------------------------------------------------------------
@@ -1412,12 +1408,11 @@ function handleMenusDone() {
 // BRIEF (specs/20260902/08-genesis-shrink-brief-state.md D3/D4/D6): sits between DISCOVERY and
 // MENUS. `--mark brief-written` is the ONLY mark this state accepts (the retired EXPLORE/DESIGN
 // marks are refused elsewhere, in handleMark's default branch). For DESIGN_SKIPPED_ARCHETYPES
-// (backend-api/data-ml) it is a pass-through: nothing beyond DISCOVERY is owed. Every other
-// archetype ratifies doctrine + category-only design-rules; a VISUAL archetype additionally
-// requires an APPROVED `design/mocks/status.json` with an open provenance ledger (D3, spec 06's
-// `lib/mocks-ledger.js`). `--legacy` skips D3's mocks
-// precondition (never D4's ratification artifacts) for a status.json that resumed at BRIEF with
-// pre-existing explore/design artifacts (D6).
+// (backend-api/data-ml/conversational-bot/cli-devtool) it is a pass-through: nothing beyond
+// DISCOVERY is owed. A VISUAL archetype requires an APPROVED `design/mocks/status.json` with an
+// open provenance ledger (D3, spec 06's `lib/mocks-ledger.js`) plus the brief's journey checks,
+// then records design: "ratified". `--legacy` skips D3's mocks precondition for a status.json
+// that resumed at BRIEF (D6).
 // ---------------------------------------------------------------------------
 function mocksStatusPath() { return path.join(root, 'design/mocks/status.json') }
 function mocksLedgerPath() { return path.join(root, 'design/mocks/ledger.md') }
@@ -1530,60 +1525,13 @@ function handleBriefWritten() {
   }
 
   // specs/20260902/08-genesis-shrink-brief-state.md D4: DESIGN_SKIPPED_ARCHETYPES
-  // (backend-api/data-ml) own nothing beyond DISCOVERY — record design: "skipped" straight away.
+  // (backend-api/data-ml/conversational-bot/cli-devtool) own nothing beyond DISCOVERY — record design: "skipped" straight away.
   if (isDesignSkipped(archetype)) {
     status.marks.briefWritten = true
     status.brief = { mocks: null, legacy: false, ratifiedAt: new Date().toISOString() }
     status.design = 'skipped'
     saveStatus()
     return { prev: 'BRIEF', next: 'MENUS' }
-  }
-
-  const p = doctrinePath()
-  if (!fs.existsSync(p)) {
-    die('docs/design/doctrine.md does not exist — draft the one-page doctrine with a ## Dissents ' +
-      'section recording the minority positions it rejects, then re-mark brief-written')
-  }
-  const text = fs.readFileSync(p, 'utf8')
-  const lineCount = text.split('\n').length
-  if (lineCount > DOCTRINE_LINE_CAP) {
-    die('docs/design/doctrine.md is ' + lineCount + ' lines — the one-page cap is ' + DOCTRINE_LINE_CAP +
-      ' lines — trim it, then re-mark brief-written')
-  }
-  if (!dissentsNonEmpty(text)) {
-    die('docs/design/doctrine.md ## Dissents has no non-blank line — record the minority ' +
-      'positions this doctrine rejects, then re-mark brief-written')
-  }
-
-  const rulesCheck = designRulesCheck()
-  if (!rulesCheck.ok) {
-    if (rulesCheck.reason === 'unreadable') {
-      die('.claude/genesis/design-rules.json does not exist or is not valid JSON (' + rulesCheck.detail +
-        ') — write it, then re-mark brief-written')
-    }
-    if (rulesCheck.reason === 'no-rules-array') {
-      die('.claude/genesis/design-rules.json has no "rules" array — write it (an empty array is ' +
-        'valid), then re-mark brief-written')
-    }
-    if (rulesCheck.reason === 'bad-id') {
-      die('.claude/genesis/design-rules.json has a rule with a missing or empty "id" — fix it, then re-mark brief-written')
-    }
-    if (rulesCheck.reason === 'bad-category') {
-      die('.claude/genesis/design-rules.json rule "' + rulesCheck.rule.id + '" has targetCategory "' +
-        rulesCheck.rule.targetCategory + '" — must be one of: ' + DESIGN_RULE_CATEGORIES.join(', ') +
-        ' — fix it, then re-mark brief-written')
-    }
-    if (rulesCheck.reason === 'bad-grounding') {
-      die('.claude/genesis/design-rules.json rule "' + rulesCheck.rule.id + '" has grounding "' +
-        rulesCheck.rule.grounding + '" — must be "grounded" or "taste" — fix it, then re-mark brief-written')
-    }
-    if (rulesCheck.reason === 'bad-severity') {
-      die('.claude/genesis/design-rules.json rule "' + rulesCheck.rule.id + '" has a missing or empty ' +
-        '"severity" — fix it, then re-mark brief-written')
-    }
-    if (rulesCheck.reason === 'bad-appliesto') {
-      die('.claude/genesis/design-rules.json rule "' + rulesCheck.rule.id + '" has no "appliesTo" array — fix it, then re-mark brief-written')
-    }
   }
 
   status.marks.briefWritten = true
@@ -1999,8 +1947,7 @@ function readStackDescriptor() {
 }
 function resolveAdrPath(p) { return path.isAbsolute(p) ? p : path.join(root, p) }
 
-// specs/20260827/03-genesis-design-state.md D2 reuses this section extraction against
-// docs/design/doctrine.md's own ## Dissents heading (same grammar as an ADR's).
+// The ADR check reads an ADR's `## Dissents` section through this extraction.
 function dissentsBody(text) {
   const m = /^##\s+Dissents\s*$/m.exec(text)
   if (!m) return null
@@ -2466,45 +2413,10 @@ function handleRoadmapWritten() {
     }
   }
   status.marks.roadmapWritten = true
-  // specs/20260902/08-genesis-shrink-brief-state.md D9: the design canon (doctrine,
-  // design-rules, tokens) is ratified at BRIEF now, long before ROADMAP — there is no DESIGN
-  // state left to route into here for any archetype; ROADMAP hands straight to HANDOFF.
+  // specs/20260902/08-genesis-shrink-brief-state.md D9: there is no DESIGN state left to route
+  // into here for any archetype; ROADMAP hands straight to HANDOFF.
   saveStatus()
   return { prev: 'ROADMAP', next: 'HANDOFF' }
-}
-
-// ---------------------------------------------------------------------------
-// Design-canon helpers shared by BRIEF (handleBriefWritten, above) and by SKELETON's
-// components.json check (handleSkeletonLanded, below). specs/20260902/08-genesis-shrink-
-// brief-state.md D3/D4: the design canon (doctrine length/Dissents, the design-rules enum) is
-// ratified at BRIEF now; the pick record lives in the mocks status (status.brief), never in a
-// per-candidate file, and there is no candidate directory left anywhere to prune.
-// ---------------------------------------------------------------------------
-const DOCTRINE_LINE_CAP = 120
-const DESIGN_RULE_CATEGORIES = ['color', 'typography', 'i18n', 'structure', 'a11y', 'density', 'layout']
-
-function doctrinePath() { return path.join(root, 'docs/design/doctrine.md') }
-function designRulesPath() { return path.join(genesisDir, 'design-rules.json') }
-
-// D4: design-rules.json's rules[] must carry only the seven closed targetCategory values and
-// grounding ∈ grounded|taste (an empty rules array is valid — every archetype this check now
-// runs for, visual or not, may have nothing category-specific to say).
-function designRulesCheck() {
-  let parsed
-  try {
-    parsed = JSON.parse(fs.readFileSync(designRulesPath(), 'utf8'))
-  } catch (e) {
-    return { ok: false, reason: 'unreadable', detail: e.message }
-  }
-  if (!Array.isArray(parsed.rules)) return { ok: false, reason: 'no-rules-array' }
-  for (const rule of parsed.rules) {
-    if (!rule || typeof rule.id !== 'string' || !rule.id.trim()) return { ok: false, reason: 'bad-id', rule }
-    if (!DESIGN_RULE_CATEGORIES.includes(rule.targetCategory)) return { ok: false, reason: 'bad-category', rule }
-    if (rule.grounding !== 'grounded' && rule.grounding !== 'taste') return { ok: false, reason: 'bad-grounding', rule }
-    if (typeof rule.severity !== 'string' || !rule.severity.trim()) return { ok: false, reason: 'bad-severity', rule }
-    if (!Array.isArray(rule.appliesTo)) return { ok: false, reason: 'bad-appliesto', rule }
-  }
-  return { ok: true }
 }
 
 // ---------------------------------------------------------------------------
@@ -2788,11 +2700,11 @@ const STEPS = {
     if (legacyResume) {
       return [
         '## Step: brief — ratify the approved set into the design canon',
-        'Read only: docs/design/doctrine.md, .claude/genesis/design-rules.json',
+        'Read only: ' + genesisRel('brief.md'),
         doctrineLine,
         'legacy: explore/design artifacts accepted in place of a mocks set (explore: ' +
           (status.explore || 'n/a') + ', design: ' + (status.design || 'pending') + ')',
-        'Write docs/design/doctrine.md (one page, ## Dissents) and .claude/genesis/design-rules.json, then:',
+        'Then:',
         '  node ' + __filename + ' --root ' + root + ' --mark brief-written --legacy',
       ].join('\n')
     }
@@ -2802,7 +2714,7 @@ const STEPS = {
         '## Step: brief — nothing owed beyond discovery',
         'Read only: ' + genesisRel('brief.md') + ' (## Picks)',
         doctrineLine,
-        'archetype "' + archetype + '" owes nothing beyond DISCOVERY — no mocks set, no doctrine, no design canon.',
+        'archetype "' + archetype + '" owes nothing beyond DISCOVERY — no mocks set and no design canon.',
         'Then:\n  node ' + __filename + ' --root ' + root + ' --mark brief-written',
       ].join('\n')
     }
@@ -2850,7 +2762,6 @@ const STEPS = {
         ' · exclusions: ' + exclusionsAgreed + ' agreed · ' + exclusionsNotContested + ' not contested' +
         ' — write ## What I think you\'re building, ## Journeys, and ## Non-UI Coverage from these, never from the interview alone')
     }
-    lines.push('Write docs/design/doctrine.md (one page, ## Dissents) and .claude/genesis/design-rules.json, then:')
     lines.push('  node ' + __filename + ' --root ' + root + ' --mark brief-written')
     return lines.join('\n')
   },
@@ -3170,7 +3081,6 @@ const STEPS = {
       descriptorRelPath(),
       genesisRel('conventions.json'),
     ]
-    if (fs.existsSync(designRulesPath())) readFiles.push(genesisRel('design-rules.json'))
     readFiles.push('docs/adr/')
     // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D1: HANDOFF writes the
     // contract's design block from status.app when it stamps spec.config.json — { "app":

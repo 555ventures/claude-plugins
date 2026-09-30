@@ -32,7 +32,7 @@ Sources: { N } cited below
   match, with citation }
 - **Predicts:** { the observable this rule predicts — "fewer abandons at step 2" — the telemetry
   hook that later promotes or retires it }
-- **Enforcement:** { gate-checkable (name the design-rules category) | walkthrough-checkable |
+- **Enforcement:** { gate-checkable (name the rules-file row or kit check that carries it) | walkthrough-checkable |
   human-judgment }
 
 ## Ethics floor (binding — not researched away)

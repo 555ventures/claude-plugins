@@ -137,38 +137,21 @@ JSON, never `lib/mocks-notes`.
 
 **Ratification (`--mark brief-written`), tiered by archetype:**
 
-- `backend-api` / `data-ml` — nothing beyond DISCOVERY; the mark records `design: "skipped"`.
-- `conversational-bot` / `cli-devtool` — a one-page `docs/design/doctrine.md` (voice/persona or
-  TUI doctrine, `## Dissents` non-empty) plus `.claude/genesis/design-rules.json` passing the
-  retained `designRulesCheck` (rules array, category enum, grounding enum — an empty array is
-  allowed).
-- `web-app` / `mobile-app` / `realtime-trading` / `desktop-app` — both of the above; no
-  additional precondition.
-
-**Doctrine (never values).** `docs/design/doctrine.md` carries taste-only rulings — postures,
-habits, judgments that genuinely resist encoding — plus a required `## Dissents` section. Any
-sentence naming a size, step, ratio, weight, tracking, duration, or specific color belongs in a
-token, not doctrine — a value living only in prose is the defect this state guards against.
-Tag every ruling's grounding (shared § Design Authoring Contracts, its "Grounded vs taste"
-rule): `grounded` (binds even against an explicit mock) or `taste` (yields to one); default to
-`taste` unless the ruling names an external anchor. The driver checks: the file exists, is
-≤120 lines, and carries `## Dissents` followed by ≥1 non-blank line — required, non-empty, no
-further reading of its contents.
-
-**Design rules.** `.claude/genesis/design-rules.json` (template via `spec-paths templates`):
-each rule carries a `targetCategory` **enum only** (§ Genesis: Enforcement Handoff),
-`appliesTo`/`exemptGlobs`, `severity`, `rationale`, and `grounding` (`grounded` | `taste`) —
-never a tool name; `/spec:enforce` owns the category→enforcer selection at runtime.
-Non-visual archetypes may carry an empty `rules` array.
+- `backend-api` / `data-ml` / `conversational-bot` / `cli-devtool` — nothing beyond DISCOVERY; the
+  mark records `design: "skipped"`. Voice, persona and CLI-style choices go into the ordinary
+  decision records and the root agent file.
+- `web-app` / `mobile-app` / `realtime-trading` / `desktop-app` — the mocks precondition above
+  plus the brief's `## Journeys` / `## Non-UI Coverage` checks; the mark records
+  `design: "ratified"`. The design contract itself is the rules file `DESIGN_BRIEF` writes
+  (§ Genesis: Design Stage).
 
 **On success:** `marks.briefWritten`, `status.brief = {mocks: "design/mocks/status.json" |
 null, legacy: false|true, ratifiedAt: "<ISO>"}`, and `status.design = "ratified"` (or
-`"skipped"` for `backend-api`/`data-ml`).
+`"skipped"` for the four design-skipped archetypes).
 
 **Legacy resume.** A `status.json` with `marks.menusDone` and no `marks.briefWritten` derives
 BRIEF with a step text opening `legacy: explore/design artifacts accepted in place of a mocks
-set`. `--mark brief-written --legacy` skips the mocks precondition entirely (never the
-ratification checks above) and records `brief.legacy: true`; every downstream legacy mark stays
+set`. `--mark brief-written --legacy` skips the mocks precondition entirely and records `brief.legacy: true`; every downstream legacy mark stays
 valid, so the run lands on its real next state — MENUS, DECIDE, SCAFFOLD, SKELETON, GATE,
 ROADMAP, or HANDOFF — after this one mark, never a forced re-run of MENUS.
 
@@ -363,17 +346,16 @@ never named here:
 |---|---|---|
 | `web-app` | `language-runtime` `framework` `persistence` `auth` `component-library` `hosting` `monorepo-topology` | yes |
 | `mobile-app` | `language-runtime` `framework` `persistence` `auth` `hosting` | yes |
-| `conversational-bot` | `language-runtime` `framework` `persistence` `auth` `hosting` | no — voice/persona doctrine |
+| `conversational-bot` | `language-runtime` `framework` `persistence` `auth` `hosting` | no |
 | `backend-api` | `language-runtime` `framework` `persistence` `auth` `hosting` | no |
-| `realtime-trading` | `language-runtime` `framework` `persistence` `auth` `component-library` `hosting` `monorepo-topology` | yes · density doctrine |
-| `cli-devtool` | `language-runtime` `framework` `persistence` `hosting` | no — TUI doctrine |
+| `realtime-trading` | `language-runtime` `framework` `persistence` `auth` `component-library` `hosting` `monorepo-topology` | yes |
+| `cli-devtool` | `language-runtime` `framework` `persistence` `hosting` | no |
 | `data-ml` | `language-runtime` `framework` `persistence` `hosting` | no |
 | `desktop-app` | `language-runtime` `framework` `persistence` `auth` `component-library` `hosting` | yes |
 
-`backend-api` and `data-ml` owe nothing beyond DISCOVERY: BRIEF's ratification (`--mark
-brief-written`, § Genesis: Brief State) records `design: "skipped"` directly and `/spec:init`
-writes no `design` block. `conversational-bot` and `cli-devtool` owe a one-page doctrine plus
-category-only rules but no mocks set. `web-app`, `mobile-app`, `realtime-trading`, and
+`backend-api`, `data-ml`, `conversational-bot` and `cli-devtool` owe nothing beyond DISCOVERY:
+BRIEF's ratification (`--mark brief-written`, § Genesis: Brief State) records `design: "skipped"`
+directly and `/spec:init` writes no `design` block. `web-app`, `mobile-app`, `realtime-trading`, and
 `desktop-app` owe an `APPROVED` `design/mocks/status.json` (`/spec:mocks`) before BRIEF opens
 (§ Genesis: Brief State).
 
@@ -411,11 +393,11 @@ The output is `docs/design/research-brief.md` (template: `ux-research-brief.md` 
   (the stock patterns fresh generation defaults to) — researched per project, since slop drifts
   with the generation.
 
-Mechanizable rules flow into `design-rules.json` categories at BRIEF's ratification mark
-(§ Genesis: Brief State); the rest bind every `/spec:mocks` session and every later
+Mechanizable rules flow into the rules file's tables at `DESIGN_BRIEF` (§ Genesis: Design Stage);
+the rest bind every `/spec:mocks` session and every later
 mock-authoring or build session — not by being read and remembered, but by being checked. The
-**rule-checklist pass** runs during `/spec:mocks`' review, which precedes `design-rules.json`
-and so has no manifest to execute yet: a checker walks the admitted rules against each
+**rule-checklist pass** runs during `/spec:mocks`' review, which precedes the rules file
+and so has nothing to execute yet: a checker walks the admitted rules against each
 candidate before approval, citing rule IDs. The falsifiable phrasing above is what makes this
 possible.
 
@@ -439,8 +421,8 @@ distills ADRs into binding doctrine with no downstream re-verification.
 
 ## Genesis: Enforcement Handoff to the spec pipeline
 
-The split is **decide vs implement**: `BRIEF` (§ Genesis: Brief State) *decides* and records
-design rules; the spec pipeline *implements* them as actual lint/contracts/sweeps wired to the
+The split is **decide vs implement**: `DESIGN_BRIEF` (§ Genesis: Design Stage) *decides* and records
+design rules in the rules file; the spec pipeline *implements* them as actual lint/contracts/sweeps wired to the
 gate. One enforcement brain, and it lives downstream —
 `/spec:enforce` (which `/spec:init` invokes at the end of bootstrap). For a greenfield repo,
 the grounding step this brain depends on runs earlier still: `HANDOFF` (§ Genesis: State
@@ -451,17 +433,12 @@ command — landing the terminal `GROUNDED` state with `next: /spec:enforce`. `/
 stays the brownfield entry and the regeneration owner (`--refresh`); re-running it on a
 genesis-grounded repo is a refresh, not first-time bootstrap. The contract:
 
-- `design-rules.json` rules carry a `targetCategory` **enum only** — `color | typography | i18n |
-  structure | a11y | density | layout` — **never a tool name** — plus a `grounding` (`grounded` | `taste`, shared
-  § Design Authoring Contracts, its "Grounded vs taste" rule; mechanizable closure rules are `grounded`), which records whether the rule binds
-  against an explicit mockup or yields to it. `/spec:enforce` folds these into its language-neutral
-  enforcement taxonomy and owns the single category→enforcer selection per detected stack, chosen
-  at runtime (discover-against-live-sources then verify-it-runs), never from a hardcoded mapping.
-  Where no mechanical enforcer fits the stack, the category becomes a Review-Check prose rule —
-  never silently dropped. Category-only tagging is what keeps the handoff robust to a stack swap:
-  an engine pre-tagged here would break the moment the stack changed.
-- `/spec:doctor` warns when a design-rules category has **no enforcer** on the current stack (the
-  early-detection benefit), and recommends `/spec:enforce` — without any plugin file naming a tool.
+- Design rules reach `/spec:enforce` through the `design` block (the `kit-discipline` cell plus
+  the per-layer naming cells); any other design rule is a written host rule. `/spec:enforce` owns
+  the single category→enforcer selection per detected stack, chosen at runtime
+  (discover-against-live-sources then verify-it-runs), never from a hardcoded mapping. Where no
+  mechanical enforcer fits the stack, the category becomes a Review-Check prose rule — never
+  silently dropped.
 
 ## Genesis: Day-Zero Skeleton
 
@@ -768,7 +745,6 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   approved-set workspace BRIEF reads directly: `seed.md`, `canon.md`, `status.json`,
   `ledger.md`, `tokens.css`, and the approved journeys' screens. BRIEF never writes here — it
   only reads `status.json`/`ledger.md` for the precondition.
-- **`.claude/genesis/design-rules.json`** — design's output: category-only enforcement rules.
 - **`.claude/genesis/design-paths.json`** — `DESIGN_BRIEF`'s session-authored path map (template
   `spec/templates/design-paths.json`, § Genesis: Design Stage): `kit`, `tokens`, `rules`,
   `primitives`, `primitivesAlias`, `journeys`, `storybook`. Read by every later design mark and

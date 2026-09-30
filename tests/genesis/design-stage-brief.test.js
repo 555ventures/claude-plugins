@@ -51,8 +51,7 @@ function writeSeedJourneys(dir, journeys) {
 }
 
 // Ratifies BRIEF's D3/D4 artifacts for a visual, non-design-skipped archetype: an APPROVED
-// mocks status with an open ledger, a one-page doctrine with a non-empty Dissents, an empty
-// design-rules.json, and (when journeys are given) design/mocks/seed.md plus a matching
+// mocks status with an open ledger, and (when journeys are given) design/mocks/seed.md plus a matching
 // ## Journeys block appended to .claude/genesis/brief.md so briefJourneysCheck passes.
 function ratifyVisualBrief(dir, journeys) {
   fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
@@ -68,14 +67,6 @@ function ratifyVisualBrief(dir, journeys) {
     '| id | what | step | cost | note |',
     '| - | - | - | - | - |', '',
   ].join('\n'))
-  fs.mkdirSync(path.join(dir, 'docs/design'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'docs/design/doctrine.md'), [
-    '# Design doctrine', '',
-    '## Dissents',
-    'Nothing rejected — synthetic fixture for design-stage-brief.test.js.',
-  ].join('\n'))
-  fs.mkdirSync(path.join(dir, '.claude/genesis'), { recursive: true })
-  fs.writeFileSync(path.join(dir, '.claude/genesis/design-rules.json'), JSON.stringify({ rules: [] }))
   fs.writeFileSync(path.join(dir, 'design/tokens.css'), ':root { --brand: #123; }\n')
 
   if (journeys && journeys.length) writeSeedJourneys(dir, journeys)
@@ -92,7 +83,7 @@ function ratifyVisualBrief(dir, journeys) {
 }
 
 const TOURNAMENT_ARCHETYPES = ['web-app', 'realtime-trading', 'backend-api', 'mobile-app', 'desktop-app']
-const DESIGN_SKIPPED_ARCHETYPES = ['backend-api', 'data-ml']
+const DESIGN_SKIPPED_ARCHETYPES = ['backend-api', 'data-ml', 'conversational-bot', 'cli-devtool']
 
 function advanceToMenus(dir, archetype, journeys) {
   bare(dir)

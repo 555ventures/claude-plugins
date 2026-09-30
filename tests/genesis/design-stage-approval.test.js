@@ -64,12 +64,6 @@ function ratifyVisualBrief(dir, journeys) {
     '| id | what | step | cost | note |',
     '| - | - | - | - | - |', '',
   ].join('\n'))
-  writeFile(path.join(dir, 'docs/design/doctrine.md'), [
-    '# Design doctrine', '',
-    '## Dissents',
-    'Nothing rejected — synthetic fixture for design-stage-approval.test.js.',
-  ].join('\n'))
-  writeFile(path.join(dir, '.claude/genesis/design-rules.json'), JSON.stringify({ rules: [] }))
   writeFile(path.join(dir, 'design/tokens.css'), ':root { --brand: #123; }\n')
 
   if (journeys && journeys.length) writeSeedJourneys(dir, journeys)

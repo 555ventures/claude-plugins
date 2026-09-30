@@ -24,7 +24,7 @@ const STUB = path.join(__dirname, 'stub-service.js')
 
 const TOKEN = 'tok_0123456789abcdef0123456789abcdef'
 const ZEROS = '0'.repeat(64)
-const HELLO_OK = { status: 200, body: { apiVersion: 1, revision: 1, sunset: null } }
+const HELLO_OK = { status: 200, body: { apiVersion: 1, revision: 2, sunset: null } }
 
 function sha256(buf) { return crypto.createHash('sha256').update(buf).digest('hex') }
 function loadJson(file) { return JSON.parse(fs.readFileSync(file, 'utf8')) }

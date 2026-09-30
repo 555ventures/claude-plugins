@@ -56,3 +56,23 @@ test('AC-20260929-01-2: self-check exits 1 naming Avatar when a catalog copy has
   assert.strictEqual(r.status, 1, 'a catalog short of a component must refuse, or a round using it would be judged unknown: ' + JSON.stringify(r))
   assert.match(r.stdout + r.stderr, /Avatar/, 'the refusal must name the missing component: ' + r.stdout + r.stderr)
 })
+
+// Escape from 20260929/01 (found 2026-09-30): the pushRound example carried the four-step
+// hearwell hash on a two-step journey and self-check, shape-only, let it through. Every
+// example journey's `beats` must be the hash of its own steps, and the response must echo it.
+test('every example journey with steps carries the beatHash of those steps, and the pushRound response echoes it', () => {
+  const { beatHash } = require('../../spec/scripts/lib/surfaces')
+  const c = loadJson(CONTRACT)
+  const hash = (steps) => beatHash(steps.map((s) => ({ beat: s.beat, screen: s.screen, state: s.state || null })))
+  let checked = 0
+  for (const [name, ex] of Object.entries(c.examples)) {
+    for (const j of ex.request?.journeys || []) {
+      if (!Array.isArray(j.steps)) continue
+      checked++
+      assert.strictEqual(j.beats, hash(j.steps), `examples.${name}.request journey ${j.id}: beats must be the hash of its own steps`)
+      const echoed = (ex.response?.journeys || []).find((r) => r.id === j.id)
+      if (echoed) assert.strictEqual(echoed.beats, j.beats, `examples.${name}.response must echo the request's beats for ${j.id}`)
+    }
+  }
+  assert.ok(checked >= 1, 'at least one example journey with steps must exist, or this test pins nothing')
+})

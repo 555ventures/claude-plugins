@@ -1,6 +1,6 @@
 {
   "apiVersion": 1,
-  "revision": 1,
+  "revision": 2,
   "prefix": "/v1",
   "auth": {
     "scheme": "bearer",
@@ -53,6 +53,7 @@
     "unknown-picture": 404,
     "unknown-note": 404,
     "unknown-api-version": 404,
+    "not-found": 404,
     "round-exists": 409,
     "not-screenshots": 409,
     "round-uploading": 409,
@@ -874,7 +875,7 @@
     "hello": {
       "response": {
         "apiVersion": 1,
-        "revision": 1,
+        "revision": 2,
         "sunset": null
       }
     },
@@ -888,7 +889,7 @@
             "id": "owner-onboarding",
             "title": "Owner onboarding",
             "persona": "Mika (clinic owner) is invited, confirms her roster, and ends at the brief.",
-            "beats": "08363cd98ef8",
+            "beats": "f5eac39a8e33",
             "steps": [
               {
                 "beat": "I open the invitation",
@@ -964,7 +965,7 @@
         "journeys": [
           {
             "id": "owner-onboarding",
-            "beats": "08363cd98ef8"
+            "beats": "f5eac39a8e33"
           }
         ]
       }
@@ -1074,7 +1075,7 @@
             "journey": "owner-onboarding",
             "by": "client",
             "round": 2,
-            "beats": "08363cd98ef8",
+            "beats": "f5eac39a8e33",
             "at": "2026-09-29T10:00:00Z"
           }
         ]

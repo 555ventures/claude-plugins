@@ -64,7 +64,7 @@ test('AC-20260929-01-6: a service revision below the contract copy\'s revision e
 })
 
 test('AC-20260929-01-6: a non-null sunset prints "/v1 stops on 2027-01-31" on stderr and the push still goes ahead', async (t) => {
-  const stub = await startStub(t, { 'GET /v1': [{ status: 200, body: { apiVersion: 1, revision: 1, sunset: '2027-01-31' } }], [POST]: [pushed(1)] })
+  const stub = await startStub(t, { 'GET /v1': [{ status: 200, body: { apiVersion: 1, revision: 2, sunset: '2027-01-31' } }], [POST]: [pushed(1)] })
   const r = await runWalkthrough(makeHost(block(stub.url)), pushArgs())
   assert.strictEqual(r.status, 0, 'a sunset is a warning, not a refusal: ' + JSON.stringify(r))
   assert.match(r.stderr, /\/v1 stops on 2027-01-31/, 'the owner must be told the date before the service stops: ' + r.stderr)

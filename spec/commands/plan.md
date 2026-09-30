@@ -62,7 +62,8 @@ Write the spec per the template. `status: draft`. While drafting:
 - **Decomposition cap:** core § Decomposition. A facade with no consumer in the spec or its
   series is mis-sliced — fold it into the consumer's.
 - **File Plan row grammar:** every touched file gets its own row (Path | Action | Layer |
-  Summary; Layer ∈ the host's layerGroups flattened, plus `tests` and `other`). A row bundling
+  Summary; Layer ∈ the host's layerGroups flattened, plus `tests`, `other` and `baseline` —
+  `spec/templates/spec.md`'s File Plan comment). A row bundling
   an edit to a different file inside its Summary hands a worker a file its contract forbids
   touching — bundled edits get their own row, or a note outside the table.
 - **ACs** follow `spec/templates/spec.md`'s `## Acceptance Criteria` comment verbatim — shape,

@@ -73,8 +73,18 @@ function printUsage(message) {
 // a run started outside any repository, where there is nothing to derive from.
 function defaultReposRoot() {
   try {
-    const top = execFileSync('git', ['rev-parse', '--show-toplevel'],
+    const git = (args) => execFileSync('git', ['rev-parse', ...args],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    const top = git(['--show-toplevel'])
+    // A linked worktree's top level sits inside its main checkout (`<repo>/.claude/worktrees/
+    // <name>`), so its parent holds no checkout at all — the same silent zero as above, on every
+    // run a spec's own worktree starts. The common git dir is shared by every worktree of one
+    // repository, so its parent is the main checkout whichever worktree the run started in.
+    const common = git(['--git-common-dir'])
+    if (common) {
+      const commonAbs = fs.realpathSync(path.resolve(process.cwd(), common))
+      if (path.basename(commonAbs) === '.git') return path.dirname(path.dirname(commonAbs))
+    }
     if (top) return path.dirname(top)
   } catch {
     // Not a repository, or git unavailable — fall through to the homedir default.

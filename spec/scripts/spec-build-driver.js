@@ -35,6 +35,11 @@
 //   INTEGRATION -> GATE (driver-only) -> REPAIR? (cap 3; 4th -> ESCALATE, terminal) ->
 //   CAPTURE? (lane: behaviour only, after a green gate) -> COMMIT -> DONE (terminal)
 //
+// A `baseline`-layer File Plan row names a file that can only be produced from the built product
+// and approved by a person (a screenshot baseline, a golden file). It is no tests-layer row — TESTS
+// never demands it and red-check never runs it — and no wave owns it; `--mark integrated` refuses
+// while one is missing, so the person's approval lands before the gate runs, never as a repair round.
+//
 // specs/20260910/07-post-gate-command.md: a host's optional `postGateCommand` config key is
 // chained into runGate()'s ONE bash -c child after the resolved scoped gate
 // (`<gate> && echo '== postGateCommand' && <post>`) — a red post-gate enters this driver's
@@ -168,9 +173,13 @@ const pipelineRulesPath = (() => {
 // File Plan body text never moves when only the frontmatter is edited (stamping diff_base,
 // flipping status) — computed once against the pre-image text.
 const filePlanRows = parseFilePlanRows(specText)
+const isBaselineRow = (r) => /^baselines?$/i.test((r.layer || '').trim())
+const baselinePaths = filePlanRows
+  .filter((r) => isBaselineRow(r) && (r.action || '').trim().toUpperCase() !== 'DELETE')
+  .flatMap((r) => r.paths)
 const hasTestsRows = filePlanRows.some((r) => /^tests?$/i.test((r.layer || '').trim()))
 const needsRedAttribution = filePlanRows.some((r) =>
-  !/^tests?$/i.test((r.layer || '').trim()) && (r.action || '').trim().toUpperCase() === 'CREATE')
+  !/^tests?$/i.test((r.layer || '').trim()) && !isBaselineRow(r) && (r.action || '').trim().toUpperCase() === 'CREATE')
 
 // ---- D2: admission ------------------------------------------------------------------------------
 const OWNING_COMMAND = { draft: '/spec:plan', done: '/spec:status', superseded: '/spec:status' }
@@ -402,7 +411,7 @@ if (!STATE_ONLY) {
 // ---- wave derivation (D2/Behavior) ---------------------------------------------------------------
 function computeWaveOrder() {
   const layerGroups = Array.isArray(hostConfig.layerGroups) ? hostConfig.layerGroups : []
-  const nonTests = filePlanRows.filter((r) => !/^tests?$/i.test((r.layer || '').trim()))
+  const nonTests = filePlanRows.filter((r) => !/^tests?$/i.test((r.layer || '').trim()) && !isBaselineRow(r))
   const rowsByLayer = new Map()
   for (const r of nonTests) {
     const layer = (r.layer || 'other').trim() || 'other'
@@ -792,7 +801,8 @@ function handleTestsAuthored() {
   const rows = filePlanRows.filter((r) =>
     /^tests?$/i.test((r.layer || '').trim()) && (r.action || '').trim().toUpperCase() !== 'DELETE')
   const remedy = ' — author it, then re-run `node ' + __filename + ' ' + specPath +
-    ' --mark tests-authored`'
+    ' --mark tests-authored` (a file only the built product can produce and only a person may ' +
+    'approve belongs on a `baseline`-layer row instead: it is expected at INTEGRATION, not here)'
   let treeCache = null
   for (const r of rows) {
     for (const p of r.paths) {
@@ -834,7 +844,7 @@ function handleTestsAuthored() {
 // stop a build whose pre-image is provably clean.
 function handleRedAttributed() {
   const rows = filePlanRows.filter((r) =>
-    !/^tests?$/i.test((r.layer || '').trim()) && (r.action || '').trim().toUpperCase() === 'CREATE')
+    !/^tests?$/i.test((r.layer || '').trim()) && !isBaselineRow(r) && (r.action || '').trim().toUpperCase() === 'CREATE')
   const createPaths = rows.flatMap((r) => r.paths)
 
   // D7's resume arm already answered the residue question for this run: on a cold resume with
@@ -928,8 +938,26 @@ function handleWaveDone() {
   return null
 }
 
+// A baseline-layer row is verified here rather than at TESTS or a wave: the file does not exist
+// until the waves have landed the product it is drawn from. Globs expand as every other row's do.
+function missingBaselinePaths() {
+  let treeCache = null
+  return baselinePaths.filter((p) => {
+    if (!/[*?[]/.test(p)) return !fs.existsSync(path.join(repoRoot, p))
+    if (treeCache === null) treeCache = walkTree(repoRoot, repoRoot)
+    return !treeCache.some((f) => globMatch(p, f))
+  })
+}
+
 function handleIntegrated() {
   if (pendingWave()) die('integrated refused — a wave is still pending; mark every wave-done first')
+  const missing = missingBaselinePaths()
+  if (missing.length) {
+    die('integrated refused — missing baseline-layer File Plan path(s): ' + missing.join(', ') +
+      ' — a person produces these from the built product and approves them (the host\'s ' +
+      'pipeline rules § Build names the command); the gate has not run and no repair round is ' +
+      'spent. Then re-run `node ' + __filename + ' ' + specPath + ' --mark integrated`')
+  }
   marks.integrated = true
   saveSidecar()
   runGate()
@@ -1222,7 +1250,7 @@ function redFindingsStepBody() {
 }
 function redAttributionStepBody() {
   const createPaths = filePlanRows.filter((r) =>
-    !/^tests?$/i.test((r.layer || '').trim()) && (r.action || '').trim().toUpperCase() === 'CREATE')
+    !/^tests?$/i.test((r.layer || '').trim()) && !isBaselineRow(r) && (r.action || '').trim().toUpperCase() === 'CREATE')
     .flatMap((r) => r.paths)
   return `## Step: red attribution — confirm the red is attributable to code that does not exist yet\n` +
     `Non-tests CREATE row(s) that must NOT exist on disk yet:\n` +
@@ -1263,6 +1291,11 @@ function integrationStepBody() {
     `New File Plan files this build created are staged into the index with \`git add -N\` when ` +
     `the gate runs, so an index-reading host check (a size or duplication baseline) already ` +
     `counts them — reconcile it now if it needs raising, rather than in a repair round. Then:\n` +
+    (baselinePaths.length
+      ? `STOP for a person first — these baseline-layer File Plan files are produced from the ` +
+        `built product and approved by a person, never by this session (the mark below refuses ` +
+        `while one is missing):\n` + baselinePaths.map((p) => '  ' + p).join('\n') + '\n'
+      : '') +
     `Then: node ${__filename} ${specPath} --mark integrated`
 }
 function repairStepBody() {

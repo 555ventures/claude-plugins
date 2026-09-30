@@ -38,10 +38,15 @@ const { parseFilePlan, parseFilePlanRows } = require('./file-plan')
 function resolveGate(specText, config) {
   let gate = config.gateCommand
   if (!/\{testDirs\}|\{scopeDirs\}/.test(gate)) return { gate }
-  const layerTests = parseFilePlanRows(specText)
+  const rows = parseFilePlanRows(specText)
+  const layerTests = rows
     .filter(r => r.layer && /^tests?$/i.test(r.layer.trim())).flatMap(r => r.paths)
+  // A baseline-layer file (a screenshot a person approves) usually lives under the tests
+  // directory; it is an input to a test, never a test file the gate can be pointed at.
+  const baselines = new Set(rows
+    .filter(r => r.layer && /^baselines?$/i.test(r.layer.trim())).flatMap(r => r.paths))
   const heuristic = parseFilePlan(specText)
-    .filter(f => /(^|\/)tests?\//.test(f) || /\.(test|spec)\.[a-z]+$/.test(f))
+    .filter(f => !baselines.has(f) && (/(^|\/)tests?\//.test(f) || /\.(test|spec)\.[a-z]+$/.test(f)))
   const testFiles = [...new Set([...layerTests, ...heuristic])].filter(f => !/(^|\/)fixtures\//.test(f))
   if (!testFiles.length) return { gate: null, reason: 'no File Plan test rows to resolve {testDirs}' }
   const globs = new Set()

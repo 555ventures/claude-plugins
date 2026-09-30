@@ -66,7 +66,7 @@ open_markers: 0
 ## File Plan
 
 <!-- Machine-consumed: the build stage parses this table into workflow batches.
-     Layer ∈ the host config's layerGroups (flattened, in order) plus tests | other. -->
+     Layer ∈ the host config's layerGroups (flattened, in order) plus tests | other | baseline. -->
 
 | Path | Action | Layer | Summary |
 |------|--------|-------|---------|

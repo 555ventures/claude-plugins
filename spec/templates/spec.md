@@ -40,7 +40,9 @@ depended_on_by: []
 ## File Plan
 
 <!-- Machine-consumed: the build stage parses this table into workflow batches.
-     Layer ∈ the host config's layerGroups (flattened, in order) plus tests | other.
+     Layer ∈ the host config's layerGroups (flattened, in order) plus tests | other | baseline
+     (baseline = a file only the built product can produce and a person approves, e.g. a
+     screenshot; demanded before the gate runs, never at TESTS).
      Tests rows list their AC-IDs in Summary. -->
 
 | Path | Action | Layer | Summary |

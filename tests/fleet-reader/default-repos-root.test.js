@@ -3,6 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
+const { spawnSync } = require('node:child_process')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
 // specs/20260820/05-fleet-evidence-reader.md: the fleet is re-derived every run, never stored —
@@ -52,4 +53,23 @@ test('an explicit --repos-root still wins over the derived default', () => {
   assert.deepStrictEqual(out.population.repos.map((x) => x.name), ['other-repo'],
     'the flag is the explicit override — if the derived default still wins, a caller can no longer ' +
     'point the reader at another machine\'s copied checkouts: ' + r.stdout)
+})
+
+test('a bare run inside a linked worktree scans the checkouts beside its MAIN checkout — a spec\'s own worktree is where builds run, and its parent directory holds no checkout', () => {
+  const fleet = tmpdir('fleet-default-root')
+  const here = mkRepo(fleet, 'invoking-repo')
+  mkRepo(fleet, 'sibling-repo')
+  const wt = path.join(here, '.claude/worktrees/spec-01-x')
+  const add = spawnSync('git', ['-C', here, 'worktree', 'add', '-q', '-b', 'spec/01-x', wt], { encoding: 'utf8' })
+  assert.strictEqual(add.status, 0, 'fixture: git worktree add must succeed: ' + add.stderr)
+
+  const r = runNode(SCRIPT, ['--json'], { cwd: wt })
+  assert.strictEqual(r.status, 0, r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.strictEqual(out.population.reposRoot, fs.realpathSync(fleet),
+    'from a linked worktree the default repos-root must still be the main checkout\'s parent — if ' +
+    'it is the worktrees directory instead, zero repos are scanned and every recurrence count a ' +
+    'build reads there is zero at exit 0: ' + r.stdout)
+  assert.deepStrictEqual(out.population.repos.map((x) => x.name).sort(), ['invoking-repo', 'sibling-repo'],
+    'both checkouts must be discovered from inside the worktree: ' + r.stdout)
 })

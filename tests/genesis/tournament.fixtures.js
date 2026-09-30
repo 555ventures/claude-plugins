@@ -173,12 +173,6 @@ function ratifyBriefArtifacts(dir) {
     '| id | what | step | cost | note |',
     '| - | - | - | - | - |', '',
   ].join('\n'))
-  writeFile(path.join(dir, 'docs/design/doctrine.md'), [
-    '# Design doctrine', '',
-    '## Dissents',
-    'Nothing rejected — synthetic fixture with no composed directions.',
-  ].join('\n'))
-  writeJSON(path.join(dir, '.claude/genesis/design-rules.json'), { rules: [] })
   writeFile(path.join(dir, 'design/tokens.css'), ':root { --brand: #123; }\n')
   ensureJourneysAndNonUiSections(dir)
 }

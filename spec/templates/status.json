@@ -7,7 +7,6 @@
   "tournament": null,
   "brief": null,
   "stackDescriptorPath": ".claude/genesis/stack-descriptor.json",
-  "designManifestPath": ".claude/genesis/design-rules.json",
   "gateCommand": null,
   "lastUpdated": null,
   "marks": {},

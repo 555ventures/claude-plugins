@@ -32,7 +32,7 @@ repo-relative and required when the block is present; `app` stays optional — t
 written by `/spec:mocks` and genesis, and equal to `design/mocks/status.json`'s own `app`),
 `release` (see § Release), `prototype` (see § Prototype), `walkthrough` (see § Walkthrough), `capabilities` (see § Capabilities),
 the rule-enforcement keys `enforcementManifest` and `rulesEnforcementHash` (see § Rule
-enforcement), and the genesis-handoff keys `genesisStackDescriptor` and `designRulesHash`
+enforcement), and the genesis-handoff key `genesisStackDescriptor`
 (see § Genesis handoff).
 
 ## Runtime verification (required)
@@ -185,17 +185,9 @@ on-disk artifacts instead of re-deciding:
 
 - `genesisStackDescriptor` — path to `.claude/genesis/stack-descriptor.json` (archetype, stack,
   `designCatalog`, resolved `gateCommand`). Optional; absent in repos not seeded by the genesis stage.
-- `designRulesHash` — hash of the rules manifest, stamped by `/spec:init`; `/spec:doctor`
-  recomputes it and warns when the design rules changed but enforcement was not regenerated.
 
-**Decide vs implement.** The manifest's rules carry a `targetCategory` **enum only** — a category,
-never a tool name. `/spec:enforce` owns the single category→enforcer selection per detected stack
-and is the sole enforcement generator (`/spec:init` ends by invoking it). The design enum
-(`color | typography | i18n | structure | a11y | density | layout`) folds into the enforcement
-category taxonomy as a pre-classified input — `color | typography | density` fold into
-`kit-discipline`, since a kit-backed host mechanizes those through the same rules-file check that
-walks its kit directory. A category with no mechanical enforcer on the stack becomes a
-Review-Check prose rule — never silently dropped.
+Design rules reach `/spec:enforce` through the `design` block (the `kit-discipline` cell plus the
+per-layer naming cells); any other design rule is a written host rule.
 
 ## Rule enforcement (optional — present after `/spec:enforce` has run)
 

@@ -1018,7 +1018,7 @@ test('AC-20260827-04-5: spec/doctrine/genesis.md carries the Conventions Probe S
 // templates), AC-20260902-08-17 (shared-for genesis regression).
 // ---------------------------------------------------------------------------
 
-test('AC-20260902-08-10: spec/doctrine/genesis.md carries a "## Genesis: Brief State" heading and neither "## Genesis: Explore State" nor "## Genesis: Design State", and citations-check.js over spec/ reports MISS=0', () => {
+test('AC-20260902-08-10 (reused by AC-20260930-01-7): spec/doctrine/genesis.md carries a "## Genesis: Brief State" heading and neither "## Genesis: Explore State" nor "## Genesis: Design State", and citations-check.js over spec/ reports MISS=0', () => {
   const src = read('spec/doctrine/genesis.md')
   assert.match(src, /^## Genesis: Brief State$/m,
     'D9: spec/doctrine/genesis.md must carry the "## Genesis: Brief State" heading — its absence means the new BRIEF state (D3/D4/D6\'s ratification contract) has no doctrine section governing it')

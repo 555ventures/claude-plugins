@@ -52,13 +52,6 @@ violations not in that baseline. A candidate for either category must additional
 baseline / known-violations mode (Phase 3); a candidate without one fails verify for these
 categories — the existing fallback order (sweep → review-check) applies.
 
-Genesis-seeded repos also carry `.claude/genesis/design-rules.json` whose rules use a design enum
-(`color | typography | i18n | structure | a11y | density | layout`). Fold these in as **pre-classified
-inputs**: `structure → module-boundary`; `color | typography | density → kit-discipline`;
-`i18n | layout → forbidden-symbol` or `structural-pattern`; `a11y → structural-pattern` (or
-judgment residue if no AST check fits). No design category folds into the ratchet categories
-(`duplication`, `cycle`) — they arrive only via a written host rule or the Phase 5 propose flow.
-
 ## The judgment residue (do NOT mechanize — compose over, don't duplicate)
 
 After mechanization, a small set genuinely resists a deterministic check and stays with the
@@ -73,8 +66,7 @@ function's parameters, **naming tense** (imperative vs past), **sentinel usage**
 Take the `workspace-scan --json` list from Setup — an empty result means one root workspace
 whose stack is confirmed from the config and manifests as today, exactly as before this cell
 grammar existed. Read the host's full rule surface — `pipelineRules`, everything under
-`.claude/rules/` and `docs/rules|standards/`, `AGENTS.md` / `CLAUDE.md`, and
-`.claude/genesis/design-rules.json` if present. For each clause decide one of:
+`.claude/rules/` and `docs/rules|standards/`, `AGENTS.md` / `CLAUDE.md`. For each clause decide one of:
 
 - **mechanizable** → assign a category + the detected stack(s) it applies to, and the rule-doc
   path(s) carrying its text. (Detect stacks from the config + repo manifests; a polyglot repo has
@@ -285,8 +277,7 @@ Write `.claude/rules/enforcement.json` — the enforcement manifest (one entry p
 ```
 
 Then stamp the host config (`.claude/spec.config.json`): set `enforcementManifest`
-(`".claude/rules/enforcement.json"`) and `rulesEnforcementHash` (hash of that manifest, the same
-way `designRulesHash` hashes `design-rules.json`). `/spec:doctor` recomputes the hash and warns
+(`".claude/rules/enforcement.json"`) and `rulesEnforcementHash` (hash of that manifest). `/spec:doctor` recomputes the hash and warns
 when rules changed but enforcement was not regenerated — the early-detection signal.
 
 ## Phase 7 — Report

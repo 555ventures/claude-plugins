@@ -80,11 +80,7 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
    `/spec:enforce`'s job, not this check's.
 9. **Genesis handoff** (only if `.claude/genesis/status.json` exists) — the consume-side
    contract is intact: `genesisStackDescriptor` (when recorded) exists and parses;
-   `design-rules.json` hash matches `designRulesHash` (mismatch → "re-run /spec:enforce");
-   every design rule's `targetCategory` is in the reserved design set
-   (`color | typography | i18n | structure | a11y | density | layout`); each encodable
-   dimension is tokenized or recorded DEFERRED in the doctrine `## Dissents`; every
-   `docs/adr/*.md` and the design doctrine has a `## Dissents` section (presence only).
+   every `docs/adr/*.md` has a `## Dissents` section (presence only).
 10. **Rule enforcement** (only if the config has an `enforcementManifest`) — recompute the
     manifest hash vs `rulesEnforcementHash` (mismatch → "re-run /spec:enforce"); every
     entry's `category` is in the reserved taxonomy; each entry's `workspace` directory

@@ -96,7 +96,8 @@
 //                 merged into HEAD (names `harden/<stem> is not merged into HEAD`) or while
 //                 `harden/<stem>` does not exist at all (names `/spec:prototype`), and
 //                 `--mark captured`/`--mark capture-accepted` refusals: the capture stub exiting
-//                 non-zero (forwards its stderr verbatim, writes no capture-state.json) or
+//                 non-zero (forwards its stderr verbatim, writes no capture-state.json), a
+//                 relative contract url while `prototype.url` is undeclared (names it), or
 //                 `capture-accepted` naming a pair with `diffs: 0` (names "has no diffs").
 
 'use strict'
@@ -703,6 +704,9 @@ function handleCaptured() {
   const viewport = contract.viewport || { width: 1280, height: 800 }
   const capturesDir = path.join(sidecarDir, 'captures')
   fs.mkdirSync(capturesDir, { recursive: true })
+  // The freeze writes each state's url RELATIVE to prototype.url (spec 02 Contracts); the browser
+  // refuses a bare path, so the base is joined here. An absolute url passes through unchanged.
+  const protoBase = (hostConfig.prototype && typeof hostConfig.prototype.url === 'string') ? hostConfig.prototype.url : ''
 
   const pairs = []
   const details = []
@@ -710,8 +714,14 @@ function handleCaptured() {
     for (const [stateName, entry] of Object.entries(states)) {
       const baselinePath = path.join(designDir, entry.capture)
       const currentPath = path.join(capturesDir, path.basename(entry.capture))
+      const absolute = /^https?:\/\//.test(entry.url || '')
+      if (!absolute && !protoBase) {
+        die('contract url ' + entry.url + ' for ' + route + ' (' + stateName + ') is relative and prototype.url is ' +
+          'not declared — remedy: declare prototype.url in the host config (/spec:doctor), then re-run --mark captured')
+      }
+      const captureUrl = absolute ? entry.url : protoBase + entry.url
       const capR = runChild(process.execPath,
-        [protoCaptureBin, '--host', repoRoot, '--url', entry.url, '--out', currentPath,
+        [protoCaptureBin, '--host', repoRoot, '--url', captureUrl, '--out', currentPath,
           '--composites', composites, '--viewport', viewport.width + 'x' + viewport.height],
         { encoding: 'utf8' }, 'proto-capture.js (capture)')
       if (capR.status !== 0) {
@@ -735,7 +745,7 @@ function handleCaptured() {
           (diffR.stdout + diffR.stderr).trim())
       }
       pairs.push({ route, state: stateName, diffs: entries.length, accepted: false })
-      details.push({ route, state: stateName, url: entry.url, entries })
+      details.push({ route, state: stateName, url: captureUrl, entries })
     }
   }
 

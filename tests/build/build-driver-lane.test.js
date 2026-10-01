@@ -201,6 +201,28 @@ test('AC-20260928-03-3: WHEN --mark captured runs with the stub reporting zero d
     'the next bare invocation must report state COMMIT once every pair is at zero diffs: ' + stateOfB(host))
 })
 
+// The freeze writes contract urls relative to prototype.url (spec 20260928/02 Contracts); every
+// other fixture here spells them absolute, which is how the bare-path defect stayed invisible.
+test('--mark captured joins prototype.url onto a relative contract url, so the capture is sent to a full address', () => {
+  const contract = {
+    schemaVersion: 1, brief: '28', stem: '28-functional-prototype',
+    viewport: { width: 1280, height: 800 }, composites: ['WomenList'],
+    routes: { '/women': { default: { url: '/women', capture: 'captures/women--default.json' } } },
+  }
+  const host = makeHost({ lane: 'behaviour', brief: 28, contract })
+  driveBehaviourToIntegration(host)
+  implementScriptsWave(host)
+  runB(host, '--mark', 'wave-done', '--wave', 'doctrine+scripts', '--workers', '2')
+  runB(host, '--mark', 'wave-done', '--wave', 'other', '--workers', '1')
+  runB(host, '--mark', 'integrated')
+
+  const r = runB(host, '--mark', 'captured')
+  assert.strictEqual(r.status, 0, 'a contract written by the real freeze (relative urls) must capture, not die on an invalid address: ' + r.stdout + r.stderr)
+  const current = JSON.parse(fs.readFileSync(path.join(host.sidecar, 'captures/women--default.json'), 'utf8'))
+  assert.strictEqual(current.url, 'http://localhost:3000/women',
+    'the capture child must receive prototype.url + the relative contract url — a bare path is refused by the browser as an invalid URL: ' + current.url)
+})
+
 // Builds a fresh behaviour-lane host driven all the way to a captured-and-diffing CAPTURE state
 // (AC-4's own fixture: 3 diffs on /women (empty), 0 on /women (default), matching the spec's
 // Contracts block verbatim) so every AC-4 test starts from the same point.

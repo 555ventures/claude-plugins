@@ -205,9 +205,11 @@ if (briefLess) {
 // Derived paths (D2) — all on the MAIN tree, never the prototype branch.
 // ---------------------------------------------------------------------------
 const stem = path.basename(briefPath, path.extname(briefPath))
-const briefNumMatch = stem.match(/^(\d+)/)
+// A brief id is NN plus an optional letter (04, 04a) — spec-status.js's normBrief shape. Taking the
+// digits alone stamps a lettered brief with its neighbour's id.
+const briefNumMatch = stem.match(/^(\d+[a-z]?)(?:-|$)/)
 const brief = briefNumMatch ? briefNumMatch[1] : stem
-const briefSlug = stem.replace(/^\d+-/, '')
+const briefSlug = stem.replace(/^\d+[a-z]?-/, '')
 const branch = 'proto/' + stem
 const worktreeName = 'proto-' + stem
 const worktreeRel = '.claude/worktrees/' + worktreeName

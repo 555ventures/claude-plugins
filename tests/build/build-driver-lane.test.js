@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { runNode, tmpdir } = require('../helpers')
 const {
-  DRIVER, makeHost, run, stateOf, toIntegration, implementScriptsWave,
+  DRIVER, makeHost, run, stateOf, toIntegration, implementScriptsWave, testFileContent,
 } = require('./build-driver.fixtures')
 
 // specs/20260928/03-the-build-reads-the-freeze.md — AC-20260928-03-1 through -5. None of
@@ -134,6 +134,56 @@ test('AC-20260928-03-2: WHEN --mark harden-merged runs before the harden branch 
     'once the session has actually run the merge, the mark must be accepted: ' + after.stdout + after.stderr)
   assert.match(after.stdout, /\(HARDEN_MERGE → TESTS\)/,
     'a verified merge must advance the state to TESTS: ' + after.stdout)
+})
+
+// The freeze's generated File Plan lists the files the harden branch carries (spec 20260928/02
+// D6); createHardenBranch() above merges only a file outside the plan, so it never exercises this.
+test('a harden merge that brings File Plan paths still reaches the first wave — red-check and the stub-residue check judge the tree against the merged pre-image, and diff_base stays at the commit before the merge', () => {
+  const host = makeHost({ lane: 'behaviour', brief: 28 })
+  runB(host)
+  const preMerge = host.g('rev-parse', 'HEAD').trim()
+  host.g('checkout', '-b', 'harden/' + host.stem)
+  fs.writeFileSync(path.join(host.root, 'other.txt'), 'exported data/API layer\n') // a MODIFY row
+  fs.writeFileSync(path.join(host.root, 'src/bar.js'), 'module.exports = () => 1\n') // a CREATE row
+  host.g('add', 'other.txt', 'src/bar.js')
+  host.g('commit', '-q', '-m', 'harden: planned files')
+  host.g('checkout', 'main')
+  mergeHardenBranch(host)
+  const merged = runB(host, '--mark', 'harden-merged')
+  assert.strictEqual(merged.status, 0, 'test setup requires the verified merge to be accepted: ' + merged.stdout + merged.stderr)
+
+  fs.writeFileSync(path.join(host.root, 'tests/foo.test.js'), testFileContent(999))
+  const authored = runB(host, '--mark', 'tests-authored')
+  assert.strictEqual(authored.status, 0,
+    'red-check must run against the merged tree, not refuse the merged File Plan files as an impure pre-image — every prototype build would stop here: ' + authored.stdout + authored.stderr)
+  assert.strictEqual(stateOfB(host), 'RED_ATTRIBUTION',
+    'a red test over the merged pre-image must land RED_ATTRIBUTION: ' + authored.stdout + authored.stderr)
+
+  const attributed = runB(host, '--mark', 'red-attributed')
+  assert.strictEqual(attributed.status, 0,
+    'a CREATE row the harden merge delivered is not stub residue — refusing it leaves the build with no way forward but hand-editing the plan: ' + attributed.stdout + attributed.stderr)
+  assert.strictEqual(stateOfB(host), 'WAVE:doctrine+scripts',
+    'with the merged files accepted as pre-image the build must advance to its first wave: ' + attributed.stdout + attributed.stderr)
+
+  assert.match(fs.readFileSync(host.spec, 'utf8'), new RegExp('^diff_base: ' + preMerge + '$', 'm'),
+    'diff_base must stay at the commit before the merge — it is review\'s range, and moving it past the merge would land the merged data/API layer on main unreviewed')
+})
+
+// Residue is still residue on this lane: a planned file written after the merge, before any wave.
+test('on the behaviour lane an uncommitted CREATE-row file written after the harden merge is still refused as stub residue', () => {
+  const host = makeHost({ lane: 'behaviour', brief: 28 })
+  runB(host)
+  createHardenBranch(host)
+  mergeHardenBranch(host)
+  runB(host, '--mark', 'harden-merged')
+  fs.writeFileSync(path.join(host.root, 'tests/foo.test.js'), testFileContent(999))
+  runB(host, '--mark', 'tests-authored')
+  assert.strictEqual(stateOfB(host), 'RED_ATTRIBUTION', 'test setup requires RED_ATTRIBUTION before the residue check can run')
+  fs.writeFileSync(path.join(host.root, 'src/bar.js'), 'module.exports = () => 1\n')
+  const r = runB(host, '--mark', 'red-attributed')
+  assert.strictEqual(r.status, 2,
+    'a stub written before its wave makes the red run meaningless — the merged pre-image must not blind the check to it: ' + r.stdout + r.stderr)
+  assert.match(r.stdout + r.stderr, /stub residue: src\/bar\.js/, 'the refusal must name the residue file: ' + r.stdout + r.stderr)
 })
 
 test('AC-20260928-03-2: WHEN no harden/ branch exists at all THE SYSTEM exits 2 naming /spec:prototype', () => {

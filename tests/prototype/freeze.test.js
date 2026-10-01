@@ -162,6 +162,44 @@ test('AC-20260928-02-6: --mark frozen exits 0, writes four correctly-named captu
     'on an empty date directory the reserved spec number must be 01: ' + contract.spec)
 })
 
+// A lettered brief (04a) sits beside its numbered neighbour (04) in docs/roadmap — spec-status.js's
+// normBrief is the id shape. Every other case here uses brief 28, which carries no letter.
+test('a lettered brief freezes under its own id: status, contract, the e2e file name and the reserved spec name all carry 04a, never the neighbouring brief 04', () => {
+  const dir = setupHost()
+  const stem = '04a-project-notes'
+  const briefRel = 'docs/roadmap/' + stem + '.md'
+  fs.writeFileSync(path.join(dir, 'docs/roadmap/04-notes.md'), 'Phase: 1\nDepends on: none\n\n# Notes\n')
+  fs.writeFileSync(path.join(dir, briefRel), 'Phase: 1\nDepends on: none\n\n# Project notes\n')
+  git(dir, 'add', '-A'); git(dir, 'commit', '-q', '-m', 'briefs 04 and 04a')
+  const design = path.join(dir, 'design/prototypes', stem)
+  fs.mkdirSync(design, { recursive: true })
+  fs.writeFileSync(path.join(design, 'states.json'), JSON.stringify({
+    schemaVersion: 1, viewport: { width: 1280, height: 800 }, routes: TWO_ROUTE_STATES,
+  }, null, 2) + '\n')
+  const drive = (name) => runNode(DRIVER, [briefRel, '--root', dir, '--mark', name], { env: captureEnv(dir) })
+
+  const opened = drive('opened')
+  assert.strictEqual(opened.status, 0, 'test setup requires --mark opened to succeed on the lettered brief: ' + opened.stderr)
+  fs.writeFileSync(path.join(design, 'pins.json'), JSON.stringify({ schemaVersion: 1, pins: threePins() }, null, 2) + '\n')
+  for (const name of ['round-done', 'approved']) {
+    const r = drive(name)
+    assert.strictEqual(r.status, 0, 'test setup requires --mark ' + name + ' to succeed on the lettered brief: ' + r.stderr)
+  }
+  const frozen = drive('frozen')
+  assert.strictEqual(frozen.status, 0, 'a lettered brief must freeze like any other: ' + JSON.stringify(frozen))
+
+  const status = JSON.parse(fs.readFileSync(path.join(design, 'status.json'), 'utf8'))
+  const contract = JSON.parse(fs.readFileSync(path.join(design, 'contract.json'), 'utf8'))
+  assert.strictEqual(status.brief, '04a',
+    'status.json must record the lettered id — "04" names the neighbouring brief, so its prototype database and derived test file would collide: ' + status.brief)
+  assert.strictEqual(contract.brief, '04a',
+    'contract.json must record the lettered id — the generated spec stamps this value, and the build then resolves docs/roadmap/<brief>-*.md from it: ' + contract.brief)
+  assert.strictEqual(contract.e2eFile, 'e2e/proto-04a.smoke.spec.ts',
+    'the derived test file must be named for the lettered brief — brief 04\'s own prototype would otherwise overwrite it: ' + contract.e2eFile)
+  assert.strictEqual(contract.spec, 'specs/' + TODAY + '/01-project-notes.md',
+    'the reserved spec name must drop the whole brief id, letter included, exactly as it drops a plain number: ' + contract.spec)
+})
+
 test('AC-20260928-02-6: --mark frozen reserves spec number 03 when specs 01 and 02 already exist in today\'s date directory', () => {
   const dir = setupHost()
   advanceToApproved(dir, TWO_ROUTE_STATES, threePins())

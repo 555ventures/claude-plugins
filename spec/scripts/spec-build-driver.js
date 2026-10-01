@@ -388,6 +388,17 @@ let resumeDirtyWarning = ''
 
 function saveSidecar() { saveSidecarLib(sidecarDir, 'build-state.json', marks) }
 
+// The tree the red tests are judged against. For every lane but behaviour this IS the build base.
+// A `lane: behaviour` build merges `harden/<stem>` after `diff_base` is pinned, and the generated
+// File Plan lists the files that merge carries — against `diff_base` they all "already differ", so
+// red-check refuses the pre-image as impure and the stub-residue check refuses every CREATE row the
+// merge delivered. The merged tree is the true pre-image, so `--mark harden-merged` records HEAD
+// and the two pre-image checks read it here. `diff_base` itself never moves: it is review's range
+// and the COMMIT reconcile's, and both must cover the merged layer — nothing else reviews it.
+function preImageBase() {
+  return (isBehaviourLane && marks.preImageBase) || resolveBase()
+}
+
 if (!STATE_ONLY) {
   if (!sidecarExisted && !justFlipped) {
     const base = resolveBase()
@@ -456,7 +467,7 @@ function ensureRedCheckAdvanced() {
   if (!hasTestsRows) return
   if (marks.redCheck === 'green' || marks.redCheck === 'skipped-resume') return
   if (!marks.testsAuthored) return
-  const base = resolveBase()
+  const base = preImageBase()
   const k = (marks.redCheckRuns || 0) + 1
   const r = runChild(process.execPath,
     [redCheckBin, '--spec', resolvedSpecPath, '--root', repoRoot, '--base', base], { encoding: 'utf8' },
@@ -679,7 +690,14 @@ function handleHardenMerged() {
     die(branch + ' is not merged into HEAD — run: git merge --no-ff ' + branch + ' -m "merge ' +
       branch + ': data and API layer from the prototype"')
   }
+  const headR = runChild('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' },
+    'git rev-parse HEAD')
+  const head = (headR.stdout || '').trim()
+  if (headR.status !== 0 || !/^[0-9a-f]{40}$/.test(head)) {
+    die('git rev-parse HEAD in ' + repoRoot + ' did not print a 40-hex commit sha')
+  }
   marks.hardenMerged = true
+  marks.preImageBase = head
   saveSidecar()
   transitionNote = '(HARDEN_MERGE → ' + deriveState() + ')'
   return null
@@ -870,7 +888,7 @@ function handleRedAttributed() {
     return null
   }
 
-  const base = resolveBase()
+  const base = preImageBase()
   const changed = changedSinceBase(base)
   const residue = createPaths.filter((p) => changed.has(p))
   if (residue.length) {
@@ -879,8 +897,11 @@ function handleRedAttributed() {
       'the working tree to match the base, then re-run this mark')
   }
 
+  // Asked of the build base, never the merged pre-image: a CREATE row the harden merge delivered
+  // is tracked at the pre-image by design, and is no stale row.
+  const buildBase = resolveBase()
   const trackedAtBase = createPaths.filter((p) => {
-    const r = runChild('git', ['-C', repoRoot, 'cat-file', '-e', base + ':' + p],
+    const r = runChild('git', ['-C', repoRoot, 'cat-file', '-e', buildBase + ':' + p],
       { encoding: 'utf8' }, 'git cat-file -e (CREATE row tracked at base)')
     return r.status === 0
   })

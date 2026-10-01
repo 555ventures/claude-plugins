@@ -1,6 +1,6 @@
 ---
 date: 2026-10-01
-status: implementing
+status: done
 build_base: design-retool
 tier: critical
 area: prototype

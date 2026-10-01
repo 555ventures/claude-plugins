@@ -137,7 +137,9 @@ pathspec globs naming the data and API layer the freeze exports off the prototyp
 optional `dbCreate` / `dbDestroy` (shell strings run with cwd = the prototype worktree and env
 `PROTO_BRANCH`, `PROTO_WORKTREE`, `PROTO_BRIEF`), optional `gate` (the command the freeze runs
 on the prototype tree when the host `gateCommand` carries a `{testDirs}`/`{scopeDirs}`
-placeholder). Absent block = the host has never declared a prototype path — the driver refuses
+placeholder), optional `storageState` (a host-root-relative path to a Playwright storage-state file — one
+saved sign-in every capture loads, at the freeze and at the build's capture gate; absent = captures
+run signed out; never tracked by git). Absent block = the host has never declared a prototype path — the driver refuses
 naming this block and `/spec:doctor`.
 
 ## Walkthrough (optional — present when the project reviews wireframes on the hosted service)

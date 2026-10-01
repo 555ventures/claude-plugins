@@ -138,7 +138,7 @@ function captureWith(hostDir, url) {
   return { outFile, r: runCapture(['--host', hostDir, '--url', url, '--out', outFile, '--composites', 'A']) }
 }
 
-test('proto-capture exits 2 naming the redirect and writes nothing when the route settles on a different path (a signed-out login redirect)', () => {
+test('proto-capture exits 2 naming the redirect and writes nothing when the route settles on a different path (a signed-out login redirect) — AC-20261001-01-6', () => {
   const host = stubHost('proto-capture-redirect', { finalUrl: 'http://localhost:3000/login?next=/women', fiber: { _debugOwner: null } })
   const { outFile, r } = captureWith(host, 'http://localhost:3000/women')
   assert.strictEqual(r.status, 2, 'a redirected capture must refuse, never record the login page as the baseline: ' + JSON.stringify(r))

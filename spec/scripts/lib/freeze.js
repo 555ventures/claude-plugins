@@ -11,6 +11,10 @@
 // them owns status.json/marks bookkeeping: the driver reads/writes status.json itself and passes
 // this module whatever facts each step needs, so the persisted-state contract stays in one place.
 //
+// specs/20261001/01-the-freeze-signs-in-and-derives-its-tier.md D5/D7: `riskTierHits` matches the
+// generated File Plan paths against the host rules' § Risk Tiers code spans (paths only, never
+// diff content), and `writeSpec` renders the derived tier and its Rationale basis sentence.
+//
 // What this deliberately does NOT do: read or write design/prototypes/<stem>/status.json, decide
 // which mark a driver invocation should record, or print anything to stdout/stderr — every
 // function returns a plain result object (`{ ok: true, ... }` or `{ ok: false, message }`) and
@@ -416,7 +420,7 @@ function titleCase(briefSlug) {
 
 // pinsById: { [pinId]: { note, screen, state } } — read fresh from pins.json by the caller
 // (still on disk at tests-derived time, before runDbDestroy/removeProtoWorktreeAndBranch run).
-function writeSpec({ root, specPath, brief, briefSlug, briefText, contract, filePlanRows, e2eFile, pinsById }) {
+function writeSpec({ root, specPath, brief, briefSlug, briefText, contract, filePlanRows, e2eFile, pinsById, tier, tierHits }) {
   const templatePath = path.join(__dirname, '..', '..', 'templates', 'prototype-spec.md')
   let template = fs.readFileSync(templatePath, 'utf8')
   // Strip the leading HTML comment block (the token/grammar documentation) — it is authoring
@@ -449,7 +453,25 @@ function writeSpec({ root, specPath, brief, briefSlug, briefText, contract, file
       ') is exercised THE SYSTEM SHALL pass its derived test → writes ' + e2eFile
   }).join('\n')
 
+  const hits = tierHits || []
+  const tierValue = tier || 'standard'
+  const guard = 'the host\'s pipeline rules § Risk Tiers'
+  let tierBasis
+  if (hits.length === 0) {
+    tierBasis = tierValue === 'critical'
+      ? 'Tier: critical — declared at freeze; no File Plan path is named in ' + guard + '.'
+      : 'Tier: standard — no File Plan path is named in ' + guard + '.'
+  } else {
+    const more = hits.length === 1 ? '' : ' and ' + (hits.length - 1) + ' more'
+    const named = '`' + hits[0].path + '` is named in ' + guard + ' (`' + hits[0].trigger + '`)' + more
+    tierBasis = tierValue === 'critical'
+      ? 'Tier: critical because ' + named + '; the user confirmed the lock at freeze.'
+      : 'Tier: standard — ' + named + '; ruled not a risk change by the user at freeze.'
+  }
+
   const substitutions = {
+    tier: tierValue,
+    tierBasis,
     date: dateFmt,
     brief,
     area: briefSlug,
@@ -475,7 +497,67 @@ function writeSpec({ root, specPath, brief, briefSlug, briefText, contract, file
   return abs
 }
 
+// ---------------------------------------------------------------------------
+// D5: riskTierHits — which generated File Plan paths the host's pipeline rules § Risk Tiers
+// spells as code. Paths only: no diff content is read and no prose statement is judged.
+// ---------------------------------------------------------------------------
+// `{a,b}` groups holding a comma, innermost-first (the pattern admits no nested brace); a group
+// without a comma stays literal.
+function braceExpand(glob) {
+  const m = /\{([^{}]*,[^{}]*)\}/.exec(glob)
+  if (!m) return [glob]
+  const out = []
+  for (const alt of m[1].split(',')) {
+    out.push(...braceExpand(glob.slice(0, m.index) + alt + glob.slice(m.index + m[0].length)))
+  }
+  return out
+}
+
+function riskTierHits({ root, config, paths }) {
+  const rulesPath = config && config.pipelineRules
+  const fail = () => ({
+    ok: false,
+    message: 'cannot derive the generated spec\'s tier — ' + rulesPath + ' is unreadable or has no "## Risk Tiers" section; ' +
+      'remedy: run /spec:doctor, then re-run --mark tests-derived',
+  })
+  if (typeof rulesPath !== 'string' || rulesPath === '') return fail()
+  let text
+  try {
+    text = fs.readFileSync(path.join(root, rulesPath), 'utf8')
+  } catch {
+    return fail()
+  }
+  const lines = text.split('\n')
+  const start = lines.findIndex((l) => l.startsWith('## Risk Tiers'))
+  if (start === -1) return fail()
+  let end = lines.length
+  for (let i = start + 1; i < lines.length; i++) {
+    if (lines[i].startsWith('## ')) { end = i; break }
+  }
+  const spans = []
+  for (const line of lines.slice(start + 1, end)) {
+    const re = /`([^`]+)`/g
+    let m
+    while ((m = re.exec(line)) !== null) {
+      if (/\s/.test(m[1])) continue
+      const candidates = braceExpand(m[1]).map((g) => {
+        let c = g.startsWith('./') ? g.slice(2) : g
+        if (c.endsWith('/')) c += '**'
+        return c
+      })
+      spans.push({ span: m[1], candidates })
+    }
+  }
+  const hits = []
+  for (const p of paths) {
+    const found = spans.find((s) => s.candidates.some((c) => globMatch(c, p)))
+    if (found) hits.push({ path: p, trigger: found.span })
+  }
+  return { ok: true, rulesPath, hits }
+}
+
 module.exports = {
+  riskTierHits,
   compositeNames,
   gateCheck,
   routeSlug,

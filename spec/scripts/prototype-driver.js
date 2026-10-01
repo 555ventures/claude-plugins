@@ -561,7 +561,21 @@ function cmdMarkFrozen() {
   if (!statesHasRoutes(statesDoc)) {
     die(statesRel + ' has no routes — remedy: author it with at least one route carrying at least one state')
   }
-  const captureResult = freeze.captureAll({ root, designDir, config: cfg, statesDoc, composites })
+  // One resolved size, used for both the captures and the contract: a contract size the
+  // captures did not use makes every build-time pair a false difference. A malformed value is
+  // refused, never silently replaced by the default: the default would freeze at a size the
+  // author did not ask for.
+  const isPosInt = (n) => Number.isInteger(n) && n > 0
+  let viewport = { width: 1280, height: 800 }
+  if (statesDoc.viewport !== undefined) {
+    const v = statesDoc.viewport
+    if (!v || typeof v !== 'object' || !isPosInt(v.width) || !isPosInt(v.height)) {
+      die(statesRel + ': viewport must be { width, height } positive integers — got ' + JSON.stringify(v) +
+        '; remedy: fix or remove it (absent = 1280x800), then re-run --mark frozen')
+    }
+    viewport = { width: v.width, height: v.height }
+  }
+  const captureResult = freeze.captureAll({ root, designDir, config: cfg, statesDoc, composites, viewport })
   if (!captureResult.ok) die(captureResult.message)
 
   // D3(8): reserve the spec number and this freeze's AC ids, before D3(7) writes the contract.
@@ -571,7 +585,7 @@ function cmdMarkFrozen() {
   // D3(7): contract.json.
   freeze.writeContract({
     designDir, brief, stem, base: status.base,
-    viewport: (statesDoc && statesDoc.viewport) || { width: 1280, height: 800 },
+    viewport,
     routes: captureResult.routes, composites, ids: captureResult.ids,
     pinsTest: behaviourPins.map((p) => p.id), pinsLook: lookPins.map((p) => p.id),
     spec: reserved.specPath, e2eFile, tests: reserved.tests,

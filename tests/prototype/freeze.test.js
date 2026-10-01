@@ -611,3 +611,80 @@ test('the generated File Plan drops the dev-entry file whose prototype-branch di
   assert.ok(!specText.includes('src/main.js'), 'the overlay wiring is prototype tooling and must not ship as a File Plan row: ' + specText)
   assert.match(specText, /src\/ui\/a\.js\s*\|\s*MODIFY/, 'real outside-export edits must still be listed: ' + specText)
 })
+
+// One viewport for the freeze, the contract and the build's replay: no spec owns this fix; the
+// pins below hold the behaviour. Every other fixture here uses 1280x800, the tool default, so a
+// size that is silently dropped is only visible at a different size — these use 1440x900.
+function setStatesViewport(dir, viewport, drop) {
+  const p = path.join(designDir(dir), 'states.json')
+  const doc = JSON.parse(fs.readFileSync(p, 'utf8'))
+  if (drop) delete doc.viewport
+  else doc.viewport = viewport
+  fs.writeFileSync(p, JSON.stringify(doc, null, 2) + '\n')
+}
+
+function captureDocs(dir) {
+  const capturesDir = path.join(designDir(dir), 'captures')
+  return fs.readdirSync(capturesDir).map((f) => JSON.parse(fs.readFileSync(path.join(capturesDir, f), 'utf8')))
+}
+
+test('--mark frozen asks the capture tool for the size states.json declares, so every capture file and the contract record 1440x900', () => {
+  const dir = setupHost()
+  advanceToApproved(dir, TWO_ROUTE_STATES, threePins())
+  setStatesViewport(dir, { width: 1440, height: 900 })
+  const r = markFrozen(dir)
+  assert.strictEqual(r.status, 0, 'a declared 1440x900 viewport with a capture tool that honours --viewport must freeze: ' + JSON.stringify(r))
+  const docs = captureDocs(dir)
+  assert.strictEqual(docs.length, 4, 'all four route x state captures must exist: ' + docs.length)
+  for (const d of docs) {
+    assert.deepStrictEqual(d.viewport, { width: 1440, height: 900 },
+      'a capture taken at the tool default instead of the declared size makes every build-time pair differ for no product reason: ' + JSON.stringify(d.viewport))
+  }
+  assert.deepStrictEqual(readContract(dir).viewport, { width: 1440, height: 900 },
+    'the contract must name the size the captures were taken at: ' + JSON.stringify(readContract(dir).viewport))
+})
+
+test('--mark frozen asks the capture tool for 1280x800 when states.json declares no viewport', () => {
+  const dir = setupHost()
+  advanceToApproved(dir, TWO_ROUTE_STATES, threePins())
+  setStatesViewport(dir, null, true)
+  const r = markFrozen(dir)
+  assert.strictEqual(r.status, 0, 'an absent viewport means the default size, not a refusal: ' + JSON.stringify(r))
+  for (const d of captureDocs(dir)) {
+    assert.deepStrictEqual(d.viewport, { width: 1280, height: 800 }, 'the default size must still be passed explicitly: ' + JSON.stringify(d.viewport))
+  }
+  assert.deepStrictEqual(readContract(dir).viewport, { width: 1280, height: 800 },
+    'the contract must carry the default size when none was declared: ' + JSON.stringify(readContract(dir).viewport))
+})
+
+for (const [label, bad] of [['string width', { width: '1440', height: 900 }], ['zero width', { width: 0, height: 900 }], ['null', null]]) {
+  test('--mark frozen exits 2 naming the states file and writes no contract when the viewport is malformed (' + label + ')', () => {
+    const dir = setupHost()
+    advanceToApproved(dir, TWO_ROUTE_STATES, threePins())
+    setStatesViewport(dir, bad)
+    const r = markFrozen(dir)
+    assert.strictEqual(r.status, 2, 'a malformed viewport must be refused, never replaced by the default (the freeze would silently use a size nobody asked for): ' + JSON.stringify(r))
+    assert.match(r.stderr, /viewport must be \{ width, height \} positive integers/, 'the refusal must state the shape it requires: ' + r.stderr)
+    assert.ok(r.stderr.includes('states.json'), 'the refusal must name the file to fix: ' + r.stderr)
+    assert.ok(!fs.existsSync(contractPath(dir)), 'a refused freeze must write no contract.json: ' + contractPath(dir))
+  })
+}
+
+test('--mark frozen exits 2 naming both sizes and writes no contract when the capture tool records a size other than the one requested', () => {
+  const dir = setupHost()
+  advanceToApproved(dir, TWO_ROUTE_STATES, threePins())
+  setStatesViewport(dir, { width: 1440, height: 900 })
+  const r = markFrozen(dir, { PROTO_CAPTURE_IGNORE_VIEWPORT: '1' })
+  assert.strictEqual(r.status, 2, 'a capture tool that ignores --viewport must fail the freeze, or the contract names a size the captures never had: ' + JSON.stringify(r))
+  assert.match(r.stderr, /captured at 1280x800, not the requested 1440x900/, 'the refusal must name the recorded and the requested size: ' + r.stderr)
+  assert.ok(!fs.existsSync(contractPath(dir)), 'a refused freeze must write no contract.json: ' + contractPath(dir))
+})
+
+test('--mark frozen accepts a capture file that records no viewport at all', () => {
+  const dir = setupHost()
+  advanceToApproved(dir, TWO_ROUTE_STATES, threePins())
+  setStatesViewport(dir, { width: 1440, height: 900 })
+  const r = markFrozen(dir, { PROTO_CAPTURE_OMIT_VIEWPORT: '1' })
+  assert.strictEqual(r.status, 0, 'a capture with no recorded size cannot be checked and must not block the freeze: ' + JSON.stringify(r))
+  assert.ok(fs.existsSync(contractPath(dir)), 'the contract must be written: ' + contractPath(dir))
+})

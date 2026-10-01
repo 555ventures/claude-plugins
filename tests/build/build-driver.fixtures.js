@@ -57,7 +57,10 @@ if (!url || !out) {
 const rule = scriptMap()[url] || {}
 if (rule.exit2capture) { process.stderr.write(rule.exit2capture + '\\n'); process.exit(2) }
 fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true })
-fs.writeFileSync(out, JSON.stringify({ schemaVersion: 1, url, entries: [] }, null, 2) + '\\n')
+const asked = /^(\\d+)x(\\d+)$/.exec(flag('--viewport') || '')
+const doc = { schemaVersion: 1, url, entries: [] }
+if (asked) doc.viewport = { width: Number(asked[1]), height: Number(asked[2]) }
+fs.writeFileSync(out, JSON.stringify(doc, null, 2) + '\\n')
 process.exit(0)
 `
 

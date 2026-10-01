@@ -719,7 +719,7 @@ function handleCaptured() {
   }
   const protoCaptureBin = process.env.PROTO_CAPTURE_BIN || path.join(PLUGIN, 'scripts/proto-capture.js')
   const composites = (contract.composites || []).join(',')
-  const viewport = contract.viewport || { width: 1280, height: 800 }
+  const contractViewport = contract.viewport || { width: 1280, height: 800 }
   const capturesDir = path.join(sidecarDir, 'captures')
   fs.mkdirSync(capturesDir, { recursive: true })
   // The freeze writes each state's url RELATIVE to prototype.url (spec 02 Contracts); the browser
@@ -738,6 +738,22 @@ function handleCaptured() {
           'not declared — remedy: declare prototype.url in the host config (/spec:doctor), then re-run --mark captured')
       }
       const captureUrl = absolute ? entry.url : protoBase + entry.url
+      // Replay the size the baseline was actually captured at: the baseline file is the record,
+      // the contract only a declaration, and a contract size its baselines never used must not
+      // need a re-freeze. This lookup only picks the size:
+      // an unreadable baseline is NOT handled here — the --diff call below still refuses it.
+      let viewport = contractViewport
+      try {
+        const bv = JSON.parse(fs.readFileSync(baselinePath, 'utf8')).viewport
+        if (bv && Number.isInteger(bv.width) && bv.width > 0 && Number.isInteger(bv.height) && bv.height > 0) {
+          viewport = { width: bv.width, height: bv.height }
+        }
+      } catch { /* size lookup only — the --diff call reports the unreadable baseline */ }
+      if (viewport.width !== contractViewport.width || viewport.height !== contractViewport.height) {
+        process.stderr.write('spec-build-driver: note — ' + route + ' (' + stateName + ') baseline frozen at ' +
+          viewport.width + 'x' + viewport.height + ', contract says ' + contractViewport.width + 'x' +
+          contractViewport.height + '; capturing at the frozen size\n')
+      }
       const capR = runChild(process.execPath,
         [protoCaptureBin, '--host', repoRoot, '--url', captureUrl, '--out', currentPath,
           '--composites', composites, '--viewport', viewport.width + 'x' + viewport.height],
@@ -1393,9 +1409,22 @@ function captureStepBody() {
   if (!cap) {
     const boot = (hostConfig.runtime && hostConfig.runtime.bootCommand) ||
       '(no runtime.bootCommand declared in the host config)'
+    // The capture walks React's dev-only owner chain, and the frozen states were captured over
+    // the prototype's own data and sign-in — the three conditions the session has to restore
+    // are named here, because the boot command alone restores none of them.
+    const proto = hostConfig.prototype || {}
+    const where = typeof proto.url === 'string' && proto.url ? proto.url : '(no prototype.url declared in the host config)'
+    const signIn = typeof proto.storageState === 'string' && proto.storageState
+      ? `the capture signs in from ${proto.storageState} — it must hold a live sign-in for this server`
+      : `the capture runs signed out (no prototype.storageState declared)`
     return `## Step: the rebuilt screens against the frozen capture\n` +
       `Read only: ${contractRel}\n` +
-      `Session: start the app in the background (tracked): ${boot}\n` +
+      `Session: start the app in the background (tracked) so it answers at ${where}: ${boot}\n` +
+      `  - a development build: the capture refuses a production build, so use the host's dev ` +
+      `server when the boot command builds for production\n` +
+      `  - the data each frozen state showed: the prototype's database is gone, recreate what ` +
+      `the contract's routes need\n` +
+      `  - ${signIn}\n` +
       `Then: node ${__filename} ${specPath} --mark captured`
   }
   const capRel = path.relative(repoRoot, path.join(sidecarDir, 'capture-state.json'))

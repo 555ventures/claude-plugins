@@ -109,7 +109,14 @@ function routeSlug(routePath) {
   return s
 }
 
-function captureAll({ root, designDir, config, statesDoc, composites }) {
+// `viewport` is the one size the driver resolved from states.json and also writes into the
+// contract, so the contract never names a size the captures did not use.
+// Omitted = 1280x800 so the lib stays callable standalone. Each capture file's own recorded
+// `viewport` is checked against it; a capture doc with no `viewport` key passes (older/stub
+// tools record none, and refusing them would break every caller that never recorded one).
+function captureAll({ root, designDir, config, statesDoc, composites, viewport }) {
+  const size = viewport || { width: 1280, height: 800 }
+  const sizeText = size.width + 'x' + size.height
   const captureBin = process.env.PROTO_CAPTURE_BIN || path.join(__dirname, '..', 'proto-capture.js')
   const capturesDir = path.join(designDir, 'captures')
   fs.mkdirSync(capturesDir, { recursive: true })
@@ -126,6 +133,7 @@ function captureAll({ root, designDir, config, statesDoc, composites }) {
       const outFile = path.join(capturesDir, slug + '--' + stateName + '.json')
       const r = spawnSync(process.execPath, [
         captureBin, '--host', root, '--url', url, '--out', outFile, '--composites', composites.join(','),
+        '--viewport', sizeText,
       ], { cwd: root, encoding: 'utf8', env: process.env })
       if (r.status !== 0) {
         return { ok: false, message: (r.stderr || '').trim() || 'capture failed for ' + url + ' (exit ' + r.status + ')' }
@@ -135,6 +143,14 @@ function captureAll({ root, designDir, config, statesDoc, composites }) {
         capture = JSON.parse(fs.readFileSync(outFile, 'utf8'))
       } catch (e) {
         return { ok: false, message: 'capture wrote unreadable JSON at ' + outFile + ': ' + e.message }
+      }
+      const got = capture && capture.viewport
+      if (got && typeof got === 'object' && (got.width !== size.width || got.height !== size.height)) {
+        return {
+          ok: false,
+          message: url + ' captured at ' + got.width + 'x' + got.height + ', not the requested ' + sizeText +
+            ' — check PROTO_CAPTURE_BIN honours --viewport, then re-run --mark frozen',
+        }
       }
       for (const entry of capture.entries || []) idSet.add(entry.id)
       routesOut[routePath][stateName] = {

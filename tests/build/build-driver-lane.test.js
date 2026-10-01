@@ -450,3 +450,70 @@ test('AC-20260928-03-5: a non-behaviour build\'s row carries no capture key', ()
   assert.ok(!Object.prototype.hasOwnProperty.call(row, 'capture'),
     'a build with no behaviour lane must carry no capture key at all — adding a capture gate must never change every other spec\'s row shape: ' + JSON.stringify(row))
 })
+
+// The capture gate replays the size each baseline was frozen at and names the conditions the
+// session must restore; no spec owns these — the pins hold the behaviour. Fixtures use 1440x900
+// because every other fixture is 1280x800, the size a dropped viewport falls back to.
+function toCaptureState(host) {
+  driveBehaviourToIntegration(host)
+  implementScriptsWave(host)
+  runB(host, '--mark', 'wave-done', '--wave', 'doctrine+scripts', '--workers', '2')
+  runB(host, '--mark', 'wave-done', '--wave', 'other', '--workers', '1')
+  const integrated = runB(host, '--mark', 'integrated')
+  assert.strictEqual(integrated.status, 0, 'test setup requires a green gate at integrated: ' + integrated.stdout + integrated.stderr)
+}
+
+function baselineFile(host, name) {
+  return path.join(host.root, 'design/prototypes', host.stem, 'captures', name)
+}
+
+test('--mark captured replays the size a baseline was frozen at, notes the contract disagreement on stderr, and falls back to the contract size for a baseline with no viewport', () => {
+  const host = makeHost({ lane: 'behaviour', brief: 28 })
+  toCaptureState(host)
+  const withSize = baselineFile(host, 'women--default.json')
+  const doc = JSON.parse(fs.readFileSync(withSize, 'utf8'))
+  doc.viewport = { width: 1440, height: 900 }
+  fs.writeFileSync(withSize, JSON.stringify(doc, null, 2) + '\n')
+
+  const r = runB(host, '--mark', 'captured')
+  assert.strictEqual(r.status, 0, 'a size disagreement is a note, not a refusal: ' + r.stdout + r.stderr)
+  const read = (name) => JSON.parse(fs.readFileSync(path.join(host.sidecar, 'captures', name), 'utf8'))
+  assert.deepStrictEqual(read('women--default.json').viewport, { width: 1440, height: 900 },
+    'the current capture must be taken at the baseline\'s own size, or the pair compares unlike windows: ' + JSON.stringify(read('women--default.json')))
+  assert.match(r.stderr, /frozen at 1440x900/, 'the note must name the size the baseline was frozen at: ' + r.stderr)
+  assert.match(r.stderr, /contract says 1280x800/, 'the note must name the contract size it disagrees with: ' + r.stderr)
+  assert.deepStrictEqual(read('women--empty.json').viewport, { width: 1280, height: 800 },
+    'a baseline that records no size must fall back to the contract size: ' + JSON.stringify(read('women--empty.json')))
+  assert.strictEqual((r.stderr.match(/frozen at/g) || []).length, 1,
+    'only the disagreeing pair earns a note: ' + r.stderr)
+})
+
+function captureStepHost(storageState) {
+  const host = makeHost({ lane: 'behaviour', brief: 28 })
+  if (storageState) {
+    const cfgPath = path.join(host.root, '.claude/spec.config.json')
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+    cfg.prototype.storageState = storageState
+    fs.writeFileSync(cfgPath, JSON.stringify(cfg))
+  }
+  toCaptureState(host)
+  return host
+}
+
+test('the CAPTURE step names the address, a development build, recreating the data, and the sign-in file when prototype.storageState is declared', () => {
+  const host = captureStepHost('design/auth/state.json')
+  const r = runB(host)
+  assert.match(r.stdout, /state: CAPTURE/, 'setup must reach CAPTURE: ' + r.stdout)
+  assert.ok(r.stdout.includes('http://localhost:3000'), 'the step must say where the app has to answer: ' + r.stdout)
+  assert.match(r.stdout, /development build/, 'the step must say the capture needs a dev server: ' + r.stdout)
+  assert.match(r.stdout, /the prototype's database is gone/, 'the step must say the data has to be recreated: ' + r.stdout)
+  assert.match(r.stdout, /signs in from design\/auth\/state\.json/, 'the step must name the sign-in file: ' + r.stdout)
+  assert.ok(!/runs signed out/.test(r.stdout), 'a declared sign-in must not also claim signed out: ' + r.stdout)
+})
+
+test('the CAPTURE step says the capture runs signed out when no prototype.storageState is declared', () => {
+  const host = captureStepHost(null)
+  const r = runB(host)
+  assert.match(r.stdout, /runs signed out/, 'the session must be told no sign-in is used: ' + r.stdout)
+  assert.ok(!/signs in from/.test(r.stdout), 'no sign-in file may be named when none is declared: ' + r.stdout)
+})

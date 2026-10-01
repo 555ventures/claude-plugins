@@ -32,7 +32,9 @@
 // Exit codes:
 //   0  --out written (capture mode), or an empty diff (--diff mode)
 //   1  --diff mode found a non-empty diff (summary printed as JSON on stdout)
-//   2  usage error; prototype.storageState not a path string, missing on disk, or not a readable
+//   2  usage error; --diff given two captures whose recorded viewports differ ("viewport mismatch
+//      — baseline WxH, current WxH"; a doc with no viewport is compared as before);
+//      prototype.storageState not a path string, missing on disk, or not a readable
 //      storage-state JSON file (each refused before any browser launches); @playwright/test
 //      unresolvable from --host (names it); --url unreachable; the page settled on a different
 //      path than --url ("redirected from <url> to <final>" — signed out the browser carries no
@@ -144,7 +146,18 @@ if (argv[0] === '--diff') {
   const baselinePath = argv[1]
   const currentPath = argv[2]
   if (!baselinePath || !currentPath) die('--diff needs two paths: --diff <baseline> <current>')
-  const result = diffCaptures(loadCaptureFile(baselinePath), loadCaptureFile(currentPath))
+  const baselineDoc = loadCaptureFile(baselinePath)
+  const currentDoc = loadCaptureFile(currentPath)
+  // Two captures at different window sizes differ everywhere for no product reason — refused
+  // rather than reported as a diff. A doc with no `viewport` (stub tools) is compared anyway.
+  const va = baselineDoc && baselineDoc.viewport
+  const vb = currentDoc && currentDoc.viewport
+  if (va && vb && typeof va === 'object' && typeof vb === 'object' &&
+      (va.width !== vb.width || va.height !== vb.height)) {
+    die('viewport mismatch — baseline ' + va.width + 'x' + va.height + ', current ' + vb.width + 'x' + vb.height +
+      ' (' + baselinePath + ' vs ' + currentPath + '); remedy: capture the current side at the baseline size (--viewport)')
+  }
+  const result = diffCaptures(baselineDoc, currentDoc)
   const clean = result.summary.missing === 0 && result.summary.extra === 0 && result.summary.changed === 0
   writeOut(1, JSON.stringify(result, null, 2) + '\n')
   process.exit(clean ? 0 : 1)

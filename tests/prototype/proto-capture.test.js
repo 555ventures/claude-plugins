@@ -160,3 +160,27 @@ test('proto-capture exits 2 naming a production build when fibers carry no _debu
   assert.match(r.stderr, /production build/, 'the refusal must say production build, not "no composite": ' + r.stderr)
   assert.ok(!fs.existsSync(outFile))
 })
+
+// One viewport per compared pair: no spec owns this; two captures at different window sizes
+// differ everywhere for no product reason, so --diff refuses them instead of reporting a diff.
+test('--diff exits 2 naming both sizes when the two captures were taken at different viewports', () => {
+  const dir = tmpdir('proto-capture-diff-viewport')
+  const entries = [{ id: 'X', tag: 'div', box: [1, 2, 3, 4], text: 't', styles: {} }]
+  const a = writeCapture(dir, 'a.json', baseCapture(entries))
+  const b = writeCapture(dir, 'b.json', { ...baseCapture(entries), viewport: { width: 1440, height: 900 } })
+  const r = runCapture(['--diff', a, b])
+  assert.strictEqual(r.status, 2, 'unlike sizes must be refused, or every box differs and the build reports a diff nobody made: ' + JSON.stringify(r))
+  assert.match(r.stderr, /viewport mismatch/, 'the refusal must say viewport mismatch: ' + r.stderr)
+  assert.match(r.stderr, /baseline 1280x800, current 1440x900/, 'the refusal must name which side had which size: ' + r.stderr)
+})
+
+test('--diff compares as before when one capture records no viewport', () => {
+  const dir = tmpdir('proto-capture-diff-noviewport')
+  const entries = [{ id: 'X', tag: 'div', box: [1, 2, 3, 4], text: 't', styles: {} }]
+  const noSize = baseCapture(entries)
+  delete noSize.viewport
+  const a = writeCapture(dir, 'a.json', noSize)
+  const b = writeCapture(dir, 'b.json', { ...baseCapture(entries), viewport: { width: 1440, height: 900 } })
+  const r = runCapture(['--diff', a, b])
+  assert.strictEqual(r.status, 0, 'a capture with no recorded size cannot be checked and identical entries must still diff clean: ' + JSON.stringify(r))
+})

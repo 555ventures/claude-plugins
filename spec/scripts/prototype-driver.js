@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // prototype-driver.js <brief path> [--root <dir>] [--state]
-// prototype-driver.js <brief path> [--root <dir>] --mark opened|round-done|approved|frozen|tests-derived
+// prototype-driver.js <brief path> [--root <dir>] --mark opened|round-done|approved|frozen
+// prototype-driver.js <brief path> [--root <dir>] --mark tests-derived [--tier standard|critical]
 // prototype-driver.js <brief path> [--root <dir>] serve --port <n>
 // prototype-driver.js <brief path> [--root <dir>] check [--json]
 // prototype-driver.js check [--root <dir>] [--json]   (brief-less: doctor check 23's own
@@ -48,6 +49,13 @@
 // postcondition first, so a re-run after a partial failure (e.g. a dirty worktree at deletion)
 // resumes at the first undone step rather than repeating already-committed work.
 //
+// specs/20261001/01-the-freeze-signs-in-and-derives-its-tier.md D4-D6: `check` also flags a
+// `prototype.storageState` file that the VCS tracks (a saved sign-in holds live session cookies;
+// an absent or untracked file is not a finding). `--mark tests-derived` derives the generated
+// spec's tier from lib/freeze.js `riskTierHits` over every generated File Plan path: a hit with
+// no `--tier` refuses (the user confirms the lock), `--tier critical|standard` records the answer
+// in the spec's Rationale, and a spec already on disk is never rewritten.
+//
 // What this deliberately does NOT do:
 //   - author states.json, wire the dev-entry import, run the host's dev server, or decide when a
 //     round is "done" — those stay session judgment; the driver only verifies artifacts already on
@@ -68,7 +76,9 @@
 //      missing overlay import at round-done, unapproved/unfrozen prototype, red gate, no composites, no
 //      behaviour pins, a failed capture, a missing/incomplete derived e2e file, a pre-existing
 //      `harden/<stem>` with marks.exported unset, a lint/sweep finding on the generated spec, or a
-//      dirty prototype worktree at deletion), a malformed status.json/states.json/contract.json,
+//      dirty prototype worktree at deletion, a `--tier` other than standard|critical, a File Plan
+//      path named in the host's pipeline rules § Risk Tiers with no `--tier`, or a pipeline rules
+//      file that is unreadable or has no `## Risk Tiers` section), a malformed status.json/states.json/contract.json,
 //      or `serve --port N` refusing an already-bound port (named, with a remedy — never an
 //      unhandled EADDRINUSE crash).
 
@@ -183,6 +193,14 @@ function cmdCheck(args) {
     }
     if (typeof proto.e2eList === 'string' && !proto.e2eList.includes('{file}')) {
       findings.push({ key: 'prototype.e2eList', message: 'prototype.e2eList lacks the {file} placeholder: ' + proto.e2eList })
+    }
+    if (typeof proto.storageState === 'string' && proto.storageState !== '') {
+      const tracked = spawnSync('git', ['-C', root, 'ls-files', '--error-unmatch', '--', proto.storageState], { encoding: 'utf8' })
+      if (tracked.status === 0) {
+        findings.push({ key: 'prototype.storageState', message: 'prototype.storageState (' + proto.storageState +
+          ') is tracked by git — a saved sign-in holds live session cookies; remedy: git rm --cached ' +
+          proto.storageState + ' and add it to .gitignore' })
+      }
     }
   }
   if (findings.length === 0) process.exit(0)
@@ -609,6 +627,13 @@ function buildFilePlanRows(base, exportFiles, exportGlobs, wiring) {
 }
 
 function cmdMarkTestsDerived() {
+  // D6: the flag is checked before any other work in the mark.
+  const tierIdx = rest.indexOf('--tier')
+  const tierFlag = tierIdx > -1 ? rest[tierIdx + 1] : null
+  if (tierIdx > -1 && tierFlag !== 'standard' && tierFlag !== 'critical') {
+    die('--tier must be standard or critical — remedy: re-run --mark tests-derived with --tier standard or --tier critical')
+  }
+  let tierLine = null
   const status = loadStatus()
   if (!status) die(statusRel + ' does not exist — remedy: run --mark opened first')
   if (!status.marks || !status.marks.frozen) {
@@ -669,9 +694,23 @@ function cmdMarkTestsDerived() {
     const pinsDoc = loadPinsDoc()
     const pinsById = {}
     for (const p of pinsDoc.pins || []) pinsById[p.id] = p
+
+    // D6: tier — over every generated File Plan row's path, the e2e file included.
+    const tierPaths = [...filePlanRows.map((r) => r.path), contract.e2eFile]
+    const risk = freeze.riskTierHits({ root, config: cfg, paths: tierPaths })
+    if (!risk.ok) die(risk.message)
+    if (risk.hits.length > 0 && !tierFlag) {
+      die(risk.hits.length + ' File Plan path' + (risk.hits.length === 1 ? '' : 's') + ' named in ' + risk.rulesPath +
+        ' § Risk Tiers:\n' + risk.hits.map((h) => '  ' + h.path + ' ← `' + h.trigger + '`').join('\n') +
+        '\nremedy: the user confirms the lock — re-run --mark tests-derived with --tier critical, or with --tier standard ' +
+        'when the user rules none of these is a risk change')
+    }
+    const tier = tierFlag || 'standard'
+    tierLine = '🚦 generated spec tier: ' + tier + ' (' + risk.hits.length + ' risk-listed path' +
+      (risk.hits.length === 1 ? '' : 's') + ')\n'
     freeze.writeSpec({
       root, specPath: contract.spec, brief, briefSlug, briefText, contract,
-      filePlanRows, e2eFile: contract.e2eFile, pinsById,
+      filePlanRows, e2eFile: contract.e2eFile, pinsById, tier, tierHits: risk.hits,
     })
     const lint = spawnSync(process.execPath, [path.join(__dirname, 'ac-matrix.js'), '--spec', contract.spec, '--lint', '--resolve-root', root], { cwd: root, encoding: 'utf8' })
     if (lint.status !== 0) {
@@ -681,6 +720,7 @@ function cmdMarkTestsDerived() {
     if (sweep.status !== 0) {
       die('promise-sweep.js refused the generated spec ' + contract.spec + ' (left on disk for inspection): ' + ((sweep.stdout || '') + (sweep.stderr || '')).trim())
     }
+    writeOut(1, tierLine)
   }
 
   // D7: deletion, then D8: the ledger row — only once, guarded by marks.closed. dbDestroy is

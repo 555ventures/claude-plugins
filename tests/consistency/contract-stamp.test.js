@@ -86,7 +86,7 @@ test('AC-20260912-15-7: WHEN spec/commands/doctor.md check 20 and spec/scripts/c
     'contract — its derivation and output stay untouched, only the comment')
 })
 
-test('AC-20260912-15-8 (reused by AC-20260926-02-9, AC-20260930-01-6): WHEN this repo\'s .claude/spec.config.json is read THE SYSTEM carries a contractHash equal to the first 12 characters of the SHA-256 of spec/templates/grounding-contract.md as spec-paths contract-hash prints it, and the value is not the pre-edit stale stamp', () => {
+test('AC-20260912-15-8 (reused by AC-20260926-02-9, AC-20260930-01-6, AC-20261001-01-17): WHEN this repo\'s .claude/spec.config.json is read THE SYSTEM carries a contractHash equal to the first 12 characters of the SHA-256 of spec/templates/grounding-contract.md as spec-paths contract-hash prints it, and the value is not the pre-edit stale stamp', () => {
   const cfgPath = path.join(ROOT, '.claude/spec.config.json')
   assert.ok(fs.existsSync(cfgPath), '.claude/spec.config.json must exist for this pin to mean anything')
   const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))

@@ -1,6 +1,7 @@
 ---
 date: 2026-10-01
-status: hardened
+status: implementing
+build_base: design-retool
 tier: critical
 area: prototype
 breaking: false
@@ -9,6 +10,7 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-10-01
 open_markers: 0
+diff_base: 212712a68330e937f7acf3309a51fa15186bad9f
 ---
 
 # The freeze signs in and derives its tier

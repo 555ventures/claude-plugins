@@ -13,7 +13,9 @@
 // own mitigations, docs/spikes/20260923-design-retool/spike-structdiff.md), injects
 // `spec/templates/proto-stable-id.js` and `spec/templates/proto-capture-page.js` via
 // `page.addScriptTag`, then calls the injected `captureComposites(root, composites, props)` and
-// writes its result as a capture document. `--diff` compares two capture files by `id` with no
+// writes its result as a capture document. When the host declares `prototype.storageState` (read
+// here through lib/host-config.js, specs/20261001/01-the-freeze-signs-in-and-derives-its-tier.md
+// D2/D3) the page opens with that saved sign-in; absent = signed out. `--diff` compares two capture files by `id` with no
 // browser involved at all.
 //
 // The 27 longhand computed properties are the spike's own enumerated PROPS list
@@ -22,16 +24,19 @@
 //
 // What this deliberately does NOT do: decide which routes/states to capture (the driver reads
 // states.json and calls this once per route x state), retry a failed navigation or capture, or
-// own the browser-side walk itself (that lives in the injected, no-import
+// write or refresh the sign-in file (the host's own Playwright setup owns it; this script only
+// checks it parses), or own the browser-side walk itself (that lives in the injected, no-import
 // spec/templates/proto-capture-page.js so the overlay, the capture and the derived tests share
 // one algorithm).
 //
 // Exit codes:
 //   0  --out written (capture mode), or an empty diff (--diff mode)
 //   1  --diff mode found a non-empty diff (summary printed as JSON on stdout)
-//   2  usage error; @playwright/test unresolvable from --host (names it); --url unreachable;
-//      the page settled on a different path than --url ("redirected from <url> to <final>" —
-//      the fresh browser carries no signed-in session, and a login redirect must never be
+//   2  usage error; prototype.storageState not a path string, missing on disk, or not a readable
+//      storage-state JSON file (each refused before any browser launches); @playwright/test
+//      unresolvable from --host (names it); --url unreachable; the page settled on a different
+//      path than --url ("redirected from <url> to <final>" — signed out the browser carries no
+//      session, signed in the saved sign-in is stale; either way a login redirect must never be
 //      recorded as the route's baseline); no element carries a React fiber ("no fibers — the dev
 //      server must run a development build"); fibers present but none carries the dev-only
 //      `_debugOwner` field ("production build" — the stable ids need it); zero composite
@@ -41,6 +46,7 @@
 const fs = require('fs')
 const path = require('path')
 const { createRequire } = require('module')
+const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 
 function die(msg) {
   writeOut(2, 'proto-capture: ' + msg + '\n')
@@ -178,6 +184,42 @@ if (viewportArg) {
 }
 const composites = compositesArg.split(',').map((s) => s.trim()).filter(Boolean)
 
+// prototype.storageState (D2): validated before @playwright/test is resolved or a browser
+// launched, so a bad sign-in never surfaces as Playwright's own remedy-less error.
+let storageStateValue = null
+let storageStateAbs = null
+const declaredState = (readConfig(path.resolve(host)).prototype || {}).storageState
+if (declaredState !== undefined) {
+  if (typeof declaredState !== 'string' || declaredState === '') {
+    die('prototype.storageState must be a path string — remedy: fix it in ' + CONFIG_RELPATH + ', then run /spec:doctor')
+  }
+  storageStateValue = declaredState
+  storageStateAbs = path.resolve(host, declaredState)
+  let origin = url
+  try { origin = new URL(url).origin } catch { /* keep the raw --url */ }
+  if (!fs.existsSync(storageStateAbs)) {
+    die('prototype.storageState (' + declaredState + ') does not exist at ' + storageStateAbs +
+      ' — remedy: sign in against ' + origin + ' and save the browser state to that path (the host\'s own ' +
+      'Playwright sign-in setup); inside a spec worktree, list the path in .worktreeinclude or run the setup there, then re-run')
+  }
+  let stateOk = true
+  let stateErr = ''
+  try {
+    const parsed = JSON.parse(fs.readFileSync(storageStateAbs, 'utf8'))
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      stateOk = false
+      stateErr = 'not a JSON object'
+    }
+  } catch (e) {
+    stateOk = false
+    stateErr = e.message
+  }
+  if (!stateOk) {
+    die('prototype.storageState (' + declaredState + ') is not a readable storage-state JSON file (' + stateErr +
+      ') — remedy: re-run the sign-in setup to rewrite it')
+  }
+}
+
 let playwrightTest
 try {
   const req = createRequire(path.join(path.resolve(host), 'package.json'))
@@ -192,7 +234,9 @@ try {
   const browser = await chromium.launch()
   let page
   try {
-    page = await browser.newPage({ viewport, deviceScaleFactor: 1, reducedMotion: 'reduce' })
+    const pageOpts = { viewport, deviceScaleFactor: 1, reducedMotion: 'reduce' }
+    if (storageStateAbs) pageOpts.storageState = storageStateAbs
+    page = await browser.newPage(pageOpts)
     try {
       await page.goto(url, { waitUntil: 'load', timeout: 15000 })
     } catch (e) {
@@ -208,9 +252,15 @@ try {
     const finalUrl = page.url()
     if (!samePage(url, finalUrl)) {
       await browser.close()
-      die('redirected from ' + url + ' to ' + finalUrl + ' — the capture browser starts signed out, so a ' +
-        'signed-in route lands on its login page; remedy: capture only routes that render signed out, ' +
-        'or serve the route without its auth guard in the prototype')
+      if (storageStateAbs) {
+        die('redirected from ' + url + ' to ' + finalUrl + ' — the capture browser was signed in from ' + storageStateValue +
+          ', so the saved sign-in has expired, belongs to another server, or this route only renders signed out; ' +
+          'remedy: sign in again to rewrite ' + storageStateValue + ', or drop the route from states.json, then re-run')
+      } else {
+        die('redirected from ' + url + ' to ' + finalUrl + ' — the capture browser starts signed out, so a ' +
+          'signed-in route lands on its login page; remedy: declare prototype.storageState (a saved sign-in) in ' +
+          CONFIG_RELPATH + ', capture only routes that render signed out, or serve the route without its auth guard in the prototype')
+      }
       return
     }
 

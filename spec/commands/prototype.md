@@ -80,7 +80,9 @@ kit gates red on `proto/<stem>` (`design/prototypes/<stem>/gate.log` names the f
 `prototype.gate` undeclared while `gateCommand` carries an unresolved placeholder; a capture
 child's own stderr — each refusal names its own remedy and writes nothing further. On success the
 driver has captured every declared route × state, written `contract.json`, and reserved this
-freeze's spec path and AC ids; it prints `(APPROVED → TESTS)` and advances.
+freeze's spec path and AC ids; it prints `(APPROVED → TESTS)` and advances. When `prototype.storageState` is declared the capture
+loads that saved sign-in and refuses naming the file when it is missing or stale; write it by
+signing in against the running prototype with the host's own Playwright sign-in setup.
 
 ## TESTS
 
@@ -95,7 +97,10 @@ path> --root . --mark tests-derived`. The driver refuses naming the e2e file whe
 still-uncounted reserved AC id when the file carries only some of them, or `e2eList` plus the
 under-reported id when the file lists every id but the host's runner does not; a refusal after
 export or spec-write has already succeeded leaves both in place and resumes at the first undone
-step on re-run. On success it exports `harden/<stem>`, appends the brief's sub-plan, writes and
+step on re-run. When a generated File Plan path is named in the host's § Risk Tiers the mark refuses listing
+each path and its trigger — put that list to the user as one `AskUserQuestion` (confirm the lock
+as critical / rule these not a risk change), never pick for them, then re-run with `--tier`;
+pass `--tier critical` unprompted only when the user has said a prose trigger applies. On success it exports `harden/<stem>`, appends the brief's sub-plan, writes and
 lints the behaviour-lane spec, destroys the prototype database, deletes the worktree and branch,
 appends the ledger row, and advances straight to `CLOSED`.
 

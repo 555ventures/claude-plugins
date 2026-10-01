@@ -429,7 +429,7 @@ test('AC-20260928-02-8: --mark tests-derived exits 2 containing "harden/<stem> e
     'the refusal must carry the literal phrase "harden/<stem> exists": ' + r.stderr)
 })
 
-test('AC-20260928-02-9: the same mark writes the reserved spec with the documented frontmatter, Decisions, File Plan and ACs, and both ac-matrix --lint and promise-sweep exit 0 with zero findings', () => {
+test('AC-20260928-02-9: the same mark writes the reserved spec with the documented frontmatter, Decisions, File Plan and ACs, and both ac-matrix --lint and promise-sweep exit 0 with zero findings — AC-20261001-01-18', () => {
   const dir = setupHost()
   const { r, contract } = driveToTestsDerived(dir)
   assert.strictEqual(r.status, 0, JSON.stringify(r))

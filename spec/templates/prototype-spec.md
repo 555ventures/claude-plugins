@@ -32,6 +32,9 @@
        {{contractsBody}}        the routes × states table plus the `contract.json` pointer —
                                  whatever prose/table the caller composes from `contract.json`'s
                                  own `routes` object
+       {{tier}}                 `standard` or `critical` — derived at the freeze from the generated File
+                                 Plan against the host's pipeline rules § Risk Tiers
+       {{tierBasis}}            the one-sentence `Tier: …` basis that opens `## Rationale`
        {{acceptanceCriteria}}   one AC bullet per behaviour pin (bullets only, no leading
                                  heading) — see the fixed bullet grammar this file pins beside
                                  the token, which the caller's per-pin text must match exactly
@@ -40,7 +43,7 @@
 ---
 date: {{date}}
 status: hardened
-tier: standard
+tier: {{tier}}
 area: {{area}}
 breaking: false
 depends_on: []
@@ -104,6 +107,8 @@ green, never by a new assertion invented at build time.
   judgment.
 
 ## Rationale
+
+{{tierBasis}}
 
 This spec is generated, not authored: the freeze measured an approved, functional prototype
 and reserved these AC ids before a single test was written, so every fact here is derived from

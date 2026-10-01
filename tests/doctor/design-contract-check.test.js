@@ -306,3 +306,31 @@ test('AC-20260926-04-15: WHEN only --rules is passed (without --kit and --tokens
   assert.match(r.stderr, /--rules, --kit and --tokens go together/,
     'the usage refusal must name the exact remedy phrase so a caller knows all three flags are required together: ' + r.stderr)
 })
+
+test('WHEN Composite cells carry backticks, props, several names, a possessive, or no name THE SYSTEM resolves each PascalCase name and reports one composite-missing per missing name', () => {
+  const dir = tmpdir('design-contract-cell-grammar')
+  const rules = FULL_RULES.replace(
+    '| edit one record | side sheet | RecordEditSheet |\n| confirm destructive | modal | DestructiveConfirmDialog |\n',
+    '| edit one record | side sheet | `RecordEditSheet` |\n' +
+    '| press | button | `Button kind="ink"` / `Button kind="plain"` |\n' +
+    '| the whole story | sheet | `StoryHead`, `Storyboard`, `StoryEnd` |\n' +
+    '| mark the screen | marks | `Outline` (`Frame`\'s `marks`) |\n' +
+    '| prose only | none | the usual one |\n')
+  assert.notStrictEqual(rules, FULL_RULES, 'the fixture edit must replace the intent rows, or this test proves nothing')
+  writeHost(dir, {
+    rules,
+    kitFiles: {
+      'record-edit-sheet.tsx': 'export function RecordEditSheet() { return null }\n',
+      'button.tsx': 'export function Button() { return null }\n',
+      'storyboard.tsx': 'export function StoryHead() { return null }\nexport function Storyboard() { return null }\n',
+      'frame.tsx': 'export function Frame() { return null }\n',
+      'marks.tsx': 'export function Outline() { return null }\n',
+    },
+  })
+  const out = JSON.parse(runCheck(dir).stdout)
+  const missing = out.findings.filter((f) => f.kind === 'composite-missing').map((f) => [f.intent, f.composite])
+  assert.deepStrictEqual(missing, [
+    ['the whole story', 'StoryEnd'],
+    ['prose only', 'the usual one'],
+  ], 'only the absent StoryEnd and the name-less prose cell may be reported — a backticked, prop-carrying or possessive name that exists in the kit must resolve: ' + JSON.stringify(out.findings))
+})

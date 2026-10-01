@@ -240,6 +240,7 @@ const mocksLedgerLib = require('./lib/mocks-ledger')
 const surfacesLib = require('./lib/surfaces')
 const driverIo = require('./lib/driver-io')
 const storybookIndexLib = require('./lib/storybook-index')
+const { compositeNames } = require('./design-contract-check')
 
 // The 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in full
 // at spec/scripts/lib/driver-io.js's writeOut. Callers here pass unterminated lines.
@@ -904,10 +905,10 @@ function designBriefCheck(paths) {
   let rulesText = ''
   try { rulesText = fs.readFileSync(path.join(root, rulesRel), 'utf8') } catch (e) { rulesText = '' }
   const intentSection = section(rulesText, 'Intent to pattern')
-  const rulesComposites = intentSection === null ? [] : findMdTableRows(intentSection).map((r) => r[2]).filter(Boolean)
+  const rulesComposites = intentSection === null ? [] : [...new Set(findMdTableRows(intentSection).flatMap((r) => compositeNames(r[2])))]
 
   const compositesSection = section(text, 'Composites') || ''
-  const briefComposites = findMdTableRows(compositesSection).map((r) => r[0]).filter(Boolean)
+  const briefComposites = [...new Set(findMdTableRows(compositesSection).flatMap((r) => compositeNames(r[0])))]
 
   if (briefComposites.length === 0) {
     return { ok: false, message: 'docs/design/brief.md ## Composites table is empty — add at least one row, then re-mark design-brief-written' }

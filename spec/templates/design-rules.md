@@ -8,7 +8,9 @@ paths:
 <!-- Intent to pattern: one row per recurring product intent, naming the composite that
      realizes it. Filled by genesis's design stage on a seeded host, or by hand on a brownfield
      host that already has a kit. An empty table (header row only) surfaces as a table-empty
-     finding — a visible gap, never a silent pass. -->
+     finding — a visible gap, never a silent pass. Composite cell grammar: one or more
+     PascalCase names, backticked or bare; prose around backticked names is ignored, and each
+     name must resolve in the kit. -->
 
 ## Intent to pattern
 

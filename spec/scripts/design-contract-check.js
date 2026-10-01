@@ -117,6 +117,21 @@ function walk(dir) {
   return out
 }
 
+// The Composite cell grammar (templates/design-rules.md): one or more PascalCase names,
+// backticked or bare. Spans are the backticked runs when the cell has any, else the whole cell;
+// each span contributes its leading PascalCase identifier (`Button kind="ink"` → Button,
+// `Frame`'s → Frame); spans with none (`marks`) and prose between backticks are ignored.
+function compositeNames(cell) {
+  const ticked = String(cell || '').match(/`[^`]*`/g)
+  const spans = ticked ? ticked.map((t) => t.slice(1, -1)) : [String(cell || '')]
+  const names = []
+  for (const span of spans) {
+    const m = span.trim().match(/^[A-Z][A-Za-z0-9]*/)
+    if (m && !names.includes(m[0])) names.push(m[0])
+  }
+  return names
+}
+
 function compositePresent(kitAbs, composite) {
   const kebab = toKebab(composite)
   const files = walk(kitAbs)
@@ -221,11 +236,21 @@ function runWithPaths(root, { tokens, kit, rules } = {}) {
         for (const row of rows) {
           const [intent, , composite] = row
           if (!composite) continue
-          if (!compositePresent(kitAbs, composite)) {
+          const names = compositeNames(composite)
+          if (names.length === 0) {
             findings.push({
               kind: 'composite-missing', intent, composite, path: kitRel,
-              remedy: `add ${composite} under ${kitRel} or fix the Composite cell`,
+              remedy: `the Composite cell names no PascalCase composite — fix the Composite cell`,
             })
+            continue
+          }
+          for (const name of names) {
+            if (!compositePresent(kitAbs, name)) {
+              findings.push({
+                kind: 'composite-missing', intent, composite: name, path: kitRel,
+                remedy: `add ${name} under ${kitRel} or fix the Composite cell`,
+              })
+            }
           }
         }
       }
@@ -276,4 +301,6 @@ function main() {
   process.exitCode = result.findings.length === 0 ? 0 : 1
 }
 
-main()
+if (require.main === module) main()
+
+module.exports = { compositeNames }

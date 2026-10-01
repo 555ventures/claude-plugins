@@ -120,17 +120,36 @@ test('AC-20260928-01-4: --mark opened refuses naming states.json and creates no 
     'a states.json precondition failure must create no branch at all — this check runs before any git op (D3): ' + git(dir, 'branch', '--list'))
 })
 
-test('AC-20260928-01-4: --mark opened refuses naming prototype.overlay when the worktree\'s tracked source does not import the overlay', () => {
+test('AC-20260928-01-4: a host with no overlay import on main opens, round-done refuses naming prototype.overlay, and wiring the import on the prototype branch clears it and records the wiring file', () => {
   const dir = setupHost()
   fs.writeFileSync(path.join(dir, 'src/main.js'), 'export function main() { return "no overlay import here" }\n')
   execFileSync('git', ['-C', dir, 'add', '-A'], { encoding: 'utf8' })
   execFileSync('git', ['-C', dir, 'commit', '-q', '-m', 'drop overlay import'], { encoding: 'utf8' })
   writeStates(dir)
-  const r = mark(dir, 'opened')
-  assert.strictEqual(r.status, 2,
-    'a worktree whose tracked source never imports the overlay must refuse the opened mark: ' + JSON.stringify(r))
-  assert.match(r.stderr, /prototype\.overlay/,
-    'the refusal must name prototype.overlay (the config key), not just "overlay" or "import": ' + r.stderr)
+
+  const opened = mark(dir, 'opened')
+  assert.strictEqual(opened.status, 0,
+    'the import lives on proto/<stem>, which only exists once opened succeeds — refusing here leaves the branch behind and the rerun is refused as stale: ' + JSON.stringify(opened))
+  const round = bare(dir)
+  assert.match(round.stdout, /Session: wire the dev-only overlay import/,
+    'the ROUND step must ask the session to wire the import while it is missing: ' + round.stdout)
+
+  const refused = mark(dir, 'round-done')
+  assert.strictEqual(refused.status, 2, 'round-done must refuse while no file in the worktree imports the overlay: ' + JSON.stringify(refused))
+  assert.match(refused.stderr, /prototype\.overlay/,
+    'the refusal must name prototype.overlay (the config key): ' + refused.stderr)
+  assert.strictEqual(statusOf(dir).rounds.length, 0, 'a refused round-done must record no round')
+
+  const wt = worktreePath(dir)
+  fs.writeFileSync(path.join(wt, 'src/main.js'), "if (import.meta.env.DEV) import('./proto-overlay.js')\n" +
+    'export function main() { return "no overlay import here" }\n')
+  execFileSync('git', ['-C', wt, 'commit', '-q', '-am', 'wire overlay'], { encoding: 'utf8' })
+
+  const accepted = mark(dir, 'round-done')
+  assert.strictEqual(accepted.status, 0, 'round-done must pass once the prototype branch imports the overlay: ' + JSON.stringify(accepted))
+  assert.strictEqual(statusOf(dir).wiring, 'src/main.js', 'status.json must record the wiring file: ' + JSON.stringify(statusOf(dir)))
+  assert.doesNotMatch(bare(dir).stdout, /Session: wire the dev-only overlay import/,
+    'once wired, the ROUND step must stop asking for the import')
 })
 
 test('AC-20260928-01-4: --mark opened refuses naming the stale branch when proto/<stem> already exists and status.json is absent', () => {

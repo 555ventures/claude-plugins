@@ -30,9 +30,12 @@
 //   0  --out written (capture mode), or an empty diff (--diff mode)
 //   1  --diff mode found a non-empty diff (summary printed as JSON on stdout)
 //   2  usage error; @playwright/test unresolvable from --host (names it); --url unreachable;
-//      no element carries a React fiber ("no fibers — the dev server must run a development
-//      build"); zero composite elements found ("no composite on <url> — screens import
-//      composites only")
+//      the page settled on a different path than --url ("redirected from <url> to <final>" —
+//      the fresh browser carries no signed-in session, and a login redirect must never be
+//      recorded as the route's baseline); no element carries a React fiber ("no fibers — the dev
+//      server must run a development build"); fibers present but none carries the dev-only
+//      `_debugOwner` field ("production build" — the stable ids need it); zero composite
+//      elements found ("no composite on <url> — screens import composites only")
 
 'use strict'
 const fs = require('fs')
@@ -141,6 +144,17 @@ if (argv[0] === '--diff') {
   process.exit(clean ? 0 : 1)
 }
 
+// The page must settle on the path it was sent to. Path (trailing slash ignored) plus the hash
+// when the requested URL routes by hash; the query is free to change.
+function samePage(requested, final) {
+  let a
+  let b
+  try { a = new URL(requested); b = new URL(final) } catch { return requested === final }
+  const norm = (p) => p.replace(/\/+$/, '') || '/'
+  if (a.origin !== b.origin || norm(a.pathname) !== norm(b.pathname)) return false
+  return !a.hash || a.hash === b.hash
+}
+
 // ---------------------------------------------------------------------------
 // Capture mode — usage validation first (never depends on @playwright/test resolving).
 // ---------------------------------------------------------------------------
@@ -190,6 +204,16 @@ try {
     await page.evaluate(() => document.fonts && document.fonts.ready)
     await page.waitForTimeout(150)
 
+    // Checked after the settle so a client-side router redirect is caught too, not only a 302.
+    const finalUrl = page.url()
+    if (!samePage(url, finalUrl)) {
+      await browser.close()
+      die('redirected from ' + url + ' to ' + finalUrl + ' — the capture browser starts signed out, so a ' +
+        'signed-in route lands on its login page; remedy: capture only routes that render signed out, ' +
+        'or serve the route without its auth guard in the prototype')
+      return
+    }
+
     const stableIdPath = path.join(__dirname, '..', 'templates', 'proto-stable-id.js')
     const capturePagePath = path.join(__dirname, '..', 'templates', 'proto-capture-page.js')
     await page.addScriptTag({ path: stableIdPath, type: 'module' })
@@ -199,6 +223,10 @@ try {
       const allEls = Array.from(document.querySelectorAll('*'))
       const hasFiber = allEls.some((el) => Object.keys(el).some((k) => k.indexOf('__reactFiber$') === 0))
       if (!hasFiber) return { error: 'no-fibers' }
+      // React development builds give every fiber a `_debugOwner` field (null at the root);
+      // production builds never define it, and the stable ids walk that owner chain.
+      const devBuild = allEls.some((el) => Object.keys(el).some((k) => k.indexOf('__reactFiber$') === 0 && el[k] && '_debugOwner' in el[k]))
+      if (!devBuild) return { error: 'production-build' }
       const root = rootSelector ? document.querySelector(rootSelector) : document.body
       if (!root) return { error: 'root-not-found' }
       const api = (window.__protoCapture && window.__protoCapture.captureComposites) ? window.__protoCapture : window
@@ -209,6 +237,11 @@ try {
 
     if (result.error === 'no-fibers') {
       die('no fibers — the dev server must run a development build')
+      return
+    }
+    if (result.error === 'production-build') {
+      die('production build on ' + url + ' — React fibers carry no _debugOwner, so no stable id can be derived; ' +
+        'remedy: point prototype.url at the dev server (a development build), then re-run')
       return
     }
     if (result.error === 'root-not-found') {

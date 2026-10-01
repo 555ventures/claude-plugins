@@ -268,15 +268,30 @@ function exportHarden({ root, branch, stem, base, exportGlobs, alreadyExported, 
     return { ok: false, message: hardenBranch + ' exists — delete it or restore status.json' }
   }
 
+  // The brief's sub-plan is written BEFORE harden/<stem> exists: a failure here (an unwritable
+  // brief path) then leaves no branch behind for the rerun's "exists" refusal to wedge on. The
+  // section is replaced whole, so a rerun after a later failure rewrites it idempotently.
+  const pathspecs = exportGlobs.map((g) => ':(glob)' + g)
+  const nameStatus = spawnSync('git', ['-C', root, 'diff', '--name-status', base + '...' + branch, '--', ...pathspecs], { encoding: 'utf8' })
+  const files = (nameStatus.stdout || '').trim().split('\n').filter(Boolean).map((line) => {
+    const [status, ...rest] = line.split('\t')
+    return { status, path: rest.join('\t') }
+  })
+  if (files.length > 0) {
+    try {
+      writeSubPlan(briefPath, files, exportGlobs)
+    } catch (e) {
+      return { ok: false, message: 'cannot write the Data/API sub-plan into ' + briefPath + ' (' + e.message + ')' }
+    }
+  }
+
   const wtPath = path.join(root, '.claude/worktrees', 'harden-' + stem)
   const add = spawnSync('git', ['-C', root, 'worktree', 'add', wtPath, '-b', hardenBranch, base], { encoding: 'utf8' })
   if (add.status !== 0) {
     return { ok: false, message: 'git worktree add for ' + hardenBranch + ' failed: ' + (add.stderr || '').trim() }
   }
 
-  const pathspecs = exportGlobs.map((g) => ':(glob)' + g)
   const diff = spawnSync('git', ['-C', root, 'diff', base + '...' + branch, '--', ...pathspecs], { encoding: 'utf8', maxBuffer: 1024 * 1024 * 64 })
-  let files = []
   let commit = null
   if (diff.status === 0 && diff.stdout && diff.stdout.trim() !== '') {
     const apply = spawnSync('git', ['-C', wtPath, 'apply', '--index'], { input: diff.stdout, encoding: 'utf8' })
@@ -284,11 +299,6 @@ function exportHarden({ root, branch, stem, base, exportGlobs, alreadyExported, 
       spawnSync('git', ['-C', root, 'worktree', 'remove', '--force', wtPath], { encoding: 'utf8' })
       return { ok: false, message: 'git apply --index into ' + hardenBranch + ' failed: ' + (apply.stderr || '').trim() }
     }
-    const nameStatus = spawnSync('git', ['-C', root, 'diff', '--name-status', base + '...' + branch, '--', ...pathspecs], { encoding: 'utf8' })
-    files = nameStatus.stdout.trim().split('\n').filter(Boolean).map((line) => {
-      const [status, ...rest] = line.split('\t')
-      return { status, path: rest.join('\t') }
-    })
     const commitMsg = 'harden(' + stem + '): data and API layer exported from proto/' + stem
     const commitRes = spawnSync('git', ['-C', wtPath, 'commit', '-m', commitMsg], { encoding: 'utf8' })
     if (commitRes.status !== 0) {
@@ -301,8 +311,6 @@ function exportHarden({ root, branch, stem, base, exportGlobs, alreadyExported, 
 
   const remove = spawnSync('git', ['-C', root, 'worktree', 'remove', wtPath], { encoding: 'utf8' })
   if (remove.status !== 0) spawnSync('git', ['-C', root, 'worktree', 'remove', '--force', wtPath], { encoding: 'utf8' })
-
-  if (files.length > 0) writeSubPlan(briefPath, files, exportGlobs)
 
   return { ok: true, files, commit, hardenBranch }
 }

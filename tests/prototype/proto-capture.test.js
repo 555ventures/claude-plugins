@@ -107,3 +107,56 @@ test('AC-20260928-02-3: --diff on two identical captures exits 0 with summary al
   assert.deepStrictEqual(parsed.summary, { missing: 0, extra: 0, changed: 0 },
     'an identical pair must report every summary count as zero: ' + JSON.stringify(parsed.summary))
 })
+
+// A stand-in `@playwright/test` planted in the host's node_modules: the page lands on `finalUrl`
+// and `evaluate` runs the real in-page function against a fake document whose elements carry the
+// given fibers — so the capture's own redirect and build checks execute, with no browser.
+function stubHost(name, { finalUrl, fiber }) {
+  const hostDir = tmpdir(name)
+  fs.writeFileSync(path.join(hostDir, 'package.json'), JSON.stringify({ name: 'h', version: '0.0.0' }) + '\n')
+  const pwDir = path.join(hostDir, 'node_modules/@playwright/test')
+  fs.mkdirSync(pwDir, { recursive: true })
+  fs.writeFileSync(path.join(pwDir, 'package.json'), JSON.stringify({ name: '@playwright/test', main: 'index.js' }) + '\n')
+  fs.writeFileSync(path.join(pwDir, 'index.js'), `
+const FINAL = ${JSON.stringify(finalUrl)}
+const FIBER = ${JSON.stringify(fiber)}
+function makeEl() { const el = {}; el['__reactFiber$x'] = FIBER; return el }
+const els = [makeEl(), makeEl()]
+globalThis.document = { querySelectorAll: () => els, body: {}, querySelector: () => ({}), fonts: null }
+globalThis.window = { __protoCapture: { captureComposites: () => [{ id: 'A#0', tag: 'div' }] } }
+const page = {
+  goto: async () => {}, url: () => FINAL, addStyleTag: async () => {}, addScriptTag: async () => {},
+  waitForTimeout: async () => {}, evaluate: async (fn, arg) => fn(arg),
+}
+exports.chromium = { launch: async () => ({ newPage: async () => page, close: async () => {} }) }
+`)
+  return hostDir
+}
+
+function captureWith(hostDir, url) {
+  const outFile = path.join(tmpdir('proto-capture-stub-out'), 'x.json')
+  return { outFile, r: runCapture(['--host', hostDir, '--url', url, '--out', outFile, '--composites', 'A']) }
+}
+
+test('proto-capture exits 2 naming the redirect and writes nothing when the route settles on a different path (a signed-out login redirect)', () => {
+  const host = stubHost('proto-capture-redirect', { finalUrl: 'http://localhost:3000/login?next=/women', fiber: { _debugOwner: null } })
+  const { outFile, r } = captureWith(host, 'http://localhost:3000/women')
+  assert.strictEqual(r.status, 2, 'a redirected capture must refuse, never record the login page as the baseline: ' + JSON.stringify(r))
+  assert.match(r.stderr, /redirected from http:\/\/localhost:3000\/women to http:\/\/localhost:3000\/login/, r.stderr)
+  assert.ok(!fs.existsSync(outFile), 'a redirected capture must write no --out file')
+})
+
+test('proto-capture accepts a trailing-slash or query-only difference as the same page', () => {
+  const host = stubHost('proto-capture-same', { finalUrl: 'http://localhost:3000/women/?tab=1', fiber: { _debugOwner: null } })
+  const { outFile, r } = captureWith(host, 'http://localhost:3000/women')
+  assert.strictEqual(r.status, 0, JSON.stringify(r))
+  assert.ok(fs.existsSync(outFile))
+})
+
+test('proto-capture exits 2 naming a production build when fibers carry no _debugOwner field', () => {
+  const host = stubHost('proto-capture-prod', { finalUrl: 'http://localhost:3000/women', fiber: { tag: 5 } })
+  const { outFile, r } = captureWith(host, 'http://localhost:3000/women')
+  assert.strictEqual(r.status, 2, JSON.stringify(r))
+  assert.match(r.stderr, /production build/, 'the refusal must say production build, not "no composite": ' + r.stderr)
+  assert.ok(!fs.existsSync(outFile))
+})

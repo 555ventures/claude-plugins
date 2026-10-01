@@ -41,16 +41,19 @@ prior invocation's memory.
 
 The driver prints a `states.json` template — one route per surface the brief's journeys touch,
 one state per branch the prototype must show (`default`, plus whatever named states the round
-needs: `empty`, `error`, …). Author `design/prototypes/<stem>/states.json` from it, wire the
-overlay import into the host's dev entry inside the worktree the driver is about to create (a
-one-line `if (import.meta.env.DEV) import('./proto-overlay.js')` or the stack's own dev-only
-equivalent — this session picks the line, the driver only verifies some tracked file imports
-it), then `node {driver} <brief path> --root . --mark opened`. The driver creates the branch and
+needs: `empty`, `error`, …). Author `design/prototypes/<stem>/states.json` from it, then
+`node {driver} <brief path> --root . --mark opened`. The driver creates the branch and
 worktree, copies the pin overlay and the stable-id module into place with the pins port baked
-in, provisions the database through the host's own `dbCreate` script when declared, and verifies
-the wiring before advancing to `ROUND`.
+in, provisions the database through the host's own `dbCreate` script when declared, and
+advances to `ROUND`.
 
 ## ROUND
+
+Until the overlay is wired, the step carries a `Session:` line asking for the import: a one-line
+`if (import.meta.env.DEV) import('./proto-overlay.js')` or the stack's own dev-only equivalent,
+committed on `proto/<stem>` — this session picks the line; `--mark round-done` refuses until
+some file in the worktree imports the overlay, and that file's import-only diff never reaches
+the generated spec.
 
 The driver's own printed step carries the two `Session:` lines to start in the background —
 the host's `runtime.bootCommand` inside the worktree, and `node {driver} <brief path> --root .

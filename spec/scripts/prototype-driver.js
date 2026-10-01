@@ -25,8 +25,12 @@
 // deriveState, before the worktree-registration probe — by CLOSED the worktree is gone). `--mark
 // opened` refuses a stale branch (proto/<stem> exists, status.json absent), refuses an empty
 // states.json, THEN creates the worktree, bakes the pins URL into the copied overlay + stable-id
-// module, runs dbCreate, and refuses if no tracked file in the worktree imports the overlay's
-// basename. D4: the ROUND step prints the session boot lines unconditionally, probes
+// module, and runs dbCreate. The overlay-import check is NOT an opened precondition: the import
+// lives on proto/<stem>, which exists only once opened succeeds, so checking it there wedged
+// every host without the import on main (the failed open left the branch behind and the rerun was
+// refused as stale). `--mark round-done` refuses instead until some file in the worktree imports
+// the overlay's basename, and records that file as status.wiring so the generated spec's File
+// Plan drops it when its diff is the import line alone. D4: the ROUND step prints the session boot lines unconditionally, probes
 // prototype.url with `curl -sf -m 3`, and gates the pin-ready/route lines on that probe succeeding
 // — never a driver crash on an unreachable dev server. D5: `serve --port N` is a plain
 // `node:http` server bound to 127.0.0.1, live only for the caller's own process lifetime (SIGTERM
@@ -61,7 +65,7 @@
 //      array).
 //   2  usage error, a missing/invalid `prototype` config block (naming `prototype` or
 //      `prototype.export`), a refused `--mark` precondition (stale branch, empty states.json,
-//      missing overlay import, unapproved/unfrozen prototype, red gate, no composites, no
+//      missing overlay import at round-done, unapproved/unfrozen prototype, red gate, no composites, no
 //      behaviour pins, a failed capture, a missing/incomplete derived e2e file, a pre-existing
 //      `harden/<stem>` with marks.exported unset, a lint/sweep finding on the generated spec, or a
 //      dirty prototype worktree at deletion), a malformed status.json/states.json/contract.json,
@@ -331,6 +335,7 @@ function findFreePortFrom(start) {
   return p
 }
 
+// Returns the worktree-relative path of the first file importing the overlay, or null.
 function worktreeImportsOverlay(wtPath, basename, excludedAbsPaths) {
   // '.claude' is skipped along with node_modules/.git: .claude/spec.config.json always contains
   // prototype.overlay's own path string (D1's own config schema literally names it) and a fresh
@@ -339,7 +344,7 @@ function worktreeImportsOverlay(wtPath, basename, excludedAbsPaths) {
   // fixture's crafted case.
   const skip = new Set(['node_modules', '.git', '.claude'])
   const excluded = new Set(excludedAbsPaths)
-  let found = false
+  let found = null
   function walk(dir) {
     if (found) return
     let entries
@@ -356,7 +361,7 @@ function worktreeImportsOverlay(wtPath, basename, excludedAbsPaths) {
       if (excluded.has(full)) continue
       let content
       try { content = fs.readFileSync(full, 'utf8') } catch { continue }
-      if (content.includes(basename)) { found = true; return }
+      if (content.includes(basename)) { found = path.relative(wtPath, full).split(path.sep).join('/'); return }
     }
   }
   walk(wtPath)
@@ -414,11 +419,6 @@ function cmdMarkOpened() {
     }
   }
 
-  if (!worktreeImportsOverlay(wtPath, path.basename(proto.overlay), [overlayDest, stableIdDest])) {
-    die('prototype.overlay (' + proto.overlay + ') is not imported by any tracked file in the worktree — remedy: wire `import(\'./' +
-      path.basename(proto.overlay) + '\')` behind the host\'s dev flag into the dev entry, commit it on ' + branch + ', then re-run --mark opened')
-  }
-
   const prevState = deriveState(existingStatus)
   const status = existingStatus || {}
   status.schemaVersion = 1
@@ -439,9 +439,21 @@ function cmdMarkOpened() {
 // ---------------------------------------------------------------------------
 // --mark round-done / --mark approved (D4).
 // ---------------------------------------------------------------------------
+function overlayImportLine() {
+  return '`if (import.meta.env.DEV) import(\'./' + path.basename(proto.overlay) + '\')` or the stack equivalent'
+}
+
 function cmdMarkRoundDone() {
   const status = loadStatus()
   if (!status) die(statusRel + ' does not exist — remedy: run --mark opened first')
+  const overlayDest = path.join(worktreePath, proto.overlay)
+  const stableIdDest = path.join(path.dirname(overlayDest), 'proto-stable-id.js')
+  const wiring = worktreeImportsOverlay(worktreePath, path.basename(proto.overlay), [overlayDest, stableIdDest])
+  if (!wiring) {
+    die('prototype.overlay (' + proto.overlay + ') is not imported by any file in ' + worktreeRel +
+      ' — remedy: wire ' + overlayImportLine() + ' into the host\'s dev entry, commit it on ' + branch + ', then re-run --mark round-done')
+  }
+  status.wiring = wiring
   const prevState = deriveState(status)
   status.rounds = status.rounds || []
   const counted = new Set()
@@ -561,7 +573,18 @@ const OVERLAY_BASENAMES_CACHE = () => {
   return names
 }
 
-function buildFilePlanRows(base, exportFiles, exportGlobs) {
+// The dev-entry file carrying the overlay import is prototype tooling, not product: dropped from
+// the File Plan when every line its proto/<stem> diff adds or removes names the overlay. A file
+// that also carries real edits keeps its row.
+function isWiringOnly(base, p, wiring) {
+  if (!wiring || p !== wiring) return false
+  const basename = path.basename(proto.overlay)
+  const d = spawnSync('git', ['-C', root, 'diff', '--unified=0', base + '...' + branch, '--', p], { encoding: 'utf8' })
+  const changed = (d.stdout || '').split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)( |$)/.test(l))
+  return changed.length > 0 && changed.every((l) => l.includes(basename))
+}
+
+function buildFilePlanRows(base, exportFiles, exportGlobs, wiring) {
   const exportPaths = new Set(exportFiles.map((f) => f.path))
   const overlayNames = OVERLAY_BASENAMES_CACHE()
   const rows = exportFiles.map((f) => ({
@@ -577,6 +600,7 @@ function buildFilePlanRows(base, exportFiles, exportGlobs) {
     if (exportPaths.has(p)) continue
     if (overlayNames.has(path.basename(p))) continue
     if ((exportGlobs || []).some((g) => globMatch(g, p))) continue
+    if (isWiringOnly(base, p, wiring)) continue
     // D6: outside-export proto/<stem> edits take their action from the diff status too.
     const st = status.charAt(0)
     rows.push({ path: p, action: st === 'A' ? 'CREATE' : st === 'D' ? 'DELETE' : 'MODIFY', layer: 'other' })
@@ -621,7 +645,7 @@ function cmdMarkTestsDerived() {
 
   // D5: export.
   const alreadyExported = !!(status.marks.exported)
-  const briefAbsPath = path.join(root, briefPath)
+  const briefAbsPath = path.resolve(root, briefPath)
   const exportResult = freeze.exportHarden({
     root, branch, stem, base: status.base, exportGlobs: proto.export || [], alreadyExported, briefPath: briefAbsPath,
   })
@@ -640,7 +664,7 @@ function cmdMarkTestsDerived() {
       const found = (exportResult.files || []).find((f) => f.path === p)
       return found || { path: p, status: 'M' }
     })
-    const filePlanRows = buildFilePlanRows(status.base, exportFileObjs, proto.export || [])
+    const filePlanRows = buildFilePlanRows(status.base, exportFileObjs, proto.export || [], status.wiring)
     const briefText = fs.existsSync(briefAbsPath) ? fs.readFileSync(briefAbsPath, 'utf8') : ''
     const pinsDoc = loadPinsDoc()
     const pinsById = {}
@@ -824,8 +848,7 @@ function printOpenStep() {
   lines.push('## Step: author states.json, then --mark opened')
   lines.push('Author ' + statesRel + ' with at least one route carrying at least one state:')
   lines.push(template)
-  lines.push('Wire the dev-only overlay import into the host\'s dev entry once the worktree exists: ' +
-    '`if (import.meta.env.DEV) import(\'./' + path.basename(proto.overlay) + '\')` or the stack equivalent.')
+  lines.push('The overlay import is wired in the ROUND step, once the worktree exists.')
   lines.push('Then:')
   lines.push('  node ' + driverAbs + ' ' + briefPath + ' --mark opened')
   writeOut(1, lines.join('\n') + '\n')
@@ -844,6 +867,10 @@ function printRoundStep(status) {
   lines.push('[prototype-driver] state: ROUND  brief: ' + briefPath + '  round: ' + roundNum)
   lines.push('## Step: pin round ' + roundNum + ' on ' + branch)
   lines.push('Read only: ' + pinsRel + ', ' + statesRel)
+  if (!status.wiring) {
+    lines.push('Session: wire the dev-only overlay import into the host\'s dev entry in ' + worktreeRel + ' and commit it on ' +
+      branch + ' (skip if main already carries it): ' + overlayImportLine())
+  }
   lines.push('Session: in ' + worktreeRel + ', start the dev server in the background (tracked): ' + (cfg.runtime && cfg.runtime.bootCommand))
   lines.push('Session: start the pin endpoint in the background (tracked): node ' + driverAbs + ' ' + briefPath + ' serve --port ' + status.pinsPort)
   const reachable = probeUrl(proto.url)

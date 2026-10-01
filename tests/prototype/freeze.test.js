@@ -51,10 +51,11 @@ function onlyLookPins() {
 
 // Reaches real APPROVED via spec 01's already-working driver mechanics — the setup every
 // AC-4..AC-11 case below needs before it can even attempt --mark frozen.
-function advanceToApproved(dir, routes, pins) {
+function advanceToApproved(dir, routes, pins, afterOpened) {
   writeStates(dir, routes || TWO_ROUTE_STATES)
   const opened = runNode(DRIVER, [BRIEF_REL, '--root', dir, '--mark', 'opened'])
   assert.strictEqual(opened.status, 0, 'test setup requires --mark opened to succeed: ' + opened.stderr)
+  if (afterOpened) afterOpened()
   writePins(dir, pins || threePins())
   const rd = runNode(DRIVER, [BRIEF_REL, '--root', dir, '--mark', 'round-done'])
   assert.strictEqual(rd.status, 0, 'test setup requires --mark round-done to succeed: ' + rd.stderr)
@@ -248,12 +249,21 @@ test('AC-20260928-02-7: --mark tests-derived refuses containing "e2eList" and th
 // prototype branch must already exist at base), advances to APPROVED, freezes, makes the
 // data/API-layer edits on proto/<stem>, authors the derived e2e file with both AC ids, and marks
 // tests-derived. Returns { dir, contract }.
-function driveToTestsDerived(dir) {
+// opts.wireOnProto: main carries no overlay import; the session wires it on proto/<stem> after
+// opening (the import-only dev-entry diff). opts.briefArg: the brief path the tests-derived run
+// is given (default BRIEF_REL).
+function driveToTestsDerived(dir, opts) {
+  opts = opts || {}
   fs.writeFileSync(path.join(dir, 'src/db/old.js'), 'module.exports = { legacy: true }\n')
+  if (opts.wireOnProto) fs.writeFileSync(path.join(dir, 'src/main.js'), 'export function main() { return 1 }\n')
   execFileSync('git', ['-C', dir, 'add', '-A'], { encoding: 'utf8' })
   execFileSync('git', ['-C', dir, 'commit', '-q', '-m', 'seed src/db/old.js on base'], { encoding: 'utf8' })
 
-  advanceToApproved(dir, TWO_ROUTE_STATES, threePins())
+  advanceToApproved(dir, TWO_ROUTE_STATES, threePins(), opts.wireOnProto ? () => {
+    const wtDir = worktreePath(dir)
+    fs.writeFileSync(path.join(wtDir, 'src/main.js'), "if (import.meta.env.DEV) import('./proto-overlay.js')\nexport function main() { return 1 }\n")
+    execFileSync('git', ['-C', wtDir, 'commit', '-q', '-am', 'wire overlay'], { encoding: 'utf8' })
+  } : null)
   patchConfig(dir, (cfg) => { cfg.prototype.export = ['src/db/**', 'drizzle/**'] })
   const frozen = markFrozen(dir)
   assert.strictEqual(frozen.status, 0, 'test setup requires --mark frozen to succeed: ' + frozen.stderr)
@@ -275,7 +285,9 @@ function driveToTestsDerived(dir) {
     "test('" + contract.tests[0].ac + " pin " + contract.tests[0].pin + ": n1', () => {})\n" +
     "test('" + contract.tests[1].ac + " pin " + contract.tests[1].pin + ": n3', () => {})\n")
 
-  const r = markTestsDerived(dir)
+  const r = opts.briefArg
+    ? runNode(DRIVER, [opts.briefArg, '--root', dir, '--mark', 'tests-derived'], { env: captureEnv(dir) })
+    : markTestsDerived(dir)
   return { dir, contract, r }
 }
 
@@ -532,4 +544,32 @@ test('AC-20260928-02-11: the same mark appends one .claude/spec-runs.jsonl ledge
 
   const state = runNode(DRIVER, [BRIEF_REL, '--root', dir])
   assert.match(state.stdout, /Next:/, 'the CLOSED step must print a "Next:" line (spec-status --next verbatim): ' + state.stdout)
+})
+
+test('tests-derived accepts the brief as an absolute path: the sub-plan lands in the real brief and harden/<stem> is created', () => {
+  const dir = setupHost()
+  const briefAbs = path.join(dir, BRIEF_REL)
+  const { r } = driveToTestsDerived(dir, { briefArg: briefAbs })
+  assert.strictEqual(r.status, 0, 'an absolute brief path must not be re-joined under the root: ' + JSON.stringify(r))
+  assert.match(fs.readFileSync(briefAbs, 'utf8'), /## Data\/API sub-plan/, 'the sub-plan must land in the brief the path names')
+  assert.ok(branchExists(dir, 'harden/' + STEM), 'harden/<stem> must exist after export')
+})
+
+test('tests-derived leaves no harden/<stem> behind when the sub-plan cannot be written, so the rerun is not refused as "exists"', () => {
+  const dir = setupHost()
+  const { r } = driveToTestsDerived(dir, { briefArg: path.join(dir, 'no-such-dir', STEM + '.md') })
+  assert.strictEqual(r.status, 2, 'an unwritable brief path must refuse: ' + JSON.stringify(r))
+  assert.match(r.stderr, /sub-plan/, 'the refusal must name the sub-plan write: ' + r.stderr)
+  assert.ok(!branchExists(dir, 'harden/' + STEM), 'no harden/<stem> may be left behind: ' + git(dir, 'branch', '--list'))
+  const rerun = markTestsDerived(dir)
+  assert.strictEqual(rerun.status, 0, 'the rerun with a good brief path must succeed: ' + JSON.stringify(rerun))
+})
+
+test('the generated File Plan drops the dev-entry file whose prototype-branch diff is only the overlay import', () => {
+  const dir = setupHost()
+  const { r, contract } = driveToTestsDerived(dir, { wireOnProto: true })
+  assert.strictEqual(r.status, 0, JSON.stringify(r))
+  const specText = fs.readFileSync(path.join(dir, contract.spec), 'utf8')
+  assert.ok(!specText.includes('src/main.js'), 'the overlay wiring is prototype tooling and must not ship as a File Plan row: ' + specText)
+  assert.match(specText, /src\/ui\/a\.js\s*\|\s*MODIFY/, 'real outside-export edits must still be listed: ' + specText)
 })

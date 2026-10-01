@@ -35,6 +35,7 @@ let shadow = null
 let panelEl = null
 let markLayer = null
 let queueBarEl = null
+let chromeEl = null
 
 function currentScreen() {
   return location.pathname
@@ -66,7 +67,8 @@ const OVERLAY_CSS = `
   .proto-badge { position: absolute; min-width: 18px; height: 18px; padding: 0 4px;
     background: #f43f5e; color: #fff; font: 700 11px/18px -apple-system, sans-serif;
     text-align: center; border-radius: 9px; transform: translate(-50%, -50%); }
-  .proto-panel { position: fixed; right: 16px; bottom: 56px; width: 260px; background: #111827;
+  .proto-panel { position: fixed; right: 16px; bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    width: min(260px, calc(100vw - 32px)); z-index: 2147483001; background: #111827;
     color: #f9fafb; font: 12px/1.4 -apple-system, sans-serif; padding: 12px; border-radius: 8px;
     box-shadow: 0 4px 16px rgba(0,0,0,.4); }
   .proto-panel.proto-hidden { display: none; }
@@ -74,9 +76,12 @@ const OVERLAY_CSS = `
   .proto-panel input { width: 100%; margin: 4px 0; box-sizing: border-box; }
   .proto-panel button { margin: 4px 4px 0 0; }
   .proto-kind button[data-active="true"] { font-weight: 700; text-decoration: underline; }
-  .proto-queue-bar { position: fixed; left: 16px; bottom: 16px; background: #111827; color: #f9fafb;
+  .proto-queue-bar { position: fixed; left: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    z-index: 2147483001; background: #111827; color: #f9fafb;
     font: 12px -apple-system, sans-serif; padding: 8px 12px; border-radius: 8px; display: flex;
-    gap: 8px; align-items: center; }
+    flex-wrap: wrap; gap: 8px; align-items: center; max-width: calc(100vw - 32px); box-sizing: border-box; }
+  .proto-top .proto-queue-bar { bottom: auto; top: calc(16px + env(safe-area-inset-top, 0px)); }
+  .proto-top .proto-panel { bottom: auto; top: calc(56px + env(safe-area-inset-top, 0px)); }
 `
 
 function ensureHost() {
@@ -90,12 +95,14 @@ function ensureHost() {
   markLayer = document.createElement('div')
   markLayer.className = 'proto-marks'
   shadow.appendChild(markLayer)
+  chromeEl = document.createElement('div')
+  shadow.appendChild(chromeEl)
   panelEl = document.createElement('div')
   panelEl.className = 'proto-panel proto-hidden'
-  shadow.appendChild(panelEl)
+  chromeEl.appendChild(panelEl)
   queueBarEl = document.createElement('div')
   queueBarEl.className = 'proto-queue-bar'
-  shadow.appendChild(queueBarEl)
+  chromeEl.appendChild(queueBarEl)
   renderQueueBar()
 }
 
@@ -191,6 +198,15 @@ function renderQueueBar() {
   const status = document.createElement('span')
   status.className = 'proto-status'
   queueBarEl.appendChild(status)
+
+  // A phone's own bottom action bar sits where this bar does — one tap moves the overlay's
+  // chrome to the top edge and back, so the host's controls stay reachable.
+  const flipBtn = document.createElement('button')
+  flipBtn.type = 'button'
+  flipBtn.textContent = '⇅'
+  flipBtn.title = 'move to the other edge'
+  flipBtn.onclick = () => chromeEl.classList.toggle('proto-top')
+  queueBarEl.appendChild(flipBtn)
 }
 
 function setStatus(text) {

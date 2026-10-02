@@ -1,6 +1,6 @@
 ---
 date: 2026-10-02
-status: implementing
+status: done
 tier: critical
 area: design
 breaking: true
@@ -413,6 +413,24 @@ stage with an open round.
 
 Picture rounds (the brief's third scope item) are not planned here: the service does not accept
 them yet and the plugin has nothing that produces a picture.
+
+Build and review record (2026-10-02, folded from the deviations sidecar):
+- The File Plan's "whole Brief State case" in `tests/consistency/genesis-doctrine.test.js` also
+  carried a ban on four retired second-artifact literals in the genesis doctrine that no other
+  test pins; the ban outlives the case's subject, so it was kept as its own case with no AC-ID
+  (citing specs/20260926/04 D9) rather than deleted.
+- Each AC that bundles several independent WHEN-clauses (ACs 3, 8, 9, 11, 12) is split into
+  several flat test cases carrying the same AC-ID, so a failure names its clause.
+- `tests/walkthrough/stub-service.js` needed no change (A6 held).
+- D8: the local `round.json` story check runs before `pull-approvals` (build auto-pick, recorded
+  in D8); the refusals and their order are unchanged.
+- D3: `roundFindings` takes an optional fifth argument, `readScreens`'s own `bad-screen-file`
+  findings, and returns them first — the four-argument signature had no other way to return
+  "them together with the rest".
+- D17 took two fix rounds at review: the build tagged only the three criteria its oracle
+  (`ac-drift-clean`) flagged, but that oracle demands tags on CONTINUE-TO pins only, so 32
+  further criteria orphaned by the deleted tests were invisible to it. The complete set came
+  from a base-versus-head diff of the AC-IDs cited under `tests/`.
 
 ## Canonical Delta
 

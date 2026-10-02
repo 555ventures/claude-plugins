@@ -99,21 +99,21 @@ the current contract version.
 
 - **AC-20260918-01-1**: WHEN `mock-cli`'s `contractOrDie` runs against a stub reporting
   `contractVersion: 3` THE SYSTEM SHALL proceed, and against one reporting `2` it SHALL die naming
-  both numbers (`contract 2 ≠ 3`) → rewrites tests/mocks/mock-contract.test.js :: AC-20260917-01-15:
+  both numbers (`contract 2 ≠ 3`) → rewrites tests/mocks/mock-contract.test.js :: AC-20260917-01-15: [retired: specs/20261002/01-the-wireframe-command-runs-over-the-service.md]
 - **AC-20260918-01-2**: WHEN the driver's `client waive --journey <j> --reason <r>` path runs THE
   SYSTEM SHALL invoke the package's `waive` verb with `--journey`, `--reason` and `--beats`, and
   SHALL NOT itself write `design/approval.json`
-  → rewrites tests/mocks/mock-driver-states.test.js :: AC-20260917-01-11:
+  → rewrites tests/mocks/mock-driver-states.test.js :: AC-20260917-01-11: [retired: specs/20261002/01-the-wireframe-command-runs-over-the-service.md]
 - **AC-20260918-01-3**: WHEN the `waive` verb exits non-zero THE SYSTEM SHALL surface its stderr as
   the driver's refusal rather than reporting the journey waived
-  → writes tests/mocks/mock-driver-states.test.js
+  → writes tests/mocks/mock-driver-states.test.js [retired: specs/20261002/01-the-wireframe-command-runs-over-the-service.md]
 - **AC-20260918-01-5**: WHEN the consistency suite compares command text against doctrine THE SYSTEM
   SHALL find `mock-review approve --screen` in both, and SHALL NOT find the retired phrases
   `approvals are recorded on the served page`, `pick on the page` or `--decision`
   → rewrites tests/consistency/design-stage-doctrine.test.js :: AC-20260914-02-8:
 - **AC-20260918-01-6**: WHEN the stub host's `defaultApproval` and `defaultNotes` fixtures are
   written THE SYSTEM SHALL emit `contractVersion: 3` and no `theme` key, so the package's own
-  `plugin-shapes` guard keeps parsing them → writes tests/mocks/mock-contract.test.js
+  `plugin-shapes` guard keeps parsing them → writes tests/mocks/mock-contract.test.js [retired: specs/20261002/01-the-wireframe-command-runs-over-the-service.md]
 
 ## Assumptions (escalation triggers)
 

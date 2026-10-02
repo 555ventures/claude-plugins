@@ -363,7 +363,10 @@ upstream bug list. -->
   inside a surviving file bites the same way, and a comment is a citation: an AC-ID named only in
   a deleted case's header comment (`rewrites AC-…`) was a third spec's sole cover. The same lock grep also
   catches the script-level form: a surviving script that spawns a deleted script BY PATH
-  (`path.join(__dirname, …)`) escapes a `require(` grep entirely.
+  (`path.join(__dirname, …)`) escapes a `require(` grep entirely. Green `ac-drift-clean` is NOT
+  proof the tags are complete: it reddens only for CONTINUE-TO pins, so a WRITES criterion whose
+  test is deleted stays silent — one build tagged 3 and review found 32 more. Derive the set as the
+  AC-IDs cited under `tests/` at the base minus those cited now (specs/20261002/01).
   (specs/20260813/07-command-report-conformance.md D8; specs/20260813/09-model-placement-mechanics.md D4;
   specs/20260814/01-ac-matrix-script.md; specs/20260907/09-atlas-index-and-note-navigation.md;
   specs/20260907/07-mocks-retires-theme.md D12; specs/20260907/08-walk-critic.md D2/D6;

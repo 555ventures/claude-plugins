@@ -233,7 +233,6 @@ const SURVIVORS = [
   'spec/scripts/lib/surfaces.js',
   'spec/templates/mocks-ledger.md',
   'spec/templates/mocks-seed.md',
-  'spec/templates/mock/contract.json',
 ]
 
 test('AC-20260914-03-6: none of the File Plan\'s DELETE-marked files or directories exist in the repo tree', () => {
@@ -245,9 +244,9 @@ test('AC-20260914-03-6: none of the File Plan\'s DELETE-marked files or director
     JSON.stringify(stillThere))
 })
 
-test('AC-20260914-03-6: D10\'s named survivors — mocks-ledger.js, surfaces.js, mocks-ledger.md, mocks-seed.md, mock/contract.json — still exist', () => {
+test('AC-20260914-03-6: D10\'s named survivors — mocks-ledger.js, surfaces.js, mocks-ledger.md, mocks-seed.md — still exist', () => {
   const missing = SURVIVORS.filter((rel) => !fs.existsSync(path.join(ROOT, rel)))
   assert.deepStrictEqual(missing, [],
-    'D10: these five paths are explicitly pinned as survivors — the batch deletion must not take ' +
+    'D10: these four paths are explicitly pinned as survivors — the batch deletion must not take ' +
     'them by accident: ' + JSON.stringify(missing))
 })

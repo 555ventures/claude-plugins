@@ -56,15 +56,11 @@ fuller incident write-ups live in each cited spec's history.
   (specs/20260908/02-driver-dedupe-onto-lib.md;
   specs/20260917/01-the-client-confirms-the-story.md)
 
-- **`spec/scripts/lib/mock-cli.js` is the sole caller of the separate `@555-ventures/mock-review`
-  package.** `contractOrDie(appDir)` runs `contract --json` first and refuses on a
-  `contractVersion` mismatch or an ENOENT spawn, each naming its install remedy; `run(appDir,
-  verb, args)` spawns with `cwd: appDir`, `shell: false`, and the app's own
-  `node_modules/.bin` prepended to the inherited PATH. Every JSON verb's stdout is parsed and
-  validated key-presence-only against `spec/templates/mock/contract.json`'s own `shapes` map
-  before any caller reads it — no library, no type checks, `null` counts as present — so a
-  shape addition in the contract needs no matching code change here.
-  (specs/20260914/01-the-mock-contract-and-the-driver.md D1, D2)
+- **`spec/scripts/lib/mocks-round.js` is the one reader of a wireframe round: the screen
+  files, the assembled round, its offline findings, its digest, and the latest round's notes and
+  approvals; the mocks driver and genesis both read through it, and the driver reaches the service
+  only by running `walkthrough.js` as a child process.**
+  (specs/20261002/01-the-wireframe-command-runs-over-the-service.md)
 
 - **`spec/scripts/lib/ignored-paths.js` is the one derivation of a root's git-ignored path
   set.** `getIgnoredPaths(root)` NUL-splits `git ls-files -o -i --exclude-standard --directory`

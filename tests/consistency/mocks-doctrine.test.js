@@ -6,12 +6,13 @@ const crypto = require('node:crypto')
 const path = require('node:path')
 const { ROOT, read } = require('../helpers')
 
-// specs/20260917/01-the-client-confirms-the-story.md D10, AC-20260917-01-14, AC-20260917-01-17,
-// AC-20260917-01-18: the CLIENT state collapses out of the doctrine chain, the seed's beat
-// grammar retires the roadmap "names and arrows only" wording and the CLIENT command section,
-// and § Provenance Ledger's exclusion sentence is rewritten to name --mark approved instead of
-// the retired `ledger derive`. Cases still tagged AC-20260914-01-19 (Authoring Rules,
-// commands/mocks.md's spec-03 surfaces, the mock-authoring skill) are untouched by this spec.
+// specs/20260917/01-the-client-confirms-the-story.md D10, AC-20260917-01-17, AC-20260917-01-18:
+// the seed's beat grammar retires the roadmap "names and arrows only" wording and the CLIENT
+// command section, and § Provenance Ledger's exclusion sentence is rewritten to name --mark
+// approved instead of the retired `ledger derive`. Cases still tagged AC-20260914-01-19
+// (commands/mocks.md's spec-03 surfaces, the mock-authoring skill) are untouched. The
+// five-state chain case and the Authoring Rules literals case are deleted by
+// specs/20261002/01-the-wireframe-command-runs-over-the-service.md D17.
 
 // Post-change hash of spec/doctrine/mocks.md's "## Provenance Ledger" section body (heading up to
 // the next "## " heading) this spec's D10 intends to land: the pre-image section with its first
@@ -38,37 +39,6 @@ function extractSection(src, heading) {
   const nextIdx = rest.indexOf('\n## ', 1)
   return nextIdx === -1 ? rest : rest.slice(0, nextIdx)
 }
-
-test('AC-20260917-01-14: mocks.md § Mocks: State Machine names the five-state chain with CLIENT collapsed out, and § Mocks: Page Notes names all four note-status literals including the new deferred', () => {
-  const mocksDoctrine = path.join(ROOT, 'spec/doctrine/mocks.md')
-  assert.ok(fs.existsSync(mocksDoctrine), 'spec/doctrine/mocks.md must exist — its absence means the whole doctrine surface this AC pins is missing: ' + mocksDoctrine)
-  const src = read('spec/doctrine/mocks.md')
-  const section = extractSection(src, 'Mocks: State Machine')
-  assert.ok(section, '§ Mocks: State Machine must exist under its exact heading name: ' + mocksDoctrine)
-  assert.match(section, /SEED\s*→\s*SHELL\s*→\s*SCREENS\s*→\s*THEME\s*→\s*APPROVED/,
-    'D10: § Mocks: State Machine must name the five-state chain in order, CLIENT collapsed out — a stale ordering means the doctrine no longer matches what the driver actually derives: ' + section)
-  for (const retired of ['KIT', 'WIREFRAMES', 'SHAPES', 'CLIENT']) {
-    assert.ok(!new RegExp('\\b' + retired + '\\b').test(section),
-      `D10: § Mocks: State Machine must name none of the retired states, CLIENT included — "${retired}" surviving here means the doctrine still describes a state the driver no longer has: ` + section)
-  }
-
-  const notesSection = extractSection(src, 'Mocks: Page Notes')
-  assert.ok(notesSection, '§ Mocks: Page Notes must exist under its exact heading name: ' + mocksDoctrine)
-  for (const status of ['open', 'answered', 'approved', 'deferred']) {
-    assert.ok(notesSection.includes(status),
-      `D10: § Mocks: Page Notes must name the "${status}" note status — its absence leaves the fourth status (deferred) undocumented, or a session cannot tell the four colors apart: ` + notesSection)
-  }
-})
-
-test('AC-20260914-01-19: mocks.md § Mocks: Authoring Rules names the four D12 authoring-rule literals', () => {
-  const src = read('spec/doctrine/mocks.md')
-  const section = extractSection(src, 'Mocks: Authoring Rules')
-  assert.ok(section, '§ Mocks: Authoring Rules must exist under its exact heading name: spec/doctrine/mocks.md')
-  for (const literal of ['@/components/ui', '/**', 'examples', 'src/records']) {
-    assert.ok(section.includes(literal),
-      `D12: § Mocks: Authoring Rules must name "${literal}" — its absence means a session reading this section alone cannot reconstruct the authoring rule: ` + section)
-  }
-})
 
 test('AC-20260917-01-18: mocks.md § Provenance Ledger hashes to the post-change body this spec\'s D10 lands, naming "deferred: <id>" and no longer naming the retired `ledger derive`', () => {
   const src = read('spec/doctrine/mocks.md')

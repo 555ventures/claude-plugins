@@ -293,7 +293,9 @@
   },
   "spec/scripts/walkthrough.js": {
     "entryPoints": [
-      "spec/commands/doctor.md"
+      "spec/commands/doctor.md",
+      "spec/commands/mocks.md",
+      "spec/scripts/mocks-driver.js"
     ]
   },
   "spec/scripts/workspace-scan.js": {

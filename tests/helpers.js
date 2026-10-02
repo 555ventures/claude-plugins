@@ -6,6 +6,7 @@
 // named top-level `function name(...) {...}` out of the source and evaluates it standalone, which
 // is exactly the unit under test for the guard functions (normalizeArgs, validateGroups, isBatch).
 const fs = require('fs')
+const assert = require('assert')
 const path = require('path')
 const os = require('os')
 const { execFileSync, spawnSync } = require('child_process')
@@ -319,7 +320,59 @@ function gitRepo(dir, opts = {}) {
   return (...a) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8' })
 }
 
+// Repo-wide retired-name sweep, shared by the retired-command sweeps in
+// tests/consistency/genesis-doctrine.test.js and the retired-package sweep in
+// tests/consistency/reviewer-retired.test.js — per § Review Checks (three or more
+// near-identical blocks names the extraction); exported from here once a second file called it
+// (specs/20261002/01-the-wireframe-command-runs-over-the-service.md D12).
+//
+// `citations` is the structural answer to the self-reference trap: a spec that retires a
+// command usually has the command's name inside its OWN filename, so every dated provenance
+// header citing that spec (Test Rules require those headers), the run ledger's plan row, and
+// the driver's retained review evidence all contain the banned literal while pointing at the
+// record of the kill rather than at the dead command. Each citation string is DELETED from a
+// file's content before the literal is looked for, so citing the killing spec is always legal
+// and pointing at the command never is. Exact strings only — never a "looks like a path" shape
+// rule, which is the evadable-guard class § Gotchas bans (a live stale reference written as a
+// path would hide behind it). Each citation must strictly contain and exceed the literal, so
+// nobody can hollow the sweep out by passing the bare name as its own citation.
+//
+// Returns offending repo-relative paths; each call site keeps its own assert and its own
+// spec-cited consequence message.
+function sweepRetiredLiteral (literal, { citations = [], waivedPaths = [], waivedPrefixes = [] }) {
+  for (const c of citations) {
+    assert.ok(c.includes(literal) && c.length > literal.length,
+      'sweep misuse: citation "' + c + '" must strictly contain and exceed the literal "' +
+      literal + '" — a citation equal to (or not containing) the literal would subtract every ' +
+      'live mention and silently hollow out the sweep it is supposed to narrow')
+  }
+  const isWaived = (rel) =>
+    waivedPaths.includes(rel) || waivedPrefixes.some((pre) => rel.startsWith(pre))
+  const walk = (dir, acc) => {
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (ent.name === '.git' || ent.name === 'node_modules') continue
+      // A sibling session's live /spec:run worktree (.claude/worktrees/<branch>/) is a
+      // checkout of an OLDER commit, not this repo's content — sweeping it reddens every
+      // retired-literal pin whenever a run is in flight.
+      if (dir === path.join(ROOT, '.claude') && ent.name === 'worktrees') continue
+      const abs = path.join(dir, ent.name)
+      if (ent.isDirectory()) walk(abs, acc)
+      else if (ent.isFile()) acc.push(abs)
+    }
+    return acc
+  }
+  const offenders = []
+  for (const abs of walk(ROOT, [])) {
+    const rel = path.relative(ROOT, abs).split(path.sep).join('/')
+    if (isWaived(rel)) continue
+    let content = fs.readFileSync(abs, 'utf8')
+    for (const c of citations) content = content.split(c).join('')
+    if (content.includes(literal)) offenders.push(rel)
+  }
+  return offenders
+}
+
 module.exports = {
   ROOT, SPEC, read, extractFn, evalFns, checkWorkflowSyntax, tmpdir, runNode, runBash, gitRepo,
-  freePort, parseFlatDom,
+  freePort, parseFlatDom, sweepRetiredLiteral,
 }

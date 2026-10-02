@@ -9,8 +9,9 @@ const { ROOT, read, runNode } = require('../helpers')
 // render-gate/atlas sections, and spec-review-driver.js drops the advisory render-gate clause.
 //
 // specs/20260918/01-mock-contract-v3.md D4, AC-20260918-01-5: the AC-20260914-02-8 case below
-// pins the served-page approve/waive doctrine rewrite across design.md, mocks.md,
-// mocks-driver.js and mock.config.ts.
+// pins the served-page approve/waive doctrine rewrite across design.md, mocks.md and
+// mocks-driver.js (the deleted config template and the four-literal loop of the design-doctrine
+// pin are dropped by specs/20261002/01-the-wireframe-command-runs-over-the-service.md D17).
 //
 // specs/20260926/01-the-approval-file-is-not-a-gate.md D1/D11: the sibling cases this file used
 // to carry over the (now-deleted) design command and stage files are retired along with their
@@ -19,7 +20,6 @@ const { ROOT, read, runNode } = require('../helpers')
 const DESIGN_DOCTRINE_REL = 'spec/doctrine/design.md'
 const REVIEW_DRIVER_REL = 'spec/scripts/spec-review-driver.js'
 const MOCKS_DOCTRINE_REL = 'spec/doctrine/mocks.md'
-const MOCK_CONFIG_REL = 'spec/templates/mock/mock.config.ts'
 const MOCKS_DRIVER_REL = 'spec/scripts/mocks-driver.js'
 
 // ---------------------------------------------------------------------------
@@ -39,24 +39,22 @@ test('AC-20260914-02-16: WHEN spec/scripts/spec-review-driver.js is read THE SYS
 // AC-20260914-02-8
 // ---------------------------------------------------------------------------
 
-test('AC-20260914-02-8 / AC-20260918-01-5: the consistency suite finds none of the retired phrases "approvals are recorded on the served page", "pick on the page" or "--decision" anywhere across design.md, mocks.md, mocks-driver.js and mock.config.ts', () => {
+test('AC-20260914-02-8 / AC-20260918-01-5: the consistency suite finds none of the retired phrases "approvals are recorded on the served page", "pick on the page" or "--decision" anywhere across design.md, mocks.md and mocks-driver.js', () => {
   const mocksDoctrineText = read(MOCKS_DOCTRINE_REL)
   const designDoctrineText = read(DESIGN_DOCTRINE_REL)
   const mocksDriverText = read(MOCKS_DRIVER_REL)
-  const mockConfigText = read(MOCK_CONFIG_REL)
   const retiredPhraseSurfaces = [
     ['design.md', designDoctrineText],
     ['mocks.md', mocksDoctrineText],
     ['mocks-driver.js', mocksDriverText],
-    ['mock.config.ts', mockConfigText],
   ]
   for (const [label, docText] of retiredPhraseSurfaces) {
     for (const retired of ['approvals are recorded on the served page', 'pick on the page', '--decision']) {
       assert.ok(!docText.includes(retired),
         'D4: ' + label + ' must contain none of the retired phrases naming the removed served-' +
         'page controls — found "' + retired + '", which describes a screen-approve/theme-pick/' +
-        'notes-decision control the served page no longer carries once `mock-review approve` ' +
-        'and `waive` are the only writers')
+        'notes-decision control the served page no longer carries once the client\'s confirm on the ' +
+        'service is the only writer')
     }
   }
 })
@@ -65,7 +63,7 @@ test('AC-20260914-02-8 / AC-20260918-01-5: the consistency suite finds none of t
 // AC-20260914-02-10
 // ---------------------------------------------------------------------------
 
-test('AC-20260914-02-10 / AC-20260926-01-8: WHEN spec/doctrine/design.md is read THE SYSTEM SHALL carry ## Design Canon, ## Design Authoring Contracts, ## Workflows Encode Shape, Not Judgment, neither ## Design Render Gate nor ## Design Atlas, name design/approval.json, src/records, examples, @/components/ui, be <=160 lines, and citations-check.js exits 0', () => {
+test('AC-20260914-02-10 / AC-20260926-01-8: WHEN spec/doctrine/design.md is read THE SYSTEM SHALL carry ## Design Canon, ## Design Authoring Contracts, ## Workflows Encode Shape, Not Judgment, neither ## Design Render Gate nor ## Design Atlas, be <=160 lines, and citations-check.js exits 0', () => {
   assert.ok(fs.existsSync(path.join(ROOT, DESIGN_DOCTRINE_REL)), DESIGN_DOCTRINE_REL + ' must exist for this pin to mean anything')
   const text = read(DESIGN_DOCTRINE_REL)
 
@@ -83,11 +81,6 @@ test('AC-20260914-02-10 / AC-20260926-01-8: WHEN spec/doctrine/design.md is read
   assert.doesNotMatch(text, /^## Design Atlas$/m,
     'D10: "## Design Atlas" must be deleted whole — the whole-product view it described is a ' +
     'retired command (spec 03) with no doctrine section left to justify it')
-  for (const literal of ['design/approval.json', 'src/records', 'examples', '@/components/ui']) {
-    assert.ok(text.includes(literal),
-      'D10: spec/doctrine/design.md must name "' + literal + '" — the rewritten canon describes ' +
-      'the three import layers and the approval record, none of which this literal\'s absence would leave documented')
-  }
   const lineCount = text.split('\n').length
   assert.ok(lineCount <= 160,
     'D10: spec/doctrine/design.md must stay at or under 160 lines — found ' + lineCount +

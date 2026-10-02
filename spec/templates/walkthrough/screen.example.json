@@ -1,0 +1,13 @@
+{
+  "root": "page",
+  "elements": {
+    "page": { "type": "Stack", "props": { "gap": 16, "padding": 24 }, "children": ["title", "start"] },
+    "title": { "type": "Heading", "props": { "text": "You are invited to Hearwell", "level": 1 }, "children": [] },
+    "start": {
+      "type": "Button",
+      "props": { "label": "Check my team" },
+      "children": [],
+      "on": { "press": { "action": "navigate", "params": { "to": "roster-confirm" } } }
+    }
+  }
+}

@@ -46,12 +46,11 @@ Milestone gates:
 ## Journey map
 
 <!-- Derived view, never authored here: each UI-bearing brief declares its surfaces + journey
-     edges in its own `surfaces` block (roadmap-brief.md template), which SEED parses into the
-     mock app's `journeys.ts`; `mock-review serve` hosts the running app so the resulting
-     whole-product journey graph can be seen. Delete this section
-     for non-visual archetypes. -->
+     edges in its own `surfaces` block (roadmap-brief.md template); the wireframe's seed journeys
+     (design/mocks/seed.md) draw them as gray screens the walkthrough service renders. Delete
+     this section for non-visual archetypes. -->
 
-Run `mock-review serve` to see every declared surface, its mock, and the journey graph.
+Run `/spec:mocks` to see every declared surface drawn as a wireframe and the journey graph.
 
 ## Ops track (external clocks — no code, start immediately, not specs)
 

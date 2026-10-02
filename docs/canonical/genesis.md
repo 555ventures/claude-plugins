@@ -127,10 +127,8 @@
   archetypes saw none of those refusals.
   (specs/20260902/11-brief-from-approved-set.md, done 2026-09-03)
 
-- Since specs/20260914/02 the BRIEF step's derivation sources are `design/approval.json` (the
-  seed journey count, its `journeys` keys) and `design/notes.json` (the open-note count,
-  `status === "open"` across notes and journey conversations alike) — read directly through
-  `fs` + JSON, never a notes module — printed as `seed journeys: N · notes open: N`; the
+- Since specs/20260914/02 BRIEF derives its counts from the seed and the latest round, printed
+  as `seed journeys: N · notes open: N`; the
   `design/components.json` entry-per-primitive check at `skeleton-landed` is retired with it.
   When the mock app exists (`<status.app>/mock.config.ts`), MENUS auto-picks `framework`,
   `language`, and `packageManager` from it (`vite-react` / `typescript` / `npm`, each recorded
@@ -138,7 +136,7 @@
   `tournament: { skipped: "mock-app" }`, so `FINALISTS`/`RACE`/`PROBE`/`PICK` are never reached
   and `DECIDE` proceeds on the derived dimensions; `SCAFFOLD` runs no `scaffoldCommand` against
   it and records `scaffold: { skipped: "mock-app" }`, and `--mark skeleton-landed` refuses
-  unless `mock-review check --json` reports `ok: true` and the zero-day gate is green — the
+  unless the wireframe's own review check passed and the zero-day gate is green — the
   shell-adopt and matrix-expansion checks that used to gate it are retired. A host with no mock
   app runs the tournament and scaffold exactly as before.
   (specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md, done 2026-09-14; the
@@ -165,8 +163,8 @@
   integer Storybook port 1024–65535), and the rules file's tables via `design-contract-check
   --rules --kit --tokens`; acceptance records `status.designStage` and routes to `DESIGN_KIT`. The mock app is no longer the product: MENUS auto-picks nothing,
   the tournament and scaffold run for every host, and `skeleton-landed` runs no mock review
-  check; BRIEF still requires the mocks set `APPROVED` and reads `design/approval.json` for the
-  journey count, and `DESIGN_BRIEF`'s step is the last read of that record. `/spec:doctor` check
+  check; BRIEF still requires the mocks set `APPROVED` and derives its counts from the seed and the
+  latest round, and `DESIGN_BRIEF`'s step is the last read of the wireframe. `/spec:doctor` check
   22 re-runs the inventory with `--check` when `docs/design/catalog.md` exists.
   (specs/20260926/04-the-design-brief.md, done 2026-09-26)
 
@@ -201,6 +199,8 @@
   hashes — frozen after approval, never gated later). ROADMAP names that record in its
   `Read only:` line, prints one `approved: <j> — <n> beats · screens: <a, b> · story: <id>` line
   per approved journey, and the placement check reads screens from that record when it exists,
-  from the seed only when it does not. The wireframe's `design/approval.json` is never read after
+  from the seed only when it does not. The wireframe is never read after
   `DESIGN_BRIEF`'s print. No PNG round is pushed from genesis until brief 29's client exists.
   (specs/20260926/06-the-approval-stop-and-the-roadmap.md, done 2026-09-28)
+
+- Since specs/20261002/01 no genesis step reads a file under a mock app.

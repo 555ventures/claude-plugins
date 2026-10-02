@@ -197,9 +197,9 @@
 // (D4) then derives from that record: it prints one `approved:` line per approved journey, and
 // `roadmap-written`'s placement check reads its label set from the record's `screens` once it
 // exists, falling back to the seed only for a legacy or skipped-stage host. D5: no driver code
-// path reads the WIREFRAME's own `<mockAppDir>/design/approval.json` after `DESIGN_BRIEF`'s
-// print — that file and this spec's `docs/design/approval.json` are two different records with
-// two different owners.
+// path reads a wireframe-stage approval record after `DESIGN_BRIEF`'s print — the wireframe's
+// confirmations live in design/mocks/status.json and design/rounds/, a different record with a
+// different owner than this spec's `docs/design/approval.json`.
 //
 // What the D1-D5 additions deliberately do NOT do:
 //   - walk a journey story's `play` function, or judge whether JJ actually reviewed each one —
@@ -233,10 +233,10 @@ const fs = require('fs')
 const path = require('path')
 const { CONFIG_RELPATH } = require('./lib/host-config')
 const mocksLedgerLib = require('./lib/mocks-ledger')
-// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(a): the BRIEF step text's
-// "seed journeys"/"notes open" counts read design/approval.json and design/notes.json directly
-// (under the mock app directory, status.app) through fs + JSON — never lib/mocks-notes, which is
-// retired with the HTML mock set (spec 03 deletes the module for good).
+// specs/20261002/01-the-wireframe-command-runs-over-the-service.md D13: the BRIEF step text's
+// "seed journeys" count is the seed's own journey count and "notes open" is lib/mocks-round.js's
+// openNoteCount — nothing in this file reads a file under a mock app.
+const mocksRoundLib = require('./lib/mocks-round')
 const surfacesLib = require('./lib/surfaces')
 const driverIo = require('./lib/driver-io')
 const storybookIndexLib = require('./lib/storybook-index')
@@ -702,8 +702,8 @@ function designBriefMdPath() { return path.join(root, 'docs/design/brief.md') }
 function catalogMdPath() { return path.join(root, 'docs/design/catalog.md') }
 
 // specs/20260926/06-the-approval-stop-and-the-roadmap.md D3/D5: the designed-set record JJ's
-// `approve` freezes — distinct from designApprovalPath() above (the WIREFRAME's own
-// <mockAppDir>/design/approval.json, read only at/before BRIEF, per D5 never again). This one
+// `approve` freezes — distinct from the wireframe stage's own records (design/mocks/status.json and
+// design/rounds/, read only at/before BRIEF, per D5 never again). This one
 // lives at docs/design/, is written once by design-approved, and is what AWAITING_DESIGN_APPROVAL
 // (D1's re-derivation), ROADMAP (D4) and roadmap-written's placement check (D4) all read.
 function docsDesignApprovalPath() { return path.join(root, 'docs/design/approval.json') }
@@ -1422,38 +1422,11 @@ function readMocksStatus() {
   try { return JSON.parse(fs.readFileSync(mocksStatusPath(), 'utf8')) } catch (e) { return null }
 }
 
-// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(a)/(b)/(d): the app directory
-// is `status.app` from design/mocks/status.json ("app" by default), and "the mock app exists"
-// means `<root>/<status.app>/mock.config.ts` exists. design/approval.json and design/notes.json
-// (the reviewer-owned records) live under that same directory.
-function mockAppDir() {
-  const st = readMocksStatus()
-  const appRel = (st && typeof st.app === 'string' && st.app) || 'app'
-  return path.join(root, appRel)
-}
-function designApprovalPath() { return path.join(mockAppDir(), 'design/approval.json') }
-function designNotesPath() { return path.join(mockAppDir(), 'design/notes.json') }
-function readDesignApproval() {
-  try { return JSON.parse(fs.readFileSync(designApprovalPath(), 'utf8')) } catch (e) { return null }
-}
-function readDesignNotes() {
-  try { return JSON.parse(fs.readFileSync(designNotesPath(), 'utf8')) } catch (e) { return null }
-}
-// D6(a): journey count off design/approval.json's `journeys` keys.
-function approvalJourneyCount() {
-  const a = readDesignApproval()
-  return (a && a.journeys && typeof a.journeys === 'object') ? Object.keys(a.journeys).length : 0
-}
-// D6(a): open-note count off design/notes.json — `status === "open"`, notes and journey
-// conversations alike.
-function notesOpenCount() {
-  const n = readDesignNotes()
-  if (!n) return 0
-  const notesOpen = Array.isArray(n.notes) ? n.notes.filter((x) => x && x.status === 'open').length : 0
-  const journeysOpen = (n.journeys && typeof n.journeys === 'object')
-    ? Object.values(n.journeys).filter((j) => j && j.status === 'open').length : 0
-  return notesOpen + journeysOpen
-}
+// specs/20261002/01-the-wireframe-command-runs-over-the-service.md D13: "seed journeys" is the
+// number of journeys design/mocks/seed.md declares; "notes open" is the waiting items of the
+// latest round's notes.json (0 with no round or no file).
+function seedJourneyCount() { return seedJourneysMap().size }
+function notesOpenCount() { return mocksRoundLib.openNoteCount(root) }
 
 // D3: design/mocks/status.json must exist, be APPROVED, and its own provenance ledger must have
 // no open blocking row (spec 06's gateVerdict) — the same closure /spec:mocks itself enforces at
@@ -2231,7 +2204,7 @@ function handleSkeletonLanded() {
   if (!bc.ok) die(describeBindingSubsetGap(bc) + ' — fix it, then re-mark skeleton-landed')
   // specs/20260926/04-the-design-brief.md D9: the mock app no longer pre-empts the day-zero
   // skeleton gate — every host lands the skeleton through the probe/binding-subset checks above
-  // only (no HTML-design checks, no mock-review check --json, no reimplementation, no shim).
+  // only (no HTML-design checks, no reviewer-package check, no reimplementation, no shim).
   status.marks.skeletonLanded = true
   saveStatus()
   const g = runGateIfDue()
@@ -2745,9 +2718,8 @@ const STEPS = {
       // sections — every confirmed product ledger row by id, and the seed's own journey count —
       // read from the seed and the ledger, never from the discovery interview alone.
       const productRows = confirmedProductRows()
-      // D6(a): "seed journeys" and "notes open" now derive from design/approval.json and
-      // design/notes.json under the mock app directory — never seed.md or lib/mocks-notes.
-      const seedCount = approvalJourneyCount()
+      // D13: "seed journeys" derives from the seed and "notes open" from the latest round.
+      const seedCount = seedJourneyCount()
       const notesOpen = notesOpenCount()
       // specs/20260911/05-approval-is-bookkeeping.md D5: the same fenced-exclusion set the
       // parking-lot check (below, ROADMAP_WRITTEN) requires verbatim — read-only here, this step
@@ -2891,8 +2863,8 @@ const STEPS = {
   ].join('\n'),
 
   // specs/20260926/04-the-design-brief.md D2: the fresh-session/model line, the design-brief
-  // skill line, one journey line per seed journey, and the catalog line D5 records — the last
-  // read of the mock app's own approval record (design/approval.json).
+  // skill line, one journey line per seed journey, and the catalog line D5 records; D13 of
+  // specs/20261002/01 adds design/mocks/screens/ to the reads when it exists.
   DESIGN_BRIEF: () => {
     ensureCatalogGenerated()
     const seedJourneys = seedJourneysMap()
@@ -2900,7 +2872,8 @@ const STEPS = {
     const rulesFile = (dp && typeof dp.rules === 'string' && dp.rules) || '.claude/rules/design.md'
     const lines = [
       '## Step: write the design brief',
-      'Read only: design/mocks/seed.md, design/approval.json (journeys — last read), ' +
+      'Read only: design/mocks/seed.md, ' +
+        (fs.existsSync(path.join(root, 'design/mocks/screens')) ? 'design/mocks/screens/ (the confirmed wireframes), ' : '') +
         genesisRel('brief.md') + ' (## Journeys), docs/design/catalog.md, ' +
         genesisRel('design-paths.json') + ', ' + rulesFile,
       'Doctrine: spec/doctrine/genesis.md § Genesis: Design Stage',

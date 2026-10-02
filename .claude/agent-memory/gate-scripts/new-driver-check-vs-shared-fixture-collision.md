@@ -3,7 +3,7 @@ name: new-driver-check-vs-shared-fixture-collision
 description: A spec-wide gate check applied unconditionally per its own Applicability clause will redden every pre-existing shared test fixture that predates it, even fixtures documented as exempt in a sibling test's own header comment — implement literally, log deviations, never narrow the check to match a stale fixture assumption.
 metadata:
   type: feedback
-  reviewed: 2026-09-28
+  reviewed: 2026-10-02
 ---
 
 When a spec's Decision table states a new driver check applies unconditionally under some
@@ -14,10 +14,10 @@ once it lands; it is not evidence the check should be narrowed.
 
 **Why:** On specs/20260902/11-brief-from-approved-set.md, `genesis-driver.js`'s new D5
 skeleton-landed checks (shell/data-shell/matrix/primitive-coverage) are gated only on
-`status.brief.mocks` being set, per the spec's Behavior › Applicability line. Three separate
-shared test-fixture helpers across three different test files
-(`writeValidBriefArtifacts`/`brief-state.test.js`, `advanceToRoadmapVisual`/
-`genesis-driver.test.js`, `ratifyBriefArtifacts`/`tournament.fixtures.js`, shared by the three tournament shards) all predate D1/D5 and
+`status.brief.mocks` being set, per the spec's Behavior › Applicability line. Several
+shared test-fixture helpers across different test files (at the time
+`writeValidBriefArtifacts`/`advanceToRoadmapVisual`, since removed; `ratifyBriefArtifacts` in
+`tests/genesis/tournament.fixtures.js` still exists) all predate D1/D5 and
 lack the now-required `## Journeys`/`## Non-UI Coverage` brief sections or the D5 shell/mocks
 artifacts. All three reddened once the checks landed — including one
 (`advanceToRoadmapVisual`) whose own header comment explicitly (and now incorrectly) claimed

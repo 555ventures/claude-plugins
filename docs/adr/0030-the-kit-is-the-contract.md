@@ -7,7 +7,8 @@
   spikes under docs/spikes/20260923-design-retool/; every clause below was ratified by JJ
   item by item on 2026-09-24)
 - Amended by: ADR-0031 (clause (f): the client's seven calls, the plugin-owned round number, the
-  optional service, the contract and vocabulary files in the plugin)
+  optional service, the contract and vocabulary files in the plugin); ADR-0032 (clause (f): the
+  wireframe command runs over the service)
 
 ## Context
 

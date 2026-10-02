@@ -3,14 +3,14 @@ name: ac1-ac2-banned-literal-collides-with-sibling-sweep
 description: Adding a design.md AC-1-style banned-literal test can trip an unrelated sibling spec's retired-literal repo sweep over the SAME literal — extend that sweep's existing per-literal waivedPaths block, don't invent a new one.
 metadata:
   type: feedback
-  reviewed: 2026-09-28
+  reviewed: 2026-10-02
 ---
 
 Writing a banned-literal test (`assert.ok(!src.includes(literal), ...)`) for one spec's design.md
 edit can spell a retired-filename literal (one of AC-20260902-08-12's `RETIRED_LITERALS` — e.g. a
 template name of the shape `<word>-pick` + `.json`, or `positions` + `.md`) that a DIFFERENT,
-already-landed spec's repo-wide `sweepRetiredLiteral` regression (in
-`tests/consistency/genesis-doctrine.test.js`) also tracks. `npm test` then reddens that unrelated
+already-landed spec's repo-wide `sweepRetiredLiteral` regression (the
+`sweepRetiredLiteral` helper in `tests/helpers.js`, called from `tests/consistency/genesis-doctrine.test.js`) also tracks. `npm test` then reddens that unrelated
 pre-existing test — your new test file is now an "offender" the sweep's walk finds. (This note
 itself must never spell either literal as one contiguous string, for the same reason — write it
 broken up, as above, or the note becomes its own offender.)

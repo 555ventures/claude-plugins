@@ -4,46 +4,39 @@ description: Mock-app doctrine for /spec:mocks and genesis — Design Canon and 
 
 # Spec Pipeline: Design Doctrine
 
-## Design Canon (the mock app is the one artifact)
+## Design Canon (the wireframe is gray screen files the service renders)
 
-`/spec:mocks` authors the mock app on a host whose config declares a `design` block —
-`{ "app": "<dir holding mock.config.ts, relative to the repo root>" }` — and genesis ratifies it
-at `BRIEF`. There is no second artifact: the mock app **is** the product's frontend, never a
-catalog a later stage renders against separately.
+`/spec:mocks` draws the wireframe on any host; genesis ratifies it at `BRIEF`. The wireframe is a
+picture, not the product: one json-render file per screen and state under
+`design/mocks/screens/`, named as the seed's beats name them, checked offline against the
+catalog and rendered by the walkthrough service. There is no mock app and no screen-approval
+record — a journey is approved by the client's confirm against the hash of its seed sentences
+(mocks.md § Mocks: Confirmation), and a host with no `walkthrough` config block draws nothing
+and confirms each story in the terminal (mocks.md § Mocks: State Machine).
 
-The wireframe's approval record (`design/approval.json`) is read by genesis exactly once more,
-at `DESIGN_BRIEF` (spec/doctrine/genesis.md § Genesis: Design Stage); the design contract that
-follows — the intent-to-pattern and naming tables, checked by `design-contract-check.js` — is
-code, never a second hand-kept copy of what the mock app already showed.
+Genesis reads the wireframe by count only: BRIEF takes the seed's journey count and the latest
+round's waiting notes, and `DESIGN_BRIEF` lists `design/mocks/screens/` among its reads when it
+exists (spec/doctrine/genesis.md § Genesis: Brief State). The design contract that follows — the
+intent-to-pattern and naming tables, checked by `design-contract-check.js` — is code, never a
+second hand-kept copy of what the wireframe already showed.
 
-**Import layers and doc lines** follow mocks.md § Mocks: Authoring Rules —
-`@/components/ui`, `src/records`, `examples` exports; `mock-review check` flags a break.
-
-**Screens carry `meta` and named states.** A screen's `meta` export names its states; each
-state renders exactly what the seed or the journey's step demands — no unbound branch, no
-paraphrase.
-
-**`design/approval.json` is the canon, one writer.** `mock-review approve --screen <name>` is
-the only writer — run by the session on the user's literal `approve` reply at a look stop, never
-a served-page control (the page carries no screen-approve surface). `approval.screens[<label>]`
-carries `approvedAt` and a `hash`; a named screen is **approved** once `approvedAt` is set and
-its `hash` equals `check --json`'s current `hash` for that screen — **stale** the moment the
-hash differs (an edit after approval, never silently re-bound).
+**Drawing rules** follow mocks.md § Mocks: Authoring Rules — one file per screen and state, the
+catalog's components only, every move a real control, invented sample values, stable element
+keys.
 
 **The design contract is code, twice over.** Once the design stage lands a kit (genesis.md
 § Genesis: Design Stage), a composite's own state stories are the living showcase of the
 intent-to-pattern table — gated by brief 27's `kit-discipline`, never a hand-kept screenshot doc.
-A journey story is a genesis artifact, not a mock-app one: it walks the seed's beats against the
-real kit and router, once the mock app's wireframe has already done its job. JJ approves the
-designed set of journey stories directly in Storybook (genesis.md § Genesis: Design Stage) — there
-is no client gate on this approval, and journey stories are frozen at that approval and never
-gated again afterward.
+A journey story is a genesis artifact, not a wireframe one: it walks the seed's beats against the
+real kit and router, once the wireframe has already done its job. JJ approves the designed set of
+journey stories directly in Storybook (genesis.md § Genesis: Design Stage) — there is no client
+gate on this approval, and journey stories are frozen at that approval and never gated again
+afterward.
 
-**Look stops are never questions.** Every look this doctrine governs prints `🎨 ready for
-review — <check.serve.url>/#/<screen>`, one line per surface, then the fixed reply line, then
-**ends the turn**; only the literal `approve` accepts. The reviewer page (the mock app's own
-served UI) is the one viewer; a session never screenshots a screen to judge it in this
-doctrine's place.
+**Look stops are never questions.** A look prints the service's project link as `🎨 ready for
+review — <link>`, then the fixed reply line, then **ends the turn**; the client's confirm on the
+service (or the user's literal `approve` in terminal mode) is the only acceptance. A session
+never screenshots a screen to judge it in this doctrine's place.
 
 **A prototype is a branch of the product, not a second artifact.** `/spec:prototype <brief>`
 runs a functional prototype on `proto/<stem>`, built on top of the real kit and records — a

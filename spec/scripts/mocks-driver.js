@@ -1,101 +1,57 @@
 #!/usr/bin/env node
 // mocks-driver.js [--root <dir>] [--state]
-// mocks-driver.js --root <dir> --mark seed-done|shell-drawn|journey-drawn|journey-approved|theme-picked|approved [--journey <j>]
-// mocks-driver.js --root <dir> --reopen journey:<j>|shell|theme
+// mocks-driver.js --root <dir> --mark seed-done|journey-drawn|journey-approved|approved [--journey <j>] [--waive --reason <r>]
+// mocks-driver.js --root <dir> round push | round pull
+// mocks-driver.js --root <dir> --reopen journey:<j>
 // mocks-driver.js --root <dir> ledger (add|set|catch|check|counts) [flags]
-// mocks-driver.js --root <dir> client open | client waive --journey <j> --reason <r>
 //
-// WHY: specs/20260917/01-the-client-confirms-the-story.md (ADR-0029, amending ADR-0028) — the
-// seed's `### <journey>` blocks are now the client's own numbered sentences (the beat grammar,
-// lib/surfaces.js's `parseSeedJourneys`), not a names-and-arrows atlas, and the one human gate in
-// the whole mock stage is the client's confirm on the served page against a hash of the exact
-// beats they read. This driver derives SEED -> SHELL -> SCREENS -> THEME -> APPROVED on every
-// invocation from design/mocks/status.json (schemaVersion 2) plus the reviewer package's own
-// `check --json`, `design/notes.json` and `design/approval.json` — never from a second,
-// hand-rolled read of any of those three. `lib/mock-cli.js` is the only caller of the package
-// (`@555-ventures/mock-review`); this driver never spawns it directly. The provenance ledger
-// (spec/scripts/lib/mocks-ledger.js) and its verbs/gate are kept verbatim — this file is the only
-// thing rewritten.
-//
-// D3: SEED until `marks.seedDone` (no run spawns the package while it is null —
-// `contractOrDie` first runs at `--mark seed-done`); SHELL until `marks.shellDrawn`; SCREENS
-// until every journey the seed declares (in seed order) is both drawn and has a client verdict
-// whose stored beat hash still matches the seed's current beats — a journey added to the seed, or
-// an approved journey whose beats are edited afterward, reopens the state; THEME until both
-// `marks.themePicked` and `marks.approved` (the CLIENT state is retired — the client's walk now
-// happens during SCREENS); then APPROVED. A status.json carrying `schemaVersion: 1` refuses
-// outright (ADR-0028: no host holds data on the old path) rather than being reinterpreted.
-//
-// D4: the SEED step block prints the scaffold command, the install line and one `cp` line per
-// template file (spec/templates/mock/*), verbatim and in that order; `--mark seed-done` refuses
-// on a missing `## Records` entity file, a missing `mock.config.ts`, a declared journey with any
-// `malformed` beat line or zero beats, or a seed declaring no journeys. D5: `--mark shell-drawn`
-// refuses on an error-severity `check --json` finding, else accepts (warn findings never refuse)
-// once some shell carries a non-empty `examples` list. D6: `--mark journey-drawn` refuses an
-// out-of-seed `--journey`, a journey `check --json` does not list, an unresolved edge, or a beats
-// mismatch against the seed (`check --json`'s steps must copy the seed's beats verbatim — same
-// length, same `beat`/`screen`/`state` at every index); it runs no ledger gate. D5 (journey
-// approval): `--mark journey-approved` walks resolved -> beats-equality -> journey-thread ->
-// client-verdict -> beat-hash-freshness before the ledger gate and recording; it never reads
-// `approval.journeys[].approvedAt`, `approval.screens`, or `notes.notes`. D6 (theme): `--mark
-// theme-picked` reads no `approval.json` — it records once `check --json`'s `config.theme` is a
-// non-empty string listed under `themes`. D7: `--mark approved` refuses any note that is `open`
-// or `answered`, or a `project: true` note that is neither `approved` nor `deferred`; before
-// recording it appends one ledger exclusion row per newly-deferred note or journey conversation
-// (never a duplicate for one already carrying that `note` field). D8: THEME prints a "pick a
-// theme" block until `marks.themePicked`, then a "close the mock" block (`client open` and
-// `--mark approved`, no Skill line) until `marks.approved`; `client open`'s only guard is at
-// least one drawn journey; `client waive` calls the package's own `waive` verb with `--journey`,
-// `--reason` and `--beats` (the seed's current beat hash) — the driver itself never writes
-// `design/approval.json` (D2). D10:
-// `--reopen` clears marks (and cascades — a shell reopen invalidates the theme and every
-// approval; a re-picked theme invalidates every approval too) and appends one `reopens` row; it
-// never deletes a file. D11: every retired verb refuses (exit 2) with a one-line replacement,
-// checked before anything else runs — a retired verb spawns nothing and touches no file. D12:
-// SHELL, both SCREENS steps and THEME's pick block print the mock-authoring skill line; SEED,
-// THEME's close block and APPROVED never do. D16: the ledger subcommand and the `gateVerdict`
-// calls before seed-done/journey-approved/theme-picked/approved keep their exact flags, output
-// and exit codes — the ledger is a plain text file, untouched by the package.
+// WHY: specs/20261002/01-the-wireframe-command-runs-over-the-service.md D1-D13 (ADR-0029's
+// confirm gate, amended; ADR-0030; ADR-0031's one door to the network). This driver derives
+// SEED -> SCREENS -> APPROVED on every invocation from design/mocks/status.json (schemaVersion 3)
+// plus the seed (`design/mocks/seed.md`, parsed by lib/surfaces.js) and prints the one step that
+// needs the session's judgment. A project whose config carries a `walkthrough` object block is in
+// service mode: the session draws one json-render file per screen under design/mocks/screens/,
+// `round push` sends the round, `round pull` prints the worklist, and the client's confirmation
+// on the service is read back from design/rounds/<n>/approvals.json. Any other project is in
+// terminal mode: nothing is drawn or sent, and each story is confirmed by the user's literal
+// `approve`. The round itself is lib/mocks-round.js's; every request is made by running
+// scripts/walkthrough.js as a child process.
 //
 // What this deliberately does NOT do:
-//   - author the seed, the shell, screens, theme candidates, or run the scaffold itself — those
-//     stay session judgment; this driver only closes each mark once `check --json` and the
-//     reviewer's own JSON files agree the artifact is there.
-//   - read `sweep` — the driver reads `check --json`, `design/notes.json` and
-//     `design/approval.json` only; the sweep is the session's own loop (Behavior).
-//   - write into the host's `src/` (the theme pick is applied by the session editing one config
-//     line) or delete a file on `--reopen` (marks are cleared, disk is never touched).
-//   - relocate the session CWD, or migrate a legacy status.json (a schemaVersion 1 host refuses
-//     outright — there is nothing to migrate to, ADR-0028).
-//   - hand-write a ledger row from a driver-side derivation other than D7's deferred-note
-//     exclusion rows: `ledger add/set/catch` remain the only direct writers of
-//     design/mocks/ledger.md, routed through spec/scripts/lib/mocks-ledger.js exactly as before.
-//   - read or write `approval.journeys[].approvedAt` or `approval.screens` anywhere — those keys
-//     belonged to the retired screen-approve/journey-approve page controls (D5, D9 Rationale).
+//   - author the seed or a screen, or judge whether a screen looks right — session work;
+//   - require the walkthrough client as a library, make a request itself, or print or write the
+//     token (the child reads it from the environment variable the config names);
+//   - re-derive the story hash (lib/surfaces.js beatHash is the one), or trust a mark over the
+//     artifact it closed (a seed edit reopens its journey by itself);
+//   - delete a file on `--reopen`, relocate the session CWD, or touch a status file of any other
+//     schemaVersion beyond printing an approved one;
+//   - write a ledger row except through lib/mocks-ledger.js (`ledger add|set|catch`, and the
+//     exclusion rows `--mark approved` appends for deferred notes).
+// Every accepted mark prints the two-line tail (ledger counts, checkpoint) the checkpoint contract
+// in spec/doctrine/mocks.md binds.
 //
 // Exit codes:
-//   0  a bare invocation printed the current step (or `--state` printed the state name), an
-//      accepted `--mark` recorded its result, a `--reopen` printed what it invalidated, a ledger
-//      subcommand succeeded, `client open` printed the served URL, or `client waive` recorded a
-//      waiver.
-//   1  `ledger check` found a blocked gate (rows printed).
-//   2  a refused mark (an unknown or retired mark, a malformed/empty-beats seed journey, a beats
-//      mismatch or stale confirmation hash, or any other failed D3-D9 precondition), a
-//      `contractOrDie`/spawn refusal (a `contractVersion` mismatch or no `mock-review` reachable),
-//      a shape-invalid `check`/`contract` response, a schemaVersion 1 status.json, an unknown
-//      `--reopen`/`ledger`/`client` subcommand, `ledger check` grammar errors, or any retired verb
-//      (D11).
+//   0  a bare run printed the current step, `--state` printed the state, an accepted mark or
+//      reopen recorded its result, a push or pull finished, or a ledger subcommand succeeded;
+//   1  `ledger check` found a blocked gate (rows printed);
+//   2  every refusal: a retired or unknown command, a failed mark precondition, a round with
+//      findings, a failed child call to the service, an unsupported status file, or a grammar
+//      error in the ledger.
 
 'use strict'
 const fs = require('fs')
+const os = require('os')
 const path = require('path')
+const { spawnSync } = require('child_process')
 const { writeOut } = require('./lib/driver-io')
 const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, setStatus } = require('./lib/mocks-ledger')
 const { parseSeedJourneys, beatHash } = require('./lib/surfaces')
-const { run, contractOrDie, checkJson, loadContract } = require('./lib/mock-cli')
+const { readConfig } = require('./lib/host-config')
+const round = require('./lib/mocks-round')
 
 function die(msg) { writeOut(2, 'mocks-driver: ' + msg + '\n'); process.exit(2) }
 function nowIso() { return new Date().toISOString() }
+const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 
 // ---------------------------------------------------------------------------
 // Arg parsing — hand-rolled, no library.
@@ -121,68 +77,42 @@ const mocksDir = path.join(root, 'design/mocks')
 const statusPath = path.join(mocksDir, 'status.json')
 const ledgerPath = path.join(mocksDir, 'ledger.md')
 const seedPath = path.join(mocksDir, 'seed.md')
+const screensRel = 'design/mocks/screens'
 const templatesRoot = path.join(__dirname, '..', 'templates')
-const mockTemplatesDir = path.join(templatesRoot, 'mock')
-
-// D4: source file -> destination relative to the app dir, in the order the SEED block prints
-// them. Both examples land under design/examples/ — outside every contract host glob (D4) — never
-// under src/.
-const TEMPLATE_FILES = [
-  { src: 'mock.config.ts', dest: 'mock.config.ts' },
-  { src: 'journeys.ts', dest: 'src/journeys.ts' },
-  { src: 'screen.example.tsx', dest: 'design/examples/screen.example.tsx' },
-  { src: 'records.example.ts', dest: 'design/examples/records.example.ts' },
-]
+const WALK = path.join(__dirname, 'walkthrough.js')
 
 const SKILL_LINE = 'Skill: mock-authoring — load it before the first edit'
 
 // ---------------------------------------------------------------------------
-// D11: retired verbs refuse before anything else — no status load, no spawn, no write. Checked
-// first so a stale command in a doctrine file or a memory fails loudly with the new spelling.
+// D10: retired verbs and unknown commands refuse before any file is read or written.
 // ---------------------------------------------------------------------------
 function checkRetired() {
-  if (rest[0] === 'notes') {
-    die('notes are read with `npx mock-review sweep` and answered with `npx mock-review answer`')
+  const first = rest[0]
+  if (first === '--mark' && ['shell-drawn', 'theme-picked'].includes(rest[1])) {
+    die('--mark ' + rest[1] + ' is retired — the wireframe has no ' + (rest[1] === 'shell-drawn' ? 'shell' : 'theme') + ' step (ADR-0030)')
   }
-  if (rest[0] === 'stop') {
-    die('client waive --journey <j> --reason <r> (the client confirms on the served page)')
+  if (first === '--reopen' && ['shell', 'theme'].includes(rest[1])) {
+    die('--reopen ' + rest[1] + ' is retired — the wireframe has no ' + rest[1] + ' step (ADR-0030)')
   }
-  if (rest[0] === 'theme' && ['state', 'compose', 'shortlist'].includes(rest[1])) {
-    die('author `src/themes/<k>.css`, set theme: "<k>" in mock.config.ts, then `--mark theme-picked`')
-  }
-  if (rest[0] === 'look' || rest[0] === 'look-probe' || rest[0] === 'look-via') {
-    die('npx mock-review check --look <screen>')
-  }
-  if (rest.includes('--refresh-register')) {
-    die('--refresh-register is retired (ADR-0028)')
-  }
-  if (rest[0] === '--mark' && ['kit-signed', 'shape-picked', 'canon-written'].includes(rest[1])) {
-    die('--mark ' + rest[1] + ' is retired (ADR-0028)')
-  }
-  if (rest[0] === 'ledger' && rest[1] === 'derive') {
-    die('ledger derive is retired (ADR-0028)')
-  }
-  if (rest[0] === 'client' && rest[1] === 'log') {
-    die('client log is retired (ADR-0028)')
-  }
-  if (rest[0] === '--reopen' && ['kit', 'shapes'].includes(rest[1])) {
-    die('--reopen ' + rest[1] + ' is retired (ADR-0028)')
+  if (first === 'client' && rest[1] === 'open') die('client open is retired — remedy: round push (it prints the link)')
+  if (first === 'client' && rest[1] === 'waive') die('client waive is retired — remedy: --mark journey-approved --journey <j> --waive --reason <r>')
+  if (first !== undefined && !['--state', '--mark', '--reopen', 'ledger', 'round'].includes(first)) {
+    die('unknown command "' + first + '" — remedy: run with no argument to print the current step')
   }
 }
 checkRetired()
 
 // ---------------------------------------------------------------------------
-// status.json (schemaVersion 2).
+// status.json (schemaVersion 3). A cold root creates the status file, the ledger and the seed.
 // ---------------------------------------------------------------------------
 function freshStatus() {
   return {
-    schemaVersion: 2, state: 'SEED', app: 'app',
-    marks: { seedDone: null, shellDrawn: null, themePicked: null, approved: null },
-    journeys: {}, reopens: [], lastUpdated: null,
+    schemaVersion: 3, state: 'SEED', marks: { seedDone: null, approved: null },
+    journeys: {}, pushed: null, reopens: [], lastUpdated: null,
   }
 }
 
-function loadStatus() {
+function readStatusFile() {
   if (!fs.existsSync(statusPath)) {
     fs.mkdirSync(mocksDir, { recursive: true })
     if (!fs.existsSync(ledgerPath)) fs.copyFileSync(path.join(templatesRoot, 'mocks-ledger.md'), ledgerPath)
@@ -191,108 +121,95 @@ function loadStatus() {
     fs.writeFileSync(statusPath, JSON.stringify(f, null, 2) + '\n')
     return f
   }
-  let raw
   try {
-    raw = JSON.parse(fs.readFileSync(statusPath, 'utf8'))
+    return JSON.parse(fs.readFileSync(statusPath, 'utf8'))
   } catch (e) {
     die('design/mocks/status.json is not valid JSON (' + e.message + ') — remedy: restore it from git history, or delete it (a fresh root is a valid starting point) and re-run')
     return null // unreachable
   }
-  if (raw.schemaVersion !== 2) {
-    die('design/mocks/status.json carries schemaVersion ' + raw.schemaVersion +
-      ' — remedy: rm design/mocks/status.json — no host holds data on the old path (ADR-0028)')
-  }
-  raw.marks = Object.assign({}, freshStatus().marks, raw.marks || {})
-  raw.journeys = Object.assign({}, raw.journeys || {})
-  raw.reopens = Array.isArray(raw.reopens) ? raw.reopens : []
-  return raw
 }
 
-let status = loadStatus()
+const rawStatus = readStatusFile()
+const legacy = !(isObj(rawStatus) && rawStatus.schemaVersion === 3)
 
-function appDir() { return path.join(root, status.app) }
+function legacyRefusal() {
+  const v = isObj(rawStatus) && rawStatus.schemaVersion !== undefined ? rawStatus.schemaVersion : '(none)'
+  die('design/mocks/status.json carries schemaVersion ' + v + ' (the retired mock-app flow) — remedy: rm design/mocks/status.json and re-run; seed.md and ledger.md are kept')
+}
+
+function normalise(raw) {
+  const marks = isObj(raw.marks) ? raw.marks : {}
+  return {
+    schemaVersion: 3, state: raw.state,
+    marks: { seedDone: marks.seedDone || null, approved: marks.approved || null },
+    journeys: isObj(raw.journeys) ? raw.journeys : {},
+    pushed: isObj(raw.pushed) ? raw.pushed : null,
+    reopens: Array.isArray(raw.reopens) ? raw.reopens : [],
+    lastUpdated: raw.lastUpdated || null,
+  }
+}
+
+let status = legacy ? null : normalise(rawStatus)
 
 function saveStatus() {
-  status.schemaVersion = 2
+  status.schemaVersion = 3
   status.state = deriveState()
   status.lastUpdated = nowIso()
   fs.writeFileSync(statusPath, JSON.stringify(status, null, 2) + '\n')
 }
 
 // ---------------------------------------------------------------------------
-// seed.md — the journey set (D3): `### <journey>` blocks, in seed order, via lib/surfaces.js.
+// Mode (D2): the config block's presence — a non-null, non-array object — is service mode.
+// ---------------------------------------------------------------------------
+function walkBlock() { return readConfig(root).walkthrough }
+function serviceMode() { const b = walkBlock(); return isObj(b) }
+function requireService() {
+  if (!serviceMode()) {
+    die('this project has no walkthrough block, so nothing is drawn or sent — remedy: confirm the story in the terminal with --mark journey-approved --journey <j>')
+  }
+}
+function projectLink() {
+  const b = walkBlock()
+  const base = isObj(b) && typeof b.baseUrl === 'string' ? b.baseUrl.trim().replace(/\/+$/, '') : ''
+  const project = isObj(b) && typeof b.project === 'string' ? b.project : ''
+  return base + '/p/' + project
+}
+
+// ---------------------------------------------------------------------------
+// seed.md — the journey set: `### <journey>` blocks, in seed order, via lib/surfaces.js.
 // ---------------------------------------------------------------------------
 function seedTextOrNull() {
   try { return fs.readFileSync(seedPath, 'utf8') } catch { return null }
 }
 function currentSeedJourneys() { return parseSeedJourneys(seedTextOrNull()) }
 
-// D4/D5: one beat side rendered the same way both directions of a mismatch print it —
-// `"sentence" -> screen[@state]`.
-function formatBeatSide(beat, screen, state) {
-  return '"' + beat + '" -> ' + screen + (state ? '@' + state : '')
-}
-
-// D4: `check --json`'s `steps` must copy the seed's beats verbatim — same length, and at every
-// index the same `beat`, `screen` and `state` (`undefined`/`null` state are equal). Returns the
-// first differing {index (1-based), sb: seed beat|undefined, st: check step|undefined}, or null
-// when every beat matches.
-function findBeatsMismatch(seedBeats, steps) {
-  const len = Math.max(seedBeats.length, steps.length)
-  for (let i = 0; i < len; i++) {
-    const sb = seedBeats[i]
-    const st = steps[i]
-    const sBeat = sb ? sb.beat : undefined
-    const stBeat = st ? st.beat : undefined
-    const sScreen = sb ? sb.screen : undefined
-    const stScreen = st ? st.screen : undefined
-    const sState = sb ? (sb.state == null ? null : sb.state) : null
-    const stState = st ? (st.state == null ? null : st.state) : null
-    if (sBeat !== stBeat || sScreen !== stScreen || sState !== stState) {
-      return { index: i + 1, sb, st }
-    }
-  }
-  return null
-}
-
-// D3: a journey counts as drawn once `journey-drawn` recorded it.
 function journeyIsDrawn(name) {
   const st = status.journeys[name]
   return !!(st && st.drawn)
 }
 
-// D3/D5: a journey counts as approved only while its stored confirmed-beats hash still matches
-// the seed's CURRENT beats — a seed edit after the client confirms voids the confirmation
-// mechanically, with no refusal and no re-typing.
+// A journey counts as approved only while its stored hash still matches the seed's CURRENT beats.
 function journeyIsApproved(name, beats) {
   const st = status.journeys[name]
   return !!(st && st.approved && st.beats === beatHash(beats))
 }
 
-function sectionOf(text, name) {
-  const re = new RegExp('^## ' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'm')
-  const m = re.exec(text)
-  if (!m) return null
-  const rest2 = text.slice(m.index + m[0].length)
-  const next = rest2.search(/^## /m)
-  return next === -1 ? rest2 : rest2.slice(0, next)
-}
-
-// D4/deviations sidecar: `## Records` carries one bare `- <entity>` line per entity; returns null
-// when the section itself is missing (never when it is merely empty).
-function parseRecordEntities(text) {
-  const sec = sectionOf(text, 'Records')
-  if (sec === null) return null
-  const out = []
-  for (const raw of sec.split('\n')) {
-    const m = raw.trim().match(/^- ([a-z0-9-]+)\s*$/)
-    if (m) out.push(m[1])
+function seedProblem(seedJourneys) {
+  for (const [name, j] of seedJourneys) {
+    if (j.malformed.length > 0) {
+      return 'design/mocks/seed.md journey "' + name + '" has malformed beat line(s), first: ' + j.malformed[0] +
+        ' — remedy: rewrite the block as numbered "sentence" -> screen[@state] lines (spec/doctrine/mocks.md § Mocks: Seed)'
+    }
+    if (j.beats.length === 0) {
+      return 'design/mocks/seed.md journey "' + name + '" declares zero beats' +
+        ' — remedy: rewrite the block as numbered "sentence" -> screen[@state] lines (spec/doctrine/mocks.md § Mocks: Seed)'
+    }
   }
-  return out
+  return null
 }
 
 // ---------------------------------------------------------------------------
-// Ledger I/O — lib/mocks-ledger.js is the one writer (D16, verbatim).
+// Ledger I/O — lib/mocks-ledger.js is the one writer.
 // ---------------------------------------------------------------------------
 function ledgerTextOrDie() {
   try { return fs.readFileSync(ledgerPath, 'utf8') } catch {
@@ -301,8 +218,7 @@ function ledgerTextOrDie() {
   }
 }
 
-// D16: seed-done, journey-approved, theme-picked and approved all run this before recording —
-// the remedy names the exact blocking row so a session never has to look the id up itself.
+// seed-done, journey-approved and approved run this before recording.
 function requireGateOpen() {
   const parsed = parseLedger(ledgerTextOrDie())
   if (parsed.errors.length) {
@@ -319,40 +235,21 @@ function requireGateOpen() {
 }
 
 // ---------------------------------------------------------------------------
-// The app-side reviewer files (D1 host layout): design/notes.json, design/approval.json.
-// ---------------------------------------------------------------------------
-function readNotesRaw() {
-  try { return JSON.parse(fs.readFileSync(path.join(appDir(), 'design/notes.json'), 'utf8')) } catch (e) {
-    die('design/notes.json is not valid JSON (' + e.message + ') — remedy: restore it from git history, or delete it (no notes is a valid starting point) and re-run')
-    return null // unreachable
-  }
-}
-function readApprovalRaw() {
-  try { return JSON.parse(fs.readFileSync(path.join(appDir(), 'design/approval.json'), 'utf8')) } catch (e) {
-    die('design/approval.json is not valid JSON (' + e.message + ') — remedy: restore it from git history, or delete it (no approval is a valid starting point) and re-run')
-    return null // unreachable
-  }
-}
-// ---------------------------------------------------------------------------
-// D3: state derivation — the only place SEED/SHELL/SCREENS/THEME/APPROVED is decided (CLIENT is
-// retired: the client's walk happens during SCREENS, and THEME carries the final close step).
+// D1: state derivation — the only place SEED/SCREENS/APPROVED is decided.
 // ---------------------------------------------------------------------------
 function deriveState() {
   if (!status.marks.seedDone) return 'SEED'
-  if (!status.marks.shellDrawn) return 'SHELL'
-  for (const [name, j] of currentSeedJourneys()) {
-    if (!journeyIsDrawn(name) || !journeyIsApproved(name, j.beats)) return 'SCREENS'
+  const seed = currentSeedJourneys()
+  if (seed.size === 0 || seedProblem(seed)) return 'SEED'
+  for (const [name, j] of seed) if (!journeyIsApproved(name, j.beats)) return 'SCREENS'
+  if (!status.marks.approved) return 'SCREENS'
+  for (const [name] of seed) {
+    if (status.journeys[name].approved > status.marks.approved) return 'SCREENS'
   }
-  if (!status.marks.themePicked || !status.marks.approved) return 'THEME'
   return 'APPROVED'
 }
 
-// ---------------------------------------------------------------------------
-// spec/doctrine/mocks.md § Mocks: Checkpoint contract (D13, unchanged, binding): every accepted
-// `--mark` prints, as its last two non-blank lines, the ledger's counts line and the checkpoint
-// line naming the derived state before and after the mark — the sole signal that disk, not chat
-// context, is now the source of truth.
-// ---------------------------------------------------------------------------
+// The checkpoint contract: the ledger's counts line, then the checkpoint line, last.
 function printAcceptedTail(prevState, nextState) {
   const parsed = parseLedger(ledgerTextOrDie())
   writeOut(1, countsLine(parsed) + '\n')
@@ -361,46 +258,81 @@ function printAcceptedTail(prevState, nextState) {
 }
 
 // ---------------------------------------------------------------------------
+// The child calls (D6, D7): every request is `walkthrough.js` run as a child process.
+// ---------------------------------------------------------------------------
+function walk(args) {
+  const r = spawnSync(process.execPath, [WALK, ...args, '--root', root, '--json'],
+    { encoding: 'utf8', env: process.env, maxBuffer: 256 * 1024 * 1024 })
+  if (r.error || r.status === null) {
+    die('walkthrough.js could not run (' + (r.error ? r.error.message : 'killed by signal ' + r.signal) + ') — remedy: run `node ' + WALK + ' hello --root ' + root + '` to see the raw error')
+  }
+  let ans = null
+  try { ans = JSON.parse(r.stdout) } catch { ans = null }
+  return { status: r.status, stderr: r.stderr || '', ans }
+}
+
+function finish(r, verb) {
+  if (r.stderr) writeOut(2, r.stderr)
+  if (r.ans && Array.isArray(r.ans.findings)) for (const f of r.ans.findings) writeOut(2, findingLine(f) + '\n')
+  if (!r.stderr && !(r.ans && Array.isArray(r.ans.findings) && r.ans.findings.length)) {
+    writeOut(2, 'mocks-driver: walkthrough ' + verb + ' failed with exit ' + r.status + ' and no message — remedy: run `node ' + WALK + ' ' + verb + ' --root ' + root + '` to see the raw error\n')
+  }
+  process.exit(2)
+}
+
+function walkOrDie(args) {
+  const r = walk(args)
+  if (r.status !== 0) finish(r, args[0])
+  return r
+}
+
+function findingLine(f) {
+  const place = f.screen ? f.screen + (f.state ? '@' + f.state : '') : 'round'
+  return f.code + ' — ' + place + (f.element ? ' [' + f.element + ']' : '') + ': ' + f.detail
+}
+
+let walkFiles = null
+function walkContract() {
+  if (!walkFiles) {
+    const dir = path.join(templatesRoot, 'walkthrough')
+    walkFiles = {
+      contract: JSON.parse(fs.readFileSync(path.join(dir, 'contract.json'), 'utf8')),
+      catalog: JSON.parse(fs.readFileSync(path.join(dir, 'catalog.json'), 'utf8')),
+    }
+  }
+  return walkFiles
+}
+
+function drawnIds(seed, extra) {
+  const ids = []
+  for (const [name] of seed) if (journeyIsDrawn(name) || name === extra) ids.push(name)
+  return ids
+}
+
+// Assembles the would-be round of `ids`; refuses (exit 2) with one stderr line per finding.
+function assembledOrDie(seed, ids, remedy) {
+  const { screens, findings: fileFindings } = round.readScreens(root)
+  const assembled = round.assembleRound(seed, ids, screens)
+  const { contract, catalog } = walkContract()
+  const findings = round.roundFindings(contract, catalog, assembled, seed, fileFindings)
+  if (findings.length) {
+    for (const f of findings) writeOut(2, findingLine(f) + '\n')
+    die('the round has ' + findings.length + ' finding(s) — remedy: ' + remedy)
+  }
+  return assembled
+}
+
+// ---------------------------------------------------------------------------
 // --mark seed-done (D4).
 // ---------------------------------------------------------------------------
 function cmdSeedDone() {
-  contractOrDie(appDir())
   const prevState = deriveState()
-  const seedText = seedTextOrNull() || ''
-  const entities = parseRecordEntities(seedText)
-  if (entities === null) {
-    die('design/mocks/seed.md is missing "## Records" — remedy: add one "- <entity>" line per entity the product handles, then write app/src/records/<entity>.ts for each')
-  }
-  for (const entity of entities) {
-    const rel = path.posix.join(status.app, 'src/records', entity + '.ts')
-    if (!fs.existsSync(path.join(root, status.app, 'src/records', entity + '.ts'))) {
-      die('design/mocks/seed.md ## Records names "' + entity + '" but ' + rel + ' does not exist — remedy: write ' + rel)
-    }
-  }
-  // deriveState's SCREENS loop iterates the seed's journeys, so a seed that declares none makes
-  // SCREENS unreachable — the mock would walk straight to APPROVED with no screen ever drawn.
-  // Refuse here rather than let an empty journey set read as a satisfied one.
-  const seedJourneys = parseSeedJourneys(seedText)
-  if (seedJourneys.size === 0) {
+  const seed = currentSeedJourneys()
+  if (seed.size === 0) {
     die('design/mocks/seed.md declares no journeys — remedy: add one "### <journey>" block per journey the product supports under "## Journeys", then re-run `--mark seed-done`')
   }
-  // D3/D4: a journey still carrying the retired ```surfaces grammar (or any other non-beat body
-  // line) parses to zero beats and no diagnostic unless caught here — first at the mark that
-  // gates every later state on the seed being real beats.
-  for (const [name, j] of seedJourneys) {
-    if (j.malformed.length > 0) {
-      die('design/mocks/seed.md journey "' + name + '" has malformed beat line(s), first: ' + j.malformed[0] +
-        ' — remedy: rewrite the block as numbered "sentence" -> screen[@state] lines (spec/doctrine/mocks.md § Mocks: Seed)')
-    }
-    if (j.beats.length === 0) {
-      die('design/mocks/seed.md journey "' + name + '" declares zero beats' +
-        ' — remedy: rewrite the block as numbered "sentence" -> screen[@state] lines (spec/doctrine/mocks.md § Mocks: Seed)')
-    }
-  }
-  if (!fs.existsSync(path.join(appDir(), 'mock.config.ts'))) {
-    const rel = path.posix.join(status.app, 'mock.config.ts')
-    die(rel + ' does not exist — remedy: cp "$(spec-paths templates)"/mock/mock.config.ts ' + rel)
-  }
+  const problem = seedProblem(seed)
+  if (problem) die(problem)
   requireGateOpen()
   status.marks.seedDone = nowIso()
   saveStatus()
@@ -408,58 +340,28 @@ function cmdSeedDone() {
   printAcceptedTail(prevState, deriveState())
 }
 
-// ---------------------------------------------------------------------------
-// --mark shell-drawn (D5).
-// ---------------------------------------------------------------------------
-function cmdShellDrawn() {
-  contractOrDie(appDir())
-  const prevState = deriveState()
-  const check = checkJson(appDir())
-  if (!check.ok) {
-    const errs = (check.findings || []).filter((f) => f.severity === 'error')
-    die((errs.map((f) => f.file + ': ' + f.message).join('; ') || 'check --json reports ok:false') +
-      ' — remedy: fix the finding(s) above, then re-run `--mark shell-drawn`')
-  }
-  const hasExamples = (check.shells || []).some((s) => Array.isArray(s.examples) && s.examples.length > 0)
-  if (!hasExamples) {
-    die('no shell in check --json carries a non-empty examples list — remedy: add an example to a shell in src/, then re-run `--mark shell-drawn`')
-  }
-  status.marks.shellDrawn = nowIso()
-  saveStatus()
-  writeOut(1, '✅ shell-drawn recorded\n')
-  printAcceptedTail(prevState, deriveState())
+function undeclared(journeyArg, seed) {
+  die('--journey ' + journeyArg + ' is not declared in design/mocks/seed.md — remedy: use one of the seed journeys: ' + [...seed.keys()].join(', '))
 }
 
 // ---------------------------------------------------------------------------
-// --mark journey-drawn --journey <j> (D6) — no ledger gate.
+// --mark journey-drawn --journey <j> (D5) — service mode only; sends nothing, runs no ledger gate.
 // ---------------------------------------------------------------------------
 function cmdJourneyDrawn(journeyArg) {
-  contractOrDie(appDir())
+  requireService()
   if (!journeyArg) die('--mark journey-drawn needs --journey <j> — remedy: --mark journey-drawn --journey <j>')
   const prevState = deriveState()
-  const seedJourneys = currentSeedJourneys()
-  if (!seedJourneys.has(journeyArg)) {
-    die('--journey ' + journeyArg + ' is not declared in design/mocks/seed.md — remedy: use one of the seed journeys: ' + [...seedJourneys.keys()].join(', '))
+  const seed = currentSeedJourneys()
+  if (!seed.has(journeyArg)) undeclared(journeyArg, seed)
+  for (const b of seed.get(journeyArg).beats) {
+    const file = b.screen + (b.state ? '@' + b.state : '') + '.json'
+    if (!fs.existsSync(path.join(root, screensRel, file))) {
+      die('journey ' + journeyArg + ' beat ' + b.n + ' needs ' + screensRel + '/' + file +
+        ' — remedy: write that screen file (spec-paths walkthrough-catalog lists the components)')
+    }
   }
-  const check = checkJson(appDir())
-  const cj = (check.journeys || []).find((j) => j.id === journeyArg)
-  if (!cj) {
-    die('check --json lists no journey with id ' + journeyArg + ' — remedy: add journey ' + journeyArg + ' to src/journeys.ts')
-  }
-  if (!cj.resolved) {
-    const lines = (cj.unresolved || []).map((u) => 'step ' + u.from + ' → ' + u.to + ': ' + u.reason)
-    die('journey ' + journeyArg + ' has unresolved edge(s):\n' + lines.join('\n') +
-      '\nremedy: resolve the edge(s) in src/journeys.ts, then re-run `--mark journey-drawn --journey ' + journeyArg + '`')
-  }
-  // D4: SCREENS copies, never paraphrases — the driver may not read src/journeys.ts itself, so
-  // the beats travel through check --json's steps and are compared verbatim against the seed.
-  const mismatch = findBeatsMismatch(seedJourneys.get(journeyArg).beats, cj.steps || [])
-  if (mismatch) {
-    const seedSide = mismatch.sb ? formatBeatSide(mismatch.sb.beat, mismatch.sb.screen, mismatch.sb.state) : '(missing)'
-    const jSide = mismatch.st ? formatBeatSide(mismatch.st.beat, mismatch.st.screen, mismatch.st.state) : '(missing)'
-    die('beat ' + mismatch.index + ': seed ' + seedSide + ', journeys.ts ' + jSide +
-      ' — remedy: copy the seed\'s beats verbatim into src/journeys.ts')
-  }
+  assembledOrDie(seed, drawnIds(seed, journeyArg),
+    'fix the screen files, then re-run --mark journey-drawn --journey ' + journeyArg)
   status.journeys[journeyArg] = status.journeys[journeyArg] || { drawn: null, approved: null }
   status.journeys[journeyArg].drawn = nowIso()
   saveStatus()
@@ -468,80 +370,140 @@ function cmdJourneyDrawn(journeyArg) {
 }
 
 // ---------------------------------------------------------------------------
-// --mark journey-approved --journey <j> (D5). Never reads approval.journeys[].approvedAt,
-// approval.screens, or notes.notes — an open screen note never blocks this mark.
+// round push (D6).
 // ---------------------------------------------------------------------------
-function cmdJourneyApproved(journeyArg) {
-  contractOrDie(appDir())
+function cmdRoundPush() {
+  requireService()
+  const seed = currentSeedJourneys()
+  const ids = drawnIds(seed, null)
+  if (ids.length === 0) die('no journey is drawn yet — remedy: --mark journey-drawn --journey <j>')
+  const assembled = assembledOrDie(seed, ids,
+    'fix the screen files, re-run --mark journey-drawn for the journey they belong to, then round push')
+  const digest = round.roundDigest(assembled)
+  if (status.pushed && status.pushed.digest === digest) {
+    writeOut(1, 'round ' + status.pushed.round + ' already carries this content — nothing sent (' + projectLink() + ')\n')
+    process.exit(0)
+  }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mocks-round-'))
+  let r
+  try {
+    const file = path.join(dir, 'round.json')
+    fs.writeFileSync(file, JSON.stringify(assembled))
+    r = walk(['push', '--round-file', file])
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+  if (r.status === 0 && r.ans && Number.isInteger(r.ans.round)) {
+    status.pushed = { round: r.ans.round, digest }
+    saveStatus()
+    writeOut(1, 'pushed round ' + r.ans.round + ' — open at ' + projectLink() + '\n')
+    process.exit(0)
+  }
+  finish(r, 'push')
+}
+
+// ---------------------------------------------------------------------------
+// round pull (D7) — the worklist.
+// ---------------------------------------------------------------------------
+function confirmer(a) {
+  if (typeof a.who === 'string' && a.who) return a.who
+  return a.by === 'owner' ? 'the owner' : 'the client'
+}
+
+function approvalsFor(n, name) {
+  const doc = round.readApprovals(root, n)
+  return doc && Array.isArray(doc.approvals) ? doc.approvals.filter((a) => a && a.journey === name) : []
+}
+
+function cmdRoundPull() {
+  requireService()
+  const n = round.latestRound(root)
+  if (!n) die('design/rounds/ holds no pushed round — remedy: round push')
+  walkOrDie(['pull-notes', '--round', String(n)])
+  walkOrDie(['pull-approvals', '--round', String(n)])
+  const items = round.waitingItems(round.readNotes(root, n))
+  const out = ['round ' + n + ' — ' + items.length + ' note' + (items.length === 1 ? '' : 's') + ' waiting for an answer']
+  for (const it of items) {
+    out.push('  ' + it.id + ' [' + it.where + '] "' + it.text + '"' + (it.picked ? ' (on: "' + it.picked + '")' : ''))
+  }
+  out.push('journeys:')
+  for (const [name, j] of currentSeedJourneys()) {
+    const hash = beatHash(j.beats)
+    const apps = approvalsFor(n, name)
+    const match = apps.find((a) => a.beats === hash)
+    if (match) out.push('  ' + name + ' — confirmed by ' + confirmer(match) + ' (story ' + hash + ')')
+    else if (apps.length) out.push('  ' + name + ' — confirmed an older story (' + apps[0].beats + ', now ' + hash + ')')
+    else out.push('  ' + name + ' — not confirmed')
+  }
+  writeOut(1, out.join('\n') + '\n')
+  process.exit(0)
+}
+
+// ---------------------------------------------------------------------------
+// --mark journey-approved --journey <j> [--waive --reason <r>] (D8).
+// ---------------------------------------------------------------------------
+function recordApproval(name, hash, by, reason) {
+  const prior = status.journeys[name] || {}
+  const entry = { drawn: prior.drawn || null, approved: nowIso(), beats: hash, by }
+  if (reason) entry.reason = reason
+  status.journeys[name] = entry
+}
+
+function cmdJourneyApproved(journeyArg, waive, reasonArg) {
   if (!journeyArg) die('--mark journey-approved needs --journey <j> — remedy: --mark journey-approved --journey <j>')
   const prevState = deriveState()
-  const seedJourneys = currentSeedJourneys()
-  const seedJourney = seedJourneys.get(journeyArg)
-  if (!seedJourney) {
-    die('--journey ' + journeyArg + ' is not declared in design/mocks/seed.md — remedy: use one of the seed journeys: ' + [...seedJourneys.keys()].join(', '))
+  const seed = currentSeedJourneys()
+  const seedJourney = seed.get(journeyArg)
+  if (!seedJourney) undeclared(journeyArg, seed)
+  const hash = beatHash(seedJourney.beats)
+  const mark = '--mark journey-approved --journey ' + journeyArg
+
+  if (!serviceMode()) {
+    if (waive) die('--waive is for a project that uses the service — remedy: --mark journey-approved --journey <j>')
+    requireGateOpen()
+    recordApproval(journeyArg, hash, 'terminal')
+    saveStatus()
+    writeOut(1, '✅ journey-approved recorded for ' + journeyArg + ' (confirmed in the terminal)\n')
+    printAcceptedTail(prevState, deriveState())
   }
-  const check = checkJson(appDir())
-  const cj = (check.journeys || []).find((j) => j.id === journeyArg)
-  if (!cj) die('check --json lists no journey with id ' + journeyArg + ' — remedy: add journey ' + journeyArg + ' to src/journeys.ts')
-  if (!cj.resolved) {
-    const lines = (cj.unresolved || []).map((u) => 'step ' + u.from + ' → ' + u.to + ': ' + u.reason)
-    die('journey ' + journeyArg + ' has unresolved edge(s):\n' + lines.join('\n') +
-      '\nremedy: resolve the edge(s) in src/journeys.ts, then re-run `--mark journey-approved --journey ' + journeyArg + '`')
+
+  const reason = typeof reasonArg === 'string' ? reasonArg.trim() : ''
+  if (waive && !reason) die('--waive needs --reason <r> — remedy: --mark journey-approved --journey <j> --waive --reason <r>')
+  if (!journeyIsDrawn(journeyArg)) {
+    die('journey "' + journeyArg + '" is not drawn yet — remedy: --mark journey-drawn --journey ' + journeyArg)
   }
-  const mismatch = findBeatsMismatch(seedJourney.beats, cj.steps || [])
-  if (mismatch) {
-    const seedSide = mismatch.sb ? formatBeatSide(mismatch.sb.beat, mismatch.sb.screen, mismatch.sb.state) : '(missing)'
-    const jSide = mismatch.st ? formatBeatSide(mismatch.st.beat, mismatch.st.screen, mismatch.st.state) : '(missing)'
-    die('beat ' + mismatch.index + ': seed ' + seedSide + ', journeys.ts ' + jSide +
-      ' — remedy: copy the seed\'s beats verbatim into src/journeys.ts')
-  }
-  const notes = readNotesRaw()
-  const journeyThread = (notes.journeys && notes.journeys[journeyArg]) || {}
-  if (journeyThread.status === 'open') {
-    die('the conversation on journey ' + journeyArg + ' is still open — remedy: resolve it (`npx mock-review answer`), then re-run `--mark journey-approved --journey ' + journeyArg + '`')
-  }
-  const approval = readApprovalRaw()
-  const jApproval = (approval.journeys && approval.journeys[journeyArg]) || {}
-  if (jApproval.client !== 'ok' && jApproval.client !== 'waived') {
-    die('journey "' + journeyArg + '" has no recorded client verdict — remedy: client open (send the link; the client confirms the journey) or client waive --journey ' + journeyArg + ' --reason <r>')
-  }
-  const currentHash = beatHash(seedJourney.beats)
-  if (jApproval.beats !== currentHash) {
-    die('journey "' + journeyArg + '" client verdict is stale: approved beats ' + jApproval.beats + ' ≠ current seed beats ' + currentHash +
-      ' — remedy: the client re-confirms the journey on the link, or client waive --journey ' + journeyArg + ' --reason <r>')
+  const link = projectLink()
+  let by = 'waived'
+  if (!waive) {
+    if (!status.pushed) die('nothing has been sent to the service yet — remedy: round push')
+    const n = round.latestRound(root)
+    if (!n) die('design/rounds/ holds no pushed round — remedy: round push')
+    const listed = ((round.readRound(root, n) || {}).journeys || []).find((j) => j && j.id === journeyArg)
+    if (!listed || listed.beats !== hash) {
+      die('the service does not show the current story for "' + journeyArg + '" yet (the seed is now ' + hash + ') — remedy: round push')
+    }
+    walkOrDie(['pull-approvals', '--round', String(n)])
+    const apps = approvalsFor(n, journeyArg)
+    if (apps.length === 0) {
+      die('journey "' + journeyArg + '" is not confirmed yet — remedy: the client opens ' + link + ' and confirms, or ' + mark + ' --waive --reason <r>')
+    }
+    const match = apps.find((a) => a.beats === hash)
+    if (!match) {
+      die('journey "' + journeyArg + '" was confirmed on an older story (' + apps[0].beats + ', now ' + hash + ') — remedy: the client confirms again on ' + link + ', or ' + mark + ' --waive --reason <r>')
+    }
+    by = match.by
   }
   requireGateOpen()
-  status.journeys[journeyArg] = status.journeys[journeyArg] || { drawn: null, approved: null }
-  status.journeys[journeyArg].approved = nowIso()
-  status.journeys[journeyArg].beats = currentHash
+  recordApproval(journeyArg, hash, by, waive ? reason : null)
   saveStatus()
-  writeOut(1, '✅ journey-approved recorded for ' + journeyArg + '\n')
+  const who = waive ? 'waived: ' + reason : 'confirmed by the ' + (by === 'owner' ? 'owner' : 'client')
+  writeOut(1, '✅ journey-approved recorded for ' + journeyArg + ' (' + who + ')\n')
   printAcceptedTail(prevState, deriveState())
 }
 
 // ---------------------------------------------------------------------------
-// --mark theme-picked (D6). Reads no approval.json — the page pick existed only for a role the
-// mock stage no longer has; the person running the stage edits mock.config.ts's theme line.
-// ---------------------------------------------------------------------------
-function cmdThemePicked() {
-  contractOrDie(appDir())
-  const prevState = deriveState()
-  const check = checkJson(appDir())
-  const k = check.config && check.config.theme
-  if (!k) die('config.theme is null — remedy: set theme: "<k>" in mock.config.ts, naming an authored src/themes/<k>.css')
-  if (!Array.isArray(check.themes) || !check.themes.includes(k)) {
-    die('theme "' + k + '" is not listed under check --json\'s themes — remedy: author src/themes/' + k + '.css, then re-run `--mark theme-picked`')
-  }
-  requireGateOpen()
-  status.marks.themePicked = nowIso()
-  saveStatus()
-  writeOut(1, '✅ theme-picked recorded\n')
-  printAcceptedTail(prevState, deriveState())
-}
-
-// ---------------------------------------------------------------------------
-// --mark approved (D7). Before recording, appends one ledger exclusion row per newly-deferred
-// note or journey conversation — deferred is a valid point, not now, and this is its only writer.
+// --mark approved (D9). Ledger exclusion rows for deferred items; the round is closed before the
+// end is recorded, so a failed close never leaves a finished stage over an open round.
 // ---------------------------------------------------------------------------
 function nextExclusionId(parsed) {
   let max = 0
@@ -552,48 +514,64 @@ function nextExclusionId(parsed) {
   return 'X' + (max + 1)
 }
 
-function deferredExclusionTargets(notes) {
+function firstText(thread, fallback) {
+  return (Array.isArray(thread) && thread[0] && typeof thread[0].text === 'string') ? thread[0].text : fallback
+}
+
+function deferredTargets(notes) {
   const out = []
-  for (const n of notes.notes || []) {
-    if (n.status === 'deferred') out.push({ id: n.id, claim: (n.thread && n.thread[0] && n.thread[0].text) || '' })
+  if (!isObj(notes)) return out
+  for (const n of Array.isArray(notes.notes) ? notes.notes : []) {
+    if (n && n.status === 'deferred') out.push({ id: n.id, claim: firstText(n.thread, n.text || '') })
   }
-  for (const [jid, thread] of Object.entries(notes.journeys || {})) {
-    if (thread && thread.status === 'deferred') out.push({ id: jid, claim: (thread.thread && thread.thread[0] && thread.thread[0].text) || '' })
+  for (const t of Array.isArray(notes.journeys) ? notes.journeys : []) {
+    if (t && t.status === 'deferred') out.push({ id: t.id, claim: firstText(t.thread, '') })
   }
   return out
 }
 
 function cmdApproved() {
-  contractOrDie(appDir())
   const prevState = deriveState()
-  const approval = readApprovalRaw()
-  for (const [name] of currentSeedJourneys()) {
-    const jApproval = (approval.journeys && approval.journeys[name]) || {}
-    if (jApproval.client !== 'ok' && jApproval.client !== 'waived') {
-      die('journey "' + name + '" has no recorded client verdict — remedy: client waive --journey <j> --reason <r>')
+  const seed = currentSeedJourneys()
+  if (seed.size === 0) {
+    die('design/mocks/seed.md declares no journeys — remedy: add one "### <journey>" block per journey the product supports under "## Journeys"')
+  }
+  for (const [name, j] of seed) {
+    if (!journeyIsApproved(name, j.beats)) {
+      die('journey "' + name + '" is not confirmed — remedy: --mark journey-approved --journey ' + name)
     }
   }
-  const notes = readNotesRaw()
-  const badNote = (notes.notes || []).find((n) => n.status === 'open' || n.status === 'answered')
-  if (badNote) die('note ' + badNote.id + ' is ' + badNote.status + ' — remedy: the client approves or defers it on the link')
-  const badProject = (notes.notes || []).find((n) => n.project === true && n.status !== 'approved' && n.status !== 'deferred')
-  if (badProject) die('project note ' + badProject.id + ' is not approved or deferred — remedy: the client approves or defers it on the link')
+  const n = serviceMode() ? round.latestRound(root) : 0
+  let notes = null
+  if (n) {
+    walkOrDie(['pull-notes', '--round', String(n)])
+    notes = round.readNotes(root, n)
+    const first = round.waitingItems(notes)[0]
+    if (first) {
+      die(first.id + ' [' + first.where + '] is waiting for an answer — remedy: answer it (walkthrough reply --note ' + first.id + ' --text-file <file>), then re-run --mark approved')
+    }
+  }
   requireGateOpen()
 
   let ledgerText = ledgerTextOrDie()
+  const original = ledgerText
   const today = nowIso().slice(0, 10)
-  for (const target of deferredExclusionTargets(notes)) {
+  for (const target of deferredTargets(notes)) {
     const noteTag = 'deferred: ' + target.id
     const parsed = parseLedger(ledgerText)
     if (parsed.assumptions.some((row) => row.note === noteTag)) continue
-    const id = nextExclusionId(parsed)
-    ledgerText = appendAssumption(ledgerText, {
-      id, step: 'APPROVED', kind: 'exclusion', claim: target.claim,
-      tag: 'said-by-user', status: 'confirmed ' + today, note: noteTag,
-    })
+    try {
+      ledgerText = appendAssumption(ledgerText, {
+        id: nextExclusionId(parsed), step: 'APPROVED', kind: 'exclusion', claim: target.claim,
+        tag: 'said-by-user', status: 'confirmed ' + today, note: noteTag,
+      })
+    } catch (e) {
+      die('cannot write the exclusion row for ' + target.id + ': ' + e.message + ' — remedy: fix the note\'s text, or record the row by hand with `ledger add`')
+    }
   }
-  fs.writeFileSync(ledgerPath, ledgerText)
+  if (ledgerText !== original) fs.writeFileSync(ledgerPath, ledgerText)
 
+  if (n) walkOrDie(['mark', '--round', String(n), '--status', 'closed'])
   status.marks.approved = nowIso()
   saveStatus()
   writeOut(1, '✅ approved recorded\n')
@@ -601,45 +579,25 @@ function cmdApproved() {
 }
 
 // ---------------------------------------------------------------------------
-// --reopen journey:<j>|shell|theme (D10). kit/shapes are handled by checkRetired above.
+// --reopen journey:<j> (D10).
 // ---------------------------------------------------------------------------
 function cmdReopen(target) {
-  const at = nowIso()
-  if (target === 'shell') {
-    const cleared = ['shellDrawn', 'themePicked', 'approved']
-    status.marks.shellDrawn = null
-    status.marks.themePicked = null
-    status.marks.approved = null
-    for (const j of Object.keys(status.journeys)) status.journeys[j].approved = null
-    status.reopens.push({ at, target: 'shell', cleared })
-    saveStatus()
-    writeOut(1, '↩ reopened shell — cleared: ' + cleared.join(', ') + '\n')
-    process.exit(0)
-  }
-  if (target === 'theme') {
-    const cleared = ['themePicked', 'approved']
-    status.marks.themePicked = null
-    status.marks.approved = null
-    status.reopens.push({ at, target: 'theme', cleared })
-    saveStatus()
-    writeOut(1, '↩ reopened theme — cleared: ' + cleared.join(', ') + '\n')
-    process.exit(0)
-  }
   if (target && target.startsWith('journey:')) {
     const j = target.slice('journey:'.length)
-    const cleared = ['approved', 'approved(all)']
+    const cleared = ['approved', 'marks.approved', 'pushed.digest']
     if (status.journeys[j]) status.journeys[j].approved = null
     status.marks.approved = null
-    status.reopens.push({ at, target, cleared })
+    if (status.pushed) status.pushed.digest = null
+    status.reopens.push({ at: nowIso(), target, cleared })
     saveStatus()
     writeOut(1, '↩ reopened ' + target + ' — cleared: ' + cleared.join(', ') + '\n')
     process.exit(0)
   }
-  die('--reopen must be journey:<j>, shell, or theme — remedy: --reopen journey:<j>|shell|theme')
+  die('--reopen must be journey:<j> — remedy: --reopen journey:<j>')
 }
 
 // ---------------------------------------------------------------------------
-// ledger subcommand (D16, verbatim over the mock-app host).
+// ledger subcommand (verbatim: flags, rows, counts line and exit codes).
 // ---------------------------------------------------------------------------
 function cmdLedger(sub, args) {
   const larg = (name) => flagArg(args, name)
@@ -691,48 +649,7 @@ function cmdLedger(sub, args) {
 }
 
 // ---------------------------------------------------------------------------
-// client open | client waive (D8). `client open`'s only guard is at least one drawn journey — the
-// client walks the app while SCREENS is still drawing, so there is no third page role to gate on.
-// ---------------------------------------------------------------------------
-function cmdClientOpen() {
-  contractOrDie(appDir())
-  const anyDrawn = Object.values(status.journeys).some((j) => j && j.drawn)
-  if (!anyDrawn) die('no journey has been drawn yet — remedy: --mark journey-drawn --journey <j>')
-  const check = checkJson(appDir())
-  if (!check.serve || check.serve.url === null) die('remedy: npx mock-review serve')
-  const token = check.config && check.config.client && check.config.client.token
-  writeOut(1, check.serve.url + '/?client=' + token + '\n')
-  process.exit(0)
-}
-
-// D2: the driver no longer writes design/approval.json for a waiver itself — that write now
-// belongs to the package's own `waive` verb, behind its lock, so a driver-side write here would
-// race it. `contractOrDie` runs first, before the seed lookup or the spawn, so a version-skewed
-// or missing `mock-review` refuses before anything else is even checked.
-function cmdClientWaive(journeyArg, reason) {
-  contractOrDie(appDir())
-  if (!journeyArg) die('client waive needs --journey <j> — remedy: client waive --journey <j> --reason <r>')
-  if (!reason) die('client waive needs --reason <r> — remedy: client waive --journey <j> --reason <r>')
-  const seedJourneys = currentSeedJourneys()
-  const seedJourney = seedJourneys.get(journeyArg)
-  if (!seedJourney) {
-    die('--journey ' + journeyArg + ' is not declared in design/mocks/seed.md — remedy: use one of the seed journeys: ' + [...seedJourneys.keys()].join(', '))
-  }
-  const hash = beatHash(seedJourney.beats)
-  const r = run(appDir(), 'waive', ['--journey', journeyArg, '--reason', reason, '--beats', hash])
-  if (r.error) {
-    if (r.error.code === 'ENOENT') die('mock-review not found — remedy: npm i -D ' + loadContract().package)
-    die('waive failed to run: ' + r.error.message + ' — remedy: verify `mock-review` is installed and executable in node_modules/.bin, then re-run')
-  }
-  if (r.status !== 0) {
-    die((r.stderr || '').trim() || 'waive exited ' + r.status + ' with no stderr — remedy: run `mock-review waive --journey ' + journeyArg + ' --reason "' + reason + '" --beats ' + hash + '` directly in the app dir to see the raw error')
-  }
-  writeOut(1, '✅ client waive recorded for ' + journeyArg + '\n')
-  process.exit(0)
-}
-
-// ---------------------------------------------------------------------------
-// Bare-invocation step printer — one step block per run.
+// Bare-invocation step printer (D11) — one step block per run.
 // ---------------------------------------------------------------------------
 function driverCmd(extra) { return 'node ' + __filename + ' --root ' + root + ' ' + extra }
 
@@ -752,129 +669,105 @@ function printStepBlock(state, title, readOnlyList, doctrineSection, thenLines, 
 }
 
 function printSeedStep() {
-  const lines = []
-  lines.push('[mocks-driver] state: SEED  root: ' + root)
-  lines.push('(re-run this driver after completing the step; it verifies artifacts and prints the next one)')
-  lines.push('')
-  lines.push('## Step: seed the product — scaffold the app, then declare records')
-  lines.push('Read only: design/mocks/seed.md')
-  lines.push('Doctrine: spec/doctrine/mocks.md § Mocks: Seed')
-  lines.push('')
-  lines.push('npx shadcn@4.21.0 init -t vite -b radix -p nova -n app -y -s')
-  lines.push('cd app && npm i -D ' + loadContract().package)
-  for (const f of TEMPLATE_FILES) {
-    lines.push('cp "$(spec-paths templates)"/mock/' + f.src + ' app/' + f.dest)
-  }
-  lines.push('')
-  lines.push('Once every "## Records" entity in design/mocks/seed.md has a matching app/src/records/<entity>.ts and app/mock.config.ts exists, run:')
-  lines.push('  ' + driverCmd('--mark seed-done'))
-  writeOut(1, lines.join('\n') + '\n')
-  process.exit(0)
-}
-
-function printShellStep() {
-  printStepBlock('SHELL', 'draw the shell — one component, every screen imports it',
+  printStepBlock('SEED', 'write the seed — the client\'s own stories, one journey block each',
     ['design/mocks/seed.md'],
-    'Mocks: State Machine',
-    [driverCmd('--mark shell-drawn')],
-    true)
+    'Mocks: Seed',
+    ['write design/mocks/seed.md: the product, then one "### <journey>" block per journey (a persona line, then numbered "sentence" -> screen[@state] beats)',
+      driverCmd('--mark seed-done')],
+    false)
 }
 
-function printScreensStep(journeys) {
-  for (const [name] of journeys) {
-    if (!journeyIsDrawn(name)) {
+function printScreensStep(seed) {
+  const service = serviceMode()
+  const todo = [...seed].filter(([name, j]) => !journeyIsApproved(name, j.beats))
+  if (service) {
+    for (const [name] of todo) {
+      if (journeyIsDrawn(name)) continue
       printStepBlock('SCREENS', 'draw journey ' + name,
-        ['design/mocks/seed.md (### ' + name + ')'],
-        'Mocks: State Machine',
-        [driverCmd('--mark journey-drawn --journey ' + name)],
+        ['design/mocks/seed.md (### ' + name + ')', 'the catalog (spec-paths walkthrough-catalog)'],
+        'Mocks: Authoring Rules',
+        ['write one ' + screensRel + '/<screen>[@<state>].json per screen and state the beats name, copying the beats verbatim',
+          driverCmd('--mark journey-drawn --journey ' + name)],
         true)
-      return
     }
   }
-  for (const [name, j] of journeys) {
-    if (!journeyIsApproved(name, j.beats)) {
-      printStepBlock('SCREENS', 'approve journey ' + name,
-        ['design/notes.json', 'design/approval.json'],
-        'Mocks: State Machine',
-        [driverCmd('--mark journey-approved --journey ' + name)],
-        true)
-      return
+  if (todo.length) {
+    const name = todo[0][0]
+    if (service) {
+      printStepBlock('SCREENS', 'confirm journey ' + name,
+        ['design/mocks/seed.md (### ' + name + ')', 'design/rounds/ (the latest round\'s notes.json and approvals.json)'],
+        'Mocks: Rounds and Notes',
+        [driverCmd('round push') + '   (sends everything drawn and prints the link; print "🎨 ready for review — <link>" and end the turn)',
+          driverCmd('round pull') + '   (what waits for an answer, and which journeys the client has confirmed)',
+          driverCmd('--mark journey-approved --journey ' + name) + '   (once round pull shows the journey confirmed; or add --waive --reason <r> for an absent client)'],
+        false)
     }
+    const j = todo[0][1]
+    printStepBlock('SCREENS', 'confirm journey ' + name + ' in the terminal',
+      ['design/mocks/seed.md (### ' + name + ')'],
+      'Mocks: Confirmation',
+      ['show the user exactly this, then end the turn and wait for their literal `approve`:',
+        '  ' + j.persona,
+        ...j.beats.map((b) => '  ' + b.n + '. "' + b.beat + '"'),
+        'on `approve`, run: ' + driverCmd('--mark journey-approved --journey ' + name)],
+      false)
   }
-}
-
-// D8: THEME prints the pick block (with the Skill line) until marks.themePicked, then the close
-// block (no Skill line — no page role reads a Skill-authoring surface at this point) until
-// marks.approved. The CLIENT state is retired; this is the mock stage's final step.
-function printThemeStep() {
-  if (!status.marks.themePicked) {
-    printStepBlock('THEME', 'pick a theme',
-      ['mock.config.ts'],
-      'Mocks: State Machine',
-      ['author two src/themes/<k>.css candidates',
-        'pick one and set theme: "<k>" in mock.config.ts',
-        driverCmd('--mark theme-picked')],
-      true)
-    return
-  }
-  printStepBlock('THEME', 'close the mock',
-    ['design/notes.json', 'design/approval.json'],
-    'Mocks: Client Player',
-    [driverCmd('client open'), driverCmd('--mark approved')],
+  const then = []
+  if (service) then.push(driverCmd('round pull') + '   (nothing may wait for an answer; answer each with walkthrough reply --note <id> --text-file <file>, then push again)')
+  then.push(driverCmd('--mark approved'))
+  printStepBlock('SCREENS', 'close the wireframe',
+    service ? ['design/rounds/ (the latest round\'s notes.json)'] : ['design/mocks/status.json'],
+    'Mocks: Confirmation',
+    then,
     false)
 }
 
 function printApprovedStep() {
-  writeOut(1, '[mocks-driver] state: APPROVED  root: ' + root + '\nmocks are approved — nothing further to do.\n')
+  writeOut(1, '[mocks-driver] state: APPROVED  root: ' + root + '\nthe wireframe is approved — nothing further to do.\n')
   process.exit(0)
 }
 
 // ---------------------------------------------------------------------------
 // Dispatch.
 // ---------------------------------------------------------------------------
-// D16: the ledger subcommand is a plain text-file operation, untouched by the package — dispatch
-// it before any contract check, exactly like the "while seedDone is null no run spawns the
-// package" carve-out below.
-if (rest[0] === 'ledger') {
-  cmdLedger(rest[1], rest.slice(2))
-}
+if (rest[0] === 'ledger') cmdLedger(rest[1], rest.slice(2))
 
-// D3: from --mark seed-done on, a contractOrDie refusal precedes every other refusal in a run;
-// `--mark seed-done` itself runs contractOrDie as its own first step (below), so this generic
-// gate only fires for every OTHER command once seedDone is already recorded.
-if (status.marks.seedDone) contractOrDie(appDir())
+// D10: a status file of any other schemaVersion — an approved one stays readable, nothing else does.
+if (legacy) {
+  const approvedOld = isObj(rawStatus) && rawStatus.state === 'APPROVED'
+  if (approvedOld && rest.length === 1 && rest[0] === '--state') { writeOut(1, 'APPROVED\n'); process.exit(0) }
+  if (approvedOld && rest.length === 0) {
+    writeOut(1, '[mocks-driver] state: APPROVED  root: ' + root + '\napproved under the retired mock-app flow — nothing further to do (to redraw as wireframes: rm design/mocks/status.json)\n')
+    process.exit(0)
+  }
+  legacyRefusal()
+}
 
 if (rest.includes('--state')) {
   writeOut(1, deriveState() + '\n')
   process.exit(0)
 }
 
-if (rest[0] === '--reopen') {
-  cmdReopen(rest[1])
-}
+if (rest[0] === '--reopen') cmdReopen(rest[1])
 
 if (rest[0] === '--mark') {
   const mark = rest[1]
   const journeyArg = flagArg(rest, '--journey')
   if (mark === 'seed-done') cmdSeedDone()
-  else if (mark === 'shell-drawn') cmdShellDrawn()
   else if (mark === 'journey-drawn') cmdJourneyDrawn(journeyArg)
-  else if (mark === 'journey-approved') cmdJourneyApproved(journeyArg)
-  else if (mark === 'theme-picked') cmdThemePicked()
+  else if (mark === 'journey-approved') cmdJourneyApproved(journeyArg, rest.includes('--waive'), flagArg(rest, '--reason'))
   else if (mark === 'approved') cmdApproved()
-  else die('--mark ' + mark + ' is unknown — remedy: --mark seed-done|shell-drawn|journey-drawn|journey-approved|theme-picked|approved')
+  else die('--mark ' + mark + ' is unknown — remedy: --mark seed-done|journey-drawn|journey-approved|approved')
 }
 
-if (rest[0] === 'client') {
-  if (rest[1] === 'open') cmdClientOpen()
-  else if (rest[1] === 'waive') cmdClientWaive(flagArg(rest, '--journey'), flagArg(rest, '--reason'))
-  else die('client: unknown subcommand "' + rest[1] + '" — remedy: use `client open` or `client waive --journey <j> --reason <r>`')
+if (rest[0] === 'round') {
+  if (rest[1] === 'push') cmdRoundPush()
+  else if (rest[1] === 'pull') cmdRoundPull()
+  else die('round: unknown subcommand "' + rest[1] + '" — remedy: use `round push` or `round pull`')
 }
 
 // Bare run: print exactly one step block for the current state.
 const state = deriveState()
 if (state === 'SEED') printSeedStep()
-else if (state === 'SHELL') printShellStep()
 else if (state === 'SCREENS') printScreensStep(currentSeedJourneys())
-else if (state === 'THEME') printThemeStep()
 else printApprovedStep()

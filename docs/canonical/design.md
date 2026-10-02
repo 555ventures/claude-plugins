@@ -1,76 +1,32 @@
 # Design — canonical decisions
 
-## Design Canon: one artifact (specs/20260914/01, specs/20260914/02)
+## The wireframe (specs/20261002/01)
 
-There is no second artifact: the mock app `/spec:mocks` authors and approves **is** the
-product's frontend, never a catalog a build stage renders against separately.
+The wireframe is a picture, not the product: gray screens drawn by the walkthrough service from
+one json-render file per screen and state under `design/mocks/screens/`, named as the seed's
+beats name them and checked offline against the catalog before anything is sent. There is no
+mock app and no screen-approval record. The chain is `SEED → SCREENS → APPROVED`. A seed
+journey is a numbered list of the client's own sentences; a journey is approved by the client's
+confirm on the service against the hash of those sentences, so editing a beat voids the
+confirmation and reopens the journey. A project with no `walkthrough` config block draws
+nothing and confirms each story in the terminal; with the block, a journey may also be waived
+with a written reason. Rounds, notes and confirmations land under `design/rounds/<n>/`; a round
+is always a full snapshot. The stage finishes when every story is confirmed and no note waits
+for an answer — an answered note does not block — and the last round is then closed. A look
+prints the service's project page and ends the turn.
 
-**Three import layers, one direction.** A screen (`src/screens/<label>.tsx`, under
-`design.app`) composes from exactly three layers and nothing else: `@/components/ui` (the
-shadcn primitives), `@/components` + `@/shells` (project components and shells built on top of
-them), and `@/records` (`src/records` under `design.app` — typed data, the only source a screen
-may read; never a hand-typed literal standing in for what a record should supply). An import
-outside these is a `layer`-kind error finding (`mock-review check`).
+## Genesis and the wireframe (specs/20261002/01)
 
-**Screens carry `meta` and named states.** A screen's `meta` export names its states; each
-state renders exactly what the seed or the journey's step demands — states are the AC matrix, no
-unbound branch, no paraphrase. A project component or shell carries one `/** … */` doc line
-above its export and a named `examples` export; a screen missing either is a `doc`-kind error
-finding, and a component with neither is invisible to `mock-review sweep`'s own worklist.
-
-**Records are the only data.** `src/records` under `design.app` holds the typed fixtures every
-screen state reads from; nothing else on a screen stands in for what a record should supply.
-
-**`design/approval.json` is the canon.** `approval.screens[<label>]` carries `approvedAt` and a
-`hash`, written only by `mock-review approve --screen <name>` on the user's literal `approve` —
-never by a control on the served page, and never by a script in this repo.
-
-**Look stops are never questions.** Every look this doctrine governs prints
-`🎨 ready for review — <check.serve.url>/#/<screen>`, one line per surface, then the fixed reply
-line, then ends the turn; only the literal `approve` accepts. The reviewer page (the mock app's
-own served UI) is the one viewer; a session never screenshots a screen to judge it in this
-doctrine's place.
-
-## The mock stage's actors and chain (specs/20260917/01)
-
-On the served page there are only two actors: the **client** and the AI session. The person
-running `/spec:mocks` works from files and the CLI; the one page surface they still reach is the
-owner-only one — the conversation closers and the Components page — as the loopback human at the
-machine running `serve`. Screen approve and theme pick are not page controls at all. The chain is
-`SEED → SHELL → SCREENS → THEME → APPROVED`. A seed journey is a numbered list of the client's
-own sentences (`N. "sentence" -> screen[@state]`), copied verbatim into the app; a journey is
-approved by the client's confirm against the hash of those exact sentences, so editing a beat
-voids the confirmation and reopens the journey. Note statuses are `open`, `answered`,
-`approved` and `deferred`; every deferred item becomes a ledger exclusion row at `--mark
-approved` and surfaces in genesis's parking lot.
-
-**Contract 3: the package is the only writer.** The host↔`mock-review` handshake is
-`contractVersion: 3`, compared on every driver entry and refused on any difference. It retires
-`design/decisions.json` and `approval.theme` — the theme a host renders is the one its
-`mock.config.ts` declares. `client waive` calls the package's `waive` verb rather than writing
-`design/approval.json` itself, so no script in this repo writes a design document and every write
-goes through the package's cross-process lock.
-
-## Genesis and the mock app (specs/20260914/02, specs/20260926/04)
-
-The mock app is a gray wireframe, never the product (specs/20260926/04 D9, ADR-0030 (j)).
-Genesis always picks the stack and scaffolds the real app: `MENUS` auto-picks nothing and records
-no skipped tournament on the mock app's account, a tournament archetype reaches `FINALISTS` like
-any other, `SCAFFOLD` runs the winner's `scaffoldCommand`, and `--mark skeleton-landed` runs the
-probe, binding-subset and zero-day gate checks only — it never spawns `mock-review`. (From
-specs/20260914/02 until this spec, the mock app pre-empted the tournament and the scaffold and
-gated the skeleton on its own review check.)
-
-BRIEF's derivation sources are `design/approval.json` (the seed journey count, from its
-`journeys` keys) and `design/notes.json` (the open-note count, `status === "open"` across notes
-and journey conversations alike) — read directly through `fs` + JSON, never a notes module —
-printed as `seed journeys: N · notes open: N`.
+Genesis always picks the stack and scaffolds the real app; the wireframe never pre-empts either.
+BRIEF prints `seed journeys: N · notes open: N` from the seed's journey count and the latest
+round's waiting notes. The design brief's step lists `design/mocks/screens/` among its reads when
+it exists.
 
 ## The design contract is code (specs/20260926/02)
 
 A host with a UI stack carries a `design` block of three repo-relative paths — `kit` (a
 directory of intent-named composite components), `tokens` (one token file), and `rules` (one
-auto-loaded rule file) — plus an optional `app` for the mock app. All three paths are required
+auto-loaded rule file) — plus an `app` that is optional — carried only by a host approved under the retired mock-app flow. All three paths are required
 once the block exists; a block missing one reports that path as missing, naming the key to add.
 
 The rules file holds two tables. `## Intent to pattern` maps each intent to a pattern and the

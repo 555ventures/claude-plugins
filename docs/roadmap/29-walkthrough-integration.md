@@ -130,6 +130,25 @@ specs/20260929/01-the-walkthrough-contract-and-the-client.md.
 - The handoff prompt below is replaced by docs/handoff/walkthrough-service-brief.md.
 - Specs 02 and 03 are planned only when the service's first version runs.
 
+## Corrections (2026-10-02, from planning spec 02 — specs/20261002/01-the-wireframe-command-runs-over-the-service.md)
+
+These override the text above where they differ. JJ ruled the first three on 2026-10-02.
+
+- Scope 2's "its states and marks stay" does not hold: the wireframe command has three states,
+  `SEED → SCREENS → APPROVED`. The shell and theme steps are dropped; colours and the shared
+  layout belong to genesis's design stage.
+- A project without the service confirms each story in the terminal and draws no screen.
+- The stage finishes when every story is confirmed and no note waits for an answer; an answered
+  note does not block.
+- The service's first slice was exercised live with the plugin's client on 2026-10-02 (greet,
+  push, pull, reply, mark, a reader's note and confirmation). It serves six of the seven calls.
+- Spec 03 (picture rounds) is still not plannable. The service refuses picture rounds and has no
+  image upload until its own brief 08, which waits on sign-in (07). The plugin has no picture
+  producer: the prototype freeze and the build's replay record structure as JSON, and genesis's
+  design stop only compiles. Two statements above are wrong for it as written: the freeze
+  captures at one width, not two; and a pulled picture note is anchored to a point (x, y), while
+  a prototype pin is anchored to an element, so "the same pins file" needs a ruling.
+
 ## Open questions for planning
 
 - Whether the gray catalog's Zod schema lives in the plugin (versioned with the contract) or

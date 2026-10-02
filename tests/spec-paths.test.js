@@ -136,7 +136,7 @@ test('AC-20260926-03-8: spec-paths workspace-scan resolves to spec/scripts/works
 // bundled keys — `walkthrough` (the one script that talks to the review service) and
 // `walkthrough-contract` / `walkthrough-catalog` (the two plain-JSON files both repositories test
 // against) — folded into this same test, with the usage string naming all three.
-test('AC-20260926-03-8: every documented key resolves to an existing path (AC-20260928-01-2; AC-20260929-01-18)', () => {
+test('AC-20260926-03-8: every documented key resolves to an existing path (AC-20260928-01-2; AC-20260929-01-18; AC-20261002-01-15)', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-enforce',
     'wf-research', 'merge-back',
@@ -163,6 +163,13 @@ test('AC-20260926-03-8: every documented key resolves to an existing path (AC-20
     assert.match(usage, new RegExp('(^|[|\\[])' + key + '($|[|\\]])'),
       'D13: the usage line must name `' + key + '` or a session reading it never learns the key exists: ' + usage)
   }
+  // specs/20261002/01-the-wireframe-command-runs-over-the-service.md D12 (AC-20261002-01-15): the
+  // `mock-contract` key is gone, so the key is an unknown one and its usage line no longer names it.
+  const retired = spawnSync('bash', [BIN, 'mock-contract'], { encoding: 'utf8' })
+  assert.notStrictEqual(retired.status, 0,
+    'AC-20261002-01-15: `spec-paths mock-contract` must exit non-zero — a surviving key resolves a path to a deleted template and sends a session to a file that is not there')
+  assert.ok(!/mock-contract/.test(retired.stderr),
+    'AC-20261002-01-15: the usage line must not mention mock-contract — a documented key that resolves nothing misleads the next reader: ' + retired.stderr)
   assert.match(run('version').trim(), /^\d+\.\d+\.\d+$/)
   assert.match(run('contract-hash').trim(), /^[0-9a-f]{12}$/)
 

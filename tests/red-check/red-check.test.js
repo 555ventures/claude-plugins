@@ -693,7 +693,7 @@ test('a sanctioned-green test file whose name carries a `$` segment runs against
     `exit 0 is the whole point: a host whose test filenames carry route params must not have every one of them reported as a failed sanctioned pin (stderr: ${res.stderr})`)
 })
 
-// Field incident (mock-review spec 20260914/01 red-check): walkAll pushed every non-directory
+// Field incident (spec 20260914/01 red-check): walkAll pushed every non-directory
 // Dirent as a file, so a fixture's `node_modules` symlink to a directory matched a globbed tests
 // row and readFileSync threw EISDIR, killing the whole run before any JSON was printed.
 test('a directory symlink under a globbed tests row is never listed as a test file, so red-check completes instead of crashing on EISDIR', () => {

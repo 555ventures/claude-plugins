@@ -7,7 +7,7 @@
 - Applies to: ADR-0028 — narrowed: the state chain ADR-0028's Decision named
   (SEED → SHELL → SCREENS → THEME → CLIENT → APPROVED) drops CLIENT; the client's walk of the
   served app happens during SCREENS, not as its own state.
-- Amended by: —
+- Amended by: ADR-0032 (the confirm gate has a terminal form and a waiver)
 
 ## Context
 

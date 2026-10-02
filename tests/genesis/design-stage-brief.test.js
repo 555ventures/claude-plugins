@@ -5,14 +5,13 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, read, ROOT } = require('../helpers')
 const { writeBrief, writeConventionsArtifacts, writeBindingSubset } = require('./tournament.fixtures.js')
-const mockApp = require('../mocks/mock-app-fixtures.js')
 
 // specs/20260926/04-the-design-brief.md: genesis-driver.js gains a DESIGN_BRIEF state between
 // the green zero-day gate and ROADMAP for a visual, storybook-catalog host (D1), its own step
 // text (D2), a design-paths.json validation (D3/D5's catalog line), the brief grammar check
-// (D6), the design-contract-check overrides (D7), the D8 mark record, and D9's retirement of the
-// mock app's product precedence. This file owns AC-20260926-04-1 through -5, -9, -11 through
-// -14, and -16 through -18. None of this exists yet — every test below is red for that reason.
+// (D6), the design-contract-check overrides (D7) and the D8 mark record. This file owns
+// AC-20260926-04-1 through -5, -9 and -11 through -14. The DESIGN_BRIEF step's Read only: line is
+// rewritten by specs/20261002/01-the-wireframe-command-runs-over-the-service.md D13.
 
 const SCRIPT = 'scripts/genesis-driver.js'
 const DIM = 'hosting'
@@ -293,13 +292,16 @@ test('AC-20260926-04-3: WHEN design-brief-written has been accepted and docs/des
 // AC-20260926-04-4
 // ---------------------------------------------------------------------------
 
-test('AC-20260926-04-4: WHEN the bare run prints DESIGN_BRIEF THE SYSTEM includes the Session/Skill/Doctrine lines, one journey line per seed journey, a Read only: line naming design/approval.json, and the --mark design-brief-written command', () => {
+test('AC-20260926-04-4 / AC-20261002-01-18: WHEN the bare run prints DESIGN_BRIEF THE SYSTEM includes the Session/Skill/Doctrine lines, one journey line per seed journey, a Read only: line naming design/mocks/screens/ when it exists and neither it nor design/approval.json when it does not, and the --mark design-brief-written command', () => {
   const dir = tmpdir('design-stage-ac4')
   const journeys = [
     { name: 'first-visit', beats: ['home', 'pick', 'confirm', 'done'] },
     { name: 'daily-check', beats: ['home', 'review', 'done'] },
   ]
   advanceToDesignBrief(dir, { archetype: 'web-app', designCatalog: 'storybook', journeys })
+  const withoutScreens = bare(dir).stdout
+  fs.mkdirSync(path.join(dir, 'design/mocks/screens'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/mocks/screens/home.json'), '{"root":"page","elements":{}}\n')
   const printed = bare(dir).stdout
 
   assert.match(printed, /^Session: start a fresh session for this step — Model: Fable \(authors the brief and the tables\)$/m,
@@ -312,8 +314,14 @@ test('AC-20260926-04-4: WHEN the bare run prints DESIGN_BRIEF THE SYSTEM include
     'D2/AC-4: the step must print "journey: first-visit (4 beats)" derived from the seed\'s own beat count: ' + printed)
   assert.match(printed, /^journey: daily-check \(3 beats\)$/m,
     'D2/AC-4: the step must print "journey: daily-check (3 beats)": ' + printed)
-  assert.match(printed, /Read only:.*design\/approval\.json/,
-    'D2: the Read only: line must name design/approval.json — the last read of the mock app\'s approval record: ' + printed)
+  const readOnly = (printed.match(/^Read only:.*$/m) || [''])[0]
+  assert.ok(readOnly.includes('design/mocks/screens/ (the confirmed wireframes)'),
+    'D13: the Read only: line must name design/mocks/screens/ (the confirmed wireframes) when that directory exists — without it the design brief\'s author is never pointed at the picture the client confirmed: ' + printed)
+  assert.ok(!readOnly.includes('design/approval.json'),
+    'D13: the Read only: line must never name design/approval.json — the mock app\'s approval record is retired and a session sent to read it finds nothing: ' + readOnly)
+  const readOnlyAbsent = (withoutScreens.match(/^Read only:.*$/m) || [''])[0]
+  assert.ok(!readOnlyAbsent.includes('design/mocks/screens/') && !readOnlyAbsent.includes('design/approval.json'),
+    'D13: with no design/mocks/screens/ directory the Read only: line must name neither path — naming an absent directory sends a session to read nothing: ' + withoutScreens)
   assert.match(printed, /--mark design-brief-written/,
     'D2: the step must print the --mark design-brief-written command: ' + printed)
 })
@@ -589,94 +597,4 @@ test('AC-20260926-04-14: WHEN the rules file\'s ### wire table has only its head
   const filledResult = mark(dir, 'design-brief-written')
   assert.strictEqual(filledResult.status, 0,
     'D7: filling the ### wire table on the same host (no kit directory exists at all) must be accepted — kit-missing is tolerated at this mark, so a still-nonzero exit means it is wrongly treated as blocking: ' + filledResult.stderr)
-})
-
-// ---------------------------------------------------------------------------
-// AC-20260926-04-16 / AC-20260926-04-17 / AC-20260926-04-18 (D9's mock-app retirement)
-// ---------------------------------------------------------------------------
-
-test('AC-20260926-04-16: WHEN MENUS runs on a host with app/mock.config.ts present and framework/language/packageManager open THE SYSTEM prints no Auto-picked line, leaves status.tournament without a skipped key, and routes a tournament archetype to FINALISTS after menus-done', () => {
-  const dir = tmpdir('design-stage-ac16')
-  mockApp.writeStatus(dir, { state: 'SEED' })
-  mockApp.writeApp(dir)
-
-  writeBrief(dir, {
-    dims: { framework: 'open', language: 'open', 'package-manager': 'open', 'test-runner': 'open' },
-    // backend-api: a TOURNAMENT archetype that is also DESIGN_SKIPPED, so brief-written is
-    // accepted immediately with no mocks/doctrine artifacts owed — the mock-app host above is
-    // for MENUS to read, not for BRIEF's ratification gate.
-    picks: ['- archetype: backend-api'],
-  })
-  assert.strictEqual(mark(dir, 'discovery-done').status, 0, 'test setup requires discovery-done to be accepted')
-  assert.strictEqual(mark(dir, 'brief-written').status, 0, 'test setup requires brief-written to be accepted immediately for backend-api')
-
-  // D9 retires the mock-app narrowing that once fixed framework/language/package-manager for
-  // free — every dimension, including these three, now gets a menu file and a ## Picks line
-  // exactly as any non-mock host would.
-  fs.mkdirSync(path.join(dir, '.claude/genesis/interview-research'), { recursive: true })
-  const dimensionPicks = { framework: 'react', language: 'typescript', 'package-manager': 'npm', 'test-runner': 'vitest' }
-  for (const [dim, label] of Object.entries(dimensionPicks)) {
-    fs.writeFileSync(path.join(dir, '.claude/genesis/interview-research', dim + '.json'),
-      JSON.stringify({ dimension: dim, options: [{ label, packages: [] }] }))
-    const written = mark(dir, 'menu-written', 'interview-research/' + dim + '.json')
-    assert.strictEqual(written.status, 0, 'test setup requires menu-written to be accepted for ' + dim + ': ' + written.stderr)
-  }
-  writeBrief(dir, {
-    dims: { framework: 'open', language: 'open', 'package-manager': 'open', 'test-runner': 'open' },
-    picks: ['- archetype: backend-api'].concat(Object.entries(dimensionPicks).map(([dim, label]) => '- ' + dim + ': ' + label)),
-  })
-
-  const r = bare(dir)
-  assert.strictEqual(r.status, 0, 'a bare invocation at MENUS on a mock-app host must exit 0: ' + r.stderr)
-  assert.doesNotMatch(r.stdout, /Auto-picked/,
-    'D9: MENUS must print no "Auto-picked" line once the mock app stops being the product\'s frontend — its presence means the retired auto-pick mechanism is still live: ' + r.stdout)
-
-  const afterMenus = statusOf(dir)
-  assert.ok(!(afterMenus.tournament && 'skipped' in afterMenus.tournament),
-    'D9: status.tournament must carry no "skipped" key purely from MENUS observing the mock app — its presence means the retired mock-app tournament-skip is still recording itself: ' + JSON.stringify(afterMenus.tournament))
-
-  const menusDone = mark(dir, 'menus-done')
-  assert.strictEqual(menusDone.status, 0, 'test setup requires menus-done to be accepted: ' + menusDone.stderr)
-  assert.match(menusDone.stdout, /FINALISTS/,
-    'D9: a tournament archetype must reach FINALISTS after menus-done on a mock-app host — its absence means the retired mock-app tournament-skip still routed straight to DECIDE: ' + menusDone.stdout)
-})
-
-test('AC-20260926-04-17: WHEN --mark skeleton-landed runs on a host with app/mock.config.ts and a stub mock-review on PATH that would exit 1 THE SYSTEM never spawns it, records status.scaffold.exit 0 instead of skipped mock-app, and accepts the mark once the probe/binding-subset/gate checks pass', () => {
-  const dir = tmpdir('design-stage-ac17')
-  advanceToDecide(dir, 'data-ml', [])
-  writeValidDecideArtifacts(dir, { archetype: 'data-ml', designCatalog: 'none', gateCommand: 'true', scaffoldCommand: 'true' })
-  writeConventionsArtifacts(dir)
-  mockApp.writeStatus(dir, { state: 'SEED' })
-  mockApp.writeApp(dir)
-  assert.strictEqual(mark(dir, 'decided').status, 0, 'test setup requires decided to be accepted')
-
-  const stubDir = path.join(dir, '.mock-review-bin')
-  fs.mkdirSync(stubDir, { recursive: true })
-  const counterPath = path.join(dir, 'mock-review-called.txt')
-  fs.writeFileSync(path.join(stubDir, 'mock-review'),
-    '#!/usr/bin/env bash\nset -u\necho called >> "' + counterPath + '"\necho \'{"ok":false}\'\nexit 1\n')
-  fs.chmodSync(path.join(stubDir, 'mock-review'), 0o755)
-  const env = Object.assign({}, process.env, { PATH: stubDir + path.delimiter + process.env.PATH })
-
-  const scaffolded = bare(dir, { env })
-  assert.strictEqual(scaffolded.status, 0, 'the scaffold must run to completion even with app/mock.config.ts present: ' + scaffolded.stderr)
-  assert.match(scaffolded.stdout, /SKELETON/, 'the scaffold must reach SKELETON: ' + scaffolded.stdout)
-  const afterScaffold = statusOf(dir)
-  assert.strictEqual(afterScaffold.scaffold && afterScaffold.scaffold.exit, 0,
-    'D9: status.scaffold.exit must be 0 (scaffoldCommand actually ran) even though app/mock.config.ts exists — its being {skipped:"mock-app"} instead means the retired scaffold-skip branch is still live: ' + JSON.stringify(afterScaffold.scaffold))
-
-  writeBindingSubset(dir, 'true')
-  const landed = mark(dir, 'skeleton-landed', undefined, { env })
-  assert.strictEqual(landed.status, 0,
-    'D9: skeleton-landed must be accepted once the probe/binding-subset/gate checks pass, regardless of app/mock.config.ts existing — its refusal means the retired mock-review-gated branch is still live: ' + landed.stderr)
-  assert.ok(!fs.existsSync(counterPath),
-    'D9: the mock-review stub must never be invoked by skeleton-landed once the retired branch is gone — its counter file existing means "mock-review check --json" still ran: ' + counterPath)
-})
-
-test('AC-20260926-04-18: spec/scripts/genesis-driver.js contains none of MOCK_APP_FIXED_DIMS, appendDerivedPicksToBrief, skipped: \'mock-app\', or require(\'./lib/mock-cli\')', () => {
-  const src = read('spec/scripts/genesis-driver.js')
-  const banned = /MOCK_APP_FIXED_DIMS|appendDerivedPicksToBrief|skipped:\s*'mock-app'|require\(['"]\.\/lib\/mock-cli['"]\)/
-  const found = src.match(banned)
-  assert.ok(!found,
-    'D9: spec/scripts/genesis-driver.js must contain none of MOCK_APP_FIXED_DIMS, appendDerivedPicksToBrief, skipped: \'mock-app\', or require(\'./lib/mock-cli\') — a match means a retired mock-app-precedence branch is still in the driver: ' + JSON.stringify(found))
 })

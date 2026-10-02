@@ -130,10 +130,10 @@ approved on real screens (or, for a legacy run, on its existing explore/design a
 and tells the session to `run /spec:mocks`. `backend-api`, `data-ml`, `conversational-bot`, and
 `cli-devtool` never owe this precondition — they proceed straight to ratification.
 
-**Derivation sources.** The BRIEF step reads `design/approval.json`'s `journeys` keys for the
-seed journey count and `design/notes.json` (notes and journey conversations alike, `status ===
-"open"`) for the open-note count, printed as `seed journeys: N · notes open: N` — plain `fs` +
-JSON, never `lib/mocks-notes`.
+**Derivation sources.** The BRIEF step counts the journeys in `design/mocks/seed.md` and the
+waiting items (`status === "open"`, notes and journey threads alike) of the latest round's
+`notes.json` through `lib/mocks-round.js`'s `openNoteCount` — `0` with no round — printed as
+`seed journeys: N · notes open: N`. No genesis step reads a file under a mock app.
 
 **Ratification (`--mark brief-written`), tiered by archetype:**
 
@@ -166,7 +166,7 @@ Non-UI Coverage key is missing or still `dark` — the checklist is the counter 
 prototypes drop the screen-less facts": a fact with no screen still owes a line. The BRIEF
 step text prints the derivation sources the session writes `## What I think you're building`
 from — every confirmed `product` ledger row (`said-by-user`/`ratified-doc`) with its id, the
-journey and label counts, and the `notes.json` unresolved count — so a fact the brief states
+journey and label counts, and the latest round's waiting-note count — so a fact the brief states
 is a row the user already confirmed, never a restatement of the discovery interview alone.
 Legacy runs (`brief.legacy: true`) and archetypes that never owe a mocks set see none of
 these refusals.
@@ -179,11 +179,11 @@ argument alone: `FINALISTS` → `RACE` (driver-only) → `PROBE` → `PICK`. Eve
 derives `MENUS → DECIDE` unchanged and writes no `.claude/genesis/tournament/`; a skipped race
 (`--mark finalists-skipped`) records `tournament.skipped` and advances the same way.
 
-**The mock app is not the product.** A host with `<status.app>/mock.config.ts` on disk runs
-`MENUS`, the tournament, and `SCAFFOLD` exactly like any other host — no dimension is
-auto-picked, no `tournament.skipped` is recorded, and no scaffold is skipped on its account.
-`design/approval.json`'s journey record still governs `BRIEF`'s precondition (§ Genesis: Brief
-State); it is never read again after `DESIGN_BRIEF` (§ Genesis: Design Stage).
+**The wireframe is not the product.** A host with an approved wireframe runs `MENUS`, the
+tournament, and `SCAFFOLD` exactly like any other host — no dimension is auto-picked, no
+`tournament.skipped` is recorded, and no scaffold is skipped on its account. The seed and the
+latest round govern `BRIEF`'s counts (§ Genesis: Brief State); `DESIGN_BRIEF` is the last step
+that reads `design/mocks/screens/` (§ Genesis: Design Stage).
 
 **FINALISTS.** The session composes 2–3 finalist stack combinations from the menus (a
 finalist is a combination the session composes, never a single option); at least one must
@@ -466,10 +466,10 @@ Land the test + CI skeleton — the enforcement half of the ops ADR, day zero:
   ≤150-line file naming the gate command and the test tree, the primary artifact a fresh agent
   actually reads.
 
-**The mock app is not the skeleton.** `SCAFFOLD` runs its `scaffoldCommand` for every host,
-mock app or not — the wireframe the user approved in `/spec:mocks` is a throwaway, never the
-day-zero skeleton. `--mark skeleton-landed` refuses on the probe, binding-subset, and
-zero-day-gate checks above only; it runs no check against the mock app.
+**The wireframe is not the skeleton.** `SCAFFOLD` runs its `scaffoldCommand` for every host —
+the wireframe the user approved in `/spec:mocks` is a throwaway, never the day-zero skeleton.
+`--mark skeleton-landed` refuses on the probe, binding-subset, and zero-day-gate checks above
+only; it runs no check against the wireframe.
 
 ## Genesis: Conventions Probe Suite
 
@@ -555,8 +555,9 @@ it. `DESIGN_BRIEF` is re-derived whenever `marks.designBriefWritten` is unset or
 `docs/design/brief.md` or `.claude/genesis/design-paths.json` has vanished from disk — the same
 artifact-over-enum discipline § Genesis: State Machine states for every other step.
 
-**The mock app's last read.** `DESIGN_BRIEF`'s step is the last point genesis reads
-`design/approval.json` — the wireframe's journey record. From here on the design stage works
+**The wireframe's last read.** `DESIGN_BRIEF`'s step is the last point genesis reads the
+wireframe: its `Read only:` line names `design/mocks/screens/ (the confirmed wireframes)` when
+that directory exists. From here on the design stage works
 against the real scaffolded app; the wireframe is a throwaway that has done its job (§ Genesis:
 Tournament of Scaffolds, § Genesis: Day-Zero Skeleton).
 
@@ -742,9 +743,10 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   and the DECIDED/DEFERRED rows the driver validates at `decided` and again (probe existence,
   the binding subset) at `skeleton-landed`.
 - **`design/mocks/`** (durable, authored by `/spec:mocks`, spec 07's `mocks-driver.js`) — the
-  approved-set workspace BRIEF reads directly: `seed.md`, `canon.md`, `status.json`,
-  `ledger.md`, `tokens.css`, and the approved journeys' screens. BRIEF never writes here — it
-  only reads `status.json`/`ledger.md` for the precondition.
+  approved-set workspace BRIEF reads directly: `seed.md`, `status.json`, `ledger.md`,
+  `screens/` (one gray json-render file per screen and state), and the pulled `design/rounds/`
+  notes. BRIEF never writes here — it reads `status.json`/`ledger.md` for the precondition and
+  the seed and latest round for its counts.
 - **`.claude/genesis/design-paths.json`** — `DESIGN_BRIEF`'s session-authored path map (template
   `spec/templates/design-paths.json`, § Genesis: Design Stage): `kit`, `tokens`, `rules`,
   `primitives`, `primitivesAlias`, `journeys`, `storybook`. Read by every later design mark and

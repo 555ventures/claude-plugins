@@ -10,15 +10,15 @@
 // beats verbatim plus `labels`/`edges` derived from them (genesis's `briefJourneysCheck` and
 // `journeyPlacementCheck` still read `labels` directly) and any body line that isn't a
 // well-numbered beat as `malformed`. `beatHash(beats)` is the one hash of a journey's story — the
-// driver, `client waive` and the client page's confirm control all compute it the same way, over
-// the beats' canonical `beat -> screen[@state]` lines.
+// driver (its `--waive` flag and the confirmations it reads) and the service's confirm control
+// all compute it the same way, over the beats' canonical `beat -> screen[@state]` lines.
 //
 // What this deliberately does NOT do: read any file itself for `parseSurfaceLines` or
 // `parseSeedJourneys` — `parseSeedJourneys` takes the seed's already-read text (`null` on a cold
 // root) so this module stays free of path policy; only `parseSurfacesPlacement` takes a
 // directory, since its caller already agrees roadmap briefs live at `docs/roadmap/**.md`. Does
-// not validate a beat's `screen`/`state` against any registered screen name — that is the
-// reviewer's `check --json`, read by the driver's own D4/D5 marks, not this parser. The retired
+// not validate a beat's `screen`/`state` against any screen file — that is the round check (lib/mocks-round.js `roundFindings`), run by the driver's
+// `--mark journey-drawn` and `round push`, not this parser. The retired
 // atlas's first-brief-wins-with-edges fold (`parseSurfaces`) is gone with the atlas it built — no
 // caller has spawned it since (D2).
 //

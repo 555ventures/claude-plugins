@@ -35,9 +35,9 @@ time this is mostly "nothing — scaffold only"; keep it honest and re-verify at
 
 <!-- UI-bearing briefs only (Design stage: yes) — delete the section otherwise. Genesis and
      `/spec:mocks` parse this fenced block (shared § Design Canon): one line per surface label,
-     one per journey edge. NAMES AND ARROWS ONLY — the roadmap owns structure, the mock app owns
-     pixels. Labels are permanent once a mock ships (they are screen file names under
-     src/screens). `/spec:plan` reads this block as structure only — labels and journey
+     one per journey edge. NAMES AND ARROWS ONLY — the roadmap owns structure, the wireframe owns
+     pixels. Labels are permanent once a wireframe ships (they are screen file names under
+     design/mocks/screens/). `/spec:plan` reads this block as structure only — labels and journey
      edges — with no check against an approval record. -->
 
 ```surfaces

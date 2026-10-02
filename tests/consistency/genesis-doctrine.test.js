@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { ROOT, SPEC, read, runBash, runNode } = require('../helpers')
+const { ROOT, SPEC, read, runBash, runNode, sweepRetiredLiteral } = require('../helpers')
 
 // specs/20260825/01-genesis-panel-collapse.md: deletes the genesis MoA panel (wf-panel.js:
 // three blind Sonnet proposers + a Fable aggregator) and replaces it with one proposer — the
@@ -55,59 +55,6 @@ function assertNoBannedLiterals (src, banned, msgFor) {
   for (const [re, label] of banned) {
     assert.ok(!re.test(src), msgFor(label))
   }
-}
-
-// Repo-wide retired-name sweep, shared by AC-20260825-04-9 (`genesis-architect`),
-// AC-20260827-02-8 (`genesis-explore`), and AC-20260827-03-7 (`genesis-design`) — per §
-// Review Checks (three or more near-identical blocks names the extraction). File-local for the
-// same reason assertNoBannedLiterals above is: every sweep lives in this file, and a
-// tests/helpers.js export would widen a single-file helper into cross-file surface for no
-// second-file caller.
-//
-// `citations` is the structural answer to the self-reference trap: a spec that retires a
-// command usually has the command's name inside its OWN filename, so every dated provenance
-// header citing that spec (Test Rules require those headers), the run ledger's plan row, and
-// the driver's retained review evidence all contain the banned literal while pointing at the
-// record of the kill rather than at the dead command. Each citation string is DELETED from a
-// file's content before the literal is looked for, so citing the killing spec is always legal
-// and pointing at the command never is. Exact strings only — never a "looks like a path" shape
-// rule, which is the evadable-guard class § Gotchas bans (a live stale reference written as a
-// path would hide behind it). Each citation must strictly contain and exceed the literal, so
-// nobody can hollow the sweep out by passing the bare name as its own citation.
-//
-// Returns offending repo-relative paths; each call site keeps its own assert and its own
-// spec-cited consequence message.
-function sweepRetiredLiteral (literal, { citations = [], waivedPaths = [], waivedPrefixes = [] }) {
-  for (const c of citations) {
-    assert.ok(c.includes(literal) && c.length > literal.length,
-      'sweep misuse: citation "' + c + '" must strictly contain and exceed the literal "' +
-      literal + '" — a citation equal to (or not containing) the literal would subtract every ' +
-      'live mention and silently hollow out the sweep it is supposed to narrow')
-  }
-  const isWaived = (rel) =>
-    waivedPaths.includes(rel) || waivedPrefixes.some((pre) => rel.startsWith(pre))
-  const walk = (dir, acc) => {
-    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (ent.name === '.git' || ent.name === 'node_modules') continue
-      // A sibling session's live /spec:run worktree (.claude/worktrees/<branch>/) is a
-      // checkout of an OLDER commit, not this repo's content — sweeping it reddens every
-      // retired-literal pin whenever a run is in flight.
-      if (dir === path.join(ROOT, '.claude') && ent.name === 'worktrees') continue
-      const abs = path.join(dir, ent.name)
-      if (ent.isDirectory()) walk(abs, acc)
-      else if (ent.isFile()) acc.push(abs)
-    }
-    return acc
-  }
-  const offenders = []
-  for (const abs of walk(ROOT, [])) {
-    const rel = path.relative(ROOT, abs).split(path.sep).join('/')
-    if (isWaived(rel)) continue
-    let content = fs.readFileSync(abs, 'utf8')
-    for (const c of citations) content = content.split(c).join('')
-    if (content.includes(literal)) offenders.push(rel)
-  }
-  return offenders
 }
 
 // ---------------------------------------------------------------------------
@@ -1163,47 +1110,6 @@ test('AC-20260902-08-17 / AC-20260914-02-15: spec-paths shared-for genesis SHALL
     'shared-for genesis must CONTINUE TO serve § Host Grounding — a section map broken by this spec\'s doctrine edits would mean the command reads no grounding doctrine at all')
 })
 
-// specs/20260926/04-the-design-brief.md D9/AC-20260926-04-22 rewrites this AC-ID in place: D9
-// retires the mock app's product-precedence branches outright (the auto-pick, the
-// tournament/scaffold skips, skeleton-landed's mock-review gate), and with them the two doctrine
-// paragraphs that described the shortcut ("The mock app pre-empts the tournament" under §
-// Tournament of Scaffolds, "The mock app is the day-zero skeleton" under § Day-Zero Skeleton).
-// This test's own former assertions — that those two paragraphs (naming skipped: "mock-app" and
-// "mock-review check") EXIST — are exactly backwards now; it asserts their absence ANYWHERE in
-// the file instead, while keeping its other two clauses (design/approval.json under Brief State,
-// the shell-adopt/check --matrix/data-shell/components.json ban) untouched, since D9 does not
-// touch either.
-
-test('AC-20260914-02-7/AC-20260926-04-22: WHEN spec/doctrine/genesis.md is read THE SYSTEM SHALL name design/approval.json under Brief State, contain neither skipped: "mock-app" nor mock-review check anywhere, and contain none of shell adopt, check --matrix, data-shell, design/components.json', () => {
-  const doctrineSrc = read('spec/doctrine/genesis.md')
-
-  const briefStateMatch = doctrineSrc.match(/^## Genesis: Brief State$/m)
-  assert.ok(briefStateMatch,
-    'the "## Genesis: Brief State" heading (migrated by specs/20260902/08) must still exist as ' +
-    'the section boundary design/approval.json\'s derivation source lives inside')
-  const afterBriefState = doctrineSrc.slice(briefStateMatch.index + briefStateMatch[0].length)
-  const briefStateSection = afterBriefState.slice(0, (afterBriefState.match(/^## /m) || { index: afterBriefState.length }).index)
-  assert.match(briefStateSection, /design\/approval\.json/,
-    'AC-20260926-04-22: § Genesis: Brief State must still name "design/approval.json" as BRIEF\'s ' +
-    'journey-count source — its absence means the section no longer documents where ' +
-    'briefPreconditionCheck reads journeys from, even though D9 leaves that read unchanged')
-
-  assert.ok(!/skipped:\s*"mock-app"/.test(doctrineSrc),
-    'D9/AC-20260926-04-22: spec/doctrine/genesis.md must contain no `skipped: "mock-app"` ' +
-    'literal anywhere — its presence means the doctrine still describes the retired mock-app ' +
-    'tournament/scaffold-skip paragraph ("The mock app pre-empts the tournament") that D9 deletes')
-  assert.ok(!doctrineSrc.includes('mock-review check'),
-    'D9/AC-20260926-04-22: spec/doctrine/genesis.md must contain no "mock-review check" literal ' +
-    'anywhere — its presence means the doctrine still describes the retired day-zero-skeleton ' +
-    'paragraph ("The mock app is the day-zero skeleton") that D9 deletes')
-
-  for (const retired of ['shell adopt', 'check --matrix', 'data-shell', 'design/components.json']) {
-    assert.ok(!doctrineSrc.includes(retired),
-      'spec/doctrine/genesis.md must CONTINUE TO contain none of the retired second-artifact ' +
-      'mechanics — found "' + retired + '", which describes a check this repo no longer runs')
-  }
-})
-
 // specs/20260907/05-genesis-drops-the-theme-gates.md D6: § Genesis: Brief State and the
 // § Genesis: Discovery Interview `next:` prose twin drop the same `design/tokens.css` /
 // composed-but-unpicked-direction / retired-SKIN-REVIEW claims removed from the driver.
@@ -1242,6 +1148,19 @@ test('AC-20260907-05-8: spec/doctrine/genesis.md\'s § Genesis: Brief State sect
     'wireframes → theme → skin → review → approved") names SKIN and REVIEW, both retired ' +
     'states (D5), and a surviving mention here re-documents a chain the driver itself ' +
     'no longer prints')
+})
+
+// specs/20260926/04-the-design-brief.md D9: the retired second-artifact mechanics stay out of the
+// genesis doctrine. Kept as its own case when specs/20261002/01 D17 deleted the Brief State case
+// that used to carry it, because the ban outlives that case's subject.
+
+test('spec/doctrine/genesis.md contains none of shell adopt, check --matrix, data-shell, design/components.json', () => {
+  const doctrineSrc = read('spec/doctrine/genesis.md')
+  for (const retired of ['shell adopt', 'check --matrix', 'data-shell', 'design/components.json']) {
+    assert.ok(!doctrineSrc.includes(retired),
+      'spec/doctrine/genesis.md must CONTINUE TO contain none of the retired second-artifact ' +
+      'mechanics — found "' + retired + '", which describes a check this repo no longer runs')
+  }
 })
 
 // ---------------------------------------------------------------------------

@@ -74,12 +74,20 @@ function walkFilePlanTables(text) {
   return rows
 }
 
+// A cell entry is a path when it has a directory or an extension — or when it is one bare token
+// (`Dockerfile`, `Makefile`) on a row whose own Action cell opens with a file action, the one
+// thing that tells a root-level file without an extension from a placeholder word.
+const FILE_ACTION_RE = /^(create|modify|delete|rename|move)\b/i
+function rowPaths({ cells, actionIdx }) {
+  const hasAction = actionIdx >= 0 && FILE_ACTION_RE.test(cells[actionIdx] || '')
+  return splitPlanCell(cells[0] || '').filter(p => p.includes('/') || /\.[A-Za-z0-9]+$/.test(p) ||
+    (hasAction && /^[A-Za-z0-9_-]+$/.test(p)))
+}
+
 function parseFilePlan(text) {
   const paths = new Set()
-  for (const { cells } of walkFilePlanTables(text)) {
-    for (const p of splitPlanCell(cells[0] || '')) {
-      if (p.includes('/') || /\.[A-Za-z0-9]+$/.test(p)) paths.add(p)
-    }
+  for (const row of walkFilePlanTables(text)) {
+    for (const p of rowPaths(row)) paths.add(p)
   }
   return [...paths]
 }
@@ -101,8 +109,9 @@ function parseFilePlan(text) {
 // table-scoped `walkFilePlanTables` walker (D1) instead of two hand-duplicated section walks.
 function parseFilePlanRows(text) {
   const rows = []
-  for (const { cells, actionIdx, layerIdx } of walkFilePlanTables(text)) {
-    const paths = splitPlanCell(cells[0] || '').filter(p => p.includes('/') || /\.[A-Za-z0-9]+$/.test(p))
+  for (const row of walkFilePlanTables(text)) {
+    const { cells, actionIdx, layerIdx } = row
+    const paths = rowPaths(row)
     if (!paths.length) continue
     rows.push({
       paths,

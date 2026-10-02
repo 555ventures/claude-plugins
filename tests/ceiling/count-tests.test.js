@@ -436,3 +436,37 @@ test('AC-20260911-04-18: WHEN D10\'s regex-context widening (operators + - * % <
     'image must yield the identical total — a moved count means the widening was NOT the ' +
     'no-op D10\'s rationale claims: pre=' + beforeCount + ' head=' + afterCount)
 })
+
+test('scanCalls reads a modifier chain and a table form as one case each, and never a suite or hook member', () => {
+  const { scanCalls, scanDescribes } = require(testScanPath)
+  const src = [
+    "describe('suite', () => {",
+    "  it.each([[1, 2], [3, 4]])('adds %i', (a, b) => {})",
+    "  it.each`",
+    "    a | b",
+    "    ${1} | ${2}",
+    "  `('table $a', ({ a }) => {})",
+    "  test.for([1, 2])('for %i', (n) => {})",
+    "  it.concurrent.each([1])('chained %i', () => {})",
+    "  test.skip('a skipped case', () => {})",
+    "  test.skip(({ browserName }) => browserName !== 'chromium', 'a suite-level condition')",
+    "  it('plain', () => {})",
+    "})",
+    "test.describe('a playwright suite', () => {",
+    "  test.beforeEach(async () => {})",
+    "  test('inner', async () => {})",
+    "})",
+    "describe.each([1])('a table of suites %i', () => {})",
+    "item('not a case')",
+    "",
+  ].join('\n')
+  assert.deepStrictEqual(scanCalls(src).map((c) => c.title),
+    ['adds %i', 'table $a', 'for %i', 'chained %i', 'a skipped case', 'plain', 'inner'],
+    'each table form and modifier chain is one case titled by its own title argument; a ' +
+    'condition-first test.skip(, test.describe(, test.beforeEach(, describe.each( and item( are none')
+  assert.deepStrictEqual(scanDescribes(src).map((c) => c.title), ['suite'],
+    'the describe scan keeps matching the bare describe( only')
+  const each = scanCalls(src)[0]
+  assert.ok(each.callText.startsWith('it.each(') && each.callText.endsWith('=> {})'),
+    'a table case spans from its name through the closing paren of its SECOND group: ' + each.callText)
+})

@@ -661,3 +661,25 @@ test('AC-20260821-01-12: an AC carrying [pre-green:] with zero test hits SHALL C
     `before and after specs/20260821/01-red-check.md D6 lands the preGreen field — got ` +
     `${JSON.stringify(out.observed.acMatrix)}`)
 })
+
+test('a criterion whose → reuses pointer names exactly one test is covered in the full matrix; a pointer naming none stays uncovered', () => {
+  const dir = tmpdir('acm-reuses')
+  fs.mkdirSync(path.join(dir, 'specs/20261002'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/old.test.js'),
+    "test('opens on step 1 with the address replaced (AC-20260920-04-6)', () => {})\n")
+  fs.writeFileSync(path.join(dir, 'tests/new.test.js'), "test('AC-20261002-01-1: new', () => {})\n")
+  const spec = path.join(dir, 'specs/20261002/01-x.md')
+  fs.writeFileSync(spec, '# Spec\n\n## Acceptance Criteria\n\n' +
+    '- **AC-20261002-01-1**: WHEN a THE SYSTEM SHALL b → writes tests/new.test.js\n' +
+    '- **AC-20261002-01-2**: WHEN a THE SYSTEM SHALL CONTINUE TO b → reuses tests/old.test.js :: opens on step 1\n' +
+    '- **AC-20261002-01-3**: WHEN a THE SYSTEM SHALL CONTINUE TO b → reuses tests/old.test.js :: a title nothing has\n\n' +
+    '## File Plan\n\n| File | Action | Layer | Summary |\n|---|---|---|---|\n' +
+    '| tests/new.test.js | CREATE | tests | AC-20261002-01-1 |\n')
+  const manifest = path.join(dir, 'manifest.jsonl')
+  fs.writeFileSync(manifest, '')
+  const res = runNode('scripts/ac-matrix.js', ['--spec', spec, '--root', dir, '--manifest', manifest, '--json'])
+  const out = JSON.parse(res.stdout)
+  assert.deepStrictEqual(out.findings.filter((f) => f.class === 'uncovered-ac').map((f) => f.ac), ['AC-20261002-01-3'],
+    'the reused test outside the File Plan covers its pin; the dangling pointer does not: ' + res.stdout)
+})

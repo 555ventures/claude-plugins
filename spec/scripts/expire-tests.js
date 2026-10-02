@@ -28,7 +28,10 @@
 // `class` keys, top-level or nested in `incidents[]`); (b) its FILE's text names the basename of
 // a script in lib/invariants.js's derived set (a script the pipeline itself runs); (c) a cited AC
 // bullet (normalized whitespace, code spans stripped) contains `SHALL CONTINUE TO` and its own
-// spec is dated on or after the 20260911 floor. An AC-ID whose owning spec cannot be found, whose
+// spec is dated on or after the 20260911 floor — or the test is the one a `SHALL CONTINUE TO`
+// bullet of any such spec that is not superseded names with `→ reuses <file> :: <title>`, whatever
+// id the test itself carries (a reused test keeps the tag of the spec that wrote it; a pointer
+// matching several cases keeps them all). An AC-ID whose owning spec cannot be found, whose
 // spec is neither done nor superseded, or whose owning spec file cannot be read at all keeps the
 // test open rather than retiring it — every unknown fails safe. A spec file under `specs/` that
 // throws on read is never silently skipped (specs/20260912/15 D6/D7): it is recorded as an
@@ -61,9 +64,11 @@
 
 const fs = require('fs')
 const path = require('path')
-const { listTestFiles, scanCalls, scanDescribes } = require('./lib/scan-test-calls')
+const { listTestFiles, scanCalls, scanDescribes, resolveReference } = require('./lib/scan-test-calls')
 const { deriveInvariants } = require('./lib/invariants')
-const { extractSection, parseAcBullets, AC_ID_RE_GLOBAL, normalizeForPinCheck } = require('./lib/spec-sections')
+const {
+  extractSection, parseAcBullets, AC_ID_RE_GLOBAL, normalizeForPinCheck, parseDisposition,
+} = require('./lib/spec-sections')
 const { fmValue } = require('./lib/frontmatter')
 const { readConfig } = require('./lib/host-config')
 
@@ -185,6 +190,7 @@ function derivedAcPrefix(rel) {
 }
 
 const acOwners = new Map()
+const pinnedByReference = new Map() // test file -> Set(call start) a live pin's `→ reuses` names
 const unreadableSpecs = [] // [{ rel, prefix }]
 for (const f of specFiles) {
   const rel = relPosix(f)
@@ -205,6 +211,14 @@ for (const f of specFiles) {
     if (bullet.malformed) continue
     if (!acOwners.has(bullet.id)) acOwners.set(bullet.id, [])
     acOwners.get(bullet.id).push({ specRel: rel, status, raw: bullet.raw, dateStr })
+    if (status === 'superseded' || !dateStr || dateStr < EXPIRY_APPLIES_FROM) continue
+    if (!/SHALL CONTINUE TO/.test(normalizeForPinCheck(bullet.raw))) continue
+    const disposition = parseDisposition(bullet.raw)
+    if (!disposition || disposition.kind !== 'reuses') continue
+    for (const call of resolveReference(root, disposition.file, disposition.prefix)) {
+      if (!pinnedByReference.has(disposition.file)) pinnedByReference.set(disposition.file, new Set())
+      pinnedByReference.get(disposition.file).add(call.start)
+    }
   }
 }
 
@@ -289,7 +303,7 @@ function allCitedDone(ids) {
   })
 }
 
-function classify(call, ids, fileText) {
+function classify(call, ids, fileText, file) {
   if (!allCitedDone(ids)) return 'open'
   for (const cls of escapeClasses) {
     if (call.callText.includes(cls)) return 'class'
@@ -304,6 +318,8 @@ function classify(call, ids, fileText) {
       if (/SHALL CONTINUE TO/.test(normalizeForPinCheck(owner.raw))) return 'pin'
     }
   }
+  const referenced = pinnedByReference.get(file)
+  if (referenced && referenced.has(call.start)) return 'pin'
   return 'retired'
 }
 
@@ -328,7 +344,7 @@ for (const file of testFiles) {
       ? ids.some((id) => closingSpecAcIds.has(id))
       : true // --all-done: every tagged test is in scope
     if (!inScope) continue
-    const cls = classify(call, ids, src)
+    const cls = classify(call, ids, src, file)
     if (cls === 'retired') {
       retired.push({ file, acIds: ids, title: call.title })
       if (!retiredByFile.has(file)) retiredByFile.set(file, [])

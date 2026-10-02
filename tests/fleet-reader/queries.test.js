@@ -156,3 +156,16 @@ test('Incident Policy: build-row incidents join escapes.byClass and reach recurr
   assert.match(bare.stdout, /byClass \(escapes \+ build incidents\)/, 'the human render says byClass is the joined count')
 })
 
+
+test('a prototype row the freeze writes is a known stage in the drift census, and an invented stage is not', () => {
+  const root = tmpdir('fleet-prototype-stage')
+  mkRepo(root, 'repo-a', {
+    rows: [
+      { ts: '2026-10-01T00:00:00Z', stage: 'prototype', spec: 'specs/20261001/01-x.md' },
+      { ts: '2026-10-01T00:00:01Z', stage: 'invented', spec: 'specs/20261001/01-x.md' },
+    ],
+  })
+  const repo = runJson(root).driftCensus.byRepo.find((x) => x.name === 'repo-a')
+  assert.strictEqual(repo.inShape, 1, JSON.stringify(repo))
+  assert.deepStrictEqual(repo.drift, { 'stage-unknown': 1 }, JSON.stringify(repo))
+})

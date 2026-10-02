@@ -11,7 +11,8 @@
 // `## Acceptance Criteria` (lib/spec-sections.js's `extractSection`/`parseAcBullets`) and reports
 // two things: a `[retired: <citation>]` tag whose value names no `specs/*.md` or `docs/adr/` path,
 // and a `SHALL CONTINUE TO` pin in a spec dated on or after EXPIRY_APPLIES_FROM that no
-// test-classified file cites (full-token, `acIdOccurs`). Every other criterion of a done spec
+// test-classified file cites (full-token, `acIdOccurs`) and whose own `→ reuses <file> :: <title>`
+// pointer, when it carries one, does not name exactly one case. Every other criterion of a done spec
 // has expired: its test was allowed to die at close (pins are the opt-in exception, 2026-09-11).
 // `/spec:doctor` runs this as check 17, advisory.
 //
@@ -30,7 +31,9 @@ const path = require('path')
 const { fmValue } = require('./lib/frontmatter')
 const {
   extractSection, parseAcBullets, acIdOccurs, extractTag, V7_APPLIES_FROM, normalizeForPinCheck,
+  parseDisposition,
 } = require('./lib/spec-sections')
+const { resolveReference } = require('./lib/scan-test-calls')
 const { readConfig, DEFAULT_TEST_GLOBS } = require('./lib/host-config')
 const { globMatch } = require('./lib/glob-match')
 
@@ -184,6 +187,18 @@ for (const specFile of specFiles) {
     }
 
     if (!pinned || dateMatch[1] < EXPIRY_APPLIES_FROM) continue // expired at close — not drift
+    // A reused test keeps the tag of the spec that wrote it — the pin's own pointer is the link.
+    const disposition = parseDisposition(bullet.raw)
+    if (disposition && disposition.kind === 'reuses') {
+      const matches = resolveReference(root, disposition.file, disposition.prefix).length
+      if (matches === 1) continue
+      findings.push({
+        spec: rel, ac: bullet.id, class: 'uncovered-ac',
+        detail: 'no test cites it, and its reuses reference "' + disposition.file + ' :: ' +
+          disposition.prefix + '" names ' + matches + ' tests (need exactly 1)',
+      })
+      continue
+    }
     findings.push({ spec: rel, ac: bullet.id, class: 'uncovered-ac', detail: 'no test cites it' })
   }
 }

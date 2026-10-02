@@ -100,9 +100,11 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     - a `hardened`/`implementing`/`done` spec containing a live `[NEEDS CLARIFICATION:`
       marker (colon form) is broken.
 12. **Run ledger hygiene** (only if `.claude/spec-runs.jsonl` exists) — script passes
-    (`jq`/`awk`), never read the ledger into context. Every line parses as JSON with `stage` ∈
-    `plan | build | review | replay | escape | escape-class | observe | release` (`observe` rows are a retired
-    v6 class — valid history; v7 rows carry structured fields). Field expectations are per-class: v7 build
+    (`jq`/`awk`), never read the ledger into context. Every line parses as JSON with a known `stage`:
+    this repo's `driftCensus.byRepo` entry in `node "$(spec-paths fleet-reader)" --json` reads
+    `unparseable: 0` and carries no `drift["stage-unknown"]` — the stage set is that script's, never
+    restated here (`observe` rows are a retired v6 class — valid history; v7 rows carry structured
+    fields). Field expectations are per-class: v7 build
     and review rows carry no `runId` (older rows may; a `runId`-bearing row is history, never a
     flag); escape and release rows carry their own field sets. The file is tracked by git, and
     `git check-attr merge -- .claude/spec-runs.jsonl` reports `union` (without it, parallel

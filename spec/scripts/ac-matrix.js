@@ -22,6 +22,8 @@
 // matcher but the shared lib/glob-match.js, or own the AC-ID grammar / `## ` section extraction
 // / AC-bullet parsing — those are lifted verbatim into lib/spec-sections.js (specs/20260817/07-
 // promise-sweep-leg D3), the single authority a sibling script (promise-sweep.js) also imports;
+// or read a `→ reuses` pointer itself — lib/scan-test-calls.js's resolveReference is the one
+// reading the lint, the coverage matrix, ac-drift.js and expire-tests.js share;
 // no test named `ac-id-lint.test.js` lifts the regex from this file's source (that test does
 // not exist).
 //
@@ -129,7 +131,7 @@ const {
   AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets, acIdOccurs,
   rejectedTrailingTagDetail, pinShape, parseDisposition, DISPOSITION_APPLIES_FROM,
 } = require('./lib/spec-sections')
-const { scanCalls } = require('./lib/scan-test-calls')
+const { resolveReference } = require('./lib/scan-test-calls')
 const { writeOut } = require('./lib/driver-io')
 
 // A script that prints a payload and exits routes through a synchronous writer — the 64 KiB pipe
@@ -193,6 +195,9 @@ if (acSection === null) {
 const bullets = parseAcBullets(acSection)
 const wellFormed = bullets.filter(b => !b.malformed)
 
+const specDateMatch = /specs\/(\d{8})\//.exec(specPath)
+const dispositionApplies = !!(specDateMatch && specDateMatch[1] >= DISPOSITION_APPLIES_FROM)
+
 // D1/D3: --lint returns HERE, before the full mode's File Plan read, coverage grep, or manifest
 // append — Fragile note above: this must run before the `--root`/`--manifest` requirement check,
 // not after it (a --lint invocation supplies neither flag).
@@ -232,8 +237,6 @@ if (lintMode) {
   // own applicability cutoff uses). An inapplicable (undated, or pre-floor-dated) spec computes
   // neither counter and carries neither key in --json's observed.lint — every pre-existing tmpdir
   // fixture (no specs/<date>/ segment) keeps today's exact 3-key shape (AC-20260907-01-4).
-  const specDateMatch = /specs\/(\d{8})\//.exec(specPath)
-  const dispositionApplies = !!(specDateMatch && specDateMatch[1] >= DISPOSITION_APPLIES_FROM)
   let missingDispositionCount = 0
   let unresolvedDispositionCount = 0
   if (dispositionApplies) {
@@ -251,9 +254,7 @@ if (lintMode) {
       // D4: reference resolution is the SEPARATE opt-in --resolve-root flag — a `writes`
       // disposition names a file that does not exist yet, so only rewrites/reuses resolve.
       if (resolveRoot && (disposition.kind === 'rewrites' || disposition.kind === 'reuses')) {
-        let src = null
-        try { src = fs.readFileSync(path.join(resolveRoot, disposition.file), 'utf8') } catch { src = null }
-        const matches = src === null ? 0 : scanCalls(src).filter(c => c.title.startsWith(disposition.prefix)).length
+        const matches = resolveReference(resolveRoot, disposition.file, disposition.prefix).length
         if (matches !== 1) {
           unresolvedDispositionCount++
           lintFindings.push({
@@ -422,6 +423,14 @@ for (const b of wellFormed) {
       if (!fileAcMap.has(f)) fileAcMap.set(f, new Set())
       fileAcMap.get(f).add(b.id)
     }
+  }
+  // A `→ reuses` pointer naming exactly one case is that criterion's cover: a reused test keeps
+  // the tag of the spec that wrote it, so the id grep above can never find it. The file stays out
+  // of fileAcMap — a skip in it still maps through the id the test itself carries.
+  if (hits === 0 && dispositionApplies) {
+    const disposition = parseDisposition(b.raw)
+    if (disposition && disposition.kind === 'reuses' &&
+      resolveReference(root, disposition.file, disposition.prefix).length === 1) hits = 1
   }
   acHits.set(b.id, hits)
 }

@@ -190,8 +190,20 @@ test('AC-20260816-03-6: a data row whose first cell is literally "file" between 
     're-derive actionIdx/layerIdx from the "file"/"CREATE"/"tests" row itself — neither "CREATE" nor ' +
     '"tests" matches /^actions?$/i or /^layers?$/i, so that rebind would leave both indices at -1 and ' +
     'null out src/b.js')
-  assert.ok(!bareFileRow,
-    'the bare "file" row itself is not a data row under test here (dropped by the existing path-shape ' +
-    'filter — "file" has neither a "/" nor a file extension) — if it appears in the output, the ' +
-    'path-shape filter regressed, not this table-scoping invariant')
+  assert.deepStrictEqual(
+    bareFileRow && { action: bareFileRow.action, layer: bareFileRow.layer },
+    { action: 'CREATE', layer: 'tests' },
+    'the bare "file" row carries a file action, so it is a data row naming a root-level file — and it ' +
+    'reads its Action/Layer from the same one header as its neighbours, never as a header itself')
+})
+
+test('a bare root-level file name is a File Plan path when its row carries a file action, and a bare word on a row without one is not', () => {
+  const text = '## File Plan\n\n' +
+    '| File | Action | Layer | Summary |\n|---|---|---|---|\n' +
+    '| Dockerfile | CREATE | other | image |\n' +
+    '| `Makefile` | MODIFY | other | targets |\n' +
+    '| none | — | — | nothing here |\n' +
+    '| src/a.ts | MODIFY | domain | x |\n'
+  assert.deepStrictEqual(parseFilePlan(text), ['Dockerfile', 'Makefile', 'src/a.ts'])
+  assert.deepStrictEqual(parseFilePlanRows(text).map((r) => r.paths[0]), ['Dockerfile', 'Makefile', 'src/a.ts'])
 })

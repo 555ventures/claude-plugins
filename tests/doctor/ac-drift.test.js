@@ -322,3 +322,22 @@ test('AC-20260906-01-9: spec-paths resolves the ac-drift key to an existing file
     `spec/commands/doctor.md, or the entrypoint-conformance checker cannot see this script is activated — ` +
     `got ${JSON.stringify(row)}`)
 })
+
+test('a pin whose → reuses pointer names exactly one test is covered without the id on that test; a pointer naming none or several is reported with its count', () => {
+  const dir = tmpdir('ac-drift-reuses')
+  writeSpec(dir, 'specs/20261002/01-x.md', 'done', [
+    '- **AC-20261002-01-1**: WHEN a THE SYSTEM SHALL CONTINUE TO b → reuses tests/old.test.js :: opens on step 1',
+    '- **AC-20261002-01-2**: WHEN a THE SYSTEM SHALL CONTINUE TO b → reuses tests/old.test.js :: a title nothing has',
+    '- **AC-20261002-01-3**: WHEN a THE SYSTEM SHALL CONTINUE TO b → reuses tests/old.test.js :: twin',
+  ])
+  writeFile(dir, 'tests/old.test.js',
+    "test('opens on step 1 with the address replaced (AC-20260920-04-6)', () => {})\n" +
+    "test('twin one', () => {})\ntest('twin two', () => {})\n")
+  const res = run(dir, ['--json'])
+  const out = parseJson(res)
+  assert.strictEqual(res.status, 1, res.stderr)
+  assert.deepStrictEqual(out.findings.map((f) => f.ac), ['AC-20261002-01-2', 'AC-20261002-01-3'],
+    'the resolved pointer covers its pin; the dangling and the ambiguous one stay drift')
+  assert.ok(out.findings[0].detail.includes('names 0 tests') && out.findings[1].detail.includes('names 2 tests'),
+    'each finding says how many tests its pointer named: ' + JSON.stringify(out.findings))
+})

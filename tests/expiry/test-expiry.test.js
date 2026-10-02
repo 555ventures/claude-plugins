@@ -706,3 +706,73 @@ test('AC-20260911-03-9: WHEN expire-tests.js --root . --all-done --json runs ove
     }
   }
 })
+
+function writeExpiryHost(prefix) {
+  const root = tmpdir(prefix)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({ gateCommand: 'true' }))
+  writeSpec(root, 'specs/20260920/01-old.md', `---
+status: done
+---
+# Old
+
+## Acceptance Criteria
+
+- **AC-20260920-01-1**: WHEN a THE SYSTEM SHALL b
+- **AC-20260920-01-2**: WHEN c THE SYSTEM SHALL d
+`)
+  return root
+}
+
+test('a file whose remaining cases are table cases is rewritten, never deleted, and a tagged table case is retired and reported like any other', () => {
+  const root = writeExpiryHost('expiry-each')
+  writeTest(root, 'tests/words.test.js', `import { it } from 'vitest'
+it('a plain retired case (AC-20260920-01-1)', () => {})
+it.each([1, 2])('an untagged table case %i', (n) => {})
+// AC-20260920-01-2
+it.each([3])('a tagged table case %i', (n) => {})
+`)
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--apply', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.strictEqual(out.scanned, 3, 'both table cases are counted beside the plain one: ' + r.stdout)
+  assert.deepStrictEqual(out.retired.map((x) => x.title).sort(),
+    ['a plain retired case (AC-20260920-01-1)', 'a tagged table case %i'],
+    'the tagged table case is retired and named in the report, never dropped unseen')
+  assert.deepStrictEqual(out.emptied, [], 'the untagged table case keeps its file')
+  const left = fs.readFileSync(path.join(root, 'tests/words.test.js'), 'utf8')
+  assert.ok(left.includes("it.each([1, 2])('an untagged table case %i'"), 'the untagged table case survives the apply byte-for-byte: ' + left)
+  assert.ok(!left.includes('a tagged table case') && !left.includes('a plain retired case'), 'both retired cases are gone: ' + left)
+})
+
+test('a test a live pin names with → reuses is kept under the old, done id it carries; a superseded spec\'s pointer keeps nothing', () => {
+  const root = writeExpiryHost('expiry-reuses')
+  writeSpec(root, 'specs/20261002/01-new.md', `---
+status: hardened
+---
+# New
+
+## Acceptance Criteria
+
+- **AC-20261002-01-1**: WHEN a THE SYSTEM SHALL CONTINUE TO b → reuses tests/old.test.js :: opens on step 1
+`)
+  writeSpec(root, 'specs/20261002/02-dead.md', `---
+status: superseded
+---
+# Dead
+
+## Acceptance Criteria
+
+- **AC-20261002-02-1**: WHEN c THE SYSTEM SHALL CONTINUE TO d → reuses tests/old.test.js :: the other case
+`)
+  writeTest(root, 'tests/old.test.js', `import { test } from 'vitest'
+test('opens on step 1 with the address replaced (AC-20260920-01-1)', () => {})
+test('the other case (AC-20260920-01-2)', () => {})
+`)
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.strictEqual(out.kept.pin, 1, 'the pointed-at test is kept as a pin: ' + r.stdout)
+  assert.deepStrictEqual(out.retired.map((x) => x.title), ['the other case (AC-20260920-01-2)'],
+    'only the test no live pin names is retired')
+})

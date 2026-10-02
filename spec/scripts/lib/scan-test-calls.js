@@ -3,7 +3,8 @@
 // ceiling.md D2). Exports `listTestFiles(root, config)` (host testGlobs-classified files,
 // skipping `.git`, `node_modules`, `fixtures`, `__fixtures__`, `.claude/worktrees`),
 // `scanCalls(src)` (every line-start `test(`/`it(` call in one source string), and
-// `countCases(root, config)` (the two composed). count-tests.js and ac-drift.js's expiry sweep
+// `countCases(root, config)` (the two composed), and `resolveReference(root, file, prefix)` (the
+// cases a `→ reuses` pointer names). count-tests.js and ac-drift.js's expiry sweep
 // both import this so the two never disagree about what a test case is. `scanDescribes(src)`
 // finds line-start `describe(` calls with the same walk (expire-tests.js's empty-suite pass). Named away from the
 // `test-*` prefix (the amendment's forcing incident: `node --test`'s default discovery matches
@@ -12,6 +13,12 @@
 // A case is a `test(` or `it(` call whose only preceding characters on its own line are
 // whitespace — `describe(` and `t.test(` are never counted (the leading-token check fails: the
 // former's name doesn't match, the latter has a non-whitespace `t.` before it on the line).
+// A modifier chain is the same case: `it.only(`/`.skip(`/`.concurrent(`/`.sequential(`/`.fails(`/
+// `.todo(`/`.fixme(` when the first argument is a string or template literal (so a suite-level
+// `test.skip(condition, 'why')` is never one), and the table forms `it.each(table)(` /
+// `it.each\`table\`(` / `test.for(table)(`, whose title is the SECOND group's first argument.
+// Any other member (`test.describe(`, `test.beforeEach(`, `test.use(`, `test.step(`) never
+// matches — the first of those is a suite, and reading it as one case would swallow its body.
 // The scanner walks the whole source once, skipping string/template literals, `//` and `/* */`
 // comments, and regex literals as opaque spans so a quote or paren inside one of them can never
 // desynchronize the paren-depth count that finds a call's own closing paren (AC-20260911-02-4).
@@ -25,8 +32,8 @@
 // (AC-20260911-02-4's second shape, the amendment's forcing incident).
 //
 // What this deliberately does NOT do: understand JSX, decorators, or any transpiled syntax
-// (plain post-Node-current-syntax test files only); count `describe(`/`t.test(`/any other call
-// name; or classify a directory tree not already walked into `listTestFiles`'s result.
+// (plain post-Node-current-syntax test files only); count `describe(`/`describe.each(`/`t.test(`/
+// any other call name; or classify a directory tree not already walked into `listTestFiles`'s result.
 //
 // Exit codes: n/a (library, not an entrypoint).
 
@@ -212,6 +219,38 @@ function findCommentAbove(src, lineStart) {
   return idx
 }
 
+// Members that leave a `test`/`it` call a case, and the two whose first group is a table.
+const CASE_MODIFIERS = new Set(['only', 'skip', 'concurrent', 'sequential', 'fails', 'todo', 'fixme'])
+const TABLE_MODIFIERS = new Set(['each', 'for'])
+
+// The index of the `(` that opens the call's own argument list when `name`, optionally followed
+// by a modifier chain, starts at `i` — or -1. `modifiers` false matches the bare `name(` only.
+function matchCallOpen(src, i, name, modifiers) {
+  if (!src.startsWith(name, i)) return -1
+  let pos = i + name.length
+  if (src[pos] === '(') return pos
+  if (!modifiers) return -1
+  let table = false
+  while (src[pos] === '.') {
+    const m = /^[A-Za-z]+/.exec(src.slice(pos + 1, pos + 24))
+    if (!m) return -1
+    pos += 1 + m[0].length
+    if (TABLE_MODIFIERS.has(m[0])) { table = true; break }
+    if (!CASE_MODIFIERS.has(m[0])) return -1
+  }
+  if (table) {
+    if (src[pos] === '(') pos = findCallEnd(src, pos)
+    else if (src[pos] === '`') pos = skipTemplate(src, pos)
+    else return -1
+    while (pos < src.length && /\s/.test(src[pos])) pos++
+    return src[pos] === '(' ? pos : -1
+  }
+  if (src[pos] !== '(') return -1
+  let arg = pos + 1
+  while (arg < src.length && /\s/.test(src[arg])) arg++
+  return src[arg] === '\'' || src[arg] === '"' || src[arg] === '`' ? pos : -1
+}
+
 // scanCalls(src) -> [{ start, end, callText, title, commentAbove }] — see the Contracts block
 // in specs/20260911/02-tests-have-a-ceiling.md for the field shapes.
 function scanCalls(src) {
@@ -226,8 +265,9 @@ function scanDescribes(src) {
 }
 
 // The one opaque-span-aware walk behind both: `names` are the call names matched at line start;
-// `skipBody` jumps past a matched call's own closing paren (cases never nest), otherwise the
-// walk continues into the body so a nested match is found too.
+// `skipBody` jumps past a matched call's own closing paren (cases never nest) and admits a case's
+// modifier chain, otherwise the walk continues into the body so a nested match is found too.
+
 function scanLineStartCalls(src, names, skipBody) {
   const calls = []
   const n = src.length
@@ -255,12 +295,16 @@ function scanLineStartCalls(src, names, skipBody) {
       i++
       continue
     }
-    const name = names.find((nm) => c === nm[0] && src.startsWith(nm + '(', i))
-    if (name) {
+    let openParen = -1
+    for (const nm of names) {
+      if (c !== nm[0]) continue
+      openParen = matchCallOpen(src, i, nm, skipBody)
+      if (openParen !== -1) break
+    }
+    if (openParen !== -1) {
       const lineStart = src.lastIndexOf('\n', i - 1) + 1
       const before = src.slice(lineStart, i)
       if (/^\s*$/.test(before)) {
-        const openParen = i + name.length
         const callEnd = findCallEnd(src, openParen)
         const title = extractTitle(src, openParen)
         // D10 (specs/20260911/04-every-criterion-declares-its-test.md): only a trailing `;` is
@@ -294,6 +338,18 @@ function scanLineStartCalls(src, names, skipBody) {
   return calls
 }
 
+// resolveReference(root, file, prefix) -> the cases in `file` whose title starts with `prefix` —
+// the one reading of a `→ reuses <file> :: <title>` pointer (lib/spec-sections.js's
+// parseDisposition), shared by the review coverage matrix, the drift check and the expiry sweep.
+// An unreadable file or a null prefix resolves to no case.
+function resolveReference(root, file, prefix) {
+  if (typeof prefix !== 'string' || !prefix) return []
+  let src
+  try { src = fs.readFileSync(path.join(root, file), 'utf8') } catch { return [] }
+  return scanCalls(src).filter((c) => c.title.startsWith(prefix))
+}
+
+
 function countCases(root, config) {
   const files = listTestFiles(root, config)
   let count = 0
@@ -305,4 +361,4 @@ function countCases(root, config) {
   return { count, files }
 }
 
-module.exports = { listTestFiles, scanCalls, scanDescribes, countCases }
+module.exports = { listTestFiles, scanCalls, scanDescribes, countCases, resolveReference }

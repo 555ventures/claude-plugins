@@ -194,7 +194,8 @@ mode with a round, pulls notes and refuses the first waiting item (an `answered`
 not block — a client who disagrees reopens it by replying); runs the ledger gate; appends one
 `exclusion` ledger row per deferred note or journey thread (claim: its first entry, tag
 `said-by-user`, note `deferred: <id>`, never twice); closes the round with `walkthrough.js
-mark --status closed` — a failed close refuses with nothing recorded — then records
+mark --status closed` — a failed close refuses before `marks.approved` is set; the exclusion
+rows already written stay and are not duplicated on retry — then records
 `marks.approved`. The stage finishes when every story is confirmed and nothing waits for an
 answer.
 

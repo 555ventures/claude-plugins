@@ -26,6 +26,7 @@ const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { globMatch } = require('./glob-match')
+const { CONFIG_RELPATH } = require('./host-config')
 
 // ---------------------------------------------------------------------------
 // D3(2): compositeNames — kit-composite names declared for this host.
@@ -533,7 +534,7 @@ function riskTierHits({ root, config, paths }) {
   const rulesPath = config && config.pipelineRules
   const fail = () => ({
     ok: false,
-    message: 'cannot derive the generated spec\'s tier — ' + rulesPath + ' is unreadable or has no "## Risk Tiers" section; ' +
+    message: 'cannot derive the generated spec\'s tier — ' + (typeof rulesPath === 'string' && rulesPath ? rulesPath : 'pipelineRules (unset in ' + CONFIG_RELPATH + ')') + ' is unreadable or has no "## Risk Tiers" section; ' +
       'remedy: run /spec:doctor, then re-run --mark tests-derived',
   })
   if (typeof rulesPath !== 'string' || rulesPath === '') return fail()

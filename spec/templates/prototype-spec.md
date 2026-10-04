@@ -47,7 +47,6 @@ tier: {{tier}}
 area: {{area}}
 breaking: false
 depends_on: []
-depended_on_by: []
 brief: {{brief}}
 lane: behaviour
 open_markers: 0

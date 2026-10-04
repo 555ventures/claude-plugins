@@ -776,3 +776,111 @@ test('the other case (AC-20260920-01-2)', () => {})
   assert.deepStrictEqual(out.retired.map((x) => x.title), ['the other case (AC-20260920-01-2)'],
     'only the test no live pin names is retired')
 })
+
+function setGate(root, gateCommand) {
+  const cfg = gateCommand === null ? {} : { gateCommand }
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify(cfg))
+}
+
+// A host whose sweep trims one file and deletes another (taking its directory with it).
+function writeSweepHost(prefix) {
+  const root = writeExpiryHost(prefix)
+  writeTest(root, 'tests/trimmed.test.js', `import { test } from 'vitest'
+test('retired (AC-20260920-01-1)', () => {})
+test('a live untagged case', () => {})
+`)
+  writeTest(root, 'tests/gone/only.test.js', `import { test } from 'vitest'
+test('retired too (AC-20260920-01-2)', () => {})
+`)
+  return root
+}
+
+const readTree = (root, rels) => rels.map((rel) => {
+  const abs = path.join(root, rel)
+  return fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : null
+})
+
+test('WHEN --apply leaves the host gate red THE SYSTEM restores every trimmed and deleted file byte-for-byte, exits 1, names the gate and its output on stderr, and reports applied:false with gate.reverted', () => {
+  const root = writeSweepHost('expiry-gate-red')
+  setGate(root, 'node -e "console.log(\'domain gate: gone/only has no tests\'); process.exit(require(\'fs\').existsSync(\'tests/gone/only.test.js\') ? 0 : 3)"')
+  const rels = ['tests/trimmed.test.js', 'tests/gone/only.test.js']
+  const before = readTree(root, rels)
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--apply', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 1, 'a red gate after the sweep is a finding, never exit 0: ' + r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.strictEqual(out.applied, false, 'a reverted sweep was not applied: ' + r.stdout)
+  assert.strictEqual(out.gate.ok, false)
+  assert.strictEqual(out.gate.reverted, true)
+  assert.deepStrictEqual(readTree(root, rels), before, 'every touched file is back byte-for-byte, its directory included')
+  assert.match(r.stderr, /went red after the sweep \(exit 3\)/)
+  assert.match(r.stderr, /domain gate: gone\/only has no tests/, 'the gate\'s own output tail reaches the user')
+})
+
+test('WHEN --apply --keep-on-red leaves the host gate red THE SYSTEM keeps the writes, exits 1, and reports gate.reverted false', () => {
+  const root = writeSweepHost('expiry-gate-keep')
+  setGate(root, 'exit 3')
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--apply', '--keep-on-red', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 1, r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.strictEqual(out.applied, true)
+  assert.deepStrictEqual(out.gate, { command: 'exit 3', ok: false, reverted: false })
+  assert.ok(!fs.existsSync(path.join(root, 'tests/gone')), 'the emptied file and its directory stay deleted')
+  assert.ok(!fs.readFileSync(path.join(root, 'tests/trimmed.test.js'), 'utf8').includes('retired ('))
+})
+
+test('WHEN --apply runs on a host with no gateCommand THE SYSTEM applies, exits 0, and warns on stderr that nothing checked the sweep; a dry run never runs the gate', () => {
+  const root = writeSweepHost('expiry-gate-none')
+  setGate(root, null)
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--apply', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr)
+  assert.strictEqual(JSON.parse(r.stdout).gate, null)
+  assert.match(r.stderr, /no gateCommand/)
+
+  const dry = writeSweepHost('expiry-gate-dry')
+  setGate(dry, 'touch ran-the-gate')
+  const d = runNode('scripts/expire-tests.js', ['--root', dry, '--all-done', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(d.status, 0, d.stdout + d.stderr)
+  assert.ok(!fs.existsSync(path.join(dry, 'ran-the-gate')), 'a dry run never runs the host gate')
+})
+
+test('an invariant script keeps a test file only when the file names it as a whole name — catalog.json never names log.js, health.json() never names health.js', () => {
+  const root = writeExpiryHost('expiry-whole-name')
+  setGate(root, 'node scripts/log.js && node scripts/health.js')
+  writeTest(root, 'scripts/log.js', '\n')
+  writeTest(root, 'scripts/health.js', '\n')
+  writeTest(root, 'tests/false-hit.test.js', `import { test } from 'vitest'
+const words = 'catalog.json'
+const probe = (r) => r.health.json()
+test('retired despite the look-alike names (AC-20260920-01-1)', () => {})
+`)
+  writeTest(root, 'tests/real-hit.test.js', `import { test } from 'vitest'
+const script = 'scripts/log.js'
+test('kept: this file names a script the gate runs (AC-20260920-01-2)', () => {})
+`)
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.strictEqual(out.kept.invariant, 1, r.stdout)
+  assert.deepStrictEqual(out.retired.map((x) => x.file), ['tests/false-hit.test.js'])
+})
+
+test('a git-ignored build directory is not the host — its copies of scripts and tests never change what the sweep keeps or retires', () => {
+  const root = writeExpiryHost('expiry-ignored')
+  setGate(root, 'node scripts/gate.js')
+  writeTest(root, 'scripts/gate.js', '\n')
+  writeTest(root, 'tests/a.test.js', `import { test } from 'vitest'
+test('retired (AC-20260920-01-1)', () => {})
+`)
+  fs.writeFileSync(path.join(root, '.gitignore'), 'dist/\n')
+  execFileSync('git', ['init', '-q', root])
+  const clean = JSON.parse(runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--json'], { encoding: 'utf8' }).stdout)
+  // A build copies the tests and a script whose name the test file happens to mention.
+  writeTest(root, 'dist/tests/a.test.js', `import { test } from 'vitest'
+test('a built copy (AC-20260920-01-2)', () => {})
+`)
+  writeTest(root, 'dist/scripts/gate.js', "require('./a.test.js')\n")
+  const built = JSON.parse(runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--json'], { encoding: 'utf8' }).stdout)
+  assert.deepStrictEqual(built, clean, 'the ignored dist/ tree changes nothing in the report')
+  const inv = runNode('scripts/expire-tests.js', ['--root', root, '--invariants'], { encoding: 'utf8' })
+  assert.strictEqual(inv.stdout.trim(), 'scripts/gate.js', 'the invariant set holds no ignored script: ' + inv.stdout)
+})

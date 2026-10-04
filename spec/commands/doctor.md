@@ -168,7 +168,7 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     ids and the review coverage grep cannot tell whose test it found — either spec can pass its
     coverage leg on the other's tests with a criterion that has no test anywhere. Remedy = renumber
     whichever spec has not yet built to the next free number in its directory, rewriting its AC-ids,
-    its `depends_on`/`depended_on_by` backlinks and any run-ledger `spec` path with it.
+    every `depends_on` entry that names it and any run-ledger `spec` path with it.
 19. **Fixed test ports** (deterministic, advisory) — run
     `node "$(spec-paths port-check)" --root .`. Each printed line is a fixed or computed port
     literal under `tests/`; remedy = bind `--port 0` / `listen(0)` and read the bound port back

@@ -15,19 +15,23 @@
 // `node_modules` link) and the skip set keys on the link's own name, not its target's. A broken
 // link, a socket, a FIFO, and an unreadable directory are all skipped silently — an unreadable
 // directory cannot be a source of truth about scripts or test cases, and every caller here is a
-// derivation that reports on what it can see.
+// derivation that reports on what it can see. A git-ignored path (lib/ignored-paths.js's one
+// derivation) is never returned and an ignored directory is never descended: a build's `dist/`
+// copy of the host's scripts and tests is not the host, and counting it made a test-expiry
+// classification depend on what happened to be built in the checkout rather than on the tree.
 //
 // What this deliberately does NOT do: apply the host's `testGlobs` (the callers classify what it
 // returns); return repo-relative paths (callers hold their own `relPosix`, because one of them
 // needs absolute paths for `require` resolution); accept a caller-supplied skip set (the two
 // callers share one by derivation — a parameter here would re-open the drift this file closes);
-// or consult `.gitignore` (red-check.js's walkAll owns the git-ignored prune and its pruned-path
-// counter, which these two callers have no notion of).
+// or count what the ignored prune skipped (red-check.js's walkAll owns a pruned-path counter;
+// these callers have no notion of one).
 //
 // Exit codes: n/a (library, not an entrypoint).
 
 const fs = require('fs')
 const path = require('path')
+const { getIgnoredPaths } = require('./ignored-paths')
 
 const SKIP_DIR_NAMES = new Set(['.git', 'node_modules', 'fixtures', '__fixtures__'])
 
@@ -35,7 +39,7 @@ function relPosix(root, abs) {
   return path.relative(root, abs).split(path.sep).join('/')
 }
 
-function walk(dir, root, out) {
+function walk(dir, root, out, ignored) {
   let entries
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true })
@@ -44,9 +48,12 @@ function walk(dir, root, out) {
   }
   for (const entry of entries) {
     const full = path.join(dir, entry.name)
+    const rel = relPosix(root, full)
     if (entry.isDirectory()) {
-      if (SKIP_DIR_NAMES.has(entry.name) || relPosix(root, full) === '.claude/worktrees') continue
-      walk(full, root, out)
+      if (SKIP_DIR_NAMES.has(entry.name) || rel === '.claude/worktrees' || ignored.has(rel + '/')) continue
+      walk(full, root, out, ignored)
+    } else if (ignored.has(rel)) {
+      continue
     } else if (entry.isFile()) {
       out.push(full)
     } else if (entry.isSymbolicLink()) {
@@ -63,7 +70,7 @@ function walk(dir, root, out) {
 
 function walkFiles(root) {
   const out = []
-  walk(root, root, out)
+  walk(root, root, out, getIgnoredPaths(root))
   return out
 }
 

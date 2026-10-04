@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict'
-// expire-tests.js --root <r> --spec <spec path>  [--apply] [--json]
-// expire-tests.js --root <r> --all-done          [--apply] [--json]
+// expire-tests.js --root <r> --spec <spec path>  [--apply [--keep-on-red]] [--json]
+// expire-tests.js --root <r> --all-done          [--apply [--keep-on-red]] [--json]
 // expire-tests.js --root <r> --invariants        [--json]
 //
 // specs/20260911/03-tests-expire-at-close.md D3/D4: a spec's tests die when the spec does. This
@@ -26,7 +26,8 @@
 // D5 — a superseded owner is a terminal retire state, same as done) AND none of three keep
 // clauses fire: (a) its own call text names a ledger escape class (`.claude/spec-runs.jsonl`'s
 // `class` keys, top-level or nested in `incidents[]`); (b) its FILE's text names the basename of
-// a script in lib/invariants.js's derived set (a script the pipeline itself runs); (c) a cited AC
+// a script in lib/invariants.js's derived set (a script the pipeline itself runs) as a whole name,
+// never inside a longer one (`catalog.json` does not name `log.js`); (c) a cited AC
 // bullet (normalized whitespace, code spans stripped) contains `SHALL CONTINUE TO` and its own
 // spec is dated on or after the 20260911 floor — or the test is the one a `SHALL CONTINUE TO`
 // bullet of any such spec that is not superseded names with `→ reuses <file> :: <title>`, whatever
@@ -52,18 +53,30 @@
 // reaches the tree: the close-time review driver never passes `--apply` and never will; a human
 // running `/spec:doctor` check 20's remedy by hand is the one path that deletes a test.
 //
+// An --apply is a change to the host like any other, so it lands through the host's own
+// `gateCommand`, run in --root once every write is made. A red gate puts every touched file back
+// byte-for-byte (deleted files and directories recreated) and names the gate and its output's tail
+// on stderr; `--keep-on-red` leaves the writes in place instead, for a sweep the host means to fix
+// forward (a trimmed file's now-unused imports are the host's to prune — this script never parses
+// a language beyond test calls). A host with no `gateCommand` gets the writes and one stderr
+// warning that nothing checked them. A dry run never runs the gate.
+//
 // What this deliberately does NOT do: re-derive what a test case is (lib/scan-test-calls.js owns
 // that), re-derive the AC-ID grammar or bullet parsing (lib/spec-sections.js owns both), or apply
 // any sanction to a malformed AC bullet — a malformed bullet contributes no AC-ID to the ownership
 // map and so keeps every test that cites it (unresolved, fail-safe).
 //
-// Exit codes: 0 = derived (dry run or applied), regardless of how many tests were retirable, and
-//                 regardless of how many spec files under --root were unreadable ·
+// Exit codes: 0 = derived (dry run, or applied with the gate green or absent), regardless of how
+//                 many tests were retirable, and regardless of how many spec files under --root
+//                 were unreadable ·
+//             1 = applied and the host's gateCommand went red (reverted, or kept under
+//                 --keep-on-red) ·
 //             2 = usage error, --root not a readable directory, or (in --spec mode) the named
 //                 spec file cannot be read
 
 const fs = require('fs')
 const path = require('path')
+const { spawnSync } = require('child_process')
 const { listTestFiles, scanCalls, scanDescribes, resolveReference } = require('./lib/scan-test-calls')
 const { deriveInvariants } = require('./lib/invariants')
 const {
@@ -72,7 +85,7 @@ const {
 const { fmValue } = require('./lib/frontmatter')
 const { readConfig } = require('./lib/host-config')
 
-const USAGE = 'expire-tests.js --root <r> (--spec <path> | --all-done | --invariants) [--apply] [--json]'
+const USAGE = 'expire-tests.js --root <r> (--spec <path> | --all-done | --invariants) [--apply [--keep-on-red]] [--json]'
 const EXPIRY_APPLIES_FROM = '20260911'
 
 // A script that prints a payload and exits routes through a synchronous writer — the 64 KiB pipe
@@ -101,6 +114,7 @@ let specArg = null
 let allDone = false
 let invariantsMode = false
 let apply = false
+let keepOnRed = false
 let asJson = false
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -110,6 +124,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--all-done') allDone = true
   else if (a === '--invariants') invariantsMode = true
   else if (a === '--apply') apply = true
+  else if (a === '--keep-on-red') keepOnRed = true
   else if (a === '--json') asJson = true
   else die('usage: ' + USAGE)
 }
@@ -126,6 +141,7 @@ if (!rootStat || !rootStat.isDirectory()) die('usage: ' + USAGE + ' — --root m
 
 const modeCount = (specArg !== null ? 1 : 0) + (allDone ? 1 : 0) + (invariantsMode ? 1 : 0)
 if (modeCount !== 1) die('usage: ' + USAGE + ' — exactly one of --spec/--all-done/--invariants is required')
+if (keepOnRed && !apply) die('usage: ' + USAGE + ' — --keep-on-red only means something with --apply')
 
 const config = readConfig(root)
 const relPosix = (abs) => path.relative(root, abs).split(path.sep).join('/')
@@ -244,8 +260,13 @@ if (closingSpecRel !== null) {
 }
 
 // ---- invariants set + escape-class ids -----------------------------------------------------------
-const invariantBasenames = new Set(
-  deriveInvariants(root, config).scripts.map((s) => path.posix.basename(s)),
+// One whole-name pattern per invariant basename: not preceded by a name character, `.` or `-`,
+// and not followed by a name character — so `catalog.json` never names `log.js` and
+// `health.json()` never names `health.js`, while `scripts/log.js` and `'log.js'` still do.
+const escapeRe = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const invariantNamePatterns = Array.from(
+  new Set(deriveInvariants(root, config).scripts.map((s) => path.posix.basename(s))),
+  (base) => new RegExp('(?<![\\w.-])' + escapeRe(base) + '(?!\\w)'),
 )
 
 function collectEscapeClasses() {
@@ -308,8 +329,8 @@ function classify(call, ids, fileText, file) {
   for (const cls of escapeClasses) {
     if (call.callText.includes(cls)) return 'class'
   }
-  for (const base of invariantBasenames) {
-    if (fileText.includes(base)) return 'invariant'
+  for (const re of invariantNamePatterns) {
+    if (re.test(fileText)) return 'invariant'
   }
   for (const id of ids) {
     const owners = acOwners.get(id) || []
@@ -362,6 +383,7 @@ const tagged = retired.length + kept.class + kept.invariant + kept.pin + kept.op
 // applies). Only fs.writeFileSync / fs.unlinkSync / the empty-directory climb are gated on `apply`.
 const emptied = []
 const emptiedSuites = [] // [{ file, title }] — describes this pass leaves with zero cases
+const writes = [] // [{ abs, before, after }] — after:null deletes; performed only under --apply
 for (const [file, calls] of retiredByFile) {
   const abs = path.join(root, file)
   let src
@@ -398,6 +420,7 @@ for (const [file, calls] of retiredByFile) {
       (o.start < r.start || o.end > r.end)))
     .map((r) => ({ start: r.start, end: src[r.end] === '\n' ? r.end + 1 : r.end }))
     .sort((a, b) => b.start - a.start)
+  const before = src
   for (const { start, end } of spans) {
     src = src.slice(0, start) + src.slice(end)
   }
@@ -418,31 +441,72 @@ for (const [file, calls] of retiredByFile) {
 
   if (scanCalls(src).length === 0) {
     emptied.push(file)
-    if (apply) {
-      fs.unlinkSync(abs)
-      let dir = path.dirname(abs)
-      while (dir !== root && fs.existsSync(dir) && fs.readdirSync(dir).length === 0) {
-        fs.rmdirSync(dir)
-        dir = path.dirname(dir)
-      }
-    }
-  } else if (apply) {
-    fs.writeFileSync(abs, src)
+    writes.push({ abs, before, after: null })
+  } else {
+    writes.push({ abs, before, after: src })
   }
 }
 
+// ---- --apply: write, then the host's gate decides whether the writes stay -----------------------
+let gate = null
+if (apply && writes.length > 0) {
+  for (const w of writes) {
+    if (w.after !== null) {
+      fs.writeFileSync(w.abs, w.after)
+      continue
+    }
+    fs.unlinkSync(w.abs)
+    let dir = path.dirname(w.abs)
+    while (dir !== root && fs.existsSync(dir) && fs.readdirSync(dir).length === 0) {
+      fs.rmdirSync(dir)
+      dir = path.dirname(dir)
+    }
+  }
+  const command = config && typeof config.gateCommand === 'string' ? config.gateCommand.trim() : ''
+  if (!command) {
+    writeOut(2, '⚠ no gateCommand in the host config — the applied sweep was not checked; ' +
+      'run the host\'s gates before committing it')
+  } else {
+    const run = spawnSync(command, {
+      cwd: root, shell: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 256 * 1024 * 1024,
+    })
+    const ok = run.status === 0
+    const reverted = !ok && !keepOnRed
+    if (reverted) {
+      for (const w of writes) {
+        fs.mkdirSync(path.dirname(w.abs), { recursive: true })
+        fs.writeFileSync(w.abs, w.before)
+      }
+    }
+    gate = { command, ok, reverted }
+    if (!ok) {
+      const tail = ((run.stdout || '') + (run.stderr || '') + (run.error ? String(run.error) : ''))
+        .trimEnd().split('\n').slice(-40).join('\n')
+      writeOut(2, 'expire-tests: the host gate `' + command + '` went red after the sweep (exit ' +
+        (run.status === null ? run.signal : run.status) + ') — ' +
+        (reverted
+          ? 'every touched file is restored; fix what the gate names in the kept code, or rerun with --keep-on-red to fix forward'
+          : 'the writes are kept (--keep-on-red); fix what the gate names before committing') +
+        '\n' + tail)
+    }
+  }
+}
+const exitCode = gate && !gate.ok ? 1 : 0
+
 // ---- render --------------------------------------------------------------------------------------
 const scope = closingSpecRel !== null ? 'spec:' + closingSpecRel : 'all-done'
-const result = { scope, scanned, tagged, kept, retired, emptied, emptiedSuites, applied: apply }
+const applied = apply && !(gate && gate.reverted)
+const result = { scope, scanned, tagged, kept, retired, emptied, emptiedSuites, applied, gate }
 
 if (asJson) {
   writeOut(1, JSON.stringify(result))
-  process.exit(0)
+  process.exit(exitCode)
 }
 
 const lines = retired.map((r) => 'retire ' + r.file + ' — ' + r.title)
 const keptTotal = kept.class + kept.invariant + kept.pin + kept.open
 lines.push('expiry: scanned ' + scanned + ' tagged ' + tagged + ' kept ' + keptTotal +
-  ' retired ' + retired.length + ' (' + (apply ? 'applied' : 'dry run') + ')')
+  ' retired ' + retired.length + ' (' +
+  (!apply ? 'dry run' : gate && gate.reverted ? 'reverted: gate red' : gate && !gate.ok ? 'applied: gate red' : 'applied') + ')')
 writeOut(1, lines.join('\n'))
-process.exit(0)
+process.exit(exitCode)

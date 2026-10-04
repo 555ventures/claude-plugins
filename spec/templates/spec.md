@@ -5,7 +5,6 @@ tier: standard           # standard | critical (critical: irreversible/high-blas
 area: { area-name }      # primary feature/domain/module; "cross-cutting" if none
 breaking: false
 depends_on: []
-depended_on_by: []
 # brief: NN              # roadmap-planned specs only: the docs/roadmap/NN-*.md brief this spec hydrates; /spec:status (and /spec:doctor check 14) derive roadmap status from this stamp
 # lane: behaviour  # written by the prototype freeze; the build driver adds the harden merge and the capture gate
 # spiked: YYYY-MM-DD     # only if a spike ran during /spec:plan

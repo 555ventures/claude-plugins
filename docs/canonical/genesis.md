@@ -200,7 +200,9 @@
   `Read only:` line, prints one `approved: <j> — <n> beats · screens: <a, b> · story: <id>` line
   per approved journey, and the placement check reads screens from that record when it exists,
   from the seed only when it does not. The wireframe is never read after
-  `DESIGN_BRIEF`'s print. No PNG round is pushed from genesis until brief 29's client exists.
+  `DESIGN_BRIEF`'s print. A picture round is optional and never a gate: when the project
+  declares a `pictures` block and is connected to the review service, ROADMAP prints the
+  `pictures` command (specs/20261005/06).
   (specs/20260926/06-the-approval-stop-and-the-roadmap.md, done 2026-09-28)
 
 - Since specs/20261002/01 no genesis step reads a file under a mock app.

@@ -30,7 +30,7 @@ token file — a Tailwind 4 `@theme` block or the stack's equivalent) and `rules
 auto-loaded rule file holding the intent-to-pattern table and the naming-convention table) are
 repo-relative and required when the block is present; `app` stays optional — the mock app dir,
 written by `/spec:mocks` and genesis, and equal to `design/mocks/status.json`'s own `app`),
-`release` (see § Release), `prototype` (see § Prototype), `walkthrough` (see § Walkthrough), `capabilities` (see § Capabilities),
+`release` (see § Release), `prototype` (see § Prototype), `walkthrough` (see § Walkthrough), `pictures` (see § Pictures), `capabilities` (see § Capabilities),
 the rule-enforcement keys `enforcementManifest` and `rulesEnforcementHash` (see § Rule
 enforcement), and the genesis-handoff key `genesisStackDescriptor`
 (see § Genesis handoff).
@@ -152,6 +152,17 @@ variable that holds the project's token: read from `env` in the git-ignored
 `.claude/settings.local.json` when `/spec:connect` stored it there, else from the environment;
 the token is never written to a file git tracks). Absent block = the project does not use the service: the client sends nothing, writes
 nothing and exits 0.
+
+## Pictures (optional — present when the project can make pictures of its real screens)
+
+`pictures` — `command` (a shell string the project owns: it makes one PNG per entry of the wanted
+list, however this stack makes a picture of a screen; run with cwd = the repo root and the
+variables `SPEC_PICTURES_DIR`, the folder to fill, and `SPEC_PICTURES_WANTED`, the path of the
+wanted list), `dir` (a repo-relative folder the plugin cleans of pictures and refills on every
+run), optional `widths` (1 to 4 widths, each 240 to 3840; default 390 and 1280). The wanted list
+names every picture by screen, state and width; a missing, empty or stray picture is refused.
+Absent block = the project has never declared how its pictures are made: `spec-paths pictures`
+refuses naming this block.
 
 ## Capabilities (optional — declares stack-shaped facts the pipeline would otherwise assume)
 

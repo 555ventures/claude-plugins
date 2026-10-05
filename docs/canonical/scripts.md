@@ -79,6 +79,9 @@ fuller incident write-ups live in each cited spec's history.
   root. It reads no config and no manifest contents, and names no tool: picking a checker per
   workspace is `/spec:enforce`'s discovery (docs/canonical/enforce.md).
   (specs/20260926/03-gates-per-workspace.md D1)
+- **`spec/scripts/pictures.js` runs the project's own picture command and never makes a picture
+  itself; it reaches the service only by running `walkthrough.js` as a child process.**
+  (specs/20261005/06-the-design-stage-sends-pictures.md)
 
 ## Prose budgets
 

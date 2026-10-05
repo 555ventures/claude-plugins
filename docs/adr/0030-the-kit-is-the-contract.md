@@ -8,7 +8,8 @@
   item by item on 2026-09-24)
 - Amended by: ADR-0031 (clause (f): the client's seven calls, the plugin-owned round number, the
   optional service, the contract and vocabulary files in the plugin); ADR-0032 (clause (f): the
-  wireframe command runs over the service)
+  wireframe command runs over the service); ADR-0034 (clause (f): a project makes its own
+  pictures and the client sends them)
 
 ## Context
 

@@ -436,7 +436,7 @@ for (const b of briefs) {
   for (const d of b.depends_on) {
     const dep = briefByNum.get(d)
     if (!dep) pushAnomaly({ kind: 'unknown-dependency', detail: `${b.file} depends on brief ${d}, which doesn't exist` })
-    else if (dep.status === 'unplanned') pushAnomaly({
+    else if (dep.status === 'unplanned' && !dep.superseded) pushAnomaly({
       kind: 'skipped-brief',
       detail: `brief ${b.num} (${b.name}) is ${b.status} but its dependency ${d} (${dep.name}) is unplanned — likely skipped; plan it with /spec:plan ${dep.file}`,
       line: `Brief ${b.num} (${b.name}) moved on, but its dependency ${d} (${dep.name}) was never planned.`,
@@ -448,11 +448,13 @@ for (const b of briefs) {
 
 // Sequence-order skip: an earlier unplanned brief sitting below any later brief that moved.
 // D2: also a DECIDE anomaly (Contracts) — the remedy is "still wanted?", a choice, not a fix.
+// A superseded brief (D6, 20260823/08) is retired, not skipped — it never fires here, nor as a
+// skipped-brief dependency above.
 const moved = briefs.filter(b => b.status !== 'unplanned')
 if (moved.length) {
   const maxMoved = moved.reduce((m, b) => briefOrd(b.num) > briefOrd(m.num) ? b : m).num
   for (const b of briefs) {
-    if (b.status === 'unplanned' && briefOrd(b.num) < briefOrd(maxMoved) && !anomalies.some(a => a.detail.includes(`dependency ${b.num} `))) {
+    if (b.status === 'unplanned' && !b.superseded && briefOrd(b.num) < briefOrd(maxMoved) && !anomalies.some(a => a.detail.includes(`dependency ${b.num} `))) {
       pushAnomaly({
         kind: 'out-of-order',
         detail: `brief ${b.num} (${b.name}) is unplanned while later brief ${maxMoved} has moved — deliberate reordering or a skip; if it still matters: /spec:plan ${b.file}`,

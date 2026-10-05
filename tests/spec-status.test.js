@@ -251,6 +251,29 @@ test('lettered ad-hoc briefs (04b between 04 and 05) are first-class brief ids',
   assert.strictEqual(pre.status, 0, 'brief 02 depends on lettered 01b, which is done: ' + pre.stdout)
 })
 
+test('a superseded brief raises neither out-of-order nor skipped-brief; a plain unplanned one still does', () => {
+  const dir = host({
+    briefs: {
+      '01-auth.md': '# 01 — Auth\n\n> **Superseded by** brief 02.\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
+      '02-billing.md': BRIEFS['02-billing.md'],
+      '03-reports.md': '# 03 — Reports\n\nPhase: P1 · Depends on: — · Primary workspaces: web\n',
+      '04-export.md': '# 04 — Export\n\nPhase: P1 · Depends on: — · Primary workspaces: web\n',
+    },
+    specs: {
+      '20260701/01-billing.md': 'date: 2026-07-01\nstatus: done\nbrief: 02',
+      '20260702/01-export.md': 'date: 2026-07-02\nstatus: done\nbrief: 04',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const out = JSON.parse(r.stdout)
+  const about = n => out.anomalies.filter(a => a.detail.includes(`brief ${n} `) || a.detail.includes(`dependency ${n} `))
+  assert.deepStrictEqual(about('01').map(a => a.kind), [],
+    'a retired brief would be offered back as "still wanted? plan it" — status tells the user to plan work they deliberately dropped')
+  assert.deepStrictEqual(about('03').map(a => a.kind), ['out-of-order'],
+    'an ordinary skipped brief would go silent — the superseded carve-out must not swallow real skips')
+})
+
 test(`AC-20260901-10-4: a design: true spec routes to /spec:run in the dashboard, not ${RETIRED_DESIGN}`, () => {
   const dir = host({
     briefs: {},

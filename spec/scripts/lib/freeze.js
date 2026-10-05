@@ -352,7 +352,7 @@ function exportTests({ root, branch, stem, base, e2eFile }) {
   const wtPath = path.join(root, '.claude/worktrees', 'harden-' + stem)
   const fail = (step, r) => {
     spawnSync('git', ['-C', root, 'worktree', 'remove', '--force', wtPath], { encoding: 'utf8' })
-    return { ok: false, message: step + ' failed: ' + ((r && r.stderr) || '').trim() }
+    return { ok: false, message: step + ' failed: ' + ((r && r.stderr) || '').trim() + ' — the transient worktree ' + wtPath + ' was force-removed; remedy: re-run --mark tests-derived' }
   }
   const add = spawnSync('git', ['-C', root, 'worktree', 'add', wtPath, hardenBranch], { encoding: 'utf8' })
   if (add.status !== 0) return fail('git worktree add for ' + hardenBranch, add)

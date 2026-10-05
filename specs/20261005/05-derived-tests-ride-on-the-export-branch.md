@@ -1,6 +1,6 @@
 ---
 date: 2026-10-05
-status: implementing
+status: done
 build_base: design-retool
 tier: standard
 area: design

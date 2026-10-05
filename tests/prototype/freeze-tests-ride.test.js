@@ -195,6 +195,23 @@ test('AC-20261005-05-7: a risk-tier refusal then --tier critical ends with exact
   assert.strictEqual(subjects(b.dir).length, 2, 'the resume must add exactly one commit: ' + subjects(b.dir).join(' | '))
 })
 
+test('AC-20261005-05-7: a stale harden worktree left by an interrupted carry refuses exit 2 naming the re-run remedy, and the plain re-run completes to CLOSED', () => {
+  const { dir, contract } = frozenHost({ rules: rulesNaming('drizzle/*.sql') })
+  authorDerivedTests(dir, contract)
+  const stop = markTests(dir)
+  assert.strictEqual(stop.status, 2, 'test setup requires the risk-tier refusal on the first run: ' + JSON.stringify(stop))
+  git(dir, 'branch', '-f', HARDEN, HARDEN + '~1')
+  const stale = path.join(dir, '.claude/worktrees/harden-' + STEM)
+  git(dir, 'worktree', 'add', stale, HARDEN)
+  const refused = markTests(dir, ['--tier', 'critical'])
+  assert.strictEqual(refused.status, 2, 'a stale harden worktree must refuse instead of exporting, or the carry could half-run: ' + JSON.stringify(refused))
+  assert.ok(refused.stderr.includes('re-run --mark tests-derived'),
+    'the refusal must name the re-run remedy, or the operator is left with a bare git error and no next step: ' + refused.stderr)
+  const again = markTests(dir, ['--tier', 'critical'])
+  assert.strictEqual(again.status, 0, 'the plain re-run after the forced removal must complete the carry: ' + JSON.stringify(again))
+  assert.strictEqual(stateOf(dir), 'CLOSED\n', 'the re-run must reach CLOSED, or the freeze stays stuck behind the stale worktree: ' + stateOf(dir))
+})
+
 test('AC-20261005-05-8: with marks.closed cleared, the prototype branch gone and harden/<stem> lacking the tests, the re-run refuses "by hand"; once the file is committed on harden/<stem> it exits 0 and reaches CLOSED', () => {
   const { dir, contract, first } = completedFreeze()
   assert.strictEqual(first.status, 0, 'test setup requires a completed freeze: ' + JSON.stringify(first))

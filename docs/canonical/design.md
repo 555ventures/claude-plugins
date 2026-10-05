@@ -57,7 +57,7 @@ are a genesis artifact that walks the seed's beats against the real kit and rout
 JJ approves the designed set in Storybook; there is no client gate. Journey stories are frozen at
 approval and never gated later. (specs/20260926/06-the-approval-stop-and-the-roadmap.md D7)
 
-## Prototypes (specs/20260928/01, specs/20260928/02, specs/20261001/01)
+## Prototypes (specs/20260928/01, specs/20260928/02, specs/20261001/01, specs/20261005/05-derived-tests-ride-on-the-export-branch.md)
 
 `/spec:prototype <brief>` runs a functional prototype on `proto/<stem>` in
 `.claude/worktrees/proto-<stem>`. The host declares a `prototype` config block (`url`,
@@ -65,16 +65,19 @@ approval and never gated later. (specs/20260926/06-the-approval-stop-and-the-roa
 `storageState` is one saved Playwright sign-in that every capture loads — at the freeze and at the
 build's capture gate; a missing, unreadable or stale one is a refusal naming the file, and
 `/spec:doctor` flags it when git tracks it. Rounds, pins
-and declared states live under `design/prototypes/<stem>/` on main; nothing on `proto/*` is read
-after close. A pin is one record with an optional anchor whose id is the keyed owner chain plus an
+and declared states live under `design/prototypes/<stem>/` on main; the data and API layer and the
+derived tests survive on `harden/<stem>`; nothing on `proto/*` is read after close. A pin is one record with an optional anchor whose id is the keyed owner chain plus an
 ordinal (`Row[w_01]<List<Screen#0`); the source location rides along as metadata only. The pin
 endpoint runs only during a round. A brief whose header says `Lane: behaviour` goes to this
 command instead of `/spec:plan`.
 
 Freeze, on approve: the kit gates run green on the prototype tree → one capture per route × state
 keyed by kit-composite instance → `contract.json` → the session writes one derived e2e test per
-behaviour pin on main, and the host runner must list every reserved AC id → `harden/<stem>` is
-created from `git diff base...proto -- <export globs>` → the generated behaviour-lane spec,
+behaviour pin in the prototype worktree and commits the file on `proto/<stem>`; the mark refuses a
+copy left in the main working tree, an uncommitted file, and a reserved AC id the host runner (run
+in the worktree) does not list → `harden/<stem>` is created from `git diff base...proto -- <export
+globs>`, then gains the test file as a second commit, so the base branch never carries a derived
+test before its hardening spec merges → the generated behaviour-lane spec,
 whose tier is derived: every generated File Plan path is matched against the paths the host's
 pipeline rules § Risk Tiers spells as code; a match stops the mark until the user confirms the
 lock (`--tier critical`) or rules it not a risk change (`--tier standard`), and the spec's

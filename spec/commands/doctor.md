@@ -169,10 +169,13 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     coverage leg on the other's tests with a criterion that has no test anywhere. Remedy = renumber
     whichever spec has not yet built to the next free number in its directory, rewriting its AC-ids,
     every `depends_on` entry that names it and any run-ledger `spec` path with it.
-19. **Fixed test ports** (deterministic, advisory) — run
+19. **Fixed ports** (deterministic, advisory) — run
     `node "$(spec-paths port-check)" --root .`. Each printed line is a fixed or computed port
-    literal under `tests/`; remedy = bind `--port 0` / `listen(0)` and read the bound port back
-    from the server rather than choosing one (a host may wrap this in a shared test helper).
+    literal under `tests/` — remedy = bind `--port 0` / `listen(0)` and read the bound port back
+    from the server rather than choosing one (a host may wrap this in a shared test helper) — or
+    a `.claude/spec.config.json` key (`runtime.readyCheck`, `prototype.url`) naming a loopback
+    port — remedy = make the boot command serve on `$PORT`, spell the port `$PORT` in
+    `readyCheck` and `{port}` in `prototype.url`.
 20. **Expiry readiness** (deterministic, advisory) — two derivations, both run every time:
     (a) `node "$(spec-paths test-expiry)" --root . --all-done` (dry run) reports
     `expired tests present: N in M files` (or `none`), naming each file. This is the only

@@ -1,6 +1,7 @@
 ---
 date: 2026-10-05
-status: hardened
+status: done
+build_base: design-retool
 tier: critical
 area: runtime
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 brief: n/a
 spiked: 2026-10-05
 open_markers: 0
+diff_base: a49fc94c10140ea76e89696df7bc3d3ce0c1008f
 ---
 
 # One port per launch
@@ -366,6 +368,9 @@ Collision closure at lock (literals `previous run`, `Fixed test ports`,
 `localhost:3000/api/health`): four hits. Three are File Plan rows (`smoke.sh`, `doctor.md`,
 `grounding-contract.md`). The fourth, `tests/smoke-stale-ready.test.js`, is waived: it spells
 the old sentence only in an assert message, matches only the unchanged slug, and stays green.
+
+Renumbered 02 → 03 before build (2026-10-05): a sibling spec locked as `20261005/02` in parallel,
+and the shared number made both specs' AC-IDs collide in one namespace.
 
 Regression pins: AC-5, AC-13, AC-16, AC-19 and AC-22 reuse existing tests, so the fixed-address
 behaviour this spec promises not to change outlives its close.

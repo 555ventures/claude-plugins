@@ -98,7 +98,15 @@
 //                 `--mark captured`/`--mark capture-accepted` refusals: the capture stub exiting
 //                 non-zero (forwards its stderr verbatim, writes no capture-state.json), a
 //                 relative contract url while `prototype.url` is undeclared (names it), or
-//                 `capture-accepted` naming a pair with `diffs: 0` (names "has no diffs").
+//                 `capture-accepted` naming a pair with `diffs: 0` (names "has no diffs"), or
+//                 (specs/20261005/03 D8) a failed capture-port allocation on a `{port}` host.
+//
+// specs/20261005/03-one-port-per-launch.md D8: when `prototype.url` carries `{port}` the build
+// keeps one capture port in `<spec>.build/capture-port.json` (`{"port": n}`), allocated the first
+// time the CAPTURE step prints or `--mark captured` runs; the step prints `PORT=<n> <bootCommand>`
+// and the resolved address, and `--mark captured` joins relative contract urls onto it. A fixed
+// `prototype.url` is joined exactly as before. capture-state.json and build-state.json are not
+// touched.
 
 'use strict'
 const fs = require('fs')
@@ -114,6 +122,7 @@ const { globMatch } = require('./lib/glob-match')
 // startup) — the review driver's own sibling reasoning applies here too.
 const { sessionModel } = require('./lib/session-stamp.js')
 const { CLASS_ID_RE } = require('./lib/escape-row')
+const appPortLib = require('./lib/app-port')
 
 function die(msg) { process.stderr.write('spec-build-driver: ' + msg + '\n'); process.exit(2) }
 
@@ -648,6 +657,27 @@ function branchExistsLocal(branch) {
     { encoding: 'utf8' }, 'git rev-parse --verify (branch existence check)')
   return r.status === 0
 }
+// specs/20261005/03-one-port-per-launch.md D8: when prototype.url carries {port}, one capture port
+// per build lives in <spec>.build/capture-port.json ({"port": n}) — allocated the first time it is
+// needed, never re-allocated. Returns { url, port } with port null for a fixed address.
+function captureAddress() {
+  const raw = (hostConfig.prototype && typeof hostConfig.prototype.url === 'string') ? hostConfig.prototype.url : ''
+  if (!appPortLib.hasPortSlot(raw)) return { url: raw, port: null }
+  const p = path.join(sidecarDir, 'capture-port.json')
+  let port = null
+  try {
+    const doc = JSON.parse(fs.readFileSync(p, 'utf8'))
+    if (doc && Number.isInteger(doc.port)) port = doc.port
+  } catch { /* absent or unreadable: allocate below */ }
+  if (port === null) {
+    try { port = appPortLib.freePort() } catch (e) {
+      die('could not allocate a capture port (' + e.message + ') — remedy: free a loopback port, then re-run')
+    }
+    fs.mkdirSync(sidecarDir, { recursive: true })
+    fs.writeFileSync(p, JSON.stringify({ port }) + '\n')
+  }
+  return { url: appPortLib.resolveUrl(raw, port), port }
+}
 function readCaptureState() {
   const p = path.join(sidecarDir, 'capture-state.json')
   if (!fs.existsSync(p)) return null
@@ -724,7 +754,7 @@ function handleCaptured() {
   fs.mkdirSync(capturesDir, { recursive: true })
   // The freeze writes each state's url RELATIVE to prototype.url (spec 02 Contracts); the browser
   // refuses a bare path, so the base is joined here. An absolute url passes through unchanged.
-  const protoBase = (hostConfig.prototype && typeof hostConfig.prototype.url === 'string') ? hostConfig.prototype.url : ''
+  const protoBase = captureAddress().url
 
   const pairs = []
   const details = []
@@ -1413,13 +1443,14 @@ function captureStepBody() {
     // the prototype's own data and sign-in — the three conditions the session has to restore
     // are named here, because the boot command alone restores none of them.
     const proto = hostConfig.prototype || {}
-    const where = typeof proto.url === 'string' && proto.url ? proto.url : '(no prototype.url declared in the host config)'
+    const addr = captureAddress()
+    const where = addr.url ? addr.url : '(no prototype.url declared in the host config)'
     const signIn = typeof proto.storageState === 'string' && proto.storageState
       ? `the capture signs in from ${proto.storageState} — it must hold a live sign-in for this server`
       : `the capture runs signed out (no prototype.storageState declared)`
     return `## Step: the rebuilt screens against the frozen capture\n` +
       `Read only: ${contractRel}\n` +
-      `Session: start the app in the background (tracked) so it answers at ${where}: ${boot}\n` +
+      `Session: start the app in the background (tracked) so it answers at ${where}: ${addr.port ? 'PORT=' + addr.port + ' ' : ''}${boot}\n` +
       `  - a development build: the capture refuses a production build, so use the host's dev ` +
       `server when the boot command builds for production\n` +
       `  - the data each frozen state showed: the prototype's database is gone, recreate what ` +

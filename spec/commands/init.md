@@ -141,6 +141,10 @@ and each is skippable only by an explicit `inert` manifest row with a reason:
 - **Health endpoint** — if the app serves HTTP and has no cheap liveness route, add one
   (e.g. `/api/health` returning 200 + version). It is the `runtime.readyCheck` target, the
   deploy healthcheck, and the e2e webServer wait, all in one ~10-line file.
+- **Port** — the generated `bootCommand` serves on `$PORT` and `readyCheck` probes `$PORT`
+  (add the framework's port flag, or a `PORT` read in the host's boot script, where the dev
+  server ignores the variable); a declared `prototype.url` carries `{port}`; the run skill
+  tells a session to launch on a free port, never a fixed one.
 - **Local DB/service provisioning** — if `.env.example` points at databases nothing creates,
   add the missing compose file or provisioning script so `TEST_DATABASE_URL`-style gates can
   actually be satisfied locally. An env-gated test suite whose env costs "hand-provision two

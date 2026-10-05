@@ -223,7 +223,7 @@ appendix.
 
 **Artifacts.** `spec/templates/finalists.json` (the template the session composes a run's
 `finalists.json` from — 2–3 entries, each `{name, picks, scaffoldCommand, gateCommand,
-bootCommand, readyCheck}`); `tournament/evidence/<name>/probe.json` (session-written, one
+bootCommand, readyCheck}`, where `bootCommand` serves on `$PORT` and `readyCheck` probes it); `tournament/evidence/<name>/probe.json` (session-written, one
 entry per expected task); `tournament/benchmark.json`/`.md` and `tournament/gallery.html`
 (driver-written). § Genesis: On-disk Handoff lists the full roster alongside the
 `tournament/` directory.

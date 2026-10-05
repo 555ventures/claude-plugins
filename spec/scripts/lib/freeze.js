@@ -112,10 +112,13 @@ function routeSlug(routePath) {
 
 // `viewport` is the one size the driver resolved from states.json and also writes into the
 // contract, so the contract never names a size the captures did not use.
+// `baseUrl` is the resolved app address (a {port} url already substituted; D7); omitted = the
+// config's own prototype.url. Contract urls stay the relative statePath.
 // Omitted = 1280x800 so the lib stays callable standalone. Each capture file's own recorded
 // `viewport` is checked against it; a capture doc with no `viewport` key passes (older/stub
 // tools record none, and refusing them would break every caller that never recorded one).
-function captureAll({ root, designDir, config, statesDoc, composites, viewport }) {
+function captureAll({ root, designDir, config, statesDoc, composites, viewport, baseUrl }) {
+  const base = baseUrl || config.prototype.url
   const size = viewport || { width: 1280, height: 800 }
   const sizeText = size.width + 'x' + size.height
   const captureBin = process.env.PROTO_CAPTURE_BIN || path.join(__dirname, '..', 'proto-capture.js')
@@ -130,7 +133,7 @@ function captureAll({ root, designDir, config, statesDoc, composites, viewport }
     routesOut[routePath] = {}
     for (const [stateName, statePath] of Object.entries(states || {})) {
       stateCount++
-      const url = config.prototype.url + statePath
+      const url = base + statePath
       const outFile = path.join(capturesDir, slug + '--' + stateName + '.json')
       const r = spawnSync(process.execPath, [
         captureBin, '--host', root, '--url', url, '--out', outFile, '--composites', composites.join(','),

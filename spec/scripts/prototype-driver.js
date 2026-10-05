@@ -56,6 +56,14 @@
 // no `--tier` refuses (the user confirms the lock), `--tier critical|standard` records the answer
 // in the spec's Rationale, and a spec already on disk is never rewritten.
 //
+// specs/20261005/03-one-port-per-launch.md D5-D7: when `prototype.url` carries `{port}` the driver
+// keeps one app port per prototype as `appPort` in status.json (allocated at --mark opened, or on
+// first need), prints `PORT=<appPort> <bootCommand>` in the ROUND step, and probes, prints and
+// captures (--mark frozen) at the resolved address; contract.json state urls stay relative. A URL
+// without the placeholder is a fixed address and behaves unchanged. The port is never
+// re-allocated — a bound port may be the session's own server mid-boot (delete `appPort` to
+// re-pick by hand); a bare ROUND run is therefore the one bare run that may write status.json.
+//
 // What this deliberately does NOT do:
 //   - author states.json, wire the dev-entry import, run the host's dev server, or decide when a
 //     round is "done" — those stay session judgment; the driver only verifies artifacts already on
@@ -91,6 +99,7 @@ const { writeOut, appendLedger } = require('./lib/driver-io')
 const { readConfigStrict, CONFIG_RELPATH } = require('./lib/host-config')
 const { globMatch } = require('./lib/glob-match')
 const freeze = require('./lib/freeze')
+const appPortLib = require('./lib/app-port')
 
 function die(msg) { writeOut(2, 'prototype-driver: ' + msg + '\n'); process.exit(2) }
 function nowIso() { return new Date().toISOString() }
@@ -258,6 +267,22 @@ function loadStatus() {
     die(statusRel + ' is not valid JSON (' + e.message + ') — remedy: restore it from git history, or delete it and re-run --mark opened')
     return null // unreachable
   }
+}
+
+// specs/20261005/03-one-port-per-launch.md D6: when prototype.url carries {port}, status.appPort
+// is the one app port for this prototype — allocated once, never re-allocated. Returns the
+// resolved address, the port to boot on (null for a fixed address) and whether it was just minted.
+function appAddress(status) {
+  if (!appPortLib.hasPortSlot(proto.url)) return { url: proto.url, port: null }
+  if (!Number.isInteger(status.appPort)) {
+    let port
+    try { port = appPortLib.freePort() } catch (e) {
+      die('could not allocate an app port (' + e.message + ') — remedy: free a loopback port, then re-run')
+    }
+    status.appPort = port
+    saveStatus(status)
+  }
+  return { url: appPortLib.resolveUrl(proto.url, status.appPort), port: status.appPort }
 }
 
 function saveStatus(status) {
@@ -448,6 +473,7 @@ function cmdMarkOpened() {
   status.worktree = worktreeRel
   status.base = baseBranch
   status.pinsPort = pinsPort
+  appAddress(status)
   status.marks = Object.assign({ opened: null, approved: null }, status.marks)
   status.marks.opened = nowIso()
   status.rounds = status.rounds || []
@@ -554,7 +580,8 @@ function cmdMarkFrozen() {
   // reachability gate is proto-capture.js's own navigation failure in D3(6) below: a driver-level
   // refusal here would duplicate that check with a different, less precise error and would make
   // a PROTO_CAPTURE_BIN test seam (which never touches the network) spuriously refuse.
-  probeUrl(proto.url)
+  const address = appAddress(status)
+  probeUrl(address.url)
 
   // D3(6): captures.
   const statesDoc = loadStatesOrNull()
@@ -575,7 +602,7 @@ function cmdMarkFrozen() {
     }
     viewport = { width: v.width, height: v.height }
   }
-  const captureResult = freeze.captureAll({ root, designDir, config: cfg, statesDoc, composites, viewport })
+  const captureResult = freeze.captureAll({ root, designDir, config: cfg, statesDoc, composites, viewport, baseUrl: address.url })
   if (!captureResult.ok) die(captureResult.message)
 
   // D3(8): reserve the spec number and this freeze's AC ids, before D3(7) writes the contract.
@@ -927,20 +954,22 @@ function printRoundStep(status) {
     lines.push('Session: wire the dev-only overlay import into the host\'s dev entry in ' + worktreeRel + ' and commit it on ' +
       branch + ' (skip if main already carries it): ' + overlayImportLine())
   }
-  lines.push('Session: in ' + worktreeRel + ', start the dev server in the background (tracked): ' + (cfg.runtime && cfg.runtime.bootCommand))
+  const address = appAddress(status)
+  lines.push('Session: in ' + worktreeRel + ', start the dev server in the background (tracked): ' +
+    (address.port ? 'PORT=' + address.port + ' ' : '') + (cfg.runtime && cfg.runtime.bootCommand))
   lines.push('Session: start the pin endpoint in the background (tracked): node ' + driverAbs + ' ' + briefPath + ' serve --port ' + status.pinsPort)
-  const reachable = probeUrl(proto.url)
+  const reachable = probeUrl(address.url)
   let tailscalePort = ''
-  try { tailscalePort = new URL(proto.url).port } catch { tailscalePort = '' }
+  try { tailscalePort = new URL(address.url).port } catch { tailscalePort = '' }
   if (reachable) {
-    lines.push('🎨 ready for pins — ' + proto.url)
+    lines.push('🎨 ready for pins — ' + address.url)
     if (statesDoc && statesDoc.routes) {
       for (const [routePath, states] of Object.entries(statesDoc.routes)) {
         lines.push('route: ' + routePath + ' (' + Object.keys(states).join(', ') + ')')
       }
     }
   } else {
-    lines.push('dev server is not answering on ' + proto.url)
+    lines.push('dev server is not answering on ' + address.url + (address.port ? ' — the boot command must serve on $PORT' : ''))
   }
   lines.push('Share (only when someone else must see it): tailscale serve --bg ' + (tailscalePort || '<port>'))
   lines.push('Reply `approve` to freeze; anything else is a change for this session to apply on ' + branch + ', then:')

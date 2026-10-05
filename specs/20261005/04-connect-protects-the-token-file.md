@@ -1,6 +1,7 @@
 ---
 date: 2026-10-05
-status: hardened
+status: done
+build_base: design-retool
 tier: standard
 area: design
 breaking: false
@@ -8,6 +9,7 @@ depends_on: [specs/20261005/02-connect-runs-first.md]
 brief: n/a
 spiked: 2026-10-05
 open_markers: 0
+diff_base: fe5bf745e5a39d14326c7eedb641fdb68555bf81
 ---
 
 # Connect protects the token file itself

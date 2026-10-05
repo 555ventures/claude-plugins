@@ -7,7 +7,7 @@ const { tmpdir, runNode, runBash, freePort } = require('../helpers')
 const fx = require('./fixture')
 
 // specs/20261005/01-connect-wires-a-project-to-the-review-service.md — AC-20261005-01-1 through
-// AC-20261005-01-15, -17 and -18 (D1–D11, D13): walkthrough-connect.js creates or joins the project,
+// AC-20261005-01-15 (not -9), -17 and -18 (D1–D11, D13): walkthrough-connect.js creates or joins the project,
 // stores the token in the git-ignored settings file, proves the link, writes the block; the client
 // reads the stored token first. Every run uses a fake `railway` on PATH and a child-process stub.
 
@@ -162,16 +162,28 @@ test('AC-20261005-01-8: a proof that does not answer keeps the token, leaves the
   assert.strictEqual(rw.creates().length, 1, 'the whole story must hold exactly one create, or a retry orphans a token: ' + JSON.stringify(rw.lines()))
 })
 
-test('AC-20261005-01-9: when the settings file is not ignored by git (empty .gitignore, or committed) connect refuses not-ignored before creating anything', async () => {
-  for (const [label, opts] of [['an empty .gitignore', { gitignore: '' }], ['a committed settings file', { tracked: true }]]) {
+test('AC-20261005-04-1: connect in a git repository that neither ignores nor tracks the token file appends the ignore line itself, keeps every existing byte and connects, and a second run leaves .gitignore byte-identical', async (t) => {
+  const OK = { status: 200, body: { apiVersion: 1, approvals: [] } }
+  const stub = await startStub(t, connectAnswers(['acme-shop'], [OK, OK, OK]))
+  const L = SETTINGS_REL
+  const cases = [
+    ['a .gitignore with no final newline', 'node_modules/', 'node_modules/\n' + L + '\n'],
+    ['an empty .gitignore', '', L + '\n'],
+    ['a deleted .gitignore', null, L + '\n'],
+  ]
+  for (const [label, before, want] of cases) {
     const rw = makeRailway()
-    const host = makeGitHost('acme-shop', opts)
-    const r = await runConnect(host, ['--base-url', 'http://127.0.0.1:1'], { railway: rw })
-    assert.strictEqual(r.status, 2, label + ' must exit 2: ' + JSON.stringify(r))
-    assert.match(r.stderr, /^walkthrough-connect: not-ignored/, label + ' must carry the not-ignored code: ' + r.stderr)
-    assert.ok(r.stderr.includes('.gitignore'), label + ': the remedy must name .gitignore: ' + r.stderr)
-    assert.strictEqual(rw.creates().length, 0, label + ': no create may run — a token stored where git can track it leaks the credential')
-    assert.ok(!('walkthrough' in readJson(host, CONFIG_REL)), label + ': no block may be written')
+    const host = makeGitHost('acme-shop', { gitignore: before === null ? '' : before })
+    if (before === null) fs.rmSync(path.join(host, '.gitignore'))
+    const r = await runConnect(host, ['--base-url', stub.url], { railway: rw })
+    assert.strictEqual(r.status, 0, label + ': connect must add the ignore line and exit 0, or a fresh repository needs a hand step before it can connect: ' + JSON.stringify(r))
+    assert.strictEqual(r.stdout.split('\n')[0], `connected acme-shop → ${stub.url}/p/acme-shop (new project)`, label + ': the first stdout line must be the connected line: ' + JSON.stringify(r.stdout))
+    assert.strictEqual(read(host, '.gitignore'), want, label + ': .gitignore must keep every existing byte and gain exactly the one line, or the host\'s own rules are damaged')
+    assert.strictEqual(read(host, SETTINGS_REL).includes(MINTED), true, label + ': the token must be stored in the settings file, or the next session cannot send screens')
+    assert.strictEqual(rw.creates().length, 1, label + ': exactly one create must run: ' + JSON.stringify(rw.lines()))
+    const second = await runConnect(host, ['--base-url', stub.url], { railway: rw })
+    assert.strictEqual(second.status, 0, label + ': a second run must exit 0: ' + JSON.stringify(second))
+    assert.strictEqual(read(host, '.gitignore'), want, label + ': a second run must leave .gitignore byte-identical, or the line is appended again on every run')
   }
 })
 

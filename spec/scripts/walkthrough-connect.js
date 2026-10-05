@@ -4,7 +4,7 @@
 //                        [--base-url <url>] — connect the host project to the hosted review service.
 //
 // Owner: specs/20261005/01-connect-wires-a-project-to-the-review-service.md (D1-D11) and
-// specs/20261005/02-connect-runs-first.md (D1-D4). It creates the
+// specs/20261005/02-connect-runs-first.md (D1-D4) and specs/20261005/04-connect-protects-the-token-file.md (D1-D4). It creates the
 // project on the service (or joins the id the service already holds) through the Railway CLI, stores
 // the token as env.<tokenEnv> in the host's .claude/settings.local.json, proves the link with one call
 // that needs the token (lib/walkthrough-client.js probe), and only then writes the `walkthrough`
@@ -20,13 +20,18 @@
 // `walkthrough-connect: <code> — <sentence> — remedy: <what to do>`; a refusal thrown by the client is
 // printed as the client words it. The minted token is never printed.
 //
-// Deliberately NOT here: running git init or writing .gitignore (a folder that is not a repository is
-// refused with `git init` named first), overwriting a config file that is not a JSON object, any verb of walkthrough.js, a rewrite of a block that points elsewhere, any
+// Before a token is stored the guard appends the line .claude/settings.local.json to <root>/.gitignore
+// (created when absent) unless git already ignores that file; git tracking it is refused with
+// `git rm --cached` named, and inside a repository git is asked again after the write. A folder that is
+// not a repository gets the line and stays a plain folder.
+//
+// Deliberately NOT here: running git init, touching a global ignore file, untracking a file, overwriting a config file that is not a JSON object, any verb of walkthrough.js, a rewrite of a block that points elsewhere, any
 // edit of a file git tracks, any retry, a shell (railway and git are spawned by bare name through
 // PATH, stdin closed, 60 s limit), or the creation of a design/ folder.
 //
 // Exit codes: 0 connected · 1 refused (by the service, by Railway or by the project tool) · 2 usage,
-// config or precondition (incl. write-failed: the settings or config file could not be written) ·
+// config or precondition (incl. write-failed: the settings, config or .gitignore file could not be written;
+// not-ignored: git tracks the token file) ·
 // 3 the service did not answer.
 
 const fs = require('fs')
@@ -171,6 +176,31 @@ function nextLine(root) {
   return '\nnext: /spec:genesis'
 }
 
+// The token-file guard: ignored → go on; tracked → refuse; otherwise append the ignore line to
+// <root>/.gitignore and, inside a repository, ask git again. Never runs git init.
+function guardTokenFile(root) {
+  const notIgnored = () => new Stop('not-ignored', `${SETTINGS_REL} is not ignored by git (not listed, tracked, or not a git repository), so a token stored there could be committed`, `add ${SETTINGS_REL} to .gitignore (and git rm --cached it when it is tracked), then run /spec:connect again`, 2)
+  const first = run('git', ['check-ignore', '-q', SETTINGS_REL], root)
+  if (first.error) throw notIgnored()
+  if (first.status === 0) return
+  const tracked = run('git', ['ls-files', '--error-unmatch', SETTINGS_REL], root)
+  if (tracked.error) throw notIgnored()
+  if (tracked.status === 0) {
+    throw new Stop('not-ignored', `${SETTINGS_REL} is tracked by git, so a token stored there would be committed`, `run git rm --cached ${SETTINGS_REL}, then run /spec:connect again`, 2)
+  }
+  const file = path.join(root, '.gitignore')
+  try {
+    let text = ''
+    try { text = fs.readFileSync(file, 'utf8') } catch (e) { if (e.code !== 'ENOENT') throw e }
+    fs.writeFileSync(file, text + (text !== '' && !text.endsWith('\n') ? '\n' : '') + SETTINGS_REL + '\n')
+  } catch (e) {
+    throw new Stop('write-failed', `.gitignore could not be written (${e.code || e.message})`, 'run the same command from a plain terminal in the project folder', 2)
+  }
+  if (first.status === 128) return
+  const again = run('git', ['check-ignore', '-q', SETTINGS_REL], root)
+  if (again.error || again.status !== 0) throw notIgnored()
+}
+
 // ---- main ------------------------------------------------------------------------------------
 
 async function main(argv) {
@@ -259,14 +289,7 @@ async function main(argv) {
   }
 
   // 4. create or join
-  const ignored = run('git', ['check-ignore', '-q', SETTINGS_REL], root)
-  if (ignored.error || ignored.status !== 0) {
-    const inside = run('git', ['rev-parse', '--is-inside-work-tree'], root)
-    if (!inside.error && inside.status !== 0) {
-      throw new Stop('not-ignored', 'this folder is not a git repository, so nothing keeps a stored token out of a later commit', `run git init, add ${SETTINGS_REL} to .gitignore, then run /spec:connect again`, 2)
-    }
-    throw new Stop('not-ignored', `${SETTINGS_REL} is not ignored by git (not listed, tracked, or not a git repository), so a token stored there could be committed`, `add ${SETTINGS_REL} to .gitignore (and git rm --cached it when it is tracked), then run /spec:connect again`, 2)
-  }
+  guardTokenFile(root)
   const settings = readSettings(root)
   if (hasBlock && flags['base-url'] === undefined) {
     const found = lookupAddress()

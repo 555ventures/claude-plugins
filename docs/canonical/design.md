@@ -124,8 +124,11 @@ is never rewritten. The default environment is `staging` until production is dep
 Connect can run first (specs/20261005/02). In a project with no config it creates
 `.claude/spec.config.json` holding only the `walkthrough` block, and only after the link is
 proved; a config file that is present but not a JSON object is refused and never overwritten.
-A folder that is not a git repository is refused with `git init` named as the first step,
-because the token is stored only where git ignores the file. In an empty folder that nothing
+Connect protects the token file itself (specs/20261005/04): when git does not ignore
+`.claude/settings.local.json` it appends that line to the project's `.gitignore`, creating the
+file when needed, in a git repository and in a plain folder alike, and never runs `git init`.
+It refuses only when git already tracks the file, naming `git rm --cached` as the way out.
+In an empty folder that nothing
 has grounded yet, connect prints `next: /spec:genesis` under its line; otherwise the next step
 is `/spec:mocks`. `init-gen.js generate` carries the block from disk on every run, with and
 without `--refresh`, treats a config that holds only the block as not yet generated, and still

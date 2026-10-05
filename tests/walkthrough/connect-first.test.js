@@ -3,13 +3,12 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { SPEC, tmpdir } = require('../helpers')
+const { SPEC } = require('../helpers')
 const fx = require('./fixture')
 
-// specs/20261005/02-connect-runs-first.md — AC-20261005-02-2 through AC-20261005-02-6 (D1–D5):
+// specs/20261005/02-connect-runs-first.md — AC-20261005-02-2 through AC-20261005-02-6 except -5 (D1–D5):
 // walkthrough-connect.js runs in a folder with no config, creates the config only after the proof,
-// refuses a present-but-unusable config as bad-config, names the repository-init step in a folder
-// that is not a repository, and prints the next step in an empty ungrounded folder.
+// refuses a present-but-unusable config as bad-config, and prints the next step in an empty ungrounded folder.
 // Fake `railway` on PATH, child-process stub.
 
 const { makeGitHost, makeRailway, runConnect, startStub, connectAnswers, SETTINGS_REL, MINTED } = fx
@@ -53,19 +52,6 @@ test('AC-20261005-02-4: neither walkthrough-connect.js nor connect.md contains t
     assert.ok(fs.existsSync(file), rel + ' must exist, or this sweep proves nothing')
     assert.ok(!RETIRED_CODE.test(fs.readFileSync(file, 'utf8')), rel + ' must not mention the retired refusal code, or a reader is told an absent config is still refused')
   }
-})
-
-test('AC-20261005-02-5: connect in a folder that is not a git repository refuses not-ignored naming the repository-init step first, before any create, leaving the folder empty', async () => {
-  const parent = tmpdir('connect-plain')
-  const host = path.join(parent, 'fresh-app')
-  fs.mkdirSync(host)
-  const rw = makeRailway()
-  const r = await runConnect(host, ['--base-url', 'http://127.0.0.1:1'], { railway: rw, env: { GIT_CEILING_DIRECTORIES: parent } })
-  assert.strictEqual(r.status, 2, 'a folder outside any repository must be refused with exit 2: ' + JSON.stringify(r))
-  assert.match(r.stderr, /^walkthrough-connect: not-ignored — this folder is not a git repository/, 'the refusal must say the folder is not a repository, or the old ignore-file-only words hide the first step: ' + r.stderr)
-  assert.ok(r.stderr.includes('remedy: run git init, add .claude/settings.local.json to .gitignore, then run /spec:connect again'), 'the remedy must name the repository-init step first: ' + r.stderr)
-  assert.strictEqual(rw.creates().length, 0, 'no create may run before the guard, or a token is minted that cannot be kept out of a commit: ' + JSON.stringify(rw.lines()))
-  assert.deepStrictEqual(fs.readdirSync(host), [], 'a refused run must leave the folder empty')
 })
 
 test('AC-20261005-02-6: connect prints next: /spec:genesis as a second line only in a root with no non-dot entry whose config has no generatedBy, and exactly one line otherwise', async (t) => {

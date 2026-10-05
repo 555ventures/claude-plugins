@@ -187,7 +187,7 @@ Gate: `spec-state-gate.sh` fed `{"prompt":"/spec:plan add a thing"}` on stdin wi
   git repository` and contains `remedy: run git init, add .claude/settings.local.json to
   .gitignore, then run /spec:connect again`; the fake's log holds no `create` line; the folder
   is still empty)
-  → writes tests/walkthrough/connect-first.test.js
+  → writes tests/walkthrough/connect-first.test.js [retired: specs/20261005/04-connect-protects-the-token-file.md]
 - **AC-20261005-02-6**: WHEN connect succeeds in a root with no entry outside dot-names and a
   config without `generatedBy` THE SYSTEM SHALL print `next: /spec:genesis` as a second stdout
   line, and SHALL print exactly one line in every other case (e.g. the host of criterion 1,

@@ -1,6 +1,6 @@
 ---
-description: Wire this project to the review service — one script run validates the service address, project id and token, stores the token in the ignored settings.local.json, and writes the walkthrough config block; prints one line and names /spec:mocks as the next step
-argument-hint: "<baseUrl> <project> [token] — the service address, the project id on the service, and optionally the token (else read from the environment)"
+description: Wire this project to the review service — one script run creates (or joins) the project on the service through the Railway CLI, stores the minted token in the git-ignored .claude/settings.local.json, proves the link with one call that needs the token, and writes the walkthrough config block; prints one line and names /spec:mocks as the next step
+argument-hint: "[--project <id>] [--name <text>] [--environment <name>] [--base-url <url>] — usually none"
 allowed-tools: Bash(spec-paths:*), Bash(node:*)
 ---
 

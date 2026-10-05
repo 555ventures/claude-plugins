@@ -151,18 +151,21 @@ function lastText(thread, fallback) {
   return last && typeof last.text === 'string' ? last.text : fallback
 }
 
-// Notes, then journey threads, whose status is "open": [{ id, where, text, picked }].
+// Notes, then journey threads, whose status is "open": [{ id, where, text, picked, spot }];
+// spot is { x, y, width } when the note's anchor carries three finite numbers under those keys.
 function waitingItems(notes) {
   const out = []
   if (!isObj(notes)) return out
   for (const n of Array.isArray(notes.notes) ? notes.notes : []) {
     if (!isObj(n) || n.status !== 'open') continue
     const where = n.screen == null ? 'project' : n.screen + (n.state ? '@' + n.state : '')
-    out.push({ id: n.id, where, text: lastText(n.thread, n.text), picked: typeof n.pickedText === 'string' && n.pickedText ? n.pickedText : null })
+    const a = isObj(n.anchor) ? n.anchor : null
+    const spot = a && [a.x, a.y, a.width].every((v) => typeof v === 'number' && Number.isFinite(v)) ? { x: a.x, y: a.y, width: a.width } : null
+    out.push({ id: n.id, where, text: lastText(n.thread, n.text), picked: typeof n.pickedText === 'string' && n.pickedText ? n.pickedText : null, spot })
   }
   for (const t of Array.isArray(notes.journeys) ? notes.journeys : []) {
     if (!isObj(t) || t.status !== 'open') continue
-    out.push({ id: t.id, where: 'story', text: lastText(t.thread, ''), picked: null })
+    out.push({ id: t.id, where: 'story', text: lastText(t.thread, ''), picked: null, spot: null })
   }
   return out
 }

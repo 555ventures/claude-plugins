@@ -636,9 +636,8 @@ the gate this stop refuses to become, since nothing downstream may compare a sto
 saw. On success the run advances to `ROADMAP`, which reads this record (§ Genesis: Roadmap
 Decomposition).
 
-**No PNG round is pushed from this stop.** Brief 29's spec 03 already owns "genesis's design
-stop can push a PNG sequence as a `screenshots` round, optional, never a gate"; until that client
-exists there is no consumer, and a hook with no caller is a mis-slice.
+A picture round is optional and never a gate: the project's `pictures` block (the contract's
+§ Pictures) says how its pictures are made, and `node "$(spec-paths pictures)" --root .` sends one.
 
 ## Genesis: Roadmap Decomposition
 

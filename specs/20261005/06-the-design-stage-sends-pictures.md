@@ -1,6 +1,7 @@
 ---
 date: 2026-10-05
-status: hardened
+status: implementing
+build_base: design-retool
 tier: critical
 area: design
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 brief: 29
 spiked: 2026-10-05
 open_markers: 0
+diff_base: c159a7a89dc9721b7fb150936fb8285ad906bab7
 ---
 
 # A project sends pictures of its screens

@@ -424,7 +424,8 @@ function cmdRoundPull() {
   const items = round.waitingItems(round.readNotes(root, n))
   const out = ['round ' + n + ' — ' + items.length + ' note' + (items.length === 1 ? '' : 's') + ' waiting for an answer']
   for (const it of items) {
-    out.push('  ' + it.id + ' [' + it.where + '] "' + it.text + '"' + (it.picked ? ' (on: "' + it.picked + '")' : ''))
+    out.push('  ' + it.id + ' [' + it.where + '] "' + it.text + '"' + (it.picked ? ' (on: "' + it.picked + '")' : '') +
+      (it.spot ? ' (spot: ' + Math.round(it.spot.x * 100) + '% across, ' + Math.round(it.spot.y * 100) + '% down the ' + it.spot.width + '-wide picture)' : ''))
   }
   out.push('journeys:')
   for (const [name, j] of currentSeedJourneys()) {

@@ -118,7 +118,15 @@
     "entryPoints": [
       "spec/commands/mocks.md",
       "spec/templates/mocks-ledger.md",
-      "spec/templates/mocks-seed.md"
+      "spec/templates/mocks-seed.md",
+      "spec/scripts/pictures.js"
+    ]
+  },
+  "spec/scripts/pictures.js": {
+    "entryPoints": [
+      "spec/scripts/genesis-driver.js",
+      "spec/doctrine/genesis.md",
+      "spec/templates/grounding-contract.md"
     ]
   },
   "spec/scripts/port-check.js": {
@@ -300,7 +308,8 @@
     "entryPoints": [
       "spec/commands/doctor.md",
       "spec/commands/mocks.md",
-      "spec/scripts/mocks-driver.js"
+      "spec/scripts/mocks-driver.js",
+      "spec/scripts/pictures.js"
     ]
   },
   "spec/scripts/workspace-scan.js": {

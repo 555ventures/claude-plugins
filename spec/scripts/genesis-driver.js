@@ -205,8 +205,8 @@
 //   - walk a journey story's `play` function, or judge whether JJ actually reviewed each one —
 //     the probe proves the index serves the story; JJ's own literal `approve` is the only mark
 //     the driver ever accepts as that review having happened.
-//   - push a screenshot round from this stop — brief 29's own spec already owns that as an
-//     optional caller; there is no consumer here yet (D6).
+//   - make or push a picture round from this stop — ROADMAP only prints the optional command
+//     (specs/20261005/06 D10); no mark and no state reads the pictures block.
 //
 // Fixing that overflow only at the child's own capture is insufficient: `logTail`, which builds the
 // SCAFFOLD_RED/GATE_RED excerpt embedded in the driver's OWN stdout, bounds its excerpt by BYTES,
@@ -231,7 +231,7 @@
 'use strict'
 const fs = require('fs')
 const path = require('path')
-const { CONFIG_RELPATH } = require('./lib/host-config')
+const { CONFIG_RELPATH, readConfig } = require('./lib/host-config')
 const mocksLedgerLib = require('./lib/mocks-ledger')
 // specs/20261002/01-the-wireframe-command-runs-over-the-service.md D13: the BRIEF step text's
 // "seed journeys" count is the seed's own journey count and "notes open" is lib/mocks-round.js's
@@ -3024,6 +3024,12 @@ const STEPS = {
         lines.push('approved: ' + name + ' — ' + beatCount + ' beats · screens: ' + screens.join(', ') +
           ' · story: ' + j.story)
       }
+    }
+    // specs/20261005/06-the-design-stage-sends-pictures.md D10: optional, never a gate.
+    const hostCfg = readConfig(root)
+    const isObjCfg = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
+    if (approval && isObjCfg(hostCfg.pictures) && isObjCfg(hostCfg.walkthrough)) {
+      lines.push('Optional — show the client the designed screens: node ' + path.join(__dirname, 'pictures.js') + ' --root ' + root)
     }
     lines.push(
       'Write docs/roadmap/00-overview.md plus one or more docs/roadmap/NN-*.md briefs, each with ' +

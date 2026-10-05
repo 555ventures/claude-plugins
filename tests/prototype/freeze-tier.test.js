@@ -222,3 +222,18 @@ test('AC-20261001-01-21: --tier critical on the three-hit fixture names the firs
   assert.ok(r.stdout.includes('🚦 generated spec tier: critical (3 risk-listed paths)'),
     'the 🚦 line must use the plural for three hits: ' + r.stdout)
 })
+
+test('a re-run after the risk refusal keeps each exported file\'s own File Plan action — a deleted file is DELETE and an added file is CREATE, never MODIFY', () => {
+  const { dir, contract } = drive({ rules: ONE_HIT })
+  const first = markTests(dir)
+  assert.strictEqual(first.status, 2, 'test setup requires the one-hit refusal first, so the re-run skips the export: ' + JSON.stringify(first))
+  const r = markTests(dir, ['--tier', 'critical'])
+  assert.strictEqual(r.status, 0, 'the confirmed re-run must complete the freeze: ' + JSON.stringify(r))
+  const text = specText(dir, contract)
+  assert.ok(text.includes('| src/db/old.js | DELETE |'),
+    'a file the export deleted must be a DELETE row on the resumed run, or the build wave check refuses the spec: ' + text)
+  assert.ok(text.includes('| drizzle/0001.sql | CREATE |'),
+    'a file the export added must stay a CREATE row on the resumed run: ' + text)
+  assert.ok(text.includes('| src/db/schema.js | MODIFY |'),
+    'a file the export changed must stay a MODIFY row: ' + text)
+})

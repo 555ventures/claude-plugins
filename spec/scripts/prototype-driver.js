@@ -648,23 +648,27 @@ function isWiringOnly(base, p, wiring) {
 function buildFilePlanRows(base, exportFiles, exportGlobs, wiring) {
   const exportPaths = new Set(exportFiles.map((f) => f.path))
   const overlayNames = OVERLAY_BASENAMES_CACHE()
+  const actionOf = (st) => (st === 'A' ? 'CREATE' : st === 'D' ? 'DELETE' : 'MODIFY')
+  const full = spawnSync('git', ['-C', root, 'diff', '--name-status', base + '...' + branch], { encoding: 'utf8' })
+  const lines = (full.stdout || '').trim().split('\n').filter(Boolean).map((line) => {
+    const [status, ...rest] = line.split('\t')
+    return { status: status.charAt(0), path: rest.join('\t') }
+  })
+  // An exported file's action comes from the proto/<stem> diff itself, never from the export
+  // call's return: a re-run of the mark skips the export and status.json keeps paths only.
+  const diffStatus = new Map(lines.map((l) => [l.path, l.status]))
   const rows = exportFiles.map((f) => ({
     path: f.path,
-    action: f.status === 'A' ? 'CREATE' : f.status === 'D' ? 'DELETE' : 'MODIFY',
+    action: actionOf(diffStatus.get(f.path) || f.status),
     layer: 'other',
   }))
-  const full = spawnSync('git', ['-C', root, 'diff', '--name-status', base + '...' + branch], { encoding: 'utf8' })
-  const lines = (full.stdout || '').trim().split('\n').filter(Boolean)
-  for (const line of lines) {
-    const [status, ...rest] = line.split('\t')
-    const p = rest.join('\t')
+  for (const { status: st, path: p } of lines) {
     if (exportPaths.has(p)) continue
     if (overlayNames.has(path.basename(p))) continue
     if ((exportGlobs || []).some((g) => globMatch(g, p))) continue
     if (isWiringOnly(base, p, wiring)) continue
     // D6: outside-export proto/<stem> edits take their action from the diff status too.
-    const st = status.charAt(0)
-    rows.push({ path: p, action: st === 'A' ? 'CREATE' : st === 'D' ? 'DELETE' : 'MODIFY', layer: 'other' })
+    rows.push({ path: p, action: actionOf(st), layer: 'other' })
   }
   return rows
 }

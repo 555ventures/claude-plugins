@@ -828,6 +828,16 @@ test('WHEN --apply --keep-on-red leaves the host gate red THE SYSTEM keeps the w
   assert.ok(!fs.readFileSync(path.join(root, 'tests/trimmed.test.js'), 'utf8').includes('retired ('))
 })
 
+// a {testDirs} gate has no File Plan to resolve against in an --all-done sweep
+test('WHEN --apply runs a gateCommand carrying {testDirs}/{scopeDirs} THE SYSTEM points it at the test files the sweep left in the directories it touched, never the raw placeholder', () => {
+  const root = writeSweepHost('expiry-gate-placeholder')
+  setGate(root, 'echo {testDirs} :: {scopeDirs} > gate-args.txt')
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--apply', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, 'a resolvable gate runs green, so the sweep lands: ' + r.stdout + r.stderr)
+  assert.strictEqual(fs.readFileSync(path.join(root, 'gate-args.txt'), 'utf8').trim(), 'tests/*.test.js :: tests',
+    'the gate runs the trimmed file\'s directory and nothing for the deleted one — a literal {testDirs} fails every host whose gate is scoped')
+})
+
 test('WHEN --apply runs on a host with no gateCommand THE SYSTEM applies, exits 0, and warns on stderr that nothing checked the sweep; a dry run never runs the gate', () => {
   const root = writeSweepHost('expiry-gate-none')
   setGate(root, null)

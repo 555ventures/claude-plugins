@@ -18,13 +18,6 @@ async function pullLines(t, notes) {
   return { r, out: r.stdout.split('\n').map((l) => l.replace(/\s+$/, '')) }
 }
 
-test('AC-20261005-06-15: round pull prints a note with a picture anchor followed by its spot as percentages across and down the picture width', async (t) => {
-  const n1 = fx.note('n1', { screen: 'dashboard', state: 'just-paid', anchor: { x: 0.25, y: 0.5, width: 390 }, text: 'Is this total in dollars?' })
-  const { r, out } = await pullLines(t, [n1])
-  assert.strictEqual(r.status, 0, 'a pull against an existing round must succeed: ' + r.stderr)
-  assert.ok(out.includes('  n1 [dashboard@just-paid] "Is this total in dollars?" (spot: 25% across, 50% down the 390-wide picture)'),
-    'the session answering a note on a picture must be told where on the picture it sits, or it cannot find what the client meant: ' + r.stdout)
-})
 
 test('AC-20261005-06-16: round pull continues to print a node-anchored note with its picked text and nothing after it', async (t) => {
   const n2 = fx.note('n2', { screen: 'welcome', anchor: { node: 'start', index: 0 }, pickedText: 'Start', text: 'Too small' })

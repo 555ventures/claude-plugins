@@ -16,6 +16,12 @@
 //   - no File Plan test rows to resolve either placeholder -> { gate: null, reason: 'no File Plan
 //     test rows to resolve {testDirs}' }
 //
+// resolveGateForFiles(gate, testFiles) -> string — the same substitution against an explicit list of
+// repo-relative test files, for a caller with no spec to read: expire-tests.js's --apply passes the
+// test files the sweep left behind in the directories it touched (an --all-done sweep has no File
+// Plan, and running the raw command handed `{testDirs}` to the shell literally). The caller owns
+// the empty-list case.
+//
 // specs/20260926/04-the-design-brief.md D13 (AC-20260926-04-23): every path under a `fixtures/`
 // directory (`/(^|\/)fixtures\//`) is dropped from the File Plan's test rows before either
 // placeholder is derived — a fixture is never a test entry point, and `node --test`'s own glob
@@ -49,6 +55,11 @@ function resolveGate(specText, config) {
     .filter(f => !baselines.has(f) && (/(^|\/)tests?\//.test(f) || /\.(test|spec)\.[a-z]+$/.test(f)))
   const testFiles = [...new Set([...layerTests, ...heuristic])].filter(f => !/(^|\/)fixtures\//.test(f))
   if (!testFiles.length) return { gate: null, reason: 'no File Plan test rows to resolve {testDirs}' }
+  return { gate: resolveGateForFiles(gate, testFiles) }
+}
+
+function resolveGateForFiles(gate, testFiles) {
+  if (!/\{testDirs\}|\{scopeDirs\}/.test(gate)) return gate
   const globs = new Set()
   for (const f of testFiles) {
     const dir = path.dirname(f)
@@ -57,7 +68,7 @@ function resolveGate(specText, config) {
     globs.add(`'${dir === '.' ? '' : dir + '/'}${suffix}'`)
   }
   const dirsStr = [...globs].join(' ')
-  return { gate: gate.replace(/\{testDirs\}/g, dirsStr).replace(/\{scopeDirs\}/g, [...new Set(testFiles.map(f => path.dirname(f)))].join(' ')) }
+  return gate.replace(/\{testDirs\}/g, dirsStr).replace(/\{scopeDirs\}/g, [...new Set(testFiles.map(f => path.dirname(f)))].join(' '))
 }
 
-module.exports = { resolveGate }
+module.exports = { resolveGate, resolveGateForFiles }

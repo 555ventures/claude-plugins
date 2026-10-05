@@ -84,6 +84,7 @@ const {
 } = require('./lib/spec-sections')
 const { fmValue } = require('./lib/frontmatter')
 const { readConfig } = require('./lib/host-config')
+const { resolveGateForFiles } = require('./lib/gate-resolve')
 
 const USAGE = 'expire-tests.js --root <r> (--spec <path> | --all-done | --invariants) [--apply [--keep-on-red]] [--json]'
 const EXPIRY_APPLIES_FROM = '20260911'
@@ -462,10 +463,21 @@ if (apply && writes.length > 0) {
       dir = path.dirname(dir)
     }
   }
-  const command = config && typeof config.gateCommand === 'string' ? config.gateCommand.trim() : ''
+  // A {testDirs}/{scopeDirs} gate is pointed at the test files the sweep left in the directories
+  // it touched — there is no File Plan to derive them from, and the raw placeholder reaches the
+  // shell as a literal path the runner cannot find.
+  const touchedDirs = new Set(writes.map((w) => relPosix(path.dirname(w.abs))))
+  const emptiedSet = new Set(emptied)
+  const surviving = testFiles.filter((f) => !emptiedSet.has(f) && touchedDirs.has(path.posix.dirname(f)))
+  const declared = config && typeof config.gateCommand === 'string' ? config.gateCommand.trim() : ''
+  const placeholder = /\{testDirs\}|\{scopeDirs\}/.test(declared)
+  const command = placeholder && surviving.length === 0 ? '' : resolveGateForFiles(declared, surviving)
   if (!command) {
-    writeOut(2, '⚠ no gateCommand in the host config — the applied sweep was not checked; ' +
-      'run the host\'s gates before committing it')
+    writeOut(2, (placeholder
+      ? '⚠ the sweep left no test file in the directories it touched to point the gateCommand\'s ' +
+        '{testDirs}/{scopeDirs} at'
+      : '⚠ no gateCommand in the host config') +
+      ' — the applied sweep was not checked; run the host\'s gates before committing it')
   } else {
     const run = spawnSync(command, {
       cwd: root, shell: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 256 * 1024 * 1024,

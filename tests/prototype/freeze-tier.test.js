@@ -7,7 +7,7 @@ const { execFileSync } = require('node:child_process')
 const { runNode } = require('../helpers')
 const {
   setupHost, patchConfig, writeStates, writePins, statusOf,
-  designDir, worktreePath, DRIVER, BRIEF_REL, STEM,
+  designDir, worktreePath, authorDerivedTests, DRIVER, BRIEF_REL, STEM,
 } = require('./fixture')
 
 // specs/20261001/01-the-freeze-signs-in-and-derives-its-tier.md D5-D8 — AC-20261001-01-9..16, -20, -21:
@@ -79,11 +79,7 @@ function drive(opts) {
   git(wt, 'add', '-A')
   git(wt, 'commit', '-q', '-m', 'edits on proto')
 
-  const e2eAbs = path.join(dir, 'e2e/proto-28.smoke.spec.ts')
-  fs.mkdirSync(path.dirname(e2eAbs), { recursive: true })
-  fs.writeFileSync(e2eAbs,
-    "test('" + contract.tests[0].ac + " pin " + contract.tests[0].pin + ": n1', () => {})\n" +
-    "test('" + contract.tests[1].ac + " pin " + contract.tests[1].pin + ": n3', () => {})\n")
+  authorDerivedTests(dir, contract)
   return { dir, contract }
 }
 

@@ -6,6 +6,7 @@
 // matches none of them).
 const fs = require('node:fs')
 const path = require('node:path')
+const { execFileSync } = require('node:child_process')
 const { tmpdir, gitRepo, ROOT, runNode } = require('../helpers')
 
 const FIXTURE_DIR = path.join(ROOT, 'tests/fixtures/prototype/host')
@@ -75,9 +76,29 @@ function mark(dir, name, extra = []) {
   return runNode(DRIVER, [BRIEF_REL, '--root', dir, '--mark', name, ...extra])
 }
 
+// Authors the derived e2e file the way the TESTS step prints it: in the prototype worktree,
+// committed on the prototype branch. opts.commit === false leaves it uncommitted; opts.where ===
+// 'main' writes it in the main working tree instead (nothing committed); opts.count keeps only the
+// first N reserved ids; opts.extra appends a line (an edit on top of a committed copy).
+function authorDerivedTests(dir, contract, opts) {
+  opts = opts || {}
+  const tests = opts.count ? contract.tests.slice(0, opts.count) : contract.tests
+  const body = tests.map((t, i) => "test('" + t.ac + ' pin ' + t.pin + ': n' + (i + 1) + "', () => {})\n").join('') +
+    (opts.extra || '')
+  const root = opts.where === 'main' ? dir : worktreePath(dir)
+  const abs = path.join(root, contract.e2eFile)
+  fs.mkdirSync(path.dirname(abs), { recursive: true })
+  fs.writeFileSync(abs, body)
+  if (opts.where !== 'main' && opts.commit !== false) {
+    execFileSync('git', ['-C', root, 'add', contract.e2eFile], { encoding: 'utf8' })
+    execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'derived tests on ' + BRANCH], { encoding: 'utf8' })
+  }
+  return abs
+}
+
 module.exports = {
   FIXTURE_DIR, DRIVER, BRIEF_REL, STEM, BRANCH, WORKTREE_NAME,
   setupHost, readConfig, writeConfig, patchConfig,
   designDir, statusPath, statesPath, pinsPath, worktreePath, statusOf,
-  writeStates, writeStatus, writePins, bare, mark,
+  writeStates, writeStatus, writePins, bare, mark, authorDerivedTests,
 }

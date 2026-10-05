@@ -92,17 +92,18 @@ Read only: `design/prototypes/<stem>/contract.json`, `design/prototypes/<stem>/p
 
 The driver's printed step lists one `pin <id> → <AC-ID>` line per behaviour pin, in pin order,
 each carrying its screen, state and note, plus the target file (`prototype.e2eFile`, substituted,
-authored on **main**) and a `Session:` line. Write one end-to-end test per line — title grammar
-`<AC-ID> pin <id>: <note>` — that fails on main today; this session authors them, the driver only
-verifies they exist and are counted by the host's own runner. Then run `node {driver} <brief
-path> --root . --mark tests-derived`. The driver refuses naming the e2e file when it is missing, a
-still-uncounted reserved AC id when the file carries only some of them, or `e2eList` plus the
-under-reported id when the file lists every id but the host's runner does not; a refusal after
-export or spec-write has already succeeded leaves both in place and resumes at the first undone
-step on re-run. When a generated File Plan path is named in the host's § Risk Tiers the mark refuses listing
-each path and its trigger — put that list to the user as one `AskUserQuestion` (confirm the lock
+under the prototype worktree) and a `Session:` line. Write one end-to-end test per line — title
+grammar `<AC-ID> pin <id>: <note>` — in the prototype worktree and commit the file on `proto/<stem>`;
+each test fails against the base, and the driver only verifies they exist and are counted by the
+host's own runner (`e2eList`, run in the worktree). Then run `node
+{driver} <brief path> --root . --mark tests-derived`. The driver refuses a copy left in the main
+working tree, a file not committed on `proto/<stem>`, uncommitted edits to it, a still-uncounted
+reserved AC id when the file carries only some of them, or `e2eList` plus the under-reported id
+when the file lists every id but the host's runner does not; a refusal after export or spec-write
+has already succeeded leaves both in place and resumes at the first undone step on re-run. When a
+generated File Plan path is named in the host's § Risk Tiers the mark refuses listing each path and its trigger — put that list to the user as one `AskUserQuestion` (confirm the lock
 as critical / rule these not a risk change), never pick for them, then re-run with `--tier`;
-pass `--tier critical` unprompted only when the user has said a prose trigger applies. On success it exports `harden/<stem>`, appends the brief's sub-plan, writes and
+pass `--tier critical` unprompted only when the user has said a prose trigger applies. On success it exports `harden/<stem>` — the data and API layer, then the derived tests as a second commit — appends the brief's sub-plan, writes and
 lints the behaviour-lane spec, destroys the prototype database, deletes the worktree and branch,
 appends the ledger row, and advances straight to `CLOSED`.
 
@@ -110,8 +111,9 @@ appends the ledger row, and advances straight to `CLOSED`.
 
 The driver prints `Read only: contract.json, <generated spec path>` and `Next:` —
 `spec-status --next` verbatim, now naming `/spec:run <generated spec>`. Commit
-`design/prototypes/<stem>/`, the e2e file, the brief and the generated spec on **main** directly
-(direct lane — no build worker touches these). Nothing under `proto/<stem>` is read again; only
+`design/prototypes/<stem>/`, the brief and the generated spec on **main** directly (direct lane
+— no build worker touches these), never the e2e file, which rides on `harden/<stem>` and reaches
+main only through the hardening spec's merge. Nothing under `proto/<stem>` is read again; only
 `harden/<stem>` and this commit survive.
 
 ## Rules
@@ -120,8 +122,8 @@ The driver prints `Read only: contract.json, <generated spec path>` and `Next:` 
   hand from `status.json` is the bug class the driver exists to prevent, and editing that file
   to bypass a mark's ordering refusal is never sanctioned.
 - Every file a later build must still read lives under `design/prototypes/<stem>/` on the main
-  working tree, committed there directly (never through a build worker) — nothing on
-  `proto/<stem>` is read once that branch closes (design.md § Design Canon).
+  working tree, or on harden/<stem>, committed there directly (never through a build worker) —
+  nothing on `proto/<stem>` is read once that branch closes (design.md § Design Canon).
 - The pin endpoint (`serve --port <pinsPort>`) runs only while a round is open; never leave it,
   or the host's dev server, resident past the turn that started them.
 - The Tailscale share line the driver prints is printed, never run — sharing a running round is

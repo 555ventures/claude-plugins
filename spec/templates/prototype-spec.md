@@ -85,9 +85,9 @@ composite, and checks each capture through the same structural comparison this p
 frozen with (spec 03) — a route/state pair with no captured composite instance is a build-time
 refusal, never a silent skip. In parallel, `harden/{{stem}}`'s diff is merged into the same base
 and carried through the host's own gate before either surface is considered done. Every
-behaviour pin below became exactly one derived end-to-end test, already authored and already
-red on `main` — this spec's own Acceptance Criteria are met the moment each such test turns
-green, never by a new assertion invented at build time.
+behaviour pin below became exactly one derived end-to-end test, already authored,
+carried on `harden/{{stem}}`, and red against `{{base}}` — this spec's own Acceptance Criteria are
+met the moment each such test turns green, never by a new assertion invented at build time.
 
 ## Acceptance Criteria
 
@@ -95,7 +95,8 @@ green, never by a new assertion invented at build time.
 
 ## Assumptions (escalation triggers)
 
-- A1: the derived end-to-end tests, red on `main` today, turn green once the rebuild reproduces
+- A1: the derived end-to-end tests, carried on `harden/{{stem}}` and red against `{{base}}` today,
+  turn green once the rebuild reproduces
   `contract.json`'s captured composite instances at the same ids — a test that stays red after
   the rebuild names a real captured-contract mismatch, never a flaky assertion to relax. —
   **if false:** STOP, ask the user; do not edit the derived test to make it pass.
@@ -118,8 +119,8 @@ former, the host's own gate for the latter — and conflating them would hide wh
 build-time failure actually failed. Every AC line here follows an approved *behaviour* pin
 one-to-one; a look-only pin never reaches this file, because a look-only pin has no derived test
 to be red or green about (spec 02's `pins.look` array). The derived tests are red today by
-construction, asserting against contract ids the current `main` tree does not yet reproduce, and
-this spec never tags one pre-green — a generated spec inherits no exemption a hand-authored one
+construction, asserting against contract ids the `{{base}}` tree does not yet reproduce, and they reach this spec's branch
+only through the `harden/{{stem}}` merge — `{{base}}` never carries them before this spec lands; this spec never tags one pre-green — a generated spec inherits no exemption a hand-authored one
 would not also need to earn. Nothing under `proto/{{stem}}` is read past this point: that branch
 was deleted before this file was written, and `harden/{{stem}}` is the only survivor of the
 prototype's own history.

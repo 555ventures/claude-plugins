@@ -43,8 +43,10 @@ runs a functional prototype on `proto/<stem>`, built on top of the real kit and 
 behaviour-lane brief's product, not a wireframe. Its rounds, pins and declared states live under
 `design/prototypes/<stem>/` in the main working tree, never on the prototype branch itself:
 nothing on `proto/*` is read once the branch closes, so any file the freeze or a later build must
-still read has to already be on main before that happens (specs/20260928/01-the-prototype-
-command-and-the-pin-overlay.md D2/D6, ADR-0030 h).
+still read has to already be on main, or exported to `harden/<stem>` (the data and API layer and
+the derived tests), before that happens (specs/20260928/01-the-prototype-
+command-and-the-pin-overlay.md D2/D6, ADR-0030 h;
+specs/20261005/05-derived-tests-ride-on-the-export-branch.md D3).
 
 ## Design Authoring Contracts
 

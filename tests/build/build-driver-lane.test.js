@@ -169,6 +169,32 @@ test('a harden merge that brings File Plan paths still reaches the first wave �
     'diff_base must stay at the commit before the merge — it is review\'s range, and moving it past the merge would land the merged data/API layer on main unreviewed')
 })
 
+// specs/20261005/05-derived-tests-ride-on-the-export-branch.md — the tests-row file arrives with
+// the harden merge instead of being written on the base first.
+test('AC-20261005-05-10 (SHALL CONTINUE TO): a tests-row file delivered by the harden merge is accepted as merged pre-image — tests-authored lands RED_ATTRIBUTION, red-attributed reaches the first wave, and diff_base stays at the commit before the merge', () => {
+  const host = makeHost({ lane: 'behaviour', brief: 28 })
+  runB(host)
+  const preMerge = host.g('rev-parse', 'HEAD').trim()
+  host.g('checkout', '-b', 'harden/' + host.stem)
+  fs.writeFileSync(path.join(host.root, 'tests/foo.test.js'), testFileContent(999))
+  host.g('add', 'tests/foo.test.js')
+  host.g('commit', '-q', '-m', 'harden: derived tests')
+  host.g('checkout', 'main')
+  assert.ok(!fs.existsSync(path.join(host.root, 'tests/foo.test.js')), 'test setup requires the tests-row file absent from the base before the merge')
+  mergeHardenBranch(host)
+  const merged = runB(host, '--mark', 'harden-merged')
+  assert.strictEqual(merged.status, 0, 'a merge delivering the tests-row file must be accepted: ' + merged.stdout + merged.stderr)
+  const authored = runB(host, '--mark', 'tests-authored')
+  assert.strictEqual(authored.status, 0,
+    'with no session write after the merge, the delivered test file must satisfy tests-authored — refusing it strands every prototype build whose tests ride the harden branch: ' + authored.stdout + authored.stderr)
+  assert.strictEqual(stateOfB(host), 'RED_ATTRIBUTION', 'the delivered red test must land RED_ATTRIBUTION: ' + authored.stdout + authored.stderr)
+  const attributed = runB(host, '--mark', 'red-attributed')
+  assert.strictEqual(attributed.status, 0, 'red-attributed must be accepted on the delivered test: ' + attributed.stdout + attributed.stderr)
+  assert.strictEqual(stateOfB(host), 'WAVE:doctrine+scripts', 'the build must advance to its first wave: ' + attributed.stdout + attributed.stderr)
+  assert.match(fs.readFileSync(host.spec, 'utf8'), new RegExp('^diff_base: ' + preMerge + '$', 'm'),
+    'diff_base must stay at the commit before the merge, so review sees the delivered tests as part of the spec\'s own change')
+})
+
 // Residue is still residue on this lane: a planned file written after the merge, before any wave.
 test('on the behaviour lane an uncommitted CREATE-row file written after the harden merge is still refused as stub residue', () => {
   const host = makeHost({ lane: 'behaviour', brief: 28 })

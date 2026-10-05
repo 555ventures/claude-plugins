@@ -230,7 +230,7 @@ otherwise, and run with `WALKTHROUGH_TOKEN` unset.
   SHALL refuse before creating anything (e.g. a host with an empty `.gitignore`, and a host
   where the file is committed: exit 2, stderr starts `walkthrough-connect: not-ignored` and
   contains `.gitignore`, the log holds no `create` line, the config has no `walkthrough` key)
-  → writes tests/walkthrough/connect.test.js
+  → writes tests/walkthrough/connect.test.js [retired: specs/20261005/04-connect-protects-the-token-file.md]
 - **AC-20261005-01-10**: WHEN the host's block points somewhere other than the flags name THE
   SYSTEM SHALL refuse and leave the block as it is (e.g. a block with project `acme-shop` and
   `--project other`: exit 2, stderr starts `walkthrough-connect: connected-elsewhere` and

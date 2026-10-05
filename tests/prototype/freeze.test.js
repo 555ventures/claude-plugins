@@ -7,7 +7,7 @@ const { execFileSync } = require('node:child_process')
 const { runNode } = require('../helpers')
 const {
   setupHost, patchConfig, writeStates, writePins, statusOf,
-  designDir, statusPath, worktreePath, DRIVER, BRIEF_REL, BRANCH, STEM,
+  designDir, statusPath, worktreePath, authorDerivedTests, DRIVER, BRIEF_REL, BRANCH, STEM,
 } = require('./fixture')
 
 // specs/20260928/02-freeze-export-and-the-contract.md D3-D8, AC-20260928-02-4 .. AC-20260928-
@@ -241,7 +241,7 @@ test('AC-20260928-02-7: the bare run at TESTS prints one "pin <id> → <AC-ID>" 
   assert.match(r.stdout, /Session:/, 'a Session: line telling the session to write the tests must be printed: ' + r.stdout)
 })
 
-test('AC-20260928-02-7: --mark tests-derived refuses naming the e2e file when it does not exist on main', () => {
+test('AC-20260928-02-7: --mark tests-derived refuses naming the e2e file when it is not committed on proto/<stem>', () => {
   const dir = setupHost()
   advanceToApproved(dir, TWO_ROUTE_STATES, threePins())
   const frozen = markFrozen(dir)
@@ -257,9 +257,7 @@ test('AC-20260928-02-7: --mark tests-derived refuses naming the second AC id whe
   const frozen = markFrozen(dir)
   assert.strictEqual(frozen.status, 0, frozen.stderr)
   const contract = readContract(dir)
-  const e2eAbs = path.join(dir, 'e2e/proto-28.smoke.spec.ts')
-  fs.mkdirSync(path.dirname(e2eAbs), { recursive: true })
-  fs.writeFileSync(e2eAbs, "test('" + contract.tests[0].ac + " pin " + contract.tests[0].pin + ": n1', () => {})\n")
+  authorDerivedTests(dir, contract, { count: 1 })
   const r = markTestsDerived(dir)
   assert.strictEqual(r.status, 2, 'a file carrying only the first reserved AC id must refuse tests-derived: ' + JSON.stringify(r))
   assert.match(r.stderr, new RegExp(contract.tests[1].ac), 'the refusal must name the still-missing second AC id: ' + r.stderr)
@@ -271,11 +269,7 @@ test('AC-20260928-02-7: --mark tests-derived refuses containing "e2eList" and th
   const frozen = markFrozen(dir)
   assert.strictEqual(frozen.status, 0, frozen.stderr)
   const contract = readContract(dir)
-  const e2eAbs = path.join(dir, 'e2e/proto-28.smoke.spec.ts')
-  fs.mkdirSync(path.dirname(e2eAbs), { recursive: true })
-  fs.writeFileSync(e2eAbs,
-    "test('" + contract.tests[0].ac + " pin " + contract.tests[0].pin + ": n1', () => {})\n" +
-    "test('" + contract.tests[1].ac + " pin " + contract.tests[1].pin + ": n3', () => {})\n")
+  authorDerivedTests(dir, contract)
   const r = markTestsDerived(dir, { LIST_TESTS_LIMIT: '1' })
   assert.strictEqual(r.status, 2, 'a file carrying both ids but whose e2eList stub prints only one title must still refuse (the host runner is the oracle, not the file content): ' + JSON.stringify(r))
   assert.match(r.stderr, /e2eList/, 'the refusal must name e2eList as the check that failed: ' + r.stderr)
@@ -317,11 +311,7 @@ function driveToTestsDerived(dir, opts) {
   execFileSync('git', ['-C', wt, 'add', '-A'], { encoding: 'utf8' })
   execFileSync('git', ['-C', wt, 'commit', '-q', '-m', 'data/API + UI edits on ' + BRANCH], { encoding: 'utf8' })
 
-  const e2eAbs = path.join(dir, 'e2e/proto-28.smoke.spec.ts')
-  fs.mkdirSync(path.dirname(e2eAbs), { recursive: true })
-  fs.writeFileSync(e2eAbs,
-    "test('" + contract.tests[0].ac + " pin " + contract.tests[0].pin + ": n1', () => {})\n" +
-    "test('" + contract.tests[1].ac + " pin " + contract.tests[1].pin + ": n3', () => {})\n")
+  authorDerivedTests(dir, contract)
 
   const r = opts.briefArg
     ? runNode(DRIVER, [opts.briefArg, '--root', dir, '--mark', 'tests-derived'], { env: captureEnv(dir) })
@@ -329,7 +319,7 @@ function driveToTestsDerived(dir, opts) {
   return { dir, contract, r }
 }
 
-test('AC-20260928-02-8: --mark tests-derived creates harden/<stem> holding exactly the export globs\' diff, leaves no harden-<stem> worktree, appends the brief\'s sub-plan, and is a no-op on a second run', () => {
+test('AC-20260928-02-8: --mark tests-derived creates harden/<stem> holding exactly the export globs\' diff, leaves no harden-<stem> worktree, appends the brief\'s sub-plan, and is a no-op on a second run — AC-20261005-05-5', () => {
   const dir = setupHost()
   const { r } = driveToTestsDerived(dir)
   assert.strictEqual(r.status, 0, 'a fully-satisfied tests-derived run (both AC ids listed by the host runner) must succeed: ' + JSON.stringify(r))
@@ -342,6 +332,12 @@ test('AC-20260928-02-8: --mark tests-derived creates harden/<stem> holding exact
   const lines = diff.trim().split('\n').filter(Boolean).sort()
   assert.deepStrictEqual(lines, ['A\tdrizzle/0001.sql', 'D\tsrc/db/old.js', 'M\tsrc/db/schema.js'].sort(),
     'harden/<stem>\'s diff against base, restricted to the export globs, must be exactly one M, one A and one D — no more, no fewer: ' + diff)
+  const full = git(dir, 'diff', '--name-status', 'main', 'harden/' + STEM).trim().split('\n').filter(Boolean).sort()
+  assert.deepStrictEqual(full, ['A\tdrizzle/0001.sql', 'A\te2e/proto-28.smoke.spec.ts', 'D\tsrc/db/old.js', 'M\tsrc/db/schema.js'].sort(),
+    'the whole harden/<stem> tip must differ from base by the three data/API paths plus the derived test file as an added path — nothing from src/ui, no overlay file: ' + full.join(' | '))
+  const dataOnly = git(dir, 'diff', '--name-status', 'main', 'harden/' + STEM + '~1').trim().split('\n').filter(Boolean).sort()
+  assert.deepStrictEqual(dataOnly, ['A\tdrizzle/0001.sql', 'D\tsrc/db/old.js', 'M\tsrc/db/schema.js'].sort(),
+    'the data commit alone must still differ from base by exactly the export globs\' diff, so the derived tests live only in the second commit: ' + dataOnly.join(' | '))
   const uiDiff = git(dir, 'diff', '--name-status', 'main', 'harden/' + STEM, '--', 'src/ui/**')
   assert.strictEqual(uiDiff.trim(), '', 'a file outside the export globs (src/ui/a.js) must never reach harden/<stem>: ' + uiDiff)
 
@@ -426,11 +422,7 @@ test('AC-20260928-02-10: a dbDestroy that fails on a second invocation still rea
   fs.rmSync(path.join(wt, 'src/db/old.js'))
   execFileSync('git', ['-C', wt, 'add', '-A'], { encoding: 'utf8' })
   execFileSync('git', ['-C', wt, 'commit', '-q', '-m', 'exported edits'], { encoding: 'utf8' })
-  const e2eAbs = path.join(dir, 'e2e/proto-28.smoke.spec.ts')
-  fs.mkdirSync(path.dirname(e2eAbs), { recursive: true })
-  fs.writeFileSync(e2eAbs,
-    "test('" + contract.tests[0].ac + " pin " + contract.tests[0].pin + ": n1', () => {})\n" +
-    "test('" + contract.tests[1].ac + " pin " + contract.tests[1].pin + ": n3', () => {})\n")
+  authorDerivedTests(dir, contract)
   // Dirty the worktree AFTER the export-worthy commit, so the deletion step (which runs
   // dbDestroy first) refuses on the worktree-remove step, after dbDestroy has already run once.
   fs.writeFileSync(path.join(wt, 'src/ui-scratch.txt'), 'uncommitted\n')
@@ -455,11 +447,7 @@ test('AC-20260928-02-8: --mark tests-derived exits 2 containing "harden/<stem> e
   const frozen = markFrozen(dir)
   assert.strictEqual(frozen.status, 0, frozen.stderr)
   const contract = readContract(dir)
-  const e2eAbs = path.join(dir, 'e2e/proto-28.smoke.spec.ts')
-  fs.mkdirSync(path.dirname(e2eAbs), { recursive: true })
-  fs.writeFileSync(e2eAbs,
-    "test('" + contract.tests[0].ac + " pin " + contract.tests[0].pin + ": n1', () => {})\n" +
-    "test('" + contract.tests[1].ac + " pin " + contract.tests[1].pin + ": n3', () => {})\n")
+  authorDerivedTests(dir, contract)
   execFileSync('git', ['-C', dir, 'branch', 'harden/' + STEM], { encoding: 'utf8' })
   const r = markTestsDerived(dir)
   assert.strictEqual(r.status, 2, 'a pre-existing harden/<stem> with marks.exported unset must refuse rather than silently reuse or overwrite it: ' + JSON.stringify(r))
@@ -532,11 +520,7 @@ test('AC-20260928-02-10: the same mark exits 2 containing "commit or discard on 
   fs.rmSync(path.join(wt, 'src/db/old.js'))
   execFileSync('git', ['-C', wt, 'add', '-A'], { encoding: 'utf8' })
   execFileSync('git', ['-C', wt, 'commit', '-q', '-m', 'exported edits'], { encoding: 'utf8' })
-  const e2eAbs = path.join(dir, 'e2e/proto-28.smoke.spec.ts')
-  fs.mkdirSync(path.dirname(e2eAbs), { recursive: true })
-  fs.writeFileSync(e2eAbs,
-    "test('" + contract.tests[0].ac + " pin " + contract.tests[0].pin + ": n1', () => {})\n" +
-    "test('" + contract.tests[1].ac + " pin " + contract.tests[1].pin + ": n3', () => {})\n")
+  authorDerivedTests(dir, contract)
   // Dirty the worktree AFTER the export-worthy commit: an uncommitted change must still block
   // deletion even though export/spec-write already succeeded.
   fs.writeFileSync(path.join(wt, 'src/ui-scratch.txt'), 'uncommitted\n')

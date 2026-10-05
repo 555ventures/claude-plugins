@@ -1,6 +1,7 @@
 ---
 date: 2026-10-05
-status: hardened
+status: implementing
+build_base: design-retool
 tier: standard
 area: design
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 brief: n/a
 spiked: 2026-10-05
 open_markers: 0
+diff_base: d7bf5e8bb627c6e2b4b9571ac7c7845068195dcb
 ---
 
 # Derived tests ride on the export branch

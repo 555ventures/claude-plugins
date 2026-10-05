@@ -340,6 +340,35 @@ function exportHarden({ root, branch, stem, base, exportGlobs, alreadyExported, 
 }
 
 // ---------------------------------------------------------------------------
+// specs/20261005/05 D3: exportTests — carry the derived test file from proto/<stem> onto
+// harden/<stem> as its own commit. Idempotent by branch content: skipped when the branch
+// already holds e2eFile.
+// ---------------------------------------------------------------------------
+function exportTests({ root, branch, stem, base, e2eFile }) {
+  const hardenBranch = 'harden/' + stem
+  const has = spawnSync('git', ['-C', root, 'cat-file', '-e', hardenBranch + ':' + e2eFile], { encoding: 'utf8' })
+  if (has.status === 0) return { skipped: true, hardenBranch }
+
+  const wtPath = path.join(root, '.claude/worktrees', 'harden-' + stem)
+  const fail = (step, r) => {
+    spawnSync('git', ['-C', root, 'worktree', 'remove', '--force', wtPath], { encoding: 'utf8' })
+    return { ok: false, message: step + ' failed: ' + ((r && r.stderr) || '').trim() }
+  }
+  const add = spawnSync('git', ['-C', root, 'worktree', 'add', wtPath, hardenBranch], { encoding: 'utf8' })
+  if (add.status !== 0) return fail('git worktree add for ' + hardenBranch, add)
+  const diff = spawnSync('git', ['-C', root, 'diff', base + '...' + branch, '--', e2eFile], { encoding: 'utf8', maxBuffer: 1024 * 1024 * 64 })
+  if (diff.status !== 0) return fail('git diff ' + base + '...' + branch + ' -- ' + e2eFile, diff)
+  const apply = spawnSync('git', ['-C', wtPath, 'apply', '--index'], { input: diff.stdout, encoding: 'utf8' })
+  if (apply.status !== 0) return fail('git apply --index into ' + hardenBranch, apply)
+  const commitRes = spawnSync('git', ['-C', wtPath, 'commit', '-m', 'harden(' + stem + '): derived behaviour tests from proto/' + stem], { encoding: 'utf8' })
+  if (commitRes.status !== 0) return fail('git commit into ' + hardenBranch, commitRes)
+  const rev = spawnSync('git', ['-C', wtPath, 'rev-parse', 'HEAD'], { encoding: 'utf8' })
+  const remove = spawnSync('git', ['-C', root, 'worktree', 'remove', wtPath], { encoding: 'utf8' })
+  if (remove.status !== 0) spawnSync('git', ['-C', root, 'worktree', 'remove', '--force', wtPath], { encoding: 'utf8' })
+  return { ok: true, commit: rev.stdout.trim(), hardenBranch }
+}
+
+// ---------------------------------------------------------------------------
 // D7: deletion — split into two postcondition-checking steps so the driver can persist
 // status.json between them. dbDestroy is not assumed idempotent (a resume after a dirty-
 // worktree refusal must not run it twice), so the driver records `marks.dbDestroyed` right
@@ -587,6 +616,7 @@ module.exports = {
   nextFreeSpecNumber,
   todayStamp,
   exportHarden,
+  exportTests,
   writeSpec,
   runDbDestroy,
   removeProtoWorktreeAndBranch,

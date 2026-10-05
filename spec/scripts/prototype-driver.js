@@ -42,8 +42,9 @@
 // `--mark frozen` (spec 02 D3) runs the gate on the prototype tree, captures every declared
 // route x state, writes contract.json, and reserves the generated spec's number and AC ids —
 // each ordered precondition refuses loudly and writes nothing past its own failure point.
-// `--mark tests-derived` (spec 02 D4-D8) refuses until the session's own derived e2e file on
-// main carries every reserved AC id AND the host's own e2eList command reports it (the runner is
+// `--mark tests-derived` (spec 02 D4-D8) refuses until the session's own derived e2e file,
+// committed on proto/<stem> and carried to harden/<stem> as a second commit after the data
+// export (specs/20261005/05 D2/D3), carries every reserved AC id AND the host's own e2eList command reports it (the runner is
 // the oracle, never the file content alone), then runs the export, the generated spec + its
 // lints, the prototype's deletion, and the ledger row in that order — each step re-checks its own
 // postcondition first, so a re-run after a partial failure (e.g. a dirty worktree at deletion)
@@ -645,7 +646,9 @@ function isWiringOnly(base, p, wiring) {
   return changed.length > 0 && changed.every((l) => l.includes(basename))
 }
 
-function buildFilePlanRows(base, exportFiles, exportGlobs, wiring) {
+function buildFilePlanRows(base, exportFiles, exportGlobs, wiring, e2eFile) {
+  // specs/20261005/05 D4: writeSpec's tests-layer CREATE row is the only row naming the e2e file.
+  exportFiles = exportFiles.filter((f) => f.path !== e2eFile)
   const exportPaths = new Set(exportFiles.map((f) => f.path))
   const overlayNames = OVERLAY_BASENAMES_CACHE()
   const actionOf = (st) => (st === 'A' ? 'CREATE' : st === 'D' ? 'DELETE' : 'MODIFY')
@@ -663,6 +666,7 @@ function buildFilePlanRows(base, exportFiles, exportGlobs, wiring) {
     layer: 'other',
   }))
   for (const { status: st, path: p } of lines) {
+    if (p === e2eFile) continue
     if (exportPaths.has(p)) continue
     if (overlayNames.has(path.basename(p))) continue
     if ((exportGlobs || []).some((g) => globMatch(g, p))) continue
@@ -689,29 +693,50 @@ function cmdMarkTestsDerived() {
   const prevState = deriveState(status)
   const contract = readContractOrDie()
 
-  // D4: the e2e file must exist on main and carry every reserved AC id.
-  const e2eAbs = path.join(root, contract.e2eFile)
-  if (!fs.existsSync(e2eAbs)) {
-    die(contract.e2eFile + ' does not exist on main — remedy: write the derived tests at ' + contract.e2eFile + ' (see the TESTS step), then re-run --mark tests-derived')
-  }
-  const e2eText = fs.readFileSync(e2eAbs, 'utf8')
-  for (const t of contract.tests) {
-    if (!e2eText.includes(t.ac)) {
-      die(contract.e2eFile + ' does not carry ' + t.ac + ' — remedy: add a derived test whose title includes ' + t.ac + ', then re-run --mark tests-derived')
+  // specs/20261005/05 D2: the derived tests are verified where they live — committed on
+  // proto/<stem> — and skipped once harden/<stem> already carries them or the freeze is closed.
+  const hardenBranch = 'harden/' + stem
+  const gitOk = (args) => spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' }).status === 0
+  const wtRel = status.worktree || worktreeRel
+  const wtAbs = path.join(root, wtRel)
+  const rerun = ', then re-run --mark tests-derived'
+  if (!status.marks.closed && !gitOk(['cat-file', '-e', hardenBranch + ':' + contract.e2eFile])) {
+    if (!gitOk(['rev-parse', '--verify', '--quiet', 'refs/heads/' + branch])) {
+      die(hardenBranch + ' does not carry ' + contract.e2eFile + ' and ' + branch + ' is gone — remedy: commit the derived tests on ' + hardenBranch +
+        ' at ' + contract.e2eFile + ' by hand (and delete any copy in the main working tree)' + rerun)
     }
-  }
-  if (typeof proto.e2eList !== 'string' || !proto.e2eList) {
-    die('prototype.e2eList is not declared — remedy: declare it (spec/templates/grounding-contract.md § Required config keys)')
-  }
-  const listCmd = proto.e2eList.split('{file}').join(contract.e2eFile)
-  const listRun = spawnSync('bash', ['-c', listCmd], { cwd: root, encoding: 'utf8' })
-  const listedOut = listRun.stdout || ''
-  if (listRun.status !== 0) {
-    die('e2eList (' + listCmd + ') exited ' + listRun.status + ': ' + ((listedOut) + (listRun.stderr || '')).trim())
-  }
-  for (const t of contract.tests) {
-    if (!listedOut.includes(t.ac)) {
-      die('e2eList (' + listCmd + ') did not report ' + t.ac + ' as listed — the host runner is the oracle, not the file content: confirm ' + contract.e2eFile + ' matches the runner\'s own test-discovery pattern')
+    if (fs.existsSync(path.join(root, contract.e2eFile)) && !gitOk(['cat-file', '-e', status.base + ':' + contract.e2eFile])) {
+      die(contract.e2eFile + ' is in the main working tree — derived tests ride on ' + hardenBranch + ', never on ' + status.base +
+        '; remedy: move it to ' + wtRel + '/' + contract.e2eFile + ', commit it on ' + branch + rerun)
+    }
+    if (!gitOk(['cat-file', '-e', branch + ':' + contract.e2eFile])) {
+      die(contract.e2eFile + ' is not committed on ' + branch + ' — remedy: write the derived tests at ' + wtRel + '/' + contract.e2eFile +
+        ', commit them on ' + branch + rerun)
+    }
+    const dirty = spawnSync('git', ['-C', wtAbs, 'status', '--porcelain', '--', contract.e2eFile], { encoding: 'utf8' })
+    if ((dirty.stdout || '').trim() !== '') {
+      die(contract.e2eFile + ' has uncommitted edits in ' + wtRel + ' — remedy: commit them on ' + branch + rerun)
+    }
+    const shown = spawnSync('git', ['-C', root, 'show', branch + ':' + contract.e2eFile], { encoding: 'utf8', maxBuffer: 1024 * 1024 * 64 })
+    const e2eText = shown.stdout || ''
+    for (const t of contract.tests) {
+      if (!e2eText.includes(t.ac)) {
+        die(contract.e2eFile + ' does not carry ' + t.ac + ' — remedy: add a derived test whose title includes ' + t.ac + ', then re-run --mark tests-derived')
+      }
+    }
+    if (typeof proto.e2eList !== 'string' || !proto.e2eList) {
+      die('prototype.e2eList is not declared — remedy: declare it (spec/templates/grounding-contract.md § Required config keys)')
+    }
+    const listCmd = proto.e2eList.split('{file}').join(contract.e2eFile)
+    const listRun = spawnSync('bash', ['-c', listCmd], { cwd: wtAbs, encoding: 'utf8' })
+    const listedOut = listRun.stdout || ''
+    if (listRun.status !== 0) {
+      die('e2eList (' + listCmd + ') exited ' + listRun.status + ': ' + ((listedOut) + (listRun.stderr || '')).trim())
+    }
+    for (const t of contract.tests) {
+      if (!listedOut.includes(t.ac)) {
+        die('e2eList (' + listCmd + ') did not report ' + t.ac + ' as listed — the host runner is the oracle, not the file content: confirm ' + contract.e2eFile + ' matches the runner\'s own test-discovery pattern')
+      }
     }
   }
 
@@ -727,6 +752,9 @@ function cmdMarkTestsDerived() {
     status.exported = { files: exportResult.files.map((f) => f.path), commit: exportResult.commit }
     saveStatus(status)
   }
+  // specs/20261005/05 D3: the second, idempotent carry — the branch content is the postcondition.
+  const testsResult = freeze.exportTests({ root, branch, stem, base: status.base, e2eFile: contract.e2eFile })
+  if (testsResult.ok === false) die(testsResult.message)
 
   // D6: the generated spec — written once (idempotent by file existence), then lint-checked.
   const specAbs = path.join(root, contract.spec)
@@ -736,7 +764,7 @@ function cmdMarkTestsDerived() {
       const found = (exportResult.files || []).find((f) => f.path === p)
       return found || { path: p, status: 'M' }
     })
-    const filePlanRows = buildFilePlanRows(status.base, exportFileObjs, proto.export || [], status.wiring)
+    const filePlanRows = buildFilePlanRows(status.base, exportFileObjs, proto.export || [], status.wiring, contract.e2eFile)
     const briefText = fs.existsSync(briefAbsPath) ? fs.readFileSync(briefAbsPath, 'utf8') : ''
     const pinsDoc = loadPinsDoc()
     const pinsById = {}
@@ -1016,8 +1044,9 @@ function printTestsStep() {
     lines.push('pin ' + t.pin + ' → ' + t.ac + ' · ' + (p.screen || '?') + ' (' + (p.state || '?') + ') · ' +
       anchorId + ' · "' + (p.note || '') + '"')
   }
-  lines.push('File: ' + contract.e2eFile + ' (main working tree) · title: `<AC-ID> pin <id>: <note>`')
-  lines.push('Session: write one test per line above; it must fail on main today.')
+  const st = loadStatus() || {}
+  lines.push('File: ' + (st.worktree || worktreeRel) + '/' + contract.e2eFile + ' (prototype worktree — commit it on ' + branch + ') · title: `<AC-ID> pin <id>: <note>`')
+  lines.push('Session: write one test per line above in the prototype worktree and commit the file on ' + branch + '; each test must fail against ' + (st.base || contract.base) + ' — the build\'s red check is the oracle.')
   lines.push('Then:')
   lines.push('  node ' + driverAbs + ' ' + briefPath + ' --mark tests-derived')
   writeOut(1, lines.join('\n') + '\n')

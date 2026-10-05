@@ -82,6 +82,15 @@ Rationale opens with the basis →
 `dbDestroy`, then the worktree and branch are deleted → one `stage: prototype` ledger row. The
 brief carries a `## Data/API sub-plan` block. `proto-capture.js --diff` is the one comparison.
 
+`prototype.url` may carry `{port}`. The prototype driver then keeps one app port per prototype
+(`appPort` in `status.json`) and the build driver one capture port per build
+(`<spec>.build/capture-port.json`); each prints `PORT=<n> <bootCommand>` in its step and probes
+and captures at the resolved address. The frozen contract's urls stay relative, so a baseline
+never records a port. A saved sign-in follows the app across ports: cookies need nothing, and a
+single saved browser-storage origin on the same host is re-pointed to the capture address at
+load time. `/spec:doctor`'s fixed-ports check flags a loopback address with a literal port in
+either `runtime.readyCheck` or `prototype.url`. (specs/20261005/03-one-port-per-launch.md)
+
 ## The walkthrough client (specs/20260929/01)
 
 A project opts into the hosted review service with a `walkthrough` config block (`baseUrl`,

@@ -326,6 +326,15 @@
   assertion that cannot fail is worse than none.
   (specs/20260815/04-runtime-shutdown-leg.md, done 2026-08-16; INTAKE JJ-20260815-05)
 
+- **One port per smoke run.** When the host's `runtime.readyCheck` reads the shell variable
+  `PORT`, `smoke.sh` allocates a free loopback port for the run and exports it as `PORT` to
+  `bootCommand`, `readyCheck` and `seedCommand`; the pass line names the port. Two smoke runs of
+  one repo can then overlap. A ready check that names a fixed port is left exactly as it was and
+  cannot run beside a second launch: the pre-boot probe exits 7 saying another process is already
+  answering on this address. `spec/scripts/lib/app-port.js` is the one allocator and the one
+  definition of "reads PORT".
+  (specs/20261005/03-one-port-per-launch.md, done 2026-10-05)
+
 - The review stage is a **stepped program**, not prose choreography: `spec-review-driver.js`
   owns the sequence (LEGS -> SKIPS? -> REVIEWER -> DISPOSITIONS -> FIX/ESCALATE? -> CLOSE ->
   MERGE/CONFLICTS -> DONE, with STOPPED terminal on `RED_BLOCKING`) and is the sole invoker of

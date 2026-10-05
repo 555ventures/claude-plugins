@@ -8,7 +8,8 @@
 # Also warns (stdout → injected context, never a block) on exactly the two gated
 # commands (/spec:plan, /spec:run — the same case pattern below) when the host grounding
 # layer's contractHash stamp fails to match the plugin's grounding-contract file —
-# fully automatic; no version bookkeeping involved.
+# fully automatic; no version bookkeeping involved. A config with no generatedBy has no
+# grounding layer yet and gets no warning (specs/20261005/02-connect-runs-first.md D9).
 # Exit 2 blocks the prompt and shows stderr to the user. Exit 0 allows.
 set -u
 
@@ -39,8 +40,8 @@ CONTRACT_HASH=$("$PLUGIN_ROOT/bin/spec-paths" contract-hash 2>/dev/null)
 CONFIG="${CLAUDE_PROJECT_DIR:-.}/.claude/spec.config.json"
 if [ -n "$CONTRACT_HASH" ] && [ -f "$CONFIG" ]; then
   STAMPED=$(jq -r '.contractHash // empty' "$CONFIG" 2>/dev/null)
-  if [ "$STAMPED" != "$CONTRACT_HASH" ]; then
-    GENERATED_BY=$(jq -r '.generatedBy // empty' "$CONFIG" 2>/dev/null)
+  GENERATED_BY=$(jq -r '.generatedBy // empty' "$CONFIG" 2>/dev/null)
+  if [ -n "$GENERATED_BY" ] && [ "$STAMPED" != "$CONTRACT_HASH" ]; then
     echo "Spec grounding drift: the plugin's grounding contract (hash $CONTRACT_HASH) no longer matches .claude/spec.config.json's contractHash stamp ('${STAMPED:-<missing>}', generatedBy '${GENERATED_BY:-<unknown>}') — the grounding layer predates current plugin contracts. Run /spec:doctor to assess (or /spec:init to refresh). Proceeding is fine if the drift is known-benign."
   fi
 fi

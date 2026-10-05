@@ -3,19 +3,25 @@
 // walkthrough-connect.js [--root <dir>] [--project <id>] [--name <text>] [--environment <name>]
 //                        [--base-url <url>] — connect the host project to the hosted review service.
 //
-// Owner: specs/20261005/01-connect-wires-a-project-to-the-review-service.md (D1-D11). It creates the
+// Owner: specs/20261005/01-connect-wires-a-project-to-the-review-service.md (D1-D11) and
+// specs/20261005/02-connect-runs-first.md (D1-D4). It creates the
 // project on the service (or joins the id the service already holds) through the Railway CLI, stores
 // the token as env.<tokenEnv> in the host's .claude/settings.local.json, proves the link with one call
 // that needs the token (lib/walkthrough-client.js probe), and only then writes the `walkthrough`
-// block into the host config. It is the one writer of that block and of the stored token; a second
-// run on a connected host changes nothing and calls Railway zero times.
+// block into the host config; a host with no config file gets one holding only that block, created
+// by that write alone, so a refused run or a failed proof leaves no config file. It is the one
+// writer of that block and of the stored token; a second run on a connected host changes nothing
+// and calls Railway zero times.
 //
 // On success one stdout line: `connected <id> → <baseUrl>/p/<id>` plus ` (new project)`,
-// ` (joined existing project)`, ` (already connected)` or nothing. Every refusal is one stderr line
+// ` (joined existing project)`, ` (already connected)` or nothing; a second line `next: /spec:genesis`
+// follows (same write) when the root holds no entry whose name lacks a leading dot and the config
+// has no generatedBy string. Every refusal is one stderr line
 // `walkthrough-connect: <code> — <sentence> — remedy: <what to do>`; a refusal thrown by the client is
 // printed as the client words it. The minted token is never printed.
 //
-// Deliberately NOT here: any verb of walkthrough.js, a rewrite of a block that points elsewhere, any
+// Deliberately NOT here: running git init or writing .gitignore (a folder that is not a repository is
+// refused with `git init` named first), overwriting a config file that is not a JSON object, any verb of walkthrough.js, a rewrite of a block that points elsewhere, any
 // edit of a file git tracks, any retry, a shell (railway and git are spawned by bare name through
 // PATH, stdin closed, 60 s limit), or the creation of a design/ folder.
 //
@@ -153,6 +159,18 @@ function writeBlock(root, cfg, block) {
   writeAtomic(configPath(root), { ...cfg, walkthrough: block }, 0o644)
 }
 
+// `\nnext: /spec:genesis` when the root holds no non-dot entry and the config on disk carries no
+// generatedBy string; '' otherwise. Appended to the connected line so both go out in one write.
+function nextLine(root) {
+  let entries
+  try { entries = fs.readdirSync(root) } catch { return '' }
+  if (entries.some((n) => !n.startsWith('.'))) return ''
+  let cfg = {}
+  if (configExists(root)) { try { cfg = readConfigStrict(root) } catch { cfg = {} } }
+  if (isObj(cfg) && typeof cfg.generatedBy === 'string' && cfg.generatedBy !== '') return ''
+  return '\nnext: /spec:genesis'
+}
+
 // ---- main ------------------------------------------------------------------------------------
 
 async function main(argv) {
@@ -161,9 +179,13 @@ async function main(argv) {
   const environment = flags.environment || 'staging'
 
   // 1. config
-  let cfg = null
-  if (configExists(root)) { try { cfg = readConfigStrict(root) } catch { cfg = null } }
-  if (!isObj(cfg)) throw new Stop('no-config', `${CONFIG_RELPATH} is absent or not a JSON object`, 'run /spec:init in the project first', 2)
+  let cfg = {}
+  if (configExists(root)) {
+    let parsed
+    try { parsed = readConfigStrict(root) } catch { parsed = null }
+    if (!isObj(parsed)) throw new Stop('bad-config', `${CONFIG_RELPATH} is not a JSON object`, `repair or delete ${CONFIG_RELPATH}, then run /spec:connect again`, 2)
+    cfg = parsed
+  }
   let contract
   try { contract = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'templates', 'walkthrough', 'contract.json'), 'utf8')) } catch (e) {
     throw new Stop('bad-config', `the walkthrough contract cannot be read (${e.code || e.message})`, 'reinstall the spec plugin', 2)
@@ -228,7 +250,7 @@ async function main(argv) {
     try {
       await client.probe(ctxFor(), nothing)
       if (!hasBlock) writeBlock(root, cfg, target)
-      return lineFor(hasBlock ? ' (already connected)' : '')
+      return lineFor(hasBlock ? ' (already connected)' : '') + nextLine(root)
     } catch (e) {
       if (!(e instanceof client.Refusal)) throw e
       if (!['bad-token', 'wrong-project', 'unknown-project'].includes(e.code)) throw e
@@ -239,6 +261,10 @@ async function main(argv) {
   // 4. create or join
   const ignored = run('git', ['check-ignore', '-q', SETTINGS_REL], root)
   if (ignored.error || ignored.status !== 0) {
+    const inside = run('git', ['rev-parse', '--is-inside-work-tree'], root)
+    if (!inside.error && inside.status !== 0) {
+      throw new Stop('not-ignored', 'this folder is not a git repository, so nothing keeps a stored token out of a later commit', `run git init, add ${SETTINGS_REL} to .gitignore, then run /spec:connect again`, 2)
+    }
     throw new Stop('not-ignored', `${SETTINGS_REL} is not ignored by git (not listed, tracked, or not a git repository), so a token stored there could be committed`, `add ${SETTINGS_REL} to .gitignore (and git rm --cached it when it is tracked), then run /spec:connect again`, 2)
   }
   const settings = readSettings(root)
@@ -265,7 +291,7 @@ async function main(argv) {
 
   // 7. block
   if (!hasBlock) writeBlock(root, cfg, target)
-  return lineFor(note)
+  return lineFor(note) + nextLine(root)
 }
 
 main(process.argv.slice(2)).then((line) => {

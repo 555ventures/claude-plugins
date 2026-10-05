@@ -224,14 +224,21 @@ test('AC-20261005-01-12: a Railway failure is refused railway-failed with Railwa
   }
 })
 
-test('AC-20261005-01-13: a host with no spec config is refused no-config with exit 2 naming /spec:init and no Railway call', async () => {
+test('AC-20261005-02-1: connect in a host with no config file and a new id connects, creates a config holding only the block, and a second run is already-connected with the config byte-identical', async (t) => {
+  const stub = await startStub(t, connectAnswers())
   const rw = makeRailway()
   const host = makeGitHost('acme-shop', { config: false })
-  const r = await runConnect(host, ['--base-url', 'http://127.0.0.1:1'], { railway: rw })
-  assert.strictEqual(r.status, 2, 'a missing config must exit 2: ' + JSON.stringify(r))
-  assert.match(r.stderr, /^walkthrough-connect: no-config/, 'the code must be no-config: ' + r.stderr)
-  assert.ok(r.stderr.includes('/spec:init'), 'the remedy must name the bootstrap command: ' + r.stderr)
-  assert.deepStrictEqual(rw.lines(), [], 'no Railway call may precede the config check')
+  const r = await runConnect(host, ['--base-url', stub.url], { railway: rw })
+  assert.strictEqual(r.status, 0, 'a host with no config must connect with exit 0, or connect cannot run first: ' + JSON.stringify(r))
+  assert.strictEqual(r.stdout.split('\n')[0], `connected acme-shop → ${stub.url}/p/acme-shop (new project)`, 'the first stdout line must be the connected line, or the session has nothing reliable to relay: ' + JSON.stringify(r.stdout))
+  assert.strictEqual(read(host, CONFIG_REL), text({ walkthrough: { baseUrl: stub.url, project: 'acme-shop', tokenEnv: 'WALKTHROUGH_TOKEN' } }), 'the created config must hold exactly the block and nothing else, or a later generate meets keys nobody wrote')
+  assert.strictEqual(settings(host).env.WALKTHROUGH_TOKEN, MINTED, 'the minted token must be stored in the settings file, or the next session cannot send screens')
+  assert.deepStrictEqual(rw.creates().map((a) => a.slice(a.indexOf('create'))), [['create', 'acme-shop', 'acme-shop']], 'exactly one create for the id must run, or a retry orphans a token: ' + JSON.stringify(rw.lines()))
+  const cfgBefore = read(host, CONFIG_REL)
+  const second = await runConnect(host, ['--base-url', stub.url], { railway: rw })
+  assert.strictEqual(second.status, 0, 'a second run must exit 0: ' + JSON.stringify(second))
+  assert.strictEqual(second.stdout.split('\n')[0], `connected acme-shop → ${stub.url}/p/acme-shop (already connected)`, 'the second run must say it changed nothing: ' + JSON.stringify(second.stdout))
+  assert.strictEqual(read(host, CONFIG_REL), cfgBefore, 'the config must be byte-identical after a rerun')
 })
 
 test('AC-20261005-01-14: storing the token keeps what the settings file holds, creates a missing file owner-only, and never overwrites a file it cannot parse', async (t) => {

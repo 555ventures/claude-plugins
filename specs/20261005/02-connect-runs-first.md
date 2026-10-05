@@ -1,6 +1,7 @@
 ---
 date: 2026-10-05
-status: hardened
+status: implementing
+build_base: design-retool
 tier: standard
 area: design
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 brief: n/a
 spiked: 2026-10-05
 open_markers: 0
+diff_base: d61c86ad50ed43dda6e6b5864e9da92dda9af653
 ---
 
 # Connect runs first

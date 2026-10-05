@@ -253,7 +253,7 @@ otherwise, and run with `WALKTHROUGH_TOKEN` unset.
 - **AC-20261005-01-13**: WHEN the host has no usable config THE SYSTEM SHALL refuse naming the
   bootstrap command (e.g. a folder with no `.claude/spec.config.json`: exit 2, stderr starts
   `walkthrough-connect: no-config` and contains `/spec:init`, the fake's log is empty)
-  → writes tests/walkthrough/connect.test.js
+  → writes tests/walkthrough/connect.test.js [retired: specs/20261005/02-connect-runs-first.md]
 - **AC-20261005-01-14**: WHEN connect stores the token THE SYSTEM SHALL keep what the settings
   file already holds, create a missing file readable by its owner only, and never overwrite a
   file it cannot parse (e.g. existing `{ "permissions": { "allow": ["Bash(ls:*)"] }, "env": {

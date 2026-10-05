@@ -1,6 +1,7 @@
 ---
 date: 2026-10-05
-status: hardened
+status: done
+build_base: design-retool
 tier: standard
 area: design
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 brief: n/a
 spiked: 2026-10-05
 open_markers: 0
+diff_base: d61c86ad50ed43dda6e6b5864e9da92dda9af653
 ---
 
 # Connect runs first
@@ -336,6 +338,10 @@ the one open question (whether connect should run `git init` itself) is a decisi
 
 One regression pin each for the two guards this spec loosens next to (criteria 10 and 12);
 every other criterion is new behaviour whose test expires at close.
+
+Build deviation, folded at close (2026-10-05, one-off): the "other" wave (README cell,
+plugin.json bump, retired tag on specs/20261005/01 criterion 13) was applied by the
+orchestrator in-session rather than by a dispatched worker — three mechanical one-line edits.
 
 ## Canonical Delta
 

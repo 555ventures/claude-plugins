@@ -36,7 +36,10 @@
 //                 .claude/settings.json unreadable, a directory, invalid JSON, or not a JSON
 //                 object (D5 merge impossible — nothing written)
 //             3 = an existing target differs from what the profile would produce and
-//                 --refresh was not given — every target left byte-identical, nothing written
+//                 --refresh was not given — every target left byte-identical, nothing written.
+//                 The config target is compared with the host's own `walkthrough` block carried
+//                 into it, and a config holding only generatedBy, contractHash and walkthrough
+//                 is not an offender (specs/20261005/02-connect-runs-first.md D6-D8)
 //             4 = unexpected internal error (uncaught throw) — the host tree may be
 //                 partially written; remedy = re-run generate. Never a verdict; always a bug.
 //   probe:    0 = always (adverse findings — no claude CLI, a vacuous test runner, an inert
@@ -508,6 +511,13 @@ function compareExisting(hostRoot, t) {
   return { existed: true, differs: raw !== t.text }
 }
 
+// The host config when the file exists and parses to a JSON object; null otherwise.
+function readExistingConfigObject(hostRoot) {
+  let v
+  try { v = JSON.parse(fs.readFileSync(path.join(hostRoot, CONFIG_RELPATH), 'utf8')) } catch { return null }
+  return v !== null && typeof v === 'object' && !Array.isArray(v) ? v : null
+}
+
 function writeTarget(hostRoot, t) {
   const full = path.join(hostRoot, t.rel)
   fs.mkdirSync(path.dirname(full), { recursive: true })
@@ -628,13 +638,24 @@ try {
   // describes (D1/D2's shape checks keep JSON-representable inputs clear of a throw here).
   const merged = mergeSettings(root, existingSettings, profile)
   const fileTargets = buildFileTargets(profile)
+  // 20261005/02 D6/D7: the host's own walkthrough block is carried verbatim into the config target,
+  // and a config holding nothing but that block and the two stamps counts as not yet generated.
+  const diskCfg = readExistingConfigObject(root)
+  let ungenerated = false
+  if (diskCfg) {
+    if (Object.prototype.hasOwnProperty.call(diskCfg, 'walkthrough')) {
+      const ct = fileTargets.find((t) => t.rel === CONFIG_RELPATH)
+      ct.obj = { ...ct.obj, walkthrough: diskCfg.walkthrough }
+    }
+    ungenerated = Object.keys(diskCfg).every((k) => k === 'generatedBy' || k === 'contractHash' || k === 'walkthrough')
+  }
   const manifestObj = buildManifestObject(root, profile)
   const targets = [...fileTargets, { rel: '.claude/spec-manifest.json', kind: 'json', obj: manifestObj }]
 
   const states = new Map()
   const offenders = []
   for (const t of targets) {
-    const st = compareExisting(root, t)
+    const st = ungenerated && t.rel === CONFIG_RELPATH ? { existed: false, differs: false } : compareExisting(root, t)
     states.set(t, st)
     if (st.existed && st.differs && !refresh) offenders.push(t.rel)
   }

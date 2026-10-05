@@ -1,13 +1,15 @@
 ---
 date: 2026-10-05
-status: hardened
+status: implementing
 tier: critical
 area: design
 breaking: false
 depends_on: []
 brief: n/a
 spiked: 2026-10-05
+build_base: design-retool
 open_markers: 0
+diff_base: 616ac76e3e8f599c80cf97036e5001200dece188
 ---
 
 # Connect wires a project to the review service

@@ -7,18 +7,21 @@
 //        `Refusal` carrying code, sentence, remedy and the exit code scripts/walkthrough.js returns.
 //
 // Owner: specs/20260929/01-the-walkthrough-contract-and-the-client.md D1 (config, token), D7
-// (request and answer rules), D8 (the hello gate), D9-D12 (calls and files). The contract file
-// (spec-paths walkthrough-contract) supplies paths, shapes, limits and revision; the config block
-// is read through lib/host-config.js.
+// (request and answer rules), D8 (the hello gate), D9-D12 (calls and files); and
+// specs/20261005/01-connect-wires-a-project-to-the-review-service.md D7 (the stored-token rule),
+// D8 (probe). The contract file (spec-paths walkthrough-contract) supplies paths, shapes, limits
+// and revision; the config block is read through lib/host-config.js.
 //
 // Rules held here: no request without a complete config, a loopback-or-https baseUrl and a token
-// read from the named environment variable at call time; redirects are refused; every answer is
+// read at call time (storedToken: the non-empty string at env.<tokenEnv> in the host's
+// .claude/settings.local.json, else the environment variable <tokenEnv>); redirects are refused; every answer is
 // parsed and checked against its call's response shape before any file is written; one retry
 // rule (429 with Retry-After of 60 s or less, twice at most). The token is placed in one request
 // header and nowhere else: it is never in a URL, a written file, a message, or output (a last
 // scrub replaces any literal occurrence in a refusal line).
 //
-// Deliberately NOT here: reading argv, printing, choosing exit codes for success, retrying network
+// Deliberately NOT here: writing the config block or the stored token (walkthrough-connect.js is
+// the one writer), reading argv, printing, choosing exit codes for success, retrying network
 // errors, following redirects, computing approval staleness, or any cache of the token.
 //
 // Exit codes (carried by Refusal.exit): 1 refused by the service, the contract or local findings;
@@ -58,13 +61,26 @@ class Refusal extends Error {
 
 // ---- config (D1, D12) ---------------------------------------------------------------------
 
+// The string at env[name] in <root>/.claude/settings.local.json; '' when the file, its env object
+// or the key is absent, unreadable, not JSON, or not a non-empty string. Never throws.
+function storedToken(root, name) {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(root, '.claude', 'settings.local.json'), 'utf8'))
+    const v = isObj(j) && isObj(j.env) && has(j.env, name) ? j.env[name] : ''
+    return typeof v === 'string' ? v : ''
+  } catch { return '' }
+}
+
+// The one token rule: stored first, then the environment variable.
+const resolveToken = (root, env, name) => storedToken(root, name) || env[name] || ''
+
 function nameOk(shapes, value) {
   if (shapes && has(shapes, 'name')) return validate(shapes, 'name', value).length === 0
   return typeof value === 'string' && NAME_FALLBACK.test(value)
 }
 
 // Every defect of a block, in a fixed order: [{ code, at, sentence, remedy }].
-function configFindings(block, env, shapes) {
+function configFindings(block, env, shapes, root) {
   const out = []
   const fix = (k) => `set walkthrough.${k} in ${CONFIG_RELPATH}`
   if (!isObj(block)) return [{ code: 'bad-config', at: 'walkthrough', sentence: 'walkthrough must be an object with baseUrl, project and tokenEnv', remedy: fix('baseUrl') }]
@@ -81,8 +97,8 @@ function configFindings(block, env, shapes) {
       out.push({ code: 'insecure-base-url', at: 'walkthrough.baseUrl', sentence: `walkthrough.baseUrl ${block.baseUrl} would send the token in clear`, remedy: 'use an https: address (plain http is allowed only for localhost, 127.0.0.1 and [::1])' })
     }
   }
-  if (typeof block.tokenEnv === 'string' && block.tokenEnv.trim() && !(env[block.tokenEnv] || '')) {
-    out.push({ code: 'no-token', at: block.tokenEnv, sentence: `environment variable ${block.tokenEnv} is unset or empty`, remedy: `export ${block.tokenEnv}=<the project's token>` })
+  if (typeof block.tokenEnv === 'string' && block.tokenEnv.trim() && !resolveToken(root, env, block.tokenEnv)) {
+    out.push({ code: 'no-token', at: block.tokenEnv, sentence: `environment variable ${block.tokenEnv} is unset or empty`, remedy: `run /spec:connect, or export ${block.tokenEnv}=<the project's token>` })
   }
   return out
 }
@@ -91,17 +107,22 @@ function configFindings(block, env, shapes) {
 function checkConfig(root, env, shapes) {
   const cfg = readConfig(root)
   if (cfg.walkthrough === undefined || cfg.walkthrough === null) return []
-  return configFindings(cfg.walkthrough, env, shapes)
+  return configFindings(cfg.walkthrough, env, shapes, root)
 }
 
 // null = not configured. Otherwise the context every call uses; throws Refusal (exit 2) on a bad block.
 function openContext(root, env, contract) {
   const cfg = readConfig(root)
   if (cfg.walkthrough === undefined || cfg.walkthrough === null) return null
-  const found = configFindings(cfg.walkthrough, env, contract.shapes)
+  return contextFromBlock(root, env, contract, cfg.walkthrough)
+}
+
+// The context for a config whose walkthrough block is `block`; throws Refusal (exit 2) on a bad block.
+function contextFromBlock(root, env, contract, block) {
+  const found = configFindings(block, env, contract.shapes, root)
   if (found.length) throw new Refusal(found[0].code, found[0].sentence, found[0].remedy, 2)
-  const b = cfg.walkthrough
-  const token = env[b.tokenEnv]
+  const b = block
+  const token = resolveToken(root, env, b.tokenEnv)
   secret = token
   return { root, contract, env, baseUrl: b.baseUrl.trim().replace(/\/+$/, ''), project: b.project, tokenEnv: b.tokenEnv, token }
 }
@@ -224,6 +245,14 @@ async function gate(c, warn) {
   }
   if (h.sunset) warn(`walkthrough: ${c.contract.prefix} stops on ${h.sunset} — update the plugin`)
   return h
+}
+
+// The link proof (connect D8): the hello gate, then one pullApprovals call with the token. Writes
+// no file and needs no local round.
+async function probe(c, warn) {
+  const h = await gate(c, warn)
+  await send(c, 'pullApprovals', {})
+  return { apiVersion: h.apiVersion, revision: h.revision }
 }
 
 // ---- local files --------------------------------------------------------------------------
@@ -516,6 +545,6 @@ async function mark(c, opts) {
 }
 
 module.exports = {
-  Refusal, configFindings, checkConfig, openContext, hello, gate, readRoundFile, checkRoundFile,
+  Refusal, configFindings, checkConfig, openContext, storedToken, contextFromBlock, probe, hello, gate, readRoundFile, checkRoundFile,
   push, pullNotes, pullApprovals, reply, mark,
 }

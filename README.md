@@ -125,6 +125,7 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 
 | Command | What it does | When |
 |---|---|---|
+| `/spec:connect` | Wire this project to the hosted review service in one command: create or join the project via Railway, store the token in the git-ignored `settings.local.json`, prove the link, write the `walkthrough` block | Once per project, before `/spec:mocks` |
 | `/spec:mocks` | Driver-stepped design entry point, run to an approved mock set — the current stage chain lives in [`docs/canonical/design.md`](docs/canonical/design.md) | Greenfield only, before genesis |
 | `/spec:genesis` | Stack + scaffold + roadmap + rendered design candidates in your browser; ratify the pick | Greenfield only, before init |
 | `/spec:init` | Profile the repo, generate the grounding layer, run enforce | Once per repo |

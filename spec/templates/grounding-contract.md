@@ -146,8 +146,9 @@ naming this block and `/spec:doctor`.
 
 `walkthrough` — `baseUrl` (the service's address; `https:` unless the host is `localhost`,
 `127.0.0.1` or `[::1]`), `project` (the project id on the service), `tokenEnv` (the name of the
-environment variable that holds the project's token; the token itself is never written to a
-file). Absent block = the project does not use the service: the client sends nothing, writes
+variable that holds the project's token: read from `env` in the git-ignored
+`.claude/settings.local.json` when `/spec:connect` stored it there, else from the environment;
+the token is never written to a file git tracks). Absent block = the project does not use the service: the client sends nothing, writes
 nothing and exits 0.
 
 ## Capabilities (optional — declares stack-shaped facts the pipeline would otherwise assume)

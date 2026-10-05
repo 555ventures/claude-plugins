@@ -709,7 +709,8 @@ function printScreensStep(seed) {
       ['show the user exactly this, then end the turn and wait for their literal `approve`:',
         '  ' + j.persona,
         ...j.beats.map((b) => '  ' + b.n + '. "' + b.beat + '"'),
-        'on `approve`, run: ' + driverCmd('--mark journey-approved --journey ' + name)],
+        'on `approve`, run: ' + driverCmd('--mark journey-approved --journey ' + name),
+        ...(service ? [] : ['(this project is not connected to the review service — /spec:connect connects it, and the screens are then drawn and sent)'])],
       false)
   }
   const then = []

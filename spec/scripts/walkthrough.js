@@ -18,8 +18,10 @@
 // the service prints the not-configured line on stdout, sends nothing, writes nothing, exits 0.
 //
 // Every refusal is one stderr line `walkthrough: <code> — <sentence> — remedy: <what to do>`.
-// `--json` prints one JSON object on stdout through a synchronous writer. The token is read from
-// the environment variable the config names and is never printed or written.
+// `--json` prints one JSON object on stdout through a synchronous writer. The token is the non-empty
+// string at env.<tokenEnv> in the host's ignored .claude/settings.local.json, else the
+// environment variable the config names (lib/walkthrough-client.js storedToken); it is never
+// printed or written here — walkthrough-connect.js is the one writer of the block and the token.
 //
 // Deliberately NOT here: any retry beyond one rate-limit wait, any redirect following, any
 // approval-staleness comparison, any edit of the host's config, any call from a hook.

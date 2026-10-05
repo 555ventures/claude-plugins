@@ -108,3 +108,14 @@ the client still never edits the config and never writes or prints the token. Th
 reads the stored token first and the environment variable second, so the session that ran
 connect can send screens at once. A second run changes nothing; a block that points elsewhere
 is never rewritten. The default environment is `staging` until production is deployed.
+
+Connect can run first (specs/20261005/02). In a project with no config it creates
+`.claude/spec.config.json` holding only the `walkthrough` block, and only after the link is
+proved; a config file that is present but not a JSON object is refused and never overwritten.
+A folder that is not a git repository is refused with `git init` named as the first step,
+because the token is stored only where git ignores the file. In an empty folder that nothing
+has grounded yet, connect prints `next: /spec:genesis` under its line; otherwise the next step
+is `/spec:mocks`. `init-gen.js generate` carries the block from disk on every run, with and
+without `--refresh`, treats a config that holds only the block as not yet generated, and still
+refuses any other hand-edit without `--refresh`. The state gate prints its grounding-drift
+warning only for a config that carries a `generatedBy` stamp.

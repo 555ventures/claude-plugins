@@ -119,7 +119,8 @@ both files from what you author here. Two skills, one profiling pass:
 - **`profile.skills.run`** (written to `.claude/skills/run/SKILL.md`) — the session-facing
   sibling: `description` as a trigger ("Use when launching this app locally to see it working —
   dev server, ports, env, seed, and where to look once it serves"). `body`: the launch command,
-  ready check, seed entry point, and observation URLs — a distilled subset of the same
+  ready check, seed entry point, and observation URLs, with the launch on a free `PORT` (never a
+  fixed one) and URLs read from it — a distilled subset of the same
   profiling, ≤30 lines, pointing at `spec-verify` for the deeper seeding/observability detail
   rather than duplicating it. This is the file the harness's built-in `/run` and `/verify`
   behaviors discover, so it pays off outside the pipeline too.

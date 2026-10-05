@@ -75,7 +75,7 @@ test('AC-20261005-03-20: --json carries a config-fixed-port entry with file, lin
 test('AC-20261005-03-20: config findings come after the tests walk and both keys are reported when both are fixed', () => {
   const dir = tmpdir('port-check-both')
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'tests/a.test.js'), 'srv.listen(3000)\n')
+  fs.writeFileSync(path.join(dir, 'tests/a.test.js'), 'srv.listen(' + '3000)\n')
   fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
   fs.writeFileSync(path.join(dir, CONFIG_REL), JSON.stringify({
     runtime: { bootCommand: 'npm run dev', readyCheck: 'curl -sf http://localhost:3000/' },

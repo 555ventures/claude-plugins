@@ -27,9 +27,18 @@
 #                                          stopSignal (group is then SIGKILLed)
 #        __SMOKE_FAIL__ shutdown-unclean: exit status outside runtime.stopExitCodes
 #   7  environment already ready before boot was ever spawned (D4 below):
-#        __SMOKE_FAIL__ stale-ready: readyCheck passed before bootCommand was spawned — a
-#                                     process from a previous run is likely still answering;
-#                                     stop it (or clean the stale ready state), then re-run.
+#        __SMOKE_FAIL__ stale-ready: another process is already answering on this address —
+#                                     readyCheck passed before bootCommand was spawned. Stop that
+#                                     process and re-run; to let launches of this repo run side
+#                                     by side, make the host read PORT (/spec:doctor names the fix).
+#   (exit 5 also covers) __SMOKE_FAIL__ no-port: a PORT-reading host could not be given a free
+#      port (specs/20261005/03-one-port-per-launch.md D4) — free a loopback port, or give
+#      runtime.readyCheck a fixed address.
+#
+# Port (specs/20261005/03-one-port-per-launch.md D1/D2): when runtime.readyCheck references the
+# shell variable PORT, one free port is allocated per run by lib/app-port.js and exported as PORT
+# to bootCommand, every readyCheck run and seedCommand (an inherited PORT is overridden); the pass
+# line gains " | port: <n>". A readyCheck that does not reference PORT allocates and sets nothing.
 #
 # specs/20260821/03-cross-spec-skip-mapping.md D4: this script used
 # to trust whatever readyCheck answered on the FIRST poll after boot spawn — an orphaned server
@@ -41,6 +50,7 @@
 # fails closed as stale-ready without spawning boot at all — deliberately even for hosts whose
 # ready state legitimately persists across runs (a probe file never cleaned), since the honest
 # remedy in either case is for the operator to clean the stale state before re-running.
+# This script does NOT retry a taken port and does NOT allocate for fixed-address hosts.
 set -u
 
 CONFIG=".claude/spec.config.json"
@@ -88,10 +98,22 @@ if [ -z "$BOOT" ] || [ -z "$READY" ]; then
   exit 3
 fi
 
+PORT_NOTE=""
+PORT_OUT=$(node "$(dirname "$0")/lib/app-port.js" --if-reads "$READY" 2>&1)
+PORT_RC=$?
+if [ "$PORT_RC" -ne 0 ]; then
+  echo "__SMOKE_FAIL__ no-port: could not allocate a free port (${PORT_OUT:-app-port.js failed}) — remedy: free a loopback port, or give runtime.readyCheck a fixed address"
+  exit 5
+fi
+if [ -n "$PORT_OUT" ]; then
+  export PORT="$PORT_OUT"
+  PORT_NOTE=" | port: ${PORT_OUT}"
+fi
+
 # D4: pre-boot staleness probe — one readyCheck run before bootCommand is ever spawned. See the
 # header note above for why this fails closed instead of trusting the first post-boot poll.
 if bash -c "$READY" >/dev/null 2>&1; then
-  echo "__SMOKE_FAIL__ stale-ready: readyCheck already passed before bootCommand was spawned — a process from a previous run is likely still answering. Stop it (or clean the stale ready state), then re-run."
+  echo "__SMOKE_FAIL__ stale-ready: another process is already answering on this address — readyCheck passed before bootCommand was spawned. Stop that process and re-run; to let launches of this repo run side by side, make the host read PORT (/spec:doctor names the fix)."
   exit 7
 fi
 
@@ -157,7 +179,7 @@ while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
       tail -30 "$LOG" | sed 's/^/    /'
       exit 6
     fi
-    echo "__SMOKE_PASS__ ready after ${ELAPSED}s, stopped cleanly (exit ${STOP_STATUS}) after ${STOP_ELAPSED}s (boot: $BOOT | ready: $READY)"
+    echo "__SMOKE_PASS__ ready after ${ELAPSED}s, stopped cleanly (exit ${STOP_STATUS}) after ${STOP_ELAPSED}s (boot: $BOOT | ready: $READY${PORT_NOTE})"
     exit 0
   fi
   sleep 2

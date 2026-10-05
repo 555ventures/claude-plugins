@@ -56,7 +56,8 @@ some file in the worktree imports the overlay, and that file's import-only diff 
 the generated spec.
 
 The driver's own printed step carries the two `Session:` lines to start in the background —
-the host's `runtime.bootCommand` inside the worktree, and `node {driver} <brief path> --root .
+the host's `runtime.bootCommand` inside the worktree (carrying the driver's port as `PORT=<n>`
+when the host declares `{port}` in `prototype.url`), and `node {driver} <brief path> --root .
 serve --port <pinsPort>` — both tracked and stopped before this turn ends, never left resident
 past the round. Print the driver's step verbatim, including the `🎨 ready for pins — <url>` line
 (or the `dev server is not answering` refusal) and the fixed reply line, then **end the turn**.
@@ -82,7 +83,8 @@ child's own stderr — each refusal names its own remedy and writes nothing furt
 driver has captured every declared route × state, written `contract.json`, and reserved this
 freeze's spec path and AC ids; it prints `(APPROVED → TESTS)` and advances. When `prototype.storageState` is declared the capture
 loads that saved sign-in and refuses naming the file when it is missing or stale; write it by
-signing in against the running prototype with the host's own Playwright sign-in setup.
+signing in against the running prototype with the host's own Playwright sign-in setup (any port
+of the same host works).
 
 ## TESTS
 

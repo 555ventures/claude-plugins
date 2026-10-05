@@ -12,13 +12,22 @@
 // it is advisory, not a hard gate. `listen(0)`, `'--port', '0'`, a bare `localhost:PORT` URL,
 // and `freePort()` deliberately match none of the three classes.
 //
+// A fourth class, config-fixed-port (specs/20261005/03-one-port-per-launch.md D10,
+// AC-20261005-03-20), is read from the host config (lib/host-config.js CONFIG_RELPATH) after the tests walk: one
+// finding for runtime.readyCheck (runtime not inert, a loopback host named, PORT not read) and one
+// for prototype.url (loopback hostname, no {port}); `line` is the line holding the key, `text` the
+// key name. A missing or unparseable config adds nothing; non-loopback addresses are never
+// flagged. It does NOT edit the config or judge whether the boot command honours PORT.
+//
 // Usage: port-check.js --root <dir> [--json]
 // Exit codes:
 //   0  clean — no findings
-//   1  findings — one line per hit on stdout (plain), or one JSON object with --json
+//   1  findings (tests or config) — one line per hit on stdout (plain), or one JSON object with --json
 //   2  usage — no --root, or --root names a directory with no tests/ subdirectory
 const fs = require('fs')
 const path = require('path')
+const { readsPort, hasPortSlot } = require('./lib/app-port')
+const { CONFIG_RELPATH } = require('./lib/host-config')
 
 const CLASSES = [
   ['listen-literal', /\blisten\(\s*(?:[1-9]\d{3,4})\b/],
@@ -49,6 +58,45 @@ function walk(dir, out) {
     if (ent.isDirectory()) walk(full, out)
     else if (ent.isFile()) out.push(full)
   }
+}
+
+const LOOPBACK_IN_COMMAND = /(?:^|[^A-Za-z0-9.-])(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(?![A-Za-z0-9.-])/
+const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]', '0.0.0.0']
+
+// 1-indexed line of `"key"` at or after the line holding `"block"`; 1 when neither is found.
+function keyLine(text, block, key) {
+  const lines = text.split('\n')
+  let from = lines.findIndex((l) => l.includes('"' + block + '"'))
+  if (from < 0) from = 0
+  for (let i = from; i < lines.length; i++) if (lines[i].includes('"' + key + '"')) return i + 1
+  const any = lines.findIndex((l) => l.includes('"' + key + '"'))
+  return any < 0 ? 1 : any + 1
+}
+
+function configFindings(root) {
+  const rel = CONFIG_RELPATH
+  let text
+  let cfg
+  try {
+    text = fs.readFileSync(path.join(root, rel), 'utf8')
+    cfg = JSON.parse(text)
+  } catch { return [] }
+  if (!cfg || typeof cfg !== 'object') return []
+  const out = []
+  const rt = cfg.runtime
+  if (rt && typeof rt === 'object' && !rt.inert && typeof rt.readyCheck === 'string' &&
+      LOOPBACK_IN_COMMAND.test(rt.readyCheck) && !readsPort(rt.readyCheck)) {
+    out.push({ file: rel, line: keyLine(text, 'runtime', 'readyCheck'), class: 'config-fixed-port', text: 'runtime.readyCheck' })
+  }
+  const url = cfg.prototype && cfg.prototype.url
+  if (typeof url === 'string' && !hasPortSlot(url)) {
+    let hostname = null
+    try { hostname = new URL(url).hostname } catch { hostname = null }
+    if (hostname && LOOPBACK_HOSTS.includes(hostname)) {
+      out.push({ file: rel, line: keyLine(text, 'prototype', 'url'), class: 'config-fixed-port', text: 'prototype.url' })
+    }
+  }
+  return out
 }
 
 function writeOut(fd, text) {
@@ -86,6 +134,8 @@ function main() {
       }
     }
   }
+
+  findings.push(...configFindings(root))
 
   if (json) {
     writeOut(1, JSON.stringify({ findings }) + '\n')

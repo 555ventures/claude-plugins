@@ -13,7 +13,10 @@
 // own mitigations, docs/spikes/20260923-design-retool/spike-structdiff.md), injects
 // `spec/templates/proto-stable-id.js` and `spec/templates/proto-capture-page.js` via
 // `page.addScriptTag`, then calls the injected `captureComposites(root, composites, props)` and
-// writes its result as a capture document. When the host declares `prototype.storageState` (read
+// writes its result as a capture document (specs/20261005/03-one-port-per-launch.md D9: a saved
+// sign-in whose single same-hostname origins[] entry names another port is opened with that entry
+// re-pointed to the --url origin; two same-hostname entries and no match leave the path as is and
+// print one stderr note). When the host declares `prototype.storageState` (read
 // here through lib/host-config.js, specs/20261001/01-the-freeze-signs-in-and-derives-its-tier.md
 // D2/D3) the page opens with that saved sign-in; absent = signed out. `--diff` compares two capture files by `id` with no
 // browser involved at all.
@@ -25,7 +28,8 @@
 // What this deliberately does NOT do: decide which routes/states to capture (the driver reads
 // states.json and calls this once per route x state), retry a failed navigation or capture, or
 // write or refresh the sign-in file (the host's own Playwright setup owns it; this script only
-// checks it parses), or own the browser-side walk itself (that lives in the injected, no-import
+// checks it parses and, in one case, re-points an in-memory copy — never edits cookies or the
+// file), or own the browser-side walk itself (that lives in the injected, no-import
 // spec/templates/proto-capture-page.js so the overlay, the capture and the derived tests share
 // one algorithm).
 //
@@ -201,6 +205,7 @@ const composites = compositesArg.split(',').map((s) => s.trim()).filter(Boolean)
 // launched, so a bad sign-in never surfaces as Playwright's own remedy-less error.
 let storageStateValue = null
 let storageStateAbs = null
+let storageStateParsed = null
 const declaredState = (readConfig(path.resolve(host)).prototype || {}).storageState
 if (declaredState !== undefined) {
   if (typeof declaredState !== 'string' || declaredState === '') {
@@ -222,6 +227,8 @@ if (declaredState !== undefined) {
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
       stateOk = false
       stateErr = 'not a JSON object'
+    } else {
+      storageStateParsed = parsed
     }
   } catch (e) {
     stateOk = false
@@ -231,6 +238,28 @@ if (declaredState !== undefined) {
     die('prototype.storageState (' + declaredState + ') is not a readable storage-state JSON file (' + stateErr +
       ') — remedy: re-run the sign-in setup to rewrite it')
   }
+}
+
+// specs/20261005/03-one-port-per-launch.md D9: cookies follow a host across ports, browser storage
+// does not. When the saved file holds exactly one origins[] entry on the --url hostname and none
+// on the --url origin, hand Playwright the parsed state with that one entry's origin re-pointed;
+// otherwise the file path, unchanged (two same-host entries and no match: say why on stderr).
+function resolveStorageState() {
+  if (!storageStateAbs) return null
+  let target
+  try { target = new URL(url) } catch { return storageStateAbs }
+  const origins = Array.isArray(storageStateParsed.origins) ? storageStateParsed.origins : []
+  const hostOf = (o) => { try { return new URL(o.origin).hostname } catch { return null } }
+  const sameHost = origins.filter((o) => o && typeof o.origin === 'string' && hostOf(o) === target.hostname)
+  if (sameHost.length === 0 || sameHost.some((o) => o.origin === target.origin)) return storageStateAbs
+  if (sameHost.length >= 2) {
+    process.stderr.write('proto-capture: note — cannot tell which saved origin is the app (' +
+      sameHost.map((o) => o.origin).join(', ') + '); browser storage not re-pointed\n')
+    return storageStateAbs
+  }
+  return Object.assign({}, storageStateParsed, {
+    origins: origins.map((o) => (o === sameHost[0] ? Object.assign({}, o, { origin: target.origin }) : o)),
+  })
 }
 
 let playwrightTest
@@ -248,7 +277,7 @@ try {
   let page
   try {
     const pageOpts = { viewport, deviceScaleFactor: 1, reducedMotion: 'reduce' }
-    if (storageStateAbs) pageOpts.storageState = storageStateAbs
+    if (storageStateAbs) pageOpts.storageState = resolveStorageState()
     page = await browser.newPage(pageOpts)
     try {
       await page.goto(url, { waitUntil: 'load', timeout: 15000 })

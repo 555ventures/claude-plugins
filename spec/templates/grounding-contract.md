@@ -43,9 +43,11 @@ verification stack composed entirely of static legs can pass a program that cann
 equally pass a program that starts but cannot cleanly stop. The `runtime` config block is the
 contract for the executed leg:
 
-- `runtime.bootCommand` — starts the app locally (e.g. the dev command).
+- `runtime.bootCommand` — starts the app locally (e.g. the dev command); it must serve on the
+  `PORT` environment variable, which `smoke.sh` sets to a free port for each run.
 - `runtime.readyCheck` — a command that exits 0 once the app observably serves (e.g.
-  `curl -sf localhost:3000/api/health`).
+  `curl -sf localhost:$PORT/api/health`); `readyCheck` and `seedCommand` read `PORT`. A
+  `readyCheck` naming a fixed port keeps fixed-address behaviour and cannot run beside a second launch.
 - Optional: `runtime.seedCommand` (seeds an observable state), `runtime.readyTimeout`
   (seconds, default 120), `runtime.stopSignal` (default SIGTERM), `runtime.stopTimeout`
   (seconds, default 30), `runtime.stopExitCodes` (integer array, default `[0]`).
@@ -129,7 +131,7 @@ init/first-release time — the plugin never invents deploy mechanics.
 
 `prototype` — the grounding `/spec:prototype` runs a throwaway branch against
 (specs/20260928/01-the-prototype-command-and-the-pin-overlay.md D1): `url` (the dev server's
-base URL), `overlay` (the worktree-relative file the driver writes the pin overlay to; the
+base URL, carrying `{port}` — the driver prints the port to boot on), `overlay` (the worktree-relative file the driver writes the pin overlay to; the
 host's dev entry imports it behind its own dev flag), `e2eFile` (a path template carrying
 `{brief}`, where the freeze stage's derived tests land), `e2eList` (a shell string carrying
 `{file}` that lists the tests in one file and exits 0), `export` (a non-empty array of git

@@ -1,6 +1,7 @@
 ---
 date: 2026-10-05
-status: hardened
+status: implementing
+build_base: design-retool
 tier: critical
 area: runtime
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 brief: n/a
 spiked: 2026-10-05
 open_markers: 0
+diff_base: a49fc94c10140ea76e89696df7bc3d3ce0c1008f
 ---
 
 # One port per launch

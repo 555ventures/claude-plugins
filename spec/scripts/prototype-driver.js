@@ -337,6 +337,23 @@ function worktreeIsRegistered() {
   return false
 }
 
+// The session stays anchored in the main checkout for every step (each driver call is
+// `--root .`) yet ROUND and TESTS have it Edit files inside the prototype worktree — a write
+// block-cross-worktree-writes.sh refuses unless the TARGET tree's private git dir carries the
+// `scratch-worktree` marker. The prototype worktree is exactly that kind of harness-made
+// throwaway sink, so the driver plants the marker: at open, and again on every ROUND/TESTS
+// step print so a prototype opened before this existed (or a re-attached worktree) heals.
+// Returns false when the tree has no linked private git dir to hold it.
+function plantScratchMarker(wtPath) {
+  const r = spawnSync('git', ['-C', wtPath, 'rev-parse', '--git-dir'], { encoding: 'utf8' })
+  if (r.status !== 0 || !r.stdout.trim()) return false
+  const raw = r.stdout.trim()
+  const gitDirAbs = path.isAbsolute(raw) ? raw : path.resolve(wtPath, raw)
+  if (!gitDirAbs.split(path.sep).includes('worktrees')) return false
+  try { fs.writeFileSync(path.join(gitDirAbs, 'scratch-worktree'), '') } catch { return false }
+  return true
+}
+
 function deriveState(status) {
   // marks.closed is checked FIRST and short-circuits the worktreeIsRegistered() probe below —
   // by CLOSED the prototype worktree is gone (D7), so testing for it would misreport OPEN.
@@ -442,6 +459,10 @@ function cmdMarkOpened() {
   }
   const createdLines = created.stdout.split('\n').filter(Boolean)
   const wtPath = createdLines.length ? createdLines[createdLines.length - 1].trim() : worktreePath
+
+  if (!plantScratchMarker(wtPath)) {
+    die('could not mark ' + worktreeRel + ' as a scratch worktree — the session\'s edits into it would be blocked; remedy: confirm it is a linked worktree with git worktree list, then re-run --mark opened')
+  }
 
   const pinsPort = findFreePortFrom(4711)
 
@@ -976,6 +997,7 @@ function probeUrl(url) {
 }
 
 function printRoundStep(status) {
+  if (worktreeIsRegistered()) plantScratchMarker(worktreePath)
   const roundNum = (status.rounds || []).length + 1
   const statesDoc = loadStatesOrNull()
   const lines = []
@@ -1029,6 +1051,7 @@ function printApprovedStep() {
 // TESTS bare-run printer (D4).
 // ---------------------------------------------------------------------------
 function printTestsStep() {
+  if (worktreeIsRegistered()) plantScratchMarker(worktreePath)
   const contract = readContractOrDie()
   const pinsDoc = loadPinsDoc()
   const pinsById = {}

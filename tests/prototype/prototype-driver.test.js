@@ -264,3 +264,39 @@ test('AC-20260928-01-6: --mark approved is accepted after a round and the next b
   assert.match(next.stdout, /\nThen:\n\s+node \S+ \S+ --mark frozen/,
     'the APPROVED step must name --mark frozen as its Then: line — without it the session cannot tell which mark freezes the prototype: ' + next.stdout)
 })
+
+// Direct fix 2026-10-05: every step keeps the session in the main checkout (`--root .`) while
+// ROUND and TESTS have it Edit files inside the prototype worktree — a write the plugin's own
+// cross-worktree guard refused. The driver now marks the worktree as a scratch sink; this runs
+// the real hook against the real opened worktree, both directions.
+test('an opened prototype worktree accepts the main-checkout session\'s edits through the cross-worktree write guard, and still cannot write back out', () => {
+  const { spawnSync } = require('node:child_process')
+  const HOOK = path.join(require('../helpers').SPEC, 'scripts/block-cross-worktree-writes.sh')
+  const hook = (cwd, filePath) => spawnSync('bash', [HOOK], {
+    input: JSON.stringify({ cwd, tool_input: { file_path: filePath } }), encoding: 'utf8',
+  })
+  const dir = setupHost()
+  writeStates(dir)
+  const opened = mark(dir, 'opened')
+  assert.strictEqual(opened.status, 0, 'test setup requires --mark opened to succeed: ' + opened.stdout + opened.stderr)
+  const wt = worktreePath(dir)
+  const inward = path.join(wt, 'src/main.js')
+
+  const afterOpen = hook(dir, inward)
+  assert.strictEqual(afterOpen.status, 0,
+    'the ROUND step tells the main-checkout session to edit files in the prototype worktree — the guard must allow that write or the round cannot be done with Edit: ' + afterOpen.stderr)
+
+  const outward = hook(wt, path.join(dir, 'src/main.js'))
+  assert.strictEqual(outward.status, 2,
+    'the marker makes the prototype worktree a sink only — a write from inside it out to the main checkout must still be blocked: ' + JSON.stringify(outward))
+
+  // A prototype opened before the driver planted the marker heals on its next step print.
+  const gitDir = execFileSync('git', ['-C', wt, 'rev-parse', '--git-dir'], { encoding: 'utf8' }).trim()
+  fs.rmSync(path.join(gitDir, 'scratch-worktree'))
+  assert.strictEqual(hook(dir, inward).status, 2,
+    'control: without the marker the guard blocks the same write — otherwise this test proves nothing about the driver')
+  const round = bare(dir)
+  assert.strictEqual(round.status, 0, 'the bare ROUND run must print its step: ' + round.stdout + round.stderr)
+  assert.strictEqual(hook(dir, inward).status, 0,
+    'the ROUND step print must re-mark an already-open prototype worktree, or prototypes opened before this fix stay blocked: ' + round.stdout)
+})

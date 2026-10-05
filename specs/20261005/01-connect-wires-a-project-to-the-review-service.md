@@ -1,13 +1,15 @@
 ---
 date: 2026-10-05
-status: hardened
+status: done
 tier: critical
 area: design
 breaking: false
 depends_on: []
 brief: n/a
 spiked: 2026-10-05
+build_base: design-retool
 open_markers: 0
+diff_base: 616ac76e3e8f599c80cf97036e5001200dece188
 ---
 
 # Connect wires a project to the review service
@@ -387,6 +389,16 @@ backlink; its clause stands as the amended record). Waived: `spec/scripts/env-pr
 ("unset or empty" is its own exit-code text, unrelated); `tests/walkthrough/config.test.js` (the
 reused pin of AC-16, unchanged); `spec/commands/mocks.md` ("the token is never printed or
 written" is said of the mocks driver and stays true).
+
+Build departures (2026-10-05, folded from the deviations sidecar at close; one-offs):
+an existing settings file whose `env` is present but not an object is refused `bad-settings`
+rather than overwritten (D6 extended so user data is never clobbered); a write failure on either
+file is refused `write-failed` (exit 2, remedy: run the same command from a plain terminal) —
+A8's if-false path given a code; a contract-file read failure reports under `bad-config`; the
+command file adds one sentence beyond D12 (on a non-zero exit, print the line and stop). Review
+iteration 1 fixed the command's usage hint, which named positional arguments and a token the
+script refuses; the advisory left open is the script's catch-all `internal` refusal code, which
+no table names.
 
 No regression pin beyond AC-16 and AC-20: every other criterion is new behaviour whose test
 expires at close, and the client's untouched rules are already pinned by their own spec.

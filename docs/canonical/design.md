@@ -94,5 +94,17 @@ vocabulary is `spec-paths walkthrough-catalog` (19 gray components, one action);
 JSON in a fixed subset of JSON Schema, read by `lib/json-shape.js`. The plugin owns the round
 number; every round, wireframe or picture, passes the offline round check before anything is
 sent; every answer is checked against the contract before it is written; rounds, notes and
-approvals land under `design/rounds/<n>/`; the token is read from the named environment variable
-and never written or printed.
+approvals land under `design/rounds/<n>/`; the client reads the token from the project's
+git-ignored settings file when connect stored it there, else from the named environment variable,
+and never writes or prints it.
+
+A project is connected with `/spec:connect` (`spec-paths walkthrough-connect`,
+specs/20261005/01): run in the project with no arguments, it derives the project id from the
+folder name, creates the project on the service through the Railway CLI (or joins the id when
+the service already holds it), stores the token as `env.WALKTHROUGH_TOKEN` in the git-ignored
+`.claude/settings.local.json`, proves the link with a call that needs the token, and only then
+writes the `walkthrough` block. It is the one writer of that block and of the stored token;
+the client still never edits the config and never writes or prints the token. The client
+reads the stored token first and the environment variable second, so the session that ran
+connect can send screens at once. A second run changes nothing; a block that points elsewhere
+is never rewritten. The default environment is `staging` until production is deployed.

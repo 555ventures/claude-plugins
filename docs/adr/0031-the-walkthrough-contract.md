@@ -6,7 +6,8 @@
 - Deciders: JJ + session (specs/20260929/01-the-walkthrough-contract-and-the-client.md; the
   running prototype recorded in docs/spikes/20260929-walkthrough/FINDINGS.md)
 - Applies to: ADR-0030 — clause (f) amended: the plugin's scripted client and what it owns.
-- Amended by: —
+- Amended by: ADR-0033 (the stored token is read before the environment variable; connect is the
+  one writer)
 
 ## Context
 

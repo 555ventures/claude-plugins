@@ -291,6 +291,11 @@
       "spec/scripts/release-legs.js"
     ]
   },
+  "spec/scripts/walkthrough-connect.js": {
+    "entryPoints": [
+      "spec/commands/connect.md"
+    ]
+  },
   "spec/scripts/walkthrough.js": {
     "entryPoints": [
       "spec/commands/doctor.md",

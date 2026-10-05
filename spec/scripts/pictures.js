@@ -18,7 +18,7 @@
 //
 // Exit codes: 0 done (round written, and sent unless --no-send) · 2 refused: usage, no-command,
 // bad-config, no-stories, not-connected, too-many, command-failed, missing-picture, bad-picture,
-// extra-picture, send-failed.
+// extra-picture, send-failed; an unexpected internal error is script-error, also exit 2.
 
 const fs = require('fs')
 const path = require('path')

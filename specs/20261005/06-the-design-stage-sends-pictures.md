@@ -1,6 +1,6 @@
 ---
 date: 2026-10-05
-status: implementing
+status: done
 build_base: design-retool
 tier: critical
 area: design
@@ -356,6 +356,13 @@ Collision closure at lock (literals `No PNG round`, `screenshot round`): six fil
 `docs/canonical/genesis.md` (Canonical Delta). Waived as dated records that stay true:
 `docs/roadmap/00-overview.md`, `docs/roadmap/29-walkthrough-integration.md` (its corrections of
 2026-10-05 carry the ruling) and `docs/spikes/20260929-walkthrough/run.js`.
+
+Build deviation (2026-10-05, one-off): the `pictures.js` row in `spec/entrypoints.json` also
+lists `spec/templates/grounding-contract.md` beyond D14's two names, because the contract's new
+§ Pictures text says `spec-paths pictures` and the entrypoints test flags an undeclared caller.
+Review (2026-10-05, CLEAN, two advisories): the catch-all `script-error` refusal word is now
+named in the script's header; D1's widths and dir edge rules are enforced but pinned only by
+AC-7's four literals — left advisory.
 
 ## Canonical Delta
 

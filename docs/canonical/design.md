@@ -134,3 +134,13 @@ is `/spec:mocks`. `init-gen.js generate` carries the block from disk on every ru
 without `--refresh`, treats a config that holds only the block as not yet generated, and still
 refuses any other hand-edit without `--refresh`. The state gate prints its grounding-drift
 warning only for a config that carries a `generatedBy` stamp.
+
+A project can send pictures of its real screens (specs/20261005/06). Its config's `pictures`
+block names the command that makes them, the folder they land in and the widths; the plugin
+names no tool for it. `spec-paths pictures` derives the wanted list from the seed's stories (one
+picture per screen, state and width, named `<screen>[--<state>]--<width>.png`), cleans the
+folder of pictures, runs the project's command with `SPEC_PICTURES_DIR` and
+`SPEC_PICTURES_WANTED`, refuses a missing, empty, non-PNG or stray picture by name, writes the
+round file with the seed's journeys, and sends it through `walkthrough.js` as a child process. A
+round is always every story of the project. The worklist of `mocks-driver.js round pull` names
+the spot of a note left on a picture.

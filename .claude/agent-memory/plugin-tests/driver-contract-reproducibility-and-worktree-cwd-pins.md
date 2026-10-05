@@ -3,7 +3,7 @@ name: driver-contract-reproducibility-and-worktree-cwd-pins
 description: Testing a stage-driver's "byte-equal to <subscript>'s own line" claim, and its "refused while CWD is inside the worktree" claim, without controlling the subscript's internal invocation.
 metadata:
   type: feedback
-  reviewed: 2026-09-14
+  reviewed: 2026-10-05
 ---
 
 Two reusable patterns from authoring tests/review/review-driver.test.js (since sharded into

@@ -1,5 +1,5 @@
 ---
-description: Mock-app doctrine for /spec:mocks and genesis — Design Canon and Authoring Contracts
+description: Design doctrine for /spec:mocks and genesis — Design Canon and Authoring Contracts
 ---
 
 # Spec Pipeline: Design Doctrine

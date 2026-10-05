@@ -9,11 +9,11 @@ what to build with and how it should look, and its `HANDOFF` step grounds the re
 `/spec:init` grounds brownfield repos the same way (config, rules, agents; it ends by invoking
 `/spec:enforce`); then the per-feature pipeline: `/spec:plan` → `/spec:run` (isolates in the
 spec's own worktree, then build, then review — review is the only stage that flips `done`; on
-CLEAN it commits the close and merges back) → `/spec:release` (repeatable milestone gate). The
-reviewer's Screens and Journeys tabs keep the whole-product design picture browsable at every
-stage.
+CLEAN it commits the close and merges back) → `/spec:release` (repeatable milestone gate). On a
+host connected to the walkthrough service, its stories and wireframes stay browsable there at
+every stage.
 
-This file carries the invariants every command shares. Mock-app doctrine lives in `design.md`
+This file carries the invariants every command shares. Design doctrine lives in `design.md`
 (via `spec-paths shared-for <mocks command>`); the genesis supplement is `genesis.md`. Genesis
 is greenfield-only.
 

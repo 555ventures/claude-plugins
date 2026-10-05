@@ -149,6 +149,26 @@ These override the text above where they differ. JJ ruled the first three on 202
   captures at one width, not two; and a pulled picture note is anchored to a point (x, y), while
   a prototype pin is anchored to an element, so "the same pins file" needs a ruling.
 
+## Corrections (2026-10-05, from planning spec 03 — specs/20261005/06-the-design-stage-sends-pictures.md)
+
+These override the text above where they differ. JJ ruled all of them on 2026-10-05.
+
+- The plugin names no tool for making pictures. A project's config declares the one command
+  that makes its pictures and the folder they land in; the plugin tells that command which
+  pictures the stories need, checks the folder and hands the round to the existing sender. A
+  first lock that put a browser driver and Storybook inside a plugin script was rejected the same
+  day against the core doctrine's rule that project differences live in the project's config.
+- A picture round is always every story of the project, because the service shows one round as
+  the whole product. The prototype driver sends no pictures and no picture note becomes a
+  prototype pin; the point-note versus element-pin ruling is asked only if that reopens.
+- The default widths are phone (390) and desktop (1280); a project may declare others. The open
+  question on sizing below is closed by this.
+- The service has accepted picture rounds since 2026-10-03 (its specs 20261003/02 to 04). A live
+  trial on 2026-10-05 sent a picture round of four real pictures through the plugin's unchanged
+  sender and pulled back a reader's note left on a spot.
+- Upload stays with the plugin's sender for now. The service's roadmap holds its own terminal
+  tool; moving the upload and the shared contract file there is a later ruling.
+
 ## Open questions for planning
 
 - Whether the gray catalog's Zod schema lives in the plugin (versioned with the contract) or

@@ -410,3 +410,81 @@ test('create --attach refuses a missing branch, an existing path, a --base, and 
   assert.match(elsewhere.stderr, /checked out in another worktree/)
   assert.ok(g('branch', '--list', 'spec/x').trim(), 'no refusal may delete the branch')
 })
+
+// Kaigai 2026-10-05: host setup lived in one prose bullet of enter-worktree.md, so a session that
+// shortened it skipped the host's migrate and seed; and a spec left uncommitted by plan never
+// reached the worktree branched from HEAD. Both now belong to create.
+function setupHost(setupCommand) {
+  const dir = tmpdir('mbsetup')
+  const g = gitRepo(dir)
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({ setupCommand }))
+  g('add', '-A'); g('commit', '-q', '-m', 'config')
+  return { dir, g }
+}
+
+test('create runs the host setupCommand inside the new worktree, on a fresh create and on --attach, keeping the path as the last stdout line', () => {
+  const { dir, g } = setupHost('pwd -P > setup-ran.txt && echo setup-noise')
+  const r = runBash(SCRIPT, ['create', '--source', 'spec/x', '--root', dir])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const wt = r.stdout.trim().split('\n').pop()
+  assert.strictEqual(wt, fs.realpathSync(path.join(dir, '.claude/worktrees/spec-x')),
+    'setup output must never displace the worktree path on stdout: ' + r.stdout)
+  assert.doesNotMatch(r.stdout, /setup-noise/, 'setup output belongs on stderr')
+  assert.strictEqual(fs.readFileSync(path.join(wt, 'setup-ran.txt'), 'utf8').trim(), wt,
+    'setup must run with the worktree as its working directory, not the root')
+  assert.ok(!fs.existsSync(path.join(dir, 'setup-ran.txt')), 'setup must not run in the root tree')
+
+  fs.rmSync(wt, { recursive: true, force: true })
+  const a = runBash(SCRIPT, ['create', '--attach', '--source', 'spec/x', '--root', dir])
+  assert.strictEqual(a.status, 0, a.stderr)
+  assert.ok(fs.existsSync(path.join(wt, 'setup-ran.txt')),
+    'a re-attached worktree is a new directory with nothing installed — setup must run again')
+  assert.strictEqual(g('-C', wt, 'rev-parse', '--abbrev-ref', 'HEAD').trim(), 'spec/x')
+})
+
+test('create undoes itself when the host setupCommand fails: fresh create leaves no worktree and no branch, --attach keeps the branch', () => {
+  const { dir, g } = setupHost('test -f allow-setup')
+  const wt = path.join(dir, '.claude/worktrees/spec-x')
+  const r = runBash(SCRIPT, ['create', '--source', 'spec/x', '--root', dir])
+  assert.strictEqual(r.status, 2, 'a failing setup must fail create: ' + r.stderr)
+  assert.match(r.stderr, /setupCommand failed/)
+  assert.ok(!fs.existsSync(wt), 'no half-provisioned worktree may survive for a caller to enter')
+  assert.doesNotMatch(g('worktree', 'list', '--porcelain'), /spec-x/, 'no registration may survive')
+  assert.strictEqual(g('branch', '--list', 'spec/x').trim(), '', 'the fresh branch must go, so a plain retry works')
+
+  fs.writeFileSync(path.join(dir, 'allow-setup'), '')
+  g('add', '-A'); g('commit', '-q', '-m', 'allow')
+  const ok = runBash(SCRIPT, ['create', '--source', 'spec/x', '--root', dir])
+  assert.strictEqual(ok.status, 0, 'the retry after a fixed cause must be a plain re-run: ' + ok.stderr)
+  g('-C', wt, 'rm', '-q', 'allow-setup'); g('-C', wt, 'commit', '-q', '-m', 'break setup')
+  fs.rmSync(wt, { recursive: true, force: true })
+
+  const a = runBash(SCRIPT, ['create', '--attach', '--source', 'spec/x', '--root', dir])
+  assert.strictEqual(a.status, 2, a.stderr)
+  assert.ok(!fs.existsSync(wt), 'a failed attach must remove the worktree too')
+  assert.match(g('log', '--format=%s', 'spec/x'), /^break setup$/m, 'a failed attach must never delete a branch carrying work')
+})
+
+test('create --spec refuses a spec that is untracked or edited since the base, and passes once it is committed', () => {
+  const { dir, g } = setupHost('true')
+  const spec = 'specs/20261005/09-example.md'
+  fs.mkdirSync(path.join(dir, 'specs/20261005'), { recursive: true })
+  fs.writeFileSync(path.join(dir, spec), 'status: draft\n')
+
+  const untracked = runBash(SCRIPT, ['create', '--source', 'spec/09-example', '--spec', spec, '--root', dir])
+  assert.strictEqual(untracked.status, 2, untracked.stderr)
+  assert.match(untracked.stderr, /is not committed on 'HEAD'/)
+  assert.strictEqual(g('branch', '--list', 'spec/09-example').trim(), '', 'the refusal must come before any branch exists')
+
+  g('add', '-A'); g('commit', '-q', '-m', 'draft')
+  fs.writeFileSync(path.join(dir, spec), 'status: hardened\n')
+  const edited = runBash(SCRIPT, ['create', '--source', 'spec/09-example', '--spec', spec, '--root', dir])
+  assert.strictEqual(edited.status, 2, 'an uncommitted status flip must refuse — the worktree would build the stale copy: ' + edited.stderr)
+
+  g('add', '-A'); g('commit', '-q', '-m', 'lock')
+  const ok = runBash(SCRIPT, ['create', '--source', 'spec/09-example', '--spec', path.join(fs.realpathSync(dir), spec), '--root', dir])
+  assert.strictEqual(ok.status, 0, 'a committed spec must pass, absolute path included: ' + ok.stderr)
+  const wt = ok.stdout.trim().split('\n').pop()
+  assert.strictEqual(fs.readFileSync(path.join(wt, spec), 'utf8'), 'status: hardened\n')
+})

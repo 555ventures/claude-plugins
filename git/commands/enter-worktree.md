@@ -51,13 +51,15 @@ spec plugin must be installed.
    - **Capture the origin first, before any entry:** `{origin} = git rev-parse --abbrev-ref HEAD`
      (Bash). Once a worktree is entered, `HEAD` is the build branch and the origin stops being
      recoverable from the session.
-   - **Create:** `{mergeBack} create --source {source}`, adding `--attach` when
+   - **Create:** `{mergeBack} create --source {source} --spec $ARGUMENTS`, adding `--attach` when
      `git rev-parse --verify -q refs/heads/{source}` succeeds (a parked build: branch kept,
      worktree directory gone). It branches from the current HEAD (= origin), or re-attaches the
-     existing branch, and does the `git worktree add` plus the `.worktreeinclude` copy — never
-     substitute a bare `git worktree add`, which skips that copy. Capture its **last stdout line** as `{worktree}`
+     existing branch, and does the `git worktree add`, the `.worktreeinclude` copy and the host's
+     `setupCommand` — never substitute a bare `git worktree add`, which skips all of that, and
+     never run setup by hand. Capture its **last stdout line** as `{worktree}`
      (the absolute path). Non-zero exit (branch/path exists, unborn HEAD, run from a worktree,
-     `.claude/worktrees/` not gitignored — see `merge-back.sh`) → show the user its stderr, then
+     `.claude/worktrees/` not gitignored, spec not committed, host setup failed — see
+     `merge-back.sh`) → show the user its stderr, then
      report as **create failed** (see ## Report) and stop. Do **not** fall back to in-place; the
      user asked for isolation.
    - **Enter:** `EnterWorktree {path: {worktree}}`.
@@ -67,8 +69,6 @@ spec plugin must be installed.
      into a registered `{path:}` is deterministic — a failure is structural, not transient;
      surface it, do not loop-retry), then report as **entry verification failed** (see
      ## Report) and stop.
-   - **Setup:** run the host's `setupCommand` (from `.claude/spec.config.json`) once inside
-     `{worktree}` — a fresh worktree has no installed deps.
    - **Write `build_base` — but never over a pin:** write `build_base: {origin}` into the spec
      frontmatter. This is the sole writer of that field; a fresh create is the only time it runs (never on
      `--attach`).

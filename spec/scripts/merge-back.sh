@@ -19,7 +19,7 @@
 #                                precondition. The sole owner of the build-branch naming rule;
 #                                `create`'s --source is derived by callers via this subcommand
 #                                (see create's own note below), never re-derived inline.
-#   create   --source S [--attach] [--root R] [--base REF] [--name N]
+#   create   --source S [--attach] [--spec P] [--root R] [--base REF] [--name N]
 #                             -> deterministically `git worktree add` the build tree under
 #                                .claude/worktrees/, then print its ABSOLUTE path as the LAST
 #                                stdout line. The caller passes that path to EnterWorktree
@@ -37,6 +37,17 @@
 #                                is gone (a parked build): same path, same include copy, no -b and
 #                                no --base. Without it an existing branch still dies — a caller
 #                                never silently resumes a dead branch.
+#                                Host setup runs HERE, in both modes: after the include copy,
+#                                the host's `setupCommand` (host config) runs inside
+#                                the new worktree, output on stderr. A failing setup undoes the
+#                                create (worktree removed; a fresh branch deleted, an attached one
+#                                kept) and exits 2, so a retry starts clean and no caller ever
+#                                enters a half-provisioned tree. No config or no setupCommand →
+#                                nothing runs.
+#                                --spec P (fresh create only): refuse unless the spec file at P
+#                                is committed, unmodified, on the base — a worktree branched from
+#                                a base without it has no spec to build, and the uncommitted file
+#                                left behind trips the clean-root gate at merge time.
 #   root     [--worktree W]   -> prints the absolute PROJECT root (the main worktree), so the
 #                                caller cd's to a verified path and never guesses "root".
 #                                Project root != $HOME. Run from inside the worktree if no W.
@@ -55,7 +66,7 @@ set -u
 die()  { echo "merge-back: $*" >&2; exit 2; }
 note() { echo "$*"; }
 
-ROOT=""; TARGET=""; SOURCE=""; STRATEGY=""; WORKTREE=""; BASE=""; NAME=""; ATTACH=""
+ROOT=""; TARGET=""; SOURCE=""; STRATEGY=""; WORKTREE=""; BASE=""; NAME=""; ATTACH=""; SPEC=""
 SUB="${1:-}"; shift || true
 
 # branch-for is pure string derivation (no git ops, no --root precondition) — it must be
@@ -78,7 +89,7 @@ while [ $# -gt 0 ]; do
   # --attach is the one valueless flag (create only).
   if [ "$1" = "--attach" ]; then ATTACH=1; shift; continue; fi
   case "$1" in
-    --root|--target|--source|--strategy|--worktree|--base|--name)
+    --root|--target|--source|--strategy|--worktree|--base|--name|--spec)
       [ $# -ge 2 ] || die "flag $1 requires a value"
       case "$2" in --*) die "flag $1 requires a value (got flag '$2')" ;; esac
       ;;
@@ -92,6 +103,7 @@ while [ $# -gt 0 ]; do
     --worktree) WORKTREE="$2" ;;
     --base)     BASE="$2" ;;
     --name)     NAME="$2" ;;
+    --spec)     SPEC="$2" ;;
   esac
   shift 2
 done
@@ -141,6 +153,11 @@ case "$SUB" in
         die "create: branch '$SOURCE' already exists — pass --attach to re-attach a parked build, or pick a new spec branch name"
       BASE="${BASE:-HEAD}"
       git -C "$CROOT" rev-parse --verify -q "$BASE" >/dev/null 2>&1 || die "create: base ref '$BASE' not found"
+      if [ -n "$SPEC" ]; then
+        SPEC_REL="${SPEC#"$CROOT"/}"
+        { git -C "$CROOT" cat-file -e "$BASE:$SPEC_REL" 2>/dev/null && git -C "$CROOT" diff --quiet "$BASE" -- "$SPEC_REL" 2>/dev/null; } || \
+          die "create: spec '$SPEC_REL' is not committed on '$BASE' (untracked, or edited since) — the worktree would not carry it and the leftover would break merge-back's clean-root gate. Commit it, then retry."
+      fi
       git -C "$CROOT" worktree add -b "$SOURCE" "$WT" "$BASE" >&2 || die "create: 'git worktree add' failed"
     fi
     # `git worktree add` materializes only TRACKED files, so gitignored runtime config
@@ -160,6 +177,29 @@ case "$SUB" in
       0|3) : ;;
       *) die "create: worktree-include.sh failed (exit $OWNER_RC) — run it by hand: bash $(dirname "$0")/worktree-include.sh --root $CROOT --dest $WT" ;;
     esac
+    # Host setup is part of create, not a step the caller remembers: a worktree that exists is a
+    # worktree that was set up. A failure undoes the create so the retry is a plain re-run.
+    undo_create() {
+      git -C "$CROOT" worktree remove --force "$WT" >/dev/null 2>&1 || rm -rf "$WT"
+      git -C "$CROOT" worktree prune >/dev/null 2>&1 || true
+      [ -n "$ATTACH" ] || git -C "$CROOT" branch -D "$SOURCE" >/dev/null 2>&1 || true
+    }
+    # The config is read through lib/host-config.js (the sole reader): the worktree's own copy
+    # first, the root's when the branch does not carry one. Exit 3 = present but unreadable.
+    SETUP="$(node -e '
+      const hc = require(process.argv[1])
+      const root = process.argv.slice(2).find((r) => hc.configExists(r))
+      if (!root) process.exit(0)
+      let c
+      try { c = hc.readConfigStrict(root) } catch { process.exit(3) }
+      process.stdout.write(c && typeof c.setupCommand === "string" ? c.setupCommand : "")
+    ' "$(dirname "$0")/lib/host-config.js" "$WT" "$CROOT")" || {
+      undo_create; die "create: the host config is present but cannot be read as JSON — worktree removed; fix it, then retry"; }
+    if [ -n "$SETUP" ]; then
+      echo "merge-back: running host setupCommand in $WT" >&2
+      ( cd "$WT" && bash -c "$SETUP" ) >&2 || {
+        undo_create; die "create: host setupCommand failed (output above) — worktree removed; fix the cause, then retry"; }
+    fi
     echo "merge-back: created worktree '$NAME' (branch '$SOURCE', base '$BASE') at $WT" >&2
     rp "$WT"            # absolute path — the LAST stdout line, for EnterWorktree {path:} and --worktree
     exit 0 ;;

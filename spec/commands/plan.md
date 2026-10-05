@@ -123,7 +123,11 @@ Write the spec per the template. `status: draft`. While drafting:
    ```
 
 4. Flip `status: draft → hardened`.
-5. **Report:** assemble slots — `outcome`: ✅ `spec hardened & locked — {path}`; `bullets`:
+5. **Commit the lock:** `git add` the spec, `.claude/spec-runs.jsonl` and any brief step 2
+   wrote, then `git commit -m "chore(spec): lock {YYYYMMDD/##}" -- <those paths>` — those paths
+   only, whatever else is uncommitted. `/spec:run` branches the worktree from HEAD and refuses a
+   spec that is not on it.
+6. **Report:** assemble slots — `outcome`: ✅ `spec hardened & locked — {path}`; `bullets`:
    one plain line per decision made; `warns`: notable spike findings; `queued`: one line
    per `spec-queue add` run in step 2, printed verbatim or glossed in plain English (omit
    the slot when step 2 wrote nothing); `next`: the verbatim

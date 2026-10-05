@@ -1,7 +1,7 @@
 {
   "name": "git",
-  "version": "1.7.0",
-  "description": "Git helpers: a fast add-all-and-commit flow, a guided merge with conflict repair and worktree cleanup, and idempotent per-spec worktree entry. Changelog (last 3): 1.7.0 — Commit's escape offer says /spec:escape derives the spec and prints it for veto; the three commands' report-contract citations point at core.md instead of the retired shared.md. 1.6.0 — /git:merge refuses a proto/* source outright (it is never merged, freeze it via /spec:prototype instead) and reports a harden/* source outside the review driver's merge-back as out of loop, since harden/<stem> is meant to land only through /spec:run. 1.5.0 — /git:enter-worktree re-attaches a parked spec branch (branch kept, worktree directory gone) through merge-back.sh create --attach, so the .worktreeinclude copy and setup still run; a listed worktree entry whose directory is missing falls through to that path instead of failing entry.",
+  "version": "1.8.0",
+  "description": "Git helpers: a fast add-all-and-commit flow, a guided merge with conflict repair and worktree cleanup, and idempotent per-spec worktree entry. Changelog (last 3): 1.8.0 — enter-worktree no longer runs host setup by hand: merge-back create owns it, plus a committed-spec check through --spec. 1.7.0 — Commit's escape offer says /spec:escape derives the spec and prints it for veto; the three commands' report-contract citations point at core.md instead of the retired shared.md. 1.6.0 — /git:merge refuses a proto/* source outright (it is never merged, freeze it via /spec:prototype instead) and reports a harden/* source outside the review driver's merge-back as out of loop, since harden/<stem> is meant to land only through /spec:run.",
   "author": {
     "name": "JJ",
     "email": "jj@555.ventures"

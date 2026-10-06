@@ -129,12 +129,23 @@ function readStatusFile() {
   }
 }
 
-const rawStatus = readStatusFile()
+let rawStatus = readStatusFile()
 const legacy = !(isObj(rawStatus) && rawStatus.schemaVersion === 3)
 
-function legacyRefusal() {
+// A status file of the retired mock-app flow that is not APPROVED is set aside by the driver
+// itself (status.legacy.json, never clobbered) and a fresh schemaVersion-3 file takes its place:
+// a printed `rm` remedy is a deletion the next run can be refused as a continuation of, and
+// nothing reads a part-way legacy file. The approved one stays readable (D10) and is never moved.
+function retireLegacyStatus() {
   const v = isObj(rawStatus) && rawStatus.schemaVersion !== undefined ? rawStatus.schemaVersion : '(none)'
-  die('design/mocks/status.json carries schemaVersion ' + v + ' (the retired mock-app flow) — remedy: rm design/mocks/status.json and re-run; seed.md and ledger.md are kept')
+  let aside = path.join(mocksDir, 'status.legacy.json')
+  for (let n = 2; fs.existsSync(aside); n++) aside = path.join(mocksDir, 'status.legacy.' + n + '.json')
+  fs.renameSync(statusPath, aside)
+  const fresh = freshStatus()
+  fs.writeFileSync(statusPath, JSON.stringify(fresh, null, 2) + '\n')
+  writeOut(2, 'mocks-driver: design/mocks/status.json carried schemaVersion ' + v + ' (the retired mock-app flow) — moved to ' +
+    path.relative(root, aside) + '; a fresh status starts at SEED, seed.md and ledger.md are kept\n')
+  return fresh
 }
 
 function normalise(raw) {
@@ -739,10 +750,12 @@ if (legacy) {
   const approvedOld = isObj(rawStatus) && rawStatus.state === 'APPROVED'
   if (approvedOld && rest.length === 1 && rest[0] === '--state') { writeOut(1, 'APPROVED\n'); process.exit(0) }
   if (approvedOld && rest.length === 0) {
-    writeOut(1, '[mocks-driver] state: APPROVED  root: ' + root + '\napproved under the retired mock-app flow — nothing further to do (to redraw as wireframes: rm design/mocks/status.json)\n')
+    writeOut(1, '[mocks-driver] state: APPROVED  root: ' + root + '\napproved under the retired mock-app flow — nothing further to do (to redraw as wireframes: move design/mocks/status.json aside, e.g. to status.legacy.json)\n')
     process.exit(0)
   }
-  legacyRefusal()
+  if (approvedOld) die('design/mocks/status.json is APPROVED under the retired mock-app flow — remedy: move it aside (status.legacy.json) to redraw as wireframes; it is never moved for you because genesis still reads it')
+  rawStatus = retireLegacyStatus()
+  status = normalise(rawStatus)
 }
 
 if (rest.includes('--state')) {

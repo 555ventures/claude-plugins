@@ -86,8 +86,9 @@ printed refusal, never pre-check it in prose. `--mark seed-done`, `journey-drawn
 `marks.approved` and `pushed.digest` (the next push opens a fresh round) and appends a
 `reopens` row. `--mark shell-drawn`, `--mark theme-picked`, `--reopen shell`, `--reopen theme`,
 `client open` and `client waive` are refused with their replacement; any other first word is an
-unknown command, never a silent bare run. A status file not at `schemaVersion: 3` refuses
-naming `rm design/mocks/status.json`, except that one already `APPROVED` stays readable.
+unknown command, never a silent bare run. A status file not at `schemaVersion: 3` is moved
+aside by the driver (`status.legacy.json`) and a fresh one starts at SEED — never a printed
+`rm` for the session to run; one already `APPROVED` stays readable and is never moved.
 
 **Edges.** A journey deleted from the seed drops out of every check and round; its status entry
 stays as a record. A screen file no journey names is still sent. Adding the config block

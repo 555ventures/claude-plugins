@@ -112,14 +112,19 @@ and never writes or prints it.
 
 A project is connected with `/spec:connect` (`spec-paths walkthrough-connect`,
 specs/20261005/01): run in the project with no arguments, it derives the project id from the
-folder name, creates the project on the service through the Railway CLI (or joins the id when
-the service already holds it), stores the token as `env.WALKTHROUGH_TOKEN` in the git-ignored
+folder name, creates the project on the service with the public terminal tool `walkthrough-cli`
+(`npx walkthrough-cli new`, or joins the id when the service already holds it, then mints a token
+with `npx walkthrough-cli token`), so anyone signed in with the tool can connect, stores the token as `env.WALKTHROUGH_TOKEN` in the git-ignored
 `.claude/settings.local.json`, proves the link with a call that needs the token, and only then
 writes the `walkthrough` block. It is the one writer of that block and of the stored token;
 the client still never edits the config and never writes or prints the token. The client
 reads the stored token first and the environment variable second, so the session that ran
 connect can send screens at once. A second run changes nothing; a block that points elsewhere
-is never rewritten. The default environment is `staging` until production is deployed.
+is never rewritten. Before creating it asks `walkthrough-cli whoami`: not signed in is refused
+with `npx walkthrough-cli login` named, and a person not on the project's team is refused with the
+team invite named. The tool never sees the plugin token: connect drops `WALKTHROUGH_TOKEN` and the
+block's `tokenEnv` from its environment, since the tool reads `WALKTHROUGH_TOKEN` as a sign-in.
+There is one hosted environment, production.
 
 Connect can run first (specs/20261005/02). In a project with no config it creates
 `.claude/spec.config.json` holding only the `walkthrough` block, and only after the link is

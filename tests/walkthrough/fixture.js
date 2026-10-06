@@ -147,10 +147,9 @@ function makePictureWork() {
   return { work, roundFile, files }
 }
 
-// ---- connect helpers (tests/walkthrough/connect.test.js) ------------------------------------
+// ---- connect helpers (tests/walkthrough/connect*.test.js) ------------------------------------
 
 const SETTINGS_REL = '.claude/settings.local.json'
-const PROJECT_UUID = '11111111-2222-3333-4444-555555555555'
 const MINTED = 'wt_3f9a1c0de4b7a2c5'
 
 function gitIn(dir, args) {
@@ -175,17 +174,18 @@ function makeGitHost(name, opts = {}) {
   return dir
 }
 
-// A fake `railway` executable in its own folder. It logs one JSON line (its argv) per call and
-// answers from `script`: { projects, domain, create, token, sshFail }, where create / token /
-// sshFail are { code, stdout, stderr }. Every `ssh` call first prints a `Using SSH key` stderr line.
-// Returns { dir, calls() (argv arrays), lines() (argv joined by spaces), creates() }.
-function makeRailway(script = {}) {
-  const dir = tmpdir('fake-railway')
+// A fake `npx` executable in its own folder, standing in for `npx --yes walkthrough-cli <args>`.
+// It logs one JSON line per call — { argv (after walkthrough-cli), token (WALKTHROUGH_TOKEN as the
+// child saw it, or null), env (the listed extra variable names it saw), url (WALKTHROUGH_URL or null) }
+// — and answers from `script`: { signedIn (default true), service (whoami's address), exists (the id
+// is taken), team (default true; 'reader' for a reader), token (the minted value) }.
+// Returns { dir, calls(), verbs() (first argv word per call), creates() (the `new` calls) }.
+function makeNpx(script = {}) {
+  const dir = tmpdir('fake-npx')
   const logFile = path.join(dir, 'calls.jsonl')
   fs.writeFileSync(logFile, '')
   fs.writeFileSync(path.join(dir, 'script.json'), JSON.stringify({
-    projects: [{ id: PROJECT_UUID, name: 'walkthrough' }],
-    domain: 'walkthrough-staging-4090.up.railway.app',
+    signedIn: true, service: 'https://walkthrough-app.up.railway.app', exists: false, team: true, token: MINTED, watch: [],
     ...script,
   }))
   const body = [
@@ -193,37 +193,38 @@ function makeRailway(script = {}) {
     "'use strict'",
     "const fs = require('fs')",
     "const path = require('path')",
-    'const argv = process.argv.slice(2)',
-    "fs.appendFileSync(path.join(__dirname, 'calls.jsonl'), JSON.stringify(argv) + '\\n')",
     "const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'script.json'), 'utf8'))",
-    "const done = (a) => { process.stdout.write(a.stdout || ''); process.stderr.write(a.stderr || ''); process.exit(a.code || 0) }",
-    "if (argv[0] === 'list') done({ stdout: JSON.stringify(cfg.projects) + '\\n' })",
-    "if (argv[0] !== 'ssh') done({ code: 1, stderr: 'unscripted\\n' })",
-    "process.stderr.write('Using SSH key from file /k.pub: a@b\\n')",
-    'if (cfg.sshFail) done(cfg.sshFail)',
-    "const rest = argv.slice(argv.indexOf('--') + 1)",
-    "if (rest[0] === 'printenv') done({ stdout: cfg.domain + '\\n' })",
-    'const verb = rest[2]',
-    'const id = rest[3]',
-    "if (verb === 'create') done(cfg.create || { stdout: 'token: " + MINTED + "\\n', stderr: 'created project ' + id + '\\n' })",
-    "if (verb === 'token') done(cfg.token || { stdout: 'token: " + MINTED + "\\n' })",
-    "done({ code: 1, stderr: 'unscripted\\n' })",
+    'const all = process.argv.slice(2)',
+    "if (all[0] !== '--yes' || all[1] !== 'walkthrough-cli') { process.stderr.write('unscripted npx call\\n'); process.exit(2) }",
+    'const argv = all.slice(2)',
+    'const env = cfg.watch.filter((k) => process.env[k] !== undefined)',
+    "fs.appendFileSync(path.join(__dirname, 'calls.jsonl'), JSON.stringify({ argv, token: process.env.WALKTHROUGH_TOKEN === undefined ? null : process.env.WALKTHROUGH_TOKEN, env, url: process.env.WALKTHROUGH_URL === undefined ? null : process.env.WALKTHROUGH_URL }) + '\\n')",
+    "const done = (code, out, err) => { if (out) process.stdout.write(out + '\\n'); if (err) process.stderr.write(err + '\\n'); process.exit(code) }",
+    "const service = process.env.WALKTHROUGH_URL || cfg.service",
+    "if (!cfg.signedIn) done(1, '', 'Not signed in. Run: npx walkthrough-cli login')",
+    "if (argv[0] === 'whoami') done(0, JSON.stringify({ person: { name: 'Ana', email: 'ana@example.com' }, computer: 'mac', expiresAt: '2026-11-01T00:00:00.000Z', service, keptIn: '/home/.config/walkthrough/sign-in.json' }), 'The sign-in is kept in x. It ends on 2026-11-01.')",
+    "const id = argv[argv.indexOf(argv[0] === 'new' ? '--id' : '--project') + 1]",
+    "if (argv[0] === 'new') done(cfg.exists ? 1 : 0, cfg.exists ? '' : JSON.stringify({ id, name: argv[1] }), cfg.exists ? 'A project with the id \"' + id + '\" already exists. Pick another name, or pass --id <another id>.' : '')",
+    "if (argv[0] === 'token' && cfg.team === 'reader') done(1, '', 'You are a reader of \"' + id + '\", not on its team.')",
+    "if (argv[0] === 'token' && !cfg.team) done(1, '', 'You are not on the team of the project \"' + id + '\".')",
+    "if (argv[0] === 'token') done(0, JSON.stringify({ id: 7, token: cfg.token }), '')",
+    "done(2, '', 'unscripted')",
     '',
   ].join('\n')
-  fs.writeFileSync(path.join(dir, 'railway'), body, { mode: 0o755 })
+  fs.writeFileSync(path.join(dir, 'npx'), body, { mode: 0o755 })
   const calls = () => fs.readFileSync(logFile, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
   return {
     dir,
     calls,
-    lines: () => calls().map((a) => a.join(' ')),
-    creates: () => calls().filter((a) => a.includes('create')),
+    verbs: () => calls().map((c) => c.argv[0]),
+    creates: () => calls().filter((c) => c.argv[0] === 'new'),
   }
 }
 
-// A PATH holding only a `git` shim, so `railway` cannot be found while git and the node binary
+// A PATH holding only a `git` shim, so `npx` cannot be found while git and the node binary
 // (spawned by absolute path) still work.
-function pathWithoutRailway() {
-  const dir = tmpdir('no-railway-path')
+function pathWithoutNpx() {
+  const dir = tmpdir('no-npx-path')
   const dirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean)
   const real = dirs.map((d) => path.join(d, 'git')).find((f) => fs.existsSync(f))
   fs.writeFileSync(path.join(dir, 'git'), '#!/bin/sh\nexec ' + JSON.stringify(real) + ' "$@"\n', { mode: 0o755 })
@@ -237,7 +238,7 @@ function connectAnswers(ids = ['acme-shop'], approvals) {
   return out
 }
 
-// Run walkthrough-connect.js as an async child. opts: railway (a makeRailway result, put first on
+// Run walkthrough-connect.js as an async child. opts: npx (a makeNpx result, put first on
 // PATH), path (a PATH string instead), env (null deletes a variable), cwd. `--root <dir>` is appended
 // unless opts.noRoot. The token variable is unset, and the user's global git ignore rules are
 // pointed at an empty folder so `git check-ignore` sees only the host.
@@ -248,7 +249,7 @@ function runConnect(dir, args, opts = {}) {
   env.GIT_CONFIG_NOSYSTEM = '1'
   env.XDG_CONFIG_HOME = tmpdir('connect-xdg')
   if (opts.path !== undefined) env.PATH = opts.path
-  else if (opts.railway) env.PATH = opts.railway.dir + path.delimiter + (process.env.PATH || '')
+  else if (opts.npx) env.PATH = opts.npx.dir + path.delimiter + (process.env.PATH || '')
   for (const [k, v] of Object.entries(opts.env || {})) {
     if (v === null || v === undefined) delete env[k]
     else env[k] = v
@@ -272,5 +273,5 @@ module.exports = {
   SCRIPT, CONTRACT, CATALOG, FIXTURES, HEARWELL, PICTURES, TOKEN, ZEROS, HELLO_OK,
   sha256, loadJson, writeJson, makeHost, writeConfig, block, seedRound, startStub,
   runWalkthrough, allFiles, pngBytes, makePictureWork,
-  CONNECT, SETTINGS_REL, PROJECT_UUID, MINTED, makeGitHost, gitIn, makeRailway, pathWithoutRailway, connectAnswers, runConnect,
+  CONNECT, SETTINGS_REL, MINTED, makeGitHost, gitIn, makeNpx, pathWithoutNpx, connectAnswers, runConnect,
 }

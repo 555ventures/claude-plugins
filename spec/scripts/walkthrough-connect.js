@@ -1,24 +1,29 @@
 #!/usr/bin/env node
 'use strict'
-// walkthrough-connect.js [--root <dir>] [--project <id>] [--name <text>] [--environment <name>]
-//                        [--base-url <url>] — connect the host project to the hosted review service.
+// walkthrough-connect.js [--root <dir>] [--project <id>] [--name <text>] [--base-url <url>]
+//                        — connect the host project to the hosted review service.
 //
 // Owner: specs/20261005/01-connect-wires-a-project-to-the-review-service.md (D1-D11) and
-// specs/20261005/02-connect-runs-first.md (D1-D4) and specs/20261005/04-connect-protects-the-token-file.md (D1-D4). It creates the
-// project on the service (or joins the id the service already holds) through the Railway CLI, stores
+// specs/20261005/02-connect-runs-first.md (D1-D4) and specs/20261005/04-connect-protects-the-token-file.md (D1-D4).
+// Since 7.242.0 the project and its token come from the public terminal tool walkthrough-cli
+// (walkthrough specs/20261006/01), so anyone signed in with it can connect, not only the Railway owner.
+// It creates the project on the service (or joins the id the service already holds) through
+// `npx walkthrough-cli new` and mints a token with `npx walkthrough-cli token`, stores
 // the token as env.<tokenEnv> in the host's .claude/settings.local.json, proves the link with one call
 // that needs the token (lib/walkthrough-client.js probe), and only then writes the `walkthrough`
 // block into the host config; a host with no config file gets one holding only that block, created
 // by that write alone, so a refused run or a failed proof leaves no config file. It is the one
 // writer of that block and of the stored token; a second run on a connected host changes nothing
-// and calls Railway zero times.
+// and calls walkthrough-cli zero times. On the create/join path `whoami` runs first: not signed in is
+// refused with the login command named; with no --base-url and no block, the address is the one
+// whoami reports.
 //
 // On success one stdout line: `connected <id> → <baseUrl>/p/<id>` plus ` (new project)`,
 // ` (joined existing project)`, ` (already connected)` or nothing; a second line `next: /spec:genesis`
 // follows (same write) when the root holds no entry whose name lacks a leading dot and the config
 // has no generatedBy string. Every refusal is one stderr line
 // `walkthrough-connect: <code> — <sentence> — remedy: <what to do>`; a refusal thrown by the client is
-// printed as the client words it. The minted token is never printed.
+// printed as the client words it. The minted token is never printed, nor any token the tool prints.
 //
 // Before a token is stored the guard appends the line .claude/settings.local.json to <root>/.gitignore
 // (created when absent) unless git already ignores that file; git tracking it is refused with
@@ -26,12 +31,13 @@
 // not a repository gets the line and stays a plain folder.
 //
 // Deliberately NOT here: running git init, touching a global ignore file, untracking a file, overwriting a config file that is not a JSON object, any verb of walkthrough.js, a rewrite of a block that points elsewhere, any
-// edit of a file git tracks, any retry, a shell (railway and git are spawned by bare name through
-// PATH, stdin closed, 60 s limit), or the creation of a design/ folder.
+// edit of a file git tracks, any retry, a shell (npx and git are spawned by bare name through
+// PATH, stdin closed, 60 s limit), passing WALKTHROUGH_TOKEN or <tokenEnv> to the tool (it would read
+// the plugin token as a sign-in), or the creation of a design/ folder.
 //
-// Exit codes: 0 connected · 1 refused (by the service, by Railway or by the project tool) · 2 usage,
+// Exit codes: 0 connected · 1 refused (by the service or by walkthrough-cli) · 2 usage,
 // config or precondition (incl. write-failed: the settings, config or .gitignore file could not be written;
-// not-ignored: git tracks the token file) ·
+// not-ignored: git tracks the token file; no-tool: npx cannot be started) ·
 // 3 the service did not answer.
 
 const fs = require('fs')
@@ -43,13 +49,13 @@ const client = require('./lib/walkthrough-client')
 
 const SETTINGS_REL = '.claude/settings.local.json'
 const DEFAULT_TOKEN_ENV = 'WALKTHROUGH_TOKEN'
-const FLAGS = ['root', 'project', 'name', 'environment', 'base-url']
-const FLAG_LIST = '--root <dir> --project <id> --name <text> --environment <name> --base-url <url>'
+const FLAGS = ['root', 'project', 'name', 'base-url']
+const FLAG_LIST = '--root <dir> --project <id> --name <text> --base-url <url>'
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 
 let minted = ''
 const scrub = (s) => {
-  let t = String(s).replace(/token: \S+/g, 'token: <token>')
+  let t = String(s).replace(/token: \S+/g, 'token: <token>').replace(/"token"\s*:\s*"[^"]*"/g, '"token":"<token>"')
   if (minted) t = t.split(minted).join('<token>')
   return t
 }
@@ -76,33 +82,57 @@ function parseArgs(argv) {
     if (i + 1 >= argv.length) throw new Stop('usage', `${a} needs a value`, `pass ${a} <value>; flags: ${FLAG_LIST}`, 2)
     flags[name] = argv[++i]
   }
-  if (flags.environment !== undefined && !/^[A-Za-z0-9_-]{1,40}$/.test(flags.environment)) {
-    throw new Stop('usage', `--environment ${JSON.stringify(flags.environment)} is not an environment name`, 'pass --environment <name> of letters, digits, _ and -, at most 40', 2)
-  }
   return flags
 }
 
 // ---- processes (no shell, stdin closed, 60 s) ----------------------------------------------
 
-function run(cmd, args, cwd) {
-  const r = spawnSync(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000, encoding: 'utf8', env: process.env })
+function run(cmd, args, cwd, env = process.env) {
+  const r = spawnSync(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000, encoding: 'utf8', env })
   return r
 }
 
-const lastLine = (text) => String(text || '').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('Using SSH key')).pop() || ''
+const lastLine = (text) => String(text || '').split('\n').map((l) => l.trim()).filter(Boolean).pop() || ''
+const lines = (text) => String(text || '').split('\n').map((l) => l.trim())
 
-function railway(args, cwd) {
-  const r = run('railway', args, cwd)
+// The tool's env: the caller's, minus WALKTHROUGH_TOKEN and <tokenEnv> (the tool reads
+// WALKTHROUGH_TOKEN as a sign-in, and the plugin token would be taken for one), plus
+// WALKTHROUGH_URL=<baseUrl> when an address is known.
+function toolEnv(tokenEnv, baseUrl) {
+  const env = { ...process.env }
+  delete env.WALKTHROUGH_TOKEN
+  delete env[tokenEnv]
+  if (baseUrl) env.WALKTHROUGH_URL = baseUrl
+  return env
+}
+
+const TOOL_REMEDY = 'run npx walkthrough-cli whoami in a terminal to see what is wrong, then /spec:connect again'
+
+function walkthroughCli(args, cwd, env) {
+  const r = run('npx', ['--yes', 'walkthrough-cli', ...args], cwd, env)
   if (r.error) {
-    if (r.error.code === 'ETIMEDOUT') throw new Stop('railway-failed', 'railway did not answer within 60 s', 'run railway login, or pass --environment <name> for a deployed one', 1)
-    throw new Stop('no-railway', 'the railway binary cannot be started', 'install the Railway CLI and run railway login', 2)
+    if (r.error.code === 'ETIMEDOUT') throw new Stop('tool-failed', 'walkthrough-cli did not answer within 60 s', TOOL_REMEDY, 1)
+    throw new Stop('no-tool', 'npx cannot be started, so walkthrough-cli cannot run', 'install Node.js (it brings npx), then /spec:connect again', 2)
   }
   return r
 }
 
+// The first JSON object among the stdout lines that passes `want`, else null.
+function jsonLine(stdout, want) {
+  for (const l of lines(stdout)) {
+    let v
+    try { v = JSON.parse(l) } catch { continue }
+    if (isObj(v) && want(v)) return v
+  }
+  return null
+}
+
+const notSignedIn = (r) => lines(r.stderr).some((l) => l.includes('Run: npx walkthrough-cli login'))
+
 function failed(r, what) {
+  if (notSignedIn(r)) return new Stop('not-signed-in', lastLine(r.stderr), 'run npx walkthrough-cli login in a terminal, then /spec:connect again', 1)
   const why = lastLine(r.stderr) || `${what} exited ${r.status}`
-  return new Stop('railway-failed', why, 'run railway login, or pass --environment <name> for an environment that is deployed', 1)
+  return new Stop('tool-failed', why, TOOL_REMEDY, 1)
 }
 
 // ---- the target ------------------------------------------------------------------------------
@@ -206,7 +236,6 @@ function guardTokenFile(root) {
 async function main(argv) {
   const flags = parseArgs(argv)
   const root = path.resolve(flags.root || process.cwd())
-  const environment = flags.environment || 'staging'
 
   // 1. config
   let cfg = {}
@@ -245,27 +274,21 @@ async function main(argv) {
     if (!nameOk(shapes, id)) throw new Stop('no-id', `${JSON.stringify(id)} is not a valid project id (letters, digits, . _ -, no "--", at most 80)`, 'pass --project <id>', 2)
   }
 
-  let pid = null
-  const projectId = () => {
-    if (pid) return pid
-    const r = railway(['list', '--json'], root)
-    if (r.status !== 0) throw failed(r, 'railway list')
-    let list
-    try { list = JSON.parse(r.stdout) } catch { list = null }
-    const hit = Array.isArray(list) ? list.find((p) => isObj(p) && p.name === 'walkthrough' && typeof p.id === 'string') : null
-    if (!hit) throw new Stop('railway-failed', 'railway list --json holds no project named walkthrough', 'run railway login with the account that owns the walkthrough project', 1)
-    pid = hit.id
-    return pid
+  // whoami: signed in, and the address the tool talks to. Run once, only when it is needed.
+  let signedIn = false
+  const whoami = () => {
+    if (signedIn) return
+    const r = walkthroughCli(['whoami', '--json'], root, toolEnv(tokenEnv, baseUrl))
+    if (r.status !== 0) {
+      if (r.status === 1 && notSignedIn(r)) throw new Stop('not-signed-in', 'walkthrough-cli is not signed in on this computer', 'run npx walkthrough-cli login in a terminal, then /spec:connect again', 1)
+      throw failed(r, 'walkthrough-cli whoami')
+    }
+    const me = jsonLine(r.stdout, (v) => typeof v.service === 'string' && v.service !== '')
+    if (!me) throw new Stop('tool-failed', 'walkthrough-cli whoami --json printed no service address', TOOL_REMEDY, 1)
+    if (!baseUrl) baseUrl = trimUrl(me.service)
+    signedIn = true
   }
-  const ssh = (tail) => ['ssh', '--project', projectId(), '--service', 'walkthrough', '--environment', environment, '--', ...tail]
-  const lookupAddress = () => {
-    const r = railway(ssh(['printenv', 'RAILWAY_PUBLIC_DOMAIN']), root)
-    if (r.status !== 0) throw failed(r, 'railway ssh')
-    const d = String(r.stdout).trim()
-    if (!/^[A-Za-z0-9.-]+(:\d+)?$/.test(d)) throw new Stop('railway-failed', `the address answer ${JSON.stringify(d.slice(0, 80))} is not a host name`, 'pass --environment <name> for a deployed environment, or --base-url <url>', 1)
-    return 'https://' + d
-  }
-  if (!baseUrl) baseUrl = lookupAddress()
+  if (!baseUrl) whoami()
 
   const target = { baseUrl, project: id, tokenEnv }
   const lineFor = (note) => `connected ${id} → ${baseUrl}/p/${id}${note}`
@@ -291,22 +314,23 @@ async function main(argv) {
   // 4. create or join
   guardTokenFile(root)
   const settings = readSettings(root)
-  if (hasBlock && flags['base-url'] === undefined) {
-    const found = lookupAddress()
-    if (found !== baseUrl) throw new Stop('connected-elsewhere', `${CONFIG_RELPATH} connects ${baseUrl}, but ${environment} answers ${found}`, 'delete the walkthrough block, then run /spec:connect again', 2)
-  }
-  const tool = (verb, ...rest) => railway(ssh(['node', 'dist/server/src/start/project.js', verb, id, ...rest]), root)
-  let r = tool('create', displayName)
+  whoami()
+  const env = toolEnv(tokenEnv, baseUrl)
+  const made = walkthroughCli(['new', displayName, '--id', id, '--json'], root, env)
   note = ' (new project)'
-  if (r.status !== 0) {
-    if (!String(r.stderr).split('\n').some((l) => l.trim() === 'project-exists')) throw failed(r, 'the project tool')
-    r = tool('token')
-    if (r.status !== 0) throw failed(r, 'the project tool')
+  if (made.status !== 0) {
+    if (!lines(made.stderr).some((l) => l.startsWith(`A project with the id "${id}" already exists.`))) throw failed(made, 'walkthrough-cli new')
     note = ' (joined existing project)'
   }
-  const m = String(r.stdout).split('\n').map((l) => l.replace(/\r$/, '')).map((l) => /^token: (\S+)$/.exec(l)).find(Boolean)
-  if (!m) throw new Stop('no-token-line', 'the project tool exited 0 without a "token: <value>" line on stdout', 'run the project tool by hand: railway ssh -- node dist/server/src/start/project.js token ' + id, 1)
-  minted = m[1]
+  const r = walkthroughCli(['token', '--project', id, '--json'], root, env)
+  if (r.status !== 0) {
+    const team = lines(r.stderr).find((l) => l === `You are not on the team of the project "${id}".` || l === `You are a reader of "${id}", not on its team.`)
+    if (team) throw new Stop('not-team', team, `ask someone on the project's team to run npx walkthrough-cli invite <your email> --team --project ${id}`, 1)
+    throw failed(r, 'walkthrough-cli token')
+  }
+  const got = jsonLine(r.stdout, (v) => typeof v.token === 'string' && v.token !== '')
+  if (!got) throw new Stop('no-token-line', 'walkthrough-cli token exited 0 without a {"token": <value>} line on stdout', `run npx walkthrough-cli tokens --project ${id} in a terminal to see the project's tokens`, 1)
+  minted = got.token
 
   // 5. store, 6. prove
   storeToken(root, settings, tokenEnv, minted)

@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { execFileSync } = require('node:child_process')
+const { execFileSync, spawnSync } = require('node:child_process')
 const { runNode } = require('../helpers')
 const { setupHost, DRIVER, BRIEF_REL, TWO_ROUTE_STATES, threePins, withEnv } = require('./fixture')
 
@@ -45,6 +45,16 @@ test('AC-20261007-02-1: the bare run from words prints the auto-picked stem befo
   assert.ok(openAt > pickAt, 'the auto-pick line must precede the state line so the veto is seen first: ' + r.stdout)
   assert.ok(r.stdout.split('\n').some((l) => l.includes('--mark opened') && l.includes('"' + WORDS + '"')),
     'the --mark opened line must carry the quoted argument or the next session cannot re-run it: ' + r.stdout)
+
+  const NASTY = 'Save "my" $HOME `x` row\\ end'
+  const nd = drive(dir, NASTY)
+  assert.strictEqual(nd.status, 0, 'an idea with shell metacharacters must still open the OPEN step: ' + nd.stderr)
+  const line = nd.stdout.split('\n').find((l) => /^\s*node\s/.test(l) && l.includes('--mark opened'))
+  assert.ok(line,'the OPEN step must print a --mark opened line: ' + nd.stdout)
+  const rest = line.trim().replace(/^node\s+\S+\s+/, '').replace(/\s+--mark opened\s*$/, '')
+  const back = spawnSync('/bin/bash', ['-c', 'printf %s ' + rest], { encoding: 'utf8' })
+  assert.strictEqual(back.stdout, NASTY,
+    'the shell must read the printed argument back as the original idea, or re-running the printed command opens a different prototype: ' + JSON.stringify(back.stdout))
 
   const named = drive(dir, WORDS, ['--stem', STEM])
   assert.strictEqual(named.status, 0, '--stem on the words shape must open the OPEN step: ' + named.stderr)

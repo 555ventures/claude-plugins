@@ -46,6 +46,9 @@ test('AC-20260928-01-1 / AC-20261007-02-3: the driver exits 2 naming prototype, 
     'the refusal must say what the block is for, or a first-time host cannot tell why it is asked for: ' + r.stderr)
   assert.match(r.stderr, /spec:doctor/,
     'the refusal must point at /spec:doctor (D1\'s check) as the remedy: ' + r.stderr)
+  const D4 = 'no "prototype" config block in .claude/spec.config.json — the block declares how a throwaway build of this app runs: where it answers (url), where the pin overlay goes (overlay), how its pictures and contract tests are made (picture, e2eFile, e2eList, e2eRun); remedy: declare it (spec/templates/grounding-contract.md § Prototype), then run /spec:doctor'
+  assert.ok(r.stderr.includes(D4),
+    'the refusal must carry D4\'s locked text byte-for-byte — a wrong § citation sends the host to a section that does not exist: ' + r.stderr)
 
   const host = setupHost()
   assert.match(fs.readFileSync(path.join(host, BRIEF_REL), 'utf8'), /^Lane: structural$/m,

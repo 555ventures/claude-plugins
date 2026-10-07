@@ -57,10 +57,14 @@ are a genesis artifact that walks the seed's beats against the real kit and rout
 JJ approves the designed set in Storybook; there is no client gate. Journey stories are frozen at
 approval and never gated later. (specs/20260926/06-the-approval-stop-and-the-roadmap.md D7)
 
-## Prototypes (specs/20260928/01, specs/20261007/01-approve-writes-a-behaviour-contract.md)
+## Prototypes (specs/20260928/01, specs/20261007/01-approve-writes-a-behaviour-contract.md, specs/20261007/02-the-prototype-opens-from-words-a-brief-or-a-stem.md)
 
-`/spec:prototype` runs a functional prototype on `proto/<stem>` in
-`.claude/worktrees/proto-<stem>`. The host declares a `prototype` config block (`url`, `overlay`,
+`/spec:prototype <idea in words | brief path | stem>` runs a functional prototype on
+`proto/<stem>` in `.claude/worktrees/proto-<stem>` (the stem is the brief's stem, a slug of the
+words printed as an auto-pick and renamable once with `--stem` before `opened`, or the re-opened
+stem; the idea and the input kind are written into `status.json` at `opened`). A brief's `Lane:`
+field is advisory; running this command is choosing the behaviour lane, and no gate runs on the
+prototype tree. The host declares a `prototype` config block (`url`, `overlay`,
 `e2eFile` carrying `{stem}`, `e2eList`, `e2eRun`, `picture`, optional `dbCreate`/`dbDestroy`).
 Rounds, pins and declared states live under `design/prototypes/<stem>/` on main. A pin is one
 record with an optional anchor whose id is the keyed owner chain plus an ordinal

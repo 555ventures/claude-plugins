@@ -140,7 +140,7 @@ function loadConfig() {
 
 function requirePrototypeConfig(cfg) {
   if (!cfg.prototype) {
-    die('no "prototype" config block in ' + CONFIG_RELPATH + ' — the block declares how a throwaway build of this app runs: where it answers (url), where the pin overlay goes (overlay), how its pictures and contract tests are made (picture, e2eFile, e2eList, e2eRun); remedy: declare it (spec/templates/grounding-contract.md § Required config keys), then run /spec:doctor')
+    die('no "prototype" config block in ' + CONFIG_RELPATH + ' — the block declares how a throwaway build of this app runs: where it answers (url), where the pin overlay goes (overlay), how its pictures and contract tests are made (picture, e2eFile, e2eList, e2eRun); remedy: declare it (spec/templates/grounding-contract.md § Prototype), then run /spec:doctor')
   }
 }
 
@@ -291,7 +291,7 @@ const proto = cfg.prototype
 // The argument every printed `node <driver> <arg>` line carries: the stem once opened (whatever
 // shape opened it), before that the shape's own argument (words quoted, plus --stem when chosen).
 let lastStatus = null
-function shellQuote(text) { return '"' + text.replace(/(["\$`])/g, '\$1') + '"' }
+function shellQuote(text) { return '"' + text.replace(/(["\\$`])/g, '\\$1') + '"' }
 function argText(status) {
   const st = status === undefined ? lastStatus : status
   if (st && st.marks && st.marks.opened) return stem

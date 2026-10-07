@@ -132,15 +132,20 @@ three and inflated the row's `workers` sums. Derive state from the observation f
 markers only to disambiguate what the observation leaves open, and execute before recording so
 an exit-2 refusal is genuinely state-unchanged.
 
-## Behaviour lane
+## Prototype specs
 
-A spec stamped `lane: behaviour` (written by the prototype freeze) starts with `HARDEN_MERGE`:
-the session merges `harden/<stem>` and the mark verifies ancestry. After a green gate it runs
-`CAPTURE`: the driver captures every contract route × state and diffs each against the freeze.
-A diff is either accepted by the user's literal `accept <route> <state>` or fixed and
-re-captured. The build row records `capture: { pairs, diffs, accepted }`. Any spec carrying a
-brief is refused while `proto/<NN>-*` exists; the review driver deletes `harden/<stem>` after
-merge-back; `/git:merge` refuses `proto/*`. (specs/20260928/03-the-build-reads-the-freeze.md)
+A spec stamped `prototype: <stem>` (written by `/spec:plan` from a behaviour contract) builds as
+any other until a green gate, then `REPLAY`: the driver copies `design/prototypes/<stem>/tests/<file>`
+to the host's `e2eFile` path, runs the host's `e2eRun` against the booted production build
+(`PROTO_URL` = the app address, one port per build in `<spec>.build/replay-port.json`), stops on
+red with the log, and on green prints the production address beside each prototype picture until
+the user's literal `close enough` (`--mark looked`); the build row records
+`replay: { tests, passed, looked }`. Review's `contract` leg reads that row and the pin criteria
+name it as their oracle; the reviewer treats a prototype line in the diff as hard. When the
+closing spec is the last one citing the stem, the review driver runs the prototype's
+`--mark closed`, and `/spec:status` prints that paste as a hygiene item while the worktree
+remains. No spec is refused for an open `proto/` branch; `/git:merge` refuses `proto/*`.
+(specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md)
 
 ## Run provenance
 

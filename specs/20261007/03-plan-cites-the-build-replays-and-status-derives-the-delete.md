@@ -1,6 +1,6 @@
 ---
 date: 2026-10-07
-status: implementing
+status: done
 build_base: main
 tier: critical
 area: prototype
@@ -159,7 +159,7 @@ the terminal.
 
 ## Acceptance Criteria
 
-- **AC-20261007-03-1**: WHEN the build driver runs on a hardened spec with `brief: 28` while branch `proto/28-functional-prototype` exists THE SYSTEM SHALL admit it (exit 0, prints `state: TESTS`) with no stderr line containing `is still open for brief`; WHEN a spec carries `lane: behaviour` and no `prototype:` THE SYSTEM SHALL print `state: TESTS` first, and `--mark harden-merged` SHALL exit 2 containing `is unknown` → writes tests/build/build-driver-replay.test.js
+- **AC-20261007-03-1**: WHEN the build driver runs on a hardened spec with `brief: 28` while branch `proto/28-functional-prototype` exists THE SYSTEM SHALL admit it (exit 0, prints `state: TESTS`) with no stderr line containing `is still open for brief`; WHEN a spec carries `lane: behaviour` and no `prototype:` THE SYSTEM SHALL print `state: TESTS` first, and `--mark harden-merged` SHALL exit 2 containing `unknown mark "harden-merged"` → writes tests/build/build-driver-replay.test.js
 - **AC-20261007-03-2**: WHEN a `prototype: 28-functional-prototype` spec reaches a green gate on the fixture host THE SYSTEM SHALL print `state: REPLAY`, `Read only:` naming `design/prototypes/28-functional-prototype/contract.json`, a `Session:` line containing the host's `runtime.bootCommand` and `PORT=`, and `--mark replayed`; WHEN the fixture's `prototype.url` carries `{port}` THE SYSTEM SHALL write `<spec>.build/replay-port.json` as `{ "port": <n> }` and print the same `<n>` on a second bare run → writes tests/build/build-driver-replay.test.js
 - **AC-20261007-03-3**: WHEN `--mark replayed` runs with the e2eRun stub green THE SYSTEM SHALL exit 0, write `e2e/proto-28-functional-prototype.spec.ts` in the repo root byte-equal to `design/prototypes/28-functional-prototype/tests/proto-28-functional-prototype.spec.ts`, have run the stub with `{file}` = `e2e/proto-28-functional-prototype.spec.ts` and `PROTO_URL` = `http://127.0.0.1:<port>` (the fixture's `e2e-env.txt`), write `replay-state.json` = `{ tests: 2, passed: true, looked: false, log: "<spec>.build/replay-1.log" }`, print `✅ contract tests green against the production build — 2 tests`, `🎨 production screens beside the prototype captures — http://127.0.0.1:<port>`, four `route ` lines of which the second is `route /women (empty): http://127.0.0.1:<port>/women?proto=empty · design/prototypes/28-functional-prototype/captures/women--empty.png`, the `close enough` reply line and `--mark looked`, and a bare run SHALL still print `state: REPLAY`; WHEN `--mark looked` then runs THE SYSTEM SHALL print `(REPLAY → COMMIT)` and the next bare run SHALL print `state: COMMIT` → writes tests/build/build-driver-replay.test.js
 - **AC-20261007-03-4**: WHEN `--mark replayed` runs with `E2E_RED=1` THE SYSTEM SHALL exit 2 with stderr containing `contract tests red against the production build (e2eRun exited 1)` and `replay-1.log`, write that log, write no `replay-state.json`, and leave the state `REPLAY`; WHEN `--mark looked` runs before any green replay THE SYSTEM SHALL exit 2 containing `replay has not passed`; WHEN `contract.json.tests` is `null` THE SYSTEM SHALL exit 2 naming `contract.json` and `--mark tests-derived`; WHEN `prototype.e2eRun` is undeclared THE SYSTEM SHALL exit 2 naming `prototype.e2eRun` → writes tests/build/build-driver-replay.test.js
@@ -210,6 +210,32 @@ suites, and spec 20261005/05's CONTINUE-TO pin on the harden-delivered test is r
 subject.
 
 Collision closure (2026-10-07, literals `HARDEN_MERGE`, `lane: behaviour`, `proto-capture`, `capture-accepted`, `is still open for brief`, `harden/`): every hit outside the File Plan is a prose mention in `docs/adr`, `docs/roadmap`, `docs/canonical` (rewritten by the Canonical Delta), a changelog, or a file spec 01 deletes before this spec builds (`lib/freeze.js`, `prototype-spec.md`, `freeze*.test.js`) — waived; the `executes` hits on `review-legs.js`, `spec-build-driver.js`, `spec-review-driver.js` and `spec-status.js` are the existing suites, whose pinned outputs this spec's additive edits leave byte-identical (A4, A6).
+
+Build deviations (folded at review close, 2026-10-07):
+- AC-1's refusal text was written `is unknown`; the driver's generic refusal reads
+  `unknown mark "harden-merged"` and D3 does not reword it, so AC-1 now quotes the shipped text
+  (reviewer advisory, review close).
+- The Contracts example's `<spec>.md.build/` is the real `<spec>.build/` sidecar (spec path minus
+  `.md`); `replay-state.json.log` is that sidecar's repo-relative `replay-<k>.log`, and `k` rises
+  per attempt (`marks.replayRuns`), so `replay-1.log` names the first attempt only.
+- `--mark replayed` also refuses (exit 2) an undeclared `prototype.url` (naming it and
+  `/spec:doctor`) and a contract test file missing under `design/prototypes/<stem>/` (naming
+  `--mark tests-derived`) — neither address nor copy source resolves without them.
+- `review-legs.js` appends the `contract` row immediately before the ac-matrix wave, not in the
+  file-reading wave, because ac-matrix reads oracle standing off the manifest it is handed.
+- The build fixture gained `toGreenGate(host)` and a `prototype` param on `specBody`; `makeHost`'s
+  `lane`/`contract` options are gone (`host.contractPath` replaces `contract`). The
+  prototype-close fixture appends a passed-and-looked build row to the review worktree's ledger
+  before the implement commit, as a real prototype build does — without it the `contract` leg
+  is correctly red and the fixture's empty dispositions are refused.
+- A7's retired-tag set widened past the lock prediction: AC-20260928-03-2 … -5 and spec
+  20261005/03 AC 16 and AC 19 (CONTINUE-TO `reuses` pointers at deleted tests) are tagged too;
+  AC-20260928-99-6 … -8 dropped out of `tests/` but are fixture ids no spec defines.
+- D1's `plan.md` bullet holds its five-line cap by eliding "the prototype is a reference only"
+  (its "Never read `proto/<stem>` or its worktree" carries the rule) and writing "driver-copied".
+- D10 (user ruling mid-build): `entrypoints.test.js`'s forward check accepts a script's printed
+  `spec-paths <key>` paste, so D7's locked paste and the build driver's remedy line are declared
+  callers of `prototype-driver.js`.
 
 ## Canonical Delta
 

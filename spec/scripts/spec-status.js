@@ -490,6 +490,40 @@ if (fs.existsSync(overview)) {
   }
 }
 
+// specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md D7: a contracted,
+// unclosed prototype whose citing specs (frontmatter `prototype: <stem>`, superseded ones aside)
+// are all done is a hygiene anomaly carrying the one close command. Hygiene only — never a Next
+// entry, never a fourth action string.
+{
+  const protoRoot = path.join(root, 'design/prototypes')
+  let stems = []
+  try { stems = fs.readdirSync(protoRoot, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort() } catch { stems = [] }
+  let citers = null
+  for (const stem of stems) {
+    let st = null
+    try { st = JSON.parse(fs.readFileSync(path.join(protoRoot, stem, 'status.json'), 'utf8')) } catch { continue }
+    const marks = (st && st.marks) || {}
+    if (!marks.testsDerived || marks.closed) continue
+    if (citers === null) {
+      citers = new Map()
+      for (const file of walkMd(path.join(root, 'specs'))) {
+        const fm = fmMap(fs.readFileSync(file, 'utf8'))
+        if (!fm.status || !fm.prototype || fm.status === 'superseded') continue
+        if (!citers.has(fm.prototype)) citers.set(fm.prototype, [])
+        citers.get(fm.prototype).push(fm.status)
+      }
+    }
+    const statuses = citers.get(stem) || []
+    if (statuses.length && statuses.every(s => s === 'done')) {
+      pushAnomaly({
+        kind: 'prototype-open',
+        detail: `prototype ${stem}: every citing spec is done; its worktree, proto/${stem} and database are still there`,
+        paste: `node "$(spec-paths prototype-driver)" ${stem} --root . --mark closed`,
+      })
+    }
+  }
+}
+
 // ---- --next: recommended next command --------------------------------------------------------
 
 // Resolve a depends_on ref against the LIVE specs. A ref naming a retired spec resolves to

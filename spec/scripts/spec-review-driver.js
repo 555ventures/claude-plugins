@@ -231,7 +231,7 @@ const { runChild, writeOut, appendLedger: appendLedgerLib, loadSidecar, saveSide
 // this driver's own local copy (rv_e83659d49386). D2 (specs/20260823/04-review-close-hardening.md):
 // fmVal renamed fmValue (D8/D9 — no alias survives); fmBlock replaces this file's own
 // `/^---\n([\s\S]*?)\n---/` block regex below.
-const { fmBlock, fmValue } = require('./lib/frontmatter')
+const { fmBlock, fmValue, fmMap } = require('./lib/frontmatter')
 // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D5: the REVIEWER step's printed
 // text no longer names an advisory fidelity-check run against a second, rendered artifact — the
 // mocks are the components now, so there is nothing left for review.md's dispatch line to
@@ -1141,16 +1141,27 @@ function branchExists(root, branch) {
     { encoding: 'utf8' }, 'git rev-parse --verify')
   return r.status === 0
 }
-// specs/20260928/03-the-build-reads-the-freeze.md D5: `<stem>` is the brief's stem, taken from
-// the single `docs/roadmap/<NN>-*.md` file the freeze itself wrote (spec 02) — read from
-// mainRootDir, the same root the branch deletion below runs against. Returns null rather than
-// dying: a missing roadmap file here must never abort a merge that already landed.
-function stemForHarden(root, briefVal) {
-  let entries = []
-  try { entries = fs.readdirSync(path.join(root, 'docs/roadmap')) } catch { entries = [] }
-  const re = new RegExp('^' + briefVal + '-.*\\.md$')
-  const match = entries.find((f) => re.test(f))
-  return match ? match.replace(/\.md$/, '') : null
+// specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md D6: every spec
+// under <root>/specs whose frontmatter `prototype` equals the stem and whose status is not
+// superseded — the citers whose completion gates the prototype's close.
+function citersOfPrototype(root, stem) {
+  const out = []
+  const walk = (dir) => {
+    let entries = []
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const e of entries) {
+      const full = path.join(dir, e.name)
+      if (e.isDirectory()) walk(full)
+      else if (e.name.endsWith('.md')) {
+        let text = ''
+        try { text = fs.readFileSync(full, 'utf8') } catch { continue }
+        const m = fmMap(text)
+        if (m.prototype === stem && m.status !== 'superseded') out.push(m.status || '')
+      }
+    }
+  }
+  walk(path.join(root, 'specs'))
+  return out
 }
 function findWorktreeForBranch(root, branch) {
   const r = runChild('git', ['-C', root, 'worktree', 'list', '--porcelain'], { encoding: 'utf8' },
@@ -2055,21 +2066,32 @@ function finishMerge(mainRootDir, source, wt) {
   const c = runChild('bash', [mergeBackBin, ...cleanupArgs], { encoding: 'utf8' }, 'merge-back.sh cleanup')
   if (c.status !== 0) die('merge-back.sh cleanup failed: ' + (c.stdout + c.stderr).trim())
   runChild('bash', [mergeBackBin, 'verify', '--root', mainRootDir], { encoding: 'utf8' }, 'merge-back.sh verify')
-  // D5: harden/<stem> is the only survivor of the prototype and is spent once merged — deleted
-  // here, from the main root, as a plain git call (A3: merge-back.sh's own exit alphabet is
-  // untouched). Scoped to a lane: behaviour spec whose branch still exists; any other spec's
-  // harden/x branch (or one already cleaned up by hand) is left exactly as it is.
   let doneNote = 'merged ' + source + ' into the target branch; worktree and branch cleaned up.'
-  if (fmVal('lane') === 'behaviour') {
-    const briefVal = fmVal('brief')
-    const stem = briefVal && briefVal !== 'n/a' ? stemForHarden(mainRootDir, briefVal) : null
-    if (stem && branchExists(mainRootDir, 'harden/' + stem)) {
-      const del = runChild('git', ['-C', mainRootDir, 'branch', '-D', 'harden/' + stem],
-        { encoding: 'utf8' }, 'git branch -D (harden branch cleanup)')
-      if (del.status === 0) doneNote = 'harden/' + stem + ' deleted\n' + doneNote
-      else {
-        doneNote = '⚠️ harden/' + stem + ' could not be deleted (' + (del.stdout + del.stderr).trim() +
-          ') — remove it by hand: git branch -D harden/' + stem + '\n' + doneNote
+  // D6: a `prototype: <stem>` spec closes the prototype when it was the last citer. The close is
+  // the prototype driver's own mark (one deletion routine); a refusal never fails a landed merge.
+  const protoStem = fmVal('prototype')
+  if (protoStem) {
+    const statusPath = path.join(mainRootDir, 'design/prototypes', protoStem, 'status.json')
+    let pst = null
+    try { pst = JSON.parse(fs.readFileSync(statusPath, 'utf8')) } catch { pst = null }
+    if (pst && !(pst.marks && pst.marks.closed)) {
+      const statuses = citersOfPrototype(mainRootDir, protoStem)
+      const open = statuses.filter((st) => st !== 'done').length
+      if (open > 0) {
+        doneNote = 'prototype ' + protoStem + ' stays open — ' + open + ' citing spec(s) not done\n' + doneNote
+      } else {
+        const driverBin = path.join(__dirname, 'prototype-driver.js')
+        const closeR = runChild(process.execPath,
+          [driverBin, protoStem, '--root', mainRootDir, '--mark', 'closed'], { encoding: 'utf8' },
+          'prototype-driver.js --mark closed')
+        if (closeR.status === 0) {
+          doneNote = 'prototype ' + protoStem + ' closed — database, worktree and proto/' + protoStem +
+            ' gone\n' + doneNote
+        } else {
+          const first = ((closeR.stderr || closeR.stdout || '').trim().split('\n')[0]) || 'exit ' + closeR.status
+          doneNote = '⚠️ prototype ' + protoStem + ' still open: ' + first + ' — run: node ' + driverBin +
+            ' ' + protoStem + ' --root ' + mainRootDir + ' --mark closed\n' + doneNote
+        }
       }
     }
   }

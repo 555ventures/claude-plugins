@@ -66,14 +66,14 @@ gated by the host's `gateCommand` and standards docs. Enter only when the work n
 **durability** (scope spans sessions; the spec is the re-entrant state). A new product
 surface is a normal spec (usually a `depends_on` series) — no separate pipeline.
 
-Changes travel one of three lanes, chosen by the shape of the ask. **Direct**: a change
-stated in one sentence with no behaviour or data change (copy, spacing, a token value, a
-component variant) is made on main through the host's `gateCommand` — no spec, no branch;
-the commit-time escape offer still runs. **Behaviour**: a behaviour change starts as a
-prototype (`/spec:prototype`). **Structural**: a schema
-or API change is planned first — a spec. A spec branch lands only through the review stage's
-merge-back; a direct change never has a branch, which is how the lanes are told apart at
-commit time.
+Changes travel one of three lanes, chosen by the shape of the ask. **Direct**: a one-sentence
+change with no behaviour or data change (copy, spacing, a token value, a component variant) is
+made on main through the host's `gateCommand` — no spec, no branch; the commit-time escape offer
+still runs. **Behaviour**: running `/spec:prototype` is choosing this lane (a brief's `Lane:` is
+advisory); the prototype's contract lands through a spec, its code never. **Structural**: a
+schema or API change is planned first — a spec. At commit time a spec branch lands only through
+the review stage's merge-back, a direct change has no branch, and a `proto/*` branch has a branch
+and never lands — that is how the three are told apart.
 
 ## Tiers
 

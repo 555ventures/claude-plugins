@@ -6,7 +6,7 @@ area: { area-name }      # primary feature/domain/module; "cross-cutting" if non
 breaking: false
 depends_on: []
 # brief: NN              # roadmap-planned specs only: the docs/roadmap/NN-*.md brief this spec hydrates; /spec:status (and /spec:doctor check 14) derive roadmap status from this stamp
-# lane: behaviour  # written by the prototype freeze; the build driver adds the harden merge and the capture gate
+# prototype: <stem>  # written by /spec:plan from a behaviour contract; the build driver replays the contract's tests (REPLAY) and the review driver closes the prototype when the last citing spec is done
 # spiked: YYYY-MM-DD     # only if a spike ran during /spec:plan
 # build_base: <branch>   # set by /git:enter-worktree; read by the review stage as the merge-back target
 # diff_base: <sha>       # set by the build stage for in-place builds; read by the review stage as the diff base when build_base is absent

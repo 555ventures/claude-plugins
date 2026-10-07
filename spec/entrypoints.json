@@ -139,15 +139,12 @@
       "spec/commands/doctor.md"
     ]
   },
-  "spec/scripts/proto-capture.js": {
-    "entryPoints": [
-      "spec/scripts/spec-build-driver.js"
-    ]
-  },
   "spec/scripts/prototype-driver.js": {
     "entryPoints": [
       "spec/commands/prototype.md",
-      "spec/commands/doctor.md"
+      "spec/commands/doctor.md",
+      "spec/scripts/spec-build-driver.js",
+      "spec/scripts/spec-status.js"
     ]
   },
   "spec/scripts/promise-sweep.js": {

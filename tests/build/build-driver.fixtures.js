@@ -12,63 +12,11 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 
 const DRIVER = 'scripts/spec-build-driver.js'
 
-// specs/20260928/03-the-build-reads-the-freeze.md D3/D4's test seam: a PROTO_CAPTURE_BIN stand-in
-// that never touches a browser. Unlike spec 02's own capture-stub.js (which writes a canned
-// capture and only ever forces a whole-capture failure), this one also answers `--diff <baseline>
-// <current>` — scripted per URL via a PROTO_CAPTURE_SCRIPT JSON map file ({ "<url>": { entries }
-// | { exit2 } | { exit2capture } }) — so a build-driver-lane test can dictate exactly which
-// route/state pair diffs and by how much, without a real structural comparison.
-const PROTO_CAPTURE_STUB_SRC = `#!/usr/bin/env node
-'use strict'
-const fs = require('fs')
-const path = require('path')
-const argv = process.argv.slice(2)
-function flag(name) { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : null }
-function scriptMap() {
-  const p = process.env.PROTO_CAPTURE_SCRIPT
-  if (!p) return {}
-  try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return {} }
-}
-if (argv[0] === '--diff') {
-  const currentPath = argv[2]
-  let cur
-  try { cur = JSON.parse(fs.readFileSync(currentPath, 'utf8')) } catch (e) {
-    process.stderr.write('proto-capture-stub: cannot read current capture ' + currentPath + ': ' + e.message + '\\n')
-    process.exit(2)
-  }
-  const rule = scriptMap()[cur.url] || {}
-  if (rule.exit2) { process.stderr.write(rule.exit2 + '\\n'); process.exit(2) }
-  if (rule.diffRaw) { process.stdout.write(rule.diffRaw + '\\n'); process.exit(1) }
-  const entries = rule.entries || []
-  const summary = {
-    missing: entries.filter((e) => e.kind === 'missing').length,
-    extra: entries.filter((e) => e.kind === 'extra').length,
-    changed: entries.filter((e) => e.kind === 'changed').length,
-  }
-  process.stdout.write(JSON.stringify({ summary, entries }, null, 2) + '\\n')
-  process.exit(entries.length === 0 ? 0 : 1)
-}
-const url = flag('--url')
-const out = flag('--out')
-if (!url || !out) {
-  process.stderr.write('proto-capture-stub: usage error — --url/--out required\\n')
-  process.exit(2)
-}
-const rule = scriptMap()[url] || {}
-if (rule.exit2capture) { process.stderr.write(rule.exit2capture + '\\n'); process.exit(2) }
-fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true })
-const asked = /^(\\d+)x(\\d+)$/.exec(flag('--viewport') || '')
-const doc = { schemaVersion: 1, url, entries: [] }
-if (asked) doc.viewport = { width: Number(asked[1]), height: Number(asked[2]) }
-fs.writeFileSync(out, JSON.stringify(doc, null, 2) + '\\n')
-process.exit(0)
-`
-
-function specBody({ status = 'hardened', tier = 'standard', design = null, diffBase = null, acId = 'AC-20260901-01-1', brief = null, lane = null }) {
+function specBody({ status = 'hardened', tier = 'standard', design = null, diffBase = null, acId = 'AC-20260901-01-1', brief = null, lane = null, prototype = null }) {
   return `---
 status: ${status}
 tier: ${tier}
-${design !== null ? `design: ${design}\n` : ''}${diffBase ? `diff_base: ${diffBase}\n` : ''}${brief !== null ? `brief: ${brief}\n` : ''}${lane !== null ? `lane: ${lane}\n` : ''}---
+${design !== null ? `design: ${design}\n` : ''}${diffBase ? `diff_base: ${diffBase}\n` : ''}${brief !== null ? `brief: ${brief}\n` : ''}${lane !== null ? `lane: ${lane}\n` : ''}${prototype !== null ? `prototype: ${prototype}\n` : ''}---
 # Build Driver Test Spec
 
 ## Decisions
@@ -105,16 +53,40 @@ test('AC-20260901-01-1: foo() returns ${expected}', () => { assert.strictEqual(f
 // unsanctioned-green shape AC-4 needs. src/bar.js (a non-tests CREATE row) never exists at base,
 // which is what drives RED_ATTRIBUTION once the test itself is made red (AC-3/4/5).
 //
-// specs/20260928/03-the-build-reads-the-freeze.md File Plan row: `{ lane: 'behaviour', brief,
-// contract }` options, additive — every existing caller (no lane/brief) is byte-for-byte
-// unaffected. `lane: 'behaviour'` also writes `docs/roadmap/<brief>-functional-prototype.md` (so
-// `<stem>` derives the same way the real freeze does), `design/prototypes/<stem>/contract.json`
-// plus two baseline capture files for the `/women` route (default/empty — the spec's own Contract
-// example), a `prototype.url` + `runtime.bootCommand` host config block, and a PROTO_CAPTURE_BIN
-// stub (+ a PROTO_CAPTURE_SCRIPT map file the caller can rewrite via `host.setCaptureScript`) so
-// AC-3/AC-4 can script diffs per URL without a browser. `contract` overrides nothing yet — reserved
-// for a future host needing a different route/state shape; every current test uses the default.
-function makeHost({ fooValue = 42, brief = null, lane = null, contract = null } = {}) {
+// specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md File Plan row:
+// `{ prototype: <stem>, brief }` options, additive — every existing caller (no prototype) is
+// byte-for-byte unaffected. `prototype: <stem>` writes design/prototypes/<stem>/{contract.json,
+// captures/*.png, tests/<file>} (the four routes x states of the spec's Contracts example, two
+// behaviour pins p1/p3 and one look pin p2), a `prototype` host config block (`url` carrying
+// {port}, `e2eFile` carrying {stem}, `e2eRun` = a stub whose exit is scripted by env E2E_RED and
+// which records its {file} argument and PROTO_URL into e2e-env.txt in the host root),
+// `runtime.bootCommand`, and stamps `prototype: <stem>` on the spec. `e2eRun: false` omits the
+// declaration. `host.contractPath` lets a test rewrite the contract (e.g. `tests: null`).
+const E2E_STUB_SRC = `'use strict'
+const fs = require('fs')
+fs.writeFileSync('e2e-env.txt', 'file=' + process.argv[2] + '\\nPROTO_URL=' + process.env.PROTO_URL + '\\n')
+process.stdout.write('e2e stub ran ' + process.argv[2] + '\\n')
+process.exit(process.env.E2E_RED === '1' ? 1 : 0)
+`
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
+function protoContract(stem, brief) {
+  const st = (url, capture) => ({ url, capture })
+  return {
+    schemaVersion: 2, stem, brief: String(brief), idea: null, approvedAt: '2026-10-07T10:00:00.000Z', base: 'main',
+    viewport: { width: 1280, height: 800 },
+    routes: {
+      '/women': { default: st('/women', 'captures/women--default.png'), empty: st('/women?proto=empty', 'captures/women--empty.png') },
+      '/women/new': { default: st('/women/new', 'captures/women_new--default.png'), error: st('/women/new?proto=error', 'captures/women_new--error.png') },
+    },
+    pins: [
+      { id: 'p1', kind: 'behaviour', screen: '/women', state: 'default', anchor: 'WomanRow[w_01]<WomenList<WomenScreen#0', note: 'row turns green on save', round: 1 },
+      { id: 'p2', kind: 'look', screen: '/women', state: 'empty', anchor: null, note: 'empty shows guidance only', round: 1 },
+      { id: 'p3', kind: 'behaviour', screen: '/women/new', state: 'error', anchor: null, note: 'blank save shows a red notice', round: 2 },
+    ],
+    tests: { file: 'tests/proto-' + stem + '.spec.ts', source: 'e2e/proto-' + stem + '.spec.ts', run: 'node .e2e-stub.js {file}', pins: ['p1', 'p3'] },
+  }
+}
+function makeHost({ fooValue = 42, brief = null, prototype = null, e2eRun = true } = {}) {
   const root = fs.realpathSync(tmpdir('blddrv'))
   const g = gitRepo(root)
   fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
@@ -130,13 +102,10 @@ function makeHost({ fooValue = 42, brief = null, lane = null, contract = null } 
     pipelineRules: '.claude/rules/spec-pipeline.md',
   }
 
-  let stem = null
-  let captureEnv = null
-  let scriptPath = null
-  if (lane === 'behaviour') {
-    if (brief === null) throw new Error('makeHost({ lane: "behaviour" }) requires a brief number')
-    stem = `${brief}-functional-prototype`
-    cfg.prototype = { url: 'http://localhost:3000' }
+  let contractPath = null
+  if (prototype !== null) {
+    cfg.prototype = { url: 'http://127.0.0.1:{port}', e2eFile: 'e2e/proto-{stem}.spec.ts' }
+    if (e2eRun) cfg.prototype.e2eRun = 'node .e2e-stub.js {file}'
     cfg.runtime.bootCommand = 'node scripts/dev-server.js'
   }
 
@@ -144,48 +113,26 @@ function makeHost({ fooValue = 42, brief = null, lane = null, contract = null } 
   fs.writeFileSync(path.join(root, 'src/foo.js'), `module.exports = () => ${fooValue}\n`)
   fs.writeFileSync(path.join(root, 'other.txt'), 'pre-image other\n')
 
-  if (lane === 'behaviour') {
-    fs.mkdirSync(path.join(root, 'docs/roadmap'), { recursive: true })
-    fs.writeFileSync(path.join(root, `docs/roadmap/${stem}.md`),
-      'Phase: 1\nDepends on: none\n\n# Functional Prototype\n')
-    const designDir = path.join(root, 'design/prototypes', stem)
-    const capturesDir = path.join(designDir, 'captures')
-    fs.mkdirSync(capturesDir, { recursive: true })
-    const doc = contract || {
-      schemaVersion: 1,
-      brief: String(brief),
-      stem,
-      viewport: { width: 1280, height: 800 },
-      composites: ['WomenList', 'WomanRow'],
-      routes: {
-        '/women': {
-          default: { url: 'http://localhost:3000/women', capture: 'captures/women--default.json' },
-          empty: { url: 'http://localhost:3000/women?proto=empty', capture: 'captures/women--empty.json' },
-        },
-      },
+  if (prototype !== null) {
+    const designDir = path.join(root, 'design/prototypes', prototype)
+    fs.mkdirSync(path.join(designDir, 'captures'), { recursive: true })
+    fs.mkdirSync(path.join(designDir, 'tests'), { recursive: true })
+    const doc = protoContract(prototype, brief === null ? 'n/a' : brief)
+    contractPath = path.join(designDir, 'contract.json')
+    fs.writeFileSync(contractPath, JSON.stringify(doc, null, 2) + '\n')
+    for (const states of Object.values(doc.routes)) {
+      for (const s of Object.values(states)) fs.writeFileSync(path.join(designDir, s.capture), PNG)
     }
-    fs.writeFileSync(path.join(designDir, 'contract.json'), JSON.stringify(doc, null, 2) + '\n')
-    for (const [, states] of Object.entries(doc.routes)) {
-      for (const [, s] of Object.entries(states)) {
-        fs.writeFileSync(path.join(designDir, s.capture),
-          JSON.stringify({ schemaVersion: 1, url: s.url, entries: [] }, null, 2) + '\n')
-      }
-    }
-    const stubPath = path.join(root, '.proto-capture-stub.js')
-    fs.writeFileSync(stubPath, PROTO_CAPTURE_STUB_SRC)
-    scriptPath = path.join(root, '.proto-capture-script.json')
-    fs.writeFileSync(scriptPath, JSON.stringify({}))
-    captureEnv = { PROTO_CAPTURE_BIN: stubPath, PROTO_CAPTURE_SCRIPT: scriptPath }
+    fs.writeFileSync(path.join(designDir, doc.tests.file),
+      "import { test } from '@playwright/test'\ntest('pin p1: row turns green on save', async () => {})\ntest('pin p3: blank save shows a red notice', async () => {})\n")
+    fs.writeFileSync(path.join(root, '.e2e-stub.js'), E2E_STUB_SRC)
   }
 
   g('add', '-A'); g('commit', '-q', '-m', 'base')
   fs.mkdirSync(path.join(root, 'specs/20260901'), { recursive: true })
   const spec = path.join(root, 'specs/20260901/99-bd-test.md')
-  fs.writeFileSync(spec, specBody({ brief, lane }))
-  return {
-    root, spec, sidecar: spec.replace(/\.md$/, '.build'), g, stem, captureEnv,
-    setCaptureScript: (map) => fs.writeFileSync(scriptPath, JSON.stringify(map)),
-  }
+  fs.writeFileSync(spec, specBody({ brief, prototype }))
+  return { root, spec, sidecar: spec.replace(/\.md$/, '.build'), g, stem: prototype, contractPath }
 }
 
 // A File Plan with no tests-layer rows at all (AC-12) and a flag-controlled gate.sh
@@ -282,6 +229,14 @@ function toIntegration(host) {
     'setup precondition: the other wave must advance to INTEGRATION: ' + r2.stdout + r2.stderr)
 }
 
+// A gate-green host WITHOUT asserting the COMMIT state — a prototype: spec derives REPLAY there.
+function toGreenGate(host) {
+  toIntegration(host)
+  const r = run(host.root, host.spec, '--mark', 'integrated')
+  assert.strictEqual(r.status, 0,
+    'setup precondition: a passing gate at INTEGRATION must be accepted before the replay or commit state: ' + r.stdout + r.stderr)
+}
+
 function toCommit(host) {
   toIntegration(host)
   const r = run(host.root, host.spec, '--mark', 'integrated')
@@ -312,5 +267,5 @@ function toEscalateCap(host) {
 
 module.exports = {
   DRIVER, specBody, testFileContent, makeHost, makeNoTestsHost, run, stateOf,
-  implementScriptsWave, toRedAttribution, toFirstWave, toIntegration, toCommit, toEscalateCap,
+  implementScriptsWave, toRedAttribution, toFirstWave, toIntegration, toGreenGate, toCommit, toEscalateCap,
 }

@@ -1,6 +1,7 @@
 ---
 date: 2026-10-07
-status: hardened
+status: implementing
+build_base: main
 tier: critical
 area: prototype
 breaking: false
@@ -9,6 +10,7 @@ depended_on_by: []
 brief: 28a
 spiked: 2026-10-07
 open_markers: 0
+diff_base: 96fc7d80174a9676a49781b65b5b97eaf8fcdd34
 ---
 
 # Plan cites, the build replays, and status derives the delete
@@ -44,6 +46,7 @@ prototype only when it is the last citer, and status names the paste.
 | D7 | **Status derives the paste.** `spec-status.js` gains anomaly kind `prototype-open` (audience `hygiene`): for every `design/prototypes/<stem>/status.json` with `marks.testsDerived` set and `marks.closed` unset, when at least one non-superseded spec carries `prototype: <stem>` and every such spec is `done`, push `{ kind: 'prototype-open', detail: 'prototype <stem>: every citing spec is done; its worktree, proto/<stem> and database are still there', paste: 'node "$(spec-paths prototype-driver)" <stem> --root . --mark closed' }`. No new action string; `--next`'s shape and the three action strings are unchanged; `--json` carries the anomaly as every other does. (AC-20261007-03-8) | Brief 28a scope 3: status derives "every spec with `prototype: <stem>` is done" and prints the one delete command. An anomaly with a paste is the existing shape for a hygiene item, so the frozen `--next` API is untouched. |
 | D8 | **Records.** This plan session minted `docs/adr/0035-prototype-carries-behaviour-never-code.md` (amending ADR-0030 (d), (h) and the discovery-prototype line) with `Amended by` backlinks on ADR-0030 and the brief's Grounding line; the build touches neither. `docs/canonical/build-integrity.md` § Behaviour lane is rewritten by the Canonical Delta. `[no-ac: records written at plan; citations-check is the oracle]` | The brief says the plan mints the ADR; ADR-0034 is the format. |
 | D9 | Bump via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"`. `[no-ac: bump — plugin-bump.js --check is the oracle]` | Version discipline. |
+| D10 | **A printed paste is a call** (build-time user ruling, 2026-10-07). `tests/consistency/entrypoints.test.js`'s forward-invocation check accepts, for a script entry point, the `spec-paths <key>` literal a `.md` entry point already needs, alongside the quoted-basename spawn shape; `spec/entrypoints.json`'s `prototype-driver.js` row declares `spec-build-driver.js` and `spec-status.js`, whose remedy and anomaly text print the `spec-paths prototype-driver` paste. `[no-ac: guard harness — entrypoints.test.js's live-repo pin is the oracle]` | D7's locked paste lives in a script; the reverse half demanded the declaration and the forward half refused it. The user chose teaching the check over rewording the paste. |
 
 ## File Plan
 
@@ -61,7 +64,7 @@ prototype only when it is the last citer, and status names the paste.
 | spec/scripts/review-legs.js | MODIFY | scripts | D5 — the `contract` leg |
 | spec/scripts/spec-review-driver.js | MODIFY | scripts | D6 — `finishMerge`: harden block and `stemForHarden` deleted; last-citer close |
 | spec/scripts/spec-status.js | MODIFY | scripts | D7 — `prototype-open` anomaly |
-| spec/entrypoints.json | MODIFY | other | D3(g) — `proto-capture.js` row deleted |
+| spec/entrypoints.json | MODIFY | other | D3(g) — `proto-capture.js` row deleted; D10 — `prototype-driver.js` row declares `spec-build-driver.js` and `spec-status.js` |
 | spec/.claude-plugin/plugin.json | MODIFY | other | D9 — `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` |
 | tests/build/build-driver-replay.test.js | CREATE | tests | AC-20261007-03-1, AC-20261007-03-2, AC-20261007-03-3, AC-20261007-03-4, AC-20261007-03-5 |
 | tests/build/build-driver-lane.test.js | DELETE | tests | its subjects (admission refusal, harden merge, capture gate) are retired |
@@ -70,6 +73,7 @@ prototype only when it is the last citer, and status names the paste.
 | tests/review/prototype-close.test.js | CREATE | tests | AC-20261007-03-7 (harness recipe from the deleted harden-branch-cleanup test) |
 | tests/review/harden-branch-cleanup.test.js | DELETE | tests | its subject (harden deletion at merge) is retired |
 | tests/spec-status.test.js | MODIFY | tests | AC-20261007-03-8 |
+| tests/consistency/entrypoints.test.js | MODIFY | tests | D10 — forward check accepts a `spec-paths <key>` paste in a script entry point |
 | tests/prototype/capture-page.test.js | DELETE | tests | subject deleted (D3g) |
 | tests/prototype/proto-capture.test.js | DELETE | tests | subject deleted (D3g) |
 | tests/prototype/capture-sign-in.test.js | DELETE | tests | subject deleted (D3g) |
@@ -81,8 +85,8 @@ each pointer line in the same batch (derive the set as the AC-IDs cited under `t
 base minus those cited after; at lock the known set is `AC-20260928-02-1`, `-2`, `-3`,
 `AC-20260928-03-1` … `-6`, `AC-20261001-01-1` … `-6`, `-19`, `AC-20261005-03-17`, `-18`,
 `AC-20261005-05-10` — the last one a CONTINUE-TO pin, so `ac-drift-clean` reddens without the
-tag). `tests/consistency/entrypoints.test.js`, `read-load.test.js` and `run-ledger`'s stage-doc
-pins are not edited.
+tag). `read-load.test.js` and `run-ledger`'s stage-doc pins are not edited; `entrypoints.test.js`
+is edited only per D10.
 
 ## Contracts
 

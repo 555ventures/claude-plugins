@@ -74,6 +74,13 @@
 //                  "sanctioned":S,"orphans":O}} — appended by promise-sweep.js itself (same
 //                  manifest); runs in EVERY scope including --fix-delta — excluded from no scope
 //                  (D4, specs/20260817/07-promise-sweep-leg.md)
+//   contract       {"leg":"contract","exit":<0|1>,"observed":{"tests":N,"passed":true}|
+//                  {"unavailable":"no-replay"}} — only for a spec whose frontmatter carries
+//                  `prototype: <stem>`; read off the LAST stage:"build" ledger row naming the spec
+//                  (exit 0 when its `replay.passed` and `replay.looked` are both true, else exit 1);
+//                  no app is booted, and verdict.js is untouched — a red or absent row is a hard
+//                  finding through ac-matrix's oracle standing for the pin criteria that name it
+//                  (specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md D5)
 //   patterns       {"matches":N} — recorded when config declares patternsScript; never required
 //   drift          {"summary":"<first stdout line, bounded to 120 chars>"} — recorded when config
 //                  declares driftScript
@@ -146,6 +153,7 @@ const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
 const { computeTestsExecuted, computeSkips, isUnobserved } = require('./lib/count-observation')
 const { extractSection, parseAcBullets, parseDisposition } = require('./lib/spec-sections')
+const { fmMap } = require('./lib/frontmatter')
 
 function usage() {
   console.error('usage: review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path> [--skips <file>] [--fix-delta] [--replay] [--out-dir <dir>]')
@@ -442,6 +450,24 @@ async function main() {
   const smokeR = await sh(`bash ${q(path.join(scriptDir, 'smoke.sh'))}`)
   fs.writeFileSync(path.join(outDir, 'smoke.txt'), smokeR.out + smokeR.err)
   appendRow('smoke', smokeR.code, { result: smokeR.code === 0 ? 'pass' : smokeR.code === 4 ? 'inert' : 'fail' })
+
+  // ---- contract leg (D5): a `prototype:` spec only — the build row is the executed evidence, ----
+  // appended before ac-matrix because ac-matrix reads oracle standing by leg name off the manifest.
+  if (fmMap(specText).prototype) {
+    const specRel = path.relative(root, path.resolve(root, spec))
+    let lastBuild = null
+    try {
+      for (const line of fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8').split('\n')) {
+        if (!line.trim()) continue
+        let row
+        try { row = JSON.parse(line) } catch { continue }
+        if (row && row.stage === 'build' && row.spec === specRel) lastBuild = row
+      }
+    } catch { /* no ledger: no replay evidence */ }
+    const rp = lastBuild && lastBuild.replay
+    if (rp && rp.passed === true && rp.looked === true) appendRow('contract', 0, { tests: rp.tests, passed: true })
+    else appendRow('contract', 1, { unavailable: 'no-replay' })
+  }
 
   // ---- wave 3: ac-matrix (+ skip-reconcile) — needs the gate row present in the manifest --
   const acr = await sh(`node ${q(path.join(scriptDir, 'ac-matrix.js'))} --spec ${q(spec)} --root ${q(root)} --manifest ${q(manifest)}${skips ? ` --skips ${q(skips)}` : ''}${config.driftScript ? ' --has-drift-script' : ''}`)

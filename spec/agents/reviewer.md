@@ -129,6 +129,9 @@ the report's display line).
 - Suppression markers (type-checker ignores, lint disables, blanket casts) without sanctioned
   justification: **soft**, escalating to **hard** where a rule file says so.
 - Defensive fallbacks that mask shape bugs instead of fixing the shape: **soft**.
+- `prototype-line`: for a spec with `prototype: <stem>`, run `git diff <base>...proto/<stem> -- . ':!<contract tests.source>'`;
+  an added line of the review range (trimmed, ≥ 40 chars, outside the contract's test file) that is also an added line of
+  that diff is **hard** — the prototype is a reference, never a source. `proto/<stem>` gone: say so and skip.
 
 ## Not findings
 

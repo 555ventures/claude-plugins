@@ -252,23 +252,23 @@ exits 1.
 - **AC-20261005-03-16**: WHEN `prototype.url` carries no `{port}` THE SYSTEM SHALL CONTINUE TO
   join a relative contract url onto the literal `prototype.url` (e.g. url `http://localhost:3000`,
   contract url `/women` → `--url http://localhost:3000/women`)
-  → reuses tests/build/build-driver-lane.test.js :: --mark captured joins
+  → reuses tests/build/build-driver-lane.test.js :: --mark captured joins [retired: specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md]
 - **AC-20261005-03-17**: WHEN the sign-in file has exactly one `origins[]` entry on the `--url`
   hostname and it is on another port THE SYSTEM SHALL open the page with the state as an object
   whose entry is re-pointed and whose cookies are untouched (e.g. file
   `{"cookies":[{"name":"sid","value":"a","domain":"localhost","path":"/"}],"origins":[{"origin":"http://localhost:3000","localStorage":[{"name":"tok","value":"x"}]}]}`,
   `--url http://localhost:4123/women` → `newPage` receives `storageState` as an object with
   `origins[0].origin === "http://localhost:4123"`, the same `localStorage`, and `cookies`
-  deep-equal to the file's) → writes tests/prototype/capture-port.test.js
+  deep-equal to the file's) → writes tests/prototype/capture-port.test.js [retired: specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md]
 - **AC-20261005-03-18**: WHEN two `origins[]` entries share the `--url` hostname and neither is
   the `--url` origin THE SYSTEM SHALL pass the file path unchanged and say why on stderr (e.g.
   origins `http://localhost:3000` and `http://localhost:4000`, `--url http://localhost:4123/women`
   → `storageState` is the absolute path string; stderr contains `cannot tell which saved origin is
-  the app` and both origins; the capture still exits 0) → writes tests/prototype/capture-port.test.js
+  the app` and both origins; the capture still exits 0) → writes tests/prototype/capture-port.test.js [retired: specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md]
 - **AC-20261005-03-19**: WHEN the sign-in file needs no re-point THE SYSTEM SHALL CONTINUE TO open
   the page with the declared file as an absolute host-resolved path (e.g. `"origins": []` →
   `storageState` is a string ending `/e2e/.auth/user.json`)
-  → reuses tests/prototype/capture-sign-in.test.js :: AC-20261001-01-1:
+  → reuses tests/prototype/capture-sign-in.test.js :: AC-20261001-01-1: [retired: specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md]
 - **AC-20261005-03-20**: WHEN `port-check.js --root <host>` runs THE SYSTEM SHALL report a
   `config-fixed-port` finding for each fixed loopback address in the config and none otherwise
   (e.g. `readyCheck` `curl -sf http://localhost:3000/api/health` → exit 1 and a line

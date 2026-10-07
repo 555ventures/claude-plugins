@@ -6,23 +6,19 @@
 //   marks: tests-authored | red-attributed |
 //          wave-done --wave <label> --workers <n> | integrated |
 //          repair-applied --continued <n> --spawned <n> | committed |
-//          harden-merged | captured | capture-accepted --route <r> --state <s>
-//            (the last three apply only to a lane: behaviour spec — specs/20260928/03-the-
-//            build-reads-the-freeze.md)
+//          replayed | looked
+//            (the last two apply only to a `prototype:` spec at REPLAY)
 // spec-build-driver <spec.md> --state                  -> print the state name only (scripting)
 //
-// specs/20260928/03-the-build-reads-the-freeze.md (D1-D4): a spec carrying a `brief:` is refused
-// before PREFLIGHT while that brief's `proto/<NN>-*` branch is still open (the prototype must be
-// frozen first). A `lane: behaviour` spec (written by the prototype freeze) gains two extra
-// states never seen by any other lane: HARDEN_MERGE, first after PREFLIGHT — the session merges
-// `harden/<stem>` (the freeze's exported data/API layer) and `--mark harden-merged` verifies
-// ancestry — and CAPTURE, derived after the gate is green and before COMMIT — the driver captures
-// and diffs every contract route x state via `proto-capture.js` (PROTO_CAPTURE_BIN, default
-// spec 02's own copy) and either advances straight to COMMIT (every pair at zero diffs) or
-// reprints as a look stop the session clears with the literal `accept <route> <state>` reply,
-// marked `--mark capture-accepted --route <r> --state <s>`. The build row gains `capture: {pairs,
-// diffs, accepted}` for this lane only, derived from `<spec>.build/capture-state.json` at
-// `committed`, absent otherwise.
+// specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md (D3): a spec
+// whose frontmatter carries `prototype: <stem>` gains one extra state, REPLAY, derived after a
+// green gate and before COMMIT. `--mark replayed` copies the contract's test file
+// (design/prototypes/<stem>/<tests.file>) to the host's `prototype.e2eFile` path, runs
+// `prototype.e2eRun` against the booted production build with `PROTO_URL` set to the app address,
+// and on green writes `<spec>.build/replay-state.json` and prints the look stop (each production
+// address beside its prototype picture); `--mark looked`, run only on the user's literal `close
+// enough`, advances REPLAY to COMMIT. The build row gains `replay: {tests, passed, looked}` for
+// a `prototype:` spec only. `lane:` is never read and no `proto/` branch refuses a spec.
 // specs/20260912/03-run-isolates-and-owns-the-stages.md (D10): `via` is recorded as "loop" once,
 // at sidecar creation, regardless of argv — /spec:run is the only entry point left, so the flag
 // that once chose between it and a direct invocation is gone; `via` itself stays a measurement
@@ -30,10 +26,10 @@
 // immediately after `tier` — model derived at row-write time by lib/session-stamp.js's
 // sessionModel(repoRoot), `null` on a host with no .claude/spec-session.json stamp.
 //
-// States: PREFLIGHT (driver-only) -> HARDEN_MERGE? (lane: behaviour only) -> TESTS ->
-//   RED_CHECK (driver-only) -> RED_FINDINGS? -> RED_ATTRIBUTION? -> WAVE:<label>... ->
-//   INTEGRATION -> GATE (driver-only) -> REPAIR? (cap 3; 4th -> ESCALATE, terminal) ->
-//   CAPTURE? (lane: behaviour only, after a green gate) -> COMMIT -> DONE (terminal)
+// States: PREFLIGHT (driver-only) -> TESTS -> RED_CHECK (driver-only) -> RED_FINDINGS? ->
+//   RED_ATTRIBUTION? -> WAVE:<label>... -> INTEGRATION -> GATE (driver-only) -> REPAIR? (cap 3;
+//   4th -> ESCALATE, terminal) -> REPLAY? (prototype: spec only, after a green gate) -> COMMIT ->
+//   DONE (terminal)
 //
 // A `baseline`-layer File Plan row names a file that can only be produced from the built product
 // and approved by a person (a screenshot baseline, a golden file). It is no tests-layer row — TESTS
@@ -89,24 +85,18 @@
 //                 `git ls-files`/`git add -N` intent-to-add staging that now runs before the gate
 //                 child (stderr names the failing command and its exit code; no gate child is
 //                 spawned and no gateRuns entry is recorded — specs/20260910/08 D5); and
-//                 (specs/20260928/03 D1-D3) a spec carrying `brief: <NN>` while
-//                 `proto/<NN>-*` is still an open branch (stderr names the branch and the brief,
-//                 remedy `/spec:prototype`, refused before PREFLIGHT and before any write), a
-//                 `lane: behaviour` spec's `--mark harden-merged` run before `harden/<stem>` is
-//                 merged into HEAD (names `harden/<stem> is not merged into HEAD`) or while
-//                 `harden/<stem>` does not exist at all (names `/spec:prototype`), and
-//                 `--mark captured`/`--mark capture-accepted` refusals: the capture stub exiting
-//                 non-zero (forwards its stderr verbatim, writes no capture-state.json), a
-//                 relative contract url while `prototype.url` is undeclared (names it), or
-//                 `capture-accepted` naming a pair with `diffs: 0` (names "has no diffs"), or
-//                 (specs/20261005/03 D8) a failed capture-port allocation on a `{port}` host.
+//                 (specs/20261007/03 D3d-e) `--mark replayed` refusals: a contract with no
+//                 `tests.file` (names `contract.json` and `--mark tests-derived`), an undeclared
+//                 `prototype.e2eRun` (names it), an undeclared `prototype.url`, a missing contract
+//                 test file, or the host e2eRun exiting non-zero (names the replay log; writes no
+//                 replay-state.json); `--mark looked` before a green replay (names `replay has not
+//                 passed`); and a failed replay-port allocation on a `{port}` host.
 //
-// specs/20261005/03-one-port-per-launch.md D8: when `prototype.url` carries `{port}` the build
-// keeps one capture port in `<spec>.build/capture-port.json` (`{"port": n}`), allocated the first
-// time the CAPTURE step prints or `--mark captured` runs; the step prints `PORT=<n> <bootCommand>`
-// and the resolved address, and `--mark captured` joins relative contract urls onto it. A fixed
-// `prototype.url` is joined exactly as before. capture-state.json and build-state.json are not
-// touched.
+// specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md D3(c): when
+// `prototype.url` carries `{port}` the build keeps one replay port in `<spec>.build/replay-port.json`
+// (`{"port": n}`), allocated the first time the REPLAY step prints or `--mark replayed` runs; the
+// step prints `PORT=<n> <bootCommand>` and the resolved address, and the replay joins each route
+// url onto it. A fixed `prototype.url` is joined as-is.
 
 'use strict'
 const fs = require('fs')
@@ -136,10 +126,8 @@ if (!fs.existsSync(specPath)) die('spec not found: ' + specPath)
 const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : null }
 const markIdx = argv.indexOf('--mark')
 const MARK = markIdx > -1 ? argv[markIdx + 1] : null
-// specs/20260928/03-the-build-reads-the-freeze.md D3: `--mark capture-accepted --route <r>
-// --state <s>` puts the literal token `--state` inside a marked invocation's own argv — scoped
-// to a bare (no --mark) invocation so that mark's own flag can never be mistaken for the driver's
-// scripting flag.
+// `--state` is the scripting flag of a bare (no --mark) invocation only, so a marked invocation's
+// own argv can never be mistaken for it.
 const STATE_ONLY = !MARK && argv.includes('--state')
 
 const PLUGIN = path.resolve(__dirname, '..')
@@ -164,9 +152,9 @@ const fmVal = (k) => fmValue(specText, k)
 
 let status = fmVal('status')
 const tier = fmVal('tier') || 'standard'
-// specs/20260928/03-the-build-reads-the-freeze.md D2: `lane:` is never touched by the hardened
-// flip (only status/diff_base are), so it is safe to read once, here.
-const isBehaviourLane = fmVal('lane') === 'behaviour'
+// specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md D3(c): a spec
+// stamped `prototype: <stem>` gains the REPLAY state; `lane:` is never read.
+const protoStem = fmVal('prototype') || null
 const specRel = path.relative(repoRoot, resolvedSpecPath) || resolvedSpecPath
 const sidecarDir = resolvedSpecPath.replace(/\.md$/, '.build')
 const sidecarRel = path.relative(repoRoot, sidecarDir)
@@ -197,23 +185,6 @@ if (status !== 'hardened' && status !== 'implementing') {
   die('spec status is "' + (status || '<missing>') + '" — spec-build-driver requires status: ' +
     'hardened (or implementing to resume); ' + (OWNING_COMMAND[status] || '/spec:status') +
     ' is the owning command')
-}
-
-// ---- D1 (specs/20260928/03-the-build-reads-the-freeze.md): a spec carrying a real brief is
-// refused while that brief's proto/ branch is still open — before PREFLIGHT, before any write.
-// The branch list is repo-wide (git branch --list), so it holds from a worktree exactly as ADR-
-// 0030 (h) requires. `brief: n/a` (or no brief: line at all) is never scoped by this check.
-const briefFm = fmVal('brief')
-if (briefFm && briefFm !== 'n/a') {
-  const protoListR = runChild('git',
-    ['-C', repoRoot, 'branch', '--list', '--format=%(refname:short)', 'proto/' + briefFm + '-*'],
-    { encoding: 'utf8' }, 'git branch --list (open prototype check)')
-  const openProtoBranches = (protoListR.stdout || '').split('\n')
-    .map((l) => l.trim()).filter(Boolean)
-  if (openProtoBranches.length) {
-    die('prototype ' + openProtoBranches[0] + ' is still open for brief ' + briefFm +
-      ' — freeze it first: /spec:prototype docs/roadmap/' + briefFm + '-*.md')
-  }
 }
 
 const sidecarExisted = fs.existsSync(sidecarDir)
@@ -389,24 +360,12 @@ function ledgerBuildRow(root, rel) {
 }
 
 let marks = loadSidecar(sidecarDir, 'build-state.json')
-// D2/D3: set only by handleHardenMerged/handleCaptured/handleCaptureAccepted when their own mark
-// resolves the state they were printed at — never a generic transition log for every mark (A2:
-// every other mark's printed shape is unchanged).
+// Set only by handleLooked when its mark resolves the state it was printed at — never a generic
+// transition log for every mark (every other mark's printed shape is unchanged).
 let transitionNote = ''
 let resumeDirtyWarning = ''
 
 function saveSidecar() { saveSidecarLib(sidecarDir, 'build-state.json', marks) }
-
-// The tree the red tests are judged against. For every lane but behaviour this IS the build base.
-// A `lane: behaviour` build merges `harden/<stem>` after `diff_base` is pinned, and the generated
-// File Plan lists the files that merge carries — against `diff_base` they all "already differ", so
-// red-check refuses the pre-image as impure and the stub-residue check refuses every CREATE row the
-// merge delivered. The merged tree is the true pre-image, so `--mark harden-merged` records HEAD
-// and the two pre-image checks read it here. `diff_base` itself never moves: it is review's range
-// and the COMMIT reconcile's, and both must cover the merged layer — nothing else reviews it.
-function preImageBase() {
-  return (isBehaviourLane && marks.preImageBase) || resolveBase()
-}
 
 if (!STATE_ONLY) {
   if (!sidecarExisted && !justFlipped) {
@@ -476,7 +435,7 @@ function ensureRedCheckAdvanced() {
   if (!hasTestsRows) return
   if (marks.redCheck === 'green' || marks.redCheck === 'skipped-resume') return
   if (!marks.testsAuthored) return
-  const base = preImageBase()
+  const base = resolveBase()
   const k = (marks.redCheckRuns || 0) + 1
   const r = runChild(process.execPath,
     [redCheckBin, '--spec', resolvedSpecPath, '--root', repoRoot, '--base', base], { encoding: 'utf8' },
@@ -634,36 +593,18 @@ function recordIncident(cls, exit, source) {
     ', ' + source + ') — ' + marks.incidents.length + ' on this build; it lands on the stage:"build" ledger row at DONE\n')
 }
 
-// ---- behaviour lane (specs/20260928/03-the-build-reads-the-freeze.md D2-D4) ----------------------
-// `<stem>` is the brief's stem, taken from the single `docs/roadmap/<NN>-*.md` file the freeze
-// itself wrote (spec 02) — never invented here, so a missing freeze names the exact remedy.
-function stemFor() {
-  if (!briefFm || briefFm === 'n/a') {
-    die('lane: behaviour requires a real brief: <NN> in the spec frontmatter to derive <stem>')
-  }
-  const roadmapDir = path.join(repoRoot, 'docs/roadmap')
-  let entries = []
-  try { entries = fs.readdirSync(roadmapDir) } catch { entries = [] }
-  const re = new RegExp('^' + briefFm + '-.*\\.md$')
-  const match = entries.find((f) => re.test(f))
-  if (!match) {
-    die('no docs/roadmap/' + briefFm + '-*.md found — the prototype must be frozen first: ' +
-      '/spec:prototype docs/roadmap/' + briefFm + '-*.md')
-  }
-  return match.replace(/\.md$/, '')
-}
-function branchExistsLocal(branch) {
-  const r = runChild('git', ['-C', repoRoot, 'rev-parse', '--verify', '-q', 'refs/heads/' + branch],
-    { encoding: 'utf8' }, 'git rev-parse --verify (branch existence check)')
-  return r.status === 0
-}
-// specs/20261005/03-one-port-per-launch.md D8: when prototype.url carries {port}, one capture port
-// per build lives in <spec>.build/capture-port.json ({"port": n}) — allocated the first time it is
-// needed, never re-allocated. Returns { url, port } with port null for a fixed address.
-function captureAddress() {
+// ---- prototype specs (specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md D3) ----
+// A spec stamped `prototype: <stem>` derives REPLAY once the gate is green: the driver copies the
+// contract's test file to the host's e2eFile path, runs the host's e2eRun against the booted
+// production build, and prints a look stop that pairs each production address with its prototype
+// picture until the user's literal `close enough` (--mark looked).
+// One replay port per build lives in <spec>.build/replay-port.json ({"port": n}) when
+// prototype.url carries {port} — allocated the first time it is needed, never re-allocated.
+// Returns { url, port } with port null for a fixed address.
+function replayAddress() {
   const raw = (hostConfig.prototype && typeof hostConfig.prototype.url === 'string') ? hostConfig.prototype.url : ''
   if (!appPortLib.hasPortSlot(raw)) return { url: raw, port: null }
-  const p = path.join(sidecarDir, 'capture-port.json')
+  const p = path.join(sidecarDir, 'replay-port.json')
   let port = null
   try {
     const doc = JSON.parse(fs.readFileSync(p, 'utf8'))
@@ -671,182 +612,101 @@ function captureAddress() {
   } catch { /* absent or unreadable: allocate below */ }
   if (port === null) {
     try { port = appPortLib.freePort() } catch (e) {
-      die('could not allocate a capture port (' + e.message + ') — remedy: free a loopback port, then re-run')
+      die('could not allocate a replay port (' + e.message + ') — remedy: free a loopback port, then re-run')
     }
     fs.mkdirSync(sidecarDir, { recursive: true })
     fs.writeFileSync(p, JSON.stringify({ port }) + '\n')
   }
   return { url: appPortLib.resolveUrl(raw, port), port }
 }
-function readCaptureState() {
-  const p = path.join(sidecarDir, 'capture-state.json')
-  if (!fs.existsSync(p)) return null
-  try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return null }
+const replayStatePath = path.join(sidecarDir, 'replay-state.json')
+function readReplayState() {
+  if (!fs.existsSync(replayStatePath)) return null
+  try { return JSON.parse(fs.readFileSync(replayStatePath, 'utf8')) } catch { return null }
 }
-// A pair is resolved once it either never diffed or the user has cleared it with the literal
-// `accept <route> <state>` reply (capture-accepted) — the ONE predicate both deriveState() and
-// the two mark handlers below share, so they can never disagree about what COMMIT is waiting on.
-function captureResolved(doc) {
-  return (doc.pairs || []).every((p) => p.diffs === 0 || p.accepted)
-}
-// marks.captureDetails carries the url/entries each pair needs for the look-stop render —
-// deliberately NOT part of capture-state.json, whose on-disk shape is pinned verbatim by this
-// spec's own Contracts block ({ pairs: [{route, state, diffs, accepted}] }).
-function detailFor(route, stateName) {
-  return (marks.captureDetails || []).find((d) => d.route === route && d.state === stateName) || {}
-}
-function renderCaptureVal(v) {
-  return Array.isArray(v) ? JSON.stringify(v) : String(v)
-}
-function renderCaptureEntry(e) {
-  const kindCol = (e.kind || '').padEnd(7) + ' '
-  if (e.kind === 'changed') {
-    return '  ' + kindCol + e.id + ' ' + e.field + ' ' + renderCaptureVal(e.before) + ' → ' +
-      renderCaptureVal(e.after)
-  }
-  return '  ' + kindCol + e.id
-}
-
-function handleHardenMerged() {
-  const stem = stemFor()
-  const branch = 'harden/' + stem
-  if (!branchExistsLocal(branch)) {
-    die(branch + ' does not exist — freeze the prototype first: /spec:prototype docs/roadmap/' +
-      stem + '.md')
-  }
-  const anc = runChild('git', ['-C', repoRoot, 'merge-base', '--is-ancestor', branch, 'HEAD'],
-    { encoding: 'utf8' }, 'git merge-base --is-ancestor (harden merge check)')
-  if (anc.status !== 0) {
-    die(branch + ' is not merged into HEAD — run: git merge --no-ff ' + branch + ' -m "merge ' +
-      branch + ': data and API layer from the prototype"')
-  }
-  const headR = runChild('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' },
-    'git rev-parse HEAD')
-  const head = (headR.stdout || '').trim()
-  if (headR.status !== 0 || !/^[0-9a-f]{40}$/.test(head)) {
-    die('git rev-parse HEAD in ' + repoRoot + ' did not print a 40-hex commit sha')
-  }
-  marks.hardenMerged = true
-  marks.preImageBase = head
-  saveSidecar()
-  transitionNote = '(HARDEN_MERGE → ' + deriveState() + ')'
-  return null
-}
-
-// D3: every route x state pair in the contract is captured (PROTO_CAPTURE_BIN, default spec 02's
-// own proto-capture.js) and diffed against its frozen baseline. capture-state.json is written
-// ONLY once every pair has been captured and diffed — a capture failure partway through must
-// leave no partial file for a later mark to mistake for a completed run.
-function handleCaptured() {
-  const stem = stemFor()
-  const designDir = path.join(repoRoot, 'design/prototypes', stem)
-  const contractPath = path.join(designDir, 'contract.json')
+function replayDone(doc) { return !!(doc && doc.passed === true && doc.looked === true) }
+function readContract() {
+  const contractPath = path.join(repoRoot, 'design/prototypes', protoStem, 'contract.json')
   let contract
   try {
     contract = JSON.parse(fs.readFileSync(contractPath, 'utf8'))
   } catch (e) {
     die('cannot read ' + contractPath + ': ' + e.message)
   }
-  const protoCaptureBin = process.env.PROTO_CAPTURE_BIN || path.join(PLUGIN, 'scripts/proto-capture.js')
-  const composites = (contract.composites || []).join(',')
-  const contractViewport = contract.viewport || { width: 1280, height: 800 }
-  const capturesDir = path.join(sidecarDir, 'captures')
-  fs.mkdirSync(capturesDir, { recursive: true })
-  // The freeze writes each state's url RELATIVE to prototype.url (spec 02 Contracts); the browser
-  // refuses a bare path, so the base is joined here. An absolute url passes through unchanged.
-  const protoBase = captureAddress().url
+  return contract
+}
+function joinAddress(base, rel) {
+  if (/^https?:\/\//.test(rel || '')) return rel
+  return base.replace(/\/+$/, '') + (String(rel || '').startsWith('/') ? '' : '/') + (rel || '')
+}
 
-  const pairs = []
-  const details = []
-  for (const [route, states] of Object.entries(contract.routes || {})) {
-    for (const [stateName, entry] of Object.entries(states)) {
-      const baselinePath = path.join(designDir, entry.capture)
-      const currentPath = path.join(capturesDir, path.basename(entry.capture))
-      const absolute = /^https?:\/\//.test(entry.url || '')
-      if (!absolute && !protoBase) {
-        die('contract url ' + entry.url + ' for ' + route + ' (' + stateName + ') is relative and prototype.url is ' +
-          'not declared — remedy: declare prototype.url in the host config (/spec:doctor), then re-run --mark captured')
-      }
-      const captureUrl = absolute ? entry.url : protoBase + entry.url
-      // Replay the size the baseline was actually captured at: the baseline file is the record,
-      // the contract only a declaration, and a contract size its baselines never used must not
-      // need a re-freeze. This lookup only picks the size:
-      // an unreadable baseline is NOT handled here — the --diff call below still refuses it.
-      let viewport = contractViewport
-      try {
-        const bv = JSON.parse(fs.readFileSync(baselinePath, 'utf8')).viewport
-        if (bv && Number.isInteger(bv.width) && bv.width > 0 && Number.isInteger(bv.height) && bv.height > 0) {
-          viewport = { width: bv.width, height: bv.height }
-        }
-      } catch { /* size lookup only — the --diff call reports the unreadable baseline */ }
-      if (viewport.width !== contractViewport.width || viewport.height !== contractViewport.height) {
-        process.stderr.write('spec-build-driver: note — ' + route + ' (' + stateName + ') baseline frozen at ' +
-          viewport.width + 'x' + viewport.height + ', contract says ' + contractViewport.width + 'x' +
-          contractViewport.height + '; capturing at the frozen size\n')
-      }
-      const capR = runChild(process.execPath,
-        [protoCaptureBin, '--host', repoRoot, '--url', captureUrl, '--out', currentPath,
-          '--composites', composites, '--viewport', viewport.width + 'x' + viewport.height],
-        { encoding: 'utf8' }, 'proto-capture.js (capture)')
-      if (capR.status !== 0) {
-        die('proto-capture.js capture failed for ' + route + ' (' + stateName + '): ' +
-          (capR.stdout + capR.stderr).trim())
-      }
-      const diffR = runChild(process.execPath, [protoCaptureBin, '--diff', baselinePath, currentPath],
-        { encoding: 'utf8' }, 'proto-capture.js --diff')
-      if (diffR.status !== 0 && diffR.status !== 1) {
-        die('proto-capture.js --diff failed for ' + route + ' (' + stateName + '): ' +
-          (diffR.stdout + diffR.stderr).trim())
-      }
-      // Exit 0 is a clean pair whatever it prints; exit 1 claims a diff, so a result the driver
-      // cannot read is refused rather than counted as zero (fail-closed on the gate's own signal).
-      let parsed = null
-      try { parsed = JSON.parse(diffR.stdout) } catch { parsed = null }
-      const entries = (parsed && Array.isArray(parsed.entries)) ? parsed.entries : []
-      if (diffR.status === 1 && entries.length === 0) {
-        die('proto-capture.js --diff reported a diff for ' + route + ' (' + stateName +
-          ') but printed no readable result — check PROTO_CAPTURE_BIN, then re-run --mark captured: ' +
-          (diffR.stdout + diffR.stderr).trim())
-      }
-      pairs.push({ route, state: stateName, diffs: entries.length, accepted: false })
-      details.push({ route, state: stateName, url: captureUrl, entries })
-    }
+function handleReplayed() {
+  const contract = readContract()
+  const contractRel = 'design/prototypes/' + protoStem + '/contract.json'
+  if (!contract.tests || typeof contract.tests.file !== 'string' || !contract.tests.file) {
+    die('replayed refused — ' + contractRel + ' carries no tests.file — derive the contract\'s tests ' +
+      'first: node "$(spec-paths prototype-driver)" ' + protoStem + ' --root . --mark tests-derived')
   }
+  const proto = hostConfig.prototype || {}
+  if (typeof proto.e2eRun !== 'string' || !proto.e2eRun || typeof proto.e2eFile !== 'string' || !proto.e2eFile) {
+    die('replayed refused — prototype.e2eRun is not declared in the host config (prototype.e2eFile ' +
+      'must name where the contract test lands) — declare both (/spec:doctor), then re-run --mark replayed')
+  }
+  const addr = replayAddress()
+  if (!addr.url) {
+    die('replayed refused — prototype.url is not declared in the host config — declare it ' +
+      '(/spec:doctor), then re-run --mark replayed')
+  }
+  const source = path.join(repoRoot, 'design/prototypes', protoStem, contract.tests.file)
+  if (!fs.existsSync(source)) {
+    die('replayed refused — ' + source + ' does not exist — re-derive it: node "$(spec-paths ' +
+      'prototype-driver)" ' + protoStem + ' --root . --mark tests-derived')
+  }
+  const e2eFile = proto.e2eFile.split('{stem}').join(protoStem)
+  const dest = path.join(repoRoot, e2eFile)
+  fs.mkdirSync(path.dirname(dest), { recursive: true })
+  fs.copyFileSync(source, dest)
 
-  fs.mkdirSync(sidecarDir, { recursive: true })
-  fs.writeFileSync(path.join(sidecarDir, 'capture-state.json'), JSON.stringify({ pairs }, null, 2) + '\n')
-  marks.captureDetails = details
+  const k = (marks.replayRuns || 0) + 1
+  marks.replayRuns = k
   saveSidecar()
-  transitionNote = captureResolved({ pairs }) ? '(CAPTURE → ' + deriveState() + ')' : ''
+  fs.mkdirSync(sidecarDir, { recursive: true })
+  const logPath = path.join(sidecarDir, 'replay-' + k + '.log')
+  const env = { ...process.env, PROTO_URL: addr.url }
+  delete env.NODE_TEST_CONTEXT
+  let fd
+  try {
+    fd = fs.openSync(logPath, 'w')
+  } catch (e) {
+    die('could not open replay log ' + logPath + ' for writing (' + e.message + ') — check the ' +
+      'sidecar directory is writable and re-run --mark replayed')
+  }
+  let r
+  try {
+    r = runChild('bash', ['-c', proto.e2eRun.split('{file}').join(e2eFile)],
+      { cwd: repoRoot, stdio: ['ignore', fd, fd], env }, 'prototype.e2eRun (' + proto.e2eRun + ')')
+  } finally {
+    try { fs.closeSync(fd) } catch (e) { /* already closed */ }
+  }
+  const logRel = path.relative(repoRoot, logPath)
+  if (r.status !== 0) {
+    die('contract tests red against the production build (e2eRun exited ' + r.status + ') — see ' +
+      logRel + '; fix, then --mark replayed')
+  }
+  const pins = Array.isArray(contract.tests.pins) ? contract.tests.pins.length : 0
+  fs.writeFileSync(replayStatePath,
+    JSON.stringify({ tests: pins, passed: true, looked: false, log: logRel }, null, 2) + '\n')
   return null
 }
 
-function handleCaptureAccepted() {
-  const route = flag('--route')
-  const stateName = flag('--state')
-  if (typeof route !== 'string' || typeof stateName !== 'string') {
-    die('--mark capture-accepted needs --route <r> --state <s>')
+function handleLooked() {
+  const doc = readReplayState()
+  if (!doc || doc.passed !== true) {
+    die('replay has not passed — run `node ' + __filename + ' ' + specPath + ' --mark replayed` first')
   }
-  const capPath = path.join(sidecarDir, 'capture-state.json')
-  if (!fs.existsSync(capPath)) {
-    die('capture-accepted refused — no ' + capPath + ' on disk; run `--mark captured` first')
-  }
-  let doc
-  try {
-    doc = JSON.parse(fs.readFileSync(capPath, 'utf8'))
-  } catch (e) {
-    die(capPath + ' is not valid JSON: ' + e.message)
-  }
-  const pair = (doc.pairs || []).find((p) => p.route === route && p.state === stateName)
-  if (!pair) {
-    die('capture-accepted refused — no pair ' + route + ' (' + stateName + ') in ' + capPath)
-  }
-  if (pair.diffs === 0) {
-    die('capture-accepted refused — ' + route + ' (' + stateName + ') has no diffs to accept')
-  }
-  pair.accepted = true
-  fs.writeFileSync(capPath, JSON.stringify(doc, null, 2) + '\n')
-  transitionNote = captureResolved(doc) ? '(CAPTURE → ' + deriveState() + ')' : ''
+  doc.looked = true
+  fs.writeFileSync(replayStatePath, JSON.stringify(doc, null, 2) + '\n')
+  transitionNote = '(REPLAY → ' + deriveState() + ')'
   return null
 }
 
@@ -934,7 +794,7 @@ function handleRedAttributed() {
     return null
   }
 
-  const base = preImageBase()
+  const base = resolveBase()
   const changed = changedSinceBase(base)
   const residue = createPaths.filter((p) => changed.has(p))
   if (residue.length) {
@@ -943,8 +803,6 @@ function handleRedAttributed() {
       'the working tree to match the base, then re-run this mark')
   }
 
-  // Asked of the build base, never the merged pre-image: a CREATE row the harden merge delivered
-  // is tracked at the pre-image by design, and is no stale row.
   const buildBase = resolveBase()
   const trackedAtBase = createPaths.filter((p) => {
     const r = runChild('git', ['-C', repoRoot, 'cat-file', '-e', buildBase + ':' + p],
@@ -1198,15 +1056,11 @@ function handleCommitted() {
     workers,
     incidents: marks.incidents || [],
   }
-  // D4: capture counts land on the build row for the behaviour lane only — every other spec's
-  // row shape is byte-for-byte unaffected (AC-20260928-03-5).
-  if (isBehaviourLane) {
-    const cap = readCaptureState() || { pairs: [] }
-    row.capture = {
-      pairs: cap.pairs.length,
-      diffs: cap.pairs.reduce((s, p) => s + (p.diffs || 0), 0),
-      accepted: cap.pairs.filter((p) => p.accepted).length,
-    }
+  // D3(f): the replay evidence lands on the build row for a `prototype:` spec only — every other
+  // spec's row shape is unaffected; review's contract leg reads this key.
+  if (protoStem) {
+    const rs = readReplayState() || {}
+    row.replay = { tests: rs.tests, passed: rs.passed === true, looked: rs.looked === true }
   }
   appendLedger(repoRoot, JSON.stringify(row))
   fs.rmSync(sidecarDir, { recursive: true, force: true })
@@ -1230,9 +1084,8 @@ const MARK_STATE = {
   'repair-applied': (s) => s === 'REPAIR',
   'committed': (s) => s === 'COMMIT',
   'incident': (s) => s !== 'DONE',   // any live step — an incident has no state of its own
-  'harden-merged': (s) => s === 'HARDEN_MERGE',
-  'captured': (s) => s === 'CAPTURE',
-  'capture-accepted': (s) => s === 'CAPTURE',
+  'replayed': (s) => s === 'REPLAY',
+  'looked': (s) => s === 'REPLAY',
 }
 function admitMark() {
   const admits = MARK_STATE[MARK]
@@ -1254,14 +1107,12 @@ function handleMark() {
     case 'repair-applied': return handleRepairApplied()
     case 'committed': return handleCommitted() // exits the process itself
     case 'incident': return handleIncident()
-    case 'harden-merged': return handleHardenMerged()
-    case 'captured': return handleCaptured()
-    case 'capture-accepted': return handleCaptureAccepted()
+    case 'replayed': return handleReplayed()
+    case 'looked': return handleLooked()
     default:
       die('unknown mark "' + MARK + '" (tests-authored | red-attributed | wave-done --wave ' +
         '<label> --workers <n> | integrated | repair-applied --continued <n> --spawned <n> | committed | ' +
-        'incident --class <id> [--exit <n>] | harden-merged | captured | capture-accepted --route ' +
-        '<r> --state <s>)')
+        'incident --class <id> [--exit <n>] | replayed | looked)')
   }
 }
 
@@ -1275,9 +1126,6 @@ function afterWaves() {
   return fs.existsSync(gateCapPath) ? 'ESCALATE' : 'REPAIR'
 }
 function deriveState() {
-  // D2: a lane: behaviour spec's very first state, ahead of TESTS — every other lane's ordering
-  // below is untouched (A2).
-  if (isBehaviourLane && !marks.hardenMerged) return 'HARDEN_MERGE'
   if (hasTestsRows) {
     if (!marks.testsAuthored) return 'TESTS'
     if (!(marks.redCheck === 'green' || marks.redCheck === 'skipped-resume')) {
@@ -1288,11 +1136,8 @@ function deriveState() {
   const w = pendingWave()
   if (w) return 'WAVE:' + w.label
   const after = afterWaves()
-  // D3: derived only once the gate is actually green — REPAIR/ESCALATE are unaffected.
-  if (isBehaviourLane && after === 'COMMIT') {
-    const cap = readCaptureState()
-    if (!cap || !captureResolved(cap)) return 'CAPTURE'
-  }
+  // D3(c): derived only once the gate is actually green — REPAIR/ESCALATE are unaffected.
+  if (protoStem && after === 'COMMIT' && !replayDone(readReplayState())) return 'REPLAY'
   return after
 }
 
@@ -1420,75 +1265,43 @@ function commitStepBody() {
     `checkpoint commit.\n` +
     `Then: node ${__filename} ${specPath} --mark committed`
 }
-// D2: the harden merge is a session git call — the driver only names it and verifies it happened.
-function hardenMergeStepBody() {
-  const stem = stemFor()
-  const branch = 'harden/' + stem
-  return `## Step: merge the harden branch — the prototype's exported data/API layer\n` +
-    `Session: git merge --no-ff ${branch} -m "merge ${branch}: data and API layer from the prototype"\n` +
-    `Then: node ${__filename} ${specPath} --mark harden-merged`
-}
-// D3: before any capture has run this prints the invitation (boot the app, then --mark
-// captured); once capture-state.json exists and still carries an unresolved pair it re-prints as
-// the look stop — same state, different render, exactly as the Decision names it.
-function captureStepBody() {
-  const stem = stemFor()
-  const designDir = path.join(repoRoot, 'design/prototypes', stem)
-  const contractRel = path.relative(repoRoot, path.join(designDir, 'contract.json'))
-  const cap = readCaptureState()
-  if (!cap) {
+// D3(c)/(d): before a green replay this prints the invitation (boot the app, then --mark replayed);
+// once replay-state.json records a pass it re-prints as the look stop — same state, different
+// render — until `--mark looked` ends it.
+function replayStepBody() {
+  const contractRel = 'design/prototypes/' + protoStem + '/contract.json'
+  const doc = readReplayState()
+  const addr = replayAddress()
+  if (!doc || doc.passed !== true) {
     const boot = (hostConfig.runtime && hostConfig.runtime.bootCommand) ||
       '(no runtime.bootCommand declared in the host config)'
-    // The capture walks React's dev-only owner chain, and the frozen states were captured over
-    // the prototype's own data and sign-in — the three conditions the session has to restore
-    // are named here, because the boot command alone restores none of them.
-    const proto = hostConfig.prototype || {}
-    const addr = captureAddress()
     const where = addr.url ? addr.url : '(no prototype.url declared in the host config)'
-    const signIn = typeof proto.storageState === 'string' && proto.storageState
-      ? `the capture signs in from ${proto.storageState} — it must hold a live sign-in for this server`
-      : `the capture runs signed out (no prototype.storageState declared)`
-    return `## Step: the rebuilt screens against the frozen capture\n` +
+    return `## Step: replay the contract's tests against the production build\n` +
       `Read only: ${contractRel}\n` +
       `Session: start the app in the background (tracked) so it answers at ${where}: ${addr.port ? 'PORT=' + addr.port + ' ' : ''}${boot}\n` +
-      `  - a development build: the capture refuses a production build, so use the host's dev ` +
-      `server when the boot command builds for production\n` +
-      `  - the data each frozen state showed: the prototype's database is gone, recreate what ` +
-      `the contract's routes need\n` +
-      `  - ${signIn}\n` +
-      `Then: node ${__filename} ${specPath} --mark captured`
+      `Then: node ${__filename} ${specPath} --mark replayed`
   }
-  const capRel = path.relative(repoRoot, path.join(sidecarDir, 'capture-state.json'))
+  const contract = readContract()
+  const stateRel = path.relative(repoRoot, replayStatePath)
   const lines = [
-    `## Step: the rebuilt screens against the frozen capture`,
-    `Read only: ${contractRel}, ${capRel}`,
+    `## Step: the production screens beside the prototype's pictures`,
+    `Read only: ${contractRel}, ${stateRel}`,
+    `✅ contract tests green against the production build — ${doc.tests} tests (${doc.log})`,
+    `🎨 production screens beside the prototype captures — ${addr.url}`,
   ]
-  const unresolved = []
-  for (const p of cap.pairs) {
-    if (p.diffs === 0) {
-      lines.push(`route ${p.route} (${p.state}): 0 diffs`)
-      continue
-    }
-    const d = detailFor(p.route, p.state)
-    lines.push(`🎨 route ${p.route} (${p.state}): ${p.diffs} diffs — ${d.url || ''}`)
-    for (const e of (d.entries || []).slice(0, 5)) lines.push(renderCaptureEntry(e))
-    if (!p.accepted) unresolved.push(p)
-  }
-  if (unresolved.length) {
-    const phrases = unresolved.map((p) => `\`accept ${p.route} ${p.state}\``).join(' or ')
-    lines.push(`Reply ${phrases} to accept a pair as the new baseline; ` +
-      `anything else is a fix for this session, then:`)
-    lines.push(`  node ${__filename} ${specPath} --mark captured`)
-    lines.push(`Then (only on the literal accept):`)
-    for (const p of unresolved) {
-      lines.push(`  node ${__filename} ${specPath} --mark capture-accepted --route ${p.route} ` +
-        `--state ${p.state}`)
+  for (const [route, states] of Object.entries(contract.routes || {})) {
+    for (const [stateName, entry] of Object.entries(states)) {
+      lines.push(`route ${route} (${stateName}): ${joinAddress(addr.url, entry.url)} · ` +
+        `design/prototypes/${protoStem}/${entry.capture}`)
     }
   }
+  lines.push('Reply `close enough` to continue; anything else is a fix for this session, then:')
+  lines.push(`  node ${__filename} ${specPath} --mark replayed`)
+  lines.push('Then (only on the literal close enough):')
+  lines.push(`  node ${__filename} ${specPath} --mark looked`)
   return lines.join('\n')
 }
 function stepBody(s) {
-  if (s === 'HARDEN_MERGE') return hardenMergeStepBody()
   if (s === 'TESTS') return testsStepBody()
   if (s === 'RED_FINDINGS') return redFindingsStepBody()
   if (s === 'RED_ATTRIBUTION') return redAttributionStepBody()
@@ -1496,7 +1309,7 @@ function stepBody(s) {
   if (s === 'INTEGRATION') return integrationStepBody()
   if (s === 'REPAIR') return repairStepBody()
   if (s === 'ESCALATE') return escalateStepBody()
-  if (s === 'CAPTURE') return captureStepBody()
+  if (s === 'REPLAY') return replayStepBody()
   if (s === 'COMMIT') return commitStepBody()
   die('internal error: no step body for state ' + s)
 }

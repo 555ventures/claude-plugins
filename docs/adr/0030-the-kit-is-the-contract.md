@@ -9,7 +9,9 @@
 - Amended by: ADR-0031 (clause (f): the client's seven calls, the plugin-owned round number, the
   optional service, the contract and vocabulary files in the plugin); ADR-0032 (clause (f): the
   wireframe command runs over the service); ADR-0034 (clause (f): a project makes its own
-  pictures and the client sends them)
+  pictures and the client sends them); ADR-0035 (clauses (d) and (h) and the
+  discovery-prototype line: the prototype carries behaviour, never code — no export, no gate,
+  no structural capture; entry from words; the worktree lives until the citing specs are done)
 
 ## Context
 

@@ -127,7 +127,7 @@ function writeContract({ designDir, stem, brief, idea, approvedAt, base, viewpor
 function copyContractTests({ root, branch, e2eFile, designDir }) {
   const shown = spawnSync('git', ['-C', root, 'show', branch + ':' + e2eFile], { encoding: 'utf8', maxBuffer: 1024 * 1024 * 64 })
   if (shown.status !== 0) {
-    return { ok: false, message: 'git show ' + branch + ':' + e2eFile + ' failed: ' + (shown.stderr || '').trim() }
+    return { ok: false, message: 'git show ' + branch + ':' + e2eFile + ' failed: ' + (shown.stderr || '').trim() + ' — remedy: confirm ' + branch + ' still carries ' + e2eFile + ' (commit it there), then re-run --mark tests-derived' }
   }
   const name = path.basename(e2eFile)
   const dest = path.join(designDir, 'tests', name)

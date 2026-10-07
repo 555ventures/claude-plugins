@@ -1166,3 +1166,70 @@ test('a header label on the line below Depends on is not swallowed into the depe
   const b2 = j.briefs.find(b => b.num === '02')
   assert.deepStrictEqual(b2.depends_on, [], 'the declared "none" still reads as no dependencies')
 })
+
+// specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md D7,
+// AC-20261007-03-8: status derives the prototype close paste as a hygiene anomaly — never a
+// fourth action string.
+const PROTO_STEM = '28-functional-prototype'
+function protoHost({ specs, marks = { testsDerived: '2026-10-07T00:00:00Z' } }) {
+  const dir = host({ briefs: BRIEFS, specs })
+  const d = path.join(dir, 'design/prototypes', PROTO_STEM)
+  fs.mkdirSync(d, { recursive: true })
+  fs.writeFileSync(path.join(d, 'status.json'), JSON.stringify({
+    schemaVersion: 1, brief: '28', stem: PROTO_STEM, marks,
+  }) + '\n')
+  return dir
+}
+const protoAnomalies = (dir) => {
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, 'status --json must derive without failing: ' + r.stderr)
+  const json = JSON.parse(r.stdout)
+  return { json, found: json.anomalies.filter(a => a.kind === 'prototype-open') }
+}
+const citing = (status) => sp(status, 'prototype: ' + PROTO_STEM)
+
+test('AC-20261007-03-8: WHEN every spec citing a contracted, unclosed prototype is done THE SYSTEM lists one hygiene prototype-open anomaly carrying the close paste', () => {
+  const dir = protoHost({ specs: {
+    '20261007/01-a.md': citing('done'),
+    '20261007/02-b.md': citing('done'),
+  } })
+  const { json, found } = protoAnomalies(dir)
+  assert.strictEqual(found.length, 1, 'one prototype with every citer done must surface exactly one close anomaly, or the delete never gets offered: ' + JSON.stringify(json.anomalies))
+  assert.strictEqual(found[0].audience, 'hygiene', 'the close paste is housekeeping, not a decision — it must not claim a decide slot: ' + JSON.stringify(found[0]))
+  assert.strictEqual(found[0].paste, 'node "$(spec-paths prototype-driver)" ' + PROTO_STEM + ' --root . --mark closed',
+    'the paste must be the one runnable close command, byte-exact: ' + JSON.stringify(found[0]))
+  assert.match(found[0].detail, /every citing spec is done/, 'the detail must say why the prototype is closable: ' + JSON.stringify(found[0]))
+})
+
+test('AC-20261007-03-8: WHEN one citing spec is still implementing THE SYSTEM lists no prototype-open anomaly', () => {
+  const dir = protoHost({ specs: {
+    '20261007/01-a.md': citing('done'),
+    '20261007/02-b.md': citing('implementing'),
+  } })
+  const { json, found } = protoAnomalies(dir)
+  assert.strictEqual(found.length, 0, 'a prototype with an unfinished citer must not be offered for deletion — its replay source would be lost: ' + JSON.stringify(json.anomalies))
+})
+
+test('AC-20261007-03-8: WHEN marks.closed is set, or no spec cites the stem, or the stem was never contracted THE SYSTEM lists no prototype-open anomaly', () => {
+  const closed = protoHost({ specs: { '20261007/01-a.md': citing('done') },
+    marks: { testsDerived: '2026-10-07T00:00:00Z', closed: '2026-10-07T01:00:00Z' } })
+  assert.strictEqual(protoAnomalies(closed).found.length, 0, 'a closed prototype must stop being offered, or the paste nags forever')
+  const uncited = protoHost({ specs: { '20261007/01-a.md': sp('done') } })
+  assert.strictEqual(protoAnomalies(uncited).found.length, 0, 'a prototype no spec cites has no "every citer done" to derive — vacuous truth must not trigger the paste')
+  const open = protoHost({ specs: { '20261007/01-a.md': citing('done') }, marks: { opened: '2026-10-07T00:00:00Z' } })
+  assert.strictEqual(protoAnomalies(open).found.length, 0, 'a prototype still iterating (no tests derived) must never be offered for deletion')
+})
+
+test('AC-20261007-03-8: WHEN a prototype-open anomaly is listed THE SYSTEM keeps the next array action strings frozen and never lists the anomaly as a next entry', () => {
+  const dir = protoHost({ specs: { '20261007/01-a.md': citing('done') } })
+  const { json, found } = protoAnomalies(dir)
+  assert.strictEqual(found.length, 1, 'setup: the fixture must raise the anomaly this test is about: ' + JSON.stringify(json.anomalies))
+  const r = runNode(SCRIPT, ['--root', dir, '--next', '--json'])
+  assert.strictEqual(r.status, 0, 'status --next --json must derive: ' + r.stderr)
+  const next = JSON.parse(r.stdout).next
+  for (const e of next) {
+    assert.ok(['/spec:plan', '/spec:run', '/spec:escape'].includes(e.action),
+      'the three action strings are frozen — a prototype close must never become a fourth: ' + JSON.stringify(e))
+  }
+  assert.ok(!JSON.stringify(next).includes('prototype-open'), 'the anomaly is a hygiene line, never a next entry: ' + JSON.stringify(next))
+})

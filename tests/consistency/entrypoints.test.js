@@ -445,7 +445,13 @@ function checkForwardInvocation(root) {
         }
         ok = hookResult.paths.has(script)
       } else {
-        ok = matchesScriptInvocation(stripCommentLines(epSrc, path.extname(ep)), basename)
+        // A script-to-script caller either spawns the script (D9's quoted-literal shape) or prints
+        // a `spec-paths <key>` paste for the user — the same literal a `.md` entry point needs
+        // (specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md D10).
+        const codeOnly = stripCommentLines(epSrc, path.extname(ep))
+        const keys = Object.keys(keyMap).filter((k) => keyMap[k] === script)
+        ok = matchesScriptInvocation(codeOnly, basename) ||
+          keys.some((k) => new RegExp('spec-paths ' + k + '\\b').test(codeOnly))
       }
       if (!ok) violations.push(script + ' -> ' + ep + ' (no invocation literal for ' + basename + ' found in ' + ep + ')')
     }

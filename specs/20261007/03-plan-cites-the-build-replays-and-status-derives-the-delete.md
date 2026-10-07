@@ -1,6 +1,7 @@
 ---
 date: 2026-10-07
-status: hardened
+status: done
+build_base: main
 tier: critical
 area: prototype
 breaking: false
@@ -9,6 +10,7 @@ depended_on_by: []
 brief: 28a
 spiked: 2026-10-07
 open_markers: 0
+diff_base: 96fc7d80174a9676a49781b65b5b97eaf8fcdd34
 ---
 
 # Plan cites, the build replays, and status derives the delete
@@ -44,6 +46,7 @@ prototype only when it is the last citer, and status names the paste.
 | D7 | **Status derives the paste.** `spec-status.js` gains anomaly kind `prototype-open` (audience `hygiene`): for every `design/prototypes/<stem>/status.json` with `marks.testsDerived` set and `marks.closed` unset, when at least one non-superseded spec carries `prototype: <stem>` and every such spec is `done`, push `{ kind: 'prototype-open', detail: 'prototype <stem>: every citing spec is done; its worktree, proto/<stem> and database are still there', paste: 'node "$(spec-paths prototype-driver)" <stem> --root . --mark closed' }`. No new action string; `--next`'s shape and the three action strings are unchanged; `--json` carries the anomaly as every other does. (AC-20261007-03-8) | Brief 28a scope 3: status derives "every spec with `prototype: <stem>` is done" and prints the one delete command. An anomaly with a paste is the existing shape for a hygiene item, so the frozen `--next` API is untouched. |
 | D8 | **Records.** This plan session minted `docs/adr/0035-prototype-carries-behaviour-never-code.md` (amending ADR-0030 (d), (h) and the discovery-prototype line) with `Amended by` backlinks on ADR-0030 and the brief's Grounding line; the build touches neither. `docs/canonical/build-integrity.md` § Behaviour lane is rewritten by the Canonical Delta. `[no-ac: records written at plan; citations-check is the oracle]` | The brief says the plan mints the ADR; ADR-0034 is the format. |
 | D9 | Bump via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"`. `[no-ac: bump — plugin-bump.js --check is the oracle]` | Version discipline. |
+| D10 | **A printed paste is a call** (build-time user ruling, 2026-10-07). `tests/consistency/entrypoints.test.js`'s forward-invocation check accepts, for a script entry point, the `spec-paths <key>` literal a `.md` entry point already needs, alongside the quoted-basename spawn shape; `spec/entrypoints.json`'s `prototype-driver.js` row declares `spec-build-driver.js` and `spec-status.js`, whose remedy and anomaly text print the `spec-paths prototype-driver` paste. `[no-ac: guard harness — entrypoints.test.js's live-repo pin is the oracle]` | D7's locked paste lives in a script; the reverse half demanded the declaration and the forward half refused it. The user chose teaching the check over rewording the paste. |
 
 ## File Plan
 
@@ -61,7 +64,7 @@ prototype only when it is the last citer, and status names the paste.
 | spec/scripts/review-legs.js | MODIFY | scripts | D5 — the `contract` leg |
 | spec/scripts/spec-review-driver.js | MODIFY | scripts | D6 — `finishMerge`: harden block and `stemForHarden` deleted; last-citer close |
 | spec/scripts/spec-status.js | MODIFY | scripts | D7 — `prototype-open` anomaly |
-| spec/entrypoints.json | MODIFY | other | D3(g) — `proto-capture.js` row deleted |
+| spec/entrypoints.json | MODIFY | other | D3(g) — `proto-capture.js` row deleted; D10 — `prototype-driver.js` row declares `spec-build-driver.js` and `spec-status.js` |
 | spec/.claude-plugin/plugin.json | MODIFY | other | D9 — `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` |
 | tests/build/build-driver-replay.test.js | CREATE | tests | AC-20261007-03-1, AC-20261007-03-2, AC-20261007-03-3, AC-20261007-03-4, AC-20261007-03-5 |
 | tests/build/build-driver-lane.test.js | DELETE | tests | its subjects (admission refusal, harden merge, capture gate) are retired |
@@ -70,6 +73,7 @@ prototype only when it is the last citer, and status names the paste.
 | tests/review/prototype-close.test.js | CREATE | tests | AC-20261007-03-7 (harness recipe from the deleted harden-branch-cleanup test) |
 | tests/review/harden-branch-cleanup.test.js | DELETE | tests | its subject (harden deletion at merge) is retired |
 | tests/spec-status.test.js | MODIFY | tests | AC-20261007-03-8 |
+| tests/consistency/entrypoints.test.js | MODIFY | tests | D10 — forward check accepts a `spec-paths <key>` paste in a script entry point |
 | tests/prototype/capture-page.test.js | DELETE | tests | subject deleted (D3g) |
 | tests/prototype/proto-capture.test.js | DELETE | tests | subject deleted (D3g) |
 | tests/prototype/capture-sign-in.test.js | DELETE | tests | subject deleted (D3g) |
@@ -81,8 +85,8 @@ each pointer line in the same batch (derive the set as the AC-IDs cited under `t
 base minus those cited after; at lock the known set is `AC-20260928-02-1`, `-2`, `-3`,
 `AC-20260928-03-1` … `-6`, `AC-20261001-01-1` … `-6`, `-19`, `AC-20261005-03-17`, `-18`,
 `AC-20261005-05-10` — the last one a CONTINUE-TO pin, so `ac-drift-clean` reddens without the
-tag). `tests/consistency/entrypoints.test.js`, `read-load.test.js` and `run-ledger`'s stage-doc
-pins are not edited.
+tag). `read-load.test.js` and `run-ledger`'s stage-doc pins are not edited; `entrypoints.test.js`
+is edited only per D10.
 
 ## Contracts
 
@@ -155,7 +159,7 @@ the terminal.
 
 ## Acceptance Criteria
 
-- **AC-20261007-03-1**: WHEN the build driver runs on a hardened spec with `brief: 28` while branch `proto/28-functional-prototype` exists THE SYSTEM SHALL admit it (exit 0, prints `state: TESTS`) with no stderr line containing `is still open for brief`; WHEN a spec carries `lane: behaviour` and no `prototype:` THE SYSTEM SHALL print `state: TESTS` first, and `--mark harden-merged` SHALL exit 2 containing `is unknown` → writes tests/build/build-driver-replay.test.js
+- **AC-20261007-03-1**: WHEN the build driver runs on a hardened spec with `brief: 28` while branch `proto/28-functional-prototype` exists THE SYSTEM SHALL admit it (exit 0, prints `state: TESTS`) with no stderr line containing `is still open for brief`; WHEN a spec carries `lane: behaviour` and no `prototype:` THE SYSTEM SHALL print `state: TESTS` first, and `--mark harden-merged` SHALL exit 2 containing `unknown mark "harden-merged"` → writes tests/build/build-driver-replay.test.js
 - **AC-20261007-03-2**: WHEN a `prototype: 28-functional-prototype` spec reaches a green gate on the fixture host THE SYSTEM SHALL print `state: REPLAY`, `Read only:` naming `design/prototypes/28-functional-prototype/contract.json`, a `Session:` line containing the host's `runtime.bootCommand` and `PORT=`, and `--mark replayed`; WHEN the fixture's `prototype.url` carries `{port}` THE SYSTEM SHALL write `<spec>.build/replay-port.json` as `{ "port": <n> }` and print the same `<n>` on a second bare run → writes tests/build/build-driver-replay.test.js
 - **AC-20261007-03-3**: WHEN `--mark replayed` runs with the e2eRun stub green THE SYSTEM SHALL exit 0, write `e2e/proto-28-functional-prototype.spec.ts` in the repo root byte-equal to `design/prototypes/28-functional-prototype/tests/proto-28-functional-prototype.spec.ts`, have run the stub with `{file}` = `e2e/proto-28-functional-prototype.spec.ts` and `PROTO_URL` = `http://127.0.0.1:<port>` (the fixture's `e2e-env.txt`), write `replay-state.json` = `{ tests: 2, passed: true, looked: false, log: "<spec>.build/replay-1.log" }`, print `✅ contract tests green against the production build — 2 tests`, `🎨 production screens beside the prototype captures — http://127.0.0.1:<port>`, four `route ` lines of which the second is `route /women (empty): http://127.0.0.1:<port>/women?proto=empty · design/prototypes/28-functional-prototype/captures/women--empty.png`, the `close enough` reply line and `--mark looked`, and a bare run SHALL still print `state: REPLAY`; WHEN `--mark looked` then runs THE SYSTEM SHALL print `(REPLAY → COMMIT)` and the next bare run SHALL print `state: COMMIT` → writes tests/build/build-driver-replay.test.js
 - **AC-20261007-03-4**: WHEN `--mark replayed` runs with `E2E_RED=1` THE SYSTEM SHALL exit 2 with stderr containing `contract tests red against the production build (e2eRun exited 1)` and `replay-1.log`, write that log, write no `replay-state.json`, and leave the state `REPLAY`; WHEN `--mark looked` runs before any green replay THE SYSTEM SHALL exit 2 containing `replay has not passed`; WHEN `contract.json.tests` is `null` THE SYSTEM SHALL exit 2 naming `contract.json` and `--mark tests-derived`; WHEN `prototype.e2eRun` is undeclared THE SYSTEM SHALL exit 2 naming `prototype.e2eRun` → writes tests/build/build-driver-replay.test.js
@@ -206,6 +210,32 @@ suites, and spec 20261005/05's CONTINUE-TO pin on the harden-delivered test is r
 subject.
 
 Collision closure (2026-10-07, literals `HARDEN_MERGE`, `lane: behaviour`, `proto-capture`, `capture-accepted`, `is still open for brief`, `harden/`): every hit outside the File Plan is a prose mention in `docs/adr`, `docs/roadmap`, `docs/canonical` (rewritten by the Canonical Delta), a changelog, or a file spec 01 deletes before this spec builds (`lib/freeze.js`, `prototype-spec.md`, `freeze*.test.js`) — waived; the `executes` hits on `review-legs.js`, `spec-build-driver.js`, `spec-review-driver.js` and `spec-status.js` are the existing suites, whose pinned outputs this spec's additive edits leave byte-identical (A4, A6).
+
+Build deviations (folded at review close, 2026-10-07):
+- AC-1's refusal text was written `is unknown`; the driver's generic refusal reads
+  `unknown mark "harden-merged"` and D3 does not reword it, so AC-1 now quotes the shipped text
+  (reviewer advisory, review close).
+- The Contracts example's `<spec>.md.build/` is the real `<spec>.build/` sidecar (spec path minus
+  `.md`); `replay-state.json.log` is that sidecar's repo-relative `replay-<k>.log`, and `k` rises
+  per attempt (`marks.replayRuns`), so `replay-1.log` names the first attempt only.
+- `--mark replayed` also refuses (exit 2) an undeclared `prototype.url` (naming it and
+  `/spec:doctor`) and a contract test file missing under `design/prototypes/<stem>/` (naming
+  `--mark tests-derived`) — neither address nor copy source resolves without them.
+- `review-legs.js` appends the `contract` row immediately before the ac-matrix wave, not in the
+  file-reading wave, because ac-matrix reads oracle standing off the manifest it is handed.
+- The build fixture gained `toGreenGate(host)` and a `prototype` param on `specBody`; `makeHost`'s
+  `lane`/`contract` options are gone (`host.contractPath` replaces `contract`). The
+  prototype-close fixture appends a passed-and-looked build row to the review worktree's ledger
+  before the implement commit, as a real prototype build does — without it the `contract` leg
+  is correctly red and the fixture's empty dispositions are refused.
+- A7's retired-tag set widened past the lock prediction: AC-20260928-03-2 … -5 and spec
+  20261005/03 AC 16 and AC 19 (CONTINUE-TO `reuses` pointers at deleted tests) are tagged too;
+  AC-20260928-99-6 … -8 dropped out of `tests/` but are fixture ids no spec defines.
+- D1's `plan.md` bullet holds its five-line cap by eliding "the prototype is a reference only"
+  (its "Never read `proto/<stem>` or its worktree" carries the rule) and writing "driver-copied".
+- D10 (user ruling mid-build): `entrypoints.test.js`'s forward check accepts a script's printed
+  `spec-paths <key>` paste, so D7's locked paste and the build driver's remedy line are declared
+  callers of `prototype-driver.js`.
 
 ## Canonical Delta
 

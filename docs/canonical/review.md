@@ -34,6 +34,12 @@
   never fix-dispatched. `CLEAN` is unreachable until dispositions cover the hard pool;
   `FINDINGS` means exactly one thing, a dispatched fix that has not landed.
   (specs/20260909/04-review-soft-floor.md, done 2026-09-09)
+
+  A spec stamped `prototype: <stem>` gains one more row, `contract`, read from the spec's last
+  build row (`replay.passed` and `replay.looked` both true → exit 0, else
+  `unavailable: no-replay`); it never blocks by itself — a red or absent one is a hard finding
+  through `ac-matrix`'s oracle rule on the pin criteria that name it.
+  (specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md)
   **Manifest row v2** is `{"leg","exit","observed"}` where `observed` is always a
   non-null JSON object drawn from the Contracts closed set; any row whose `observed` is a
   string, an array, null, or absent makes the manifest invalid and derives `UNVERIFIED` in

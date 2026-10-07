@@ -38,18 +38,15 @@ A red-expected file that passed (`unsanctioned-green`), a carried AC mixing a pr
 pin (`mixed-pin` — split the AC, re-run), or a red run recorded `redCheck: "skipped-resume"`
 is diagnosed with the user before the next mark, never laundered past.
 
-## Behaviour lane
+## Prototype specs
 
-A spec whose frontmatter carries `lane: behaviour` (written by the prototype freeze) inserts two
-states around the ordinary sequence, derived only for that lane. First, `HARDEN_MERGE`, before
-`TESTS`: the session runs `git merge --no-ff harden/<stem>` and the mark verifies the branch is
-now an ancestor of HEAD — the merged data and API layer then rides through TESTS, the rebuild,
-and the host gate like any other change. Second, `CAPTURE`, after a green gate and before
-`COMMIT`: the session boots the app, then the driver captures every contract route × state
-and diffs each against the frozen baseline. Zero diffs advance straight to `COMMIT`; any diff prints a look
-stop and the turn ends — the user's literal `accept <route> <state>` marks that pair as the new
-baseline, anything else is a fix for this session followed by a re-capture. The build ledger row
-for this lane carries `capture: { pairs, diffs, accepted }`.
+A spec whose frontmatter carries `prototype: <stem>` adds one state, `REPLAY`, after a green gate and
+before `COMMIT`. The session boots the app; `--mark replayed` has the driver copy the contract's test file
+from `design/prototypes/<stem>/` to the host's `prototype.e2eFile` and run `prototype.e2eRun` against the
+production build with `PROTO_URL` set. Red stops the turn; green prints a look stop putting the production
+screens beside the prototype's pictures. The user's literal `close enough` is the only advance: the session
+then runs `--mark looked` (`REPLAY → COMMIT`); anything else is a fix followed by `--mark replayed` again.
+No harden merge, no capture diff. The build ledger row carries `replay: { tests, passed, looked }`.
 
 ## Worker Contract — every dispatch this session makes
 

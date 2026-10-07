@@ -162,29 +162,29 @@ export intact.
   the capture page with a `storageState` option equal to the absolute path
   `<host>/e2e/.auth/user.json`, exit 0 and write `--out` (e.g. a stand-in `@playwright/test`
   that records `newPage`'s options → the recorded `storageState` ends
-  `/e2e/.auth/user.json` and is absolute) → writes tests/prototype/capture-sign-in.test.js
+  `/e2e/.auth/user.json` and is absolute) → writes tests/prototype/capture-sign-in.test.js [retired: specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md]
 - **AC-20261001-01-2**: WHEN `prototype.storageState` is `e2e/.auth/user.json` and no such file
   exists THE SYSTEM SHALL exit 2 with stderr containing
   `prototype.storageState (e2e/.auth/user.json) does not exist at` and `.worktreeinclude`,
   launch no browser and write no `--out` (e.g. the stand-in's `launch` writes a marker file →
-  the marker is absent) → writes tests/prototype/capture-sign-in.test.js
+  the marker is absent) → writes tests/prototype/capture-sign-in.test.js [retired: specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md]
 - **AC-20261001-01-3**: WHEN the declared sign-in file's content is `{not json` THE SYSTEM SHALL
   exit 2 with stderr containing `is not a readable storage-state JSON file`, launch no browser
-  and write no `--out` → writes tests/prototype/capture-sign-in.test.js
+  and write no `--out` → writes tests/prototype/capture-sign-in.test.js [retired: specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md]
 - **AC-20261001-01-4**: WHEN `prototype.storageState` is the JSON value `true` THE SYSTEM SHALL
   exit 2 with stderr containing `prototype.storageState must be a path string` and write no
-  `--out` → writes tests/prototype/capture-sign-in.test.js
+  `--out` → writes tests/prototype/capture-sign-in.test.js [retired: specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md]
 - **AC-20261001-01-5**: WHEN a valid sign-in is declared as `e2e/.auth/user.json` and the page
   sent to `http://localhost:3000/women` settles on `http://localhost:3000/login?next=/women` THE
   SYSTEM SHALL exit 2 with stderr containing
   `redirected from http://localhost:3000/women to http://localhost:3000/login` and
   `signed in from e2e/.auth/user.json`, and write no `--out`
-  → writes tests/prototype/capture-sign-in.test.js
+  → writes tests/prototype/capture-sign-in.test.js [retired: specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md]
 - **AC-20261001-01-6**: WHEN no `prototype.storageState` is declared and the page sent to
   `http://localhost:3000/women` settles on `http://localhost:3000/login?next=/women` THE SYSTEM
   SHALL CONTINUE TO exit 2 with stderr matching
   `redirected from http://localhost:3000/women to http://localhost:3000/login` and write no
-  `--out` → reuses tests/prototype/proto-capture.test.js :: proto-capture exits 2 naming the redirect
+  `--out` → reuses tests/prototype/proto-capture.test.js :: proto-capture exits 2 naming the redirect [retired: specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md]
 - **AC-20261001-01-7**: WHEN `prototype.storageState` is `e2e/.auth/user.json` and that file is
   committed in the host repo THE SYSTEM SHALL make `prototype-driver.js check` exit 1 printing a
   line containing `prototype.storageState (e2e/.auth/user.json) is tracked by git`, and make
@@ -247,7 +247,7 @@ export intact.
 - **AC-20261001-01-19**: WHEN no `prototype.storageState` is declared and the page sent to
   `http://localhost:3000/women` settles on `http://localhost:3000/login` THE SYSTEM SHALL name
   the new way out in the refusal: stderr contains `declare prototype.storageState`
-  → writes tests/prototype/capture-sign-in.test.js
+  → writes tests/prototype/capture-sign-in.test.js [retired: specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md]
 - **AC-20261001-01-20**: WHEN the generated spec already exists with `tier: standard` (the
   zero-hit fixture, first mark stopped by the dirty-worktree refusal after the spec write) and
   the mark is re-run with `--tier critical` THE SYSTEM SHALL leave the spec's `tier: standard`

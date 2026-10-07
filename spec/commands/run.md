@@ -54,8 +54,7 @@ error, and name `--in-place` as the deliberate opt-out.
 3. `done` with no review sidecar → the review driver's own cold path prints `DONE` with
    `spec-status --next` — the loop's no-op resume.
 
-This is `spec-status.js`'s own `deriveNext` order, restated — never skip a rung. A spec stamped
-with a `brief:` is refused by the build driver while that brief's `proto/` branch still exists.
+This is `spec-status.js`'s own `deriveNext` order, restated — never skip a rung.
 
 ## Build stage
 

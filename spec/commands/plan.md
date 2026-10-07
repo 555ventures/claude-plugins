@@ -16,27 +16,28 @@ re-read). Either missing → STOP: run `/spec:init` first.
 
 ## Input
 
-`$ARGUMENTS` — a feature description, a path to an existing draft spec to re-open, or a
-path to a roadmap planning brief (`docs/roadmap/NN-*.md`).
+`$ARGUMENTS` — a feature description, a path to an existing draft spec to re-open, a path to a roadmap planning brief
+(`docs/roadmap/NN-*.md`), or a behaviour contract (`design/prototypes/<stem>/contract.json`).
 
 ## Entry
 
-- **Roadmap brief:** read the brief, `docs/roadmap/00-overview.md`, and every ADR the brief's Grounding cites (including
-  each `Amended by ADR-NNNN`). Run `node "$(spec-paths spec-status)" --root . --brief NN` — exit 1 means a `Depends on`
-  brief has no spec at `implementing`/`done`: print `📌 Auto-picked proceed — <dep NN> at <status>; planning is
-  reversible (veto anytime)` and continue; claims resting on the unbuilt dependency cite its spec's
-  Contracts as Assumptions, never spiked. Every spec this session produces gets
-  `brief: NN` in frontmatter (that stamp is how roadmap status is derived); an ad-hoc spec gets `brief: n/a`. The
-  brief's Out of scope section is binding; a `surfaces` block is structure only — labels and journey edges, never
-  checked against approval.
-- **Tier:** per core § Tiers — state it and why. Work failing core § Pipeline Entry gets no
-  spec: say so and make it on the direct lane when it qualifies; a structural change gets a spec whatever its size.
-- **Explore before asking.** Ground every claim in current code (parallel Explore agents where
-  the surface is wide; `docs/canonical/{area}.md` when present). Run the pre-emptive lookups
-  the host's pipeline rules § Planning declares (Context7 for third-party APIs the spec relies
-  on) and embed the excerpts that matter into Contracts/UI (core § MCP Policy). Put genuine
-  forks to the user via `AskUserQuestion`, options grounded in what you found; never ask what
-  the codebase can answer.
+- **Roadmap brief:** read the brief, `docs/roadmap/00-overview.md`, and every ADR the brief's Grounding cites (with each
+  `Amended by ADR-NNNN`). Run `node "$(spec-paths spec-status)" --root . --brief NN` — exit 1 means a `Depends on` brief
+  has no spec at `implementing`/`done`: print `📌 Auto-picked proceed — <dep NN> at <status>; planning is reversible
+  (veto anytime)` and continue; claims resting on the unbuilt dependency cite its spec's Contracts as Assumptions, never
+  spiked. Every spec this session produces gets `brief: NN` (that stamp derives roadmap status); an ad-hoc spec gets
+  `brief: n/a`. The brief's Out of scope is binding; a `surfaces` block is structure only.
+- **Behaviour contract:** read `contract.json`, every picture under `captures/` (view them), the test file and `pins.json`; amend
+  the brief its `brief` names (it gains `Prototype: <stem>`), a draft spec, or mint specs (`brief: n/a` without a roadmap). Every
+  spec carries `prototype: <stem>`; one owns the test file (row `<e2eFile with {stem}> | CREATE | other`, driver-copied) and
+  one AC per pin: `WHEN pin <id> ("<note>", <screen> / <state>) is exercised against the production build THE SYSTEM SHALL pass
+  its contract test`, tagged `[oracle: contract]`, ending `→ writes <that file>`. Never read `proto/<stem>` or its worktree.
+- **Tier:** per core § Tiers — state it and why. Work failing core § Pipeline Entry gets no spec: say so and use the
+  direct lane when it qualifies; a structural change gets a spec whatever its size.
+- **Explore before asking.** Ground every claim in current code (parallel Explore agents where the surface is wide;
+  `docs/canonical/{area}.md` when present). Run the pre-emptive lookups the host's pipeline rules § Planning declares
+  (Context7 for third-party APIs) and embed the excerpts that matter into Contracts/UI (core § MCP Policy). Genuine forks
+  go to the user via `AskUserQuestion`, grounded in what you found; never ask what the codebase can answer.
 
 ## Micro-spikes (mandatory — the shape triggers it, never felt uncertainty)
 

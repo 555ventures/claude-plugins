@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 'use strict'
-// Synthetic `prototype.e2eList` (spec 20260928/02 D4): reads the file named by the one positional
-// arg (resolved against cwd = the host root, matching how the driver is expected to run this
+// Synthetic `prototype.e2eList` (specs/20261007/01-approve-writes-a-behaviour-contract.md D6): reads the file named by the one positional
+// arg (resolved against cwd = the prototype worktree, where the driver runs this
 // command) and prints one line per `test('<title>', ...)` call found in it, in file order.
-// LIST_TESTS_LIMIT caps how many titles are printed — freeze.test.js's AC-20260928-02-7 case that
-// must observe the driver refuse when the list stub under-reports a file that genuinely carries
-// both AC ids.
+// LIST_TESTS_LIMIT caps how many titles are printed, so a file that carries `pin p1:` and `pin p3:`
+// can be made to list only `pin p1:` (the runner under-reporting a test the file really holds).
 const fs = require('fs')
 const file = process.argv[2]
 let src = ''

@@ -1,6 +1,6 @@
 ---
 date: 2026-10-07
-status: hardened
+status: implementing
 tier: critical
 area: prototype
 breaking: false
@@ -8,7 +8,9 @@ depends_on: []
 depended_on_by: [specs/20261007/02-the-prototype-opens-from-words-a-brief-or-a-stem.md, specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md]
 brief: 28a
 spiked: 2026-10-07
+build_base: main
 open_markers: 0
+diff_base: 639ae05b66a9da56ec35c2ed30552aca22248c65
 ---
 
 # Approve writes a behaviour contract

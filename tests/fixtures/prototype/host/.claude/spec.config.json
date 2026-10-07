@@ -1,7 +1,7 @@
 {
   "generatedBy": "spec@5.0.0",
   "contractHash": "000000000000",
-  "gateCommand": "node gate.js",
+  "gateCommand": "true",
   "testCommand": "true",
   "setupCommand": "true",
   "patternsScript": "scripts/spec-patterns.sh",
@@ -13,11 +13,12 @@
     "readyCheck": "true"
   },
   "prototype": {
-    "url": "http://127.0.0.1:1",
+    "url": "http://127.0.0.1:{port}",
     "overlay": "src/proto-overlay.js",
-    "e2eFile": "e2e/proto-{brief}.smoke.spec.ts",
+    "e2eFile": "e2e/proto-{stem}.spec.ts",
     "e2eList": "node list-tests.js {file}",
-    "export": ["src/db/**"],
+    "e2eRun": "node run-tests.js {file}",
+    "picture": "node picture-stub.js {url} {out} {width} {height}",
     "dbCreate": "node scripts/create-db.js",
     "dbDestroy": "node scripts/destroy-db.js"
   }

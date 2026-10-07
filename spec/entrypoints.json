@@ -141,7 +141,6 @@
   },
   "spec/scripts/proto-capture.js": {
     "entryPoints": [
-      "spec/scripts/lib/freeze.js",
       "spec/scripts/spec-build-driver.js"
     ]
   },

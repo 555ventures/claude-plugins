@@ -46,14 +46,57 @@ test('AC-20260928-01-1: the driver exits 2 naming prototype and spec:doctor when
     'the refusal must point at /spec:doctor (D1\'s check) as the remedy: ' + r.stderr)
 })
 
-test('AC-20260928-01-1: the driver exits 2 naming prototype.export when the block declares no export globs', () => {
+// `check --json` on a fresh fixture host after `edit(cfg)`; returns { r, findings }.
+function checkJson(edit) {
   const dir = setupHost()
-  patchConfig(dir, (cfg) => { cfg.prototype.export = [] })
-  const r = bare(dir)
-  assert.strictEqual(r.status, 2,
-    'a prototype block with an empty export array must refuse — nothing declares the data/API layer to freeze later: ' + JSON.stringify(r))
-  assert.match(r.stderr, /prototype\.export/,
-    'the refusal must name prototype.export specifically, not just "prototype": ' + r.stderr)
+  if (edit) patchConfig(dir, edit)
+  const r = bare(dir, ['check', '--json'])
+  let findings = null
+  try { findings = JSON.parse(r.stdout).findings } catch (e) { /* asserted by the caller's message */ }
+  return { dir, r, findings }
+}
+
+test('AC-20261007-01-1: the bare run admits a block with no export or gate key, and check flags only {stem}, e2eRun and picture shapes — never a tracked storageState', () => {
+  const dir = setupHost()
+  const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.claude/spec.config.json'), 'utf8'))
+  assert.ok(!('export' in cfg.prototype) && !('gate' in cfg.prototype),
+    'test setup requires the fixture host to carry no prototype.export and no prototype.gate key')
+  const bareRun = bare(dir)
+  assert.strictEqual(bareRun.status, 0,
+    'a block with no export key must admit — a startup refusal on a key no step reads blocks every prototype: ' + JSON.stringify(bareRun))
+  assert.match(bareRun.stdout, /state:\s*OPEN/, 'the admitted bare run must print state OPEN: ' + bareRun.stdout)
+  assert.ok(!/prototype\.export/.test(bareRun.stderr),
+    'no stderr line may name prototype.export — the key is retired and a remedy naming it sends the host to declare a dead key: ' + bareRun.stderr)
+
+  const clean = checkJson()
+  assert.strictEqual(clean.r.status, 0, 'check on the fixture host must exit 0 — nothing it declares is a finding: ' + JSON.stringify(clean.r))
+  assert.deepStrictEqual(clean.findings, [], 'check --json must print { "findings": [] } on a clean host: ' + clean.r.stdout)
+
+  const noStem = checkJson((c) => { c.prototype.e2eFile = 'e2e/proto-28.spec.ts' })
+  assert.strictEqual(noStem.r.status, 1, 'an e2eFile without {stem} would make every prototype write to one shared file — check must exit 1: ' + JSON.stringify(noStem.r))
+  assert.ok(Array.isArray(noStem.findings) && noStem.findings.length === 1 && noStem.findings[0].key === 'prototype.e2eFile',
+    'check must report exactly one finding keyed prototype.e2eFile: ' + noStem.r.stdout)
+  assert.ok(noStem.findings[0].message.includes('{stem}'),
+    'the finding must name the missing {stem} placeholder so the remedy is discoverable: ' + noStem.findings[0].message)
+
+  const noRun = checkJson((c) => { delete c.prototype.e2eRun })
+  assert.strictEqual(noRun.r.status, 1, 'an undeclared e2eRun is a finding — the tests-derived mark cannot run the tests without it: ' + JSON.stringify(noRun.r))
+  assert.ok((noRun.findings || []).some((f) => f.key === 'prototype.e2eRun'), 'check must name prototype.e2eRun: ' + noRun.r.stdout)
+
+  const badPicture = checkJson((c) => { c.prototype.picture = 'node x.js {out}' })
+  assert.strictEqual(badPicture.r.status, 1, 'a picture command with no {url} cannot make a picture of the page — check must exit 1: ' + JSON.stringify(badPicture.r))
+  const pf = (badPicture.findings || []).find((f) => f.key === 'prototype.picture')
+  assert.ok(pf && pf.message.includes('{url}'), 'check must name prototype.picture and the missing {url}: ' + badPicture.r.stdout)
+
+  const signedIn = checkJson((c) => { c.prototype.storageState = 'e2e/.auth/user.json' })
+  fs.mkdirSync(path.join(signedIn.dir, 'e2e/.auth'), { recursive: true })
+  fs.writeFileSync(path.join(signedIn.dir, 'e2e/.auth/user.json'), '{"cookies":[],"origins":[]}\n')
+  execFileSync('git', ['-C', signedIn.dir, 'add', '-f', '--', 'e2e/.auth/user.json'], { encoding: 'utf8' })
+  execFileSync('git', ['-C', signedIn.dir, 'commit', '-q', '-m', 'track a sign-in'], { encoding: 'utf8' })
+  const tracked = bare(signedIn.dir, ['check', '--json'])
+  assert.strictEqual(tracked.status, 0,
+    'storageState is no longer a plugin key — a tracked file under it must not fail the check: ' + JSON.stringify(tracked))
+  assert.deepStrictEqual(JSON.parse(tracked.stdout).findings, [], 'no storageState finding may remain: ' + tracked.stdout)
 })
 
 test('AC-20260928-01-3: the bare run on a host with no design/prototypes/<stem>/ prints state OPEN, a Step line, and a states.json template', () => {
@@ -182,7 +225,7 @@ test('AC-20260928-01-5: the bare ROUND run reports the dev server unreachable, p
     'no pin-ready line may be printed while the dev server is unreachable (D4): ' + r.stdout)
 })
 
-test('AC-20260928-01-5: the bare ROUND run prints the pin-ready line, one route line per states.json route, the tailscale line, and the approve reply line when prototype.url is reachable', () => {
+test('AC-20260928-01-5: the bare ROUND run prints the pin-ready line, one route line per states.json route, the tailscale line, and the approve-to-write-the-contract reply line when prototype.url is reachable', () => {
   const dir = setupHost()
   advanceToRound(dir)
   const fileUrl = 'file://' + path.join(dir, 'docs/roadmap/28-functional-prototype.md')
@@ -195,8 +238,8 @@ test('AC-20260928-01-5: the bare ROUND run prints the pin-ready line, one route 
     'one "route:" line per states.json route, listing its declared states, must be printed (D4): ' + r.stdout)
   assert.match(r.stdout, /tailscale serve --bg/,
     'the optional Share line must name "tailscale serve --bg" verbatim, printed only, never run (D4): ' + r.stdout)
-  assert.match(r.stdout, /Reply `approve` to freeze/,
-    'the fixed reply line must be printed verbatim so the session knows how to end the round (D4): ' + r.stdout)
+  assert.match(r.stdout, /Reply `approve` to write the contract; anything else is a change for this session to apply on proto\/28-functional-prototype, then:/,
+    'the fixed reply line must be printed verbatim (specs/20261007/01 D7) so the session knows how to end the round and that approve writes the contract: ' + r.stdout)
 })
 
 test('AC-20260928-01-6: --mark round-done appends a round entry carrying the pins added since the last round', () => {
@@ -245,7 +288,7 @@ test('AC-20260928-01-6: --mark approved refuses naming round-done when no round 
     'the refusal must name round-done as the missing precondition: ' + r.stderr)
 })
 
-test('AC-20260928-01-6: --mark approved is accepted after a round and the next bare run reports state APPROVED with the freeze step naming --mark frozen', () => {
+test('AC-20260928-01-6: --mark approved is accepted after a round and the next bare run reports state APPROVED with the write-the-contract step naming --mark contracted', () => {
   const dir = setupHost()
   advanceToRound(dir)
   const rd = mark(dir, 'round-done')
@@ -259,10 +302,12 @@ test('AC-20260928-01-6: --mark approved is accepted after a round and the next b
   const next = bare(dir)
   assert.strictEqual(next.status, 0, JSON.stringify(next))
   assert.match(next.stdout, /state:\s*APPROVED/, 'once approved, every subsequent bare run must report state APPROVED: ' + next.stdout)
-  assert.match(next.stdout, /## Step: freeze\n/,
-    'the APPROVED step must print the freeze step (specs/20260928/02 D3) — without it the session has no way from approve to the contract: ' + next.stdout)
-  assert.match(next.stdout, /\nThen:\n\s+node \S+ \S+ --mark frozen/,
-    'the APPROVED step must name --mark frozen as its Then: line — without it the session cannot tell which mark freezes the prototype: ' + next.stdout)
+  assert.match(next.stdout, /## Step: write the behaviour contract\n/,
+    'the APPROVED step must print the write-the-contract step (specs/20261007/01 D7) — without it the session has no way from approve to the contract: ' + next.stdout)
+  assert.match(next.stdout, /Read only: pins\.json, states\.json/,
+    'the APPROVED step must name the two files it reads so the session reads nothing else: ' + next.stdout)
+  assert.match(next.stdout, /\nThen:\n\s+node \S+ \S+ --mark contracted/,
+    'the APPROVED step must name --mark contracted as its Then: line — without it the session cannot tell which mark writes the contract: ' + next.stdout)
 })
 
 // Direct fix 2026-10-05: every step keeps the session in the main checkout (`--root .`) while

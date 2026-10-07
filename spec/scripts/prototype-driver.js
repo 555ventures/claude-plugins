@@ -1,18 +1,24 @@
 #!/usr/bin/env node
-// prototype-driver.js <brief path> [--root <dir>] [--state]
-// prototype-driver.js <brief path> [--root <dir>] --mark opened|round-done|approved|contracted|tests-derived|closed
-// prototype-driver.js <brief path> [--root <dir>] serve --port <n>
-// prototype-driver.js <brief path> [--root <dir>] check [--json]
+// prototype-driver.js <idea in words | brief path | stem> [--stem <name>] [--root <dir>] [--state]
+// prototype-driver.js <idea | brief path | stem> [--stem <name>] [--root <dir>] --mark opened|round-done|approved|contracted|tests-derived|closed
+// prototype-driver.js <idea | brief path | stem> [--root <dir>] serve --port <n>
+// prototype-driver.js <idea | brief path | stem> [--root <dir>] check [--json]
 // prototype-driver.js check [--root <dir>] [--json]   (brief-less: doctor check 23's own
 //   invocation has no brief — a host-wide config check needs none)
 //
 // WHY: specs/20260928/01-the-prototype-command-and-the-pin-overlay.md D2-D5/D8, reshaped by
-// specs/20261007/01-approve-writes-a-behaviour-contract.md D2-D9 — /spec:prototype derives
+// specs/20261007/01-approve-writes-a-behaviour-contract.md D2-D9 and
+// specs/20261007/02-the-prototype-opens-from-words-a-brief-or-a-stem.md D1-D4 — /spec:prototype derives
 // OPEN -> ROUND -> APPROVED -> TESTS -> CONTRACTED -> CLOSED from design/prototypes/<stem>/
 // status.json plus disk and the host's declared `prototype` config block
 // (spec/templates/grounding-contract.md § Prototype), the way genesis-driver.js and
-// mocks-driver.js derive their own state machines. The brief STEM is the brief path's basename
-// without extension; branch `proto/<stem>`; worktree `.claude/worktrees/proto-<stem>` (created
+// mocks-driver.js derive their own state machines. The first argument takes three shapes, tried in
+// order: a brief (an existing .md file under --root; stem = its basename without extension), a stem
+// (design/prototypes/<arg>/status.json exists; brief and idea read from it), else words (the
+// argument is the idea; the stem is its slug cut to 48 characters at a `-`, printed as a 📌
+// auto-pick the user may rename once with --stem before --mark opened; brief = n/a). `--mark
+// opened` writes status.input = { kind, brief, idea }. The brief's `Lane:` header is never read.
+// Every printed `node <driver> <arg>` line echoes the stem once opened. Branch `proto/<stem>`; worktree `.claude/worktrees/proto-<stem>` (created
 // through merge-back.sh create, which owns the worktree path and the .worktreeinclude manifest);
 // status/pins/states/contract all live under `design/prototypes/<stem>/` in the MAIN working tree,
 // never on the prototype branch. The contract's step primitives (pictures, contract.json, test
@@ -63,7 +69,8 @@
 //      found nothing (including when the `prototype` block is absent).
 //   1  `check` found finding(s) (one line per finding on stdout, or `--json` with a `findings`
 //      array).
-//   2  usage error, a missing `prototype` config block (naming `prototype`), a refused `--mark`
+//   2  usage error (an idea with no letter or digit, an invalid or too-late `--stem`, `--stem` on a
+//      brief or stem argument), a missing `prototype` config block (naming `prototype`), a refused `--mark`
 //      precondition (stale branch, empty states.json, missing overlay import at round-done,
 //      unapproved or already-contracted prototype, no behaviour pins, an undeclared
 //      picture/e2eList/e2eRun, a failed or non-PNG picture, a test file missing, uncommitted, not
@@ -99,15 +106,21 @@ function withoutFlagPair(arr, name) {
 }
 
 if (argv.length === 0) {
-  die('usage: prototype-driver <brief path> [--root <dir>] [--state] [--mark opened|round-done|approved|contracted|tests-derived|closed] [serve --port <n>] [check [--json]] | prototype-driver check [--root <dir>] [--json]')
+  die('usage: prototype-driver <idea in words | brief path | stem> [--stem <name>] [--root <dir>] [--state] [--mark opened|round-done|approved|contracted|tests-derived|closed] [serve --port <n>] [check [--json]] | prototype-driver check [--root <dir>] [--json]')
 }
 // `check` is the one subcommand doctor check 23 invokes with no brief (a host-wide config check
 // has no brief to derive a stem/branch/worktree from) — every other form still needs one.
 const briefLess = argv[0] === 'check'
-const briefPath = briefLess ? null : argv[0]
+const inputArg = briefLess ? null : argv[0]
 let rest = briefLess ? argv.slice(0) : argv.slice(1)
 const root = path.resolve(flagArg(rest, '--root') || process.cwd())
 rest = withoutFlagPair(rest, '--root')
+const stemFlagGiven = rest.includes('--stem')
+const stemFlag = flagArg(rest, '--stem')
+rest = withoutFlagPair(rest, '--stem')
+if (stemFlagGiven && (stemFlag === undefined || stemFlag === null || stemFlag.startsWith('--'))) {
+  die('--stem needs a name — remedy: --stem <name> (lowercase letters, digits and `-`, at most 48 characters)')
+}
 
 if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
   die('--root ' + root + ' is not a directory — remedy: pass a real project root, or omit --root to use the current directory')
@@ -127,7 +140,7 @@ function loadConfig() {
 
 function requirePrototypeConfig(cfg) {
   if (!cfg.prototype) {
-    die('no "prototype" config block in ' + CONFIG_RELPATH + ' — remedy: declare it (spec/templates/grounding-contract.md § Required config keys), then run /spec:doctor')
+    die('no "prototype" config block in ' + CONFIG_RELPATH + ' — the block declares how a throwaway build of this app runs: where it answers (url), where the pin overlay goes (overlay), how its pictures and contract tests are made (picture, e2eFile, e2eList, e2eRun); remedy: declare it (spec/templates/grounding-contract.md § Prototype), then run /spec:doctor')
   }
 }
 
@@ -175,18 +188,84 @@ if (rest[0] === 'check') cmdCheck(rest.slice(1))
 
 // Every other subcommand needs a brief path — `check` above is the sole brief-less form.
 if (briefLess) {
-  die('usage: prototype-driver check [--root <dir>] [--json] — every other subcommand needs a brief path: prototype-driver <brief path> [--root <dir>] ...')
+  die('usage: prototype-driver check [--root <dir>] [--json] — every other subcommand needs an idea, a brief path or a stem: prototype-driver <idea | brief path | stem> [--root <dir>] ...')
 }
 
 // ---------------------------------------------------------------------------
 // Derived paths (D2) — all on the MAIN tree, never the prototype branch.
 // ---------------------------------------------------------------------------
-const stem = path.basename(briefPath, path.extname(briefPath))
+const STEM_RE = /^[a-z0-9][a-z0-9-]{0,47}$/
+function slugOf(text) {
+  const slug = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  if (slug.length <= 48) return slug
+  const cut = slug.slice(0, 48)
+  if (slug[48] === '-') return cut
+  const at = cut.lastIndexOf('-')
+  return (at > 0 ? cut.slice(0, at) : cut).replace(/-+$/, '')
+}
+function statusOfStem(s) {
+  try { return JSON.parse(fs.readFileSync(path.join(root, 'design/prototypes', s, 'status.json'), 'utf8')) } catch { return null }
+}
+// The stem a words idea was opened under, if any — the stem is fixed from `--mark opened` on.
+function openedStemFor(idea) {
+  let names = []
+  try { names = fs.readdirSync(path.join(root, 'design/prototypes')) } catch { return null }
+  for (const n of names) {
+    const st = statusOfStem(n)
+    if (st && st.marks && st.marks.opened && st.input && st.input.kind === 'words' && st.input.idea === idea) return n
+  }
+  return null
+}
+function resolveInput(arg) {
+  // (a) brief — an existing .md file against --root.
+  const abs = path.resolve(root, arg)
+  let isBrief = false
+  try { isBrief = abs.endsWith('.md') && fs.statSync(abs).isFile() } catch { isBrief = false }
+  if (isBrief) {
+    const base = path.basename(abs, path.extname(abs))
+    return { kind: 'brief', stem: base, briefRel: path.relative(root, abs).split(path.sep).join('/'), idea: null }
+  }
+  // (b) stem — design/prototypes/<arg>/status.json exists.
+  const st = STEM_RE.test(arg) ? statusOfStem(arg) : null
+  if (st) {
+    return { kind: 'stem', stem: arg, briefRel: st.input && st.input.brief ? st.input.brief : null,
+      idea: st.input && typeof st.input.idea === 'string' ? st.input.idea : null, storedBrief: st.brief }
+  }
+  // (c) words.
+  const slug = slugOf(arg)
+  if (slug === '') die('usage: give the idea in a few words, a brief path, or a prototype stem')
+  return { kind: 'words', stem: slug, briefRel: null, idea: arg }
+}
+const input = resolveInput(inputArg)
+if (stemFlagGiven) {
+  if (input.kind === 'words') {
+    const fixed = openedStemFor(input.idea)
+    if (fixed && fixed !== stemFlag) {
+      die('the stem is fixed once opened — re-open with ' + fixed)
+    }
+    if (!STEM_RE.test(stemFlag)) {
+      die('--stem ' + JSON.stringify(stemFlag) + ' is not a valid stem — remedy: --stem <name> matching ^[a-z0-9][a-z0-9-]{0,47}$ (lowercase letters, digits and `-`)')
+    }
+    input.stem = stemFlag
+  } else {
+    const st = statusOfStem(input.stem)
+    if (st && st.marks && st.marks.opened) die('the stem is fixed once opened — re-open with ' + input.stem)
+    die('--stem applies to the words shape only — remedy: drop --stem, or pass the idea in words instead of ' + inputArg)
+  }
+}
+if (input.kind === 'words') {
+  const taken = statusOfStem(input.stem)
+  if (taken && !(taken.input && taken.input.idea === input.idea)) {
+    die('the stem ' + input.stem + ' already belongs to another prototype — remedy: re-run with --stem <name> for a new name, or pass the stem ' + input.stem + ' to re-open it')
+  }
+}
+const stem = input.stem
 // A brief id is NN plus an optional letter (04, 04a) — spec-status.js's normBrief shape. Taking the
-// digits alone stamps a lettered brief with its neighbour's id.
+// digits alone stamps a lettered brief with its neighbour's id. A words prototype has no brief: n/a.
 const briefNumMatch = stem.match(/^(\d+[a-z]?)(?:-|$)/)
-const brief = briefNumMatch ? briefNumMatch[1] : stem
-const briefSlug = stem.replace(/^\d+[a-z]?-/, '')
+const brief = input.kind === 'words' ? 'n/a'
+  : input.kind === 'stem' ? (input.storedBrief || 'n/a')
+    : (briefNumMatch ? briefNumMatch[1] : stem)
 const branch = 'proto/' + stem
 const worktreeName = 'proto-' + stem
 const worktreeRel = '.claude/worktrees/' + worktreeName
@@ -209,10 +288,20 @@ const proto = cfg.prototype
 // ---------------------------------------------------------------------------
 // status.json / states.json / pins.json I/O.
 // ---------------------------------------------------------------------------
+// The argument every printed `node <driver> <arg>` line carries: the stem once opened (whatever
+// shape opened it), before that the shape's own argument (words quoted, plus --stem when chosen).
+let lastStatus = null
+function shellQuote(text) { return '"' + text.replace(/(["\\$`])/g, '\\$1') + '"' }
+function argText(status) {
+  const st = status === undefined ? lastStatus : status
+  if (st && st.marks && st.marks.opened) return stem
+  if (input.kind === 'words') return shellQuote(input.idea) + (stemFlagGiven ? ' --stem ' + stem : '')
+  return inputArg
+}
 function loadStatus() {
   if (!fs.existsSync(statusPath)) return null
   try {
-    return JSON.parse(fs.readFileSync(statusPath, 'utf8'))
+    return (lastStatus = JSON.parse(fs.readFileSync(statusPath, 'utf8')))
   } catch (e) {
     die(statusRel + ' is not valid JSON (' + e.message + ') — remedy: restore it from git history, or delete it and re-run --mark opened')
     return null // unreachable
@@ -236,6 +325,7 @@ function appAddress(status) {
 }
 
 function saveStatus(status) {
+  lastStatus = status
   fs.mkdirSync(designDir, { recursive: true })
   status.lastUpdated = nowIso()
   fs.writeFileSync(statusPath, JSON.stringify(status, null, 2) + '\n')
@@ -317,7 +407,7 @@ function deriveState(status) {
 
 function printCheckpoint(prevState, nextState) {
   writeOut(1, '✅ checkpoint — prototype state saved (' + prevState + ' → ' + nextState +
-    '); safe to /clear and re-run /spec:prototype ' + briefPath + '\n')
+    '); safe to /clear and re-run /spec:prototype ' + argText() + '\n')
   process.exit(0)
 }
 
@@ -441,6 +531,9 @@ function cmdMarkOpened() {
   const status = existingStatus || {}
   status.schemaVersion = 1
   status.brief = brief
+  status.input = existingStatus && existingStatus.input
+    ? existingStatus.input
+    : { kind: input.kind, brief: input.briefRel, idea: input.idea }
   status.stem = stem
   status.branch = branch
   status.worktree = worktreeRel
@@ -584,7 +677,7 @@ function cmdMarkContracted() {
 
   // D4(6): contract.json — every pin as a record, tests null until tests-derived.
   contractLib.writeContract({
-    designDir, stem, brief: status.brief || brief, idea: status.idea === undefined ? null : status.idea,
+    designDir, stem, brief: status.brief || brief, idea: status.input && typeof status.input.idea === 'string' ? status.input.idea : null,
     approvedAt: status.marks.approved, base: status.base, viewport, routes: pictured.routes,
     pins: pins.map((p) => ({
       id: p.id, kind: p.kind, screen: p.screen, state: p.state,
@@ -854,7 +947,7 @@ function cmdServe(args) {
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
       die('port ' + port + ' is already in use — stop whatever is holding it (e.g. `lsof -i :' + port +
-        '`), then re-run: node ' + driverAbs + ' ' + briefPath + ' serve --port ' + port)
+        '`), then re-run: node ' + driverAbs + ' ' + argText(loadStatus()) + ' serve --port ' + port)
     }
     die('serve --port ' + port + ' failed: ' + err.message)
   })
@@ -873,13 +966,16 @@ function printOpenStep() {
     routes: { '/example': { default: '/example' } },
   }, null, 2)
   const lines = []
-  lines.push('[prototype-driver] state: OPEN  brief: ' + briefPath)
+  if (input.kind === 'words' && !stemFlagGiven) {
+    lines.push('📌 Auto-picked stem ' + stem + ' — from your words (veto: re-run with --stem <name>)')
+  }
+  lines.push('[prototype-driver] state: OPEN  prototype: ' + stem)
   lines.push('## Step: author states.json, then --mark opened')
   lines.push('Author ' + statesRel + ' with at least one route carrying at least one state:')
   lines.push(template)
   lines.push('The overlay import is wired in the ROUND step, once the worktree exists.')
   lines.push('Then:')
-  lines.push('  node ' + driverAbs + ' ' + briefPath + ' --mark opened')
+  lines.push('  node ' + driverAbs + ' ' + argText() + ' --mark opened')
   writeOut(1, lines.join('\n') + '\n')
   process.exit(0)
 }
@@ -894,7 +990,7 @@ function printRoundStep(status) {
   const roundNum = (status.rounds || []).length + 1
   const statesDoc = loadStatesOrNull()
   const lines = []
-  lines.push('[prototype-driver] state: ROUND  brief: ' + briefPath + '  round: ' + roundNum)
+  lines.push('[prototype-driver] state: ROUND  prototype: ' + stem + '  round: ' + roundNum)
   lines.push('## Step: pin round ' + roundNum + ' on ' + branch)
   lines.push('Read only: ' + pinsRel + ', ' + statesRel)
   if (!status.wiring) {
@@ -904,7 +1000,7 @@ function printRoundStep(status) {
   const address = appAddress(status)
   lines.push('Session: in ' + worktreeRel + ', start the dev server in the background (tracked): ' +
     (address.port ? 'PORT=' + address.port + ' ' : '') + (cfg.runtime && cfg.runtime.bootCommand))
-  lines.push('Session: start the pin endpoint in the background (tracked): node ' + driverAbs + ' ' + briefPath + ' serve --port ' + status.pinsPort)
+  lines.push('Session: start the pin endpoint in the background (tracked): node ' + driverAbs + ' ' + argText() + ' serve --port ' + status.pinsPort)
   const reachable = probeUrl(address.url)
   let tailscalePort = ''
   try { tailscalePort = new URL(address.url).port } catch { tailscalePort = '' }
@@ -920,20 +1016,20 @@ function printRoundStep(status) {
   }
   lines.push('Share (only when someone else must see it): tailscale serve --bg ' + (tailscalePort || '<port>'))
   lines.push('Reply `approve` to write the contract; anything else is a change for this session to apply on ' + branch + ', then:')
-  lines.push('  node ' + driverAbs + ' ' + briefPath + ' --mark round-done')
+  lines.push('  node ' + driverAbs + ' ' + argText() + ' --mark round-done')
   lines.push('Then (only on the literal `approve`):')
-  lines.push('  node ' + driverAbs + ' ' + briefPath + ' --mark approved')
+  lines.push('  node ' + driverAbs + ' ' + argText() + ' --mark approved')
   writeOut(1, lines.join('\n') + '\n')
   process.exit(0)
 }
 
 function printApprovedStep() {
   const lines = []
-  lines.push('[prototype-driver] state: APPROVED  brief: ' + briefPath)
+  lines.push('[prototype-driver] state: APPROVED  prototype: ' + stem)
   lines.push('## Step: write the behaviour contract')
   lines.push('Read only: pins.json, states.json')
   lines.push('Then:')
-  lines.push('  node ' + driverAbs + ' ' + briefPath + ' --mark contracted')
+  lines.push('  node ' + driverAbs + ' ' + argText() + ' --mark contracted')
   writeOut(1, lines.join('\n') + '\n')
   process.exit(0)
 }
@@ -947,7 +1043,7 @@ function printTestsStep() {
   const st = loadStatus() || {}
   const e2eFile = e2eFileOf()
   const lines = []
-  lines.push('[prototype-driver] state: TESTS  brief: ' + briefPath)
+  lines.push('[prototype-driver] state: TESTS  prototype: ' + stem)
   lines.push('## Step: derive one end-to-end test per behaviour pin')
   lines.push('Read only: ' + contractRel + ', ' + pinsRel)
   for (const p of (contract.pins || []).filter((x) => x.kind === 'behaviour')) {
@@ -961,7 +1057,7 @@ function printTestsStep() {
   lines.push('Session: write one test per line above in the prototype worktree and commit the file on ' + branch +
     '; each test must pass against the prototype and fail against ' + (st.base || contract.base))
   lines.push('Then:')
-  lines.push('  node ' + driverAbs + ' ' + briefPath + ' --mark tests-derived')
+  lines.push('  node ' + driverAbs + ' ' + argText() + ' --mark tests-derived')
   writeOut(1, lines.join('\n') + '\n')
   process.exit(0)
 }
@@ -974,7 +1070,7 @@ function printContractedStep() {
   lines.push('[prototype-driver] state: CONTRACTED  prototype: ' + stem)
   lines.push('Read only: ' + contractRel)
   lines.push('Next: /spec:plan ' + contractRel)
-  lines.push('Close (when every spec citing ' + stem + ' is done, or to abandon): node ' + driverAbs + ' ' + briefPath + ' --root ' + root + ' --mark closed')
+  lines.push('Close (when every spec citing ' + stem + ' is done, or to abandon): node ' + driverAbs + ' ' + argText() + ' --root ' + root + ' --mark closed')
   writeOut(1, lines.join('\n') + '\n')
   process.exit(0)
 }
@@ -984,7 +1080,7 @@ function printContractedStep() {
 // ---------------------------------------------------------------------------
 function printClosedStep() {
   const lines = []
-  lines.push('[prototype-driver] state: CLOSED  brief: ' + briefPath)
+  lines.push('[prototype-driver] state: CLOSED  prototype: ' + stem)
   lines.push('Read only: ' + contractRel)
   const specStatusPath = path.join(__dirname, 'spec-status.js')
   const r = spawnSync(process.execPath, [specStatusPath, '--root', root, '--next'], { encoding: 'utf8' })

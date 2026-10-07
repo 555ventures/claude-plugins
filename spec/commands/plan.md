@@ -28,11 +28,9 @@ path to a roadmap planning brief (`docs/roadmap/NN-*.md`).
   Contracts as Assumptions, never spiked. Every spec this session produces gets
   `brief: NN` in frontmatter (that stamp is how roadmap status is derived); an ad-hoc spec gets `brief: n/a`. The
   brief's Out of scope section is binding; a `surfaces` block is structure only — labels and journey edges, never
-  checked against approval. A `Lane: behaviour` brief (absent = structural) STOPs: run `/spec:prototype <brief>` instead
-  — it carries no plan document, the freeze writes its spec.
+  checked against approval.
 - **Tier:** per core § Tiers — state it and why. Work failing core § Pipeline Entry gets no
-  spec: say so and make it on the direct lane when it qualifies; a behaviour change names its
-  lane and stops; a structural change gets a spec whatever its size.
+  spec: say so and make it on the direct lane when it qualifies; a structural change gets a spec whatever its size.
 - **Explore before asking.** Ground every claim in current code (parallel Explore agents where
   the surface is wide; `docs/canonical/{area}.md` when present). Run the pre-emptive lookups
   the host's pipeline rules § Planning declares (Context7 for third-party APIs the spec relies

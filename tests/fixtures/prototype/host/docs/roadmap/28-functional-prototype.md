@@ -1,6 +1,6 @@
 # 28. Functional prototype
 
-Lane: behaviour
+Lane: structural
 
 Synthetic brief file — tests/fixtures/prototype/host (spec 20260928/01). The stem
 `28-functional-prototype` (this file's basename without extension) names the branch

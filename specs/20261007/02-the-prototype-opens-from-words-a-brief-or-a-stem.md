@@ -1,6 +1,7 @@
 ---
 date: 2026-10-07
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: prototype
 breaking: false
@@ -9,6 +10,7 @@ depended_on_by: [specs/20261007/03-plan-cites-the-build-replays-and-status-deriv
 brief: 28a
 spiked: 2026-10-07
 open_markers: 0
+diff_base: 4a512bc8809f3d33069651f5667e783c370e8bae
 ---
 
 # The prototype opens from words, a brief or a stem
@@ -125,6 +127,19 @@ for compatibility (a token that lies about what it holds). No `SHALL CONTINUE TO
 shape keeps its own citing tests in `prototype-driver.test.js`.
 
 Collision closure (2026-10-07, literals `Lane: behaviour`, `{brief}`): every hit outside the File Plan is a prose mention, a file spec 01 deletes before this spec builds, or an unrelated meaning (`{brief}` in `tests/queue/queue-overlay.test.js`, `tests/build/build-driver.fixtures.js`) — waived.
+
+Build departures (folded 2026-10-07): A3 held only in part — `fixture.js`'s `bare()`/`mark()`
+hardcode the brief path, so `entry.test.js` drives the driver through a local `drive()` over
+`runNode` and reuses the fixture's host helpers; `fixture.js` is untouched. D1 left two cases
+unstated, both now refusals (exit 2, remedy named): a words idea whose slug equals a stem already
+opened from a different idea, and `--stem` on a brief or stem argument. D3 needed no code —
+`e2eFileOf()` already substituted `{stem}` and nothing substituted `{brief}`. `prototype.md`'s
+driver-loop and checkpoint lines rename `<brief path>` to `<arg>`, beyond D5's list, so they stop
+describing brief-only input. Review (rv_6b0045935384) fixed two hard findings in round 1: the D4
+refusal had cited `§ Required config keys` instead of the locked `§ Prototype`, and `shellQuote`
+inserted no backslashes, so an idea with `"`, `$` or a backtick printed a `--mark opened` line
+that opened a different stem; both now carry regression assertions proven red on the pre-fix
+driver.
 
 ## Canonical Delta
 

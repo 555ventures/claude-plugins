@@ -130,19 +130,20 @@ init/first-release time — the plugin never invents deploy mechanics.
 ## Prototype (optional — present when the host declares a functional-prototype path)
 
 `prototype` — the grounding `/spec:prototype` runs a throwaway branch against
-(specs/20260928/01-the-prototype-command-and-the-pin-overlay.md D1): `url` (the dev server's
-base URL, carrying `{port}` — the driver prints the port to boot on), `overlay` (the worktree-relative file the driver writes the pin overlay to; the
-host's dev entry imports it behind its own dev flag), `e2eFile` (a path template carrying
-`{brief}`, where the freeze stage's derived tests land), `e2eList` (a shell string carrying
-`{file}` that lists the tests in one file and exits 0), `export` (a non-empty array of git
-pathspec globs naming the data and API layer the freeze exports off the prototype branch),
-optional `dbCreate` / `dbDestroy` (shell strings run with cwd = the prototype worktree and env
-`PROTO_BRANCH`, `PROTO_WORKTREE`, `PROTO_BRIEF`), optional `gate` (the command the freeze runs
-on the prototype tree when the host `gateCommand` carries a `{testDirs}`/`{scopeDirs}`
-placeholder), optional `storageState` (a host-root-relative path to a Playwright storage-state file — one
-saved sign-in every capture loads, at the freeze and at the build's capture gate; absent = captures
-run signed out; never tracked by git). Absent block = the host has never declared a prototype path — the driver refuses
-naming this block and `/spec:doctor`.
+(specs/20261007/01-approve-writes-a-behaviour-contract.md D1): `url` (the dev server's base
+URL, carrying `{port}` — the driver prints the port to boot on), `overlay` (the
+worktree-relative file the driver writes the pin overlay to; the host's dev entry imports it
+behind its own dev flag), `e2eFile` (a path template carrying `{stem}`, where the contract's
+derived tests are written in the prototype worktree), `e2eList` (a shell string carrying
+`{file}` that lists the tests in one file and exits 0), `e2eRun` (a shell string carrying
+`{file}` that runs the tests in one file and exits 0 only when every test passes; it runs with
+`PROTO_URL` in its environment, the address of the app under test), `picture` (a shell string
+carrying `{url}`, `{out}`, `{width}` and `{height}` that writes one PNG of the page at `{url}`
+to `{out}`, however this stack makes a picture of a screen — signing in is its own business; run
+with cwd = the prototype worktree), optional `dbCreate` / `dbDestroy` (shell strings run with
+cwd = the prototype worktree and env `PROTO_BRANCH`, `PROTO_WORKTREE`, `PROTO_BRIEF`). Absent
+block = the host has never declared a prototype path — the driver refuses naming this block
+and `/spec:doctor`.
 
 ## Walkthrough (optional — present when the project reviews wireframes on the hosted service)
 

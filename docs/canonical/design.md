@@ -57,33 +57,26 @@ are a genesis artifact that walks the seed's beats against the real kit and rout
 JJ approves the designed set in Storybook; there is no client gate. Journey stories are frozen at
 approval and never gated later. (specs/20260926/06-the-approval-stop-and-the-roadmap.md D7)
 
-## Prototypes (specs/20260928/01, specs/20260928/02, specs/20261001/01, specs/20261005/05-derived-tests-ride-on-the-export-branch.md)
+## Prototypes (specs/20260928/01, specs/20261007/01-approve-writes-a-behaviour-contract.md)
 
-`/spec:prototype <brief>` runs a functional prototype on `proto/<stem>` in
-`.claude/worktrees/proto-<stem>`. The host declares a `prototype` config block (`url`,
-`overlay`, `e2eFile`, `e2eList`, `export`, optional `dbCreate`/`dbDestroy`/`gate`/`storageState`).
-`storageState` is one saved Playwright sign-in that every capture loads — at the freeze and at the
-build's capture gate; a missing, unreadable or stale one is a refusal naming the file, and
-`/spec:doctor` flags it when git tracks it. Rounds, pins
-and declared states live under `design/prototypes/<stem>/` on main; the data and API layer and the
-derived tests survive on `harden/<stem>`; nothing on `proto/*` is read after close. A pin is one record with an optional anchor whose id is the keyed owner chain plus an
-ordinal (`Row[w_01]<List<Screen#0`); the source location rides along as metadata only. The pin
-endpoint runs only during a round. A brief whose header says `Lane: behaviour` goes to this
-command instead of `/spec:plan`.
+`/spec:prototype` runs a functional prototype on `proto/<stem>` in
+`.claude/worktrees/proto-<stem>`. The host declares a `prototype` config block (`url`, `overlay`,
+`e2eFile` carrying `{stem}`, `e2eList`, `e2eRun`, `picture`, optional `dbCreate`/`dbDestroy`).
+Rounds, pins and declared states live under `design/prototypes/<stem>/` on main. A pin is one
+record with an optional anchor whose id is the keyed owner chain plus an ordinal
+(`Row[w_01]<List<Screen#0`); the source location rides along as metadata only. The pin endpoint
+runs only during a round.
 
-Freeze, on approve: the kit gates run green on the prototype tree → one capture per route × state
-keyed by kit-composite instance → `contract.json` → the session writes one derived e2e test per
-behaviour pin in the prototype worktree and commits the file on `proto/<stem>`; the mark refuses a
-copy left in the main working tree, an uncommitted file, and a reserved AC id the host runner (run
-in the worktree) does not list → `harden/<stem>` is created from `git diff base...proto -- <export
-globs>`, then gains the test file as a second commit, so the base branch never carries a derived
-test before its hardening spec merges → the generated behaviour-lane spec,
-whose tier is derived: every generated File Plan path is matched against the paths the host's
-pipeline rules § Risk Tiers spells as code; a match stops the mark until the user confirms the
-lock (`--tier critical`) or rules it not a risk change (`--tier standard`), and the spec's
-Rationale opens with the basis →
-`dbDestroy`, then the worktree and branch are deleted → one `stage: prototype` ledger row. The
-brief carries a `## Data/API sub-plan` block. `proto-capture.js --diff` is the one comparison.
+On approve the driver writes the behaviour contract: one picture per route × state through the
+host's own `picture` command (the driver checks only that each output is a PNG), then
+`contract.json` with every pin as a record. The session then writes one test per behaviour pin in
+the prototype worktree and commits it on `proto/<stem>`; the tests must be listed by `e2eList`
+and green under `e2eRun` against the prototype. The driver then copies the test file into
+`design/prototypes/<stem>/tests/`, appends one `stage: prototype` ledger row and queues the
+`/spec:plan <contract>` paste at the top. No gate runs on the prototype tree, nothing is
+exported, and no spec is generated. The worktree and branch stay until `--mark closed`, run by
+the review driver when the last citing spec closes, or by hand to abandon the idea.
+`/git:merge` refuses `proto/*` and names the contract.
 
 `prototype.url` may carry `{port}`. The prototype driver then keeps one app port per prototype
 (`appPort` in `status.json`) and the build driver one capture port per build

@@ -1,6 +1,6 @@
 ---
 date: 2026-10-07
-status: hardened
+status: done
 tier: critical
 area: prototype
 breaking: false
@@ -8,7 +8,9 @@ depends_on: []
 depended_on_by: [specs/20261007/02-the-prototype-opens-from-words-a-brief-or-a-stem.md, specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md]
 brief: 28a
 spiked: 2026-10-07
+build_base: main
 open_markers: 0
+diff_base: 639ae05b66a9da56ec35c2ed30552aca22248c65
 ---
 
 # Approve writes a behaviour contract
@@ -249,6 +251,27 @@ loop, `check`'s remaining findings) keeps its own citing test, and this spec's o
 close as its ACs describe new behaviour.
 
 Collision closure (2026-10-07, literals `harden`, `freeze`, `frozen`, `tests-derived`, `storageState`, `prototype.export`, `gate.log`): every hit outside the File Plan is a prose mention in `docs/adr`, `docs/roadmap`, `docs/canonical` (rewritten by the Canonical Delta) or a plugin changelog, a sibling test of the build or review driver that this spec does not change (`tests/build/build-driver-lane.test.js`, `tests/review/harden-branch-cleanup.test.js`, `tests/prototype/capture-port.test.js`), or an unrelated meaning (`gate.log` in genesis) — waived; the `executes` hits on `fleet-reader.js` are suites that never assert `SPEC_STAGES`.
+
+Build deviations (folded at close, 2026-10-07; one-offs, none recurring-shaped — Gotchas at cap):
+- Fixture host: `export` dropped, so the unchanged `AC-20260928-01-3`…`-6` and cross-worktree
+  cases were red on the pre-image until D2 landed (verified green with `export` re-added); `url`
+  became `http://127.0.0.1:{port}` so the driver allocates `appPort`; `gateCommand` became `true`
+  (its only target `gate.js` is deleted). `authorDerivedTests(dir, opts)` writes the test file
+  directly because `contract.tests` is null until `tests-derived`. Stub side channels:
+  `picture-calls.jsonl` at the host root, `e2e-env.txt` beside the log.
+- `setupHost` commits a `.gitignore` for `db-created` and `src/proto-*.js` (a glob, because a
+  literal `proto-overlay.js` line made `.gitignore` count as an overlay importer) so
+  `--mark closed` can remove the worktree. A real host has no such ignore and gets the
+  dirty-worktree refusal once per close — queued as a follow-up.
+- `removeProtoWorktreeAndBranch` gained an optional `rerun` argument for D9's `then re-run
+  --mark closed` text; `tests-derived` records `status.ledgered` right after the append so a crash
+  before `marks.testsDerived` cannot duplicate the row; `check --json` prints `{"findings":[]}` on
+  a clean host (AC-1).
+- The doctrine worker ran `git rm` on the File Plan's own DELETE row (worker git ban breach,
+  effect limited to staging that deletion). The orchestrator applied the four `other` rows
+  directly and tagged 22 done-spec criteria `[retired: …]`, matching the lock-time set exactly.
+- Review: one hard finding fixed (a `copyContractTests` refusal without a remedy clause); one soft
+  advisory left (a fixture comment in `destroy-db.js` cites the deleted `freeze.test.js`).
 
 ## Canonical Delta
 

@@ -190,20 +190,24 @@ export intact.
   line containing `prototype.storageState (e2e/.auth/user.json) is tracked by git`, and make
   `check --json` print a `findings` entry whose `key` is `prototype.storageState`
   → writes tests/prototype/capture-sign-in.test.js
+  [retired: specs/20261007/01-approve-writes-a-behaviour-contract.md — the freeze (gate, capture, export, generated spec, sign-in) is retired; approve writes a behaviour contract instead]
 - **AC-20261001-01-8**: WHEN `prototype.storageState` is `e2e/.auth/user.json` and that file is
   either absent from disk or present but untracked THE SYSTEM SHALL make `check` exit 0 and
   print nothing (both cases asserted) → writes tests/prototype/capture-sign-in.test.js
+  [retired: specs/20261007/01-approve-writes-a-behaviour-contract.md — the freeze (gate, capture, export, generated spec, sign-in) is retired; approve writes a behaviour contract instead]
 - **AC-20261001-01-9**: WHEN `--mark tests-derived` runs with no `--tier` on the fixture host
   whose § Risk Tiers names only `src/auth/**` and `migrations/{up,down}.sql` THE SYSTEM SHALL
   write the generated spec with frontmatter `tier: standard`, a Rationale containing
   `Tier: standard — no File Plan path is named in the host's pipeline rules § Risk Tiers.`, and
   print `🚦 generated spec tier: standard (0 risk-listed paths)` → writes tests/prototype/freeze-tier.test.js
+  [retired: specs/20261007/01-approve-writes-a-behaviour-contract.md — the freeze (gate, capture, export, generated spec, sign-in) is retired; approve writes a behaviour contract instead]
 - **AC-20261001-01-10**: WHEN the fixture's § Risk Tiers also names `` `drizzle/*.sql` `` and
   `--mark tests-derived` runs with no `--tier` THE SYSTEM SHALL exit 2 with stderr containing
   `1 File Plan path named in .claude/rules/spec-pipeline.md § Risk Tiers:`, the line
   ``  drizzle/0001.sql ← `drizzle/*.sql` `` and `--tier critical`, write no generated spec file,
   keep `harden/28-functional-prototype` and the prototype worktree, and leave `--state` printing
   `TESTS` → writes tests/prototype/freeze-tier.test.js
+  [retired: specs/20261007/01-approve-writes-a-behaviour-contract.md — the freeze (gate, capture, export, generated spec, sign-in) is retired; approve writes a behaviour contract instead]
 - **AC-20261001-01-11**: WHEN that refused mark is re-run with `--tier critical` THE SYSTEM
   SHALL exit 0, write the generated spec with `tier: critical` and `status: hardened`, a
   Rationale containing ``Tier: critical because `drizzle/0001.sql` is named in the host's
@@ -211,29 +215,35 @@ export intact.
   `🚦 generated spec tier: critical (1 risk-listed path)`, reach `CLOSED`, and leave the spec
   accepted by `ac-matrix.js --lint` and `promise-sweep.js` (both exit 0)
   → writes tests/prototype/freeze-tier.test.js
+  [retired: specs/20261007/01-approve-writes-a-behaviour-contract.md — the freeze (gate, capture, export, generated spec, sign-in) is retired; approve writes a behaviour contract instead]
 - **AC-20261001-01-12**: WHEN the same one-hit fixture is marked with `--tier standard` THE
   SYSTEM SHALL write the generated spec with `tier: standard` and a Rationale containing
   ``Tier: standard — `drizzle/0001.sql` is named in the host's pipeline rules § Risk Tiers
   (`drizzle/*.sql`); ruled not a risk change by the user at freeze.``
   → writes tests/prototype/freeze-tier.test.js
+  [retired: specs/20261007/01-approve-writes-a-behaviour-contract.md — the freeze (gate, capture, export, generated spec, sign-in) is retired; approve writes a behaviour contract instead]
 - **AC-20261001-01-13**: WHEN § Risk Tiers names `` `./src/{db,auth}/schema.js` ``, `` `src/ui/` ``,
   `` `DROP TABLE` `` and `` `e2e/` `` in that order and the mark runs with no `--tier` THE SYSTEM
   SHALL refuse listing exactly three hits in File Plan row order —
   ``  src/db/schema.js ← `./src/{db,auth}/schema.js` ``, then ``  src/ui/a.js ← `src/ui/` ``,
   then ``  e2e/proto-28.smoke.spec.ts ← `e2e/` `` — under the header
   `3 File Plan paths named in` → writes tests/prototype/freeze-tier.test.js
+  [retired: specs/20261007/01-approve-writes-a-behaviour-contract.md — the freeze (gate, capture, export, generated spec, sign-in) is retired; approve writes a behaviour contract instead]
 - **AC-20261001-01-14**: WHEN the host's pipeline rules file is absent, and separately when it
   exists with no `## Risk Tiers` line, THE SYSTEM SHALL make `--mark tests-derived` exit 2 with
   stderr containing `cannot derive the generated spec's tier`, the rules path
   `.claude/rules/spec-pipeline.md` and `/spec:doctor`, and write no generated spec file (both
   cases asserted) → writes tests/prototype/freeze-tier.test.js
+  [retired: specs/20261007/01-approve-writes-a-behaviour-contract.md — the freeze (gate, capture, export, generated spec, sign-in) is retired; approve writes a behaviour contract instead]
 - **AC-20261001-01-15**: WHEN `--mark tests-derived --tier high` runs THE SYSTEM SHALL exit 2
   with stderr containing `--tier must be standard or critical` and create no
   `harden/28-functional-prototype` branch → writes tests/prototype/freeze-tier.test.js
+  [retired: specs/20261007/01-approve-writes-a-behaviour-contract.md — the freeze (gate, capture, export, generated spec, sign-in) is retired; approve writes a behaviour contract instead]
 - **AC-20261001-01-16**: WHEN the zero-hit fixture is marked with `--tier critical` THE SYSTEM
   SHALL write the generated spec with `tier: critical` and a Rationale containing
   `Tier: critical — declared at freeze; no File Plan path is named in the host's pipeline rules § Risk Tiers.`
   → writes tests/prototype/freeze-tier.test.js
+  [retired: specs/20261007/01-approve-writes-a-behaviour-contract.md — the freeze (gate, capture, export, generated spec, sign-in) is retired; approve writes a behaviour contract instead]
 - **AC-20261001-01-19**: WHEN no `prototype.storageState` is declared and the page sent to
   `http://localhost:3000/women` settles on `http://localhost:3000/login` THE SYSTEM SHALL name
   the new way out in the refusal: stderr contains `declare prototype.storageState`
@@ -243,11 +253,13 @@ export intact.
   the mark is re-run with `--tier critical` THE SYSTEM SHALL leave the spec's `tier: standard`
   line unchanged and print no line containing `generated spec tier`
   → writes tests/prototype/freeze-tier.test.js
+  [retired: specs/20261007/01-approve-writes-a-behaviour-contract.md — the freeze (gate, capture, export, generated spec, sign-in) is retired; approve writes a behaviour contract instead]
 - **AC-20261001-01-21**: WHEN AC 13's three-hit fixture is marked with `--tier critical` THE
   SYSTEM SHALL write a Rationale containing ``Tier: critical because `src/db/schema.js` is named
   in the host's pipeline rules § Risk Tiers (`./src/{db,auth}/schema.js`) and 2 more; the user
   confirmed the lock at freeze.`` and print `🚦 generated spec tier: critical (3 risk-listed paths)`
   → writes tests/prototype/freeze-tier.test.js
+  [retired: specs/20261007/01-approve-writes-a-behaviour-contract.md — the freeze (gate, capture, export, generated spec, sign-in) is retired; approve writes a behaviour contract instead]
 - **AC-20261001-01-17**: WHEN this repo's `.claude/spec.config.json` is read after the contract
   edit THE SYSTEM SHALL CONTINUE TO carry a `contractHash` equal to `spec-paths contract-hash`'s
   output (e.g. the first 12 hex characters of the SHA-256 of
@@ -258,6 +270,7 @@ export intact.
   pin, accepted by `ac-matrix.js --lint` and `promise-sweep.js` (e.g. the fixture host → exit 0,
   two AC bullets each ending `→ writes e2e/proto-28.smoke.spec.ts`)
   → reuses tests/prototype/freeze.test.js :: AC-20260928-02-9: the same mark writes
+  [retired: specs/20261007/01-approve-writes-a-behaviour-contract.md — the freeze (gate, capture, export, generated spec, sign-in) is retired; approve writes a behaviour contract instead]
 
 ## Assumptions (escalation triggers)
 

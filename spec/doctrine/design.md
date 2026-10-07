@@ -38,15 +38,13 @@ review — <link>`, then the fixed reply line, then **ends the turn**; the clien
 service (or the user's literal `approve` in terminal mode) is the only acceptance. A session
 never screenshots a screen to judge it in this doctrine's place.
 
-**A prototype is a branch of the product, not a second artifact.** `/spec:prototype <brief>`
-runs a functional prototype on `proto/<stem>`, built on top of the real kit and records — a
-behaviour-lane brief's product, not a wireframe. Its rounds, pins and declared states live under
-`design/prototypes/<stem>/` in the main working tree, never on the prototype branch itself:
-nothing on `proto/*` is read once the branch closes, so any file the freeze or a later build must
-still read has to already be on main, or exported to `harden/<stem>` (the data and API layer and
-the derived tests), before that happens (specs/20260928/01-the-prototype-
-command-and-the-pin-overlay.md D2/D6, ADR-0030 h;
-specs/20261005/05-derived-tests-ride-on-the-export-branch.md D3).
+**A prototype is a branch of the product, not a second artifact.** `/spec:prototype` runs a
+functional prototype on `proto/<stem>`, a reference and never a source: nothing on it is read by
+plan, build or review. Its rounds, pins, declared states and, after approve, its behaviour
+contract — pins as sentences, one picture per route × state, one end-to-end test per behaviour
+pin — live under `design/prototypes/<stem>/` in the main working tree; the worktree and branch
+stay until the last spec citing the stem is done
+(specs/20261007/01-approve-writes-a-behaviour-contract.md D4/D6/D9, ADR-0035).
 
 ## Design Authoring Contracts
 

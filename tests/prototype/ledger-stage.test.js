@@ -5,10 +5,9 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// specs/20260928/01-the-prototype-command-and-the-pin-overlay.md D10, AC-20260928-01-11 —
-// spec/scripts/fleet-reader.js's STAGES/SPEC_STAGES sets do not carry 'prototype' yet, so a
-// prototype-stage row is classified stage-unknown (never missing-spec, since the missing-spec
-// check only runs when stageOk) on the pre-image. Both halves of the AC are genuinely RED.
+// specs/20260928/01-the-prototype-command-and-the-pin-overlay.md D10 (a prototype row is a known
+// stage) and specs/20261007/01-approve-writes-a-behaviour-contract.md D8 (a prototype row names a
+// contract, never a spec: `prototype` is in STAGES and not in SPEC_STAGES).
 
 function makeRepo(root, name, rows) {
   const dir = path.join(root, name)
@@ -44,14 +43,16 @@ test('AC-20260928-01-11: a prototype-stage row carrying spec is not classified s
     'a well-formed prototype row (ts, stage, spec all present and valid) must classify fully in-shape: ' + JSON.stringify(repo))
 })
 
-test('AC-20260928-01-11: a prototype-stage row with no spec is listed under missing-spec', () => {
+test('AC-20261007-01-9: a prototype-stage contract row naming no spec is listed under neither stage-unknown nor missing-spec', () => {
   const root = tmpdir('fleet-proto')
   makeRepo(root, 'proto-repo-2', [
-    { ts: '2026-09-28T09:05:00.000Z', stage: 'prototype', brief: '28', rounds: 0 },
+    { ts: '2026-10-07T09:05:00.000Z', stage: 'prototype', stem: 'x', brief: 'n/a', contract: 'design/prototypes/x/contract.json', verdict: 'contracted' },
   ])
   const repo = driftFor(root, 'proto-repo-2')
-  assert.strictEqual(repo.drift['missing-spec'], 1,
-    'a prototype row with no `spec` field must be listed under missing-spec (D10: prototype is one of the SPEC_STAGES that requires it) — a still-zero count means the stage never reached the missing-spec check at all: ' + JSON.stringify(repo.drift))
+  assert.strictEqual(repo.drift['missing-spec'] || 0, 0,
+    'a prototype row names its contract, not a spec — a nonzero missing-spec count means every approved prototype is reported as drift in the fleet census because prototype is still a SPEC_STAGE: ' + JSON.stringify(repo.drift))
   assert.strictEqual(repo.drift['stage-unknown'] || 0, 0,
-    'the row\'s stage IS a known one (prototype) — it must never ALSO count as stage-unknown: ' + JSON.stringify(repo.drift))
+    'prototype is a known stage — it must never count as stage-unknown: ' + JSON.stringify(repo.drift))
+  assert.strictEqual(repo.inShape, 1,
+    'a well-formed contract row (ts, stage, verdict) must classify fully in-shape: ' + JSON.stringify(repo))
 })

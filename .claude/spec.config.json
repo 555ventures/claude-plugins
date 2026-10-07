@@ -1,6 +1,6 @@
 {
   "generatedBy": "spec@7.159.0",
-  "contractHash": "d02f63606dba",
+  "contractHash": "09b6aa256753",
   "gateCommand": "node --test --test-timeout=45000 --test-force-exit {testDirs}",
   "testCommand": "node --test --test-timeout=45000 --test-force-exit --test-reporter=spec --test-reporter-destination=stdout",
   "postGateCommand": "{testCommand}",

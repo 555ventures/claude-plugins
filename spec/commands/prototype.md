@@ -1,5 +1,5 @@
 ---
-description: Opens a throwaway worktree on proto/<brief stem> from the host's main branch, wires a dev-only pin overlay into the running app, iterates pin rounds across sessions until the user replies approve, then freezes — captures every route and state, derives one end-to-end test per behaviour pin, exports the data/API layer to harden/<stem>, writes the behaviour-lane spec, and deletes the worktree — driver-stepped, /clear-safe
+description: Opens a throwaway worktree on proto/<brief stem> from the host's main branch, wires a dev-only pin overlay into the running app, iterates pin rounds across sessions until the user replies approve, then writes a behaviour contract — every pin as a sentence, one picture per route × state, one end-to-end test per behaviour pin — queues the /spec:plan paste, and keeps the worktree until --mark closed — driver-stepped, /clear-safe
 argument-hint: <roadmap brief path — docs/roadmap/NN-*.md>
 ---
 
@@ -52,8 +52,7 @@ advances to `ROUND`.
 Until the overlay is wired, the step carries a `Session:` line asking for the import: a one-line
 `if (import.meta.env.DEV) import('./proto-overlay.js')` or the stack's own dev-only equivalent,
 committed on `proto/<stem>` — this session picks the line; `--mark round-done` refuses until
-some file in the worktree imports the overlay, and that file's import-only diff never reaches
-the generated spec.
+some file in the worktree imports the overlay.
 
 The driver's own printed step carries the two `Session:` lines to start in the background —
 the host's `runtime.bootCommand` inside the worktree (carrying the driver's port as `PORT=<n>`
@@ -63,7 +62,7 @@ past the round. Print the driver's step verbatim, including the `🎨 ready for 
 (or the `dev server is not answering` refusal) and the fixed reply line, then **end the turn**.
 
 JJ Alt+clicks elements in the running app; each pin lands in `pins.json` through the endpoint
-the driver just started. On the literal `approve` reply, run `--mark approved`. On anything
+the driver just started. On the literal `approve` reply (the driver's reply line: write the contract), run `--mark approved`. On anything
 else, treat it as a change to apply on `proto/<stem>` — ordinary commits on that branch, this
 session's git only — then run
 `--mark round-done` and re-enter the loop; a round that lands zero new pins still marks (it is
@@ -71,50 +70,45 @@ how "nothing more to change" gets recorded).
 
 ## APPROVED
 
-Read only: `design/prototypes/<stem>/pins.json`, `docs/design/approval.json` (or the kit
-directory when it is absent).
+Read only: `design/prototypes/<stem>/pins.json`, `design/prototypes/<stem>/states.json`.
 
-Run `node {driver} <brief path> --root . --mark frozen`. The driver refuses in order — not yet
-approved; no composites declared (the kit must exist first, brief 30); no behaviour pins (a
-prototype with none is the direct lane in disguise — mark a pin behaviour or close by hand); the
-kit gates red on `proto/<stem>` (`design/prototypes/<stem>/gate.log` names the failure);
-`prototype.gate` undeclared while `gateCommand` carries an unresolved placeholder; a capture
-child's own stderr — each refusal names its own remedy and writes nothing further. On success the
-driver has captured every declared route × state, written `contract.json`, and reserved this
-freeze's spec path and AC ids; it prints `(APPROVED → TESTS)` and advances. When `prototype.storageState` is declared the capture
-loads that saved sign-in and refuses naming the file when it is missing or stale; write it by
-signing in against the running prototype with the host's own Playwright sign-in setup (any port
-of the same host works).
+Run `node {driver} <brief path> --root . --mark contracted`. The driver refuses in order — not yet
+approved; no behaviour pins (a prototype that changed no behaviour is the direct lane — mark a pin
+behaviour or close with `--mark closed`); `states.json` unusable; `prototype.picture` undeclared;
+a picture command that fails or writes no PNG — each refusal names its own remedy and writes
+nothing further. On success the driver has pictured every declared route × state through the
+host's own `picture` command and written `contract.json` (every pin as a record); it prints
+`(APPROVED → TESTS)`. No gate runs, no kit is required, nothing is exported.
 
 ## TESTS
 
 Read only: `design/prototypes/<stem>/contract.json`, `design/prototypes/<stem>/pins.json`.
 
-The driver's printed step lists one `pin <id> → <AC-ID>` line per behaviour pin, in pin order,
-each carrying its screen, state and note, plus the target file (`prototype.e2eFile`, substituted,
-under the prototype worktree) and a `Session:` line. Write one end-to-end test per line — title
-grammar `<AC-ID> pin <id>: <note>` — in the prototype worktree and commit the file on `proto/<stem>`;
-each test fails against the base, and the driver only verifies they exist and are counted by the
-host's own runner (`e2eList`, run in the worktree). Then run `node
-{driver} <brief path> --root . --mark tests-derived`. The driver refuses a copy left in the main
-working tree, a file not committed on `proto/<stem>`, uncommitted edits to it, a still-uncounted
-reserved AC id when the file carries only some of them, or `e2eList` plus the under-reported id
-when the file lists every id but the host's runner does not; a refusal after export or spec-write
-has already succeeded leaves both in place and resumes at the first undone step on re-run. When a
-generated File Plan path is named in the host's § Risk Tiers the mark refuses listing each path and its trigger — put that list to the user as one `AskUserQuestion` (confirm the lock
-as critical / rule these not a risk change), never pick for them, then re-run with `--tier`;
-pass `--tier critical` unprompted only when the user has said a prose trigger applies. On success it exports `harden/<stem>` — the data and API layer, then the derived tests as a second commit — appends the brief's sub-plan, writes and
-lints the behaviour-lane spec, destroys the prototype database, deletes the worktree and branch,
-appends the ledger row, and advances straight to `CLOSED`.
+The driver's printed step lists one `pin <id> · <screen> (<state>) · <anchor> · "<note>"` line
+per behaviour pin, the target file (`prototype.e2eFile`, `{stem}` substituted, under the
+prototype worktree) and two `Session:` lines. Write one end-to-end test per line — title
+`pin <id>: <note>` — in the prototype worktree and commit the file on `proto/<stem>`; each test
+passes against the prototype and fails against the base. Then run `node {driver} <brief path>
+--root . --mark tests-derived`. The driver refuses a copy left in the main working tree, a file
+not committed on `proto/<stem>` or edited since, a pin the file does not carry, a pin the host's
+`e2eList` does not list, and a test red under `e2eRun` against the prototype (`e2e.log` names it).
+On success it copies the file to `design/prototypes/<stem>/tests/`, completes `contract.json`,
+appends the ledger row, queues `/spec:plan design/prototypes/<stem>/contract.json` at the top of
+the session queue and advances to `CONTRACTED`; a refusal after a step has succeeded leaves it in
+place and resumes at the first undone step on re-run.
+
+## CONTRACTED
+
+The driver prints `Read only: contract.json`, `Next: /spec:plan <contract>` and a `Close (` line.
+Commit `design/prototypes/<stem>/` on **main** directly (direct lane — no build worker touches
+it). The worktree, branch and database stay: `--mark closed` deletes them once every spec citing
+the stem is done, or to abandon the idea — it is the one mark accepted from any resting state
+(`ROUND`, `APPROVED`, `TESTS`, `CONTRACTED`).
 
 ## CLOSED
 
-The driver prints `Read only: contract.json, <generated spec path>` and `Next:` —
-`spec-status --next` verbatim, now naming `/spec:run <generated spec>`. Commit
-`design/prototypes/<stem>/`, the brief and the generated spec on **main** directly (direct lane
-— no build worker touches these), never the e2e file, which rides on `harden/<stem>` and reaches
-main only through the hardening spec's merge. Nothing under `proto/<stem>` is read again; only
-`harden/<stem>` and this commit survive.
+The driver prints `Read only: contract.json` and `Next:` — `spec-status --next` verbatim. The
+contract and pictures on main are untouched; only the worktree, branch and database are gone.
 
 ## Rules
 
@@ -122,8 +116,8 @@ main only through the hardening spec's merge. Nothing under `proto/<stem>` is re
   hand from `status.json` is the bug class the driver exists to prevent, and editing that file
   to bypass a mark's ordering refusal is never sanctioned.
 - Every file a later build must still read lives under `design/prototypes/<stem>/` on the main
-  working tree, or on harden/<stem>, committed there directly (never through a build worker) —
-  nothing on `proto/<stem>` is read once that branch closes (design.md § Design Canon).
+  working tree, committed there directly (never through a build worker) — nothing on
+  `proto/<stem>` is read by any later stage (design.md § Design Canon).
 - The pin endpoint (`serve --port <pinsPort>`) runs only while a round is open; never leave it,
   or the host's dev server, resident past the turn that started them.
 - The Tailscale share line the driver prints is printed, never run — sharing a running round is

@@ -3,12 +3,10 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { execFileSync } = require('node:child_process')
 const { tmpdir, runNode } = require('../helpers')
-const { setupHost, patchConfig, bare } = require('./fixture')
 
-// specs/20261001/01-the-freeze-signs-in-and-derives-its-tier.md D2-D4 — AC-20261001-01-1..5, -7, -8, -19:
-// proto-capture.js loads prototype.storageState, and prototype-driver.js check flags a tracked one.
+// specs/20261001/01-the-freeze-signs-in-and-derives-its-tier.md D2-D3 — AC-20261001-01-1..5, -19:
+// proto-capture.js loads prototype.storageState (the driver's `check` no longer reads it).
 
 const CAPTURE = 'scripts/proto-capture.js'
 const REL = 'e2e/.auth/user.json'
@@ -117,41 +115,4 @@ test('AC-20261001-01-19: a signed-out redirect refusal names declaring prototype
   assert.strictEqual(r.status, 2, 'a signed-out redirect must still refuse: ' + JSON.stringify(r))
   assert.ok(r.stderr.includes('declare prototype.storageState'),
     'without the new remedy sentence a user hitting the login redirect has no discoverable way to capture a signed-in route: ' + r.stderr)
-})
-
-// --- prototype-driver check (doctor check 23) ---
-
-function commitFile(dir, rel, content, msg) {
-  fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true })
-  fs.writeFileSync(path.join(dir, rel), content)
-  execFileSync('git', ['-C', dir, 'add', '-f', '--', rel], { encoding: 'utf8' })
-  execFileSync('git', ['-C', dir, 'commit', '-q', '-m', msg], { encoding: 'utf8' })
-}
-
-test('AC-20261001-01-7: check exits 1 with a tracked-by-git line and a prototype.storageState finding when the sign-in file is committed', () => {
-  const dir = setupHost()
-  patchConfig(dir, (cfg) => { cfg.prototype.storageState = REL })
-  commitFile(dir, REL, '{"cookies":[],"origins":[]}\n', 'commit a sign-in by mistake')
-  const r = bare(dir, ['check'])
-  assert.strictEqual(r.status, 1, 'a committed sign-in holds live session cookies and must fail the check: ' + JSON.stringify(r))
-  assert.ok(r.stdout.includes('prototype.storageState (e2e/.auth/user.json) is tracked by git'),
-    'the finding line must name the key, the value and that git tracks it: ' + r.stdout)
-  const j = bare(dir, ['check', '--json'])
-  let parsed
-  try { parsed = JSON.parse(j.stdout) } catch (e) { assert.fail('check --json must print parseable JSON: ' + j.stdout) }
-  assert.ok((parsed.findings || []).some((f) => f.key === 'prototype.storageState'),
-    'check --json must carry a findings entry keyed prototype.storageState: ' + j.stdout)
-})
-
-test('AC-20261001-01-8: check exits 0 printing nothing when the declared sign-in file is absent from disk, and again when it is present but untracked', () => {
-  const dir = setupHost()
-  patchConfig(dir, (cfg) => { cfg.prototype.storageState = REL })
-  const absent = bare(dir, ['check'])
-  assert.strictEqual(absent.status, 0, 'a missing sign-in is normal between prototypes and must not be a finding: ' + JSON.stringify(absent))
-  assert.strictEqual(absent.stdout.trim(), '', 'an absent sign-in must print nothing: ' + JSON.stringify(absent.stdout))
-  fs.mkdirSync(path.join(dir, 'e2e/.auth'), { recursive: true })
-  fs.writeFileSync(path.join(dir, REL), '{"cookies":[],"origins":[]}\n')
-  const untracked = bare(dir, ['check'])
-  assert.strictEqual(untracked.status, 0, 'a present but untracked sign-in is the correct state and must not be a finding: ' + JSON.stringify(untracked))
-  assert.strictEqual(untracked.stdout.trim(), '', 'an untracked sign-in must print nothing: ' + JSON.stringify(untracked.stdout))
 })

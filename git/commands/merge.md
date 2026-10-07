@@ -18,13 +18,10 @@ If the source branch is still ambiguous, use `AskUserQuestion` with concrete bra
 
 **Refusals, before any inspection runs:**
 
-- Source matches `proto/*` → STOP: a prototype branch is never merged — `harden/<stem>` is what
-  lands, through `/spec:run`'s own merge-back. Report `outcome: {anchor:'🚫', text:'<source> is a
-  prototype branch — it is never merged'}`, `next: {kind:'command', text:'/spec:prototype
-  <brief> — freeze it; harden/<stem> is what lands'}`.
-- Source matches `harden/*` and this command was not dispatched by the review driver's own
-  merge-back → STOP: `outcome: {anchor:'🚫', text:'harden/<stem> lands through /spec:run, not by
-  hand'}`, `next: {kind:'none', reason:'the review driver merges this branch at close'}`.
+- Source matches `proto/*` → STOP: a prototype branch is never merged. Report `outcome:
+  {anchor:'🚫', text:'<source> is a prototype branch — it is never merged; its behaviour
+  contract (design/prototypes/<stem>/contract.json) lands through a spec'}`, `next:
+  {kind:'command', text:'/spec:plan design/prototypes/<stem>/contract.json'}`.
 
 ## Step 2: Pre-Merge Inspection (ONE APPROVAL)
 
@@ -115,7 +112,7 @@ JSON to the scratch dir first), printing its output verbatim:
 - **Dirty working tree** (Step 2): `outcome: {anchor:'🚫', text:'working tree is dirty — cannot
   inspect or merge safely'}`, `next: {kind:'command', text:'/git:commit — commit the dirty tree
   (or run \`git stash -u\` to shelve it), then retry the merge'}`.
-- **Prototype/harden refusal** (Step 1): the slots named above under Refusals.
+- **Prototype refusal** (Step 1): the slots named above under Refusals.
 
 ```report
 ✅ **merged spec/checkout into main**
@@ -128,8 +125,8 @@ Next: /git:commit — commit the dirty tree (or run `git stash -u` to shelve it)
 ```
 
 ```report
-🚫 **proto/28-functional-prototype is a prototype branch — it is never merged**
-Next: /spec:prototype docs/roadmap/28-functional-prototype.md — freeze it; harden/28-functional-prototype is what lands
+🚫 **proto/28-functional-prototype is a prototype branch — it is never merged; its behaviour contract (design/prototypes/28-functional-prototype/contract.json) lands through a spec**
+Next: /spec:plan design/prototypes/28-functional-prototype/contract.json
 ```
 
 ## NON-NEGOTIABLE RULES

@@ -1,12 +1,11 @@
 ---
 description: Opens a throwaway worktree on proto/<brief stem> from the host's main branch, wires a dev-only pin overlay into the running app, iterates pin rounds across sessions until the user replies approve, then writes a behaviour contract — every pin as a sentence, one picture per route × state, one end-to-end test per behaviour pin — queues the /spec:plan paste, and keeps the worktree until --mark closed — driver-stepped, /clear-safe
-argument-hint: <roadmap brief path — docs/roadmap/NN-*.md>
+argument-hint: <idea in plain words | docs/roadmap/NN-*.md | prototype stem>
 ---
 
 # Prototype: The Driver-Stepped Pin Loop
 
-`/spec:prototype <brief>` runs a real, functional prototype for a `Lane: behaviour` brief on
-its own throwaway branch — never a second wireframe, never a spec written up front.
+`/spec:prototype <idea | brief | stem>` runs a real, functional prototype on its own throwaway branch — never a second wireframe, never a spec written up front.
 `prototype-driver.js` (`spec-paths prototype-driver`) owns the state's sequencing (derived from
 `design/prototypes/<stem>/status.json` plus disk, never from chat context) and prints exactly
 one step at a time for this session's judgment. This command is a thin shell: it names where
@@ -22,19 +21,24 @@ prototype-driver` once and keep the printed absolute path as `{driver}`.
 
 ## Input
 
-`$ARGUMENTS` — a roadmap brief path (`docs/roadmap/NN-*.md`). Every round of this command reads
-this same path; the driver derives the brief's stem, branch and worktree from it, never from a
-prior invocation's memory.
+`$ARGUMENTS` — one of three shapes, derived by the driver in this order: a **brief** (a path to
+an existing `docs/roadmap/NN-*.md`; the stem is its basename), a **stem** (a name whose
+`design/prototypes/<stem>/status.json` exists; brief and idea are read from that file), or
+**words** (anything else: the text is the idea and the stem is a slug of it). `--stem <name>`
+replaces the slug before `--mark opened`. Every round reads this same argument; once opened,
+every printed `node {driver}` line echoes the stem, and the driver derives branch and worktree
+from it, never from a prior invocation's memory. A prototype on an empty `main` builds whatever
+the idea needs in its first round, like any round.
 
 ## The driver loop
 
-1. Run `node {driver} <brief path> --root .`. It prints the current state, a `## Step:` line,
+1. Run `node {driver} <arg> --root .`. It prints the current state, a `## Step:` line,
    and a `Read only:` file list.
 2. Do that one step exactly as printed.
 3. Record it with the step's own printed `--mark …` line — the driver verifies the artifact it
    demands before advancing; a missing or malformed one is refused and demanded again. Every
    accepted mark prints `✅ checkpoint — prototype state saved (<prev> → <next>); safe to
-   /clear and re-run /spec:prototype <brief>`.
+   /clear and re-run /spec:prototype <arg>`.
 4. Re-run. Repeat until the printed state is `CLOSED`.
 
 ## OPEN
@@ -42,10 +46,12 @@ prior invocation's memory.
 The driver prints a `states.json` template — one route per surface the brief's journeys touch,
 one state per branch the prototype must show (`default`, plus whatever named states the round
 needs: `empty`, `error`, …). Author `design/prototypes/<stem>/states.json` from it, then
-`node {driver} <brief path> --root . --mark opened`. The driver creates the branch and
+`node {driver} <arg> --root . --mark opened`. The driver creates the branch and
 worktree, copies the pin overlay and the stable-id module into place with the pins port baked
 in, provisions the database through the host's own `dbCreate` script when declared, and
-advances to `ROUND`.
+advances to `ROUND`. In the words shape the bare `OPEN` run first prints `📌 Auto-picked stem
+<slug> — from your words (veto: re-run with --stem <name>)`; `--stem <name>` before `opened`
+replaces the slug and prints nothing extra.
 
 ## ROUND
 
@@ -56,7 +62,7 @@ some file in the worktree imports the overlay.
 
 The driver's own printed step carries the two `Session:` lines to start in the background —
 the host's `runtime.bootCommand` inside the worktree (carrying the driver's port as `PORT=<n>`
-when the host declares `{port}` in `prototype.url`), and `node {driver} <brief path> --root .
+when the host declares `{port}` in `prototype.url`), and `node {driver} <arg> --root .
 serve --port <pinsPort>` — both tracked and stopped before this turn ends, never left resident
 past the round. Print the driver's step verbatim, including the `🎨 ready for pins — <url>` line
 (or the `dev server is not answering` refusal) and the fixed reply line, then **end the turn**.
@@ -72,7 +78,7 @@ how "nothing more to change" gets recorded).
 
 Read only: `design/prototypes/<stem>/pins.json`, `design/prototypes/<stem>/states.json`.
 
-Run `node {driver} <brief path> --root . --mark contracted`. The driver refuses in order — not yet
+Run `node {driver} <arg> --root . --mark contracted`. The driver refuses in order — not yet
 approved; no behaviour pins (a prototype that changed no behaviour is the direct lane — mark a pin
 behaviour or close with `--mark closed`); `states.json` unusable; `prototype.picture` undeclared;
 a picture command that fails or writes no PNG — each refusal names its own remedy and writes
@@ -88,7 +94,7 @@ The driver's printed step lists one `pin <id> · <screen> (<state>) · <anchor> 
 per behaviour pin, the target file (`prototype.e2eFile`, `{stem}` substituted, under the
 prototype worktree) and two `Session:` lines. Write one end-to-end test per line — title
 `pin <id>: <note>` — in the prototype worktree and commit the file on `proto/<stem>`; each test
-passes against the prototype and fails against the base. Then run `node {driver} <brief path>
+passes against the prototype and fails against the base. Then run `node {driver} <arg>
 --root . --mark tests-derived`. The driver refuses a copy left in the main working tree, a file
 not committed on `proto/<stem>` or edited since, a pin the file does not carry, a pin the host's
 `e2eList` does not list, and a test red under `e2eRun` against the prototype (`e2e.log` names it).
@@ -118,6 +124,8 @@ contract and pictures on main are untouched; only the worktree, branch and datab
 - Every file a later build must still read lives under `design/prototypes/<stem>/` on the main
   working tree, committed there directly (never through a build worker) — nothing on
   `proto/<stem>` is read by any later stage (design.md § Design Canon).
+- Rounds run with no gate: the driver never invokes gateCommand on the prototype tree — gates
+  protect what lands, and the prototype never lands.
 - The pin endpoint (`serve --port <pinsPort>`) runs only while a round is open; never leave it,
   or the host's dev server, resident past the turn that started them.
 - The Tailscale share line the driver prints is printed, never run — sharing a running round is

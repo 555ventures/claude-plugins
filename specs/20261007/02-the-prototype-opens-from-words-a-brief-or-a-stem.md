@@ -1,6 +1,7 @@
 ---
 date: 2026-10-07
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: prototype
 breaking: false
@@ -9,6 +10,7 @@ depended_on_by: [specs/20261007/03-plan-cites-the-build-replays-and-status-deriv
 brief: 28a
 spiked: 2026-10-07
 open_markers: 0
+diff_base: 4a512bc8809f3d33069651f5667e783c370e8bae
 ---
 
 # The prototype opens from words, a brief or a stem

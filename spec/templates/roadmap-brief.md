@@ -10,10 +10,10 @@ person observes it }
 <!-- One brief = one /spec:plan session = 1–4 sibling specs. A brief is stable intent
      grounded in ADRs — it names WHAT and WHY and where the ground truth lives; the specs it
      hydrates into own HOW. Anything execution-shaped (file plans, function signatures, test
-     lists) belongs in the specs, not here. Lane is absent = structural; a brief minted
-     "Lane: behaviour" is the shape of ask known at mint time — it sends /spec:plan's Entry to
-     /spec:prototype instead of hydrating into a spec directly (spec/doctrine/core.md
-     § Pipeline Entry). -->
+     lists) belongs in the specs, not here. Lane is advisory — a hint at mint time that the ask
+     is behaviour-shaped. /spec:prototype is the behaviour lane by choice: running it on any
+     brief, or on no brief, is choosing that lane (spec/doctrine/core.md § Pipeline Entry);
+     nothing reads the field. -->
 
 ## Result
 

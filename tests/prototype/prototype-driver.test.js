@@ -34,16 +34,27 @@ function advanceToRound(dir) {
   return statusOf(dir)
 }
 
-test('AC-20260928-01-1: the driver exits 2 naming prototype and spec:doctor when the host config carries no prototype block', () => {
+test('AC-20260928-01-1 / AC-20261007-02-3: the driver exits 2 naming prototype, what the block is for and spec:doctor when the config carries no prototype block, and admits a brief marked Lane: structural', () => {
   const dir = setupHost()
   patchConfig(dir, (cfg) => { delete cfg.prototype })
   const r = bare(dir)
   assert.strictEqual(r.status, 2,
     'a host with no declared prototype block must refuse rather than crash or silently no-op: ' + JSON.stringify(r))
-  assert.match(r.stderr, /prototype/,
+  assert.match(r.stderr, /no "prototype" config block/,
     'the refusal must name the missing "prototype" config block so the remedy is discoverable: ' + r.stderr)
+  assert.match(r.stderr, /declares how a throwaway build of this app runs/,
+    'the refusal must say what the block is for, or a first-time host cannot tell why it is asked for: ' + r.stderr)
   assert.match(r.stderr, /spec:doctor/,
     'the refusal must point at /spec:doctor (D1\'s check) as the remedy: ' + r.stderr)
+
+  const host = setupHost()
+  assert.match(fs.readFileSync(path.join(host, BRIEF_REL), 'utf8'), /^Lane: structural$/m,
+    'the fixture brief must read Lane: structural, or this case no longer proves the lane is never read')
+  const ok = bare(host)
+  assert.strictEqual(ok.status, 0,
+    'a brief marked Lane: structural must open exactly like any other — a lane gate would refuse it: ' + ok.stderr)
+  assert.match(ok.stdout, /state: OPEN/, 'the bare run on a structural brief must print the OPEN step: ' + ok.stdout)
+  assert.ok(!/Lane/.test(ok.stderr), 'no stderr line may mention Lane — the driver never reads it: ' + ok.stderr)
 })
 
 // `check --json` on a fresh fixture host after `edit(cfg)`; returns { r, findings }.

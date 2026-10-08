@@ -84,27 +84,16 @@ const fs = require('fs')
 const path = require('path')
 const http = require('http')
 const { spawnSync } = require('child_process')
-const { writeOut, appendLedger } = require('./lib/driver-io')
+const { appendLedger } = require('./lib/driver-io')
+const core = require('./lib/driver-core')
+const { writeOut, nowIso, flagArg, withoutFlagPair } = core
 const { readConfigStrict, CONFIG_RELPATH } = require('./lib/host-config')
 const contractLib = require('./lib/contract')
 const appPortLib = require('./lib/app-port')
 
-function die(msg) { writeOut(2, 'prototype-driver: ' + msg + '\n'); process.exit(2) }
-function nowIso() { return new Date().toISOString() }
+const die = core.makeDie('prototype-driver')
 
-// ---------------------------------------------------------------------------
-// Arg parsing — hand-rolled, no library.
-// ---------------------------------------------------------------------------
 const argv = process.argv.slice(2)
-function flagArg(arr, name) { const i = arr.indexOf(name); return i > -1 ? arr[i + 1] : null }
-function withoutFlagPair(arr, name) {
-  const i = arr.indexOf(name)
-  if (i === -1) return arr.slice()
-  const copy = arr.slice()
-  copy.splice(i, 2)
-  return copy
-}
-
 if (argv.length === 0) {
   die('usage: prototype-driver <idea in words | brief path | stem> [--stem <name>] [--root <dir>] [--state] [--mark opened|round-done|approved|contracted|tests-derived|closed] [serve --port <n>] [check [--json]] | prototype-driver check [--root <dir>] [--json]')
 }
@@ -112,18 +101,14 @@ if (argv.length === 0) {
 // has no brief to derive a stem/branch/worktree from) — every other form still needs one.
 const briefLess = argv[0] === 'check'
 const inputArg = briefLess ? null : argv[0]
-let rest = briefLess ? argv.slice(0) : argv.slice(1)
-const root = path.resolve(flagArg(rest, '--root') || process.cwd())
-rest = withoutFlagPair(rest, '--root')
+const taken0 = core.takeRoot(briefLess ? argv.slice(0) : argv.slice(1), die)
+const root = taken0.root
+let rest = taken0.rest
 const stemFlagGiven = rest.includes('--stem')
 const stemFlag = flagArg(rest, '--stem')
 rest = withoutFlagPair(rest, '--stem')
 if (stemFlagGiven && (stemFlag === undefined || stemFlag === null || stemFlag.startsWith('--'))) {
   die('--stem needs a name — remedy: --stem <name> (lowercase letters, digits and `-`, at most 48 characters)')
-}
-
-if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
-  die('--root ' + root + ' is not a directory — remedy: pass a real project root, or omit --root to use the current directory')
 }
 
 // ---------------------------------------------------------------------------
@@ -299,13 +284,9 @@ function argText(status) {
   return inputArg
 }
 function loadStatus() {
-  if (!fs.existsSync(statusPath)) return null
-  try {
-    return (lastStatus = JSON.parse(fs.readFileSync(statusPath, 'utf8')))
-  } catch (e) {
-    die(statusRel + ' is not valid JSON (' + e.message + ') — remedy: restore it from git history, or delete it and re-run --mark opened')
-    return null // unreachable
-  }
+  const st = core.readJsonOrNull(statusPath, die, (e) => statusRel + ' is not valid JSON (' + e.message + ') — remedy: restore it from git history, or delete it and re-run --mark opened')
+  if (st !== null) lastStatus = st
+  return st
 }
 
 // specs/20261005/03-one-port-per-launch.md D6: when prototype.url carries {port}, status.appPort
@@ -326,9 +307,7 @@ function appAddress(status) {
 
 function saveStatus(status) {
   lastStatus = status
-  fs.mkdirSync(designDir, { recursive: true })
-  status.lastUpdated = nowIso()
-  fs.writeFileSync(statusPath, JSON.stringify(status, null, 2) + '\n')
+  core.saveStatusFile(statusPath, status)
 }
 
 function loadStatesOrNull() {
@@ -406,9 +385,7 @@ function deriveState(status) {
 }
 
 function printCheckpoint(prevState, nextState) {
-  writeOut(1, '✅ checkpoint — prototype state saved (' + prevState + ' → ' + nextState +
-    '); safe to /clear and re-run /spec:prototype ' + argText() + '\n')
-  process.exit(0)
+  core.checkpoint('prototype', prevState, nextState, '/spec:prototype ' + argText())
 }
 
 // ---------------------------------------------------------------------------
@@ -976,8 +953,7 @@ function printOpenStep() {
   lines.push('The overlay import is wired in the ROUND step, once the worktree exists.')
   lines.push('Then:')
   lines.push('  node ' + driverAbs + ' ' + argText() + ' --mark opened')
-  writeOut(1, lines.join('\n') + '\n')
-  process.exit(0)
+  core.emit(lines)
 }
 
 function probeUrl(url) {
@@ -1019,8 +995,7 @@ function printRoundStep(status) {
   lines.push('  node ' + driverAbs + ' ' + argText() + ' --mark round-done')
   lines.push('Then (only on the literal `approve`):')
   lines.push('  node ' + driverAbs + ' ' + argText() + ' --mark approved')
-  writeOut(1, lines.join('\n') + '\n')
-  process.exit(0)
+  core.emit(lines)
 }
 
 function printApprovedStep() {
@@ -1030,8 +1005,7 @@ function printApprovedStep() {
   lines.push('Read only: pins.json, states.json')
   lines.push('Then:')
   lines.push('  node ' + driverAbs + ' ' + argText() + ' --mark contracted')
-  writeOut(1, lines.join('\n') + '\n')
-  process.exit(0)
+  core.emit(lines)
 }
 
 // ---------------------------------------------------------------------------
@@ -1058,8 +1032,7 @@ function printTestsStep() {
     '; each test must pass against the prototype and fail against ' + (st.base || contract.base))
   lines.push('Then:')
   lines.push('  node ' + driverAbs + ' ' + argText() + ' --mark tests-derived')
-  writeOut(1, lines.join('\n') + '\n')
-  process.exit(0)
+  core.emit(lines)
 }
 
 // ---------------------------------------------------------------------------
@@ -1071,8 +1044,7 @@ function printContractedStep() {
   lines.push('Read only: ' + contractRel)
   lines.push('Next: /spec:plan ' + contractRel)
   lines.push('Close (when every spec citing ' + stem + ' is done, or to abandon): node ' + driverAbs + ' ' + argText() + ' --root ' + root + ' --mark closed')
-  writeOut(1, lines.join('\n') + '\n')
-  process.exit(0)
+  core.emit(lines)
 }
 
 // ---------------------------------------------------------------------------
@@ -1086,8 +1058,7 @@ function printClosedStep() {
   const r = spawnSync(process.execPath, [specStatusPath, '--root', root, '--next'], { encoding: 'utf8' })
   lines.push('Next:')
   lines.push((r.stdout || '').trim() || '(spec-status --next produced no output)')
-  writeOut(1, lines.join('\n') + '\n')
-  process.exit(0)
+  core.emit(lines)
 }
 
 // ---------------------------------------------------------------------------

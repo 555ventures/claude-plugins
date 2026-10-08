@@ -43,35 +43,17 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const { spawnSync } = require('child_process')
-const { writeOut } = require('./lib/driver-io')
+const core = require('./lib/driver-core')
+const { writeOut, nowIso, flagArg } = core
 const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, setStatus } = require('./lib/mocks-ledger')
 const { parseSeedJourneys, beatHash } = require('./lib/surfaces')
 const { readConfig } = require('./lib/host-config')
 const round = require('./lib/mocks-round')
 
-function die(msg) { writeOut(2, 'mocks-driver: ' + msg + '\n'); process.exit(2) }
-function nowIso() { return new Date().toISOString() }
+const die = core.makeDie('mocks-driver')
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 
-// ---------------------------------------------------------------------------
-// Arg parsing — hand-rolled, no library.
-// ---------------------------------------------------------------------------
-const argv = process.argv.slice(2)
-function flagArg(arr, name) { const i = arr.indexOf(name); return i > -1 ? arr[i + 1] : null }
-function withoutFlagPair(arr, name) {
-  const i = arr.indexOf(name)
-  if (i === -1) return arr.slice()
-  const copy = arr.slice()
-  copy.splice(i, 2)
-  return copy
-}
-
-const root = path.resolve(flagArg(argv, '--root') || process.cwd())
-const rest = withoutFlagPair(argv, '--root')
-
-if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
-  die('--root ' + root + ' is not a directory — remedy: pass a real project root, or omit --root to use the current directory')
-}
+const { root, rest } = core.takeRoot(process.argv.slice(2), die)
 
 const mocksDir = path.join(root, 'design/mocks')
 const statusPath = path.join(mocksDir, 'status.json')
@@ -118,15 +100,10 @@ function readStatusFile() {
     if (!fs.existsSync(ledgerPath)) fs.copyFileSync(path.join(templatesRoot, 'mocks-ledger.md'), ledgerPath)
     if (!fs.existsSync(seedPath)) fs.copyFileSync(path.join(templatesRoot, 'mocks-seed.md'), seedPath)
     const f = freshStatus()
-    fs.writeFileSync(statusPath, JSON.stringify(f, null, 2) + '\n')
+    core.writeJson(statusPath, f)
     return f
   }
-  try {
-    return JSON.parse(fs.readFileSync(statusPath, 'utf8'))
-  } catch (e) {
-    die('design/mocks/status.json is not valid JSON (' + e.message + ') — remedy: restore it from git history, or delete it (a fresh root is a valid starting point) and re-run')
-    return null // unreachable
-  }
+  return core.readJsonOrNull(statusPath, die, (e) => 'design/mocks/status.json is not valid JSON (' + e.message + ') — remedy: restore it from git history, or delete it (a fresh root is a valid starting point) and re-run')
 }
 
 let rawStatus = readStatusFile()
@@ -142,7 +119,7 @@ function retireLegacyStatus() {
   for (let n = 2; fs.existsSync(aside); n++) aside = path.join(mocksDir, 'status.legacy.' + n + '.json')
   fs.renameSync(statusPath, aside)
   const fresh = freshStatus()
-  fs.writeFileSync(statusPath, JSON.stringify(fresh, null, 2) + '\n')
+  core.writeJson(statusPath, fresh)
   writeOut(2, 'mocks-driver: design/mocks/status.json carried schemaVersion ' + v + ' (the retired mock-app flow) — moved to ' +
     path.relative(root, aside) + '; a fresh status starts at SEED, seed.md and ledger.md are kept\n')
   return fresh
@@ -165,8 +142,7 @@ let status = legacy ? null : normalise(rawStatus)
 function saveStatus() {
   status.schemaVersion = 3
   status.state = deriveState()
-  status.lastUpdated = nowIso()
-  fs.writeFileSync(statusPath, JSON.stringify(status, null, 2) + '\n')
+  core.saveStatusFile(statusPath, status)
 }
 
 // ---------------------------------------------------------------------------
@@ -264,8 +240,7 @@ function deriveState() {
 function printAcceptedTail(prevState, nextState) {
   const parsed = parseLedger(ledgerTextOrDie())
   writeOut(1, countsLine(parsed) + '\n')
-  writeOut(1, '✅ checkpoint — mocks state saved (' + prevState + ' → ' + nextState + '); safe to /clear and re-run /spec:mocks\n')
-  process.exit(0)
+  core.checkpoint('mocks', prevState, nextState, '/spec:mocks')
 }
 
 // ---------------------------------------------------------------------------
@@ -676,8 +651,7 @@ function printStepBlock(state, title, readOnlyList, doctrineSection, thenLines, 
   if (withSkill) lines.push(SKILL_LINE)
   lines.push('Then:')
   for (const t of thenLines) lines.push('  ' + t)
-  writeOut(1, lines.join('\n') + '\n')
-  process.exit(0)
+  core.emit(lines)
 }
 
 function printSeedStep() {

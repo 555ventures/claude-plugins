@@ -488,3 +488,18 @@ test('create --spec refuses a spec that is untracked or edited since the base, a
   const wt = ok.stdout.trim().split('\n').pop()
   assert.strictEqual(fs.readFileSync(path.join(wt, spec), 'utf8'), 'status: hardened\n')
 })
+
+test('create --spec accepts a committed spec given through a symlinked absolute path — the spec is canonicalised the same way the root is', () => {
+  const { dir, g } = setupHost('true')
+  const spec = 'specs/20261005/10-symlinked.md'
+  fs.mkdirSync(path.join(dir, 'specs/20261005'), { recursive: true })
+  fs.writeFileSync(path.join(dir, spec), 'status: hardened\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'lock')
+
+  const link = path.join(tmpdir('mblink'), 'alias')
+  fs.symlinkSync(fs.realpathSync(dir), link, 'dir')
+  const ok = runBash(SCRIPT, ['create', '--source', 'spec/10-symlinked', '--spec', path.join(link, spec), '--root', link])
+  assert.strictEqual(ok.status, 0, 'a committed spec reached through a symlink must pass, never read as untracked: ' + ok.stderr)
+  const wt = ok.stdout.trim().split('\n').pop()
+  assert.strictEqual(fs.readFileSync(path.join(wt, spec), 'utf8'), 'status: hardened\n')
+})

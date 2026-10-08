@@ -466,7 +466,9 @@ if (apply && writes.length > 0) {
   // A {testDirs}/{scopeDirs} gate is pointed at the test files the sweep left in the directories
   // it touched — there is no File Plan to derive them from, and the raw placeholder reaches the
   // shell as a literal path the runner cannot find.
-  const touchedDirs = new Set(writes.map((w) => relPosix(path.dirname(w.abs))))
+  // relPosix(root) is '' while path.posix.dirname('root.test.js') is '.' — a root-level test file
+  // must count as surviving, or a resolvable gate is skipped with a false 'nothing survived' warning.
+  const touchedDirs = new Set(writes.map((w) => relPosix(path.dirname(w.abs)) || '.'))
   const emptiedSet = new Set(emptied)
   const surviving = testFiles.filter((f) => !emptiedSet.has(f) && touchedDirs.has(path.posix.dirname(f)))
   const declared = config && typeof config.gateCommand === 'string' ? config.gateCommand.trim() : ''

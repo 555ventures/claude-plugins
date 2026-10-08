@@ -154,6 +154,9 @@ case "$SUB" in
       BASE="${BASE:-HEAD}"
       git -C "$CROOT" rev-parse --verify -q "$BASE" >/dev/null 2>&1 || die "create: base ref '$BASE' not found"
       if [ -n "$SPEC" ]; then
+        # An absolute --spec is canonicalised the same way CROOT was (pwd -P), else a project behind a
+        # symlink (/tmp → /private/tmp) strips nothing and a committed spec is refused as untracked.
+        case "$SPEC" in /*) SPEC="$(rp "$(dirname "$SPEC")")/$(basename "$SPEC")" ;; esac
         SPEC_REL="${SPEC#"$CROOT"/}"
         { git -C "$CROOT" cat-file -e "$BASE:$SPEC_REL" 2>/dev/null && git -C "$CROOT" diff --quiet "$BASE" -- "$SPEC_REL" 2>/dev/null; } || \
           die "create: spec '$SPEC_REL' is not committed on '$BASE' (untracked, or edited since) — the worktree would not carry it and the leftover would break merge-back's clean-root gate. Commit it, then retry."

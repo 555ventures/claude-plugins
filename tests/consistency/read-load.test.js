@@ -36,10 +36,21 @@ const PROSE_CAP = path.join(ROOT, 'spec', 'scripts', 'prose-cap.js')
 // specs/20261008/01-doctrine-states-contracts-and-points-at-its-enforcers.md D7: one entry per
 // command, no flat fallback. connect is held to 22 own + <= 108 shared (D6); the other entries
 // may only shrink.
-const BUDGET = {
-  connect: 70, doctor: 378, enforce: 412, escape: 347, genesis: 269, init: 606, mocks: 183,
-  plan: 265, prototype: 232, queue: 133, release: 322, replay: 363, run: 251, status: 146,
+// specs/20261008/02-commands-state-their-steps-and-point-at-their-scripts.md D5: each entry is
+// the command's own-file ceiling (lines() formula) plus its current shared-for load; an interim
+// upper bound, then lowered at build to the value measured after the command files were cut
+// (own + shared). The table may only shrink.
+const COMMAND_CEILING = {
+  init: 270, doctor: 215, enforce: 295, escape: 215, genesis: 85, mocks: 60, plan: 120,
+  prototype: 95, queue: 55, release: 175, replay: 190, run: 75, status: 60, connect: 22,
 }
+const BUDGET = {
+  connect: 70, doctor: 323, enforce: 376, escape: 284, genesis: 235, init: 421, mocks: 166,
+  plan: 228, prototype: 195, queue: 109, release: 264, replay: 288, run: 227, status: 115,
+}
+
+// wc -l semantics: the number of newline characters in the file.
+function wcLines(text) { return (text.match(/\n/g) || []).length }
 
 function lines(text) { return text.split('\n').length }
 
@@ -57,7 +68,7 @@ const commands = fs.readdirSync(COMMANDS).filter(f => f.endsWith('.md')).map(f =
 // itself must no longer list them. Genuinely red until spec/commands/{build,review,design}.md
 // are gone; the three stage files' own per-file line caps are pinned separately in
 // tests/consistency/stage-files.test.js (AC-20260912-03-15).
-test('every /spec command has a read-load budget entry (AC-20261008-01-2: its own BUDGET entry, no flat CAP fallback), and neither table nor roster names a retired stage command', () => {
+test('every /spec command has a read-load budget entry (AC-20261008-01-2: its own BUDGET entry, no flat CAP fallback) and an own-file COMMAND_CEILING entry (AC-20261008-02-2), and neither table nor roster names a retired stage command', () => {
   assert.ok(commands.length >= 10, 'expected the command roster, got ' + commands.length)
   assert.strictEqual(commands.length, 14,
     'AC-20261008-01-2: the roster must be the fourteen /spec commands, connect included — got ' + commands.join(','))
@@ -67,6 +78,8 @@ test('every /spec command has a read-load budget entry (AC-20261008-01-2: its ow
     if (RETIRED_STAGE_COMMANDS.includes(cmd)) continue
     assert.ok(Object.prototype.hasOwnProperty.call(BUDGET, cmd),
       'AC-20261008-01-2: /spec:' + cmd + ' has no BUDGET entry — its read-load would go unpinned')
+    assert.ok(Object.prototype.hasOwnProperty.call(COMMAND_CEILING, cmd),
+      'AC-20261008-02-2: /spec:' + cmd + ' has no COMMAND_CEILING entry — its own file could grow without any ceiling catching it')
     const { total } = readLoad(cmd)
     assert.ok(total <= BUDGET[cmd],
       'AC-20261008-01-2: /spec:' + cmd + ' loads ' + total + ' lines, over its own BUDGET entry ' +
@@ -100,7 +113,12 @@ const RETIRED_STAGE_COMMANDS = ['build', 'review', 'design']
 for (const cmd of commands) {
   if (RETIRED_STAGE_COMMANDS.includes(cmd)) continue
   const limit = BUDGET[cmd]
-  test(`AC-20260908-06-1 / AC-20261008-01-2: read-load budget: /spec:${cmd} loads ≤ ${limit} lines (command file + shared-for sections)`, () => {
+  test(`AC-20260908-06-1 / AC-20261008-01-2 / AC-20261008-02-1: read-load budget: /spec:${cmd} loads ≤ ${limit} lines (command file + shared-for sections) and its own file is ≤ ${COMMAND_CEILING[cmd]} lines`, () => {
+    const ceiling = COMMAND_CEILING[cmd]
+    const ownWc = wcLines(fs.readFileSync(path.join(COMMANDS, cmd + '.md'), 'utf8'))
+    assert.ok(ownWc <= ceiling,
+      `AC-20261008-02-1: spec/commands/${cmd}.md is ${ownWc} lines (wc -l) > its ${ceiling} ceiling — ` +
+      'the command restates procedure a driver or script already owns; every session running it pays the overage')
     const { own, shared, total } = readLoad(cmd)
     assert.ok(total <= limit,
       `/spec:${cmd} loads ${total} lines (own ${own} + shared ${shared}) > ${limit}. ` +

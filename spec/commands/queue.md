@@ -7,14 +7,8 @@ allowed-tools: Bash(spec-paths:*), Bash(node:*), Read
 # Spec Queue: Durable Sequencing Behind `--next`
 
 The queue is a single per-repository file (`spec-queue.json`, in the git common directory —
-never inside the checkout, never in `git status`) holding an ordered to-do list: briefs by
-number, ad-hoc specs by path, and free-text prompt items, any of which may carry an `after`
-gate on a spec or a brief. `/spec:status`'s `--next` derivation reads it as a read-only
-overlay; this command is the *only* way it is ever written. This command **never edits
-`spec-queue.json` directly** — every mutation goes through `spec-queue.js`, which owns
-reconciliation, readiness, and doneness in one place (`spec/scripts/lib/queue.js`). There is
-no hand-tracked fallback: an absent or unparseable answer is correct, a hand-reconstructed
-queue ordering never is.
+never inside the checkout) holding an ordered to-do list: briefs by number, ad-hoc specs by
+path, and free-text prompt items. Enforced by `spec-queue.js` — its header comment is the contract.
 
 **Intended model: any.** Run `spec-paths shared-for queue` and read what it prints. No
 judgment happens here — the script derives and writes, you render its output.
@@ -23,26 +17,16 @@ judgment happens here — the script derives and writes, you render its output.
 
 `$ARGUMENTS` — `<subcommand> [args…]`. Subcommands:
 
-- `next` — reconcile+write, print the pick (a brief's derived `/spec:plan`/`/spec:run` line,
-  or a prompt item's payload verbatim); the default when `$ARGUMENTS` is empty.
-- `list` — pending items only, numbered exactly as `move`/`--at` count them, gated entries
-  shown, a done-count footer.
+- `next` — reconcile+write, print the pick; the default when `$ARGUMENTS` is empty.
+- `list` — pending items only, numbered exactly as `move`/`--at` count them.
 - `add <payload…> [--top | --at <n>] [--after-spec <path> | --after-brief NN] [--when
-  <type>:<args>]` — classify the payload yourself only to describe it back to the user; the
-  script does the real classification (`NN`/`NNa` or a `docs/roadmap/NN-*.md` path → brief; a
-  path matching `^specs/.*\.md$` → spec; anything else → prompt verbatim) and refuses a
-  brief/spec already queued.
-- `move <ref> <n>` — reorder: `<n>` counts pending positions the way `list` prints them;
-  `<n>` at or past the end places last.
+  <type>:<args>]` — the script classifies the payload and refuses a brief/spec already queued.
+- `move <ref> <n>` — reorder: `<n>` counts pending positions the way `list` prints them.
 - `done <ref>` — manual tick.
-- `show <ref>` — the item's full, untruncated payload plus its id, kind and gate. `list` and
-  `/spec:status` cut every row to one line, so this is the only surface that prints a long
-  payload whole; reach for it whenever a row ends in `…`.
+- `show <ref>` — the item's full, untruncated payload plus its id, kind and gate.
 
-`<ref>` resolves against a brief number, a spec path (exact or unique basename substring), a
-unique prompt-payload substring, or an item id. Pass everything after the subcommand straight
-through — never reparse or validate `<ref>`/`--when`/`--after-*` shapes yourself; the
-script's usage/ambiguity errors already name the fix.
+Pass everything after the subcommand straight through — never reparse or validate
+`<ref>`/`--when`/`--after-*` shapes yourself.
 
 ## Run
 
@@ -59,20 +43,12 @@ fix; never reconstruct ordering, readiness, or position by hand.
 
 Print the script's stdout **verbatim** — never a markdown table, never re-sorted.
 After the block, add only what the script cannot: one sentence naming what changed
-(`add`/`move`/`done`) or, for `next`/`list`, one sentence naming the top pick's relationship
-to the rest of the pipeline (e.g. "this jumps ahead of the closest-to-done ranking because
-it's queued above it", or "waiting behind spec 04, which is still hardened").
+(`add`/`move`/`done`) or, for `next`/`list`, the top pick's place in the pipeline.
 
 ## Rules
 
 - Never edit `spec-queue.json` directly, under any circumstance — every mutation is a
-  `spec-queue.js` subcommand, so reconciliation, readiness, and doneness are derived exactly
-  once (`spec/scripts/lib/queue.js`), never duplicated in this command's judgment.
+  `spec-queue.js` subcommand.
 - Never hand-derive an item's readiness, position, or the top pick — an `add`/`move` that
-  appears to have "obviously" landed in the wrong place is reported to the user with the
-  script's own output, never silently corrected by a second write.
-- A brief that lands on the roadmap is appended last on the next `spec-queue next`, with no
-  mark and no notice — there is no accept step. The one way to say "this goes first" is
-  `--top`/`--at <n>` at the moment an item is queued, or `move` afterward.
-- There is no session-start hook: the queue surfaces only when you invoke this command —
-  `next` or `list` is the session check-in.
+  appears to have landed in the wrong place is reported to the user with the script's own
+  output, never silently corrected by a second write.

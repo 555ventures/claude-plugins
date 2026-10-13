@@ -1,12 +1,14 @@
 ---
 date: 2026-10-08
-status: hardened
+status: implementing
+build_base: main
 open_markers: 0
 tier: standard
 area: doctrine
 breaking: false
 depends_on: [specs/20261008/01-doctrine-states-contracts-and-points-at-its-enforcers.md]
 brief: n/a
+diff_base: 6620ceada2ce21d0f398cb2e5a956f24b771968b
 ---
 
 # Commands state their steps and point at their scripts

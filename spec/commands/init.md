@@ -7,15 +7,13 @@ argument-hint: [notes about the repo, optional]
 
 The spec plugin ships the **process layer** (commands, workflows, state gate, reviewer,
 template). This command generates the **grounding layer** — everything repo-specific — so the
-pipeline can run here. It is a one-time deep session (re-runnable to refresh); budget real
-exploration time. Everything you write must be verified against actual code in this repo:
+pipeline can run here. Everything you write must be verified against actual code in this repo:
 real paths, real exports, real naming, real commands. An invented reference is worse than a
 missing one — workers trust these files blindly.
 
 You profile the repo and interview the user; `spec/scripts/init-gen.js` (`spec-paths
 init-gen`) is the **sole writer** of every grounding-layer deliverable it owns — it enforces
-the manifest-check→stamp ordering in code, so a session interrupted mid-run can never leave a
-stamped-but-unverified config. Session flow: Phase 1 profiling → Phase 1.5 substrate
+the manifest-check→stamp ordering in code. Session flow: Phase 1 profiling → Phase 1.5 substrate
 authoring → `init-gen probe` → interview → author the profile JSON in your scratchpad →
 `init-gen generate` → Phase 6 design contract → report → Phase 8 `/spec:enforce` handoff.
 
@@ -24,148 +22,62 @@ the core sections the grounding layer must satisfy (never the whole doctrine fil
 
 ## Deliverables (all in the host repo)
 
-**Authoring rule (governs every phase below, including Phase 1's skill-content authoring):**
-any generated file's prose about a **volatile enumerable fact** — routes, table lists, package
-inventories, token homes — must name the derivation, the command or location that yields the
-fact (e.g. "`ls apps/web/src/routes/` is the surface list"), never inline the enumeration
-itself. A sentence that can go stale independently of the derivation it summarizes is a defect
-at generation time (specs/20260813/04-plan-lock-obligation-carriers.md D4: a generated run
-skill on a host named its routes inline and went stale the moment new ones shipped).
-
 `init-gen generate` is the sole writer of 1–6, 8, and 10 below, from the judgment content you
-author into the profile JSON (Phase 4); 7 and 9 stay session-authored (D2's boundary), and you
-record them into the profile's `manifestExtras` so the manifest still carries a row for each.
+author into the profile JSON (Phase 4); 7 and 9 stay session-authored, and you record them
+into the profile's `manifestExtras` so the manifest still carries a row for each.
 
 1. `.claude/spec.config.json` — machine-readable knobs
-2. `.claude/rules/spec-pipeline.md` — prose grounding, seven sections, `paths:`-scoped so it
-   ambient-loads only for spec/pipeline work (commands Read it explicitly regardless)
-3. `.claude/rules/conventions/*.md` — per-layer **path-scoped convention rules**: small rule
-   files whose `paths:` globs mirror `routing`, so any session touching a matching file gets
-   that layer's hard rules without pipeline machinery (Phase 3)
+2. `.claude/rules/spec-pipeline.md` — prose grounding, seven sections, `paths:`-scoped
+3. `.claude/rules/conventions/*.md` — per-layer **path-scoped convention rules** (Phase 3)
 4. `.claude/agents/*.md` — project-grounded implementer agents (one per batch kind)
 5. `scripts/spec-patterns.sh` — mechanical shortcut sweep adapted to this repo
-6. `.claude/settings.json` `permissions` block — allow entries for the exact toolchain
-   commands the config declares, deny entries for destructive ops and secrets reads; merged
-   into any existing block, never clobbered
-7. UI-stack hosts only: the **design contract record** — `design: {kit, tokens, rules}` written
-   into config, the rules file seeded from the template when absent, and the presence check run
-   (Phase 6)
+6. `.claude/settings.json` `permissions` block — merged into any existing block, never clobbered
+7. UI-stack hosts only: the **design contract record** (Phase 6)
 8. `.claude/skills/spec-verify/SKILL.md` and `.claude/skills/run/SKILL.md` — the per-host
-   **verify** and **run** skills: how to launch, seed, and observe this app, both derived
-   from Phase 1's profiling
-9. The **runtime substrate** where the repo lacks it (Phase 1.5): health endpoint, seed entry
-   point, local DB provisioning, quickstart — the things the verify skill and the smoke leg
-   presuppose
-10. `.claude/spec-manifest.json` — the **deliverable manifest**: every deliverable above plus
-    the activation each claims, verified by `manifest-check.sh` **before** the config is
-    stamped. Init is the one LLM in the pipeline whose output would otherwise ship
-    unverified — this closes that recursion.
+   **verify** and **run** skills
+9. The **runtime substrate** where the repo lacks it (Phase 1.5)
+10. `.claude/spec-manifest.json` — the **deliverable manifest**, verified by `manifest-check.sh`
+    **before** the config is stamped
 11. A short report: what was generated, what was verified, what needs the user's eyes
 
 ## Phase 1 — Profile the repo
 
-Launch parallel Explore agents (`model: sonnet`) and read key files yourself:
+Launch parallel Explore agents (`model: sonnet`) and read key files yourself: stack and
+toolchain (real commands from `package.json` scripts / `Makefile` / `pyproject.toml` — never
+guess), UI stack, architecture, conventions, high-risk surfaces, runtime and observability.
+Interview the user via `AskUserQuestion` only for what the code cannot answer.
 
-- **Stack & toolchain:** language(s), framework, package manager, test runner, linter,
-  typechecker, codegen tools. Extract the real commands from `package.json` scripts /
-  `Makefile` / `pyproject.toml` — never guess (`make check`? `bun typecheck && bun lint &&
-  bun test:run`? `uv run pytest`?).
-- **UI stack:** present? A UI framework or component library in the dependencies (React/Vue/
-  Flutter/…, plus a base design system such as shadcn/Radix, MUI, Material 3, Cupertino).
-  This decides whether the config carries a `design` block at all. If present, also profile the
-  **design language**: existing theme/token files, the directory holding intent-named composite
-  components (an existing `components/base` or barrel counts as the kit), and how consistently
-  real screens follow it — input to Phase 6.
-- **Architecture:** how is code organized (features? domains? modules?), what are the layer
-  boundaries, which surfaces are generated/managed (codegen outputs, lockfile-like catalogs,
-  translation files), what CI enforces (import linters, purity checks) — a check requiring a test carrier per
-  acceptance criterion must exempt `done` specs (contract § Test expiry) or every close deadlocks.
-- **Conventions:** read 3–5 representative source files per layer; extract naming patterns,
-  canonical exemplar files, the rules docs that already exist (`.claude/rules/`,
-  `docs/standards/`, `docs/rules/`, `AGENTS.md`, `CLAUDE.md`).
-- **High-risk surfaces:** money paths, auth, migrations, cross-area contracts — what here
-  would be critical-tier?
-- **Runtime & observability:** how to launch the app locally — dev command, ports, required
-  env vars/secrets stubs; how to seed a testable state — test user/credentials, fixtures, seed
-  script, db reset; how to observe behavior once it's running — URLs/routes, CLI invocations,
-  log locations, and whether the observable surface is browser, API, or both. Derive every
-  answer from `package.json` scripts, the README, `docker-compose.yml`, Playwright/Cypress
-  config, seed scripts — never guess. This is the profiling input to the verify skill below.
+**Author the generated skills' content** from the runtime & observability findings, for
+`profile.skills` (Phase 4) — `init-gen generate` writes both files from what you author here:
 
-Interview the user via `AskUserQuestion` only for what the code cannot answer — glossed in plain
-English, recommended-first, with one line of consequence per option (e.g. "which surfaces should
-get the extra critical-tier scrutiny — the ones where a bad change is expensive to fix after it ships?
-(Recommended: money/auth/migration paths, if this repo has any — missing one lets a risky change
-through at routine speed; naming too many slows every ordinary edit down with critical tier's extra
-build/review overhead)", with the real candidate paths as informed options).
-
-**Author the generated skills' content** from the runtime & observability findings above, for
-`profile.skills` (Phase 4) — deliverables, not incidental notes; `init-gen generate` writes
-both files from what you author here. Two skills, one profiling pass:
-
-- **`profile.skills.specVerify`** (written to `.claude/skills/spec-verify/SKILL.md`) —
-  `description` written as a trigger condition (e.g. "Use when exercising a spec-pipeline
-  finding or an acceptance criterion against the running app instead of just reading code —
-  launching it, seeding a test state, and observing real behavior"). `body`: how to launch the
-  app locally (dev command, ports, env), how to seed a testable state (test user, fixtures, db
-  reset — whatever this repo reveals), and how to observe behavior (URLs/routes, CLI
-  invocations, log locations, browser vs API surfaces). Every instruction must trace to a real
-  file in this repo — `package.json` scripts, the README, `docker-compose.yml`,
-  Playwright/Cypress config, a seed script; where the repo is silent, write `[NEEDS
-  CLARIFICATION: <question>]` rather than guess. State its consumers in the body:
-  the review stage's verifiers use it to exercise findings; critical-tier builds may use it for
-  advisory behavioral checks of acceptance criteria — advisory only, it gates nothing until the
-  run ledger (`.claude/spec-runs.jsonl`) shows its verdicts track real escapes.
-- **`profile.skills.run`** (written to `.claude/skills/run/SKILL.md`) — the session-facing
-  sibling: `description` as a trigger ("Use when launching this app locally to see it working —
-  dev server, ports, env, seed, and where to look once it serves"). `body`: the launch command,
-  ready check, seed entry point, and observation URLs, with the launch on a free `PORT` (never a
-  fixed one) and URLs read from it — a distilled subset of the same
-  profiling, ≤30 lines, pointing at `spec-verify` for the deeper seeding/observability detail
-  rather than duplicating it. This is the file the harness's built-in `/run` and `/verify`
-  behaviors discover, so it pays off outside the pipeline too.
-- **`allowedTools` (both):** pre-authorize exactly the Bash commands each body instructs (boot,
-  ready check, seed) so invoking the skill doesn't burn permission prompts on its own
-  documented commands.
+- **`profile.skills.specVerify`** (`.claude/skills/spec-verify/SKILL.md`) — `description` as a
+  trigger condition; `body`: how to launch the app locally, seed a testable state, and observe
+  behavior. Every instruction must trace to a real file in this repo; where the repo is
+  silent, write `[NEEDS CLARIFICATION: <question>]` rather than guess.
+- **`profile.skills.run`** (`.claude/skills/run/SKILL.md`) — the session-facing sibling:
+  `description` as a trigger; `body`: the launch command, ready check, seed entry point, and
+  observation URLs, launched on a free `PORT` (never a fixed one), ≤30 lines, pointing at
+  `spec-verify` for the deeper detail.
+- **`allowedTools` (both):** pre-authorize exactly the Bash commands each body instructs.
 
 ## Phase 1.5 — Runtime substrate (generate what verification presupposes)
 
-Session-authored, per the D2 boundary — `init-gen generate` does not write any of this; you
-record each item as a `manifestExtras` row (Phase 4) so the manifest still claims it.
+Session-authored: `init-gen generate` does not write any of this; you record each item as a
+`manifestExtras` row (Phase 4). Where Phase 1's profiling found gaps, **create the substrate —
+don't just record the gap**; each item is skippable only by an explicit `inert` manifest row
+with a reason:
 
-The verify skill, the smoke leg, and any DB-gated test suite all presuppose a runnable
-substrate. Where Phase 1's profiling found gaps, **create the substrate — don't just record
-the gap**: a host that skips this ships without knowing whether it can even run, and "can I
-run this?" becomes a full investigation instead of a one-line answer. Each item is small,
-and each is skippable only by an explicit `inert` manifest row with a reason:
-
-- **Health endpoint** — if the app serves HTTP and has no cheap liveness route, add one
-  (e.g. `/api/health` returning 200 + version). It is the `runtime.readyCheck` target, the
-  deploy healthcheck, and the e2e webServer wait, all in one ~10-line file.
-- **Port** — the generated `bootCommand` serves on `$PORT` and `readyCheck` probes `$PORT`
-  (add the framework's port flag, or a `PORT` read in the host's boot script, where the dev
-  server ignores the variable); a declared `prototype.url` carries `{port}`; the run skill
-  tells a session to launch on a free port, never a fixed one.
-- **Local DB/service provisioning** — if `.env.example` points at databases nothing creates,
-  add the missing compose file or provisioning script so `TEST_DATABASE_URL`-style gates can
-  actually be satisfied locally. An env-gated test suite whose env costs "hand-provision two
-  databases" never runs — and a skip is not a pass.
-- **Seed entry point** — a script that produces an observable post-signup state (test
-  tenant/user, minimal fixtures). Without it, "launch, seed, observe" fails at step two.
-- **Worktree env manifest** — if gitignored runtime config exists (`.env*`, local override
-  files), write `.worktreeinclude` at the repo root listing those patterns (gitignore syntax;
-  Claude Code's native format). The manifest feeds both worktree-creation paths through the
-  shared `worktree-include.sh` owner — `merge-back.sh create`'s build worktree and `/spec:replay`'s
-  `--setup` scratch worktree — without it, either boots env-less and smoke fails on a config artifact, not the code under review.
-- **Quickstart** — a root README section (or file) answering "how do I run this?" in five
-  lines, citing the real commands.
+- **Health endpoint** — the `runtime.readyCheck` target, when the app serves HTTP.
+- **Port** — the generated `bootCommand` serves on `$PORT` and `readyCheck` probes `$PORT`; a
+  declared `prototype.url` carries `{port}`.
+- **Local DB/service provisioning** — so `TEST_DATABASE_URL`-style gates can be satisfied.
+- **Seed entry point** — a script that produces an observable post-signup state.
+- **Worktree env manifest** — `.worktreeinclude` at the repo root listing gitignored runtime
+  config patterns (gitignore syntax).
+- **Quickstart** — a root README section answering "how do I run this?" in five lines.
 - **Git remote / CI activation** — check `git remote -v`. If empty, ask the user
-  (`AskUserQuestion`, glossed in plain English with a consequence per option): "this repo has no
-  git remote, so generated CI config would never run — connect one now (Recommended: CI then
-  catches drift on every push, and it's a one-time setup cost) or declare CI inert for now
-  (cheaper today, but nothing checks this repo until a remote exists)." Generated CI config with
-  no remote executes zero times; the manifest records whichever the user chooses — never an
-  undeclared limbo.
+  (`AskUserQuestion`): connect one now (Recommended) or declare CI inert for now; the manifest
+  records whichever the user chooses.
 
 ## Phase 2 — Probe the host (`init-gen probe`)
 
@@ -175,34 +87,19 @@ Run:
 node "$(spec-paths init-gen)" probe --root . [--test-command "<config testCommand>"] [--sample <n>]
 ```
 
-Read-only, deterministic, and it never blocks: every adverse finding is data, not a failure —
-`probe` exits 0 on findings, 2 only on a usage error. Pass `--test-command` once Phase 1 has
-extracted the real `testCommand` string, so the probe can execute it against a synthesized
-nonexistent path (`--sample` bounds how many tracked source files the at-risk sub-probe
-samples; default is up to 20).
+Read-only and it never blocks: `probe` exits 0 on findings, 2 only on a usage error. Pass
+`--test-command` once Phase 1 has extracted the real `testCommand` string.
 
-stdout is a single JSON object:
+stdout is a single JSON object (`testCommand`, `atRisk`); every finding routes to Phase 3's interview:
 
-```jsonc
-{
-  "testCommand": { "failsLoudOnNoMatch": true, "exit": 1 },   // only when --test-command given
-  "atRisk": { "sampled": 20, "testFiles": 14, "refs": 3 }     // via scope-reconcile --probe-at-risk
-}
-```
-
-Detection is the script's job; every finding here routes to Phase 3's interview — the probe
-itself never installs, never asks, never fails on an adverse finding:
-
-- `testCommand.failsLoudOnNoMatch: false` — the test runner exits 0 on a path matching nothing
-  (specs/20260822/02-init-generation-script.md D8); Phase 3 surfaces it.
-- `atRisk.refs: 0` — the at-risk review leg's path-substring heuristic found no test
-  references among the sampled files; Phase 3 discloses that the leg will likely never fire on
-  this host.
+- `testCommand.failsLoudOnNoMatch: false` — the test runner exits 0 on a path matching nothing;
+  Phase 3 surfaces it.
+- `atRisk.refs: 0` — the at-risk review leg's heuristic found no test references among the
+  sampled files; Phase 3 discloses that the leg will likely never fire on this host.
 
 ## Phase 3 — Interview
 
-Every question here — the ones above from Phase 1/1.5's profiling and the three below driven
-by Phase 2's probe — follows shared § Question Style: plain language, product-behavior lens,
+Every question here follows shared § Question Style: plain language, product-behavior lens,
 the ten-second cold test, recommended option first labeled "(Recommended)", consequences in
 each option's `description`.
 
@@ -211,10 +108,8 @@ each option's `description`.
   path matching nothing, and ask whether to accept that risk as-is or fix the invocation before
   continuing. Record the ruling either way — never silently accept a vacuous pass.
 - **at-risk applicability disclosure** — shown when the probe reports `"atRisk": {"refs": 0,
-  ...}`: tell the user the at-risk review leg will likely never fire on this host (its
-  path-substring heuristic found zero references among the sampled files — the known failure
-  mode on Python/Go-shaped import styles) and ask whether that's expected or worth a closer
-  look before accepting it.
+  ...}`: tell the user the at-risk review leg will likely never fire on this host and ask
+  whether that's expected or worth a closer look before accepting it.
 
 Both rulings land in the profile at `probeOutcomes.testCommand` / `probeOutcomes.atRisk`
 (Phase 4) — never omitted, never inferred silently.
@@ -267,52 +162,21 @@ describes:
 Field-by-field, tracing each back to the phase that grounds it:
 
 - **`config`** — Phase 1's stack/toolchain/runtime findings; Phase 6's `design` block on
-  design-capable hosts. Real paths, real commands, no invented references — the script
-  validates keys and exits 2 naming the first missing one; a *wrong* value is never caught.
-- **`rules.sections`** — the six judgment sections (Risk Tiers / Planning / Build / Worker
-  Rules / Test Rules / Review Checks) as this repo's concrete grounding: the critical-tier
-  trigger list with real paths, the new-surface checklist, orchestrator integration duties,
-  worker/test conventions, reviewer severity calibrations — same content bar the pipeline
-  rules file has always carried — rules state the current invariant plus one owner citation,
-  never dates, people, hosts, versions, or prior behavior. `## Gotchas` is never authored
-  here; the script emits it empty with its own contract header.
+  design-capable hosts. The script validates keys and exits 2 naming the first missing one; a
+  *wrong* value is never caught.
+- **`rules.sections`** — the six judgment sections as this repo's concrete grounding. Rules
+  state the current invariant plus one owner citation, never dates, people, hosts, versions, or
+  prior behavior. `## Gotchas` is never authored here.
 - **`conventionRules`** — one entry per routing kind with hard conventions worth ambient
-  enforcement (skip kinds with nothing beyond generic style); each `paths` glob must match ≥1
-  tracked file, each `body` ≤15 lines citing the matching agent and one exemplar file rather
-  than duplicating its tables, and one owner citation per rule that needs one, never a dated
-  story.
-- **`agents`** — one entry per non-`default` `agentMap` kind. Study real code first: for each
-  kind, read the canonical files of that layer and extract naming tables, exemplar paths, and
-  constraints — every path and export you cite must exist. Per field: `persona` is a paragraph
-  (the script renders it under an auto-generated `# {Kind} Specialist` heading) stating what
-  this agent owns in THIS repo's vocabulary and what it never does; `expertise` is bullets of
-  concrete files/surfaces it owns; `reference` is bullets of verified pointers — rule docs
-  governing the layer, 1–3 canonical exemplar files, generated files to grep rather than guess;
-  `constraints` is bullets of this layer's hard rules (the ones CI or review would catch), each
-  imperative with the sanctioned alternative, naming-convention tables with real repo examples
-  earning their keep; `mcp` is omitted unless the layer leans on third-party APIs, in which
-  case it names the Context7/registry queries to run interactively and closes with: "**Pipeline
-  carve-out:** the lookups above apply to interactive invocations only. As a spec-pipeline
-  worker you never query MCPs — `/spec:plan` embeds the needed references into the spec's
-  UI/Contracts sections." The `## Worker Contract (spec pipeline)` section (and, for the
-  `tests` kind, the Tests-kind addendum) is never authored here — the script emits it
-  byte-identical across every agent from `templates/grounding-contract.md`, substituting only
-  `selfVerifyExamples`. Host-repo agents (unlike plugin agents) get `permissionMode:
-  acceptEdits` and `memory: project` automatically; you don't declare either.
+  enforcement; each `paths` glob must match ≥1 tracked file, each `body` ≤15 lines.
+- **`agents`** — one entry per non-`default` `agentMap` kind; every path and export you cite
+  must exist. The `## Worker Contract (spec pipeline)` section is never authored here.
 - **`skills`** — the content Phase 1 already authored, carried here verbatim.
-- **`settings.extraAllow`/`extraDeny`** — beyond the allow set the script derives automatically
-  from `gateCommand`/`testCommand`/`setupCommand`/`patternsScript`/`runtime.*` and the deny
-  defaults (`Bash(rm -rf:*)`, `Read(.env*)`); add whatever this repo's toolchain or secrets
-  shape additionally needs.
 - **`patternSweeps`** — repo-specific `sweep "<name>" -e '<regex>' [-g '!<glob>' ...]` calls
-  grounded in the Worker/Test/Review rules above (suppression markers, deferred-work comments,
-  discipline bypasses, boundary violations, generated-surface edits vs `DIFF_BASE`) — spliced
-  verbatim into the generated harness.
-- **`sourceRoot`** — the patterns script's default scope and the at-risk probe's sampling root.
+  grounded in the Worker/Test/Review rules above.
 - **`manifestExtras`** — one row per deliverable the script does NOT itself write: every
   Phase 1.5 substrate item you created (or declared `inert`) and the Phase 6 rules-file seed copy
-  (`.claude/rules/design.md`, when Phase 6 copied it from the template) — the D2 boundary line:
-  those stay session-authored, but the manifest must still claim each of them.
+  (`.claude/rules/design.md`, when Phase 6 copied it from the template).
 - **`probeOutcomes`** — Phase 3's rulings, verbatim.
 
 ## Phase 5 — Generate (`init-gen generate`)
@@ -324,131 +188,82 @@ invocation is the brownfield first-run, or a refresh of a genesis-grounded repo.
 node "$(spec-paths init-gen)" generate --root . --profile <scratchpad profile path> [--refresh]
 ```
 
-Exit codes:
-
-- **0** — generated, `manifest-check.sh` green, config stamped.
-- **1** — `manifest-check.sh` red; nothing stamped. Fix the named row and re-run.
-- **2** — usage error, an invalid profile (the first missing required field, named, with the
-  remedy printed), or an unparseable Worker Contract (`templates/grounding-contract.md`'s
-  expected heading not found).
-- **3** — one or more existing target files differ from what the profile would produce and
-  `--refresh` was not passed; nothing was written. Diff the named files yourself, fold whatever
-  the user hand-edited back into the profile, then re-run with `--refresh` — it overwrites and
-  prints one `changed:`/`unchanged:` line per file. `.claude/settings.json` is the one
-  exception: it always merge-preserves in both modes (every existing entry kept; an existing
-  deny covering a would-be allow stays, reported, never overridden).
+Enforced by `init-gen.js` — its header comment is the contract (exit codes 0–3). On exit 3,
+diff the named files yourself, fold whatever the user hand-edited back into the profile, then
+re-run with `--refresh`.
 
 ## Phase 6 — Design contract (UI-stack hosts only)
 
-Session-authored, per the D2 boundary (Phase 4's `manifestExtras` records these rows — the
-script never sees this phase's output directly). Skip unless Phase 1 found a UI stack. Goal:
-**locate, seed, record, check** — the design contract is code (tokens, kit, rules file); init
-never authors a component or a token, it only records where the three pieces live and verifies
-their presence.
+Session-authored (Phase 4's `manifestExtras` records these rows). Skip unless Phase 1 found a
+UI stack. Goal: **locate, seed, record, check** — init never authors a component or a token.
 
 **Precedence — check for a genesis canon first.** If `.claude/genesis/status.json` exists
 (the genesis stage seeded this repo), branch four ways on its `design` value:
 
-- `ratified`, `rules-locked`, or `skipped` → **consume, never re-prompt.** The canon already
-  exists: the genesis BRIEF state authored the kit, tokens, and rules file. Extract from what's there (treat it
-  like brownfield below), and record `genesisStackDescriptor` in `profile.config` (enforcement
-  is generated later by `/spec:enforce`, Phase 8). On `skipped` (headless archetype) write no
-  `design` block at all. Report mode `genesis` in Phase 7.
+- `ratified`, `rules-locked`, or `skipped` → **consume, never re-prompt.** Extract from what's
+  there (treat it like brownfield below), and record `genesisStackDescriptor` in
+  `profile.config`. On `skipped` (headless archetype) write no `design` block at all. Report
+  mode `genesis` in Phase 7.
 - `doctrine-drafted` / `tokens-landed` (legacy partial canon) → **STOP.** Tell the user to
-  finish the genesis BRIEF state (re-run `/spec:genesis` to reach BRIEF and ratify it) first;
-  the state gate also blocks this. Do not half-adopt.
-- `pending`, or any value outside the three arms above → **warn and proceed** — matching
-  genesis.md's own gate for this state ("warned, proceeds"). Write **no** `design` block (the
-  canon isn't ready to consume); name **re-run `/spec:genesis`** as the pending finisher in
-  both the warning and the Phase 7 report.
+  finish the genesis BRIEF state (re-run `/spec:genesis` to reach BRIEF and ratify it) first.
+- `pending`, or any value outside the three arms above → **warn and proceed.** Write **no**
+  `design` block; name **re-run `/spec:genesis`** as the pending finisher in both the warning
+  and the Phase 7 report.
 - (no `.claude/genesis/` at all) → the brownfield-or-greenfield path below.
 
 **Enforcement is generated by `/spec:enforce`, not here.** This phase does NOT emit linters,
-contracts, or hooks for the design rules (or any other rules). It records the consume-side keys
-(`genesisStackDescriptor` only) in `profile.config` and
-leaves the actual category→enforcer selection — discovered and verified at runtime, never from
-a hardcoded mapping — to the dedicated command. Init **ends by invoking `/spec:enforce`**
-(Phase 8), which mechanizes the design rules (including the `kit-discipline` cell the `design`
-block earns) together with the rest of the host's rule set in one pass.
+contracts, or hooks for the design rules. Init **ends by invoking `/spec:enforce`** (Phase 8).
 
 **Brownfield (the repo has real UI, no genesis canon):** locate, don't invent.
 
-1. **Locate** the token file (theme/tokens CSS, or the stack's equivalent) and the kit
-   directory — the directory holding intent-named composite components (an existing
-   `components/base` or barrel counts).
-2. **Locate the rules file.** When one already exists (recorded by a prior init, or hand-authored),
-   use it as-is. When none exists, copy `spec/templates/design-rules.md`
-   (`$(spec-paths design-rules-template)`) to `.claude/rules/design.md` unchanged except its
-   `paths:` frontmatter, which points at the located kit directory and the screen directory (the
-   template's own globs are a starting default); record this copy as a `manifestExtras` row
-   (Phase 4). Init never fills in the tables — genesis's design stage or a brownfield author does,
-   by hand.
+1. **Locate** the token file and the kit directory — the directory holding intent-named
+   composite components.
+2. **Locate the rules file.** When one already exists, use it as-is. When none exists, copy
+   `spec/templates/design-rules.md` (`$(spec-paths design-rules-template)`) to
+   `.claude/rules/design.md` unchanged except its `paths:` frontmatter, which points at the
+   located kit directory and the screen directory; record this copy as a `manifestExtras` row
+   (Phase 4). Init never fills in the tables.
 3. **Record** `design: {kit, tokens, rules}` (repo-relative paths) into `profile.config` (Phase 4).
    A host with no UI stack at all writes no `design` block — greenfield with nothing to record yet
    is told to run `/spec:genesis` instead of adopting or crafting here.
 4. **Check.** After `init-gen generate` stamps the config, run
    `node "$(spec-paths design-contract-check)" --root .` and fold its findings into Phase 7's
-   `warns` — missing composites, empty seeded tables, absent naming subsections. Nothing here
-   blocks: a brownfield host arrives with real gaps, and the check exists to surface them, not to
-   gate init.
+   `warns`. Nothing here blocks.
 
 ## Phase 7 — Report
 
-1. Re-read `generate`'s own stdout for anything unresolved: a settings-merge conflict line (an
-   existing deny kept over a would-be allow), the `changed:`/`unchanged:` lines from a
-   `--refresh` run, or an accepted-risk `probeOutcomes` reason from Phase 3 — these become
-   `warns`.
+1. Re-read `generate`'s own stdout for anything unresolved: a settings-merge conflict line, the
+   `changed:`/`unchanged:` lines from a `--refresh` run, or an accepted-risk `probeOutcomes`
+   reason from Phase 3 — these become `warns`.
 2. Assemble the slots below and write them to a scratch JSON file, then print
    `node "$(spec-paths report-render)" --slots <file>` verbatim (shared § Console Output
-   Style — the script is the sole render authority; never hand-format the output):
+   Style):
    - `outcome`: ✅ anchor (⚠️ if something needs the user), text
      `initialized — {N} files, gate verified, stamped`
-   - `bullets`: two plain-language lines, replacing the old `{kind → name}`/glob dumps with
-     meaning (§ Console Output Style's "meaning over dumps") — (1) what was generated: agent
-     count, the verify + run skills, convention-file count, the critical-tier triggers chosen, and the
-     permissions entries landed; (2) runtime + design-contract state: boot/ready commands
-     or a declared-inert reason, and the design contract status — genesis / located / pending
-     (name **re-run `/spec:genesis`** as the finisher when pending) — with the check's findings
-     folded into `warns`
+   - `bullets`: two plain-language lines — (1) what was generated: agent count, the verify + run
+     skills, convention-file count, the critical-tier triggers chosen, and the permissions
+     entries landed; (2) runtime + design-contract state: boot/ready commands or a
+     declared-inert reason, and the design contract status — genesis / located / pending
+     (name **re-run `/spec:genesis`** as the finisher when pending)
    - `warns`: one line per unresolved item from step 1, plus anything Phase 1's citations
      couldn't be spot-checked against the repo
    - `next`: `{kind: 'status-verbatim', text: <captured output of
      node "$(spec-paths spec-status)" --next>}` — never a hand-written `Next: /spec:enforce`:
-     Phase 8 auto-chains enforcement in this same run, so naming it as a next step would
-     misleadingly suggest a manual action that is about to happen automatically
-
-   ```report
-   ✅ **initialized — 14 files, gate verified, stamped**
-   - generated 6 implementer agents, the verify + run skills, 3 convention rule files, and the tier/permissions grounding this repo needs to run the pipeline safely
-   - runtime ready (`bun dev`, health-checked) · design contract located — src/components/kit, src/styles/tokens.css, .claude/rules/design.md
-   ⚠️ manifest-check found one unverified row — settings.json permissions merge kept an existing deny in place, surfaced for review
-   ⚠️ design-contract-check: 2 findings — composite-missing RecordEditSheet under src/components/kit, table-empty ### wire in .claude/rules/design.md
-   {spec-status --next, verbatim}
-   ```
+     Phase 8 auto-chains enforcement in this same run
 
 ## Phase 8 — Generate enforcement (invoke `/spec:enforce`)
 
 The grounding layer is now in place but the rules are not yet mechanized. **End by invoking
 `/spec:enforce`** so a fresh repo leaves init with its rule set deterministically enforced in one
-shot. Enforcement is a separate command by design — different cadence (rules/tooling drift, not
-repo re-profiling) and expensive, flaky work (live research + install-and-verify) — so init does
-not inline it; it hands off. Tell the user enforce is running and that it is independently
-re-runnable later when rules or tooling change.
+shot. Tell the user enforce is running and that it is independently re-runnable later when
+rules or tooling change.
 
 ## Rules
 
 - Never write a reference you did not verify against this repo's actual code.
 - Plugin agents cannot declare `permissionMode`/`memory`; the host agents `init-gen generate`
-  writes CAN and DO (`permissionMode: acceptEdits`, `memory: project`) — the script emits this
-  frontmatter automatically from each `profile.agents[]` entry; you never declare it yourself.
-- The `## Worker Contract (spec pipeline)` section is byte-identical across all generated
-  agents — the script extracts it from `templates/grounding-contract.md` at generate time and
-  substitutes only `profile.selfVerifyExamples`; you never author it.
+  writes CAN and DO — the script emits this frontmatter automatically.
 - Re-running `/spec:init` refreshes the grounding layer: `init-gen generate` refuses (exit 3)
-  to overwrite any target file that already differs from what the profile would produce —
-  re-profile, diff the named files, fold whatever the user hand-edited back into a re-authored
-  profile, then re-run with `--refresh` (Phase 5, D5). `.claude/settings.json` always
-  merge-preserves regardless of `--refresh`. A run that reaches exit 0 re-stamps `generatedBy`
-  and `contractHash`. (To check for drift without regenerating, the user runs `/spec:doctor` —
-  read-only, much cheaper.)
+  to overwrite any target file that already differs from what the profile would produce
+  (Phase 5). To check for drift without regenerating, the user runs `/spec:doctor`.
 - `AskUserQuestion` dismissed → STOP.

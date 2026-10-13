@@ -56,12 +56,12 @@ function host({ briefs = {}, specs = {}, ledgerRows = null, queue = null } = {})
 }
 
 // Splits `list` rows into {head, age, rest}: the age column sits between the id and the
-// description (specs/20261013/02-queue-hygiene.md D2); a trailing stale flag is dropped so
-// numbering and description assertions stay exact. Rows without an age column get age null.
+// description (specs/20261013/02-queue-hygiene.md D2); a trailing stale flag is returned
+// separately as `flag` so each caller asserts it. Rows without an age column get age null.
 function ageRows(out) {
   return out.trim().split('\n').filter((l) => /^\d+ /.test(l)).map((l) => {
-    const m = /^(\d+  \S+)\s+(\d+d|\?)\s+(.*?)(?:\s+⌛ stale)?$/.exec(l)
-    return m ? { head: m[1], age: m[2], rest: m[3] } : { head: l, age: null, rest: '' }
+    const m = /^(\d+  \S+)\s+(\d+d|\?)\s+(.*?)(?:\s+(⌛ stale))?$/.exec(l)
+    return m ? { head: m[1], age: m[2], rest: m[3], flag: m[4] || '' } : { head: l, age: null, rest: '', flag: '' }
   })
 }
 const ageOf = (iso) => Math.floor((Date.now() - Date.parse(iso)) / 86400000) + 'd'
@@ -274,6 +274,8 @@ test('AC-20260903-03-8 / AC-20261013-02-9: spec-queue list renders exactly the n
   const rowsP = ageRows(rPending.stdout)
   assert.deepStrictEqual(rowsP.map((x) => x.age), [ageOf('2026-09-03T10:00:00Z'), ageOf('2026-09-03T10:01:00Z'), ageOf('2026-09-03T10:02:00Z')],
     'D2: every `list` row must carry its age (days since `added`) between the id and the description — an absent column leaves the reader to date items by hand: ' + rPending.stdout)
+  assert.deepStrictEqual(rowsP.map((x) => x.flag), ['', '', ''],
+    'D2: briefs, gated prompts and specs are never flagged stale however old — a stale flag here sends the reader to drop live work: ' + rPending.stdout)
   assert.deepStrictEqual(rowsP.map((x) => x.head + '  ' + x.rest), [
     '1  q1  brief 24 (status-and-queue-diet)',
     '2  q2  /spec:plan @docs/roadmap/26-x.md  ⏳ after 04-reports-write-the-queue (hardened)',
@@ -305,6 +307,8 @@ test('AC-20260903-03-8 / AC-20261013-02-12: spec-queue list virtually reconciles
   const rows = ageRows(r.stdout)
   assert.deepStrictEqual(rows.map((x) => x.age), [ageOf('2026-09-03T10:00:00Z'), '?'],
     "D2: the queued brief shows its age in days and the virtually reconciled brief (no `added`) shows `?` — a missing age column or a guessed one misdates the item: " + r.stdout)
+  assert.deepStrictEqual(rows.map((x) => x.flag), ['', ''],
+    'D2: briefs are never flagged stale, queued or reconciled: ' + r.stdout)
   assert.deepStrictEqual(rows.map((x) => x.head + '  ' + x.rest), ['1  q1  brief 05 (a)', '2  —  brief 08 (b)'],
     "D8: `list` must virtually reconcile brief 08 — never queued, still on-disk and not done — into the numbered pending output at its append-last position with id `—`: " + r.stdout)
   assert.match(r.stdout.trim().split('\n').pop(), /^— 0 done · move: spec-queue move <ref> <n> · full text: spec-queue show <ref>$/,
@@ -468,6 +472,8 @@ test('AC-20260903-03-7 / AC-20261013-02-13: spec-queue move <ref> <n> counts pen
   const frontRows = ageRows(listFront.stdout).slice(0, 3)
   assert.ok(frontRows.every((x) => x.age !== null),
     'D2: every row `list` prints after a move must carry the age column, or the move test is numbering rows the reader cannot date: ' + listFront.stdout)
+  assert.deepStrictEqual(frontRows.map((x) => x.flag), ['⌛ stale', '⌛ stale', '⌛ stale'],
+    'D2: ungated prompts 14+ days old must carry the stale flag after a move — a missing flag hides rot from the reader: ' + listFront.stdout)
   assert.strictEqual(frontRows.map((x) => x.head + '  ' + x.rest).join('\n'),
     '1  q4  task C\n2  q1  task A\n3  q3  task B',
     "D7: after `move C 1`, `list` must number pending items exactly [C, A, B] — the done item sinks out of the pending numbering entirely: " + listFront.stdout)
@@ -480,6 +486,8 @@ test('AC-20260903-03-7 / AC-20261013-02-13: spec-queue move <ref> <n> counts pen
   const lastRows = ageRows(listLast.stdout).slice(0, 3)
   assert.ok(lastRows.every((x) => x.age !== null),
     'D2: every row `list` prints after a move must carry the age column: ' + listLast.stdout)
+  assert.deepStrictEqual(lastRows.map((x) => x.flag), ['⌛ stale', '⌛ stale', '⌛ stale'],
+    'D2: ungated prompts 14+ days old must carry the stale flag after a move — a missing flag hides rot from the reader: ' + listLast.stdout)
   assert.strictEqual(lastRows.map((x) => x.head + '  ' + x.rest).join('\n'),
     '1  q1  task A\n2  q3  task B\n3  q4  task C',
     'D7: `move C 9` (n >= pending count) must place C LAST among pending items, never error and never leave it where it was: ' + listLast.stdout)

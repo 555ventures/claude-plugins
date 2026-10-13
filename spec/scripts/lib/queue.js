@@ -124,6 +124,7 @@ function makeCtx({ ledgerRows, briefStatus, specStatus, specRoot }) {
   return {
     briefStatus,
     specStatus,
+    specRoot,
     specExists: relPath => fs.existsSync(path.join(specRoot, relPath)),
     ledgerCount: stage => {
       if (!countCache.has(stage)) countCache.set(stage, ledgerRows.filter(r => r.stage === stage).length)
@@ -206,9 +207,13 @@ function jaccard(a, b) {
 // superseded (ctx.specStatus), else null. Only prompts cite; briefs and specs never do.
 function citesDoneSpec(item, ctx) {
   if (!item || item.kind !== 'prompt' || typeof item.payload !== 'string') return null
-  for (const m of item.payload.matchAll(/specs\/\d{8}\/\d{2}[\w.-]*\.md/g)) {
-    const st = ctx.specStatus(m[0])
-    if (st === 'done' || st === 'superseded') return m[0]
+  const hit = rel => { const st = ctx.specStatus(rel); return st === 'done' || st === 'superseded' }
+  for (const m of item.payload.matchAll(/specs\/\d{8}\/\d{2}[\w.-]*\.md/g)) if (hit(m[0])) return m[0]
+  // bare `specs/YYYYMMDD/NN` (no more filename) -> the unique on-disk NN-*.md; ambiguous/missing -> no flag
+  for (const m of item.payload.matchAll(/specs\/(\d{8})\/(\d{2})(?![\w.-])/g)) {
+    let names = []
+    try { names = fs.readdirSync(path.join(ctx.specRoot, 'specs', m[1])).filter(n => n.startsWith(m[2] + '-') && n.endsWith('.md')) } catch (_) { /* absent dir */ }
+    if (names.length === 1 && hit(`specs/${m[1]}/${names[0]}`)) return `specs/${m[1]}/${names[0]}`
   }
   return null
 }

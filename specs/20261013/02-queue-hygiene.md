@@ -1,6 +1,6 @@
 ---
 date: 2026-10-13
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: session-queue
@@ -169,6 +169,16 @@ the status overlay tests; three existing `list` pins assert the exact row string
 reconcile, move numbering) — the age column is inserted after the id, so all three are planned
 rewrites in `spec-queue.test.js` (AC-9, AC-12, AC-13), numbering assertions kept verbatim. No test pins the `list` footer count or the
 queue file's ticked rows after a write (grepped at lock). Literals leg: none retired.
+
+**Build deviations (folded at close).** The lock grep above was wrong: five pre-existing
+`spec-queue.test.js` pins asserted done/ticked rows stay in the queue file after a write (the
+dedupe, derived-done skip, done-stamp, concurrent-writer and one-line-cut pins). The archive is
+a new side effect on every write — the pipeline rules' known collision class where a Decision
+makes an existing step write something — so the grep should have been for the call (`done`,
+`next`) rather than for the ticked-row literal. D9 records the ruling: each pin reads the archive
+instead, never deleted. Two smaller follow-ons: the concurrent-writer pin reseeds its queue and
+removes the archive at each trial (a second `done` on an archived id is a correct exit 2), and the
+one-line-cut pin's verb-hint regex gained `groom`. One-off; the class is already a Gotchas entry.
 
 ## Canonical Delta
 

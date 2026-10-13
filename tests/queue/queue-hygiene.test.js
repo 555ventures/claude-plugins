@@ -105,6 +105,8 @@ test('AC-20261013-02-3: spec-queue list prints an age column and the stale, cite
   assert.doesNotMatch(rows[2], /⌛ stale/, 'D2: a gated item is never flagged stale: ' + rows[2])
   assert.match(rows[3], /^4  —\s+\?\s+brief 05/, 'D2: a brief with no `added` must print id `—` and age `?`: ' + rows[3])
   assert.doesNotMatch(rows[3], /⌛|📎|gate met/, 'D2: an item with age `?` carries no flag: ' + rows[3])
+  const bare = host({ specs: DONE_SPEC, queue: [{ id: 'q1', kind: 'prompt', payload: 'Check export after specs/20260101/01 shipped', added: daysAgo(1) }] })
+  assert.match(runNode(SCRIPT, ['list'], { cwd: bare }).stdout, /📎 cites done 01-done/, 'D2: a bare specs/YYYYMMDD/NN citation of a done spec must be flagged')
 })
 
 function archiveHost() {

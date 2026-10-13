@@ -24,7 +24,7 @@ judgment happens here — the script derives and writes, you render its output.
 - `move <ref> <n>` — reorder: `<n>` counts pending positions the way `list` prints them.
 - `done <ref>` — manual tick.
 - `show <ref>` — the item's full, untruncated payload plus its id, kind and gate.
-- `groom` — read-only: prints the flagged buckets (cites-done, gate-met, stale), writes nothing.
+- `groom` — read-only: prints the flagged buckets (duplicates, cites-done, gate-met, stale), writes nothing.
 
 Pass everything after the subcommand through verbatim — never reparse `<ref>`/`--when`/`--after-*`.
 

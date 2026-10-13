@@ -25,10 +25,11 @@ function setupHost() {
   const dir = tmpdir('proto-host')
   fs.cpSync(FIXTURE_DIR, dir, { recursive: true })
   gitRepo(dir)
-  // A real host git-ignores the files the fixture's dbCreate and the driver plant in the worktree;
-  // without this `git worktree remove` refuses every close on them. seedGitRepo overwrites any
-  // shipped .gitignore, so the entries are appended after the seed commit.
-  fs.appendFileSync(path.join(dir, '.gitignore'), 'db-created\nsrc/proto-*.js\n')
+  // The fixture's own dbCreate plants db-created in the worktree; a real host would ignore its own
+  // scratch the same way. The driver's planted overlay files are deliberately NOT ignored — closing
+  // must clean them up itself. seedGitRepo overwrites any shipped .gitignore, so the entry is
+  // appended after the seed commit.
+  fs.appendFileSync(path.join(dir, '.gitignore'), 'db-created\n')
   execFileSync('git', ['-C', dir, 'add', '.gitignore'], { encoding: 'utf8' })
   execFileSync('git', ['-C', dir, 'commit', '-q', '-m', 'ignore prototype scratch files'], { encoding: 'utf8' })
   return dir

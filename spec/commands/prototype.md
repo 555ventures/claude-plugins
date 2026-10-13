@@ -1,5 +1,5 @@
 ---
-description: Opens a throwaway worktree on proto/<brief stem> from the host's main branch, wires a dev-only pin overlay into the running app, iterates pin rounds across sessions until the user replies approve, then writes a behaviour contract — every pin as a sentence, one picture per route × state, one end-to-end test per behaviour pin — queues the /spec:plan paste, and keeps the worktree until --mark closed — driver-stepped, /clear-safe
+description: Opens a throwaway worktree on proto/<stem> from the host's main branch — from an idea in plain words, a roadmap brief, or an existing prototype stem — wires a dev-only pin overlay into the running app, iterates pin rounds across sessions until the user replies approve, then writes a behaviour contract — every pin as a sentence, one picture per route × state, one end-to-end test per behaviour pin — queues the /spec:plan paste, and keeps the worktree until --mark closed — driver-stepped, /clear-safe
 argument-hint: <idea in plain words | docs/roadmap/NN-*.md | prototype stem>
 ---
 

@@ -238,6 +238,11 @@ if (stemFlagGiven) {
     die('--stem applies to the words shape only — remedy: drop --stem, or pass the idea in words instead of ' + inputArg)
   }
 }
+if (input.kind === 'words' && !stemFlagGiven) {
+  // A bare re-run with the idea opened earlier under --stem resumes that prototype, never a second one.
+  const fixed = openedStemFor(input.idea)
+  if (fixed) input.stem = fixed
+}
 if (input.kind === 'words') {
   const taken = statusOfStem(input.stem)
   if (taken && !(taken.input && taken.input.idea === input.idea)) {
@@ -795,6 +800,18 @@ function cmdMarkTestsDerived() {
 // ---------------------------------------------------------------------------
 // --mark closed (D9).
 // ---------------------------------------------------------------------------
+// The two overlay files --mark opened copies in are the driver's own, never the user's work: a
+// still-untracked copy is deleted so `git worktree remove` does not refuse on it. A copy the user
+// committed is tracked and left alone — the dirty check then judges only their changes.
+function removePlantedOverlay() {
+  const overlayDest = path.join(worktreePath, proto.overlay)
+  for (const f of [overlayDest, path.join(path.dirname(overlayDest), 'proto-stable-id.js')]) {
+    if (!fs.existsSync(f)) continue
+    const tracked = spawnSync('git', ['-C', worktreePath, 'ls-files', '--error-unmatch', '--', f], { encoding: 'utf8' })
+    if (tracked.status !== 0) fs.rmSync(f)
+  }
+}
+
 function cmdMarkClosed() {
   const status = loadStatus()
   if (!status) die(statusRel + ' does not exist — remedy: nothing to close; run --mark opened to start a prototype')
@@ -814,6 +831,7 @@ function cmdMarkClosed() {
     status.marks.dbDestroyed = nowIso()
     saveStatus(status)
   }
+  removePlantedOverlay()
   const removed = contractLib.removeProtoWorktreeAndBranch({ root, worktreePath, branch, stem, rerun: '--mark closed' })
   if (!removed.ok) die(removed.message)
   status.marks.closed = nowIso()

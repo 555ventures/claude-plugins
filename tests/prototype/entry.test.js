@@ -90,6 +90,11 @@ test('AC-20261007-02-2: --mark opened persists the words input, a stem re-opens 
   assert.match(again.stdout, /state: ROUND/, 'a re-opened opened prototype is at ROUND: ' + again.stdout)
   assert.match(again.stdout, /prototype: collector-flow/, 'the step must name the stem: ' + again.stdout)
 
+  const byWords = drive(dir, WORDS)
+  assert.strictEqual(byWords.status, 0, 'the same words without --stem must re-open the prototype: ' + byWords.stderr)
+  assert.match(byWords.stdout, /prototype: collector-flow/, 'a bare re-run with the opened idea must resume the --stem prototype, not open a second one: ' + byWords.stdout)
+  assert.match(byWords.stdout, /state: ROUND/, 'the resumed prototype is at ROUND: ' + byWords.stdout)
+
   const renamed = drive(dir, WORDS, ['--stem', 'other'])
   assert.strictEqual(renamed.status, 2, 'the stem is fixed once opened: ' + JSON.stringify(renamed))
   assert.match(renamed.stderr, /the stem is fixed once opened/, 'the refusal must say why: ' + renamed.stderr)

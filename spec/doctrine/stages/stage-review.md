@@ -8,8 +8,7 @@ judgment on survivors (fix / waive / reject) happens in this session with the us
 reviewer reports, never adjudicates.
 
 **Setup:** run `spec-paths shared-for review` and read its output. Read the host's
-`.claude/spec.config.json` (its pipeline rules load with that Read — path-scoped, never
-re-read). Either missing → STOP: run `/spec:init` first. Then run `spec-paths review-driver`
+`.claude/spec.config.json`. Either missing → STOP: run `/spec:init` first. Then run `spec-paths review-driver`
 once and keep the printed path — it is `{driver}` below.
 
 ## Input
@@ -22,10 +21,7 @@ DISPOSITIONS protocol below — see `spec/commands/run.md`'s Review stage.
 ## Protocol — the driver owns the state machine
 
 Loop until the driver prints `DONE`: run `node {driver} <spec path>`; execute exactly the
-printed step; record it with `node {driver} <spec> --mark <mark>`; re-run. The driver verifies
-the step's artifacts before advancing (a missing or malformed one is refused, exit 2, repair
-named) and never trusts a sidecar mark alone, so it always re-derives the true current step —
-never skip ahead of it or re-do a step it reports complete. Base derivation prefers the pin
+printed step; record it with `node {driver} <spec> --mark <mark>`; re-run. Base derivation prefers the pin
 before the ref: `diff_base` → `build_base` → `merge-base HEAD main|master`.
 
 `STOPPED` (a `RED_BLOCKING` gate failure) and `ESCALATE` (a third `fix-applied`, cap 2) are
@@ -33,21 +29,10 @@ terminal states the driver's own printed step names in full — remedy and exits
 that text, never guess one. Every pass's ledger line lands in `.claude/spec-runs.jsonl`,
 appended by the driver, never hand-appended.
 
-When the driver prints `DONE`, report (core § Console Output Style) from slots it captured —
-`outcome` (✅ `CLEAN — merged`, or its one-line MERGE-skip note), `warns` (derived by this
-session from the ci leg's manifest row — `unavailable: sha-unseen` with a `branchConclusion`
-of `failure`, `timed_out` or `cancelled` — dropped otherwise; report-only, never a finding,
-never a driver slot — plus `📎 N advisory finding(s) recorded` when the return carried a soft),
-`queued` (one line per queued follow-up, omitted when none), `next` (its captured
+When the driver prints `DONE`, report (core § Console Output Style) — printed by
+`report-render.js`; slots `outcome`, `warns`, `queued`, `next` (its captured
 `node "$(spec-paths spec-status)" --next`, verbatim, never hand-applied). Run
 `node "$(spec-paths report-render)" --slots <file>` and print it verbatim.
-
-```report
-✅ **CLEAN — merged**
-⚠️ CI has not seen this commit; origin `main`'s latest run: `failure`    (only when the ci leg observed sha-unseen with a failing/timed-out/cancelled branch conclusion)
-📎 3 advisory finding(s) recorded    (only when the reviewer return carried any soft survivor)
-{spec-status --next, verbatim}
-```
 
 ## Rules — the judgments this session holds
 
@@ -62,9 +47,9 @@ never a driver slot — plus `📎 N advisory finding(s) recorded` when the retu
   the whole diff, is the range (`spec/agents/reviewer.md` § The fix-delta pass).
 - **The evidence standard is executed, not argued:** every non-soft finding carries a repro
   the reviewer actually ran, or the exact spec lines (Decision/AC) the diff violates with the
-  hunk quoted — neither present returns `advisory`; an empty findings list is valid. No
+  hunk quoted — neither present returns `advisory`. No
   finding dies by argument — dismissed only on executed contrary evidence, a quoted spec
-  sanction, or a demonstrated miscitation, presented to the user, never silently.
+  sanction, or a demonstrated miscitation, presented to the user.
 - **Dispositions (the DISPOSITIONS step).** Only the hard pool needs judgment; softs are advisory
   — printed once, recorded in the artifact and the ledger's `findings.soft`, never dispositioned;
   one worth fixing becomes `spec-queue add`. Dispatch **one** `Agent {subagent_type:
@@ -73,8 +58,7 @@ never a driver slot — plus `📎 N advisory finding(s) recorded` when the retu
   reversible, re-reviewed by the fix-delta pass once you mark `fix-applied`. Every
   `waive`/`reject` goes to the user via `AskUserQuestion` (≤4 per call, core § Question
   Style), the disposer's reason quoted and its recommendation first; record the answer as
-  `final`, `overriddenBy: "user"` + `overrideReason` when it differs. The session never
-  changes a recommendation or asks about a `fix`; it may attach `sessionNote` (informational).
+  `final`, `overriddenBy: "user"` + `overrideReason` when it differs.
   Waive/Reject land in the spec's Rationale with date + reason; only the user waives.
   `DISPOSER_FAILED` is a failed dispatch, never a disposition — re-dispatch before marking.
   An empty hard pool the driver dispositions itself at `reviewer-returned` — no mark, no disposer.
@@ -94,9 +78,7 @@ never a driver slot — plus `📎 N advisory finding(s) recorded` when the retu
   mechanized), **merge** (durable truth → `docs/canonical/{area}.md`), or **mechanize** (a
   recurring class → a script per core § Incident Policy) — record each eviction as one
   Rationale line. **Dispose every
-  `.claude/agent-memory/` file this spec's diff touched** (carry, correct, or delete, judged on
-  what it teaches, never on who wrote it — an unnamed "concurrent process" attribution or a
-  stood-down claim is corrected or dropped) plus what `node "$(spec-paths memory-sweep)"
+  `.claude/agent-memory/` file this spec's diff touched** (carry, correct, or delete) plus what `node "$(spec-paths memory-sweep)"
   --root <root> --diff <files>` surfaces; a **carry** stamps `reviewed: YYYY-MM-DD`. Commit
   everything still uncommitted per the driver's printed instruction for what the close commit
   includes. Never `--no-verify`.

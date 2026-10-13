@@ -9,167 +9,75 @@ the `BRIEF` ratification, § Genesis: Brief State), in addition to `core.md`.
 
 ## Genesis: Discovery Interview (the intake posture)
 
-Genesis Phase 1 intake is an **adaptive, consultant-style interview**, not a form and not a
-scripted question list — both genesis stages run it this way. The AI is the interviewer, the
-user is the client. Open with a reflect-back of `$ARGUMENTS` — what you think is being built,
-for whom, the core job it does — then follow the answer: depth is earned by signal (hesitation,
-vagueness, a high-stakes area), never spent on a fixed script. There is no probe cap and no
-fixed batch list; order, depth, and follow-ups are the session's judgment, round by round.
-
-**The coverage audit is the one fixed structure.** Ten keys the model cannot derive because
-they are invisible unless asked — `payer`, `tenancy`, `data-sensitivity`, `residency`,
-`ai-use`, `unattended`, `integrations`, `scale-outage`, `vendor-budget`, `offline-mobile` —
-each recorded in `.claude/genesis/brief.md`'s `## Coverage` block as `- <key>: covered | dark |
-n/a — <one line in the user's words>`. The session audits silently after every answer (an
-answer can close a key nobody asked about directly) and asks the highest-stakes still-`dark`
-key next, phrased in plain language that passes core § Question Style's ten-second cold test —
-never the key's identifier. Discovery ends when no key is `dark`; a user who declines a key is
-recorded `n/a — declined: <reason>`, which counts as closed. A key a coverage answer already
-closes ("must use <vendor>") is written `constrained` in `## Open Dimensions` and never asked
-again as a fork (§ Genesis: Hard-to-Reverse Dimensions).
+**The coverage audit is the one fixed structure.** Ten keys the model cannot derive because they are
+invisible unless asked — `payer`, `tenancy`, `data-sensitivity`, `residency`, `ai-use`,
+`unattended`, `integrations`, `scale-outage`, `vendor-budget`, `offline-mobile` — each recorded in
+`.claude/genesis/brief.md`'s `## Coverage` block as
+`- <key>: covered | dark | n/a — <one line in the user's words>`. Discovery ends when no key is
+`dark`; a user who declines a key is recorded `n/a — declined: <reason>`, which counts as closed. A
+key a coverage answer already closes ("must use <vendor>") is written `constrained` in
+`## Open Dimensions` and never asked again as a fork (§ Genesis: Hard-to-Reverse Dimensions).
 
 **The brief is the interface.** `.claude/genesis/brief.md` is authored from the template
-`genesis-brief.md` (`$(spec-paths templates)/genesis-brief.md`) with exactly six `## ` sections
-in order: `What I think you're building`, `Coverage`, `Non-goals`, `Open Dimensions`,
-`Research Angles`, `Picks`. After **every** `AskUserQuestion` round the session edits the file
-in place — only the lines the answer changed (the answered `## Coverage` key, any new `##
-Open Dimensions` or `## Picks` line) — and prints those changed lines, one per key, never a
-rewrite or a re-print of the whole page. `## What I think you're building` + `## Coverage` are
-printed in full exactly once, at the end of discovery, immediately before `--mark
-discovery-done` (the driver's own step text names this render). There is no separate sign-off
-question: that single closing render IS the discovery brief.
+`genesis-brief.md` (`$(spec-paths templates)/genesis-brief.md`) with exactly six `## ` sections in
+order: `What I think you're building`, `Coverage`, `Non-goals`, `Open Dimensions`,
+`Research Angles`, `Picks`. `## What I think you're building` + `## Coverage` are printed in full
+exactly once, at the end of discovery, immediately before `--mark discovery-done`.
 
 **Archetype and hand-off.** `discovery-done` requires a `- archetype: <registry key>` line in
-`## Picks` (§ Genesis: Archetype Registry) — the seed's primary-surface answer already settles
-it, so it is recorded here rather than re-asked at `MENUS`. DISCOVERY itself closes with
-`--mark discovery-done` and nothing else; the archetype hand-off is rendered one state later,
-by BRIEF (§ Genesis: Brief State), which branches on the registry row: an archetype whose row
-owes a mocks set that is not yet approved is told `next: run /spec:mocks in this repo until it
-reports APPROVED, then --mark brief-written`; once `design/mocks/status.json` is `APPROVED`,
-BRIEF instead renders the ratification step over the approved set; an archetype that owes no
-set is told it owes nothing beyond DISCOVERY and goes straight to `--mark brief-written`.
-There is no throwaway sketch step — the first rendered artifact this
-pipeline produces is a real mock (or, for a non-visual archetype, none at all), never a
-disposable HTML round.
+`## Picks` (§ Genesis: Archetype Registry).
+Printed by `genesis-driver.js` at BRIEF; never restated here.
 
-- **Escape hatch on every round.** "Other / not sure" is the one open lane (and the tool's
-  free-text channel) — it counters closed-set option bias and is the signal that earns a
-  follow-up. Phrase every option neutrally; no leading or double-barreled options.
-- **Non-goals are recorded, not parked.** Adjacent features the user rules out go into `##
-  Non-goals` as soon as they surface, marked In / Later / Won't-this-time — written exclusions
-  focus the build; unwritten ones get assumed in.
+- **Escape hatch on every round.** "Other / not sure" is the one open lane (and the tool's free-text
+  channel).
+- **Non-goals are recorded, not parked.** Adjacent features the user rules out go into
+  `## Non-goals` as soon as they surface, marked In / Later / Won't-this-time.
 
-**The woven loop (research-backed rounds).** The interview is *not* "user provides everything, AI
-summarizes." A round is **cold** (user-contextual — the coverage audit, non-goals, taste; the
-session authors these itself) or **research-backed** (stack, framework, component library,
-visual-trend — the option menu is researched **live** from the user's last answer). A
-research-backed round:
+**The woven loop (research-backed rounds).** A research-backed round:
 
 1. The user's last answer, or a coverage answer, opens one or more dimensions. The command calls
    **`wf-research`** — research agents only, no proposers — with `args` = paths/keys/booleans
-   (`stage`, `dimensionKeys`, `briefPath`, `contextPaths`). Batch every dimension
-   one answer opens into a single parallel call. Cross-cutting angles available to any archetype —
-   `scope-discipline` (what to include vs deliberately exclude), `competitive-teardown`,
-   `accessibility`, and the locale bundle (`i18n-rtl`, `locale-formatting`, `cultural-color`,
-   `locale-norms`) — are switched on by the audience scope, not the archetype, and fold into the
-   same call.
+   (`stage`, `dimensionKeys`, `briefPath`, `contextPaths`).
 2. It returns one **option menu per dimension** — 2–4 current options, ranked recommended-first,
-   each carrying an honest `tradeoff`, a `because` (the coverage keys and answers that drove this
-   option's rank), a `priced` consequence at the brief's stated scale (a concrete monthly figure
-   and its jump point, a migration cost, or the honest `n/a — no number in the brief`), a recency
-   stamp grounded in sources, an `is_minority` flag preserving any contrarian option (MAINTAINED
-   DISSENT — carried forward into `## Dissents` at decision time), and a required
-   `why_recommended` (one line: why rank 1 wins for THIS project — the stated reason behind the
-   ranking, not just the ranking itself).
-3. The command writes each menu to `.claude/genesis/interview-research/{dimension}.json` (stamping
-   `fetchedAt` itself — the workflow can't), then presents an `AskUserQuestion` built **from the
-   menu**: options recommended-first, each description built as `tradeoff` · `because` · `priced`
-   · "current as of `<fetchedAt>`", neutral phrasing, the escape hatch, rank 1 labeled
-   "(Recommended)" with `why_recommended` as the stated reason. The user reacts to an informed,
-   priced menu, never a blank field; the pick seeds the next round.
+   each carrying an honest `tradeoff`, a `because`, a `priced` consequence at the brief's stated
+   scale, a recency stamp grounded in sources, an `is_minority` flag preserving any contrarian
+   option, and a required `why_recommended`.
+3. The command writes each menu to `.claude/genesis/interview-research/{dimension}.json`, then
+   presents an `AskUserQuestion` built **from the menu**: options recommended-first, each
+   description built as `tradeoff` · `because` · `priced` · "current as of `<fetchedAt>`", rank 1
+   labeled "(Recommended)" with `why_recommended` as the stated reason.
 
-**Model placement in the loop:** **Sonnet** builds the menu (research + option synthesis, incl.
-`because`/`priced`); currency is executed by `registry-check.js`, which the driver runs on every accepted menu,
-over each option's `packages` — a version absent from its registry never enters a menu;
-unreachable registries stamp `unverified`, never block; **Opus** (the session) curates which
-2–4 options ship, orders them, enforces neutral phrasing, and owns the write. This holds the
-pipeline doctrine: Sonnet research, a deterministic registry check, Opus session/curation.
-
-**Provenance.** Every shipped option's `sources` + `fetchedAt` live in
-`interview-research/{dimension}.json`; the *picked* option's provenance is copied into the
-brief's `## Picks` and flows into the ADR rationale/citations. A research call that returns
-nothing in good time falls back to a model-knowledge menu stamped `unverified` — `because` and
-`priced` are then the session's own lines, marked `(unverified)` — the loop never blocks.
-
-**Discovery→Decision bridge (no redundancy).** Split by reversibility: `wf-research` *elicits*
-(today's options, so the user picks informed); the Decision Record (§ Genesis: Decision Record
-(one proposer)) *decides* the hard-to-reverse forks directly, from the same menus, no second
-reader. A dimension settled in the woven loop is written **`constrained`** in `## Open Dimensions`,
-and its `interview-research/*.json` is reused as `contextPaths` for any later dimension instead of
-being re-researched. A settled dimension's ADR may still carry a `minority_position` sourced from
-the menu's non-picked ranks, but it is never reopened as a hard fork.
+Enforced by `registry-check.js` — its header comment is the contract; the driver runs it on every accepted menu.
 
 **Discovery is product / user / business / legal only — never organizational.** Team skill,
-headcount, ownership, ops staffing are never asked: Claude is always the implementer. "Team skill"
-(the real-world #1 stack driver) collapses to a silent default — favor boring, typed, testable
-stacks Claude implements reliably — applied as a Phase-2 tiebreaker, not a question.
+headcount, ownership, ops staffing are never asked: Claude is always the implementer.
 
 ## Genesis: Brief State
 
-`BRIEF` sits between `DISCOVERY` and `MENUS` in the driver loop (§ Genesis: State Machine) —
-entered once `discoveryDone` records an archetype and no `marks.briefWritten` exists yet,
-regardless of any later legacy marks. It is the ratification gate: nothing genesis decides
-past this point is decided about a product the user has not already seen, corrected, and
-approved on real screens (or, for a legacy run, on its existing explore/design artifacts).
+**Precondition (archetypes that owe a mocks set only, § Genesis: Archetype Registry).** `web-app`,
+`mobile-app`, `realtime-trading`, and `desktop-app` must show `design/mocks/status.json` at
+`state: "APPROVED"` and `gateVerdict(design/mocks/ledger.md)` at `open`, before
+`--mark brief-written` is even attempted.
 
-**Precondition (archetypes that owe a mocks set only, § Genesis: Archetype Registry).**
-`web-app`, `mobile-app`, `realtime-trading`, and `desktop-app` must show
-`design/mocks/status.json` at `state: "APPROVED"` and `gateVerdict(design/mocks/ledger.md)`
-(spec 06's `lib/mocks-ledger.js`, read directly — never re-implemented here) at `open`, before
-`--mark brief-written` is even attempted; a refusal names the blocking state or the ledger row
-and tells the session to `run /spec:mocks`. `backend-api`, `data-ml`, `conversational-bot`, and
-`cli-devtool` never owe this precondition — they proceed straight to ratification.
-
-**Derivation sources.** The BRIEF step counts the journeys in `design/mocks/seed.md` and the
-waiting items (`status === "open"`, notes and journey threads alike) of the latest round's
-`notes.json` through `lib/mocks-round.js`'s `openNoteCount` — `0` with no round — printed as
-`seed journeys: N · notes open: N`. No genesis step reads a file under a mock app.
-
-**Ratification (`--mark brief-written`), tiered by archetype:**
-
-- `backend-api` / `data-ml` / `conversational-bot` / `cli-devtool` — nothing beyond DISCOVERY; the
-  mark records `design: "skipped"`. Voice, persona and CLI-style choices go into the ordinary
-  decision records and the root agent file.
-- `web-app` / `mobile-app` / `realtime-trading` / `desktop-app` — the mocks precondition above
-  plus the brief's `## Journeys` / `## Non-UI Coverage` checks; the mark records
-  `design: "ratified"`. The design contract itself is the rules file `DESIGN_BRIEF` writes
-  (§ Genesis: Design Stage).
+**Derivation sources.** The BRIEF step counts the journeys in `design/mocks/seed.md` and the waiting
+items of the latest round's `notes.json` through `lib/mocks-round.js`'s `openNoteCount` — `0` with
+no round — printed as `seed journeys: N · notes open: N`.
 
 **On success:** `marks.briefWritten`, `status.brief = {mocks: "design/mocks/status.json" |
 null, legacy: false|true, ratifiedAt: "<ISO>"}`, and `status.design = "ratified"` (or
 `"skipped"` for the four design-skipped archetypes).
 
-**Legacy resume.** A `status.json` with `marks.menusDone` and no `marks.briefWritten` derives
-BRIEF with a step text opening `legacy: explore/design artifacts accepted in place of a mocks
-set`. `--mark brief-written --legacy` skips the mocks precondition entirely and records `brief.legacy: true`; every downstream legacy mark stays
-valid, so the run lands on its real next state — MENUS, DECIDE, SCAFFOLD, SKELETON, GATE,
-ROADMAP, or HANDOFF — after this one mark, never a forced re-run of MENUS.
+**Legacy resume.** A `status.json` with `marks.menusDone` and no `marks.briefWritten` derives BRIEF
+with a step text opening `legacy: explore/design artifacts accepted in place of a mocks set`.
+`--mark brief-written --legacy` skips the mocks precondition entirely and records
+`brief.legacy: true`.
 
-**Brief generation is derived, never guessed (specs/20260902/11 D1–D2).** On a fresh run
-that owes a mocks set, `.claude/genesis/brief.md` gains two sections after `## Picks`:
-`## Journeys` (one `### <journey>` block per seed journey — persona line, the seed's
-`surfaces` block copied verbatim, and one `states:` line per screen naming its
-`data-state-btn` names) and `## Non-UI Coverage` (`- <key>: covered|n/a — <one line>` for the
-six closed keys `jobs notifications retention integrations admin pricing`). `--mark
-brief-written` refuses when any seed journey or label is missing from `## Journeys`, or any
-Non-UI Coverage key is missing or still `dark` — the checklist is the counter to "polished
-prototypes drop the screen-less facts": a fact with no screen still owes a line. The BRIEF
-step text prints the derivation sources the session writes `## What I think you're building`
-from — every confirmed `product` ledger row (`said-by-user`/`ratified-doc`) with its id, the
-journey and label counts, and the latest round's waiting-note count — so a fact the brief states
-is a row the user already confirmed, never a restatement of the discovery interview alone.
-Legacy runs (`brief.legacy: true`) and archetypes that never owe a mocks set see none of
-these refusals.
+**Brief generation is derived, never guessed.** On a fresh run that owes a mocks set,
+`.claude/genesis/brief.md` gains two sections after `## Picks`: `## Journeys` and
+`## Non-UI Coverage` (`- <key>: covered|n/a — <one line>` for the six closed keys
+`jobs notifications retention integrations admin pricing`). `--mark brief-written` refuses when any
+seed journey or label is missing from `## Journeys`, or any Non-UI Coverage key is missing or still
+`dark`.
 
 ## Genesis: Tournament of Scaffolds
 
@@ -180,134 +88,73 @@ derives `MENUS → DECIDE` unchanged and writes no `.claude/genesis/tournament/`
 (`--mark finalists-skipped`) records `tournament.skipped` and advances the same way.
 
 **The wireframe is not the product.** A host with an approved wireframe runs `MENUS`, the
-tournament, and `SCAFFOLD` exactly like any other host — no dimension is auto-picked, no
-`tournament.skipped` is recorded, and no scaffold is skipped on its account. The seed and the
-latest round govern `BRIEF`'s counts (§ Genesis: Brief State); `DESIGN_BRIEF` is the last step
-that reads `design/mocks/screens/` (§ Genesis: Design Stage).
+tournament, and `SCAFFOLD` exactly like any other host.
 
-**FINALISTS.** The session composes 2–3 finalist stack combinations from the menus (a
-finalist is a combination the session composes, never a single option); at least one must
-equal the brief's current `## Picks` on every key it names (the incumbent), so the race stays
-consistent with the pick already in view. The step is a go/no-go line, printed before any
-spend: the archetype's probe tasks — their table lives in the driver
-(`genesis-driver.js`), never restated here, so the two can't drift apart — the two-retry cap,
-and `cost: roughly one mini-build per finalist (scaffold + gate + boot + probe slice)`, plus
-the last measured token figure once one exists.
-
-**RACE (driver-only).** For each named finalist the driver scaffolds it for real into
-`.claude/genesis/tournament/finalists/<name>/`, runs its zero-day gate, and boots it to
-readiness through `smoke.sh`'s existing boot contract, recording exit codes and the boot
-sentinel. A finalist whose scaffold fails is recorded and spent no further; a finalist with a
-recorded race is never re-raced.
-
-**PROBE.** The session builds one thin probe slice per surviving finalist with Sonnet workers,
-under a hard two-retry cap per task, and records `tournament/evidence/<name>/probe.json`
-(tokens are the harness-reported figure the session copies in, never estimated). `--mark
-probe-done` triggers the driver to re-run gate + boot for each finalist post-probe and
-assemble `tournament/benchmark.json`/`benchmark.md` (the finalists side by side: scaffold/gate
-/boot pre and post, probe pass rate, retries, tokens, screenshots) and
-`tournament/gallery.html`.
+**FINALISTS.** The session composes 2–3 finalist stack combinations from the menus; at least one
+must equal the brief's current `## Picks` on every key it names (the incumbent).
+Printed by `genesis-driver.js` at RACE and PROBE; never restated here.
 
 **PICK.** **Executed evidence informs the user's pick; it never makes it** — two finalists
 that both pass are ranked by the coverage answers, stated, never by the numbers alone. The
 user picks by rewriting the brief's `## Picks` to the winner's labels; `--mark picked` matches
 it against exactly one finalist's picks.
 
-**Re-scaffold clean.** The probe slice is benchmark code, built under retry caps with no spec
-and no review — it must never become the foundation everything later inherits. `decided`
-re-scaffolds the winner clean into the project root (its `scaffoldCommand` run exactly as a
-non-tournament `SCAFFOLD` would) and deletes the raced copies (`tournament/finalists/`,
-`tournament/logs/`) once an ADR cites `tournament/benchmark.md` as evidence; `benchmark.json`,
-`benchmark.md`, `gallery.html`, and `evidence/` survive as the decision record's evidence
-appendix.
+**Re-scaffold clean.** `decided` re-scaffolds the winner clean into the project root (its
+`scaffoldCommand` run exactly as a non-tournament `SCAFFOLD` would) and deletes the raced copies
+(`tournament/finalists/`, `tournament/logs/`) once an ADR cites `tournament/benchmark.md` as
+evidence; `benchmark.json`, `benchmark.md`, `gallery.html`, and `evidence/` survive as the decision
+record's evidence appendix.
 
-**Artifacts.** `spec/templates/finalists.json` (the template the session composes a run's
-`finalists.json` from — 2–3 entries, each `{name, picks, scaffoldCommand, gateCommand,
-bootCommand, readyCheck}`, where `bootCommand` serves on `$PORT` and `readyCheck` probes it); `tournament/evidence/<name>/probe.json` (session-written, one
-entry per expected task); `tournament/benchmark.json`/`.md` and `tournament/gallery.html`
-(driver-written). § Genesis: On-disk Handoff lists the full roster alongside the
-`tournament/` directory.
+**Artifacts.** `spec/templates/finalists.json`; `tournament/evidence/<name>/probe.json`
+(session-written, one entry per expected task); `tournament/benchmark.json`/`.md` and
+`tournament/gallery.html` (driver-written).
 
 ## Genesis: Decision Record (one proposer)
 
-`AskUserQuestion` **cannot run inside a workflow**, so the commands never nest it — the session
-owns every question and every file write; `wf-research` is a callable subroutine that returns
-research only, never a decision.
+`AskUserQuestion` **cannot run inside a workflow**, so the commands never nest it — the session owns
+every question and every file write.
 
-The session is the proposer. Input: every `interview-research/{dimension}.json` on disk (plus any
-partitioned second leg, below); output: one ADR per hard-to-reverse dimension, `## Options
-considered` copied from the menu's ranked options, `## Decision` the pick, `## Dissents` per the
-rule below.
+The session is the proposer. Input: every `interview-research/{dimension}.json` on disk; output: one
+ADR per hard-to-reverse dimension, `## Options considered` copied from the menu's ranked options,
+`## Decision` the pick, `## Dissents` per the rule below.
 
 A hard fork — two menu options within one rank of each other, or a user hesitation signal — is an
-`AskUserQuestion`: options verbatim from the menu, `tradeoff` in each description, rank 1 first
-labeled "(Recommended)" with `why_recommended` as the reason.
+`AskUserQuestion`: options verbatim from the menu, `tradeoff` in each description.
 
 `## Dissents` carries every non-picked ranked option, every `is_minority` option, and every
-user-rejected option — MAINTAINED DISSENT survives the collapse: a correct minority view is
-recorded, never silently dropped.
-
-A second perspective on a hard fork is a second `wf-research` call with a **different**
-`dimensionKeys` slice (e.g. `hosting-cost-shape` beside `hosting`) — a *partitioned-evidence*
-research leg, never a second agent reading the same brief. Deliberation over identical evidence
-herds; partitioned evidence is the shape that measured gains.
+user-rejected option.
 
 ## Genesis: Ops Conventions ADR
 
-Write the ops-conventions ADR (`docs/adr/NNNN-operational-conventions.md`, one ADR, one table).
-Robust software is mostly conventions-under-load, and in a greenfield repo nobody else ever
-decides them — `/spec:init` can only extract what exists. Rows (a floor, not a ceiling — add
-any convention-under-load the research surfaces): **error taxonomy** (the error shape/base
-classes and user-facing vs internal split — binding for **every process entrypoint** (workers,
-queue handlers, seeds, scheduled/sync tasks), never only the serving path, and exception text
-persisted anywhere — DB columns, event payloads, stdout — goes through the taxonomy, never a
-raw exception string; measured 3-for-3 across audited hosts: the request path got the
-discipline, every background path hand-rolled its own), **logging** (structured or not, shape,
-what is never logged — same every-entrypoint scope: a worker or seed script rolling its own
-logger without the redaction list violates this row, it is not a local style choice),
-**naming & identifiers** (casing and plurality for tables/columns/indexes/
-constraints; primary-key strategy AND id-minting — one generator module + prefix registry;
-per-surface casing ownership — DB vs wire vs logs vs analytics tags — with the boundary
-stated, and per surface the file globs that constitute it plus its decided spelling
-exemplars, so a later reader can tell a boundary crossing from a typo),
-**wire representations** (decided once at the contracts seam: non-JSON-native types
-such as bigint/decimal money, timestamp form on the wire — UTC-only vs offsets tolerated —
-and the discriminator field name), **cross-plane constants** (any literal referenced on
-both sides of a language/process seam — env var names, header and auth-scheme names,
-queue/topic names, redaction key lists — lives in the generated contracts surface or
-carries a test that pins both sides to one source; a value mirrored by hand and "kept in
-sync by comment" is a silent-outage class, banned; checker-enforceable — the same seam the wire row decides,
-applied to identifiers instead of types), **env/config management** (file layout, secrets never in
-git, the sanctioned secret store), **CI** (the gate runs on every push — wired at scaffold time,
-§ Genesis: Day-Zero Skeleton), **background/async work** (in-process, queue, or none-in-v1), and
-**success-metric instrumentation** (the discovery measurement pick — the analytics seam, or "not
-measured in v1"). These are boring-default rows the session fills from the research;
-`AskUserQuestion` only on a genuine fork (e.g. a paid observability vendor, or the concrete id
-scheme — ULID vs nanoid and the prefix table are a product-owner pick; that one generator module
-exists is not). A DECIDED row in a category `/spec:enforce` can mechanize is stated
-**checker-enforceable** — no taste clauses ("strict plural", never "plural where natural reads
-better"); the rejected taste variant goes in Dissents. Each row is DECIDED or DEFERRED-with-reason —
-same ledger discipline as the design canon. The rows above are samples of one **generating question**
-— *"what will two context-free executors, weeks apart, decide differently unless a row
-decides it now: every value class crossing a surface boundary, every name a second writer
-will mint, every operational behavior a spec will assume but never state?"* After filling
-the dictated rows, run one **derive pass** against that question — walk the research and
-the archetype's value-crossing boundaries (its API seams, storage, logs, external
-integrations: the same axis the casing-ownership row enumerates) and propose rows the
-floor missed; derived rows follow the same fill discipline as dictated ones (boring
-defaults, `AskUserQuestion` only on a genuine fork). Then the **coverage check**: a
-second same-session read of the finished table against the generating question, whose
-only outputs are added rows or nothing — it writes no certification and asks nothing
-new. Both passes are **advisory** — the coverage checker shares the deriver's blind
-spots (same-model correlation, the reason review doctrine forbids same-context
-verification), so derivation can add rows but its silence never certifies completeness.
+Write the ops-conventions ADR (`docs/adr/NNNN-operational-conventions.md`, one ADR, one table). Rows
+(a floor, not a ceiling): **error taxonomy** (the error shape/base classes and user-facing vs
+internal split — binding for **every process entrypoint**, never only the serving path), **logging**
+(structured or not, shape, what is never logged), **naming & identifiers** (casing and plurality for
+tables/columns/indexes/ constraints; primary-key strategy AND id-minting — one generator module +
+prefix registry; per-surface casing ownership — DB vs wire vs logs vs analytics tags — with the
+boundary stated), **wire representations** (decided once at the contracts seam: non-JSON-native
+types such as bigint/decimal money, timestamp form on the wire — UTC-only vs offsets tolerated — and
+the discriminator field name), **cross-plane constants** (any literal referenced on both sides of a
+language/process seam — env var names, header and auth-scheme names, queue/topic names, redaction
+key lists — lives in the generated contracts surface or carries a test that pins both sides to one
+source), **env/config management**, **CI** (the gate runs on every push — wired at scaffold time, §
+Genesis: Day-Zero Skeleton), **background/async work**, and **success-metric instrumentation** (the
+discovery measurement pick — the analytics seam, or "not measured in v1"). These are boring-default
+rows the session fills from the research; `AskUserQuestion` only on a genuine fork. A DECIDED row in
+a category `/spec:enforce` can mechanize is stated **checker-enforceable** — no taste clauses; the
+rejected taste variant goes in Dissents. Each row is DECIDED or DEFERRED-with-reason. The rows above
+are samples of one **generating question** — *"what will two context-free executors, weeks apart,
+decide differently unless a row decides it now: every value class crossing a surface boundary, every
+name a second writer will mint, every operational behavior a spec will assume but never state?"*
+After filling the dictated rows, run one **derive pass** against that question and propose rows the
+floor missed. Then the **coverage check**: a second same-session read of the finished table against
+the generating question, whose only outputs are added rows or nothing. Both passes are **advisory**;
+derivation can add rows but its silence never certifies completeness.
 
 ## Genesis: Hard-to-Reverse Dimensions (always escalate via AskUserQuestion)
 
-A hard fork on any of these — two menu options within one rank of each other, or a user hesitation
-signal — is a **mandatory** `AskUserQuestion` (verbatim, recommended first), never synthesized
-away. Constrained dimensions (user already chose, or settled in the Phase-1 research-woven loop)
-skip the fork.
+A hard fork on any of these is a **mandatory** `AskUserQuestion` (verbatim, recommended first),
+never synthesized away.
 
 - **architect:** persistence model · framework · monorepo topology · primary
   language/runtime · auth approach · component library · deployment target.
@@ -317,11 +164,6 @@ skip the fork.
   widths) · **color schemes** (light / dark / system — token structure is hard to retrofit).
 
 ### Derived dimensions (from coverage answers)
-
-The registry floor (§ Genesis: Archetype Registry) always applies; the rows below are **added
-on top of it**, never substituted for it, mapped directly from the coverage audit's answers
-(§ Genesis: Discovery Interview). A dimension a coverage answer already closes ("must use
-`<vendor>`") is written `constrained` in `## Open Dimensions` and never asked as a fork.
 
 | Coverage answer | Derived dimension key(s) |
 |---|---|
@@ -336,11 +178,7 @@ on top of it**, never substituted for it, mapped directly from the coverage audi
 ## Genesis: Archetype Registry (the master variable)
 
 The project **archetype** conditions the hard-to-reverse dimension floor, research angles, and
-**whether/what kind of design stage runs**. Establish it (and the locale/audience scope) first in
-architect intake. Locale composes *on top* of archetype (a Japanese mobile app and a Japanese web
-app share locale angles, differ in surface). Illustrative — dimension keys are the fixed floor;
-research candidates within each key are verified against current ecosystems at research time,
-never named here:
+**whether/what kind of design stage runs**.
 
 | Archetype | Hard-to-reverse dimension keys (floor) | Mocks set owed |
 |---|---|---|
@@ -362,109 +200,63 @@ directly and `/spec:init` writes no `design` block. `web-app`, `mobile-app`, `re
 ## Genesis: Fresh UX Research (method fixed, content researched)
 
 Every project gets a **freshly researched** UX/psychology brief — never a frozen principle list
-baked into a template or a command. Anchoring to old UX psychology is the failure mode this
-section exists to prevent: a list that was current when the plugin shipped is training-data
-folklore two model generations later. What is **fixed** is the *method*; what is **researched
-live** (via `wf-research`, UX dimension keys, web-enabled Sonnet) is the *content* — current
-evidence for this app's archetype, audience, and domain.
+baked into a template or a command.
 
 The output is `docs/design/research-brief.md` (template: `ux-research-brief.md` via
 `spec-paths templates`), and every admitted principle must survive the method:
 
 - **Falsifiable interface rules, not vibes.** Each principle translates to a checkable rule with
-  numeric ALWAYS/NEVER bounds where possible ("primary action reachable in ≤1 tap from the core
-  screen"), tagged with the screens/archetype conditions it applies to. The bar is
-  **verifiable-by-a-stranger**: a checker who was never in the room must be able to look at a
-  screen and say pass or fail. A principle that cannot be phrased that way is recorded as
-  context, never as a rule — unencoded taste is advisory by definition and will be violated.
+  numeric ALWAYS/NEVER bounds where possible, tagged with the screens/archetype conditions it
+  applies to.
 - **Evidence-tiered.** Each rule carries `evidence: strong | conditional | weak` grounded in the
-  research pass (replication status, effect size, domain match) — conditional rules state their
-  boundary conditions inline; weak ones are hypotheses, admitted only with a `predicts:` line.
+  research pass — conditional rules state their boundary conditions inline; weak ones are
+  hypotheses, admitted only with a `predicts:` line.
 - **`predicts:` observable (the telemetry hook).** Every behavioral rule names the observable it
-  predicts ("fewer abandons at step 2", "higher first-run completion"). This is what lets a host
-  with telemetry later promote a rule to standing doctrine or retire it on evidence — the design
-  analog of the scaffold ledger's promote/retire condition. No telemetry yet → the field still
-  ships; it costs one line and makes the rule falsifiable on the day telemetry exists.
+  predicts ("fewer abandons at step 2", "higher first-run completion").
 - **Ethics floor (binding, not researched away):** no fake scarcity, no fabricated social proof,
   symmetric choices (declining as easy as accepting), no confirm-shaming. Litmus: a technique
   that only works when the user doesn't notice it is a dark pattern — out, regardless of its
   evidence tier or conversion data.
-- **Anti-slop negations.** The brief lists what the candidates must NOT do for this audience
-  (the stock patterns fresh generation defaults to) — researched per project, since slop drifts
-  with the generation.
-
-Mechanizable rules flow into the rules file's tables at `DESIGN_BRIEF` (§ Genesis: Design Stage);
-the rest bind every `/spec:mocks` session and every later
-mock-authoring or build session — not by being read and remembered, but by being checked. The
-**rule-checklist pass** runs during `/spec:mocks`' review, which precedes the rules file
-and so has nothing to execute yet: a checker walks the admitted rules against each
-candidate before approval, citing rule IDs. The falsifiable phrasing above is what makes this
-possible.
+- **Anti-slop negations.** The brief lists what the candidates must NOT do for this audience (the
+  stock patterns fresh generation defaults to).
 
 ## Genesis: Executed Assumptions (dependency-adjudicated claims never lock by argument)
 
-Genesis decisions are verified by argument — research citations, the session's own reading
-of the research menus on disk, user rulings. That is the right bar for taste and
-architecture forks, and the **wrong** bar for any claim a third-party dependency
-adjudicates: naming/format conventions the dependency validates, cron/schedule strings,
-config keys, DSL fragments, version-pinned API shapes.
-Those are falsifiable in one executed line, and no volume of reading substitutes.
-
-**Rule: before an ADR locks, every dependency-adjudicated convention it binds is executed
-once against the pinned dependency** — a scratch file in the scaffold (or a throwaway
-`npx`/equivalent run pre-scaffold), output observed, file deleted. The ADR cites the executed
-check and its observed output in its evidence, alongside the research citations. A convention
-that cannot be cheaply executed is recorded as an open risk in the ADR, never silently
-trusted. The per-feature pipeline applies the same rule at plan time (`/spec:plan`
-§ Micro-spikes); genesis is where it matters most, because init
-distills ADRs into binding doctrine with no downstream re-verification.
+**Rule: before an ADR locks, every dependency-adjudicated convention it binds is executed once
+against the pinned dependency** — a scratch file in the scaffold (or a throwaway `npx`/equivalent
+run pre-scaffold), output observed, file deleted. The ADR cites the executed check and its observed
+output in its evidence, alongside the research citations. A convention that cannot be cheaply
+executed is recorded as an open risk in the ADR, never silently trusted. The per-feature pipeline
+applies the same rule at plan time (`/spec:plan` § Micro-spikes).
 
 ## Genesis: Enforcement Handoff to the spec pipeline
 
 The split is **decide vs implement**: `DESIGN_BRIEF` (§ Genesis: Design Stage) *decides* and records
-design rules in the rules file; the spec pipeline *implements* them as actual lint/contracts/sweeps wired to the
-gate. One enforcement brain, and it lives downstream —
-`/spec:enforce` (which `/spec:init` invokes at the end of bootstrap). For a greenfield repo,
-the grounding step this brain depends on runs earlier still: `HANDOFF` (§ Genesis: State
-Machine, § Genesis: Conventions Probe Suite) has the session author
-`.claude/genesis/init-profile.json` and the driver run `init-gen.js generate` against it
-directly — the same generator `/spec:init` Phase 5 runs, invoked here instead of by that
-command — landing the terminal `GROUNDED` state with `next: /spec:enforce`. `/spec:init`
-stays the brownfield entry and the regeneration owner (`--refresh`); re-running it on a
-genesis-grounded repo is a refresh, not first-time bootstrap. The contract:
+design rules in the rules file; the spec pipeline *implements* them as actual lint/contracts/sweeps
+wired to the gate. `HANDOFF` (§ Genesis: State Machine, § Genesis: Conventions Probe Suite) has the
+session author `.claude/genesis/init-profile.json` and the driver run `init-gen.js generate` against
+it directly landing the terminal `GROUNDED` state with `next: /spec:enforce`. The contract:
 
-- Design rules reach `/spec:enforce` through the `design` block (the `kit-discipline` cell plus
-  the per-layer naming cells); any other design rule is a written host rule. `/spec:enforce` owns
-  the single category→enforcer selection per detected stack, chosen at runtime
-  (discover-against-live-sources then verify-it-runs), never from a hardcoded mapping. Where no
-  mechanical enforcer fits the stack, the category becomes a Review-Check prose rule — never
-  silently dropped.
+- Design rules reach `/spec:enforce` through the `design` block; any other design rule is a written
+  host rule. Where no mechanical enforcer fits the stack, the category becomes a Review-Check prose
+  rule — never silently dropped.
 
 ## Genesis: Day-Zero Skeleton
 
 Land the test + CI skeleton — the enforcement half of the ops ADR, day zero:
 
-- one **example test per declared layer** (trivial but real — it exercises the runner and
-  shows the convention the `tests`-kind agent will follow), and the **e2e harness stub** when
-  the archetype warrants one (web/mobile/desktop): installed, one smoke test, wired into a
-  script — so the build stage's TDD never meets a repo where the harness itself is missing;
-- a **CI workflow** for the repo's forge (detect from the remote; **no remote → ask the
-  user now**: connect one, or explicitly record CI-inert in the descriptor — a written
-  workflow with no remote executes zero times, and "authored but never activated" is the
-  failure class this stage must not seed; `/spec:init`'s manifest check verifies whichever
-  was chosen) that runs `setupCommand` then `gateCommand` on every push/PR. An enforcement
-  rule that only runs on a developer's machine is advisory, not enforced;
-- the **runtime substrate the archetype implies** — a health/liveness route (bootable
-  archetypes), a seed entry point stub, and local service provisioning (compose file or
-  script) wherever the scaffold's `.env.example` references services nothing creates. These
-  are what `/spec:init`'s runtime block, verify skill, and smoke leg will bind to — cheaper
-  to land here, while the scaffold tool's conventions are hot, than to retrofit at init;
-- the **conventions probe suite** (§ Genesis: Conventions Probe Suite) — one executable test
-  per checker-enforceable DECIDED ops-conventions row, landed in the same test tree these
-  other skeleton tests exercise, so the gate wired above runs the conventions forever;
+- one **example test per declared layer**, and the **e2e harness stub** when the archetype warrants
+  one (web/mobile/desktop): installed, one smoke test, wired into a script;
+- a **CI workflow** for the repo's forge (detect from the remote; **no remote → ask the user now**:
+  connect one, or explicitly record CI-inert in the descriptor) that runs `setupCommand` then
+  `gateCommand` on every push/PR;
+- the **runtime substrate the archetype implies** — a health/liveness route (bootable archetypes), a
+  seed entry point stub, and local service provisioning (compose file or script) wherever the
+  scaffold's `.env.example` references services nothing creates;
+- the **conventions probe suite** (§ Genesis: Conventions Probe Suite) — one executable test per
+  checker-enforceable DECIDED ops-conventions row;
 - the **binding subset** (`CLAUDE.md`/`AGENTS.md`, § Genesis: Conventions Probe Suite) — the
-  ≤150-line file naming the gate command and the test tree, the primary artifact a fresh agent
-  actually reads.
+  ≤150-line file naming the gate command and the test tree.
 
 **The wireframe is not the skeleton.** `SCAFFOLD` runs its `scaffoldCommand` for every host —
 the wireframe the user approved in `/spec:mocks` is a throwaway, never the day-zero skeleton.
@@ -473,202 +265,114 @@ only; it runs no check against the wireframe.
 
 ## Genesis: Conventions Probe Suite
 
-The ops-conventions table (§ Genesis: Ops Conventions ADR) stops being a paragraph nobody
-re-runs: at `DECIDE` the session records every row into `.claude/genesis/conventions.json`
-(template via `spec-paths templates`, schemaVersion 1) — each row DECIDED or
-DEFERRED-with-reason, naming the ADR that carries its rationale. A checker-enforceable DECIDED
-row (`enforceable: true`) names a `probe` path under the descriptor's `testTree`; at
-`SKELETON` the session lands one **executable test per such row**, at that path, in the host's
-own test tree — the same tree `## Genesis: Day-Zero Skeleton` already wires into the gate, so
-the zero-day gate that runs on every push executes the conventions forever. A `DEFERRED` row
-carries its `reason` in the JSON instead of a probe; deferral is a recorded choice, never a
-silent gap.
+The ops-conventions table (§ Genesis: Ops Conventions ADR) stops being a paragraph nobody re-runs:
+at `DECIDE` the session records every row into `.claude/genesis/conventions.json` (template via
+`spec-paths templates`, schemaVersion 1) — each row DECIDED or DEFERRED-with-reason, naming the ADR
+that carries its rationale. A checker-enforceable DECIDED row (`enforceable: true`) names a `probe`
+path under the descriptor's `testTree`; at `SKELETON` the session lands one **executable test per
+such row**, at that path, in the host's own test tree. A `DEFERRED` row carries its `reason` in the
+JSON instead of a probe.
 
-The **binding subset** — the root `CLAUDE.md` or `AGENTS.md` a fresh agent actually reads
-before it writes code — is the primary artifact of this closure, and every ops-conventions ADR
-is its rationale appendix (`## Dissents` still required in each). It stays **≤150 lines** and
-names, as literals: the `gateCommand`, the `testTree`, the conventions the landed probes pin,
-and — once `/spec:enforce` has run — the enforcement manifest's path. Admission checks
-existence and size only, never content quality; content is the session's judgment, the same
-decide-vs-mechanize split § Genesis: Enforcement Handoff to the spec pipeline draws.
+The **binding subset** — the root `CLAUDE.md` or `AGENTS.md` a fresh agent actually reads before it
+writes code — is the primary artifact of this closure, and every ops-conventions ADR is its
+rationale appendix (`## Dissents` still required in each). It stays **≤150 lines** and names, as
+literals: the `gateCommand`, the `testTree`, the conventions the landed probes pin, and — once
+`/spec:enforce` has run — the enforcement manifest's path.
 
 ## Genesis: State Machine
 
-`.claude/genesis/status.json` (template via `spec-paths templates`, schemaVersion 3). The
-architect stage is now driver-owned: `genesis-driver.js` (resolved by `/spec:genesis`) derives
-the current state on **every invocation** from `status.json` plus the artifacts actually on
-disk — never from the enum alone; a mark whose named artifact vanished is demanded again. The
-states: `DISCOVERY` → `BRIEF` (mark-driven, § Genesis: Brief State) → `MENUS` →
+`.claude/genesis/status.json` (template via `spec-paths templates`, schemaVersion 3).
+`genesis-driver.js` (resolved by `/spec:genesis`) derives the current state on **every invocation**
+from `status.json` plus the artifacts actually on disk — never from the enum alone; a mark whose
+named artifact vanished is demanded again. The states: `DISCOVERY` → `BRIEF` → `MENUS` →
 [`FINALISTS` → `RACE` (driver-only) → `PROBE` → `PICK`, tournament archetypes only, § Genesis:
-Tournament of Scaffolds] → `DECIDE` → `SCAFFOLD` (driver-only) → `SKELETON` → `GATE`
-(driver-only) → `GATE_RED` | `DESIGN_BRIEF` → [`DESIGN_KIT` → `DESIGN_JOURNEYS` →
-`AWAITING_DESIGN_APPROVAL`, specs 05/06, § Genesis: Design Stage] → `ROADMAP` → `HANDOFF` →
-`GROUNDED` (terminal for this stage).
-`HANDOFF` is itself a judgment step — the session authors `.claude/genesis/init-profile.json`
-and the driver runs `init-gen.js generate` against it (§ Genesis: Enforcement Handoff to the
-spec pipeline) — never the terminal print itself; `GROUNDED` is reached only once that run
-exits 0. No `status.json` on disk → the driver creates it from the template and prints
-`DISCOVERY`; no `brief.md` on disk → the DISCOVERY step names `genesis-brief.md`
-(`$(spec-paths templates)/genesis-brief.md`) as the source.
+Tournament of Scaffolds] → `DECIDE` → `SCAFFOLD` (driver-only) → `SKELETON` → `GATE` (driver-only) →
+`GATE_RED` | `DESIGN_BRIEF` → [`DESIGN_KIT` → `DESIGN_JOURNEYS` → `AWAITING_DESIGN_APPROVAL`, §
+Genesis: Design Stage] → `ROADMAP` → `HANDOFF` → `GROUNDED` (terminal for this stage). No
+`status.json` on disk → the driver creates it from the template and prints `DISCOVERY`.
 
-**Checkpoint contract.** Every accepted `--mark` prints, as its last line, `✅ checkpoint —
-genesis state saved (<prev> → <next>); safe to /clear and re-run /spec:genesis`; every step's
-text opens with `Read only:` followed by the files that step needs — never the whole
-`.claude/genesis/` directory. This is what makes a full genesis safe to run across as many
-`/clear`s as it needs: state lives on disk, never in chat context.
+**Checkpoint contract.** Every accepted `--mark` prints, as its last line,
+`✅ checkpoint — genesis state saved (<prev> → <next>); safe to /clear and re-run /spec:genesis`.
 
-- `architect`: `pending → decisions-recorded → scaffold-complete` (driven by the marks above,
-  never a command's own phase tracking)
-- `design`: `pending → ratified` (or `skipped`); a legacy file may still carry
-  `doctrine-drafted` or `tokens-landed` — § Genesis: Brief State's legacy resume
+- `architect`: `pending → decisions-recorded → scaffold-complete`
+- `design`: `pending → ratified` (or `skipped`)
 - `brief`: `null` until `--mark brief-written`, then `{mocks, legacy, ratifiedAt}`
   (§ Genesis: Brief State)
 - `designStage`: `null` until the first derivation past the green gate, then either
   `{ skipped: 'non-visual' | 'non-storybook', at }` or `{ paths, brief, catalog, briefAt }`
   once `design-brief-written` is accepted (§ Genesis: Design Stage)
 
-The roadmap (the driver's `ROADMAP` state, § Genesis: Roadmap Decomposition) deliberately has
-**no enum value of its own**: nothing downstream gates on it (design and init don't depend on
-it), so it is verified by artifact existence only — `architect: scaffold-complete` with no
-`docs/roadmap/00-overview.md` means the driver resumes at `ROADMAP`.
+The roadmap (the driver's `ROADMAP` state, § Genesis: Roadmap Decomposition) deliberately has **no
+enum value of its own**: it is verified by artifact existence only — `architect: scaffold-complete`
+with no `docs/roadmap/00-overview.md` means the driver resumes at `ROADMAP`.
 
-**BRIEF derivation.** The driver enters `BRIEF` on the first derivation once `discoveryDone`
-holds and `!marks.briefWritten` — regardless of any later legacy marks (§ Genesis: Brief
-State's legacy resume). A legacy `status.json` carrying `marks.menusDone` and no
-`marks.briefWritten` derives `BRIEF` too, with its step text opening `legacy:` — the run
-resumes there with its existing explore/design artifacts rather than being forced back through
-`MENUS`. `/spec:init` is blocked when `design` is a legacy partial value
-(`doctrine-drafted`/`tokens-landed`); it proceeds on `ratified` or `skipped`, and is merely
-warned when `design` is still `pending`. **Re-entry verifies the named artifacts physically
-exist — never trust the phase enum alone** (a phase can be set while a side-effect was rolled
-back).
+**BRIEF derivation.** The driver enters `BRIEF` on the first derivation once `discoveryDone` holds
+and `!marks.briefWritten` — regardless of any later legacy marks (§ Genesis: Brief State's legacy
+resume). **Re-entry verifies the named artifacts physically exist — never trust the phase enum
+alone**.
 
 ## Genesis: Design Stage
 
 `DESIGN_BRIEF` is derived after the zero-day gate is green (`architect: scaffold-complete`) and
-before `ROADMAP`, on a host where `designStageApplies()` holds: the archetype is visual
-(§ Genesis: Archetype Registry) **and** the stack descriptor's `designCatalog === 'storybook'`.
-Any other host — `data-ml`, `backend-api`, a visual archetype on a non-Storybook catalog —
-records `status.designStage = { skipped: 'non-visual' | 'non-storybook', at }` on the first
-derivation past the gate and continues straight to `ROADMAP`; no new mark is ever demanded of
-it. `DESIGN_BRIEF` is re-derived whenever `marks.designBriefWritten` is unset or either
-`docs/design/brief.md` or `.claude/genesis/design-paths.json` has vanished from disk — the same
-artifact-over-enum discipline § Genesis: State Machine states for every other step.
+before `ROADMAP`, on a host where `designStageApplies()` holds: the archetype is visual (§ Genesis:
+Archetype Registry) **and** the stack descriptor's `designCatalog === 'storybook'`. Any other host —
+`data-ml`, `backend-api`, a visual archetype on a non-Storybook catalog — records
+`status.designStage = { skipped: 'non-visual' | 'non-storybook', at }` on the first derivation past
+the gate and continues straight to `ROADMAP`. `DESIGN_BRIEF` is re-derived whenever
+`marks.designBriefWritten` is unset or either `docs/design/brief.md` or
+`.claude/genesis/design-paths.json` has vanished from disk.
 
-**The wireframe's last read.** `DESIGN_BRIEF`'s step is the last point genesis reads the
-wireframe: its `Read only:` line names `design/mocks/screens/ (the confirmed wireframes)` when
-that directory exists. From here on the design stage works
-against the real scaffolded app; the wireframe is a throwaway that has done its job (§ Genesis:
-Tournament of Scaffolds, § Genesis: Day-Zero Skeleton).
+**`--mark design-brief-written`** verifies three artifacts, refusing by name on the first failure:
+`.claude/genesis/design-paths.json` (schema-complete, `storybook.port` an integer 1024–65535);
+`docs/design/brief.md`; and the rules file's `## Intent to pattern`/`## Naming` tables via
+`design-contract-check.js`'s `--rules --kit --tokens` overrides. On success the mark records
+`status.designStage = { paths, brief, catalog, briefAt }` and the run advances to `DESIGN_KIT`.
 
-**Session and model.** The driver's printed step names a fresh session and Fable as the model:
-`DESIGN_BRIEF` is authored by the seat that writes taste and prose, never carried inside the
-architect session's own context. The step also names the `design-brief` skill
-(`spec/skills/design-brief/SKILL.md`) to load before the first line, and prints one
-`catalog: N components · M compositions unavailable` line and one `journey: <name> (<beats>
-beats)` line per approved journey.
+**The kit (`DESIGN_KIT`).** Derived once `marks.designBriefWritten` holds and re-derived whenever `marks.kitLanded` is unset or `.storybook/main.*` has vanished from disk.
+Printed by `genesis-driver.js` at DESIGN_KIT; never restated here.
 
-**The catalog inventory.** When `docs/design/catalog.md` is absent at the step's first print,
-the driver runs `catalog-inventory.js` itself and records the
-counts under `status.designStage.catalog`; a non-zero exit degrades to a warning and never
-blocks the mark — the brief's `## Catalog` section can still be written from the component list
-alone. `/spec:doctor` re-runs the same script with `--check` to flag a catalog gone stale
-against the installed kit.
+**The journeys (`DESIGN_JOURNEYS`).** Derived once `marks.kitLanded` holds and re-derived whenever
+`marks.journeysDrawn` is unset or a journey story has vanished from disk. **The beats-file
+contract:** at every print the driver derives `<journeys>/<journey>.beats.json` from the seed's own
+beats (`{ journey, beatHash, beats: [{ n, sentence, screen, state }] }`), rewriting only a file
+whose hash no longer matches the seed. **The primitive ban:** no file under the journeys directory
+may import a primitive — by specifier equal to or under `primitivesAlias`, or by relative path
+resolving into `primitives` — a journey composes kit composites only; the refusal names the file and
+the specifier. `--mark journeys-drawn` proves, via the rebuilt Storybook index, that every journey
+carries a story tagged both `journey` and `play-fn` with a passing build.
 
-**`--mark design-brief-written`** verifies three artifacts, refusing by name on the first
-failure: `.claude/genesis/design-paths.json` (schema-complete, `storybook.port` an integer
-1024–65535); `docs/design/brief.md` (heading order, one JTBD line per journey, no entity
-section, a non-empty `## Composites` table whose `Composite` column equals the rules file's own
-`## Intent to pattern` column, every `### Used` name present in `docs/design/catalog.md`); and
-the rules file's `## Intent to pattern`/`## Naming` tables via `design-contract-check.js`'s
-`--rules --kit --tokens` overrides (a missing kit or tokens file is tolerated here — the kit
-lands at `DESIGN_KIT`, next). On success the mark records `status.designStage = { paths, brief,
-catalog, briefAt }` and the run advances to `DESIGN_KIT`.
-
-**The kit (`DESIGN_KIT`).** Derived once `marks.designBriefWritten` holds and re-derived whenever
-`marks.kitLanded` is unset or `.storybook/main.*` has vanished from disk — the same
-artifact-over-enum discipline as every other step. The step names a fresh session and Fable as
-the model, the same taste-and-prose seat as `DESIGN_BRIEF`: Fable authors the tokens, the shell,
-and one intent-named composite per pattern row with a fixture story per declared state; the
-`frontend-design` skill loads first if installed, warning and continuing when it is not. The
-Storybook setup recipe (the non-interactive init, the preview CSS import, the example-stories
-deletion, the pinned-`latest` devDependency re-pin, the TanStack Start iframe-input fix) is
-printed by the step itself via `spec-paths shared-genesis --section "Design Stage"` — this
-section states the rule, never a second copy of the recipe text. `--mark kit-landed` runs
-`design-contract-check`'s `--rules --kit --tokens` overrides, requires `.storybook/main.*` and a
-green Storybook build, and refuses by composite and state name the first declared state with no
-matching story — a kit is landed only once every composite the brief named carries a story for
-every state the brief declared.
-
-**The journeys (`DESIGN_JOURNEYS`).** Derived once `marks.kitLanded` holds and re-derived
-whenever `marks.journeysDrawn` is unset or a journey story has vanished from disk. **The
-beats-file contract:** at every print the driver derives `<journeys>/<journey>.beats.json` from
-the seed's own beats (`{ journey, beatHash, beats: [{ n, sentence, screen, state }] }`),
-rewriting only a file whose hash no longer matches the seed — a journey story imports this file
-and iterates it in its `play` function, so "a story whose steps equal the seed's beats" holds by
-construction; `journeys-drawn` only has to prove the import and the recomputed hash, never parse
-step literals out of source (pipeline rules § Gotchas records that class of regex-over-prose
-fragility). **The primitive ban:** no file under the journeys directory may import a primitive —
-by specifier equal to or under `primitivesAlias`, or by relative path resolving into
-`primitives` — a journey composes kit composites only; the refusal names the file and the
-specifier. **Model placement:** the step names Sonnet as the model that may draw the journey
-screens from the brief, once the kit exists and never before it, and names every approved journey
-in this one session — never a session per journey. `--mark journeys-drawn` proves, via the
-rebuilt Storybook index, that every journey carries a story tagged both `journey` and `play-fn`
-with a passing build; on success the run advances to `AWAITING_DESIGN_APPROVAL`, the approval
-stop below, never straight to `ROADMAP`.
-
-**The approval stop (`AWAITING_DESIGN_APPROVAL`).** JJ approves the designed set in Storybook
-itself — no client gate exists at this stop. The step probes the live index
-(`storybook.indexUrl` when set, else `http://127.0.0.1:<port>/index.json`) rather than a story
-URL's status: Storybook answers 200 for a story id that does not exist, so only the index's own
-`entries` content proves a journey story is actually served. On success it prints one verified
-`🎨 ready for review` URL plus one `journey: <j> → <url>` line per journey in seed order and the
-composite-state count, ending the turn on a reply line inviting the one literal word
-**`approve`** (design.md § Design Canon's look-stop contract). On failure it names the port and the reason (`unreachable` | `index unparseable` |
-`missing story <id>`) and a `Session:` line to start Storybook in the background, never a URL.
+**The approval stop (`AWAITING_DESIGN_APPROVAL`).** JJ approves the designed set in Storybook itself
+— no client gate exists at this stop. The step probes the live index (`storybook.indexUrl` when set,
+else `http://127.0.0.1:<port>/index.json`). On success it prints one verified `🎨 ready for review`
+URL plus one `journey: <j> → <url>` line per journey in seed order and the composite-state count,
+ending the turn on a reply line inviting the one literal word **`approve`** (design.md § Design
+Canon's look-stop contract).
+Printed by `genesis-driver.js` at `AWAITING_DESIGN_APPROVAL`; never restated here.
 
 Only the literal `approve` runs `--mark design-approved`, which re-verifies the fresh index and
-writes `docs/design/approval.json`: per journey its story id, source file, beats hash, and
-screens in beat order; per composite its declared states. No per-file or per-screen hash is
-recorded — **frozen after approval, never gated later**: recording a hash would invite exactly
-the gate this stop refuses to become, since nothing downstream may compare a story to what JJ
-saw. On success the run advances to `ROADMAP`, which reads this record (§ Genesis: Roadmap
-Decomposition).
+writes `docs/design/approval.json`. No per-file or per-screen hash is recorded — **frozen after
+approval, never gated later**. On success the run advances to `ROADMAP`, which reads this record (§
+Genesis: Roadmap Decomposition).
 
 A picture round is optional and never a gate: the project's `pictures` block (the contract's
 § Pictures) says how its pictures are made, and `node "$(spec-paths pictures)" --root .` sends one.
 
 ## Genesis: Roadmap Decomposition
 
-Runs immediately after the zero-day gate is green, **while the interview, decision, and ADR
-context is still hot** — this decomposition is half-formed in the session already; a later
-session would pay full price to reconstruct it worse. The roadmap is what makes the pipeline
-invocable after setup: without it, genesis ends and the user has no unit to hand `/spec:plan`.
-
 The two format contracts are templates: `$(spec-paths templates)/roadmap-overview.md` and
-`$(spec-paths templates)/roadmap-brief.md` — Read both first. The governing principle: **briefs
-are stable intent; specs are perishable execution detail.** Briefs cite ADRs (also stable) and
-are hydrated into specs lazily, one `/spec:plan` session at a time, when "Current state" can be
-written against real code. Never pre-plan the whole roadmap into specs.
+`$(spec-paths templates)/roadmap-brief.md` — Read both first. The governing principle: **briefs are
+stable intent; specs are perishable execution detail.**
 
-1. **Decompose.** Slice the confirmed goal + ADRs into ordered briefs, each sized to one
-   planning session (1–4 specs; a brief whose Scope can't be told in ~1 page splits). Slice by
-   **landing unit** (each brief leaves the system green and demonstrable), never by layer.
-   **An ops-conventions row records a choice, never scaffolds its mechanism:** the
-   facade/runtime an ops decision implies (queue wrapper, enqueue helper, analytics seam)
-   lands in the same brief as its **first consumer** — never as a standalone infrastructure
-   brief, and never wired into boot for an empty registry (measured: two audited hosts each
-   carried a well-tested dead queue facade every review re-flagged).
-   Wire `depends_on` as a DAG; assign phases (P0 = walking skeleton → first milestone → …);
-   derive milestone gates from the discovery success outcome (observable states, not feature
-   lists). Design column: `yes` only for user-facing briefs in archetypes whose design stage
-   isn't `none` — and every `yes` brief carries a `## Surfaces` fenced block (screen labels +
-   journey edges, names and arrows only; the template documents the grammar) so the design
-   atlas can render the whole-product journey and its gaps. Seed the **ops track** with external clocks (OAuth registrations, hosting
-   provisioning, partner asks) and the **parking lot** with the "Later / Won't-this-time"
-   answers from discovery — recorded so they stop leaking into briefs; promotion out requires an amendment
-   ADR applying to the receiving brief.
+1. **Decompose.** Slice the confirmed goal + ADRs into ordered briefs, each sized to one planning
+   session. Slice by **landing unit** (each brief leaves the system green and demonstrable), never
+   by layer.
+   Wire `depends_on` as a DAG; assign phases (P0 = walking skeleton → first milestone → …); derive
+   milestone gates from the discovery success outcome (observable states, not feature lists). Design
+   column: `yes` only for user-facing briefs in archetypes whose design stage isn't `none` — and
+   every `yes` brief carries a `## Surfaces` fenced block (screen labels + journey edges, names and
+   arrows only; the template documents the grammar). Seed the **ops track** with external clocks and
+   the **parking lot** with the "Later / Won't-this-time" answers from discovery; promotion out
+   requires an amendment ADR applying to the receiving brief.
 
    **Brief 01 is the first-light brief.** Its Result is one real record through the deployed
    production path — created by a real actor, observed by a person, named in one `First light:`
@@ -676,122 +380,68 @@ written against real code. Never pre-plan the whole roadmap into specs.
    acceptance criterion, no feature. Feature briefs start at 02.
 2. **Confirm the sequence.** One `AskUserQuestion` round presenting the proposed sequence table
    (brief names, phases, dependencies, milestone gates) before writing files.
-3. **Write** `docs/roadmap/00-overview.md` + one `NN-{kebab}.md` per brief. Post-genesis
-   product-shape decisions are amendment ADRs whose effects are edited into the briefs they
-   name at decision time (the overview states the rule; adr.md template § Applies to) — no
-   side-channel amendment dir exists. **Never write a status column** —
-   per-brief status is derived from specs' `brief:` frontmatter (`/spec:status`), not tracked.
-4. **Self-check (checklist, not a workflow):** no `depends_on` cycles; every ADR is carried by
-   ≥1 brief's Grounding or is genuinely cross-cutting (note which); no two briefs claim the same
-   scope; each milestone gate is satisfiable by the briefs sequenced before it; brief 01 depends
-   on nothing and is plannable immediately after `/spec:init` + `/spec:enforce`; brief 01 carries
-   `First light:`.
+3. **Write** `docs/roadmap/00-overview.md` + one `NN-{kebab}.md` per brief. **Never write a status
+   column** — per-brief status is derived from specs' `brief:` frontmatter (`/spec:status`), not
+   tracked.
+4. **Self-check (checklist, not a workflow):** no `depends_on` cycles; every ADR is carried by ≥1
+   brief's Grounding or is genuinely cross-cutting (note which); no two briefs claim the same scope;
+   each milestone gate is satisfiable by the briefs sequenced before it.
 
-**Journey placement (specs/20260902/11 D4, fresh mocks-set runs only).** Decomposition
-derives from the designed set: once `docs/design/approval.json` exists (§ Genesis: Design
-Stage), the ROADMAP step prints one `approved: <j> — <n> beats · screens: <a, b, c> · story:
-<id>` line per approved journey read straight from that record, and `--mark roadmap-written`'s
-placement check reads its label set from the record's `screens` — the seed is no longer the
-source once the approval record exists. A host whose design stage never reaches approval (a
-legacy run, or a skipped stage) falls back to `design/mocks/seed.md`'s journeys unchanged: the
-step text lists journeys → suggested brief slices, one brief per journey by default, splitting a
-journey whose Scope exceeds a page. Either way, `--mark roadmap-written` requires every declared
-label to appear in **exactly one brief**'s `## Surfaces` block — a label placed in zero briefs is
-unplaced scope, a label placed in two is duplicated scope, and both refuse by name. An extra
-label a brief declares that no journey names is allowed (new scope discovered while slicing);
-only a source-declared label is checked for placement. This is what makes the design atlas's
-gap/orphan badges mean what they say from day one, instead of drifting the moment a journey's
-screens land in the wrong brief.
+**Journey placement.** Decomposition derives from the designed set: once `docs/design/approval.json`
+exists (§ Genesis: Design Stage), the ROADMAP step prints one
+`approved: <j> — <n> beats · screens: <a, b, c> · story: <id>` line per approved journey read
+straight from that record, and `--mark roadmap-written`'s placement check reads its label set from
+the record's `screens`. `--mark roadmap-written` requires every declared label to appear in
+**exactly one brief**'s `## Surfaces` block — a label placed in zero briefs is unplaced scope, a
+label placed in two is duplicated scope, and both refuse by name.
 
 **Agreed and not-contested exclusions land in the Parking lot.** `--mark roadmap-written` also
-requires every `confirmed` or `open` `exclusion` ledger row's claim (spec/doctrine/mocks.md
-§ Provenance Ledger) to appear verbatim under the overview's `## Parking lot` heading, refusing
-by claim otherwise — an `open` row names itself not contested in the refusal, since the client
-never disputed it. `overridden` rows (the client's `client-needed` answer, or a retired source)
-are never required — that claim is a feature the client asked for, recorded the ordinary way,
-not fenced. The same fencing that keeps discovery non-goals out of briefs now applies to
-everything the client left agreed or not contested.
+requires every `confirmed` or `open` `exclusion` ledger row's claim (spec/doctrine/mocks.md §
+Provenance Ledger) to appear verbatim under the overview's `## Parking lot` heading, refusing by
+claim otherwise. `overridden` rows are never required.
 
 ## Genesis: On-disk Handoff (the genesis artifacts)
 
-Genesis follows the same on-disk-handoff spine as the per-feature pipeline (shared § Workflows
-Encode Shape): every cross-stage handoff is a **file**, never conversation context — a
-re-invocation of a genesis command was never in the originating conversation; it Reads files only.
 The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/adr/` (durable):
 
 - **`.claude/genesis/brief.md`** — authored from the template `genesis-brief.md`
-  (`$(spec-paths templates)/genesis-brief.md`, § Genesis: Discovery Interview): `## What I
-  think you're building`, `## Coverage` (the ten-key audit — grammar per § Genesis: Discovery
-  Interview), `## Non-goals`, `## Open Dimensions` (each line `- <key>: open|constrained [—
-  note]`) and `## Research Angles` (the two machine-keyed sections the workflow agents read —
-  key → focus, and each marked hard-to-reverse or not), `## Picks` (each line `- <key>:
-  <label>`). These are the grammars `genesis-driver.js` parses mechanically at its
-  `discovery-done`, `menu-written`, and `menus-done` marks — write what the driver can read.
-  The command writes and re-renders this after every answer; the workflow's `args` only ever
-  carries the *keys*.
-- **`.claude/genesis/status.json`** — the genesis state machine (§ Genesis: State Machine),
-  carrying `tournament` (null for a non-tournament archetype or a skipped race).
-- **`.claude/genesis/tournament/`** (tournament archetypes only, § Genesis: Tournament of
-  Scaffolds) — `finalists/<name>/` and `logs/` (deleted once `decided`), `evidence/<name>/
-  probe.json` (session-written), `benchmark.json`/`benchmark.md`/`gallery.html`
-  (driver-written, survive `decided`). Template: `spec/templates/finalists.json`, the shape
-  the session composes a run's `finalists.json` from.
+  (`$(spec-paths templates)/genesis-brief.md`, § Genesis: Discovery Interview): `## Open Dimensions`
+  (each line `- <key>: open|constrained [— note]`), `## Research Angles`, `## Picks` (each line
+  `- <key>: <label>`).
+- **`.claude/genesis/status.json`** — the genesis state machine (§ Genesis: State Machine).
+- **`.claude/genesis/tournament/`** (tournament archetypes only, § Genesis: Tournament of Scaffolds)
+  — `finalists/<name>/` and `logs/` (deleted once `decided`), `evidence/<name>/probe.json`
+  (session-written), `benchmark.json`/`benchmark.md`/`gallery.html` (driver-written, survive
+  `decided`).
 - **`.claude/genesis/stack-descriptor.json`** — architect's output (template via `spec-paths templates`).
 - **`.claude/genesis/conventions.json`** — `DECIDE`'s ops-conventions ledger (template via
-  `spec-paths templates`, § Genesis: Conventions Probe Suite): schemaVersion 1, `testTree`,
-  and the DECIDED/DEFERRED rows the driver validates at `decided` and again (probe existence,
-  the binding subset) at `skeleton-landed`.
-- **`design/mocks/`** (durable, authored by `/spec:mocks`, spec 07's `mocks-driver.js`) — the
-  approved-set workspace BRIEF reads directly: `seed.md`, `status.json`, `ledger.md`,
-  `screens/` (one gray json-render file per screen and state), and the pulled `design/rounds/`
-  notes. BRIEF never writes here — it reads `status.json`/`ledger.md` for the precondition and
-  the seed and latest round for its counts.
+  `spec-paths templates`, § Genesis: Conventions Probe Suite).
+- **`design/mocks/`** (durable, authored by `/spec:mocks`) — the approved-set workspace BRIEF reads
+  directly: `seed.md`, `status.json`, `ledger.md`, `screens/`, and the pulled `design/rounds/`
+  notes.
 - **`.claude/genesis/design-paths.json`** — `DESIGN_BRIEF`'s session-authored path map (template
   `spec/templates/design-paths.json`, § Genesis: Design Stage): `kit`, `tokens`, `rules`,
-  `primitives`, `primitivesAlias`, `journeys`, `storybook`. Read by every later design mark and
-  by `HANDOFF`; `--mark design-brief-written` refuses when it is missing a required key.
-- **`<journeys>/<journey>.beats.json`** (durable, driver-written at every `DESIGN_JOURNEYS`
-  print, § Genesis: Design Stage) — the derived beats a journey story imports and iterates;
-  rewritten only when its `beatHash` no longer matches the seed.
+  `primitives`, `primitivesAlias`, `journeys`, `storybook`.
+- **`<journeys>/<journey>.beats.json`** (durable, driver-written at every `DESIGN_JOURNEYS` print, §
+  Genesis: Design Stage) — the derived beats a journey story imports and iterates.
 - **`<kit>/<Composite>.stories.*`** and **`<journeys>/<journey>.journey.stories.*`** (durable,
   session-authored at `DESIGN_KIT`/`DESIGN_JOURNEYS`) — the state stories that prove a composite's
-  declared states and the journey stories the beats files feed; both are proved by the rebuilt
-  Storybook index at their own mark, never by a separate assertion of file existence.
+  declared states and the journey stories the beats files feed.
 - **`.claude/genesis/storybook-static/`** (transient, gitignored) — the Storybook static export
-  `runStorybookBuild` rebuilds at every `kit-landed`/`journeys-drawn` attempt; never committed,
-  never read after the mark that built it.
+  `runStorybookBuild` rebuilds at every `kit-landed`/`journeys-drawn` attempt.
 - **`docs/design/brief.md`** — `DESIGN_BRIEF`'s authored brief (template
-  `spec/templates/design-brief.md`, § Genesis: Design Stage): users and context, one JTBD line
-  per journey, navigation, the catalog split into used/excluded, one composite per intent, and
-  the `## Contract` line naming the rules file.
-- **`docs/design/approval.json`** (durable, written once by `--mark design-approved` on JJ's
-  literal `approve`, § Genesis: Design Stage) — `schemaVersion`, `approvedAt`, `storybook.port`,
-  per journey `{ story, file, beats, screens }` (beats in beat order, no per-file hash), and
-  `composites: { <Composite>: [<states>] }`. Frozen after approval, never gated later; ROADMAP
-  reads its `journeys` for the `approved:` lines and the placement check's label set.
+  `spec/templates/design-brief.md`, § Genesis: Design Stage).
+- **`docs/design/approval.json`** (durable, written once by `--mark design-approved` on JJ's literal
+  `approve`, § Genesis: Design Stage) — `schemaVersion`, `approvedAt`, `storybook.port`, per journey
+  `{ story, file, beats, screens }`, and `composites: { <Composite>: [<states>] }`.
 - **`docs/design/catalog.md`** (durable) — the driver-generated shadcn inventory
-  (`catalog-inventory.js`, § Genesis: Design Stage), refreshed by `/spec:doctor`'s currency
-  check when the installed kit changes.
-- **`.claude/genesis/interview-research/{dimension}.json`** — the woven-loop option menus,
-  each surviving option stamped with a `currency` block and each menu carrying any
-  `droppedForCurrency` entries `registry-check.js` removed.
+  (`catalog-inventory.js`, § Genesis: Design Stage).
+- **`.claude/genesis/interview-research/{dimension}.json`** — the woven-loop option menus.
 - **`docs/adr/NNNN-*.md`** — architecture/design decision records (template via `spec-paths templates`).
-- **`docs/roadmap/`** (durable) — the decomposition that makes the pipeline invocable after
-  setup: `00-overview.md` (sequence table, milestone gates, ops track, parking lot) plus one
-  `NN-*.md` planning brief per `/spec:plan` unit
-  (templates: `roadmap-overview.md`, `roadmap-brief.md` via `spec-paths templates`).
-  Post-genesis amendments are ADRs with an `Applies to` list, their effects edited into the
-  named briefs at decision time (consumed briefs get a letter-suffixed successor) — no
-  side-channel amendment files; the numbered sequence is the only work queue. Briefs are
-  **stable intent** hydrated into specs lazily; per-brief status is never written here — it is
-  derived from specs' `brief:` frontmatter (`/spec:status`, or `/spec:doctor` check 14 for
-  the audited version). Brownfield repos (no
-  genesis) hand-author from the same templates; a dedicated command exists only if evidence
-  demands one.
+- **`docs/roadmap/`** (durable) — the decomposition that makes the pipeline invocable after setup:
+  `00-overview.md` (sequence table, milestone gates, ops track, parking lot) plus one `NN-*.md`
+  planning brief per `/spec:plan` unit (templates: `roadmap-overview.md`, `roadmap-brief.md` via
+  `spec-paths templates`).
 - **`.claude/genesis/init-profile.json`** (session-authored) — `HANDOFF`'s judgment artifact:
   the init profile (`spec/commands/init.md` Phase 4's shape) the driver hands to `init-gen.js
   generate` at `--mark profile-written` (§ Genesis: Enforcement Handoff to the spec pipeline).
-- **`.claude/genesis/init-gen.log`** (driver-written) — the streamed stdout+stderr of that
-  `generate` run; a refused mark quotes its tail, the full log survives on disk for a deeper
-  read.
-

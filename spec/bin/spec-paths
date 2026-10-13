@@ -102,6 +102,7 @@ case "${1:-root}" in
       replay)  SECTIONS="Host Grounding|Tiers|Model Placement|Decisions|Question Style|Console Output Style|Feedback Loop|Session Execution" ;;
       init)    SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Pipeline Entry|Tiers|Runtime Verification|Release Stage|Model Placement|Question Style|Console Output Style|Canonical Docs Loop|Design Canon|Session Execution" ;;
       prototype) SECTIONS="Host Grounding|Pipeline Entry|Model Placement|Decisions|Question Style|Console Output Style|Worker Git Ban|MCP Policy|On-Disk Handoff|Session Execution" ;;
+      connect) SECTIONS="Host Grounding|Question Style|Console Output Style|Session Execution" ;;
       *) cat "$CORE" "$DESIGN"; exit 0 ;;
     esac
     echo "<!-- shared invariants scoped to /spec:${CMD} — full doctrine: $CORE + $DESIGN -->"

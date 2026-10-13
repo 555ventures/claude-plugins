@@ -1,12 +1,14 @@
 ---
 date: 2026-10-08
-status: hardened
+status: done
+build_base: main
 open_markers: 0
 tier: standard
 area: doctrine
 breaking: false
 depends_on: []
 brief: n/a
+diff_base: c467f7b1c20d4ba2e0681569a6f7fc73982a8012
 ---
 
 # Doctrine states contracts and points at its enforcers
@@ -41,6 +43,7 @@ value, and the test suite green with every retired phrase pin gone rather than w
 | D8 | **Retired phrase pins leave, never weaken.** Every test that asserts a literal phrase this spec deletes is either deleted (its subject is gone) or re-targeted to the surviving contract line in the same File Plan row; no assertion is loosened to pass. The pins are enumerated in Rationale § Pin inventory from the lock-time blanking spike (A3). `[no-ac: the host gate is the oracle; the spike found no pin D2 fails to keep]` | pipeline rules § Test Rules: a weakened assertion is a doctrine change. The spike is the inventory; a pin the spike missed is handled under A3's remedy. |
 | D9 | **`replay-corpus.md` is untouched.** `lib/replay-corpus.js` parses it at runtime; it is data, not prose. `[no-ac: absence of change; the replay suite already pins the parse]` | The audit's doctrine bucket included it only because it lives in the directory. |
 | D10 | **Plugin version bump** via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"`; no version literal is named here. `[no-ac: scripts/plugin-bump.js --check in the gate is the oracle]` | pipeline rules § Planning. |
+| D11 | **User ruling at build (red-check `unsanctioned-green`):** the frozen-headings promise is a continuation — AC-20261008-01-4 reads SHALL CONTINUE TO, its new test is green on the pre-image and stays green through the cuts. (AC-20261008-01-4) | The headings already match; the spec's job is to keep them matching. Rejected: dropping the guard (a renamed uncited heading would slip through). |
 
 ## File Plan
 
@@ -229,7 +232,7 @@ the reviewer checks each one resolves.
   `spec/doctrine/genesis.md` → ≤ 450), the entries being the values measured at build → writes
   tests/consistency/doctrine-budget.test.js
 - **AC-20261008-01-4**: WHEN the `## ` lines of each of the six doctrine files are collected THE SYSTEM
-  SHALL match the Contracts § Frozen headings list exactly, in order (e.g. core.md's 14th heading is
+  SHALL CONTINUE TO match the Contracts § Frozen headings list exactly, in order (e.g. core.md's 14th heading is
   `## Question Style (every \`AskUserQuestion\`, every stage)`) → writes tests/consistency/doctrine-headings.test.js
 - **AC-20261008-01-5**: WHEN `spec-paths shared-for <cmd>` runs for each of the thirteen previously
   scoped commands THE SYSTEM SHALL CONTINUE TO print the section list the SHARED_FOR table pinned
@@ -318,6 +321,33 @@ keeps. No structural test reddened. The anchors, each a keep-line for the worker
 
 Because every anchor is kept, the File Plan's test rows carry only the ceiling tightenings and
 the two new budget/heading tests; a pin that reddens anyway is handled under A3's remedy.
+
+### Build deviations (folded at close, 2026-10-13)
+
+Three lock-time AC errors surfaced at red-check, each already a pipeline-rules Gotchas class
+(the `→` verb and CONTINUE-TO entry), so no new Gotchas entry:
+
+- `design-stage-doctrine.test.js`'s `<=160` cap was not tightened: AC-20261008-01-6 `reuses` that
+  case, so it must stay green on the 82-line pre-image (`broken-reuse`). It gains the AC-6 tag only;
+  design.md's real ceiling is pinned by `doctrine-budget.test.js`.
+- `read-load.test.js`'s named AC-2 case also asserts each command's measured load against its own
+  BUDGET entry, so the rewrite is red on the pre-image (`gutted-rewrite`).
+- AC-20261008-01-4 now reads SHALL CONTINUE TO by user ruling D11 (`unsanctioned-green`).
+
+Doctrine cuts:
+
+- Several per-section ceilings were unreachable by deletion without removing a pin-inventory or D2
+  keep-line; the file totals fit instead (A1's file-total clause). Over their section ceiling: core
+  preamble, Feedback Loop, Incident Policy, Question Style, Console Output Style; genesis Discovery
+  Interview, Brief State, Tournament, Decision Record, Ops Conventions, Fresh UX, Design Stage, State
+  Machine, Roadmap Decomposition, On-disk Handoff. Measured (`wc -l`): core 229, genesis 447, mocks
+  199, design 64, stage-build 84, stage-review 92.
+- To hold genesis.md's 450, whole paragraphs beyond the fate table's named deletions went: Brief
+  State's ratification-by-archetype bullets (the Archetype Registry closing rule carries the split),
+  the derived-dimensions intro, Decision Record's partitioned-evidence paragraph, three Design Stage
+  paragraphs, the Roadmap ops-conventions facade rule, and the `init-gen.log` artifact bullet
+  (`genesis-driver.js` names it in its own refusal). Review flagged the two keep-line deletions as
+  soft: A1's remedy was raising the ceiling, not deleting keep-lines.
 
 ## Canonical Delta
 

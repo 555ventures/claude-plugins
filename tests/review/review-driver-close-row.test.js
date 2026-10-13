@@ -27,7 +27,7 @@ const { GREEN_TEST, specBody, makeHost, run, stateOf, toReviewer, returnFileWith
 // flipping status right there, with no separate `--mark dispositions` step ever required or
 // printed. The line below asserting DISPOSITIONS directly after reviewer-returned is superseded;
 // this test now captures the ledger `before` snapshot before that single mark and asserts CLOSE.
-test('AC-20260820-07-6 / AC-20260901-03-5 (SHALL CONTINUE TO) / AC-20260909-04-7 (D6, retagged): WHEN a clean run\'s reviewer-returned mark leaves an empty hard pool THE SYSTEM self-dispositions, runs the authoritative verdict with --retain .claude/spec-runs, appends one ledger line, flips status implementing -> done, and prints the close-step instructions, all within that one mark', () => {
+test('AC-20260820-07-6 / AC-20260901-03-5 (SHALL CONTINUE TO) / AC-20260909-04-7 (D6, retagged) / AC-20261013-01-8 (SHALL CONTINUE TO): WHEN a clean run\'s reviewer-returned mark leaves an empty hard pool THE SYSTEM self-dispositions, runs the authoritative verdict with --retain .claude/spec-runs, appends one ledger line, flips status implementing -> done, and prints the close-step instructions, all within that one mark', () => {
   const host = makeHost()
   toReviewer(host)
   const returnFile = returnFileWith('rvdrv-clean', CLEAN_RETURN)
@@ -57,6 +57,22 @@ test('AC-20260820-07-6 / AC-20260901-03-5 (SHALL CONTINUE TO) / AC-20260909-04-7
     'the CLOSE step\'s hygiene listing must name .claude/spec-runs/*.jsonl as an EXPECTED artifact — omitting it invites deleting durable evidence as reviewer scratch: ' + r.stdout)
   assert.match(r.stdout, /EXPECTED/, 'the hygiene listing must mark expected artifacts (retained evidence + sidecar) as EXPECTED, not stray paths to clean up: ' + r.stdout)
   assert.match(r.stdout, /close[- ]commit/i, 'the CLOSE step must print the close-commit instruction: ' + r.stdout)
+
+  // specs/20261013/01-review-closes-its-own-softs.md D9: a zero-soft close needs no sweep mark and
+  // leaves the close row without a softSweep key.
+  assert.doesNotMatch(r.stdout, /soft-swept/,
+    'a zero-soft CLOSE step must not mention the sweep mark — in-flight zero-soft hosts must not notice the sweep: ' + r.stdout)
+  assert.ok(!('softSweep' in row),
+    'a zero-soft close row must carry no softSweep key — the row stays byte-identical to what verdict.js wrote: ' + JSON.stringify(row))
+  const g = gitRepo(host.root)
+  g('add', host.spec)
+  if (g('status', '--porcelain', '--untracked-files=no').trim()) g('commit', '-q', '-m', 'close')
+  const closed = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(closed.status, 0,
+    'a zero-soft close must be accepted with no sweep mark ever made — the new unswept-soft refusal must not strand zero-soft hosts: ' + closed.stdout + closed.stderr)
+  const finalRow = fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((x) => x.runId === row.runId)
+  assert.ok(!('softSweep' in finalRow),
+    'an accepted zero-soft close must not re-stamp the close row with a softSweep key: ' + JSON.stringify(finalRow))
 })
 
 // specs/20260824/06-review-range-identity.md D3/D4: the close row is written by

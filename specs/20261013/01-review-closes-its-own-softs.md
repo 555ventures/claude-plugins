@@ -1,6 +1,7 @@
 ---
 date: 2026-10-13
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: review
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 brief: n/a
 spiked: 2026-10-13
 open_markers: 0
+diff_base: c796f0324cf57dd219abc1ae7e10d420dc978bf6
 ---
 
 # Review closes its own soft findings
@@ -168,6 +170,19 @@ the lane in its smallest form. Direct fixes on main stay as they are. Tick q319 
 naming the sweep mark; the remedy is one sweep pass. No other state changes.
 
 **Collision closure (lock).** Literals leg: `wants fixed` (driver), `one worth fixing` (stage-review), `never fix-dispatched inside review` (reviewer.md) — all in-plan rows; `not dispositioned` hits soft-floor.test.js, which pins the `advisory (N, recorded, not dispositioned):` heading D7 keeps byte-identical — waived. Paths leg: 13 `executes` hits run the driver on zero-soft or pre-CLOSE paths, which D9 pins unchanged; no test with a soft return reaches `--mark closed` today (grepped at lock), so D4's new refusal strands no fixture — waived.
+
+**Build deviations (folded at close, 2026-10-13).** (1) The driver's startup deviations
+observation no longer persists the review sidecar when the mark is `closed`; `handleClosed()`
+saves it right after D4's unswept-soft refusal — forced by AC-4's byte-identical
+`review-state.json` requirement when a deviations sidecar exists. (2) The build left `soft-swept`
+out of the unknown-mark list because a test pins that list verbatim; review raised it as a soft
+and this spec's own CLOSE sweep handled it (see the sweep outcome below).
+
+**Review fix (iteration 1, 2026-10-13).** D5's "and the sidecar" was built as the never-committed
+`.review/` state dir; the ceiling then counted the deviations sidecar's close-time deletion as fix
+lines, and a large sidecar made `--mark closed` unreachable (ceiling refusal → restore → lingering
+sidecar refusal). The exclusions now carry the deviations sidecar and `.claude/agent-memory/`,
+exactly the files CLOSE writes, pinned by an AC-5 case.
 
 ## Canonical Delta
 

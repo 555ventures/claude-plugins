@@ -31,9 +31,18 @@
   field is absent or non-numeric) to the undispositioned pool beside reviewer survivors: the
   pool is hard survivors plus leg findings, and soft survivors are advisory —
   counted in the row's `findings.soft`, retained verbatim in the artifact, never dispositioned,
-  never fix-dispatched. `CLEAN` is unreachable until dispositions cover the hard pool;
-  `FINDINGS` means exactly one thing, a dispatched fix that has not landed.
+  never fix-dispatched at DISPOSITIONS. `CLEAN` is unreachable until dispositions cover the hard
+  pool; `FINDINGS` means exactly one thing, a dispatched fix that has not landed.
   (specs/20260909/04-review-soft-floor.md, done 2026-09-09)
+  Softs do not leave the review by hand: at CLOSE the driver prints each soft as `a<i>`, the
+  session dispatches fix workers, and `--mark soft-swept --file <sweep.json>` records one
+  outcome per soft — `fixed`, or `debt` with a reason that the driver appends under the spec's
+  `## Rationale` as `### Advisory debt (review <runId>)`. `--mark closed` refuses an unswept
+  soft, and when any soft was fixed it measures the committed close tree against the judged sha
+  (overlay paths excluded) and refuses more than `SOFT_SWEEP_MAX_LINES` (60) changed lines or any
+  binary change with `soft sweep over ceiling`; an accepted close re-stamps the close row with
+  `softSweep: {fixed, debt}`. The queue receives only follow-ups that need their own spec or the
+  user's decision. (specs/20261013/01-review-closes-its-own-softs.md)
 
   A spec stamped `prototype: <stem>` gains one more row, `contract`, read from the spec's last
   build row (`replay.passed` and `replay.looked` both true → exit 0, else

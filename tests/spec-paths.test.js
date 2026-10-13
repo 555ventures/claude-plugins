@@ -621,7 +621,7 @@ test('shared-for init: scoped (not fail-open) and strictly smaller than the whol
 // exists to find zero occurrences of elsewhere.
 const RUN_DESIGN_KEY = 'run-' + 'design'
 
-test('shared-for: every scoped command serves § Session Execution (AC-20260926-01-5; AC-20260928-01-2 adds prototype), and the scoped roster has exactly 13 members with neither sketch nor the design-only-delta key among them', () => {
+test('shared-for: every scoped command serves § Session Execution (AC-20260926-01-5; AC-20260928-01-2 adds prototype), and the scoped roster has exactly 14 members (AC-20261008-01-1: connect joins) with neither sketch nor the design-only-delta key among them', () => {
   const src = read('spec/bin/spec-paths')
   const cmds = [...src.matchAll(/^\s+([a-z-]+)\)\s+SECTIONS="/gm)].map(m => m[1])
   assert.ok(!cmds.includes('sketch'),
@@ -630,9 +630,11 @@ test('shared-for: every scoped command serves § Session Execution (AC-20260926-
   assert.ok(!cmds.includes(RUN_DESIGN_KEY),
     'AC-20260926-01-5/D1: the scoped roster must not include the design-only-delta key — its ' +
     'SECTIONS arm is deleted, falling open to the whole doctrine like every unknown command: ' + cmds.join(','))
-  assert.strictEqual(cmds.length, 13,
-    'AC-20260926-01-5 + AC-20260928-01-2: with the sketch and design-only-delta arms deleted and the prototype arm added, exactly 13 scoped ' +
+  assert.strictEqual(cmds.length, 14,
+    'AC-20260926-01-5 + AC-20260928-01-2: with the sketch and design-only-delta arms deleted and the prototype arm added, exactly 14 scoped (connect joins, AC-20261008-01-1) ' +
     'command arms (A1, executed at lock) — got ' + cmds.length + ': ' + cmds.join(','))
+  assert.ok(cmds.includes('connect'),
+    'AC-20261008-01-1/D6: the scoped roster must include "connect" — otherwise /spec:connect loads both whole doctrine files')
   for (const cmd of cmds) {
     assert.match(run('shared-for', cmd), /## Session Execution/,
       `/spec:${cmd} must load § Session Execution — without it the session has no edit-don't-rewrite / no-extras / batch-calls contract`)

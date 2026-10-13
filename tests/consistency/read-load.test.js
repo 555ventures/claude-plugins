@@ -20,7 +20,6 @@ const COMMANDS = path.join(ROOT, 'spec', 'commands')
 const SPEC_PATHS = path.join(ROOT, 'spec', 'bin', 'spec-paths')
 const PROSE_CAP = path.join(ROOT, 'spec', 'scripts', 'prose-cap.js')
 
-const CAP = 500
 // design is 510, not D7's 490: assumption A4 measured it at 500, but HEAD's ratchet already
 // carried 510, granted by the recorded review-gate ruling in
 // specs/20260907/09-atlas-index-and-note-navigation.md D13 (the added lines are contracts, not
@@ -34,7 +33,13 @@ const CAP = 500
 // ahead of it: the loop is now the only entry into three stages, so it pays for Step 0's
 // isolation contract on top of what it already carried. A4's ratchet still binds — the entry may
 // only shrink from here.
-const BUDGET = { run: 334, mocks: 325, replay: 450, plan: 328, init: 735 }
+// specs/20261008/01-doctrine-states-contracts-and-points-at-its-enforcers.md D7: one entry per
+// command, no flat fallback. connect is held to 22 own + <= 108 shared (D6); the other entries
+// may only shrink.
+const BUDGET = {
+  connect: 70, doctor: 378, enforce: 412, escape: 347, genesis: 269, init: 606, mocks: 183,
+  plan: 265, prototype: 232, queue: 133, release: 322, replay: 363, run: 251, status: 146,
+}
 
 function lines(text) { return text.split('\n').length }
 
@@ -52,8 +57,21 @@ const commands = fs.readdirSync(COMMANDS).filter(f => f.endsWith('.md')).map(f =
 // itself must no longer list them. Genuinely red until spec/commands/{build,review,design}.md
 // are gone; the three stage files' own per-file line caps are pinned separately in
 // tests/consistency/stage-files.test.js (AC-20260912-03-15).
-test('every /spec command has a read-load budget entry (a per-command BUDGET or the flat CAP), and neither table nor roster names a retired stage command', () => {
+test('every /spec command has a read-load budget entry (AC-20261008-01-2: its own BUDGET entry, no flat CAP fallback), and neither table nor roster names a retired stage command', () => {
   assert.ok(commands.length >= 10, 'expected the command roster, got ' + commands.length)
+  assert.strictEqual(commands.length, 14,
+    'AC-20261008-01-2: the roster must be the fourteen /spec commands, connect included — got ' + commands.join(','))
+  assert.ok(!/(const|let|var)\s+CAP\s*=/.test(fs.readFileSync(__filename, 'utf8')),
+    'AC-20261008-01-2: a flat CAP fallback is still defined in read-load.test.js — a command without its own entry would escape the measured ratchet silently')
+  for (const cmd of commands) {
+    if (RETIRED_STAGE_COMMANDS.includes(cmd)) continue
+    assert.ok(Object.prototype.hasOwnProperty.call(BUDGET, cmd),
+      'AC-20261008-01-2: /spec:' + cmd + ' has no BUDGET entry — its read-load would go unpinned')
+    const { total } = readLoad(cmd)
+    assert.ok(total <= BUDGET[cmd],
+      'AC-20261008-01-2: /spec:' + cmd + ' loads ' + total + ' lines, over its own BUDGET entry ' +
+      BUDGET[cmd] + ' — every session running it pays the overage on every invocation')
+  }
   for (const extra of Object.keys(BUDGET)) {
     assert.ok(commands.includes(extra), 'BUDGET names a command that no longer exists: ' + extra)
   }
@@ -81,8 +99,8 @@ const RETIRED_STAGE_COMMANDS = ['build', 'review', 'design']
 
 for (const cmd of commands) {
   if (RETIRED_STAGE_COMMANDS.includes(cmd)) continue
-  const limit = BUDGET[cmd] || CAP
-  test(`AC-20260908-06-1: read-load budget: /spec:${cmd} loads ≤ ${limit} lines (command file + shared-for sections)`, () => {
+  const limit = BUDGET[cmd]
+  test(`AC-20260908-06-1 / AC-20261008-01-2: read-load budget: /spec:${cmd} loads ≤ ${limit} lines (command file + shared-for sections)`, () => {
     const { own, shared, total } = readLoad(cmd)
     assert.ok(total <= limit,
       `/spec:${cmd} loads ${total} lines (own ${own} + shared ${shared}) > ${limit}. ` +
@@ -150,6 +168,7 @@ const SHARED_FOR = {
   escape: ['Host Grounding', 'Feedback Loop', 'Incident Policy', 'Question Style', 'Console Output Style', 'Session Execution'],
   doctor: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Tiers', 'Runtime Verification', 'Feedback Loop', 'State Machine', 'Question Style', 'Console Output Style', 'Session Execution'],
   replay: ['Host Grounding', 'Tiers', 'Feedback Loop', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Session Execution'],
+  connect: ['Host Grounding', 'Question Style', 'Console Output Style', 'Session Execution'],
   init: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Pipeline Entry', 'Tiers', 'Runtime Verification', 'Release Stage', 'Model Placement', 'Question Style', 'Console Output Style', 'Canonical Docs Loop', 'Session Execution', 'Design Canon'],
 }
 

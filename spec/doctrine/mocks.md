@@ -4,8 +4,6 @@ description: Mocks-stage supplement to the spec pipeline's shared invariants —
 
 # Spec Pipeline: Mocks-Stage Supplement
 
-Mocks-stage supplement — read by the mocks driver (spec 07) in addition to `core.md`.
-
 ## Provenance Ledger
 
 The ledger is one markdown file, `design/mocks/ledger.md`, two tables in fixed columns,
@@ -116,22 +114,15 @@ invented from the seed's own sentences, awkward cases included, and typed into e
 
 ## Mocks: Checkpoint contract
 
-Every state opens with exactly one step, `Read only:` naming the files this step needs and
-nothing else, and a `Doctrine:` line naming the `## ` section of this file governing the
-judgment — the genesis checkpoint contract verbatim (specs/20260825/04 D9), because a driver
-loop across many `/clear`s only survives if the session never has to hold more state in
-context than the current step. An accepted `--mark` prints, as its last two non-blank lines,
-the ledger's counts line (§ Provenance Ledger) and:
+Printed by `mocks-driver.js` at every state; never restated here. An accepted `--mark` prints,
+as its last two non-blank lines, the ledger's counts line (§ Provenance Ledger) and:
 
 ```
 ✅ checkpoint — mocks state saved (<prev> → <next>); safe to /clear and re-run /spec:mocks
 ```
 
-`<prev>`/`<next>` are the derived state names, identical when a sub-mark (a journey) advances
-without changing the top-level state. This line is the sole signal that disk, not chat
-context, is now the source of truth — a session may `/clear` immediately after reading it and
-re-invoke `/spec:mocks` cold with nothing lost. `--state` is a read-only peek: it prints only
-the derived state name and never writes `status.json` beyond first-run creation.
+`--state` is a read-only peek: it prints only the derived state name and never writes
+`status.json` beyond first-run creation.
 
 ## Mocks: Authoring Rules
 
@@ -202,14 +193,7 @@ answer.
 
 ## Product-Stage Exemption (question-style-gate.js)
 
-While a mocks run is live (`design/mocks/status.json` exists with `state` other than
+Enforced by `question-style-gate.js` — its header comment is the contract. While a mocks run is live (`design/mocks/status.json` exists with `state` other than
 `APPROVED`) or a genesis run is live (`.claude/genesis/status.json` exists with `handoff`
 null), the question-style gate's tier-2 judge cannot return `derive` — that verdict is treated
-as `pass` instead. Every question inside those windows is a user decision by construction
-(coverage keys, menu picks, product facts), so `derive` has no legitimate target there;
-`rewrite` verdicts and every tier-1 check are unchanged. The judge's prompt states the rule
-that makes this exemption necessary: a document that cites, discusses, or recommends a
-subject is never the user deciding it, and a product fact (who, what, platform, payer,
-tenancy, what a screen does) is never `"derive"` — ask it. The exemption reads both status
-files on every hook invocation and fails open toward the pre-exemption behavior — a missing or
-unparsable status file counts as absent, never as a reason to block.
+as `pass` instead.

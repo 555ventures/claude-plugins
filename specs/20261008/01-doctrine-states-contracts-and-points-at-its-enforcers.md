@@ -1,6 +1,6 @@
 ---
 date: 2026-10-08
-status: implementing
+status: done
 build_base: main
 open_markers: 0
 tier: standard
@@ -321,6 +321,33 @@ keeps. No structural test reddened. The anchors, each a keep-line for the worker
 
 Because every anchor is kept, the File Plan's test rows carry only the ceiling tightenings and
 the two new budget/heading tests; a pin that reddens anyway is handled under A3's remedy.
+
+### Build deviations (folded at close, 2026-10-13)
+
+Three lock-time AC errors surfaced at red-check, each already a pipeline-rules Gotchas class
+(the `→` verb and CONTINUE-TO entry), so no new Gotchas entry:
+
+- `design-stage-doctrine.test.js`'s `<=160` cap was not tightened: AC-20261008-01-6 `reuses` that
+  case, so it must stay green on the 82-line pre-image (`broken-reuse`). It gains the AC-6 tag only;
+  design.md's real ceiling is pinned by `doctrine-budget.test.js`.
+- `read-load.test.js`'s named AC-2 case also asserts each command's measured load against its own
+  BUDGET entry, so the rewrite is red on the pre-image (`gutted-rewrite`).
+- AC-20261008-01-4 now reads SHALL CONTINUE TO by user ruling D11 (`unsanctioned-green`).
+
+Doctrine cuts:
+
+- Several per-section ceilings were unreachable by deletion without removing a pin-inventory or D2
+  keep-line; the file totals fit instead (A1's file-total clause). Over their section ceiling: core
+  preamble, Feedback Loop, Incident Policy, Question Style, Console Output Style; genesis Discovery
+  Interview, Brief State, Tournament, Decision Record, Ops Conventions, Fresh UX, Design Stage, State
+  Machine, Roadmap Decomposition, On-disk Handoff. Measured (`wc -l`): core 229, genesis 447, mocks
+  199, design 64, stage-build 84, stage-review 92.
+- To hold genesis.md's 450, whole paragraphs beyond the fate table's named deletions went: Brief
+  State's ratification-by-archetype bullets (the Archetype Registry closing rule carries the split),
+  the derived-dimensions intro, Decision Record's partitioned-evidence paragraph, three Design Stage
+  paragraphs, the Roadmap ops-conventions facade rule, and the `init-gen.log` artifact bullet
+  (`genesis-driver.js` names it in its own refusal). Review flagged the two keep-line deletions as
+  soft: A1's remedy was raising the ceiling, not deleting keep-lines.
 
 ## Canonical Delta
 

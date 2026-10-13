@@ -55,8 +55,24 @@ function host({ briefs = {}, specs = {}, ledgerRows = null, queue = null } = {})
   return dir
 }
 
+// Splits `list` rows into {head, age, rest}: the age column sits between the id and the
+// description (specs/20261013/02-queue-hygiene.md D2); a trailing stale flag is dropped so
+// numbering and description assertions stay exact. Rows without an age column get age null.
+function ageRows(out) {
+  return out.trim().split('\n').filter((l) => /^\d+ /.test(l)).map((l) => {
+    const m = /^(\d+  \S+)\s+(\d+d|\?)\s+(.*?)(?:\s+⌛ stale)?$/.exec(l)
+    return m ? { head: m[1], age: m[2], rest: m[3] } : { head: l, age: null, rest: '' }
+  })
+}
+const ageOf = (iso) => Math.floor((Date.now() - Date.parse(iso)) / 86400000) + 'd'
+
 function readQueue(dir) {
   return JSON.parse(fs.readFileSync(path.join(dir, '.git/spec-queue.json'), 'utf8'))
+}
+// Ticked and derived-done rows leave the queue file for the archive beside it
+// (specs/20261013/02-queue-hygiene.md D3, D9).
+function readArchive(dir) {
+  return JSON.parse(fs.readFileSync(path.join(dir, '.git/spec-queue-done.json'), 'utf8'))
 }
 
 test('AC-20260823-08-1: spec-queue add writes spec-queue.json inside the git common directory, readable and git-status-clean from a linked worktree', () => {
@@ -142,7 +158,8 @@ test('AC-20260903-03-5: a queue file holding a brief item and a spec item twice 
   const rDone = runNode(SCRIPT, ['done', '08'], { cwd: dir })
   assert.strictEqual(rDone.status, 0, rDone.stderr)
 
-  const q = readQueue(dir)
+  // The ticked brief 08 now lives in the archive; dedupe is judged over queue file + archive together.
+  const q = { items: [...readQueue(dir).items, ...readArchive(dir).items] }
   assert.strictEqual(q.items.length, 3,
     'D5: a write subcommand must collapse both duplicate pairs to their first occurrence, leaving exactly 3 items (21, 08, the spec): ' + JSON.stringify(q.items))
   assert.deepStrictEqual(q.items.filter((i) => i.kind === 'brief').map((i) => i.brief), ['21', '08'],
@@ -153,7 +170,7 @@ test('AC-20260903-03-5: a queue file holding a brief item and a spec item twice 
     'D5: no item may retain an auto_placed key after any write subcommand strips it: ' + JSON.stringify(q.items))
 })
 
-test('AC-20260903-03-6: spec-queue add refuses a brief already queued, naming its pending position and the move remedy, and writes nothing', () => {
+test('AC-20260903-03-6 / AC-20261013-02-10: spec-queue add refuses a brief already queued, naming its pending position and the move remedy, and writes nothing', () => {
   const dir = host({
     queue: [
       { id: 'q1', kind: 'prompt', payload: 'ship the landing page', added: '2026-08-23T10:00:00Z' },
@@ -222,7 +239,7 @@ test('AC-20260903-03-11: spec-queue add --after-spec/--after-brief refuses a mis
     'D2: a deleted gate target must keep the item not-ready with a (missing) state, never silently release it: ' + JSON.stringify(gated))
 })
 
-test('AC-20260903-03-8: spec-queue list renders exactly the numbered pending format with an after-gate marker and a done-count footer, or the empty-pending line', () => {
+test('AC-20260903-03-8 / AC-20261013-02-9: spec-queue list renders exactly the numbered pending format with an after-gate marker and a done-count footer, or the empty-pending line', () => {
   function listHost(withPending) {
     return host({
       briefs: {
@@ -254,12 +271,17 @@ test('AC-20260903-03-8: spec-queue list renders exactly the numbered pending for
   const dirPending = listHost(true)
   const rPending = runNode(SCRIPT, ['list'], { cwd: dirPending })
   assert.strictEqual(rPending.status, 0, rPending.stderr)
-  assert.strictEqual(rPending.stdout.trim(),
-    '1  q1  brief 24 (status-and-queue-diet)\n' +
-    '2  q2  /spec:plan @docs/roadmap/26-x.md  ⏳ after 04-reports-write-the-queue (hardened)\n' +
-    '3  q3  spec specs/20260903/06-hotfix.md\n' +
-    '— 2 done · move: spec-queue move <ref> <n> · full text: spec-queue show <ref>',
-    'D8: `list` must render exactly this literal — numbered pending items only, each carrying its own id as a `<ref>` column, the gated prompt carrying its ⏳ blocker marker, and a footer naming the done count and the move remedy: ' + rPending.stdout)
+  const rowsP = ageRows(rPending.stdout)
+  assert.deepStrictEqual(rowsP.map((x) => x.age), [ageOf('2026-09-03T10:00:00Z'), ageOf('2026-09-03T10:01:00Z'), ageOf('2026-09-03T10:02:00Z')],
+    'D2: every `list` row must carry its age (days since `added`) between the id and the description — an absent column leaves the reader to date items by hand: ' + rPending.stdout)
+  assert.deepStrictEqual(rowsP.map((x) => x.head + '  ' + x.rest), [
+    '1  q1  brief 24 (status-and-queue-diet)',
+    '2  q2  /spec:plan @docs/roadmap/26-x.md  ⏳ after 04-reports-write-the-queue (hardened)',
+    '3  q3  spec specs/20260903/06-hotfix.md',
+  ], 'D8: numbering 1-3, ids, the gated prompt\'s ⏳ blocker marker and descriptions must survive the age column unchanged: ' + rPending.stdout)
+  assert.match(rPending.stdout.trim().split('\n').pop(),
+    /^— 2 done · move: spec-queue move <ref> <n> · full text: spec-queue show <ref>$/,
+    'D8: the footer must still name the done count and the move remedy: ' + rPending.stdout)
 
   const dirEmpty = listHost(false)
   const rEmpty = runNode(SCRIPT, ['list'], { cwd: dirEmpty })
@@ -268,7 +290,7 @@ test('AC-20260903-03-8: spec-queue list renders exactly the numbered pending for
     'D8: with nothing pending, `list` must print exactly this one line, never an empty pending section with just a footer: ' + rEmpty.stdout)
 })
 
-test('AC-20260903-03-8: spec-queue list virtually reconciles an unqueued, non-done on-disk brief into its numbered pending output at the append-last position, without ever writing the queue file', () => {
+test('AC-20260903-03-8 / AC-20261013-02-12: spec-queue list virtually reconciles an unqueued, non-done on-disk brief into its numbered pending output at the append-last position, without ever writing the queue file', () => {
   const dir = host({
     briefs: {
       '05-a.md': '# 05 — A\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
@@ -280,11 +302,13 @@ test('AC-20260903-03-8: spec-queue list virtually reconciles an unqueued, non-do
 
   const r = runNode(SCRIPT, ['list'], { cwd: dir })
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.strictEqual(r.stdout.trim(),
-    '1  q1  brief 05 (a)\n' +
-    '2  —   brief 08 (b)\n' +
-    '— 0 done · move: spec-queue move <ref> <n> · full text: spec-queue show <ref>',
-    "D8: `list` must virtually reconcile brief 08 — never queued, still on-disk and not done — into the numbered pending output at its append-last position, exactly as a write subcommand's own reconcile would place it: " + r.stdout)
+  const rows = ageRows(r.stdout)
+  assert.deepStrictEqual(rows.map((x) => x.age), [ageOf('2026-09-03T10:00:00Z'), '?'],
+    "D2: the queued brief shows its age in days and the virtually reconciled brief (no `added`) shows `?` — a missing age column or a guessed one misdates the item: " + r.stdout)
+  assert.deepStrictEqual(rows.map((x) => x.head + '  ' + x.rest), ['1  q1  brief 05 (a)', '2  —  brief 08 (b)'],
+    "D8: `list` must virtually reconcile brief 08 — never queued, still on-disk and not done — into the numbered pending output at its append-last position with id `—`: " + r.stdout)
+  assert.match(r.stdout.trim().split('\n').pop(), /^— 0 done · move: spec-queue move <ref> <n> · full text: spec-queue show <ref>$/,
+    'D8: the footer must still name the done count and the move remedy: ' + r.stdout)
 
   const after = fs.readFileSync(path.join(dir, '.git/spec-queue.json'), 'utf8')
   assert.strictEqual(after, before,
@@ -330,7 +354,9 @@ test('AC-20260823-08-6 / AC-20260903-03-10: a brief item whose brief is fully do
     'brief 05 is all-done — next must skip its item and print the one below it: ' + r.stdout)
   const after = readQueue(dir)
   const beforeItem = before.items.find((i) => i.id === 'q1')
-  const afterItem = after.items.find((i) => i.id === 'q1')
+  const archived = readArchive(dir).items.find((i) => i.id === 'q1')
+  assert.ok(archived, 'D3: a derived-done brief item is archived, not lost — q1 must be readable from spec-queue-done.json: ' + JSON.stringify(after))
+  const { archived: _stamp, ...afterItem } = archived
   assert.deepStrictEqual(afterItem, beforeItem,
     "D4: a brief item's doneness is derived live from spec-status, never stored as a flag on the item itself — the on-disk q1 item must come back byte-identical after next: " + JSON.stringify({ before: beforeItem, after: afterItem }))
 })
@@ -344,8 +370,8 @@ test('AC-20260823-08-7 / AC-20260903-03-10: spec-queue done stamps an ISO ticked
   })
   const rDone = runNode(SCRIPT, ['done', 'q1'], { cwd: dir })
   assert.strictEqual(rDone.status, 0, rDone.stderr)
-  const item = readQueue(dir).items.find((i) => i.id === 'q1')
-  assert.ok(item && item.ticked, 'D14: spec-queue done must stamp a `ticked` field on the item in the queue file itself — a tick is a decision and the file stores decisions: ' + JSON.stringify(item))
+  const item = readArchive(dir).items.find((i) => i.id === 'q1')
+  assert.ok(item && item.ticked, 'D14: spec-queue done must stamp a `ticked` field on the item (now archived beside the queue file) — a tick is a decision and the file stores decisions: ' + JSON.stringify(item))
   assert.match(item.ticked, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
     'the ticked stamp must be a real ISO-8601 timestamp, not a boolean or placeholder string: ' + JSON.stringify(item))
 
@@ -432,14 +458,17 @@ function moveHost() {
   })
 }
 
-test('AC-20260903-03-7: spec-queue move <ref> <n> counts pending positions as `list` prints them, done items keep their relative slot, and out-of-range n\'s are handled per D7', () => {
+test('AC-20260903-03-7 / AC-20261013-02-13: spec-queue move <ref> <n> counts pending positions as `list` prints them, done items keep their relative slot, and out-of-range n\'s are handled per D7', () => {
   // move C 1 — C jumps to the front of the PENDING order; the done item between A and B must
   // stay between them (relative slots preserved), never get pushed around by the move.
   const dirFront = moveHost()
   const rFront = runNode(SCRIPT, ['move', 'task C', '1'], { cwd: dirFront })
   assert.strictEqual(rFront.status, 0, 'D7: `move <ref> 1` must succeed for a pending item: ' + rFront.stdout + rFront.stderr)
   const listFront = runNode(SCRIPT, ['list'], { cwd: dirFront })
-  assert.strictEqual(listFront.stdout.split('\n').filter((l) => l.trim()).slice(0, 3).join('\n'),
+  const frontRows = ageRows(listFront.stdout).slice(0, 3)
+  assert.ok(frontRows.every((x) => x.age !== null),
+    'D2: every row `list` prints after a move must carry the age column, or the move test is numbering rows the reader cannot date: ' + listFront.stdout)
+  assert.strictEqual(frontRows.map((x) => x.head + '  ' + x.rest).join('\n'),
     '1  q4  task C\n2  q1  task A\n3  q3  task B',
     "D7: after `move C 1`, `list` must number pending items exactly [C, A, B] — the done item sinks out of the pending numbering entirely: " + listFront.stdout)
 
@@ -448,7 +477,10 @@ test('AC-20260903-03-7: spec-queue move <ref> <n> counts pending positions as `l
   const rLast = runNode(SCRIPT, ['move', 'task C', '9'], { cwd: dirLast })
   assert.strictEqual(rLast.status, 0, 'D7: `move <ref> <n>` with n beyond the pending count must succeed by appending last, never refuse: ' + rLast.stdout + rLast.stderr)
   const listLast = runNode(SCRIPT, ['list'], { cwd: dirLast })
-  assert.strictEqual(listLast.stdout.split('\n').filter((l) => l.trim()).slice(0, 3).join('\n'),
+  const lastRows = ageRows(listLast.stdout).slice(0, 3)
+  assert.ok(lastRows.every((x) => x.age !== null),
+    'D2: every row `list` prints after a move must carry the age column: ' + listLast.stdout)
+  assert.strictEqual(lastRows.map((x) => x.head + '  ' + x.rest).join('\n'),
     '1  q1  task A\n2  q3  task B\n3  q4  task C',
     'D7: `move C 9` (n >= pending count) must place C LAST among pending items, never error and never leave it where it was: ' + listLast.stdout)
 
@@ -484,7 +516,7 @@ test('AC-20260903-03-7: spec-queue move <ref> <n> counts pending positions as `l
 // EEXIST-style concurrency crashes that leave the file missing or malformed; and (4) the pre-fix
 // tearing defect itself, on any future CI runner or filesystem where the >196KB threshold IS
 // reachable. Read this as a concurrent-invocation safety pin, not a corruption one.
-test('AC-20260823-08-review-concurrent-writer-safety: N concurrent spec-queue invocations racing writes against one shared queue file all succeed and never leave it unparseable', async () => {
+test('AC-20260823-08-review-concurrent-writer-safety / AC-20261013-02-11: N concurrent spec-queue invocations racing writes against one shared queue file all succeed and never leave it unparseable', async () => {
   const CONCURRENCY = 12
   const TRIALS = 6
   const SCRIPT_PATH = path.join(SPEC, 'scripts/spec-queue.js')
@@ -511,6 +543,11 @@ test('AC-20260823-08-review-concurrent-writer-safety: N concurrent spec-queue in
   }
 
   for (let t = 0; t < TRIALS; t++) {
+    // Each trial starts from a fresh live queue and no archive: a tick archives its row, and a
+    // second `done` on an archived id is a legitimate exit 2, not a race symptom.
+    fs.rmSync(path.join(dirPath, '.git/spec-queue-done.json'), { force: true })
+    fs.writeFileSync(path.join(dirPath, '.git/spec-queue.json'),
+      JSON.stringify({ version: 1, seq: items.length, items }, null, 2))
     // Launch all CONCURRENCY processes together (spawn, not spawnSync) so their writes genuinely
     // overlap in wall-clock time — a sequential loop of spawnSync calls would never race.
     const results = await Promise.all(items.map((it) => spawnOne(it.id)))
@@ -525,8 +562,19 @@ test('AC-20260823-08-review-concurrent-writer-safety: N concurrent spec-queue in
       `trial ${t}: ${CONCURRENCY} concurrent writers left spec-queue.json unparseable — writeQueue's temp-file+rename must guarantee a reader never observes a partial write: ${raw}`)
     assert.ok(parsed && Array.isArray(parsed.items) && typeof parsed.seq === 'number',
       `trial ${t}: the queue file must still match the {version, seq, items} shape after concurrent writes, or every spec-queue subcommand starts exiting 2: ${raw}`)
-    assert.strictEqual(parsed.items.length, CONCURRENCY,
-      `trial ${t}: concurrent done-ticks must never drop or duplicate items — only mark them (last-writer-safe, not last-writer-lossy): ${raw}`)
+    // Rows move to the archive on tick, so the count is no longer fixed. Archive row loss under
+    // racing writers is the accepted risk in specs/20261013/02-queue-hygiene.md (A5), never the queue file's.
+    const ids = parsed.items.map((i) => i.id)
+    assert.strictEqual(new Set(ids).size, ids.length,
+      `trial ${t}: concurrent done-ticks must never duplicate an item in the queue file: ${raw}`)
+    const archFile = path.join(dirPath, '.git/spec-queue-done.json')
+    if (fs.existsSync(archFile)) {
+      let arch
+      assert.doesNotThrow(() => { arch = JSON.parse(fs.readFileSync(archFile, 'utf8')) },
+        `trial ${t}: concurrent writers left spec-queue-done.json unparseable — the archive write must be atomic too`)
+      assert.ok(arch && arch.version === 1 && Array.isArray(arch.items),
+        `trial ${t}: the archive must still match {version, items} after concurrent writes, or every later write exits 2: ${JSON.stringify(arch)}`)
+    }
   }
 })
 
@@ -578,8 +626,8 @@ test('spec-queue list cuts every row to one line, and show <ref> prints the untr
   const dir = host({
     specs: { '20260701/01-gate.md': 'date: 2026-07-01\nstatus: hardened' },
     queue: [
-      { id: 'q1', kind: 'prompt', payload, added: '2026-07-01T10:00:00Z' },
-      { id: 'q2', kind: 'prompt', payload: 'gated note', after: { spec: 'specs/20260701/01-gate.md' }, added: '2026-07-01T10:01:00Z' },
+      { id: 'q1', kind: 'prompt', payload, added: new Date(Date.now() - 3600000).toISOString() },
+      { id: 'q2', kind: 'prompt', payload: 'gated note', after: { spec: 'specs/20260701/01-gate.md' }, added: new Date(Date.now() - 3600000).toISOString() },
     ],
   })
 
@@ -613,7 +661,7 @@ test('spec-queue list cuts every row to one line, and show <ref> prints the untr
   assert.strictEqual(rBare.status, 2, 'a bare <ref> stays an error: ' + rBare.stdout)
   assert.match(rBare.stderr, /did you mean: spec-queue show q1/,
     'a lone token is a <ref> missing its verb more often than a typo: ' + rBare.stderr)
-  assert.match(rBare.stderr, /\(next\|list\|add\|move\|done\|show\)/,
+  assert.match(rBare.stderr, /\(next\|list\|groom\|add\|move\|done\|show\)/,
     'the hint carries the verb list, so a typo self-corrects too: ' + rBare.stderr)
   assert.ok(!/^usage:/m.test(rBare.stderr),
     'the hint replaces the dump; both bury the actionable line: ' + rBare.stderr)

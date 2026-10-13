@@ -14,15 +14,26 @@
 // reconciles a copy for display numbering only); the retired `bump`/`defer`/`ok` verbs and
 // `add --after`/`--brief` flags each exit 2 naming their D6 replacement.
 //
+// Hygiene (specs/20261013/02-queue-hygiene.md): `add` refuses a free-text prompt whose token
+// Jaccard against any PENDING prompt is >= 0.35 (`--distinct` overrides); `list` prints an age
+// column and the flags `📎 cites done <spec>` · `⏳ gate met` · `⌛ stale`; every write verb
+// moves ticked and derived-done items out of the queue file into
+// <git-common-dir>/spec-queue-done.json (seq stays in the queue file, so ids never repeat);
+// `groom` prints the flagged items in buckets and never writes. It deliberately does NOT
+// auto-tick anything (the session asks per item), compare against archived prompts, or lock
+// the archive file (a concurrent writer can lose archived rows, never queue rows).
+//
 // Subcommands:
 //   next                          reconcile+write, print the pick (or a prompt payload)
-//   list                          pending items only, one line each, gates shown, footer
+//   list                          pending items only, one line each (age, gates, flags), footer
+//   groom                         read-only: duplicates · cites done · gate met · stale buckets
 //   add <payload…> [--top | --at <n>] [--after-spec <path> | --after-brief NN]
-//                  [--when <type>:<args>]
+//                  [--when <type>:<args>] [--distinct]
 //   move <ref> <n>                n counts pending positions as `list` prints them
 //   done <ref>                    manual tick: stamp ticked
 //   show <ref>                    the item's FULL payload (list/status cut rows to one line,
-//                                 so this is the only way to read a long one)
+//                                 so this is the only way to read a long one); resolves
+//                                 archived ids too
 // Payload classification: NN/NNa or a docs/roadmap/NN-*.md path -> brief; ^specs/.*\.md$ ->
 // spec; anything else -> prompt verbatim.
 // <ref> resolves against an id, a brief number, a spec path (exact or unique basename
@@ -32,8 +43,10 @@
 //
 // Exit codes: 0 ok · 2 usage, unresolvable/ambiguous/already-done <ref>, duplicate brief/spec
 //   on add (names `spec-queue move <ref> <n>`), a missing --after-spec/--after-brief target,
-//   a removed verb/flag (names its replacement), or a corrupt queue file (remove
-//   <git-common-dir>/spec-queue.json, re-run `next`) · 3 not a git repository (run inside it).
+//   a removed verb/flag (names its replacement), a near-duplicate prompt on add (names the
+//   matching id and `--distinct`), `move`/`done` on an archived id, or a corrupt queue file
+//   (remove <git-common-dir>/spec-queue.json, re-run `next`) or archive file (remove or
+//   repair <git-common-dir>/spec-queue-done.json) · 3 not a git repository (run inside it).
 
 const fs = require('fs')
 const path = require('path')
@@ -42,14 +55,15 @@ const { readLedgerRows } = require('./lib/observation')
 const {
   normBrief, isSupersededBriefText, isItemDone, isItemReady, makeCtx,
   dedupeItems, stripAutoPlaced, reconcileMissingBriefs,
+  promptTokens, jaccard, citesDoneSpec,
 } = require('./lib/queue')
 
 const SPEC_STATUS = path.join(__dirname, 'spec-status.js')
 
 function usage() {
-  console.error('usage: spec-queue.js <next|list|add|move|done|show> [args]')
-  console.error('  next | list')
-  console.error('  add <payload…> [--top | --at <n>] [--after-spec <path> | --after-brief NN] [--when <type>:<args>]')
+  console.error('usage: spec-queue.js <next|list|groom|add|move|done|show> [args]')
+  console.error('  next | list | groom')
+  console.error('  add <payload…> [--top | --at <n>] [--after-spec <path> | --after-brief NN] [--when <type>:<args>] [--distinct]')
   console.error('  move <ref> <n> | done <ref> | show <ref>')
 }
 
@@ -70,7 +84,7 @@ if (Object.prototype.hasOwnProperty.call(REMOVED_SUBS, sub)) {
   process.exit(2)
 }
 
-const SUBS = ['next', 'list', 'add', 'move', 'done', 'show']
+const SUBS = ['next', 'list', 'groom', 'add', 'move', 'done', 'show']
 if (!SUBS.includes(sub)) {
   // A lone non-flag token is more often a <ref> typed without its verb (`spec-queue q133`)
   // than a mistyped subcommand, and a usage dump leaves the user guessing. `show` is the only
@@ -112,6 +126,9 @@ if (!common) {
   process.exit(3)
 }
 const QUEUE_PATH = path.join(common, 'spec-queue.json')
+const ARCHIVE_PATH = path.join(common, 'spec-queue-done.json')
+const DUP_THRESHOLD = 0.35
+const STALE_DAYS = 14
 
 function readSpecStatusJson() {
   const r = spawnSync(process.execPath, [SPEC_STATUS, '--root', root, '--json'], { encoding: 'utf8' })
@@ -153,7 +170,81 @@ function writeQueue(data) {
   fs.renameSync(tmpPath, QUEUE_PATH)
 }
 
+function loadArchive() {
+  if (!fs.existsSync(ARCHIVE_PATH)) return { version: 1, items: [] }
+  let data
+  try {
+    data = JSON.parse(fs.readFileSync(ARCHIVE_PATH, 'utf8'))
+  } catch (e) {
+    console.error(`spec-queue: ${ARCHIVE_PATH} is not valid JSON (${e.message}) — remove or repair it, then re-run the command`)
+    process.exit(2)
+  }
+  if (!data || !Array.isArray(data.items)) {
+    console.error(`spec-queue: ${ARCHIVE_PATH} does not match the {version,items} shape — remove or repair it, then re-run the command`)
+    process.exit(2)
+  }
+  return data
+}
+
+function appendArchive(gone) {
+  const arc = loadArchive()
+  const stamp = nowIso()
+  const items = arc.items.concat(gone.map(it => ({ ...it, archived: stamp })))
+  const tmpPath = path.join(path.dirname(ARCHIVE_PATH), `.spec-queue-done.${process.pid}.tmp`)
+  fs.writeFileSync(tmpPath, JSON.stringify({ version: 1, items }, null, 2) + '\n')
+  fs.renameSync(tmpPath, ARCHIVE_PATH)
+}
+
+// stdout for payloads: synchronous and looped, so a large print followed by process.exit is
+// never truncated at the pipe buffer.
+function out(text) {
+  const buf = Buffer.from(text + '\n')
+  let off = 0
+  while (off < buf.length) {
+    try {
+      off += fs.writeSync(1, buf, off)
+    } catch (e) {
+      if (e.code === 'EAGAIN') continue
+      if (e.code === 'EPIPE') return
+      throw e
+    }
+  }
+}
+
+function archivedItem(ref) {
+  return loadArchive().items.find(i => i.id === ref) || null
+}
+
+function refuseArchived(ref) {
+  console.error(`spec-queue: ${ref} is archived (done) — nothing to do (spec-queue show ${ref} still prints it)`)
+  process.exit(2)
+}
+
 function nowIso() { return new Date().toISOString() }
+
+function ageDays(it) {
+  if (!it.added) return null
+  const t = Date.parse(it.added)
+  if (Number.isNaN(t)) return null
+  return Math.max(0, Math.floor((Date.now() - t) / 86400000))
+}
+const ageText = it => { const a = ageDays(it); return a === null ? '?' : `${a}d` }
+
+// D2 flag predicates, shared by `list` and `groom`: one derivation per rot shape.
+function gateMet(it, ctx) { return !!it.after && isItemReady(it, ctx).ready }
+function isStale(it) { const a = ageDays(it); return it.kind === 'prompt' && !it.after && a !== null && a >= STALE_DAYS }
+
+function dupPairs(prompts) {
+  const tok = prompts.map(p => promptTokens(p.payload))
+  const pairs = []
+  for (let i = 0; i < prompts.length; i++) {
+    for (let j = i + 1; j < prompts.length; j++) {
+      const score = jaccard(tok[i], tok[j])
+      if (score >= DUP_THRESHOLD) pairs.push({ a: prompts[i], b: prompts[j], score })
+    }
+  }
+  return pairs
+}
 
 // On-disk briefs the way spec-queue.js needs them: num + status come straight from
 // spec-status.js's own derivation (never re-parsed here); superseded exclusion reads each
@@ -197,12 +288,18 @@ function reconciledItems(rawItems, statusJson, { append }) {
 }
 
 // Assigns real sequential ids to any inserted item (id === null) and writes the file.
-// `baseSeq` is the queue file's previous `seq` (0 for a brand-new file).
-function persist(items, baseSeq) {
+// `baseSeq` is the queue file's previous `seq` (0 for a brand-new file). D3: ticked and
+// derived-done items leave the queue file for the archive (written first, so a crash between
+// the two renames duplicates rows rather than losing them); `seq` stays so ids never repeat.
+function persist(items, baseSeq, ctx) {
   let seq = baseSeq
   const withIds = items.map(it => (it.id === null ? { ...it, id: `q${++seq}` } : it))
-  writeQueue({ version: 1, seq, items: withIds })
-  return { version: 1, seq, items: withIds }
+  const live = []
+  const gone = []
+  for (const it of withIds) (isItemDone(it, ctx).done ? gone : live).push(it)
+  if (gone.length) appendArchive(gone)
+  writeQueue({ version: 1, seq, items: live })
+  return { version: 1, seq, items: live }
 }
 
 function pendingIndices(items, ctx) {
@@ -287,29 +384,68 @@ switch (sub) {
     const items = reconciledItems(raw ? raw.items : [], statusJson, { append: true })
     const briefNameByNum = new Map(statusJson.briefs.map(b => [b.num, b.name]))
     const pending = items.filter(it => !isItemDone(it, ctx).done)
-    const doneCount = items.length - pending.length
+    const doneCount = items.length - pending.length + loadArchive().items.length
     if (!pending.length) {
-      console.log(`✨ nothing pending · ${doneCount} done`)
+      out(`✨ nothing pending · ${doneCount} done`)
       process.exit(0)
     }
     // Every item's own id is a valid `<ref>` for move/done, so the listing prints it as a
     // column: a virtually reconciled item has none yet (`id: null`) and shows `—`, its brief
     // number being the ref instead.
     const refWidth = Math.max(...pending.map(it => (it.id || '—').length))
+    const ageWidth = Math.max(...pending.map(it => ageText(it).length))
+    const lines = []
     pending.forEach((it, i) => {
-      const head = `${i + 1}  ${(it.id || '—').padEnd(refWidth)}  `
-      let gate = ''
+      const head = `${i + 1}  ${(it.id || '—').padEnd(refWidth)}  ${ageText(it).padEnd(ageWidth)}  `
+      let tail = ''
       if (it.after) {
         const r = isItemReady(it, ctx)
         // The gate target is shown by its basename: a full specs/YYYYMMDD/NN-name.md path
         // costs half the row's width and adds nothing a reader of a one-line list needs.
-        if (!r.ready) gate = `  ⏳ after ${path.basename(r.target).replace(/\.md$/, '')} (${r.state})`
+        tail += r.ready ? '  ⏳ gate met' : `  ⏳ after ${path.basename(r.target).replace(/\.md$/, '')} (${r.state})`
       }
-      // The gate marker is the row's most decision-relevant part, so it keeps its full width
-      // and the description absorbs the cut.
-      console.log(head + oneLine(itemDesc(it, briefNameByNum), Math.max(20, ROW_WIDTH() - head.length - gate.length)) + gate)
+      const cited = citesDoneSpec(it, ctx)
+      if (cited) tail += `  📎 cites done ${path.basename(cited).replace(/\.md$/, '')}`
+      if (isStale(it)) tail += '  ⌛ stale'
+      // The flag marks are the row's most decision-relevant part, so they keep their full
+      // width and the description absorbs the cut.
+      lines.push(head + oneLine(itemDesc(it, briefNameByNum), Math.max(20, ROW_WIDTH() - head.length - tail.length)) + tail)
     })
-    console.log(`— ${doneCount} done · move: spec-queue move <ref> <n> · full text: spec-queue show <ref>`)
+    lines.push(`— ${doneCount} done · move: spec-queue move <ref> <n> · full text: spec-queue show <ref>`)
+    out(lines.join('\n'))
+    process.exit(0)
+  }
+
+  case 'groom': {
+    const statusJson = readSpecStatusJson()
+    const raw = loadQueue()
+    const ctx = ctxFor(statusJson)
+    const items = reconciledItems(raw ? raw.items : [], statusJson, { append: true })
+    const briefNameByNum = new Map(statusJson.briefs.map(b => [b.num, b.name]))
+    const pending = items.filter(it => !isItemDone(it, ctx).done)
+    const prompts = pending.filter(it => it.kind === 'prompt')
+    const itemRows = list => {
+      const idW = Math.max(0, ...list.map(it => (it.id || '—').length))
+      const ageW = Math.max(0, ...list.map(it => ageText(it).length))
+      return list.map(it => {
+        const head = `  ${(it.id || '—').padEnd(idW)}  ${ageText(it).padEnd(ageW)}  `
+        return head + oneLine(itemDesc(it, briefNameByNum), Math.max(20, ROW_WIDTH() - head.length))
+      })
+    }
+    const buckets = [
+      ['duplicates', dupPairs(prompts).map(p => `  ${p.a.id} ~ ${p.b.id}  ${p.score.toFixed(2)}`)],
+      ['cites done', itemRows(prompts.filter(it => citesDoneSpec(it, ctx)))],
+      ['gate met', itemRows(pending.filter(it => gateMet(it, ctx)))],
+      ['stale', itemRows(pending.filter(isStale))],
+    ].filter(([, rows]) => rows.length)
+    if (!buckets.length) {
+      out(`✨ nothing to groom · ${pending.length} pending`)
+      process.exit(0)
+    }
+    const lines = []
+    for (const [name, rows] of buckets) lines.push(`${name} (${rows.length}):`, ...rows)
+    lines.push('fates: spec-queue done <ref> · spec-queue move <ref> <n> · keep — never tick without a yes')
+    out(lines.join('\n'))
     process.exit(0)
   }
 
@@ -317,19 +453,20 @@ switch (sub) {
     const statusJson = readSpecStatusJson()
     const raw = loadQueue()
     const items = reconciledItems(raw ? raw.items : [], statusJson, { append: true })
-    const { items: written } = persist(items, raw ? raw.seq : 0)
-    if (!raw) console.log(`seeded queue with ${written.length} briefs (roadmap order)`)
     const ctx = ctxFor(statusJson)
+    const { items: written } = persist(items, raw ? raw.seq : 0, ctx)
+    if (!raw) console.log(`seeded queue with ${written.length} briefs (roadmap order)`)
     printTopLine(topPick(written, ctx))
     process.exit(0)
   }
 
   case 'add': {
-    const flags = { when: null, top: false, at: null, afterSpec: null, afterBrief: null }
+    const flags = { when: null, top: false, at: null, afterSpec: null, afterBrief: null, distinct: false }
     const payloadParts = []
     for (let i = 0; i < rest.length; i++) {
       const a = rest[i]
       if (a === '--top') flags.top = true
+      else if (a === '--distinct') flags.distinct = true
       else if (a === '--at') flags.at = rest[++i]
       else if (a === '--after-spec') flags.afterSpec = rest[++i]
       else if (a === '--after-brief') flags.afterBrief = rest[++i]
@@ -339,7 +476,7 @@ switch (sub) {
       // An unrecognized --flag never folds into the payload: that silently turns a spec path into a
       // free-text prompt item (observed: `add specs/x.md --root /abs` landed as kind "prompt").
       // spec-queue takes no --root — the queue is keyed off the cwd's git common dir; run it from the repo root.
-      else if (/^--/.test(a)) { console.error(`spec-queue: add: unknown flag ${a} — spec-queue takes no --root (run from the repo root); flags: --top | --at <n> | --after-spec <path> | --after-brief NN | --when <type>:<args>`); process.exit(2) }
+      else if (/^--/.test(a)) { console.error(`spec-queue: add: unknown flag ${a} — spec-queue takes no --root (run from the repo root); flags: --top | --at <n> | --after-spec <path> | --after-brief NN | --when <type>:<args> | --distinct`); process.exit(2) }
       else payloadParts.push(a)
     }
     const payload = payloadParts.join(' ')
@@ -406,6 +543,22 @@ switch (sub) {
       }
     }
 
+    // D1: a near-duplicate free-text prompt is refused against PENDING prompts only (a ticked
+    // prompt re-added is a legitimate reopen); --distinct is the honest override.
+    if (kind === 'prompt' && !flags.distinct) {
+      const tok = promptTokens(payload)
+      let best = null
+      for (const it of items) {
+        if (it.kind !== 'prompt' || isItemDone(it, ctx).done) continue
+        const score = jaccard(tok, promptTokens(it.payload))
+        if (score >= DUP_THRESHOLD && (!best || score > best.score)) best = { id: it.id, score }
+      }
+      if (best) {
+        console.error(`spec-queue: near-duplicate of ${best.id} (score ${best.score.toFixed(2)}) — spec-queue show ${best.id}; add it anyway with --distinct`)
+        process.exit(2)
+      }
+    }
+
     let newItem
     if (kind === 'brief') newItem = { id: null, kind: 'brief', brief: briefNum, added: nowIso() }
     else if (kind === 'spec') newItem = { id: null, kind: 'spec', spec: specPath, added: nowIso() }
@@ -433,7 +586,7 @@ switch (sub) {
     } else {
       placed = [...items, newItem]
     }
-    persist(placed, raw ? raw.seq : 0)
+    persist(placed, raw ? raw.seq : 0, ctx)
     console.log(`added${kind === 'brief' ? ` brief ${briefNum}` : kind === 'spec' ? ` ${specPath}` : ''}`)
     process.exit(0)
   }
@@ -445,6 +598,7 @@ switch (sub) {
     const n = Number(nRaw)
     if (!Number.isInteger(n) || n < 1) { console.error(`spec-queue: move <n> must be an integer >= 1 (got "${nRaw}")`); process.exit(2) }
 
+    if (archivedItem(ref)) refuseArchived(ref)
     const statusJson = readSpecStatusJson()
     const raw = loadQueue()
     if (!raw) { console.error('spec-queue: no queue file — nothing to move (remedy: spec-queue next to seed one)'); process.exit(2) }
@@ -460,7 +614,7 @@ switch (sub) {
     const pending = pendingIndices(without, ctx)
     const insertAt = n - 1 >= pending.length ? without.length : pending[n - 1]
     const finalItems = [...without.slice(0, insertAt), item, ...without.slice(insertAt)]
-    persist(finalItems, raw.seq)
+    persist(finalItems, raw.seq, ctx)
     console.log(`moved ${itemDesc(item, new Map(statusJson.briefs.map(b => [b.num, b.name])))} to pending position ${Math.min(n, pending.length + 1)}`)
     process.exit(0)
   }
@@ -468,13 +622,14 @@ switch (sub) {
   case 'done': {
     const ref = rest[0]
     if (!ref) { console.error('spec-queue: done needs a <ref>'); process.exit(2) }
+    if (archivedItem(ref)) refuseArchived(ref)
     const statusJson = readSpecStatusJson()
     const raw = loadQueue()
     if (!raw) { console.error('spec-queue: no queue file — nothing to tick (remedy: spec-queue next to seed one)'); process.exit(2) }
     const items = reconciledItems(raw.items, statusJson, { append: true })
     const item = resolveRef(items, ref)
     item.ticked = nowIso()
-    persist(items, raw.seq)
+    persist(items, raw.seq, ctxFor(statusJson))
     console.log(`ticked ${item.id || itemDesc(item, new Map())}`)
     process.exit(0)
   }
@@ -482,6 +637,11 @@ switch (sub) {
   case 'show': {
     const ref = rest[0]
     if (!ref) { console.error('spec-queue: show needs a <ref>'); process.exit(2) }
+    const archived = archivedItem(ref)
+    if (archived) {
+      out(`${archived.id}  ${archived.kind} · done (archived)\n\n${archived.kind === 'prompt' ? archived.payload : itemDesc(archived, new Map())}`)
+      process.exit(0)
+    }
     const statusJson = readSpecStatusJson()
     const raw = loadQueue()
     if (!raw) { console.error('spec-queue: no queue file — nothing to show (remedy: spec-queue next to seed one)'); process.exit(2) }

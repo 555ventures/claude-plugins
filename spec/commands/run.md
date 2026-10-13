@@ -7,12 +7,10 @@ argument-hint: <spec path>
 
 `/spec:run <spec>` is the loop that finishes a feature after `/spec:plan`. Each invocation
 derives the next stage from disk in the order below and executes it in-session, so one command
-carries a spec from `hardened` to `done`. `spec-build-driver.js` and `spec-review-driver.js`
-each own their own stage's sequencing, printing exactly one step at a time for this session's
-judgments. Orchestrator and workers: Sonnet.
+carries a spec from `hardened` to `done`. Orchestrator and workers: Sonnet.
 
 **Setup:** run `spec-paths shared-for run` and read its output. Read the host's
-`.claude/spec.config.json` (pipeline rules load with that Read — path-scoped, never re-read).
+`.claude/spec.config.json`.
 Either missing → STOP: run `/spec:init` first. Then run `spec-paths build-driver` once (keep
 the path — `{driver}` below) and `spec-paths review-driver` once (`{review-driver}` below).
 
@@ -34,10 +32,6 @@ derived, each printed as one line:
 - `status:` past `hardened` AND `{worktree}` absent from `git worktree list --porcelain` AND no
   `refs/heads/{source}` branch → skip (the build really ran in place; an existing branch is a
   parked worktree build, which Step 3 re-attaches).
-  An in-flight build keeps its marks in an untracked `<spec>.build/` sidecar and its workers'
-  output uncommitted; `git worktree add` carries neither, so a new worktree would restart the
-  build against an empty tree while the half-built work stays behind. This fires on a `/clear`
-  resume too.
 
 A worktree that cannot be created is a **hard stop** — never a fall back to in place. When the
 failure text is `create: run from the main working tree`, the session is inside a different
@@ -48,13 +42,12 @@ error, and name `--in-place` as the deliberate opt-out.
 
 1. `hardened`, or `implementing` with no `<spec>.review/` sidecar and no `stage: "build"`
    ledger row for this spec → run the **build stage** below (`node {driver} <spec> --via loop`)
-   to `DONE`. (A build row means build is already `DONE`; the driver refuses a re-run.)
+   to `DONE`.
 2. `implementing` or `done` → run the **review stage** below
    (`node {review-driver} <spec> --via loop`) until it prints a judgment step or `DONE`.
-3. `done` with no review sidecar → the review driver's own cold path prints `DONE` with
-   `spec-status --next` — the loop's no-op resume.
+3. `done` with no review sidecar → the review driver's own cold path prints `DONE`.
 
-This is `spec-status.js`'s own `deriveNext` order, restated — never skip a rung.
+Order: `spec-status.js` `deriveNext` — never skip a rung.
 
 ## Build stage
 
@@ -62,37 +55,20 @@ Run `node {driver} <spec> --via loop` per `spec/doctrine/stages/stage-build.md`'
 Worker Contract, and `blocked` rules, unchanged; skip its own `spec-paths shared-for build`
 line — `shared-for run` already carries every section it lists. When the driver prints `DONE`,
 print the advisory checkpoint — `✅ checkpoint — build complete; safe to /clear and re-run
-/spec:run <spec>` — and continue straight into the review stage; clearing here is optional,
-never required.
+/spec:run <spec>` — and continue straight into the review stage.
 
 ## Review stage
 
 Run `node {review-driver} <spec> --via loop` the same way, per
 `spec/doctrine/stages/stage-review.md`'s own Protocol and Rules, unchanged for every judgment
-step. Skip its own `spec-paths shared-for review` line for the same reason as build's:
-
-- **No stop between the reviewer's return and dispositions** — the loop proceeds straight to
-  DISPOSITIONS; nothing here gates.
-- **Pre-merge.** stage-review.md's own Relocate-before-marking rule (§ Rules, the MERGE
-  bullet) is the pre-merge stop — never a forced `/clear`.
+step. Skip its own `spec-paths shared-for review` line for the same reason as build's.
 
 ## Report
 
-Every stop of the loop — a checkpoint, a judgment step, or the terminal `DONE` — prints one
-report (core § Console Output Style); a look stop's printed block replaces the report (shared
-§ Design Canon). Assemble slots from whichever driver's state produced the stop — `outcome`
-(✅/⚠️), `bullets` (one line per escalation), `next` (the literal re-run command at a
+Every stop prints one report. Assemble slots from whichever driver's state produced the stop —
+`outcome` (✅/⚠️), `bullets` (one line per escalation), `next` (the literal re-run command at a
 checkpoint, or `spec-status --next` verbatim at the review driver's own `DONE`). Run `node
 "$(spec-paths report-render)" --slots <file>` and print it verbatim.
-
-```report
-✅ **checkpoint — build complete; safe to /clear and re-run /spec:run <spec>**
-
-Next: /spec:run specs/20260817/01-example.md
-```
-
-If in a worktree, stay in it until the pre-merge stop relocates the session — merge-back runs
-outside the worktree and merges on CLEAN.
 
 ## Rules
 

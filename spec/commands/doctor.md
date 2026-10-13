@@ -7,11 +7,9 @@ argument-hint: [focus area, optional — e.g. "agents" or "design"] [--fix]
 
 The grounding layer (`/spec:init`'s output) goes stale two ways: the **plugin updated**
 (contracts changed under it) or the **codebase drifted** (cited paths, commands, and
-conventions moved on). This command detects both, cheaply. It is a **diagnosis, not a
-treatment**: report first; apply only targeted patches the user approves; recommend a full
-`/spec:init` refresh for structural drift. Never regenerate wholesale, never touch files
-outside the grounding layer. With `--fix`, the targeted-patch path extends to doctrine
-repair (below) — still evidence-cited, still per-patch approved, never structural.
+conventions moved on). This command is a **diagnosis, not a treatment**: report first; apply
+only targeted patches the user approves; recommend a full `/spec:init` refresh for structural
+drift. Never regenerate wholesale, never touch files outside the grounding layer.
 
 **Intended model: Sonnet.** Run `spec-paths shared-for doctor` and read its output. If
 `.claude/spec.config.json` is missing entirely, STOP — the repo was never initialized; the
@@ -70,14 +68,12 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
 7. **Cited references** — extract repo paths cited in the pipeline rules file, the
    convention rule files, and each generated agent; verify each exists. Extract **bare
    filenames too** (`scaffold-ledger.md`, `helpers.js` — a citation with no directory
-   prefix), resolving each against the file set its sentence implies; a path-shaped regex
-   alone silently passes every directory-less reference (specs/20260810/09-stale-reference-sweep.md
-   D7). Stale citations are the most common drift and are individually patchable.
+   prefix), resolving each against the file set its sentence implies. Stale citations are the
+   most common drift and are individually patchable.
 8. **Design contract** (only if the config has a `design` block) — run
    `node "$(spec-paths design-contract-check)" --root . --json`. Each finding is a ⚠️ advisory
-   naming the script's own remedy — a missing token file or kit directory, a missing composite,
-   an absent naming subsection, or an empty table. Never re-derives an enforcer here — that's
-   `/spec:enforce`'s job, not this check's.
+   naming the script's own remedy. Never re-derives an enforcer here — that's
+   `/spec:enforce`'s job.
 9. **Genesis handoff** (only if `.claude/genesis/status.json` exists) — the consume-side
    contract is intact: `genesisStackDescriptor` (when recorded) exists and parses;
    every `docs/adr/*.md` has a `## Dissents` section (presence only).
@@ -103,23 +99,17 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     (`jq`/`awk`), never read the ledger into context. Every line parses as JSON with a known `stage`:
     this repo's `driftCensus.byRepo` entry in `node "$(spec-paths fleet-reader)" --json` reads
     `unparseable: 0` and carries no `drift["stage-unknown"]` — the stage set is that script's, never
-    restated here (`observe` rows are a retired v6 class — valid history; v7 rows carry structured
-    fields). Field expectations are per-class: v7 build
-    and review rows carry no `runId` (older rows may; a `runId`-bearing row is history, never a
-    flag); escape and release rows carry their own field sets. The file is tracked by git, and
+    restated here. Field expectations are per-class: v7 build and review rows carry no `runId`
+    (a `runId`-bearing row is history, never a flag). The file is tracked by git, and
     `git check-attr merge -- .claude/spec-runs.jsonl` reports `union` (without it, parallel
     worktree builds conflict at merge-back — init sets the `.gitattributes` entry). The
     pipeline's own ignore entries are audited the same way: `node "$(spec-paths init-gen)"
-    ignore-check --root .` exits 0, else each printed line is a scratch path init would
-    ignore on a fresh host but this host never received (entries added after its init) —
-    un-ignored, it surfaces as a spurious out-of-plan reconcile finding and can ride a close
-    commit; the remedy is the same command with `--fix`, a line-item patch under Repair mode.
-    A line over ~1000 chars is an advisory tripwire ("long but well-formed — inspect for prose
-    leak"), never a standalone broken finding. Year archives
-    (`.claude/spec-runs-<year>.jsonl`) get the same checks; suggest archiving whole years
-    past ~2 MB. **Tier distribution:** with ≥5 build rows, if ≥90% share one tier, flag it —
-    a tier system that always answers `critical` (or always `standard`) has stopped
-    discriminating. **Escapes** (`stage:"escape"` rows) — jq correlations, flag loudly:
+    ignore-check --root .` exits 0, else each printed line is a scratch path this host never
+    received; the remedy is the same command with `--fix`, a line-item patch under Repair mode.
+    A line over ~1000 chars is an advisory tripwire, never a standalone broken finding. Year
+    archives (`.claude/spec-runs-<year>.jsonl`) get the same checks. **Tier distribution:**
+    with ≥5 build rows, if ≥90% share one tier, flag it. **Escapes** (`stage:"escape"` rows) —
+    jq correlations, flag loudly:
     - an escape correlated to a review row with `verdict:"CLEAN"` (via `reviewRunId` on
       legacy rows, else same-spec latest prior review row) is a **contradicted CLEAN** —
       the review passed a real defect; report per-spec;
@@ -133,77 +123,40 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     **Plugin-defect roll-up:** collect `[plugin]`-tagged Gotchas entries into one "upstream
     bug report" block (entry + citation, verbatim).
 13. **Roadmap derivation** (only if `docs/roadmap/00-overview.md` exists) — run
-    `node "$(spec-paths spec-status)" --root . --json` (the one derivation, shared with
-    `/spec:status` and `/spec:plan`'s preflight). Report its derived table and split every
-    `anomalies` entry by its `audience` field: `hygiene` anomalies (`queue-unparseable`,
-    `queue-orphan`, `unknown-status`, `orphan-stamp`, `unparsed-dependency`,
-    `unknown-dependency`, `skipped-spec`, `hand-tracked-status`) are this check's findings —
-    each names a file to fix; `decide` anomalies (`skipped-brief`, `out-of-order`) report
-    prominently as info, never a finding — their remedy is a choice the user makes, and
-    `/spec:status`'s default screen already surfaces them as paste-ready decide lines.
-14. **CI-gate parity** (deterministic, advisory) — run
-    `node "$(spec-paths ci-gate-parity)" --root .`. It owns the whole algorithm and
-    self-gates on `.github/workflows/` existing. A non-zero exit means the host's CI does
-    not invoke the configured `gateCommand`; report each printed line as advisory — remedy =
-    make one CI step run the `gateCommand` verbatim.
+    `node "$(spec-paths spec-status)" --root . --json`; report its derived table, `hygiene`
+    anomalies as findings and `decide` anomalies as info.
+14. **CI-gate parity** (advisory) — run `node "$(spec-paths ci-gate-parity)" --root .`; each
+    printed line is advisory.
 15. **Citation integrity** (deterministic, advisory) — run
-    `node "$(spec-paths citations-check)"` against the repo. Each MISS line (file, line,
-    cited heading, resolved doctrine file) is a stale-citation finding; the `--verbose` SKIP
-    list is informational only.
-16. **Rules-layer narration** (deterministic, advisory) — run
-    `node "$(spec-paths comment-narration)" --rules-mode .`. Each finding line is a
-    narration finding in the rules layer; under `--fix` each is a line-item patch at the
-    repair-mode bar above (before → after: the note rewritten as tag + rule + one owner
-    citation — spec path, AC-ID, D-number, ADR, run id — evidence is the finding line itself).
-17. **AC-pin drift** (deterministic, advisory) — run `node "$(spec-paths ac-drift)" --root .`.
-    It re-derives, for every `done` spec dated on or after the v7 cutover, the `SHALL CONTINUE
-    TO` pins (specs dated on or after 20260911) no test-classified file cites, and the
-    `[retired:]` tags that cite no retiring path. Every other criterion of a done spec expired
-    at close and is never a finding. Each printed row names its remedy (tag the covering test,
-    or drop the pin); `inapplicable — no specs/` is not a finding.
-18. **Spec-number collisions** (deterministic, broken — never advisory) — run
-    `node "$(spec-paths spec-number-check)" --root .`. Each printed line names one
-    `specs/YYYYMMDD/` directory in which two or more non-`superseded` specs share one `NN[a]-`
-    number: the number IS the AC-ID namespace, so both specs mint the same `AC-<date>-<NN>-<n>`
-    ids and the review coverage grep cannot tell whose test it found — either spec can pass its
-    coverage leg on the other's tests with a criterion that has no test anywhere. Remedy = renumber
-    whichever spec has not yet built to the next free number in its directory, rewriting its AC-ids,
-    every `depends_on` entry that names it and any run-ledger `spec` path with it.
-19. **Fixed ports** (deterministic, advisory) — run
-    `node "$(spec-paths port-check)" --root .`. Each printed line is a fixed or computed port
-    literal under `tests/` — remedy = bind `--port 0` / `listen(0)` and read the bound port back
-    from the server rather than choosing one (a host may wrap this in a shared test helper) — or
-    a `.claude/spec.config.json` key (`runtime.readyCheck`, `prototype.url`) naming a loopback
-    port — remedy = make the boot command serve on `$PORT`, spell the port `$PORT` in
-    `readyCheck` and `{port}` in `prototype.url`.
-20. **Expiry readiness** (deterministic, advisory) — two derivations, both run every time:
-    (a) `node "$(spec-paths test-expiry)" --root . --all-done` (dry run) reports
-    `expired tests present: N in M files` (or `none`), naming each file. This is the only
-    deletion path there is: the same command with `--apply`, run only after one
-    `AskUserQuestion` naming the count and the files it will delete — never under `--fix`'s
-    line-item path and never silently.
-    (b) `node "$(spec-paths coverage-scope)" --root .` names each host file that parses
-    acceptance-criterion ids alongside a `done` status yet never mentions `SHALL CONTINUE TO`.
-    A check demanding a carrier for every AC of a done spec contradicts close-time expiry: once
-    a sweep actually runs, that check goes red for every retired criterion of a done spec and
-    stays red, with no path forward short of rescoping it. Remedy = scope the named check's
-    carriers to specs that are not `done` (grounding contract § Test expiry). A hit is a file to
-    read, never a verdict; run (b) even when (a) reports `none`, because the hazard is a
-    property of the gate, not of today's retirable count.
-21. **Replay baseline-red honesty** (deterministic, broken — never advisory) — run
-    `node "$(spec-paths replay)" --audit-claims --root .`. Each printed line names one replay
-    row whose `baseline-red:<leg>` claim contradicts its review's own CLEAN row (the leg is
-    recorded green there, absent, or the review has no CLEAN row). Such a row excuses a caught
-    or missed outcome with a leg that was never red, so `--stats` counts it on a false premise.
-    `pristine-red` rows are never flagged — disagreeing with the CLEAN row is that claim's
-    meaning. Remedy = relabel the row's `legs` to `green` (or `red:<leg>` if the mutation
-    reddened it) — a `--fix` patch (before → after row shown).
-
-22. **Catalog currency** (deterministic, advisory) — only when `docs/design/catalog.md` exists, run `node "$(spec-paths catalog-inventory)" --root . --out docs/design/catalog.md --check`; exit 1 → one ⚠️ line naming the added/removed components and the remedy (re-run the same command without `--check`). A host with no catalog file yet is not a finding — it has never reached `DESIGN_BRIEF` (spec/doctrine/genesis.md § Genesis: Design Stage).
-
-23. **Prototype config** (deterministic, advisory) — only when the config has a `prototype` block, run `node "$(spec-paths prototype-driver)" check --json`. It verifies `e2eFile` contains `{stem}`, `e2eList` contains `{file}`, `e2eRun` is declared and contains `{file}`, and `picture` is declared and contains `{url}` and `{out}`; each finding is one ⚠️ line naming the failing key, remedy = fix the value in `.claude/spec.config.json`. Exit 0 when clean or when the block is absent — a host that has never declared `prototype` is not a finding.
-
-24. **Walkthrough config** (deterministic, advisory) — only when the config has a `walkthrough` block, run `node "$(spec-paths walkthrough)" check --json`. It inspects the config only and opens no connection: each missing or empty key, a `project` that fails the name shape, an insecure `baseUrl` (plain `http:` to a host other than `localhost`, `127.0.0.1` or `[::1]`) and an unset token variable is one ⚠️ line naming the key or the variable's name, remedy = fix that value in `.claude/spec.config.json` or export the variable. Exit 0 when clean or when the block is absent — a project that never declared `walkthrough` is not a finding.
+    `node "$(spec-paths citations-check)"` against the repo; each MISS line is a stale-citation
+    finding.
+16. **Rules-layer narration** (advisory) — run
+    `node "$(spec-paths comment-narration)" --rules-mode .`; under `--fix` each finding is a
+    line-item patch.
+17. **AC-pin drift** (deterministic, advisory) — run `node "$(spec-paths ac-drift)" --root .`;
+    each printed row names its remedy.
+18. **Spec-number collisions** (broken — never advisory) — run
+    `node "$(spec-paths spec-number-check)" --root .`; remedy = renumber whichever spec has not
+    yet built to the next free number in its directory, rewriting its AC-ids, every `depends_on`
+    entry that names it and any run-ledger `spec` path with it.
+19. **Fixed ports** (advisory) — run `node "$(spec-paths port-check)" --root .`; each printed
+    line is a fixed port literal under `tests/` or in `.claude/spec.config.json`.
+20. **Expiry readiness** (advisory) — run `node "$(spec-paths test-expiry)" --root . --all-done`
+    (dry run) and `node "$(spec-paths coverage-scope)" --root .`, both every time; the only
+    deletion path is the same `test-expiry` command with `--apply`, run only after one
+    `AskUserQuestion` naming the count and the files — never under `--fix`'s line-item path
+    and never silently.
+21. **Replay baseline-red honesty** (broken — never advisory) — run
+    `node "$(spec-paths replay)" --audit-claims --root .`; remedy = relabel the row's `legs` to
+    `green` (or `red:<leg>` if the mutation reddened it) — a `--fix` patch (before → after row
+    shown).
+22. **Catalog currency** (advisory) — only when `docs/design/catalog.md` exists, run
+    `node "$(spec-paths catalog-inventory)" --root . --out docs/design/catalog.md --check`; exit 1
+    → one ⚠️ line (spec/doctrine/genesis.md § Genesis: Design Stage).
+23. **Prototype config** (advisory) — only when the config has a `prototype` block, run
+    `node "$(spec-paths prototype-driver)" check --json`; each finding is one ⚠️ line.
+24. **Walkthrough config** (advisory) — only when the config has a `walkthrough` block, run
+    `node "$(spec-paths walkthrough)" check --json`; each finding is one ⚠️ line.
 
 ## Semantic spot-check — small, bounded
 
@@ -242,14 +195,6 @@ what's wrong and what it affects — and render via
 - `warns`: one `stale: {what — what it affects}` line per stale finding.
 - `blocks`: one `broken: {what — what it affects}` line per broken finding.
 - `next`: the single recommendation below.
-
-```report
-⚠️ **2 stale**
-⚠️ stale: review.md cites a deleted § heading — the citation silently drops at render time
-⚠️ stale: an `agentMap` entry has no matching `.claude/agents/*.md` — batch dispatch for that kind fails silently
-
-Next: apply the 2 targeted patches above (per-patch approval via AskUserQuestion)
-```
 
 Close with exactly one recommendation: **clean** (offer a re-stamp if only check 2 failed) ·
 **targeted patches** (enumerated, user-approved, re-check after) · **enforcement drift**

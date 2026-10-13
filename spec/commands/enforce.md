@@ -5,16 +5,9 @@ argument-hint: [focus — optional, e.g. a category or rule-doc path to re-enfor
 
 # Spec Enforce: Mechanize the Rule Set
 
-Turn the host repo's rules into **deterministic checks that run in its gate command**. The
-guiding principle does not rot: *consistency requires determinism.* For any rule a linter,
-arch-tool, or text/structural matcher CAN check, an LLM checking it at runtime is a strict
-downgrade — non-reproducible, brittle, false-confidence coverage. So enforcement is mechanical
-and lives in the gate; the only sanctioned runtime LLM rule-check is `/spec:plan` reading a draft
-spec (prose has no CI). This command neither depends on nor replicates a host's `/comply`.
-
-This is a different cadence from `/spec:init`: enforcement regenerates when **rules or tooling**
-change (frequent), not when the repo is re-profiled (rare), and the work is expensive and flaky
-(live research + install-and-verify). So it is its own command, independently re-runnable.
+Turn the host repo's rules into **deterministic checks that run in its gate command** —
+*consistency requires determinism.* This command is independently re-runnable: enforcement
+regenerates when **rules or tooling** change, not when the repo is re-profiled.
 
 **Intended model: Opus.** **Setup:** run `spec-paths shared-for enforce` and read its output (shared
 invariants). Read the host's `.claude/spec.config.json` (its pipeline rules load with that
@@ -42,24 +35,17 @@ arbitrary values, restyles of kit components, primitive imports outside the kit 
 missing state story per declared state — the way a single lint config bundles several rules. It
 is not a ratchet category.
 
-This is the operational copy of the canonical taxonomy in the grounding contract (`spec-paths
-contract`); they must stay in sync — the contract is the single source of truth, this file is the
-executor's working list.
+The grounding contract (`spec-paths contract`) is the canonical taxonomy; this is the executor's
+working list.
 
 **Ratchet categories.** `duplication` and `cycle` are enforced as **ratchets**: a per-host
 baseline snapshot quarantines existing violations at wiring time, and the gate blocks only on
-violations not in that baseline. A candidate for either category must additionally support a
-baseline / known-violations mode (Phase 3); a candidate without one fails verify for these
-categories — the existing fallback order (sweep → review-check) applies.
+violations not in that baseline (Phase 3).
 
 ## The judgment residue (do NOT mechanize — compose over, don't duplicate)
 
-After mechanization, a small set genuinely resists a deterministic check and stays with the
-reviewer (severity-calibration prose in pipeline rules § Review Checks), layered OVER the
-deterministic coverage: **data-flow ordering** (event-emit vs commit), **semantic intent** of a
-function's parameters, **naming tense** (imperative vs past), **sentinel usage** in control flow,
-**cross-file N+1 / batch-variant** reasoning, and **"is this a sanctioned carve-out."**
-**Pure-process** rules (review neutrality, agent model-routing) are not about source code at all.
+What genuinely resists a deterministic check stays with the reviewer (pipeline rules § Review
+Checks), layered OVER the deterministic coverage. **Pure-process** rules are not about source code at all.
 
 ## Phase 1 — Classify (interactive command, not the workflow)
 
@@ -120,19 +106,12 @@ citations** — never from training memory — and returns ranked candidates wit
 genesis `stack-descriptor` is passed only as a stack-identity **hint**; the workflow still
 researches (this is why enforce works on brownfield repos the genesis stage never touched).
 
-**Return shape:** `{stage: "researched", cells: [...], skipped: [{id, category, reason}],
-tokens}`. `skipped` accounts for every cell that was NOT researched (`unknown-category`,
-`agent-failed`, or — for a malformed cell the workflow itself refuses before dispatch —
-`layer-on-non-naming` / `unknown-layer`) — reconcile it against the Phase 1 work list and
-re-research those cells (inline for a handful) before Phase 3; a skipped cell is unfinished
-work, never a silent drop.
+Return shape: printed by `wf-enforce.js`; never restated here. Reconcile its `skipped` list
+against the Phase 1 work list and re-research those cells (inline for a handful) before Phase 3;
+a skipped cell is unfinished work, never a silent drop.
 
-For a `duplication` or `cycle` cell, the extra candidate requirement applies: the discovered tool
-must support a baseline / known-violations / ignore-file mode, and the citations must demonstrate
-that capability specifically, not just the underlying check.
-
-(If Phase 1's list was tiny, do this discovery inline with the same discipline: live citation
-required, no tool from memory.)
+For a `duplication` or `cycle` cell, the discovered tool must support a baseline /
+known-violations / ignore-file mode, and the citations must demonstrate that capability.
 
 ## Phase 3 — Verify (VERIFY — interactive, in the command, serial)
 
@@ -299,25 +278,10 @@ the script is the sole render authority; never hand-format the output):
   clean tree (or surfaces the real violations they just caught)'}` — the host's `gateCommand`
   from `.claude/spec.config.json`, printed verbatim, never paraphrased as "re-run the host gate"
 
-```report
-✅ **enforcement wired — 6 categories mechanized, 1 as Review-Check prose**
-- module-boundary: dependency-cruiser — verified, newly added
-- naming: eslint rule — verified, already covered
-- duplication ratchet baseline: .claude/rules/duplication-baseline.json, 4 quarantined violations
-⚠️ Review-Check fallback: cycle — no verified tool supports a baseline mode for this stack
-📦 rulesEnforcementHash a1b2c3d4
-Next: bun typecheck && bun lint && bun test:run — confirms the new checks pass on a clean tree (or surfaces the real violations they just caught)
-```
-
-Rules proposed vs accepted were already settled interactively in their own phase — don't
-re-inventory them here.
-
 ## Rules
 
-- **Never Read `wf-enforce.js`.** The complete `args` contract and the return shape are in
-  Phase 2 (`{configPath, pipelineRulesPath, stackDescriptorPath, enforcementManifestPath, cells}`
-  → `{stage, cells, skipped, tokens}`). Invoke it (by `scriptPath`) and act on its return — its
-  source is never orchestrator context.
+- **Never Read `wf-enforce.js`.** The `args` contract is in Phase 2; invoke it (by
+  `scriptPath`) and act on its return — its source is never orchestrator context.
 - **Never name a specific linter/formatter/arch-tool/hook-runner in any plugin file.** Encode the
   method + category here; discover the tool at runtime. A named tool anchors the agent and goes
   stale faster than the rules do.

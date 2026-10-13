@@ -526,8 +526,8 @@ test('AC-20260825-04-9: spec-paths resolves genesis-driver and shared-for genesi
     'D11: spec/commands/genesis.md must exist — it is the entry point the state gate now admits ' +
     'and the only command that loops on the driver')
   const cmdLines = read('spec/commands/genesis.md').split('\n').length
-  assert.ok(cmdLines <= 120,
-    'D11: spec/commands/genesis.md must be at most 120 lines, found ' + cmdLines + ' — the whole ' +
+  assert.ok(cmdLines <= 84,
+    'AC-20261008-02-3 (specs/20261008/02 D6): spec/commands/genesis.md must be at most 84 lines, found ' + cmdLines + ' — the whole ' +
     'point of the driver is that the command stops re-reading phase prose into context; a command ' +
     'that grows back past this bound has silently reabsorbed the choreography the driver owns')
 
@@ -608,7 +608,7 @@ test('AC-20260825-04-9: spec-paths resolves genesis-driver and shared-for genesi
 // AC-20260827-01-8 (file-level half; the step-text half lives in tournament.test.js)
 // ---------------------------------------------------------------------------
 
-test('AC-20260827-01-8: spec/commands/genesis.md drops its per-state pointer section and stays within the 120-line pin, spec/doctrine/genesis.md gains the Tournament of Scaffolds section, status.json carries a tournament key, and finalists.json parses as exactly two finalists each carrying the four command keys', () => {
+test('AC-20260827-01-8: spec/commands/genesis.md drops its per-state pointer section and stays within the 84-line pin, spec/doctrine/genesis.md gains the Tournament of Scaffolds section, status.json carries a tournament key, and finalists.json parses as exactly two finalists each carrying the four command keys', () => {
   const cmdSrc = read('spec/commands/genesis.md')
   assert.ok(!cmdSrc.includes('## Per-state judgment pointers'),
     'D10: spec/commands/genesis.md must not contain "## Per-state judgment pointers" — the ' +
@@ -616,8 +616,8 @@ test('AC-20260827-01-8: spec/commands/genesis.md drops its per-state pointer sec
     'tournament.test.js), and a surviving pointer section means the command still carries the ' +
     'choreography prose D10 moves out of it, leaving two binding homes instead of one')
   const cmdLines = cmdSrc.split('\n').length
-  assert.ok(cmdLines <= 120,
-    'D10: spec/commands/genesis.md must stay at most 120 lines (AC-20260825-04-9\'s own pin) — ' +
+  assert.ok(cmdLines <= 84,
+    'AC-20261008-02-3 (specs/20261008/02 D6): spec/commands/genesis.md must stay at most 84 lines — ' +
     'found ' + cmdLines + '. The command sat at 119 of 120 before this spec; three new states ' +
     '(FINALISTS, PROBE, PICK) could not land as prose here at all, which is exactly why D10 ' +
     'deletes the pointer section rather than growing it — a line count back over the pin means ' +
@@ -980,11 +980,11 @@ test('AC-20260902-08-10 (reused by AC-20260930-01-7): spec/doctrine/genesis.md c
     'D9: deleting two doctrine sections and adding one must not orphan any "§ Genesis: ..." citation elsewhere in spec/ — a nonzero MISS here means some command or doctrine file still points at a heading this spec renamed or removed: ' + check.stdout)
 })
 
-test('AC-20260902-08-11 / AC-20260914-02-14: spec/commands/genesis.md is <=120 lines, contains the literal "/spec:mocks → /spec:genesis → /spec:enforce", and does not contain "/spec:atlas sweep"; spec/commands/init.md contains "ratified" within its design precedence list', () => {
+test('AC-20260902-08-11 / AC-20260914-02-14 / AC-20261008-02-3: spec/commands/genesis.md is <=84 lines, contains the literal "/spec:mocks → /spec:genesis → /spec:enforce", and does not contain "/spec:atlas sweep"; spec/commands/init.md contains "ratified" within its design precedence list', () => {
   const genesisCmd = read('spec/commands/genesis.md')
   const lineCount = genesisCmd.split('\n').length
-  assert.ok(lineCount <= 120,
-    'D10: spec/commands/genesis.md must stay at or under 120 lines — it is ' + lineCount +
+  assert.ok(lineCount <= 84,
+    'AC-20261008-02-3 (specs/20261008/02 D6): spec/commands/genesis.md must stay at or under 84 lines — it is ' + lineCount +
     ' lines; dropping the atlas-sweep link and rewriting the chain bullet must not be offset by growth elsewhere')
   assert.ok(genesisCmd.includes('/spec:mocks → /spec:genesis → /spec:enforce'),
     'D10: the chain bullet must contain the literal "/spec:mocks → /spec:genesis → /spec:enforce" — the whole-product design stage now precedes genesis for a visual archetype, and a missing literal here means the command doc still tells the session the old (design-inside-genesis) chain')

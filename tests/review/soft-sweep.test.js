@@ -32,9 +32,10 @@ const HARD_AND_SOFT_RETURN = {
 let seq = 0
 // A fresh host driven to CLOSE off a green-legs reviewer return. Soft-only and zero-survivor
 // returns both self-disposition at the reviewer-returned mark and land CLOSE directly.
-function hostAtClose(body, label) {
+function hostAtClose(body, label, prep) {
   seq += 1
   const host = makeReplayHost('softsweep' + seq + label, { acId: 'AC-20260820-99-' + (40 + seq) })
+  if (prep) prep(host)
   run(host.root, host.spec)
   assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER',
     'setup precondition: a green-legs fixture must reach REVIEWER before any sweep AC can be exercised')
@@ -211,6 +212,23 @@ test('AC-20261013-01-5: WHEN --mark closed follows a sweep with a fixed soft THE
   const none = closeWith('c0', ALL_DEBT, prependFoo(61))
   assert.strictEqual(none.r.status, 0,
     'AC-20261013-01-5: a sweep that fixed nothing runs no measurement — the ceiling bounds fixes, not unrelated close-commit content: ' + none.r.stdout + none.r.stderr)
+})
+
+test('AC-20261013-01-5: WHEN the close commit deletes a committed deviations sidecar over 60 lines THE SYSTEM SHALL not count that deletion toward the soft sweep ceiling and SHALL accept --mark closed', () => {
+  const host = hostAtClose(TWO_SOFT_RETURN, 'c5dev', (h) => {
+    const dev = h.spec.replace(/\.md$/, '.deviations.md')
+    fs.writeFileSync(dev, '# Deviations — x\n' + Array.from({ length: 70 }, (_, i) => '- departure ' + i).join('\n') + '\n')
+    h.g('add', '-A'); h.g('commit', '-q', '-m', 'sidecar')
+  })
+  const m = mark(host, writeSweep(host, FIXED_AND_DEBT))
+  assert.strictEqual(m.status, 0,
+    'setup precondition: the sweep mark must be accepted before the ceiling can be measured: ' + m.stdout + m.stderr)
+  const dev = host.spec.replace(/\.md$/, '.deviations.md')
+  fs.rmSync(dev)
+  commitClose(host, [path.relative(host.root, dev)])
+  const r = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(r.status, 0,
+    'AC-20261013-01-5: CLOSE itself deletes the deviations sidecar, so counting its lines toward the ceiling makes close unreachable (the remedy restores the sidecar, which trips the lingering-sidecar refusal): ' + r.stdout + r.stderr)
 })
 
 test('AC-20261013-01-6: WHEN --mark closed is accepted after a sweep of one fixed and one debt THE SYSTEM SHALL re-stamp the close row in place with softSweep {fixed:1, debt:1}, adding no row and changing no other key', () => {

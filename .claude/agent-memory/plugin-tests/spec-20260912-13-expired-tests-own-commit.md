@@ -3,7 +3,7 @@ name: spec-20260912-13-expired-tests-own-commit
 description: Test-layer authoring for moving expired-test deletion out of the close commit into its own post-close commit
 metadata:
   type: project
-  reviewed: 2026-09-14
+  reviewed: 2026-10-13
 ---
 
 Spec: specs/20260912/13-expired-tests-leave-in-their-own-commit.md. Amends

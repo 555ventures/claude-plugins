@@ -1857,7 +1857,8 @@ function judgedSha() {
 function refuseOverSweepCeiling() {
   if (!marks.softSweep || !(marks.softSweep.fixed >= 1)) return
   const sha = judgedSha()
-  const excludes = [specRel, 'docs/canonical/', '.claude/spec-runs.jsonl', '.claude/spec-runs/', sidecarRel]
+  const excludes = [specRel, 'docs/canonical/', '.claude/spec-runs.jsonl', '.claude/spec-runs/', sidecarRel,
+    path.relative(repoRoot, deviationsPath), '.claude/agent-memory/']
   if (pipelineRulesPath) excludes.push(path.relative(repoRoot, pipelineRulesPath))
   const r = runChild('git', ['-C', repoRoot, 'diff', '--numstat', '--no-renames', sha, 'HEAD', '--', '.',
     ...excludes.map((p) => ':(exclude)' + p)], { encoding: 'utf8' }, 'git diff --numstat (soft sweep ceiling)')
@@ -2288,7 +2289,7 @@ function handleMark() {
     case 'conflicts-resolved': return handleConflictsResolved() // exits the process itself
     default:
       die('unknown mark "' + MARK + '" (skips-extracted | reviewer-returned | dispositions | ' +
-        'fix-applied | closed | merge-strategy | conflicts-resolved)')
+        'fix-applied | soft-swept | closed | merge-strategy | conflicts-resolved)')
   }
 }
 

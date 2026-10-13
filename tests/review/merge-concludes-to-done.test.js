@@ -28,7 +28,7 @@ test('AC-20260913-09-1: WHEN a review host seeded with five prior stage:"review"
     'DONE must delete the sidecar directory exactly as it does today — D1 does not touch the DONE-time deletion, only what precedes it')
 })
 
-test('AC-20260913-09-2: WHEN spec-review-driver.js <spec> --mark replay-recorded runs THE SYSTEM exits 2 with the unknown-mark refusal enumerating exactly the seven remaining marks (skips-extracted | reviewer-returned | dispositions | fix-applied | closed | merge-strategy | conflicts-resolved)', () => {
+test('AC-20260913-09-2: WHEN spec-review-driver.js <spec> --mark replay-recorded runs THE SYSTEM exits 2 with the unknown-mark refusal enumerating exactly the eight remaining marks (skips-extracted | reviewer-returned | dispositions | fix-applied | soft-swept | closed | merge-strategy | conflicts-resolved)', () => {
   const host = makeReplayHost('mergedonemark', { acId: 'AC-20260820-99-31', seedRows: [] })
   const r = run(host.root, host.spec, '--mark', 'replay-recorded')
   assert.strictEqual(r.status, 2,
@@ -37,8 +37,8 @@ test('AC-20260913-09-2: WHEN spec-review-driver.js <spec> --mark replay-recorded
   assert.match(out, /unknown mark "replay-recorded"/,
     'the refusal must name the mark that was rejected: ' + out)
   assert.match(out,
-    /\(skips-extracted \| reviewer-returned \| dispositions \| fix-applied \| closed \| merge-strategy \| conflicts-resolved\)/,
-    'D1: the enumeration must list EXACTLY the seven remaining marks, in this order, with replay-recorded removed — an enumeration that still names replay-recorded (the pre-image\'s own eight-mark list) means the case arm and its list entry were not both deleted: ' + out)
+    /\(skips-extracted \| reviewer-returned \| dispositions \| fix-applied \| soft-swept \| closed \| merge-strategy \| conflicts-resolved\)/,
+    'D1: the enumeration must list EXACTLY the eight remaining marks, in this order, with replay-recorded removed — an enumeration that still names replay-recorded (the pre-image\'s own eight-mark list) means the case arm and its list entry were not both deleted: ' + out)
 })
 
 test('AC-20260913-09-3: WHEN the driver is re-invoked bare after DONE was printed THE SYSTEM prints DONE again and exits 0, with no state re-derivation from deleted manifests', () => {

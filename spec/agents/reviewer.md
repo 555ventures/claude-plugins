@@ -114,7 +114,7 @@ the same length" or "the pinned tests still pass" is not a kill (`replay-corpus.
 - **hard** — violates an explicit project rule or contradicts the spec; causes runtime
   errors or CI failures. Blocks `CLEAN` until dispositioned.
 - **soft** — everything short of hard: bent intent, convention drift, hygiene. Advisory —
-  recorded verbatim, never dispositioned, never fix-dispatched inside review.
+  recorded verbatim, never dispositioned, swept at CLOSE under the driver's ceiling.
 
 Every finding carries a verified `file:line`, a self-contained claim, its `evidence` (the
 repro output or quotes), and an `impact` line in plain English (no code identifiers — that is

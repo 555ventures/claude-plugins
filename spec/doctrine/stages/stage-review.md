@@ -52,7 +52,7 @@ When the driver prints `DONE`, report (core § Console Output Style) — printed
   sanction, or a demonstrated miscitation, presented to the user.
 - **Dispositions (the DISPOSITIONS step).** Only the hard pool needs judgment; softs are advisory
   — printed once, recorded in the artifact and the ledger's `findings.soft`, never dispositioned;
-  one worth fixing becomes `spec-queue add`. Dispatch **one** `Agent {subagent_type:
+  each is swept at CLOSE, never queued. Dispatch **one** `Agent {subagent_type:
   'spec:disposer'}` with the paths the driver's step prints; no memory of the build. Every
   `fix` recommendation dispatches a Sonnet worker (via `agentMap`) with no question —
   reversible, re-reviewed by the fix-delta pass once you mark `fix-applied`. Every
@@ -65,23 +65,23 @@ When the driver prints `DONE`, report (core § Console Output Style) — printed
 - **The verdict word is derived by `verdict.js`, never asserted in prose** — the driver runs
   every verdict pass and prints its word. Never hand-write the word; a CLEAN row with non-zero
   `survived` records dispositioned findings, never ignored ones.
-- **Close (the CLOSE step).** Apply the spec's Canonical Delta to `docs/canonical/{area}.md`.
-  Fold the deviations sidecar: recurring-shaped entries become one-line Gotchas entries
-  (format per the host Gotchas section's header comment);
-  one-offs go to the spec's Rationale; delete the sidecar. Queue
-  any follow-up the fold or the Rationale surfaces, never leave it narrated: `node
-  "$(spec-paths spec-queue)" add …`, listed under the DONE report's `queued` slot. Follow the
-  driver's printed sidecar listing and hygiene listing before marking `closed`; after the
+- **Close (the CLOSE step).** Step 0, when softs print: one fix worker per soft (via `agentMap`),
+  each returns `fixed` or `debt <reason>` (a soft needing the user's decision is `debt`, never
+  asked); write `sweep.json`, `--mark soft-swept --file <sweep.json>` — debt lands in the spec's
+  Rationale, and `--mark closed` refuses an unswept soft or a fix over the line ceiling. Then
+  apply the spec's Canonical Delta to `docs/canonical/{area}.md`. Fold the deviations sidecar:
+  recurring-shaped entries become one-line Gotchas entries (format per the host Gotchas section's
+  header comment); one-offs go to the spec's Rationale; delete the sidecar. Queue any follow-up
+  needing its own spec or the user's decision, never leave it narrated:
+  `node "$(spec-paths spec-queue)" add …`, listed under the DONE report's `queued` slot. Follow
+  the driver's printed sidecar listing and hygiene listing before marking `closed`; after the
   fold, run `node "$(spec-paths prose-cap)" --file <host pipelineRules> --section Gotchas
   --baseline <the review row's gotchas count>` — exit 1 means evict before the close commit,
-  choosing one of exactly three fates per entry: **delete** (wrong, dead-cited, or
-  mechanized), **merge** (durable truth → `docs/canonical/{area}.md`), or **mechanize** (a
-  recurring class → a script per core § Incident Policy) — record each eviction as one
-  Rationale line. **Dispose every
-  `.claude/agent-memory/` file this spec's diff touched** (carry, correct, or delete) plus what `node "$(spec-paths memory-sweep)"
+  choosing one of exactly three fates per entry: **delete** (wrong, dead-cited, or mechanized),
+  **merge** (durable truth → `docs/canonical/{area}.md`), or **mechanize** (a recurring class →
+  a script per core § Incident Policy) — record each eviction as one Rationale line. **Dispose every `.claude/agent-memory/` file this spec's diff touched** (carry, correct, or delete) plus what `node "$(spec-paths memory-sweep)"
   --root <root> --diff <files>` surfaces; a **carry** stamps `reviewed: YYYY-MM-DD`. Commit
-  everything still uncommitted per the driver's printed instruction for what the close commit
-  includes. Never `--no-verify`.
+  everything uncommitted per the driver's printed close-commit instruction. Never `--no-verify`.
 - **Merge strategy is derived, never asked; non-trivial conflicts always go through
   `AskUserQuestion`** (the MERGE step). Take `merge-back` inspect's `RECOMMEND` (absent or
   contradicted: `merge-commit`, cheapest to reverse), print `📌 Auto-picked <strategy> —

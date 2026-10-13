@@ -70,7 +70,7 @@ test('AC-20260909-04-6: WHEN the driver prints the DISPOSITIONS step for a revie
     step.stdout)
 })
 
-test('AC-20260909-04-7: WHEN --mark reviewer-returned --file carries a soft-only return on green legs THE SYSTEM SHALL exit 0, write marks.dispositions = {waived:0, rejected:0, fixDispatched:0, word:"CLEAN"} to review-state.json, and the next bare invocation SHALL print the CLOSE step with no DISPOSITIONS step ever printed', () => {
+test('AC-20260909-04-7 / AC-20261013-01-10 (SHALL CONTINUE TO): WHEN --mark reviewer-returned --file carries a soft-only return on green legs THE SYSTEM SHALL exit 0, write marks.dispositions = {waived:0, rejected:0, fixDispatched:0, word:"CLEAN"} to review-state.json, and the next bare invocation SHALL print the CLOSE step with no DISPOSITIONS step ever printed', () => {
   const host = makeHost('soft-floor-ac7')
   toReviewer(host)
   const r = run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('soft-floor-ac7-return', SOFT_ONLY_RETURN))

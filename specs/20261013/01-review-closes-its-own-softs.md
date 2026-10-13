@@ -1,6 +1,7 @@
 ---
 date: 2026-10-13
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: review
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 brief: n/a
 spiked: 2026-10-13
 open_markers: 0
+diff_base: c796f0324cf57dd219abc1ae7e10d420dc978bf6
 ---
 
 # Review closes its own soft findings

@@ -1,6 +1,6 @@
 ---
 date: 2026-10-08
-status: implementing
+status: done
 build_base: main
 open_markers: 0
 tier: standard
@@ -174,6 +174,27 @@ scripts' invocation sites; they keep their numbers and lose only their explanati
 **Fragile.** Tests anchor on numbered checks and steps: doctor 6b/11/15/17, replay Phase 1 steps
 1/5/7 and Phase 3, escape step 6. Renumbering is forbidden by D2; a check that shrinks to one line
 keeps its number.
+
+**Build deviations (folded at close, 2026-10-13).**
+- The init.md spike worktree named in What the session does at build step 1 was gone by build
+  time; init's Phase 1/1.5/4/6 deletions followed the fate table text alone.
+- The worker assembled files by whole-file rewrite from the original text rather than in-place
+  deletes; review inspected every added line and found only rejoined wraps and pointer lines
+  (D3 held). One rewrap split the `spec-paths mocks-driver` literal across a line break and
+  reddened `entrypoints.test.js` until rejoined — the reflow trigger the host Gotchas already carry.
+- Report example `report` code blocks were deleted in run, plan, release, replay, enforce,
+  doctor, escape and init; slot names stay in prose. genesis keeps its example because the
+  `- Chain:` pin matches a line-initial bullet only the example carries.
+- genesis.md is 83 lines by `wc -l`, 84 by the test's split count; D6's cap is pinned at the
+  split-count measurement, 84.
+- escape.md Steps 1, 3, 4 and 6 and replay.md Phase 1 steps 1, 4, 5 and 7 lost explanatory
+  clauses read as D2's "explains why" rather than D4-protected procedure; every pin anchor and
+  step 6's three fates and owner-citation rule are verbatim. Review left this as a soft note.
+- BUDGET was set to the measured own + shared load for all fourteen commands (connect unchanged
+  at 70).
+- The review's soft note on the COMMAND_CEILING comment naming the BUDGET formula was fixed at
+  close; its note on escape-row.js's exit-1 clause surviving inside the pointer is left as-is
+  (pre-image text, D2 refusal-adjacent).
 
 ### Pin inventory (A3) — the lock-time blanking spike
 

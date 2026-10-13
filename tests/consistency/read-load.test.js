@@ -36,10 +36,10 @@ const PROSE_CAP = path.join(ROOT, 'spec', 'scripts', 'prose-cap.js')
 // specs/20261008/01-doctrine-states-contracts-and-points-at-its-enforcers.md D7: one entry per
 // command, no flat fallback. connect is held to 22 own + <= 108 shared (D6); the other entries
 // may only shrink.
-// specs/20261008/02-commands-state-their-steps-and-point-at-their-scripts.md D5: each entry is
-// the command's own-file ceiling (lines() formula) plus its current shared-for load; an interim
-// upper bound, then lowered at build to the value measured after the command files were cut
-// (own + shared). The table may only shrink.
+// specs/20261008/02-commands-state-their-steps-and-point-at-their-scripts.md D5: COMMAND_CEILING
+// is each command file's own line count as `wc -l` reads it (wcLines, newline count); BUDGET is
+// own + shared-for load in the lines() formula, measured at build after the command files were
+// cut. Both tables may only shrink.
 const COMMAND_CEILING = {
   init: 270, doctor: 215, enforce: 295, escape: 215, genesis: 85, mocks: 60, plan: 120,
   prototype: 95, queue: 55, release: 175, replay: 190, run: 75, status: 60, connect: 22,

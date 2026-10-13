@@ -124,6 +124,7 @@ function makeCtx({ ledgerRows, briefStatus, specStatus, specRoot }) {
   return {
     briefStatus,
     specStatus,
+    specRoot,
     specExists: relPath => fs.existsSync(path.join(specRoot, relPath)),
     ledgerCount: stage => {
       if (!countCache.has(stage)) countCache.set(stage, ledgerRows.filter(r => r.stage === stage).length)
@@ -184,7 +185,41 @@ function reconcileMissingBriefs(items, onDiskBriefs) {
   return { items: items.concat(inserted), inserted }
 }
 
+// Token set of a free-text prompt: lowercase [a-z0-9]+ runs of length >= 4 (specs/20261013/
+// 02-queue-hygiene.md D1) — short words and punctuation carry no duplicate signal.
+function promptTokens(payload) {
+  const out = new Set()
+  for (const t of String(payload || '').toLowerCase().match(/[a-z0-9]+/g) || []) {
+    if (t.length >= 4) out.add(t)
+  }
+  return out
+}
+
+// |A∩B| / |A∪B| over two Sets; 0 when both are empty.
+function jaccard(a, b) {
+  if (!a.size && !b.size) return 0
+  let inter = 0
+  for (const t of a) if (b.has(t)) inter++
+  return inter / (a.size + b.size - inter)
+}
+
+// D2: the first specs/YYYYMMDD/NN…md path a prompt payload names whose spec is done or
+// superseded (ctx.specStatus), else null. Only prompts cite; briefs and specs never do.
+function citesDoneSpec(item, ctx) {
+  if (!item || item.kind !== 'prompt' || typeof item.payload !== 'string') return null
+  const hit = rel => { const st = ctx.specStatus(rel); return st === 'done' || st === 'superseded' }
+  for (const m of item.payload.matchAll(/specs\/\d{8}\/\d{2}[\w.-]*\.md/g)) if (hit(m[0])) return m[0]
+  // bare `specs/YYYYMMDD/NN` (no more filename) -> the unique on-disk NN-*.md; ambiguous/missing -> no flag
+  for (const m of item.payload.matchAll(/specs\/(\d{8})\/(\d{2})(?![\w.-])/g)) {
+    let names = []
+    try { names = fs.readdirSync(path.join(ctx.specRoot, 'specs', m[1])).filter(n => n.startsWith(m[2] + '-') && n.endsWith('.md')) } catch (_) { /* absent dir */ }
+    if (names.length === 1 && hit(`specs/${m[1]}/${names[0]}`)) return `specs/${m[1]}/${names[0]}`
+  }
+  return null
+}
+
 module.exports = {
   normBrief, isSupersededBriefText, evaluateWhen, isItemDone, isItemReady, makeCtx,
   dedupeItems, stripAutoPlaced, reconcileMissingBriefs,
+  promptTokens, jaccard, citesDoneSpec,
 }

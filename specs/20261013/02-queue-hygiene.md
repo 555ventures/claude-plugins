@@ -1,12 +1,14 @@
 ---
 date: 2026-10-13
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: session-queue
 breaking: false
 depends_on: []
 brief: n/a
 open_markers: 0
+diff_base: 176b35e11eb52b845dea8f1abb58aabe2e24b3d7
 ---
 
 # Queue hygiene: refuse duplicates, show age, archive the done, groom the rest
@@ -36,6 +38,7 @@ handles only what that one cannot prevent.
 | D5 | `spec/commands/queue.md` adds `groom` to the frontmatter `argument-hint` and the subcommand list and extends the Render sentence: for `groom`, propose one fate per flagged item from the printed buckets and ask per item (`AskUserQuestion`, ≤ 4 per call), never ticking without a yes — file stays ≤ 55 lines (AC-20261013-02-8) | The command doctrine is where the session learns the ask-per-item rule (memory: explicit yes per decision); the read-load ceiling forbids growth, so the sentence replaces words |
 | D6 | `spec-queue.js`'s header comment lists `groom`, `--distinct`, the archive file and the new exit-2 causes (near-duplicate prompt, archived ref) [no-ac: header prose; the behaviours are AC-1, AC-5, AC-6] | Worker Rules: every script header is its own contract |
 | D7 | Regression pins: `add` of an already-queued brief still refuses naming its position; N concurrent writers still never corrupt the queue file (AC-20261013-02-10, AC-20261013-02-11). The three tests asserting the exact `list` row string (list form, virtual reconcile, move numbering) are rewritten to carry the age column, their numbering assertions intact (AC-20261013-02-9, AC-20261013-02-12, AC-20261013-02-13) | The archive adds a second write per persist; the atomic-write pin must still hold on the primary file |
+| D9 | Build-time ruling (lock grep missed them — collision-closure seventh trigger, a new side effect): five pre-existing `spec-queue.test.js` pins asserted done/ticked rows stay in `spec-queue.json` after a write. Each is retargeted to read the row from `spec-queue-done.json` (ticked stamp / dedupe / derived-done skip still asserted there), never deleted. The concurrent-writer pin keeps its exit-0, parse and shape asserts on the queue file and replaces `items.length === CONCURRENCY` with: no id appears twice in the queue file and the archive file, when present, parses — row loss in the archive under racing writers is the accepted A5 risk. The `list cuts every row to one line` fixture gets a recent `added` so no `⌛ stale` flag trails the cut. AC-3's item (d) is a virtually reconciled on-disk brief (not queued), matching its `—` id [no-ac: test-side currency; behaviours are AC-3, AC-4, AC-11] | Auto-picked: the File Plan already owns spec-queue.test.js and A5 already accepts archive loss under races; the alternative (keeping done rows in the file) contradicts D3 |
 | D8 | `spec/.claude-plugin/plugin.json` bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` [no-ac: `plugin-bump.js --check` is the oracle] | Version discipline (.claude/rules/spec-pipeline.md § Planning) |
 
 ## File Plan
@@ -166,6 +169,16 @@ the status overlay tests; three existing `list` pins assert the exact row string
 reconcile, move numbering) — the age column is inserted after the id, so all three are planned
 rewrites in `spec-queue.test.js` (AC-9, AC-12, AC-13), numbering assertions kept verbatim. No test pins the `list` footer count or the
 queue file's ticked rows after a write (grepped at lock). Literals leg: none retired.
+
+**Build deviations (folded at close).** The lock grep above was wrong: five pre-existing
+`spec-queue.test.js` pins asserted done/ticked rows stay in the queue file after a write (the
+dedupe, derived-done skip, done-stamp, concurrent-writer and one-line-cut pins). The archive is
+a new side effect on every write — the pipeline rules' known collision class where a Decision
+makes an existing step write something — so the grep should have been for the call (`done`,
+`next`) rather than for the ticked-row literal. D9 records the ruling: each pin reads the archive
+instead, never deleted. Two smaller follow-ons: the concurrent-writer pin reseeds its queue and
+removes the archive at each trial (a second `done` on an archived id is a correct exit 2), and the
+one-line-cut pin's verb-hint regex gained `groom`. One-off; the class is already a Gotchas entry.
 
 ## Canonical Delta
 

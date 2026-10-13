@@ -24,6 +24,14 @@ with no mark or notice. No queue file means the derivation is unchanged. Statuse
 stay derived — the queue stores only ordering, gates, free-text payloads, and done-when
 predicates.
 
+The queue file holds only live rows: every write moves ticked and derived-done items into
+`spec-queue-done.json` beside it (`show` still resolves an archived id). `add` refuses a
+free-text prompt whose token-set Jaccard against any pending prompt is ≥ 0.35 (`--distinct`
+overrides). `list` prints an age column and flags `📎 cites done <spec>`, `⏳ gate met` and
+`⌛ stale` (≥ 14 days, ungated prompt); `groom` prints the same flags in buckets plus
+duplicate pairs and the two fate commands, read-only — the session proposes one fate per item
+and asks per item. (specs/20261013/02-queue-hygiene.md)
+
 The dashboard prints one line directly under the 🗺️ Roadmap block —
 `🧭 misunderstandings: N caught before build (latest <id> at <step>)` — read from
 `design/mocks/ledger.md` via `lib/mocks-ledger.js`; the line is omitted when the ledger is

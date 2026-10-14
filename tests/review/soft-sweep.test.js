@@ -4,7 +4,8 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { read, ROOT, tmpdir } = require('../helpers')
-const { run, stateOf, returnFileWith, makeReplayHost, ledgerRows, CLEAN_RETURN } = require('./review-driver.fixtures')
+const { execFileSync } = require('node:child_process')
+const { run, stateOf, returnFileWith, makeReplayHost, makeHost, ledgerRows, CLEAN_RETURN, SURVIVOR_RETURN, oneFixReturnFile } = require('./review-driver.fixtures')
 
 // specs/20261013/01-review-closes-its-own-softs.md D1-D8 — spec-review-driver.js's CLOSE-step soft
 // sweep, `--mark soft-swept --file`, the unswept-soft and ceiling refusals at `--mark closed`, the
@@ -171,7 +172,7 @@ test('AC-20261013-01-4: WHEN --mark closed runs with a soft in the return and no
 // Drives a host through sweep + close commit with `body` as the sweep and the given tree edit.
 function closeWith(label, sweep, edit) {
   const host = hostAtClose(TWO_SOFT_RETURN, label)
-  const judged = closeRowOf(host).diff.head
+  const judged = readState(host).judgedTree
   const m = mark(host, writeSweep(host, sweep))
   assert.strictEqual(m.status, 0,
     'setup precondition: the sweep mark must be accepted before the ceiling can be measured: ' + m.stdout + m.stderr)
@@ -194,8 +195,9 @@ test('AC-20261013-01-5: WHEN --mark closed follows a sweep with a fixed soft THE
   assert.match(over.r.stderr, /soft sweep over ceiling/, 'AC-20261013-01-5: the refusal must carry the fixed phrase the doctrine and session key on: ' + over.r.stderr)
   assert.match(over.r.stderr, /\b61\b/, 'AC-20261013-01-5: the refusal must state the measured count: ' + over.r.stderr)
   assert.match(over.r.stderr, /\b60\b/, 'AC-20261013-01-5: the refusal must state the ceiling: ' + over.r.stderr)
+  assert.match(String(over.judged), /^[0-9a-f]{40}$/, 'the close-row append must pin the judged tree sha in review-state.json')
   assert.ok(over.r.stderr.includes('git checkout ' + over.judged.slice(0, 7)) && /-- src\/foo\.js/.test(over.r.stderr),
-    'AC-20261013-01-5: the refusal must name the revert command for the oversized file so the session can recover: ' + over.r.stderr)
+    'AC-20261013-01-5: the refusal must name the revert command (against the judged tree) for the oversized file so the session can recover: ' + over.r.stderr)
 
   const at = closeWith('c60', FIXED_AND_DEBT, prependFoo(60))
   assert.strictEqual(at.r.status, 0,
@@ -212,6 +214,45 @@ test('AC-20261013-01-5: WHEN --mark closed follows a sweep with a fixed soft THE
   const none = closeWith('c0', ALL_DEBT, prependFoo(61))
   assert.strictEqual(none.r.status, 0,
     'AC-20261013-01-5: a sweep that fixed nothing runs no measurement — the ceiling bounds fixes, not unrelated close-commit content: ' + none.r.stdout + none.r.stderr)
+})
+
+// Incident (shop-bltr 20261007/05, 2026-10-14): the fix-delta pass judges the working tree, so a
+// hard fix the session commits only at close sat between the close row's HEAD and the close
+// commit and was counted toward the soft-sweep ceiling (127 lines vs 60). The ceiling now diffs
+// against the tree the legs actually judged.
+test('incident 2026-10-14: WHEN a 70-line hard fix is left uncommitted through fix-applied and committed only with the close THE SYSTEM SHALL measure the soft-sweep ceiling against the judged tree, not HEAD, and accept --mark closed', () => {
+  const host = makeHost()
+  const g = (...a) => execFileSync('git', ['-C', host.root, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { encoding: 'utf8' })
+  run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', 'setup: a green-legs fixture must reach REVIEWER')
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('judged-tree-ret1', SURVIVOR_RETURN))
+  const dispR = run(host.root, host.spec, '--mark', 'dispositions', '--file', oneFixReturnFile('judged-tree-disp', 's0'),
+    '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+  assert.strictEqual(stateOf(host.root, host.spec), 'FIX', 'setup: dispatching a fix for the hard survivor must land FIX: ' + dispR.stdout + dispR.stderr)
+
+  // The hard fix: 70 lines, written by workers, NOT committed (the Worker Git Ban — the session commits later).
+  const foo = path.join(host.root, 'src/foo.js')
+  fs.writeFileSync(foo, commentLines(70) + fs.readFileSync(foo, 'utf8'))
+  const fixR = run(host.root, host.spec, '--mark', 'fix-applied')
+  assert.strictEqual(fixR.status, 0, 'setup: fix-applied over the uncommitted fix must be accepted: ' + fixR.stdout + fixR.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', 'setup: fix-applied must return to REVIEWER for the fix-delta pass')
+
+  const r2 = run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('judged-tree-ret2', TWO_SOFT_RETURN))
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE', 'setup: a soft-only fix-delta return must land CLOSE: ' + r2.stdout + r2.stderr)
+  const state = readState(host)
+  assert.match(String(state.judgedTree), /^[0-9a-f]{40}$/, 'the close-row append must pin the judged tree sha')
+  assert.notStrictEqual(state.judgedTree, closeRowOf(host).diff.head,
+    'with the fix uncommitted the judged tree cannot equal the HEAD commit the close row records — that equality is the incident')
+
+  const m = mark(host, writeSweep(host, FIXED_AND_DEBT))
+  assert.strictEqual(m.status, 0, 'setup: the sweep mark must be accepted: ' + m.stdout + m.stderr)
+  fs.writeFileSync(foo, commentLines(5) + fs.readFileSync(foo, 'utf8')) // the 5-line soft fix
+  g('add', '-A')
+  g('commit', '-q', '-m', 'close + hard fix')
+  const closed = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(closed.status, 0,
+    'the 70 reviewed hard-fix lines must not count toward the 60-line soft-sweep ceiling — only the 5 sweep lines do: ' + closed.stdout + closed.stderr)
+  assert.doesNotMatch(closed.stderr, /soft sweep over ceiling/, 'the ceiling must measure against the judged tree, not HEAD: ' + closed.stderr)
 })
 
 test('AC-20261013-01-5: WHEN the close commit deletes a committed deviations sidecar over 60 lines THE SYSTEM SHALL not count that deletion toward the soft sweep ceiling and SHALL accept --mark closed', () => {

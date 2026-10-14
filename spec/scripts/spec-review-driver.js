@@ -1116,6 +1116,13 @@ function doCloseWork(n) {
   appendLedger(lines[1])
   // D1: best-effort — never blocks the close (AC-20260913-01-2).
   writeReviewRef(runId, 'judged', row.diff.head)
+  // Incident (shop-bltr 20261007/05, 2026-10-14): the legs judge the WORKING tree — a fix-delta
+  // pass runs over fixes the session has not committed yet (snapshotTree(), never a commit) — but
+  // the close row's diff.head is HEAD. The soft-sweep ceiling measured judged-HEAD..close-commit,
+  // so every reviewed-but-uncommitted hard fix was counted as sweep lines (127 vs 60 there). The
+  // judged tree is pinned here, at the same moment the row lands, as a tree sha the ceiling diffs
+  // against instead; diff.head and the judged ref keep their commit meaning for replay.
+  marks.judgedTree = snapshotTree()
 
   const newSpecText = specText.replace(/^status:\s*.*$/m, 'status: done')
   const stampedText = stampDiffBaseIfAbsent(newSpecText)
@@ -1853,10 +1860,13 @@ function judgedSha() {
     'refs/spec-review/' + marks.closeRunId + '/judged) — the soft sweep ceiling cannot be measured; restore the ledger row')
 }
 
-// D5: the committed close tree against the judged sha, minus the files CLOSE itself writes.
+// D5: the committed close tree against the judged tree, minus the files CLOSE itself writes. The
+// judged tree is the working-tree snapshot taken at the close-row append (marks.judgedTree) — the
+// exact tree the authoritative legs ran over; a sidecar older than that mark falls back to the
+// close row's diff.head commit.
 function refuseOverSweepCeiling() {
   if (!marks.softSweep || !(marks.softSweep.fixed >= 1)) return
-  const sha = judgedSha()
+  const sha = (SHA40_RE.test(marks.judgedTree || '') && marks.judgedTree) || judgedSha()
   const excludes = [specRel, 'docs/canonical/', '.claude/spec-runs.jsonl', '.claude/spec-runs/', sidecarRel,
     path.relative(repoRoot, deviationsPath), '.claude/agent-memory/']
   if (pipelineRulesPath) excludes.push(path.relative(repoRoot, pipelineRulesPath))

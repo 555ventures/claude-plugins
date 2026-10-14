@@ -32,23 +32,41 @@ EOF
 )"
 ```
 
-## Step 3: Escape Check (fix commits only, skippable)
+## Step 3: Escape or Fix Row (fix commits only, skippable)
 
 Runs only when `.claude/spec-runs.jsonl` exists at repo root **and** the commit is plausibly
-a defect fix — the user said so, or the subject's conventional type is `fix`/`hotfix` —
-otherwise skip with zero output.
+a defect fix — the user said so, the invoker is `/spec:fix`, or the subject's conventional
+type is `fix`/`hotfix` — otherwise skip with zero output.
 
 1. Run `node "$(spec-paths commit-coverage)" --root . --commit HEAD --json`. A non-zero
    exit prints one `⚠️` line naming the exit code and skips the check — never blocks.
-2. `offer: false` (or, when the user called it a fix, `landed` empty) → skip silently: no
-   touched file was landed by a spec whose review closed before this commit.
-3. Otherwise offer once via `AskUserQuestion` (skippable, never blocking the commit): record a
-   `/spec:escape` row for the defect this commit fixes? Name `landed[0].specs[0].spec` and its
-   `reviewRunId`, the count of landed files, and the count of distinct landing specs (when
-   more than one, say `/spec:escape` will derive the spec and print it for veto). Question style: plain
-   language, self-contained, consequences per option, recommended pick first.
-4. Yes → run `/spec:escape <that spec path>` (it owns the row schema; tell it the invocation
-   is commit-driven so the row carries `via:"commit"`). No → proceed silently.
+2. `offer: false` (or, when the user called it a fix, `landed` empty) **and the invoker is not
+   `/spec:fix`** → skip silently: no touched file was landed by a spec whose review closed
+   before this commit, and nothing asked for a fix row.
+3. Otherwise ask once via `AskUserQuestion` (skippable, never blocking the commit) which row
+   this commit earns — recommended pick first, consequences per option, plain language:
+   - **Escape of `<spec>`** (only when `landed` is non-empty; recommended whenever offered —
+     the escape ledger is ground truth, core § Feedback Loop): the defect lived in lines that
+     spec's review (`reviewRunId`) passed. Name
+     `landed[0].specs[0].spec`, the count of landed files and of distinct landing specs (more
+     than one → say `/spec:escape` will derive the spec and print it for veto).
+   - **Fix row** (recommended when `landed` is empty and the invoker is `/spec:fix`): the defect
+     was not that spec's, or no spec landed these files — record this commit as a Direct-lane
+     repair instead of charging it to a spec that merely touched the files.
+   - **Neither**.
+4. Escape → run `/spec:escape <that spec path>` (it owns the row schema; tell it the invocation
+   is commit-driven so the row carries `via:"commit"`). Fix row → append exactly ONE line to
+   `.claude/spec-runs.jsonl` (`printf '%s\n' '<json>' >>`), paths/enums/booleans only — the
+   root cause lives in the commit body the sha resolves to, never in the row:
+
+   ```
+   {"ts":"<ISO-8601>","stage":"fix","sha":"<HEAD 40-hex>","files":["<repo-relative path>",…],"reviewed":true|false,"via":"spec-fix"|"commit"}
+   ```
+
+   `files` is `git show --name-only --format= HEAD` minus the ledger itself; `via` is `spec-fix`
+   when this session's `/spec:fix` invoked the commit, else `commit`; `reviewed` is true only when
+   that invocation said its reviewer step completed — nothing said means `commit` and `false`.
+   The line stays uncommitted until the next commit, like an escape row. Neither → proceed silently.
 
 ## Step 4: Report
 
@@ -80,9 +98,9 @@ Next: /git:merge — land it on main
 ## NON-NEGOTIABLE RULES
 
 1. **`git add -A` is MANDATORY** — add ALL changes regardless of relevance to previous work
-2. **Only 2 approval prompts for the commit itself** — parallel info-gathering, then commit; Step 3's `AskUserQuestion` is additional, skippable, and only fires on fix-typed commits
+2. **Only 2 approval prompts for the commit itself** — parallel info-gathering, then commit; Step 3's `AskUserQuestion` is additional, skippable, and only fires on fix-typed (or `/spec:fix`-invoked) commits
 3. **Never selectively stage** unless user explicitly requests it
 4. **No post-commit status check** — reduces unnecessary approval
 5. **Warn about sensitive files** (.env, credentials) but still stage them
 6. **Never touch worktrees** — do not unstage, reset, rm, or modify anything under `.claude/worktrees/`
-7. **Escape check never slows non-fix commits** — gated on a fix-typed subject (or the user calling it a fix) AND ledger presence; both absent means zero cost
+7. **The escape/fix-row check never slows non-fix commits** — gated on a fix-typed subject (or the user calling it a fix, or a `/spec:fix` invoker) AND ledger presence; absent both, zero cost

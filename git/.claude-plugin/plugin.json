@@ -1,7 +1,7 @@
 {
   "name": "git",
-  "version": "1.9.0",
-  "description": "Git helpers: a fast add-all-and-commit flow, a guided merge with conflict repair and worktree cleanup, and idempotent per-spec worktree entry. Changelog (last 3): 1.9.0 — /git:merge refuses proto/* naming the prototype's behaviour contract (design/prototypes/<stem>/contract.json) and /spec:plan as the next step; the harden/* refusal is gone (specs/20261007/01 D10). 1.8.0 — enter-worktree no longer runs host setup by hand: merge-back create owns it, plus a committed-spec check through --spec. 1.7.0 — Commit's escape offer says /spec:escape derives the spec and prints it for veto; the three commands' report-contract citations point at core.md instead of the retired shared.md.",
+  "version": "1.10.0",
+  "description": "Git helpers: a fast add-all-and-commit flow, a guided merge with conflict repair and worktree cleanup, and idempotent per-spec worktree entry. Changelog (last 3): 1.10.0 — Commit's step 3 asks which row a fix commit earns: an escape of the spec whose review passed the lines, or a stage:\"fix\" row naming this commit's sha and files for a Direct-lane repair (recommended when /spec:fix invoked it); fix commits that no spec landed get the fix-row offer only when /spec:fix is the invoker. 1.9.0 — /git:merge refuses proto/* naming the prototype's behaviour contract (design/prototypes/<stem>/contract.json) and /spec:plan as the next step; the harden/* refusal is gone (specs/20261007/01 D10). 1.8.0 — enter-worktree no longer runs host setup by hand: merge-back create owns it, plus a committed-spec check through --spec.",
   "author": {
     "name": "JJ",
     "email": "jj@555.ventures"

@@ -316,7 +316,7 @@ test('shared-for: every mapped section name still exists as a core.md or design.
 // lists are unchanged from the pre-image.
 test('shared-for: scoped output carries its sections (AC-20260926-01-6) and is smaller than the full doc, and the retired stage/sketch keys fall open to it (incl. AC-20260820-05-17: escape keeps serving Incident Policy; AC-20260823-01-19: release keeps Release Stage/Runtime Verification and drops Feedback Loop; AC-20260912-03-13: design, build and review print the fail-open whole doctrine)', () => {
   const full = run('shared-for', 'no-such-command')
-  for (const cmd of ['plan', 'release', 'enforce', 'escape', 'doctor', 'replay', 'queue']) {
+  for (const cmd of ['plan', 'release', 'enforce', 'escape', 'doctor', 'replay', 'queue', 'fix']) {
     const out = run('shared-for', cmd)
     assert.ok(out.length < full.length, cmd + ' output should be a strict subset')
     assert.match(out, /## Host Grounding/, cmd + ' must keep Host Grounding')
@@ -621,7 +621,7 @@ test('shared-for init: scoped (not fail-open) and strictly smaller than the whol
 // exists to find zero occurrences of elsewhere.
 const RUN_DESIGN_KEY = 'run-' + 'design'
 
-test('shared-for: every scoped command serves § Session Execution (AC-20260926-01-5; AC-20260928-01-2 adds prototype), and the scoped roster has exactly 14 members (AC-20261008-01-1: connect joins) with neither sketch nor the design-only-delta key among them', () => {
+test('shared-for: every scoped command serves § Session Execution (AC-20260926-01-5; AC-20260928-01-2 adds prototype), and the scoped roster has exactly 15 members (AC-20261008-01-1: connect joins; /spec:fix joins) with neither sketch nor the design-only-delta key among them', () => {
   const src = read('spec/bin/spec-paths')
   const cmds = [...src.matchAll(/^\s+([a-z-]+)\)\s+SECTIONS="/gm)].map(m => m[1])
   assert.ok(!cmds.includes('sketch'),
@@ -630,9 +630,11 @@ test('shared-for: every scoped command serves § Session Execution (AC-20260926-
   assert.ok(!cmds.includes(RUN_DESIGN_KEY),
     'AC-20260926-01-5/D1: the scoped roster must not include the design-only-delta key — its ' +
     'SECTIONS arm is deleted, falling open to the whole doctrine like every unknown command: ' + cmds.join(','))
-  assert.strictEqual(cmds.length, 14,
-    'AC-20260926-01-5 + AC-20260928-01-2: with the sketch and design-only-delta arms deleted and the prototype arm added, exactly 14 scoped (connect joins, AC-20261008-01-1) ' +
+  assert.strictEqual(cmds.length, 15,
+    'AC-20260926-01-5 + AC-20260928-01-2: with the sketch and design-only-delta arms deleted and the prototype arm added, exactly 15 scoped (connect joins, AC-20261008-01-1; fix joins, spec/commands/fix.md) ' +
     'command arms (A1, executed at lock) — got ' + cmds.length + ': ' + cmds.join(','))
+  assert.ok(cmds.includes('fix'),
+    'spec/commands/fix.md: the scoped roster must include "fix" — otherwise /spec:fix loads both whole doctrine files instead of its nine sections')
   assert.ok(cmds.includes('connect'),
     'AC-20261008-01-1/D6: the scoped roster must include "connect" — otherwise /spec:connect loads both whole doctrine files')
   for (const cmd of cmds) {

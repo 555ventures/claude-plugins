@@ -547,7 +547,7 @@ function computeCleanByVia(reposList) {
 // failure increments a named reason bucket. Unparseable lines are counted separately (per
 // repo, at parse time) and never reach this classifier.
 
-const STAGES = new Set(['plan', 'build', 'review', 'escape', 'escape-class', 'replay', 'observe', 'release', 'prototype'])
+const STAGES = new Set(['plan', 'build', 'review', 'escape', 'escape-class', 'replay', 'observe', 'release', 'prototype', 'fix'])
 const SPEC_STAGES = new Set(['plan', 'build', 'review', 'escape', 'escape-class', 'replay'])
 const TIERS = new Set(['standard', 'critical'])
 
@@ -566,6 +566,9 @@ function classifyRow(r, { amendments, escapeKeys }) {
   if (stageOk && SPEC_STAGES.has(r.stage) && typeof r.spec !== 'string') reasons.push('missing-spec')
   if (r.tier !== undefined && !TIERS.has(r.tier)) reasons.push('pre-v7-tier')
   if (r.stage === 'review' && typeof r.verdict !== 'string') reasons.push('review-missing-verdict')
+  // A fix row (written by /git:commit step 3 for a Direct-lane repair) points at its commit, never
+  // at a spec: the sha is the only thing a later escape on the same files can join against.
+  if (r.stage === 'fix' && !(typeof r.sha === 'string' && /^[0-9a-f]{40}$/.test(r.sha))) reasons.push('fix-missing-sha')
   if (r.stage === 'escape') {
     const amended = amendments.has(escapeKey(r))
     reasons.push(...validateEscapeRow(r, { amended }))

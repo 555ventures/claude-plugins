@@ -202,7 +202,8 @@
       "git/commands/enter-worktree.md",
       "git/commands/merge.md",
       "git/commands/commit.md",
-      "spec/doctrine/core.md"
+      "spec/doctrine/core.md",
+      "spec/commands/fix.md"
     ]
   },
   "spec/scripts/review-legs.js": {
@@ -267,7 +268,8 @@
       "spec/doctrine/stages/stage-build.md",
       "spec/scripts/spec-review-driver.js",
       "spec/scripts/spec-build-driver.js",
-      "spec/doctrine/core.md"
+      "spec/doctrine/core.md",
+      "spec/commands/fix.md"
     ]
   },
   "spec/scripts/coverage-scope.js": {

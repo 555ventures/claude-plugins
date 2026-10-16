@@ -53,6 +53,11 @@
       "git/commands/commit.md"
     ]
   },
+  "spec/scripts/decision-lint.js": {
+    "entryPoints": [
+      "spec/commands/plan.md"
+    ]
+  },
   "spec/scripts/design-contract-check.js": {
     "entryPoints": [
       "spec/commands/doctor.md",

@@ -30,7 +30,11 @@ depends_on: []
 <!-- Carrier contract (specs/20260817/07-promise-sweep-leg.md D8; enforced by promise-sweep.js
      at plan lock and in every review): every row cites ≥1 of this spec's own AC-IDs — the AC
      whose test goes red if the decision is unimplemented — or carries `[no-ac: <reason>]` for
-     a row with no testable surface. An empty reason ([no-ac: ]) does not count as a sanction. -->
+     a row with no testable surface. An empty reason ([no-ac: ]) does not count as a sanction.
+     A row that withholds an affordance from a user (cannot edit/delete/undo/restore, write-once,
+     immutable, `only a <Role> may`, requires a reason) carries `[guards: <text from the host
+     rules § Risk Tiers>]` or `[asked: <what the user chose>]`; a row that defers work carries
+     the queue id from `spec-queue add`. Enforced by decision-lint.js at plan lock. -->
 
 | ID | Decision | One-line rationale |
 |----|----------|--------------------|

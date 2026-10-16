@@ -1,6 +1,6 @@
 ---
 date: 2026-10-16
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: plan-lock
@@ -42,7 +42,7 @@ and the plan ledger row records its counts.
 | D5 | **Output.** Plain stdout: one line `decision-lint: restrictions=<R> deferrals=<F> findings=<N>` where R and F count matched live rows (justified or not) and N counts findings; findings print to stdout one per line as `  <class> <Dn>: <detail>`. `--json` prints `{"findings":[{severity:"hard",class,id,detail}],"counts":{"restrictions":R,"deferrals":F}}`. No manifest append, no report rendering. (AC-20261016-01-9) | R and F are the removability numbers (Rationale): the plan ledger row copies them, so "zero lock-time matches over the last 20 plan rows" is a ledger query. |
 | D6 | `spec/bin/spec-paths` gains the key `decision-lint` → `scripts/decision-lint.js`, listed in the usage string. (AC-20261016-01-10) | Every bundled script resolves through spec-paths; a missing key breaks the lock line silently (host rules § Risk Tiers, spec-paths). |
 | D7 | `spec/commands/plan.md` Lock step 2 adds, after the promise-sweep sentence: run `node "$(spec-paths decision-lint)" --spec {spec path} --root .` and resolve every finding by tagging the row (`[guards: <§ Risk Tiers text>]` or `[asked: <what the user chose>]` for a restriction; a `q<id>` from `spec-queue add` for a deferral) — zero findings to lock. Step 3's ledger row gains `"decisionLint":{"restrictions":R,"deferrals":F}` copied from the script's stdout counts. [no-ac: command prose; the behaviour it invokes is pinned by AC-20261016-01-1…9] | A lock check that the lock step never runs is decoration; the ledger field is the only way the removability question (Rationale) gets a count. |
-| D8 | `spec/templates/spec.md`'s Decisions carrier comment gains two sentences: a row that withholds an affordance from a user (cannot edit/delete/undo/restore, write-once, immutable, `only a <Role> may`, requires a reason) carries `[guards: <text from the host rules § Risk Tiers>]` or `[asked: <what the user chose>]`; a row that defers work carries the queue id from `spec-queue add`. Enforced by `decision-lint.js` at plan lock. [no-ac: template prose; the markers' semantics are pinned by AC-20261016-01-2…6] | Planners write from the template, not from doctrine; one comment line is the whole discoverability surface. No doctrine prose is added anywhere (core § Doctrine Authoring). |
+| D8 | `spec/templates/spec.md`'s Decisions carrier comment gains two sentences: a row that withholds an affordance from a user (the restriction vocabulary in Contracts' `RESTRICT_RE`) carries a guards tag naming text from the host rules § Risk Tiers, or an asked tag recording what the user chose; a row that defers work carries the queue id from `spec-queue add`. Enforced by `decision-lint.js` at plan lock. [no-ac: template prose; the markers' semantics are pinned by AC-20261016-01-2…6] | Planners write from the template, not from doctrine; one comment line is the whole discoverability surface. No doctrine prose is added anywhere (core § Doctrine Authoring). |
 | D9 | No review leg, no reviewer or disposer change, no host config key, no grounding-contract edit. [no-ac: an absence; the File Plan lists no such file] | The reviewer checks conformance to the spec (agents/reviewer.md); a wrong spec is caught at lock, where it is cheapest. Research 2026-10-16: every published spec gate is structural, so the check's home at authoring time is the field's own seam. |
 | D10 | Plugin version: `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` run by the build orchestrator at the version-bump row. [no-ac: version discipline; `plugin-bump --check` in the gate (tests/consistency/plugin-bump.test.js) is the oracle] | Host rules § Planning, version bump discipline. |
 | D12 | `spec/entrypoints.json` gains the row `"spec/scripts/decision-lint.js": {"entryPoints": ["spec/commands/plan.md"]}`. [no-ac: exhaustive live-file pin; tests/consistency/entrypoints.test.js reddens on the orphan until the row lands] | A shipped script with zero declared callers is the orphan class that test exists to catch; one caller, the lock step. |
@@ -104,8 +104,8 @@ Plan ledger row (plan.md step 3) gains one field:
   `[guards: Money]`; `[guards: provenance]` matches nothing in a host that never wrote it.
 - `[asked: …]` is an attestation; the script verifies only non-emptiness. The lock step's
   AskUserQuestion is the human path; the tag records its outcome in the row.
-- The deferral check spawns spec-queue.js once per distinct cited id; a row citing two ids
-  where one is dead reports one `dead-queue-id` and is still `untracked` only if no id resolved.
+- The deferral check spawns spec-queue.js once per distinct cited id; each id that does not
+  resolve reports its own `dead-queue-id`, and `untracked-deferral` fires only on a row citing no id.
 
 ## Acceptance Criteria
 

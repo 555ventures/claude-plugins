@@ -1,12 +1,14 @@
 ---
 date: 2026-10-16
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: plan-lock
 breaking: false
 depends_on: []
 brief: n/a
 open_markers: 0
+diff_base: 35c25cbaebc51e4bc1efcc11a8aec87eb26b4e46
 ---
 
 # Lock refuses unjustified restrictions and untracked deferrals

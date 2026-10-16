@@ -110,6 +110,10 @@
 // identical-literal shape this module's own history (see the header notes above) exists to remove.
 const V7_APPLIES_FROM = '20260817'
 
+// specs/20261016/01-lock-refuses-unjustified-restrictions.md D4: the date decision-lint.js starts
+// applying; an earlier-dated spec exits 0 not-applicable instead of producing bulk findings.
+const DECISION_LINT_APPLIES_FROM = '20261016'
+
 // specs/20260911/04-every-criterion-declares-its-test.md D1/D2: the disposition-grammar floor —
 // the date this AC bullet's `→ writes|rewrites|reuses` trailing-pointer grammar shipped. Shared
 // with ac-matrix.js's `--lint` gate (D3) so the floor is one literal, not a second copy.
@@ -419,5 +423,5 @@ function parseAcBullets(sectionText) {
 module.exports = {
   AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, V7_APPLIES_FROM, extractSection, parseAcBullets,
   acIdOccurs, rejectedTrailingTagDetail, extractTag, normalizeForPinCheck, pinShape,
-  DISPOSITION_APPLIES_FROM, parseDisposition,
+  DISPOSITION_APPLIES_FROM, parseDisposition, DECISION_LINT_APPLIES_FROM,
 }

@@ -136,7 +136,7 @@ test('AC-20260926-03-8: spec-paths workspace-scan resolves to spec/scripts/works
 // bundled keys — `walkthrough` (the one script that talks to the review service) and
 // `walkthrough-contract` / `walkthrough-catalog` (the two plain-JSON files both repositories test
 // against) — folded into this same test, with the usage string naming all three.
-test('AC-20260926-03-8: every documented key resolves to an existing path (AC-20260928-01-2; AC-20260929-01-18; AC-20261002-01-15; AC-20261005-06-18)', () => {
+test('AC-20260926-03-8: every documented key resolves to an existing path (AC-20260928-01-2; AC-20260929-01-18; AC-20261002-01-15; AC-20261005-06-18; AC-20261016-01-10)', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-enforce',
     'wf-research', 'merge-back',
@@ -146,7 +146,7 @@ test('AC-20260926-03-8: every documented key resolves to an existing path (AC-20
     'worktree-include', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract',
     'design-contract-check', 'design-rules-template', 'workspace-scan',
     'catalog-inventory', 'design-brief-template', 'design-paths-template', 'prototype-driver',
-    'walkthrough', 'walkthrough-contract', 'walkthrough-catalog', 'pictures']) {
+    'walkthrough', 'walkthrough-contract', 'walkthrough-catalog', 'pictures', 'decision-lint']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }
@@ -157,6 +157,8 @@ test('AC-20260926-03-8: every documented key resolves to an existing path (AC-20
       'AC-20260929-01-18/D13: `spec-paths ' + key + '` must print a path ending ' + tail + ' — a wrong key sends the wireframe ' +
       'client or its contract check to the wrong file silently: ' + run(key).trim())
   }
+  assert.ok(run('decision-lint').trim().endsWith('scripts/decision-lint.js'),
+    'AC-20261016-01-10: `spec-paths decision-lint` must print a path ending scripts/decision-lint.js — a wrong key breaks the plan lock line silently: ' + run('decision-lint').trim())
   const { spawnSync } = require('node:child_process')
   const usage = spawnSync('bash', [BIN, 'no-such-key-xyz'], { encoding: 'utf8' }).stderr
   assert.ok(run('pictures').trim().endsWith('scripts/pictures.js'),

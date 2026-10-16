@@ -65,32 +65,32 @@ Write the spec per the template. `status: draft`. While drafting:
 1. **Marker sweep:** `grep -n "NEEDS CLARIFICATION" {spec path}`. Resolve every live hit
    (ask or explore; delete the marker, record the ruling in Decisions), then write
    `open_markers: N` into frontmatter (0 to lock).
-2. **Confirm:** run `node "$(spec-paths ac-matrix)" --spec {spec path} --lint --resolve-root .`
-   first — zero findings to lock (`node "$(spec-paths count-tests)" --root . --titles [--file <rel>]`
-   is the reference lookup for `unresolved-disposition`). Then:
-   zero open forks; every shape-triggered micro-spike executed with evidence
-   in Assumptions; every Goal promise traced to a Decision that delivers it and an AC that
-   goes red in its absence — run `node "$(spec-paths promise-sweep)" --spec {spec path}`
-   (no `--manifest`) and resolve every `orphan-decision` finding by citing the delivering
-   AC in the row or recording `[no-ac: <reason>]`; zero orphans to lock. A Decision that
-   retires or narrows prose elsewhere runs
-   `node "$(spec-paths collision-closure)" --spec {spec path} --root . --literal <stem>…`
-   and enumerates every literals-leg hit in the File Plan as fix or recorded waive.
-   Work discovered this session that needs its own spec → write the roadmap brief now; if it
-   must run before the current work, `node "$(spec-paths spec-queue)" add NN --top`; any
-   follow-up that must wait for this spec →
+2. **Confirm:** run `node "$(spec-paths ac-matrix)" --spec {spec path} --lint --resolve-root .` first — zero findings
+   to lock (`node "$(spec-paths count-tests)" --root . --titles [--file <rel>]` is the reference lookup for
+   `unresolved-disposition`). Then: zero open forks; every shape-triggered micro-spike executed with evidence in
+   Assumptions; every Goal promise traced to a Decision that delivers it and an AC that goes red in its absence — run
+   `node "$(spec-paths promise-sweep)" --spec {spec path}` (no `--manifest`), resolving every `orphan-decision` finding
+   by citing the delivering AC in the row or recording `[no-ac: <reason>]`; zero orphans to lock. Then run
+   `node "$(spec-paths decision-lint)" --spec {spec path} --root .`, resolving every finding by tagging the row —
+   `[guards: <§ Risk Tiers text>]` or `[asked: <what the user chose>]` for a restriction, a `q<id>` from
+   `spec-queue add` for a deferral; zero findings to lock. A Decision that retires or narrows prose elsewhere runs
+   `node "$(spec-paths collision-closure)" --spec {spec path} --root . --literal <stem>…` and enumerates every
+   literals-leg hit in the File Plan as fix or recorded waive. Work discovered this session that needs its own spec →
+   write the roadmap brief now; if it must run before the current work,
+   `node "$(spec-paths spec-queue)" add NN --top`; any follow-up that must wait for this spec →
    `node "$(spec-paths spec-queue)" add "<paste-ready action>" --after-spec {spec path}`.
 3. **Ledger row:** append exactly ONE row to `.claude/spec-runs.jsonl` (repo root;
-   `printf '%s\n' '<json>' >>`), before the status flip: `spikes` = the count of executed
-   micro-spikes; `promiseSweep` = step 2's `promise-sweep.js` printed counters copied verbatim;
-   `acLint` = `{"mixed":N}` from step 2's FIRST `ac-matrix --lint` run; `collisions` = `{hits,
-   waived}` from step 2's `collision-closure.js` run, omitted when no Decision triggered that
-   sweep. Numbers, enums, and paths only:
+   `printf '%s\n' '<json>' >>`), before the status flip: `spikes` = executed micro-spikes;
+   `promiseSweep` = step 2's `promise-sweep.js` printed counters copied verbatim; `acLint` =
+   `{"mixed":N}` from step 2's FIRST `ac-matrix --lint` run; `collisions` = `{hits, waived}` from
+   `collision-closure.js`, omitted when no Decision triggered it; `decisionLint` =
+   `{restrictions,deferrals}` from `decision-lint.js`'s stdout. Numbers, enums, paths only:
 
    ```
    {"ts":"<ISO-8601>","stage":"plan","spec":"<repo-relative spec path>","tier":"<tier>",
     "brief":"NN"|"n/a","spikes":N,"promiseSweep":{"rows":N,"carried":N,"sanctioned":N,
-    "orphans":0},"acLint":{"mixed":N},"collisions":{"hits":N,"waived":N},"verdict":"locked"}
+    "orphans":0},"acLint":{"mixed":N},"collisions":{"hits":N,"waived":N},
+    "decisionLint":{"restrictions":N,"deferrals":N},"verdict":"locked"}
    ```
 
 4. Flip `status: draft → hardened`.

@@ -746,6 +746,19 @@ function snapshotTree() {
     // pathspec is carried only when the sidecar is NOT already ignored.
     const ignoredR = runChild('git', ['-C', repoRoot, 'check-ignore', '-q', sidecarRel],
       { encoding: 'utf8' }, 'git check-ignore (sidecar already ignored?)')
+    // Seeded from HEAD: against an empty index a tracked-but-gitignored file (a committed
+    // .claude/settings.local.json, an older committed *.review/ folder) reads as untracked and
+    // ignored, so `add -A` drops it and every diff against the snapshot counts it as deleted.
+    const seedR = runChild('git', ['-C', repoRoot, 'read-tree', 'HEAD'], { encoding: 'utf8', env },
+      'git read-tree HEAD (seed the scratch index)')
+    if (seedR.status !== 0) {
+      die('git read-tree HEAD into a scratch index failed (exit ' + seedR.status + '): ' +
+        (seedR.stderr || seedR.stdout).trim())
+    }
+    // A sidecar committed in HEAD would ride in on the seed, and an ignored sidecar carries no
+    // exclude pathspec — drop it so the driver's own writes never appear in a delta.
+    runChild('git', ['-C', repoRoot, 'rm', '--cached', '-r', '-q', '--ignore-unmatch', '--', sidecarRel],
+      { encoding: 'utf8', env }, 'git rm --cached (sidecar out of the scratch index)')
     const addArgs = ['-C', repoRoot, 'add', '-A', '--', '.']
     if (ignoredR.status !== 0) addArgs.push(':(exclude)' + sidecarRel)
     const addR = runChild('git', addArgs,

@@ -255,6 +255,27 @@ test('incident 2026-10-14: WHEN a 70-line hard fix is left uncommitted through f
   assert.doesNotMatch(closed.stderr, /soft sweep over ceiling/, 'the ceiling must measure against the judged tree, not HEAD: ' + closed.stderr)
 })
 
+// The judged-tree snapshot started from an empty scratch index, so a tracked file matching
+// .gitignore was dropped from it and the ceiling counted its every line as a sweep change.
+test('fix: WHEN the host tracks a gitignored file over 60 lines THE SYSTEM SHALL keep it in the judged tree snapshot and accept --mark closed after a one-line sweep', () => {
+  // The planned file itself is padded past the ceiling and ignored through info/exclude, so the
+  // reconcile leg sees no out-of-plan file.
+  const host = hostAtClose(TWO_SOFT_RETURN, 'tracked-ignored', (h) => {
+    const f = path.join(h.root, 'src/foo.js')
+    fs.writeFileSync(f, commentLines(80) + fs.readFileSync(f, 'utf8'))
+    h.g('add', '-A'); h.g('commit', '-q', '-m', 'pad')
+    fs.appendFileSync(path.join(h.root, '.git/info/exclude'), 'src/foo.js\n')
+  })
+  const m = mark(host, writeSweep(host, FIXED_AND_DEBT))
+  assert.strictEqual(m.status, 0, 'setup precondition: the sweep mark must be accepted: ' + m.stdout + m.stderr)
+  const foo = path.join(host.root, 'src/foo.js')
+  fs.writeFileSync(foo, commentLines(1) + fs.readFileSync(foo, 'utf8'))
+  commitClose(host, ['-f', 'src/foo.js'])
+  const r = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(r.status, 0,
+    'a committed gitignored file missing from the judged tree is counted as 80+ changed lines and refuses every close on a host that tracks one: ' + r.stdout + r.stderr)
+})
+
 test('AC-20261013-01-5: WHEN the close commit deletes a committed deviations sidecar over 60 lines THE SYSTEM SHALL not count that deletion toward the soft sweep ceiling and SHALL accept --mark closed', () => {
   const host = hostAtClose(TWO_SOFT_RETURN, 'c5dev', (h) => {
     const dev = h.spec.replace(/\.md$/, '.deviations.md')

@@ -1,11 +1,12 @@
 ---
 date: 2026-10-24
-status: draft
+status: hardened
 tier: standard
 area: review
 breaking: false
 depends_on: []
 brief: n/a
+open_markers: 0
 ---
 
 # The close tree equals the judged tree; softs are debt or ride a fix round
@@ -17,10 +18,10 @@ session declares it fixed a soft, and then only by a 60-line budget measured aga
 that has needed two structural repairs in ten days. This spec makes the guard exact and
 unconditional: `--mark closed` refuses any counted change between the committed close tree and
 the judged tree, every time. The post-verdict fix window closes with it: a soft is recorded as
-advisory debt at close, or it rides a fix round the reviewer re-checks before the verdict. The
-line ceiling, the sweep mark and its sweep file are deleted. Done means the close refuses drift
-with no soft in play, a cleaned-up build directory the reviewer's legs left behind is not drift,
-and no plugin file names a ceiling or a sweep.
+advisory debt when the verdict lands, or it rides a fix round the reviewer re-checks before the
+verdict. The line ceiling, the sweep mark and its sweep file are deleted. Done means the close
+refuses drift with no soft in play, a cleaned-up build directory the reviewer's legs left behind
+is not drift, and no plugin script, doctrine file or canonical doc names a retired identifier.
 
 ## Decisions (locked — workers apply verbatim, never override)
 
@@ -28,28 +29,29 @@ and no plugin file names a ceiling or a sweep.
 |----|----------|--------------------|
 | D1 | `--mark closed` always measures the committed close tree against the judged tree (`marks.judgedTree`, falling back to the close row's `diff.head`) with the overlay excludes unchanged (spec file, `docs/canonical/`, ledger, retained evidence, sidecar, deviations sidecar, agent memory, pipeline rules). One counted line or one binary change is a refusal, `close tree drifted from the judged tree`, naming the files and the revert command; the check runs after the dirty-tree check and before any mutation (AC-20261024-06-1, AC-20261024-06-2) | The guard today runs only when `softSweep.fixed >= 1`; a session that records every soft as debt, or has no softs, can commit anything before the close and nothing compares. An exact zero needs no tuned number. |
 | D2 | The tally stays one library module, renamed `spec/scripts/lib/close-tree-drift.js` exporting `measureDrift(opts)` with the shape of today's `measureSweep`: a path counts only when tracked in the judged commit, in HEAD, or named by a fix-delta list (`alsoTracked`); everything else is reported under `skipped` and the driver prints one `ℹ close check ignored N path(s) tracked in neither the judged commit nor HEAD (reviewer-created, since cleaned)` line (AC-20261024-06-3, AC-20261024-06-4) | The judged tree is a working-tree snapshot and must stay one (an uncommitted hard fix's new file is judged code); the reviewer's own legs leave untracked build output in that same tree, and cleaning it is not a change to reviewed code. The fix-delta lists close the one gap: a fix round's new file is in neither commit and must still count when deleted. |
-| D3 | The CLOSE step prints softs under `advisory — recorded as debt, none fixed here:` as `a<i> [soft] file:line — claim` and, when any print, the sentence `A soft worth fixing is a Direct-lane commit through the host gate after merge-back, or rides the next fix round; never a change before --mark closed.` The `0. Soft sweep` block, `--mark soft-swept`, `sweep.json`, `handleSoftSwept`, `SOFT_SWEEP_MAX_LINES` and `refuseOverSweepCeiling` are deleted; `--mark soft-swept` is an unknown mark (AC-20261024-06-5, AC-20261024-06-6) | Seven close rows ever recorded a sweep, each fixing one to four softs; the whole post-verdict fix path exists for that. The Direct lane already is the sanctioned route for a one-sentence change on main. |
-| D4 | At an accepted `--mark closed` the driver appends `### Advisory debt (review <runId>)` under `## Rationale` with one line per soft in the current return, `- a<i> file:line — claim`, reusing `withAdvisoryDebt`; a return with zero softs appends nothing. The close row carries no `softSweep` key and is never re-stamped; `restampCloseRowSweep` is deleted (AC-20261024-06-7, AC-20261024-06-8) | The reviewer's claim is the debt line; a hand-written reason per soft was the sweep file's only content and nobody read it. The ledger row stays byte-identical to what verdict.js wrote, which `review-driver-close-row.test.js` already pins for the zero-soft case. |
-| D5 | The DISPOSITIONS step and the FIX step print the current softs after the hard pool under `softs may ride this fix round (same workers, same files); the fix-delta pass re-reviews whatever changed:`; the disposer's pool, refs and the verdict arithmetic are unchanged — a soft never enters `dispositions` (AC-20261024-06-9) | Fixing a soft is free when a fix round runs anyway and the reviewer re-checks the whole delta; a soft-only fix round is not offered (it would spend one of two fix iterations on advisory findings). Softs stay out of the pool so 20260909/04 D8/D9 keep holding. |
-| D6 | `spec/doctrine/stages/stage-review.md` § Dispositions and § Close, and the disposer step text, replace the sweep wording with D3–D5; no doctrine file names a ceiling, a sweep mark or a sweep file (AC-20261024-06-10) | One binding home per rule (core § Doctrine Authoring); the retired words left standing would send a session to a mark that no longer exists. |
-| D7 | `tests/review/soft-sweep.test.js` is deleted; its two incident cases (uncommitted 70-line hard fix accepted; gitignored tracked file kept in the snapshot) and the deviations-sidecar exclusion case are re-expressed in `tests/review/close-tree-drift.test.js` under this spec's AC-IDs; `tests/sweep-ceiling.test.js` is renamed `tests/close-tree-drift-measure.test.js` with the import and names updated, assertions intact (AC-20261024-06-2, AC-20261024-06-3, AC-20261024-06-4) | A refactor deletes the tests of what it retires and carries the cases that still bind; an assertion is moved, never weakened. |
-| D8 | `spec/.claude-plugin/plugin.json` bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` [no-ac: `plugin-bump.js --check` is the oracle] | Version discipline (.claude/rules/spec-pipeline.md § Planning). |
+| D3 | The CLOSE step prints softs under `advisory — recorded as debt, none fixed here:` as `a<i> [soft] file:line — claim` and, when any print, the sentence `A soft worth fixing is a Direct-lane commit through the host gate after merge-back, or rides the next fix round; never a change before --mark closed.` The `0. Soft sweep` block, `--mark soft-swept`, `sweep.json`, `handleSoftSwept`, `SOFT_SWEEP_MAX_LINES` and `refuseOverSweepCeiling` are deleted; `--mark soft-swept` is an unknown mark and the unknown-mark message lists the seven remaining marks (AC-20261024-06-5, AC-20261024-06-6) | Seven close rows ever recorded a sweep, each fixing one to four softs; the whole post-verdict fix path exists for that. The Direct lane already is the sanctioned route for a one-sentence change on main. |
+| D4 | The CLOSE verdict (the no-mark driver call that appends the close row and flips `status: done`) writes `### Advisory debt (review <runId>)` under `## Rationale`, one line per soft in the current return, `- a<i> file:line — claim`, through `withAdvisoryDebt` in the same spec-file write as the status flip; zero softs write nothing. `--mark closed` never writes the spec file. The close row carries no `softSweep` key and is never re-stamped; `restampCloseRowSweep` is deleted (AC-20261024-06-7, AC-20261024-06-8) | The debt must be in the tree the close commit carries: a write after `--mark closed` would leave the spec file dirty, `git worktree remove` refuses a dirty worktree and an uncommitted edit never reaches main through merge-back (A6, executed). The spec file is already an overlay exclude, so the write is never drift. The reviewer's claim is the debt line; the hand-written reason per soft was the sweep file's only content and nobody read it. |
+| D5 | The DISPOSITIONS step keeps its `advisory (N, recorded, not dispositioned):` block and replaces its closing sentence with `softs may ride this fix round (same workers, same files); the fix-delta pass re-reviews whatever changed — never dispositioned here.`; the FIX step prints the current softs after its dispatch line under the same sentence. The disposer's pool, refs and the verdict arithmetic are unchanged — a soft never enters `dispositions`, and the driver never opens a fix round for softs alone (rejected alternative, Rationale) (AC-20261024-06-9, AC-20261024-06-11) | Fixing a soft is free when a fix round runs anyway and the reviewer re-checks the whole delta. Softs stay out of the pool so 20260909/04 D8/D9 keep holding; `soft-floor.test.js` pins the advisory heading verbatim (A7). |
+| D6 | `spec/doctrine/stages/stage-review.md` § Dispositions and § Close replace the sweep wording with D3–D5; no doctrine file names a ceiling, a sweep mark or a sweep file (AC-20261024-06-10) | One binding home per rule (core § Doctrine Authoring); the retired words left standing would send a session to a mark that no longer exists. |
+| D7 | `tests/review/soft-sweep.test.js` is deleted; its two incident cases (uncommitted 70-line hard fix accepted; gitignored tracked file kept in the snapshot) and the deviations-sidecar exclusion case are re-expressed in `tests/review/close-tree-drift.test.js` under this spec's AC-IDs; `tests/sweep-ceiling.test.js` is renamed `tests/close-tree-drift-measure.test.js` with the import and names updated, assertions intact; `tests/review/merge-concludes-to-done.test.js`'s mark-list assertion drops `soft-swept` (seven marks) and is co-tagged AC-20261024-06-6; every AC bullet of `specs/20261013/01-review-closes-its-own-softs.md` whose sole citing test is deleted here ends with `[retired: specs/20261024/06-close-tree-equals-judged-tree.md]` (AC-20261024-06-2, AC-20261024-06-3, AC-20261024-06-4, AC-20261024-06-6) | A refactor deletes the tests of what it retires and carries the cases that still bind; an assertion is moved, never weakened. `ac-drift.js` accepts a `[retired:]` tag only when it names a `specs/*.md` path. |
+| D8 | `spec/.claude-plugin/plugin.json` bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"`; the paragraph names no retired identifier [no-ac: `plugin-bump.js --check` is the oracle] | Version discipline (.claude/rules/spec-pipeline.md § Planning). |
 
 ## File Plan
 
 | Path | Action | Layer | Summary |
 |------|--------|-------|---------|
-| spec/scripts/spec-review-driver.js | MODIFY | scripts | D1: unconditional drift refusal at `--mark closed`; D3: CLOSE advisory block, `soft-swept` mark/handler/constant/ceiling deleted; D4: debt appended at accepted close, close-row re-stamp deleted; D5: ride-along sentence at DISPOSITIONS and FIX |
+| spec/scripts/spec-review-driver.js | MODIFY | scripts | D1: unconditional drift refusal at `--mark closed`; D3: CLOSE advisory block, `soft-swept` mark/handler/constant/ceiling deleted, seven-mark unknown-mark message; D4: debt written in the CLOSE verdict's spec write, close-row re-stamp deleted; D5: ride-along sentence at DISPOSITIONS and softs printed at FIX |
 | spec/scripts/lib/sweep-ceiling.js | DELETE | scripts | D2: renamed |
-| spec/scripts/lib/close-tree-drift.js | CREATE | scripts | D2: `measureDrift` — the moved module, header reworded for the exact check |
+| spec/scripts/lib/close-tree-drift.js | CREATE | scripts | D2: `measureDrift` — the moved module, header reworded for the exact check, no retired identifier |
 | spec/doctrine/stages/stage-review.md | MODIFY | doctrine | D6: § Dispositions ride-along sentence, § Close advisory-debt wording; sweep/ceiling wording removed |
 | spec/.claude-plugin/plugin.json | MODIFY | scripts | D8 |
 | tests/review/soft-sweep.test.js | DELETE | tests | D7: pins of the retired mark |
-| tests/review/close-tree-drift.test.js | CREATE | tests | AC-20261024-06-1, AC-20261024-06-2, AC-20261024-06-5, AC-20261024-06-6, AC-20261024-06-7, AC-20261024-06-8, AC-20261024-06-9 |
+| tests/review/close-tree-drift.test.js | CREATE | tests | AC-20261024-06-1, AC-20261024-06-2, AC-20261024-06-5, AC-20261024-06-7, AC-20261024-06-9, AC-20261024-06-11 |
 | tests/sweep-ceiling.test.js | DELETE | tests | D7: renamed |
 | tests/close-tree-drift-measure.test.js | CREATE | tests | AC-20261024-06-3, AC-20261024-06-4 |
+| tests/review/merge-concludes-to-done.test.js | MODIFY | tests | AC-20261024-06-6 (D7: the mark-list regex drops `soft-swept`) |
 | tests/consistency/retired-flags.test.js | MODIFY | tests | AC-20261024-06-10 |
-| specs/20261013/01-review-closes-its-own-softs.md | MODIFY | other | D7: every AC pointer whose sole citing test is deleted here gets `[retired: specs/20261024/06]` at the end of its bullet |
+| specs/20261013/01-review-closes-its-own-softs.md | MODIFY | other | D7: AC-20261013-01-1 … -7 and -9 bullets end with `[retired: specs/20261024/06-close-tree-equals-judged-tree.md]` (-8 and -10 keep their live tests) |
 
 ## Contracts
 
@@ -68,15 +70,21 @@ and no plugin file names a ceiling or a sweep.
 
 Sidecar (`<spec>.review/review-state.json`): `marks.judgedTree` unchanged; `marks.softSweep` is
 never written. Ledger: the review close row has no `softSweep` key. Spec file: the
-`### Advisory debt (review <runId>)` block's line shape becomes `- a<i> file:line — claim`.
+`### Advisory debt (review <runId>)` block is written by the CLOSE verdict, in the same write as
+`status: done`, with the line shape `- a<i> file:line — claim`; `--mark closed` writes nothing to
+the spec file.
 
-Driver marks: `soft-swept` is removed from the accepted mark list; the unknown-mark message lists
-`fix-applied | closed | merge-strategy | conflicts-resolved` in its place.
+Driver marks: `soft-swept` is removed from the accepted mark list; the unknown-mark message reads
+`(skips-extracted | reviewer-returned | dispositions | fix-applied | closed | merge-strategy | conflicts-resolved)`.
+
+Driver refusal (exit 2, side-effect-free): `close tree drifted from the judged tree: <N> changed
+line(s)[ plus a binary change] vs judged <sha7> — revert (git checkout <judgedTree> -- <files>),
+re-commit, then re-run \`node … --mark closed\``.
 
 ## Behavior
 
 - Close with no softs, nothing committed after the verdict: `--mark closed` measures zero drift,
-  accepts, appends no debt, re-stamps nothing.
+  accepts, re-stamps nothing.
 - Close with no softs, the session committed a 3-line edit after the verdict: refused with
   `close tree drifted from the judged tree: 3 changed line(s) vs judged <sha7>` and
   `git checkout <judgedTree> -- <files>`; nothing written. Re-commit and re-mark passes.
@@ -86,12 +94,14 @@ Driver marks: `soft-swept` is removed from the accepted mark list; the unknown-m
   deleted before the close commit: the tally skips them, one `ℹ` line names the count, accepted.
 - Close where the session deleted a file a fix round had created: that path is in the fix-delta
   list, counts as drift, refused.
-- CLOSE step with two softs: prints the advisory block with `a0`, `a1` and the Direct-lane
-  sentence; never prints `--mark soft-swept`, `sweep.json` or a line count. An accepted
-  `--mark closed` then appends two debt lines under `## Rationale`.
-- DISPOSITIONS and FIX steps with one hard and two softs: the hard pool prints as today; the two
-  softs print after it under the ride-along sentence; a disposer return naming `a0` is still
-  refused by the existing pool check.
+- CLOSE verdict with two softs: the spec file on disk now carries `status: done` and, under
+  `## Rationale`, `### Advisory debt (review <runId>)` with two `- a<i> …` lines; the CLOSE step
+  then prints the advisory block with `a0`, `a1` and the Direct-lane sentence; it never prints
+  `--mark soft-swept`, `sweep.json` or a line count. The close commit carries the debt; an
+  accepted `--mark closed` leaves the spec file and the close row untouched.
+- DISPOSITIONS and FIX steps with one hard and two softs: the hard pool prints as today; the
+  advisory heading prints as today; the two softs print under the ride-along sentence at both
+  steps; a disposer return naming `a0` is still refused by the existing pool check.
 
 ## Acceptance Criteria
 
@@ -100,19 +110,22 @@ Driver marks: `soft-swept` is removed from the accepted mark list; the unknown-m
 - **AC-20261024-06-3**: WHEN the judged tree snapshot holds untracked, non-ignored files absent from the judged commit and from HEAD THE SYSTEM SHALL report them under `skipped` and count zero lines for them, while a tracked file deleted, a tracked file edited and a new file committed since the snapshot are all counted → writes tests/close-tree-drift-measure.test.js
 - **AC-20261024-06-4**: WHEN a path in neither commit is named in `alsoTracked` and the close commit deleted it THE SYSTEM SHALL count its lines as drift and never list it under `skipped` → writes tests/close-tree-drift-measure.test.js
 - **AC-20261024-06-5**: WHEN the CLOSE step prints for a return of two softs THE SYSTEM SHALL print `advisory — recorded as debt, none fixed here:` followed by `a0` then `a1` and the Direct-lane sentence, and SHALL NOT print `--mark soft-swept`, `sweep.json` or `changed lines` → writes tests/review/close-tree-drift.test.js
-- **AC-20261024-06-6**: WHEN `--mark soft-swept --file x.json` is invoked THE SYSTEM SHALL exit 2 as an unknown mark whose message lists the accepted marks without `soft-swept` → writes tests/review/close-tree-drift.test.js
-- **AC-20261024-06-7**: WHEN `--mark closed` is accepted with two softs in the return THE SYSTEM SHALL have appended `### Advisory debt (review <runId>)` under `## Rationale` with exactly two lines `- a0 <file>:<line> — <claim>` and `- a1 …`, and the close row SHALL carry no `softSweep` key → writes tests/review/close-tree-drift.test.js
-- **AC-20261024-06-8**: WHEN `--mark closed` is accepted with zero softs THE SYSTEM SHALL CONTINUE TO leave the close row byte-identical to what verdict.js wrote and append no debt heading → reuses tests/review/review-driver-close-row.test.js
-- **AC-20261024-06-9**: WHEN the DISPOSITIONS step prints for one hard and two softs THE SYSTEM SHALL print the hard pool as `s0` and then the two softs under `softs may ride this fix round`, and a disposer return whose entry names `a0` SHALL CONTINUE TO be refused as matching nothing in the pools → writes tests/review/close-tree-drift.test.js
-- **AC-20261024-06-10**: WHEN `spec/` and `docs/canonical/` are searched for `SOFT_SWEEP_MAX_LINES`, `soft-swept`, `handleSoftSwept`, `refuseOverSweepCeiling`, `restampCloseRowSweep`, `softSweep` and `sweep-ceiling` THE SYSTEM SHALL return zero hits → writes tests/consistency/retired-flags.test.js
+- **AC-20261024-06-6**: WHEN `--mark soft-swept --file x.json` is invoked THE SYSTEM SHALL exit 2 as an unknown mark whose message lists exactly `(skips-extracted | reviewer-returned | dispositions | fix-applied | closed | merge-strategy | conflicts-resolved)` → rewrites tests/review/merge-concludes-to-done.test.js :: AC-20260913-09-2
+- **AC-20261024-06-7**: WHEN the CLOSE verdict flips a spec to `status: done` with two softs in the current return THE SYSTEM SHALL have written, in that same spec-file write, `### Advisory debt (review <runId>)` under `## Rationale` with exactly two lines `- a0 <file>:<line> — <claim>` and `- a1 …`, the following accepted `--mark closed` SHALL leave the spec file byte-identical, and the close row SHALL carry no `softSweep` key → writes tests/review/close-tree-drift.test.js
+- **AC-20261024-06-8**: WHEN the CLOSE verdict flips a spec to `status: done` with zero softs and the session marks closed THE SYSTEM SHALL CONTINUE TO leave the close row byte-identical to what verdict.js wrote and SHALL CONTINUE TO write no `### Advisory debt` heading → reuses tests/review/review-driver-close-row.test.js :: AC-20260820-07-6
+- **AC-20261024-06-9**: WHEN the DISPOSITIONS step and then the FIX step print for one hard and two softs THE SYSTEM SHALL print, at each step, the two softs under `softs may ride this fix round (same workers, same files); the fix-delta pass re-reviews whatever changed`, keep the `advisory (2, recorded, not dispositioned):` heading at DISPOSITIONS, and print `Softs are swept at CLOSE` at neither → writes tests/review/close-tree-drift.test.js
+- **AC-20261024-06-10**: WHEN `spec/scripts/`, `spec/doctrine/`, `spec/commands/`, `spec/agents/`, `spec/templates/` and `docs/canonical/` are searched for `SOFT_SWEEP_MAX_LINES`, `soft-swept`, `handleSoftSwept`, `refuseOverSweepCeiling`, `restampCloseRowSweep`, `softSweep`, `measureSweep` and `sweep-ceiling` THE SYSTEM SHALL return zero hits → writes tests/consistency/retired-flags.test.js
+- **AC-20261024-06-11**: WHEN a disposer return's entry names `a0` against a return of one hard and two softs THE SYSTEM SHALL CONTINUE TO refuse it as matching nothing in the pools → writes tests/review/close-tree-drift.test.js
 
 ## Assumptions (escalation triggers)
 
-- A1: the close row is appended and `marks.judgedTree` pinned before the session's close commit, so the snapshot never contains the Canonical Delta or the status flip and the excludes list is the only overlay — **if false:** the drift check reads non-zero on every close; STOP and re-order the close-row append in a spike before locking.
-- A2: `withAdvisoryDebt` rewrites the block for the same runId idempotently, so a refused-then-accepted close appends once — **if false:** dedupe on the `a<i>` prefix inside the block.
-- A3: no host ledger reader consumes `softSweep` (fleet-reader, spec-status, verdict.js grep zero at plan time) — **if false:** keep the key as `{fixed: 0, debt: N}` for one release and queue its removal.
-- A5: the Canonical Delta names none of the retired identifiers, so AC-20261024-06-10's zero-hit sweep over `docs/canonical/` stays green after the Delta is applied — **if false:** reword the Delta, never widen the sweep's waived prefixes.
-- A4: `tests/review/merge-concludes-to-done.test.js` mentions `softSweep` only in a comment or a negative assertion — **if false:** add it to the File Plan as MODIFY, tests layer.
+- A1 (verified 2026-10-24): the close row is appended and `marks.judgedTree` pinned before the CLOSE verdict's spec-file write (status flip, and now the debt block), and the spec file is an overlay exclude, so the snapshot never reads the overlay as drift — `spec-review-driver.js` pins `marks.judgedTree = snapshotTree()` after `appendLedger` and before `fs.writeFileSync(resolvedSpecPath, …)` — **if false:** the drift check reads non-zero on every close; STOP and re-order the close-row append in a spike before building.
+- A2 (verified 2026-10-24): `withAdvisoryDebt` splices out an existing block for the same runId before writing, so a CLOSE verdict re-run writes the block once — **if false:** dedupe on the `a<i>` prefix inside the block.
+- A3 (verified 2026-10-24): no host ledger reader consumes `softSweep` — `grep -c softSweep` over `spec/scripts/verdict.js`, `spec/scripts/spec-status.js`, `spec/scripts/fleet-reader.js` = 0, 0, 0 — **if false:** keep the key as `{fixed: 0, debt: N}` for one release and queue its removal.
+- A4 (false, applied 2026-10-24): `tests/review/merge-concludes-to-done.test.js` asserts the eight-mark list positively (`/\(skips-extracted \| … \| soft-swept \| closed \| …\)/`), so it is a File Plan MODIFY row and AC-20261024-06-6's `rewrites` target; `tests/review/review-driver-close-row.test.js` mentions `softSweep`/`soft-swept` only in negative assertions that stay green — **if a third test proves to assert the list:** add it as a MODIFY row at build, never weaken it.
+- A5: the Canonical Delta names none of the retired identifiers, so AC-20261024-06-10's zero-hit sweep over `docs/canonical/` stays green after the Delta is applied — **if false:** reword the Delta, never widen the sweep's scope.
+- A6 (executed 2026-10-24, git 2.54.0): in a fresh repo with a linked worktree, appending one line to a tracked file in the worktree and running `git worktree remove <wt>` → `fatal: '<wt>' contains modified or untracked files, use --force to delete it` (exit 128); merging the worktree's branch into main afterwards → the appended line is absent from main (grep count 0). Debt written after the close commit would therefore be stranded; D4 writes it before — **if false:** D4's timing could stay at the accepted mark; it does not.
+- A7 (verified 2026-10-24): `tests/review/soft-floor.test.js` pins the literal `advisory (1, recorded, not dispositioned):` at DISPOSITIONS (AC-20260909-04-6), so D5 keeps that heading and changes only the closing sentence — **if false:** D5 may reword the heading; it does not need to.
 
 ## Rationale
 
@@ -133,26 +146,42 @@ filter stay because both are exact; only the tuned number and the opt-in go. The
 built on 2026-10-13 (20261013/01) goes with them because its usage never justified it: seven close
 rows ever, one to four softs each, and the debt reasons it collected were never read back.
 
+Where the debt is written moved during planning. The first draft appended it at an accepted
+`--mark closed`, after the close commit. That leaves the spec file dirty in a worktree review:
+git refuses to remove the worktree and merge-back carries only commits, so the debt would never
+reach main (A6, executed). The CLOSE verdict already rewrites the spec file to flip its status;
+the debt block rides that same write, lands in the close commit, and the spec file's standing
+exclude keeps it out of the drift tally.
+
 Where softs go instead: a soft that rides a fix round costs nothing extra and is re-reviewed by
 the fix-delta pass; a soft that does not is recorded and, if worth fixing, is a Direct-lane
 commit through the host gate after merge-back. Rejected: a dedicated re-check round for soft
 fixes at close (the second opinion's option B) — it keeps every layer the ceiling needed, adds a
 driver state, a sidecar mark and a return file, and must run the Fable reviewer seat to keep the
-different-family invariant, all for a path used seven times. Rejected: letting the disposer
-disposition softs as `fix|debt` — it reopens 20260909/04 D8/D9 and changes the verdict pool
-arithmetic for the same gain the ride-along sentence gives for free. Reopen condition for either:
-Advisory debt blocks across readable ledgers whose softs were never fixed exceed 30 in 90 days.
+different-family invariant, all for a path used seven times. Rejected: a fix round opened for
+softs alone — it spends one of the two capped fix iterations on advisory findings. Rejected:
+letting the disposer disposition softs as `fix|debt` — it reopens 20260909/04 D8/D9 and changes
+the verdict pool arithmetic for the same gain the ride-along sentence gives for free. Reopen
+condition for any of the three: Advisory debt blocks across readable ledgers whose softs were
+never fixed exceed 30 in 90 days.
+
+Collision closure (literals leg) waives: `docs/canonical/review.md` — rewritten by the Canonical
+Delta at the review stage's CLEAN, never a File Plan row; `tests/review/review-driver-close-row.test.js`
+— its `soft-swept`/`softSweep` hits are negative assertions that stay green, and AC-20261024-06-8
+reuses its zero-soft close test with the AC-ID tag the build adds. Every other literals hit is a
+File Plan row.
 
 ## Canonical Delta
 
 docs/canonical/review.md, the paragraph beginning `Softs do not leave the review by hand`
 (cited to specs/20261013/01): replace with "Softs are advisory to the end. At DISPOSITIONS and
 FIX they print after the hard pool and may ride the fix round the same workers run; the fix-delta
-pass re-reviews whatever changed. At CLOSE they print under an advisory heading and an accepted
-`--mark closed` appends one `- a<i> file:line — claim` line per soft under the spec's
-`## Rationale` as `### Advisory debt (review <runId>)`. A soft worth fixing after close is a
-Direct-lane commit through the host gate. `--mark closed` always measures the committed close tree
-against the judged tree snapshot (overlay paths excluded; paths tracked in neither the judged
-commit nor HEAD nor a fix-delta list are reviewer-created and skipped) and refuses any counted
-line or binary change with `close tree drifted from the judged tree`. The close row is never
-re-stamped after verdict.js writes it. (specs/20261024/06-close-tree-equals-judged-tree.md)"
+pass re-reviews whatever changed. The CLOSE verdict writes one `- a<i> file:line — claim` line per
+soft under the spec's `## Rationale` as `### Advisory debt (review <runId>)`, in the same write
+that flips the status, so the debt rides the close commit; the CLOSE step prints the softs under
+an advisory heading. A soft worth fixing after close is a Direct-lane commit through the host
+gate. `--mark closed` always measures the committed close tree against the judged tree snapshot
+(overlay paths excluded; paths tracked in neither the judged commit nor HEAD nor a fix-delta list
+are reviewer-created and skipped) and refuses any counted line or binary change with
+`close tree drifted from the judged tree`. The close row is never re-stamped after verdict.js
+writes it. (specs/20261024/06-close-tree-equals-judged-tree.md)"

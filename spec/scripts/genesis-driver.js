@@ -614,7 +614,7 @@ function handleDiscoveryDone() {
 function menusCheck() {
   const open = openDimensionKeys()
   const pks = picks()
-  const missing = open.filter((k) => !hasMenuFile(k) || !(k in pks))
+  const missing = open.filter((k) => !(k in status.menus) || !(k in pks))
   return { ok: missing.length === 0, missing }
 }
 
@@ -1386,7 +1386,7 @@ function handleMenusDone() {
   if (!status.marks.briefWritten) die('brief-written has not been marked yet — mark brief-written first')
   const check = menusCheck()
   if (!check.ok) {
-    die('open dimension(s) missing a menu file or a ## Picks line: ' + check.missing.join(', ') +
+    die('open dimension(s) with no recorded menu (--mark menu-written --file <menu.json>) or no ## Picks line: ' + check.missing.join(', ') +
       ' — finish the interview, then re-mark menus-done')
   }
   // specs/20260902/08-genesis-shrink-brief-state.md D2: the archetype was already validated
@@ -2528,11 +2528,9 @@ function deriveState(opts) {
   }
 
   // specs/20260926/04-the-design-brief.md D1: DESIGN_BRIEF sits between the green gate and
-  // ROADMAP for a design-stage-applicable host — re-derived while the mark is unset or its own
-  // artifacts (the brief file, design-paths.json) have vanished, never trusted from the mark
-  // alone.
-  if (designStageApplies() &&
-      (!status.marks.designBriefWritten || !fs.existsSync(designBriefMdPath()) || !fs.existsSync(designPathsJsonPath()))) {
+  // ROADMAP for a design-stage-applicable host — derived from the mark alone — the
+  // design-brief-written handler verifies the brief file and design-paths.json.
+  if (designStageApplies() && !status.marks.designBriefWritten) {
     return 'DESIGN_BRIEF'
   }
 
@@ -2543,10 +2541,9 @@ function deriveState(opts) {
   if (designStageApplies()) {
     if (!status.marks.kitLanded || !storybookMainExists()) return 'DESIGN_KIT'
     if (!status.marks.journeysDrawn || anyJourneyStoryVanished()) return 'DESIGN_JOURNEYS'
-    // specs/20260926/06-the-approval-stop-and-the-roadmap.md D1: re-derived from disk on every
-    // call, same as every other design-stage mark — a `designApproved` mark whose own
-    // docs/design/approval.json vanished is demanded again, never trusted from the mark alone.
-    if (!status.marks.designApproved || !fs.existsSync(docsDesignApprovalPath())) return 'AWAITING_DESIGN_APPROVAL'
+    // specs/20260926/06-the-approval-stop-and-the-roadmap.md D1: derived from the mark alone; the
+    // design-approved handler verifies docs/design/approval.json before setting it.
+    if (!status.marks.designApproved) return 'AWAITING_DESIGN_APPROVAL'
   }
 
   const rm = roadmapCheck()
@@ -2619,7 +2616,7 @@ const STEPS = {
     const noMenu = []
     const noPick = []
     for (const k of openKeys) {
-      if (!hasMenuFile(k)) noMenu.push(k)
+      if (!(k in status.menus)) noMenu.push(k)
       else if (!(k in pks)) noPick.push(k)
     }
     const readFiles = [genesisRel('brief.md') + ' (## Open Dimensions, ## Picks)']

@@ -130,3 +130,9 @@ in a test's own name is data, not shell. A test-name filter that selects nothing
 runner's exit code — the run's own output naming the selected title is the only proof of selection,
 and an unresolved or unselected reference falls back to the file's colour with a warning, never a
 finding.
+
+## Evals
+
+`spec/evals/` holds the plugin's `claude plugin eval` suite — three `cheap` cases proving skill
+selection and script execution with deterministic graders, one `heavy` `/spec:run` case run on
+request. The suite is never in the gate; `tests/evals-suite.test.js` pins its shape.

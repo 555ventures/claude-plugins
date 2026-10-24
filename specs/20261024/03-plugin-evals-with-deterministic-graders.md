@@ -1,6 +1,6 @@
 ---
 date: 2026-10-24
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: evals
@@ -168,6 +168,20 @@ prompting page.
 
 Rejected: an `llm` grader for "the reply is useful" — judge drift and cost without a
 deterministic claim; the Skill `with-only` indicator already answers "was the plugin used".
+
+### Build departures (2026-10-24, folded from the deviations sidecar)
+- D2's doctor stem `spec-doctor` named no shipped script; the grader matches `contract-hash` (D8).
+- The first executed run refused every case (`unknown frontmatter key "context"` in `prompt.md`),
+  falsifying A1's Contracts block; each case now carries a `case.yaml` (D9), D4/D6/AC-2 amended.
+- D4's invocation lacked `--allow-tools Bash`, without which every Bash grader fails; the README
+  invocations carry it plus `--trust-plugin` (D9).
+- `spec/evals/host.sh` (shared grounded-host writer) and `spec/evals/.gitignore` (the CLI writes
+  `results/` inside the plugin) were added with File Plan rows.
+- Measured: cheap run $2.89, 8 min, WITH 1.00, W/OUT 0.11, Δ 0.89 — A4 held.
+
+### Advisory debt (review rv_38a127e84689)
+- a0 spec/evals/doctor/graders/script.md:4 — The cheap cases' Bash graders match a bare substring of the script stem; a no-plugin baseline run satisfied the doctor contract-hash grader once, so the grader can pass on a command that merely contains the stem. — Anchoring the Bash graders on `spec-paths <key>` would also fail a with-plugin run that calls the resolved script path directly, and any grader change needs a paid re-measure (~$2.89); the 1-in-3 doctor baseline pass is visible in the delta. Reopen if a cheap run shows W/OUT above 0.34 on any case.
+- a1 spec/evals/run/graders/order.md:3 — The heavy run case's tool_order grader shape ({ tool, input_match } flow maps) has never been executed against the CLI (spec A2: not executed). — Only a paid heavy run can prove the CLI accepts the tool_order flow-map form (spec A2); A2's own remedy (two tool_used graders) applies if the first heavy run refuses the case.
 
 ## Canonical Delta
 

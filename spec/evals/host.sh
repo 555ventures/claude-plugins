@@ -7,6 +7,7 @@
 # Claude starts) and writes no queue, spec or ledger row — each case's fixture adds its own.
 # Usage: . "$(dirname "$0")/../host.sh"; host_init
 # Exit codes (of host_init): 0 host written · 1 a write or git step failed.
+set -u
 
 host_init() {
   git init -q -b main . || return 1

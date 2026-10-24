@@ -6,7 +6,7 @@ const path = require('node:path')
 const { tmpdir, SPEC, gitRepo } = require('./helpers')
 const { spawnSync, execFileSync } = require('node:child_process')
 
-// specs/20260820/02-replay-scratch-write-access.md: the first live /spec:replay
+// specs/20260820/02-replay-scratch-write-access.md: the first live replay-command
 // run's mutation worker was correctly dispatched from a main-anchored session to Edit the
 // scratch worktree replay.js stood up — and this hook blocked it, since the pre-fix decision
 // table had no exception for a same-repo cross-worktree write whose TARGET is a disposable

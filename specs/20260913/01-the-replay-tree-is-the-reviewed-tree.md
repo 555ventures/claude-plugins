@@ -150,48 +150,48 @@ line and three red legs discovered a session later.
   spec file, and SHALL fall back to a resolvable `diff.head` only when the ref is absent (e.g. a
   selected row whose `judged` ref is `<H>` and whose spec was last touched by an unrelated later
   `<X>` with parent `<Y>` → `parent=<H>`, never `<Y>`)
-  → rewrites tests/replay/replay.test.js :: AC-20260819-02-2
+  → rewrites tests/replay/replay.test.js :: AC-20260819-02-2 [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260913-01-4**: WHEN `--select` picks a row whose run has a `close` ref, THE SYSTEM SHALL
   print that ref's sha as `commit=`, including when it is not a descendant of `parent` (e.g.
   `judged` at `<H>` orphaned by a rebasing merge-back and `close` at `<C>` on the rewritten main
   line → `commit=<C> parent=<H>`)
-  → writes tests/replay/replay-tree-identity.test.js
+  → writes tests/replay/replay-tree-identity.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260913-01-5**: WHEN the selected row's run has no `close` ref, or has neither a `judged`
   ref nor a `diff.head` that `git rev-parse --verify <sha>^{commit}` resolves, THE SYSTEM SHALL
   exit 4, print nothing on stdout, and name on stderr the row's `runId`, the spec path and
   `--backfill-pins` (e.g. a selected row `rv_abc123def456` with a `judged` ref and no `close` ref
   → exit 4, stdout `""`, stderr containing `rv_abc123def456` and `--backfill-pins`)
-  → writes tests/replay/replay-tree-identity.test.js
+  → writes tests/replay/replay-tree-identity.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260913-01-6**: WHEN `--backfill-pins` runs, THE SYSTEM SHALL print one line per CLEAN
   review row naming what it derived, create only the refs that are missing, leave every existing
   ref at its current sha, and exit 0 even when some rows are underivable (e.g. three CLEAN rows
   where the first already has both refs, the second derives both, and the third has an
   unresolvable `diff.head` → three lines, two refs created, first row marked `skipped: ref
   exists`, exit 0)
-  → writes tests/replay/replay-tree-identity.test.js
+  → writes tests/replay/replay-tree-identity.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260913-01-7**: WHEN `--setup` was given `--spec` and the tree it has stood up (after any
   `--overlay` commit) does not satisfy `ac-matrix.js --spec <spec under dir> --root <dir>`, THE
   SYSTEM SHALL exit 5, print no `setup dir=` line on stdout, and name on stderr the spec path,
   the commit, the first `ac-matrix` finding line and the `worktree remove --force` remedy (e.g. a
   tree stood up one commit before the spec's own work landed, so `ac-matrix` reports
   `uncovered-ac AC-<id>-1` → exit 5, stdout `""`)
-  → writes tests/replay/replay-tree-identity.test.js
+  → writes tests/replay/replay-tree-identity.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260913-01-8**: WHEN `--setup` runs with `--dir` and no `--spec`, THE SYSTEM SHALL
   CONTINUE TO create the marker-carrying detached worktree, run no verification, and exit 0
-  → reuses tests/replay/replay.test.js :: AC-20260823-05-1:
+  → reuses tests/replay/replay.test.js :: AC-20260823-05-1: [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260913-01-9**: WHEN `--setup` is given an `--overlay` that is neither equal to
   `--commit` nor an ancestor of it, THE SYSTEM SHALL proceed even though it is not a descendant
   of `--commit` (e.g. two commits on sibling branches off one shared base, passed as `--commit`
   and `--overlay` → the worktree is created and the overlay is materialized, exit 0)
-  → writes tests/replay/replay-tree-identity.test.js
+  → writes tests/replay/replay-tree-identity.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260913-01-10**: WHEN every row in the `--commit`..`--overlay` range is meta-prefixed,
   THE SYSTEM SHALL CONTINUE TO create no overlay commit, leave the worktree HEAD at `--commit`,
   and print `overlaid=0`
-  → reuses tests/replay/replay.test.js :: AC-20260831-01-3:
+  → reuses tests/replay/replay.test.js :: AC-20260831-01-3: [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260913-01-11**: WHEN `--setup` is given an `--overlay` equal to `--commit`, or one that
   is an ancestor of it, THE SYSTEM SHALL CONTINUE TO exit 4 before creating any worktree, naming
   the `--select` remedy
-  → reuses tests/replay/replay.test.js :: AC-20260831-01-4:
+  → reuses tests/replay/replay.test.js :: AC-20260831-01-4: [retired: specs/20261024/05-replay-retired.md]
 
 ## Assumptions (escalation triggers)
 

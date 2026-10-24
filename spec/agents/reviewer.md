@@ -106,8 +106,7 @@ input the change weakens — never on equivalence over today's fixtures. A weake
 or boundary check (`===` → `includes`/`startsWith`/`indexOf`, an anchored regex → unanchored,
 a full-token match → substring) is a finding unless you construct the colliding input the
 loosened check would newly accept and show it cannot reach that site; "every current id is
-the same length" or "the pinned tests still pass" is not a kill (`replay-corpus.md`
-§ `prefix-collision-coverage-fail-open`; replay `rp_c88b27bf13b2`).
+the same length" or "the pinned tests still pass" is not a kill.
 
 ## Severity calibration
 

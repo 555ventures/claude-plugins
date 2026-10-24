@@ -3,7 +3,7 @@
 // prototype-driver.js <idea | brief path | stem> [--stem <name>] [--root <dir>] --mark opened|round-done|approved|contracted|tests-derived|closed
 // prototype-driver.js <idea | brief path | stem> [--root <dir>] serve --port <n>
 // prototype-driver.js <idea | brief path | stem> [--root <dir>] check [--json]
-// prototype-driver.js check [--root <dir>] [--json]   (brief-less: doctor check 23's own
+// prototype-driver.js check [--root <dir>] [--json]   (brief-less: doctor check 22's own
 //   invocation has no brief — a host-wide config check needs none)
 //
 // WHY: specs/20260928/01-the-prototype-command-and-the-pin-overlay.md D2-D5/D8, reshaped by
@@ -42,7 +42,7 @@
 // (D9) runs dbDestroy once, removes the worktree and branch, and is accepted from ROUND,
 // APPROVED, TESTS and CONTRACTED.
 //
-// `check` is doctor check 23 (advisory): findings are the keys a mark will read —
+// `check` is doctor check 22 (advisory): findings are the keys a mark will read —
 // prototype.e2eFile without {stem}, e2eList without {file}, e2eRun undeclared or without {file},
 // picture undeclared or without {url}/{out}. A host with no `prototype` block reads as clean,
 // unlike every other subcommand, which refuses without one. `serve --port N` is a plain
@@ -97,7 +97,7 @@ const argv = process.argv.slice(2)
 if (argv.length === 0) {
   die('usage: prototype-driver <idea in words | brief path | stem> [--stem <name>] [--root <dir>] [--state] [--mark opened|round-done|approved|contracted|tests-derived|closed] [serve --port <n>] [check [--json]] | prototype-driver check [--root <dir>] [--json]')
 }
-// `check` is the one subcommand doctor check 23 invokes with no brief (a host-wide config check
+// `check` is the one subcommand doctor check 22 invokes with no brief (a host-wide config check
 // has no brief to derive a stem/branch/worktree from) — every other form still needs one.
 const briefLess = argv[0] === 'check'
 const inputArg = briefLess ? null : argv[0]
@@ -132,7 +132,7 @@ function requirePrototypeConfig(cfg) {
 const cfg = loadConfig()
 
 // ---------------------------------------------------------------------------
-// check [--json] (D2, doctor check 23) — the one subcommand that runs even with no `prototype`
+// check [--json] (D2, doctor check 22) — the one subcommand that runs even with no `prototype`
 // block (an absent block reads as clean: "0 when clean or when the block is absent"). Findings
 // are the keys a mark will read: a key no step uses is never a finding.
 // ---------------------------------------------------------------------------

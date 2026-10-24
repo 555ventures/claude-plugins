@@ -176,24 +176,24 @@ appears once).
   followed by `prefix-collision-coverage-fail-open` with `derived:true` — and WHEN it reads a
   synthetic corpus with `` ## `a-b` ``, `## Derived classes`, `` ### `c-d` ``, `` ### `e-f` ``,
   and a stray `` ### `g-h` `` placed BEFORE the Derived heading THE SYSTEM SHALL return
-  `[a-b:false, c-d:true, e-f:true]` and ignore `g-h` → `tests/replay/replay-corpus.test.js`
+  `[a-b:false, c-d:true, e-f:true]` and ignore `g-h` → `tests/replay/replay-corpus.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260901-08-2**: WHEN `--apply --dir D --patch P --patch-out O --class not-a-class` runs
   THE SYSTEM SHALL exit 2 with stderr naming `replay-corpus.md` and the valid ids, leave D's
   HEAD unchanged, and write no `--patch-out`; `--class silent-fallback` on the same inputs
   SHALL CONTINUE TO commit the mutation (the existing AC-20260819-02-4 fixture) →
-  `tests/replay/replay.test.js`
+  `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260901-08-3**: WHEN `--record --spec S --review-run-id R --legs green --outcome caught
   --class not-a-class --patch P --workflow W` runs THE SYSTEM SHALL exit 2 and append nothing
   (pre-image executed 2026-09-01: exit 0 and a row appended); `--class
   prefix-collision-coverage-fail-open` on the same inputs appends the row →
-  `tests/replay/replay.test.js`
+  `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260901-08-4**: WHEN `--pick-class --root R` runs over an empty ledger THE SYSTEM SHALL
   print `class=prefix-collision-coverage-fail-open derived=true rows=0`; over a ledger holding
   `prefix-collision-coverage-fail-open` caught×1 and every hand-authored class ≥1 except
   `doc-contract-lie` at 0 THE SYSTEM SHALL print `class=doc-contract-lie derived=false rows=0`;
   a `setup-failed` row for `doc-contract-lie` SHALL NOT change that answer; ties among
   hand-authored classes resolve to corpus order (`promise-carried-not-delivered` first) →
-  `tests/replay/replay.test.js`
+  `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260901-08-5** `[oracle: gate]`: WHEN replay.md's Phase 1 step 3 is rewritten THE
   SYSTEM SHALL keep `/spec:replay`'s read-load (own + `shared-for replay`) ≤ 500 — the read-load
   budget test in the gate is the oracle
@@ -201,11 +201,11 @@ appears once).
   amendment), `c-d`×1, `silent-fallback`×3, and one `unclassed` THE SYSTEM SHALL return
   `escapes.corpusGaps = [{class:"a-b", count:2}]` and `escapes.registry = [{silent-fallback,3,true},
   {a-b,2,false}, {c-d,1,false}]` in that order, with `unclassed` in neither →
-  `tests/fleet-reader/corpus-gaps.test.js`
+  `tests/fleet-reader/corpus-gaps.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260901-08-7**: WHEN the human render runs over AC-6's fleet THE SYSTEM SHALL print
   `  corpusGaps: a-b (2 recurrences) — author its section under ## Derived classes in spec/doctrine/replay-corpus.md`
   inside query 3, and `  corpusGaps: none` over a fleet with no gap →
-  `tests/fleet-reader/corpus-gaps.test.js`
+  `tests/fleet-reader/corpus-gaps.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260901-08-8**: WHEN `--mark reviewer-returned --file F` reads a return whose `killed` is
   `[{"claim":"x"}]` (no `file`/`line` keys), or `[{"claim":"x","file":"a.js"}]` (no `line`), or
   is missing, or is not an array THE SYSTEM SHALL exit 2 with stderr naming `killed[0]` (or the
@@ -218,7 +218,7 @@ appears once).
   `tests/review/escalate-row.test.js`, tagged
 - **AC-20260901-08-10**: WHEN the corpus gains the derived region THE SYSTEM SHALL CONTINUE TO
   carry all six 20260819/02 class ids as their own headings with a recipe → the existing
-  AC-20260819-02-9 test in `tests/replay/replay.test.js`, tagged
+  AC-20260819-02-9 test in `tests/replay/replay.test.js`, tagged [retired: specs/20261024/05-replay-retired.md]
 
 ## Assumptions (escalation triggers)
 

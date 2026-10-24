@@ -39,9 +39,9 @@
 // no coverage grep, no manifest append; `/spec:plan` lock runs it before locking (D4). The lint
 // path returns BEFORE the full mode's `--root`/`--manifest` requirement check (Fragile, below) — a
 // `--lint` invocation supplies neither. In FULL mode a mixed bullet is a WARNING only
-// (`mixed-pin <id> — split …`), never a finding: full mode also runs inside `/spec:replay` against
-// the last CLEANed spec, whose own bullets may be mixed (Assumptions A1) — a red leg there would be
-// a false catch on history, not a build-time promise ready to ship untested.
+// (`mixed-pin <id> — split …`), never a finding: full mode also runs against an already-CLEANed
+// spec, whose own bullets may be mixed (Assumptions A1) — a red leg there would be a false
+// catch on history, not a build-time promise ready to ship untested.
 //
 // specs/20260820/04-entrypoint-conformance.md D13: the
 // missing-test-file check asserted existence for EVERY tests-layer File Plan row regardless of
@@ -343,9 +343,9 @@ for (const b of wellFormed) {
 // specs/20260907/01-mixed-pin-guard-and-drift-line.md D3: a mixed carried AC is a WARNING here,
 // never a finding — unconditional, independent of --has-drift-script (same AC-line-lint reasoning
 // as the preGreen validation above), and independent of coverage (a mixed bullet may still be
-// fully covered by its cited test — the shape defect stands regardless). Full mode also feeds
-// /spec:replay against the last CLEANed spec, whose own bullets may be mixed (Assumptions A1) — a
-// finding here would redden a fair measurement of history; --lint (above) is where a mixed bullet
+// fully covered by its cited test — the shape defect stands regardless). Full mode also runs
+// against an already-CLEANed spec, whose own bullets may be mixed (Assumptions A1) — a
+// finding here would redden history; --lint (above) is where a mixed bullet
 // is refused, at /spec:plan lock and build's red-check, not here.
 for (const b of wellFormed) {
   if (pinShape(b.raw) === 'mixed') {

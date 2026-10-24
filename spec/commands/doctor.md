@@ -146,16 +146,12 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     deletion path is the same `test-expiry` command with `--apply`, run only after one
     `AskUserQuestion` naming the count and the files — never under `--fix`'s line-item path
     and never silently.
-21. **Replay baseline-red honesty** (broken — never advisory) — run
-    `node "$(spec-paths replay)" --audit-claims --root .`; remedy = relabel the row's `legs` to
-    `green` (or `red:<leg>` if the mutation reddened it) — a `--fix` patch (before → after row
-    shown).
-22. **Catalog currency** (advisory) — only when `docs/design/catalog.md` exists, run
+21. **Catalog currency** (advisory) — only when `docs/design/catalog.md` exists, run
     `node "$(spec-paths catalog-inventory)" --root . --out docs/design/catalog.md --check`; exit 1
     → one ⚠️ line (spec/doctrine/genesis.md § Genesis: Design Stage).
-23. **Prototype config** (advisory) — only when the config has a `prototype` block, run
+22. **Prototype config** (advisory) — only when the config has a `prototype` block, run
     `node "$(spec-paths prototype-driver)" check --json`; each finding is one ⚠️ line.
-24. **Walkthrough config** (advisory) — only when the config has a `walkthrough` block, run
+23. **Walkthrough config** (advisory) — only when the config has a `walkthrough` block, run
     `node "$(spec-paths walkthrough)" check --json`; each finding is one ⚠️ line.
 
 ## Semantic spot-check — small, bounded
@@ -177,13 +173,12 @@ grounding entry that teaches a verified bug. The bar, per patch — all three, n
    before → after text and evidence; every patch needs its own explicit yes.
 3. **Scope: line-item only, inside the grounding layer** (pipeline rules file, convention
    rules, generated agents, generated skills, the settings `permissions` block, config
-   values, `scripts/spec-patterns.sh`), plus check 18's renumber of the not-yet-built spec and
-   check 21's `legs` relabel. Structural drift is `/spec:init`'s job — `--fix`
+   values, `scripts/spec-patterns.sh`), plus check 18's renumber of the not-yet-built spec. Structural drift is `/spec:init`'s job — `--fix`
    refuses it and says why.
 
 After patching: re-run the affected checks, re-stamp `contractHash`/`generatedBy`, and
-append the correction as a Gotchas entry citing the evidence — checks 18 and 21 patch the
-spec and the ledger row directly and skip the re-stamp and the Gotchas append.
+append the correction as a Gotchas entry citing the evidence — check 18 patches the
+spec directly and skips the re-stamp and the Gotchas append.
 
 ## Report & recommendation
 
@@ -204,7 +199,7 @@ naming the findings that drove the call).
 ## Rules
 
 - Read-only by default; every edit is user-approved, targeted, and inside the grounding
-  layer, plus the check 18 renumber and the check 21 ledger relabel. `--fix` widens what may
+  layer, plus the check 18 renumber. `--fix` widens what may
   be patched, never who approves or where.
 - Never run the host's `gateCommand`/`testCommand`/`setupCommand` — verify they resolve
   (exceptions: `manifest-check` in the activation check; a single falsifying line when

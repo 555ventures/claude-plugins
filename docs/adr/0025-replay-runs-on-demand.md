@@ -10,7 +10,7 @@
   D5's ruling that execution is "review's own close... rather than a printed reminder" are all
   reversed. (b) `spec/doctrine/core.md` § Feedback Loop — the replay-cadence paragraph is
   rewritten in place by specs/20260913/09 D5; this record is the durable account of why.
-- Amended by: —
+- Amended by: ADR-0036
 
 ## Context
 

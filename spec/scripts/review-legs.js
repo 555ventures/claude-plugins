@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict'
 // review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path>
-//   [--skips <file>] [--fix-delta] [--replay] [--out-dir <dir>]
+//   [--skips <file>] [--fix-delta] [--out-dir <dir>]
 //
 // Why (v7 redesign): the review stage's Phase 0 was ~2 pages of leg choreography a
 // session re-performed by hand every review — resolve the gate, launch five background legs,
@@ -112,13 +112,8 @@
 // `testCommand` gets the typed whole-row alternative {"unavailable":"no-test-command"} — never a
 // silent skip, since `testCommand` is a contract-required config key.
 //
-// specs/20260912/04-softs-get-a-reader.md D5: --replay skips exactly the wave-3b promise-sweep
-// leg and nothing else — every other leg runs unaffected, with its keys, order and `scope`
-// value unchanged. promise-sweep.js reads nothing but the spec text (no --root, no File Plan
-// parsing, no test-file reads), and replay's overlay deliberately withholds `specs/` to keep
-// the reviewer blind, so in a replay tree the leg can only ever re-derive the pre-review-fix
-// result — it observes no manifest row is emitted; verdict.js is not involved (a replay run
-// never derives a review verdict).
+// specs/20261024/05-replay-retired.md D3: the wave-3b promise-sweep leg runs on every
+// invocation; there is no flag that skips a leg, and an unrecognised argument exits 2.
 //
 // specs/20260902/05-manifest-stamped-scope.md D1: every row this script appends
 // through its own `appendRow` writer carries `scope` as its LAST key — "full" with no
@@ -156,10 +151,10 @@ const { extractSection, parseAcBullets, parseDisposition } = require('./lib/spec
 const { fmMap } = require('./lib/frontmatter')
 
 function usage() {
-  console.error('usage: review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path> [--skips <file>] [--fix-delta] [--replay] [--out-dir <dir>]')
+  console.error('usage: review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path> [--skips <file>] [--fix-delta] [--out-dir <dir>]')
 }
 
-let root = null, spec = null, base = null, manifest = null, skips = null, fixDelta = false, replay = false, outDir = null
+let root = null, spec = null, base = null, manifest = null, skips = null, fixDelta = false, outDir = null
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
@@ -169,9 +164,8 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--manifest') manifest = argv[++i]
   else if (a === '--skips') skips = argv[++i]
   else if (a === '--fix-delta') fixDelta = true
-  else if (a === '--replay') replay = true
   else if (a === '--out-dir') outDir = argv[++i]
-  else { usage(); process.exit(2) }
+  else { console.error('review-legs: unknown argument ' + a); usage(); process.exit(2) }
 }
 if (!root || !spec || !base || !manifest) { usage(); process.exit(2) }
 root = path.resolve(root)
@@ -476,14 +470,9 @@ async function main() {
   // ---- wave 3b: promise-sweep — runs in EVERY scope including --fix-delta (D4: the spec text
   // may be amended during a fix pass, and the leg is milliseconds); appends its own manifest row
   // the same way ac-matrix.js does above, never via appendRow (that would double-write it).
-  // --replay skips exactly this leg (D5, specs/20260912/04-softs-get-a-reader.md): its only
-  // input is the spec text, which replay's overlay withholds, so it would only ever re-derive
-  // the pre-review-fix result in a replay tree. No manifest row is emitted when skipped.
-  let wrotePromiseSweep = false
-  if (!replay) {
+  {
     const psr = await sh(`node ${q(path.join(scriptDir, 'promise-sweep.js'))} --spec ${q(spec)} --manifest ${q(manifest)}`)
     fs.writeFileSync(path.join(outDir, 'promise-sweep.txt'), psr.out + psr.err)
-    wrotePromiseSweep = true
   }
 
   // ---- summary ----------------------------------------------------------------------------
@@ -501,7 +490,7 @@ async function main() {
   // a RED_BLOCKING run still hands the driver a complete manifest to derive STOPPED from.
   fs.renameSync(manifest, manifestFinal)
   console.log(`manifest: ${manifestFinal}`)
-  console.log(`outputs: ${outDir}  (reconcile.json, gate-output.txt${wroteSuiteOutput ? ', suite-output.txt' : ''}, smoke.txt, ac-matrix.txt${wrotePromiseSweep ? ', promise-sweep.txt' : ''}${config.patternsScript ? ', patterns.txt' : ''}${wroteAtRisk ? ', at-risk.txt' : ''})`)
+  console.log(`outputs: ${outDir}  (reconcile.json, gate-output.txt${wroteSuiteOutput ? ', suite-output.txt' : ''}, smoke.txt, ac-matrix.txt, promise-sweep.txt${config.patternsScript ? ', patterns.txt' : ''}${wroteAtRisk ? ', at-risk.txt' : ''})`)
   if (blockedBy.length) {
     console.log(`RED_BLOCKING: ${blockedBy.join(',')}`)
     process.exit(1)

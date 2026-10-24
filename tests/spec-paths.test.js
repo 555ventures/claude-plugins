@@ -22,10 +22,9 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // every other bundled script it needs a spec-paths key, or plan.md's Lock checklist invocation
 // and review-legs.js's own resolution find nothing.
 
-// AC-20260819-02-10: specs/20260819/02-mutation-replay.md D14 adds spec/scripts/replay.js and
-// spec/doctrine/replay-corpus.md to the bundle — like every other bundled script/doctrine file
-// they need spec-paths keys (`replay`, `replay-corpus`), or /spec:replay resolves nothing. This
-// is a recurrence of the known spec-paths additive-collision class (specs/20260814/01-ac-matrix-script.md):
+// AC-20260819-02-10: specs/20260819/02-mutation-replay.md D14 added the two replay keys to the
+// bundle; specs/20261024/05-replay-retired.md D1 retires them. This
+// was a recurrence of the known spec-paths additive-collision class (specs/20260814/01-ac-matrix-script.md):
 // the key list below is updated in place, never a parallel exhaustive pin.
 
 // AC-20260821-01-11: specs/20260821/01-red-check.md D11 adds spec/scripts/red-check.js to the
@@ -106,7 +105,7 @@ test('AC-20260926-03-8: spec-paths workspace-scan resolves to spec/scripts/works
 
 // AC-20260904-02-12: specs/20260904/02-worktree-include-shared-owner.md D5 adds
 // spec/scripts/worktree-include.sh to the bundle (a new `worktree-include` key) — like every
-// other bundled script it needs a spec-paths key, or replay.js's sibling-resolution fallback and
+// other bundled script it needs a spec-paths key, or a sibling-resolution fallback and
 // any session running `spec-paths worktree-include` by hand resolve nothing (§ Risk Tiers,
 // spec-paths: "a wrong key breaks commands silently"; same additive-collision class as
 // AC-20260819-02-10 above). The key list below is updated in place, never a parallel exhaustive pin.
@@ -141,7 +140,7 @@ test('AC-20260926-03-8: every documented key resolves to an existing path (AC-20
   for (const key of ['root', 'workflows', 'wf-enforce',
     'wf-research', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
-    'review-driver', 'build-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check',
+    'review-driver', 'build-driver', 'promise-sweep', 'red-check',
     'registry-check', 'genesis-driver', 'escape-row', 'mocks-driver', 'commit-coverage',
     'worktree-include', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract',
     'design-contract-check', 'design-rules-template', 'workspace-scan',
@@ -318,7 +317,7 @@ test('shared-for: every mapped section name still exists as a core.md or design.
 // lists are unchanged from the pre-image.
 test('shared-for: scoped output carries its sections (AC-20260926-01-6) and is smaller than the full doc, and the retired stage/sketch keys fall open to it (incl. AC-20260820-05-17: escape keeps serving Incident Policy; AC-20260823-01-19: release keeps Release Stage/Runtime Verification and drops Feedback Loop; AC-20260912-03-13: design, build and review print the fail-open whole doctrine)', () => {
   const full = run('shared-for', 'no-such-command')
-  for (const cmd of ['plan', 'release', 'enforce', 'escape', 'doctor', 'replay', 'queue', 'fix']) {
+  for (const cmd of ['plan', 'release', 'enforce', 'escape', 'doctor', 'queue', 'fix']) {
     const out = run('shared-for', cmd)
     assert.ok(out.length < full.length, cmd + ' output should be a strict subset')
     assert.match(out, /## Host Grounding/, cmd + ' must keep Host Grounding')
@@ -377,16 +376,6 @@ test('shared-for: scoped output carries its sections (AC-20260926-01-6) and is s
     'doctor must not pay for design doctrine — check 8 only verifies design files exist')
   assert.match(run('shared-for', 'doctor'), /## Grounding Drift/)
   assert.match(run('shared-for', 'doctor'), /## Rule Enforcement/)
-  // D14: replay's section list — Feedback Loop is where the cadence policy (D12) lives, so the
-  // command must be served it or /spec:replay's own doctrine reads nothing about its cadence.
-  assert.match(run('shared-for', 'replay'), /## Tiers/)
-  assert.match(run('shared-for', 'replay'), /## Model Placement/)
-  assert.match(run('shared-for', 'replay'), /## Decisions/)
-  assert.match(run('shared-for', 'replay'), /## Question Style/)
-  assert.match(run('shared-for', 'replay'), /## Console Output Style/)
-  assert.match(run('shared-for', 'replay'), /## Feedback Loop/,
-    'replay reads the cadence policy (D12) from Feedback Loop — without this section the command has no ' +
-    'doctrine source for "every 5th review" at all')
   // D12: /spec:queue's shared-for section list (Host Grounding|State Machine|Question Style|
   // Console Output Style) — a missing map entry means the command reads no doctrine at all for
   // its predicate vocabulary (State Machine) or its list/veto-notice wording conventions.
@@ -403,19 +392,18 @@ test('shared-for: scoped output carries its sections (AC-20260926-01-6) and is s
     'D12: /spec:queue must be served § Console Output Style — the list\'s numbered-pending render and its ⏳ gate marker must follow the shared narration doctrine')
 })
 
-test('AC-20260819-02-10: spec-paths replay and spec-paths replay-corpus resolve to the D14 script and corpus paths', () => {
-  const fs = require('node:fs')
-  const replayPath = run('replay').trim()
-  assert.strictEqual(replayPath, path.join(SPEC, 'scripts/replay.js'),
-    'D14: `spec-paths replay` must resolve to spec/scripts/replay.js — a wrong or missing key breaks every ' +
-    '/spec:replay invocation silently (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently")')
-  assert.ok(fs.existsSync(replayPath), 'the resolved replay.js path must actually exist on disk: ' + replayPath)
-
-  const corpusPath = run('replay-corpus').trim()
-  assert.strictEqual(corpusPath, path.join(SPEC, 'doctrine/replay-corpus.md'),
-    'D14: `spec-paths replay-corpus` must resolve to spec/doctrine/replay-corpus.md — the corpus is served ' +
-    'to /spec:replay through this key, and a wrong key means the command can never find its own corpus')
-  assert.ok(fs.existsSync(corpusPath), 'the resolved replay-corpus.md path must actually exist on disk: ' + corpusPath)
+test('AC-20260819-02-10 / AC-20261024-05-3: spec-paths replay and spec-paths of the retired corpus key exit non-zero with a usage line that names neither key', () => {
+  const { spawnSync } = require('node:child_process')
+  const retiredKeys = ['replay', ['replay', 'corpus'].join('-')]
+  for (const key of retiredKeys) {
+    const r = spawnSync('bash', [BIN, key], { encoding: 'utf8' })
+    assert.notStrictEqual(r.status, 0,
+      '`spec-paths ' + key + '` must exit non-zero like any unknown key — a zero exit (or a printed path) means the retired key still resolves and the command surface it served is not gone: ' + r.stdout + r.stderr)
+    assert.match(r.stderr, /^usage: spec-paths /m,
+      '`spec-paths ' + key + '` must print the usage line to stderr so the caller learns the key is unknown: ' + r.stderr)
+    assert.doesNotMatch(r.stderr, new RegExp('(^|[|\\[ ])(' + retiredKeys.join('|') + ')($|[|\\] ])'),
+      'the usage line must not name either retired replay key — a documented key that resolves nothing misleads the next reader: ' + r.stderr)
+  }
 })
 
 // AC-20260824-02-1: specs/20260824/02-design-stage-on-render-gate.md D2 retires
@@ -623,7 +611,7 @@ test('shared-for init: scoped (not fail-open) and strictly smaller than the whol
 // exists to find zero occurrences of elsewhere.
 const RUN_DESIGN_KEY = 'run-' + 'design'
 
-test('shared-for: every scoped command serves § Session Execution (AC-20260926-01-5; AC-20260928-01-2 adds prototype), and the scoped roster has exactly 15 members (AC-20261008-01-1: connect joins; /spec:fix joins) with neither sketch nor the design-only-delta key among them', () => {
+test('shared-for: every scoped command serves § Session Execution (AC-20260926-01-5; AC-20260928-01-2 adds prototype), and the scoped roster has exactly 14 members (AC-20261008-01-1: connect joins; /spec:fix joins; AC-20261024-05-3: replay leaves) with neither sketch nor the design-only-delta key among them', () => {
   const src = read('spec/bin/spec-paths')
   const cmds = [...src.matchAll(/^\s+([a-z-]+)\)\s+SECTIONS="/gm)].map(m => m[1])
   assert.ok(!cmds.includes('sketch'),
@@ -632,8 +620,8 @@ test('shared-for: every scoped command serves § Session Execution (AC-20260926-
   assert.ok(!cmds.includes(RUN_DESIGN_KEY),
     'AC-20260926-01-5/D1: the scoped roster must not include the design-only-delta key — its ' +
     'SECTIONS arm is deleted, falling open to the whole doctrine like every unknown command: ' + cmds.join(','))
-  assert.strictEqual(cmds.length, 15,
-    'AC-20260926-01-5 + AC-20260928-01-2: with the sketch and design-only-delta arms deleted and the prototype arm added, exactly 15 scoped (connect joins, AC-20261008-01-1; fix joins, spec/commands/fix.md) ' +
+  assert.strictEqual(cmds.length, 14,
+    'AC-20260926-01-5 + AC-20260928-01-2: with the sketch and design-only-delta arms deleted and the prototype arm added, exactly 14 scoped (connect joins, AC-20261008-01-1; fix joins, spec/commands/fix.md; replay leaves, AC-20261024-05-3) ' +
     'command arms (A1, executed at lock) — got ' + cmds.length + ': ' + cmds.join(','))
   assert.ok(cmds.includes('fix'),
     'spec/commands/fix.md: the scoped roster must include "fix" — otherwise /spec:fix loads both whole doctrine files instead of its nine sections')

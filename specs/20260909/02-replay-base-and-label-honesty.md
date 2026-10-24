@@ -252,13 +252,13 @@ replay.md — "the same first failing line" (D7)
   rv_a --legs baseline-red:suite --outcome caught --patch p --workflow w` exits 2 (the CLEAN
   row records `suite` exit 0), and `--select` on the same ledger prints `baselineRed=none` →
   test "a review run id resolves to its CLEAN row, not to a red iteration that shares the id"
-  in `tests/replay/replay.test.js`
+  in `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-02-9**: WHEN `--record --legs baseline-red:<leg>` names a leg the resolved row
   records green THE SYSTEM SHALL exit 2 naming the leg and its recorded exit and append nothing
   — a single CLEAN row `{"runId":"rv_a","legs":[{"leg":"suite","exit":0}]}` with
   `--legs baseline-red:suite --outcome caught --patch p --workflow w` → exit 2, stderr contains
   `suite` and `exit 0`, and the ledger file is byte-for-byte unchanged → test "a baseline-red
-  claim the cited review row records green is refused" in `tests/replay/replay.test.js`
+  claim the cited review row records green is refused" in `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-02-10**: WHEN `--record --legs baseline-red:<leg>` names a leg the resolved row
   records red THE SYSTEM SHALL append the row exactly as today — the same fixture with
   `legs:[{"leg":"suite","exit":1}]` → exit 0, stdout matching `recorded runId=rp_[0-9a-f]{12}`,
@@ -267,7 +267,7 @@ replay.md — "the same first failing line" (D7)
   `exit 1` counts as red (→ exit 0) → tests "a founded baseline-red claim records unchanged" and
   "smoke's exit 4 is green to the cross-check, exit 1 is red" in `tests/replay/replay.test.js`,
   together with every existing `baseline-red` accept-path test retagged in place per the File
-  Plan's fixture duty
+  Plan's fixture duty [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-02-11**: WHEN `--record --legs baseline-red:<leg>` cites a `--review-run-id`
   that names no CLEAN review row, or whose CLEAN row carries no `legs` array, THE SYSTEM SHALL
   exit 2 naming that run id and append nothing — `--review-run-id rv_missing` against a ledger
@@ -275,27 +275,27 @@ replay.md — "the same first failing line" (D7)
   `{"stage":"review","runId":"rv_b","verdict":"GATE_RED","legs":[…]}` → exit 2, stderr contains
   `rv_b`; a CLEAN row `{"stage":"review","runId":"rv_c","verdict":"CLEAN"}` with no `legs` key →
   exit 2, stderr contains `rv_c` → test "a baseline-red claim citing an absent, never-CLEAN or
-  legless review row is refused" in `tests/replay/replay.test.js`
+  legless review row is refused" in `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-02-12**: WHEN `--record --outcome setup-failed --legs pristine-red:gate,suite`
   cites a CLEAN row recording both legs green THE SYSTEM SHALL exit 0 and append a row whose
   `legs` is the literal string `pristine-red:gate,suite`, `class` `null`, `files` `null` —
   CLEAN row `{"runId":"rv_a","legs":[{"leg":"gate","exit":0},{"leg":"suite","exit":0}]}` → exit
   0 and the appended row's `legs` field equals `"pristine-red:gate,suite"` → test "a pristine-red
-  setup-failed row records the legs that could not be reproduced" in `tests/replay/replay.test.js`
+  setup-failed row records the legs that could not be reproduced" in `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-02-13**: WHEN `--legs pristine-red:<leg>` names a leg the resolved row records
   red THE SYSTEM SHALL exit 2 naming `baseline-red` as the correct shape and append nothing —
   the same call against `legs:[{"leg":"gate","exit":1}]` → exit 2, stderr contains
   `baseline-red` → test "a pristine-red claim about a leg that was already red is refused" in
-  `tests/replay/replay.test.js`
+  `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-02-14**: WHEN `--legs pristine-red:<leg>` is given with any `--outcome` other
   than `setup-failed` THE SYSTEM SHALL exit 2 naming `setup-failed` as the only accepted outcome
   and append nothing — `--outcome leg-caught --legs pristine-red:gate --patch p` → exit 2,
   stderr contains `setup-failed` → test "pristine-red is accepted only with setup-failed" in
-  `tests/replay/replay.test.js`
+  `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-02-15**: WHEN `--outcome setup-failed` is given `--class`, `--patch` or
   `--workflow` THE SYSTEM SHALL CONTINUE TO exit 2 and append nothing — `--outcome setup-failed
   --legs none --class silent-fallback` → exit 2 → the existing AC-20260823-09 setup-failed
-  refusal tests in `tests/replay/replay.test.js`, retagged with this AC-ID in place
+  refusal tests in `tests/replay/replay.test.js`, retagged with this AC-ID in place [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-02-16**: WHEN `spec/commands/replay.md` is read THE SYSTEM SHALL state, in
   Phase 1 step 7 rung 3, that a still-red pristine result is re-verified once against a third
   manifest, that the three manifests are copied to `{root}/.claude/spec-runs/{runId}.manifests/`
@@ -311,7 +311,7 @@ replay.md — "the same first failing line" (D7)
   AC-20260831-01-7 step-7 prose test in `tests/replay/replay.test.js`, extended and retagged
   with this AC-ID in place — its four inherited assertions (`reset --hard HEAD^`, a fresh
   manifest, the word `pristine`, and a route to rung 4's seam) all still hold and are never
-  deleted — plus a sibling Phase 4 assertion
+  deleted — plus a sibling Phase 4 assertion [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-02-17**: WHEN `plugin-bump.js --check` runs at this repository's root with
   `SPEC_REVIEW_BASE` set to `git rev-parse HEAD` THE SYSTEM SHALL exit 0 and print
   `(no change under ` for every marketplace plugin — stdout differing from the bare `--check`

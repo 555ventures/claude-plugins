@@ -91,13 +91,7 @@ review — one row pointing back at the review that passed it.
 it. Every memory file a spec's diff touches is therefore disposed at review close, one stated
 fate each — carry, correct, or delete.
 
-The **escape ledger** and the **reviewer replay catch-rate** are the pipeline's only two
-ground-truth signals.
-
-**Replay cadence** is `replay.js --due` policy, never a session's memory: due every 5th
-review and at minimum once per major pipeline version. Execution is `/spec:replay`, run on
-demand. Dueness is seen on the dashboard footer's `replay due` clause instead, printed by
-`/spec:status` every run. The blocking REPLAY state was retired by `docs/adr/0025`.
+The **escape ledger** is the pipeline's one ground-truth signal.
 
 ## Incident Policy
 

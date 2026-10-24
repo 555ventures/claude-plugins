@@ -131,7 +131,7 @@ sub-state; no second ledger read.
   SHALL print `DONE` again and exit 0 (no state re-derivation from deleted manifests) → writes tests/review/merge-concludes-to-done.test.js
 - **AC-20260913-09-4**: WHEN `replay.js --due` runs over a ledger with a `caught` replay row
   followed by five review rows THE SYSTEM SHALL CONTINUE TO print `due reviewsSince=5` and exit
-  0, and over three review rows SHALL CONTINUE TO print `not due reviewsSince=3` and exit 1 → reuses tests/replay/replay.test.js :: AC-20260819-02-1: --due
+  0, and over three review rows SHALL CONTINUE TO print `not due reviewsSince=3` and exit 1 → reuses tests/replay/replay.test.js :: AC-20260819-02-1: --due [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260913-09-5**: WHEN `replayDueness` is called with the two replay examples in Contracts
   THE SYSTEM SHALL return `{ reviewsSince: 3, due: false }` and `{ reviewsSince: 5, due: true }`
   respectively → writes tests/status/since-release.test.js
@@ -145,7 +145,7 @@ sub-state; no second ledger read.
   footer SHALL carry neither clause → writes tests/status/since-release.test.js
 - **AC-20260913-09-8**: WHEN the same root's ledger also holds a `caught` replay row followed by
   six review rows THE SYSTEM SHALL append `· replay due (6/5) — /spec:replay` as the footer's last
-  clause, and with four review rows SHALL print no `replay` clause → writes tests/status/since-release.test.js
+  clause, and with four review rows SHALL print no `replay` clause → writes tests/status/since-release.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260913-09-9**: WHEN `spec-status.js --json` and `--next --json` run THE SYSTEM SHALL
   CONTINUE TO emit exactly the top-level keys `anomalies, briefs, specs, superseded` and `next` → reuses tests/spec-status.test.js :: AC-20260902-11-7 / AC-20260903-05-9 / AC-20260909-08-8
 - **AC-20260913-09-10**: WHEN `spec/doctrine/core.md` § Feedback Loop, `stage-review.md` and

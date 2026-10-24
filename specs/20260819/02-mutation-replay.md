@@ -139,13 +139,13 @@ one judgment seam: the session shows the finding beside the injected defect and 
 - **AC-20260819-02-1**: WHEN the ledger holds N review rows appended after the last replay
   row THE SYSTEM SHALL exit 0 printing `due reviewsSince=N` at N ≥ 5 and exit 1 at N < 5
   (e.g. 5 review rows, 0 replay rows → exit 0; a replay row then 4 review rows → exit 1)
-  → new tests in tests/replay/replay.test.js
+  → new tests in tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-02-2**: WHEN selecting THE SYSTEM SHALL prefer a critical-tier CLEAN row
   over a later standard-tier one within the window and print
   `spec= reviewRunId= commit= parent= diffBase=` (e.g. rows [critical@t1, standard@t2] →
   the t1 spec, `parent` = the t1 close commit's parent, `diffBase` = that spec's
   frontmatter `build_base`/`diff_base` read at `parent`; [standard@t1, standard@t2] → t2)
-  → same file
+  → same file [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-02-3**: WHEN `--setup` is given a `--dir` inside the repo root THE SYSTEM
   SHALL refuse with exit 3 and create nothing; WHEN given an outside dir THE SYSTEM SHALL
   create a detached worktree and write the `replay-worktree` marker into its private git dir
@@ -153,7 +153,7 @@ one judgment seam: the session shows the finding beside the injected defect and 
   `.git/info/exclude` byte-identical and `git status --porcelain` in the main tree empty
   (e.g. `--dir <repo>/x` → exit 3; `--dir <tmp>/x` → worktree at the commit, marker present
   at `<git -C <tmp>/x rev-parse --git-dir>/replay-worktree`, host `.git/info/exclude`
-  unchanged and host `git status --porcelain` empty) → same file
+  unchanged and host `git status --porcelain` empty) → same file [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-02-4**: WHEN `--apply` runs THE SYSTEM SHALL leave the mutation committed
   on the worktree's detached HEAD, with the passed `--subject` (default `build:
   follow-up`) as the commit subject, so `git diff <base>..HEAD` contains the patch's hunks
@@ -162,33 +162,33 @@ one judgment seam: the session shows the finding beside the injected defect and 
   `--subject "build(20260819/02): scheduled mutation replay harness"` → `git -C <dir> log
   -1 --format=%s` prints that subject verbatim, `git -C <dir> diff --name-status
   <base>..HEAD` lists only the patched file; `git status --porcelain` in the worktree is
-  clean) → same file
+  clean) → same file [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-02-5**: WHEN `--score` reads a workflow return THE SYSTEM SHALL print
   `caught` on a finding at the mutated file within ±5 lines, `ambiguous` on findings
   elsewhere, `missed` on zero findings, and exit 2 printing nothing on a return that isn't
   `verdict: CLEAN` with a `survivors` array (e.g. mutation at lib/x.js:40 — finding
   `{file:"lib/x.js",line:43}` → caught; `{file:"lib/y.js",line:40}` → ambiguous; `[]` →
   missed; `{verdict:"REVIEWER_FAILED"}` or a return with no `survivors` array → exit 2,
-  nothing printed) → same file
+  nothing printed) → same file [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-02-6**: WHEN `--record` runs THE SYSTEM SHALL append exactly one ledger
   row matching the Contracts shape with a fresh `rp_` runId and write
   `.claude/spec-runs/<rp_id>.json` holding the patch verbatim (and `reviewer: null` when
   `--outcome leg-caught`) (e.g. runId matches `^rp_[0-9a-f]{12}$`; row keys are exactly
-  the Contracts set) → same file
+  the Contracts set) → same file [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-02-7**: WHEN `--stats` reads a ledger with 2 caught, 1 missed, 1
   leg-caught THE SYSTEM SHALL print totals per outcome, per-class counts, and
-  `catch-rate 2/3` (leg-caught excluded from the denominator) → same file
+  `catch-rate 2/3` (leg-caught excluded from the denominator) → same file [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-02-8**: WHEN `--teardown` targets a dir whose private git dir (`git -C
   <dir> rev-parse --git-dir`) holds no `replay-worktree` marker THE SYSTEM SHALL refuse
   with exit 3 and delete nothing; with the marker present there THE SYSTEM SHALL remove the
   worktree (e.g. a plain mkdir dir → `rev-parse --git-dir` fails or has no `worktrees`
   segment → exit 3 and still present; a --setup dir → marker found at
   `.git/worktrees/<name>/replay-worktree` → removed and pruned from `git worktree list`)
-  → same file
+  → same file [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-02-9**: WHEN the shipped corpus file is parsed THE SYSTEM SHALL find all 6
   class ids from Contracts, each carrying a recipe section (structural check executed
   against `spec/doctrine/replay-corpus.md` — the one sanctioned prose-shape assert, on the
-  file whose ids `--record --class` values must match) → same file
+  file whose ids `--record --class` values must match) → same file [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-02-10**: WHEN `spec-paths replay` / `spec-paths replay-corpus` run THE
   SYSTEM SHALL print the two paths and `spec-paths shared-for replay` SHALL emit the D14
   section list (existing shared-for heading test covers name validity) → tests in
@@ -196,7 +196,7 @@ one judgment seam: the session shows the finding beside the injected defect and 
 - **AC-20260819-02-11**: WHEN spec-status derives against a ledger containing
   `stage:"replay"` rows THE SYSTEM SHALL CONTINUE TO exit 0 with zero anomalies (executed
   2026-08-19 in planning: synthetic root + replay row → exit 0, anomalies 0) → same file
-  as AC-1
+  as AC-1 [retired: specs/20261024/05-replay-retired.md]
 
 ## Assumptions (escalation triggers)
 

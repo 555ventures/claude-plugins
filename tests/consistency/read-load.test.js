@@ -42,11 +42,11 @@ const PROSE_CAP = path.join(ROOT, 'spec', 'scripts', 'prose-cap.js')
 // cut. Both tables may only shrink.
 const COMMAND_CEILING = {
   init: 270, doctor: 215, enforce: 295, escape: 215, genesis: 85, mocks: 60, plan: 120,
-  prototype: 95, queue: 55, release: 175, replay: 190, run: 75, status: 60, connect: 22, fix: 70,
+  prototype: 95, queue: 55, release: 175, run: 75, status: 60, connect: 22, fix: 70,
 }
 const BUDGET = {
   connect: 70, doctor: 323, enforce: 376, escape: 284, genesis: 235, init: 421, mocks: 166,
-  plan: 228, prototype: 195, queue: 109, release: 264, replay: 288, run: 227, status: 115, fix: 177,
+  plan: 228, prototype: 195, queue: 109, release: 264, run: 227, status: 115, fix: 177,
 }
 
 // wc -l semantics: the number of newline characters in the file.
@@ -70,8 +70,8 @@ const commands = fs.readdirSync(COMMANDS).filter(f => f.endsWith('.md')).map(f =
 // tests/consistency/stage-files.test.js (AC-20260912-03-15).
 test('every /spec command has a read-load budget entry (AC-20261008-01-2: its own BUDGET entry, no flat CAP fallback) and an own-file COMMAND_CEILING entry (AC-20261008-02-2), and neither table nor roster names a retired stage command', () => {
   assert.ok(commands.length >= 10, 'expected the command roster, got ' + commands.length)
-  assert.strictEqual(commands.length, 15,
-    'AC-20261008-01-2: the roster must be the fifteen /spec commands, connect and fix included — got ' + commands.join(','))
+  assert.strictEqual(commands.length, 14,
+    'AC-20261008-01-2: the roster must be the fourteen /spec commands, connect and fix included, the retired replay command gone (specs/20261024/05-replay-retired.md) — got ' + commands.join(','))
   assert.ok(!/(const|let|var)\s+CAP\s*=/.test(fs.readFileSync(__filename, 'utf8')),
     'AC-20261008-01-2: a flat CAP fallback is still defined in read-load.test.js — a command without its own entry would escape the measured ratchet silently')
   for (const cmd of commands) {
@@ -185,7 +185,6 @@ const SHARED_FOR = {
   queue: ['Host Grounding', 'State Machine', 'Question Style', 'Console Output Style', 'Session Execution'],
   escape: ['Host Grounding', 'Feedback Loop', 'Incident Policy', 'Question Style', 'Console Output Style', 'Session Execution'],
   doctor: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Tiers', 'Runtime Verification', 'Feedback Loop', 'State Machine', 'Question Style', 'Console Output Style', 'Session Execution'],
-  replay: ['Host Grounding', 'Tiers', 'Feedback Loop', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Session Execution'],
   connect: ['Host Grounding', 'Question Style', 'Console Output Style', 'Session Execution'],
   init: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Pipeline Entry', 'Tiers', 'Runtime Verification', 'Release Stage', 'Model Placement', 'Question Style', 'Console Output Style', 'Canonical Docs Loop', 'Session Execution', 'Design Canon'],
 }

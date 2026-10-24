@@ -198,14 +198,14 @@ scripts/size-ratchet.js  --reconcile
   THE SYSTEM SHALL run that command inside `--dir` between `git apply --index` and the commit
   and include the declared path in that same commit — `git diff --name-only HEAD^ HEAD` →
   `derived.json` and the mutated file, both, in one commit → test "the declared post-apply
-  reconcile rides the mutation commit" in `tests/replay/replay.test.js`
+  reconcile rides the mutation commit" in `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-01-2**: WHEN the declared command newly dirties a path outside `paths` — command
   `printf x > derived.json; printf y > stray.txt` with `paths: ["derived.json"]` — THE SYSTEM
   SHALL exit 4 with a stderr line containing `stray.txt`, and leave `git rev-parse HEAD`
   unchanged from its pre-`--apply` value; and WHEN the command itself exits nonzero — `exit 3` —
   THE SYSTEM SHALL exit 4 quoting that command's stderr, HEAD unchanged → tests "an undeclared
   path dirtied by the post-apply reconcile is refused and nothing is committed" and "a failing
-  post-apply command is exit 4 with its own stderr quoted" in `tests/replay/replay.test.js`
+  post-apply command is exit 4 with its own stderr quoted" in `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-01-3**: WHEN a tracked path is already dirty before `--apply` — `lock.txt`
   modified, `D0 = {lock.txt}` — and the declared command rewrites both `derived.json` and
   `lock.txt` with `paths: ["derived.json"]` THE SYSTEM SHALL exit 0, commit `derived.json` and
@@ -214,47 +214,47 @@ scripts/size-ratchet.js  --reconcile
   mutated file only; and WHEN `paths` is `["derived.json", "lock.txt"]` instead THE SYSTEM SHALL
   stage `lock.txt` too, because staging reads `paths ∩ Dafter` and not the delta → tests
   "pre-existing dirt is neither refused nor staged" and "a declared path already dirty in D0 is
-  still staged" in `tests/replay/replay.test.js`
+  still staged" in `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-01-4**: WHEN `replay.afterApply` declares `paths: ["derived.json"]` THE SYSTEM
   SHALL write a `--patch-out` whose `+++ b/` headers name only the mutated file — commit
   touching `derived.json` and `spec/scripts/x.js` → the emitted patch contains
   `+++ b/spec/scripts/x.js` and no `+++ b/derived.json`; and WHEN `paths` is `["gen/"]` and the
   command writes `gen/a.json` THE SYSTEM SHALL exclude `gen/a.json` the same way → tests "the
   canonical patch excludes the declared reconcile paths" and "a trailing-slash path excludes its
-  whole subtree" in `tests/replay/replay.test.js`
+  whole subtree" in `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-01-5**: WHEN the declared `command` contains `{spec}` and `--apply` is invoked
   without `--spec` THE SYSTEM SHALL exit 2 with a stderr line naming `--spec`, before the patch
   is applied (`git status --porcelain` in `--dir` unchanged); and WHEN `--spec
   specs/20260909/01-x.md` is supplied the command SHALL run with `{spec}` replaced by that exact
   string → tests "a {spec} placeholder with no --spec is refused before anything is applied" and
-  "{spec} is substituted with the --spec value" in `tests/replay/replay.test.js`
+  "{spec} is substituted with the --spec value" in `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-01-6**: WHEN `--spec` does not match `^specs/\d{8}/\d{2}-` — `--spec
   'x; rm -rf /'` or `--spec docs/notes.md` — THE SYSTEM SHALL exit 2 naming the expected shape,
   before the patch is applied and before any `bash -c` runs → test "a --spec that is not a dated
-  spec path is refused before it reaches the shell" in `tests/replay/replay.test.js`
+  spec path is refused before it reaches the shell" in `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-01-7**: WHEN a `paths` entry is absolute (`/etc/x`), contains `..`
   (`../outside.json`), or resolves under `specs/`, `.claude/` or `docs/canonical/`
   (`.claude/notes.json`) THE SYSTEM SHALL exit 2 naming that entry, applying nothing; and WHEN
   an entry is written `./derived.json` THE SYSTEM SHALL treat it as `derived.json` → tests "an
   afterApply path that escapes the worktree or names a review-outcome surface is refused" and
-  "a ./-prefixed path is normalized" in `tests/replay/replay.test.js`
+  "a ./-prefixed path is normalized" in `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-01-8**: WHEN `replay.afterApply` is present but malformed — `{command: ""}`,
   `{command: "x"}` with no `paths`, `{command: "x", paths: "derived.json"}`, or
   `{command: "x", paths: []}` — THE SYSTEM SHALL exit 2 naming `.claude/spec.config.json` and
   the offending field, and leave `git status --porcelain` in `--dir` unchanged → test "a
   malformed afterApply block is refused before the patch is applied" in
-  `tests/replay/replay.test.js`
+  `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-01-9**: WHEN `<--root>/.claude/spec.config.json` does not exist, or exists with
   no `replay.afterApply`, THE SYSTEM SHALL CONTINUE TO apply the patch, commit it under
   `--subject`, and write a `--patch-out` equal to the full `git diff HEAD^ HEAD` → the existing
   `--apply` tests in `tests/replay/replay.test.js` — whose hosts carry no config file at all —
-  retagged with this AC-ID in place
+  retagged with this AC-ID in place [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-01-10**: WHEN `<--root>/.claude/spec.config.json` exists but is not parseable
   JSON THE SYSTEM SHALL exit 2 naming that file, applying nothing — never falling through to
   the no-hook path — and WHEN the config lives at `<--dir>/.claude/spec.config.json` only, with
   none at `<--root>`, THE SYSTEM SHALL read no hook from it (the no-hook path) → tests "an
   unparsable host config is refused rather than read as no-hook" and "the hook is read from the
-  main root, never from the scratch worktree" in `tests/replay/replay.test.js`
+  main root, never from the scratch worktree" in `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-01-11**: WHEN `spec/commands/replay.md` is read THE SYSTEM SHALL state, in
   Phase 1 step 5, that `--apply` takes `--spec {spec}`, runs the host's declared post-apply
   reconcile between applying and committing, stages only the declared paths, excludes them from
@@ -265,7 +265,7 @@ scripts/size-ratchet.js  --reconcile
   and the Phase 4 slice not matching `/never reaches this phase/` → test "replay.md Phase 1 step
   5 documents the post-apply reconcile hook and its failure arm" in
   `tests/replay/replay.test.js`, section-scoped exactly as AC-20260831-01-7 scopes its own step
-  slices
+  slices [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260909-01-12**: WHEN `size-ratchet.js --root <dir> --reconcile --cite <spec>` runs
   against a tree carrying one stale ceiling and one over file — `scripts/a.js` baselined 10,
   actual 8; `scripts/b.js` baselined 10, actual 12 — THE SYSTEM SHALL write
@@ -291,7 +291,7 @@ scripts/size-ratchet.js  --reconcile
   that a survivor naming only a declared reconcile path is adjudicated `missed`, because the
   reviewer spent its finding on commit shape rather than the planted defect — the Phase 3 slice
   matching `/reconcile path/i` and `/missed/` → test "replay.md Phase 3 rules a
-  reconcile-path-only survivor" in `tests/replay/replay.test.js`
+  reconcile-path-only survivor" in `tests/replay/replay.test.js` [retired: specs/20261024/05-replay-retired.md]
 
 ## Assumptions (escalation triggers)
 

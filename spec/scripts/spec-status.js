@@ -93,10 +93,10 @@ function writeOut(str) {
   }
 }
 const { parseFilePlan } = require('./lib/file-plan')
-// specs/20260913/09-the-tool-shows-never-interrupts.md D2/D3/D4: sinceLastRelease/replayDueness
-// feed the footer's two ignorable clauses (D4) — computed once over the SAME `ledgerRows` this
+// specs/20260913/09-the-tool-shows-never-interrupts.md D2/D3/D4: sinceLastRelease feeds the
+// footer's ignorable done-since-release clause — computed once over the SAME `ledgerRows` this
 // file already reads for the observation sub-state below, never a second ledger read.
-const { readLedgerRows, qualifyingObservation, sinceLastRelease, replayDueness } = require('./lib/observation')
+const { readLedgerRows, qualifyingObservation, sinceLastRelease } = require('./lib/observation')
 const {
   isSupersededBriefText, isItemDone, isItemReady, makeCtx, dedupeItems, stripAutoPlaced,
   reconcileMissingBriefs,
@@ -986,9 +986,9 @@ const waitClause = n => `${n} more open`
   // specs/20260909/08-next-carries-the-lanes.md D4: the `{m} could run in parallel (--all)`
   // clause is retired outright — the lanes it counted are already on screen above.
   // specs/20260913/09-the-tool-shows-never-interrupts.md D4: two more clauses ride AFTER the
-  // hygiene clause, each only when non-zero/due — a done-since-release count (or "never
-  // released" when no CLEAN release row exists) and a replay-due count. Both are ignorable by
-  // design: the owner asked for a line they can see, never a state that blocks anything.
+  // hygiene clause, only when non-zero — a done-since-release count (or "never released"
+  // when no CLEAN release row exists). Ignorable by design: the owner asked for a line they
+  // can see, never a state that blocks anything.
   {
     // D4/Behavior: wait count n excludes escape entries outright, then excludes the top pick
     // itself — the top pick is entries[0] regardless of whether it is the escape entry, so an
@@ -1024,8 +1024,6 @@ const waitClause = n => `${n} more open`
     if (h > 0) clauses.push(`${h} hygiene finding${h === 1 ? '' : 's'} (/spec:doctor)`)
     const { done, released } = sinceLastRelease(ledgerRows)
     if (done >= 1) clauses.push(released ? `${done} done since last release` : `${done} done, never released`)
-    const { reviewsSince, due } = replayDueness(ledgerRows)
-    if (due) clauses.push(`replay due (${reviewsSince}/5) — /spec:replay`)
     out.push('', `${glyph} ${head}${clauses.map(c => ` · ${c}`).join('')}`)
   }
 

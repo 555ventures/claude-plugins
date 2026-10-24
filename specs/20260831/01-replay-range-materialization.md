@@ -111,33 +111,33 @@ does; dismissal records `unresolved`.
   {M `lib/a.js`, A `tests/new.test.js`, D `lib/dead.js`, M `specs/01-x.md`, M
   `.claude/spec-runs.jsonl`} → `git diff --name-status <parent> HEAD` in the worktree lists
   exactly `M lib/a.js`, `A tests/new.test.js`, `D lib/dead.js`; `git log -1 --format=%s` →
-  `build: follow-up`; teardown still removes the worktree) → tests/replay/replay.test.js
+  `build: follow-up`; teardown still removes the worktree) → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260831-01-2**: WHEN the overlay runs THE SYSTEM SHALL leave every meta-prefix path
   at the `--commit` version: the spec file still reads `status: implementing`, the worktree
   ledger has no close-time row, `docs/canonical/` matches the parent, and a close-added
-  `.claude/spec-runs/<id>.json` evidence file is absent → tests/replay/replay.test.js
+  `.claude/spec-runs/<id>.json` evidence file is absent → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260831-01-3**: WHEN `--overlay` names a close commit whose non-meta delta is empty
   (meta-only close — the clean-close degenerate case) THE SYSTEM SHALL create no overlay
   commit (worktree HEAD == `--commit`), exit 0, and print ` overlaid=0` →
-  tests/replay/replay.test.js
+  tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260831-01-4**: WHEN `--overlay` is not a strict descendant of `--commit` (an
   unrelated sha, an ancestor, or the same sha) THE SYSTEM SHALL exit 4 before creating the
   worktree, naming the remedy (re-run `--select` and pass its printed `commit`/`parent`
-  pair) → tests/replay/replay.test.js
+  pair) → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260831-01-5**: WHEN `--setup … --subject "replay harness check"` is invoked THE
   SYSTEM SHALL refuse with exit 2 naming the constraint; a build-shaped subject (e.g.
   `build(20260830/03): ci leg honest absence`) SHALL be accepted and become the overlay
-  commit's subject verbatim → tests/replay/replay.test.js
+  commit's subject verbatim → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260831-01-6**: WHEN `--setup` runs without `--overlay` THE SYSTEM SHALL CONTINUE TO
   create the worktree at `--commit` with the marker and the two-token printed line, refusing
   in-repo dirs outside `.claude/worktrees/` exactly as today (existing setup tests retagged
-  in place, never duplicated) → tests/replay/replay.test.js
+  in place, never duplicated) → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260831-01-7**: WHEN replay.md Phase 1 is read THE SYSTEM SHALL state, in step 1,
   that setup passes `--overlay {commit}` and why (the judged range ends at the close
   commit), and, in step 7 rung 3's own text: the pristine-baseline verification
   (`reset --hard HEAD^`, fresh manifest, re-run legs) between the failed retry and
   `leg-caught`, red-pristine routing to rung 4's seam (prose pin, AC-20260823-09-9 pattern —
-  section-scoped grep, never whole-file) → tests/replay/replay.test.js
+  section-scoped grep, never whole-file) → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 
 ## Assumptions (escalation triggers)
 

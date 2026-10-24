@@ -53,7 +53,7 @@ test('AC-20260823-04-1/2/3 (sanity + absent key): fmValue on a key with no comme
   assert.strictEqual(fmValue(DOC, 'status'), 'implementing',
     'a plain unquoted value with no trailing comment must pass through unchanged — a stripping rule that mangles the ordinary case is worse than the bug it fixes: got ' + JSON.stringify(fmValue(DOC, 'status')))
   assert.strictEqual(fmValue(DOC, 'nonexistent_key'), '',
-    'a key absent from the document must return "" (the Contracts\' documented default) — every caller (spec-status.js, the review/design drivers, replay.js) falls back from this default rather than crashing on undefined: got ' + JSON.stringify(fmValue(DOC, 'nonexistent_key')))
+    'a key absent from the document must return "" (the Contracts\' documented default) — every caller (spec-status.js, the review/design drivers) falls back from this default rather than crashing on undefined: got ' + JSON.stringify(fmValue(DOC, 'nonexistent_key')))
 })
 
 test('fmBlock returns exactly the raw interior between the leading `---` fences (no fence lines, no body) and "" when no frontmatter block is present', () => {
@@ -81,7 +81,7 @@ test('AC-20260823-04-1/2/3 (fmMap facet): fmMap over full document text returns 
 // specs/20260823/03 D4 already routed spec-review-driver.js's local fmVal through
 // lib/frontmatter.js's (already correctly quote-aware, whitespace-strip) fmVal, and D8 records
 // that this driver's D2 obligation is satisfied by a one-line import rename alone — the
-// substantive bug this build closes is spec-status.js/replay.js's OWN kv-loop (AC-10). An
+// substantive bug this build closes is spec-status.js's OWN kv-loop (AC-10). An
 // executed spike against this exact fixture shape confirms the driver already resolves
 // `build_base: <sha>   # set by enter-worktree` to bare `<sha>` and reaches state REVIEWER with
 // no `fatal: invalid object name` — this pin is therefore GREEN at HEAD already, kept and logged
@@ -180,28 +180,27 @@ test('AC-20260823-04-4: WHEN the review driver reads a spec whose build_base: li
     'the commented and comment-free fixtures are otherwise identical (same commit history, same source, same tests) — if build_base resolution genuinely strips the comment the same way, both must derive the SAME state; a divergence here means the two fixtures resolved different bases: control=' + controlState + ' treatment=' + treatmentState)
 })
 
-// ---- AC-20260823-04-10 / AC-20260824-02-6: routing sweep — the three surviving scripts route
+// ---- AC-20260823-04-10 / AC-20260824-02-6: routing sweep — the surviving scripts route
 // ---- through lib/frontmatter.js (spec-design-driver.js retired by specs/20260824/02 D2) ------
 
-const THREE_SCRIPTS = [
+const ROUTED_SCRIPTS = [
   'scripts/spec-review-driver.js',
   'scripts/spec-status.js',
-  'scripts/replay.js',
 ]
-// The literal text of the buggy any-`#` strip this build closes (present today in spec-status.js
-// and replay.js's own private frontmatter() kv loops) — stripping at ANY `#`, not just a
+// The literal text of the buggy any-`#` strip this build closes (present today in spec-status.js's
+// own private frontmatter() kv loop) — stripping at ANY `#`, not just a
 // whitespace-preceded one, is exactly rv_6825fa48c98d/rv_e83659d49386's mechanism reimplemented a
 // third and fourth time. Absence of this literal is the only way to observe "no second
 // derivation" from outside the module — there is no runtime hook that proves a script chose not
 // to write its own regex, so a source-text assertion is the sole available observable here (the
 // AC-4 behavioral pin above and the spec-status.js pin below cover the actually-reachable half).
 const BUGGY_ANY_HASH_STRIP = '\\s*#.*$'
-// The literal per-line kv-construction shape spec-status.js and replay.js each carry today —
+// The literal per-line kv-construction shape spec-status.js carries today —
 // a local re-derivation of exactly what fmMap now owns.
 const BUGGY_KV_LINE = '/^([A-Za-z_]+):\\s*(.*)$/'
 
-test('AC-20260823-04-10 / AC-20260824-02-6: EACH of spec-review-driver.js, spec-status.js, and replay.js requires lib/frontmatter.js and carries no surviving local per-key or per-line frontmatter-parsing construction', () => {
-  for (const rel of THREE_SCRIPTS) {
+test('AC-20260823-04-10 / AC-20260824-02-6: EACH of spec-review-driver.js and spec-status.js requires lib/frontmatter.js and carries no surviving local per-key or per-line frontmatter-parsing construction', () => {
+  for (const rel of ROUTED_SCRIPTS) {
     const src = read('spec/' + rel)
     assert.ok(src.includes("require('./lib/frontmatter')"),
       rel + ' must require lib/frontmatter.js — a script that parses spec frontmatter without ' +

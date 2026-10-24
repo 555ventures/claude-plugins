@@ -142,7 +142,7 @@ DONE     unchanged (terminal; re-prints the next pointer; sidecar deleted here n
   (`reviewer replay due — run /spec:replay` as a report warn) → tests/run-ledger.test.js
 - **AC-20260821-02-9**: WHEN `spec/doctrine/core.md` § Feedback Loop is read THE SYSTEM
   SHALL name the driver's REPLAY state as the cadence's executor and `/spec:replay` as the
-  manual/retry surface → tests/run-ledger.test.js
+  manual/retry surface → tests/run-ledger.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260821-02-10**: WHEN `spec/commands/review.md`'s close step and `spec/doctrine/core.md`
   § Feedback Loop are read THE SYSTEM SHALL state that every `.claude/agent-memory/` file a
   spec's diff touches is disposed at review close with one stated fate each (carry / correct /

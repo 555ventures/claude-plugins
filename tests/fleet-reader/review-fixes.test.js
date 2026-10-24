@@ -77,7 +77,7 @@ test('review finding 1: a >64KB --json payload survives a pipe byte-identical, e
   // truncation this test exists to catch is still detected by a MISSING key).
   assert.deepStrictEqual(Object.keys(parsed).sort(), [
     'cleanByVia', 'cleanContradicted', 'driftCensus', 'escapes', 'gate08', 'legRecency', 'owed',
-    'population', 'replayDebt',
+    'population',
   ], 'a truncated pipe write cuts the JSON mid-object — if any top-level key is missing or extra, the output is corrupt even though the process reported exit 0')
 
   const codeOnly = stripLineComments(fs.readFileSync(SCRIPT_PATH, 'utf8'))

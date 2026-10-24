@@ -2,7 +2,7 @@
 'use strict'
 // fleet-reader.js [--repos-root <dir>] [--json] [--owed] — read every spec-run ledger this
 // machine can see and answer nine fixed questions: leg red-recency, the brief-08 adoption gate,
-// escape aggregates, replay debt, CLEAN-contradicted-by-escape (with its false-CLEAN rate), a schema-drift census,
+// escape aggregates, CLEAN-contradicted-by-escape (with its false-CLEAN rate), a schema-drift census,
 // escapes-per-CLEAN by via (loop vs. direct vs. unknown), and — the ninth,
 // specs/20260903/01-owed-query-and-row-handoff.md D1 — `owed`: every plugin-blaming row across
 // this machine's checkouts (escape rows whose preventedBy is review-check|runtime-leg, missed
@@ -35,11 +35,6 @@
 // only `specs/`, `spec/`, and `tests/` are scanned (docs/spec-feedback/ is read separately, by
 // D6's own frontmatter parser, purely to find UNSTAMPED findings — never as a citation surface).
 //
-// specs/20260901/08-corpus-derivation-and-kill-match.md D6: the escapes
-// query gains corpusGaps (classes at or past CORPUS_BAR fleet recurrences with no replay-corpus
-// entry) and registry (every classified class, with its inCorpus flag) — both derived fresh each
-// run from lib/replay-corpus.js's parser against the plugin's own shipped corpus, never stored.
-//
 // Exit codes: 0 = derived (0 repos scanned is still a derived answer — the population block
 //                 carries the absence, never an error)
 //             2 = usage error: unknown flag, missing --repos-root value, --repos-root not a
@@ -52,7 +47,6 @@ const os = require('os')
 const { execFileSync } = require('child_process')
 const { configExists } = require('./lib/host-config')
 const { validateEscapeRow, validateAmendmentRow, joinAmendments, escapeKey } = require('./lib/escape-row')
-const { CORPUS_BAR, corpusPath, parseCorpus } = require('./lib/replay-corpus')
 const { fmBlock } = require('./lib/frontmatter')
 
 const USAGE = 'Usage: node fleet-reader.js [--repos-root <dir>] [--json] [--owed]'
@@ -404,50 +398,13 @@ function computeEscapes(reposList) {
     recurrentUnguarded.push({ class: cls, count, latestTs: classLatest[cls] || null })
   }
   recurrentUnguarded.sort((a, b) => a.class.localeCompare(b.class))
-  return { total, killedMatchNull, softMatchTrue, preventedBy, byClass, recurrentUnguarded, byRepo, amendments: amendmentsCount, incidents, unclassedRows }
-}
-
-// D6: cross the joined byClass count against the plugin's own shipped corpus — corpusGaps names
-// every non-unclassed class at or past CORPUS_BAR with no corpus id (class asc); registry lists
-// every non-unclassed class with its inCorpus flag (count desc, then class asc). Read fresh every
-// run — this script never stores a derived value between runs (D12).
-function computeCorpusCrossing(byClass) {
-  const ids = new Set(parseCorpus(fs.readFileSync(corpusPath(), 'utf8')).map((c) => c.id))
-  const corpusGaps = []
-  const registry = []
-  for (const [cls, count] of Object.entries(byClass)) {
-    if (cls === 'unclassed') continue
-    const inCorpus = ids.has(cls)
-    registry.push({ class: cls, count, inCorpus })
-    if (!inCorpus && count >= CORPUS_BAR) corpusGaps.push({ class: cls, count })
-  }
-  corpusGaps.sort((a, b) => a.class.localeCompare(b.class))
-  registry.sort((a, b) => b.count - a.count || a.class.localeCompare(b.class))
-  return { corpusGaps, registry }
-}
-
-// ---- query 4: replayDebt --------------------------------------------------------------------
-// Per repo: replay-row count, review rows with ts after the latest replay row's ts (no replay
-// rows -> all review rows + neverReplayed:true).
-
-function computeReplayDebt(reposList) {
-  const byRepo = []
-  for (const repo of reposList) {
-    const reviews = repo.rawRows.filter(r => r.stage === 'review' && typeof r.ts === 'string')
-    const replays = repo.rawRows.filter(r => r.stage === 'replay' && typeof r.ts === 'string')
-    let reviewsSinceLastReplay
-    let neverReplayed
-    if (!replays.length) {
-      reviewsSinceLastReplay = reviews.length
-      neverReplayed = true
-    } else {
-      const lastReplayTs = replays.reduce((max, r) => (r.ts > max ? r.ts : max), replays[0].ts)
-      reviewsSinceLastReplay = reviews.filter(r => r.ts > lastReplayTs).length
-      neverReplayed = false
-    }
-    byRepo.push({ name: repo.name, replays: replays.length, reviewsSinceLastReplay, neverReplayed })
-  }
-  return { byRepo }
+  // registry: every non-unclassed class with its count (count desc, then class asc) — the class
+  // vocabulary /spec:escape and the build driver's `--mark incident --class` read.
+  const registry = Object.entries(byClass)
+    .filter(([cls]) => cls !== 'unclassed')
+    .map(([cls, count]) => ({ class: cls, count }))
+    .sort((a, b) => b.count - a.count || a.class.localeCompare(b.class))
+  return { total, killedMatchNull, softMatchTrue, preventedBy, byClass, recurrentUnguarded, byRepo, amendments: amendmentsCount, incidents, unclassedRows, registry }
 }
 
 // ---- query 5: cleanContradicted -------------------------------------------------------------
@@ -491,7 +448,7 @@ function computeCleanContradicted(reposList) {
 }
 
 // A repo with no CLEAN rows has no rate at all — 0 would read as "never wrong" when the truth
-// is "never measured", the exact confusion query 4's neverReplayed flag exists to prevent.
+// is "never measured".
 function falseCleanRate(contradicted, cleans) {
   return cleans === 0 ? null : contradicted / cleans
 }
@@ -844,8 +801,6 @@ function computeOwed(reposList, reposRoot, escapesByClass) {
 const legRecency = computeLegRecency(reposData)
 const gate08 = computeGate08(reposData)
 const escapes = computeEscapes(reposData)
-Object.assign(escapes, computeCorpusCrossing(escapes.byClass))
-const replayDebt = computeReplayDebt(reposData)
 const cleanContradicted = computeCleanContradicted(reposData)
 const cleanByVia = computeCleanByVia(reposData)
 const driftCensus = computeDriftCensus(reposData)
@@ -862,7 +817,7 @@ function writeAll(fd, buf) {
 
 if (json) {
   writeAll(1, Buffer.from(JSON.stringify({
-    population, legRecency, gate08, escapes, replayDebt, cleanContradicted, driftCensus, cleanByVia, owed,
+    population, legRecency, gate08, escapes, cleanContradicted, driftCensus, cleanByVia, owed,
   }, null, 2) + '\n'))
 }
 
@@ -931,21 +886,6 @@ function renderEscapes(esc) {
   } else {
     lines.push('  recurrentUnguarded: none')
   }
-  // D6: corpusGaps — one line per gap, naming the class and its exact fleet-wide count with the
-  // authoring remedy verbatim; "corpusGaps: none" when there is no gap.
-  if (esc.corpusGaps.length) {
-    for (const g of esc.corpusGaps) {
-      lines.push(`  corpusGaps: ${g.class} (${g.count} recurrences) — author its section under ## Derived classes in spec/doctrine/replay-corpus.md`)
-    }
-  } else {
-    lines.push('  corpusGaps: none')
-  }
-  return lines.join('\n')
-}
-
-function renderReplayDebt(rd) {
-  const lines = ["4. Replay debt — reviews accumulated since each repo's last replay"]
-  for (const r of rd.byRepo) lines.push(`  ${r.name}: replays=${r.replays} reviewsSinceLastReplay=${r.reviewsSinceLastReplay} neverReplayed=${r.neverReplayed}`)
   return lines.join('\n')
 }
 
@@ -1049,7 +989,6 @@ if (!json) {
       renderLegRecency(legRecency),
       renderGate08(gate08),
       renderEscapes(escapes),
-      renderReplayDebt(replayDebt),
       renderCleanContradicted(cleanContradicted),
       renderDriftCensus(driftCensus),
       renderCleanByVia(cleanByVia),

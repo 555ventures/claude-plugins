@@ -137,10 +137,7 @@ defective file — that is the only unrecoverable input.
      is `review-check` or `runtime-leg`, a second line naming the row's key: `- {key} —
      the plugin repo's fleet-reader --owed picks this row up`.
    - `warns`: `correlated review said CLEAN — miscalibration signal /spec:doctor aggregates`
-     when the step-3 correlated review row's verdict was CLEAN, else omit. After the append,
-     re-run `node "$(spec-paths fleet-reader)" --json` and add `corpus gap: <class> has <N>
-     fleet recurrences and no replay-corpus section — author it in the plugin repo from this
-     fix` when `escapes.corpusGaps` now lists this row's effective class; omit otherwise.
+     when the step-3 correlated review row's verdict was CLEAN, else omit.
    - `found`: `killedMatch: execution-grounded verification killed a finding that later
      proved real — strongest re-tuning evidence the ledger can hold` when `killedMatch` is
      `true`, else omit.
@@ -159,8 +156,7 @@ historical rows that predate the `class`/`unclassedReason` fields.
 
 1. Run `node "$(spec-paths fleet-reader)" --json [--repos-root <dir>]`; the work list is
    `escapes.unclassedRows` verbatim. Empty → report `nothing to backfill` and stop.
-2. Build the registry: `escapes.byClass` keys minus `unclassed`, plus `spec-paths
-   replay-corpus`'s class headings.
+2. Build the registry: `escapes.byClass` keys minus `unclassed`.
 3. Per row, dispatch one Sonnet agent with paths only — the row's repo dir, spec path,
    defect file, `escapeTs`, the retained artifact at
    `<repo>/.claude/spec-runs/<reviewRunId>.jsonl` (or its legacy `.json` stem) when it

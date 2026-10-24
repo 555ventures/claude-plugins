@@ -336,3 +336,53 @@ test('AC-20261007-01-8: --mark closed is accepted from ROUND, abandoning the pro
   assert.match(r.stdout, /\(ROUND\s*(→|->)\s*CLOSED\)/, 'the accepted mark must print the ROUND to CLOSED checkpoint: ' + r.stdout)
   assert.ok(!fs.existsSync(worktreePath(dir)), 'the worktree must be gone')
 })
+
+// /spec:fix 2026-10-24 — the picture command is a bash string: a state url carrying `&` must reach
+// the host command whole, never end it early (an early end backgrounds the real command and the
+// PNG check can pass a picture of the wrong state).
+test('fix-20261024: --mark contracted hands a state url carrying & to the picture command whole', () => {
+  const dir = setupHost()
+  const routes = { '/women': { default: '/women', filtered: '/women?line=x&year=2025' } }
+  advanceToApproved(dir, routes)
+  const r = markContracted(dir)
+  assert.strictEqual(r.status, 0, 'a state url with & must not break the picture command: ' + r.stderr)
+  const call = pictureCalls(dir).find((x) => /filtered\.png$/.test(x.argv[1]))
+  assert.ok(call, 'the filtered state must be pictured: ' + JSON.stringify(pictureCalls(dir)))
+  assert.match(call.argv[0], /\/women\?line=x&year=2025$/, 'the whole url must reach the command: ' + call.argv[0])
+  assert.strictEqual(call.argv[2], '1280', 'width still arrives as the third argument: ' + JSON.stringify(call.argv))
+})
+
+// /spec:fix 2026-10-24 — documents the rounds leave behind are recorded in the handoff file: the
+// brief carries the driver's Prototype: line, contract.json lists every ADR/roadmap file committed
+// since opened plus every stray file in the prototype folder, and the CONTRACTED step prints them.
+test('fix-20261024: --mark contracted stamps the brief and records changed docs and stray files in contract.json; the CONTRACTED step prints them', () => {
+  const dir = setupHost()
+  advanceToApproved(dir)
+  // An ADR written mid-round, committed on main after the prototype opened; a note file no stage reads.
+  fs.mkdirSync(path.join(dir, 'docs/adr'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'docs/adr/0099-mid-round-decision.md'), '# ADR-0099\n\nStatus: Accepted\n')
+  git(dir, 'add', 'docs/adr/0099-mid-round-decision.md')
+  git(dir, 'commit', '-q', '-m', 'adr written during round 7')
+  fs.writeFileSync(path.join(designDir(dir), 'gap-audit.md'), '# stale notes\n')
+
+  const r = markContracted(dir)
+  assert.strictEqual(r.status, 0, 'contracted must succeed: ' + r.stderr)
+  const contract = readContract(dir)
+  assert.deepStrictEqual(contract.reconcile.docs, ['docs/adr/0099-mid-round-decision.md'],
+    'only the ADR committed after opened is listed — the brief committed before opening is not: ' + JSON.stringify(contract.reconcile))
+  assert.deepStrictEqual(contract.reconcile.stray, ['gap-audit.md'], 'the stray note is listed, the driver\'s own files are not: ' + JSON.stringify(contract.reconcile))
+  assert.strictEqual(contract.stampedBrief, BRIEF_REL)
+  const brief = fs.readFileSync(path.join(dir, BRIEF_REL), 'utf8').split('\n')
+  assert.ok(brief[0].startsWith('# '), 'the title stays first: ' + brief[0])
+  assert.strictEqual(brief[2], 'Prototype: ' + STEM + ' — contracted; the design prose below is historical, ' + CONTRACT_REL + ' is current',
+    'the Prototype: line sits under the title: ' + brief.slice(0, 4).join(' | '))
+
+  authorDerivedTests(dir)
+  const td = markTestsDerived(dir)
+  assert.strictEqual(td.status, 0, td.stderr)
+  const step = bare(dir).stdout
+  assert.match(step, /state: CONTRACTED/)
+  assert.match(step, /\nReconcile \(.*\): docs\/adr\/0099-mid-round-decision\.md\n/, 'the CONTRACTED step names the ADR to settle: ' + step)
+  assert.match(step, /\nStray in design\/prototypes\/.*: gap-audit\.md\n/, 'the CONTRACTED step names the stray file: ' + step)
+  assert.match(step, new RegExp('\\nCommit on main: design/prototypes/' + STEM + '/ and ' + BRIEF_REL), 'the step says to commit the stamped brief too: ' + step)
+})

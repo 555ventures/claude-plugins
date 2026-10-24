@@ -44,7 +44,6 @@ function pictureAll({ root, worktreePath, designDir, config, statesDoc, viewport
   const size = viewport || { width: 1280, height: 800 }
   const capturesDir = path.join(designDir, 'captures')
   fs.mkdirSync(capturesDir, { recursive: true })
-  const runEnv = Object.assign({}, process.env, env || {})
   const routesOut = {}
   let stateCount = 0
 
@@ -58,11 +57,19 @@ function pictureAll({ root, worktreePath, designDir, config, statesDoc, viewport
       // A stale file from an earlier run must not satisfy the signature check for a command that
       // wrote nothing this time.
       try { fs.rmSync(outFile, { force: true }) } catch { /* the signature check below catches whatever remains */ }
+      // Placeholders become quoted variable references, never spliced text: a state url carrying
+      // `&` or `;` would otherwise end the command early and background it, and the PNG check below
+      // could then pass a picture of the wrong state. A host that already wrote "{url}" still works
+      // (adjacent double quotes concatenate); the same values ride in the environment.
+      const runEnv = Object.assign({}, process.env, env || {}, {
+        PROTO_PICTURE_URL: url, PROTO_PICTURE_OUT: outFile,
+        PROTO_PICTURE_WIDTH: String(size.width), PROTO_PICTURE_HEIGHT: String(size.height),
+      })
       const cmd = template
-        .split('{url}').join(url)
-        .split('{out}').join(outFile)
-        .split('{width}').join(String(size.width))
-        .split('{height}').join(String(size.height))
+        .split('{url}').join('"$PROTO_PICTURE_URL"')
+        .split('{out}').join('"$PROTO_PICTURE_OUT"')
+        .split('{width}').join('"$PROTO_PICTURE_WIDTH"')
+        .split('{height}').join('"$PROTO_PICTURE_HEIGHT"')
       const r = spawnSync('bash', ['-c', cmd], { cwd: worktreePath, encoding: 'utf8', env: runEnv })
       if (r.status !== 0) {
         return {
@@ -104,7 +111,10 @@ function pictureAll({ root, worktreePath, designDir, config, statesDoc, viewport
 // writeContract — contract.json, schemaVersion 2. `pins` are the records the driver built
 // from pins.json; `tests` is null until tests-derived completes it.
 // ---------------------------------------------------------------------------
-function writeContract({ designDir, stem, brief, idea, approvedAt, base, viewport, routes, pins, tests }) {
+// `reconcile` = { since, docs, stray }: the ADR/roadmap files committed since the prototype opened
+// and the stray files in its folder — what /spec:plan must settle into Decisions rows. `stampedBrief`
+// = the brief that carries the driver's `Prototype:` line, or null.
+function writeContract({ designDir, stem, brief, idea, approvedAt, base, viewport, routes, pins, tests, reconcile, stampedBrief }) {
   const contract = {
     schemaVersion: 2,
     stem,
@@ -116,6 +126,8 @@ function writeContract({ designDir, stem, brief, idea, approvedAt, base, viewpor
     routes,
     pins,
     tests: tests === undefined ? null : tests,
+    reconcile: reconcile || { since: approvedAt, docs: [], stray: [] },
+    stampedBrief: stampedBrief || null,
   }
   fs.mkdirSync(designDir, { recursive: true })
   fs.writeFileSync(path.join(designDir, 'contract.json'), JSON.stringify(contract, null, 2) + '\n')

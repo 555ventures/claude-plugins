@@ -25,7 +25,11 @@ One session: explore → draft → lock. Produces a hardened spec at
   spiked. Every spec this session produces gets `brief: NN` (that stamp derives roadmap status); an ad-hoc spec gets
   `brief: n/a`. The brief's Out of scope is binding; a `surfaces` block is structure only.
 - **Behaviour contract:** read `contract.json`, every picture under `captures/` (view them), the test file and `pins.json`; amend
-  the brief its `brief` names (it gains `Prototype: <stem>`), a draft spec, or mint specs (`brief: n/a` without a roadmap). Every
+  the brief its `brief` names (the driver already stamped its `Prototype: <stem>` line; rewrite the design prose under it), a
+  draft spec, or mint specs (`brief: n/a` without a roadmap). `contract.json`'s `reconcile.docs` lists every ADR and roadmap file
+  committed since the prototype opened: each listed ADR this plan would rely on becomes one Decisions row — the pin that outranks
+  it, or `ADR-NNNN superseded by prototype <stem>` with the ADR's status flipped in the same turn; `reconcile.stray` files are
+  never read as grounding. Every
   spec carries `prototype: <stem>`; one owns the test file (row `<e2eFile with {stem}> | CREATE | other`, driver-copied) and
   one AC per pin: `WHEN pin <id> ("<note>", <screen> / <state>) is exercised against the production build THE SYSTEM SHALL pass
   its contract test`, tagged `[oracle: contract]`, ending `→ writes <that file>`. Never read `proto/<stem>` or its worktree.

@@ -520,6 +520,13 @@ function cmdMarkOpened() {
   status.branch = branch
   status.worktree = worktreeRel
   status.base = baseBranch
+  // The base commit at opening: `git log <openedCommit>..<base>` is the exact set of commits that
+  // landed while the idea was still moving (a --since window truncates to the second and would
+  // sweep in the brief committed moments before opening).
+  status.openedCommit = (function () {
+    const r = spawnSync('git', ['-C', root, 'rev-parse', baseBranch], { encoding: 'utf8' })
+    return r.status === 0 ? r.stdout.trim() : null
+  })()
   status.pinsPort = pinsPort
   appAddress(status)
   status.marks = Object.assign({ opened: null, approved: null }, status.marks)
@@ -608,6 +615,55 @@ function e2eFileOf() {
   return (proto.e2eFile || '').split('{stem}').join(stem)
 }
 
+// Files the driver itself writes under design/prototypes/<stem>/; anything else there is a note
+// no later stage reads.
+const CANONICAL_DESIGN_FILES = new Set(['status.json', 'pins.json', 'states.json', 'contract.json', 'captures', 'tests'])
+
+// The documents a reader between contracted and /spec:plan may still trust although the rounds
+// moved past them: every ADR and roadmap file committed on the base branch since the prototype
+// opened, plus every stray file in the prototype folder. Recorded in contract.json so /spec:plan
+// reads it from disk (core § On-Disk Handoff) and turns each listed ADR into a Decisions row.
+function reconcileDocs(status) {
+  const base = status.base || 'HEAD'
+  const range = status.openedCommit ? [status.openedCommit + '..' + base] : ['--since=' + status.marks.opened, base]
+  const log = spawnSync('git', ['-C', root, 'log', '--name-only', '--pretty=format:', ...range, '--', 'docs/adr', 'docs/roadmap'], { encoding: 'utf8' })
+  const docs = log.status === 0
+    ? Array.from(new Set(log.stdout.split('\n').map((l) => l.trim()).filter(Boolean))).sort()
+    : []
+  let stray = []
+  try { stray = fs.readdirSync(designDir).filter((n) => !CANONICAL_DESIGN_FILES.has(n)).sort() } catch { stray = [] }
+  return { since: status.marks.opened, docs, stray }
+}
+
+// Stamps the brief the prototype opened from: one `Prototype: <stem>` line under its title saying
+// the design prose below is historical and contract.json is current. Idempotent; the full rewrite
+// stays with /spec:plan. Returns the brief's relative path, or null when there is no brief.
+function stampBrief(status) {
+  const rel = status.input && status.input.brief
+  if (!rel) return null
+  const abs = path.join(root, rel)
+  if (!fs.existsSync(abs)) return null
+  const lines = fs.readFileSync(abs, 'utf8').split('\n')
+  const stampLine = 'Prototype: ' + stem + ' — contracted; the design prose below is historical, ' + contractRel + ' is current'
+  // Exact match: a `Prototype: <stem>-v2` line from another prototype must not pass for this one.
+  if (lines.some((l) => l === stampLine || l === 'Prototype: ' + stem)) return rel
+  const h1 = lines.findIndex((l) => l.startsWith('# '))
+  lines.splice(h1 >= 0 ? h1 + 1 : 0, 0, '', stampLine)
+  fs.writeFileSync(abs, lines.join('\n'))
+  return rel
+}
+
+function printReconcileLines(lines, contract) {
+  const rec = contract && contract.reconcile
+  if (!rec) return
+  if (rec.docs && rec.docs.length) {
+    lines.push('Reconcile (changed since the prototype opened — every ADR here becomes a Decisions row at /spec:plan: the pin that outranks it, or superseded): ' + rec.docs.join(', '))
+  }
+  if (rec.stray && rec.stray.length) {
+    lines.push('Stray in design/prototypes/' + stem + '/ (no stage reads these — fold into a pin or delete): ' + rec.stray.join(', '))
+  }
+}
+
 function cmdMarkContracted() {
   const status = loadStatus()
   if (!status) die(statusRel + ' does not exist — remedy: run --mark opened first')
@@ -655,10 +711,13 @@ function cmdMarkContracted() {
   })
   if (!pictured.ok) die(pictured.message)
 
-  // contract.json — every pin as a record, tests null until tests-derived.
+  // contract.json — every pin as a record, tests null until tests-derived, plus the documents
+  // the rounds may have left behind.
+  const reconcile = reconcileDocs(status)
+  const stampedBrief = stampBrief(status)
   contractLib.writeContract({
     designDir, stem, brief: status.brief || brief, idea: status.input && typeof status.input.idea === 'string' ? status.input.idea : null,
-    approvedAt: status.marks.approved, base: status.base, viewport, routes: pictured.routes,
+    approvedAt: status.marks.approved, base: status.base, viewport, routes: pictured.routes, reconcile, stampedBrief,
     pins: pins.map((p) => ({
       id: p.id, kind: p.kind, screen: p.screen, state: p.state,
       anchor: anchorIdOf(p.anchor), note: p.note, round: p.round,
@@ -1053,8 +1112,14 @@ function printTestsStep() {
 // ---------------------------------------------------------------------------
 function printContractedStep() {
   const lines = []
+  // Read softly: CONTRACTED derives from marks.testsDerived alone, and a contract.json deleted by
+  // hand must not turn the resting step into a refusal whose remedy (--mark contracted) is refused.
+  let contract = null
+  try { contract = JSON.parse(fs.readFileSync(contractPath, 'utf8')) } catch { contract = null }
   lines.push('[prototype-driver] state: CONTRACTED  prototype: ' + stem)
-  lines.push('Read only: ' + contractRel)
+  lines.push('Read only: ' + contractRel + (contract ? '' : ' (missing — restore it from git before /spec:plan)'))
+  printReconcileLines(lines, contract)
+  lines.push('Commit on ' + ((loadStatus() || {}).base || 'main') + ': design/prototypes/' + stem + '/' + (contract && contract.stampedBrief ? ' and ' + contract.stampedBrief + ' (its Prototype: line)' : ''))
   lines.push('Next: /spec:plan ' + contractRel)
   lines.push('Close (when every spec citing ' + stem + ' is done, or to abandon): node ' + driverAbs + ' ' + argText() + ' --root ' + root + ' --mark closed')
   core.emit(lines)

@@ -75,9 +75,10 @@ passes against the prototype and fails against the base. Then run `node {driver}
 
 ## CONTRACTED
 
-The driver prints `Read only: contract.json`, `Next: /spec:plan <contract>` and a `Close (` line.
-Commit `design/prototypes/<stem>/` on **main** directly (direct lane — no build worker touches
-it). `--mark closed` deletes the worktree, branch and database once every spec citing the stem
+The driver prints `Read only: contract.json`, its `Reconcile`/`Stray` lines when the rounds left
+documents behind, `Commit on main:`, `Next: /spec:plan <contract>` and a `Close (` line. Commit
+`design/prototypes/<stem>/` and the stamped brief on **main** directly (direct lane — no build
+worker touches them); the ADRs listed under `Reconcile` are settled by `/spec:plan`, never here. `--mark closed` deletes the worktree, branch and database once every spec citing the stem
 is done, or to abandon the idea — it is the one mark accepted from any resting state.
 
 ## CLOSED

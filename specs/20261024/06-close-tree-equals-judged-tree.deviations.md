@@ -1,5 +1,0 @@
-# Deviations — 06-close-tree-equals-judged-tree
-- tests/review/review-driver-close-row.test.js is outside the tests-wave file list; its zero-soft close test title gained the AC-20261024-06-8 tag (title only, no assertion change) because that criterion reuses it and ac-matrix counts the ID by occurrence.
-- tests/close-tree-drift-measure.test.js was created as a copy of tests/sweep-ceiling.test.js with the import and names switched; tests/sweep-ceiling.test.js is left in place for the implementation wave to delete with the module.
-- AC-20261024-06-2 and AC-20261024-06-11 cases in tests/review/close-tree-drift.test.js are CONTINUE-TO pins and pass on the pre-image by design.
-- tests/review/review-driver-close-expiry.test.js and tests/review/review-driver-close-refusals.test.js are auto-picked scope additions: the unconditional drift refusal fired first in four stranded setups (spec 20260912 AC 13-7 and 15-9; spec 20260903 AC 02-10; spec 20260830 AC 02-1), so each now lands its gateCommand/testCommand change and always-red.sh before the verdict call that pins the judged tree; no path is excluded and no AC tag changed.

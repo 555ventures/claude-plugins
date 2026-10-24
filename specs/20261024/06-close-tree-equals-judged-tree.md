@@ -1,6 +1,6 @@
 ---
 date: 2026-10-24
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: review
@@ -178,6 +178,20 @@ Delta at CLOSE, moved into the build by D9 because AC-20261024-06-10 sweeps it b
 — its `soft-swept`/`softSweep` hits are negative assertions that stay green, and AC-20261024-06-8
 reuses its zero-soft close test with the AC-ID tag the build adds. Every other literals hit is a
 File Plan row.
+
+Build deviations (one-offs, folded at close): the reused zero-soft close test gained the
+AC-20261024-06-8 tag in its title only, no assertion change; the measure test was created as a
+copy of the old ceiling test with import and names switched, and the old file deleted with its
+module; the AC-20261024-06-2 and -11 cases are CONTINUE-TO pins and passed on the pre-image by
+design; the close-expiry and close-refusals fixtures (D9) now land their gate/test command edits
+and `always-red.sh` before the verdict call that pins the judged tree, with no path excluded and
+no AC tag changed. The running review driver for this spec's own close was the installed
+pre-change one, so its three softs were recorded through the retired sweep mark as debt.
+
+### Advisory debt (review rv_e9bcdc40f01d)
+- a0 tests/review/review-driver-close-row.test.js:30 — AC-20261024-06-8 promises the zero-soft CLOSE verdict writes no `### Advisory debt` heading, but the reused test asserts nothing about the heading's absence; behavior holds by construction, so the clause is uncovered, not defective. — this spec retires post-verdict fixes; add the absence assertion as a Direct-lane commit after merge-back
+- a1 spec/scripts/spec-review-driver.js:1156 — Driver comment still narrates the retired ceiling as prior behavior. — this spec retires post-verdict fixes; drop the prior-behavior comment as a Direct-lane commit after merge-back
+- a2 tests/review/review-driver-close-refusals.test.js:205 — In review-driver-close-refusals.test.js the AC-20260830-02-1 case moved the always-red.sh/gateCommand edit above reviewer-returned but left the comment describing the old placement. — this spec retires post-verdict fixes; reword the stale fixture comment as a Direct-lane commit after merge-back
 
 ## Canonical Delta
 

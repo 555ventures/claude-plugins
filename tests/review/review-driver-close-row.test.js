@@ -51,6 +51,8 @@ test('AC-20260820-07-6 / AC-20260901-03-5 (SHALL CONTINUE TO) / AC-20260909-04-7
 
   assert.match(fs.readFileSync(host.spec, 'utf8'), /status:\s*done/,
     'CLOSE must flip the spec\'s frontmatter status from implementing to done')
+  assert.doesNotMatch(fs.readFileSync(host.spec, 'utf8'), /### Advisory debt/,
+    'a zero-soft CLOSE verdict must write no advisory-debt heading — an empty block would read as recorded debt that does not exist')
 
   assert.match(r.stdout, /Canonical Delta/, 'the CLOSE step must print the Canonical Delta instruction: ' + r.stdout)
   assert.match(r.stdout, /\.claude\/spec-runs\/\*\.jsonl/,

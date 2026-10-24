@@ -202,10 +202,9 @@ test('AC-20260830-02-1: WHEN --mark closed is invoked with all earlier refusals 
   assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
     'setup precondition: a clean zero-survivor disposition must reach CLOSE before the close-time gate refusal can be exercised: ' + dispR.stdout + dispR.stderr)
 
-  // Simulate the close commit itself breaking the gate: an always-red
-  // script the close-time gate now runs, written and committed alongside the spec's own
-  // status:done flip — exactly the class of files CLOSE writes, never a gate broken from the
-  // start (which would have died before REVIEWER instead).
+  // The close commit carries the always-red script and config written above (inside the judged
+  // snapshot, so no drift) alongside the spec's own status:done flip; the legs ran before the
+  // gate broke, so the review still reached CLOSE rather than dying before REVIEWER.
   const specRel = path.relative(host.root, host.spec)
   execFileSync('git', ['-C', host.root, 'add', specRel, '.claude/spec.config.json', 'always-red.sh', 'tests/foo.test.js'], { encoding: 'utf8' })
   execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'close'], { encoding: 'utf8' })

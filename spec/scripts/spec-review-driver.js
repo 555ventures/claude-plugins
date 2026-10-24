@@ -1153,10 +1153,10 @@ function doCloseWork(n) {
   writeReviewRef(runId, 'judged', row.diff.head)
   // Incident (shop-bltr 20261007/05, 2026-10-14): the legs judge the WORKING tree — a fix-delta
   // pass runs over fixes the session has not committed yet (snapshotTree(), never a commit) — but
-  // the close row's diff.head is HEAD. The old ceiling measured judged-HEAD..close-commit,
-  // so every reviewed-but-uncommitted hard fix was counted as sweep lines (127 vs 60 there). The
-  // judged tree is pinned here, at the same moment the row lands, as a tree sha the ceiling diffs
-  // against instead; diff.head and the judged ref keep their commit meaning for replay.
+  // the close row's diff.head is HEAD, so a close check against HEAD would count every
+  // reviewed-but-uncommitted hard fix as drift. The judged tree is pinned here, at the same
+  // moment the row lands, as the tree sha the close-tree drift check diffs against; diff.head and
+  // the judged ref keep their commit meaning.
   marks.judgedTree = snapshotTree()
 
   const newSpecText = specText.replace(/^status:\s*.*$/m, 'status: done')

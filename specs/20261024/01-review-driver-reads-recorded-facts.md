@@ -1,6 +1,6 @@
 ---
 date: 2026-10-24
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: review
@@ -143,6 +143,20 @@ were the last `n - 1` arithmetic in the file.
 
 Rejected: a thin hooks-based redesign (spike section 4) — a third the size, but any version
 that counts files reproduces this class; the fix is the rule, not the rewrite.
+
+Build departures (folded from the deviations sidecar at review close, 2026-10-24):
+- `liveIteration()` trusts `marks.iteration` only when `legsMode[<n>]` records a legs run at
+  that number; otherwise it falls back to the highest manifest on disk. D2 read literally
+  breaks AC-20260820-07-8 (a hand-edited `iteration: 99` must not move the cap), which
+  AC-20261024-01-3 reuses. The fallback fires only for an unrecorded counter.
+- D7 reddened two pins outside the File Plan that equated the ledger iteration with the
+  manifest number; D8 added them to scope and retagged them.
+- `tests/review/review-driver.fixtures.js` gained additive shared-setup exports (A3's remedy);
+  its count host's AC bullet carries a bare env tag so skip-reconcile stays green.
+- AC-20261024-01-5 stays on its reused pin, not in the new file, so red-check never expects it red.
+
+### Advisory debt (review rv_ff0ab35d94b3)
+- a0 /Users/jj/Projects/claude-plugins/.claude/worktrees/spec-01-review-driver-reads-recorded-facts/spec/scripts/spec-review-driver.js:103 — liveIteration() falls back to the highest manifest number on disk when marks.iteration has no legsMode entry — a recorded deviation from D2. It still reads a file-count stand-in on the hand-edited-counter path; sanctioned only by the deviations sidecar and AC-20260820-07-8, not by a Decision. — Removing the highest-manifest fallback in liveIteration() means amending locked D2 against AC-20260820-07-8 (a hand-edited iteration must not move the cap), which AC-20261024-01-3 reuses; that trade is the user's decision. The fallback fires only when marks.iteration has no recorded legs run.
 
 ## Canonical Delta
 

@@ -84,3 +84,16 @@ test('a bare-name skip line with no AC cited after its position falls back to th
     'env) and fail as unsanctioned-skip; without the fallback the skip becomes unmapped; findings: ' +
     JSON.stringify(out.findings))
 })
+
+test('a class-qualified skip id maps to the AC cited after its method, not the module docstring AC (specs/20261024/01 D6 last-segment name)', () => {
+  const dir = tmpdir('acm-skip-pos-class')
+  const body = POSITIONED.replace('def test_round_trip', 'class TestA:\n  def test_round_trip')
+  const { spec, manifest } = host(dir, body)
+  const out = runSkip(dir, spec, manifest, 'tests/unit/test_x.py::TestA::test_round_trip')
+  assert.ok(!out.findings.some(f => f.ac === 'AC-20261024-01-1'),
+    'the class-qualified id was looked up as "TestA::test_round_trip", missed in source, and fell back to the module docstring AC; findings: ' +
+    JSON.stringify(out.findings))
+  assert.deepStrictEqual(out.observed.skipReconcile, { skipped: 1, sanctioned: 1 },
+    'the skip must resolve to the AC cited after the method and be sanctioned; got ' +
+    JSON.stringify(out.observed.skipReconcile))
+})

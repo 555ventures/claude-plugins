@@ -828,9 +828,10 @@ function isFixDeltaManifest(n) {
 function fixRoundsDone() { return listManifestNumbers().filter(isFixDeltaManifest).length }
 // A recorded iteration is trusted only when a legs run actually recorded it (legsMode[n] exists):
 // a hand-edited counter names no legs run and must not move the live iteration (AC-20260820-07-8).
+function legsModeFor(n) { return marks.legsMode && marks.legsMode[String(n)] }
 function liveIteration() {
   const it = Number(marks.iteration) || 0
-  if (it > 0 && marks.legsMode && marks.legsMode[String(it)]) return it
+  if (it > 0 && legsModeFor(it)) return it
   const nums = listManifestNumbers()
   return nums.length ? nums[nums.length - 1] : 0
 }
@@ -1693,7 +1694,7 @@ function handleFixApplied() {
   marks.fixDeltaFrom = marks.fixDeltaFrom || {}
   marks.fixDeltaFrom[String(n)] = curN
   // D3: carry the prior iteration's skips file (and the count it was extracted against).
-  const prior = (marks.legsMode && marks.legsMode[String(curN)]) || {}
+  const prior = legsModeFor(curN) || {}
   const r = runLegsIteration(n, { fixDelta: true, skipsFile: prior.skipsFile || undefined, skipsGateCount: prior.skipsGateCount })
   if (r.stopped) return 'STOPPED'
   marks.pendingFix = false
@@ -2376,7 +2377,7 @@ function deriveState() {
   if (n === 0 || readManifestRows(manifestPathFor(n)).length === 0) {
     // D2: the recorded iteration owns the number — a missing manifest is regenerated at that same
     // number, in the mode legs last ran in, never replaced by judging an older one live.
-    const mode = (n > 0 && marks.legsMode && marks.legsMode[String(n)]) || {}
+    const mode = (n > 0 && legsModeFor(n)) || {}
     n = n || 1
     const r = runLegsIteration(n, { skipsFile: mode.skipsFile || undefined, skipsGateCount: mode.skipsGateCount, fixDelta: !!mode.fixDelta })
     if (r.stopped) return 'STOPPED'
@@ -2391,7 +2392,7 @@ function deriveState() {
   const rows = readManifestRows(manifestPathFor(n))
 
   // D3: SKIPS is per iteration — the gate's count against the count recorded at this iteration's extraction.
-  const liveMode = (marks.legsMode && marks.legsMode[String(n)]) || {}
+  const liveMode = legsModeFor(n) || {}
   const gateSkips = gateSkipsCount(rows)
   if (gateSkips > 0 && (!liveMode.skipsFile || liveMode.skipsGateCount !== gateSkips)) return 'SKIPS'
 
@@ -2543,6 +2544,7 @@ const STEPS = {
       `REVIEWER_FAILED is a failed run, never CLEAN — re-dispatch before marking.`
     if (currentN >= 1 && isFixDeltaManifest(currentN)) {
       const from = marks.fixDeltaFrom && marks.fixDeltaFrom[String(currentN)]
+      if (from === undefined) die(`the sidecar predates the fixDeltaFrom record for fix round ${currentN} — re-run: node ${__filename} ${specPath} --mark fix-applied`)
       const deltaFile = path.join(sidecarDir, `fix-delta-${currentN}.txt`)
       const priorReviewer = path.join(sidecarDir, `reviewer-return-${from}.json`)
       const priorDisposer = path.join(sidecarDir, `disposer-return-${from}.json`)

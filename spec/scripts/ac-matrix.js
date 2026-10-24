@@ -84,7 +84,7 @@
 // line never enters route 3, and an already-mapped line never re-resolves through it.
 //
 // specs/20261024/01-review-driver-reads-recorded-facts.md D6: routes 2 and 3 take the first AC cited at
-// or after the test name's own position in the file (route 3: the text after "::" up to the first
+// or after the test name's own position in the file (route 3: the last "::" segment up to the first
 // "["), falling back to the file-level citations only when none follows or the name is not found.
 //
 // D7 (specs/20260821/03-cross-spec-skip-mapping.md amendment): the coverage grep at step 6 (readTestFile(f).includes
@@ -643,7 +643,7 @@ for (const line of skipLines) {
     if (resolved && fs.existsSync(resolved)) {
       const relForCache = path.relative(root, resolved).split(path.sep).join('/')
       const content = readTestFile(relForCache)
-      const name = line.slice(line.indexOf('::') + 2).split('[')[0]
+      const name = line.slice(line.lastIndexOf('::') + 2).split('[')[0]
       const cited = [...content.matchAll(AC_ID_RE_GLOBAL)].map(m => m[0])
       const deduped = [...new Set(cited)]
       if (deduped.length) mappedIds = idsFromPosition(content, name ? content.indexOf(name) : -1, deduped)

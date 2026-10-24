@@ -239,7 +239,7 @@ function rulesWithGotchas(root, n) {
     '# Rules\n\n## Review Checks\n\n- none\n\n## Gotchas (evidence-cited)\n\n' + entries.join('\n') + '\n')
 }
 
-// specs/20260924/01-review-driver-reads-recorded-facts.md (tests for iteration identity and
+// specs/20261024/01-review-driver-reads-recorded-facts.md (tests for iteration identity and
 // per-iteration skips): a host whose gate prints `ℹ skipped <N>` where N is read from a file the
 // test rewrites between rounds, plus a hard-survivor return and one fix round driven through the
 // real marks. Consumed by iteration-identity.test.js and skips-per-iteration.test.js.

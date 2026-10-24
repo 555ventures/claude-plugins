@@ -266,6 +266,8 @@
   other, silently sanctioning an ungated AC in one order and falsely flagging a gated one in
   the other (found by retainer consult at this spec's own review, 2026-08-16).
   (specs/20260815/03-ac-matrix-fail-closed.md, done 2026-08-16)
+  Routes 2 and 3 map a skip to the first AC cited at or after the test's own name, falling back
+  to the file's citations. (specs/20261024/01-review-driver-reads-recorded-facts.md)
 
 - The Phase 0 leg inventory carries **`at-risk`**: required on full scope, skipped on
   fix-delta (mirroring `reconcile`), never blocking. `scope-reconcile.js` derives it as an
@@ -366,8 +368,8 @@
   driver never recommends a disposition, never picks a merge strategy, and never renders a
   user-facing report. Marks are a closed, artifact-verified set — state is re-derived from
   frontmatter + sidecar + on-disk artifacts on every invocation, a mark whose artifact vanished
-  is demanded again, and the fix-iteration cap (2) is counted from manifest files present, so
-  hand-editing the sidecar cannot reach ESCALATE. The `<spec>.review/` sidecar is scratch: never
+  is demanded again, and the fix-iteration cap (2) counts the fix-delta manifests present on disk, so
+  hand-editing the sidecar cannot reset it. The `<spec>.review/` sidecar is scratch: never
   committed, deleted at DONE — everything that must outlive the run already lives in
   `.claude/spec-runs`. Every child process the driver spawns runs through one fail-closed
   helper: `spawnSync` returning no exit code (signal death, spawn failure, maxBuffer overflow)
@@ -387,6 +389,11 @@
   hands the reviewer that list plus the prior reviewer and disposer returns — the reviewer
   re-verifies fix-routed findings and reports only inside the listed files.
   (specs/20260909/05-fix-delta-reviewer-pass.md)
+  A manifest's number is a storage key. Its kind is the `scope` stamp on its rows; the fix cap
+  counts fix-delta manifests. The live iteration is the sidecar's recorded `iteration`; SKIPS
+  re-fires per iteration when the gate's skip count differs from the count recorded at
+  extraction. `skips-extracted` refuses an empty file against a gate reporting skips and warns on
+  a count mismatch. (specs/20261024/01-review-driver-reads-recorded-facts.md)
 
 - **The merge step is re-entrant, and promotion leaves the worktree clean.** A worktree
   review's merge-back sequence can fail mid-promotion; the retry must not deadlock on its own

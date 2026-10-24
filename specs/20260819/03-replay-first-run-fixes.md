@@ -136,55 +136,55 @@ is unchanged but computed against the last measurement row (D5). All other codes
 - **AC-20260819-03-1**: WHEN `--score` reads a CLEAN return whose survivors include
   `{file:"tests/guard.test.js", line:3}` and a `--patch` whose hunks are
   `lib/guard.js @@ +1,5` and `tests/guard.test.js @@ +1,3` THE SYSTEM SHALL print `caught`
-  and exit 0 (a finding on the second file of a two-file mutation scores) → tests/replay/replay.test.js
+  and exit 0 (a finding on the second file of a two-file mutation scores) → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-03-2**: WHEN survivors are non-empty but none lie within ±5 of any hunk
   range in a mutated file (e.g. sole survivor `{file:"lib/guard.js", line:40}` against
-  `lib/guard.js @@ +1,5` → window 1–10) THE SYSTEM SHALL print `ambiguous` and exit 0 → tests/replay/replay.test.js
+  `lib/guard.js @@ +1,5` → window 1–10) THE SYSTEM SHALL print `ambiguous` and exit 0 → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-03-3**: WHEN the CLEAN return's survivors array is empty THE SYSTEM SHALL
-  print `missed` and exit 0 → tests/replay/replay.test.js
+  print `missed` and exit 0 → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-03-4**: WHEN `--score --patch` names a file that parses to zero
   `+++ b/` hunk headers THE SYSTEM SHALL exit 2 with stderr naming the patch path and the
-  remedy, printing no score → tests/replay/replay.test.js
+  remedy, printing no score → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-03-5**: WHEN `--record --outcome unresolved --legs green` rides with
   `--patch` and `--workflow` THE SYSTEM SHALL append a row with `outcome:"unresolved"` and
-  `files` parsed from the patch, and write the artifact with the reviewer return verbatim → tests/replay/replay.test.js
+  `files` parsed from the patch, and write the artifact with the reviewer return verbatim → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-03-6**: WHEN `--record --outcome setup-failed --legs none` rides with no
   `--class`/`--patch`/`--workflow` THE SYSTEM SHALL append
   `{…,"class":null,"files":null,"legs":"none","outcome":"setup-failed",…}` and write the
-  artifact with `patch:null, reviewer:null` → tests/replay/replay.test.js
+  artifact with `patch:null, reviewer:null` → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-03-7**: WHEN the ledger holds a measurement replay row, then 5 review rows,
   then a `setup-failed` replay row THE SYSTEM SHALL report `due reviewsSince=5` and exit 0
-  from `--due` (a non-measurement row never resets the clock) → tests/replay/replay.test.js
+  from `--due` (a non-measurement row never resets the clock) → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-03-8**: WHEN fewer than 5 review rows follow the last measurement replay
-  row THE SYSTEM SHALL CONTINUE TO report not due and exit 1 from `--due` → tests/replay/replay.test.js
+  row THE SYSTEM SHALL CONTINUE TO report not due and exit 1 from `--due` → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-03-9**: WHEN a CLEAN review row is followed only by a `setup-failed` replay
   row THE SYSTEM SHALL still select that review from `--select` (the retry targets the same
-  review) → tests/replay/replay.test.js
+  review) → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-03-10**: WHEN `--score --workflow` reads a return that is not
   `verdict:"CLEAN"` with a `survivors` array THE SYSTEM SHALL CONTINUE TO exit 2 printing
-  no score → tests/replay/replay.test.js
+  no score → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-03-11**: WHEN `--record --outcome` is any value outside
-  `caught|missed|leg-caught|unresolved|setup-failed` THE SYSTEM SHALL CONTINUE TO exit 2 → tests/replay/replay.test.js
+  `caught|missed|leg-caught|unresolved|setup-failed` THE SYSTEM SHALL CONTINUE TO exit 2 → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-03-12**: WHEN `--stats` reads one row of each outcome THE SYSTEM SHALL
   print all five buckets and `catch-rate 1/2` (unresolved and setup-failed absent from the
-  denominator) → tests/replay/replay.test.js
+  denominator) → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-03-13**: WHEN `--record --outcome caught` omits `--patch` or `--workflow`,
   or `--outcome setup-failed` rides with `--class`, THE SYSTEM SHALL exit 2 naming the
-  violated requirement → tests/replay/replay.test.js
+  violated requirement → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-03-14**: WHEN `--apply --patch-out {out}` runs in a worktree whose repository
   config sets `diff.noprefix=true` and `diff.mnemonicPrefix=true` with `core.quotePath` left
   on, against a mutation touching a non-ASCII path, THE SYSTEM SHALL write `{out}` with
   unquoted `+++ b/<path>` headers that `--score --patch {out}` parses to at least one hunk
-  (the bare `git diff` in that repo produces neither) → tests/replay/replay.test.js
+  (the bare `git diff` in that repo produces neither) → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-03-15**: WHEN `--apply` omits `--patch-out` THE SYSTEM SHALL exit 2 naming the
   flag, and WHEN `--patch-out` resolves inside `--dir` THE SYSTEM SHALL exit 3 with nothing
-  applied, nothing committed, and no file written → tests/replay/replay.test.js
+  applied, nothing committed, and no file written → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-03-16**: WHEN `--apply` runs in a worktree carrying an unrelated modified
   tracked file and an unrelated untracked file THE SYSTEM SHALL commit only the patch's own
-  files (`HEAD^..HEAD` names nothing else) and leave both unrelated changes uncommitted → tests/replay/replay.test.js
+  files (`HEAD^..HEAD` names nothing else) and leave both unrelated changes uncommitted → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260819-03-17**: WHEN a survivor's `file` is `./lib/guard.js`, and when it is an
   absolute path ending in `/lib/guard.js`, with a line inside a `lib/guard.js` hunk window,
-  THE SYSTEM SHALL print `caught` in both cases → tests/replay/replay.test.js
+  THE SYSTEM SHALL print `caught` in both cases → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 
 ## Assumptions (escalation triggers)
 

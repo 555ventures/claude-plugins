@@ -66,7 +66,7 @@ test('no script under spec/scripts/ reads build_base as a base candidate except 
 })
 
 test('every consumer of a base candidate imports the shared order', () => {
-  const consumers = ['spec-build-driver.js', 'spec-review-driver.js', 'replay.js']
+  const consumers = ['spec-build-driver.js', 'spec-review-driver.js']
   for (const name of consumers) {
     const src = fs.readFileSync(path.join(SCRIPTS, name), 'utf8')
     assert.match(src, /require\('\.\/lib\/base-derivation'\)/,

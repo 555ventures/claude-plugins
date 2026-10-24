@@ -112,24 +112,24 @@ is byte-identical to today (`--legs green`).
   `{"leg":"reconcile","exit":3}` among green legs THE SYSTEM SHALL append
   ` baselineRed=reconcile baselineLegs=<all leg names in array order>` to the selection line
   (e.g. legs `[ci:0, gate:0, reconcile:3]` → `baselineRed=reconcile baselineLegs=ci,gate,reconcile`)
-  → tests/replay/replay.test.js
+  → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260823-09-2**: WHEN the selected row's `legs` array exists with no red leg — a
   `smoke` leg with exit 4 present — THE SYSTEM SHALL emit `baselineRed=none` with `smoke`
   still listed in `baselineLegs` (exit-4 smoke is not red; presence is not redness) →
-  tests/replay/replay.test.js
+  tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260823-09-3**: WHEN the selected row has no `legs` array THE SYSTEM SHALL emit
-  `baselineRed=unknown baselineLegs=unknown` → tests/replay/replay.test.js
+  `baselineRed=unknown baselineLegs=unknown` → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260823-09-4**: WHEN `--record --outcome caught --legs baseline-red:reconcile` rides
   with `--patch` + `--workflow` THE SYSTEM SHALL append a row whose `legs` field is the
   literal string `baseline-red:reconcile` and write the evidence artifact as for `green` →
-  tests/replay/replay.test.js
+  tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260823-09-5**: WHEN `--record --outcome caught --legs red:gate` is invoked THE
   SYSTEM SHALL refuse with exit 2 naming the accepted values (`red:` stays evidence of a
-  newly-red leg, incompatible with a caught outcome) → tests/replay/replay.test.js
+  newly-red leg, incompatible with a caught outcome) → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260823-09-6**: WHEN `--record --outcome unresolved --legs red:reconcile --patch <p>`
   is invoked without `--workflow` THE SYSTEM SHALL append the row; WHEN the same invocation
   adds `--workflow` THE SYSTEM SHALL refuse with exit 2 (the reviewer never ran on a step-7
-  dismissal) → tests/replay/replay.test.js
+  dismissal) → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260823-09-7**: WHEN the driver parses a selection line carrying the two new tokens
   THE SYSTEM SHALL print `baselineRed:` and `baselineLegs:` lines in the REPLAY step body →
   tests/review/review-driver.test.js
@@ -140,16 +140,16 @@ is byte-identical to today (`--legs green`).
   step 7's own text: the newly-red keying, the reconcile exemption with its File-Plan ground,
   and the unattributable-leg `AskUserQuestion` with dismissed → `unresolved` via the
   `red:<leg>` record arm (prose pin, AC-20260820-02-6 pattern — section-scoped grep, never
-  whole-file) → tests/replay/replay.test.js
+  whole-file) → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260823-09-10**: WHEN `--stats` runs over a ledger containing a
   `legs:"baseline-red:reconcile"` caught row THE SYSTEM SHALL CONTINUE TO count it in the
   `caught` bucket and the catch-rate numerator and denominator exactly as a `legs:"green"`
-  caught row `[pre-green: absence-invariant]` → tests/replay/replay.test.js
+  caught row `[pre-green: absence-invariant]` → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260823-09-11**: WHEN `--record` is invoked with the pre-existing matrix values —
   `green` for caught/missed, `red:<leg>` for leg-caught, `none` for setup-failed, and a
   malformed `--legs` value — THE SYSTEM SHALL CONTINUE TO validate each exactly as before
   `[pre-green: predicate-in-test]` (existing tests AC-20260819-03-4/-5/-6 retagged, never
-  duplicated) → tests/replay/replay.test.js
+  duplicated) → tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 
 ## Assumptions (escalation triggers)
 

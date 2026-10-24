@@ -151,7 +151,7 @@ function deriveScratchDir(resolvedRoot, specPath) {
   (e.g. `--spec specs/20260825/02-genesis-consultant-discovery.md` → stdout matches
   `^setup dir=R/\.claude/worktrees/spec-02-genesis-consultant-discovery-[0-9a-f]{6} commit=<sha>$`;
   `--spec specs/20260819/02-mutation-replay.md` → basename `spec-02-mutation-replay-[0-9a-f]{6}`,
-  which does not open with `replay`) → new test in tests/replay/replay.test.js
+  which does not open with `replay`) → new test in tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260826-01-2**: WHEN a worktree already occupies `R/.claude/worktrees/<name>` (the spec's
   real build worktree) and `--setup --spec` for the same spec runs twice THE SYSTEM SHALL succeed
   both times at two distinct suffixed siblings, leaving the un-suffixed worktree and its HEAD
@@ -160,7 +160,7 @@ function deriveScratchDir(resolvedRoot, specPath) {
   (e.g. existing `…/spec-02-genesis-consultant-discovery` on branch `spec/02-genesis-consultant-discovery`
   → after two derived setups `git worktree list` has 3 entries under `.claude/worktrees/`, the
   first still on that branch; `--setup --commit <sha>` alone → exit 2, `git worktree list`
-  unchanged) → new test in tests/replay/replay.test.js
+  unchanged) → new test in tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260826-01-3**: WHEN `--setup --commit <sha> --dir <path>` is called with a `<path>`
   whose basename matches `/^replay/i` THE SYSTEM SHALL exit 3, create no directory and register
   no worktree, and print a stderr line containing `--spec` as the remedy; a `--dir` whose
@@ -168,7 +168,7 @@ function deriveScratchDir(resolvedRoot, specPath) {
   (e.g. `--dir R/.claude/worktrees/replay-x` → exit 3, `R/.claude/worktrees/replay-x` absent,
   `git worktree list` unchanged; `--dir /outside/Replay-abc` → exit 3; `--dir
   R/.claude/worktrees/spec-02-mutation-replay-a1b2c3` → exit 0) → new test in
-  tests/replay/replay.test.js
+  tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260826-01-4**: WHEN `--setup` succeeds (derived or supplied dir) THE SYSTEM SHALL plant
   exactly `scratch-worktree` in the worktree's private git dir and no file named
   `replay-worktree` or `.replay-worktree` in that git dir or in the working tree; and
@@ -176,7 +176,7 @@ function deriveScratchDir(resolvedRoot, specPath) {
   worktree whose private git dir carries only `replay-worktree` SHALL exit 3 and delete nothing
   (e.g. `ls "$(git -C {dir} rev-parse --git-dir)"` → contains `scratch-worktree`, not
   `replay-worktree`; hand-planted `replay-worktree` only → `--teardown` exit 3, dir still
-  present) → new test in tests/replay/replay.test.js
+  present) → new test in tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260826-01-5**: WHEN a Write's TARGET is a same-repo linked worktree whose private git dir
   carries `scratch-worktree` THE SYSTEM (the cross-worktree write hook) SHALL allow with exit 0
   and empty stderr; WHEN that git dir carries only the retired `replay-worktree` name THE SYSTEM
@@ -190,7 +190,7 @@ function deriveScratchDir(resolvedRoot, specPath) {
   marked linked worktree>` runs THE SYSTEM SHALL CONTINUE TO exit 3 and delete nothing
   (e.g. `--dir /tmp/scratch-abc` → exit 0, host `git status --porcelain` empty; `--teardown
   --dir /tmp/plain-dir` → exit 3, dir present) → existing tests AC-20260823-05-6 and
-  AC-20260819-02-8 in tests/replay/replay.test.js, re-tagged
+  AC-20260819-02-8 in tests/replay/replay.test.js, re-tagged [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260826-01-7**: WHEN a Write targets a same-repo sibling worktree carrying no marker, or
   targets another tree's git metadata from a different worktree, THE SYSTEM SHALL CONTINUE TO
   block with exit 2 and a `BLOCKED:` stderr line, and a same-worktree write SHALL CONTINUE TO

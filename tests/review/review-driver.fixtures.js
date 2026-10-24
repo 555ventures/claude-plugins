@@ -137,10 +137,10 @@ const SURVIVOR_RETURN = {
 }
 
 // specs/20260821/02-replay-review-phase.md (brief 14): the reviewer-replay harness shipped
-// as an ADVISORY — review's CLEAN close printed `replay is DUE — run /spec:replay` and
+// as an ADVISORY — review's CLEAN close printed a `replay is DUE` reminder and
 // nothing ran it. This repo went due at 5 reviews and skipped the reminder
 // through 12+ reviews in ~48 hours. specs/20260913/09-the-tool-shows-never-interrupts.md (ADR-0025)
-// keeps the driver out of it: MERGE concludes straight into DONE, /spec:replay is the one
+// keeps the driver out of it: MERGE concludes straight into DONE, the replay command is the one
 // executor, and dueness shows as a /spec:status footer clause. The helpers below seed the ledger
 // rows those replay-cadence tests read.
 

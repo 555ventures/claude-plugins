@@ -5,8 +5,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// specs/20260820/05-fleet-evidence-reader.md: the five fixed queries this file pins
-// (legRecency, gate08, escapes, replayDebt, cleanContradicted) are what brief 17 exists for —
+// specs/20260820/05-fleet-evidence-reader.md: the fixed queries this file pins
+// (legRecency, gate08, escapes, cleanContradicted) are what brief 17 exists for —
 // the dead-leg smell (at-risk exits 0-only in some repos while red in others), the brief-08
 // adoption gate (clause 1: >=5 host CLEANs; clause 2: self-repair share <20%, per
 // docs/roadmap/17-fleet-evidence-reader.md), and CLEAN verdicts a later escape contradicts.

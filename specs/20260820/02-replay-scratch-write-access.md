@@ -128,7 +128,7 @@ under a `/worktrees/<name>/` segment belongs to the main checkout itself.
 - **AC-20260820-02-6**: WHEN spec/commands/replay.md's Phase 1 is read THE SYSTEM SHALL
   contain the setup-gate `git -C {dir} clean -fd` step and the sanctioned-Edit/Write sentence
   (e.g. grep `clean -fd` → exactly the setup-gate line) → doctrine assertions in
-  tests/replay/replay.test.js alongside the existing replay pins
+  tests/replay/replay.test.js alongside the existing replay pins [retired: specs/20261024/05-replay-retired.md]
 
 The following ACs (added 2026-08-20, review-gate amendment, D8) cover the git-metadata
 attribution block — `tests/worktree-hook.test.js` is the oracle for all five:

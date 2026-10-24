@@ -15,17 +15,15 @@
 # Worker Contract's git ban — workers run with cwd = their own worktree, so a
 # parallel worker that writes an absolute path into the root checkout is blocked.
 #
-# One sanctioned exception (specs/20260820/02-replay-scratch-write-access.md): /spec:replay's mutation
-# worker is correctly dispatched from a main-anchored session to Edit a disposable
-# scratch worktree that `replay.js --setup` stood up — a cross-worktree write that is
-# the whole point of the tool, not pollution. The first live run blocked it and the
-# worker tunneled the same write through Bash instead, tripping an Auto-Mode Bypass
-# warning. The fix: allow when the TARGET tree's PRIVATE git dir (outside the working
-# tree, so the blind reviewer never sees it) carries a `scratch-worktree` marker file,
-# planted only by `replay.js --setup` and gone after `--teardown` / `git worktree
-# remove`. The scratch tree is a sink, never a source: the allow keys on the TARGET
-# only, so a session anchored inside the marker-carrying tree writing OUT to the main
-# checkout still blocks.
+# One sanctioned exception (specs/20260820/02-replay-scratch-write-access.md): a mutation
+# worker dispatched from a main-anchored session may Edit a disposable scratch worktree
+# stood up for it — a cross-worktree write that is the whole point of that tool, not
+# pollution. The exception: allow when the TARGET tree's PRIVATE git dir (outside the
+# working tree, so a blind reviewer never sees it) carries a `scratch-worktree` marker
+# file, planted by a setup step and gone after teardown / `git worktree remove`. The
+# scratch tree is a sink, never a source: the allow keys on the TARGET only, so a
+# session anchored inside the marker-carrying tree writing OUT to the main checkout
+# still blocks.
 #
 # That marker allow turned out to be forgeable through this hook's own fail-open: a
 # target inside a repo's `.git`-internal paths made `rev-parse --show-toplevel` exit
@@ -37,7 +35,7 @@
 # segment) and blocking unless that owner is the cwd's own git dir — this runs
 # BEFORE the old tgt_top resolution, so the forging write itself is now blocked. The
 # marker allow is additionally narrowed to git dirs with a `/worktrees/` segment,
-# since `replay.js --setup` only ever plants into a linked tree.
+# since a setup step only ever plants into a linked tree.
 #
 # Invariant enforced (topology-independent):
 #   - target resolves to the SAME worktree as cwd            -> ALLOW
@@ -45,7 +43,7 @@
 #   - target is inside THIS repo's git metadata, owned by a
 #     tree other than cwd's own                               -> BLOCK (marker forgery)
 #   - target is a same-repo LINKED tree whose PRIVATE git
-#     dir carries the `scratch-worktree` marker (TARGET only)  -> ALLOW (replay sink)
+#     dir carries the `scratch-worktree` marker (TARGET only)  -> ALLOW (scratch sink)
 #   - target is in a DIFFERENT repo, or outside any repo      -> ALLOW
 #
 # Correct for every nesting: a worktree spawned from another worktree, or a spec
@@ -131,7 +129,7 @@ if [ -n "$probe_canon" ]; then
         echo "  owned by:            $owner"
         echo "  current tree's dir:  $cur_gitdir"
         echo "  Git-internal state of a sibling tree is never a write target; if this is"
-        echo "  replay harness setup, replay.js --setup plants its own marker — never"
+        echo "  scratch-worktree setup, its setup step plants its own marker — never"
         echo "  hand-plant one."
       } >&2
       exit 2
@@ -152,7 +150,7 @@ tgt_common="$(canon "$tgt_common_raw")" || exit 0
 # Same worktree -> allow.
 [ "$tgt_top" = "$cur_top" ] && exit 0
 
-# --- Replay-scratch marker allow (D1/D2, specs/20260820/02): TARGET only ---
+# --- Scratch-worktree marker allow (D1/D2, specs/20260820/02): TARGET only ---
 # `git rev-parse --git-dir` returns the tree's PRIVATE git dir: a bare relative `.git`
 # from a main checkout, or an absolute `.../.git/worktrees/<name>` from a linked
 # worktree (both observed in the executed spike) — absolutize a relative result
@@ -163,7 +161,7 @@ tgt_common="$(canon "$tgt_common_raw")" || exit 0
 # still hits the BLOCK.
 tgt_gitdir_raw="$(git -C "$probe" rev-parse --git-dir 2>/dev/null)" && [ -n "$tgt_gitdir_raw" ] && {
   tgt_gitdir="$(absolutize_gitdir "$tgt_gitdir_raw" "$probe")"
-  # `replay.js --setup` cmdSetup hard-refuses to plant into a git dir without a
+  # A legitimate setup step refuses to plant into a git dir without a
   # `worktrees` segment, so a legitimate marker is always a LINKED tree's marker —
   # a marker sitting at a main checkout's top-level `.git` is never legitimate.
   case "$tgt_gitdir" in

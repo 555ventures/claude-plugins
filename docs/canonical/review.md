@@ -112,8 +112,8 @@
   escaped is distinguishable from one review never saw; the fleet reader counts them as
   `escapes.softMatchTrue`. (specs/20260912/04-softs-get-a-reader.md) Plan locks
   append a `stage:"plan"` ledger row of executed facts (spike count, promise-sweep
-  counters, collision counts). The escape ledger and replay catch-rate are the pipeline's
-  two ground-truth signals; self-reported review quality is subordinate to both.
+  counters, collision counts). The escape ledger is the pipeline's one ground-truth
+  signal; self-reported review quality is subordinate to it.
   (specs/20260819/01-review-evidence-retention.md)
 
 - Every escape row carries a validated defect class or an explicit `unclassedReason`
@@ -126,126 +126,16 @@
   third-recurrence bar's Materiality field cites the joined count.
   (specs/20260901/07-escape-class-contract.md)
 
-- The replay corpus has two regions: hand-authored `## ` classes and a `## Derived classes`
-  region of `### ` classes grown from the escape ledger — a class with two or more fleet
-  recurrences (joined count) and no corpus entry is a `corpusGaps` line in the fleet reader,
-  and its section is authored from the escape's fix diff with its ledger rows cited.
-  `lib/replay-corpus.js` is the one parser; `replay.js` refuses a `--class` outside the corpus
-  and `--pick-class` selects the next class (fewest measurement rows, derived first on ties).
-  Reviewer returns carry `file`/`line` (or explicit null) on every killed claim, enforced at the
-  `reviewer-returned` mark, so `/spec:escape` matches dismissed claims by location.
+- Reviewer returns carry `file`/`line` (or explicit null) on every killed claim, enforced at
+  the `reviewer-returned` mark, so `/spec:escape` matches dismissed claims by location.
   (specs/20260901/08-corpus-derivation-and-kill-match.md)
 
-  Reviewer catch-rate is measured, not assumed: every 5th review (and at least once per
-  major version) `/spec:replay` injects one corpus-class defect into the last CLEANed
-  spec's tree in a marker-guarded scratch worktree, re-runs the legs, and dispatches the
-  standard reviewer blind; the run lands as a `stage:"replay"` ledger row with retained
-  evidence, and `replay.js --stats` derives the catch-rate. Outcomes are
-  `caught`/`missed`/`leg-caught`/`unresolved`/`setup-failed`. Scoring is never a
-  self-reported point: survivors are compared against the mutation patch's own hunks —
-  caught when a survivor names any mutated file within ±5 lines of one of its hunks. Only
-  `caught`+`missed` enter the catch-rate; a non-measurement outcome (`unresolved`,
-  `setup-failed`) is visible in the totals, absent from the rate, and leaves the harness
-  due, so the next review session retries rather than waiting five more.
-  Cadence is `replay.js --due` policy (every 5th review, at least once per major version) and
-  execution is `/spec:replay`, run on demand — the review driver never parks a close, and a
-  merged review prints `DONE`. Dueness is seen on the `/spec:status` footer's
-  `· replay due (r/5) — /spec:replay` clause, derived by `lib/observation.js`'s
-  `replayDueness` (the same derivation `replay.js --due` prints); non-measurement outcomes
-  leave the harness due. A replay never re-derives or gates a review verdict — it measures the
-  reviewer while the verdict measures the diff. The blocking close-time state
-  (specs/20260821/02) was retired by ADR-0025: a block on a finished review is bypassed anyway
-  and its interrupt is the cost. The printed-advisory form before it was measured to fail
-  (skipped through 12+ reviews), which is why the count lives on the dashboard, not in a report.
-  (specs/20260913/09-the-tool-shows-never-interrupts.md)
-  A sustained miss-rate is the evidence that reopens the second-reviewer question.
-  The scratch worktree lives at `<root>/.claude/worktrees/spec-<stem>-<6hex>` — a path
-  `replay.js --setup --spec` derives from the target spec (the build-worktree naming rule
-  `merge-back.sh branch-for` owns, `/`→`-`, plus a random suffix because the spec's own build
-  worktree may still be registered), never a name a session supplies.
-  `--setup` then copies the host's `.worktreeinclude`-matched gitignored files into the
-  scratch tree through the same owner `merge-back.sh create` uses for build worktrees
-  (`spec/scripts/worktree-include.sh`, `spec-paths worktree-include`), so a host that boots
-  from env files reaches the setup gate and the smoke leg with them present; a host with no
-  manifest is unchanged, and a `setup-failed` row still means the host's own `setupCommand`
-  failed, never that the scratch copy was under-provisioned.
-  (specs/20260904/02-worktree-include-shared-owner.md)
-  The worktree materializes the judged range's true upper bound: `--setup --commit <parent>
-  --overlay <close>` stands the tree at the close commit's parent, then re-applies the close
-  commit's non-meta content (everything outside `specs/`, `.claude/`, `docs/canonical/`) as
-  one build-shaped commit — a `diff.dirty:true` row's fix-worker edits ride the close commit
-  (range identity, specs/20260824/06), so the parent alone under-states the range and made
-  legs falsely newly-red. Because the overlay withholds `specs/`, a leg whose only input is
-  the spec text re-derives the pre-review-fix result in a replay tree; `review-legs.js
-  --replay` skips `promise-sweep` for that reason, and no other leg is affected.
-  (specs/20260912/04-softs-get-a-reader.md) Before `leg-caught` is ever recorded, step 7 now verifies the
-  still-red leg against the pristine (mutation-free) baseline via `reset --hard HEAD^` plus a
-  fresh leg run — red there means the scratch tree does not reproduce the state the cited
-  review row judged green. The legs are re-run once more against the same pristine tree: the
-  same first failing line makes it deterministic — a harness defect, recorded as `setup-failed`
-  with `--legs pristine-red:<leg>`, reported with that failing line, its manifests retained
-  beside the run id, and stopped, so the harness stays due; a green or differently-failing
-  re-run is drift and routes to the attribution question seam instead.
-  (specs/20260831/01-replay-range-materialization.md,
-  specs/20260909/02-replay-base-and-label-honesty.md)
-  `--setup` refuses a
-  caller `--dir` whose basename opens with `replay`. Inside the repo, so agent edits are
-  auto-approved and the scheduled replay runs unattended (an out-of-repo scratch tree is denied
-  Edit/Write by the permission classifier, which blocked the mutation worker on both live runs
-  of 2026-08-23); a neutral-named `--dir` outside the repo remains the manual fallback.
-  It stays invisible to `git status` via an ignore line
-  `--setup` self-provisions into `info/exclude` when the host repo lacks it. Isolation comes
-  from the detached worktree, that ignore line, and the private-git-dir marker — not from living
-  outside the repo.
-  Blindness surfaces enumerated and closed to date: file contents, prompt text, branch name
-  (detached), commit subject (`--apply` refusal), the worktree **path** handed to the reviewer
-  as its root, and the marker filename in the tree's private git dir — the last two closed by
-  specs/20260826/01-replay-scratch-path-blindness.md. Catch-rate rows dated before that spec's
-  close (`rp_048e28386da8` through `rp_02b3f1ee52f1`) were measured under a path tell and stand
-  as observations, not as proof of blind review; the defensible catch rate starts at the first
-  row after it.
-  The mutation worker's writes are sanctioned by the cross-worktree write guard: a write is
-  allowed when the TARGET tree carries the `scratch-worktree` marker, honoured only when that
-  marker sits in a linked worktree's private git dir. The scratch tree is a sink, never a
-  source — scratch-anchored writes outward stay blocked — and a write into this repo's own
-  git metadata is attributed to its owning worktree and blocked unless that owner is the
-  writing session's own tree, so the marker cannot be forged through the tool surface the
-  guard governs.
-  `--select` emits a pinned, ancestry-validated sha as the replay's diff base — a spec's
-  symbolic `build_base` is stale the moment the review's own merge lands — sourced from the
-  `diff_base` the review driver stamps into the spec frontmatter at every `status: done` flip.
-  A spec closed before stamping existed, whose base no longer validates, is refused (exit 4)
-  rather than measured against a distorted diff.
-  A review records the two commits bounding what it judged as refs under
+- A review records the two commits bounding what it judged as refs under
   `refs/spec-review/<runId>/` — `judged` at the close row's own head sha, `close` at the close
-  commit — written best-effort so a failed write can never block a close, and named for the
-  review rather than the harness so their presence signals nothing to a blind reviewer. The
-  replay harness reads that pair and derives neither: a commit identified by "the newest commit
-  touching the spec file" is a different commit as soon as anything else touches that file, and
-  a close commit found by walking descendants is unfindable once a rebasing merge-back has
-  orphaned the judged commit. A row missing either ref is refused, never partially measured, and
-  `replay.js --backfill-pins` is the one place the history walk survives — a run-once
-  reconstruction for reviews that closed before the refs existed. Because the pair need not
-  share a line of descent, `--setup`'s overlay guard refuses only an `--overlay` equal to or an
-  ancestor of `--commit`. `--setup` re-derives the target's own AC coverage against the tree it
-  assembled and refuses (exit 5) rather than printing a success line when the reassembly does
-  not hold; that refusal records `setup-failed` with a `pristine-red:ac-matrix` claim, so the
-  window stays due and the target leaves the candidate pool.
+  commit — written best-effort so a failed write can never block a close. A consumer reads that
+  pair and derives neither: a commit identified by "the newest commit touching the spec file" is
+  a different commit as soon as anything else touches that file.
   (specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md)
-  Replay attributes red legs against the originating review's own recorded baseline
-  (`--select` emits `baselineRed`/`baselineLegs` from the selected row; zero extra leg runs).
-  Only newly-red legs trigger the authoring retry and `leg-caught`; reconcile is
-  deterministically exempt (mutations are File-Plan-confined; reconcile redness is
-  definitionally out-of-plan). The record grammar carries the truth:
-  `baseline-red:<leg>[,<leg>]` on caught/missed/unresolved rows whose target closed with
-  sanctioned red legs; an unattributable red leg is a user question, and its dismissal
-  records `unresolved` via the workflow-refusing `red:<leg>` arm.
-  (specs/20260819/02-mutation-replay.md, specs/20260819/03-replay-first-run-fixes.md,
-  specs/20260820/02-replay-scratch-write-access.md,
-  specs/20260821/02-replay-review-phase.md,
-  specs/20260823/05-replay-unattended-hardening.md,
-  specs/20260823/09-replay-baseline-attribution.md,
-  specs/20260826/01-replay-scratch-path-blindness.md)
 
 - `ac-matrix`'s coverage denominator fails closed: an AC bullet no ID grammar can parse counts
   as **uncovered** — unparseable = unknown, never absent — in both drift modes, since a host
@@ -355,7 +245,7 @@
 - The review stage is a **stepped program**, not prose choreography: `spec-review-driver.js`
   owns the sequence (LEGS -> SKIPS? -> REVIEWER -> DISPOSITIONS -> FIX/ESCALATE? -> CLOSE ->
   MERGE/CONFLICTS -> DONE, with STOPPED terminal on `RED_BLOCKING`) and is the sole invoker of
-  `review-legs.js`, `verdict.js`, `merge-back.sh`, `replay.js`, and `spec-status.js` within the
+  `review-legs.js`, `verdict.js`, `merge-back.sh`, and `spec-status.js` within the
   stage. It EXECUTES every deterministic step itself — base derivation, the per-iteration
   manifest lifecycle (`<spec>.review/manifest-<n>.jsonl`, never reused), all three `verdict.js`
   passes, both ledger appends, the `implementing → done` flip, the merge-back sequence — and

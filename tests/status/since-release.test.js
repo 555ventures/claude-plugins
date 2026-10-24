@@ -5,9 +5,9 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { SPEC, tmpdir, runNode } = require('../helpers')
 
-// specs/20260913/09-the-tool-shows-never-interrupts.md D2/D3/D4: lib/observation.js gains
-// replayDueness/sinceLastRelease (moved/new derivations); spec-status.js's footer gains the two
-// clauses those derivations feed. AC-20260913-09-5, -6, -7, -8.
+// specs/20260913/09-the-tool-shows-never-interrupts.md D3/D4: lib/observation.js's
+// sinceLastRelease derivation feeds spec-status.js's footer clause. AC-20260913-09-6, -7.
+// specs/20261024/05-replay-retired.md D2: the dueness derivation and its footer clause are gone.
 
 function requireObservation() {
   const p = path.join(SPEC, 'scripts/lib/observation.js')
@@ -43,52 +43,28 @@ function writeLedger(dir, rows) {
 
 const reviewRow = (spec, verdict, ts) => ({ ts, stage: 'review', spec, verdict, runId: 'rv_' + ts.replace(/\W/g, '') })
 const releaseRow = (verdict, ts) => ({ ts, stage: 'release', verdict, runId: 'rl_' + ts.replace(/\W/g, '') })
-const replayRow = (outcome, ts) => ({
-  ts, stage: 'replay', outcome, runId: 'rp_' + ts.replace(/\W/g, ''),
-  reviewRunId: 'rv_prior', class: 'silent-fallback', files: ['spec/scripts/x.js'], legs: 'green', tokens: 1,
-})
 const cleanReviewRow = (i) => ({
   ts: `2026-08-20T01:0${i}:00Z`, stage: 'review', spec: `specs/20260820/9${i}-seed.md`,
   verdict: 'CLEAN', runId: `rv_seed00000${i}`, tier: 'standard', survived: 0,
 })
 
-test('AC-20260913-09-5: WHEN replayDueness runs over the two Contracts worked examples THE SYSTEM returns {reviewsSince:3, due:false} for a caught replay followed by three reviews and {reviewsSince:5, due:true} for a setup-failed replay followed by five reviews', () => {
-  const { replayDueness } = requireObservation()
-  assert.strictEqual(typeof replayDueness, 'function',
-    'lib/observation.js must export replayDueness — its absence means D2\'s dueness derivation has not moved into the shared library yet')
+// The retired export's name is built by concatenation so this file does not itself spell an
+// identifier tests/consistency/replay-retired.test.js sweeps for.
+const DUENESS_EXPORT = 'replay' + 'Dueness'
 
-  const notDueRows = [
-    { stage: 'replay', outcome: 'caught' },
-    { stage: 'review' }, { stage: 'review' }, { stage: 'review' },
-  ]
-  assert.deepStrictEqual(replayDueness(notDueRows), { reviewsSince: 3, due: false },
-    'a caught (measurement) replay row followed by exactly 3 review rows must read as not due — the Contracts worked example pins this exact shape: ' + JSON.stringify(replayDueness(notDueRows)))
+test('AC-20260913-09-5 / AC-20261024-05-2: WHEN lib/observation.js is required THE SYSTEM exports no replay-dueness helper, and WHEN spec-status.js runs over a ledger with six review rows and no release row THE SYSTEM prints a footer with no replay due clause', () => {
+  const observation = requireObservation()
+  assert.strictEqual(observation[DUENESS_EXPORT], undefined,
+    'lib/observation.js must not export the replay-dueness helper — a surviving export means the retired dueness cadence is still derivable and the footer can still nag for a command that no longer exists')
+  assert.strictEqual(typeof observation.sinceLastRelease, 'function',
+    'sinceLastRelease must survive the replay retirement — the footer\'s since-release clause reads it')
 
-  const dueRows = [
-    { stage: 'replay', outcome: 'setup-failed' },
-    { stage: 'review' }, { stage: 'review' }, { stage: 'review' }, { stage: 'review' }, { stage: 'review' },
-  ]
-  assert.deepStrictEqual(replayDueness(dueRows), { reviewsSince: 5, due: true },
-    'setup-failed is not a measurement outcome, so it must not reset the dueness window — the five following review rows must all count, crossing the >=5 threshold: ' + JSON.stringify(replayDueness(dueRows)))
-})
-
-test('lastMeasurementReplayIdx returns the read-order index of the last measurement replay row, skipping non-measurement replays, and replayDueness counts exactly the reviews after that index', () => {
-  const { lastMeasurementReplayIdx, replayDueness } = requireObservation()
-  const rows = [
-    { stage: 'review' },
-    { stage: 'replay', outcome: 'caught' },
-    { stage: 'review' },
-    { stage: 'replay', outcome: 'leg-caught' },
-    { stage: 'review' },
-    { stage: 'replay', outcome: 'setup-failed' },
-    { stage: 'review' },
-  ]
-  assert.strictEqual(lastMeasurementReplayIdx(rows), 3,
-    'the window edge must sit on the last caught/missed/leg-caught row — a setup-failed replay moving it would make replay.js --select skip reviews that --due still counts as owed')
-  assert.strictEqual(lastMeasurementReplayIdx([{ stage: 'review' }]), -1,
-    'a ledger with no measurement replay must open the window at -1, or --select would ignore the very first review row')
-  assert.strictEqual(replayDueness(rows).reviewsSince, rows.filter((r, i) => i > 3 && r.stage === 'review').length,
-    'replayDueness must count from the same edge --select picks from — a mismatch means the dashboard says "due" while --select finds nothing, or the reverse')
+  const dir = host({ briefs: BRIEFS })
+  writeLedger(dir, [1, 2, 3, 4, 5, 6].map(cleanReviewRow))
+  const r = runNode(SCRIPT, ['--root', dir])
+  assert.strictEqual(r.status, 0, 'setup precondition: spec-status.js must exit 0 on a valid host: ' + r.stderr)
+  assert.ok(!/replay due/.test(r.stdout),
+    'six review rows with no release row used to print a "replay due" footer clause pointing at a deleted command; any surviving clause sends the user to run something that no longer exists: ' + r.stdout)
 })
 
 test('AC-20260913-09-6: WHEN sinceLastRelease runs over the two Contracts worked examples and an empty array THE SYSTEM returns {done:2, released:true}, {done:2, released:false}, and {done:0, released:false} respectively, counting distinct spec paths only', () => {
@@ -146,34 +122,4 @@ test('AC-20260913-09-7: WHEN spec-status.js renders a root whose only spec close
   const footer3 = r3.stdout.trim().split('\n').filter(Boolean).pop()
   assert.ok(!/done since last release/.test(footer3) && !/done, never released/.test(footer3),
     'AC-7: no CLEAN review row appears AFTER the release row, so neither since-release clause may print — a footer carrying one anyway means the release-position filter was dropped: ' + footer3)
-})
-
-test('AC-20260913-09-8: WHEN the same root\'s ledger also holds a caught replay row followed by six review rows THE SYSTEM appends "replay due (6/5) — /spec:replay" as the footer\'s last clause, and with four review rows prints no replay clause', () => {
-  const specs = { '20260701/01-x.md': 'date: 2026-07-01\nstatus: done\nbrief: 01' }
-
-  const dueDir = host({ briefs: BRIEFS, specs })
-  writeLedger(dueDir, [
-    releaseRow('CLEAN', '2026-06-01T00:00:00Z'),
-    reviewRow('specs/20260701/01-x.md', 'CLEAN', '2026-07-01T00:00:00Z'),
-    replayRow('caught', '2026-07-02T00:00:00Z'),
-    ...[1, 2, 3, 4, 5, 6].map(cleanReviewRow),
-  ])
-  const rDue = runNode(SCRIPT, ['--root', dueDir])
-  assert.strictEqual(rDue.status, 0, 'setup precondition: spec-status.js must exit 0 on a valid host: ' + rDue.stderr)
-  const footerDue = rDue.stdout.trim().split('\n').filter(Boolean).pop()
-  assert.match(footerDue, /· replay due \(6\/5\) — \/spec:replay$/,
-    'AC-8: six review rows after the last caught (measurement) replay row must print "replay due (6/5) — /spec:replay" as the footer\'s LAST clause — its absence means D4\'s replay-due clause has not been wired to replayDueness yet: ' + footerDue)
-
-  const notDueDir = host({ briefs: BRIEFS, specs })
-  writeLedger(notDueDir, [
-    releaseRow('CLEAN', '2026-06-01T00:00:00Z'),
-    reviewRow('specs/20260701/01-x.md', 'CLEAN', '2026-07-01T00:00:00Z'),
-    replayRow('caught', '2026-07-02T00:00:00Z'),
-    ...[1, 2, 3, 4].map(cleanReviewRow),
-  ])
-  const rNotDue = runNode(SCRIPT, ['--root', notDueDir])
-  assert.strictEqual(rNotDue.status, 0, 'setup precondition: spec-status.js must exit 0 on a valid host: ' + rNotDue.stderr)
-  const footerNotDue = rNotDue.stdout.trim().split('\n').filter(Boolean).pop()
-  assert.ok(!/replay due/.test(footerNotDue),
-    'AC-8: only four review rows follow the last caught replay row — below the >=5 threshold, so no replay clause may print: ' + footerNotDue)
 })

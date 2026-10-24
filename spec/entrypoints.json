@@ -184,16 +184,9 @@
       "spec/commands/release.md"
     ]
   },
-  "spec/scripts/replay.js": {
-    "entryPoints": [
-      "spec/commands/doctor.md",
-      "spec/commands/replay.md"
-    ]
-  },
   "spec/scripts/report-render.js": {
     "entryPoints": [
       "spec/commands/doctor.md",
-      "spec/commands/replay.md",
       "spec/commands/init.md",
       "spec/commands/release.md",
       "spec/doctrine/stages/stage-build.md",
@@ -213,7 +206,6 @@
   },
   "spec/scripts/review-legs.js": {
     "entryPoints": [
-      "spec/commands/replay.md",
       "spec/scripts/spec-review-driver.js"
     ]
   },
@@ -322,9 +314,7 @@
   },
   "spec/scripts/worktree-include.sh": {
     "entryPoints": [
-      "spec/scripts/merge-back.sh",
-      "spec/scripts/replay.js",
-      "spec/commands/replay.md"
+      "spec/scripts/merge-back.sh"
     ]
   },
   "spec/workflows/wf-enforce.js": {

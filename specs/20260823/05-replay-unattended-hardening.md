@@ -103,26 +103,26 @@ guess riding into a measurement).
   worktree there with the `replay-worktree` marker in its private git dir and exit 0 (e.g.
   `--dir <root>/.claude/worktrees/replay-x` → stdout `setup dir=<abs path> commit=<sha>`,
   exit 0; a follow-up `--teardown --dir` of the same path exits 0 and removes it) → in
-  tests/replay/replay.test.js
+  tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260823-05-2**: WHEN `--setup --dir` resolves inside the repo root but not inside
   `<root>/.claude/worktrees/` THE SYSTEM SHALL CONTINUE TO refuse with exit 3 and create
   nothing (e.g. `--dir <root>/scratch` → exit 3, no worktree registered) → in
-  tests/replay/replay.test.js
+  tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260823-05-3**: WHEN `--setup` targets `<root>/.claude/worktrees/<name>` in a repo
   whose ignore rules do not cover that path THE SYSTEM SHALL append `.claude/worktrees/` to
   the repo's `info/exclude` before creating, so that after setup `git check-ignore -q
   .claude/worktrees/<name>` exits 0 and `git status --porcelain` in the root prints nothing →
-  in tests/replay/replay.test.js
+  in tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260823-05-4**: WHEN the repo's `info/exclude` already contains the
   `.claude/worktrees/` line THE SYSTEM SHALL not append a duplicate (two consecutive setups →
-  exactly one occurrence of the line) → in tests/replay/replay.test.js
+  exactly one occurrence of the line) → in tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260823-05-5**: WHEN `--select`'s chosen spec carries `diff_base: <sha>` at the close
   commit and that sha is an ancestor of the close commit's parent THE SYSTEM SHALL emit
   `diffBase=<that full sha>` (never the spec's `build_base` ref name) → in
-  tests/replay/replay.test.js
+  tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260823-05-6**: WHEN `--setup --dir` resolves outside the repo root THE SYSTEM SHALL
   CONTINUE TO create the worktree there exactly as today (the manual fallback path survives)
-  → existing setup tests retagged in tests/replay/replay.test.js
+  → existing setup tests retagged in tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 - **AC-20260823-05-7**: WHEN the driver flips a spec whose frontmatter has `build_base` but no
   `diff_base` to `status: done` THE SYSTEM SHALL write `diff_base: <sha>` (the base ref
   resolved at flip time) into the frontmatter in the same edit, and SHALL leave an existing
@@ -133,7 +133,7 @@ guess riding into a measurement).
   ancestor of the close parent distinct from it (e.g. only `build_base: main` and `main` has
   since absorbed the merge, so it is a descendant — not an ancestor — of the parent) THE
   SYSTEM SHALL exit 4 emitting no `spec=…` selection line, with stderr naming the stale-base
-  cause and the stamped-at-close remedy → in tests/replay/replay.test.js
+  cause and the stamped-at-close remedy → in tests/replay/replay.test.js [retired: specs/20261024/05-replay-retired.md]
 
 ## Assumptions (escalation triggers)
 

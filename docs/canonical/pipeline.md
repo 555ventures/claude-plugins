@@ -62,7 +62,7 @@ nothing to boot. (specs/20260815/04-runtime-shutdown-leg.md, 2026-08-16)
 ## Frontmatter has one reader, and it strips comments at the source
 
 Spec frontmatter is read through `spec/scripts/lib/frontmatter.js` — the sole derivation, used
-by `spec-review-driver.js`, `spec-status.js`, and `replay.js` alike (`spec-design-driver.js`
+by `spec-review-driver.js` and `spec-status.js` alike (`spec-design-driver.js`
 was a fourth reader until it was retired 2026-08-24, specs/20260824/02).
 Inline `#` comments on key lines are stripped per YAML unquoted-scalar semantics (cut at the
 first whitespace-preceded `#`; quoted values unwrap and never strip), so a trailing note on
@@ -114,16 +114,13 @@ above the `direct` rate over 30 fleet reviews reverts the loop.
 
 The fleet reader's `owed` question (`--owed` for the human render) lists every
 plugin-blaming row across this machine's checkouts: escape rows whose `preventedBy` is
-`review-check` or `runtime-leg`, missed replay rows, and unstamped `docs/spec-feedback/`
+`review-check` or `runtime-leg`, and unstamped `docs/spec-feedback/`
 findings, grouped by effective class with the joined recurrence count and a pointer to core
 § Incident Policy. Fixed-status is derived, never stored: an item's key
-(`escape:<repo>:<ts>:<file>`, a replay run id, or a feedback finding id) cited in a landed
+(`escape:<repo>:<ts>:<file>` or a feedback finding id) cited in a landed
 test, a doctrine file, or a `done` spec marks it fixed; a citation in an unfinished spec marks
 it in-flight. Host reports end with the row key and nothing else — no handoff prompt is
-composed; the owed query is the consumer. Replay rows carry `via` (`driver` on historical rows the
-review driver's retired close-time replay step handed the target — ADR-0025 — `manual`
-otherwise), so `replay.js --stats`'s `by-via`
-line counts the manual path. (specs/20260903/01-owed-query-and-row-handoff.md, done 2026-09-03)
+composed; the owed query is the consumer. (specs/20260903/01-owed-query-and-row-handoff.md, done 2026-09-03)
 
 Commit-time escape coverage is a derived number, never asserted:
 `node "$(spec-paths commit-coverage)" --repos-root ~/Projects` prints, population first, per

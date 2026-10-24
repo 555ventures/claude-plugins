@@ -48,7 +48,6 @@ case "${1:-root}" in
   test-expiry)    echo "$ROOT/scripts/expire-tests.js" ;;
   coverage-scope) echo "$ROOT/scripts/coverage-scope.js" ;;
   count-tests)    echo "$ROOT/scripts/count-tests.js" ;;
-  replay)         echo "$ROOT/scripts/replay.js" ;;
   escape-row)     echo "$ROOT/scripts/escape-row.js" ;;
   fleet-reader)   echo "$ROOT/scripts/fleet-reader.js" ;;
   prose-cap)      echo "$ROOT/scripts/prose-cap.js" ;;
@@ -77,7 +76,6 @@ case "${1:-root}" in
       keep { print }
     ' "$FILE"
     ;;
-  replay-corpus)  echo "$ROOT/doctrine/replay-corpus.md" ;;
   shared-for)
     # Print the shared-invariants CONTENT scoped to one command — only the `## ` sections that
     # command consumes, so a session never pays for doctrine it cannot act on. Sections are
@@ -100,7 +98,6 @@ case "${1:-root}" in
       escape)  SECTIONS="Host Grounding|Feedback Loop|Incident Policy|Question Style|Console Output Style|Session Execution" ;;
       fix)     SECTIONS="Host Grounding|Pipeline Entry|Model Placement|Incident Policy|Question Style|Console Output Style|Worker Git Ban|Session Execution" ;;
       doctor)  SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Runtime Verification|Feedback Loop|Tiers|State Machine|Question Style|Console Output Style|Session Execution" ;;
-      replay)  SECTIONS="Host Grounding|Tiers|Model Placement|Decisions|Question Style|Console Output Style|Feedback Loop|Session Execution" ;;
       init)    SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Pipeline Entry|Tiers|Runtime Verification|Release Stage|Model Placement|Question Style|Console Output Style|Canonical Docs Loop|Design Canon|Session Execution" ;;
       prototype) SECTIONS="Host Grounding|Pipeline Entry|Model Placement|Decisions|Question Style|Console Output Style|Worker Git Ban|MCP Policy|On-Disk Handoff|Session Execution" ;;
       connect) SECTIONS="Host Grounding|Question Style|Console Output Style|Session Execution" ;;
@@ -134,7 +131,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|workspace-scan|registry-check|port-check|spec-number-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|prototype-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|decision-lint|collision-closure|ci-query|ci-gate-parity|ac-drift|test-expiry|coverage-scope|count-tests|replay|escape-row|fleet-reader|comment-narration|design-contract-check|design-rules-template|shared|shared-design|shared-for <command>|shared-genesis [--section <names>]|shared-mocks [--section <names>]|replay-corpus|template|templates|walkthrough|walkthrough-connect|pictures|walkthrough-contract|walkthrough-catalog|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|workspace-scan|registry-check|port-check|spec-number-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|prototype-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|decision-lint|collision-closure|ci-query|ci-gate-parity|ac-drift|test-expiry|coverage-scope|count-tests|escape-row|fleet-reader|comment-narration|design-contract-check|design-rules-template|shared|shared-design|shared-for <command>|shared-genesis [--section <names>]|shared-mocks [--section <names>]|template|templates|walkthrough|walkthrough-connect|pictures|walkthrough-contract|walkthrough-catalog|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

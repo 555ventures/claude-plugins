@@ -16,7 +16,7 @@ edit gate scripts, workflow bodies, or generated `wf-*.js`.
 ## Your Expertise
 
 - `spec/commands/*.md` (15 commands) and `git/commands/*.md` (3)
-- `spec/doctrine/{core.md, design.md, genesis.md, replay-corpus.md}` — invariants, design doctrine, genesis doctrine, the mutation corpus
+- `spec/doctrine/{core.md, design.md, genesis.md}` — invariants, design doctrine, genesis doctrine
 - `spec/templates/*` — spec/ADR/brief templates, `grounding-contract.md`, JSON schemas
 - `spec/agents/reviewer.md`, `spec/hooks/hooks.json`, both plugin manifests + `.claude-plugin/marketplace.json`
 

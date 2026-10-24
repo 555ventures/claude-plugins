@@ -366,7 +366,10 @@ upstream bug list. -->
   (`path.join(__dirname, …)`) escapes a `require(` grep entirely. Green `ac-drift-clean` is NOT
   proof the tags are complete: it reddens only for CONTINUE-TO pins, so a WRITES criterion whose
   test is deleted stays silent — one build tagged 3 and review found 32 more. Derive the set as the
-  AC-IDs cited under `tests/` at the base minus those cited now (specs/20261002/01).
+  AC-IDs cited under `tests/` at the base minus those cited now (specs/20261002/01). The tag
+  belongs at the END of the bullet — on a wrapped bullet, its last line — or ac-drift misses it.
+  Name the tagged spec files as explicit File Plan rows: a `specs/**/*.md` glob also matches the
+  spec itself, and red-check refuses the pre-image as impure (specs/20261024/05).
   (specs/20260813/07-command-report-conformance.md D8; specs/20260813/09-model-placement-mechanics.md D4;
   specs/20260814/01-ac-matrix-script.md; specs/20260907/09-atlas-index-and-note-navigation.md;
   specs/20260907/07-mocks-retires-theme.md D12; specs/20260907/08-walk-critic.md D2/D6;

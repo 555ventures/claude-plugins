@@ -208,16 +208,14 @@
 // construction: a non-zero `git update-ref` (e.g. the `refs/spec-review` namespace already
 // occupied as a leaf ref) prints one warning line naming the ref and the driver continues exactly
 // as if the write had succeeded — a replay-measurement convenience must never be able to fail a
-// review, its close row, or its close commit (AC-20260913-01-1, AC-20260913-01-2). replay.js reads
-// this pair instead of reconstructing it from history.
+// review, its close row, or its close commit (AC-20260913-01-1, AC-20260913-01-2). A reader of
+// the judged tree uses this pair instead of reconstructing it from history.
 //
 // specs/20260913/09-the-tool-shows-never-interrupts.md D1: the REPLAY state is retired outright —
 // a block on a finished review is bypassed anyway, and the surprise interrupt mid-delivery was the
 // real cost (docs/adr/0025-replay-runs-on-demand.md). The state chain is now CLOSE -> MERGE/
 // CONFLICTS -> DONE (terminal); `finishMerge()` and MERGE's merge-skipped arm conclude straight
-// into `printDoneNow()`. `/spec:replay` is the only executor of the replay harness now, run on
-// demand — dueness is surfaced on the `/spec:status` dashboard footer (D2/D4 of the same spec),
-// never parked as a step here.
+// into `printDoneNow()`. Nothing is parked as a step after DONE.
 
 // specs/20261013/01-review-closes-its-own-softs.md (D1-D6): a soft (advisory) finding is fixed
 // inside the review that found it or recorded as debt in the spec it belongs to, never hand-queued.
@@ -634,9 +632,9 @@ if (marks.via === undefined) {
 // pre-image. Preferring the ref over the pin is how a review comes to judge an empty range: on
 // spec 20260901/01: `main` already carried the build's own commits, so `main...HEAD`
 // was empty, every diff-scoped leg reported zero and green (at-risk files:0, reconcile listing all
-// 27 planned files "unrealized"), and the reviewer was handed nothing to review. replay.js:374
-// had already inverted this order for exactly this reason ("build_base is typically the moving
-// ref `main`, stale the instant the review's own merge lands") — the fix landed in that consumer
+// 27 planned files "unrealized"), and the reviewer was handed nothing to review. A sibling
+// consumer had already inverted this order for exactly this reason ("build_base is typically the
+// moving ref `main`, stale the instant the review's own merge lands") — the fix landed in that consumer
 // and was never pushed back here. This is that push-back; the non-degenerate-range invariant in
 // resolveBaseSha() below is the backstop for whatever the NEXT base-derivation mistake turns out
 // to be, since precedence alone only fixes the failure mode already seen.
@@ -674,8 +672,9 @@ function resolveBaseSha() {
   // Nothing downstream objects — verdict.js validates sha SHAPE only, so ledger row rv_31224a17550e
   // recorded base === head and no leg, no verdict pass and no ledger append noticed. Refuse here,
   // at the single point where the range is first known, rather than trusting every future caller to
-  // have derived it correctly. Mirrors replay.js:386-391, which already validates its own candidates
-  // this way (`sha !== parent` + `merge-base --is-ancestor`).
+  // have derived it correctly. The check below has two parts: the base sha must differ from HEAD
+  // (otherwise the range is empty), and it must be an ancestor of HEAD per
+  // `merge-base --is-ancestor` (otherwise the diff would carry foreign reverse hunks).
   //
   // SCOPED TO THE JUDGING PHASES. Once `closed` is marked the verdict is already recorded and what
   // remains is merge mechanics, which run from the MAIN ROOT — where HEAD legitimately still sits
@@ -1162,11 +1161,10 @@ function doCloseWork(n) {
   const stampedText = stampDiffBaseIfAbsent(newSpecText)
   fs.writeFileSync(resolvedSpecPath, stampedText)
 
-  // D8: no dueness probe here. A printed "run /spec:replay yourself" reminder was the measured
-  // failure this state machine replaces (specs/20260821/02-replay-review-phase.md D8), and the
-  // state-based REPLAY block that later replaced it was itself retired (specs/20260913/09-the-
-  // tool-shows-never-interrupts.md D1) — dueness now surfaces only on the /spec:status dashboard
-  // footer (D2/D4 of that spec) and via `/spec:replay`, run on demand, never inside this driver.
+  // D8 (specs/20260821/02-replay-review-phase.md): no dueness probe here — a printed reminder
+  // at close was the measured failure this state machine replaces, and the state-based block
+  // that later replaced it was itself retired (specs/20260913/09-the-tool-shows-never-
+  // interrupts.md D1).
   marks.closeRunId = runId
   saveSidecar()
 }

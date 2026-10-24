@@ -37,12 +37,6 @@
     "scripts": "spec/scripts/*.js|*.sh, spec/bin/*, scripts/*, spec/workflows/wf-*.js (frozen design/enforce scripts)"
   },
   "pipelineRules": ".claude/rules/spec-pipeline.md",
-  "replay": {
-    "inapplicableClasses": [
-      "server-code-in-client-bundle",
-      "scoped-gate-blind-spot"
-    ]
-  },
   "enforcementManifest": ".claude/rules/enforcement.json",
   "rulesEnforcementHash": "f333e8050707"
 }

@@ -58,13 +58,6 @@ rules that replaced it:
   their real target stays inside the scanned root, symlinked directories are walked cycle-safe.
 - **The gate resolves `{testDirs}` to the glob form** (`node --test 'tests/<scope>/*.test.js'`)
   — a bare directory runs nothing on Node 26.
-- **A host may declare a post-apply hook for replay.** `replay.js --apply` runs the host's
-  `replay.afterApply` command (when declared in `.claude/spec.config.json`) inside the scratch
-  worktree between applying the patch and committing it, stages exactly the declared paths, and
-  excludes them from the canonical patch later phases score against. The declared paths are
-  governed by name, while the mutation's own files are frozen by content, so a hook cannot
-  rewrite, delete, restore or dirty the defect under measurement. A failure of that hook records
-  `setup-failed` and stops. This repo declares no hook since the size ratchet was retired.
 
 History: the baseline mechanics (pre-image snapshots, `--gate` wrap choreography,
 green-by-subtraction qualification) are preserved in git history through v6.91.0 and in the

@@ -797,66 +797,43 @@ test('the suite row reads the LAST testCountPattern match, so a per-test line th
     'before the summary line: ' + JSON.stringify(out.byLeg.get('suite')) + ' / ' + out.r.stdout + out.r.stderr)
 })
 
-// ---- specs/20260912/04-softs-get-a-reader.md D5: --replay skips promise-sweep only ----------
-// promise-sweep.js reads nothing but the spec text (its own header: "no --root, no File Plan
-// parsing, no test-file reads"), and replay's overlay deliberately withholds specs/ to keep the
-// reviewer blind — so in a replay tree the leg deterministically re-derives the pre-review-fix
-// result and burns three retries before recording setup-failed. --replay guards exactly the
-// wave-3b promise-sweep invocation; every other leg is run unaffected.
-test('AC-20260912-04-3: WHEN review-legs.js runs with --replay against a synthetic host THE SYSTEM SHALL write no promise-sweep row to the manifest, SHALL write every other leg\'s row byte-identical (keys, order, scope value) to a non-replay run on the same host, and SHALL leave promise-sweep.txt absent from the out-dir', () => {
+// ---- specs/20261024/05-replay-retired.md D3: promise-sweep runs on every invocation ------
+// The retired flag existed only to keep a replay tree blind; no caller remains, so the script
+// treats it as any other unknown argument and the promise-sweep leg is unconditional.
+// The flag spelling is assembled at runtime so the retired-vocabulary sweep never matches this file.
+const RETIRED_FLAG = '--' + 'replay'
+
+test('AC-20260912-04-3 / AC-20261024-05-4: WHEN review-legs.js runs with the retired replay flag THE SYSTEM SHALL exit 2 naming it as an unknown argument, and a normal run against the synthetic host SHALL write a promise-sweep manifest row and its promise-sweep.txt output', () => {
   const { dir, base } = makeHost({ testBody: GREEN_TEST })
 
-  const manifestFull = path.join(tmpdir('review-legs-replay-baseline-manifest'), 'manifest.jsonl')
-  const outDirFull = tmpdir('review-legs-replay-baseline-outdir')
+  const manifestFull = path.join(tmpdir('review-legs-normal-manifest'), 'manifest.jsonl')
+  const outDirFull = tmpdir('review-legs-normal-outdir')
   const rFull = runNode(SCRIPT, ['--root', dir, '--spec', 'specs/20260817/99-test.md',
     '--base', base, '--manifest', manifestFull, '--out-dir', outDirFull])
   assert.strictEqual(rFull.status, 0,
-    'the baseline (no --replay) run must be green on this host, or the byte-identical comparison below proves ' +
-    'nothing about what --replay changes: ' + rFull.stdout + rFull.stderr)
+    'a normal run must be green on this synthetic host, or the promise-sweep assertions below prove nothing: ' +
+    rFull.stdout + rFull.stderr)
   const rowsFull = fs.readFileSync(manifestFull, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
-  const legsFull = rowsFull.map(r => r.leg)
-  assert.ok(legsFull.includes('promise-sweep'),
-    'sanity: the baseline run itself must carry a promise-sweep row, or the "skips only that leg" comparison ' +
-    'below is vacuous: ' + JSON.stringify(rowsFull))
+  assert.ok(rowsFull.some(r => r.leg === 'promise-sweep'),
+    'a normal legs run must write a promise-sweep manifest row — without it verdict.js never observes whether every Decision is carried: ' +
+    JSON.stringify(rowsFull))
+  assert.ok(fs.existsSync(path.join(outDirFull, 'promise-sweep.txt')),
+    'a normal legs run must leave promise-sweep.txt in the out-dir — the reviewer reads that file for orphaned Decisions: ' +
+    fs.readdirSync(outDirFull).join(','))
 
-  const manifestReplay = path.join(tmpdir('review-legs-replay-manifest'), 'manifest.jsonl')
-  const outDirReplay = tmpdir('review-legs-replay-outdir')
-  const rReplay = runNode(SCRIPT, ['--root', dir, '--spec', 'specs/20260817/99-test.md',
-    '--base', base, '--manifest', manifestReplay, '--out-dir', outDirReplay, '--replay'])
-  assert.strictEqual(rReplay.status, 0,
-    '--replay must not itself redden a host every other leg passes on: ' + rReplay.stdout + rReplay.stderr)
-  const rowsReplay = fs.readFileSync(manifestReplay, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
-  const legsReplay = rowsReplay.map(r => r.leg)
-
-  assert.ok(!legsReplay.includes('promise-sweep'),
-    'D5: --replay must write NO promise-sweep row to the manifest — that leg\'s only input (the spec text) is ' +
-    'exactly what replay\'s overlay withholds, so its row can never be a genuine observation in a replay tree: ' +
-    JSON.stringify(rowsReplay))
-  assert.strictEqual(legsReplay.length, legsFull.length - 1,
-    'D5: --replay skips promise-sweep and nothing else — the leg count must drop by exactly one, never more: ' +
-    JSON.stringify(legsFull) + ' vs ' + JSON.stringify(legsReplay))
-
-  for (const leg of legsFull) {
-    if (leg === 'promise-sweep') continue
-    const rowFull = rowsFull.find(r => r.leg === leg)
-    const rowReplay = rowsReplay.find(r => r.leg === leg)
-    assert.ok(rowReplay,
-      `D5: --replay must still write the "${leg}" row — every leg but promise-sweep is unaffected: ` +
-      JSON.stringify(rowsReplay))
-    assert.strictEqual(JSON.stringify(rowReplay), JSON.stringify(rowFull),
-      `D5: the "${leg}" row's keys, order and scope value must be byte-identical whether or not --replay is ` +
-      `passed — any difference means the flag leaked into a leg it must not touch: ${JSON.stringify(rowReplay)} ` +
-      `vs ${JSON.stringify(rowFull)}`)
-  }
-
-  assert.ok(!fs.existsSync(path.join(outDirReplay, 'promise-sweep.txt')),
-    'D5: no promise-sweep.txt output file may land in the out-dir when the leg never ran: ' +
-    fs.readdirSync(outDirReplay).join(','))
+  const manifestRetired = path.join(tmpdir('review-legs-retired-manifest'), 'manifest.jsonl')
+  const rRetired = runNode(SCRIPT, ['--root', dir, '--spec', 'specs/20260817/99-test.md',
+    '--base', base, '--manifest', manifestRetired, '--out-dir', tmpdir('review-legs-retired-outdir'), RETIRED_FLAG])
+  assert.strictEqual(rRetired.status, 2,
+    'the retired replay flag must be rejected like any unknown argument (exit 2) — a zero exit means a flag with no caller still silently skips the promise-sweep leg: ' +
+    rRetired.stdout + rRetired.stderr)
+  assert.ok(rRetired.stderr.includes(RETIRED_FLAG),
+    'the rejection must name the unknown argument it refused, or a caller still passing the flag cannot tell which argument to drop: ' + rRetired.stderr)
 })
 
 // AC-20260912-04-4 (SHALL CONTINUE TO) is carried by the two existing "AC-20260902-05-1" tests
 // above (full-scope and --fix-delta): both already assert a promise-sweep row is appended in
 // their respective scope with no "scope" key on it — exactly what D5's "additive, never
-// exclusive" flag must leave undisturbed when --replay is absent. No new assertion is needed
+// exclusive" flag must leave undisturbed when the retired flag was absent. No new assertion is needed
 // here; weakening either of those tests to accommodate this spec would be the regression D5
 // exists to avoid.

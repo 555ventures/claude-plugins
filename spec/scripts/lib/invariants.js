@@ -1,12 +1,13 @@
 'use strict'
-// lib/invariants.js — exports `deriveInvariants(root, config)`, the D1 authority for "a script
-// the pipeline itself runs" (specs/20260911/03-tests-expire-at-close.md D1, AC-20260911-03-1,
-// AC-20260911-03-2). expire-tests.js's D3(b) keep-clause needs exactly this set: a hand list of
-// ten scripts once silently dropped `red-check.js`, `ac-matrix.js`, and the build driver
-// (specs/20260906/01's own incident), so the set here is DERIVED from the host's real command
+// lib/invariants.js — exports `deriveInvariants(root, config)`, the authority for "a script
+// the pipeline itself runs"
+// expire-tests.js's keep-clause needs exactly this set: a hand list of
+// ten scripts once silently dropped `red-check.js`, `ac-matrix.js`, and the build driver,
+// so the set here is DERIVED from the host's real command
 // strings, hook commands, and the pipeline's own four entrypoints every time it is asked for,
 // never stored on disk (a checked-in derived file is the exact ratchet-baseline pattern this repo
 // already retired once).
+// Owner: specs/20260911/03-tests-expire-at-close.md.
 //
 // The universe is every `.js`/`.mjs`/`.cjs`/`.ts`/`.sh` file under `root`, outside the skip dirs
 // (`.git`, `node_modules`, `fixtures`, `__fixtures__`, `.claude/worktrees`) and outside the host's
@@ -27,10 +28,10 @@
 //
 // What this deliberately does NOT do: understand a shell/JS tokenizer precisely (comment
 // stripping here is a documented approximation — `#.*` per bash line, `//...`/`/* ... */` for the
-// rest — good enough to keep a stray comment from opening a false edge, per AC-20260911-03-1, but
+// rest — good enough to keep a stray comment from opening a false edge, but
 // not a guarantee against every possible string/regex-literal edge case lib/scan-test-calls.js's
 // full tokenizer handles); resolve an ambiguous multi-match basename to one "true" file (every
-// match is added — false positives here only widen `kept`, never narrow it, matching D3's
+// match is added — false positives here only widen `kept`, never narrow it, matching the
 // fail-safe stance); or read/write any file outside `root` (pure over the tree it is pointed at).
 //
 // Exit codes: n/a (library, not an entrypoint).
@@ -49,7 +50,7 @@ function relPosix(root, abs) {
 }
 
 // The universe's walk and its skip set live in lib/walk-files.js — the one copy
-// lib/scan-test-calls.js's `listTestFiles` (D2) shares, so the two can never disagree about which
+// lib/scan-test-calls.js's `listTestFiles` shares, so the two can never disagree about which
 // files exist (they once did: only one of them resolved symlinks).
 
 // Recursively collects every string value found anywhere inside `value` (an object, array, or

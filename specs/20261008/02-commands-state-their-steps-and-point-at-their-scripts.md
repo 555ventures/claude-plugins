@@ -120,10 +120,10 @@ comment is the contract.`` or ``Printed by `<driver>.js` at <STATE>; never resta
 - **AC-20261008-02-1**: WHEN the read-load test runs THE SYSTEM SHALL hold every command's own file
   at or under its Contracts ceiling and its `own + shared` load at or under its `BUDGET` entry as
   measured at build (e.g. `wc -l spec/commands/init.md` → ≤ 270; `/spec:init` loads ≤ 270 + its
-  shared lines) → rewrites tests/consistency/read-load.test.js :: AC-20260908-06-1: read-load budget
+  shared lines) → rewrites tests/consistency/read-load.test.js :: AC-20260908-06-1: read-load budget [retired: specs/20261024/04-scripts-drop-their-inline-changelog.md]
 - **AC-20261008-02-2**: WHEN the budget roster test runs THE SYSTEM SHALL find a `BUDGET` entry for
   every one of the fourteen commands and no entry above the value this build measured (the table
-  may only shrink) → rewrites tests/consistency/read-load.test.js :: every /spec command has a read-load budget entry
+  may only shrink) → rewrites tests/consistency/read-load.test.js :: every /spec command has a read-load budget entry [retired: specs/20261024/04-scripts-drop-their-inline-changelog.md]
 - **AC-20261008-02-3**: WHEN `spec/commands/genesis.md` is measured THE SYSTEM SHALL be at or under the
   value measured at build (≤ 85) and SHALL still contain the literal `/spec:mocks → /spec:genesis → /spec:enforce`
   and a `- Chain:` bullet → rewrites tests/consistency/genesis-doctrine.test.js :: AC-20260902-08-11 / AC-20260914-02-14
@@ -135,7 +135,7 @@ comment is the contract.`` or ``Printed by `<driver>.js` at <STATE>; never resta
 - **AC-20261008-02-6**: WHEN `doctor.md` is read THE SYSTEM SHALL CONTINUE TO carry check 17 running
   `spec-paths ac-drift` under its own number → reuses tests/doctor/ac-drift.test.js :: AC-20260906-01-9
 - **AC-20261008-02-7**: WHEN every command's `## Rules` section is counted THE SYSTEM SHALL CONTINUE TO
-  hold at most 8 bullets → reuses tests/consistency/read-load.test.js :: AC-20260908-06-2
+  hold at most 8 bullets → reuses tests/consistency/read-load.test.js :: AC-20260908-06-2 [retired: specs/20261024/04-scripts-drop-their-inline-changelog.md]
 
 ## Assumptions (escalation triggers)
 

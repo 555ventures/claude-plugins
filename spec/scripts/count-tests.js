@@ -3,11 +3,12 @@
 // count-tests.js --root <dir> [--json]
 // count-tests.js --root <dir> --titles [--file <rel>] [--json]
 //
-// specs/20260911/02-tests-have-a-ceiling.md D3′/AC-20260911-02-2: reports a repo's test-case
+// Owner: specs/20260911/02-tests-have-a-ceiling.md.
+// Reports a repo's test-case
 // count as a derived number, never a verdict. Delegates entirely to lib/scan-test-calls.js's
-// countCases() (D2 — the one scanner, shared with ac-drift.js's expiry sweep) over the host's
+// countCases() (the one scanner, shared with ac-drift.js's expiry sweep) over the host's
 // test-classified files. Prints `tests: <count> cases` (human) or `{"count":N}` (--json).
-// Consumer: review-legs.js's `tests` leg (D4′) shells out to this script and never re-derives
+// Consumer: review-legs.js's `tests` leg shells out to this script and never re-derives
 // the count itself. Named `count-tests.js`, never `test-*` — `node --test`'s default file
 // discovery matches `**/test-*.js` anywhere under the repo root, so a `test-count.js` this repo
 // ships gets DISCOVERED AND EXECUTED as a test file by the post-gate's path-less `node --test`
@@ -15,7 +16,7 @@
 // failure (the amendment's forcing incident). No executable this repo ships may be named
 // `test-*`.
 //
-// specs/20260911/04-every-criterion-declares-its-test.md D5: `--titles [--file <rel>] [--json]`
+// `--titles [--file <rel>] [--json]`
 // is the one place a spec author finds a `→ reuses`/`→ rewrites` reference string — one line per
 // case, `<file> :: <prefix>`, the prefix grown a character at a time until it is unique among the
 // other titles in ITS OWN FILE, then extended forward to the next word boundary (never cut off
@@ -78,7 +79,7 @@ if (!rootStat || !rootStat.isDirectory()) die(2, 'usage: ' + USAGE + ' — --roo
 
 const config = readConfig(root)
 
-// D5: the shortest-unique-within-its-own-file prefix — grown a character at a time until no
+// The shortest-unique-within-its-own-file prefix — grown a character at a time until no
 // other case IN THE SAME FILE shares that same-length prefix, then extended forward to the next
 // word boundary (never cut mid-word) and capped at 200 characters (measured: <=80 chars suffices
 // for 1,017 of 1,021 live cases, <=200 for all 1,021).

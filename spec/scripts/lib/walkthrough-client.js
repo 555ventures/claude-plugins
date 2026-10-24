@@ -6,10 +6,8 @@
 //        c.pullApprovals / c.reply / c.mark / c.hello against ctx. Every failure is a thrown
 //        `Refusal` carrying code, sentence, remedy and the exit code scripts/walkthrough.js returns.
 //
-// Owner: specs/20260929/01-the-walkthrough-contract-and-the-client.md D1 (config, token), D7
-// (request and answer rules), D8 (the hello gate), D9-D12 (calls and files); and
-// specs/20261005/01-connect-wires-a-project-to-the-review-service.md D7 (the stored-token rule),
-// D8 (probe). The contract file (spec-paths walkthrough-contract) supplies paths, shapes, limits
+// Owner: specs/20260929/01-the-walkthrough-contract-and-the-client.md; specs/20261005/01-connect-wires-a-project-to-the-review-service.md.
+// The contract file (spec-paths walkthrough-contract) supplies paths, shapes, limits
 // and revision; the config block is read through lib/host-config.js.
 //
 // Rules held here: no request without a complete config, a loopback-or-https baseUrl and a token
@@ -59,7 +57,7 @@ class Refusal extends Error {
   line() { return scrub(`walkthrough: ${this.code} — ${this.sentence}` + (this.remedy ? ` — remedy: ${this.remedy}` : '')) }
 }
 
-// ---- config (D1, D12) ---------------------------------------------------------------------
+// ---- config ---------------------------------------------------------------------
 
 // The string at env[name] in <root>/.claude/settings.local.json; '' when the file, its env object
 // or the key is absent, unreadable, not JSON, or not a non-empty string. Never throws.
@@ -127,7 +125,7 @@ function contextFromBlock(root, env, contract, block) {
   return { root, contract, env, baseUrl: b.baseUrl.trim().replace(/\/+$/, ''), project: b.project, tokenEnv: b.tokenEnv, token }
 }
 
-// ---- requests (D7) ------------------------------------------------------------------------
+// ---- requests ------------------------------------------------------------------------
 
 const REMEDY = {
   'bad-token': (c) => `issue a new token for ${c.project} in the service and export ${c.tokenEnv}`,
@@ -229,7 +227,7 @@ function interpret(c, call, where, res, opts) {
   throw new Refusal(`http-${res.status}`, `${where} answered ${res.status} with a body outside the error shape`, 'check walkthrough.baseUrl points at the service; repeat the command', 1)
 }
 
-// ---- hello and the gate (D8) --------------------------------------------------------------
+// ---- hello and the gate --------------------------------------------------------------
 
 async function hello(c) {
   return send(c, 'hello', { auth: false, notFound: 'unknown-api-version' })
@@ -247,7 +245,7 @@ async function gate(c, warn) {
   return h
 }
 
-// The link proof (connect D8): the hello gate, then one pullApprovals call with the token. Writes
+// The link proof: the hello gate, then one pullApprovals call with the token. Writes
 // no file and needs no local round.
 async function probe(c, warn) {
   const h = await gate(c, warn)
@@ -309,7 +307,7 @@ function localRound(c, arg) {
   return n
 }
 
-// ---- the round file (D5, D9, D10) ---------------------------------------------------------
+// ---- the round file ---------------------------------------------------------
 
 function bad(sentence, file) {
   return new Refusal('bad-round-file', sentence, `fix the round file${file ? ' ' + file : ''} and run walkthrough validate --round-file <file>`, 2)
@@ -331,12 +329,12 @@ function readRoundFile(file) {
   return { round, dir: path.dirname(path.resolve(file)) }
 }
 
-// D5 findings for a round read by readRoundFile.
+// Findings for a round read by readRoundFile.
 function checkRoundFile(contract, catalog, round) {
   return checkRound(catalog, round, { shapes: contract.shapes, limits: contract.limits })
 }
 
-// D10: every picture checked before any request. Returns [{ screen, abs, sha256, bytes }].
+// Every picture checked before any request. Returns [{ screen, abs, sha256, bytes }].
 function preparePictures(contract, round, dir) {
   const limit = contract.limits.imageBytes
   return round.screens.map((s) => {
@@ -411,7 +409,7 @@ function roundRecord(c, body, status, pics) {
   return rec
 }
 
-// ---- push (D9, D10) -----------------------------------------------------------------------
+// ---- push -----------------------------------------------------------------------
 
 async function uploadPictures(c, body, prepared, uploaded) {
   const file = path.join(roundDir(c.root, body.round), 'round.json')
@@ -432,7 +430,7 @@ async function uploadPictures(c, body, prepared, uploaded) {
   return uploaded.every(Boolean) ? 'open' : 'uploading'
 }
 
-// opts: { roundFile, round, resume, catalog, warn }. Returns { findings } when D5 refuses (nothing sent),
+// opts: { roundFile, round, resume, catalog, warn }. Returns { findings } when the round-file check refuses (nothing sent),
 // else { round, kind, status, pictures? }.
 async function push(c, opts) {
   const { round, dir } = readRoundFile(opts.roundFile)
@@ -487,7 +485,7 @@ async function push(c, opts) {
   return { round: n, kind: body.kind, status, already, pictures: { total: uploaded.length, uploaded: uploaded.filter(Boolean).length } }
 }
 
-// ---- pulls (D11) --------------------------------------------------------------------------
+// ---- pulls --------------------------------------------------------------------------
 
 const byAtThenId = (a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 
@@ -521,7 +519,7 @@ async function pullApprovals(c, opts) {
   return { round: n, approvals: approvals.length, changed }
 }
 
-// ---- reply and mark (D12) -----------------------------------------------------------------
+// ---- reply and mark -----------------------------------------------------------------
 
 async function reply(c, opts) {
   let raw

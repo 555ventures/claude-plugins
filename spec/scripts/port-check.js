@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 'use strict'
 // port-check.js --root <dir> [--json] — walk <dir>/tests and report every fixed or computed
-// port literal, so the class specs/20260909/06-ephemeral-serve-ports.md removed cannot creep
-// back in unnoticed (specs/20260909/07-hang-bound-and-port-check.md D3, AC-20260909-07-4
-// through -6). /spec:doctor's fixed-test-ports check is its caller.
+// port literal, so the fixed-port class cannot creep
+// back in unnoticed. /spec:doctor's fixed-test-ports check is its caller.
+// Owner: specs/20260909/07-hang-bound-and-port-check.md.
 //
 // Classifies by LOCATION, not by filename or extension — every regular file under <root>/tests
 // is walked (node_modules and .git excluded) — and by three regexes only, checked in this
@@ -12,8 +12,8 @@
 // it is advisory, not a hard gate. `listen(0)`, `'--port', '0'`, a bare `localhost:PORT` URL,
 // and `freePort()` deliberately match none of the three classes.
 //
-// A fourth class, config-fixed-port (specs/20261005/03-one-port-per-launch.md D10,
-// AC-20261005-03-20), is read from the host config (lib/host-config.js CONFIG_RELPATH) after the tests walk: one
+// A fourth class, config-fixed-port,
+// is read from the host config (lib/host-config.js CONFIG_RELPATH) after the tests walk: one
 // finding for runtime.readyCheck (runtime not inert, a loopback host named, PORT not read) and one
 // for prototype.url (loopback hostname, no {port}); `line` is the line holding the key, `text` the
 // key name. A missing or unparseable config adds nothing; non-loopback addresses are never

@@ -1,8 +1,7 @@
 'use strict'
 // lib/surfaces.js — the one parser of the roadmap ```surfaces line grammar (a bare label, an
-// `a -> b` edge, a `#` comment) and of the seed's beat grammar (`N. "sentence" -> screen[@state]`)
-// (specs/20260908/02-driver-dedupe-onto-lib.md D1; specs/20260917/01-the-client-confirms-the-
-// story.md D2). The roadmap grammar and the seed's beat grammar are unrelated surfaces sharing
+// `a -> b` edge, a `#` comment) and of the seed's beat grammar (`N. "sentence" -> screen[@state]`).
+// The roadmap grammar and the seed's beat grammar are unrelated surfaces sharing
 // this module only because both parse a small line-oriented format: `parseSurfacesPlacement`
 // folds `docs/roadmap/**.md`'s ```surfaces blocks (genesis's every-brief-without-edges fold,
 // tracking every declaring brief so it can catch a double-placement); `parseSeedJourneys` folds
@@ -12,6 +11,7 @@
 // well-numbered beat as `malformed`. `beatHash(beats)` is the one hash of a journey's story — the
 // driver (its `--waive` flag and the confirmations it reads) and the service's confirm control
 // all compute it the same way, over the beats' canonical `beat -> screen[@state]` lines.
+// Owner: specs/20260908/02-driver-dedupe-onto-lib.md.
 //
 // What this deliberately does NOT do: read any file itself for `parseSurfaceLines` or
 // `parseSeedJourneys` — `parseSeedJourneys` takes the seed's already-read text (`null` on a cold
@@ -20,7 +20,7 @@
 // not validate a beat's `screen`/`state` against any screen file — that is the round check (lib/mocks-round.js `roundFindings`), run by the driver's
 // `--mark journey-drawn` and `round push`, not this parser. The retired
 // atlas's first-brief-wins-with-edges fold (`parseSurfaces`) is gone with the atlas it built — no
-// caller has spawned it since (D2).
+// caller has spawned it since.
 //
 // Exit codes: n/a (library, not an entrypoint).
 
@@ -45,11 +45,11 @@ function parseSurfaceLines(block) {
   return out
 }
 
-// D1's beat line — the one parser: `N. "sentence" -> screen[@state]`. Quotes are mandatory;
+// The beat line — the one parser: `N. "sentence" -> screen[@state]`. Quotes are mandatory;
 // `screen`/`state` match `^[\w][\w-]*$`; `@state` is optional.
 const BEAT_RE = /^(\d+)\.\s+"(.+)"\s*->\s*([\w][\w-]*)(?:@([\w][\w-]*))?\s*$/
 
-// D2: sha256 over the canonical `beat -> screen[@state]` lines, joined by "\n", first 12 hex —
+// sha256 over the canonical `beat -> screen[@state]` lines, joined by "\n", first 12 hex —
 // the one hash of a journey's story, shared by every mark and the client page's confirm control.
 function beatHash(beats) {
   const canonical = beats

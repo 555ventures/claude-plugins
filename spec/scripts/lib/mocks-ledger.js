@@ -1,11 +1,12 @@
 'use strict'
 // lib/mocks-ledger.js — pure text-in/text-out parser, gate, counts, and row writer for the
-// mocks provenance ledger (design/mocks/ledger.md). specs/20260902/06-mocks-provenance-
-// ledger.md D1-D4, AC-20260902-06-1..5. Callers own all file I/O; this module never touches
+// ledger (design/mocks/ledger.md).
+// Owner: specs/20260902/06-mocks-provenance-ledger.md.
+// Callers own all file I/O; this module never touches
 // fs. The grammar, the blocking rule, and the counts-line shape are the spec's Contracts
 // block verbatim — do not add fields or reorder columns without a new AC.
 //
-// Grammar (D1): two header-driven markdown tables.
+// Grammar: two header-driven markdown tables.
 //   Assumptions:      | id | step | kind | claim | tag | status | rejected | dependents | note |
 //   Misunderstandings: | id | what | step | cost | note |
 // Enum cells are exactly one fixed word: kind product|process|exclusion, tag said-by-user|
@@ -18,16 +19,16 @@
 // `^[A-Z][A-Z-]*$` token parses), or dedupe/normalize rows beyond flagging duplicate ids as
 // an Err.
 //
-// specs/20260907/10-client-review.md D8: STATUS_WORDS/STATUS_RE gain "waived" (a question's row
+// STATUS_WORDS/STATUS_RE gain "waived" (a question's row
 // once `notes waive` releases it) and gateVerdict treats a waived product row as non-blocking,
 // the same posture as "overridden" — a waived question keeps the ledger truthful (never
 // laundered into "confirmed") without ever tripping the gate.
 //
-// specs/20260910/05-what-the-journey-does-not-do.md D1: KINDS gains "exclusion" — a row kind
+// KINDS gains "exclusion" — a row kind
 // written by mocks-driver.js's `--mark approved`, one row per note or journey conversation newly
 // left `deferred` (`note` = `deferred: <id>`), never hand-authored end to end — a hand-typed
 // exclusion row still passes through `ledger add --kind exclusion` the same as any other kind
-// (specs/20260917/01-the-client-confirms-the-story.md D7/A3: the doctrine sentence claiming
+// (the doctrine sentence claiming
 // `ledger add --kind exclusion` refuses was stale — it does not, and this module never refuses on
 // `kind`). gateVerdict already never blocks on it (its loop only ever inspects `kind === "product"`
 // rows); countsLine gains a trailing ` · <n> exclusions` segment.
@@ -191,7 +192,7 @@ function parseLedger(text) {
   return { assumptions, catches, errors }
 }
 
-// D2: a ledger is blocked when a product row is invented (status !== overridden) or
+// A ledger is blocked when a product row is invented (status !== overridden) or
 // inferred+open. ratified-doc rows and every process row never block.
 function gateVerdict(ledger) {
   if (!ledger || !Array.isArray(ledger.errors) || ledger.errors.length > 0) {
@@ -209,9 +210,9 @@ function gateVerdict(ledger) {
   return { open: blocking.length === 0, blocking, errors: [] }
 }
 
-// D3: the one fixed counts-line shape. specs/20260910/05-…-05 D1 appends a trailing
+// The one fixed counts-line shape. It appends a trailing
 // ` · <n> exclusions` segment — an exclusion row counts only there, never as said-by-user (even
-// though its `tag` is always "said-by-user" by D1's own grammar).
+// though its `tag` is always "said-by-user" by the grammar).
 function countsLine(ledger) {
   let said = 0
   let ratified = 0
@@ -260,7 +261,7 @@ function validateAssumptionInput(row) {
   return statusText
 }
 
-// D4: appendAssumption writes one new Assumptions row before the blank line that ends the
+// appendAssumption writes one new Assumptions row before the blank line that ends the
 // table (i.e. right after the last data row, or right after the separator row if the table
 // is empty). Throws on a row that fails the grammar — never writes a bad row.
 function appendAssumption(text, row) {
@@ -289,7 +290,7 @@ function validateCatchInput(row) {
   if (!CATCH_ID_RE.test(row.id || '')) throw new Error(`catch id "${row.id}" does not match ^M\\d+$`)
 }
 
-// D4: appendCatch — same shape, the Misunderstandings table.
+// appendCatch — same shape, the Misunderstandings table.
 function appendCatch(text, row) {
   validateCatchInput(row)
   const lines = String(text).split('\n')
@@ -307,7 +308,7 @@ function appendCatch(text, row) {
   return lines.join('\n')
 }
 
-// D4: setStatus rewrites only the addressed row's status cell (and tag cell, when given) —
+// setStatus rewrites only the addressed row's status cell (and tag cell, when given) —
 // every other byte in the text stays identical.
 function setStatus(text, id, status, tag) {
   const lines = String(text).split('\n')

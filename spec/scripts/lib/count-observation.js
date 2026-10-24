@@ -2,8 +2,9 @@
 'use strict'
 // spec/scripts/lib/count-observation.js — required by review-legs.js and release-legs.js. No CLI.
 //
-// Why (specs/20260908/05-release-e2e-unobserved-count.md D1, specs/20260907/03 D4/D5): this
-// module is the one binding home for lastMatch/computeTestsExecuted/computeSkips/isUnobserved
+// Owner: specs/20260908/05-release-e2e-unobserved-count.md.
+//
+// Why: this module is the one binding home for lastMatch/computeTestsExecuted/computeSkips/isUnobserved
 // so review-legs.js and release-legs.js read a runner's output identically; each importer
 // requires this file instead of defining any of the four itself.
 //

@@ -4,8 +4,8 @@
 // screens: derives the wanted list from the seed's stories, runs the project's own declared
 // picture command, checks the folder it filled, writes the round file and hands it to walkthrough.js.
 //
-// Owner: specs/20261005/06-the-design-stage-sends-pictures.md D2-D9 (AC-20261005-06-1 to
-// AC-20261005-06-13). The `pictures` config block is the grounding contract's § Pictures.
+// Owner: specs/20261005/06-the-design-stage-sends-pictures.md.
+// The `pictures` config block is the grounding contract's § Pictures.
 //
 // Run order: preconditions (arguments, config block, seed, connection, picture count), clean the
 // folder's top-level pictures and round files, write wanted.json, run the command with cwd = the

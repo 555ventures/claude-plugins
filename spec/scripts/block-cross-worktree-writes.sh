@@ -14,8 +14,9 @@
 # This is the mechanical complement to the build stage's worktree isolation and the
 # Worker Contract's git ban — workers run with cwd = their own worktree, so a
 # parallel worker that writes an absolute path into the root checkout is blocked.
+# Owner: specs/20260820/02-replay-scratch-write-access.md.
 #
-# One sanctioned exception (specs/20260820/02-replay-scratch-write-access.md): a mutation
+# One sanctioned exception: a mutation
 # worker dispatched from a main-anchored session may Edit a disposable scratch worktree
 # stood up for it — a cross-worktree write that is the whole point of that tool, not
 # pollution. The exception: allow when the TARGET tree's PRIVATE git dir (outside the
@@ -150,7 +151,7 @@ tgt_common="$(canon "$tgt_common_raw")" || exit 0
 # Same worktree -> allow.
 [ "$tgt_top" = "$cur_top" ] && exit 0
 
-# --- Scratch-worktree marker allow (D1/D2, specs/20260820/02): TARGET only ---
+# --- Scratch-worktree marker allow: TARGET only ---
 # `git rev-parse --git-dir` returns the tree's PRIVATE git dir: a bare relative `.git`
 # from a main checkout, or an absolute `.../.git/worktrees/<name>` from a linked
 # worktree (both observed in the executed spike) — absolutize a relative result

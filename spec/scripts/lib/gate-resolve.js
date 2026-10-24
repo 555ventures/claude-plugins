@@ -1,12 +1,13 @@
 'use strict'
 // lib/gate-resolve.js — the sole derivation of `{testDirs}`/`{scopeDirs}` substitution against a
-// host's declared `gateCommand`. Extracted verbatim from review-legs.js's own local resolveGate()
-// (specs/20260830/02-close-gate-rerun.md D3): the driver's new
+// host's declared `gateCommand`. Extracted verbatim from review-legs.js's own local resolveGate():
+// the driver's new
 // close-time gate re-run (spec-review-driver.js's handleClosed()) needs to resolve the exact same
 // command review-legs.js already resolves for the review-time gate leg — a second, paraphrased
 // copy in the driver would be a drift seam (the same reason ci-query.js was unified).
 // Semantics are byte-identical to the function this replaces: only the config source moved, from
 // review-legs.js's module-scope `config` to an explicit second parameter.
+// Owner: specs/20260830/02-close-gate-rerun.md.
 //
 // resolveGate(specText, config) -> { gate: string } | { gate: null, reason: string }
 //   - config.gateCommand without {testDirs}/{scopeDirs} returns { gate: config.gateCommand } as-is
@@ -22,7 +23,7 @@
 // Plan, and running the raw command handed `{testDirs}` to the shell literally). The caller owns
 // the empty-list case.
 //
-// specs/20260926/04-the-design-brief.md D13 (AC-20260926-04-23): every path under a `fixtures/`
+// Every path under a `fixtures/`
 // directory (`/(^|\/)fixtures\//`) is dropped from the File Plan's test rows before either
 // placeholder is derived — a fixture is never a test entry point, and `node --test`'s own glob
 // matching would otherwise execute it as one (the scoped gate reddened on

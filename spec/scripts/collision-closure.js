@@ -2,17 +2,19 @@
 'use strict'
 // collision-closure.js --spec <path> [--root <dir>] [--tests <dir>]… [--literal <stem>]… [--json]
 //
-// spec 20260814/05-collision-closure: two plan-time collateral-damage
+// Owner: specs/20260814/05-collision-closure.md.
+//
+// Two plan-time collateral-damage
 // sweeps — find the tests that pin the files a spec is about to change, find the doctrine prose
 // elsewhere that quotes wording a spec is about to retire — have lived as hand-executed prose
 // (a § Gotchas bullet, a /spec:plan sentence) and have missed three times
-// (specs/20260813/07 D8, specs/20260813/09 D4, specs/20260814/01's spec-paths key-set pin,
+// (including a spec-paths key-set pin,
 // which landed out-of-plan and had to be waived at review). This script is the sole derivation
 // of both sweeps, invoked at plan lock: the **paths leg** (always runs) joins every non-tests
 // File Plan path against the test corpus; the **literals leg** (--literal, optional, repeatable)
 // joins planner-supplied stems against the whole repo. Advisory listing only — it never blocks.
 //
-// spec 20260830/01-collision-closure-exec-recall: the paths leg matched a File Plan target as
+// The paths leg matched a File Plan target as
 // a literal substring, but this repo's
 // test helpers spawn scripts by a root-stripped path (`runNode('scripts/foo.js')`, never
 // `spec/scripts/foo.js`) — two out-of-plan genesis test files (7 tests) spawned
@@ -22,8 +24,8 @@
 // extensionless file) tier their hits `executes` — a call-graph fact, not a proximity guess —
 // alongside the unchanged `likely`/`mentions` proximity tiering for non-runnable (prose) targets.
 //
-// What this deliberately does NOT do: gate the lock or any build/review stage (spec
-// 20260814/03 D10's blocking whole-suite check owns execution adjudication end-to-end); choose
+// What this deliberately does NOT do: gate the lock or any build/review stage (the
+// blocking whole-suite check owns execution adjudication end-to-end); choose
 // which stems to search for (planner judgment); diff a git changed-set against the File Plan
 // (that is scope-reconcile.js — disjoint inputs, disjoint stage); expand File Plan globs
 // (targets are matched as literal substrings, never as patterns); shell out to grep (BSD/GNU
@@ -47,7 +49,7 @@ const HONESTY_LINE = 'likely/mentions tier is a lexical proxy; mentions may cont
 const REMEDY_LINE = "remedy: add each literals hit as a File Plan row, or record the waive in the spec's Rationale; an `executes` hit names a test that runs a script you are changing — if the change alters that script's observable behavior, widen the File Plan or plan the fixture repair now; `likely` and `mentions` hits are visibility only and owe no waive line"
 const PROXIMITY_LINES = 25
 
-// ---- D1/D2: match-key derivation and runnable classification, applied once at target
+// ---- match-key derivation and runnable classification, applied once at target
 // construction (no second pass over targets anywhere below). ------------------------------------
 function matchKey(target) {            // D1
   const seg = target.split('/')
@@ -108,7 +110,7 @@ const isTestsLayer = r => (r.layer || '').trim().toLowerCase() === 'tests'
 const planned = [...new Set(rows.flatMap(r => r.paths))].sort()
 const targets = [...new Set(rows.filter(r => !isTestsLayer(r)).flatMap(r => r.paths))].sort()
 
-// ---- D3: test-root derivation --------------------------------------------------------------
+// ---- test-root derivation --------------------------------------------------------------
 
 let testRoots
 if (testsCli.length) {
@@ -163,11 +165,11 @@ function literalPrefix(glob) {
   return i === -1 ? glob : glob.slice(0, i)
 }
 
-// D5: repo-root walk excluding .git, node_modules, and pipelineOwnedGlobs(root) — pruned at
-// directory level where possible (perf, A2/A7) and re-checked per file (correctness: a glob
+// Repo-root walk excluding .git, node_modules, and pipelineOwnedGlobs(root) — pruned at
+// directory level where possible (perf) and re-checked per file (correctness: a glob
 // like `.claude/spec-runs.jsonl` names a single file, not a directory to prune).
 //
-// Ignored-path prune (D1, specs/20260915/01-one-derivation-of-ignored-paths.md): a git-ignored
+// Ignored-path prune: a git-ignored
 // working copy (`.claude/worktrees/**`, a `*.build/` scratch dir) is a second copy of files this
 // repo already owns, so a literals hit naming one is never a real collateral-damage site. The
 // ignored set is the ONE derivation in `lib/ignored-paths.js` — shared with scope-reconcile.js's
@@ -190,7 +192,7 @@ function walkForLiterals(base, ownedGlobs) {
       const rel = toRel(full, base)
       if (e.isDirectory()) {
         if (e.name === '.git' || e.name === 'node_modules' || dirPrefixes.includes(rel)) continue
-        // D1: a fully-ignored directory arrives from ls-files as its path plus a trailing slash —
+        // A fully-ignored directory arrives from ls-files as its path plus a trailing slash —
         // pruning here means the subtree is never descended, an ignored second checkout included.
         if (ignored.has(`${rel}/`)) continue
         rec(full)
@@ -213,7 +215,7 @@ function readSafe(absPath) {
   }
 }
 
-// ---- D12: tier — likely iff a `deepStrictEqual` line sits within ±25 lines of a line that
+// ---- tier — likely iff a `deepStrictEqual` line sits within ±25 lines of a line that
 // mentions the target's literal string. ----------------------------------------------------
 function isLikely(content, target) {
   const lines = content.split('\n')
@@ -249,10 +251,10 @@ if (targets.length) {
       if (!content.includes(entry.key)) continue
       entry.hits.add(f)
       anyPathsHit = true
-      // D3: executes is additive on top of the unchanged likely/mentions proximity computation —
+      // executes is additive on top of the unchanged likely/mentions proximity computation —
       // a runnable target's hit that also sits near a deepStrictEqual tiers BOTH executes and
       // likely (Contracts: "a file... may appear in both executes and likely"); isLikely runs
-      // unconditionally, keyed on the D1 suffix.
+      // unconditionally, keyed on the match-key suffix.
       if (entry.runnable) entry.executes.add(f)
       if (isLikely(content, entry.key)) likelyFiles.add(f)
     }
@@ -289,7 +291,7 @@ const unplanned = [...allHits].filter(h => h !== specRel && !plannedSet.has(h)).
 const unplannedSet = new Set(unplanned)
 const likely = [...likelyFiles].filter(f => unplannedSet.has(f)).sort()
 
-// D3: executes = union of per-target executes sets, filtered to unplanned, sorted — the
+// executes = union of per-target executes sets, filtered to unplanned, sorted — the
 // identical derivation `likely` uses above.
 const executesFiles = new Set()
 for (const p of pathsResult) for (const h of p.executes) executesFiles.add(h)
@@ -320,7 +322,7 @@ if (jsonOut) {
       continue
     }
     out.push(`  ${p.target}:`)
-    // D3: executes: first, always; likely: is unconditional (a runnable hit that is also
+    // executes: first, always; likely: is unconditional (a runnable hit that is also
     // proximate to a deepStrictEqual prints under both); mentions: is the non-runnable catch-all
     // only — a runnable target's every hit is already accounted for under executes:, so it never
     // gets a redundant mentions: bucket.

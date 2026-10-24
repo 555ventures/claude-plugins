@@ -2,7 +2,9 @@
 'use strict'
 // prose-cap.js — cap lint for one markdown section's entry-bullet count.
 //
-// specs/20260823/06-prose-debt-pruning.md: the host rules' § Gotchas section
+// Owner: specs/20260823/06-prose-debt-pruning.md.
+//
+// The host rules' § Gotchas section
 // accreted 23 entries in 23 days with nothing pruning them, including two citing machinery
 // (`suite-baseline.js`, `.claude/suite-baseline.json`) that were removed and went unnoticed for
 // many days — proof that nothing reads an append-only section once it grows past a skim. This

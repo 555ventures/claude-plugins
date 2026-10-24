@@ -4,7 +4,8 @@
 // always exit 0 today — that is the whole failure mode this spec closes). verdict.js's release-
 // profile derive() and release-legs.js stage's summary both `require` this module; neither
 // re-derives, so the ledger's word and the printed summary can never disagree about what
-// silence looks like. specs/20260913/08-silence-is-not-a-pass.md D1 (AC-20260913-08-1).
+// silence looks like.
+// Owner: specs/20260913/08-silence-is-not-a-pass.md.
 //
 // Judged shapes: a `ci` row whose `observed.unavailable` is a string (no-adapter, sha-unseen,
 // any future value) -> `ci:unavailable:<value>`; a `ci` row whose `observed.status ===
@@ -13,10 +14,10 @@
 // (every check declared inert, nothing actually ran) -> `substrate:nothing-executed`. Every
 // other row, including a fully-typed measured row of any leg and an `e2e` row whose nested
 // `skipped` slot carries `{"unavailable":"no-format-declared"}` (governed by `executed` at
-// append time already, specs/20260908/05), derives `null`.
+// append time already), derives `null`.
 //
-// Does NOT: read `row.exit` (a row's exit code is a separate, unchanged contract — D3/D4 of
-// this spec reuse today's exit-0 rows verbatim); judge any leg not named above (deploy, ready,
+// Does NOT: read `row.exit` (a row's exit code is a separate, unchanged contract; today's exit-0
+// rows stay verbatim); judge any leg not named above (deploy, ready,
 // e2e, journeys never derive unmeasured); store or print anything — this is a pure function.
 //
 // Exit codes: n/a (library, no CLI surface).

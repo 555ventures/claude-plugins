@@ -2,10 +2,12 @@
 'use strict'
 // scope-reconcile.js --base <ref> --spec <path> (--json | --dirs) [--root <dir>] — reconciles
 // the WHOLE changed-file set (committed diff UNION untracked) against a spec's File Plan.
-// --json additionally emits `atRisk` (specs/20260815/02-at-risk-pins.md D1): test files outside
+// --json additionally emits `atRisk`: test files outside
 // the spec's File Plan tests rows whose content references a changed file's path stem.
 //
-// specs/20260805/01-review-scope-reconciliation.md: the review stage diffed only the File Plan's directories, so an
+// Owner: specs/20260805/01-review-scope-reconciliation.md.
+//
+// The review stage diffed only the File Plan's directories, so an
 // out-of-plan `waitForExit` edit was structurally invisible to review and rode a CLEAN verdict
 // into production. This script inverts the File Plan's role from scope-definer to
 // prediction-under-test: every changed file is seen; the plan's misses (out-of-plan) and
@@ -14,10 +16,10 @@
 // What it deliberately does NOT do: resolve `pipelineOwnedPaths` beyond the additive glob list
 // in .claude/spec.config.json, or re-derive the changed set anywhere else — the review stage and
 // the build stage's Final gate both call this, once each. It DOES read test-file CONTENT, but only
-// for the at-risk derivation's substring scan below (specs/20260815/02-at-risk-pins.md D1) — the
+// for the at-risk derivation's substring scan below — the
 // outOfPlan/unrealized/excluded/renamed derivation never looks past a path string. The at-risk
-// walk does NOT descend into `fixtures`/`__fixtures__` directories (specs/20260903/07-test-file-
-// budget-guard.md D8) — fixture files are never at-risk candidates, even when test-classified.
+// walk does NOT descend into `fixtures`/`__fixtures__` directories.
+// Fixture files are never at-risk candidates, even when test-classified.
 //
 // Changed set = `git diff --name-status -M <base>` (BOTH sides of R/C rows) UNION `??` paths
 // from `git status --porcelain --untracked-files=all` (the `=all` flag is required — plain
@@ -25,7 +27,7 @@
 // A rename whose old path was planned realizes that plan row — reported once in `renamed`,
 // never as an out-of-plan + unrealized finding pair.
 //
-// File Plan glob rows (D2, specs/20260813/03-gate-script-mechanics.md): a row containing `*`,
+// File Plan glob rows: a row containing `*`,
 // `?`, or `[` is a pattern, matched via lib/glob-match.js's `globMatch` against concrete changed
 // files — never an exact-string comparison. A changed file matching a glob row is in-plan
 // (never outOfPlan); a glob row matched by >=1 changed file is realized (never unrealized).
@@ -36,19 +38,19 @@
 // Exit codes: 0 = outOfPlan empty · 3 = outOfPlan non-empty · 2 = usage error, spec unreadable,
 // spec has no File Plan table, or the git ref/repo is unusable.
 //
-// --probe-at-risk <file> [--test-globs <csv>] --root <dir> (D9, specs/20260822/02-init-generation-
-// script.md): an ADDITIVE, read-only mode for init-gen.js's at-risk-applicability probe — `<file>`
+// --probe-at-risk <file> [--test-globs <csv>] --root <dir>:
+// an ADDITIVE, read-only mode for init-gen.js's at-risk-applicability probe — `<file>`
 // is a newline-separated list of repo-relative source paths (init-gen samples up to 20 tracked
 // non-test files). It reuses THIS file's existing `stemsFor` derivation and `walkTestFiles` test-file
 // scan in place (never a second implementation — the sole-derivation rule), fed the caller-supplied
 // sample list instead of a git-diff changed set, and `--test-globs`/the same default array instead of
 // the host config (which does not exist yet at init probe time). Prints `{sampled, testFiles, refs}`
-// and always exits 0 (D13: probe findings are data). This mode is checked BEFORE the --base/--spec/
+// and always exits 0 (probe findings are data). This mode is checked BEFORE the --base/--spec/
 // mode requirement below so it never needs a spec or a git ref; it never touches outOfPlan/unrealized/
-// excluded/renamed, and D10 pins the existing --json/--dirs modes byte-identical around it.
+// excluded/renamed, and the existing --json/--dirs modes stay byte-identical around it.
 //
-// Ignored-path prune (D1, specs/20260915/01-one-derivation-of-ignored-paths.md, carrying over
-// the D1/D2 contract of specs/20260907/03-ignored-paths-and-unobserved-count.md unchanged in
+// Ignored-path prune (carrying over
+// the earlier contract unchanged in
 // substance): `walkTestFiles` prunes every git-ignored path — a git-ignored working copy
 // (`.claude/worktrees/**`, a `*.build/` scratch dir) is not a real candidate on any host layout,
 // and the four name skips below were never meant to enumerate that class. The ignored set is now
@@ -139,11 +141,11 @@ if (filePlanPaths.size === 0) {
   process.exit(2)
 }
 
-// ---- pipeline-owned exclusions (D4): built-in defaults + additive config globs -------------
+// ---- pipeline-owned exclusions: built-in defaults + additive config globs -------------
 
 const pipelineOwned = pipelineOwnedGlobs(root)
 
-// ---- changed set: git diff --name-status (both sides of R/C) UNION untracked (D3) ----------
+// ---- changed set: git diff --name-status (both sides of R/C) UNION untracked ----------
 
 let diffOut, statusOut
 try {
@@ -181,7 +183,7 @@ const realizedRenamedTo = new Set(
   renamed.filter(r => filePlanPaths.has(r.from) || excludedSet.has(r.from)).map(r => r.to)
 )
 
-// ---- glob-row expansion (D2): a File Plan row with *, ?, or [ is a pattern, not a literal ----
+// ---- glob-row expansion: a File Plan row with *, ?, or [ is a pattern, not a literal ----
 
 // A row ending in `/` names a directory and covers every file beneath it — matched as `<row>**`.
 // Trailing slash only, never an on-disk isDirectory() probe: a deleted directory no longer exists.
@@ -200,14 +202,14 @@ const unrealized = [
   ...globRows.filter(g => !nonExcludedChanged.some(p => globMatch(toPattern(g), p)))
 ].sort()
 
-// ---- at-risk derivation (D1/D2/D5, specs/20260815/02-at-risk-pins.md) ----------------------
+// ---- at-risk derivation ----------------------
 // A Decision that changes what a shared script returns reddens suites the scoped gate never
 // runs, because those suites live outside the spec's own File Plan tests rows (escape
 // wf_e1da0ea6-94c). For each changed file that is neither test-classified
 // (testGlobs), pipeline-owned, nor a rename-from path, derive path stems and substring-scan the
 // repo's test-classified files for them; a hit that is not resolved by the File Plan's
 // tests-layer rows and is not itself in the changed set is at-risk. Additive to outOfPlan/
-// unrealized/excluded/renamed above — never affects the exit code (D2).
+// unrealized/excluded/renamed above — never affects the exit code.
 
 const configTestGlobs = readConfig(root).testGlobs
 const testGlobs = Array.isArray(configTestGlobs) ? configTestGlobs : DEFAULT_TEST_GLOBS
@@ -215,7 +217,7 @@ const isTestClassified = (p) => testGlobs.some(g => globMatch(g, p))
 
 function stemsFor(p) {
   // Form (a) — the full repo-relative path — is always emitted, even when it is a bare
-  // single-segment basename, so a root-level file stays matchable at all (D1). Forms (b) and
+  // single-segment basename, so a root-level file stays matchable at all. Forms (b) and
   // (c) must be able to discriminate: never a bare single-segment basename (no `/`), and never
   // the empty string (a root dotfile like `.gitignore` strips to '' under the last-extension
   // regex, and `content.includes('')` is vacuously true for every candidate — the reproduced
@@ -250,12 +252,12 @@ function walkTestFiles(dir, out, classifyFn = isTestClassified) {
     return
   }
   for (const entry of entries) {
-    // specs/20260903/07-test-file-budget-guard.md D8: fixture dirs are never at-risk candidates.
+    // Fixture dirs are never at-risk candidates.
     if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === 'fixtures' || entry.name === '__fixtures__') continue
     const full = path.join(dir, entry.name)
     const rel = path.relative(root, full).split(path.sep).join('/')
     if (entry.isDirectory()) {
-      // D1: a fully-ignored directory arrives from ls-files as its path plus a trailing slash —
+      // A fully-ignored directory arrives from ls-files as its path plus a trailing slash —
       // pruning here means the subtree is never descended, an ignored second checkout included.
       if (ignored.has(`${rel}/`)) continue
       walkTestFiles(full, out, classifyFn)

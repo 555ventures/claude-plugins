@@ -3,18 +3,20 @@
 // spec-status.js [--root <dir>] [--json] [--brief NN | --next | --all] — derive pipeline
 // status, never store it.
 //
+// Owner: specs/20260903/05-status-diet.md
+//
 // Human output is ALWAYS the pretty render: bare invocation → the four-block dashboard —
 // 🗺️ Roadmap, 🎯 Next, up to three ⚠️ decide lines, one glyph+sentence footer — and nothing
-// else (specs/20260903/05-status-diet.md D1/D3/D4). The 🎯 Next block IS the lane render —
+// else. The 🎯 Next block IS the lane render —
 // escape lines first, then the ⚡ parallel-lanes fan-out (or the lone pick's 🚦 solo tag), or
 // the blocked top pick's ⏳ branch when nothing is unblocked — identically in the default
-// render and under --all (specs/20260909/08-next-carries-the-lanes.md D1). --next → the lean
+// render and under --all. --next → the lean
 // 🎯 top-pick line alone (@-prefixed so it pastes straight into Claude Code). --all only lifts
 // the decide-line cap and inserts what is genuinely not startable now — 🕓 after that: and
-// ⛔ blocked: (D3) — directly after the Next block's own lines and before the decide lines,
-// plus the hygiene catalogue ahead of the same footer (D5) — every anomaly kind classifies
+// ⛔ blocked: — directly after the Next block's own lines and before the decide lines,
+// plus the hygiene catalogue ahead of the same footer — every anomaly kind classifies
 // once, in code, as `audience: "decide"` (a choice only the reader can make) or `"hygiene"`
-// (/spec:doctor's findings), never re-derived per call site (D2). --json is the only machine
+// (/spec:doctor's findings), never re-derived per call site. --json is the only machine
 // format (doctor check 13, release). --pretty is accepted as a no-op for old call sites; there
 // is no plain human render anymore.
 //
@@ -30,13 +32,13 @@
 // A `done` spec also carries a derived observation sub-state read from `.claude/spec-runs*.jsonl`
 // (live + year archives) `stage:"observe"` rows — written by observe-ci.js, never here. Offline
 // read only (ledger absence = every done spec reports "ok"); the network leg that actually
-// queries CI lives solely in observe-ci.js. Observation is a red alarm, not a certification
-// (specs/20260807/01-observation-red-alarm.md D2): the derived state is `n/a`/`ok`/`red` only —
+// queries CI lives solely in observe-ci.js. Observation is a red alarm, not a certification:
+// the derived state is `n/a`/`ok`/`red` only —
 // `pending` is retired, nothing renders for "ok" (no ⏳, no "unobserved" anywhere). Observation
 // never blocks depends_on satisfaction; a red observation becomes the --next top pick as a full
-// oracle-shaped `/spec:escape` entry (unchanged from specs/20260805/03's D5) and drives the
+// oracle-shaped `/spec:escape` entry and drives the
 // dashboard footer to `🔴 CI is red on {path} — {branch}@{sha} ({url})`
-// (specs/20260903/05-status-diet.md D8) — the sole render of the alarm; there is no separate
+// — the sole render of the alarm; there is no separate
 // observation section.
 //
 // --next derives the recommended next command per open spec: draft → /spec:plan; hardened and
@@ -54,8 +56,7 @@
 // Everything else lands under 🕓 with a ⛓️/🤷 branch line giving the derived reason (or the
 // no-claim) — never an unexplained bucket.
 //
-// specs/20260823/08-derived-session-queue.md D2/D9 (retooled by specs/20260903/03-pipeline-
-// queue-mechanics.md D1-D4): `--next` additionally consults an OPTIONAL per-repo session
+// `--next` additionally consults an OPTIONAL per-repo session
 // queue (`<git-common-dir>/spec-queue.json`, written only by spec-queue.js) as a read-only
 // input overlay to deriveNext(): queue position reorders unblocked entries across briefs
 // (deliberately overriding cross-brief closest-to-done) and a queued `spec` item's own
@@ -65,8 +66,8 @@
 // lib/queue.js's isItemReady (shared with spec-queue.js's own write path); a linked
 // worktree suppresses the overlay entirely (the global pointer misleads mid-spec). A
 // newly-landed on-disk brief absent from the queue is appended last with no stamp and no
-// anomaly (D4 retires the dependency-aware auto-placement and its veto/accept notice).
-// Resolution is fail-soft in every direction (A5) — no git, a git error, no queue file, an
+// anomaly (the dependency-aware auto-placement and its veto/accept notice are retired).
+// Resolution is fail-soft in every direction — no git, a git error, no queue file, an
 // unparseable file, or a linked worktree all leave today's derivation byte-for-byte
 // unchanged, with zero stderr; only an unparseable file additionally earns one
 // `queue-unparseable` anomaly. This script never writes the queue file — spec-queue.js is
@@ -93,7 +94,7 @@ function writeOut(str) {
   }
 }
 const { parseFilePlan } = require('./lib/file-plan')
-// specs/20260913/09-the-tool-shows-never-interrupts.md D2/D3/D4: sinceLastRelease feeds the
+// sinceLastRelease feeds the
 // footer's ignorable done-since-release clause — computed once over the SAME `ledgerRows` this
 // file already reads for the observation sub-state below, never a second ledger read.
 const { readLedgerRows, qualifyingObservation, sinceLastRelease } = require('./lib/observation')
@@ -101,12 +102,12 @@ const {
   isSupersededBriefText, isItemDone, isItemReady, makeCtx, dedupeItems, stripAutoPlaced,
   reconcileMissingBriefs,
 } = require('./lib/queue')
-// D2 (specs/20260823/04-review-close-hardening.md, rv_6825fa48c98d): the local frontmatter() kv
+// The local frontmatter() kv
 // loop this replaced stripped a trailing comment at the FIRST "#" regardless of what preceded it,
 // corrupting an unspaced value like `source_url: https://x/p#frag` — the sole shared derivation
 // strips only a whitespace-preceded "#", per YAML unquoted-scalar semantics.
 const { fmMap } = require('./lib/frontmatter')
-// specs/20260902/11-brief-from-approved-set.md D6: the 🧭 misunderstandings line reads
+// The 🧭 misunderstandings line reads
 // design/mocks/ledger.md through this lib the same way genesis-driver.js's BRIEF precondition
 // check does — never a second ledger parser.
 const mocksLedgerLib = require('./lib/mocks-ledger')
@@ -156,7 +157,7 @@ if (nextMode && briefFilter) {
   console.error('--next and --brief are mutually exclusive')
   process.exit(2)
 }
-// D5/Contracts (specs/20260903/05-status-diet.md): --all is a render switch only — it is
+// --all is a render switch only — it is
 // usage-incompatible with --next or --brief, and a no-op combined with --json (the full
 // --json shape is unaffected by --all).
 if (allMode && (nextMode || briefFilter)) {
@@ -176,10 +177,9 @@ function walkMd(dir, out = []) {
   return out
 }
 
-// File Plan parsing (parseFilePlan/splitPlanCell) lives in lib/file-plan.js (D2,
-// specs/20260805/01-review-scope-reconciliation.md) — scope-reconcile.js shares this derivation
-// rather than carrying a second copy that could drift. CLI behavior here is byte-identical
-// (AC-20260805-01-7).
+// File Plan parsing (parseFilePlan/splitPlanCell) lives in lib/file-plan.js —
+// scope-reconcile.js shares this derivation
+// rather than carrying a second copy that could drift. CLI behavior here is byte-identical.
 
 function parseList(v) {
   if (!v) return []
@@ -256,7 +256,7 @@ if (fs.existsSync(roadmapDir)) {
       phase: phase ? phase[1] : null,
       depends_on: deps,
       dep_rejects: depRejects,
-      // specs/20260823/08 D6: internal-only (never exposed via --json) — a superseded
+      // Internal-only (never exposed via --json) — a superseded
       // roadmap brief (the v7 "*(superseded by v7)*" entries) is excluded from the queue
       // overlay's virtual reconcile so it never earns a perpetual auto-placement anomaly.
       superseded: isSupersededBriefText(text),
@@ -272,14 +272,13 @@ const LANDED = s => s === 'done' || s === 'implementing'
 // this derivation can't reason about — fail closed: flag it, never route it to an action.
 const KNOWN_STATUS = new Set(['draft', 'hardened', 'implementing', 'done'])
 
-// ---- .claude/spec-runs*.jsonl (live + archives) — done-spec observation sub-state (D2) --------
+// ---- .claude/spec-runs*.jsonl (live + archives) — done-spec observation sub-state --------
 // Offline read only — this is a VIEW; the network leg lives solely in observe-ci.js. Absence of
 // the ledger means every done spec resolves to "ok" (silent — a host that has never run
 // observe-ci has never seen a red run, which renders identically to a host that has and stayed
 // green — both collapse to the same "ok" render by design).
-// readLedgerRows/qualifyingObservation (D2 algorithm) live in lib/observation.js — shared
-// with observe-ci.js instead of a second derivation drifting apart (D2,
-// specs/20260805/03-done-unobserved-observation.md). CLI behavior here is byte-identical.
+// readLedgerRows/qualifyingObservation live in lib/observation.js — shared
+// with observe-ci.js instead of a second derivation drifting apart. CLI behavior here is byte-identical.
 function observationFor(rows, specPath) {
   const row = qualifyingObservation(rows, specPath)
   return row && row.ci === 'red' ? { state: 'red', row } : { state: 'ok', row: null }
@@ -310,10 +309,10 @@ for (const b of briefs) {
 }
 const briefByNum = new Map(briefs.map(b => [b.num, b]))
 
-// ---- specs/20260823/08: read-only session queue overlay (D2/D6/D9) --------------------------
+// ---- read-only session queue overlay -------------------------------------------------------
 // `git -C <root> rev-parse --git-common-dir`/`--git-dir`, resolved against <root> (never
-// --path-format=absolute, git >=2.31-only, A2) — a linked worktree has git-dir != common-dir,
-// which is exactly the D9 suppression signal (no second "am I a worktree" check needed).
+// --path-format=absolute, git >=2.31-only) — a linked worktree has git-dir != common-dir,
+// which is exactly the suppression signal (no second "am I a worktree" check needed).
 function resolveQueueOverlay(rootDir) {
   const common = spawnSync('git', ['-C', rootDir, 'rev-parse', '--git-common-dir'], { encoding: 'utf8' })
   if (common.error || common.status !== 0) return { on: false }
@@ -334,7 +333,7 @@ function resolveQueueOverlay(rootDir) {
 }
 
 const anomalies = []
-// D2 (specs/20260903/05-status-diet.md): every anomaly kind classifies once, here — DECIDE
+// Every anomaly kind classifies once, here — DECIDE
 // kinds are the two whose remedy is a choice only the reader can make; every other kind,
 // including one added here later and never listed in DECIDE, resolves to hygiene by
 // construction rather than silently carrying no audience at all.
@@ -343,7 +342,7 @@ function pushAnomaly(a) {
   anomalies.push({ ...a, audience: DECIDE_KINDS.has(a.kind) ? 'decide' : 'hygiene' })
 }
 
-// specs/20260903/03 D1: specStatus(relPath) -> the spec's own frontmatter status, including
+// specStatus(relPath) -> the spec's own frontmatter status, including
 // `superseded` (retired specs are filtered OUT of `specs` above but must still resolve here
 // so a queued spec item pointing at a since-superseded spec reads correctly) — null only
 // when the path never resolved to any spec file at all (never existed, or deleted).
@@ -360,7 +359,7 @@ if (queueOverlay.parseError) {
   pushAnomaly({ kind: 'queue-unparseable', detail: `${queueOverlay.parseError} — the session queue overlay is disabled until this is fixed (or the file removed and reseeded with \`spec-queue next\`)` })
 }
 if (queueOverlay.on) {
-  // D4: virtual reconcile — computed here, never written here (spec-queue.js's own
+  // Virtual reconcile — computed here, never written here (spec-queue.js's own
   // reconcile is the persisted twin of this exact algorithm, from lib/queue.js): strip any
   // stale `auto_placed` key, collapse duplicate brief/spec items to their first occurrence,
   // then append any on-disk non-done, non-superseded brief absent from the queue LAST, with
@@ -386,7 +385,7 @@ if (queueOverlay.on) {
     } else if (it.kind === 'spec') {
       queuePosBySpec.set(it.spec, i)
     }
-    // D2/D3: a gate on a brief item blocks every open spec entry of that brief; a gate on a
+    // A gate on a brief item blocks every open spec entry of that brief; a gate on a
     // spec item blocks that one spec's entry; a gate on a prompt item blocks its own entry
     // (handled below, in the prompt-entries map).
     if (it.kind === 'brief' || it.kind === 'spec') {
@@ -436,9 +435,9 @@ for (const b of briefs) {
   }
 }
 
-// Skipped dependency: a brief moved while a declared dependency is still unplanned. D2
-// (specs/20260903/05-status-diet.md): skipped-brief is a DECIDE anomaly — the remedy is a
-// choice ("plan it now?"), so it carries line/ask/paste alongside detail (Contracts).
+// Skipped dependency: a brief moved while a declared dependency is still unplanned.
+// skipped-brief is a DECIDE anomaly — the remedy is a
+// choice ("plan it now?"), so it carries line/ask/paste alongside detail.
 for (const b of briefs) {
   if (b.status === 'unplanned' || b.status === 'superseded') continue
   for (const d of b.depends_on) {
@@ -455,8 +454,8 @@ for (const b of briefs) {
 }
 
 // Sequence-order skip: an earlier unplanned brief sitting below any later brief that moved.
-// D2: also a DECIDE anomaly (Contracts) — the remedy is "still wanted?", a choice, not a fix.
-// A superseded brief (D6, 20260823/08) is retired, not skipped — it never fires here, nor as a
+// Also a DECIDE anomaly — the remedy is "still wanted?", a choice, not a fix.
+// A superseded brief is retired, not skipped — it never fires here, nor as a
 // skipped-brief dependency above, nor does it count as "moved".
 const moved = briefs.filter(b => b.status !== 'unplanned' && b.status !== 'superseded')
 if (moved.length) {
@@ -498,7 +497,7 @@ if (fs.existsSync(overview)) {
   }
 }
 
-// specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md D7: a contracted,
+// A contracted,
 // unclosed prototype whose citing specs (frontmatter `prototype: <stem>`, superseded ones aside)
 // are all done is a hygiene anomaly carrying the one close command. Hygiene only — never a Next
 // entry, never a fourth action string.
@@ -572,7 +571,7 @@ function deriveNext() {
   const entries = []
   for (const s of specs) {
     if (DONE(s.status) || !KNOWN_STATUS.has(s.status)) continue
-    // hardened and implementing both route through the loop (D5).
+    // hardened and implementing both route through the loop.
     const action = s.status === 'draft' ? '/spec:plan' : '/spec:run'
     const blockers = []
     for (const d of s.depends_on) {
@@ -585,7 +584,7 @@ function deriveNext() {
         if (!dep || !dep.specs.some(x => LANDED(x.status))) blockers.push(`brief ${d} (${dep ? dep.status : 'missing'})`)
       }
     }
-    // specs/20260903/03 D2/D3: a queue `after` gate on this spec's own queued position, or
+    // A queue `after` gate on this spec's own queued position, or
     // on its brief's queued position, adds one more blocker string — reusing the existing
     // blocked tier rather than a new field.
     if (queueBlockersBySpec.has(s.path)) blockers.push(queueBlockersBySpec.get(s.path))
@@ -597,7 +596,7 @@ function deriveNext() {
       rank,
     })
   }
-  // D5: a red observation is a dashboard-level alarm — it outranks every build/review/plan
+  // A red observation is a dashboard-level alarm — it outranks every build/review/plan
   // action and every unplanned brief as a full oracle-shaped /spec:escape entry, carrying its
   // evidence (branch/sha/url) in `note` so the escape session derives from it, never guesses.
   // blockers:[] (an escape is always actionable) plus parallel:false/parallel_reason:null
@@ -612,15 +611,15 @@ function deriveNext() {
       rank: -3,
     })
   }
-  // specs/20260823/08 D11/Behavior: undone prompt queue items surface as their own entries
+  // Undone prompt queue items surface as their own entries
   // (no underlying spec — path:null) so they can compete for the top pick like any other
   // entry, ordered purely by their own queue position (queuePos below).
   if (queueOverlay.on) entries.push(...queueUndonePromptEntries)
 
   // Closest-to-done first (review > build/design > plan), blocked entries last, then brief
-  // order, then path — the first line is THE recommendation. D10: a red-observation escape
+  // order, then path — the first line is THE recommendation. A red-observation escape
   // (rank -3) keeps supremacy over every queue position — its own sort tier, ahead of queue
-  // position, unconditionally. D6/Behavior: queue position (a briefed entry maps to its
+  // position, unconditionally. Queue position (a briefed entry maps to its
   // queue item's index, real or virtually reconciled above; briefless/unqueued entries sort
   // after every queued position via Infinity) deliberately overrides the existing
   // closest-to-done rank, which still breaks ties within one queue position/brief. `queuePos`
@@ -628,7 +627,7 @@ function deriveNext() {
   function queuePos(e) {
     if (!queueOverlay.on) return 0
     if (e.queue) return e.__queuePos
-    // D1: a queued spec item's own position overrides its brief's queued position.
+    // A queued spec item's own position overrides its brief's queued position.
     if (e.path && queuePosBySpec.has(e.path)) return queuePosBySpec.get(e.path)
     if (e.brief && queuePosByBrief.has(e.brief)) return queuePosByBrief.get(e.brief)
     return Infinity
@@ -688,7 +687,7 @@ function nothingNextLine() {
 if (nextMode) {
   const entries = deriveNext()
   if (json) {
-    // D11: a queue prompt entry's --json shape is a frozen, append-only 7-key object
+    // A queue prompt entry's --json shape is a frozen, append-only 7-key object
     // (action/path/queue/status/brief/blockers/note) with no parallel/parallel_reason
     // decoration — it never took part in the parallel-annotation loop above (no brief to
     // claim against), so the generic augmentation is skipped for it, never applied then
@@ -704,7 +703,7 @@ if (nextMode) {
     out.push(`✨ ${nothingNextLine()}`)
   } else {
     const top = entries[0]
-    // D11: a prompt item's payload prints verbatim, with no `@path` suffix (path is null).
+    // A prompt item's payload prints verbatim, with no `@path` suffix (path is null).
     out.push(top.path ? `${top.action} @${top.path}` : top.action)
     top.blockers.forEach((b, i) =>
       out.push(`   ${i === top.blockers.length - 1 ? '└─' : '├─'} ⏳ ${b}`))
@@ -749,13 +748,12 @@ if (briefFilter) {
 
 if (json) {
   // `superseded` (the brief-level flag, internal-only per its own comment above) is
-  // stripped here alongside `specs: ss` — this dashboard JSON shape is unchanged by
-  // specs/20260823/08.
+  // stripped here alongside `specs: ss` — this dashboard JSON shape is unchanged.
   writeOut(JSON.stringify({ briefs: briefs.map(({ specs: ss, superseded, ...b }) => ({ ...b, specs: ss.map(s => ({ path: s.path, status: s.status })) })), specs, superseded: retired.map(s => ({ path: s.path, superseded_by: s.superseded_by })), anomalies }, null, 2))
   process.exit(0)
 }
 
-// Lane admission (shared by the 🎯 Next block's lane render and --all's 🕓/⛔ sections, D1/D3):
+// Lane admission (shared by the 🎯 Next block's lane render and --all's 🕓/⛔ sections):
 // pairwise-greedy fan-out over unblocked, non-escape entries — one derivation, every call site,
 // so the lanes drawn in Next and the runner-ups sunk under --all can never disagree.
 function laneAdmission(entries) {
@@ -775,20 +773,20 @@ function laneAdmission(entries) {
 // Path-shortening is global, not anchored: a queue gate reads "after specs/2026…/08-x.md
 // (hardened)", where the path is not at the start of the string.
 const shortBlocker = b => b.replace(/\S*\//g, '').replace(/\s*\([^)]*\)$/, '').replace(/\.md$/, '')
-// D4 (specs/20260909/08-next-carries-the-lanes.md): n counts open work below the top pick —
+// n counts open work below the top pick —
 // every lane the 🎯 Next block printed is startable now, so the clause says "open", not "waiting".
 const waitClause = n => `${n} more open`
 
 {
-  // D1/D5 (specs/20260903/05 as amended by ADR-0014): the default render is exactly four
+  // The default render is exactly four
   // blocks — 🗺️ Roadmap, 🎯 Next (the whole lane fan-out), up to three ⚠️ decide lines, one
   // footer. `--all` lifts the decide cap and inserts 🕓 after that: / ⛔ blocked: under 🎯 Next
   // plus 🧹 Hygiene before the same footer. No anomaly fold, no ⚠️ Anomalies section, no 📡
-  // block, no headline verdict line survive anywhere (D1/D8).
+  // block, no headline verdict line survive anywhere.
   const out = []
   const BRIEF_ICON = { done: '✅', 'in-flight': '🔨', unplanned: '⬜', superseded: '⛔' }
 
-  // D2/D5(a): a red observation is a dashboard-level alarm — it decides the footer glyph
+  // A red observation is a dashboard-level alarm — it decides the footer glyph
   // outright and is never folded into the ordinary anomaly-driven verdict. "ok" never renders.
   const doneRed = specs.filter(s => s.observation === 'red')
   const entries = deriveNext()
@@ -833,11 +831,11 @@ const waitClause = n => `${n} more open`
     for (const r of rows) out.push(`   ${r.icon} ${r.label.padEnd(lw)}  ${r.phase.padEnd(pw)}  ${r.tail}`)
   }
 
-  // D6: 🧭 misunderstandings — a render-only pipeline-record line read from
+  // 🧭 misunderstandings — a render-only pipeline-record line read from
   // design/mocks/ledger.md's own Misunderstandings table (spec 06's grammar), directly under
   // 🗺️ Roadmap and ahead of 📡 Observation. Any absence or read/parse failure omits the line
   // silently (Behavior: "a viewer, never a verdict") — never a second derivation surfaced via
-  // --json, which stays byte-for-byte unchanged (AC-20260902-11-7).
+  // --json, which stays byte-for-byte unchanged.
   {
     let ledgerText = null
     try { ledgerText = fs.readFileSync(path.join(root, 'design/mocks/ledger.md'), 'utf8') } catch (e) { ledgerText = null }
@@ -857,7 +855,7 @@ const waitClause = n => `${n} more open`
   // stays byte-identical and id-free: it must survive a double-click copy, and its own spec
   // path is already a valid `spec-queue` <ref>. Width falls back to 100 off a TTY so piped
   // output stays deterministic. Hoisted above the 🎯 Next block (below) because that block now
-  // renders every command through it too (D9).
+  // renders every command through it too.
   const rowWidth = process.stdout.columns || 100
   const idWidth = Math.max(0, ...entries.filter(e => e.__queueId).map(e => e.__queueId.length))
   const cmd = e => {
@@ -868,15 +866,14 @@ const waitClause = n => `${n} more open`
     return head + (flat.length <= room ? flat : flat.slice(0, room - 1) + '…')
   }
 
-  // 🎯 Next (D1, specs/20260909/08-next-carries-the-lanes.md): the lane render IS the Next
+  // 🎯 Next: the lane render IS the Next
   // block now, byte-identical in the default render and under --all — (a) every /spec:escape
   // entry, one bare command line each; (b) the ⚡ parallel-lanes fan-out (with its 🔶
   // merge-conflict heads-up) or the single admitted lane's 🚦 solo tag; (c) when neither (a)
   // nor (b) printed anything and entries exist, the top pick's command plus its ⏳ branch — by
-  // construction (Behavior/A1) a blocked top pick means lanes is empty, so (b) and (c) never
+  // construction a blocked top pick means lanes is empty, so (b) and (c) never
   // both fire; (d) ✨ nothingNextLine() when there are no entries at all. Every command line
-  // renders through cmd() — the old raw-payload special case for a queue prompt entry is gone
-  // (D9).
+  // renders through cmd() — the old raw-payload special case for a queue prompt entry is gone.
   out.push('', '🎯 Next')
   const { blocked, lanes, laneClash, later } = laneAdmission(entries)
   const escapes = entries.filter(e => e.action === '/spec:escape')
@@ -912,7 +909,7 @@ const waitClause = n => `${n} more open`
     // when other open work exists, the solo pick states it out loud.
     if (later.length || blocked.length) out.push('   └─ 🚦 solo')
   }
-  // D3: when branch (c) below fires, the top pick it prints is also the head of `blocked` —
+  // When branch (c) below fires, the top pick it prints is also the head of `blocked` —
   // remembered here so --all's ⛔ section can filter it back out instead of re-printing it.
   let topPrintedAsBlocked = false
   if (!escapes.length && !laneRendered) {
@@ -928,7 +925,7 @@ const waitClause = n => `${n} more open`
   }
 
   if (allMode) {
-    // D3: `--all` inserts only what the Next block above did NOT already show as startable —
+    // `--all` inserts only what the Next block above did NOT already show as startable —
     // 🕓 after that: (serial/no-claim runner-ups) then ⛔ blocked: — directly after the Next
     // block's own lines and before the ⚠️ decide lines below. Nothing here re-prints a line the
     // Next block already carried.
@@ -947,7 +944,7 @@ const waitClause = n => `${n} more open`
         if (!next || reasonOf(next) !== reason) out.push(`   └─ ${reason}`)
       })
     }
-    // D3: `blocked` is the same array the branch-(c) top pick came from — filter it back out
+    // `blocked` is the same array the branch-(c) top pick came from — filter it back out
     // here (never in the Next block) so the top pick keeps its position above and the section
     // is skipped entirely when nothing else survives the filter.
     const blockedForAll = topPrintedAsBlocked ? blocked.filter(e => e !== entries[0]) : blocked
@@ -961,7 +958,7 @@ const waitClause = n => `${n} more open`
     }
   }
 
-  // ⚠️ Decide lines (D3): `⚠️ {line}` then `   {ask}  {paste}` — capped at three by default in
+  // ⚠️ Decide lines: `⚠️ {line}` then `   {ask}  {paste}` — capped at three by default in
   // derivation order (skipped-brief before out-of-order, roadmap order within a kind, already
   // the anomalies array's own push order); `--all` lifts the cap.
   if (shownDecide.length) {
@@ -973,24 +970,24 @@ const waitClause = n => `${n} more open`
   }
 
   if (allMode) {
-    // 🧹 Hygiene keeps its place after the decide lines, ahead of the footer (D3).
+    // 🧹 Hygiene keeps its place after the decide lines, ahead of the footer.
     out.push('', `🧹 Hygiene (${hygieneAnomalies.length}) — /spec:doctor`)
     for (const a of hygieneAnomalies) out.push(`   [${a.kind}] ${a.detail}`)
   }
 
-  // D4: the one-line footer — glyph + one sentence, the LAST line printed. A red observation
+  // The one-line footer — glyph + one sentence, the LAST line printed. A red observation
   // outranks every other head (the Next line above is already its /spec:escape entry); else a
   // blocked top pick names its short blocker; else ready/nothing. Clauses (wait, decide-overflow,
   // hygiene-count), each only when non-zero, ride after the head in that order — except the wait
   // clause on the 🟢 line, which prints "nothing else open" at n = 0 rather than being omitted.
-  // specs/20260909/08-next-carries-the-lanes.md D4: the `{m} could run in parallel (--all)`
+  // The `{m} could run in parallel (--all)`
   // clause is retired outright — the lanes it counted are already on screen above.
-  // specs/20260913/09-the-tool-shows-never-interrupts.md D4: two more clauses ride AFTER the
+  // Two more clauses ride AFTER the
   // hygiene clause, only when non-zero — a done-since-release count (or "never released"
   // when no CLEAN release row exists). Ignorable by design: the owner asked for a line they
   // can see, never a state that blocks anything.
   {
-    // D4/Behavior: wait count n excludes escape entries outright, then excludes the top pick
+    // Wait count n excludes escape entries outright, then excludes the top pick
     // itself — the top pick is entries[0] regardless of whether it is the escape entry, so an
     // escape top pick subtracts nothing (every non-escape entry is still waiting behind it).
     const nonEscape = entries.filter(e => e.action !== '/spec:escape')
@@ -1005,7 +1002,7 @@ const waitClause = n => `${n} more open`
       glyph = '🔴'
       head = `CI is red on ${top.path} — ${row.branch}@${row.sha} (${row.url})`
     } else if (!entries.length) {
-      // D4/Behavior "Nothing next": unqualified — every entries.length === 0 shape (not just the
+      // "Nothing next": unqualified — every entries.length === 0 shape (not just the
       // blocked-unplanned-brief one) is ⬜, the Next block's ✨ nothingNextLine() message paired
       // one-to-one with this glyph.
       glyph = '⬜'

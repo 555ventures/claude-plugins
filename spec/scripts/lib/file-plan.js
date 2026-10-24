@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 'use strict'
 // lib/file-plan.js — the sole parser for a spec's `## File Plan` table. Extracted verbatim
-// from spec-status.js (D2,
-// specs/20260805/01-review-scope-reconciliation.md) so spec-status.js and
+// from spec-status.js so spec-status.js and
 // scope-reconcile.js share one derivation instead of drifting apart. This module has no CLI
 // of its own — it exports parseFilePlan/splitPlanCell for both consumers.
+// Owner: specs/20260805/01-review-scope-reconciliation.md.
 //
 // What it deliberately does NOT do: validate Action/annotation columns, resolve globs, or
 // diff against a changed-file set — callers own that.
@@ -26,8 +26,8 @@ function splitPlanCell(cell) {
   return cell.split(/\s*\+\s*|,\s*/).map(x => x.trim()).filter(Boolean)
 }
 
-// walkFilePlanTables — module-private, shared by parseFilePlan and parseFilePlanRows (D1,
-// specs/20260816/03-file-plan-table-scoped-parsing.md). Finds the `## File Plan` section (or
+// walkFilePlanTables — module-private, shared by parseFilePlan and parseFilePlanRows.
+// Finds the `## File Plan` section (or
 // `###`; section ends at the next heading whose level is <= the File Plan heading's level, so
 // `###` subheadings under a `##` File Plan stay in-section), then walks it table-scoped: a
 // table is a maximal contiguous run of `|`-prefixed lines, and any non-`|` line (blank, prose,
@@ -92,7 +92,7 @@ function parseFilePlan(text) {
   return [...paths]
 }
 
-// parseFilePlanRows — additive extension (D2, specs/20260814/01-ac-matrix-script.md): exposes
+// parseFilePlanRows — additive extension: exposes
 // the Action/Layer columns that parseFilePlan deliberately discards, without changing
 // parseFilePlan's own return shape or any existing caller. ac-matrix.js needs the Layer column
 // to find a spec's `tests`-layer File Plan rows without a second table walker or a
@@ -101,12 +101,12 @@ function parseFilePlan(text) {
 // `Action`/`Layer`, any column order), so a table with a different column order still resolves,
 // and a table with no Layer column yields `layer: null` on every row of THAT table (not the
 // whole section) rather than misreading an unrelated column or inheriting a sibling table's
-// binding. Escaped once (specs/20260816/03-file-plan-table-scoped-parsing.md):
+// binding. Escaped once:
 // a second `| Path | ... |` status table under a `### Landed at design stage` subheading
 // clobbered the section-wide index binding computed after this function's walk, so
 // every row in the section — including the first table's real tests-layer rows — read back
 // `layer: null`; fixed by routing both this function and `parseFilePlan` through the shared,
-// table-scoped `walkFilePlanTables` walker (D1) instead of two hand-duplicated section walks.
+// table-scoped `walkFilePlanTables` walker instead of two hand-duplicated section walks.
 function parseFilePlanRows(text) {
   const rows = []
   for (const row of walkFilePlanTables(text)) {

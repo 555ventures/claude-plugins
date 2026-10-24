@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 'use strict'
-// lib/observation.js — the sole D2 qualifying-row algorithm for a spec's post-review
+// lib/observation.js — the sole qualifying-row algorithm for a spec's post-review
 // observation state, read from `.claude/spec-runs*.jsonl` (live + year archives).
-// Extracted verbatim from spec-status.js and observe-ci.js (specs/20260805/03-done-unobserved-
-// observation.md) so both consumers share one derivation
+// Extracted verbatim from spec-status.js and observe-ci.js
+// so both consumers share one derivation
 // instead of two copies drifting apart — the repo rules flag a second derivation of the same
 // algorithm as a hard finding. This module has no CLI of its own — it exports
 // readLedgerRows/qualifyingObservation for both callers.
+// Owner: specs/20260805/03-done-unobserved-observation.md.
 //
 // sinceLastRelease() is the derivation for the status footer's done-since-release clause:
 // distinct specs closed CLEAN since the last CLEAN release row, never a raw row count (a fix
@@ -21,7 +22,7 @@
 const fs = require('fs')
 const path = require('path')
 
-// Ledger reads: live + year archives, filename order then line order (D2/A6). Malformed lines
+// Ledger reads: live + year archives, filename order then line order. Malformed lines
 // are silently dropped — flagging them is doctor's job, not this read path's.
 function readLedgerRows(root) {
   const dir = path.join(root, '.claude')
@@ -39,7 +40,7 @@ function readLedgerRows(root) {
 
 // Qualifying rows for a spec = its stage:"observe" rows appearing (by read-order position, not
 // timestamp) after its latest stage:"review" row. Winner = the qualifying row with the greatest
-// runAt (tie -> red wins, D2) — a union-merged worktree history reorders lines, not time.
+// runAt (tie -> red wins) — a union-merged worktree history reorders lines, not time.
 // Returns null when there is no qualifying row (unobserved); otherwise the winning row itself.
 function qualifyingObservation(rows, specPath) {
   let lastReviewIdx = -1
@@ -50,7 +51,7 @@ function qualifyingObservation(rows, specPath) {
     !best || row.runAt > best.runAt || (row.runAt === best.runAt && row.ci === 'red') ? row : best, null)
 }
 
-// ---- D3: specs done since the last release. `released` is true when any stage:"release" row -----
+// ---- Specs done since the last release. `released` is true when any stage:"release" row -----
 // ---- with verdict:"CLEAN" exists; `done` counts DISTINCT spec values among stage:"review" rows ---
 // ---- with verdict:"CLEAN" positioned after the last such release row (after none when released ---
 // ---- is false) — a fix round writes two review rows for one close, so rows would over-count. -----

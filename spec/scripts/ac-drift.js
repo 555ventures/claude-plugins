@@ -2,7 +2,8 @@
 'use strict'
 // ac-drift.js --root <dir> [--json]
 //
-// WHY: specs/20260906/01-ac-drift-doctor-check.md D1 — the AC↔test coverage matrix
+// Owner: specs/20260906/01-ac-drift-doctor-check.md.
+// WHY: the AC↔test coverage matrix
 // (ac-matrix.js) runs once, at review, against the spec under review; nothing re-derives it after
 // a spec closes, so a later test split, a fix-cap waive, or a retired surface silently leaves a
 // done spec's acceptance criteria with no test citing them. This script re-derives that matrix
@@ -92,7 +93,7 @@ if (!fs.existsSync(specsDir)) {
   process.exit(0)
 }
 
-// ---- repo walk (D4): skips .git/node_modules/fixtures/__fixtures__ — a fixture is input data for
+// ---- repo walk: skips .git/node_modules/fixtures/__fixtures__ — a fixture is input data for
 // some OTHER test, never a citation of its own. ------------------------------------------------
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'fixtures', '__fixtures__'])
 function walk(dir, out) {
@@ -118,7 +119,7 @@ const specFiles = allFiles
   .filter((f) => { const rel = relPosix(f); return rel.startsWith('specs/') && rel.endsWith('.md') })
   .sort()
 
-// ---- test classification (D4): host config's testGlobs when it is an array, else the shared
+// ---- test classification: host config's testGlobs when it is an array, else the shared
 // DEFAULT_TEST_GLOBS. Files read once into a joined haystack. ------------------------------------
 const configTestGlobs = readConfig(root).testGlobs
 const testGlobs = Array.isArray(configTestGlobs) ? configTestGlobs : DEFAULT_TEST_GLOBS
@@ -165,12 +166,12 @@ for (const specFile of specFiles) {
 
     if (acIdOccurs(getHaystack(), bullet.id)) continue // covered — never reported
 
-    // specs/20260907/01-mixed-pin-guard-and-drift-line.md D1: the inline backtick-strip/whitespace-
+    // The inline backtick-strip/whitespace-
     // collapse here is lib/spec-sections.js's exported normalizeForPinCheck — the single authority
-    // red-check.js's D2 mixed-pin guard and ac-matrix.js's D3 lint/warning also import, rather than
+    // red-check.js's mixed-pin guard and ac-matrix.js's lint/warning also import, rather than
     // a third from-scratch copy of the identical pass. Behaviour is unchanged: this predicate still
     // only asks whether the bullet contains a `SHALL CONTINUE TO` phrase at all, never `pinShape`'s
-    // finer promise/pin/mixed read — a done spec's mixed bullet is history (Assumptions A1), not a
+    // finer promise/pin/mixed read — a done spec's mixed bullet is history, not a
     // hygiene finding this script reports.
     const pinned = /SHALL CONTINUE TO/.test(normalizeForPinCheck(bullet.raw))
 
@@ -206,7 +207,7 @@ for (const specFile of specFiles) {
 const exitCode = findings.length ? 1 : 0
 
 // --json is a single stdout object and nothing else — no per-row stderr lines, no skipped/summary
-// lines (D5's Contracts: the human render and --json are two distinct formats, not one payload
+// lines (the human render and --json are two distinct formats, not one payload
 // doubled across streams). The human render below is unchanged: per-row findings on stderr, the
 // summary/sentinel on stdout.
 if (asJson) {

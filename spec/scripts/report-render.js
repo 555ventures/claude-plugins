@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 'use strict'
 // report-render.js --slots <path> — the sole render authority for the end-of-run report
-// skeleton (spec/doctrine/shared.md § Console Output Style; specs/20260813/06-report-renderer.md).
+// skeleton (spec/doctrine/shared.md § Console Output Style).
+// Owner: specs/20260813/06-report-renderer.md.
 //
 // Before this script the console-output contract was prose-only: every command hand-filled
 // its own fenced template at report time, and drifted from every other command under
@@ -12,7 +13,7 @@
 //
 // Deliberately does NOT: derive `next` — a `status-verbatim` slot is captured by the calling
 // command running `spec-status --next` itself; shelling out to spec-status from here would be
-// a second derivation path and break the sole-derivation rule (D3). Does NOT reorder,
+// a second derivation path and break the sole-derivation rule. Does NOT reorder,
 // merge, or rewrite slot text — glossing quality (plain English, no identifiers) stays a prose
 // obligation on the assembling command; this script only guarantees shape. Does NOT retry any
 // command phase on failure — a slots-file contract violation is discovered strictly AFTER the

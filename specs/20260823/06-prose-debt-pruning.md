@@ -171,7 +171,7 @@ eviction (delete / merge / mechanize).
   test IS the standing enforcement → tests/prose-debt/prose-cap.test.js
 - **AC-20260823-06-4**: WHEN review.md and escape.md are read THE SYSTEM SHALL state the
   at-cap eviction duty with the three fates (delete / merge / mechanize) in review's CLOSE
-  step and in escape's step-6 `doctrine` branch → tests/prose-debt/doctrine-pins.test.js
+  step and in escape's step-6 `doctrine` branch → tests/prose-debt/doctrine-pins.test.js [retired: specs/20261024/04-scripts-drop-their-inline-changelog.md]
 - **AC-20260823-06-5**: WHEN memory-sweep runs with a diff list containing a path whose
   repo-relative form or basename appears as a path-shaped token in a note's body THE SYSTEM
   SHALL surface that note as `diff-hit` (e.g. note body citing `ac-matrix.js`, diff line

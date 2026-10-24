@@ -7,6 +7,7 @@
 # __SMOKE_*__ sentinel line are the verdict (same lesson as the gate sentinel). This script
 # deliberately does NOT re-run readyCheck after shutdown (undefined for file-probe hosts —
 # would false-pass) and does NOT add a post-stop probe (deferred, see shared.md).
+# Owner: specs/20261005/03-one-port-per-launch.md.
 #
 # Usage: smoke.sh [--config <path>] [--timeout <seconds>] [--seed]
 #   --config   path to spec.config.json (default .claude/spec.config.json under CWD)
@@ -26,21 +27,21 @@
 #        __SMOKE_FAIL__ shutdown-hung:    still alive runtime.stopTimeout seconds after
 #                                          stopSignal (group is then SIGKILLed)
 #        __SMOKE_FAIL__ shutdown-unclean: exit status outside runtime.stopExitCodes
-#   7  environment already ready before boot was ever spawned (D4 below):
+#   7  environment already ready before boot was ever spawned:
 #        __SMOKE_FAIL__ stale-ready: another process is already answering on this address —
 #                                     readyCheck passed before bootCommand was spawned. Stop that
 #                                     process and re-run; to let launches of this repo run side
 #                                     by side, make the host read PORT (/spec:doctor names the fix).
 #   (exit 5 also covers) __SMOKE_FAIL__ no-port: a PORT-reading host could not be given a free
-#      port (specs/20261005/03-one-port-per-launch.md D4) — free a loopback port, or give
+#      port — free a loopback port, or give
 #      runtime.readyCheck a fixed address.
 #
-# Port (specs/20261005/03-one-port-per-launch.md D1/D2): when runtime.readyCheck references the
+# Port: when runtime.readyCheck references the
 # shell variable PORT, one free port is allocated per run by lib/app-port.js and exported as PORT
 # to bootCommand, every readyCheck run and seedCommand (an inherited PORT is overridden); the pass
 # line gains " | port: <n>". A readyCheck that does not reference PORT allocates and sets nothing.
 #
-# specs/20260821/03-cross-spec-skip-mapping.md D4: this script used
+# The stale-ready probe: this script used
 # to trust whatever readyCheck answered on the FIRST poll after boot spawn — an orphaned server
 # left over from a crashed prior run (or any other environment whose ready predicate is already
 # true) made readiness look instantaneous, crediting THIS run's boot for a readiness it never
@@ -110,7 +111,7 @@ if [ -n "$PORT_OUT" ]; then
   PORT_NOTE=" | port: ${PORT_OUT}"
 fi
 
-# D4: pre-boot staleness probe — one readyCheck run before bootCommand is ever spawned. See the
+# pre-boot staleness probe — one readyCheck run before bootCommand is ever spawned. See the
 # header note above for why this fails closed instead of trusting the first post-boot poll.
 if bash -c "$READY" >/dev/null 2>&1; then
   echo "__SMOKE_FAIL__ stale-ready: another process is already answering on this address — readyCheck passed before bootCommand was spawned. Stop that process and re-run; to let launches of this repo run side by side, make the host read PORT (/spec:doctor names the fix)."
@@ -152,7 +153,7 @@ while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
         exit 1
       fi
     fi
-    # Shutdown observation (D1): the signal was already being sent from the EXIT-trap
+    # Shutdown observation: the signal was already being sent from the EXIT-trap
     # cleanup below, but by then the leg's verdict was already fixed — claim it here,
     # before the pass line, while the exit status still counts.
     STOP_ELAPSED=0

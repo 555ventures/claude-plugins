@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // Deterministic state-machine driver for the review stage.
-//
-// WHY: specs/20260820/07-review-driver.md (brief 16) — the review stage hand-performed ~14
+// Owner: specs/20260820/07-review-driver.md
+// WHY: the review stage hand-performed ~14
 // choreography steps around review-legs.js/verdict.js/merge-back.sh every review: resolve the
 // base, launch legs, append the GATE_RED ledger line by hand, run three separate verdict.js
 // passes, flip status, drive merge-back's inspect/merge/cleanup/verify sequence. Every one of
 // those steps is deterministic; procedural hallucination — skipping or fabricating a step while
 // reporting success — is the measured largest agent-failure class (38.5%, agenticrail.nz).
-// This driver, on specs/20260820/07-review-driver.md's driver-stepped contract, EXECUTES every deterministic
+// This driver, on the driver-stepped contract, EXECUTES every deterministic
 // step itself (base derivation, the per-iteration manifest lifecycle, review-legs.js, all three
 // verdict.js passes, both ledger appends, the implementing->done flip, the merge-back sequence)
 // and prints ONLY the step that needs this session's judgment (reviewer dispatch, dispositions,
@@ -26,11 +26,11 @@
 // child that never ran) is the exact silent-success failure this driver exists to prevent.
 //
 // What this deliberately does NOT do: recommend a disposition, pick a merge strategy, or render
-// a user-facing report (D9) — it prints machine summaries plus which judgment is due and the
+// a user-facing report — it prints machine summaries plus which judgment is due and the
 // evidence paths; report assembly stays with the session via report-render.js. It never asserts
 // the verdict word itself (verdict.js is the sole derivation, surfaced through this driver).
 //
-// specs/20260822/01-escalate-ledger-row.md (D5-D10): a review that burns its fix loop
+// a review that burns its fix loop
 // to the cap and is then abandoned must not write ZERO ledger rows — three leg iterations and three
 // reviewer dispatches left no trace, because the only two append points were the hard-stop and the
 // CLEAN close and the ESCALATE refusal reached neither. writeEscalateRow() is the third write
@@ -41,11 +41,11 @@
 // (never a new filename). A verdict.js exit 2 during the escalate pass (evidence drift — a red leg
 // going green between the dispositions pass and the cap) is never a crash: it is embedded in the
 // refusal/step text verbatim and retried on the next invocation, so the cap record itself is never
-// lost. The D10 silent-loss detector runs once on every entry, stderr-only, and never blocks — it
-// exists because spec 04's own A6 assumed a durable-write loss would be observed, when by
+// lost. The silent-loss detector runs once on every entry, stderr-only, and never blocks — it
+// exists because its earlier design assumed a durable-write loss would be observed, when by
 // construction it is silent (a dead worktree's durable file simply lacks the row).
 //
-// specs/20260824/06-review-range-identity.md (D4): every ledger row this driver
+// every ledger row this driver
 // appends now names the commit range it judged. resolveBaseSha() resolves resolveBase()'s own
 // build_base -> diff_base -> merge-base result to a full sha via `git rev-parse --verify
 // <base>^{commit}` ONCE, at startup, right after resolveBase() returns — a base that cannot
@@ -60,7 +60,7 @@
 // [--dirty]) are threaded into every verdict.js invocation runHardStopVerdict, writeEscalateRow,
 // and doCloseWork make.
 //
-// specs/20260823/07-deviations-sidecar-backstop.md (D1-D6): the deviations sidecar
+// The deviations sidecar
 // (<spec>.deviations.md) was pure convention — build sessions appended departure entries by hand,
 // review folded and deleted the file by hand, and nothing caught a skipped fold or an entry written
 // in a shape the ledger's own `^- ` bullet count could never see. This driver now classifies the
@@ -68,9 +68,9 @@
 // persists {entries, malformed} into the sidecar state (surviving the file's own deletion),
 // enumerates every entry into the printed CLOSE step, and refuses `--mark closed` (exit 2) while the
 // sidecar still exists on disk or while the last observation recorded a malformed line even after
-// deletion — prevention before loss, since same-commit fold forensics measured vacuous (A5).
+// deletion — prevention before loss, since same-commit fold forensics measured vacuous.
 //
-// specs/20260830/02-close-gate-rerun.md (D1-D5): CLOSE
+// CLOSE
 // writes the canonical doc and folds Gotchas into the host's rules file AFTER review-legs.js's own
 // gate leg already ran over the diff, then commits — so the exact files CLOSE itself writes bypass
 // the host's deterministic rule enforcement. handleClosed() now runs the host's resolved
@@ -88,7 +88,7 @@
 // nested `node --test` inheriting that var degrades to a silent child-protocol run (exit 0 over
 // failing tests), which would make this refusal vacuously green.
 //
-// specs/20260903/02-whole-suite-review-leg.md (D3/D4): `suite` — review-legs.js's own
+// `suite` — review-legs.js's own
 // whole-bare-testCommand leg — joins BLOCKING_LEGS: a red suite hard-stops LEGS into STOPPED
 // (GATE_RED row, the STOPPED step's `❌ suite exit=…` line) exactly like a red gate, and is
 // excluded from the disposition pools the same way. runCloseTimeGate() widens additively: after
@@ -110,7 +110,7 @@
 //   spec-review-driver <spec.md> --state          -> print the state name only (scripting)
 //
 // States: LEGS (driver-only) -> STOPPED (terminal on RED_BLOCKING) | SKIPS? -> REVIEWER ->
-//   DISPOSITIONS (specs/20260901/09-disposer-gate.md D2/D4 — both via values land here directly;
+//   DISPOSITIONS (both via values land here directly;
 //   there is no session-change CHECKPOINT state) -> FIX/ESCALATE(cap 2, terminal)? ->
 //   CLOSE -> MERGE/CONFLICTS -> DONE (terminal)
 //
@@ -127,17 +127,16 @@
 // recorded a malformed line even after the sidecar's own deletion (restore-then-repair remedy), a
 // resolved base ref that `git rev-parse --verify <ref>^{commit}` cannot turn into a commit —
 // resolveBaseSha() dies at startup, before the first manifest or leg, naming `diff_base` and the
-// remedy command (specs/20260824/06-review-range-identity.md D4, AC-12), `git rev-parse HEAD`
+// remedy command `git rev-parse HEAD`
 // printing no parseable 40-hex sha at any of the three verdict passes, or `--mark closed`'s
 // close-time host-gate re-run over the committed close tree exiting non-zero (message names the
 // literal phrase "gate red at close", the resolved command, and the re-run remedy) or resolving to
 // no runnable gate at all (message names the unresolvable-gate reason and the remedy — never a
-// silent skip; specs/20260830/02-close-gate-rerun.md D1/D2/D4), or `--mark closed`'s close-time
+// silent skip), or `--mark closed`'s close-time
 // whole-suite re-run (additive, after the gate re-run above) exiting non-zero over the committed
 // close tree (message names the literal phrase "suite red at close", the testCommand, and the
 // re-run remedy) or the host declaring no testCommand at all (message names the config remedy;
-// specs/20260903/02-whole-suite-review-leg.md D4), or (specs/20260901/09-disposer-
-// gate.md D2, the CHECKPOINT/`--skip-independence-check-because` cases above are retired outright)
+// ), or (the CHECKPOINT/`--skip-independence-check-because` cases above are retired outright)
 // `--mark dispositions` on a non-empty survivor/leg-finding pool with `--file` absent (names
 // `--file` and `spec:disposer`), the named file unreadable or not valid JSON, a disposer return
 // carrying `"verdict":"DISPOSER_FAILED"` (names DISPOSER_FAILED) or a non-array `dispositions`, an
@@ -146,7 +145,7 @@
 // `recommended`/`final` value outside `fix|waive|reject`, a blank `reason`, a `final` that differs
 // from `recommended` with no `overriddenBy:"user"` plus non-blank `overrideReason`, a
 // `--waived`/`--rejected`/`--fix-dispatched` count that IS PASSED and does not match the return's
-// `final`-or-`recommended` tallies (specs/20260909/04-review-soft-floor.md D7 makes the three
+// `final`-or-`recommended` tallies makes the three
 // count flags optional — an omitted flag is filled in from the derived tally instead of refused;
 // names `--fix-dispatched`; a `leg:<name>` entry weighs that leg's whole finding count via
 // lib/leg-findings.js, the unit verdict.js sums — so one waived reconcile leg with
@@ -154,45 +153,45 @@
 // `recommended`) value is `fix` while this run's fix cap has already visibly tripped —
 // `marks.escalated`, set nowhere but `handleFixApplied`'s own cap refusal, never the raw manifest
 // count (a dispositions mark that lands FIX for what would be the capping cycle stays accepted,
-// AC-20260820-07-8 SHALL CONTINUE TO) — (names "iteration cap 2" — specs/20260909/04-review-soft-
-// floor.md D10), or `--skip-independence-check-
+// SHALL CONTINUE TO) — (names "iteration cap 2"), or
+// `--skip-independence-check-
 // because` passed at all, on any run (names the flag and ADR-0005 — there is no CHECKPOINT left
-// for it to bypass), or (specs/20260902/05-manifest-stamped-scope.md D5) `--mark dispositions`
+// for it to bypass), or `--mark dispositions`
 // whose pass derives `UNVERIFIED` — message quotes verdict.js's own `UNVERIFIED — <cause>` line
 // verbatim plus the remedy (delete the sidecar directory, named, and re-run the bare
 // `node <driver> <spec>` command, also named), refused before any sidecar or disposer-return
 // write.
 //
-// specs/20260902/05-manifest-stamped-scope.md (D6): `scope` leaves the reviewer return
+// `scope` leaves the reviewer return
 // contract — it was a fact only the driver could have known (`review-legs.js`'s own `--fix-delta`
 // flag), never something the reviewer could honestly report, so asking for it was an interview for
 // its own sake. The REVIEWER step text and both `reviewer-returned` refusal messages now name the
 // trimmed shape `{verdict, survivors, killed, reviewerCount, tokens}`; a return that still carries
-// a stray `scope` key (an older doctrine copy, or this spec's own dogfooding review pipeline, A7)
+// a stray `scope` key (an older doctrine copy, or this spec's own dogfooding review pipeline)
 // is accepted and the key silently ignored — `--mark dispositions` derives its required-leg set
-// from the manifest's own scope stamps (D2, verdict.js) regardless of what the return says.
+// from the manifest's own scope stamps (verdict.js) regardless of what the return says.
 //
-// specs/20260909/04-review-soft-floor.md (D5-D10): a soft-only reviewer return demanding the
+// a soft-only reviewer return demanding the
 // same fix/waive/reject ceremony as a hard one, with a fresh reviewer producing a new soft every
-// pass, is the loop's measured non-convergence mechanism. dispositionPools(n) (D5/D9) now splits the
+// pass, is the loop's measured non-convergence mechanism. dispositionPools(n) now splits the
 // reviewer return's survivors into a HARD-only `survivors` array (0-based `s<i>` indexes THIS
 // filtered list, in printed order) and an advisory-only `softs` array, never indexed and never
 // covered by a disposition; the DISPOSITIONS step prints softs under a separate
 // `advisory (N, recorded, not dispositioned):` heading so nothing is hidden, then never asks
-// about them again. handleReviewerReturned() (D6) checks this SAME pool derivation: an empty hard
+// about them again. handleReviewerReturned() checks this SAME pool derivation: an empty hard
 // pool (softs only, or none at all) needs no session judgment, so the driver runs the verdict
 // pass itself with zero dispositions, records `marks.dispositions`, and the SAME invocation's
 // `deriveState()` call proceeds straight through to CLOSE — no `--mark dispositions` is ever
 // printed or required. An explicit `--mark dispositions --waived 0 --rejected 0
-// --fix-dispatched 0` against that same empty pool SHALL CONTINUE TO be accepted afterward (D6/
-// AC-11 — 17 existing test files and any host mid-run pass this exact form). handleDispositions()
-// (D7) makes the three count flags optional on a non-empty pool: the tally derived from the
+// --fix-dispatched 0` against that same empty pool SHALL CONTINUE TO be accepted afterward
+// (17 existing test files and any host mid-run pass this exact form). handleDispositions()
+// makes the three count flags optional on a non-empty pool: the tally derived from the
 // disposer return's own `final`-else-`recommended` values (weighted by lib/leg-findings.js for a
 // `leg:<name>` ref, exactly as before) is authoritative — a flag that IS passed must still equal
 // it (the existing mismatch refusal, unchanged text), and an omitted flag is filled in from the
-// tally rather than defaulting to a hand-typed 0. D8's refusal text ("matches nothing in the
+// tally rather than defaulting to a hand-typed 0. The refusal text ("matches nothing in the
 // survivor or leg-finding pools") is unchanged, but now fires for ANY ref naming a soft survivor
-// by another name — a soft never enters the pool a disposer return can cover. D10: once this
+// by another name — a soft never enters the pool a disposer return can cover. Once this
 // run's fix cap has already visibly tripped (`marks.escalated`), a disposer return whose
 // effective value for any ref is `fix` is refused (names "iteration cap 2") rather than silently
 // promising
@@ -200,7 +199,7 @@
 // `--mark dispositions --file <return.json>` (every entry `waive`/`reject`), never the retired
 // hand-typed `--waived N --rejected N --fix-dispatched 0` form.
 //
-// specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md D1: doCloseWork() writes
+// doCloseWork() writes
 // refs/spec-review/<runId>/judged at the close-row append, pointing at the exact sha the row
 // records as diff.head, and handleClosed() writes refs/spec-review/<runId>/close once the close
 // commit exists (HEAD, read right after the dirty-tree/gotchas-ratchet/close-gate refusals have
@@ -208,16 +207,16 @@
 // construction: a non-zero `git update-ref` (e.g. the `refs/spec-review` namespace already
 // occupied as a leaf ref) prints one warning line naming the ref and the driver continues exactly
 // as if the write had succeeded — a replay-measurement convenience must never be able to fail a
-// review, its close row, or its close commit (AC-20260913-01-1, AC-20260913-01-2). A reader of
+// review, its close row, or its close commit. A reader of
 // the judged tree uses this pair instead of reconstructing it from history.
 //
-// specs/20260913/09-the-tool-shows-never-interrupts.md D1: the REPLAY state is retired outright —
+// the REPLAY state is retired outright —
 // a block on a finished review is bypassed anyway, and the surprise interrupt mid-delivery was the
 // real cost (docs/adr/0025-replay-runs-on-demand.md). The state chain is now CLOSE -> MERGE/
 // CONFLICTS -> DONE (terminal); `finishMerge()` and MERGE's merge-skipped arm conclude straight
 // into `printDoneNow()`. Nothing is parked as a step after DONE.
 
-// specs/20261013/01-review-closes-its-own-softs.md (D1-D6): a soft (advisory) finding is fixed
+// a soft (advisory) finding is fixed
 // inside the review that found it or recorded as debt in the spec it belongs to, never hand-queued.
 // The CLOSE step prints each soft of the current reviewer return as `a<i>`; `--mark soft-swept --file`
 // records one `fixed|debt` outcome per soft (debt is appended under the spec's `## Rationale`);
@@ -232,28 +231,28 @@
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
-// D11 (specs/20260901/01-build-driver.md): the fail-closed spawn wrapper, the synchronous
+// the fail-closed spawn wrapper, the synchronous
 // EAGAIN-retrying stdout writer, the ledger append, and the sidecar load/save pair now live in
 // lib/driver-io.js — spec-build-driver.js needs the identical four shapes for its own
 // <spec>.build/ sidecar, and a second copy here would be the drift seam ci-query.js and
 // lib/gate-resolve.js were each unified over. Local wrappers below (appendLedger/saveSidecar)
 // keep every existing call site in this file unchanged — only the load/save primitives moved.
 const { runChild, writeOut, appendLedger: appendLedgerLib, loadSidecar, saveSidecar: saveSidecarLib } = require('./lib/driver-io')
-// D4 (specs/20260823/03-silent-drop-hardening.md): the one shared frontmatter reader, replacing
-// this driver's own local copy (rv_e83659d49386). D2 (specs/20260823/04-review-close-hardening.md):
-// fmVal renamed fmValue (D8/D9 — no alias survives); fmBlock replaces this file's own
+// the one shared frontmatter reader, replacing
+// this driver's own local copy (rv_e83659d49386).
+// fmVal renamed fmValue (no alias survives); fmBlock replaces this file's own
 // `/^---\n([\s\S]*?)\n---/` block regex below.
 const { fmBlock, fmValue, fmMap } = require('./lib/frontmatter')
-// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D5: the REVIEWER step's printed
+// the REVIEWER step's printed
 // text no longer names an advisory fidelity-check run against a second, rendered artifact — the
 // mocks are the components now, so there is nothing left for review.md's dispatch line to
 // describe beyond the reviewer itself. readConfig still backs the close-time gateCommand re-run below.
 const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
-// specs/20260830/02-close-gate-rerun.md D1/D3: the close-time
+// the close-time
 // host-gate re-run in handleClosed() shares the exact {testDirs}/{scopeDirs} resolution
 // review-legs.js's own gate leg uses — a second, paraphrased copy here would be a drift seam.
 const { resolveGate } = require('./lib/gate-resolve')
-// D4 (specs/20260901/02-run-provenance.md): model is derived at row-write time (never once at
+// model is derived at row-write time (never once at
 // startup) — right after /clear the new transcript has no assistant line yet, and by the time a
 // verdict pass runs the session has spoken many times.
 const { sessionModel } = require('./lib/session-stamp.js')
@@ -264,9 +263,9 @@ const { countLegFinding } = require('./lib/leg-findings')
 // Base-candidate ORDER only (pin before ref); this driver keeps its own validity predicate.
 const { BASE_KEYS, pinnedBaseCandidates } = require('./lib/base-derivation')
 
-// D1-D6 (specs/20260821/04-stopped-row-durability.md): a worktree review's RED_BLOCKING hard-stop
+// a worktree review's RED_BLOCKING hard-stop
 // durably appends here, at the MAIN root, instead of the worktree's own (destructible)
-// spec-runs.jsonl — closes R3(1) of specs/20260820/07. readLedgerRows() already matches
+// spec-runs.jsonl — readLedgerRows() already matches
 // /^spec-runs.*\.jsonl$/ and union-merges in filename order (this file sorts after
 // spec-runs.jsonl) — zero reader changes anywhere.
 const STOPPED_LEDGER = '.claude/spec-runs.stopped.jsonl'
@@ -274,7 +273,7 @@ const SOFT_SWEEP_MAX_LINES = 60 // added + deleted lines of the close tree vs th
 
 function die(msg) { process.stderr.write('spec-review-driver: ' + msg + '\n'); process.exit(2) }
 
-// runChild is now lib/driver-io.js's shared fail-closed spawn wrapper (D11) — every call site
+// runChild is now lib/driver-io.js's shared fail-closed spawn wrapper — every call site
 // below is unchanged (still passes its own `what` label as the 4th arg); only the definition
 // moved.
 
@@ -297,7 +296,7 @@ const mergeBackBin = path.join(PLUGIN, 'scripts/merge-back.sh')
 const specStatusBin = path.join(PLUGIN, 'scripts/spec-status.js')
 const testExpiryBin = path.join(PLUGIN, 'scripts/expire-tests.js')
 
-// D6/A3: repoRoot is derived from process.cwd() (the driver's INHERITED CWD), never from the
+// repoRoot is derived from process.cwd() (the driver's INHERITED CWD), never from the
 // spec's own path — the whole relocation guard at MERGE depends on the session's shell CWD, not
 // on where the spec file happens to live (which stays inside the build worktree even after the
 // session cd's back to the main root to accept `merge-strategy`).
@@ -310,18 +309,18 @@ if (repoRootResult.status !== 0) {
 const repoRoot = repoRootResult.stdout.trim()
 // mergeBackBin's own `root` subcommand: the first entry of `git worktree list`, self-discovering
 // from repoRoot regardless of whether repoRoot IS the main root or a linked worktree. Used for the
-// D6 relocation check and the merge/cleanup/verify sequence. Ledger + retained evidence are
+// relocation check and the merge/cleanup/verify sequence. Ledger + retained evidence are
 // written under repoRoot (wherever THIS review is actually running, worktree included, so a plain
 // `git merge --ff-only`/`assert_clean_root` at the main root is never dirtied by a review running
 // in a linked worktree) and promoted into mainRoot only once a merge has actually landed — see
 // finishMerge()'s evidence-promotion step, which also clears repoRoot's copies (+ the sidecar) so
-// `git worktree remove` sees a clean tree (D10: the sidecar "dies with the worktree at cleanup").
+// `git worktree remove` sees a clean tree (the sidecar "dies with the worktree at cleanup").
 const mainRoot = mainRootPath()
 
 const resolvedSpecPath = path.resolve(specPath)
 const specText = fs.readFileSync(resolvedSpecPath, 'utf8')
 const fmRaw = fmBlock(specText)
-// D4 (specs/20260823/03-silent-drop-hardening.md, rv_e83659d49386): the local fmVal this replaced
+// The local fmVal this replaced (rv_e83659d49386)
 // captured everything after `key:` verbatim, inline comment included — the mechanism that
 // polluted seven live review ledger rows' `tier` fields and once broke `build_base:` outright.
 // lib/frontmatter.js's fmValue is quote-aware and strips a whitespace-preceded `#` comment.
@@ -352,7 +351,7 @@ if (!['implementing', 'done'].includes(status)) {
 }
 
 // `let`, not `const`: a worktree merge relocates the sidecar into the main root mid-invocation
-// (D8 (b)) — printDoneNow() runs after `merge-back.sh cleanup` has already deleted the worktree
+// — printDoneNow() runs after `merge-back.sh cleanup` has already deleted the worktree
 // the sidecar lived in. `replaySpecPath` is the spec path DONE prints, which after that
 // relocation is the main root's copy of the spec, never the deleted worktree's (the name predates
 // specs/20260913/09's removal of the REPLAY state; DONE is now the only reader of it).
@@ -361,29 +360,29 @@ let sidecarRel = path.relative(repoRoot, sidecarDir)
 let stateFile = path.join(sidecarDir, 'review-state.json')
 let replaySpecPath = specPath
 const specRel = path.relative(repoRoot, resolvedSpecPath) || resolvedSpecPath
-// D2/D5 (specs/20260823/07-deviations-sidecar-backstop.md): derived from resolvedSpecPath, never
+// derived from resolvedSpecPath, never
 // from sidecarDir — worktree-aware the same way the sidecar itself is, but never relocated (unlike
 // sidecarDir) because the file is gone (folded) long before any merge-back relocation could run.
 const deviationsPath = resolvedSpecPath.replace(/\.md$/, '.deviations.md')
 
 let marks = loadSidecar(sidecarDir, 'review-state.json')
-// D8/D9: set only when a self-heal attempt (deriveState()'s ESCALATE arm) hits a verdict.js drift
+// set only when a self-heal attempt (deriveState()'s ESCALATE arm) hits a verdict.js drift
 // refusal — the ESCALATE step text names it in place of the (unset) escalateLedgerPath. Never
 // persisted: a fresh invocation retries the write from scratch rather than trusting a stale error.
 let escalateDriftError = null
-// saveSidecar/appendLedger are thin wrappers over lib/driver-io.js's shared primitives (D11) —
+// saveSidecar/appendLedger are thin wrappers over lib/driver-io.js's shared primitives —
 // every existing call site below (`saveSidecar()`, `appendLedger(line)`) is unchanged.
 function saveSidecar() { saveSidecarLib(sidecarDir, path.basename(stateFile), marks) }
 
-// D4: --model <sessionModel(repoRoot) or omitted when null> — one shared arg-builder for all
+// --model <sessionModel(repoRoot) or omitted when null> — one shared arg-builder for all
 // three verdict.js passes below, read fresh at each call site (never cached) so a session that
 // has spoken since the last pass gets its current model, not a startup snapshot.
-// D6 (specs/20260901/09-disposer-gate.md): the ONE shared arg-builder for all three verdict.js
+// the ONE shared arg-builder for all three verdict.js
 // driver passes (hard-stop, escalate, close) — appending --checkpoint here, read fresh at each
 // call site against the pass's OWN iteration `n` (marks.disposer can be recorded for a different
 // iteration than the one this particular pass is judging — e.g. the hard-stop pass runs before
 // any reviewer return exists at all) — reaches all three identically and both via values alike
-// (the old loop-only restriction is gone, D5).
+// (the old loop-only restriction is gone).
 function viaModelArgs(n) {
   const m = sessionModel(repoRoot)
   const args = m === null ? ['--via', marks.via] : ['--via', marks.via, '--model', m]
@@ -393,7 +392,7 @@ function viaModelArgs(n) {
   return args
 }
 
-// D6: the outcome verdict.js's --checkpoint flag carries on every review verdict pass, derived
+// the outcome verdict.js's --checkpoint flag carries on every review verdict pass, derived
 // from marks — never a separate persisted field. A disposer mark recorded for exactly this pass's
 // iteration `n` yields "disposer" (with its overrides count) or "empty" (marks.disposer.empty);
 // anything else — no disposer mark yet, or one recorded for a stale iteration — is "not-reached"
@@ -406,13 +405,12 @@ function checkpointOutcome(n) {
   return { outcome: 'disposer', overrides: d.overrides }
 }
 
-// ---- D2/A5 (specs/20260901/09-disposer-gate.md), narrowed to hard-only survivors by
-// ---- D5/D9 (specs/20260909/04-review-soft-floor.md): the ONE derivation of the disposition ----
-// pools, shared by the printed DISPOSITIONS step body, handleReviewerReturned()'s own D6
+// ---- the ONE derivation of the disposition ----
+// pools, narrowed to hard-only survivors, shared by the printed DISPOSITIONS step body, handleReviewerReturned()'s own
 // auto-dispose check, and handleDispositions()'s own --file verification — never a second
 // derivation that could silently disagree about what needs covering. `survivors` is the
 // HARD-only subset of the recorded reviewer-return file's survivors (0-based `s<i>` indexes THIS
-// filtered list, in printed order — D9); `softs` is every other-severity survivor, advisory only,
+// filtered list, in printed order); `softs` is every other-severity survivor, advisory only,
 // never indexed and never covered by a disposition. leg findings are the current manifest's
 // non-blocking red rows (`leg:<name>`), mirroring BLOCKING_LEGS exactly as verdict.js's own
 // leg-findings pool does.
@@ -469,13 +467,13 @@ function refuseUnlessGotchasRatchet() {
     (baseline === null ? '' : ' (ratchet: ' + r.count + ' entries now, ' + baseline + ' when the verdict ran; over cap the count must be strictly lower)'))
 }
 
-// ---- D2/D5: deviations sidecar observation (specs/20260823/07-deviations-sidecar-backstop.md) --
+// ---- deviations sidecar observation --
 // Classifies every line of the deviations sidecar per the bullets-only entry grammar (Contracts):
 // blank/`#`-header/`- `-bullet are always allowed; a whitespace-indented continuation is allowed
 // only while an entry is open (a bullet just opened it, no blank/header line has closed it since);
 // anything else is malformed. `entries` counts bullet lines only — identical to build's own ledger
 // `^- ` count, so a malformed flush-left line is exactly the content that count could never see.
-// Called unconditionally near the top of every invocation (mark or bare) — D5's "on every
+// Called unconditionally near the top of every invocation (mark or bare) — the "on every
 // derivation" — and persists {entries, malformed} into the sidecar state, overwriting any prior
 // observation. Deliberately a no-op when the file is absent: the last persisted observation
 // must survive the file's own deletion (that survival is what makes refusal 2 possible below).
@@ -495,7 +493,7 @@ function observeDeviations(persist = true) {
   marks.deviations = { entries, malformed }
   if (persist) saveSidecar()
 }
-// `--mark closed` defers the persist: its unswept-soft refusal (specs/20261013/01 D4) must leave the
+// `--mark closed` defers the persist: its unswept-soft refusal must leave the
 // sidecar byte-identical, and handleClosed() saves the observation itself right after that check.
 observeDeviations(MARK !== 'closed')
 
@@ -515,8 +513,8 @@ function malformedLines(malformed) {
   return shown
 }
 
-// ---- D10: silent-loss detector, run once per invocation, stderr-only, never blocks ------------
-// specs/20260822/01-escalate-ledger-row.md: spec 04's own A6 assumed loss would be "observed", but
+// silent-loss detector, run once per invocation, stderr-only, never blocks ------------
+// its earlier design assumed loss would be "observed", but
 // the loss is silent by construction (a dead worktree's durable file just quietly lacks the
 // row) — this is the trigger. Checked only against a DURABLE path (one whose basename isn't the
 // plain tracked ledger — an in-place spec-runs.jsonl append rides normal git history and has no
@@ -593,20 +591,20 @@ if (!sidecarExistsAtStart && status === 'done') {
   }
   printDoneNow('')
 }
-// R8: a spec already marked done whose sidecar does not carry THIS run's own closeRunId is not
+// a spec already marked done whose sidecar does not carry THIS run's own closeRunId is not
 // mid-review — either the promise was already kept and the sidecar is a stray/hand-recreated
 // artifact, or an aborted run left one behind. Re-walking a full review here can never reach
 // doCloseWork() again (it is gated on status !== 'done'), so it would print CLOSE with
 // runId: undefined and append zero ledger rows while looking like a real run. Refuse instead. A
 // sidecar that DOES carry this run's own closeRunId is the normal tail of a successful run and
-// must keep flowing to MERGE/DONE below (AC-20260820-07-12) — unaffected by this check.
+// must keep flowing to MERGE/DONE below — unaffected by this check.
 if (status === 'done' && !marks.closeRunId) {
   die('spec status is already "done" and ' + sidecarRel + ' does not record this run\'s own ' +
     'close — the authoritative verdict for this spec already ran; use /spec:escape to record a ' +
     'defect that escaped a review that already passed, not another review run')
 }
 
-// ---- D10 (specs/20260912/03-run-isolates-and-owns-the-stages.md): `via` recorded once, at
+// `via` recorded once, at
 // sidecar creation, as "loop" unconditionally -------------------------------------------------
 // /spec:run is the only entry point left, so the flag that once chose between it and a direct
 // invocation is gone; argv is never consulted here at all, and a resumed session reports the
@@ -619,7 +617,7 @@ if (marks.via === undefined) {
   saveSidecar()
 }
 
-// ---- base derivation (D2, revised: diff_base -> build_base -> branch) -------------------------
+// ---- base derivation (revised: diff_base -> build_base -> branch) -------------------------
 // The ORDER lives in lib/base-derivation.js, imported below — this driver keeps only its own
 // validity predicate (resolveBaseSha's non-degenerate-range invariant). The module carries the
 // ordering rationale as the single authority, and tests/consistency/base-derivation.test.js
@@ -651,7 +649,7 @@ function resolveBase() {
 }
 const base = resolveBase()
 
-// ---- D4 (specs/20260824/06-review-range-identity.md): resolve base to a full sha ONCE, at ------
+// resolve base to a full sha ONCE, at ------
 // startup, right after resolveBase() — so an unresolvable base dies before the first manifest or
 // leg (AC-12), not at the first verdict pass. stampDiffBaseIfAbsent() below reuses this exact sha
 // (one resolution, two carriers, AC-11) instead of running its own rev-parse; its former
@@ -704,7 +702,7 @@ function resolveBaseSha() {
 }
 const baseSha = resolveBaseSha()
 
-// ---- D4: HEAD is re-read fresh at each verdict pass (fix iterations can add commits between -----
+// HEAD is re-read fresh at each verdict pass (fix iterations can add commits between -----
 // passes) and the tree's dirty state is checked the same way — --untracked-files=no is deliberate,
 // the deviations sidecar and scratch artifacts are always on disk at every pass.
 function headSha() {
@@ -724,8 +722,8 @@ function treeDirty() {
   return r.status === 0 && r.stdout.split('\n').some((l) => l.trim())
 }
 
-// specs/20260909/05-fix-delta-reviewer-pass.md D1/Contracts: snapshots the working tree —
-// tracked edits AND untracked files, which `git stash create` cannot see (A1, executed spike) —
+// Snapshots the working tree —
+// tracked edits AND untracked files, which `git stash create` cannot see (executed spike) —
 // as a git tree object via a scratch index, so the real .git/index and worktree are never
 // touched. GIT_INDEX_FILE points at a file INSIDE the sidecar, always removed afterward (even on
 // a failed write-tree) so a crash mid-snapshot never leaves a stray index for the next `git` call
@@ -781,7 +779,7 @@ function snapshotTree() {
   }
 }
 
-// D3: the fallback snapshot for a sidecar carrying no marks.treeSnapshot[n] (an older sidecar
+// the fallback snapshot for a sidecar carrying no marks.treeSnapshot[n] (an older sidecar
 // that predates this spec) — HEAD's own tree, so the delta at fix-applied lists every file dirty
 // against HEAD rather than refusing the whole pass for missing history.
 function headTree() {
@@ -818,7 +816,7 @@ function readManifestRows(p) {
   return fs.readFileSync(p, 'utf8').split('\n').filter((l) => l.trim())
     .map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
 }
-// specs/20261024/01-review-driver-reads-recorded-facts.md D1/D2: a manifest's number is a storage
+// a manifest's number is a storage
 // key only. Its kind is the `scope` review-legs.js stamps on every row; the live iteration is the
 // sidecar's recorded `iteration`, written by every legs run.
 function isFixDeltaManifest(n) {
@@ -826,7 +824,7 @@ function isFixDeltaManifest(n) {
 }
 function fixRoundsDone() { return listManifestNumbers().filter(isFixDeltaManifest).length }
 // A recorded iteration is trusted only when a legs run actually recorded it (legsMode[n] exists):
-// a hand-edited counter names no legs run and must not move the live iteration (AC-20260820-07-8).
+// a hand-edited counter names no legs run and must not move the live iteration.
 function legsModeFor(n) { return marks.legsMode && marks.legsMode[String(n)] }
 function liveIteration() {
   const it = Number(marks.iteration) || 0
@@ -864,7 +862,7 @@ function runLegs(n, opts = {}) {
   }
   marks.legsMode = marks.legsMode || {}
   marks.legsMode[String(n)] = { skipsFile: opts.skipsFile || null, fixDelta: !!opts.fixDelta }
-  // D3: the gate's skip count AT EXTRACTION rides beside the file; a carried file keeps its
+  // the gate's skip count AT EXTRACTION rides beside the file; a carried file keeps its
   // original count so a later, larger gate count re-enters SKIPS.
   if (opts.skipsFile) marks.legsMode[String(n)].skipsGateCount = opts.skipsGateCount
   marks.iteration = n
@@ -872,7 +870,7 @@ function runLegs(n, opts = {}) {
   return { code: r.status, out: r.stdout, err: r.stderr }
 }
 
-// R9 (AC-20260820-07-1): a legs run that did NOT hard-stop must have actually written a
+// a legs run that did NOT hard-stop must have actually written a
 // manifest — the child's own exit code alone is not proof; a killed/never-run leg can still leave
 // review-legs.js's wrapper exiting 0 over a manifest nobody wrote. Refuse to advance past an
 // unverified artifact rather than trust the exit code in isolation.
@@ -902,8 +900,8 @@ function computeDiffLoc() {
 
 function appendLedger(jsonLine) { appendLedgerLib(repoRoot, jsonLine) }
 
-// D2/D3: is STOPPED_LEDGER ignored at mainRootDir right now? `check-ignore -q` verdicts a
-// not-yet-existing path (A3's executed spike), so this runs before the first durable append ever
+// is STOPPED_LEDGER ignored at mainRootDir right now? `check-ignore -q` verdicts a
+// not-yet-existing path (executed spike), so this runs before the first durable append ever
 // happens. Routed through runChild: exit 1 (not ignored) is a legitimate result, not a death —
 // only a signal-killed/never-spawned git is fatal here, same as every other git call in this file.
 function checkStoppedLedgerIgnored(mainRootDir) {
@@ -912,10 +910,10 @@ function checkStoppedLedgerIgnored(mainRootDir) {
   return r.status === 0
 }
 
-// D2/D3 (Contracts): ensure-ignored guard with self-heal, run once per hard stop before the
+// Ensure-ignored guard with self-heal, run once per hard stop before the
 // durable write. Not ignored -> append the line to <git-common-dir>/info/exclude (shared by every
-// linked worktree, A5) and re-check once. Returns true when the durable write is safe to proceed,
-// false when the path genuinely cannot be made ignored (D3: e.g. a .gitignore negation, which
+// linked worktree) and re-check once. Returns true when the durable write is safe to proceed,
+// false when the path genuinely cannot be made ignored (e.g. a .gitignore negation, which
 // outranks info/exclude in git's precedence) — the caller falls back to today's behavior.
 function ensureStoppedLedgerIgnored(mainRootDir) {
   if (checkStoppedLedgerIgnored(mainRootDir)) return true
@@ -929,7 +927,7 @@ function ensureStoppedLedgerIgnored(mainRootDir) {
   return checkStoppedLedgerIgnored(mainRootDir)
 }
 
-// D5/D6 (Contracts): the one spec-scoped drain, two callers (promoteEvidenceAndClean(),
+// The one spec-scoped drain, two callers (promoteEvidenceAndClean(),
 // doCloseWork() when repoRoot === mainRoot). Reads STOPPED_LEDGER at mainRootDir (absent -> no
 // rows to drain), partitions lines by parsed .spec === specRel — unparseable lines are KEPT
 // (flagging malformed lines is doctor's job, mirroring readLedgerRows's own silent-drop), rewrites
@@ -952,13 +950,13 @@ function drainStoppedRows(mainRootDir, specRel) {
   return { drained }
 }
 
-// ---- D1-D4: RED_BLOCKING hard-stop — no-workflow verdict pass, GATE_RED ledger line appended ---
-// In-place (repoRoot === mainRoot) keeps today's appendLedger() path unchanged (D1). A worktree
+// ---- RED_BLOCKING hard-stop — no-workflow verdict pass, GATE_RED ledger line appended ---
+// In-place (repoRoot === mainRoot) keeps today's appendLedger() path unchanged. A worktree
 // review durably appends to <mainRoot>/STOPPED_LEDGER instead — surviving an abandoned or
-// force-removed worktree (R3(1) of specs/20260820/07) — once the ensure-ignored guard confirms
-// the write cannot dirty mainRoot's tree; when it genuinely cannot be ignored (D3), fall back to
+// force-removed worktree — once the ensure-ignored guard confirms
+// the write cannot dirty mainRoot's tree; when it genuinely cannot be ignored, fall back to
 // the worktree ledger exactly as before. Either way marks.stoppedLedgerPath records where the row
-// actually landed, for the STOPPED step text to name (D4) and for a bare re-invocation to re-print.
+// actually landed, for the STOPPED step text to name and for a bare re-invocation to re-print.
 function runHardStopVerdict(n) {
   const runId = ensureRunId()
   const diffLoc = computeDiffLoc()
@@ -994,19 +992,19 @@ function runLegsIteration(n, opts) {
   return { stopped: false, n }
 }
 
-// ---- D5-D8: writeEscalateRow() — the durable-path branch mirroring runHardStopVerdict(), for the
+// ---- writeEscalateRow() — the durable-path branch mirroring runHardStopVerdict(), for the
 // fix-cap ESCALATE refusal rather than a RED_BLOCKING hard-stop. specs/20260822/01-escalate-ledger-
 // row.md: a review that burns its fix loop to the cap wrote ZERO ledger rows — this is the one
 // write point, called from handleFixApplied()'s cap branch (before die()) and self-healed from the
-// ESCALATE step arm on a bare re-invocation (D5) — the abandonment path never re-invokes, so the
+// ESCALATE step arm on a bare re-invocation — the abandonment path never re-invokes, so the
 // refusal moment is the last guaranteed chance to record it. Idempotent via marks.escalateRunId,
-// set only after a successful append (D5's own idempotency guard). D2's invocation shape: the
+// set only after a successful append (its own idempotency guard). The invocation shape: the
 // FINAL manifest/reviewer-return, the recorded dispositions' waived/rejected, --fixDispatched 0
 // FORCED (the dispatched fix never landed — crediting it would fabricate coverage), --escalated,
 // --retain (a feature: the capped run's survivors are retained full-fidelity under the run's own
-// runId). D6: durability reuses spec 04's stopped-ledger path VERBATIM (never a new filename — A2
-// falsified sorting a spec-runs.escalated.jsonl ahead of spec-runs.jsonl). D8: any exit-2 from the
-// escalate verdict pass (D4's CLEAN guard, or the contradiction guard tripping on a shrunk pool) is
+// runId). Durability reuses spec 04's stopped-ledger path VERBATIM (never a new filename —
+// sorting a spec-runs.escalated.jsonl ahead of spec-runs.jsonl was falsified). Any exit-2 from the
+// escalate verdict pass (the CLEAN guard, or the contradiction guard tripping on a shrunk pool) is
 // returned to the caller as { ok: false, error } — loud, row-less, retryable: no row is appended,
 // escalateRunId stays unset so a later self-heal retries, and the caller's own refusal message
 // embeds `error` verbatim rather than this function calling die() and losing the cap record.
@@ -1043,7 +1041,7 @@ function writeEscalateRow(n) {
   return { ok: true }
 }
 
-// ---- D3 (specs/20260823/05-replay-unattended-hardening.md): stamp diff_base at the close flip --
+// ---- stamp diff_base at the close flip --
 // specs/20260819/02's replay harness read a spec's build_base — typically the moving ref `main`
 // — as its diff base; that ref goes stale the instant THIS review's own merge lands, so a
 // scheduled replay run diffed the wrong tree (rv_387d84a3b424). The close commit is the last
@@ -1055,7 +1053,7 @@ function writeEscalateRow(n) {
 // a spec closed once already keeps its original pin byte-identical forever).
 function stampDiffBaseIfAbsent(text) {
   if (diffBaseFm) return text // already stamped (or hand-authored) — never overwritten
-  // D4: reuses baseSha, resolved once at startup (die() already ran there on failure) — never a
+  // reuses baseSha, resolved once at startup (die() already ran there on failure) — never a
   // second rev-parse, and never a warn-and-continue: a base that cannot resolve already broke
   // every leg's diff this run, so the stamp must not pretend otherwise.
   const sha = baseSha
@@ -1069,11 +1067,11 @@ function stampDiffBaseIfAbsent(text) {
   return text.slice(0, m.index) + '---\n' + lines.join('\n') + '\n---' + text.slice(m.index + m[0].length)
 }
 
-// ---- D1 (specs/20260913/01-the-replay-tree-is-the-reviewed-tree.md): best-effort ref write ------
+// ---- best-effort ref write ------
 // ---- for one of the two review-bound refs — refs/spec-review/<runId>/judged (written here, at ----
 // ---- the close-row append) and .../close (written at --mark closed, once the close commit -------
 // ---- exists). Neither write may ever block the close: a measurement convenience is never worth ---
-// ---- failing a review over (AC-20260913-01-2), so a non-zero `git update-ref` prints ONE warning -
+// ---- failing a review over, so a non-zero `git update-ref` prints ONE warning -
 // ---- line naming the ref and the driver continues exactly as if the write had succeeded. ---------
 // ---- runChild still dies on a genuinely dead child (spawn failure/signal) — that is a real host ---
 // ---- defect, not the "ref already occupied" conflict this best-effort guard exists for.
@@ -1093,7 +1091,7 @@ function doCloseWork(n) {
   const diffLoc = computeDiffLoc()
   const retainDir = path.join(repoRoot, '.claude/spec-runs')
   const d = marks.dispositions
-  // D6: in-place close drain (same helper as D5) — covers a spec that stopped in a since-
+  // in-place close drain (same helper as the one above) — covers a spec that stopped in a since-
   // abandoned worktree and later closed CLEAN in-place. doCloseWork() is the only append point for
   // that path, so the drain has to run here too, ahead of the close-row append below.
   if (repoRoot === mainRoot) {
@@ -1111,7 +1109,7 @@ function doCloseWork(n) {
   if (r.status === 2) die('verdict.js (authoritative pass) failed: ' + (r.stdout + r.stderr).trim())
   const lines = r.stdout.split('\n')
 
-  // specs/20260912/15-the-close-stops-deleting-tests.md D1: expire-tests.js runs after the
+  // expire-tests.js runs after the
   // authoritative verdict and before the ledger append — every test tagged with this spec's own
   // AC-IDs is classified, never applied (no `--apply` anywhere in this call or downstream of it).
   // This is classification-only end to end: the dry-run `emptied` reporting is what tells CLOSE
@@ -1139,7 +1137,7 @@ function doCloseWork(n) {
   marks.testsExpiry = { ...testsRow, filesRemoved: expiry.emptied.length }
 
   // Gotchas count rides the review row only when a rules file was observed — a host without one
-  // keeps verdict.js's line byte-identical. D5: `tests` rides every close row; when gotchas is
+  // keeps verdict.js's line byte-identical. `tests` rides every close row; when gotchas is
   // also present it lands first, `tests` after (Contracts: "after gotchas when present").
   const gotchas = observeGotchas()
   const row = JSON.parse(lines[1])
@@ -1147,7 +1145,7 @@ function doCloseWork(n) {
   row.tests = testsRow
   lines[1] = JSON.stringify(row)
   appendLedger(lines[1])
-  // D1: best-effort — never blocks the close (AC-20260913-01-2).
+  // best-effort — never blocks the close.
   writeReviewRef(runId, 'judged', row.diff.head)
   // Incident (shop-bltr 20261007/05, 2026-10-14): the legs judge the WORKING tree — a fix-delta
   // pass runs over fixes the session has not committed yet (snapshotTree(), never a commit) — but
@@ -1161,10 +1159,9 @@ function doCloseWork(n) {
   const stampedText = stampDiffBaseIfAbsent(newSpecText)
   fs.writeFileSync(resolvedSpecPath, stampedText)
 
-  // D8 (specs/20260821/02-replay-review-phase.md): no dueness probe here — a printed reminder
+  // no dueness probe here — a printed reminder
   // at close was the measured failure this state machine replaces, and the state-based block
-  // that later replaced it was itself retired (specs/20260913/09-the-tool-shows-never-
-  // interrupts.md D1).
+  // that later replaced it was itself retired.
   marks.closeRunId = runId
   saveSidecar()
 }
@@ -1195,7 +1192,7 @@ function branchExists(root, branch) {
     { encoding: 'utf8' }, 'git rev-parse --verify')
   return r.status === 0
 }
-// specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md D6: every spec
+// Every spec
 // under <root>/specs whose frontmatter `prototype` equals the stem and whose status is not
 // superseded — the citers whose completion gates the prototype's close.
 function citersOfPrototype(root, stem) {
@@ -1234,8 +1231,7 @@ function findWorktreeForBranch(root, branch) {
   return null
 }
 
-// D8 (a): the sidecar dies HERE, at DONE — the only terminal state left (specs/20260913/09-the-
-// tool-shows-never-interrupts.md D1 retired the REPLAY state that used to run after the merge and
+// The sidecar dies HERE, at DONE — the only terminal state left (the REPLAY state that used to run after the merge and
 // read it). `--state` is answered before the delete: a state query must not be the thing that
 // tears down the run it is querying.
 function printDoneNow(note, harnessLine) {
@@ -1262,7 +1258,7 @@ function handleSkipsExtracted() {
   if (!file || typeof file !== 'string') die('--mark skips-extracted needs --file <extracted skip names>')
   if (!fs.existsSync(file)) die('--file ' + file + ' does not exist — extract the skipped-test names and pass a real path')
   const resolved = path.resolve(file)
-  // D5: validate before any write. An empty file against a gate reporting skips is refused (exit 2,
+  // validate before any write. An empty file against a gate reporting skips is refused (exit 2,
   // nothing written); a count mismatch is a warning, not a refusal — runners group identical skips.
   const curN = liveIteration()
   const gateCount = gateSkipsCount(readManifestRows(manifestPathFor(curN)))
@@ -1275,7 +1271,7 @@ function handleSkipsExtracted() {
   if (listed !== gateCount) {
     process.stderr.write('⚠ skip file lists ' + listed + ' names, gate reported ' + gateCount + ' skips\n')
   }
-  // D4: a skips re-run inside a fix round stays a fix-delta pass — same delta file, same prior return.
+  // a skips re-run inside a fix round stays a fix-delta pass — same delta file, same prior return.
   const n = curN + 1
   const inheritFix = curN > 0 && isFixDeltaManifest(curN)
   if (inheritFix) {
@@ -1308,7 +1304,7 @@ function handleReviewerReturned() {
     die('--file ' + file + ' is missing a survivors array — the reviewer return shape must be ' +
       '{verdict, survivors, killed, reviewerCount, tokens}; re-dispatch and write a valid return')
   }
-  // D8 (specs/20260901/08-corpus-derivation-and-kill-match.md, brief 19): killed must
+  // `killed` must
   // be an array, and every entry an object carrying a string claim plus BOTH file (string|null)
   // and line (number|null) keys PRESENT — explicit null for a process-level claim, never an
   // omitted key. Extends this same verdict/survivors validation seam; never a second pass, and
@@ -1338,26 +1334,26 @@ function handleReviewerReturned() {
   marks.reviewerReturnIteration = n
   marks.dispositions = null
   marks.dispositionsIteration = null
-  // D4 (specs/20260901/09-disposer-gate.md): reset alongside dispositions — every iteration needs
+  // reset alongside dispositions — every iteration needs
   // its own disposer return, so a fix-delta pass's second reviewer-returned must never let a stale
   // prior-iteration disposer mark satisfy this iteration's --mark dispositions.
   marks.disposer = null
   marks.pendingFix = false
-  // D1 (specs/20260909/05-fix-delta-reviewer-pass.md): snapshot the tree for iteration n THIS
+  // snapshot the tree for iteration n THIS
   // reviewer-returned covers — the fix-applied that follows diffs this against its own fresh
   // snapshot to derive the fix's changed-file delta. Recorded before saveSidecar() below, same as
   // every other mark this handler writes.
   marks.treeSnapshot = marks.treeSnapshot || {}
   marks.treeSnapshot[String(n)] = snapshotTree()
-  // D6 (specs/20260909/04-review-soft-floor.md): an empty HARD pool needs no session judgment at
-  // all — softs are advisory (D5), so a return whose survivors are all non-hard and whose current
+  // an empty HARD pool needs no session judgment at
+  // all — softs are advisory, so a return whose survivors are all non-hard and whose current
   // manifest carries no red non-blocking leg is dispositioned by the driver itself, zero
   // waived/rejected/fixDispatched, and deriveState() below (this same invocation, once handleMark()
   // returns) proceeds straight through CLOSE — no `--mark dispositions` is ever printed or
   // required. dispositionPools(n) is the SAME derivation the DISPOSITIONS step and
-  // handleDispositions() use (A5), so this can never silently disagree about what needs covering.
+  // handleDispositions() use, so this can never silently disagree about what needs covering.
   // An explicit `--mark dispositions --waived 0 --rejected 0 --fix-dispatched 0` against this same
-  // empty pool SHALL CONTINUE TO be accepted afterward (AC-20260909-04-11) — handleDispositions()
+  // empty pool SHALL CONTINUE TO be accepted afterward — handleDispositions()
   // re-runs the same zero-disposition verdict pass and overwrites marks.dispositions with an
   // identical value.
   const pools = dispositionPools(n)
@@ -1368,7 +1364,7 @@ function handleReviewerReturned() {
       'verdict.js (auto-dispositions pass, empty hard pool)')
     if (r.status === 2) die((r.stderr || r.stdout).trim())
     const word = r.stdout.split('\n')[0].trim()
-    // D6 (specs/20260909/04-review-soft-floor.md) / AC-20260909-04-7: an empty hard pool is only
+    // an empty hard pool is only
     // ever auto-dispositioned into a CLEAN-shaped terminal pass — a non-CLEAN word here (most
     // often UNVERIFIED: a required leg row is missing even though the survivor/leg-finding pools
     // are empty) means dispositions cannot cure this and marks.dispositions must NEVER be written
@@ -1394,7 +1390,7 @@ function handleReviewerReturned() {
   return null
 }
 
-// D2/D4 (specs/20260901/09-disposer-gate.md): the driver refuses to advance --mark dispositions
+// the driver refuses to advance --mark dispositions
 // on a non-empty pool without a disposer return covering every finding exactly once, each with a
 // non-blank grounded reason. --skip-independence-check-because is retired outright (ADR-0005) —
 // there is no CHECKPOINT left for it to bypass, so it is refused unconditionally, before any
@@ -1404,7 +1400,7 @@ function handleReviewerReturned() {
 const RECOMMEND_ENUM = new Set(['fix', 'waive', 'reject'])
 function handleDispositions() {
   if (!marks.reviewerReturnFile) die('no reviewer return recorded yet — mark reviewer-returned first')
-  // D4/A4: argv.includes(...) catches the flag whether it is bare (flag() would return `true`) or
+  // argv.includes(...) catches the flag whether it is bare (flag() would return `true`) or
   // carries a value — a stale doctrine copy or memory teaching the retired override must never
   // silently succeed.
   if (argv.includes('--skip-independence-check-because')) {
@@ -1414,10 +1410,10 @@ function handleDispositions() {
   }
   const n = marks.reviewerReturnIteration
 
-  // D5 (specs/20260902/05-manifest-stamped-scope.md): refuse before any sidecar or disposer-
+  // refuse before any sidecar or disposer-
   // return write when the pass derives UNVERIFIED — dispositions can never cure missing or
   // contradictory evidence, only a cold legs re-run can. A dry pre-check against zero
-  // dispositions is enough: verdict.js's first-match-wins order (D10) derives UNVERIFIED before
+  // dispositions is enough: verdict.js's first-match-wins order derives UNVERIFIED before
   // any disposition arithmetic runs, so the --waived/--rejected/--fix-dispatched values this
   // invocation actually carries cannot change the outcome.
   const unverifiedCheck = runChild(process.execPath,
@@ -1434,7 +1430,7 @@ function handleDispositions() {
     ...pools.survivors.map((_, i) => 's' + i),
     ...pools.legs.map((r) => 'leg:' + r.leg),
   ]
-  // D7 (specs/20260909/04-review-soft-floor.md): the three count flags are now optional — when
+  // the three count flags are now optional — when
   // --file is present (non-empty pool) the tally derived from the file below is authoritative; a
   // flag that IS passed must still equal that derived tally (the existing mismatch refusal,
   // unchanged text). "Given" tracks presence (flag() returns null when absent) separately from
@@ -1534,12 +1530,12 @@ function handleDispositions() {
       }
       tally[effective] += legWeight.has(entry.ref) ? legWeight.get(entry.ref) : 1
     }
-    // D10 (specs/20260909/04-review-soft-floor.md): at a spent cap, an effective fix can never be
+    // at a spent cap, an effective fix can never be
     // honored — accepting one would silently promise a fix cycle the cap already forbids. This is
     // narrower than handleFixApplied's own count arithmetic on purpose: a dispositions mark that
-    // lands FIX for what WOULD BE the capping cycle stays accepted (AC-20260820-07-8/AC-20260909-
-    // 04-13 SHALL CONTINUE TO — the cap applies to fix-applied itself, the moment it re-runs legs,
-    // never to entering FIX); D10 only fires once the cap has ALREADY visibly tripped in THIS
+    // lands FIX for what WOULD BE the capping cycle stays accepted, which SHALL CONTINUE TO hold
+    // — the cap applies to fix-applied itself, the moment it re-runs legs,
+    // never to entering FIX); this refusal only fires once the cap has ALREADY visibly tripped in THIS
     // session (marks.escalated, set nowhere but handleFixApplied's own cap branch) — the durable,
     // cross-session half of handleFixApplied's count (an uncleared prior escalate row) is
     // deliberately NOT mirrored here: tests/review/escalate-cap-durable.test.js pins that exact
@@ -1562,7 +1558,7 @@ function handleDispositions() {
         ' reject:' + tally.reject + ' fix:' + tally.fix + ') — a leg ref counts that leg\'s whole ' +
         'finding count' + (weights ? ' (' + weights + ')' : '') + '; recount before re-running')
     }
-    // D7: the file's own derived tally is authoritative — an omitted flag fills in from it, and a
+    // the file's own derived tally is authoritative — an omitted flag fills in from it, and a
     // present flag was just checked equal to it above, so this reassignment is a no-op whenever a
     // flag WAS passed and the correct fill-in whenever it was not.
     waived = tally.waive
@@ -1581,7 +1577,7 @@ function handleDispositions() {
   const word = r.stdout.split('\n')[0].trim()
   marks.dispositions = { waived, rejected, fixDispatched, word }
   marks.dispositionsIteration = n
-  // D2: empty pools -> {file:null, iteration, overrides:0, empty:true}; non-empty, accepted ->
+  // empty pools -> {file:null, iteration, overrides:0, empty:true}; non-empty, accepted ->
   // {file, iteration, overrides}.
   marks.disposer = poolRefs.length > 0
     ? { file: dest, iteration: n, overrides }
@@ -1597,7 +1593,7 @@ function handleDispositions() {
   return null
 }
 
-// D5/AC-20260820-07-8 (manifest-provable cap): the cap itself is enforced HERE, from
+// Manifest-provable cap: the cap itself is enforced HERE, from
 // manifest-<n>.jsonl files actually present on disk — a hand-edited sidecar counter cannot
 // influence it. Whether the STATE reads FIX vs ESCALATE, though, cannot be re-derived from disk
 // alone (a refused 3rd attempt and a not-yet-attempted 3rd attempt look identical on disk: same
@@ -1654,7 +1650,7 @@ function handleFixApplied() {
   if (fixIterationsDone >= FIX_CAP) {
     marks.escalated = true
     saveSidecar()
-    // D5: the refusal is the last guaranteed execution moment — write the escalate row HERE,
+    // the refusal is the last guaranteed execution moment — write the escalate row HERE,
     // before die(), never after (the abandonment path never re-invokes).
     const result = writeEscalateRow(curN)
     const capMsg = 'iteration cap 2 reached — a third fix-applied is refused; the fix/review loop ' +
@@ -1667,14 +1663,14 @@ function handleFixApplied() {
         : '')
     die(result.ok
       ? capMsg + '\nAn escalate ledger line has been appended to ' + marks.escalateLedgerPath + '.'
-      // D8: loud, row-less, retryable — embed the verdict.js drift error verbatim, never crash the
+      // loud, row-less, retryable — embed the verdict.js drift error verbatim, never crash the
       // refusal and lose the cap record; escalateRunId stays unset so the next bare invocation's
-      // self-heal (D5) retries the append.
+      // self-heal retries the append.
       : capMsg + '\nThe escalate ledger pass could not be completed: ' + result.error +
         '\nRe-run this driver once the evidence is repaired — the append will be retried.')
   }
   const n = curN + 1
-  // D2/D3 (specs/20260909/05-fix-delta-reviewer-pass.md): diff the tree snapshotted at
+  // diff the tree snapshotted at
   // reviewer-returned for iteration curN against a fresh snapshot taken right now — a prior
   // sidecar with no marks.treeSnapshot[curN] (older than this spec) falls back to HEAD's tree, so
   // the delta lists every file dirty against HEAD rather than refusing the whole pass. Nothing is
@@ -1688,10 +1684,10 @@ function handleFixApplied() {
   }
   fs.mkdirSync(sidecarDir, { recursive: true })
   fs.writeFileSync(path.join(sidecarDir, `fix-delta-${n}.txt`), delta.join('\n') + '\n')
-  // D4: the REVIEWER fix-delta variant names the prior returns from this record, never n - 1.
+  // the REVIEWER fix-delta variant names the prior returns from this record, never n - 1.
   marks.fixDeltaFrom = marks.fixDeltaFrom || {}
   marks.fixDeltaFrom[String(n)] = curN
-  // D3: carry the prior iteration's skips file (and the count it was extracted against).
+  // carry the prior iteration's skips file (and the count it was extracted against).
   const prior = legsModeFor(curN) || {}
   const r = runLegsIteration(n, { fixDelta: true, skipsFile: prior.skipsFile || undefined, skipsGateCount: prior.skipsGateCount })
   if (r.stopped) return 'STOPPED'
@@ -1700,10 +1696,10 @@ function handleFixApplied() {
   return null
 }
 
-// ---- D1/D2/D4: close-time host-gate re-run (specs/20260830/02-close-gate-rerun.md) -------------
+// ---- close-time host-gate re-run -------------
 // The gate re-run's LAST refusal check in handleClosed() — see this file's header comment for the
 // incident. Resolves the same {testDirs}/{scopeDirs} form review-legs.js's own gate leg resolves
-// (lib/gate-resolve.js's resolveGate(), D3), runs it with cwd = repoRoot, and refuses (exit 2,
+// (lib/gate-resolve.js's resolveGate()), runs it with cwd = repoRoot, and refuses (exit 2,
 // side-effect-free — this runs before any mutation in handleClosed()) on either a non-zero exit or
 // an unresolvable gate. NODE_TEST_CONTEXT is scrubbed from the child env exactly as review-legs.js's
 // sh() already does: this driver is itself invoked from inside `node --test` by its own tests, and
@@ -1714,7 +1710,7 @@ function tailLines(text, n) {
   if (lines.length && lines[lines.length - 1] === '') lines.pop()
   return lines.slice(-n).join('\n')
 }
-// specs/20260912/15-the-close-stops-deleting-tests.md D2: runCloseTimeGate() is gate + whole-suite
+// runCloseTimeGate() is gate + whole-suite
 // only. The `--apply` invocation, commitExpiry(), restoreExpiryPaths(), expiryPathsFrom(),
 // expirySkipWarning() and the restore-and-re-run red arm all existed only to make a close-time
 // deletion safe — with no deletion left at close, they are dead code that touched `git commit`,
@@ -1731,7 +1727,7 @@ function runCloseTimeGate() {
   }
   const env = { ...process.env }
   delete env.NODE_TEST_CONTEXT
-  // specs/20260903/02-whole-suite-review-leg.md D4: the resolved-gate re-run, then the
+  // the resolved-gate re-run, then the
   // testCommand whole-suite re-run — unconditional, in that order, and that is all.
   const r = runChild('bash', ['-c', resolved.gate], { cwd: repoRoot, encoding: 'utf8', env },
     'close-time host gate (' + resolved.gate + ')')
@@ -1745,7 +1741,7 @@ function runCloseTimeGate() {
       'Fix the session-written files, commit the fix, then re-run `node ' + __filename + ' ' +
       specPath + ' --mark closed`.\n--- last 40 lines of gate output ---\n' + tailLines(output, 40))
   }
-  // specs/20260903/02-whole-suite-review-leg.md D4: additive to the resolved-gate re-run above —
+  // additive to the resolved-gate re-run above —
   // a host's gateCommand may carry typecheck/lint the testCommand lacks, so the scoped re-run
   // stays. Same env scrub/cwd as the gate re-run above and as review-legs.js's own sh() — this
   // driver is itself invoked from inside `node --test` by its own tests.
@@ -1805,7 +1801,7 @@ function restampBuildDeviations() {
   marks.deviationsRestamp = { from, to }
 }
 
-// ---- specs/20261013/01-review-closes-its-own-softs.md: the CLOSE soft sweep ----------------------
+// ---- the CLOSE soft sweep ----------------------
 // The soft list is dispositionPools(n).softs of the recorded reviewer return — the same derivation
 // the DISPOSITIONS step prints, so `a<i>` indexes the printed order. Every refusal below runs before
 // the first write (sidecar or spec), so a refused mark is side-effect-free.
@@ -1893,7 +1889,7 @@ function withAdvisoryDebt(text, runId, debtLines) {
   return lines.join('\n')
 }
 
-// D5: the judged sha is the close row's diff.head, read back from the ledger (the ref is the fallback).
+// the judged sha is the close row's diff.head, read back from the ledger (the ref is the fallback).
 function judgedSha() {
   const ledgerPath = path.join(repoRoot, '.claude/spec-runs.jsonl')
   if (fs.existsSync(ledgerPath)) {
@@ -1912,7 +1908,7 @@ function judgedSha() {
     'refs/spec-review/' + marks.closeRunId + '/judged) — the soft sweep ceiling cannot be measured; restore the ledger row')
 }
 
-// D5: the committed close tree against the judged tree, minus the files CLOSE itself writes. The
+// the committed close tree against the judged tree, minus the files CLOSE itself writes. The
 // judged tree is the working-tree snapshot taken at the close-row append (marks.judgedTree) — the
 // exact tree the authoritative legs ran over; a sidecar older than that mark falls back to the
 // close row's diff.head commit.
@@ -1943,7 +1939,7 @@ function refuseOverSweepCeiling() {
   }
 }
 
-// D6: re-stamp this run's close row in place with the sweep tally — one row, one added top-level key.
+// re-stamp this run's close row in place with the sweep tally — one row, one added top-level key.
 function restampCloseRowSweep() {
   if (!marks.softSweep || !marks.closeRunId) return
   const ledgerPath = path.join(repoRoot, '.claude/spec-runs.jsonl')
@@ -1966,16 +1962,16 @@ function handleClosed() {
     die('spec status is not yet "done" — re-run the driver with no mark first so CLOSE\'s ' +
       'authoritative verdict runs and flips status')
   }
-  // specs/20261013/01 D4: an unswept soft is refused before every other check, side-effect-free.
+  // an unswept soft is refused before every other check, side-effect-free.
   if (currentSofts().length > 0 && !marks.softSweep) {
     die('the current reviewer return carries ' + currentSofts().length + ' soft finding(s) and no sweep is ' +
       'recorded — dispatch the CLOSE step\'s sweep workers, write the sweep file, then run `node ' +
       __filename + ' ' + specPath + ' --mark soft-swept --file <sweep.json>` and re-run this mark')
   }
   saveSidecar() // persists the deviations observation the startup call deferred for this mark
-  // D3/D5 (specs/20260823/07-deviations-sidecar-backstop.md): both deviations refusals run BEFORE
+  // both deviations refusals run BEFORE
   // the dirty-tree check below — a lingering (committed, unchanged) sidecar is invisible to that
-  // check entirely (A3), which is the whole gap this closes. Refusal 1 re-observes and persists
+  // check entirely, which is the whole gap this closes. Refusal 1 re-observes and persists
   // FIRST, then refuses — otherwise a repair made to the file after the last derivation would be
   // invisible to refusal 2's own check on a later invocation. State is left unchanged either way:
   // die() exits before marks.closed is ever set.
@@ -2011,14 +2007,14 @@ function handleClosed() {
       'path), then re-run this mark')
   }
   refuseOverSweepCeiling()
-  // D1: LAST refusal check — after deviations, gotchas-ratchet, and dirty-tree above — so the gate
+  // LAST refusal check — after deviations, gotchas-ratchet, and dirty-tree above — so the gate
   // observes the exact committed close tree those checks just certified. die()s before any
   // mutation; a refused mark is always side-effect-free.
   runCloseTimeGate()
   restampBuildDeviations()
   restampCloseRowSweep()
-  // D1: the close commit now exists (the dirty-tree check above already certified the tree is
-  // clean apart from the sidecar/ledger) — best-effort, never blocks the mark (AC-20260913-01-2).
+  // the close commit now exists (the dirty-tree check above already certified the tree is
+  // clean apart from the sidecar/ledger) — best-effort, never blocks the mark.
   if (marks.closeRunId) {
     const closeSha = runChild('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' },
       'git rev-parse HEAD').stdout.trim()
@@ -2061,7 +2057,7 @@ function handleMergeStrategy() {
     { encoding: 'utf8' }, 'git symbolic-ref').stdout.trim()
   const wt = findWorktreeForBranch(mainRoot, source)
 
-  // D4 (specs/20260823/04-review-close-hardening.md, rv_6825fa48c98d): re-entrancy. The recorded
+  // Re-entrancy (rv_6825fa48c98d). The recorded
   // deadlock — a retry after a landed merge re-ran merge-back.sh merge and died on
   // assert_clean_root against its own promoted evidence — is broken by detecting "already landed"
   // BEFORE ever invoking merge-back.sh merge. Order: resolve source first (a gone branch means the
@@ -2135,19 +2131,19 @@ function handleConflictsResolved() {
 }
 
 // Shared tail for a concluded merge (whether it went straight through or via CONFLICTS ->
-// conflicts-resolved): cleanup (removes the worktree, taking the sidecar with it per D10) +
+// conflicts-resolved): cleanup (removes the worktree, taking the sidecar with it) +
 // verify + spec-status --next verbatim, then DONE. Exits the process directly — after cleanup the
 // sidecar this invocation loaded may already be gone from disk, so nothing here re-reads it.
-// D10: the ledger + retained evidence were written under the WORKTREE (repoRoot at CLOSE time,
+// the ledger + retained evidence were written under the WORKTREE (repoRoot at CLOSE time,
 // wherever the review actually ran) so the main root stays clean for `merge-back.sh merge`'s
 // assert_clean_root/ff-only preconditions. Once the merge has landed, promote them into mainRoot
-// (dedup by exact line / by filename), then per D5 (specs/20260823/04-review-close-hardening.md,
-// rv_6825fa48c98d) clear the worktree-local copies by TRACKED STATUS, not by blanket delete: a
+// (dedup by exact line / by filename), then
+// (rv_6825fa48c98d) clear the worktree-local copies by TRACKED STATUS, not by blanket delete: a
 // path tracked in the worktree is restored to its own HEAD content (`git -C <wt> checkout --
-// <path>`), an untracked path is `fs.rmSync`'d exactly as before (A3: the ledger may be tracked or
+// <path>`), an untracked path is `fs.rmSync`'d exactly as before (the ledger may be tracked or
 // untracked depending on the host, decided per path). Deleting a TRACKED file leaves it
 // "deleted" in `git status`, which made the plain `git worktree remove` below (no --force) refuse
-// at exit 128 (A1, spiked) — the second half of the recorded deadlock. Restoring instead of
+// at exit 128 (spiked) — the second half of the recorded deadlock. Restoring instead of
 // deleting keeps `git -C <wt> status --porcelain` empty either way, so cleanup's `worktree remove`
 // succeeds without --force.
 function isTrackedInWorktree(wt, relPath) {
@@ -2165,7 +2161,7 @@ function isTrackedInWorktree(wt, relPath) {
 // The fix is NOT a bare `recursive: true`. The tracked-restore / untracked-delete decision is
 // per PATH: `git checkout -- <dir>` restores a directory's tracked children but leaves its
 // untracked ones on disk, and a leftover untracked file is exactly what makes the plain
-// `git worktree remove` in cleanup refuse at exit 128 — the recorded A1 deadlock this function
+// `git worktree remove` in cleanup refuse at exit 128 — the recorded deadlock this function
 // exists to avoid. So recurse, decide per file, then drop the directory only once it is empty.
 function clearPromotedCopy(wt, absPath, relPath) {
   const st = fs.lstatSync(absPath, { throwIfNoEntry: false })
@@ -2204,9 +2200,9 @@ function copyTreeIfAbsent(src, dst) {
 function promoteEvidenceAndClean(wt, mainRootDir) {
   const srcLedger = path.join(wt, '.claude/spec-runs.jsonl')
   const dstLedger = path.join(mainRootDir, '.claude/spec-runs.jsonl')
-  // D5: drain this spec's durable stopped rows into the tracked ledger BEFORE promoting the
+  // drain this spec's durable stopped rows into the tracked ledger BEFORE promoting the
   // worktree's own ledger lines below, so a drained GATE_RED row lands ahead of this run's CLOSE
-  // row in read order (A4: qualifyingObservation() picks the LAST review row by read-order
+  // row in read order (qualifyingObservation() picks the LAST review row by read-order
   // position — an undrained-then-appended-after row would poison observation for this spec
   // forever). The key is the spec's path relative to the WORKTREE, not to mainRootDir: this
   // invocation's own repoRoot is mainRootDir (merge-strategy runs from there), so the top-level
@@ -2246,10 +2242,10 @@ function promoteEvidenceAndClean(wt, mainRootDir) {
   }
 }
 
-// D8 (b): `git worktree remove` refuses on ANY untracked file, so the worktree-local sidecar has
+// `git worktree remove` refuses on ANY untracked file, so the worktree-local sidecar has
 // to be gone before cleanup runs — but printDoneNow() runs AFTER cleanup, from the main root, and
 // needs this run's state to print the right spec path and delete the sidecar there (specs/
-// 20260913/09-the-tool-shows-never-interrupts.md D1: the REPLAY step this comment used to name is
+// the REPLAY step this comment used to name is
 // retired; DONE is now the only reader). Move review-state.json into the main root's own
 // <spec>.review/ and rebind this invocation's paths to it. The per-iteration manifests are
 // deliberately NOT carried over: they are evidence of a verdict that is already concluded and
@@ -2306,7 +2302,7 @@ function finishMerge(mainRootDir, source, wt) {
   if (c.status !== 0) die('merge-back.sh cleanup failed: ' + (c.stdout + c.stderr).trim())
   runChild('bash', [mergeBackBin, 'verify', '--root', mainRootDir], { encoding: 'utf8' }, 'merge-back.sh verify')
   let doneNote = 'merged ' + source + ' into the target branch; worktree and branch cleaned up.'
-  // D6: a `prototype: <stem>` spec closes the prototype when it was the last citer. The close is
+  // a `prototype: <stem>` spec closes the prototype when it was the last citer. The close is
   // the prototype driver's own mark (one deletion routine); a refusal never fails a landed merge.
   const protoStem = fmVal('prototype')
   if (protoStem) {
@@ -2373,7 +2369,7 @@ function deriveState() {
   let n = liveIteration()
 
   if (n === 0 || readManifestRows(manifestPathFor(n)).length === 0) {
-    // D2: the recorded iteration owns the number — a missing manifest is regenerated at that same
+    // the recorded iteration owns the number — a missing manifest is regenerated at that same
     // number, in the mode legs last ran in, never replaced by judging an older one live.
     const mode = (n > 0 && legsModeFor(n)) || {}
     n = n || 1
@@ -2381,7 +2377,7 @@ function deriveState() {
     if (r.stopped) return 'STOPPED'
   } else if (isRedBlocking(readManifestRows(manifestPathFor(n)))) {
     // STOPPED is sticky, like DONE/ESCALATE — it does not auto-retry on a bare re-invocation (a
-    // no-mark call must stay idempotent, AC-20260820-07-9's guarantee generalized). Re-entry
+    // no-mark call must stay idempotent; the guarantee generalized). Re-entry
     // requires the underlying issue to be fixed AND a fresh attempt: delete the sidecar (or just
     // this iteration's manifest) to force LEGS to run again from cold.
     return 'STOPPED'
@@ -2389,7 +2385,7 @@ function deriveState() {
 
   const rows = readManifestRows(manifestPathFor(n))
 
-  // D3: SKIPS is per iteration — the gate's count against the count recorded at this iteration's extraction.
+  // SKIPS is per iteration — the gate's count against the count recorded at this iteration's extraction.
   const liveMode = legsModeFor(n) || {}
   const gateSkips = gateSkipsCount(rows)
   if (gateSkips > 0 && (!liveMode.skipsFile || liveMode.skipsGateCount !== gateSkips)) return 'SKIPS'
@@ -2397,17 +2393,17 @@ function deriveState() {
   const reviewerFresh = marks.reviewerReturnFile && marks.reviewerReturnIteration === n
   if (!reviewerFresh) return 'REVIEWER'
 
-  // D4 (specs/20260901/09-disposer-gate.md): CHECKPOINT retired — both via values land
+  // CHECKPOINT retired — both via values land
   // DISPOSITIONS directly after a fresh reviewer return.
   const dispositionsFresh = marks.dispositions && marks.dispositionsIteration === n
   if (!dispositionsFresh) return 'DISPOSITIONS'
 
   if (marks.pendingFix) {
     if (!marks.escalated) return 'FIX'
-    // D5 self-heal: a session that hit the cap and walked away never re-invokes with --mark
+    // self-heal: a session that hit the cap and walked away never re-invokes with --mark
     // fix-applied again (that mark is refused forever) — a bare re-invocation here is the ONLY
     // remaining chance to append the row for an abandonment that crashed or exited between the
-    // cap refusal and the write. D8 applies the same way here as at the direct write point: a
+    // cap refusal and the write. The same applies way here as at the direct write point: a
     // drift refusal is stashed for the ESCALATE step text, never thrown — a bare (no --mark)
     // invocation must still exit 0. Gated on !STATE_ONLY — a `--state` query must not be the thing
     // that performs the write it is merely reporting on (same principle as printDoneNow's deferred
@@ -2451,7 +2447,7 @@ const restampLine = (marks.deviationsRestamp)
     `${marks.deviationsRestamp.to} (the sidecar's final entry count).\n`
   : ''
 
-// D4 (specs/20260823/07-deviations-sidecar-backstop.md): the CLOSE enumeration reads entry
+// the CLOSE enumeration reads entry
 // first-lines from the sidecar FILE itself, never a persisted key — at CLOSE-print time the fold
 // has not happened yet (Behavior), so the file is still on disk, and the persisted `deviations`
 // observation deliberately carries only `entries`/`malformed` (no third key for entry text).
@@ -2472,12 +2468,12 @@ function deviationsEnumBlock() {
   return numbered + malformedPart + '\n'
 }
 
-// specs/20260907/01-mixed-pin-guard-and-drift-line.md D6: the CLOSE step's advisory AC-pin drift
+// The CLOSE step's advisory AC-pin drift
 // line — doctor-only first (/spec:doctor check 17), an advisory line here second, never a
 // review-legs.js leg (critical tier: a drift line never touches the verdict, the ledger row, or
 // mark acceptance). Runs ac-drift.js --root <repoRoot> --json via the shared fail-closed runChild
 // wrapper; a non-zero-but-alive exit other than 0/1 (a genuine death is runChild's own fail-closed
-// exit(2)) prints a could-not-run line instead of guessing a count. D6: "when 0 or inapplicable
+// exit(2)) prints a could-not-run line instead of guessing a count. The rule is "when 0 or inapplicable
 // print nothing" — a --root with no specs/ prints ac-drift.js's plain `inapplicable — no specs/`
 // sentinel (written before --json is even consulted, spec/scripts/ac-drift.js) rather than JSON,
 // still exit 0, so the JSON parse is guarded: any unparseable stdout on a 0/1 exit prints nothing
@@ -2507,7 +2503,7 @@ const STEPS = {
     const rows = readManifestRows(manifestPathFor(marks.stoppedIteration || currentN))
     const red = rows.filter((r) => BLOCKING_LEGS.has(r.leg) &&
       (r.leg === 'smoke' ? (r.exit !== 0 && r.exit !== 4) : r.exit !== 0))
-    // D4: name the absolute path the GATE_RED row actually landed in (durable main-root path or
+    // name the absolute path the GATE_RED row actually landed in (durable main-root path or
     // fallback worktree path), including on a bare re-invocation — sourced from the sidecar mark,
     // never re-derived, so the answer cannot silently change between invocations.
     const remedy = marks.stoppedFallback
@@ -2530,12 +2526,12 @@ const STEPS = {
     `path — then:\n` +
     `  node ${__filename} ${specPath} --mark skips-extracted --file <path>`,
 
-  // D4 (specs/20260909/05-fix-delta-reviewer-pass.md): iteration >= 2 (currentN, this driver's own
+  // iteration >= 2 (currentN, this driver's own
   // "which manifest is live" derivation) means a fix-delta cycle just completed —
-  // manifest-<currentN>.jsonl and fix-delta-<currentN>.txt both exist (written at fix-applied,
-  // D2). The reviewer's range for that pass is the delta file plus the two prior returns it needs
-  // to re-verify closure, never the whole diff again (AC-20260909-05-5) — AC-20260902-05-13 bans
-  // the word "scope" from this step's text outright, so neither variant below prints it.
+  // manifest-<currentN>.jsonl and fix-delta-<currentN>.txt both exist (written at fix-applied).
+  // The reviewer's range for that pass is the delta file plus the two prior returns it needs
+  // to re-verify closure, never the whole diff again — and
+  // the word "scope" is banned from this step's text outright, so neither variant below prints it.
   REVIEWER: () => {
     const tail = `Write its structured return ({verdict, survivors, killed, reviewerCount, tokens}) to ` +
       `a file, then:\n  node ${__filename} ${specPath} --mark reviewer-returned --file <return.json>\n` +
@@ -2562,18 +2558,18 @@ const STEPS = {
       tail
   },
 
-  // D2/D3 (specs/20260901/09-disposer-gate.md): dispositionPools(n) is the SAME derivation
-  // handleDispositions()'s own --file verification uses (A5) — this step and that check can never
-  // silently disagree about what needs covering. D5/D9 (specs/20260909/04-review-soft-floor.md):
+  // dispositionPools(n) is the SAME derivation
+  // handleDispositions()'s own --file verification uses — this step and that check can never
+  // silently disagree about what needs covering.
   // `survivors` is hard-only (s0..sN-1 index THIS printed order) and softs print under a separate
-  // advisory heading — visible, never dispositionable. D7: the mark line drops the count flags —
+  // advisory heading — visible, never dispositionable. The mark line drops the count flags —
   // the driver derives them from the file.
   DISPOSITIONS: () => {
     const { survivors, softs, legs } = dispositionPools(currentN)
     if (survivors.length === 0 && legs.length === 0) {
-      // D6/D12 (specs/20260909/04-review-soft-floor.md): the mark line drops the count flags,
+      // The mark line drops the count flags,
       // matching the main DISPOSITIONS step's own line below — this branch is only ever reached
-      // when D6's own auto-disposition (handleReviewerReturned()) somehow did not already close
+      // when the auto-disposition (handleReviewerReturned()) somehow did not already close
       // the run out from under an empty hard pool.
       return `## Step: dispositions due — nothing to disposition\n` +
         `survivors (0) · leg findings (0). Then:\n` +
@@ -2610,9 +2606,9 @@ const STEPS = {
     `  node ${__filename} ${specPath} --mark fix-applied\n` +
     `(re-runs legs --fix-delta on a fresh manifest and returns to REVIEWER for the fix-delta pass)`,
 
-  // D9: the ESCALATE step names both exit routes plus where the escalate row landed (or, when D8
-  // withheld the write, the loud drift note naming why — never silently omitted). D10
-  // (specs/20260909/04-review-soft-floor.md): the waive/reject exit names the --file form —
+  // the ESCALATE step names both exit routes plus where the escalate row landed (or, when the drift guard
+  // withheld the write, the loud drift note naming why — never silently omitted).
+  // The waive/reject exit names the --file form —
   // handleDispositions() derives the tally from the return, and a return carrying an effective
   // fix entry is refused (cap already spent) rather than the driver asking for hand-typed counts.
   ESCALATE: () => {
@@ -2636,7 +2632,7 @@ const STEPS = {
       `first fix-applied is refused again until a waive/reject close clears it.\n`
   },
 
-  // R10: the close-commit instruction derives from whether this review is running in-place or in
+  // the close-commit instruction derives from whether this review is running in-place or in
   // a linked worktree. In-place, the ledger + retained evidence ride the close commit as always.
   // In a linked worktree, finishMerge()'s evidence-promotion step is what moves those paths into
   // the main root (only once the merge has actually landed) — committing them here would just
@@ -2656,15 +2652,15 @@ const STEPS = {
         `running in a linked worktree (main root: ${mainRoot}), so the ledger and retained ` +
         `evidence are promoted there only once the merge lands, not committed from the worktree ` +
         `now; this is the close commit.\n` + gateRerunNote
-    // specs/20260912/15-the-close-stops-deleting-tests.md D4: the 🧹 line prints only when
-    // close-time classification (D1) found something retirable — nothing otherwise, so a clean
+    // the 🧹 line prints only when
+    // close-time classification found something retirable — nothing otherwise, so a clean
     // close never claims a deletion that never happened. The wording now states that nothing is
     // deleted at close (there is no separate deletion commit any more) and names the sweep
     // command that is the one path that deletes a test.
     const testsExpiredLine = (marks.testsExpiry && marks.testsExpiry.retired > 0)
       ? `🧹 ${marks.testsExpiry.retired} tests are retirable with this spec (${marks.testsExpiry.filesRemoved} files would empty) — nothing is deleted at close; sweep deliberately with: node "$(spec-paths test-expiry)" --root . --all-done --apply\n`
       : ''
-    // specs/20261013/01 D1: step 0 prints only when the current return carries >= 1 soft.
+    // step 0 prints only when the current return carries >= 1 soft.
     const sweepSofts = currentSofts()
     const sweepBlock = sweepSofts.length
       ? `0. Soft sweep — ${sweepSofts.length} soft finding(s) from the reviewer return; fix or record each, none is queued:\n` +
@@ -2698,8 +2694,8 @@ const STEPS = {
   MERGE: () => {
     const source = sourceBranchFor()
     if (!branchExists(mainRoot, source)) {
-      // D6: review ran directly on the originating branch — nothing to merge. specs/20260913/09-
-      // the-tool-shows-never-interrupts.md D1: this arm concludes MERGE exactly like a landed
+      // review ran directly on the originating branch — nothing to merge.
+      // This arm concludes MERGE exactly like a landed
       // merge-back does, straight into DONE (the REPLAY state this comment used to name is gone).
       marks.mergeConcluded = true
       saveSidecar()

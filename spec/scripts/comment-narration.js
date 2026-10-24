@@ -58,7 +58,7 @@ function isReadableDir(p) {
   try { return fs.statSync(p).isDirectory() } catch { return false }
 }
 
-// ---- D3 discriminator ----------------------------------------------------
+// ---- discriminator ----------------------------------------------------
 
 function isCodeCommentLine(rawLine, isFirstLine) {
   const t = rawLine.trim()
@@ -72,7 +72,7 @@ function isCodeCommentLine(rawLine, isFirstLine) {
   return false
 }
 
-// ---- D4 classes ------------------------------------------------------------
+// ---- classes ------------------------------------------------------------
 
 const DATE_RE = /\b20\d{2}-\d{2}(-\d{2})?\b/
 const MONTH_RE = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.? 20\d{2}\b/i
@@ -321,7 +321,7 @@ function finishScan(mode, findings, files, baseline, jsonMode) {
   process.exit(exitCode)
 }
 
-// ---- D7 oracle --------------------------------------------------------------
+// ---- oracle --------------------------------------------------------------
 
 function stripCode(text) {
   const lines = text.split('\n')

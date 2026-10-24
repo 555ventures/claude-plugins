@@ -1,185 +1,23 @@
 'use strict'
-// Read-load budget: what a /spec command actually loads into the session before it acts —
-// its own command file plus the doctrine sections `spec-paths shared-for <cmd>` prints.
-// Generalizes the three ad-hoc line caps that already exist (design.md ≤160 in
-// design-doctrine.test.js, genesis.md ≤120 in genesis-doctrine.test.js) into one budget per
-// command, measured through the real binary so the number is the load, not a guess — this
-// pins that procedure growth cannot happen silently; a grandfathered ratchet may only shrink.
-// AC-20260908-06-1 (specs/20260908/06-command-prose-states-contracts.md D7): the flat
-// CAP/RATCHET pair is replaced by per-command BUDGET entries for the eight commands D1/D2/D8
-// trimmed — build, review, run, mocks, replay, design, plan, init — measured with this same
-// formula; the table may only shrink.
+// Owner: specs/20261024/04-scripts-drop-their-inline-changelog.md (shared-for section lists stay pinned; prose-size tests retired).
 const test = require('node:test')
 const assert = require('node:assert')
-const fs = require('fs')
 const path = require('path')
-const { execFileSync, spawnSync } = require('child_process')
+const { execFileSync } = require('child_process')
 
 const ROOT = path.join(__dirname, '..', '..')
-const COMMANDS = path.join(ROOT, 'spec', 'commands')
 const SPEC_PATHS = path.join(ROOT, 'spec', 'bin', 'spec-paths')
-const PROSE_CAP = path.join(ROOT, 'spec', 'scripts', 'prose-cap.js')
-
-// design is 510, not D7's 490: assumption A4 measured it at 500, but HEAD's ratchet already
-// carried 510, granted by the recorded review-gate ruling in
-// specs/20260907/09-atlas-index-and-note-navigation.md D13 (the added lines are contracts, not
-// procedure). A4's own trigger fires — re-measure at build, never raise above the true
-// ceiling — so the entry restores that ceiling rather than cutting prose D13 protects and
-// spec 06's File Plan never named. Owner: specs/20260908/06-command-prose-states-contracts.md D12.
-// specs/20260912/03-run-isolates-and-owns-the-stages.md D13 (AC-20260912-03-14): build, review
-// and design are retired from this table outright — those three stage commands are no longer
-// invokable (D7), so they carry no read-load budget at all. `run` rises from 310 to 334, the
-// value MEASURED at build once Step 0 landed (112 own + 222 shared), never a round number chosen
-// ahead of it: the loop is now the only entry into three stages, so it pays for Step 0's
-// isolation contract on top of what it already carried. A4's ratchet still binds — the entry may
-// only shrink from here.
-// specs/20261008/01-doctrine-states-contracts-and-points-at-its-enforcers.md D7: one entry per
-// command, no flat fallback. connect is held to 22 own + <= 108 shared (D6); the other entries
-// may only shrink.
-// specs/20261008/02-commands-state-their-steps-and-point-at-their-scripts.md D5: COMMAND_CEILING
-// is each command file's own line count as `wc -l` reads it (wcLines, newline count); BUDGET is
-// own + shared-for load in the lines() formula, measured at build after the command files were
-// cut. Both tables may only shrink.
-const COMMAND_CEILING = {
-  init: 270, doctor: 215, enforce: 295, escape: 215, genesis: 85, mocks: 60, plan: 120,
-  prototype: 95, queue: 55, release: 175, run: 75, status: 60, connect: 22, fix: 70,
-}
-const BUDGET = {
-  connect: 70, doctor: 323, enforce: 376, escape: 284, genesis: 235, init: 421, mocks: 166,
-  plan: 228, prototype: 195, queue: 109, release: 264, run: 227, status: 115, fix: 177,
-}
-
-// wc -l semantics: the number of newline characters in the file.
-function wcLines(text) { return (text.match(/\n/g) || []).length }
 
 function lines(text) { return text.split('\n').length }
 
-function readLoad(cmd) {
-  const own = lines(fs.readFileSync(path.join(COMMANDS, cmd + '.md'), 'utf8'))
-  const shared = lines(execFileSync(SPEC_PATHS, ['shared-for', cmd], { encoding: 'utf8' }))
-  return { own, shared, total: own + shared }
-}
-
-const commands = fs.readdirSync(COMMANDS).filter(f => f.endsWith('.md')).map(f => f.replace(/\.md$/, ''))
-
-// AC-20260912-03-14 (specs/20260912/03-run-isolates-and-owns-the-stages.md D7/D13): the roster
-// and the two budget tables must agree in BOTH directions. build, review and design are retired
-// outright — their command files are deleted, so neither table may name them and the roster
-// itself must no longer list them. Genuinely red until spec/commands/{build,review,design}.md
-// are gone; the three stage files' own per-file line caps are pinned separately in
-// tests/consistency/stage-files.test.js (AC-20260912-03-15).
-test('every /spec command has a read-load budget entry (AC-20261008-01-2: its own BUDGET entry, no flat CAP fallback) and an own-file COMMAND_CEILING entry (AC-20261008-02-2), and neither table nor roster names a retired stage command', () => {
-  assert.ok(commands.length >= 10, 'expected the command roster, got ' + commands.length)
-  assert.strictEqual(commands.length, 14,
-    'AC-20261008-01-2: the roster must be the fourteen /spec commands, connect and fix included, the retired replay command gone (specs/20261024/05-replay-retired.md) — got ' + commands.join(','))
-  assert.ok(!/(const|let|var)\s+CAP\s*=/.test(fs.readFileSync(__filename, 'utf8')),
-    'AC-20261008-01-2: a flat CAP fallback is still defined in read-load.test.js — a command without its own entry would escape the measured ratchet silently')
-  for (const cmd of commands) {
-    if (RETIRED_STAGE_COMMANDS.includes(cmd)) continue
-    assert.ok(Object.prototype.hasOwnProperty.call(BUDGET, cmd),
-      'AC-20261008-01-2: /spec:' + cmd + ' has no BUDGET entry — its read-load would go unpinned')
-    assert.ok(Object.prototype.hasOwnProperty.call(COMMAND_CEILING, cmd),
-      'AC-20261008-02-2: /spec:' + cmd + ' has no COMMAND_CEILING entry — its own file could grow without any ceiling catching it')
-    const { total } = readLoad(cmd)
-    assert.ok(total <= BUDGET[cmd],
-      'AC-20261008-01-2: /spec:' + cmd + ' loads ' + total + ' lines, over its own BUDGET entry ' +
-      BUDGET[cmd] + ' — every session running it pays the overage on every invocation')
-  }
-  for (const extra of Object.keys(BUDGET)) {
-    assert.ok(commands.includes(extra), 'BUDGET names a command that no longer exists: ' + extra)
-  }
-  for (const retired of ['build', 'review', 'design']) {
-    assert.ok(!Object.prototype.hasOwnProperty.call(BUDGET, retired),
-      'BUDGET must carry no "' + retired + '" key — that stage command is retired outright (D7), ' +
-      'not merely a command with no measured budget')
-    assert.ok(!Object.prototype.hasOwnProperty.call(SHARED_FOR, retired),
-      'SHARED_FOR must carry no "' + retired + '" key — its shared-for key falls open to the whole ' +
-      'doctrine fallback now (D13), so pinning a scoped section list for it is stale')
-    assert.ok(!commands.includes(retired),
-      'the read-load command roster (derived from spec/commands/*.md) must no longer list "' +
-      retired + '" — D7 deletes spec/commands/' + retired + '.md outright, so its continued ' +
-      'presence here means the command file was never actually removed')
-  }
-})
-
-// specs/20260912/03-run-isolates-and-owns-the-stages.md D7: build, review and design are mid-
-// retirement — their command files are still on disk in the pre-image this file is authored
-// against, but they are being deleted outright, not merely re-budgeted, so the generic CAP must
-// never apply to them as a stand-in budget (design.md's grandfathered 510-line ratchet would
-// otherwise fail against the flat 500-line CAP for a reason that has nothing to do with this
-// spec). Their retirement itself is pinned above, not re-tested per-command here.
-const RETIRED_STAGE_COMMANDS = ['build', 'review', 'design']
-
-for (const cmd of commands) {
-  if (RETIRED_STAGE_COMMANDS.includes(cmd)) continue
-  const limit = BUDGET[cmd]
-  test(`AC-20260908-06-1 / AC-20261008-01-2 / AC-20261008-02-1: read-load budget: /spec:${cmd} loads ≤ ${limit} lines (command file + shared-for sections) and its own file is ≤ ${COMMAND_CEILING[cmd]} lines`, () => {
-    const ceiling = COMMAND_CEILING[cmd]
-    const ownWc = wcLines(fs.readFileSync(path.join(COMMANDS, cmd + '.md'), 'utf8'))
-    assert.ok(ownWc <= ceiling,
-      `AC-20261008-02-1: spec/commands/${cmd}.md is ${ownWc} lines (wc -l) > its ${ceiling} ceiling — ` +
-      'the command restates procedure a driver or script already owns; every session running it pays the overage')
-    const { own, shared, total } = readLoad(cmd)
-    assert.ok(total <= limit,
-      `/spec:${cmd} loads ${total} lines (own ${own} + shared ${shared}) > ${limit}. ` +
-      'Procedure belongs in a driver script that prints one step; prose states contracts ' +
-      '(core § Doctrine Authoring). Shrink the command or move the mechanism into spec/scripts/.')
-  })
-}
-
-test('shared-for prints only sections for a known command (an unknown command falls open to both files)', () => {
-  const known = lines(execFileSync(SPEC_PATHS, ['shared-for', 'status'], { encoding: 'utf8' }))
-  const unknown = lines(execFileSync(SPEC_PATHS, ['shared-for', 'no-such-command'], { encoding: 'utf8' }))
-  assert.ok(known < unknown, 'the section filter should load less than the fail-open whole-file fallback')
-})
-
-// AC-20260908-06-2 (D5): every spec/commands/*.md's `## Rules…` section holds at most 8
-// top-level bullets; a file with no Rules heading passes via prose-cap's own exit-2 usage
-// error, never a hand-rolled "does this file have Rules" check that could drift from the
-// script's real no-heading message.
-test('AC-20260908-06-2: every spec/commands/*.md Rules section holds at most 8 bullets (prose-cap --section Rules --cap 8 exits 0, or exits 2 with the no-heading message when the file has no Rules section)', () => {
-  const offenders = []
-  for (const cmd of commands) {
-    const file = path.join(COMMANDS, cmd + '.md')
-    const r = spawnSync(process.execPath, [PROSE_CAP, '--file', file, '--section', 'Rules', '--cap', '8'], { encoding: 'utf8' })
-    const noRulesSection = r.status === 2 && /no "## " heading containing/.test(r.stderr)
-    if (r.status !== 0 && !noRulesSection) offenders.push(cmd + '.md: ' + r.stderr.trim())
-  }
-  assert.deepStrictEqual(offenders, [],
-    'a Rules section over 8 bullets (or a prose-cap failure other than "no Rules section") means the ' +
-    'command restates procedure the driver already prints — evict before appending, never move the bullet ' +
-    'elsewhere: ' + offenders.join(' | '))
-})
-
-// AC-20260908-06-3 (D6) `[pre-green: predicate-in-test]`: the exact `## ` section list
-// `spec-paths shared-for <cmd>` prints, parentheticals stripped, for the remaining scoped
-// command keys. Green on arrival by design — the spec changes no list;
-// a silent addition/removal to spec-paths's own SECTIONS is what this catches.
-// specs/20260912/03-run-isolates-and-owns-the-stages.md D13 (AC-20260912-03-14): build, review
-// and design keys are retired here too — their shared-for output is fail-open now, so pinning a
-// scoped section list for them is stale (the fail-open equivalence itself is pinned in
-// tests/spec-paths.test.js, AC-20260912-03-13).
-// specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D10: § Design Render Gate and
-// § Design Atlas are deleted from design.md outright, and spec-paths' D10 SECTIONS-list edits
-// (spec/bin/spec-paths) fold Design Canon in earlier for genesis rather than
-// appending it — the genesis row below follows the landed list in
-// place, never weakened; every other row is untouched.
-// specs/20260914/03-the-html-atlas-is-retired.md D2/A2 (if-false remedy): the `atlas` command
-// and its spec-paths key are deleted outright, so this table's `atlas` row is retired along
-// with its subject rather than left to assert a scoped list no key produces anymore — its
-// fail-open equivalence is pinned instead in tests/spec-paths.test.js.
-//
-// specs/20260926/01-the-approval-file-is-not-a-gate.md D1: `sketch`'s
-// SECTIONS arm is deleted outright — it falls open to the whole doctrine now, so its scoped-list
-// row is retired along with its subject rather than left to assert a section list no key
-// produces anymore; the fail-open equivalence is pinned instead in tests/spec-paths.test.js.
+// The exact `## ` section list `spec-paths shared-for <cmd>` prints, parentheticals stripped,
+// for every scoped command; a command without a row falls open to the whole doctrine.
 const SHARED_FOR = {
   plan: ['Host Grounding', 'Pipeline Entry', 'Tiers', 'Decomposition', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'MCP Policy', 'Canonical Docs Loop', 'Session Execution'],
   run: ['Host Grounding', 'Tiers', 'Runtime Verification', 'Incident Policy', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'On-Disk Handoff', 'Worker Git Ban', 'Read-Only Surfaces', 'MCP Policy', 'Canonical Docs Loop', 'Session Execution'],
   release: ['Host Grounding', 'Runtime Verification', 'Release Stage', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Canonical Docs Loop', 'Session Execution'],
   enforce: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Model Placement', 'Question Style', 'Console Output Style', 'Session Execution', 'Workflows Encode Shape, Not Judgment'],
   genesis: ['Host Grounding', 'Pipeline Entry', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Worker Git Ban', 'MCP Policy', 'Session Execution', 'Design Canon', 'Design Authoring Contracts', 'Workflows Encode Shape, Not Judgment'],
-  // specs/20260914/01-the-mock-contract-and-the-driver.md D14: § Design Atlas dropped from /spec:mocks.
   mocks: ['Host Grounding', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'MCP Policy', 'Session Execution', 'Design Canon'],
   status: ['Host Grounding', 'State Machine', 'Question Style', 'Console Output Style', 'Session Execution'],
   queue: ['Host Grounding', 'State Machine', 'Question Style', 'Console Output Style', 'Session Execution'],
@@ -189,7 +27,13 @@ const SHARED_FOR = {
   init: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Pipeline Entry', 'Tiers', 'Runtime Verification', 'Release Stage', 'Model Placement', 'Question Style', 'Console Output Style', 'Canonical Docs Loop', 'Session Execution', 'Design Canon'],
 }
 
-test('AC-20260908-06-3: spec-paths shared-for prints exactly the pinned `## ` section list, in order, for every scoped command', () => {
+test('shared-for prints only sections for a known command (an unknown command falls open to both files)', () => {
+  const known = lines(execFileSync(SPEC_PATHS, ['shared-for', 'status'], { encoding: 'utf8' }))
+  const unknown = lines(execFileSync(SPEC_PATHS, ['shared-for', 'no-such-command'], { encoding: 'utf8' }))
+  assert.ok(known < unknown, 'the section filter should load less than the fail-open whole-file fallback')
+})
+
+test('AC-20260908-06-3 / AC-20261024-04-5: spec-paths shared-for prints exactly the pinned `## ` section list, in order, for every scoped command', () => {
   for (const [cmd, expected] of Object.entries(SHARED_FOR)) {
     const out = execFileSync(SPEC_PATHS, ['shared-for', cmd], { encoding: 'utf8' })
     const headings = out.split('\n').filter((l) => l.startsWith('## '))

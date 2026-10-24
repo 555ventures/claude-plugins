@@ -5,9 +5,8 @@
 // intent-named composites, and the auto-loaded rules file holding the intent-to-pattern table
 // and the four naming subsections.
 //
-// Owner: specs/20260926/02-the-design-contract-is-code.md D2/D3 (AC-20260926-02-1 through
-// AC-20260926-02-6, AC-20260926-02-10); specs/20260926/04-the-design-brief.md D7 adds the
-// --rules/--kit/--tokens override flags (AC-20260926-04-15) — all three together, repo-relative
+// Owner: specs/20260926/02-the-design-contract-is-code.md.
+// The --rules/--kit/--tokens override flags — all three together, repo-relative
 // to --root, bypass `.claude/spec.config.json` entirely and run the same findings over the named
 // paths, for genesis's `--mark design-brief-written` (no `design` block exists in the config at
 // that point yet).
@@ -18,7 +17,7 @@
 // exist; re-derive an enforcer (that is /spec:enforce's job — this script only reports
 // presence).
 //
-// A `design` block that is present but missing `kit`, `tokens`, or `rules` (D1: all three are
+// A `design` block that is present but missing `kit`, `tokens`, or `rules` (all three are
 // required once the block exists) reports the same *-missing kind as a missing path would, with
 // no `path` (there is no configured value to point at) and a remedy naming the key to add — it
 // never crashes and never invents a new finding kind.
@@ -177,7 +176,7 @@ function checkNamingLayer(namingSection, layer, rulesRelPath, findings) {
   }
 }
 
-// D7: the shared check body, run either from a host config's `design` block (run(), below) or
+// The shared check body, run either from a host config's `design` block (run(), below) or
 // from the --rules/--kit/--tokens override flags (main()) — the same findings either way, since
 // a bypassed config is just a different source for the same three paths.
 function runWithPaths(root, { tokens, kit, rules } = {}) {

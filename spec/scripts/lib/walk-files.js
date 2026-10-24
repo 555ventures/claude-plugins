@@ -1,14 +1,15 @@
 'use strict'
 // lib/walk-files.js — exports `walkFiles(root)`, the one recursive file walk
-// lib/scan-test-calls.js (specs/20260911/02-tests-have-a-ceiling.md D2's `listTestFiles`) and
-// lib/invariants.js (specs/20260911/03-tests-expire-at-close.md D1's universe) share. Two private
+// lib/scan-test-calls.js (`listTestFiles`) and
+// lib/invariants.js (its universe) share. Two private
 // copies of one walk let the count, coverage-scope, and expiry gates disagree with red-check.js
 // about which files exist; a single copy is what keeps "a file the pipeline can see" one answer.
+// Owner: specs/20260911/02-tests-have-a-ceiling.md.
 //
 // Returns absolute paths of every REGULAR file under `root`, in readdir order, depth-first. A
 // directory whose bare name is `.git`, `node_modules`, `fixtures`, or `__fixtures__` is never
 // descended, nor is the one relative path `.claude/worktrees` (a directory named "worktrees"
-// anywhere else IS descended — D2's skip set is a bare-name match everywhere else). A symlink is
+// anywhere else IS descended — the skip set is a bare-name match everywhere else). A symlink is
 // resolved with `statSync`: a link whose target is a regular file is pushed under the LINK's own
 // path, so a test file that is itself a link still classifies; a link to a directory is skipped
 // and never descended, because following one walks the link's whole target tree (a fixture's

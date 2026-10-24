@@ -1,12 +1,13 @@
 'use strict'
 // lib/driver-io.js — the four private I/O helpers spec-review-driver.js and spec-build-driver.js
-// both need, extracted so two drivers never carry two copies (specs/20260901/01-build-driver.md
-// D11). spec-review-driver.js (specs/20260820/07) grew runChild (the fail-closed spawnSync
+// both need, extracted so two drivers never carry two copies.
+// spec-review-driver.js grew runChild (the fail-closed spawnSync
 // wrapper), appendLedger, and a load/save pair for its own <spec>.review/ sidecar; the build
 // driver (this spec) needs the identical shapes for its own <spec>.build/ sidecar and ledger row,
 // plus a synchronous stdout writer neither driver had a shared copy of. A second, paraphrased copy
-// of any of these in the new driver is the exact drift seam ci-query.js was unified over on
-// (specs/20260805/02-review-evidence-manifest.md D4) and lib/gate-resolve.js closed for the two gate resolvers (specs/20260830/02-close-gate-rerun.md D3).
+// of any of these in the new driver is the exact drift seam ci-query.js was unified over,
+// and lib/gate-resolve.js closed for the two gate resolvers.
+// Owner: specs/20260901/01-build-driver.md.
 //
 // runChild deliberately takes no caller identity (no __filename/specPath) — those lived in
 // spec-review-driver.js's die() remedy text before this extraction, and a shared library cannot
@@ -30,7 +31,7 @@ const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 
-// R9 (spec-review-driver.js's own comment, carried forward): spawnSync's `status` is null when
+// spawnSync's `status` is null when
 // the child dies by signal, fails to spawn, or overflows maxBuffer — every caller that reads
 // `.status`/`.code` or trusts `.stdout` without checking either would otherwise tolerate that null
 // silently. This is the ONE place death is handled: every spawnSync call in both drivers routes

@@ -4,7 +4,7 @@
 // machine can see and answer nine fixed questions: leg red-recency, the brief-08 adoption gate,
 // escape aggregates, CLEAN-contradicted-by-escape (with its false-CLEAN rate), a schema-drift census,
 // escapes-per-CLEAN by via (loop vs. direct vs. unknown), and — the ninth,
-// specs/20260903/01-owed-query-and-row-handoff.md D1 — `owed`: every plugin-blaming row across
+// `owed`: every plugin-blaming row across
 // this machine's checkouts (escape rows whose preventedBy is review-check|runtime-leg, missed
 // replay rows, and unstamped docs/spec-feedback/ findings), grouped by class with the joined
 // recurrence count and a derived fixed/in-flight/uncited/unknown citation status.
@@ -13,9 +13,10 @@
 // happened to be open on this machine — ~14% of the fleet's ~1,100 evidence rows at the time
 // (11 checkouts under ~Projects; this repo alone held 176 of 1,077 rows). A stored repo list
 // rots the moment a checkout moves or a new one clones, so this script re-derives the fleet on
-// every run instead (spec/scripts/fleet-reader.js, specs/20260820/05-fleet-evidence-reader.md).
+// every run instead.
+// Owner: specs/20260820/05-fleet-evidence-reader.md.
 //
-// --owed (D1) is a RENDER SELECTOR only, never a new machine format: the bare human render (no
+// --owed is a RENDER SELECTOR only, never a new machine format: the bare human render (no
 // flag) stays byte-identical to the pre-owed render — population then queries 1-6 plus
 // cleanByVia; `--owed` instead prints population then the owed render (population, then class
 // groups/ambiguous/spec-feedback/hidden/excluded — the other eight queries are omitted from
@@ -23,17 +24,16 @@
 // top-level key regardless of whether --owed rode along, so a `jq` reader never needs the flag.
 //
 // What this deliberately does NOT do: it never stores a repo list, a cache, or any derived
-// number between runs (read-only, stateless — D12); it never regexes a ledger row's packed
-// legacy status-string field (D10 — structured fields only: leg name + exit, verdict, stage,
+// number between runs (read-only, stateless); it never regexes a ledger row's packed
+// legacy status-string field (structured fields only: leg name + exit, verdict, stage,
 // ts, escape enums, replay outcomes); it takes no query flags beyond --owed's render selection —
-// the nine questions are fixed (D5; the seventh, cleanByVia, added by
-// specs/20260901/03-unified-build-loop.md D9; the ninth, owed, added by this spec's D1), a new
+// the nine questions are fixed (the seventh is cleanByVia, the ninth is owed), a new
 // query still needs a spec, not a flag; it never coerces an out-of-enum or missing value to zero
-// or drops a parseable row silently (D11) — every such row renders verbatim in its query AND
-// increments a named drift-census reason bucket; and the owed query's citation scan (D5) never
+// or drops a parseable row silently — every such row renders verbatim in its query AND
+// increments a named drift-census reason bucket; and the owed query's citation scan never
 // reads `docs/` — a roadmap or feedback-brief mention of a row's key is a plan, not a fix, so
 // only `specs/`, `spec/`, and `tests/` are scanned (docs/spec-feedback/ is read separately, by
-// D6's own frontmatter parser, purely to find UNSTAMPED findings — never as a citation surface).
+// its own frontmatter parser, purely to find UNSTAMPED findings — never as a citation surface).
 //
 // Exit codes: 0 = derived (0 repos scanned is still a derived answer — the population block
 //                 carries the absence, never an error)
@@ -115,7 +115,7 @@ if (!rootStat || !rootStat.isDirectory()) {
   process.exit(2)
 }
 
-// ---- discovery (D2/D3): one level under reposRoot, config-gated, read-only --------------------
+// ---- discovery: one level under reposRoot, config-gated, read-only --------------------
 
 function discoverRepos(root) {
   let entries
@@ -142,12 +142,12 @@ function discoverRepos(root) {
   return repos
 }
 
-// Ledger glob (D3): .claude/spec-runs*.jsonl — live file plus year archives, spec-status.js's
+// Ledger glob: .claude/spec-runs*.jsonl — live file plus year archives, spec-status.js's
 // own contract, so a reader blind to archives does not silently lose history.
 // A readdir failure here means ".claude provably exists (discovery's config check already
 // passed) but its listing could not be read" — that is never the same fact as "listed fine,
 // no ledger files present", so it is reported via unreadablePaths rather than folded into an
-// empty file list (FIX 3 / the D4 silent-absence lie-risk).
+// empty file list (the silent-absence lie-risk).
 function ledgerFiles(claudeDir) {
   let names
   try {
@@ -281,7 +281,6 @@ function computeLegRecency(reposList) {
 }
 
 // ---- query 2: gate08 ------------------------------------------------------------------------
-// D6's pinned definitions; D16's clause thresholds.
 
 const CUTOVER = '2026-08-17'
 
@@ -327,9 +326,9 @@ function computeGate08(reposList) {
 
 // ---- query 3: escapes -----------------------------------------------------------------------
 // total, killedMatch===null count, preventedBy distribution verbatim, byClass (rows without
-// class -> unclassed), recurrentUnguarded per D9, per-repo totals.
+// class -> unclassed), recurrentUnguarded, per-repo totals.
 //
-// D4 (specs/20260901/07-escape-class-contract.md): byClass/classLatest/recurrentUnguarded now
+// byClass/classLatest/recurrentUnguarded now
 // count on the EFFECTIVE class — joinAmendments(repo.rawRows) gives the latest escape-class
 // amendment per key; an escape row's effective class is the amendment's when one exists, else
 // its own. escapes.unclassedRows lists rows whose effective class AND effective reason are both
@@ -390,7 +389,7 @@ function computeEscapes(reposList) {
     if (repoCount) byRepo[repo.name] = repoCount
   }
   unclassedRows.sort((a, b) => a.repo.localeCompare(b.repo) || String(a.ts).localeCompare(String(b.ts)))
-  // D9: recurrent-unguarded = a class (excluding the unclassed bucket, which is a
+  // recurrent-unguarded = a class (excluding the unclassed bucket, which is a
   // missing-data bucket, not a defect class) with >=3 fleet-wide recurrences.
   const recurrentUnguarded = []
   for (const [cls, count] of Object.entries(byClass)) {
@@ -414,14 +413,14 @@ function computeEscapes(reposList) {
 //
 // falseCleanRate (contradicted / cleans, null when a repo has no CLEAN rows at all) and the
 // `fleet` roll-up are the DIVISION of the two counts this query already derives, not a tenth
-// question — the reader's fixed question set stays at nine (D5). Why the division belongs
+// question — the reader's fixed question set stays at nine. Why the division belongs
 // here: the per-repo counts were already the catch-rate scoreboard, and every reader was
 // doing the arithmetic by eye. The rate is a FLOOR, never an exact miscalibration figure:
-// escapesUnjoined stays out of the numerator by D11's rule that an unjoined escape is never
+// escapesUnjoined stays out of the numerator by the rule that an unjoined escape is never
 // folded into either side, so a repo carrying unjoined escapes is at least this miscalibrated
 // and possibly more. Deliberately NOT here: any trend, history, or per-window bucketing of
 // this rate — the fleet carries ~25 contradicted rows in total, so a weekly line moves several
-// points on a single escape, and storing a number between runs would break D12's stateless
+// points on a single escape, and storing a number between runs would break the stateless
 // contract outright. A trend needs its own spec, and enough rows to survive one escape.
 
 function computeCleanContradicted(reposList) {
@@ -454,10 +453,10 @@ function falseCleanRate(contradicted, cleans) {
 }
 
 // ---- query 7: cleanByVia ---------------------------------------------------------------------
-// specs/20260901/03-unified-build-loop.md D9: per repo and fleet-total, for each via bucket
+// Per repo and fleet-total, for each via bucket
 // (loop / direct / unknown — review rows carrying no via at all, pre-sibling-02 rows), the same
 // {cleans, contradicted} shape query 5 (computeCleanContradicted) already derives, using the
-// EXACT reviewRunId<->runId join that query uses. A4: this is a sibling function, never a
+// EXACT reviewRunId<->runId join that query uses. This is a sibling function, never a
 // reshape of computeCleanContradicted itself — that query's --json output stays byte-identical.
 const VIA_BUCKETS = ['loop', 'direct', 'unknown']
 
@@ -500,7 +499,7 @@ function computeCleanByVia(reposList) {
 }
 
 // ---- query 6: driftCensus -------------------------------------------------------------------
-// Current-shape classifier (D14): a row is in-shape iff every applicable rule holds; each
+// Current-shape classifier: a row is in-shape iff every applicable rule holds; each
 // failure increments a named reason bucket. Unparseable lines are counted separately (per
 // repo, at parse time) and never reach this classifier.
 
@@ -508,7 +507,7 @@ const STAGES = new Set(['plan', 'build', 'review', 'escape', 'escape-class', 're
 const SPEC_STAGES = new Set(['plan', 'build', 'review', 'escape', 'escape-class', 'replay'])
 const TIERS = new Set(['standard', 'critical'])
 
-// D5 (specs/20260901/07-escape-class-contract.md): the drift census routes every escape and
+// The drift census routes every escape and
 // escape-class row through lib/escape-row.js's validator. `escapeKeys` is the set of every
 // escape row's own key in this repo — an escape-class row whose key matches none of them is an
 // orphan amendment (amendment-unmatched), never `stage-unknown` (escape-class IS a known
@@ -555,11 +554,11 @@ function computeDriftCensus(reposList) {
 }
 
 // ---- query 9: owed ----------------------------------------------------------------------------
-// specs/20260903/01-owed-query-and-row-handoff.md D1-D7: every plugin-blaming row across this
+// Every plugin-blaming row across this
 // machine's checkouts, grouped by effective class with a derived fixed/in-flight/uncited/unknown
-// citation status. Owner rule (D2): preventedBy review-check|runtime-leg -> owed item;
+// citation status. Owner rule: preventedBy review-check|runtime-leg -> owed item;
 // enforcer|test -> hostOwned (never listed); anything else (doctrine|none|missing|out-of-enum)
-// -> ambiguous (listed, never grouped). D3: a self-repair repo's plugin-blaming escape rows are
+// -> ambiguous (listed, never grouped). A self-repair repo's plugin-blaming escape rows are
 // never listed (selfRepairExcluded counts them; their class's recurrences, read from
 // escapes.byClass, still counts them) — a self-repair repo's OWN missed replay rows ARE listed
 // (a reviewer measurement is fleet evidence regardless of whose repo it ran in).
@@ -572,7 +571,7 @@ function ownerBucket(preventedBy) {
   return 'ambiguous'
 }
 
-// D5: walk specs/, spec/, tests/ recursively under every self-repair repo; a missing surface
+// Walk specs/, spec/, tests/ recursively under every self-repair repo; a missing surface
 // directory scans as zero files (readdirSync's ENOENT is caught, never thrown onward); an
 // unreadable file inside a scanned surface is skipped and contributes nothing to `files` — never
 // a crash, since this scan is read-only advisory. `null` (never an empty-but-present shape) when
@@ -604,7 +603,7 @@ function scanCitationSurfaces(selfRepairRepos) {
         }
         filesScanned++
         const relPath = path.relative(repo.dir, fullPath).split(path.sep).join('/')
-        // Spec frontmatter status (D5 Contracts): the first `^status:\s*(\S+)` line inside the
+        // Spec frontmatter status : the first `^status:\s*(\S+)` line inside the
         // leading `---` block — a narrower grammar than lib/frontmatter's general fmValue, pinned
         // by this spec directly rather than reused.
         let status = null
@@ -619,7 +618,7 @@ function scanCitationSurfaces(selfRepairRepos) {
   return { roots, files: filesScanned, records }
 }
 
-// D5/D7: derive {cited, next} for one item key against the citation scan (or the citationScan:
+// Derive {cited, next} for one item key against the citation scan (or the citationScan:
 // null case). A hit under spec/ or tests/, or under specs/ in a status:done spec, marks fixed
 // (by lists every such hit, path asc); a hit only under specs/ in a non-done spec marks
 // in-flight (by lists those hits; next names the first one's path and its own status); no hit at
@@ -658,7 +657,7 @@ function citeItem(key, scan, reposRoot) {
   }
 }
 
-// D6: the docs/spec-feedback/*.md hand-rolled frontmatter parser. Returns null when the file
+// The docs/spec-feedback/*.md hand-rolled frontmatter parser. Returns null when the file
 // carries no leading `---\n…\n---` block at all (parsed:false); otherwise an array (possibly
 // empty) of { id, category, stage, severity, intake } entries read from the `findings:` list —
 // which opens at a `findings:` line and ends at the next non-indented line. No YAML library, no
@@ -755,7 +754,7 @@ function computeOwed(reposList, reposRoot, escapesByClass) {
   groups.sort((a, b) => a.class.localeCompare(b.class))
   sortItems(ambiguous)
 
-  // D6: docs/spec-feedback/*.md — a flat glob of that one directory per repo (never nested); a
+  // docs/spec-feedback/*.md — a flat glob of that one directory per repo (never nested); a
   // repo with no such directory contributes no files entry at all.
   const feedbackFiles = []
   const feedbackUnstamped = []
@@ -821,7 +820,7 @@ if (json) {
   }, null, 2) + '\n'))
 }
 
-// ---- human render (D4/D13/D14 Behavior): population first, then queries 1-6 numbered, each
+// ---- human render : population first, then queries 1-6 numbered, each
 // with a one-line takeaway heading. This reader owns its render like spec-status.js does —
 // never routed through report-render.js. Never a claim of fleet completeness: the population
 // block is scoped to "this machine's checkouts" wording only.
@@ -830,7 +829,7 @@ function renderPopulation(pop) {
   const lines = [`Fleet population — scoped to this machine's checkouts under ${pop.reposRoot} (scanned: ${pop.scanned})`]
   if (!pop.repos.length) lines.push('  (no repos found)')
   for (const r of pop.repos) {
-    // A readdir/read failure is never "no ledger" (D4) — that marker is reserved for a
+    // A readdir/read failure is never "no ledger"  — that marker is reserved for a
     // directory that listed cleanly and simply held no ledger files.
     const marker = r.unreadable > 0
       ? ` — UNREADABLE: ${r.unreadablePaths.join(', ')} (fix permissions, e.g. chmod, or remove the blocking path; rows below undercount)`
@@ -871,7 +870,7 @@ function renderEscapes(esc) {
   lines.push(`  preventedBy: ${Object.entries(esc.preventedBy).map(([k, v]) => `${k}=${v}`).join(', ') || 'none'}`)
   lines.push(`  byClass (escapes + build incidents): ${Object.entries(esc.byClass).map(([k, v]) => `${k}=${v}`).join(', ') || 'none'}`)
   lines.push(`  buildIncidents: ${esc.incidents}`)
-  // D12: the unclassed-rows line is the first carrier of D11's backfill obligation — printed
+  // The unclassed-rows line is the first carrier of the backfill obligation — printed
   // only when N > 0 so a clean fleet never shows a false-positive nudge; the amendments line
   // always prints so the joined count's other half is never invisible.
   if (esc.unclassedRows.length > 0) {
@@ -901,7 +900,7 @@ function renderRate(rate) {
   return rate === null ? 'n/a' : `${(rate * 100).toFixed(1)}%`
 }
 
-// specs/20260901/03-unified-build-loop.md D9/Contracts: one line, exact wording and middle-dot
+// One line, exact wording and middle-dot
 // separators — the brief 18 kill condition is read straight off this line.
 function renderCleanByVia(cbv) {
   const part = (b) => `${b} ${cbv.total[b].contradicted}/${cbv.total[b].cleans}`
@@ -917,9 +916,9 @@ function renderDriftCensus(dc) {
   return lines.join('\n')
 }
 
-// D7: the owed render — population first, then class groups (header + one line per non-fixed
+// The owed render — population first, then class groups (header + one line per non-fixed
 // item), ambiguous owners, spec-feedback, then trailing hidden:/excluded: counts that keep every
-// exclusion visible (never a silent drop). D1: --owed is a render SELECTOR — this replaces
+// exclusion visible (never a silent drop). --owed is a render SELECTOR — this replaces
 // queries 1-6/cleanByVia in the printed output, never adds to them; the full nine-query --json
 // stays the sole complete machine view.
 function bracketStatus(cited, next) {

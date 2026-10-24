@@ -3,6 +3,8 @@
 // review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path>
 //   [--skips <file>] [--fix-delta] [--out-dir <dir>]
 //
+// Owner: specs/20260820/06-typed-evidence-manifest.md
+//
 // Why (v7 redesign): the review stage's Phase 0 was ~2 pages of leg choreography a
 // session re-performed by hand every review — resolve the gate, launch five background legs,
 // append JSONL rows, remember which legs feed which. Every step was deterministic; none needed
@@ -14,17 +16,15 @@
 // Every leg subprocess is told the base this review is judging against: sh() exports
 // SPEC_REVIEW_BASE=<--base>, applied after any leg-local opts.env, so a host check that
 // resolves its own comparison point (e.g. plugin-bump.js --check) can read it as one candidate
-// among its own (specs/20260909/02-replay-base-and-label-honesty.md D1).
+// among its own.
 //
-// Legs and row shapes (verdict.js's REVIEW_LEGS; observed is always a typed JSON object per
-// specs/20260820/06-typed-evidence-manifest.md D1/D2 — the Contracts block there is the closed
-// set, reproduced here for orientation):
+// Legs and row shapes (verdict.js's REVIEW_LEGS; observed is always a typed JSON object — the
+// manifest's Contracts block is the closed set, reproduced here for orientation):
 //   reconcile      {"leg":"reconcile","exit":<0|3>,"observed":{"outOfPlan":N,"files":[…],
 //                  "filesOmitted":M?}} — files is scope-reconcile's outOfPlan path array VERBATIM
 //                  and in its order, always present ([] when N is 0), capped at 40 entries;
-//                  filesOmitted is added only when N > 40 (specs/20260824/06-review-range-
-//                  identity.md D5). verdict.js's countLegFinding reads outOfPlan only, never
-//                  files.length.
+//                  filesOmitted is added only when N > 40. verdict.js's countLegFinding reads
+//                  outOfPlan only, never files.length.
 //   gate           {"leg":"gate","exit":<code>,"observed":{"skips":N,"todos":N,"testsExecuted":N|
 //                  {"unavailable":"pattern-no-match"|"no-format-declared"}}} — skips itself takes
 //                  the same {"unavailable":...} shape (then no "todos" key) when skipReportPattern
@@ -35,75 +35,69 @@
 //   ci             {"leg":"ci","exit":<0|1>,"observed":{"conclusion":"<v>"}|{"status":"in-progress"}|
 //                  {"unavailable":"no-adapter"|"transient"}|{"unavailable":"sha-unseen","branch":"<v>",
 //                  "branchConclusion":"<v>"}} — the sha-unseen alternative is always exit 0, even
-//                  when branchConclusion is red (specs/20260830/03-ci-leg-honest-absence.md D4:
-//                  ci-query.js's shaUnseen shape for an unpushed HEAD; the never-block
-//                  ruling forbids a red origin branch from reddening this leg)
+//                  when branchConclusion is red (ci-query.js's shaUnseen shape for an unpushed
+//                  HEAD; the never-block ruling forbids a red origin branch from reddening this
+//                  leg)
 //   at-risk        {"leg":"at-risk","exit":<code>,"observed":{"files":N,"testsExecuted":N|
 //                  {"unavailable":"pattern-no-match"|"no-format-declared"}}} |
 //                  {"unavailable":"no-test-command"} | {"malformed":{"entries":N,"of":M}} — exit is
 //                  FORCED to 1 when files>0 and testsExecuted is the number 0 OR the object
-//                  {"unavailable":"pattern-no-match"} (D4, specs/20260907/03-ignored-paths-and-
-//                  unobserved-count.md; emitter-side contradiction — a declared format that never
-//                  matched observed nothing executing, the same unsupported promise as an observed
-//                  zero; "no-format-declared" never forces — that host never promised an
-//                  observation)
+//                  {"unavailable":"pattern-no-match"} (emitter-side contradiction — a declared
+//                  format that never matched observed nothing executing, the same unsupported
+//                  promise as an observed zero; "no-format-declared" never forces — that host
+//                  never promised an observation)
 //   suite          {"leg":"suite","exit":<code>,"observed":{"skips":N|{"unavailable":...},
 //                  "todos":N?,"testsExecuted":N|{"unavailable":"pattern-no-match"|
 //                  "no-format-declared"}}} | {"unavailable":"no-test-command"} — its own wave,
 //                  1b, after wave 1 (reconcile/gate/ci) and before wave 2 (at-risk/patterns);
 //                  runs config.testCommand BARE (no file args) through sh(), typed exactly like
 //                  the gate row; exit is FORCED to 1 when a declared testCountPattern observes
-//                  exactly 0 executed tests OR never matches at all on an exit-0 run (D5,
-//                  specs/20260907/03-ignored-paths-and-unobserved-count.md, the identical
-//                  extension applied to the whole suite — the blocking leg, so a vacuous whole-
-//                  suite run is the wider-blast-radius half of the same escape); runs in EVERY
-//                  scope including --fix-delta; BLOCKING (specs/20260903/02-whole-suite-review-
-//                  leg.md D1-D3)
+//                  exactly 0 executed tests OR never matches at all on an exit-0 run (the
+//                  identical extension applied to the whole suite — the blocking leg, so a
+//                  vacuous whole-suite run is the wider-blast-radius half of the same escape);
+//                  runs in EVERY scope including --fix-delta; BLOCKING
 //   tests          {"leg":"tests","exit":0,"observed":{"count":N,"dispositions":{"writes":N,
 //                  "rewrites":N,"reuses":N}}} | {"leg":"tests","exit":0,"observed":
 //                  {"unavailable":"count-failed"}} — always exit 0, in every scope including
 //                  --fix-delta; advisory only, count derived by shelling out to count-tests.js
-//                  --json (D4′ entry point; neither script re-derives the count), dispositions
+//                  --json (neither script re-derives the count), dispositions
 //                  counted here from the spec's own AC bullets via lib/spec-sections.js's
-//                  parseDisposition (specs/20260911/04-every-criterion-declares-its-test.md D9); a
+//                  parseDisposition; a
 //                  count-tests.js invocation that itself exits non-zero or prints unparseable
 //                  stdout reads as the typed unavailable shape, never as a false {"count":0}; NOT
-//                  in BLOCKING (specs/20260911/02-tests-have-a-ceiling.md D4′)
+//                  in BLOCKING
 //   ac-matrix / skip-reconcile — appended by ac-matrix.js itself (same manifest)
 //   promise-sweep  {"leg":"promise-sweep","exit":<0|1>,"observed":{"rows":N,"carried":C,
 //                  "sanctioned":S,"orphans":O}} — appended by promise-sweep.js itself (same
 //                  manifest); runs in EVERY scope including --fix-delta — excluded from no scope
-//                  (D4, specs/20260817/07-promise-sweep-leg.md)
 //   contract       {"leg":"contract","exit":<0|1>,"observed":{"tests":N,"passed":true}|
 //                  {"unavailable":"no-replay"}} — only for a spec whose frontmatter carries
 //                  `prototype: <stem>`; read off the LAST stage:"build" ledger row naming the spec
 //                  (exit 0 when its `replay.passed` and `replay.looked` are both true, else exit 1);
 //                  no app is booted, and verdict.js is untouched — a red or absent row is a hard
 //                  finding through ac-matrix's oracle standing for the pin criteria that name it
-//                  (specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md D5)
 //   patterns       {"matches":N} — recorded when config declares patternsScript; never required
 //   drift          {"summary":"<first stdout line, bounded to 120 chars>"} — recorded when config
 //                  declares driftScript
 //
-// specs/20260820/06-typed-evidence-manifest.md D2/D5 (brief 16's second move): every
-// row's `observed` is now a typed JSON object instead of a packed/prefixed string — a string row
-// is manifest-invalid to verdict.js by construction (D1), so this script never emits one. Free-
+// Every row's `observed` is a typed JSON object instead of a packed/prefixed string — a string row
+// is manifest-invalid to verdict.js by construction, so this script never emits one. Free-
 // text sub-fields (gate's whole-row `detail`, drift's `summary`) are bounded to 120 chars AT THE
-// EMITTER (D2) — the bound is on the string field, never the whole row object (D11: slicing a
-// JSON object corrupts it). A new capability, `testCountPattern` (regex over runner output, group
+// EMITTER — the bound is on the string field, never the whole row object (slicing a
+// JSON object corrupts it). A capability, `testCountPattern` (regex over runner output, group
 // 1 = executed-test count, or "none"), is read the same way `skipReportPattern` already is and
 // applied to the gate and at-risk legs' child output, writing `testsExecuted` as a number or a
 // typed `{"unavailable":...}` — absent/"none"/no-match is never assumed zero (the
 // never-assumed-zero rule, extended). The at-risk leg's exit is forced to 1 when it captured
 // files>0 and testsExecuted is the number 0 OR the object {"unavailable":"pattern-no-match"}
-// (D4, specs/20260907/03-ignored-paths-and-unobserved-count.md) — the vacuous-green escape
+// — the vacuous-green escape
 // (files=N, exit=0, runner executed nothing OR a declared format that never matched) becomes a
 // same-run red instead of silent decay; {"unavailable":"no-format-declared"} never forces.
 // --fix-delta skips reconcile/at-risk/patterns (the fix diff is a response to findings) and
 // re-runs everything else in full — a fix-delta pass must re-assert executed state, never
 // inherit it (CROSS-20260727-01).
 //
-// specs/20260903/02-whole-suite-review-leg.md D1/D2/D3: a ninth leg, `suite`, closes the
+// A ninth leg, `suite`, closes the
 // scoped-gate-blind-spot escape class — the gate's {testDirs} glob and at-risk's stem match are
 // both directory/content-shaped, so a repo-wide scanner test outside every File Plan test
 // directory (never naming a changed file) is invisible to both. `suite` runs the host's bare
@@ -112,10 +106,10 @@
 // `testCommand` gets the typed whole-row alternative {"unavailable":"no-test-command"} — never a
 // silent skip, since `testCommand` is a contract-required config key.
 //
-// specs/20261024/05-replay-retired.md D3: the wave-3b promise-sweep leg runs on every
+// The wave-3b promise-sweep leg runs on every
 // invocation; there is no flag that skips a leg, and an unrecognised argument exits 2.
 //
-// specs/20260902/05-manifest-stamped-scope.md D1: every row this script appends
+// Every row this script appends
 // through its own `appendRow` writer carries `scope` as its LAST key — "full" with no
 // --fix-delta, "fix-delta" with it — derived from the one `fixDelta` flag this script already
 // holds. Rows `ac-matrix.js` and `promise-sweep.js` append directly to the manifest in their
@@ -126,7 +120,7 @@
 // extract skipped-test NAMES from gate output (runner-specific; the session passes --skips
 // when the gate reports skips), or retry/poll anything.
 //
-// spec review-observation-truth.md D1: env-
+// env-
 // preflight.js was authored and wired into build/design/doctor but absent from the review path —
 // the 3rd recurrence of the authored-not-activated class. Before wave 1 (and before any manifest
 // row is appended), this script now runs `env-preflight.js --root <root>` (default mode,
@@ -176,7 +170,7 @@ root = path.resolve(root)
 // own death) leaves a fragment holding the legs that had already returned and no gate row.
 // spec-review-driver.js counts manifest-<n>.jsonl files to derive its state and sees nothing
 // red in such a fragment; were the fragment under the named path, a re-invocation would
-// advance to REVIEWER over it — the cached advance AC-20260820-07-14 forbids. The fragment
+// advance to REVIEWER over it — the cached advance forbids. The fragment
 // stays .partial, which that count never matches, and is truncated here so a re-run never
 // inherits another run's rows.
 const manifestFinal = manifest
@@ -192,8 +186,8 @@ if (!config.gateCommand) {
   process.exit(2)
 }
 
-// ---- D1 precondition: env-preflight.js, default mode, before wave 1 and before any manifest ----
-// row is appended (specs/20260820/03-review-observation-truth.md). No --rules — that mode is
+// ---- precondition: env-preflight.js, default mode, before wave 1 and before any manifest ----
+// row is appended. No --rules — that mode is
 // doctor's registry-vs-doctrine check, unrelated to this run-time presence gate.
 const preflight = spawnSync(process.execPath, [path.join(__dirname, 'env-preflight.js'), '--root', root], { encoding: 'utf8' })
 if (preflight.status !== 0) {
@@ -206,7 +200,7 @@ fs.mkdirSync(outDir, { recursive: true })
 
 const rows = []
 function appendRow(leg, exit, observed) {
-  // D1: scope is always the LAST key on a row this writer appends — full/fix-delta from the
+  // scope is always the LAST key on a row this writer appends — full/fix-delta from the
   // one fixDelta flag already parsed above; ac-matrix.js/promise-sweep.js append their own rows
   // directly and never pass through here, so their rows stay untouched.
   const row = { leg, exit, observed, scope: fixDelta ? 'fix-delta' : 'full' }
@@ -214,19 +208,18 @@ function appendRow(leg, exit, observed) {
   fs.appendFileSync(manifest, JSON.stringify(row) + '\n')
 }
 
-// D5: testCountPattern is read/handled exactly like skipReportPattern below — absent or "none"
+// testCountPattern is read/handled exactly like skipReportPattern below — absent or "none"
 // means the host declares no format (sanctioned, never a finding); declared but unmatched means
 // drift (pages via verdict.js's gate-skips finding for skips specifically; at-risk's contradiction
 // rule for testsExecuted). Never assumed zero either way. lastMatch/computeTestsExecuted/
-// computeSkips/isUnobserved live in ./lib/count-observation.js (specs/20260908/05-release-e2e-
-// unobserved-count.md D1) — the sole home both this script and release-legs.js import.
+// computeSkips/isUnobserved live in ./lib/count-observation.js — the sole home both this script and release-legs.js import.
 function sh(cmd, opts = {}) {
   return new Promise((resolve) => {
     // Scrub the test-runner context vars: a gate that itself runs `node --test` must behave as
     // a fresh top-level runner even when review-legs.js was invoked from inside one (a nested
     // runner inheriting NODE_TEST_CONTEXT degrades to a silent child-protocol run — exit 0
     // over failing tests).
-    // SPEC_REVIEW_BASE (specs/20260909/02-replay-base-and-label-honesty.md D1) is set to the
+    // SPEC_REVIEW_BASE is set to the
     // exact --base value AFTER opts.env, in every leg subprocess, so no leg-local override can
     // redirect the base this review is judging against — a host check (e.g. plugin-bump.js
     // --check) that resolves its own comparison point reads it as one candidate among its own.
@@ -274,7 +267,7 @@ async function main() {
       if (r.code === 2) { console.error(`review-legs.js: scope-reconcile precondition failure:\n${r.err || r.out}`); process.exit(2) }
       fs.writeFileSync(reconcilePath, r.out)
       try { reconcileJson = JSON.parse(r.out) } catch { reconcileJson = null }
-      // D5 (specs/20260824/06-review-range-identity.md): files is scope-reconcile's outOfPlan
+      // files is scope-reconcile's outOfPlan
       // array verbatim and in its order, always present ([] when N is 0), capped at 40; an
       // unparseable scope-reconcile JSON keeps today's n=0 path and emits files:[].
       const paths = reconcileJson ? reconcileJson.outOfPlan : []
@@ -297,7 +290,7 @@ async function main() {
       appendRow('gate', r.code, observed)
     }))
   } else {
-    // D2: the whole-row unavailable alternative — no gate command could be resolved at all — is
+    // the whole-row unavailable alternative — no gate command could be resolved at all — is
     // still a red gate row (exit 1), with the reason bounded to 120 chars at this emitter.
     appendRow('gate', 1, { unavailable: 'gate-unresolvable', detail: String(resolved.reason || '').slice(0, 120) })
   }
@@ -309,7 +302,7 @@ async function main() {
     else {
       try {
         const j = JSON.parse(line)
-        // D4 (specs/20260830/03-ci-leg-honest-absence.md): shaUnseen maps to an honest observed
+        // shaUnseen maps to an honest observed
         // row at exit 0 UNCONDITIONALLY — `exit` is never touched here, so a red branchConclusion
         // can never redden this leg (the never-block ruling).
         if (j.shaUnseen === true) observed = { unavailable: 'sha-unseen', branch: j.branch, branchConclusion: j.branchRun.conclusion }
@@ -324,11 +317,10 @@ async function main() {
   await Promise.all(wave1)
 
   // ---- wave 1b: suite, ALONE — after wave 1 (reconcile/gate/ci), before wave 2 (at-risk/
-  // patterns). Runs in EVERY scope including --fix-delta (D1, specs/20260903/02-whole-suite-
-  // review-leg.md). Never concurrent with another leg that runs host tests — the same collision
+  // patterns). Runs in EVERY scope including --fix-delta. Never concurrent with another leg that runs host tests — the same collision
   // class the wave-1/wave-2b comments already document for smoke.
   if (!config.testCommand) {
-    // D2: the whole-row unavailable alternative — testCommand is a contract-required config key,
+    // the whole-row unavailable alternative — testCommand is a contract-required config key,
     // so its absence is a broken host, never a silent skip.
     appendRow('suite', 1, { unavailable: 'no-test-command' })
   } else {
@@ -339,9 +331,9 @@ async function main() {
     const skipPat = config.capabilities && config.capabilities.skipReportPattern
     const countPat = config.capabilities && config.capabilities.testCountPattern
     const testsExecuted = computeTestsExecuted(output, countPat)
-    // D2/D5: exit is FORCED to 1 when a declared testCountPattern observes exactly 0 executed
+    // exit is FORCED to 1 when a declared testCountPattern observes exactly 0 executed
     // tests OR never matches at all on an exit-0 run — the at-risk emitter-side contradiction
-    // rule (D4, specs/20260907/03-ignored-paths-and-unobserved-count.md), applied to the whole
+    // rule, applied to the whole
     // suite: a vacuous-green whole run is the same escape at a wider scope.
     const exit = isUnobserved(testsExecuted) ? 1 : sr.code
     appendRow('suite', exit, { ...computeSkips(output, skipPat), testsExecuted })
@@ -349,18 +341,17 @@ async function main() {
 
   // ---- wave 2 (parallel): at-risk + patterns (post-gate; both need reconcile's output) ----
   const wave2 = []
-  // specs/20260911/02-tests-have-a-ceiling.md D4′: `tests` — the count-tests instrument. Runs in
-  // EVERY scope including --fix-delta (a fix round can add tests) and is advisory ONLY — always
-  // exit 0, never in BLOCKING. Shells out to count-tests.js --json (D4′ names review-legs.js as
+  // `tests` — the count-tests instrument. Runs in EVERY scope including --fix-delta (a fix round can add tests) and is advisory ONLY — always
+  // exit 0, never in BLOCKING. Shells out to count-tests.js --json (review-legs.js is
   // its one entry point) rather than re-deriving the count via lib/scan-test-calls.js directly — "the
-  // leg shells out to count-tests.js --json; it never re-derives the count" (D4′).
+  // leg shells out to count-tests.js --json; it never re-derives the count".
   {
-    // specs/20260911/04-every-criterion-declares-its-test.md D9: a count-tests.js invocation that
+    // a count-tests.js invocation that
     // itself exits non-zero (a broken instrument, e.g. a corrupt testGlobs entry) must NOT read as
     // a healthy {"count":0} — that's indistinguishable from a genuinely empty suite. The typed
     // {"unavailable":"count-failed"} shape carries no count/dispositions key at all. `dispositions`
     // is counted here (not by count-tests.js — it derives from the SPEC's own AC bullets, not the
-    // tree) via parseDisposition, the same authority ac-matrix.js's --lint D3 imports.
+    // tree) via parseDisposition, the same authority ac-matrix.js's --lint imports.
     const testCountResult = spawnSync(process.execPath,
       [path.join(scriptDir, 'count-tests.js'), '--root', root, '--json'], { encoding: 'utf8' })
     let testCountJson = null
@@ -409,7 +400,7 @@ async function main() {
           fs.writeFileSync(atRiskPath, `$ ${config.testCommand} ${atRiskFiles.map(q).join(' ')}\n\n${r.out}${r.err}`)
           wroteAtRisk = true
           const testsExecuted = computeTestsExecuted(r.out + r.err, config.capabilities && config.capabilities.testCountPattern)
-          // D4 (specs/20260907/03-ignored-paths-and-unobserved-count.md): exit is FORCED to 1
+          // exit is FORCED to 1
           // when files>0 and testsExecuted is the number 0 OR the object
           // {"unavailable":"pattern-no-match"} — the vacuous-green escape becomes a same-run red;
           // {"unavailable":"no-format-declared"} never forces.
@@ -430,7 +421,7 @@ async function main() {
     }
   }
   if (config.driftScript) {
-    // D2: drift's summary is the one built-in free-text field — bounded to 120 chars at this
+    // drift's summary is the one built-in free-text field — bounded to 120 chars at this
     // emitter, never sliced as a whole row downstream.
     wave2.push(sh(`${config.driftScript} ${q(spec)}`).then(r =>
       appendRow('drift', r.code, { summary: (r.out.trim().split('\n')[0] || '').slice(0, 120) })))
@@ -445,7 +436,7 @@ async function main() {
   fs.writeFileSync(path.join(outDir, 'smoke.txt'), smokeR.out + smokeR.err)
   appendRow('smoke', smokeR.code, { result: smokeR.code === 0 ? 'pass' : smokeR.code === 4 ? 'inert' : 'fail' })
 
-  // ---- contract leg (D5): a `prototype:` spec only — the build row is the executed evidence, ----
+  // ---- contract leg: a `prototype:` spec only — the build row is the executed evidence, ----
   // appended before ac-matrix because ac-matrix reads oracle standing by leg name off the manifest.
   if (fmMap(specText).prototype) {
     const specRel = path.relative(root, path.resolve(root, spec))
@@ -467,7 +458,7 @@ async function main() {
   const acr = await sh(`node ${q(path.join(scriptDir, 'ac-matrix.js'))} --spec ${q(spec)} --root ${q(root)} --manifest ${q(manifest)}${skips ? ` --skips ${q(skips)}` : ''}${config.driftScript ? ' --has-drift-script' : ''}`)
   fs.writeFileSync(path.join(outDir, 'ac-matrix.txt'), acr.out + acr.err)
 
-  // ---- wave 3b: promise-sweep — runs in EVERY scope including --fix-delta (D4: the spec text
+  // ---- wave 3b: promise-sweep — runs in EVERY scope including --fix-delta (the spec text
   // may be amended during a fix pass, and the leg is milliseconds); appends its own manifest row
   // the same way ac-matrix.js does above, never via appendRow (that would double-write it).
   const psr = await sh(`node ${q(path.join(scriptDir, 'promise-sweep.js'))} --spec ${q(spec)} --manifest ${q(manifest)}`)

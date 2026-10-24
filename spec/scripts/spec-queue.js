@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 'use strict'
 // spec-queue.js <subcommand> [args] — the sole writer of the per-repo session queue
-// (<git-common-dir>/spec-queue.json). Owner: specs/20260903/03-pipeline-queue-mechanics.md.
+// (<git-common-dir>/spec-queue.json).
+// Owner: specs/20260903/03-pipeline-queue-mechanics.md.
 // The queue is the pipeline's memory for deferred work: an item can wait behind a spec or a
 // brief (an "after" gate) until that target is done, an ad-hoc spec can be queued by path at
 // any position, a landed brief is appended last with no mark, and a brief or spec is queued at
@@ -12,9 +13,9 @@
 // kind) are evaluated exclusively via lib/queue.js's isItemDone/isItemReady — the overlay's
 // own evaluators — never a second derivation. `list` never mutates the queue file (it
 // reconciles a copy for display numbering only); the retired `bump`/`defer`/`ok` verbs and
-// `add --after`/`--brief` flags each exit 2 naming their D6 replacement.
+// `add --after`/`--brief` flags each exit 2 naming their replacement.
 //
-// Hygiene (specs/20261013/02-queue-hygiene.md): `add` refuses a free-text prompt whose token
+// Hygiene: `add` refuses a free-text prompt whose token
 // Jaccard against any PENDING prompt is >= 0.35 (`--distinct` overrides); `list` prints an age
 // column and the flags `📎 cites done <spec>` · `⏳ gate met` · `⌛ stale`; every write verb
 // moves ticked and derived-done items out of the queue file into
@@ -71,7 +72,7 @@ const argv = process.argv.slice(2)
 const sub = argv[0]
 const rest = argv.slice(1)
 
-// D6: the retired verbs are recognized only to name their replacement and exit 2 — they
+// The retired verbs are recognized only to name their replacement and exit 2 — they
 // never touch the queue file. Checked before general usage validation so a typo'd old verb
 // gets a helpful message, not a bare usage dump.
 const REMOVED_SUBS = {
@@ -230,7 +231,7 @@ function ageDays(it) {
 }
 const ageText = it => { const a = ageDays(it); return a === null ? '?' : `${a}d` }
 
-// D2 flag predicates, shared by `list` and `groom`: one derivation per rot shape.
+// Flag predicates, shared by `list` and `groom`: one derivation per rot shape.
 function gateMet(it, ctx) { return !!it.after && isItemReady(it, ctx).ready }
 function isStale(it) { const a = ageDays(it); return it.kind === 'prompt' && !it.after && a !== null && a >= STALE_DAYS }
 
@@ -263,7 +264,7 @@ function ctxFor(statusJson) {
   // `statusJson.specs` deliberately excludes superseded specs (they live in the separate
   // `superseded` array) — merge both so a gate or queued item pointing at a since-superseded
   // spec resolves to 'superseded' here exactly as spec-status.js's own in-process overlay
-  // does (D2: ready ⇔ done or superseded; D3: one readiness derivation for both callers).
+  // does (ready ⇔ done or superseded; one readiness derivation for both callers).
   const specStatusMap = new Map(statusJson.specs.map(s => [s.path, s.status]))
   for (const s of statusJson.superseded) specStatusMap.set(s.path, 'superseded')
   return makeCtx({
@@ -288,7 +289,7 @@ function reconciledItems(rawItems, statusJson, { append }) {
 }
 
 // Assigns real sequential ids to any inserted item (id === null) and writes the file.
-// `baseSeq` is the queue file's previous `seq` (0 for a brand-new file). D3: ticked and
+// `baseSeq` is the queue file's previous `seq` (0 for a brand-new file). Ticked and
 // derived-done items leave the queue file for the archive (written first, so a crash between
 // the two renames duplicates rows rather than losing them); `seq` stays so ids never repeat.
 function persist(items, baseSeq, ctx) {
@@ -366,7 +367,7 @@ function printTopLine(item) {
   console.log(lines.slice(1).join('\n').trim() || itemDesc(item, new Map()))
 }
 
-// The pick is the first item in queue order that is both undone AND ready (D3).
+// The pick is the first item in queue order that is both undone AND ready.
 function topPick(items, ctx) {
   for (const it of items) {
     if (isItemDone(it, ctx).done) continue
@@ -486,7 +487,7 @@ switch (sub) {
 
     const statusJson = readSpecStatusJson() // read-only — never touches the queue file
 
-    // Classification (D1): NN/NNa or docs/roadmap/NN-*.md -> brief; specs/*.md -> spec;
+    // Classification: NN/NNa or docs/roadmap/NN-*.md -> brief; specs/*.md -> spec;
     // else -> prompt verbatim.
     const roadmapPathMatch = /^docs\/roadmap\/(\d+[a-z]?)-/.exec(payload)
     let kind, briefNum, specPath
@@ -504,7 +505,7 @@ switch (sub) {
       kind = 'prompt'
     }
 
-    // --after-* target validation (D2) — BEFORE any write, so a refused add creates nothing.
+    // --after-* target validation — BEFORE any write, so a refused add creates nothing.
     let after = null
     if (flags.afterSpec) {
       if (!fs.existsSync(path.join(root, flags.afterSpec))) {
@@ -525,7 +526,7 @@ switch (sub) {
     const items = reconciledItems(raw ? raw.items : [], statusJson, { append: true })
     const ctx = ctxFor(statusJson)
 
-    // D5: a brief or spec is queued at most once — refuse regardless of the existing item's
+    // A brief or spec is queued at most once — refuse regardless of the existing item's
     // doneness (no done-item exception). Position is numbered exactly as `list` (pending)
     // when the existing item is itself pending; a done duplicate has no `list` position (done
     // items are hidden there), so it is named by its raw item-order position instead.
@@ -543,7 +544,7 @@ switch (sub) {
       }
     }
 
-    // D1: a near-duplicate free-text prompt is refused against PENDING prompts only (a ticked
+    // A near-duplicate free-text prompt is refused against PENDING prompts only (a ticked
     // prompt re-added is a legitimate reopen); --distinct is the honest override.
     if (kind === 'prompt' && !flags.distinct) {
       const tok = promptTokens(payload)

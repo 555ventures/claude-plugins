@@ -10,7 +10,9 @@
 //            (the last two apply only to a `prototype:` spec at REPLAY)
 // spec-build-driver <spec.md> --state                  -> print the state name only (scripting)
 //
-// specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md (D3): a spec
+// Owner: specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md
+//
+// A spec
 // whose frontmatter carries `prototype: <stem>` gains one extra state, REPLAY, derived after a
 // green gate and before COMMIT. `--mark replayed` copies the contract's test file
 // (design/prototypes/<stem>/<tests.file>) to the host's `prototype.e2eFile` path, runs
@@ -19,7 +21,7 @@
 // address beside its prototype picture); `--mark looked`, run only on the user's literal `close
 // enough`, advances REPLAY to COMMIT. The build row gains `replay: {tests, passed, looked}` for
 // a `prototype:` spec only. `lane:` is never read and no `proto/` branch refuses a spec.
-// specs/20260912/03-run-isolates-and-owns-the-stages.md (D10): `via` is recorded as "loop" once,
+// `via` is recorded as "loop" once,
 // at sidecar creation, regardless of argv — /spec:run is the only entry point left, so the flag
 // that once chose between it and a direct invocation is gone; `via` itself stays a measurement
 // field fleet-reader.js still buckets escapes-per-CLEAN by. The DONE row gains `via`/`model`
@@ -36,7 +38,7 @@
 // never demands it and red-check never runs it — and no wave owns it; `--mark integrated` refuses
 // while one is missing, so the person's approval lands before the gate runs, never as a repair round.
 //
-// specs/20260910/07-post-gate-command.md: a host's optional `postGateCommand` config key is
+// a host's optional `postGateCommand` config key is
 // chained into runGate()'s ONE bash -c child after the resolved scoped gate
 // (`<gate> && echo '== postGateCommand' && <post>`) — a red post-gate enters this driver's
 // existing repair loop exactly as a red scoped gate does, one gate run per round either way.
@@ -45,11 +47,11 @@
 // other placeholder is recognized. The DONE ledger row's `gate` object carries a `postGate`
 // boolean recording whether one was declared.
 //
-// WHY THIS EXISTS: specs/20260901/01-build-driver.md — the build stage was a
+// WHY THIS EXISTS: the build stage was a
 // 161-line markdown procedure with no driver and no state file: it resumed by inspecting the
 // diff, ran the red-check/gate/scope-reconcile by hand, and hand-appended its own ledger row —
 // the last stage in the per-feature loop whose deterministic choreography was still performed by
-// an LLM. This driver, on spec-review-driver.js's own contract (specs/20260820/07 D1 — a proven
+// an LLM. This driver, on spec-review-driver.js's own contract (a proven
 // shape, not a second one to learn), EXECUTES every deterministic step itself (admission, wave
 // derivation, gate resolution, env preflight, the hardened->implementing flip, red-check, the
 // final gate, scope-reconcile, diff counts, the stage:"build" ledger row) and prints ONLY the
@@ -61,18 +63,18 @@
 // What this deliberately does NOT do: dispatch any agent, write the Decisions table, render a
 // user-facing report, or make any git write beyond one — the intent-to-add (`git add -N`) of
 // untracked, non-ignored File Plan paths immediately before the gate child spawns
-// (specs/20260910/08-gate-sees-created-files.md D1; D12 narrowed by ADR-0015 to admit exactly
+// (narrowed by ADR-0015 to admit exactly
 // this write — every other git call this driver makes is still rev-parse/diff/status/ls-files).
 // It never accepts an "unsanctioned green" itself; the sanction stays in the spec's own
 // carriers (`[pre-green:]`, `SHALL CONTINUE TO`) that red-check reads — a driver mark that let
 // the session record "the user said it's fine" would be a second sanction channel invisible to
-// review's ac-matrix (D4 rationale). It never creates, enters, or leaves a worktree (build_base
+// review's ac-matrix (rationale). It never creates, enters, or leaves a worktree (build_base
 // stays /git:enter-worktree's field).
 //
 // Exit codes: 0 = step printed / mark accepted / --state printed
 //             2 = precondition failure or refused mark (stderr names the artifact + remedy;
 //                 state unchanged) — includes env-preflight exit non-zero (its output printed
-//                 verbatim), red-check exit 2 (a usage/config failure, not the D7 resume-skip
+//                 verbatim), red-check exit 2 (a usage/config failure, not the resume-skip
 //                 case, which is handled without ever invoking red-check), an unresolved gate
 //                 ({gate:null} from lib/gate-resolve.js), a fourth repair-applied past the
 //                 3-round cap (touches <spec>.build/gate-cap), a mark issued at a state that does
@@ -84,15 +86,15 @@
 //                 sidecar is opened, remedy = the review driver; and a non-zero exit from the
 //                 `git ls-files`/`git add -N` intent-to-add staging that now runs before the gate
 //                 child (stderr names the failing command and its exit code; no gate child is
-//                 spawned and no gateRuns entry is recorded — specs/20260910/08 D5); and
-//                 (specs/20261007/03 D3d-e) `--mark replayed` refusals: a contract with no
+//                 spawned and no gateRuns entry is recorded); and
+//                 `--mark replayed` refusals: a contract with no
 //                 `tests.file` (names `contract.json` and `--mark tests-derived`), an undeclared
 //                 `prototype.e2eRun` (names it), an undeclared `prototype.url`, a missing contract
 //                 test file, or the host e2eRun exiting non-zero (names the replay log; writes no
 //                 replay-state.json); `--mark looked` before a green replay (names `replay has not
 //                 passed`); and a failed replay-port allocation on a `{port}` host.
 //
-// specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md D3(c): when
+// When
 // `prototype.url` carries `{port}` the build keeps one replay port in `<spec>.build/replay-port.json`
 // (`{"port": n}`), allocated the first time the REPLAY step prints or `--mark replayed` runs; the
 // step prints `PORT=<n> <bootCommand>` and the resolved address, and the replay joins each route
@@ -108,7 +110,7 @@ const { readConfig } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
 const { parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
-// D5 (specs/20260901/02-run-provenance.md): model is derived at row-write time (never once at
+// model is derived at row-write time (never once at
 // startup) — the review driver's own sibling reasoning applies here too.
 const { sessionModel } = require('./lib/session-stamp.js')
 const { CLASS_ID_RE } = require('./lib/escape-row')
@@ -136,7 +138,7 @@ const envPreflightBin = path.join(PLUGIN, 'scripts/env-preflight.js')
 const scopeReconcileBin = path.join(PLUGIN, 'scripts/scope-reconcile.js')
 const specStatusBin = path.join(PLUGIN, 'scripts/spec-status.js')
 
-// D6/A3 (mirrors spec-review-driver.js): repoRoot is the driver's INHERITED CWD, never derived
+// Mirrors spec-review-driver.js: repoRoot is the driver's INHERITED CWD, never derived
 // from the spec's own path.
 const repoRootResult = runChild('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' },
   'git rev-parse --show-toplevel')
@@ -152,7 +154,7 @@ const fmVal = (k) => fmValue(specText, k)
 
 let status = fmVal('status')
 const tier = fmVal('tier') || 'standard'
-// specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md D3(c): a spec
+// A spec
 // stamped `prototype: <stem>` gains the REPLAY state; `lane:` is never read.
 const protoStem = fmVal('prototype') || null
 const specRel = path.relative(repoRoot, resolvedSpecPath) || resolvedSpecPath
@@ -179,7 +181,7 @@ const hasTestsRows = filePlanRows.some((r) => /^tests?$/i.test((r.layer || '').t
 const needsRedAttribution = filePlanRows.some((r) =>
   !/^tests?$/i.test((r.layer || '').trim()) && !isBaselineRow(r) && (r.action || '').trim().toUpperCase() === 'CREATE')
 
-// ---- D2: admission ------------------------------------------------------------------------------
+// ---- admission ------------------------------------------------------------------------------
 const OWNING_COMMAND = { draft: '/spec:plan', done: '/spec:status', superseded: '/spec:status' }
 if (status !== 'hardened' && status !== 'implementing') {
   die('spec status is "' + (status || '<missing>') + '" — spec-build-driver requires status: ' +
@@ -233,7 +235,7 @@ if (pre.status !== 0) {
 
 let justFlipped = false
 if (status === 'hardened') {
-  // ---- stamp diff_base whenever it is absent (specs/20260901/01-build-driver.md) ---
+  // ---- stamp diff_base whenever it is absent ---
   // Absent-only stamping in BOTH fields would leave a spec already carrying `build_base` unpinned,
   // on the reasoning that build_base already answered "what is this built against". It does not —
   // build_base is conventionally the moving ref `main`, and /git:enter-worktree writes it at any
@@ -317,7 +319,7 @@ function resolveBase() {
   return value
 }
 
-// ---- D7 (specs/20260901/01-build-driver.md, AC-14): resume without a sidecar --------------------
+// ---- resume without a sidecar --------------------
 // A status: implementing spec with no <spec>.build/ directory on disk (a resumed cold session
 // with landed, uncommitted work) cannot run red-check on the post-image tree — that would prove
 // nothing about vacuity (red-check's own purity refusal is correct; the honest alternative is to
@@ -380,7 +382,7 @@ if (!STATE_ONLY) {
     }
   }
   if (!hasTestsRows && marks.redCheck === undefined) marks.redCheck = 'none'
-  // D10 (specs/20260912/03-run-isolates-and-owns-the-stages.md): `via` is recorded once, at
+  // `via` is recorded once, at
   // sidecar creation, as "loop" unconditionally — the flag that used to choose between a direct
   // invocation and the loop is gone now that /spec:run is the only entry point, so argv is never
   // consulted here at all.
@@ -388,7 +390,7 @@ if (!STATE_ONLY) {
   saveSidecar()
 }
 
-// ---- wave derivation (D2/Behavior) ---------------------------------------------------------------
+// ---- wave derivation ---------------------------------------------------------------
 function computeWaveOrder() {
   const layerGroups = Array.isArray(hostConfig.layerGroups) ? hostConfig.layerGroups : []
   const nonTests = filePlanRows.filter((r) => !/^tests?$/i.test((r.layer || '').trim()) && !isBaselineRow(r))
@@ -459,7 +461,7 @@ function ensureRedCheckAdvanced() {
   saveSidecar()
 }
 
-// specs/20260910/07-post-gate-command.md D2: the literal `{testCommand}` inside
+// the literal `{testCommand}` inside
 // `postGateCommand` is replaced with the config's `testCommand` string; no other placeholder is
 // recognized. Returns null when no non-empty string postGateCommand is declared, so callers
 // never need to re-check emptiness.
@@ -470,20 +472,20 @@ function resolvePostGate() {
   return raw.split('{testCommand}').join(testCommand)
 }
 
-// specs/20260910/08-gate-sees-created-files.md D1-D5: before the gate child ever spawns, the
-// driver asks git which of the spec's own File Plan paths (D2 — nothing wider, so an out-of-plan
+// before the gate child ever spawns, the
+// driver asks git which of the spec's own File Plan paths (nothing wider, so an out-of-plan
 // creation stays untracked for scope-reconcile to catch at COMMIT) are untracked and not
 // git-ignored, and adds exactly those to the index with intent-to-add (`git add -N`). That makes
 // `git ls-files` list the path and a `statSync`-based inventory (a size or duplication baseline)
 // read its real on-disk bytes, so the ONE gate run this round already sees what the build just
 // created instead of first seeing it at review, after the checkpoint commit made it tracked.
-// The entries are never reverted (D3) — they persist through every repair round, whose own
+// The entries are never reverted — they persist through every repair round, whose own
 // fix tooling reads the same index, and are consumed by the checkpoint commit; the driver prints
 // one stderr notice naming the staged paths and the undo command. A File Plan path that is a
 // regular file on disk, neither tracked nor listed as untracked, is hidden by the host's own
-// .gitignore (D4): the driver warns and continues to the gate rather than refusing — a directory
-// path never triggers the warning. A non-zero exit from either git call refuses the mark (D5,
-// exit 2) before any gate child spawns and before any `marks.gateRuns` entry is recorded, so the
+// .gitignore: the driver warns and continues to the gate rather than refusing — a directory
+// path never triggers the warning. A non-zero exit from either git call refuses the mark (exit 2)
+// before any gate child spawns and before any `marks.gateRuns` entry is recorded, so the
 // mark is simply re-issuable once the underlying git failure is fixed.
 function stageCreatedFilePlanPaths() {
   const paths = [...new Set(filePlanRows.flatMap((r) => r.paths))]
@@ -507,7 +509,7 @@ function stageCreatedFilePlanPaths() {
   const tracked = new Set(trackedR.stdout.split('\0').filter(Boolean))
   const untrackedSet = new Set(untracked)
 
-  // D4: a File Plan path is a regular file on disk, git knows it as neither tracked nor
+  // a File Plan path is a regular file on disk, git knows it as neither tracked nor
   // untracked, and it is not a directory — the only way that combination happens is the host's
   // own .gitignore hiding it.
   const ignored = paths.filter((p) => {
@@ -542,7 +544,7 @@ function runGate() {
       ' — add File Plan test rows or a gateCommand, then re-run this driver')
   }
   stageCreatedFilePlanPaths()
-  // D1: the host's optional postGateCommand is chained into this SAME bash -c child after the
+  // the host's optional postGateCommand is chained into this SAME bash -c child after the
   // resolved scoped gate, so the repair-round bookkeeping (marks.gateRuns, REPAIR_CAP,
   // isAtRepairNow) sees exactly one gate run per round whether or not a post-gate is declared.
   // bash && short-circuits on a red scoped gate — the post-gate never runs, and the marker line
@@ -593,7 +595,7 @@ function recordIncident(cls, exit, source) {
     ', ' + source + ') — ' + marks.incidents.length + ' on this build; it lands on the stage:"build" ledger row at DONE\n')
 }
 
-// ---- prototype specs (specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md D3) ----
+// ---- prototype specs ----
 // A spec stamped `prototype: <stem>` derives REPLAY once the gate is green: the driver copies the
 // contract's test file to the host's e2eFile path, runs the host's e2eRun against the booted
 // production build, and prints a look stop that pairs each production address with its prototype
@@ -711,8 +713,7 @@ function handleLooked() {
 }
 
 // ---- mark handlers --------------------------------------------------------------------------------
-// A tests-layer File Plan row may be a glob (sanctioned by scope-reconcile.js, D2 of
-// specs/20260813/03-gate-script-mechanics.md, and expanded the same way by red-check.js). A
+// A tests-layer File Plan row may be a glob (sanctioned by scope-reconcile.js and expanded the same way by red-check.js). A
 // pattern is satisfied by at least one matching file on disk; a literal path by its own
 // existence. Expansion goes through lib/glob-match.js — never a private matcher.
 function walkTree(dir, rootDir, out = []) {
@@ -781,7 +782,7 @@ function handleRedAttributed() {
     !/^tests?$/i.test((r.layer || '').trim()) && !isBaselineRow(r) && (r.action || '').trim().toUpperCase() === 'CREATE')
   const createPaths = rows.flatMap((r) => r.paths)
 
-  // D7's resume arm already answered the residue question for this run: on a cold resume with
+  // The resume arm already answered the residue question for this run: on a cold resume with
   // landed, uncommitted work, red-check is recorded as "skipped-resume" precisely because the
   // post-image tree cannot be judged for vacuity. Every non-tests path is expected to differ from
   // base there, so refusing here would contradict the skip the driver itself recorded.
@@ -822,7 +823,7 @@ function handleRedAttributed() {
   return null
 }
 
-// A File Plan row may be a glob (specs/20260902/02-plugin-code-sweep.md D10, the same rule
+// A File Plan row may be a glob (the same rule
 // handleTestsAuthored applies): a CREATE/MODIFY pattern verifies when at least one file matches,
 // a DELETE pattern when none does. Expansion goes through lib/glob-match.js — never a private
 // matcher.
@@ -910,7 +911,7 @@ function isAtRepairNow() {
 // is recorded as an entry on the build row the driver already writes, never a row of its own,
 // so fleet-reader's escapes.byClass can join it with escape rows and the class can reach the
 // recurrence count that earns a guard — without it a class that only ever burns build time
-// scores 0 forever (host spec 20260905/07 D16). The mark never moves the state: the session
+// scores 0 forever. The mark never moves the state: the session
 // re-lands on the step it was executing.
 function handleIncident() {
   const cls = flag('--class')
@@ -961,7 +962,7 @@ function handleRepairApplied() {
     // that goes green proceeds to COMMIT instead.
     // Gate runs BEFORE the round is recorded: if the child dies with no exit code, runGate()
     // exits the process itself, and `repairs` must not have been persisted for a round that
-    // never actually completed (D1 — exit 2 leaves state unchanged).
+    // never actually completed (exit 2 leaves state unchanged).
     runGate()
     marks.repairs.push({ continued, spawned })
     saveSidecar()
@@ -1003,7 +1004,7 @@ function printDoneNow() {
 }
 
 function handleCommitted() {
-  // D3: no File Plan path — tests-layer rows included — may appear in `git status --porcelain`.
+  // no File Plan path — tests-layer rows included — may appear in `git status --porcelain`.
   const filePlanPaths = filePlanRows.flatMap((r) => r.paths)
   const dirty = gitStatusPaths(repoRoot)
   const dirtyFilePlan = filePlanPaths.filter((p) => dirty.includes(p))
@@ -1035,8 +1036,8 @@ function handleCommitted() {
 
   const runId = 'bd_' + crypto.randomBytes(6).toString('hex')
   const workers = sumWorkers()
-  // D5: model is derived HERE, at row-write time (never once at startup) — the review driver's
-  // own D2/D4 reasoning applies here too: right after /clear the new transcript has no assistant
+  // model is derived HERE, at row-write time (never once at startup) — the review driver's
+  // own reasoning applies here too: right after /clear the new transcript has no assistant
   // line yet, and by the time COMMIT runs the session has spoken many times.
   const model = sessionModel(repoRoot)
   const row = {
@@ -1048,7 +1049,7 @@ function handleCommitted() {
     model,
     runId,
     diff: { files: diffFiles, loc: diffLoc },
-    // D4: postGate records whether a non-empty postGateCommand was declared at row-write time —
+    // postGate records whether a non-empty postGateCommand was declared at row-write time —
     // the only way to later compare review-time GATE_RED rates for builds with the knob on vs off.
     gate: { finalRounds: (marks.gateRuns || []).length, postGate: resolvePostGate() !== null },
     deviations: countDeviations(),
@@ -1056,7 +1057,7 @@ function handleCommitted() {
     workers,
     incidents: marks.incidents || [],
   }
-  // D3(f): the replay evidence lands on the build row for a `prototype:` spec only — every other
+  // the replay evidence lands on the build row for a `prototype:` spec only — every other
   // spec's row shape is unaffected; review's contract leg reads this key.
   if (protoStem) {
     const rs = readReplayState() || {}
@@ -1067,7 +1068,7 @@ function handleCommitted() {
   printDoneNow()
 }
 
-// ---- D3 admission: a mark is admissible only at the state that prints it -----------------------
+// ---- admission: a mark is admissible only at the state that prints it -----------------------
 // Every handler verifies its own artifacts, but a mark whose artifact predicate is trivially true
 // at some OTHER state would otherwise land off-script: `integrated` has no artifact at all, so it
 // re-ran the gate from REPAIR (an uncounted repair round that never trips the cap) and from
@@ -1136,7 +1137,7 @@ function deriveState() {
   const w = pendingWave()
   if (w) return 'WAVE:' + w.label
   const after = afterWaves()
-  // D3(c): derived only once the gate is actually green — REPAIR/ESCALATE are unaffected.
+  // derived only once the gate is actually green — REPAIR/ESCALATE are unaffected.
   if (protoStem && after === 'COMMIT' && !replayDone(readReplayState())) return 'REPLAY'
   return after
 }
@@ -1265,7 +1266,7 @@ function commitStepBody() {
     `checkpoint commit.\n` +
     `Then: node ${__filename} ${specPath} --mark committed`
 }
-// D3(c)/(d): before a green replay this prints the invitation (boot the app, then --mark replayed);
+// Before a green replay this prints the invitation (boot the app, then --mark replayed);
 // once replay-state.json records a pass it re-prints as the look stop — same state, different
 // render — until `--mark looked` ends it.
 function replayStepBody() {

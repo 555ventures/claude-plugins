@@ -36,8 +36,9 @@
 // The JSON object is the only channel available on an allow: stderr from a hook that exits 0
 // goes to the debug log and the model never sees it.
 // Fail-open: any parse failure or unexpected shape allows the call (never wedge).
+// Owner: specs/20260902/06-mocks-provenance-ledger.md.
 //
-// specs/20260902/06-mocks-provenance-ledger.md D5/D6: while a mocks run (design/mocks/
+// While a mocks run (design/mocks/
 // status.json, state !== APPROVED) or a genesis run (.claude/genesis/status.json, handoff
 // null) is live under the resolved root, a "derive" judge verdict is treated as pass — every
 // question inside those runs is a user decision by construction, so the session is not even
@@ -52,7 +53,7 @@ const MIN_RECOMMENDED_DESC = 40 // a recommendation must also say WHY
 const JUDGE_MODEL = 'claude-haiku-4-5-20251001'
 const JUDGE_TIMEOUT_MS = 30000 // hook budget is 60s; leave headroom to fail open
 
-// D5: product-stage exemption. `root` resolution mirrors spec-state-gate.sh
+// Product-stage exemption. `root` resolution mirrors spec-state-gate.sh
 // (${CLAUDE_PROJECT_DIR:-.}) and spec-session-stamp.sh (.cwd): env var first, then the hook
 // input's own `cwd`, then process.cwd(). Fail-open throughout — any read/parse error means
 // "not in a product stage", never "block".
@@ -146,7 +147,7 @@ function judgePrompt(questions) {
 // Returns null when there is nothing to say, or an advisory string to hand back to the model
 // alongside an ALLOWED call. Never blocks — see the "why tier 2 never blocks" note above.
 // Fail-open throughout.
-// D5: `input` is the parsed hook JSON, used only to resolve productStageRoot for the derive
+// `input` is the parsed hook JSON, used only to resolve productStageRoot for the derive
 // exemption; `rewrite` verdicts and tier-1 are unaffected by it.
 function judge(questions, input) {
   if (process.env.SPEC_QUESTION_JUDGE === 'off') return null

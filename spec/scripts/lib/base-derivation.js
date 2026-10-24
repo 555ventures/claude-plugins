@@ -8,7 +8,9 @@
 // therefore lets a stage judge a range that does not describe the build: with `main` carrying the
 // build's own commits, `main...HEAD` is empty, every diff-scoped leg reports zero and green
 // (at-risk files 0, reconcile listing every planned file "unrealized"), and the reviewer is handed
-// nothing. Owner: specs/20260901/01-build-driver.md.
+// nothing.
+//
+// Owner: specs/20260901/01-build-driver.md.
 //
 // THE REASON THIS IS A MODULE AND NOT A PER-CONSUMER CONSTANT: three consumers derive a base, and
 // three independent spellings of one ordering rule is the shape that lets a correction reach one

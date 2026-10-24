@@ -1,8 +1,9 @@
 'use strict'
 // lib/glob-match.js — two related but distinct exports over one glob syntax.
+// Owner: specs/20260812/02-hotspot-audit.md.
 //
-// `globMatch(glob, filePath)` is the general-purpose matcher (D17, specs/20260812/02-hotspot-
-// audit.md) — extracted verbatim from scope-reconcile.js's private globMatch so its consumers
+// `globMatch(glob, filePath)` is the general-purpose matcher,
+// extracted verbatim from scope-reconcile.js's private globMatch so its consumers
 // share one derivation instead of drifting into private matchers (both
 // adversarial-check refuters on that spec flagged the second private matcher independently). It
 // has FIVE consumers today: ac-matrix.js, collision-closure.js, init-gen.js, red-check.js,
@@ -18,8 +19,8 @@
 // `capabilities.forge` — this module keeps owning the exclusion set, host-config.js owns the file
 // (absent/unparseable → {}, unchanged contract).
 //
-// `.claude/agent-memory/**` is in BASELINE_GLOBS (D6, specs/20260823/04-review-close-
-// hardening.md): no File Plan can enumerate the memories a worker will write mid-build, so a
+// `.claude/agent-memory/**` is in BASELINE_GLOBS:
+// no File Plan can enumerate the memories a worker will write mid-build, so a
 // changed agent-memory file is structurally out-of-plan on every worker-dispatching build. Review
 // CLOSE already disposes every touched memory per-file on content, which is strictly stronger than
 // a path-based scope check — this is the fix, not a new host-config flag (the class is universal
@@ -29,7 +30,7 @@
 // it.
 //
 // What this module deliberately does NOT do: validate glob syntax, or surface config read errors
-// (a broken config skips the additive exclusions, matching AC-20260812-02-3's absent-config
+// (a broken config skips the additive exclusions, matching the absent-config
 // contract).
 //
 // Exit codes: n/a (library, not an entrypoint).
@@ -57,7 +58,7 @@ function globMatch(glob, filePath) {
 }
 
 // The additive pipeline-noise baseline — always excluded regardless of host config.
-// `.claude/agent-memory/**` (D6, specs/20260823/04-review-close-hardening.md): worker memory
+// `.claude/agent-memory/**`: worker memory
 // writes are structurally out-of-plan on every dispatching build; see the header above.
 // `.claude/spec-runs/**`: the retained-evidence directory the review driver itself
 // writes via its mandatory `--retain` on every hard-stop/escalation/close (and a now-retired

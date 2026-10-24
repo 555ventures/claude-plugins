@@ -3,8 +3,8 @@
 // any gate, probe, or repair path is reachable, instead of an ordinary red the gate cannot tell
 // apart from broken code.
 //
-// WHY THIS EXISTS: specs/20260815/05-env-preflight.md — (runId
-// wf_e4778d03-81b, observed twice): with a suite-gating variable unset, the gate failed at env()
+// Owner: specs/20260815/05-env-preflight.md
+// WHY THIS EXISTS: (runId wf_e4778d03-81b, observed twice) with a suite-gating variable unset, the gate failed at env()
 // parse time, wf-build classified that as implementation breakage, and burned a full repair
 // round it could not possibly win — the code the round would edit was never the code that
 // failed. Hosts declare their gating variables in `.claude/spec.config.json`'s `testEnv` array

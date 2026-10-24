@@ -4,7 +4,8 @@
 // escape-class (amendment) row must satisfy, the join key both row shapes share, and three
 // pure functions: validateEscapeRow, validateAmendmentRow, joinAmendments.
 //
-// Why: specs/20260901/07-escape-class-contract.md D1. Before this module, fleet-reader.js's
+// Owner: specs/20260901/07-escape-class-contract.md.
+// Why: before this module, fleet-reader.js's
 // PREVENTED_BY/FOUND_BY/SEVERITY sets were inline and nothing validated the `class` field at
 // all — a session `printf` could write `preventedBy:"test"` and
 // `foundBy:"build"` straight into a fleet ledger, and a null `class` with no excuse was
@@ -15,7 +16,7 @@
 // What this deliberately does NOT do: read or write a ledger file (escape-row.js owns the
 // append; fleet-reader.js owns discovery), decide the effective class for a row (the caller
 // joins joinAmendments' map against its own rows — this module never consults escape rows
-// from inside joinAmendments, D1 Contracts), or offer a CLI of its own.
+// from inside joinAmendments), or offer a CLI of its own.
 //
 // Exit codes: n/a (library, not an entrypoint).
 
@@ -27,13 +28,13 @@ const CLASS_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const VIA = ['backfill', 'manual']
 
 // escapeKey: the join key both an escape row and its escape-class amendment share. An escape
-// row has no escapeTs of its own, so it falls back to its own ts (D1 Contracts).
+// row has no escapeTs of its own, so it falls back to its own ts.
 function escapeKey(row) {
   const ts = row.escapeTs !== undefined && row.escapeTs !== null ? row.escapeTs : row.ts
   return `${ts}\0${row.spec}\0${row.file}`
 }
 
-// Shared class/unclassedReason rules (D1 Contracts closed reason set) — identical on an escape
+// Shared class/unclassedReason rules (closed reason set) — identical on an escape
 // row and an amendment row. `amended` suppresses class-missing on an escape row whose key has
 // a joining amendment (that amendment supplies the effective class/reason instead); it is
 // never passed for an amendment row itself.
@@ -52,16 +53,15 @@ function classReasons(row, { amended = false } = {}) {
 }
 
 // tristate(v): true for the four values validateEscapeRow's killedMatch/softMatch keys may
-// hold — absent, true, false or null (specs/20260912/04-softs-get-a-reader.md D3).
+// hold — absent, true, false or null.
 function tristate(v) {
   return v === undefined || v === true || v === false || v === null
 }
 
 // validateEscapeRow(row, {amended}) -> string[] (empty = valid). preventedBy/foundBy/severity
-// keep fleet-reader's pre-existing reason spellings (D1 Contracts: "the three existing reason
-// names keep their spelling"). killedMatch and softMatch share one tri-state predicate
-// (D3): absent, true, false or null passes; any other value is a reason, appended after the
-// three enum reasons in that order.
+// keep fleet-reader's pre-existing reason spellings. killedMatch and softMatch share one
+// tri-state predicate: absent, true, false or null passes; any other value is a reason,
+// appended after the three enum reasons in that order.
 function validateEscapeRow(row, { amended = false } = {}) {
   const reasons = classReasons(row, { amended })
   if (!PREVENTED_BY.includes(row.preventedBy)) reasons.push('preventedBy-out-of-enum')
@@ -84,7 +84,7 @@ function validateAmendmentRow(row) {
 // joinAmendments(rows) -> Map<key, {class, unclassedReason, ts}>: for every stage:"escape-class"
 // row, latest ts wins; equal ts -> later read order wins (>= on the comparison, since rows
 // arrive in read order). Never consults escape rows — the caller joins this map against its own
-// escape rows and detects unmatched amendments itself (D1 Contracts).
+// escape rows and detects unmatched amendments itself.
 function joinAmendments(rows) {
   const map = new Map()
   for (const row of rows) {

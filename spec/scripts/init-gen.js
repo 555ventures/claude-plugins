@@ -3,7 +3,9 @@
 // init-gen.js probe --root <dir> [--test-command "<cmd>"] [--sample <n>]
 // init-gen.js generate --root <dir> --profile <path> [--refresh]
 //
-// specs/20260822/02-init-generation-script.md: the review-legs.js inversion applied to
+// Owner: specs/20260822/02-init-generation-script.md.
+//
+// The review-legs.js inversion applied to
 // /spec:init: file-generation phases are generated deterministically — never hand-performed as prose
 // re-executed by a model each bootstrap — config, rules, agents, skills, settings merge,
 // patterns harness, manifest, gitignore/gitattributes mechanics. That drifts per session/model
@@ -12,12 +14,12 @@
 // read-only findings the interview adjudicates. Two dated incidents behind this shape:
 // (1) the locked init.md idempotency check `git check-ignore -q
 // .claude/worktrees` exits 1 on a fresh host even when the ignore entry exists (dir-only
-// pattern, path not yet on disk) — D4 retires it for a child-path probe (`.../worktrees/x`).
+// pattern, path not yet on disk) — the child-path probe replaces it (`.../worktrees/x`).
 // (2) an at-risk escape: a shared script's return value changed and reddened a
-// suite outside the spec's own File Plan tests rows, undetected until much later — D8/D9 make
+// suite outside the spec's own File Plan tests rows, undetected until much later — the probes make
 // the vacuous-pass and inert-at-risk-leg classes visible at the one moment (init) they're cheap
 // to fix.
-// (3) specs/20260824/05-design-doctrine-cut.md D6: generate does not write a
+// (3) generate does not write a
 // `specs/**/*.design/` gitignore line — the render gate never wrote that sidecar, so init must
 // not provision it either. The `.claude/worktrees/` entry is unaffected.
 //
@@ -32,14 +34,14 @@
 //             2 = usage error / invalid or incomplete profile (missing field, a required- or
 //                 optional-when-present array field that isn't an array, or a field that must
 //                 be a plain object but isn't, named + remedy) / unparseable Worker Contract
-//                 (grounding-contract.md heading drifted, D6/A7) / existing
+//                 (grounding-contract.md heading drifted) / existing
 //                 .claude/settings.json unreadable, a directory, invalid JSON, or not a JSON
-//                 object (D5 merge impossible — nothing written)
+//                 object (merge impossible — nothing written)
 //             3 = an existing target differs from what the profile would produce and
 //                 --refresh was not given — every target left byte-identical, nothing written.
 //                 The config target is compared with the host's own `walkthrough` block carried
 //                 into it, and a config holding only generatedBy, contractHash and walkthrough
-//                 is not an offender (specs/20261005/02-connect-runs-first.md D6-D8)
+//                 is not an offender
 //             4 = unexpected internal error (uncaught throw) — the host tree may be
 //                 partially written; remedy = re-run generate. Never a verdict; always a bug.
 //   probe:    0 = always (adverse findings — no claude CLI, a vacuous test runner, an inert
@@ -86,19 +88,19 @@ const SELF_VERIFY_LITERAL = '`bun lint`, `bun test:run <your files>`, `bunx tsc 
 // probe
 // ============================================================================================
 
-// D4: idempotency by executed child-path probe — never the bare-directory form that falsified
-// init.md's locked prose (A5). Each entry carries a representative descendant path to probe.
+// Idempotency by executed child-path probe — never the bare-directory form that falsified
+// init.md's locked prose. Each entry carries a representative descendant path to probe.
 const IGNORE_ENTRIES = [
   { line: '.claude/worktrees/', sample: '.claude/worktrees/x' },
   // spec-review-driver.js keeps its re-entry sidecar at specs/<date>/<spec>.review/ for the whole
   // run (deleted only at DONE) — unignored, a host gate that sweeps the whole tree reds on the
   // pipeline's own scratch before a reviewer dispatches (a host lint/format gate, e.g. prettier --check).
   { line: 'specs/**/*.review/', sample: 'specs/20260101/01-x.review/review-state.json' },
-  // specs/20260901/01-build-driver.md D5: spec-build-driver.js keeps its own re-entry sidecar at
+  // spec-build-driver.js keeps its own re-entry sidecar at
   // specs/<date>/<spec>.build/ for the build run's whole lifetime (deleted only at DONE) — the
   // same host-gate mechanism as the .review/ entry above, closed here for build.
   { line: 'specs/**/*.build/', sample: 'specs/20260101/01-x.build/build-state.json' },
-  // specs/20260901/02-run-provenance.md D6: spec-session-stamp.sh writes a per-session scratch
+  // spec-session-stamp.sh writes a per-session scratch
   // file at .claude/spec-session.json on every /spec: prompt — a per-session file must never ride
   // a close commit (the same sidecar-scratch class as above). A single bare file, not a directory glob, so the
   // probe is the literal path itself rather than a child-path sample.
@@ -107,7 +109,7 @@ const IGNORE_ENTRIES = [
 
 // The same executed probe answers the drift question: an entry added to this list after a host
 // ran /spec:init never reaches that host (init writes .gitignore once), and nothing else audited
-// it — a host initialised before D6 of specs/20260901/02 surfaces its un-ignored session stamp
+// it — a host initialised before this entry existed surfaces its un-ignored session stamp
 // as a spurious out-of-plan reconcile finding. `ignore-check` is the read-only sweep
 // /spec:doctor runs (doctor.md check 12); `--fix` is ensureGitignore itself.
 function missingIgnoreEntries(hostRoot) {
@@ -143,7 +145,7 @@ if (sub === 'probe') {
   process.exit(0)
 }
 
-// D8: executes `<cmd> <generated nonexistent path>` in the host root. exit 0 means the runner
+// Executes `<cmd> <generated nonexistent path>` in the host root. exit 0 means the runner
 // vacuously "passed" against a path that matches nothing (the at-risk escape's class);
 // exit != 0 means it fails loud, which is the safe/expected shape. A spawn failure (runner not
 // found) reports failsLoud:true too — a runner that can't even be invoked cannot be trusted to
@@ -155,10 +157,10 @@ function probeTestCommand(cmd, hostRoot) {
   return { failsLoudOnNoMatch: exit !== 0, exit }
 }
 
-// D9: samples up to `sample` tracked non-test files and shells to scope-reconcile.js's
+// Samples up to `sample` tracked non-test files and shells to scope-reconcile.js's
 // additive --probe-at-risk mode (the sole stem-derivation, reused — never re-implemented here).
 // Best-effort: any failure (no git, no tracked files, scope-reconcile error) omits the field
-// entirely rather than failing the probe (probe never blocks, D1's contract).
+// entirely rather than failing the probe (probe never blocks).
 function probeAtRisk(hostRoot, sampleN) {
   try {
     const ls = spawnSync('git', ['-C', hostRoot, 'ls-files'], { encoding: 'utf8' })
@@ -210,7 +212,7 @@ function has(obj, dotted) {
   return cur !== undefined && cur !== null
 }
 
-// D1/D2: the two refusal shapes every optional-array and required-object field share. Kept as
+// The two refusal shapes every optional-array and required-object field share. Kept as
 // named helpers so every caller prints the identical message shape (round-3 ruling: a
 // non-array/non-object is a shape refusal, never an enumeration).
 function mustBeArray(field, v) {
@@ -243,7 +245,7 @@ function validateProfile(p) {
     'probeOutcomes.testCommand', 'probeOutcomes.atRisk',
   ]
   for (const field of required) if (!has(p, field)) fieldMissing(field)
-  // D1: extraAllow/extraDeny are optional (the `|| []` default in mergeSettings stands when
+  // extraAllow/extraDeny are optional (the `|| []` default in mergeSettings stands when
   // absent) — but a *present* non-array silently spreads per character (a string) or throws
   // "is not iterable" (a number/object) inside mergeSettings, so a present value gets the same
   // shape check as a required array, before generate ever reaches the merge.
@@ -252,7 +254,7 @@ function validateProfile(p) {
       if (p.settings[f] !== undefined && p.settings[f] !== null) mustBeArray(`settings.${f}`, p.settings[f])
     }
   }
-  // D2: `'k' in v` throws a bare TypeError for any primitive `v` (42, "x", ...) — a plain-object
+  // `'k' in v` throws a bare TypeError for any primitive `v` (42, "x", ...) — a plain-object
   // guard ahead of each `in`-operator loop turns that crash into the same named exit-2 refusal
   // the missing-field case already uses.
   if (p.config) {
@@ -274,7 +276,7 @@ function validateProfile(p) {
   }
 }
 
-// D6/A7: the Worker Contract + Tests-kind addendum are extracted at runtime from the plugin's
+// The Worker Contract + Tests-kind addendum are extracted at runtime from the plugin's
 // own grounding-contract.md, never a second copy. Unparseable (heading or fence not found) ->
 // exit 2 naming the file and the heading it expected.
 function fencedBlock(src, heading) {
@@ -407,7 +409,7 @@ function renderPatternsScript(p) {
   return lines.join('\n')
 }
 
-// ---- target list (D5: every one of these is subject to the refuse-or-refresh scan) ----------
+// ---- target list (every one of these is subject to the refuse-or-refresh scan) ----------
 
 function buildFileTargets(p) {
   const targets = []
@@ -454,7 +456,7 @@ function buildManifestObject(hostRoot, p) {
     checks.push({ claim: 'git remote / CI activation', kind: 'inert', target: 'no git remote configured for this host' })
   }
 
-  // D8/A4: the negated exec form keeps the testCommand activation claim permanently
+  // The negated exec form keeps the testCommand activation claim permanently
   // re-verifiable (doctor check 6b) instead of a one-shot interview answer.
   const tc = p.probeOutcomes.testCommand
   if (tc.failsLoud) {
@@ -467,7 +469,7 @@ function buildManifestObject(hostRoot, p) {
     checks.push({ claim: 'testCommand accepted-risk: vacuous pass on no-match', kind: 'inert', target: tc.acceptedReason })
   }
 
-  // D9: an inapplicable at-risk leg is an explicit inert row, not a silent drop.
+  // An inapplicable at-risk leg is an explicit inert row, not a silent drop.
   const ar = p.probeOutcomes.atRisk
   if (!ar.applicable) {
     checks.push({ claim: 'at-risk leg applicability', kind: 'inert', target: ar.reason })
@@ -478,7 +480,7 @@ function buildManifestObject(hostRoot, p) {
   return { checks }
 }
 
-// ---- comparison / write helpers (D5) ---------------------------------------------------------
+// ---- comparison / write helpers ---------------------------------------------------------
 
 function sortKeysDeep(v) {
   if (Array.isArray(v)) return v.map(sortKeysDeep)
@@ -525,7 +527,7 @@ function writeTarget(hostRoot, t) {
   if (t.executable) fs.chmodSync(full, 0o755)
 }
 
-// D4/A6: gitattributes detection stays `git check-attr merge` (unlike the ignore check, this
+// gitattributes detection stays `git check-attr merge` (unlike the ignore check, this
 // form was never falsified — no child-path substitute needed here).
 function ensureGitattributes(hostRoot) {
   const r = spawnSync('git', ['check-attr', 'merge', '--', '.claude/spec-runs.jsonl'], { cwd: hostRoot, encoding: 'utf8' })
@@ -537,7 +539,7 @@ function ensureGitattributes(hostRoot) {
   fs.writeFileSync(p, content)
 }
 
-// D5: settings.json is the exception to refuse-or-refresh — always merge-preserving, in both
+// settings.json is the exception to refuse-or-refresh — always merge-preserving, in both
 // modes. An existing deny entry covering a config-derived would-be allow is kept and reported,
 // never overridden.
 function deriveAllowEntries(config) {
@@ -573,7 +575,7 @@ function mergeSettings(hostRoot, existing, p) {
   return { settingsPath, settingsObj, conflicts }
 }
 
-// ---- version / contract hash (D3) -------------------------------------------------------------
+// ---- version / contract hash -------------------------------------------------------------
 
 function readVersion() {
   const pj = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), 'utf8'))
@@ -586,11 +588,11 @@ function computeContractHash() {
 
 // ---- main generate flow -----------------------------------------------------------------------
 
-// D5: settings.json is always merge-preserved, never rebuilt — so an unreadable, unparseable, or
+// settings.json is always merge-preserved, never rebuilt — so an unreadable, unparseable, or
 // non-object existing file makes the merge impossible rather than emptyable. Read, parsed, and
 // shape-checked once, here, pre-flight, before any target is written (both modes: --refresh's
 // overwrite semantics apply only to script-owned targets, and settings.json is explicitly not
-// one). D3 (round 3): the merge computation itself moved OFF this pre-flight block and into the
+// one). The merge computation itself moved OFF this pre-flight block and into the
 // try boundary below, as its first statement — still ahead of buildFileTargets and every write,
 // so no settings-derived throw can follow a write; a value that parses as valid JSON but isn't a
 // usable object (`null`, a top-level array) is still caught right here by the shape check below,
@@ -603,7 +605,7 @@ if (fs.existsSync(existingSettingsPath)) {
   try {
     rawSettings = fs.readFileSync(existingSettingsPath, 'utf8')
   } catch (e) {
-    // D4: EISDIR (A2: observed on darwin) is its own remedy — a directory can't be chmod'd into
+    // EISDIR (observed on darwin) is its own remedy — a directory can't be chmod'd into
     // a file, so the generic permissions message would send the operator down a dead end. Every
     // other read failure (permissions, ...) keeps the existing chmod remedy verbatim.
     if (e.code === 'EISDIR') {
@@ -626,19 +628,19 @@ if (fs.existsSync(existingSettingsPath)) {
   }
 }
 
-// D6.4 round 2: everything below can hit an unforeseen host filesystem state (a confirmed repro:
+// Everything below can hit an unforeseen host filesystem state (a confirmed repro:
 // .gitignore is a directory, so ensureGitignore's read throws EISDIR after all targets are
 // written). A pre-flight check can't be written for every such case, so the remainder is boundary-
 // wrapped — any uncaught throw here becomes an unmistakable exit 4, never a collision with the
 // documented 0/1/2/3 verdicts. process.exit() calls inside do not throw, so they pass through.
 try {
-  // D3 (round 3): the merge is computed here, INSIDE the boundary, as its first statement — still
+  // The merge is computed here, INSIDE the boundary, as its first statement — still
   // ahead of buildFileTargets and every write (round 2's no-settings-throw-after-a-write ordering
-  // holds), and now also covered by this same exit-4 boundary for the unenumerable residue A1
-  // describes (D1/D2's shape checks keep JSON-representable inputs clear of a throw here).
+  // holds), and now also covered by this same exit-4 boundary for the unenumerable residue that
+  // remains (the shape checks keep JSON-representable inputs clear of a throw here).
   const merged = mergeSettings(root, existingSettings, profile)
   const fileTargets = buildFileTargets(profile)
-  // 20261005/02 D6/D7: the host's own walkthrough block is carried verbatim into the config target,
+  // The host's own walkthrough block is carried verbatim into the config target,
   // and a config holding nothing but that block and the two stamps counts as not yet generated.
   const diskCfg = readExistingConfigObject(root)
   let ungenerated = false
@@ -691,7 +693,7 @@ try {
     process.exit(1)
   }
 
-  // D3: stamp only after a green manifest-check.
+  // Stamp only after a green manifest-check.
   const cfgPath = configPath(root)
   const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
   cfg.generatedBy = 'spec@' + readVersion()

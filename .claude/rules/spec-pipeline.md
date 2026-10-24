@@ -136,6 +136,12 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
 - Duplication calibration: three or more near-identical blocks in one diff is a finding
   naming the extraction — batch-scoped workers never see the third repetition; the reviewer
   is the first eye that can.
+- A value spliced raw into a shell command string (`bash -c`, a template placeholder joined
+  into text) without quoting or an environment variable is **hard** — a `&`, `;` or space ends
+  the command early (escaped specs/20261007/01-approve-writes-a-behaviour-contract.md).
+- A test that judges the working tree against `main` or a merge base is **hard** — it certifies
+  one commit yet goes red on every later change; pin the commit it certifies instead
+  (escaped specs/20261024/04-scripts-drop-their-inline-changelog.md).
 
 ## Gotchas (evidence-cited)
 

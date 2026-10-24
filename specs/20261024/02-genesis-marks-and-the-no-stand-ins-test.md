@@ -1,6 +1,6 @@
 ---
 date: 2026-10-24
-status: implementing
+status: done
 tier: standard
 area: genesis
 breaking: false

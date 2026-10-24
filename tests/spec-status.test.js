@@ -274,6 +274,55 @@ test('a superseded brief raises neither out-of-order nor skipped-brief; a plain 
     'an ordinary skipped brief would go silent — the superseded carve-out must not swallow real skips')
 })
 
+// /spec:fix 2026-10-24: a superseded brief is its own derived status, not a side flag. The
+// escape: zubu-web rendered "⬜ 04–07 unplanned (4 briefs)" over three retired briefs, and the
+// --next fallback pick (fires when every spec is done or blocked) could recommend /spec:plan on
+// a retired brief — the render and the pick switched on status alone while the flag lived
+// beside it. Three consumers asserted at once: --json status, the roadmap run, the pick.
+test('a superseded brief derives status superseded: its own ⛔ roadmap run, never in the unplanned count, never the --next fallback pick', () => {
+  const dir = host({
+    briefs: {
+      '01-auth.md': BRIEFS['01-auth.md'],
+      '02-billing.md': '# 02 — Billing\n\n> **Superseded by** brief 04.\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n',
+      '03-reports.md': '# 03 — Reports\n\n> **Superseded by** brief 04.\n\nPhase: P1 · Depends on: 01 · Primary workspaces: web\n',
+      '04-export.md': '# 04 — Export\n\nPhase: P1 · Depends on: 01 · Primary workspaces: web\n',
+    },
+    specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01' },
+  })
+  const j = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(j.status, 0, j.stderr)
+  const out = JSON.parse(j.stdout)
+  assert.deepStrictEqual(out.briefs.map(b => b.status), ['done', 'superseded', 'superseded', 'unplanned'],
+    'status is the one derivation every consumer reads — the retire state must live there, not in a side flag')
+  assert.ok(!('superseded' in out.briefs[1]), 'D6 (20260823/08): the raw flag stays off --json; status carries the fact')
+
+  const r = runNode(SCRIPT, ['--root', dir])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /⛔ 02–03\s+P0–P1\s+superseded \(2 briefs\)/,
+    'retired briefs collapse into their own ⛔ run: ' + r.stdout)
+  assert.match(r.stdout, /⬜ 04 export\s+P1\s+unplanned\n/, 'the one live unplanned brief stands alone: ' + r.stdout)
+  assert.doesNotMatch(r.stdout, /unplanned \(\d+ briefs\)/, 'the zubu-web symptom — retired briefs counted as unplanned: ' + r.stdout)
+
+  const n = runNode(SCRIPT, ['--root', dir, '--next', '--json'])
+  assert.strictEqual(n.status, 0, n.stderr)
+  const next = JSON.parse(n.stdout).next
+  assert.strictEqual(next.length, 1, 'every spec done → exactly the fallback brief pick: ' + n.stdout)
+  assert.strictEqual(next[0].brief, '04', 'the pick skips retired 02 and 03 (dependencies met) and lands on 04: ' + n.stdout)
+
+  // Decision 2: the banner never hides live work — a retired brief with a spec still open stays
+  // in-flight (and under Next) until that spec lands.
+  const live = host({
+    briefs: { '01-auth.md': BRIEFS['01-auth.md'], '02-billing.md': '# 02 — Billing\n\n> **Superseded by** brief 03.\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n' },
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260710/02-billing.md': 'date: 2026-07-10\nstatus: implementing\nbrief: 02',
+    },
+  })
+  const l = runNode(SCRIPT, ['--root', live, '--json'])
+  assert.strictEqual(l.status, 0, l.stderr)
+  assert.strictEqual(JSON.parse(l.stdout).briefs[1].status, 'in-flight', 'a bannered brief with an open spec is not retired yet')
+})
+
 test(`AC-20260901-10-4: a design: true spec routes to /spec:run in the dashboard, not ${RETIRED_DESIGN}`, () => {
   const dir = host({
     briefs: {},

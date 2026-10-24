@@ -296,9 +296,17 @@ for (const s of specs) {
   if (obs.row) observationRows.set(s.path, obs.row)
 }
 
+// Brief status is derived HERE and nowhere else — every consumer (render, --next pick, the
+// anomaly loops, the queue overlay) switches on `status` alone. `superseded` is the retire
+// state for a brief carrying the "Superseded by" banner (lib/queue.js isSupersededBriefText)
+// with no spec still in flight: a retired brief with live work keeps `in-flight` so the work
+// stays visible. The incident this pins: superseded briefs rendered as ⬜ unplanned and could
+// be picked by --next's fallback because two consumers never consulted the side flag.
 for (const b of briefs) {
   b.specs = specs.filter(s => s.brief === b.num)
-  b.status = b.specs.length === 0 ? 'unplanned' : b.specs.every(s => DONE(s.status)) ? 'done' : 'in-flight'
+  const allDone = b.specs.every(s => DONE(s.status))
+  b.status = b.superseded && allDone ? 'superseded'
+    : b.specs.length === 0 ? 'unplanned' : allDone ? 'done' : 'in-flight'
 }
 const briefByNum = new Map(briefs.map(b => [b.num, b]))
 
@@ -358,7 +366,7 @@ if (queueOverlay.on) {
   // then append any on-disk non-done, non-superseded brief absent from the queue LAST, with
   // no stamp and no anomaly.
   const onDiskBriefs = briefs
-    .filter(b => b.status !== 'done' && !b.superseded)
+    .filter(b => b.status !== 'done' && b.status !== 'superseded')
     .map(b => ({ num: b.num }))
   const stripped = stripAutoPlaced(queueOverlay.items)
   const deduped = dedupeItems(stripped)
@@ -432,11 +440,11 @@ for (const b of briefs) {
 // (specs/20260903/05-status-diet.md): skipped-brief is a DECIDE anomaly — the remedy is a
 // choice ("plan it now?"), so it carries line/ask/paste alongside detail (Contracts).
 for (const b of briefs) {
-  if (b.status === 'unplanned') continue
+  if (b.status === 'unplanned' || b.status === 'superseded') continue
   for (const d of b.depends_on) {
     const dep = briefByNum.get(d)
     if (!dep) pushAnomaly({ kind: 'unknown-dependency', detail: `${b.file} depends on brief ${d}, which doesn't exist` })
-    else if (dep.status === 'unplanned' && !dep.superseded) pushAnomaly({
+    else if (dep.status === 'unplanned') pushAnomaly({
       kind: 'skipped-brief',
       detail: `brief ${b.num} (${b.name}) is ${b.status} but its dependency ${d} (${dep.name}) is unplanned — likely skipped; plan it with /spec:plan ${dep.file}`,
       line: `Brief ${b.num} (${b.name}) moved on, but its dependency ${d} (${dep.name}) was never planned.`,
@@ -449,12 +457,12 @@ for (const b of briefs) {
 // Sequence-order skip: an earlier unplanned brief sitting below any later brief that moved.
 // D2: also a DECIDE anomaly (Contracts) — the remedy is "still wanted?", a choice, not a fix.
 // A superseded brief (D6, 20260823/08) is retired, not skipped — it never fires here, nor as a
-// skipped-brief dependency above.
-const moved = briefs.filter(b => b.status !== 'unplanned')
+// skipped-brief dependency above, nor does it count as "moved".
+const moved = briefs.filter(b => b.status !== 'unplanned' && b.status !== 'superseded')
 if (moved.length) {
   const maxMoved = moved.reduce((m, b) => briefOrd(b.num) > briefOrd(m.num) ? b : m).num
   for (const b of briefs) {
-    if (b.status === 'unplanned' && !b.superseded && briefOrd(b.num) < briefOrd(maxMoved) && !anomalies.some(a => a.detail.includes(`dependency ${b.num} `))) {
+    if (b.status === 'unplanned' && briefOrd(b.num) < briefOrd(maxMoved) && !anomalies.some(a => a.detail.includes(`dependency ${b.num} `))) {
       pushAnomaly({
         kind: 'out-of-order',
         detail: `brief ${b.num} (${b.name}) is unplanned while later brief ${maxMoved} has moved — deliberate reordering or a skip; if it still matters: /spec:plan ${b.file}`,
@@ -778,7 +786,7 @@ const waitClause = n => `${n} more open`
   // plus 🧹 Hygiene before the same footer. No anomaly fold, no ⚠️ Anomalies section, no 📡
   // block, no headline verdict line survive anywhere (D1/D8).
   const out = []
-  const BRIEF_ICON = { done: '✅', 'in-flight': '🔨', unplanned: '⬜' }
+  const BRIEF_ICON = { done: '✅', 'in-flight': '🔨', unplanned: '⬜', superseded: '⛔' }
 
   // D2/D5(a): a red observation is a dashboard-level alarm — it decides the footer glyph
   // outright and is never folded into the ordinary anomaly-driven verdict. "ok" never renders.
@@ -795,17 +803,18 @@ const waitClause = n => `${n} more open`
     for (let i = 0; i < briefs.length; i++) {
       const b = briefs[i]
       // Runs of same-status briefs with nothing actionable per row (unplanned = no state yet,
-      // done = all specs green) collapse to one range row — avoiding a long run of shipped
-      // history filling the screen. In-flight briefs never collapse.
+      // done = all specs green, superseded = retired) collapse to one range row — avoiding a
+      // long run of shipped history filling the screen. In-flight briefs never collapse.
       let j = i
-      while ((b.status === 'unplanned' || b.status === 'done') && j + 1 < briefs.length && briefs[j + 1].status === b.status) j++
+      const collapsible = b.status === 'unplanned' || b.status === 'done' || b.status === 'superseded'
+      while (collapsible && j + 1 < briefs.length && briefs[j + 1].status === b.status) j++
       if (j > i) {
         const run = briefs.slice(i, j + 1)
         const phases = [...new Set(run.map(x => x.phase).filter(Boolean))]
         const phase = phases.length > 1 ? `${phases[0]}–${phases[phases.length - 1]}` : phases[0] || '—'
         const tail = b.status === 'done'
           ? `done (${run.length} briefs, ${run.reduce((n, x) => n + x.specs.length, 0)} specs)`
-          : `unplanned (${run.length} briefs)`
+          : `${b.status} (${run.length} briefs)`
         rows.push({ icon: BRIEF_ICON[b.status], label: `${b.num}–${briefs[j].num}`, phase, tail })
         i = j
         continue
@@ -816,7 +825,7 @@ const waitClause = n => `${n} more open`
       // list wraps hard on narrow terminals and duplicates what's below.
       const bar = total
         ? '▓'.repeat(nDone === total ? 10 : Math.min(9, Math.floor(nDone / total * 10))).padEnd(10, '░') + ` ${nDone}/${total}`
-        : 'unplanned'
+        : b.status
       rows.push({ icon: BRIEF_ICON[b.status], label: `${b.num} ${b.name}`, phase: b.phase || '—', tail: bar })
     }
     const lw = Math.max(...rows.map(r => r.label.length))

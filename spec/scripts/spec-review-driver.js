@@ -14,8 +14,10 @@
 // the Canonical Delta + deviations fold, the close commit, merge strategy, and conflict
 // resolution). State is re-derived from spec frontmatter + the <spec>.review/
 // sidecar + on-disk artifacts on EVERY invocation — a mark whose artifact vanished is demanded
-// again, and the fix-iteration cap is counted from manifest-<n>.jsonl files actually present on
-// disk plus this spec's uncleared `escalated:true` ledger rows, never a sidecar counter
+// again, and the fix-iteration cap is counted from the `scope: fix-delta` stamps on the
+// manifest-<n>.jsonl files actually present on disk (a manifest's number is only a storage key;
+// the live iteration is the sidecar's recorded `iteration`) plus this spec's uncleared
+// `escalated:true` ledger rows, never a sidecar counter
 // (hand-editing the sidecar cannot reach ESCALATE, and deleting it cannot reset the cap). Every child
 // process this driver spawns — legs, all three verdict.js passes, spec-status --next, every
 // merge-back.sh subcommand, every git call — is routed through one
@@ -817,6 +819,22 @@ function readManifestRows(p) {
   return fs.readFileSync(p, 'utf8').split('\n').filter((l) => l.trim())
     .map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
 }
+// specs/20261024/01-review-driver-reads-recorded-facts.md D1/D2: a manifest's number is a storage
+// key only. Its kind is the `scope` review-legs.js stamps on every row; the live iteration is the
+// sidecar's recorded `iteration`, written by every legs run.
+function isFixDeltaManifest(n) {
+  return readManifestRows(manifestPathFor(n)).some((r) => r.scope === 'fix-delta')
+}
+function fixRoundsDone() { return listManifestNumbers().filter(isFixDeltaManifest).length }
+// A recorded iteration is trusted only when a legs run actually recorded it (legsMode[n] exists):
+// a hand-edited counter names no legs run and must not move the live iteration (AC-20260820-07-8).
+function legsModeFor(n) { return marks.legsMode && marks.legsMode[String(n)] }
+function liveIteration() {
+  const it = Number(marks.iteration) || 0
+  if (it > 0 && legsModeFor(it)) return it
+  const nums = listManifestNumbers()
+  return nums.length ? nums[nums.length - 1] : 0
+}
 // Mirrors review-legs.js's own blocking-leg/exit rule (gate/smoke/ci; smoke's exit 4 = sanctioned
 // inert-green) — this is plumbing over review-legs.js's OWN typed exit codes, never a second
 // derivation of a verdict word (verdict.js stays the sole derivation of that).
@@ -847,6 +865,9 @@ function runLegs(n, opts = {}) {
   }
   marks.legsMode = marks.legsMode || {}
   marks.legsMode[String(n)] = { skipsFile: opts.skipsFile || null, fixDelta: !!opts.fixDelta }
+  // D3: the gate's skip count AT EXTRACTION rides beside the file; a carried file keeps its
+  // original count so a later, larger gate count re-enters SKIPS.
+  if (opts.skipsFile) marks.legsMode[String(n)].skipsGateCount = opts.skipsGateCount
   marks.iteration = n
   saveSidecar()
   return { code: r.status, out: r.stdout, err: r.stderr }
@@ -943,7 +964,7 @@ function runHardStopVerdict(n) {
   const runId = ensureRunId()
   const diffLoc = computeDiffLoc()
   const args = ['--manifest', manifestPathFor(n), '--ledger', '--spec', specRel, '--tier', tier,
-    '--diff-loc', String(diffLoc), '--iteration', String(n), '--run-id', runId,
+    '--diff-loc', String(diffLoc), '--iteration', String(fixRoundsDone()), '--run-id', runId,
     '--base-sha', baseSha, '--head-sha', headSha(), ...viaModelArgs(n)]
   if (treeDirty()) args.push('--dirty')
   const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
@@ -998,7 +1019,7 @@ function writeEscalateRow(n) {
   const args = ['--manifest', manifestPathFor(n), '--workflow', marks.reviewerReturnFile,
     '--waived', String(d.waived), '--rejected', String(d.rejected), '--fixDispatched', '0',
     '--escalated', '--ledger', '--spec', specRel, '--tier', tier, '--diff-loc', String(diffLoc),
-    '--iteration', String(n), '--run-id', runId, '--retain', path.join(repoRoot, '.claude/spec-runs'),
+    '--iteration', String(fixRoundsDone()), '--run-id', runId, '--retain', path.join(repoRoot, '.claude/spec-runs'),
     '--base-sha', baseSha, '--head-sha', headSha(), ...viaModelArgs(n)]
   if (treeDirty()) args.push('--dirty')
   const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
@@ -1083,7 +1104,7 @@ function doCloseWork(n) {
   const args = ['--manifest', manifestPathFor(n), '--workflow', marks.reviewerReturnFile,
     '--waived', String(d.waived), '--rejected', String(d.rejected), '--fixDispatched', String(d.fixDispatched),
     '--ledger', '--spec', specRel, '--tier', tier, '--diff-loc', String(diffLoc),
-    '--iteration', String(n), '--run-id', runId, '--retain', retainDir,
+    '--iteration', String(fixRoundsDone()), '--run-id', runId, '--retain', retainDir,
     '--base-sha', baseSha, '--head-sha', headSha(), ...viaModelArgs(n)]
   if (treeDirty()) args.push('--dirty')
   const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
@@ -1243,11 +1264,28 @@ function handleSkipsExtracted() {
   if (!file || typeof file !== 'string') die('--mark skips-extracted needs --file <extracted skip names>')
   if (!fs.existsSync(file)) die('--file ' + file + ' does not exist — extract the skipped-test names and pass a real path')
   const resolved = path.resolve(file)
-  marks.skipsExtracted = true
-  marks.skipsFile = resolved
-  saveSidecar()
-  const n = (listManifestNumbers().length ? Math.max(...listManifestNumbers()) : 0) + 1
-  const r = runLegsIteration(n, { skipsFile: resolved })
+  // D5: validate before any write. An empty file against a gate reporting skips is refused (exit 2,
+  // nothing written); a count mismatch is a warning, not a refusal — runners group identical skips.
+  const curN = liveIteration()
+  const gateCount = gateSkipsCount(readManifestRows(manifestPathFor(curN)))
+  const listed = fs.readFileSync(resolved, 'utf8').split('\n').filter((l) => l.trim()).length
+  if (listed === 0 && gateCount > 0) {
+    die('--file ' + file + ' lists no skipped-test names but the gate reported ' + gateCount +
+      ' skips — extract the real names and re-run `node ' + __filename + ' ' + specPath +
+      ' --mark skips-extracted --file <path>`')
+  }
+  if (listed !== gateCount) {
+    process.stderr.write('⚠ skip file lists ' + listed + ' names, gate reported ' + gateCount + ' skips\n')
+  }
+  // D4: a skips re-run inside a fix round stays a fix-delta pass — same delta file, same prior return.
+  const n = curN + 1
+  const inheritFix = curN > 0 && isFixDeltaManifest(curN)
+  if (inheritFix) {
+    fs.copyFileSync(path.join(sidecarDir, `fix-delta-${curN}.txt`), path.join(sidecarDir, `fix-delta-${n}.txt`))
+    marks.fixDeltaFrom = marks.fixDeltaFrom || {}
+    marks.fixDeltaFrom[String(n)] = marks.fixDeltaFrom[String(curN)]
+  }
+  const r = runLegsIteration(n, { skipsFile: resolved, skipsGateCount: gateCount, fixDelta: inheritFix })
   return r.stopped ? 'STOPPED' : null
 }
 
@@ -1294,7 +1332,7 @@ function handleReviewerReturned() {
         'investigated and dismissed, with an explicit null when the claim carries no location')
     }
   }
-  const n = listManifestNumbers().length ? Math.max(...listManifestNumbers()) : 0
+  const n = liveIteration()
   fs.mkdirSync(sidecarDir, { recursive: true })
   const dest = path.join(sidecarDir, `reviewer-return-${n}.json`)
   fs.writeFileSync(dest, raw)
@@ -1612,16 +1650,15 @@ function unclearedEscalationsFor() {
 
 function handleFixApplied() {
   if (!marks.pendingFix) die('no fix was dispatched for the current findings — mark dispositions --fix-dispatched N first')
-  const manifests = listManifestNumbers()
+  const curN = liveIteration()
   const priorEscalations = unclearedEscalationsFor()
-  const fixIterationsDone = manifests.length - 1 + priorEscalations.length * FIX_CAP
+  const fixIterationsDone = fixRoundsDone() + priorEscalations.length * FIX_CAP
   if (fixIterationsDone >= FIX_CAP) {
     marks.escalated = true
     saveSidecar()
     // D5: the refusal is the last guaranteed execution moment — write the escalate row HERE,
     // before die(), never after (the abandonment path never re-invokes).
-    const capN = Math.max(...manifests)
-    const result = writeEscalateRow(capN)
+    const result = writeEscalateRow(curN)
     const capMsg = 'iteration cap 2 reached — a third fix-applied is refused; the fix/review loop ' +
       'is capped at 2 iterations, escalate to the user instead of dispatching another fix' +
       (priorEscalations.length
@@ -1638,7 +1675,6 @@ function handleFixApplied() {
       : capMsg + '\nThe escalate ledger pass could not be completed: ' + result.error +
         '\nRe-run this driver once the evidence is repaired — the append will be retried.')
   }
-  const curN = Math.max(...manifests)
   const n = curN + 1
   // D2/D3 (specs/20260909/05-fix-delta-reviewer-pass.md): diff the tree snapshotted at
   // reviewer-returned for iteration curN against a fresh snapshot taken right now — a prior
@@ -1654,7 +1690,12 @@ function handleFixApplied() {
   }
   fs.mkdirSync(sidecarDir, { recursive: true })
   fs.writeFileSync(path.join(sidecarDir, `fix-delta-${n}.txt`), delta.join('\n') + '\n')
-  const r = runLegsIteration(n, { fixDelta: true })
+  // D4: the REVIEWER fix-delta variant names the prior returns from this record, never n - 1.
+  marks.fixDeltaFrom = marks.fixDeltaFrom || {}
+  marks.fixDeltaFrom[String(n)] = curN
+  // D3: carry the prior iteration's skips file (and the count it was extracted against).
+  const prior = legsModeFor(curN) || {}
+  const r = runLegsIteration(n, { fixDelta: true, skipsFile: prior.skipsFile || undefined, skipsGateCount: prior.skipsGateCount })
   if (r.stopped) return 'STOPPED'
   marks.pendingFix = false
   saveSidecar()
@@ -2331,13 +2372,15 @@ function deriveState() {
     printDoneNow('')
   }
 
-  const manifests = listManifestNumbers()
-  let n = manifests.length ? Math.max(...manifests) : 0
+  let n = liveIteration()
 
-  if (n === 0) {
-    const r = runLegsIteration(1, {})
+  if (n === 0 || readManifestRows(manifestPathFor(n)).length === 0) {
+    // D2: the recorded iteration owns the number — a missing manifest is regenerated at that same
+    // number, in the mode legs last ran in, never replaced by judging an older one live.
+    const mode = (n > 0 && legsModeFor(n)) || {}
+    n = n || 1
+    const r = runLegsIteration(n, { skipsFile: mode.skipsFile || undefined, skipsGateCount: mode.skipsGateCount, fixDelta: !!mode.fixDelta })
     if (r.stopped) return 'STOPPED'
-    n = 1
   } else if (isRedBlocking(readManifestRows(manifestPathFor(n)))) {
     // STOPPED is sticky, like DONE/ESCALATE — it does not auto-retry on a bare re-invocation (a
     // no-mark call must stay idempotent, AC-20260820-07-9's guarantee generalized). Re-entry
@@ -2348,9 +2391,10 @@ function deriveState() {
 
   const rows = readManifestRows(manifestPathFor(n))
 
-  if (!marks.skipsExtracted) {
-    if (gateSkipsCount(rows) > 0) return 'SKIPS'
-  }
+  // D3: SKIPS is per iteration — the gate's count against the count recorded at this iteration's extraction.
+  const liveMode = legsModeFor(n) || {}
+  const gateSkips = gateSkipsCount(rows)
+  if (gateSkips > 0 && (!liveMode.skipsFile || liveMode.skipsGateCount !== gateSkips)) return 'SKIPS'
 
   const reviewerFresh = marks.reviewerReturnFile && marks.reviewerReturnIteration === n
   if (!reviewerFresh) return 'REVIEWER'
@@ -2392,7 +2436,7 @@ function deriveState() {
 let forcedState = null
 if (MARK) forcedState = handleMark()
 const state = forcedState || deriveState()
-const currentN = listManifestNumbers().length ? Math.max(...listManifestNumbers()) : 0
+const currentN = liveIteration()
 
 if (STATE_ONLY) { writeOut(1, state + '\n'); process.exit(0) }
 
@@ -2498,10 +2542,12 @@ const STEPS = {
     const tail = `Write its structured return ({verdict, survivors, killed, reviewerCount, tokens}) to ` +
       `a file, then:\n  node ${__filename} ${specPath} --mark reviewer-returned --file <return.json>\n` +
       `REVIEWER_FAILED is a failed run, never CLEAN — re-dispatch before marking.`
-    if (currentN >= 2) {
+    if (currentN >= 1 && isFixDeltaManifest(currentN)) {
+      const from = marks.fixDeltaFrom && marks.fixDeltaFrom[String(currentN)]
+      if (from === undefined) die(`the sidecar predates the fixDeltaFrom record for fix round ${currentN} — re-run: node ${__filename} ${specPath} --mark fix-applied`)
       const deltaFile = path.join(sidecarDir, `fix-delta-${currentN}.txt`)
-      const priorReviewer = path.join(sidecarDir, `reviewer-return-${currentN - 1}.json`)
-      const priorDisposer = path.join(sidecarDir, `disposer-return-${currentN - 1}.json`)
+      const priorReviewer = path.join(sidecarDir, `reviewer-return-${from}.json`)
+      const priorDisposer = path.join(sidecarDir, `disposer-return-${from}.json`)
       return `## Step: dispatch the reviewer — fix-delta pass\n` +
         `Legs are green. Dispatch ONE Agent {subagent_type: "spec:reviewer"} with the spec path, ` +
         `diff base ${base}, root ${repoRoot}, and this pass's inputs:\n` +

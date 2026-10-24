@@ -1,6 +1,7 @@
 ---
 date: 2026-10-24
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: review
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 brief: n/a
 open_markers: 0
 spiked: 2026-10-24
+diff_base: 0a44191f4e57fed0f75d2b29ba6ccfa174ec18ca
 ---
 
 # Review driver reads recorded facts, never stand-ins
@@ -34,6 +36,7 @@ regression test per defect, and the existing pins keep passing.
 | D5 | `--mark skips-extracted` refuses (exit 2, nothing written) a file with zero non-blank lines while the live manifest's gate row reports skips > 0; when the non-blank line count differs from the gate's count it prints one `⚠ skip file lists N names, gate reported M skips` line and proceeds (AC-20261024-01-9, AC-20261024-01-10) | An empty file against 26 skips let a review reach CLEAN (zubu-connect 20261017/03). A count mismatch is a warning, not a refusal: the plugin declares only the skip-count format; runners group identical skips into one line. |
 | D6 | ac-matrix.js step-6 routes 2 and 3 are position-aware: locate the test's name in the file (route 2: the whole line; route 3: the part after `::`, cut at the first `[`), take the first AC-ID cited at or after that position, and fall back to today's file-level mapping only when none follows (AC-20261024-01-11, AC-20261024-01-12, AC-20261024-01-13) | File-level citations hand a skipped test the module docstring's first AC; the sanction decision then reads the wrong `[env:]`. Position is language-neutral; the plugin still owns no test-name grammar. |
 | D7 | The `--iteration` passed to every verdict.js pass is `fixRoundsDone()`, not the manifest number (AC-20261024-01-14) | Ledger rows overstated the fix iteration after a skips round; verdict.js is the only reader, so the shape is unchanged. |
+| D8 | Build-time scope widening (gate lines: `tests/review/escalate-row.test.js` AC-20260822-01-5, `tests/review/review-driver-fix-cycle.test.js` AC-20260902-05-6): both pins asserted the ledger `iteration` equals the manifest number; under D7 they assert the fix-round count (2 after two fix cycles; 1 for the first fix-delta hard-stop), updated in place and retagged AC-20261024-01-14, never weakened (AC-20261024-01-14) | Auto-picked add to scope; D7 retires the manifest-number reading these pins spelled. |
 
 ## File Plan
 
@@ -45,6 +48,9 @@ regression test per defect, and the existing pins keep passing.
 | tests/review/iteration-identity.test.js | CREATE | tests | AC-20261024-01-1, AC-20261024-01-2, AC-20261024-01-4, AC-20261024-01-5, AC-20261024-01-8, AC-20261024-01-14 |
 | tests/review/skips-per-iteration.test.js | CREATE | tests | AC-20261024-01-6, AC-20261024-01-7, AC-20261024-01-9, AC-20261024-01-10 |
 | tests/ac-matrix/skip-position.test.js | CREATE | tests | AC-20261024-01-11, AC-20261024-01-12 |
+| tests/review/review-driver.fixtures.js | MODIFY | tests | A3 remedy: additive shared-setup exports for the two new review test files |
+| tests/review/escalate-row.test.js | MODIFY | tests | D8: escalate-row iteration pin reads the fix-round count |
+| tests/review/review-driver-fix-cycle.test.js | MODIFY | tests | D8: first fix-delta GATE_RED row pins iteration 1 |
 
 ## Contracts
 
@@ -137,6 +143,20 @@ were the last `n - 1` arithmetic in the file.
 
 Rejected: a thin hooks-based redesign (spike section 4) — a third the size, but any version
 that counts files reproduces this class; the fix is the rule, not the rewrite.
+
+Build departures (folded from the deviations sidecar at review close, 2026-10-24):
+- `liveIteration()` trusts `marks.iteration` only when `legsMode[<n>]` records a legs run at
+  that number; otherwise it falls back to the highest manifest on disk. D2 read literally
+  breaks AC-20260820-07-8 (a hand-edited `iteration: 99` must not move the cap), which
+  AC-20261024-01-3 reuses. The fallback fires only for an unrecorded counter.
+- D7 reddened two pins outside the File Plan that equated the ledger iteration with the
+  manifest number; D8 added them to scope and retagged them.
+- `tests/review/review-driver.fixtures.js` gained additive shared-setup exports (A3's remedy);
+  its count host's AC bullet carries a bare env tag so skip-reconcile stays green.
+- AC-20261024-01-5 stays on its reused pin, not in the new file, so red-check never expects it red.
+
+### Advisory debt (review rv_ff0ab35d94b3)
+- a0 /Users/jj/Projects/claude-plugins/.claude/worktrees/spec-01-review-driver-reads-recorded-facts/spec/scripts/spec-review-driver.js:103 — liveIteration() falls back to the highest manifest number on disk when marks.iteration has no legsMode entry — a recorded deviation from D2. It still reads a file-count stand-in on the hand-edited-counter path; sanctioned only by the deviations sidecar and AC-20260820-07-8, not by a Decision. — Removing the highest-manifest fallback in liveIteration() means amending locked D2 against AC-20260820-07-8 (a hand-edited iteration must not move the cap), which AC-20261024-01-3 reuses; that trade is the user's decision. The fallback fires only when marks.iteration has no recorded legs run.
 
 ## Canonical Delta
 

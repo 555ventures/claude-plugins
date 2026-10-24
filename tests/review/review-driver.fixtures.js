@@ -239,4 +239,62 @@ function rulesWithGotchas(root, n) {
     '# Rules\n\n## Review Checks\n\n- none\n\n## Gotchas (evidence-cited)\n\n' + entries.join('\n') + '\n')
 }
 
-module.exports = { DRIVER, GREEN_TEST, specBody, makeHost, run, stateOf, toReviewer, returnFileWith, oneFixReturnFile, CLEAN_RETURN, SURVIVOR_RETURN, seedReplayRow, seedReviewRow, makeReplayHost, driveToClose, commitClose, ledgerRows, closeRunIdOf, rulesWithGotchas }
+// specs/20261024/01-review-driver-reads-recorded-facts.md (tests for iteration identity and
+// per-iteration skips): a host whose gate prints `ℹ skipped <N>` where N is read from a file the
+// test rewrites between rounds, plus a hard-survivor return and one fix round driven through the
+// real marks. Consumed by iteration-identity.test.js and skips-per-iteration.test.js.
+const HARD_RETURN = {
+  verdict: 'CLEAN',
+  survivors: [{ severity: 'hard', claim: 'x', file: 'src/foo.js', line: 1, impact: 'x', evidence: 'x' }],
+  killed: [], reviewerCount: 1, scope: 'full', tokens: 10,
+}
+
+function makeCountHost(initialCount) {
+  const root = fs.realpathSync(tmpdir('rvdrv-count'))
+  const countFile = path.join(fs.realpathSync(tmpdir('rvdrv-countfile')), 'count.txt')
+  fs.writeFileSync(countFile, String(initialCount))
+  const g = gitRepo(root)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: `node --test {testDirs}; echo "ℹ skipped $(cat ${countFile})"`,
+    testCommand: 'node --test',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' },
+  }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const diffBase = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(root, 'specs/20260820'), { recursive: true })
+  const spec = path.join(root, 'specs/20260820/99-drv-count.md')
+  // A trailing bare [env:] tag sanctions the AC's skipped test, so the skip-reconcile leg stays green.
+  fs.writeFileSync(spec, specBody({ diffBase, acId: 'AC-20260820-99-2' }).replace('foo() returns 42.\n', 'foo() returns 42. [env: SKIPENV]\n'))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 42\n')
+  fs.writeFileSync(path.join(root, 'tests/foo.test.js'), GREEN_TEST.replace('AC-20260820-99-1', 'AC-20260820-99-2'))
+  g('add', '-A'); g('commit', '-q', '-m', 'implement')
+  return {
+    root, spec, sidecar: spec.replace(/\.md$/, '.review'),
+    setCount: (n) => fs.writeFileSync(countFile, String(n)),
+  }
+}
+
+// reviewer-returned (hard survivor) -> dispositions (fix) -> a real file edit -> fix-applied.
+// Returns the fix-applied run result; the caller asserts on it.
+function fixRound(host, tag) {
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith(tag + '-ret', HARD_RETURN))
+  run(host.root, host.spec, '--mark', 'dispositions', '--file', oneFixReturnFile(tag + '-disp', 's0'),
+    '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+  fs.writeFileSync(path.join(host.root, 'src/foo.js'), `module.exports = () => 42 // ${tag}\n`)
+  return run(host.root, host.spec, '--mark', 'fix-applied')
+}
+
+const sidecarState = (host) => JSON.parse(fs.readFileSync(path.join(host.sidecar, 'review-state.json'), 'utf8'))
+
+function writeSkipsFile(name, lines) {
+  const file = path.join(fs.realpathSync(tmpdir('rvdrv-skipfile')), name)
+  fs.writeFileSync(file, lines.length ? lines.join('\n') + '\n' : '')
+  return file
+}
+
+module.exports = { HARD_RETURN, makeCountHost, fixRound, sidecarState, writeSkipsFile, DRIVER, GREEN_TEST, specBody, makeHost, run, stateOf, toReviewer, returnFileWith, oneFixReturnFile, CLEAN_RETURN, SURVIVOR_RETURN, seedReplayRow, seedReviewRow, makeReplayHost, driveToClose, commitClose, ledgerRows, closeRunIdOf, rulesWithGotchas }

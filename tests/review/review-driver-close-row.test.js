@@ -27,7 +27,7 @@ const { GREEN_TEST, specBody, makeHost, run, stateOf, toReviewer, returnFileWith
 // flipping status right there, with no separate `--mark dispositions` step ever required or
 // printed. The line below asserting DISPOSITIONS directly after reviewer-returned is superseded;
 // this test now captures the ledger `before` snapshot before that single mark and asserts CLOSE.
-test('AC-20260820-07-6 / AC-20260901-03-5 (SHALL CONTINUE TO) / AC-20260909-04-7 (D6, retagged) / AC-20261013-01-8 (SHALL CONTINUE TO): WHEN a clean run\'s reviewer-returned mark leaves an empty hard pool THE SYSTEM self-dispositions, runs the authoritative verdict with --retain .claude/spec-runs, appends one ledger line, flips status implementing -> done, and prints the close-step instructions, all within that one mark', () => {
+test('AC-20260820-07-6 / AC-20260901-03-5 (SHALL CONTINUE TO) / AC-20260909-04-7 (D6, retagged) / AC-20261013-01-8 (SHALL CONTINUE TO) / AC-20261024-06-8 (SHALL CONTINUE TO): WHEN a clean run\'s reviewer-returned mark leaves an empty hard pool THE SYSTEM self-dispositions, runs the authoritative verdict with --retain .claude/spec-runs, appends one ledger line, flips status implementing -> done, and prints the close-step instructions, all within that one mark', () => {
   const host = makeHost()
   toReviewer(host)
   const returnFile = returnFileWith('rvdrv-clean', CLEAN_RETURN)

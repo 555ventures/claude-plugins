@@ -52,24 +52,22 @@ test('AC-20260903-02-10: WHEN --mark closed is invoked with every earlier refusa
   assert.strictEqual(stateOf(root, spec), 'REVIEWER',
     'setup: the fixture must reach REVIEWER on a genuinely green gate ("true") and a genuinely green suite ' +
     'leg ("node --test" over the fixture\'s own green test): ' + legsR.stdout + legsR.stderr)
-  const returnFile = returnFileWith('rvdrv-suite-close-return', CLEAN_RETURN)
-  run(root, spec, '--mark', 'reviewer-returned', '--file', returnFile)
-  run(root, spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
-  assert.strictEqual(stateOf(root, spec), 'CLOSE', 'setup: a clean pass must reach CLOSE')
-
-  execFileSync('git', ['-C', root, 'add', 'specs/20260903/98-drv-suite-close.md', 'tests/foo.test.js'])
-  execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'close'])
-
-  // Now that CLOSE is reached, swap testCommand to the red script — this AC pins the CLOSE-time
-  // re-run's OWN refusal (D4), independent of whether the review-time suite leg was ever red.
+  // The suite leg already ran green, so testCommand turns red before the verdict pass pins the judged
+  // tree: the close commit carries no drift and the close-time re-run's OWN refusal (D4) is what fires.
   fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
     gateCommand: 'true',
     testCommand: 'bash always-red.sh',
     runtime: { inert: 'plugin repo — nothing boots' },
     capabilities: { forge: 'none', skipReportPattern: 'none' },
   }))
-  execFileSync('git', ['-C', root, 'add', '.claude/spec.config.json'])
-  execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'redden testCommand for the close-time re-run'])
+  const returnFile = returnFileWith('rvdrv-suite-close-return', CLEAN_RETURN)
+  run(root, spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  run(root, spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(stateOf(root, spec), 'CLOSE', 'setup: a clean pass must reach CLOSE')
+
+  execFileSync('git', ['-C', root, 'add', 'specs/20260903/98-drv-suite-close.md', 'tests/foo.test.js', '.claude/spec.config.json'])
+  execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'close'])
+
 
   const closeR = run(root, spec, '--mark', 'closed')
   assert.strictEqual(closeR.status, 2,
@@ -193,6 +191,12 @@ test('AC-20260820-07-7: WHEN --mark closed is passed while the tree is dirty bey
 test('AC-20260830-02-1: WHEN --mark closed is invoked with all earlier refusals passing and the resolved host gateCommand exits non-zero THE SYSTEM refuses the mark (exit 2), leaves marks.closed unset (state stays CLOSE), and prints a message naming "gate red at close", the resolved command, and the re-run remedy', () => {
   const host = makeHost()
   toReviewer(host)
+  // The gate breaks before the verdict pass pins the judged tree, so the close commit carries no drift.
+  fs.writeFileSync(path.join(host.root, 'always-red.sh'), '#!/usr/bin/env bash\necho ALWAYS_RED_MARKER\nexit 1\n')
+  const cfgPath = path.join(host.root, '.claude/spec.config.json')
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+  cfg.gateCommand = 'bash always-red.sh'
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg))
   run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-gate1-clean', CLEAN_RETURN))
   const dispR = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
   assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
@@ -202,11 +206,6 @@ test('AC-20260830-02-1: WHEN --mark closed is invoked with all earlier refusals 
   // script the close-time gate now runs, written and committed alongside the spec's own
   // status:done flip — exactly the class of files CLOSE writes, never a gate broken from the
   // start (which would have died before REVIEWER instead).
-  fs.writeFileSync(path.join(host.root, 'always-red.sh'), '#!/usr/bin/env bash\necho ALWAYS_RED_MARKER\nexit 1\n')
-  const cfgPath = path.join(host.root, '.claude/spec.config.json')
-  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
-  cfg.gateCommand = 'bash always-red.sh'
-  fs.writeFileSync(cfgPath, JSON.stringify(cfg))
   const specRel = path.relative(host.root, host.spec)
   execFileSync('git', ['-C', host.root, 'add', specRel, '.claude/spec.config.json', 'always-red.sh', 'tests/foo.test.js'], { encoding: 'utf8' })
   execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'close'], { encoding: 'utf8' })

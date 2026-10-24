@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runNode } = require('../helpers')
+const { ROOT, tmpdir, runNode } = require('../helpers')
 
 // Pins: specs/20260906/01-ac-drift-doctor-check.md D8, AC-20260906-01-12, AC-20260906-01-14
 // (promise-sweep half only). Parsed-but-never-passed flags are deleted (registry-check.js
@@ -62,4 +62,33 @@ test('AC-20260906-01-10 (the two new promises; the SHALL CONTINUE TO pin stays i
   assert.ok(!res.stderr.includes('--applies-from'),
     `D8: once deleted, the printed usage line must no longer mention --applies-from at all — a lingering ` +
     `mention would document a flag the parser no longer accepts — got "${res.stderr}"`)
+})
+
+// specs/20261024/06-close-tree-equals-judged-tree.md D6 — the soft-sweep machinery is deleted as one
+// unit. The eight retired identifiers are assembled from fragments so this file never matches its
+// own search; each is a plain substring ban, and none is a prefix of a replacement name
+// (close-tree-drift.js, measureDrift).
+const jn = (...parts) => parts.join('')
+const SWEEP_RETIRED = [
+  jn('SOFT_SWEEP', '_MAX_LINES'), jn('soft', '-swept'), jn('handle', 'SoftSwept'), jn('refuseOver', 'SweepCeiling'),
+  jn('restampClose', 'RowSweep'), jn('soft', 'Sweep'), jn('measure', 'Sweep'), jn('sweep', '-ceiling'),
+]
+
+test('AC-20261024-06-10: spec/scripts, spec/doctrine, spec/commands, spec/agents, spec/templates and docs/canonical name none of the eight retired soft-sweep identifiers', () => {
+  const hits = []
+  const walkDir = (abs) => {
+    for (const name of fs.readdirSync(abs)) {
+      const f = path.join(abs, name)
+      if (fs.statSync(f).isDirectory()) { walkDir(f); continue }
+      let text
+      try { text = fs.readFileSync(f, 'utf8') } catch { continue }
+      for (const r of SWEEP_RETIRED) if (text.includes(r)) hits.push(path.relative(ROOT, f) + ' :: ' + r)
+    }
+  }
+  for (const rel of ['spec/scripts', 'spec/doctrine', 'spec/commands', 'spec/agents', 'spec/templates', 'docs/canonical']) {
+    assert.ok(fs.existsSync(path.join(ROOT, rel)), rel + ' must exist — a missing directory would make this sweep pass on nothing')
+    walkDir(path.join(ROOT, rel))
+  }
+  assert.deepStrictEqual(hits, [],
+    'a retired soft-sweep identifier still live in a plugin script, doctrine file or canonical doc sends a session to a mark, constant or file that no longer exists: ' + hits.join('; '))
 })

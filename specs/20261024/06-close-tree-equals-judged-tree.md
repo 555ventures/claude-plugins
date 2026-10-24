@@ -1,12 +1,14 @@
 ---
 date: 2026-10-24
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: review
 breaking: false
 depends_on: []
 brief: n/a
 open_markers: 0
+diff_base: 2702310b4db7f8363d17661fcaebea720334ea69
 ---
 
 # The close tree equals the judged tree; softs are debt or ride a fix round
@@ -34,6 +36,7 @@ is not drift, and no plugin script, doctrine file or canonical doc names a retir
 | D5 | The DISPOSITIONS step keeps its `advisory (N, recorded, not dispositioned):` block and replaces its closing sentence with `softs may ride this fix round (same workers, same files); the fix-delta pass re-reviews whatever changed — never dispositioned here.`; the FIX step prints the current softs after its dispatch line under the same sentence. The disposer's pool, refs and the verdict arithmetic are unchanged — a soft never enters `dispositions`, and the driver never opens a fix round for softs alone (rejected alternative, Rationale) (AC-20261024-06-9, AC-20261024-06-11) | Fixing a soft is free when a fix round runs anyway and the reviewer re-checks the whole delta. Softs stay out of the pool so 20260909/04 D8/D9 keep holding; `soft-floor.test.js` pins the advisory heading verbatim (A7). |
 | D6 | `spec/doctrine/stages/stage-review.md` § Dispositions and § Close replace the sweep wording with D3–D5; no doctrine file names a ceiling, a sweep mark or a sweep file (AC-20261024-06-10) | One binding home per rule (core § Doctrine Authoring); the retired words left standing would send a session to a mark that no longer exists. |
 | D7 | `tests/review/soft-sweep.test.js` is deleted; its two incident cases (uncommitted 70-line hard fix accepted; gitignored tracked file kept in the snapshot) and the deviations-sidecar exclusion case are re-expressed in `tests/review/close-tree-drift.test.js` under this spec's AC-IDs; `tests/sweep-ceiling.test.js` is renamed `tests/close-tree-drift-measure.test.js` with the import and names updated, assertions intact; `tests/review/merge-concludes-to-done.test.js`'s mark-list assertion drops `soft-swept` (seven marks) and is co-tagged AC-20261024-06-6; every AC bullet of `specs/20261013/01-review-closes-its-own-softs.md` whose sole citing test is deleted here ends with `[retired: specs/20261024/06-close-tree-equals-judged-tree.md]` (AC-20261024-06-2, AC-20261024-06-3, AC-20261024-06-4, AC-20261024-06-6) | A refactor deletes the tests of what it retires and carries the cases that still bind; an assertion is moved, never weakened. `ac-drift.js` accepts a `[retired:]` tag only when it names a `specs/*.md` path. |
+| D9 | Build-time scope additions (auto-picked, gate lines): `spec/agents/reviewer.md`'s severity calibration drops the ceiling wording (AC-20261024-06-10 sweep); `docs/canonical/review.md` takes the Canonical Delta at build, not at CLOSE, because AC-20261024-06-10 sweeps `docs/canonical/` and the build and review gates run before CLOSE; `tests/review/review-driver-close-expiry.test.js` and `tests/review/review-driver-close-refusals.test.js` land their config/script edits before the judged snapshot, since D1's refusal now fires first on drift they committed at close [no-ac: the existing pins in those files stay the oracle] | A refusal added where the old path was permissive strands shared setups (pipeline rules § Gotchas, seventh trigger); the fixtures now do what a real session does. |
 | D8 | `spec/.claude-plugin/plugin.json` bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"`; the paragraph names no retired identifier [no-ac: `plugin-bump.js --check` is the oracle] | Version discipline (.claude/rules/spec-pipeline.md § Planning). |
 
 ## File Plan
@@ -51,6 +54,11 @@ is not drift, and no plugin script, doctrine file or canonical doc names a retir
 | tests/close-tree-drift-measure.test.js | CREATE | tests | AC-20261024-06-3, AC-20261024-06-4 |
 | tests/review/merge-concludes-to-done.test.js | MODIFY | tests | AC-20261024-06-6 (D7: the mark-list regex drops `soft-swept`) |
 | tests/consistency/retired-flags.test.js | MODIFY | tests | AC-20261024-06-10 |
+| spec/agents/reviewer.md | MODIFY | doctrine | D9: severity calibration drops the ceiling wording |
+| docs/canonical/review.md | MODIFY | other | D9: the Canonical Delta applied at build |
+| tests/review/review-driver-close-expiry.test.js | MODIFY | tests | D9: config edits land before the judged snapshot |
+| tests/review/review-driver-close-refusals.test.js | MODIFY | tests | D9: config/script edits land before the judged snapshot |
+| tests/review/review-driver-close-row.test.js | MODIFY | tests | AC-20261024-06-8 tag added to the reused test's title |
 | specs/20261013/01-review-closes-its-own-softs.md | MODIFY | other | D7: AC-20261013-01-1 … -7 and -9 bullets end with `[retired: specs/20261024/06-close-tree-equals-judged-tree.md]` (-8 and -10 keep their live tests) |
 
 ## Contracts
@@ -165,8 +173,8 @@ the verdict pool arithmetic for the same gain the ride-along sentence gives for 
 condition for any of the three: Advisory debt blocks across readable ledgers whose softs were
 never fixed exceed 30 in 90 days.
 
-Collision closure (literals leg) waives: `docs/canonical/review.md` — rewritten by the Canonical
-Delta at the review stage's CLEAN, never a File Plan row; `tests/review/review-driver-close-row.test.js`
+Collision closure (literals leg) waives: `docs/canonical/review.md` — planned for the Canonical
+Delta at CLOSE, moved into the build by D9 because AC-20261024-06-10 sweeps it before CLOSE; `tests/review/review-driver-close-row.test.js`
 — its `soft-swept`/`softSweep` hits are negative assertions that stay green, and AC-20261024-06-8
 reuses its zero-soft close test with the AC-ID tag the build adds. Every other literals hit is a
 File Plan row.

@@ -34,15 +34,17 @@
   never fix-dispatched at DISPOSITIONS. `CLEAN` is unreachable until dispositions cover the hard
   pool; `FINDINGS` means exactly one thing, a dispatched fix that has not landed.
   (specs/20260909/04-review-soft-floor.md, done 2026-09-09)
-  Softs do not leave the review by hand: at CLOSE the driver prints each soft as `a<i>`, the
-  session dispatches fix workers, and `--mark soft-swept --file <sweep.json>` records one
-  outcome per soft — `fixed`, or `debt` with a reason that the driver appends under the spec's
-  `## Rationale` as `### Advisory debt (review <runId>)`. `--mark closed` refuses an unswept
-  soft, and when any soft was fixed it measures the committed close tree against the judged sha
-  (overlay paths excluded) and refuses more than `SOFT_SWEEP_MAX_LINES` (60) changed lines or any
-  binary change with `soft sweep over ceiling`; an accepted close re-stamps the close row with
-  `softSweep: {fixed, debt}`. The queue receives only follow-ups that need their own spec or the
-  user's decision. (specs/20261013/01-review-closes-its-own-softs.md)
+  Softs are advisory to the end. At DISPOSITIONS and FIX they print after the hard pool and may
+  ride the fix round the same workers run; the fix-delta pass re-reviews whatever changed. The
+  CLOSE verdict writes one `- a<i> file:line — claim` line per soft under the spec's
+  `## Rationale` as `### Advisory debt (review <runId>)`, in the same write that flips the
+  status, so the debt rides the close commit; the CLOSE step prints the softs under an advisory
+  heading. A soft worth fixing after close is a Direct-lane commit through the host gate.
+  `--mark closed` always measures the committed close tree against the judged tree snapshot
+  (overlay paths excluded; paths tracked in neither the judged commit nor HEAD nor a fix-delta
+  list are reviewer-created and skipped) and refuses any counted line or binary change with
+  `close tree drifted from the judged tree`. The close row is never re-stamped after verdict.js
+  writes it. (specs/20261024/06-close-tree-equals-judged-tree.md)
 
   A spec stamped `prototype: <stem>` gains one more row, `contract`, read from the spec's last
   build row (`replay.passed` and `replay.looked` both true → exit 0, else

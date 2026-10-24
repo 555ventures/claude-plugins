@@ -104,7 +104,6 @@
 //     marks: skips-extracted --file <f> | reviewer-returned --file <json> |
 //            dispositions [--file <disposer return.json>] --waived N --rejected N
 //              --fix-dispatched N | fix-applied | closed |
-//            soft-swept --file <sweep.json> (CLOSE only; one outcome per printed soft) |
 //            merge-strategy <merge-commit|ff-only|squash|rebase-ff> (bare token) |
 //            conflicts-resolved
 //   spec-review-driver <spec.md> --state          -> print the state name only (scripting)
@@ -216,16 +215,13 @@
 // CONFLICTS -> DONE (terminal); `finishMerge()` and MERGE's merge-skipped arm conclude straight
 // into `printDoneNow()`. Nothing is parked as a step after DONE.
 
-// a soft (advisory) finding is fixed
-// inside the review that found it or recorded as debt in the spec it belongs to, never hand-queued.
-// The CLOSE step prints each soft of the current reviewer return as `a<i>`; `--mark soft-swept --file`
-// records one `fixed|debt` outcome per soft (debt is appended under the spec's `## Rationale`);
-// `--mark closed` refuses an unswept soft, then (when any soft was fixed) measures the committed close
-// tree against the judged sha and refuses more than SOFT_SWEEP_MAX_LINES changed lines or any binary
-// change ("soft sweep over ceiling"), and re-stamps the close row in place with `softSweep`. The
-// ceiling is a driver constant, not a grounding-contract field. A refused soft-swept mark writes
-// nothing. Exit 2 additionally covers: a malformed or incomplete sweep file, `soft-swept` with no
-// soft to sweep or before CLOSE, `closed` with an unswept soft, `closed` over the ceiling.
+// a soft (advisory) finding is recorded as debt or rides a fix round, never a post-verdict change.
+// The CLOSE verdict writes one `- a<i> file:line — claim` line per soft under the spec's
+// `## Rationale` (`### Advisory debt (review <runId>)`) in the same write that flips `status: done`;
+// the CLOSE step prints each soft as `a<i>`. `--mark closed` always measures the committed close
+// tree against the judged tree (lib/close-tree-drift.js) and refuses any counted line or binary
+// change ("close tree drifted from the judged tree"); it never writes the spec file or the close row.
+// Exit 2 additionally covers: `closed` over any drift.
 
 'use strict'
 const fs = require('fs')
@@ -260,7 +256,7 @@ const { sessionModel } = require('./lib/session-stamp.js')
 // into legFindings, from the same module, so the two never count in different units again
 // (lib/leg-findings.js header carries the ruling; tests/review/disposer-gate.test.js pins it).
 const { countLegFinding } = require('./lib/leg-findings')
-const { measureSweep } = require('./lib/sweep-ceiling')
+const { measureDrift } = require('./lib/close-tree-drift')
 // Base-candidate ORDER only (pin before ref); this driver keeps its own validity predicate.
 const { BASE_KEYS, pinnedBaseCandidates } = require('./lib/base-derivation')
 
@@ -270,7 +266,6 @@ const { BASE_KEYS, pinnedBaseCandidates } = require('./lib/base-derivation')
 // /^spec-runs.*\.jsonl$/ and union-merges in filename order (this file sorts after
 // spec-runs.jsonl) — zero reader changes anywhere.
 const STOPPED_LEDGER = '.claude/spec-runs.stopped.jsonl'
-const SOFT_SWEEP_MAX_LINES = 60 // added + deleted lines of the close tree vs the judged sha, overlay paths excluded
 
 function die(msg) { process.stderr.write('spec-review-driver: ' + msg + '\n'); process.exit(2) }
 
@@ -657,6 +652,14 @@ const base = resolveBase()
 // warn-and-continue branch is removed — a base that cannot resolve already broke every leg's diff,
 // so the row must not pretend otherwise.
 const SHA40_RE = /^[0-9a-f]{40}$/
+const RIDE_ALONG = 'softs may ride this fix round (same workers, same files); the fix-delta pass re-reviews whatever changed — never dispositioned here.'
+// the FIX step's soft list: the current return's softs under the ride-along sentence, or nothing.
+function fixSoftBlock() {
+  const softs = currentSofts()
+  if (softs.length === 0) return ''
+  return `advisory (${softs.length}, recorded, not dispositioned):\n` +
+    softs.map((s) => `  [${s.severity}] ${s.file}:${s.line} — ${s.claim}`).join('\n') + '\n' + RIDE_ALONG
+}
 function resolveBaseSha() {
   const r = runChild('git', ['-C', repoRoot, 'rev-parse', '--verify', base + '^{commit}'],
     { encoding: 'utf8' }, 'git rev-parse --verify (base resolution)')
@@ -1150,7 +1153,7 @@ function doCloseWork(n) {
   writeReviewRef(runId, 'judged', row.diff.head)
   // Incident (shop-bltr 20261007/05, 2026-10-14): the legs judge the WORKING tree — a fix-delta
   // pass runs over fixes the session has not committed yet (snapshotTree(), never a commit) — but
-  // the close row's diff.head is HEAD. The soft-sweep ceiling measured judged-HEAD..close-commit,
+  // the close row's diff.head is HEAD. The old ceiling measured judged-HEAD..close-commit,
   // so every reviewed-but-uncommitted hard fix was counted as sweep lines (127 vs 60 there). The
   // judged tree is pinned here, at the same moment the row lands, as a tree sha the ceiling diffs
   // against instead; diff.head and the judged ref keep their commit meaning for replay.
@@ -1158,7 +1161,10 @@ function doCloseWork(n) {
 
   const newSpecText = specText.replace(/^status:\s*.*$/m, 'status: done')
   const stampedText = stampDiffBaseIfAbsent(newSpecText)
-  fs.writeFileSync(resolvedSpecPath, stampedText)
+  // The advisory debt rides this same write so the close commit carries it; the spec file is an
+  // overlay exclude, so it is never read as drift.
+  const debtLines = currentSofts().map((s, i) => '- a' + i + ' ' + s.file + ':' + s.line + ' — ' + s.claim)
+  fs.writeFileSync(resolvedSpecPath, debtLines.length ? withAdvisoryDebt(stampedText, runId, debtLines) : stampedText)
 
   // no dueness probe here — a printed reminder
   // at close was the measured failure this state machine replaces, and the state-based block
@@ -1802,66 +1808,12 @@ function restampBuildDeviations() {
   marks.deviationsRestamp = { from, to }
 }
 
-// ---- the CLOSE soft sweep ----------------------
+// ---- the CLOSE advisory softs ----------------------
 // The soft list is dispositionPools(n).softs of the recorded reviewer return — the same derivation
-// the DISPOSITIONS step prints, so `a<i>` indexes the printed order. Every refusal below runs before
-// the first write (sidecar or spec), so a refused mark is side-effect-free.
+// the DISPOSITIONS step prints, so `a<i>` indexes the printed order.
 function currentSofts() {
   if (!marks.reviewerReturnFile || !Number.isFinite(marks.reviewerReturnIteration)) return []
   return dispositionPools(marks.reviewerReturnIteration).softs
-}
-
-function handleSoftSwept() {
-  if (status !== 'done' || !marks.closeRunId || !marks.dispositions) {
-    die('--mark soft-swept applies only at CLOSE (status: done with an authoritative verdict recorded) ' +
-      '— run `node ' + __filename + ' ' + specPath + '` and complete the printed step first')
-  }
-  if (marks.closed) die('--mark soft-swept after --mark closed — the close is already recorded; nothing to sweep')
-  const softs = currentSofts()
-  if (softs.length === 0) die('nothing to sweep — the current reviewer return carries no soft finding; go straight to `--mark closed`')
-  const file = flag('--file')
-  if (!file || typeof file !== 'string') {
-    die('--mark soft-swept needs --file <sweep.json> — {"sweep":[{"ref":"a0","outcome":"fixed"|"debt","reason":"…"}]} ' +
-      'covering every printed soft exactly once; write it, then re-run `node ' + __filename + ' ' + specPath +
-      ' --mark soft-swept --file <sweep.json>`')
-  }
-  let raw
-  try { raw = fs.readFileSync(file, 'utf8') } catch (e) {
-    die('--file ' + file + ' could not be read (' + e.message + ') — write the sweep file and pass its real path')
-  }
-  let parsed
-  try { parsed = JSON.parse(raw) } catch (e) {
-    die('--file ' + file + ' is not valid JSON (' + e.message + ') — write {"sweep":[{"ref":"a0","outcome":"fixed"}, …]}')
-  }
-  if (!parsed || !Array.isArray(parsed.sweep)) {
-    die('--file ' + file + ' needs a "sweep" array — {"sweep":[{"ref":"a0","outcome":"fixed"|"debt","reason":"…"}]}')
-  }
-  const refs = softs.map((_, i) => 'a' + i)
-  const seen = new Map()
-  for (const entry of parsed.sweep) {
-    const ref = entry && typeof entry.ref === 'string' ? entry.ref : null
-    if (ref === null) die('--file ' + file + ' has a sweep entry with no string ref — every entry names a printed soft (a<i>)')
-    if (!refs.includes(ref)) die('--file ' + file + ' has unknown ref ' + ref + ' — the printed softs are ' + refs.join(', '))
-    if (entry.outcome !== 'fixed' && entry.outcome !== 'debt') {
-      die('--file ' + file + ' entry ' + ref + ' has outcome ' + JSON.stringify(entry.outcome) + ' — must be fixed|debt')
-    }
-    if (entry.outcome === 'debt' && (typeof entry.reason !== 'string' || !entry.reason.trim())) {
-      die('--file ' + file + ' entry ' + ref + ' is debt with a blank reason — a debt soft needs a non-blank reason')
-    }
-    seen.set(ref, (seen.get(ref) || 0) + 1)
-  }
-  for (const [ref, count] of seen) if (count > 1) die('--file ' + file + ' has duplicate ' + ref + ' — cover each printed soft exactly once')
-  for (const ref of refs) if (!seen.has(ref)) die('--file ' + file + ' has uncovered ' + ref + ' — cover each printed soft exactly once')
-
-  const entries = parsed.sweep.map((e) => ({ ref: e.ref, outcome: e.outcome, reason: typeof e.reason === 'string' ? e.reason.trim() : '' }))
-  const debtLines = entries.filter((e) => e.outcome === 'debt').map((e) => {
-    const s = softs[Number(e.ref.slice(1))]
-    return '- ' + e.ref + ' ' + s.file + ':' + s.line + ' — ' + s.claim + ' — ' + e.reason
-  })
-  fs.writeFileSync(resolvedSpecPath, withAdvisoryDebt(fs.readFileSync(resolvedSpecPath, 'utf8'), marks.closeRunId, debtLines))
-  marks.softSweep = { fixed: entries.filter((e) => e.outcome === 'fixed').length, debt: debtLines.length, entries }
-  saveSidecar()
-  return null
 }
 
 // Appends (or rewrites, for the same runId) the `### Advisory debt (review <runId>)` block at the end
@@ -1895,7 +1847,7 @@ function judgedSha() {
   const sha = findJudgedSha()
   if (sha) return sha
   die('cannot find the judged sha for run ' + marks.closeRunId + ' (no close row in .claude/spec-runs.jsonl, no ' +
-    'refs/spec-review/' + marks.closeRunId + '/judged) — the soft sweep ceiling cannot be measured; restore the ledger row')
+    'refs/spec-review/' + marks.closeRunId + '/judged) — the close tree drift cannot be measured; restore the ledger row')
 }
 
 // null when neither the close row nor the judged ref carries it.
@@ -1919,37 +1871,35 @@ function findJudgedSha() {
 // judged tree is the working-tree snapshot taken at the close-row append (marks.judgedTree) — the
 // exact tree the authoritative legs ran over; a sidecar older than that mark falls back to the
 // close row's diff.head commit.
-function refuseOverSweepCeiling() {
-  if (!marks.softSweep || !(marks.softSweep.fixed >= 1)) return
+function refuseCloseTreeDrift() {
   const pinned = SHA40_RE.test(marks.judgedTree || '') && marks.judgedTree
   const sha = pinned || judgedSha()
   const excludes = [specRel, 'docs/canonical/', '.claude/spec-runs.jsonl', '.claude/spec-runs/', sidecarRel,
     path.relative(repoRoot, deviationsPath), '.claude/agent-memory/']
   if (pipelineRulesPath) excludes.push(path.relative(repoRoot, pipelineRulesPath))
   // The judged tree is a working-tree snapshot that also holds whatever the reviewer's legs left
-  // behind (untracked build output a host never ignored); lib/sweep-ceiling.js counts only paths
-  // tracked in the judged commit or in HEAD, so cleaning that output is never sweep lines.
+  // behind (untracked build output a host never ignored); lib/close-tree-drift.js counts only paths
+  // tracked in the judged commit, in HEAD or in a fix-delta list, so cleaning that output is not drift.
   let m
   try {
-    m = measureSweep({ repoRoot, judgedTree: sha, judgedCommit: pinned ? findJudgedSha() : sha,
+    m = measureDrift({ repoRoot, judgedTree: sha, judgedCommit: pinned ? findJudgedSha() : sha,
       alsoTracked: fixDeltaPaths(), excludes, run: runChild })
   } catch (e) {
     die(e.message + ' — fix the repo state, then re-run this mark')
   }
   if (m.skipped.length) {
-    writeOut(1, 'ℹ soft sweep ceiling ignored ' + m.skipped.length + ' path(s) tracked in neither the judged commit nor HEAD ' +
+    writeOut(1, 'ℹ close check ignored ' + m.skipped.length + ' path(s) tracked in neither the judged commit nor HEAD ' +
       '(reviewer-created, since cleaned): ' + m.skipped.slice(0, 5).join(', ') + (m.skipped.length > 5 ? ', …' : '') + '\n')
   }
-  if (m.total > SOFT_SWEEP_MAX_LINES || m.binary) {
-    die('soft sweep over ceiling: ' + m.total + ' changed line(s)' + (m.binary ? ' plus a binary change' : '') +
-      ' vs judged ' + sha.slice(0, 7) + ', ceiling ' + SOFT_SWEEP_MAX_LINES + ' — revert the oversized fix (git checkout ' +
-      sha + ' -- ' + m.files.join(' ') + '), re-record those softs as debt (--mark soft-swept --file <sweep.json>), ' +
-      're-commit, then re-run `node ' + __filename + ' ' + specPath + ' --mark closed`')
+  if (m.total > 0 || m.binary) {
+    die('close tree drifted from the judged tree: ' + m.total + ' changed line(s)' + (m.binary ? ' plus a binary change' : '') +
+      ' vs judged ' + sha.slice(0, 7) + ' — revert (git checkout ' + sha + ' -- ' + m.files.join(' ') +
+      '), re-commit, then re-run `node ' + __filename + ' ' + specPath + ' --mark closed`')
   }
 }
 
 // every path a fix round touched (the fix-delta-<n>.txt lists): a hard fix's brand-new file is in
-// the judged snapshot but in neither commit, and must still count when a sweep deletes it.
+// the judged snapshot but in neither commit, and must still count when the close commit deletes it.
 function fixDeltaPaths() {
   const out = []
   for (const n of listManifestNumbers()) {
@@ -1959,34 +1909,10 @@ function fixDeltaPaths() {
   return out
 }
 
-// re-stamp this run's close row in place with the sweep tally — one row, one added top-level key.
-function restampCloseRowSweep() {
-  if (!marks.softSweep || !marks.closeRunId) return
-  const ledgerPath = path.join(repoRoot, '.claude/spec-runs.jsonl')
-  if (!fs.existsSync(ledgerPath)) return
-  const lines = fs.readFileSync(ledgerPath, 'utf8').split('\n')
-  for (let i = lines.length - 1; i >= 0; i--) {
-    if (!lines[i].trim()) continue
-    let row
-    try { row = JSON.parse(lines[i]) } catch { continue }
-    if (row.runId !== marks.closeRunId || row.stage !== 'review') continue
-    row.softSweep = { fixed: marks.softSweep.fixed, debt: marks.softSweep.debt }
-    lines[i] = JSON.stringify(row)
-    fs.writeFileSync(ledgerPath, lines.join('\n'))
-    return
-  }
-}
-
 function handleClosed() {
   if (status !== 'done') {
     die('spec status is not yet "done" — re-run the driver with no mark first so CLOSE\'s ' +
       'authoritative verdict runs and flips status')
-  }
-  // an unswept soft is refused before every other check, side-effect-free.
-  if (currentSofts().length > 0 && !marks.softSweep) {
-    die('the current reviewer return carries ' + currentSofts().length + ' soft finding(s) and no sweep is ' +
-      'recorded — dispatch the CLOSE step\'s sweep workers, write the sweep file, then run `node ' +
-      __filename + ' ' + specPath + ' --mark soft-swept --file <sweep.json>` and re-run this mark')
   }
   saveSidecar() // persists the deviations observation the startup call deferred for this mark
   // both deviations refusals run BEFORE
@@ -2026,13 +1952,12 @@ function handleClosed() {
       unexpected.join(', ') + ' — commit or clean them (never git add -A past an unadjudicated ' +
       'path), then re-run this mark')
   }
-  refuseOverSweepCeiling()
+  refuseCloseTreeDrift()
   // LAST refusal check — after deviations, gotchas-ratchet, and dirty-tree above — so the gate
   // observes the exact committed close tree those checks just certified. die()s before any
   // mutation; a refused mark is always side-effect-free.
   runCloseTimeGate()
   restampBuildDeviations()
-  restampCloseRowSweep()
   // the close commit now exists (the dirty-tree check above already certified the tree is
   // clean apart from the sidecar/ledger) — best-effort, never blocks the mark.
   if (marks.closeRunId) {
@@ -2361,13 +2286,12 @@ function handleMark() {
     case 'reviewer-returned': return handleReviewerReturned()
     case 'dispositions': return handleDispositions()
     case 'fix-applied': return handleFixApplied()
-    case 'soft-swept': return handleSoftSwept()
     case 'closed': return handleClosed()
     case 'merge-strategy': return handleMergeStrategy() // exits the process itself
     case 'conflicts-resolved': return handleConflictsResolved() // exits the process itself
     default:
       die('unknown mark "' + MARK + '" (skips-extracted | reviewer-returned | dispositions | ' +
-        'fix-applied | soft-swept | closed | merge-strategy | conflicts-resolved)')
+        'fix-applied | closed | merge-strategy | conflicts-resolved)')
   }
 }
 
@@ -2614,7 +2538,7 @@ const STEPS = {
       `  outputs: ${outDir}\n` +
       `Fix recommendations dispatch without a question; waive/reject recommendations go to the ` +
       `user (AskUserQuestion; record the answer as final with overriddenBy:"user" when it differs). ` +
-      `Softs are swept at CLOSE (fixed under the ceiling or recorded as debt), never dispositioned here.\n` +
+      `${RIDE_ALONG}\n` +
       `Write the return to a file, then:\n` +
       `  node ${__filename} ${specPath} --mark dispositions --file <return.json>\n` +
       `DISPOSER_FAILED is a failed dispatch, never a disposition — re-dispatch before marking.`
@@ -2624,7 +2548,8 @@ const STEPS = {
     `${marks.dispositions.fixDispatched} finding(s) routed to Fix (via the host's agentMap). ` +
     `Dispatch the workers, wait for them to return, then:\n` +
     `  node ${__filename} ${specPath} --mark fix-applied\n` +
-    `(re-runs legs --fix-delta on a fresh manifest and returns to REVIEWER for the fix-delta pass)`,
+    `(re-runs legs --fix-delta on a fresh manifest and returns to REVIEWER for the fix-delta pass)\n` +
+    fixSoftBlock(),
 
   // the ESCALATE step names both exit routes plus where the escalate row landed (or, when the drift guard
   // withheld the write, the loud drift note naming why — never silently omitted).
@@ -2680,23 +2605,19 @@ const STEPS = {
     const testsExpiredLine = (marks.testsExpiry && marks.testsExpiry.retired > 0)
       ? `🧹 ${marks.testsExpiry.retired} tests are retirable with this spec (${marks.testsExpiry.filesRemoved} files would empty) — nothing is deleted at close; sweep deliberately with: node "$(spec-paths test-expiry)" --root . --all-done --apply\n`
       : ''
-    // step 0 prints only when the current return carries >= 1 soft.
-    const sweepSofts = currentSofts()
-    const sweepBlock = sweepSofts.length
-      ? `0. Soft sweep — ${sweepSofts.length} soft finding(s) from the reviewer return; fix or record each, none is queued:\n` +
-        sweepSofts.map((s, i) => `   a${i} [${s.severity}] ${s.file}:${s.line} — ${s.claim}`).join('\n') + '\n' +
-        `   Dispatch one fix worker per soft via the host's agentMap, exactly as the FIX step does; each returns ` +
-        `\`fixed\` or \`debt <reason>\` (a soft that needs a decision only the user can make is debt, never a question). ` +
-        `Write sweep.json {"sweep":[{"ref":"a0","outcome":"fixed"|"debt","reason":"…"}]} covering every ref once, then:\n` +
-        `     node ${__filename} ${specPath} --mark soft-swept --file <sweep.json>\n` +
-        `   Fixes must stay within ${SOFT_SWEEP_MAX_LINES} changed lines in total (--mark closed measures the committed close tree).\n`
+    // the advisory block prints only when the current return carries >= 1 soft.
+    const closeSofts = currentSofts()
+    const softBlock = closeSofts.length
+      ? `advisory — recorded as debt, none fixed here:\n` +
+        closeSofts.map((s, i) => `   a${i} [${s.severity}] ${s.file}:${s.line} — ${s.claim}`).join('\n') + '\n' +
+        `   A soft worth fixing is a Direct-lane commit through the host gate after merge-back, or rides the next fix round; never a change before --mark closed.\n`
       : ''
     return `## Step: close (the driver has already run the authoritative verdict and flipped status: done)\n` +
       `verdict: ${marks.dispositions.word}   runId: ${marks.closeRunId}   ` +
       `retained: .claude/spec-runs/${marks.closeRunId}.jsonl\n` +
       testsExpiredLine +
       waivedWarn +
-      sweepBlock +
+      softBlock +
       `1. Apply the spec's Canonical Delta to ${canonicalTarget}.\n` +
       `2. Fold the deviations sidecar if one exists (recurring -> Gotchas [host]/[plugin]; one-offs ` +
       `-> the spec's Rationale); delete the sidecar.\n` +

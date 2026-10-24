@@ -3,7 +3,10 @@
 // ci-query.js (--branch <name> | --commit <sha>) [--root <dir>] — one normalized `gh` wrapper
 // answering "what did CI just do?", shared by the review stage's `ci` leg (--commit, per-SHA),
 // /spec:release's `ci` leg (--commit, per-SHA), and observe-ci.js (--branch,
-// trunk latest-run). `gh run list --commit <sha>` returns `[]` exit 0 for a commit CI never saw
+// trunk latest-run).
+// Owner: specs/20260813/10-host-capabilities.md, specs/20260830/03-ci-leg-honest-absence.md
+//
+// `gh run list --commit <sha>` returns `[]` exit 0 for a commit CI never saw
 // (executed against the installed `gh` binary).
 //
 // Two independent gh wrappers was the drift seam a refuter flagged from the review side while

@@ -6,20 +6,18 @@ const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 const { tmpdir, gitRepo, SPEC } = require('./helpers')
 
-// The review driver's soft-sweep ceiling diffs the committed close tree against a snapshot of the
-// working tree taken when the close row lands. That snapshot carries untracked files on purpose
-// (an uncommitted fix's new file must count) — and so also carries whatever the reviewer's legs
-// left behind (build output a host never ignored). Cleaning that output before `--mark closed`
-// must never read as sweep lines: a path counts only when it is tracked in the judged commit or
-// in HEAD.
+// specs/20261024/06-close-tree-equals-judged-tree.md D2: measureDrift tallies the committed close
+// tree against the judged working-tree snapshot; a path counts only when tracked in the judged
+// commit, in HEAD, or named by a fix-delta list. Untracked build output the reviewer left behind
+// and the session since cleaned is reported under skipped, never counted.
 
-const { measureSweep } = require(path.join(SPEC, 'scripts/lib/sweep-ceiling.js'))
+const { measureDrift } = require(path.join(SPEC, 'scripts/lib/close-tree-drift.js'))
 
 const run = (cmd, args, opts) => spawnSync(cmd, args, opts)
 
 // The driver's own snapshot recipe: seed a scratch index from HEAD, `add -A`, `write-tree`.
 function snapshotWorkingTree(dir) {
-  const indexFile = path.join(tmpdir('sweep-ceiling-index'), 'index') // outside the repo: its lock file must not enter the snapshot
+  const indexFile = path.join(tmpdir('close-tree-drift-index'), 'index') // outside the repo: its lock file must not enter the snapshot
   const env = Object.assign({}, process.env, { GIT_INDEX_FILE: indexFile })
   for (const args of [['read-tree', 'HEAD'], ['add', '-A', '--', '.']]) {
     const r = spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8', env })
@@ -34,7 +32,7 @@ function lines(n, tag) { return Array.from({ length: n }, (_, i) => tag + ' ' + 
 
 // One repo, one judged state, one close commit — every case below reads the same measurement.
 function scenario() {
-  const dir = tmpdir('sweep-ceiling')
+  const dir = tmpdir('close-tree-drift')
   const g = gitRepo(dir, { empty: true })
   fs.writeFileSync(path.join(dir, 'src.js'), lines(5, 'src'))
   fs.writeFileSync(path.join(dir, 'retired.js'), lines(4, 'retired'))
@@ -61,13 +59,13 @@ function scenario() {
   return { dir, judgedTree, judgedCommit }
 }
 
-test('cleaning the reviewer\'s untracked build output never counts as sweep lines; the real sweep still does', () => {
+test('AC-20261024-06-3: cleaning the reviewer\'s untracked build output is skipped and counts zero lines while a deleted tracked file, an edited tracked file and a newly committed file all count', () => {
   const { dir, judgedTree, judgedCommit } = scenario()
   // The plain diff the ceiling used to trust sees the cleaned output as 1,250 deleted lines.
   const raw = spawnSync('git', ['-C', dir, 'diff', '--numstat', judgedTree, 'HEAD'], { encoding: 'utf8' }).stdout
   assert.match(raw, /build-out\/index\.html/, 'precondition: the snapshot did capture the untracked output')
 
-  const m = measureSweep({ repoRoot: dir, judgedTree, judgedCommit, excludes: [], run })
+  const m = measureDrift({ repoRoot: dir, judgedTree, judgedCommit, excludes: [], run })
   assert.deepStrictEqual(m.files.sort(), ['retired.js', 'src.js', 'sweep.test.js'],
     'counted paths are exactly the committed sweep: a deleted tracked file (in the judged commit), an edit, a new file (in HEAD)')
   assert.strictEqual(m.total, 4 + 1 + 3, 'retired.js 4 deleted, src.js 1 added, sweep.test.js 3 added — the hard fix already in the snapshot adds nothing')
@@ -76,17 +74,17 @@ test('cleaning the reviewer\'s untracked build output never counts as sweep line
   assert.ok(m.skipped.every((p) => p.startsWith('build-out/')), m.skipped.join(', '))
 })
 
-test('with no judged commit at hand, HEAD alone decides what is tracked — a deleted tracked file then goes uncounted, nothing else changes', () => {
+test('AC-20261024-06-3: with no judged commit at hand, HEAD alone decides what is tracked — a deleted tracked file then goes uncounted, nothing else changes', () => {
   const { dir, judgedTree } = scenario()
-  const m = measureSweep({ repoRoot: dir, judgedTree, judgedCommit: null, excludes: [], run })
+  const m = measureDrift({ repoRoot: dir, judgedTree, judgedCommit: null, excludes: [], run })
   assert.deepStrictEqual(m.files.sort(), ['src.js', 'sweep.test.js'], 'without the judged commit only HEAD-tracked paths can count')
   assert.strictEqual(m.total, 4, 'src.js 1 added, sweep.test.js 3 added')
   assert.ok(m.skipped.includes('retired.js') && m.skipped.length === 8,
     'the deleted tracked file joins the seven cleaned build files under skipped: ' + m.skipped.join(', '))
 })
 
-test('build output the session COMMITTED is in HEAD and counts — the ceiling still catches it', () => {
-  const dir = tmpdir('sweep-ceiling-committed')
+test('AC-20261024-06-3: build output the session COMMITTED is in HEAD and counts as drift', () => {
+  const dir = tmpdir('close-tree-drift-committed')
   const g = gitRepo(dir, { empty: true })
   fs.writeFileSync(path.join(dir, 'src.js'), lines(5, 'src'))
   g('add', '-A'); g('commit', '-q', '-m', 'judged')
@@ -95,21 +93,21 @@ test('build output the session COMMITTED is in HEAD and counts — the ceiling s
   fs.mkdirSync(path.join(dir, 'build-out'))
   fs.writeFileSync(path.join(dir, 'build-out/bundle.js'), lines(100, 'bundle'))
   g('add', '-A'); g('commit', '-q', '-m', 'close with junk')
-  const m = measureSweep({ repoRoot: dir, judgedTree, judgedCommit, excludes: [], run })
+  const m = measureDrift({ repoRoot: dir, judgedTree, judgedCommit, excludes: [], run })
   assert.deepStrictEqual(m.files, ['build-out/bundle.js'], 'a committed junk file is tracked in HEAD and must be counted')
   assert.strictEqual(m.total, 100, 'all 100 committed junk lines count toward the ceiling')
   assert.deepStrictEqual(m.skipped, [], 'nothing is skipped when every diffed path is committed')
 })
 
-test('a new file an uncommitted hard fix created is in neither commit, yet deleting it in the sweep counts when the fix-delta list names it', () => {
+test('AC-20261024-06-4: a new file an uncommitted hard fix created is in neither commit, yet deleting it at the close counts when the fix-delta list names it', () => {
   const { dir, judgedTree, judgedCommit } = scenario()
   // In scenario() hard.test.js rode in the snapshot uncommitted and was then committed at close, so
   // it is in HEAD. Rebuild the close commit without it: the sweep deleted the hard fix's file.
   const g = (...a) => spawnSync('git', ['-C', dir, ...a], { encoding: 'utf8' })
   fs.rmSync(path.join(dir, 'hard.test.js')); g('add', '-A'); g('commit', '-q', '-m', 'close minus the hard fix file')
-  const blind = measureSweep({ repoRoot: dir, judgedTree, judgedCommit, excludes: [], run })
+  const blind = measureDrift({ repoRoot: dir, judgedTree, judgedCommit, excludes: [], run })
   assert.ok(blind.skipped.includes('hard.test.js'), 'precondition: with no fix-delta list the deletion is skipped as junk — the gap this test closes')
-  const m = measureSweep({ repoRoot: dir, judgedTree, judgedCommit, alsoTracked: ['hard.test.js'], excludes: [], run })
+  const m = measureDrift({ repoRoot: dir, judgedTree, judgedCommit, alsoTracked: ['hard.test.js'], excludes: [], run })
   assert.ok(m.files.includes('hard.test.js') && !m.skipped.includes('hard.test.js'),
     'reviewed code a sweep removed must be counted, never skipped as reviewer junk: ' + JSON.stringify(m))
   assert.strictEqual(m.total, 4 + 1 + 3 + 3, 'the three deleted lines of hard.test.js join the sweep tally')
@@ -117,8 +115,8 @@ test('a new file an uncommitted hard fix created is in neither commit, yet delet
 
 test('excludes become pathspecs and a failing diff throws instead of returning a tally', () => {
   const { dir, judgedTree, judgedCommit } = scenario()
-  const m = measureSweep({ repoRoot: dir, judgedTree, judgedCommit, excludes: ['sweep.test.js'], run })
+  const m = measureDrift({ repoRoot: dir, judgedTree, judgedCommit, excludes: ['sweep.test.js'], run })
   assert.deepStrictEqual(m.files.sort(), ['retired.js', 'src.js'], 'an excluded overlay path leaves the tally entirely')
-  assert.throws(() => measureSweep({ repoRoot: dir, judgedTree: '0'.repeat(40), judgedCommit, excludes: [], run }),
+  assert.throws(() => measureDrift({ repoRoot: dir, judgedTree: '0'.repeat(40), judgedCommit, excludes: [], run }),
     /git diff --numstat .* failed/, 'a bogus judged tree must throw, never return a zero tally that lets the mark through')
 })

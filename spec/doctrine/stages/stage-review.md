@@ -52,7 +52,7 @@ When the driver prints `DONE`, report (core § Console Output Style) — printed
   sanction, or a demonstrated miscitation, presented to the user.
 - **Dispositions (the DISPOSITIONS step).** Only the hard pool needs judgment; softs are advisory
   — printed once, recorded in the artifact and the ledger's `findings.soft`, never dispositioned;
-  each is swept at CLOSE, never queued. Dispatch **one** `Agent {subagent_type:
+  softs may ride a fix round (same workers, same files; the fix-delta pass re-reviews whatever changed), never queued. Dispatch **one** `Agent {subagent_type:
   'spec:disposer'}` with the paths the driver's step prints; no memory of the build. Every
   `fix` recommendation dispatches a Sonnet worker (via `agentMap`) with no question —
   reversible, re-reviewed by the fix-delta pass once you mark `fix-applied`. Every
@@ -65,11 +65,11 @@ When the driver prints `DONE`, report (core § Console Output Style) — printed
 - **The verdict word is derived by `verdict.js`, never asserted in prose** — the driver runs
   every verdict pass and prints its word. Never hand-write the word; a CLEAN row with non-zero
   `survived` records dispositioned findings, never ignored ones.
-- **Close (the CLOSE step).** Step 0, when softs print: one fix worker per soft (via `agentMap`),
-  each returns `fixed` or `debt <reason>` (a soft needing the user's decision is `debt`, never
-  asked); write `sweep.json`, `--mark soft-swept --file <sweep.json>` — debt lands in the spec's
-  Rationale, and `--mark closed` refuses an unswept soft or a fix over the line ceiling. Then
-  apply the spec's Canonical Delta to `docs/canonical/{area}.md`. Fold the deviations sidecar:
+- **Close (the CLOSE step).** The CLOSE verdict writes `### Advisory debt (review <runId>)` lines
+  under Rationale in the same write as the status flip, and the step prints the softs under the
+  advisory heading — none fixed here. A soft worth fixing after close is a Direct-lane commit
+  through the host gate after merge-back; `--mark closed` refuses any drift between the committed
+  close tree and the judged tree. Apply the spec's Canonical Delta to `docs/canonical/{area}.md`. Fold the deviations sidecar:
   recurring-shaped entries become one-line Gotchas entries (format per the host Gotchas section's
   header comment); one-offs go to the spec's Rationale; delete the sidecar. Queue any follow-up
   needing its own spec or the user's decision, never leave it narrated:

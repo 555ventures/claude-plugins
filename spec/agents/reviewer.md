@@ -113,7 +113,7 @@ the same length" or "the pinned tests still pass" is not a kill.
 - **hard** — violates an explicit project rule or contradicts the spec; causes runtime
   errors or CI failures. Blocks `CLEAN` until dispositioned.
 - **soft** — everything short of hard: bent intent, convention drift, hygiene. Advisory —
-  recorded verbatim, never dispositioned, swept at CLOSE under the driver's ceiling.
+  recorded verbatim, never dispositioned, written as advisory debt at CLOSE.
 
 Every finding carries a verified `file:line`, a self-contained claim, its `evidence` (the
 repro output or quotes), and an `impact` line in plain English (no code identifiers — that is

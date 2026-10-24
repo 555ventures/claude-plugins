@@ -222,16 +222,17 @@ test('AC-20260912-15-6: WHEN --mark closed completes over a retiring close THE S
 test('AC-20260912-13-7: WHEN the resolved host gate exits non-zero over the committed close tree THE SYSTEM SHALL CONTINUE TO refuse --mark closed with exit 2 and "gate red at close", SHALL CONTINUE TO leave the driver state at CLOSE, and SHALL CONTINUE TO print no expiry note when the close retired nothing', () => {
   const host = makeExpiryHost('rvdrv-expiry-gate-red-keep', { onlyPin: true })
   toReviewer(host)
-  const r = run(host.root, host.spec, '--mark', 'reviewer-returned',
-    '--file', returnFileWith('rvdrv-expiry-gate-red-keep-clean', CLEAN_RETURN))
-  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
-    'setup precondition: the clean reviewer return must reach CLOSE: ' + r.stdout + r.stderr)
-
+  // The gate breaks before the verdict pass pins the judged tree, so the close commit carries no drift.
   fs.writeFileSync(path.join(host.root, 'always-red.sh'), '#!/usr/bin/env bash\nexit 1\n')
   const cfgPath = path.join(host.root, '.claude/spec.config.json')
   const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
   cfg.gateCommand = 'bash always-red.sh'
   fs.writeFileSync(cfgPath, JSON.stringify(cfg))
+  const r = run(host.root, host.spec, '--mark', 'reviewer-returned',
+    '--file', returnFileWith('rvdrv-expiry-gate-red-keep-clean', CLEAN_RETURN))
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
+    'setup precondition: the clean reviewer return must reach CLOSE: ' + r.stdout + r.stderr)
+
   execFileSync('git', ['-C', host.root, 'add', '-A'], { encoding: 'utf8' })
   execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'close'], { encoding: 'utf8' })
 
@@ -254,16 +255,17 @@ test('AC-20260912-13-7: WHEN the resolved host gate exits non-zero over the comm
 test('AC-20260912-15-9: WHEN the resolved host gate exits non-zero over a committed close tree whose classification recorded a retirable test THE SYSTEM SHALL CONTINUE TO refuse --mark closed with exit 2 and "gate red at close", and SHALL CONTINUE TO leave the driver state at CLOSE', () => {
   const host = makeExpiryHost('rvdrv-expiry-gate-red-retired')
   toReviewer(host)
-  const r = run(host.root, host.spec, '--mark', 'reviewer-returned',
-    '--file', returnFileWith('rvdrv-expiry-gate-red-retired-clean', CLEAN_RETURN))
-  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
-    'setup precondition: the clean reviewer return must reach CLOSE: ' + r.stdout + r.stderr)
-
+  // The gate breaks before the verdict pass pins the judged tree, so the close commit carries no drift.
   fs.writeFileSync(path.join(host.root, 'always-red.sh'), '#!/usr/bin/env bash\nexit 1\n')
   const cfgPath = path.join(host.root, '.claude/spec.config.json')
   const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
   cfg.gateCommand = 'bash always-red.sh'
   fs.writeFileSync(cfgPath, JSON.stringify(cfg))
+  const r = run(host.root, host.spec, '--mark', 'reviewer-returned',
+    '--file', returnFileWith('rvdrv-expiry-gate-red-retired-clean', CLEAN_RETURN))
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
+    'setup precondition: the clean reviewer return must reach CLOSE: ' + r.stdout + r.stderr)
+
   execFileSync('git', ['-C', host.root, 'add', '-A'], { encoding: 'utf8' })
   execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'close'], { encoding: 'utf8' })
 

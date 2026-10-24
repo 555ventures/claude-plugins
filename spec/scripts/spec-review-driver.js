@@ -260,6 +260,7 @@ const { sessionModel } = require('./lib/session-stamp.js')
 // into legFindings, from the same module, so the two never count in different units again
 // (lib/leg-findings.js header carries the ruling; tests/review/disposer-gate.test.js pins it).
 const { countLegFinding } = require('./lib/leg-findings')
+const { measureSweep } = require('./lib/sweep-ceiling')
 // Base-candidate ORDER only (pin before ref); this driver keeps its own validity predicate.
 const { BASE_KEYS, pinnedBaseCandidates } = require('./lib/base-derivation')
 
@@ -1891,6 +1892,14 @@ function withAdvisoryDebt(text, runId, debtLines) {
 
 // the judged sha is the close row's diff.head, read back from the ledger (the ref is the fallback).
 function judgedSha() {
+  const sha = findJudgedSha()
+  if (sha) return sha
+  die('cannot find the judged sha for run ' + marks.closeRunId + ' (no close row in .claude/spec-runs.jsonl, no ' +
+    'refs/spec-review/' + marks.closeRunId + '/judged) — the soft sweep ceiling cannot be measured; restore the ledger row')
+}
+
+// null when neither the close row nor the judged ref carries it.
+function findJudgedSha() {
   const ledgerPath = path.join(repoRoot, '.claude/spec-runs.jsonl')
   if (fs.existsSync(ledgerPath)) {
     for (const l of fs.readFileSync(ledgerPath, 'utf8').split('\n')) {
@@ -1903,9 +1912,7 @@ function judgedSha() {
   const r = runChild('git', ['-C', repoRoot, 'rev-parse', '--verify', 'refs/spec-review/' + marks.closeRunId + '/judged'],
     { encoding: 'utf8' }, 'git rev-parse judged ref')
   const sha = (r.stdout || '').trim()
-  if (r.status === 0 && SHA40_RE.test(sha)) return sha
-  die('cannot find the judged sha for run ' + marks.closeRunId + ' (no close row in .claude/spec-runs.jsonl, no ' +
-    'refs/spec-review/' + marks.closeRunId + '/judged) — the soft sweep ceiling cannot be measured; restore the ledger row')
+  return (r.status === 0 && SHA40_RE.test(sha)) ? sha : null
 }
 
 // the committed close tree against the judged tree, minus the files CLOSE itself writes. The
@@ -1914,29 +1921,42 @@ function judgedSha() {
 // close row's diff.head commit.
 function refuseOverSweepCeiling() {
   if (!marks.softSweep || !(marks.softSweep.fixed >= 1)) return
-  const sha = (SHA40_RE.test(marks.judgedTree || '') && marks.judgedTree) || judgedSha()
+  const pinned = SHA40_RE.test(marks.judgedTree || '') && marks.judgedTree
+  const sha = pinned || judgedSha()
   const excludes = [specRel, 'docs/canonical/', '.claude/spec-runs.jsonl', '.claude/spec-runs/', sidecarRel,
     path.relative(repoRoot, deviationsPath), '.claude/agent-memory/']
   if (pipelineRulesPath) excludes.push(path.relative(repoRoot, pipelineRulesPath))
-  const r = runChild('git', ['-C', repoRoot, 'diff', '--numstat', '--no-renames', sha, 'HEAD', '--', '.',
-    ...excludes.map((p) => ':(exclude)' + p)], { encoding: 'utf8' }, 'git diff --numstat (soft sweep ceiling)')
-  if (r.status !== 0) die('git diff --numstat ' + sha + ' HEAD failed (' + (r.stderr || r.stdout).trim() + ') — fix the repo state, then re-run this mark')
-  let total = 0
-  let binary = false
-  const files = []
-  for (const l of r.stdout.split('\n')) {
-    if (!l.trim()) continue
-    const [add, del, ...rest] = l.split('\t')
-    files.push(rest.join('\t'))
-    if (add === '-' && del === '-') binary = true
-    else total += Number(add) + Number(del)
+  // The judged tree is a working-tree snapshot that also holds whatever the reviewer's legs left
+  // behind (untracked build output a host never ignored); lib/sweep-ceiling.js counts only paths
+  // tracked in the judged commit or in HEAD, so cleaning that output is never sweep lines.
+  let m
+  try {
+    m = measureSweep({ repoRoot, judgedTree: sha, judgedCommit: pinned ? findJudgedSha() : sha,
+      alsoTracked: fixDeltaPaths(), excludes, run: runChild })
+  } catch (e) {
+    die(e.message + ' — fix the repo state, then re-run this mark')
   }
-  if (total > SOFT_SWEEP_MAX_LINES || binary) {
-    die('soft sweep over ceiling: ' + total + ' changed line(s)' + (binary ? ' plus a binary change' : '') +
+  if (m.skipped.length) {
+    writeOut(1, 'ℹ soft sweep ceiling ignored ' + m.skipped.length + ' path(s) tracked in neither the judged commit nor HEAD ' +
+      '(reviewer-created, since cleaned): ' + m.skipped.slice(0, 5).join(', ') + (m.skipped.length > 5 ? ', …' : '') + '\n')
+  }
+  if (m.total > SOFT_SWEEP_MAX_LINES || m.binary) {
+    die('soft sweep over ceiling: ' + m.total + ' changed line(s)' + (m.binary ? ' plus a binary change' : '') +
       ' vs judged ' + sha.slice(0, 7) + ', ceiling ' + SOFT_SWEEP_MAX_LINES + ' — revert the oversized fix (git checkout ' +
-      sha + ' -- ' + files.join(' ') + '), re-record those softs as debt (--mark soft-swept --file <sweep.json>), ' +
+      sha + ' -- ' + m.files.join(' ') + '), re-record those softs as debt (--mark soft-swept --file <sweep.json>), ' +
       're-commit, then re-run `node ' + __filename + ' ' + specPath + ' --mark closed`')
   }
+}
+
+// every path a fix round touched (the fix-delta-<n>.txt lists): a hard fix's brand-new file is in
+// the judged snapshot but in neither commit, and must still count when a sweep deletes it.
+function fixDeltaPaths() {
+  const out = []
+  for (const n of listManifestNumbers()) {
+    const p = path.join(sidecarDir, `fix-delta-${n}.txt`)
+    if (fs.existsSync(p)) out.push(...fs.readFileSync(p, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean))
+  }
+  return out
 }
 
 // re-stamp this run's close row in place with the sweep tally — one row, one added top-level key.

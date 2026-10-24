@@ -503,3 +503,29 @@ test('create --spec accepts a committed spec given through a symlinked absolute 
   const wt = ok.stdout.trim().split('\n').pop()
   assert.strictEqual(fs.readFileSync(path.join(wt, spec), 'utf8'), 'status: hardened\n')
 })
+
+// Owner: the /spec:fix fix row on the commit introducing SELF_DIR in merge-back.sh. Pins two
+// invariants of `create`: sibling lookups do not depend on how the script was invoked, and only
+// the host-config reader's own exit 3 earns the "cannot be read as JSON" wording.
+test('create works when the script itself is invoked by a bare relative path, and a truly broken config is still named as unreadable JSON', () => {
+  const { spawnSync } = require('node:child_process')
+  const { SPEC } = require('./helpers')
+  const { dir, g } = setupHost('true')
+  const r = spawnSync('bash', ['scripts/merge-back.sh', 'create', '--source', 'spec/x', '--root', dir],
+    { cwd: SPEC, encoding: 'utf8' })
+  assert.strictEqual(r.status, 0,
+    'a relative invocation must create the worktree — otherwise a correct host config gets blamed as unreadable JSON and the worktree is undone: ' + r.stderr)
+  assert.doesNotMatch(r.stderr, /cannot be read as JSON/,
+    'a missing helper module must never be reported as a broken host config')
+  assert.strictEqual(r.stdout.trim().split('\n').pop(), fs.realpathSync(path.join(dir, '.claude/worktrees/spec-x')),
+    'the last stdout line must still be the worktree path for the caller to enter')
+
+  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), '{ not json')
+  g('add', '-A'); g('commit', '-q', '-m', 'break config') // the worktree's own committed copy is read first
+  const bad = spawnSync('bash', ['scripts/merge-back.sh', 'create', '--source', 'spec/y', '--root', dir],
+    { cwd: SPEC, encoding: 'utf8' })
+  assert.strictEqual(bad.status, 2, 'an unparsable config must still fail create: ' + bad.stderr)
+  assert.match(bad.stderr, /cannot be read as JSON/,
+    'the exit-3 reader path must keep its JSON wording so the remedy (fix the config) stays discoverable')
+  assert.ok(!fs.existsSync(path.join(dir, '.claude/worktrees/spec-y')), 'a failed create must still undo the worktree')
+})

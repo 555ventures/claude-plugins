@@ -63,6 +63,11 @@
 #   4  refused: session CWD is inside the worktree — relocate to root first
 set -u
 
+# The script's own directory, absolute, resolved once. Every sibling lookup (worktree-include.sh,
+# lib/host-config.js) goes through it: `dirname "$0"` is only as absolute as the invocation, and
+# a bare relative path handed to Node's require() is read as a package name, not a file.
+SELF_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+
 die()  { echo "merge-back: $*" >&2; exit 2; }
 note() { echo "$*"; }
 
@@ -174,11 +179,11 @@ case "$SUB" in
     # same owner, so the two paths cannot drift apart again. Exit 0/3 continue (3 is already a
     # printed WARNING from the owner); any other exit is a programmer-error `die` naming the
     # owner's usage remedy.
-    bash "$(dirname "$0")/worktree-include.sh" --root "$CROOT" --dest "$WT"
+    bash "$SELF_DIR/worktree-include.sh" --root "$CROOT" --dest "$WT"
     OWNER_RC=$?
     case "$OWNER_RC" in
       0|3) : ;;
-      *) die "create: worktree-include.sh failed (exit $OWNER_RC) — run it by hand: bash $(dirname "$0")/worktree-include.sh --root $CROOT --dest $WT" ;;
+      *) die "create: worktree-include.sh failed (exit $OWNER_RC) — run it by hand: bash $SELF_DIR/worktree-include.sh --root $CROOT --dest $WT" ;;
     esac
     # Host setup is part of create, not a step the caller remembers: a worktree that exists is a
     # worktree that was set up. A failure undoes the create so the retry is a plain re-run.
@@ -196,8 +201,13 @@ case "$SUB" in
       let c
       try { c = hc.readConfigStrict(root) } catch { process.exit(3) }
       process.stdout.write(c && typeof c.setupCommand === "string" ? c.setupCommand : "")
-    ' "$(dirname "$0")/lib/host-config.js" "$WT" "$CROOT")" || {
-      undo_create; die "create: the host config is present but cannot be read as JSON — worktree removed; fix it, then retry"; }
+    ' "$SELF_DIR/lib/host-config.js" "$WT" "$CROOT")"
+    READER_RC=$?
+    case "$READER_RC" in
+      0) : ;;
+      3) undo_create; die "create: the host config is present but cannot be read as JSON — worktree removed; fix it, then retry" ;;
+      *) undo_create; die "create: the host-config reader failed (exit $READER_RC) before reading any config — is $SELF_DIR/lib/host-config.js present? Worktree removed." ;;
+    esac
     if [ -n "$SETUP" ]; then
       echo "merge-back: running host setupCommand in $WT" >&2
       ( cd "$WT" && bash -c "$SETUP" ) >&2 || {

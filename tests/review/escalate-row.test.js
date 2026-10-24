@@ -133,7 +133,7 @@ test('AC-20260822-01-4 (also AC-20260902-05-2, AC-20260903-02-15, SHALL CONTINUE
 
 // ---- driver-level ACs (D5-D10): writeEscalateRow(), self-heal, D10 detector --------------------
 
-test('AC-20260822-01-5 (also AC-20260901-09-2): WHEN the third fix-applied mark is refused in an in-place review THE SYSTEM SHALL have appended exactly one row with escalated:true to .claude/spec-runs.jsonl whose runId equals the sidecar\'s own runId and whose iteration equals the final manifest number, and the sidecar SHALL record escalateRunId', () => {
+test('AC-20260822-01-5 (also AC-20260901-09-2): WHEN the third fix-applied mark is refused in an in-place review THE SYSTEM SHALL have appended exactly one row with escalated:true to .claude/spec-runs.jsonl whose runId equals the sidecar\'s own runId and whose iteration equals the fix-round count (2), and the sidecar SHALL record escalateRunId AC-20261024-01-14', () => {
   const host = makeHost('esc-ac5')
   driveToCapEdge(host.root, host.spec)
   const ledgerPath = path.join(host.root, '.claude/spec-runs.jsonl')
@@ -156,8 +156,8 @@ test('AC-20260822-01-5 (also AC-20260901-09-2): WHEN the third fix-applied mark 
   assert.ok(sidecar.runId, 'the sidecar must record marks.runId once the escalate row is written: ' + JSON.stringify(sidecar))
   assert.strictEqual(row.runId, sidecar.runId,
     'the appended row\'s runId must equal the sidecar\'s own runId — a mismatch would mean the row was minted under a second, unrelated run id: ' + JSON.stringify({ row, sidecar }))
-  assert.strictEqual(row.iteration, 3,
-    'the row\'s iteration must equal the final manifest number (3, after two real fix cycles) — a stale iteration would misattribute which pass the capped evidence came from: ' + JSON.stringify(row))
+  assert.strictEqual(row.iteration, 2,
+    'the row\'s iteration must equal the fix-round count (2, after two real fix cycles — not the manifest number 3) — a manifest-number iteration would misattribute how many fix rounds the capped evidence took: ' + JSON.stringify(row))
   assert.strictEqual(sidecar.escalateRunId, row.runId,
     'the sidecar must record escalateRunId equal to the appended row\'s runId — this is the idempotency guard a bare re-invocation checks before ever writing again: ' + JSON.stringify(sidecar))
 })

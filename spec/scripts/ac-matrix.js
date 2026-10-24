@@ -83,6 +83,10 @@
 // to today's unmapped-skip, byte-identical detail - monotonic widening only (D2): a bare-name
 // line never enters route 3, and an already-mapped line never re-resolves through it.
 //
+// specs/20261024/01-review-driver-reads-recorded-facts.md D6: routes 2 and 3 take the first AC cited at
+// or after the test name's own position in the file (route 3: the text after "::" up to the first
+// "["), falling back to the file-level citations only when none follows or the name is not found.
+//
 // D7 (specs/20260821/03-cross-spec-skip-mapping.md amendment): the coverage grep at step 6 (readTestFile(f).includes
 // (b.id)) was a bare substring test - a well-formed AC whose ID is a PREFIX of another declared
 // AC's ID (AC-...-1 inside AC-...-12) read as covered by a test citing only the LONGER id,
@@ -610,13 +614,24 @@ function resolveInsideRoot(rootDir, rel) {
   return resolved === rootResolved || resolved.startsWith(rootResolved + path.sep) ? resolved : null
 }
 
+// specs/20261024/01-review-driver-reads-recorded-facts.md D6: a skipped test maps to the first AC
+// cited at or after its own name's position in the file, not to the file's first citation (a module
+// docstring's AC). Position is language-neutral; no test-name grammar is parsed. Falls back to the
+// file-level ids when the name is not found or no AC-ID follows it.
+function idsFromPosition(content, pos, fileLevelIds) {
+  if (pos < 0) return fileLevelIds
+  const after = [...new Set([...content.slice(pos).matchAll(AC_ID_RE_GLOBAL)].map(m => m[0]))]
+  return after.length ? after : fileLevelIds
+}
+
 let sanctioned = 0
 for (const line of skipLines) {
   const embedded = [...line.matchAll(AC_ID_RE_GLOBAL)].map(m => m[0])
   let mappedIds = embedded
   if (!mappedIds.length) {
     for (const [f, ids] of fileAcMap) {
-      if (readTestFile(f).includes(line)) { mappedIds = [...ids]; break }
+      const content = readTestFile(f)
+      if (content.includes(line)) { mappedIds = idsFromPosition(content, content.indexOf(line), [...ids]); break }
     }
   }
   // D1/D2: route 3 — only after routes 1/2 both miss AND the line carries a runner-style file
@@ -627,9 +642,11 @@ for (const line of skipLines) {
     const resolved = resolveInsideRoot(root, rel)
     if (resolved && fs.existsSync(resolved)) {
       const relForCache = path.relative(root, resolved).split(path.sep).join('/')
-      const cited = [...readTestFile(relForCache).matchAll(AC_ID_RE_GLOBAL)].map(m => m[0])
+      const content = readTestFile(relForCache)
+      const name = line.slice(line.indexOf('::') + 2).split('[')[0]
+      const cited = [...content.matchAll(AC_ID_RE_GLOBAL)].map(m => m[0])
       const deduped = [...new Set(cited)]
-      if (deduped.length) mappedIds = deduped
+      if (deduped.length) mappedIds = idsFromPosition(content, name ? content.indexOf(name) : -1, deduped)
     }
   }
   if (!mappedIds.length) {

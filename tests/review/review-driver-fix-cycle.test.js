@@ -199,7 +199,7 @@ test('AC-20260820-07-8 (manifest-provable cap) / AC-20260901-09-2: hand-editing 
 // stamps (D1) the source of the hard-stop pass's required-leg set, so the red gate is reached and
 // GATE_RED derives (today's code judges the same manifest against the FULL set and derives
 // UNVERIFIED instead — A2 spike S1).
-test('AC-20260902-05-6: WHEN the driver\'s --mark fix-applied legs run hard-stops on a red gate THE SYSTEM SHALL append a ledger row with verdict:"GATE_RED", scope:"fix-delta" and iteration:2, and --state SHALL report STOPPED', () => {
+test('AC-20260902-05-6: WHEN the driver\'s --mark fix-applied legs run hard-stops on a red gate THE SYSTEM SHALL append a ledger row with verdict:"GATE_RED", scope:"fix-delta" and iteration:1 (the fix-round count), and --state SHALL report STOPPED AC-20261024-01-14', () => {
   const host = makeHost()
   run(host.root, host.spec)
   assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', 'setup: a fresh green-legs fixture must reach REVIEWER')
@@ -234,8 +234,8 @@ test('AC-20260902-05-6: WHEN the driver\'s --mark fix-applied legs run hard-stop
     `GATE_RED derives, never UNVERIFIED: ${JSON.stringify(row)}`)
   assert.strictEqual(row.scope, 'fix-delta',
     `D4: the hard-stop ledger row must carry the manifest-derived scope "fix-delta": ${JSON.stringify(row)}`)
-  assert.strictEqual(row.iteration, 2,
-    `this is the second manifest iteration (manifest-2.jsonl, the fix-delta re-run) — the row must record it: ${JSON.stringify(row)}`)
+  assert.strictEqual(row.iteration, 1,
+    `this is the first fix round (manifest-2.jsonl is the fix-delta re-run, but the ledger iteration is the fix-round count, not the manifest number) — the row must record 1: ${JSON.stringify(row)}`)
 })
 
 // specs/20260902/05-manifest-stamped-scope.md D5/AC-20260902-05-8: a hand-edited manifest (the

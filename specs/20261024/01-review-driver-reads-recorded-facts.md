@@ -1,6 +1,7 @@
 ---
 date: 2026-10-24
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: review
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 brief: n/a
 open_markers: 0
 spiked: 2026-10-24
+diff_base: 0a44191f4e57fed0f75d2b29ba6ccfa174ec18ca
 ---
 
 # Review driver reads recorded facts, never stand-ins
@@ -34,6 +36,7 @@ regression test per defect, and the existing pins keep passing.
 | D5 | `--mark skips-extracted` refuses (exit 2, nothing written) a file with zero non-blank lines while the live manifest's gate row reports skips > 0; when the non-blank line count differs from the gate's count it prints one `⚠ skip file lists N names, gate reported M skips` line and proceeds (AC-20261024-01-9, AC-20261024-01-10) | An empty file against 26 skips let a review reach CLEAN (zubu-connect 20261017/03). A count mismatch is a warning, not a refusal: the plugin declares only the skip-count format; runners group identical skips into one line. |
 | D6 | ac-matrix.js step-6 routes 2 and 3 are position-aware: locate the test's name in the file (route 2: the whole line; route 3: the part after `::`, cut at the first `[`), take the first AC-ID cited at or after that position, and fall back to today's file-level mapping only when none follows (AC-20261024-01-11, AC-20261024-01-12, AC-20261024-01-13) | File-level citations hand a skipped test the module docstring's first AC; the sanction decision then reads the wrong `[env:]`. Position is language-neutral; the plugin still owns no test-name grammar. |
 | D7 | The `--iteration` passed to every verdict.js pass is `fixRoundsDone()`, not the manifest number (AC-20261024-01-14) | Ledger rows overstated the fix iteration after a skips round; verdict.js is the only reader, so the shape is unchanged. |
+| D8 | Build-time scope widening (gate lines: `tests/review/escalate-row.test.js` AC-20260822-01-5, `tests/review/review-driver-fix-cycle.test.js` AC-20260902-05-6): both pins asserted the ledger `iteration` equals the manifest number; under D7 they assert the fix-round count (2 after two fix cycles; 1 for the first fix-delta hard-stop), updated in place and retagged AC-20261024-01-14, never weakened (AC-20261024-01-14) | Auto-picked add to scope; D7 retires the manifest-number reading these pins spelled. |
 
 ## File Plan
 
@@ -45,6 +48,9 @@ regression test per defect, and the existing pins keep passing.
 | tests/review/iteration-identity.test.js | CREATE | tests | AC-20261024-01-1, AC-20261024-01-2, AC-20261024-01-4, AC-20261024-01-5, AC-20261024-01-8, AC-20261024-01-14 |
 | tests/review/skips-per-iteration.test.js | CREATE | tests | AC-20261024-01-6, AC-20261024-01-7, AC-20261024-01-9, AC-20261024-01-10 |
 | tests/ac-matrix/skip-position.test.js | CREATE | tests | AC-20261024-01-11, AC-20261024-01-12 |
+| tests/review/review-driver.fixtures.js | MODIFY | tests | A3 remedy: additive shared-setup exports for the two new review test files |
+| tests/review/escalate-row.test.js | MODIFY | tests | D8: escalate-row iteration pin reads the fix-round count |
+| tests/review/review-driver-fix-cycle.test.js | MODIFY | tests | D8: first fix-delta GATE_RED row pins iteration 1 |
 
 ## Contracts
 

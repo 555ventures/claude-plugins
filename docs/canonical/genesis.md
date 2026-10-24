@@ -59,6 +59,11 @@
   excerpt the driver prints back is bounded in **bytes** (`LOGTAIL_MAX_BYTES`), not lines.
   (specs/20260825/04-genesis-driver.md, done 2026-08-26)
 
+- Since specs/20261024/02 the MENUS gate reads `status.menus` (written by `menu-written` after
+  registry-check.js) and the `## Picks` line; a menu file's presence is display, never the gate.
+  The design-stage states derive from `designBriefWritten`/`designApproved` alone — the mark
+  handlers verify the artifacts. (specs/20261024/02-genesis-marks-and-the-no-stand-ins-test.md, done 2026-10-24)
+
 - Since specs/20260827/01 the driver races finalists between `MENUS` and `DECIDE` for tournament
   archetypes (`web-app`, `realtime-trading`, `backend-api`, `mobile-app`, `desktop-app`): states
   `FINALISTS` → `RACE` (driver-only: scaffold into

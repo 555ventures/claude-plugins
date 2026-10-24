@@ -1,12 +1,14 @@
 ---
 date: 2026-10-24
-status: hardened
+status: done
 tier: standard
 area: genesis
 breaking: false
 depends_on: [specs/20261024/01-review-driver-reads-recorded-facts.md]
 brief: n/a
 open_markers: 0
+build_base: main
+diff_base: 72068eda9c517330f39320c3cf6360a26a88ffb4
 ---
 
 # Genesis reads its marks, and a consistency test bans stand-ins in every driver
@@ -28,6 +30,7 @@ file-presence calls, so the class fixed by 20261024/01 cannot return silently.
 | D2 | `deriveState()` in genesis-driver.js reads `status.marks.designBriefWritten` and `status.marks.designApproved` alone; the two `fs.existsSync` artifact checks beside them are removed. The mark handlers already verify the artifacts before setting the marks (AC-20261024-02-3, AC-20261024-02-4) | Mark-and-file was two derivations of one fact; the handlers are the verification point, the derivation reads the result. |
 | D3 | A consistency test reads the source of `deriveState()` in the five drivers (review, build, genesis, prototype, mocks) and fails on any `existsSync(`, `readdirSync(`, `listManifestNumbers(` or `Math.max(...listManifestNumbers` call inside the function body; it also fails on `Math.max(...listManifestNumbers` anywhere in spec-review-driver.js (AC-20261024-02-5, AC-20261024-02-6) | Behaviour tests pin each incident; this is the one structural pin for the class (core § Incident Policy: third recurrence earns a deterministic guard — the audit counted 13 of 62 fix diffs). |
 | D4 | The test extracts each function body by brace matching from `function deriveState(` to its closing brace at column 0 (AC-20261024-02-6) | A regex over the whole file would ban legitimate presence checks inside mark handlers; only the derivation is banned. |
+| D5 | Build ruling (2026-10-24): AC-20261024-02-4's `reuses tests/genesis/genesis-driver.test.js :: review finding F1 (D4)` pointer named a test about the MENUS dropped-option re-print, and no existing test pins the `design-brief-written` refusal on an absent `design-paths.json`. The pin moves to a new green-expected file, tests/genesis/design-brief-refusal.test.js (AC-20261024-02-4) | A1's verification point is the handler; D2 removes the second check, so the handler's refusal needs its own pin, and a CONTINUE-TO pin cannot share the red-expected menus-recorded file. |
 
 ## File Plan
 
@@ -37,6 +40,7 @@ file-presence calls, so the class fixed by 20261024/01 cannot return silently.
 | spec/.claude-plugin/plugin.json | MODIFY | scripts | `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` |
 | tests/genesis/menus-recorded.test.js | CREATE | tests | AC-20261024-02-1, AC-20261024-02-2, AC-20261024-02-3, AC-20261024-02-4 |
 | tests/consistency/no-stand-ins.test.js | CREATE | tests | AC-20261024-02-5, AC-20261024-02-6 |
+| tests/genesis/design-brief-refusal.test.js | CREATE | tests | AC-20261024-02-4 (D5) |
 
 ## Contracts
 
@@ -70,7 +74,7 @@ const DRIVERS = ['spec-review-driver.js', 'spec-build-driver.js', 'genesis-drive
 - **AC-20261024-02-1**: WHEN `interview-research/<key>.json` exists for an open dimension but `menu-written` was never marked for it THE SYSTEM SHALL refuse `--mark menus-done` (exit 2) naming `<key>`, and `--state` SHALL print `MENUS` → writes tests/genesis/menus-recorded.test.js
 - **AC-20261024-02-2**: WHEN every open dimension has a `status.menus` record and a `## Picks` line THE SYSTEM SHALL accept `menus-done` and derive the next state (the record alone is sufficient; the test deletes the menu files after marking to prove presence is not read) → writes tests/genesis/menus-recorded.test.js
 - **AC-20261024-02-3**: WHEN `status.marks.designBriefWritten` is true THE SYSTEM SHALL derive the post-brief state without reading `docs/design/brief.md` or `design-paths.json` (the test removes both after the mark) → writes tests/genesis/menus-recorded.test.js
-- **AC-20261024-02-4**: WHEN `--mark design-brief-written` runs with `design-paths.json` absent THE SYSTEM SHALL CONTINUE TO refuse naming the file → reuses tests/genesis/genesis-driver.test.js :: review finding F1 (D4)
+- **AC-20261024-02-4**: WHEN `--mark design-brief-written` runs with `design-paths.json` absent THE SYSTEM SHALL CONTINUE TO refuse naming the file → writes tests/genesis/design-brief-refusal.test.js
 - **AC-20261024-02-5**: WHEN the consistency test reads the five drivers THE SYSTEM SHALL find zero banned calls inside each `deriveState()` body and zero `Math.max(...listManifestNumbers` occurrences anywhere in spec-review-driver.js → writes tests/consistency/no-stand-ins.test.js
 - **AC-20261024-02-6**: WHEN a driver source is given in which `deriveState()` contains `fs.existsSync(` THE SYSTEM SHALL fail the test naming the driver and the call (the test exercises its own checker against a fixture string, not the live file) → writes tests/consistency/no-stand-ins.test.js
 

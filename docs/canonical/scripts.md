@@ -82,6 +82,9 @@ fuller incident write-ups live in each cited spec's history.
 - **`spec/scripts/pictures.js` runs the project's own picture command and never makes a picture
   itself; it reaches the service only by running `walkthrough.js` as a child process.**
   (specs/20261005/06-the-design-stage-sends-pictures.md)
+- **Every driver's `deriveState()` reads recorded marks and evidence rows, never file presence
+  or counts;** `tests/consistency/no-stand-ins.test.js` pins it.
+  (specs/20261024/02-genesis-marks-and-the-no-stand-ins-test.md D3)
 
 ## Prose budgets
 

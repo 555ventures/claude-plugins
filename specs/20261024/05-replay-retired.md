@@ -1,6 +1,6 @@
 ---
 date: 2026-10-24
-status: implementing
+status: done
 build_base: main
 tier: critical
 area: feedback-loop
@@ -192,6 +192,20 @@ provenance, never edited: `docs/roadmap/19-escape-seeded-replay.md`,
 `docs/roadmap/23-closed-feedback-loop.md`, `docs/adr/0025` beyond its backlink line, and every
 `specs/**` file (their ACs receive `[retired:]` tags under D7, nothing else changes).
 `docs/canonical/*` hits land through the Canonical Delta at review close.
+
+Build departures (folded from the deviations sidecar, 2026-10-24): AC-6 and AC-9 described the
+pre-image wrongly and AC-12's pointer verb contradicted its CONTINUE TO — all three corrected
+under D10. The tests wave dropped the core Feedback Loop cadence case and the replay command's
+entry-point assertion from `run-ledger.test.js`, and the `lastMeasurementReplayIdx` and footer
+cases from `since-release.test.js`; their criteria carry `[retired:]` tags. The scripts worker
+made `review-legs.js` name an unknown argument on stderr (AC-4 needed it), reworded the write
+hook's BLOCKED hint line and two inline comments besides its header (text only; D8's logic
+untouched), and dropped `escapes.registry` with the corpus crossing — restored by the session
+as `{class, count}` under D11. Gate round 1 widened scope to `read-load.test.js`,
+`entrypoints.test.js` and `prototype-driver.js` (D11, user-approved). Both doctrine and scripts
+workers ran `git rm` on their own deletions (a Worker Git Ban breach with no harm: it only
+staged the deletions this spec makes). Review: CLEAN, two softs (a garbled comment, a bare
+block) fixed at close.
 
 ## Canonical Delta
 

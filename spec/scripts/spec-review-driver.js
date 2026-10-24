@@ -670,8 +670,9 @@ function resolveBaseSha() {
   // Nothing downstream objects — verdict.js validates sha SHAPE only, so ledger row rv_31224a17550e
   // recorded base === head and no leg, no verdict pass and no ledger append noticed. Refuse here,
   // at the single point where the range is first known, rather than trusting every future caller to
-  // have derived it correctly. Validates the candidate
-  // this way (`sha !== parent` + `merge-base --is-ancestor`).
+  // have derived it correctly. The check below has two parts: the base sha must differ from HEAD
+  // (otherwise the range is empty), and it must be an ancestor of HEAD per
+  // `merge-base --is-ancestor` (otherwise the diff would carry foreign reverse hunks).
   //
   // SCOPED TO THE JUDGING PHASES. Once `closed` is marked the verdict is already recorded and what
   // remains is merge mechanics, which run from the MAIN ROOT — where HEAD legitimately still sits

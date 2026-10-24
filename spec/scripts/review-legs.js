@@ -470,10 +470,8 @@ async function main() {
   // ---- wave 3b: promise-sweep — runs in EVERY scope including --fix-delta (D4: the spec text
   // may be amended during a fix pass, and the leg is milliseconds); appends its own manifest row
   // the same way ac-matrix.js does above, never via appendRow (that would double-write it).
-  {
-    const psr = await sh(`node ${q(path.join(scriptDir, 'promise-sweep.js'))} --spec ${q(spec)} --manifest ${q(manifest)}`)
-    fs.writeFileSync(path.join(outDir, 'promise-sweep.txt'), psr.out + psr.err)
-  }
+  const psr = await sh(`node ${q(path.join(scriptDir, 'promise-sweep.js'))} --spec ${q(spec)} --manifest ${q(manifest)}`)
+  fs.writeFileSync(path.join(outDir, 'promise-sweep.txt'), psr.out + psr.err)
 
   // ---- summary ----------------------------------------------------------------------------
   const all = fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))

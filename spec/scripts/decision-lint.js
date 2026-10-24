@@ -2,8 +2,8 @@
 'use strict'
 // decision-lint.js --spec <path> --root <dir> [--json]
 //
-// Why (specs/20261016/01-lock-refuses-unjustified-restrictions.md D1-D5):
-// a spec's Decisions table can withhold an affordance from a product's users, or defer work into
+// Owner: specs/20261016/01-lock-refuses-unjustified-restrictions.md
+// A spec's Decisions table can withhold an affordance from a product's users, or defer work into
 // a cell no queue reads, and lock stays green because a refusal is the cheapest Decision to
 // write. This lint runs at /spec:plan's lock and refuses (1) a restrictive row carrying neither
 // `[guards: <text found in the host's rules § Risk Tiers>]` nor `[asked: <what the user chose>]`,

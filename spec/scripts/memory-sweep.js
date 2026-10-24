@@ -2,12 +2,13 @@
 'use strict'
 // memory-sweep.js — surfaces agent-memory notes owed a disposition at review close.
 //
-// specs/20260823/06-prose-debt-pruning.md D5/D6/D7/D13: the disposition trigger.
+// Owner: specs/20260823/06-prose-debt-pruning.md.
+// The disposition trigger.
 //
 // It deliberately does NOT trigger merely because a diff touches the note's own file (only
 // diff-hit or ttl-expired, defined below, qualify), does NOT dispose anything itself, does NOT
 // read or require any frontmatter `subjects:` field (relevance is derived by grepping note
-// bodies, per D6 — no note-writing contract change), and NEVER feeds `verdict.js` (D13: a
+// bodies — no note-writing contract change), and NEVER feeds `verdict.js` (a
 // disposition-trigger widener, not a gate) — it exits 0 whenever the sweep ran, findings or not.
 //
 // Usage: node memory-sweep.js --root <repo root> --diff <file with one changed path per line>
@@ -28,7 +29,7 @@
 //   2  bad invocation: missing/unreadable --root or --diff, an explicitly-given --ledger that is
 //      unreadable, or git not answering in --root (stderr names the remedy). A --ledger left at
 //      its default and simply absent (a fresh repo with no review closes yet) is NOT an error —
-//      it is read as zero rows, since D13 makes this sweep fail-open by design.
+//      it is read as zero rows, since this sweep is fail-open by design.
 
 const fs = require('fs')
 const path = require('path')

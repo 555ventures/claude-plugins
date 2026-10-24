@@ -1,23 +1,24 @@
 'use strict'
 // lib/host-config.js — the sole reader of the host's `.claude/spec.config.json` for scripts that
-// need one fact out of it. Extracted (review advisory on specs/20260813/10's own diff:
+// need one fact out of it. Extracted (a review advisory:
 // ci-query.js and observe-ci.js each grew a byte-identical private readForge block in one diff,
 // while lib/glob-match.js's pipelineOwnedGlobs already carried a third copy of the same
 // read-parse-swallow shape — the identical class this repo already paid down once, on
 // the occasion when scope-reconcile.js and hotspot.js were deduplicated into glob-match.js).
 // Three private readers meant three places for the absent-config contract to drift apart.
+// Owner: specs/20260813/10-host-capabilities.md.
 //
 // `readConfig(root)` is the file read; `declaredForge(root)` is the one derivation of the
 // declared forge capability, so the two CI scripts read the same fact the same way rather than
-// each restating the key path (specs/20260813/10-host-capabilities.md D1/D2).
+// each restating the key path.
 //
 // What `readConfig` deliberately does NOT do: validate the config's shape, apply defaults for
 // any key, or surface read/parse errors. An absent, unreadable, or unparsable config reads as
 // `{}` — every caller degrades to its own documented default (glob-match: baseline globs only;
 // the CI scripts: legacy dynamic `gh` probing), which is the contract each of them already had.
 //
-// `readConfigStrict(root)` is the fail-loud sibling (specs/20260815/01-recurrence-carriers.md
-// D5): the divergence across this repo's config readers was always the ERROR POLICY, never the
+// `readConfigStrict(root)` is the fail-loud sibling:
+// the divergence across this repo's config readers was always the ERROR POLICY, never the
 // read — strict-flavored consumers (ci-gate-parity.js, a now-retired design-render gate script)
 // structurally could not call `readConfig` and read the file privately instead, which is what recurred the
 // config-read class a day after its second paydown. It throws on absent/unreadable/unparsable
@@ -28,7 +29,7 @@
 // to before the swap (a non-object throw would have silently rewritten ci-gate-parity's locked
 // exit-0 "inapplicable — no gateCommand" degrade on a scalar config into an exit-2 crash).
 //
-// specs/20260820/08-config-name-ban.md D7: `tests/host-config/config-read.test.js`
+// `tests/host-config/config-read.test.js`
 // bans naming the literal filename `spec.config.json` (stem `spec.config`) in executable text
 // anywhere under `spec/scripts/`, with exactly three named exemptions: this file (the sole Node
 // reader), and `smoke.sh`/`spec-state-gate.sh` (read via `jq`; bash cannot `require()` this
@@ -48,7 +49,7 @@ const CONFIG_RELPATH = '.claude/spec.config.json'
 // The default test-classification glob set — THE single declaration in this repo (docs/adr/0011).
 // Every consumer imports it: scope-reconcile.js (at-risk leg + --probe-at-risk), ac-drift.js, and
 // init-gen.js's at-risk-applicability probe. It was briefly declared three times over
-// (specs/20260906/01 D4 deliberately deferred the fold-in); tests/doctor/ac-drift.test.js now pins
+// (the fold-in was deliberately deferred); tests/doctor/ac-drift.test.js now pins
 // single-sourcing directly — a second copy anywhere under spec/scripts/ reddens that test.
 // Frozen because it is shared by reference across those modules: no consumer mutates it today
 // (all three read sites are membership tests), and the freeze keeps that true by construction.

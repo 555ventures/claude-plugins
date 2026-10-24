@@ -99,7 +99,7 @@ once at the end.
   file plus its `shared-for` output (both as `split('\n').length`) THE SYSTEM SHALL report
   build ≤ 300, review ≤ 340, run ≤ 310, mocks ≤ 325, replay ≤ 450, design ≤ 510, plan ≤ 328,
   init ≤ 735 and every other command ≤ 500 (e.g. review.md today: `429` → after: `≤ 340`) →
-  per-command budget tests in `tests/consistency/read-load.test.js`
+  per-command budget tests in `tests/consistency/read-load.test.js` [retired: specs/20261024/04-scripts-drop-their-inline-changelog.md]
   - superseded at build Phase 1 by D12: this AC read `design ≤ 490`, derived from A4's
     mismeasurement of 500. design's true figure at `build_base` is 510, which is also the
     ceiling specs/20260907/09-atlas-index-and-note-navigation.md D13 granted by recorded
@@ -108,7 +108,7 @@ once at the end.
   `spec/commands/*.md` THE SYSTEM SHALL exit 0 for every file that has a `## Rules` heading
   and treat a file with none (exit 2, stderr `no "## " heading containing`) as passing (e.g.
   `status.md` → pass; `review.md` with 12 bullets → fail; with 8 → pass) → Rules-cap test in
-  `tests/consistency/read-load.test.js`
+  `tests/consistency/read-load.test.js` [retired: specs/20261024/04-scripts-drop-their-inline-changelog.md]
 - **AC-20260908-06-3** `[pre-green: predicate-in-test]`: WHEN `spec-paths shared-for <cmd>`
   runs for each of the 17 scoped keys THE SYSTEM SHALL print exactly the `## ` headings the
   test's `SHARED_FOR` table lists for that key, in that order, parentheticals stripped (e.g.

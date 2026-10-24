@@ -1,6 +1,7 @@
 'use strict'
-// lib/scan-test-calls.js — the one derivation of "a test case" (specs/20260911/02-tests-have-a-
-// ceiling.md D2). Exports `listTestFiles(root, config)` (host testGlobs-classified files,
+// lib/scan-test-calls.js — the one derivation of "a test case".
+// Owner: specs/20260911/02-tests-have-a-ceiling.md.
+// Exports `listTestFiles(root, config)` (host testGlobs-classified files,
 // skipping `.git`, `node_modules`, `fixtures`, `__fixtures__`, `.claude/worktrees`),
 // `scanCalls(src)` (every line-start `test(`/`it(` call in one source string), and
 // `countCases(root, config)` (the two composed), and `resolveReference(root, file, prefix)` (the
@@ -21,15 +22,14 @@
 // matches — the first of those is a suite, and reading it as one case would swallow its body.
 // The scanner walks the whole source once, skipping string/template literals, `//` and `/* */`
 // comments, and regex literals as opaque spans so a quote or paren inside one of them can never
-// desynchronize the paren-depth count that finds a call's own closing paren (AC-20260911-02-4).
+// desynchronize the paren-depth count that finds a call's own closing paren.
 // Regex-literal detection follows the standard heuristic: a `/` opens a regex only when the last
 // significant character read is one of `( , = : [ ! & | ? { } ; + - * % < > ~ ^`, one of the
 // keywords `return typeof case await throw else in of`, or the `=>` arrow token — anywhere else
 // (an identifier, a literal, `]`, a postfix `++`/`--`) it is division and left alone. A `)` is
 // ambiguous on its own (`(a + b) / 2` is division, `if (a) /re/.test(x)` is a regex) so a paren
 // stack tracks, for each `(`, whether the word immediately before it was `if`/`while`/`for`/
-// `switch`/`catch` — only a `)` that closed one of those conditionals opens a regex context
-// (AC-20260911-02-4's second shape, the amendment's forcing incident).
+// `switch`/`catch` — only a `)` that closed one of those conditionals opens a regex context.
 //
 // What this deliberately does NOT do: understand JSX, decorators, or any transpiled syntax
 // (plain post-Node-current-syntax test files only); count `describe(`/`describe.each(`/`t.test(`/
@@ -43,7 +43,7 @@ const { readConfig, DEFAULT_TEST_GLOBS } = require('./host-config')
 const { globMatch } = require('./glob-match')
 const { walkFiles } = require('./walk-files')
 
-// D2's skip set and the walk that applies it live in lib/walk-files.js — the one copy
+// The skip set and the walk that applies it live in lib/walk-files.js — the one copy
 // lib/invariants.js's universe shares, so the two can never disagree about which files exist
 // (they once did: only one of them resolved symlinks).
 
@@ -116,7 +116,7 @@ const REGEX_OPENING_PUNCT = '(,=:[!&|?{};+-*%<>~^'
 // `throw /re/`, `else /re/.test(x)`, `x in /re/`, `for (x of /re/)`, `return /re/`).
 const REGEX_OPENING_KEYWORD_RE = /(^|[^A-Za-z0-9_$])(return|typeof|case|await|throw|else|in|of)$/
 
-// A `/` opens a regex only in the documented contexts (D2/A3) — the trailing significant-
+// A `/` opens a regex only in the documented contexts — the trailing significant-
 // character buffer `sig` (a boundary space collapses each whitespace run, never fully dropped)
 // is checked, never a single char, so the `return`/`=>` checks can match a whole token rather
 // than its last letter. `lastCloseWasKeyword` carries whether the most recently closed paren (if
@@ -152,7 +152,7 @@ function skipRegex(src, i) {
 
 // Finds the index just past the call's OWN closing paren, given the index of its opening `(`.
 // Depth-tracks parens only, skipping every opaque span the same way the top-level scan does —
-// this is what keeps a regex literal holding an escaped `\)` and a bare `"` (AC-20260911-02-4)
+// this is what keeps a regex literal holding an escaped `\)` and a bare `"`
 // from corrupting the count.
 function findCallEnd(src, openParenIdx) {
   let depth = 1
@@ -251,8 +251,7 @@ function matchCallOpen(src, i, name, modifiers) {
   return src[arg] === '\'' || src[arg] === '"' || src[arg] === '`' ? pos : -1
 }
 
-// scanCalls(src) -> [{ start, end, callText, title, commentAbove }] — see the Contracts block
-// in specs/20260911/02-tests-have-a-ceiling.md for the field shapes.
+// scanCalls(src) -> [{ start, end, callText, title, commentAbove }]
 function scanCalls(src) {
   return scanLineStartCalls(src, ['test', 'it'], true)
 }
@@ -307,14 +306,14 @@ function scanLineStartCalls(src, names, skipBody) {
       if (/^\s*$/.test(before)) {
         const callEnd = findCallEnd(src, openParen)
         const title = extractTitle(src, openParen)
-        // D10 (specs/20260911/04-every-criterion-declares-its-test.md): only a trailing `;` is
+        // Only a trailing `;` is
         // consumed now — the former unconditional trailing-`\n` consumption pushed a span past
         // its own call's closing paren into the FOLLOWING line, so a call immediately followed by
         // another (the overwhelmingly common shape, one blank-free line between two test( calls)
         // reported `end === <next call's start>` instead of strictly less, and the file's last
         // call (one trailing newline before EOF, equally common) reported `end === src.length`
         // indistinguishable from a swallowed-rest-of-file span — the exact file-corrupting
-        // deletion this invariant exists to let spec 03 detect (AC-20260911-04-12).
+        // deletion this invariant exists to let spec 03 detect.
         let end = callEnd
         if (src[end] === ';' && end + 1 < src.length) end++
         calls.push({

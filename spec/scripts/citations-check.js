@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 'use strict'
 // citations-check.js [--root <dir>] [--verbose] — the § citation checker.
+// Owner: specs/20260810/09-stale-reference-sweep.md.
 //
-// Six broken `§ Heading` citations accumulated silently in doctrine across one audit cycle
-// (specs/20260810/09-stale-reference-sweep.md D9) because
+// Six broken `§ Heading` citations accumulated silently in doctrine across one audit cycle because
 // nothing verified that a `§ Name` citation actually names a `## ` heading in the file it
 // points at — `shared-for` filtering just silently drops a mismatched section, so a broken
 // citation reads as valid doctrine forever. This is the enumerator: it scans every citation
@@ -72,7 +72,7 @@ function listMd(dir) {
 const scannedFiles = SCANNED_DIRS.flatMap(d => listMd(path.join(root, d)))
 
 // scanned-basename index: a bare word (no `.md`) matching a SCANNED file's basename resolves
-// to it (D9's "a scanned basename" clause) — deliberately narrower than the full repo index.
+// to it — deliberately narrower than the full repo index.
 const scannedBasenames = new Map()
 for (const f of scannedFiles) {
   scannedBasenames.set(path.basename(f, '.md').toLowerCase(), f)
@@ -147,7 +147,7 @@ function cleanTok(t) {
 // A truly bare § (no lookback word at all) resolves to the citing file itself. Any OTHER
 // lookback — words present but naming nothing this checker recognizes (prose like "the
 // contract file's §" or "Where §") — is a SKIP, never a match against the citing file: falling
-// through to "match the citing file" for arbitrary prose was the AC-20260810-09-2 defect
+// through to "match the citing file" for arbitrary prose was a defect
 // (every unresolvable lookback forced a false MISS against whatever file happened to be
 // citing, because most files carry no heading answering random prose).
 function resolveTarget(farWord, nearWord, citingFile, citingDir) {
@@ -186,7 +186,7 @@ function resolveTarget(farWord, nearWord, citingFile, citingDir) {
   // resolution is WEAK: a heading matching nothing there stays a SKIP and never becomes a
   // MISS. That asymmetry is the whole guard rail. Ordinary English before `§` cannot be told
   // apart from a real file reference, so a strong resolution here would turn correct doctrine
-  // into false misses (the AC-20260810-09-2 defect); a weak one can only ever add coverage.
+  // into false misses; a weak one can only ever add coverage.
   return { kind: 'weak', target: [citingFile, ...DOCTRINE_PATHS] }
 }
 
@@ -235,7 +235,7 @@ for (const file of scannedFiles) {
         termIdx = stripped.search(TERM)
       }
       // Collapse whitespace (a wrapped heading picks up the next line's leading indent) so a
-      // wrapped citation resolves identically to its unwrapped spelling (AC-20260810-09-2).
+      // wrapped citation resolves identically to its unwrapped spelling.
       const heading = (termIdx === -1 ? stripped : stripped.slice(0, termIdx)).trim().replace(/\s+/g, ' ')
 
       total++
@@ -250,7 +250,7 @@ for (const file of scannedFiles) {
 
       // Every real `## ` heading in this corpus is Title Case; a citation whose captured
       // name starts lowercase ("§ mock supremacy") is quoting a bold run-in lead-in, not a
-      // heading — D7's own rationale calls this class out as needing a non-`§` reword. Until
+      // heading — a class that needs a non-`§` reword. Until
       // that reword lands it is a malformed citation, never a checkable one: SKIP, not MISS.
       if (heading.length === 0 || !/^[A-Z]/.test(heading)) {
         skip++

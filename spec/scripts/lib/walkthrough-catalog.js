@@ -4,7 +4,7 @@
 // Usage: const { checkScreen, checkRound, screenLabel, selfCheck } = require('./walkthrough-catalog')
 //        checkRound(catalog, round, { shapes, limits }) -> [{ screen, state, element, code, detail }]
 //
-// Owner: specs/20260929/01-the-walkthrough-contract-and-the-client.md D5 (AC-20260929-01-3).
+// Owner: specs/20260929/01-the-walkthrough-contract-and-the-client.md.
 // `catalog` is the parsed spec/templates/walkthrough/catalog.json; `shapes` the contract's shapes
 // (for the `name` shape); `limits` the contract's limits. The library the service renders with
 // checks component names only, so the prop check is ours: a typo costs no request, and the
@@ -16,7 +16,7 @@
 // duplicate-screen, unknown-step-screen, unknown-variant-of, chained-variant, too-many.
 // A finding about a journey or the round has `screen: null`.
 //
-// `selfCheck(contract, catalog)` is D6's no-network proof that the two shipped JSON files agree
+// `selfCheck(contract, catalog)` is the no-network proof that the two shipped JSON files agree
 // with themselves (subset keywords only, calls name real shapes, examples pass their shapes,
 // listed error codes exist, exactly the 19 components): -> { findings: [{ part, code, at, detail }],
 // calls, components }.
@@ -40,7 +40,7 @@ function nameFindings(ctx, value) {
   return typeof value === 'string' && DEFAULT_NAME.test(value) ? [] : [{ at: '', code: 'pattern', detail: 'not a valid name' }]
 }
 
-// props findings from json-shape -> D5 codes. A top-level prop is `.prop`; anything deeper is bad-prop.
+// props findings from json-shape -> this catalog's codes. A top-level prop is `.prop`; anything deeper is bad-prop.
 function propFindings(catalog, type, props) {
   const out = []
   for (const f of validate(catalog.shapes, type, props)) {

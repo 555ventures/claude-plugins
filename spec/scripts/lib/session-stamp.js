@@ -1,16 +1,17 @@
 'use strict'
-// lib/session-stamp.js (D2, specs/20260901/02-run-provenance.md): the read side of
+// lib/session-stamp.js the read side of
 // the session-provenance mechanism spec-session-stamp.sh writes. readSessionStamp(root) parses
 // <root>/.claude/spec-session.json; sessionModel(root) derives the session's model id from the
 // LAST "type":"assistant" line of the stamped transcript's final 512 KiB.
+// Owner: specs/20260901/02-run-provenance.md.
 //
 // Motivation: no review/build row could name which model held
-// the session that produced it — the session model is not in the shell environment (executed
-// spike A1), and the transcript is the only other carrier. The transcript format is documented
+// the session that produced it — the session model is not in the shell environment,
+// and the transcript is the only other carrier. The transcript format is documented
 // as internal and version-unstable (Claude Code sessions doc), so every failure mode here — an
 // absent stamp, a missing transcript file, an unparseable line, no assistant line at all —
 // degrades to `null`, never a thrown error; a broken review must never be the cost of a format
-// change (executed spike A2: four distinct model ids observed across 15 real transcripts on
+// change (four distinct model ids observed across 15 real transcripts on
 // record).
 //
 // What this deliberately does NOT do: write the stamp file (spec-session-stamp.sh's job), read

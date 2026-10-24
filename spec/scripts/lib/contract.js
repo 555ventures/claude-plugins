@@ -2,12 +2,13 @@
 // lib/contract.js — the behaviour contract's steps as exported functions, called in order by
 // prototype-driver.js's `--mark contracted`, `--mark tests-derived` and `--mark closed` handlers.
 //
-// WHY: specs/20261007/01-approve-writes-a-behaviour-contract.md D3 — approve writes a contract
+// Owner: specs/20261007/01-approve-writes-a-behaviour-contract.md.
+// WHY: approve writes a contract
 // (every pin as a record, one picture per route x state made by the host's own `picture` command,
 // one verified end-to-end test per behaviour pin) and nothing else leaves the prototype worktree;
 // each step lives here as a small, independently callable function so the driver's mark handlers
 // stay readable as an ordered list of calls. Not an entry point: every function is reached only
-// through the driver's own ACs (AC-20261007-01-2 .. AC-20261007-01-8), and none of them owns
+// through the driver's mark handlers, and none of them owns
 // status.json/marks bookkeeping — the driver passes whatever facts each step needs.
 //
 // What this deliberately does NOT do: read or write design/prototypes/<stem>/status.json, decide
@@ -25,7 +26,7 @@ const { spawnSync } = require('child_process')
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
 // ---------------------------------------------------------------------------
-// D4(5): pictureAll — one `prototype.picture` run per route x state.
+// pictureAll — one `prototype.picture` run per route x state.
 // ---------------------------------------------------------------------------
 function routeSlug(routePath) {
   if (routePath === '/') return 'root'
@@ -100,8 +101,8 @@ function pictureAll({ root, worktreePath, designDir, config, statesDoc, viewport
 }
 
 // ---------------------------------------------------------------------------
-// D4(6): writeContract — contract.json, schemaVersion 2. `pins` are the records the driver built
-// from pins.json; `tests` is null until tests-derived completes it (D6(7)).
+// writeContract — contract.json, schemaVersion 2. `pins` are the records the driver built
+// from pins.json; `tests` is null until tests-derived completes it.
 // ---------------------------------------------------------------------------
 function writeContract({ designDir, stem, brief, idea, approvedAt, base, viewport, routes, pins, tests }) {
   const contract = {
@@ -122,7 +123,7 @@ function writeContract({ designDir, stem, brief, idea, approvedAt, base, viewpor
 }
 
 // ---------------------------------------------------------------------------
-// D6(6): copyContractTests — `git show <branch>:<e2eFile>` into design/prototypes/<stem>/tests/.
+// copyContractTests — `git show <branch>:<e2eFile>` into design/prototypes/<stem>/tests/.
 // ---------------------------------------------------------------------------
 function copyContractTests({ root, branch, e2eFile, designDir }) {
   const shown = spawnSync('git', ['-C', root, 'show', branch + ':' + e2eFile], { encoding: 'utf8', maxBuffer: 1024 * 1024 * 64 })
@@ -137,7 +138,7 @@ function copyContractTests({ root, branch, e2eFile, designDir }) {
 }
 
 // ---------------------------------------------------------------------------
-// D9: deletion — split into two postcondition-checking steps so the driver can persist
+// deletion — split into two postcondition-checking steps so the driver can persist
 // status.json between them. dbDestroy is not assumed idempotent (a resume after a dirty-
 // worktree refusal must not run it twice), so the driver records `marks.dbDestroyed` right
 // after `runDbDestroy` succeeds, before ever attempting `removeProtoWorktreeAndBranch` — and
@@ -194,7 +195,7 @@ function removeProtoWorktreeAndBranch({ root, worktreePath, branch, stem, rerun 
 }
 
 // ---------------------------------------------------------------------------
-// D8: ledgerRow — the plain object; the driver appends it through lib/driver-io.js's
+// ledgerRow — the plain object; the driver appends it through lib/driver-io.js's
 // appendLedger so every driver shares the one JSONL-append implementation.
 // ---------------------------------------------------------------------------
 function ledgerRow({ stem, brief, branch, rounds, pinsTotal, pinsBehaviour, pinsLook, routes, states, captures, contract }) {

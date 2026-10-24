@@ -5,7 +5,8 @@
 //              | --amend  --root <dir> --escape-ts <ts> --spec <path> --file <path>
 //                        (--class <id> | --unclassed-reason no-fix-diff|deferred) [--via backfill|manual]
 //
-// Why: specs/20260901/07-escape-class-contract.md D2. escape.md appended ledger rows with a
+// Owner: specs/20260901/07-escape-class-contract.md.
+// Why: escape.md appended ledger rows with a
 // session `printf` before this script existed — that is exactly how a `preventedBy:"test"` and
 // a `foundBy:"build"` row reached a fleet ledger (no script stood between the session and the
 // file). This CLI is the ONE writer of every `stage:"escape"` and `stage:"escape-class"` row:
@@ -18,7 +19,7 @@
 // separating newline when needed, matching the idiom already used in replay.js's info/exclude
 // append.
 //
-// What this deliberately does NOT do: edit or delete an existing ledger line (D3 — the ledger
+// What this deliberately does NOT do: edit or delete an existing ledger line (the ledger
 // is append-only fleet-wide; a wrong amendment is superseded by a later one, never rewritten),
 // decide a row's class for the caller (the session or the backfill agent supplies --class /
 // --unclassed-reason; this script only validates and appends what it is given), or re-derive
@@ -27,7 +28,7 @@
 //
 // Exit codes: 0 = ok (--check: no reasons; --append: one line appended, stdout
 //                 `appended spec=… file=… key=escape:<basename(resolved --root)>:<ts>:<file>` —
-//                 specs/20260903/01-owed-query-and-row-handoff.md D11: the trailing key= suffix
+//                 the trailing key= suffix
 //                 is the exact literal spec/scripts/fleet-reader.js's `owed` query joins
 //                 citations against, so a session copies it verbatim into its report;
 //                 --amend: one line appended, stdout `amended escapeTs=… spec=… file=… class=…|null`)
@@ -79,7 +80,7 @@ for (let i = 0; i < argv.length; i++) {
 }
 if (!mode) { usage(); process.exit(2) }
 
-// A6 (Assumptions): lib/observation.js readLedgerRows(root) merges live + year archives in
+// lib/observation.js readLedgerRows(root) merges live + year archives in
 // read order — verified by code read at plan time. --append's duplicate check and --amend's
 // key search both route through it, so neither can miss a row living only in an archive.
 function requireDir(dir, label) {
@@ -164,11 +165,11 @@ if (mode === 'append') {
     process.exit(3)
   }
   appendLine(root, row)
-  // D11 (specs/20260903/01-owed-query-and-row-handoff.md): the key the fleet reader's `owed`
+  // The key the fleet reader's `owed`
   // query joins citations against — derived here, never hand-composed by the session that
   // copies it into its report. basename(resolved --root) is the population name fleet-reader.js
   // itself keys repos by; the row's OWN ts (never an amendment's) plus file make it unique
-  // fleet-wide (D4).
+  // fleet-wide.
   const key = `escape:${path.basename(root)}:${row.ts}:${row.file}`
   console.log(`appended spec=${row.spec} file=${row.file} key=${key}`)
   process.exit(0)

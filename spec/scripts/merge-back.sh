@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Deterministic merge-back mechanics for the review stage's Phase 4.
+# Owner: specs/20260904/02-worktree-include-shared-owner.md.
 #
 # WHY A SCRIPT (and what it deliberately does NOT do):
 #   A subprocess cannot move the harness session's working directory. Only an
@@ -31,8 +32,7 @@
 #                                --source is taken pre-derived; callers derive it via `branch-for`
 #                                — `create` itself never re-derives the `spec/<stem>` naming rule.
 #                                The .worktreeinclude copy step is delegated to the shared owner
-#                                spec/scripts/worktree-include.sh (spec-paths worktree-include) —
-#                                see specs/20260904/02-worktree-include-shared-owner.md D3.
+#                                spec/scripts/worktree-include.sh (spec-paths worktree-include).
 #                                --attach re-attaches an EXISTING branch whose worktree directory
 #                                is gone (a parked build): same path, same include copy, no -b and
 #                                no --base. Without it an existing branch still dies — a caller
@@ -76,8 +76,8 @@ SUB="${1:-}"; shift || true
 
 # branch-for is pure string derivation (no git ops, no --root precondition) — it must be
 # special-cased HERE, before the generic flag loop below, because that loop dies on any bare
-# positional ("unknown arg") before subcommand dispatch ever runs (refuter-executed defect,
-# spec 20260814/02 D2). The sole owner of the `spec/<stem>` build-branch rule: doctor.md check 11
+# positional ("unknown arg") before subcommand dispatch ever runs (a refuter-executed defect).
+# The sole owner of the `spec/<stem>` build-branch rule: doctor.md check 11
 # and enter-worktree.md step 1 both derive {source} by invoking this instead of restating the rule.
 if [ "$SUB" = "branch-for" ]; then
   SPEC_PATH="${1:-}"
@@ -174,7 +174,7 @@ case "$SUB" in
     # repo root) with the same semantics the harness applies to worktrees IT creates —
     # copy files that are BOTH gitignored AND manifest-matched. Claude Code never
     # processes the manifest for externally created worktrees like this one, hence here.
-    # specs/20260904/02-worktree-include-shared-owner.md D3: the copy step itself is delegated
+    # The copy step itself is delegated
     # to the shared owner (spec-paths worktree-include) — replay.js's scratch worktree calls the
     # same owner, so the two paths cannot drift apart again. Exit 0/3 continue (3 is already a
     # printed WARNING from the owner); any other exit is a programmer-error `die` naming the

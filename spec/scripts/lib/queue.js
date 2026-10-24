@@ -1,13 +1,13 @@
 'use strict'
 // lib/queue.js — the ONE item-doneness/readiness evaluator and the ONE missing-brief
-// placement algorithm for the derived session queue. Owner: specs/20260903/03-pipeline-
-// queue-mechanics.md (D1-D5), superseding specs/20260823/08-derived-session-queue.md's
-// original dependency-aware placement. Why a shared module: doneness AND readiness must be
+// placement algorithm for the derived session queue.
+// Owner: specs/20260903/03-pipeline-queue-mechanics.md.
+// Why a shared module: doneness AND readiness must be
 // evaluated identically whether the caller is spec-queue.js (the write path — brief/spec
 // states come from shelling `spec-status --json`) or spec-status.js's own read-only overlay
 // (states come from its in-process derivation) — a second hand-rolled copy of either
 // predicate in either caller is exactly the duplicate-derivation defect class this repo
-// flags as a hard finding. `reconcileMissingBriefs` is shared for the same reason: D4 runs
+// flags as a hard finding. `reconcileMissingBriefs` is shared for the same reason: it runs
 // the identical append-last placement rule twice — for real, with writes, on every
 // spec-queue.js write subcommand, and virtually (never writing) inside spec-status.js's
 // overlay — and a placement computed two different ways would eventually disagree about
@@ -21,7 +21,7 @@
 // decide seeding (an absent-file "seed everything" is spec-queue.js's own call — this
 // module's reconcile only ever appends missing items into an existing list, real or
 // virtual, it never decides whether to seed from nothing); place items relative to their
-// roadmap Depends-on parent (D4 retired that — append-last is the whole rule now).
+// roadmap Depends-on parent (append-last is the whole rule).
 //
 // Exit codes: n/a (library, not an entrypoint).
 
@@ -38,7 +38,7 @@ function normBrief(v) {
   return m ? m[1].padStart(2, '0') + m[2].toLowerCase() : String(v).trim()
 }
 
-// D6 (20260823/08): a roadmap brief file is superseded when its body opens a blockquote
+// A roadmap brief file is superseded when its body opens a blockquote
 // with "Superseded by" — the same marker the roadmap overview's "*(superseded by v7)*"
 // annotations describe in prose. "Substantially delivered by" deliberately does NOT match —
 // a delivered brief is done, not exempt from ever being queued.
@@ -66,9 +66,9 @@ function evaluateWhen(when, ctx) {
   }
 }
 
-// Item doneness (D1/D4/D14 of the two specs): a `brief` item's doneness is ALWAYS the
+// Item doneness: a `brief` item's doneness is ALWAYS the
 // derived brief state — never a stored flag, with ONE exception: an explicit tick always wins
-// (see isItemDone). A `spec` item's doneness (D1, this spec) is otherwise ALWAYS the derived
+// (see isItemDone). A `spec` item's doneness is otherwise ALWAYS the derived
 // spec status — done or superseded — OR the file being absent (retirement precedent: a vanished
 // spec is silence, not a dangling reference). A `prompt` item is done when manually ticked
 // (`ticked` stamped), OR — when it carries a `when` predicate — when that predicate evaluates
@@ -88,7 +88,7 @@ function isItemDone(item, ctx) {
   return { done: false, unknownType: false }
 }
 
-// D2/D3 (this spec): readiness is a SECOND predicate, independent of doneness — a done item
+// Readiness is a SECOND predicate, independent of doneness — a done item
 // is never "not ready" (nothing consults isItemReady for a done item; readiness only matters
 // while the item is still undone). An item with no `after` gate is always ready. `target` is
 // "specs/…" for a spec gate, "brief NN" for a brief gate; `state` is the gate target's
@@ -133,7 +133,7 @@ function makeCtx({ ledgerRows, briefStatus, specStatus, specRoot }) {
   }
 }
 
-// D5 (this spec): a brief or spec is queued at most once. Collapses duplicate `brief`/`spec`
+// A brief or spec is queued at most once. Collapses duplicate `brief`/`spec`
 // items to their FIRST occurrence, in original order; `prompt` items are never deduped
 // (there is no natural identity to collapse on). Returns a NEW array — `items` is never
 // mutated.
@@ -154,7 +154,7 @@ function dedupeItems(items) {
   return out
 }
 
-// D4 (this spec): `auto_placed` is never written; a file carrying the key is tolerated on
+// `auto_placed` is never written; a file carrying the key is tolerated on
 // read and stripped on the next write. Returns a NEW array
 // (items themselves are shallow-copied only when they actually carry the key) — `items` is
 // never mutated.
@@ -166,10 +166,10 @@ function stripAutoPlaced(items) {
   })
 }
 
-// D4's placement rule, run against a full (brief/spec/prompt, in order) item list. For every
+// The placement rule, run against a full (brief/spec/prompt, in order) item list. For every
 // on-disk brief not already present as a `kind:'brief'` item, APPEND it at the very end, in
 // the order `onDiskBriefs` is given (callers pass roadmap order) — no dependency-aware or
-// letter-suffix-parent insertion (both retired by D4), no stamp. Returns NEW arrays —
+// letter-suffix-parent insertion (both retired), no stamp. Returns NEW arrays —
 // `items` is never mutated. Each inserted item gets `id: null` — assigning a real,
 // sequential id is the caller's job (a real write bumps the file's `seq`; a virtual/never-
 // persisted caller may leave ids null, since nothing downstream keys off them).
@@ -185,8 +185,8 @@ function reconcileMissingBriefs(items, onDiskBriefs) {
   return { items: items.concat(inserted), inserted }
 }
 
-// Token set of a free-text prompt: lowercase [a-z0-9]+ runs of length >= 4 (specs/20261013/
-// 02-queue-hygiene.md D1) — short words and punctuation carry no duplicate signal.
+// Token set of a free-text prompt: lowercase [a-z0-9]+ runs of length >= 4.
+// Short words and punctuation carry no duplicate signal.
 function promptTokens(payload) {
   const out = new Set()
   for (const t of String(payload || '').toLowerCase().match(/[a-z0-9]+/g) || []) {
@@ -203,7 +203,7 @@ function jaccard(a, b) {
   return inter / (a.size + b.size - inter)
 }
 
-// D2: the first specs/YYYYMMDD/NN…md path a prompt payload names whose spec is done or
+// The first specs/YYYYMMDD/NN…md path a prompt payload names whose spec is done or
 // superseded (ctx.specStatus), else null. Only prompts cite; briefs and specs never do.
 function citesDoneSpec(item, ctx) {
   if (!item || item.kind !== 'prompt' || typeof item.payload !== 'string') return null

@@ -5,8 +5,10 @@
 // mocks-driver.js --root <dir> --reopen journey:<j>
 // mocks-driver.js --root <dir> ledger (add|set|catch|check|counts) [flags]
 //
-// WHY: specs/20261002/01-the-wireframe-command-runs-over-the-service.md D1-D13 (ADR-0029's
-// confirm gate, amended; ADR-0030; ADR-0031's one door to the network). This driver derives
+// Owner: specs/20261002/01-the-wireframe-command-runs-over-the-service.md.
+//
+// WHY: ADR-0029's
+// confirm gate, amended; ADR-0030; ADR-0031's one door to the network. This driver derives
 // SEED -> SCREENS -> APPROVED on every invocation from design/mocks/status.json (schemaVersion 3)
 // plus the seed (`design/mocks/seed.md`, parsed by lib/surfaces.js) and prints the one step that
 // needs the session's judgment. A project whose config carries a `walkthrough` object block is in
@@ -66,7 +68,7 @@ const WALK = path.join(__dirname, 'walkthrough.js')
 const SKILL_LINE = 'Skill: mock-authoring — load it before the first edit'
 
 // ---------------------------------------------------------------------------
-// D10: retired verbs and unknown commands refuse before any file is read or written.
+// Retired verbs and unknown commands refuse before any file is read or written.
 // ---------------------------------------------------------------------------
 function checkRetired() {
   const first = rest[0]
@@ -112,7 +114,7 @@ const legacy = !(isObj(rawStatus) && rawStatus.schemaVersion === 3)
 // A status file of the retired mock-app flow that is not APPROVED is set aside by the driver
 // itself (status.legacy.json, never clobbered) and a fresh schemaVersion-3 file takes its place:
 // a printed `rm` remedy is a deletion the next run can be refused as a continuation of, and
-// nothing reads a part-way legacy file. The approved one stays readable (D10) and is never moved.
+// nothing reads a part-way legacy file. The approved one stays readable and is never moved.
 function retireLegacyStatus() {
   const v = isObj(rawStatus) && rawStatus.schemaVersion !== undefined ? rawStatus.schemaVersion : '(none)'
   let aside = path.join(mocksDir, 'status.legacy.json')
@@ -146,7 +148,7 @@ function saveStatus() {
 }
 
 // ---------------------------------------------------------------------------
-// Mode (D2): the config block's presence — a non-null, non-array object — is service mode.
+// Mode: the config block's presence — a non-null, non-array object — is service mode.
 // ---------------------------------------------------------------------------
 function walkBlock() { return readConfig(root).walkthrough }
 function serviceMode() { const b = walkBlock(); return isObj(b) }
@@ -222,7 +224,7 @@ function requireGateOpen() {
 }
 
 // ---------------------------------------------------------------------------
-// D1: state derivation — the only place SEED/SCREENS/APPROVED is decided.
+// State derivation — the only place SEED/SCREENS/APPROVED is decided.
 // ---------------------------------------------------------------------------
 function deriveState() {
   if (!status.marks.seedDone) return 'SEED'
@@ -244,7 +246,7 @@ function printAcceptedTail(prevState, nextState) {
 }
 
 // ---------------------------------------------------------------------------
-// The child calls (D6, D7): every request is `walkthrough.js` run as a child process.
+// The child calls: every request is `walkthrough.js` run as a child process.
 // ---------------------------------------------------------------------------
 function walk(args) {
   const r = spawnSync(process.execPath, [WALK, ...args, '--root', root, '--json'],
@@ -309,7 +311,7 @@ function assembledOrDie(seed, ids, remedy) {
 }
 
 // ---------------------------------------------------------------------------
-// --mark seed-done (D4).
+// --mark seed-done.
 // ---------------------------------------------------------------------------
 function cmdSeedDone() {
   const prevState = deriveState()
@@ -331,7 +333,7 @@ function undeclared(journeyArg, seed) {
 }
 
 // ---------------------------------------------------------------------------
-// --mark journey-drawn --journey <j> (D5) — service mode only; sends nothing, runs no ledger gate.
+// --mark journey-drawn --journey <j> — service mode only; sends nothing, runs no ledger gate.
 // ---------------------------------------------------------------------------
 function cmdJourneyDrawn(journeyArg) {
   requireService()
@@ -356,7 +358,7 @@ function cmdJourneyDrawn(journeyArg) {
 }
 
 // ---------------------------------------------------------------------------
-// round push (D6).
+// round push.
 // ---------------------------------------------------------------------------
 function cmdRoundPush() {
   requireService()
@@ -389,7 +391,7 @@ function cmdRoundPush() {
 }
 
 // ---------------------------------------------------------------------------
-// round pull (D7) — the worklist.
+// round pull — the worklist.
 // ---------------------------------------------------------------------------
 function confirmer(a) {
   if (typeof a.who === 'string' && a.who) return a.who
@@ -427,7 +429,7 @@ function cmdRoundPull() {
 }
 
 // ---------------------------------------------------------------------------
-// --mark journey-approved --journey <j> [--waive --reason <r>] (D8).
+// --mark journey-approved --journey <j> [--waive --reason <r>].
 // ---------------------------------------------------------------------------
 function recordApproval(name, hash, by, reason) {
   const prior = status.journeys[name] || {}
@@ -489,7 +491,7 @@ function cmdJourneyApproved(journeyArg, waive, reasonArg) {
 }
 
 // ---------------------------------------------------------------------------
-// --mark approved (D9). Ledger exclusion rows for deferred items; the round is closed before the
+// --mark approved. Ledger exclusion rows for deferred items; the round is closed before the
 // end is recorded, so a failed close never leaves a finished stage over an open round.
 // ---------------------------------------------------------------------------
 function nextExclusionId(parsed) {
@@ -566,7 +568,7 @@ function cmdApproved() {
 }
 
 // ---------------------------------------------------------------------------
-// --reopen journey:<j> (D10).
+// --reopen journey:<j>.
 // ---------------------------------------------------------------------------
 function cmdReopen(target) {
   if (target && target.startsWith('journey:')) {
@@ -636,7 +638,7 @@ function cmdLedger(sub, args) {
 }
 
 // ---------------------------------------------------------------------------
-// Bare-invocation step printer (D11) — one step block per run.
+// Bare-invocation step printer — one step block per run.
 // ---------------------------------------------------------------------------
 function driverCmd(extra) { return 'node ' + __filename + ' --root ' + root + ' ' + extra }
 
@@ -719,7 +721,7 @@ function printApprovedStep() {
 // ---------------------------------------------------------------------------
 if (rest[0] === 'ledger') cmdLedger(rest[1], rest.slice(2))
 
-// D10: a status file of any other schemaVersion — an approved one stays readable, nothing else does.
+// A status file of any other schemaVersion — an approved one stays readable, nothing else does.
 if (legacy) {
   const approvedOld = isObj(rawStatus) && rawStatus.state === 'APPROVED'
   if (approvedOld && rest.length === 1 && rest[0] === '--state') { writeOut(1, 'APPROVED\n'); process.exit(0) }

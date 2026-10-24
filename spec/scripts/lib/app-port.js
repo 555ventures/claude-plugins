@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 'use strict'
 // app-port.js — the one place a launch's app port is allocated, "reads PORT" is decided, and a
-// {port} address is resolved (specs/20261005/03-one-port-per-launch.md D4, AC-20261005-03-7).
+// {port} address is resolved.
+//
+// Owner: specs/20261005/03-one-port-per-launch.md.
 //
 // Usage: node app-port.js --if-reads <command>
 //   command reads $PORT  -> prints one free loopback port and a newline

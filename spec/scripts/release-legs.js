@@ -5,7 +5,9 @@
 // release-legs.js append --manifest <path> --leg production --result <verified|skipped|failed>
 // release-legs.js record --root <dir> --manifest <path> [--milestone <s>] [--briefs <N,N,...>]
 //
-// Why (specs/20260823/01-release-legs.md): /spec:release was a ~10-step prose
+// Owner: specs/20260823/01-release-legs.md.
+//
+// Why: /spec:release was a ~10-step prose
 // checklist a session re-performed by hand every milestone — deploy, ready check, migrations
 // check, CI polling, e2e, hand-printf'd manifest JSON rows, and a verdict.js/ledger call the
 // session had to remember on EVERY path, including the paths where it bails. This is release's
@@ -15,30 +17,29 @@
 // hand-performed step.
 //
 // Row grammar (closed; verdict.js --profile release copies `observed` verbatim — this header is
-// the row grammar's one home; release.md cites this script rather than restating it, D11):
+// the row grammar's one home; release.md cites this script rather than restating it):
 //   {"leg":"substrate","exit":0|1,"observed":{"checked":N,"failed":M,"inert":K}}
 //   {"leg":"deploy","exit":E,"observed":{"result":"pass"|"fail"}}
 //   {"leg":"ready","exit":E,"observed":{"result":"pass"|"fail"}}
 //   {"leg":"migrations","exit":E,"observed":{"result":"pass"|"fail"}}     (only when runnable migrationsCheck)
 //   {"leg":"ci","exit":0|1,"observed":{"conclusion":"<v>"}|{"status":"in-progress"}|{"unavailable":"no-adapter"|"transient"}|
 //       {"unavailable":"sha-unseen","branch":"<v>","branchConclusion":"<v>"}}   (sha-unseen is always exit 0, even
-//       when branchConclusion is red — specs/20260830/03-ci-leg-honest-absence.md D4, the identical mapping
+//       when branchConclusion is red — the identical mapping
 //       review-legs.js's ci leg uses, copied verbatim so the two consumers never drift apart;
-//       verdict.js maps it UNVERIFIED on the release profile (lib/release-unmeasured.js),
-//       specs/20260913/08-silence-is-not-a-pass.md D1/D2/D4)
+//       verdict.js maps it UNVERIFIED on the release profile (lib/release-unmeasured.js))
 //   {"leg":"e2e","exit":E,"observed":{"passed":N|{"unavailable":R},"failed":M|{"unavailable":R},
 //       "skipped":K|{"unavailable":R},"executed":N|{"unavailable":R}}}   where R =
-//       "no-format-declared"|"pattern-no-match" — executed is always present (specs/20260908/05-
-//       release-e2e-unobserved-count.md D3), and on a child exit of 0 this leg's `exit` is forced
+//       "no-format-declared"|"pattern-no-match" — executed is always present,
+//       and on a child exit of 0 this leg's `exit` is forced
 //       to 1 when isUnobserved(executed) (imported from spec/scripts/lib/count-observation.js,
 //       the same predicate review's at-risk/suite legs apply — never a second copy); a non-zero
-//       child exit is recorded as-is. no-format-declared never forces (D4).
+//       child exit is recorded as-is. no-format-declared never forces.
 //   {"leg":"journeys","exit":0|1,"observed":{"walked":N,"failed":M}}      (append-only; exit is
 //       forced to 1 when walked is 0 — release.md requires every release to walk at least one
-//       journey — specs/20260908/05-release-e2e-unobserved-count.md D5)
+//       journey)
 //   {"leg":"production","exit":0|1,"observed":{"result":"verified"|"skipped"|"failed"}}  (append-only)
 //
-// `stage` runs the deterministic pre-promote legs in dependency order (D2): wave 1 in parallel =
+// `stage` runs the deterministic pre-promote legs in dependency order: wave 1 in parallel =
 // substrate + ci + deploy (mutually independent — wave-1 results are buffered, not appended,
 // until all three settle, so a substrate precondition failure can still guarantee zero rows even
 // though ci/deploy already ran); `ready` only after `deploy` exits 0; `migrations` (only when the
@@ -46,7 +47,7 @@
 // deploy/ready leaves dependent legs unrun — absent rows, never fabricated ones. Every leg is
 // blocking on the release profile (verdict.js's release profile treats all seven as required), so
 // any red row makes `stage` exit 1 with a `RED_BLOCKING:` summary line naming every red leg. A
-// row that measured nothing (D1/D3, specs/20260913/08-silence-is-not-a-pass.md — no adapter, a
+// row that measured nothing (no adapter, a
 // commit ci never saw, an all-inert substrate manifest) prints ⚪ instead of ✅ and is named on a
 // trailing `UNMEASURED: <leg>:<reason>[,…]` line; `stage` exits 1 on that alone, even when every
 // row it ran is individually exit 0 — the row shapes and their `exit` values are unchanged.
@@ -88,7 +89,7 @@ const { spawn, spawnSync } = require('child_process')
 const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 const { computeTestsExecuted, computeSkips, isUnobserved } = require('./lib/count-observation')
 // One derivation of "this release leg measured nothing" shared with verdict.js's release-profile
-// derive() — specs/20260913/08-silence-is-not-a-pass.md D1/D3.
+// derive().
 const { unmeasuredReason } = require('./lib/release-unmeasured')
 
 function usage() {
@@ -129,7 +130,7 @@ function sh(cmd, opts = {}) {
   })
 }
 
-// D1/D2 (specs/20260908/05-release-e2e-unobserved-count.md): computeTestsExecuted/computeSkips/
+// computeTestsExecuted/computeSkips/
 // isUnobserved live in ./lib/count-observation.js, the sole home this script and review-legs.js
 // both import — each read against the LAST regex match over the runner's output, never the
 // first, so a decoy line quoting the summary phrase can never be misread as the count.
@@ -206,8 +207,8 @@ function ciQueryOnce(root) {
   const commit = (head.status === 0 && head.stdout ? head.stdout : '').trim() || 'HEAD'
   const r = spawnSync(process.execPath, [path.join(__dirname, 'ci-query.js'), '--commit', commit, '--root', root],
     { encoding: 'utf8' })
-  // D4: review-legs.js's exact output->row mapping, copied verbatim so the two ci consumers can
-  // never drift apart. specs/20260830/03-ci-leg-honest-absence.md D4 extends it with the
+  // review-legs.js's exact output->row mapping, copied verbatim so the two ci consumers can
+  // never drift apart. It extends it with the
   // shaUnseen alternative, mapped to exit 0 unconditionally — `exit` is never touched on that
   // branch, so a red branchConclusion can never redden this leg (the never-block ruling).
   let observed = { unavailable: 'no-adapter' }, exit = 0
@@ -231,7 +232,7 @@ async function runCiLeg(root, capabilities) {
   const timeoutMs = (Number(poll.timeoutSeconds) > 0 ? Number(poll.timeoutSeconds) : 600) * 1000
   const start = Date.now()
   let result = ciQueryOnce(root)
-  // D4: exactly ONE ci row is appended per stage run, after the loop resolves — never one row per
+  // Exactly ONE ci row is appended per stage run, after the loop resolves — never one row per
   // poll iteration.
   while (result.observed && result.observed.status === 'in-progress' && (Date.now() - start) < timeoutMs) {
     await sleep(intervalMs)
@@ -246,7 +247,7 @@ async function runDeployLeg(root, deployCommand, outDir) {
   return { leg: 'deploy', exit: r.code, observed: { result: r.code === 0 ? 'pass' : 'fail' } }
 }
 
-// D6: a plain curl probe, retried up to 3 attempts 5s apart, exit 0 iff any attempt succeeds.
+// A plain curl probe, retried up to 3 attempts 5s apart, exit 0 iff any attempt succeeds.
 // runtime.readyCheck is deliberately NOT reused (it probes local boot, the wrong host for a
 // deployed URL). Shells bare `curl` (PATH-resolved), never an absolute path.
 async function runReadyLeg(stagingUrl, healthPath) {
@@ -265,9 +266,9 @@ async function runMigrationsLeg(root, migrationsCheck, outDir) {
   return { leg: 'migrations', exit: r.code, observed: { result: r.code === 0 ? 'pass' : 'fail' } }
 }
 
-// D5: BASE_URL={stagingUrl} is a shell env-var prefix on the whole e2eCommand, never an option
+// BASE_URL={stagingUrl} is a shell env-var prefix on the whole e2eCommand, never an option
 // passed to spawn — a multi-statement e2eCommand script must see it too.
-// D3 (specs/20260908/05-release-e2e-unobserved-count.md): `executed` is derived on EVERY run,
+// `executed` is derived on EVERY run,
 // red or green, through the lib's last-match parser, and recorded as a new LAST key on
 // `observed`. The existing branch on the child's exit code runs unchanged to produce
 // passed/failed; `exit` is then forced to 1 when the child exited 0 but isUnobserved(executed) —
@@ -287,7 +288,7 @@ async function runE2eLeg(root, release, capabilities, outDir) {
     else if (typeof executed !== 'number') passed = executed // testCountPattern's own unavailability reason
     else passed = skipped // executed known, skipped unavailable — carry skipped's own reason
   } else {
-    // D5: no failure-count format exists as a declared capability — both are unconditionally
+    // No failure-count format exists as a declared capability — both are unconditionally
     // typed unavailable on a red e2e run.
     passed = { unavailable: 'no-format-declared' }
     failed = { unavailable: 'no-format-declared' }
@@ -318,7 +319,7 @@ async function cmdStage(argv) {
     }
   }
 
-  // D9: one fresh manifest per release run — a re-run onto a stale manifest would double every
+  // One fresh manifest per release run — a re-run onto a stale manifest would double every
   // leg row and corrupt verdict.js's leg map silently.
   if (manifestHasRows(manifest)) {
     console.error(`release-legs.js stage: --manifest ${manifest} already contains row(s) — start a ` +
@@ -366,7 +367,7 @@ async function cmdStage(argv) {
   }
 
   // ---- summary: mirrors review-legs.js's per-leg line, RED_BLOCKING, manifest/outputs footer ----
-  // D3 (specs/20260913/08-silence-is-not-a-pass.md): a row that measured nothing prints ⚪
+  // A row that measured nothing prints ⚪
   // instead of ✅ (never both — a leg cannot be reported measured and unmeasured at once) and
   // its leg:reason pair is named on a trailing UNMEASURED: line, in row order, so a silent
   // exit-0 row can no longer read as a passed release gate.
@@ -391,7 +392,7 @@ async function cmdStage(argv) {
 }
 
 // ================================================================================================
-// append — the sole emitter for journeys/production, D7
+// append — the sole emitter for journeys/production
 // ================================================================================================
 
 function cmdAppend(argv) {
@@ -419,7 +420,7 @@ function cmdAppend(argv) {
         'non-negative integers')
       process.exit(2)
     }
-    // D5: exit is forced to 1 when walked is 0 (with failed 0) — release.md requires every
+    // exit is forced to 1 when walked is 0 (with failed 0) — release.md requires every
     // release to walk at least one journey, so a zero walk contradicts doctrine the same way an
     // observed zero contradicts a declared count. --walked 0 --failed 0 stays well-formed input.
     row = { leg: 'journeys', exit: (w === 0 || f !== 0) ? 1 : 0, observed: { walked: w, failed: f } }
@@ -432,7 +433,7 @@ function cmdAppend(argv) {
     row = { leg: 'production', exit: result === 'failed' ? 1 : 0, observed: { result } }
   }
 
-  // D7: refuse a duplicate row for any leg already in the manifest.
+  // Refuse a duplicate row for any leg already in the manifest.
   if (readManifestRows(manifest).some(r => r.leg === leg)) {
     console.error(`release-legs.js append: manifest ${manifest} already has a ${leg} row — append ` +
       'refuses a duplicate (it would corrupt verdict.js\'s per-leg map)')
@@ -444,7 +445,7 @@ function cmdAppend(argv) {
 }
 
 // ================================================================================================
-// record — the single verdict.js --profile release --ledger invocation point, D8
+// record — the single verdict.js --profile release --ledger invocation point
 // ================================================================================================
 
 function cmdRecord(argv) {
@@ -466,7 +467,7 @@ function cmdRecord(argv) {
   const verdictArgs = ['--manifest', manifest, '--profile', 'release', '--ledger']
   if (milestone) verdictArgs.push('--milestone', milestone)
   if (briefs) verdictArgs.push('--briefs', briefs)
-  // D8: --require migrations is derived here, never a caller flag.
+  // --require migrations is derived here, never a caller flag.
   if (isRunnableMigrationsCheck(release)) verdictArgs.push('--require', 'migrations')
 
   const verdictPath = path.join(__dirname, 'verdict.js')

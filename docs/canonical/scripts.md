@@ -139,3 +139,9 @@ finding.
 `spec/evals/` holds the plugin's `claude plugin eval` suite — three `cheap` cases proving skill
 selection and script execution with deterministic graders, one `heavy` `/spec:run` case run on
 request. The suite is never in the gate; `tests/evals-suite.test.js` pins its shape.
+
+## Comments
+
+Script comments explain why; they cite no spec, AC or decision id except one `Owner:` header line
+per file. `tests/consistency/no-citation-comments.test.js` pins it. Doctrine line budgets and
+heading lists are no longer pinned by tests.

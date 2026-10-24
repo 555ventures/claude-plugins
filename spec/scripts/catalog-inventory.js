@@ -2,8 +2,8 @@
 'use strict'
 // catalog-inventory.js --root <dir> --out <file> [--check] [--json] [--shadcn <command>]
 //
-// Owner: specs/20260926/04-the-design-brief.md D4 (AC-20260926-04-6, AC-20260926-04-7,
-// AC-20260926-04-8) — the shadcn-catalog inventory genesis's DESIGN_BRIEF state generates once
+// Owner: specs/20260926/04-the-design-brief.md
+// The shadcn-catalog inventory genesis's DESIGN_BRIEF state generates once
 // (spec/scripts/genesis-driver.js runs this as a child, --shadcn threaded from the env
 // GENESIS_SHADCN_COMMAND) and /spec:doctor re-checks with --check when a kit may have drifted.
 //

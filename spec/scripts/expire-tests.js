@@ -4,9 +4,11 @@
 // expire-tests.js --root <r> --all-done          [--apply [--keep-on-red]] [--json]
 // expire-tests.js --root <r> --invariants        [--json]
 //
-// specs/20260911/03-tests-expire-at-close.md D3/D4: a spec's tests die when the spec does. This
-// script is the ONE place D3's classification runs — spec-review-driver.js's doCloseWork() calls
-// it (D5) and /spec:doctor's check 20 calls it (D7), so a close and a doctor dry run can never
+// Owner: specs/20260911/03-tests-expire-at-close.md.
+//
+// A spec's tests die when the spec does. This
+// script is the ONE place the classification runs — spec-review-driver.js's doCloseWork() calls
+// it and /spec:doctor's check 20 calls it, so a close and a doctor dry run can never
 // disagree about what is retirable.
 //
 // Named `expire-tests.js`, never `test-expiry.js` — `node --test`'s default file discovery
@@ -14,16 +16,16 @@
 // header, renamed for the identical reason), so a `test-expiry.js` this repo ships gets
 // DISCOVERED AND EXECUTED as a test file by the post-gate's path-less `node --test` run — its own
 // argv handling exiting non-zero under the runner reported as a spurious test failure (this
-// spec's own forcing incident, D8). The `spec-paths` KEY stays `test-expiry`; only the file this
+// spec's own forcing incident). The `spec-paths` KEY stays `test-expiry`; only the file this
 // key resolves to changed.
 //
 // A test is *tagged* when an AC-ID occurs in its title or the contiguous comment block directly
-// above the call (lib/scan-test-calls.js's own shape, D2); an untagged test is never read for
+// above the call (lib/scan-test-calls.js's own shape); an untagged test is never read for
 // anything else. `--spec` scans only tests that cite one of the given spec's own AC-IDs (its own
 // status counts as done, even while its frontmatter still literally says otherwise mid-close);
 // `--all-done` scans every tagged test in the host. A tagged, in-scope test is *retired* only
-// when every AC-ID it cites belongs to a spec that is `done` or `superseded` (specs/20260912/15
-// D5 — a superseded owner is a terminal retire state, same as done) AND none of three keep
+// when every AC-ID it cites belongs to a spec that is `done` or `superseded`
+// (a superseded owner is a terminal retire state, same as done) AND none of three keep
 // clauses fire: (a) its own call text names a ledger escape class (`.claude/spec-runs.jsonl`'s
 // `class` keys, top-level or nested in `incidents[]`); (b) its FILE's text names the basename of
 // a script in lib/invariants.js's derived set (a script the pipeline itself runs) as a whole name,
@@ -35,7 +37,7 @@
 // matching several cases keeps them all). An AC-ID whose owning spec cannot be found, whose
 // spec is neither done nor superseded, or whose owning spec file cannot be read at all keeps the
 // test open rather than retiring it — every unknown fails safe. A spec file under `specs/` that
-// throws on read is never silently skipped (specs/20260912/15 D6/D7): it is recorded as an
+// throws on read is never silently skipped: it is recorded as an
 // unreadable owner, its AC-ID prefix derived from its own path
 // (`specs/YYYYMMDD/NN[a]-*.md` -> `AC-YYYYMMDD-NN[a]-`), and every cited AC-ID starting with that
 // prefix — whether or not a readable sibling also defines it — is treated as unresolved. The rule
@@ -48,8 +50,8 @@
 // by one more character when a trailing newline follows), removes a line-start `describe(` that
 // held a retired test and is left with no test/it/describe token (`emptiedSuites`), collapses a
 // run of three-or-more blank lines down to one, deletes a file left with zero remaining test() calls, and climbs to delete
-// any directory the deletion leaves empty. A dry run mutates nothing on disk, and — since
-// specs/20260912/15 D1/D2 — this script's own `--apply` flag is the ONLY way anything it derives
+// any directory the deletion leaves empty. A dry run mutates nothing on disk, and
+// this script's own `--apply` flag is the ONLY way anything it derives
 // reaches the tree: the close-time review driver never passes `--apply` and never will; a human
 // running `/spec:doctor` check 20's remedy by hand is the one path that deletes a test.
 //
@@ -196,11 +198,11 @@ if (fs.existsSync(specsDir)) walkSpecs(specsDir, specFiles)
 // acId -> [{ specRel, status, raw, dateStr }, ...]. An AC-ID is many-to-many: spec-number-check.js
 // polices collisions at the gate (this script is not the place for that — see header), so an ID
 // defined by more than one spec keeps every one of those owner records rather than the first
-// walked. D3's fail-safe rule then reads as "done only when EVERY owner is done" (allCitedDone
+// walked. The fail-safe rule then reads as "done only when EVERY owner is done" (allCitedDone
 // below) instead of picking a single winner by directory walk order.
-// specs/20260912/15 D6: a spec file under specs/ whose read throws is recorded here rather than
+// A spec file under specs/ whose read throws is recorded here rather than
 // skipped — its path-derived AC-ID prefix is held unresolved for every id under it (see
-// matchesUnreadablePrefix below), scoped to that prefix only (D7).
+// matchesUnreadablePrefix below), scoped to that prefix only.
 function derivedAcPrefix(rel) {
   const m = /^specs\/(\d{8})\/(\d{2}[a-z]?)-/.exec(rel)
   return m ? 'AC-' + m[1] + '-' + m[2] + '-' : null
@@ -239,7 +241,7 @@ for (const f of specFiles) {
   }
 }
 
-// specs/20260912/15 D6/D7: one stderr warning per unreadable spec file, before the stdout report,
+// One stderr warning per unreadable spec file, before the stdout report,
 // naming the file and its derived prefix — exit code unaffected.
 const unreadablePrefixes = new Set(unreadableSpecs.map((u) => u.prefix))
 function matchesUnreadablePrefix(id) {
@@ -306,12 +308,12 @@ function citedAcIds(call) {
   return Array.from(new Set(hay.match(AC_ID_RE_GLOBAL) || []))
 }
 
-// allDone(ids): every cited AC-ID resolves to a spec that is done or superseded (specs/20260912/15
-// D5) — the closing spec itself (--spec mode) counts as done regardless of its literal on-disk
-// status (D3: this runs before the status flip). An unresolved AC-ID is never "done"; an id
-// falling under an unreadable spec's derived prefix is always unresolved (D6/D7). A collided
+// allDone(ids): every cited AC-ID resolves to a spec that is done or superseded.
+// The closing spec itself (--spec mode) counts as done regardless of its literal on-disk
+// status (this runs before the status flip). An unresolved AC-ID is never "done"; an id
+// falling under an unreadable spec's derived prefix is always unresolved. A collided
 // AC-ID (defined by more than one spec) is done only when EVERY defining spec is done or
-// superseded — any single open or unreadable owner keeps the test (D3's fail-safe rule extended
+// superseded — any single open or unreadable owner keeps the test (the fail-safe rule extended
 // to the many-to-many case; see the acOwners comment above).
 function allCitedDone(ids) {
   return ids.every((id) => {
@@ -378,7 +380,7 @@ for (const file of testFiles) {
 }
 const tagged = retired.length + kept.class + kept.invariant + kept.pin + kept.open
 
-// ---- classify emptied on every run (D1, specs/20260912/13); disk writes stay behind --apply ----
+// ---- classify emptied on every run; disk writes stay behind --apply ----
 // The per-file span removal and blank-run collapse are an in-memory pass that always runs, so a
 // dry run reports the same `emptied` array an apply would (the close reads this count before it
 // applies). Only fs.writeFileSync / fs.unlinkSync / the empty-directory climb are gated on `apply`.

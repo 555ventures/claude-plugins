@@ -2,7 +2,8 @@
 'use strict'
 // coverage-scope.js --root <r> [--json]
 //
-// WHY: specs/20260912/15-the-close-stops-deleting-tests.md made test expiry a deliberate, human-run
+// Owner: specs/20260912/15-the-close-stops-deleting-tests.md.
+// WHY: test expiry is a deliberate, human-run
 // sweep (expire-tests.js --all-done --apply) rather than something a close ever applies —
 // expire-tests.js only classifies at close; the deletion happens later, at the operator's own
 // command. That still places an obligation on the host: a check requiring a test
@@ -26,7 +27,7 @@
 // incident is spelled out in expire-tests.js's own header).
 //
 // SIGNATURE (deterministic, language-neutral, deliberately narrow): a non-test source file that
-// names an AC-ID — literally (`AC-20260824-02-1`) or as a pattern a scanner matches with
+// names an AC-ID — literally (a full `AC-…` id) or as a pattern a scanner matches with
 // (`AC-\d{8}`, `AC-[0-9]{8}`) — AND compares a status against a `done` literal, AND never mentions
 // `SHALL CONTINUE TO`. The pin phrase is the exemption because a check that honors the obligation
 // must name it: that is the only string by which a criterion opts out of expiry. Measured over the
@@ -63,7 +64,7 @@ const CODE_EXT = new Set([
 const MAX_BYTES = 512 * 1024
 
 // An AC-ID EXTRACTION pattern, never a cited id: `AC-` followed by a digit-class token as a
-// scanner's own regex spells it, or an AC-ID identifier. A file merely citing `AC-20260824-02-1`
+// scanner's own regex spells it, or an AC-ID identifier. A file merely citing a full `AC-…` id
 // as its owner citation is the normal shape of every script in the layer and is never a finding —
 // only a file that PARSES acceptance-criterion ids can be the check this scan is looking for.
 const AC_REFERENCE_RE = /AC-(?:\\{1,2}d|\[0-9\]|%d|\{8\})|\bAC_ID|\bac_?[Ii]d\b/

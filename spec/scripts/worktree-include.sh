@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # worktree-include.sh --root <main worktree root> --dest <existing directory>
 #
-# specs/20260904/02-worktree-include-shared-owner.md D1/D2: the sole owner of "copy the
+# Owner: specs/20260904/02-worktree-include-shared-owner.md
+# The sole owner of "copy the
 # .worktreeinclude-matched, gitignored files from --root into --dest". merge-back.sh's `create`
 # and replay.js's `--setup` both call this instead of each carrying their own copy of the
 # selection+copy pipeline — the duplication this spec closes. It does NOT touch any tracked

@@ -4,14 +4,15 @@
 //   --commit <sha> [--root <dir>] [--json]         one commit's landing/offer answer
 //   --since <YYYY-MM-DD> [--root <dir>] [--json]   one repo's window share
 //   --repos-root <dir> [--since <date>] [--json]   this machine's fleet share
-// Owner: specs/20260904/01-commit-time-escape-coverage.md D1-D7 — the derivation `/git:commit`
+// Owner: specs/20260904/01-commit-time-escape-coverage.md.
+// The derivation `/git:commit`
 // step 3 runs as its offer oracle, and the number `/spec:status`/ad-hoc reads print cold.
 //
 // A file is LANDED for a reference commit iff a spec's `## File Plan` (lib/file-plan) lists it
 // (exact path or glob, lib/glob-match) AND that spec's repo ledger (lib/observation) holds a
 // stage:"review" row whose ts parses to an epoch strictly before the reference commit's
 // committer epoch; the file is IN-FLIGHT when a listing spec exists but none qualifies yet.
-// Fix-shaped = the subject's conventional type token is fix/hotfix only (D2) — never a broader
+// Fix-shaped = the subject's conventional type token is fix/hotfix only — never a broader
 // substring match.
 //
 // What this deliberately does NOT do: block a commit, record a decline, mutate anything on
@@ -107,7 +108,7 @@ function loadSpecIndex(root) {
   return out
 }
 
-// D3: landed/inFlight/none for one touched file against one reference epoch.
+// landed/inFlight/none for one touched file against one reference epoch.
 function classifyFile(file, refEpoch, specIndex, ledgerRows) {
   const listing = specIndex.filter(s => s.filePlanPaths.some(p => globMatch(p, file)))
   if (!listing.length) return { status: 'none' }
@@ -143,7 +144,7 @@ function parseLogLine(line) {
   return { sha: line.slice(0, i1), ts: line.slice(i1 + 1, i2), subject: line.slice(i2 + 1) }
 }
 
-// D6: the window computation, shared by window mode's single repo and fleet mode's per-repo
+// The window computation, shared by window mode's single repo and fleet mode's per-repo
 // entries. Assumes root IS a git repo (or the caller has already gated on that).
 function computeWindow(root, sinceEpoch) {
   const ledger = ledgerExists(root)
@@ -226,7 +227,7 @@ function runCommitMode(rawRoot, shaArg) {
   const fixShaped = isFixShaped(subject)
   const landed = []
   const inFlight = []
-  // D3/s1: classification runs regardless of ledger presence — with no ledger there are simply
+  // Classification runs regardless of ledger presence — with no ledger there are simply
   // no qualifying review rows, so every File-Plan-listed file falls out as inFlight (never
   // landed) via the SAME classifyFile window mode uses; one classification path, not two.
   const specIndex = loadSpecIndex(root)

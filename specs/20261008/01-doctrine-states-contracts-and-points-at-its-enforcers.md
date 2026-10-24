@@ -226,14 +226,14 @@ the reviewer checks each one resolves.
 - **AC-20261008-01-2**: WHEN the read-load test runs THE SYSTEM SHALL hold every one of the fourteen
   commands to its own `BUDGET` entry, `connect` included, with no flat `CAP` fallback left in the
   file (e.g. `/spec:connect` loads ≤ 130 lines: 22 own + ≤ 108 shared) → rewrites
-  tests/consistency/read-load.test.js :: every /spec command has a read-load budget entry
+  tests/consistency/read-load.test.js :: every /spec command has a read-load budget entry [retired: specs/20261024/04-scripts-drop-their-inline-changelog.md]
 - **AC-20261008-01-3**: WHEN each of the six doctrine files is measured THE SYSTEM SHALL find it at or
   under its `DOCTRINE_BUDGET` entry (e.g. `wc -l spec/doctrine/core.md` → ≤ 230;
   `spec/doctrine/genesis.md` → ≤ 450), the entries being the values measured at build → writes
-  tests/consistency/doctrine-budget.test.js
+  tests/consistency/doctrine-budget.test.js [retired: specs/20261024/04-scripts-drop-their-inline-changelog.md]
 - **AC-20261008-01-4**: WHEN the `## ` lines of each of the six doctrine files are collected THE SYSTEM
   SHALL CONTINUE TO match the Contracts § Frozen headings list exactly, in order (e.g. core.md's 14th heading is
-  `## Question Style (every \`AskUserQuestion\`, every stage)`) → writes tests/consistency/doctrine-headings.test.js
+  `## Question Style (every \`AskUserQuestion\`, every stage)`) → writes tests/consistency/doctrine-headings.test.js [retired: specs/20261024/04-scripts-drop-their-inline-changelog.md]
 - **AC-20261008-01-5**: WHEN `spec-paths shared-for <cmd>` runs for each of the thirteen previously
   scoped commands THE SYSTEM SHALL CONTINUE TO print the section list the SHARED_FOR table pinned
   before this spec, unchanged → reuses tests/spec-paths.test.js :: shared-for: scoped output carries its sections

@@ -3,8 +3,7 @@
 // walkthrough-connect.js [--root <dir>] [--project <id>] [--name <text>] [--base-url <url>]
 //                        — connect the host project to the hosted review service.
 //
-// Owner: specs/20261005/01-connect-wires-a-project-to-the-review-service.md (D1-D11) and
-// specs/20261005/02-connect-runs-first.md (D1-D4) and specs/20261005/04-connect-protects-the-token-file.md (D1-D4).
+// Owner: specs/20261005/01-connect-wires-a-project-to-the-review-service.md, specs/20261005/02-connect-runs-first.md, specs/20261005/04-connect-protects-the-token-file.md
 // Since 7.242.0 the project and its token come from the public terminal tool walkthrough-cli
 // (walkthrough specs/20261006/01), so anyone signed in with it can connect, not only the Railway owner.
 // It creates the project on the service (or joins the id the service already holds) through

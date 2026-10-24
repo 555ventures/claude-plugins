@@ -11,9 +11,9 @@
 //   pull-notes [--round <n>]    pull-approvals [--round <n>]
 //   reply --note <id> --text-file <file>         mark --round <n> --status open|answered|closed
 //
-// Owner: specs/20260929/01-the-walkthrough-contract-and-the-client.md D6 (verbs, exit codes, the
-// refusal line), D12 (check, reply, mark); the rules of each call live in lib/walkthrough-client.js
-// (D7-D11), the offline checks in lib/walkthrough-catalog.js (D5) and lib/json-shape.js (D2).
+// Owner: specs/20260929/01-the-walkthrough-contract-and-the-client.md.
+// The rules of each call live in lib/walkthrough-client.js,
+// the offline checks in lib/walkthrough-catalog.js and lib/json-shape.js.
 // A project whose config has no `walkthrough` block is untouched: every verb that would talk to
 // the service prints the not-configured line on stdout, sends nothing, writes nothing, exits 0.
 //

@@ -2,10 +2,11 @@
 'use strict'
 // registry-check.js --menu <file>… [--write] [--base <registry>=<url>]… [--json]
 //
-// specs/20260825/03-genesis-currency-executed.md: replaces wf-research.js's deleted Haiku "still
+// Owner: specs/20260825/03-genesis-currency-executed.md.
+// Replaces wf-research.js's deleted Haiku "still
 // current?" pass — a fast model asked to opine, never told to pin to release pages, in a year
-// when blog roundups asserted Bun 2.0 / Deno 3.0 / Storybook 11 (none of which exist, spec
-// Assumptions A1/A3). This script makes currency EXECUTED instead of opined: it resolves every
+// when blog roundups asserted Bun 2.0 / Deno 3.0 / Storybook 11 (none of which exist).
+// This script makes currency EXECUTED instead of opined: it resolves every
 // `options[].packages[]` entry a research menu names against the registry's own per-version JSON
 // endpoint (npm, PyPI, crates.io) or endoflife.date's cycle list for runtimes, prints one verdict
 // line per package, and — with --write — mechanically drops any option whose package 404s and
@@ -19,11 +20,11 @@
 //   - follow HTTP redirects, retry a failed request, or cache a verdict across runs — one GET
 //     per package, per invocation.
 //   - treat an unreachable registry as evidence a version is missing — offline is never a block
-//     (exit 3 stamps `unverified` and the interview continues; see spec D3/D4).
+//     (exit 3 stamps `unverified` and the interview continues).
 //   - treat an endoflife.date 404 (the curated runtime list has never heard of the product) as
-//     evidence of a missing VERSION — that is `unknown-product`, never `missing` (spec D3
-//     Rationale: "a runtime slug the researcher spelled differently must not delete a real
-//     option").
+//     evidence of a missing VERSION — that is `unknown-product`, never `missing`:
+//     "a runtime slug the researcher spelled differently must not delete a real
+//     option".
 //   - relocate the session CWD, mutate any file it was not pointed at via --menu, or write
 //     anything at all without --write.
 //
@@ -240,7 +241,7 @@ function probe(pkg, bases, timeoutMs, userAgent) {
 }
 
 // ---------------------------------------------------------------------------
-// Option-status derivation (D3, applied in this exact order):
+// Option-status derivation (applied in this exact order):
 //   1. any package `missing`                        -> `missing`
 //   2. else no packages                              -> `unverified`
 //   3. else any `unreachable`/`unknown-product`       -> `unverified`

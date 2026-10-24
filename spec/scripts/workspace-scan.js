@@ -3,11 +3,12 @@
 // workspace-scan.js --root <dir> [--json] [--depth N] — walk a tree and print one
 // {root, stack, manifest} entry per directory holding a package manifest, sorted by root
 // (root "." for the tree's own root, forward-slash repo-relative paths below it).
+// Owner: specs/20260926/03-gates-per-workspace.md.
 //
-// specs/20260926/03-gates-per-workspace.md D1: /spec:enforce's Phase 1 runs this first, so a
+// /spec:enforce's Phase 1 runs this first, so a
 // monorepo gets one enforcer set per workspace instead of one per repo. Directory-name skip
-// list and manifest→stack table are D1's own; when a directory carries several manifests, the
-// first match in D1's listing order wins (package.json first, then the python trio, then
+// list and manifest→stack table are this script's own; when a directory carries several manifests, the
+// first match in the listed order wins (package.json first, then the python trio, then
 // go/rust/dart/ruby/php/csproj/elixir/jvm) — deterministic, never "whichever fs.readdir
 // returns first".
 //
@@ -61,7 +62,7 @@ function parseArgs(argv) {
   return out
 }
 
-// D1's manifest-precedence list: first match in this exact order wins.
+// The manifest-precedence list: first match in this exact order wins.
 function detectManifest(dir) {
   const has = (name) => fs.existsSync(path.join(dir, name))
   if (has('package.json')) {

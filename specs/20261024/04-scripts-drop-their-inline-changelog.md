@@ -1,12 +1,14 @@
 ---
 date: 2026-10-24
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: cross-cutting
 breaking: false
 depends_on: [specs/20261024/01-review-driver-reads-recorded-facts.md, specs/20261024/02-genesis-marks-and-the-no-stand-ins-test.md, specs/20261024/05-replay-retired.md]
 brief: n/a
 open_markers: 0
+diff_base: 1916b6766f07febc5c1beb9db5a6f16d783b4161
 ---
 
 # Scripts drop their inline changelog; prose-size tests retire
@@ -30,6 +32,8 @@ suite with the four files gone.
 | D2 | The sweep is comment-only: `node spec/scripts/comment-narration.js --root . --code-identical $(git merge-base HEAD main)` exits 0 over the touched tree (AC-20261024-04-3) | The script already certifies a comment-only diff; a worker that touches code by accident is caught by a deterministic check, not a reviewer's eye. |
 | D3 | Delete `tests/consistency/doctrine-budget.test.js`, `tests/consistency/doctrine-headings.test.js` and `tests/prose-debt/doctrine-pins.test.js`; in `tests/consistency/read-load.test.js` delete the read-load budget, command-ceiling and Rules-cap tests and keep the two `shared-for` behaviour tests (AC-20261024-04-4, AC-20261024-04-5) | Line budgets and frozen heading lists pin prose, not behaviour; `shared-for` printing exactly the pinned section list is behaviour and stays. [asked: retire the prose-size tests] |
 | D4 | Every AC a deleted test was the sole citer of gets `[retired: specs/20261024/04-scripts-drop-their-inline-changelog.md]` appended to its bullet in the owning done spec; `node spec/scripts/ac-drift.js --root . --all-done` exits 0 is the oracle for completeness (AC-20261024-04-6) | ac-drift already reads the `[retired:]` tag; the worker tags what it reports, never a hand list. |
+| D6 | Build amendment: `comment-narration.js --code-identical` also scans `tests/` and `scripts/`, which D3 changes, so AC-20261024-04-3 runs it with `--json` and requires zero differing files under `spec/scripts/` and `spec/bin/`; `ac-drift.js` has no `--all-done` flag, so AC-20261024-04-6 runs `ac-drift.js --root .`, which already scans every done spec. 📌 auto-picked at build | Both spec premises were false against the scripts' own usage lines; the certificate and the drift oracle are kept, scoped to what they can honestly see. |
+| D7 | D4's tag set is the AC-IDs cited under `tests/` at `diff_base` minus those cited after the deletions (ac-drift reddens only CONTINUE-TO pins): AC-20260823-06-4, AC-20260908-06-1, AC-20260908-06-2, AC-20260912-03-14, AC-20260912-03-15, AC-20261008-01-2, AC-20261008-01-3, AC-20261008-01-4, AC-20261008-02-1, AC-20261008-02-2, plus AC-20261008-02-7 whose `reuses` pointer names the deleted Rules-cap case. `specs/20261008/02-commands-state-their-steps-and-point-at-their-scripts.md` and `specs/20260912/03-run-isolates-and-owns-the-stages.md` join the File Plan (AC-20261024-04-6). 📌 auto-picked add to scope | Same D4 rule; the lock grep listed five of the eleven. |
 | D5 | `spec/scripts/prose-cap.js` stays: escape.md and stage-review.md still run it over a host's Gotchas section [no-ac: nothing changes] | Only the read-load use of it retires. |
 
 ## File Plan
@@ -48,6 +52,8 @@ suite with the four files gone.
 | specs/20261008/01-doctrine-states-contracts-and-points-at-its-enforcers.md | MODIFY | other | D4 `[retired:]` tags |
 | specs/20260908/06-command-prose-states-contracts.md | MODIFY | other | D4 `[retired:]` tags |
 | specs/20260823/06-prose-debt-pruning.md | MODIFY | other | D4 `[retired:]` tags |
+| specs/20261008/02-commands-state-their-steps-and-point-at-their-scripts.md | MODIFY | other | D7 `[retired:]` tag |
+| specs/20260912/03-run-isolates-and-owns-the-stages.md | MODIFY | other | D7 `[retired:]` tags |
 
 ## Contracts
 
@@ -78,10 +84,10 @@ const OWNER_LINE   = /^\s*(\/\/|#)\s*Owner:/         // at most one per file, ex
 
 - **AC-20261024-04-1**: WHEN the test scans every whole-line comment under `spec/scripts/**/*.js`, `spec/scripts/**/*.sh` and `spec/bin/*` THE SYSTEM SHALL find zero spec-path tokens and zero AC-ID tokens outside each file's single `Owner:` line → writes tests/consistency/no-citation-comments.test.js
 - **AC-20261024-04-2**: WHEN the same scan is run for decision-id tokens (`D<n>`, `R<n>`, `A<n>` as whole words) THE SYSTEM SHALL find zero outside `Owner:` lines, and SHALL find at most one `Owner:` line per file → writes tests/consistency/no-citation-comments.test.js
-- **AC-20261024-04-3**: WHEN `node spec/scripts/comment-narration.js --root . --code-identical <ref>` runs with `<ref>` = `git merge-base HEAD main` THE SYSTEM SHALL exit 0 (every scanned file identical once comments are removed) → writes tests/consistency/no-citation-comments.test.js
+- **AC-20261024-04-3**: WHEN `node spec/scripts/comment-narration.js --root . --code-identical <ref>` runs with `<ref>` = `git merge-base HEAD main` THE SYSTEM SHALL report zero differing files under `spec/scripts/` and `spec/bin/` in its `--json` output (every swept file identical once comments are removed; D6) → writes tests/consistency/no-citation-comments.test.js
 - **AC-20261024-04-4**: WHEN `tests/` is grepped for `AC-20261008-01-3`, `AC-20261008-01-4`, `AC-20260908-06-1`, `AC-20260908-06-2` and `AC-20260823-06-4` THE SYSTEM SHALL find zero hits, and the three deleted files SHALL not exist → writes tests/consistency/no-citation-comments.test.js
 - **AC-20261024-04-5**: WHEN `spec-paths shared-for <cmd>` runs for every scoped command THE SYSTEM SHALL CONTINUE TO print exactly the pinned `## ` section list, in order → reuses tests/consistency/read-load.test.js :: AC-20260908-06-3
-- **AC-20261024-04-6**: WHEN `node spec/scripts/ac-drift.js --root . --all-done` runs after the deletions THE SYSTEM SHALL exit 0 (every orphaned criterion carries a `[retired:]` tag naming this spec) → writes tests/consistency/no-citation-comments.test.js
+- **AC-20261024-04-6**: WHEN `node spec/scripts/ac-drift.js --root .` runs (D6) after the deletions THE SYSTEM SHALL exit 0 (every orphaned criterion carries a `[retired:]` tag naming this spec) → writes tests/consistency/no-citation-comments.test.js
 
 ## Assumptions (escalation triggers)
 
@@ -114,6 +120,13 @@ the worker judges each.
 Collision closure (literals `doctrine-budget`, `doctrine-headings`, `doctrine-pins`): the one
 literals hit outside the File Plan is `spec/doctrine/replay-corpus.md`, deleted by the
 dependency 20261024/05 before this spec builds — waived.
+
+Build deviations (2026-10-24, folded at close): `ac-drift.js` has no `--all-done` flag, and
+`comment-narration.js --code-identical` also scans `tests/` and `scripts/`, so the AC-3 and AC-6
+oracles were scoped as D6 records. The lock-time tag list held five of the eleven orphaned
+criteria; the base-minus-now derivation in D7 found the rest, as the Gotchas' test-file-deletion
+entry already prescribes. Review: one hard finding (a swept script left with no `Owner:` line)
+and one leg finding (D7 uncarried), both fixed in the fix-delta pass.
 
 ## Canonical Delta
 

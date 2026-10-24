@@ -6,14 +6,15 @@
 # (repos that never used the genesis stage) are never touched.
 # Exit 2 blocks the prompt and shows stderr to the user. Exit 0 allows; stdout is injected context.
 #
-# specs/20260827/03-genesis-design-state.md D6: the design lock folds into the driver
+# Owner: specs/20260827/03-genesis-design-state.md.
+# The design lock folds into the driver
 # as the new DESIGN state; the retired design-lock command is deleted, and this hook's own arm for
-# it — shared with the already-retired explore command's arm from
-# specs/20260827/02-genesis-explore-state.md via the same require_scaffold helper — is deleted
+# it — shared with the already-retired explore command's arm
+# via the same require_scaffold helper — is deleted
 # too. Both retired commands' prompts now fall through untouched (exit 0, no arm) at every state.
 #
-# specs/20260902/08-genesis-shrink-brief-state.md D8: the init arm's passing value set gains
-# "ratified" (BRIEF's own successful ratification, D4) alongside the legacy "rules-locked"/
+# The init arm's passing value set gains
+# "ratified" (BRIEF's own successful ratification) alongside the legacy "rules-locked"/
 # "skipped" values; the blocked message for the legacy partial-canon values doctrine-drafted/
 # tokens-landed is reworded to "re-run /spec:genesis to reach BRIEF" and the pending/absent note
 # to "the genesis BRIEF state has not ratified a design canon" — neither message says

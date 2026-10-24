@@ -1,19 +1,20 @@
 #!/usr/bin/env node
 // genesis-driver.js [--root <dir>] [--mark <mark> [--file <path>]] [--state]
 //
-// WHY: specs/20260825/04-genesis-driver.md — genesis's architect stage was three phases
+// Owner: specs/20260825/04-genesis-driver.md.
+//
+// WHY: genesis's architect stage was three phases
 // of hand-performed choreography: run the coverage-audit gate,
 // invoke registry-check.js per research menu, close the decision record, run the scaffold
 // command, run the zero-day gate, close the roadmap — each a deterministic check a session could
 // (and, measured, did) skip or fabricate while reporting success. Procedural hallucination is
-// the largest agent-failure class (38.5%, agenticrail.nz). On specs/20260825/04-genesis-driver.md's
-// contract, this script EXECUTES every one of those checks itself and prints only the ONE step
+// the largest agent-failure class (38.5%, agenticrail.nz). By contract, this script EXECUTES every one of those checks itself and prints only the ONE step
 // that still needs the session's judgment (the interview, the picks, the ADRs, the day-zero
 // skeleton, the roadmap decomposition). State is re-derived from `.claude/genesis/status.json`
 // plus the artifacts actually on disk on EVERY invocation — a mark whose artifact vanished (a
 // coverage answer edited back to `dark`, a menu file deleted) is demanded again, never trusted
 // from the recorded mark alone. Every accepted mark prints a checkpoint line so a full genesis
-// interview never has to fit inside one context window (D9): the session may /clear and
+// interview never has to fit inside one context window: the session may /clear and
 // re-invoke, and the driver picks up exactly where the disk says it left off.
 //
 // Every child process this driver spawns (registry-check.js, the descriptor's scaffoldCommand,
@@ -27,7 +28,7 @@
 // routinely emits well over spawnSync's 1 MiB default maxBuffer, and a Node pipe at that ceiling
 // SIGTERM-kills the child mid-run (ENOBUFS) before a single byte reaches the log — permanently
 // bricking genesis on that project, since the truncated scaffold never completes and every re-run
-// hits the identical wall (specs/20260825/04-genesis-driver.md). Streamed output can never
+// hits the identical wall. Streamed output can never
 // overflow a buffer that does not exist in the parent; runChild's fail-closed guard for a
 // genuine signal death or spawn failure is unchanged.
 //
@@ -41,10 +42,10 @@
 //     `docs/roadmap/`, and whatever `scaffoldCommand`/`gateCommand` themselves write.
 //   - run scaffoldCommand/gateCommand, or write status.json beyond `loadStatus()`'s own cold-root
 //     creation, for a `--state` invocation: `--state` is a read-only peek at the derived state, so
-//     it may report the transient driver-only states `SCAFFOLD`/`GATE` (D2's enum) that a bare
+//     it may report the transient driver-only states `SCAFFOLD`/`GATE` (in the state enum) that a bare
 //     invocation never leaves standing, instead of running the command a bare invocation would.
 //
-// specs/20260827/01-genesis-tournament.md: between MENUS and DECIDE, five archetypes
+// Between MENUS and DECIDE, five archetypes
 // (web-app, realtime-trading, backend-api, mobile-app, desktop-app) gain a tournament —
 // FINALISTS -> RACE (driver-only) -> PROBE -> PICK. The driver races 2-3 session-composed
 // finalist stacks for real (scaffold, zero-day gate, boot through smoke.sh's own contract) into
@@ -71,13 +72,12 @@
 //     leader and a `## Picks` that names the other finalist still records THAT finalist as the
 //     winner.
 //
-// specs/20260827/01-genesis-tournament.md D1 named an EXPLORE state (a pre-tournament
-// taste funnel) and specs/20260827/03-genesis-design-state.md D1 named a DESIGN state (the
-// design lock, between ROADMAP and HANDOFF); both are retired outright by
-// specs/20260902/08-genesis-shrink-brief-state.md D1 — see that spec's own paragraph below for
-// the current contract; `deriveState` never derives either name for any status shape.
+// An EXPLORE state (a pre-tournament
+// taste funnel) and a DESIGN state (the
+// design lock, between ROADMAP and HANDOFF) are both retired outright — see the paragraph
+// below for the current contract; `deriveState` never derives either name for any status shape.
 //
-// specs/20260827/04-genesis-conventions-handoff.md: the ops-conventions table
+// The ops-conventions table
 // stops being ADR paragraph nobody re-runs. `--mark decided` additionally validates
 // `.claude/genesis/conventions.json` — the nine floor keys, each row DECIDED-with-boolean-
 // enforceable or DEFERRED-with-reason, an enforceable row's probe living under the declared
@@ -94,7 +94,7 @@
 // and a remedy keyed on init-gen's own exit code. Greenfield genesis is now init + enforce;
 // `/spec:init` stays the brownfield entry and the regeneration owner (`--refresh`).
 //
-// What the D2-D4 additions deliberately do NOT do:
+// What these additions deliberately do NOT do:
 //   - author conventions.json, land a probe file, write CLAUDE.md/AGENTS.md, or author the init
 //     profile itself — those stay session judgment; the driver only closes each gate once the
 //     artifact exists and validates.
@@ -104,19 +104,19 @@
 //   - read status.json a second time inside init-gen — the profile itself carries every genesis
 //     artifact init-gen needs (config.genesisStackDescriptor, config.design).
 //
-// specs/20260901/04-shell-composed-mocks.md D7: `--mark tokens-landed` (visual
+// `--mark tokens-landed` (visual
 // archetypes) additionally requires `design/shell/app.html` to exist and its shell check to
 // exit 0, refused naming the missing file or carrying the check's own output otherwise — the
 // navigation shell is the mock-side artifact of the same
 // decision `tokens.css` already gates here, checked by the same driver so the mark cannot pass
 // without it. The check runs alongside the tokens.css checks (both validate a CANON file), ahead
 // of the approved-mock/matrix checks that validate the MOCKS.
-// NOTE: this paragraph describes a mark (`tokens-landed`) retired by
-// specs/20260902/08-genesis-shrink-brief-state.md D1 — kept here only as history for the
+// NOTE: this paragraph describes a mark (`tokens-landed`) retired outright —
+// kept here only as history for the
 // shell-canon fact it recorded; `design/shell/app.html` is not re-checked by BRIEF (spec 11 is
 // expected to fold shell extraction into SCAFFOLD).
 //
-// specs/20260902/08-genesis-shrink-brief-state.md D1-D8, D11: genesis loses its design
+// Genesis loses its design
 // states. The chain becomes DISCOVERY -> BRIEF -> MENUS -> tournament -> DECIDE -> SCAFFOLD ->
 // SKELETON -> GATE -> ROADMAP -> HANDOFF -> GROUNDED (specs/20260926/04-06 later insert
 // DESIGN_BRIEF -> DESIGN_KIT -> DESIGN_JOURNEYS -> AWAITING_DESIGN_APPROVAL between GATE and
@@ -124,12 +124,12 @@
 // (`- archetype: <registry key>` in `## Picks`, moved here from menus-done) and hands off to
 // `/spec:mocks` for a visual archetype. BRIEF sits between DISCOVERY and MENUS: for
 // DESIGN_SKIPPED_ARCHETYPES (backend-api/data-ml/conversational-bot/cli-devtool) it is a
-// pass-through (D4); a visual archetype records design: "ratified" once `design/mocks/status.json`
-// is APPROVED with an open provenance ledger (D3, spec 06's lib) and the brief's journey checks pass. The pick record lives
+// pass-through; a visual archetype records design: "ratified" once `design/mocks/status.json`
+// is APPROVED with an open provenance ledger (lib/mocks-ledger.js) and the brief's journey checks pass. The pick record lives
 // in the mocks status (`status.brief`) — RETIRED_MARKS (below) all refuse with exit 2 naming
 // `/spec:mocks` as the remedy. A legacy `status.json` past MENUS with no `marks.briefWritten`
 // resumes at BRIEF and accepts `--mark brief-written --legacy`, which skips the mocks
-// precondition (D3) and records design: "ratified" with nothing further.
+// precondition and records design: "ratified" with nothing further.
 //
 // What the BRIEF addition deliberately does NOT do:
 //   - approve a mocks set itself — that stays session (or `/spec:mocks`) judgment; the driver
@@ -137,42 +137,42 @@
 //   - re-derive whether a mocks set was ever needed after DISCOVERY — that fact is fixed the
 //     moment discovery-done records `status.archetype`.
 //
-// specs/20260902/11-brief-from-approved-set.md D1-D5 (Behavior: Applicability — a fresh visual
-// run only, `status.brief.mocks` set; legacy and non-visual runs are untouched): `brief-written`
+// Applicability — a fresh visual
+// run only (`status.brief.mocks` set; legacy and non-visual runs are untouched): `brief-written`
 // additionally requires brief.md's `## Journeys` to cover every design/mocks/seed.md journey and
-// label, and `## Non-UI Coverage`'s six closed keys to carry none dark or missing (D1); the
+// label, and `## Non-UI Coverage`'s six closed keys to carry none dark or missing; the
 // BRIEF step text prints the derivation sources (confirmed product ledger row ids, the seed's
 // journey count, unresolved notes) so the session writes the brief from the approved set, never
-// from the discovery interview alone (D2); the MENUS step text prints the seed's
-// primary-surface/platforms-horizon rows above an open `framework` dimension (D3);
+// from the discovery interview alone; the MENUS step text prints the seed's
+// primary-surface/platforms-horizon rows above an open `framework` dimension;
 // `roadmap-written` additionally requires every seed-declared label to land in exactly one
-// brief's ```surfaces block (D4); `skeleton-landed` additionally requires design/shell/app.html
+// brief's ```surfaces block; `skeleton-landed` additionally requires design/shell/app.html
 // to pass `check`, every top-level design/mocks/*.html to declare `data-shell`,
 // `check --matrix design/mocks` to exit 0, and design/components.json to name every
-// design/mocks/canon.md primitive (D5).
-// NOTE: D5's skeleton-landed HTML-design checks are retired outright by
-// specs/20260914/03-the-html-atlas-is-retired.md D11 — kept here only as history for D1-D4,
-// which still apply; `handleSkeletonLanded` no longer runs any of D5's checks.
+// design/mocks/canon.md primitive.
+// NOTE: the skeleton-landed HTML-design checks are retired outright — kept here only as
+// history for the other checks above, which still apply; `handleSkeletonLanded` no longer runs
+// the HTML-design checks.
 //
-// What the D1-D4 additions deliberately do NOT do:
+// What these additions deliberately do NOT do:
 //   - author brief.md's prose or the mocks approval itself — those stay session
 //     judgment; the driver only closes each mark once the artifacts exist and cover the seed.
 //
-// specs/20260926/05-the-kit-and-the-journey-stories.md D1: two more design-stage states,
+// Two more design-stage states,
 // DESIGN_KIT and DESIGN_JOURNEYS, sit between DESIGN_BRIEF and ROADMAP for a design-stage-
 // applicable host. DESIGN_KIT closes with `--mark kit-landed` once every brief composite has a
-// fixture story per declared state, proven by an EXECUTED Storybook static build (`runStorybookBuild`,
-// D3) and lib/storybook-index.js's index reader (D2) — a build that exits 0 with no `iframe.html`
+// fixture story per declared state, proven by an EXECUTED Storybook static build (`runStorybookBuild`)
+// and lib/storybook-index.js's index reader — a build that exits 0 with no `iframe.html`
 // (the salon-os TanStack Start spike) is still a refusal, never a pass on exit code alone.
 // DESIGN_JOURNEYS closes with `--mark journeys-drawn` once every seed journey has a story that
 // imports the driver's own `<journeys>/<j>.beats.json` derivation (written at this state's own
-// print, D6) and calls `step()` per beat, contains no import of a primitive (D8's ban walks every
+// print) and calls `step()` per beat, contains no import of a primitive (the ban walks every
 // file under `<journeys>` by location, never by filename shape), and the rebuilt index tags it
 // `journey`+`play-fn`. Both marks re-derive their state from disk on every invocation — a
 // deleted `.storybook/main.*` or journey story file is demanded again, never trusted from the
-// recorded mark alone (D1).
+// recorded mark alone.
 //
-// What the D1-D9 additions deliberately do NOT do:
+// What these additions deliberately do NOT do:
 //   - author the kit, the tokens, the shell, or a single journey screen — those stay session
 //     (Fable, then Sonnet) judgment; the driver only closes each mark once the artifacts exist,
 //     compile, and the executed build proves it.
@@ -183,30 +183,30 @@
 //   - execute a story's `play` function at either mark — Storybook's own build only compiles and
 //     indexes stories; walking a journey is the human review at the approval stop (spec 06).
 //
-// specs/20260926/06-the-approval-stop-and-the-roadmap.md D1-D5: one more design-stage state,
+// One more design-stage state,
 // AWAITING_DESIGN_APPROVAL, sits between DESIGN_JOURNEYS and ROADMAP — the one look stop where JJ
 // approves the designed set in Storybook. It probes the live dev server's own `/index.json` (or
-// `design-paths.storybook.indexUrl`, D2) through `curl`, proving by CONTENT that every seed
+// `design-paths.storybook.indexUrl`) through `curl`, proving by CONTENT that every seed
 // journey's story is served — never by a story URL's HTTP status, since Storybook answers 200 for
-// a story id that does not exist (Assumption A1). `--mark design-approved` (D3), run only on the
+// a story id that does not exist. `--mark design-approved`, run only on the
 // user's literal `approve` — the driver cannot see the conversation, so doctrine binds the session
 // to that one word — re-runs the build and both journey/state checks against a fresh index, then
 // freezes the designed set into `docs/design/approval.json`: journeys with their story id, file,
 // beats hash and screens, composites with their states, and deliberately no per-file hash (frozen
 // after approval, never gated later — recording a hash would invite exactly that gate). ROADMAP
-// (D4) then derives from that record: it prints one `approved:` line per approved journey, and
+//  then derives from that record: it prints one `approved:` line per approved journey, and
 // `roadmap-written`'s placement check reads its label set from the record's `screens` once it
-// exists, falling back to the seed only for a legacy or skipped-stage host. D5: no driver code
+// exists, falling back to the seed only for a legacy or skipped-stage host. No driver code
 // path reads a wireframe-stage approval record after `DESIGN_BRIEF`'s print — the wireframe's
 // confirmations live in design/mocks/status.json and design/rounds/, a different record with a
 // different owner than this spec's `docs/design/approval.json`.
 //
-// What the D1-D5 additions deliberately do NOT do:
+// What these additions deliberately do NOT do:
 //   - walk a journey story's `play` function, or judge whether JJ actually reviewed each one —
 //     the probe proves the index serves the story; JJ's own literal `approve` is the only mark
 //     the driver ever accepts as that review having happened.
-//   - make or push a picture round from this stop — ROADMAP only prints the optional command
-//     (specs/20261005/06 D10); no mark and no state reads the pictures block.
+//   - make or push a picture round from this stop — ROADMAP only prints the optional command;
+// no mark and no state reads the pictures block.
 //
 // Fixing that overflow only at the child's own capture is insufficient: `logTail`, which builds the
 // SCAFFOLD_RED/GATE_RED excerpt embedded in the driver's OWN stdout, bounds its excerpt by BYTES,
@@ -216,7 +216,7 @@
 // the driver's own stdout through a pipe (e.g. a test's default 1 MiB maxBuffer) hits the identical
 // ENOBUFS one layer up. `logTail` reads only the last LOGTAIL_MAX_BYTES of the file via
 // `fs.openSync`/`fs.readSync`, never the whole thing, and marks the excerpt as truncated when it is
-// (specs/20260825/04-genesis-driver.md — bounding a printed excerpt by line count alone is not a
+// (bounding a printed excerpt by line count alone is not a
 // bound, because a caller's buffer is measured in bytes).
 //
 // Exit codes:
@@ -233,7 +233,7 @@ const fs = require('fs')
 const path = require('path')
 const { CONFIG_RELPATH, readConfig } = require('./lib/host-config')
 const mocksLedgerLib = require('./lib/mocks-ledger')
-// specs/20261002/01-the-wireframe-command-runs-over-the-service.md D13: the BRIEF step text's
+// The BRIEF step text's
 // "seed journeys" count is the seed's own journey count and "notes open" is lib/mocks-round.js's
 // openNoteCount — nothing in this file reads a file under a mock app.
 const mocksRoundLib = require('./lib/mocks-round')
@@ -276,7 +276,7 @@ const statusPath = path.join(genesisDir, 'status.json')
 function genesisRel(name) { return '.claude/genesis/' + name }
 
 // ---------------------------------------------------------------------------
-// status.json (v3, specs/20260902/08-genesis-shrink-brief-state.md D11) — created fresh on a
+// status.json (v3) — created fresh on a
 // cold root; an existing v1/v2 file is read as-is (missing keys default in memory, and any
 // legacy-only keys such as `explore` or `exploreRecord` are kept untouched — see loadStatus())
 // and rewritten as v3 only on the next accepted mark.
@@ -338,7 +338,7 @@ function section(text, name) {
   return next === -1 ? rest : rest.slice(0, next)
 }
 
-// specs/20260902/11-brief-from-approved-set.md Assumption A4: the `covered|dark|n/a` line
+// The `covered|dark|n/a` line
 // grammar is shared by ## Coverage and ## Non-UI Coverage — one parser, parameterized by
 // section name, never a second copy of the regex.
 function parseKeyedSection(text, sectionName) {
@@ -396,16 +396,16 @@ function picks() { const t = briefText(); return t === null ? {} : parsePicks(t)
 function hasMenuFile(key) { return fs.existsSync(path.join(genesisDir, 'interview-research', key + '.json')) }
 
 // ---------------------------------------------------------------------------
-// specs/20260902/11-brief-from-approved-set.md D1-D3: design/mocks/seed.md and
-// design/mocks/ledger.md readers shared by BRIEF's journey/coverage derivation (D1/D2), MENUS'
-// framework pricing print (D3), and ROADMAP's journey-placement check (D4).
+// The design/mocks/seed.md and
+// design/mocks/ledger.md readers shared by BRIEF's journey/coverage derivation, MENUS'
+// framework pricing print, and ROADMAP's journey-placement check.
 // ---------------------------------------------------------------------------
 function seedPath() { return path.join(root, 'design/mocks/seed.md') }
 function seedText() { try { return fs.readFileSync(seedPath(), 'utf8') } catch (e) { return null } }
 
 function seedJourneysMap() { return surfacesLib.parseSeedJourneys(seedText()) }
 
-// design/mocks/seed.md's `## Facts` section: `- <key>: <value>` lines (D3 reads
+// design/mocks/seed.md's `## Facts` section: `- <key>: <value>` lines (read
 // `primary-surface`/`platforms-horizon`, whose value is a product ledger row id).
 function seedFacts() {
   const t = seedText()
@@ -421,9 +421,9 @@ function seedFacts() {
   return facts
 }
 
-// specs/20260911/05-approval-is-bookkeeping.md D5: every FENCED exclusion row — `confirmed`
-// (agreed by the client) or `open` (never answered, "not contested") — widened from spec
-// 20260910/05 D6's confirmed-only set, since an unanswered row is fenced too now (an item the
+// Every FENCED exclusion row — `confirmed`
+// (agreed by the client) or `open` (never answered, "not contested") — widened from the
+// confirmed-only set, since an unanswered row is fenced too now (an item the
 // client did not dispute goes to the parking lot, never silently unfenced). `overridden` rows (a
 // client's "needed" answer, or a retired source) are never required. Read/parse failure (no
 // design/mocks/ledger.md at all, a non-visual host per AC-10) degrades to [], the same posture as
@@ -436,7 +436,7 @@ function fencedExclusionRows() {
   return ledger.assumptions.filter((r) => r.kind === 'exclusion' && (r.status === 'confirmed' || r.status === 'open'))
 }
 
-// A4: the overview's own heading is `## Parking lot (deferred ideas — not scope, not backlog)`
+// The overview's own heading is `## Parking lot (deferred ideas — not scope, not backlog)`
 // — matched by prefix `## Parking lot`, never section()'s exact-name regex (which would refuse
 // the parenthetical). Returns the body between that heading and the next `## `, or null.
 function parkingLotSection(text) {
@@ -448,7 +448,7 @@ function parkingLotSection(text) {
   return next === -1 ? rest : rest.slice(0, next)
 }
 
-// D2: every confirmed said-by-user/ratified-doc product row — the derivation sources the BRIEF
+// Every confirmed said-by-user/ratified-doc product row — the derivation sources the BRIEF
 // step text must list by id, never the discovery interview alone. Read/parse failure degrades
 // to [] (the step text falls back to "none"), never a throw.
 function confirmedProductRows() {
@@ -462,7 +462,7 @@ function confirmedProductRows() {
     .map((r) => ({ id: r.id, claim: r.claim, tag: r.tag }))
 }
 
-// D3: look up one product ledger row by id (the seed's primary-surface/platforms-horizon facts
+// Look up one product ledger row by id (the seed's primary-surface/platforms-horizon facts
 // name a row id, not a claim — the MENUS step reads the claim text off the ledger itself).
 function productRowById(id) {
   let text
@@ -472,7 +472,7 @@ function productRowById(id) {
   return ledger.assumptions.find((r) => r.id === id) || null
 }
 
-// D1: does brief.md's own ## Journeys section cover every seed journey and every one of its
+// Does brief.md's own ## Journeys section cover every seed journey and every one of its
 // labels? Walked in seed-file order so the refusal names the FIRST offender (Contracts: "the
 // first missing journey").
 function briefJourneysCheck(text, seedJourneys) {
@@ -492,7 +492,7 @@ function briefJourneysCheck(text, seedJourneys) {
   return { ok: true }
 }
 
-// D1: ## Non-UI Coverage's six closed keys, none dark or missing — Assumption A4's
+// ## Non-UI Coverage's six closed keys, none dark or missing:
 // parameterized reuse of ## Coverage's own grammar.
 const NON_UI_COVERAGE_KEYS = ['jobs', 'notifications', 'retention', 'integrations', 'admin', 'pricing']
 function briefNonUiCheck(text) {
@@ -501,10 +501,10 @@ function briefNonUiCheck(text) {
   return { missing }
 }
 
-// D4: every declared label placed in exactly one brief's ```surfaces block.
+// Every declared label placed in exactly one brief's ```surfaces block.
 // surfacesLib.parseSurfacesPlacement tracks EVERY brief declaring a label (the retired HTML
-// atlas's own parseSurfaces kept only the first) since D4 must also catch a double-placement,
-// not just an absence. specs/20260926/06-the-approval-stop-and-the-roadmap.md D4: once
+// atlas's own parseSurfaces kept only the first) since the check must also catch a double-placement,
+// not just an absence. Once
 // docs/design/approval.json exists, its own journeys' `screens` are the label source — the seed
 // is no longer read here (a journey the seed gains AFTER approval froze must never re-enter this
 // check); a legacy or skipped-stage host with no approval record falls back to the seed, unchanged.
@@ -534,7 +534,7 @@ function journeyPlacementCheck() {
   return { ok: true }
 }
 
-// D4: on registryExit === 1 the step re-print names the dropped labels, read from the menu
+// On registryExit === 1 the step re-print names the dropped labels, read from the menu
 // file's `droppedForCurrency` (registry-check.js --write's shape: [{label, packages: [...]}]).
 // Read defensively — a missing/unparseable menu file or an absent/empty array degrades to null
 // so the caller falls back to the generic wording; it must never throw.
@@ -551,7 +551,7 @@ function droppedLabelsFor(key) {
 }
 
 // ---------------------------------------------------------------------------
-// DISCOVERY (D3): the coverage-audit gate.
+// DISCOVERY: the coverage-audit gate.
 // ---------------------------------------------------------------------------
 const COVERAGE_KEYS = [
   'payer', 'tenancy', 'data-sensitivity', 'residency', 'ai-use', 'unattended',
@@ -591,7 +591,7 @@ function handleDiscoveryDone() {
         'them, in the user\'s words, then re-mark discovery-done')
     }
   }
-  // specs/20260902/08-genesis-shrink-brief-state.md D2: the archetype gate moves here from
+  // The archetype gate moves here from
   // menus-done — BRIEF (the very next state) must already know whether a mocks set is owed.
   const archetype = picks().archetype
   if (!archetype) {
@@ -609,7 +609,7 @@ function handleDiscoveryDone() {
 }
 
 // ---------------------------------------------------------------------------
-// MENUS (D4): registry-check.js per menu, then the picks gate.
+// MENUS: registry-check.js per menu, then the picks gate.
 // ---------------------------------------------------------------------------
 function menusCheck() {
   const open = openDimensionKeys()
@@ -646,8 +646,8 @@ function handleMenuWritten() {
   return { prev: 'MENUS', next: 'MENUS' }
 }
 
-// specs/20260827/01-genesis-tournament.md D2: the eight registry archetype keys — the grammar
-// `--mark menus-done` now requires a `- archetype: <key>` ## Picks line to name. D1: five of the
+// The eight registry archetype keys — the grammar
+// `--mark menus-done` now requires a `- archetype: <key>` ## Picks line to name. Five of the
 // eight are TOURNAMENT archetypes; every other archetype's MENUS -> DECIDE path is unchanged.
 const REGISTRY_KEYS = [
   'web-app', 'mobile-app', 'conversational-bot', 'backend-api',
@@ -656,7 +656,7 @@ const REGISTRY_KEYS = [
 const TOURNAMENT_ARCHETYPES = ['web-app', 'realtime-trading', 'backend-api', 'mobile-app', 'desktop-app']
 function isTournamentArchetype(a) { return TOURNAMENT_ARCHETYPES.includes(a) }
 
-// specs/20260827/02-genesis-explore-state.md D1: the four VISUAL archetypes are every tournament
+// The four VISUAL archetypes are every tournament
 // archetype except backend-api (headless — no UI, no taste funnel). Every other archetype (the
 // three TOURNAMENT_ARCHETYPES are a superset check, not a subset — data-ml/cli-devtool/
 // conversational-bot are neither tournament nor visual) gets explore: "skipped" the moment
@@ -664,18 +664,18 @@ function isTournamentArchetype(a) { return TOURNAMENT_ARCHETYPES.includes(a) }
 const VISUAL_ARCHETYPES = ['web-app', 'realtime-trading', 'mobile-app', 'desktop-app']
 function isVisualArchetype(a) { return VISUAL_ARCHETYPES.includes(a) }
 
-// specs/20260930/01-the-brief-stops-ratifying-prose.md D2: these four archetypes carry no design
+// These four archetypes carry no design
 // record at all — handleBriefWritten records design: "skipped" and brief.mocks: null for them.
 // Every other archetype is visual and ratifies at BRIEF behind the mocks precondition.
 const DESIGN_SKIPPED_ARCHETYPES = ['backend-api', 'data-ml', 'conversational-bot', 'cli-devtool']
 function isDesignSkipped(a) { return DESIGN_SKIPPED_ARCHETYPES.includes(a) }
 
 // ---------------------------------------------------------------------------
-// DESIGN_BRIEF (specs/20260926/04-the-design-brief.md D1): sits between the green zero-day gate
+// DESIGN_BRIEF: sits between the green zero-day gate
 // and ROADMAP, for a visual archetype whose stack descriptor names Storybook as its design
 // catalog. Applicability is recomputed on every call (never cached) so a descriptor edited after
 // the gate is still read correctly; only the SKIP outcome is persisted (once), since "applies"
-// has nothing to record until the mark itself lands (D8).
+// has nothing to record until the mark itself lands.
 // ---------------------------------------------------------------------------
 function designStageApplies() {
   const desc = readStackDescriptor() || {}
@@ -685,7 +685,7 @@ function designStageApplies() {
 // Called exactly at the two places the zero-day gate first turns green (handleSkeletonLanded's
 // mark acceptance, and deriveState's own bare-run gate branch) — never from a `--state` peek,
 // so this never violates the "peek writes nothing" contract. A no-op once status.designStage is
-// already set (either this skip record, or the full D8 record a later mark writes).
+// already set (either this skip record, or the full record a later mark writes).
 function recordDesignStageSkipIfNeeded() {
   if (status.designStage) return
   if (designStageApplies()) return
@@ -701,17 +701,17 @@ function readDesignPathsJson() {
 function designBriefMdPath() { return path.join(root, 'docs/design/brief.md') }
 function catalogMdPath() { return path.join(root, 'docs/design/catalog.md') }
 
-// specs/20260926/06-the-approval-stop-and-the-roadmap.md D3/D5: the designed-set record JJ's
+// The designed-set record JJ's
 // `approve` freezes — distinct from the wireframe stage's own records (design/mocks/status.json and
-// design/rounds/, read only at/before BRIEF, per D5 never again). This one
+// design/rounds/, read only at/before BRIEF, never again). This one
 // lives at docs/design/, is written once by design-approved, and is what AWAITING_DESIGN_APPROVAL
-// (D1's re-derivation), ROADMAP (D4) and roadmap-written's placement check (D4) all read.
+// (its re-derivation), ROADMAP and roadmap-written's placement check all read.
 function docsDesignApprovalPath() { return path.join(root, 'docs/design/approval.json') }
 function readDocsDesignApproval() {
   try { return JSON.parse(fs.readFileSync(docsDesignApprovalPath(), 'utf8')) } catch (e) { return null }
 }
 
-// D3: design-paths.json's required shape — every top-level path key non-empty, plus
+// design-paths.json's required shape — every top-level path key non-empty, plus
 // storybook.port (integer 1024-65535), storybook.buildCommand, storybook.staticDir. Walked in
 // the Contracts' own key order so the refusal names the first missing/invalid key.
 const DESIGN_PATHS_REQUIRED_KEYS = ['kit', 'tokens', 'rules', 'primitives', 'primitivesAlias', 'journeys']
@@ -741,7 +741,7 @@ function designPathsCheck() {
   return { ok: true, parsed }
 }
 
-// specs/20260926/05-the-kit-and-the-journey-stories.md D5/D8: design-paths.json is re-validated
+// design-paths.json is re-validated
 // (never trusted from design-brief-written's earlier pass alone) at both kit-landed and
 // journeys-drawn — shares designPathsCheck()'s reasons and design-brief-written's own wording,
 // parameterized by the mark name so the remedy names the right re-mark command.
@@ -764,8 +764,8 @@ function requireDesignPaths(markName) {
 }
 
 // docs/design/brief.md's own ## Composites table — one composite per row, `{ composite, states }`
-// in brief order, states split on `,` and trimmed. Shared by the DESIGN_KIT step text (D4) and
-// kit-landed's stateStoriesCheck call (D5).
+// in brief order, states split on `,` and trimmed. Shared by the DESIGN_KIT step text and
+// kit-landed's stateStoriesCheck call.
 function briefCompositesWithStates() {
   const text = fs.readFileSync(designBriefMdPath(), 'utf8')
   const sec = section(text, 'Composites') || ''
@@ -774,13 +774,13 @@ function briefCompositesWithStates() {
     .map((r) => ({ composite: r[0], states: (r[2] || '').split(',').map((s) => s.trim()).filter(Boolean) }))
 }
 
-// D5: runs catalog-inventory.js only when docs/design/catalog.md is absent — D5's own trigger is
+// Runs catalog-inventory.js only when docs/design/catalog.md is absent — that is its own trigger,
 // the file's absence, so a file already on the host (never generated by this driver) is left
 // untouched, never overwritten, and never re-run for. A recorded FAILED run
 // (status.designStage.catalog.exit !== 0) is the second half of the gate: catalog-inventory.js
 // never writes the file on a non-zero exit, so gating on the file alone would re-run the child
 // on every single print after a failure. A recorded SUCCESS does not gate — a catalog.md deleted
-// after a successful run is regenerated on the next print. The GENESIS_SHADCN_COMMAND env override (A9) is threaded to the child's --shadcn flag
+// after a successful run is regenerated on the next print. The GENESIS_SHADCN_COMMAND env override is threaded to the child's --shadcn flag
 // when set. Records status.designStage.catalog on EITHER outcome of a run it actually performs
 // — {exit, components, unavailable, at}, with components/unavailable at 0 on a non-zero exit —
 // so a later print derives its ⚠️ warning (or its normal catalog line) from the recorded exit
@@ -813,7 +813,7 @@ function ensureCatalogGenerated() {
   saveStatus()
 }
 
-// D6: a small markdown-table reader shared by designBriefCheck below — the same shape
+// A small markdown-table reader shared by designBriefCheck below — the same shape
 // design-contract-check.js's own findTable() reads, kept as a second small copy here (this
 // driver has never required() that script, and doing so now would couple a CLI script's argv
 // parsing into a library role neither file wants).
@@ -841,11 +841,11 @@ function extractMdSubHeading(text, name) {
   return next === -1 ? rest : rest.slice(0, next)
 }
 
-// D6: docs/design/brief.md's grammar — heading presence/order, one JTBD line per seed journey,
+// docs/design/brief.md's grammar — heading presence/order, one JTBD line per seed journey,
 // no entity-shaped heading, a non-empty ## Composites table equal to the rules file's own
 // Composite column, and every ### Used name present in docs/design/catalog.md when that
 // inventory lists any. Returns { ok: true } or { ok: false, message } naming the FIRST failure,
-// in the order D6 lists them.
+// in the order the brief grammar lists them.
 const DESIGN_BRIEF_REQUIRED_HEADINGS = ['## Users and context', '## Journeys', '## Navigation', '## Catalog', '## Composites', '## Contract']
 
 function designBriefCheck(paths) {
@@ -952,7 +952,7 @@ function designBriefCheck(paths) {
   return { ok: true }
 }
 
-// D7: findings blocking the mark — table-missing/table-empty/naming-section-missing; the
+// Findings blocking the mark — table-missing/table-empty/naming-section-missing; the
 // others (kit-missing, tokens-missing, composite-missing) are tolerated at this mark (the kit
 // lands in spec 05's own build).
 const DESIGN_CONTRACT_BLOCKING_KINDS = ['table-missing', 'table-empty', 'naming-section-missing']
@@ -1013,16 +1013,15 @@ function handleDesignBriefWritten() {
     briefAt: new Date().toISOString(),
   })
   saveStatus()
-  // specs/20260926/05-the-kit-and-the-journey-stories.md D1: design-brief-written now hands off
+  // design-brief-written now hands off
   // to DESIGN_KIT, never straight to ROADMAP — the kit and the journey stories land first.
   return { prev: 'DESIGN_BRIEF', next: 'DESIGN_KIT' }
 }
 
 // ---------------------------------------------------------------------------
-// DESIGN_KIT / DESIGN_JOURNEYS (specs/20260926/05-the-kit-and-the-journey-stories.md D1/D3/D5/D6/
-// D8): two more design-stage states between DESIGN_BRIEF and ROADMAP. Shared plumbing first —
-// runStorybookBuild (D3), the Storybook main-config check, the journey-story-file finder, the
-// primitive ban's directory walk, and the beats-file writer (D6) — then the two mark handlers.
+// DESIGN_KIT / DESIGN_JOURNEYS: two more design-stage states between DESIGN_BRIEF and ROADMAP. Shared plumbing first —
+// runStorybookBuild, the Storybook main-config check, the journey-story-file finder, the
+// primitive ban's directory walk, and the beats-file writer — then the two mark handlers.
 // ---------------------------------------------------------------------------
 
 function storybookBuildLogPath() { return path.join(genesisDir, 'storybook-build.log') }
@@ -1032,9 +1031,9 @@ function storybookMainExists() {
   return STORYBOOK_MAIN_EXTS.some((ext) => fs.existsSync(path.join(root, '.storybook', 'main.' + ext)))
 }
 
-// D3: runs `design-paths.storybook.buildCommand` through the existing runShell idiom (streamed to
-// storybook-build.log, never a Node pipe — A6), writes `<staticDir>/.gitignore` containing `*`
-// before every attempt (AC-20260926-05-7: the file must exist after ANY attempt, successful or
+// Runs `design-paths.storybook.buildCommand` through the existing runShell idiom (streamed to
+// storybook-build.log, never a Node pipe), writes `<staticDir>/.gitignore` containing `*`
+// before every attempt (the file must exist after ANY attempt, successful or
 // not, so the static export is never accidentally committed), and returns `{ exit, ms, index }`.
 // Refusing on the result is the caller's job (refuseOnStorybookBuild, below) — both marks share
 // the exact same refusal wording.
@@ -1050,7 +1049,7 @@ function runStorybookBuild(paths) {
   return { exit: r.status, ms, index }
 }
 
-// Shared by kit-landed (D5) and journeys-drawn (D8): a non-zero exit quotes the log's tail and
+// Shared by kit-landed and journeys-drawn: a non-zero exit quotes the log's tail and
 // names "storybook build"; an ok:false index names whichever file readIndex found missing —
 // `iframe.html` (the salon-os false-pass class this whole design exists to catch) or
 // `index.json`.
@@ -1070,7 +1069,7 @@ function refuseOnStorybookBuild(build, markName) {
   }
 }
 
-// D8's journey-story finder: exactly one file matching `<journeysDir>/<name>.journey.stories.*`.
+// The journey-story finder: exactly one file matching `<journeysDir>/<name>.journey.stories.*`.
 function findJourneyStoryFile(journeysAbsDir, name) {
   let files = []
   try { files = fs.readdirSync(journeysAbsDir) } catch (e) { files = [] }
@@ -1091,7 +1090,7 @@ function walkFilesRecursive(dir) {
   return out
 }
 
-// D8's primitive ban: every `.ts/.tsx/.js/.jsx` file under `<journeysDir>` (classified by
+// The primitive ban: every `.ts/.tsx/.js/.jsx` file under `<journeysDir>` (classified by
 // LOCATION — the directory walk — never by filename shape, per the pipeline rules' own recorded
 // gotcha) is scanned for an import specifier that equals `primitivesAlias`, starts with
 // `primitivesAlias + '/'`, or (a relative specifier) resolves inside `primitives`. Returns the
@@ -1114,7 +1113,7 @@ function primitiveBanCheck(journeysAbsDir, primitivesAlias, primitivesAbs) {
   return null
 }
 
-// D6: `<journeysDir>/<name>.beats.json` — the driver's own derivation of a journey's story,
+// `<journeysDir>/<name>.beats.json` — the driver's own derivation of a journey's story,
 // never the story's declaration (see the header's rationale paragraph). Called only from
 // STEPS.DESIGN_JOURNEYS's print (never from `--state`, which never side-effects): creates the
 // journeys directory, rewrites a file whose recorded `beatHash` no longer matches the seed's own
@@ -1135,7 +1134,7 @@ function writeBeatsFilesIfNeeded(journeysRel) {
   }
 }
 
-// D1: a journey story file vanishing after journeys-drawn re-derives DESIGN_JOURNEYS — checked
+// A journey story file vanishing after journeys-drawn re-derives DESIGN_JOURNEYS — checked
 // against design-paths.json's own journeys dir, never cached.
 function anyJourneyStoryVanished() {
   const dp = readDesignPathsJson()
@@ -1147,9 +1146,9 @@ function anyJourneyStoryVanished() {
   return false
 }
 
-// D5: `--mark kit-landed` — design-paths.json valid, then design-contract-check.js's full check
+// `--mark kit-landed` — design-paths.json valid, then design-contract-check.js's full check
 // (every composite present, tables filled, tokens file present) exits 0, then .storybook/main.*
-// exists, then D3's build succeeds, then D2's stateStoriesCheck finds every declared state.
+// exists, then the Storybook build succeeds, then stateStoriesCheck finds every declared state.
 function handleKitLanded() {
   if (!status.marks.designBriefWritten) die('design-brief-written has not been marked yet — mark design-brief-written first')
   if (!designStageApplies()) {
@@ -1202,9 +1201,9 @@ function handleKitLanded() {
   return { prev: 'DESIGN_KIT', next: 'DESIGN_JOURNEYS' }
 }
 
-// D8: `--mark journeys-drawn` — per seed journey, D6's hash still holds, exactly one story file,
+// `--mark journeys-drawn` — per seed journey, the beats hash still holds, exactly one story file,
 // it imports its own beats.json and calls step(), then the primitive ban over the whole journeys
-// directory, then D3's build and D2's journeyStoriesCheck.
+// directory, then the Storybook build and journeyStoriesCheck.
 function handleJourneysDrawn() {
   if (!status.marks.kitLanded) die('kit-landed has not been marked yet — mark kit-landed first')
   if (!designStageApplies()) {
@@ -1267,23 +1266,23 @@ function handleJourneysDrawn() {
     },
   })
   saveStatus()
-  // specs/20260926/06-the-approval-stop-and-the-roadmap.md D1: journeys-drawn hands off to the
+  // journeys-drawn hands off to the
   // approval stop now, never straight to ROADMAP.
   return { prev: 'DESIGN_JOURNEYS', next: 'AWAITING_DESIGN_APPROVAL' }
 }
 
 // ---------------------------------------------------------------------------
-// AWAITING_DESIGN_APPROVAL (specs/20260926/06-the-approval-stop-and-the-roadmap.md D1-D3): the
+// AWAITING_DESIGN_APPROVAL: the
 // one look stop where JJ approves the designed set in Storybook. The probe proves by CONTENT —
-// index.json's own entries — never by a story URL's HTTP status: Assumption A1 (spiked
+// index.json's own entries — never by a story URL's HTTP status (spiked
 // 2026-09-26) is that Storybook answers 200 for a story id that does not exist, so a URL-status
 // check would point JJ at a page that may show nothing.
 // ---------------------------------------------------------------------------
 
-// D2: `curl -sf -m 3 <url>` routed through runChild — a genuine spawn failure or signal death is
+// `curl -sf -m 3 <url>` routed through runChild — a genuine spawn failure or signal death is
 // runChild's own fail-closed refusal (exit 2); a reachable-but-erroring server, a closed port, or
 // a `file:` URL to a missing fixture all come back as an ordinary non-zero curl exit, read here as
-// 'unreachable'. A3: curl reads `file:` URLs natively, so this same code path serves both the real
+// 'unreachable'. curl reads `file:` URLs natively, so this same code path serves both the real
 // dev server and this spec's own `indexUrl`-pointed test fixtures.
 function probeStorybookIndex(url) {
   const r = runChild('curl', ['-sf', '-m', '3', url], { encoding: 'utf8' }, 'curl ' + url)
@@ -1294,20 +1293,20 @@ function probeStorybookIndex(url) {
   return { ok: true, entriesById: parsed.entries }
 }
 
-// D2: `design-paths.storybook.indexUrl` when set, else the port URL.
+// `design-paths.storybook.indexUrl` when set, else the port URL.
 function storybookIndexUrl(paths) {
   const sb = paths.storybook || {}
   return (typeof sb.indexUrl === 'string' && sb.indexUrl) || ('http://127.0.0.1:' + sb.port + '/index.json')
 }
 
-// D2: the journey story ids the served index must carry — journeys-drawn's own recorded result
+// The journey story ids the served index must carry — journeys-drawn's own recorded result
 // (status.designStage.journeys.stories), in seed order (the object's own insertion order, since
 // handleJourneysDrawn built it by walking seedJourneysMap() in file order).
 function requiredJourneyStoryIds() {
   return (status.designStage && status.designStage.journeys && status.designStage.journeys.stories) || {}
 }
 
-// D2: the full serving check the look stop and the refusal both need — probes the index, then
+// The full serving check the look stop and the refusal both need — probes the index, then
 // walks the required journey ids in seed order so the result names the FIRST journey the served
 // index does not carry.
 function checkStorybookServingJourneys(paths) {
@@ -1320,10 +1319,10 @@ function checkStorybookServingJourneys(paths) {
   return { ok: true, entriesById: probe.entriesById }
 }
 
-// D3: `--mark design-approved` — re-runs spec 05's own build + journeyStoriesCheck +
+// `--mark design-approved` — re-runs its own build + journeyStoriesCheck +
 // stateStoriesCheck against a FRESH index (never trusted from journeys-drawn's earlier pass
 // alone), then freezes the designed set into docs/design/approval.json. No per-file hash is
-// recorded (D3's own rationale: "frozen after approval, never gated later" — recording one would
+// recorded (the rationale: "frozen after approval, never gated later" — recording one would
 // invite exactly the gate that forbids).
 function handleDesignApproved() {
   if (!status.marks.journeysDrawn) die('journeys-drawn has not been marked yet — mark journeys-drawn first')
@@ -1389,14 +1388,14 @@ function handleMenusDone() {
     die('open dimension(s) with no recorded menu (--mark menu-written --file <menu.json>) or no ## Picks line: ' + check.missing.join(', ') +
       ' — finish the interview, then re-mark menus-done')
   }
-  // specs/20260902/08-genesis-shrink-brief-state.md D2: the archetype was already validated
-  // and recorded at discovery-done — AC-20260902-08-13 requires a ## Picks archetype line
+  // The archetype was already validated
+  // and recorded at discovery-done — a ## Picks archetype line is required
   // still present here (never removed from the grammar) to keep being accepted, never re-parsed
   // or re-validated a second time.
   status.marks.menusDone = true
   saveStatus()
   const archetype = status.archetype
-  // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D6(c): once the mock app
+  // Once the mock app
   // exists the tournament is recorded skipped at MENUS and FINALISTS/RACE/PROBE/PICK are never
   // derived — the tournament-archetype branch below still runs first (the existing guard), this
   // only narrows which archetypes it actually routes into the tournament.
@@ -1407,14 +1406,14 @@ function handleMenusDone() {
 }
 
 // ---------------------------------------------------------------------------
-// BRIEF (specs/20260902/08-genesis-shrink-brief-state.md D3/D4/D6): sits between DISCOVERY and
+// BRIEF: sits between DISCOVERY and
 // MENUS. `--mark brief-written` is the ONLY mark this state accepts (the retired EXPLORE/DESIGN
 // marks are refused elsewhere, in handleMark's default branch). For DESIGN_SKIPPED_ARCHETYPES
 // (backend-api/data-ml/conversational-bot/cli-devtool) it is a pass-through: nothing beyond
 // DISCOVERY is owed. A VISUAL archetype requires an APPROVED `design/mocks/status.json` with an
-// open provenance ledger (D3, spec 06's `lib/mocks-ledger.js`) plus the brief's journey checks,
-// then records design: "ratified". `--legacy` skips D3's mocks precondition for a status.json
-// that resumed at BRIEF (D6).
+// open provenance ledger (`lib/mocks-ledger.js`) plus the brief's journey checks,
+// then records design: "ratified". `--legacy` skips the mocks precondition for a status.json
+// that resumed at BRIEF.
 // ---------------------------------------------------------------------------
 function mocksStatusPath() { return path.join(root, 'design/mocks/status.json') }
 function mocksLedgerPath() { return path.join(root, 'design/mocks/ledger.md') }
@@ -1422,14 +1421,14 @@ function readMocksStatus() {
   try { return JSON.parse(fs.readFileSync(mocksStatusPath(), 'utf8')) } catch (e) { return null }
 }
 
-// specs/20261002/01-the-wireframe-command-runs-over-the-service.md D13: "seed journeys" is the
+// "seed journeys" is the
 // number of journeys design/mocks/seed.md declares; "notes open" is the waiting items of the
 // latest round's notes.json (0 with no round or no file).
 function seedJourneyCount() { return seedJourneysMap().size }
 function notesOpenCount() { return mocksRoundLib.openNoteCount(root) }
 
-// D3: design/mocks/status.json must exist, be APPROVED, and its own provenance ledger must have
-// no open blocking row (spec 06's gateVerdict) — the same closure /spec:mocks itself enforces at
+// design/mocks/status.json must exist, be APPROVED, and its own provenance ledger must have
+// no open blocking row (gateVerdict) — the same closure /spec:mocks itself enforces at
 // its own APPROVED mark, re-checked here so BRIEF never trusts a state that regressed after
 // approval.
 function briefPreconditionCheck() {
@@ -1474,7 +1473,7 @@ function handleBriefWritten() {
     }
     mocksStatus = check.status
 
-    // specs/20260902/11-brief-from-approved-set.md D1: the brief is generated from the
+    // The brief is generated from the
     // approved set, not from memory — ## Journeys must cover every seed journey and label, and
     // ## Non-UI Coverage must carry none dark or missing. Applies only to a fresh visual run
     // (Behavior: Applicability) — the `legacy`/`isVisualArchetype` guard above already scopes
@@ -1499,7 +1498,7 @@ function handleBriefWritten() {
     }
   }
 
-  // specs/20260902/08-genesis-shrink-brief-state.md D4: DESIGN_SKIPPED_ARCHETYPES
+  // DESIGN_SKIPPED_ARCHETYPES
   // (backend-api/data-ml/conversational-bot/cli-devtool) own nothing beyond DISCOVERY — record design: "skipped" straight away.
   if (isDesignSkipped(archetype)) {
     status.marks.briefWritten = true
@@ -1521,15 +1520,15 @@ function handleBriefWritten() {
 }
 
 // ---------------------------------------------------------------------------
-// FINALISTS / RACE / PROBE / PICK (specs/20260827/01 D1, D3-D9): the tournament of scaffolds,
-// entered only for TOURNAMENT_ARCHETYPES. RACE is driver-only (D5): a bare invocation races every
+// FINALISTS / RACE / PROBE / PICK: the tournament of scaffolds,
+// entered only for TOURNAMENT_ARCHETYPES. RACE is driver-only: a bare invocation races every
 // not-yet-raced finalist for real — scaffold, then (if scaffold is green) gate, then boot through
-// spec/scripts/smoke.sh's own contract, unchanged (Assumption A1). PROBE is a session-judgment
+// spec/scripts/smoke.sh's own contract, unchanged. PROBE is a session-judgment
 // step whose closure (`probe-done`) re-runs gate+boot per finalist and assembles the benchmark
-// (D7). PICK (`picked`) never ranks finalists itself — it matches the brief's own ## Picks
-// against each finalist's `picks` (D8).
+// PICK (`picked`) never ranks finalists itself — it matches the brief's own ## Picks
+// against each finalist's `picks`.
 // ---------------------------------------------------------------------------
-// specs/20260902/08-genesis-shrink-brief-state.md D7: PROBE_TASKS carries only the
+// PROBE_TASKS carries only the
 // archetype's own task set — no per-archetype tile-rendering task exists.
 const PROBE_TASKS = {
   'web-app': ['authed-crud-screen', 'background-job'],
@@ -1552,7 +1551,7 @@ function expectedTasksFor(archetype) {
   return (PROBE_TASKS[archetype] || []).slice()
 }
 
-// D4: "last measured" reads an existing tournament/benchmark.json's average tokens/finalist, or
+// "last measured" reads an existing tournament/benchmark.json's average tokens/finalist, or
 // falls back to "no figure yet" — a session must never see a fabricated cost figure.
 function lastMeasuredLine() {
   try {
@@ -1578,7 +1577,7 @@ function handleFinalistsSkipped() {
     die('archetype "' + status.archetype + '" is not a tournament archetype (' +
       TOURNAMENT_ARCHETYPES.join(', ') + ') — finalists-skipped only applies once a tournament archetype has reached FINALISTS')
   }
-  // D6(c): a mock-app host records the tournament skipped at MENUS and never derives FINALISTS —
+  // A mock-app host records the tournament skipped at MENUS and never derives FINALISTS —
   // there is nothing left for finalists-skipped to do; DECIDE is already the next step.
   if (status.tournament && status.tournament.skipped) {
     die('the tournament was already skipped for this host (' + JSON.stringify(status.tournament.skipped) +
@@ -1595,7 +1594,7 @@ function handleFinalistsWritten() {
     die('archetype "' + status.archetype + '" is not a tournament archetype (' +
       TOURNAMENT_ARCHETYPES.join(', ') + ') — finalists-written only applies once a tournament archetype has reached FINALISTS')
   }
-  // D6(c): same refusal as finalists-skipped above — a mock-app host never reaches FINALISTS.
+  // Same refusal as finalists-skipped above — a mock-app host never reaches FINALISTS.
   if (status.tournament && status.tournament.skipped) {
     die('the tournament was already skipped for this host (' + JSON.stringify(status.tournament.skipped) +
       ') — the mock app fixes the frontend dimensions and FINALISTS is never reached; run --mark decided instead')
@@ -1654,7 +1653,7 @@ function handleFinalistsWritten() {
   return { prev: 'FINALISTS', next: 'RACE' }
 }
 
-// D5: races every finalist in `status.tournament.finalistDefs` that has no `race[name]` yet, in
+// Races every finalist in `status.tournament.finalistDefs` that has no `race[name]` yet, in
 // file order. A finalist whose scaffold fails records `race[name] = {scaffold, at}` and spends
 // nothing further — no gate, no boot. Persisted after every finalist so a crash mid-race never
 // re-spends an already-recorded step. Driver-only: called from deriveState on a bare (non-peek)
@@ -1711,12 +1710,12 @@ function runRace() {
 
 function safeReadFile(p) { try { return fs.readFileSync(p, 'utf8') } catch (e) { return '' } }
 
-// D7: probe-done validates every finalist that reached a green scaffold, then re-runs its gate
+// probe-done validates every finalist that reached a green scaffold, then re-runs its gate
 // and boot as an executed fact (never trusted from the race's own earlier run) before assembling
-// the benchmark. A finalist whose scaffold failed owes no probe.json — D5's "nothing further is
+// the benchmark. A finalist whose scaffold failed owes no probe.json — "nothing further is
 // spent" extends through PROBE.
 function handleProbeDone() {
-  // D6(c): a mock-app host records the tournament skipped and never derives finalists — name that
+  // A mock-app host records the tournament skipped and never derives finalists — name that
   // remedy before falling into the generic "not raced yet" message, which would point at a state
   // (RACE/PROBE) this host never reaches.
   if (status.tournament && status.tournament.skipped) {
@@ -1843,7 +1842,7 @@ function renderBenchmarkMd(rows) {
   return header + body + '\n'
 }
 
-// specs/20260902/08-genesis-shrink-brief-state.md D7: every probe.json task carries exactly
+// Every probe.json task carries exactly
 // one entry per task name — the gallery row key is the task name alone.
 function taskRowKey(t) { return t.task }
 
@@ -1882,13 +1881,13 @@ function writeBenchmark() {
   fs.writeFileSync(galleryPath(), renderGalleryHtml(rows))
 }
 
-// D8: the driver never ranks finalists — it matches the brief's CURRENT ## Picks against each
+// The driver never ranks finalists — it matches the brief's CURRENT ## Picks against each
 // finalist's own `picks`. Exactly one match records the winner; zero or several is refused.
-// specs/20260902/08-genesis-shrink-brief-state.md D1/D7: the design pick this mark used
+// The design pick this mark used
 // to also validate (specs/20260827/02's EXPLORE tile winner) is retired outright — the design
 // canon is ratified at BRIEF, before the tournament ever runs, so PICK is a stack-only decision.
 function handlePicked() {
-  // D6(c): same remedy as handleProbeDone's guard above — a skipped tournament never reaches PICK.
+  // Same remedy as handleProbeDone's guard above — a skipped tournament never reaches PICK.
   if (status.tournament && status.tournament.skipped) {
     die('the tournament was skipped for this host (' + JSON.stringify(status.tournament.skipped) +
       ') — the mock app fixes the frontend dimensions and PICK is never reached; run --mark decided instead')
@@ -1905,7 +1904,7 @@ function handlePicked() {
 }
 
 // ---------------------------------------------------------------------------
-// DECIDE (D5): the decision-record closure check.
+// DECIDE: the decision-record closure check.
 // ---------------------------------------------------------------------------
 const REQUIRED_DESCRIPTOR_KEYS = [
   'archetype', 'language', 'framework', 'packageManager', 'testRunner', 'linter',
@@ -1936,7 +1935,7 @@ function dissentsNonEmpty(text) {
   return body !== null && body.split('\n').some((l) => l.trim().length > 0)
 }
 
-// specs/20260827/04-genesis-conventions-handoff.md D1/D2: the nine floor keys every
+// The nine floor keys every
 // `.claude/genesis/conventions.json` must carry a row for, decided or deferred.
 const CONVENTIONS_FLOOR_KEYS = [
   'error-taxonomy', 'logging', 'naming-identifiers', 'wire-representations',
@@ -1948,10 +1947,10 @@ function readConventions() {
   try { return JSON.parse(fs.readFileSync(conventionsPath(), 'utf8')) } catch (e) { return null }
 }
 
-// D2: `decided` gains this as an ADDITIONAL gate, run only once the pre-existing decideCheck()
-// below has already passed (D8's regression pin: the ADR/Dissents/dimension checks must keep
+// `decided` gains this as an ADDITIONAL gate, run only once the pre-existing decideCheck()
+// below has already passed (regression pin: the ADR/Dissents/dimension checks must keep
 // firing exactly as before, never superseded or reordered away by this new gate). Walks rows in
-// file order and returns the FIRST offender, named by key, per D2's own wording.
+// file order and returns the FIRST offender, named by key.
 function conventionsCheck() {
   const conv = readConventions()
   if (!conv) return { ok: false, reason: 'unreadable' }
@@ -2032,18 +2031,18 @@ function describeDecideGap(check) {
   return 'the decision record is not yet closed'
 }
 
-// specs/20260827/01-genesis-tournament.md D9: once a tournament winner is recorded, `decided`
+// Once a tournament winner is recorded, `decided`
 // gains two more checks on top of the base decideCheck() closure: the descriptor's
 // scaffoldCommand must be the winner's own (the descriptor must scaffold exactly what the race
 // validated, never something the race never touched), and at least one listed ADR must cite the
 // literal `.claude/genesis/tournament/benchmark.md` path (the durable link back to the executed
-// evidence). On success the raced `finalists/` and `logs/` are deleted (A3) — scratch race
+// evidence). On success the raced `finalists/` and `logs/` are deleted — scratch race
 // output, never durable evidence; `benchmark.json/.md`, `gallery.html`, and `evidence/` survive.
 function handleDecided() {
   if (!status.marks.menusDone) die('menus-done has not been marked yet — mark menus-done first')
   const check = decideCheck()
   if (!check.ok) die(describeDecideGap(check) + ' — fix it, then re-mark decided')
-  // D2: an ADDITIONAL gate, run only once decideCheck() above has already passed — D8's
+  // An ADDITIONAL gate, run only once decideCheck() above has already passed — the
   // regression pin requires the pre-existing ADR/Dissents/dimension checks to keep firing
   // exactly as before, never superseded or reordered away by this new conventions.json gate.
   const convCheck = conventionsCheck()
@@ -2070,13 +2069,13 @@ function handleDecided() {
 }
 
 // ---------------------------------------------------------------------------
-// SCAFFOLD / SKELETON / GATE (D6/D7, driver-only): run scaffoldCommand and gateCommand via
+// SCAFFOLD / SKELETON / GATE (driver-only): run scaffoldCommand and gateCommand via
 // `bash -c` in --root (the idiom smoke.sh uses for bootCommand/readyCheck).
 // ---------------------------------------------------------------------------
 function scaffoldLogPath() { return path.join(genesisDir, 'scaffold.log') }
 function gateLogPath() { return path.join(genesisDir, 'gate.log') }
 
-// specs/20260827/01-genesis-tournament.md A5: `cwd` is an ADDITIVE option (default `root`,
+// `cwd` is an ADDITIVE option (default `root`,
 // byte-identical to the pre-spec behavior) — the tournament's RACE/PROBE legs run every finalist
 // command inside its own `tournament/finalists/<name>/`, never in `--root` itself.
 function runLogged(cmd, args, logPath, opts) {
@@ -2107,7 +2106,7 @@ function runShell(cmd, logPath, opts) {
   return runLogged('bash', ['-c', cmd], logPath, Object.assign({ what: 'shell command "' + cmd + '"' }, opts))
 }
 
-// specs/20260926/04-the-design-brief.md D9: the mock app no longer pre-empts the scaffold — a
+// The mock app no longer pre-empts the scaffold — a
 // scaffold record is "succeeded" only the one way now (scaffoldCommand exited 0).
 function scaffoldSucceeded(s) { return !!(s && s.exit === 0) }
 
@@ -2132,7 +2131,7 @@ function runGateIfDue() {
   return status.zeroDayGate
 }
 
-// specs/20260827/04-genesis-conventions-handoff.md D3: every enforceable DECIDED row's probe
+// Every enforceable DECIDED row's probe
 // file must exist and be non-empty, checked at `skeleton-landed` (not at `decided` — probes are
 // landed WITH the skeleton, per Behavior). Re-reads conventions.json fresh, never trusts the
 // `decided` mark's earlier validation alone.
@@ -2155,7 +2154,7 @@ function describeProbeGap(check) {
     check.probe + ' does not exist or is empty'
 }
 
-// D3: the binding-subset file (CLAUDE.md, or AGENTS.md when CLAUDE.md is absent) must exist,
+// The binding-subset file (CLAUDE.md, or AGENTS.md when CLAUDE.md is absent) must exist,
 // be <= 150 lines, and name the descriptor's gateCommand and the conventions testTree as
 // literals — the doc agents actually read, not judged on content beyond that.
 const BINDING_SUBSET_LINE_CAP = 150
@@ -2202,7 +2201,7 @@ function handleSkeletonLanded() {
   if (!pc.ok) die(describeProbeGap(pc) + ' — land it, then re-mark skeleton-landed')
   const bc = bindingSubsetCheck(desc, testTree)
   if (!bc.ok) die(describeBindingSubsetGap(bc) + ' — fix it, then re-mark skeleton-landed')
-  // specs/20260926/04-the-design-brief.md D9: the mock app no longer pre-empts the day-zero
+  // The mock app no longer pre-empts the day-zero
   // skeleton gate — every host lands the skeleton through the probe/binding-subset checks above
   // only (no HTML-design checks, no reviewer-package check, no reimplementation, no shim).
   status.marks.skeletonLanded = true
@@ -2260,7 +2259,7 @@ function logTail(p, n) {
 }
 
 // ---------------------------------------------------------------------------
-// ROADMAP (D8): the roadmap closure check — headers present, Depends-on graph acyclic.
+// ROADMAP: the roadmap closure check — headers present, Depends-on graph acyclic.
 // ---------------------------------------------------------------------------
 function roadmapFiles() {
   const roadmapDir = path.join(root, 'docs/roadmap')
@@ -2316,7 +2315,7 @@ function roadmapCheck() {
       .map((s) => { const m2 = s.match(/\d\d/); return m2 ? m2[0] : s })
     graph[id] = deps
   }
-  // specs/20260913/08-silence-is-not-a-pass.md D5: brief 01 is the first-light brief — its
+  // Brief 01 is the first-light brief — its
   // header (text before the first ## heading) must name the one real record through the
   // deployed production path. Runs after missing-headers (every brief's header is already known
   // well-formed here) and before cycle. A roadmap with no 01-*.md brief (legacy numbering) is
@@ -2350,7 +2349,7 @@ function handleRoadmapWritten() {
       die('docs/roadmap has a Depends-on cycle: ' + check.detail.join(' -> ') + ' — break the cycle, then re-mark roadmap-written')
     }
   }
-  // specs/20260902/11-brief-from-approved-set.md D4: on a fresh visual run (status.brief.mocks
+  // On a fresh visual run (status.brief.mocks
   // set — Behavior: Applicability; legacy and non-visual runs see none of this), every seed
   // label must land in exactly one brief's ```surfaces block — the atlas's gap/orphan badges
   // then mean what they say from day one.
@@ -2367,7 +2366,7 @@ function handleRoadmapWritten() {
       }
     }
   }
-  // specs/20260911/05-approval-is-bookkeeping.md D5: every FENCED exclusion row's claim (agreed
+  // Every FENCED exclusion row's claim (agreed
   // `confirmed`, or not-contested `open`) must appear verbatim as a bullet under the overview's
   // own Parking lot heading — applies to every host regardless of archetype/status.brief.mocks
   // (AC-10: zero rows is a no-op that still runs the pre-existing checks above). An `open` row's
@@ -2388,21 +2387,21 @@ function handleRoadmapWritten() {
     }
   }
   status.marks.roadmapWritten = true
-  // specs/20260902/08-genesis-shrink-brief-state.md D9: there is no DESIGN state left to route
+  // There is no DESIGN state left to route
   // into here for any archetype; ROADMAP hands straight to HANDOFF.
   saveStatus()
   return { prev: 'ROADMAP', next: 'HANDOFF' }
 }
 
 // ---------------------------------------------------------------------------
-// HANDOFF -> GROUNDED (specs/20260827/04-genesis-conventions-handoff.md D4): the greenfield
+// HANDOFF -> GROUNDED: the greenfield
 // grounding closure. `profile-written` is the last mark of the whole genesis driver — it runs
 // init-gen.js generate itself (the way /spec:init's own Phase 5 does) instead of handing off to
 // a separate command, and its acceptance is what reaches the new terminal state GROUNDED.
 // ---------------------------------------------------------------------------
 function initGenLogPath() { return path.join(genesisDir, 'init-gen.log') }
 
-// The exit-code-keyed remedy D4 lists verbatim (1: manifest row, 2: profile field, 3: hand
+// The exit-code-keyed remedy the handoff lists verbatim (1: manifest row, 2: profile field, 3: hand
 // edits differ from what the profile would produce, 4: internal error — never a verdict).
 function remedyForExit(code) {
   switch (code) {
@@ -2414,7 +2413,7 @@ function remedyForExit(code) {
   }
 }
 
-// Bash-quotes a single argument for the shell command string runShell (D4's own idiom) executes
+// Bash-quotes a single argument for the shell command string runShell executes
 // via `bash -c` — every path here can contain spaces even though none of the fixtures do.
 function shQuote(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
 
@@ -2445,20 +2444,20 @@ function handleProfileWritten() {
 }
 
 // ---------------------------------------------------------------------------
-// deriveState (D2) — side-effecting by default: runs the driver-only SCAFFOLD/GATE stages as
+// deriveState — side-effecting by default: runs the driver-only SCAFFOLD/GATE stages as
 // needed, idempotent on scaffold.exit === 0; every check re-reads the artifacts, never trusts a
 // mark whose backing file has vanished or regressed.
 //
 // `{ peek: true }` (used only by `--state`, F3) derives the SAME state without ever invoking
 // runScaffoldIfDue/runGateIfDue or writing status.json: it reads back whatever scaffold/gate
 // result is already on disk instead of running the command. When no result is on disk yet, it
-// reports the transient driver-only name (`SCAFFOLD`/`GATE`, both in D2's state enum) that a
+// reports the transient driver-only name (`SCAFFOLD`/`GATE`, both in the state enum) that a
 // bare invocation would immediately resolve by running the command — never runs it itself.
 // ---------------------------------------------------------------------------
 function deriveState(opts) {
   const peek = !!(opts && opts.peek)
 
-  // specs/20260902/08-genesis-shrink-brief-state.md D6: a status.json carrying
+  // A status.json carrying
   // `marks.menusDone` with no `marks.briefWritten` resumes at BRIEF on its existing artifacts;
   // `discoveryDone` is trusted from the recorded mark alone for this one resume path, since
   // its own brief.md is not required to satisfy discoveryCheck()'s current grammar or even to
@@ -2468,19 +2467,19 @@ function deriveState(opts) {
   const disc = discoveryCheck()
   if (!status.marks.discoveryDone || (!legacyResume && !disc.ok)) return 'DISCOVERY'
 
-  // specs/20260902/08-genesis-shrink-brief-state.md D1/D6: BRIEF sits between DISCOVERY
+  // BRIEF sits between DISCOVERY
   // and MENUS — a legacy status.json past MENUS with no `marks.briefWritten` still derives BRIEF
-  // here, regardless of any later legacy marks already recorded (D6's "resumes at BRIEF").
+  // here, regardless of any later legacy marks already recorded ("resumes at BRIEF").
   if (!status.marks.briefWritten) return 'BRIEF'
 
   const menus = menusCheck()
   if (!status.marks.menusDone || !menus.ok) return 'MENUS'
 
-  // specs/20260827/01-genesis-tournament.md D1: FINALISTS -> RACE -> PROBE -> PICK sits between
+  // FINALISTS -> RACE -> PROBE -> PICK sits between
   // MENUS and DECIDE for a tournament archetype that hasn't been skipped or resolved yet. Once
   // skipped (tournament.skipped) or resolved (tournament.winner), fall straight through to the
   // unchanged decideCheck() derivation below — a non-tournament archetype never enters this block
-  // at all (status.archetype stays outside TOURNAMENT_ARCHETYPES). specs/20260902/08's D6
+  // at all (status.archetype stays outside TOURNAMENT_ARCHETYPES). The legacy
   // legacy resume additionally exempts a host whose `decided` mark is already recorded — a
   // legacy record past DECIDE has necessarily already resolved (or predates) the tournament, and
   // must never be routed backward into FINALISTS just because it carries no tournament record.
@@ -2502,10 +2501,10 @@ function deriveState(opts) {
     return 'PICK'
   }
 
-  // specs/20260902/08-genesis-shrink-brief-state.md D6: a legacy-ratified status
+  // A legacy-ratified status
   // (`status.brief.legacy === true`) trusts its own recorded `decided`/`roadmapWritten` marks
   // for these two closure checks instead of re-validating their backing artifacts — a legacy
-  // host is never asked to reconstruct them (AC-20260902-08-7: "every downstream legacy mark
+  // host is never asked to reconstruct them ("every downstream legacy mark
   // stays valid so the run lands on its real next state after one mark").
   const legacyTrusted = !!(status.brief && status.brief.legacy)
 
@@ -2527,21 +2526,21 @@ function deriveState(opts) {
     return designStageApplies() ? 'DESIGN_BRIEF' : 'ROADMAP'
   }
 
-  // specs/20260926/04-the-design-brief.md D1: DESIGN_BRIEF sits between the green gate and
+  // DESIGN_BRIEF sits between the green gate and
   // ROADMAP for a design-stage-applicable host — derived from the mark alone — the
   // design-brief-written handler verifies the brief file and design-paths.json.
   if (designStageApplies() && !status.marks.designBriefWritten) {
     return 'DESIGN_BRIEF'
   }
 
-  // specs/20260926/05-the-kit-and-the-journey-stories.md D1: DESIGN_KIT while
+  // DESIGN_KIT while
   // `marks.designBriefWritten && !marks.kitLanded`, or a vanished `.storybook/main.*`; then
   // DESIGN_JOURNEYS while `!marks.journeysDrawn`, or a vanished journey story — both re-derived
   // from disk on every call, never trusted from the mark alone.
   if (designStageApplies()) {
     if (!status.marks.kitLanded || !storybookMainExists()) return 'DESIGN_KIT'
     if (!status.marks.journeysDrawn || anyJourneyStoryVanished()) return 'DESIGN_JOURNEYS'
-    // specs/20260926/06-the-approval-stop-and-the-roadmap.md D1: derived from the mark alone; the
+    // Derived from the mark alone; the
     // design-approved handler verifies docs/design/approval.json before setting it.
     if (!status.marks.designApproved) return 'AWAITING_DESIGN_APPROVAL'
   }
@@ -2549,10 +2548,10 @@ function deriveState(opts) {
   const rm = roadmapCheck()
   if (!status.marks.roadmapWritten || (!legacyTrusted && !rm.ok)) return 'ROADMAP'
 
-  // specs/20260902/08-genesis-shrink-brief-state.md D9: ROADMAP hands directly to HANDOFF —
+  // ROADMAP hands directly to HANDOFF —
   // the design canon is ratified at BRIEF, before ROADMAP is ever reached.
 
-  // specs/20260827/04-genesis-conventions-handoff.md D4: HANDOFF is not terminal — once
+  // HANDOFF is not terminal — once
   // `profile-written` records a successful init-gen generate run, the derived state advances to
   // the new terminal state GROUNDED. No `peek` branch is needed here (unlike SCAFFOLD/GATE):
   // this reads a value status.handoff already persisted, with no side effect either way.
@@ -2562,19 +2561,19 @@ function deriveState(opts) {
 }
 
 // ---------------------------------------------------------------------------
-// Step text per state (D9: every step opens with a Read only: file list).
+// Step text per state (every step opens with a Read only: file list).
 // ---------------------------------------------------------------------------
-// specs/20260827/02-genesis-explore-state.md D10: /spec:genesis-explore is deleted — the explore
+// /spec:genesis-explore is deleted — the explore
 // funnel is now a driver state this session already ran, not a separate command HANDOFF hands
-// off into. specs/20260827/03-genesis-design-state.md D5: the design lock folds into the driver
+// off into. The design lock folds into the driver
 // too (the DESIGN state) — there is no separate command left to hand off into for ANY archetype
-// or designCatalog. specs/20260827/04-genesis-conventions-handoff.md D4/D5: HANDOFF itself stops
+// or designCatalog. HANDOFF itself stops
 // being terminal and stops printing a next command at all — it is a judgment step that closes
 // with `--mark profile-written`, and only the new terminal state GROUNDED prints `next:
 // /spec:enforce` (nextCommandLine() is retired along with it — greenfield genesis is now
 // init + enforce, with nothing left for /spec:init to hand off into).
 
-// D2/D3/D4 share this count: the enforceable, checker-backed DECIDED rows conventions.json
+// These share this count: the enforceable, checker-backed DECIDED rows conventions.json
 // carries — read fresh off disk, never cached in status.json.
 function enforceableProbeCount() {
   const conv = readConventions()
@@ -2593,14 +2592,14 @@ const STEPS = {
     } else {
       lines.push('Read only: ' + genesisRel('brief.md') + ' (## Coverage, ## Picks)')
       lines.push('Doctrine: spec/doctrine/genesis.md § Genesis: Discovery Interview')
-      // specs/20260908/06-command-prose-states-contracts.md D9/AC-20260908-06-5: reminds the
+      // Reminds the
       // session to render the brief in full once, replacing genesis.md's per-round restatement.
       lines.push('Before marking: print ## What I think you\'re building and ## Coverage once, in full — the user reads this render as the brief.')
       const check = discoveryCheck()
       if (check.reason === 'unparseable') lines.push('unparseable coverage line(s): ' + check.detail.join('; '))
       if (check.reason === 'missing') lines.push('missing coverage key(s): ' + check.detail.join(', '))
       if (check.reason === 'dark') lines.push('dark coverage key(s) — ask, in the user\'s words: ' + check.detail.join(', '))
-      // specs/20260902/08-genesis-shrink-brief-state.md D2: the archetype gate moved here from
+      // The archetype gate moved here from
       // menus-done — this step must tell the session the exact `## Picks` line it still owes.
       if (check.ok && !picks().archetype) {
         lines.push('missing ## Picks line: - archetype: <key> (one of: ' + REGISTRY_KEYS.join(', ') + ')')
@@ -2636,7 +2635,7 @@ const STEPS = {
       }
       if (rec.registryExit === 3) lines.push('⚠️ unverified: ' + k + ' (registry unreachable — options kept, currency unconfirmed)')
     }
-    // specs/20260902/11-brief-from-approved-set.md D3: for a fresh visual run
+    // For a fresh visual run
     // (status.brief.mocks set — never a legacy or non-visual run, Behavior: Applicability) with
     // `framework` still open, print the seed's primary-surface/platforms-horizon rows above the
     // framework dimension and the literal pricing instruction — the framework pick must be priced
@@ -2656,11 +2655,11 @@ const STEPS = {
     return lines.join('\n')
   },
 
-  // specs/20260902/08-genesis-shrink-brief-state.md D2/D3/D4/D6: sits between DISCOVERY and
+  // Sits between DISCOVERY and
   // MENUS. A legacy resume (status.marks.menusDone already true, briefWritten not yet) opens with
   // `legacy:` and names `--legacy`; DESIGN_SKIPPED_ARCHETYPES owe nothing beyond DISCOVERY; a
   // visual archetype whose mocks set is not yet APPROVED is sent to `/spec:mocks`; otherwise the
-  // step prints the brief-written mark command (specs/20260930/01 D3).
+  // step prints the brief-written mark command.
   BRIEF: () => {
     const archetype = status.archetype
     const doctrineLine = 'Doctrine: spec/doctrine/genesis.md § Genesis: Brief State'
@@ -2711,14 +2710,14 @@ const STEPS = {
     ]
     if (visual) {
       lines.push('mocks: APPROVED · journeys: ' + journeys + ' · open product rows: 0')
-      // D2: the derivation sources for `## What I think you're building` and the two new
+      // The derivation sources for `## What I think you're building` and the two new
       // sections — every confirmed product ledger row by id, and the seed's own journey count —
       // read from the seed and the ledger, never from the discovery interview alone.
       const productRows = confirmedProductRows()
-      // D13: "seed journeys" derives from the seed and "notes open" from the latest round.
+      // "seed journeys" derives from the seed and "notes open" from the latest round.
       const seedCount = seedJourneyCount()
       const notesOpen = notesOpenCount()
-      // specs/20260911/05-approval-is-bookkeeping.md D5: the same fenced-exclusion set the
+      // The same fenced-exclusion set the
       // parking-lot check (below, ROADMAP_WRITTEN) requires verbatim — read-only here, this step
       // only surfaces the split agreed/not-contested count in place of the old confirmed-only one.
       const fenced = fencedExclusionRows()
@@ -2746,8 +2745,8 @@ const STEPS = {
     return lines.join('\n')
   },
 
-  // specs/20260827/01-genesis-tournament.md D4: the go/no-go line — the archetype's probe tasks
-  // (D6), the retry cap, the cost estimate, and the last-measured tokens/finalist figure (or "no
+  // The go/no-go line — the archetype's probe tasks,
+  // the retry cap, the cost estimate, and the last-measured tokens/finalist figure (or "no
   // figure yet" when tournament/benchmark.json does not exist yet).
   FINALISTS: () => {
     const archetype = status.archetype
@@ -2764,7 +2763,7 @@ const STEPS = {
     ].join('\n')
   },
 
-  // RACE is driver-only (D5): a bare invocation runs it and lands directly on PROBE, so this
+  // RACE is driver-only: a bare invocation runs it and lands directly on PROBE, so this
   // entry is only ever rendered by acceptedOutput() right after finalists-written accepts —
   // never by deriveState() itself (which resolves RACE before returning, exactly like the
   // existing SCAFFOLD entry below resolves SCAFFOLD before returning).
@@ -2776,7 +2775,7 @@ const STEPS = {
     'Then:\n  node ' + __filename + ' --root ' + root,
   ].join('\n'),
 
-  // D6: race results per finalist (a failed scaffold prints "failed at scaffold — spent no
+  // Race results per finalist (a failed scaffold prints "failed at scaffold — spent no
   // further" and owes no probe.json), the archetype's expected task set, the retry cap, each
   // raced finalist's evidence dir, and the probe.json shape.
   PROBE: () => {
@@ -2809,7 +2808,7 @@ const STEPS = {
     return lines.join('\n')
   },
 
-  // D8: benchmark.md printed verbatim (never paraphrased — reading it verbatim is the whole
+  // benchmark.md printed verbatim (never paraphrased — reading it verbatim is the whole
   // point of not making the session open a second file mid-decision) plus the evidence-informs
   // line, so a session cannot read this step and think a benchmark number decides anything.
   PICK: () => {
@@ -2859,9 +2858,9 @@ const STEPS = {
     '  node ' + __filename + ' --root ' + root,
   ].join('\n'),
 
-  // specs/20260926/04-the-design-brief.md D2: the fresh-session/model line, the design-brief
-  // skill line, one journey line per seed journey, and the catalog line D5 records; D13 of
-  // specs/20261002/01 adds design/mocks/screens/ to the reads when it exists.
+  // The fresh-session/model line, the design-brief
+  // skill line, one journey line per seed journey, and the catalog line; the step also
+  // adds design/mocks/screens/ to the reads when it exists.
   DESIGN_BRIEF: () => {
     ensureCatalogGenerated()
     const seedJourneys = seedJourneysMap()
@@ -2892,7 +2891,7 @@ const STEPS = {
     return lines.join('\n')
   },
 
-  // specs/20260926/05-the-kit-and-the-journey-stories.md D4: the fresh-session/model line, the
+  // The fresh-session/model line, the
   // frontend-design skill line (warn, never block — the standing theme-authoring skill), one
   // composite line per brief row, the Storybook setup recipe (Contracts), and --mark kit-landed.
   DESIGN_KIT: () => {
@@ -2920,9 +2919,9 @@ const STEPS = {
     return lines.join('\n')
   },
 
-  // specs/20260926/05-the-kit-and-the-journey-stories.md D7/D6: the fresh-session/model line
+  // The fresh-session/model line
   // naming Sonnet, one journey line per seed journey (beat count and the story's target path),
-  // the primitive-ban rule, the CSF/router recipe (Contracts), and --mark journeys-drawn. D6's
+  // the primitive-ban rule, the CSF/router recipe (Contracts), and --mark journeys-drawn.
   // beats-file writer runs here, at this step's own print — never from `--state`.
   DESIGN_JOURNEYS: () => {
     const dp = readDesignPathsJson() || {}
@@ -2949,12 +2948,12 @@ const STEPS = {
     return lines.join('\n')
   },
 
-  // specs/20260926/06-the-approval-stop-and-the-roadmap.md D2: the one look stop where JJ
+  // The one look stop where JJ
   // approves the designed set in Storybook. On a served index carrying every journey story
   // (Contracts): the 🎨 line naming the first journey's own verified URL, one `journey:` line per
   // journey in seed order, the composite count, the reply line, and `--mark design-approved`. On
   // any probe failure: the refusal naming the port and the reason, a `Session:` line for the
-  // background command, and no URL — the spike (A1) showed Storybook answering 200 for a story id
+  // background command, and no URL — the spike showed Storybook answering 200 for a story id
   // that does not exist, so a URL here would point JJ at a page that may show nothing.
   AWAITING_DESIGN_APPROVAL: () => {
     const paths = readDesignPathsJson() || {}
@@ -3002,7 +3001,7 @@ const STEPS = {
       'Read only: ' + descriptorRelPath() + ', docs/roadmap/, docs/design/approval.json, docs/design/brief.md',
       'Doctrine: spec/doctrine/genesis.md § Genesis: Roadmap Decomposition',
     ]
-    // specs/20260926/06-the-approval-stop-and-the-roadmap.md D4/D4a: the roadmap derives from
+    // The roadmap derives from
     // the approved set once docs/design/approval.json exists — a legacy or skipped-stage host
     // (the file never written) prints no `approved:` line at all. D4a: this prefix replaced an
     // earlier word the plugin's own retired-literal sweep (spec 01) bans under spec/ and tests/.
@@ -3022,7 +3021,7 @@ const STEPS = {
           ' · story: ' + j.story)
       }
     }
-    // specs/20261005/06-the-design-stage-sends-pictures.md D10: optional, never a gate.
+    // Optional, never a gate.
     const hostCfg = readConfig(root)
     const isObjCfg = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
     if (approval && isObjCfg(hostCfg.pictures) && isObjCfg(hostCfg.walkthrough)) {
@@ -3039,13 +3038,13 @@ const STEPS = {
     return lines.join('\n')
   },
 
-  // specs/20260902/08-genesis-shrink-brief-state.md D9: the DESIGN state (its own
+  // The DESIGN state (its own
   // doctrine-drafted -> tokens-landed -> rules-locked progression) is retired — the design canon
   // is ratified at BRIEF, long before ROADMAP.
 
-  // specs/20260827/04-genesis-conventions-handoff.md D4: HANDOFF becomes a judgment step — the
+  // HANDOFF becomes a judgment step — the
   // session authors .claude/genesis/init-profile.json (init.md Phase 4's shape) and closes with
-  // `--mark profile-written`, which the driver runs init-gen.js generate for itself. D8's
+  // `--mark profile-written`, which the driver runs init-gen.js generate for itself.
   // regression pin still requires archetype/resolved gate/ADR count/brief count to print here —
   // this step keeps ALL of them, on top of the new profile-authoring instructions.
   HANDOFF: () => {
@@ -3057,10 +3056,10 @@ const STEPS = {
       genesisRel('conventions.json'),
     ]
     readFiles.push('docs/adr/')
-    // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md D1: HANDOFF writes the
+    // HANDOFF writes the
     // contract's design block from status.app when it stamps spec.config.json — { "app":
     // "<status.app>" } and nothing else, present only on a host the mocks stage actually ran on.
-    // specs/20260926/05-the-kit-and-the-journey-stories.md D9: once the design stage landed a
+    // Once the design stage landed a
     // kit, the line reads design-paths.json instead — { "kit", "tokens", "rules" }, plus "app"
     // when the mocks status still carries one. A skipped or never-reached stage is unchanged.
     const mocksStatus = readMocksStatus()
@@ -3089,9 +3088,9 @@ const STEPS = {
     ].join('\n')
   },
 
-  // D4: the terminal state — printed once profile-written records a successful init-gen
+  // The terminal state — printed once profile-written records a successful init-gen
   // generate run. archetype/resolved gate/ADR count/brief count carry over from HANDOFF's own
-  // report inputs; convention probes is new (D4's report-inputs list).
+  // report inputs; convention probes is new.
   GROUNDED: () => {
     const desc = readStackDescriptor() || {}
     const adrCount = Array.isArray(desc.decisionRecords) ? desc.decisionRecords.length : 0
@@ -3128,10 +3127,10 @@ function acceptedOutput(prevNext) {
     ' → ' + prevNext.next + '); safe to /clear and re-run /spec:genesis'
 }
 
-// specs/20260902/08-genesis-shrink-brief-state.md D1: the eight EXPLORE/DESIGN marks are
+// The eight EXPLORE/DESIGN marks are
 // retired outright — the design stage is /spec:mocks now, ratified at BRIEF's own single mark.
-// D14: this refusal table is the sanctioned live surface for `positions-authored` and
-// `tiles-culled` — AC-20260902-08-12's sweep waives this file by path for those two names.
+// This refusal table is the sanctioned live surface for `positions-authored` and
+// `tiles-culled` — the retired-mark sweep waives this file by path for those two names.
 const RETIRED_MARKS = [
   'research-done', 'positions-authored', 'tiles-built', 'tiles-culled', 'external',
   'doctrine-drafted', 'tokens-landed', 'rules-locked',
@@ -3175,7 +3174,7 @@ function handleMark() {
 if (MARK) {
   handleMark()
 } else if (STATE_ONLY) {
-  // Read-only peek (F3, D1/Behavior): never runs scaffoldCommand/gateCommand, never writes
+  // Read-only peek (never runs scaffoldCommand/gateCommand, never writes
   // status.json beyond loadStatus()'s own cold-root creation.
   writeOut(1, deriveState({ peek: true }))
   process.exit(0)

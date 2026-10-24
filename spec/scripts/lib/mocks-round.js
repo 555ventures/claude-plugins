@@ -7,9 +7,8 @@
 //        r.roundDigest(round) · r.latestRound(root) · r.readRound/readNotes/readApprovals(root, n)
 //        r.waitingItems(notes) · r.openNoteCount(root)
 //
-// Owner: specs/20261002/01-the-wireframe-command-runs-over-the-service.md D3 (the round
-// library), D7 (the waiting rule), D13 (genesis's open-note count). The mocks driver and
-// genesis-driver.js both read through it; neither re-derives a round.
+// Owner: specs/20261002/01-the-wireframe-command-runs-over-the-service.md.
+// The mocks driver and genesis-driver.js both read through it; neither re-derives a round.
 //
 // Rules held here: a screen is design/mocks/screens/<screen>[@<state>].json holding the
 // json-render spec itself; names starting with "." are skipped; a round is a full snapshot —

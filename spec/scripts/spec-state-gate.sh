@@ -9,7 +9,8 @@
 # commands (/spec:plan, /spec:run — the same case pattern below) when the host grounding
 # layer's contractHash stamp fails to match the plugin's grounding-contract file —
 # fully automatic; no version bookkeeping involved. A config with no generatedBy has no
-# grounding layer yet and gets no warning (specs/20261005/02-connect-runs-first.md D9).
+# grounding layer yet and gets no warning.
+# Owner: specs/20261005/02-connect-runs-first.md
 # Exit 2 blocks the prompt and shows stderr to the user. Exit 0 allows.
 set -u
 

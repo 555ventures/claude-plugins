@@ -5,7 +5,9 @@
 // ac-matrix.js --spec <path> --lint [--json]   (spec-only: no --root/--manifest/--skips/
 //   --has-drift-script — the AC-line lint alone, no File Plan read, no manifest append)
 //
-// specs/20260814/01-ac-matrix-script.md: review.md Phase 0 steps 5–6 (AC-line lint +
+// Owner: specs/20260814/01-ac-matrix-script.md
+//
+// review.md Phase 0 steps 5–6 (AC-line lint +
 // AC↔test coverage matrix + [oracle:] handling, skipped-test reconciliation + [env:] handling)
 // were hand-executed from prose every review — a leg that drifts per session and per model.
 // This is the sole derivation of both legs: it lints the spec's `## Acceptance Criteria`
@@ -20,8 +22,8 @@
 // names per the host's declared format and passes them via --skips — no universal name format
 // exists, only the skip *count* format is host-declared), expand a File Plan glob through any
 // matcher but the shared lib/glob-match.js, or own the AC-ID grammar / `## ` section extraction
-// / AC-bullet parsing — those are lifted verbatim into lib/spec-sections.js (specs/20260817/07-
-// promise-sweep-leg D3), the single authority a sibling script (promise-sweep.js) also imports;
+// / AC-bullet parsing — those are lifted verbatim into lib/spec-sections.js,
+// the single authority a sibling script (promise-sweep.js) also imports;
 // or read a `→ reuses` pointer itself — lib/scan-test-calls.js's resolveReference is the one
 // reading the lint, the coverage matrix, ac-drift.js and expire-tests.js share;
 // no test named `ac-id-lint.test.js` lifts the regex from this file's source (that test does
@@ -32,19 +34,18 @@
 // with no `## Acceptance Criteria` section, or `--lint` combined with `--root`/`--manifest`/
 // `--skips`/`--has-drift-script` (usage: `--lint` is spec-only).
 //
-// specs/20260907/01-mixed-pin-guard-and-drift-line.md D1/D3: `--lint` runs ONLY the AC-line lint
+// `--lint` runs ONLY the AC-line lint
 // (`malformed-ac`, `invalid-pre-green`, and the new `mixed-pin` — a carried AC bullet mixing a new
 // promise with a `SHALL CONTINUE TO` pin, per lib/spec-sections.js's exported `pinShape`, the same
-// predicate red-check.js's D2 guard and `/spec:plan` lock's D4 step both use) — no File Plan read,
-// no coverage grep, no manifest append; `/spec:plan` lock runs it before locking (D4). The lint
+// predicate red-check.js's guard and `/spec:plan` lock's step both use) — no File Plan read,
+// no coverage grep, no manifest append; `/spec:plan` lock runs it before locking. The lint
 // path returns BEFORE the full mode's `--root`/`--manifest` requirement check (Fragile, below) — a
 // `--lint` invocation supplies neither. In FULL mode a mixed bullet is a WARNING only
 // (`mixed-pin <id> — split …`), never a finding: full mode also runs against an already-CLEANed
-// spec, whose own bullets may be mixed (Assumptions A1) — a red leg there would be a false
+// spec, whose own bullets may be mixed — a red leg there would be a false
 // catch on history, not a build-time promise ready to ship untested.
 //
-// specs/20260820/04-entrypoint-conformance.md D13: the
-// missing-test-file check asserted existence for EVERY tests-layer File Plan row regardless of
+// The missing-test-file check asserted existence for EVERY tests-layer File Plan row regardless of
 // its Action column, so a spec that plans a test file's deletion raised a HARD finding by
 // construction — the check punished a correctly-classified DELETE row for the absence it
 // itself planned. Fixed to read each row's Action (lib/file-plan.js's parseFilePlanRows already
@@ -52,24 +53,23 @@
 // closed: a row whose table bound no Action column (action === null) keeps the existence
 // requirement — a missing Action is never treated as an implicit DELETE.
 //
-// specs/20260820/06-typed-evidence-manifest.md D2/D8: the
-// two manifest rows this script appends — leg "ac-matrix" ({"uncovered":N,"oracle":N}) and leg
+// The two manifest rows this script appends — leg "ac-matrix" ({"uncovered":N,"oracle":N}) and leg
 // "skip-reconcile" ({"skipped":N,"sanctioned":N}) — carry typed JSON objects, not packed
 // "uncovered=N oracle=M"/"skipped=N sanctioned=S" strings; `--json`'s own `observed` field
 // mirrors those same objects exactly. The plain-mode stdout summary line stays byte-unchanged
-// (D8) — only the manifest rows and --json's observed field take the typed shape.
+// — only the manifest rows and --json's observed field take the typed shape.
 //
-// specs/20260821/01-red-check.md D1/D6: the acMatrix row extends in place to
+// The acMatrix row extends in place to
 // {"uncovered":N,"oracle":N,"preGreen":N} — `preGreen` counts well-formed AC bullets carrying a
 // VALID `[pre-green: <reason>]` tag (validated here against lib/spec-sections.js's
-// PRE_GREEN_REASONS, the single enum authority; the parser itself does no enum validation, D1).
+// PRE_GREEN_REASONS, the single enum authority; the parser itself does no enum validation).
 // An out-of-enum reason is hard finding `invalid-pre-green` (added to ACM_FINDING_CLASSES) and
 // does NOT count toward preGreen. The tag NEVER sanctions a skip out of `uncovered` — a tagged AC
-// with zero test hits still counts uncovered (AC-20260821-01-12). The plain-mode summary line
-// gains a `preGreen=N` segment (D6: "yours to extend sensibly" — not pinned byte-unchanged like
-// D8's uncovered/oracle/skipped/sanctioned segments).
+// with zero test hits still counts uncovered. The plain-mode summary line
+// gains a `preGreen=N` segment (yours to extend sensibly — not pinned byte-unchanged like
+// the uncovered/oracle/skipped/sanctioned segments).
 //
-// specs/20260821/03-cross-spec-skip-mapping.md D1/D2: step 6's
+// Step 6's
 // skip reconciliation only mapped a skip line via an AC-ID embedded in the line itself (route 1)
 // or a content-match against the spec-under-review's own File Plan test files (route 2) - a
 // skip owned by an EARLIER spec, reported by a runner that qualifies its line with the file's own
@@ -80,22 +80,21 @@
 // inside root and the file exists, read its full-token AC-ID citations (dedup in file order,
 // via the existing readTestFile cache) as mappedIds, feeding the SAME acById/owning-spec logic
 // below untouched. Every edge (no "::", outside-root, missing file, zero citations) fails closed
-// to today's unmapped-skip, byte-identical detail - monotonic widening only (D2): a bare-name
+// to today's unmapped-skip, byte-identical detail - monotonic widening only: a bare-name
 // line never enters route 3, and an already-mapped line never re-resolves through it.
 //
-// specs/20261024/01-review-driver-reads-recorded-facts.md D6: routes 2 and 3 take the first AC cited at
+// Routes 2 and 3 take the first AC cited at
 // or after the test name's own position in the file (route 3: the last "::" segment up to the first
 // "["), falling back to the file-level citations only when none follows or the name is not found.
 //
-// D7 (specs/20260821/03-cross-spec-skip-mapping.md amendment): the coverage grep at step 6 (readTestFile(f).includes
+// The coverage grep at step 6 (readTestFile(f).includes
 // (b.id)) was a bare substring test - a well-formed AC whose ID is a PREFIX of another declared
 // AC's ID (AC-...-1 inside AC-...-12) read as covered by a test citing only the LONGER id,
 // silently laundering uncovered-ac. Fixed by replacing the bare .includes with
 // lib/spec-sections.js's exported acIdOccurs, a full-token occurrence check - the single
 // authority also used by red-check.js's carried-AC classifier.
 //
-// specs/20260823/03-silent-drop-hardening.md D1 (the
-// silent-drop incident): lib/spec-sections.js's bare-only trailing-tag rule (rv_640c582f4902)
+// The silent-drop incident: lib/spec-sections.js's bare-only trailing-tag rule (rv_640c582f4902)
 // refuses a backticked trailing tag silently — an AC whose bullet genuinely declares its
 // `[oracle:]`/`[env:]` backticked at the trailing position — read as a plain
 // `uncovered-ac`/`unsanctioned-skip` with no hint the refusal is the actual cause (measured at 17
@@ -107,7 +106,7 @@
 // otherwise clean (covered, or not a mapped skip) stays silent — the refusal never changes any
 // verdict there, so nothing is said.
 //
-// D9 (specs/20260823/03-silent-drop-hardening.md): the two manifest leg exits
+// The two manifest leg exits
 // (`ac-matrix`, `skip-reconcile`) were derived by testing each finding's `class` against two
 // class sets — adding `rejected-trailing-tag` to BOTH (it is emitted from both loops above) meant
 // an emission from EITHER loop reddened BOTH legs. Repro: a spec with one uncovered AC carrying a
@@ -121,11 +120,11 @@
 // own key set (`ac`,`class`,`detail`,`severity`) stay byte-identical — origin is internal
 // bookkeeping, never an emitted field.
 //
-// D10 (specs/20260823/03-silent-drop-hardening.md): the `rejected-trailing-tag` remedy-text builder was a local
+// The `rejected-trailing-tag` remedy-text builder was a local
 // copy of `rejectedTrailingTagDetail` here, byte-identical to red-check.js's own copy — the exact
-// two-identical-copies shape D4 (this spec) exists to eliminate. It is imported
-// from lib/spec-sections.js, beside the refusal predicate (D2) it explains; message bytes are
-// unchanged (pinned by the AC-20260823-03-1/-2 detail assertions).
+// two-identical-copies shape the shared lib exists to eliminate. It is imported
+// from lib/spec-sections.js, beside the refusal predicate it explains; message bytes are
+// unchanged (pinned by the detail assertions).
 
 const fs = require('fs')
 const path = require('path')
@@ -170,8 +169,8 @@ for (let i = 0; i < argv.length; i++) {
 }
 if (!specPath) { usage(); process.exit(2) }
 if (lintMode) {
-  // D3/D4: --lint is spec-only — combining it with any full-mode flag is a usage error.
-  // --resolve-root is the ONE tree-reading companion --lint accepts (D4).
+  // --lint is spec-only — combining it with any full-mode flag is a usage error.
+  // --resolve-root is the ONE tree-reading companion --lint accepts.
   if (root !== null || manifestPath !== null || skipsFile !== null || hasDriftScript) {
     usage(); process.exit(2)
   }
@@ -188,7 +187,7 @@ try {
 }
 
 // ---- ## Acceptance Criteria section extraction + bullet parsing: both lifted verbatim into
-// ---- lib/spec-sections.js (D3) — extractSection/parseAcBullets imported above -----------------
+// ---- lib/spec-sections.js — extractSection/parseAcBullets imported above -----------------
 
 const acSection = extractSection(specText, 'Acceptance Criteria')
 if (acSection === null) {
@@ -202,7 +201,7 @@ const wellFormed = bullets.filter(b => !b.malformed)
 const specDateMatch = /specs\/(\d{8})\//.exec(specPath)
 const dispositionApplies = !!(specDateMatch && specDateMatch[1] >= DISPOSITION_APPLIES_FROM)
 
-// D1/D3: --lint returns HERE, before the full mode's File Plan read, coverage grep, or manifest
+// --lint returns HERE, before the full mode's File Plan read, coverage grep, or manifest
 // append — Fragile note above: this must run before the `--root`/`--manifest` requirement check,
 // not after it (a --lint invocation supplies neither flag).
 if (lintMode) {
@@ -235,12 +234,12 @@ if (lintMode) {
     }
   }
 
-  // specs/20260911/04-every-criterion-declares-its-test.md D3/D4: the disposition grammar's own
+  // The disposition grammar's own
   // lint arms — applicable only to a spec dated on or after DISPOSITION_APPLIES_FROM (spec date =
   // the first specs/<YYYYMMDD>/ path segment in --spec, the same convention promise-sweep.js's
   // own applicability cutoff uses). An inapplicable (undated, or pre-floor-dated) spec computes
   // neither counter and carries neither key in --json's observed.lint — every pre-existing tmpdir
-  // fixture (no specs/<date>/ segment) keeps today's exact 3-key shape (AC-20260907-01-4).
+  // fixture (no specs/<date>/ segment) keeps today's exact 3-key shape.
   let missingDispositionCount = 0
   let unresolvedDispositionCount = 0
   if (dispositionApplies) {
@@ -255,7 +254,7 @@ if (lintMode) {
         })
         continue
       }
-      // D4: reference resolution is the SEPARATE opt-in --resolve-root flag — a `writes`
+      // Reference resolution is the SEPARATE opt-in --resolve-root flag — a `writes`
       // disposition names a file that does not exist yet, so only rewrites/reuses resolve.
       if (resolveRoot && (disposition.kind === 'rewrites' || disposition.kind === 'reuses')) {
         const matches = resolveReference(resolveRoot, disposition.file, disposition.prefix).length
@@ -294,23 +293,23 @@ const acById = new Map(wellFormed.map(b => [b.id, b]))
 const findings = []
 const warnings = []
 
-// D9 (specs/20260823/03-silent-drop-hardening.md): emission-SITE tracking for `rejected-trailing-tag`, the one finding class this
+// Emission-SITE tracking for `rejected-trailing-tag`, the one finding class this
 // file emits from BOTH the coverage loop (step 5) and the skip-reconciliation loop (step 6, both
 // branches) — the two Sets below record, by OBJECT REFERENCE into `findings`, which loop actually
 // produced a given rejected-trailing-tag finding. This is internal bookkeeping only: it is never
-// read back off the finding object itself (no key is added to the pushed object — AC-20260823-03-
-// 13a pins the finding's key set stays exactly ['ac','class','detail','severity']) and never
+// read back off the finding object itself (no key is added to the pushed object — the finding's
+// key set stays exactly ['ac','class','detail','severity']) and never
 // serialized; it exists solely to let the exit derivation below partition by the loop that
 // actually observed something, not by class membership across two loops that share one class.
 const acMatrixOrigin = new Set()
 const skipOrigin = new Set()
 
-// D10: `rejectedTrailingTagDetail` (the `rejected-trailing-tag` remedy-text builder, used by all
+// `rejectedTrailingTagDetail` (the `rejected-trailing-tag` remedy-text builder, used by all
 // three call sites in this file — step 5's coverage loop, step 6's skip-reconciliation loop's two
 // branches) is imported from lib/spec-sections.js, the one authority, rather than defined here —
 // see that module's own comment above the function for why it lives there.
 
-// D1: unparseable = unknown = uncovered. `uncovered` is declared here (before both the
+// Unparseable = unknown = uncovered. `uncovered` is declared here (before both the
 // malformed loop below and step 5's well-formed coverage loop) so a malformed bullet
 // increments the same denominator step 5 uses, in BOTH drift modes — a driftScript can't
 // parse a malformed bullet either, so exempting drift-mode hosts would reopen the hole
@@ -327,9 +326,9 @@ for (const b of bullets) {
   }
 }
 
-// D6 (specs/20260821/01-red-check.md): [pre-green:] validation — unconditional, independent of
+// [pre-green:] validation — unconditional, independent of
 // --has-drift-script (coverage suppression under drift mode is orthogonal to tag validity), and
-// independent of the AC's own coverage standing (D6: the tag never launders coverage — a valid
+// independent of the AC's own coverage standing (the tag never launders coverage — a valid
 // tag on a zero-hit AC still counts uncovered via the loop below, AND still counts preGreen here).
 let preGreen = 0
 for (const b of wellFormed) {
@@ -344,11 +343,11 @@ for (const b of wellFormed) {
   }
 }
 
-// specs/20260907/01-mixed-pin-guard-and-drift-line.md D3: a mixed carried AC is a WARNING here,
+// A mixed carried AC is a WARNING here,
 // never a finding — unconditional, independent of --has-drift-script (same AC-line-lint reasoning
 // as the preGreen validation above), and independent of coverage (a mixed bullet may still be
 // fully covered by its cited test — the shape defect stands regardless). Full mode also runs
-// against an already-CLEANed spec, whose own bullets may be mixed (Assumptions A1) — a
+// against an already-CLEANed spec, whose own bullets may be mixed — a
 // finding here would redden history; --lint (above) is where a mixed bullet
 // is refused, at /spec:plan lock and build's red-check, not here.
 for (const b of wellFormed) {
@@ -360,7 +359,7 @@ for (const b of wellFormed) {
 // ---- File Plan tests-layer rows: resolve to real files (globs expanded via lib/glob-match) --
 
 const filePlanRows = parseFilePlanRows(specText)
-// D13: each path carries its own row's Action (normalized trim+lowercase, mirroring the
+// Each path carries its own row's Action (normalized trim+lowercase, mirroring the
 // existing layer normalization) so a DELETE row's missing file is a satisfied plan, not a
 // finding — while a null/absent Action (no Action column bound in that row's table) keeps
 // isDelete false and the existence requirement stays enforced.
@@ -398,7 +397,7 @@ for (const { p, isDelete } of testsRowPaths) {
       detail: `File Plan tests row ${p} does not exist under --root ${root}`,
     })
   }
-  // D13: an Action=DELETE row naming a missing file is correctly absent — no finding, and the
+  // An Action=DELETE row naming a missing file is correctly absent — no finding, and the
   // path stays out of testFiles (it can't be grepped for AC-ID coverage if it doesn't exist).
 }
 
@@ -483,7 +482,7 @@ if (!hasDriftScript) {
       }
     } else {
       uncovered++
-      // D1: a refused trailing [oracle:] tag replaces uncovered-ac — the refusal is causally
+      // A refused trailing [oracle:] tag replaces uncovered-ac — the refusal is causally
       // relevant (zero coverage plus a would-be oracle declaration that never registered).
       if (b.trailingRejected && b.trailingRejected.includes('[oracle:')) {
         const f = {
@@ -503,7 +502,7 @@ if (!hasDriftScript) {
   }
 }
 
-// ---- D2: owning-spec [env:] lookup — consulted ONLY on an acById MISS (a current-spec hit,
+// ---- Owning-spec [env:] lookup — consulted ONLY on an acById MISS (a current-spec hit,
 // with or without [env:], is final and never falls through here). The AC-ID grammar itself
 // encodes the owner: AC-{YYYYMMDD}-{NN[a-z]?}-{k} -> the single file matching
 // ^{NN[a-z]?}-.*\.md$ under {root}/specs/{YYYYMMDD}/. Fails closed (returns an `error` string,
@@ -511,7 +510,7 @@ if (!hasDriftScript) {
 // unreadable, no AC section, or the AC not found in it — the caller treats every edge as
 // unsanctioned-skip.
 //
-// Caching seam (specs/20260815/03-ac-matrix-fail-closed.md): only the owning FILE's resolved
+// Caching seam: only the owning FILE's resolved
 // state — its relative path plus every parsed AC bullet, or a file-level error (date dir
 // absent / ambiguous or missing filename match / unreadable / no AC section) — is cached per
 // date+ordinal. Two different AC-IDs owned by the same file share that one read. The
@@ -605,7 +604,7 @@ if (skipsFile) {
   skipLines = raw.split('\n').map(l => l.trim()).filter(Boolean)
 }
 
-// D1: route 3's fail-closed containment check — the resolved path must land strictly inside
+// Route 3's fail-closed containment check — the resolved path must land strictly inside
 // --root, never merely start with the same string prefix (a sibling directory sharing a name
 // prefix with root must not pass).
 function resolveInsideRoot(rootDir, rel) {
@@ -614,7 +613,7 @@ function resolveInsideRoot(rootDir, rel) {
   return resolved === rootResolved || resolved.startsWith(rootResolved + path.sep) ? resolved : null
 }
 
-// specs/20261024/01-review-driver-reads-recorded-facts.md D6: a skipped test maps to the first AC
+// A skipped test maps to the first AC
 // cited at or after its own name's position in the file, not to the file's first citation (a module
 // docstring's AC). Position is language-neutral; no test-name grammar is parsed. Falls back to the
 // file-level ids when the name is not found or no AC-ID follows it.
@@ -634,7 +633,7 @@ for (const line of skipLines) {
       if (content.includes(line)) { mappedIds = idsFromPosition(content, content.indexOf(line), [...ids]); break }
     }
   }
-  // D1/D2: route 3 — only after routes 1/2 both miss AND the line carries a runner-style file
+  // Route 3 — only after routes 1/2 both miss AND the line carries a runner-style file
   // qualifier. Fails closed at every edge (no "::", outside --root, missing file, zero
   // citations) straight through to the unmapped-skip fallthrough below, byte-identical detail.
   if (!mappedIds.length && line.includes('::')) {
@@ -659,13 +658,13 @@ for (const line of skipLines) {
   const primary = mappedIds[0]
   const bullet = acById.get(primary)
   if (bullet) {
-    // D2 branch (1): a current-spec hit is final, with or without [env:] — the owning spec is
+    // Branch (1): a current-spec hit is final, with or without [env:] — the owning spec is
     // never consulted here (a re-declared bullet that dropped its gate is authoritative).
     if (bullet.env) {
       sanctioned++
       warnings.push(`${primary}: skipped test sanctioned by [env: ${bullet.env}]`)
     } else if (bullet.trailingRejected && bullet.trailingRejected.includes('[env:')) {
-      // D1: a refused trailing [env:] tag on the owning (here: current-spec) bullet replaces
+      // A refused trailing [env:] tag on the owning (here: current-spec) bullet replaces
       // unsanctioned-skip — the refusal is causally relevant (this skip's only sanction attempt).
       const f = {
         severity: 'hard', class: 'rejected-trailing-tag', ac: primary,
@@ -682,7 +681,7 @@ for (const line of skipLines) {
     }
     continue
   }
-  // D2 branch (2): acById MISS — derive the owning spec from the AC-ID grammar and read its
+  // Branch (2): acById MISS — derive the owning spec from the AC-ID grammar and read its
   // declaration there. Every edge (missing/ambiguous/unreadable/no-section/not-found/no-env)
   // fails closed to unsanctioned-skip, the detail naming the owning-spec edge that fired.
   const owning = resolveOwningBullet(primary)
@@ -692,11 +691,11 @@ for (const line of skipLines) {
       detail: `${primary}: skipped test with no [env:] declaration on its AC line — ${line} (${owning.error})`,
     })
   } else if (owning.bullet.env) {
-    // D3: an owning-spec sanction counts and reports like a same-spec sanction, naming the source.
+    // An owning-spec sanction counts and reports like a same-spec sanction, naming the source.
     sanctioned++
     warnings.push(`${primary}: skipped test sanctioned by [env: ${owning.bullet.env}] (declared in ${owning.path})`)
   } else if (owning.bullet.trailingRejected && owning.bullet.trailingRejected.includes('[env:')) {
-    // D1: a refused trailing [env:] tag on the OWNING spec's bullet replaces unsanctioned-skip —
+    // A refused trailing [env:] tag on the OWNING spec's bullet replaces unsanctioned-skip —
     // same relevance gate as the current-spec branch above, applied to the cross-spec lookup.
     const f = {
       severity: 'hard', class: 'rejected-trailing-tag', ac: primary,
@@ -715,14 +714,14 @@ for (const line of skipLines) {
 }
 
 // ---- observed objects + manifest append (this script is the sole writer of its two rows) -----
-// specs/20260820/06-typed-evidence-manifest.md D2/D8: both rows' `observed` are typed JSON
+// Both rows' `observed` are typed JSON
 // objects, never packed strings — `--json`'s own `observed` field (below) mirrors these same
 // objects exactly, byte-identical to what gets appended to --manifest.
 
 const acMatrixObserved = { uncovered, oracle: oracleCovered, preGreen }
 const skipReconcileObserved = { skipped: skipLines.length, sanctioned }
 
-// D9: rejected-trailing-tag is deliberately absent from BOTH sets — it is emitted from both
+// rejected-trailing-tag is deliberately absent from BOTH sets — it is emitted from both
 // loops, so class membership alone cannot tell which leg actually observed it (that was the bug:
 // adding it to both sets reddened both legs from a single-loop emission). The exit derivation
 // below ORs each set's class test with the corresponding emission-site origin Set instead.
@@ -752,9 +751,9 @@ if (jsonOut) {
 } else {
   for (const f of findings) console.log(`HARD  ${f.class.padEnd(20)} ${f.detail}`)
   for (const w of warnings) console.log(`WARN  ${''.padEnd(20)} ${w}`)
-  // D8: the plain-mode stdout summary line stays byte-unchanged for the uncovered/oracle/
-  // skipped/sanctioned segments — D6 extends it with a preGreen segment ("yours to extend
-  // sensibly", not pinned byte-unchanged like D8's four).
+  // The plain-mode stdout summary line stays byte-unchanged for the uncovered/oracle/
+  // skipped/sanctioned segments — a preGreen segment extends it ("yours to extend
+  // sensibly", not pinned byte-unchanged like the other four).
   console.log(`ac-matrix: uncovered=${acMatrixObserved.uncovered} oracle=${acMatrixObserved.oracle} ` +
     `preGreen=${acMatrixObserved.preGreen} · ` +
     `skipped=${skipReconcileObserved.skipped} sanctioned=${skipReconcileObserved.sanctioned} · ` +

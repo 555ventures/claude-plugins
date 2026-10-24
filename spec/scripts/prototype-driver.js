@@ -6,9 +6,9 @@
 // prototype-driver.js check [--root <dir>] [--json]   (brief-less: doctor check 22's own
 //   invocation has no brief — a host-wide config check needs none)
 //
-// WHY: specs/20260928/01-the-prototype-command-and-the-pin-overlay.md D2-D5/D8, reshaped by
-// specs/20261007/01-approve-writes-a-behaviour-contract.md D2-D9 and
-// specs/20261007/02-the-prototype-opens-from-words-a-brief-or-a-stem.md D1-D4 — /spec:prototype derives
+// Owner: specs/20260928/01-the-prototype-command-and-the-pin-overlay.md
+//
+// WHY: /spec:prototype derives
 // OPEN -> ROUND -> APPROVED -> TESTS -> CONTRACTED -> CLOSED from design/prototypes/<stem>/
 // status.json plus disk and the host's declared `prototype` config block
 // (spec/templates/grounding-contract.md § Prototype), the way genesis-driver.js and
@@ -32,14 +32,14 @@
 //
 // Marks: `opened` refuses a stale branch and an empty states.json, then creates the worktree,
 // bakes the pins URL into the copied overlay and runs dbCreate. `round-done` refuses until a file
-// in the worktree imports the overlay. `contracted` (D4) refuses without an approved round, a
+// in the worktree imports the overlay. `contracted` refuses without an approved round, a
 // behaviour pin, valid states.json or a declared `prototype.picture`, pictures every route x state
 // through the host's own command (PNG signature verified), and writes contract.json. `tests-derived`
-// (D6) verifies the session's test file is committed on proto/<stem>, carries `pin <id>:` for every
+// verifies the session's test file is committed on proto/<stem>, carries `pin <id>:` for every
 // behaviour pin, is listed by `prototype.e2eList` and passes `prototype.e2eRun` against the
 // prototype, then copies it into the contract, appends one ledger row and queues the
 // `/spec:plan` paste through spec-queue.js; a re-run resumes at the first undone step. `closed`
-// (D9) runs dbDestroy once, removes the worktree and branch, and is accepted from ROUND,
+// runs dbDestroy once, removes the worktree and branch, and is accepted from ROUND,
 // APPROVED, TESTS and CONTRACTED.
 //
 // `check` is doctor check 22 (advisory): findings are the keys a mark will read —
@@ -49,7 +49,7 @@
 // `node:http` server bound to 127.0.0.1, live only for the caller's own process lifetime
 // (SIGTERM -> exit 0); a pin failing its shape check writes nothing in the batch.
 //
-// specs/20261005/03-one-port-per-launch.md D5-D7: when `prototype.url` carries `{port}` the driver
+// when `prototype.url` carries `{port}` the driver
 // keeps one app port per prototype as `appPort` in status.json (allocated at --mark opened, or on
 // first need), prints `PORT=<appPort> <bootCommand>` in the ROUND and TESTS steps, and probes,
 // pictures and runs the tests at the resolved address; contract.json state urls stay relative.
@@ -112,7 +112,7 @@ if (stemFlagGiven && (stemFlag === undefined || stemFlag === null || stemFlag.st
 }
 
 // ---------------------------------------------------------------------------
-// Host config (D1).
+// Host config.
 // ---------------------------------------------------------------------------
 function loadConfig() {
   try {
@@ -132,7 +132,7 @@ function requirePrototypeConfig(cfg) {
 const cfg = loadConfig()
 
 // ---------------------------------------------------------------------------
-// check [--json] (D2, doctor check 22) — the one subcommand that runs even with no `prototype`
+// check [--json] (doctor check 22) — the one subcommand that runs even with no `prototype`
 // block (an absent block reads as clean: "0 when clean or when the block is absent"). Findings
 // are the keys a mark will read: a key no step uses is never a finding.
 // ---------------------------------------------------------------------------
@@ -177,7 +177,7 @@ if (briefLess) {
 }
 
 // ---------------------------------------------------------------------------
-// Derived paths (D2) — all on the MAIN tree, never the prototype branch.
+// Derived paths — all on the MAIN tree, never the prototype branch.
 // ---------------------------------------------------------------------------
 const STEM_RE = /^[a-z0-9][a-z0-9-]{0,47}$/
 function slugOf(text) {
@@ -294,7 +294,7 @@ function loadStatus() {
   return st
 }
 
-// specs/20261005/03-one-port-per-launch.md D6: when prototype.url carries {port}, status.appPort
+// when prototype.url carries {port}, status.appPort
 // is the one app port for this prototype — allocated once, never re-allocated. Returns the
 // resolved address, the port to boot on (null for a fixed address) and whether it was just minted.
 function appAddress(status) {
@@ -345,7 +345,7 @@ function writePinsAtomic(doc) {
 }
 
 // ---------------------------------------------------------------------------
-// State derivation (D3).
+// State derivation.
 // ---------------------------------------------------------------------------
 function safeRealpath(p) { try { return fs.realpathSync(p) } catch { return path.resolve(p) } }
 
@@ -380,7 +380,7 @@ function plantScratchMarker(wtPath) {
 function deriveState(status) {
   // marks.closed and marks.testsDerived are checked BEFORE the worktreeIsRegistered() probe: by
   // CLOSED the worktree is gone, and CONTRACTED is a resting state the worktree may not outlive
-  // (removed by hand) — probing first would misreport either as OPEN (specs/20261007/01 D7).
+  // (removed by hand) — probing first would misreport either as OPEN.
   if (status && status.marks && status.marks.closed) return 'CLOSED'
   if (status && status.marks && status.marks.testsDerived) return 'CONTRACTED'
   if (!status || !status.marks || !status.marks.opened || !worktreeIsRegistered()) return 'OPEN'
@@ -394,7 +394,7 @@ function printCheckpoint(prevState, nextState) {
 }
 
 // ---------------------------------------------------------------------------
-// --mark opened (D3).
+// --mark opened.
 // ---------------------------------------------------------------------------
 function gitBranchExists(name) {
   const r = spawnSync('git', ['-C', root, 'branch', '--list', name], { encoding: 'utf8' })
@@ -424,7 +424,7 @@ function findFreePortFrom(start) {
 // Returns the worktree-relative path of the first file importing the overlay, or null.
 function worktreeImportsOverlay(wtPath, basename, excludedAbsPaths) {
   // '.claude' is skipped along with node_modules/.git: .claude/spec.config.json always contains
-  // prototype.overlay's own path string (D1's own config schema literally names it) and a fresh
+  // prototype.overlay's own path string (the config schema literally names it) and a fresh
   // worktree always materializes it as a tracked file — searching it would make the "no tracked
   // file imports the overlay" refusal below unsatisfiable on every real host, not just this
   // fixture's crafted case.
@@ -462,7 +462,7 @@ function statesHasRoutes(statesDoc) {
 }
 
 function cmdMarkOpened() {
-  // D3: stale-branch refusal runs first — before even looking at states.json — because the fixed
+  // stale-branch refusal runs first — before even looking at states.json — because the fixed
   // stale-branch test seeds no states.json at all.
   const existingStatus = loadStatus()
   if (gitBranchExists(branch) && !existingStatus) {
@@ -531,7 +531,7 @@ function cmdMarkOpened() {
 }
 
 // ---------------------------------------------------------------------------
-// --mark round-done / --mark approved (D4).
+// --mark round-done / --mark approved.
 // ---------------------------------------------------------------------------
 function overlayImportLine() {
   return '`if (import.meta.env.DEV) import(\'./' + path.basename(proto.overlay) + '\')` or the stack equivalent'
@@ -578,7 +578,7 @@ function cmdMarkApproved() {
 }
 
 // ---------------------------------------------------------------------------
-// --mark contracted (D4, specs/20261007/01-approve-writes-a-behaviour-contract.md).
+// --mark contracted.
 // ---------------------------------------------------------------------------
 function readContractOrDie() {
   let raw
@@ -611,7 +611,6 @@ function e2eFileOf() {
 function cmdMarkContracted() {
   const status = loadStatus()
   if (!status) die(statusRel + ' does not exist — remedy: run --mark opened first')
-  // D4(1)
   if (!status.marks || !status.marks.approved) {
     die('prototype is not yet approved — remedy: run --mark round-done then --mark approved before --mark contracted')
   }
@@ -620,13 +619,13 @@ function cmdMarkContracted() {
   }
   const prevState = deriveState(status)
 
-  // D4(2): at least one behaviour pin.
+  // at least one behaviour pin.
   const pins = loadPinsDoc().pins || []
   if (!pins.some((p) => p.kind === 'behaviour')) {
     die('no behaviour pins — a prototype that changed no behaviour is the direct lane; mark a pin behaviour or close the prototype with --mark closed')
   }
 
-  // D4(3): states.json with a route and a valid viewport.
+  // states.json with a route and a valid viewport.
   const statesDoc = loadStatesOrNull()
   if (!statesHasRoutes(statesDoc)) {
     die(statesRel + ' has no routes — remedy: author it with at least one route carrying at least one state')
@@ -644,12 +643,11 @@ function cmdMarkContracted() {
     viewport = { width: v.width, height: v.height }
   }
 
-  // D4(4)
   if (typeof proto.picture !== 'string' || proto.picture === '') {
     die('prototype.picture is not declared — remedy: declare it (spec/templates/grounding-contract.md § Prototype), then run /spec:doctor')
   }
 
-  // D4(5): one picture per route x state at the resolved app address.
+  // one picture per route x state at the resolved app address.
   const address = appAddress(status)
   const pictured = contractLib.pictureAll({
     root, worktreePath, designDir, config: cfg, statesDoc, viewport, baseUrl: address.url,
@@ -657,7 +655,7 @@ function cmdMarkContracted() {
   })
   if (!pictured.ok) die(pictured.message)
 
-  // D4(6): contract.json — every pin as a record, tests null until tests-derived.
+  // contract.json — every pin as a record, tests null until tests-derived.
   contractLib.writeContract({
     designDir, stem, brief: status.brief || brief, idea: status.input && typeof status.input.idea === 'string' ? status.input.idea : null,
     approvedAt: status.marks.approved, base: status.base, viewport, routes: pictured.routes,
@@ -668,19 +666,17 @@ function cmdMarkContracted() {
     tests: null,
   })
 
-  // D4(7)
   status.marks.contracted = nowIso()
   saveStatus(status)
   printCheckpoint(prevState, deriveState(status))
 }
 
 // ---------------------------------------------------------------------------
-// --mark tests-derived (D6).
+// --mark tests-derived.
 // ---------------------------------------------------------------------------
 function cmdMarkTestsDerived() {
   const status = loadStatus()
   if (!status) die(statusRel + ' does not exist — remedy: run --mark opened first')
-  // D6(1)
   if (!status.marks || !status.marks.contracted) {
     die('prototype is not yet contracted — remedy: run --mark contracted first')
   }
@@ -696,7 +692,7 @@ function cmdMarkTestsDerived() {
   const wtAbs = path.join(root, wtRel)
   const rerun = ', then re-run --mark tests-derived'
 
-  // D6(2): the test file is committed on proto/<stem>.
+  // the test file is committed on proto/<stem>.
   if (fs.existsSync(path.join(root, e2eFile)) && !gitOk(['cat-file', '-e', status.base + ':' + e2eFile])) {
     die(e2eFile + ' is in the main working tree — derived tests live on ' + branch + ', never on ' + status.base +
       '; remedy: move it to ' + wtRel + '/' + e2eFile + ', commit it on ' + branch + rerun)
@@ -710,7 +706,7 @@ function cmdMarkTestsDerived() {
     die(e2eFile + ' has uncommitted edits in ' + wtRel + ' — remedy: commit them on ' + branch + rerun)
   }
 
-  // D6(3): every behaviour pin has a test title in the committed file.
+  // every behaviour pin has a test title in the committed file.
   const shown = spawnSync('git', ['-C', root, 'show', branch + ':' + e2eFile], { encoding: 'utf8', maxBuffer: 1024 * 1024 * 64 })
   const e2eText = shown.stdout || ''
   for (const p of behaviourPins) {
@@ -719,7 +715,7 @@ function cmdMarkTestsDerived() {
     }
   }
 
-  // D6(4): the host runner lists every pin's test (the runner is the oracle, never the file alone).
+  // the host runner lists every pin's test (the runner is the oracle, never the file alone).
   if (typeof proto.e2eList !== 'string' || !proto.e2eList) {
     die('prototype.e2eList is not declared — remedy: declare it (spec/templates/grounding-contract.md § Prototype)')
   }
@@ -736,7 +732,7 @@ function cmdMarkTestsDerived() {
     }
   }
 
-  // D6(5): the tests are green against the prototype they describe.
+  // the tests are green against the prototype they describe.
   if (typeof proto.e2eRun !== 'string' || !proto.e2eRun) {
     die('prototype.e2eRun is not declared — remedy: declare it (spec/templates/grounding-contract.md § Prototype)')
   }
@@ -753,15 +749,15 @@ function cmdMarkTestsDerived() {
       path.relative(root, logPath))
   }
 
-  // D6(6): the copy that reaches the production build without the branch.
+  // the copy that reaches the production build without the branch.
   const copied = contractLib.copyContractTests({ root, branch, e2eFile, designDir })
   if (!copied.ok) die(copied.message)
 
-  // D6(7): complete the contract.
+  // complete the contract.
   contract.tests = { file: copied.file, source: e2eFile, run: proto.e2eRun, pins: behaviourPins.map((p) => p.id) }
   fs.writeFileSync(contractPath, JSON.stringify(contract, null, 2) + '\n')
 
-  // D6(8): the ledger row, once. marks.testsDerived is set last (step 10), so a crash between this
+  // the ledger row, once. marks.testsDerived is set last (step 10), so a crash between this
   // append and that mark is guarded by status.ledgered rather than appending a second row.
   if (!status.ledgered) {
     let stateCount = 0
@@ -778,7 +774,7 @@ function cmdMarkTestsDerived() {
     saveStatus(status)
   }
 
-  // D6(9): queue the plan paste at the top, once.
+  // queue the plan paste at the top, once.
   const paste = '/spec:plan ' + contractRel
   if (!status.queued) {
     const queued = spawnSync(process.execPath, [path.join(__dirname, 'spec-queue.js'), 'add', paste, '--top'], { cwd: root, encoding: 'utf8' })
@@ -790,7 +786,6 @@ function cmdMarkTestsDerived() {
     saveStatus(status)
   }
 
-  // D6(10)
   status.marks.testsDerived = nowIso()
   saveStatus(status)
   writeOut(1, 'Next: ' + paste + '\n')
@@ -798,7 +793,7 @@ function cmdMarkTestsDerived() {
 }
 
 // ---------------------------------------------------------------------------
-// --mark closed (D9).
+// --mark closed.
 // ---------------------------------------------------------------------------
 // The two overlay files --mark opened copies in are the driver's own, never the user's work: a
 // still-untracked copy is deleted so `git worktree remove` does not refuse on it. A copy the user
@@ -850,7 +845,7 @@ function cmdMark(name) {
 }
 
 // ---------------------------------------------------------------------------
-// serve --port <n> (D5).
+// serve --port <n>.
 // ---------------------------------------------------------------------------
 function validatePin(p) {
   if (!p || typeof p.note !== 'string' || p.note.length === 0) return { field: 'note', message: 'pin is missing "note"' }
@@ -952,7 +947,7 @@ function cmdServe(args) {
 }
 
 // ---------------------------------------------------------------------------
-// Bare-invocation step printer (D3/D4).
+// Bare-invocation step printer.
 // ---------------------------------------------------------------------------
 function printOpenStep() {
   const template = JSON.stringify({
@@ -1027,7 +1022,7 @@ function printApprovedStep() {
 }
 
 // ---------------------------------------------------------------------------
-// TESTS bare-run printer (D5).
+// TESTS bare-run printer.
 // ---------------------------------------------------------------------------
 function printTestsStep() {
   if (worktreeIsRegistered()) plantScratchMarker(worktreePath)
@@ -1054,7 +1049,7 @@ function printTestsStep() {
 }
 
 // ---------------------------------------------------------------------------
-// CONTRACTED bare-run printer (D7): the resting state — hands the contract to /spec:plan.
+// CONTRACTED bare-run printer: the resting state — hands the contract to /spec:plan.
 // ---------------------------------------------------------------------------
 function printContractedStep() {
   const lines = []
@@ -1066,7 +1061,7 @@ function printContractedStep() {
 }
 
 // ---------------------------------------------------------------------------
-// CLOSED bare-run printer (D7): `Read only:` + `Next:` (spec-status --next, verbatim).
+// CLOSED bare-run printer: `Read only:` + `Next:` (spec-status --next, verbatim).
 // ---------------------------------------------------------------------------
 function printClosedStep() {
   const lines = []

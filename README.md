@@ -139,6 +139,7 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 | `/spec:doctor` | Drift + ledger check; `--fix` repairs with approval | When things feel off |
 | `/spec:escape` | Record a defect that slipped past review | When one surfaces |
 | `/spec:enforce` | Turn rules into deterministic checks | On rule/tooling change |
+| `claude plugin eval ./spec` | The plugin's eval suite: proves a fresh session picks the commands on plain phrasing and runs their scripts, scored against a no-plugin baseline — see [`spec/evals/README.md`](spec/evals/README.md) | After a command or skill-description change; never in the gate (each run is paid) |
 | `/git:commit`, `/git:merge` | Add-all-commit (with escape capture); guided merge | Anytime |
 | `/git:enter-worktree` | Manually enter or repair a spec's worktree — `/spec:run` opens it automatically | If `/spec:run`'s isolation step fails, or to re-enter by hand |
 

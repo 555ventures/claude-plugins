@@ -1,6 +1,6 @@
 ---
 date: 2026-10-25
-status: implementing
+status: done
 build_base: main
 tier: critical           # spec-status.js's frozen --json action set changes (host rules § Risk Tiers)
 area: cross-cutting
@@ -177,6 +177,16 @@ Why one row per commit (D1) rather than per landing spec: a repair that touches 
 Collision closure (literals `spec:escape`, `escape.md`; 40 hits, 21 files outside the File Plan, each waived here): `docs/adr/*`, `docs/audit/*`, `docs/roadmap/*` are history and are never edited; `docs/canonical/pipeline.md`, `review.md`, `status.md` change through the Canonical Delta at review close; `.claude/rules/spec-pipeline.md` is the host-generated rules file, re-stamped by `/spec:doctor` after D8; `spec/commands/doctor.md`, `spec/commands/release.md`, `spec/scripts/fleet-reader.js`, `spec/scripts/spec-build-driver.js`, `spec/scripts/verdict.js` are sibling 02's File Plan rows (D10); `tests/fleet-reader/queries.test.js`, `tests/review/verdict.test.js`, `tests/review/stopped-row-durability.test.js`, `tests/spec-paths.test.js` carry the name in comments and assertion messages only — no behaviour, adjudicated by the suite at build.
 
 Fragile: `commit.md` is prose executed by a model; the tests pin its literals, not its behaviour. The real check is the next fix commit on a spec-landed file in any host: the ledger must gain a row with no question except the class. Sibling 02 must land soon after, or the fleet reader keeps counting fields no writer produces.
+
+Build departures (2026-10-25, folded from the deviations sidecar; each is a recurrence of an existing Gotchas entry, so none adds a Gotcha):
+- AC-11 said CONTINUE TO but its pointer said `rewrites`; the pointer was amended to `reuses` (no promise changed). Recurrence of the red-check pointer-verb entry.
+- Assumption A2 was false: two more `tests/spec-status.test.js` cases pinned `/spec:escape` (the lane render, spec 20260909/08 criterion 4, and the prototype-anomaly action set); both were retargeted to `/spec:fix` with their original tags kept. A third out-of-plan pin, the `escape` entry in `tests/consistency/read-load.test.js`'s section table, surfaced at gate-1 and was added to scope. Recurrence of the retired-literal collision entry.
+- Deleting the amend and tri-state cases left spec 20260901/07 criteria 5 and 6 and spec 20260912/04 criterion 1 without a citing test; D11 did the same to spec 20260820/05 criterion 17. All four were tagged retired, each spec file an explicit File Plan row. Derived as the criteria cited under tests/ at base minus those cited now. Recurrence of the twelfth-trigger entry.
+- AC-6's original "shared-for escape SHALL exit non-zero" contradicted D5 and the arm's own fail-open contract; the user ruled at build to keep the fail-open (D11). The escape `## Feedback Loop` assert in tests/spec-paths.test.js retired alongside the Incident Policy one, since under fail-open it would pass vacuously. Recurrence of the "example contradicts its Decision" entry.
+
+### Advisory debt (review rv_814a8cc940d0)
+- a0 /Users/jj/Projects/claude-plugins/.claude/worktrees/spec-01-the-commit-writes-the-escape-row/spec/scripts/fleet-reader.js:877 — fleet-reader.js's human render still prints the remedy `run /spec:escape --backfill` (line 877), and doctor.md:122 / release.md:105,173 still prescribe /spec:escape — live error-path remedies naming a command this spec deletes. Sanctioned as sibling 02's File Plan by D10 and the Rationale's collision closure, so advisory only; the Gotchas' ninth-trigger warning (a sibling deferral is only real when the sibling lands) applies until 20261025/02 merges.
+- a1 /Users/jj/Projects/claude-plugins/.claude/worktrees/spec-01-the-commit-writes-the-escape-row/tests/spec-paths.test.js:481 — A comment edited in this range still advertises the retired mode: tests/spec-paths.test.js line 481 now reads "the commit command's `node "$(spec-paths escape-row)" --append/--amend` invocations" — `--amend` is a usage error after D4 and commit.md never invokes it.
 
 ## Canonical Delta
 

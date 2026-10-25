@@ -7,11 +7,12 @@ const { ROOT, read } = require('../helpers')
 
 // specs/20261025/02-readers-keep-only-the-surviving-escape-fields.md D6, D7 (retired escape
 // command and dead-field names leave the plugin tree; three doctrine passages describe the
-// slim ledger).
+// slim ledger). The retired command name itself is swept by tests/consistency/live-commands.test.js,
+// which derives the live set from spec/commands/ — only field and file names stay hand-listed here.
 
 const SCOPES = ['spec', 'git', 'docs/canonical', 'README.md']
 const ZERO = [
-  '/spec:escape', 'spec:escape', 'escape.md', 'killedMatch', 'softMatch', 'preventedBy',
+  'escape.md', 'killedMatch', 'softMatch', 'preventedBy',
   'unclassedReason', '--owed', '--amend', 'joinAmendments', 'validateAmendmentRow', 'escapeKey',
   'computeOwed',
 ]
@@ -28,7 +29,7 @@ function walk(rel, acc) {
   return acc
 }
 
-test('AC-20261025-02-7: no retired escape-command or dead-field name survives under spec/, git/, docs/canonical/ or README.md, and escape-class lives only in the fleet reader', () => {
+test('AC-20261025-02-7: no retired escape-command file or dead-field name survives under spec/, git/, docs/canonical/ or README.md, and escape-class lives only in the fleet reader', () => {
   const files = SCOPES.flatMap(s => walk(s, []))
   assert.ok(files.length > 50, 'the sweep must actually walk the plugin tree (saw ' + files.length + ' files) — an empty walk passes vacuously')
   const hits = []

@@ -2563,7 +2563,7 @@ function deriveState(opts) {
 // ---------------------------------------------------------------------------
 // Step text per state (every step opens with a Read only: file list).
 // ---------------------------------------------------------------------------
-// /spec:genesis-explore is deleted — the explore
+// The standalone genesis-explore command is deleted — the explore
 // funnel is now a driver state this session already ran, not a separate command HANDOFF hands
 // off into. The design lock folds into the driver
 // too (the DESIGN state) — there is no separate command left to hand off into for ANY archetype

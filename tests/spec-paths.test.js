@@ -84,7 +84,7 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 
 // AC-20260901-07-15: specs/20260901/07-escape-class-contract.md D10 adds spec/scripts/escape-row.js
 // to the bundle (a new `escape-row` key) — like every other bundled script it needs a spec-paths
-// key, or the commit command's `node "$(spec-paths escape-row)" --append/--amend` invocations resolve
+// key, or the commit command's `node "$(spec-paths escape-row)" --append` invocation resolves
 // nothing (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently"; same
 // additive-collision class as AC-20260819-02-10 above).
 

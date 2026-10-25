@@ -154,7 +154,7 @@ test('AC-20260814-01-3b: an [oracle:] AC whose declared leg is red or absent fro
     'oracle-red-or-absent finding, standing identical to an uncovered AC, never covered-by-declaration')
 })
 
-test('AC-20260814-01-4a / continues AC-20260815-03-8: a skipped test whose AC line carries [env: TEST_DB] is sanctioned, observed skipped=1 sanctioned=1, and warns naming TEST_DB', () => {
+test('AC-20260814-01-4a / AC-20261025-03-3 / continues AC-20260815-03-8: a skipped test whose AC line carries [env: TEST_DB] is sanctioned, observed skipped=1 sanctioned=1, and warns naming TEST_DB', () => {
   const dir = tmpdir('acm4a')
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'tests/env.test.js'), '// covers AC-20260814-01-4\n')
@@ -173,6 +173,18 @@ test('AC-20260814-01-4a / continues AC-20260815-03-8: a skipped test whose AC li
     'the sanctioned skip must warn naming the un-run environment (TEST_DB) — never silent green')
   assert.ok(!out.findings.some(f => f.class === 'unsanctioned-skip'),
     'an [env:]-declared skip must not also be reported as an unsanctioned-skip hard finding')
+  assert.strictEqual(res.status, 0, 'the sanctioned skip must exit 0 on the untiered spec')
+  for (const fm of ['---\ntier: standard\n---\n\n', '---\ndate: 2026-10-25\n---\n\n']) {
+    fs.writeFileSync(spec, fm + specMd(
+      ['- **AC-20260814-01-4** `[env: TEST_DB]`: WHEN X THE SYSTEM SHALL Y → tests/env.test.js'],
+      ['| tests/env.test.js | CREATE | tests | covers AC |']))
+    const r2 = run(spec, dir, writeManifest(dir, []), ['--skips', skips, '--json'])
+    const o2 = findings(r2)
+    assert.strictEqual(r2.status, 0, `a standard or tier-less spec must keep exiting 0 on its own gated skip (stderr: ${r2.stderr})`)
+    assert.ok(o2.warnings.some(w => w.includes('sanctioned by [env: TEST_DB]')), 'the standard-tier sanction warning vanished')
+    assert.strictEqual(o2.findings.length, 0, `standard tier must stay finding-free — got ${JSON.stringify(o2.findings)}`)
+    assert.deepStrictEqual(o2.observed.skipReconcile, { skipped: 1, sanctioned: 1 }, 'standard tier must still count the skip as sanctioned')
+  }
 })
 
 test('AC-20260814-01-4b: a skipped test mapped to an AC with no [env:] tag is a hard unsanctioned-skip finding, observed skipped=1 sanctioned=0', () => {

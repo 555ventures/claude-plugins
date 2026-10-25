@@ -54,7 +54,7 @@ review stage's merge-back, a direct change has no branch, and a `proto/*` branch
 **`critical`** when the work touches irreversible or high-blast-radius surfaces — the host's
 pipeline rules § Risk Tiers lists its triggers — plus the universal
 process-boundary trigger: boot-path code (process/plugin registration, env/config schema,
-runtime wiring, signal handling). Critical tier means: literal examples on every AC,
+runtime wiring, signal handling). Critical tier means: literal examples on every AC (refused at lock by `ac-matrix --lint`),
 spike-verified assumptions, and the user confirms the lock. Mid-build evidence of a critical
 trigger upgrades the tier immediately (note it in the spec).
 
@@ -64,7 +64,7 @@ trigger upgrades the tier immediately (note it in the spec).
 (`bootCommand` + `readyCheck`, or an explicit `{"inert": "<reason>"}`) is the contract.
 Enforced by `smoke.sh` — its header comment is the contract; `verdict.js` requires its leg.
 **Skipped tests are not passes**: a skipped mapped test is a hard finding unless the AC
-declares its environment gate. **Authored ≠ activated**: verification infrastructure counts only
+declares its environment gate — and on `tier: critical` the spec's own gated test must still execute, so its skip stays hard. **Authored ≠ activated**: verification infrastructure counts only
 once its execution is demonstrated or its inertness declared (`manifest-check.sh`). **A stub is
 not its dependency**: a leg that passed only against a stub is reported unverified until re-run
 for real.

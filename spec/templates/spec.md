@@ -90,7 +90,9 @@ depends_on: []
      EXECUTED tests: a skipped test is a hard finding too, unless the AC carries an explicit
      env gate). An AC whose test legitimately needs an environment declares it inline:
      `[env: TEST_DATABASE_URL]` — then a skip reports as a warning naming that environment
-     instead of a hard finding; never leave an env dependency undeclared. An AC whose honest
+     instead of a hard finding; never leave an env dependency undeclared. On `tier: critical` the spec's own env-gated test
+     must still execute, so its skip stays a hard finding. Every critical AC carries a literal
+     example, and `ac-matrix --lint` refuses the lock with `missing-literal` when one lacks it. An AC whose honest
      oracle is a non-test gate leg (e.g. the typecheck/gate leg itself) declares
      `[oracle: <manifest leg>]` — a leg name from the evidence manifest's closed set (`gate`,
      `smoke`, `drift`, `ci`, `tests`, …), sibling syntax to `[env:]`, never free-form command

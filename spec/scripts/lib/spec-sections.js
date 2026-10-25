@@ -117,6 +117,10 @@ const DECISION_LINT_APPLIES_FROM = '20261016'
 // with ac-matrix.js's `--lint` gate so the floor is one literal, not a second copy.
 const DISPOSITION_APPLIES_FROM = '20260911'
 
+// The critical-tier literal-example floor: `ac-matrix --lint`'s `missing-literal` arm applies only to a
+// `tier: critical` spec dated on or after this day.
+const CRITICAL_LINT_APPLIES_FROM = '20261025'
+
 // parseDisposition(bullet) locates the disposition tail by scanning every `→` occurrence
 // in `bullet` (an AC bullet's raw text, or any string ending in the disposition tail)
 // RIGHT-TO-LEFT and taking the FIRST one (i.e. the RIGHTMOST occurrence) whose tail matches
@@ -420,5 +424,6 @@ function parseAcBullets(sectionText) {
 module.exports = {
   AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, V7_APPLIES_FROM, extractSection, parseAcBullets,
   acIdOccurs, rejectedTrailingTagDetail, extractTag, normalizeForPinCheck, pinShape,
-  DISPOSITION_APPLIES_FROM, parseDisposition, DECISION_LINT_APPLIES_FROM,
+  DISPOSITION_APPLIES_FROM, parseDisposition, DECISION_LINT_APPLIES_FROM, CRITICAL_LINT_APPLIES_FROM,
+  slotRun, trailingRun,
 }

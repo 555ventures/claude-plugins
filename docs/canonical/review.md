@@ -151,6 +151,9 @@
   other, silently sanctioning an ungated AC in one order and falsely flagging a gated one in
   the other (found by retainer consult at this spec's own review, 2026-08-16).
   (specs/20260815/03-ac-matrix-fail-closed.md, done 2026-08-16)
+  On a `tier: critical` spec the current-spec `[env:]` sanction is withdrawn — the skip is a
+  hard `critical-env-skip` finding and is never counted as `sanctioned`; the owning-spec branch
+  is unchanged on every tier. (specs/20261025/03-critical-tier-enforces-its-own-rules.md)
   Routes 2 and 3 map a skip to the first AC cited at or after the test's own name, falling back
   to the file's citations. (specs/20261024/01-review-driver-reads-recorded-facts.md)
 

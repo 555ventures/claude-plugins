@@ -26,6 +26,14 @@
 // the single authority a sibling script (promise-sweep.js) also imports;
 // or read a `→ reuses` pointer itself — lib/scan-test-calls.js's resolveReference is the one
 // reading the lint, the coverage matrix, ac-drift.js and expire-tests.js share;
+// Critical tier (tier read by lib/frontmatter.js's fmValue, a missing or
+// unparseable value is standard): in skip-reconcile a skip mapped to THIS spec's own AC declaring
+// [env: VAR], on a `tier: critical` spec, is hard finding `critical-env-skip` (never sanctioned,
+// counted in skipped only); the owning-spec branch and every standard spec keep the sanction. `--lint`
+// gains hard `missing-literal` for a critical spec dated on or after CRITICAL_LINT_APPLIES_FROM: a
+// well-formed AC bullet with no backtick span once the slot tag run, trailing bare-tag run and `→`
+// disposition tail are removed; `observed.lint.missingLiteral` exists only when the arm applies.
+//
 // no test named `ac-id-lint.test.js` lifts the regex from this file's source (that test does
 // not exist).
 //
@@ -133,7 +141,9 @@ const { globMatch } = require('./lib/glob-match')
 const {
   AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets, acIdOccurs,
   rejectedTrailingTagDetail, pinShape, parseDisposition, DISPOSITION_APPLIES_FROM,
+  CRITICAL_LINT_APPLIES_FROM, slotRun, trailingRun,
 } = require('./lib/spec-sections')
+const { fmValue } = require('./lib/frontmatter')
 const { resolveReference } = require('./lib/scan-test-calls')
 const { writeOut } = require('./lib/driver-io')
 
@@ -200,6 +210,25 @@ const wellFormed = bullets.filter(b => !b.malformed)
 
 const specDateMatch = /specs\/(\d{8})\//.exec(specPath)
 const dispositionApplies = !!(specDateMatch && specDateMatch[1] >= DISPOSITION_APPLIES_FROM)
+const isCritical = String(fmValue(specText, 'tier') || '').trim() === 'critical'
+const literalApplies = isCritical && !!(specDateMatch && specDateMatch[1] >= CRITICAL_LINT_APPLIES_FROM)
+
+// Literal detection:the bullet's raw minus the declaration-slot run, the trailing bare-tag
+// run and the disposition tail from its `→`; any backtick span left counts.
+function hasLiteral(raw) {
+  let text = raw
+  const slot = slotRun(raw.split('\n')[0])
+  if (slot) text = text.replace(slot, '')
+  text = text.replace(/\s+$/, '')
+  const trail = trailingRun(text)
+  if (trail) text = text.slice(0, text.length - trail.replace(/\s+$/, '').length)
+  const arrows = []
+  for (let i = text.indexOf('\u2192'); i !== -1; i = text.indexOf('\u2192', i + 1)) arrows.push(i)
+  for (let i = arrows.length - 1; i >= 0; i--) {
+    if (parseDisposition('\u2192' + text.slice(arrows[i] + 1)) !== null) { text = text.slice(0, arrows[i]); break }
+  }
+  return /`[^`\n]+`/.test(text)
+}
 
 // --lint returns HERE, before the full mode's File Plan read, coverage grep, or manifest
 // append — Fragile note above: this must run before the `--root`/`--manifest` requirement check,
@@ -271,11 +300,25 @@ if (lintMode) {
     }
   }
 
+  let missingLiteralCount = 0
+  if (literalApplies) {
+    for (const b of wellFormed) {
+      if (!hasLiteral(b.raw)) {
+        missingLiteralCount++
+        lintFindings.push({
+          severity: 'hard', class: 'missing-literal', ac: b.id,
+          detail: `${b.id}: critical-tier AC carries no literal example — add one backticked input → output pair`,
+        })
+      }
+    }
+  }
+
   const lintObserved = { malformed: malformedCount, invalidPreGreen: invalidPreGreenCount, mixed: mixedCount }
   if (dispositionApplies) {
     lintObserved.missingDisposition = missingDispositionCount
     lintObserved.unresolvedDisposition = unresolvedDispositionCount
   }
+  if (literalApplies) lintObserved.missingLiteral = missingLiteralCount
   if (jsonOut) {
     writeOut(1, JSON.stringify({ findings: lintFindings, warnings: [], observed: { lint: lintObserved } }, null, 2) + '\n')
   } else {
@@ -660,7 +703,14 @@ for (const line of skipLines) {
   if (bullet) {
     // Branch (1): a current-spec hit is final, with or without [env:] — the owning spec is
     // never consulted here (a re-declared bullet that dropped its gate is authoritative).
-    if (bullet.env) {
+    if (bullet.env && isCritical) {
+      // a critical spec's own gated test must execute — the sanction is withdrawn.
+      findings.push({
+        severity: 'hard', class: 'critical-env-skip', ac: primary,
+        detail: `${primary}: skipped test gated by [env: ${bullet.env}] on a tier: critical spec — ${line} — ` +
+          `provision ${bullet.env} and re-run the review legs — a critical spec's own gated test must execute`,
+      })
+    } else if (bullet.env) {
       sanctioned++
       warnings.push(`${primary}: skipped test sanctioned by [env: ${bullet.env}]`)
     } else if (bullet.trailingRejected && bullet.trailingRejected.includes('[env:')) {
@@ -726,7 +776,7 @@ const skipReconcileObserved = { skipped: skipLines.length, sanctioned }
 // adding it to both sets reddened both legs from a single-loop emission). The exit derivation
 // below ORs each set's class test with the corresponding emission-site origin Set instead.
 const ACM_FINDING_CLASSES = new Set(['malformed-ac', 'uncovered-ac', 'oracle-red-or-absent', 'missing-test-file', 'invalid-pre-green'])
-const SKIP_FINDING_CLASSES = new Set(['unsanctioned-skip', 'unmapped-skip'])
+const SKIP_FINDING_CLASSES = new Set(['unsanctioned-skip', 'unmapped-skip', 'critical-env-skip'])
 const acMatrixExit = findings.some(f => ACM_FINDING_CLASSES.has(f.class) || acMatrixOrigin.has(f)) ? 1 : 0
 const skipReconcileExit = findings.some(f => SKIP_FINDING_CLASSES.has(f.class) || skipOrigin.has(f)) ? 1 : 0
 

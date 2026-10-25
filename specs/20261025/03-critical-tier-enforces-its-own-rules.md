@@ -1,12 +1,14 @@
 ---
 date: 2026-10-25
-status: hardened
+status: implementing
+build_base: main
 open_markers: 0
 tier: standard
 area: cross-cutting
 breaking: false
 depends_on: []
 brief: n/a
+diff_base: 6db3b1f65953c367b85768dc4faae2340d5682f7
 ---
 
 # Critical tier enforces its own rules

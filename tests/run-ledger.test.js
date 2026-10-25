@@ -21,9 +21,15 @@ const LEDGER = '.claude/spec-runs.jsonl'
 // restated, since the assertion below already exercises exactly this file.
 // specs/20260912/03-run-isolates-and-owns-the-stages.md AC-20260912-03-6: build.md's and
 // review.md's bodies move to spec/doctrine/stages/stage-{build,review}.md — repointed in place.
-test('AC-20260820-07-13 / AC-20260823-01-20: build, review, escape, and release all append to the single repo-wide ledger', () => {
-  for (const f of ['doctrine/stages/stage-build.md', 'doctrine/stages/stage-review.md', 'commands/escape.md', 'commands/release.md']) {
-    assert.match(read(f), new RegExp(LEDGER.replace(/[./]/g, '\\$&')),
+test('AC-20261025-01-11 / AC-20260820-07-13 / AC-20260823-01-20: build, review, commit (the escape row), and release all append to the single repo-wide ledger', () => {
+  const readGit = (p) => fs.readFileSync(path.join(SPEC, '..', p), 'utf8')
+  for (const [f, src] of [
+    ['doctrine/stages/stage-build.md', read('doctrine/stages/stage-build.md')],
+    ['doctrine/stages/stage-review.md', read('doctrine/stages/stage-review.md')],
+    ['git/commands/commit.md', readGit('git/commands/commit.md')],
+    ['commands/release.md', read('commands/release.md')],
+  ]) {
+    assert.match(src, new RegExp(LEDGER.replace(/[./]/g, '\\$&')),
       `${f} must reference ${LEDGER} — a stage that stops writing ledger rows silently drops ` +
       'out of the durable cost/verdict history')
   }

@@ -21,7 +21,6 @@ const SHARED_FOR = {
   mocks: ['Host Grounding', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'MCP Policy', 'Session Execution', 'Design Canon'],
   status: ['Host Grounding', 'State Machine', 'Question Style', 'Console Output Style', 'Session Execution'],
   queue: ['Host Grounding', 'State Machine', 'Question Style', 'Console Output Style', 'Session Execution'],
-  escape: ['Host Grounding', 'Feedback Loop', 'Incident Policy', 'Question Style', 'Console Output Style', 'Session Execution'],
   doctor: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Tiers', 'Runtime Verification', 'Feedback Loop', 'State Machine', 'Question Style', 'Console Output Style', 'Session Execution'],
   connect: ['Host Grounding', 'Question Style', 'Console Output Style', 'Session Execution'],
   init: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Pipeline Entry', 'Tiers', 'Runtime Verification', 'Release Stage', 'Model Placement', 'Question Style', 'Console Output Style', 'Canonical Docs Loop', 'Session Execution', 'Design Canon'],

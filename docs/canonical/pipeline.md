@@ -106,8 +106,9 @@ disposer is a ledger query. The session-id checkpoint, its restart remedy, and
 `--skip-independence-check-because` are retired (specs/20260901/09-disposer-gate.md,
 ADR-0005). The pre-merge stop is the worktree step-out, never a forced clear.
 `spec-status --next` names `/spec:run` for every spec past `hardened`; its `--json` action
-set is `/spec:plan | /spec:run | /spec:escape` (specs/20260901/10-spec-run-command.md,
-ADR-0005). The loop
+set is `/spec:plan | /spec:run | /spec:fix` (specs/20260901/10-spec-run-command.md,
+ADR-0005; a red observation surfaces as a `/spec:fix` entry,
+specs/20261025/01-the-commit-writes-the-escape-row.md). The loop
 is scored by the fleet reader's `cleanByVia` (escapes-per-CLEAN by `via`); a `loop` rate
 above the `direct` rate over 30 fleet reviews reverts the loop.
 (specs/20260901/03-unified-build-loop.md, done 2026-09-01)
@@ -128,10 +129,13 @@ checkout and for the host fleet, the fix-typed commits (`fix`/`hotfix` type toke
 cutover, how many touched a file a reviewed spec landed (File Plan membership joined to a
 `stage:"review"` row that precedes the commit's committer date), and the escape rows recorded
 `via:"commit"` in the same window; `--since` scopes one repo, `--commit <sha>` answers the
-single-commit question `/git:commit`'s step 3 asks. The commit-time offer fires on `offer: true`
-— a fix-typed commit touching any file a reviewed spec landed — and is always skippable; a spec
-still under build or review is in flight and never offered. Nothing blocks a commit and no
-decline is recorded. (specs/20260904/01-commit-time-escape-coverage.md, done 2026-09-04)
+single-commit question `/git:commit`'s step 3 asks. (specs/20260904/01-commit-time-escape-coverage.md,
+done 2026-09-04) There is no offer: a fix commit whose `landed` list is non-empty writes one
+escape row itself (`/git:commit` step 3, `escape-row.js --append`) — one row per commit, `spec`
+and `reviewRunId` taken from the landed file with the latest qualifying review, every landed
+file in `files`, and the defect class the one (skippable) question. Nothing blocks a commit.
+The window and fleet share numbers retire with specs/20261025/02.
+(specs/20261025/01-the-commit-writes-the-escape-row.md)
 
 ## The question gate asks product facts, never derives them (2026-09-02, specs/20260902/06)
 

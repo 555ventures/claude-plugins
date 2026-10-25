@@ -42,8 +42,7 @@ when the work needs **delegation** (execution large enough that workers build wh
 only plans) or **durability** (scope spans sessions; the spec is the re-entrant state).
 
 Changes travel one of three lanes. **Direct**: a one-sentence change with no behaviour or data change,
-made on main through the host's `gateCommand` — no spec, no branch, the commit-time escape offer still
-runs; a repair across more than two `layerGroups` or user-visible text follows `/spec:fix`, its playbook.
+made on main through the host's `gateCommand` — no spec, no branch, the commit-time escape row still lands; a repair across more than two `layerGroups` or user-visible text follows `/spec:fix`, its playbook.
 **Behaviour**: running `/spec:prototype` is choosing this lane (a brief's `Lane:` is advisory); the
 prototype's contract lands through a spec, its code never. **Structural**: a schema or API change is
 planned first — a spec. The three are told apart at commit time: a spec branch lands only through the
@@ -83,8 +82,8 @@ The pipeline improves on evidence, through artifacts — never through anyone's 
 Carriers, all side effects of normal runs: the **run ledger** (`.claude/spec-runs.jsonl`),
 its **retained evidence artifacts** (`.claude/spec-runs/<runId>.jsonl`), and **Gotchas** entries in
 the host's pipeline rules (tagged `[host]` or `[plugin]` by provenance, folded from
-deviations sidecars at review close). `/spec:escape` records a defect that got past a
-review — one row pointing back at the review that passed it.
+deviations sidecars at review close). A fix commit touching lines a reviewed spec landed records the escape row
+(`/git:commit` step 3) — one row pointing back at the review that passed those lines.
 
 **Agent memory is not one of these carriers, and must never quietly become one.**
 `.claude/agent-memory/` is written by dispatched workers and outlives the session that wrote

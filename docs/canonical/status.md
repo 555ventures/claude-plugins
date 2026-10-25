@@ -2,7 +2,7 @@
 
 Observation is a red alarm, not a certification (specs/20260807/01). v7.0.0 retired
 `observe-ci.js` (no new `stage:"observe"` rows are written); `spec-status.js` still derives
-`observation: n/a|ok|red` from historical rows; only red renders — the `/spec:escape` entry
+`observation: n/a|ok|red` from historical rows; only red renders — the `/spec:fix` entry
 tops `--next` as the oracle-shaped pick and the dashboard footer turns 🔴 carrying branch, sha
 and url. The default dashboard is four blocks — 🗺️ Roadmap, 🎯 Next (the paste line, with ⏳ branch
 lines only when the top pick is blocked), up to three ⚠️ decide lines (`skipped-brief`,
@@ -18,7 +18,7 @@ by number, specs by path, or free-text prompts; any item may carry an `after` ga
 or a brief and is not ready until that target is done. Queue position orders unblocked
 entries across briefs (a queued spec's own position overrides its brief's); a not-ready item's
 entries carry an `after <target> (<state>)` blocker and sink with the other blocked entries;
-prompt items surface verbatim; red-observation escape entries still rank first; linked
+prompt items surface verbatim; red-observation `/spec:fix` entries still rank first; linked
 worktrees suppress the overlay entirely. A brief that lands on the roadmap is appended last
 with no mark or notice. No queue file means the derivation is unchanged. Statuses and payloads
 stay derived — the queue stores only ordering, gates, free-text payloads, and done-when

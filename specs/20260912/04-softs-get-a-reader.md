@@ -118,7 +118,7 @@ cannot reach `CLEAN` without a promise-sweep row.
   (e.g. `{"softMatch":"yes",…}` → stdout contains `softMatch-out-of-enum`, exit 1;
   `{"killedMatch":0,…}` → stdout contains `killedMatch-out-of-enum`, exit 1; the same row
   carrying `"softMatch":null` and no `killedMatch` key at all → exit 0)
-  → writes tests/escape/escape-row.test.js
+  → writes tests/escape/escape-row.test.js [retired: specs/20261025/01-the-commit-writes-the-escape-row.md]
 - **AC-20260912-04-2**: WHEN `fleet-reader --json` reads a ledger holding three escape rows
   whose `softMatch` values are `true`, `false` and absent THE SYSTEM SHALL report
   `escapes.softMatchTrue` as `1` with `escapes.total` `3`, every other escapes key unchanged,

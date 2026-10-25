@@ -322,7 +322,7 @@ function renderRulesFile(rules) {
     'a spec-plugin template/command/generated artifact) — the rule with its mechanism, and\n' +
     'one owner citation (spec path, AC-ID, D-number, ADR, run id).\n' +
     'Never dates, people, hosts, versions, or prior behavior (/spec:doctor check 16 scans this\n' +
-    'layer). Writers: the review stage\'s close step and /spec:escape only. /spec:doctor prunes dead\n' +
+    'layer). Writers: the review stage\'s close step only. /spec:doctor prunes dead\n' +
     'citations and rolls [plugin] entries up as an upstream bug list. -->\n'
   return fm + '\n' + body
 }

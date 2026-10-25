@@ -258,7 +258,7 @@ population block is scoped to "this machine's checkouts" wording.
   null-when-underivable → doctrine pin in tests/fleet-reader/doctrine-pins.test.js
 - **AC-20260820-05-17**: WHEN `spec-paths shared-for escape` runs THE SYSTEM SHALL CONTINUE
   TO serve the `## Incident Policy` section (existing assert in tests/spec-paths.test.js
-  tagged with this AC-ID, not duplicated)
+  tagged with this AC-ID, not duplicated) [retired: specs/20261025/01-the-commit-writes-the-escape-row.md]
 
 ## Assumptions (escalation triggers)
 

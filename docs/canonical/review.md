@@ -60,8 +60,8 @@
   (`{"unavailable":"pattern-no-match"|"no-format-declared"}`) is permanently distinguishable
   from a pass and can never be coerced to zero.
   (specs/20260820/06-typed-evidence-manifest.md, done 2026-08-21) Review rows always carry
-  `runId` (orchestrator-passed, else generated `rv_`+12hex by verdict.js) — the backlink
-  `/spec:escape` correlates on. Build rows count `deviations` as sidecar entries (`^- `
+  `runId` (orchestrator-passed, else generated `rv_`+12hex by verdict.js) — the backlink an
+  escape row's `reviewRunId` carries. Build rows count `deviations` as sidecar entries (`^- `
   lines) and `diff.loc` as insertions+deletions, matching review.
   (specs/20260818/01-ledger-truth.md)
 
@@ -94,8 +94,7 @@
   leg's row carries its out-of-plan paths beside the count — `{"outOfPlan":N,"files":[…]}`,
   verbatim from `scope-reconcile.js`, capped at 40 with `filesOmitted` when the cap bites —
   and `countLegFinding` still reads the number. Rows and artifacts from before this landed are
-  never backfilled; `/spec:escape` reads the range when present and proceeds as before when
-  absent. No waive cap exists by ruling: CLEAN stays derivable at any user-adjudicated waive
+  never backfilled. No waive cap exists by ruling: CLEAN stays derivable at any user-adjudicated waive
   count, and high-waive surfacing waits for an escape row that correlates with one.
 
   A third `fix-applied` (the iteration cap) appends an **escalate row** at the moment of the
@@ -108,7 +107,9 @@
   its close row lands after the escalate row and remains the observation join's key.
   (specs/20260822/01-escalate-ledger-row.md)
 
-  `/spec:escape` derives `killedMatch` from it. (amended by specs/20260820/07-review-driver.md,
+  Historically the escape command derived `killedMatch` from it; since
+  specs/20261025/01-the-commit-writes-the-escape-row.md that field, `softMatch` and the command
+  are retired, and the paragraph below is history. (amended by specs/20260820/07-review-driver.md,
   2026-08-21) A row also carries `softMatch`, derived the same way from the correlated
   artifact's non-hard survivors, so a defect the reviewer filed as advisory and that later
   escaped is distinguishable from one review never saw; the fleet reader counts them as
@@ -120,7 +121,9 @@
 
 - Every escape row carries a validated defect class or an explicit `unclassedReason`
   (`no-fix-diff` | `deferred`); `spec/scripts/lib/escape-row.js` is the one validator and
-  `escape-row.js` the one writer (`--append`, duplicate-refusing; `--amend`). A historical row's
+  `escape-row.js` the one writer (`--append`, duplicate-refusing; the `--amend` mode retired
+  with specs/20261025/01-the-commit-writes-the-escape-row.md, which also slims the row to
+  `{ts, stage, spec, files, reviewRunId, class, sha, via}` with legacy rows still accepted). A historical row's
   class is repaired by an append-only `stage:"escape-class"` amendment keyed by the original's
   `ts`+`spec`+`file`; latest amendment wins. The fleet reader counts recurrences on the joined
   (row + amendment) class, lists rows still needing a class as `escapes.unclassedRows`, and
@@ -129,7 +132,7 @@
   (specs/20260901/07-escape-class-contract.md)
 
 - Reviewer returns carry `file`/`line` (or explicit null) on every killed claim, enforced at
-  the `reviewer-returned` mark, so `/spec:escape` matches dismissed claims by location.
+  the `reviewer-returned` mark, so dismissed claims can be matched by location.
   (specs/20260901/08-corpus-derivation-and-kill-match.md)
 
 - A review records the two commits bounding what it judged as refs under
@@ -272,8 +275,9 @@
   as debt: the frozen-base check + detached review worktree (attributing foreign hunks to their
   owning spec covers both the moved-HEAD case it targeted and the interleaved-concurrent case it
   structurally cannot see), and the `done`-spec re-run — a re-review recorded no run at all, so
-  a `done` spec whose sidecar lacks this run's own `closeRunId` is refused naming `/spec:escape`,
-  the command that exists for defects escaping a review that already passed.
+  a `done` spec whose sidecar lacks this run's own `closeRunId` is refused naming `/spec:fix`,
+  which repairs a defect that escaped a review that already passed — its commit records the
+  escape row.
   (specs/20260820/07-review-driver.md, done 2026-08-21)
   The driver snapshots the tree at each `reviewer-returned` (scratch-index write-tree, untracked
   files included) and at `fix-applied` writes `<sidecar>/fix-delta-<n>.txt`, refusing a fix that

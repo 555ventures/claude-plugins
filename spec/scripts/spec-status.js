@@ -36,7 +36,7 @@
 // the derived state is `n/a`/`ok`/`red` only —
 // `pending` is retired, nothing renders for "ok" (no ⏳, no "unobserved" anywhere). Observation
 // never blocks depends_on satisfaction; a red observation becomes the --next top pick as a full
-// oracle-shaped `/spec:escape` entry and drives the
+// oracle-shaped `/spec:fix` entry and drives the
 // dashboard footer to `🔴 CI is red on {path} — {branch}@{sha} ({url})`
 // — the sole render of the alarm; there is no separate
 // observation section.
@@ -597,7 +597,7 @@ function deriveNext() {
     })
   }
   // A red observation is a dashboard-level alarm — it outranks every build/review/plan
-  // action and every unplanned brief as a full oracle-shaped /spec:escape entry, carrying its
+  // action and every unplanned brief as a full oracle-shaped /spec:fix entry, carrying its
   // evidence (branch/sha/url) in `note` so the escape session derives from it, never guesses.
   // blockers:[] (an escape is always actionable) plus parallel:false/parallel_reason:null
   // (never part of the ⚡ fan-out — it isn't worktree build work) are pinned, not derived.
@@ -605,7 +605,7 @@ function deriveNext() {
     if (s.observation !== 'red') continue
     const row = observationRows.get(s.path)
     entries.push({
-      action: '/spec:escape', path: s.path, status: s.status, brief: s.brief, blockers: [],
+      action: '/spec:fix', path: s.path, status: s.status, brief: s.brief, blockers: [],
       parallel: false, parallelReason: null,
       note: `CI red on ${row.branch} @${row.sha} — ${row.url}`,
       rank: -3,
@@ -657,14 +657,14 @@ function deriveNext() {
   // Escape entries never take part (top or runner-up) — they always sort first (rank -3) when
   // present, but they carry no worktree-build parallel claim of their own (pinned above) and
   // must never receive one derived against them either.
-  const top = entries[0] && entries[0].action === '/spec:escape'
-    ? entries.find(e => e.action !== '/spec:escape' && !e.blockers.length)
+  const top = entries[0] && entries[0].action === '/spec:fix'
+    ? entries.find(e => e.action !== '/spec:fix' && !e.blockers.length)
     : entries[0]
   // A queue prompt entry (top.brief === null) makes no worktree-build parallelism claim —
   // same reasoning as the escape exclusion just above.
   if (top && !top.blockers.length && top.brief) {
     for (const e of entries.slice(1)) {
-      if (e.blockers.length || !e.brief || !top.brief || e.action === '/spec:escape') continue
+      if (e.blockers.length || !e.brief || !top.brief || e.action === '/spec:fix') continue
       const reason = briefSerialReason(e.brief, top.brief)
       if (reason) { e.parallel = false; e.parallelReason = reason }
       else e.parallel = true
@@ -757,7 +757,7 @@ if (json) {
 // pairwise-greedy fan-out over unblocked, non-escape entries — one derivation, every call site,
 // so the lanes drawn in Next and the runner-ups sunk under --all can never disagree.
 function laneAdmission(entries) {
-  const unblocked = entries.filter(e => !e.blockers.length && e.action !== '/spec:escape')
+  const unblocked = entries.filter(e => !e.blockers.length && e.action !== '/spec:fix')
   const blocked = entries.filter(e => e.blockers.length)
   const lanes = unblocked.length ? [unblocked[0]] : []
   const laneClash = new Map()
@@ -867,7 +867,7 @@ const waitClause = n => `${n} more open`
   }
 
   // 🎯 Next: the lane render IS the Next
-  // block now, byte-identical in the default render and under --all — (a) every /spec:escape
+  // block now, byte-identical in the default render and under --all — (a) every /spec:fix
   // entry, one bare command line each; (b) the ⚡ parallel-lanes fan-out (with its 🔶
   // merge-conflict heads-up) or the single admitted lane's 🚦 solo tag; (c) when neither (a)
   // nor (b) printed anything and entries exist, the top pick's command plus its ⏳ branch — by
@@ -876,7 +876,7 @@ const waitClause = n => `${n} more open`
   // renders through cmd() — the old raw-payload special case for a queue prompt entry is gone.
   out.push('', '🎯 Next')
   const { blocked, lanes, laneClash, later } = laneAdmission(entries)
-  const escapes = entries.filter(e => e.action === '/spec:escape')
+  const escapes = entries.filter(e => e.action === '/spec:fix')
   escapes.forEach(e => out.push(cmd(e)))
   let laneRendered = false
   if (lanes.length > 1) {
@@ -976,7 +976,7 @@ const waitClause = n => `${n} more open`
   }
 
   // The one-line footer — glyph + one sentence, the LAST line printed. A red observation
-  // outranks every other head (the Next line above is already its /spec:escape entry); else a
+  // outranks every other head (the Next line above is already its /spec:fix entry); else a
   // blocked top pick names its short blocker; else ready/nothing. Clauses (wait, decide-overflow,
   // hygiene-count), each only when non-zero, ride after the head in that order — except the wait
   // clause on the 🟢 line, which prints "nothing else open" at n = 0 rather than being omitted.
@@ -990,8 +990,8 @@ const waitClause = n => `${n} more open`
     // Wait count n excludes escape entries outright, then excludes the top pick
     // itself — the top pick is entries[0] regardless of whether it is the escape entry, so an
     // escape top pick subtracts nothing (every non-escape entry is still waiting behind it).
-    const nonEscape = entries.filter(e => e.action !== '/spec:escape')
-    const topIsEscape = entries.length > 0 && entries[0].action === '/spec:escape'
+    const nonEscape = entries.filter(e => e.action !== '/spec:fix')
+    const topIsEscape = entries.length > 0 && entries[0].action === '/spec:fix'
     const n = topIsEscape ? nonEscape.length : (nonEscape.length ? nonEscape.length - 1 : 0)
     const k = decideOverflow
     const h = hygieneAnomalies.length

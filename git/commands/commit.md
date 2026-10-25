@@ -32,32 +32,37 @@ EOF
 )"
 ```
 
-## Step 3: Escape or Fix Row (fix commits only, skippable)
+## Step 3: Escape or Fix Row (fix commits only)
 
 Runs only when `.claude/spec-runs.jsonl` exists at repo root **and** the commit is plausibly
 a defect fix — the user said so, the invoker is `/spec:fix`, or the subject's conventional
-type is `fix`/`hotfix` — otherwise skip with zero output.
+type is `fix`/`hotfix` — otherwise skip with zero output. Never blocks the commit, never offers.
 
 1. Run `node "$(spec-paths commit-coverage)" --root . --commit HEAD --json`. A non-zero
-   exit prints one `⚠️` line naming the exit code and skips the check — never blocks.
-2. `offer: false` (or, when the user called it a fix, `landed` empty) **and the invoker is not
-   `/spec:fix`** → skip silently: no touched file was landed by a spec whose review closed
-   before this commit, and nothing asked for a fix row.
-3. Otherwise ask once via `AskUserQuestion` (skippable, never blocking the commit) which row
-   this commit earns — recommended pick first, consequences per option, plain language:
-   - **Escape of `<spec>`** (only when `landed` is non-empty; recommended whenever offered —
-     the escape ledger is ground truth, core § Feedback Loop): the defect lived in lines that
-     spec's review (`reviewRunId`) passed. Name
-     `landed[0].specs[0].spec`, the count of landed files and of distinct landing specs (more
-     than one → say `/spec:escape` will derive the spec and print it for veto).
-   - **Fix row** (recommended when `landed` is empty and the invoker is `/spec:fix`): the defect
-     was not that spec's, or no spec landed these files — record this commit as a Direct-lane
-     repair instead of charging it to a spec that merely touched the files.
-   - **Neither**.
-4. Escape → run `/spec:escape <that spec path>` (it owns the row schema; tell it the invocation
-   is commit-driven so the row carries `via:"commit"`). Fix row → append exactly ONE line to
-   `.claude/spec-runs.jsonl` (`printf '%s\n' '<json>' >>`), paths/enums/booleans only — the
-   root cause lives in the commit body the sha resolves to, never in the row:
+   exit prints one `⚠️` line naming the exit code and skips the check.
+2. `landed` empty → invoker `/spec:fix`: append the `stage:"fix"` row (shape below); any other
+   invoker: skip silently. A commit never earns both rows.
+3. `landed` non-empty → write one escape row, no offer, with these fields:
+   - `spec` and `reviewRunId` come from the `landed` entry whose `specs[0].reviewTs` is the
+     latest (tie: the lexically smaller spec path).
+   - `files` is every `landed[*].file`; `sha` is `HEAD` (40-hex); `via` is `spec-fix` when this
+     session's `/spec:fix` invoked the commit, else `commit`.
+   - `class` is the one question. With a root cause in session (a `/spec:fix` invoker, or the
+     commit body) derive it from `fleet-reader --json`'s `.escapes.registry` and print
+     `📌 Auto-picked class=<id> — <reason> (veto anytime)`; otherwise ask once via a skippable
+     `AskUserQuestion` for the defect class — the registry's top entries, "a new word", "no
+     class". Dismissed or "no class" → `class: null`; the row is still written.
+
+   ```
+   {"ts":"<ISO-8601>","stage":"escape","spec":"<spec path>","files":["<repo-relative path>",…],"reviewRunId":"rv_…"|null,"class":"<kebab-case id>"|null,"sha":"<HEAD 40-hex>"|null,"via":"commit"|"spec-fix"}
+   ```
+
+   Append it with `node "$(spec-paths escape-row)" --append --root . --row '<json>'`. Exit 3
+   (a row for that spec already shares a file) → print the stderr line, append nothing, and
+   continue the commit.
+4. The `stage:"fix"` row is exactly ONE line appended to `.claude/spec-runs.jsonl`
+   (`printf '%s\n' '<json>' >>`), paths/enums/booleans only — the root cause lives in the commit
+   body the sha resolves to, never in the row:
 
    ```
    {"ts":"<ISO-8601>","stage":"fix","sha":"<HEAD 40-hex>","files":["<repo-relative path>",…],"reviewed":true|false,"via":"spec-fix"|"commit"}
@@ -66,7 +71,8 @@ type is `fix`/`hotfix` — otherwise skip with zero output.
    `files` is `git show --name-only --format= HEAD` minus the ledger itself; `via` is `spec-fix`
    when this session's `/spec:fix` invoked the commit, else `commit`; `reviewed` is true only when
    that invocation said its reviewer step completed — nothing said means `commit` and `false`.
-   The line stays uncommitted until the next commit, like an escape row. Neither → proceed silently.
+
+Either line stays uncommitted until the next commit.
 
 ## Step 4: Report
 
@@ -98,7 +104,7 @@ Next: /git:merge — land it on main
 ## NON-NEGOTIABLE RULES
 
 1. **`git add -A` is MANDATORY** — add ALL changes regardless of relevance to previous work
-2. **Only 2 approval prompts for the commit itself** — parallel info-gathering, then commit; Step 3's `AskUserQuestion` is additional, skippable, and only fires on fix-typed (or `/spec:fix`-invoked) commits
+2. **Only 2 approval prompts for the commit itself** — parallel info-gathering, then commit; Step 3's one `AskUserQuestion` (the defect class) is additional, skippable, and only fires on fix-typed (or `/spec:fix`-invoked) commits that touch spec-landed lines
 3. **Never selectively stage** unless user explicitly requests it
 4. **No post-commit status check** — reduces unnecessary approval
 5. **Warn about sensitive files** (.env, credentials) but still stage them

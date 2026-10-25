@@ -73,14 +73,13 @@
   },
   "spec/scripts/escape-row.js": {
     "entryPoints": [
-      "spec/commands/escape.md"
+      "git/commands/commit.md"
     ]
   },
   "spec/scripts/fleet-reader.js": {
     "entryPoints": [
       "spec/doctrine/core.md",
-      "spec/commands/doctor.md",
-      "spec/commands/escape.md"
+      "spec/commands/doctor.md"
     ]
   },
   "spec/scripts/genesis-driver.js": {
@@ -160,8 +159,7 @@
   },
   "spec/scripts/prose-cap.js": {
     "entryPoints": [
-      "spec/doctrine/stages/stage-review.md",
-      "spec/commands/escape.md"
+      "spec/doctrine/stages/stage-review.md"
     ]
   },
   "spec/scripts/question-style-gate.js": {
@@ -193,7 +191,6 @@
       "spec/commands/run.md",
       "spec/commands/genesis.md",
       "spec/commands/enforce.md",
-      "spec/commands/escape.md",
       "spec/commands/mocks.md",
       "spec/doctrine/stages/stage-review.md",
       "spec/commands/plan.md",
@@ -234,7 +231,6 @@
       "spec/commands/queue.md",
       "spec/commands/plan.md",
       "spec/doctrine/stages/stage-review.md",
-      "spec/commands/escape.md",
       "spec/doctrine/core.md"
     ]
   },

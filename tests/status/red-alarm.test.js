@@ -55,7 +55,7 @@ test('AC-20260807-01-2: a done spec with zero qualifying observe rows reports ob
 })
 
 // (sanctioned pin exception, green pre-change): D3's rationale states the red path — headline
-// glyph, red line, full oracle-shaped /spec:escape entry — is explicitly unchanged by this
+// glyph, red line, full oracle-shaped /spec:fix entry — is explicitly unchanged by this
 // spec ("same ledger stage, same escape entry shape, same D8 derive path"). Relocated verbatim
 // from the retired done-unobserved.test.js (carried as AC-20260805-03-6 there).
 const BRIEFS_AC7 = {
@@ -64,10 +64,10 @@ const BRIEFS_AC7 = {
 }
 
 // AC-20260903-05-6 (rewritten in place, D8, specs/20260903/05-status-diet.md): the 📡
-// Observation block is deleted; a red observation now renders as the /spec:escape Next line
+// Observation block is deleted; a red observation now renders as the /spec:fix Next line
 // plus a 🔴 footer sentence carrying branch, sha and url — the old 📡 line assertion below is
 // rewritten to the new footer literal, never weakened.
-test('AC-20260807-01-7 / AC-20260903-05-6: a red latest observation turns the headline red, renders the 🔴 footer with branch/sha/url (no 📡 line), and tops --next as a full oracle-shaped escape entry', () => {
+test('AC-20261025-01-8 / AC-20260807-01-7 / AC-20260903-05-6: a red latest observation turns the headline red, renders the 🔴 footer with branch/sha/url (no 📡 line), and tops --next as a full oracle-shaped /spec:fix entry', () => {
   const specPath = 'specs/20260701/01-auth-core.md'
   const ledgerRows = [
     { ts: '2026-07-05', stage: 'review', spec: specPath, verdict: 'CLEAN' },
@@ -95,7 +95,7 @@ test('AC-20260807-01-7 / AC-20260903-05-6: a red latest observation turns the he
   const j = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
   assert.ok(j.next.length, 'test fixture bug: --next must return at least the escape entry')
   const top = j.next[0]
-  assert.strictEqual(top.action, '/spec:escape', 'a red observation must outrank every build/review/plan action as the --next top pick')
+  assert.strictEqual(top.action, '/spec:fix', 'a red observation must surface as the /spec:fix entry (the lane whose commit records the escape row) and outrank every build/review/plan action as the --next top pick')
   assert.strictEqual(top.path, specPath, 'the escape entry must point at the red spec itself')
   assert.deepStrictEqual(top.blockers, [], 'blockers:[] is pinned — a populated blockers array would make an external --next --json consumer treat a ready escape as stuck')
   assert.strictEqual(top.parallel, false, 'escape entries are excluded from the parallel fan-out — parallel must be false, not null')

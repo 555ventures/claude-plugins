@@ -51,7 +51,7 @@ function stripLineComments(src) {
 const isRoot = !!(process.getuid && process.getuid() === 0)
 
 // review fix 1
-test('review finding 1: a >64KB --json payload survives a pipe byte-identical, exits 0, and the reader never calls process.exit(0) as a code statement', () => {
+test('review finding 1 (AC-20261025-02-1): a >64KB --json payload survives a pipe byte-identical, exits 0, and the reader never calls process.exit(0) as a code statement', () => {
   const root = tmpdir('fleet-review-pipe')
   const legNames = Array.from({ length: 40 }, (_, i) => 'leg-' + i)
   for (let r = 0; r < 20; r++) {
@@ -72,11 +72,11 @@ test('review finding 1: a >64KB --json payload survives a pipe byte-identical, e
   assert.ok(byteLen > 65536,
     'the fixture must exceed 64KB (got ' + byteLen + ' bytes) — at or under that boundary this test cannot distinguish the fix from the truncation bug it pins, making the assertions below vacuous')
   const parsed = JSON.parse(r.stdout)
-  // AC-20260901-03-6 / AC-20260903-01-8: specs/20260901/03 D9's cleanByVia is the eighth
-  // top-level key and specs/20260903/01 D1's owed is the ninth; the pin stays exhaustive (the
-  // truncation this test exists to catch is still detected by a MISSING key).
+  // AC-20260901-03-6: specs/20260901/03 D9's cleanByVia stays a top-level key; specs/20261025/02
+  // D2 deletes the owed query, so owed leaves the key set; the pin stays exhaustive (the truncation this test exists to catch is still
+  // detected by a MISSING key).
   assert.deepStrictEqual(Object.keys(parsed).sort(), [
-    'cleanByVia', 'cleanContradicted', 'driftCensus', 'escapes', 'gate08', 'legRecency', 'owed',
+    'cleanByVia', 'cleanContradicted', 'driftCensus', 'escapes', 'gate08', 'legRecency',
     'population',
   ], 'a truncated pipe write cuts the JSON mid-object — if any top-level key is missing or extra, the output is corrupt even though the process reported exit 0')
 

@@ -113,29 +113,21 @@ is scored by the fleet reader's `cleanByVia` (escapes-per-CLEAN by `via`); a `lo
 above the `direct` rate over 30 fleet reviews reverts the loop.
 (specs/20260901/03-unified-build-loop.md, done 2026-09-01)
 
-The fleet reader's `owed` question (`--owed` for the human render) lists every
-plugin-blaming row across this machine's checkouts: escape rows whose `preventedBy` is
-`review-check` or `runtime-leg`, and unstamped `docs/spec-feedback/`
-findings, grouped by effective class with the joined recurrence count and a pointer to core
-§ Incident Policy. Fixed-status is derived, never stored: an item's key
-(`escape:<repo>:<ts>:<file>` or a feedback finding id) cited in a landed
-test, a doctrine file, or a `done` spec marks it fixed; a citation in an unfinished spec marks
-it in-flight. Host reports end with the row key and nothing else — no handoff prompt is
-composed; the owed query is the consumer. (specs/20260903/01-owed-query-and-row-handoff.md, done 2026-09-03)
+The fleet reader answers eight fixed questions; the owed query and its
+`escape:<repo>:<ts>:<file>` citation key are retired
+(specs/20261025/02-readers-keep-only-the-surviving-escape-fields.md).
 
 Commit-time escape coverage is a derived number, never asserted:
-`node "$(spec-paths commit-coverage)" --repos-root ~/Projects` prints, population first, per
-checkout and for the host fleet, the fix-typed commits (`fix`/`hotfix` type token) since the v7
-cutover, how many touched a file a reviewed spec landed (File Plan membership joined to a
-`stage:"review"` row that precedes the commit's committer date), and the escape rows recorded
-`via:"commit"` in the same window; `--since` scopes one repo, `--commit <sha>` answers the
-single-commit question `/git:commit`'s step 3 asks. (specs/20260904/01-commit-time-escape-coverage.md,
+`node "$(spec-paths commit-coverage)" --commit <sha>` answers the single-commit landed
+question `/git:commit`'s step 3 asks (landed = File Plan membership joined to a
+`stage:"review"` row that precedes the commit's committer date). (specs/20260904/01-commit-time-escape-coverage.md,
 done 2026-09-04) There is no offer: a fix commit whose `landed` list is non-empty writes one
 escape row itself (`/git:commit` step 3, `escape-row.js --append`) — one row per commit, `spec`
 and `reviewRunId` taken from the landed file with the latest qualifying review, every landed
 file in `files`, and the defect class the one (skippable) question. Nothing blocks a commit.
-The window and fleet share numbers retire with specs/20261025/02.
-(specs/20261025/01-the-commit-writes-the-escape-row.md)
+(specs/20261025/01-the-commit-writes-the-escape-row.md) The window and fleet share numbers
+are retired — the row is written by the commit itself, so only the per-commit landing
+derivation (`--commit`) remains (specs/20261025/02).
 
 ## The question gate asks product facts, never derives them (2026-09-02, specs/20260902/06)
 

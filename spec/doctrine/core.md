@@ -109,7 +109,7 @@ derived from ledger evidence wherever a ledger can answer them, asserted only wh
 - **Generality** — names at least two ledger-recorded members of the class, at least one of
   which is not the triggering incident.
 - **Materiality** — the class's recurrence count across every readable repo ledger, **escape
-  rows joined with their `escape-class` amendments and build-row `incidents`** (as
+  rows and build-row `incidents`** (as
   `fleet-reader --json`'s `escapes.byClass` derives it), cited as a number, never claimed.
 - **Falsifiability** — deliberately tripped once; the proposal cites the red run.
 - **Removability** — a kill condition phrased as a question a ledger query answers with a

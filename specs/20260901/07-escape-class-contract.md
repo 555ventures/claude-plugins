@@ -229,7 +229,7 @@ unmatched check against the repo's escape keys.
   under `byClass["silent-fallback"]` (not `unclassed`); WHEN two amendments share the key with
   `ts` `2026-09-02T00:00:00Z` → `a-b` and `2026-09-03T00:00:00Z` → `c-d` THE SYSTEM SHALL count
   `c-d` only; WHEN one native `x-y` row plus two amended-to-`x-y` rows exist THE SYSTEM SHALL
-  list `x-y` in `recurrentUnguarded` with `count: 3` → `tests/fleet-reader/escape-class.test.js`
+  list `x-y` in `recurrentUnguarded` with `count: 3` → `tests/fleet-reader/escape-class.test.js` [retired: specs/20261025/02-readers-keep-only-the-surviving-escape-fields.md]
 - **AC-20260901-07-9**: WHEN the fleet holds (a) an escape row with `class:null` and no reason
   and no amendment, (b) one with `class:null, unclassedReason:"no-fix-diff"`, (c) one amended
   with `unclassedReason:"deferred"`, and (d) one with `class:"a-b"` THE SYSTEM SHALL return

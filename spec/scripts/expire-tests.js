@@ -262,7 +262,7 @@ if (closingSpecRel !== null) {
   }
 }
 
-// ---- invariants set + escape-class ids -----------------------------------------------------------
+// ---- invariants set + defect-class ids -----------------------------------------------------------
 // One whole-name pattern per invariant basename: not preceded by a name character, `.` or `-`,
 // and not followed by a name character — so `catalog.json` never names `log.js` and
 // `health.json()` never names `health.js`, while `scripts/log.js` and `'log.js'` still do.

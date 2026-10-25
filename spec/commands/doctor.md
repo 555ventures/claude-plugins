@@ -114,12 +114,7 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
       legacy rows, else same-spec latest prior review row) is a **contradicted CLEAN** —
       the review passed a real defect; report per-spec;
     - with ≥10 CLEAN review rows and zero escape rows, report that too — absence of escapes
-      is only meaningful if escapes are being recorded; note when zero escape rows exist;
-    - an escape with `"preventedBy":"doctrine"` whose named change has not landed is an
-      **open repair** (`--fix` input); `preventedBy:"enforcer"` with no matching
-      enforcement-manifest entry means `/spec:enforce` is due;
-    - a non-empty `escapes.unclassedRows` (from `node "$(spec-paths fleet-reader)" --json`)
-      means `/spec:escape --backfill` is due — report it naming the count.
+      is only meaningful if escapes are being recorded; note when zero escape rows exist.
     **Plugin-defect roll-up:** collect `[plugin]`-tagged Gotchas entries into one "upstream
     bug report" block (entry + citation, verbatim).
 13. **Roadmap derivation** (only if `docs/roadmap/00-overview.md` exists) — run

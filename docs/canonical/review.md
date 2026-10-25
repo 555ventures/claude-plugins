@@ -107,29 +107,19 @@
   its close row lands after the escalate row and remains the observation join's key.
   (specs/20260822/01-escalate-ledger-row.md)
 
-  Historically the escape command derived `killedMatch` from it; since
-  specs/20261025/01-the-commit-writes-the-escape-row.md that field, `softMatch` and the command
-  are retired, and the paragraph below is history. (amended by specs/20260820/07-review-driver.md,
-  2026-08-21) A row also carries `softMatch`, derived the same way from the correlated
-  artifact's non-hard survivors, so a defect the reviewer filed as advisory and that later
-  escaped is distinguishable from one review never saw; the fleet reader counts them as
-  `escapes.softMatchTrue`. (specs/20260912/04-softs-get-a-reader.md) Plan locks
-  append a `stage:"plan"` ledger row of executed facts (spike count, promise-sweep
+  The escape row carries spec, files, review run id, class, sha and via; the
+  review-survivor match counter and its derivation are
+  retired. Plan locks append a `stage:"plan"` ledger row of executed facts (spike count, promise-sweep
   counters, collision counts). The escape ledger is the pipeline's one ground-truth
   signal; self-reported review quality is subordinate to it.
   (specs/20260819/01-review-evidence-retention.md)
 
-- Every escape row carries a validated defect class or an explicit `unclassedReason`
-  (`no-fix-diff` | `deferred`); `spec/scripts/lib/escape-row.js` is the one validator and
-  `escape-row.js` the one writer (`--append`, duplicate-refusing; the `--amend` mode retired
-  with specs/20261025/01-the-commit-writes-the-escape-row.md, which also slims the row to
-  `{ts, stage, spec, files, reviewRunId, class, sha, via}` with legacy rows still accepted). A historical row's
-  class is repaired by an append-only `stage:"escape-class"` amendment keyed by the original's
-  `ts`+`spec`+`file`; latest amendment wins. The fleet reader counts recurrences on the joined
-  (row + amendment) class, lists rows still needing a class as `escapes.unclassedRows`, and
-  flags unvalidated rows in the drift census (`class-missing`, `amendment-unmatched`). The
-  third-recurrence bar's Materiality field cites the joined count.
-  (specs/20260901/07-escape-class-contract.md)
+- Every escape row carries a validated defect class; `spec/scripts/lib/escape-row.js` is the
+  one validator and `escape-row.js` the one writer (`--append`, duplicate-refusing). The row
+  is `{ts, stage, spec, files, reviewRunId, class, sha, via}`, legacy rows still accepted.
+  The fleet reader counts recurrences on the row's class and validates each escape row in the
+  drift census with that validator and reports malformed shapes (e.g. `class-malformed`). The third-recurrence bar's Materiality field cites that
+  count.
 
 - Reviewer returns carry `file`/`line` (or explicit null) on every killed claim, enforced at
   the `reviewer-returned` mark, so dismissed claims can be matched by location.

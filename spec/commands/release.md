@@ -102,8 +102,7 @@ to Phase 4's `record`.
 
 Report a Phase 2 STOP via the shared shape: assemble `outcome: {anchor:'🚫', text:'{the derived
 verdict word} — {leg} failed'}` and `next: {kind:'command', text:'route the defect to the
-normal flow — direct fix or a spec, or /spec:escape (foundBy: later-spec,
-preventedBy: runtime-leg) if it escaped a CLEAN review'}`, write to a temp file, and run
+normal flow — /spec:fix for a repair (its commit records the escape row), or a spec'}`, write to a temp file, and run
 `node "$(spec-paths report-render)" --slots <file>`, printing its output verbatim.
 
 ## Phase 3 — Promote (explicitly confirmed, never autonomous)
@@ -170,5 +169,5 @@ never a silent promote. There is no path from here that carries it into a promot
   staging. Approval in one release does not carry to the next.
 - **A skip is reported by name, never silently green** — e2e skips, unwalkable journeys, and
   `inert` manifest rows all appear in the report explicitly.
-- Defects found here route to the normal flow (fix/spec + `/spec:escape` when they escaped a
-  review) — release records and gates; it never becomes a repair entry point.
+- Defects found here route to the normal flow (`/spec:fix` — its commit records the escape
+  row — or a spec) — release records and gates; it never becomes a repair entry point.

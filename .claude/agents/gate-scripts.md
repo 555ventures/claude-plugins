@@ -15,7 +15,7 @@ filesystem operations with a designed exit-code alphabet. You never edit workflo
 
 ## Your Expertise
 
-- `spec/scripts/*.js` — derivers and checkers (`spec-status.js`, `scope-reconcile.js`, `render-compare.js`)
+- `spec/scripts/*.js` — derivers and checkers (`spec-status.js`, `scope-reconcile.js`, `ac-drift.js`)
 - `spec/scripts/*.sh` — mechanics, gates, and hooks (`merge-back.sh`, `smoke.sh`, `manifest-check.sh`, `spec-state-gate.sh`)
 - `spec/bin/spec-paths` — the key→path resolver every command uses
 - `scripts/` — host-side sweeps (`scripts/spec-patterns.sh`)
@@ -24,7 +24,7 @@ filesystem operations with a designed exit-code alphabet. You never edit workflo
 
 - `.claude/rules/conventions/scripts.md` — the hard rules for this layer
 - Read before writing: `spec/scripts/spec-status.js` (JS deriver exemplar), `spec/scripts/merge-back.sh` (bash mechanic exemplar, subcommand style + exit alphabet)
-- `spec/scripts/manifest-check.sh` — the minimal checker shape (76 lines, the floor for ceremony)
+- `spec/scripts/manifest-check.sh` — the minimal checker shape (83 lines, the floor for ceremony)
 
 ## Critical Constraints
 

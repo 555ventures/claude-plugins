@@ -148,9 +148,8 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
 <!-- One line per entry: a provenance tag — [host] (this repo/stack) or [plugin] (traces to a
 spec-plugin template/command/generated artifact) — the rule with its mechanism, and one owner
 citation (spec path, AC-ID, D-number, ADR, run id). Never dates, people, hosts, versions, or
-prior behavior (/spec:doctor check 16 scans this layer). Writers: the review stage close and
-/spec:escape only. /spec:doctor prunes dead citations and rolls [plugin] entries up as an
-upstream bug list. -->
+prior behavior (/spec:doctor check 16 scans this layer). Writers: the review stage's close step
+only. /spec:doctor prunes dead citations and rolls [plugin] entries up as an upstream bug list. -->
 - `[plugin]` A conformance guard that classifies what to inspect by **file name or extension**
   is evadable by the exact thing it guards — classify by **location** (the directory walk) and
   admit everything inside it; any name-shape filter is a new hole, never a legitimate

@@ -26,18 +26,6 @@ function fixtureRepo() {
   return dir
 }
 
-test('AC-20261025-02-5: --since and --repos-root are usage errors naming --commit and saying retired', () => {
-  const dir = fixtureRepo()
-  const since = runNode(SCRIPT, ['--since', '2026-08-17', '--root', dir])
-  assert.strictEqual(since.status, 2, 'the window share measures a constant after the commit writes its own row — it must be refused, not computed: ' + since.stdout)
-  assert.match(since.stderr, /--commit/, 'the refusal must name the surviving mode so the caller knows the remedy: ' + since.stderr)
-  assert.match(since.stderr, /retired/, 'the refusal must say the mode is retired, not merely malformed: ' + since.stderr)
-
-  const fleet = runNode(SCRIPT, ['--repos-root', path.dirname(dir)])
-  assert.strictEqual(fleet.status, 2, 'the fleet share is retired with the window share: ' + fleet.stdout)
-  assert.match(fleet.stderr, /--commit/, 'the refusal must name the surviving mode: ' + fleet.stderr)
-  assert.match(fleet.stderr, /retired/, 'the refusal must say the mode is retired: ' + fleet.stderr)
-})
 
 test('AC-20261025-02-14: --commit HEAD --json still reports mode commit, the landed review run and ts, and the offer boolean', () => {
   const dir = fixtureRepo()

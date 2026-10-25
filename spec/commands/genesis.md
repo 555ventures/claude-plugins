@@ -34,13 +34,13 @@ beyond config/scaffold), STOP and tell the user to run `/spec:init` directly.
    of the loop's steps (author `.claude/genesis/init-profile.json`, then `--mark
    profile-written`), not the stop condition.
 
-Every accepted mark prints `✅ checkpoint — genesis state saved (<prev> → <next>); safe to
-/clear and re-run /spec:genesis` as its last line.
+Every accepted mark prints `✅ checkpoint — genesis state saved (<prev> → <next>); safe to /clear and re-run /spec:genesis` as its last line.
 
 A visual archetype on a Storybook stack stops once more, at `DESIGN_BRIEF` between the green
-gate and `ROADMAP` (spec/doctrine/genesis.md § Genesis: Design Stage). That step's own printed
-`Session:` line names a fresh session and Fable — start one before doing that step's work. To
-refresh a stale catalog by hand: `node "$(spec-paths catalog-inventory)" --root . --out docs/design/catalog.md`.
+gate and `ROADMAP` (spec/doctrine/genesis.md § Genesis: Design Stage). Design steps print a
+`Session:` line naming a fresh session and a model.
+**A step naming Fable stops before its work unless this session runs on Fable** (no script can see the active
+model — the check is the session's alone): print `/clear`, `/model fable`, re-run `/spec:genesis`, end the turn. To refresh a stale catalog by hand: `node "$(spec-paths catalog-inventory)" --root . --out docs/design/catalog.md`.
 
 ## HANDOFF report
 

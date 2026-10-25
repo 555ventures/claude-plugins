@@ -1,17 +1,10 @@
 #!/usr/bin/env node
 'use strict'
-// lib/escape-row.js — the ONE escape-row validator. Exports the enums an escape or
-// escape-class (amendment) row must satisfy, the join key both row shapes share, and three
-// pure functions: validateEscapeRow, validateAmendmentRow, joinAmendments.
+// lib/escape-row.js — the ONE escape-row validator: the slim escape row shape, the legacy
+// reader (`file` string, dropped fields ignored), and the amendment helpers the fleet reader
+// still joins (escapeKey, joinAmendments, validateAmendmentRow).
 //
-// Owner: specs/20260901/07-escape-class-contract.md.
-// Why: before this module, fleet-reader.js's
-// PREVENTED_BY/FOUND_BY/SEVERITY sets were inline and nothing validated the `class` field at
-// all — a session `printf` could write `preventedBy:"test"` and
-// `foundBy:"build"` straight into a fleet ledger, and a null `class` with no excuse was
-// indistinguishable from a deliberately-unclassable row. This module is now the ONE place
-// `escape-row.js` (the CLI writer) and `fleet-reader.js` (the drift census + effective-class
-// join) both read the reason set from, so the two can never disagree on what "valid" means.
+// Owner: specs/20261025/01-the-commit-writes-the-escape-row.md D3, D10.
 //
 // What this deliberately does NOT do: read or write a ledger file (escape-row.js owns the
 // append; fleet-reader.js owns discovery), decide the effective class for a row (the caller
@@ -25,7 +18,7 @@ const FOUND_BY = ['user', 'later-spec', 'production']
 const SEVERITY = ['hard', 'soft']
 const UNCLASSED_REASONS = ['no-fix-diff', 'deferred']
 const CLASS_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
-const VIA = ['backfill', 'manual']
+const VIA = ['commit', 'spec-fix', 'manual', 'backfill']   // backfill: legacy amendment rows only
 
 // escapeKey: the join key both an escape row and its escape-class amendment share. An escape
 // row has no escapeTs of its own, so it falls back to its own ts.
@@ -52,23 +45,27 @@ function classReasons(row, { amended = false } = {}) {
   return reasons
 }
 
-// tristate(v): true for the four values validateEscapeRow's killedMatch/softMatch keys may
-// hold — absent, true, false or null.
-function tristate(v) {
-  return v === undefined || v === true || v === false || v === null
+// escapeFiles(row) -> string[]: every file an escape row names — `files` when an array, else
+// the legacy single `file` string, else [].
+function escapeFiles(row) {
+  if (Array.isArray(row.files)) return row.files
+  if (typeof row.file === 'string') return [row.file]
+  return []
 }
 
-// validateEscapeRow(row, {amended}) -> string[] (empty = valid). preventedBy/foundBy/severity
-// keep fleet-reader's pre-existing reason spellings. killedMatch and softMatch share one
-// tri-state predicate: absent, true, false or null passes; any other value is a reason,
-// appended after the three enum reasons in that order.
-function validateEscapeRow(row, { amended = false } = {}) {
-  const reasons = classReasons(row, { amended })
-  if (!PREVENTED_BY.includes(row.preventedBy)) reasons.push('preventedBy-out-of-enum')
-  if (!FOUND_BY.includes(row.foundBy)) reasons.push('foundBy-out-of-enum')
-  if (!SEVERITY.includes(row.severity)) reasons.push('severity-out-of-enum')
-  if (!tristate(row.killedMatch)) reasons.push('killedMatch-out-of-enum')
-  if (!tristate(row.softMatch)) reasons.push('softMatch-out-of-enum')
+// validateEscapeRow(row) -> string[] (empty = valid), closed reason set: files-missing,
+// files-entry-not-string, class-malformed, sha-malformed, via-out-of-enum. The legacy keys
+// foundBy, severity, killedMatch, softMatch, preventedBy and unclassedReason are ignored.
+function validateEscapeRow(row) {
+  const reasons = []
+  const hasFiles = Array.isArray(row.files) ? row.files.length > 0 : typeof row.file === 'string'
+  if (!hasFiles) reasons.push('files-missing')
+  else if (escapeFiles(row).some(f => typeof f !== 'string')) reasons.push('files-entry-not-string')
+  const cls = row.class
+  if (cls !== null && cls !== undefined && !(typeof cls === 'string' && CLASS_ID_RE.test(cls))) reasons.push('class-malformed')
+  const sha = row.sha
+  if (sha !== null && sha !== undefined && !(typeof sha === 'string' && /^[0-9a-f]{40}$/.test(sha))) reasons.push('sha-malformed')
+  if (row.via !== undefined && row.via !== null && !VIA.includes(row.via)) reasons.push('via-out-of-enum')
   return reasons
 }
 
@@ -100,5 +97,5 @@ function joinAmendments(rows) {
 
 module.exports = {
   PREVENTED_BY, FOUND_BY, SEVERITY, UNCLASSED_REASONS, CLASS_ID_RE, VIA,
-  escapeKey, validateEscapeRow, validateAmendmentRow, joinAmendments,
+  escapeKey, escapeFiles, validateEscapeRow, validateAmendmentRow, joinAmendments,
 }

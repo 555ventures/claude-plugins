@@ -2,64 +2,44 @@
 'use strict'
 // escape-row.js --check (--row '<json>' | --file <path>)
 //              | --append --root <dir> --row '<json>' [--allow-duplicate]
-//              | --amend  --root <dir> --escape-ts <ts> --spec <path> --file <path>
-//                        (--class <id> | --unclassed-reason no-fix-diff|deferred) [--via backfill|manual]
 //
-// Owner: specs/20260901/07-escape-class-contract.md.
-// Why: escape.md appended ledger rows with a
-// session `printf` before this script existed — that is exactly how a `preventedBy:"test"` and
-// a `foundBy:"build"` row reached a fleet ledger (no script stood between the session and the
-// file). This CLI is the ONE writer of every `stage:"escape"` and `stage:"escape-class"` row:
-// --check runs lib/escape-row.js's validator without touching disk, --append is the sole path
-// that puts a NEW escape row into a ledger (duplicate-refusing), and --amend is the sole writer
-// of an append-only `escape-class` amendment that repairs a historical row's class without
-// rewriting it. A review finding of this spec: appendLine glued a new row onto an
-// existing ledger's last line when that line lacked a trailing newline, corrupting both rows
-// for every fleet-reader; appendLine now checks the existing ledger's last byte and prefixes a
-// separating newline when needed, matching the idiom already used in replay.js's info/exclude
-// append.
+// Owner: specs/20261025/01-the-commit-writes-the-escape-row.md D3, D4.
+// Why: a fix commit records its escape row through this one writer, so no session `printf`
+// can put an unvalidated row into a ledger. --check runs lib/escape-row.js's validator
+// without touching disk; --append is the sole path that puts a new escape row into a ledger,
+// refusing a second row that names the same spec and shares a file with an existing one.
 //
-// What this deliberately does NOT do: edit or delete an existing ledger line (the ledger
-// is append-only fleet-wide; a wrong amendment is superseded by a later one, never rewritten),
-// decide a row's class for the caller (the session or the backfill agent supplies --class /
-// --unclassed-reason; this script only validates and appends what it is given), or re-derive
-// the effective class across amendments (that join is fleet-reader.js's job — this script's
-// duplicate/key search reads only the ROOT's own raw rows, never joins them).
+// What this deliberately does NOT do: edit or delete an existing ledger line (the ledger is
+// append-only fleet-wide), decide a row's class for the caller (the session supplies it; this
+// script only validates and appends what it is given), or join amendments (fleet-reader.js
+// owns that read).
 //
 // Exit codes: 0 = ok (--check: no reasons; --append: one line appended, stdout
-//                 `appended spec=… file=… key=escape:<basename(resolved --root)>:<ts>:<file>` —
-//                 the trailing key= suffix
-//                 is the exact literal spec/scripts/fleet-reader.js's `owed` query joins
-//                 citations against, so a session copies it verbatim into its report;
-//                 --amend: one line appended, stdout `amended escapeTs=… spec=… file=… class=…|null`)
+//                 `appended spec=<spec> files=<n> reviewRunId=<rv_…|null>`)
 //             1 = validation reasons found (lib/escape-row.js's closed reason set), printed one
 //                 per line on stdout, nothing appended
-//             2 = usage error, unreadable/unparseable --row/--file, --root not a directory,
-//                 --amend with both or neither of --class/--unclassed-reason
-//             3 = refusal: --append finds an escape row with the same spec+file in <dir>'s
-//                 ledger (live + archives) and --allow-duplicate is absent; --amend finds no
-//                 escape row with key (escapeTs, spec, file) in <dir>'s ledger — nothing
-//                 appended, stderr names the remedy (--allow-duplicate / the exact key searched)
+//             2 = usage error, unreadable/unparseable --row/--file, --root not a directory
+//             3 = refusal: --append finds an escape row in <dir>'s ledger (live + archives)
+//                 with the same spec sharing a file and --allow-duplicate is absent — nothing
+//                 appended, stderr names the shared file and the remedy
 
 const fs = require('fs')
 const path = require('path')
-const { validateEscapeRow, validateAmendmentRow } = require('./lib/escape-row')
+const { validateEscapeRow, escapeFiles } = require('./lib/escape-row')
 const { readLedgerRows } = require('./lib/observation')
 
 function usage() {
   console.error(
     "Usage: escape-row.js --check (--row '<json>' | --file <path>)\n" +
     "     | escape-row.js --append --root <dir> --row '<json>' [--allow-duplicate]\n" +
-    '     | escape-row.js --amend  --root <dir> --escape-ts <ts> --spec <path> --file <path>\n' +
-    '                     (--class <id> | --unclassed-reason no-fix-diff|deferred) [--via backfill|manual]'
+    'Only --check and --append exist; the row shape is in specs/20261025/01-the-commit-writes-the-escape-row.md.'
   )
 }
 
-const MODE_FLAGS = { '--check': 'check', '--append': 'append', '--amend': 'amend' }
+const MODE_FLAGS = { '--check': 'check', '--append': 'append' }
 
 let mode = null
 let rowArg = null, fileArg = null, rootArg = null, allowDuplicate = false
-let escapeTsArg = null, specArg = null, fileFieldArg = null, classArg = null, reasonArg = null, viaArg = null
 
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -68,21 +48,13 @@ for (let i = 0; i < argv.length; i++) {
     if (mode) { usage(); process.exit(2) }
     mode = MODE_FLAGS[a]
   } else if (a === '--row') rowArg = argv[++i]
-  else if (a === '--file') { fileArg = argv[++i]; fileFieldArg = fileArg }
+  else if (a === '--file') fileArg = argv[++i]
   else if (a === '--root') rootArg = argv[++i]
   else if (a === '--allow-duplicate') allowDuplicate = true
-  else if (a === '--escape-ts') escapeTsArg = argv[++i]
-  else if (a === '--spec') specArg = argv[++i]
-  else if (a === '--class') classArg = argv[++i]
-  else if (a === '--unclassed-reason') reasonArg = argv[++i]
-  else if (a === '--via') viaArg = argv[++i]
   else { usage(); process.exit(2) }
 }
 if (!mode) { usage(); process.exit(2) }
 
-// lib/observation.js readLedgerRows(root) merges live + year archives in
-// read order — verified by code read at plan time. --append's duplicate check and --amend's
-// key search both route through it, so neither can miss a row living only in an archive.
 function requireDir(dir, label) {
   let st = null
   try { st = fs.statSync(dir) } catch { st = null }
@@ -117,6 +89,15 @@ function appendLine(root, row) {
   fs.appendFileSync(ledgerPath, sep + JSON.stringify(row) + '\n')
 }
 
+function rowObject(value, label) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    console.error(`escape-row.js: ${label} must be a JSON object`)
+    usage()
+    process.exit(2)
+  }
+  return value
+}
+
 if (mode === 'check') {
   if ((rowArg === null) === (fileArg === null)) {
     console.error('escape-row.js: --check needs exactly one of --row <json> or --file <path>')
@@ -135,79 +116,42 @@ if (mode === 'check') {
       process.exit(2)
     }
   }
-  const row = parseJson(text, rowArg !== null ? '--row' : `--file ${fileArg}`)
-  let reasons
-  if (row.stage === 'escape') reasons = validateEscapeRow(row)
-  else if (row.stage === 'escape-class') reasons = validateAmendmentRow(row)
-  else {
-    console.error(`escape-row.js: --check row must carry stage:"escape" or stage:"escape-class", got ${JSON.stringify(row.stage)}`)
+  const label = rowArg !== null ? '--row' : `--file ${fileArg}`
+  const row = rowObject(parseJson(text, label), label)
+  if (row.stage !== 'escape') {
+    console.error(`escape-row.js: --check row must carry stage:"escape", got ${JSON.stringify(row.stage)}`)
     usage()
     process.exit(2)
   }
-  if (reasons.length) { printReasons(reasons); process.exit(1) }
-  process.exit(0)
-}
-
-if (mode === 'append') {
-  if (rootArg === null || rowArg === null) { usage(); process.exit(2) }
-  requireDir(rootArg, '--root')
-  const root = path.resolve(rootArg)
-  const row = parseJson(rowArg, '--row')
   const reasons = validateEscapeRow(row)
   if (reasons.length) { printReasons(reasons); process.exit(1) }
-  const existing = readLedgerRows(root)
-  const duplicate = existing.some(r => r.stage === 'escape' && r.spec === row.spec && r.file === row.file)
-  if (duplicate && !allowDuplicate) {
-    console.error(
-      `escape-row.js: an escape row with spec=${row.spec} file=${row.file} already exists in ${root}'s ledger — ` +
-      'compare the existing row to this diagnosis (escape.md step 5); a distinct defect re-runs with --allow-duplicate'
-    )
-    process.exit(3)
-  }
-  appendLine(root, row)
-  // The key the fleet reader's `owed`
-  // query joins citations against — derived here, never hand-composed by the session that
-  // copies it into its report. basename(resolved --root) is the population name fleet-reader.js
-  // itself keys repos by; the row's OWN ts (never an amendment's) plus file make it unique
-  // fleet-wide.
-  const key = `escape:${path.basename(root)}:${row.ts}:${row.file}`
-  console.log(`appended spec=${row.spec} file=${row.file} key=${key}`)
   process.exit(0)
 }
 
-// mode === 'amend'
-if (rootArg === null || escapeTsArg === null || specArg === null || fileFieldArg === null) { usage(); process.exit(2) }
-if ((classArg === null) === (reasonArg === null)) {
-  console.error('escape-row.js: --amend needs exactly one of --class <id> or --unclassed-reason no-fix-diff|deferred')
-  usage()
-  process.exit(2)
-}
+// mode === 'append'
+if (rootArg === null || rowArg === null) { usage(); process.exit(2) }
 requireDir(rootArg, '--root')
 const root = path.resolve(rootArg)
-const via = viaArg || 'manual'
-const amendment = {
-  ts: new Date().toISOString(),
-  stage: 'escape-class',
-  spec: specArg,
-  file: fileFieldArg,
-  escapeTs: escapeTsArg,
-  class: classArg !== null ? classArg : null,
-  unclassedReason: reasonArg !== null ? reasonArg : null,
-  via,
-}
-const amendReasons = validateAmendmentRow(amendment)
-if (amendReasons.length) { printReasons(amendReasons); process.exit(1) }
+const row = rowObject(parseJson(rowArg, '--row'), '--row')
+const reasons = validateEscapeRow(row)
+if (reasons.length) { printReasons(reasons); process.exit(1) }
 
-const rows = readLedgerRows(root)
-const matched = rows.some(r => r.stage === 'escape' && r.ts === escapeTsArg && r.spec === specArg && r.file === fileFieldArg)
-if (!matched) {
+// readLedgerRows(root) merges live + year archives, so a row living only in an archive still
+// counts toward the duplicate refusal.
+const newFiles = escapeFiles(row)
+let shared = null
+for (const r of readLedgerRows(root)) {
+  if (r.stage !== 'escape' || r.spec !== row.spec) continue
+  const hit = escapeFiles(r).find(f => newFiles.includes(f))
+  if (hit !== undefined) { shared = hit; break }
+}
+if (shared !== null && !allowDuplicate) {
   console.error(
-    `escape-row.js: no escape row with key (escapeTs=${escapeTsArg}, spec=${specArg}, file=${fileFieldArg}) found in ${root}'s ` +
-    'ledger — confirm the escapeTs/spec/file exactly match an existing stage:"escape" row (searched: ' +
-    `escapeTs=${escapeTsArg} spec=${specArg} file=${fileFieldArg})`
+    `escape-row.js: an escape row with spec=${row.spec} already names file ${shared} in ${root}'s ledger — ` +
+    'compare it to this diagnosis; a distinct defect re-runs with --allow-duplicate'
   )
   process.exit(3)
 }
-appendLine(root, amendment)
-console.log(`amended escapeTs=${amendment.escapeTs} spec=${amendment.spec} file=${amendment.file} class=${amendment.class === null ? 'null' : amendment.class}`)
+appendLine(root, row)
+console.log(`appended spec=${row.spec} files=${newFiles.length} reviewRunId=${row.reviewRunId === undefined || row.reviewRunId === null ? 'null' : row.reviewRunId}`)
 process.exit(0)

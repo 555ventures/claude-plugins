@@ -14,8 +14,8 @@ once and keep the printed path — it is `{driver}` below.
 ## Input
 
 `$ARGUMENTS` — path to a spec with `status: implementing`; one that already closed
-(`status: done`) is refused (exit 2) — `/spec:escape` records a defect that escaped a review
-that already passed. `/spec:run` is this driver's only entry point, and runs the same
+(`status: done`) is refused (exit 2) — `/spec:fix` repairs a defect that escaped a review
+that already passed — its commit records the escape row. `/spec:run` is this driver's only entry point, and runs the same
 DISPOSITIONS protocol below — see `spec/commands/run.md`'s Review stage.
 
 ## Protocol — the driver owns the state machine

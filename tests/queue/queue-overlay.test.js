@@ -345,7 +345,7 @@ test('spec-status.js --next --json survives a real pipe intact at a fixture size
     'the parsed --next JSON received over the pipe must carry its documented top-level "next" array — a truncated payload would either fail JSON.parse above or land here without it: ' + JSON.stringify(parsed))
 })
 
-test('AC-20260823-08-15 / AC-20260903-03-10: a red-observation escape entry keeps rank supremacy above every queue position', () => {
+test('AC-20261025-01-15 / AC-20260823-08-15 / AC-20260903-03-10: a red-observation /spec:fix entry keeps rank supremacy above every queue position', () => {
   const dir = fs.realpathSync(tmpdir('queue-escape'))
   gitRepo(dir)
   fs.mkdirSync(path.join(dir, 'docs/roadmap'), { recursive: true })
@@ -366,10 +366,10 @@ test('AC-20260823-08-15 / AC-20260903-03-10: a red-observation escape entry keep
   }))
 
   const j = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
-  assert.strictEqual(j.next[0].action, '/spec:escape',
+  assert.strictEqual(j.next[0].action, '/spec:fix',
     'D10: a red observation must outrank every queue position — the queue orders work, it never silences an alarm: ' + JSON.stringify(j.next))
   assert.strictEqual(j.next[0].path, specPath,
-    'the escape entry at rank 0 must point at the red spec itself, not a queue-derived pick: ' + JSON.stringify(j.next[0]))
+    'the /spec:fix entry at rank 0 must point at the red spec itself, not a queue-derived pick: ' + JSON.stringify(j.next[0]))
 })
 
 // One-line open-work rows: a free-text queue payload runs to hundreds of words, and printing

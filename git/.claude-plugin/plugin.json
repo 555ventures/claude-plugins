@@ -1,7 +1,7 @@
 {
   "name": "git",
-  "version": "1.10.0",
-  "description": "Git helpers: a fast add-all-and-commit flow, a guided merge with conflict repair and worktree cleanup, and idempotent per-spec worktree entry. Changelog (last 3): 1.10.0 — Commit's step 3 asks which row a fix commit earns: an escape of the spec whose review passed the lines, or a stage:\"fix\" row naming this commit's sha and files for a Direct-lane repair (recommended when /spec:fix invoked it); fix commits that no spec landed get the fix-row offer only when /spec:fix is the invoker. 1.9.0 — /git:merge refuses proto/* naming the prototype's behaviour contract (design/prototypes/<stem>/contract.json) and /spec:plan as the next step; the harden/* refusal is gone (specs/20261007/01 D10). 1.8.0 — enter-worktree no longer runs host setup by hand: merge-back create owns it, plus a committed-spec check through --spec.",
+  "version": "1.11.0",
+  "description": "Git helpers: a fast add-all-and-commit flow, a guided merge with conflict repair and worktree cleanup, and idempotent per-spec worktree entry. Changelog (last 3): 1.11.0 — Commit's step 3 writes the escape row itself for a fix commit that touches spec-landed lines (one row per commit through escape-row.js --append; the defect class is the only question) and keeps the stage:\"fix\" row for commits no spec landed. 1.10.0 — Commit's step 3 asks which row a fix commit earns: an escape of the spec whose review passed the lines, or a stage:\"fix\" row naming this commit's sha and files for a Direct-lane repair (recommended when /spec:fix invoked it); fix commits that no spec landed get the fix-row offer only when /spec:fix is the invoker. 1.9.0 — /git:merge refuses proto/* naming the prototype's behaviour contract (design/prototypes/<stem>/contract.json) and /spec:plan as the next step; the harden/* refusal is gone (specs/20261007/01 D10).",
   "author": {
     "name": "JJ",
     "email": "jj@555.ventures"

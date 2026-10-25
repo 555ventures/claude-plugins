@@ -440,7 +440,7 @@ test('AC-20260901-10-4: --next orders closest-to-done first (both implementing a
 })
 
 // AC-20260901-10-6 (D5): the --json action set shrinks from five strings to three —
-// /spec:plan | /spec:run | /spec:escape — with /spec:design, /spec:build, and /spec:review
+// /spec:plan | /spec:run | /spec:fix — with /spec:design, /spec:build, and /spec:review
 // never emitted. Two hosts, not one: spec-status.js's own fallback gate (line ~510,
 // `if (readyBriefs.length && !entries.some(e => !e.blockers.length))`) only ever adds a
 // /spec:plan entry when NO other entry is unblocked, and /spec:run/​/spec:escape entries are
@@ -452,7 +452,7 @@ test('AC-20260901-10-4: --next orders closest-to-done first (both implementing a
 // Host B carries only a done spec, so the unplanned dependency-met brief 03 is the sole
 // (fallback) pick. Both hosts assert the negative — the forbidden three never appear — and
 // together they cover the positive presence of all three surviving actions.
-test(`AC-20260901-10-6: --json emits only /spec:plan | /spec:run | /spec:escape action values, never ${RETIRED_DESIGN}, ${RETIRED_BUILD}, or ${RETIRED_REVIEW}`, () => {
+test(`AC-20261025-01-14 / AC-20260901-10-6: --json emits only /spec:plan | /spec:run | /spec:fix action values, never ${RETIRED_DESIGN}, ${RETIRED_BUILD}, or ${RETIRED_REVIEW}`, () => {
   const dirA = host({
     briefs: BRIEFS,
     specs: {
@@ -482,15 +482,15 @@ test(`AC-20260901-10-6: --json emits only /spec:plan | /spec:run | /spec:escape 
 
   for (const [label, actions, j] of [['A', actionsA, jA], ['B', actionsB, jB]]) {
     for (const forbidden of [RETIRED_DESIGN, RETIRED_BUILD, RETIRED_REVIEW]) {
-      assert.ok(!actions.has(forbidden), `AC-20260901-10-6/D5: the --json action set must never emit ${forbidden} — the frozen set shrinks to /spec:plan | /spec:run | /spec:escape (host ${label}): ${JSON.stringify([...actions])}`)
+      assert.ok(!actions.has(forbidden), `AC-20260901-10-6/D5: the --json action set must never emit ${forbidden} — the frozen set is /spec:plan | /spec:run | /spec:fix (host ${label}): ${JSON.stringify([...actions])}`)
     }
     for (const a of actions) {
-      assert.ok(['/spec:plan', '/spec:run', '/spec:escape'].includes(a),
-        `AC-20260901-10-6/D5: every --json action value must be one of /spec:plan, /spec:run, or /spec:escape — got ${a} (host ${label}): ${JSON.stringify(j.next)}`)
+      assert.ok(['/spec:plan', '/spec:run', '/spec:fix'].includes(a),
+        `AC-20261025-01-14/D6: every --json action value must be one of /spec:plan, /spec:run, or /spec:fix — got ${a} (host ${label}): ${JSON.stringify(j.next)}`)
     }
   }
   assert.ok(actionsA.has('/spec:run'), 'AC-20260901-10-6/D5: the hardened and implementing specs must both surface as /spec:run entries: ' + JSON.stringify(jA.next))
-  assert.ok(actionsA.has('/spec:escape'), 'AC-20260901-10-6/D5: the red-observation ledger row for the done spec must surface as an /spec:escape entry: ' + JSON.stringify(jA.next))
+  assert.ok(actionsA.has('/spec:fix'), 'AC-20261025-01-14/D6: the red-observation ledger row for the done spec must surface as a /spec:fix entry: ' + JSON.stringify(jA.next))
   assert.ok(actionsB.has('/spec:plan'), 'AC-20260901-10-6/D5: brief 03\'s unplanned, dependency-met status must surface as the fallback /spec:plan pick once every spec is done: ' + JSON.stringify(jB.next))
 })
 
@@ -670,7 +670,7 @@ test('AC-20260909-08-1: default render prints the ⚡ lane header + both lane co
 })
 
 // D1(a)+(b): an escape entry ranks first, then the lane render, never duplicated elsewhere.
-test('AC-20260909-08-4: default render prints /spec:escape first, then the lane header and both lane commands, with the escape line exactly once total', () => {
+test('AC-20260909-08-4: default render prints /spec:fix first, then the lane header and both lane commands, with the fix line exactly once total', () => {
   const dir = host({
     briefs: PARALLEL_BRIEFS,
     specs: {
@@ -686,12 +686,12 @@ test('AC-20260909-08-4: default render prints /spec:escape first, then the lane 
   const lines = r.stdout.split('\n')
   const idxNext = lines.findIndex(l => l.includes('🎯 Next'))
   assert.deepStrictEqual(lines.slice(idxNext + 1, lines.indexOf('', idxNext + 1)), [
-    `/spec:escape @${redSpecPath}`,
+    `/spec:fix @${redSpecPath}`,
     '⚡ 2 parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):',
     '/spec:run @specs/20260710/01-x.md', '/spec:run @specs/20260710/02-y.md',
   ], 'D1(a)+(b): escape line first, then the lane header + both lane commands, all inside the Next block: ' + r.stdout)
-  const escapeOccurrences = r.stdout.split('\n').filter(l => l === `/spec:escape @${redSpecPath}`).length
-  assert.strictEqual(escapeOccurrences, 1, 'the /spec:escape line must print exactly once — never duplicated inside the lane list: ' + r.stdout)
+  const escapeOccurrences = r.stdout.split('\n').filter(l => l === `/spec:fix @${redSpecPath}`).length
+  assert.strictEqual(escapeOccurrences, 1, 'the /spec:fix line must print exactly once — never duplicated inside the lane list: ' + r.stdout)
 })
 
 // merge-conflict heads-up: parallel lanes are independently safe by brief, but
@@ -1277,7 +1277,7 @@ test('AC-20261007-03-8: WHEN a prototype-open anomaly is listed THE SYSTEM keeps
   assert.strictEqual(r.status, 0, 'status --next --json must derive: ' + r.stderr)
   const next = JSON.parse(r.stdout).next
   for (const e of next) {
-    assert.ok(['/spec:plan', '/spec:run', '/spec:escape'].includes(e.action),
+    assert.ok(['/spec:plan', '/spec:run', '/spec:fix'].includes(e.action),
       'the three action strings are frozen — a prototype close must never become a fourth: ' + JSON.stringify(e))
   }
   assert.ok(!JSON.stringify(next).includes('prototype-open'), 'the anomaly is a hygiene line, never a next entry: ' + JSON.stringify(next))

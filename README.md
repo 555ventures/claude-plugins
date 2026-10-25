@@ -118,8 +118,9 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
   something feels stale. A hook also auto-warns when generated files go stale.
 - **`/spec:enforce`** — re-mechanize your rules into deterministic checks when rules or tooling
   change (init runs it the first time).
-- **`/spec:escape`** — record a defect that slipped past review; `/git:commit` offers to capture
-  one automatically on fix-shaped commits. This keeps the review layer honest.
+- **The escape row is automatic.** When a fix commit touches lines a reviewed spec landed,
+  `/git:commit` writes the escape row itself — at most one skippable question, the defect class.
+  This keeps the review layer honest.
 
 ## Command reference
 
@@ -136,10 +137,9 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 | `/spec:status` | Where the work stands + the one command to paste next; `--all` adds lanes, blocked list, hygiene | Anytime you are lost |
 | `/spec:queue` | Your intended work order across briefs and specs — the one thing the pipeline cannot derive | When the order matters |
 | `/spec:doctor` | Drift + ledger check; `--fix` repairs with approval | When things feel off |
-| `/spec:escape` | Record a defect that slipped past review | When one surfaces |
 | `/spec:enforce` | Turn rules into deterministic checks | On rule/tooling change |
 | `claude plugin eval ./spec` | The plugin's eval suite: proves a fresh session picks the commands on plain phrasing and runs their scripts, scored against a no-plugin baseline — see [`spec/evals/README.md`](spec/evals/README.md) | After a command or skill-description change; never in the gate (each run is paid) |
-| `/git:commit`, `/git:merge` | Add-all-commit (with escape capture); guided merge | Anytime |
+| `/git:commit`, `/git:merge` | Add-all-commit (writes the escape row on fix commits); guided merge | Anytime |
 | `/git:enter-worktree` | Manually enter or repair a spec's worktree — `/spec:run` opens it automatically | If `/spec:run`'s isolation step fails, or to re-enter by hand |
 
 ## What makes it different
@@ -153,7 +153,7 @@ elsewhere:
 - **The review must execute, not read.** Elsewhere "review" is a model reading a diff; here the
   reviewer runs the tests and boots the app before a verdict counts. Independent testing of Spec
   Kit found exactly this gap — good planning artifacts, code that drifts from spec intent.
-- **The review layer is falsifiable.** `/spec:escape` records defects that slipped past a CLEAN
+- **The review layer is falsifiable.** `/git:commit` records the escape row for defects that slipped past a CLEAN
   verdict, and guards that don't earn their keep on ledger evidence get retired. No other tool
   keeps score on its own review process.
 - **Model economics are encoded.** Expensive model authors and judges, cheap models type behind

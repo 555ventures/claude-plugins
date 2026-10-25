@@ -216,11 +216,11 @@ unmatched check against the repo's escape keys.
   runs and R's ledger holds an escape row with `ts:T, spec:S, file:F` THE SYSTEM SHALL append
   one `stage:"escape-class"` row carrying `escapeTs:T, spec:S, file:F, class:"silent-fallback",
   unclassedReason:null, via:"manual"` (default) and an ISO `ts`, print `amended escapeTs=T
-  spec=S file=F class=silent-fallback`, exit 0 → `tests/escape/escape-row.test.js`
+  spec=S file=F class=silent-fallback`, exit 0 → `tests/escape/escape-row.test.js` [retired: specs/20261025/01-the-commit-writes-the-escape-row.md]
 - **AC-20260901-07-6**: WHEN `--amend`'s key matches no escape row in R (wrong `escapeTs`,
   or the row lives in a different root) THE SYSTEM SHALL exit 3, append nothing, and print the
   searched key on stderr; `--unclassed-reason no-fix-diff` with `--via backfill` appends
-  `class:null, unclassedReason:"no-fix-diff", via:"backfill"` → `tests/escape/escape-row.test.js`
+  `class:null, unclassedReason:"no-fix-diff", via:"backfill"` → `tests/escape/escape-row.test.js` [retired: specs/20261025/01-the-commit-writes-the-escape-row.md]
 - **AC-20260901-07-7**: WHEN `--amend` receives both `--class` and `--unclassed-reason`, or
   neither, or `--root` names a non-directory THE SYSTEM SHALL exit 2 with the usage line on
   stderr; `--class Bad_Id` → exit 1 printing `class-malformed` → `tests/escape/escape-row.test.js`

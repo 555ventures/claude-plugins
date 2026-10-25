@@ -84,7 +84,7 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 
 // AC-20260901-07-15: specs/20260901/07-escape-class-contract.md D10 adds spec/scripts/escape-row.js
 // to the bundle (a new `escape-row` key) — like every other bundled script it needs a spec-paths
-// key, or escape.md's D6 `node "$(spec-paths escape-row)" --append/--amend` invocations resolve
+// key, or the commit command's `node "$(spec-paths escape-row)" --append/--amend` invocations resolve
 // nothing (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently"; same
 // additive-collision class as AC-20260819-02-10 above).
 
@@ -212,7 +212,7 @@ test('AC-20260901-07-15: spec-paths escape-row resolves to spec/scripts/escape-r
   const fs = require('node:fs')
   const escapeRowPath = run('escape-row').trim()
   assert.strictEqual(escapeRowPath, path.join(SPEC, 'scripts/escape-row.js'),
-    'D2/D10: `spec-paths escape-row` must resolve to spec/scripts/escape-row.js — a wrong or missing key breaks escape.md\'s D6 --append/--amend invocations silently (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently")')
+    'D2/D10: `spec-paths escape-row` must resolve to spec/scripts/escape-row.js — a wrong or missing key breaks the commit command\'s escape-row invocation silently (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently")')
   assert.ok(fs.existsSync(escapeRowPath), 'the resolved escape-row.js path must actually exist on disk: ' + escapeRowPath)
   assert.ok(fs.statSync(escapeRowPath).isFile(), 'the resolved escape-row.js path must be a regular file, not a directory or missing entirely: ' + escapeRowPath)
 })
@@ -296,12 +296,6 @@ test('shared-for: every mapped section name still exists as a core.md or design.
 // next-line content in shared.md. This awk-based section extraction already passes comment
 // lines through unchanged (it filters on `## ` headings only, never on line content), so this
 // coverage stays green across the marker landing — the regression pin the AC calls for.
-// AC-20260820-05-17 (regression pin, specs/20260820/05-fleet-evidence-reader.md): D7 of that
-// spec rewrites `## Incident Policy` in spec/doctrine/core.md — the section escape.md derives
-// its defect-class and recurrence rules from. This test's existing
-// `run('shared-for', 'escape')` / Incident Policy assert below is the oracle that `shared-for
-// escape` keeps serving that section after D7 lands — tagged here rather than duplicated, per
-// that spec's File Plan.
 // specs/20260912/03-run-isolates-and-owns-the-stages.md D13 (AC-20260912-03-13): design, build
 // and review are retired from this scoped-output roster — their shared-for keys fall open to
 // the whole-doctrine fallback now (their own dedicated fail-open pin lives in the "shared-for:
@@ -315,9 +309,9 @@ test('shared-for: every mapped section name still exists as a core.md or design.
 // in place): `sketch` joins the fail-open group below (its SECTIONS arm is deleted) and drops
 // out of the strict-subset loop that used to check it; the 12 remaining scoped commands' section
 // lists are unchanged from the pre-image.
-test('shared-for: scoped output carries its sections (AC-20260926-01-6) and is smaller than the full doc, and the retired stage/sketch keys fall open to it (incl. AC-20260820-05-17: escape keeps serving Incident Policy; AC-20260823-01-19: release keeps Release Stage/Runtime Verification and drops Feedback Loop; AC-20260912-03-13: design, build and review print the fail-open whole doctrine)', () => {
+test('shared-for: scoped output carries its sections (AC-20260926-01-6) and is smaller than the full doc, and the retired stage/sketch keys fall open to it (incl. AC-20260823-01-19: release keeps Release Stage/Runtime Verification and drops Feedback Loop; AC-20260912-03-13: design, build and review print the fail-open whole doctrine)', () => {
   const full = run('shared-for', 'no-such-command')
-  for (const cmd of ['plan', 'release', 'enforce', 'escape', 'doctor', 'queue', 'fix']) {
+  for (const cmd of ['plan', 'release', 'enforce', 'doctor', 'queue', 'fix']) {
     const out = run('shared-for', cmd)
     assert.ok(out.length < full.length, cmd + ' output should be a strict subset')
     assert.match(out, /## Host Grounding/, cmd + ' must keep Host Grounding')
@@ -337,10 +331,11 @@ test('shared-for: scoped output carries its sections (AC-20260926-01-6) and is s
   // dedicated `atlas` SECTIONS map) is gone. Retired, never weakened into passing.
   // AC-20260926-01-6: `sketch` joins this same fail-open group — D1 deletes its SECTIONS arm
   // outright, so its scoped output must now retire to the exact fail-open line count too.
-  for (const cmd of ['design', 'build', 'review', 'atlas', 'sketch']) {
+  // AC-20261025-01-6/D11: `escape` joins this group — its arm is deleted with the command.
+  for (const cmd of ['design', 'build', 'review', 'atlas', 'sketch', 'escape']) {
     const got = run('shared-for', cmd).split('\n').length
     assert.strictEqual(got, fallbackLines,
-      'D13/AC-20260926-01-6: shared-for ' + cmd + ' must retire to the exact fail-open line count ' +
+      'D13/AC-20260926-01-6/AC-20261025-01-6: shared-for ' + cmd + ' must retire to the exact fail-open line count ' +
       'once its SECTIONS arm is deleted — a still-scoped or partially-scoped output here means the ' +
       'retired key was left half-wired, which `shared-for` "silently drops" instead of erroring on ' +
       '(§ Review Checks): got ' + got + ', fallback is ' + fallbackLines)
@@ -368,10 +363,6 @@ test('shared-for: scoped output carries its sections (AC-20260926-01-6) and is s
     'drops "Feedback Loop" now that the feedback-brief flush is retired, so a surviving citation ' +
     'here would mean the doc still tells the session to read doctrine for a step that no longer ' +
     'exists: ' + run('shared-for', 'release'))
-  assert.match(run('shared-for', 'escape'), /## Feedback Loop/,
-    'escape IS the Emit leg — it writes preventedBy rows and Gotchas tags')
-  assert.match(run('shared-for', 'escape'), /## Incident Policy/,
-    'escape derives its defect-class and recurrence rules from Incident Policy — shared-for filtering silently drops a mismatched section, so escape would run without the policy it is supposed to apply (AC-20260820-05-17)')
   assert.ok(!/## Design (Canon|Authoring Contracts|Render Gate)/.test(run('shared-for', 'doctor')),
     'doctor must not pay for design doctrine — check 8 only verifies design files exist')
   assert.match(run('shared-for', 'doctor'), /## Grounding Drift/)
@@ -611,7 +602,7 @@ test('shared-for init: scoped (not fail-open) and strictly smaller than the whol
 // exists to find zero occurrences of elsewhere.
 const RUN_DESIGN_KEY = 'run-' + 'design'
 
-test('shared-for: every scoped command serves § Session Execution (AC-20260926-01-5; AC-20260928-01-2 adds prototype), and the scoped roster has exactly 14 members (AC-20261008-01-1: connect joins; /spec:fix joins; AC-20261024-05-3: replay leaves) with neither sketch nor the design-only-delta key among them', () => {
+test('shared-for: every scoped command serves § Session Execution (AC-20260926-01-5; AC-20260928-01-2 adds prototype), and the scoped roster has exactly 13 members (AC-20261008-01-1: connect joins; /spec:fix joins; AC-20261024-05-3: replay leaves; AC-20261025-01-6: escape leaves) with neither sketch nor the design-only-delta key among them', () => {
   const src = read('spec/bin/spec-paths')
   const cmds = [...src.matchAll(/^\s+([a-z-]+)\)\s+SECTIONS="/gm)].map(m => m[1])
   assert.ok(!cmds.includes('sketch'),
@@ -620,8 +611,8 @@ test('shared-for: every scoped command serves § Session Execution (AC-20260926-
   assert.ok(!cmds.includes(RUN_DESIGN_KEY),
     'AC-20260926-01-5/D1: the scoped roster must not include the design-only-delta key — its ' +
     'SECTIONS arm is deleted, falling open to the whole doctrine like every unknown command: ' + cmds.join(','))
-  assert.strictEqual(cmds.length, 14,
-    'AC-20260926-01-5 + AC-20260928-01-2: with the sketch and design-only-delta arms deleted and the prototype arm added, exactly 14 scoped (connect joins, AC-20261008-01-1; fix joins, spec/commands/fix.md; replay leaves, AC-20261024-05-3) ' +
+  assert.strictEqual(cmds.length, 13,
+    'AC-20260926-01-5 + AC-20260928-01-2: with the sketch and design-only-delta arms deleted and the prototype arm added, exactly 13 scoped (connect joins, AC-20261008-01-1; fix joins, spec/commands/fix.md; replay leaves, AC-20261024-05-3; escape leaves, AC-20261025-01-6) ' +
     'command arms (A1, executed at lock) — got ' + cmds.length + ': ' + cmds.join(','))
   assert.ok(cmds.includes('fix'),
     'spec/commands/fix.md: the scoped roster must include "fix" — otherwise /spec:fix loads both whole doctrine files instead of its nine sections')

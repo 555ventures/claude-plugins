@@ -408,7 +408,7 @@ test('AC-20260820-07-12 (also AC-20260821-04-9, AC-20260823-07-6, AC-20260830-02
 // gateCommand that SIGKILLs review-legs.js itself via the `bash -c` tail-exec trick, which the
 // OLD driver let through as `state: REVIEWER` over a manifest nobody wrote. R8: a cold invocation
 // on a spec already `status: done` whose sidecar carries no closeRunId of ITS OWN run is refused
-// (exit 2, names /spec:escape) rather than silently re-walking a review that records nothing —
+// (exit 2, names /spec:fix) rather than silently re-walking a review that records nothing —
 // note this refusal fires only when the sidecar directory exists (a stray/hand-recreated
 // artifact); a `done` spec with NO sidecar at all stays the legitimate post-merge DONE fast path
 // (R2 arm (a), unaffected). R10: the CLOSE step's close-commit instruction now excludes the
@@ -528,7 +528,7 @@ function makeDoneHost() {
   return { root, spec, sidecar: spec.replace(/\.md$/, '.review') }
 }
 
-test('AC-20260820-07-15: WHEN a done spec\'s sidecar exists but does not record this run\'s own closeRunId THE SYSTEM refuses (exit 2, names /spec:escape) and appends no ledger line, in BOTH an empty hand-recreated sidecar and one carrying stray marks with no closeRunId', () => {
+test('AC-20261025-01-9 / AC-20260820-07-15: WHEN a done spec\'s sidecar exists but does not record this run\'s own closeRunId THE SYSTEM refuses (exit 2, names /spec:fix and the escape row, never /spec:escape) and appends no ledger line, in BOTH an empty hand-recreated sidecar and one carrying stray marks with no closeRunId', () => {
   const host = makeDoneHost()
   const ledger = path.join(host.root, '.claude/spec-runs.jsonl')
   const ledgerSnap = () => (fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8') : '')
@@ -539,8 +539,12 @@ test('AC-20260820-07-15: WHEN a done spec\'s sidecar exists but does not record 
   const r1 = run(host.root, host.spec)
   assert.strictEqual(r1.status, 2,
     'a done spec whose sidecar carries no closeRunId of its own must be refused, not walked as a fresh review that would record nothing: ' + r1.stdout + r1.stderr)
-  assert.match(r1.stderr, /\/spec:escape/,
-    'the refusal must name /spec:escape as the remedy — that command exists precisely to record a defect escaping an already-passed review: ' + r1.stderr)
+  assert.match(r1.stderr, /\/spec:fix/,
+    'the refusal must name /spec:fix as the remedy — the lane whose commit records the defect escaping an already-passed review: ' + r1.stderr)
+  assert.match(r1.stderr, /escape row/,
+    'the refusal must say the fix commit records the escape row, or the caller cannot tell what the remedy does: ' + r1.stderr)
+  assert.doesNotMatch(r1.stderr, /\/spec:escape/,
+    'the refusal must never name the deleted /spec:escape command — a remedy naming a command that does not exist strands the caller: ' + r1.stderr)
   assert.strictEqual(ledgerSnap(), before1,
     'the refused cold invocation must append NO ledger line — the old bug was a full review walk over a done spec recording nothing while looking like a real run: ' + JSON.stringify({ before: before1, after: ledgerSnap() }))
 
@@ -551,8 +555,12 @@ test('AC-20260820-07-15: WHEN a done spec\'s sidecar exists but does not record 
   const r2 = run(host.root, host.spec)
   assert.strictEqual(r2.status, 2,
     'a sidecar carrying OTHER marks but still no closeRunId must be refused the same way — closeRunId, not sidecar existence alone, is the signal that THIS run already closed: ' + r2.stdout + r2.stderr)
-  assert.match(r2.stderr, /\/spec:escape/,
-    'this case must also name /spec:escape: ' + r2.stderr)
+  assert.match(r2.stderr, /\/spec:fix/,
+    'this case must also name /spec:fix: ' + r2.stderr)
+  assert.match(r2.stderr, /escape row/,
+    'this case must also mention the escape row: ' + r2.stderr)
+  assert.doesNotMatch(r2.stderr, /\/spec:escape/,
+    'this case must also never name the deleted /spec:escape command: ' + r2.stderr)
   assert.strictEqual(ledgerSnap(), before2,
     'this case must also append no ledger line: ' + JSON.stringify({ before: before2, after: ledgerSnap() }))
 

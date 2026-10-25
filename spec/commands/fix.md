@@ -10,7 +10,7 @@ the host's `layerGroups` or touching text a user sees in the product; inside one
 is a plain commit. Behaviour is new — not a repair — only when no existing doc, test, type or mock
 states it; new behaviour, a new screen or an unmade product decision STOPs here naming `/spec:plan`
 (or `/spec:prototype`). No driver, no gate, no File Plan; its one ledger row is the `stage:"fix"`
-row `/git:commit` step 3 writes.
+row, or the escape row when the commit touches lines a reviewed spec landed — `/git:commit` step 3 writes it.
 
 **Setup:** run `spec-paths shared-for fix` and read its output. Read the host's
 `.claude/spec.config.json` (`gateCommand`, `testCommand`, `layerGroups`, `pipelineRules`).
@@ -55,10 +55,10 @@ continue; nothing identifiable → ask for the symptom, the only unrecoverable i
    undisposed. A `REVIEWER_FAILED` return is re-dispatched once, then reported as unreviewed.
 5. **Gate and commit.** Run the host's `gateCommand`; red → fix, never commit around it. Commit
    through `/git:commit` in this same session, root-cause statement as the body, stating that the
-   invoker is `/spec:fix` and whether step 4 completed — its step 3 offers the fix row.
+   invoker is `/spec:fix` and whether step 4 completed — its step 3 writes the escape row or the fix row.
 6. **Report** (core § Console Output Style, rendered via `spec-paths report-render`): `outcome`
    ✅ `fixed — {symptom}`; `bullets`: the root-cause line, the test added, `{N} reviewer findings
-   disposed` (or `unreviewed`), and `fix row appended — lands with the next commit` when one
+   disposed` (or `unreviewed`), and `fix row appended` or `escape row appended` (either lands with the next commit) when one
    was; `next`: `node "$(spec-paths spec-status)" --root . --next` verbatim as
    `{kind: 'status-verbatim'}`.
 

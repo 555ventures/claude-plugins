@@ -121,7 +121,7 @@
 // no exit code — signal-killed, never spawned, or maxBuffer-overflowed — via runChild()'s
 // fail-closed refusal, a legs iteration reporting success with a missing/empty manifest, or a
 // cold invocation on a spec already marked status: done whose sidecar carries no closeRunId of
-// its own (use /spec:escape instead), `--mark closed` while the deviations sidecar still exists on disk
+// its own (use /spec:fix instead), `--mark closed` while the deviations sidecar still exists on disk
 // (fold-then-delete-then-commit remedy), or while the last persisted deviations observation
 // recorded a malformed line even after the sidecar's own deletion (restore-then-repair remedy), a
 // resolved base ref that `git rev-parse --verify <ref>^{commit}` cannot turn into a commit —
@@ -596,8 +596,8 @@ if (!sidecarExistsAtStart && status === 'done') {
 // must keep flowing to MERGE/DONE below — unaffected by this check.
 if (status === 'done' && !marks.closeRunId) {
   die('spec status is already "done" and ' + sidecarRel + ' does not record this run\'s own ' +
-    'close — the authoritative verdict for this spec already ran; use /spec:escape to record a ' +
-    'defect that escaped a review that already passed, not another review run')
+    'close — the authoritative verdict for this spec already ran; use /spec:fix to repair a ' +
+    'defect that escaped a review that already passed — its commit records the escape row — not another review run')
 }
 
 // `via` recorded once, at

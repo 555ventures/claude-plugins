@@ -1,12 +1,14 @@
 ---
 date: 2026-10-25
-status: hardened
+status: implementing
+build_base: main
 tier: critical           # spec-status.js's frozen --json action set changes (host rules § Risk Tiers)
 area: cross-cutting
 breaking: true           # the /spec:escape command is deleted; the escape row loses six fields
 depends_on: []
 brief: n/a
 open_markers: 0
+diff_base: 571def24b747360c067fd705c25dbd33d3d37744
 ---
 
 # The commit writes the escape row; /spec:escape retires
@@ -37,6 +39,7 @@ command, doctrine or status line names `/spec:escape`.
 | D8 | `init-gen.js`'s generated Gotchas header says `Writers: the review stage's close step only.`; the escape flow writes no Gotchas entry and no Review Checks row. Hosts re-stamp with `/spec:doctor`. (AC-20261025-01-10) | The prevention-delta write was the old command's step 6; with the command gone the review close is the only Gotchas writer. |
 | D9 | The `stage:"fix"` row is unchanged and is written exactly when `landed` is empty and the invoker is `/spec:fix`; a commit never earns both rows. `core.md` § Pipeline Entry's Direct-lane sentence reads "the commit-time escape row still lands", § Feedback Loop says a fix commit touching spec-landed lines records the escape row (`/git:commit` step 3) and keeps the sentence `The **escape ledger** is the pipeline's one ground-truth signal.` verbatim. (AC-20261025-01-11, AC-20261025-01-12) | Two rows for one commit would double-count a repair; the doctrine sentence is pinned by an existing test. |
 | D10 | Readers of the escape ledger (`fleet-reader.js`, `commit-coverage.js`'s window and fleet modes, `doctor.md`'s preventedBy and backfill bullets, `release.md`'s prescription) are sibling spec `specs/20261025/02`'s File Plan; this spec leaves `lib/escape-row.js`'s `escapeKey`, `joinAmendments` and `validateAmendmentRow` exported so the reader keeps running until 02 lands. `[no-ac: the reader side is the sibling's deliverable; this row only states the landing-unit boundary]` | Writer first, reader second: each spec leaves the tree green. |
+| D11 | With its arm deleted (D5), `spec-paths shared-for escape` falls open to the whole-doctrine output with exit 0, exactly like every other retired `shared-for` key (design, build, review, atlas, sketch); no bespoke retired arm is added. `tests/spec-paths.test.js` moves `escape` from the scoped roster into the fail-open group (roster 14 → 13) and its Incident Policy assert retires, so spec 20260820/05's CONTINUE-TO criterion 17 is tagged retired. `[asked: JJ said yes to "same as every other retired command" over "fail with an error", 2026-10-25, build stage]` (AC-20261025-01-6) | AC-6's original exit-non-zero clause contradicted D5 and the arm's own fail-open contract; no caller of `shared-for escape` survives this spec, so no runtime path depends on it. |
 
 ## File Plan
 
@@ -64,6 +67,11 @@ command, doctrine or status line names `/spec:escape`.
 | tests/queue/queue-overlay.test.js | MODIFY | tests | AC-20261025-01-15 |
 | tests/review/review-driver.test.js | MODIFY | tests | AC-20261025-01-9 |
 | tests/run-ledger.test.js | MODIFY | tests | AC-20261025-01-11 |
+| specs/20260901/07-escape-class-contract.md | MODIFY | other | retired tag on spec 07 ACs 5 and 6 (amend cases deleted with `--amend`, D4) |
+| specs/20260912/04-softs-get-a-reader.md | MODIFY | other | retired tag on spec 04 AC 1 (tri-state validation dropped, D3) |
+| specs/20260820/05-fleet-evidence-reader.md | MODIFY | other | retired tag on spec 05 AC 17 (shared-for escape no longer scoped, D11) |
+| tests/spec-paths.test.js | MODIFY | tests | escape joins the fail-open group, scoped roster 13 (D11) |
+| tests/consistency/read-load.test.js | MODIFY | tests | drop the `escape` entry from the pinned SHARED_FOR section table (D11; gate-1 line "spec-paths shared-for escape printed a different doctrine-section list than SHARED_FOR pins") |
 
 ## Contracts
 
@@ -141,14 +149,14 @@ Runs only when .claude/spec-runs.jsonl exists at repo root AND the commit is pla
 - **AC-20261025-01-3**: WHEN the root's ledger holds `{"stage":"escape","spec":"specs/1.md","file":"a.js",…}` and `--append` receives `{…,"spec":"specs/1.md","files":["b.js","a.js"]}` THE SYSTEM SHALL exit 3, append nothing, and name `a.js` on stderr; WHEN `--allow-duplicate` rides along, or the new row's files are `["c.js"]`, THE SYSTEM SHALL exit 0, append exactly one line, and print `appended spec=specs/1.md files=2 reviewRunId=null` (respectively `files=1`) with no `key=` text → rewrites tests/escape/escape-row.test.js :: AC-20260901-07-6
 - **AC-20261025-01-4**: WHEN `git/commands/commit.md` is read THE SYSTEM SHALL contain, inside its `## Step 3` section, the literal `spec-paths escape-row` followed by `--append`, the literal `one escape row`, exactly one `AskUserQuestion` mention whose sentence names `class`, and zero occurrences of `Escape of`, `/spec:escape`, `foundBy`, `severity`, `killedMatch`, `softMatch`, `preventedBy`, `unclassedReason` → writes tests/commit/escape-row-in-commit.test.js
 - **AC-20261025-01-5**: WHEN `git/commands/commit.md` step 3 is read THE SYSTEM SHALL state the selection rule for `spec` and `reviewRunId` with the literal `latest` and `reviewTs`, state `sha` as `HEAD`, and state the `stage:"fix"` row is written when `landed` is empty and the invoker is `/spec:fix` (literal `landed` within three lines of `"fix"`) → writes tests/commit/escape-row-in-commit.test.js
-- **AC-20261025-01-6**: WHEN the plugin tree is inspected THE SYSTEM SHALL have no file at `spec/commands/escape.md`; `spec/entrypoints.json` SHALL contain zero occurrences of `spec/commands/escape.md` and SHALL list `git/commands/commit.md` under `spec/scripts/escape-row.js`'s `entryPoints`; `spec-paths shared-for escape` SHALL exit non-zero → writes tests/commit/escape-row-in-commit.test.js
+- **AC-20261025-01-6**: WHEN the plugin tree is inspected THE SYSTEM SHALL have no file at `spec/commands/escape.md`; `spec/entrypoints.json` SHALL contain zero occurrences of `spec/commands/escape.md` and SHALL list `git/commands/commit.md` under `spec/scripts/escape-row.js`'s `entryPoints`; `spec-paths shared-for escape` SHALL print the fail-open whole-doctrine output an unknown command gets, exit 0 (D11) → writes tests/commit/escape-row-in-commit.test.js
 - **AC-20261025-01-7**: WHEN `spec/.claude-plugin/plugin.json`'s `description` and `README.md` are read THE SYSTEM SHALL contain zero occurrences of `/spec:escape` and README SHALL contain the literal `escape row` at least once → writes tests/commit/escape-row-in-commit.test.js
 - **AC-20261025-01-8**: WHEN a done spec's latest observation row is red (`{"stage":"observe","spec":"<path>","result":"red","branch":"main","sha":"abc1234","url":"https://ci/1"}` as the existing fixtures write it) THE SYSTEM SHALL emit as `--next --json`'s first entry `{"action":"/spec:fix","path":"<path>","blockers":[],"parallel":false,…}` with a note matching `/main/`, turn the headline red, and render the 🔴 footer → rewrites tests/status/red-alarm.test.js :: AC-20260807-01-7 / AC-20260903-05-6
 - **AC-20261025-01-14**: WHEN `--next --json` runs over the two-host fixture (host A: a hardened spec, an implementing spec and a red-observation done spec; host B: a done spec and an unplanned ready brief) THE SYSTEM SHALL emit only `/spec:plan`, `/spec:run`, `/spec:fix` action values, host A's set containing `/spec:fix`, and never `/spec:escape`, `/spec:design`, `/spec:build` or `/spec:review` → rewrites tests/spec-status.test.js :: AC-20260901-10-6
 - **AC-20261025-01-15**: WHEN a queue file positions other work first and a done spec carries a red observation THE SYSTEM SHALL place the `/spec:fix` entry for that spec at `next[0]` above every queue position and lane → rewrites tests/queue/queue-overlay.test.js :: AC-20260823-08-15 / AC-20260903-03-10
 - **AC-20261025-01-9**: WHEN the review driver is invoked cold on a spec already `status: done` whose sidecar records no `closeRunId` THE SYSTEM SHALL exit 2 with stderr matching `/\/spec:fix/` and `/escape row/` and not matching `/\/spec:escape/`, appending no ledger line → rewrites tests/review/review-driver.test.js :: AC-20260820-07-15
 - **AC-20261025-01-10**: WHEN `init-gen.js` renders a host rules file THE SYSTEM SHALL write a Gotchas header comment containing `Writers: the review stage's close step only.` and zero occurrences of `/spec:escape` → writes tests/commit/escape-row-in-commit.test.js
-- **AC-20261025-01-11**: WHEN `spec/doctrine/stages/stage-build.md`, `spec/doctrine/stages/stage-review.md`, `git/commands/commit.md` and `spec/commands/release.md` are read THE SYSTEM SHALL CONTINUE TO reference `.claude/spec-runs.jsonl` in each → rewrites tests/run-ledger.test.js :: AC-20260820-07-13 / AC-20260823-01-20
+- **AC-20261025-01-11**: WHEN `spec/doctrine/stages/stage-build.md`, `spec/doctrine/stages/stage-review.md`, `git/commands/commit.md` and `spec/commands/release.md` are read THE SYSTEM SHALL CONTINUE TO reference `.claude/spec-runs.jsonl` in each → reuses tests/run-ledger.test.js :: AC-20260820-07-13 / AC-20260823-01-20
 - **AC-20261025-01-12**: WHEN `spec/doctrine/core.md` is read THE SYSTEM SHALL contain the literal `The **escape ledger** is the pipeline's one ground-truth signal.` and the literal `commit-time escape row still lands`, and zero occurrences of `/spec:escape`; `spec/commands/fix.md` SHALL contain `escape row` and zero occurrences of `/spec:escape`; `spec/doctrine/stages/stage-review.md` SHALL contain `/spec:fix` and zero occurrences of `/spec:escape` → writes tests/commit/escape-row-in-commit.test.js
 - **AC-20261025-01-13** `[oracle: gate]`: WHEN the gate runs THE SYSTEM SHALL pass `node scripts/plugin-bump.js --check` with both `spec` and `git` manifests bumped → reuses tests/spec-paths.test.js :: AC-20260901-07-15
 

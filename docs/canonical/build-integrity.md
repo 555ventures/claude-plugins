@@ -90,6 +90,10 @@ example self-tags, and the parser fabricates findings against the very spec that
 without multi-tag runs, template-sanctioned sibling tags (e.g. `[env:]` with `[pre-green:]`)
 silently drop, un-sanctioning a declared skip. Both failure modes manufacture hard findings from
 correct authoring, which is the class the mechanized red-check exists to eliminate.
+`ac-matrix --lint` also refuses a critical-tier AC dated on or after 2026-10-25 that carries no
+backticked literal (`missing-literal`), after stripping the slot run, the trailing bare-tag run
+and the `→` disposition tail; `observed.lint` carries `missingLiteral` only when that arm
+applies. (specs/20261025/03-critical-tier-enforces-its-own-rules.md)
 
 ## Build driver
 

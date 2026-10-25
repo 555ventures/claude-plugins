@@ -1,6 +1,6 @@
 ---
 date: 2026-10-25
-status: implementing
+status: done
 build_base: main
 open_markers: 0
 tier: standard
@@ -134,6 +134,15 @@ Also out of scope, recorded for the reply to the reporter: the session-pointer f
 by `/spec:init` since 2026-09-01 (`/spec:doctor --fix` repairs an older host); the ready check is
 arbitrary shell and `testEnv` already runs as a hard precondition, so a config-blind health route
 is host grounding, not a plugin gap.
+
+Build deviations folded at close (2026-10-25): the AC 2 fixture appends the other required legs
+green or inert plus a clean `--workflow`, because `verdict.js` derives UNVERIFIED from a manifest
+holding only the skip-reconcile and gate rows; the asserted verdict and `testsSkipped` are as
+written. AC 6 asserts absence, so it was green on the pre-image like the two pins.
+
+### Advisory debt (review rv_3b4aff17bb51)
+- a0 /Users/jj/Projects/claude-plugins/.claude/worktrees/spec-03-critical-tier-enforces-its-own-rules/spec/scripts/ac-matrix.js:326 — The human (non --json) --lint summary line omits the new missingLiteral count even when the arm applies; the per-finding `HARD  missing-literal` lines still print, so the refusal is visible, but the summary footer is no longer a full mirror of observed.lint.
+- a1 /Users/jj/Projects/claude-plugins/.claude/worktrees/spec-03-critical-tier-enforces-its-own-rules/spec/scripts/ac-matrix.js:223 — A backticked tag sitting in the TRAILING position (e.g. ``… SHALL y `[oracle: gate]` ``) is not stripped by hasLiteral because the Contract removes only the BARE trailing run; its backticks therefore satisfy the literal check even though spec-sections treats that shape as a refused/illustrative tag, not a declaration.
 
 ## Canonical Delta
 

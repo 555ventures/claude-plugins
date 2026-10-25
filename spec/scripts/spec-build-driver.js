@@ -916,8 +916,8 @@ function isAtRepairNow() {
 function handleIncident() {
   const cls = flag('--class')
   if (typeof cls !== 'string' || !CLASS_ID_RE.test(cls)) {
-    die('--mark incident needs --class <kebab-case id> (same vocabulary as escape.md\'s class ' +
-      'field; read `.escapes.registry` from fleet-reader --json first) — got ' + JSON.stringify(cls))
+    die('--mark incident needs --class <kebab-case id> (the fleet\'s class vocabulary — ' +
+      'read `.escapes.registry` from fleet-reader --json first) — got ' + JSON.stringify(cls))
   }
   const exitRaw = flag('--exit')
   let exit = null

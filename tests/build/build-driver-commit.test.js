@@ -310,7 +310,21 @@ test('a wave File Plan glob row verifies on at least one match for CREATE/MODIFY
 // a build-time incident is counted on the stage:"build" row the run writes anyway, via
 // `--mark incident --class <id> [--exit <n>]`, so a class that only ever costs build time can
 // reach the recurrence count that earns a guard. The mark never moves the state.
-test('Incident Policy: --mark incident records a classed entry on the build row without moving the state; a malformed class is refused', () => {
+test('Incident Policy: --mark incident records a classed entry (AC-20261025-02-11) — a missing or malformed class is refused with the registry remedy and no retired command name', () => {
+  const host = makeHost()
+  run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'TESTS', 'setup: a fresh host lands TESTS')
+
+  const missing = run(host.root, host.spec, '--mark', 'incident')
+  const bad = run(host.root, host.spec, '--mark', 'incident', '--class', 'Bad Class')
+  for (const [label, r] of [['missing', missing], ['malformed', bad]]) {
+    assert.notStrictEqual(r.status, 0, 'a ' + label + ' class must refuse: ' + r.stdout + r.stderr)
+    assert.match(r.stderr, /\.escapes\.registry/, 'the ' + label + '-class refusal must point at the live class vocabulary (fleet-reader --json .escapes.registry): ' + r.stderr)
+    assert.doesNotMatch(r.stderr, /escape\.md/, 'the ' + label + '-class refusal must not send the session to a deleted command file: ' + r.stderr)
+  }
+})
+
+test('Incident Policy: --mark incident records a classed entry (AC-20261025-02-15) on the build row without moving the state; a malformed class is refused', () => {
   const host = makeHost()
   run(host.root, host.spec)
   assert.strictEqual(stateOf(host.root, host.spec), 'TESTS', 'setup: a fresh host lands TESTS')

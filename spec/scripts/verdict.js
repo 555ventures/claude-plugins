@@ -55,7 +55,7 @@
 // survivors, the disposition-contradiction guard widens to that pool's sum,
 // ledger leg rows retain `observed` in both profiles so a structurally-absent observation stays
 // distinguishable from a pass, and review rows always carry `runId` — the orchestrator's
-// --run-id verbatim, else `rv_` + 12 lowercase hex generated here — so /spec:escape has a
+// --run-id verbatim, else `rv_` + 12 lowercase hex generated here — so the escape row has a
 // backlink on every row, not a conditional one.
 //
 // Incident: a release could read CLEAN while the
@@ -744,7 +744,7 @@ if (ledger) {
     row.model = model
   }
   // Review rows always carry runId — the passed --run-id verbatim, else generated here
-  // ("rv_" + 12 lowercase hex via crypto.randomBytes) so /spec:escape always has a backlink.
+  // ("rv_" + 12 lowercase hex via crypto.randomBytes) so the escape row always has a backlink.
   if (profile !== 'release') row.runId = runId || ('rv_' + crypto.randomBytes(6).toString('hex'))
   row.verdict = word
   // Checkpoint is inserted immediately after verdict,

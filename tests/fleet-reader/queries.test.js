@@ -40,7 +40,7 @@ function runJson(root) {
 // test's fixture carries zero escape-class rows, so it is the CONTINUE-TO oracle that the
 // unamended path (fold null/missing into "unclassed", recur at 3+) still behaves exactly as
 // before once the join exists.
-test('AC-20260820-05-5 / AC-20260901-07-11: escapes byClass counts explicit class values and folds null/missing class into unclassed, feeding recurrentUnguarded at 3+ recurrences', () => {
+test('AC-20260820-05-5 / AC-20260901-07-11 / AC-20261025-02-2: escapes byClass counts explicit class values and folds null/missing class into unclassed, feeding recurrentUnguarded at 3+ recurrences', () => {
   const root = tmpdir('fleet-escapes')
   const base = { stage: 'escape', file: 'x.js', reviewRunId: null, foundBy: 'user', severity: 'soft', killedMatch: null, preventedBy: 'none', via: 'manual' }
   mkRepo(root, 'repo-a', {
@@ -63,12 +63,27 @@ test('AC-20260820-05-5 / AC-20260901-07-11: escapes byClass counts explicit clas
   const bare = runNode(SCRIPT, ['--repos-root', root])
   assert.strictEqual(bare.status, 0, bare.stderr)
   assert.match(bare.stdout, /silent-fallback/, 'Behavior: recurrentUnguarded renders each qualifying class with its count and latest ts in the human render')
+
+  // specs/20261025/02 D3: the amendment join is deleted — a legacy escape-class row no longer
+  // supplies the effective class of the escape row it names.
+  const rootAmend = tmpdir('fleet-escapes-unjoined')
+  mkRepo(rootAmend, 'repo-a', {
+    rows: [
+      { ts: '2026-08-14T22:49:11.580Z', stage: 'escape', spec: 'specs/a.md', file: 'x.js', class: null, reviewRunId: null, via: 'manual' },
+      { ts: '2026-08-20T00:00:00Z', stage: 'escape-class', escapeTs: '2026-08-14T22:49:11.580Z', spec: 'specs/a.md', file: 'x.js', class: 'silent-fallback', unclassedReason: null, via: 'manual' },
+    ],
+  })
+  const unjoined = runJson(rootAmend)
+  assert.strictEqual(unjoined.escapes.byClass.unclassed, 1,
+    'a class:null escape row stays unclassed once the amendment join is gone — counting the amendment would keep a dead join alive and move guard counts for rows nothing writes any more')
+  assert.strictEqual(unjoined.escapes.byClass['silent-fallback'], undefined,
+    'the escape-class row must contribute nothing to byClass — a silent-fallback key from that pair means the amendment join still runs')
 })
 
 // Direct fix, no spec: query 5 already carried both halves of the fleet's
 // false-CLEAN rate and every reader was dividing them by eye. The division is a render/field
 // addition to the FIFTH question, never a tenth question, so D5's fixed question set holds.
-test('cleanContradicted carries falseCleanRate per repo and a fleet roll-up, renders it as a percent, and reports n/a — never 0% — for a repo with no CLEAN rows', () => {
+test('cleanContradicted carries falseCleanRate (AC-20261025-02-9) per repo and a fleet roll-up, renders it as a percent, and reports n/a — never 0% — for a repo with no CLEAN rows', () => {
   const root = tmpdir('fleet-falseclean')
   mkRepo(root, 'repo-a', {
     rows: [
@@ -118,7 +133,7 @@ test('cleanContradicted carries falseCleanRate per repo and a fleet roll-up, ren
 // the same class reaches the guard-earning count. `total` stays escape rows only; `incidents`
 // is the build-incident count. Without the join a build-time-only class scores 0 forever
 // (host spec 20260905/07 D16).
-test('Incident Policy: build-row incidents join escapes.byClass and reach recurrentUnguarded; total stays escape-only', () => {
+test('Incident Policy: build-row incidents join escapes.byClass (AC-20261025-02-10) and reach recurrentUnguarded; total stays escape-only', () => {
   const root = tmpdir('fleet-incidents')
   const base = { stage: 'escape', file: 'x.js', reviewRunId: null, foundBy: 'user', severity: 'soft', killedMatch: null, preventedBy: 'none', via: 'manual' }
   mkRepo(root, 'repo-a', {

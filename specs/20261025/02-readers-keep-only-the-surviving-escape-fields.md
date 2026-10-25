@@ -1,12 +1,14 @@
 ---
 date: 2026-10-25
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: cross-cutting
 breaking: true           # fleet-reader --json loses the `owed` key and --owed flag; commit-coverage loses two modes
 depends_on: ["specs/20261025/01-the-commit-writes-the-escape-row.md"]
 brief: n/a
 open_markers: 0
+diff_base: 84cf542ca6cda74cce6078d9f110b17b05fd17f7
 ---
 
 # Readers keep only the surviving escape fields
@@ -33,6 +35,8 @@ the plugin tree and a fleet reader whose escape block carries six keys.
 | D5 | `commit-coverage.js` keeps commit mode only: `--since` and `--repos-root` are usage errors (exit 2) naming `--commit`; the header, `USAGE` and the window/fleet functions go; `tests/commit-coverage/commit-coverage.fixtures.js` (imported by nothing) is deleted. (AC-20261025-02-5, AC-20261025-02-14) | With the row written automatically, "the share of fix commits that record a row" is 1 by construction; a measurement of a constant is dead code. |
 | D6 | `doctor.md`'s Escapes paragraph keeps the contradicted-CLEAN correlation and the "≥10 CLEAN rows and zero escape rows" bullet, and drops the `preventedBy:"doctrine"` open-repair, the `preventedBy:"enforcer"` enforce-due and the backfill bullets; `release.md`'s Phase 2 STOP `next` text reads `route the defect to the normal flow — /spec:fix for a repair (its commit records the escape row), or a spec`; `core.md` § Incident Policy's Materiality bullet reads `escape rows and build-row \`incidents\`` with no amendment clause. (AC-20261025-02-8) | Each sentence named a field, mode or command that no longer exists. |
 | D7 | `spec-build-driver.js`'s `--mark incident` refusal reads `--mark incident needs --class <kebab-case id> (the fleet's class vocabulary — read \`.escapes.registry\` from fleet-reader --json first)`; `verdict.js`'s two comments naming `/spec:escape` say `the escape row` instead. Zero occurrences of `/spec:escape`, `spec:escape`, `escape.md`, `killedMatch`, `softMatch`, `preventedBy`, `unclassedReason`, `--owed`, `--amend`, `escape-class` remain under `spec/`, `git/`, `README.md` and `docs/canonical/` — except the `escape-class` literal inside `fleet-reader.js`'s drift-census stage set (D3). (AC-20261025-02-7, AC-20261025-02-11, AC-20261025-02-15) | A retired identifier that survives in prose or comments is the next dangling reference. |
+| D9 | (build, auto-picked add to scope) AC-20261025-02-7's grep covers `docs/canonical/`, where `pipeline.md` (the owed paragraph) and `review.md` (the `killedMatch`/`softMatch`/`unclassedReason`/`--amend`/amendment paragraphs) still carry retired names; the build applies the Canonical Delta to those two files itself so the gate can go green, with the retired names elided and the amendment paragraph's `specs/20260901/07-escape-class-contract.md` citation dropped with it. Review's delta step finds them already applied. (AC-20261025-02-7) | Otherwise AC-7 stays red until the review close, after the last build gate. |
+| D10 | (build, auto-picked add to scope) `expire-tests.js`'s section comment `escape-class ids` is the one AC-20261025-02-7 hit outside the File Plan; it reads `defect-class ids`. Comment only — the script's logic is untouched, as the Rationale promises. (AC-20261025-02-7) | The zero-hit grep cannot go green otherwise. |
 | D8 | `cleanContradicted`, `cleanByVia`, the `incidents` join into `byClass`, `gate08`, `legRecency`, `population` and `driftCensus` keep their shapes byte-for-byte. (AC-20261025-02-9, AC-20261025-02-10) | The reviewer-quality measurement is the reason the row survives at all. |
 
 ## File Plan
@@ -44,12 +48,17 @@ the plugin tree and a fleet reader whose escape block carries six keys.
 | spec/scripts/commit-coverage.js | MODIFY | scripts | commit mode only (D5) |
 | spec/scripts/spec-build-driver.js | MODIFY | scripts | incident refusal wording (D7) |
 | spec/scripts/verdict.js | MODIFY | scripts | two comments (D7) |
+| spec/scripts/expire-tests.js | MODIFY | scripts | one section comment says `defect-class ids` (D10) |
 | spec/commands/doctor.md | MODIFY | doctrine | Escapes paragraph (D6) |
 | spec/commands/release.md | MODIFY | doctrine | Phase 2 STOP next text (D6) |
 | spec/doctrine/core.md | MODIFY | doctrine | Materiality bullet (D6) |
+| docs/canonical/pipeline.md | MODIFY | doctrine | Canonical Delta applied at build (D9) |
+| docs/canonical/review.md | MODIFY | doctrine | Canonical Delta applied at build (D9) |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | `node scripts/plugin-bump.js --bump --plugin spec --changelog "…"` |
 | tests/fleet-reader/escape-class.test.js | DELETE | tests | amendment join retired (D3) |
 | tests/commit-coverage/commit-coverage.fixtures.js | DELETE | tests | imported by nothing (D5) |
+| specs/20260901/07-escape-class-contract.md | MODIFY | doctrine | AC 8 tagged retired (its only test is deleted, D3) |
+| specs/20260903/01-owed-query-and-row-handoff.md | MODIFY | doctrine | AC 8 tagged retired (the owed key leaves the pin, D2) |
 | tests/fleet-reader/queries.test.js | MODIFY | tests | AC-20261025-02-2, AC-20261025-02-9, AC-20261025-02-10 |
 | tests/fleet-reader/review-fixes.test.js | MODIFY | tests | AC-20261025-02-1 |
 | tests/fleet-reader/slim-escapes.test.js | CREATE | tests | AC-20261025-02-3, AC-20261025-02-4, AC-20261025-02-6, AC-20261025-02-13 |

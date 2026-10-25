@@ -113,15 +113,9 @@ is scored by the fleet reader's `cleanByVia` (escapes-per-CLEAN by `via`); a `lo
 above the `direct` rate over 30 fleet reviews reverts the loop.
 (specs/20260901/03-unified-build-loop.md, done 2026-09-01)
 
-The fleet reader's `owed` question (`--owed` for the human render) lists every
-plugin-blaming row across this machine's checkouts: escape rows whose `preventedBy` is
-`review-check` or `runtime-leg`, and unstamped `docs/spec-feedback/`
-findings, grouped by effective class with the joined recurrence count and a pointer to core
-§ Incident Policy. Fixed-status is derived, never stored: an item's key
-(`escape:<repo>:<ts>:<file>` or a feedback finding id) cited in a landed
-test, a doctrine file, or a `done` spec marks it fixed; a citation in an unfinished spec marks
-it in-flight. Host reports end with the row key and nothing else — no handoff prompt is
-composed; the owed query is the consumer. (specs/20260903/01-owed-query-and-row-handoff.md, done 2026-09-03)
+The fleet reader answers eight fixed questions; the owed query and its
+`escape:<repo>:<ts>:<file>` citation key are retired
+(specs/20261025/02-readers-keep-only-the-surviving-escape-fields.md).
 
 Commit-time escape coverage is a derived number, never asserted:
 `node "$(spec-paths commit-coverage)" --repos-root ~/Projects` prints, population first, per

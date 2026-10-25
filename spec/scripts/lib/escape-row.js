@@ -1,49 +1,18 @@
 #!/usr/bin/env node
 'use strict'
-// lib/escape-row.js — the ONE escape-row validator: the slim escape row shape, the legacy
-// reader (`file` string, dropped fields ignored), and the amendment helpers the fleet reader
-// still joins (escapeKey, joinAmendments, validateAmendmentRow).
+// lib/escape-row.js — the ONE escape-row validator: the slim escape row shape and the legacy
+// reader (`file` string; fields no writer produces are ignored).
 //
-// Owner: specs/20261025/01-the-commit-writes-the-escape-row.md D3, D10.
+// Owner: specs/20261025/02-readers-keep-only-the-surviving-escape-fields.md D4.
 //
-// What this deliberately does NOT do: read or write a ledger file (escape-row.js owns the
-// append; fleet-reader.js owns discovery), decide the effective class for a row (the caller
-// joins joinAmendments' map against its own rows — this module never consults escape rows
-// from inside joinAmendments), or offer a CLI of its own.
+// What this deliberately does NOT do: read or write a ledger file (fleet-reader.js owns
+// discovery), decide the effective class for a row (a row's class is its own `class` field),
+// or offer a CLI of its own.
 //
 // Exit codes: n/a (library, not an entrypoint).
 
-const PREVENTED_BY = ['doctrine', 'enforcer', 'review-check', 'runtime-leg', 'none']
-const FOUND_BY = ['user', 'later-spec', 'production']
-const SEVERITY = ['hard', 'soft']
-const UNCLASSED_REASONS = ['no-fix-diff', 'deferred']
 const CLASS_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
-const VIA = ['commit', 'spec-fix', 'manual', 'backfill']   // backfill: legacy amendment rows only
-
-// escapeKey: the join key both an escape row and its escape-class amendment share. An escape
-// row has no escapeTs of its own, so it falls back to its own ts.
-function escapeKey(row) {
-  const ts = row.escapeTs !== undefined && row.escapeTs !== null ? row.escapeTs : row.ts
-  return `${ts}\0${row.spec}\0${row.file}`
-}
-
-// Shared class/unclassedReason rules (closed reason set) — identical on an escape
-// row and an amendment row. `amended` suppresses class-missing on an escape row whose key has
-// a joining amendment (that amendment supplies the effective class/reason instead); it is
-// never passed for an amendment row itself.
-function classReasons(row, { amended = false } = {}) {
-  const reasons = []
-  const cls = row.class
-  const reason = row.unclassedReason
-  const classIsSet = cls !== null && cls !== undefined
-  const classIsString = typeof cls === 'string'
-  if (classIsSet && !(classIsString && CLASS_ID_RE.test(cls))) reasons.push('class-malformed')
-  const reasonIsSet = reason !== null && reason !== undefined
-  if (reasonIsSet && !UNCLASSED_REASONS.includes(reason)) reasons.push('unclassed-reason-out-of-enum')
-  if (classIsString && reasonIsSet) reasons.push('unclassed-reason-with-class')
-  if (!classIsSet && !reasonIsSet && !amended) reasons.push('class-missing')
-  return reasons
-}
+const VIA = ['commit', 'spec-fix', 'manual', 'backfill']   // backfill: legacy rows only
 
 // escapeFiles(row) -> string[]: every file an escape row names — `files` when an array, else
 // the legacy single `file` string, else [].
@@ -54,8 +23,8 @@ function escapeFiles(row) {
 }
 
 // validateEscapeRow(row) -> string[] (empty = valid), closed reason set: files-missing,
-// files-entry-not-string, class-malformed, sha-malformed, via-out-of-enum. The legacy keys
-// foundBy, severity, killedMatch, softMatch, preventedBy and unclassedReason are ignored.
+// files-entry-not-string, class-malformed, sha-malformed, via-out-of-enum. Any other key a
+// legacy row carries is ignored.
 function validateEscapeRow(row) {
   const reasons = []
   const hasFiles = Array.isArray(row.files) ? row.files.length > 0 : typeof row.file === 'string'
@@ -69,33 +38,4 @@ function validateEscapeRow(row) {
   return reasons
 }
 
-// validateAmendmentRow(row) -> string[]. An amendment row is never validated with
-// {amended:true} — its own class-missing check is unconditional.
-function validateAmendmentRow(row) {
-  const reasons = classReasons(row)
-  if (typeof row.escapeTs !== 'string') reasons.push('amendment-missing-escape-ts')
-  if (!VIA.includes(row.via)) reasons.push('amendment-via-out-of-enum')
-  return reasons
-}
-
-// joinAmendments(rows) -> Map<key, {class, unclassedReason, ts}>: for every stage:"escape-class"
-// row, latest ts wins; equal ts -> later read order wins (>= on the comparison, since rows
-// arrive in read order). Never consults escape rows — the caller joins this map against its own
-// escape rows and detects unmatched amendments itself.
-function joinAmendments(rows) {
-  const map = new Map()
-  for (const row of rows) {
-    if (row.stage !== 'escape-class') continue
-    const key = escapeKey(row)
-    const existing = map.get(key)
-    const ts = row.ts
-    const wins = !existing || typeof ts !== 'string' || typeof existing.ts !== 'string' || ts >= existing.ts
-    if (wins) map.set(key, { class: row.class ?? null, unclassedReason: row.unclassedReason ?? null, ts })
-  }
-  return map
-}
-
-module.exports = {
-  PREVENTED_BY, FOUND_BY, SEVERITY, UNCLASSED_REASONS, CLASS_ID_RE, VIA,
-  escapeKey, escapeFiles, validateEscapeRow, validateAmendmentRow, joinAmendments,
-}
+module.exports = { CLASS_ID_RE, VIA, escapeFiles, validateEscapeRow }

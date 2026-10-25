@@ -38,7 +38,7 @@ Every accepted mark prints `✅ checkpoint — genesis state saved (<prev> → <
 
 A visual archetype on a Storybook stack stops once more, at `DESIGN_BRIEF` between the green
 gate and `ROADMAP` (spec/doctrine/genesis.md § Genesis: Design Stage). Design steps print a
-`Session:` line naming a fresh session and a model.
+`Session:` line naming a fresh session and a model; every design step names Fable, and a session already on Fable works in place.
 **A step naming Fable stops before its work unless this session runs on Fable** (no script can see the active
 model — the check is the session's alone): print `/clear`, `/model fable`, re-run `/spec:genesis`, end the turn. To refresh a stale catalog by hand: `node "$(spec-paths catalog-inventory)" --root . --out docs/design/catalog.md`.
 

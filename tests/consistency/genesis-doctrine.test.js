@@ -1183,3 +1183,27 @@ test('AC-20260907-05-9: spec/doctrine/genesis.md\'s § Genesis: On-disk Handoff 
     'presence" clause, never the file roster itself; its absence would mean the roster lost the ' +
     'workspace pointer, not just the retired clause')
 })
+
+// ---------------------------------------------------------------------------
+// 2026-10-25 direct fix: the journey-stories step named Sonnet while the brief and kit steps
+// named Fable; an Opus session read that as a forced downward switch and stopped. Design taste
+// is one seat (the 2026-09-11 rule): every design step's Session: line names Fable, and the
+// driver carries no other model name on a Session: line.
+// ---------------------------------------------------------------------------
+
+test('every genesis design step\'s Session: line names Fable and none names Sonnet, Opus or Haiku — the journey step is not handed to a cheaper model', () => {
+  const src = read('spec/scripts/genesis-driver.js')
+  const sessionLines = src.split('\n').filter((l) => /'Session: start a fresh session for this step/.test(l))
+  assert.strictEqual(sessionLines.length, 3,
+    'the design stage prints exactly three fresh-session steps (brief, kit, journeys); a different count means ' +
+    'a step was added or dropped without this pin being revisited: ' + JSON.stringify(sessionLines))
+  for (const l of sessionLines) {
+    assert.match(l, /Model: Fable/,
+      'a design step\'s Session: line must name Fable — the brief, kit and journey steps are all taste work: ' + l)
+    assert.doesNotMatch(l, /Sonnet|Opus|Haiku/,
+      'no design step may name a cheaper model; a session reads any other name as a forced downward switch: ' + l)
+  }
+  const cmd = read('spec/commands/genesis.md')
+  assert.match(cmd, /every design step names Fable/,
+    'genesis.md must state the one-seat rule so a session on Fable never treats a Session: line as a reason to switch')
+})

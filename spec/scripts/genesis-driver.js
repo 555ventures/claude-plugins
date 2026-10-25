@@ -174,7 +174,7 @@
 //
 // What these additions deliberately do NOT do:
 //   - author the kit, the tokens, the shell, or a single journey screen — those stay session
-//     (Fable, then Sonnet) judgment; the driver only closes each mark once the artifacts exist,
+//     (Fable at every design step) judgment; the driver only closes each mark once the artifacts exist,
 //     compile, and the executed build proves it.
 //   - parse `step()` call sites out of a journey story's source to verify it "matches" the seed's
 //     beats — the story imports the beats file and iterates it, so equality holds by
@@ -2920,7 +2920,9 @@ const STEPS = {
   },
 
   // The fresh-session/model line
-  // naming Sonnet, one journey line per seed journey (beat count and the story's target path),
+  // naming Fable (arranging composites into screens is hierarchy and flow judgment — the same
+  // seat as the brief and kit steps; no design step hands work to a cheaper model), one journey
+  // line per seed journey (beat count and the story's target path),
   // the primitive-ban rule, the CSF/router recipe (Contracts), and --mark journeys-drawn.
   // beats-file writer runs here, at this step's own print — never from `--state`.
   DESIGN_JOURNEYS: () => {
@@ -2934,7 +2936,7 @@ const STEPS = {
       '## Step: rebuild every approved journey as a journey story',
       'Read only: docs/design/brief.md, ' + rulesFile + ', ' + beatsFiles.join(', ') + ', ' + (dp.kit || 'src/components/kit'),
       'Doctrine: spec/doctrine/genesis.md § Genesis: Design Stage',
-      'Session: start a fresh session for this step — Model: Sonnet may draw the journey screens from the brief; all journeys in this one session',
+      'Session: start a fresh session for this step — Model: Fable (composes every approved journey from the kit; all journeys in this one session)',
     ]
     for (const [name, j] of seedJourneys) {
       lines.push('journey: ' + name + ' — ' + j.beats.length + ' beats → ' + journeysRel + '/' + name + '.journey.stories.tsx')

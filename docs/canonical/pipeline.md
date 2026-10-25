@@ -118,18 +118,16 @@ The fleet reader answers eight fixed questions; the owed query and its
 (specs/20261025/02-readers-keep-only-the-surviving-escape-fields.md).
 
 Commit-time escape coverage is a derived number, never asserted:
-`node "$(spec-paths commit-coverage)" --repos-root ~/Projects` prints, population first, per
-checkout and for the host fleet, the fix-typed commits (`fix`/`hotfix` type token) since the v7
-cutover, how many touched a file a reviewed spec landed (File Plan membership joined to a
-`stage:"review"` row that precedes the commit's committer date), and the escape rows recorded
-`via:"commit"` in the same window; `--since` scopes one repo, `--commit <sha>` answers the
-single-commit question `/git:commit`'s step 3 asks. (specs/20260904/01-commit-time-escape-coverage.md,
+`node "$(spec-paths commit-coverage)" --commit <sha>` answers the single-commit landed
+question `/git:commit`'s step 3 asks (landed = File Plan membership joined to a
+`stage:"review"` row that precedes the commit's committer date). (specs/20260904/01-commit-time-escape-coverage.md,
 done 2026-09-04) There is no offer: a fix commit whose `landed` list is non-empty writes one
 escape row itself (`/git:commit` step 3, `escape-row.js --append`) — one row per commit, `spec`
 and `reviewRunId` taken from the landed file with the latest qualifying review, every landed
 file in `files`, and the defect class the one (skippable) question. Nothing blocks a commit.
-The window and fleet share numbers retire with specs/20261025/02.
-(specs/20261025/01-the-commit-writes-the-escape-row.md)
+(specs/20261025/01-the-commit-writes-the-escape-row.md) The window and fleet share numbers
+are retired — the row is written by the commit itself, so only the per-commit landing
+derivation (`--commit`) remains (specs/20261025/02).
 
 ## The question gate asks product facts, never derives them (2026-09-02, specs/20260902/06)
 

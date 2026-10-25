@@ -117,8 +117,8 @@
 - Every escape row carries a validated defect class; `spec/scripts/lib/escape-row.js` is the
   one validator and `escape-row.js` the one writer (`--append`, duplicate-refusing). The row
   is `{ts, stage, spec, files, reviewRunId, class, sha, via}`, legacy rows still accepted.
-  The fleet reader counts recurrences on the row's class and flags unvalidated rows in the
-  drift census (`class-missing`). The third-recurrence bar's Materiality field cites that
+  The fleet reader counts recurrences on the row's class and validates each escape row in the
+  drift census with that validator and reports malformed shapes (e.g. `class-malformed`). The third-recurrence bar's Materiality field cites that
   count.
 
 - Reviewer returns carry `file`/`line` (or explicit null) on every killed claim, enforced at

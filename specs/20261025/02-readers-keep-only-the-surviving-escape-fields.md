@@ -1,6 +1,6 @@
 ---
 date: 2026-10-25
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: cross-cutting
@@ -143,6 +143,14 @@ Query 9 (`owed`) goes because its population was defined by `preventedBy`, which
 Collision closure (literals `preventedBy`, `killedMatch`, `softMatch`, `unclassedReason`, `joinAmendments`, `validateAmendmentRow`, `escapeKey`, `computeOwed`, `spec:escape`; 77 hits, 30 files outside the File Plan, each waived here): `README.md`, `git/commands/commit.md`, `spec/commands/escape.md`, `spec/scripts/escape-row.js`, `spec/scripts/init-gen.js`, `spec/scripts/spec-review-driver.js`, `spec/scripts/spec-status.js`, `spec/doctrine/stages/stage-review.md` and their tests (`tests/escape/*`, `tests/queue/queue-overlay.test.js`, `tests/review/review-driver.test.js`, `tests/spec-status.test.js`, `tests/status/red-alarm.test.js`) are sibling 01's File Plan rows and land first; `docs/adr/*`, `docs/audit/*`, `docs/roadmap/*` are history; `docs/canonical/*` changes through the Canonical Delta; `.claude/rules/spec-pipeline.md` is host-generated; `tests/fixtures/minimal-host/.claude/spec-runs.jsonl` holds legacy rows that D3/D4 keep in shape as data; `tests/fixtures/minimal-host/docs/spec-feedback/20260716-brief.md` was read only by the owed scan and stays as a shared fixture; `tests/review/verdict.test.js`, `tests/review/stopped-row-durability.test.js`, `tests/spec-paths.test.js` mention the names in comments and assertion messages only.
 
 What this deliberately keeps: the contradicted-CLEAN join (the only measurement of the reviewer that exists), the class registry (the incident rule's counter and the build driver's `--mark incident` vocabulary), and the test-expiry clause that keeps a class-citing test alive — `expire-tests.js` reads `class` and `incidents[].class` only, and is untouched.
+
+Build deviations (folded 2026-10-25): `tests/commit-coverage/commit-coverage.test.js` did not exist,
+so its CREATE row stood and its fixture helpers are inlined (the fixtures file is deleted here).
+AC-11 (`rewrites`) and AC-15 (`reuses`) named the same build-driver case, which cannot be both red
+and green; the case was split into two sharing the pointer prefix — a new red AC-11 case and the
+original body carrying AC-15. A lock-time read of every pointer pair naming one case would have
+caught it; the Gotchas section is at its cap and the red-check entry already covers pointer verbs,
+so this stays a Rationale line.
 
 ## Canonical Delta
 

@@ -1,6 +1,6 @@
 ---
 date: 2026-10-26
-status: implementing
+status: done
 build_base: main
 tier: critical
 area: cross-cutting

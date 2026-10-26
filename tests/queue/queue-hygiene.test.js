@@ -44,7 +44,7 @@ const DUP = "merge-back.sh create fails with 'host config cannot be read as JSON
 test('AC-20261013-02-1: spec-queue add exits 2 on a prompt whose token Jaccard against a pending prompt is at least 0.35, naming the id, a two-decimal score, show and --distinct, and writes nothing', () => {
   const dir = host({ queue: [{ id: 'q1', kind: 'prompt', payload: Q1, added: daysAgo(1) }] })
   const before = fs.readFileSync(qPath(dir), 'utf8')
-  const r = runNode(SCRIPT, ['add', DUP], { cwd: dir })
+  const r = runNode(SCRIPT, ['add', DUP, '--lane', 'plan'], { cwd: dir })
   assert.strictEqual(r.status, 2, 'D1: a near-duplicate prompt must exit 2, or the same finding is queued twice from two sessions: ' + r.stdout + r.stderr)
   assert.match(r.stderr, /near-duplicate of q1/, 'D1: the refusal must name the matching id so the caller can inspect it: ' + r.stderr)
   const m = /\(score (\d\.\d\d)\)/.exec(r.stderr)
@@ -61,12 +61,12 @@ test('AC-20261013-02-2: spec-queue add still appends with --distinct, a below-th
     const r = runNode(SCRIPT, argv, { cwd: dir })
     return { dir, r }
   }
-  const a = addTo(['add', DUP, '--distinct'])
+  const a = addTo(['add', DUP, '--lane', 'plan', '--distinct'])
   assert.strictEqual(a.r.status, 0, 'D1: --distinct must skip the duplicate check, or the honest override does not exist: ' + a.r.stdout + a.r.stderr)
   assert.strictEqual(JSON.parse(fs.readFileSync(qPath(a.dir), 'utf8')).items.length, 2,
     'D1: the --distinct add must append the item, not merely exit 0: ' + fs.readFileSync(qPath(a.dir), 'utf8'))
 
-  const b = addTo(['add', 'Decide whether the walkthrough export keeps its PNG step'])
+  const b = addTo(['add', 'Decide whether the walkthrough export keeps its PNG step', '--lane', 'decide'])
   assert.strictEqual(b.r.status, 0, 'D1: a prompt scoring below 0.35 against every pending prompt must be accepted: ' + b.r.stdout + b.r.stderr)
 
   const c = addTo(['add', '15'])
@@ -76,7 +76,7 @@ test('AC-20261013-02-2: spec-queue add still appends with --distinct, a below-th
   assert.strictEqual(d.r.status, 0, 'D1: spec payloads are unaffected by the duplicate check: ' + d.r.stdout + d.r.stderr)
 
   // --distinct is a bare flag accepted with no duplicate present too.
-  const e = addTo(['add', 'Decide whether the walkthrough export keeps its PNG step', '--distinct'])
+  const e = addTo(['add', 'Decide whether the walkthrough export keeps its PNG step', '--lane', 'decide', '--distinct'])
   assert.strictEqual(e.r.status, 0, 'D1: --distinct with no duplicate present must still be accepted, not refused as an unknown flag: ' + e.r.stdout + e.r.stderr)
 })
 

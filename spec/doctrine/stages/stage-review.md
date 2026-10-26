@@ -73,7 +73,7 @@ When the driver prints `DONE`, report (core § Console Output Style) — printed
   recurring-shaped entries become one-line Gotchas entries (format per the host Gotchas section's
   header comment); one-offs go to the spec's Rationale; delete the sidecar. Queue any follow-up
   needing its own spec or the user's decision, never leave it narrated:
-  `node "$(spec-paths spec-queue)" add …`, listed under the DONE report's `queued` slot. Follow
+  `node "$(spec-paths spec-queue)" add "<subject>" --lane plan|prototype|fix|decide`, listed under the DONE report's `queued` slot. Follow
   the driver's printed sidecar listing and hygiene listing before marking `closed`; after the
   fold, run `node "$(spec-paths prose-cap)" --file <host pipelineRules> --section Gotchas
   --baseline <the review row's gotchas count>` — exit 1 means evict before the close commit,

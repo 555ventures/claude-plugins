@@ -129,7 +129,7 @@ for (const row of rows) {
     deferrals++
     const ids = [...new Set(row.match(QUEUE_ID_RE) || [])]
     if (ids.length === 0) {
-      push('untracked-deferral', id, 'row defers work with no queue id — run spec-queue add and cite the q<id> in the row')
+      push('untracked-deferral', id, 'row defers work with no queue id — run spec-queue add "<subject>" --lane <lane> and cite the q<id> in the row')
     } else {
       for (const q of ids) {
         const code = queueExit(q)

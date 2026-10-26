@@ -217,23 +217,23 @@ test('AC-20260903-03-9: the retired bump/defer/ok verbs and the retired add flag
 
 test('AC-20260903-03-11: spec-queue add --after-spec/--after-brief refuses a missing target at add time, and a gate whose target later disappears reports (missing) rather than releasing the item', () => {
   const dirA = host({})
-  const rSpec = runNode(SCRIPT, ['add', 'x', '--after-spec', 'specs/nope.md'], { cwd: dirA })
+  const rSpec = runNode(SCRIPT, ['add', 'x', '--lane', 'plan', '--after-spec', 'specs/nope.md'], { cwd: dirA })
   assert.strictEqual(rSpec.status, 2, 'D2: add --after-spec of a nonexistent spec must exit 2, never silently write an ungated or wrongly-gated item: ' + rSpec.stdout + rSpec.stderr)
   assert.match(rSpec.stderr, /specs\/nope\.md/, 'the refusal must name the missing target: ' + rSpec.stderr)
   assert.ok(!fs.existsSync(path.join(dirA, '.git/spec-queue.json')),
     'a refused add must write nothing at all — the queue file must not even be created')
 
   const dirB = host({})
-  const rBrief = runNode(SCRIPT, ['add', 'x', '--after-brief', '99'], { cwd: dirB })
+  const rBrief = runNode(SCRIPT, ['add', 'x', '--lane', 'plan', '--after-brief', '99'], { cwd: dirB })
   assert.strictEqual(rBrief.status, 2, 'D2: add --after-brief of a nonexistent brief must exit 2: ' + rBrief.stdout + rBrief.stderr)
   assert.match(rBrief.stderr, /99/, 'the refusal must name the missing brief: ' + rBrief.stderr)
 
   const dirC = host({ specs: { '20260701/01-a.md': 'date: 2026-07-01\nstatus: hardened' } })
-  const rAdd = runNode(SCRIPT, ['add', 'ship it', '--after-spec', 'specs/20260701/01-a.md'], { cwd: dirC })
+  const rAdd = runNode(SCRIPT, ['add', 'ship it', '--lane', 'plan', '--after-spec', 'specs/20260701/01-a.md'], { cwd: dirC })
   assert.strictEqual(rAdd.status, 0, rAdd.stderr)
   fs.unlinkSync(path.join(dirC, 'specs/20260701/01-a.md'))
   const j = JSON.parse(runNode('scripts/spec-status.js', ['--root', dirC, '--next', '--json']).stdout)
-  const gated = j.next.find((e) => e.action === 'ship it')
+  const gated = j.next.find((e) => e.action === '/spec:plan ship it')
   assert.ok(gated, 'the gated prompt must still surface as its own --next entry once its target spec vanishes: ' + JSON.stringify(j.next))
   assert.deepStrictEqual(gated.blockers, ['after specs/20260701/01-a.md (missing)'],
     'D2: a deleted gate target must keep the item not-ready with a (missing) state, never silently release it: ' + JSON.stringify(gated))
@@ -675,4 +675,49 @@ test('spec-queue list cuts every row to one line, and show <ref> prints the untr
     'the hint replaces the dump; both bury the actionable line: ' + rBare.stderr)
   const rFlag = runNode(SCRIPT, ['--help'], { cwd: dir })
   assert.match(rFlag.stderr, /^usage:/m, 'a flag is never a <ref> — it still gets usage')
+})
+
+// A free-text item records its lane at add time — the one fact `next` cannot derive — and the
+// lane writes the command, so `next` and spec-status.js's Next block print the same paste line.
+test('spec-queue add requires a lane for free text, refuses a payload that names its own command, and refuses a lane on a brief', () => {
+  const dir = host({ briefs: { '05-a.md': '# Brief 05: A\n' } })
+  const cases = [
+    { argv: ['add', 'merge-back fails on a relative path'], mustMatch: /needs --lane plan\|prototype\|fix\|decide/ },
+    { argv: ['add', 'merge-back fails', '--lane', 'direct'], mustMatch: /unknown --lane "direct"/ },
+    { argv: ['add', '/spec:plan the export rework', '--lane', 'plan'], mustMatch: /pass the subject only, without "\/spec:plan"/ },
+    { argv: ['add', '05', '--lane', 'plan'], mustMatch: /--lane is for free text only/ },
+  ]
+  for (const c of cases) {
+    const r = runNode(SCRIPT, c.argv, { cwd: dir })
+    assert.strictEqual(r.status, 2, `${c.argv.join(' ')} must exit 2: ` + r.stdout + r.stderr)
+    assert.match(r.stderr, c.mustMatch, r.stderr)
+  }
+  assert.ok(!fs.existsSync(path.join(dir, '.git/spec-queue.json')), 'a refused add writes nothing')
+})
+
+test('spec-queue next prints the lane lead above the composed paste line, and spec-status --next prints the same line', () => {
+  const lanes = [
+    { lane: 'fix', lead: '🛣️ fix', line: '/spec:fix merge-back fails on a relative path' },
+    { lane: 'prototype', lead: '🛣️ prototype', line: '/spec:prototype merge-back fails on a relative path' },
+    { lane: 'decide', lead: '📌 decide — needs your yes, nothing to run', line: '📌 decide: merge-back fails on a relative path' },
+  ]
+  for (const l of lanes) {
+    const dir = host()
+    const rAdd = runNode(SCRIPT, ['add', 'merge-back fails on a relative path', '--lane', l.lane], { cwd: dir })
+    assert.strictEqual(rAdd.status, 0, rAdd.stderr)
+    const r = runNode(SCRIPT, ['next'], { cwd: dir })
+    assert.strictEqual(r.status, 0, r.stderr)
+    assert.strictEqual(r.stdout.trim().split('\n').slice(-2).join('\n'), `${l.lead}\n${l.line}`,
+      `next must lead with the ${l.lane} lane, then the paste line: ` + r.stdout)
+    const s = runNode('scripts/spec-status.js', ['--root', dir, '--next'])
+    assert.ok(s.stdout.includes(l.line), 'spec-status --next must print the same composed line, never the bare subject: ' + s.stdout)
+  }
+})
+
+test('spec-queue next marks a lane-less legacy item and still prints its payload verbatim', () => {
+  const dir = host({ queue: [{ id: 'q1', kind: 'prompt', payload: 'ship the landing page', added: '2026-08-23T10:00:00Z' }] })
+  const r = runNode(SCRIPT, ['next'], { cwd: dir })
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.strictEqual(r.stdout.trim(),
+    '⚠️ no lane — re-add with --lane plan|prototype|fix|decide, then spec-queue done q1\nship the landing page', r.stdout)
 })

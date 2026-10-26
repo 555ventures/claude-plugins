@@ -100,7 +100,7 @@ const { parseFilePlan } = require('./lib/file-plan')
 const { readLedgerRows, qualifyingObservation, sinceLastRelease } = require('./lib/observation')
 const {
   isSupersededBriefText, isItemDone, isItemReady, makeCtx, dedupeItems, stripAutoPlaced,
-  reconcileMissingBriefs,
+  reconcileMissingBriefs, promptAction,
 } = require('./lib/queue')
 // The local frontmatter() kv
 // loop this replaced stripped a trailing comment at the FIRST "#" regardless of what preceded it,
@@ -404,7 +404,7 @@ if (queueOverlay.on) {
       const r = isItemReady(it, ctx)
       const blockers = r.ready ? [] : [`after ${r.target} (${r.state})`]
       return {
-        action: it.payload, path: null, status: 'queued', brief: null, blockers,
+        action: promptAction(it), path: null, status: 'queued', brief: null, blockers,
         note: `queue item ${it.id}`, rank: 0, queue: true, __queuePos: i, __queueId: it.id,
       }
     })

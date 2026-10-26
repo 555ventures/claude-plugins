@@ -28,8 +28,10 @@
 //   next                          reconcile+write, print the pick (or a prompt payload)
 //   list                          pending items only, one line each (age, gates, flags), footer
 //   groom                         read-only: duplicates · cites done · gate met · stale buckets
-//   add <payload…> [--top | --at <n>] [--after-spec <path> | --after-brief NN]
-//                  [--when <type>:<args>] [--distinct]
+//   add <payload…> [--lane plan|prototype|fix|decide] [--top | --at <n>]
+//                  [--after-spec <path> | --after-brief NN] [--when <type>:<args>] [--distinct]
+//                  --lane is required for free text and refused for a brief/spec; the lane
+//                  writes the command, so a free-text payload never opens with one
 //   move <ref> <n>                n counts pending positions as `list` prints them
 //   done <ref>                    manual tick: stamp ticked
 //   show <ref>                    the item's FULL payload (list/status cut rows to one line,
@@ -56,7 +58,7 @@ const { readLedgerRows } = require('./lib/observation')
 const {
   normBrief, isSupersededBriefText, isItemDone, isItemReady, makeCtx,
   dedupeItems, stripAutoPlaced, reconcileMissingBriefs,
-  promptTokens, jaccard, citesDoneSpec,
+  promptTokens, jaccard, citesDoneSpec, LANES, promptAction,
 } = require('./lib/queue')
 
 const SPEC_STATUS = path.join(__dirname, 'spec-status.js')
@@ -64,7 +66,7 @@ const SPEC_STATUS = path.join(__dirname, 'spec-status.js')
 function usage() {
   console.error('usage: spec-queue.js <next|list|groom|add|move|done|show> [args]')
   console.error('  next | list | groom')
-  console.error('  add <payload…> [--top | --at <n>] [--after-spec <path> | --after-brief NN] [--when <type>:<args>] [--distinct]')
+  console.error('  add <payload…> [--lane plan|prototype|fix|decide] [--top | --at <n>] [--after-spec <path> | --after-brief NN] [--when <type>:<args>] [--distinct]')
   console.error('  move <ref> <n> | done <ref> | show <ref>')
 }
 
@@ -313,7 +315,15 @@ function itemDesc(it, briefNameByNum) {
     return `brief ${it.brief}${name ? ` (${name})` : ''}`
   }
   if (it.kind === 'spec') return `spec ${it.spec}`
-  return it.payload
+  return promptAction(it)
+}
+
+// The lane lead `next` prints above a prompt item's paste line. A lane-less item gets the
+// ⚠️ mark and its remedy (there is no re-lane verb: re-add with --lane, then tick the old id).
+const LANE_NAMES = Object.keys(LANES).join('|')
+function laneLead(item) {
+  if (!item.lane) return `⚠️ no lane — re-add with --lane ${LANE_NAMES}, then spec-queue done ${item.id || '<ref>'}`
+  return item.lane === 'decide' ? '📌 decide — needs your yes, nothing to run' : `🛣️ ${item.lane}`
 }
 
 // Every rendered row is exactly one line. A free-text payload runs to hundreds of words, and
@@ -361,7 +371,7 @@ function parseWhen(raw, ctx) {
 // next-pointer derivation — rather than re-deriving a brief/spec's action here.
 function printTopLine(item) {
   if (!item) { console.log('✨ queue empty — nothing left undone'); return }
-  if (item.kind === 'prompt') { console.log(item.payload); return }
+  if (item.kind === 'prompt') { console.log(`${laneLead(item)}\n${promptAction(item)}`); return }
   const r = spawnSync(process.execPath, [SPEC_STATUS, '--root', root, '--next'], { encoding: 'utf8' })
   const lines = (r.stdout || '').split('\n')
   console.log(lines.slice(1).join('\n').trim() || itemDesc(item, new Map()))
@@ -462,7 +472,7 @@ switch (sub) {
   }
 
   case 'add': {
-    const flags = { when: null, top: false, at: null, afterSpec: null, afterBrief: null, distinct: false }
+    const flags = { when: null, top: false, at: null, afterSpec: null, afterBrief: null, distinct: false, lane: null }
     const payloadParts = []
     for (let i = 0; i < rest.length; i++) {
       const a = rest[i]
@@ -472,12 +482,13 @@ switch (sub) {
       else if (a === '--after-spec') flags.afterSpec = rest[++i]
       else if (a === '--after-brief') flags.afterBrief = rest[++i]
       else if (a === '--when') flags.when = rest[++i]
+      else if (a === '--lane') flags.lane = rest[++i]
       else if (a === '--after') { console.error('spec-queue: --after is retired — use --at <n> to insert at a specific pending position'); process.exit(2) }
       else if (a === '--brief') { console.error('spec-queue: --brief is retired — pass the brief number as the payload directly (e.g. spec-queue add 05)'); process.exit(2) }
       // An unrecognized --flag never folds into the payload: that silently turns a spec path into a
       // free-text prompt item (observed: `add specs/x.md --root /abs` landed as kind "prompt").
       // spec-queue takes no --root — the queue is keyed off the cwd's git common dir; run it from the repo root.
-      else if (/^--/.test(a)) { console.error(`spec-queue: add: unknown flag ${a} — spec-queue takes no --root (run from the repo root); flags: --top | --at <n> | --after-spec <path> | --after-brief NN | --when <type>:<args> | --distinct`); process.exit(2) }
+      else if (/^--/.test(a)) { console.error(`spec-queue: add: unknown flag ${a} — spec-queue takes no --root (run from the repo root); flags: --lane <lane> | --top | --at <n> | --after-spec <path> | --after-brief NN | --when <type>:<args> | --distinct`); process.exit(2) }
       else payloadParts.push(a)
     }
     const payload = payloadParts.join(' ')
@@ -503,6 +514,28 @@ switch (sub) {
       }
     } else {
       kind = 'prompt'
+    }
+
+    // A free-text item must say which command takes it next — the one fact `next` cannot
+    // derive. The lane writes the command, so the payload carries the subject only; a payload
+    // that opens with its own command would let the two disagree. A brief or spec item's next
+    // command is already derived by spec-status.js, so a lane on one is refused, not ignored.
+    if (kind === 'prompt') {
+      if (!flags.lane) {
+        console.error(`spec-queue: add needs --lane ${LANE_NAMES} for free text — a small fix is done now in-session, another repo's work goes to that repo, never this queue`)
+        process.exit(2)
+      }
+      if (!Object.prototype.hasOwnProperty.call(LANES, flags.lane)) {
+        console.error(`spec-queue: unknown --lane "${flags.lane}" — one of ${LANE_NAMES}`)
+        process.exit(2)
+      }
+      if (/^\s*\//.test(payload)) {
+        console.error(`spec-queue: the lane writes the command — pass the subject only, without "${payload.trim().split(/\s/)[0]}"`)
+        process.exit(2)
+      }
+    } else if (flags.lane) {
+      console.error(`spec-queue: --lane is for free text only — a ${kind}'s next command is derived`)
+      process.exit(2)
     }
 
     // --after-* target validation — BEFORE any write, so a refused add creates nothing.
@@ -564,7 +597,7 @@ switch (sub) {
     if (kind === 'brief') newItem = { id: null, kind: 'brief', brief: briefNum, added: nowIso() }
     else if (kind === 'spec') newItem = { id: null, kind: 'spec', spec: specPath, added: nowIso() }
     else {
-      newItem = { id: null, kind: 'prompt', payload, added: nowIso() }
+      newItem = { id: null, kind: 'prompt', lane: flags.lane, payload, added: nowIso() }
       if (flags.when) {
         const w = parseWhen(flags.when, ctx)
         if (!w) {
@@ -640,7 +673,7 @@ switch (sub) {
     if (!ref) { console.error('spec-queue: show needs a <ref>'); process.exit(2) }
     const archived = archivedItem(ref)
     if (archived) {
-      out(`${archived.id}  ${archived.kind} · done (archived)\n\n${archived.kind === 'prompt' ? archived.payload : itemDesc(archived, new Map())}`)
+      out(`${archived.id}  ${archived.kind} · done (archived)\n\n${archived.kind === 'prompt' ? promptAction(archived) : itemDesc(archived, new Map())}`)
       process.exit(0)
     }
     const statusJson = readSpecStatusJson()
@@ -657,7 +690,7 @@ switch (sub) {
       console.log(r.ready ? '⏳ gate met' : `⏳ after ${r.target} (${r.state})`)
     }
     console.log('')
-    console.log(item.kind === 'prompt' ? item.payload : itemDesc(item, briefNameByNum))
+    console.log(item.kind === 'prompt' ? promptAction(item) : itemDesc(item, briefNameByNum))
     process.exit(0)
   }
 }

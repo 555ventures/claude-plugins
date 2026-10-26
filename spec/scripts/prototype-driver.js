@@ -835,9 +835,10 @@ function cmdMarkTestsDerived() {
   }
 
   // queue the plan paste at the top, once.
+  // The plan lane writes the `/spec:plan` command; the payload is the contract path alone.
   const paste = '/spec:plan ' + contractRel
   if (!status.queued) {
-    const queued = spawnSync(process.execPath, [path.join(__dirname, 'spec-queue.js'), 'add', paste, '--top'], { cwd: root, encoding: 'utf8' })
+    const queued = spawnSync(process.execPath, [path.join(__dirname, 'spec-queue.js'), 'add', contractRel, '--lane', 'plan', '--top'], { cwd: root, encoding: 'utf8' })
     if (queued.status !== 0) {
       die('spec-queue add failed (exit ' + queued.status + '): ' + ((queued.stdout || '') + (queued.stderr || '')).trim() +
         ' — remedy: fix the queue, then re-run --mark tests-derived')

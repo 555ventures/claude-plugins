@@ -218,8 +218,26 @@ function citesDoneSpec(item, ctx) {
   return null
 }
 
+// A free-text item's lane: which command takes it next, recorded by the session that adds it
+// (the one place that knows whether it is a bug, a feature, a screen change or a question) —
+// never guessed from the payload afterwards. One lane per entry command, plus `decide`, which
+// has no command: it waits on the user's yes. Small in-session fixes and other repos' work have
+// no lane on purpose — they never belong in this queue.
+const LANES = { plan: '/spec:plan', prototype: '/spec:prototype', fix: '/spec:fix', decide: null }
+
+// The ONE paste line for a prompt item, shared by `spec-queue next` and spec-status.js's Next
+// block so the two surfaces can never disagree: the lane's command followed by the payload
+// (the payload is the subject only — `add` refuses one that starts with a command). `decide`
+// prints a "needs your yes" lead instead of a command. A lane-less item (added before lanes
+// existed) prints its payload verbatim, exactly as before.
+function promptAction(item) {
+  if (!item.lane || !Object.prototype.hasOwnProperty.call(LANES, item.lane)) return item.payload
+  const command = LANES[item.lane]
+  return command ? `${command} ${item.payload}` : `📌 decide: ${item.payload}`
+}
+
 module.exports = {
   normBrief, isSupersededBriefText, evaluateWhen, isItemDone, isItemReady, makeCtx,
   dedupeItems, stripAutoPlaced, reconcileMissingBriefs,
-  promptTokens, jaccard, citesDoneSpec,
+  promptTokens, jaccard, citesDoneSpec, LANES, promptAction,
 }

@@ -82,7 +82,7 @@ Write the spec per the template. `status: draft`. While drafting:
    literals-leg hit in the File Plan as fix or recorded waive. Work discovered this session that needs its own spec →
    write the roadmap brief now; if it must run before the current work,
    `node "$(spec-paths spec-queue)" add NN --top`; any follow-up that must wait for this spec →
-   `node "$(spec-paths spec-queue)" add "<paste-ready action>" --after-spec {spec path}`.
+   `node "$(spec-paths spec-queue)" add "<subject>" --lane plan|prototype|fix|decide --after-spec {spec path}`.
 3. **Ledger row:** append exactly ONE row to `.claude/spec-runs.jsonl` (repo root;
    `printf '%s\n' '<json>' >>`), before the status flip: `spikes` = executed micro-spikes;
    `promiseSweep` = step 2's `promise-sweep.js` printed counters copied verbatim; `acLint` =

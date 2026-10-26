@@ -92,7 +92,10 @@ function stateStoriesCheck(entries, composites, kitDir) {
 // Per journey, the entry whose importPath ends `/<journey>.journey.stories.<ext>` under
 // `journeysDir` and whose tags include both `journey` and `play-fn` — the two tags together are
 // the proof the story exists AND walks (`play-fn` is Storybook's own auto-added tag for a story
-// carrying a `play` function). Returns `{ ok: true, stories: { <journey>: <story id> } }` once
+// carrying a `play` function). `journeysDir` is repo-relative but Storybook writes importPath
+// relative to its own project root — on a workspace host (Storybook in apps/web) that is
+// "src/journeys" against "apps/web/src/journeys", so the dir matches journeysDir or a `/`-bounded
+// suffix of it. Returns `{ ok: true, stories: { <journey>: <story id> } }` once
 // every journey has one, or `{ ok: false, journey }` naming the first missing journey.
 function journeyStoriesCheck(entries, journeys, journeysDir) {
   const stories = {}
@@ -103,7 +106,8 @@ function journeyStoriesCheck(entries, journeys, journeysDir) {
       const dir = path.posix.dirname(ip)
       const base = path.posix.basename(ip)
       const tags = Array.isArray(e.tags) ? e.tags : []
-      return dir === journeysDir && nameRe.test(base) && tags.includes('journey') && tags.includes('play-fn')
+      const dirMatches = dir === journeysDir || journeysDir.endsWith('/' + dir)
+      return dirMatches && nameRe.test(base) && tags.includes('journey') && tags.includes('play-fn')
     })
     if (!found) return { ok: false, journey: name }
     stories[name] = found.id

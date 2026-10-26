@@ -1,12 +1,14 @@
 ---
 date: 2026-10-26
-status: hardened
+status: done
+build_base: main
 tier: critical
 area: cross-cutting
 breaking: false
 depends_on: [specs/20261026/01-one-runner-for-host-commands.md]
 brief: n/a
 open_markers: 0
+diff_base: 90473c82def1aa54781a77214a445205364e1208
 ---
 
 # One tests-row check and host-shape hints
@@ -142,6 +144,14 @@ script would add a `spec-paths` key and an entry point for two checks.
 
 This spec is split from spec 01 because the decomposition cap counts 15 source rows there; the
 two share no Decision and land green independently.
+
+Build note (2026-10-26): the scripts worker read D3's `text` = `runtime.bootCommand` as the
+command value and logged a deviation for emitting the key name; review showed D3 names the key,
+as `config-fixed-port` does and as Contracts and AC-20261026-02-5 print — no departure.
+
+### Advisory debt (review rv_a008cbf5ec21)
+- a0 tests/consistency/one-tests-row-check.test.js:46 — tests/consistency/one-tests-row-check.test.js reimplements the scratch-directory helper inline (fs.mkdtempSync + manual rmSync) instead of using tmpdir() from tests/helpers.js.
+- a1 spec/scripts/port-check.js:22 — port-check.js header comment line 22 runs to ~136 characters instead of the file's ~100-column wrap.
 
 ## Canonical Delta
 

@@ -134,8 +134,12 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     `node "$(spec-paths spec-number-check)" --root .`; remedy = renumber whichever spec has not
     yet built to the next free number in its directory, rewriting its AC-ids, every `depends_on`
     entry that names it and any run-ledger `spec` path with it.
-19. **Fixed ports** (advisory) — run `node "$(spec-paths port-check)" --root .`; each printed
-    line is a fixed port literal under `tests/` or in `.claude/spec.config.json`.
+19. **Fixed ports and host command shape** (advisory) — run
+    `node "$(spec-paths port-check)" --root .`; each printed line is a fixed port literal under
+    `tests/` or in `.claude/spec.config.json`, or a host-shape hint: `config-compound-boot` →
+    move the line into a host script (e.g. a package.json script) and point `bootCommand` at it;
+    `config-no-test-count` → add `capabilities.testCountPattern` matching the runner's executed-tests
+    count line (advisory; zero tests stays sanctioned).
 20. **Expiry readiness** (advisory) — run `node "$(spec-paths test-expiry)" --root . --all-done`
     (dry run) and `node "$(spec-paths coverage-scope)" --root .`, both every time; the only
     deletion path is the same `test-expiry` command with `--apply`, run only after one

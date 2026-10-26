@@ -122,4 +122,9 @@ function parseFilePlanRows(text) {
   return rows
 }
 
-module.exports = { parseFilePlan, splitPlanCell, parseFilePlanRows }
+// True exactly when the row's Layer cell reads tests or test, any case, surrounding space ignored.
+function isTestsRow(row) {
+  return /^tests?$/i.test(String(row && row.layer || '').trim())
+}
+
+module.exports = { parseFilePlan, splitPlanCell, parseFilePlanRows, isTestsRow }

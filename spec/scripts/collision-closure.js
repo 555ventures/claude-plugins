@@ -41,7 +41,7 @@
 
 const fs = require('fs')
 const path = require('path')
-const { parseFilePlanRows } = require('./lib/file-plan')
+const { parseFilePlanRows, isTestsRow } = require('./lib/file-plan')
 const { globMatch, pipelineOwnedGlobs } = require('./lib/glob-match')
 const { getIgnoredPaths } = require('./lib/ignored-paths')
 
@@ -105,10 +105,9 @@ if (!rows.length) {
   process.exit(2)
 }
 
-const isTestsLayer = r => (r.layer || '').trim().toLowerCase() === 'tests'
 
 const planned = [...new Set(rows.flatMap(r => r.paths))].sort()
-const targets = [...new Set(rows.filter(r => !isTestsLayer(r)).flatMap(r => r.paths))].sort()
+const targets = [...new Set(rows.filter(r => !isTestsRow(r)).flatMap(r => r.paths))].sort()
 
 // ---- test-root derivation --------------------------------------------------------------
 
@@ -116,7 +115,7 @@ let testRoots
 if (testsCli.length) {
   testRoots = [...new Set(testsCli)]
 } else {
-  testRoots = [...new Set(rows.filter(isTestsLayer).flatMap(r => r.paths).map(p => p.split('/')[0]))]
+  testRoots = [...new Set(rows.filter(isTestsRow).flatMap(r => r.paths).map(p => p.split('/')[0]))]
   if (!testRoots.length) {
     console.error('collision-closure: no tests-layer File Plan rows and no --tests supplied — ' +
       "add tests rows to the spec's File Plan, or pass --tests <dir>")

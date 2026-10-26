@@ -136,7 +136,7 @@
 
 const fs = require('fs')
 const path = require('path')
-const { parseFilePlanRows } = require('./lib/file-plan')
+const { parseFilePlanRows, isTestsRow } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
 const {
   AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets, acIdOccurs,
@@ -407,7 +407,7 @@ const filePlanRows = parseFilePlanRows(specText)
 // finding — while a null/absent Action (no Action column bound in that row's table) keeps
 // isDelete false and the existence requirement stays enforced.
 const testsRowPaths = filePlanRows
-  .filter(r => (r.layer || '').trim().toLowerCase() === 'tests')
+  .filter(r => isTestsRow(r))
   .flatMap(r => r.paths.map(p => ({ p, isDelete: (r.action || '').trim().toLowerCase() === 'delete' })))
 
 function walkAll(dir, base, out = []) {

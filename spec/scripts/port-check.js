@@ -16,7 +16,10 @@
 // is read from the host config (lib/host-config.js CONFIG_RELPATH) after the tests walk: one
 // finding for runtime.readyCheck (runtime not inert, a loopback host named, PORT not read) and one
 // for prototype.url (loopback hostname, no {port}); `line` is the line holding the key, `text` the
-// key name. A missing or unparseable config adds nothing; non-loopback addresses are never
+// key name. Two advisory classes follow: config-compound-boot (runtime not inert, bootCommand
+// chains with && ; | or opens with cd; text is the key name — move it into a host script) and
+// config-no-test-count (testCommand or gateCommand set, capabilities.testCountPattern absent;
+// text is the key — add the pattern; zero executed tests stays sanctioned). A missing or unparseable config adds nothing; non-loopback addresses are never
 // flagged. It does NOT edit the config or judge whether the boot command honours PORT.
 //
 // Usage: port-check.js --root <dir> [--json]
@@ -95,6 +98,17 @@ function configFindings(root) {
     if (hostname && LOOPBACK_HOSTS.includes(hostname)) {
       out.push({ file: rel, line: keyLine(text, 'prototype', 'url'), class: 'config-fixed-port', text: 'prototype.url' })
     }
+  }
+  if (rt && typeof rt === 'object' && !rt.inert && typeof rt.bootCommand === 'string' &&
+      /&&|;|\||^\s*cd\s/.test(rt.bootCommand)) {
+    out.push({ file: rel, line: keyLine(text, 'runtime', 'bootCommand'), class: 'config-compound-boot', text: 'runtime.bootCommand' })
+  }
+  const caps = cfg.capabilities
+  const pattern = caps && typeof caps === 'object' ? caps.testCountPattern : undefined
+  const hasCmd = (k) => typeof cfg[k] === 'string' && cfg[k].trim() !== ''
+  if (!(typeof pattern === 'string' && pattern !== '') && (hasCmd('testCommand') || hasCmd('gateCommand'))) {
+    out.push({ file: rel, line: keyLine(text, '', hasCmd('testCommand') ? 'testCommand' : 'gateCommand'),
+      class: 'config-no-test-count', text: 'capabilities.testCountPattern' })
   }
   return out
 }

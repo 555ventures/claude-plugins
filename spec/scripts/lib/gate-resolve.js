@@ -13,7 +13,7 @@
 //   - config.gateCommand without {testDirs}/{scopeDirs} returns { gate: config.gateCommand } as-is
 //   - {testDirs} -> space-joined quoted globs derived from the spec's File Plan test rows (glob
 //     form — `node --test <dir>` does not run files on Node 26)
-//   - {scopeDirs} -> space-joined (unquoted) unique directories of those same test files
+//   - {scopeDirs} -> space-joined (quoted only when unsafe) unique directories of those same test files
 //   - no File Plan test rows to resolve either placeholder -> { gate: null, reason: 'no File Plan
 //     test rows to resolve {testDirs}' }
 //
@@ -40,6 +40,7 @@
 // Exit codes: n/a (library, not an entrypoint).
 
 const path = require('path')
+const { quote } = require('./host-run')
 const { parseFilePlan, parseFilePlanRows } = require('./file-plan')
 
 function resolveGate(specText, config) {
@@ -66,10 +67,10 @@ function resolveGateForFiles(gate, testFiles) {
     const dir = path.dirname(f)
     const m = path.basename(f).match(/(\.[a-z]+)+$/i)
     const suffix = /\.(test|spec)\./.test(f) ? '*.' + f.split('.').slice(-2).join('.') : (m ? '*' + m[0] : '*')
-    globs.add(`'${dir === '.' ? '' : dir + '/'}${suffix}'`)
+    globs.add(quote(`${dir === '.' ? '' : dir + '/'}${suffix}`))
   }
   const dirsStr = [...globs].join(' ')
-  return gate.replace(/\{testDirs\}/g, dirsStr).replace(/\{scopeDirs\}/g, [...new Set(testFiles.map(f => path.dirname(f)))].join(' '))
+  return gate.replace(/\{testDirs\}/g, dirsStr).replace(/\{scopeDirs\}/g, [...new Set(testFiles.map(f => path.dirname(f)))].map(quote).join(' '))
 }
 
 module.exports = { resolveGate, resolveGateForFiles }

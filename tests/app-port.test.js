@@ -100,17 +100,3 @@ test('AC-20261005-03-21: every shipped finalist carries a PORT-reading readyChec
   assert.strictEqual(tanstack.bootCommand, 'npm run dev -- --port $PORT',
     'Vite does not read PORT, so tanstack-node must pass it as a flag or its dev server serves on 5173 and the race smoke goes not-ready')
 })
-
-test('bootLine: PORT reaches every command of a compound bootCommand, not only the first', () => {
-  const { bootLine } = loadModule()
-  const { spawnSync } = require('node:child_process')
-  // shop-bltr 2026-10-25: `PORT=<p> build && cd apps/web && exec node server.mjs` gave PORT to the
-  // build alone, so the server listened on its default and readiness on <p> never passed.
-  const command = 'echo "build=$PORT" && cd / && exec sh -c \'echo "server=$PORT"\''
-  const line = bootLine(command, 4321)
-  const r = spawnSync('sh', ['-c', line], { encoding: 'utf8', env: { PATH: process.env.PATH } })
-  assert.strictEqual(r.stdout, 'build=4321\nserver=4321\n',
-    'the server process at the end of the boot line must see PORT, or it binds its default port and readiness on the allocated one never passes: ' + JSON.stringify(line) + ' -> ' + JSON.stringify(r))
-  assert.strictEqual(bootLine(command, undefined), command,
-    'a fixed-address host gets the bootCommand untouched — no PORT the host never opted into')
-})

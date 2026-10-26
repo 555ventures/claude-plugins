@@ -85,6 +85,7 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
+const { runAsync } = require('./lib/host-run')
 const { spawn, spawnSync } = require('child_process')
 const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 const { computeTestsExecuted, computeSkips, isUnobserved } = require('./lib/count-observation')
@@ -118,16 +119,7 @@ const q = (p) => `"${p}"`
 // spawn-failed child collapses to a red leg (exit 1), never a silent pass — mirrors review-legs.js
 // exactly so the two scripts' child-process semantics never drift apart.
 function sh(cmd, opts = {}) {
-  return new Promise((resolve) => {
-    const env = { ...process.env, ...opts.env }
-    delete env.NODE_TEST_CONTEXT
-    const child = spawn('bash', ['-c', cmd], { cwd: opts.cwd, env })
-    let out = '', err = ''
-    child.stdout.on('data', d => { out += d })
-    child.stderr.on('data', d => { err += d })
-    child.on('error', () => resolve({ code: 127, out, err }))
-    child.on('close', code => resolve({ code: code === null ? 1 : code, out, err }))
-  })
+  return runAsync(cmd, { cwd: opts.cwd, env: opts.env })
 }
 
 // computeTestsExecuted/computeSkips/
@@ -266,8 +258,7 @@ async function runMigrationsLeg(root, migrationsCheck, outDir) {
   return { leg: 'migrations', exit: r.code, observed: { result: r.code === 0 ? 'pass' : 'fail' } }
 }
 
-// BASE_URL={stagingUrl} is a shell env-var prefix on the whole e2eCommand, never an option
-// passed to spawn — a multi-statement e2eCommand script must see it too.
+// BASE_URL={stagingUrl} rides as spawn env, so every command of a compound e2eCommand sees it.
 // `executed` is derived on EVERY run,
 // red or green, through the lib's last-match parser, and recorded as a new LAST key on
 // `observed`. The existing branch on the child's exit code runs unchanged to produce
@@ -275,8 +266,7 @@ async function runMigrationsLeg(root, migrationsCheck, outDir) {
 // an observed zero or a declared testCountPattern that never matched is the unsupported "the
 // suite ran" promise this leg exists to catch. A non-zero child exit is recorded as-is.
 async function runE2eLeg(root, release, capabilities, outDir) {
-  const cmd = `BASE_URL=${q(release.stagingUrl)} ${release.e2eCommand}`
-  const r = await sh(cmd, { cwd: root })
+  const r = await sh(release.e2eCommand, { cwd: root, env: { BASE_URL: release.stagingUrl } })
   fs.writeFileSync(path.join(outDir, 'e2e.txt'), r.out + r.err)
   const output = r.out + r.err
   const skipped = computeSkips(output, capabilities.skipReportPattern).skips

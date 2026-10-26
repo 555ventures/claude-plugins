@@ -243,7 +243,7 @@ test('AC-20260823-01-7: stage appends exactly ONE ci row with conclusion success
   }
 })
 
-test('AC-20260908-05-6 (retag of AC-20260823-01-8): stage appends the e2e row with passed = executed - skipped (never the raw executed count), the row additionally carrying executed:5 (AC-20260908-05-5\'s rule), and exports BASE_URL into the child env', async () => {
+test('AC-20260908-05-6 (retag of AC-20260823-01-8) / AC-20261026-01-10: stage appends the e2e row with passed = executed - skipped (never the raw executed count), the row additionally carrying executed:5 (AC-20260908-05-5\'s rule), and exports BASE_URL into the child env', async () => {
   const host = await setupWorkingHost('rl-ac8')
   try {
     const e2eScript = path.join(host.dir, 'e2e-stub.sh')

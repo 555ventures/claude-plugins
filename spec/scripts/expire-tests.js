@@ -78,7 +78,6 @@
 
 const fs = require('fs')
 const path = require('path')
-const { spawnSync } = require('child_process')
 const { listTestFiles, scanCalls, scanDescribes, resolveReference } = require('./lib/scan-test-calls')
 const { deriveInvariants } = require('./lib/invariants')
 const {
@@ -87,6 +86,7 @@ const {
 const { fmValue } = require('./lib/frontmatter')
 const { readConfig } = require('./lib/host-config')
 const { resolveGateForFiles } = require('./lib/gate-resolve')
+const hostRun = require('./lib/host-run')
 
 const USAGE = 'expire-tests.js --root <r> (--spec <path> | --all-done | --invariants) [--apply [--keep-on-red]] [--json]'
 const EXPIRY_APPLIES_FROM = '20260911'
@@ -483,8 +483,8 @@ if (apply && writes.length > 0) {
       : '⚠ no gateCommand in the host config') +
       ' — the applied sweep was not checked; run the host\'s gates before committing it')
   } else {
-    const run = spawnSync(command, {
-      cwd: root, shell: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 256 * 1024 * 1024,
+    const run = hostRun.run(command, {
+      cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 256 * 1024 * 1024,
     })
     const ok = run.status === 0
     const reverted = !ok && !keepOnRed

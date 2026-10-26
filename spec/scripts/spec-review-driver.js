@@ -233,7 +233,7 @@ const crypto = require('crypto')
 // <spec>.build/ sidecar, and a second copy here would be the drift seam ci-query.js and
 // lib/gate-resolve.js were each unified over. Local wrappers below (appendLedger/saveSidecar)
 // keep every existing call site in this file unchanged — only the load/save primitives moved.
-const { runChild, writeOut, appendLedger: appendLedgerLib, loadSidecar, saveSidecar: saveSidecarLib } = require('./lib/driver-io')
+const { runChild, runHost, writeOut, appendLedger: appendLedgerLib, loadSidecar, saveSidecar: saveSidecarLib } = require('./lib/driver-io')
 // the one shared frontmatter reader, replacing
 // this driver's own local copy (rv_e83659d49386).
 // fmVal renamed fmValue (no alias survives); fmBlock replaces this file's own
@@ -1732,11 +1732,9 @@ function runCloseTimeGate() {
     die('close-time host gate could not be resolved — ' + reason + ' — fix the host config / File ' +
       'Plan, then re-run `node ' + __filename + ' ' + specPath + ' --mark closed`')
   }
-  const env = { ...process.env }
-  delete env.NODE_TEST_CONTEXT
   // the resolved-gate re-run, then the
   // testCommand whole-suite re-run — unconditional, in that order, and that is all.
-  const r = runChild('bash', ['-c', resolved.gate], { cwd: repoRoot, encoding: 'utf8', env },
+  const r = runHost(resolved.gate, { cwd: repoRoot, encoding: 'utf8' },
     'close-time host gate (' + resolved.gate + ')')
   if (r.status !== 0) {
     const output = (r.stdout || '') + (r.stderr || '')
@@ -1758,7 +1756,7 @@ function runCloseTimeGate() {
       ' ' + specPath + ' --mark closed`')
   }
 
-  const sr = runChild('bash', ['-c', gateConfig.testCommand], { cwd: repoRoot, encoding: 'utf8', env },
+  const sr = runHost(gateConfig.testCommand, { cwd: repoRoot, encoding: 'utf8' },
     'close-time whole-suite (' + gateConfig.testCommand + ')')
   if (sr.status === 0) return
 

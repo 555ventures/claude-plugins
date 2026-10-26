@@ -137,9 +137,10 @@
 
 const fs = require('fs')
 const path = require('path')
-const { spawn, spawnSync } = require('child_process')
+const { spawnSync } = require('child_process')
 const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
+const { runAsync } = require('./lib/host-run')
 const { computeTestsExecuted, computeSkips, isUnobserved } = require('./lib/count-observation')
 const { extractSection, parseAcBullets, parseDisposition } = require('./lib/spec-sections')
 const { fmMap } = require('./lib/frontmatter')
@@ -214,24 +215,12 @@ function appendRow(leg, exit, observed) {
 // rule for testsExecuted). Never assumed zero either way. lastMatch/computeTestsExecuted/
 // computeSkips/isUnobserved live in ./lib/count-observation.js — the sole home both this script and release-legs.js import.
 function sh(cmd, opts = {}) {
-  return new Promise((resolve) => {
-    // Scrub the test-runner context vars: a gate that itself runs `node --test` must behave as
-    // a fresh top-level runner even when review-legs.js was invoked from inside one (a nested
-    // runner inheriting NODE_TEST_CONTEXT degrades to a silent child-protocol run — exit 0
-    // over failing tests).
-    // SPEC_REVIEW_BASE is set to the
-    // exact --base value AFTER opts.env, in every leg subprocess, so no leg-local override can
-    // redirect the base this review is judging against — a host check (e.g. plugin-bump.js
-    // --check) that resolves its own comparison point reads it as one candidate among its own.
-    const env = { ...process.env, ...opts.env, SPEC_REVIEW_BASE: base }
-    delete env.NODE_TEST_CONTEXT
-    const child = spawn('bash', ['-c', cmd], { cwd: root, env })
-    let out = '', err = ''
-    child.stdout.on('data', d => { out += d })
-    child.stderr.on('data', d => { err += d })
-    child.on('error', () => resolve({ code: 127, out, err }))
-    child.on('close', code => resolve({ code: code === null ? 1 : code, out, err }))
-  })
+  // lib/host-run.js scrubs the test-runner context vars (a gate that itself runs `node --test`
+  // must behave as a fresh top-level runner). SPEC_REVIEW_BASE is set to the exact --base value
+  // AFTER opts.env, in every leg subprocess, so no leg-local override can redirect the base this
+  // review is judging against — a host check (e.g. plugin-bump.js --check) that resolves its own
+  // comparison point reads it as one candidate among its own.
+  return runAsync(cmd, { cwd: root, env: { ...opts.env, SPEC_REVIEW_BASE: base } })
 }
 
 async function main() {

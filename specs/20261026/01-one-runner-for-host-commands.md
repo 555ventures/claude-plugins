@@ -1,6 +1,7 @@
 ---
 date: 2026-10-26
-status: hardened
+status: done
+build_base: main
 tier: critical
 area: cross-cutting
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 brief: n/a
 open_markers: 0
 spiked: 2026-10-26
+diff_base: 2bb7fa786dda570f9c6dccb701e2543292f6a794
 ---
 
 # One runner for host commands
@@ -44,6 +46,7 @@ on its allocated port when run from a symlinked root.
 | D11 | Out of scope, derived from evidence: no config key is deleted. `replay` has no reader anywhere in the plugin (only stale data in two host configs, which is host work); `pictures` is a live block declared in the grounding contract and read by `pictures.js` and genesis. `grounding-contract.md` is not edited. [no-ac: no code change] | The queue item's step (5) assumed both were dead; deleting `pictures` would be a contract change, which this spec's non-goal forbids. |
 | D12 | Also out of scope: `smoke.sh` (a shell script, not a JS spawn site — its `bash -c "$READY"` is already the same interpreter) and prototype-driver's `shellQuote`, which quotes the plugin's own printed `node <driver> "<idea>"` argument, never a host command. [no-ac: unchanged surfaces] | The ban is for JS sites that run host strings; widening it would sweep in non-host printing. |
 | D13 | `spec/.claude-plugin/plugin.json` is bumped with `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"`. [no-ac: the gate's `plugin-bump.js --check` is the oracle] | Repo version discipline. |
+| D14 | Build-time ruling (user, 2026-10-26, after a Fable consult): AC-20261026-01-7 is a CONTINUE-TO pin, not a red-first criterion — its test passes on the pre-image because 7.274.0 already fixed the compound PORT line. The test is kept unchanged as the only guard that a driver's printed boot line still carries the allocated port. (AC-20261026-01-7) | Fix the verb, never the measurement; nothing else pins the print-site wiring once `bootLine` retires. |
 
 ## File Plan
 
@@ -142,7 +145,7 @@ module.exports = { quote, printable, run, runAsync }
   `BASE_URL=https://staging.example.test`) → writes tests/release-legs/compound-base-url.test.js
 - **AC-20261026-01-7**: WHEN the prototype driver prints its ROUND boot line for a workspace host
   whose `runtime.bootCommand` is `cd apps/web && exec node server.mjs`, reached through a
-  symlinked path to the host THE SYSTEM SHALL print a line that, run with `sh -c` in the
+  symlinked path to the host THE SYSTEM SHALL CONTINUE TO print a line that, run with `sh -c` in the
   prototype worktree, serves the resolved `prototype.url` (GET `http://127.0.0.1:<appPort>` →
   body `workspace-host ok`) → writes tests/prototype/workspace-host-boot.test.js
 - **AC-20261026-01-8**: WHEN `spec/scripts/**/*.js` is scanned THE SYSTEM SHALL find zero shell

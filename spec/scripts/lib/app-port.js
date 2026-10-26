@@ -8,8 +8,7 @@
 // Usage: node app-port.js --if-reads <command>
 //   command reads $PORT  -> prints one free loopback port and a newline
 //   command does not     -> prints nothing
-// Library: freePort(), readsPort(command), hasPortSlot(url), resolveUrl(url, port),
-// bootLine(command, port).
+// Library: freePort(), readsPort(command), hasPortSlot(url), resolveUrl(url, port).
 //
 // Deliberately does NOT hold a port open (the window between close and the app's bind is not
 // closed here, no retry loop), persist anything, or inspect the host's config — callers pass the
@@ -49,14 +48,7 @@ function resolveUrl(url, port) {
   return String(url).split('{port}').join(String(port))
 }
 
-// The boot line a driver prints for the session to run. bootCommand is an arbitrary shell string
-// (often `build && cd dir && exec server`), so PORT is exported for the whole line — a bare
-// `PORT=n <command>` prefix reaches only its first simple command.
-function bootLine(command, port) {
-  return (port ? 'export PORT=' + port + '; ' : '') + command
-}
-
-module.exports = { freePort, readsPort, hasPortSlot, resolveUrl, bootLine }
+module.exports = { freePort, readsPort, hasPortSlot, resolveUrl }
 
 if (require.main === module) {
   const argv = process.argv.slice(2)

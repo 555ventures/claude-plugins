@@ -193,7 +193,7 @@ test('AC-20260911-04-9: WHEN a reuses reference resolves to zero titles THE SYST
 // `touch <marker>` therefore ran the touch for real instead of matching it as literal text, and
 // the run's own output no longer named the title verbatim (D8's selection proof failed), so the
 // reference degraded to "unselected" and fell back to whole-file colour. Single-quoting the
-// substituted fragments (shellQuoteSingle) fixes both: the marker is never created, and the
+// substituted fragments (the single-quote helper in lib/host-run.js) fixes both: the marker is never created, and the
 // title still selects and resolves as a genuine reuses match.
 test('AC-20260911-04-9 / AC-20260911-04-7: WHEN a reuses reference\'s own title carries a backtick-quoted shell command, a $-prefixed name, a single quote and a double quote THE SYSTEM selects and resolves that exact case with no fallback and executes no shell expansion of the title', () => {
   const { dir, base } = newHost('rcd9-quoting', FILTER_CONFIG)

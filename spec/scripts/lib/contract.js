@@ -22,6 +22,7 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
+const hostRun = require('./host-run')
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
@@ -61,7 +62,7 @@ function pictureAll({ root, worktreePath, designDir, config, statesDoc, viewport
       // `&` or `;` would otherwise end the command early and background it, and the PNG check below
       // could then pass a picture of the wrong state. A host that already wrote "{url}" still works
       // (adjacent double quotes concatenate); the same values ride in the environment.
-      const runEnv = Object.assign({}, process.env, env || {}, {
+      const runEnv = Object.assign({}, env || {}, {
         PROTO_PICTURE_URL: url, PROTO_PICTURE_OUT: outFile,
         PROTO_PICTURE_WIDTH: String(size.width), PROTO_PICTURE_HEIGHT: String(size.height),
       })
@@ -70,7 +71,7 @@ function pictureAll({ root, worktreePath, designDir, config, statesDoc, viewport
         .split('{out}').join('"$PROTO_PICTURE_OUT"')
         .split('{width}').join('"$PROTO_PICTURE_WIDTH"')
         .split('{height}').join('"$PROTO_PICTURE_HEIGHT"')
-      const r = spawnSync('bash', ['-c', cmd], { cwd: worktreePath, encoding: 'utf8', env: runEnv })
+      const r = hostRun.run(cmd, { cwd: worktreePath, encoding: 'utf8', env: runEnv })
       if (r.status !== 0) {
         return {
           ok: false,
@@ -178,8 +179,8 @@ function worktreeIsRegistered(root, worktreePath) {
 function runDbDestroy({ config, worktreePath, branch, brief, alreadyRan }) {
   if (alreadyRan) return { ok: true, ran: false }
   if (!(config.prototype && config.prototype.dbDestroy)) return { ok: true, ran: false }
-  const env = Object.assign({}, process.env, { PROTO_BRANCH: branch, PROTO_WORKTREE: worktreePath, PROTO_BRIEF: brief })
-  const r = spawnSync('bash', ['-c', config.prototype.dbDestroy], { cwd: worktreePath, encoding: 'utf8', env })
+  const env = { PROTO_BRANCH: branch, PROTO_WORKTREE: worktreePath, PROTO_BRIEF: brief }
+  const r = hostRun.run(config.prototype.dbDestroy, { cwd: worktreePath, encoding: 'utf8', env })
   if (r.status !== 0) {
     return { ok: false, message: 'prototype.dbDestroy failed (exit ' + r.status + '): ' + ((r.stdout || '') + (r.stderr || '')).trim() }
   }

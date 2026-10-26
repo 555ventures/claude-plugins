@@ -53,6 +53,7 @@ const path = require('path')
 const os = require('os')
 const crypto = require('crypto')
 const { spawnSync } = require('child_process')
+const hostRun = require('./lib/host-run')
 const { globMatch } = require('./lib/glob-match')
 const { configPath, CONFIG_RELPATH, DEFAULT_TEST_GLOBS } = require('./lib/host-config')
 
@@ -152,7 +153,7 @@ if (sub === 'probe') {
 // pass silently.
 function probeTestCommand(cmd, hostRoot) {
   const nonexistent = path.join(hostRoot, '.spec-init-gen-probe-nonexistent.txt')
-  const r = spawnSync('bash', ['-c', cmd + ' ' + JSON.stringify(nonexistent)], { cwd: hostRoot })
+  const r = hostRun.run(cmd + ' ' + hostRun.quote(nonexistent), { cwd: hostRoot })
   const exit = r.status
   return { failsLoudOnNoMatch: exit !== 0, exit }
 }

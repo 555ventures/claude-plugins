@@ -104,7 +104,7 @@
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
-const { runChild, writeOut, appendLedger, loadSidecar, saveSidecar: saveSidecarLib } = require('./lib/driver-io')
+const { runChild, runHost, writeOut, appendLedger, loadSidecar, saveSidecar: saveSidecarLib } = require('./lib/driver-io')
 const { fmValue } = require('./lib/frontmatter')
 const { readConfig } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
@@ -116,6 +116,7 @@ const { sessionModel } = require('./lib/session-stamp.js')
 const { CLASS_ID_RE } = require('./lib/escape-row')
 const { extractSection } = require('./lib/spec-sections')
 const appPortLib = require('./lib/app-port')
+const { printable } = require('./lib/host-run')
 
 function die(msg) { process.stderr.write('spec-build-driver: ' + msg + '\n'); process.exit(2) }
 
@@ -558,8 +559,6 @@ function runGate() {
   const gateCommand = postGate !== null
     ? resolved.gate + " && echo '== postGateCommand' && " + postGate
     : resolved.gate
-  const env = { ...process.env }
-  delete env.NODE_TEST_CONTEXT
   const k = (marks.gateRuns || []).length + 1
   fs.mkdirSync(sidecarDir, { recursive: true })
   const logPath = path.join(sidecarDir, 'gate-' + k + '.log')
@@ -578,7 +577,7 @@ function runGate() {
   }
   let r
   try {
-    r = runChild('bash', ['-c', gateCommand], { cwd: repoRoot, stdio: ['ignore', fd, fd], env },
+    r = runHost(gateCommand, { cwd: repoRoot, stdio: ['ignore', fd, fd] },
       'gate (' + gateCommand + ')')
   } finally {
     try { fs.closeSync(fd) } catch (e) { /* already closed */ }
@@ -679,8 +678,7 @@ function handleReplayed() {
   saveSidecar()
   fs.mkdirSync(sidecarDir, { recursive: true })
   const logPath = path.join(sidecarDir, 'replay-' + k + '.log')
-  const env = { ...process.env, PROTO_URL: addr.url }
-  delete env.NODE_TEST_CONTEXT
+  const env = { PROTO_URL: addr.url }
   let fd
   try {
     fd = fs.openSync(logPath, 'w')
@@ -690,7 +688,7 @@ function handleReplayed() {
   }
   let r
   try {
-    r = runChild('bash', ['-c', proto.e2eRun.split('{file}').join(e2eFile)],
+    r = runHost(proto.e2eRun.split('{file}').join(e2eFile),
       { cwd: repoRoot, stdio: ['ignore', fd, fd], env }, 'prototype.e2eRun (' + proto.e2eRun + ')')
   } finally {
     try { fs.closeSync(fd) } catch (e) { /* already closed */ }
@@ -1302,7 +1300,7 @@ function replayStepBody() {
     const where = addr.url ? addr.url : '(no prototype.url declared in the host config)'
     return `## Step: replay the contract's tests against the production build\n` +
       `Read only: ${contractRel}\n` +
-      `Session: start the app in the background (tracked) so it answers at ${where}: ${appPortLib.bootLine(boot, addr.port)}\n` +
+      `Session: start the app in the background (tracked) so it answers at ${where}: ${printable(boot, { PORT: addr.port })}\n` +
       `Then: node ${__filename} ${specPath} --mark replayed`
   }
   const contract = readContract()

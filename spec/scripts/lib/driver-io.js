@@ -30,6 +30,7 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
+const hostRun = require('./host-run')
 
 // spawnSync's `status` is null when
 // the child dies by signal, fails to spawn, or overflows maxBuffer — every caller that reads
@@ -46,6 +47,21 @@ function runChild(cmd, args, opts, what) {
       : 'exited with no status (spawn failure)'
     const label = what || (cmd + ' ' + args.join(' '))
     process.stderr.write('driver-io: ' + label + ' died without an exit code (' + reason +
+      ') — nothing it was meant to produce can be trusted; fix the cause and re-run the driver\n')
+    process.exit(2)
+  }
+  return r
+}
+
+// runChild's no-status die for a host command string: hostRun.run (bash -c, env additions,
+// NODE_TEST_CONTEXT scrubbed) with the same fail-closed refusal.
+function runHost(command, opts, what) {
+  const r = hostRun.run(command, opts)
+  if (r.error || r.status === null) {
+    const reason = r.error ? r.error.message
+      : r.signal ? 'killed by signal ' + r.signal
+      : 'exited with no status (spawn failure)'
+    process.stderr.write('driver-io: ' + (what || command) + ' died without an exit code (' + reason +
       ') — nothing it was meant to produce can be trusted; fix the cause and re-run the driver\n')
     process.exit(2)
   }
@@ -112,4 +128,4 @@ function saveSidecar(dir, file, obj) {
   fs.writeFileSync(path.join(dir, file), JSON.stringify(obj, null, 2) + '\n')
 }
 
-module.exports = { runChild, writeOut, appendLedger, loadSidecar, saveSidecar }
+module.exports = { runChild, runHost, writeOut, appendLedger, loadSidecar, saveSidecar }

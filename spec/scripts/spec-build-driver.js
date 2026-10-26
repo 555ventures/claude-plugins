@@ -97,7 +97,7 @@
 // When
 // `prototype.url` carries `{port}` the build keeps one replay port in `<spec>.build/replay-port.json`
 // (`{"port": n}`), allocated the first time the REPLAY step prints or `--mark replayed` runs; the
-// step prints `PORT=<n> <bootCommand>` and the resolved address, and the replay joins each route
+// step prints `export PORT=<n>; <bootCommand>` and the resolved address, and the replay joins each route
 // url onto it. A fixed `prototype.url` is joined as-is.
 
 'use strict'
@@ -1302,7 +1302,7 @@ function replayStepBody() {
     const where = addr.url ? addr.url : '(no prototype.url declared in the host config)'
     return `## Step: replay the contract's tests against the production build\n` +
       `Read only: ${contractRel}\n` +
-      `Session: start the app in the background (tracked) so it answers at ${where}: ${addr.port ? 'PORT=' + addr.port + ' ' : ''}${boot}\n` +
+      `Session: start the app in the background (tracked) so it answers at ${where}: ${appPortLib.bootLine(boot, addr.port)}\n` +
       `Then: node ${__filename} ${specPath} --mark replayed`
   }
   const contract = readContract()

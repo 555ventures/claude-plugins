@@ -51,7 +51,7 @@
 //
 // when `prototype.url` carries `{port}` the driver
 // keeps one app port per prototype as `appPort` in status.json (allocated at --mark opened, or on
-// first need), prints `PORT=<appPort> <bootCommand>` in the ROUND and TESTS steps, and probes,
+// first need), prints `export PORT=<appPort>; <bootCommand>` in the ROUND and TESTS steps, and probes,
 // pictures and runs the tests at the resolved address; contract.json state urls stay relative.
 // The port is never re-allocated (delete `appPort` to re-pick by hand).
 //
@@ -1047,7 +1047,7 @@ function printRoundStep(status) {
   }
   const address = appAddress(status)
   lines.push('Session: in ' + worktreeRel + ', start the dev server in the background (tracked): ' +
-    (address.port ? 'PORT=' + address.port + ' ' : '') + (cfg.runtime && cfg.runtime.bootCommand))
+    appPortLib.bootLine(cfg.runtime && cfg.runtime.bootCommand, address.port))
   lines.push('Session: start the pin endpoint in the background (tracked): node ' + driverAbs + ' ' + argText() + ' serve --port ' + status.pinsPort)
   const reachable = probeUrl(address.url)
   let tailscalePort = ''
@@ -1099,7 +1099,7 @@ function printTestsStep() {
   lines.push('File: ' + (st.worktree || worktreeRel) + '/' + e2eFile + ' (prototype worktree — commit it on ' + branch + ') · title: `pin <id>: <note>`')
   const address = appAddress(st)
   lines.push('Session: start the dev server in the background (tracked): ' +
-    (address.port ? 'PORT=' + address.port + ' ' : '') + (cfg.runtime && cfg.runtime.bootCommand))
+    appPortLib.bootLine(cfg.runtime && cfg.runtime.bootCommand, address.port))
   lines.push('Session: write one test per line above in the prototype worktree and commit the file on ' + branch +
     '; each test must pass against the prototype and fail against ' + (st.base || contract.base))
   lines.push('Then:')

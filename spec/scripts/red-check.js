@@ -100,7 +100,7 @@ const path = require('path')
 const { execFileSync } = require('child_process')
 const hostRun = require('./lib/host-run')
 const { quote } = hostRun
-const { parseFilePlanRows } = require('./lib/file-plan')
+const { parseFilePlanRows, isTestsRow } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
 const { readConfig } = require('./lib/host-config')
 const { scanCalls } = require('./lib/scan-test-calls')
@@ -189,7 +189,7 @@ const untracked = gitLines(['status', '--porcelain', '--untracked-files=all'])
 const changedPaths = new Set([...trackedDiff, ...untracked])
 
 const nonTestsPatterns = filePlanRows
-  .filter(r => (r.layer || '').trim().toLowerCase() !== 'tests')
+  .filter(r => !isTestsRow(r))
   .flatMap(r => r.paths)
 
 function matchesNonTests(p) {
@@ -207,7 +207,7 @@ if (offending.length) {
 // ---- resolve tests-layer File Plan rows (DELETE rows skipped, per ac-matrix) --------
 
 const testsRowEntries = filePlanRows
-  .filter(r => (r.layer || '').trim().toLowerCase() === 'tests')
+  .filter(r => isTestsRow(r))
   .flatMap(r => {
     const isDelete = (r.action || '').trim().toLowerCase() === 'delete'
     return r.paths.map(p => ({ p, isDelete }))

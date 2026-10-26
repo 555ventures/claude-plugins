@@ -1,12 +1,14 @@
 ---
 date: 2026-10-26
-status: hardened
+status: implementing
+build_base: main
 tier: critical
 area: cross-cutting
 breaking: false
 depends_on: [specs/20261026/01-one-runner-for-host-commands.md]
 brief: n/a
 open_markers: 0
+diff_base: 90473c82def1aa54781a77214a445205364e1208
 ---
 
 # One tests-row check and host-shape hints

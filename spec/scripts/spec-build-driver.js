@@ -108,7 +108,7 @@ const { runChild, runHost, writeOut, appendLedger, loadSidecar, saveSidecar: sav
 const { fmValue } = require('./lib/frontmatter')
 const { readConfig } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
-const { parseFilePlanRows } = require('./lib/file-plan')
+const { parseFilePlanRows, isTestsRow } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
 // model is derived at row-write time (never once at
 // startup) — the review driver's own sibling reasoning applies here too.
@@ -179,9 +179,9 @@ const isBaselineRow = (r) => /^baselines?$/i.test((r.layer || '').trim())
 const baselinePaths = filePlanRows
   .filter((r) => isBaselineRow(r) && (r.action || '').trim().toUpperCase() !== 'DELETE')
   .flatMap((r) => r.paths)
-const hasTestsRows = filePlanRows.some((r) => /^tests?$/i.test((r.layer || '').trim()))
+const hasTestsRows = filePlanRows.some((r) => isTestsRow(r))
 const needsRedAttribution = filePlanRows.some((r) =>
-  !/^tests?$/i.test((r.layer || '').trim()) && !isBaselineRow(r) && (r.action || '').trim().toUpperCase() === 'CREATE')
+  !isTestsRow(r) && !isBaselineRow(r) && (r.action || '').trim().toUpperCase() === 'CREATE')
 
 // ---- admission ------------------------------------------------------------------------------
 const OWNING_COMMAND = { draft: '/spec:plan', done: '/spec:status', superseded: '/spec:status' }
@@ -346,7 +346,7 @@ function changedSinceBase(base) {
 function dirtyNonTestsPaths(base) {
   const changed = changedSinceBase(base)
   const nonTestsPaths = filePlanRows
-    .filter((r) => !/^tests?$/i.test((r.layer || '').trim())).flatMap((r) => r.paths)
+    .filter((r) => !isTestsRow(r)).flatMap((r) => r.paths)
   return nonTestsPaths.filter((p) => changed.has(p))
 }
 
@@ -399,7 +399,7 @@ if (!STATE_ONLY) {
 // ---- wave derivation ---------------------------------------------------------------
 function computeWaveOrder() {
   const layerGroups = Array.isArray(hostConfig.layerGroups) ? hostConfig.layerGroups : []
-  const nonTests = filePlanRows.filter((r) => !/^tests?$/i.test((r.layer || '').trim()) && !isBaselineRow(r))
+  const nonTests = filePlanRows.filter((r) => !isTestsRow(r) && !isBaselineRow(r))
   const rowsByLayer = new Map()
   for (const r of nonTests) {
     const layer = (r.layer || 'other').trim() || 'other'
@@ -737,7 +737,7 @@ function walkTree(dir, rootDir, out = []) {
 
 function handleTestsAuthored() {
   const rows = filePlanRows.filter((r) =>
-    /^tests?$/i.test((r.layer || '').trim()) && (r.action || '').trim().toUpperCase() !== 'DELETE')
+    isTestsRow(r) && (r.action || '').trim().toUpperCase() !== 'DELETE')
   const remedy = ' — author it, then re-run `node ' + __filename + ' ' + specPath +
     ' --mark tests-authored` (a file only the built product can produce and only a person may ' +
     'approve belongs on a `baseline`-layer row instead: it is expected at INTEGRATION, not here)'
@@ -782,7 +782,7 @@ function handleTestsAuthored() {
 // stop a build whose pre-image is provably clean.
 function handleRedAttributed() {
   const rows = filePlanRows.filter((r) =>
-    !/^tests?$/i.test((r.layer || '').trim()) && !isBaselineRow(r) && (r.action || '').trim().toUpperCase() === 'CREATE')
+    !isTestsRow(r) && !isBaselineRow(r) && (r.action || '').trim().toUpperCase() === 'CREATE')
   const createPaths = rows.flatMap((r) => r.paths)
 
   // The resume arm already answered the residue question for this run: on a cold resume with
@@ -1174,7 +1174,7 @@ if (STATE_ONLY) { writeOut(1, state + '\n'); process.exit(0) }
 // ---- step bodies -------------------------------------------------------------------------------
 function testsStepBody() {
   const paths = filePlanRows.filter((r) =>
-    /^tests?$/i.test((r.layer || '').trim()) && (r.action || '').trim().toUpperCase() !== 'DELETE')
+    isTestsRow(r) && (r.action || '').trim().toUpperCase() !== 'DELETE')
     .flatMap((r) => r.paths)
   return resumeDirtyWarning +
     `## Step: author the tests\n` +
@@ -1194,7 +1194,7 @@ function redFindingsStepBody() {
 }
 function redAttributionStepBody() {
   const createPaths = filePlanRows.filter((r) =>
-    !/^tests?$/i.test((r.layer || '').trim()) && !isBaselineRow(r) && (r.action || '').trim().toUpperCase() === 'CREATE')
+    !isTestsRow(r) && !isBaselineRow(r) && (r.action || '').trim().toUpperCase() === 'CREATE')
     .flatMap((r) => r.paths)
   return `## Step: red attribution — confirm the red is attributable to code that does not exist yet\n` +
     `Non-tests CREATE row(s) that must NOT exist on disk yet:\n` +

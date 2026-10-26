@@ -62,7 +62,7 @@
 const fs = require('fs')
 const path = require('path')
 const { execFileSync } = require('child_process')
-const { parseFilePlan, parseFilePlanRows } = require('./lib/file-plan')
+const { parseFilePlan, parseFilePlanRows, isTestsRow } = require('./lib/file-plan')
 const { globMatch, pipelineOwnedGlobs } = require('./lib/glob-match')
 const { readConfig, DEFAULT_TEST_GLOBS } = require('./lib/host-config')
 const { getIgnoredPaths } = require('./lib/ignored-paths')
@@ -235,7 +235,7 @@ const stemSources = [...changed]
   .map(p => ({ file: p, stems: stemsFor(p) }))
 
 const filePlanTestsPaths = parseFilePlanRows(specText)
-  .filter(r => r.layer && /^tests?$/i.test(r.layer))
+  .filter(r => isTestsRow(r))
   .flatMap(r => r.paths)
 const isResolvedByTestsRows = (p) =>
   filePlanTestsPaths.some(row => (isGlobRow(row) ? globMatch(toPattern(row), p) : row === p))

@@ -87,13 +87,13 @@ Write the spec per the template. `status: draft`. While drafting:
    `printf '%s\n' '<json>' >>`), before the status flip: `spikes` = executed micro-spikes;
    `promiseSweep` = step 2's `promise-sweep.js` printed counters copied verbatim; `acLint` =
    `{"mixed":N}` from step 2's FIRST `ac-matrix --lint` run; `collisions` = `{hits, waived}` from
-   `collision-closure.js`, omitted when no Decision triggered it; `decisionLint` =
+   `collision-closure.js`, `{"skipped":true}` when no Decision triggered it — never omitted; `decisionLint` =
    `{restrictions,deferrals}` from `decision-lint.js`'s stdout. Numbers, enums, paths only:
 
    ```
    {"ts":"<ISO-8601>","stage":"plan","spec":"<repo-relative spec path>","tier":"<tier>",
     "brief":"NN"|"n/a","spikes":N,"promiseSweep":{"rows":N,"carried":N,"sanctioned":N,
-    "orphans":0},"acLint":{"mixed":N},"collisions":{"hits":N,"waived":N},
+    "orphans":0},"acLint":{"mixed":N},"collisions":{"hits":N,"waived":N}|{"skipped":true},
     "decisionLint":{"restrictions":N,"deferrals":N},"verdict":"locked"}
    ```
 

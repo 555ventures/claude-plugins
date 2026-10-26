@@ -114,6 +114,7 @@ const { globMatch } = require('./lib/glob-match')
 // startup) — the review driver's own sibling reasoning applies here too.
 const { sessionModel } = require('./lib/session-stamp.js')
 const { CLASS_ID_RE } = require('./lib/escape-row')
+const { extractSection } = require('./lib/spec-sections')
 const appPortLib = require('./lib/app-port')
 
 function die(msg) { process.stderr.write('spec-build-driver: ' + msg + '\n'); process.exit(2) }
@@ -387,6 +388,10 @@ if (!STATE_ONLY) {
   // invocation and the loop is gone now that /spec:run is the only entry point, so argv is never
   // consulted here at all.
   if (marks.via === undefined) marks.via = 'loop'
+  // The lock-time Decision IDs, snapshotted only on the hardened->implementing flip (the one
+  // invocation guaranteed to read the locked text); a sidecar-less resume records null and
+  // COMMIT skips the comparison rather than counting rows it cannot date.
+  if (marks.decisionsAtLock === undefined) marks.decisionsAtLock = justFlipped ? decisionIds(specText) : null
   saveSidecar()
 }
 
@@ -983,6 +988,23 @@ function gitStatusPaths(root) {
   return r.stdout.split('\n').filter(Boolean).map((l) => l.slice(3).trim().replace(/^"|"$/g, ''))
 }
 
+function decisionIds(text) {
+  const section = extractSection(text, 'Decisions')
+  if (section === null) return []
+  return section.split('\n').map((l) => /^\|\s*(D\d+[a-zA-Z′']*)\s*\|/.exec(l)).filter(Boolean).map((m) => m[1])
+}
+
+// A Decision row added after lock is a ruling the plan missed (core § Incident Policy: a costly
+// wrong assumption). Mid-build decision stops land as Decision rows, never deviations, so without
+// this entry the class scores 0 forever in fleet-reader's byClass — one entry per build, its
+// source naming the added IDs.
+function recordAddedDecisions() {
+  if (!Array.isArray(marks.decisionsAtLock)) return
+  const atLock = new Set(marks.decisionsAtLock)
+  const added = decisionIds(specText).filter((id) => !atLock.has(id))
+  if (added.length) recordIncident('decision-added-at-build', null, added.join(', '))
+}
+
 function countDeviations() {
   if (!fs.existsSync(deviationsPath)) return 0
   return fs.readFileSync(deviationsPath, 'utf8').split('\n').filter((l) => /^- /.test(l)).length
@@ -1040,6 +1062,7 @@ function handleCommitted() {
   // own reasoning applies here too: right after /clear the new transcript has no assistant
   // line yet, and by the time COMMIT runs the session has spoken many times.
   const model = sessionModel(repoRoot)
+  recordAddedDecisions()
   const row = {
     ts: new Date().toISOString(),
     spec: specRel,

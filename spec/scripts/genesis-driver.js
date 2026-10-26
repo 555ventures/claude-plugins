@@ -2080,6 +2080,11 @@ function gateLogPath() { return path.join(genesisDir, 'gate.log') }
 // command inside its own `tournament/finalists/<name>/`, never in `--root` itself.
 function runLogged(cmd, args, logPath, opts) {
   const cwd = (opts && opts.cwd) || root
+  const what = (opts && opts.what) || ('command "' + [cmd].concat(args).join(' ') + '"')
+  return runLoggedWith(logPath, (fd) => runChild(cmd, args, { cwd, stdio: ['ignore', fd, fd] }, what))
+}
+
+function runLoggedWith(logPath, spawnWith) {
   // The log fd is opened and truncated BEFORE the child spawns, then handed straight to
   // spawnSync's stdio for both stdout and stderr — the child's output never transits a Node
   // pipe, so it can never overflow one (see the header's runChild paragraph). Closed on every
@@ -2094,8 +2099,7 @@ function runLogged(cmd, args, logPath, opts) {
   }
   let r
   try {
-    const what = (opts && opts.what) || ('command "' + [cmd].concat(args).join(' ') + '"')
-    r = runChild(cmd, args, { cwd, stdio: ['ignore', fd, fd] }, what)
+    r = spawnWith(fd)
   } finally {
     try { fs.closeSync(fd) } catch (e) { /* already closed */ }
   }
@@ -2103,7 +2107,9 @@ function runLogged(cmd, args, logPath, opts) {
 }
 
 function runShell(cmd, logPath, opts) {
-  return runLogged('bash', ['-c', cmd], logPath, Object.assign({ what: 'shell command "' + cmd + '"' }, opts))
+  const cwd = (opts && opts.cwd) || root
+  const what = (opts && opts.what) || ('shell command "' + cmd + '"')
+  return runLoggedWith(logPath, (fd) => driverIo.runHost(cmd, { cwd, stdio: ['ignore', fd, fd] }, what))
 }
 
 // The mock app no longer pre-empts the scaffold — a

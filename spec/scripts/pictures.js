@@ -23,6 +23,7 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
+const hostRun = require('./lib/host-run')
 const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 const { parseSeedJourneys } = require('./lib/surfaces')
 const { assembleRound, readRound } = require('./lib/mocks-round')
@@ -129,9 +130,9 @@ function cleanFolder(abs) {
 }
 
 function runCommand(block, root, absDir, wantedFile) {
-  const r = spawnSync('bash', ['-c', block.command], {
+  const r = hostRun.run(block.command, {
     cwd: root, stdio: ['ignore', 2, 2],
-    env: { ...process.env, SPEC_PICTURES_DIR: absDir, SPEC_PICTURES_WANTED: wantedFile },
+    env: { SPEC_PICTURES_DIR: absDir, SPEC_PICTURES_WANTED: wantedFile },
   })
   if (r.error || r.status !== 0) {
     const how = r.signal ? `was stopped by signal ${r.signal}` : r.error ? `could not start (${r.error.code || r.error.message})` : `exited ${r.status}`

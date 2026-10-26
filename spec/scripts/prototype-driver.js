@@ -84,6 +84,7 @@ const fs = require('fs')
 const path = require('path')
 const http = require('http')
 const { spawnSync } = require('child_process')
+const { run: hostRunSync, printable } = require('./lib/host-run')
 const { appendLedger } = require('./lib/driver-io')
 const core = require('./lib/driver-core')
 const { writeOut, nowIso, flagArg, withoutFlagPair } = core
@@ -502,8 +503,8 @@ function cmdMarkOpened() {
   fs.copyFileSync(stableIdSrc, stableIdDest)
 
   if (proto.dbCreate) {
-    const dbEnv = Object.assign({}, process.env, { PROTO_BRANCH: branch, PROTO_WORKTREE: wtPath, PROTO_BRIEF: brief })
-    const dbRun = spawnSync('bash', ['-c', proto.dbCreate], { cwd: wtPath, encoding: 'utf8', env: dbEnv })
+    const dbEnv = { PROTO_BRANCH: branch, PROTO_WORKTREE: wtPath, PROTO_BRIEF: brief }
+    const dbRun = hostRunSync(proto.dbCreate, { cwd: wtPath, encoding: 'utf8', env: dbEnv })
     if (dbRun.status !== 0) {
       die('prototype.dbCreate failed (exit ' + dbRun.status + '): ' + ((dbRun.stdout || '') + (dbRun.stderr || '')).trim())
     }
@@ -779,7 +780,7 @@ function cmdMarkTestsDerived() {
     die('prototype.e2eList is not declared — remedy: declare it (spec/templates/grounding-contract.md § Prototype)')
   }
   const listCmd = proto.e2eList.split('{file}').join(e2eFile)
-  const listRun = spawnSync('bash', ['-c', listCmd], { cwd: wtAbs, encoding: 'utf8' })
+  const listRun = hostRunSync(listCmd, { cwd: wtAbs, encoding: 'utf8' })
   const listedOut = listRun.stdout || ''
   if (listRun.status !== 0) {
     die('e2eList (' + listCmd + ') exited ' + listRun.status + ': ' + (listedOut + (listRun.stderr || '')).trim())
@@ -797,8 +798,8 @@ function cmdMarkTestsDerived() {
   }
   const runCmd = proto.e2eRun.split('{file}').join(e2eFile)
   const address = appAddress(status)
-  const run = spawnSync('bash', ['-c', runCmd], {
-    cwd: wtAbs, encoding: 'utf8', env: Object.assign({}, process.env, { PROTO_URL: address.url }),
+  const run = hostRunSync(runCmd, {
+    cwd: wtAbs, encoding: 'utf8', env: { PROTO_URL: address.url },
   })
   const logPath = path.join(designDir, 'e2e.log')
   fs.mkdirSync(designDir, { recursive: true })
@@ -1047,7 +1048,7 @@ function printRoundStep(status) {
   }
   const address = appAddress(status)
   lines.push('Session: in ' + worktreeRel + ', start the dev server in the background (tracked): ' +
-    appPortLib.bootLine(cfg.runtime && cfg.runtime.bootCommand, address.port))
+    printable(cfg.runtime && cfg.runtime.bootCommand, { PORT: address.port }))
   lines.push('Session: start the pin endpoint in the background (tracked): node ' + driverAbs + ' ' + argText() + ' serve --port ' + status.pinsPort)
   const reachable = probeUrl(address.url)
   let tailscalePort = ''
@@ -1099,7 +1100,7 @@ function printTestsStep() {
   lines.push('File: ' + (st.worktree || worktreeRel) + '/' + e2eFile + ' (prototype worktree — commit it on ' + branch + ') · title: `pin <id>: <note>`')
   const address = appAddress(st)
   lines.push('Session: start the dev server in the background (tracked): ' +
-    appPortLib.bootLine(cfg.runtime && cfg.runtime.bootCommand, address.port))
+    printable(cfg.runtime && cfg.runtime.bootCommand, { PORT: address.port }))
   lines.push('Session: write one test per line above in the prototype worktree and commit the file on ' + branch +
     '; each test must pass against the prototype and fail against ' + (st.base || contract.base))
   lines.push('Then:')

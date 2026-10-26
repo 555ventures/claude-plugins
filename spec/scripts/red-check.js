@@ -97,7 +97,9 @@
 
 const fs = require('fs')
 const path = require('path')
-const { execFileSync, spawnSync } = require('child_process')
+const { execFileSync } = require('child_process')
+const hostRun = require('./lib/host-run')
+const { quote } = hostRun
 const { parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
 const { readConfig } = require('./lib/host-config')
@@ -329,16 +331,14 @@ const sanctionedById = new Map(wellFormed.map(b => [b.id, isSanctioned(b)]))
 // runner output is never parsed. NODE_TEST_CONTEXT is scrubbed so a nested `node --test` leg
 // behaves as a fresh top-level runner even when red-check.js itself runs inside one.
 //
-// `relPath` is substituted via `shellQuoteSingle` for the reason its own comment gives below —
+// `relPath` is substituted via `quote` (lib/host-run.js's single-quote helper) for the reason given on runFilteredLeg below —
 // the same substitution defect was found and fixed in `runFilteredLeg` and left standing here,
 // where the value at risk is the FILE PATH rather than the test title: a framework whose route
 // files carry a `$` segment (TanStack file routes, `customers.$memberId.note-role.test.tsx`) had
 // `$memberId` expanded away by bash, so the leg ran against a path that does not exist, exited
 // non-zero, and reported a passing sanctioned-green file as a hard `broken-pin`.
 function runLeg(cmd, relPath) {
-  const env = { ...process.env }
-  delete env.NODE_TEST_CONTEXT
-  const res = spawnSync('bash', ['-c', `${cmd} ${shellQuoteSingle(relPath)}`], { cwd: root, env, stdio: 'ignore' })
+  const res = hostRun.run(`${cmd} ${quote(relPath)}`, { cwd: root, stdio: 'ignore' })
   return res.status === null ? 1 : res.status
 }
 
@@ -501,16 +501,6 @@ function escapeTitleForRegex(title) {
   return title.replace(/[\\^$.|?*+()[\]{}]/g, '\\$&')
 }
 
-// Wraps `arg` in single quotes for literal, no-expansion substitution into a `bash -c` command
-// string — single quotes are the one POSIX quoting form with zero escapes recognised inside
-// (no `\`, `$`, backtick, or `"` is special there), so this is the only form that survives a
-// title carrying any of those characters unexpanded. An embedded single quote is closed,
-// escaped as `\'` OUTSIDE the quoting (a literal backslash-quote passed straight through the
-// shell), then reopened, e.g. `it's` → `'it'\''s'`.
-function shellQuoteSingle(arg) {
-  return `'${arg.replace(/'/g, `'\\''`)}'`
-}
-
 // `{testCommand} {testNameFilter←escaped ^title$} <file>`, appended ahead of the file path
 // (matching the existing `{typecheckCommand} <file>` append form) — output is captured (never
 // `stdio: 'ignore'` like runLeg above) because selection proof needs the run's own stdout to
@@ -524,15 +514,11 @@ function shellQuoteSingle(arg) {
 // created the file it named; 27 of this repo's 1,050 live titles carry a backtick and 6 carry
 // `$`). `testCommand` itself is still `bash -c`-interpreted (it is a host-supplied command
 // string, its own contract) — only the SUBSTITUTED filter/path fragments are now single-quoted
-// via `shellQuoteSingle`, which recognises no shell metacharacter at all.
+// via `quote` (lib/host-run.js), which recognises no shell metacharacter at all.
 function runFilteredLeg(cmd, filterTemplate, title, relPath) {
   const pattern = `^${escapeTitleForRegex(title)}$`
   const filterArg = filterTemplate.replace('{name}', pattern)
-  const env = { ...process.env }
-  delete env.NODE_TEST_CONTEXT
-  const res = spawnSync('bash',
-    ['-c', `${cmd} ${shellQuoteSingle(filterArg)} ${shellQuoteSingle(relPath)}`],
-    { cwd: root, env, encoding: 'utf8' })
+  const res = hostRun.run(`${cmd} ${quote(filterArg)} ${quote(relPath)}`, { cwd: root, encoding: 'utf8' })
   return { code: res.status === null ? 1 : res.status, output: (res.stdout || '') + (res.stderr || '') }
 }
 

@@ -119,3 +119,21 @@ test('this repository at HEAD is clean — the guard is live, not merely authore
   assert.strictEqual(res.status, 0,
     `specs/ must hold no live number collision — got:\n${res.stdout}${res.stderr}`)
 })
+
+// /spec:plan lock step 2 (2026-10-27): the lock runs this script first and refuses on exit 1. The
+// lock-time shape is one draft beside one already-locked spec on the same number — the second of
+// two parallel plans — which must be refused exactly like two hardened specs, since a draft's
+// AC-IDs are minted the moment it is written.
+test('lock-time shape: a draft sharing a hardened spec\'s number is refused (exit 1) — the second parallel plan cannot lock', () => {
+  const root = tmpdir()
+  writeSpec(root, 'specs/20261026/03-caregiver-web-correctness.md', 'hardened')
+  writeSpec(root, 'specs/20261026/03-domain-kit-correctness.md', 'draft')
+  const res = run(root)
+  assert.strictEqual(res.status, 1,
+    `a draft on a locked number must be refused at lock — got ${res.status}: ${res.stdout}${res.stderr}`)
+  assert.match(res.stdout, /specs\/20261026 number 03/, 'the refusal must name the directory and number')
+  assert.match(res.stdout, /remedy: renumber/, 'the refusal must carry the renumber remedy')
+  fs.renameSync(path.join(root, 'specs/20261026/03-domain-kit-correctness.md'),
+    path.join(root, 'specs/20261026/05-domain-kit-correctness.md'))
+  assert.strictEqual(run(root).status, 0, 'renaming the draft to a free number clears the refusal')
+})

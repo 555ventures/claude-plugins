@@ -13,7 +13,9 @@
 // renumbered by hand after the fact, and 20260908/01, 20260908/05, 20260911/04 all still colliding
 // on disk, the last a live pair of hardened specs sharing eighteen AC-IDs. Past the third-
 // recurrence bar for a standing guard (core § Incident Policy), which must be a deterministic
-// script with an exit code rather than prose — this is that script. /spec:doctor is its caller.
+// script with an exit code rather than prose — this is that script. Callers: /spec:plan's lock
+// step (exit 1 refuses the lock — the class occurs there: two parallel plans both took 20261026/03
+// in a host on 2026-10-26 while this ran only from the audit) and /spec:doctor check 18.
 //
 // Scope: a `superseded` spec is excluded on BOTH sides of a pair — it is terminal, its ACs are
 // never re-derived, and the two historical pairs here are each one live spec beside one retired

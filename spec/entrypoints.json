@@ -140,7 +140,8 @@
   },
   "spec/scripts/spec-number-check.js": {
     "entryPoints": [
-      "spec/commands/doctor.md"
+      "spec/commands/doctor.md",
+      "spec/commands/plan.md"
     ]
   },
   "spec/scripts/prototype-driver.js": {

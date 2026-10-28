@@ -69,7 +69,12 @@ Write the spec per the template. `status: draft`. While drafting:
 1. **Marker sweep:** `grep -n "NEEDS CLARIFICATION" {spec path}`. Resolve every live hit
    (ask or explore; delete the marker, record the ruling in Decisions), then write
    `open_markers: N` into frontmatter (0 to lock).
-2. **Confirm:** run `node "$(spec-paths ac-matrix)" --spec {spec path} --lint --resolve-root .` first — zero findings
+2. **Confirm:** run `node "$(spec-paths spec-number-check)" --root .` first — exit 1 prints one line per
+   shared number naming the directory and both specs. A line naming this draft means a parallel plan took its
+   number: rename the draft to the next free number, rewrite its AC-IDs with it, and rerun. A line naming only
+   other specs is a leftover collision: fix it per `/spec:doctor` check 18 before locking. The lock never
+   proceeds while the check is red. Then
+   `node "$(spec-paths ac-matrix)" --spec {spec path} --lint --resolve-root .` — zero findings
    to lock (`node "$(spec-paths count-tests)" --root . --titles [--file <rel>]` is the reference lookup for
    `unresolved-disposition`). Then: zero open forks; every shape-triggered micro-spike executed with evidence in
    Assumptions; every Goal promise traced to a Decision that delivers it and an AC that goes red in its absence — run

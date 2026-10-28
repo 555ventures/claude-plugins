@@ -30,9 +30,11 @@ One session: explore → draft → lock. Produces a hardened spec at
   committed since the prototype opened: each listed ADR this plan would rely on becomes one Decisions row — the pin that outranks
   it, or `ADR-NNNN superseded by prototype <stem>` with the ADR's status flipped in the same turn; `reconcile.stray` files are
   never read as grounding. Every
-  spec carries `prototype: <stem>`; one owns the test file (row `<e2eFile with {stem}> | CREATE | other`, driver-copied) and
-  one AC per pin: `WHEN pin <id> ("<note>", <screen> / <state>) is exercised against the production build THE SYSTEM SHALL pass
-  its contract test`, tagged `[oracle: contract]`, ending `→ writes <that file>`. Never read `proto/<stem>` or its worktree.
+  spec carries `prototype: <stem>`; exactly one — the last landing unit when the contract splits — owns the test file (row
+  `<e2eFile with {stem}> | CREATE | other`, driver-copied, never a wave row) and with it every pin AC: `WHEN pin <id>
+  ("<note>", <screen> / <state>) is exercised against the production build THE SYSTEM SHALL pass its contract test`, tagged
+  `[oracle: contract]`, ending `→ writes <that file>`. Only the owner replays (stage-build § Prototype specs); a sibling
+  carries no `[oracle: contract]` AC. Never read `proto/<stem>` or its worktree.
 - **Tier:** per core § Tiers — state it and why. Work failing core § Pipeline Entry gets no spec: say so and use the
   direct lane when it qualifies; a structural change gets a spec whatever its size.
 - **Explore before asking.** Ground every claim in current code (parallel Explore agents where the surface is wide;

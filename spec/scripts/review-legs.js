@@ -439,7 +439,11 @@ async function main() {
       }
     } catch { /* no ledger: no replay evidence */ }
     const rp = lastBuild && lastBuild.replay
-    if (rp && rp.passed === true && rp.looked === true) appendRow('contract', 0, { tests: rp.tests, passed: true })
+    // A sibling slice of one contract (build row `replay: {owner: false}`) never replayed and owns
+    // no pin criteria: no contract row at all, so a stray [oracle: contract] AC on it still reads
+    // absent in ac-matrix instead of vouched-for or spuriously red.
+    if (rp && rp.owner === false) { /* not the replay owner */ }
+    else if (rp && rp.passed === true && rp.looked === true) appendRow('contract', 0, { tests: rp.tests, passed: true })
     else appendRow('contract', 1, { unavailable: 'no-replay' })
   }
 

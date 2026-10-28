@@ -32,10 +32,13 @@ is diagnosed with the user before the next mark, never laundered past.
 
 ## Prototype specs
 
-A spec whose frontmatter carries `prototype: <stem>` adds one state, `REPLAY`, after a green gate and
-before `COMMIT`. The session boots the app; `--mark replayed` has the driver copy the contract's test file
-from `design/prototypes/<stem>/` to the host's `prototype.e2eFile` and run `prototype.e2eRun` against the
-production build with `PROTO_URL` set. Red stops the turn; green prints a look stop putting the production
+A spec whose frontmatter carries `prototype: <stem>` and whose File Plan owns the host's `prototype.e2eFile`
+(`{stem}` substituted — the one row `/spec:plan` gives exactly one spec per contract) adds one state, `REPLAY`,
+after a green gate and before `COMMIT`; sibling slices of the same contract carry `prototype:` without that row,
+skip `REPLAY` (the COMMIT step says so) and record `replay: {owner: false}`. The session boots the app with the
+command the step prints (`prototype.bootCommand`, else `runtime.bootCommand`); `--mark replayed` has the driver
+copy the contract's test file from `design/prototypes/<stem>/` to the host's `prototype.e2eFile` and run
+`prototype.e2eRun` against the production build with `PROTO_URL` set. Red stops the turn; green prints a look stop putting the production
 screens beside the prototype's pictures. The user's literal `close enough` is the only advance: the session
 then runs `--mark looked` (`REPLAY → COMMIT`); anything else is a fix followed by `--mark replayed` again.
 No harden merge, no capture diff. The build ledger row carries `replay: { tests, passed, looked }`.

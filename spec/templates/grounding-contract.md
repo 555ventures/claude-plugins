@@ -131,7 +131,10 @@ init/first-release time — the plugin never invents deploy mechanics.
 
 `prototype` — the grounding `/spec:prototype` runs a throwaway branch against
 (specs/20261007/01-approve-writes-a-behaviour-contract.md D1): `url` (the dev server's base
-URL, carrying `{port}` — the driver prints the port to boot on), `overlay` (the
+URL, carrying `{port}` — the driver prints the port to boot on), optional `bootCommand` (the
+command that serves the app at `url`, reading `PORT` like `runtime.bootCommand`; absent = the
+drivers print `runtime.bootCommand` — declare it when the smoke boot is a different process from
+the screens, such as an API-only worker beside a web build), `overlay` (the
 worktree-relative file the driver writes the pin overlay to; the host's dev entry imports it
 behind its own dev flag), `e2eFile` (a path template carrying `{stem}`, where the contract's
 derived tests are written in the prototype worktree), `e2eList` (a shell string carrying

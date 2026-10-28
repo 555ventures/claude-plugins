@@ -12,7 +12,7 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 
 const DRIVER = 'scripts/spec-build-driver.js'
 
-function specBody({ status = 'hardened', tier = 'standard', design = null, diffBase = null, acId = 'AC-20260901-01-1', brief = null, lane = null, prototype = null }) {
+function specBody({ status = 'hardened', tier = 'standard', design = null, diffBase = null, acId = 'AC-20260901-01-1', brief = null, lane = null, prototype = null, e2eRow = null }) {
   return `---
 status: ${status}
 tier: ${tier}
@@ -32,7 +32,7 @@ ${design !== null ? `design: ${design}\n` : ''}${diffBase ? `diff_base: ${diffBa
 | src/foo.js | MODIFY | scripts |
 | src/bar.js | CREATE | scripts |
 | other.txt | MODIFY | other |
-| tests/foo.test.js | CREATE | tests |
+${e2eRow ? `| ${e2eRow} | CREATE | other |\n` : ''}| tests/foo.test.js | CREATE | tests |
 
 ## Acceptance Criteria
 
@@ -86,7 +86,10 @@ function protoContract(stem, brief) {
     tests: { file: 'tests/proto-' + stem + '.spec.ts', source: 'e2e/proto-' + stem + '.spec.ts', run: 'node .e2e-stub.js {file}', pins: ['p1', 'p3'] },
   }
 }
-function makeHost({ fooValue = 42, brief = null, prototype = null, e2eRun = true } = {}) {
+// `owner` (default true): a prototype: spec's File Plan carries the host's e2eFile row ({stem}
+// substituted) — the replay-owner marker; false minted a sibling slice of the same contract.
+// `protoBoot`: a prototype.bootCommand beside runtime.bootCommand.
+function makeHost({ fooValue = 42, brief = null, prototype = null, e2eRun = true, owner = true, protoBoot = null } = {}) {
   const root = fs.realpathSync(tmpdir('blddrv'))
   const g = gitRepo(root)
   fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
@@ -106,6 +109,7 @@ function makeHost({ fooValue = 42, brief = null, prototype = null, e2eRun = true
   if (prototype !== null) {
     cfg.prototype = { url: 'http://127.0.0.1:{port}', e2eFile: 'e2e/proto-{stem}.spec.ts' }
     if (e2eRun) cfg.prototype.e2eRun = 'node .e2e-stub.js {file}'
+    if (protoBoot) cfg.prototype.bootCommand = protoBoot
     cfg.runtime.bootCommand = 'node scripts/dev-server.js'
   }
 
@@ -131,7 +135,8 @@ function makeHost({ fooValue = 42, brief = null, prototype = null, e2eRun = true
   g('add', '-A'); g('commit', '-q', '-m', 'base')
   fs.mkdirSync(path.join(root, 'specs/20260901'), { recursive: true })
   const spec = path.join(root, 'specs/20260901/99-bd-test.md')
-  fs.writeFileSync(spec, specBody({ brief, prototype }))
+  const e2eRow = (prototype !== null && owner) ? 'e2e/proto-' + prototype + '.spec.ts' : null
+  fs.writeFileSync(spec, specBody({ brief, prototype, e2eRow }))
   return { root, spec, sidecar: spec.replace(/\.md$/, '.build'), g, stem: prototype, contractPath }
 }
 

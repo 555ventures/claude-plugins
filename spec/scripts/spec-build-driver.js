@@ -13,14 +13,20 @@
 // Owner: specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md
 //
 // A spec
-// whose frontmatter carries `prototype: <stem>` gains one extra state, REPLAY, derived after a
-// green gate and before COMMIT. `--mark replayed` copies the contract's test file
+// whose frontmatter carries `prototype: <stem>` AND whose File Plan owns the host's
+// `prototype.e2eFile` (`{stem}` substituted — plan.md gives that row to exactly one spec per
+// contract) gains one extra state, REPLAY, derived after a green gate and before COMMIT. Sibling
+// slices of one contract carry `prototype:` without that row and go straight to COMMIT (core
+// § Decomposition: every slice lands green); their build row records `replay: {owner: false}`.
+// The REPLAY step prints `prototype.bootCommand` when declared, else `runtime.bootCommand` — the
+// smoke boot and the app the contract's tests hit are two processes on hosts with a separate API
+// worker. `--mark replayed` copies the contract's test file
 // (design/prototypes/<stem>/<tests.file>) to the host's `prototype.e2eFile` path, runs
 // `prototype.e2eRun` against the booted production build with `PROTO_URL` set to the app address,
 // and on green writes `<spec>.build/replay-state.json` and prints the look stop (each production
 // address beside its prototype picture); `--mark looked`, run only on the user's literal `close
 // enough`, advances REPLAY to COMMIT. The build row gains `replay: {tests, passed, looked}` for
-// a `prototype:` spec only. `lane:` is never read and no `proto/` branch refuses a spec.
+// the owning spec only. `lane:` is never read and no `proto/` branch refuses a spec.
 // `via` is recorded as "loop" once,
 // at sidecar creation, regardless of argv — /spec:run is the only entry point left, so the flag
 // that once chose between it and a direct invocation is gone; `via` itself stays a measurement
@@ -175,13 +181,25 @@ const pipelineRulesPath = (() => {
 // File Plan body text never moves when only the frontmatter is edited (stamping diff_base,
 // flipping status) — computed once against the pre-image text.
 const filePlanRows = parseFilePlanRows(specText)
+// The host's prototype.e2eFile with {stem} substituted — the one File Plan row the driver itself
+// writes (copied at --mark replayed), so it is never a wave row and its presence is what makes
+// this spec the contract's replay owner. null when the spec cites no prototype or the host
+// declares no e2eFile (then the old every-citer derivation stands so --mark replayed still
+// prints its own refusal naming the missing key).
+const replayFile = (() => {
+  if (!protoStem) return null
+  const f = hostConfig.prototype && hostConfig.prototype.e2eFile
+  return (typeof f === 'string' && f) ? f.split('{stem}').join(protoStem) : null
+})()
+const isReplayRow = (r) => replayFile !== null && r.paths.includes(replayFile)
+const replayOwner = !!protoStem && (replayFile === null || filePlanRows.some(isReplayRow))
 const isBaselineRow = (r) => /^baselines?$/i.test((r.layer || '').trim())
 const baselinePaths = filePlanRows
   .filter((r) => isBaselineRow(r) && (r.action || '').trim().toUpperCase() !== 'DELETE')
   .flatMap((r) => r.paths)
 const hasTestsRows = filePlanRows.some((r) => isTestsRow(r))
 const needsRedAttribution = filePlanRows.some((r) =>
-  !isTestsRow(r) && !isBaselineRow(r) && (r.action || '').trim().toUpperCase() === 'CREATE')
+  !isTestsRow(r) && !isBaselineRow(r) && !isReplayRow(r) && (r.action || '').trim().toUpperCase() === 'CREATE')
 
 // ---- admission ------------------------------------------------------------------------------
 const OWNING_COMMAND = { draft: '/spec:plan', done: '/spec:status', superseded: '/spec:status' }
@@ -399,7 +417,7 @@ if (!STATE_ONLY) {
 // ---- wave derivation ---------------------------------------------------------------
 function computeWaveOrder() {
   const layerGroups = Array.isArray(hostConfig.layerGroups) ? hostConfig.layerGroups : []
-  const nonTests = filePlanRows.filter((r) => !isTestsRow(r) && !isBaselineRow(r))
+  const nonTests = filePlanRows.filter((r) => !isTestsRow(r) && !isBaselineRow(r) && !isReplayRow(r))
   const rowsByLayer = new Map()
   for (const r of nonTests) {
     const layer = (r.layer || 'other').trim() || 'other'
@@ -640,6 +658,14 @@ function readContract() {
     die('cannot read ' + contractPath + ': ' + e.message)
   }
   return contract
+}
+// The command that serves the app the contract's tests and pictures hit: prototype.bootCommand
+// when the host declares one, else the smoke boot (runtime.bootCommand). Empty string when neither.
+function protoBootCommand() {
+  const p = hostConfig.prototype
+  if (p && typeof p.bootCommand === 'string' && p.bootCommand) return p.bootCommand
+  const rt = hostConfig.runtime
+  return (rt && typeof rt.bootCommand === 'string' && rt.bootCommand) ? rt.bootCommand : ''
 }
 function joinAddress(base, rel) {
   if (/^https?:\/\//.test(rel || '')) return rel
@@ -1082,7 +1108,9 @@ function handleCommitted() {
   // spec's row shape is unaffected; review's contract leg reads this key.
   if (protoStem) {
     const rs = readReplayState() || {}
-    row.replay = { tests: rs.tests, passed: rs.passed === true, looked: rs.looked === true }
+    row.replay = replayOwner
+      ? { tests: rs.tests, passed: rs.passed === true, looked: rs.looked === true }
+      : { owner: false }
   }
   appendLedger(repoRoot, JSON.stringify(row))
   fs.rmSync(sidecarDir, { recursive: true, force: true })
@@ -1159,7 +1187,7 @@ function deriveState() {
   if (w) return 'WAVE:' + w.label
   const after = afterWaves()
   // derived only once the gate is actually green — REPAIR/ESCALATE are unaffected.
-  if (protoStem && after === 'COMMIT' && !replayDone(readReplayState())) return 'REPLAY'
+  if (replayOwner && after === 'COMMIT' && !replayDone(readReplayState())) return 'REPLAY'
   return after
 }
 
@@ -1281,6 +1309,10 @@ function commitStepBody() {
     fs.writeFileSync(path.join(sidecarDir, 'reconcile.json'), JSON.stringify(j, null, 2) + '\n')
     if (j.outOfPlan && j.outOfPlan.length) summary += `⚠️ out-of-plan: ${j.outOfPlan.join(', ')}\n`
   } catch { /* advisory only — a scope-reconcile.js precondition failure never blocks COMMIT */ }
+  if (protoStem && !replayOwner) {
+    summary += `ℹ️ prototype ${protoStem}: REPLAY skipped — this spec's File Plan does not own ${replayFile}; ` +
+      `the sibling spec that carries that row replays the contract\n`
+  }
   return `## Step: checkpoint commit\n` +
     summary +
     `Commit every File Plan path on the working branch (never --no-verify) — this is the ` +
@@ -1295,8 +1327,8 @@ function replayStepBody() {
   const doc = readReplayState()
   const addr = replayAddress()
   if (!doc || doc.passed !== true) {
-    const boot = (hostConfig.runtime && hostConfig.runtime.bootCommand) ||
-      '(no runtime.bootCommand declared in the host config)'
+    const boot = protoBootCommand() ||
+      '(neither prototype.bootCommand nor runtime.bootCommand is declared in the host config)'
     const where = addr.url ? addr.url : '(no prototype.url declared in the host config)'
     return `## Step: replay the contract's tests against the production build\n` +
       `Read only: ${contractRel}\n` +

@@ -137,11 +137,24 @@ const cfg = loadConfig()
 // block (an absent block reads as clean: "0 when clean or when the block is absent"). Findings
 // are the keys a mark will read: a key no step uses is never a finding.
 // ---------------------------------------------------------------------------
+// The command that serves the app the pins, pictures and contract tests hit: prototype.bootCommand
+// when declared, else runtime.bootCommand (the smoke boot). On a host whose smoke target is an
+// API-only process the two differ, and printing the smoke boot here served nothing at prototype.url.
+function appBootCommand() {
+  const proto = cfg.prototype
+  if (proto && typeof proto.bootCommand === 'string' && proto.bootCommand) return proto.bootCommand
+  return cfg.runtime && cfg.runtime.bootCommand
+}
+
 function cmdCheck(args) {
   const asJson = args.includes('--json')
   const findings = []
   const proto = cfg.prototype
   if (proto) {
+    if (!(typeof proto.bootCommand === 'string' && proto.bootCommand) &&
+        !(cfg.runtime && typeof cfg.runtime.bootCommand === 'string' && cfg.runtime.bootCommand)) {
+      findings.push({ key: 'prototype.bootCommand', message: 'neither prototype.bootCommand nor runtime.bootCommand is declared — no step can tell the session how to start the app that prototype.url names' })
+    }
     if (typeof proto.e2eFile === 'string' && !proto.e2eFile.includes('{stem}')) {
       findings.push({ key: 'prototype.e2eFile', message: 'prototype.e2eFile lacks the {stem} placeholder: ' + proto.e2eFile })
     }
@@ -1049,7 +1062,7 @@ function printRoundStep(status) {
   }
   const address = appAddress(status)
   lines.push('Session: in ' + worktreeRel + ', start the dev server in the background (tracked): ' +
-    printable(cfg.runtime && cfg.runtime.bootCommand, { PORT: address.port }))
+    printable(appBootCommand(), { PORT: address.port }))
   lines.push('Session: start the pin endpoint in the background (tracked): node ' + driverAbs + ' ' + argText() + ' serve --port ' + status.pinsPort)
   const reachable = probeUrl(address.url)
   let tailscalePort = ''
@@ -1101,7 +1114,7 @@ function printTestsStep() {
   lines.push('File: ' + (st.worktree || worktreeRel) + '/' + e2eFile + ' (prototype worktree — commit it on ' + branch + ') · title: `pin <id>: <note>`')
   const address = appAddress(st)
   lines.push('Session: start the dev server in the background (tracked): ' +
-    printable(cfg.runtime && cfg.runtime.bootCommand, { PORT: address.port }))
+    printable(appBootCommand(), { PORT: address.port }))
   lines.push('Session: write one test per line above in the prototype worktree and commit the file on ' + branch +
     '; each test must pass against the prototype and fail against ' + (st.base || contract.base))
   lines.push('Then:')

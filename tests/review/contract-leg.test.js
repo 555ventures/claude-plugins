@@ -135,6 +135,17 @@ test('AC-20261007-03-6: WHEN no build row names the spec THE SYSTEM appends the 
     'an older green replay must not outvote the latest red build row, or a rebuilt-and-broken spec reads green: ' + JSON.stringify(last.rows))
 })
 
+test('/spec:fix 2026-10-28: WHEN the last build row records replay.owner false (a sibling slice of one contract) THE SYSTEM appends no contract row, and ac-matrix still reads a stray pin criterion as absent', () => {
+  const h = makeHost({ prototype: true, ledgerRows: [buildRow({ owner: false })] })
+  const { r, rows, byLeg, manifest } = legs(h)
+  assert.ok(rows.length > 0, 'setup: review-legs must have produced a manifest: ' + r.stdout + r.stderr)
+  assert.ok(!byLeg.has('contract'),
+    'a sibling slice never replayed and owns no pin criteria — a contract row would read either vouched-for or spuriously red: ' + JSON.stringify(rows))
+  const m = matrixFindings(h.dir, manifest)
+  assert.match(m.text, /oracle-red-or-absent/,
+    'a pin criterion left on a sibling (plan.md puts them all on the owner) must still surface as absent, never pass vacuously: ' + m.text)
+})
+
 test('AC-20261007-03-6: WHEN the spec carries no prototype: frontmatter THE SYSTEM appends no contract row', () => {
   const { r, rows } = legs(makeHost({ prototype: false, ledgerRows: [buildRow({ tests: 2, passed: true, looked: true })] }))
   assert.ok(rows.length > 0, 'setup: review-legs must have produced a manifest for the no-prototype fixture: ' + r.stdout + r.stderr)

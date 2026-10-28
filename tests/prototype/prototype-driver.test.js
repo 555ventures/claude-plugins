@@ -239,6 +239,16 @@ test('AC-20260928-01-5: the bare ROUND run reports the dev server unreachable, p
     'no pin-ready line may be printed while the dev server is unreachable (D4): ' + r.stdout)
 })
 
+test('/spec:fix 2026-10-28: the ROUND step prints prototype.bootCommand instead of runtime.bootCommand when the host declares one — the smoke boot may serve nothing at prototype.url', () => {
+  const dir = setupHost()
+  advanceToRound(dir)
+  patchConfig(dir, (cfg) => { cfg.prototype.url = 'http://127.0.0.1:39217'; cfg.prototype.bootCommand = 'npm run dev:web' })
+  const r = bare(dir)
+  assert.strictEqual(r.status, 0, JSON.stringify(r))
+  assert.match(r.stdout, /Session:.*npm run dev:web/, 'the declared prototype.bootCommand must be the printed boot: ' + r.stdout)
+  assert.ok(!/node scripts\/dev-server\.js/.test(r.stdout), 'runtime.bootCommand must not be printed beside it: ' + r.stdout)
+})
+
 test('AC-20260928-01-5: the bare ROUND run prints the pin-ready line, one route line per states.json route, the tailscale line, and the approve-to-write-the-contract reply line when prototype.url is reachable', () => {
   const dir = setupHost()
   advanceToRound(dir)

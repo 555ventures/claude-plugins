@@ -135,16 +135,23 @@ Enforced by `spec-state-gate.sh` — its header comment is the contract.
 
 ## Model Placement
 
-**The expensive model authors the contract; cheap models execute it behind deterministic gates;
-review independence comes from fresh-context, blind-to-author dispatch, executed evidence, and a
-reviewer from a different model family than the builder.** Concretely: the planning session (Fable,
-or the best available model) authors specs and holds the roadmap-level design seats (genesis position
-briefs, and every mock, wireframe or themed, authored in-session
-— design.md § Design Canon). **Sonnet** orchestrates build and review and is every worker. **The
-reviewer seat is Fable at `effort: low`** (`agents/reviewer.md`), a different family from the Opus
-session that builds. The disposer inherits the session model at
-`effort: medium`. **Haiku** runs lookups and re-reads. Orchestrators pass paths, never raw file contents. `/spec:enforce` and genesis judgment seats run
-Opus; `/spec:init` runs on the invoker; an unavailable `Agent {model: "fable"}` falls back to `opus`.
+**The expensive model authors the contract; cheap models execute it behind deterministic gates.**
+One table binds every seat; seats name aliases only, never a versioned id.
+
+| Seat | Model | Effort | Where it is set |
+|---|---|---|---|
+| Planner (/spec:plan, genesis design seats) | fable | high | the session; genesis design steps dispatch `Agent {model: "fable", effort: "high"}` |
+| Build / review orchestrator | the invoking session (opus recommended) | — | /model |
+| Implementation workers | sonnet | medium | build driver wave step, host agentMap agents |
+| Reviewer | opus | high | spec/agents/reviewer.md |
+| Disposer | opus | medium | spec/agents/disposer.md |
+| Research / option-menu agents | sonnet | medium | wf-research.js, wf-enforce.js |
+| Lookups, re-reads, queue groom, question judge | haiku | low | queue.md, question-style-gate.js |
+
+Review independence comes from fresh-context, blind-to-author dispatch and executed evidence — the
+reviewer never sees the conversation that produced the diff. Orchestrators pass paths, never raw
+file contents. `/spec:enforce` and genesis judgment seats run Opus; `/spec:init` runs on the
+invoker; an unavailable `Agent {model: "fable"}` falls back to `opus`.
 
 ## Decisions
 

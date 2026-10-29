@@ -54,7 +54,7 @@ When the driver prints `DONE`, report (core § Console Output Style) — printed
   — printed once, recorded in the artifact and the ledger's `findings.soft`, never dispositioned;
   softs may ride a fix round (same workers, same files; the fix-delta pass re-reviews whatever changed), never queued. Dispatch **one** `Agent {subagent_type:
   'spec:disposer'}` with the paths the driver's step prints; no memory of the build. Every
-  `fix` recommendation dispatches a Sonnet worker (via `agentMap`) with no question —
+  `fix` recommendation dispatches a worker (`sonnet` at `effort: medium`, core § Model Placement; via `agentMap`) with no question —
   reversible, re-reviewed by the fix-delta pass once you mark `fix-applied`. Every
   `waive`/`reject` goes to the user via `AskUserQuestion` (≤4 per call, core § Question
   Style), the disposer's reason quoted and its recommendation first; record the answer as

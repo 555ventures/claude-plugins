@@ -3,7 +3,7 @@ name: disposer
 description: "Read-only spec-implementation disposer. Reads the spec, the diff, the reviewer's
   findings and the leg evidence with no memory of the build, and returns one grounded
   recommendation per finding. Dispatched at the review driver's DISPOSITIONS step."
-model: inherit
+model: opus
 effort: medium
 tools:
   - Read

@@ -1,12 +1,14 @@
 ---
 date: 2026-10-29
-status: hardened
+status: implementing
 open_markers: 0
 tier: critical           # touches spec/scripts/question-style-gate.js (hook surface, rules § Risk Tiers)
 area: doctrine
 breaking: false
 depends_on: []
 brief: n/a
+build_base: main
+diff_base: b888aebf2afab26c7db136a5fba1684b32eaaf87
 ---
 
 # Model placement refresh: seats pin a tier and an effort, independence is a fresh context

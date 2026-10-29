@@ -2864,7 +2864,7 @@ const STEPS = {
     '  node ' + __filename + ' --root ' + root,
   ].join('\n'),
 
-  // The fresh-session/model line, the design-brief
+  // The Agent dispatch line, the design-brief
   // skill line, one journey line per seed journey, and the catalog line; the step also
   // adds design/mocks/screens/ to the reads when it exists.
   DESIGN_BRIEF: () => {
@@ -2879,7 +2879,7 @@ const STEPS = {
         genesisRel('brief.md') + ' (## Journeys), docs/design/catalog.md, ' +
         genesisRel('design-paths.json') + ', ' + rulesFile,
       'Doctrine: spec/doctrine/genesis.md § Genesis: Design Stage',
-      'Session: start a fresh session for this step — Model: Fable (authors the brief and the tables)',
+      'Dispatch: Agent {model: "fable", effort: "high"} — fresh context; hand it this step\'s read list, doctrine and skill lines verbatim (authors the brief and the tables)',
       'Skill: design-brief — load it before the first line',
     ]
     if (status.designStage && status.designStage.catalog) {
@@ -2897,7 +2897,7 @@ const STEPS = {
     return lines.join('\n')
   },
 
-  // The fresh-session/model line, the
+  // The Agent dispatch line, the
   // frontend-design skill line (warn, never block — the standing theme-authoring skill), one
   // composite line per brief row, the Storybook setup recipe (Contracts), and --mark kit-landed.
   DESIGN_KIT: () => {
@@ -2907,7 +2907,7 @@ const STEPS = {
       '## Step: author the tokens, the shell and the kit',
       'Read only: docs/design/brief.md, docs/design/catalog.md, ' + rulesFile + ', ' + genesisRel('design-paths.json'),
       'Doctrine: spec/doctrine/genesis.md § Genesis: Design Stage',
-      'Session: start a fresh session for this step — Model: Fable (authors tokens, shell and composites)',
+      'Dispatch: Agent {model: "fable", effort: "high"} — fresh context; hand it this step\'s read list, doctrine and skill lines verbatim (authors tokens, shell and composites)',
       'Skill: frontend-design — load it if installed; ⚠️ missing = warn and continue',
     ]
     for (const c of briefCompositesWithStates()) {
@@ -2925,8 +2925,8 @@ const STEPS = {
     return lines.join('\n')
   },
 
-  // The fresh-session/model line
-  // naming Fable (arranging composites into screens is hierarchy and flow judgment — the same
+  // The Agent dispatch line
+  // naming the fable model (arranging composites into screens is hierarchy and flow judgment — the same
   // seat as the brief and kit steps; no design step hands work to a cheaper model), one journey
   // line per seed journey (beat count and the story's target path),
   // the primitive-ban rule, the CSF/router recipe (Contracts), and --mark journeys-drawn.
@@ -2942,7 +2942,7 @@ const STEPS = {
       '## Step: rebuild every approved journey as a journey story',
       'Read only: docs/design/brief.md, ' + rulesFile + ', ' + beatsFiles.join(', ') + ', ' + (dp.kit || 'src/components/kit'),
       'Doctrine: spec/doctrine/genesis.md § Genesis: Design Stage',
-      'Session: start a fresh session for this step — Model: Fable (composes every approved journey from the kit; all journeys in this one session)',
+      'Dispatch: Agent {model: "fable", effort: "high"} — fresh context; hand it this step\'s read list, doctrine and skill lines verbatim (composes every approved journey from the kit; all journeys in this one session)',
     ]
     for (const [name, j] of seedJourneys) {
       lines.push('journey: ' + name + ' — ' + j.beats.length + ' beats → ' + journeysRel + '/' + name + '.journey.stories.tsx')

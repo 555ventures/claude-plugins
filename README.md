@@ -12,8 +12,8 @@ A Claude Code plugin marketplace with three plugins:
 The idea in one sentence:
 
 > **The expensive model authors the contract; cheap models execute it behind deterministic
-> gates; the expensive model is consulted, not resident; an uncorrelated model reviews the
-> result.**
+> gates; the expensive model is consulted, not resident; a fresh-context reviewer must
+> demonstrate its verdicts.**
 
 Fable writes and hardens the plan, Sonnet workers do the typing test-first behind gates, and an
 independent review has to *demonstrate* its verdicts — executed tests, an observed app boot —
@@ -157,7 +157,7 @@ elsewhere:
   verdict, and guards that don't earn their keep on ledger evidence get retired. No other tool
   keeps score on its own review process.
 - **Model economics are encoded.** Expensive model authors and judges, cheap models type behind
-  deterministic gates, an uncorrelated model reviews. Others are single-model or model-agnostic.
+  deterministic gates, a fresh-context reviewer judges. Others are single-model or model-agnostic.
 - **Genesis writes the record in front of you.** Live-researched stack and design decisions,
   authored by one proposer — the session itself — with hard forks surfaced as questions — not
   a template questionnaire.

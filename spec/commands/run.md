@@ -7,7 +7,7 @@ argument-hint: <spec path>
 
 `/spec:run <spec>` is the loop that finishes a feature after `/spec:plan`. Each invocation
 derives the next stage from disk in the order below and executes it in-session, so one command
-carries a spec from `hardened` to `done`. Orchestrator and workers: Sonnet.
+carries a spec from `hardened` to `done`. The orchestrator is the invoking session; workers are the seat in core § Model Placement.
 
 **Setup:** run `spec-paths shared-for run` and read its output. Read the host's
 `.claude/spec.config.json`.

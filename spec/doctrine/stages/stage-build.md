@@ -3,7 +3,7 @@
 The build stage carries a hardened spec to `implementing` and its build to `DONE`.
 `spec-build-driver.js` owns this stage's sequencing — executing every deterministic step itself and printing exactly one step at a time
 for this session's judgments. `/spec:run` is the only way here: it reaches this driver and, on
-`DONE`, continues into review — see `spec/commands/run.md`. Orchestrator and workers: Sonnet.
+`DONE`, continues into review — see `spec/commands/run.md`. The orchestrator is the invoking session; workers are the seat in core § Model Placement.
 
 **Setup:** run `spec-paths shared-for build` and read its output. Read the host's
 `.claude/spec.config.json`. Either missing → STOP: run `/spec:init` first. Run `spec-paths build-driver` once, keeping the

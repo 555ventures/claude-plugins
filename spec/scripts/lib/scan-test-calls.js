@@ -26,12 +26,14 @@
 // Regex-literal detection follows the standard heuristic: a `/` opens a regex only when the last
 // significant character read is one of `( , = : [ ! & | ? { } ; + - * % < > ~ ^`, one of the
 // keywords `return typeof case await throw else in of`, or the `=>` arrow token — anywhere else
-// (an identifier, a literal, `]`, a postfix `++`/`--`) it is division and left alone. A `)` is
+// (an identifier, a literal, `]`, a postfix `++`/`--`) it is division and left alone; a `/` right
+// after `<` or right before `>` (a JSX `</tag>` or `/>`) never opens one. A `)` is
 // ambiguous on its own (`(a + b) / 2` is division, `if (a) /re/.test(x)` is a regex) so a paren
 // stack tracks, for each `(`, whether the word immediately before it was `if`/`while`/`for`/
 // `switch`/`catch` — only a `)` that closed one of those conditionals opens a regex context.
 //
-// What this deliberately does NOT do: understand JSX, decorators, or any transpiled syntax
+// What this deliberately does NOT do: understand JSX beyond its two tag shapes (an apostrophe or
+// `//` in JSX text still reads as a string or comment), decorators, or any transpiled syntax
 // (plain post-Node-current-syntax test files only); count `describe(`/`describe.each(`/`t.test(`/
 // any other call name; or classify a directory tree not already walked into `listTestFiles`'s result.
 //
@@ -135,6 +137,15 @@ function isRegexContext(sig, lastCloseWasKeyword) {
   return REGEX_OPENING_KEYWORD_RE.test(word)
 }
 
+// The two JSX tag shapes a `.tsx`/`.jsx` test file carries in nearly every render — a closing
+// tag's `</` and a self-closing `/>` — are never a regex opening, whatever `sig` says (`}` and
+// `<` both sit in REGEX_OPENING_PUNCT). Anything else JSX-shaped stays unhandled; expire-tests.js
+// refuses a span this walk cannot bound rather than trusting it.
+function opensRegex(src, i, sig, lastCloseWasKeyword) {
+  if (src[i - 1] === '<' || src[i + 1] === '>') return false
+  return isRegexContext(sig, lastCloseWasKeyword)
+}
+
 function skipRegex(src, i) {
   let j = i + 1
   let inClass = false
@@ -167,7 +178,7 @@ function findCallEnd(src, openParenIdx) {
     if (c === '/' && src[pos + 1] === '*') { pos = skipBlockComment(src, pos); continue }
     if (c === '\'' || c === '"') { pos = skipQuoteString(src, pos, c); sig = c; continue }
     if (c === '`') { pos = skipTemplate(src, pos); sig = '`'; continue }
-    if (c === '/' && isRegexContext(sig, lastCloseWasKeyword)) { pos = skipRegex(src, pos); sig = '/'; continue }
+    if (c === '/' && opensRegex(src, pos, sig, lastCloseWasKeyword)) { pos = skipRegex(src, pos); sig = '/'; continue }
     if (/\s/.test(c)) { if (sig[sig.length - 1] !== ' ') sig = (sig + ' ').slice(-24); pos++; continue }
     if (c === '(') {
       depth++
@@ -280,7 +291,7 @@ function scanLineStartCalls(src, names, skipBody) {
     if (c === '/' && src[i + 1] === '*') { i = skipBlockComment(src, i); continue }
     if (c === '\'' || c === '"') { i = skipQuoteString(src, i, c); sig = c; continue }
     if (c === '`') { i = skipTemplate(src, i); sig = '`'; continue }
-    if (c === '/' && isRegexContext(sig, lastCloseWasKeyword)) { i = skipRegex(src, i); sig = '/'; continue }
+    if (c === '/' && opensRegex(src, i, sig, lastCloseWasKeyword)) { i = skipRegex(src, i); sig = '/'; continue }
     if (/\s/.test(c)) { if (sig[sig.length - 1] !== ' ') sig = (sig + ' ').slice(-24); i++; continue }
     if (c === '(') {
       parenStack.push(CONTROL_KEYWORD_PAREN_RE.test(trailingWord(sig)))

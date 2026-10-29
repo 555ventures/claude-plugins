@@ -341,6 +341,212 @@ test('a top-level live case', () => { assert.ok(true) })
     'the file left behind must still be syntactically valid JS')
 })
 
+// JSX fixtures (the salon-os broadcast.targets.test.tsx corruption): a retired case's body renders
+// JSX the plain-JS scanner can misread. Closing and self-closing tags must cut cleanly; an
+// apostrophe or URL in JSX text yields a span that cannot be bounded, and its file must be left
+// byte-identical and reported, never cut through a describe's `})` or deleted with kept cases.
+function makeJsxHost(prefix, files) {
+  const root = tmpdir(prefix)
+  writeSpec(root, 'specs/20260911/81-closing5.md', `---
+status: done
+tier: standard
+diff_base: 0000000000000000000000000000000000000000
+---
+# Closing Fixture Spec 5
+
+## Acceptance Criteria
+
+- **AC-20260911-81-1**: THE SYSTEM has nothing keeping these tests alive.
+`)
+  for (const [rel, body] of Object.entries(files)) writeTest(root, rel, body)
+  return root
+}
+
+test('WHEN --apply retires a case whose body renders a closing tag or a self-closing tag THE SYSTEM cuts exactly that case (and the describe it empties) and keeps every sibling and closing brace', () => {
+  const root = makeJsxHost('expiry-jsx-tags', {
+    'src/close.test.tsx': `describe('suite', () => {
+  it('AC-20260911-81-1: retired', () => {
+    render(<p>hi</p>)
+  })
+  it('keeps', () => {})
+})
+`,
+    'src/self.test.tsx': `describe('suite', () => {
+  it('AC-20260911-81-1: retired', () => {
+    render(<Widget a={b} />)
+  })
+})
+describe('other', () => {
+  it('keeps', () => {})
+})
+`,
+  })
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--apply', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, 'the JSX tag sweep must apply cleanly: ' + r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.strictEqual(out.retired.length, 2, 'both tagged JSX cases must retire: ' + JSON.stringify(out.retired))
+  assert.deepStrictEqual(out.unscannable, [], 'tag shapes the scanner bounds must never be refused: ' + JSON.stringify(out.unscannable))
+  assert.strictEqual(fs.readFileSync(path.join(root, 'src/close.test.tsx'), 'utf8'),
+    `describe('suite', () => {\n  it('keeps', () => {})\n})\n`,
+    'a closing tag in a retired body must not cost the describe its `})` or its kept sibling')
+  assert.strictEqual(fs.readFileSync(path.join(root, 'src/self.test.tsx'), 'utf8'),
+    `describe('other', () => {\n  it('keeps', () => {})\n})\n`,
+    'a self-closing tag in a retired body must still let its emptied describe go whole')
+})
+
+test('WHEN a retired case holds JSX text with an apostrophe or a URL THE SYSTEM leaves its file byte-identical, reports it under unscannable instead of retired, and still applies the rest of the sweep', () => {
+  const apostrophe = `describe('suite', () => {
+  it('AC-20260911-81-1: retired', () => {
+    render(<p>Don't panic</p>)
+  })
+  it('keeps a live case', () => {})
+})
+`
+  const url = `describe('suite', () => {
+  it('AC-20260911-81-1: retired', () => {
+    render(<p>see https://x.io</p>)
+  })
+})
+describe('other', () => {
+  it('keeps a live case', () => {})
+})
+`
+  const root = makeJsxHost('expiry-jsx-unbounded', {
+    'src/apostrophe.test.tsx': apostrophe,
+    'src/url.test.tsx': url,
+    'src/plain.test.js': `test('AC-20260911-81-1: retired plain', () => {})\ntest('keeps', () => {})\n`,
+  })
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--apply', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, 'a refused file must not fail the sweep: ' + r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.deepStrictEqual(out.emptied, [], 'a file holding a kept case must never be deleted: ' + JSON.stringify(out.emptied))
+  assert.deepStrictEqual([...new Set(out.unscannable.map((u) => u.file))].sort(), ['src/apostrophe.test.tsx', 'src/url.test.tsx'],
+    'both unboundable files must be reported, or a cut through them goes unseen: ' + JSON.stringify(out.unscannable))
+  assert.deepStrictEqual(out.retired.map((x) => x.file), ['src/plain.test.js'],
+    'a refused case listed as retired would overstate the close-time expiry count: ' + JSON.stringify(out.retired))
+  assert.strictEqual(fs.readFileSync(path.join(root, 'src/apostrophe.test.tsx'), 'utf8'), apostrophe,
+    'an apostrophe in JSX text must never let the sweep delete or cut the file')
+  assert.strictEqual(fs.readFileSync(path.join(root, 'src/url.test.tsx'), 'utf8'), url,
+    'a URL in JSX text must never let the sweep eat a describe\'s closing brace')
+  assert.strictEqual(fs.readFileSync(path.join(root, 'src/plain.test.js'), 'utf8'), `test('keeps', () => {})\n`,
+    'one refused file must not stop the rest of the sweep from applying')
+  assert.match(r.stderr, /left src\/apostrophe\.test\.tsx untouched/, 'a refusal nobody sees leaves the expiry silently stuck')
+})
+
+function applyJsx(prefix, files) {
+  const root = makeJsxHost(prefix, files)
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--apply', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, 'a sweep holding refused spans must still apply: ' + r.stdout + r.stderr)
+  return { root, out: JSON.parse(r.stdout) }
+}
+
+test('WHEN one file holds a bounded retired case beside an unbounded one THE SYSTEM cuts the bounded case, leaves the unbounded one in place and reports it under unscannable', () => {
+  const { root, out } = applyJsx('expiry-jsx-mixed', {
+    'src/mixed.test.tsx': `describe('suite', () => {
+  it('AC-20260911-81-1: retired bounded', () => {
+    render(<p>hi</p>)
+  })
+  it('AC-20260911-81-1: retired unbounded', () => {
+    render(<p>Don't panic</p>)
+  })
+  it('keeps a live case', () => {})
+})
+`,
+  })
+  assert.deepStrictEqual(out.retired.map((x) => x.title), ['AC-20260911-81-1: retired bounded'],
+    'one unbounded case must not stop its bounded neighbour from retiring: ' + JSON.stringify(out))
+  assert.deepStrictEqual(out.unscannable.map((x) => x.title), ['AC-20260911-81-1: retired unbounded'],
+    'the case left in place must be reported, or it stays stuck unseen: ' + JSON.stringify(out))
+  assert.strictEqual(fs.readFileSync(path.join(root, 'src/mixed.test.tsx'), 'utf8'), `describe('suite', () => {
+  it('AC-20260911-81-1: retired unbounded', () => {
+    render(<p>Don't panic</p>)
+  })
+  it('keeps a live case', () => {})
+})
+`, 'only the bounded case may leave the file — the describe, the refused case and the kept case all stay')
+})
+
+test('WHEN a describe closing the file cannot be bounded and its only retired case can THE SYSTEM refuses that case rather than leave an empty describe, and leaves the file byte-identical', () => {
+  const src = `describe('other', () => {
+  it('keeps a live case', () => {})
+})
+describe('suite', () => {
+  it('AC-20260911-81-1: retired', () => {
+    render(<p>hi</p>)
+  })
+  afterEach(() => { render(<p>Don't</p>) })
+})
+`
+  const { root, out } = applyJsx('expiry-jsx-describe', { 'src/d.test.tsx': src })
+  assert.deepStrictEqual(out.retired, [], 'a case cut out of an unboundable describe leaves an empty suite: ' + JSON.stringify(out))
+  assert.deepStrictEqual(out.emptiedSuites, [], 'an unboundable describe must never be reported emptied: ' + JSON.stringify(out))
+  assert.strictEqual(out.unscannable.length, 1, 'the refused case must be reported once: ' + JSON.stringify(out))
+  assert.match(out.unscannable[0].reason, /its describe "suite" cannot be bounded/,
+    'the reason must name the describe, or the hand trim targets the wrong span')
+  assert.strictEqual(fs.readFileSync(path.join(root, 'src/d.test.tsx'), 'utf8'), src,
+    'a refused describe must leave the file untouched')
+})
+
+test('WHEN a bounded retired case is cut and a kept case later in the file sits past an apostrophe the scanner misreads THE SYSTEM never deletes the file', () => {
+  const { root, out } = applyJsx('expiry-jsx-invisible', {
+    'src/inv.test.tsx': `it('AC-20260911-81-1: retired', () => {})
+afterEach(() => { render(<p>Don't</p>) })
+it('keeps a live case', () => {
+  expect(x).toBe(1)
+})
+`,
+  })
+  assert.deepStrictEqual(out.emptied, [], 'a file still holding a kept case must never be deleted: ' + JSON.stringify(out))
+  assert.strictEqual(fs.readFileSync(path.join(root, 'src/inv.test.tsx'), 'utf8'), `afterEach(() => { render(<p>Don't</p>) })
+it('keeps a live case', () => {
+  expect(x).toBe(1)
+})
+`, 'the kept case the scanner could not see must survive the sweep')
+})
+
+test('WHEN a describe loses its last case but keeps a comment naming a test file THE SYSTEM still removes it, and WHEN its sibling is a table case THE SYSTEM keeps the describe', () => {
+  const { root, out } = applyJsx('expiry-describe-tokens', {
+    'src/comment.test.tsx': `describe('suite', () => {
+  it('AC-20260911-81-1: retired', () => {})
+  // mirrors foo.test.tsx
+})
+it('keeps', () => {})
+`,
+    'src/table.test.tsx': `describe('suite', () => {
+  it('AC-20260911-81-1: retired', () => {})
+  it.each([1, 2])('keeps %s', (n) => {})
+})
+`,
+  })
+  assert.deepStrictEqual(out.emptiedSuites.map((e) => e.file), ['src/comment.test.tsx'],
+    'a describe left with only a comment fails the host run as an empty suite: ' + JSON.stringify(out))
+  assert.strictEqual(fs.readFileSync(path.join(root, 'src/comment.test.tsx'), 'utf8'), `it('keeps', () => {})\n`,
+    'the emptied describe and its comment must go, the top-level kept case must stay')
+  assert.strictEqual(fs.readFileSync(path.join(root, 'src/table.test.tsx'), 'utf8'), `describe('suite', () => {
+  it.each([1, 2])('keeps %s', (n) => {})
+})
+`, 'a kept table case must keep its describe')
+})
+
+test('WHEN an emptied inner describe is bounded but the outer describe closing the file is not THE SYSTEM refuses the inner case, lists no emptied suite, and leaves the file byte-identical', () => {
+  const src = `describe('other', () => {
+  it('keeps a live case', () => {})
+})
+describe('outer', () => {
+  describe('inner', () => {
+    it('AC-20260911-81-1: retired', () => {})
+  })
+  afterEach(() => { render(<p>Don't</p>) })
+})
+`
+  const { root, out } = applyJsx('expiry-jsx-nested', { 'src/n.test.tsx': src })
+  assert.deepStrictEqual(out.retired, [], 'the inner case must not retire out of an unboundable outer describe: ' + JSON.stringify(out))
+  assert.deepStrictEqual(out.emptiedSuites, [], 'the inner describe must not be reported emptied once its cut is dropped: ' + JSON.stringify(out))
+  assert.strictEqual(out.unscannable.length, 1, 'the refused inner case must be reported once: ' + JSON.stringify(out))
+  assert.strictEqual(fs.readFileSync(path.join(root, 'src/n.test.tsx'), 'utf8'), src,
+    'a refused nested describe must leave the file untouched')
+})
+
 // Collision fixture: two specs define the identical AC-ID (spec-number-check.js's job to refuse
 // at the gate, not this script's — D3's fail-safe rule must still hold in its presence). One
 // citing test keyed to the collided ID must be kept `open` whenever ANY of its collided ID's

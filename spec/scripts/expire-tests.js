@@ -49,8 +49,15 @@
 // trailing `;` and newline all included — lib/scan-test-calls.js's own `start`/`end`, widened here
 // by one more character when a trailing newline follows), removes a line-start `describe(` that
 // held a retired test and is left with no test/it/describe token (`emptiedSuites`), collapses a
-// run of three-or-more blank lines down to one, deletes a file left with zero remaining test() calls, and climbs to delete
-// any directory the deletion leaves empty. A dry run mutates nothing on disk, and
+// run of three-or-more blank lines down to one, deletes a file left with zero remaining test() calls
+// and no line-start titled case or describe (the scanner can miss a kept case it misreads), and climbs to delete
+// any directory the deletion leaves empty. Every span is cut only when it is visibly bounded (it
+// ends on its own `)`, closes at its opening line's indent, and holds no titled case or describe
+// that is not itself being cut); an unbounded case — or every case inside an emptied describe that
+// is unbounded — stays in its file uncut, listed under `unscannable` with a reason and one stderr
+// line each instead of under `retired`, while every bounded case beside it is still cut; the exit
+// code is unaffected. The indent check is vacuous in a file with no indentation at all, so an
+// overrun there can still end on an enclosing `})` — the host gate's parse catches it. A dry run mutates nothing on disk, and
 // this script's own `--apply` flag is the ONLY way anything it derives
 // reaches the tree: the close-time review driver never passes `--apply` and never will; a human
 // running `/spec:doctor` check 20's remedy by hand is the one path that deletes a test.
@@ -350,7 +357,7 @@ function classify(call, ids, fileText, file) {
 let scanned = 0
 const kept = { class: 0, invariant: 0, pin: 0, open: 0 }
 const retiredByFile = new Map() // file -> [{ call, ids }]
-const retired = []
+let retired = [] // every retired row; a refused span's row leaves it before render
 
 for (const file of testFiles) {
   let src
@@ -370,7 +377,8 @@ for (const file of testFiles) {
     if (!inScope) continue
     const cls = classify(call, ids, src, file)
     if (cls === 'retired') {
-      retired.push({ file, acIds: ids, title: call.title })
+      call.row = { file, acIds: ids, title: call.title }
+      retired.push(call.row)
       if (!retiredByFile.has(file)) retiredByFile.set(file, [])
       retiredByFile.get(file).push(call)
     } else {
@@ -386,7 +394,36 @@ const tagged = retired.length + kept.class + kept.invariant + kept.pin + kept.op
 // applies). Only fs.writeFileSync / fs.unlinkSync / the empty-directory climb are gated on `apply`.
 const emptied = []
 const emptiedSuites = [] // [{ file, title }] — describes this pass leaves with zero cases
+const unscannable = [] // [{ file, title, reason }] — spans refused; each stays in its file uncut
+const refused = new Set() // the `retired` rows those spans carried
 const writes = [] // [{ abs, before, after }] — after:null deletes; performed only under --apply
+
+// A span is cut only when it is visibly bounded — lib/scan-test-calls.js is a plain-JS walk, and
+// a host file it misreads (JSX text holding an apostrophe or `//`) yields a span that eats a
+// describe's `})`, a kept sibling, or the rest of the file. Bounded: the call ends on its own `)`,
+// its closing line carries its opening line's indent, and no line-start test/it/describe inside it
+// falls outside `inner` (the spans already being cut) — a titled or table case or any describe, never a
+// `test.skip(cond)`/`test.setTimeout(`/`test.step(` inside a body. Returns why not, or null.
+const LINE_START_CALL_RE =
+  /^[ \t]*(?:(?:test|it)(?:\.(?:only|skip|concurrent|sequential|fails|todo|fixme))*(?:\s*\(\s*['"`]|\.(?:each|for)\b)|describe\b[\w.]*\s*\()/
+function unboundedReason(src, rec, inner) {
+  const lineStart = rec.start + rec.commentAbove.length
+  const indent = /^[ \t]*/.exec(src.slice(lineStart, lineStart + 200))[0]
+  const callEnd = lineStart + indent.length + rec.callText.length
+  if (src[callEnd - 1] !== ')') return 'its call never closes before the end of the file'
+  const closeLineStart = src.lastIndexOf('\n', callEnd - 1) + 1
+  const closeIndent = /^[ \t]*/.exec(src.slice(closeLineStart, closeLineStart + 200))[0]
+  if (closeLineStart !== lineStart && closeIndent !== indent) {
+    return 'its closing line is indented differently from its opening line'
+  }
+  for (let nl = src.indexOf('\n', lineStart); nl !== -1 && nl + 1 < callEnd; nl = src.indexOf('\n', nl + 1)) {
+    const ls = nl + 1
+    if (!LINE_START_CALL_RE.test(src.slice(ls, ls + 200))) continue
+    if (!inner.some((r) => r.start <= ls && ls < r.end)) return 'it holds a test or describe that is not retired'
+  }
+  return null
+}
+
 for (const [file, calls] of retiredByFile) {
   const abs = path.join(root, file)
   let src
@@ -395,11 +432,24 @@ for (const [file, calls] of retiredByFile) {
   } catch {
     continue
   }
+  // A retired case whose span is not visibly bounded is never cut: its row moves from `retired`
+  // to `unscannable` and it stays in the file, while every bounded case beside it is still cut.
+  const refuse = (c, reason) => {
+    unscannable.push({ file, title: c.title, reason })
+    refused.add(c.row)
+  }
+  let removals = []
+  for (const c of calls) {
+    const reason = unboundedReason(src, c, [])
+    if (reason) refuse(c, reason)
+    else removals.push({ start: c.start, end: c.end, call: c })
+  }
   // A line-start describe( that held a retired span and, once every removal inside it is cut,
-  // holds no test/it/describe token at all is removed too (inner first, so an outer describe
+  // starts no line with a case or describe (LINE_START_CALL_RE) is removed too (inner first, so an outer describe
   // emptied only by an emptied inner one goes as well) — the same invariant as the whole-file
-  // deletion below, one level down: vitest fails an empty suite. Any stray token keeps it.
-  const removals = calls.map((c) => ({ start: c.start, end: c.end }))
+  // deletion below, one level down: vitest fails an empty suite. A comment naming `foo.test.tsx` never keeps it. An
+  // emptied describe that is not itself bounded keeps every case inside it, so it is never left
+  // standing empty.
   const retiredOnly = removals.slice()
   for (const d of scanDescribes(src).sort((a, b) => b.start - a.start)) {
     const inside = (r) => r.start >= d.start && r.end <= d.end
@@ -408,16 +458,25 @@ for (const [file, calls] of retiredByFile) {
     const callEnd = callStart + d.callText.length
     let body = ''
     let pos = callStart + 'describe('.length
-    for (const cut of removals.filter(inside).sort((a, b) => a.start - b.start)) {
-      if (cut.start < pos) continue
-      body += src.slice(pos, cut.start)
-      pos = cut.end
+    for (const r of removals.filter(inside).sort((a, b) => a.start - b.start)) {
+      if (r.start < pos) continue
+      body += src.slice(pos, r.start)
+      pos = r.end
     }
     body += src.slice(pos, callEnd)
-    if (/\b(test|it|describe)\s*[.(]/.test(body)) continue
-    removals.push({ start: d.start, end: d.end })
-    emptiedSuites.push({ file, title: d.title })
+    if (body.split('\n').some((line) => LINE_START_CALL_RE.test(line))) continue
+    const reason = unboundedReason(src, d, removals)
+    if (reason) {
+      for (const r of removals.filter(inside)) {
+        if (r.call) refuse(r.call, 'its describe ' + JSON.stringify(d.title) + ' cannot be bounded — ' + reason)
+      }
+      removals = removals.filter((r) => !inside(r))
+      continue
+    }
+    removals.push({ start: d.start, end: d.end, title: d.title })
   }
+  for (const r of removals) if (r.title) emptiedSuites.push({ file, title: r.title })
+  if (removals.length === 0) continue
   const spans = removals
     .filter((r) => !removals.some((o) => o !== r && o.start <= r.start && o.end >= r.end &&
       (o.start < r.start || o.end > r.end)))
@@ -442,13 +501,17 @@ for (const [file, calls] of retiredByFile) {
   }
   src = collapsed.join('\n')
 
-  if (scanCalls(src).length === 0) {
+  // A kept case the scanner misread is invisible to scanCalls but still starts a line, so a file
+  // with any line-start titled case or describe left is never deleted.
+  if (scanCalls(src).length === 0 && !src.split('\n').some((line) => LINE_START_CALL_RE.test(line))) {
     emptied.push(file)
     writes.push({ abs, before, after: null })
   } else {
     writes.push({ abs, before, after: src })
   }
 }
+
+retired = retired.filter((r) => !refused.has(r))
 
 // ---- --apply: write, then the host's gate decides whether the writes stay -----------------------
 let gate = null
@@ -512,7 +575,11 @@ const exitCode = gate && !gate.ok ? 1 : 0
 // ---- render --------------------------------------------------------------------------------------
 const scope = closingSpecRel !== null ? 'spec:' + closingSpecRel : 'all-done'
 const applied = apply && !(gate && gate.reverted)
-const result = { scope, scanned, tagged, kept, retired, emptied, emptiedSuites, applied, gate }
+const result = { scope, scanned, tagged, kept, retired, emptied, emptiedSuites, unscannable, applied, gate }
+for (const u of unscannable) {
+  writeOut(2, 'expire-tests: left ' + u.file + ' untouched — ' + JSON.stringify(u.title) + ': ' + u.reason +
+    '; its retired tests stay until it is trimmed by hand')
+}
 
 if (asJson) {
   writeOut(1, JSON.stringify(result))
@@ -522,7 +589,7 @@ if (asJson) {
 const lines = retired.map((r) => 'retire ' + r.file + ' — ' + r.title)
 const keptTotal = kept.class + kept.invariant + kept.pin + kept.open
 lines.push('expiry: scanned ' + scanned + ' tagged ' + tagged + ' kept ' + keptTotal +
-  ' retired ' + retired.length + ' (' +
+  ' retired ' + retired.length + (unscannable.length ? ' unscannable ' + unscannable.length : '') + ' (' +
   (!apply ? 'dry run' : gate && gate.reverted ? 'reverted: gate red' : gate && !gate.ok ? 'applied: gate red' : 'applied') + ')')
 writeOut(1, lines.join('\n'))
 process.exit(exitCode)

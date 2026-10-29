@@ -206,3 +206,27 @@ test('groom proposes from agent evidence: one haiku checker per flagged item, fl
   const tools = /^allowed-tools:.*$/m.exec(src)
   assert.ok(tools && /\bAgent\b/.test(tools[0]) && /AskUserQuestion/.test(tools[0]), 'the command must be allowed to dispatch agents and ask per item: ' + (tools && tools[0]))
 })
+
+// Incident 2026-10-28 (expense-tracking): prototype-driver --mark tests-derived queues
+// `design/prototypes/<stem>/contract.json` in the plan lane; with another prototype's contract
+// pending, the word-overlap scorer saw the shared directory tokens (design, prototypes, contract,
+// json) and refused the add at 0.50, killing the mark. A path is an identity, not prose.
+test('incident-20261028: spec-queue add accepts a second plan-lane contract path beside a pending one without --distinct, refuses the identical path, and groom pairs no two distinct paths', () => {
+  const A = 'design/prototypes/settings-grouped-rows/contract.json'
+  const B = 'design/prototypes/07-trust-and-ops/contract.json'
+  const dir = host({ queue: [{ id: 'q1', kind: 'prompt', lane: 'plan', payload: A, added: daysAgo(1) }] })
+  const r = runNode(SCRIPT, ['add', B, '--lane', 'plan', '--top'], { cwd: dir })
+  assert.strictEqual(r.status, 0, 'two different contract paths are never near-duplicates — the prototype mark must not die on the second prototype: ' + r.stdout + r.stderr)
+  const q = JSON.parse(fs.readFileSync(qPath(dir), 'utf8'))
+  assert.deepStrictEqual(q.items.map((it) => it.payload), [B, A], 'the second path must be appended at the top: ' + JSON.stringify(q.items))
+
+  const same = runNode(SCRIPT, ['add', A, '--lane', 'plan'], { cwd: dir })
+  assert.strictEqual(same.status, 2, 'the identical contract path pending twice is still a duplicate: ' + same.stdout + same.stderr)
+  assert.match(same.stderr, /near-duplicate of q1 \(score 1\.00\)/, 'an identical path names the pending id at score 1.00: ' + same.stderr)
+  const variant = runNode(SCRIPT, ['add', './' + A + '/', '--lane', 'plan'], { cwd: dir })
+  assert.strictEqual(variant.status, 2, 'a cosmetic variant of a pending path (./ prefix, trailing /) is the same identity: ' + variant.stdout + variant.stderr)
+
+  const g = runNode(SCRIPT, ['groom'], { cwd: dir })
+  assert.strictEqual(g.status, 0, 'groom exits 0: ' + g.stdout + g.stderr)
+  assert.ok(!/duplicates \(/.test(g.stdout), 'groom must not pair two distinct contract paths as duplicates: ' + g.stdout)
+})

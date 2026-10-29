@@ -16,7 +16,8 @@
 // `add --after`/`--brief` flags each exit 2 naming their replacement.
 //
 // Hygiene: `add` refuses a free-text prompt whose token
-// Jaccard against any PENDING prompt is >= 0.35 (`--distinct` overrides); `list` prints an age
+// Jaccard against any PENDING prompt is >= 0.35 (`--distinct` overrides; a path-shaped payload
+// such as a prototype contract duplicates only an identical path, never by word overlap); `list` prints an age
 // column and the flags `📎 cites done <spec>` · `⏳ gate met` · `⌛ stale`; every write verb
 // moves ticked and derived-done items out of the queue file into
 // <git-common-dir>/spec-queue-done.json (seq stays in the queue file, so ids never repeat);
@@ -58,7 +59,7 @@ const { readLedgerRows } = require('./lib/observation')
 const {
   normBrief, isSupersededBriefText, isItemDone, isItemReady, makeCtx,
   dedupeItems, stripAutoPlaced, reconcileMissingBriefs,
-  promptTokens, jaccard, citesDoneSpec, LANES, promptAction,
+  promptDupScore, citesDoneSpec, LANES, promptAction,
 } = require('./lib/queue')
 
 const SPEC_STATUS = path.join(__dirname, 'spec-status.js')
@@ -238,12 +239,11 @@ function gateMet(it, ctx) { return !!it.after && isItemReady(it, ctx).ready }
 function isStale(it) { const a = ageDays(it); return it.kind === 'prompt' && !it.after && a !== null && a >= STALE_DAYS }
 
 function dupPairs(prompts) {
-  const tok = prompts.map(p => promptTokens(p.payload))
   const pairs = []
   for (let i = 0; i < prompts.length; i++) {
     for (let j = i + 1; j < prompts.length; j++) {
-      const score = jaccard(tok[i], tok[j])
-      if (score >= DUP_THRESHOLD) pairs.push({ a: prompts[i], b: prompts[j], score })
+      const score = promptDupScore(prompts[i].payload, prompts[j].payload)
+      if (score !== null && score >= DUP_THRESHOLD) pairs.push({ a: prompts[i], b: prompts[j], score })
     }
   }
   return pairs
@@ -578,14 +578,15 @@ switch (sub) {
     }
 
     // A near-duplicate free-text prompt is refused against PENDING prompts only (a ticked
-    // prompt re-added is a legitimate reopen); --distinct is the honest override.
+    // prompt re-added is a legitimate reopen); --distinct is the honest override. A path-shaped
+    // payload (a prototype contract in the plan lane) duplicates only an identical path — never
+    // a prose prompt or another path (promptDupScore).
     if (kind === 'prompt' && !flags.distinct) {
-      const tok = promptTokens(payload)
       let best = null
       for (const it of items) {
         if (it.kind !== 'prompt' || isItemDone(it, ctx).done) continue
-        const score = jaccard(tok, promptTokens(it.payload))
-        if (score >= DUP_THRESHOLD && (!best || score > best.score)) best = { id: it.id, score }
+        const score = promptDupScore(payload, it.payload)
+        if (score !== null && score >= DUP_THRESHOLD && (!best || score > best.score)) best = { id: it.id, score }
       }
       if (best) {
         console.error(`spec-queue: near-duplicate of ${best.id} (score ${best.score.toFixed(2)}) — spec-queue show ${best.id}; add it anyway with --distinct`)

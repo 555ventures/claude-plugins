@@ -203,6 +203,21 @@ function jaccard(a, b) {
   return inter / (a.size + b.size - inter)
 }
 
+// A path-shaped payload: one whitespace-free token containing a `/` (a prototype's
+// `design/prototypes/<stem>/contract.json`, queued in the plan lane). Paths are identities, not
+// prose — two different paths are never near-duplicates however many directory words they share.
+function isPathPayload(payload) { return /^\S+\/\S+$/.test(String(payload || '').trim()) }
+// Identity form of a path payload: `./` prefixes, `//` runs and a trailing `/` are cosmetic.
+function pathIdentity(payload) { return path.posix.normalize(String(payload).trim()).replace(/\/+$/, '') }
+
+// Near-duplicate score between two prompt payloads, or null when the pair is not comparable.
+// Path vs path: 1 when identical, else null. Path vs prose: null. Prose vs prose: token Jaccard.
+function promptDupScore(a, b) {
+  const pa = isPathPayload(a), pb = isPathPayload(b)
+  if (pa || pb) return pa && pb && pathIdentity(a) === pathIdentity(b) ? 1 : null
+  return jaccard(promptTokens(a), promptTokens(b))
+}
+
 // The first specs/YYYYMMDD/NN…md path a prompt payload names whose spec is done or
 // superseded (ctx.specStatus), else null. Only prompts cite; briefs and specs never do.
 function citesDoneSpec(item, ctx) {
@@ -239,5 +254,5 @@ function promptAction(item) {
 module.exports = {
   normBrief, isSupersededBriefText, evaluateWhen, isItemDone, isItemReady, makeCtx,
   dedupeItems, stripAutoPlaced, reconcileMissingBriefs,
-  promptTokens, jaccard, citesDoneSpec, LANES, promptAction,
+  promptTokens, jaccard, isPathPayload, promptDupScore, citesDoneSpec, LANES, promptAction,
 }

@@ -1185,25 +1185,28 @@ test('AC-20260907-05-9: spec/doctrine/genesis.md\'s § Genesis: On-disk Handoff 
 })
 
 // ---------------------------------------------------------------------------
-// 2026-10-25 direct fix: the journey-stories step named Sonnet while the brief and kit steps
-// named Fable; an Opus session read that as a forced downward switch and stopped. Design taste
-// is one seat (the 2026-09-11 rule): every design step's Session: line names Fable, and the
-// driver carries no other model name on a Session: line.
+// 2026-10-25 direct fix, amended by specs/20261029/01-model-placement-refresh.md: the journey
+// step once named Sonnet while brief and kit named Fable, and an Opus session read that as a
+// forced downward switch. Design taste is one seat: every design step dispatches a Fable
+// subagent (AC-20261029-01-5, -6); no Session: line survives to stop the human on a model switch.
 // ---------------------------------------------------------------------------
 
-test('every genesis design step\'s Session: line names Fable and none names Sonnet, Opus or Haiku — the journey step is not handed to a cheaper model', () => {
+test('AC-20261029-01-5: genesis-driver.js prints exactly three Fable Dispatch lines for the design steps and no fresh-session Session: line', () => {
   const src = read('spec/scripts/genesis-driver.js')
-  const sessionLines = src.split('\n').filter((l) => /'Session: start a fresh session for this step/.test(l))
-  assert.strictEqual(sessionLines.length, 3,
-    'the design stage prints exactly three fresh-session steps (brief, kit, journeys); a different count means ' +
-    'a step was added or dropped without this pin being revisited: ' + JSON.stringify(sessionLines))
-  for (const l of sessionLines) {
-    assert.match(l, /Model: Fable/,
-      'a design step\'s Session: line must name Fable — the brief, kit and journey steps are all taste work: ' + l)
-    assert.doesNotMatch(l, /Sonnet|Opus|Haiku/,
-      'no design step may name a cheaper model; a session reads any other name as a forced downward switch: ' + l)
-  }
+  const lines = src.split('\n')
+  const dispatch = lines.filter((l) => /'Dispatch: Agent \{model: "fable", effort: "high"\}/.test(l))
+  const session = lines.filter((l) => /Session: start a fresh session for this step/.test(l))
+  assert.strictEqual(dispatch.length, 3,
+    'the design stage prints exactly three dispatch steps (brief, kit, journeys); a different count means ' +
+    'a step was added or dropped, or a step still stops the human instead of dispatching: ' + JSON.stringify(dispatch))
+  assert.strictEqual(session.length, 0,
+    'a surviving Session: line still tells the session to stop for a manual model switch: ' + JSON.stringify(session))
+})
+
+test('AC-20261029-01-6: genesis.md tells the session to dispatch the Fable subagent and no longer carries the /model fable stop', () => {
   const cmd = read('spec/commands/genesis.md')
-  assert.match(cmd, /every design step names Fable/,
-    'genesis.md must state the one-seat rule so a session on Fable never treats a Session: line as a reason to switch')
+  assert.ok(cmd.includes('Agent {model: "fable", effort: "high"}'),
+    'genesis.md must name the design-step dispatch, or a session never learns to hand the step to a Fable subagent')
+  assert.ok(!cmd.includes('/model fable'),
+    'genesis.md still tells the human to switch models by hand, which the dispatch line was meant to remove')
 })

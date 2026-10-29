@@ -93,10 +93,14 @@ session is already inside the tree it would create.
 Status transitions are owned by driver states, not commands: plan's lock → `hardened`, the
 build driver's preflight → `implementing`, the review driver's close → `done`. There is no stop
 between the reviewer's return and dispositions. Independence is a fresh-context
-`spec:disposer` agent (read-only, paths only, the session's model) dispatched at
+`spec:disposer` agent (read-only, paths only, `opus` at `effort: medium` — the disposer seat in
+core § Model Placement) dispatched at
 DISPOSITIONS; it returns one grounded recommendation per survivor
 and leg finding, and the review driver refuses `--mark dispositions` on non-empty pools
-without a return that covers every finding exactly once with a non-blank reason. Fix
+without a return that covers every finding exactly once with a non-blank reason. The reviewer
+seat is `opus` at `effort: high`; both seats are fixed aliases, never the session's model, and
+independence is the fresh context plus executed evidence, not a model family
+(specs/20261029/01-model-placement-refresh.md). Fix
 recommendations dispatch without a question; waive and reject recommendations go to the
 user, and the user's answer is recorded as `final` with `overriddenBy: "user"`. Every
 review row records `checkpoint: {outcome, overrides}` — `disposer` (with the count of

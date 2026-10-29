@@ -7,7 +7,7 @@
 // or buys, a "(Recommended)" label must come with a stated reason, and question text
 // may not lean on code identifiers.
 //
-// Tier 2 (judge, ADVISORY): questions that pass tier 1 are reviewed by a fast model against
+// Tier 2 (judge, ADVISORY): questions that pass tier 1 are reviewed by the `haiku` alias (tracks the newest Haiku) against
 // the ten-second cold test — could a non-technical product owner who has never seen this
 // repo answer correctly from the question text alone? The judge also screens for
 // questions the codebase/session/ledger could answer without the user (verdict
@@ -50,7 +50,7 @@
 const MIN_DESC = 25 // chars — below this a description cannot carry a consequence
 const MIN_RECOMMENDED_DESC = 40 // a recommendation must also say WHY
 
-const JUDGE_MODEL = 'claude-haiku-4-5-20251001'
+const JUDGE_MODEL = 'haiku'
 const JUDGE_TIMEOUT_MS = 30000 // hook budget is 60s; leave headroom to fail open
 
 // Product-stage exemption. `root` resolution mirrors spec-state-gate.sh

@@ -316,3 +316,24 @@ test('AC-20260902-06-8: the judge prompt carries the literal citation-is-not-a-d
     'D6\'s exact sentence must be present in the prompt handed to the judge on every invocation — its absence means a document citing a subject can still be judged as the user deciding it'
   )
 })
+
+// specs/20261029/01-model-placement-refresh.md AC-20261029-01-4: the judge is spawned with the
+// `haiku` alias, never a dated snapshot id that retires silently.
+test('AC-20261029-01-4: the tier-2 judge binary is invoked with the consecutive arguments --model haiku', () => {
+  const dir = tmpdir('question-judge-argv')
+  const argvFile = path.join(dir, 'argv.txt')
+  const bin = path.join(dir, 'fake-claude')
+  fs.writeFileSync(bin,
+    `#!/bin/sh\nfor a in "$@"; do printf '%s\\n' "$a" >> ${JSON.stringify(argvFile)}; done\nprintf '%s' '{"verdict":"pass"}'\nexit 0\n`,
+    { mode: 0o755 })
+  const res = run(
+    ask([{ question: 'Which storage shape should notices use?', header: 'Notices', multiSelect: false, options: [GOOD_OPT, GOOD_ALT] }]),
+    { SPEC_QUESTION_JUDGE: '', SPEC_QUESTION_JUDGE_BIN: bin },
+  )
+  assert.ok(fs.existsSync(argvFile),
+    'the judge binary was never invoked on a tier-1-clean question, so the model argument cannot be pinned: ' + res.stderr)
+  const argv = fs.readFileSync(argvFile, 'utf8').split('\n')
+  const at = argv.indexOf('--model')
+  assert.ok(at !== -1 && argv[at + 1] === 'haiku',
+    'the judge must run on the haiku alias; a dated id retires silently and the judge then fails open with no message: ' + JSON.stringify(argv))
+})

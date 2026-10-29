@@ -1250,7 +1250,7 @@ function waveStepBody(label) {
     ? `empty wave(s) skipped — no File Plan rows: ${skippedWaves.join(', ')}\n`
     : ''
   return skipNote + skippedNote +
-    `## Step: wave ${label} — spawn one long-lived Agent {model: sonnet} per layer above and KEEP it\n` +
+    `## Step: wave ${label} — spawn one long-lived Agent {model: sonnet, effort: medium} per layer above and KEEP it\n` +
     body + '\n' +
     `spec: ${specPath}\n` +
     `pipeline rules: ${pipelineRulesPath || '(none declared)'}\n` +

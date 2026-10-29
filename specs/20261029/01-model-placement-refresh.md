@@ -1,6 +1,6 @@
 ---
 date: 2026-10-29
-status: implementing
+status: done
 open_markers: 0
 tier: critical           # touches spec/scripts/question-style-gate.js (hook surface, rules § Risk Tiers)
 area: doctrine
@@ -206,6 +206,13 @@ the version-bump check, and that file no longer exists; the check is reviewer-he
 Rejected adversarial finding: "keep `inherit` for the disposer so a cheaper session gets a cheaper
 disposer." Rejected because the seat must not float with the session; cost control belongs to
 the per-seat table, and `medium` on `opus` is the documented default.
+
+### Advisory debt (review rv_271b9aa5cde3)
+- a0 tests/review/reviewer-seat.test.js:41 — The AC-20261029-01-3 rewrite of the core.md § Model Placement case drops the base-side assertion `assert.doesNotMatch(section, /is every worker and the reviewer/)` (base line 40) with no replacement. The new case only pins table rows, so prose re-introducing the claim that Sonnet is the reviewer would sit beside a Reviewer|opus|high row and pass. The AC enumerates the new assertion set and the pointer says `rewrites`, which is why this is soft. Rules § Review Checks ("a weakened existing assertion is hard") would argue for hard.
+- a1 tests/consistency/genesis-doctrine.test.js:1197 — The AC-20261029-01-5 rewrite drops the base per-line guard `assert.doesNotMatch(l, /Sonnet|Opus|Haiku/)` (base line 1203). The new filter pins only the fixed prefix, so a Dispatch line whose trailing text hands the step to a cheaper model still counts as one of the three Fable dispatches. The model field itself is still pinned to fable, which limits the gap.
+- a2 spec/scripts/genesis-driver.js:2945 — Contracts gives the design-step line as "exact text (one per step, replacing the `Session:` line)": `Dispatch: Agent {model: "fable", effort: "high"} — fresh context; hand it this step's read list, doctrine and skill lines verbatim`. All three driver lines add a carried-over parenthetical after it. The DESIGN_JOURNEYS one still says "(composes every approved journey from the kit; all journeys in this one session)", but the step is now a subagent dispatch, not a session. The prefix is byte-identical in all three lines, so the AC-5 regex passes.
+- a3 spec/doctrine/core.md:149 — The binding seat table says `| Lookups, re-reads, queue groom, question judge | haiku | low | queue.md, question-style-gate.js |`, but neither named site sets an effort. queue.md:45 dispatches `Agent {model: "haiku"}` with no effort, and question-style-gate.js:157 spawns ['-p', judgePrompt(questions), '--model', JUDGE_MODEL] with no effort flag. The row matches the spec Contracts byte-for-byte, so this is a defect in the spec contract the build applied faithfully, not a build deviation.
+- a4 spec/doctrine/stages/stage-review.md:38 — The File Plan row for stage-review.md promises "reviewer/disposer dispatch lines cite the seat table". Only the fix-worker line (57) gained a core § Model Placement citation. The reviewer dispatch (38-40) and disposer dispatch (55-56) are unchanged. No Decision or AC requires it, and the seats are fixed in agent frontmatter.
 
 ## Canonical Delta
 

@@ -160,8 +160,9 @@
   straight to `ROADMAP`. At `DESIGN_BRIEF` the driver generates `docs/design/catalog.md` once —
   only when the file is absent and no run is recorded — from shadcn `info --json` plus each
   component's `## Composition` section (`catalog-inventory.js`; a failure is recorded and printed
-  as a warning, never retried per print, never blocking), and prints a fresh-session line naming
-  Fable and the `design-brief` skill. `--mark design-brief-written` verifies
+  as a warning, never retried per print, never blocking), and prints a dispatch line —
+  `Agent {model: "fable", effort: "high"}`, run as a subagent from whatever model the session
+  holds (specs/20261029/01-model-placement-refresh.md) — and the `design-brief` skill. `--mark design-brief-written` verifies
   `docs/design/brief.md` (heading order, one `JTBD: When ` line per approved journey, no entity
   section, a non-empty composites table equal to the rules file's composite column, used
   components present in the inventory), `.claude/genesis/design-paths.json` (every path key, an

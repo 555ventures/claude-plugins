@@ -104,7 +104,9 @@
 //     marks: skips-extracted --file <f> | reviewer-returned --file <json> |
 //            dispositions [--file <disposer return.json>] --waived N --rejected N
 //              --fix-dispatched N | fix-applied | closed |
-//            merge-strategy <merge-commit|ff-only|squash|rebase-ff> (bare token) |
+//            merge-strategy <merge-commit|ff-only|squash|rebase-ff> (bare token)
+//              [--prototype delete|keep — required when the closing spec's prototype carries
+//              unmerged commits] |
 //            conflicts-resolved
 //   spec-review-driver <spec.md> --state          -> print the state name only (scripting)
 //
@@ -1987,6 +1989,27 @@ function gotchasCapLine() {
     `into docs/canonical/ / mechanize — one Rationale line each; full pruning is separate direct work).\n`
 }
 
+// The prototype the closing spec would close at merge: the spec carries `prototype: <stem>`, the
+// prototype's status.json exists without marks.closed, every citing spec is done (read from the
+// build worktree — the closing spec is `done` there, not yet on main), and proto/<stem> exists.
+// Returns { stem, n } with n = commits on proto/<stem> the target does not hold, else null. A
+// missing branch returns null so finishMerge keeps its "still open" warning path.
+function prototypeAtRisk(target) {
+  const stem = fmVal('prototype')
+  if (!stem) return null
+  let pst = null
+  try { pst = JSON.parse(fs.readFileSync(path.join(mainRoot, 'design/prototypes', stem, 'status.json'), 'utf8')) } catch { return null }
+  if (!pst || (pst.marks && pst.marks.closed)) return null
+  if (citersOfPrototype(repoRoot, stem).some((st) => st !== 'done')) return null
+  if (!branchExists(mainRoot, 'proto/' + stem)) return null
+  const r = runChild('git', ['-C', mainRoot, 'rev-list', '--count', target + '..proto/' + stem],
+    { encoding: 'utf8' }, 'git rev-list --count')
+  if (r.status !== 0) return null
+  return { stem, n: Number(r.stdout.trim()) }
+}
+
+let protoClose = null // set by handleMergeStrategy; read by finishMerge
+
 function handleMergeStrategy() {
   const strategy = argv[markIdx + 2]
   const VALID = ['merge-commit', 'ff-only', 'squash', 'rebase-ff']
@@ -2004,6 +2027,22 @@ function handleMergeStrategy() {
   const target = runChild('git', ['-C', mainRoot, 'symbolic-ref', '--short', 'HEAD'],
     { encoding: 'utf8' }, 'git symbolic-ref').stdout.trim()
   const wt = findWorktreeForBranch(mainRoot, source)
+
+  // Unmerged prototype commits are the one artifact the close destroys that nothing else
+  // holds, so a nonzero count needs an answer BEFORE any merge runs (side-effect-free refusal;
+  // the driver stays at MERGE and the retry with the operand resumes).
+  const pIdx = argv.indexOf('--prototype')
+  const protoAnswer = pIdx > -1 ? argv[pIdx + 1] : null
+  if (pIdx > -1 && protoAnswer !== 'delete' && protoAnswer !== 'keep') {
+    die('--prototype needs delete|keep, got ' + JSON.stringify(protoAnswer))
+  }
+  const atRisk = prototypeAtRisk(target)
+  if (atRisk && atRisk.n > 0 && !protoAnswer) {
+    die('--mark merge-strategy needs --prototype delete|keep — proto/' + atRisk.stem + ' carries ' +
+      atRisk.n + ' unmerged commits')
+  }
+  protoClose = atRisk ? { stem: atRisk.stem, n: atRisk.n, decision: atRisk.n > 0 ? protoAnswer : null } : null
+  if (protoClose) { marks.prototypeClose = { unmerged: protoClose.n, decision: protoClose.decision }; saveSidecar() }
 
   // Re-entrancy (rv_6825fa48c98d). The recorded
   // deadlock — a retry after a landed merge re-ran merge-back.sh merge and died on
@@ -2260,10 +2299,18 @@ function finishMerge(mainRootDir, source, wt) {
     if (pst && !(pst.marks && pst.marks.closed)) {
       const statuses = citersOfPrototype(mainRootDir, protoStem)
       const open = statuses.filter((st) => st !== 'done').length
-      if (open > 0) {
+      if (open === 0 && protoClose && protoClose.stem === protoStem && protoClose.decision === 'keep') {
+        doneNote = 'prototype ' + protoStem + ' kept — ' + protoClose.n + ' unmerged commits on proto/' + protoStem +
+          '; close later: node ' + path.join(__dirname, 'prototype-driver.js') + ' ' + protoStem +
+          ' --root ' + mainRootDir + ' --mark closed\n' + doneNote
+      } else if (open > 0) {
         doneNote = 'prototype ' + protoStem + ' stays open — ' + open + ' citing spec(s) not done\n' + doneNote
       } else {
         const driverBin = path.join(__dirname, 'prototype-driver.js')
+        if (protoClose && protoClose.stem === protoStem) {
+          process.stdout.write('prototype ' + protoStem + ': ' + protoClose.n +
+            ' unmerged commits — deleting worktree, branch and database\n')
+        }
         const closeR = runChild(process.execPath,
           [driverBin, protoStem, '--root', mainRootDir, '--mark', 'closed'], { encoding: 'utf8' },
           'prototype-driver.js --mark closed')
@@ -2652,7 +2699,18 @@ const STEPS = {
     const inspect = runChild('bash',
       [mergeBackBin, 'inspect', '--root', mainRoot, '--target', target, '--source', source],
       { encoding: 'utf8' }, 'merge-back.sh inspect')
+    const risk = prototypeAtRisk(target)
+    let protoText = ''
+    if (risk) {
+      protoText = `prototype ${risk.stem}: ${risk.n} unmerged commits on proto/${risk.stem}` +
+        (risk.n === 0 ? ' — the close proceeds with the merge (notify only)\n\n'
+          : `\n\nAsk ONE AskUserQuestion before the mark — question "The prototype has ${risk.n} commits that were never merged. Delete the prototype now?"; ` +
+            'options: "Delete it (Recommended)" — The worktree, branch and database go; its contract, pictures and tests stay under the design folder; ' +
+            '"Keep it for now" — The worktree and branch stay; close it later by hand with the printed command. ' +
+            'Pass the answer as --prototype delete|keep on the mark below (the mark refuses without it).\n\n')
+    }
     return `## Step: merge strategy\n` + (inspect.stdout + inspect.stderr).trim() + '\n\n' +
+      protoText +
       restampLine +
       waivedWarn +
       `Derive the strategy — take RECOMMEND above (merge-commit when it is absent or the ` +
@@ -2660,7 +2718,8 @@ const STEPS = {
       `\`📌 Auto-picked <strategy> — <RECOMMEND's reason> (veto anytime)\` and do NOT ask: a ` +
       `merge strategy has no product consequence and its delivery consequence is in the history ` +
       `printed above. Then:\n` +
-      `  node ${__filename} ${specPath} --mark merge-strategy <merge-commit|ff-only|squash|rebase-ff>\n` +
+      `  node ${__filename} ${specPath} --mark merge-strategy <merge-commit|ff-only|squash|rebase-ff>` +
+      (risk && risk.n > 0 ? ' --prototype <delete|keep>' : '') + `\n` +
       `Relocate first if needed: ExitWorktree(action="keep") if this session entered the worktree, ` +
       `else \`cd ${mainRoot}\` in the main session — the mark is refused while the driver's ` +
       `inherited CWD sits inside the build worktree.`

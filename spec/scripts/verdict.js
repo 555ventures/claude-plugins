@@ -800,6 +800,9 @@ if (ledger) {
     if (substrateRow) row.substrate = substrateRow.observed
     const productionRow = legRows.get('production')
     if (productionRow) row.production = productionRow.observed && productionRow.observed.result
+    // Present only when release-legs.js rollback ran; sits right after production in the row.
+    const rollbackRow = legRows.get('rollback')
+    if (rollbackRow) row.rollback = rollbackRow.observed && rollbackRow.observed.result
     const ciRow = legRows.get('ci')
     if (ciRow) row.ci = ciRow.observed
     row.legs = legs

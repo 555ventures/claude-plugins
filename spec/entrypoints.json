@@ -214,6 +214,11 @@
       "spec/scripts/init-gen.js"
     ]
   },
+  "spec/scripts/secrets-scan.js": {
+    "entryPoints": [
+      "git/commands/commit.md"
+    ]
+  },
   "spec/scripts/smoke.sh": {
     "entryPoints": [
       "spec/templates/grounding-contract.md",

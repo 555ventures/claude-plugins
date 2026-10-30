@@ -15,8 +15,9 @@ release.md's prose:
   green, then `migrations` (only when the config declares a runnable `migrationsCheck`) and
   `e2e` once `ready` is green. A red `deploy` or `ready` leaves its dependents unrun — absent
   rows, never fabricated ones, which `verdict.js` already reads as UNVERIFIED.
-- `append --manifest <path> --leg journeys|production …` — the sole emitter for the two
-  session-observed legs. It validates the closed grammar, derives the row's exit itself, and
+- `append --manifest <path> --leg journeys|production …` — the sole emitter for the three
+  session-observed legs (journeys, production via `append`; rollback via `rollback --decision
+  run|decline`). It validates the closed grammar, derives the row's exit itself, and
   refuses a duplicate row for a leg already in the manifest.
 - `record --root <dir> --manifest <path> [--milestone <s>] [--briefs N,N]` — the single
   `verdict.js --profile release --ledger` invocation point on **every** path: early-leg STOP,
@@ -32,6 +33,10 @@ prints it `⚪` plus an `UNMEASURED: <leg>:<reason>` line and exits 1, and `verd
 --profile release` derives `UNVERIFIED` over it. Both read one derivation,
 `lib/release-unmeasured.js`; the review profile is untouched.
 (specs/20260913/08-silence-is-not-a-pass.md, done 2026-09-13)
+
+A `failed` production verification offers one rollback question when `release.rollbackCommand`
+is configured (host-declared, no placeholders, cwd = repo root); the manifest records a
+`rollback` row and the ledger row copies its result. The release still ends GATE_RED.
 
 `record` being the sole verdict invocation point is the load-bearing property. Its predecessor
 was a prose rule — "the STOP still runs verdict.js … the same call runs again in Phase 4" —

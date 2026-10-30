@@ -3,6 +3,7 @@
 // release-legs.js stage  --root <dir> --manifest <path> [--out-dir <dir>]
 // release-legs.js append --manifest <path> --leg journeys   --walked <N> --failed <M>
 // release-legs.js append --manifest <path> --leg production --result <verified|skipped|failed>
+// release-legs.js rollback --root <dir> --manifest <path> --decision run|decline [--out-dir <dir>]
 // release-legs.js record --root <dir> --manifest <path> [--milestone <s>] [--briefs <N,N,...>]
 //
 // Owner: specs/20260823/01-release-legs.md.
@@ -38,6 +39,9 @@
 //       forced to 1 when walked is 0 — release.md requires every release to walk at least one
 //       journey)
 //   {"leg":"production","exit":0|1,"observed":{"result":"verified"|"skipped"|"failed"}}  (append-only)
+//   {"leg":"rollback","exit":0|1,"observed":{"result":"rolled-back"|"failed"|"declined"|"unavailable"}}
+//       (rollback-only; rolled-back 0, declined 0, failed 1, unavailable 1; verdict.js copies the
+//       result onto the release ledger row as `rollback`, after `production`)
 //
 // `stage` runs the deterministic pre-promote legs in dependency order: wave 1 in parallel =
 // substrate + ci + deploy (mutually independent — wave-1 results are buffered, not appended,
@@ -55,9 +59,14 @@
 // NODE_TEST_CONTEXT scrubbed) and their output is retained under --out-dir — a red leg with no
 // retained output is undiagnosable.
 //
-// `append` is the sole emitter for the two session-observed legs (journeys, production): it
-// validates the closed grammar, derives the row's exit itself, and refuses (exit 2) a duplicate
-// row for any leg already present in the manifest.
+// `append` is the sole emitter for two of the three session-observed legs (journeys, production):
+// it validates the closed grammar, derives the row's exit itself, and refuses (exit 2) a duplicate
+// row for any leg already present in the manifest. `rollback` is the third's sole emitter, entered
+// only after production was recorded `failed` (specs/20261029/04 D2a): `--decision run` executes
+// release.rollbackCommand (cwd = --root, no placeholders, output retained under --out-dir when
+// given) or records `unavailable` when none is configured; `--decision decline` records
+// `declined` and runs nothing. It refuses (exit 2) a manifest with no production row, a
+// production result other than `failed`, or an existing rollback row.
 //
 // `record` is the single `verdict.js --profile release --ledger` invocation point on every path
 // (early-leg STOP, red-journeys STOP, declined promote, and the normal close alike). It derives
@@ -97,6 +106,7 @@ function usage() {
   console.error('usage: release-legs.js stage  --root <dir> --manifest <path> [--out-dir <dir>]')
   console.error('       release-legs.js append --manifest <path> --leg journeys   --walked <N> --failed <M>')
   console.error('       release-legs.js append --manifest <path> --leg production --result <verified|skipped|failed>')
+  console.error('       release-legs.js rollback --root <dir> --manifest <path> --decision run|decline [--out-dir <dir>]')
   console.error('       release-legs.js record --root <dir> --manifest <path> [--milestone <s>] [--briefs <N,N,...>]')
 }
 
@@ -435,6 +445,59 @@ function cmdAppend(argv) {
 }
 
 // ================================================================================================
+// rollback — the sole emitter for the rollback leg
+// ================================================================================================
+
+async function cmdRollback(argv) {
+  let root = null, manifest = null, decision = null, outDir = null
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]
+    if (a === '--root') root = argv[++i]
+    else if (a === '--manifest') manifest = argv[++i]
+    else if (a === '--decision') decision = argv[++i]
+    else if (a === '--out-dir') outDir = argv[++i]
+    else { usage(); process.exit(2) }
+  }
+  if (!root || !manifest) { usage(); process.exit(2) }
+  if (decision !== 'run' && decision !== 'decline') {
+    console.error(`release-legs.js rollback: --decision must be run or decline — got ${decision}`)
+    process.exit(2)
+  }
+  root = path.resolve(root)
+  const rows = readManifestRows(manifest)
+  const prod = rows.find(r => r.leg === 'production')
+  if (!prod || !prod.observed || prod.observed.result !== 'failed') {
+    console.error(`release-legs.js rollback: manifest ${manifest} has no production row with result failed — ` +
+      'rollback is only entered after `append --leg production --result failed`')
+    process.exit(2)
+  }
+  if (rows.some(r => r.leg === 'rollback')) {
+    console.error(`release-legs.js rollback: manifest ${manifest} already has a rollback row — rollback refuses a duplicate`)
+    process.exit(2)
+  }
+
+  let result
+  if (decision === 'decline') result = 'declined'
+  else {
+    const release = requireReleaseBlock(readConfig(root), 'rollback')
+    const cmd = release.rollbackCommand
+    if (typeof cmd !== 'string' || !cmd.trim()) result = 'unavailable'
+    else {
+      const r = await sh(cmd, { cwd: root })
+      if (outDir) {
+        fs.mkdirSync(outDir, { recursive: true })
+        fs.writeFileSync(path.join(outDir, 'rollback.txt'), r.out + r.err)
+      }
+      result = r.code === 0 ? 'rolled-back' : 'failed'
+    }
+  }
+  const exit = (result === 'rolled-back' || result === 'declined') ? 0 : 1
+  fs.appendFileSync(manifest, JSON.stringify({ leg: 'rollback', exit, observed: { result } }) + '\n')
+  console.log(`rollback: ${result}`)
+  process.exit(exit)
+}
+
+// ================================================================================================
 // record — the single verdict.js --profile release --ledger invocation point
 // ================================================================================================
 
@@ -489,5 +552,6 @@ function cmdRecord(argv) {
 const [sub, ...rest] = process.argv.slice(2)
 if (sub === 'stage') cmdStage(rest).catch(e => { console.error('release-legs.js stage: ' + e.stack); process.exit(2) })
 else if (sub === 'append') cmdAppend(rest)
+else if (sub === 'rollback') cmdRollback(rest).catch(e => { console.error('release-legs.js rollback: ' + e.stack); process.exit(2) })
 else if (sub === 'record') cmdRecord(rest)
 else { usage(); process.exit(2) }

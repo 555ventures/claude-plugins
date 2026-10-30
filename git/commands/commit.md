@@ -14,8 +14,25 @@ Run ALL of these commands **in parallel in a single message**:
 - `git status` — show staged files
 - `git diff --staged` — for commit message context (don't display full output)
 - `git log -5 --oneline` — for commit style reference
+- `node "$(spec-paths secrets-scan)" --root . --worktree --json` — the secrets scan (reads the working tree, so its order beside `git add -A` is irrelevant)
 
 **Show user**: Only the `git status` output (file summary).
+
+## Step 1b: Secrets Question (scan hits only)
+
+Fires only on the scan's exit 1; exit 0 prints nothing new.
+
+- Exit 1 → ONE `AskUserQuestion` naming every hit path as context: "These staged files look like
+  secrets. Keep them out of this commit?"
+  1. **Exclude them (Recommended)** — They stay on disk but out of history, which is the only place a leaked secret cannot be removed from later
+  2. **Stage them anyway** — They go into the commit and into history, where a later commit cannot unpublish them
+
+  Exclude → run `git reset -q -- <hit paths>` and list them in Step 4's `warns` slot as `kept out
+  of this commit: <paths>`. Stage anyway → the commit proceeds and `warns` lists them as `staged
+  on your say-so: <paths>`.
+- Exit 2 (usage, not a git repo) → print `⚠️ secrets scan skipped — <stderr line>` and proceed.
+- `spec-paths` absent on PATH (git plugin installed alone) → print `⚠️ secrets scan skipped —
+  the spec plugin is not installed` and proceed.
 
 ## Step 2: Commit (ONE APPROVAL)
 
@@ -104,9 +121,9 @@ Next: /git:merge — land it on main
 ## NON-NEGOTIABLE RULES
 
 1. **`git add -A` is MANDATORY** — add ALL changes regardless of relevance to previous work
-2. **Only 2 approval prompts for the commit itself** — parallel info-gathering, then commit; Step 3's one `AskUserQuestion` (the defect class) is additional, skippable, and only fires on fix-typed (or `/spec:fix`-invoked) commits that touch spec-landed lines
+2. **Only 2 approval prompts for the commit itself** — parallel info-gathering, then commit; two further questions are additional: Step 1b's secrets question fires only on a scan hit (exit 1), on any commit; Step 3's one `AskUserQuestion` (the defect class) is skippable and only fires on fix-typed (or `/spec:fix`-invoked) commits that touch spec-landed lines
 3. **Never selectively stage** unless user explicitly requests it
 4. **No post-commit status check** — reduces unnecessary approval
-5. **Warn about sensitive files** (.env, credentials) but still stage them
+5. **Secrets never stage silently** — a scan hit is a question; staging anyway is the user's explicit answer, never a default
 6. **Never touch worktrees** — do not unstage, reset, rm, or modify anything under `.claude/worktrees/`
 7. **The escape/fix-row check never slows non-fix commits** — gated on a fix-typed subject (or the user calling it a fix, or a `/spec:fix` invoker) AND ledger presence; absent both, zero cost

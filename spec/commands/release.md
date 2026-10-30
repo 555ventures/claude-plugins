@@ -28,7 +28,7 @@ Recorded in the release manifest and tag; never parsed for behavior.
 
 1. **Config `release` block** (contract file § Release): `deployCommand` (staging),
    `stagingUrl`, `e2eCommand` (runs the e2e suite against `BASE_URL`), optional
-   `promoteCommand`, `productionUrl`, `healthPath`. If absent, this is the first release:
+   `promoteCommand`, `rollbackCommand` (a host command that returns production to the previous build; derive or confirm like `promoteCommand`), `productionUrl`, `healthPath`. If absent, this is the first release:
    derive each value from the repo (deploy tooling config, CI files, e2e config) — most fields
    are fully derivable and are never asked about. Confirm only the fields the repo left
    genuinely ambiguous, in batched `AskUserQuestion` calls of **≤4 fields per call**, each
@@ -131,7 +131,23 @@ never a silent promote. There is no path from here that carries it into a promot
    A `failed` result (or a nonzero `append` exit) is a Phase 3 failure — **STOP** via the same
    renderer shape as Phase 2 above (`outcome: {anchor:'🚫', text:'GATE_RED — production
    verification failed'}`, `next: {kind:'command', text:'verify {productionUrl}/{healthPath}
-   serves the staged build, then re-run /spec:release'}`), then Phase 4's `record`.
+   serves the staged build, then re-run /spec:release'}`), then Phase 4's `record` — after
+   step 4 below.
+4. **Rollback** (entered only after step 3 appended `production` = `failed`):
+   - With `release.rollbackCommand` configured → ONE `AskUserQuestion`: "Production is not
+     serving the new build. Roll back to the previous build?"
+     1. **Roll back (Recommended)** — Runs the host's configured rollback command now, so production serves the last good build while you investigate
+     2. **Leave production as it is** — Production stays on the failed build until you act by hand; the release still records as failed
+
+     Roll back → `node "$(spec-paths release-legs)" rollback --root . --manifest {manifestPath} --decision run`;
+     Leave → the same call with `--decision decline`.
+   - Without it → no question; print `⚠️ no release.rollbackCommand configured — production
+     stays on the failed build` and run the same call with `--decision run` (records
+     `unavailable`); its `next` slot reads `add release.rollbackCommand to
+     .claude/spec.config.json, then re-run /spec:release`.
+
+   Every arm then STOPs GATE_RED to Phase 4 exactly as above — a rolled-back production is still
+   a failed release.
 
 ## Phase 4 — Record & report
 

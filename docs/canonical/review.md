@@ -51,6 +51,9 @@
   `unavailable: no-replay`); it never blocks by itself — a red or absent one is a hard finding
   through `ac-matrix`'s oracle rule on the pin criteria that name it.
   (specs/20261007/03-plan-cites-the-build-replays-and-status-derives-the-delete.md)
+  At MERGE the driver prints the prototype's unmerged-commit count when the closing spec is its
+  last citer; zero proceeds, more than zero is a question answered through `--prototype
+  delete|keep` on the strategy mark.
   **Manifest row v2** is `{"leg","exit","observed"}` where `observed` is always a
   non-null JSON object drawn from the Contracts closed set; any row whose `observed` is a
   string, an array, null, or absent makes the manifest invalid and derives `UNVERIFIED` in

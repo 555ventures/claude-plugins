@@ -33,5 +33,4 @@ redundant on such a host anyway, since `add -A` skips ignored paths on its own. 
 on `git check-ignore -q <sidecarRel>` exiting non-zero, and pin the ignored-sidecar host with its
 own behavioral test.
 
-See [[gate-scripts-parallel-batch-corpus-landing]] for the general pattern of test hosts diverging
-from the real repo's gitignore assumptions.
+Test hosts routinely diverge from the real repo's ignore-file assumptions; check that before trusting a fixture.

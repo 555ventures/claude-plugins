@@ -16,7 +16,7 @@ NOT a findings-count word like the derived FINDINGS/HARD_FINDINGS/CLEAN verdict 
 counts. A workflow return with `verdict:"CLEAN"` can still carry a non-empty `survivors` array —
 that's the normal "ran fine, found N things" case.
 
-**Why:** discovered while fixing replay.js's `--score` (specs/20260819/02-mutation-replay.md
+**Why:** discovered while fixing replay.js's `--score` (replay.js is since retired; the guard now lives in `verdict.js` ~line 648 and `spec-review-driver.js` ~line 1313, both reading the raw `verdict === 'REVIEWER_FAILED'`) (specs/20260819/02-mutation-replay.md
 review finding F4): a crashed/malformed reviewer return was being scored `missed`, permanently
 deflating catch-rate evidence with something that was never produced. The correct guard is
 `wf.verdict === 'CLEAN' && Array.isArray(wf.survivors)` — gating on the raw two-value field, not
@@ -26,8 +26,7 @@ on `survivors.length === 0`.
 verdict.js's post-processed word) must treat `verdict !== 'CLEAN'` as "the reviewer never
 produced usable output" and refuse to interpret `survivors` at all. Don't confuse this raw field
 with verdict.js's derived CLEAN/FINDINGS/HARD_FINDINGS/REVIEWER_FAILED vocabulary — same word
-"CLEAN", different layer, different meaning window. See [[replay-js-mode-flag-dispatch]] for the
-sibling replay.js conventions this schema get consumed under.
+"CLEAN", different layer, different meaning window.
 
 **Corrected 2026-09-02 (review close, specs/20260902/05-manifest-stamped-scope.md):** the
 reviewer return no longer carries a `scope` field and `verdict.js` never reads `workflow.scope`

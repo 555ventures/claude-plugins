@@ -26,6 +26,6 @@ before exit — a small `writeOut(str)` helper using `fs.writeSync(1, buf, off, 
 loop (handles partial writes on a pipe) with EAGAIN retry, documented with the dated
 incident per this repo's header-comment convention. Small/bounded prints (a one-line usage
 error, a tiny status report) are not at risk — only apply the helper where it's load-bearing,
-per [[gate-scripts-parallel-batch-corpus-landing]]-style scoping discipline (don't touch
+per scoping discipline (don't touch
 exit sites outside what was asked). See specs/20260823/08's repair-round deviation entry for
 the executed proof and fix shape.

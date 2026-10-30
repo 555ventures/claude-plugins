@@ -35,6 +35,7 @@ case "${1:-root}" in
   report-render)  echo "$ROOT/scripts/report-render.js" ;;
   spec-status)    echo "$ROOT/scripts/spec-status.js" ;;
   spec-queue)     echo "$ROOT/scripts/spec-queue.js" ;;
+  secrets-scan)   echo "$ROOT/scripts/secrets-scan.js" ;;
   scope-reconcile) echo "$ROOT/scripts/scope-reconcile.js" ;;
   init-gen)       echo "$ROOT/scripts/init-gen.js" ;;
   verdict)        echo "$ROOT/scripts/verdict.js" ;;
@@ -130,7 +131,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|workspace-scan|registry-check|port-check|spec-number-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|prototype-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|decision-lint|collision-closure|ci-query|ci-gate-parity|ac-drift|test-expiry|coverage-scope|count-tests|escape-row|fleet-reader|comment-narration|design-contract-check|design-rules-template|shared|shared-design|shared-for <command>|shared-genesis [--section <names>]|shared-mocks [--section <names>]|template|templates|walkthrough|walkthrough-connect|pictures|walkthrough-contract|walkthrough-catalog|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|workspace-scan|registry-check|port-check|spec-number-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|secrets-scan|review-driver|build-driver|genesis-driver|mocks-driver|prototype-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|decision-lint|collision-closure|ci-query|ci-gate-parity|ac-drift|test-expiry|coverage-scope|count-tests|escape-row|fleet-reader|comment-narration|design-contract-check|design-rules-template|shared|shared-design|shared-for <command>|shared-genesis [--section <names>]|shared-mocks [--section <names>]|template|templates|walkthrough|walkthrough-connect|pictures|walkthrough-contract|walkthrough-catalog|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

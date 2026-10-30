@@ -25,8 +25,8 @@ source-level pin (here, `config-read.test.js`'s `scanConfigReadOffenders` produc
 thing that actually reddens pre-migration.
 
 **Why:** an AC's worked example is prose written against the spec author's mental model of the
-script, not a transcript of an actual execution. [[spec-ac-example-vs-shipped-refusal]] already
-covers examples that contradict the very rule they demonstrate; this is the sibling failure mode —
+script, not a transcript of an actual execution. A sibling failure mode is an
+example that contradicts the very rule it demonstrates; this one is the other mode —
 an example that names a branch no call path can reach. Both require executing the real script
 before encoding the example as a test literal, never transcribing on faith.
 

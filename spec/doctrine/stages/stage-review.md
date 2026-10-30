@@ -90,3 +90,11 @@ When the driver prints `DONE`, report (core § Console Output Style) — printed
   intent, never a mechanical pick. Relocate before marking `merge-strategy` —
   `ExitWorktree(action="keep")` if entered via `EnterWorktree`, else `cd` to the driver-named
   root — then pass the **worktree's absolute spec path**. Never push; that is the user's action.
+  **Prototype question:** when the step prints `prototype <stem>: N unmerged commits on
+  proto/<stem>` with N > 0, ask via `AskUserQuestion` before marking — "The prototype has N
+  commits that were never merged. Delete the prototype now?" — **Delete it (Recommended)** (the
+  worktree, branch and database go; its contract, pictures and tests stay under the design
+  folder) / **Keep it for now** (the worktree and branch stay; close it later by hand with the
+  printed command) — and mark `--mark merge-strategy <strategy> --prototype delete|keep`; the
+  mark exits 2 without `--prototype` when N > 0. N = 0 is notify-only: the merge closes the
+  prototype as before.

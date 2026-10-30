@@ -1,6 +1,7 @@
 ---
 date: 2026-10-29
-status: hardened
+status: done
+build_base: main
 tier: critical           # touches spec/scripts/verdict.js and spec/templates/grounding-contract.md (rules § Risk Tiers), spec/bin/spec-paths, and the review driver's prototype close
 area: doctrine
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 brief: n/a
 open_markers: 0
 spiked: 2026-10-29
+diff_base: ff4eb9c15102f012eeeb80e79a648a9c0c43e0f7
 ---
 
 # The four questions that did not exist
@@ -36,6 +38,8 @@ Source: docs/audit/question-points-and-model-placement-2026-10-29.md Part 3 rows
 | D4 | The review driver's MERGE step owns the prototype question. When the closing spec carries `prototype: <stem>`, `design/prototypes/<stem>/status.json` exists without `marks.closed`, and every citing spec is `done`, the printed MERGE step computes `N = git rev-list --count <target>..proto/<stem>` and appends `prototype <stem>: N unmerged commits on proto/<stem>`. N = 0 → the line ends `— the close proceeds with the merge (notify only)`. N > 0 → the step prints the question to ask (text in Contracts) and the mark form `--mark merge-strategy <strategy> --prototype delete\|keep`; `--mark merge-strategy` without `--prototype` exits 2 naming `--prototype` before any merge runs. The decision persists as `marks.prototypeClose = {unmerged: N, decision}`. `finishMerge` on `keep` deletes nothing and prints `prototype <stem> kept — N unmerged commits on proto/<stem>; close later: node <prototype-driver.js> <stem> --root <root> --mark closed`; on `delete` or N = 0 it prints `prototype <stem>: N unmerged commits — deleting worktree, branch and database` and closes through the prototype driver exactly as today. A missing `proto/<stem>` branch takes today's "still open" warning path unchanged. `spec/doctrine/stages/stage-review.md`'s MERGE bullet states the rule (AC-20261029-04-7, AC-20261029-04-8, AC-20261029-04-9) `[guards: spec/scripts/merge-back.sh — runs destructive git ops against host repos; exit-code alphabet is load-bearing for the review stage]` | A prototype's unmerged commits are the only artifact the close destroys that nothing else holds; the contract and captures survive regardless. Asking at the MERGE step (before the merge) keeps "a refusal never fails a landed merge" true and adds no driver state; `/git:merge` refuses `proto/*` outright and deletes nothing, so the question lives where the deletion is. |
 | D5 | Every question above passes `question-style-gate.js` tier 1 as authored: option descriptions ≥ 25 chars carrying the consequence, the recommended option first with its reason, no two backticked identifiers in the question text. The four texts in Contracts are the ones the commands carry verbatim. `[no-ac: enforced by the existing PreToolUse hook at run time; the texts are spiked (S4) and pinned by AC-20261029-04-2, -4, -6, -9]` | core § Question Style. |
 | D6 | `spec/.claude-plugin/plugin.json` and `git/.claude-plugin/plugin.json` are each bumped through `node scripts/plugin-bump.js --bump --plugin <name> --changelog "<paragraph>"`; the release-legs.js header's "two session-observed legs" becomes three and docs/canonical/release-pipeline.md follows (Canonical Delta). `[no-ac: plugin-bump.js --check in the gate is the oracle; reviewer-held against the merge base]` | Two plugin directories are touched (rules § Gotchas, fourth surface). |
+| D7 | Build ruling (user, 2026-10-29): AC-20261029-04-8 no longer asserts `marks.prototypeClose` in the sidecar after DONE. The sidecar is deleted at DONE by design (`printDoneNow`), so the post-DONE read can never succeed; D4's `marks.prototypeClose` stays as MERGE-step working state written before the merge. The keep decision's lasting evidence is the kept branch and worktree, `marks.closed` unset, and the printed `--mark closed` paste — all still asserted (AC-20261029-04-8) | The scripts worker returned `blocked`: the AC promised a read of a file the existing DONE rule deletes. Recording the decision durably (a review ledger field) was offered and declined as extra scope. |
+| D8 | Build ruling (user, 2026-10-29): `.claude/spec.config.json`'s `contractHash` is restamped to `spec-paths contract-hash` over the D2b contract edit, the same restamp every prior contract-editing spec made; `spec/entrypoints.json`'s D1a row is landed by the orchestrator (orchestrator-only file). `[no-ac: tests/consistency/contract-stamp.test.js's existing restamp pin is the oracle]` | D2b changes the contract hash by construction; the stale stamp reddened the existing pin, a file outside the File Plan on a critical-tier spec, so the scope widening was asked rather than auto-picked. |
 
 ## File Plan
 
@@ -44,6 +48,7 @@ Source: docs/audit/question-points-and-model-placement-2026-10-29.md Part 3 rows
 | spec/scripts/secrets-scan.js | CREATE | scripts | D1a scanner: `--root <dir> (--worktree \| --paths <file>) [--json]`; exit 0/1/2; header lists the closed pattern list and the `secrets-scan:allow` marker |
 | spec/bin/spec-paths | MODIFY | scripts | `secrets-scan` key + usage line (D1a) |
 | spec/entrypoints.json | MODIFY | other | `spec/scripts/secrets-scan.js` → `git/commands/commit.md` (D1a) |
+| .claude/spec.config.json | MODIFY | other | `contractHash` restamped over the D2b contract edit (D8) |
 | git/commands/commit.md | MODIFY | doctrine | Step 1 batch gains the scan; Step 1b question on hits; rule 5 rewritten (D1) |
 | spec/commands/release.md | MODIFY | doctrine | Phase 3 step 4 rollback; Phase 0.1 lists `rollbackCommand` (D2) |
 | spec/scripts/release-legs.js | MODIFY | scripts | `rollback` subcommand, row grammar in the header, "three session-observed legs" (D2a, D6) |
@@ -132,7 +137,7 @@ Q4 merge   — "The prototype has N commits that were never merged. Delete the p
 - **AC-20261029-04-5**: WHEN `verdict.js --manifest <m> --profile release --ledger` runs under a `--root` whose manifest carries every release leg green except `production` = `failed` followed by `{"leg":"rollback","exit":0,"observed":{"result":"rolled-back"}}` THE SYSTEM SHALL print `GATE_RED` and append a ledger row whose `production` is `"failed"` and whose `rollback` is `"rolled-back"` (e.g. the row's key order places `rollback` immediately after `production`); over the same manifest without the rollback row the appended row SHALL carry no `rollback` key → writes tests/release-legs/rollback.test.js
 - **AC-20261029-04-6**: WHEN `spec/commands/plan.md`'s `## Lock` section is read THE SYSTEM SHALL contain a step that names `tier: critical` within 400 characters before `AskUserQuestion`, offers `Lock it (Recommended)` and `Keep it as a draft`, and places that step before the text `Ledger row` (e.g. `section.indexOf('Keep it as a draft') < section.indexOf('**Ledger row')` → true) → writes tests/consistency/critical-lock-confirm.test.js
 - **AC-20261029-04-7**: WHEN a closed spec citing prototype `28-functional-prototype` as its only citer reaches MERGE with `proto/28-functional-prototype` carrying 0 commits unreachable from the target THE SYSTEM SHALL print `prototype 28-functional-prototype: 0 unmerged commits` in the MERGE step and, on `--mark merge-strategy ff-only` with no `--prototype` operand, print `prototype 28-functional-prototype: 0 unmerged commits — deleting worktree, branch and database`, close the prototype (branch gone, `marks.closed` set) and reach DONE; with 2 unreachable commits on the proto branch the MERGE step SHALL print `prototype 28-functional-prototype: 2 unmerged commits on proto/28-functional-prototype` and `--mark merge-strategy ff-only` without `--prototype` SHALL exit 2 with stderr containing `--prototype delete|keep`, leaving the proto branch, worktree and target branch unchanged (e.g. `git rev-list --count main..proto/28-functional-prototype` still 2) → writes tests/review/prototype-close.test.js
-- **AC-20261029-04-8**: WHEN the same 2-unmerged-commit fixture is marked `--mark merge-strategy ff-only --prototype keep` THE SYSTEM SHALL land the merge, reach DONE, print `prototype 28-functional-prototype kept — 2 unmerged commits` and `--mark closed`, leave `proto/28-functional-prototype` and its worktree in place with `marks.closed` unset, and record `marks.prototypeClose` = `{"unmerged":2,"decision":"keep"}` in the sidecar; marked `--prototype delete` instead it SHALL print `prototype 28-functional-prototype: 2 unmerged commits — deleting worktree, branch and database`, delete the branch (e.g. `git branch --list 'proto/*'` → empty) and set `marks.closed` → writes tests/review/prototype-close.test.js
+- **AC-20261029-04-8**: WHEN the same 2-unmerged-commit fixture is marked `--mark merge-strategy ff-only --prototype keep` THE SYSTEM SHALL land the merge, reach DONE, print `prototype 28-functional-prototype kept — 2 unmerged commits` and `--mark closed`, and leave `proto/28-functional-prototype` and its worktree in place with `marks.closed` unset (D7: `marks.prototypeClose` is MERGE working state, deleted with the sidecar at DONE, so it is not asserted after DONE); marked `--prototype delete` instead it SHALL print `prototype 28-functional-prototype: 2 unmerged commits — deleting worktree, branch and database`, delete the branch (e.g. `git branch --list 'proto/*'` → empty) and set `marks.closed` → writes tests/review/prototype-close.test.js
 - **AC-20261029-04-9**: WHEN `spec/doctrine/stages/stage-review.md` is read THE SYSTEM SHALL contain, in the MERGE bullet, `unmerged commits`, `--prototype delete|keep`, and an `AskUserQuestion` whose first option label is `Delete it (Recommended)` (e.g. the substring `Delete it (Recommended)` present → pass) → writes tests/review/prototype-close.test.js
 
 ## Assumptions (escalation triggers)
@@ -182,6 +187,23 @@ rows. The paths leg's `executes` hits on spec-paths, release-legs.js, spec-revie
 verdict.js are additive surfaces (a new key, a new subcommand, an optional operand, a ledger key
 present only when the manifest row exists) — no existing pin's observable changes; the build's
 whole-suite check adjudicates.
+
+Build deviations (folded at review close, 2026-10-29; one-offs): the git plugin's manifest was bumped
+by hand (1.11.0 → 1.12.0, changelog rotated to three entries) because the session's worktree guard
+refused the `plugin-bump.js --bump` call whose arguments name the plugin — `plugin-bump.js --check`
+was green over the result. The orchestrator landed the four `other`-layer rows (both bumps, the
+entrypoints row, the D8 restamp) itself rather than dispatching a worker. The first review legs
+run stopped GATE_RED on an unrelated walkthrough stub test that received stray requests from an
+external Go HTTP client on the stub's port; the test passed 3/3 in isolation and the re-run legs
+were green.
+
+Review fix round (2026-10-29): the D1 rule-2 gating contradiction was fixed; both round-1 softs
+rode it — `secrets-scan.js --worktree` now maps porcelain paths against the repo toplevel and
+reports them relative to `--root` (regression case proven red against the pre-fix scanner), and
+the changelog spacing was restored.
+
+### Advisory debt (review rv_b2cce0fe85a5)
+- a0 spec/scripts/secrets-scan.js:11 — secrets-scan.js --worktree now filters hits to paths under --root, but commit.md's Step 1 runs it with `--root .` next to a bare `git add -A`, which (Git >= 2.0, no pathspec) stages the whole repository regardless of cwd. From a repo sub-directory the scanner's set is therefore a strict subset of what `git add -A` stages: a root-level `.env` is staged with no question. The header comment at line 9-12 still describes the --worktree set as 'the set `git add -A` stages', which is no longer true for sub-directory roots. Advisory: D1 says 'under --root', so this is intent drift, not a contradiction; remedy: commit.md passes the toplevel as --root, or the scanner reports against the toplevel.
 
 ## Canonical Delta
 

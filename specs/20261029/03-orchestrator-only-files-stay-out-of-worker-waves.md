@@ -1,6 +1,6 @@
 ---
 date: 2026-10-29
-status: implementing
+status: done
 build_base: main
 tier: critical
 area: build
@@ -155,6 +155,9 @@ otherwise hand the files to workers anyway.
 Not in scope: adding the key to zubu-backend's config (a different repo — a handoff after this
 lands), and a guard that workers honor `blocked` on read-only surfaces (no ledger class has
 recurred; core § Incident Policy).
+
+### Advisory debt (review rv_e6eca27bbf1a)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/spec-03-orchestrator-only-files-stay-out-of-worker-waves/spec/doctrine/core.md:52 — The D10 sentence in core.md § Read-Only Surfaces and the D11 advisory in doctor.md check 5 were appended mid-paragraph without rewrapping, leaving one 150+-char line in each (core.md line 52; doctor.md line 36). No width pin exists in tests/, so this is hygiene only.
 
 ## Canonical Delta
 

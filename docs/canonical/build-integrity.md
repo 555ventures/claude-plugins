@@ -102,7 +102,12 @@ re-derives the build's state from spec frontmatter + the `<spec>.build/` sidecar
 artifacts on every invocation, executes every deterministic step itself (admission, wave
 derivation from `layerGroups`, gate resolution, env preflight, the `hardened → implementing`
 flip with the absent-only `diff_base` stamp, red-check, the final gate, scope-reconcile, diff
-counts, the `stage:"build"` ledger row), and prints one judgment step at a time. Marks are a
+counts, the `stage:"build"` ledger row), and prints one judgment step at a time. A File Plan
+path matching a glob in the host config's optional `orchestratorOnly` list never enters a
+worker's file list: the WAVE step prints it in an orchestrator block inside its own wave, the
+REPAIR step names it as orchestrator-owned, and `--mark wave-done` still verifies it like any
+other row. An absent key routes every row by layer; a key that is not an array of strings
+refuses every invocation with exit 2. Marks are a
 closed set verified against artifacts before they land, **and each is admissible only at the
 state whose printed step names it** — the same pure derivation the bare invocation prints
 from, run before any handler, so the printed step and the admissible mark cannot drift; a mark

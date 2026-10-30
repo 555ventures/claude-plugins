@@ -17,7 +17,7 @@ $ git -C $S/gp/wt rev-parse --git-dir
 $S/gp/repo/.git/worktrees/wt          <-- genuinely per-worktree
 ```
 
-**Why:** discovered in `spec/scripts/replay.js`'s `cmdSetup`/`cmdTeardown` — a prior fix tried to
+**Why:** discovered in `spec/scripts/replay.js`'s (script since retired and gone; the git behaviour and lesson are unchanged) `cmdSetup`/`cmdTeardown` — a prior fix tried to
 exclude an untracked marker file via info/exclude so it wouldn't leak into `git add -A`. That
 "fix" made things worse: it silently and permanently mutated the maintainer's real local git
 config on every run, with no dedup and no cleanup, and info/exclude's shared-dir nature directly

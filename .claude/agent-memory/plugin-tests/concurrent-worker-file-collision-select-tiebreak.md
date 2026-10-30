@@ -1,14 +1,13 @@
 ---
 name: concurrent-worker-file-collision-select-tiebreak
-description: Edit tool's "modified on disk since you last read it" warning means STOP and re-Read in full before trusting your own draft — the concurrent editor is usually the ORCHESTRATOR that dispatched you (its completion notification can fire early), so report what you found and never stand down as "already done"; also, replay.js --select's own tie-break means a driver CLOSE's own just-appended CLEAN+runId row is always a self-selectable candidate
+description: Edit tool's "modified on disk since you last read it" warning means STOP and re-Read in full before trusting your own draft; the concurrent editor is usually the ORCHESTRATOR that dispatched you, so report what you found and never stand down as "already done"
 metadata:
   type: feedback
   reviewed: 2026-10-29
 ---
 
 Dispatched 2026-08-21 to author tests/review/review-driver.test.js (AC-20260821-02-1..7 — those
-tests now live in tests/review/review-driver-replay-entry.test.js and
-review-driver-replay-record.test.js since specs/20260903/06 sharded the family) and
+tests now live in tests/review/the review-driver-*.test.js family since specs/20260903/06 sharded it) and
 tests/run-ledger.test.js (AC-20260821-02-8/9) for specs/20260821/02-replay-review-phase.md. By
 the time I finished research and called Edit on review-driver.test.js, the tool returned
 success but flagged: "the file had been modified on disk since you last read it." `git status`
@@ -52,26 +51,5 @@ done and stand down — report what you found and let the orchestrator adjudicat
 `node --test <your files>` regardless of which version wins, to confirm red/green status is what
 the spec's TDD contract expects before reporting completion.
 
-> Corrected 2026-09-14: ADR-0025 (specs/20260913/09) deleted the review driver's REPLAY state,
-> so no REPLAY-phase fixture exists any more. The tie-break below still applies whenever
-> `replay.js --select` runs right after a review close appended its own CLEAN row (for example
-> `/spec:replay` run immediately after a merge).
-
-**The specific bug this caught** (historical — the REPLAY-phase fixtures are gone):
-spec-review-driver.js's `doCloseWork()` appends its OWN authoritative verdict.js pass as a
-`stage:"review"` ledger row for the SPEC UNDER TEST ITSELF, carrying `verdict:"CLEAN"` and a
-fresh `runId` — moments before REPLAY's own `--due`/`--select` run. That row is therefore
-ALWAYS a `--select` candidate for its own review (same-tier, latest-read-order). If a test
-separately seeds a different "eligible target" spec+row hoping `--select` will pick it, the
-fixture's own just-appended CLOSE row will instead win the tie-break (`c.i >= best.i` favors
-later read-order among equal tiers) — `--select` selects the fixture's OWN spec, not the
-seeded one. Two consequences for any REPLAY-phase fixture: (a) a "due but no eligible CLEAN
-row" (AC-3-shaped) fixture can NOT be built by simply omitting an eligible row — a candidate
-always exists once the driver's own CLOSE runs, so exit 1 ("no eligible row") is
-structurally unreachable from REPLAY; the reachable arm is `--select` failing to RESOLVE the
-self-selected candidate (exit 4), e.g. by amending the close commit so the spec's newest
-commit has no parent revision carrying a `build_base`/`diff_base`. (b) an "eligible CLEAN row"
-(AC-2-shaped) fixture doesn't need a separately-seeded target at all — read the fixture's own
-selected `runId`/`spec` back off the ledger after `driveToClose()` (e.g. filter
-`stage:"review"` rows for one whose `runId` starts with the driver's own prefix) and assert
-against THAT, rather than asserting a different pre-seeded spec path was chosen.
+> Corrected 2026-10-29: the second half of this note (replay.js `--select` self-selecting the driver's own
+> CLOSE row) was dropped; ADR-0025 deleted the REPLAY state and `spec/scripts/replay.js` no longer exists.

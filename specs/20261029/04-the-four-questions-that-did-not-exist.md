@@ -1,6 +1,6 @@
 ---
 date: 2026-10-29
-status: implementing
+status: done
 build_base: main
 tier: critical           # touches spec/scripts/verdict.js and spec/templates/grounding-contract.md (rules § Risk Tiers), spec/bin/spec-paths, and the review driver's prototype close
 area: doctrine
@@ -187,6 +187,23 @@ rows. The paths leg's `executes` hits on spec-paths, release-legs.js, spec-revie
 verdict.js are additive surfaces (a new key, a new subcommand, an optional operand, a ledger key
 present only when the manifest row exists) — no existing pin's observable changes; the build's
 whole-suite check adjudicates.
+
+Build deviations (folded at review close, 2026-10-29; one-offs): the git plugin's manifest was bumped
+by hand (1.11.0 → 1.12.0, changelog rotated to three entries) because the session's worktree guard
+refused the `plugin-bump.js --bump` call whose arguments name the plugin — `plugin-bump.js --check`
+was green over the result. The orchestrator landed the four `other`-layer rows (both bumps, the
+entrypoints row, the D8 restamp) itself rather than dispatching a worker. The first review legs
+run stopped GATE_RED on an unrelated walkthrough stub test that received stray requests from an
+external Go HTTP client on the stub's port; the test passed 3/3 in isolation and the re-run legs
+were green.
+
+Review fix round (2026-10-29): the D1 rule-2 gating contradiction was fixed; both round-1 softs
+rode it — `secrets-scan.js --worktree` now maps porcelain paths against the repo toplevel and
+reports them relative to `--root` (regression case proven red against the pre-fix scanner), and
+the changelog spacing was restored.
+
+### Advisory debt (review rv_b2cce0fe85a5)
+- a0 spec/scripts/secrets-scan.js:11 — secrets-scan.js --worktree now filters hits to paths under --root, but commit.md's Step 1 runs it with `--root .` next to a bare `git add -A`, which (Git >= 2.0, no pathspec) stages the whole repository regardless of cwd. From a repo sub-directory the scanner's set is therefore a strict subset of what `git add -A` stages: a root-level `.env` is staged with no question. The header comment at line 9-12 still describes the --worktree set as 'the set `git add -A` stages', which is no longer true for sub-directory roots. Advisory: D1 says 'under --root', so this is intent drift, not a contradiction; remedy: commit.md passes the toplevel as --root, or the scanner reports against the toplevel.
 
 ## Canonical Delta
 

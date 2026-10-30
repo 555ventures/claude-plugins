@@ -131,7 +131,9 @@ and `reviewRunId` taken from the landed file with the latest qualifying review, 
 file in `files`, and the defect class the one (skippable) question. Nothing blocks a commit.
 (specs/20261025/01-the-commit-writes-the-escape-row.md) The window and fleet share numbers
 are retired — the row is written by the commit itself, so only the per-commit landing
-derivation (`--commit`) remains (specs/20261025/02).
+derivation (`--commit`) remains (specs/20261025/02). `/git:commit` runs `secrets-scan.js` over
+the would-be staging set in Step 1's batch; a hit is a question, never a warning that stages
+anyway; `secrets-scan:allow` on a line is the one documented false-positive escape.
 
 ## The question gate asks product facts, never derives them (2026-09-02, specs/20260902/06)
 

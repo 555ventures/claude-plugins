@@ -8,7 +8,8 @@
 //
 // --worktree scans every path `git status --porcelain -z --untracked-files=all` lists under
 // --root that still exists on disk (the set `git add -A` stages; deletions skipped, ignored files
-// never listed). --paths scans one repo-relative path per line from <file>.
+// never listed); only paths under --root count, and hits are reported relative to --root even
+// when --root is a sub-directory of the repo. --paths scans one repo-relative path per line from <file>.
 //
 // Closed detector list — no host configuration:
 //   path (basename):  .env, .env.* except .env.example|.env.sample|.env.template; *.pem *.key
@@ -84,11 +85,20 @@ if (worktree) {
   const st = spawnSync('git', ['-C', root, 'status', '--porcelain', '-z', '--untracked-files=all'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
   if (st.status !== 0) { console.error('secrets-scan: git status failed — run git status in ' + root); process.exit(2) }
   const parts = st.stdout.split('\0').filter(Boolean)
+  // Porcelain paths are relative to the repo toplevel, not --root: resolve against the toplevel,
+  // keep only paths under --root, and report them relative to --root.
+  const top = spawnSync('git', ['-C', root, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' })
+  if (top.status !== 0) { console.error('secrets-scan: cannot resolve the repo toplevel — run git rev-parse in ' + root); process.exit(2) }
+  const topDir = top.stdout.trim()
+  let realRoot = root
+  try { realRoot = fs.realpathSync(root) } catch { /* keep the given path */ }
   files = []
   for (let i = 0; i < parts.length; i++) {
     const code = parts[i].slice(0, 2), p = parts[i].slice(3)
     if (code[0] === 'R' || code[0] === 'C') i++ // rename/copy: the next entry is the source path
-    files.push(p)
+    const rel = path.relative(realRoot, path.join(topDir, p))
+    if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) continue
+    files.push(rel)
   }
 } else {
   let txt

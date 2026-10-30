@@ -51,6 +51,14 @@ test('AC-20261029-04-1: WHEN the uncommitted set is only a file containing hello
   assert.deepStrictEqual(JSON.parse(r.stdout), { hits: [] }, 'a clean tree must print an empty hits list so --json consumers parse it: ' + r.stdout)
 })
 
+test('AC-20261029-04-1: WHEN --root is a sub-folder of the work tree THE SYSTEM SHALL report only files under it, with paths relative to --root', () => {
+  const dir = hostWith({ '.env': 'ROOT=1\n', 'pkg/id_rsa': 'anything\n' })
+  const r = runNode(SCRIPT, ['--root', path.join(dir, 'pkg'), '--worktree', '--json'])
+  assert.strictEqual(r.status, 1, 'a secret in a sub-folder must not be silently dropped when /git:commit runs from that sub-folder: ' + r.stdout + r.stderr)
+  assert.deepStrictEqual(JSON.parse(r.stdout).hits, [{ path: 'id_rsa', reason: 'path:id_rsa', line: null }],
+    'a file outside --root must not be reported, and pkg/id_rsa must appear relative to --root, or a hit names the wrong path: ' + r.stdout)
+})
+
 test('AC-20261029-04-1: WHEN --root is not a git work tree THE SYSTEM SHALL exit 2 with a reason on stderr', () => {
   const dir = fs.realpathSync(tmpdir('ss-nogit'))
   const r = runNode(SCRIPT, ['--root', dir, '--worktree', '--json'])

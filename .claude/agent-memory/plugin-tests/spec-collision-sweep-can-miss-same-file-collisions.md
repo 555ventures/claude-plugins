@@ -30,7 +30,7 @@ Decision's blast radius on its own file can exceed what the collision sweep enum
 in place, keep the original AC-ID when the underlying invariant is unchanged (only the
 derivation mechanism is), and flag the discovery explicitly in both the file's header comment
 and the return to the dispatcher, since it's exactly the kind of File Plan gap
-[[spec-ac-example-vs-shipped-refusal]] and [[stale-dispatch-premise-concurrent-session]] already
+[[stale-dispatch-premise-concurrent-session]] already
 warn about trusting on faith.
 
 Separately, confirmed the same task's generalized-third-occurrence vacuous-rejection Gotcha

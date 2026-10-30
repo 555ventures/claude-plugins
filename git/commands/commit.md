@@ -121,7 +121,7 @@ Next: /git:merge — land it on main
 ## NON-NEGOTIABLE RULES
 
 1. **`git add -A` is MANDATORY** — add ALL changes regardless of relevance to previous work
-2. **Only 2 approval prompts for the commit itself** — parallel info-gathering, then commit; Step 1b's secrets question (scan hits only) and Step 3's one `AskUserQuestion` (the defect class) are additional, skippable, and only fires on fix-typed (or `/spec:fix`-invoked) commits that touch spec-landed lines
+2. **Only 2 approval prompts for the commit itself** — parallel info-gathering, then commit; two further questions are additional: Step 1b's secrets question fires only on a scan hit (exit 1), on any commit; Step 3's one `AskUserQuestion` (the defect class) is skippable and only fires on fix-typed (or `/spec:fix`-invoked) commits that touch spec-landed lines
 3. **Never selectively stage** unless user explicitly requests it
 4. **No post-commit status check** — reduces unnecessary approval
 5. **Secrets never stage silently** — a scan hit is a question; staging anyway is the user's explicit answer, never a default

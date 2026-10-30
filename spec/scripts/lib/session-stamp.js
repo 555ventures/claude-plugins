@@ -2,7 +2,12 @@
 // lib/session-stamp.js the read side of
 // the session-provenance mechanism spec-session-stamp.sh writes. readSessionStamp(root) parses
 // <root>/.claude/spec-session.json; sessionModel(root) derives the session's model id from the
-// LAST "type":"assistant" line of the stamped transcript's final 512 KiB.
+// LAST "type":"assistant" line of the stamped transcript's final 512 KiB; sessionUsage(root)
+// sums the stamped transcript's token counters over the WHOLE file, counting the FIRST
+// "type":"assistant" line per message.id only (one API response is written as several lines
+// that repeat the same usage; a line with no id counts once by itself). It returns
+// {input, cacheCreate, cacheRead, output, turns} (turns = distinct ids counted), or null when
+// there is no stamp, no readable transcript, or no assistant line carrying a usage object.
 // Owner: specs/20260901/02-run-provenance.md.
 //
 // Motivation: no review/build row could name which model held
@@ -16,10 +21,11 @@
 //
 // What this deliberately does NOT do: write the stamp file (spec-session-stamp.sh's job), read
 // the model at prompt time (the transcript is empty right after /clear — this is read late, at
-// ledger-row-write time, so a driver's checkpoints see a real assistant line), or validate the
-// stamp beyond "does it parse as a JSON object".
+// ledger-row-write time, so a driver's checkpoints see a real assistant line), validate the
+// stamp beyond "does it parse as a JSON object", or read subagent transcripts (sessionUsage
+// counts this session's own transcript only).
 //
-// Exit codes: n/a (library, not an entrypoint) — both exports degrade to null rather than
+// Exit codes: n/a (library, not an entrypoint) — every export degrades to null rather than
 // throwing or exiting.
 const fs = require('fs')
 const path = require('path')
@@ -93,4 +99,53 @@ function sessionModel(root) {
   return null
 }
 
-module.exports = { readSessionStamp, sessionModel }
+function sessionUsage(root) {
+  try {
+    const stamp = readSessionStamp(root)
+    if (!stamp || !stamp.transcriptPath) return null
+    const text = fs.readFileSync(stamp.transcriptPath, 'utf8')
+    const seen = new Set()
+    const total = { input: 0, cacheCreate: 0, cacheRead: 0, output: 0, turns: 0 }
+    const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+    let start = 0
+    while (start <= text.length) {
+      let end = text.indexOf('\n', start)
+      if (end === -1) end = text.length
+      const line = text.slice(start, end).trim()
+      start = end + 1
+      if (!line || !line.includes('"assistant"')) continue
+      let row
+      try { row = JSON.parse(line) } catch { continue }
+      if (!row || row.type !== 'assistant' || !row.message || typeof row.message !== 'object') continue
+      const u = row.message.usage
+      if (!u || typeof u !== 'object') continue
+      const id = row.message.id
+      if (typeof id === 'string' && id) {
+        if (seen.has(id)) continue
+        seen.add(id)
+      }
+      total.input += num(u.input_tokens)
+      total.cacheCreate += num(u.cache_creation_input_tokens)
+      total.cacheRead += num(u.cache_read_input_tokens)
+      total.output += num(u.output_tokens)
+      total.turns += 1
+    }
+    return total.turns === 0 ? null : total
+  } catch {
+    return null
+  }
+}
+
+// Counter-wise now - start over all five fields; null when either side is null or any
+// difference is negative.
+function usageDelta(now, start) {
+  if (!now || !start) return null
+  const d = {}
+  for (const k of ['input', 'cacheCreate', 'cacheRead', 'output', 'turns']) {
+    d[k] = now[k] - start[k]
+    if (!(d[k] >= 0)) return null
+  }
+  return d
+}
+
+module.exports = { readSessionStamp, sessionModel, sessionUsage, usageDelta }

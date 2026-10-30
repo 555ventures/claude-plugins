@@ -251,7 +251,7 @@ const { resolveGate } = require('./lib/gate-resolve')
 // model is derived at row-write time (never once at
 // startup) — right after /clear the new transcript has no assistant line yet, and by the time a
 // verdict pass runs the session has spoken many times.
-const { sessionModel } = require('./lib/session-stamp.js')
+const { sessionModel, sessionUsage, usageDelta } = require('./lib/session-stamp.js')
 // A `leg:<name>` disposition covers that leg's WHOLE finding count — the same count verdict.js sums
 // into legFindings, from the same module, so the two never count in different units again
 // (lib/leg-findings.js header carries the ruling; tests/review/disposer-gate.test.js pins it).
@@ -382,6 +382,8 @@ function saveSidecar() { saveSidecarLib(sidecarDir, path.basename(stateFile), ma
 function viaModelArgs(n) {
   const m = sessionModel(repoRoot)
   const args = m === null ? ['--via', marks.via] : ['--via', marks.via, '--model', m]
+  // read fresh at each call (never cached), like the model
+  args.push('--sessionTokens', JSON.stringify(usageDelta(sessionUsage(repoRoot), marks.tokensAtStart || null)))
   const outcome = checkpointOutcome(n)
   args.push('--checkpoint', outcome.outcome)
   if (outcome.outcome === 'disposer') args.push('--checkpoint-overrides', String(outcome.overrides))
@@ -610,6 +612,7 @@ if (status === 'done' && !marks.closeRunId) {
 // query on a finished review into a fresh restart attempt.
 if (marks.via === undefined) {
   marks.via = 'loop'
+  marks.tokensAtStart = sessionUsage(repoRoot)
   saveSidecar()
 }
 
@@ -1147,6 +1150,8 @@ function doCloseWork(n) {
   const row = JSON.parse(lines[1])
   if (gotchas !== null) row.gotchas = gotchas
   row.tests = testsRow
+  // sessionTokens (when verdict.js carried it) stays the LAST key, after the keys added here.
+  if (Object.prototype.hasOwnProperty.call(row, 'sessionTokens')) { const st = row.sessionTokens; delete row.sessionTokens; row.sessionTokens = st }
   lines[1] = JSON.stringify(row)
   appendLedger(lines[1])
   // best-effort — never blocks the close.

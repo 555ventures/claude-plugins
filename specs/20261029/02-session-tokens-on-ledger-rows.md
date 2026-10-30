@@ -1,12 +1,14 @@
 ---
 date: 2026-10-29
-status: hardened
+status: implementing
 open_markers: 0
 tier: critical           # touches spec/scripts/verdict.js (rules § Risk Tiers: sole verdict derivation)
 area: provenance
 breaking: false
 depends_on: [specs/20261029/01-model-placement-refresh.md]
 brief: n/a
+build_base: main
+diff_base: 10b44102054967fe9ceebf0a37734d68327e0914
 ---
 
 # Session token usage on build and review ledger rows
@@ -31,6 +33,7 @@ value and position, and every failure to read degrades to `null`, never an error
 | D4 | The review driver stores `marks.tokensAtStart` when it creates its sidecar and `viaModelArgs()` appends `--sessionTokens <json>` with the D2-style delta (or `null`) on every verdict pass, read fresh at each call (AC-20261029-02-7) | Same "read at row-write time, never cached" rule the model id follows; one shared arg-builder already exists, so the flag lands in all three passes identically. |
 | D5 | Subagent spend is out of scope: the field counts the orchestrating session's transcript only, and its name says so. `[no-ac: a naming decision; AC-20261029-02-3 and -02-4 pin the key name]` | Subagents write separate transcripts the stamp does not name. A field called `tokens` would be read as the whole run's cost. |
 | D6 | `spec/.claude-plugin/plugin.json` is bumped via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` naming `sessionTokens` on build and review rows. `[no-ac: the reviewer runs plugin-bump.js --check against the merge base; a test judging the tree against main is a hard finding per rules § Review Checks]` | Rules § Planning version-bump discipline. |
+| D7 | Scope widened at build (asked, critical tier; JJ chose "add to scope" 2026-10-29): `tests/review/stopped-row-durability.test.js` enters the File Plan. Its two byte-equality reconstruction cases re-run `verdict.js` from the appended row's recorded flags; the re-run builder now threads the observed row's own `sessionTokens` into the re-invocation (`if ('sessionTokens' in appended) reArgs.push('--sessionTokens', JSON.stringify(appended.sessionTokens))`) — never a hardcoded value, never a weakened comparison. Gate line: `stopped-row-durability.test.js` "WHEN the synthetic gate fails…" and "WHEN a review running in a linked worktree hard-stops…" deep-equal failures on a row carrying `sessionTokens: null`. `[asked: add to scope — fix the two tests in this build]` | Rules § Gotchas: a reconstruction test inherits the script's untouched default, so it must be fed the observed row's field (the changed-default trigger). |
 
 ## File Plan
 
@@ -44,6 +47,7 @@ value and position, and every failure to read degrades to `null`, never an error
 | tests/provenance/provenance.test.js | MODIFY | tests | AC-20261029-02-1, AC-20261029-02-2, AC-20261029-02-4, AC-20261029-02-5, AC-20261029-02-6 |
 | tests/build/build-driver-commit.test.js | MODIFY | tests | AC-20261029-02-3 |
 | tests/review/review-driver.test.js | MODIFY | tests | AC-20261029-02-7 |
+| tests/review/stopped-row-durability.test.js | MODIFY | tests | D7 — re-run builder threads the observed row's `sessionTokens` (no AC: pre-existing pins, unchanged assertions) |
 
 ## Contracts
 

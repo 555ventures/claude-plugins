@@ -416,3 +416,122 @@ test('AC-20260901-09-11 (rewrites the former AC-20260901-05-7 test in place, D5)
       `AC-20260901-09-11 (${c.name}): a refused --checkpoint combination must print no verdict word and no ledger row: ` + r.stdout)
   }
 })
+
+// AC-20261029-02-1, -2, -4, -5, -6 -------------------------------------------------------------
+
+function asstLine(id, u) {
+  return { type: 'assistant', message: { id, model: 'claude-opus-5', usage: { input_tokens: u[0], cache_creation_input_tokens: u[1], cache_read_input_tokens: u[2], output_tokens: u[3] } } }
+}
+
+test('AC-20261029-02-1: sessionUsage(root) sums the first assistant line per message.id across the whole stamped transcript, so duplicated content-block lines and a user line between them yield {input:34, cacheCreate:2534, cacheRead:163585, output:726, turns:2}', () => {
+  delete require.cache[LIB]
+  const { sessionUsage } = require(LIB)
+  assert.strictEqual(typeof sessionUsage, 'function',
+    'session-stamp.js must export sessionUsage — without it neither driver can measure a stage\'s token spend')
+  const root = fs.realpathSync(tmpdir('sess-usage-happy'))
+  const transcript = path.join(root, 'transcript.jsonl')
+  writeTranscript(transcript, [
+    asstLine('A', [2, 2125, 82077, 566]),
+    { type: 'user', message: { content: 'go on' } },
+    asstLine('A', [2, 2125, 82077, 566]),
+    asstLine('B', [32, 409, 81508, 160])
+  ])
+  writeStamp(root, { transcriptPath: transcript })
+  assert.deepStrictEqual(sessionUsage(root), { input: 34, cacheCreate: 2534, cacheRead: 163585, output: 726, turns: 2 },
+    'repeated lines for one message.id must count once — a naive sum roughly doubles the true spend and every cost comparison built on the ledger is wrong')
+})
+
+test('AC-20261029-02-2: sessionUsage(root) returns null without throwing when the stamp is absent, the stamped transcript is missing, or no assistant line carries a message.usage object', () => {
+  delete require.cache[LIB]
+  const { sessionUsage } = require(LIB)
+  assert.strictEqual(typeof sessionUsage, 'function',
+    'session-stamp.js must export sessionUsage — without it neither driver can measure a stage\'s token spend')
+  const noStamp = fs.realpathSync(tmpdir('sess-usage-nostamp'))
+  assert.strictEqual(sessionUsage(noStamp), null,
+    'an absent stamp must derive null, not throw — a row must never crash on a host with no stamp')
+  const noFile = fs.realpathSync(tmpdir('sess-usage-nofile'))
+  writeStamp(noFile, { transcriptPath: path.join(noFile, 'missing.jsonl') })
+  assert.strictEqual(sessionUsage(noFile), null,
+    'a stamp naming a missing transcript must derive null, not throw — the transcript format is internal and version-unstable')
+  const noUsage = fs.realpathSync(tmpdir('sess-usage-nousage'))
+  const transcript = path.join(noUsage, 'transcript.jsonl')
+  writeTranscript(transcript, [{ type: 'user' }, { type: 'assistant', message: { model: 'claude-opus-5' } }])
+  writeStamp(noUsage, { transcriptPath: transcript })
+  assert.strictEqual(sessionUsage(noUsage), null,
+    'a transcript with no message.usage object must derive null rather than a zero-filled object — zeros would read as a measured free stage')
+})
+
+const SESSION_TOKENS = { input: 1, cacheCreate: 2, cacheRead: 3, output: 4, turns: 1 }
+
+function sessionTokensPass(extra, retainName) {
+  const { manifest, workflow } = manifestFixture()
+  const retainDir = fs.realpathSync(tmpdir(retainName))
+  return runNode('scripts/verdict.js', [
+    '--manifest', manifest, '--workflow', workflow, '--ledger', '--spec', 'specs/x.md', '--tier', 'standard',
+    '--retain', retainDir, '--run-id', 'rv_fixedfixed01', ...extra
+  ])
+}
+
+test('AC-20261029-02-4: verdict.js --via loop --model claude-opus-5 --sessionTokens <object> prints a row whose first seven keys are unchanged and whose LAST key is sessionTokens, and with --checkpoint disposer the checkpoint key still sits immediately after verdict', () => {
+  const r = sessionTokensPass(['--via', 'loop', '--model', 'claude-opus-5', '--sessionTokens', JSON.stringify(SESSION_TOKENS)], 'verdict-st-4')
+  assert.strictEqual(r.status, 0, '--sessionTokens with a JSON object must be accepted on the review profile: ' + r.stdout + r.stderr)
+  const row = JSON.parse(r.stdout.trim().split('\n')[1])
+  const keys = Object.keys(row)
+  assert.deepStrictEqual(keys.slice(0, 7), ['ts', 'spec', 'stage', 'tier', 'via', 'model', 'runId'],
+    'adding sessionTokens must not move the pinned first seven keys: ' + JSON.stringify(row))
+  assert.strictEqual(keys[keys.length - 1], 'sessionTokens',
+    'sessionTokens must be the LAST key so every earlier key-order pin keeps holding: ' + JSON.stringify(row))
+  assert.deepStrictEqual(row.sessionTokens, SESSION_TOKENS,
+    'the row must carry the passed object verbatim: ' + JSON.stringify(row))
+
+  const rc = sessionTokensPass(['--via', 'loop', '--model', 'claude-opus-5', '--checkpoint', 'disposer', '--sessionTokens', JSON.stringify(SESSION_TOKENS)], 'verdict-st-4c')
+  assert.strictEqual(rc.status, 0, '--sessionTokens together with --checkpoint disposer must be accepted: ' + rc.stdout + rc.stderr)
+  const rowc = JSON.parse(rc.stdout.trim().split('\n')[1])
+  const keysc = Object.keys(rowc)
+  assert.strictEqual(keysc[keysc.indexOf('verdict') + 1], 'checkpoint',
+    'checkpoint must stay immediately after verdict when sessionTokens is present: ' + JSON.stringify(rowc))
+  assert.strictEqual(keysc[keysc.length - 1], 'sessionTokens',
+    'sessionTokens must stay last when checkpoint is present: ' + JSON.stringify(rowc))
+})
+
+test('AC-20261029-02-5: verdict.js without --sessionTokens prints a row with no sessionTokens key and every other key identical to the flagged row, so pre-existing callers are byte-identical', () => {
+  const plain = sessionTokensPass(['--via', 'loop', '--model', 'claude-opus-5'], 'verdict-st-5a')
+  const withTokens = sessionTokensPass(['--via', 'loop', '--model', 'claude-opus-5', '--sessionTokens', JSON.stringify(SESSION_TOKENS)], 'verdict-st-5b')
+  assert.strictEqual(plain.status, 0, 'the flagless pass must exit 0: ' + plain.stdout + plain.stderr)
+  assert.strictEqual(withTokens.status, 0, 'the --sessionTokens pass must exit 0 so the key comparison is meaningful: ' + withTokens.stdout + withTokens.stderr)
+  const rowPlain = JSON.parse(plain.stdout.trim().split('\n')[1])
+  const rowWith = JSON.parse(withTokens.stdout.trim().split('\n')[1])
+  assert.strictEqual('sessionTokens' in rowPlain, false,
+    'an absent flag must mean an absent key — a stray sessionTokens:null would break byte-identity with every pre-existing row: ' + JSON.stringify(rowPlain))
+  delete rowWith.sessionTokens; delete rowPlain.ts; delete rowWith.ts
+  assert.deepStrictEqual(rowPlain, rowWith,
+    'the flagless row must equal the flagged row minus sessionTokens — the flag may add only its own key: ' + JSON.stringify({ rowPlain, rowWith }))
+})
+
+test('AC-20261029-02-6: verdict.js refuses --sessionTokens not-json, --sessionTokens [1] and --sessionTokens {} with --profile release with exit 2, stderr naming --sessionTokens and no row, while --sessionTokens null on the review profile writes "sessionTokens": null as the last key', () => {
+  for (const bad of ['not-json', '[1]']) {
+    const r = sessionTokensPass(['--sessionTokens', bad], 'verdict-st-6')
+    assert.strictEqual(r.status, 2, '--sessionTokens ' + bad + ' must be refused rather than written into a ledger row: ' + r.stdout + r.stderr)
+    assert.match(r.stderr, /--sessionTokens/,
+      'the refusal must name --sessionTokens, not fall through to a generic unknown-flag usage line: ' + r.stderr)
+    assert.strictEqual(r.stdout.trim().split('\n').filter(Boolean).length, 0,
+      'a refused --sessionTokens value must print no ledger row: ' + r.stdout)
+  }
+  const dir = fs.realpathSync(tmpdir('verdict-st-release'))
+  const manifest = path.join(dir, 'manifest.jsonl')
+  fs.writeFileSync(manifest, JSON.stringify({ leg: 'ready', exit: 0, observed: { result: 'pass' } }) + '\n')
+  const rel = runNode('scripts/verdict.js', ['--manifest', manifest, '--ledger', '--profile', 'release', '--sessionTokens', '{}'])
+  assert.strictEqual(rel.status, 2, '--sessionTokens with --profile release must refuse — a release row carries no session spend: ' + rel.stdout + rel.stderr)
+  assert.match(rel.stderr, /--sessionTokens/,
+    'the release refusal must name --sessionTokens: ' + rel.stderr)
+  assert.strictEqual(rel.stdout.trim().split('\n').filter(Boolean).length, 0,
+    'a refused release combination must print no ledger row: ' + rel.stdout)
+
+  const ok = sessionTokensPass(['--sessionTokens', 'null'], 'verdict-st-6null')
+  assert.strictEqual(ok.status, 0, '--sessionTokens null is the driver\'s "unknown" value and must be accepted: ' + ok.stdout + ok.stderr)
+  const row = JSON.parse(ok.stdout.trim().split('\n')[1])
+  const keys = Object.keys(row)
+  assert.strictEqual(keys[keys.length - 1], 'sessionTokens',
+    'sessionTokens:null must be present as the last key, not omitted: ' + JSON.stringify(row))
+  assert.strictEqual(row.sessionTokens, null, 'the literal null must be written as null: ' + JSON.stringify(row))
+})

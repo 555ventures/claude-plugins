@@ -1,6 +1,6 @@
 ---
 date: 2026-10-29
-status: implementing
+status: done
 open_markers: 0
 tier: critical           # touches spec/scripts/verdict.js (rules § Risk Tiers: sole verdict derivation)
 area: provenance
@@ -137,6 +137,19 @@ purpose — place the new key last.
 
 Rejected: writing cost in dollars. Prices change per model and per provider; counters are
 stable, and a reader can price them later from the `model` field on the same row.
+
+Deviations folded at close (one-offs): AC-7's test observes the close row's `sessionTokens` last
+key rather than the verdict.js argv, because the review driver spawns verdict.js by absolute
+`process.execPath` path with no env seam; the row observation exercises the same `viaModelArgs`
+path end to end. The review driver re-appends `sessionTokens` after its post-hoc `gotchas`/`tests`
+keys so the Contracts' "always the last key" holds, and a shared `usageDelta` helper in
+`lib/session-stamp.js` implements the D2/D4 delta rule once for both drivers.
+
+### Advisory debt (review rv_16a3e3cf601f)
+- a0 tests/review/stopped-row-durability.test.js:223 — The fix commit's subject says 'every-pass carriage pinned', but only two of the three verdict passes are now pinned (hard-stop via the new anti-vacuity asserts, close via AC-7). The escalate pass at spec-review-driver.js:1027 still has no test asserting that its row carries sessionTokens, so the prior D4 soft is only partly addressed.
+- a1 specs/20261029/02-session-tokens-on-ledger-rows.md:36 — The D7 text is still partly wrong: (a) it says stopped-row-durability.test.js holds 'two byte-equality reconstruction cases' while the corrected Gate line puts one case in review-driver.test.js and the file holds one threading site; (b) the new no-ac reason says 'assertions unchanged' but this fix round added an assert.ok('sessionTokens' in appended) to both reconstruction cases (additive, but the sentence is false).
+- a2 specs/20261029/02-session-tokens-on-ledger-rows.md:51 — The fix round added tests/helpers.js to the locked File Plan citing 'D7 (same test-only ruling, fix round)', but D7's asked sanction was for one file. Extending an asked scope ruling to a new file without a new ask bends D7's intent. The change itself is harmless: additive, test-only, the extraction the prior duplication soft named.
+- a3 spec/scripts/lib/session-stamp.js:6 — The session-stamp.js header now says the transcript is 'read whole, scanned line by line' (accurate), while spec D1 still says it 'streams the WHOLE stamped transcript line by line'; the code comment now openly contradicts the spec.
 
 ## Canonical Delta
 

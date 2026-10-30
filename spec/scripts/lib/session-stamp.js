@@ -3,9 +3,9 @@
 // the session-provenance mechanism spec-session-stamp.sh writes. readSessionStamp(root) parses
 // <root>/.claude/spec-session.json; sessionModel(root) derives the session's model id from the
 // LAST "type":"assistant" line of the stamped transcript's final 512 KiB; sessionUsage(root)
-// sums the stamped transcript's token counters over the WHOLE file, counting the FIRST
-// "type":"assistant" line per message.id only (one API response is written as several lines
-// that repeat the same usage; a line with no id counts once by itself). It returns
+// sums the stamped transcript's token counters over the WHOLE file (read whole, scanned line by
+// line — not the 512 KiB tail), counting the FIRST "type":"assistant" line per message.id only
+// (one API response is written as several lines that repeat the same usage). It returns
 // {input, cacheCreate, cacheRead, output, turns} (turns = distinct ids counted), or null when
 // there is no stamp, no readable transcript, or no assistant line carrying a usage object.
 // Owner: specs/20260901/02-run-provenance.md.
@@ -22,8 +22,9 @@
 // What this deliberately does NOT do: write the stamp file (spec-session-stamp.sh's job), read
 // the model at prompt time (the transcript is empty right after /clear — this is read late, at
 // ledger-row-write time, so a driver's checkpoints see a real assistant line), validate the
-// stamp beyond "does it parse as a JSON object", or read subagent transcripts (sessionUsage
-// counts this session's own transcript only).
+// stamp beyond "does it parse as a JSON object", read subagent transcripts (sessionUsage
+// counts this session's own transcript only), or count assistant lines that carry no
+// message.id (sessionUsage skips them, so turns equals distinct ids).
 //
 // Exit codes: n/a (library, not an entrypoint) — every export degrades to null rather than
 // throwing or exiting.
@@ -120,10 +121,9 @@ function sessionUsage(root) {
       const u = row.message.usage
       if (!u || typeof u !== 'object') continue
       const id = row.message.id
-      if (typeof id === 'string' && id) {
-        if (seen.has(id)) continue
-        seen.add(id)
-      }
+      if (typeof id !== 'string' || !id) continue
+      if (seen.has(id)) continue
+      seen.add(id)
       total.input += num(u.input_tokens)
       total.cacheCreate += num(u.cache_creation_input_tokens)
       total.cacheRead += num(u.cache_read_input_tokens)

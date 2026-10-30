@@ -4,7 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
-const { tmpdir, runNode, runBash, gitRepo } = require('../helpers')
+const { tmpdir, runNode, runBash, gitRepo, assistantUsageLine } = require('../helpers')
 const { GREEN_TEST, specBody, makeHost, run, stateOf, toReviewer, returnFileWith, CLEAN_RETURN, SURVIVOR_RETURN } = require('./review-driver.fixtures')
 
 // Shard A of the review-driver family (split from review-driver.test.js by
@@ -119,6 +119,9 @@ test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO) / AC-20260824-
     'AC-20260912-03-10/AC-20260901-02-4: a driver invocation with no --via and no stamp must record the appended row as via:"loop" — via is fixed at sidecar creation and no longer read from argv, so a "direct" here means the retired flag read survived: ' + JSON.stringify(appended))
   assert.strictEqual(appended.model, null,
     'AC-20260901-02-4/A6: a host with no .claude/spec-session.json stamp must derive model:null on the appended row, never a thrown error or a fabricated value: ' + JSON.stringify(appended))
+
+  assert.ok('sessionTokens' in appended,
+    'specs/20261029/02 D4: every verdict pass carries --sessionTokens, so the hard-stop row must have the key — without this the threading below would be skipped vacuously: ' + JSON.stringify(appended))
 
   // Reproducibility check for "byte-equal to verdict.js's stdout line 2": feeding verdict.js the
   // SAME manifest with the exact tier/diff/iteration/runId/base-sha/head-sha/dirty/via/model the
@@ -672,7 +675,7 @@ test('AC-20260912-03-10 (also AC-20260901-02-4, AC-20260901-09-6, rewritten in p
 // onto the verdict pass. The driver spawns verdict.js by absolute path with no argv-capturing
 // seam, so the argv is observed through its only effect: the row verdict.js prints from it.
 function usageLine7(id, input, cacheCreate, cacheRead, output) {
-  return { type: 'assistant', message: { id, model: 'claude-opus-5', usage: { input_tokens: input, cache_creation_input_tokens: cacheCreate, cache_read_input_tokens: cacheRead, output_tokens: output } } }
+  return assistantUsageLine(id, { input, cacheCreate, cacheRead, output })
 }
 
 function closeRowWithStamp(name, mutateSidecar) {

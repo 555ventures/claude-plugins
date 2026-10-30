@@ -4,6 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
+const { assistantUsageLine } = require('../helpers')
 const { makeHost, run, stateOf, toCommit, toFirstWave, implementScriptsWave, specBody, testFileContent } = require('./build-driver.fixtures')
 
 // specs/20260901/01-build-driver.md + specs/20260901/02-run-provenance.md D5: shard of
@@ -384,7 +385,7 @@ function stampWithTranscript(root, lines) {
 }
 
 function usageLine(id, input, cacheCreate, cacheRead, output) {
-  return { type: 'assistant', message: { id, model: 'claude-opus-5', usage: { input_tokens: input, cache_creation_input_tokens: cacheCreate, cache_read_input_tokens: cacheRead, output_tokens: output } } }
+  return assistantUsageLine(id, { input, cacheCreate, cacheRead, output })
 }
 
 function driveToDone(host) {
@@ -425,4 +426,19 @@ test('AC-20261029-02-3: the build DONE row ends with sessionTokens equal to the 
     'a host with no stamp must still carry sessionTokens as the last key, never omit it: ' + JSON.stringify(bareRow))
   assert.strictEqual(bareRow.sessionTokens, null,
     'with no stamp at either moment the field must be null, never zeros or an error: ' + JSON.stringify(bareRow))
+})
+
+test('AC-20261029-02-3: a transcript that shrinks between sidecar creation and --mark committed (negative delta) leaves sessionTokens:null as the last key of the DONE row', () => {
+  const host = makeHost()
+  const transcript = stampWithTranscript(host.root, [usageLine('A', 2, 2125, 82077, 566), usageLine('B', 32, 409, 81508, 160)])
+  const rInit = run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'TESTS',
+    'setup precondition: the first invocation must create the sidecar and reach TESTS: ' + rInit.stdout + rInit.stderr)
+  fs.writeFileSync(transcript, JSON.stringify(usageLine('B', 32, 409, 81508, 160)) + '\n')
+  const row = driveToDone(host)
+  const keys = Object.keys(row)
+  assert.strictEqual(keys[keys.length - 1], 'sessionTokens',
+    'sessionTokens must stay the last key even when the delta is unmeasurable: ' + JSON.stringify(row))
+  assert.strictEqual(row.sessionTokens, null,
+    'a negative delta (transcript rewritten smaller) must be null, never clamped or negative numbers on the ledger: ' + JSON.stringify(row))
 })

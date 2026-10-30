@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runBash, runNode, SPEC } = require('../helpers')
+const { tmpdir, runBash, runNode, SPEC, assistantUsageLine } = require('../helpers')
 
 // specs/20260901/02-run-provenance.md D1/D2/D3 (brief 18): a review row is ledger-answerable
 // only when it names which command shape produced it (via) and which model held the session
@@ -420,7 +420,7 @@ test('AC-20260901-09-11 (rewrites the former AC-20260901-05-7 test in place, D5)
 // AC-20261029-02-1, -2, -4, -5, -6 -------------------------------------------------------------
 
 function asstLine(id, u) {
-  return { type: 'assistant', message: { id, model: 'claude-opus-5', usage: { input_tokens: u[0], cache_creation_input_tokens: u[1], cache_read_input_tokens: u[2], output_tokens: u[3] } } }
+  return assistantUsageLine(id, { input: u[0], cacheCreate: u[1], cacheRead: u[2], output: u[3] })
 }
 
 test('AC-20261029-02-1: sessionUsage(root) sums the first assistant line per message.id across the whole stamped transcript, so duplicated content-block lines and a user line between them yield {input:34, cacheCreate:2534, cacheRead:163585, output:726, turns:2}', () => {
@@ -439,6 +439,40 @@ test('AC-20261029-02-1: sessionUsage(root) sums the first assistant line per mes
   writeStamp(root, { transcriptPath: transcript })
   assert.deepStrictEqual(sessionUsage(root), { input: 34, cacheCreate: 2534, cacheRead: 163585, output: 726, turns: 2 },
     'repeated lines for one message.id must count once — a naive sum roughly doubles the true spend and every cost comparison built on the ledger is wrong')
+})
+
+test('AC-20261029-02-1: sessionUsage(root) skips assistant lines without a string message.id, so id-less usage lines add nothing and turns counts only identified responses', () => {
+  delete require.cache[LIB]
+  const { sessionUsage } = require(LIB)
+  const root = fs.realpathSync(tmpdir('sess-usage-idless'))
+  const transcript = path.join(root, 'transcript.jsonl')
+  writeTranscript(transcript, [
+    asstLine('A', [2, 2125, 82077, 566]),
+    asstLine('A', [2, 2125, 82077, 566]),
+    asstLine(undefined, [1000, 1000, 1000, 1000]),
+    asstLine(undefined, [1000, 1000, 1000, 1000]),
+    asstLine('B', [32, 409, 81508, 160])
+  ])
+  writeStamp(root, { transcriptPath: transcript })
+  assert.deepStrictEqual(sessionUsage(root), { input: 34, cacheCreate: 2534, cacheRead: 163585, output: 726, turns: 2 },
+    'id-less assistant lines must contribute nothing — counting them would inflate the stage spend by lines that cannot be deduplicated')
+})
+
+test('AC-20261029-02-3: usageDelta returns null when any counter went backwards or the start snapshot lacks a counter, and otherwise subtracts field-wise including turns', () => {
+  delete require.cache[LIB]
+  const { usageDelta } = require(LIB)
+  const start = { input: 10, cacheCreate: 20, cacheRead: 30, output: 40, turns: 2 }
+  const now = { input: 15, cacheCreate: 20, cacheRead: 130, output: 41, turns: 5 }
+  assert.deepStrictEqual(usageDelta(now, start), { input: 5, cacheCreate: 0, cacheRead: 100, output: 1, turns: 3 },
+    'a normal delta must subtract every counter, turns included — a wrong delta mis-states the stage spend on the ledger')
+  for (const k of Object.keys(start)) {
+    assert.strictEqual(usageDelta(now, { ...start, [k]: now[k] + 1 }), null,
+      'a start ' + k + ' above now means the transcript shrank; a negative delta must be null, never clamped to a fabricated number')
+  }
+  const lacking = { ...start }
+  delete lacking.output
+  assert.strictEqual(usageDelta(now, lacking), null,
+    'a start snapshot missing a counter yields NaN; it must derive null, never NaN on the row')
 })
 
 test('AC-20261029-02-2: sessionUsage(root) returns null without throwing when the stamp is absent, the stamped transcript is missing, or no assistant line carries a message.usage object', () => {

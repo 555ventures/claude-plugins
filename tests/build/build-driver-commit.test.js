@@ -4,6 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
+const { assistantUsageLine } = require('../helpers')
 const { makeHost, run, stateOf, toCommit, toFirstWave, implementScriptsWave, specBody, testFileContent } = require('./build-driver.fixtures')
 
 // specs/20260901/01-build-driver.md + specs/20260901/02-run-provenance.md D5: shard of
@@ -369,4 +370,75 @@ test('Incident Policy: a build with no incident marks writes incidents:[] so the
   assert.strictEqual(r.status, 0, r.stdout + r.stderr)
   const rows = fs.readFileSync(path.join(host.root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
   assert.deepStrictEqual(rows[rows.length - 1].incidents, [], 'no marks -> an empty array, never a missing key')
+})
+
+// AC-20261029-02-3: the DONE row's last key is sessionTokens, the counter-wise delta between
+// sidecar creation and row write (deduplicated by message.id), or null when no stamp exists.
+function stampWithTranscript(root, lines) {
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  const transcript = path.join(root, 'transcript.jsonl')
+  fs.writeFileSync(transcript, lines.map((l) => JSON.stringify(l)).join('\n') + '\n')
+  fs.writeFileSync(path.join(root, '.claude/spec-session.json'), JSON.stringify({
+    session_id: 's1', transcript_path: transcript, cwd: root, ts: new Date().toISOString()
+  }))
+  return transcript
+}
+
+function usageLine(id, input, cacheCreate, cacheRead, output) {
+  return assistantUsageLine(id, { input, cacheCreate, cacheRead, output })
+}
+
+function driveToDone(host) {
+  toCommit(host)
+  fs.writeFileSync(host.spec.replace(/\.md$/, '.deviations.md'), '# Deviations — 99-bd-test\n\n- one departure\n')
+  execFileSync('git', ['-C', host.root, 'add', 'src/foo.js', 'src/bar.js', 'other.txt', 'tests/foo.test.js', path.relative(host.root, host.spec)], { encoding: 'utf8' })
+  execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'checkpoint'], { encoding: 'utf8' })
+  const r = run(host.root, host.spec, '--mark', 'committed')
+  assert.strictEqual(r.status, 0, 'a clean, advanced File Plan must be accepted at COMMIT: ' + r.stdout + r.stderr)
+  const rows = fs.readFileSync(path.join(host.root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').filter(Boolean)
+  return JSON.parse(rows[rows.length - 1])
+}
+
+test('AC-20261029-02-3: the build DONE row ends with sessionTokens equal to the deduplicated counter-wise delta between sidecar creation and row write, keeps via, model immediately after tier, and writes sessionTokens:null as the last key when no stamp exists at either moment', () => {
+  const host = makeHost()
+  const transcript = stampWithTranscript(host.root, [usageLine('B', 32, 409, 81508, 160)])
+  const rInit = run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'TESTS',
+    'setup precondition: the first invocation (the one that creates the sidecar) must reach TESTS: ' + rInit.stdout + rInit.stderr)
+  fs.appendFileSync(transcript, [usageLine('A', 2, 2125, 82077, 566), usageLine('A', 2, 2125, 82077, 566)].map((l) => JSON.stringify(l)).join('\n') + '\n')
+  const row = driveToDone(host)
+  const keys = Object.keys(row)
+  assert.strictEqual(keys[keys.length - 1], 'sessionTokens',
+    'sessionTokens must be the LAST key of the DONE row so the tier, via, model slice pin keeps holding: ' + JSON.stringify(row))
+  assert.deepStrictEqual(row.sessionTokens, { input: 2, cacheCreate: 2125, cacheRead: 82077, output: 566, turns: 1 },
+    'the field must be the stage\'s own spend — usage now minus the snapshot at sidecar creation, with the duplicated A lines counted once — not a session total: ' + JSON.stringify(row))
+  const tierIdx = keys.indexOf('tier')
+  assert.deepStrictEqual(keys.slice(tierIdx, tierIdx + 3), ['tier', 'via', 'model'],
+    'via and model must stay the two keys immediately after tier: ' + JSON.stringify(row))
+
+  const bare = makeHost()
+  const rBare = run(bare.root, bare.spec)
+  assert.strictEqual(stateOf(bare.root, bare.spec), 'TESTS',
+    'setup precondition: a host with no stamp must still reach TESTS: ' + rBare.stdout + rBare.stderr)
+  const bareRow = driveToDone(bare)
+  const bareKeys = Object.keys(bareRow)
+  assert.strictEqual(bareKeys[bareKeys.length - 1], 'sessionTokens',
+    'a host with no stamp must still carry sessionTokens as the last key, never omit it: ' + JSON.stringify(bareRow))
+  assert.strictEqual(bareRow.sessionTokens, null,
+    'with no stamp at either moment the field must be null, never zeros or an error: ' + JSON.stringify(bareRow))
+})
+
+test('AC-20261029-02-3: a transcript that shrinks between sidecar creation and --mark committed (negative delta) leaves sessionTokens:null as the last key of the DONE row', () => {
+  const host = makeHost()
+  const transcript = stampWithTranscript(host.root, [usageLine('A', 2, 2125, 82077, 566), usageLine('B', 32, 409, 81508, 160)])
+  const rInit = run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'TESTS',
+    'setup precondition: the first invocation must create the sidecar and reach TESTS: ' + rInit.stdout + rInit.stderr)
+  fs.writeFileSync(transcript, JSON.stringify(usageLine('B', 32, 409, 81508, 160)) + '\n')
+  const row = driveToDone(host)
+  const keys = Object.keys(row)
+  assert.strictEqual(keys[keys.length - 1], 'sessionTokens',
+    'sessionTokens must stay the last key even when the delta is unmeasurable: ' + JSON.stringify(row))
+  assert.strictEqual(row.sessionTokens, null,
+    'a negative delta (transcript rewritten smaller) must be null, never clamped or negative numbers on the ledger: ' + JSON.stringify(row))
 })

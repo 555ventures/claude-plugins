@@ -220,8 +220,12 @@ test('AC-20260821-04-1 / AC-20260824-06-5 (worktree carrier) / AC-20260901-09-13
   // via/model, exactly as the sibling reproducibility pin in tests/review/review-driver.test.js
   // already does. Hardcoding either here would make this a byte-equality assertion about the
   // test's guess rather than about what the driver actually threaded.
+  assert.ok('sessionTokens' in appended,
+    'specs/20261029/02 D4: every verdict pass carries --sessionTokens, so the hard-stop row must have the key — without this the threading below would be skipped vacuously: ' + JSON.stringify(appended))
   if (appended.via) reArgs.push('--via', appended.via)
   if (appended.model) reArgs.push('--model', appended.model)
+  // specs/20261029/02 D7: thread the observed row's own sessionTokens field back onto the re-run.
+  if ('sessionTokens' in appended) reArgs.push('--sessionTokens', JSON.stringify(appended.sessionTokens))
   const reRun = runNode('scripts/verdict.js', reArgs)
   const reRunLine = reRun.stdout.trim().split('\n')[1]
   assert.ok(reRunLine, 'verdict.js must print a ledger line when re-invoked with the driver\'s own recorded flags against the same manifest: ' + reRun.stdout + reRun.stderr)

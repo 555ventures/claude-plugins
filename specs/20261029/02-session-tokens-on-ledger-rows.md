@@ -1,12 +1,14 @@
 ---
 date: 2026-10-29
-status: hardened
+status: done
 open_markers: 0
 tier: critical           # touches spec/scripts/verdict.js (rules § Risk Tiers: sole verdict derivation)
 area: provenance
 breaking: false
 depends_on: [specs/20261029/01-model-placement-refresh.md]
 brief: n/a
+build_base: main
+diff_base: 10b44102054967fe9ceebf0a37734d68327e0914
 ---
 
 # Session token usage on build and review ledger rows
@@ -31,6 +33,7 @@ value and position, and every failure to read degrades to `null`, never an error
 | D4 | The review driver stores `marks.tokensAtStart` when it creates its sidecar and `viaModelArgs()` appends `--sessionTokens <json>` with the D2-style delta (or `null`) on every verdict pass, read fresh at each call (AC-20261029-02-7) | Same "read at row-write time, never cached" rule the model id follows; one shared arg-builder already exists, so the flag lands in all three passes identically. |
 | D5 | Subagent spend is out of scope: the field counts the orchestrating session's transcript only, and its name says so. `[no-ac: a naming decision; AC-20261029-02-3 and -02-4 pin the key name]` | Subagents write separate transcripts the stamp does not name. A field called `tokens` would be read as the whole run's cost. |
 | D6 | `spec/.claude-plugin/plugin.json` is bumped via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` naming `sessionTokens` on build and review rows. `[no-ac: the reviewer runs plugin-bump.js --check against the merge base; a test judging the tree against main is a hard finding per rules § Review Checks]` | Rules § Planning version-bump discipline. |
+| D7 | Scope widened at build (asked, critical tier; JJ chose "add to scope" 2026-10-29): `tests/review/stopped-row-durability.test.js` enters the File Plan. Its two byte-equality reconstruction cases re-run `verdict.js` from the appended row's recorded flags; the re-run builder now threads the observed row's own `sessionTokens` into the re-invocation (`if ('sessionTokens' in appended) reArgs.push('--sessionTokens', JSON.stringify(appended.sessionTokens))`) — never a hardcoded value, never a weakened comparison. Gate line: `tests/review/review-driver.test.js` "WHEN the synthetic gate fails…" and `stopped-row-durability.test.js` "WHEN a review running in a linked worktree hard-stops…" deep-equal failures on a row carrying `sessionTokens: null` (the shared re-run builder in each file gets the same one-liner). `[asked: add to scope — fix the two tests in this build]` `[no-ac: test-only scope widening; the two reconstruction cases' existing deep-equal pins are the oracle, assertions unchanged]` | Rules § Gotchas: a reconstruction test inherits the script's untouched default, so it must be fed the observed row's field (the changed-default trigger). |
 
 ## File Plan
 
@@ -44,6 +47,8 @@ value and position, and every failure to read degrades to `null`, never an error
 | tests/provenance/provenance.test.js | MODIFY | tests | AC-20261029-02-1, AC-20261029-02-2, AC-20261029-02-4, AC-20261029-02-5, AC-20261029-02-6 |
 | tests/build/build-driver-commit.test.js | MODIFY | tests | AC-20261029-02-3 |
 | tests/review/review-driver.test.js | MODIFY | tests | AC-20261029-02-7 |
+| tests/review/stopped-row-durability.test.js | MODIFY | tests | D7 — re-run builder threads the observed row's `sessionTokens` (no AC: pre-existing pins, unchanged assertions) |
+| tests/helpers.js | MODIFY | tests | D7 (same test-only ruling, fix round) — `assistantUsageLine(id, counters)` extracted from three identical fixture builders the reviewer flagged as duplication |
 
 ## Contracts
 
@@ -82,7 +87,7 @@ as the last key, or `"sessionTokens": null`.
 - **AC-20261029-02-2**: WHEN the stamp is absent, OR the stamped transcript file is missing, OR the transcript holds only lines without a `message.usage` object THE SYSTEM SHALL return `null` from `sessionUsage(root)` without throwing (e.g. transcript `[{type:"user"},{type:"assistant", message:{model:"claude-opus-5"}}]` → `null`) → writes tests/provenance/provenance.test.js
 - **AC-20261029-02-3**: WHEN the build driver creates its sidecar while the stamped transcript sums to `{output:160, turns:1}` and later reaches DONE while it sums to `{output:726, turns:2}` (inputs likewise grown) THE SYSTEM SHALL append a row whose LAST key is `sessionTokens` deep-equal to the counter-wise difference (e.g. `output: 566`, `turns: 1`), whose keys immediately after `tier` are still `via, model`; and WHEN no stamp exists at either moment THE SYSTEM SHALL write `"sessionTokens": null` as the last key → writes tests/build/build-driver-commit.test.js
 - **AC-20261029-02-4**: WHEN `verdict.js` runs a review-profile `--ledger` pass with `--via loop --model claude-opus-5 --sessionTokens '{"input":1,"cacheCreate":2,"cacheRead":3,"output":4,"turns":1}'` THE SYSTEM SHALL print a row whose keys begin `ts, spec, stage, tier, via, model, runId`, whose `checkpoint` key (when passed) sits immediately after `verdict`, and whose LAST key is `sessionTokens` deep-equal to that object → writes tests/provenance/provenance.test.js
-- **AC-20261029-02-5**: WHEN `verdict.js` runs a review-profile `--ledger` pass without `--sessionTokens` THE SYSTEM SHALL print a row with no `sessionTokens` key, byte-identical (minus `ts`) to the pre-change row for the same inputs (e.g. keys `[…, "verdict"]` end there) → writes tests/provenance/provenance.test.js
+- **AC-20261029-02-5**: WHEN `verdict.js` runs a review-profile `--ledger` pass without `--sessionTokens` THE SYSTEM SHALL print a row with no `sessionTokens` key, byte-identical (minus `ts`) to the pre-change row for the same inputs (e.g. the key list ends at the pre-change last key — `verify` on the AC's own manifest-plus-workflow fixture — with no `sessionTokens` after it) → writes tests/provenance/provenance.test.js
 - **AC-20261029-02-6**: WHEN `verdict.js` receives `--sessionTokens not-json`, OR `--sessionTokens '[1]'`, OR `--sessionTokens '{}' --profile release` THE SYSTEM SHALL exit 2 with stderr containing `--sessionTokens` and print no row (e.g. `--sessionTokens '{}' --profile release` → exit 2; `--sessionTokens null` on the review profile → exit 0 with `"sessionTokens": null` last) → writes tests/provenance/provenance.test.js
 - **AC-20261029-02-7**: WHEN the review driver runs a verdict pass with a stamped transcript present THE SYSTEM SHALL invoke `verdict.js` with `--sessionTokens` followed by a JSON object or `null` immediately after the `--model` pair (e.g. argv `[…, '--via','loop','--model','claude-opus-5','--sessionTokens','{"input":…}', '--checkpoint', …]`; a driver sidecar with no `tokensAtStart` → `--sessionTokens null`) → writes tests/review/review-driver.test.js
 ## Assumptions (escalation triggers)
@@ -132,6 +137,19 @@ purpose — place the new key last.
 
 Rejected: writing cost in dollars. Prices change per model and per provider; counters are
 stable, and a reader can price them later from the `model` field on the same row.
+
+Deviations folded at close (one-offs): AC-7's test observes the close row's `sessionTokens` last
+key rather than the verdict.js argv, because the review driver spawns verdict.js by absolute
+`process.execPath` path with no env seam; the row observation exercises the same `viaModelArgs`
+path end to end. The review driver re-appends `sessionTokens` after its post-hoc `gotchas`/`tests`
+keys so the Contracts' "always the last key" holds, and a shared `usageDelta` helper in
+`lib/session-stamp.js` implements the D2/D4 delta rule once for both drivers.
+
+### Advisory debt (review rv_16a3e3cf601f)
+- a0 tests/review/stopped-row-durability.test.js:223 — The fix commit's subject says 'every-pass carriage pinned', but only two of the three verdict passes are now pinned (hard-stop via the new anti-vacuity asserts, close via AC-7). The escalate pass at spec-review-driver.js:1027 still has no test asserting that its row carries sessionTokens, so the prior D4 soft is only partly addressed.
+- a1 specs/20261029/02-session-tokens-on-ledger-rows.md:36 — The D7 text is still partly wrong: (a) it says stopped-row-durability.test.js holds 'two byte-equality reconstruction cases' while the corrected Gate line puts one case in review-driver.test.js and the file holds one threading site; (b) the new no-ac reason says 'assertions unchanged' but this fix round added an assert.ok('sessionTokens' in appended) to both reconstruction cases (additive, but the sentence is false).
+- a2 specs/20261029/02-session-tokens-on-ledger-rows.md:51 — The fix round added tests/helpers.js to the locked File Plan citing 'D7 (same test-only ruling, fix round)', but D7's asked sanction was for one file. Extending an asked scope ruling to a new file without a new ask bends D7's intent. The change itself is harmless: additive, test-only, the extraction the prior duplication soft named.
+- a3 spec/scripts/lib/session-stamp.js:6 — The session-stamp.js header now says the transcript is 'read whole, scanned line by line' (accurate), while spec D1 still says it 'streams the WHOLE stamped transcript line by line'; the code comment now openly contradicts the spec.
 
 ## Canonical Delta
 

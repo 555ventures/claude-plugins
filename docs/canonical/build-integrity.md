@@ -167,3 +167,11 @@ never-blocking `spec-session-stamp.sh` prompt hook writes on every `/spec:` prom
 transcript format is internal to Claude Code; the reader fails soft to `null`. The session
 model is deliberately not read at prompt time — the transcript is empty right after a
 `/clear`.
+
+Build and review rows also carry `sessionTokens` as their last key: the orchestrating session's
+own transcript usage during that stage — `input`, `cacheCreate`, `cacheRead`, `output` token
+counters and `turns` — as a delta between sidecar creation and row write, deduplicated by
+message id because the transcript repeats a message's usage on every content-block line (lines
+without an id are not counted). `null` when the stamp or transcript is absent or the stamp moved
+to another transcript mid-stage. Subagent spend is not included; the name says so.
+(specs/20261029/02-session-tokens-on-ledger-rows.md)

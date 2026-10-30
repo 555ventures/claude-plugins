@@ -372,7 +372,15 @@ function sweepRetiredLiteral (literal, { citations = [], waivedPaths = [], waive
   return offenders
 }
 
+// One assistant transcript row carrying a usage object; the shape session-stamp.js sums.
+function assistantUsageLine(id, { input, cacheCreate, cacheRead, output }) {
+  const message = { model: 'claude-opus-5', usage: { input_tokens: input, cache_creation_input_tokens: cacheCreate, cache_read_input_tokens: cacheRead, output_tokens: output } }
+  if (id !== undefined && id !== null) message.id = id
+  return { type: 'assistant', message }
+}
+
 module.exports = {
+  assistantUsageLine,
   ROOT, SPEC, read, extractFn, evalFns, checkWorkflowSyntax, tmpdir, runNode, runBash, gitRepo,
   freePort, parseFlatDom, sweepRetiredLiteral,
 }

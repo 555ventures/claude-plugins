@@ -4,7 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
-const { tmpdir, runNode, runBash, gitRepo } = require('../helpers')
+const { tmpdir, runNode, runBash, gitRepo, assistantUsageLine } = require('../helpers')
 const { GREEN_TEST, specBody, makeHost, run, stateOf, toReviewer, returnFileWith, CLEAN_RETURN, SURVIVOR_RETURN } = require('./review-driver.fixtures')
 
 // Shard A of the review-driver family (split from review-driver.test.js by
@@ -120,6 +120,9 @@ test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO) / AC-20260824-
   assert.strictEqual(appended.model, null,
     'AC-20260901-02-4/A6: a host with no .claude/spec-session.json stamp must derive model:null on the appended row, never a thrown error or a fabricated value: ' + JSON.stringify(appended))
 
+  assert.ok('sessionTokens' in appended,
+    'specs/20261029/02 D4: every verdict pass carries --sessionTokens, so the hard-stop row must have the key — without this the threading below would be skipped vacuously: ' + JSON.stringify(appended))
+
   // Reproducibility check for "byte-equal to verdict.js's stdout line 2": feeding verdict.js the
   // SAME manifest with the exact tier/diff/iteration/runId/base-sha/head-sha/dirty/via/model the
   // driver's own row recorded must reproduce an identical row (every field but the call-time
@@ -139,6 +142,8 @@ test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO) / AC-20260824-
   }
   reArgs.push('--via', appended.via)
   if (appended.model !== null && appended.model !== undefined) reArgs.push('--model', appended.model)
+  // specs/20261029/02 D7: thread the observed row's own sessionTokens field back onto the re-run.
+  if ('sessionTokens' in appended) reArgs.push('--sessionTokens', JSON.stringify(appended.sessionTokens))
   // AC-20260901-09-13/D6: the driver now threads a derived --checkpoint onto every review verdict
   // pass (both via values) — a GATE_RED hard-stop row is always "not-reached" (no disposer mark
   // can exist before LEGS even finishes). Omitting this from the re-run would make the deep-equal
@@ -664,4 +669,57 @@ test('AC-20260912-03-10 (also AC-20260901-02-4, AC-20260901-09-6, rewritten in p
     'a run with no .claude/spec-session.json stamp anywhere must carry model:null on its appended CLOSE row: ' + JSON.stringify(directRow))
   assert.deepStrictEqual(directRow.checkpoint, { outcome: 'empty' },
     'AC-20260901-09-6: a run created without --via must ALSO carry checkpoint:{"outcome":"empty"} on its close row — D6 threads the derived outcome onto every review verdict pass regardless of via: ' + JSON.stringify(directRow))
+})
+
+// AC-20261029-02-7: the driver threads --sessionTokens (delta since sidecar creation, or null)
+// onto the verdict pass. The driver spawns verdict.js by absolute path with no argv-capturing
+// seam, so the argv is observed through its only effect: the row verdict.js prints from it.
+function usageLine7(id, input, cacheCreate, cacheRead, output) {
+  return assistantUsageLine(id, { input, cacheCreate, cacheRead, output })
+}
+
+function closeRowWithStamp(name, mutateSidecar) {
+  const host = makeHost()
+  fs.mkdirSync(path.join(host.root, '.claude'), { recursive: true })
+  // transcript lives outside the host root (stamp transcript_path is absolute) and the stamp is
+  // excluded from the host's git view, so the reconcile leg sees no stray untracked files.
+  const transcript = path.join(tmpdir('rvdrv-transcript-'), 'transcript.jsonl')
+  fs.appendFileSync(path.join(host.root, '.git', 'info', 'exclude'), '\n.claude/spec-session.json\n')
+  fs.writeFileSync(transcript, JSON.stringify(usageLine7('B', 32, 409, 81508, 160)) + '\n')
+  fs.writeFileSync(path.join(host.root, '.claude/spec-session.json'), JSON.stringify({
+    session_id: 's1', transcript_path: transcript, cwd: host.root, ts: new Date().toISOString()
+  }))
+  const rInit = run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER',
+    'setup precondition (' + name + '): the first invocation must create the sidecar and reach REVIEWER: ' + rInit.stdout + rInit.stderr)
+  if (mutateSidecar) {
+    const file = path.join(host.sidecar, 'review-state.json')
+    const state = JSON.parse(fs.readFileSync(file, 'utf8'))
+    mutateSidecar(state)
+    fs.writeFileSync(file, JSON.stringify(state))
+  }
+  fs.appendFileSync(transcript, [usageLine7('A', 2, 2125, 82077, 566), usageLine7('A', 2, 2125, 82077, 566)].map((l) => JSON.stringify(l)).join('\n') + '\n')
+  const r = run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-st-' + name, CLEAN_RETURN))
+  assert.strictEqual(r.status, 0, 'setup precondition (' + name + '): a zero-survivor reviewer-returned mark must close cleanly: ' + r.stdout + r.stderr)
+  const rows = fs.readFileSync(path.join(host.root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').filter(Boolean)
+  return JSON.parse(rows[rows.length - 1])
+}
+
+test('AC-20261029-02-7: the review driver passes --sessionTokens with the deduplicated delta since sidecar creation on the verdict pass so the close row ends with it, and a sidecar lacking tokensAtStart yields sessionTokens:null', () => {
+  const row = closeRowWithStamp('delta', null)
+  const keys = Object.keys(row)
+  assert.strictEqual(keys[keys.length - 1], 'sessionTokens',
+    'the driver must append --sessionTokens to the verdict pass argv so the close row carries it as its last key: ' + JSON.stringify(row))
+  assert.deepStrictEqual(row.sessionTokens, { input: 2, cacheCreate: 2125, cacheRead: 82077, output: 566, turns: 1 },
+    'the review row must carry the stage\'s own spend — usage at row-write minus the snapshot at sidecar creation, duplicate lines counted once: ' + JSON.stringify(row))
+
+  const nullRow = closeRowWithStamp('nostart', (state) => {
+    delete state.tokensAtStart
+    if (state.marks) delete state.marks.tokensAtStart
+  })
+  const nullKeys = Object.keys(nullRow)
+  assert.strictEqual(nullKeys[nullKeys.length - 1], 'sessionTokens',
+    'a sidecar with no snapshot must still pass --sessionTokens null so the row carries the key: ' + JSON.stringify(nullRow))
+  assert.strictEqual(nullRow.sessionTokens, null,
+    'with no start snapshot the delta is unknowable and must be null, never the whole-session total: ' + JSON.stringify(nullRow))
 })

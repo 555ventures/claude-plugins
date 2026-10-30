@@ -126,7 +126,7 @@ const { parseFilePlanRows, isTestsRow } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
 // model is derived at row-write time (never once at
 // startup) — the review driver's own sibling reasoning applies here too.
-const { sessionModel } = require('./lib/session-stamp.js')
+const { sessionModel, sessionUsage, usageDelta } = require('./lib/session-stamp.js')
 const { CLASS_ID_RE } = require('./lib/escape-row')
 const { extractSection } = require('./lib/spec-sections')
 const appPortLib = require('./lib/app-port')
@@ -424,7 +424,11 @@ if (!STATE_ONLY) {
   // sidecar creation, as "loop" unconditionally — the flag that used to choose between a direct
   // invocation and the loop is gone now that /spec:run is the only entry point, so argv is never
   // consulted here at all.
-  if (marks.via === undefined) marks.via = 'loop'
+  if (marks.via === undefined) {
+    marks.via = 'loop'
+    // session token snapshot at sidecar creation, so the DONE row's sessionTokens is a delta
+    marks.tokensAtStart = sessionUsage(repoRoot)
+  }
   // The lock-time Decision IDs, snapshotted only on the hardened->implementing flip (the one
   // invocation guaranteed to read the locked text); a sidecar-less resume records null and
   // COMMIT skips the comparison rather than counting rows it cannot date.
@@ -1130,6 +1134,9 @@ function handleCommitted() {
       ? { tests: rs.tests, passed: rs.passed === true, looked: rs.looked === true }
       : { owner: false }
   }
+  // sessionTokens is the LAST key: counter-wise delta since sidecar creation, null when either
+  // snapshot is absent or a counter went backwards.
+  row.sessionTokens = usageDelta(sessionUsage(repoRoot), marks.tokensAtStart || null)
   appendLedger(repoRoot, JSON.stringify(row))
   fs.rmSync(sidecarDir, { recursive: true, force: true })
   printDoneNow()

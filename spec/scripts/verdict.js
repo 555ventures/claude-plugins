@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict'
 // verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] [--fixDispatched N]
-//   [--escalated] [--via loop|direct] [--model <id>]
+//   [--escalated] [--via loop|direct] [--model <id>] [--sessionTokens <json-object|null>]
 //   [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] [--iteration N] [--run-id <id>]
 //     [--retain <dir>] [--base-sha <40hex>] [--head-sha <40hex>] [--dirty]]
 //   [--profile release [--milestone <string>] [--briefs N,N,...]] [--require <leg> ...]
@@ -180,6 +180,9 @@
 // remedy, or (checked at arg-parse time before the manifest
 // is read, no verdict word or ledger line printed) a --via value other than "loop"/"direct", or
 // either --via or --model passed with --profile release — the message names --via specifically
+// (and --sessionTokens, review-profile only, exits 2 naming --sessionTokens when the value is
+// neither a JSON object nor the literal null — pass a JSON object or null — or when passed with
+// --profile release; when present it is the row's LAST key, when absent the row gains no key)
 // (never the generic unknown-flag usage line) so a caller can tell the two refusals apart, or
 // (checked at arg-parse time before the manifest is read,
 // no verdict word or ledger line printed, message names --checkpoint specifically) a --checkpoint
@@ -257,6 +260,7 @@ const { unmeasuredReason } = require('./lib/release-unmeasured')
 function usage() {
   console.error('usage: verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] ' +
     '[--fixDispatched N] [--escalated] [--via loop|direct] [--model <id>] ' +
+    '[--sessionTokens <json-object|null>] ' +
     '[--checkpoint <disposer|empty|not-reached> [--checkpoint-overrides N]] ' +
     '[--ledger [--spec <path>] ' +
     '[--tier <T>] [--diff-loc N] [--iteration N] [--run-id <id>] [--retain <dir>] ' +
@@ -268,7 +272,7 @@ let manifestPath = null, workflowPath = null, waived = 0, rejected = 0, fixDispa
 let ledger = false, specArg = null, tier = null, diffLoc = null, iteration = null, profile = 'review'
 let runId = null, milestone = null, briefsArg = null, retainDir = null, escalated = false
 let baseShaArg = null, headShaArg = null, dirtyFlag = false
-let viaArg = null, modelArg = null
+let viaArg = null, modelArg = null, sessionTokensArg = null
 let checkpointArg = null, checkpointReasonArg = null, checkpointOverridesArg = null
 const requireLegs = []
 const argv = process.argv.slice(2)
@@ -296,6 +300,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--dirty') dirtyFlag = true
   else if (a === '--via') viaArg = argv[++i]
   else if (a === '--model') modelArg = argv[++i]
+  else if (a === '--sessionTokens') sessionTokensArg = argv[++i]
   else if (a === '--checkpoint') checkpointArg = argv[++i]
   else if (a === '--checkpoint-reason') checkpointReasonArg = argv[++i]
   else if (a === '--checkpoint-overrides') checkpointOverridesArg = argv[++i]
@@ -341,6 +346,21 @@ if (profile === 'release' && (viaArg !== null || modelArg !== null)) {
   console.error('verdict.js: --via/--model are not valid with --profile release — a release row ' +
     'carries no runId and no reviewer return, so via/model have nothing to key; drop --via/--model')
   process.exit(2)
+}
+let sessionTokens
+if (sessionTokensArg !== null) {
+  if (profile === 'release') {
+    console.error('verdict.js: --sessionTokens is not valid with --profile release — a release row ' +
+      'carries no session spend; drop --sessionTokens')
+    process.exit(2)
+  }
+  let parsed
+  try { parsed = JSON.parse(sessionTokensArg === undefined ? '' : sessionTokensArg) } catch { parsed = undefined }
+  if (parsed === undefined || (parsed !== null && (typeof parsed !== 'object' || Array.isArray(parsed)))) {
+    console.error('verdict.js: --sessionTokens must be a JSON object or null — pass a JSON object or null')
+    process.exit(2)
+  }
+  sessionTokens = parsed
 }
 const via = viaArg || 'direct'
 const model = modelArg !== null ? modelArg : null
@@ -823,6 +843,7 @@ if (ledger) {
       row.verify = workflow.verify
     }
   }
+  if (sessionTokensArg !== null) row.sessionTokens = sessionTokens // LAST key, always
   console.log(JSON.stringify(row))
 
   // Retention is additive to the printed row above — it never changes row's shape or

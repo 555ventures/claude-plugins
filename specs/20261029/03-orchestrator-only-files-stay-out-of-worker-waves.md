@@ -1,6 +1,7 @@
 ---
 date: 2026-10-29
-status: hardened
+status: implementing
+build_base: main
 tier: critical
 area: build
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 brief: n/a
 open_markers: 0
 spiked: 2026-10-29
+diff_base: a5b7078d127d4cc30ed5986a31595f96d93cd469
 ---
 
 # Orchestrator-only files stay out of worker waves
@@ -40,6 +42,7 @@ batch, and a host that does not declare it builds exactly as today.
 | D11 | `/spec:doctor` check 5 gains one advisory: when the host's § Worker Rules names surfaces workers must never edit and the config has no `orchestratorOnly`, or names one no `orchestratorOnly` glob matches, flag it — "the build driver hands these files to workers; add them to orchestratorOnly" [asked: the user's /spec:plan brief directed "/spec:doctor warns when § Worker Rules names read-only surfaces but the key is absent", 2026-10-29] [no-ac: an LLM-run advisory line in doctor.md; no script surface to execute] | Existing hosts get the stale-contract warning (A3) and land in doctor, which then names the missing key |
 | D12 | The spec plugin's version bumps via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` [no-ac: `plugin-bump.js --check` in the gate is the oracle] | Behavior change (pipeline rules § Planning) |
 | D13 | This repo's `.claude/spec.config.json` `contractHash` is re-stamped to the new `spec-paths contract-hash` output in the same change as the contract edit (AC-20261029-03-7) | The contract-stamp pin fails otherwise |
+| D14 | The contract-stamp pin's stale-stamp literal moves from `2dfb46dfcd7a` to `f3547b98c89a` (the pre-image stamp), and AC-20261029-03-7's pointer verb is `rewrites`, so the pin is red on the pre-image and green only after the re-stamp. User ruling at build RED_FINDINGS, 2026-10-29 (AC-20261029-03-7) | The lock wrote `reuses` over a pin whose old literal the pre-image already passes; `unsanctioned-green` refused it. Tightening the literal proves the re-stamp happened (rejected: rewording AC-7 to CONTINUE TO, which leaves the re-stamp unproved) |
 
 ## File Plan
 
@@ -52,7 +55,7 @@ batch, and a host that does not declare it builds exactly as today.
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D12: `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` |
 | .claude/spec.config.json | MODIFY | other | D13: `contractHash` re-stamped to `spec-paths contract-hash` output |
 | tests/build/build-driver-orchestrator-only.test.js | CREATE | tests | AC-20261029-03-1, AC-20261029-03-2, AC-20261029-03-3, AC-20261029-03-4, AC-20261029-03-5, AC-20261029-03-6 |
-| tests/consistency/contract-stamp.test.js | MODIFY | tests | AC-20261029-03-7 — retag the reused AC-20260912-15-8 pin's title with this AC-ID, assertion unchanged |
+| tests/consistency/contract-stamp.test.js | MODIFY | tests | AC-20261029-03-7 — retag the AC-20260912-15-8 pin's title with this AC-ID and move its stale-stamp literal to `f3547b98c89a` (D14) |
 
 ## Contracts
 
@@ -114,7 +117,7 @@ in the driver checks it against the printed layers.
 - **AC-20261029-03-4**: WHEN `orchestratorOnly` is `["main.py"]`, the api wave holds `main.py | MODIFY | api` and `src/api/deps.js | MODIFY | api`, and the build has reached `REPAIR` after a red gate THE SYSTEM SHALL print the routing line `  api: src/api/deps.js` (without `main.py`) followed by the line `orchestrator-owned — fix these yourself, never route them to a worker: main.py` (e.g. those two literal lines, in that order) → writes tests/build/build-driver-orchestrator-only.test.js
 - **AC-20261029-03-5**: WHEN the host config has no `orchestratorOnly` key and the File Plan holds `src/foo.js | MODIFY | scripts` and `src/bar.js | CREATE | scripts` THE SYSTEM SHALL CONTINUE TO print at `WAVE:scripts` one `layer: scripts` block listing both `{"path":"src/foo.js","action":"MODIFY"}` and `{"path":"src/bar.js","action":"CREATE"}`, with no line starting `  orchestrator` (e.g. today's step body, unchanged) → writes tests/build/build-driver-orchestrator-only.test.js
 - **AC-20261029-03-6**: WHEN the host config declares `"orchestratorOnly": "main.py"` (a string, not an array) THE SYSTEM SHALL exit 2 on a bare driver invocation with stderr exactly `spec-build-driver: orchestratorOnly in .claude/spec.config.json must be an array of path globs (got "main.py") — fix it, or remove the key to route every row by layer`, and the spec's frontmatter `status` SHALL stay `hardened` (e.g. `"main.py"` → exit 2, `status: hardened`) → writes tests/build/build-driver-orchestrator-only.test.js
-- **AC-20261029-03-7**: WHEN this repo's `.claude/spec.config.json` is read after the contract edit THE SYSTEM SHALL carry a `contractHash` equal to `spec-paths contract-hash` output, which is no longer `f3547b98c89a` (e.g. stamp == `spec-paths contract-hash` stdout) → reuses tests/consistency/contract-stamp.test.js :: AC-20260912-15-8
+- **AC-20261029-03-7**: WHEN this repo's `.claude/spec.config.json` is read after the contract edit THE SYSTEM SHALL carry a `contractHash` equal to `spec-paths contract-hash` output, which is no longer `f3547b98c89a` (e.g. stamp == `spec-paths contract-hash` stdout) → rewrites tests/consistency/contract-stamp.test.js :: AC-20260912-15-8
 
 ## Assumptions (escalation triggers)
 

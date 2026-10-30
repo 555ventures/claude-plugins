@@ -77,9 +77,17 @@
 // review's ac-matrix (rationale). It never creates, enters, or leaves a worktree (build_base
 // stays /git:enter-worktree's field).
 //
+// The host's optional `orchestratorOnly` config key (array of lib/glob-match.js path globs) names
+// files only the orchestrator may change. A File Plan path matching one never enters a worker's
+// file list: the WAVE step prints it in an `orchestrator` block inside its own wave, the REPAIR
+// step names it as orchestrator-owned, and `--mark wave-done` still verifies it like any other
+// row. Key absent -> every row routes by layer; key present but not an array of strings -> every
+// invocation exits 2 before any state change.
+//
 // Exit codes: 0 = step printed / mark accepted / --state printed
 //             2 = precondition failure or refused mark (stderr names the artifact + remedy;
-//                 state unchanged) — includes env-preflight exit non-zero (its output printed
+//                 state unchanged) — includes a malformed `orchestratorOnly` config key (stderr
+//                 names the value and the remedy), and includes env-preflight exit non-zero (its output printed
 //                 verbatim), red-check exit 2 (a usage/config failure, not the resume-skip
 //                 case, which is handled without ever invoking red-check), an unresolved gate
 //                 ({gate:null} from lib/gate-resolve.js), a fourth repair-applied past the
@@ -112,7 +120,7 @@ const path = require('path')
 const crypto = require('crypto')
 const { runChild, runHost, writeOut, appendLedger, loadSidecar, saveSidecar: saveSidecarLib } = require('./lib/driver-io')
 const { fmValue } = require('./lib/frontmatter')
-const { readConfig } = require('./lib/host-config')
+const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
 const { parseFilePlanRows, isTestsRow } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
@@ -171,6 +179,16 @@ const sidecarRel = path.relative(repoRoot, sidecarDir)
 const deviationsPath = resolvedSpecPath.replace(/\.md$/, '.deviations.md')
 const gateCapPath = path.join(sidecarDir, 'gate-cap')
 const hostConfig = readConfig(repoRoot)
+const orchestratorOnly = (() => {
+  const v = hostConfig.orchestratorOnly
+  if (v === undefined) return []
+  if (!Array.isArray(v) || !v.every((g) => typeof g === 'string')) {
+    die('orchestratorOnly in ' + CONFIG_RELPATH + ' must be an array of path globs (got ' +
+      JSON.stringify(v) + ') — fix it, or remove the key to route every row by layer')
+  }
+  return v
+})()
+const isOrchestratorOnly = (p) => orchestratorOnly.some((g) => globMatch(g, p))
 const pipelineRulesPath = (() => {
   const rel = hostConfig.pipelineRules
   if (!rel || typeof rel !== 'string') return null
@@ -1237,20 +1255,32 @@ function waveStepBody(label) {
     : ''
   const agentMap = hostConfig.agentMap || {}
   const perLayer = new Map()
+  const orchFiles = []
   for (const r of rows) {
     const layer = (r.layer || 'other').trim() || 'other'
-    if (!perLayer.has(layer)) perLayer.set(layer, [])
-    for (const p of r.paths) perLayer.get(layer).push({ path: p, action: r.action })
+    for (const p of r.paths) {
+      if (isOrchestratorOnly(p)) { orchFiles.push({ path: p, action: r.action }); continue }
+      if (!perLayer.has(layer)) perLayer.set(layer, [])
+      perLayer.get(layer).push({ path: p, action: r.action })
+    }
   }
-  const body = [...perLayer.entries()].map(([layer, files]) => {
+  const layerBlocks = [...perLayer.entries()].map(([layer, files]) => {
     const agent = agentMap[layer] || agentMap.default || 'general-purpose'
     return `  layer: ${layer}  agent: ${agent}\n` + files.map((f) => '    ' + JSON.stringify(f)).join('\n')
-  }).join('\n')
+  })
+  const orchBlock = orchFiles.length
+    ? `  orchestrator — never in a worker's file list; change each through its route in pipeline rules § Worker Rules, before dispatch when a worker's files depend on it, else after the workers return:\n` +
+      orchFiles.map((f) => '    ' + JSON.stringify(f)).join('\n')
+    : null
+  const body = [...layerBlocks, ...(orchBlock ? [orchBlock] : [])].join('\n')
+  const header = (perLayer.size === 0 && orchBlock)
+    ? `## Step: wave ${label} — orchestrator rows only, spawn no worker\n`
+    : `## Step: wave ${label} — spawn one long-lived Agent {model: sonnet} per layer above and KEEP it\n`
   const skippedNote = skippedWaves.length
     ? `empty wave(s) skipped — no File Plan rows: ${skippedWaves.join(', ')}\n`
     : ''
   return skipNote + skippedNote +
-    `## Step: wave ${label} — spawn one long-lived Agent {model: sonnet} per layer above and KEEP it\n` +
+    header +
     body + '\n' +
     `spec: ${specPath}\n` +
     `pipeline rules: ${pipelineRulesPath || '(none declared)'}\n` +
@@ -1276,6 +1306,7 @@ function repairStepBody() {
   const current = runs[runs.length - 1]
   const previous = runs[runs.length - 2]
   const roundLabel = marks.capEverTripped ? `round ${round} (re-armed past the cap of 3)` : `round ${round} of 3`
+  const orchPaths = waveOrder.flatMap((w) => w.rows.flatMap((r) => r.paths)).filter(isOrchestratorOnly)
   const postGate = resolvePostGate()
   const postGateLine = postGate !== null
     ? `\npost-gate: ${postGate} — red only after the scoped gate passed; find '== postGateCommand' in the log`
@@ -1285,7 +1316,12 @@ function repairStepBody() {
     postGateLine +
     (previous ? `\nprevious gate: ${previous.log}` : '') + '\n' +
     `File Plan rows by layer, so failures route to the worker that owns them:\n` +
-    waveOrder.map((w) => `  ${w.label}: ` + w.rows.flatMap((r) => r.paths).join(', ')).join('\n') + '\n' +
+    waveOrder.map((w) => ({ label: w.label, paths: w.rows.flatMap((r) => r.paths).filter((p) => !isOrchestratorOnly(p)) }))
+      .filter((w) => orchestratorOnly.length === 0 || w.paths.length > 0)
+      .map((w) => `  ${w.label}: ` + w.paths.join(', ')).join('\n') + '\n' +
+    (orchPaths.length
+      ? `orchestrator-owned — fix these yourself, never route them to a worker: ${orchPaths.join(', ')}\n`
+      : '') +
     `Route each failing file to the worker that owns its layer (SendMessage; spawn fresh only if ` +
     `that worker is gone). Then:\n` +
     `Then: node ${__filename} ${specPath} --mark repair-applied --continued <n> --spawned <n>`

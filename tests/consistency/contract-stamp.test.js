@@ -22,7 +22,7 @@ const DOCTOR_REL = 'spec/commands/doctor.md'
 const COVERAGE_SCOPE_REL = 'spec/scripts/coverage-scope.js'
 
 
-test('AC-20260912-15-8 (reused by AC-20260926-02-9, AC-20260930-01-6, AC-20261001-01-17): WHEN this repo\'s .claude/spec.config.json is read THE SYSTEM carries a contractHash equal to the first 12 characters of the SHA-256 of spec/templates/grounding-contract.md as spec-paths contract-hash prints it, and the value is not the pre-edit stale stamp', () => {
+test('AC-20260912-15-8 (reused by AC-20260926-02-9, AC-20260930-01-6, AC-20261001-01-17, AC-20261029-03-7): WHEN this repo\'s .claude/spec.config.json is read THE SYSTEM carries a contractHash equal to the first 12 characters of the SHA-256 of spec/templates/grounding-contract.md as spec-paths contract-hash prints it, and the value is not the pre-edit stale stamp', () => {
   const cfgPath = path.join(ROOT, '.claude/spec.config.json')
   assert.ok(fs.existsSync(cfgPath), '.claude/spec.config.json must exist for this pin to mean anything')
   const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
@@ -37,7 +37,7 @@ test('AC-20260912-15-8 (reused by AC-20260926-02-9, AC-20260930-01-6, AC-2026100
     'sanity: spec-paths contract-hash must itself agree with a plain SHA-256 of the contract file, or this pin ' +
     'is checking the wrong thing: ' + JSON.stringify({ fromScript, expected }))
 
-  assert.notStrictEqual(cfg.contractHash, '2dfb46dfcd7a',
+  assert.notStrictEqual(cfg.contractHash, 'f3547b98c89a',
     'D8: the pre-edit stale stamp must not survive the contract rewrite — a still-stale hash here means the ' +
     'contract was rewritten (or the re-stamp forgotten) without re-running node "$(spec-paths contract-hash)"')
   assert.strictEqual(cfg.contractHash, expected,

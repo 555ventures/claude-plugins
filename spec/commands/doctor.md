@@ -39,7 +39,10 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
 5. **Pipeline rules shape & scoping** — the file at `pipelineRules` exists with all seven
    contract-required sections and opens with the `paths:` frontmatter § Session grounding
    requires. Sweep every `.claude/rules/**/*.md` carrying `paths:` frontmatter: each glob
-   must match ≥1 tracked file — a zero-match glob is a rule that silently never loads.
+   must match ≥1 tracked file — a zero-match glob is a rule that silently never loads. Advisory: when § Worker Rules names
+   surfaces workers must never edit and the config has no `orchestratorOnly`, or names one
+   that no `orchestratorOnly` glob matches, flag it — "the build driver hands these files to
+   workers; add them to orchestratorOnly".
 6. **Scripts & commands** — `patternsScript` exists, is executable, exits 0; `driftScript`
    (if declared) exists; each command referenced by `gateCommand` / `testCommand` /
    `setupCommand` resolves by name (never run the gate here). Session grounding:

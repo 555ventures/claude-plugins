@@ -197,7 +197,9 @@ orchestrator owns all git and checkpoint-commits after each green phase.
 
 Hosts declare generated/managed surfaces (and their sanctioned change routes) in pipeline
 rules § Worker Rules. Nobody edits them by hand; changes go through the declared tool. The
-pattern sweep and the reviewer treat hand-edits to them as hard findings.
+pattern sweep and the reviewer treat hand-edits to them as hard findings. The machine-readable home of the orchestrator-only subset is the config key
+`orchestratorOnly` (see the grounding contract's § Required config keys); the build driver
+routes matching File Plan rows to the orchestrator, never to a worker.
 
 ## MCP Policy
 

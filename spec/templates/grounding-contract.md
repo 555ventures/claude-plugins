@@ -23,6 +23,11 @@ the design stage's gate/repair paths run; absent = legacy mode, no preflight),
 regex-escaped, anchored title and appends the fragment to `testCommand` ahead of the file path
 to verify that one declared test rather than its whole file; absent = every file keeps today's
 per-file classification),
+`orchestratorOnly` (array of repo-relative path globs in `lib/glob-match.js` syntax — `**` any run
+of segments, `*` within one segment, everything else literal, no braces — naming the host's
+orchestrator-only File Plan paths; the build driver never lists a matching row in a worker's
+file list and prints it as a line the orchestrator applies itself; absent = every row routes
+by layer),
 `design`
 (`{ "kit": "<dir>", "tokens": "<file>", "rules": "<file>", "app"?: "<dir>" }` — present = the
 host has a UI stack; `kit` (the directory of intent-named composite components), `tokens` (the

@@ -56,7 +56,7 @@ pipeline rules § Risk Tiers lists its triggers — plus the universal
 process-boundary trigger: boot-path code (process/plugin registration, env/config schema,
 runtime wiring, signal handling). Critical tier means: literal examples on every AC (refused at lock by `ac-matrix --lint`),
 spike-verified assumptions, and the user confirms the lock. Mid-build evidence of a critical
-trigger upgrades the tier immediately (note it in the spec).
+trigger upgrades the tier immediately (note it in the spec). A non-empty Data Model is critical by construction (refused at lock by `decision-lint`).
 
 ## Runtime Verification
 

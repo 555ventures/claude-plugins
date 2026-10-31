@@ -13,13 +13,26 @@
 // lib/spec-sections.js's DECISION_LINT_APPLIES_FROM (a path with no `specs/<YYYYMMDD>/` segment
 // is linted in full).
 //
+// Structural checks (specs/20261029/05; applicable from STRUCTURAL_LINT_APPLIES_FROM): a
+// `breaking: true` spec needs a live Decision tagged [asked:] or [breaking:]; a File Plan row
+// whose basename is a dependency manifest or lockfile prints a notice and must name its packages
+// in backticks in its Summary (or say `no dependency change`); a non-empty ## Data Model needs
+// `tier: critical` and an `existing rows:` line. MANIFEST basenames (closed set, no host
+// configuration): package.json, package-lock.json, npm-shrinkwrap.json, pnpm-lock.yaml,
+// yarn.lock, bun.lockb, bun.lock, pyproject.toml, poetry.lock, Pipfile, Pipfile.lock,
+// requirements*.txt, Cargo.toml, Cargo.lock, go.mod, go.sum, Gemfile, Gemfile.lock,
+// composer.json, composer.lock.
+//
 // Deliberately does NOT: write a manifest or ledger row, render a report, verify an `[asked:]`
 // attestation beyond non-emptiness, read spec-queue.json itself (it spawns spec-queue.js), or
 // accept any allow-list file or failure-class enum.
 //
 // Stdout: `decision-lint: restrictions=<R> deferrals=<F> findings=<N>` then one
 // `  <class> <Dn>: <detail>` line per finding; --json prints one object
-// { findings: [{ severity, class, id, detail }], counts: { restrictions, deferrals } }.
+// { findings: [{ severity, class, id, detail }], counts: { restrictions, deferrals, breaking,
+// dependencyRows, dataModel }, notices: [{ kind: 'dependency-row', path }] }. Dependency notices
+// (`📌 adds or changes dependencies — <path> (veto anytime)`) print after the finding lines and
+// never change the exit code.
 //
 // Exit codes:
 //   0  no findings (including a not-applicable pre-cutoff spec)
@@ -30,10 +43,13 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
-const { extractSection, DECISION_LINT_APPLIES_FROM } = require('./lib/spec-sections')
+const { extractSection, DECISION_LINT_APPLIES_FROM, STRUCTURAL_LINT_APPLIES_FROM } = require('./lib/spec-sections')
+const { fmValue } = require('./lib/frontmatter')
+const { parseFilePlanRows } = require('./lib/file-plan')
 const { readConfigStrict, configExists, CONFIG_RELPATH } = require('./lib/host-config')
 const { writeOut } = require('./lib/driver-io')
 
+const MANIFEST_RE = /^(package\.json|package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb|bun\.lock|pyproject\.toml|poetry\.lock|Pipfile|Pipfile\.lock|requirements[^/]*\.txt|Cargo\.toml|Cargo\.lock|go\.mod|go\.sum|Gemfile|Gemfile\.lock|composer\.json|composer\.lock)$/
 const RESTRICT_RE = /\b(cannot|can't|may not|must not|never)\s+(be\s+)?(edit|delet|undo|undone|restor|reassign|reactivat|renam|remov|fix|correct)\w*|\b(immutable|write-once|frozen to)\b|\bonly (an? |the )?[A-Z][a-z]+s? (can|may)\b|\b(restricted|limited) to (an? |the )?[A-Z][a-z]+s?\b|\brequires? a reason\b|\bwith(out)? (a )?reason only\b/i
 const DEFER_RE = /\b(in|to|for) a (later|follow-up|future|separate) spec\b|\bnot (offered|now|in this spec)\b|\bdeferred (to|until)\b|\b(later|follow-up|future) spec\b|\bcheap(ly)? later\b|\babsent now\b/i
 const QUEUE_ID_RE = /\bq\d+\b/g
@@ -139,12 +155,42 @@ for (const row of rows) {
   }
 }
 
-const counts = { restrictions, deferrals }
+let breaking = 0, dataModel = 0
+const notices = []
+if (!dateMatch || dateMatch[1] >= STRUCTURAL_LINT_APPLIES_FROM) {
+  if (fmValue(specText, 'breaking') === 'true') {
+    breaking = 1
+    const tagged = rows.some(r => tagTexts(r, 'asked').some(Boolean) || tagTexts(r, 'breaking').some(Boolean))
+    if (!tagged) push('breaking-unasked', 'frontmatter', 'breaking: true has no reader — add [breaking: <what breaks for whom>] or [asked: <what the user chose>] to the Decision that introduces the break')
+  }
+
+  for (const r of parseFilePlanRows(specText)) {
+    for (const p of r.paths) {
+      if (!MANIFEST_RE.test(path.basename(p))) continue
+      if (r.summary === 'no dependency change') continue
+      notices.push({ kind: 'dependency-row', path: p })
+      if (r.summary === null || !/`[^`]+`/.test(r.summary)) {
+        push('missing-dependency-names', p, p + ' adds or changes dependencies but its Summary names no package — write the packages in backticks (adds `zod@3`) or the literal `no dependency change`')
+      }
+    }
+  }
+
+  const dm = extractSection(specText, 'Data Model')
+  const dmBody = dm === null ? '' : dm.replace(/\{\s*Persistence changes:[\s\S]*?\}/, '').trim()
+  if (dmBody) {
+    dataModel = 1
+    if (fmValue(specText, 'tier') !== 'critical') push('data-model-requires-critical', 'Data Model', '## Data Model is non-empty — a persisted-data change is tier: critical (core § Tiers); set tier: critical or remove the section')
+    if (!/^existing rows:\s*\S/m.test(dmBody)) push('missing-existing-rows-line', 'Data Model', '## Data Model has no `existing rows:` line — add `existing rows: unaffected` or `existing rows: <what changes>` on its own line')
+  }
+}
+
+const counts = { restrictions, deferrals, breaking, dependencyRows: notices.length, dataModel }
 if (jsonOut) {
-  writeOut(1, JSON.stringify({ findings, counts }, null, 2) + '\n')
+  writeOut(1, JSON.stringify({ findings, counts, notices }, null, 2) + '\n')
 } else {
   const out = ['decision-lint: restrictions=' + restrictions + ' deferrals=' + deferrals + ' findings=' + findings.length]
   for (const f of findings) out.push('  ' + f.class + ' ' + f.id + ': ' + f.detail)
+  for (const n of notices) out.push('📌 adds or changes dependencies — ' + n.path + ' (veto anytime)')
   writeOut(1, out.join('\n') + '\n')
 }
 process.exit(findings.length ? 1 : 0)

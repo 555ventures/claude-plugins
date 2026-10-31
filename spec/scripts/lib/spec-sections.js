@@ -112,6 +112,10 @@ const V7_APPLIES_FROM = '20260817'
 // applying; an earlier-dated spec exits 0 not-applicable instead of producing bulk findings.
 const DECISION_LINT_APPLIES_FROM = '20261016'
 
+// The date decision-lint.js's structural checks (breaking, dependency rows, data model) start
+// applying; specs/20261029/05. An earlier-dated spec is exempt from those three only.
+const STRUCTURAL_LINT_APPLIES_FROM = '20261029'
+
 // The disposition-grammar floor:
 // the date this AC bullet's `→ writes|rewrites|reuses` trailing-pointer grammar shipped. Shared
 // with ac-matrix.js's `--lint` gate so the floor is one literal, not a second copy.
@@ -424,6 +428,6 @@ function parseAcBullets(sectionText) {
 module.exports = {
   AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, V7_APPLIES_FROM, extractSection, parseAcBullets,
   acIdOccurs, rejectedTrailingTagDetail, extractTag, normalizeForPinCheck, pinShape,
-  DISPOSITION_APPLIES_FROM, parseDisposition, DECISION_LINT_APPLIES_FROM, CRITICAL_LINT_APPLIES_FROM,
+  DISPOSITION_APPLIES_FROM, parseDisposition, DECISION_LINT_APPLIES_FROM, STRUCTURAL_LINT_APPLIES_FROM, CRITICAL_LINT_APPLIES_FROM,
   slotRun, trailingRun,
 }

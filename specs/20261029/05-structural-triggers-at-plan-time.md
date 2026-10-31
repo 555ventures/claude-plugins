@@ -1,6 +1,7 @@
 ---
 date: 2026-10-29
-status: hardened
+status: implementing
+build_base: main
 tier: standard           # touches decision-lint.js, two lib parsers, four doctrine files and tests — none is a rules § Risk Tiers surface (no spec-paths key, no grounding-contract edit, no verdict.js/spec-status.js edit)
 area: doctrine
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 brief: n/a
 open_markers: 0
 spiked: 2026-10-31
+diff_base: cc203196fb9f38af3feeb03534afa822e73e1f23
 ---
 
 # Structural triggers at plan time: breaking changes, new dependencies, persisted-data changes

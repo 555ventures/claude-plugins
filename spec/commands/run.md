@@ -33,10 +33,13 @@ derived, each printed as one line:
   `refs/heads/{source}` branch → skip (the build really ran in place; an existing branch is a
   parked worktree build, which Step 3 re-attaches).
 
-A worktree that cannot be created is a **hard stop** — never a fall back to in place. When the
-failure text is `create: run from the main working tree`, the session is inside a different
-spec's worktree: stop and say to exit that worktree first. Any other failure: stop, print the
-error, and name `--in-place` as the deliberate opt-out.
+A worktree that cannot be created is ONE `AskUserQuestion`, never a bare stop and never a silent
+fall back to in place. Print the failure text, then ask. When the failure text starts `create:
+run from the main working tree`, the session is inside a different spec's worktree; the options
+are "exit the other worktree and retry (Recommended)" — nothing changes until you have left it
+and re-run — and "abort" — the run ends here, no branch or worktree is created. For any other
+failure the options are "run in place with `--in-place` (Recommended)" — the loop continues on
+the current branch with no isolation — and "abort" — the run ends here, nothing is created.
 
 ## Routing — derived from disk, in this order
 

@@ -26,7 +26,10 @@ before the ref: `diff_base` → `build_base` → `merge-base HEAD main|master`.
 
 `STOPPED` (a `RED_BLOCKING` gate failure) and `ESCALATE` (a third `fix-applied`, cap 2) are
 terminal states the driver's own printed step names in full — remedy and exits included; read
-that text, never guess one. Every pass's ledger line lands in `.claude/spec-runs.jsonl`,
+that text, never guess one. Each is a question, not a dead stop: `STOPPED` offers one in-session
+repair round (`--mark repair-round`, cap 1; a second red is two exits — queue `/spec:fix` /
+abandon), and `ESCALATE` lists the open findings and asks ONE `AskUserQuestion` (abandon and
+queue `/spec:fix` (Recommended) / waive all / reject with evidence / re-plan). Every pass's ledger line lands in `.claude/spec-runs.jsonl`,
 appended by the driver, never hand-appended.
 
 When the driver prints `DONE`, report (core § Console Output Style) — printed by

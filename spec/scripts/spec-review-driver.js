@@ -2330,18 +2330,41 @@ function finishMerge(mainRootDir, source, wt) {
   printDoneNow(doneNote)
 }
 
+// `--mark repair-round` (STOPPED only, cap 1): the mechanized form of the hand remedy -- delete the
+// stopped iteration's manifest and re-run legs at the same number. Admission is read from the
+// manifest, not deriveState(), so a refused mark has no side effect.
+const REPAIR_ROUND_CAP = 1
+function handleRepairRound() {
+  const n = liveIteration()
+  if (n === 0 || !isRedBlocking(readManifestRows(manifestPathFor(n)))) {
+    die('--mark repair-round refused \u2014 the run is not at STOPPED (state unchanged); re-run `node ' +
+      __filename + ' ' + specPath + '` and execute the step it prints')
+  }
+  if ((marks.repairRounds || 0) >= REPAIR_ROUND_CAP) {
+    die('--mark repair-round refused \u2014 repair round spent (' + REPAIR_ROUND_CAP + ' of ' + REPAIR_ROUND_CAP +
+      '); queue `/spec:fix` or abandon the review (state unchanged)')
+  }
+  marks.repairRounds = (marks.repairRounds || 0) + 1
+  saveSidecar()
+  fs.rmSync(manifestPathFor(n), { force: true })
+  const mode = legsModeFor(n) || {}
+  const r = runLegsIteration(n, { skipsFile: mode.skipsFile || undefined, skipsGateCount: mode.skipsGateCount, fixDelta: !!mode.fixDelta })
+  return r.stopped ? 'STOPPED' : null
+}
+
 function handleMark() {
   switch (MARK) {
     case 'skips-extracted': return handleSkipsExtracted()
     case 'reviewer-returned': return handleReviewerReturned()
     case 'dispositions': return handleDispositions()
     case 'fix-applied': return handleFixApplied()
+    case 'repair-round': return handleRepairRound()
     case 'closed': return handleClosed()
     case 'merge-strategy': return handleMergeStrategy() // exits the process itself
     case 'conflicts-resolved': return handleConflictsResolved() // exits the process itself
     default:
       die('unknown mark "' + MARK + '" (skips-extracted | reviewer-returned | dispositions | ' +
-        'fix-applied | closed | merge-strategy | conflicts-resolved)')
+        'fix-applied | repair-round | closed | merge-strategy | conflicts-resolved)')
   }
 }
 
@@ -2432,7 +2455,7 @@ if (STATE_ONLY) { writeOut(1, state + '\n'); process.exit(0) }
 const manifestPath = manifestPathFor(currentN)
 const outDir = outDirFor(currentN)
 const waivedWarn = (marks.dispositions && marks.dispositions.waived > 0)
-  ? `⚠ ${marks.dispositions.waived} finding(s) waived this run — confirm in the close report.\n`
+  ? `${marks.dispositions.waived} finding(s) waived at DISPOSITIONS (recorded)\n`
   : ''
 // q242: a silent ledger correction is exactly the kind of change that must be visible once, live.
 // Read from marks, so a bare re-invocation parked at MERGE re-prints it.
@@ -2492,6 +2515,24 @@ function acPinDriftLine() {
     `spec(s) have no citing test — node "$(spec-paths ac-drift)" --root . names each\n`
 }
 
+// The open pool in DISPOSITIONS order (hard survivors s<i>, then leg findings) and the one
+// question that routes it. The driver recommends an exit route, never a disposition.
+function escalatePoolBlock() {
+  const { survivors, legs } = dispositionPools(currentN)
+  const open = survivors.length + legs.length
+  const queueAdd = `node "$(spec-paths spec-queue)" add "${specRel}: review escalated at the fix cap \u2014 ${open} open findings" --lane fix --top`
+  return `open findings (${open}):\n` +
+    survivors.map((sv, i) => `  s${i} [hard] ${sv.file}:${sv.line} \u2014 ${sv.claim}`).join('\n') +
+    (survivors.length && legs.length ? '\n' : '') +
+    legs.map((r) => `  leg:${r.leg} exit=${r.exit} count=${countLegFinding(r)}`).join('\n') +
+    (open ? '\n' : '') +
+    `Ask ONE AskUserQuestion \u2014 options:\n` +
+    `  abandon and queue /spec:fix (Recommended) \u2014 delete ${sidecarDir}, then ${queueAdd}\n` +
+    `  waive all and close \u2014 a disposer return with every entry waive, then --mark dispositions --file <return.json>\n` +
+    `  reject with evidence \u2014 every entry reject with the executed contrary evidence quoted, same mark\n` +
+    `  re-plan \u2014 abandon as above, then node "$(spec-paths spec-queue)" add "re-plan ${specRel}: <reason>" --lane plan\n`
+}
+
 const STEPS = {
   STOPPED: () => {
     const rows = readManifestRows(manifestPathFor(marks.stoppedIteration || currentN))
@@ -2508,8 +2549,17 @@ const STEPS = {
       red.map((r) => `❌ ${r.leg} exit=${r.exit} ${JSON.stringify(r.observed)}`).join('\n') +
       `\nmanifest: ${manifestPathFor(marks.stoppedIteration || currentN)}\noutputs: ${outDirFor(marks.stoppedIteration || currentN)}\n` +
       `A GATE_RED ledger line has been appended to ${marks.stoppedLedgerPath}.\n` + remedy +
-      `Remedy: fix the failing leg(s) above, then delete ` +
-      `${sidecarDir} (or just ${manifestPathFor(marks.stoppedIteration || currentN)}) and re-run this driver — it restarts at LEGS with a fresh manifest.`
+      ((marks.repairRounds || 0) >= REPAIR_ROUND_CAP
+        ? `repair round spent (${REPAIR_ROUND_CAP} of ${REPAIR_ROUND_CAP}) \u2014 two exits:\n` +
+          `  queue /spec:fix \u2014 node "$(spec-paths spec-queue)" add "${specRel}: review stopped, repair round spent" --lane fix --top\n` +
+          `  abandon the review \u2014 delete ${sidecarDir}; the GATE_RED row stays on the ledger\n`
+        : `Ask ONE AskUserQuestion \u2014 options, consequences in each description:\n` +
+          `  run one in-session repair round (Recommended) \u2014 fix the failing leg(s) above through the review fix seat ` +
+          `(the host's agentMap; sonnet at effort: medium), commit, then the mark re-runs legs at this iteration; green continues to REVIEWER, ` +
+          `red lands here again with the round spent\n` +
+          `  queue /spec:fix and stop \u2014 node "$(spec-paths spec-queue)" add "${specRel}: review stopped, blocking leg red" --lane fix --top; this review ends\n` +
+          `  abandon the review \u2014 delete ${sidecarDir}; the GATE_RED row stays on the ledger\n` +
+          `Then: node ${__filename} ${specPath} --mark repair-round\n`)
   },
 
   SKIPS: () => `## Step: extract skipped-test names\n` +
@@ -2624,7 +2674,8 @@ const STEPS = {
       `    node ${__filename} ${specPath} --mark dispositions --file <return.json>\n` +
       `  abandon: delete ${sidecarDir} (the <spec>.review sidecar and its manifests) to restart cold — ` +
       `this does NOT reset the cap: the escalate row stays on the ledger and the restarted review's ` +
-      `first fix-applied is refused again until a waive/reject close clears it.\n`
+      `first fix-applied is refused again until a waive/reject close clears it.\n` +
+      escalatePoolBlock()
   },
 
   // the close-commit instruction derives from whether this review is running in-place or in

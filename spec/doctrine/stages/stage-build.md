@@ -27,8 +27,17 @@ observes mid-build is recorded at any live step with `--mark incident --class <i
 `fleet-reader --json`'s `.escapes.registry`); the mark never moves the state.
 
 A red-expected file that passed (`unsanctioned-green`), a carried AC mixing a promise with a
-pin (`mixed-pin` — split the AC, re-run), or a red run recorded `redCheck: "skipped-resume"`
-is diagnosed with the user before the next mark, never laundered past.
+pin (`mixed-pin`), or a red run recorded `redCheck: "skipped-resume"` is never laundered past;
+the RED_FINDINGS step classifies each `HARD <class> <path>` line and prints the rule. `mixed-pin`
+auto-picks splitting the bullet (`📌 Auto-picked split the bullet — <path>: <AC-IDs> (veto
+anytime)`). `unsanctioned-green` on `tier: standard` auto-picks removing the AC-ID mention (the
+§ Gotchas known cause) — when the known cause does not match, the test is vacuous and is
+rewritten red; on `tier: critical` the step asks (remove the AC-ID mention (Recommended) /
+rewrite the test red / pause the build). `skipped-resume` stays a printed, recorded notice, never
+a user diagnosis. The repair-cap `ESCALATE` step prints `recommended: <re-arm|park>` from the
+gate logs' failure-count trend and ONE `AskUserQuestion` (re-arm / restart cold / park and queue
+a `/spec:fix` / amend the spec); record the answer with `--mark escalate-choice
+<re-arm|cold|park|amend>`.
 
 ## Prototype specs
 
@@ -62,9 +71,13 @@ Plan rows themselves. Every worker applies this contract:
 
 ## `blocked` returns
 
-Resolve against the spec's Rationale/Assumptions when the intent is clear; a genuine fork
-goes to the user via `AskUserQuestion` with the consequence of each option (core § Question
-Style); the out-of-plan gate failure below is auto-picked. Write the ruling **into the spec's
+Resolve against the spec's Rationale/Assumptions when the intent is clear. When the spec's
+Assumptions already carry an `if false` fallback for the assumption the worker names, apply it
+and print `📌 Auto-picked <fallback> — A<n>'s if-false arm (veto anytime)`. A genuine fork with
+no written fallback goes to the user via `AskUserQuestion` with the consequence of each option
+(core § Question Style); every other blocked worker in the same wave is batched into that
+ONE `AskUserQuestion` (≤4 questions per call), never one call per worker. The out-of-plan
+gate failure below is auto-picked. Write the ruling **into the spec's
 Decisions table**, then re-dispatch that worker. A ruling that adds or changes an observable promise updates its
 terminal-observable AC in the same spec edit. A gate failure implicating a file outside the
 File Plan widens scope — a File Plan row plus a Decisions entry naming the gate line, then the

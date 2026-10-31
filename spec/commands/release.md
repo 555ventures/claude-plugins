@@ -84,7 +84,9 @@ is the evidence a STOP report below quotes.
 
 - **Exit 0:** continue to journey walks below.
 - **Non-zero:** **STOP** — never promote over a leg that observed nothing (a red leg, or a
-  `⚪` row with a final `UNMEASURED:` line); the printed remedy names the fix. Skip straight to
+  `⚪` row with a final `UNMEASURED:` line); the printed remedy names the fix. A red leg is first
+  routed to the queue: `node "$(spec-paths spec-queue)" add "<leg> red at release <milestone>: <one-line symptom>" --lane fix --top`,
+  listed under the report's `queued` slot. Skip straight to
   Phase 4's `record` (below); it is the only path to a report from here.
 
 **Journey walks** (session judgment — `release-legs.js` does not walk journeys): for each brief
@@ -93,14 +95,17 @@ observable, via the host's spec-verify skill, browser automation, or scripted AP
 plus **one standing whole-product journey** (sign-up → core loop → the product's reason to
 exist) every release regardless of what shipped. Record each as observed-pass / observed-fail
 with the command or interaction trace. A journey that cannot be walked (no seed path, no
-access) is a **blocking finding**, not a skip. Then record it:
+access) asks ONE `AskUserQuestion`: "give access or seed data now and re-walk (Recommended)" — the
+journey is walked again before anything is recorded — / "record it as a blocking finding and
+stop" — the release stops here and the gap is reported by name. Then record it:
 
 ```
 node "$(spec-paths release-legs)" append --manifest {manifestPath} --leg journeys --walked <N> --failed <M>
 ```
 
-Exit 0 (zero failed) → continue to Phase 3. Exit 1 (≥1 failed) → **STOP**, same as above: skip
-to Phase 4's `record`.
+Exit 0 (zero failed) → continue to Phase 3. Exit 1 (≥1 failed) → queue each failed journey the
+same way (`node "$(spec-paths spec-queue)" add "<journey> red at release <milestone>: <one-line symptom>" --lane fix --top`),
+then **STOP**, same as above: skip to Phase 4's `record`.
 
 Report a Phase 2 STOP via the shared shape: assemble `outcome: {anchor:'🚫', text:'{the derived
 verdict word} — {leg} failed'}` and `next: {kind:'command', text:'route the defect to the
@@ -173,7 +178,7 @@ never a silent promote. There is no path from here that carries it into a promot
    ci verdict — one line each, read off `stage`'s and `append`'s own output}`,
    `- substrate: {rows checked / inert-declared} · production: {verification result}`),
    `warns` (`yours / the client's to do: {inert rows, verbatim — one line each}` whenever inert
-   rows exist), and `next` — **unconditional, branched by outcome**: on CLEAN, the verbatim
+   rows exist), `queued` (each Phase 2 repair added to the queue, one line each), and `next` — **unconditional, branched by outcome**: on CLEAN, the verbatim
    output of `node "$(spec-paths spec-status)" --root . --next` as `{kind: 'status-verbatim'}`;
    `{kind:'command', text: the remedy for what blocked promotion}` on 🚫. Write the slots to a temp file and run
    `node "$(spec-paths report-render)" --slots <file>`, printing its output verbatim.

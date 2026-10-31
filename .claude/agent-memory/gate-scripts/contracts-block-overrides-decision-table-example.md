@@ -3,7 +3,7 @@ name: contracts-block-overrides-decision-table-example
 description: When a Decision table's inline example finding text conflicts with the spec's Contracts block and the pinned AC tests, follow the Contracts block/tests, not the table cell's literal
 metadata:
   type: feedback
-  reviewed: 2026-10-25
+  reviewed: 2026-10-31
 ---
 
 A spec Decision table cell can show a `text:` example (e.g. `'<label>: region <n> carries
@@ -21,3 +21,6 @@ text carried a `<label>: ` prefix that no Contracts line or AC test expected.
 **How to apply:** whenever a Decision's inline `text:`/example string looks handwritten and a
 Contracts block or AC test exists for the same surface, diff them before implementing; on
 conflict, code to Contracts+tests and log the deviation rather than picking one by feel.
+This covers only an illustrative literal inside a Decision cell; when the Decision's rule
+itself contradicts the Contracts block, the Decision wins and the mismatch is a `blocked`
+return, never a silent pick (pipeline rules § Gotchas, the ac-matrix entry).

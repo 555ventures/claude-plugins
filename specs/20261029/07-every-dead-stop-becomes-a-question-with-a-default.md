@@ -1,6 +1,6 @@
 ---
 date: 2026-10-29
-status: implementing
+status: done
 build_base: main
 tier: standard           # no rules § Risk Tiers surface is edited: merge-back.sh is read, not changed (its inspect already prints RECOMMEND); the two drivers, the command docs and a new lib are not listed triggers and none is boot-path code
 area: pipeline
@@ -198,6 +198,15 @@ a different rule).
 Rejected: dropping the escalate questions in favour of automatic re-arm. A capped run is the one
 place the pipeline has decided it cannot judge; the cap exists to hand over. Rejected: a
 `failCountPattern` config field — correct but a contract edit for a recommendation heuristic.
+
+Build deviation (2026-10-31, one-off): D5's new `repair-round` mark made the review driver's
+exhaustive unknown-mark pin in `tests/review/merge-concludes-to-done.test.js` stale (seven marks
+expected, eight listed); scope widened by D15 and the pin updated in place, not weakened. An
+instance of the existing Gotchas entry on adding a member to an exhaustive live-file pin.
+
+### Advisory debt (review rv_bc0ab4c8bb79)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/spec-07-every-dead-stop-becomes-a-question-with-a-default/git/.claude-plugin/plugin.json:4 — The git plugin's new 1.13.0 changelog paragraph describes the merge strategy as 'offered as the recommended default in one question', but D8 and the merge.md text it ships make the strategy an auto-pick that proceeds without a question (rule 5 now says 'the strategy is derived').
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/spec-07-every-dead-stop-becomes-a-question-with-a-default/spec/scripts/spec-review-driver.js:104 — The review driver's header CONTRACT block enumerates the admitted marks but was not updated to include the new `repair-round` mark, while the dispatch (`case 'repair-round'`) and the unknown-mark refusal text both admit it.
 
 ## Canonical Delta
 

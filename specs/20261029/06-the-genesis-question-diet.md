@@ -1,6 +1,6 @@
 ---
 date: 2026-10-29
-status: implementing
+status: done
 build_base: main
 tier: critical           # touches spec/scripts/question-style-gate.js (hook surface, rules § Risk Tiers)
 area: genesis
@@ -234,6 +234,17 @@ cut by flow complexity") is a drawing-scope rule for service mode, not the termi
 sentence D8 replaces; it stays as written. `within one rank` and `Confirm the sequence` are rewritten
 in `spec/doctrine/genesis.md` (planned row); `One journey at a time` in `spec/commands/mocks.md` is
 rewritten under its planned row.
+
+Build deviations (folded from the sidecar at close, 2026-10-31; all one-offs, none recurring-shaped):
+- AC-5's test uses `backend-api` rather than `web-app`; the FINALISTS cost and default lines do not depend on the archetype.
+- Menu fixtures carry `why_recommended` at both menu-set and option level; the driver reads the rank-1 option first, then the menu-set level.
+- The AC-20260902-06-6 test was retitled `AC-20260902-06-6 / AC-20261029-06-11: …` — prefix-compatible with the AC pointer, not byte-identical.
+- DISCOVERY prints the round list whenever `brief.md` exists, even for a covered brief, because `success-metric` stays `dark` until written under `## Picks`; `classifyMenu` reads the menu file only, so FINALISTS' default ignores an existing `## Picks` line.
+- Terminal SCREENS puts the journey list above `Then:` so the unindented `### <name>` headings stay line-anchored; the assumptions block also precedes the close-the-wireframe step.
+
+### Advisory debt (review rv_5ba5e8c81963)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/spec-06-the-genesis-question-diet/spec/scripts/genesis-driver.js:2840 — FINALISTS' D4 default reads `skip (Recommended) — every tournament dimension was auto-picked` whenever `classifyMenu('framework')`/`classifyMenu('language-runtime')` returns null (no research menu file at all, e.g. a dimension that was `constrained` or picked before research), because the ternary only distinguishes `kind === 'ask'` from everything else. The spec's D4 literally says `else skip`, so this is within the letter of the Decision and the deviations sidecar records the menu-only read, but the printed reason sentence ('every tournament dimension was auto-picked') is false in that case — nothing was auto-picked.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/spec-06-the-genesis-question-diet/spec/scripts/genesis-driver.js:2628 — The DISCOVERY round list is printed with each key line indented two spaces (`  - <key>: dark · guess:`), while the Contracts block and AC-1 spell the line as `- <key>: <current value or dark> · guess:` (unindented). The test matches with `/- payer: dark · guess:/` (unanchored) so it passes, and the sidecar does not record the indentation choice.
 
 ## Canonical Delta
 

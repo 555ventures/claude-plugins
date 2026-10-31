@@ -1,6 +1,0 @@
-# Deviations — 06-the-genesis-question-diet
-- tests/genesis/menus-autopick.test.js: AC-5 uses `backend-api` (a tournament archetype with no design-stage prerequisites) instead of `web-app`; the FINALISTS cost/default lines are archetype-independent.
-- tests/genesis/menus-autopick.test.js: menu fixtures carry `why_recommended` both at menu-set level (the real wf-research schema) and on each option (the AC-3 fixture text); implementation may read either.
-- tests/question-style-gate.test.js: the AC-20260902-06-6 test was rewritten in place and retitled `AC-20260902-06-6 / AC-20261029-06-11: a derive verdict is silenced …`; its title is not byte-identical to the AC pointer's name, only prefix-compatible.
-- spec/scripts/genesis-driver.js: the DISCOVERY round list prints whenever brief.md exists (a covered brief still shows it, since `success-metric` is `dark` until written under `## Picks`); `classifyMenu` reads the menu file only, so FINALISTS' D4 default is independent of whether the dimension already has a `## Picks` line; `why_recommended` is read from the rank-1 option first, then the menu-set level.
-- spec/scripts/mocks-driver.js: the terminal SCREENS block's journey list sits above `Then:` (unindented `### <name>` headings) so the line-anchored heading match holds; the `confirm these N assumptions` block also precedes the close-the-wireframe step.

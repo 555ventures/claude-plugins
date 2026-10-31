@@ -3,7 +3,7 @@ name: git-committer-date-iso-z-roundtrips
 description: GIT_COMMITTER_DATE="...Z" round-trips verbatim through git log -1 --format=%cI, so date-ordering test fixtures can assert exact string equality on the matched/observed date
 metadata:
   type: feedback
-  reviewed: 2026-10-16
+  reviewed: 2026-10-31
 ---
 
 When a test needs deterministic git commit dates (e.g. to control ordering/threshold logic

@@ -1,7 +1,7 @@
 ---
 name: spec-20260914-02-review-fix-retag-and-menus-done-fix-already-landed
 description: Retag idiom for a reused AC (AC-OLD / AC-NEW), its ac-matrix oracle, and the genesis brief fixture ordering for driver-written picks
-reviewed: 2026-10-16
+reviewed: 2026-10-31
 metadata:
   type: project
 ---

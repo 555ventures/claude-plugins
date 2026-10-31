@@ -3,7 +3,7 @@ date: { YYYY-MM-DD }
 status: draft            # draft → hardened → implementing → done (hook-enforced); to retire a preserved spec: superseded (terminal — drops out of /spec:status silently; optional superseded_by: <what replaced it> is free-form provenance)
 tier: standard           # standard | critical (critical: irreversible/high-blast-radius surfaces — auth, migrations, money, data deletion). Work too small to need a spec gets none.
 area: { area-name }      # primary feature/domain/module; "cross-cutting" if none
-breaking: false
+breaking: false        # true needs a Decision tagged [breaking: <what breaks for whom>] or [asked: …]; lock refuses breaking-unasked otherwise
 depends_on: []
 # brief: NN              # roadmap-planned specs only: the docs/roadmap/NN-*.md brief this spec hydrates; /spec:status (and /spec:doctor check 14) derive roadmap status from this stamp
 # prototype: <stem>  # written by /spec:plan from a behaviour contract; the build driver replays the contract's tests (REPLAY, on the one spec whose File Plan owns prototype.e2eFile) and the review driver closes the prototype when the last citing spec is done
@@ -69,7 +69,9 @@ depends_on: []
 ## Data Model
 
 { Persistence changes: tables/columns, constraints, indexes, state shapes, migrations. State
-  explicitly whether existing rows/persisted state are affected. Omit if none. }
+  explicitly whether existing rows/persisted state are affected. Omit if none. A non-empty Data
+  Model makes the spec `tier: critical` and must hold one line `existing rows: unaffected` or
+  `existing rows: <what changes>`; lock refuses it otherwise. }
 
 ## Behavior
 

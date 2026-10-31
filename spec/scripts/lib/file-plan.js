@@ -53,23 +53,27 @@ function walkFilePlanTables(text) {
     const hm = lines[i].match(/^(#{1,6})\s/)
     if (hm && hm[1].length <= level) { end = i; break }
   }
-  const cellsOf = line => line.replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.replace(/`/g, '').trim())
+  const rawCellsOf = line => line.replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim())
+  const cellsOf = line => rawCellsOf(line).map(c => c.replace(/`/g, '').trim())
   const rows = []
-  let actionIdx = -1, layerIdx = -1, sawFirstRow = false
+  let actionIdx = -1, layerIdx = -1, summaryIdx = -1, pathIdx = 0, sawFirstRow = false
   for (let i = start; i < end; i++) {
     const line = lines[i].trim()
-    if (!line.startsWith('|')) { actionIdx = -1; layerIdx = -1; sawFirstRow = false; continue } // table boundary
+    if (!line.startsWith('|')) { actionIdx = -1; layerIdx = -1; summaryIdx = -1; pathIdx = 0; sawFirstRow = false; continue } // table boundary
     const cells = cellsOf(line)
     if (cells.every(c => !c || /^:?-{2,}:?$/.test(c))) continue // separator row
     if (!sawFirstRow) {
       sawFirstRow = true
-      if (/^(file|path)s?$/i.test(cells[0] || '')) {
+      const hdrPath = cells.findIndex(c => /^(file|path)s?$/i.test(c))
+      if (hdrPath >= 0) {
+        pathIdx = hdrPath // the Path column may sit anywhere (a reordered table); default is column 1
         actionIdx = cells.findIndex(c => /^actions?$/i.test(c))
         layerIdx = cells.findIndex(c => /^layers?$/i.test(c))
+        summaryIdx = cells.findIndex(c => /^summary$/i.test(c))
         continue // this table's header row, not a data row
       }
     }
-    rows.push({ cells, actionIdx, layerIdx })
+    rows.push({ cells, rawCells: rawCellsOf(line), pathIdx, actionIdx, layerIdx, summaryIdx })
   }
   return rows
 }
@@ -78,9 +82,9 @@ function walkFilePlanTables(text) {
 // (`Dockerfile`, `Makefile`) on a row whose own Action cell opens with a file action, the one
 // thing that tells a root-level file without an extension from a placeholder word.
 const FILE_ACTION_RE = /^(create|modify|delete|rename|move)\b/i
-function rowPaths({ cells, actionIdx }) {
+function rowPaths({ cells, actionIdx, pathIdx = 0 }) {
   const hasAction = actionIdx >= 0 && FILE_ACTION_RE.test(cells[actionIdx] || '')
-  return splitPlanCell(cells[0] || '').filter(p => p.includes('/') || /\.[A-Za-z0-9]+$/.test(p) ||
+  return splitPlanCell(cells[pathIdx] || '').filter(p => p.includes('/') || /\.[A-Za-z0-9]+$/.test(p) ||
     (hasAction && /^[A-Za-z0-9_-]+$/.test(p)))
 }
 
@@ -110,13 +114,16 @@ function parseFilePlan(text) {
 function parseFilePlanRows(text) {
   const rows = []
   for (const row of walkFilePlanTables(text)) {
-    const { cells, actionIdx, layerIdx } = row
+    const { cells, rawCells, actionIdx, layerIdx, summaryIdx } = row
     const paths = rowPaths(row)
     if (!paths.length) continue
     rows.push({
       paths,
       action: actionIdx >= 0 ? (cells[actionIdx] || null) : null,
       layer: layerIdx >= 0 ? (cells[layerIdx] || null) : null,
+      // Summary keeps its backticks (the packages a manifest row names live in them); null when
+      // the row's own table binds no Summary column. specs/20261029/05 D2a.
+      summary: summaryIdx >= 0 ? (rawCells[summaryIdx] || '') : null,
     })
   }
   return rows

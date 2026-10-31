@@ -84,7 +84,12 @@ Write the spec per the template. `status: draft`. While drafting:
    by citing the delivering AC in the row or recording `[no-ac: <reason>]`; zero orphans to lock. Then run
    `node "$(spec-paths decision-lint)" --spec {spec path} --root .`, resolving every finding by tagging the row —
    `[guards: <§ Risk Tiers text>]` or `[asked: <what the user chose>]` for a restriction, a `q<id>` from
-   `spec-queue add` for a deferral; zero findings to lock. A Decision that retires or narrows prose elsewhere runs
+   `spec-queue add` for a deferral; `breaking-unasked` (a `breaking: true` spec) by tagging the introducing Decision
+   `[breaking: <what breaks for whom>]` or `[asked: …]`; `missing-dependency-names` by naming the packages in
+   backticks in the File Plan Summary (or the literal `no dependency change`); `data-model-requires-critical` and
+   `missing-existing-rows-line` by setting `tier: critical` and adding an `existing rows:` line to `## Data Model`;
+   zero findings to lock. Any `📌 adds or changes dependencies — <path> (veto anytime)` notice line is advisory and
+   rides step 2b on critical tier. A Decision that retires or narrows prose elsewhere runs
    `node "$(spec-paths collision-closure)" --spec {spec path} --root . --literal <stem>…` and enumerates every
    literals-leg hit in the File Plan as fix or recorded waive. Work discovered this session that needs its own spec →
    write the roadmap brief now; if it must run before the current work,
@@ -92,7 +97,8 @@ Write the spec per the template. `status: draft`. While drafting:
    `node "$(spec-paths spec-queue)" add "<subject>" --lane plan|prototype|fix|decide --after-spec {spec path}`.
 2b. **Critical confirm** (only `tier: critical`; after step 2 is green, before the ledger row):
    ONE `AskUserQuestion` — "This spec is critical tier because it touches <the § Risk Tiers
-   trigger>. Lock it now?" — with the spec path, Decision count and AC count as context.
+   trigger>. Lock it now?" — with the clause ", and it adds or changes dependencies: <path>, <path>" inserted
+   before "Lock it now?" when decision-lint printed any `📌` notice, and with the spec path, Decision count and AC count as context.
    1. **Lock it (Recommended)** — Every lint passed; locking makes the decisions binding for the build and the review
    2. **Keep it as a draft** — Nothing changes; you can re-run the plan command after editing the spec
 

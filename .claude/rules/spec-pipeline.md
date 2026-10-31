@@ -121,7 +121,8 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
 ## Review Checks
 
 - A doctrine/behavior change without a plugin.json version bump is **hard** — pinned
-  mechanically by `scripts/plugin-bump.js --check` (gate, via `tests/consistency/plugin-bump.test.js`)
+  mechanically by `scripts/plugin-bump.js --check` (gate, via the untagged standing guard
+  `tests/consistency/plugin-bump-gate.test.js` — never an AC-tagged test, which the close sweep retires)
   against the merge base; the reviewer keeps only the residue a branch-level check cannot see
   (a second behavior change on a branch that already bumped once).
 - A script or test importing a non-builtin package is **hard**. Any non-builtin import

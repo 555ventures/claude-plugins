@@ -35,10 +35,10 @@
       "enforcer": {
         "tool": "in-repo node:test pins (version bump against the merge base; every executable has a live entry point)",
         "mechanism": "checker-script",
-        "configPath": "tests/consistency/plugin-bump.test.js",
-        "gateWiring": "gateCommand runs tests/** via node --test (plugin-bump.test.js and entrypoints.test.js)",
+        "configPath": "tests/consistency/plugin-bump-gate.test.js",
+        "gateWiring": "gateCommand runs tests/** via node --test (plugin-bump-gate.test.js — an untagged standing guard the close-time sweep never retires — and entrypoints.test.js)",
         "citations": [],
-        "verifiedRun": "node --test --test-timeout=45000 --test-force-exit tests/consistency/plugin-bump.test.js tests/consistency/entrypoints.test.js"
+        "verifiedRun": "node --test --test-timeout=45000 --test-force-exit tests/consistency/plugin-bump-gate.test.js tests/consistency/entrypoints.test.js"
       },
       "fallback": "review-check"
     },

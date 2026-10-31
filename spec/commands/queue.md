@@ -42,11 +42,10 @@ Print the script's stdout **verbatim** — never a table, never re-sorted — th
 naming what changed (`add`/`move`/`done`) or the top pick's place (`next`/`list`).
 
 **`groom` checks before it proposes.** Flags are suspicion, not evidence. Fan out one read-only
-`Agent {model: "haiku"}` per flagged item, all in one message, each given the item's `show` output
-and the repo root: does the tree already hold what it asks for (name the file), did a done spec
-supersede it (name the spec), or is it live (name what is missing)? Propose from that evidence,
-flagged = presumed `done`; `keep` only with the missing piece quoted. Ask per item (`AskUserQuestion`,
-≤ 4/call, one evidence line each); never tick without a yes. No agent, no proposal.
+`Agent {model: "haiku"}` per flagged item in one message, each given its `show` output and the repo
+root: done (name the file or spec) or live (name what is missing)? Flagged = presumed `done`;
+`keep` only with the missing piece quoted. Hard evidence ticks with `📌 Auto-picked done — <evidence> (veto anytime)`;
+ask only `keep`/ambiguous items (`AskUserQuestion`, ≤ 4/call); never tick without a yes. No agent, no proposal.
 
 ## Rules
 

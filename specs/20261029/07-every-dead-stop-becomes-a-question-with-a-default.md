@@ -1,6 +1,7 @@
 ---
 date: 2026-10-29
-status: hardened
+status: done
+build_base: main
 tier: standard           # no rules § Risk Tiers surface is edited: merge-back.sh is read, not changed (its inspect already prints RECOMMEND); the two drivers, the command docs and a new lib are not listed triggers and none is boot-path code
 area: pipeline
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 brief: n/a
 spiked: 2026-10-31
 open_markers: 0
+diff_base: ab1aa463555f948aad7f957061b69ad5cb0fb716
 ---
 
 # Every dead stop becomes a question with a default
@@ -43,6 +45,7 @@ GIT-05, GIT-06), Part 3 #20 and Part 4 #3.
 | D12 | `/spec:queue groom` (`queue.md` § Render): an item whose checker returned hard evidence — a named file that exists, or a `done` spec that supersedes it — is ticked with `📌 Auto-picked done — <evidence> (veto anytime)`; only `keep` and ambiguous items are asked, and the file keeps `never tick without a yes` for those. The file stays within its 55-line pin. (AC-20261029-07-12) | The evidence is already in hand. |
 | D13 | `git/commands/merge.md` Step 1: when exactly one `spec/*` branch is ahead of the target it is the first option, marked `(Recommended)`; the question is kept. (AC-20261029-07-13) | Keep the ask, add the default. |
 | D14 | `spec/.claude-plugin/plugin.json` and `git/.claude-plugin/plugin.json` are bumped via `node scripts/plugin-bump.js --bump --plugin <name> --changelog "<paragraph>"`; `spec/entrypoints.json` gains the new doctrine callers (Contracts). `[no-ac: reviewer-held — plugin-bump --check and entrypoints.test.js are the standing guards]` | Two plugin directories; a new caller of an existing script must be declared. |
+| D15 | `tests/review/merge-concludes-to-done.test.js`'s unknown-mark refusal pin lists the review driver's admitted marks exactly; D5's `repair-round` joins that list and the test title, its existing AC tags unchanged. Gate line: the unknown-mark refusal now lists eight marks where the pin expects seven. `[no-ac: reviewer-held — the existing pin is the guard]` | Out-of-plan gate failure widens scope (stage-build § `blocked` returns auto-pick). |
 
 ## File Plan
 
@@ -65,6 +68,7 @@ GIT-05, GIT-06), Part 3 #20 and Part 4 #3.
 | tests/review/stopped-repair-round.test.js | CREATE | tests | AC-20261029-07-5, AC-20261029-07-6, AC-20261029-07-7 |
 | tests/merge-back.test.js | MODIFY | tests | AC-20261029-07-14 (one new case; no existing case changes) |
 | tests/consistency/dead-stops.test.js | CREATE | tests | AC-20261029-07-1, AC-20261029-07-4, AC-20261029-07-8, AC-20261029-07-9, AC-20261029-07-10, AC-20261029-07-11, AC-20261029-07-12, AC-20261029-07-13 |
+| tests/review/merge-concludes-to-done.test.js | MODIFY | tests | `repair-round` joins the unknown-mark pin's mark list (D15) |
 
 ## Contracts
 
@@ -194,6 +198,15 @@ a different rule).
 Rejected: dropping the escalate questions in favour of automatic re-arm. A capped run is the one
 place the pipeline has decided it cannot judge; the cap exists to hand over. Rejected: a
 `failCountPattern` config field — correct but a contract edit for a recommendation heuristic.
+
+Build deviation (2026-10-31, one-off): D5's new `repair-round` mark made the review driver's
+exhaustive unknown-mark pin in `tests/review/merge-concludes-to-done.test.js` stale (seven marks
+expected, eight listed); scope widened by D15 and the pin updated in place, not weakened. An
+instance of the existing Gotchas entry on adding a member to an exhaustive live-file pin.
+
+### Advisory debt (review rv_bc0ab4c8bb79)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/spec-07-every-dead-stop-becomes-a-question-with-a-default/git/.claude-plugin/plugin.json:4 — The git plugin's new 1.13.0 changelog paragraph describes the merge strategy as 'offered as the recommended default in one question', but D8 and the merge.md text it ships make the strategy an auto-pick that proceeds without a question (rule 5 now says 'the strategy is derived').
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/spec-07-every-dead-stop-becomes-a-question-with-a-default/spec/scripts/spec-review-driver.js:104 — The review driver's header CONTRACT block enumerates the admitted marks but was not updated to include the new `repair-round` mark, while the dispatch (`case 'repair-round'`) and the unknown-mark refusal text both admit it.
 
 ## Canonical Delta
 

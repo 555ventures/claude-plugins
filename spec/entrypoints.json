@@ -115,7 +115,8 @@
     "entryPoints": [
       "spec/commands/doctor.md",
       "spec/scripts/spec-review-driver.js",
-      "git/commands/enter-worktree.md"
+      "git/commands/enter-worktree.md",
+      "git/commands/merge.md"
     ]
   },
   "spec/scripts/mocks-driver.js": {
@@ -237,7 +238,10 @@
       "spec/commands/queue.md",
       "spec/commands/plan.md",
       "spec/doctrine/stages/stage-review.md",
-      "spec/doctrine/core.md"
+      "spec/doctrine/core.md",
+      "spec/commands/release.md",
+      "spec/scripts/spec-build-driver.js",
+      "spec/scripts/spec-review-driver.js"
     ]
   },
   "spec/scripts/spec-review-driver.js": {

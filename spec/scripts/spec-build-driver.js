@@ -5,7 +5,7 @@
 // spec-build-driver <spec.md> --mark <mark> [args]     -> verify artifacts, record, print next step
 //   marks: tests-authored | red-attributed |
 //          wave-done --wave <label> --workers <n> | integrated |
-//          repair-applied --continued <n> --spawned <n> | committed |
+//          repair-applied --continued <n> --spawned <n> | escalate-choice <re-arm|cold|park|amend> | committed |
 //          replayed | looked
 //            (the last two apply only to a `prototype:` spec at REPLAY)
 // spec-build-driver <spec.md> --state                  -> print the state name only (scripting)
@@ -130,6 +130,7 @@ const { globMatch } = require('./lib/glob-match')
 const { sessionModel, sessionUsage, usageDelta } = require('./lib/session-stamp.js')
 const { CLASS_ID_RE } = require('./lib/escape-row')
 const { extractSection } = require('./lib/spec-sections')
+const { failCount } = require('./lib/gate-fail-count')
 const appPortLib = require('./lib/app-port')
 const { printable } = require('./lib/host-run')
 
@@ -1006,8 +1007,8 @@ function handleRepairApplied() {
       saveSidecar()
       die('repair iteration cap (3) reached — a fourth repair-applied is refused; the repair loop ' +
         'is capped at 3 rounds — surface this to the user instead of dispatching another repair. ' +
-        'Two exits: edit the tree and delete ' + gateCapPath + ' to re-arm one more round, or ' +
-        'delete ' + sidecarDir + ' entirely to restart cold.')
+        'Re-run `node ' + __filename + ' ' + specPath + '` for the ESCALATE question, then ' +
+        '`--mark escalate-choice <re-arm|cold|park|amend>`.')
     }
     // capEverTripped is true and gate-cap has been deleted — a deliberate re-arm: one deletion
     // buys exactly one more round. The cap re-trips only if that round is still red; a round
@@ -1025,6 +1026,29 @@ function handleRepairApplied() {
   // Same ordering as the re-arm branch above: gate first, then record.
   runGate()
   marks.repairs.push({ continued, spawned })
+  saveSidecar()
+  return null
+}
+
+// `--mark escalate-choice <re-arm|cold|park|amend>` (ESCALATE only): the sanctioned surface for
+// the capped run's four exits. re-arm and cold perform the deletions the step used to ask for.
+function handleEscalateChoice() {
+  const choice = argv[markIdx + 2]
+  if (!['re-arm', 'cold', 'park', 'amend'].includes(choice)) {
+    die('--mark escalate-choice needs one of re-arm | cold | park | amend (got ' + JSON.stringify(choice) + ')')
+  }
+  if (choice === 're-arm') {
+    fs.rmSync(gateCapPath, { force: true })
+    delete marks.escalateChoice
+    saveSidecar()
+    return null
+  }
+  if (choice === 'cold') {
+    fs.rmSync(sidecarDir, { recursive: true, force: true })
+    writeOut(1, 'sidecar removed \u2014 the next run resumes from the tree as it is:\n  node ' + __filename + ' ' + specPath + '\n')
+    process.exit(0)
+  }
+  marks.escalateChoice = choice
   saveSidecar()
   return null
 }
@@ -1158,6 +1182,7 @@ const MARK_STATE = {
   'wave-done': (s) => s.startsWith('WAVE:'),   // the label match stays in handleWaveDone (AC-6's message)
   'integrated': (s) => s === 'INTEGRATION',
   'repair-applied': (s) => s === 'REPAIR',
+  'escalate-choice': (s) => s === 'ESCALATE',
   'committed': (s) => s === 'COMMIT',
   'incident': (s) => s !== 'DONE',   // any live step — an incident has no state of its own
   'replayed': (s) => s === 'REPLAY',
@@ -1181,6 +1206,7 @@ function handleMark() {
     case 'wave-done': return handleWaveDone()
     case 'integrated': return handleIntegrated()
     case 'repair-applied': return handleRepairApplied()
+    case 'escalate-choice': return handleEscalateChoice()
     case 'committed': return handleCommitted() // exits the process itself
     case 'incident': return handleIncident()
     case 'replayed': return handleReplayed()
@@ -1240,11 +1266,40 @@ function testsStepBody() {
     `deviations sidecar: ${deviationsPath}\n` +
     `Then: node ${__filename} ${specPath} --mark tests-authored`
 }
+// Each HARD line of the red-check output is classified. mixed-pin and a standard-tier
+// unsanctioned-green have one mechanical fix, announced as an auto-pick; a critical-tier green
+// stays a question. Other classes print only in the verbatim output above.
+function redFindingsGuidance() {
+  const out = []
+  let askGreen = false
+  for (const line of (marks.lastRedCheckOutput || '').split('\n')) {
+    const m = /^HARD\s+(\S+)\s+(\S+)/.exec(line)
+    if (!m) continue
+    if (m[1] === 'mixed-pin') {
+      const acs = (line.slice(line.indexOf(m[2]) + m[2].length).match(/AC-\d{8}-\d+-\d+/g) || [])
+      out.push(`\ud83d\udccc Auto-picked split the bullet \u2014 ${m[2]}: ${[...new Set(acs)].join(', ')} (veto anytime)\n` +
+        `  split the SHALL CONTINUE TO clause into its own AC, then re-run`)
+    } else if (m[1] === 'unsanctioned-green') {
+      if (tier === 'critical') askGreen = true
+      else out.push(`\ud83d\udccc Auto-picked remove the AC-ID mention \u2014 ${m[2]} (veto anytime)\n` +
+        `  known cause (spec-pipeline \u00a7 Gotchas): the file mentions a carried AC-ID in a comment or test name, ` +
+        `which forces a red expectation onto a green file \u2014 remove the mention. If that does not match, the ` +
+        `test is vacuous: rewrite it red.`)
+    }
+  }
+  if (askGreen) {
+    out.push(`Ask ONE AskUserQuestion \u2014 an unsanctioned-green on a critical-tier spec:\n` +
+      `  remove the AC-ID mention (Recommended) \u2014 the known cause; the test keeps its assertions\n` +
+      `  rewrite the test red \u2014 when the test is vacuous\n` +
+      `  pause the build \u2014 stop here and investigate`)
+  }
+  return out.length ? out.join('\n') + '\n' : ''
+}
 function redFindingsStepBody() {
-  return `## RED_FINDINGS — red-check reports the pre-image does not match expectations\n` +
-    (marks.lastRedCheckOutput || '') + '\n' +
+  return `## RED_FINDINGS \u2014 red-check reports the pre-image does not match expectations\n` +
+    (marks.lastRedCheckOutput || '') + '\n' + redFindingsGuidance() +
     `Fix the test file(s) above so the pre-image is genuinely red where expected, then re-run ` +
-    `this driver with no mark — it re-runs red-check itself:\n  node ${__filename} ${specPath}`
+    `this driver with no mark \u2014 it re-runs red-check itself:\n  node ${__filename} ${specPath}`
 }
 function redAttributionStepBody() {
   const createPaths = filePlanRows.filter((r) =>
@@ -1334,12 +1389,45 @@ function repairStepBody() {
     `that worker is gone). Then:\n` +
     `Then: node ${__filename} ${specPath} --mark repair-applied --continued <n> --spawned <n>`
 }
+// Failure counts of the last three red gate runs, oldest first; any null makes the trend
+// not derivable. The recommendation is a heuristic: a wrong re-arm costs one gate run, so
+// unknown falls to park.
+function escalateRecommendation() {
+  const reds = (marks.gateRuns || []).filter((r) => r.exit !== 0).slice(-3)
+  const counts = reds.map((r) => {
+    try { return failCount(fs.readFileSync(r.log, 'utf8')) } catch { return null }
+  })
+  if (counts.length < 3 || counts.some((c) => c === null)) {
+    return { pick: 'park', text: 'recommended: park (failure count not derivable from the gate logs)' }
+  }
+  const trend = counts.join(' \u2192 ')
+  return counts[0] > counts[1] && counts[1] > counts[2]
+    ? { pick: 're-arm', text: `recommended: re-arm (failures shrank ${trend})` }
+    : { pick: 'park', text: `recommended: park (failures did not shrink: ${trend})` }
+}
 function escalateStepBody() {
-  return `## ESCALATE — repair iteration cap (3) reached\n` +
-    `A fourth repair-applied was refused. Surface this to the user — a capped run needs a decision.\n` +
-    `Remedy — two exits:\n` +
-    `  edit the tree and delete ${gateCapPath} to re-arm exactly one more round\n` +
-    `  delete ${sidecarDir} entirely to restart cold\n`
+  const runs = marks.gateRuns || []
+  const lastLog = runs.length ? path.relative(repoRoot, runs[runs.length - 1].log) : '(none)'
+  const queueLine = `node "$(spec-paths spec-queue)" add "${specRel}: build parked at the repair cap \u2014 ${lastLog}" --lane fix --top`
+  if (marks.escalateChoice === 'park') {
+    return `## ESCALATE \u2014 parked at the repair cap\n` +
+      `The build stays parked. Queue the repair (run this line):\n  ${queueLine}\n` +
+      `To change the answer: node ${__filename} ${specPath} --mark escalate-choice <re-arm|cold|amend>\n`
+  }
+  if (marks.escalateChoice === 'amend') {
+    return `## ESCALATE \u2014 amend the spec\n` +
+      `Edit the spec's Decisions table (the \`decision-added-at-build\` incident records it), then:\n` +
+      `  node ${__filename} ${specPath} --mark escalate-choice re-arm\n`
+  }
+  const rec = escalateRecommendation()
+  return `## ESCALATE \u2014 repair iteration cap (3) reached\n` +
+    `${rec.text}\n` +
+    `Ask ONE AskUserQuestion \u2014 options, consequences in each description:\n` +
+    `  re-arm one more round${rec.pick === 're-arm' ? ' (Recommended when shrinking)' : ''} \u2014 one more gate run; red again re-trips the cap\n` +
+    `  restart cold \u2014 the build sidecar is deleted; the next run resumes from the tree as it is\n` +
+    `  park and queue a /spec:fix \u2014 the build stays parked; the queue's top item is the repair\n` +
+    `  amend the spec \u2014 edit the Decisions table, then re-arm\n` +
+    `Then: node ${__filename} ${specPath} --mark escalate-choice <re-arm|cold|park|amend>\n`
 }
 function commitStepBody() {
   const base = resolveBase()

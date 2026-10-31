@@ -25,8 +25,11 @@ continue; nothing identifiable → ask for the symptom, the only unrecoverable i
 ## Steps
 
 1. **Root-cause statement, before the first edit.** First `git status --porcelain`: any output
-   means another fix or stray edits are in flight — STOP naming the files (commit or stash them;
-   one fix per checkout, so the gate, the reviewer and the fix row judge one root cause). Then
+   means another fix or stray edits are in flight — ask ONE `AskUserQuestion` naming the files
+   (one fix per checkout, so the gate, the reviewer and the fix row judge one root cause):
+   "commit the unrelated changes first via `/git:commit` (Recommended)" / "stash them with a
+   tagged entry (`git stash push -u -m "fix: <symptom>"`)" / "abort" — each description states
+   its consequence; abort STOPs. Then
    this session reads the failing path end to end (parallel Explore agents locate it where the
    surface is wide; they return paths, never file contents). Print ONE paragraph: the defect, why
    it can recur, and the structural change that makes recurrence impossible. A symptom-only patch
@@ -51,8 +54,9 @@ continue; nothing identifiable → ask for the symptom, the only unrecoverable i
    root-cause statement and step 3's approved list in place of a spec, with the line "no File
    Plan or ACs exist — judge the diff against the statement"; the range `git rev-parse HEAD`
    plus the dirty working tree, untracked files included; the root; the config's `pipelineRules`
-   path. Dispose every finding inline — fix it, or state why not; a `hard` finding never ships
-   undisposed. A `REVIEWER_FAILED` return is re-dispatched once, then reported as unreviewed.
+   path. A `fix` disposition is applied without a question; `waive`/`reject` go to the user in
+   ONE `AskUserQuestion` (≤4 per call, the reviewer's claim quoted, the recommended fate first) —
+   only the user waives; a `hard` finding never ships undisposed. A `REVIEWER_FAILED` return is re-dispatched once, then reported as unreviewed.
 5. **Gate and commit.** Run the host's `gateCommand`; red → fix, never commit around it. Commit
    through `/git:commit` in this same session, root-cause statement as the body, stating that the
    invoker is `/spec:fix` and whether step 4 completed — its step 3 writes the escape row or the fix row.
@@ -65,5 +69,5 @@ continue; nothing identifiable → ask for the symptom, the only unrecoverable i
 ## Rules
 
 - Names no tool (gate and test commands come from the host config only); never edits outside the
-  host repo — a blocking defect elsewhere is reported, not fixed; at most TWO `AskUserQuestion`
-  calls: the step-3 decisions stop and the Input fallback.
+  host repo — a blocking defect elsewhere is reported, not fixed; at most FOUR `AskUserQuestion`
+  calls: the step-1 dirty tree, the step-3 decisions stop, the step-4 waive/reject and the Input fallback.

@@ -529,3 +529,29 @@ test('create works when the script itself is invoked by a bare relative path, an
     'the exit-3 reader path must keep its JSON wording so the remedy (fix the config) stays discoverable')
   assert.ok(!fs.existsSync(path.join(dir, '.claude/worktrees/spec-y')), 'a failed create must still undo the worktree')
 })
+
+// specs/20261029/07-every-dead-stop-becomes-a-question-with-a-default.md D8 — the git plugin's merge
+// command derives its strategy from this script's RECOMMEND line, so the commit-count thresholds
+// must stay exactly as they are.
+test('AC-20261029-07-14: inspect on a source 3 commits ahead keeps printing RECOMMEND merge-commit and on 7 commits ahead keeps printing RECOMMEND squash', () => {
+  const dir = tmpdir('mbthresh')
+  gitRepo(dir)
+  const created = runBash(SCRIPT, ['create', '--source', 'spec/x', '--root', dir])
+  assert.strictEqual(created.status, 0, created.stderr)
+  const wt = created.stdout.trim().split('\n').pop()
+  const gw = (...a) => require('child_process').execFileSync('git', ['-C', wt, ...a])
+  const commit = (n) => {
+    fs.writeFileSync(path.join(wt, 'c' + n + '.txt'), String(n) + '\n')
+    gw('add', '-A'); gw('commit', '-q', '-m', 'work ' + n)
+  }
+  for (let i = 1; i <= 3; i++) commit(i)
+  const three = runBash(SCRIPT, ['inspect', '--root', dir, '--target', 'main', '--source', 'spec/x'])
+  assert.strictEqual(three.status, 0, three.stderr)
+  assert.match(three.stdout, /RECOMMEND: merge-commit/,
+    'a 3-commit source must keep recommending merge-commit — /git:merge now takes this line as its only strategy rule: ' + three.stdout)
+  for (let i = 4; i <= 7; i++) commit(i)
+  const seven = runBash(SCRIPT, ['inspect', '--root', dir, '--target', 'main', '--source', 'spec/x'])
+  assert.strictEqual(seven.status, 0, seven.stderr)
+  assert.match(seven.stdout, /RECOMMEND: squash/,
+    'a 7-commit source must keep recommending squash — a drift here silently changes every derived merge: ' + seven.stdout)
+})

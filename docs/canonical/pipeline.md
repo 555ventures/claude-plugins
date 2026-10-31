@@ -82,8 +82,9 @@ stage from disk, opens the spec's own git worktree before anything else runs, an
 hardened spec to `done` in one command. The three stage bodies live under
 `spec/doctrine/stages/` as prose the loop executes; none of them is an invokable command, and
 the state-machine hook gates `/spec:plan` and `/spec:run` alone. Isolation is the default:
-`--in-place` opts out, and a worktree that cannot be created stops the run rather than
-continuing on the current branch. A spec already past `hardened` with no worktree registered
+`--in-place` opts out, and a worktree that cannot be created asks one question — exit the
+other worktree and retry, or run `--in-place` — and never silently continues on the current
+branch. A spec already past `hardened` with no worktree registered
 stays where it is, because an in-flight build's sidecar marks and uncommitted worker output do
 not travel into a new working tree. `/git:enter-worktree` remains the manual surface for
 entering or repairing a spec's worktree by hand; it is idempotent and short-circuits when the
@@ -139,6 +140,13 @@ are retired — the row is written by the commit itself, so only the per-commit 
 derivation (`--commit`) remains (specs/20261025/02). `/git:commit` runs `secrets-scan.js` over
 the would-be staging set in Step 1's batch; a hit is a question, never a warning that stages
 anyway; `secrets-scan:allow` on a line is the one documented false-positive escape.
+Every terminal stop in build and review is a question with a recommended default derived from
+the run's own evidence: the build's repair-cap stop recommends re-arm or park from the
+failure-count trend of its gate logs and takes `--mark escalate-choice`; the review's red-leg
+stop offers one in-session repair round (`--mark repair-round`, cap 1) before `/spec:fix`; the
+review's fix-cap stop lists the open findings and recommends abandon-and-queue. Merge strategy
+is derived in every command from `merge-back.sh inspect`'s RECOMMEND line. Only the user
+waives, in every lane — `/spec:fix` included. (specs/20261029/07)
 
 ## The question gate asks product facts, never derives them (2026-09-02, specs/20260902/06)
 

@@ -254,7 +254,8 @@
   dispositions, the Canonical Delta + deviations fold, the close commit, merge strategy,
   conflict resolution. An empty hard pool after `reviewer-returned` is dispositioned by the
   driver itself (no mark); `--mark dispositions --file` derives the waived/rejected/fix tallies
-  from the disposer return, the count flags being an optional cross-check.
+  from the disposer return, the count flags being an optional cross-check. A waived
+  finding is recorded at DISPOSITIONS and listed at CLOSE as a notice; it is never re-confirmed.
   `review.md` is the judgment shell that hosts those conversations; the
   driver never recommends a disposition, never picks a merge strategy, and never renders a
   user-facing report. Marks are a closed, artifact-verified set — state is re-derived from

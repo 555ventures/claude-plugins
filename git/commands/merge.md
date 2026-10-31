@@ -14,7 +14,7 @@ If the user provided a branch name as an argument, use it. Otherwise, run **in p
 - `git worktree list` — show worktrees (we may be inside one)
 - `git log --oneline -5` — recent context on current branch
 
-If the source branch is still ambiguous, use `AskUserQuestion` with concrete branch options pulled from `git branch -vv`. Do NOT guess.
+If the source branch is still ambiguous, use `AskUserQuestion` with concrete branch options pulled from `git branch -vv`. Do NOT guess. When exactly one `spec/*` branch is ahead of the target it is the first option, marked `(Recommended)`; the question is still asked.
 
 **Refusals, before any inspection runs:**
 
@@ -33,24 +33,20 @@ Run **in parallel in a single message**:
 - `git diff --stat <target>...<source>` — file-level summary of incoming changes
 - `git merge-base <target> <source>` — common ancestor (for sanity)
 
-**If working tree is dirty**: STOP — do not proceed. Report as **dirty working tree** (see
-## Report).
+**If working tree is dirty**: do not proceed; ask ONE `AskUserQuestion`:
+
+- "commit the unrelated changes first via `/git:commit` (Recommended)" — the tree is clean, then the merge continues
+- "stash them with a tagged entry (`git stash push -u -m "merge: <source>"`)" — the changes are shelved; restore them after the merge
+- "abort" — nothing is merged; Report as **dirty working tree** (see ## Report)
 
 **Show user**: short summary — N commits, M files, list of touched paths. Do not dump full diffs.
 
-## Step 3: Choose Merge Strategy (ASK)
+## Step 3: Derive Merge Strategy
 
-Use `AskUserQuestion` with these options (always ask — strategy is a real fork):
-
-- **Merge commit** (`git merge --no-ff`) — preserves branch history, creates merge commit
-- **Fast-forward only** (`git merge --ff-only`) — fails if not FF; cleanest history when possible
-- **Squash** (`git merge --squash`) — collapse source branch into a single commit on target
-- **Rebase then FF** (`git rebase` on source, then FF merge) — linear history, rewrites source
-
-Include the recommended default based on commit count:
-- 1 commit → fast-forward
-- 2-5 commits, feature work → merge commit
-- Many small WIP commits → squash
+Run `bash "$(spec-paths merge-back)" inspect --root . --target <target> --source <source>` and
+take its `RECOMMEND:` line — the single home of the strategy heuristic. Print `📌 Auto-picked
+<strategy> — <reason> (veto anytime)` and proceed; the user vetoes by naming another strategy
+(`git merge --no-ff`, `--ff-only`, `--squash`, or rebase then FF).
 
 ## Step 4: Execute Merge
 
@@ -135,7 +131,7 @@ Next: /spec:plan design/prototypes/28-functional-prototype/contract.json
 2. **Never force-push, never `merge --abort` silently** — both require explicit user approval
 3. **Never resolve conflicts by picking a side without reading the file** — conflicts are logic decisions
 4. **Worktree cleanup**: follow Step 7's sequence exactly.
-5. **Always use `AskUserQuestion`** for strategy choice and non-trivial conflict resolution
+5. **Use `AskUserQuestion`** for non-trivial conflict resolution only; the strategy is derived
    — question style: plain language, self-contained, consequences per option, recommended
    pick first
 6. **Never push after merge** unless user explicitly asks

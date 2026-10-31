@@ -18,6 +18,8 @@ invisible unless asked — `payer`, `tenancy`, `data-sensitivity`, `residency`, 
 key a coverage answer already closes ("must use <vendor>") is written `constrained` in
 `## Open Dimensions` and never asked again as a fork (§ Genesis: Hard-to-Reverse Dimensions).
 
+**Coverage is confirmed in rounds, not interrogated.** The DISCOVERY step prints fifteen keys grouped `round N of 4` — the ten above, the four `## Non-UI Coverage` keys that are not duplicates (`jobs`, `notifications`, `retention`, `admin`) and `success-metric` — each with its current brief value. Derive one guess per key from the idea and ask each round as one `AskUserQuestion` of up to four questions; every question names its key in parentheses (`Who pays for the product (payer) — …?`) and offers `confirm: <guess> (Recommended)` / `correct it` / `not applicable`. Write the answers into `## Coverage` / `## Non-UI Coverage`; `success-metric` is written as `- success-metric: <label>` under `## Picks`. `## Non-UI Coverage`'s `integrations` and `pricing` lines are copied from the `integrations` and `payer` answers, never asked. Product facts stay asked; only their form is a sentence to confirm.
+
 **The brief is the interface.** `.claude/genesis/brief.md` is authored from the template
 `genesis-brief.md` (`$(spec-paths templates)/genesis-brief.md`) with exactly six `## ` sections in
 order: `What I think you're building`, `Coverage`, `Non-goals`, `Open Dimensions`,
@@ -25,7 +27,7 @@ order: `What I think you're building`, `Coverage`, `Non-goals`, `Open Dimensions
 exactly once, at the end of discovery, immediately before `--mark discovery-done`.
 
 **Archetype and hand-off.** `discovery-done` requires a `- archetype: <registry key>` line in
-`## Picks` (§ Genesis: Archetype Registry).
+`## Picks` (§ Genesis: Archetype Registry). The archetype is a printed pick: derive it from the idea, print `📌 Auto-picked archetype <key> — <one-line reason> (veto anytime)`, then write the line.
 Printed by `genesis-driver.js` at BRIEF; never restated here.
 
 - **Escape hatch on every round.** "Other / not sure" is the one open lane (and the tool's free-text
@@ -48,6 +50,8 @@ Printed by `genesis-driver.js` at BRIEF; never restated here.
    labeled "(Recommended)" with `why_recommended` as the stated reason.
 
 Enforced by `registry-check.js` — its header comment is the contract; the driver runs it on every accepted menu.
+
+**Auto-pick before you ask.** After `--mark menu-written` the MENUS step classifies every open, unpicked dimension from its research file: `auto` when exactly one option holds rank 1, that option is not `is_minority`, and its `priced` string begins `n/a`; `ask` otherwise (a rank tie, a minority leader, a priced leader, no rank). For each `auto` dimension print the step's `📌 Auto-picked <dim>: <label> — <why_recommended> (veto anytime)` line to the owner and write its `write:` line under `## Picks` (the driver never writes `brief.md`); an owner veto is a `## Picks` edit before `menus-done`. Paid services are always asked — a priced leader is never auto-picked, even inside the stated vendor budget. The `ask (N)` dimensions are asked batched four per `AskUserQuestion`, recommended first, built from their menus as above.
 
 **Discovery is product / user / business / legal only — never organizational.** Team skill,
 headcount, ownership, ops staffing are never asked: Claude is always the implementer.
@@ -91,7 +95,7 @@ derives `MENUS → DECIDE` unchanged and writes no `.claude/genesis/tournament/`
 tournament, and `SCAFFOLD` exactly like any other host.
 
 **FINALISTS.** The session composes 2–3 finalist stack combinations from the menus; at least one
-must equal the brief's current `## Picks` on every key it names (the incumbent).
+must equal the brief's current `## Picks` on every key it names (the incumbent). Race or skip is one `AskUserQuestion` whose recommended option is the step's printed `default:` line — race when `framework` or `language-runtime` was asked at MENUS, skip when every tournament dimension was auto-picked.
 Printed by `genesis-driver.js` at RACE and PROBE; never restated here.
 
 **PICK.** **Executed evidence informs the user's pick; it never makes it** — two finalists
@@ -118,11 +122,13 @@ The session is the proposer. Input: every `interview-research/{dimension}.json` 
 ADR per hard-to-reverse dimension, `## Options considered` copied from the menu's ranked options,
 `## Decision` the pick, `## Dissents` per the rule below.
 
-A hard fork — two menu options within one rank of each other, or a user hesitation signal — is an
+A hard fork — a dimension still without a `## Picks` line after MENUS, or a user hesitation signal — is an
 `AskUserQuestion`: options verbatim from the menu, `tradeoff` in each description.
 
 `## Dissents` carries every non-picked ranked option, every `is_minority` option, and every
 user-rejected option.
+
+**Conventions are derived, not asked.** The DECIDE step prints `conventions auto-pick (8)`: derive each of those eight ops-convention keys from the stack and print `📌 Auto-picked <key> — <reason> (veto anytime)`. Analytics is a vendor/privacy choice and belongs to discovery: the step's `success-metric:` line carries the label DISCOVERY wrote under `## Picks`, or says to ask it in the user's words when absent.
 
 ## Genesis: Ops Conventions ADR
 
@@ -322,6 +328,8 @@ the gate and continues straight to `ROADMAP`. `DESIGN_BRIEF` is re-derived whene
 `marks.designBriefWritten` is unset or either `docs/design/brief.md` or
 `.claude/genesis/design-paths.json` has vanished from disk.
 
+**The direction round.** Before the Fable dispatch the step prints a `## Direction round` block — `navigation shell`, `layout system`, `color schemes`, `accessibility baseline`, `token tiers`, each with one `(Recommended)` default derived from the archetype. Ask it as one `AskUserQuestion` of up to four (`token tiers` joins only when the kit catalogue offers more than one tier model; otherwise print the `2 (Recommended)` line as a `📌` pick), hand the answers to the dispatch, and the brief carries them as `## Direction` after `## Users and context`. `--mark design-brief-written` refuses while that section is absent from `docs/design/brief.md`. These are the mandatory design forks of § Genesis: Hard-to-Reverse Dimensions; journey approval, client review and `approve` stay human look stops.
+
 **`--mark design-brief-written`** verifies three artifacts, refusing by name on the first failure:
 `.claude/genesis/design-paths.json` (schema-complete, `storybook.port` an integer 1024–65535);
 `docs/design/brief.md`; and the rules file's `## Intent to pattern`/`## Naming` tables via
@@ -378,8 +386,7 @@ stable intent; specs are perishable execution detail.**
    production path — created by a real actor, observed by a person, named in one `First light:`
    header line (`First light: <the one record and where it is observed>`). One spec, one
    acceptance criterion, no feature. Feature briefs start at 02.
-2. **Confirm the sequence.** One `AskUserQuestion` round presenting the proposed sequence table
-   (brief names, phases, dependencies, milestone gates) before writing files.
+2. **Veto window, then milestone gates.** Print the proposed sequence table (brief names, phases, dependencies) and proceed unless vetoed — briefs are markdown and `spec-queue move` reorders later. Ask once, in one `AskUserQuestion`, the milestone gates: they are product commitments.
 3. **Write** `docs/roadmap/00-overview.md` + one `NN-{kebab}.md` per brief. **Never write a status
    column** — per-brief status is derived from specs' `brief:` frontmatter (`/spec:status`), not
    tracked.

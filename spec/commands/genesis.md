@@ -76,7 +76,7 @@ Next: /spec:enforce
   contextPaths}` (genesis.md § Genesis: Discovery Interview) — invoke it by `scriptPath`.
 - **Never run the currency check by hand.** Writing a menu file and marking it
   `--mark menu-written --file <f>` is the whole step.
-- Hard-to-reverse forks always go to the user; never synthesized away.
+- Hard-to-reverse forks always go to the user; every derived pick prints `📌 Auto-picked … (veto anytime)`; remaining questions batch ≤4 per `AskUserQuestion`, recommended first.
 - Every `Agent`/workflow `model:` is explicit (shared § Model Placement).
 - **BRIEF derives, never guesses.** On a fresh mocks-set run, write `## Journeys` and
   `## Non-UI Coverage` from `design/mocks/seed.md` and the confirmed ledger rows the step

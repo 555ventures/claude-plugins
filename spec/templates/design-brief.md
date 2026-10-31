@@ -5,6 +5,15 @@
 ## Users and context
 <one or two paragraphs: who uses this, and the context they're in when they do>
 
+<!-- ## Direction: the five design forks the owner answered in the direction round, one line
+     each; the driver refuses a brief without this heading after ## Users and context. -->
+## Direction
+- navigation shell: <sidebar|top-nav|tabs> — <reason>
+- layout system: <breakpoints/grid summary>
+- color schemes: <light|dark|system>
+- accessibility baseline: <WCAG level>
+- token tiers: <n>
+
 <!-- ## Journeys: one "### <journey>" block per approved journey, in the order the driver
      checks first — this heading must come before any entity-shaped heading in the file.
      Each block's first non-blank line must start "JTBD: When " — the driver refuses by

@@ -595,7 +595,8 @@ function handleDiscoveryDone() {
   // menus-done — BRIEF (the very next state) must already know whether a mocks set is owed.
   const archetype = picks().archetype
   if (!archetype) {
-    die('brief.md ## Picks is missing a `- archetype: <key>` line — add one of: ' +
+    die('brief.md ## Picks is missing a `- archetype: <key>` line — derive it from the idea and print ' +
+      '📌 Auto-picked archetype <key> — <reason> (veto anytime), then add one of: ' +
       REGISTRY_KEYS.join(', ') + ', then re-mark discovery-done')
   }
   if (!REGISTRY_KEYS.includes(archetype)) {
@@ -846,7 +847,7 @@ function extractMdSubHeading(text, name) {
 // Composite column, and every ### Used name present in docs/design/catalog.md when that
 // inventory lists any. Returns { ok: true } or { ok: false, message } naming the FIRST failure,
 // in the order the brief grammar lists them.
-const DESIGN_BRIEF_REQUIRED_HEADINGS = ['## Users and context', '## Journeys', '## Navigation', '## Catalog', '## Composites', '## Contract']
+const DESIGN_BRIEF_REQUIRED_HEADINGS = ['## Users and context', '## Direction', '## Journeys', '## Navigation', '## Catalog', '## Composites', '## Contract']
 
 function designBriefCheck(paths) {
   if (!fs.existsSync(designBriefMdPath())) {
@@ -2587,6 +2588,68 @@ function enforceableProbeCount() {
   return rows.filter((r) => r && r.status === 'DECIDED' && r.enforceable === true).length
 }
 
+// The fifteen asked keys in fixed order, four per round. `integrations` and `pricing` under
+// ## Non-UI Coverage are copied from the coverage answers (`integrations`, `payer`), never asked.
+const DISCOVERY_ROUNDS = [
+  ['payer', 'tenancy', 'data-sensitivity', 'residency'],
+  ['ai-use', 'unattended', 'integrations', 'scale-outage'],
+  ['vendor-budget', 'offline-mobile', 'jobs', 'notifications'],
+  ['retention', 'admin', 'success-metric'],
+]
+const NON_UI_ASKED_KEYS = ['jobs', 'notifications', 'retention', 'admin']
+
+function discoveryRoundLines() {
+  const text = briefText()
+  if (text === null) return []
+  const coverage = parseKeyedSection(text, 'Coverage').keys
+  const nonUi = parseKeyedSection(text, 'Non-UI Coverage').keys
+  const pks = parsePicks(text)
+  const current = (k) => {
+    if (k === 'success-metric') return pks[k] || 'dark'
+    if (NON_UI_ASKED_KEYS.includes(k)) return nonUi[k] || 'dark'
+    return coverage[k] || 'dark'
+  }
+  const lines = ['ask in rounds of four — one AskUserQuestion per round, every question naming its key in parentheses, options "confirm: <guess> (Recommended)" / "correct it" / "not applicable"; copy ## Non-UI Coverage integrations from the integrations answer and pricing from the payer answer; write success-metric as - success-metric: <label> under ## Picks:']
+  DISCOVERY_ROUNDS.forEach((keys, i) => {
+    lines.push('round ' + (i + 1) + ' of 4')
+    for (const k of keys) lines.push('  - ' + k + ': ' + current(k) + ' · guess:')
+  })
+  return lines
+}
+
+// MENUS classification of one dimension's recorded research menu: auto-pick only a sole,
+// non-minority, unpriced rank-1 leader; everything else is asked. Returns null without a menu.
+const DIRECTION_NAV_BY_ARCHETYPE = { 'web-app': 'sidebar', 'desktop-app': 'sidebar', 'realtime-trading': 'sidebar', 'mobile-app': 'tabs' }
+function directionRoundLines(archetype) {
+  const mobile = archetype === 'mobile-app'
+  const nav = DIRECTION_NAV_BY_ARCHETYPE[archetype] || 'sidebar'
+  const layout = mobile ? 'single column, safe-area insets' : 'responsive grid, 3 breakpoints'
+  return [
+    '## Direction round — ask once, recommended first, then hand the answers to the dispatch',
+    '- navigation shell: ' + nav + ' (Recommended) | ' + ['sidebar', 'top-nav', 'tabs'].filter((n) => n !== nav).join(' | '),
+    '- layout system: ' + layout + ' (Recommended) | ' + (mobile ? 'responsive grid, 3 breakpoints' : 'single column, safe-area insets'),
+    '- color schemes: system (Recommended) | light | dark',
+    '- accessibility baseline: WCAG 2.2 AA (Recommended) | WCAG 2.2 AAA',
+    '- token tiers: 2 (Recommended) | 3',
+    'ask the forks above in one AskUserQuestion (token tiers joins only when the kit catalogue offers more than one tier model; otherwise print it as a 📌 line), then write ## Direction in docs/design/brief.md after ## Users and context',
+  ]
+}
+
+function classifyMenu(dim) {
+  let menu
+  try { menu = JSON.parse(fs.readFileSync(path.join(genesisDir, 'interview-research', dim + '.json'), 'utf8')) } catch { return null }
+  const options = menu && Array.isArray(menu.options) ? menu.options.filter((o) => o && typeof o === 'object') : []
+  if (!options.length) return null
+  if (options.some((o) => !Number.isInteger(o.rank))) return { kind: 'ask', reason: 'no rank' }
+  const leaders = options.filter((o) => o.rank === 1)
+  if (leaders.length !== 1) return { kind: 'ask', reason: 'rank tie' }
+  const lead = leaders[0]
+  if (lead.is_minority === true) return { kind: 'ask', reason: 'minority leader' }
+  if (!/^n\/a\b/i.test(String(lead.priced))) return { kind: 'ask', reason: 'priced: ' + lead.priced }
+  const why = lead.why_recommended || menu.why_recommended || 'ranked first in the research'
+  return { kind: 'auto', label: lead.label, why }
+}
+
 const STEPS = {
   DISCOVERY: () => {
     const exists = fs.existsSync(briefPath())
@@ -2608,8 +2671,10 @@ const STEPS = {
       // The archetype gate moved here from
       // menus-done — this step must tell the session the exact `## Picks` line it still owes.
       if (check.ok && !picks().archetype) {
-        lines.push('missing ## Picks line: - archetype: <key> (one of: ' + REGISTRY_KEYS.join(', ') + ')')
+        lines.push('📌 derive the archetype from the idea, print "📌 Auto-picked archetype <key> — <one-line reason> (veto anytime)", ' +
+          'then write - archetype: <key> under ## Picks (one of: ' + REGISTRY_KEYS.join(', ') + ')')
       }
+      lines.push(...discoveryRoundLines())
     }
     lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark discovery-done')
     return lines.join('\n')
@@ -2655,6 +2720,18 @@ const STEPS = {
       if (psRow || phRow) {
         lines.push('price every framework option against these two rows (research contextPaths include design/mocks/seed.md)')
       }
+    }
+    if (noPick.length) {
+      const asked = []
+      for (const k of noPick) {
+        const c = classifyMenu(k)
+        if (!c) continue
+        if (c.kind === 'auto') {
+          lines.push('📌 Auto-picked ' + k + ': ' + c.label + ' — ' + c.why + ' (veto anytime)')
+          lines.push('  write: - ' + k + ': ' + c.label)
+        } else asked.push(k + ' (' + c.reason + ')')
+      }
+      lines.push(asked.length ? 'ask (' + asked.length + '): ' + asked.join(', ') : 'ask (0): none')
     }
     lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark menu-written --file <menu.json>' +
       '\n  node ' + __filename + ' --root ' + root + ' --mark menus-done')
@@ -2747,6 +2824,9 @@ const STEPS = {
       'Doctrine: spec/doctrine/genesis.md § Genesis: Decision Record (one proposer)',
     ]
     if (!check.ok) lines.push(describeDecideGap(check) + '.')
+    lines.push('conventions auto-pick (8): error-taxonomy, logging, naming-identifiers, wire-representations, cross-plane-constants, env-config, ci, background-async — derive each from the stack and print 📌 Auto-picked <key> — <reason> (veto anytime)')
+    const metric = picks()['success-metric']
+    lines.push(metric ? 'success-metric: ' + metric + ' (from ## Picks)' : 'success-metric: not in ## Picks — ask it, in the user\'s words')
     lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark decided')
     return lines.join('\n')
   },
@@ -2757,12 +2837,16 @@ const STEPS = {
   FINALISTS: () => {
     const archetype = status.archetype
     const tasks = expectedTasksFor(archetype)
+    const askedDim = ['framework', 'language-runtime'].find((d) => { const c = classifyMenu(d); return c && c.kind === 'ask' })
     return [
       '## Step: name the finalists to race (or skip the race)',
       'Read only: ' + genesisRel('brief.md') + ' (## Open Dimensions, ## Picks), ' + genesisRel('interview-research/*.json'),
       'Doctrine: spec/doctrine/genesis.md § Genesis: Tournament of Scaffolds',
       'probe tasks (' + archetype + '): ' + tasks.join(', ') + ' · retry cap: 2 per task',
       'cost: roughly one mini-build per finalist (scaffold + gate + boot + probe slice)',
+      askedDim
+        ? 'default: race (Recommended) — ' + askedDim + ' was asked'
+        : 'default: skip (Recommended) — every tournament dimension was auto-picked',
       lastMeasuredLine(),
       'Then:\n  node ' + __filename + ' --root ' + root + ' --mark finalists-written --file <finalists.json>' +
         '\n  node ' + __filename + ' --root ' + root + ' --mark finalists-skipped',
@@ -2879,7 +2963,8 @@ const STEPS = {
         genesisRel('brief.md') + ' (## Journeys), docs/design/catalog.md, ' +
         genesisRel('design-paths.json') + ', ' + rulesFile,
       'Doctrine: spec/doctrine/genesis.md § Genesis: Design Stage',
-      'Dispatch: Agent {model: "fable", effort: "high"} — fresh context; hand it this step\'s read list, doctrine and skill lines verbatim (authors the brief and the tables)',
+      ...directionRoundLines(status.archetype),
+      'Dispatch: Agent {model: "fable", effort: "high"} — fresh context; hand it this step\'s read list, doctrine and skill lines verbatim (authors the brief and the tables); append the direction answers to the hand-off',
       'Skill: design-brief — load it before the first line',
     ]
     if (status.designStage && status.designStage.catalog) {
@@ -3008,6 +3093,8 @@ const STEPS = {
       '## Step: decompose the roadmap',
       'Read only: ' + descriptorRelPath() + ', docs/roadmap/, docs/design/approval.json, docs/design/brief.md',
       'Doctrine: spec/doctrine/genesis.md § Genesis: Roadmap Decomposition',
+      'proceeding unless vetoed: brief order and dependencies (reorder later with spec-queue move)',
+      'ask once: milestone gates — one AskUserQuestion',
     ]
     // The roadmap derives from
     // the approved set once docs/design/approval.json exists — a legacy or skipped-stage host

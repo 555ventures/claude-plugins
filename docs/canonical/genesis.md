@@ -212,3 +212,14 @@
   (specs/20260926/06-the-approval-stop-and-the-roadmap.md, done 2026-09-28)
 
 - Since specs/20261002/01 no genesis step reads a file under a mock app.
+
+- Since specs/20261029/06 DISCOVERY prints fifteen keys (ten coverage, four non-UI,
+  `success-metric`) in `round N of 4` groups for pre-filled confirmation; the archetype is a
+  printed `📌 Auto-picked archetype` pick before `discovery-done`. MENUS classifies each recorded,
+  unpicked dimension `auto` (one rank-1 leader, not minority, `priced` begins `n/a`) or `ask`,
+  printing `📌 Auto-picked <dim>: …` for `auto`. FINALISTS prints a race/skip default from whether
+  `framework` or `language-runtime` was asked; DECIDE prints the eight derivable conventions rows
+  and reads `success-metric` from `## Picks`; DESIGN_BRIEF prints a `## Direction round` and
+  `design-brief-written` requires `## Direction` after `## Users and context`; ROADMAP proceeds
+  unless vetoed and asks only milestone gates. Paid services are always asked (JJ, 2026-10-31).
+  (specs/20261029/06-the-genesis-question-diet.md, done 2026-10-31)

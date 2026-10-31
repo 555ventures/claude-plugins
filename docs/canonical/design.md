@@ -146,3 +146,7 @@ folder of pictures, runs the project's command with `SPEC_PICTURES_DIR` and
 round file with the seed's journeys, and sends it through `walkthrough.js` as a child process. A
 round is always every story of the project. The worklist of `mocks-driver.js round pull` names
 the spot of a note left on a picture.
+
+Since specs/20261029/06 SEED prints the idea from `.claude/genesis/brief.md` when present; every
+mocks step print is preceded by one `confirm these N assumptions` block for blocking `product`
+rows; terminal SCREENS lists every pending journey in one block.

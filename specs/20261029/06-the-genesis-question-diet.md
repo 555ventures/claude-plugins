@@ -1,6 +1,7 @@
 ---
 date: 2026-10-29
-status: hardened
+status: implementing
+build_base: main
 tier: critical           # touches spec/scripts/question-style-gate.js (hook surface, rules § Risk Tiers)
 area: genesis
 breaking: false
@@ -8,6 +9,7 @@ depends_on: []
 brief: n/a
 spiked: 2026-10-31
 open_markers: 0
+diff_base: d7af83b6d8e174c1c70de75dd92f5f18787a1359
 ---
 
 # The genesis question diet

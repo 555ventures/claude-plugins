@@ -642,14 +642,42 @@ function cmdLedger(sub, args) {
 // ---------------------------------------------------------------------------
 function driverCmd(extra) { return 'node ' + __filename + ' --root ' + root + ' ' + extra }
 
-function printStepBlock(state, title, readOnlyList, doctrineSection, thenLines, withSkill) {
-  const lines = []
+// The product rows that would block the gate, listed once ahead of any step print.
+function confirmBlockLines() {
+  let text
+  try { text = fs.readFileSync(ledgerPath, 'utf8') } catch { return [] }
+  const parsed = parseLedger(text)
+  if (parsed.errors.length) return []
+  const blocking = gateVerdict(parsed).blocking
+  if (!blocking.length) return []
+  const claimOf = (id) => (parsed.assumptions.find((r) => r.id === id) || {}).claim
+  return [
+    'confirm these ' + blocking.length + ' assumptions — one AskUserQuestion: "all correct" / "correct these: …"',
+    ...blocking.map((b) => '  ' + b.id + ' ' + b.tag + ' ' + b.status + ' — ' + claimOf(b.id)),
+    ...blocking.map((b) => '  on confirm: ' + driverCmd('ledger set --id ' + b.id + ' --status confirmed --tag said-by-user')),
+    ''
+  ]
+}
+
+// The genesis brief's first building paragraph, when the brief carries that section.
+function genesisIdeaLine() {
+  const none = 'idea: ask the user for the product idea (no .claude/genesis/brief.md)'
+  let text
+  try { text = fs.readFileSync(path.join(root, '.claude/genesis/brief.md'), 'utf8') } catch { return none }
+  const m = text.match(/^## What I think you're building[ \t]*\r?\n([\s\S]*?)(?=^## |(?![\s\S]))/m)
+  const para = m && m[1].trim().split(/\r?\n\s*\r?\n/)[0].trim().replace(/\s*\r?\n\s*/g, ' ')
+  return para ? 'idea (from genesis brief): ' + para : none
+}
+
+function printStepBlock(state, title, readOnlyList, doctrineSection, thenLines, withSkill, extraLines) {
+  const lines = confirmBlockLines()
   lines.push('[mocks-driver] state: ' + state + '  root: ' + root)
   lines.push('(re-run this driver after completing the step; it verifies artifacts and prints the next one)')
   lines.push('')
   lines.push('## Step: ' + title)
   lines.push('Read only: ' + readOnlyList.join(', '))
   lines.push('Doctrine: spec/doctrine/mocks.md § ' + doctrineSection)
+  if (extraLines) for (const l of extraLines) lines.push(l)
   if (withSkill) lines.push(SKILL_LINE)
   lines.push('Then:')
   for (const t of thenLines) lines.push('  ' + t)
@@ -662,7 +690,8 @@ function printSeedStep() {
     'Mocks: Seed',
     ['write design/mocks/seed.md: the product, then one "### <journey>" block per journey (a persona line, then numbered "sentence" -> screen[@state] beats)',
       driverCmd('--mark seed-done')],
-    false)
+    false,
+    [genesisIdeaLine()])
 }
 
 function printScreensStep(seed) {
@@ -690,16 +719,17 @@ function printScreensStep(seed) {
           driverCmd('--mark journey-approved --journey ' + name) + '   (once round pull shows the journey confirmed; or add --waive --reason <r> for an absent client)'],
         false)
     }
-    const j = todo[0][1]
-    printStepBlock('SCREENS', 'confirm journey ' + name + ' in the terminal',
-      ['design/mocks/seed.md (### ' + name + ')'],
+    printStepBlock('SCREENS', 'confirm ' + todo.length + ' journeys in the terminal',
+      ['design/mocks/seed.md'],
       'Mocks: Confirmation',
-      ['show the user exactly this, then end the turn and wait for their literal `approve`:',
-        '  ' + j.persona,
-        ...j.beats.map((b) => '  ' + b.n + '. "' + b.beat + '"'),
-        'on `approve`, run: ' + driverCmd('--mark journey-approved --journey ' + name),
+      ['end the turn and wait for the user\'s reply',
+        'approve all, or name the ones to change',
+        'on `approve`, run each:',
+        ...todo.map(([n]) => '  ' + driverCmd('--mark journey-approved --journey ' + n)),
         ...(service ? [] : ['(this project is not connected to the review service — /spec:connect connects it, and the screens are then drawn and sent)'])],
-      false)
+      false,
+      ['show the user exactly this:',
+        ...todo.flatMap(([n, j]) => ['### ' + n, j.persona, ...j.beats.map((b) => b.n + '. "' + b.beat + '"')])])
   }
   const then = []
   if (service) then.push(driverCmd('round pull') + '   (nothing may wait for an answer; answer each with walkthrough reply --note <id> --text-file <file>, then push again)')

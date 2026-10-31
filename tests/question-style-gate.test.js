@@ -233,41 +233,57 @@ function runStage(payload, envOverrides) {
 
 const DERIVE_JSON = '{"verdict":"derive","problems":["x"]}'
 
-test('AC-20260902-06-6: a derive verdict is silenced while CLAUDE_PROJECT_DIR points at a non-APPROVED mocks run or a handoff-less genesis run, advises again once mocks is APPROVED with no genesis file, and is silenced via the hook input\'s cwd when CLAUDE_PROJECT_DIR is unset', () => {
-  const wireframes = stageDir()
-  writeMocksStatus(wireframes, 'WIREFRAMES')
-  const inWireframes = runStage(TIER1_CLEAN, {
-    SPEC_QUESTION_JUDGE: '', SPEC_QUESTION_JUDGE_BIN: fakeJudge(DERIVE_JSON), CLAUDE_PROJECT_DIR: wireframes,
-  })
-  assert.strictEqual(inWireframes.status, 0,
-    'a mocks run with state !== APPROVED must exempt a derive verdict — every question inside a mocks run is a user decision by construction (D5), so blocking it here defeats the exemption: ' + inWireframes.stderr)
-  assert.strictEqual(inWireframes.stdout, '',
-    'inside the stage window the exemption suppresses the derive advisory entirely — an unrebutted "you could derive this" is exactly what pushes a session to auto-pick a product fact that was the user\'s to state')
+// specs/20261029/06-the-genesis-question-diet.md D9 (AC-20261029-06-11): the exemption narrows to
+// a question that names a coverage key or "assumption(s)"; every other in-stage derive advises.
+function askText(question) {
+  return ask([{ question, header: 'Pick', multiSelect: false, options: [GOOD_OPT, GOOD_ALT] }])
+}
 
+const PM_Q = 'Which package manager should the repo use?'
+const PAYER_Q = 'Who pays for the product (payer) — the end user or their employer?'
+const ASSUME_Q = 'These 3 assumptions about the product — all correct?'
+
+function derivedIn(question, projectDir, extraPayload = {}) {
+  const env = { SPEC_QUESTION_JUDGE: '', SPEC_QUESTION_JUDGE_BIN: fakeJudge(DERIVE_JSON) }
+  if (projectDir) env.CLAUDE_PROJECT_DIR = projectDir
+  return runStage({ ...askText(question), ...extraPayload }, env)
+}
+
+test('AC-20260902-06-6 / AC-20261029-06-11: a derive verdict is silenced inside a live run only for a question naming a coverage key or assumptions, and advises for every other question and outside any run', () => {
   const genesis = stageDir()
   writeGenesisStatus(genesis, null)
-  const inGenesis = runStage(TIER1_CLEAN, {
-    SPEC_QUESTION_JUDGE: '', SPEC_QUESTION_JUDGE_BIN: fakeJudge(DERIVE_JSON), CLAUDE_PROJECT_DIR: genesis,
-  })
-  assert.strictEqual(inGenesis.status, 0,
-    'a genesis run with handoff === null must equally exempt a derive verdict per D5\'s second clause: ' + inGenesis.stderr)
+  const pm = derivedIn(PM_Q, genesis)
+  assert.strictEqual(pm.status, 0, 'tier 2 never blocks: ' + pm.stderr)
+  assert.match(advisoryOf(pm), /answerable without the user/,
+    'a derivable stack question inside a live genesis run must still get the derive advisory — the blanket exemption switched off the one mechanism that flags derivable questions exactly where most of them fire')
+
+  const payer = derivedIn(PAYER_Q, genesis)
+  assert.strictEqual(payer.status, 0, 'tier 2 never blocks: ' + payer.stderr)
+  assert.strictEqual(payer.stdout, '',
+    'a question naming a coverage key in parentheses is a product fact and its derive advisory must be suppressed — an unrebutted "you could derive this" pushes a session to auto-pick the owner\'s own fact')
+
+  const assume = derivedIn(ASSUME_Q, genesis)
+  assert.strictEqual(assume.status, 0, 'tier 2 never blocks: ' + assume.stderr)
+  assert.strictEqual(assume.stdout, '',
+    'the batched assumptions confirmation is a product fact and its derive advisory must be suppressed')
+
+  const wireframes = stageDir()
+  writeMocksStatus(wireframes, 'WIREFRAMES')
+  assert.strictEqual(derivedIn(ASSUME_Q, wireframes).stdout, '',
+    'a mocks run with state !== APPROVED must equally suppress a derive verdict for an assumptions question')
+  assert.match(advisoryOf(derivedIn(PM_Q, wireframes)), /answerable without the user/,
+    'a derivable question inside a live mocks run must advise too, or the narrowing only covers genesis')
 
   const approved = stageDir()
   writeMocksStatus(approved, 'APPROVED')
-  const inApproved = runStage(TIER1_CLEAN, {
-    SPEC_QUESTION_JUDGE: '', SPEC_QUESTION_JUDGE_BIN: fakeJudge(DERIVE_JSON), CLAUDE_PROJECT_DIR: approved,
-  })
-  assert.strictEqual(inApproved.status, 0,
-    'tier 2 never blocks, in or out of the stage window')
-  assert.match(advisoryOf(inApproved), /answerable without the user/,
-    'once mocks/status.json says APPROVED (and no genesis file exists) the stage window is closed, so the derive advisory is emitted again — the exemption changes WHETHER the advice is sent, never the tool call\'s outcome')
+  assert.match(advisoryOf(derivedIn(PM_Q, approved)), /answerable without the user/,
+    'once mocks/status.json says APPROVED the run is not live, so the derive advisory is emitted — the exemption changes WHETHER advice is sent, never the tool call\'s outcome')
+  assert.match(advisoryOf(derivedIn(PAYER_Q, approved)), /answerable without the user/,
+    'outside a live run even a product-fact question gets the advisory, or the shield outlives the run')
 
-  const cwdPayload = { ...TIER1_CLEAN, cwd: wireframes }
-  const viaCwd = runStage(cwdPayload, {
-    SPEC_QUESTION_JUDGE: '', SPEC_QUESTION_JUDGE_BIN: fakeJudge(DERIVE_JSON),
-  })
-  assert.strictEqual(viaCwd.status, 0,
-    'with CLAUDE_PROJECT_DIR unset, D5\'s root resolution falls back to the hook input\'s own `cwd` field — a session without that env var still gets the exemption inside a mocks run: ' + viaCwd.stderr)
+  const viaCwd = runStage({ ...askText(ASSUME_Q), cwd: wireframes }, { SPEC_QUESTION_JUDGE: '', SPEC_QUESTION_JUDGE_BIN: fakeJudge(DERIVE_JSON) })
+  assert.strictEqual(viaCwd.status, 0, 'with CLAUDE_PROJECT_DIR unset the hook input\'s own cwd resolves the root: ' + viaCwd.stderr)
+  assert.strictEqual(viaCwd.stdout, '', 'a session without CLAUDE_PROJECT_DIR must still get the product-fact shield through the hook input\'s cwd')
 })
 
 test('AC-20260902-06-7: a rewrite verdict still advises inside the product-stage window, and tier-1 still blocks there', () => {

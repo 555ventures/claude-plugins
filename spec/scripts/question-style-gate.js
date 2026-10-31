@@ -38,14 +38,16 @@
 // Fail-open: any parse failure or unexpected shape allows the call (never wedge).
 // Owner: specs/20260902/06-mocks-provenance-ledger.md.
 //
-// While a mocks run (design/mocks/
-// status.json, state !== APPROVED) or a genesis run (.claude/genesis/status.json, handoff
-// null) is live under the resolved root, a "derive" judge verdict is treated as pass — every
-// question inside those runs is a user decision by construction, so the session is not even
-// handed the advisory (an unrebutted "you could derive this" is what pushes a model to
-// auto-pick). "rewrite" and every tier-1 check are unchanged. The judge prompt also carries one added rule sentence: a document that
-// cites a subject is never the user deciding it. Root resolution and stage reads fail open on
-// any error (missing/unparsable file => not in a product stage, never a block).
+// While a mocks run (design/mocks/status.json, state !== APPROVED) or a genesis run
+// (.claude/genesis/status.json, handoff null) is live under the resolved root, a "derive"
+// judge verdict is treated as pass ONLY when some question's text names a product-fact key
+// (PRODUCT_FACT_RE: payer, tenancy, data-sensitivity, ..., success-metric, assumptions) —
+// product facts are the owner's by construction, so the session is not handed the advisory
+// (an unrebutted "you could derive this" pushes a model to auto-pick). Every other in-stage
+// "derive" is advised as outside the stage. "rewrite" and every tier-1 check are unchanged.
+// The judge prompt also carries one added rule sentence: a document that cites a subject is
+// never the user deciding it. Root resolution and stage reads fail open on any error
+// (missing/unparsable file => not in a product stage, never a block).
 
 const MIN_DESC = 25 // chars — below this a description cannot carry a consequence
 const MIN_RECOMMENDED_DESC = 40 // a recommendation must also say WHY
@@ -80,6 +82,12 @@ function inProductStage(root) {
     return false
   }
   return false
+}
+
+const PRODUCT_FACT_RE = /\b(payer|tenancy|data-sensitivity|residency|ai-use|unattended|integrations|scale-outage|vendor-budget|offline-mobile|jobs|notifications|retention|admin|success-metric|assumptions?)\b/i
+
+function suppressDerive(questions, root) {
+  return inProductStage(root) && questions.some((q) => PRODUCT_FACT_RE.test(String((q && q.question) || '')))
 }
 
 function normalize(s) {
@@ -181,7 +189,7 @@ function judge(questions, input) {
   }
   if (verdict.verdict === 'derive') {
     try {
-      if (inProductStage(productStageRoot(input))) return null
+      if (suppressDerive(questions, productStageRoot(input))) return null
     } catch {
       // fail-open toward the existing derive-block behavior below
     }

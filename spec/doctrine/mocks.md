@@ -44,6 +44,8 @@ every `process` row never block — a fact the user ratified as prose stays coun
 and is re-tested on the screen that renders it, never re-asked as a question. A ledger that
 fails to parse never opens a gate (parse errors are reported, not silently passed).
 
+**One confirmation round.** Whenever at least one `product` row would block the gate, every step print is preceded by a `confirm these N assumptions` block listing each such row (`<id> <tag> <status> — <claim>`), one `AskUserQuestion` ("all correct" / "correct these: …") and the `ledger set` line per row that confirms it. Confirmed rows drop out of the block on the next run; the mark-time gate refusal stays as the backstop.
+
 **Counts line.** Every mark prints one fixed line:
 
 ```
@@ -72,7 +74,7 @@ neither; colours and the shared layout belong to the design stage (ADR-0030).
 object is in **service mode**; any other host is in **terminal mode**. Terminal mode draws and
 sends nothing: `--mark journey-drawn`, `round push` and `round pull` refuse naming `no
 walkthrough block`, the SCREENS step prints each journey's persona and sentences, and the
-user's literal `approve` is recorded with `--mark journey-approved` as `by: "terminal"`. It
+user's literal `approve` is recorded with `--mark journey-approved` as `by: "terminal"`. The terminal SCREENS step lists every pending journey in one block under `approve all, or name the ones to change`, with one `--mark journey-approved --journey <j>` line per journey; a named change edits the seed, which reopens that journey by hash. It
 never creates `design/rounds/` or `design/mocks/screens/`. An approval made in one mode stays
 valid in the other — the story hash is the only test.
 
@@ -106,6 +108,8 @@ from the beats, `labels` and `edges` (every consecutive beat pair whose screens 
 `beatHash(beats)` is the one hash of a journey's story — the first 12 hex of sha256 over its
 canonical `<beat> -> <screen>[@<state>]` lines — shared by the driver and the walkthrough
 service's confirm (§ Mocks: Confirmation).
+
+SEED reads the idea from `.claude/genesis/brief.md`'s `## What I think you're building` when that file has it (the step prints `idea (from genesis brief): …`) and asks the user for it only when it does not.
 
 `--mark seed-done` accepts when the seed declares at least one journey, every journey has a
 beat and no malformed line, and the ledger gate is open (§ Provenance Ledger). It reads no
@@ -195,5 +199,4 @@ answer.
 
 Enforced by `question-style-gate.js` — its header comment is the contract. While a mocks run is live (`design/mocks/status.json` exists with `state` other than
 `APPROVED`) or a genesis run is live (`.claude/genesis/status.json` exists with `handoff`
-null), the question-style gate's tier-2 judge cannot return `derive` — that verdict is treated
-as `pass` instead.
+null), the question-style gate's tier-2 `derive` verdict is treated as `pass` only when some question names a product-fact key (the coverage keys, `success-metric`) or `assumption(s)` — which is why discovery questions name their key in parentheses; every other `derive` is advised as outside the stage.

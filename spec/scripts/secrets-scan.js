@@ -6,10 +6,12 @@
 // /git:commit Step 1 runs it beside `git add -A` so a would-be-staged secret becomes a question
 // on evidence, never a model's guess.
 //
-// --worktree scans every path `git status --porcelain -z --untracked-files=all` lists under
-// --root that still exists on disk (the set `git add -A` stages; deletions skipped, ignored files
-// never listed); only paths under --root count, and hits are reported relative to --root even
-// when --root is a sub-directory of the repo. --paths scans one repo-relative path per line from <file>.
+// --worktree scans every path `git status --porcelain -z --untracked-files=all` lists for the
+// whole repository that still exists on disk (the set `git add -A` stages from any directory;
+// deletions skipped, ignored files never listed). --root only locates the repository and anchors
+// the reported paths: hits are relative to --root, so a file outside a sub-directory root reads
+// `../<path>` and `git reset -q -- <path>` run from --root unstages exactly it. --paths scans one
+// --root-relative path per line from <file>.
 //
 // Closed detector list — no host configuration:
 //   path (basename):  .env, .env.* except .env.example|.env.sample|.env.template; *.pem *.key
@@ -85,8 +87,8 @@ if (worktree) {
   const st = spawnSync('git', ['-C', root, 'status', '--porcelain', '-z', '--untracked-files=all'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
   if (st.status !== 0) { console.error('secrets-scan: git status failed — run git status in ' + root); process.exit(2) }
   const parts = st.stdout.split('\0').filter(Boolean)
-  // Porcelain paths are relative to the repo toplevel, not --root: resolve against the toplevel,
-  // keep only paths under --root, and report them relative to --root.
+  // Porcelain paths are relative to the repo toplevel, not --root: resolve against the toplevel
+  // and report them relative to --root. Never filter to --root — `git add -A` does not.
   const top = spawnSync('git', ['-C', root, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' })
   if (top.status !== 0) { console.error('secrets-scan: cannot resolve the repo toplevel — run git rev-parse in ' + root); process.exit(2) }
   const topDir = top.stdout.trim()
@@ -96,14 +98,12 @@ if (worktree) {
   for (let i = 0; i < parts.length; i++) {
     const code = parts[i].slice(0, 2), p = parts[i].slice(3)
     if (code[0] === 'R' || code[0] === 'C') i++ // rename/copy: the next entry is the source path
-    const rel = path.relative(realRoot, path.join(topDir, p))
-    if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) continue
-    files.push(rel)
+    files.push(path.relative(realRoot, path.join(topDir, p)))
   }
 } else {
   let txt
   try { txt = fs.readFileSync(paths, 'utf8') } catch {
-    console.error(`secrets-scan: cannot read --paths file ${paths} — pass a readable file of repo-relative paths`)
+    console.error(`secrets-scan: cannot read --paths file ${paths} — pass a readable file of --root-relative paths`)
     process.exit(2)
   }
   files = txt.split('\n').map(s => s.trim()).filter(Boolean)

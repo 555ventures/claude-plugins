@@ -3,6 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
+const { spawnSync } = require('node:child_process')
 const { read, tmpdir, runNode, gitRepo } = require('../helpers')
 
 // specs/20261029/04-the-four-questions-that-did-not-exist.md D1/D1a:
@@ -51,12 +52,21 @@ test('AC-20261029-04-1: WHEN the uncommitted set is only a file containing hello
   assert.deepStrictEqual(JSON.parse(r.stdout), { hits: [] }, 'a clean tree must print an empty hits list so --json consumers parse it: ' + r.stdout)
 })
 
-test('AC-20261029-04-1: WHEN --root is a sub-folder of the work tree THE SYSTEM SHALL report only files under it, with paths relative to --root', () => {
+test('AC-20261029-04-1: WHEN --root is a sub-folder of the work tree THE SYSTEM SHALL report every file git add -A stages, with paths relative to --root that git reset accepts from there', () => {
   const dir = hostWith({ '.env': 'ROOT=1\n', 'pkg/id_rsa': 'anything\n' })
-  const r = runNode(SCRIPT, ['--root', path.join(dir, 'pkg'), '--worktree', '--json'])
-  assert.strictEqual(r.status, 1, 'a secret in a sub-folder must not be silently dropped when /git:commit runs from that sub-folder: ' + r.stdout + r.stderr)
-  assert.deepStrictEqual(JSON.parse(r.stdout).hits, [{ path: 'id_rsa', reason: 'path:id_rsa', line: null }],
-    'a file outside --root must not be reported, and pkg/id_rsa must appear relative to --root, or a hit names the wrong path: ' + r.stdout)
+  const pkg = path.join(dir, 'pkg')
+  const r = runNode(SCRIPT, ['--root', pkg, '--worktree', '--json'])
+  assert.strictEqual(r.status, 1, 'a secret must not be silently dropped when /git:commit runs from a sub-folder: ' + r.stdout + r.stderr)
+  const hits = byPath(JSON.parse(r.stdout).hits)
+  assert.deepStrictEqual(hits, [
+    { path: '../.env', reason: 'path:.env', line: null },
+    { path: 'id_rsa', reason: 'path:id_rsa', line: null },
+  ], 'git add -A stages the whole repository from any folder, so a root-level .env outside --root must still be a hit, or it stages with no question: ' + r.stdout)
+  const git = (...a) => spawnSync('git', a, { cwd: pkg, encoding: 'utf8' })
+  git('add', '-A')
+  git('reset', '-q', '--', ...hits.map(h => h.path))
+  assert.strictEqual(git('diff', '--cached', '--name-only').stdout.trim(), '',
+    'commit.md resets the hit paths from the folder it scanned; a path git cannot resolve from there leaves the secret staged')
 })
 
 test('AC-20261029-04-1: WHEN --root is not a git work tree THE SYSTEM SHALL exit 2 with a reason on stderr', () => {

@@ -1,6 +1,6 @@
 ---
 date: 2026-10-29
-status: implementing
+status: done
 build_base: main
 tier: standard           # touches decision-lint.js, two lib parsers, four doctrine files and tests — none is a rules § Risk Tiers surface (no spec-paths key, no grounding-contract edit, no verdict.js/spec-status.js edit)
 area: doctrine

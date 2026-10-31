@@ -91,7 +91,12 @@ session is already inside the tree it would create.
 (specs/20260912/03-run-isolates-and-owns-the-stages.md, done 2026-09-12)
 
 Status transitions are owned by driver states, not commands: plan's lock → `hardened`, the
-build driver's preflight → `implementing`, the review driver's close → `done`. There is no stop
+build driver's preflight → `implementing`, the review driver's close → `done`.
+Lock reads three structural carriers through `decision-lint`: a `breaking: true` spec needs an
+`[asked:]` or `[breaking:]` Decision; a dependency manifest or lockfile in the File Plan prints
+`📌 adds or changes dependencies` and must name its packages in the row's Summary (or say `no
+dependency change`); a non-empty Data Model makes the spec critical and must carry an `existing
+rows:` line. Specs dated before 2026-10-29 are exempt (specs/20261029/05). There is no stop
 between the reviewer's return and dispositions. Independence is a fresh-context
 `spec:disposer` agent (read-only, paths only, `opus` at `effort: medium` — the disposer seat in
 core § Model Placement) dispatched at

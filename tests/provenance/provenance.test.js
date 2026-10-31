@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runBash, runNode, SPEC, assistantUsageLine } = require('../helpers')
+const { tmpdir, runBash, runNode, SPEC, assistantUsageLine, gitRepo } = require('../helpers')
 
 // specs/20260901/02-run-provenance.md D1/D2/D3 (brief 18): a review row is ledger-answerable
 // only when it names which command shape produced it (via) and which model held the session
@@ -146,6 +146,36 @@ test('AC-20260901-02-2: sessionModel(root) returns the last "type":"assistant" l
   writeStamp(root, { transcriptPath: transcript })
   assert.strictEqual(sessionModel(root), 'claude-opus-5',
     'sessionModel must walk the transcript backwards to find the LAST assistant line, not the first — a later user line must not shadow it')
+})
+
+// /spec:fix 2026-10-30 — the hook stamps the PROMPT's cwd (the main checkout) while a driver
+// inside /spec:run's isolation reads repoRoot, a linked worktree; a per-checkout read derived
+// model:null and sessionTokens:null on every worktree row (20261029/01, /02, /03). The reader
+// now resolves the stamp per repository: <root> and the main working tree, freshest ts wins.
+test('/spec:fix 2026-10-30: readSessionStamp/sessionModel(<linked worktree>) fall back to the main working tree\'s stamp, and the freshest ts wins when both trees carry one', () => {
+  delete require.cache[LIB]
+  const { readSessionStamp, sessionModel } = require(LIB)
+  const main = fs.realpathSync(tmpdir('sess-stamp-wt-main'))
+  const g = gitRepo(main)
+  const wt = path.join(main, '.claude', 'worktrees', 'spec-x')
+  g('worktree', 'add', '-q', '-b', 'spec/x', wt)
+  const transcript = path.join(main, 'transcript.jsonl')
+  writeTranscript(transcript, [
+    { type: 'assistant', message: { model: 'claude-opus-5', content: 'ok' } }
+  ])
+  writeStamp(main, { sessionId: 'main-session', transcriptPath: transcript, ts: '2026-10-30T01:00:00Z' })
+  assert.strictEqual(readSessionStamp(wt).sessionId, 'main-session',
+    'a linked worktree with no stamp of its own must read the main working tree\'s stamp — the hook only ever writes to the prompt\'s cwd, so a per-checkout read leaves every worktree row with model:null')
+  assert.strictEqual(sessionModel(wt), 'claude-opus-5',
+    'sessionModel(<linked worktree>) must derive the model through the main tree\'s stamp — this is the value the build and review rows record')
+  writeStamp(wt, { sessionId: 'older-local', transcriptPath: transcript, ts: '2026-10-29T01:00:00Z' })
+  assert.strictEqual(readSessionStamp(wt).sessionId, 'main-session',
+    'when both trees carry a stamp the freshest ts must win — a stale stamp left in the worktree must not shadow the live session')
+  writeStamp(wt, { sessionId: 'newer-local', transcriptPath: transcript, ts: '2026-10-30T02:00:00Z' })
+  assert.strictEqual(readSessionStamp(wt).sessionId, 'newer-local',
+    'a fresher stamp in the worktree itself must win over the main tree\'s — a session prompting from inside the worktree is the live one')
+  assert.strictEqual(readSessionStamp(main).sessionId, 'main-session',
+    'reading from the main tree itself must not consult linked worktrees — only the main tree is the shared fallback')
 })
 
 test('AC-20260901-02-2: sessionModel(root) returns null when no stamp file exists, without throwing', () => {

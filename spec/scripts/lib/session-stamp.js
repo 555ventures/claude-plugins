@@ -1,7 +1,12 @@
 'use strict'
 // lib/session-stamp.js the read side of
 // the session-provenance mechanism spec-session-stamp.sh writes. readSessionStamp(root) parses
-// <root>/.claude/spec-session.json; sessionModel(root) derives the session's model id from the
+// <root>/.claude/spec-session.json AND <main worktree>/.claude/spec-session.json (the main
+// working tree of root's repository, the first entry of `git worktree list`) and returns the
+// freshest by ts — the hook stamps the PROMPT's cwd (the main checkout), while a driver's
+// repoRoot inside /spec:run's isolation is a linked worktree that never receives a stamp.
+// Keying the read per repository ties writer and reader together without changing the hook;
+// sessionModel(root) derives the session's model id from the
 // LAST "type":"assistant" line of the stamped transcript's final 512 KiB; sessionUsage(root)
 // sums the stamped transcript's token counters over the WHOLE file (read whole, scanned line by
 // line — not the 512 KiB tail), counting the FIRST "type":"assistant" line per message.id only
@@ -30,11 +35,22 @@
 // throwing or exiting.
 const fs = require('fs')
 const path = require('path')
+const { spawnSync } = require('child_process')
 
 const STAMP_RELPATH = path.join('.claude', 'spec-session.json')
 const TAIL_BYTES = 512 * 1024
 
-function readSessionStamp(root) {
+// The main working tree of root's repository: the first `worktree <path>` line of
+// `git worktree list --porcelain` (git lists the main tree first, linked trees after). null
+// when root is not inside a git repository or git is unavailable — then only <root> is read.
+function mainWorktreeRoot(root) {
+  const r = spawnSync('git', ['-C', root, 'worktree', 'list', '--porcelain'], { encoding: 'utf8' })
+  if (r.error || r.status !== 0) return null
+  const m = /^worktree (.+)$/m.exec(r.stdout)
+  return m ? m[1] : null
+}
+
+function readStampAt(root) {
   let raw
   try {
     raw = fs.readFileSync(path.join(root, STAMP_RELPATH), 'utf8')
@@ -54,6 +70,26 @@ function readSessionStamp(root) {
     cwd: parsed.cwd,
     ts: parsed.ts,
   }
+}
+
+function sameDir(a, b) {
+  try { return fs.realpathSync(a) === fs.realpathSync(b) } catch { return a === b }
+}
+
+// Freshest stamp across <root> and the repository's main working tree; <root> wins a tie or an
+// unparseable ts, so a non-git root behaves exactly as before. The ts comparison is a plain
+// string compare, correct only because spec-session-stamp.sh always writes the same
+// fixed-width second-resolution UTC shape (date -u +%Y-%m-%dT%H:%M:%SZ) — a hook that
+// changed that shape must change this compare with it.
+function readSessionStamp(root) {
+  const local = readStampAt(root)
+  const main = mainWorktreeRoot(root)
+  if (!main || sameDir(main, root)) return local
+  const shared = readStampAt(main)
+  if (!local) return shared
+  if (!shared) return local
+  const ts = s => (typeof s.ts === 'string' ? s.ts : '')
+  return ts(shared) > ts(local) ? shared : local
 }
 
 // Reads the transcript's final TAIL_BYTES (whole file when smaller), walks its lines backwards,

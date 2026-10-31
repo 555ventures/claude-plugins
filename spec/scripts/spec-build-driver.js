@@ -32,7 +32,8 @@
 // that once chose between it and a direct invocation is gone; `via` itself stays a measurement
 // field fleet-reader.js still buckets escapes-per-CLEAN by. The DONE row gains `via`/`model`
 // immediately after `tier` — model derived at row-write time by lib/session-stamp.js's
-// sessionModel(repoRoot), `null` on a host with no .claude/spec-session.json stamp.
+// sessionModel(repoRoot), `null` on a host with no .claude/spec-session.json stamp in repoRoot
+// or its repository's main working tree (a linked worktree reads the main tree's stamp).
 //
 // States: PREFLIGHT (driver-only) -> TESTS -> RED_CHECK (driver-only) -> RED_FINDINGS? ->
 //   RED_ATTRIBUTION? -> WAVE:<label>... -> INTEGRATION -> GATE (driver-only) -> REPAIR? (cap 3;

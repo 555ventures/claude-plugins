@@ -60,8 +60,8 @@ test('AC-20261029-01-3 / AC-20261029-08-10: core.md § Model Placement carries t
   assert.doesNotMatch(section, /different family/,
     'the retired "different family" phrasing is still taught, contradicting the fresh-context independence rule');
   const fix = fs.readFileSync(path.join(SPEC, 'commands/fix.md'), 'utf8');
-  assert.ok(fix.includes('`fable` at `effort: low`'),
-    'fix.md step 4 names a reviewer seat other than the table row, so /spec:fix dispatches a seat the doctrine no longer defines');
+  assert.ok(fix.includes('`policy.models.reviewer`') && fix.includes('reviewer row of core § Model Placement'),
+    'fix.md step 4 does not take the reviewer seat from the host policy with the table row as its default, so /spec:fix dispatches a seat the doctrine no longer defines');
   assert.ok(!fix.includes('`opus` at `effort: high`'),
     'fix.md still teaches the retired opus/high reviewer seat, contradicting core.md § Model Placement');
 });

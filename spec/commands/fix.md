@@ -1,5 +1,5 @@
 ---
-description: Root-cause repair in the Direct lane — this session owns the diagnosis, the structural change and the judgement; a root-cause statement before the first edit, a regression test, one decisions stop over every authored string and policy choice, one different-family reviewer, then the host gate and /git:commit (which records the fix row)
+description: Root-cause repair in the Direct lane — this session owns the diagnosis, the structural change and the judgement; a root-cause statement before the first edit, a regression test, one decisions stop over every authored string and policy choice, one fresh-context reviewer on the host's reviewer seat, then the host gate and /git:commit (which records the fix row)
 argument-hint: "[symptom in plain words] — optional; bare mid-session derives the defect from the conversation"
 ---
 
@@ -13,7 +13,7 @@ states it; new behaviour, a new screen or an unmade product decision STOPs here 
 row, or the escape row when the commit touches lines a reviewed spec landed — `/git:commit` step 3 writes it.
 
 **Setup:** run `spec-paths shared-for fix` and read its output. Read the host's
-`.claude/spec.config.json` (`gateCommand`, `testCommand`, `layerGroups`, `pipelineRules`).
+`.claude/spec.config.json` (`gateCommand`, `testCommand`, `layerGroups`, `pipelineRules`, `policy`).
 Either missing → STOP: run `/spec:init` first.
 
 ## Input
@@ -49,8 +49,8 @@ continue; nothing identifiable → ask for the symptom, the only unrecoverable i
    § Question Style); a vetoed item reverts to the pre-fix behaviour and is not re-asked. Empty
    list → skip without output. Dismissed → STOP, edits left in the tree, nothing committed.
 4. **Fresh review.** Dispatch ONE `Agent {subagent_type: 'spec:reviewer'}` — read-only, blind to
-   this conversation — on the agent's own seat (`fable` at `effort: low`, core § Model Placement),
-   with no per-call override. Hand it: the
+   this conversation — with `model` and `effort` from the config's `policy.models.reviewer` (a field it
+   omits takes the reviewer row of core § Model Placement). Hand it: the
    root-cause statement and step 3's approved list in place of a spec, with the line "no File
    Plan or ACs exist — judge the diff against the statement"; the range `git rev-parse HEAD`
    plus the dirty working tree, untracked files included; the root; the config's `pipelineRules`

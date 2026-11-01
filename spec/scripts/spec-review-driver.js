@@ -245,7 +245,7 @@ const { fmBlock, fmValue, fmMap } = require('./lib/frontmatter')
 // text no longer names an advisory fidelity-check run against a second, rendered artifact — the
 // mocks are the components now, so there is nothing left for review.md's dispatch line to
 // describe beyond the reviewer itself. readConfig still backs the close-time gateCommand re-run below.
-const { readConfig, policy, CONFIG_RELPATH } = require('./lib/host-config')
+const { readConfig, policy, agentCall, CONFIG_RELPATH } = require('./lib/host-config')
 // the close-time
 // host-gate re-run in handleClosed() shares the exact {testDirs}/{scopeDirs} resolution
 // review-legs.js's own gate leg uses — a second, paraphrased copy here would be a drift seam.
@@ -1095,12 +1095,6 @@ function writeReviewRef(runId, leaf, sha) {
 }
 
 // ---- CLOSE driver work: authoritative verdict + ledger append + status flip --------------------
-// `model: <m>, effort: <e>` for a policy seat, read at print time.
-function seatArgs(seat) {
-  const s = policy(repoRoot).models[seat]
-  return `model: ${s.model}, effort: ${s.effort}`
-}
-
 function doCloseWork(n) {
   const runId = ensureRunId()
   const diffLoc = computeDiffLoc()
@@ -1320,7 +1314,7 @@ function handleReviewerReturned() {
   }
   if (json.verdict === 'REVIEWER_FAILED') {
     die('the reviewer returned REVIEWER_FAILED (the run died mid-review, never CLEAN) — ' +
-      're-dispatch Agent {subagent_type: "spec:reviewer"} and mark reviewer-returned again once it completes')
+      're-dispatch ' + agentCall(repoRoot, 'reviewer', 'spec:reviewer') + ' and mark reviewer-returned again once it completes')
   }
   if (!Array.isArray(json.survivors)) {
     die('--file ' + file + ' is missing a survivors array — the reviewer return shape must be ' +
@@ -1471,7 +1465,7 @@ function handleDispositions() {
     const file = flag('--file')
     if (!file || typeof file !== 'string') {
       die('--mark dispositions needs --file <disposer return json> — the survivor/leg-finding pools ' +
-        'are non-empty, so dispatch Agent {subagent_type: "spec:disposer"} first and pass the path ' +
+        'are non-empty, so dispatch ' + agentCall(repoRoot, 'disposer', 'spec:disposer') + ' first and pass the path ' +
         'it wrote its return to')
     }
     let raw
@@ -1486,7 +1480,7 @@ function handleDispositions() {
     }
     if (ret.verdict === 'DISPOSER_FAILED') {
       die('the disposer returned DISPOSER_FAILED (a failed dispatch, never a disposition) — ' +
-        're-dispatch Agent {subagent_type: "spec:disposer"} and mark dispositions again once it completes')
+        're-dispatch ' + agentCall(repoRoot, 'disposer', 'spec:disposer') + ' and mark dispositions again once it completes')
     }
     if (!Array.isArray(ret.dispositions)) {
       die('--file ' + file + ' is missing a dispositions array — the disposer return shape must be ' +
@@ -2595,7 +2589,7 @@ const STEPS = {
       const priorReviewer = path.join(sidecarDir, `reviewer-return-${from}.json`)
       const priorDisposer = path.join(sidecarDir, `disposer-return-${from}.json`)
       return `## Step: dispatch the reviewer — fix-delta pass\n` +
-        `Legs are green. Dispatch ONE Agent {subagent_type: "spec:reviewer", ${seatArgs('reviewer')}} with the spec path, ` +
+        `Legs are green. Dispatch ONE ${agentCall(repoRoot, 'reviewer', 'spec:reviewer')} with the spec path, ` +
         `diff base ${base}, root ${repoRoot}, and this pass's inputs:\n` +
         `  changed files: ${deltaFile}\n` +
         `  prior reviewer return: ${priorReviewer}\n` +
@@ -2604,7 +2598,7 @@ const STEPS = {
         tail
     }
     return `## Step: dispatch the reviewer\n` +
-      `Legs are green. Dispatch ONE Agent {subagent_type: "spec:reviewer", ${seatArgs('reviewer')}} with the spec path, ` +
+      `Legs are green. Dispatch ONE ${agentCall(repoRoot, 'reviewer', 'spec:reviewer')} with the spec path, ` +
       `diff base ${base}, root ${repoRoot}, and this run's evidence:\n` +
       `  manifest: ${manifestPath}\n  outputs: ${outDir}\n` +
       tail
@@ -2638,7 +2632,7 @@ const STEPS = {
       `leg findings (${legs.length} leg(s), ${legs.reduce((t, r) => t + countLegFinding(r), 0)} finding(s) — ` +
       `one leg:<name> disposition covers the leg's whole count):\n` +
       legs.map((r) => `  leg:${r.leg} exit=${r.exit} count=${countLegFinding(r)} ${JSON.stringify(r.observed)}`).join('\n') + '\n' +
-      `Dispatch ONE Agent {subagent_type: "spec:disposer", ${seatArgs('disposer')}} with the spec path, diff base ${base}, ` +
+      `Dispatch ONE ${agentCall(repoRoot, 'disposer', 'spec:disposer')} with the spec path, diff base ${base}, ` +
       `root ${repoRoot}, the pipeline-rules path${pipelineRulesPath ? ' (' + pipelineRulesPath + ')' : ' (none declared)'}, ` +
       `and this iteration's evidence:\n` +
       `  reviewer return: ${marks.reviewerReturnFile}\n` +
@@ -2676,7 +2670,7 @@ const STEPS = {
       `refused. Surface this to the user — a capped run needs a decision, not a fourth dispatch.\n` +
       rowLine +
       `Remedy — two exits:\n` +
-      `  waive/reject: dispatch Agent {subagent_type: "spec:disposer", ${seatArgs('disposer')}} against the ESCALATE pool ` +
+      `  waive/reject: dispatch ${agentCall(repoRoot, 'disposer', 'spec:disposer')} against the ESCALATE pool ` +
       `with every entry waive or reject (an effective fix is refused at a spent cap) — the derived ` +
       `tally is dispositions --fix-dispatched 0 once every entry is covered, closing normally:\n` +
       `    node ${__filename} ${specPath} --mark dispositions --file <return.json>\n` +

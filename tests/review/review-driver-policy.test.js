@@ -4,7 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
-const { tmpdir, runBash, gitRepo } = require('../helpers')
+const { tmpdir, runBash, gitRepo, writePolicy } = require('../helpers')
 const {
   makeHost, run, stateOf, toReviewer, returnFileWith, CLEAN_RETURN, SURVIVOR_RETURN, ledgerRows,
 } = require('./review-driver.fixtures')
@@ -12,19 +12,11 @@ const {
 // specs/20261029/09-the-commands-read-the-policy-block.md (AC-20261029-09-3, -5, -9): the review
 // driver's MERGE, CLOSE and dispatch lines read the host's policy block.
 
-function setPolicy(root, block) {
-  if (!block) return
-  const cfgPath = path.join(root, '.claude/spec.config.json')
-  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
-  cfg.policy = block
-  fs.writeFileSync(cfgPath, JSON.stringify(cfg))
-}
-
 // ---- AC-20261029-09-9: dispatch lines ---------------------------------------------------------
 
 function reviewerAndDispositionsOut(block) {
   const host = makeHost()
-  setPolicy(host.root, block)
+  writePolicy(host.root, block)
   const first = run(host.root, host.spec)
   assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER',
     'setup precondition: green legs must reach REVIEWER: ' + first.stdout + first.stderr)
@@ -52,6 +44,18 @@ test('AC-20261029-09-9: WHEN there is no policy block THE SYSTEM prints fable/lo
     'the default reviewer dispatch line does not spell the seat table model and effort: ' + reviewerOut)
   assert.ok(dispOut.includes('Agent {subagent_type: "spec:disposer", model: opus, effort: medium}'),
     'the default disposer dispatch line does not spell the seat table model and effort: ' + dispOut)
+})
+
+test('/spec:fix seat gaps: WHEN the reviewer returns REVIEWER_FAILED under a reviewer policy seat THE SYSTEM names that seat in the re-dispatch remedy', () => {
+  const host = makeHost()
+  writePolicy(host.root, { models: { reviewer: { model: 'opus', effort: 'high' } } })
+  run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', 'setup precondition: green legs must reach REVIEWER')
+  const r = run(host.root, host.spec, '--mark', 'reviewer-returned',
+    '--file', returnFileWith('rvpol-failed', { verdict: 'REVIEWER_FAILED' }))
+  assert.notStrictEqual(r.status, 0, 'a REVIEWER_FAILED return must be refused: ' + r.stdout + r.stderr)
+  assert.ok(r.stderr.includes('re-dispatch Agent {subagent_type: "spec:reviewer", model: opus, effort: high}'),
+    'the REVIEWER_FAILED remedy re-dispatches with no seat, so the retry silently drops the host policy: ' + r.stderr)
 })
 
 // ---- AC-20261029-09-5: CLOSE and testExpiry ---------------------------------------------------

@@ -3,7 +3,7 @@ const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { ROOT, SPEC, read } = require('../helpers')
+const { ROOT, SPEC, read, writePolicy } = require('../helpers')
 const { makeNoTestsHost, run } = require('../build/build-driver.fixtures')
 
 // specs/20261029/01-model-placement-refresh.md (AC-20261029-01-7, -8, -9, -10): model seats are
@@ -17,7 +17,7 @@ test('AC-20261029-01-7: fix.md step 4 dispatches the spec:reviewer seat uncondit
   const end = rest.search(/\n5\. /)
   const step = end === -1 ? rest : rest.slice(0, end)
   assert.ok(step.includes("Agent {subagent_type: 'spec:reviewer'}"),
-    'step 4 must dispatch the reviewer agent so its own opus/high seat applies')
+    'step 4 must dispatch the reviewer agent so the reviewer seat applies')
   assert.ok(!step.includes('when this session runs Fable'),
     'step 4 still switches the reviewer by session model, inverting the seat in a Fable session')
   assert.ok(!step.includes('a different family'),
@@ -33,10 +33,7 @@ test('AC-20261029-01-8 / AC-20261029-09-8: the build driver wave step prints the
   assert.ok(!r.stdout.includes('Agent {model: sonnet} per layer'),
     'the printed wave step still shows the effortless worker seat')
   const o = makeNoTestsHost()
-  const cfgPath = path.join(o.root, '.claude/spec.config.json')
-  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
-  cfg.policy = { models: { workers: { model: 'opus', effort: 'medium' } } }
-  fs.writeFileSync(cfgPath, JSON.stringify(cfg))
+  writePolicy(o.root, { models: { workers: { model: 'opus', effort: 'medium' } } })
   o.g('add', '-A'); o.g('commit', '-q', '-m', 'policy')
   const ro = run(o.root, o.spec)
   assert.ok(ro.stdout.includes('Agent {model: opus, effort: medium} per layer above and KEEP it'),

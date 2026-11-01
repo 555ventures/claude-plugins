@@ -1,8 +1,7 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert')
-const fs = require('node:fs')
-const path = require('node:path')
+const { writePolicy } = require('../helpers')
 const fx = require('./wireframe-fixtures')
 
 // specs/20261029/09-the-commands-read-the-policy-block.md (AC-20261029-09-7): the terminal SCREENS
@@ -19,12 +18,7 @@ function confirmStep(policyBlock) {
       'team-invite': fx.journeyEntry({ approved: null, beats: fx.H_TEAM }),
     },
   })
-  if (policyBlock) {
-    const cfgPath = path.join(root, '.claude/spec.config.json')
-    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
-    cfg.policy = policyBlock
-    fs.writeFileSync(cfgPath, JSON.stringify(cfg))
-  }
+  writePolicy(root, policyBlock)
   const r = fx.runDriver(root, [])
   assert.strictEqual(r.status, 0, 'setup precondition: the driver must print the SCREENS confirm step: ' + r.stdout + r.stderr)
   assert.match(r.stdout, /confirm 2 journeys in the terminal/,

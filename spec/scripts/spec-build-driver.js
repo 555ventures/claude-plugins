@@ -121,7 +121,7 @@ const path = require('path')
 const crypto = require('crypto')
 const { runChild, runHost, writeOut, appendLedger, loadSidecar, saveSidecar: saveSidecarLib } = require('./lib/driver-io')
 const { fmValue } = require('./lib/frontmatter')
-const { readConfig, policy, CONFIG_RELPATH } = require('./lib/host-config')
+const { readConfig, agentCall, CONFIG_RELPATH } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
 const { parseFilePlanRows, isTestsRow } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
@@ -1336,10 +1336,9 @@ function waveStepBody(label) {
       orchFiles.map((f) => '    ' + JSON.stringify(f)).join('\n')
     : null
   const body = [...layerBlocks, ...(orchBlock ? [orchBlock] : [])].join('\n')
-  const seat = policy(repoRoot).models.workers
   const header = (perLayer.size === 0 && orchBlock)
     ? `## Step: wave ${label} — orchestrator rows only, spawn no worker\n`
-    : `## Step: wave ${label} — spawn one long-lived Agent {model: ${seat.model}, effort: ${seat.effort}} per layer above and KEEP it\n`
+    : `## Step: wave ${label} — spawn one long-lived ${agentCall(repoRoot, 'workers')} per layer above and KEEP it\n`
   const skippedNote = skippedWaves.length
     ? `empty wave(s) skipped — no File Plan rows: ${skippedWaves.join(', ')}\n`
     : ''

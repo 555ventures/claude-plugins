@@ -1,8 +1,7 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert')
-const fs = require('node:fs')
-const path = require('node:path')
+const { writePolicy } = require('../helpers')
 const { makeNoTestsHost, run } = require('./build-driver.fixtures')
 
 // specs/20261029/09-the-commands-read-the-policy-block.md (AC-20261029-09-8): the build driver's
@@ -11,10 +10,7 @@ const { makeNoTestsHost, run } = require('./build-driver.fixtures')
 function waveOut(policyBlock) {
   const h = makeNoTestsHost()
   if (policyBlock) {
-    const cfgPath = path.join(h.root, '.claude/spec.config.json')
-    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
-    cfg.policy = policyBlock
-    fs.writeFileSync(cfgPath, JSON.stringify(cfg))
+    writePolicy(h.root, policyBlock)
     h.g('add', '-A'); h.g('commit', '-q', '-m', 'policy')
   }
   const r = run(h.root, h.spec)

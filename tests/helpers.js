@@ -379,8 +379,18 @@ function assistantUsageLine(id, { input, cacheCreate, cacheRead, output }) {
   return { type: 'assistant', message }
 }
 
+// Set a host fixture's `.claude/spec.config.json` policy block (no-op for a falsy block); the
+// caller commits when its driver reads the committed tree.
+function writePolicy(root, block) {
+  if (!block) return
+  const cfgPath = path.join(root, '.claude', 'spec.config.json')
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+  cfg.policy = block
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg))
+}
+
 module.exports = {
   assistantUsageLine,
   ROOT, SPEC, read, extractFn, evalFns, checkWorkflowSyntax, tmpdir, runNode, runBash, gitRepo,
-  freePort, parseFlatDom, sweepRetiredLiteral,
+  freePort, parseFlatDom, sweepRetiredLiteral, writePolicy,
 }

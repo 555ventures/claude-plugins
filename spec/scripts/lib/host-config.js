@@ -42,7 +42,9 @@
 // `POLICY_DEFAULTS`, `policy(root)` and `validatePolicy(block)` are the one declaration, one accessor
 // and one validator of the config's optional `policy` block. `policy` deep-merges a host's partial
 // block over the defaults and drops unknown keys; `validatePolicy` is what `init-gen.js generate` and `policy-check` refuse or report with. Neither
-// writes anything, and no reader of a key lives here (the commands that read them are spec 09's).
+// writes anything, and no reader of a key lives here (the commands that read them are spec 09's) —
+// except `agentCall(root, seat, subagentType)`, the one writer of a printed `Agent {…}` dispatch:
+// every driver line that dispatches a policy seat is built by it, so none can print without one.
 //
 // Exit codes: n/a (library, not an entrypoint).
 
@@ -148,6 +150,13 @@ function mergePolicy(raw) {
 // The host's effective policy: its config's block merged over the defaults.
 function policy(root) { return mergePolicy(readConfig(root).policy) }
 
+// `Agent {subagent_type: "<t>", model: <m>, effort: <e>}` (subagent_type omitted when absent) for a
+// policy seat, read from the host's policy at print time.
+function agentCall(root, seatName, subagentType) {
+  const s = policy(root).models[seatName]
+  return `Agent {${subagentType ? `subagent_type: "${subagentType}", ` : ''}model: ${s.model}, effort: ${s.effort}}`
+}
+
 // [] or one finding string per defect. A partial block is valid (absent keys take defaults).
 function validatePolicy(block) {
   if (!isObj(block)) return ['policy: expected an object']
@@ -178,5 +187,5 @@ function validatePolicy(block) {
 
 module.exports = {
   readConfig, readConfigStrict, declaredForge, configPath, configExists, CONFIG_RELPATH,
-  DEFAULT_TEST_GLOBS, POLICY_DEFAULTS, policy, mergePolicy, validatePolicy,
+  DEFAULT_TEST_GLOBS, POLICY_DEFAULTS, policy, mergePolicy, validatePolicy, agentCall,
 }

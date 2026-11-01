@@ -1,9 +1,15 @@
 #!/usr/bin/env node
 'use strict'
-// commit-coverage.js --commit <sha> [--root <dir>] [--json] — one commit's landing/offer
-// answer: which touched files a reviewed spec landed, and whether /git:commit step 3 offers
-// the fix row.
-// Owner: specs/20261025/02-readers-keep-only-the-surviving-escape-fields.md D5
+// commit-coverage.js --commit <sha> [--root <dir>] [--primary <path>]… [--json] — one commit's
+// landing/offer answer: which touched files a reviewed spec landed, whether /git:commit step 3
+// offers the fix row, and which landed entry (`pick`) the escape row attributes through.
+// Owner: specs/20261025/02-readers-keep-only-the-surviving-escape-fields.md D5; specs/20261031/01-the-escape-row-follows-the-diagnosed-file.md D1, D2, D7
+//
+// pick: a landed entry whose file is a --primary path wins (latest top review, tie lexically
+// smaller spec path; reason "primary"). Otherwise the latest top review among landed files
+// that are not ubiquitous (every other landed entry's top spec also lists that file); if that
+// would exclude everything, nothing is excluded (reason "latest-review"). No landed entry:
+// pick null. landed[*].specs keeps its shape; pick and ubiquitous are additive.
 //
 // A file is LANDED for a reference commit iff a spec's `## File Plan` (lib/file-plan) lists it
 // (exact path or glob, lib/glob-match) AND that spec's repo ledger (lib/observation) holds a
@@ -19,7 +25,8 @@
 // Exit codes: 0 = derived (a missing ledger and offer:false are derived answers, never errors)
 //             2 = usage error (no --commit, unknown flag, missing flag value); --since or
 //                 --repos-root given (remedy names --commit); --root not a git repository
-//                 (remedy names --root <repo dir>); an unresolvable --commit sha (remedy
+//                 (remedy names --root <repo dir>); --primary without a value (remedy names
+//                 `--primary <path>`); an unresolvable --commit sha (remedy
 //                 names the sha and `git log --oneline -5`)
 
 const fs = require('fs')
@@ -30,7 +37,7 @@ const { globMatch } = require('./lib/glob-match')
 const { readLedgerRows } = require('./lib/observation')
 const { writeOut } = require('./lib/driver-io')
 
-const USAGE = 'Usage: node commit-coverage.js --commit <sha> [--root <dir>] [--json]'
+const USAGE = 'Usage: node commit-coverage.js --commit <sha> [--root <dir>] [--primary <path>]... [--json]'
 
 function die(message) {
   process.stderr.write('commit-coverage: ' + message + '\n')
@@ -43,6 +50,7 @@ function die(message) {
 let commitArg = null
 let rootArg = null
 let json = false
+const primaries = []
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
@@ -53,6 +61,9 @@ for (let i = 0; i < argv.length; i++) {
     const v = argv[++i]
     if (a === '--commit') commitArg = v
     else rootArg = v
+  } else if (a === '--primary') {
+    if (i + 1 >= argv.length) die('--primary needs a value — pass --primary <path>')
+    primaries.push(argv[++i])
   } else if (a === '--json') {
     json = true
   } else {
@@ -127,6 +138,38 @@ function classifyFile(file, refEpoch, specIndex, ledgerRows) {
   return { status: 'inflight', specs: listing.map(s => s.specPath).sort() }
 }
 
+// Latest top review wins; tie → lexically smaller spec path.
+function bestByReview(entries) {
+  let best = null
+  let bestEpoch = -Infinity
+  for (const l of entries) {
+    const e = Date.parse(l.specs[0].reviewTs)
+    if (best === null || e > bestEpoch || (e === bestEpoch && l.specs[0].spec < best.specs[0].spec)) {
+      best = l
+      bestEpoch = e
+    }
+  }
+  return best
+}
+
+function pickShape(l, reason) {
+  const s = l.specs[0]
+  return { file: l.file, spec: s.spec, reviewRunId: s.reviewRunId, reviewTs: s.reviewTs, reason }
+}
+
+// {pick, ubiquitous} for the landed entries (every entry has specs[0] — landed means qualified).
+function derivePick(landed, primarySet) {
+  if (!landed.length) return { pick: null, ubiquitous: [] }
+  const primary = landed.filter(l => primarySet.has(l.file))
+  if (primary.length) return { pick: pickShape(bestByReview(primary), 'primary'), ubiquitous: [] }
+  const ubiq = landed.filter(f => landed.every(e =>
+    e === f || f.specs.some(s => s.spec === e.specs[0].spec)))
+  let pool = landed.filter(l => !ubiq.includes(l))
+  let ubiquitous = ubiq.map(l => l.file)
+  if (!pool.length) { pool = landed; ubiquitous = [] }
+  return { pick: pickShape(bestByReview(pool), 'latest-review'), ubiquitous }
+}
+
 function checkGitRoot(root) {
   const r = spawnSync('git', ['-C', root, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' })
   if (r.status !== 0) die('--root ' + root + ' is not a git repository — pass an existing checkout, e.g. --root <repo dir>')
@@ -162,7 +205,8 @@ function runCommitMode(rawRoot, shaArg) {
   }
   const offer = fixShaped && landed.length > 0
 
-  const out = { mode: 'commit', root, sha, subject, committerTs, fixShaped, ledger, files, landed, inFlight, offer }
+  const { pick, ubiquitous } = derivePick(landed, new Set(primaries))
+  const out = { mode: 'commit', root, sha, subject, committerTs, fixShaped, ledger, files, landed, inFlight, offer, pick, ubiquitous }
 
   if (json) {
     writeOut(1, JSON.stringify(out) + '\n')
@@ -182,6 +226,7 @@ function runCommitMode(rawRoot, shaArg) {
     offerLine = `offer: yes — ${landed.length} files landed by reviewed specs (${distinct.size} distinct)`
   }
   lines.push('  ' + offerLine)
+  lines.push('  ' + (pick ? `pick: ${pick.file} ← ${pick.spec} (${pick.reason})` : 'pick: none'))
   for (const l of landed) {
     const specsStr = l.specs.map(s => `${s.spec} (review ${s.reviewRunId || 'none'} ${s.verdict || '?'} ${s.reviewTs})`).join('; ')
     lines.push(`    ${l.file} ← ${specsStr}`)

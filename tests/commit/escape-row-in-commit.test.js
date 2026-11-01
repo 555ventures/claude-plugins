@@ -35,16 +35,25 @@ test('AC-20261025-01-4: commit.md step 3 appends one escape row through spec-pat
   }
 })
 
-test('AC-20261025-01-5: commit.md step 3 states the latest-reviewTs selection rule, sha as HEAD, and the fix row only when landed is empty', () => {
+test('AC-20261031-01-5: commit.md step 3 takes spec and reviewRunId from pick, passes --primary, states sha as HEAD, and keeps the fix row only when landed is empty', () => {
   const s3 = step3()
-  assert.match(s3, /latest/, 'step 3 must state the selection rule with "latest", or spec/reviewRunId pick is undefined across multi-spec fixes')
-  assert.match(s3, /reviewTs/, 'step 3 must name reviewTs as the ordering key, or "latest" has no referent')
+  assert.match(squash(s3), /`?spec`? and `?reviewRunId`?[^.]*\bpick\b/, 'step 3 must name pick as the source of spec and reviewRunId, or the prose keeps its own competing selection rule')
+  assert.match(s3, /--primary/, 'step 3 must pass --primary for the file the root cause names, or every version-bumping fix picks the newest spec')
+  assert.ok(!/reviewTs/.test(s3), 'step 3 must not name reviewTs — the script owns the ordering, and a second prose rule drifts')
+  assert.ok(!/\blatest\b/.test(s3), 'step 3 must not state a "latest" ordering rule of its own — the script owns it')
   assert.match(s3, /sha[^\n]*HEAD/, 'step 3 must state sha is HEAD, or the row cannot link to the fixing commit')
   const lines = s3.split('\n')
   const fixIdx = lines.map((l, i) => (l.includes('"fix"') ? i : -1)).filter(i => i >= 0)
   assert.ok(fixIdx.length > 0, 'step 3 must still describe the stage:"fix" row')
   const near = fixIdx.some(i => lines.slice(Math.max(0, i - 3), i + 4).some(l => l.includes('landed')))
   assert.ok(near, 'the "fix" row rule must sit within three lines of "landed" — otherwise a commit can earn both rows')
+})
+
+test('AC-20261031-01-6: commit.md step 3 records the stage:"fix" row with the refusal line when escape-row.js exits 3, and keeps the never-both-rows sentence', () => {
+  const flat = squash(step3())
+  assert.match(flat, /exit 3[^.]*"fix"/i, 'step 3 must say an exit 3 refusal appends the stage:"fix" row, or a refused escape row leaves the commit unrecorded')
+  assert.ok(flat.includes('📌 escape row refused — fix row recorded (veto anytime)'), 'step 3 must carry the exact refusal line, or the owner cannot see the fallback happened')
+  assert.ok(flat.includes('A commit never earns both rows'), 'step 3 must keep the never-both-rows sentence, or the fallback reads as licence to double-record')
 })
 
 test('AC-20261025-01-6: the escape command file is gone, entrypoints lists commit.md for escape-row.js and no escape.md, and spec-paths shared-for escape falls open like an unknown command', () => {

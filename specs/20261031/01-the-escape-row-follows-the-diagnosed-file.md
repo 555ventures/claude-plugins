@@ -1,12 +1,14 @@
 ---
 date: 2026-10-31
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: commit-escape
 breaking: false
 depends_on: []
 brief: n/a
 open_markers: 0
+diff_base: 1814608ae4695db594defedc3e888e7a7ef92f68
 ---
 
 # The escape row follows the diagnosed file

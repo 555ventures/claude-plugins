@@ -1,12 +1,14 @@
 ---
 date: 2026-10-31
-status: hardened
+status: done
+build_base: main
 tier: standard           # readers only: driver step text, doctrine sentences; no contract, hook, merge-back or verdict edit
 area: pipeline
 breaking: false
 depends_on: [specs/20261029/08-the-policy-round-at-init.md]
 brief: n/a
 open_markers: 0
+diff_base: e2e79bed16d8104222addaddbf773a17e00011a9
 ---
 
 # The commands read the policy block
@@ -125,6 +127,18 @@ Rejected: reading the policy in `spec-state-gate.sh` to enforce `directLaneToMai
 time (the gate is a hook surface — critical tier — and the lane is told apart at commit by
 branch presence, which doctrine already states); a `policy` read in `merge-back.sh` (critical
 surface; the driver and the command are the two callers and both read it before invoking).
+
+Build departures (2026-10-31, one-offs): the rewritten AC-8 case in
+`tests/consistency/model-placement.test.js` also asserts the opus/medium override, because a
+default-only output pin passes on the pre-image and red-check refuses it as `gutted-rewrite`;
+the AC-5 off-arm test read `marks.testsExpiry` one level too deep — `review-state.json` is the
+flat marks object — and was corrected to `testsExpiry` with the asserted value unchanged.
+
+### Advisory debt (review rv_cf1ade17da9e)
+- a0 spec/.claude-plugin/plugin.json:39 — The spec plugin's 7.291.0 changelog paragraph claims the mocks driver's dispatch lines print the policy.models seats, but the diff changes no dispatch line in mocks-driver.js (D7 names only the build and review drivers) and the file contains no `model:` dispatch line at all.
+- a1 spec/scripts/spec-review-driver.js:1323 — Three remedy-text dispatch lines in the review driver still print a bare Agent {subagent_type: "spec:reviewer"} / Agent {subagent_type: "spec:disposer"} with no model/effort, while the Goal says every driver dispatch line prints the seat from policy.models. D7 enumerates only the REVIEWER, DISPOSITIONS and ESCALATE sites, so this is bent intent, not a contradiction.
+- a2 spec/doctrine/stages/stage-review.md:60 — stage-review.md's fix-worker bullet still hard-codes the fix seat as sonnet at effort: medium while the review driver's fix-dispatch sentence (same step) now reads policy.models.workers — doctrine and driver now disagree on a host with a workers override.
+- a3 tests/review/review-driver-policy.test.js:15 — Six near-identical 'read spec.config.json → cfg.policy = block → write back' blocks across four test files in this diff; the rules' duplication calibration names the extraction — a setPolicy(root, block) helper in tests/helpers.js.
 
 ## Canonical Delta
 

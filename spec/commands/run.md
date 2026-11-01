@@ -29,6 +29,8 @@ print its report — its `Next: nothing needs you` line is wrong mid-loop. Two s
 derived, each printed as one line:
 
 - `--in-place` → skip.
+- the host's `policy.worktreePerSpec` is `false` (read through the config; `true` or absent keeps
+  today's isolation) → skip, printing `📌 Auto-picked in place — host policy worktreePerSpec: false (veto anytime)`.
 - `status:` past `hardened` AND `{worktree}` absent from `git worktree list --porcelain` AND no
   `refs/heads/{source}` branch → skip (the build really ran in place; an existing branch is a
   parked worktree build, which Step 3 re-attaches).

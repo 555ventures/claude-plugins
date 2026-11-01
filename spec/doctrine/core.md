@@ -42,7 +42,7 @@ when the work needs **delegation** (execution large enough that workers build wh
 only plans) or **durability** (scope spans sessions; the spec is the re-entrant state).
 
 Changes travel one of three lanes. **Direct**: a one-sentence change with no behaviour or data change,
-made on main through the host's `gateCommand` — no spec, no branch, the commit-time escape row still lands; a repair across more than two `layerGroups` or user-visible text follows `/spec:fix`, its playbook.
+made on main through the host's `gateCommand` — no spec, no branch, the commit-time escape row still lands (where the host's `policy.directLaneToMain` is `false`, a Direct change lands through a branch and `/git:merge`, never a commit on main — still no spec, the escape row still lands at commit time); a repair across more than two `layerGroups` or user-visible text follows `/spec:fix`, its playbook.
 **Behaviour**: running `/spec:prototype` is choosing this lane (a brief's `Lane:` is advisory); the
 prototype's contract lands through a spec, its code never. **Structural**: a schema or API change is
 planned first — a spec. The three are told apart at commit time: a spec branch lands only through the

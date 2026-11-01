@@ -54,7 +54,9 @@ The standing rules:
   reports what is retirable and which files that would empty, and writes nothing. The review
   row records `tests:{born,kept,retired}` from it (`retired` meaning *retirable*, not
   *deleted*) and the CLOSE step prints one 🧹 line when anything is retirable, stating that
-  nothing is deleted at close and naming the sweep. A failing or unparseable classification
+  nothing is deleted at close and naming the sweep. With `policy.testExpiry: off` the close skips
+  classification, prints `test expiry: off by policy` in place of the 🧹 line, and omits the
+  row's `tests` key (specs/20261029/09-the-commands-read-the-policy-block.md D4). A failing or unparseable classification
   refuses the close. `--mark closed` re-runs the resolved host gate and then the host's whole
   suite over the committed close tree and refuses on either red; it applies no expiry, makes
   no commit of its own, and leaves `git rev-parse HEAD` untouched. The one path that deletes a

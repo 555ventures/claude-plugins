@@ -245,7 +245,7 @@ const { fmBlock, fmValue, fmMap } = require('./lib/frontmatter')
 // text no longer names an advisory fidelity-check run against a second, rendered artifact — the
 // mocks are the components now, so there is nothing left for review.md's dispatch line to
 // describe beyond the reviewer itself. readConfig still backs the close-time gateCommand re-run below.
-const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
+const { readConfig, policy, CONFIG_RELPATH } = require('./lib/host-config')
 // the close-time
 // host-gate re-run in handleClosed() shares the exact {testDirs}/{scopeDirs} resolution
 // review-legs.js's own gate leg uses — a second, paraphrased copy here would be a drift seam.
@@ -1095,6 +1095,12 @@ function writeReviewRef(runId, leaf, sha) {
 }
 
 // ---- CLOSE driver work: authoritative verdict + ledger append + status flip --------------------
+// `model: <m>, effort: <e>` for a policy seat, read at print time.
+function seatArgs(seat) {
+  const s = policy(repoRoot).models[seat]
+  return `model: ${s.model}, effort: ${s.effort}`
+}
+
 function doCloseWork(n) {
   const runId = ensureRunId()
   const diffLoc = computeDiffLoc()
@@ -1126,24 +1132,26 @@ function doCloseWork(n) {
   // /spec:doctor check 20) would remove — nothing here or in runCloseTimeGate() ever writes to
   // the tree. A non-zero exit or unparseable output refuses the close (status unchanged, no
   // ledger append) rather than close over an unresolved expiry pass.
-  const er = runChild(process.execPath, [testExpiryBin, '--root', repoRoot, '--spec', specRel,
+  const expiryOff = policy(repoRoot).testExpiry === 'off'
+  const er = expiryOff ? null : runChild(process.execPath, [testExpiryBin, '--root', repoRoot, '--spec', specRel,
     '--json'], { encoding: 'utf8' }, 'expire-tests.js (close-time expiry classification)')
+  if (expiryOff) marks.testsExpiry = { off: 'policy' }
   const expiryRemedy = 'node "$(spec-paths test-expiry)" --root . --spec ' + specRel
-  if (er.status !== 0) {
+  if (!expiryOff && er.status !== 0) {
     die('expire-tests.js failed at close — status unchanged. Remedy: ' + expiryRemedy + '\n' +
       (er.stdout + er.stderr).trim())
   }
   let expiry = null
   try {
-    expiry = JSON.parse(er.stdout)
+    expiry = expiryOff ? null : JSON.parse(er.stdout)
   } catch {
     expiry = null
   }
-  if (!expiry || !Array.isArray(expiry.retired) || typeof expiry.tagged !== 'number') {
+  if (!expiryOff && (!expiry || !Array.isArray(expiry.retired) || typeof expiry.tagged !== 'number')) {
     die('expire-tests.js printed unparseable output at close — status unchanged. Remedy: ' + expiryRemedy)
   }
-  const testsRow = { born: expiry.tagged, kept: expiry.tagged - expiry.retired.length, retired: expiry.retired.length }
-  marks.testsExpiry = { ...testsRow, filesRemoved: expiry.emptied.length }
+  const testsRow = expiryOff ? null : { born: expiry.tagged, kept: expiry.tagged - expiry.retired.length, retired: expiry.retired.length }
+  if (!expiryOff) marks.testsExpiry = { ...testsRow, filesRemoved: expiry.emptied.length }
 
   // Gotchas count rides the review row only when a rules file was observed — a host without one
   // keeps verdict.js's line byte-identical. `tests` rides every close row; when gotchas is
@@ -1151,7 +1159,7 @@ function doCloseWork(n) {
   const gotchas = observeGotchas()
   const row = JSON.parse(lines[1])
   if (gotchas !== null) row.gotchas = gotchas
-  row.tests = testsRow
+  if (testsRow) row.tests = testsRow
   // sessionTokens (when verdict.js carried it) stays the LAST key, after the keys added here.
   if (Object.prototype.hasOwnProperty.call(row, 'sessionTokens')) { const st = row.sessionTokens; delete row.sessionTokens; row.sessionTokens = st }
   lines[1] = JSON.stringify(row)
@@ -2555,7 +2563,7 @@ const STEPS = {
           `  abandon the review \u2014 delete ${sidecarDir}; the GATE_RED row stays on the ledger\n`
         : `Ask ONE AskUserQuestion \u2014 options, consequences in each description:\n` +
           `  run one in-session repair round (Recommended) \u2014 fix the failing leg(s) above through the review fix seat ` +
-          `(the host's agentMap; sonnet at effort: medium), commit, then the mark re-runs legs at this iteration; green continues to REVIEWER, ` +
+          `(the host's agentMap; ${policy(repoRoot).models.workers.model} at effort: ${policy(repoRoot).models.workers.effort}), commit, then the mark re-runs legs at this iteration; green continues to REVIEWER, ` +
           `red lands here again with the round spent\n` +
           `  queue /spec:fix and stop \u2014 node "$(spec-paths spec-queue)" add "${specRel}: review stopped, blocking leg red" --lane fix --top; this review ends\n` +
           `  abandon the review \u2014 delete ${sidecarDir}; the GATE_RED row stays on the ledger\n` +
@@ -2587,7 +2595,7 @@ const STEPS = {
       const priorReviewer = path.join(sidecarDir, `reviewer-return-${from}.json`)
       const priorDisposer = path.join(sidecarDir, `disposer-return-${from}.json`)
       return `## Step: dispatch the reviewer — fix-delta pass\n` +
-        `Legs are green. Dispatch ONE Agent {subagent_type: "spec:reviewer"} with the spec path, ` +
+        `Legs are green. Dispatch ONE Agent {subagent_type: "spec:reviewer", ${seatArgs('reviewer')}} with the spec path, ` +
         `diff base ${base}, root ${repoRoot}, and this pass's inputs:\n` +
         `  changed files: ${deltaFile}\n` +
         `  prior reviewer return: ${priorReviewer}\n` +
@@ -2596,7 +2604,7 @@ const STEPS = {
         tail
     }
     return `## Step: dispatch the reviewer\n` +
-      `Legs are green. Dispatch ONE Agent {subagent_type: "spec:reviewer"} with the spec path, ` +
+      `Legs are green. Dispatch ONE Agent {subagent_type: "spec:reviewer", ${seatArgs('reviewer')}} with the spec path, ` +
       `diff base ${base}, root ${repoRoot}, and this run's evidence:\n` +
       `  manifest: ${manifestPath}\n  outputs: ${outDir}\n` +
       tail
@@ -2630,7 +2638,7 @@ const STEPS = {
       `leg findings (${legs.length} leg(s), ${legs.reduce((t, r) => t + countLegFinding(r), 0)} finding(s) — ` +
       `one leg:<name> disposition covers the leg's whole count):\n` +
       legs.map((r) => `  leg:${r.leg} exit=${r.exit} count=${countLegFinding(r)} ${JSON.stringify(r.observed)}`).join('\n') + '\n' +
-      `Dispatch ONE Agent {subagent_type: "spec:disposer"} with the spec path, diff base ${base}, ` +
+      `Dispatch ONE Agent {subagent_type: "spec:disposer", ${seatArgs('disposer')}} with the spec path, diff base ${base}, ` +
       `root ${repoRoot}, the pipeline-rules path${pipelineRulesPath ? ' (' + pipelineRulesPath + ')' : ' (none declared)'}, ` +
       `and this iteration's evidence:\n` +
       `  reviewer return: ${marks.reviewerReturnFile}\n` +
@@ -2668,7 +2676,7 @@ const STEPS = {
       `refused. Surface this to the user — a capped run needs a decision, not a fourth dispatch.\n` +
       rowLine +
       `Remedy — two exits:\n` +
-      `  waive/reject: dispatch Agent {subagent_type: "spec:disposer"} against the ESCALATE pool ` +
+      `  waive/reject: dispatch Agent {subagent_type: "spec:disposer", ${seatArgs('disposer')}} against the ESCALATE pool ` +
       `with every entry waive or reject (an effective fix is refused at a spent cap) — the derived ` +
       `tally is dispositions --fix-dispatched 0 once every entry is covered, closing normally:\n` +
       `    node ${__filename} ${specPath} --mark dispositions --file <return.json>\n` +
@@ -2703,7 +2711,9 @@ const STEPS = {
     // close never claims a deletion that never happened. The wording now states that nothing is
     // deleted at close (there is no separate deletion commit any more) and names the sweep
     // command that is the one path that deletes a test.
-    const testsExpiredLine = (marks.testsExpiry && marks.testsExpiry.retired > 0)
+    const testsExpiredLine = (marks.testsExpiry && marks.testsExpiry.off === 'policy')
+      ? `test expiry: off by policy\n`
+      : (marks.testsExpiry && marks.testsExpiry.retired > 0)
       ? `🧹 ${marks.testsExpiry.retired} tests are retirable with this spec (${marks.testsExpiry.filesRemoved} files would empty) — nothing is deleted at close; sweep deliberately with: node "$(spec-paths test-expiry)" --root . --all-done --apply\n`
       : ''
     // the advisory block prints only when the current return carries >= 1 soft.
@@ -2760,16 +2770,23 @@ const STEPS = {
             '"Keep it for now" — The worktree and branch stay; close it later by hand with the printed command. ' +
             'Pass the answer as --prototype delete|keep on the mark below (the mark refuses without it).\n\n')
     }
-    return `## Step: merge strategy\n` + (inspect.stdout + inspect.stderr).trim() + '\n\n' +
+    const named = policy(repoRoot).mergeStrategy
+    const inspectText = named === 'derived'
+      ? (inspect.stdout + inspect.stderr).trim()
+      : (inspect.stdout + inspect.stderr).trim().split('\n').filter((l) => !l.startsWith('RECOMMEND:')).join('\n')
+    const deriveText = named === 'derived'
+      ? `Derive the strategy — take RECOMMEND above (merge-commit when it is absent or the ` +
+        `history contradicts it: it is the cheapest to reverse). Print one line ` +
+        `\`📌 Auto-picked <strategy> — <RECOMMEND's reason> (veto anytime)\` and do NOT ask: a ` +
+        `merge strategy has no product consequence and its delivery consequence is in the history ` +
+        `printed above. Then:\n`
+      : `📌 Auto-picked ${named} — host policy (veto anytime)\nDo NOT ask. Then:\n`
+    return `## Step: merge strategy\n` + inspectText + '\n\n' +
       protoText +
       restampLine +
       waivedWarn +
-      `Derive the strategy — take RECOMMEND above (merge-commit when it is absent or the ` +
-      `history contradicts it: it is the cheapest to reverse). Print one line ` +
-      `\`📌 Auto-picked <strategy> — <RECOMMEND's reason> (veto anytime)\` and do NOT ask: a ` +
-      `merge strategy has no product consequence and its delivery consequence is in the history ` +
-      `printed above. Then:\n` +
-      `  node ${__filename} ${specPath} --mark merge-strategy <merge-commit|ff-only|squash|rebase-ff>` +
+      deriveText +
+      `  node ${__filename} ${specPath} --mark merge-strategy ${named === 'derived' ? '<merge-commit|ff-only|squash|rebase-ff>' : named}` +
       (risk && risk.n > 0 ? ' --prototype <delete|keep>' : '') + `\n` +
       `Relocate first if needed: ExitWorktree(action="keep") if this session entered the worktree, ` +
       `else \`cd ${mainRoot}\` in the main session — the mark is refused while the driver's ` +

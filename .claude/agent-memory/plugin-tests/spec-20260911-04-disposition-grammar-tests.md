@@ -1,6 +1,6 @@
 ---
 name: spec-20260911-04-disposition-grammar-tests
-description: Test-authoring patterns for spec 20260911/04 (every-criterion-declares-its-test) — forcing count-tests.js/scope-reconcile.js crashes via testGlobs:[null], and a legitimate green-pre-change reconstruction pin.
+description: Test-authoring patterns for spec 20260911/04 (every-criterion-declares-its-test) — forcing count-tests.js/scope-reconcile.js crashes via fileShapes.testGlobs:[null], and a legitimate green-pre-change reconstruction pin.
 metadata:
   type: project
   reviewed: 2026-11-01
@@ -10,10 +10,10 @@ specs/20260911/04-every-criterion-declares-its-test.md (disposition grammar: wri
 arrow-tail on AC bullets, D1-D12). Two reusable patterns from authoring its red-phase tests:
 
 **Forcing count-tests.js to crash for a "broken instrument" fixture**: setting host config
-`testGlobs: [null]` makes `lib/glob-match.js`'s `globMatch(null, filePath)` throw
+`fileShapes: { testGlobs: [null] }` makes (the top-level `testGlobs` key was removed with no alias by specs/20261101/02 D1) `lib/glob-match.js`'s `globMatch(null, filePath)` throw
 `TypeError: Cannot read properties of null (reading 'length')` inside `listTestFiles`, crashing
 count-tests.js's child process (non-zero exit, empty stdout) with zero other scaffolding needed.
-Collateral: `scope-reconcile.js`'s non-probe mode ALSO reads `config.testGlobs` at module top level,
+Collateral: `scope-reconcile.js`'s non-probe mode ALSO reads the config's `fileShapes.testGlobs` (via `lib/file-shapes.js`),
 so this SAME config crashes the `reconcile` leg too when driving it through `review-legs.js` — review-
 legs.js still completes and appends every other leg's row regardless (each leg's crash is isolated to
 its own row), so this is safe for tests that only inspect one specific leg's row (e.g. the `tests`
@@ -26,7 +26,7 @@ it a real, non-vacuous, executable check rather than skip/block it: capture the 
 via the shipped `count-tests.js --root .`, then textually patch a faithful reconstruction of D10's
 exact literal token-list widening onto a SCRATCH COPY of the real `lib/scan-test-calls.js` (string
 `.replace()` on two specific lines), fix up that copy's relative `require('./host-config')` /
-`require('./glob-match')` to absolute paths (the copy lives outside the real lib/ dir, so relative
+`require('./glob-match')` / `require('./file-shapes')` to absolute paths (the copy lives outside the real lib/ dir, so relative
 requires break — this bit me once), run its `countCases(ROOT, config)` over the SAME real corpus,
 and assert the two totals match. Passes today; would catch a real regression if a future edit ever
 added a live file matching one of the widened shapes. See [[new-spec-ac-green-pre-change]].

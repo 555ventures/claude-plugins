@@ -69,6 +69,15 @@ fuller incident write-ups live in each cited spec's history.
   mismatched prefix would prune real directories. Its three consumers are `scope-reconcile.js`'s
   at-risk walk, `red-check.js`'s wildcard expansion, and `collision-closure.js`'s literals leg.
   (specs/20260915/01-one-derivation-of-ignored-paths.md D1)
+- **`spec/scripts/lib/file-shapes.js` is the one definition of a test file, a code file and a
+  dependency manifest.** `fileShapes(config)` merges the host's optional `fileShapes` block
+  (`testGlobs`, `codeExtensions`, `manifests`) key by key over stack-neutral defaults;
+  `isTestClassified`, `isCodeFile` and `isManifest` are the only predicates, read by
+  `scan-test-calls.js`, `invariants.js`, `scope-reconcile.js`, `ac-drift.js`, `coverage-scope.js`,
+  `collision-closure.js`, `decision-lint.js` and `init-gen.js`. `/spec:init` writes the block from
+  the tree it profiled; `init-gen shapes-check` is `/spec:doctor` check 1's proof that every
+  declared test glob still matches a file. No script carries a private extension, glob or manifest
+  list. (specs/20261101/02-the-host-declares-its-file-shapes.md D2, D3)
 
 - **`spec/scripts/workspace-scan.js` is the one derivation of a host's workspaces**
   (`spec-paths workspace-scan --root <dir> [--json] [--depth N]`, default depth 4). Every

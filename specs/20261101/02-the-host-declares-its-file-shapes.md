@@ -1,6 +1,6 @@
 ---
 date: 2026-11-01
-status: implementing
+status: done
 build_base: main
 tier: critical
 area: host-grounding
@@ -196,6 +196,12 @@ Spec 20261101/01 lands first (`depends_on`): both touch `lib/scan-test-calls.js`
 spec's `listTestFiles` caller is unchanged by this one.
 
 Collision closure (lock, `--literal DEFAULT_TEST_GLOBS --literal TRACKED_EXT_RE --literal CODE_EXT --literal MANIFEST_RE`): 13 literals-leg hits, every one a File Plan row (the seven scripts, `docs/canonical/pipeline.md`, `docs/adr/0011-single-sourced-test-globs.md`, `tests/doctor/ac-drift.test.js`), zero waived; test-corpus hits are the suites of the scripts this spec changes, whose fixtures declare no `fileShapes` and are pinned unchanged by AC-15, AC-16, AC-17.
+
+### Advisory debt (review rv_1b6cd334df61)
+- a0 spec/scripts/lib/file-shapes.js:50 — validateFileShapes accepts unknown keys inside the fileShapes block. A typo such as `testglobs` passes validation, fileShapes() quietly falls back to all 13 default globs, and `init-gen shapes-check` reports the block as declared and valid and exits 0. So the doctor check 1 proof added by D5 cannot see the most likely way an author mis-declares the block.
+- a1 spec/scripts/scope-reconcile.js:46 — scope-reconcile.js's header and an inline comment still describe --probe-at-risk as classifying with `--test-globs`/the same default array instead of the host config, which does not exist yet at init probe time. This diff makes the probe read the host config's fileShapes (line 98), so both comments now contradict the code in a critical-tier file.
+- a2 spec/scripts/init-gen.js:209 — shapes-check treats a failed `git ls-files` (for example a --root that is not a git repo) as an empty file list. Every declared testGlobs entry is then reported as 'matches no tracked file' with exit 3, instead of reporting that git was unusable.
+- a3 spec/scripts/init-gen.js:70 — init-gen.js's printed usage() line for probe was not updated with the new `[--test-globs a,b]` flag. The header comment on line 4 has it, but the usage text a user sees on a usage error does not.
 
 ## Canonical Delta
 

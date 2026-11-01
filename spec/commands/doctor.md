@@ -157,7 +157,8 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     `node "$(spec-paths walkthrough)" check --json`; each finding is one ⚠️ line.
 24. **Policy block** (advisory) — run `node "$(spec-paths init-gen)" policy-check --root . --json`;
     each finding is one ⚠️ line (a malformed key, a `ledgerCommitted=false` ledger that is still
-    tracked, a `riskTiers` entry missing from the rules file's § Risk Tiers).
+    tracked, a `riskTiers` entry missing from the rules file's § Risk Tiers, or one line naming why
+    the tiers cannot be compared: no `pipelineRules` key, an unreadable rules file, no § Risk Tiers).
 
 ## Semantic spot-check — small, bounded
 

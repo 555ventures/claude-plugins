@@ -64,12 +64,12 @@ test('AC-20261029-08-2: POLICY_DEFAULTS.models equals core.md § Model Placement
 
 const RULES = '.claude/rules/spec-pipeline.md'
 
-function policyHost(policy, { trackLedger, riskBody }) {
+function policyHost(policy, { trackLedger, riskBody, rulesKey = RULES, rulesText }) {
   const dir = tmpdir('policy-check')
   const git = gitRepo(dir)
-  writeConfig(dir, { pipelineRules: RULES, policy })
+  writeConfig(dir, rulesKey === null ? { policy } : { pipelineRules: rulesKey, policy })
   fs.mkdirSync(path.join(dir, '.claude', 'rules'), { recursive: true })
-  fs.writeFileSync(path.join(dir, RULES), '# Rules\n\n## Risk Tiers\n\n' + riskBody + '\n\n## Planning\n\nPlanning body.\n')
+  fs.writeFileSync(path.join(dir, RULES), rulesText !== undefined ? rulesText : '# Rules\n\n## Risk Tiers\n\n' + riskBody + '\n\n## Planning\n\nPlanning body.\n')
   if (trackLedger) fs.writeFileSync(path.join(dir, '.claude', 'spec-runs.jsonl'), '{"a":1}\n')
   git('add', '-A')
   git('commit', '-q', '-m', 'seed policy host')
@@ -102,3 +102,19 @@ test('AC-20261029-08-7: policy-check includes the validator finding for a bad en
   assert.ok(JSON.parse(r.stdout).includes('mergeStrategy: expected one of derived|merge-commit|ff-only|squash|rebase-ff'),
     'policy-check must surface validatePolicy findings, or an invalid hand-edit is never reported: ' + r.stdout)
 })
+
+// A rules file policy-check cannot compare against is one finding naming why — never one
+// "not in  § Risk Tiers" per tier with an empty filename (the missing-key escape).
+for (const [name, opts, expected] of [
+  ['the config has no pipelineRules key', { rulesKey: null }, 'riskTiers declared but config has no pipelineRules path'],
+  ['pipelineRules names a missing file', { rulesKey: '.claude/rules/absent.md' }, 'riskTiers declared but pipelineRules .claude/rules/absent.md is unreadable (ENOENT)'],
+  ['the rules file has no Risk Tiers section', { rulesText: '# Rules\n\n## Planning\n\nPlanning body.\n' }, 'riskTiers declared but ' + RULES + ' has no ## Risk Tiers section'],
+]) {
+  test('policy-check reports exactly one finding naming the cause when ' + name, () => {
+    const dir = policyHost({ riskTiers: ['auth', 'PII'] }, { trackLedger: false, riskBody: '- auth', ...opts })
+    const r = check(dir)
+    assert.strictEqual(r.status, 1, 'an uncomparable rules file is drift and must exit 1: ' + r.stderr + r.stdout)
+    assert.deepStrictEqual(JSON.parse(r.stdout), [expected],
+      'one finding naming the cause, not one per tier blaming the tiers, or doctor 24 sends the owner to fix the wrong thing')
+  })
+}

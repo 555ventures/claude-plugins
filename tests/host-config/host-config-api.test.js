@@ -95,3 +95,29 @@ test('AC-20260820-08-9: review-legs.js exits with a remedy naming .claude/spec.c
   assert.match(r.stderr, /\.claude\/spec\.config\.json/,
     'review-legs.js\'s remedy for a missing gateCommand must render the path .claude/spec.config.json (via CONFIG_RELPATH) so an operator knows exactly which file to create — a bare "spec.config.json" or an interpolation bug silently makes the remedy less actionable: ' + r.stderr)
 })
+
+// readPipelineRules(root, cfg) is the one resolver and reader of the pipelineRules file: four
+// scripts each resolved the key privately, and init-gen policy-check's `'' + catch-all` read
+// reported a missing key as every risk tier absent from an empty filename.
+test('readPipelineRules(root, cfg) returns no-key for an absent or empty key, unreadable with the error for a missing file, and the text with rel/abs on success', () => {
+  const { readPipelineRules } = require('../../spec/scripts/lib/host-config')
+  const root = tmpdir('host-config-rules')
+
+  assert.deepStrictEqual(readPipelineRules(root, {}), { ok: false, kind: 'no-key', rel: null, abs: null, error: null },
+    'an absent key must read as no-key, never as a path resolved from an empty string (that path is the repo root)')
+  assert.strictEqual(readPipelineRules(root, { pipelineRules: '' }).kind, 'no-key', 'an empty key must read as no-key, not as the root directory')
+
+  const missing = readPipelineRules(root, { pipelineRules: 'rules.md' })
+  assert.strictEqual(missing.ok, false)
+  assert.strictEqual(missing.kind, 'unreadable', 'a declared but absent file must read as unreadable, not no-key, or the caller blames the wrong fix')
+  assert.strictEqual(missing.rel, 'rules.md')
+  assert.strictEqual(missing.error.code, 'ENOENT', 'the read error must be carried, so the caller can name why')
+
+  fs.writeFileSync(path.join(root, 'rules.md'), '## Risk Tiers\n- auth\n')
+  assert.deepStrictEqual(readPipelineRules(root, { pipelineRules: 'rules.md' }),
+    { ok: true, rel: 'rules.md', abs: path.join(root, 'rules.md'), text: '## Risk Tiers\n- auth\n' })
+
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude', 'spec.config.json'), JSON.stringify({ pipelineRules: 'rules.md' }))
+  assert.strictEqual(readPipelineRules(root).ok, true, 'without a cfg argument the helper must read the host config itself')
+})

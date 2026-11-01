@@ -245,7 +245,7 @@ const { fmBlock, fmValue, fmMap } = require('./lib/frontmatter')
 // text no longer names an advisory fidelity-check run against a second, rendered artifact — the
 // mocks are the components now, so there is nothing left for review.md's dispatch line to
 // describe beyond the reviewer itself. readConfig still backs the close-time gateCommand re-run below.
-const { readConfig, policy, agentCall, CONFIG_RELPATH } = require('./lib/host-config')
+const { readConfig, readPipelineRules, policy, agentCall, CONFIG_RELPATH } = require('./lib/host-config')
 // the close-time
 // host-gate re-run in handleClosed() shares the exact {testDirs}/{scopeDirs} resolution
 // review-legs.js's own gate leg uses — a second, paraphrased copy here would be a drift seam.
@@ -433,12 +433,8 @@ function dispositionPools(n) {
 // declared/readable pipelineRules file is skipped with a printed note (the state-gate hook is the
 // grounding gate, not this driver); a rules file with no Gotchas section is a hard refusal.
 const proseCapBin = path.join(__dirname, 'prose-cap.js')
-const pipelineRulesPath = (() => {
-  const rel = readConfig(repoRoot).pipelineRules
-  if (!rel || typeof rel !== 'string') return null
-  const abs = path.resolve(repoRoot, rel)
-  return fs.existsSync(abs) ? abs : null
-})()
+const pipelineRules = readPipelineRules(repoRoot)
+const pipelineRulesPath = pipelineRules.ok ? pipelineRules.abs : null
 
 function runProseCap(extra) {
   const r = runChild(process.execPath,

@@ -46,6 +46,16 @@
 // except `agentCall(root, seat, subagentType)`, the one writer of a printed `Agent {…}` dispatch:
 // every driver line that dispatches a policy seat is built by it, so none can print without one.
 //
+// `readPipelineRules(root, cfg)` is the one resolver and reader of the file the config's
+// `pipelineRules` key names. Four scripts (decision-lint, init-gen policy-check, both drivers)
+// each resolved the key privately with their own error policy, and policy-check's
+// `'' + catch-all` read reported a missing key as every risk tier absent from an empty
+// filename. It returns `{ok: true, rel, abs, text}` or `{ok: false, kind, rel, abs, error}`,
+// `kind` being `no-key` (absent, non-string or empty) or `unreadable` (the read threw) — never a
+// throw, never a default path. Each caller maps the kind to its own policy (die, one finding,
+// "(none declared)"); section parsing stays with the caller (lib/spec-sections.js
+// `extractSection`), keeping this library a leaf.
+//
 // Exit codes: n/a (library, not an entrypoint).
 
 const fs = require('fs')
@@ -92,6 +102,18 @@ function readConfigStrict(root) {
     return JSON.parse(raw)
   } catch (e) {
     throw new Error('cannot read/parse ' + p + ' (' + e.message + ')')
+  }
+}
+
+// `cfg` defaults to the lenient read; a caller holding a strictly-read config passes it in.
+function readPipelineRules(root, cfg = readConfig(root)) {
+  const rel = cfg && typeof cfg.pipelineRules === 'string' && cfg.pipelineRules ? cfg.pipelineRules : null
+  if (rel === null) return { ok: false, kind: 'no-key', rel: null, abs: null, error: null }
+  const abs = path.resolve(root, rel)
+  try {
+    return { ok: true, rel, abs, text: fs.readFileSync(abs, 'utf8') }
+  } catch (error) {
+    return { ok: false, kind: 'unreadable', rel, abs, error }
   }
 }
 
@@ -186,6 +208,6 @@ function validatePolicy(block) {
 }
 
 module.exports = {
-  readConfig, readConfigStrict, declaredForge, configPath, configExists, CONFIG_RELPATH,
+  readConfig, readConfigStrict, readPipelineRules, declaredForge, configPath, configExists, CONFIG_RELPATH,
   DEFAULT_TEST_GLOBS, POLICY_DEFAULTS, policy, mergePolicy, validatePolicy, agentCall,
 }

@@ -46,7 +46,7 @@ const { spawnSync } = require('child_process')
 const { extractSection, DECISION_LINT_APPLIES_FROM, STRUCTURAL_LINT_APPLIES_FROM } = require('./lib/spec-sections')
 const { fmValue } = require('./lib/frontmatter')
 const { parseFilePlanRows } = require('./lib/file-plan')
-const { readConfigStrict, configExists, CONFIG_RELPATH } = require('./lib/host-config')
+const { readConfigStrict, readPipelineRules, configExists, CONFIG_RELPATH } = require('./lib/host-config')
 const { writeOut } = require('./lib/driver-io')
 
 const MANIFEST_RE = /^(package\.json|package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb|bun\.lock|pyproject\.toml|poetry\.lock|Pipfile|Pipfile\.lock|requirements[^/]*\.txt|Cargo\.toml|Cargo\.lock|go\.mod|go\.sum|Gemfile|Gemfile\.lock|composer\.json|composer\.lock)$/
@@ -98,11 +98,11 @@ if (decisions === null) die(specPath + ' has no ## Decisions section — add one
 if (!configExists(root)) die('no readable ' + CONFIG_RELPATH + ' under --root ' + root + ' — run /spec:init (or pass --root <host repo>)')
 let riskTiers
 try {
-  const cfg = readConfigStrict(root)
-  if (!cfg || typeof cfg.pipelineRules !== 'string' || !cfg.pipelineRules) throw new Error('config has no pipelineRules path')
-  const rules = fs.readFileSync(path.resolve(root, cfg.pipelineRules), 'utf8')
-  riskTiers = extractSection(rules, 'Risk Tiers')
-  if (riskTiers === null) throw new Error(cfg.pipelineRules + ' has no ## Risk Tiers section')
+  const rules = readPipelineRules(root, readConfigStrict(root))
+  if (rules.kind === 'no-key') throw new Error('config has no pipelineRules path')
+  if (!rules.ok) throw rules.error
+  riskTiers = extractSection(rules.text, 'Risk Tiers')
+  if (riskTiers === null) throw new Error(rules.rel + ' has no ## Risk Tiers section')
 } catch (e) {
   die('unreadable host rules — ' + e.message + ' — run /spec:doctor to repair the grounding layer')
 }

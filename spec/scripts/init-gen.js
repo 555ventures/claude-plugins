@@ -59,7 +59,8 @@ const crypto = require('crypto')
 const { spawnSync } = require('child_process')
 const hostRun = require('./lib/host-run')
 const { globMatch } = require('./lib/glob-match')
-const { configPath, CONFIG_RELPATH, DEFAULT_TEST_GLOBS, policy, mergePolicy, validatePolicy, readConfigStrict } = require('./lib/host-config')
+const { configPath, CONFIG_RELPATH, DEFAULT_TEST_GLOBS, policy, mergePolicy, validatePolicy, readConfigStrict, readPipelineRules } = require('./lib/host-config')
+const { extractSection } = require('./lib/spec-sections')
 
 function usage() {
   console.error('usage: init-gen.js probe --root <dir> [--test-command "<cmd>"] [--sample <n>]')
@@ -155,15 +156,6 @@ if (sub === 'ignore-check') {
 }
 
 // policy-check: validatePolicy over the on-disk block, then two drift checks.
-function sectionText(src, title) {
-  const lines = src.split('\n')
-  const at = lines.findIndex((l) => /^##\s/.test(l) && l.replace(/^##\s+/, '').trim() === title)
-  if (at === -1) return ''
-  let end = lines.findIndex((l, i) => i > at && /^##\s/.test(l))
-  if (end === -1) end = lines.length
-  return lines.slice(at + 1, end).join('\n')
-}
-
 if (sub === 'policy-check') {
   let cfg
   try { cfg = readConfigStrict(root) } catch (e) {
@@ -181,11 +173,17 @@ if (sub === 'policy-check') {
     findings.push('ledgerCommitted=false but .claude/spec-runs.jsonl is tracked')
   }
   if (Array.isArray(eff.riskTiers) && eff.riskTiers.length) {
-    const rulesRel = typeof cfg.pipelineRules === 'string' ? cfg.pipelineRules : ''
-    let section = ''
-    try { section = sectionText(fs.readFileSync(path.join(root, rulesRel), 'utf8'), 'Risk Tiers').toLowerCase() } catch { /* absent rules file: every entry is reported */ }
-    for (const t of eff.riskTiers) {
-      if (typeof t === 'string' && t && !section.includes(t.toLowerCase())) findings.push(`riskTiers entry "${t}" is not in ${rulesRel} § Risk Tiers`)
+    // A rules file that cannot be compared is one finding naming why, never one per tier.
+    const rules = readPipelineRules(root, cfg)
+    const section = rules.ok ? extractSection(rules.text, 'Risk Tiers') : null
+    if (rules.kind === 'no-key') findings.push('riskTiers declared but config has no pipelineRules path')
+    else if (!rules.ok) findings.push(`riskTiers declared but pipelineRules ${rules.rel} is unreadable (${rules.error.code || rules.error.message})`)
+    else if (section === null) findings.push(`riskTiers declared but ${rules.rel} has no ## Risk Tiers section`)
+    else {
+      const lower = section.toLowerCase()
+      for (const t of eff.riskTiers) {
+        if (typeof t === 'string' && t && !lower.includes(t.toLowerCase())) findings.push(`riskTiers entry "${t}" is not in ${rules.rel} § Risk Tiers`)
+      }
     }
   }
   if (asJson) console.log(JSON.stringify(findings))

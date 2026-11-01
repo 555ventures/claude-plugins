@@ -121,7 +121,7 @@ const path = require('path')
 const crypto = require('crypto')
 const { runChild, runHost, writeOut, appendLedger, loadSidecar, saveSidecar: saveSidecarLib } = require('./lib/driver-io')
 const { fmValue } = require('./lib/frontmatter')
-const { readConfig, agentCall, CONFIG_RELPATH } = require('./lib/host-config')
+const { readConfig, readPipelineRules, agentCall, CONFIG_RELPATH } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
 const { parseFilePlanRows, isTestsRow } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
@@ -191,12 +191,8 @@ const orchestratorOnly = (() => {
   return v
 })()
 const isOrchestratorOnly = (p) => orchestratorOnly.some((g) => globMatch(g, p))
-const pipelineRulesPath = (() => {
-  const rel = hostConfig.pipelineRules
-  if (!rel || typeof rel !== 'string') return null
-  const abs = path.resolve(repoRoot, rel)
-  return fs.existsSync(abs) ? abs : null
-})()
+const pipelineRules = readPipelineRules(repoRoot, hostConfig)
+const pipelineRulesPath = pipelineRules.ok ? pipelineRules.abs : null
 
 // File Plan body text never moves when only the frontmatter is edited (stamping diff_base,
 // flipping status) — computed once against the pre-image text.

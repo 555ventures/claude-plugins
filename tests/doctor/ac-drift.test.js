@@ -249,54 +249,52 @@ test('AC-20260906-01-7: a --root with no specs/ directory is inapplicable and ex
     `got ${JSON.stringify(fileRootRes.stderr)}`)
 })
 
-test('AC-20260906-01-8: a host-declared testGlobs array replaces the default classification, and lib/host-config.js\'s exported DEFAULT_TEST_GLOBS is the SINGLE declaration of that array under spec/scripts/ (docs/adr/0011)', () => {
-  const dir = tmpdir('ac-drift-8')
-  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
-  fs.writeFileSync(path.join(dir, '.claude', 'spec.config.json'), JSON.stringify({ testGlobs: ['checks/**'] }))
-  writeSpec(dir, 'specs/20260901/01-x.md', 'done',
-    ['- **AC-20260901-01-1**: WHEN a THE SYSTEM SHALL b'])
-  writeFile(dir, 'checks/a.js', "test('AC-20260901-01-1: ...', () => {})\n")
-  const res = run(dir)
-  assert.strictEqual(res.status, 0,
-    `D4: a host-declared testGlobs array must fully REPLACE (not extend) the default classification — a ` +
-    `citation living in checks/a.js must count as coverage exactly as tests/**/*.test.js would by default ` +
-    `(stderr: ${res.stderr})`)
+test('AC-20260906-01-8 / AC-20261101-02-18: a host-declared fileShapes.testGlobs replaces the default classification in ac-drift, and lib/file-shapes.js is the SINGLE declaration of the default array under spec/scripts/ (docs/adr/0011)', () => {
+  const pinned = ['- **AC-20260912-01-1**: WHEN a THE SYSTEM SHALL CONTINUE TO b']
+  const mk = (prefix, citeRel) => {
+    const dir = tmpdir(prefix)
+    fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+    fs.writeFileSync(path.join(dir, '.claude', 'spec.config.json'), JSON.stringify({ fileShapes: { testGlobs: ['checks/**'] } }))
+    writeSpec(dir, 'specs/20260912/01-x.md', 'done', pinned)
+    writeFile(dir, citeRel, "test('AC-20260912-01-1: ...', () => {})\n")
+    return dir
+  }
+  const inChecks = run(mk('ac-drift-8a', 'checks/x.js'))
+  assert.strictEqual(inChecks.status, 0,
+    `a citation living in checks/x.js must count as coverage when the host declares testGlobs ['checks/**'] — ` +
+    `otherwise ac-drift classifies with a private list and reports false uncovered-ac findings (stderr: ${inChecks.stderr})`)
+  const inTests = run(mk('ac-drift-8b', 'tests/x.test.js'))
+  assert.strictEqual(inTests.status, 1,
+    `a declared testGlobs array REPLACES the defaults: tests/x.test.js is no longer a test file, so a citation there ` +
+    `must not cover the pin — extending instead of replacing silently launders coverage (stderr: ${inTests.stderr})`)
 
-  // docs/adr/0011 SUPERSEDES this AC's original second clause. That clause read the
-  // `const defaultTestGlobs = [...]` literal out of scope-reconcile.js's source and asserted it
-  // deep-equalled the export — a bridge pin holding two copies together while specs/20260906/01 D4
-  // deliberately deferred the fold-in. The fold has now landed: scope-reconcile.js, ac-drift.js and
-  // init-gen.js all import the export, so there is no second literal left to compare against and
-  // the equality form is unsatisfiable by construction. The replacement below is strictly stronger:
-  // equality can only ever compare the copies it names, so a copy it does not name is invisible to
-  // it; single-sourcing catches ANY declaration, named or not.
-  const SHARED = ['tests/**', 'test/**', '**/*.test.*', '**/*.spec.*', '**/*_test.*']
-  const { DEFAULT_TEST_GLOBS } = require('../../spec/scripts/lib/host-config')
+  const SHARED = ['tests/**', 'test/**', '**/tests/**', '**/test/**', '**/__tests__/**',
+    '**/*.test.*', '**/*.spec.*', '**/*_test.*', '**/test_*.*', '**/*_spec.*',
+    '**/*Test.*', '**/*Tests.*', '**/*.Tests/**']
+  const shapesPath = path.join(__dirname, '..', '..', 'spec', 'scripts', 'lib', 'file-shapes.js')
+  assert.ok(fs.existsSync(shapesPath),
+    'spec/scripts/lib/file-shapes.js must exist — it is the single declaration of the default test-glob array (docs/adr/0011)')
+  const { DEFAULT_TEST_GLOBS } = require(shapesPath)
   assert.deepStrictEqual(DEFAULT_TEST_GLOBS, SHARED,
-    'lib/host-config.js\'s exported DEFAULT_TEST_GLOBS must still hold this exact glob set in this exact ' +
-    'order — it is the sole classification authority for the at-risk leg, ac-drift, and init-gen\'s probe, ' +
-    `so a silent edit here silently changes what all three call a test file: got ${JSON.stringify(DEFAULT_TEST_GLOBS)}`)
+    'lib/file-shapes.js\'s DEFAULT_TEST_GLOBS must hold this exact glob set in this exact order — it is the sole ' +
+    `classification authority for every consumer, so a silent edit here silently changes what all of them call a test file: got ${JSON.stringify(DEFAULT_TEST_GLOBS)}`)
   assert.ok(Object.isFrozen(DEFAULT_TEST_GLOBS),
-    'DEFAULT_TEST_GLOBS must be frozen — it is now shared BY REFERENCE across scope-reconcile.js, ac-drift.js ' +
-    'and init-gen.js, so an unfrozen array lets any one consumer mutate what the other two classify with')
+    'DEFAULT_TEST_GLOBS must be frozen — it is shared BY REFERENCE across every consumer, so an unfrozen array lets any one of them mutate what the others classify with')
 
-  // Single-sourcing: no file under spec/scripts/ may declare this array again. Scans real source, so
-  // a new copy added anywhere in the tree reddens this test — the failure mode a two-copy equality
-  // assertion is structurally blind to.
+  // Single-sourcing: no file under spec/scripts/ may declare this array again; scans real source, so
+  // a new copy anywhere in the tree reddens this test — what a copy-by-copy equality check cannot see.
   const scriptsDir = path.join(__dirname, '..', '..', 'spec', 'scripts')
   const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => {
     const full = path.join(d, e.name)
     if (e.isDirectory()) return e.name === 'node_modules' ? [] : walk(full)
     return e.isFile() && e.name.endsWith('.js') ? [full] : []
   })
-  const HOST_CONFIG = path.join(scriptsDir, 'lib', 'host-config.js')
   const dupes = walk(scriptsDir).filter((f) => (
-    f !== HOST_CONFIG && /\[\s*'tests\/\*\*'\s*,\s*'test\/\*\*'/.test(fs.readFileSync(f, 'utf8'))
+    f !== shapesPath && /\[\s*'tests\/\*\*'\s*,\s*'test\/\*\*'/.test(fs.readFileSync(f, 'utf8'))
   ))
   assert.deepStrictEqual(dupes.map((f) => path.relative(path.join(__dirname, '..', '..'), f)), [],
-    'lib/host-config.js must be the ONLY declaration of the default test-glob array under spec/scripts/ ' +
-    '(docs/adr/0011) — every other consumer imports DEFAULT_TEST_GLOBS. A re-declared copy drifts silently ' +
-    'the moment one side is edited, and nothing downstream can tell which copy a given consumer classified with')
+    'lib/file-shapes.js must be the ONLY declaration of the default test-glob array under spec/scripts/ (docs/adr/0011) — ' +
+    'a re-declared copy drifts silently the moment one side is edited, and nothing downstream can tell which copy a given consumer classified with')
 })
 
 test('AC-20260906-01-9: spec-paths resolves the ac-drift key to an existing file, doctor.md wires it as check 17, and entrypoints.json carries its row', () => {

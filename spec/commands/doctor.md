@@ -20,7 +20,9 @@ answer is `/spec:init`, not a drift report.
 Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
 
 1. **Config integrity** — `.claude/spec.config.json` parses; required keys present per the
-   contract file's § Required config keys.
+   contract file's § Required config keys. `fileShapes` — run
+   `node "$(spec-paths init-gen)" shapes-check --root . --json`; exit 3 → one ⚠️ line per
+   `unmatchedTestGlobs` entry (a declared glob matching no tracked file) or the `invalid` message.
 2. **Contract stamp** — config `contractHash` equals `$(spec-paths contract-hash)`. A
    mismatch is a lead, not a verdict — checks 3–6 test the *current* contract (Read
    `$(spec-paths contract)`) directly and decide whether the drift is real. Also flag an

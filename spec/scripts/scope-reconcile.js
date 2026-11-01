@@ -64,7 +64,8 @@ const path = require('path')
 const { execFileSync } = require('child_process')
 const { parseFilePlan, parseFilePlanRows, isTestsRow } = require('./lib/file-plan')
 const { globMatch, pipelineOwnedGlobs } = require('./lib/glob-match')
-const { readConfig, DEFAULT_TEST_GLOBS } = require('./lib/host-config')
+const { readConfig } = require('./lib/host-config')
+const { fileShapes, isTestClassified: shapeIsTest } = require('./lib/file-shapes')
 const { getIgnoredPaths } = require('./lib/ignored-paths')
 
 function usage() {
@@ -94,8 +95,9 @@ if (probeAtRiskFile) {
     process.exit(2)
   }
   const sampledFiles = listRaw.split('\n').map(s => s.trim()).filter(Boolean)
-  const probeTestGlobs = testGlobsArg ? testGlobsArg.split(',').map(s => s.trim()).filter(Boolean) : DEFAULT_TEST_GLOBS
-  const probeIsTestClassified = (p) => probeTestGlobs.some(g => globMatch(g, p))
+  const probeShapes = fileShapes(readConfig(root))
+  if (testGlobsArg) probeShapes.testGlobs = testGlobsArg.split(',').map(s => s.trim()).filter(Boolean)
+  const probeIsTestClassified = (p) => shapeIsTest(p, probeShapes)
 
   // Reuses stemsFor (declared below, a hoisted function — pure over its argument, no TDZ risk
   // at this call site) exactly as the main derivation does, fed the sample list instead of a
@@ -211,9 +213,8 @@ const unrealized = [
 // tests-layer rows and is not itself in the changed set is at-risk. Additive to outOfPlan/
 // unrealized/excluded/renamed above — never affects the exit code.
 
-const configTestGlobs = readConfig(root).testGlobs
-const testGlobs = Array.isArray(configTestGlobs) ? configTestGlobs : DEFAULT_TEST_GLOBS
-const isTestClassified = (p) => testGlobs.some(g => globMatch(g, p))
+const shapes = fileShapes(readConfig(root))
+const isTestClassified = (p) => shapeIsTest(p, shapes)
 
 function stemsFor(p) {
   // Form (a) — the full repo-relative path — is always emitted, even when it is a bare

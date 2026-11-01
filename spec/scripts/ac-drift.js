@@ -37,8 +37,8 @@ const {
   parseDisposition,
 } = require('./lib/spec-sections')
 const { resolveReference } = require('./lib/scan-test-calls')
-const { readConfig, DEFAULT_TEST_GLOBS } = require('./lib/host-config')
-const { globMatch } = require('./lib/glob-match')
+const { readConfig } = require('./lib/host-config')
+const { fileShapes, isTestClassified: shapeIsTest } = require('./lib/file-shapes')
 
 const USAGE = 'ac-drift.js --root <dir> [--json]'
 
@@ -121,11 +121,9 @@ const specFiles = allFiles
   .filter((f) => { const rel = relPosix(f); return rel.startsWith('specs/') && rel.endsWith('.md') })
   .sort()
 
-// ---- test classification: host config's testGlobs when it is an array, else the shared
-// DEFAULT_TEST_GLOBS. Files read once into a joined haystack. ------------------------------------
-const configTestGlobs = readConfig(root).testGlobs
-const testGlobs = Array.isArray(configTestGlobs) ? configTestGlobs : DEFAULT_TEST_GLOBS
-const isTestClassified = (p) => testGlobs.some((g) => globMatch(g, p))
+// ---- test classification: lib/file-shapes.js over the host's fileShapes.testGlobs or its defaults. Files read once into a joined haystack. ------------------------------------
+const shapes = fileShapes(readConfig(root))
+const isTestClassified = (p) => shapeIsTest(p, shapes)
 const testFiles = allFiles.filter((f) => isTestClassified(relPosix(f)))
 
 let haystack = null

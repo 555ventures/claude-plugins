@@ -3,6 +3,7 @@
 - Status: accepted
 - Date: 2026-09-08
 - Archetype: n/a (amendment ADR for this plugin repo) · Audience: n/a
+- Amended by: specs/20261101/02-the-host-declares-its-file-shapes.md
 - Deciders: JJ
 - Applies to: specs/20260906/01-ac-drift-doctor-check.md D4 — its "scope-reconcile.js keeps its
   local copy untouched this spec ... the fold-in is queued for the next spec that touches it"

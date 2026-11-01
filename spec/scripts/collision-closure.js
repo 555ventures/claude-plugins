@@ -44,6 +44,8 @@ const path = require('path')
 const { parseFilePlanRows, isTestsRow } = require('./lib/file-plan')
 const { globMatch, pipelineOwnedGlobs } = require('./lib/glob-match')
 const { getIgnoredPaths } = require('./lib/ignored-paths')
+const { readConfig } = require('./lib/host-config')
+const { fileShapes, isCodeFile } = require('./lib/file-shapes')
 
 const HONESTY_LINE = 'likely/mentions tier is a lexical proxy; mentions may contain closed pins; an executes hit names a runnable file the test spawns, loads, or cites — not distinguished; the build-time suite check adjudicates'
 const REMEDY_LINE = "remedy: add each literals hit as a File Plan row, or record the waive in the spec's Rationale; an `executes` hit names a test that runs a script you are changing — if the change alters that script's observable behavior, widen the File Plan or plan the fixture repair now; `likely` and `mentions` hits are visibility only and owe no waive line"
@@ -56,7 +58,7 @@ function matchKey(target) {            // D1
   return seg.length >= 2 ? seg.slice(-2).join('/') : target
 }
 function isRunnable(target, base) {    // D2
-  if (/\.(js|mjs|cjs|sh)$/.test(target)) return true
+  if (isCodeFile(target, fileShapes(readConfig(base)))) return true
   try { const fd = fs.openSync(path.join(base, target), 'r'); const b = Buffer.alloc(2)
         fs.readSync(fd, b, 0, 2, 0); fs.closeSync(fd); return b.toString() === '#!' }
   catch { return false }

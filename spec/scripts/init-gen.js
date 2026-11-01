@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 'use strict'
-// init-gen.js probe --root <dir> [--test-command "<cmd>"] [--sample <n>]
+// init-gen.js probe --root <dir> [--test-command "<cmd>"] [--sample <n>] [--test-globs a,b]
 // init-gen.js generate --root <dir> --profile <path> [--refresh] [--dry-run]
 // init-gen.js policy-check --root <dir> [--json]
+// init-gen.js shapes-check --root <dir> [--json]
 //
 // Owner: specs/20260822/02-init-generation-script.md
 //
@@ -48,6 +49,8 @@
 //   generate --dry-run: 0 = manifest printed, nothing written · 2 = the usual profile/usage errors
 //   policy-check: 0 = no findings · 1 = findings (one per line, or a JSON array under --json) ·
 //             2 = usage error / unreadable config
+//   shapes-check: 0 = no block declared, or every declared testGlobs entry matches a tracked file ·
+//             3 = invalid block or a declared testGlobs entry matching no tracked file (stderr, one line each)
 //   probe:    0 = always (adverse findings — no claude CLI, a vacuous test runner, an inert
 //                 at-risk leg — are data for the interview, never a probe failure)
 //             2 = usage error
@@ -59,11 +62,13 @@ const crypto = require('crypto')
 const { spawnSync } = require('child_process')
 const hostRun = require('./lib/host-run')
 const { globMatch } = require('./lib/glob-match')
-const { configPath, CONFIG_RELPATH, DEFAULT_TEST_GLOBS, policy, mergePolicy, validatePolicy, readConfigStrict, readPipelineRules } = require('./lib/host-config')
+const { fileShapes, isTestClassified, validateFileShapes } = require('./lib/file-shapes')
+const { readConfig, configPath, CONFIG_RELPATH, policy, mergePolicy, validatePolicy, readConfigStrict, readPipelineRules } = require('./lib/host-config')
 const { extractSection } = require('./lib/spec-sections')
 
 function usage() {
   console.error('usage: init-gen.js probe --root <dir> [--test-command "<cmd>"] [--sample <n>]')
+  console.error('       init-gen.js shapes-check --root <dir> [--json]   (exit 0 clean · 3 invalid block or unmatched testGlobs)')
   console.error('       init-gen.js generate --root <dir> --profile <path> [--refresh] [--dry-run]')
   console.error('       init-gen.js policy-check --root <dir> [--json]   (exit 0 clean · 1 findings · 2 usage)')
   console.error('       init-gen.js ignore-check --root <dir> [--fix]   (exit 0 all present · 3 missing, one path per line)')
@@ -71,9 +76,9 @@ function usage() {
 
 const argv = process.argv.slice(2)
 const sub = argv[0]
-if (sub !== 'probe' && sub !== 'generate' && sub !== 'ignore-check' && sub !== 'policy-check') { usage(); process.exit(2) }
+if (sub !== 'probe' && sub !== 'generate' && sub !== 'ignore-check' && sub !== 'policy-check' && sub !== 'shapes-check') { usage(); process.exit(2) }
 
-let root = null, profilePath = null, refresh = false, testCommandArg = null, sample = 20, fix = false, dryRun = false, asJson = false
+let root = null, profilePath = null, refresh = false, testCommandArg = null, testGlobsArg = null, sample = 20, fix = false, dryRun = false, asJson = false
 for (let i = 1; i < argv.length; i++) {
   const a = argv[i]
   if (a === '--root') root = argv[++i]
@@ -83,6 +88,7 @@ for (let i = 1; i < argv.length; i++) {
   else if (a === '--dry-run') dryRun = true
   else if (a === '--json') asJson = true
   else if (a === '--test-command') testCommandArg = argv[++i]
+  else if (a === '--test-globs') testGlobsArg = argv[++i]
   else if (a === '--sample') sample = parseInt(argv[++i], 10)
   else { usage(); process.exit(2) }
 }
@@ -192,6 +198,25 @@ if (sub === 'policy-check') {
   process.exit(findings.length ? 1 : 0)
 }
 
+// shapes-check: the declared fileShapes block over the tracked files.
+if (sub === 'shapes-check') {
+  const cfg = readConfig(root)
+  const declared = cfg.fileShapes !== undefined
+  const invalid = declared ? validateFileShapes(cfg.fileShapes) : null
+  const shapes = fileShapes(cfg)
+  const ls = spawnSync('git', ['-C', root, 'ls-files'], { encoding: 'utf8' })
+  const files = ls.status === 0 ? ls.stdout.split('\n').map((s) => s.trim()).filter(Boolean) : []
+  const testFiles = files.filter((f) => isTestClassified(f, shapes)).length
+  const unmatched = declared && !invalid && Array.isArray(cfg.fileShapes.testGlobs)
+    ? cfg.fileShapes.testGlobs.filter((g) => !files.some((f) => globMatch(g, f))) : []
+  const out = { declared, invalid, testFiles, unmatchedTestGlobs: unmatched }
+  if (asJson) console.log(JSON.stringify(out))
+  else for (const k of Object.keys(out)) console.log(`${k}: ${JSON.stringify(out[k])}`)
+  if (invalid) console.error(`init-gen: shapes-check: ${invalid} — fix fileShapes in ${CONFIG_RELPATH}`)
+  for (const g of unmatched) console.error(`init-gen: shapes-check: testGlobs entry "${g}" matches no tracked file — fix or remove it in ${CONFIG_RELPATH}`)
+  process.exit(invalid || unmatched.length ? 3 : 0)
+}
+
 if (sub === 'probe') {
   const out = {}
   if (testCommandArg) out.testCommand = probeTestCommand(testCommandArg, root)
@@ -222,13 +247,17 @@ function probeAtRisk(hostRoot, sampleN) {
     const ls = spawnSync('git', ['-C', hostRoot, 'ls-files'], { encoding: 'utf8' })
     if (ls.status !== 0) return null
     const files = ls.stdout.split('\n').map((s) => s.trim()).filter(Boolean)
-    const nonTest = files.filter((f) => !DEFAULT_TEST_GLOBS.some((g) => globMatch(g, f)))
+    const shapes = fileShapes(readConfig(hostRoot))
+    if (testGlobsArg) shapes.testGlobs = testGlobsArg.split(',').map((s) => s.trim()).filter(Boolean)
+    const nonTest = files.filter((f) => !isTestClassified(f, shapes))
     const sampled = nonTest.slice(0, sampleN)
     if (!sampled.length) return null
     const tmpFile = path.join(os.tmpdir(), 'init-gen-atrisk-' + process.pid + '-' + Date.now() + '.txt')
     fs.writeFileSync(tmpFile, sampled.join('\n') + '\n')
     const scopeReconcilePath = path.join(__dirname, 'scope-reconcile.js')
-    const r = spawnSync(process.execPath, [scopeReconcilePath, '--probe-at-risk', tmpFile, '--root', hostRoot], { encoding: 'utf8' })
+    const reconcileArgs = [scopeReconcilePath, '--probe-at-risk', tmpFile, '--root', hostRoot]
+    if (testGlobsArg) reconcileArgs.push('--test-globs', testGlobsArg)
+    const r = spawnSync(process.execPath, reconcileArgs, { encoding: 'utf8' })
     try { fs.unlinkSync(tmpFile) } catch { /* best-effort cleanup */ }
     if (r.status !== 0) return null
     return JSON.parse(r.stdout)
@@ -252,6 +281,14 @@ try {
 }
 
 validateProfile(profile)
+
+if (profile.config.fileShapes !== undefined) {
+  const msg = validateFileShapes(profile.config.fileShapes)
+  if (msg) {
+    console.error(`init-gen: profile field "config.fileShapes" ${msg} — fix the profile JSON`)
+    process.exit(2)
+  }
+}
 
 // The policy block: absent -> the defaults, with the veto line printed on success; present ->
 // validated (exit 2, nothing written) then merged over the defaults.

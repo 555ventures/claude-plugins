@@ -63,15 +63,6 @@ const path = require('path')
 
 const CONFIG_RELPATH = '.claude/spec.config.json'
 
-// The default test-classification glob set — THE single declaration in this repo (docs/adr/0011).
-// Every consumer imports it: scope-reconcile.js (at-risk leg + --probe-at-risk), ac-drift.js, and
-// init-gen.js's at-risk-applicability probe. It was briefly declared three times over
-// (the fold-in was deliberately deferred); tests/doctor/ac-drift.test.js now pins
-// single-sourcing directly — a second copy anywhere under spec/scripts/ reddens that test.
-// Frozen because it is shared by reference across those modules: no consumer mutates it today
-// (all three read sites are membership tests), and the freeze keeps that true by construction.
-const DEFAULT_TEST_GLOBS = Object.freeze(['tests/**', 'test/**', '**/*.test.*', '**/*.spec.*', '**/*_test.*'])
-
 function configPath(root) { return path.join(root, '.claude', 'spec.config.json') }
 
 // Presence only — never opens, reads, or parses the file. A directory occupying the path
@@ -209,5 +200,5 @@ function validatePolicy(block) {
 
 module.exports = {
   readConfig, readConfigStrict, readPipelineRules, declaredForge, configPath, configExists, CONFIG_RELPATH,
-  DEFAULT_TEST_GLOBS, POLICY_DEFAULTS, policy, mergePolicy, validatePolicy, agentCall,
+  POLICY_DEFAULTS, policy, mergePolicy, validatePolicy, agentCall,
 }

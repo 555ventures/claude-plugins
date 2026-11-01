@@ -1,12 +1,14 @@
 ---
 date: 2026-11-01
-status: hardened
+status: implementing
+build_base: main
 tier: critical
 area: host-grounding
 breaking: false
 depends_on: [specs/20261101/01-the-host-names-its-own-test-cases.md]
 brief: n/a
 open_markers: 0
+diff_base: 24f608d88452e244277ab6c9ccfdba00bf3cb5ff
 ---
 
 # The host declares its file shapes
@@ -37,6 +39,8 @@ unclassified are classified.
 | D5 | New `init-gen shapes-check --root <dir> [--json]`: `{"declared":bool,"invalid":string|null,"testFiles":N,"unmatchedTestGlobs":string[]}`; exit 3 when `invalid` is set or any declared `testGlobs` entry matches no tracked file, else 0. `spec/commands/doctor.md` check 1 runs it; exit 3 → one ⚠️ line per unmatched glob or the `invalid` message. (AC-20261101-02-13) | A declared glob that matches nothing is drift the host cannot see otherwise (the same class as a `paths:` rule glob matching zero files, doctor § Session grounding). |
 | D6 | `node scripts/plugin-bump.js --bump --plugin spec --changelog "…"`. `[no-ac: node scripts/plugin-bump.js --check in the gate is the oracle]` | Behaviour change under `spec/` (pipeline rules § Planning). |
 | D7 | Work found and not taken here is queued, never done silently: `workspace-scan.js` returning every manifest of a directory (polyglot roots read as JavaScript only) — q10 (`spec-queue add`, fix lane, after this spec). `[no-ac: queue row only]` | Out of this spec's landing unit; stack naming belongs to enforce's discovery. |
+| D8 | Gate line widening scope (user ruling 2026-11-01, "add to scope"): three existing tests broke as a direct consequence of D1/D2 and are fixed in this build — `tests/ceiling/walk-files-symlinks.test.js` and `tests/ceiling/tests-leg.test.js` (AC-20260911-04-10) pass the removed top-level `testGlobs` key and move it into `fileShapes`; `tests/ceiling/count-tests.test.js` (AC-20260911-04-18) copies `scan-test-calls.js` with a hand-picked lib set and must also copy `lib/file-shapes.js` and `lib/glob-match.js`. `[no-ac: test-setup repair only]` | D1 drops the old key with no alias; the tests pin prior behaviour, not the old key name. |
+| D9 | The default `codeExtensions` literal in Contracts has 33 entries, not 34; the literal list is the contract (as Contracts already states), so the count note and AC-20261101-02-1's test read 33. AC-20261101-02-7's fixture cites `src/app.rb` (which contains the string `app.rb`), because `scope-reconcile.js` `stemsFor` deliberately refuses bare basenames. (AC-20261101-02-1, AC-20261101-02-7) | Orchestrator correction of a miscount and a fixture that could never match the existing stem rule; no behaviour change. |
 
 ## File Plan
 
@@ -62,6 +66,9 @@ unclassified are classified.
 | tests/host-config/file-shapes.test.js | CREATE | tests | AC-20261101-02-1, AC-20261101-02-2, AC-20261101-02-3, AC-20261101-02-4, AC-20261101-02-5, AC-20261101-02-6, AC-20261101-02-7, AC-20261101-02-8, AC-20261101-02-9, AC-20261101-02-10 |
 | tests/init-gen/file-shapes-key.test.js | CREATE | tests | AC-20261101-02-11, AC-20261101-02-12, AC-20261101-02-13, AC-20261101-02-14 |
 | tests/doctor/ac-drift.test.js | MODIFY | tests | AC-20261101-02-18 |
+| tests/ceiling/walk-files-symlinks.test.js | MODIFY | tests | config moves to `fileShapes.testGlobs` (D8) |
+| tests/ceiling/tests-leg.test.js | MODIFY | tests | AC-20260911-04-10 fixture config moves to `fileShapes.testGlobs` (D8) |
+| tests/ceiling/count-tests.test.js | MODIFY | tests | AC-20260911-04-18 tmp copy adds `lib/file-shapes.js`, `lib/glob-match.js` (D8) |
 
 ## Contracts
 
@@ -98,7 +105,7 @@ isManifest(basename, shapes)       // any manifests entry globMatch-es the basen
 validateFileShapes(block)          // null | 'fileShapes.<key> must be an array of non-empty strings' | 'fileShapes.codeExtensions entries must start with "."' | 'fileShapes must be an object'
 ```
 
-(The default `codeExtensions` list above has 34 entries and `manifests` 37; D1's counts are superseded by these literals — the literal lists are the contract.)
+(The default `codeExtensions` list above has 33 entries and `manifests` 37; D1's counts are superseded by these literals — the literal lists are the contract.)
 
 `init-gen.js` (D4, D5):
 

@@ -49,8 +49,8 @@
 
 const fs = require('fs')
 const path = require('path')
-const { readConfig, DEFAULT_TEST_GLOBS } = require('./host-config')
-const { globMatch } = require('./glob-match')
+const { readConfig } = require('./host-config')
+const { fileShapes, isTestClassified } = require('./file-shapes')
 const { walkFiles } = require('./walk-files')
 
 // The skip set and the walk that applies it live in lib/walk-files.js — the one copy
@@ -59,11 +59,10 @@ const { walkFiles } = require('./walk-files')
 
 function listTestFiles(root, config) {
   const cfg = config || {}
-  const configTestGlobs = cfg.testGlobs
-  const testGlobs = Array.isArray(configTestGlobs) ? configTestGlobs : DEFAULT_TEST_GLOBS
+  const shapes = fileShapes(cfg)
   const all = walkFiles(root)
   const relPosix = (abs) => path.relative(root, abs).split(path.sep).join('/')
-  return all.filter((f) => testGlobs.some((g) => globMatch(g, relPosix(f))))
+  return all.filter((f) => isTestClassified(relPosix(f), shapes))
 }
 
 // ---- low-level opaque-span skippers — each returns the index just past the span it opened at

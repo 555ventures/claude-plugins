@@ -16,13 +16,15 @@ const { read, runBash, ROOT } = require('../helpers')
 // restamp pin below, unchanged, retagged in its title per the reuses-pointer convention — joining
 // specs/20260914/02-genesis-run-and-sketch-read-the-mock-app.md's own AC-20260914-02-2, which
 // already reused that same pin and must keep its citation here or ac-drift-clean.test.js orphans it.
+// specs/20261029/08-the-policy-round-at-init.md D1 (AC-20261029-08-11): the contract's new § Policy edit
+// is restamped in the same change; the same pin is reused, retagged in its title.
 
 const CONTRACT_REL = 'spec/templates/grounding-contract.md'
 const DOCTOR_REL = 'spec/commands/doctor.md'
 const COVERAGE_SCOPE_REL = 'spec/scripts/coverage-scope.js'
 
 
-test('AC-20260912-15-8 (reused by AC-20260926-02-9, AC-20260930-01-6, AC-20261001-01-17, AC-20261029-03-7): WHEN this repo\'s .claude/spec.config.json is read THE SYSTEM carries a contractHash equal to the first 12 characters of the SHA-256 of spec/templates/grounding-contract.md as spec-paths contract-hash prints it, and the value is not the pre-edit stale stamp', () => {
+test('AC-20260912-15-8 (reused by AC-20260926-02-9, AC-20260930-01-6, AC-20261001-01-17, AC-20261029-03-7, AC-20261029-08-11): WHEN this repo\'s .claude/spec.config.json is read THE SYSTEM carries a contractHash equal to the first 12 characters of the SHA-256 of spec/templates/grounding-contract.md as spec-paths contract-hash prints it, and the value is not the pre-edit stale stamp', () => {
   const cfgPath = path.join(ROOT, '.claude/spec.config.json')
   assert.ok(fs.existsSync(cfgPath), '.claude/spec.config.json must exist for this pin to mean anything')
   const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))

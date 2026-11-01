@@ -49,7 +49,7 @@ continue; nothing identifiable → ask for the symptom, the only unrecoverable i
    § Question Style); a vetoed item reverts to the pre-fix behaviour and is not re-asked. Empty
    list → skip without output. Dismissed → STOP, edits left in the tree, nothing committed.
 4. **Fresh review.** Dispatch ONE `Agent {subagent_type: 'spec:reviewer'}` — read-only, blind to
-   this conversation — on the agent's own seat (`opus` at `effort: high`, core § Model Placement),
+   this conversation — on the agent's own seat (`fable` at `effort: low`, core § Model Placement),
    with no per-call override. Hand it: the
    root-cause statement and step 3's approved list in place of a spec, with the line "no File
    Plan or ACs exist — judge the diff against the statement"; the range `git rev-parse HEAD`

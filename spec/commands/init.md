@@ -67,6 +67,14 @@ Session-authored: `init-gen generate` does not write any of this; you record eac
 don't just record the gap**; each item is skippable only by an explicit `inert` manifest row
 with a reason:
 
+Open with ONE `AskUserQuestion` (`header: Substrate`) before anything is created, listing only
+the items below that Phase 1 found missing: "Init wants to create these files in your source:
+<one line per item>. Create them?" — **Create them (Recommended)**: "The pipeline can boot, seed
+and verify the app; every file is listed above." / **Declare them inert instead**: "Nothing is
+written; each item is recorded as inert and verification skips it." On the second answer every
+listed item becomes an `inert` manifest row with the reason `declined at init`. Nothing is
+created before the answer.
+
 - **Health endpoint** — the `runtime.readyCheck` target, when the app serves HTTP.
 - **Port** — the generated `bootCommand` serves on `$PORT` and `readyCheck` probes `$PORT`; a
   declared `prototype.url` carries `{port}`.
@@ -113,6 +121,57 @@ each option's `description`.
 
 Both rulings land in the profile at `probeOutcomes.testCommand` / `probeOutcomes.atRisk`
 (Phase 4) — never omitted, never inferred silently.
+
+Then the two policy rounds — standing preferences, each with a working default. A dismissed round
+keeps that round's defaults, prints `📌 policy defaults kept — edit .claude/spec.config.json policy to change (veto anytime)`
+and continues; it never stops init.
+
+### Policy round 1
+
+One `AskUserQuestion`, four questions, each first option the default:
+
+- `header: Worktrees` (`worktreePerSpec`) — "Should each spec build in its own git worktree,
+  away from your working copy?" — **Yes, isolate each spec (Recommended)**: "Builds never touch
+  the files you are editing; costs one checkout per spec." / **No, build in place**: "Builds run
+  on your current branch and can collide with uncommitted work."
+- `header: Direct lane` (`directLaneToMain`) — "May a one-line fix be committed straight to
+  main?" — **Yes (Recommended)**: "Tiny fixes skip the branch; a gate still runs and the escape
+  row still lands." / **No, always a branch**: "Every fix lands through a branch and a guided
+  merge; main only moves by merge."
+- `header: Merge shape` (`mergeStrategy`) — "How should finished spec branches land on main?" —
+  **Let the tool pick per branch (Recommended)**: "One commit fast-forwards, a few merge, many
+  squash; the pick is printed and you can veto it." / **Always merge commit**: "Every branch keeps
+  its history behind one merge commit." / **Always squash**: "Every branch lands as one commit;
+  the branch history is dropped." / **Always rebase then fast-forward**: "Linear history;
+  conflicts are repaired commit by commit."
+- `header: Test expiry` (`testExpiry`) — "After a spec closes, should the review classify which
+  of its tests can be retired?" — **Classify, delete nothing (Recommended)**: "Close prints what
+  is retirable; a separate deliberate sweep is the only deletion." / **Never classify**: "Every
+  spec test stays forever; the close prints no expiry line."
+
+### Policy round 2
+
+One `AskUserQuestion`, four questions, each first option the default:
+
+- `header: Run history` (`ledgerCommitted`) — "Should the pipeline's run history be committed
+  into this repo?" — **Commit it (Recommended)**: "Reviews, builds and fixes are recorded in git
+  for everyone on the project." / **Keep it out of git**: "History stays on this machine only; the
+  ledger files are gitignored."
+- `header: Review service` (`reviewService`) — "Where are wireframes confirmed?" — **In the
+  terminal (Recommended)**: "Nothing leaves this machine; you approve stories here." / **On the
+  hosted review service**: "Screens and notes are uploaded for a client to review; /spec:connect
+  sets it up."
+- `header: Model mix` (`models`) — "Which models run the build workers, the reviewer and the
+  disposer?" — **Plugin defaults (Recommended)**: "Sonnet builds, Fable reviews at low effort,
+  Opus disposes — the reviewer is never the model your session runs." / **Same model as this
+  session: reviewer Opus at high**: "Same model as an Opus session; cheaper per token, more effort
+  per review." / **I will edit the block by hand**: "Defaults are written now; change models in
+  the config file later."
+- `header: High-risk areas` (`riskTiers`, multiSelect) — "Which areas are high-risk in this
+  repo, where a spec must be confirmed before it locks?" — options `auth`, `money`, `migrations`,
+  `data deletion`, `public API`, `PII` plus every bullet Phase 1 found, each description naming
+  what the area covers here. The first listed option carries `(Recommended)` — the area Phase 1
+  found most at risk, else `auth`.
 
 ## Phase 4 — Author the profile JSON
 
@@ -164,6 +223,10 @@ Field-by-field, tracing each back to the phase that grounds it:
 - **`config`** — Phase 1's stack/toolchain/runtime findings; Phase 6's `design` block on
   design-capable hosts. The script validates keys and exits 2 naming the first missing one; a
   *wrong* value is never caught.
+- **`config.policy`** — Phase 3's two policy rounds, only the keys the owner answered (a dismissed
+  round contributes none); `generate` validates the block, merges it over the defaults and exits 2
+  naming the first bad key. The chosen risk areas are ALSO written as bullets into
+  `rules.sections["Risk Tiers"]`.
 - **`rules.sections`** — the six judgment sections as this repo's concrete grounding. Rules
   state the current invariant plus one owner citation, never dates, people, hosts, versions, or
   prior behavior. `## Gotchas` is never authored here.
@@ -187,6 +250,13 @@ invocation is the brownfield first-run, or a refresh of a genesis-grounded repo.
 ```
 node "$(spec-paths init-gen)" generate --root . --profile <scratchpad profile path> [--refresh]
 ```
+
+Run it first with `--dry-run`: it writes nothing and prints `Confirm before writing: N permissions,
+M files` followed by one `  + ` line per allow/deny entry and per file about to be created. Ask ONE
+`AskUserQuestion` (`header: Write`) whose question text is that printed line plus the item lines —
+**Write them (Recommended)**: "The listed permissions and files are written now; nothing else
+changes." / **Stop here**: "Nothing is written; re-run /spec:init after editing the profile." —
+then **Stop here** → STOP, nothing written; otherwise run the command above without `--dry-run`.
 
 Enforced by `init-gen.js` — its header comment is the contract (exit codes 0–3). On exit 3,
 diff the named files yourself, fold whatever the user hand-edited back into the profile, then
@@ -266,4 +336,4 @@ rules or tooling change.
 - Re-running `/spec:init` refreshes the grounding layer: `init-gen generate` refuses (exit 3)
   to overwrite any target file that already differs from what the profile would produce
   (Phase 5). To check for drift without regenerating, the user runs `/spec:doctor`.
-- `AskUserQuestion` dismissed → STOP.
+- `AskUserQuestion` dismissed → STOP, except the two policy rounds, which keep their defaults.

@@ -1,6 +1,7 @@
 ---
 date: 2026-10-29
-status: hardened
+status: implementing
+build_base: main
 tier: critical           # edits spec/templates/grounding-contract.md (hash-stamped into every host) and init-gen.js's settings.json permission writes (rules § Risk Tiers)
 area: bootstrap
 breaking: false
@@ -8,6 +9,7 @@ depends_on: [specs/20261029/04-the-four-questions-that-did-not-exist.md]
 brief: n/a
 spiked: 2026-10-31
 open_markers: 0
+diff_base: 5684e6bb942c29cbe061fc14b393c440f00a4e64
 ---
 
 # The policy round at init

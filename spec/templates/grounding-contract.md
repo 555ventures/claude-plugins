@@ -35,7 +35,7 @@ token file — a Tailwind 4 `@theme` block or the stack's equivalent) and `rules
 auto-loaded rule file holding the intent-to-pattern table and the naming-convention table) are
 repo-relative and required when the block is present; `app` stays optional — the mock app dir,
 written by `/spec:mocks` and genesis, and equal to `design/mocks/status.json`'s own `app`),
-`release` (see § Release), `prototype` (see § Prototype), `walkthrough` (see § Walkthrough), `pictures` (see § Pictures), `capabilities` (see § Capabilities),
+`release` (see § Release), `prototype` (see § Prototype), `walkthrough` (see § Walkthrough), `pictures` (see § Pictures), `capabilities` (see § Capabilities), `policy` (see § Policy),
 the rule-enforcement keys `enforcementManifest` and `rulesEnforcementHash` (see § Rule
 enforcement), and the genesis-handoff key `genesisStackDescriptor`
 (see § Genesis handoff).
@@ -202,6 +202,48 @@ the corresponding observation slot a typed unavailability object instead of assu
 `{"unavailable":"pattern-no-match"}` when a declared pattern misses the output (drift, which
 raises a leg finding); `ciPoll` overrides `/spec:release`'s poll interval/timeout when present,
 otherwise the 30s/600s defaults hold.
+
+## Policy (optional — the standing preferences the owner answered once at init)
+
+One closed block, asked at `/spec:init` in two rounds and written by `init-gen generate`; the
+JSON is the default block:
+
+```json
+"policy": {
+  "worktreePerSpec": true,
+  "directLaneToMain": true,
+  "mergeStrategy": "derived",
+  "testExpiry": "classify",
+  "ledgerCommitted": true,
+  "reviewService": "terminal",
+  "models": {
+    "workers":  {"model": "sonnet", "effort": "medium"},
+    "reviewer": {"model": "fable",  "effort": "low"},
+    "disposer": {"model": "opus",   "effort": "medium"}
+  },
+  "riskTiers": []
+}
+```
+
+Enums: `mergeStrategy` `derived | merge-commit | ff-only | squash | rebase-ff`; `testExpiry`
+`classify | off`; `reviewService` `terminal | hosted`; `models.<seat>.model`
+`fable | opus | sonnet | haiku`; `models.<seat>.effort` `low | medium | high | xhigh | max`;
+`riskTiers` an array of non-empty strings.
+
+Semantics: `worktreePerSpec` false → `/spec:run` runs in place without `--in-place`;
+`directLaneToMain` false → a Direct-lane change lands through a branch and `/git:merge`, never a
+commit on main, still no spec; `mergeStrategy` `derived` → `merge-back inspect`'s RECOMMEND, else
+the named strategy is auto-picked; `testExpiry` `off` → review close runs no classification and
+`/spec:doctor` check 20 reports `disabled by policy`; `ledgerCommitted` false →
+`.claude/spec-runs.jsonl` and `.claude/spec-runs/` are gitignored at init and never staged;
+`reviewService` `terminal` → the wireframe command never suggests `/spec:connect`;
+`models.<seat>` → the model and effort every driver prints on that seat's dispatch line;
+`riskTiers` → the high-risk areas the owner chose, also written as bullets into the rules file's
+§ Risk Tiers (the section planning reads; the key is provenance, checked by `/spec:doctor`
+check 24).
+
+**Absent or partial block = the defaults above, key by key** — a host that predates the block
+changes nothing. Validated by `validatePolicy` in `host-config.js`; read through `policy(root)`.
 
 ## Genesis handoff (optional — present when the genesis stage seeded the repo)
 

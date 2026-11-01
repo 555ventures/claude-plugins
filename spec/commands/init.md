@@ -45,6 +45,8 @@ into the profile's `manifestExtras` so the manifest still carries a row for each
 Launch parallel Explore agents (`model: sonnet`) and read key files yourself: stack and
 toolchain (real commands from `package.json` scripts / `Makefile` / `pyproject.toml` — never
 guess), UI stack, architecture, conventions, high-risk surfaces, runtime and observability.
+Profile the test runner's case shape too: when a stack's test files are not line-start
+`test(`/`it(` JavaScript calls (pytest, Go, RSpec, …), Phase 4 declares `config.testCaseScanner`.
 Interview the user via `AskUserQuestion` only for what the code cannot answer.
 
 **Author the generated skills' content** from the runtime & observability findings, for
@@ -223,6 +225,14 @@ Field-by-field, tracing each back to the phase that grounds it:
 - **`config`** — Phase 1's stack/toolchain/runtime findings; Phase 6's `design` block on
   design-capable hosts. The script validates keys and exits 2 naming the first missing one; a
   *wrong* value is never caught.
+- **`config.testCaseScanner`** — only for a stack whose test files are not line-start
+  `test(`/`it(` JavaScript calls (Phase 1's case-shape profiling): the stack's own listing piped
+  into the grammar `$(spec-paths contract) § Required config keys` defines (`<file> :: <title>` per
+  line) — the runner's dry-run/collect-only output when it has one, else a grep over the stack's
+  test-function convention. A pipeline longer than one line is written as
+  `scripts/spec-test-cases.sh` and recorded in `manifestExtras`. `generate` exits 2 naming
+  `config.testCaseScanner` when it is not a non-empty string, adds the manifest row proving the
+  listing prints at least one case, and pre-authorizes the command.
 - **`config.policy`** — Phase 3's two policy rounds, only the keys the owner answered (a dismissed
   round contributes none); `generate` validates the block, merges it over the defaults and exits 2
   naming the first bad key. The chosen risk areas are ALSO written as bullets into

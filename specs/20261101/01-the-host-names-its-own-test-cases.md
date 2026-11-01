@@ -1,12 +1,14 @@
 ---
 date: 2026-11-01
-status: hardened
+status: done
+build_base: main
 tier: critical
 area: test-scanning
 breaking: false
 depends_on: []
 brief: n/a
 open_markers: 0
+diff_base: c6f833a7d10f4f87266ecbcf7638dee84685c368
 ---
 
 # The host names its own test cases
@@ -38,6 +40,12 @@ that declares nothing is byte-for-byte unchanged, and `/spec:init` and `/spec:do
 | D8 | `lib/invariants.js`'s `configCommandStrings` includes `testCaseScanner`. (AC-20261101-01-15) | Every host command string the config carries is in the one list the exec-recall sweep reads. |
 | D9 | The library ships no language-specific scanner besides the JavaScript walker: `scanPythonCases` is not exported, and should the merge-back of `specs/20261031/01` re-land commit `1814608a`, the build removes `scanPythonCases` and `tests/ceiling/python-cases.test.js` as part of this spec. (AC-20261101-01-16) | The plugin is language-agnostic; that commit was reset off `main` on 2026-11-01 but survives on the open spec branch cut from it. |
 | D10 | `node scripts/plugin-bump.js --bump --plugin spec --changelog "…"`. `[no-ac: node scripts/plugin-bump.js --check in the gate is the oracle]` | Behaviour change under `spec/` (pipeline rules § Planning). |
+| D11 | A host case without a span is tagged by its `title` alone (A2: its `commentAbove` is `''`, and the file body outside a span is never read), so AC-20261101-01-9's fixture names the spanless case `AC-20260911-55-1 test_alpha` and its `unscannable` entry carries that title. `[auto-picked at build: resolves AC-9 against A2 — the bare title is untagged and skipped before the span check]` (AC-20261101-01-9) | AC-9 as locked could not hold without reading the file outside the span, which A2 forbids; citing the AC in the title is the only tag a spanless case has. |
+| D12 | AC-20261101-01-8's stub `testCommand` is `node -e "process.exit(0)" --`: without the trailing `--`, node rejects the appended `--name=^test_gamma$` filter with `bad option: --name=^test_gamma$`, which names the title, so the run is read as selected-and-red and A6's premise (output never names the title) is not met. `[auto-picked at build: keeps A6's premise true rather than taking its if-false weakening]` (AC-20261101-01-8) | The trailing `--` makes node pass the filter as script argv and print nothing, so the leg exercises the unselected path the AC pins. |
+| D13 | `spec/entrypoints.json` lists `spec/commands/doctor.md` as an entry point of `spec/scripts/count-tests.js`, because D7's check-6 line invokes `spec-paths count-tests`; added to the File Plan at build. Gate line: `tests/consistency/entrypoints.test.js` (AC-20260820-04-6). `[asked: JJ 2026-11-01 — add to scope]` [no-ac: the entrypoints conformance pin of spec 20260820/04 is the oracle; no observable behaviour of this spec] | The entry-point registry must name every caller; the D7 doctor line is a new caller. |
+| D14 | The smoke fixtures in `tests/smoke-manifest.test.js`, `tests/smoke-shutdown-behavior.test.js` and `tests/smoke-port.test.js` install their `TERM` trap before they signal ready, never after: a stop signal landing between the ready file and the trap killed the fake boot by the default action (exit 143) and `smoke.sh` read it as `shutdown-unclean`, red under machine load. Tripped deliberately with a 3 s gap — old order exit 6 `shutdown-unclean`, new order exit 0 `__SMOKE_PASS__`. Gate line: the review suite leg (AC-20260815-04-7). `[asked: JJ 2026-11-01 — fix it in this task]` [no-ac: test-fixture ordering only; the existing smoke pins of spec 20260815/04 are the oracle] | Pre-existing fixture race unrelated to this spec's behaviour; fixed where it was understood (core § Incident Policy). |
+| D15 | `expire-tests.js` merges retired host spans before it cuts: identical spans collapse to one, and overlapping or touching spans merge into their union, so each byte is cut at most once and nothing outside a retired case's own span is removed — a pytest parametrized function lists one case per param id, all sharing the function's span. Review finding s0 (review 1). (AC-20261101-01-20) | Two retired cases with one span cut twice from the shrinking source, deleting the next live tests; D5 promises a host span is cut by its lines, exactly once. |
+| D16 | Every `--scanner-check` exit-3 stderr line ends with the remedy ` — fix config.testCaseScanner, then rerun: node <absolute path of count-tests.js> --root . --scanner-check`. The path is the script's own `__filename`, as every self-rerun remedy in `spec/scripts/` spells it; a `spec-paths count-tests` literal inside count-tests.js reads to the entrypoints conformance pin as an undeclared self-invocation. Review finding s1 (review 1). (AC-20261101-01-6) | Pipeline rules § Review Checks: an error path names its remedy command. |
 
 ## File Plan
 
@@ -56,7 +64,11 @@ that declares nothing is byte-for-byte unchanged, and `/spec:init` and `/spec:do
 | spec/commands/doctor.md | MODIFY | doctrine | check 6 `--scanner-check` line (D7) |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | `node scripts/plugin-bump.js --bump --plugin spec --changelog "…"` (D10) |
 | .claude/spec.config.json | MODIFY | other | `contractHash` re-stamped to `$(spec-paths contract-hash)` after the D1 edit (the existing stamp pin in tests/consistency/contract-stamp.test.js) |
-| tests/ceiling/host-scanner.test.js | CREATE | tests | AC-20261101-01-1, AC-20261101-01-2, AC-20261101-01-3, AC-20261101-01-4, AC-20261101-01-5, AC-20261101-01-6, AC-20261101-01-7, AC-20261101-01-8, AC-20261101-01-9, AC-20261101-01-10, AC-20261101-01-15, AC-20261101-01-16 |
+| spec/entrypoints.json | MODIFY | other | `spec/commands/doctor.md` added to `count-tests.js`'s entry points (D13) |
+| tests/smoke-manifest.test.js | MODIFY | tests | smoke fixture installs its `TERM` trap before signalling ready (D14) |
+| tests/smoke-shutdown-behavior.test.js | MODIFY | tests | smoke fixture installs its `TERM` trap before signalling ready (D14) |
+| tests/smoke-port.test.js | MODIFY | tests | smoke fixture installs its `TERM` trap before signalling ready (D14) |
+| tests/ceiling/host-scanner.test.js | CREATE | tests | AC-20261101-01-1, AC-20261101-01-2, AC-20261101-01-3, AC-20261101-01-4, AC-20261101-01-5, AC-20261101-01-6, AC-20261101-01-7, AC-20261101-01-8, AC-20261101-01-9, AC-20261101-01-10, AC-20261101-01-15, AC-20261101-01-16, AC-20261101-01-20 |
 | tests/init-gen/host-scanner-key.test.js | CREATE | tests | AC-20261101-01-11, AC-20261101-01-12, AC-20261101-01-13, AC-20261101-01-14 |
 
 ## Contracts
@@ -104,7 +116,7 @@ count-tests.js --root <dir> --scanner-check [--json]
   absent   -> {"declared":false}                                              exit 0
   declared -> {"declared":true,"command":"<cmd>","exit":N,"cases":N,"files":N,"malformed":N}
               exit 0 iff exit === 0 && malformed === 0 && cases >= 1, else exit 3 and one stderr line
-              `count-tests: testCaseScanner <field> — <value>` for the first failing field
+              `count-tests: testCaseScanner <field> — <value> — fix config.testCaseScanner, then rerun: node <absolute path of count-tests.js> --root . --scanner-check` for the first failing field (D16)
   human form prints the same fields one per line as `<field>: <value>`
 ```
 
@@ -159,10 +171,10 @@ Failure path: config `testCaseScanner: "exit 3"` → `--scanner-check` exits 3 w
 - **AC-20261101-01-3**: WHEN the listing holds a blank line and the line `garbage without separator` THE SYSTEM SHALL skip the blank line and count the other as malformed (`--scanner-check --json` → `"malformed":1`, `"cases":3`), and WHEN a line reads `tests/test_x.py :: a :: b` THE SYSTEM SHALL read file `tests/test_x.py` and title `a :: b` → writes tests/ceiling/host-scanner.test.js
 - **AC-20261101-01-4**: WHEN `testCaseScanner` is `exit 3` THE SYSTEM SHALL print `{"count":1}` for `--json` (every file fell to the built-in walker) and write exactly one stderr line `testCaseScanner failed (exit 3): exit 3` → writes tests/ceiling/host-scanner.test.js
 - **AC-20261101-01-5**: WHEN `count-tests.js --root <fixture> --titles --file tests/test_x.py` runs THE SYSTEM SHALL print exactly `tests/test_x.py :: test_alpha`, `tests/test_x.py :: test_beta`, `tests/test_x.py :: test_gamma` on stdout and nothing on stderr; WHEN the same runs with the key absent THE SYSTEM SHALL print nothing on stdout, exit 0, and write the one stderr line `count-tests: 0 cases in tests/test_x.py (read by the built-in JavaScript walker)`; WHEN the key is declared but the listing never names `tests/nothing.py` THE SYSTEM SHALL write `count-tests: 0 cases in tests/nothing.py (read by testCaseScanner: node scanner.js)` → writes tests/ceiling/host-scanner.test.js
-- **AC-20261101-01-6**: WHEN `count-tests.js --root <fixture> --scanner-check --json` runs THE SYSTEM SHALL print `{"declared":true,"command":"node scanner.js","exit":0,"cases":3,"files":1,"malformed":0}` and exit 0; with the key absent print `{"declared":false}` and exit 0; with `testCaseScanner` set to `exit 3` print `"exit":3` and exit 3 with stderr `count-tests: testCaseScanner exit — 3`; with a listing of only blank lines exit 3 with stderr `count-tests: testCaseScanner cases — 0` → writes tests/ceiling/host-scanner.test.js
+- **AC-20261101-01-6**: WHEN `count-tests.js --root <fixture> --scanner-check --json` runs THE SYSTEM SHALL print `{"declared":true,"command":"node scanner.js","exit":0,"cases":3,"files":1,"malformed":0}` and exit 0; with the key absent print `{"declared":false}` and exit 0; with `testCaseScanner` set to `exit 3` print `"exit":3` and exit 3 with stderr `count-tests: testCaseScanner exit — 3 — fix config.testCaseScanner, then rerun: node <absolute path of count-tests.js> --root . --scanner-check` (D16); with a listing of only blank lines exit 3 with stderr `count-tests: testCaseScanner cases — 0 — fix config.testCaseScanner, then rerun: node <absolute path of count-tests.js> --root . --scanner-check` (D16) → writes tests/ceiling/host-scanner.test.js
 - **AC-20261101-01-7**: WHEN `scanCases(root, config, 'tests/test_x.py', src)` is called THE SYSTEM SHALL return three records with `source` `host`, `test_gamma` carrying `cuttable` `true` and `commentAbove` equal to lines 9–11 of the file (e.g. the slice starting `class TestThing:` and ending after `pass\n`), and `test_alpha` carrying `cuttable` `false`, `start` `0`, `end` `0`; and WHEN called for `tests/a.test.js` THE SYSTEM SHALL return one record with `source` `builtin` and `cuttable` `true` → writes tests/ceiling/host-scanner.test.js
-- **AC-20261101-01-8**: WHEN `red-check.js --spec <spec> --root <fixture> --base <sha> --json` runs with `testCommand` `node -e "process.exit(0)"`, `testNameFilter` `--name={name}` and an AC `→ reuses tests/test_x.py :: test_gamma` THE SYSTEM SHALL record a disposition for that AC with `prefix` `test_gamma` and `fallback` equal to `unselected` (the stub run's output never names the title), never `unresolved` → writes tests/ceiling/host-scanner.test.js
-- **AC-20261101-01-9**: WHEN `expire-tests.js --root <fixture> --spec specs/20260911/55-closing.md --apply --json` runs with `test_alpha` listed without a span THE SYSTEM SHALL leave `tests/test_x.py` byte-identical, list `{file:"tests/test_x.py", title:"test_alpha", reason:"its span is not known — the host scanner printed no start/end"}` under `unscannable`, `retired` empty and `emptied` `[]` → writes tests/ceiling/host-scanner.test.js
+- **AC-20261101-01-8**: WHEN `red-check.js --spec <spec> --root <fixture> --base <sha> --json` runs with `testCommand` `node -e "process.exit(0)" --` (D12), `testNameFilter` `--name={name}` and an AC `→ reuses tests/test_x.py :: test_gamma` THE SYSTEM SHALL record a disposition for that AC with `prefix` `test_gamma` and `fallback` equal to `unselected` (the stub run's output never names the title), never `unresolved` → writes tests/ceiling/host-scanner.test.js
+- **AC-20261101-01-9**: WHEN `expire-tests.js --root <fixture> --spec specs/20260911/55-closing.md --apply --json` runs with the case listed without a span as `AC-20260911-55-1 test_alpha` (D11) THE SYSTEM SHALL leave `tests/test_x.py` byte-identical, list `{file:"tests/test_x.py", title:"AC-20260911-55-1 test_alpha", reason:"its span is not known — the host scanner printed no start/end"}` under `unscannable`, `retired` empty and `emptied` `[]` → writes tests/ceiling/host-scanner.test.js
 - **AC-20261101-01-10**: WHEN the same run uses a listing where `test_alpha` carries `"start":5,"end":7` THE SYSTEM SHALL cut exactly lines 5–7 of `tests/test_x.py` (the `# AC-20260911-55-1` line, `def test_alpha():` and its `    assert True`), list it under `retired`, and WHEN every case of the file is listed with a span and retired THE SYSTEM SHALL still leave the file on disk with `emptied` `[]` → writes tests/ceiling/host-scanner.test.js
 - **AC-20261101-01-11**: WHEN `init-gen.js generate --root <host> --profile <p>` runs with `config.testCaseScanner` equal to `node scanner.js` and a `scanner.js` printing one listing line THE SYSTEM SHALL exit 0, write the key verbatim into `.claude/spec.config.json`, and `.claude/spec-manifest.json` SHALL hold the row `{"claim":"test-case scanner lists at least one case","kind":"exec","target":"node scanner.js | grep -q ."}` → writes tests/init-gen/host-scanner-key.test.js
 - **AC-20261101-01-12**: WHEN the profile's `config.testCaseScanner` is `""` or `42` THE SYSTEM SHALL exit 2 with stderr containing `profile field "config.testCaseScanner" must be a non-empty shell command string` and write no config → writes tests/init-gen/host-scanner-key.test.js
@@ -173,6 +185,7 @@ Failure path: config `testCaseScanner: "exit 3"` → `--scanner-check` exits 3 w
 - **AC-20261101-01-17**: WHEN `count-tests.js --root <fixture> --json` runs over a host that declares no `testCaseScanner` and holds five line-start `test()`/`it()` calls beside a `"test("` string, a `// test(` comment, a `describe(` and a `t.test(` THE SYSTEM SHALL CONTINUE TO print `{"count":5}` and exit 0 → reuses tests/ceiling/count-tests.test.js :: AC-20260911-02-1:
 - **AC-20261101-01-18**: WHEN a retired JavaScript case holds JSX text with an apostrophe or a URL and no `testCaseScanner` is declared THE SYSTEM SHALL CONTINUE TO leave its file byte-identical, report it under `unscannable` and apply the rest of the sweep → reuses tests/expiry/test-expiry.test.js :: WHEN a retired
 - **AC-20261101-01-19**: WHEN a `rewrites` disposition's own named JavaScript case already passes against the pre-image on a host with `testNameFilter` and no `testCaseScanner` THE SYSTEM SHALL CONTINUE TO emit `gutted-rewrite` naming the AC and the prefix → reuses tests/disposition/red-check-per-test.test.js :: AC-20260911-04-6:
+- **AC-20261101-01-20**: WHEN `expire-tests.js --root <fixture> --spec specs/20260911/55-closing.md --apply --json` runs over a `tests/test_x.py` holding a commented parametrized `test_p` on lines 3–6 followed by `test_keep` and `test_keep2`, with a listing that gives `test_p[1]` and `test_p[2]` both `"start":3,"end":6` THE SYSTEM SHALL list both under `retired`, remove exactly lines 3–6 once, and leave `test_keep` and `test_keep2` byte-identical in the file → writes tests/ceiling/host-scanner.test.js
 
 ## Assumptions (escalation triggers)
 
@@ -220,6 +233,20 @@ branch this plan reads. The 35 `executes` hits are the suites that run `count-te
 `ac-drift.js`, `red-check.js`, `expire-tests.js` and `init-gen.js`; every one runs a host that declares no
 `testCaseScanner`, the path D1 leaves byte-for-byte unchanged (AC-17, AC-18, AC-19 pin it), so they are
 waived as visibility; the build-time suite check adjudicates.
+
+### Build deviations (folded at close)
+
+- The spanless host case in the AC-9 test is titled `AC-20260911-55-1 test_alpha`: a spanless case has
+  an empty `commentAbove` (A2), so its title is its only tag. Resolved into D11.
+- The AC-15 test observes `configCommandStrings` through `deriveInvariants(...).roots`, because the
+  function is not exported from `lib/invariants.js`.
+- The build first shipped the scanner-check exit-3 line without a remedy, leaving it to the header
+  and doctor's line; review 1 ruled that hard and D16 added the rerun command.
+- The AC-8 stub `node -e "process.exit(0)"` rejected the appended filter with an error that named the
+  title, so the run read as selected-and-red; the trailing `--` makes it ignore the filter (D12).
+
+### Advisory debt (review rv_4796e56bd79d)
+- a0 spec/scripts/count-tests.js:138 — The new exit-3 remedy of `count-tests.js --scanner-check` always prints `--root .` regardless of the `--root` the check ran against; rerunning it from any other cwd checks the wrong repo, and on a repo with no scanner reports declared:false exit 0 — a false all-clear. Every other self-rerun remedy in spec/scripts (genesis-driver.js:2679) splices the real root. D16 and amended AC-20261101-01-6 pin the `.` literal, so advisory.
 
 ## Canonical Delta
 

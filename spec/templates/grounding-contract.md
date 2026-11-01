@@ -23,6 +23,13 @@ the design stage's gate/repair paths run; absent = legacy mode, no preflight),
 regex-escaped, anchored title and appends the fragment to `testCommand` ahead of the file path
 to verify that one declared test rather than its whole file; absent = every file keeps today's
 per-file classification),
+`testCaseScanner` (a shell command run from the repo root, no placeholders, printing one test case
+per stdout line — `<file> :: <title>` with a repo-relative POSIX file split at the first ` :: `,
+or a JSON object `{"file","title","start"?,"end"?}` whose 1-based inclusive `start`/`end` line
+numbers bound the case and any tag comment above it; blank lines skipped, any other line
+malformed; absent = every test file is read by the built-in JavaScript walker. A file the
+listing names is never read by the walker; a case without a span is never cut by the expiry
+sweep and a host-named file is never deleted),
 `orchestratorOnly` (array of repo-relative path globs in `lib/glob-match.js` syntax — `**` any run
 of segments, `*` within one segment, everything else literal, no braces — naming the host's
 orchestrator-only File Plan paths; the build driver never lists a matching row in a worker's

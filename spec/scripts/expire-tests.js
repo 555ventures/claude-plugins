@@ -85,7 +85,7 @@
 
 const fs = require('fs')
 const path = require('path')
-const { listTestFiles, scanCalls, scanDescribes, resolveReference } = require('./lib/scan-test-calls')
+const { listTestFiles, scanCalls, scanCases, scanDescribes, resolveReference } = require('./lib/scan-test-calls')
 const { deriveInvariants } = require('./lib/invariants')
 const {
   extractSection, parseAcBullets, AC_ID_RE_GLOBAL, normalizeForPinCheck, parseDisposition,
@@ -366,7 +366,7 @@ for (const file of testFiles) {
   } catch {
     continue
   }
-  const calls = scanCalls(src)
+  const calls = scanCases(root, config, file, src)
   scanned += calls.length
   for (const call of calls) {
     const ids = citedAcIds(call)
@@ -406,7 +406,19 @@ const writes = [] // [{ abs, before, after }] — after:null deletes; performed 
 // `test.skip(cond)`/`test.setTimeout(`/`test.step(` inside a body. Returns why not, or null.
 const LINE_START_CALL_RE =
   /^[ \t]*(?:(?:test|it)(?:\.(?:only|skip|concurrent|sequential|fails|todo|fixme))*(?:\s*\(\s*['"`]|\.(?:each|for)\b)|describe\b[\w.]*\s*\()/
+let hostSiblings = [] // the current file's span-carrying host cases (unboundedReason reads it)
 function unboundedReason(src, rec, inner) {
+  if (rec.cuttable === false) return 'its span is not known \u2014 the host scanner printed no start/end'
+  if (rec.source === 'host') {
+    // The host declared this span: only a not-retired case inside it is refused (no JavaScript
+    // paren or indent reading of a file the plugin cannot parse).
+    for (const o of hostSiblings) {
+      if ((o.start !== rec.start || o.end !== rec.end) && o.start >= rec.start && o.end <= rec.end && !inner.some((r) => r.start === o.start && r.end === o.end)) {
+        return 'it holds a test or describe that is not retired'
+      }
+    }
+    return null
+  }
   const lineStart = rec.start + rec.commentAbove.length
   const indent = /^[ \t]*/.exec(src.slice(lineStart, lineStart + 200))[0]
   const callEnd = lineStart + indent.length + rec.callText.length
@@ -432,6 +444,9 @@ for (const [file, calls] of retiredByFile) {
   } catch {
     continue
   }
+  hostSiblings = calls.some((c) => c.source === 'host')
+    ? scanCases(root, config, file, src).filter((c) => c.cuttable !== false)
+    : []
   // A retired case whose span is not visibly bounded is never cut: its row moves from `retired`
   // to `unscannable` and it stays in the file, while every bounded case beside it is still cut.
   const refuse = (c, reason) => {
@@ -477,10 +492,16 @@ for (const [file, calls] of retiredByFile) {
   }
   for (const r of removals) if (r.title) emptiedSuites.push({ file, title: r.title })
   if (removals.length === 0) continue
-  const spans = removals
-    .filter((r) => !removals.some((o) => o !== r && o.start <= r.start && o.end >= r.end &&
-      (o.start < r.start || o.end > r.end)))
-    .map((r) => ({ start: r.start, end: src[r.end] === '\n' ? r.end + 1 : r.end }))
+  // Merge retired spans before cutting: identical spans collapse, overlapping or touching spans
+  // become their union, so each byte is cut at most once.
+  const merged = []
+  for (const r of removals.slice().sort((a, b) => a.start - b.start || b.end - a.end)) {
+    const last = merged[merged.length - 1]
+    if (last && r.start <= last.end) last.end = Math.max(last.end, r.end)
+    else merged.push({ start: r.start, end: r.end })
+  }
+  const spans = merged
+    .map((r) => ({ start: r.start, end: src[r.end] === '\n' && src[r.end - 1] !== '\n' ? r.end + 1 : r.end }))
     .sort((a, b) => b.start - a.start)
   const before = src
   for (const { start, end } of spans) {
@@ -503,7 +524,8 @@ for (const [file, calls] of retiredByFile) {
 
   // A kept case the scanner misread is invisible to scanCalls but still starts a line, so a file
   // with any line-start titled case or describe left is never deleted.
-  if (scanCalls(src).length === 0 && !src.split('\n').some((line) => LINE_START_CALL_RE.test(line))) {
+  const hostFile = calls.some((c) => c.source === 'host')
+  if (!hostFile && scanCalls(src).length === 0 && !src.split('\n').some((line) => LINE_START_CALL_RE.test(line))) {
     emptied.push(file)
     writes.push({ abs, before, after: null })
   } else {

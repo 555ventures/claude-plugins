@@ -492,9 +492,15 @@ for (const [file, calls] of retiredByFile) {
   }
   for (const r of removals) if (r.title) emptiedSuites.push({ file, title: r.title })
   if (removals.length === 0) continue
-  const spans = removals
-    .filter((r) => !removals.some((o) => o !== r && o.start <= r.start && o.end >= r.end &&
-      (o.start < r.start || o.end > r.end)))
+  // Merge retired spans before cutting: identical spans collapse, overlapping or touching spans
+  // become their union, so each byte is cut at most once.
+  const merged = []
+  for (const r of removals.slice().sort((a, b) => a.start - b.start || b.end - a.end)) {
+    const last = merged[merged.length - 1]
+    if (last && r.start <= last.end) last.end = Math.max(last.end, r.end)
+    else merged.push({ start: r.start, end: r.end })
+  }
+  const spans = merged
     .map((r) => ({ start: r.start, end: src[r.end] === '\n' && src[r.end - 1] !== '\n' ? r.end + 1 : r.end }))
     .sort((a, b) => b.start - a.start)
   const before = src

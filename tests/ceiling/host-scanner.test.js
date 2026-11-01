@@ -121,6 +121,8 @@ test('AC-20261101-01-5: count-tests --titles --file prints the host titles with 
     'a declared-scanner miss must name the scanner, so the author fixes the listing not the file: ' + JSON.stringify(rn.stderr))
 })
 
+const REMEDY = ' — fix config.testCaseScanner, then rerun: node ' + require('node:path').join(SPEC, 'scripts', 'count-tests.js') + ' --root . --scanner-check'
+
 test('AC-20261101-01-6: count-tests --scanner-check reports the listing, and exits 3 naming the first failing field', () => {
   const dir = makeHost('hs-ac6')
   const r = runNode('scripts/count-tests.js', ['--root', dir, '--scanner-check', '--json'])
@@ -138,12 +140,12 @@ test('AC-20261101-01-6: count-tests --scanner-check reports the listing, and exi
   const rx = runNode('scripts/count-tests.js', ['--root', bad, '--scanner-check', '--json'])
   assert.strictEqual(rx.status, 3, 'a non-zero scanner exit must fail the check with 3: ' + rx.stdout + rx.stderr)
   assert.strictEqual(JSON.parse(rx.stdout).exit, 3, 'the scanner exit must be reported: ' + rx.stdout)
-  assert.match(rx.stderr, /^count-tests: testCaseScanner exit — 3\n$/, 'one stderr line names the failing field: ' + JSON.stringify(rx.stderr))
+  assert.strictEqual(rx.stderr, 'count-tests: testCaseScanner exit — 3' + REMEDY + '\n','one stderr line names the failing field: ' + JSON.stringify(rx.stderr))
 
   const blank = makeHost('hs-ac6-blank', { listing: '\n\n' })
   const rz = runNode('scripts/count-tests.js', ['--root', blank, '--scanner-check', '--json'])
   assert.strictEqual(rz.status, 3, 'a scanner listing nothing is grounding drift and must fail the check: ' + rz.stdout + rz.stderr)
-  assert.match(rz.stderr, /^count-tests: testCaseScanner cases — 0\n$/, 'one stderr line names the cases field: ' + JSON.stringify(rz.stderr))
+  assert.strictEqual(rz.stderr, 'count-tests: testCaseScanner cases — 0' + REMEDY + '\n','one stderr line names the cases field: ' + JSON.stringify(rz.stderr))
 })
 
 test('AC-20261101-01-7: scanCases returns host records with spans cuttable and spanless ones not, and builtin records for files the listing never names', () => {
@@ -239,6 +241,27 @@ test('AC-20261101-01-10: expiry cuts exactly the host-declared lines, and never 
   assert.ok(fs.existsSync(path.join(dir2, 'tests/test_x.py')),
     'deleting a whole host file is the one irreversible step and stays the walker\'s alone: file was removed')
   assert.deepStrictEqual(out2.emptied, [], 'emptied lists builtin-sourced files only: ' + JSON.stringify(out2.emptied))
+})
+
+test('AC-20261101-01-20: expiry cuts a parametrized function once when two retired cases share one span, leaving the next live tests byte-identical', () => {
+  const dir = expiryHost('hs-ac20',
+    '{"file":"tests/test_x.py","title":"test_p[1]","start":3,"end":6}\n' +
+    '{"file":"tests/test_x.py","title":"test_p[2]","start":3,"end":6}\n')
+  const src = ['import pytest', '', '# AC-20260911-55-1', '@pytest.mark.parametrize("n", [1, 2])',
+    'def test_p(n):', '    assert n', 'def test_keep():', '    assert True', 'def test_keep2():', '    assert True', ''].join('\n')
+  fs.writeFileSync(path.join(dir, 'tests/test_x.py'), src)
+  const r = expire(dir)
+  assert.strictEqual(r.status, 0, 'a shared-span sweep must not fail: ' + r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.deepStrictEqual(out.retired.map(x => x.title).sort(), ['test_p[1]', 'test_p[2]'],
+    'both param cases must be retired, else the retired list lies about what was cut: ' + JSON.stringify(out.retired))
+  const lines = src.split('\n')
+  const expected = lines.slice(0, 2).concat(lines.slice(6)).join('\n')
+  const after = fs.readFileSync(path.join(dir, 'tests/test_x.py'), 'utf8')
+  assert.strictEqual(after, expected,
+    'lines 3-6 must be cut exactly once; a double cut deletes the live test_keep and test_keep2: ' + after)
+  assert.ok(after.includes('def test_keep():\n    assert True\ndef test_keep2():\n    assert True\n'),
+    'test_keep and test_keep2 must stay byte-identical or live coverage is silently lost: ' + after)
 })
 
 test('AC-20261101-01-15: a testCaseScanner command in the host config roots the invariants universe at the script it names', () => {

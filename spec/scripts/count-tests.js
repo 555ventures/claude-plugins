@@ -36,7 +36,8 @@
 //
 // Exit codes: 0 = count/titles printed, always, regardless of the count's value ·
 //             2 = usage error, or --root is not a readable directory ·
-//             3 = --scanner-check found the declared testCaseScanner failing (remedy: fix the command, rerun)
+//             3 = --scanner-check found the declared testCaseScanner failing; every stderr line ends with the remedy: fix config.testCaseScanner, then rerun:
+//                 node <this script's absolute path> --root . --scanner-check
 const fs = require('fs')
 const path = require('path')
 const { readConfig } = require('./lib/host-config')
@@ -133,7 +134,8 @@ if (scannerCheck) {
   if (asJson) writeOut(1, JSON.stringify(out))
   else for (const k of Object.keys(out)) writeOut(1, k + ': ' + out[k])
   const failing = out.exit !== 0 ? 'exit' : out.malformed !== 0 ? 'malformed' : out.cases < 1 ? 'cases' : null
-  if (failing) die(3, 'testCaseScanner ' + failing + ' \u2014 ' + (out[failing] === null ? 'timeout' : out[failing]))
+  if (failing) die(3, 'testCaseScanner ' + failing + ' \u2014 ' + (out[failing] === null ? 'timeout' : out[failing]) +
+    ' \u2014 fix config.testCaseScanner, then rerun: node ' + __filename + ' --root . --scanner-check')
   process.exit(0)
 }
 

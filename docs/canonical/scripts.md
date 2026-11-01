@@ -107,9 +107,17 @@ merits — the rule bans history, not reasons — but it lives in exactly one fi
 site that would repeat it carries a one-line citation instead.
 
 A repo's test count is instrumented, not capped. `lib/scan-test-calls.js` is the one definition
-of a test case — a `test(`/`it(` call at line start across the host's test-classified files,
-blind to strings, comments and regex literals — and `count-tests.js` reports it (`tests: <count>
-cases`, `--json` → `{"count":N}`). The review's `tests` leg records that count on every evidence
+of a test case: when the host config declares `testCaseScanner`, that command's listing
+(`<file> :: <title>` or JSON lines with optional 1-based `start`/`end` lines) owns every file it
+names, and every other test-classified file is read by the built-in JavaScript walker (a
+`test(`/`it(` call at line start, blind to strings, comments and regex literals);
+`scanCases(root, config, file, src)` is the one dispatch that `count-tests.js`, `ac-matrix.js`,
+`ac-drift.js`, `red-check.js` and `expire-tests.js` read through, and `count-tests.js` reports the
+count (`tests: <count> cases`, `--json` → `{"count":N}`). A host case without a span is never cut
+by expiry and a host-named file is never deleted; `count-tests.js --scanner-check` is
+`/spec:doctor` check 6's proof that a declared scanner still lists cases, and `--titles --file`
+names on stderr which reader saw zero cases
+(specs/20261101/01-the-host-names-its-own-test-cases.md). The review's `tests` leg records that count on every evidence
 manifest and is deliberately absent from every blocking set, so the number appears on each ledger
 row and can never redden a verdict. There is no limit, no ceiling file and no hook: a count that
 could fail a build would make deleting tests the model's cheapest route to green. No executable

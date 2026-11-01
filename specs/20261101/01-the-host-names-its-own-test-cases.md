@@ -1,6 +1,6 @@
 ---
 date: 2026-11-01
-status: implementing
+status: done
 build_base: main
 tier: critical
 area: test-scanning
@@ -233,6 +233,20 @@ branch this plan reads. The 35 `executes` hits are the suites that run `count-te
 `ac-drift.js`, `red-check.js`, `expire-tests.js` and `init-gen.js`; every one runs a host that declares no
 `testCaseScanner`, the path D1 leaves byte-for-byte unchanged (AC-17, AC-18, AC-19 pin it), so they are
 waived as visibility; the build-time suite check adjudicates.
+
+### Build deviations (folded at close)
+
+- The spanless host case in the AC-9 test is titled `AC-20260911-55-1 test_alpha`: a spanless case has
+  an empty `commentAbove` (A2), so its title is its only tag. Resolved into D11.
+- The AC-15 test observes `configCommandStrings` through `deriveInvariants(...).roots`, because the
+  function is not exported from `lib/invariants.js`.
+- The build first shipped the scanner-check exit-3 line without a remedy, leaving it to the header
+  and doctor's line; review 1 ruled that hard and D16 added the rerun command.
+- The AC-8 stub `node -e "process.exit(0)"` rejected the appended filter with an error that named the
+  title, so the run read as selected-and-red; the trailing `--` makes it ignore the filter (D12).
+
+### Advisory debt (review rv_4796e56bd79d)
+- a0 spec/scripts/count-tests.js:138 — The new exit-3 remedy of `count-tests.js --scanner-check` always prints `--root .` regardless of the `--root` the check ran against; rerunning it from any other cwd checks the wrong repo, and on a repo with no scanner reports declared:false exit 0 — a false all-clear. Every other self-rerun remedy in spec/scripts (genesis-driver.js:2679) splices the real root. D16 and amended AC-20261101-01-6 pin the `.` literal, so advisory.
 
 ## Canonical Delta
 

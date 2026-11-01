@@ -3,7 +3,7 @@ name: new-spec-ac-green-pre-change
 description: a brand-new spec's AC can be legitimately green pre-implementation when it pins the ABSENCE of a not-yet-built mechanism (an overlay that doesn't exist yet trivially "stays off"/"is suppressed") — tag it as a sanctioned pin exception rather than treating it as a stale-assumption block.
 metadata:
   type: feedback
-  reviewed: 2026-10-25
+  reviewed: 2026-10-31
 ---
 
 specs/20260823/08-derived-session-queue.md added a queue overlay to spec-status.js's --next
@@ -42,3 +42,10 @@ here: spec-queue.js's and session-queue.sh's CLI contracts (specs/20260823/08 Co
 list no --root flag for any subcommand, so tests invoke both via `runNode`/`runBash` with
 `{cwd: dir}`, never an explicit --root — second confirmed instance of "no --root in the Contracts
 flag list means cwd-based, not a missing spec".
+
+**Carried 2026-10-31 (specs/20261029/09-the-commands-read-the-policy-block.md) — the exception
+never covers a `rewrites` pointer.** An AC whose pointer says `rewrites <file> :: <name>` makes
+red-check run that named case alone and demand RED (`gutted-rewrite` otherwise), even when the
+default output it pins is unchanged. Turning a source grep into an output pin of an unchanged
+default is green by construction — fold the AC's override half (the part that is genuinely new)
+into the same named case so it reddens on the pre-image.

@@ -91,6 +91,12 @@ entering or repairing a spec's worktree by hand; it is idempotent and short-circ
 session is already inside the tree it would create.
 (specs/20260912/03-run-isolates-and-owns-the-stages.md, done 2026-09-12)
 
+`policy.worktreePerSpec` is read by `/spec:run` Step 0, `policy.mergeStrategy` by the review MERGE
+step and `/git:merge`, `policy.testExpiry` by the review CLOSE step and doctor check 20,
+`policy.reviewService` by the wireframe driver's connect hint, and `policy.models` by every
+driver dispatch line; absent keys print today's lines
+(specs/20261029/09-the-commands-read-the-policy-block.md).
+
 Status transitions are owned by driver states, not commands: plan's lock → `hardened`, the
 build driver's preflight → `implementing`, the review driver's close → `done`.
 Lock reads three structural carriers through `decision-lint`: a `breaking: true` spec needs an
@@ -105,7 +111,8 @@ DISPOSITIONS; it returns one grounded recommendation per survivor
 and leg finding, and the review driver refuses `--mark dispositions` on non-empty pools
 without a return that covers every finding exactly once with a non-blank reason. The reviewer
 seat is `fable` at `effort: low` — a model the Opus run session does not run — and a host's
-`policy.models` overrides the workers, reviewer and disposer seats; both seats are fixed aliases,
+`policy.models` overrides the workers, reviewer and disposer seats (the printed model and
+effort come from the host policy, defaulting to the seat table); both seats are fixed aliases,
 never the session's model, and independence is the fresh context plus executed evidence, not a
 model family (specs/20261029/01-model-placement-refresh.md;
 specs/20261029/08-the-policy-round-at-init.md D8). Fix

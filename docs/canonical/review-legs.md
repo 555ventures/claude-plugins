@@ -95,3 +95,12 @@ match cannot. It is blocking in `review-legs.js`, `verdict.js` (`REVIEW_LEGS` + 
 required in both scopes) and the review driver's `BLOCKING_LEGS` alike; `--require` was not the
 mechanism because on the review profile it widens the required set only. It has its own wave so
 it never overlaps another leg that runs host tests. (specs/20260903/02-whole-suite-review-leg.md)
+
+When the host's raw `gateCommand` carries no `{testDirs}`/`{scopeDirs}` and one of its `&&`
+segments is exactly `testCommand`, the gate already ran the whole suite; the suite row then copies
+the gate row's evidence with `"reused":"gate"` and spawns nothing, provided the gate's
+executed-test count was observed — with no count the bare run stays, so a gate green on lint alone
+never vouches for the suite. The same helper, `gateRunsSuite` in `lib/gate-resolve.js`, lets the
+driver's close-time re-run skip its whole-suite half. Every legs run also writes `timings.json`
+beside the manifest, one wall-clock millisecond count per leg.
+(specs/20261101/05-the-gate-that-ran-the-suite-is-the-suite.md)

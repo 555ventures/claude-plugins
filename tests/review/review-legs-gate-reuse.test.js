@@ -18,7 +18,7 @@ test('AC-20260817-99-1: foo() returns 42', () => { assert.strictEqual(foo(), 42)
 
 // The counter lives outside the fixture repo: an untracked file inside it would reconcile as
 // out-of-plan. The stub appends one line per invocation, so line count = runner invocations.
-function makeHost({ gateCommand = 'bash lint.sh && bash test.sh', countPattern = true, tests = 3 } = {}) {
+function makeHost({ gateCommand = 'bash lint.sh && bash test.sh', countPattern = true, tests = 3, stray = false } = {}) {
   const counter = path.join(tmpdir('gate-reuse-counter'), 'counter')
   const capabilities = { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' }
   if (countPattern) capabilities.testCountPattern = 'ℹ tests (\\d+)'
@@ -30,6 +30,7 @@ function makeHost({ gateCommand = 'bash lint.sh && bash test.sh', countPattern =
       // The stubs are planned files, so reconcile sees no out-of-plan change.
       'specs/20260817/99-test.md': reviewLegsSpecBody({ specDate: '20260817', ordinal: '99', acId: 'AC-20260817-99-1' })
         .replace('| tests/foo.test.js | create | tests |\n', '| tests/foo.test.js | create | tests |\n| lint.sh | create | scripts |\n| test.sh | create | scripts |\n'),
+      ...(stray ? { 'stray.txt': 'unplanned\n' } : {}),
       'lint.sh': '#!/usr/bin/env bash\nexit 0\n',
       'test.sh': `#!/usr/bin/env bash\necho x >> '${counter}'\necho "ℹ tests ${tests}"\necho "ℹ skipped 0"\nexit \${STUB_EXIT:-0}\n`,
     },
@@ -162,9 +163,21 @@ test('AC-20261101-05-10: every run writes timings.json (one non-negative integer
   const legLines = r.stdout.split('\n').filter(l => /^(✅|❌|⚠️ ) \S+\s+exit=\d+ /.test(l))
   assert.ok(legLines.length >= legs.length, 'summary must print a line per leg: ' + r.stdout)
   for (const l of legLines) {
-    assert.match(l, / \(\d+\.\ds\)/, 'every summary line must show wall-clock seconds: ' + l)
+    assert.match(l, / \(\d+\.\ds\)$/, 'every summary line must END with wall-clock seconds: ' + l)
   }
   const suiteLine = legLines.find(l => /^✅ suite /.test(l)) || ''
   assert.match(suiteLine, /\{"skips":0,"todos":0,"testsExecuted":3,"reused":"gate"\} \(\d+\.\ds\)$/,
     'the observed JSON must be followed directly by the seconds suffix: ' + suiteLine)
+})
+
+test('AC-20261101-05-10: a red non-blocking leg line carries the findings note and still ends with the seconds suffix', () => {
+  const host = makeHost({ stray: true })
+  const { r, byLeg } = run(host)
+  assert.notStrictEqual(byLeg.get('reconcile').exit, 0,
+    'setup precondition: an unplanned committed file must redden reconcile, a non-blocking leg: ' + JSON.stringify(byLeg.get('reconcile')))
+  const line = r.stdout.split('\n').find(l => /^⚠️\s+reconcile\s/.test(l)) || ''
+  assert.match(line, /\(findings — disposition in review\)/,
+    'a red non-blocking leg must keep its findings note: ' + r.stdout)
+  assert.match(line, / \(\d+\.\ds\)$/,
+    'the seconds must come last, after the findings note — "end with" is the contract the summary line is read by: ' + line)
 })

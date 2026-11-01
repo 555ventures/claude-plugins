@@ -43,7 +43,9 @@ runs the host's bare `testCommand` once per legs iteration in its own wave (neve
 with another leg that runs host tests), in both scopes, and it is blocking — a red suite
 derives `GATE_RED` before any reviewer spend, and the driver's close-time re-run runs the same
 command over the committed close tree so the files CLOSE itself writes are covered. Build never
-runs unscoped; review never closes on a scoped observation alone.
+runs unscoped; review never closes on a scoped observation alone. A host whose gate carries no
+placeholder runs unscoped everywhere; review recognises that gate as the suite observation rather
+than running the suite twice (specs/20261101/05).
 (specs/20260815/02-at-risk-pins.md, done 2026-08-16; specs/20260903/02-whole-suite-review-leg.md)
 
 ## Runtime verification covers stopping, not just starting

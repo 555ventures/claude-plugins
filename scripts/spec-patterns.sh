@@ -5,11 +5,14 @@
 set -u
 DIRS=("$@")
 [ ${#DIRS[@]} -eq 0 ] && DIRS=(spec git tests scripts)
-# Drop dirs that don't exist yet (this repo's tracked dir set shifts across specs).
+# Drop paths that don't exist yet (this repo's tracked dir set shifts across specs); a root-level
+# file arrives as itself, so the test is -e, not -d.
 EXISTING=()
-for d in "${DIRS[@]}"; do [ -d "$d" ] && EXISTING+=("$d"); done
+for d in "${DIRS[@]}"; do [ -e "$d" ] && EXISTING+=("$d"); done
 DIRS=("${EXISTING[@]}")
 echo "## Mechanical pattern sweep"; echo "Scope: ${DIRS[*]}"; echo
+# Without rg every sweep would print a clean 0 — a false green. Say so and print no counts.
+if ! command -v rg >/dev/null 2>&1; then echo "rg unavailable — sweep not run"; exit 0; fi
 sweep() {
   local name="$1"; shift
   local out; out=$(rg -n "$@" "${DIRS[@]}" 2>/dev/null || true)
@@ -35,8 +38,10 @@ sweep "prose stringified into workflow args" -e 'args[^\n]*JSON\.stringify' -g '
 # Assertions without a consequence message read as noise at failure time.
 sweep "single-arg assert.ok (no consequence message)" -e 'assert\.ok\([^,)]+\)\s*$' -g 'tests/*.test.js'
 # Generated surface: wf-*.js must only change via the build step.
-echo "### generated-surface edits vs ${DIFF_BASE:-main} (sanctioned tool: npm run build:workflows)"
-git diff --name-only "${DIFF_BASE:-main}" -- 'spec/workflows/wf-*.js' 2>/dev/null | sed 's/^/    /'
+GEN=$(git diff --name-only "${DIFF_BASE:-main}" -- 'spec/workflows/wf-*.js' 2>/dev/null || true)
+GEN_COUNT=0; [ -n "$GEN" ] && GEN_COUNT=$(printf '%s\n' "$GEN" | wc -l | tr -d ' ')
+echo "### generated-surface edits vs ${DIFF_BASE:-main} (sanctioned tool: npm run build:workflows): ${GEN_COUNT}"
+[ -n "$GEN" ] && printf '%s\n' "$GEN" | sed 's/^/    /'
 echo
 echo "Sweep complete. Counts are leads, not verdicts — sanctioned exceptions exist."
 exit 0

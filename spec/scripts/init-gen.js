@@ -462,6 +462,8 @@ function renderPatternsScript(p) {
   lines.push('DIRS=("$@")')
   lines.push(`[ \${#DIRS[@]} -eq 0 ] && DIRS=(${p.sourceRoot})`)
   lines.push('echo "## Mechanical pattern sweep"; echo "Scope: ${DIRS[*]}"; echo')
+  lines.push('# Without rg every sweep would print a clean 0 — a false green. Say so and print no counts.')
+  lines.push('if ! command -v rg >/dev/null 2>&1; then echo "rg unavailable — sweep not run"; exit 0; fi')
   lines.push('sweep() {')
   lines.push('  local name="$1"; shift')
   lines.push('  local out; out=$(rg -n "$@" "${DIRS[@]}" 2>/dev/null || true)')

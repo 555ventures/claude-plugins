@@ -76,7 +76,9 @@
 //                  (exit 0 when its `replay.passed` and `replay.looked` are both true, else exit 1);
 //                  no app is booted, and verdict.js is untouched — a red or absent row is a hard
 //                  finding through ac-matrix's oracle standing for the pin criteria that name it
-//   patterns       {"matches":N} — recorded when config declares patternsScript; never required
+//   patterns       {"matches":N|{"unavailable":"no-count-lines"}} — N sums the script's
+//                  `### <name>: N` totals; scope = dirs of changed files minus pipeline-owned
+//                  paths; recorded when config declares patternsScript; never required
 //   drift          {"summary":"<first stdout line, bounded to 120 chars>"} — recorded when config
 //                  declares driftScript
 //
@@ -214,6 +216,24 @@ function appendRow(leg, exit, observed) {
 // drift (pages via verdict.js's gate-skips finding for skips specifically; at-risk's contradiction
 // rule for testsExecuted). Never assumed zero either way. lastMatch/computeTestsExecuted/
 // computeSkips/isUnobserved live in ./lib/count-observation.js — the sole home both this script and release-legs.js import.
+// The generated patterns script (init-gen renderPatternsScript) prints one `### <name>: <N>` total
+// per sweep; `matches` is their sum. The script's own header lines ("## Mechanical pattern
+// sweep", "Scope: ...") are never counted. No `###` line at all means the script does not speak
+// the generated contract — a typed unavailability, never an assumed count.
+// Sweep scope from a list of changed, non-pipeline-owned paths: each nested path contributes its
+// dir; a root-level file contributes ITSELF (its dirname "." would sweep the whole tree, pipeline-
+// owned paths included). Entries nested under another entry are pruned — rg visits every argument
+// separately, so an overlapping pair reports the same hit twice.
+function patternsScope(files) {
+  const raw = [...new Set(files.map(f => (f.includes('/') ? path.posix.dirname(f) : f)))].sort()
+  return raw.filter(d => !raw.some(o => o !== d && d.startsWith(o + '/')))
+}
+
+function countPatternMatches(out) {
+  const totals = [...String(out).matchAll(/^### .*: (\d+)\s*$/gm)].map(m => Number(m[1]))
+  return totals.length ? totals.reduce((a, b) => a + b, 0) : { unavailable: 'no-count-lines' }
+}
+
 function sh(cmd, opts = {}) {
   // lib/host-run.js scrubs the test-runner context vars (a gate that itself runs `node --test`
   // must behave as a fresh top-level runner). SPEC_REVIEW_BASE is set to the exact --base value
@@ -400,12 +420,17 @@ async function main() {
     }
 
     if (config.patternsScript) {
-      const dirs = reconcileJson
-        ? [...new Set([].concat(reconcileJson.outOfPlan, reconcileJson.unrealized, reconcileJson.excluded || []).map(f => path.dirname(typeof f === 'string' ? f : f.file || '')))].filter(Boolean)
-        : []
+      // Scope = the dirs of every file the diff changed, minus pipeline-owned paths (specs/,
+      // .claude/...). Derived from reconcile's `changed` set, never from its exception sets
+      // (outOfPlan/unrealized/excluded): a planned, realized source edit sits in none of those,
+      // so a scope built from them sweeps only specs/ and .claude and misses the one file the
+      // sweep exists for. An empty list leaves the host script on its own default roots.
+      const excludedSet = new Set(reconcileJson && Array.isArray(reconcileJson.excluded) ? reconcileJson.excluded : [])
+      const changed = reconcileJson && Array.isArray(reconcileJson.changed) ? reconcileJson.changed : []
+      const dirs = patternsScope(changed.filter(f => !excludedSet.has(f)))
       wave2.push(sh(`DIFF_BASE=${q(base)} bash ${q(path.resolve(root, config.patternsScript))} ${dirs.map(q).join(' ')}`).then(r => {
         fs.writeFileSync(patternsPath, r.out)
-        appendRow('patterns', r.code, { matches: r.out.split('\n').filter(l => l.trim()).length })
+        appendRow('patterns', r.code, { matches: countPatternMatches(r.out) })
       }))
     }
   }

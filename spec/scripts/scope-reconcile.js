@@ -2,7 +2,7 @@
 'use strict'
 // scope-reconcile.js --base <ref> --spec <path> (--json | --dirs) [--root <dir>] — reconciles
 // the WHOLE changed-file set (committed diff UNION untracked) against a spec's File Plan.
-// --json additionally emits `atRisk`: test files outside
+// --json emits `changed` (every changed path, sorted) and additionally `atRisk`: test files outside
 // the spec's File Plan tests rows whose content references a changed file's path stem.
 //
 // Owner: specs/20260805/01-review-scope-reconciliation.md.
@@ -290,6 +290,8 @@ if (mode === 'dirs') {
   const dirs = [...new Set([...changed].map(p => path.posix.dirname(p)))].sort()
   console.log(dirs.join('\n'))
 } else {
-  console.log(JSON.stringify({ outOfPlan, unrealized, excluded, renamed, atRisk }, null, 2))
+  // `changed` is the full changed set (sorted) so consumers scope to what the diff touched without
+  // re-deriving it from git (header: no second derivation anywhere) — the patterns leg reads it.
+  console.log(JSON.stringify({ changed: [...changed].sort(), outOfPlan, unrealized, excluded, renamed, atRisk }, null, 2))
 }
 process.exit(outOfPlan.length ? 3 : 0)

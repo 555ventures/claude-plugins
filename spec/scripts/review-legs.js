@@ -48,7 +48,11 @@
 //                  never promised an observation)
 //   suite          {"leg":"suite","exit":<code>,"observed":{"skips":N|{"unavailable":...},
 //                  "todos":N?,"testsExecuted":N|{"unavailable":"pattern-no-match"|
-//                  "no-format-declared"}}} | {"unavailable":"no-test-command"} — its own wave,
+//                  "no-format-declared"},"reused":"gate"?}} | {"unavailable":"no-test-command"} —
+//                  "reused":"gate" marks a row copied from the gate row (no spawn, no
+//                  suite-output.txt) when gateRunsSuite() holds and the gate observed a numeric
+//                  testsExecuted; every run also writes <out-dir>/timings.json (ms per leg,
+//                  `total` last). Its own wave,
 //                  1b, after wave 1 (reconcile/gate/ci) and before wave 2 (at-risk/patterns);
 //                  runs config.testCommand BARE (no file args) through sh(), typed exactly like
 //                  the gate row; exit is FORCED to 1 when a declared testCountPattern observes
@@ -141,7 +145,7 @@ const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
-const { resolveGate } = require('./lib/gate-resolve')
+const { resolveGate, gateRunsSuite } = require('./lib/gate-resolve')
 const { runAsync } = require('./lib/host-run')
 const { computeTestsExecuted, computeSkips, isUnobserved } = require('./lib/count-observation')
 const { extractSection, parseAcBullets, parseDisposition } = require('./lib/spec-sections')
@@ -202,7 +206,12 @@ outDir = outDir || fs.mkdtempSync(path.join(require('os').tmpdir(), 'review-legs
 fs.mkdirSync(outDir, { recursive: true })
 
 const rows = []
-function appendRow(leg, exit, observed) {
+const runStart = Date.now()
+const timings = {}
+// `timed` is the sh() result the row was derived from (it carries `ms`, the spawn's wall-clock);
+// a reused/unavailable row passes none and// records 0. Timings live in <out-dir>/timings.json, never in the manifest row.
+function appendRow(leg, exit, observed, timed) {
+  timings[leg] = timed && Number.isFinite(timed.ms) ? Math.max(0, Math.round(timed.ms)) : 0
   // scope is always the LAST key on a row this writer appends — full/fix-delta from the
   // one fixDelta flag already parsed above; ac-matrix.js/promise-sweep.js append their own rows
   // directly and never pass through here, so their rows stay untouched.
@@ -240,7 +249,9 @@ function sh(cmd, opts = {}) {
   // AFTER opts.env, in every leg subprocess, so no leg-local override can redirect the base this
   // review is judging against — a host check (e.g. plugin-bump.js --check) that resolves its own
   // comparison point reads it as one candidate among its own.
+  const t0 = Date.now()
   return runAsync(cmd, { cwd: root, env: { ...opts.env, SPEC_REVIEW_BASE: base } })
+    .then(r => ({ ...r, ms: Date.now() - t0 }))
 }
 
 async function main() {
@@ -282,7 +293,7 @@ async function main() {
       const paths = reconcileJson ? reconcileJson.outOfPlan : []
       const n = paths.length
       appendRow('reconcile', r.code,
-        { outOfPlan: n, files: paths.slice(0, 40), ...(n > 40 ? { filesOmitted: n - 40 } : {}) })
+        { outOfPlan: n, files: paths.slice(0, 40), ...(n > 40 ? { filesOmitted: n - 40 } : {}) }, r)
     }))
   }
 
@@ -296,7 +307,7 @@ async function main() {
       // No match is honestly unavailable, never assumed-zero (the never-assumed-zero rule) —
       // runners that print a zero-skip line still match the declared pattern with count 0.
       const observed = { ...computeSkips(output, skipPat), testsExecuted: computeTestsExecuted(output, countPat) }
-      appendRow('gate', r.code, observed)
+      appendRow('gate', r.code, observed, r)
     }))
   } else {
     // the whole-row unavailable alternative — no gate command could be resolved at all — is
@@ -320,7 +331,7 @@ async function main() {
         else { observed = { conclusion: j.conclusion }; exit = /^(failure|timed_out|cancelled)$/.test(j.conclusion) ? 1 : 0 }
       } catch { observed = { unavailable: 'no-adapter' } }
     }
-    appendRow('ci', exit, observed)
+    appendRow('ci', exit, observed, r)
   }))
 
   await Promise.all(wave1)
@@ -332,6 +343,12 @@ async function main() {
     // the whole-row unavailable alternative — testCommand is a contract-required config key,
     // so its absence is a broken host, never a silent skip.
     appendRow('suite', 1, { unavailable: 'no-test-command' })
+  } else if (gateRunsSuite(config.gateCommand, resolved.gate, config.testCommand) &&
+      rows.some(r => r.leg === 'gate' && typeof r.observed.testsExecuted === 'number')) {
+    // the gate ran the whole suite over this tree and observed an executed count — copy its
+    // evidence, spawn nothing.
+    const g = rows.find(r => r.leg === 'gate')
+    appendRow('suite', isUnobserved(g.observed.testsExecuted) ? 1 : g.exit, { ...g.observed, reused: 'gate' })
   } else {
     const sr = await sh(config.testCommand)
     fs.writeFileSync(suiteOutPath, `$ ${config.testCommand}\n\n${sr.out}${sr.err}`)
@@ -345,7 +362,7 @@ async function main() {
     // rule, applied to the whole
     // suite: a vacuous-green whole run is the same escape at a wider scope.
     const exit = isUnobserved(testsExecuted) ? 1 : sr.code
-    appendRow('suite', exit, { ...computeSkips(output, skipPat), testsExecuted })
+    appendRow('suite', exit, { ...computeSkips(output, skipPat), testsExecuted }, sr)
   }
 
   // ---- wave 2 (parallel): at-risk + patterns (post-gate; both need reconcile's output) ----
@@ -361,14 +378,16 @@ async function main() {
     // {"unavailable":"count-failed"} shape carries no count/dispositions key at all. `dispositions`
     // is counted here (not by count-tests.js — it derives from the SPEC's own AC bullets, not the
     // tree) via parseDisposition, the same authority ac-matrix.js's --lint imports.
+    const tTests = Date.now()
     const testCountResult = spawnSync(process.execPath,
       [path.join(scriptDir, 'count-tests.js'), '--root', root, '--json'], { encoding: 'utf8' })
+    const testCountTimed = { ms: Date.now() - tTests }
     let testCountJson = null
     if (testCountResult.status === 0) {
       try { testCountJson = JSON.parse((testCountResult.stdout || '').trim().split('\n').pop() || '') } catch { testCountJson = null }
     }
     if (!testCountJson || !Number.isInteger(testCountJson.count)) {
-      appendRow('tests', 0, { unavailable: 'count-failed' })
+      appendRow('tests', 0, { unavailable: 'count-failed' }, testCountTimed)
     } else {
       const dispositions = { writes: 0, rewrites: 0, reuses: 0 }
       const acSection = extractSection(specText, 'Acceptance Criteria')
@@ -379,7 +398,7 @@ async function main() {
           if (d && Object.prototype.hasOwnProperty.call(dispositions, d.kind)) dispositions[d.kind]++
         }
       }
-      appendRow('tests', 0, { count: testCountJson.count, dispositions })
+      appendRow('tests', 0, { count: testCountJson.count, dispositions }, testCountTimed)
     }
   }
   if (!fixDelta) {
@@ -414,7 +433,7 @@ async function main() {
           // {"unavailable":"pattern-no-match"} — the vacuous-green escape becomes a same-run red;
           // {"unavailable":"no-format-declared"} never forces.
           const exit = isUnobserved(testsExecuted) ? 1 : r.code
-          appendRow('at-risk', exit, { files: atRisk.length, testsExecuted })
+          appendRow('at-risk', exit, { files: atRisk.length, testsExecuted }, r)
         }))
       }
     }
@@ -430,7 +449,7 @@ async function main() {
       const dirs = patternsScope(changed.filter(f => !excludedSet.has(f)))
       wave2.push(sh(`DIFF_BASE=${q(base)} bash ${q(path.resolve(root, config.patternsScript))} ${dirs.map(q).join(' ')}`).then(r => {
         fs.writeFileSync(patternsPath, r.out)
-        appendRow('patterns', r.code, { matches: countPatternMatches(r.out) })
+        appendRow('patterns', r.code, { matches: countPatternMatches(r.out) }, r)
       }))
     }
   }
@@ -438,7 +457,7 @@ async function main() {
     // drift's summary is the one built-in free-text field — bounded to 120 chars at this
     // emitter, never sliced as a whole row downstream.
     wave2.push(sh(`${config.driftScript} ${q(spec)}`).then(r =>
-      appendRow('drift', r.code, { summary: (r.out.trim().split('\n')[0] || '').slice(0, 120) })))
+      appendRow('drift', r.code, { summary: (r.out.trim().split('\n')[0] || '').slice(0, 120) }, r)))
   }
   await Promise.all(wave2)
 
@@ -448,7 +467,7 @@ async function main() {
   // undiagnosable.
   const smokeR = await sh(`bash ${q(path.join(scriptDir, 'smoke.sh'))}`)
   fs.writeFileSync(path.join(outDir, 'smoke.txt'), smokeR.out + smokeR.err)
-  appendRow('smoke', smokeR.code, { result: smokeR.code === 0 ? 'pass' : smokeR.code === 4 ? 'inert' : 'fail' })
+  appendRow('smoke', smokeR.code, { result: smokeR.code === 0 ? 'pass' : smokeR.code === 4 ? 'inert' : 'fail' }, smokeR)
 
   // ---- contract leg: a `prototype:` spec only — the build row is the executed evidence, ----
   // appended before ac-matrix because ac-matrix reads oracle standing by leg name off the manifest.
@@ -485,13 +504,21 @@ async function main() {
   // ---- summary ----------------------------------------------------------------------------
   const all = fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
   const byLeg = new Map(all.map(r => [r.leg, r]))
+  // rows ac-matrix.js / promise-sweep.js append themselves take their script's wall-clock (the
+  // skip-reconcile row rides ac-matrix's spawn, so it records 0); timings.json keeps manifest order.
+  const ms = (leg) => leg in timings ? timings[leg]
+    : leg === 'ac-matrix' ? acr.ms : leg === 'promise-sweep' ? psr.ms : 0
+  const timingsOut = {}
+  for (const leg of byLeg.keys()) timingsOut[leg] = Math.max(0, Math.round(ms(leg)))
+  timingsOut.total = Math.round(Date.now() - runStart)
+  fs.writeFileSync(path.join(outDir, 'timings.json'), JSON.stringify(timingsOut) + '\n')
   const BLOCKING = ['gate', 'suite', 'smoke', 'ci']
   let blockedBy = []
   for (const r of byLeg.values()) {
     const red = r.leg === 'smoke' ? (r.exit !== 0 && r.exit !== 4) : r.exit !== 0
     const blocking = BLOCKING.includes(r.leg)
     if (red && blocking) blockedBy.push(r.leg)
-    console.log(`${red ? (blocking ? '❌' : '⚠️ ') : '✅'} ${r.leg.padEnd(14)} exit=${r.exit} ${JSON.stringify(r.observed)}${red && !blocking ? ' (findings — disposition in review)' : ''}`)
+    console.log(`${red ? (blocking ? '❌' : '⚠️ ') : '✅'} ${r.leg.padEnd(14)} exit=${r.exit} ${JSON.stringify(r.observed)}${red && !blocking ? ' (findings — disposition in review)' : ''} (${(timingsOut[r.leg] / 1000).toFixed(1)}s)`)
   }
   // Finalize: only now does the caller's manifest path exist. Both exits below follow it, so
   // a RED_BLOCKING run still hands the driver a complete manifest to derive STOPPED from.

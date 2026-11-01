@@ -1,13 +1,15 @@
 ---
 date: 2026-11-01
-status: hardened
+status: done
 tier: critical
 area: review-legs
 breaking: false
 depends_on: []
 brief: n/a
 open_markers: 0
+build_base: main
 spiked: 2026-11-01
+diff_base: 2d51850e3b5a6458fedbe722038399246aba49a5
 ---
 
 # The gate that ran the suite is the suite
@@ -150,6 +152,20 @@ whatever they wrote — that is specs/20261101/07's init and doctor work, not th
 `--skip-suite` flag (review-legs has no flag that skips a leg by design, and a copied row with
 provenance is evidence where a skip is silence); comparing gate and suite output text (runner
 output is not deterministic).
+
+### Build deviations (folded at close, 2026-11-01)
+- The gate-reuse test's stub counter lives in a separate `tmpdir()`, not `<host>/counter`: a
+  counter inside the fixture repo is an untracked file and reconciles as out-of-plan. Same counted
+  invariant.
+- `spec/.claude-plugin/plugin.json`'s description carried a doubled `7.295.0 — ` prefix at base,
+  which made `plugin-bump.js --bump` count four changelog entries and refuse; collapsed to one
+  prefix, then bumped through the script.
+- `timings.json`'s `skip-reconcile` entry is always `0` and `ac-matrix` carries the whole
+  `ac-matrix.js` spawn: one process appends both rows, so review-legs cannot split them.
+  `promise-sweep` gets its own spawn time.
+
+### Advisory debt (review rv_ab9489c18a28)
+- a0 spec/scripts/review-legs.js:212 — The rewritten appendRow doc comment contains a paste artefact: `a reused/unavailable row passes none and// records 0.` — a stray `//` mid-sentence where the old line break was joined, leaving the second line over the file's width and the sentence garbled.
 
 ## Canonical Delta
 

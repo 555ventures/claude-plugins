@@ -249,7 +249,7 @@ const { readConfig, readPipelineRules, policy, agentCall, CONFIG_RELPATH } = req
 // the close-time
 // host-gate re-run in handleClosed() shares the exact {testDirs}/{scopeDirs} resolution
 // review-legs.js's own gate leg uses — a second, paraphrased copy here would be a drift seam.
-const { resolveGate } = require('./lib/gate-resolve')
+const { resolveGate, gateRunsSuite } = require('./lib/gate-resolve')
 // model is derived at row-write time (never once at
 // startup) — right after /clear the new transcript has no assistant line yet, and by the time a
 // verdict pass runs the session has spoken many times.
@@ -1738,7 +1738,9 @@ function runCloseTimeGate() {
       'Plan, then re-run `node ' + __filename + ' ' + specPath + ' --mark closed`')
   }
   // the resolved-gate re-run, then the
-  // testCommand whole-suite re-run — unconditional, in that order, and that is all.
+  // testCommand whole-suite re-run, in that order — the second is skipped only when
+  // gateRunsSuite() proves the gate just ran it (raw gate has no placeholder and an `&&` segment
+  // is exactly testCommand).
   const r = runHost(resolved.gate, { cwd: repoRoot, encoding: 'utf8' },
     'close-time host gate (' + resolved.gate + ')')
   if (r.status !== 0) {
@@ -1750,6 +1752,10 @@ function runCloseTimeGate() {
       'wrote them — a finding against one is a plugin defect to report, never a file to edit.\n' +
       'Fix the session-written files, commit the fix, then re-run `node ' + __filename + ' ' +
       specPath + ' --mark closed`.\n--- last 40 lines of gate output ---\n' + tailLines(output, 40))
+  }
+  if (gateRunsSuite(gateConfig.gateCommand, resolved.gate, gateConfig.testCommand)) {
+    console.log('close-time suite: reused the gate run (' + resolved.gate + ')')
+    return
   }
   // additive to the resolved-gate re-run above —
   // a host's gateCommand may carry typecheck/lint the testCommand lacks, so the scoped re-run

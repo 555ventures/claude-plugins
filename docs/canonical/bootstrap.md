@@ -60,6 +60,40 @@
   when absent and never authors components or tokens; `design-contract-check.js` is the
   presence oracle and doctor check 8 runs it (specs/20260926/02-the-design-contract-is-code.md).
 
+## Policy block
+
+The standing preferences the pipeline applies to a host live in the config's optional `policy`
+block (grounding contract § Policy), asked once at init
+(specs/20261029/08-the-policy-round-at-init.md).
+
+- **Keys and defaults.** `worktreePerSpec: true`, `directLaneToMain: true`,
+  `mergeStrategy: "derived"` (`derived | merge-commit | ff-only | squash | rebase-ff`),
+  `testExpiry: "classify"` (`classify | off`), `ledgerCommitted: true`,
+  `reviewService: "terminal"` (`terminal | hosted`), `models` with `workers` `sonnet`/`medium`,
+  `reviewer` `fable`/`low`, `disposer` `opus`/`medium`, and `riskTiers: []`. An absent or partial
+  block means the defaults, key by key; a host that predates the block changes nothing.
+- **Two init rounds.** Phase 3 asks Policy round 1 (worktrees, direct lane, merge shape, test
+  expiry) and Policy round 2 (run history, review service, model mix, high-risk areas), four
+  questions each, the default first and recommended. A dismissed round keeps that round's
+  defaults, prints the 📌 policy-defaults line and continues — the one exception to init's
+  dismissed-question STOP. Chosen risk areas are also written as bullets into the rules file's
+  § Risk Tiers.
+- **`generate` owns the write.** An absent `config.policy` writes the defaults and prints
+  `📌 policy defaults kept — edit .claude/spec.config.json policy to change (veto anytime)`; an
+  invalid block exits 2 printing one `policy: <finding>` line per defect and writes
+  nothing; a valid one is written merged over the defaults. `ledgerCommitted: false` adds
+  `.claude/spec-runs.jsonl` and `.claude/spec-runs/` to the ignore entries, so the ledger is
+  never staged and `ignore-check` reports them when missing.
+- **Confirm before writing.** Phase 1.5 first asks whether to create the missing substrate or
+  declare it inert. Phase 5 runs `generate --dry-run`, which prints
+  `Confirm before writing: N permissions, M files` plus one `  + ` line per new permission and
+  file, writes nothing and exits 0; init then asks once before the real `generate`.
+- **Drift.** `init-gen.js policy-check --root <dir> [--json]` validates the on-disk block and
+  reports a tracked ledger under `ledgerCommitted: false` and any `riskTiers` entry missing from
+  § Risk Tiers (case-insensitive); exit 0 clean, 1 findings, 2 unreadable config.
+  `/spec:doctor` check 24 (Policy block) runs it and reports each finding as advisory. The
+  commands that read each key are wired by spec 09.
+
 ## Exit codes (`generate`)
 
 `0` generated, manifest-check green, stamped · `1` manifest-check red, nothing stamped ·

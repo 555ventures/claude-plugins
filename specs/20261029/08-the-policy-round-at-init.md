@@ -1,6 +1,7 @@
 ---
 date: 2026-10-29
-status: hardened
+status: done
+build_base: main
 tier: critical           # edits spec/templates/grounding-contract.md (hash-stamped into every host) and init-gen.js's settings.json permission writes (rules § Risk Tiers)
 area: bootstrap
 breaking: false
@@ -8,6 +9,7 @@ depends_on: [specs/20261029/04-the-four-questions-that-did-not-exist.md]
 brief: n/a
 spiked: 2026-10-31
 open_markers: 0
+diff_base: 5684e6bb942c29cbe061fc14b393c440f00a4e64
 ---
 
 # The policy round at init
@@ -218,6 +220,10 @@ Rejected: a `/spec:policy` command (new frontmatter, spec-paths key and shared-f
 re-answer case that editing the block plus doctor 24 covers); a `policy-check.js` script with its
 own spec-paths key (a subcommand on the script that already owns the config avoids a new entry
 point and an entrypoints.json row).
+
+### Advisory debt (review rv_114c1a8856e0)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/spec-08-the-policy-round-at-init/spec/scripts/init-gen.js:193 — `policy-check --json` and `generate --dry-run` print their machine-consumed payload with `console.log(...)` immediately followed by `process.exit(...)` — the exact shape the host rules § Gotchas names as truncating at the 64 KiB pipe buffer while still exiting 0. Today's payloads are tiny (a handful of finding strings / a few dozen `  + ` lines) so no truncation is reachable, which is why this is advisory, not hard.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/spec-08-the-policy-round-at-init/spec/scripts/init-gen.js:184 — When the host config carries no string `pipelineRules`, `policy-check` sets `rulesRel = ''`, so `path.join(root, '')` reads the root directory (EISDIR, swallowed) and every `riskTiers` entry is reported as `not in  § Risk Tiers` with an empty filename — the finding names no file to fix. The contract requires `pipelineRules`, so this only bites a hand-broken config; a one-line fallback naming the missing key would make the message self-remedying.
 
 ## Canonical Delta
 

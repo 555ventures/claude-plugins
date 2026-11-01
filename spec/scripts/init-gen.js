@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 'use strict'
 // init-gen.js probe --root <dir> [--test-command "<cmd>"] [--sample <n>]
-// init-gen.js generate --root <dir> --profile <path> [--refresh]
+// init-gen.js generate --root <dir> --profile <path> [--refresh] [--dry-run]
+// init-gen.js policy-check --root <dir> [--json]
 //
-// Owner: specs/20260822/02-init-generation-script.md.
+// Owner: specs/20260822/02-init-generation-script.md
 //
 // The review-legs.js inversion applied to
 // /spec:init: file-generation phases are generated deterministically — never hand-performed as prose
@@ -44,6 +45,9 @@
 //                 is not an offender
 //             4 = unexpected internal error (uncaught throw) — the host tree may be
 //                 partially written; remedy = re-run generate. Never a verdict; always a bug.
+//   generate --dry-run: 0 = manifest printed, nothing written · 2 = the usual profile/usage errors
+//   policy-check: 0 = no findings · 1 = findings (one per line, or a JSON array under --json) ·
+//             2 = usage error / unreadable config
 //   probe:    0 = always (adverse findings — no claude CLI, a vacuous test runner, an inert
 //                 at-risk leg — are data for the interview, never a probe failure)
 //             2 = usage error
@@ -55,25 +59,28 @@ const crypto = require('crypto')
 const { spawnSync } = require('child_process')
 const hostRun = require('./lib/host-run')
 const { globMatch } = require('./lib/glob-match')
-const { configPath, CONFIG_RELPATH, DEFAULT_TEST_GLOBS } = require('./lib/host-config')
+const { configPath, CONFIG_RELPATH, DEFAULT_TEST_GLOBS, policy, mergePolicy, validatePolicy, readConfigStrict } = require('./lib/host-config')
 
 function usage() {
   console.error('usage: init-gen.js probe --root <dir> [--test-command "<cmd>"] [--sample <n>]')
-  console.error('       init-gen.js generate --root <dir> --profile <path> [--refresh]')
+  console.error('       init-gen.js generate --root <dir> --profile <path> [--refresh] [--dry-run]')
+  console.error('       init-gen.js policy-check --root <dir> [--json]   (exit 0 clean · 1 findings · 2 usage)')
   console.error('       init-gen.js ignore-check --root <dir> [--fix]   (exit 0 all present · 3 missing, one path per line)')
 }
 
 const argv = process.argv.slice(2)
 const sub = argv[0]
-if (sub !== 'probe' && sub !== 'generate' && sub !== 'ignore-check') { usage(); process.exit(2) }
+if (sub !== 'probe' && sub !== 'generate' && sub !== 'ignore-check' && sub !== 'policy-check') { usage(); process.exit(2) }
 
-let root = null, profilePath = null, refresh = false, testCommandArg = null, sample = 20, fix = false
+let root = null, profilePath = null, refresh = false, testCommandArg = null, sample = 20, fix = false, dryRun = false, asJson = false
 for (let i = 1; i < argv.length; i++) {
   const a = argv[i]
   if (a === '--root') root = argv[++i]
   else if (a === '--profile') profilePath = argv[++i]
   else if (a === '--refresh') refresh = true
   else if (a === '--fix') fix = true
+  else if (a === '--dry-run') dryRun = true
+  else if (a === '--json') asJson = true
   else if (a === '--test-command') testCommandArg = argv[++i]
   else if (a === '--sample') sample = parseInt(argv[++i], 10)
   else { usage(); process.exit(2) }
@@ -113,8 +120,18 @@ const IGNORE_ENTRIES = [
 // it — a host initialised before this entry existed surfaces its un-ignored session stamp
 // as a spurious out-of-plan reconcile finding. `ignore-check` is the read-only sweep
 // /spec:doctor runs (doctor.md check 12); `--fix` is ensureGitignore itself.
+// `policy.ledgerCommitted: false` (read from the host's config, so generate — which writes the
+// config before the gitignore — and ignore-check agree) adds the two ledger rows.
+const LEDGER_IGNORE_ENTRIES = [
+  { line: '.claude/spec-runs.jsonl', sample: '.claude/spec-runs.jsonl' },
+  { line: '.claude/spec-runs/', sample: '.claude/spec-runs/x' },
+]
+function ignoreEntries(hostRoot) {
+  return policy(hostRoot).ledgerCommitted === false ? [...IGNORE_ENTRIES, ...LEDGER_IGNORE_ENTRIES] : IGNORE_ENTRIES
+}
+
 function missingIgnoreEntries(hostRoot) {
-  return IGNORE_ENTRIES.filter(({ sample }) => spawnSync('git', ['check-ignore', '-q', sample], { cwd: hostRoot }).status !== 0)
+  return ignoreEntries(hostRoot).filter(({ sample }) => spawnSync('git', ['check-ignore', '-q', sample], { cwd: hostRoot }).status !== 0)
 }
 
 function ensureGitignore(hostRoot) {
@@ -133,8 +150,48 @@ if (sub === 'ignore-check') {
   const missing = missingIgnoreEntries(root)
   if (missing.length && fix) { ensureGitignore(root); console.log(`init-gen ignore-check: appended ${missing.length} missing .gitignore line(s): ${missing.map(m => m.line).join(', ')}`); process.exit(0) }
   if (missing.length) { for (const m of missing) console.log(m.line); process.exit(3) }
-  console.log(`init-gen ignore-check: all ${IGNORE_ENTRIES.length} pipeline ignore entries present`)
+  console.log(`init-gen ignore-check: all ${ignoreEntries(root).length} pipeline ignore entries present`)
   process.exit(0)
+}
+
+// policy-check: validatePolicy over the on-disk block, then two drift checks.
+function sectionText(src, title) {
+  const lines = src.split('\n')
+  const at = lines.findIndex((l) => /^##\s/.test(l) && l.replace(/^##\s+/, '').trim() === title)
+  if (at === -1) return ''
+  let end = lines.findIndex((l, i) => i > at && /^##\s/.test(l))
+  if (end === -1) end = lines.length
+  return lines.slice(at + 1, end).join('\n')
+}
+
+if (sub === 'policy-check') {
+  let cfg
+  try { cfg = readConfigStrict(root) } catch (e) {
+    console.error(`init-gen: policy-check: ${e.message} — pass --root <host dir> holding ${CONFIG_RELPATH} (run /spec:init first)`)
+    process.exit(2)
+  }
+  if (cfg === null || typeof cfg !== 'object' || Array.isArray(cfg)) {
+    console.error('init-gen: policy-check: config is not a JSON object — fix it, then re-run')
+    process.exit(2)
+  }
+  const findings = validatePolicy(cfg.policy === undefined ? {} : cfg.policy)
+  const eff = mergePolicy(cfg.policy)
+  if (eff.ledgerCommitted === false &&
+      spawnSync('git', ['ls-files', '--error-unmatch', '.claude/spec-runs.jsonl'], { cwd: root, stdio: 'ignore' }).status === 0) {
+    findings.push('ledgerCommitted=false but .claude/spec-runs.jsonl is tracked')
+  }
+  if (Array.isArray(eff.riskTiers) && eff.riskTiers.length) {
+    const rulesRel = typeof cfg.pipelineRules === 'string' ? cfg.pipelineRules : ''
+    let section = ''
+    try { section = sectionText(fs.readFileSync(path.join(root, rulesRel), 'utf8'), 'Risk Tiers').toLowerCase() } catch { /* absent rules file: every entry is reported */ }
+    for (const t of eff.riskTiers) {
+      if (typeof t === 'string' && t && !section.includes(t.toLowerCase())) findings.push(`riskTiers entry "${t}" is not in ${rulesRel} § Risk Tiers`)
+    }
+  }
+  if (asJson) console.log(JSON.stringify(findings))
+  else if (findings.length) for (const f of findings) console.log(f)
+  else console.log('init-gen policy-check: policy block clean')
+  process.exit(findings.length ? 1 : 0)
 }
 
 if (sub === 'probe') {
@@ -197,6 +254,22 @@ try {
 }
 
 validateProfile(profile)
+
+// The policy block: absent -> the defaults, with the veto line printed on success; present ->
+// validated (exit 2, nothing written) then merged over the defaults.
+let policyDefaultsKept = false
+if (profile.config.policy === undefined) {
+  policyDefaultsKept = true
+  profile.config = { ...profile.config, policy: mergePolicy({}) }
+} else {
+  const findings = validatePolicy(profile.config.policy)
+  if (findings.length) {
+    for (const f of findings) console.error(`policy: ${f}`)
+    console.error('init-gen: invalid config.policy in the profile — fix the keys named above (allowed values are in the grounding contract § Policy) and re-run generate; nothing written')
+    process.exit(2)
+  }
+  profile.config = { ...profile.config, policy: mergePolicy(profile.config.policy) }
+}
 
 function fieldMissing(field) {
   console.error(`init-gen: profile is missing required field "${field}" — add it to the profile JSON per the Contracts profile schema in specs/20260822/02-init-generation-script.md before running generate again`)
@@ -652,6 +725,19 @@ try {
     }
     ungenerated = Object.keys(diskCfg).every((k) => k === 'generatedBy' || k === 'contractHash' || k === 'walkthrough')
   }
+  if (dryRun) {
+    const exAllow = (existingSettings.permissions && Array.isArray(existingSettings.permissions.allow)) ? existingSettings.permissions.allow : []
+    const exDeny = (existingSettings.permissions && Array.isArray(existingSettings.permissions.deny)) ? existingSettings.permissions.deny : []
+    const perms = [
+      ...merged.settingsObj.permissions.allow.filter((e) => !exAllow.includes(e)).map((e) => `allow ${e}`),
+      ...merged.settingsObj.permissions.deny.filter((e) => !exDeny.includes(e)).map((e) => `deny ${e}`),
+    ]
+    const files = fileTargets.filter((t) => !fs.existsSync(path.join(root, t.rel))).map((t) => t.rel)
+    console.log(`Confirm before writing: ${perms.length} permissions, ${files.length} files`)
+    for (const e of perms) console.log(`  + ${e}`)
+    for (const f of files) console.log(`  + ${f}`)
+    process.exit(0)
+  }
   const manifestObj = buildManifestObject(root, profile)
   const targets = [...fileTargets, { rel: '.claude/spec-manifest.json', kind: 'json', obj: manifestObj }]
 
@@ -701,6 +787,7 @@ try {
   cfg.contractHash = computeContractHash()
   fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n')
 
+  if (policyDefaultsKept) console.log(`📌 policy defaults kept — edit ${CONFIG_RELPATH} policy to change (veto anytime)`)
   process.exit(0)
 } catch (e) {
   console.error(e && e.stack ? e.stack : String(e))

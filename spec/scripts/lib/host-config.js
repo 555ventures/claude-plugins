@@ -39,6 +39,11 @@
 // sanctioned routes for the two legitimate reasons a script needs the filename: a
 // presence check and a remedy string (`CONFIG_RELPATH`, for display only, never path-building).
 //
+// `POLICY_DEFAULTS`, `policy(root)` and `validatePolicy(block)` are the one declaration, one accessor
+// and one validator of the config's optional `policy` block. `policy` deep-merges a host's partial
+// block over the defaults and drops unknown keys; `validatePolicy` is what `init-gen.js generate` and `policy-check` refuse or report with. Neither
+// writes anything, and no reader of a key lives here (the commands that read them are spec 09's).
+//
 // Exit codes: n/a (library, not an entrypoint).
 
 const fs = require('fs')
@@ -95,7 +100,83 @@ function declaredForge(root) {
   return capabilities && capabilities.forge
 }
 
+const POLICY_ENUMS = Object.freeze({
+  mergeStrategy: Object.freeze(['derived', 'merge-commit', 'ff-only', 'squash', 'rebase-ff']),
+  testExpiry: Object.freeze(['classify', 'off']),
+  reviewService: Object.freeze(['terminal', 'hosted']),
+})
+const POLICY_BOOLEANS = Object.freeze(['worktreePerSpec', 'directLaneToMain', 'ledgerCommitted'])
+const POLICY_SEATS = Object.freeze(['workers', 'reviewer', 'disposer'])
+const POLICY_MODELS = Object.freeze(['fable', 'opus', 'sonnet', 'haiku'])
+const POLICY_EFFORTS = Object.freeze(['low', 'medium', 'high', 'xhigh', 'max'])
+
+const seat = (model, effort) => Object.freeze({ model, effort })
+const POLICY_DEFAULTS = Object.freeze({
+  worktreePerSpec: true,
+  directLaneToMain: true,
+  mergeStrategy: 'derived',
+  testExpiry: 'classify',
+  ledgerCommitted: true,
+  reviewService: 'terminal',
+  models: Object.freeze({
+    workers: seat('sonnet', 'medium'),
+    reviewer: seat('fable', 'low'),
+    disposer: seat('opus', 'medium'),
+  }),
+  riskTiers: Object.freeze([]),
+})
+
+const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
+
+// A policy block merged key by key over POLICY_DEFAULTS; unknown keys dropped, `models` merged
+// per seat. Returns a fresh mutable object. A wrongly-typed value is kept as written —
+// validatePolicy reports it, this does not second-guess it.
+function mergePolicy(raw) {
+  const block = isObj(raw) ? raw : {}
+  const out = { models: {} }
+  for (const k of Object.keys(POLICY_DEFAULTS)) {
+    if (k === 'models') continue
+    out[k] = k in block ? block[k] : (Array.isArray(POLICY_DEFAULTS[k]) ? [...POLICY_DEFAULTS[k]] : POLICY_DEFAULTS[k])
+  }
+  const m = isObj(block.models) ? block.models : {}
+  for (const s of POLICY_SEATS) {
+    out.models[s] = { ...POLICY_DEFAULTS.models[s], ...(isObj(m[s]) ? m[s] : {}) }
+  }
+  return out
+}
+
+// The host's effective policy: its config's block merged over the defaults.
+function policy(root) { return mergePolicy(readConfig(root).policy) }
+
+// [] or one finding string per defect. A partial block is valid (absent keys take defaults).
+function validatePolicy(block) {
+  if (!isObj(block)) return ['policy: expected an object']
+  const found = []
+  for (const k of Object.keys(block)) {
+    if (!(k in POLICY_DEFAULTS)) { found.push('unknown key ' + k); continue }
+    const v = block[k]
+    if (POLICY_BOOLEANS.includes(k)) {
+      if (typeof v !== 'boolean') found.push(k + ': expected boolean')
+    } else if (POLICY_ENUMS[k]) {
+      if (!POLICY_ENUMS[k].includes(v)) found.push(k + ': expected one of ' + POLICY_ENUMS[k].join('|'))
+    } else if (k === 'riskTiers') {
+      if (!Array.isArray(v) || !v.every((e) => typeof e === 'string' && e.trim() !== '')) found.push('riskTiers: expected an array of non-empty strings')
+    } else if (k === 'models') {
+      if (!isObj(v)) { found.push('models: expected an object'); continue }
+      for (const s of Object.keys(v)) {
+        if (!POLICY_SEATS.includes(s)) { found.push('unknown key models.' + s); continue }
+        const e = v[s]
+        if (!isObj(e)) { found.push('models.' + s + ': expected an object'); continue }
+        for (const f of Object.keys(e)) if (f !== 'model' && f !== 'effort') found.push('unknown key models.' + s + '.' + f)
+        if ('model' in e && !POLICY_MODELS.includes(e.model)) found.push('models.' + s + '.model: expected one of ' + POLICY_MODELS.join('|'))
+        if ('effort' in e && !POLICY_EFFORTS.includes(e.effort)) found.push('models.' + s + '.effort: expected one of ' + POLICY_EFFORTS.join('|'))
+      }
+    }
+  }
+  return found
+}
+
 module.exports = {
   readConfig, readConfigStrict, declaredForge, configPath, configExists, CONFIG_RELPATH,
-  DEFAULT_TEST_GLOBS,
+  DEFAULT_TEST_GLOBS, POLICY_DEFAULTS, policy, mergePolicy, validatePolicy,
 }

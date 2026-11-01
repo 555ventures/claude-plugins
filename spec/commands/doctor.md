@@ -155,6 +155,9 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     `node "$(spec-paths prototype-driver)" check --json`; each finding is one ⚠️ line.
 23. **Walkthrough config** (advisory) — only when the config has a `walkthrough` block, run
     `node "$(spec-paths walkthrough)" check --json`; each finding is one ⚠️ line.
+24. **Policy block** (advisory) — run `node "$(spec-paths init-gen)" policy-check --root . --json`;
+    each finding is one ⚠️ line (a malformed key, a `ledgerCommitted=false` ledger that is still
+    tracked, a `riskTiers` entry missing from the rules file's § Risk Tiers).
 
 ## Semantic spot-check — small, bounded
 

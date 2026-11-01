@@ -2,6 +2,8 @@
 // specs/20261029/01-model-placement-refresh.md (AC-20261029-01-1, -2, -3): the reviewer and
 // disposer seats pin a tier and an effort in frontmatter, and core.md § Model Placement
 // carries the per-seat table and the fresh-context independence statement.
+// specs/20261029/08-the-policy-round-at-init.md D8 (AC-20261029-08-9, AC-20261029-08-10): the reviewer
+// seat returns to fable at low effort; the pins below are rewritten in place under both ids.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -20,12 +22,12 @@ const frontmatter = (file) => {
   return out;
 };
 
-test('AC-20261029-01-1: reviewer seat frontmatter yields model opus and effort high', () => {
+test('AC-20261029-01-1 / AC-20261029-08-9: reviewer seat frontmatter yields model fable and effort low', () => {
   const fm = frontmatter('agents/reviewer.md');
-  assert.equal(fm.model, 'opus',
-    'a reviewer seat that is not opus floats with or above the session model and loses the documented bug-finding tier');
-  assert.equal(fm.effort, 'high',
-    'a reviewer seat below high effort under-reviews the diff and lets findings escape');
+  assert.equal(fm.model, 'fable',
+    'a reviewer seat that is not fable runs the same model as the Opus /spec:run session and is not independent of the orchestrator');
+  assert.equal(fm.effort, 'low',
+    'a reviewer seat off low effort drifts from the policy.models default that doctrine and the init question promise');
 });
 
 test('AC-20261029-01-2: disposer seat frontmatter yields model opus and effort medium, never inherit', () => {
@@ -38,21 +40,28 @@ test('AC-20261029-01-2: disposer seat frontmatter yields model opus and effort m
     'a disposer without medium effort misprices its bounded judgment work');
 });
 
-test('AC-20261029-01-3: core.md § Model Placement carries the per-seat table rows and the fresh-context independence sentence, with no family rule', () => {
+test('AC-20261029-01-3 / AC-20261029-08-10: core.md § Model Placement carries the per-seat table rows and the fresh-context independence sentence, with no family rule', () => {
   const core = fs.readFileSync(path.join(SPEC, 'doctrine/core.md'), 'utf8');
   const section = core.slice(core.indexOf('## Model Placement'), core.indexOf('## Decisions'));
   const row = (seat, model, effort) =>
     new RegExp('^\\|\\s*' + seat + '[^|]*\\|\\s*' + model + '\\s*\\|\\s*' + effort + '\\s*\\|', 'm');
-  assert.match(section, row('Reviewer', 'opus', 'high'),
-    'without the Reviewer | opus | high row the table does not bind the reviewer seat that the agent frontmatter declares');
+  assert.match(section, row('Reviewer', 'fable', 'low'),
+    'without the Reviewer | fable | low row the table does not bind the reviewer seat that the agent frontmatter declares');
   assert.match(section, row('Disposer', 'opus', 'medium'),
     'without the Disposer | opus | medium row the disposer seat has no doctrine home');
   assert.match(section, row('Implementation workers', 'sonnet', 'medium'),
     'without the Implementation workers | sonnet | medium row the worker seat is unstated and drivers drift');
+  assert.match(section, /policy\.models[^.]*overrid|overrid[^.]*policy\.models/,
+    'without the policy.models override sentence a host cannot learn that the three seat rows are only defaults');
   assert.match(section, /fresh-context/,
     'without the fresh-context sentence review independence is unexplained and the family rule has no replacement');
   assert.doesNotMatch(section, /different model family/,
     'the retired "different model family" rule is still taught, which nothing in the plugin can enforce');
   assert.doesNotMatch(section, /different family/,
     'the retired "different family" phrasing is still taught, contradicting the fresh-context independence rule');
+  const fix = fs.readFileSync(path.join(SPEC, 'commands/fix.md'), 'utf8');
+  assert.ok(fix.includes('`fable` at `effort: low`'),
+    'fix.md step 4 names a reviewer seat other than the table row, so /spec:fix dispatches a seat the doctrine no longer defines');
+  assert.ok(!fix.includes('`opus` at `effort: high`'),
+    'fix.md still teaches the retired opus/high reviewer seat, contradicting core.md § Model Placement');
 });

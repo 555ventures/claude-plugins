@@ -143,7 +143,7 @@ One table binds every seat; seats name aliases only, never a versioned id.
 | Planner (/spec:plan, genesis design seats) | fable | high | the session; genesis design steps dispatch `Agent {model: "fable", effort: "high"}` |
 | Build / review orchestrator | the invoking session (opus recommended) | — | /model |
 | Implementation workers | sonnet | medium | build driver wave step, host agentMap agents |
-| Reviewer | opus | high | spec/agents/reviewer.md |
+| Reviewer | fable | low | spec/agents/reviewer.md |
 | Disposer | opus | medium | spec/agents/disposer.md |
 | Research / option-menu agents | sonnet | medium | wf-research.js, wf-enforce.js |
 | Lookups, re-reads, queue groom, question judge | haiku | low | queue.md, question-style-gate.js |
@@ -152,6 +152,8 @@ Review independence comes from fresh-context, blind-to-author dispatch and execu
 reviewer never sees the conversation that produced the diff. Orchestrators pass paths, never raw
 file contents. `/spec:enforce` and genesis judgment seats run Opus; `/spec:init` runs on the
 invoker; an unavailable `Agent {model: "fable"}` falls back to `opus`.
+
+A host's `policy.models` overrides the workers, reviewer and disposer rows (spec 09 wires the readers); the reviewer default is a model the orchestrating session does not run.
 
 ## Decisions
 

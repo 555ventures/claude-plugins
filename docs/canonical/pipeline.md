@@ -104,9 +104,11 @@ core § Model Placement) dispatched at
 DISPOSITIONS; it returns one grounded recommendation per survivor
 and leg finding, and the review driver refuses `--mark dispositions` on non-empty pools
 without a return that covers every finding exactly once with a non-blank reason. The reviewer
-seat is `opus` at `effort: high`; both seats are fixed aliases, never the session's model, and
-independence is the fresh context plus executed evidence, not a model family
-(specs/20261029/01-model-placement-refresh.md). Fix
+seat is `fable` at `effort: low` — a model the Opus run session does not run — and a host's
+`policy.models` overrides the workers, reviewer and disposer seats; both seats are fixed aliases,
+never the session's model, and independence is the fresh context plus executed evidence, not a
+model family (specs/20261029/01-model-placement-refresh.md;
+specs/20261029/08-the-policy-round-at-init.md D8). Fix
 recommendations dispatch without a question; waive and reject recommendations go to the
 user, and the user's answer is recorded as `final` with `overriddenBy: "user"`. Every
 review row records `checkpoint: {outcome, overrides}` — `disposer` (with the count of

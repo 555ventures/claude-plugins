@@ -1,11 +1,13 @@
 ---
 date: 2026-11-01
-status: draft
+status: hardened
 tier: critical
 area: review-legs
 breaking: false
 depends_on: []
 brief: n/a
+open_markers: 0
+spiked: 2026-11-01
 ---
 
 # The gate that ran the suite is the suite
@@ -31,6 +33,7 @@ writes wall-clock milliseconds per leg so a slow leg is visible without a profil
 | D3 | `spec-review-driver.js` `runCloseTimeGate()`: after the resolved-gate re-run exits 0, when `gateRunsSuite(gateConfig.gateCommand, resolved.gate, gateConfig.testCommand)` is true the whole-suite re-run is skipped and one stdout line `close-time suite: reused the gate run (<resolved gate>)` is printed; otherwise the bare `testCommand` re-run and its red refusal are unchanged. (AC-20261101-05-8, AC-20261101-05-9) | The close re-run exists to cover files CLOSE writes; a gate that runs the suite over the committed close tree already covers them. |
 | D4 | `review-legs.js` records wall-clock milliseconds per leg: every `appendRow` call site measures from its spawn (or, for a reused/unavailable row, records `0`) and the script writes `<out-dir>/timings.json` `{"<leg>": <ms>, …, "total": <ms>}` (one key per appended row, in append order, `total` last) before the manifest rename; the summary line gains ` (<s>.<d>s)` after the observed JSON, e.g. `✅ gate           exit=0 {"skips":0,…} (12.4s)`. Manifest rows are byte-for-byte unchanged. (AC-20261101-05-10) | Rows are pinned by `deepStrictEqual` across five suites and read by `verdict.js`; a sidecar file costs no row-shape change and the summary line is the one place a person looks. |
 | D5 | Header comments: `review-legs.js`'s suite-row grammar gains `"reused":"gate"` and names `timings.json`; the driver's `runCloseTimeGate` comment drops "unconditional" and names D3's condition; `lib/gate-resolve.js`'s header names `gateRunsSuite`. `[no-ac: prose in script headers; the behaviour is pinned by AC-20261101-05-2 and AC-20261101-05-8]` | The header is each script's contract (pipeline rules § Worker Rules). |
+| D7 | The close-time pin's host keeps the real `node --test` as the runner behind a bash wrapper (`test.sh` = `echo >> counter` then `node --test`), never a stub that skips the runner: `gateCommand` `true && bash test.sh`, `testCommand` `bash test.sh`, `counter` git-ignored; the pin counts `counter` lines across `--mark closed`. (AC-20261101-05-8) | The driver's close path stays pinned on a gate that really judges the tree; the wrapper makes the number of runner invocations observable without touching the runner (A7's spike). |
 | D6 | `node scripts/plugin-bump.js --bump --plugin spec --changelog "…"`. `[no-ac: node scripts/plugin-bump.js --check in the gate is the oracle]` | Behaviour change under `spec/` (pipeline rules § Planning). |
 
 ## File Plan
@@ -86,12 +89,13 @@ declares `testCountPattern` `ℹ tests (\d+)` and `skipReportPattern` `ℹ skipp
 - `STUB_EXIT=1` → gate row exit 1, suite row exit 1 reused, counter 1, `RED_BLOCKING: gate,suite`.
 - Scoped gate `bash lint.sh && bash test.sh {testDirs}` → counter 2, no `reused` key (today's path).
 
-Close-time fixture (`tests/review/review-driver-close-gate-reuse.test.js`, from
-`review-driver.fixtures.js`'s host with `gateCommand` rewritten to `node --test && node --test`
-… `[NEEDS CLARIFICATION: the driver fixture's testCommand is the real node --test over the
-fixture's tests; confirm at lock whether a counter-stub testCommand is admissible there or the
-close fixture must count node --test invocations through a wrapper script]`): a review carried to
-`--mark closed` runs the test command once at close and prints the D3 line.
+Close-time fixture (`tests/review/review-driver-close-gate-reuse.test.js`, D7): the host from
+`review-driver.fixtures.js`'s `makeHost` shape with `gateCommand` `true && bash test.sh`,
+`testCommand` `bash test.sh`, where `test.sh` is `echo >> counter` then `node --test` (the real
+runner still judges the fixture's test file, so the gate stays a genuine gate; `counter` is
+git-ignored so the close tree stays clean). The test drives the review to CLOSE, commits the
+close, reads the `counter` line count, runs `--mark closed`, and asserts the count grew by
+exactly 1 and the D3 line was printed. Without D3 the count grows by 2 (gate + whole-suite half).
 
 ## Acceptance Criteria
 
@@ -102,7 +106,7 @@ close fixture must count node --test invocations through a wrapper script]`): a 
 - **AC-20261101-05-5**: WHEN the unscoped fixture's `test.sh` prints `ℹ tests 0` and exits 0 THE SYSTEM SHALL append the suite row with `exit` `1`, `testsExecuted` `0`, `reused` `gate`, and print `RED_BLOCKING: suite` → writes tests/review/review-legs-gate-reuse.test.js
 - **AC-20261101-05-6**: WHEN the unscoped fixture's `test.sh` exits 1 printing `ℹ tests 3` THE SYSTEM SHALL leave 1 line in `counter`, append gate `exit` `1` and suite `exit` `1` with `reused` `gate`, and print `RED_BLOCKING: gate,suite` → writes tests/review/review-legs-gate-reuse.test.js
 - **AC-20261101-05-7**: WHEN the host's gate is `node --test {testDirs}` and `testCommand` `node --test` THE SYSTEM SHALL CONTINUE TO run the bare `testCommand` as the suite leg and append a suite row without a `reused` key (e.g. `{"leg":"suite","exit":0,"observed":{"skips":0,"todos":0,"testsExecuted":{"unavailable":"no-format-declared"}},"scope":"full"}`) → reuses tests/review/review-legs.test.js :: AC-20260903-02-1:
-- **AC-20261101-05-8**: WHEN `--mark closed` runs over a host whose raw `gateCommand` is `<lint> && <testCommand>` with no `{testDirs}` and the committed close tree is green THE SYSTEM SHALL run `testCommand` exactly once during close (e.g. a counter stub holds 1 line), print one stdout line starting `close-time suite: reused the gate run (`, and exit 0 → writes tests/review/review-driver-close-gate-reuse.test.js
+- **AC-20261101-05-8**: WHEN `--mark closed` runs over a host whose raw `gateCommand` is `<lint> && <testCommand>` with no `{testDirs}` and the committed close tree is green THE SYSTEM SHALL run `testCommand` exactly once during close (e.g. the `counter` file gains exactly 1 line across the `--mark closed` invocation), print one stdout line starting `close-time suite: reused the gate run (`, and exit 0 → writes tests/review/review-driver-close-gate-reuse.test.js
 - **AC-20261101-05-9**: WHEN `--mark closed` runs over a host whose gate is `node --test {testDirs}` THE SYSTEM SHALL CONTINUE TO run the resolved gate and then the bare `testCommand` and exit 0 on a green tree → reuses tests/review/review-driver-close-expiry.test.js :: AC-20260912-15-2:
 - **AC-20261101-05-10**: WHEN review-legs finishes any run THE SYSTEM SHALL write `<out-dir>/timings.json` holding one non-negative integer per appended leg plus `total` as the last key (e.g. keys `["reconcile","gate","ci","suite","tests","at-risk","patterns","smoke","ac-matrix","skip-reconcile","promise-sweep","total"]` for a full-scope run on the inert fixture), and every summary line SHALL end with ` (<digits>.<digit>s)` (e.g. `✅ suite          exit=0 {"skips":0,"todos":0,"testsExecuted":3,"reused":"gate"} (0.0s)`) → writes tests/review/review-legs-gate-reuse.test.js
 
@@ -113,6 +117,9 @@ close fixture must count node --test invocations through a wrapper script]`): a 
 - A3: No test pins the exact text of review-legs' summary lines past the observed JSON (grep at lock: `exit=\d+ \{` patterns and `✅ gate` matches) — **if false:** the seconds suffix moves to a separate `timings:` line after `manifest:`.
 - A4: The driver's close-time run goes through `runHost` with `encoding: 'utf8'` and the gate re-run's result is in scope where D3's check lands (`runCloseTimeGate` body) — **if false:** D3 reads the config and resolved gate again locally; still one helper.
 - A5: `makeReviewLegsHost` accepts a `config` with `runtime: {inert}` and `extraFiles` for the two stubs, and `env-preflight.js` exits 0 with no `testEnv` (spike harness ran this way) — **if false:** the new test builds its host inline, same shape.
+- A6 (micro-spike, executed at lock): a scratch implementation of D1's rule run over the seven AC-1 shapes plus `check && lint && vitest run` / `vitest run` (true) and `lint; node --test` (false) returned the expected boolean for every row (9/9 `ok`) — **if false:** n/a, executed.
+- A7 (micro-spike, executed at lock): a bash wrapper `test.sh` (`echo >> counter`; `node --test`) spawned from a process holding `NODE_TEST_CONTEXT=child` with that var deleted from the child env ran the nested runner as a top-level runner (`status 0`, `ℹ tests 1`, `ℹ pass 1`, counter 1 line); `lib/host-run.js` deletes the var the same way — **if false:** the close pin counts `node --test` invocations through a `node` shim first on PATH instead.
+- A8: `tests/` holds no fixture whose raw `gateCommand` lacks `{testDirs}` while an `&&` segment equals its `testCommand` (grep at lock: the unscoped gates are genesis `true`/`exit 0` fixtures and `walkthrough-carry`'s `make hand-edit`, none with a matching `testCommand`) — **if false:** same remedy as A1.
 
 ## Rationale
 

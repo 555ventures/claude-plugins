@@ -142,7 +142,10 @@ question `/git:commit`'s step 3 asks (landed = File Plan membership joined to a
 `stage:"review"` row that precedes the commit's committer date). (specs/20260904/01-commit-time-escape-coverage.md,
 done 2026-09-04) There is no offer: a fix commit whose `landed` list is non-empty writes one
 escape row itself (`/git:commit` step 3, `escape-row.js --append`) — one row per commit, `spec`
-and `reviewRunId` taken from the landed file with the latest qualifying review, every landed
+and `reviewRunId` taken from `commit-coverage.js`'s `pick` — the landed file the root cause
+names (`--primary`), else the latest qualifying review among files not landed by every other
+entry's winning spec; a duplicate refusal from `escape-row.js` records the `stage:"fix"` row
+instead (specs/20261031/01-the-escape-row-follows-the-diagnosed-file.md) — every landed
 file in `files`, and the defect class the one (skippable) question. Nothing blocks a commit.
 (specs/20261025/01-the-commit-writes-the-escape-row.md) The window and fleet share numbers
 are retired — the row is written by the commit itself, so only the per-commit landing

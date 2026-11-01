@@ -1,6 +1,6 @@
 ---
 date: 2026-10-31
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: commit-escape
@@ -133,6 +133,13 @@ D2 exists for a fix-typed commit whose body names no file. Its ubiquity test is 
 
 
 Collision closure (lock, `--literal latest --literal reviewTs`): every `reviewTs` hit is in the File Plan. The `latest` literal is an ordinary English word; its 31 out-of-plan hits (ADR 0032, canonical docs, spikes, doctor/genesis/mocks prose, drivers, status scripts and their tests) use it for unrelated orderings and are waived as false positives. The one hit that restates the retired rule, `docs/canonical/pipeline.md`, is rewritten by the Canonical Delta at review close; the `likely`/`mentions` paths-leg hits owe no waive line.
+
+### Advisory debt (review rv_f53e53a22d08)
+- a0 spec/scripts/commit-coverage.js:208 — `--primary` values are matched against landed file paths byte-for-byte, with no normalization and no signal when a primary matches nothing. A primary written as `./spec/scripts/review-legs.js` (or as an absolute path) quietly falls back to the latest-review rule and attributes the row to a different spec. D1 says the value is a repo-relative path, so this is within contract, but `commit.md` has the session copy the path out of free prose (the /spec:fix statement or the commit body), where such spellings are likely.
+- a1 spec/scripts/commit-coverage.js:64 — `--primary` followed by another flag takes that flag as its path. `--primary --json` exits 0, records the primary as `--json`, and prints the human render instead of JSON. D1's usage error only fires when `--primary` is the very last argument. `--commit` and `--root` already parse values the same way, so this follows the existing convention.
+- a2 tests/commit-coverage/commit-coverage.test.js:71 — No test exercises D1's several-primaries clause (latest review wins, tie goes to the lexically smaller spec path) or D2's tie-break. AC-1 passes one primary, and no fixture has two entries with equal review timestamps. I ran the multi-primary path by hand and it behaves as specified, so the gap is in test coverage, not in behavior.
+- a3 tests/commit-coverage/commit-coverage.test.js:91 — Some asserts in the new tests use raw output (`r.stderr`) or a restated expectation as their message instead of a consequence-of-failure line. Examples: AC-3 and AC-8 `assert.strictEqual(r.status, 0, r.stderr)`, and AC-4 `'empty landed has nothing to exclude'`.
+- a4 spec/scripts/review-legs.js:429 — This review's patterns leg did not sweep any of the diff's code paths. `patterns.txt` shows `Scope: .claude specs/20261031`, but the range edits spec/scripts, git/commands, tests/commit-coverage and tests/commit. The `reconcile.json` the driver wrote has no `changed` key, so review-legs.js:429 got an empty changed set. The likely cause is that the driver ran an installed scope-reconcile.js older than the one that emits `changed` (7.293.0); I did not confirm this. review-legs.js predates the range, so this is not a defect of this spec. I swept the four directories by hand: no hit falls on a line the diff touches.
 
 ## Canonical Delta
 

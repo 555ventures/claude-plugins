@@ -37,6 +37,12 @@
 // resolved command, or validate that config.gateCommand is a non-empty string (a caller with no
 // gateCommand at all never reaches this function).
 //
+// gateRunsSuite(rawGate, resolvedGate, testCommand) -> boolean — true only when the raw gate has no
+// {testDirs}/{scopeDirs}, testCommand is a non-empty string, and an `&&` segment of resolvedGate
+// is exactly testCommand (the only operator under which a zero gate exit implies the test command
+// ran and passed). Read by review-legs.js (suite-leg reuse) and the driver's close-time re-run so
+// the two cannot drift.
+//
 // Exit codes: n/a (library, not an entrypoint).
 
 const path = require('path')
@@ -60,6 +66,13 @@ function resolveGate(specText, config) {
   return { gate: resolveGateForFiles(gate, testFiles) }
 }
 
+function gateRunsSuite(rawGate, resolvedGate, testCommand) {
+  if (typeof rawGate !== 'string' || /\{testDirs\}|\{scopeDirs\}/.test(rawGate)) return false
+  if (typeof resolvedGate !== 'string') return false
+  if (typeof testCommand !== 'string' || !testCommand.trim()) return false
+  return resolvedGate.split('&&').some(seg => seg.trim() === testCommand.trim())
+}
+
 function resolveGateForFiles(gate, testFiles) {
   if (!/\{testDirs\}|\{scopeDirs\}/.test(gate)) return gate
   const globs = new Set()
@@ -73,4 +86,4 @@ function resolveGateForFiles(gate, testFiles) {
   return gate.replace(/\{testDirs\}/g, dirsStr).replace(/\{scopeDirs\}/g, [...new Set(testFiles.map(f => path.dirname(f)))].map(quote).join(' '))
 }
 
-module.exports = { resolveGate, resolveGateForFiles }
+module.exports = { resolveGate, resolveGateForFiles, gateRunsSuite }

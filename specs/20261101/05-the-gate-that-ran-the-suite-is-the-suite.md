@@ -1,13 +1,15 @@
 ---
 date: 2026-11-01
-status: hardened
+status: implementing
 tier: critical
 area: review-legs
 breaking: false
 depends_on: []
 brief: n/a
 open_markers: 0
+build_base: main
 spiked: 2026-11-01
+diff_base: 2d51850e3b5a6458fedbe722038399246aba49a5
 ---
 
 # The gate that ran the suite is the suite

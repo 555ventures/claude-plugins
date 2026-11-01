@@ -31,7 +31,7 @@ function smokeAsync(dir, args = []) {
 }
 
 // A boot that records the PORT it saw, signals ready through a PORT-named file, and exits 0 on SIGTERM.
-const FILE_BOOT = 'echo "${PORT-unset}" > boot.port; touch "ready.${PORT-unset}"; trap "exit 0" TERM; while :; do sleep 0.2; done'
+const FILE_BOOT = 'trap "exit 0" TERM; echo "${PORT-unset}" > boot.port; touch "ready.${PORT-unset}"; while :; do sleep 0.2; done'
 const readText = (dir, name) => fs.readFileSync(path.join(dir, name), 'utf8').trim()
 
 test('AC-20261005-03-1: smoke.sh gives bootCommand, readyCheck and seedCommand one and the same integer PORT on a PORT-reading host and prints it in the pass line', () => {

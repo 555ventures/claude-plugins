@@ -93,7 +93,7 @@ test('AC-20260815-04-3: smoke.sh accepts a declared stopExitCodes value as a cle
 test('AC-20260815-04-4 (also AC-20260821-03-10, SHALL CONTINUE TO): smoke.sh passes with the shutdown recorded when the process exits 0 on the stop signal', () => {
   const dir = tmpdir('smoke-shutdown')
   writeConfig(dir, {
-    bootCommand: `touch ${dir}/up && trap 'exit 0' TERM && while :; do sleep 1; done`,
+    bootCommand: `trap 'exit 0' TERM && touch ${dir}/up && while :; do sleep 1; done`,
     readyCheck: `test -f ${dir}/up`,
     readyTimeout: 20,
     stopTimeout: 5,

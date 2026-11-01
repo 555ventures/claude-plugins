@@ -52,7 +52,7 @@ test('AC-20260815-04-7: smoke: boot observed ready with a clean-handler boot CON
     // to still pass — a bare `sleep 30` dies 143 on the stop signal (default action), which is
     // exactly the escape this spec exists to catch. `trap 'exit 0' TERM` keeps this fixture
     // meaning "boots and stops cleanly."
-    bootCommand: `touch ${dir}/up && trap 'exit 0' TERM && while :; do sleep 1; done`,
+    bootCommand: `trap 'exit 0' TERM && touch ${dir}/up && while :; do sleep 1; done`,
     readyCheck: `test -f ${dir}/up`,
     readyTimeout: 20,
   })

@@ -45,7 +45,9 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
    workers; add them to orchestratorOnly".
 6. **Scripts & commands** — `patternsScript` exists, is executable, exits 0; `driftScript`
    (if declared) exists; each command referenced by `gateCommand` / `testCommand` /
-   `setupCommand` resolves by name (never run the gate here). Session grounding:
+   `setupCommand` resolves by name (never run the gate here).
+   `testCaseScanner` (if declared) — run `node "$(spec-paths count-tests)" --root . --scanner-check --json`;
+   exit 3 → one ⚠️ line per failing field (`exit`, `malformed`, `cases`). Session grounding:
    `.claude/settings.json` parses; its `permissions` allow
    entries still resolve; a *missing* deny on `.env*` reads is a flag;
    `.claude/skills/run/SKILL.md` exists and agrees with the config `runtime` block.

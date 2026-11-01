@@ -37,6 +37,14 @@
 // (plain post-Node-current-syntax test files only); count `describe(`/`describe.each(`/`t.test(`/
 // any other call name; or classify a directory tree not already walked into `listTestFiles`'s result.
 //
+// Host listing: when the host config
+// declares `testCaseScanner`, `hostCases(root, config)` runs that command once per process per root
+// and `scanCases(root, config, file, src)` lets its listing own every file it names (the walker never
+// reads such a file); any other file falls to `scanCalls(src)`. Every case record carries
+// `source: 'host' | 'builtin'` and `cuttable` (a host case printed without a span is never cuttable).
+// A scanner that fails yields zero host cases and one stderr line per process; every file then falls
+// to the walker. The library ships no language-specific scanner besides the JavaScript walker.
+//
 // Exit codes: n/a (library, not an entrypoint).
 
 const fs = require('fs')
@@ -348,6 +356,78 @@ function scanLineStartCalls(src, names, skipBody) {
   return calls
 }
 
+// ---- host listing -----------------------------------------------------------------------------
+
+const HOST_TIMEOUT_MS = 120000
+const hostMemo = new Map() // root + command -> result
+const hostWarned = new Set()
+
+function parseListingLine(line) {
+  if (line.trim() === '') return { skip: true }
+  if (line[0] === '{') {
+    let o
+    try { o = JSON.parse(line) } catch { return null }
+    if (!o || typeof o.file !== 'string' || !o.file || typeof o.title !== 'string') return null
+    const span = Number.isInteger(o.start) && Number.isInteger(o.end) && o.start >= 1 && o.end >= o.start
+    return { file: o.file, title: o.title, start: span ? o.start : null, end: span ? o.end : null }
+  }
+  const at = line.indexOf(' :: ')
+  if (at <= 0) return null
+  return { file: line.slice(0, at), title: line.slice(at + 4), start: null, end: null }
+}
+
+// hostCases(root, config[, {quiet}]) -> { ok, exit, command, byFile: Map<rel, [{title, start, end}]>, malformed }
+function hostCases(root, config, opts) {
+  const cfg = config || {}
+  const command = typeof cfg.testCaseScanner === 'string' && cfg.testCaseScanner.trim() ? cfg.testCaseScanner : null
+  const empty = { ok: true, exit: null, command: null, byFile: new Map(), malformed: 0 }
+  if (!command) return empty
+  const key = root + '\0' + command
+  if (hostMemo.has(key)) return hostMemo.get(key)
+  const r = require('./host-run').run(command, {
+    cwd: root, encoding: 'utf8', timeout: HOST_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'pipe'],
+    maxBuffer: 256 * 1024 * 1024,
+  })
+  let exit = r.status
+  if (r.error) exit = r.error.code === 'ETIMEDOUT' ? null : 127
+  const res = { ok: exit === 0, exit, command, byFile: new Map(), malformed: 0 }
+  if (!res.ok) {
+    if (!hostWarned.has(key) && !(opts && opts.quiet)) {
+      hostWarned.add(key)
+      process.stderr.write('testCaseScanner failed (exit ' + (exit === null ? 'timeout' : exit) + '): ' + command + '\n')
+    }
+  } else {
+    for (const line of String(r.stdout || '').split('\n')) {
+      const rec = parseListingLine(line.replace(/\r$/, ''))
+      if (rec === null) { res.malformed++; continue }
+      if (rec.skip) continue
+      if (!res.byFile.has(rec.file)) res.byFile.set(rec.file, [])
+      res.byFile.get(rec.file).push({ title: rec.title, start: rec.start, end: rec.end })
+    }
+  }
+  hostMemo.set(key, res)
+  return res
+}
+
+// scanCases(root, config, file, src) -> Case[]; `file` is repo-relative POSIX.
+function scanCases(root, config, file, src) {
+  const host = hostCases(root, config)
+  const listed = host.ok ? host.byFile.get(file) : null
+  if (!listed) {
+    return scanCalls(src).map((c) => ({ ...c, cuttable: true, source: 'builtin' }))
+  }
+  const offsets = [0]
+  for (let i = 0; i < src.length; i++) if (src[i] === '\n') offsets.push(i + 1)
+  return listed.map((h) => {
+    if (h.start === null) {
+      return { start: 0, end: 0, callText: '', title: h.title, commentAbove: '', cuttable: false, source: 'host' }
+    }
+    const start = h.start - 1 < offsets.length ? offsets[h.start - 1] : src.length
+    const end = h.end < offsets.length ? offsets[h.end] : src.length
+    return { start, end, callText: '', title: h.title, commentAbove: src.slice(start, end), cuttable: true, source: 'host' }
+  })
+}
+
 // resolveReference(root, file, prefix) -> the cases in `file` whose title starts with `prefix` —
 // the one reading of a `→ reuses <file> :: <title>` pointer (lib/spec-sections.js's
 // parseDisposition), shared by the review coverage matrix, the drift check and the expiry sweep.
@@ -356,9 +436,8 @@ function resolveReference(root, file, prefix) {
   if (typeof prefix !== 'string' || !prefix) return []
   let src
   try { src = fs.readFileSync(path.join(root, file), 'utf8') } catch { return [] }
-  return scanCalls(src).filter((c) => c.title.startsWith(prefix))
+  return scanCases(root, readConfig(root), file, src).filter((c) => c.title.startsWith(prefix))
 }
-
 
 function countCases(root, config) {
   const files = listTestFiles(root, config)
@@ -366,9 +445,10 @@ function countCases(root, config) {
   for (const f of files) {
     let src
     try { src = fs.readFileSync(f, 'utf8') } catch { continue }
-    count += scanCalls(src).length
+    const rel = path.relative(root, f).split(path.sep).join('/')
+    count += scanCases(root, config, rel, src).length
   }
   return { count, files }
 }
 
-module.exports = { listTestFiles, scanCalls, scanDescribes, countCases, resolveReference }
+module.exports = { listTestFiles, scanCalls, scanDescribes, scanCases, hostCases, countCases, resolveReference }

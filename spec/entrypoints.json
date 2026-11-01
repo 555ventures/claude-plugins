@@ -291,7 +291,8 @@
     "entryPoints": [
       "spec/scripts/review-legs.js",
       "spec/commands/plan.md",
-      "spec/templates/spec.md"
+      "spec/templates/spec.md",
+      "spec/commands/doctor.md"
     ]
   },
   "spec/scripts/verdict.js": {

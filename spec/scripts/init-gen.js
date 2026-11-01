@@ -329,6 +329,11 @@ function validateProfile(p) {
   // `'k' in v` throws a bare TypeError for any primitive `v` (42, "x", ...) — a plain-object
   // guard ahead of each `in`-operator loop turns that crash into the same named exit-2 refusal
   // the missing-field case already uses.
+  if (p.config && p.config.testCaseScanner !== undefined &&
+      (typeof p.config.testCaseScanner !== 'string' || !p.config.testCaseScanner.trim())) {
+    console.error('init-gen: profile field "config.testCaseScanner" must be a non-empty shell command string — fix the profile JSON or drop the key (the built-in JavaScript walker then reads every test file) before running generate again')
+    process.exit(2)
+  }
   if (p.config) {
     mustBeObject('config.agentMap', p.config.agentMap)
     for (const k of ['tests', 'default']) if (!(k in p.config.agentMap)) fieldMissing(`config.agentMap.${k}`)
@@ -516,6 +521,9 @@ function buildManifestObject(hostRoot, p) {
   checks.push({ claim: 'spec-verify skill generated', kind: 'file', target: '.claude/skills/spec-verify/SKILL.md' })
   checks.push({ claim: 'run skill generated', kind: 'file', target: '.claude/skills/run/SKILL.md' })
   checks.push({ claim: 'patterns script executes cleanly', kind: 'exec', target: `bash ${p.config.patternsScript}` })
+  if (p.config.testCaseScanner) {
+    checks.push({ claim: 'test-case scanner lists at least one case', kind: 'exec', target: `${p.config.testCaseScanner} | grep -q .` })
+  }
   checks.push({
     claim: 'settings.json permissions merge applied', kind: 'exec',
     target: `jq -e '(.permissions.allow|type=="array") and (.permissions.deny|type=="array")' .claude/settings.json`,
@@ -618,6 +626,7 @@ function ensureGitattributes(hostRoot) {
 // never overridden.
 function deriveAllowEntries(config) {
   const cmds = [config.gateCommand, config.testCommand, config.setupCommand, 'bash ' + config.patternsScript]
+  if (config.testCaseScanner) cmds.push(config.testCaseScanner)
   if (config.runtime && !config.runtime.inert) {
     for (const k of ['bootCommand', 'readyCheck', 'seedCommand']) if (config.runtime[k]) cmds.push(config.runtime[k])
   }

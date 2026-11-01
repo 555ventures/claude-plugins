@@ -103,7 +103,7 @@ const { quote } = hostRun
 const { parseFilePlanRows, isTestsRow } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
 const { readConfig } = require('./lib/host-config')
-const { scanCalls } = require('./lib/scan-test-calls')
+const { scanCases } = require('./lib/scan-test-calls')
 const { getIgnoredPaths } = require('./lib/ignored-paths')
 const {
   extractSection, parseAcBullets, PRE_GREEN_REASONS, acIdOccurs, rejectedTrailingTagDetail,
@@ -543,7 +543,7 @@ if (dispositionCandidates.length) {
       const expected = disposition.kind === 'rewrites' ? 'red' : 'green'
       let src = null
       try { src = fs.readFileSync(path.join(root, disposition.file), 'utf8') } catch { src = null }
-      const matches = src === null ? [] : scanCalls(src).filter(c => c.title.startsWith(disposition.prefix))
+      const matches = src === null ? [] : scanCases(root, config, disposition.file, src).filter(c => c.title.startsWith(disposition.prefix))
       // not resolvable to exactly one pre-image test — fall back to the file's whole-file
       // colour, WARN naming the file/prefix/cause, never a finding on this path alone.
       if (matches.length !== 1) {

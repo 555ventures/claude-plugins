@@ -24,7 +24,7 @@
 // matcher but the shared lib/glob-match.js, or own the AC-ID grammar / `## ` section extraction
 // / AC-bullet parsing — those are lifted verbatim into lib/spec-sections.js,
 // the single authority a sibling script (promise-sweep.js) also imports;
-// or read a `→ reuses` pointer itself — lib/scan-test-calls.js's resolveReference is the one
+// or read a `→ reuses` pointer itself — lib/scan-test-calls.js's resolveReference (which reads the host's testCaseScanner listing when declared, else the built-in JavaScript walker) is the one
 // reading the lint, the coverage matrix, ac-drift.js and expire-tests.js share;
 // Critical tier (tier read by lib/frontmatter.js's fmValue, a missing or
 // unparseable value is standard): in skip-reconcile a skip mapped to THIS spec's own AC declaring

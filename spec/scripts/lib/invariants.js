@@ -65,7 +65,7 @@ function collectStrings(value, out) {
 function configCommandStrings(config) {
   const cfg = config || {}
   const out = []
-  for (const key of ['gateCommand', 'testCommand', 'postGateCommand', 'setupCommand', 'patternsScript']) {
+  for (const key of ['gateCommand', 'testCommand', 'postGateCommand', 'setupCommand', 'patternsScript', 'testCaseScanner']) {
     if (typeof cfg[key] === 'string') out.push(cfg[key])
   }
   collectStrings(cfg.runtime, out)

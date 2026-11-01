@@ -13,7 +13,9 @@
 // two things: a `[retired: <citation>]` tag whose value names no `specs/*.md` or `docs/adr/` path,
 // and a `SHALL CONTINUE TO` pin in a spec dated on or after EXPIRY_APPLIES_FROM that no
 // test-classified file cites (full-token, `acIdOccurs`) and whose own `→ reuses <file> :: <title>`
-// pointer, when it carries one, does not name exactly one case. Every other criterion of a done spec
+// pointer, when it carries one, does not name exactly one case (lib/scan-test-calls.js's
+// resolveReference reads the host's testCaseScanner listing when declared, else the built-in
+// JavaScript walker). Every other criterion of a done spec
 // has expired: its test was allowed to die at close (pins are the opt-in exception, 2026-09-11).
 // `/spec:doctor` runs this as check 17, advisory.
 //

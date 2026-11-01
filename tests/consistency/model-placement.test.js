@@ -4,6 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, SPEC, read } = require('../helpers')
+const { makeNoTestsHost, run } = require('../build/build-driver.fixtures')
 
 // specs/20261029/01-model-placement-refresh.md (AC-20261029-01-7, -8, -9, -10): model seats are
 // aliases with an explicit effort, review independence is a fresh context, no family rule.
@@ -23,12 +24,23 @@ test('AC-20261029-01-7: fix.md step 4 dispatches the spec:reviewer seat uncondit
     'step 4 still teaches the retired family rule that nothing in the plugin can enforce')
 })
 
-test('AC-20261029-01-8: the build driver wave step names the sonnet/medium worker seat and no doctrine claims "Orchestrator and workers: Sonnet"', () => {
-  const drv = read('spec/scripts/spec-build-driver.js')
-  assert.ok(drv.includes('Agent {model: sonnet, effort: medium}'),
-    'the wave step must print the worker seat with its effort, or workers run at the session default effort')
-  assert.ok(!drv.includes('Agent {model: sonnet} per layer'),
-    'the wave step still prints the effortless worker seat')
+test('AC-20261029-01-8 / AC-20261029-09-8: the build driver wave step prints the sonnet/medium worker seat from the policy defaults and no doctrine claims "Orchestrator and workers: Sonnet"', () => {
+  const h = makeNoTestsHost()
+  const r = run(h.root, h.spec)
+  assert.strictEqual(r.status, 0, 'setup precondition: the driver must print the first wave: ' + r.stdout + r.stderr)
+  assert.ok(r.stdout.includes('Agent {model: sonnet, effort: medium} per layer above and KEEP it'),
+    'the printed wave step must carry the worker seat with its effort, or workers run at the session default effort: ' + r.stdout)
+  assert.ok(!r.stdout.includes('Agent {model: sonnet} per layer'),
+    'the printed wave step still shows the effortless worker seat')
+  const o = makeNoTestsHost()
+  const cfgPath = path.join(o.root, '.claude/spec.config.json')
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+  cfg.policy = { models: { workers: { model: 'opus', effort: 'medium' } } }
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg))
+  o.g('add', '-A'); o.g('commit', '-q', '-m', 'policy')
+  const ro = run(o.root, o.spec)
+  assert.ok(ro.stdout.includes('Agent {model: opus, effort: medium} per layer above and KEEP it'),
+    'the wave step seat is hard-coded, so a host policy override of the worker seat never reaches the dispatch: ' + ro.stdout + ro.stderr)
   for (const f of ['spec/commands/run.md', 'spec/doctrine/stages/stage-build.md', 'spec/doctrine/stages/stage-review.md']) {
     assert.ok(!read(f).includes('Orchestrator and workers: Sonnet'),
       f + ' still claims the orchestrator is Sonnet, a seat that is the invoking session and cannot be enforced')

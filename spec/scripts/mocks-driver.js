@@ -49,7 +49,7 @@ const core = require('./lib/driver-core')
 const { writeOut, nowIso, flagArg } = core
 const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, setStatus } = require('./lib/mocks-ledger')
 const { parseSeedJourneys, beatHash } = require('./lib/surfaces')
-const { readConfig } = require('./lib/host-config')
+const { readConfig, policy } = require('./lib/host-config')
 const round = require('./lib/mocks-round')
 
 const die = core.makeDie('mocks-driver')
@@ -726,7 +726,7 @@ function printScreensStep(seed) {
         'approve all, or name the ones to change',
         'on `approve`, run each:',
         ...todo.map(([n]) => '  ' + driverCmd('--mark journey-approved --journey ' + n)),
-        ...(service ? [] : ['(this project is not connected to the review service — /spec:connect connects it, and the screens are then drawn and sent)'])],
+        ...(service || policy(root).reviewService !== 'hosted' ? [] : ['(this project is not connected to the review service — /spec:connect connects it, and the screens are then drawn and sent)'])],
       false,
       ['show the user exactly this:',
         ...todo.flatMap(([n, j]) => ['### ' + n, j.persona, ...j.beats.map((b) => b.n + '. "' + b.beat + '"')])])

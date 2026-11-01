@@ -119,9 +119,10 @@ Write the spec per the template. `status: draft`. While drafting:
    ```
 
 4. Flip `status: draft → hardened`.
-5. **Commit the lock:** `git add` the spec, `.claude/spec-runs.jsonl` and any brief step 2
-   wrote, then `git commit -m "chore(spec): lock {YYYYMMDD/##}" -- <those paths>` — those paths
-   only, whatever else is uncommitted.
+5. **Commit the lock:** `git add` the spec, `.claude/spec-runs.jsonl` (only when it is tracked — on a
+   `policy.ledgerCommitted: false` host the ledger is ignored and `git add` refuses it) and any brief step 2
+   wrote, then `git commit -m "chore(spec): lock {YYYYMMDD/##}" -- <those paths>` (the same
+   ledger rule) — those paths only, whatever else is uncommitted.
 6. **Report:** assemble slots — `outcome`: ✅ `spec hardened & locked — {path}`; `bullets`:
    one plain line per decision made; `warns`: notable spike findings; `queued`: one line
    per `spec-queue add` run in step 2 (omit the slot when step 2 wrote nothing); `next`: the verbatim

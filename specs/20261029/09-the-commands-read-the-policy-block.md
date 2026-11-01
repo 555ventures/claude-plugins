@@ -1,12 +1,14 @@
 ---
 date: 2026-10-31
-status: hardened
+status: implementing
+build_base: main
 tier: standard           # readers only: driver step text, doctrine sentences; no contract, hook, merge-back or verdict edit
 area: pipeline
 breaking: false
 depends_on: [specs/20261029/08-the-policy-round-at-init.md]
 brief: n/a
 open_markers: 0
+diff_base: e2e79bed16d8104222addaddbf773a17e00011a9
 ---
 
 # The commands read the policy block

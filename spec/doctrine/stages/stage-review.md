@@ -40,7 +40,7 @@ When the driver prints `DONE`, report (core § Console Output Style) — printed
 ## Rules — the judgments this session holds
 
 - **Reviewer dispatch (the REVIEWER step).** Dispatch **one** `Agent {subagent_type:
-  'spec:reviewer'}` (read-only; doctrine `spec/agents/reviewer.md`) with the spec path, diff
+  'spec:reviewer'}` (model and effort as the step prints them — from the host policy, defaulting to the seat table; read-only; doctrine `spec/agents/reviewer.md`) with the spec path, diff
   base, root (or frozen worktree), pipeline-rules path, and the evidence paths the driver's
   step prints — blind to the build session, artifacts on disk only. Write the reviewer's
   structured return to the file the driver names, then mark `reviewer-returned --file <json>`.
@@ -56,7 +56,7 @@ When the driver prints `DONE`, report (core § Console Output Style) — printed
 - **Dispositions (the DISPOSITIONS step).** Only the hard pool needs judgment; softs are advisory
   — printed once, recorded in the artifact and the ledger's `findings.soft`, never dispositioned;
   softs may ride a fix round (same workers, same files; the fix-delta pass re-reviews whatever changed), never queued. Dispatch **one** `Agent {subagent_type:
-  'spec:disposer'}` with the paths the driver's step prints; no memory of the build. Every
+  'spec:disposer'}` (model and effort printed from the host policy, defaulting to the seat table) with the paths the driver's step prints; no memory of the build. Every
   `fix` recommendation dispatches a worker (`sonnet` at `effort: medium`, core § Model Placement; via `agentMap`) with no question —
   reversible, re-reviewed by the fix-delta pass once you mark `fix-applied`. Every
   `waive`/`reject` goes to the user via `AskUserQuestion` (≤4 per call, core § Question
@@ -72,7 +72,7 @@ When the driver prints `DONE`, report (core § Console Output Style) — printed
   under Rationale in the same write as the status flip, and the step prints the softs under the
   advisory heading — none fixed here. A soft worth fixing after close is a Direct-lane commit
   through the host gate after merge-back; `--mark closed` refuses any drift between the committed
-  close tree and the judged tree. Apply the spec's Canonical Delta to `docs/canonical/{area}.md`. Fold the deviations sidecar:
+  close tree and the judged tree. Where `policy.testExpiry` is `off`, expiry is not run: the step prints `test expiry: off by policy`, `marks.testsExpiry` is `{off: "policy"}` and the review ledger row carries no `tests` key. Apply the spec's Canonical Delta to `docs/canonical/{area}.md`. Fold the deviations sidecar:
   recurring-shaped entries become one-line Gotchas entries (format per the host Gotchas section's
   header comment); one-offs go to the spec's Rationale; delete the sidecar. Queue any follow-up
   needing its own spec or the user's decision, never leave it narrated:
@@ -85,7 +85,7 @@ When the driver prints `DONE`, report (core § Console Output Style) — printed
   a script per core § Incident Policy) — record each eviction as one Rationale line. **Dispose every `.claude/agent-memory/` file this spec's diff touched** (carry, correct, or delete) plus what `node "$(spec-paths memory-sweep)"
   --root <root> --diff <files>` surfaces; a **carry** stamps `reviewed: YYYY-MM-DD`. Commit
   everything uncommitted per the driver's printed close-commit instruction. Never `--no-verify`.
-- **Merge strategy is derived, never asked; non-trivial conflicts always go through
+- **Merge strategy is derived, never asked** (where the host's `policy.mergeStrategy` names a strategy, the step strips inspect's `RECOMMEND:` line, prints `📌 Auto-picked <strategy> — host policy (veto anytime)` and pre-fills the mark with it; `derived` or absent is the text below); non-trivial conflicts always go through
   `AskUserQuestion`** (the MERGE step). Take `merge-back` inspect's `RECOMMEND` (absent or
   contradicted: `merge-commit`, cheapest to reverse), print `📌 Auto-picked <strategy> —
   <reason> (veto anytime)`, mark it — strategy has no product consequence and its delivery

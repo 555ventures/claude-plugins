@@ -45,7 +45,8 @@ Run **in parallel in a single message**:
 
 Run `bash "$(spec-paths merge-back)" inspect --root . --target <target> --source <source>` and
 take its `RECOMMEND:` line — the single home of the strategy heuristic. Print `📌 Auto-picked
-<strategy> — <reason> (veto anytime)` and proceed; the user vetoes by naming another strategy
+<strategy> — <reason> (veto anytime)` and proceed. Where the host's `policy.mergeStrategy` names a
+strategy (not `derived`), skip the `RECOMMEND:` read and print `📌 Auto-picked <strategy> — host policy (veto anytime)`; the user vetoes by naming another strategy
 (`git merge --no-ff`, `--ff-only`, `--squash`, or rebase then FF).
 
 ## Step 4: Execute Merge

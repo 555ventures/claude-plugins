@@ -55,13 +55,14 @@ Runs only when `.claude/spec-runs.jsonl` exists at repo root **and** the commit 
 a defect fix — the user said so, the invoker is `/spec:fix`, or the subject's conventional
 type is `fix`/`hotfix` — otherwise skip with zero output. Never blocks the commit, never offers.
 
-1. Run `node "$(spec-paths commit-coverage)" --root . --commit HEAD --json`. A non-zero
-   exit prints one `⚠️` line naming the exit code and skips the check.
+1. Run `node "$(spec-paths commit-coverage)" --root . --commit HEAD --json`, adding
+   `--primary <path>` for every file the root cause names (the `/spec:fix` statement or the
+   commit body) and none when no file is named. A non-zero exit prints one `⚠️` line naming the
+   exit code and skips the check.
 2. `landed` empty → invoker `/spec:fix`: append the `stage:"fix"` row (shape below); any other
    invoker: skip silently. A commit never earns both rows.
 3. `landed` non-empty → write one escape row, no offer, with these fields:
-   - `spec` and `reviewRunId` come from the `landed` entry whose `specs[0].reviewTs` is the
-     latest (tie: the lexically smaller spec path).
+   - `spec` and `reviewRunId` come from the output's `pick` — the script owns the choice.
    - `files` is every `landed[*].file`; `sha` is `HEAD` (40-hex); `via` is `spec-fix` when this
      session's `/spec:fix` invoked the commit, else `commit`.
    - `class` is the one question. With a root cause in session (a `/spec:fix` invoker, or the
@@ -75,8 +76,10 @@ type is `fix`/`hotfix` — otherwise skip with zero output. Never blocks the com
    ```
 
    Append it with `node "$(spec-paths escape-row)" --append --root . --row '<json>'`. Exit 3
-   (a row for that spec already shares a file) → print the stderr line, append nothing, and
-   continue the commit.
+   (a row for that spec already shares a file) → print the stderr line, append the
+   `stage:"fix"` row (step 4's shape, `via` and `reviewed` as there), print
+   `📌 escape row refused — fix row recorded (veto anytime)`, and continue the commit. A commit
+   never earns both rows.
 4. The `stage:"fix"` row is exactly ONE line appended to `.claude/spec-runs.jsonl`
    (`printf '%s\n' '<json>' >>`), paths/enums/booleans only — the root cause lives in the commit
    body the sha resolves to, never in the row:

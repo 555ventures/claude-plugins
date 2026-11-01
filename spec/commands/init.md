@@ -47,6 +47,9 @@ toolchain (real commands from `package.json` scripts / `Makefile` / `pyproject.t
 guess), UI stack, architecture, conventions, high-risk surfaces, runtime and observability.
 Profile the test runner's case shape too: when a stack's test files are not line-start
 `test(`/`it(` JavaScript calls (pytest, Go, RSpec, …), Phase 4 declares `config.testCaseScanner`.
+Profile the host's file shapes from the tree, never from a stack name: where its test files live
+and how they are named, which extensions its source files carry, and which dependency manifests it
+keeps; Phase 4 writes them as `config.fileShapes`.
 Interview the user via `AskUserQuestion` only for what the code cannot answer.
 
 **Author the generated skills' content** from the runtime & observability findings, for
@@ -233,6 +236,11 @@ Field-by-field, tracing each back to the phase that grounds it:
   `scripts/spec-test-cases.sh` and recorded in `manifestExtras`. `generate` exits 2 naming
   `config.testCaseScanner` when it is not a non-empty string, adds the manifest row proving the
   listing prints at least one case, and pre-authorizes the command.
+- **`config.fileShapes`** — always written, the three lists Phase 1 observed in the tree:
+  `{ "testGlobs": [...], "codeExtensions": [...], "manifests": [...] }` in the syntax
+  `$(spec-paths contract) § Required config keys` defines. `generate` validates the block and exits
+  2 naming `config.fileShapes.<key>` for the first bad key; `probe` reads `--test-globs` when
+  given, else the existing config's shapes, else the defaults.
 - **`config.policy`** — Phase 3's two policy rounds, only the keys the owner answered (a dismissed
   round contributes none); `generate` validates the block, merges it over the defaults and exits 2
   naming the first bad key. The chosen risk areas are ALSO written as bullets into

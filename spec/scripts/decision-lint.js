@@ -46,10 +46,11 @@ const { spawnSync } = require('child_process')
 const { extractSection, DECISION_LINT_APPLIES_FROM, STRUCTURAL_LINT_APPLIES_FROM } = require('./lib/spec-sections')
 const { fmValue } = require('./lib/frontmatter')
 const { parseFilePlanRows } = require('./lib/file-plan')
-const { readConfigStrict, readPipelineRules, configExists, CONFIG_RELPATH } = require('./lib/host-config')
+const { readConfig, readConfigStrict, readPipelineRules, configExists, CONFIG_RELPATH } = require('./lib/host-config')
+const { fileShapes, isManifest } = require('./lib/file-shapes')
 const { writeOut } = require('./lib/driver-io')
+let shapes
 
-const MANIFEST_RE = /^(package\.json|package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb|bun\.lock|pyproject\.toml|poetry\.lock|Pipfile|Pipfile\.lock|requirements[^/]*\.txt|Cargo\.toml|Cargo\.lock|go\.mod|go\.sum|Gemfile|Gemfile\.lock|composer\.json|composer\.lock)$/
 const RESTRICT_RE = /\b(cannot|can't|may not|must not|never)\s+(be\s+)?(edit|delet|undo|undone|restor|reassign|reactivat|renam|remov|fix|correct)\w*|\b(immutable|write-once|frozen to)\b|\bonly (an? |the )?[A-Z][a-z]+s? (can|may)\b|\b(restricted|limited) to (an? |the )?[A-Z][a-z]+s?\b|\brequires? a reason\b|\bwith(out)? (a )?reason only\b/i
 const DEFER_RE = /\b(in|to|for) a (later|follow-up|future|separate) spec\b|\bnot (offered|now|in this spec)\b|\bdeferred (to|until)\b|\b(later|follow-up|future) spec\b|\bcheap(ly)? later\b|\babsent now\b/i
 const QUEUE_ID_RE = /\bq\d+\b/g
@@ -96,6 +97,7 @@ if (decisions === null) die(specPath + ' has no ## Decisions section — add one
 
 // Host rules: fail-closed, never "no strict surfaces".
 if (!configExists(root)) die('no readable ' + CONFIG_RELPATH + ' under --root ' + root + ' — run /spec:init (or pass --root <host repo>)')
+shapes = fileShapes(readConfig(root))
 let riskTiers
 try {
   const rules = readPipelineRules(root, readConfigStrict(root))
@@ -166,7 +168,7 @@ if (!dateMatch || dateMatch[1] >= STRUCTURAL_LINT_APPLIES_FROM) {
 
   for (const r of parseFilePlanRows(specText)) {
     for (const p of r.paths) {
-      if (!MANIFEST_RE.test(path.basename(p))) continue
+      if (!isManifest(path.basename(p), shapes)) continue
       if (r.summary === 'no dependency change') continue
       notices.push({ kind: 'dependency-row', path: p })
       if (r.summary === null || !/`[^`]+`/.test(r.summary)) {

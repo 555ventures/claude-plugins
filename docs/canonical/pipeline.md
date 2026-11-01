@@ -190,6 +190,6 @@ shared with the promise sweep) and `/spec:doctor` check 17 prints each criterion
 test-classified file cites. Sanctions are the review-time ones — `SHALL CONTINUE TO`,
 `[oracle:]`, `[pre-green:]` — plus `[retired: <specs/… or docs/adr/… path>]`, the one edit a
 done spec accepts: the citation of the decision that retired the behaviour. An uncited
-`[retired:]` is itself a finding. Test classification is the host's `testGlobs` or
-`DEFAULT_TEST_GLOBS` (`lib/host-config.js`), the same set the at-risk leg walks; fixture
+`[retired:]` is itself a finding. Test classification is `lib/file-shapes.js`'s `isTestClassified` over
+the host's `fileShapes.testGlobs` or its defaults, the same set the at-risk leg walks; fixture
 directories never count as citations.

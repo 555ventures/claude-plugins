@@ -112,7 +112,7 @@ test('AC-20260911-04-10 (rewrites AC-20260911-02-5, full scope): WHEN review-leg
   // throws), forcing count-tests.js's own child process to exit non-zero with no parseable
   // stdout — the "broken instrument" fixture this AC exists to name. Confirmed executed against
   // the untouched pre-image: count-tests.js exits 1 with an empty stdout under this config.
-  cfg.testGlobs = [null]
+  cfg.fileShapes = { testGlobs: [null] }
   const { dir, base } = makeReviewLegsHost('tests-leg-countfail', {
     specDate: '20260911', ordinal: '97', acId: 'AC-20260911-97-1',
     config: cfg,
@@ -121,7 +121,7 @@ test('AC-20260911-04-10 (rewrites AC-20260911-02-5, full scope): WHEN review-leg
   const direct = runNode('scripts/count-tests.js', ['--root', dir, '--json'])
   assert.notStrictEqual(direct.status, 0,
     'setup precondition: count-tests.js must genuinely crash (non-zero exit) against this ' +
-    'testGlobs:[null] config, or this fixture never exercises a failed instrument at all: ' +
+    'fileShapes.testGlobs:[null] config, or this fixture never exercises a failed instrument at all: ' +
     direct.stdout + ' / ' + direct.stderr)
 
   const manifest = path.join(tmpdir('tests-leg-countfail-out'), 'manifest.jsonl')

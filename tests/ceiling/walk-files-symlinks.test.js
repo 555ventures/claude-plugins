@@ -29,7 +29,7 @@ test('listTestFiles classifies a test file that is itself a symlink to a regular
   fs.symlinkSync(path.join(root, 'shared/linked.test.js'), path.join(root, 'tests/linked.test.js'), 'file')
   fs.symlinkSync(path.join(root, 'vendor'), path.join(root, 'tests/node_modules'), 'dir')
 
-  const rel = listTestFiles(root, { testGlobs: ['tests/**/*.test.js'] })
+  const rel = listTestFiles(root, { fileShapes: { testGlobs: ['tests/**/*.test.js'] } })
     .map((f) => path.relative(root, f).split(path.sep).join('/')).sort()
 
   assert.deepStrictEqual(rel, ['tests/linked.test.js', 'tests/real.test.js'],

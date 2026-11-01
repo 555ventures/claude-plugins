@@ -30,6 +30,11 @@ numbers bound the case and any tag comment above it; blank lines skipped, any ot
 malformed; absent = every test file is read by the built-in JavaScript walker. A file the
 listing names is never read by the walker; a case without a span is never cut by the expiry
 sweep and a host-named file is never deleted),
+`fileShapes` (`{ "testGlobs"?: string[], "codeExtensions"?: string[], "manifests"?: string[] }` — the
+host's file shapes: `testGlobs` and `manifests` in `lib/glob-match.js` syntax, a `manifests` entry
+matching a path's basename (e.g. `*.csproj`, `requirements*.txt`); `codeExtensions` entries start
+with `.`; each key absent = that key's stack-neutral default in `lib/file-shapes.js`, the block
+absent = all three defaults),
 `orchestratorOnly` (array of repo-relative path globs in `lib/glob-match.js` syntax — `**` any run
 of segments, `*` within one segment, everything else literal, no braces — naming the host's
 orchestrator-only File Plan paths; the build driver never lists a matching row in a worker's

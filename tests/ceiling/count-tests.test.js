@@ -381,6 +381,7 @@ function writeScanLibVariant(outPath, srcText) {
   const patched = srcText
     .replace("require('./host-config')", `require(${JSON.stringify(path.join(libDir, 'host-config.js'))})`)
     .replace("require('./glob-match')", `require(${JSON.stringify(path.join(libDir, 'glob-match.js'))})`)
+    .replace("require('./file-shapes')", `require(${JSON.stringify(path.join(libDir, 'file-shapes.js'))})`)
     .replace("require('./walk-files')", `require(${JSON.stringify(path.join(libDir, 'walk-files.js'))})`)
   fs.writeFileSync(outPath, patched)
   delete require.cache[outPath]

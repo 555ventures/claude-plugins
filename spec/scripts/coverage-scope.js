@@ -46,6 +46,7 @@
 const fs = require('fs')
 const path = require('path')
 const { readConfig } = require('./lib/host-config')
+const { fileShapes, isCodeFile } = require('./lib/file-shapes')
 const { listTestFiles } = require('./lib/scan-test-calls')
 
 const USAGE = 'coverage-scope.js --root <dir> [--json]'
@@ -56,10 +57,6 @@ const USAGE = 'coverage-scope.js --root <dir> [--json]'
 const SKIP_DIR_NAMES = new Set([
   '.git', 'node_modules', 'fixtures', '__fixtures__', 'dist', 'build', 'coverage', 'vendor',
   '.next', '.venv', '__pycache__', 'specs', 'docs',
-])
-const CODE_EXT = new Set([
-  '.js', '.mjs', '.cjs', '.ts', '.tsx', '.sh', '.bash', '.py', '.rb', '.go', '.rs', '.java',
-  '.kt', '.php', '.ex', '.exs', '.pl', '.ps1',
 ])
 const MAX_BYTES = 512 * 1024
 
@@ -110,6 +107,7 @@ try {
 if (!rootStat || !rootStat.isDirectory()) die('usage: ' + USAGE + ' — --root must name an existing directory')
 
 const relPosix = (abs) => path.relative(root, abs).split(path.sep).join('/')
+const shapes = fileShapes(readConfig(root))
 
 function walk(dir, out) {
   let entries
@@ -124,7 +122,7 @@ function walk(dir, out) {
       if (SKIP_DIR_NAMES.has(entry.name)) continue
       if (relPosix(full) === '.claude/worktrees') continue
       walk(full, out)
-    } else if (entry.isFile() && CODE_EXT.has(path.extname(entry.name))) {
+    } else if (entry.isFile() && isCodeFile(entry.name, shapes)) {
       out.push(full)
     }
   }

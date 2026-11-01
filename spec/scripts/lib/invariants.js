@@ -9,9 +9,9 @@
 // already retired once).
 // Owner: specs/20260911/03-tests-expire-at-close.md.
 //
-// The universe is every `.js`/`.mjs`/`.cjs`/`.ts`/`.sh` file under `root`, outside the skip dirs
+// The universe is every code file (lib/file-shapes.js `isCodeFile`) under `root`, outside the skip dirs
 // (`.git`, `node_modules`, `fixtures`, `__fixtures__`, `.claude/worktrees`) and outside the host's
-// test-classified globs (config `testGlobs`, else `DEFAULT_TEST_GLOBS`) — a test file is never a
+// test-classified globs (`isTestClassified`) — a test file is never a
 // root and never an edge target. Roots are every universe file whose basename is named in: the
 // host config's `gateCommand`/`testCommand`/`postGateCommand`/`setupCommand`/`patternsScript`
 // string values, every string found (recursively) inside `runtime`/`design`, every `provision`
@@ -38,11 +38,10 @@
 
 const fs = require('fs')
 const path = require('path')
-const { readConfig, DEFAULT_TEST_GLOBS } = require('./host-config')
-const { globMatch } = require('./glob-match')
+const { readConfig } = require('./host-config')
+const { fileShapes, isTestClassified, isCodeFile } = require('./file-shapes')
 const { walkFiles } = require('./walk-files')
 
-const TRACKED_EXT_RE = /\.(js|mjs|cjs|ts|sh)$/
 const PIPELINE_ENTRYPOINTS = ['review-legs.js', 'spec-review-driver.js', 'spec-build-driver.js', 'verdict.js']
 
 function relPosix(root, abs) {
@@ -105,12 +104,19 @@ function hookCommandStrings(root, allFiles) {
 // only ever cares about the final segment.
 const NAME_EXT_RE = /[\w.\-/]+\.(?:js|mjs|cjs|ts|sh)\b/g
 
-function basenamesIn(text) {
+function basenamesIn(text, re = NAME_EXT_RE) {
   const out = []
   let m
-  NAME_EXT_RE.lastIndex = 0
-  while ((m = NAME_EXT_RE.exec(text))) out.push(path.basename(m[0]))
+  re.lastIndex = 0
+  while ((m = re.exec(text))) out.push(path.basename(m[0]))
   return out
+}
+
+// Roots are named in host commands, so their extension set is the host's code extensions
+// (a `python3 tools/run.py` gate script is a root); the edge walk keeps the JS-shaped regex.
+function rootNameRe(shapes) {
+  const exts = shapes.codeExtensions.map((e) => e.slice(1).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  return new RegExp('[\\w.\\-/]+\\.(?:' + exts.join('|') + ')\\b', 'g')
 }
 
 // Documented approximation (see module header) — good enough to keep a stray comment from
@@ -130,12 +136,11 @@ function deriveInvariants(root, config) {
   const allFiles = walkFiles(absRoot)
 
   const cfg = config || {}
-  const configTestGlobs = Array.isArray(cfg.testGlobs) ? cfg.testGlobs : DEFAULT_TEST_GLOBS
-  const isTestClassified = (rel) => configTestGlobs.some((g) => globMatch(g, rel))
+  const shapes = fileShapes(cfg)
 
   const universe = allFiles
     .map((f) => relPosix(absRoot, f))
-    .filter((rel) => TRACKED_EXT_RE.test(rel) && !isTestClassified(rel))
+    .filter((rel) => isCodeFile(rel, shapes) && !isTestClassified(rel, shapes))
     .sort()
 
   const universeByBasename = new Map()
@@ -189,8 +194,9 @@ function deriveInvariants(root, config) {
 
   // ---- roots -----------------------------------------------------------------------------------
   const rootBasenames = new Set()
-  for (const s of configCommandStrings(cfg)) for (const b of basenamesIn(s)) rootBasenames.add(b)
-  for (const s of hookCommandStrings(absRoot, allFiles)) for (const b of basenamesIn(s)) rootBasenames.add(b)
+  const rootRe = rootNameRe(shapes)
+  for (const s of configCommandStrings(cfg)) for (const b of basenamesIn(s, rootRe)) rootBasenames.add(b)
+  for (const s of hookCommandStrings(absRoot, allFiles)) for (const b of basenamesIn(s, rootRe)) rootBasenames.add(b)
   for (const b of PIPELINE_ENTRYPOINTS) rootBasenames.add(b)
 
   const roots = new Set()

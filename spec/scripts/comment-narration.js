@@ -34,17 +34,11 @@ const { spawnSync } = require('child_process')
 const USAGE = 'usage: node comment-narration.js --root <dir> | --rules-mode <hostRoot> | ' +
   '--root <dir> --code-identical <ref>'
 
+const { writeOut: libWrite } = require('./lib/sync-write')
+
+// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
 function syncWrite(fd, str) {
-  const buf = Buffer.from(str, 'utf8')
-  let off = 0
-  while (off < buf.length) {
-    try {
-      off += fs.writeSync(fd, buf, off, buf.length - off)
-    } catch (e) {
-      if (e.code === 'EAGAIN') continue
-      throw e
-    }
-  }
+  libWrite(fd, str)
 }
 function writeOut(str) { syncWrite(1, str.endsWith('\n') ? str : str + '\n') }
 function writeErr(str) { syncWrite(2, str.endsWith('\n') ? str : str + '\n') }

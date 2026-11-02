@@ -1,12 +1,14 @@
 ---
 date: 2026-11-01
-status: hardened
+status: implementing
+build_base: main
 tier: critical
 area: scripts
 breaking: false
 depends_on: [specs/20261101/09-the-five-writers-that-never-retried.md]
 brief: n/a
 open_markers: 0
+diff_base: 2b86c28641dc1915d97dd2a9a68af9a80575310e
 ---
 
 # One writer, and no copies left

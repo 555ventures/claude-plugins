@@ -319,7 +319,7 @@ function runJsonOverPipeAndFile(dir, jsonArgs) {
   return { fullBytes, pipeRun }
 }
 
-test('spec-status.js --json survives a real pipe intact at a fixture size proven to exceed the 64 KiB pipe buffer, never silently truncating stdout while still exiting 0', () => {
+test('spec-status.js --json survives a real pipe intact at a fixture size proven to exceed the 64 KiB pipe buffer, never silently truncating stdout while still exiting 0 (AC-20261101-10-4)', () => {
   const dir = bigQueueHost()
   const { fullBytes, pipeRun } = runJsonOverPipeAndFile(dir, ['--json'])
   assert.ok(fullBytes.length > 65536,

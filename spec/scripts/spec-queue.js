@@ -199,20 +199,11 @@ function appendArchive(gone) {
   fs.renameSync(tmpPath, ARCHIVE_PATH)
 }
 
-// stdout for payloads: synchronous and looped, so a large print followed by process.exit is
-// never truncated at the pipe buffer.
+const { writeOut: syncWrite } = require('./lib/sync-write')
+
+// stdout for payloads: spec/scripts/lib/sync-write.js's header explains the pipe truncation and EPIPE handling.
 function out(text) {
-  const buf = Buffer.from(text + '\n')
-  let off = 0
-  while (off < buf.length) {
-    try {
-      off += fs.writeSync(1, buf, off)
-    } catch (e) {
-      if (e.code === 'EAGAIN') continue
-      if (e.code === 'EPIPE') return
-      throw e
-    }
-  }
+  syncWrite(1, text + '\n')
 }
 
 function archivedItem(ref) {

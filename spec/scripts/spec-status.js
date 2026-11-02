@@ -79,19 +79,10 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
-// The 64 KiB process.exit stdout-truncation mechanism this synchronous writer exists to avoid:
-// spec/scripts/lib/driver-io.js.
+const { writeOut: syncWrite } = require('./lib/sync-write')
+// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
 function writeOut(str) {
-  const buf = Buffer.from(str + '\n', 'utf8')
-  let off = 0
-  while (off < buf.length) {
-    try {
-      off += fs.writeSync(1, buf, off, buf.length - off)
-    } catch (e) {
-      if (e.code === 'EAGAIN') continue
-      throw e
-    }
-  }
+  syncWrite(1, str + '\n')
 }
 const { parseFilePlan } = require('./lib/file-plan')
 // sinceLastRelease feeds the

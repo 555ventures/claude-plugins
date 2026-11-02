@@ -617,14 +617,13 @@ if (dispositionCandidates.length) {
 }
 
 // ---- output -------------------------------------------------------------------------------------
-// The 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in full
-// at spec/scripts/lib/driver-io.js's writeOut.
+const { writeOut: syncWrite } = require('./lib/sync-write')
+// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
 // Local to this script: process.exitCode is set instead of calling process.exit(), so Node drains
 // stdout naturally before exiting.
 
 function writeAll(fd, buf) {
-  let written = 0
-  while (written < buf.length) written += fs.writeSync(fd, buf, written)
+  syncWrite(fd, buf.toString('utf8'))
 }
 
 if (jsonOut) {

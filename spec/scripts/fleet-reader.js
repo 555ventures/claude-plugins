@@ -496,13 +496,12 @@ const cleanContradicted = computeCleanContradicted(reposData)
 const cleanByVia = computeCleanByVia(reposData)
 const driftCensus = computeDriftCensus(reposData)
 
-// The 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in full
-// at spec/scripts/lib/driver-io.js's writeOut.
+const { writeOut: syncWrite } = require('./lib/sync-write')
+// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
 // Local to this script: falling off the end with nothing else keeping the event loop alive exits
 // 0 on its own, so neither branch below calls process.exit(0).
 function writeAll(fd, buf) {
-  let written = 0
-  while (written < buf.length) written += fs.writeSync(fd, buf, written)
+  syncWrite(fd, buf.toString('utf8'))
 }
 
 if (json) {

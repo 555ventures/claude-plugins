@@ -55,3 +55,45 @@ for (const name of FIVE) {
       'the script must import the shared writer exactly once, else it still carries its own copy: ' + reqs.length + ' hits')
   })
 }
+
+// specs/20261101/10-one-writer-and-no-copies-left.md: AC-20261101-10-1 pins the single-writer sweep
+// over spec/scripts/; AC-20261101-10-2 pins spec-status.js --json under a closed stdout by execution.
+
+function walkFiles(dir) {
+  const out = []
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name)
+    if (e.isDirectory()) out.push(...walkFiles(p))
+    else out.push(p)
+  }
+  return out
+}
+
+function stripComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\/|(^|\s)\/\/.*$/gm, '$1')
+}
+
+test('AC-20261101-10-1: writeSync( occurs, comments stripped, in exactly one file under spec/scripts/ — lib/sync-write.js', () => {
+  const lib = path.join(ROOT, 'spec/scripts/lib/sync-write.js')
+  const offenders = walkFiles(path.join(ROOT, 'spec/scripts'))
+    .filter((p) => p !== lib && stripComments(fs.readFileSync(p, 'utf8')).includes('writeSync('))
+    .map((p) => path.relative(ROOT, p))
+  assert.ok(stripComments(fs.readFileSync(lib, 'utf8')).includes('writeSync('),
+    'the shared writer must itself hold the one writeSync loop, else the sweep guards nothing')
+  assert.deepStrictEqual(offenders, [],
+    'each listed script carries a private copy of the synchronous writer that rethrows EPIPE — route it through lib/sync-write.js: ' + offenders.join(', '))
+})
+
+test('AC-20261101-10-2: spec-status.js --root <empty dir> --json spawned with its stdout destroyed exits 0 with no EPIPE trace, matching the open run', async () => {
+  const dir = tmpdir('sync-write-spec-status')
+  const open = runNode('scripts/spec-status.js', ['--root', dir, '--json'])
+  assert.strictEqual(open.status, 0, 'the open run must succeed so the closed run has a baseline: ' + open.stderr)
+  assert.deepStrictEqual(JSON.parse(open.stdout), { briefs: [], specs: [], superseded: [], anomalies: [] },
+    'the open run must print the empty four-key payload, else the closed run exercises no write: ' + open.stdout)
+  const closed = await runWithClosedStdout('spec-status', ['--root', dir, '--json'])
+  assert.strictEqual(closed.signal, null, 'the script must exit on its own, not die by signal: ' + closed.signal)
+  assert.strictEqual(closed.code, 0,
+    'a reader that closed early leaves nothing to deliver, so the script keeps exit 0 — exit 1 means EPIPE escaped the writer as an uncaught exception: ' + closed.text)
+  assert.doesNotMatch(closed.text, /EPIPE|Error:|at writeOut/,
+    'stderr must carry no EPIPE stack trace from the writer: ' + closed.text)
+})

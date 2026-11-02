@@ -34,15 +34,11 @@ const WIDTH_MAX = 3840
 const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 const CONTRACT = path.join(__dirname, '..', 'templates', 'walkthrough', 'contract.json')
 
+const { writeOut: syncWrite } = require('./lib/sync-write')
+
+// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
 function writeFd(fd, str) {
-  const buf = Buffer.from(str, 'utf8')
-  let off = 0
-  while (off < buf.length) {
-    try { off += fs.writeSync(fd, buf, off, buf.length - off) } catch (e) {
-      if (e.code === 'EAGAIN') continue
-      throw e
-    }
-  }
+  syncWrite(fd, str)
 }
 
 class Refusal extends Error {

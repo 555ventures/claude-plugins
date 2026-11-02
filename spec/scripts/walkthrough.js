@@ -49,19 +49,10 @@ const VERBS = {
   mark: ['round', 'status'],
 }
 
-// A script that prints a payload and exits routes through a synchronous writer — a piped
-// stdout write followed by process.exit truncates at the pipe buffer.
+const { writeOut: syncWrite } = require('./lib/sync-write')
+// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
 function writeOut(fd, str) {
-  const buf = Buffer.from(str + '\n', 'utf8')
-  let off = 0
-  while (off < buf.length) {
-    try {
-      off += fs.writeSync(fd, buf, off, buf.length - off)
-    } catch (e) {
-      if (e.code === 'EAGAIN') continue
-      throw e
-    }
-  }
+  syncWrite(fd, str + '\n')
 }
 
 const out = (s) => writeOut(1, s)

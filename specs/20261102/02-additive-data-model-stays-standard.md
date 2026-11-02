@@ -1,6 +1,6 @@
 ---
 date: 2026-11-02
-status: implementing
+status: done
 tier: standard
 area: plan-lock
 breaking: false
@@ -136,6 +136,12 @@ heuristic over free text; a wrapped line will miss it, which A3 accepts.
 Collision-closure waives (executes leg): `tests/host-config/file-shapes.test.js` and
 `tests/spec-paths.test.js` execute decision-lint only through its manifest-row and key-resolution
 paths, which D1/D2 leave untouched, so neither is a File Plan row.
+
+Build deviations (2026-11-02, folded at close): AC-20261102-02-5's `rewrites` pointer named a
+case an earlier close's expiry had already removed, so the build recreated it under that title
+carrying only this spec's pins (the § Gotchas expired-MODIFY shape). D1a records that the
+carve-out also requires the contradiction predicate to find nothing, as Behavior's own "two
+findings" sentence and AC-20261102-02-3 state.
 
 ## Canonical Delta
 

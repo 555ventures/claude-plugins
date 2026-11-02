@@ -98,3 +98,26 @@ test('AC-20261025-02-6: lib/escape-row.js exports exactly CLASS_ID_RE, VIA, esca
     ['CLASS_ID_RE', 'VIA', 'escapeFiles', 'validateEscapeRow'],
     'an extra export (amendment helpers, legacy enums) keeps a retired shape importable and invites the next reader to depend on it')
 })
+
+test('AC-20261101-11-8: --json counts a spec-superseded and a shipped-file-deleted row under byClass and registry, as unjoined escapes, in shape in the drift census', () => {
+  const root = tmpdir('fleet-supersession-classes')
+  const sha = 'a'.repeat(40)
+  mkRepo(root, 'repo-a', [
+    slim({ spec: 'specs/20261004/01-x.md', files: ['specs/20261004/01-x.md'], class: 'spec-superseded', sha, via: 'commit', supersededBy: 'D49' }),
+    slim({ spec: 'specs/20261001/05-zone-rules.md', files: ['src/zones/rule.ts'], class: 'shipped-file-deleted', sha, via: 'review', supersededBy: 'specs/20261017/03-workers-ingress.md' }),
+  ])
+  const out = runJson(root)
+  assert.deepStrictEqual(out.escapes.byClass, { 'shipped-file-deleted': 1, 'spec-superseded': 1 },
+    'a direction flip counted under no class leaves core Incident Policy unable to earn a guard for the largest loss: ' + JSON.stringify(out.escapes))
+  assert.strictEqual(out.escapes.total, 2, 'both rows are escapes and must both be totalled: ' + JSON.stringify(out.escapes))
+  const registry = JSON.stringify(out.escapes.registry)
+  assert.ok(registry.includes('spec-superseded') && registry.includes('shipped-file-deleted'),
+    'both classes must appear in the registry or a recurrence of either is invisible to the guard-earning rule: ' + registry)
+  assert.strictEqual(out.cleanContradicted.fleet.escapesUnjoined, 2,
+    'null-reviewRunId rows are unjoined escapes — folding them into either side of the false-CLEAN rate misstates it: ' + JSON.stringify(out.cleanContradicted.fleet))
+  assert.strictEqual(out.cleanContradicted.fleet.contradicted, 0,
+    'a direction flip never contradicts a review verdict: ' + JSON.stringify(out.cleanContradicted.fleet))
+  const repo = out.driftCensus.byRepo.find(r => r.name === 'repo-a')
+  assert.strictEqual(repo.inShape, 2, 'both rows must be in shape — the extra supersededBy key and review via must not read as drift: ' + JSON.stringify(repo))
+  assert.deepStrictEqual(repo.drift, {}, 'no drift bucket may fire for the two new rows: ' + JSON.stringify(repo))
+})

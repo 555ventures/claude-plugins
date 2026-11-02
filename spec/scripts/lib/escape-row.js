@@ -7,12 +7,13 @@
 //
 // What this deliberately does NOT do: read or write a ledger file (fleet-reader.js owns
 // discovery), decide the effective class for a row (a row's class is its own `class` field),
-// or offer a CLI of its own.
+// or offer a CLI of its own. `supersededBy` (string or null) rides on supersession rows as an extra
+// key this validator ignores by contract.
 //
 // Exit codes: n/a (library, not an entrypoint).
 
 const CLASS_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
-const VIA = ['commit', 'spec-fix', 'manual', 'backfill']   // backfill: legacy rows only
+const VIA = ['commit', 'spec-fix', 'manual', 'backfill', 'review']   // backfill: legacy rows only; review: the merge-back writer
 
 // escapeFiles(row) -> string[]: every file an escape row names — `files` when an array, else
 // the legacy single `file` string, else [].

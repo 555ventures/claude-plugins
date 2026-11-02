@@ -28,6 +28,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { readConfig } = require('./lib/host-config')
+const { writeOut: syncWrite } = require('./lib/sync-write')
 
 function usage() {
   process.stderr.write('usage: design-contract-check.js --root <dir> [--json] [--rules <file> --kit <dir> --tokens <file>]\n')
@@ -46,12 +47,9 @@ function parseArgs(argv) {
   return out
 }
 
+// Routes through lib/sync-write.js — see its header for why a bare write + exit truncates.
 function writeOut(fd, text) {
-  const buf = Buffer.from(text, 'utf8')
-  let off = 0
-  while (off < buf.length) {
-    off += fs.writeSync(fd, buf, off, buf.length - off)
-  }
+  syncWrite(fd, text)
 }
 
 // Finds the first markdown table block (a run of `|...|` lines) in `text`. Returns the data

@@ -33,6 +33,7 @@
 //      root directory; stderr prints the usage line either way.
 
 const fs = require('fs')
+const { writeOut: syncWrite } = require('./lib/sync-write')
 const path = require('path')
 
 const SKIP_DIRS = new Set([
@@ -42,15 +43,9 @@ const SKIP_DIRS = new Set([
 
 const USAGE = 'usage: workspace-scan.js --root <dir> [--json] [--depth N]'
 
-// Writes go through a writeSync loop, never process.stdout.write + process.exit — a pipe
-// (rather than a tty) truncates a large single write at the 64KiB buffer boundary while still
-// reporting a clean exit if the process exits before the pipe drains.
+// Routes through lib/sync-write.js — see its header for why a bare write + exit truncates.
 function writeOut(fd, str) {
-  const buf = Buffer.from(str, 'utf8')
-  let off = 0
-  while (off < buf.length) {
-    off += fs.writeSync(fd, buf, off, buf.length - off)
-  }
+  syncWrite(fd, str)
 }
 
 function fail(msg) {

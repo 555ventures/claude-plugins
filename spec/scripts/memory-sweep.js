@@ -14,14 +14,16 @@
 // Usage: node memory-sweep.js --root <repo root> --diff <file with one changed path per line>
 //        [--ledger <path>]   (default: <root>/.claude/spec-runs.jsonl)
 // Scope: <root>/.claude/agent-memory/*/*.md, excluding MEMORY.md index files.
-// diff-hit:    a path-shaped token in the note body ([A-Za-z0-9_./-]+\.(js|mjs|cjs|sh|md|json))
-//              equals a changed path, or its basename equals a changed path's basename.
+// diff-hit:    the note body contains a changed path verbatim, or a changed path's dotted
+//              basename as a whole token (bounded by a char outside [A-Za-z0-9_./-]); no
+//              extension list.
 // ttl-expired: count of ledger rows with "stage":"review" whose ts postdates the note's last
 //              git commit date (git log -1 --format=%cI -- <note>, run with cwd=<root>) is >= 10.
+//              A note git has never seen ages from its file mtime (source 'mtime', else 'commit').
 //              At most 3 ttl-expired notes per run, oldest git date first. A note already
 //              surfaced as diff-hit is never also surfaced as ttl-expired.
 // stdout (always, sole output): {"notes":[{"path":"...","reason":"diff-hit"|"ttl-expired",
-//   "matched":"<token or ISO date>"}]}
+//   "matched":"<path or ISO date>","source":"commit"|"mtime" (ttl-expired only)}]}
 //
 // Exit codes:
 //   0  sweep ran — with or without findings (NEVER a verdict input; nothing but the close-step
@@ -124,16 +126,19 @@ function relPath(repoRoot, abs) {
   return path.relative(repoRoot, abs).split(path.sep).join('/')
 }
 
-const TOKEN_RE = /[A-Za-z0-9_./-]+\.(?:js|mjs|cjs|sh|md|json)/g
+function escapeRe(t) {
+  return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 
 function findDiffHit(body, diffLines) {
-  const tokens = body.match(TOKEN_RE) || []
-  for (const token of tokens) {
-    for (const changed of diffLines) {
-      if (token === changed || path.basename(token) === path.basename(changed)) {
-        return token
-      }
-    }
+  for (const changed of diffLines) {
+    if (body.includes(changed)) return changed
+  }
+  for (const changed of diffLines) {
+    const base = path.basename(changed)
+    if (!base.includes('.')) continue
+    const re = new RegExp('(^|[^A-Za-z0-9_./-])' + escapeRe(base) + '($|[^A-Za-z0-9_./-])')
+    if (re.test(body)) return base
   }
   return null
 }
@@ -166,20 +171,28 @@ for (const abs of notePaths) {
     diffHits.push({ path: rel, reason: 'diff-hit', matched: matchedToken })
     continue
   }
-  const commitDate = lastCommitDate(root, rel)
-  if (!commitDate) continue
+  let commitDate = lastCommitDate(root, rel)
+  let source = 'commit'
+  if (!commitDate) {
+    try {
+      commitDate = fs.statSync(abs).mtime.toISOString()
+    } catch (e) {
+      continue
+    }
+    source = 'mtime'
+  }
   const commitTime = Date.parse(commitDate)
   const postdatingCount = ledgerRows.reduce((n, ts) => {
     const t = Date.parse(ts)
     return (!Number.isNaN(t) && t > commitTime) ? n + 1 : n
   }, 0)
   if (postdatingCount >= 10) {
-    ttlCandidates.push({ path: rel, reason: 'ttl-expired', matched: commitDate, commitTime })
+    ttlCandidates.push({ path: rel, reason: 'ttl-expired', matched: commitDate, source, commitTime })
   }
 }
 
 ttlCandidates.sort((a, b) => a.commitTime - b.commitTime)
-const ttlSurfaced = ttlCandidates.slice(0, 3).map(({ path: p, reason, matched }) => ({ path: p, reason, matched }))
+const ttlSurfaced = ttlCandidates.slice(0, 3).map(({ path: p, reason, matched, source }) => ({ path: p, reason, matched, source }))
 
 const notes = diffHits.concat(ttlSurfaced)
 process.stdout.write(JSON.stringify({ notes }) + '\n')

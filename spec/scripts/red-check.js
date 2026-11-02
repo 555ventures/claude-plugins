@@ -19,9 +19,10 @@
 // reports every mismatch as a named finding. build.md's classification prose and red-check
 // paragraph shrink to this invocation line.
 //
-// What this deliberately does NOT do: parse or attribute runner OUTPUT (exit codes only — a
-// crash-red vs assert-red distinction stays orchestrator judgment, per build.md's disposition
-// rules); render a review report or compute a verdict (this is a build-Phase-1 gate, never a
+// What this deliberately does NOT do: attribute runner OUTPUT to individual tests (output is read
+// only to count executed tests via capabilities.testCountPattern, and to confirm a filtered run
+// selected its title — a crash-red vs assert-red distinction stays orchestrator judgment, per
+// build.md's disposition rules); render a review report or compute a verdict (this is a build-Phase-1 gate, never a
 // review leg); snapshot or restore the tree (the working tree AT INVOCATION TIME is the
 // pre-image — the purity refusal below exists precisely because no snapshot is taken); validate
 // `[pre-green:]` reasons anywhere but here and in ac-matrix.js (lib/spec-sections.js's
@@ -37,7 +38,7 @@
 // Exit codes: 0 = every resolved tests-layer file matches its expected pre-image colour ·
 //             1 = findings emitted (unsanctioned-green | broken-pin | missing-test-file |
 //                 invalid-pre-green | rejected-trailing-tag | mixed-pin | gutted-rewrite |
-//                 broken-reuse) — rides the normal build Phase 1 disposition flow, never a script
+//                 broken-reuse | vacuous-green) — rides the normal build Phase 1 disposition flow, never a script
 //                 failure · 2 = usage error, unreadable --spec, no ## Acceptance Criteria section,
 //                 host config declares no testCommand, or a pre-image purity refusal (a non-tests
 //                 File Plan path already differs from --base — tracked or untracked)
@@ -99,6 +100,7 @@ const fs = require('fs')
 const path = require('path')
 const { execFileSync } = require('child_process')
 const hostRun = require('./lib/host-run')
+const { computeTestsExecuted, isUnobserved } = require('./lib/count-observation')
 const { quote } = hostRun
 const { parseFilePlanRows, isTestsRow } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
@@ -327,8 +329,8 @@ function isSanctioned(b) {
 
 const sanctionedById = new Map(wellFormed.map(b => [b.id, isSanctioned(b)]))
 
-// ---- `{testCommand} <file>` (+ `{typecheckCommand} <file>` when declared) — exit codes only,
-// runner output is never parsed. NODE_TEST_CONTEXT is scrubbed so a nested `node --test` leg
+// ---- `{testCommand} <file>` (+ `{typecheckCommand} <file>` when declared) — the exit code is the
+// verdict; output is captured only for the executed-test count. NODE_TEST_CONTEXT is scrubbed so a nested `node --test` leg
 // behaves as a fresh top-level runner even when red-check.js itself runs inside one.
 //
 // `relPath` is substituted via `quote` (lib/host-run.js's single-quote helper) for the reason given on runFilteredLeg below —
@@ -337,9 +339,20 @@ const sanctionedById = new Map(wellFormed.map(b => [b.id, isSanctioned(b)]))
 // files carry a `$` segment (TanStack file routes, `customers.$memberId.note-role.test.tsx`) had
 // `$memberId` expanded away by bash, so the leg ran against a path that does not exist, exited
 // non-zero, and reported a passing sanctioned-green file as a hard `broken-pin`.
+// maxBuffer: spawnSync's 1 MiB default kills a passing runner that prints more (ENOBUFS, status
+// null → 1), which would report a passing pin as broken.
+const MAX_BUFFER = 16 * 1024 * 1024
 function runLeg(cmd, relPath) {
-  const res = hostRun.run(`${cmd} ${quote(relPath)}`, { cwd: root, stdio: 'ignore' })
-  return res.status === null ? 1 : res.status
+  const res = hostRun.run(`${cmd} ${quote(relPath)}`, { cwd: root, encoding: 'utf8', stdio: 'pipe', maxBuffer: MAX_BUFFER })
+  return { status: res.status === null ? 1 : res.status, output: (res.stdout || '') + (res.stderr || '') }
+}
+
+// capabilities.testCountPattern: absent or "none" means red-check reads exit codes only.
+const countPattern = (config.capabilities && config.capabilities.testCountPattern) || null
+const patternDeclared = !!countPattern && countPattern !== 'none'
+if (!patternDeclared) {
+  warnings.push('testCountPattern is not declared in the host config — red-check reads exit codes only ' +
+    'and cannot see a run that executed no test')
 }
 
 const expectGreenSet = new Set(expectGreenPaths)
@@ -381,9 +394,10 @@ for (const relPath of [...testFiles].sort()) {
       detail: `${relPath}: ${mixedAcs.join(', ')} mixes a new promise with a SHALL CONTINUE TO pin ` +
         `— split the SHALL CONTINUE TO clause into its own AC, then re-run`,
     })
-    let observed = runLeg(config.testCommand, relPath) === 0 ? 'green' : 'red'
+    const mixedRun = runLeg(config.testCommand, relPath)
+    let observed = mixedRun.status === 0 ? 'green' : 'red'
     if (observed === 'green' && config.typecheckCommand) {
-      observed = runLeg(config.typecheckCommand, relPath) === 0 ? 'green' : 'red'
+      observed = runLeg(config.typecheckCommand, relPath).status === 0 ? 'green' : 'red'
     }
     files.push({ path: relPath, expected: 'unclassified', observed, carriedAcs })
     continue
@@ -411,14 +425,26 @@ for (const relPath of [...testFiles].sort()) {
   // pinned CPU, not a failing assertion. It still classifies as red (a hung test is not green),
   // but it is surfaced by name so the build driver can record the incident on its build row
   // (core § Incident Policy materiality) instead of the trip vanishing into "observed: red".
-  const testExit = runLeg(config.testCommand, relPath)
+  const testRun = runLeg(config.testCommand, relPath)
+  const testExit = testRun.status
   if (testExit === 124) warnings.push(`watchdog-trip ${relPath} (exit 124) — the test run was killed by the host timeout, not a failing assertion`)
   let observed = testExit === 0 ? 'green' : 'red'
+  let testsExecuted
+  if (observed === 'green' && patternDeclared) {
+    testsExecuted = computeTestsExecuted(testRun.output, countPattern)
+    if (isUnobserved(testsExecuted)) observed = 'unobserved'
+  }
   if (observed === 'green' && config.typecheckCommand) {
-    observed = runLeg(config.typecheckCommand, relPath) === 0 ? 'green' : 'red'
+    observed = runLeg(config.typecheckCommand, relPath).status === 0 ? 'green' : 'red'
   }
 
-  if (expected === 'green' && observed === 'red') {
+  if (expected === 'green' && observed === 'unobserved') {
+    findings.push({
+      severity: 'hard', class: 'vacuous-green', path: relPath, acs: carriedAcs,
+      detail: `${relPath}: the runner exited ${testExit} but executed no test per its output ` +
+        `(testCountPattern ${countPattern}) — the sanctioned-green file proved nothing`,
+    })
+  } else if (expected === 'green' && observed === 'red') {
     findings.push({
       class: 'broken-pin', path: relPath, acs: carriedAcs,
       detail: `${relPath}: sanctioned-green file failed its run`,
@@ -488,7 +514,9 @@ for (const relPath of [...testFiles].sort()) {
     }
   }
 
-  files.push({ path: relPath, expected, observed, carriedAcs })
+  const fileRow = { path: relPath, expected, observed, carriedAcs }
+  if (testsExecuted !== undefined) fileRow.testsExecuted = testsExecuted
+  files.push(fileRow)
 }
 
 // ---- per-test verification
@@ -502,8 +530,7 @@ function escapeTitleForRegex(title) {
 }
 
 // `{testCommand} {testNameFilter←escaped ^title$} <file>`, appended ahead of the file path
-// (matching the existing `{typecheckCommand} <file>` append form) — output is captured (never
-// `stdio: 'ignore'` like runLeg above) because selection proof needs the run's own stdout to
+// (matching the existing `{typecheckCommand} <file>` append form) — output is captured (as in runLeg above) because selection proof needs the run's own stdout to
 // confirm the title was actually selected, not merely infer it from the exit code (Assumptions
 // a pattern matching nothing still exits 0).
 //
@@ -518,7 +545,7 @@ function escapeTitleForRegex(title) {
 function runFilteredLeg(cmd, filterTemplate, title, relPath) {
   const pattern = `^${escapeTitleForRegex(title)}$`
   const filterArg = filterTemplate.replace('{name}', pattern)
-  const res = hostRun.run(`${cmd} ${quote(filterArg)} ${quote(relPath)}`, { cwd: root, encoding: 'utf8' })
+  const res = hostRun.run(`${cmd} ${quote(filterArg)} ${quote(relPath)}`, { cwd: root, encoding: 'utf8', maxBuffer: MAX_BUFFER })
   return { code: res.status === null ? 1 : res.status, output: (res.stdout || '') + (res.stderr || '') }
 }
 

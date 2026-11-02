@@ -207,3 +207,56 @@ test('AC-20260823-06-8: an unreadable --root, --diff, or --ledger exits 2 naming
     'result here means the "still exits 0" half of this AC is not actually being exercised: ' +
     JSON.stringify(out))
 })
+
+// specs/20261101/03-legs-read-evidence-not-exit-codes.md D3/D4: diff-hit matches the diff's own
+// paths with no extension list, and a note the repo has never recorded ages from its file mtime.
+
+const fixtureFm = (n) => `---\nname: ${n}\ndescription: fixture\nmetadata:\n  type: feedback\n---\n\n`
+
+test('AC-20261101-03-5: a note naming a changed path or its dotted basename is a diff-hit whatever the extension, and a note naming only an undotted word is not', () => {
+  const dir = fs.realpathSync(tmpdir('memory-sweep-anyext'))
+  gitRepo(dir, { empty: true })
+  const pyRel = writeNote(dir, 'plugin-tests', 'note-py.md', fixtureFm('note-py') + 'watch app/models.py when the ORM changes\n')
+  const goRel = writeNote(dir, 'plugin-tests', 'note-go.md', fixtureFm('note-go') + 'see main.go\n')
+  const bareRel = writeNote(dir, 'plugin-tests', 'note-bare.md', fixtureFm('note-bare') + 'models\n')
+  commitAt(dir, '2026-08-01T00:00:00Z', [pyRel, goRel, bareRel])
+  writeLedger(dir, [])
+  const diffFile = writeDiff(dir, ['app/models.py', 'cmd/server/main.go'])
+
+  const r = runNode('scripts/memory-sweep.js', ['--root', dir, '--diff', diffFile])
+  assert.strictEqual(r.status, 0, (r.stderr || '') + ' — the sweep must exit 0 whatever it finds')
+  const out = JSON.parse((r.stdout || '').trim())
+  const py = out.notes.find((n) => n.path.endsWith('note-py.md'))
+  assert.ok(py && py.reason === 'diff-hit' && py.matched === 'app/models.py',
+    'a note naming app/models.py must diff-hit on the verbatim path, else agent memory on a non-JS host is never surfaced for disposal: ' + JSON.stringify(out))
+  const go = out.notes.find((n) => n.path.endsWith('note-go.md'))
+  assert.ok(go && go.reason === 'diff-hit',
+    'a note naming main.go must diff-hit on the dotted basename of cmd/server/main.go, else Go-host notes outlive every review: ' + JSON.stringify(out))
+  assert.ok(!out.notes.some((n) => n.path.endsWith('note-bare.md')),
+    'a note saying only "models" must not hit app/models.py — the basename rule is gated on a dot or every common word becomes a hit: ' + JSON.stringify(out))
+})
+
+test('AC-20261101-03-6: an untracked note ages from its mtime and surfaces as ttl-expired with source mtime, while a committed note carries source commit', () => {
+  const dir = fs.realpathSync(tmpdir('memory-sweep-mtime'))
+  gitRepo(dir, { empty: true })
+  const committedRel = writeNote(dir, 'plugin-tests', 'note-committed.md', fixtureFm('note-committed') + 'A routine observation with no path references.\n')
+  commitAt(dir, '2026-07-01T00:00:00Z', [committedRel])
+  const untrackedRel = writeNote(dir, 'plugin-tests', 'note-untracked.md', fixtureFm('note-untracked') + 'A routine observation with no path references.\n')
+  const when = new Date('2026-08-01T00:00:00Z')
+  fs.utimesSync(path.join(dir, untrackedRel), when, when)
+  const rows = []
+  for (let d = 2; d <= 13; d++) rows.push({ ts: `2026-08-${String(d).padStart(2, '0')}T00:00:00Z`, stage: 'review' })
+  writeLedger(dir, rows)
+  const diffFile = writeDiff(dir, ['docs/unrelated-file.md'])
+
+  const r = runNode('scripts/memory-sweep.js', ['--root', dir, '--diff', diffFile])
+  assert.strictEqual(r.status, 0, (r.stderr || '') + ' — the sweep must exit 0')
+  const out = JSON.parse((r.stdout || '').trim())
+  const u = out.notes.find((n) => n.path.endsWith('note-untracked.md'))
+  assert.ok(u, 'an uncommitted note with 12 later review rows must reach ttl-expired, else a gitignored memory outlives every review: ' + JSON.stringify(out))
+  assert.strictEqual(u.reason, 'ttl-expired', 'the untracked note must surface as ttl-expired: ' + JSON.stringify(u))
+  assert.strictEqual(u.source, 'mtime', 'a note with no commit date must record source mtime so the disposer knows the age is a file time: ' + JSON.stringify(u))
+  assert.ok(String(u.matched).startsWith('2026-08-01'), 'matched must carry the mtime ISO date: ' + JSON.stringify(u))
+  const c = out.notes.find((n) => n.path.endsWith('note-committed.md'))
+  assert.ok(c && c.source === 'commit', 'a committed note must carry source commit: ' + JSON.stringify(out))
+})

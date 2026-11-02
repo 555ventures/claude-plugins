@@ -62,7 +62,11 @@ The build driver's RED_CHECK state is mechanized by `spec/scripts/red-check.js` 
 red-check`). Expectation derives from `SHALL CONTINUE TO` regression pins and closed-enum
 `[pre-green:]` tags (`fallback-rejection` | `absence-invariant` | `predicate-in-test`);
 observation is per-file `{testCommand}` exit codes against the pre-image, purity-refused when
-non-tests File Plan paths already differ from the diff base. The plan-time tag count rides
+non-tests File Plan paths already differ from the diff base. A file whose runner exits 0 while
+the host's `testCountPattern` shows no executed test is `observed: unobserved`; green-expected,
+that is the hard finding `vacuous-green`; without a declared pattern red-check reads exit codes
+only and says so once per run (specs/20261101/03-legs-read-evidence-not-exit-codes.md D1, D2).
+The plan-time tag count rides
 review's ac-matrix manifest row as `observed.preGreen` into every ledger row, making the class
 fleet-countable. Every carried AC's regression-pin bullet is also classified by `pinShape(raw)`
 (`spec/scripts/lib/spec-sections.js`'s `normalizeForPinCheck` plus a `SHALL`-count rule, shared

@@ -126,10 +126,8 @@
 // DESIGN_SKIPPED_ARCHETYPES (backend-api/data-ml/conversational-bot/cli-devtool) it is a
 // pass-through; a visual archetype records design: "ratified" once `design/mocks/status.json`
 // is APPROVED with an open provenance ledger (lib/mocks-ledger.js) and the brief's journey checks pass. The pick record lives
-// in the mocks status (`status.brief`) — RETIRED_MARKS (below) all refuse with exit 2 naming
-// `/spec:mocks` as the remedy. A legacy `status.json` past MENUS with no `marks.briefWritten`
-// resumes at BRIEF and accepts `--mark brief-written --legacy`, which skips the mocks
-// precondition and records design: "ratified" with nothing further.
+// in the mocks status (`status.brief`); a status past MENUS that never ratified a brief derives
+// DISCOVERY or BRIEF from its live artifacts like a fresh run.
 //
 // What the BRIEF addition deliberately does NOT do:
 //   - approve a mocks set itself — that stays session (or `/spec:mocks`) judgment; the driver
@@ -138,7 +136,7 @@
 //     moment discovery-done records `status.archetype`.
 //
 // Applicability — a fresh visual
-// run only (`status.brief.mocks` set; legacy and non-visual runs are untouched): `brief-written`
+// run only (`status.brief.mocks` set; non-visual runs are untouched): `brief-written`
 // additionally requires brief.md's `## Journeys` to cover every design/mocks/seed.md journey and
 // label, and `## Non-UI Coverage`'s six closed keys to carry none dark or missing; the
 // BRIEF step text prints the derivation sources (confirmed product ledger row ids, the seed's
@@ -1408,13 +1406,11 @@ function handleMenusDone() {
 
 // ---------------------------------------------------------------------------
 // BRIEF: sits between DISCOVERY and
-// MENUS. `--mark brief-written` is the ONLY mark this state accepts (the retired EXPLORE/DESIGN
-// marks are refused elsewhere, in handleMark's default branch). For DESIGN_SKIPPED_ARCHETYPES
+// MENUS. `--mark brief-written` is the ONLY mark this state accepts. For DESIGN_SKIPPED_ARCHETYPES
 // (backend-api/data-ml/conversational-bot/cli-devtool) it is a pass-through: nothing beyond
 // DISCOVERY is owed. A VISUAL archetype requires an APPROVED `design/mocks/status.json` with an
 // open provenance ledger (`lib/mocks-ledger.js`) plus the brief's journey checks,
-// then records design: "ratified". `--legacy` skips the mocks precondition for a status.json
-// that resumed at BRIEF.
+// then records design: "ratified".
 // ---------------------------------------------------------------------------
 function mocksStatusPath() { return path.join(root, 'design/mocks/status.json') }
 function mocksLedgerPath() { return path.join(root, 'design/mocks/ledger.md') }
@@ -1452,10 +1448,9 @@ function briefPreconditionCheck() {
 function handleBriefWritten() {
   if (!status.marks.discoveryDone) die('discovery-done has not been marked yet — mark discovery-done first')
   const archetype = status.archetype
-  const legacy = argv.includes('--legacy')
 
   let mocksStatus = null
-  if (isVisualArchetype(archetype) && !legacy) {
+  if (isVisualArchetype(archetype)) {
     const check = briefPreconditionCheck()
     if (!check.ok) {
       if (check.reason === 'no-status') {
@@ -1477,7 +1472,7 @@ function handleBriefWritten() {
     // The brief is generated from the
     // approved set, not from memory — ## Journeys must cover every seed journey and label, and
     // ## Non-UI Coverage must carry none dark or missing. Applies only to a fresh visual run
-    // (Behavior: Applicability) — the `legacy`/`isVisualArchetype` guard above already scopes
+    // (Behavior: Applicability) — the `isVisualArchetype` guard above already scopes
     // this whole block to that condition.
     const text = briefText() || ''
     const jCheck = briefJourneysCheck(text, seedJourneysMap())
@@ -1503,7 +1498,7 @@ function handleBriefWritten() {
   // (backend-api/data-ml/conversational-bot/cli-devtool) own nothing beyond DISCOVERY — record design: "skipped" straight away.
   if (isDesignSkipped(archetype)) {
     status.marks.briefWritten = true
-    status.brief = { mocks: null, legacy: false, ratifiedAt: new Date().toISOString() }
+    status.brief = { mocks: null, ratifiedAt: new Date().toISOString() }
     status.design = 'skipped'
     saveStatus()
     return { prev: 'BRIEF', next: 'MENUS' }
@@ -1512,7 +1507,6 @@ function handleBriefWritten() {
   status.marks.briefWritten = true
   status.brief = {
     mocks: mocksStatus ? 'design/mocks/status.json' : null,
-    legacy,
     ratifiedAt: new Date().toISOString(),
   }
   status.design = 'ratified'
@@ -2464,19 +2458,11 @@ function handleProfileWritten() {
 function deriveState(opts) {
   const peek = !!(opts && opts.peek)
 
-  // A status.json carrying
-  // `marks.menusDone` with no `marks.briefWritten` resumes at BRIEF on its existing artifacts;
-  // `discoveryDone` is trusted from the recorded mark alone for this one resume path, since
-  // its own brief.md is not required to satisfy discoveryCheck()'s current grammar or even to
-  // exist.
-  const legacyResume = !!(status.marks && status.marks.menusDone && !status.marks.briefWritten)
-
   const disc = discoveryCheck()
-  if (!status.marks.discoveryDone || (!legacyResume && !disc.ok)) return 'DISCOVERY'
+  if (!status.marks.discoveryDone || !disc.ok) return 'DISCOVERY'
 
   // BRIEF sits between DISCOVERY
-  // and MENUS — a legacy status.json past MENUS with no `marks.briefWritten` still derives BRIEF
-  // here, regardless of any later legacy marks already recorded ("resumes at BRIEF").
+  // and MENUS.
   if (!status.marks.briefWritten) return 'BRIEF'
 
   const menus = menusCheck()
@@ -2486,10 +2472,8 @@ function deriveState(opts) {
   // MENUS and DECIDE for a tournament archetype that hasn't been skipped or resolved yet. Once
   // skipped (tournament.skipped) or resolved (tournament.winner), fall straight through to the
   // unchanged decideCheck() derivation below — a non-tournament archetype never enters this block
-  // at all (status.archetype stays outside TOURNAMENT_ARCHETYPES). The legacy
-  // legacy resume additionally exempts a host whose `decided` mark is already recorded — a
-  // legacy record past DECIDE has necessarily already resolved (or predates) the tournament, and
-  // must never be routed backward into FINALISTS just because it carries no tournament record.
+  // at all (status.archetype stays outside TOURNAMENT_ARCHETYPES). A host whose `decided` mark
+  // is already recorded is never routed backward into FINALISTS.
   if (isTournamentArchetype(status.archetype) && !status.marks.decided &&
       !(status.tournament && (status.tournament.skipped || status.tournament.winner))) {
     const t = status.tournament || {}
@@ -2508,15 +2492,8 @@ function deriveState(opts) {
     return 'PICK'
   }
 
-  // A legacy-ratified status
-  // (`status.brief.legacy === true`) trusts its own recorded `decided`/`roadmapWritten` marks
-  // for these two closure checks instead of re-validating their backing artifacts — a legacy
-  // host is never asked to reconstruct them ("every downstream legacy mark
-  // stays valid so the run lands on its real next state after one mark").
-  const legacyTrusted = !!(status.brief && status.brief.legacy)
-
   const decide = decideCheck()
-  if (!status.marks.decided || (!legacyTrusted && !decide.ok)) return 'DECIDE'
+  if (!status.marks.decided || !decide.ok) return 'DECIDE'
 
   if (!scaffoldSucceeded(status.scaffold)) {
     if (peek) return status.scaffold ? 'SCAFFOLD_RED' : 'SCAFFOLD'
@@ -2553,7 +2530,7 @@ function deriveState(opts) {
   }
 
   const rm = roadmapCheck()
-  if (!status.marks.roadmapWritten || (!legacyTrusted && !rm.ok)) return 'ROADMAP'
+  if (!status.marks.roadmapWritten || !rm.ok) return 'ROADMAP'
 
   // ROADMAP hands directly to HANDOFF —
   // the design canon is ratified at BRIEF, before ROADMAP is ever reached.
@@ -2739,27 +2716,12 @@ const STEPS = {
   },
 
   // Sits between DISCOVERY and
-  // MENUS. A legacy resume (status.marks.menusDone already true, briefWritten not yet) opens with
-  // `legacy:` and names `--legacy`; DESIGN_SKIPPED_ARCHETYPES owe nothing beyond DISCOVERY; a
+  // MENUS. DESIGN_SKIPPED_ARCHETYPES owe nothing beyond DISCOVERY; a
   // visual archetype whose mocks set is not yet APPROVED is sent to `/spec:mocks`; otherwise the
   // step prints the brief-written mark command.
   BRIEF: () => {
     const archetype = status.archetype
     const doctrineLine = 'Doctrine: spec/doctrine/genesis.md § Genesis: Brief State'
-    const legacyResume = !!(status.marks && status.marks.menusDone && !status.marks.briefWritten)
-
-    if (legacyResume) {
-      return [
-        '## Step: brief — ratify the approved set into the design canon',
-        'Read only: ' + genesisRel('brief.md'),
-        doctrineLine,
-        'legacy: explore/design artifacts accepted in place of a mocks set (explore: ' +
-          (status.explore || 'n/a') + ', design: ' + (status.design || 'pending') + ')',
-        'Then:',
-        '  node ' + __filename + ' --root ' + root + ' --mark brief-written --legacy',
-      ].join('\n')
-    }
-
     if (isDesignSkipped(archetype)) {
       return [
         '## Step: brief — nothing owed beyond discovery',
@@ -3134,7 +3096,7 @@ const STEPS = {
   },
 
   // The DESIGN state (its own
-  // doctrine-drafted -> tokens-landed -> rules-locked progression) is retired — the design canon
+  // doctrine-drafted -> tokens-landed progression) is retired — the design canon
   // is ratified at BRIEF, long before ROADMAP.
 
   // HANDOFF becomes a judgment step — the
@@ -3222,15 +3184,6 @@ function acceptedOutput(prevNext) {
     ' → ' + prevNext.next + '); safe to /clear and re-run /spec:genesis'
 }
 
-// The eight EXPLORE/DESIGN marks are
-// retired outright — the design stage is /spec:mocks now, ratified at BRIEF's own single mark.
-// This refusal table is the sanctioned live surface for `positions-authored` and
-// `tiles-culled` — the retired-mark sweep waives this file by path for those two names.
-const RETIRED_MARKS = [
-  'research-done', 'positions-authored', 'tiles-built', 'tiles-culled', 'external',
-  'doctrine-drafted', 'tokens-landed', 'rules-locked',
-]
-
 function handleMark() {
   let result
   switch (MARK) {
@@ -3251,11 +3204,7 @@ function handleMark() {
     case 'roadmap-written': result = handleRoadmapWritten(); break
     case 'profile-written': result = handleProfileWritten(); break
     default:
-      if (RETIRED_MARKS.includes(MARK)) {
-        die('mark "' + MARK + '" was retired with the genesis design states (specs/20260902/08) — ' +
-          'the design stage is /spec:mocks; run it, then --mark brief-written')
-      }
-      die('unknown mark "' + MARK + '" (discovery-done | brief-written [--legacy] | menu-written --file <f> | ' +
+      die('unknown mark "' + MARK + '" (discovery-done | brief-written | menu-written --file <f> | ' +
         'menus-done | finalists-written --file <f> | finalists-skipped | probe-done | picked | ' +
         'decided | skeleton-landed | design-brief-written | kit-landed | journeys-drawn | ' +
         'design-approved | roadmap-written | profile-written --file <f> [--refresh])')

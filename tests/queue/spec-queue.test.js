@@ -138,13 +138,13 @@ test('AC-20260903-03-1: spec-queue add <spec path> --top queues a `spec` item at
     'D1: --next --json next[0].path must be the queued fix spec, not brief 05\'s spec: ' + JSON.stringify(j.next))
 })
 
-test('AC-20260903-03-5: a queue file holding a brief item and a spec item twice each collapses to the first occurrence on any write subcommand, stripping any auto_placed key, and `list` already renders the dedupe read-only', () => {
+test('AC-20260903-03-5: a queue file holding a brief item and a spec item twice each collapses to the first occurrence on any write subcommand, preserving an auto_placed key as an ordinary unknown key (AC-20261101-08-7), and `list` already renders the dedupe read-only', () => {
   const dir = host({
     specs: { '20260903/hotfix.md': 'date: 2026-09-03\nstatus: draft' },
     queue: [
-      { id: 'q1', kind: 'brief', brief: '21', added: '2026-08-23T10:00:00Z' },
+      { id: 'q1', kind: 'brief', brief: '21', added: '2026-08-23T10:00:00Z', auto_placed: '2026-08-23T10:02:00Z' },
       { id: 'q2', kind: 'brief', brief: '08', added: '2026-08-23T10:01:00Z' },
-      { id: 'q3', kind: 'brief', brief: '21', auto_placed: '2026-08-23T10:02:00Z' },
+      { id: 'q3', kind: 'brief', brief: '21' },
       { id: 'q4', kind: 'spec', spec: 'specs/20260903/hotfix.md', added: '2026-08-23T10:03:00Z' },
       { id: 'q5', kind: 'spec', spec: 'specs/20260903/hotfix.md', added: '2026-08-23T10:04:00Z' },
     ],
@@ -166,8 +166,8 @@ test('AC-20260903-03-5: a queue file holding a brief item and a spec item twice 
     'D5: the brief-21 duplicate must collapse to its first occurrence, in original order: ' + JSON.stringify(q.items))
   assert.strictEqual(q.items.filter((i) => i.kind === 'spec').length, 1,
     'D5: the duplicate spec item must collapse to its first occurrence: ' + JSON.stringify(q.items))
-  assert.ok(q.items.every((i) => !('auto_placed' in i)),
-    'D5: no item may retain an auto_placed key after any write subcommand strips it: ' + JSON.stringify(q.items))
+  assert.strictEqual(q.items[0].auto_placed, '2026-08-23T10:02:00Z',
+    'an auto_placed key is an ordinary unknown key — a reconcile that strips it is a path for a key nothing writes: ' + JSON.stringify(q.items))
 })
 
 test('AC-20260903-03-6 / AC-20261013-02-10: spec-queue add refuses a brief already queued, naming its pending position and the move remedy, and writes nothing', () => {
@@ -189,7 +189,7 @@ test('AC-20260903-03-6 / AC-20261013-02-10: spec-queue add refuses a brief alrea
     'D5: a refused add must leave the queue file byte-identical — no partial write on a usage refusal: ' + after)
 })
 
-test('AC-20260903-03-9: the retired bump/defer/ok verbs and the retired add flags all exit 2 naming their D6 replacement, writing nothing', () => {
+test('AC-20260903-03-9 / AC-20261101-08-10: the retired bump/defer/ok verbs exit 2 naming their D6 replacement and the retired add flags exit 2 through the generic add unknown-flag refusal, writing nothing', () => {
   const dir = host({ queue: [{ id: 'q1', kind: 'brief', brief: '05', added: '2026-08-23T10:00:00Z' }] })
   const before = fs.readFileSync(path.join(dir, '.git/spec-queue.json'), 'utf8')
 
@@ -197,8 +197,8 @@ test('AC-20260903-03-9: the retired bump/defer/ok verbs and the retired add flag
     { argv: ['bump', '05'], mustMatch: /spec-queue move 05 1/ },
     { argv: ['defer', '05'], mustMatch: /spec-queue move 05/ },
     { argv: ['ok'], mustMatch: /no accept step/ },
-    { argv: ['add', 'x', '--after', 'q1'], mustMatch: /--at <n>/ },
-    { argv: ['add', '--brief', '05'], mustMatch: /pass the brief number as the payload/ },
+    { argv: ['add', 'x', '--after', 'q1'], mustMatch: /add: unknown flag --after/ },
+    { argv: ['add', '--brief', '05'], mustMatch: /add: unknown flag --brief/ },
     // An unknown flag must refuse, never fold into the payload — `add specs/x.md --root /abs`
     // once landed as a kind "prompt" item with payload "specs/x.md --root /abs".
     { argv: ['add', 'specs/20260901/01-a.md', '--top', '--root', dir], mustMatch: /unknown flag --root/ },

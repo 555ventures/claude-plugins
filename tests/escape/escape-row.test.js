@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runNode } = require('../helpers')
+const { SPEC, tmpdir, runNode } = require('../helpers')
 
 // specs/20261025/01-the-commit-writes-the-escape-row.md D3/D4: `escape-row.js --check/--append`
 // and `lib/escape-row.js`'s slim validator are the one writer of the escape row; --amend is a
@@ -120,4 +120,16 @@ test('AC-20261025-01-3: escape-row.js --append exits 3 naming the shared file wh
   assert.strictEqual(disjoint.status, 0, 'a same-spec row with no shared file is a distinct defect and must append: ' + disjoint.stdout + disjoint.stderr)
   assert.strictEqual(disjoint.stdout.trim(), 'appended spec=specs/1.md files=1 reviewRunId=null', 'a one-file row prints files=1')
   assert.strictEqual(lines(), 3, 'the disjoint append must add exactly one line')
+})
+
+// specs/20261101/08-no-host-needs-the-shims.md D5: the ledger readers keep every shape the fleet wrote.
+test('AC-20261101-08-13: the validator still accepts a via:backfill single-file escape row and escapeFiles still reads both the single-file and the files-array shapes', () => {
+  const lib = require(path.join(SPEC, 'scripts/lib/escape-row.js'))
+  const row = { stage: 'escape', spec: 'specs/a.md', file: 'x.js', via: 'backfill', class: null, sha: null }
+  assert.deepStrictEqual(lib.validateEscapeRow(row), [],
+    'rejecting a backfill row turns in-shape ledger history into drift noise in every fleet census')
+  assert.deepStrictEqual(lib.escapeFiles({ file: 'x.js' }), ['x.js'],
+    'dropping the single-file fallback leaves every legacy escape row naming no files')
+  assert.deepStrictEqual(lib.escapeFiles({ files: ['a', 'b'] }), ['a', 'b'],
+    'escapeFiles must keep reading the slim files array, the one shape the writer produces')
 })

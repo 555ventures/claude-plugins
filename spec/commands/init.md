@@ -288,7 +288,7 @@ UI stack. Goal: **locate, seed, record, check** — init never authors a compone
 **Precedence — check for a genesis canon first.** If `.claude/genesis/status.json` exists
 (the genesis stage seeded this repo), branch four ways on its `design` value:
 
-- `ratified`, `rules-locked`, or `skipped` → **consume, never re-prompt.** Extract from what's
+- `ratified` or `skipped` → **consume, never re-prompt.** Extract from what's
   there (treat it like brownfield below), and record `genesisStackDescriptor` in
   `profile.config`. On `skipped` (headless archetype) write no `design` block at all. Report
   mode `genesis` in Phase 7.

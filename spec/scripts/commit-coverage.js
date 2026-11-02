@@ -54,9 +54,7 @@ const primaries = []
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
-  if (a === '--since' || a === '--repos-root') {
-    die(a + ' is not accepted — only --commit remains: the window and fleet shares retired with specs/20261025/02; pass --commit <sha>')
-  } else if (a === '--commit' || a === '--root') {
+  if (a === '--commit' || a === '--root') {
     if (i + 1 >= argv.length) die(a + ' needs a value')
     const v = argv[++i]
     if (a === '--commit') commitArg = v

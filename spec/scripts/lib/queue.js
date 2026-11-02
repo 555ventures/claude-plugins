@@ -154,18 +154,6 @@ function dedupeItems(items) {
   return out
 }
 
-// `auto_placed` is never written; a file carrying the key is tolerated on
-// read and stripped on the next write. Returns a NEW array
-// (items themselves are shallow-copied only when they actually carry the key) — `items` is
-// never mutated.
-function stripAutoPlaced(items) {
-  return items.map(it => {
-    if (!('auto_placed' in it)) return it
-    const { auto_placed, ...rest } = it
-    return rest
-  })
-}
-
 // The placement rule, run against a full (brief/spec/prompt, in order) item list. For every
 // on-disk brief not already present as a `kind:'brief'` item, APPEND it at the very end, in
 // the order `onDiskBriefs` is given (callers pass roadmap order) — no dependency-aware or
@@ -253,6 +241,6 @@ function promptAction(item) {
 
 module.exports = {
   normBrief, isSupersededBriefText, evaluateWhen, isItemDone, isItemReady, makeCtx,
-  dedupeItems, stripAutoPlaced, reconcileMissingBriefs,
+  dedupeItems, reconcileMissingBriefs,
   promptTokens, jaccard, isPathPayload, promptDupScore, citesDoneSpec, LANES, promptAction,
 }

@@ -68,18 +68,10 @@ const WALK = path.join(__dirname, 'walkthrough.js')
 const SKILL_LINE = 'Skill: mock-authoring — load it before the first edit'
 
 // ---------------------------------------------------------------------------
-// Retired verbs and unknown commands refuse before any file is read or written.
+// Unknown commands refuse before any file is read or written.
 // ---------------------------------------------------------------------------
 function checkRetired() {
   const first = rest[0]
-  if (first === '--mark' && ['shell-drawn', 'theme-picked'].includes(rest[1])) {
-    die('--mark ' + rest[1] + ' is retired — the wireframe has no ' + (rest[1] === 'shell-drawn' ? 'shell' : 'theme') + ' step (ADR-0030)')
-  }
-  if (first === '--reopen' && ['shell', 'theme'].includes(rest[1])) {
-    die('--reopen ' + rest[1] + ' is retired — the wireframe has no ' + rest[1] + ' step (ADR-0030)')
-  }
-  if (first === 'client' && rest[1] === 'open') die('client open is retired — remedy: round push (it prints the link)')
-  if (first === 'client' && rest[1] === 'waive') die('client waive is retired — remedy: --mark journey-approved --journey <j> --waive --reason <r>')
   if (first !== undefined && !['--state', '--mark', '--reopen', 'ledger', 'round'].includes(first)) {
     die('unknown command "' + first + '" — remedy: run with no argument to print the current step')
   }
@@ -474,7 +466,7 @@ function cmdJourneyApproved(journeyArg, waive, reasonArg) {
     walkOrDie(['pull-approvals', '--round', String(n)])
     const apps = approvalsFor(n, journeyArg)
     if (apps.length === 0) {
-      die('journey "' + journeyArg + '" is not confirmed yet — remedy: the client opens ' + link + ' and confirms, or ' + mark + ' --waive --reason <r>')
+      die('journey "' + journeyArg + '" is not confirmed yet — remedy: the client visits ' + link + ' and confirms, or ' + mark + ' --waive --reason <r>')
     }
     const match = apps.find((a) => a.beats === hash)
     if (!match) {

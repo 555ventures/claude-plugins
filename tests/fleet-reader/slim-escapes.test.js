@@ -49,7 +49,7 @@ test('AC-20261025-02-13: --json carries exactly six escapes keys and no owed key
   assert.match(r.stderr, /--owed/, 'the usage error must name the rejected flag so the caller sees what to drop: ' + r.stderr)
 })
 
-test('AC-20261025-02-3: the drift census keeps a legacy escape row, a slim row and an escape-class row in shape, and reports class-malformed alone for a bad class', () => {
+test('AC-20261025-02-3 / AC-20261101-08-14: the drift census keeps a legacy escape row, a slim row and an escape-class row in shape, and reports class-malformed alone for a bad class', () => {
   const root = tmpdir('fleet-slim-census')
   mkRepo(root, 'legacy', [
     { ts: '2026-08-01T00:00:00Z', stage: 'escape', spec: 'specs/a.md', file: 'x.js', reviewRunId: null,

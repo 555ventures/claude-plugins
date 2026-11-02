@@ -248,7 +248,7 @@ test('AC-20260825-01-6: spec-paths wf-research continues to resolve to an existi
 // genesis.md (AC-1). The brief template `spec/templates/genesis-brief.md` carries six fixed
 // `## ` headings in order and a ten-line, all-`dark` `## Coverage` skeleton (AC-2). The On-disk
 // Handoff roster names that template as `brief.md`'s source and the throwaway
-// `.claude/genesis/sketch.html`, pruned at the driver's rules-locked mark (AC-3).
+// `.claude/genesis/sketch.html`, pruned at the driver's final design mark (AC-3).
 
 // Build a regex matching a multi-word phrase with `\s+` between words instead of a literal space,
 // so a doctrine file that hard-wraps the phrase across two lines still gets caught (memory:
@@ -993,7 +993,7 @@ test('AC-20260902-08-11 / AC-20260914-02-14 / AC-20261008-02-3: spec/commands/ge
 
   const initCmd = read('spec/commands/init.md')
   assert.ok(initCmd.includes('ratified'),
-    'D10: spec/commands/init.md\'s design-precedence branch must add "ratified" to its consume-case list — BRIEF\'s own successful value is a closed canon exactly like the legacy "rules-locked"/"skipped" values already listed, and its absence would leave init.md silent about the value /spec:init actually sees on a fresh BRIEF-ratified host')
+    'D10: spec/commands/init.md\'s design-precedence branch must add "ratified" to its consume-case list — BRIEF\'s own successful value is a closed canon exactly like the "skipped" value already listed, and its absence would leave init.md silent about the value /spec:init actually sees on a fresh BRIEF-ratified host')
 })
 
 test('AC-20260902-08-12: the retired-literal sweep for design-pick.json, positions.md, style-tile, tiles-culled, and positions-authored over spec/, README.md, and .claude-plugin/ returns zero offenders, and spec/templates/design-positions.md / design-pick.json do not exist', () => {
@@ -1015,7 +1015,6 @@ test('AC-20260902-08-12: the retired-literal sweep for design-pick.json, positio
       // the AC-20260902-08-8 regression moved here verbatim under
       // specs/20260903/07-test-file-budget-guard.md D7 (the per-file budget split).
       'tests/genesis/tournament-probe-pick.test.js',
-      'tests/genesis/brief-state.test.js',
       // its `description` is the changelog surface; prior changelog paragraphs legitimately
       // name retired mechanisms by design (D11 precedent) as a historical record.
       'spec/.claude-plugin/plugin.json',
@@ -1025,7 +1024,7 @@ test('AC-20260902-08-12: the retired-literal sweep for design-pick.json, positio
       'tests/genesis-gate.test.js',
     ]
     // Collision closure (spec body, "Collision closure" section): spec/doctrine/design.md's two
-    // sentences naming `rules-locked` and the `positions.md`/`design-pick.json` grounding are
+    // sentences naming a retired design value and the `positions.md`/`design-pick.json` grounding are
     // rewritten by spec 09's design.md row, which builds AFTER this spec in the same brief — a
     // deliberate, spec-cited deferral, waived here for exactly the two literals it names, never
     // for style-tile/tiles-culled/positions-authored, which design.md does not mention.
@@ -1037,14 +1036,6 @@ test('AC-20260902-08-12: the retired-literal sweep for design-pick.json, positio
     // stale reference.
     if (literal === 'design-pick.json' || literal === 'positions.md') {
       waivedPaths.push('spec/doctrine/design.md', 'tests/consistency/design-doctrine.test.js')
-    }
-    // D14: the driver's own retired-mark refusal table (Contracts § driver surface) must spell
-    // `positions-authored` and `tiles-culled` plainly by name so `--mark positions-authored`/
-    // `--mark tiles-culled` are refused with a remedy naming them — waived by explicit path,
-    // per literal, never for design-pick.json/positions.md/style-tile, which this table does
-    // not need to name.
-    if (literal === 'positions-authored' || literal === 'tiles-culled') {
-      waivedPaths.push('spec/scripts/genesis-driver.js')
     }
     const offenders = sweepRetiredLiteral(literal, {
       waivedPaths,

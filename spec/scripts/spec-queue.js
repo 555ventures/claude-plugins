@@ -58,7 +58,7 @@ const { spawnSync } = require('child_process')
 const { readLedgerRows } = require('./lib/observation')
 const {
   normBrief, isSupersededBriefText, isItemDone, isItemReady, makeCtx,
-  dedupeItems, stripAutoPlaced, reconcileMissingBriefs,
+  dedupeItems, reconcileMissingBriefs,
   promptDupScore, citesDoneSpec, LANES, promptAction,
 } = require('./lib/queue')
 
@@ -277,12 +277,12 @@ function ctxFor(statusJson) {
   })
 }
 
-// Virtual reconcile shared by every subcommand: strip -> dedupe -> append missing on-disk
+// Virtual reconcile shared by every subcommand: dedupe -> append missing on-disk
 // briefs last, all on a copy — never written back here. Every subcommand (including `list`,
-// which reconciles purely for display numbering) runs the full three-step reconcile with
+// which reconciles purely for display numbering) runs the full two-step reconcile with
 // `append: true`; only a write subcommand additionally persists the result.
 function reconciledItems(rawItems, statusJson, { append }) {
-  let items = dedupeItems(stripAutoPlaced(rawItems))
+  let items = dedupeItems(rawItems)
   if (append) {
     const disk = onDiskBriefs(statusJson).filter(b => b.status !== 'done')
     items = reconcileMissingBriefs(items, disk).items
@@ -483,8 +483,6 @@ switch (sub) {
       else if (a === '--after-brief') flags.afterBrief = rest[++i]
       else if (a === '--when') flags.when = rest[++i]
       else if (a === '--lane') flags.lane = rest[++i]
-      else if (a === '--after') { console.error('spec-queue: --after is retired — use --at <n> to insert at a specific pending position'); process.exit(2) }
-      else if (a === '--brief') { console.error('spec-queue: --brief is retired — pass the brief number as the payload directly (e.g. spec-queue add 05)'); process.exit(2) }
       // An unrecognized --flag never folds into the payload: that silently turns a spec path into a
       // free-text prompt item (observed: `add specs/x.md --root /abs` landed as kind "prompt").
       // spec-queue takes no --root — the queue is keyed off the cwd's git common dir; run it from the repo root.

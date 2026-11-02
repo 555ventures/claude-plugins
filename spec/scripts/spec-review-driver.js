@@ -861,7 +861,7 @@ function liveIteration() {
 // Mirrors review-legs.js's own blocking-leg/exit rule (gate/smoke/ci; smoke's exit 4 = sanctioned
 // inert-green) — this is plumbing over review-legs.js's OWN typed exit codes, never a second
 // derivation of a verdict word (verdict.js stays the sole derivation of that).
-const BLOCKING_LEGS = new Set(['gate', 'suite', 'smoke', 'ci'])
+const BLOCKING_LEGS = new Set(['gate', 'suite', 'smoke', 'ci', 'slow'])
 function isRedBlocking(rows) {
   for (const r of rows) {
     if (!BLOCKING_LEGS.has(r.leg)) continue

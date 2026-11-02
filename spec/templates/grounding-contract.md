@@ -47,7 +47,7 @@ token file — a Tailwind 4 `@theme` block or the stack's equivalent) and `rules
 auto-loaded rule file holding the intent-to-pattern table and the naming-convention table) are
 repo-relative and required when the block is present; `app` stays optional — the mock app dir,
 written by `/spec:mocks` and genesis, and equal to `design/mocks/status.json`'s own `app`),
-`release` (see § Release), `prototype` (see § Prototype), `walkthrough` (see § Walkthrough), `pictures` (see § Pictures), `capabilities` (see § Capabilities), `policy` (see § Policy),
+`slowTestCommand` (see § Test tiers), `release` (see § Release), `prototype` (see § Prototype), `walkthrough` (see § Walkthrough), `pictures` (see § Pictures), `capabilities` (see § Capabilities), `policy` (see § Policy),
 the rule-enforcement keys `enforcementManifest` and `rulesEnforcementHash` (see § Rule
 enforcement), and the genesis-handoff key `genesisStackDescriptor`
 (see § Genesis handoff).
@@ -100,6 +100,16 @@ one host at a time, never by the close itself. The host obligation follows from 
   phrase pins pre-existing behavior a spec must not break, never behavior the spec introduces.
 
 The pipeline generates no coverage check of its own; a host that authors one owns this scoping.
+
+## Test tiers (optional)
+
+`testCommand` is the fast tier: every gate, suite, at-risk and close-time run executes it.
+`slowTestCommand` (a shell string, no placeholders) is the host's own invocation of the tests it
+has excluded from `testCommand` by its runner's own mechanism — a marker, a project, a tag; the
+plugin names none. It runs once per review legs iteration as the blocking `slow` leg and never at
+close. `gateCommand` carries `{testDirs}` (or `{scopeDirs}`) wherever the runner accepts appended
+paths; an unscoped gate is reported by `/spec:doctor` (check 25), never refused. Absent
+`slowTestCommand` = no slow leg.
 
 ## Deliverable manifest (required)
 

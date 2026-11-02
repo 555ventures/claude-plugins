@@ -1,12 +1,14 @@
 ---
 date: 2026-11-01
-status: hardened
+status: implementing
+build_base: main
 tier: critical
 area: grounding-contract
 breaking: false
 depends_on: [specs/20261101/05-the-gate-that-ran-the-suite-is-the-suite.md]
 brief: n/a
 open_markers: 0
+diff_base: c709a684e888310e55e537e7847c4a9300f84db5
 ---
 
 # The gate is scoped, and the slow tier has a home

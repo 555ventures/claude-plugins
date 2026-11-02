@@ -4,6 +4,7 @@
 // init-gen.js generate --root <dir> --profile <path> [--refresh] [--dry-run]
 // init-gen.js policy-check --root <dir> [--json]
 // init-gen.js shapes-check --root <dir> [--json]
+// init-gen.js gate-check --root <dir> [--json]
 //
 // Owner: specs/20260822/02-init-generation-script.md
 //
@@ -51,6 +52,8 @@
 //             2 = usage error / unreadable config
 //   shapes-check: 0 = no block declared, or every declared testGlobs entry matches a tracked file ·
 //             3 = invalid block or a declared testGlobs entry matching no tracked file (stderr, one line each)
+//   gate-check: 0 = always (prints {"scoped","gateRunsSuite","slowTier"} —
+//             report only, never a refusal) · 2 = usage error
 //   probe:    0 = always (adverse findings — no claude CLI, a vacuous test runner, an inert
 //                 at-risk leg — are data for the interview, never a probe failure)
 //             2 = usage error
@@ -65,10 +68,12 @@ const { globMatch } = require('./lib/glob-match')
 const { fileShapes, isTestClassified, validateFileShapes } = require('./lib/file-shapes')
 const { readConfig, configPath, CONFIG_RELPATH, policy, mergePolicy, validatePolicy, readConfigStrict, readPipelineRules } = require('./lib/host-config')
 const { extractSection } = require('./lib/spec-sections')
+const { resolveGate, gateRunsSuite } = require('./lib/gate-resolve')
 
 function usage() {
   console.error('usage: init-gen.js probe --root <dir> [--test-command "<cmd>"] [--sample <n>]')
   console.error('       init-gen.js shapes-check --root <dir> [--json]   (exit 0 clean · 3 invalid block or unmatched testGlobs)')
+  console.error('       init-gen.js gate-check --root <dir> [--json]   (exit 0 always · 2 usage)')
   console.error('       init-gen.js generate --root <dir> --profile <path> [--refresh] [--dry-run]')
   console.error('       init-gen.js policy-check --root <dir> [--json]   (exit 0 clean · 1 findings · 2 usage)')
   console.error('       init-gen.js ignore-check --root <dir> [--fix]   (exit 0 all present · 3 missing, one path per line)')
@@ -76,7 +81,7 @@ function usage() {
 
 const argv = process.argv.slice(2)
 const sub = argv[0]
-if (sub !== 'probe' && sub !== 'generate' && sub !== 'ignore-check' && sub !== 'policy-check' && sub !== 'shapes-check') { usage(); process.exit(2) }
+if (sub !== 'probe' && sub !== 'generate' && sub !== 'ignore-check' && sub !== 'policy-check' && sub !== 'shapes-check' && sub !== 'gate-check') { usage(); process.exit(2) }
 
 let root = null, profilePath = null, refresh = false, testCommandArg = null, testGlobsArg = null, sample = 20, fix = false, dryRun = false, asJson = false
 for (let i = 1; i < argv.length; i++) {
@@ -198,6 +203,23 @@ if (sub === 'policy-check') {
   process.exit(findings.length ? 1 : 0)
 }
 
+// gate-check: is the gate scoped, does it run the whole suite, is a slow tier declared
+// Reports only; /spec:doctor check 25 reads the JSON.
+if (sub === 'gate-check') {
+  const cfg = readConfig(root)
+  const raw = cfg.gateCommand
+  const scoped = typeof raw === 'string' && /\{testDirs\}|\{scopeDirs\}/.test(raw)
+  const resolved = typeof raw === 'string' ? resolveGate('', cfg) : { gate: null }
+  const out = {
+    scoped,
+    gateRunsSuite: typeof raw === 'string' && gateRunsSuite(raw, resolved.gate, cfg.testCommand),
+    slowTier: typeof cfg.slowTestCommand === 'string' && cfg.slowTestCommand.trim() !== '',
+  }
+  if (asJson) console.log(JSON.stringify(out))
+  else for (const k of Object.keys(out)) console.log(`${k}: ${out[k]}`)
+  process.exit(0)
+}
+
 // shapes-check: the declared fileShapes block over the tracked files.
 if (sub === 'shapes-check') {
   const cfg = readConfig(root)
@@ -281,6 +303,10 @@ try {
 }
 
 validateProfile(profile)
+
+if (!/\{testDirs\}|\{scopeDirs\}/.test(profile.config.gateCommand)) {
+  console.error('init-gen: gateCommand is unscoped — every build iteration and the review gate run the whole suite; put {testDirs} where the test runner takes its paths, or accept this when the runner takes none')
+}
 
 if (profile.config.fileShapes !== undefined) {
   const msg = validateFileShapes(profile.config.fileShapes)
@@ -369,6 +395,11 @@ function validateProfile(p) {
   if (p.config && p.config.testCaseScanner !== undefined &&
       (typeof p.config.testCaseScanner !== 'string' || !p.config.testCaseScanner.trim())) {
     console.error('init-gen: profile field "config.testCaseScanner" must be a non-empty shell command string — fix the profile JSON or drop the key (the built-in JavaScript walker then reads every test file) before running generate again')
+    process.exit(2)
+  }
+  if (p.config && p.config.slowTestCommand !== undefined &&
+      (typeof p.config.slowTestCommand !== 'string' || !p.config.slowTestCommand.trim())) {
+    console.error('init-gen: profile field "config.slowTestCommand" must be a non-empty shell command string — fix the profile JSON or drop the key (no slow tier runs then) before running generate again')
     process.exit(2)
   }
   if (p.config) {
@@ -561,6 +592,9 @@ function buildManifestObject(hostRoot, p) {
   if (p.config.testCaseScanner) {
     checks.push({ claim: 'test-case scanner lists at least one case', kind: 'exec', target: `${p.config.testCaseScanner} | grep -q .` })
   }
+  if (p.config.slowTestCommand) {
+    checks.push({ claim: 'slow tier command runs', kind: 'exec', target: p.config.slowTestCommand })
+  }
   checks.push({
     claim: 'settings.json permissions merge applied', kind: 'exec',
     target: `jq -e '(.permissions.allow|type=="array") and (.permissions.deny|type=="array")' .claude/settings.json`,
@@ -664,6 +698,7 @@ function ensureGitattributes(hostRoot) {
 function deriveAllowEntries(config) {
   const cmds = [config.gateCommand, config.testCommand, config.setupCommand, 'bash ' + config.patternsScript]
   if (config.testCaseScanner) cmds.push(config.testCaseScanner)
+  if (config.slowTestCommand) cmds.push(config.slowTestCommand)
   if (config.runtime && !config.runtime.inert) {
     for (const k of ['bootCommand', 'readyCheck', 'seedCommand']) if (config.runtime[k]) cmds.push(config.runtime[k])
   }

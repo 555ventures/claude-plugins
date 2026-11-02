@@ -50,6 +50,8 @@ Profile the test runner's case shape too: when a stack's test files are not line
 Profile the host's file shapes from the tree, never from a stack name: where its test files live
 and how they are named, which extensions its source files carry, and which dependency manifests it
 keeps; Phase 4 writes them as `config.fileShapes`.
+Profile whether the test runner accepts appended paths (the contract asserts `testCommand` does) and
+whether any test boots a process, builds, or needs a service — Phase 3 asks where the slow tier lives.
 Interview the user via `AskUserQuestion` only for what the code cannot answer.
 
 **Author the generated skills' content** from the runtime & observability findings, for
@@ -123,6 +125,10 @@ each option's `description`.
 - **at-risk applicability disclosure** — shown when the probe reports `"atRisk": {"refs": 0,
   ...}`: tell the user the at-risk review leg will likely never fire on this host and ask
   whether that's expected or worth a closer look before accepting it.
+- **slow tier** — where the slow tests live. Option 1 is "(Recommended) none — every test is fast
+  enough for the gate" when Phase 1 found no boot/build/service test; otherwise the runner's own
+  exclusion mechanism, named with its command. Consequence text: slow tests leave the gate and run
+  once per review. The answer lands as `config.slowTestCommand` (absent for "none").
 
 Both rulings land in the profile at `probeOutcomes.testCommand` / `probeOutcomes.atRisk`
 (Phase 4) — never omitted, never inferred silently.
@@ -192,7 +198,9 @@ describes:
                  keys, § Runtime verification, § Capabilities, § Release), judgment values
                  filled from Phase 1's findings. testCommand accepts appended file paths — a
                  no-match must not read as pass (D8's capture-site contract; Phase 3 disclosed
-                 whether this repo's runner honors it). generatedBy/contractHash MUST be
+                 whether this repo's runner honors it). gateCommand carries {testDirs} at the
+                 test segment wherever the runner takes paths; slowTestCommand is Phase 3's
+                 slow-tier answer (absent when none). generatedBy/contractHash MUST be
                  absent — the script stamps them only after manifest-check.sh exits 0 */ },
   "rules": {
     "paths": ["specs/**", ".claude/**"],          // frontmatter scoping

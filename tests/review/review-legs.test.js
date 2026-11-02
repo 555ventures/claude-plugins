@@ -241,7 +241,7 @@ test('AC-20260820-03-2 (also AC-20260830-02-3, AC-20260903-02-12, AC-20260911-02
     'every blocking leg is green — review-legs must exit 0 so the review proceeds to the reviewer: ' + r.stdout + r.stderr)
 })
 
-test('AC-20260903-02-12 (also, SHALL CONTINUE TO): the green manifest feeds verdict.js to CLEAN — the two scripts agree on row shapes, including the new suite row', () => {
+test('AC-20260903-02-12 (also, SHALL CONTINUE TO): the green manifest feeds verdict.js to CLEAN — the two scripts agree on row shapes, including the new suite row (AC-20261101-07-6: a manifest with no slow row still derives CLEAN)', () => {
   const { dir, base } = makeHost({ testBody: GREEN_TEST })
   const { manifest } = run(dir, base)
   const workflow = path.join(dir, 'workflow.json')

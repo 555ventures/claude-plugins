@@ -73,7 +73,8 @@
   },
   "spec/scripts/escape-row.js": {
     "entryPoints": [
-      "git/commands/commit.md"
+      "git/commands/commit.md",
+      "spec/scripts/supersession-rows.js"
     ]
   },
   "spec/scripts/supersession-rows.js": {

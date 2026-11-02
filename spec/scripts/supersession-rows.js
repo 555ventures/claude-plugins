@@ -15,7 +15,7 @@
 // deletion, count MODIFY rows or tests-layer rows as shipped work, or print a verdict.
 //
 // Exit codes: 0 = derived (nothing derived is still 0)
-//             2 = usage; --root not a git repository; sha/ref unresolvable
+//             2 = usage; --root not a git repository; sha/ref unresolvable; the escape-row writer refused a row
 
 const fs = require('fs')
 const path = require('path')
@@ -90,7 +90,7 @@ if (mode === 'commit') {
     if (w.status === 0) console.log(`supersession spec=${p} class=spec-superseded supersededBy=${sup === null ? 'null' : sup}`)
     else if (w.status === 3) console.log(`already recorded spec=${p}`)
     else {
-      console.error(`supersession-rows: escape-row.js --append exited ${w.status} for ${p}: ${(w.stderr || w.stdout || '').trim()}`)
+      console.error(`supersession-rows: escape-row.js --append exited ${w.status} for ${p}: ${(w.stderr || w.stdout || "").trim()} -- see the writer's reason with: node "$(spec-paths escape-row)" --check --row '${JSON.stringify(row)}'`)
       process.exit(2)
     }
   }

@@ -160,7 +160,9 @@ existing rows: unaffected
   with the main root's ledger holding exactly one `stage:"escape"` row `spec:
   "specs/20260820/98-sibling.md"`, `files: ["src/old.js"]`, `class: "shipped-file-deleted"`,
   `via: "review"`, `supersededBy` = the reviewed spec's repo-relative path, `sha` equal to
-  `git rev-parse HEAD` on the target branch after the merge, and print
+  the landed merge commit on the target branch (the commit that deleted the file — HEAD when
+  `finishMerge` starts, before the ledger-record commit), the row committed inside that
+  ledger-record commit, and print
   `supersession spec=specs/20260820/98-sibling.md class=shipped-file-deleted files=1` (e.g. the
   sidecar at MERGE carries `marks.supersessions` with that one row and `sha: null` before the mark)
   → writes tests/review/merge-supersession-rows.test.js

@@ -1,6 +1,7 @@
 ---
 date: 2026-11-01
-status: hardened
+status: implementing
+build_base: main
 tier: critical
 area: review-legs
 breaking: false
@@ -8,6 +9,7 @@ depends_on: [specs/20261101/05-the-gate-that-ran-the-suite-is-the-suite.md]
 brief: n/a
 open_markers: 0
 spiked: 2026-11-01
+diff_base: 373e8b6d4b3cbc3eba2a4b537a9ae5ee210e4143
 ---
 
 # A rerun re-runs only what went red
@@ -37,6 +39,7 @@ the driver's output and sidecar.
 | D5 | Header comments: `review-legs.js` names `--reuse-from`, `REUSABLE`, and the `reusedFrom` key, and its "there is no flag that skips a leg" sentence becomes "no flag skips a leg; `--reuse-from` copies a prior green row as this run's evidence, provenance-stamped"; the driver header names `legsTree` and `flaky`. `[no-ac: script header prose; the behaviour is pinned by AC-20261101-06-2 and AC-20261101-06-6]` | The header is the script's contract. |
 | D6 | `node scripts/plugin-bump.js --bump --plugin spec --changelog "…"`. `[no-ac: node scripts/plugin-bump.js --check in the gate is the oracle]` | Behaviour change under `spec/`. |
 | D7 | The driver test file builds its own two hosts rather than importing `makeSkipsHost`/`redGateHost` (neither is exported, neither counts runs): a skips host whose tracked `gate.sh` appends one line to a `counter` file and prints `ℹ skipped 1`, and a red-gate host whose tracked `gate.sh` exits 1 while a `flake` file holds `red` and 0 otherwise. Both `counter` and `flake` live OUTSIDE the fixture repo (a `tmpdir()` path baked into the script as an absolute path, the pattern `review-legs-gate-reuse.test.js` already uses for its counter), so flipping `flake` or growing `counter` never moves `snapshotTree()`; the "tree changed" case edits a tracked file. `[no-ac: test-fixture mechanics; exercised by every AC the file writes]` | A flip file inside the repo would have to sit in the sidecar or a gitignored path the fixture host does not carry; outside the repo it is invisible to git by construction (spike S1). |
+| D8 | `runHardStopVerdict` re-records `marks.legsTree[String(n)] = snapshotTree()` after its ledger append and before `saveSidecar()`, so the driver's own STOPPED row — appended to the tracked `.claude/spec-runs.jsonl` when the review runs in place (repoRoot === mainRoot) — never reads as a tree change at `--mark repair-round`. (AC-20261101-06-7) | User ruling 2026-11-01 at build (fix in driver over fix only the test): nothing but the driver's own write runs between the legs snapshot and the hard-stop append, so re-snapshotting there cannot mask an owner edit; without it in-place repair rounds never reuse. |
 
 ## File Plan
 

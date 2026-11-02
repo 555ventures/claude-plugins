@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict'
 // review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path>
-//   [--skips <file>] [--fix-delta] [--out-dir <dir>]
+//   [--skips <file>] [--fix-delta] [--out-dir <dir>] [--reuse-from <manifest>]
 //
 // Owner: specs/20260820/06-typed-evidence-manifest.md
 //
@@ -113,7 +113,13 @@
 // silent skip, since `testCommand` is a contract-required config key.
 //
 // The wave-3b promise-sweep leg runs on every
-// invocation; there is no flag that skips a leg, and an unrecognised argument exits 2.
+// invocation; no flag skips a leg; `--reuse-from` copies a prior green row as this run's evidence, provenance-stamped, and an unrecognised argument exits 2.
+//
+// --reuse-from <manifest>: each leg in
+// REUSABLE = gate, suite, at-risk, patterns, smoke whose row in that manifest is green (exit 0;
+// smoke also 4) with a scope equal to this run's is appended verbatim with observed.reusedFrom =
+// the manifest's basename and no child spawned; every other leg and every red or missing REUSABLE
+// row runs as usual. An unreadable --reuse-from path exits 2 before any row is written.
 //
 // Every row this script appends
 // through its own `appendRow` writer carries `scope` as its LAST key — "full" with no
@@ -152,10 +158,10 @@ const { extractSection, parseAcBullets, parseDisposition } = require('./lib/spec
 const { fmMap } = require('./lib/frontmatter')
 
 function usage() {
-  console.error('usage: review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path> [--skips <file>] [--fix-delta] [--out-dir <dir>]')
+  console.error('usage: review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path> [--skips <file>] [--fix-delta] [--out-dir <dir>] [--reuse-from <manifest>]')
 }
 
-let root = null, spec = null, base = null, manifest = null, skips = null, fixDelta = false, outDir = null
+let root = null, spec = null, base = null, manifest = null, skips = null, fixDelta = false, outDir = null, reuseFrom = null
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
@@ -166,10 +172,34 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--skips') skips = argv[++i]
   else if (a === '--fix-delta') fixDelta = true
   else if (a === '--out-dir') outDir = argv[++i]
+  else if (a === '--reuse-from') reuseFrom = argv[++i]
   else { console.error('review-legs: unknown argument ' + a); usage(); process.exit(2) }
 }
 if (!root || !spec || !base || !manifest) { usage(); process.exit(2) }
 root = path.resolve(root)
+// REUSABLE legs: the five that run host tests, boot the app or sweep the tree. With --reuse-from,
+// a REUSABLE leg whose row in the prior manifest is green (smoke: 0 or 4) and whose scope equals
+// this run's scope is appended as that row with observed.reusedFrom = the manifest's basename and
+// nothing spawned. Every other leg, and every red or missing REUSABLE row, runs for real.
+const REUSABLE = ['gate', 'suite', 'at-risk', 'patterns', 'smoke']
+const priorRows = new Map()
+if (reuseFrom) {
+  try {
+    for (const line of fs.readFileSync(reuseFrom, 'utf8').split('\n')) {
+      if (!line.trim()) continue
+      const r = JSON.parse(line)
+      if (r && typeof r.leg === 'string' && !priorRows.has(r.leg)) priorRows.set(r.leg, r)
+    }
+  } catch { console.error(`review-legs.js: --reuse-from ${reuseFrom} cannot be read`); process.exit(2) }
+}
+function reusableRow(leg) {
+  if (!REUSABLE.includes(leg)) return null
+  const r = priorRows.get(leg)
+  if (!r || !r.observed || typeof r.observed !== 'object') return null
+  if (r.scope !== (fixDelta ? 'fix-delta' : 'full')) return null
+  if (!(r.exit === 0 || (leg === 'smoke' && r.exit === 4))) return null
+  return r
+}
 // The manifest is all-or-nothing. Every row below (appendRow's, and the ones ac-matrix.js and
 // promise-sweep.js append by path) lands in `<manifest>.partial`; the file the caller named
 // exists only after the summary — the single rename at the tail. Rows are appended as each
@@ -233,6 +263,13 @@ function appendRow(leg, exit, observed, timed) {
 // dir; a root-level file contributes ITSELF (its dirname "." would sweep the whole tree, pipeline-
 // owned paths included). Entries nested under another entry are pruned — rg visits every argument
 // separately, so an overlapping pair reports the same hit twice.
+function appendReused(r) {
+  timings[r.leg] = 0
+  const row = { leg: r.leg, exit: r.exit, observed: { ...r.observed, reusedFrom: path.basename(reuseFrom) }, scope: r.scope }
+  rows.push(row)
+  fs.appendFileSync(manifest, JSON.stringify(row) + '\n')
+}
+
 function patternsScope(files) {
   const raw = [...new Set(files.map(f => (f.includes('/') ? path.posix.dirname(f) : f)))].sort()
   return raw.filter(d => !raw.some(o => o !== d && d.startsWith(o + '/')))
@@ -298,7 +335,10 @@ async function main() {
   }
 
   const resolved = resolveGate(specText, config)
-  if (resolved.gate) {
+  const reusedGate = reusableRow('gate')
+  if (reusedGate) {
+    appendReused(reusedGate)
+  } else if (resolved.gate) {
     wave1.push(sh(resolved.gate).then(r => {
       fs.writeFileSync(gateOutPath, r.out + r.err)
       const output = r.out + r.err
@@ -339,7 +379,10 @@ async function main() {
   // ---- wave 1b: suite, ALONE — after wave 1 (reconcile/gate/ci), before wave 2 (at-risk/
   // patterns). Runs in EVERY scope including --fix-delta. Never concurrent with another leg that runs host tests — the same collision
   // class the wave-1/wave-2b comments already document for smoke.
-  if (!config.testCommand) {
+  const reusedSuite = reusableRow('suite')
+  if (reusedSuite) {
+    appendReused(reusedSuite)
+  } else if (!config.testCommand) {
     // the whole-row unavailable alternative — testCommand is a contract-required config key,
     // so its absence is a broken host, never a silent skip.
     appendRow('suite', 1, { unavailable: 'no-test-command' })
@@ -405,7 +448,9 @@ async function main() {
     const atRisk = (reconcileJson && Array.isArray(reconcileJson.atRisk)) ? reconcileJson.atRisk : []
     // Zero at-risk files is a genuine, known zero (nothing needed to run) — not an unmade
     // observation, so testsExecuted is the literal 0 here, never a typed unavailability.
-    if (!atRisk.length) appendRow('at-risk', 0, { files: 0, testsExecuted: 0 })
+    const reusedAtRisk = reusableRow('at-risk')
+    if (reusedAtRisk) appendReused(reusedAtRisk)
+    else if (!atRisk.length) appendRow('at-risk', 0, { files: 0, testsExecuted: 0 })
     else if (!config.testCommand) appendRow('at-risk', 0, { unavailable: 'no-test-command' })
     // scope-reconcile emits atRisk as {file, refs} objects (the `refs` provenance is load-bearing
     // and the patterns consumer below already reads the object form). Extract `.file` — a bare
@@ -438,7 +483,9 @@ async function main() {
       }
     }
 
-    if (config.patternsScript) {
+    const reusedPatterns = config.patternsScript ? reusableRow('patterns') : null
+    if (reusedPatterns) appendReused(reusedPatterns)
+    else if (config.patternsScript) {
       // Scope = the dirs of every file the diff changed, minus pipeline-owned paths (specs/,
       // .claude/...). Derived from reconcile's `changed` set, never from its exception sets
       // (outOfPlan/unrealized/excluded): a planned, realized source edit sits in none of those,
@@ -465,9 +512,13 @@ async function main() {
   // (gate in wave 1, at-risk/patterns in wave 2; see the wave-1 comment for both observed
   // collisions). Its full output is retained: a red smoke row with no captured boot log is
   // undiagnosable.
-  const smokeR = await sh(`bash ${q(path.join(scriptDir, 'smoke.sh'))}`)
-  fs.writeFileSync(path.join(outDir, 'smoke.txt'), smokeR.out + smokeR.err)
-  appendRow('smoke', smokeR.code, { result: smokeR.code === 0 ? 'pass' : smokeR.code === 4 ? 'inert' : 'fail' }, smokeR)
+  const reusedSmoke = reusableRow('smoke')
+  if (reusedSmoke) appendReused(reusedSmoke)
+  else {
+    const smokeR = await sh(`bash ${q(path.join(scriptDir, 'smoke.sh'))}`)
+    fs.writeFileSync(path.join(outDir, 'smoke.txt'), smokeR.out + smokeR.err)
+    appendRow('smoke', smokeR.code, { result: smokeR.code === 0 ? 'pass' : smokeR.code === 4 ? 'inert' : 'fail' }, smokeR)
+  }
 
   // ---- contract leg: a `prototype:` spec only — the build row is the executed evidence, ----
   // appended before ac-matrix because ac-matrix reads oracle standing by leg name off the manifest.

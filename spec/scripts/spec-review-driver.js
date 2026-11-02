@@ -25,6 +25,13 @@
 // never spawns, or overflows maxBuffer, and treating that null as a pass (or as an inline .stdout.trim() of a
 // child that never ran) is the exact silent-success failure this driver exists to prevent.
 //
+// A legs run over an unchanged tree reuses green rows:
+// runLegs records marks.legsTree[n] = snapshotTree() before invoking review-legs; `--mark
+// skips-extracted` and `--mark repair-round` compare a fresh snapshot to marks.legsTree[curN] and,
+// when equal, pass review-legs `--reuse-from <prior manifest>`. A leg in REUSABLE that was red in
+// the prior manifest and green in the new one over that same tree is recorded in marks.flaky[n]
+// and printed; the review proceeds normally. A sidecar with no legsTree[curN] is never reused.
+//
 // What this deliberately does NOT do: recommend a disposition, pick a merge strategy, or render
 // a user-facing report — it prints machine summaries plus which judgment is due and the
 // evidence paths; report assembly stays with the session via report-render.js. It never asserts
@@ -861,6 +868,10 @@ function runLegs(n, opts = {}) {
     '--manifest', manifestPathFor(n), '--out-dir', outDirFor(n)]
   if (opts.skipsFile) args.push('--skips', opts.skipsFile)
   if (opts.fixDelta) args.push('--fix-delta')
+  if (opts.reuseFrom) args.push('--reuse-from', opts.reuseFrom)
+  marks.legsTree = marks.legsTree || {}
+  marks.legsTree[String(n)] = opts.tree || snapshotTree()
+  saveSidecar()
   const r = runChild(process.execPath, [legsBin, ...args], { encoding: 'utf8' }, 'review-legs.js')
   if (r.status === 2) {
     die(`review-legs.js precondition failed (iteration ${n}):\n` + (r.stdout + r.stderr).trim())
@@ -987,7 +998,40 @@ function runHardStopVerdict(n) {
     marks.stoppedFallback = repoRoot !== mainRoot // only a real fallback when durable was attempted and lost
   }
   marks.stoppedIteration = n
+  // The STOPPED row just appended is the driver's own write — re-snapshot so it never reads as a tree change at repair-round.
+  marks.legsTree = marks.legsTree || {}
+  marks.legsTree[String(n)] = snapshotTree()
   saveSidecar()
+}
+
+// REUSABLE mirrors review-legs.js's set: the legs a green prior row may stand in for.
+const REUSABLE_LEGS = ['gate', 'suite', 'at-risk', 'patterns', 'smoke']
+function legGreen(r) { return r.leg === 'smoke' ? (r.exit === 0 || r.exit === 4) : r.exit === 0 }
+// Decides reuse for a legs re-run at iteration n from the run curN: returns the opts to merge into
+// runLegsIteration's and prints the owner's veto line. priorManifest is the file --reuse-from names.
+function decideReuse(curN, priorManifest, fixDelta) {
+  const tree = snapshotTree()
+  const recorded = marks.legsTree && marks.legsTree[String(curN)]
+  if (!recorded || recorded !== tree) {
+    console.log('tree changed since legs ' + curN + ' — every leg re-runs')
+    return { tree }
+  }
+  const scope = fixDelta ? 'fix-delta' : 'full'
+  const greens = readManifestRows(priorManifest)
+    .filter((r) => REUSABLE_LEGS.includes(r.leg) && legGreen(r) && r.scope === scope).map((r) => r.leg)
+  console.log('♻️ tree unchanged since legs ' + curN + ' — reusing green rows: ' + greens.join(', '))
+  return { tree, reuseFrom: priorManifest }
+}
+// REUSABLE legs red in the prior rows and green in the new manifest, over the same tree.
+function recordFlaky(n, curN, priorRows) {
+  const now = readManifestRows(manifestPathFor(n))
+  const flaky = priorRows.filter((p) => REUSABLE_LEGS.includes(p.leg) && !legGreen(p) &&
+    now.some((r) => r.leg === p.leg && legGreen(r))).map((p) => p.leg)
+  if (!flaky.length) return
+  marks.flaky = marks.flaky || {}
+  marks.flaky[String(n)] = flaky
+  saveSidecar()
+  for (const leg of flaky) console.log('⚠ flaky: ' + leg + ' was red at legs ' + curN + ' and green over the same tree')
 }
 
 function runLegsIteration(n, opts) {
@@ -1291,7 +1335,11 @@ function handleSkipsExtracted() {
     marks.fixDeltaFrom = marks.fixDeltaFrom || {}
     marks.fixDeltaFrom[String(n)] = marks.fixDeltaFrom[String(curN)]
   }
-  const r = runLegsIteration(n, { skipsFile: resolved, skipsGateCount: gateCount, fixDelta: inheritFix })
+  const priorManifest = manifestPathFor(curN)
+  const priorRows = readManifestRows(priorManifest)
+  const reuse = decideReuse(curN, priorManifest, inheritFix)
+  const r = runLegsIteration(n, { skipsFile: resolved, skipsGateCount: gateCount, fixDelta: inheritFix, ...reuse })
+  if (reuse.reuseFrom) recordFlaky(n, curN, priorRows)
   return r.stopped ? 'STOPPED' : null
 }
 
@@ -2350,9 +2398,16 @@ function handleRepairRound() {
   }
   marks.repairRounds = (marks.repairRounds || 0) + 1
   saveSidecar()
-  fs.rmSync(manifestPathFor(n), { force: true })
   const mode = legsModeFor(n) || {}
-  const r = runLegsIteration(n, { skipsFile: mode.skipsFile || undefined, skipsGateCount: mode.skipsGateCount, fixDelta: !!mode.fixDelta })
+  // the re-run reuses the number, so the stopped manifest is kept aside as the reuse source.
+  fs.mkdirSync(outDirFor(n), { recursive: true })
+  const priorManifest = path.join(outDirFor(n), 'prior-manifest.jsonl')
+  fs.copyFileSync(manifestPathFor(n), priorManifest)
+  const priorRows = readManifestRows(priorManifest)
+  fs.rmSync(manifestPathFor(n), { force: true })
+  const reuse = decideReuse(n, priorManifest, !!mode.fixDelta)
+  const r = runLegsIteration(n, { skipsFile: mode.skipsFile || undefined, skipsGateCount: mode.skipsGateCount, fixDelta: !!mode.fixDelta, ...reuse })
+  if (reuse.reuseFrom) recordFlaky(n, n, priorRows)
   return r.stopped ? 'STOPPED' : null
 }
 

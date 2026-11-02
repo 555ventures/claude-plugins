@@ -10,13 +10,20 @@ CI's verdict about *this commit* is per-SHA or nothing — the per-SHA query is 
 2026-08-10 design and stays. What the leg must never do is collapse distinct absences into
 one label. Three are distinguished:
 
-- **`no-adapter`** — there is no CI tooling or forge to consult at all: `gh` is missing, the
-  repo has no remote, or the host declares `capabilities.forge: "none"`.
-- **`transient`** — the forge query failed retryably; the answer is unknown, not absent.
+- **`no-adapter`** — there is no forge adapter to consult: the host config's
+  `capabilities.forge` is not `github` (absent block, absent key, `none`, or any other value —
+  the CI scripts never invoke `gh`), or `forge` is `github` and `gh` is missing or the repo has
+  no remote.
+- **`transient`** — the forge query failed retryably; the answer is unknown, not absent. It
+  arises only on a `forge: "github"` host whose `gh` executed and failed; it is never produced
+  for an undeclared forge.
 - **`sha-unseen`** — CI exists and was reachable, but this commit is on no remote ref, so no
   run could ever have observed it. The row carries the current branch's latest origin
   conclusion (`{unavailable: "sha-unseen", branch, branchConclusion}`) so the report can say
   what CI last knew about the branch this work sits on.
+
+`/spec:init` writes `forge` from the origin remote and `gh`; `/spec:doctor` check 1's
+`grammar-check` reports `undeclared`.
 
 Before 2026-08-30 `sha-unseen` was folded into `no-adapter`: an unpushed commit returned an
 empty run list and the leg reported the same shape as a repo with no CI at all. In a repo

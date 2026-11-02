@@ -5,8 +5,9 @@
 // init-gen.js policy-check --root <dir> [--json]
 // init-gen.js shapes-check --root <dir> [--json]
 // init-gen.js gate-check --root <dir> [--json]
+// init-gen.js grammar-check --root <dir> [--json]
 //
-// Owner: specs/20260822/02-init-generation-script.md
+// Owner: specs/20260822/02-init-generation-script.md, specs/20261102/01-the-host-names-its-runner-grammar.md (grammar-check)
 //
 // The review-legs.js inversion applied to
 // /spec:init: file-generation phases are generated deterministically — never hand-performed as prose
@@ -39,7 +40,9 @@
 //                 be a plain object but isn't, named + remedy) / unparseable Worker Contract
 //                 (grounding-contract.md heading drifted) / existing
 //                 .claude/settings.json unreadable, a directory, invalid JSON, or not a JSON
-//                 object (merge impossible — nothing written)
+//                 object (merge impossible — nothing written) / config.trunk not a non-empty
+//                 string, config.capabilities.forge outside github|none, or
+//                 config.capabilities.failCountPattern neither "none" nor a regex with a capture group
 //             3 = an existing target differs from what the profile would produce and
 //                 --refresh was not given — every target left byte-identical, nothing written.
 //                 The config target is compared with the host's own `walkthrough` block carried
@@ -52,6 +55,8 @@
 //             2 = usage error / unreadable config
 //   shapes-check: 0 = no block declared, or every declared testGlobs entry matches a tracked file ·
 //             3 = invalid block or a declared testGlobs entry matching no tracked file (stderr, one line each)
+//   grammar-check: 0 = failCountPattern not invalid, trunk undeclared or resolving, forge declared
+//             as github|none · 3 = any of those drifted (one stderr line each) · 2 = usage error
 //   gate-check: 0 = always (prints {"scoped","gateRunsSuite","slowTier"} —
 //             report only, never a refusal) · 2 = usage error
 //   probe:    0 = always (adverse findings — no claude CLI, a vacuous test runner, an inert
@@ -73,6 +78,7 @@ const { resolveGate, gateRunsSuite } = require('./lib/gate-resolve')
 function usage() {
   console.error('usage: init-gen.js probe --root <dir> [--test-command "<cmd>"] [--sample <n>]')
   console.error('       init-gen.js shapes-check --root <dir> [--json]   (exit 0 clean · 3 invalid block or unmatched testGlobs)')
+  console.error('       init-gen.js grammar-check --root <dir> [--json]   (exit 0 clean · 3 drifted grammar declaration)')
   console.error('       init-gen.js gate-check --root <dir> [--json]   (exit 0 always · 2 usage)')
   console.error('       init-gen.js generate --root <dir> --profile <path> [--refresh] [--dry-run]')
   console.error('       init-gen.js policy-check --root <dir> [--json]   (exit 0 clean · 1 findings · 2 usage)')
@@ -81,7 +87,7 @@ function usage() {
 
 const argv = process.argv.slice(2)
 const sub = argv[0]
-if (sub !== 'probe' && sub !== 'generate' && sub !== 'ignore-check' && sub !== 'policy-check' && sub !== 'shapes-check' && sub !== 'gate-check') { usage(); process.exit(2) }
+if (sub !== 'probe' && sub !== 'generate' && sub !== 'ignore-check' && sub !== 'policy-check' && sub !== 'shapes-check' && sub !== 'grammar-check' && sub !== 'gate-check') { usage(); process.exit(2) }
 
 let root = null, profilePath = null, refresh = false, testCommandArg = null, testGlobsArg = null, sample = 20, fix = false, dryRun = false, asJson = false
 for (let i = 1; i < argv.length; i++) {
@@ -239,6 +245,37 @@ if (sub === 'shapes-check') {
   process.exit(invalid || unmatched.length ? 3 : 0)
 }
 
+// grammar-check: the declared runner grammar — one stderr line per drift.
+if (sub === 'grammar-check') {
+  const cfg = readConfig(root)
+  const caps = cfg.capabilities && typeof cfg.capabilities === 'object' ? cfg.capabilities : {}
+  const hasFile = (k) => typeof cfg[k] === 'string' ? cfg[k].includes('{file}') : null
+  const fcp = caps.failCountPattern
+  const fcpState = fcp === undefined ? 'built-in' : fcp === 'none' ? 'none' : patternHasGroup(fcp) ? 'declared' : 'invalid'
+  const trunkDeclared = typeof cfg.trunk === 'string' && cfg.trunk ? cfg.trunk : null
+  let resolves = null
+  if (trunkDeclared) {
+    resolves = spawnSync('git', ['-C', root, 'rev-parse', '--verify', '--quiet', 'refs/heads/' + trunkDeclared], { encoding: 'utf8' }).status === 0
+  }
+  const forge = caps.forge === undefined ? 'undeclared' : (caps.forge === 'github' || caps.forge === 'none') ? caps.forge : 'invalid'
+  const out = {
+    file: { testCommand: hasFile('testCommand') === true, typecheckCommand: hasFile('typecheckCommand') },
+    failCountPattern: fcpState,
+    trunk: { declared: trunkDeclared, resolves },
+    forge,
+  }
+  if (asJson) console.log(JSON.stringify(out))
+  else for (const k of Object.keys(out)) console.log(`${k}: ${JSON.stringify(out[k])}`)
+  const where = CONFIG_RELPATH
+  let drift = false
+  const finding = (msg) => { drift = true; console.error(`init-gen: grammar-check: ${msg}`) }
+  if (fcpState === 'invalid') finding(`capabilities.failCountPattern is not "none" or a regex with a capture group — fix capabilities.failCountPattern in ${where}`)
+  if (trunkDeclared && resolves === false) finding(`trunk "${trunkDeclared}" does not resolve to a branch — fix trunk in ${where}`)
+  if (forge === 'undeclared') finding(`capabilities.forge is undeclared, so CI evidence is off — declare capabilities.forge ("github" | "none") in ${where} or run /spec:init`)
+  if (forge === 'invalid') finding(`capabilities.forge must be "github" or "none" — fix capabilities.forge in ${where}`)
+  process.exit(drift ? 3 : 0)
+}
+
 if (sub === 'probe') {
   const out = {}
   if (testCommandArg) out.testCommand = probeTestCommand(testCommandArg, root)
@@ -253,9 +290,14 @@ if (sub === 'probe') {
 // exit != 0 means it fails loud, which is the safe/expected shape. A spawn failure (runner not
 // found) reports failsLoud:true too — a runner that can't even be invoked cannot be trusted to
 // pass silently.
+function patternHasGroup(p) {
+  if (typeof p !== 'string') return false
+  try { return new RegExp(p + '|').exec('').length - 1 >= 1 } catch { return false }
+}
+
 function probeTestCommand(cmd, hostRoot) {
   const nonexistent = path.join(hostRoot, '.spec-init-gen-probe-nonexistent.txt')
-  const r = hostRun.run(cmd + ' ' + hostRun.quote(nonexistent), { cwd: hostRoot })
+  const r = hostRun.run(hostRun.withFiles(cmd, [nonexistent]), { cwd: hostRoot })
   const exit = r.status
   return { failsLoudOnNoMatch: exit !== 0, exit }
 }
@@ -306,6 +348,16 @@ validateProfile(profile)
 
 if (!/\{testDirs\}|\{scopeDirs\}/.test(profile.config.gateCommand)) {
   console.error('init-gen: gateCommand is unscoped — every build iteration and the review gate run the whole suite; put {testDirs} where the test runner takes its paths, or accept this when the runner takes none')
+}
+
+{
+  const c = profile.config, caps = c.capabilities
+  const bad = (field, msg) => { console.error(`init-gen: profile field "${field}" ${msg} — fix the profile JSON (grammar: the grounding contract § Required config keys / § Capabilities) before running generate again`); process.exit(2) }
+  if (c.trunk !== undefined && (typeof c.trunk !== 'string' || !c.trunk.trim())) bad('config.trunk', 'must be a non-empty branch name string')
+  if (caps && typeof caps === 'object') {
+    if (caps.forge !== undefined && caps.forge !== 'github' && caps.forge !== 'none') bad('config.capabilities.forge', 'must be "github" or "none"')
+    if (caps.failCountPattern !== undefined && caps.failCountPattern !== 'none' && !patternHasGroup(caps.failCountPattern)) bad('config.capabilities.failCountPattern', 'must be "none" or a regex with at least one capture group (group 1 = the failure count)')
+  }
 }
 
 if (profile.config.fileShapes !== undefined) {

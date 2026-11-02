@@ -1389,9 +1389,13 @@ function repairStepBody() {
 // not derivable. The recommendation is a heuristic: a wrong re-arm costs one gate run, so
 // unknown falls to park.
 function escalateRecommendation() {
+  const failPattern = hostConfig.capabilities && hostConfig.capabilities.failCountPattern
+  if (failPattern === 'none') {
+    return { pick: 'park', text: 'recommended: park (fail count unavailable \u2014 the host declares failCountPattern "none")' }
+  }
   const reds = (marks.gateRuns || []).filter((r) => r.exit !== 0).slice(-3)
   const counts = reds.map((r) => {
-    try { return failCount(fs.readFileSync(r.log, 'utf8')) } catch { return null }
+    try { return failCount(fs.readFileSync(r.log, 'utf8'), failPattern) } catch { return null }
   })
   if (counts.length < 3 || counts.some((c) => c === null)) {
     return { pick: 'park', text: 'recommended: park (failure count not derivable from the gate logs)' }

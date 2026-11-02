@@ -2,9 +2,10 @@
 // lib/host-run.js — the one module that runs or prints a host's own command string (gate, test,
 // e2e, boot, db, picture, scaffold), so cwd, env scrubbing and quoting have one owner.
 //
-// Owner: specs/20261026/01-one-runner-for-host-commands.md (D1-D3; AC-20261026-01-1..4).
+// Owner: specs/20261026/01-one-runner-for-host-commands.md (D1-D3; AC-20261026-01-1..4); specs/20261102/01-the-host-names-its-runner-grammar.md (withFiles).
 //
-// Library: quote(value), printable(command, env), run(command, opts), runAsync(command, {cwd, env}).
+// Library: quote(value), withFiles(cmd, relPaths), printable(command, env), run(command, opts), runAsync(command, {cwd, env}).
+//   withFiles substitutes quoted paths at a `{file}` placeholder, else appends them.
 //   env is ADDITIONS over process.env; NODE_TEST_CONTEXT is always removed from the final env.
 //
 // Deliberately does NOT call process.exit (drivers keep their own die-on-no-status discipline via
@@ -21,6 +22,14 @@ function quote(value) {
   const s = String(value)
   if (SAFE.test(s)) return s
   return "'" + s.split("'").join("'\\''") + "'"
+}
+
+// Every `{file}` in cmd becomes the quoted space-joined paths; with no placeholder the quoted
+// paths are appended after one space. quote() stays the only path into the string.
+function withFiles(cmd, relPaths) {
+  const joined = relPaths.map(quote).join(' ')
+  if (cmd.includes('{file}')) return cmd.split('{file}').join(joined)
+  return cmd + ' ' + joined
 }
 
 // `export K=V[ K2=V2]; <command>` — the export reaches every command of a compound line, which a
@@ -52,4 +61,4 @@ function runAsync(command, { cwd, env } = {}) {
   })
 }
 
-module.exports = { quote, printable, run, runAsync }
+module.exports = { quote, withFiles, printable, run, runAsync }

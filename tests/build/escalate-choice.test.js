@@ -13,8 +13,14 @@ const { makeHost, makeNoTestsHost, run, stateOf, testFileContent } = require('./
 const git = (root, ...a) => execFileSync('git', ['-C', root, ...a], { encoding: 'utf8' })
 
 // A no-tests host whose gate is red every run and prints, per run, the next line of counts.txt.
-function escalatedHost(lines) {
+function escalatedHost(lines, failCountPattern) {
   const host = makeNoTestsHost()
+  if (failCountPattern !== undefined) {
+    const cfgPath = path.join(host.root, '.claude/spec.config.json')
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+    cfg.capabilities.failCountPattern = failCountPattern
+    fs.writeFileSync(cfgPath, JSON.stringify(cfg))
+  }
   fs.writeFileSync(path.join(host.root, 'gate.sh'),
     '#!/usr/bin/env bash\nline=$(head -1 counts.txt)\nsed -i 1d counts.txt\necho "$line"\nexit 1\n')
   fs.writeFileSync(path.join(host.root, 'counts.txt'), lines.join('\n') + '\n')
@@ -29,8 +35,8 @@ function escalatedHost(lines) {
   return { host, fourth }
 }
 
-test('AC-20261029-07-2: gate logs carrying fail 9, 4, 2 make the ESCALATE step recommend re-arm, name the mark, and the re-arm mark re-enters the repair round', () => {
-  const { host, fourth } = escalatedHost(['ℹ fail 20', 'ℹ fail 9', 'ℹ fail 4', 'ℹ fail 2'])
+test('AC-20261029-07-2 / AC-20261102-01-7: gate logs carrying Failed: 9, 4, 2 under a declared failCountPattern make the ESCALATE step recommend re-arm, name the mark, and the re-arm mark re-enters the repair round', () => {
+  const { host, fourth } = escalatedHost(['Failed: 20', 'Failed: 9', 'Failed: 4', 'Failed: 2'], 'Failed:\\s+(\\d+)')
   assert.match(fourth.stdout + fourth.stderr, /--mark escalate-choice/,
     'the fourth-repair refusal must name the sanctioned mark, or the owner is told to delete files by hand: ' + fourth.stdout + fourth.stderr)
   assert.doesNotMatch(fourth.stdout + fourth.stderr, /delete/,
@@ -44,6 +50,20 @@ test('AC-20261029-07-2: gate logs carrying fail 9, 4, 2 make the ESCALATE step r
   const next = run(host.root, host.spec).stdout
   assert.match(next, /round 4 \(re-armed past the cap of 3\)/,
     'a re-arm must land the next repair step labelled as past the cap: ' + next)
+})
+
+test('AC-20261029-07-2: with no failCountPattern declared, gate logs carrying fail 9, 4, 2 still recommend re-arm from the built-in shape', () => {
+  const { host } = escalatedHost(['ℹ fail 20', 'ℹ fail 9', 'ℹ fail 4', 'ℹ fail 2'])
+  const step = run(host.root, host.spec).stdout
+  assert.match(step, /recommended: re-arm \(failures shrank 9 → 4 → 2\)/,
+    'a host declaring nothing must keep the built-in count shapes, or every default host loses its trend: ' + step)
+})
+
+test('AC-20261102-01-7: a host declaring failCountPattern "none" gets the unavailable-count park recommendation even when the logs carry a built-in shape', () => {
+  const { host } = escalatedHost(['ℹ fail 20', 'ℹ fail 9', 'ℹ fail 4', 'ℹ fail 2'], 'none')
+  const step = run(host.root, host.spec).stdout
+  assert.ok(step.includes('recommended: park (fail count unavailable — the host declares failCountPattern "none")'),
+    'a declined count must say so instead of recommending on a guess or on "not derivable": ' + step)
 })
 
 test('AC-20261029-07-2: a flat failure trend recommends park, and a log with no recognizable summary recommends park with the not-derivable reason', () => {

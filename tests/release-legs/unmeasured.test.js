@@ -121,12 +121,12 @@ test('AC-20260913-08-6: release-legs.js stage appends {"leg":"substrate","exit":
   const ghScript = '#!/usr/bin/env bash\n' +
     'echo \'[{"status":"completed","conclusion":"success","headSha":"abc123","url":"http://example.com/run","updatedAt":"2026-08-23T00:00:00Z"}]\'\n' +
     'exit 0\n'
-  // capabilities.forge left undefined (dropped by JSON.stringify) so ci falls through to the
-  // dynamic gh probe instead of the forge:"none" short-circuit — the AC-20260823-01-7 trick —
+  // capabilities.forge: 'github' so ci takes the gh probe instead of the forge:"none" short-circuit —
+  // the AC-20260823-01-7 setup —
   // giving this host a real, measured ci leg so the UNMEASURED: line pins substrate alone,
   // isolated from AC-20260913-08-5's ci case above.
   const host = await setupWorkingHost('rl-unmeasured-ac6', {
-    capabilities: { forge: undefined },
+    capabilities: { forge: 'github' },
     checks: [{ claim: 'an unverifiable-from-this-host check', kind: 'inert', target: 'declared: nothing to verify from here' }],
   })
   try {

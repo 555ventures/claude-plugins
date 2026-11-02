@@ -640,13 +640,28 @@ if (marks.via === undefined) {
 // and was never pushed back here. This is that push-back; the non-degenerate-range invariant in
 // resolveBaseSha() below is the backstop for whatever the NEXT base-derivation mistake turns out
 // to be, since precedence alone only fixes the failure mode already seen.
+let autoPickedAnnounced = false
 function resolveBase() {
   const pinned = pinnedBaseCandidates({ diff_base: diffBaseFm, build_base: buildBase })
   if (pinned.length) return pinned[0].value
+  const cfgTrunk = readConfig(repoRoot).trunk
+  if (typeof cfgTrunk === 'string' && cfgTrunk.trim()) {
+    const t = runChild('git', ['-C', repoRoot, 'merge-base', 'HEAD', cfgTrunk], { encoding: 'utf8' },
+      'git merge-base HEAD ' + cfgTrunk)
+    if (t.status === 0 && t.stdout.trim()) return t.stdout.trim()
+    die('config.trunk "' + cfgTrunk + '" does not resolve to a branch \u2014 fix trunk in ' + CONFIG_RELPATH + ' ' +
+      'or add build_base (or diff_base) to the spec frontmatter')
+  }
   for (const cand of ['main', 'master']) {
     const r = runChild('git', ['-C', repoRoot, 'merge-base', 'HEAD', cand], { encoding: 'utf8' },
       'git merge-base HEAD ' + cand)
-    if (r.status === 0 && r.stdout.trim()) return r.stdout.trim()
+    if (r.status === 0 && r.stdout.trim()) {
+      if (!autoPickedAnnounced) {
+        autoPickedAnnounced = true
+        console.error('\u{1F4CC} Auto-picked trunk ' + cand + ' \u2014 no config.trunk declared; /spec:init writes it (veto anytime)')
+      }
+      return r.stdout.trim()
+    }
   }
   die('spec frontmatter carries neither build_base nor diff_base, and no main/master branch ' +
     'exists to derive one from — add build_base (or diff_base) to the spec frontmatter')

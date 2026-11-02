@@ -15,7 +15,8 @@
 // reconciliation: it derives each tests-layer File Plan file's expected colour from the spec's AC
 // vocabulary (a `SHALL CONTINUE TO` pin, or a closed-enum `[pre-green: <reason>]` tag — the tag
 // grammar/enum live in lib/spec-sections.js, the single authority), executes `{testCommand}`
-// (+ `{typecheckCommand}` when declared) once per file against the untouched pre-image, and
+// (+ `{typecheckCommand}` when declared; a `{file}` in either is substituted via
+// lib/host-run.js withFiles, else the path is appended) once per file against the untouched pre-image, and
 // reports every mismatch as a named finding. build.md's classification prose and red-check
 // paragraph shrink to this invocation line.
 //
@@ -343,7 +344,7 @@ const sanctionedById = new Map(wellFormed.map(b => [b.id, isSanctioned(b)]))
 // null → 1), which would report a passing pin as broken.
 const MAX_BUFFER = 16 * 1024 * 1024
 function runLeg(cmd, relPath) {
-  const res = hostRun.run(`${cmd} ${quote(relPath)}`, { cwd: root, encoding: 'utf8', stdio: 'pipe', maxBuffer: MAX_BUFFER })
+  const res = hostRun.run(hostRun.withFiles(cmd, [relPath]), { cwd: root, encoding: 'utf8', stdio: 'pipe', maxBuffer: MAX_BUFFER })
   return { status: res.status === null ? 1 : res.status, output: (res.stdout || '') + (res.stderr || '') }
 }
 
@@ -545,7 +546,7 @@ function escapeTitleForRegex(title) {
 function runFilteredLeg(cmd, filterTemplate, title, relPath) {
   const pattern = `^${escapeTitleForRegex(title)}$`
   const filterArg = filterTemplate.replace('{name}', pattern)
-  const res = hostRun.run(`${cmd} ${quote(filterArg)} ${quote(relPath)}`, { cwd: root, encoding: 'utf8', maxBuffer: MAX_BUFFER })
+  const res = hostRun.run(cmd.includes('{file}') ? hostRun.withFiles(cmd, [relPath]) + ' ' + quote(filterArg) : `${cmd} ${quote(filterArg)} ${quote(relPath)}`, { cwd: root, encoding: 'utf8', maxBuffer: MAX_BUFFER })
   return { code: res.status === null ? 1 : res.status, output: (res.stdout || '') + (res.stderr || '') }
 }
 

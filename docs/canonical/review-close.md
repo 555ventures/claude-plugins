@@ -65,3 +65,13 @@ The standing rules:
   no commit of its own, and leaves `git rev-parse HEAD` untouched. The one path that deletes a
   test is `/spec:doctor` check 20's remedy — `node "$(spec-paths test-expiry)" --root .
   --all-done --apply` — run only after one question naming the count and the files.
+- **A merge-back that deletes shipped work records it.** Before the first `merge-back.sh`
+  subcommand, the driver derives the files the spec branch deleted that a done spec's File Plan
+  created (`supersession-rows.js --merge`, creator rows only, tests layer excluded) and stores
+  them in the sidecar; after the merge lands, `finishMerge` appends one `stage:"escape"` row per
+  owning spec (`class: shipped-file-deleted`, `via: review`, `supersededBy` = the merged spec,
+  `sha` = the landed merge commit) through `escape-row.js --append`, before the evidence
+  promotion, so the row rides the ledger-record commit. A derivation failure prints one `⚠️`
+  line and never fails the merge. The retired-spec sibling (`class: spec-superseded`) is
+  written by `/git:commit` Step 3b when a commit flips a spec to `status: superseded`.
+  (specs/20261101/11-a-direction-flip-leaves-a-row.md D2, D4)

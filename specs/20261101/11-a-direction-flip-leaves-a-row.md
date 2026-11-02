@@ -1,6 +1,6 @@
 ---
 date: 2026-11-01
-status: implementing
+status: done
 tier: critical
 area: ledger
 breaking: false
@@ -247,6 +247,21 @@ source branch still exists), write after (the sha exists), rows carried in the s
 the CONFLICTS and already-landed re-entry paths. Fragile to watch: the review-driver test needs
 the full synthetic worktree fixture; `supersededBy` is an extra key the validator ignores, so a
 future slim-row tightening must list it.
+
+Build departures (folded from the deviations sidecar, 2026-11-02): AC-10 is a negative pin and
+was green on the pre-image, with AC-9 as its red sibling in the same file. AC-9's first test
+pinned `sha` to the final HEAD, which contradicted D4's "append as `finishMerge`'s first
+action"; the build kept D4 verbatim, so the row is written before the evidence promotion, rides
+the ledger-record commit, and carries the squash commit's sha. The test and AC-9's text were
+tightened to that. `--merge` rows omit `stage` to match AC-5's exact shape, and the driver adds
+`stage:"escape"` on append. The driver passes `--by` relative to the build worktree, because the
+session's spec path carries the `.claude/worktrees/…` prefix. D7, a git plugin bump, was added
+at build because D3 edits a second plugin directory. The fix-delta suite also required the
+entry-point manifest to declare `supersession-rows.js` as a caller of `escape-row.js`.
+
+### Advisory debt (review rv_dc2893789319)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/spec-11-a-direction-flip-leaves-a-row/spec/scripts/supersession-rows.js:93 — The new remedy text splices `JSON.stringify(row)` inside single quotes (`--check --row '${JSON.stringify(row)}'`). `row.supersededBy` is free-form frontmatter (`superseded_by`), so a value containing an apostrophe would produce a copy-paste remedy that the shell cannot parse; a spec path or sha never carries one, so only that one field is exposed. Hygiene only — the operator still sees the writer's own stderr and the row content.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/spec-11-a-direction-flip-leaves-a-row/tests/escape/supersession-rows.test.js:102 — No test pins the repaired writer-refusal path (escape-row.js --append exiting other than 0/3): neither the header's new exit-2 cause nor the remedy text in the stderr message is asserted anywhere, so a future edit could drop the remedy silently.
 
 ## Canonical Delta
 

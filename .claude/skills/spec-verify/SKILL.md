@@ -30,8 +30,9 @@ one the way the suite does (`tests/helpers.js`):
 
 - Exit codes per the script's documented alphabet (0 pass · 1 findings · 2 usage · specifics above).
 - Sentinel lines on stdout (`__SMOKE_PASS__`, `__GATE_PASS__`) and `--json` where offered.
-- Doctrine claims are verified by regex over the markdown itself — the same mode
-  `tests/doctrine-review.test.js` uses.
+- Doctrine references and tokens are verified over the markdown itself with `section`/`phrase` from
+  `tests/helpers.js` — the mode `tests/consistency/dead-stops.test.js` uses; wording is read,
+  never matched.
 
 ## Consumers
 

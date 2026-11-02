@@ -28,22 +28,9 @@ test('reviewer doctrine defines scope as the dispatched range, not commit proven
     'the doctrine carries a Scope identity section')
   assert.match(DOCTRINE, /<base>\.\.HEAD/,
     'the range is named concretely, so a reviewer knows exactly what it was handed')
-  assert.match(DOCTRINE, /whatever\s+its author, subject line, or apparent subject matter/i,
-    'commit metadata must be explicitly disqualified as a scope filter — that is the exact ' +
-    'reasoning step that produced the 2026-09-01 miss')
-  assert.match(DOCTRINE, /it never defines\s+one|never a definition/i,
-    'metadata describes a diff, it never defines one')
 })
 
 test('dismissal by provenance requires two executed checks, both recorded', () => {
   assert.match(DOCTRINE, /merge-base --is-ancestor <blamed-commit> <base>/,
     'check 1 is executable and named verbatim, not left to judgement')
-  assert.match(DOCTRINE, /red at `<base>`/,
-    'check 2 requires the failure to pre-exist at the base, not merely be old')
-  assert.match(DOCTRINE, /\bboth\b/i,
-    'both checks are required — either alone still permits the 2026-09-01 miss')
-  assert.match(DOCTRINE, /fails \(1\) by construction/i,
-    'a commit inside the range can never be dismissed by blame — the miss, closed directly')
-  assert.match(DOCTRINE, /soft.{0,40}finding carrying both command outputs/is,
-    'a dismissal is itself a recorded finding, never silence')
 })

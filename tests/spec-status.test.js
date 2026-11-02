@@ -977,8 +977,6 @@ test('consumers are wired to the one derivation', () => {
     'plan Phase 0 dependency preflight must use --brief mode')
   assert.match(read('spec/commands/status.md'), /spec-status.*--next/s,
     '/spec:status section 2 must print --next verbatim, not re-derive the mapping in prose')
-  assert.match(read('spec/commands/status.md'), /verbatim, as a fenced code block/,
-    '/spec:status must print the deterministic dashboard verbatim, not restyle by hand')
   // AC-20260912-03-6: review.md's body moves to spec/doctrine/stages/stage-review.md with no
   // command file left behind — repointed in place, not deleted, since the underlying invariant
   // (review close prints --next verbatim) still holds wherever the prose now lives.

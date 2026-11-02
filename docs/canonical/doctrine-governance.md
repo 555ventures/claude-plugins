@@ -6,7 +6,9 @@ governing rules now:
 
 - **One binding home per rule** (core.md § Doctrine Authoring): prose that restates canon
   living elsewhere shrinks to a pointer; touch-time dedup, never a sweep.
-- **Behavior is pinned by behavioral tests** that execute it — never by regexes over prose.
+- **Prose is pinned for three things only** (core.md § Doctrine Authoring): references it must keep, phrases it must no longer
+  contain, and protocol tokens an executor prints verbatim; a pin on the wording of a rule is
+  not a test — `/doctrine-review` reads wording (ADR-0037).
 - **Incident policy** (core.md § Incident Policy): an incident is fixed with a behavioral
   test in the same session; only a third recurrence of a class — counted across every readable
   repo ledger on this machine, numbers from `node "$(spec-paths fleet-reader)" --json` — earns a

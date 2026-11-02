@@ -51,10 +51,6 @@ test('AC-20261029-01-3 / AC-20261029-08-10: core.md § Model Placement carries t
     'without the Disposer | opus | medium row the disposer seat has no doctrine home');
   assert.match(section, row('Implementation workers', 'sonnet', 'medium'),
     'without the Implementation workers | sonnet | medium row the worker seat is unstated and drivers drift');
-  assert.match(section, /policy\.models[^.]*overrid|overrid[^.]*policy\.models/,
-    'without the policy.models override sentence a host cannot learn that the three seat rows are only defaults');
-  assert.match(section, /fresh-context/,
-    'without the fresh-context sentence review independence is unexplained and the family rule has no replacement');
   assert.doesNotMatch(section, /different model family/,
     'the retired "different model family" rule is still taught, which nothing in the plugin can enforce');
   assert.doesNotMatch(section, /different family/,

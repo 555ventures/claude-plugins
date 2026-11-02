@@ -247,11 +247,6 @@ test('AC-20260810-09-5: doctor.md documents a numbered advisory check invoking c
   assert.match(doctor, /15\.\s*\*\*[^*]*\*\*[\s\S]{0,400}citations-check/,
     'doctor.md must contain a numbered check that names citations-check — without it a ' +
     'fresh /spec:doctor run never invokes the checker at all')
-  const idx = doctor.search(/15\.\s*\*\*/)
-  const nearby = doctor.slice(idx, idx + 400)
-  assert.match(nearby, /advisory/i,
-    'the citations check must stay documented as advisory — a silently-blocking check would ' +
-    'contradict the Decision that scoped it advisory')
 })
 
 // ---------------------------------------------------------------------------

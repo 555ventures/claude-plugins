@@ -389,7 +389,31 @@ function writePolicy(root, block) {
   fs.writeFileSync(cfgPath, JSON.stringify(cfg))
 }
 
+// The lines of `text` from the first line matching `startRe` up to, excluding, the next line
+// matching `endRe`; to the end of text when `endRe` never matches after it.
+function sliceSection(text, startRe, endRe, label) {
+  const lines = text.split('\n')
+  const from = lines.findIndex((l) => startRe.test(l))
+  assert.ok(from !== -1, label + ' must keep the heading ' + String(startRe) + ' — without it the section pin cannot read the rule')
+  let to = lines.findIndex((l, i) => i > from && endRe.test(l))
+  if (to === -1) to = lines.length
+  return lines.slice(from, to).join('\n')
+}
+
+// read(rel) sliced by sliceSection; a missing file or heading fails once, naming the remedy.
+function section(rel, startRe, endRe) {
+  assert.ok(fs.existsSync(path.join(ROOT, rel)), rel + ' must exist — the doctrine under test is gone')
+  return sliceSection(read(rel), startRe, endRe, rel)
+}
+
+// A reflow-safe regex for a literal: metacharacters escaped, every whitespace run matches \s+.
+function phrase(literal, flags = '') {
+  const source = literal.trim().replace(/[.*+?^${}()|[\]\\/]/g, '\\$&').replace(/\s+/g, '\\s+')
+  return new RegExp(source, flags)
+}
+
 module.exports = {
+  sliceSection, section, phrase,
   assistantUsageLine,
   ROOT, SPEC, read, extractFn, evalFns, checkWorkflowSyntax, tmpdir, runNode, runBash, gitRepo,
   freePort, parseFlatDom, sweepRetiredLiteral, writePolicy,

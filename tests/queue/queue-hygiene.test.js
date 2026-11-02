@@ -191,18 +191,11 @@ test('AC-20261013-02-8: the queue command doctrine names groom in its argument-h
   const hint = /^argument-hint:.*$/m.exec(src)
   assert.ok(hint && /groom/.test(hint[0]), 'D5: the frontmatter argument-hint must list groom, or the session never learns the subcommand exists: ' + (hint && hint[0]))
   assert.match(src, /^- `groom`/m, 'D5: the subcommand list needs a groom line: ' + src)
-  const render = src.slice(src.indexOf('## Render'))
-  assert.match(render, /never tick/, 'D5: § Render must carry the ask-per-item rule (never tick without a yes), or groom becomes an auto-tick path: ' + render)
   assert.ok(src.split('\n').length - (src.endsWith('\n') ? 1 : 0) <= 55, 'D5: the file must stay at or under the 55-line read-load ceiling: ' + src.split('\n').length)
 })
 
 test('groom proposes from agent evidence: one haiku checker per flagged item, flagged presumed done, keep needs the missing piece quoted', () => {
   const src = read('spec/commands/queue.md')
-  const render = src.slice(src.indexOf('## Render'))
-  assert.match(render, /`Agent \{model: "haiku"\}` per flagged item/, 'groom must fan out one cheap read-only agent per flagged item, or the session proposes keep from age alone: ' + render)
-  assert.match(render, /presumed `done`/, 'the default fate for a flagged item must be done, never keep: ' + render)
-  assert.match(render, /`keep` only with/, 'keep must require quoted evidence of what is still missing: ' + render)
-  assert.match(render, /No agent, no proposal/, 'a proposal without a checker run is the bias this rule exists to remove: ' + render)
   const tools = /^allowed-tools:.*$/m.exec(src)
   assert.ok(tools && /\bAgent\b/.test(tools[0]) && /AskUserQuestion/.test(tools[0]), 'the command must be allowed to dispatch agents and ask per item: ' + (tools && tools[0]))
 })

@@ -109,6 +109,5 @@ test('AC-20261029-04-2: WHEN git/commands/commit.md is read THE SYSTEM SHALL car
   assert.ok(m[1].includes('spec-paths secrets-scan'), 'Step 1 must run the scan in its batch, or secrets stage with no question')
   assert.match(text, /AskUserQuestion[\s\S]*Exclude them \(Recommended\)/, 'the first option must be "Exclude them (Recommended)" so the safe default is one keypress')
   assert.ok(text.includes('git reset -q -- '), 'the exclude arm must unstage the hit paths with a quiet reset, or "exclude" excludes nothing')
-  assert.ok(text.includes('Secrets never stage silently'), 'rule 5 must state that a hit is a question, not a warning')
   assert.ok(!text.includes('but still stage them'), 'the old "warn but still stage" rule contradicts the new question and must be gone')
 })

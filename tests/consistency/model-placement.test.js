@@ -46,8 +46,6 @@ test('AC-20261029-01-8 / AC-20261029-09-8: the build driver wave step prints the
 
 test('AC-20261029-01-9: README states the thesis as a fresh-context reviewer and no longer names an uncorrelated model', () => {
   const readme = read('README.md')
-  assert.ok(readme.includes('fresh-context reviewer'),
-    'README must state the fresh-context mechanism, or the public thesis contradicts core § Model Placement')
   assert.ok(!readme.includes('uncorrelated model'),
     'README still teaches the retired uncorrelated-model mechanism')
 })

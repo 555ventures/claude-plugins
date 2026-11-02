@@ -7,12 +7,12 @@ metadata:
 ---
 
 specs/20260820/08-config-name-ban.md AC-20260820-08-9 gave `review-legs.js` with an unreadable
-config → stderr contains `cannot read .claude/spec.config.json under --root` (review-legs.js:77,
+config → stderr contains `cannot read .claude/spec.config.json under --root` (review-legs.js:~217,
 inside a `try { config = readConfig(root) } catch (e) { ... }`). But `readConfig()` in
 `lib/host-config.js` internally swallows every read/parse failure to `{}` — it can never throw —
 so that catch block is unreachable dead code under any `--root` value. The only reachable remedy
 in that script for an absent/unreadable config is the *next* line's `if (!config.gateCommand)`
-message (review-legs.js:81, "no gateCommand in .claude/spec.config.json under --root"), which is
+message (review-legs.js:~222, "no gateCommand in .claude/spec.config.json under --root"), which is
 also one of the same D9 migration targets and does render the path.
 
 Separately, that reachable test turned out **vacuous as a red pin**: the current source already

@@ -104,3 +104,13 @@ never vouches for the suite. The same helper, `gateRunsSuite` in `lib/gate-resol
 driver's close-time re-run skip its whole-suite half. Every legs run also writes `timings.json`
 beside the manifest, one wall-clock millisecond count per leg.
 (specs/20261101/05-the-gate-that-ran-the-suite-is-the-suite.md)
+
+## A rerun over an unchanged tree copies its green rows
+
+The driver snapshots the tree (`snapshotTree`, sidecar excluded)
+before every legs run. When `--mark skips-extracted` or `--mark repair-round` starts a new legs
+run over the same tree, review-legs receives `--reuse-from <prior manifest>` and copies the prior
+green rows for `gate`, `suite`, `at-risk`, `patterns` and `smoke` with `observed.reusedFrom`
+naming the manifest; red rows and every other leg run for real. A leg red before and green over
+the same tree is printed and recorded as flaky. A changed tree re-runs everything.
+(specs/20261101/06-a-rerun-re-runs-only-what-went-red.md)

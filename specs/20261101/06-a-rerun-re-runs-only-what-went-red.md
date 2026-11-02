@@ -1,6 +1,6 @@
 ---
 date: 2026-11-01
-status: implementing
+status: done
 build_base: main
 tier: critical
 area: review-legs
@@ -151,6 +151,11 @@ header forbids retry/poll by design); reusing across different iterations' scope
 run judges a different question); reusing `ci`.
 
 Collision closure (D5 narrows review-legs.js's "there is no flag that skips a leg" sentence): both literals-leg hits land in `spec/scripts/review-legs.js`, already a File Plan row; no test pins the sentence, so nothing is waived. The `executes` hits are tests that spawn review-legs.js or the driver without `--reuse-from` and without the two marks over an unchanged tree (A3), which this spec leaves byte-identical.
+
+### Advisory debt (review rv_ac0e233e1afd)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/spec-06-a-rerun-re-runs-only-what-went-red/spec/scripts/review-legs.js:389 — When the gate command runs the suite (gateRunsSuite true) and the prior manifest's gate row is green but its suite row is red or missing, the suite leg's gate-derived branch copies the REUSED gate row from `rows` and synthesizes a suite row with no spawn — so a red prior suite row does not 'run exactly as today' in the spawn sense, and the synthesized row inherits `reusedFrom` via the observed spread plus `reused: 'gate'`. Unreachable in practice (a gate-derived suite row is deterministic in the gate row), hence advisory; no executed repro (the scratch-file write was refused by the worktree guard).
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/spec-06-a-rerun-re-runs-only-what-went-red/spec/scripts/spec-review-driver.js:1013 — decideReuse prints 'tree changed since legs N — every leg re-runs' when `marks.legsTree[curN]` is simply absent (an older sidecar); D1 calls that case 'tree unknown — never reused', and the printed cause misstates it.
+- a2 /home/jj/projects/claude-plugins/.claude/worktrees/spec-06-a-rerun-re-runs-only-what-went-red/spec/scripts/spec-review-driver.js:1020 — With an unchanged tree but no green REUSABLE rows in the prior manifest (e.g. every expensive leg red), the ♻️ line prints with an empty tail ('reusing green rows: ') while still passing --reuse-from.
 
 ## Canonical Delta
 

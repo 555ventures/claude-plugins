@@ -1,12 +1,14 @@
 ---
 date: 2026-11-01
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: scripts
 breaking: false
 depends_on: []
 brief: n/a
 open_markers: 0
+diff_base: 65495095120e52ef2e781ac6dd61ced0a07cf284
 ---
 
 # The five writers that never retried

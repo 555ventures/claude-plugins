@@ -33,15 +33,15 @@
 //   1  findings — one line per colliding number on stdout (plain), or one JSON object with --json
 //   2  usage — unknown flag, --root missing its value, or --root is not an existing directory
 const fs = require('fs')
+const { writeOut: syncWrite } = require('./lib/sync-write')
 const path = require('path')
 const { fmValue } = require('./lib/frontmatter')
 
 const USAGE = 'usage: spec-number-check.js --root <dir> [--json]'
 
+// Routes through lib/sync-write.js — see its header for why a bare write + exit truncates.
 function writeOut(fd, text) {
-  const buf = Buffer.from(text, 'utf8')
-  let off = 0
-  while (off < buf.length) off += fs.writeSync(fd, buf, off, buf.length - off)
+  syncWrite(fd, text)
 }
 
 function die(code, msg) {

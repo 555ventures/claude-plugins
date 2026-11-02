@@ -35,6 +35,7 @@
 //   2  usage error (missing --root or --out).
 
 const fs = require('fs')
+const { writeOut: syncWrite } = require('./lib/sync-write')
 const path = require('path')
 const { execFileSync } = require('child_process')
 const { fileURLToPath } = require('url')
@@ -57,10 +58,9 @@ function parseArgs(argv) {
   return out
 }
 
+// Routes through lib/sync-write.js — see its header for why a bare write + exit truncates.
 function writeOut(fd, text) {
-  const buf = Buffer.from(text, 'utf8')
-  let off = 0
-  while (off < buf.length) off += fs.writeSync(fd, buf, off, buf.length - off)
+  syncWrite(fd, text)
 }
 
 // Runs `<shadcn> info --json` inside `root`; returns the parsed payload or null on any failure

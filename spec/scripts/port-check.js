@@ -28,6 +28,7 @@
 //   1  findings (tests or config) — one line per hit on stdout (plain), or one JSON object with --json
 //   2  usage — no --root, or --root names a directory with no tests/ subdirectory
 const fs = require('fs')
+const { writeOut: syncWrite } = require('./lib/sync-write')
 const path = require('path')
 const { readsPort, hasPortSlot } = require('./lib/app-port')
 const { CONFIG_RELPATH } = require('./lib/host-config')
@@ -113,10 +114,9 @@ function configFindings(root) {
   return out
 }
 
+// Routes through lib/sync-write.js — see its header for why a bare write + exit truncates.
 function writeOut(fd, text) {
-  let buf = Buffer.from(text, 'utf8')
-  let off = 0
-  while (off < buf.length) off += fs.writeSync(fd, buf, off, buf.length - off)
+  syncWrite(fd, text)
 }
 
 function main() {

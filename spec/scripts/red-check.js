@@ -99,6 +99,7 @@ const fs = require('fs')
 const path = require('path')
 const { execFileSync } = require('child_process')
 const hostRun = require('./lib/host-run')
+const { computeTestsExecuted, isUnobserved } = require('./lib/count-observation')
 const { quote } = hostRun
 const { parseFilePlanRows, isTestsRow } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
@@ -338,8 +339,16 @@ const sanctionedById = new Map(wellFormed.map(b => [b.id, isSanctioned(b)]))
 // `$memberId` expanded away by bash, so the leg ran against a path that does not exist, exited
 // non-zero, and reported a passing sanctioned-green file as a hard `broken-pin`.
 function runLeg(cmd, relPath) {
-  const res = hostRun.run(`${cmd} ${quote(relPath)}`, { cwd: root, stdio: 'ignore' })
-  return res.status === null ? 1 : res.status
+  const res = hostRun.run(`${cmd} ${quote(relPath)}`, { cwd: root, encoding: 'utf8', stdio: 'pipe' })
+  return { status: res.status === null ? 1 : res.status, output: (res.stdout || '') + (res.stderr || '') }
+}
+
+// capabilities.testCountPattern: absent or "none" means red-check reads exit codes only.
+const countPattern = (config.capabilities && config.capabilities.testCountPattern) || null
+const patternDeclared = !!countPattern && countPattern !== 'none'
+if (!patternDeclared) {
+  warnings.push('testCountPattern is not declared in the host config — red-check reads exit codes only ' +
+    'and cannot see a run that executed no test')
 }
 
 const expectGreenSet = new Set(expectGreenPaths)
@@ -381,9 +390,10 @@ for (const relPath of [...testFiles].sort()) {
       detail: `${relPath}: ${mixedAcs.join(', ')} mixes a new promise with a SHALL CONTINUE TO pin ` +
         `— split the SHALL CONTINUE TO clause into its own AC, then re-run`,
     })
-    let observed = runLeg(config.testCommand, relPath) === 0 ? 'green' : 'red'
+    const mixedRun = runLeg(config.testCommand, relPath)
+    let observed = mixedRun.status === 0 ? 'green' : 'red'
     if (observed === 'green' && config.typecheckCommand) {
-      observed = runLeg(config.typecheckCommand, relPath) === 0 ? 'green' : 'red'
+      observed = runLeg(config.typecheckCommand, relPath).status === 0 ? 'green' : 'red'
     }
     files.push({ path: relPath, expected: 'unclassified', observed, carriedAcs })
     continue
@@ -411,14 +421,26 @@ for (const relPath of [...testFiles].sort()) {
   // pinned CPU, not a failing assertion. It still classifies as red (a hung test is not green),
   // but it is surfaced by name so the build driver can record the incident on its build row
   // (core § Incident Policy materiality) instead of the trip vanishing into "observed: red".
-  const testExit = runLeg(config.testCommand, relPath)
+  const testRun = runLeg(config.testCommand, relPath)
+  const testExit = testRun.status
   if (testExit === 124) warnings.push(`watchdog-trip ${relPath} (exit 124) — the test run was killed by the host timeout, not a failing assertion`)
   let observed = testExit === 0 ? 'green' : 'red'
+  let testsExecuted
+  if (observed === 'green' && patternDeclared) {
+    testsExecuted = computeTestsExecuted(testRun.output, countPattern)
+    if (isUnobserved(testsExecuted)) observed = 'unobserved'
+  }
   if (observed === 'green' && config.typecheckCommand) {
-    observed = runLeg(config.typecheckCommand, relPath) === 0 ? 'green' : 'red'
+    observed = runLeg(config.typecheckCommand, relPath).status === 0 ? 'green' : 'red'
   }
 
-  if (expected === 'green' && observed === 'red') {
+  if (expected === 'green' && observed === 'unobserved') {
+    findings.push({
+      severity: 'hard', class: 'vacuous-green', path: relPath, acs: carriedAcs,
+      detail: `${relPath}: the runner exited ${testExit} but executed no test per its output ` +
+        `(testCountPattern ${countPattern}) — the sanctioned-green file proved nothing`,
+    })
+  } else if (expected === 'green' && observed === 'red') {
     findings.push({
       class: 'broken-pin', path: relPath, acs: carriedAcs,
       detail: `${relPath}: sanctioned-green file failed its run`,
@@ -488,7 +510,9 @@ for (const relPath of [...testFiles].sort()) {
     }
   }
 
-  files.push({ path: relPath, expected, observed, carriedAcs })
+  const fileRow = { path: relPath, expected, observed, carriedAcs }
+  if (testsExecuted !== undefined) fileRow.testsExecuted = testsExecuted
+  files.push(fileRow)
 }
 
 // ---- per-test verification

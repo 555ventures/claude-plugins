@@ -1,12 +1,14 @@
 ---
 date: 2026-11-01
-status: hardened
+status: implementing
 tier: standard
 area: build-integrity
 breaking: false
+build_base: main
 depends_on: []
 brief: n/a
 open_markers: 0
+diff_base: 3a84b6609b091ae178b0e3d4c505351d0d762a3b
 ---
 
 # Legs read evidence, not exit codes alone

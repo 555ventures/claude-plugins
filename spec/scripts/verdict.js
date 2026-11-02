@@ -186,7 +186,7 @@
 // (never the generic unknown-flag usage line) so a caller can tell the two refusals apart, or
 // (checked at arg-parse time before the manifest is read,
 // no verdict word or ledger line printed, message names --checkpoint specifically) a --checkpoint
-// value outside disposer|empty|not-reached, --checkpoint-reason passed at all (retired), a
+// value outside disposer|empty|not-reached, a
 // --checkpoint-overrides passed without --checkpoint disposer or not a non-negative integer, or
 // --checkpoint passed with --profile release
 //
@@ -199,8 +199,7 @@
 // (a dispositionable, waivable word) rather than making CLEAN structurally unreachable while the
 // whole suite is red — the ruling this spec locks.
 //
-// The session-change CHECKPOINT
-// (cleared|stamp-appeared|overridden|not-reached) is retired along with --checkpoint-reason.
+// The session-change CHECKPOINT enum (cleared|stamp-appeared|overridden|not-reached) is retired.
 // --checkpoint <disposer|empty|not-reached> and --checkpoint-overrides <N> (a non-negative
 // integer, valid only with --checkpoint disposer; --checkpoint disposer without it defaults to
 // 0) are review-profile-only flags, now valid with --via loop, --via direct, and --via absent
@@ -210,8 +209,7 @@
 // `{"outcome":"not-reached"}`. Absent flags leave the row byte-identical to today (no checkpoint
 // key at all). Refused (exit 2, arg-parse time, before the manifest is read, no verdict word or
 // ledger line printed, message names --checkpoint specifically): a --checkpoint value outside the
-// new enum (cleared/stamp-appeared/overridden included), --checkpoint-reason passed at all (the
-// message says it is retired), --checkpoint-overrides passed without --checkpoint disposer,
+// new enum (cleared/stamp-appeared/overridden included), --checkpoint-overrides passed without --checkpoint disposer,
 // --checkpoint-overrides not a non-negative integer, or --checkpoint passed with --profile
 // release (no runId to key).
 //
@@ -273,7 +271,7 @@ let ledger = false, specArg = null, tier = null, diffLoc = null, iteration = nul
 let runId = null, milestone = null, briefsArg = null, retainDir = null, escalated = false
 let baseShaArg = null, headShaArg = null, dirtyFlag = false
 let viaArg = null, modelArg = null, sessionTokensArg = null
-let checkpointArg = null, checkpointReasonArg = null, checkpointOverridesArg = null
+let checkpointArg = null, checkpointOverridesArg = null
 const requireLegs = []
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -302,7 +300,6 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--model') modelArg = argv[++i]
   else if (a === '--sessionTokens') sessionTokensArg = argv[++i]
   else if (a === '--checkpoint') checkpointArg = argv[++i]
-  else if (a === '--checkpoint-reason') checkpointReasonArg = argv[++i]
   else if (a === '--checkpoint-overrides') checkpointOverridesArg = argv[++i]
   else { usage(); process.exit(2) }
 }
@@ -371,17 +368,12 @@ const model = modelArg !== null ? modelArg : null
 // flag-presence-first pattern as every other matrix in this file), so a malformed or contextually
 // invalid checkpoint outcome can never reach the ledger. Every refusal names --checkpoint
 // specifically so it is never confused with the generic unknown-flag usage line. The session-
-// change enum (cleared|stamp-appeared|overridden) and --checkpoint-reason are retired — independence
+// change enum (cleared|stamp-appeared|overridden) is retired — independence
 // is now the disposer agent, dispatched on both --via loop and --via direct alike, so --checkpoint
 // is not refused for a non-loop --via.
 const CHECKPOINT_ENUM = new Set(['disposer', 'empty', 'not-reached'])
 if (checkpointArg !== null && !CHECKPOINT_ENUM.has(checkpointArg)) {
   console.error(`verdict.js: --checkpoint must be one of disposer|empty|not-reached, got "${checkpointArg}"`)
-  process.exit(2)
-}
-if (checkpointReasonArg !== null) {
-  console.error('verdict.js: --checkpoint-reason is retired (specs/20260901/09-disposer-gate.md, ' +
-    'ADR-0005) — drop it; --checkpoint no longer carries a reason')
   process.exit(2)
 }
 if (checkpointOverridesArg !== null && checkpointArg !== 'disposer') {

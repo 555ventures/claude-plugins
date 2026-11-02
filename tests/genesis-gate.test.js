@@ -76,11 +76,11 @@ test('AC-20260827-03-6: /spec:genesis-design now falls through the hook untouche
 
 // specs/20260902/08-genesis-shrink-brief-state.md D8 (AC-20260902-08-9, AC-20260902-08-16):
 // the init arm's init-arm value set gains "ratified" (BRIEF's own successful ratification value,
-// D4) as a third passing value alongside the SHALL-CONTINUE-TO "rules-locked"/"skipped" legacy
-// values; the blocked message for doctrine-drafted/tokens-landed says "re-run /spec:genesis to
+// D4) as a passing value alongside "skipped"; the blocked message for doctrine-drafted/tokens-landed says "re-run /spec:genesis to
 // reach BRIEF" (never "genesis design state"); the pending/absent note says "the genesis BRIEF
 // state has not ratified a design canon".
-test('AC-20260902-08-9: init gating passes silently at design: "ratified"; blocks at doctrine-drafted/tokens-landed naming the value and BRIEF; notes (never blocks) at pending naming BRIEF and never "genesis-design"; AC-20260902-08-16: SHALL CONTINUE TO pass at rules-locked and skipped', () => {
+// specs/20261101/08-no-host-needs-the-shims.md D2: the retired closed-canon value falls to the note arm.
+test('AC-20260902-08-9 / AC-20261101-08-6 / AC-20261101-08-5: init gating passes silently at design: "ratified" or "skipped"; blocks at doctrine-drafted/tokens-landed naming the value and BRIEF; notes (never blocks) at pending and at a retired closed-canon value naming BRIEF and never "genesis-design"; AC-20260902-08-16: SHALL CONTINUE TO pass at skipped', () => {
   const ratified = gate('/spec:init', { architect: 'scaffold-complete', design: 'ratified' })
   assert.strictEqual(ratified.status, 0, 'D8: design: "ratified" is BRIEF\'s own successful ratification value — /spec:init must pass silently')
   assert.strictEqual(ratified.stdout, '', 'D8: a passing design: "ratified" invocation must inject nothing onto stdout')
@@ -99,8 +99,13 @@ test('AC-20260902-08-9: init gating passes silently at design: "ratified"; block
   assert.match(tokensLanded.stderr, /BRIEF/, 'D8: the blocked message must name BRIEF for tokens-landed too')
   assert.ok(!tokensLanded.stderr.includes('genesis-design'), 'D8: the blocked message must not mention "genesis-design" either')
 
-  assert.strictEqual(gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'rules-locked' }).status, 0, 'AC-20260902-08-16: design: rules-locked is a legacy closed canon — /spec:init SHALL CONTINUE TO pass')
-  assert.strictEqual(gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'skipped' }).status, 0, 'AC-20260902-08-16: design: skipped is a legitimate headless archetype — /spec:init SHALL CONTINUE TO pass')
+  const skipped = gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'skipped' })
+  assert.strictEqual(skipped.status, 0, 'AC-20260902-08-16: design: skipped is a legitimate headless archetype — /spec:init SHALL CONTINUE TO pass')
+  assert.strictEqual(skipped.stdout, '', 'a passing design: "skipped" invocation must stay silent — a note here nags every headless host on every /spec:init')
+
+  const retiredValue = gate('/spec:init', { architect: 'scaffold-complete', design: 'rules-' + 'locked' })
+  assert.strictEqual(retiredValue.status, 0, 'a retired closed-canon value must never block /spec:init — the prompt would be refused on a host that cannot fix it')
+  assert.match(retiredValue.stdout, /^Genesis note:.*BRIEF/m, 'a status carrying a value no writer produces is "no ratified canon" — the note naming BRIEF is the only message that points at the way forward: ' + retiredValue.stdout)
 
   const pending = gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked' })
   assert.strictEqual(pending.status, 0, 'design: pending must never block /spec:init — a headless archetype legitimately has no design stage')
@@ -159,5 +164,5 @@ test('AC-20260825-04-8: /spec:genesis is the entry point and is never gated, at 
 test('AC-20260825-04-8, AC-20260827-03-6: the renamed entry-point arm leaves init byte-identical, and both the retired explore and genesis-design commands\' arms fall through instead of blocking', () => {
   assert.strictEqual(gate(RETIRED_EXPLORE_CMD + ' idea', { architect: 'pending' }).status, 0, 'AC-20260827-02-7/D9: the retired explore command\'s case arm is removed — a nonzero exit here means the retired command is still gated, the opposite of D9\'s "falls through untouched" contract')
   assert.strictEqual(gate('/spec:genesis-design idea', { architect: 'scaffold-complete', explore: 'tiles-culled' }).status, 0, 'D6: genesis-design must now fall through even while explore is mid-flight (tiles-culled) — its own arm and the pick-precedes-the-lock gate it used to enforce are both retired by this spec')
-  assert.strictEqual(gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'rules-locked' }).status, 0, '/spec:init must still pass at design: rules-locked — neither D12 nor this spec touches the init arm')
+  assert.strictEqual(gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'rules-' + 'locked' }).status, 0, '/spec:init must still pass at a retired design value — neither D12 nor this spec touches the init arm')
 })

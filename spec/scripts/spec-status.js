@@ -99,7 +99,7 @@ const { parseFilePlan } = require('./lib/file-plan')
 // file already reads for the observation sub-state below, never a second ledger read.
 const { readLedgerRows, qualifyingObservation, sinceLastRelease } = require('./lib/observation')
 const {
-  isSupersededBriefText, isItemDone, isItemReady, makeCtx, dedupeItems, stripAutoPlaced,
+  isSupersededBriefText, isItemDone, isItemReady, makeCtx, dedupeItems,
   reconcileMissingBriefs, promptAction,
 } = require('./lib/queue')
 // The local frontmatter() kv
@@ -360,15 +360,14 @@ if (queueOverlay.parseError) {
 }
 if (queueOverlay.on) {
   // Virtual reconcile — computed here, never written here (spec-queue.js's own
-  // reconcile is the persisted twin of this exact algorithm, from lib/queue.js): strip any
-  // stale `auto_placed` key, collapse duplicate brief/spec items to their first occurrence,
+  // reconcile is the persisted twin of this exact algorithm, from lib/queue.js): collapse
+  // duplicate brief/spec items to their first occurrence,
   // then append any on-disk non-done, non-superseded brief absent from the queue LAST, with
   // no stamp and no anomaly.
   const onDiskBriefs = briefs
     .filter(b => b.status !== 'done' && b.status !== 'superseded')
     .map(b => ({ num: b.num }))
-  const stripped = stripAutoPlaced(queueOverlay.items)
-  const deduped = dedupeItems(stripped)
+  const deduped = dedupeItems(queueOverlay.items)
   const { items: reconciled } = reconcileMissingBriefs(deduped, onDiskBriefs)
   const ctx = makeCtx({
     ledgerRows, briefStatus: n => (briefByNum.get(n) || {}).status, specStatus: specStatusFor, specRoot: root,

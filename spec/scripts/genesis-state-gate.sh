@@ -13,10 +13,9 @@
 # via the same require_scaffold helper — is deleted
 # too. Both retired commands' prompts now fall through untouched (exit 0, no arm) at every state.
 #
-# The init arm's passing value set gains
-# "ratified" (BRIEF's own successful ratification) alongside the legacy "rules-locked"/
-# "skipped" values; the blocked message for the legacy partial-canon values doctrine-drafted/
-# tokens-landed is reworded to "re-run /spec:genesis to reach BRIEF" and the pending/absent note
+# The init arm passes "ratified" (BRIEF's own successful ratification) and "skipped" silently;
+# the blocked message for the partial-canon values doctrine-drafted/
+# tokens-landed reads to "re-run /spec:genesis to reach BRIEF" and the pending/absent note
 # to "the genesis BRIEF state has not ratified a design canon" — neither message says
 # "genesis-design" (that command is retired; BRIEF is a driver state, not a command).
 # `jq` is a hard dependency here as it is in every UserPromptSubmit gate: absent, the prompt
@@ -48,7 +47,7 @@ DES=$(jq -r '.design // "pending"' "$STATUS" 2>/dev/null)
 case "$PROMPT" in
   /spec:init*)
     case "$DES" in
-      ratified|rules-locked|skipped) exit 0 ;;
+      ratified|skipped) exit 0 ;;
       doctrine-drafted|tokens-landed)
         echo "Genesis state gate: /spec:init found a partial design canon (design: $DES) — re-run /spec:genesis to reach BRIEF and ratify it before grounding, so spec:init consumes one canon instead of half-adopting." >&2
         exit 2

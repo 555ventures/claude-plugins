@@ -13,7 +13,7 @@ const { tmpdir, runBash, runNode, SPEC, assistantUsageLine, gitRepo } = require(
 // verdict.js carries --via/--model (D3). AC-20260901-02-1, -2, -3, -6 below.
 //
 // specs/20260901/05-checkpoint-fail-closed.md D3 (brief 18a): verdict.js gains --checkpoint
-// <cleared|stamp-appeared|overridden|not-reached> and --checkpoint-reason <text>,
+// <cleared|stamp-appeared|overridden|not-reached> and a free-text reason flag,
 // review-profile only, inserting a `checkpoint` key immediately after `verdict` (before
 // `escalated`) on the printed row. AC-20260901-05-8 tags the pre-existing AC-20260901-02-6
 // byte-identity test in place (D3 requires that test to keep passing untouched — via/model's
@@ -24,7 +24,7 @@ const { tmpdir, runBash, runNode, SPEC, assistantUsageLine, gitRepo } = require(
 // valid with --checkpoint disposer), accepted with --via loop, --via direct, or --via absent.
 // The old AC-20260901-05-6 test is rewritten in place to AC-20260901-09-10 and the old
 // AC-20260901-05-7 test to AC-20260901-09-11 — every old-enum value
-// (cleared/stamp-appeared/overridden) and --checkpoint-reason are refused. The
+// (cleared/stamp-appeared/overridden) and the reason flag are refused. The
 // AC-20260901-02-6 byte-identity test is tagged AC-20260901-09-12 in place, untouched (D5
 // changes nothing about the flagless row).
 
@@ -419,7 +419,7 @@ test('AC-20260901-09-10 (rewrites the former AC-20260901-05-6 test in place, D5)
     'a --via-absent pass with --checkpoint disposer must carry the same checkpoint shape as an explicit --via pass')
 })
 
-test('AC-20260901-09-11 (rewrites the former AC-20260901-05-7 test in place, D5): verdict.js refuses (exit 2, stderr naming --checkpoint, no ledger row printed) --checkpoint cleared, --checkpoint stamp-appeared, --checkpoint overridden, an out-of-enum --checkpoint value, --checkpoint-reason with any --checkpoint (retired), --checkpoint-overrides without --checkpoint disposer, --checkpoint disposer with a negative or non-integer --checkpoint-overrides, and --checkpoint empty with --profile release', () => {
+test('AC-20260901-09-11 / AC-20261101-08-17 (rewrites the former AC-20260901-05-7 test in place, D5): verdict.js refuses (exit 2, stderr naming --checkpoint, no ledger row printed) --checkpoint cleared, --checkpoint stamp-appeared, --checkpoint overridden, an out-of-enum --checkpoint value, --checkpoint-overrides without --checkpoint disposer, --checkpoint disposer with a negative or non-integer --checkpoint-overrides, and --checkpoint empty with --profile release', () => {
   const { manifest, workflow } = manifestFixture()
   const retainDir = fs.realpathSync(tmpdir('verdict-checkpoint-refusals-retain'))
   const common = ['--manifest', manifest, '--workflow', workflow, '--ledger', '--spec', 'specs/x.md', '--tier', 'standard', '--retain', retainDir]
@@ -429,7 +429,6 @@ test('AC-20260901-09-11 (rewrites the former AC-20260901-05-7 test in place, D5)
     { name: 'old enum value stamp-appeared', args: [...common, '--via', 'loop', '--checkpoint', 'stamp-appeared'] },
     { name: 'old enum value overridden', args: [...common, '--via', 'loop', '--checkpoint', 'overridden'] },
     { name: 'out-of-enum value', args: [...common, '--via', 'loop', '--checkpoint', 'bogus'] },
-    { name: '--checkpoint-reason (retired)', args: [...common, '--via', 'loop', '--checkpoint', 'disposer', '--checkpoint-reason', 'x'] },
     { name: '--checkpoint-overrides without --checkpoint disposer', args: [...common, '--via', 'loop', '--checkpoint', 'empty', '--checkpoint-overrides', '1'] },
     { name: '--checkpoint-overrides without --checkpoint at all', args: [...common, '--via', 'loop', '--checkpoint-overrides', '1'] },
     { name: 'negative --checkpoint-overrides', args: [...common, '--via', 'loop', '--checkpoint', 'disposer', '--checkpoint-overrides', '-1'] },

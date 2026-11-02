@@ -68,13 +68,8 @@ items of the latest round's `notes.json` through `lib/mocks-round.js`'s `openNot
 no round — printed as `seed journeys: N · notes open: N`.
 
 **On success:** `marks.briefWritten`, `status.brief = {mocks: "design/mocks/status.json" |
-null, legacy: false|true, ratifiedAt: "<ISO>"}`, and `status.design = "ratified"` (or
+null, ratifiedAt: "<ISO>"}`, and `status.design = "ratified"` (or
 `"skipped"` for the four design-skipped archetypes).
-
-**Legacy resume.** A `status.json` with `marks.menusDone` and no `marks.briefWritten` derives BRIEF
-with a step text opening `legacy: explore/design artifacts accepted in place of a mocks set`.
-`--mark brief-written --legacy` skips the mocks precondition entirely and records
-`brief.legacy: true`.
 
 **Brief generation is derived, never guessed.** On a fresh run that owes a mocks set,
 `.claude/genesis/brief.md` gains two sections after `## Picks`: `## Journeys` and
@@ -302,7 +297,7 @@ Genesis: Design Stage] → `ROADMAP` → `HANDOFF` → `GROUNDED` (terminal for 
 
 - `architect`: `pending → decisions-recorded → scaffold-complete`
 - `design`: `pending → ratified` (or `skipped`)
-- `brief`: `null` until `--mark brief-written`, then `{mocks, legacy, ratifiedAt}`
+- `brief`: `null` until `--mark brief-written`, then `{mocks, ratifiedAt}`
   (§ Genesis: Brief State)
 - `designStage`: `null` until the first derivation past the green gate, then either
   `{ skipped: 'non-visual' | 'non-storybook', at }` or `{ paths, brief, catalog, briefAt }`
@@ -313,8 +308,7 @@ enum value of its own**: it is verified by artifact existence only — `architec
 with no `docs/roadmap/00-overview.md` means the driver resumes at `ROADMAP`.
 
 **BRIEF derivation.** The driver enters `BRIEF` on the first derivation once `discoveryDone` holds
-and `!marks.briefWritten` — regardless of any later legacy marks (§ Genesis: Brief State's legacy
-resume). **Re-entry verifies the named artifacts physically exist — never trust the phase enum
+and `!marks.briefWritten`. **Re-entry verifies the named artifacts physically exist — never trust the phase enum
 alone**.
 
 ## Genesis: Design Stage

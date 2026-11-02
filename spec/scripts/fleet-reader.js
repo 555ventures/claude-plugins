@@ -17,8 +17,7 @@
 // shape, replay outcomes); it takes no query flags — the eight questions are fixed, a new
 // query still needs a spec, not a flag; it never coerces an out-of-enum or missing value to
 // zero or drops a parseable row silently — every such row renders verbatim in its query AND
-// increments a named drift-census reason bucket; a row's class is its own `class` field, so
-// legacy amendment rows are read for ts and spec only and count toward nothing else.
+// increments a named drift-census reason bucket; a row's class is its own `class` field.
 //
 // Exit codes: 0 = derived (0 repos scanned is still a derived answer — the population block
 //                 carries the absence, never an error)
@@ -459,8 +458,7 @@ const STAGES = new Set(['plan', 'build', 'review', 'escape', 'escape-class', 're
 const SPEC_STAGES = new Set(['plan', 'build', 'review', 'escape', 'escape-class', 'replay'])
 const TIERS = new Set(['standard', 'critical'])
 
-// Every stage:"escape" row goes through lib/escape-row.js's validateEscapeRow; a legacy
-// amendment-stage row is a known stage validated for ts and spec only.
+// Every stage:"escape" row goes through lib/escape-row.js's validateEscapeRow.
 function classifyRow(r) {
   const reasons = []
   if (typeof r.ts !== 'string') reasons.push('missing-ts')

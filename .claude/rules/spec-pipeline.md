@@ -503,7 +503,9 @@ only. /spec:doctor prunes dead citations and rolls [plugin] entries up as an ups
   and `process.exit` tears the process down mid-flush. Latent for as long as nothing consumes
   the output programmatically; the first `--json` consumer surfaces it as unparseable output,
   not as a crash. Any script that prints a payload and exits routes through a synchronous
-  writer (`fs.writeSync` on fd 1, looped for partial writes, retried on EAGAIN).
+  writer — `lib/sync-write.js`'s `writeOut` (`fs.writeSync`, looped for partial writes, retried
+  on EAGAIN, and EPIPE treated as done: a reader that closed early, `script | head`, is not a
+  crash — Node ignores SIGPIPE, so a rethrown EPIPE exits 1 and masks the script's own exit code).
   Second trap in the same family — shipping a new executable: **no script this repo ships may be
   named `test-*`**. `node --test`'s default discovery matches `**/test-*.js` anywhere under the
   root, so the post-gate's path-less run DISCOVERS AND EXECUTES the tool as a test file, and its

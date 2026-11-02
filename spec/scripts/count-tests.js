@@ -42,22 +42,15 @@ const fs = require('fs')
 const path = require('path')
 const { readConfig } = require('./lib/host-config')
 const { countCases, scanCases, hostCases, listTestFiles } = require('./lib/scan-test-calls')
+const { writeOut: syncWrite } = require('./lib/sync-write')
 
 const USAGE = 'count-tests.js --root <dir> [--json] | --root <dir> --titles [--file <rel>] [--json] | --root <dir> --scanner-check [--json]'
 
-// A script that prints a payload and exits routes through a synchronous writer — the 64 KiB pipe
-// truncation this avoids is spelled out at spec/scripts/lib/driver-io.js's writeOut.
+// A script that prints a payload and exits routes through lib/sync-write.js — synchronous so a
+// 64 KiB+ payload never truncates at process.exit, and EPIPE (a reader like `head` closed early)
+// is done, not an uncaught exit 1 that masks this script's own exit code.
 function writeOut(fd, str) {
-  const buf = Buffer.from(str + '\n', 'utf8')
-  let off = 0
-  while (off < buf.length) {
-    try {
-      off += fs.writeSync(fd, buf, off, buf.length - off)
-    } catch (e) {
-      if (e.code === 'EAGAIN') continue
-      throw e
-    }
-  }
+  syncWrite(fd, str + '\n')
 }
 
 function die(code, msg) {

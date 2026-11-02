@@ -68,26 +68,10 @@ function runHost(command, opts, what) {
   return r
 }
 
-// The synchronous, EAGAIN-retrying writer this repo's other large-payload scripts already carry
-// (spec-status.js, red-check.js, fleet-reader.js, registry-check.js,
-// render-*.js): `console.log(...)` immediately followed by `process.exit(0)` silently truncates at
-// the 64 KiB pipe buffer while still exiting 0 — stdout's write to a pipe is async, and
-// process.exit tears the process down mid-flush (.claude/rules/spec-pipeline.md [plugin] gotcha,
-// spec-status.js's own ~75 KB dashboard truncation). Neither driver's own final print had grown
-// past that ceiling yet, but both drivers print-then-exit on every terminal branch, so both route
-// through this rather than wait to be the next host that measures the truncation the hard way.
-function writeOut(fd, text) {
-  const buf = Buffer.from(text, 'utf8')
-  let off = 0
-  while (off < buf.length) {
-    try {
-      off += fs.writeSync(fd, buf, off, buf.length - off)
-    } catch (e) {
-      if (e.code === 'EAGAIN') continue
-      throw e
-    }
-  }
-}
+// writeOut is lib/sync-write.js's, re-exported so the drivers keep one import: print-then-exit
+// on every terminal branch must never truncate at the 64 KiB pipe buffer, and a reader that
+// closed early (EPIPE) is done, not a crash. The rationale lives once, in that module's header.
+const { writeOut } = require('./sync-write')
 
 // <root>/.claude/spec-runs.jsonl, sync — the one run ledger both drivers append their stage row
 // to. mkdir -p first: a fresh host may not have .claude/ yet at a driver's very first ledger

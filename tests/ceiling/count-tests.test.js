@@ -471,3 +471,41 @@ test('scanCalls reads a modifier chain and a table form as one case each, and ne
   assert.ok(each.callText.startsWith('it.each(') && each.callText.endsWith('=> {})'),
     'a table case spans from its name through the closing paren of its SECOND group: ' + each.callText)
 })
+
+// A reader that closes early (`count-tests.js --titles | head -1`) must not crash the script. The
+// fixture's --titles payload is well past the 64 KiB pipe buffer, so even if the child wrote before
+// the read end was destroyed it blocks on the full pipe and its next write lands on a closed one —
+// the EPIPE is guaranteed either way, with no sleep or timing in the test.
+function runWithClosedReader(args, closed) {
+  const { spawn } = require('node:child_process')
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [path.join(ROOT, 'spec', SCRIPT), ...args],
+      { stdio: ['ignore', 'pipe', 'pipe'] })
+    child[closed].destroy()
+    const live = closed === 'stdout' ? 'stderr' : 'stdout'
+    let text = ''
+    child[live].on('data', (d) => { text += d })
+    child.on('error', reject)
+    child.on('close', (code, signal) => resolve({ code, signal, text }))
+  })
+}
+
+test('count-tests.js treats a closed stdout (EPIPE) as done: --titles over a >64 KiB payload exits 0 with no stack trace', async () => {
+  const dir = tmpdir('count-epipe')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  let src = "'use strict'\nconst { test } = require('node:test')\n"
+  for (let i = 0; i < 2000; i++) src += `test('case number ${i} with a title long enough to fill the pipe quickly', () => {})\n`
+  fs.writeFileSync(path.join(dir, 'tests/big.test.js'), src)
+  const r = await runWithClosedReader(['--root', dir, '--titles'], 'stdout')
+  assert.strictEqual(r.signal, null, 'the script must exit on its own, not die by signal: ' + r.signal)
+  assert.strictEqual(r.code, 0,
+    'a reader that closed early leaves nothing to deliver, so the write is done and the script keeps its own exit 0 — exit 1 means EPIPE was rethrown as an uncaught exception: ' + r.text)
+  assert.doesNotMatch(r.text, /EPIPE|Error:|at writeOut/, 'stderr must carry no EPIPE stack trace: ' + r.text)
+})
+
+test('count-tests.js keeps its usage exit 2 when stderr is closed (EPIPE on fd 2 never masks die()\'s code)', async () => {
+  const r = await runWithClosedReader(['--root', path.join(tmpdir('count-epipe-err'), 'missing')], 'stderr')
+  assert.strictEqual(r.signal, null, 'the script must exit on its own, not die by signal: ' + r.signal)
+  assert.strictEqual(r.code, 2,
+    'a missing --root is a usage error (exit 2) even when nobody reads stderr — exit 1 means the EPIPE from die()\'s message escaped before process.exit(2): ' + r.text)
+})

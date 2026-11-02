@@ -5,6 +5,11 @@
 #                and review stages are reached only through this command; they are prose under
 #                spec/doctrine/stages/, not invokable commands, so they carry no arm of their own
 #   /spec:plan   requires zero [NEEDS CLARIFICATION] markers in the spec
+#   Marker gate: the frontmatter `open_markers:` counter is written by the planning session
+#                about itself, so the gate never trusts it alone — a counter above 0 blocks, and
+#                a counter of 0 is re-verified by counting live `[NEEDS CLARIFICATION:` markers in
+#                the body; any live hit blocks. Narration that quotes the marker drops the colon
+#                form (write `[NEEDS CLARIFICATION]` bare) — the recount is the contract.
 # Also warns (stdout → injected context, never a block) on exactly the two gated
 # commands (/spec:plan, /spec:run — the same case pattern below) when the host grounding
 # layer's contractHash stamp fails to match the plugin's grounding-contract file —
@@ -60,22 +65,21 @@ FILE="$SPEC"
 [ -f "$FILE" ] || FILE="$ROOT/$SPEC"
 [ -f "$FILE" ] || exit 0   # nonexistent path — command will surface that itself
 
-# Marker gate. Authoritative source: the frontmatter `open_markers:` counter, written
-# mechanically at lock by /spec:plan (the count of LIVE markers after adjudication — quoted
-# narration doesn't count). A prose grep is trippable by DESCRIBING the marker syntax in
-# Rationale, so when the counter is present the grep is not consulted. Specs predating the
-# counter fall back to the grep (live bracketed colon form only).
+# Marker gate. The frontmatter `open_markers:` counter is self-reported by /spec:plan (the
+# session that wrote the spec), so a 0 is never taken on trust: the body is re-counted for
+# live `[NEEDS CLARIFICATION:` markers (colon form) and any hit blocks, whatever the counter
+# says. Narration that quotes a resolved marker uses the bare `[NEEDS CLARIFICATION]` form.
 OPEN_MARKERS=$(awk '/^---[[:space:]]*$/{f++; next} f==1 && /^open_markers:/{print $2; exit}' "$FILE")
-if [ -n "$OPEN_MARKERS" ]; then
-  case "$OPEN_MARKERS" in
-    0) ;;
-    *)
-      echo "Spec state gate: $SPEC declares open_markers: $OPEN_MARKERS — unresolved [NEEDS CLARIFICATION] markers; resolve them via /spec:plan (which re-counts and rewrites the field) before proceeding." >&2
-      exit 2
-      ;;
-  esac
-elif grep -q '\[NEEDS CLARIFICATION:' "$FILE"; then
-  echo "Spec state gate: $SPEC contains unresolved [NEEDS CLARIFICATION] markers — resolve them via /spec:plan before proceeding." >&2
+case "${OPEN_MARKERS:-0}" in
+  0) ;;
+  *)
+    echo "Spec state gate: $SPEC declares open_markers: $OPEN_MARKERS — unresolved [NEEDS CLARIFICATION] markers; resolve them via /spec:plan (which re-counts and rewrites the field) before proceeding." >&2
+    exit 2
+    ;;
+esac
+LIVE_MARKERS=$(grep -c '\[NEEDS CLARIFICATION:' "$FILE")
+if [ "$LIVE_MARKERS" -gt 0 ]; then
+  echo "Spec state gate: $SPEC has $LIVE_MARKERS live [NEEDS CLARIFICATION: …] marker line(s) while open_markers declares ${OPEN_MARKERS:-<missing>} — the counter is self-reported and the gate re-counts. Resolve each marker via /spec:plan (record the ruling in Decisions); a quote of a resolved marker drops the colon form." >&2
   exit 2
 fi
 

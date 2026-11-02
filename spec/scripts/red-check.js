@@ -19,9 +19,10 @@
 // reports every mismatch as a named finding. build.md's classification prose and red-check
 // paragraph shrink to this invocation line.
 //
-// What this deliberately does NOT do: parse or attribute runner OUTPUT (exit codes only — a
-// crash-red vs assert-red distinction stays orchestrator judgment, per build.md's disposition
-// rules); render a review report or compute a verdict (this is a build-Phase-1 gate, never a
+// What this deliberately does NOT do: attribute runner OUTPUT to individual tests (output is read
+// only to count executed tests via capabilities.testCountPattern, and to confirm a filtered run
+// selected its title — a crash-red vs assert-red distinction stays orchestrator judgment, per
+// build.md's disposition rules); render a review report or compute a verdict (this is a build-Phase-1 gate, never a
 // review leg); snapshot or restore the tree (the working tree AT INVOCATION TIME is the
 // pre-image — the purity refusal below exists precisely because no snapshot is taken); validate
 // `[pre-green:]` reasons anywhere but here and in ac-matrix.js (lib/spec-sections.js's
@@ -37,7 +38,7 @@
 // Exit codes: 0 = every resolved tests-layer file matches its expected pre-image colour ·
 //             1 = findings emitted (unsanctioned-green | broken-pin | missing-test-file |
 //                 invalid-pre-green | rejected-trailing-tag | mixed-pin | gutted-rewrite |
-//                 broken-reuse) — rides the normal build Phase 1 disposition flow, never a script
+//                 broken-reuse | vacuous-green) — rides the normal build Phase 1 disposition flow, never a script
 //                 failure · 2 = usage error, unreadable --spec, no ## Acceptance Criteria section,
 //                 host config declares no testCommand, or a pre-image purity refusal (a non-tests
 //                 File Plan path already differs from --base — tracked or untracked)
@@ -328,8 +329,8 @@ function isSanctioned(b) {
 
 const sanctionedById = new Map(wellFormed.map(b => [b.id, isSanctioned(b)]))
 
-// ---- `{testCommand} <file>` (+ `{typecheckCommand} <file>` when declared) — exit codes only,
-// runner output is never parsed. NODE_TEST_CONTEXT is scrubbed so a nested `node --test` leg
+// ---- `{testCommand} <file>` (+ `{typecheckCommand} <file>` when declared) — the exit code is the
+// verdict; output is captured only for the executed-test count. NODE_TEST_CONTEXT is scrubbed so a nested `node --test` leg
 // behaves as a fresh top-level runner even when red-check.js itself runs inside one.
 //
 // `relPath` is substituted via `quote` (lib/host-run.js's single-quote helper) for the reason given on runFilteredLeg below —
@@ -338,8 +339,11 @@ const sanctionedById = new Map(wellFormed.map(b => [b.id, isSanctioned(b)]))
 // files carry a `$` segment (TanStack file routes, `customers.$memberId.note-role.test.tsx`) had
 // `$memberId` expanded away by bash, so the leg ran against a path that does not exist, exited
 // non-zero, and reported a passing sanctioned-green file as a hard `broken-pin`.
+// maxBuffer: spawnSync's 1 MiB default kills a passing runner that prints more (ENOBUFS, status
+// null → 1), which would report a passing pin as broken.
+const MAX_BUFFER = 16 * 1024 * 1024
 function runLeg(cmd, relPath) {
-  const res = hostRun.run(`${cmd} ${quote(relPath)}`, { cwd: root, encoding: 'utf8', stdio: 'pipe' })
+  const res = hostRun.run(`${cmd} ${quote(relPath)}`, { cwd: root, encoding: 'utf8', stdio: 'pipe', maxBuffer: MAX_BUFFER })
   return { status: res.status === null ? 1 : res.status, output: (res.stdout || '') + (res.stderr || '') }
 }
 
@@ -526,8 +530,7 @@ function escapeTitleForRegex(title) {
 }
 
 // `{testCommand} {testNameFilter←escaped ^title$} <file>`, appended ahead of the file path
-// (matching the existing `{typecheckCommand} <file>` append form) — output is captured (never
-// `stdio: 'ignore'` like runLeg above) because selection proof needs the run's own stdout to
+// (matching the existing `{typecheckCommand} <file>` append form) — output is captured (as in runLeg above) because selection proof needs the run's own stdout to
 // confirm the title was actually selected, not merely infer it from the exit code (Assumptions
 // a pattern matching nothing still exits 0).
 //
@@ -542,7 +545,7 @@ function escapeTitleForRegex(title) {
 function runFilteredLeg(cmd, filterTemplate, title, relPath) {
   const pattern = `^${escapeTitleForRegex(title)}$`
   const filterArg = filterTemplate.replace('{name}', pattern)
-  const res = hostRun.run(`${cmd} ${quote(filterArg)} ${quote(relPath)}`, { cwd: root, encoding: 'utf8' })
+  const res = hostRun.run(`${cmd} ${quote(filterArg)} ${quote(relPath)}`, { cwd: root, encoding: 'utf8', maxBuffer: MAX_BUFFER })
   return { code: res.status === null ? 1 : res.status, output: (res.stdout || '') + (res.stderr || '') }
 }
 

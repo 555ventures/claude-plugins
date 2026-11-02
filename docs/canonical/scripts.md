@@ -102,7 +102,10 @@ fuller incident write-ups live in each cited spec's history.
 The host rules' § Gotchas section is capped at 15 entries, enforced by `prose-cap.js` (review
 CLOSE and this repo's own suite); appending at cap requires an eviction — delete, merge here,
 or mechanize. Agent-memory notes are disposed when a spec's diff touches what they are *about*
-(memory-sweep `diff-hit`) or after 10 undisposed review closes (`ttl-expired`); a carry
+(memory-sweep `diff-hit`) or after 10 undisposed review closes (`ttl-expired`) — a note is about
+a changed path when it names the path or its dotted basename, whatever the language; a note git
+has never seen ages from its file time (specs/20261101/03-legs-read-evidence-not-exit-codes.md
+D3, D4); a carry
 disposition records `reviewed: YYYY-MM-DD` in the note's metadata. Comment narration is capped
 per file by `.claude/comment-narration.baseline.json` while the sweep runs, and at zero once it
 is deleted. Test setup that a second file needs lives in a sibling `*.fixtures.js` module

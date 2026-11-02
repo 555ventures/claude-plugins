@@ -1,6 +1,6 @@
 ---
 date: 2026-11-01
-status: implementing
+status: done
 tier: standard
 area: build-integrity
 breaking: false
@@ -96,7 +96,7 @@ untracked note (never committed) whose `mtime` is set to 2026-08-01 with 12 late
 - **AC-20261101-03-4**: WHEN the config declares no `capabilities.testCountPattern` (or `"none"`) and the stub exits 0 printing `ℹ tests 0` THE SYSTEM SHALL record `observed` `green`, no `testsExecuted` key, no finding, and exactly one warning containing `testCountPattern is not declared` → writes tests/red-check/vacuous-green.test.js
 - **AC-20261101-03-5**: WHEN a note body reads `watch app/models.py when the ORM changes` and the diff holds `app/models.py` THE SYSTEM SHALL list it as `diff-hit` with `matched` `app/models.py`; WHEN a note reads `see main.go` and the diff holds `cmd/server/main.go` THE SYSTEM SHALL list it as `diff-hit`; WHEN a note reads `models` and the diff holds `app/models.py` THE SYSTEM SHALL NOT list it → writes tests/prose-debt/memory-sweep.test.js
 - **AC-20261101-03-6**: WHEN an untracked note's `mtime` is `2026-08-01T00:00:00Z` and the ledger holds 12 review rows dated after it THE SYSTEM SHALL list it as `ttl-expired` with `source` `mtime` and `matched` starting `2026-08-01`; a committed note in the same run SHALL carry `source` `commit` → writes tests/prose-debt/memory-sweep.test.js
-- **AC-20261101-03-7**: WHEN `red-check.js` runs over a host with `testCommand` `node --test`, no `testCountPattern`, a red-expected file that fails and a `[pre-green: predicate-in-test]` file that passes THE SYSTEM SHALL CONTINUE TO classify them `red` and `green` respectively with exit 0 → reuses tests/red-check/red-check.test.js :: AC-20260821-01-3:
+- **AC-20261101-03-7**: WHEN `red-check.js` runs over a host with `testCommand` `node --test`, no `testCountPattern`, a red-expected file that fails and a `[pre-green: predicate-in-test]` file that passes THE SYSTEM SHALL CONTINUE TO classify them `red` and `green` respectively with exit 0 → reuses tests/red-check/red-check.test.js :: AC-20260821-01-4: a fixture spec whose SHALL-CONTINUE-TO file passes
 - **AC-20261101-03-8**: WHEN a note body cites a changed path's basename (`foo.md` for diff `docs/foo.md`) THE SYSTEM SHALL CONTINUE TO surface it as `diff-hit` and exclude `MEMORY.md` index files → reuses tests/prose-debt/memory-sweep.test.js :: AC-20260823-06-5:
 
 ## Assumptions (escalation triggers)
@@ -130,6 +130,15 @@ derivation beside `count-observation.js`, and stack-shaped); dropping basename m
 memory-sweep (breaks the existing pin and misses notes written with a bare filename).
 
 Collision closure (lock, `--literal TOKEN_RE`): the only literals hit is `spec/scripts/memory-sweep.js`, a File Plan row.
+
+Build deviations (folded at close, 2026-11-01): the `vacuous-green` detail reads "the runner
+exited <code> but executed no test per its output (testCountPattern <p>) — …" rather than D1's
+"its output shows no executed test", because AC-20261101-03-1 asserts the substring `executed no
+test`; a memory-sweep basename-rule hit reports the basename as `matched` (a verbatim-path hit
+still reports the full path), because AC-20260823-06-5 asserts the basename. Review (rv_c27ce941a196)
+fixed two hard findings: `runLeg` and `runFilteredLeg` now pass `maxBuffer` 16 MiB (A2's if-false
+arm — a passing file printing over 1 MiB was killed with ENOBUFS and read as a broken pin), and
+AC-20261101-03-7's `reuses` pointer was retargeted to the test that asserts its promise.
 
 ## Canonical Delta
 

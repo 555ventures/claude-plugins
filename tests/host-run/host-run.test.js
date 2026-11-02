@@ -94,3 +94,21 @@ test('AC-20261026-01-4: runAsync resolves { code, out, err } with the exit code,
   assert.strictEqual(missing.code, 127,
     'a spawn failure must resolve code 127, never reject — a leg awaiting it would crash instead of recording a red row: ' + JSON.stringify(missing))
 })
+
+// Direct-lane fix (2026-11-02): niko-hub spec 20261101/12 could never close — the host gate
+// exited 0 but printed 1.24 MB, spawnSync's default 1 MiB maxBuffer SIGTERM-killed it (ENOBUFS,
+// status null) and driver-io's runHost reported "died without an exit code". The one runner
+// owns the default now; an explicit caller cap still wins.
+test('run keeps a host command that exits 0 after printing more than 1 MiB alive, and an explicit maxBuffer still wins', () => {
+  const { run } = load()
+  const big = run('head -c 2000000 /dev/zero | tr "\\0" x', { encoding: 'utf8' })
+  assert.strictEqual(big.error, undefined,
+    'a >1 MiB stdout must not surface ENOBUFS — the driver would read a green gate as a spawn failure: ' + String(big.error))
+  assert.strictEqual(big.status, 0,
+    'status null means spawnSync killed a passing command at its 1 MiB default: ' + JSON.stringify({ status: big.status, signal: big.signal }))
+  assert.strictEqual(big.stdout.length, 2000000,
+    'the output must be captured whole, or a parser (prototype e2eList) reads a truncated list: ' + big.stdout.length)
+  const capped = run('head -c 4096 /dev/zero', { maxBuffer: 1024 })
+  assert.strictEqual(capped.error && capped.error.code, 'ENOBUFS',
+    'a caller that passes its own maxBuffer must keep it — the default is a floor for callers that pass none, never an override: ' + JSON.stringify({ status: capped.status, error: capped.error && capped.error.code }))
+})

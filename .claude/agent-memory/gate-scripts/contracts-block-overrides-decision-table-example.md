@@ -3,7 +3,7 @@ name: contracts-block-overrides-decision-table-example
 description: When a Decision table's inline example finding text conflicts with the spec's Contracts block and the pinned AC tests, follow the Contracts block/tests, not the table cell's literal
 metadata:
   type: feedback
-  reviewed: 2026-10-31
+  reviewed: 2026-11-01
 ---
 
 A spec Decision table cell can show a `text:` example (e.g. `'<label>: region <n> carries

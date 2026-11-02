@@ -16,7 +16,7 @@ function section(text, heading) {
 const CORE = path.join(ROOT, 'spec/doctrine/core.md')
 const TEMPLATE = path.join(ROOT, 'spec/templates/spec.md')
 
-test('AC-20261025-03-7: core.md names the critical env-skip rule in Runtime Verification and the lint refusal in Tiers, and the template AC comment names critical and missing-literal', () => {
+test('AC-20261025-03-7: core.md Tiers names the lint refusal, and the template AC comment names missing-literal', () => {
   assert.ok(fs.existsSync(CORE) && fs.existsSync(TEMPLATE), 'core.md or the spec template is missing, so no doctrine pin can run')
   const core = read('spec/doctrine/core.md')
   const tiers = section(core, 'Tiers').replace(/\s+/g, ' ')

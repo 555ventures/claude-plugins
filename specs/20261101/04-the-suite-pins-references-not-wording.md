@@ -1,6 +1,6 @@
 ---
 date: 2026-11-01
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: doctrine-governance
@@ -245,6 +245,14 @@ paths-leg hit is visibility only; the build's whole-suite check adjudicates.
 its cases still hold the path, flag, token and retired-phrase pins that matter. § Gotchas in
 spec-pipeline.md still says "dense regex pins" — it is history, written only by review close,
 and AC-3 slices § Test Rules so that line never trips it.
+
+**Build deviations (folded at close, 2026-11-01).** A2 was false for one more case: the
+run-ledger test's case for the criterion that review never hand-writes the verdict word held only
+two listed pins, so it emptied and was deleted with its preamble comment. Its AC-ID is still cited
+by the run-ledger file's shared build/review/commit/release case, so no retire tag was owed (A2's
+if-false arm). Also at build: the helpers' two criteria were tagged pre-green (D9), and review
+iteration 1 found the replay-retired ground-truth literal left undeleted by the test worker (fixed
+in the fix round; review rv_b6c1ec76be66 CLEAN).
 
 ## Canonical Delta
 

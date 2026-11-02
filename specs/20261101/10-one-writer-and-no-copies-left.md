@@ -1,6 +1,6 @@
 ---
 date: 2026-11-01
-status: implementing
+status: done
 build_base: main
 tier: critical
 area: scripts
@@ -134,6 +134,13 @@ guards — and judges the working tree, never a git ref. `spec-queue.js` already
 locally; it still migrates so the sweep has no exemption list. Fragile: the `reuses` pointers
 cover nothing in `ac-matrix` until the IDs sit in the reused titles, hence the two tests-layer
 MODIFY rows that change titles only — red-check reads them as sanctioned green pins.
+
+
+Build deviation (2026-11-01, one-off): `spec/scripts/comment-narration.js` already names its wrapper `syncWrite`, so D1's import alias collides there; the library is imported as `const { writeOut: libWrite } = require('./lib/sync-write')` with the wrapper's name, signature and callers unchanged.
+
+### Advisory debt (review rv_8efe2905e5b9)
+- a0 tests/ceiling/sync-write-callers.test.js:90 — D3/AC-20261101-10-2 promise the open run prints the empty payload in the pretty-printed form, but the test asserts only deepStrictEqual(JSON.parse(open.stdout), ...), so any formatting of the same four keys passes; the formatting qualifier is untested.
+- a1 tests/ceiling/sync-write-callers.test.js:72 — The sweep's stripComments regex does not respect string/regex literals: a // inside a string strips the rest of that line, and a /* inside a literal opens a phantom block comment, either of which can hide a writeSync( copy.
 
 ## Canonical Delta
 

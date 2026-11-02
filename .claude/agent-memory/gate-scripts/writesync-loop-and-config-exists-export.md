@@ -8,22 +8,12 @@ metadata:
 
 Two reusable patterns from fixing spec/scripts/fleet-reader.js (2026-08-20, JJ-dispatched review-fix batch):
 
-**`fs.writeSync(1, buf)` is not guaranteed to write the whole buffer in one call.** The
-`process.stdout.write()` + `process.exit()` 64KB-pipe-truncation gotcha (documented in
-`.claude/rules/spec-pipeline.md` `[host]`) is fixed by switching to `fs.writeSync`, but a single
-call can still return short (signal interruption, non-blocking fd edge cases). The safe pattern
-is a loop:
-```js
-function writeAll(fd, buf) {
-  let written = 0
-  while (written < buf.length) written += fs.writeSync(fd, buf, written)
-}
-```
-Then delete the trailing `process.exit(0)` entirely — with nothing else keeping the event loop
-alive, falling off the end of the script exits 0 on its own. Verified against an 82KB+ synthetic
-payload piped through a consuming process: parses cleanly, exit 0. Piping through `head -c N`
-still SIGPIPEs the writer (expected Unix behavior, not a defect) — verify full-payload delivery
-with a real consumer, not `head`.
+**Superseded (specs/20261101/10-one-writer-and-no-copies-left.md): never hand-roll the
+`fs.writeSync` loop this note once recommended for fleet-reader.js.** Every payload write under
+`spec/scripts/` goes through `lib/sync-write.js`'s `writeOut` (partial-write loop, EAGAIN retry,
+EPIPE treated as done so `| head` no longer exits 1); a standing sweep in
+`tests/ceiling/sync-write-callers.test.js` reds any other file containing `writeSync(`. Falling off
+the end instead of a trailing `process.exit(0)` still holds.
 
 **`lib/host-config.js` exports `configExists(root)`, `configPath(root)`, and `CONFIG_RELPATH`**
 (superseding the short-lived `configPathFor` export, retired 2026-08-20 by
@@ -52,7 +42,6 @@ crash-on-unreadable-file, silent-lie-on-unreadable-dir, unguarded root readdir, 
 sweep evasion) with exact fix instructions per defect — a good template for how detailed a
 gate-scripts fix dispatch from this user looks when the defects are already fully diagnosed.
 
-How to apply: use the `writeAll` loop pattern for any future JS gate script piping a large
-`--json` payload to stdout. Use `configExists` for an existence-only config gate, `configPath` when
+How to apply: route any large `--json` payload through `lib/sync-write.js`'s `writeOut`. Use `configExists` for an existence-only config gate, `configPath` when
 you need the path, and `CONFIG_RELPATH` in remedy strings — never spell `spec.config.json` yourself
 in a script under `spec/scripts/`; add a new `lib/host-config.js` export instead.

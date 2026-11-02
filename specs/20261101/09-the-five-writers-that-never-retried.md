@@ -1,6 +1,6 @@
 ---
 date: 2026-11-01
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: scripts

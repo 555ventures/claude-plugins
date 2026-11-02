@@ -827,7 +827,21 @@ function readManifestRows(p) {
 function isFixDeltaManifest(n) {
   return readManifestRows(manifestPathFor(n)).some((r) => r.scope === 'fix-delta')
 }
-function fixRoundsDone() { return listManifestNumbers().filter(isFixDeltaManifest).length }
+// A fix round is one fix-applied, not one fix-delta manifest: a skips re-run inside the round
+// inherits scope:"fix-delta" AND the round's fixDeltaFrom source (handleSkipsExtracted), so rounds
+// are the distinct fixDeltaFrom sources. A manifest with no recorded source (a sidecar predating
+// the record) counts as its own round — the count never drops below what disk proves.
+function fixRoundsDone() {
+  const from = marks.fixDeltaFrom || {}
+  const sources = new Set()
+  let rounds = 0
+  for (const n of listManifestNumbers().filter(isFixDeltaManifest)) {
+    const src = from[String(n)]
+    if (src === undefined) { rounds++; continue }
+    if (!sources.has(src)) { sources.add(src); rounds++ }
+  }
+  return rounds
+}
 // A recorded iteration is trusted only when a legs run actually recorded it (legsMode[n] exists):
 // a hand-edited counter names no legs run and must not move the live iteration.
 function legsModeFor(n) { return marks.legsMode && marks.legsMode[String(n)] }
@@ -2208,8 +2222,24 @@ function promoteEvidenceAndClean(wt, mainRootDir) {
   if (fs.existsSync(srcLedger)) {
     const srcLines = fs.readFileSync(srcLedger, 'utf8').split('\n').filter(Boolean)
     const dstLines = fs.existsSync(dstLedger) ? fs.readFileSync(dstLedger, 'utf8').split('\n').filter(Boolean) : []
+    // A build row's identity is its runId, not its bytes: restampBuildDeviations() rewrites it in
+    // the worktree at close, after the branch may already have carried the pre-restamp copy to
+    // main through the merge — so the worktree copy replaces main's in place. Review rows keep
+    // exact-line semantics: a hard-stop row and its run's close row share one runId by design.
+    const buildRunId = (l) => {
+      try { const r = JSON.parse(l); return r && r.stage === 'build' && r.runId ? r.runId : null } catch { return null }
+    }
+    const dstBuildIdx = new Map()
+    dstLines.forEach((l, i) => { const id = buildRunId(l); if (id) dstBuildIdx.set(id, i) })
+    let replaced = false
     const dstSet = new Set(dstLines)
-    const toAppend = srcLines.filter((l) => !dstSet.has(l))
+    const toAppend = srcLines.filter((l) => {
+      if (dstSet.has(l)) return false
+      const id = buildRunId(l)
+      if (id && dstBuildIdx.has(id)) { dstLines[dstBuildIdx.get(id)] = l; replaced = true; return false }
+      return true
+    })
+    if (replaced) fs.writeFileSync(dstLedger, dstLines.join('\n') + '\n')
     if (toAppend.length) {
       fs.mkdirSync(path.dirname(dstLedger), { recursive: true })
       fs.appendFileSync(dstLedger, toAppend.join('\n') + '\n')

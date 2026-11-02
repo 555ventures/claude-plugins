@@ -73,8 +73,8 @@
   `.claude/spec-runs/<runId>.jsonl` — the manifest legs untruncated plus the reviewer's
   survivors/killed with their executed repro evidence verbatim. The artifact rides the close commit in an
   in-place review; in a linked-worktree review the ledger and retained evidence are written
-  under the worktree, EXCLUDED from the close commit, and promoted (deduped) into the main root
-  only once a merge has actually landed — writing them straight to the main root at close time
+  under the worktree, EXCLUDED from the close commit, and promoted (deduped — a build row by runId, the worktree's restamped copy replacing main's in place;
+  every other row by exact line) into the main root only once a merge has actually landed — writing them straight to the main root at close time
   dirties it before `merge` runs and trips `assert_clean_root`/`ff-only`, and committing them
   from the worktree makes `git worktree remove` refuse cleanup after the merge already landed.
   The exception is terminal-red evidence: a worktree review's `RED_BLOCKING` hard-stop appends
@@ -283,7 +283,10 @@
   re-verifies fix-routed findings and reports only inside the listed files.
   (specs/20260909/05-fix-delta-reviewer-pass.md)
   A manifest's number is a storage key. Its kind is the `scope` stamp on its rows; the fix cap
-  counts fix-delta manifests. The live iteration is the sidecar's recorded `iteration`; SKIPS
+  counts fix rounds — the distinct `fixDeltaFrom` sources of the fix-delta manifests, so a skips
+  re-run inside a round (which inherits the round's scope and source) is not a second round. The
+  review row's `iteration` is that fix-round count, and its `findings.fixDispatched` is the closing round's value — 0 on a terminal row by
+  construction, since a round that dispatches a fix is never the last. The live iteration is the sidecar's recorded `iteration`; SKIPS
   re-fires per iteration when the gate's skip count differs from the count recorded at
   extraction. `skips-extracted` refuses an empty file against a gate reporting skips and warns on
   a count mismatch. (specs/20261024/01-review-driver-reads-recorded-facts.md)

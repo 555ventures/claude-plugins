@@ -340,3 +340,31 @@ test('a merge-strategy retry after a landed squash skips the merge and reaches D
   assert.strictEqual(execFileSync('git', ['-C', root, 'branch', '--list', branch], { encoding: 'utf8' }).trim(), '',
     'the concluded retry must delete the squash-merged branch')
 })
+
+// /spec:fix 2026-11-01 (pipeline-efficiency audit § Ledger defects): restampBuildDeviations()
+// rewrites the build row in the worktree ledger at close, after the branch already committed the
+// pre-restamp copy — the merge carries that copy to main, and promotion compared bytes, so the
+// restamped line was appended as a second row with the same runId. Promotion keys build rows by
+// runId (the worktree copy wins, in place); review rows keep exact-line semantics because a
+// hard-stop row and the run's close row share one runId by design.
+test('promotion replaces a restamped build row in place by runId — one build row survives, carrying the restamped deviations — while two review rows sharing a runId both survive', () => {
+  const { root, wt, spec, gw } = driveToMerge('restamp', 'AC-20260823-99-7', { trackLedger: true })
+  const wtLedger = path.join(wt, '.claude/spec-runs.jsonl')
+  const closeRows = fs.readFileSync(wtLedger, 'utf8').split('\n').filter(Boolean).slice(1)
+  const build = { stage: 'build', spec: 'specs/20260823/99-restamp.md', runId: 'bd_restamp', ts: '2026-11-01T00:00:00Z', deviations: 0 }
+  const hardStop = { stage: 'review', spec: 'specs/20260823/99-restamp.md', runId: 'rv_shared', verdict: 'GATE_RED' }
+  fs.writeFileSync(wtLedger, ['{"stage":"seed"}', JSON.stringify(build), JSON.stringify(hardStop)].join('\n') + '\n')
+  gw('add', '.claude/spec-runs.jsonl'); gw('commit', '-q', '-m', 'build row committed on the branch')
+  const restamped = { ...build, deviations: 1 }
+  const close = { stage: 'review', spec: 'specs/20260823/99-restamp.md', runId: 'rv_shared', verdict: 'CLEAN' }
+  fs.writeFileSync(wtLedger, ['{"stage":"seed"}', JSON.stringify(restamped), JSON.stringify(hardStop), JSON.stringify(close), ...closeRows].join('\n') + '\n')
+
+  const merged = run(root, spec, '--mark', 'merge-strategy', 'ff-only')
+  assert.strictEqual(merged.status, 0, 'merge-strategy must reach DONE: ' + merged.stdout + merged.stderr)
+  const rows = fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
+  const builds = rows.filter((r) => r.runId === 'bd_restamp')
+  assert.strictEqual(builds.length, 1, 'one build has one build row — the restamped copy must replace the merged pre-restamp copy, not land beside it: ' + JSON.stringify(builds))
+  assert.strictEqual(builds[0].deviations, 1, 'the restamped deviations count is the one that survives: ' + JSON.stringify(builds[0]))
+  const shared = rows.filter((r) => r.runId === 'rv_shared').map((r) => r.verdict)
+  assert.deepStrictEqual(shared, ['GATE_RED', 'CLEAN'], 'review rows sharing a runId (hard-stop then close) must both survive, in read order: ' + JSON.stringify(shared))
+})

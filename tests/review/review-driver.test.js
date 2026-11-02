@@ -15,7 +15,7 @@ const { GREEN_TEST, specBody, makeHost, run, stateOf, toReviewer, returnFileWith
 // specs/20260901/09-disposer-gate.md AC-20260901-09-6; specs/20260902/05-manifest-stamped-scope.md
 // AC-20260902-05-13. Shared helpers live in review-driver.fixtures.js (D2).
 
-function makeSkipsHost() {
+function makeSkipsHost(gateCommand = "node --test {testDirs}; echo 'ℹ skipped 1'") {
   const root = fs.realpathSync(tmpdir('rvdrv-skips'))
   const g = gitRepo(root)
   fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
@@ -25,12 +25,13 @@ function makeSkipsHost() {
     // The injected skips line comes AFTER the runner: the skip pattern reads the LAST match, as
     // every real runner prints its summary line last (specs/20260903/02-whole-suite-review-leg.md
     // close record) — an echo ahead of the runner would be shadowed by node's own `ℹ skipped 0`.
-    gateCommand: "node --test {testDirs}; echo 'ℹ skipped 1'",
+    gateCommand,
     testCommand: 'node --test',
     runtime: { inert: 'plugin repo — nothing boots' },
     capabilities: { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' },
   }))
   fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 41\n')
+  fs.writeFileSync(path.join(root, 'src/skips.count'), '1\n')
   g('add', '-A'); g('commit', '-q', '-m', 'base')
   const diffBase = g('rev-parse', 'HEAD').trim()
   fs.mkdirSync(path.join(root, 'specs/20260820'), { recursive: true })
@@ -722,4 +723,46 @@ test('AC-20261029-02-7: the review driver passes --sessionTokens with the dedupl
     'a sidecar with no snapshot must still pass --sessionTokens null so the row carries the key: ' + JSON.stringify(nullRow))
   assert.strictEqual(nullRow.sessionTokens, null,
     'with no start snapshot the delta is unknowable and must be null, never the whole-session total: ' + JSON.stringify(nullRow))
+})
+
+// /spec:fix 2026-11-01 (pipeline-efficiency audit § Ledger defects): a skips re-run inside a fix
+// round inherits scope:"fix-delta" (same delta, same prior return) but is not a second fix round.
+// On a host whose gate always reports skips, every fix round is fix-applied + skips-extracted —
+// counting both spent the cap of 2 on ONE real fix and refused the second.
+test('a skips re-run inside a fix round is not counted as a fix round: fix -> skips -> fix is accepted, and the third fix-applied is still refused', () => {
+  // the gate's skip count reads a tracked file, so each fix can change it — a fix that changes the
+  // skip count is exactly what sends a fix round back through SKIPS
+  const host = makeSkipsHost("node --test {testDirs}; echo \"ℹ skipped $(cat src/skips.count)\"")
+  const skipsFile = path.join(fs.realpathSync(tmpdir('rvdrv-skipfix')), 'skips.txt')
+  fs.writeFileSync(skipsFile, 'AC-20260820-99-2: foo() returns 42\n')
+  const hard = { verdict: 'CLEAN', survivors: [{ severity: 'hard', claim: 'x', file: 'src/foo.js', line: 1, impact: 'x', evidence: 'x' }], killed: [], reviewerCount: 1, scope: 'full', tokens: 10 }
+  run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'SKIPS', 'setup precondition: a gate reporting a skip must land SKIPS, or no skips re-run is exercised below')
+  run(host.root, host.spec, '--mark', 'skips-extracted', '--file', skipsFile)
+  const fixCycle = (cycle) => {
+    assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', `cycle ${cycle}: must reach REVIEWER`)
+    run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-skipfix-' + cycle, hard))
+    // the gate's injected skip surfaces a skip-reconcile leg finding beside the reviewer survivor —
+    // the disposer return covers both refs, each dispatched as a fix
+    const disp = returnFileWith('rvdrv-skipfix-disp-' + cycle, { verdict: 'DISPOSED', tokens: 1, dispositions: ['s0', 'leg:skip-reconcile'].map((ref) => ({ ref, recommended: 'fix', reason: 'fix is the conservative disposition' })) })
+    const d = run(host.root, host.spec, '--mark', 'dispositions', '--file', disp, '--waived', '0', '--rejected', '0', '--fix-dispatched', '2')
+    assert.strictEqual(d.status, 0, `cycle ${cycle}: dispositions must be accepted: ` + d.stdout + d.stderr)
+    fs.writeFileSync(path.join(host.root, 'src/foo.js'), `module.exports = () => 42 // fix cycle ${cycle}\n`)
+    fs.writeFileSync(path.join(host.root, 'src/skips.count'), `${cycle + 1}\n`)
+    return run(host.root, host.spec, '--mark', 'fix-applied')
+  }
+  for (let cycle = 1; cycle <= 2; cycle++) {
+    const f = fixCycle(cycle)
+    assert.strictEqual(f.status, 0, `cycle ${cycle}: fix-applied ${cycle} of the cap of 2 must be accepted — the skips re-run after the previous fix is not a fix round: ` + f.stdout + f.stderr)
+    assert.strictEqual(stateOf(host.root, host.spec), 'SKIPS', `cycle ${cycle}: the fix-delta gate still reports a skip`)
+    const s = run(host.root, host.spec, '--mark', 'skips-extracted', '--file', skipsFile)
+    assert.strictEqual(s.status, 0, `cycle ${cycle}: skips-extracted inside the fix round must be accepted: ` + s.stdout + s.stderr)
+  }
+  const third = fixCycle(3)
+  assert.notStrictEqual(third.status, 0, 'a third fix-applied must still be refused: ' + third.stdout + third.stderr)
+  assert.match(third.stdout + third.stderr, /iteration cap 2/, 'the refusal must name the cap, or a session cannot tell an over-cap fix from a broken mark: ' + third.stdout + third.stderr)
+  const rows = fs.readFileSync(path.join(host.root, '.claude/spec-runs.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
+  const esc = rows.filter((r) => r.escalated === true).pop()
+  assert.ok(esc, 'the refused third fix writes the escalate row: ' + JSON.stringify(rows))
+  assert.strictEqual(esc.iteration, 2, 'the escalate row records 2 fix rounds, not 4 fix-delta manifests: ' + JSON.stringify(esc))
 })

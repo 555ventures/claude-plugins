@@ -93,10 +93,13 @@
   cells. BRIEF has no theme precondition: the theme is picked in `/spec:mocks`,
   which runs after genesis, so `design/tokens.css` does not exist while genesis runs and is
   never checked here. The tournament's tile probe task and the discovery sketch are retired; the
-  `design/components.json` check moves to `skeleton-landed`. A legacy status past MENUS
-  resumes at BRIEF via `--mark brief-written --legacy` (no re-run forced); the init hook
-  accepts `design: ratified` and still blocks on a partial legacy canon.
-  (specs/20260902/08-genesis-shrink-brief-state.md, done 2026-09-03;
+  `design/components.json` check moves to `skeleton-landed`. A status past MENUS that never
+  ratified a brief derives BRIEF from its live artifacts exactly like a fresh run — there is no
+  legacy resume and no resume flag; `status.brief` is `{mocks, ratifiedAt}`. The init hook passes
+  `design: ratified` or `skipped` silently, prints its note for any other value, and still blocks
+  on a partial canon (`doctrine-drafted`/`tokens-landed`).
+  (specs/20261101/08-no-host-needs-the-shims.md D1, D2;
+  specs/20260902/08-genesis-shrink-brief-state.md, done 2026-09-03;
   BRIEF's theme preconditions dropped by
   specs/20260907/05-genesis-drops-the-theme-gates.md, done 2026-09-08)
 

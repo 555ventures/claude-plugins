@@ -1,6 +1,6 @@
 ---
 date: 2026-11-01
-status: implementing
+status: done
 tier: critical
 area: cross-cutting
 breaking: false
@@ -260,6 +260,25 @@ RETIRED_MARKS legacyResume shell-drawn`): every live-surface hit is a File Plan 
 `docs/roadmap/18b-disposer-and-run.md` — dated records that name the retired flag as history, never
 edited. The `executes` hits (tests that run the touched scripts) stay green by construction: every
 change is to a retired input's refusal wording or to a dead branch no live fixture reaches.
+
+Build deviations (folded at close, 2026-11-01; each a recurrence of an existing Gotchas entry,
+so none earns a new one — the Gotchas section is at its 15-entry cap):
+- RED_FINDINGS `gutted-rewrite`: AC-17's pointer verb fixed from `rewrites` to `reuses` — its text
+  is CONTINUE TO (§ Gotchas red-check entry, "fix the verb").
+- RED_FINDINGS `broken-reuse`: AC-6's pointer changed to `writes tests/genesis-gate.test.js` —
+  AC-5 rewrites the same named case red, so it could not also be a green reuse target.
+- The orchestrator reworded AC-16's test title to say "a legacy brief key" instead of the dotted
+  literal, which the AC-15 sweep banned. No assertion changed.
+- `mocks-driver.js`'s not-confirmed remedy now reads "the client visits <link>" (was "opens"):
+  the `client open` ban is a bare substring (§ Gotchas, tenth trigger). No test pinned the old
+  wording.
+- Host-state proof (Behavior, D5): `fleet-reader.js --repos-root ~/projects --json`
+  `driftCensus.byRepo` drift buckets identical before and after the change (8 repos; only
+  `{}` / `pre-v7-tier`).
+
+### Advisory debt (review rv_dcdba3f101b5)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/spec-08-no-host-needs-the-shims/spec/scripts/genesis-driver.js:2354 — genesis-driver.js still narrates a 'legacy run' category in five comments after D1 deleted the only thing that made a run legacy (the resume path and brief.legacy). Lines 197, 508, 2354, 2687 and 3062 say 'legacy or skipped-stage host' / 'legacy and non-visual runs see none of this' while the header's Applicability line at 139 was reworded to drop the word. Not a D6 literal (the sweep bans specific tokens, not the word), so no test pins it.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/spec-08-no-host-needs-the-shims/spec/scripts/genesis-state-gate.sh:17 — genesis-state-gate.sh header comment grammar slip introduced by this diff: 'the blocked message for the partial-canon values doctrine-drafted/ tokens-landed reads to "re-run /spec:genesis to reach BRIEF"' — the rewording turned 'is reworded to' into 'reads to'.
 
 ## Canonical Delta
 

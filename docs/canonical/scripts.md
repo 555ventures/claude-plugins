@@ -167,3 +167,12 @@ request. The suite is never in the gate; `tests/evals-suite.test.js` pins its sh
 Script comments explain why; they cite no spec, AC or decision id except one `Owner:` header line
 per file. `tests/consistency/no-citation-comments.test.js` pins it. Doctrine line budgets and
 heading lists are no longer pinned by tests.
+
+- **A retired flag is refused by the script's generic unknown-flag path, never by a bespoke
+  stub.** A stub that names a retired flag is a compatibility path that outlives the state it
+  served; the one sanctioned exception is a script with no generic refusal
+  (`spec-review-driver.js`'s `flag()` reader), where the bespoke refusal IS the guard. The ledger
+  readers (`lib/escape-row.js`, `fleet-reader.js` `STAGES`) keep every shape the fleet has ever
+  written — the plugin's own ledger is the oldest and still carries them; the proof for any reader
+  change is a byte-identical fleet drift census.
+  (specs/20261101/08-no-host-needs-the-shims.md D4, D5)

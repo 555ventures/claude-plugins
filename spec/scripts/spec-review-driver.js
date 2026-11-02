@@ -523,6 +523,12 @@ function malformedLines(malformed) {
 // plain tracked ledger — an in-place spec-runs.jsonl append rides normal git history and has no
 // comparable loss mode). Partial by design (a dead worktree's sidecar never speaks at all — this
 // only catches the case where THIS sidecar is still readable but the row it points at is not).
+// The row is matched by runId alone, never by spec path: the hard-stop wrote it from inside the
+// worktree with the plain repo-relative spec path, while the `--mark merge-strategy` invocation
+// must run from the main root, where `specRel` carries the .claude/worktrees/<name>/ prefix — a
+// spec-path match there misses a row that is still present (false alarm, specs/20261101/11).
+// A drain that moves this run's row retargets the mark at the tracked ledger (retargetDrainedMarks),
+// which the basename guard below then skips.
 function checkDurableRowPresent(ledgerPathKey, runIdKey) {
   const ledgerPath = marks[ledgerPathKey]
   const rid = marks[runIdKey]
@@ -532,7 +538,7 @@ function checkDurableRowPresent(ledgerPathKey, runIdKey) {
     rows = fs.readFileSync(ledgerPath, 'utf8').split('\n').filter((l) => l.trim())
       .map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
   } catch { rows = [] }
-  const present = rows.some((r) => r.spec === specRel && r.runId === rid)
+  const present = rows.some((r) => r.runId === rid)
   if (!present) {
     process.stderr.write('spec-review-driver: durable ledger row for ' + specRel + ' (runId ' + rid +
       ') is no longer readable at ' + ledgerPath + ' — the row may have been lost (a dead worktree, ' +
@@ -995,6 +1001,18 @@ function drainStoppedRows(mainRootDir, specRel) {
   return { drained }
 }
 
+// A drained row no longer lives where marks.stoppedLedgerPath / escalateLedgerPath say it does.
+// Point each mark whose runId is among the drained lines at the tracked ledger it moved into, so
+// the mark keeps its meaning ("where the row actually landed") and checkDurableRowPresent() never
+// reports a deliberate move as a loss. Matched by runId only: an in-place close may drain rows a
+// dead worktree wrote, which this sidecar never owned. The caller's own sidecar save persists it.
+function retargetDrainedMarks(drained, trackedLedger) {
+  const ids = new Set()
+  for (const line of drained) { try { ids.add(JSON.parse(line).runId) } catch {} }
+  if (marks.runId && ids.has(marks.runId) && marks.stoppedLedgerPath) marks.stoppedLedgerPath = trackedLedger
+  if (marks.escalateRunId && ids.has(marks.escalateRunId) && marks.escalateLedgerPath) marks.escalateLedgerPath = trackedLedger
+}
+
 // ---- RED_BLOCKING hard-stop — no-workflow verdict pass, GATE_RED ledger line appended ---
 // In-place (repoRoot === mainRoot) keeps today's appendLedger() path unchanged. A worktree
 // review durably appends to <mainRoot>/STOPPED_LEDGER instead — surviving an abandoned or
@@ -1174,7 +1192,10 @@ function doCloseWork(n) {
   // that path, so the drain has to run here too, ahead of the close-row append below.
   if (repoRoot === mainRoot) {
     const { drained } = drainStoppedRows(mainRoot, specRel)
-    if (drained.length) appendLedger(drained.join('\n'))
+    if (drained.length) {
+      appendLedger(drained.join('\n'))
+      retargetDrainedMarks(drained, path.join(repoRoot, '.claude/spec-runs.jsonl'))
+    }
   }
   const args = ['--manifest', manifestPathFor(n), '--workflow', marks.reviewerReturnFile,
     '--waived', String(d.waived), '--rejected', String(d.rejected), '--fixDispatched', String(d.fixDispatched),
@@ -2292,6 +2313,7 @@ function promoteEvidenceAndClean(wt, mainRootDir) {
   if (drained.length) {
     fs.mkdirSync(path.dirname(dstLedger), { recursive: true })
     fs.appendFileSync(dstLedger, drained.join('\n') + '\n')
+    retargetDrainedMarks(drained, dstLedger) // relocateSidecar() right after persists the live marks
   }
   if (fs.existsSync(srcLedger)) {
     const srcLines = fs.readFileSync(srcLedger, 'utf8').split('\n').filter(Boolean)

@@ -408,3 +408,90 @@ test('AC-20260821-04-10: WHEN a worktree hard-stop\'s row has landed durably and
   assert.ok(gateRed,
     'readLedgerRows(<mainRoot>) must still return the GATE_RED row after the worktree that produced it is force-removed — the row\'s durability is the WRITE location, not the reader (which already union-merges spec-runs*.jsonl with zero changes), and this is exactly what makes an abandoned worktree survivable: ' + JSON.stringify(rows))
 })
+
+// /spec:fix 2026-11-02 — the silent-loss detector (checkDurableRowPresent) raised "durable ledger
+// row … is no longer readable" for a row that was still present or had been drained on purpose
+// (seen on specs/20261101/11). Two causes: the row was matched by spec path, which carries the
+// .claude/worktrees/<name>/ prefix when the driver runs from the main root (as --mark
+// merge-strategy must), and a drain moved the row without retargeting the sidecar mark.
+const LOSS_PHRASE = 'no longer readable'
+
+test('fix 2026-11-02: WHEN a worktree review hard-stopped durably and the driver is then invoked from the main root against the worktree spec THE SYSTEM does not report the still-present stopped row as lost', () => {
+  const host = makeWorktreeHost({ name: 'sr-durability-fixkey', acId: 'AC-20260820-99-40', gateFails: true, ignoreStopped: true })
+  const r1 = run(host.wt, host.spec)
+  assert.strictEqual(stateOf(host.wt, host.spec), 'STOPPED', 'setup precondition: the fixture must hard-stop durably: ' + r1.stdout + r1.stderr)
+  assert.ok(readJsonl(path.join(host.root, STOPPED_LEDGER_REL)).length === 1, 'setup precondition: the GATE_RED row must sit in the durable stopped file')
+  const fromRoot = run(host.root, host.spec, '--state')
+  assert.ok(!fromRoot.stderr.includes(LOSS_PHRASE),
+    'the row is still in the durable file — invoking from the main root (where the spec path gains the worktree prefix) must not read it as lost: ' + fromRoot.stderr)
+})
+
+test('fix 2026-11-02: WHEN the durable stopped file loses this run\'s row THE SYSTEM still reports the loss on stderr (the detector survives the runId-keyed match)', () => {
+  const host = makeWorktreeHost({ name: 'sr-durability-fixloss', acId: 'AC-20260820-99-41', gateFails: true, ignoreStopped: true })
+  run(host.wt, host.spec)
+  assert.strictEqual(stateOf(host.wt, host.spec), 'STOPPED', 'setup precondition: the fixture must hard-stop durably')
+  fs.writeFileSync(path.join(host.root, STOPPED_LEDGER_REL), '')
+  const r = run(host.wt, host.spec, '--state')
+  assert.ok(r.stderr.includes(LOSS_PHRASE), 'a truncated durable file must still trip the silent-loss detector: ' + r.stderr)
+})
+
+test('fix 2026-11-02: WHEN a close drains this run\'s stopped and escalate rows into the tracked ledger THE SYSTEM points both sidecar marks at the tracked ledger and a later invocation reports no loss', () => {
+  const host = makeHost()
+  const stoppedPath = path.join(host.root, STOPPED_LEDGER_REL)
+  toReviewer(host)
+  const stateFile = path.join(host.sidecar, 'review-state.json')
+  const marks = JSON.parse(fs.readFileSync(stateFile, 'utf8'))
+  const runId = marks.runId || 'rv_fixretgt001'
+  Object.assign(marks, { runId, stoppedLedgerPath: stoppedPath, escalateRunId: 'rv_fixretgt002', escalateLedgerPath: stoppedPath })
+  fs.writeFileSync(stateFile, JSON.stringify(marks, null, 2) + '\n')
+  fs.writeFileSync(stoppedPath,
+    JSON.stringify({ ts: '2026-11-02T00:00:00Z', stage: 'review', spec: host.specRel, verdict: 'GATE_RED', runId, tier: 'standard' }) + '\n' +
+    JSON.stringify({ ts: '2026-11-02T00:01:00Z', stage: 'review', spec: host.specRel, verdict: 'HARD_FINDINGS', escalated: true, runId: 'rv_fixretgt002', tier: 'standard' }) + '\n')
+
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('sr-durability-fixretgt-return', CLEAN_RETURN))
+  const dispR = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE', 'setup precondition: must reach CLOSE: ' + dispR.stdout + dispR.stderr)
+  assert.ok(!fs.existsSync(stoppedPath), 'setup precondition: the close must have drained both rows out of the stopped file')
+
+  const after = JSON.parse(fs.readFileSync(stateFile, 'utf8'))
+  const tracked = path.join(host.root, '.claude/spec-runs.jsonl')
+  assert.strictEqual(after.stoppedLedgerPath, tracked, 'the stopped mark must follow its drained row into the tracked ledger: ' + JSON.stringify(after))
+  assert.strictEqual(after.escalateLedgerPath, tracked, 'the escalate mark must follow its drained row into the tracked ledger: ' + JSON.stringify(after))
+  const later = run(host.root, host.spec, '--state')
+  assert.ok(!later.stderr.includes(LOSS_PHRASE), 'a deliberate drain must never read as a lost row: ' + later.stderr)
+})
+
+test('fix 2026-11-02: WHEN the merge-time drain moves this run\'s stopped and escalate rows into the tracked ledger and a later step of the merge dies THE SYSTEM leaves the relocated sidecar\'s marks pointing at the tracked ledger, so the retry reports no loss', () => {
+  const host = makeWorktreeHost({ name: 'sr-durability-fixmerge', acId: 'AC-20260820-99-42', gateFails: false, ignoreStopped: true })
+  const stoppedPath = path.join(host.root, STOPPED_LEDGER_REL)
+  run(host.wt, host.spec)
+  assert.strictEqual(stateOf(host.wt, host.spec), 'REVIEWER', 'setup precondition: green legs must reach REVIEWER')
+  run(host.wt, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('sr-durability-fixmerge-return', CLEAN_RETURN))
+  run(host.wt, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(stateOf(host.wt, host.spec), 'CLOSE', 'setup precondition: must reach CLOSE')
+  host.gw('add', host.specRel, 'tests/foo.test.js'); host.gw('commit', '-q', '-m', 'close')
+  const closeR = run(host.wt, host.spec, '--mark', 'closed')
+  assert.strictEqual(closeR.status, 0, 'setup: closed must succeed: ' + closeR.stdout + closeR.stderr)
+
+  // Seed the state a stopped-then-recovered review carries: both marks at the durable file, rows present.
+  const wtState = path.join(host.sidecar, 'review-state.json')
+  const marks = JSON.parse(fs.readFileSync(wtState, 'utf8'))
+  Object.assign(marks, { stoppedLedgerPath: stoppedPath, escalateRunId: 'rv_fixmerge0002', escalateLedgerPath: stoppedPath })
+  fs.writeFileSync(wtState, JSON.stringify(marks, null, 2) + '\n')
+  fs.writeFileSync(stoppedPath,
+    JSON.stringify({ ts: '2026-11-02T00:00:00Z', stage: 'review', spec: host.specRel, verdict: 'GATE_RED', runId: marks.runId, tier: 'standard' }) + '\n' +
+    JSON.stringify({ ts: '2026-11-02T00:01:00Z', stage: 'review', spec: host.specRel, verdict: 'HARD_FINDINGS', escalated: true, runId: 'rv_fixmerge0002', tier: 'standard' }) + '\n')
+  // An untracked file makes `git worktree remove` refuse, so the merge dies after relocateSidecar().
+  fs.writeFileSync(path.join(host.wt, 'stray-untracked.txt'), 'x\n')
+
+  const merged = run(host.root, host.spec, '--mark', 'merge-strategy', 'ff-only')
+  assert.ok(!merged.stderr.includes(LOSS_PHRASE), 'the merge invocation itself must not report the present row as lost: ' + merged.stderr)
+  const rootState = path.join(host.root, host.specRel.replace(/\.md$/, '.review'), 'review-state.json')
+  assert.ok(fs.existsSync(rootState), 'setup precondition: the merge must die after relocating the sidecar to the main root: ' + merged.status + merged.stdout + merged.stderr)
+  const after = JSON.parse(fs.readFileSync(rootState, 'utf8'))
+  const tracked = path.join(host.root, '.claude/spec-runs.jsonl')
+  assert.strictEqual(after.stoppedLedgerPath, tracked, 'the stopped mark must follow its drained row into the tracked ledger: ' + JSON.stringify(after))
+  assert.strictEqual(after.escalateLedgerPath, tracked, 'the escalate mark must follow its drained row into the tracked ledger: ' + JSON.stringify(after))
+  const retry = run(host.root, path.join(host.root, host.specRel), '--state')
+  assert.ok(!retry.stderr.includes(LOSS_PHRASE), 'a retry after the deliberate drain must never read as a lost row: ' + retry.stderr)
+})

@@ -1,8 +1,8 @@
 {
   "generatedBy": "spec@7.268.0",
   "contractHash": "d3216056413e",
-  "gateCommand": "node --test --test-timeout=45000 --test-force-exit {testDirs}",
-  "testCommand": "node --test --test-timeout=45000 --test-force-exit --test-reporter=spec --test-reporter-destination=stdout",
+  "gateCommand": "node --test --test-timeout=45000 --test-force-exit --require ./scripts/test-stdout-blocking.js {testDirs}",
+  "testCommand": "node --test --test-timeout=45000 --test-force-exit --require ./scripts/test-stdout-blocking.js --test-reporter=spec --test-reporter-destination=stdout",
   "postGateCommand": "{testCommand}",
   "setupCommand": "npm install",
   "testNameFilter": "--test-name-pattern={name}",

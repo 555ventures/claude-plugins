@@ -10,7 +10,11 @@ rules that replaced it:
   or unfinished work, never a backlog entry.
 - **A hanging test ends the run.** `npm test`, the host `testCommand` and the scoped
   `gateCommand` carry `--test-timeout=45000 --test-force-exit`, so a test that never resolves
-  is a `cancelled` red and the process ends. Neither command caps `--test-concurrency`.
+  is a `cancelled` red and the process ends. Each also carries
+  `--require ./scripts/test-stdout-blocking.js`: force-exit exits a per-file child with results
+  still queued in its non-blocking stdout pipe, silently dropping that file's last tests from a
+  green run, and the preload makes those writes blocking (pinned by
+  `tests/consistency/test-stdout-blocking.test.js`). Neither command caps `--test-concurrency`.
   `/spec:doctor` check 19 (`port-check.js`) reports any fixed, computed or `--port <n>` literal
   under `tests/`. (specs/20260909/07-hang-bound-and-port-check.md)
 - **One derivation per verdict.** `verdict.js` is the sole source of the review/release

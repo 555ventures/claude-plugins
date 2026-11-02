@@ -568,6 +568,10 @@ const requiredLegs = profile === 'release'
       : [...REVIEW_LEGS])
 const blockingLegs = profile === 'release' ? new Set(RELEASE_LEGS) : new Set(REVIEW_BLOCKING)
 
+// `slow` is blocking-if-present: a declared slow tier that is red derives
+// GATE_RED, and a host that declares none has no row — never added to REVIEW_LEGS (required).
+if (profile !== 'release' && legRows.has('slow')) blockingLegs.add('slow')
+
 // --require <leg> widens the active profile's required set (and, release-only, its
 // blocking set too) — never removes or reorders the built-ins above; duplicates collapse.
 for (const leg of requireLegs) {

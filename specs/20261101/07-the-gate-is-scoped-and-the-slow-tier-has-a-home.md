@@ -1,12 +1,14 @@
 ---
 date: 2026-11-01
-status: hardened
+status: done
+build_base: main
 tier: critical
 area: grounding-contract
 breaking: false
 depends_on: [specs/20261101/05-the-gate-that-ran-the-suite-is-the-suite.md]
 brief: n/a
 open_markers: 0
+diff_base: c709a684e888310e55e537e7847c4a9300f84db5
 ---
 
 # The gate is scoped, and the slow tier has a home
@@ -149,6 +151,16 @@ home. Rejected: a numeric budget (no source prescribes one; it would be a guess 
 rule), a plugin-side slow-test detector (stack-shaped), and a change to expiry (specs/20261101/01
 makes the scanner host-declared; doctor check 20 already reports the retirable count — the
 62% figure measured on zubu-web this week is a host decision to apply, not a plugin gap).
+
+Build deviation (folded at close, 2026-11-01): this repo's own `.claude/spec.config.json`
+`contractHash` was re-stamped d3216056413e → e94cfb1d87a8 at integration, outside the File Plan, as
+A5 anticipated; the reconcile leg's out-of-plan finding was waived by the user at review
+(rv_22537839ca41).
+
+### Advisory debt (review rv_22537839ca41)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/spec-07-the-gate-is-scoped-and-the-slow-tier-has-a-home/spec/scripts/spec-review-driver.js:1022 — The slow leg is excluded from the reuse set in both review-legs.js (REUSABLE = gate, suite, at-risk, patterns, smoke) and spec-review-driver.js REUSABLE_LEGS, so a driver legs re-run over an unchanged tree (--mark skips-extracted / repair-round) re-executes slowTestCommand every time. The spec's Rationale states 'spec 06 would reuse even that if the tree is unchanged', which the implementation does not deliver; D2's 'once per legs iteration' is still met, so this is intent drift, not a Decision violation.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/spec-07-the-gate-is-scoped-and-the-slow-tier-has-a-home/spec/scripts/init-gen.js:209 — `init-gen gate-check` over a host with no readable `.claude/spec.config.json` prints `{"scoped":false,"gateRunsSuite":false,"slowTier":false}` and exits 0 — indistinguishable from a real unscoped gate, so doctor check 25 would emit the 'gate is unscoped' warning on a host that simply has no config. D4 does say exit 0 always except usage, so this is a shape gap, not a contradiction.
+- a2 /home/jj/projects/claude-plugins/.claude/worktrees/spec-07-the-gate-is-scoped-and-the-slow-tier-has-a-home/spec/scripts/spec-review-driver.js:861 — The driver's BLOCKING_LEGS header comment still enumerates 'gate/smoke/ci' after the set gained 'slow' (and already omitted 'suite'); the comment and the set it describes disagree.
 
 ## Canonical Delta
 

@@ -105,6 +105,13 @@ driver's close-time re-run skip its whole-suite half. Every legs run also writes
 beside the manifest, one wall-clock millisecond count per leg.
 (specs/20261101/05-the-gate-that-ran-the-suite-is-the-suite.md)
 
+## The slow leg
+
+When the host declares `slowTestCommand`, `review-legs.js` runs it bare once per legs iteration as the
+`slow` leg, typed like the suite row, blocking in review-legs, `verdict.js` (blocking only when
+the row is present, never required) and the driver alike. Absent key, absent row.
+(specs/20261101/07)
+
 ## A rerun over an unchanged tree copies its green rows
 
 The driver snapshots the tree (`snapshotTree`, sidecar excluded)

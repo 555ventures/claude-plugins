@@ -48,6 +48,13 @@ placeholder runs unscoped everywhere; review recognises that gate as the suite o
 than running the suite twice (specs/20261101/05).
 (specs/20260815/02-at-risk-pins.md, done 2026-08-16; specs/20260903/02-whole-suite-review-leg.md)
 
+The scoping is a host declaration the contract now spells out: `gateCommand` carries `{testDirs}`
+wherever its runner takes paths, `/spec:init` warns when it does not, and `/spec:doctor` check 25
+reports it. The contract also names the slow tier: `slowTestCommand`, the host's own invocation of
+the tests it excludes from `testCommand`, runs once per legs iteration as the blocking `slow` leg,
+alone in its wave after smoke, never at close, and a host that declares none is unchanged.
+(specs/20261101/07-the-gate-is-scoped-and-the-slow-tier-has-a-home.md)
+
 ## Runtime verification covers stopping, not just starting
 
 A verification stack of static legs passes a program that cannot start — the founding

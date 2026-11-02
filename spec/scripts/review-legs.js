@@ -60,6 +60,10 @@
 //                  identical extension applied to the whole suite — the blocking leg, so a
 //                  vacuous whole-suite run is the wider-blast-radius half of the same escape);
 //                  runs in EVERY scope including --fix-delta; BLOCKING
+//   slow           {"leg":"slow","exit":<code>,"observed":{"skips":N,"todos":N,"testsExecuted":N|
+//                  {"unavailable":...}}} — only when config.slowTestCommand is a non-empty string
+//                  wave 2c, alone, after smoke and before wave 3; typed
+//                  exactly like the suite row, writes <out-dir>/slow-output.txt; BLOCKING
 //   tests          {"leg":"tests","exit":0,"observed":{"count":N,"dispositions":{"writes":N,
 //                  "rewrites":N,"reuses":N}}} | {"leg":"tests","exit":0,"observed":
 //                  {"unavailable":"count-failed"}} — always exit 0, in every scope including
@@ -520,6 +524,19 @@ async function main() {
     appendRow('smoke', smokeR.code, { result: smokeR.code === 0 ? 'pass' : smokeR.code === 4 ? 'inert' : 'fail' }, smokeR)
   }
 
+  // ---- wave 2c: slow, ALONE — after smoke, before wave 3. Runs the ----
+  // host's optional slowTestCommand bare, typed like the suite row; absent key = no row, no file.
+  let wroteSlowOutput = false
+  if (typeof config.slowTestCommand === 'string' && config.slowTestCommand.trim()) {
+    const slr = await sh(config.slowTestCommand)
+    fs.writeFileSync(path.join(outDir, 'slow-output.txt'), `$ ${config.slowTestCommand}\n\n${slr.out}${slr.err}`)
+    wroteSlowOutput = true
+    const slowOut = slr.out + slr.err
+    const slowCaps = config.capabilities || {}
+    const slowExecuted = computeTestsExecuted(slowOut, slowCaps.testCountPattern)
+    appendRow('slow', isUnobserved(slowExecuted) ? 1 : slr.code, { ...computeSkips(slowOut, slowCaps.skipReportPattern), testsExecuted: slowExecuted }, slr)
+  }
+
   // ---- contract leg: a `prototype:` spec only — the build row is the executed evidence, ----
   // appended before ac-matrix because ac-matrix reads oracle standing by leg name off the manifest.
   if (fmMap(specText).prototype) {
@@ -563,7 +580,7 @@ async function main() {
   for (const leg of byLeg.keys()) timingsOut[leg] = Math.max(0, Math.round(ms(leg)))
   timingsOut.total = Math.round(Date.now() - runStart)
   fs.writeFileSync(path.join(outDir, 'timings.json'), JSON.stringify(timingsOut) + '\n')
-  const BLOCKING = ['gate', 'suite', 'smoke', 'ci']
+  const BLOCKING = ['gate', 'suite', 'smoke', 'ci', 'slow']
   let blockedBy = []
   for (const r of byLeg.values()) {
     const red = r.leg === 'smoke' ? (r.exit !== 0 && r.exit !== 4) : r.exit !== 0
@@ -575,7 +592,7 @@ async function main() {
   // a RED_BLOCKING run still hands the driver a complete manifest to derive STOPPED from.
   fs.renameSync(manifest, manifestFinal)
   console.log(`manifest: ${manifestFinal}`)
-  console.log(`outputs: ${outDir}  (reconcile.json, gate-output.txt${wroteSuiteOutput ? ', suite-output.txt' : ''}, smoke.txt, ac-matrix.txt, promise-sweep.txt${config.patternsScript ? ', patterns.txt' : ''}${wroteAtRisk ? ', at-risk.txt' : ''})`)
+  console.log(`outputs: ${outDir}  (reconcile.json, gate-output.txt${wroteSuiteOutput ? ', suite-output.txt' : ''}, smoke.txt${wroteSlowOutput ? ', slow-output.txt' : ''}, ac-matrix.txt, promise-sweep.txt${config.patternsScript ? ', patterns.txt' : ''}${wroteAtRisk ? ', at-risk.txt' : ''})`)
   if (blockedBy.length) {
     console.log(`RED_BLOCKING: ${blockedBy.join(',')}`)
     process.exit(1)

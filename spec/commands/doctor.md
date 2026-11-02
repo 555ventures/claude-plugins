@@ -163,6 +163,9 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     each finding is one ⚠️ line (a malformed key, a `ledgerCommitted=false` ledger that is still
     tracked, a `riskTiers` entry missing from the rules file's § Risk Tiers, or one line naming why
     the tiers cannot be compared: no `pipelineRules` key, an unreadable rules file, no § Risk Tiers).
+25. **Gate scope** (advisory) — run `node "$(spec-paths init-gen)" gate-check --root . --json`;
+    `scoped:false` → `⚠️ gate is unscoped: build iterations and the review gate run the whole suite — add {testDirs} to gateCommand`;
+    `scoped:false` and `slowTier:false` → a second line `⚠️ no slow tier declared — boot/integration tests, if any, run in every gate`.
 
 ## Semantic spot-check — small, bounded
 

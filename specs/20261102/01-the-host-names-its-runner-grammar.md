@@ -1,6 +1,6 @@
 ---
 date: 2026-11-02
-status: implementing
+status: done
 tier: critical
 area: host-grounding
 breaking: true
@@ -315,6 +315,23 @@ hits owe no waive line.
 glob expansion of `{testDirs}` (all fenced by the brief's Out of scope); a `trunk` read in
 `merge-back.sh` (it derives from `build_base`, which the worktree command writes from the real
 branch).
+
+**Build deviations (folded at close, 2026-11-02):**
+- AC 13's pointer verb was `rewrites` over a CONTINUE-TO bullet — the lock defect § Gotchas already
+  names; amended to `reuses`, and the transient case stays a green pin.
+- `tests/review/trunk-declared.test.js`'s no-trunk case is green on the pre-image by design (a
+  CONTINUE-TO pin); the derived-default line is asserted only in the auto-pick case.
+- The suite leg's `{file}` branch records `file-placeholder` instead of running the unsubstituted
+  command — ratified as D11 by the user at build.
+- The spec's owner citation is folded into each touched script's single `Owner:` line, since the
+  comment-lint pins forbid a second citation line or D-ids in comments.
+- Review rv_e028d73852e2 rejected the at-risk leg's one failure (`tests/smoke-port.test.js`'s clean
+  SIGTERM case) as a parallel-run timing flake outside the range: 5/5 green alone, green in the
+  suite and gate legs; user confirmed.
+
+### Advisory debt (review rv_e028d73852e2)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/spec-01-the-host-names-its-runner-grammar/spec/scripts/review-legs.js:49 — review-legs.js's header enumerates the suite row's typed shapes ending at {"unavailable":"no-test-command"} and states the leg runs config.testCommand BARE (no file args), but D11's new row {"unavailable":"file-placeholder"} (line 402) is absent from that enumeration and the BARE sentence is now false for a {file} host. docs/canonical/review-legs.md likewise never names the new value.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/spec-01-the-host-names-its-runner-grammar/specs/20261102/01-the-host-names-its-runner-grammar.md:145 — The spec's worked examples for withFiles (Contracts block and AC-20261102-01-1/-2) show quoted paths, but lib/host-run.js quote() returns SAFE-charset strings bare, so the system emits -run A B -v / node --test tests/a.test.js; tests/host-run/with-files.test.js pins the bare form. D2 defers to quote, so the code is right and the examples are drift.
 
 ## Canonical Delta
 

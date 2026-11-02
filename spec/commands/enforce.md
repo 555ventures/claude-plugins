@@ -56,7 +56,7 @@ grammar existed. Read the host's full rule surface — `pipelineRules`, everythi
 
 - **mechanizable** → assign a category + the detected stack(s) it applies to, and the rule-doc
   path(s) carrying its text. (Detect stacks from the config + repo manifests; a polyglot repo has
-  more than one — the scan's own `stack` field per workspace is the detection.)
+  more than one — the scan's `stack` rows are the detection, one row per stack a directory carries.)
 - **judgment residue / pure-process** → route to pipeline rules § Review Checks; it is NOT a
   research cell.
 
@@ -77,8 +77,9 @@ oracles (a code linter, a schema definition, a route table, a wire document), so
 gets its own discovered checker with its own citation.
 
 When the host config (`$(spec-paths contract)` § Required config keys) carries a `design` block,
-add one `<workspace>:<stack>:kit-discipline` cell **per workspace that owns the `design.kit`
-directory**, with `ruleRefs` set to `[design.rules]` — the check script (`design-contract-check.js`,
+add one `<workspace>:<stack>:kit-discipline` cell **per workspace directory that owns the
+`design.kit` directory** — once per directory, not once per scan row: a polyglot directory takes
+it under its `javascript`/`typescript` row, the stack the kit is written in — with `ruleRefs` set to `[design.rules]` — the check script (`design-contract-check.js`,
 doctor check 8) is the presence oracle; this cell is the enforcement side, discovering a real
 mechanical check (raw-color/arbitrary-value/restyle/primitive-import/missing-state-story) over
 the same kit directory and rules file. Restyle enforcement is blocked until the host has folded

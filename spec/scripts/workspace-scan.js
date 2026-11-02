@@ -1,16 +1,24 @@
 #!/usr/bin/env node
 'use strict'
 // workspace-scan.js --root <dir> [--json] [--depth N] — walk a tree and print one
-// {root, stack, manifest} entry per directory holding a package manifest, sorted by root
-// (root "." for the tree's own root, forward-slash repo-relative paths below it).
+// {root, stack, manifest} entry per (directory, stack) pair holding a package manifest, sorted
+// by root and then by the table's listing order (root "." for the tree's own root,
+// forward-slash repo-relative paths below it).
 // Owner: specs/20260926/03-gates-per-workspace.md.
 //
 // /spec:enforce's Phase 1 runs this first, so a
 // monorepo gets one enforcer set per workspace instead of one per repo. Directory-name skip
-// list and manifest→stack table are this script's own; when a directory carries several manifests, the
-// first match in the listed order wins (package.json first, then the python trio, then
-// go/rust/dart/ruby/php/csproj/elixir/jvm) — deterministic, never "whichever fs.readdir
-// returns first".
+// list and manifest→stack table are this script's own. A directory carrying manifests of several
+// stacks yields one row per stack (a polyglot root with package.json + pyproject.toml is both a
+// javascript and a python workspace), ordered package.json, the python trio, then
+// go/rust/dart/ruby/php/csproj/elixir/jvm; manifests of ONE stack collapse to its first listed
+// manifest (pyproject.toml over setup.py over requirements.txt) — deterministic, never
+// "whichever fs.readdir returns first".
+//
+// Known over-approximation: a package.json that only carries tooling (husky, prettier) beside
+// another stack's manifest still counts as a javascript workspace — this script never reads
+// manifest contents, and a spare cell costs /spec:enforce one "no mechanizable clauses" skip,
+// where a dropped stack would cost a whole unenforced language.
 //
 // What this deliberately does NOT do:
 //   - read any config file (.claude/spec.config.json, a manifest's own contents, …) — it only
@@ -62,38 +70,44 @@ function parseArgs(argv) {
   return out
 }
 
-// The manifest-precedence list: first match in this exact order wins.
-function detectManifest(dir) {
-  const has = (name) => fs.existsSync(path.join(dir, name))
-  if (has('package.json')) {
-    return { stack: has('tsconfig.json') ? 'typescript' : 'javascript', manifest: 'package.json' }
-  }
-  if (has('pyproject.toml')) return { stack: 'python', manifest: 'pyproject.toml' }
-  if (has('setup.py')) return { stack: 'python', manifest: 'setup.py' }
-  if (has('requirements.txt')) return { stack: 'python', manifest: 'requirements.txt' }
-  if (has('go.mod')) return { stack: 'go', manifest: 'go.mod' }
-  if (has('Cargo.toml')) return { stack: 'rust', manifest: 'Cargo.toml' }
-  if (has('pubspec.yaml')) return { stack: 'dart', manifest: 'pubspec.yaml' }
-  if (has('Gemfile')) return { stack: 'ruby', manifest: 'Gemfile' }
-  if (has('composer.json')) return { stack: 'php', manifest: 'composer.json' }
+// The manifest→stack table: one entry per stack, in listing order. Every entry that matches a
+// directory contributes one row; within an entry the first manifest present names the row (a
+// pyproject.toml beside a requirements.txt is still one python workspace).
+const STACKS = [
+  { stack: (has) => (has('tsconfig.json') ? 'typescript' : 'javascript'), manifests: ['package.json'] },
+  { stack: 'python', manifests: ['pyproject.toml', 'setup.py', 'requirements.txt'] },
+  { stack: 'go', manifests: ['go.mod'] },
+  { stack: 'rust', manifests: ['Cargo.toml'] },
+  { stack: 'dart', manifests: ['pubspec.yaml'] },
+  { stack: 'ruby', manifests: ['Gemfile'] },
+  { stack: 'php', manifests: ['composer.json'] },
+  { stack: 'dotnet', manifests: [(entries) => entries.filter((f) => f.endsWith('.csproj')).sort()[0]] },
+  { stack: 'elixir', manifests: ['mix.exs'] },
+  { stack: 'jvm', manifests: ['build.gradle', 'build.gradle.kts', 'pom.xml'] },
+]
+
+function detectManifests(dir) {
   let entries
   try { entries = fs.readdirSync(dir) } catch { entries = [] }
-  const csproj = entries.filter((f) => f.endsWith('.csproj')).sort()[0]
-  if (csproj) return { stack: 'dotnet', manifest: csproj }
-  if (has('mix.exs')) return { stack: 'elixir', manifest: 'mix.exs' }
-  if (has('build.gradle')) return { stack: 'jvm', manifest: 'build.gradle' }
-  if (has('build.gradle.kts')) return { stack: 'jvm', manifest: 'build.gradle.kts' }
-  if (has('pom.xml')) return { stack: 'jvm', manifest: 'pom.xml' }
-  return null
+  const has = (name) => fs.existsSync(path.join(dir, name))
+  const rows = []
+  for (const entry of STACKS) {
+    let manifest = null
+    for (const m of entry.manifests) {
+      manifest = typeof m === 'function' ? m(entries) : (has(m) ? m : null)
+      if (manifest) break
+    }
+    if (!manifest) continue
+    rows.push({ stack: typeof entry.stack === 'function' ? entry.stack(has) : entry.stack, manifest })
+  }
+  return rows
 }
 
 function walk(root, maxDepth) {
   const results = []
   function visit(absDir, relDir, depth) {
-    const manifest = detectManifest(absDir)
-    if (manifest) {
-      results.push({ root: relDir === '' ? '.' : relDir.split(path.sep).join('/'), ...manifest })
-    }
+    const root = relDir === '' ? '.' : relDir.split(path.sep).join('/')
+    for (const row of detectManifests(absDir)) results.push({ root, ...row })
     if (depth >= maxDepth) return
     let entries
     try { entries = fs.readdirSync(absDir, { withFileTypes: true }) } catch { return }
@@ -105,6 +119,7 @@ function walk(root, maxDepth) {
     }
   }
   visit(root, '', 0)
+  // Stable sort: rows of one directory keep the table's listing order.
   results.sort((a, b) => (a.root < b.root ? -1 : a.root > b.root ? 1 : 0))
   return results
 }

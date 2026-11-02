@@ -81,13 +81,15 @@ fuller incident write-ups live in each cited spec's history.
 
 - **`spec/scripts/workspace-scan.js` is the one derivation of a host's workspaces**
   (`spec-paths workspace-scan --root <dir> [--json] [--depth N]`, default depth 4). Every
-  directory holding a package manifest is a workspace `{root, stack, manifest}`, sorted by root,
-  `.` for the tree's own root; vendored and build-output directories (`node_modules`, `dist`,
-  `.claude`, …) are never walked, and a directory with several manifests resolves by D1's listing
-  order. Exit 0 on any readable root — `[]` is a valid scan — and 2 on usage or an unreadable
+  (directory, stack) pair with a package manifest is a workspace row `{root, stack, manifest}`,
+  sorted by root and then by D1's listing order, `.` for the tree's own root; vendored and
+  build-output directories (`node_modules`, `dist`, `.claude`, …) are never walked. A polyglot
+  directory yields one row per stack (`package.json` + `pyproject.toml` is a javascript and a
+  python workspace); manifests of one stack collapse to its first listed manifest. A tooling-only
+  `package.json` still counts — a known over-approximation, since manifest contents are never read. Exit 0 on any readable root — `[]` is a valid scan — and 2 on usage or an unreadable
   root. It reads no config and no manifest contents, and names no tool: picking a checker per
   workspace is `/spec:enforce`'s discovery (docs/canonical/enforce.md).
-  (specs/20260926/03-gates-per-workspace.md D1)
+  (specs/20260926/03-gates-per-workspace.md D1; one row per stack: the q10 repair, specs/20261101/02-the-host-declares-its-file-shapes.md D7)
 - **`spec/scripts/pictures.js` runs the project's own picture command and never makes a picture
   itself; it reaches the service only by running `walkthrough.js` as a child process.**
   (specs/20261005/06-the-design-stage-sends-pictures.md)

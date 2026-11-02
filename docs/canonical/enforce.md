@@ -6,7 +6,9 @@ How `/spec:enforce` turns a host's rules into gate-wired checkers. The command p
 ## Cells
 
 Discovery runs once per `(workspace × stack × category)` cell, never once per repo.
-`workspace-scan.js` lists the workspaces first; an empty scan means one root workspace whose
+`workspace-scan.js` lists the workspaces first, one row per (directory, stack) — a polyglot
+directory contributes a cell set for each of its stacks, so `javascript:…` and `python:…` cells
+coexist at the root; an empty scan means one root workspace whose
 stack comes from the config and manifests. A cell carries `workspace` (repo-relative dir, `.`
 for the root) and, for `category: "naming"` only, `layer` ∈ `code | schema | routes | wire` —
 the host naming table's own `###` section list, so adding a layer is a naming-table change

@@ -27,9 +27,12 @@ The standing rules:
   `resolveGate(specText, config)` — the single `{testDirs}`/`{scopeDirs}` substitution, shared
   by `review-legs.js`'s gate leg and the driver's close-time re-run. A paraphrased second copy
   is a drift seam; the two must never disagree about what the host's gate is.
-- **Cost is accepted by contract.** One full `gateCommand` run per close attempt. The gate is
-  the host's own definition of "enforced", and close happens once per spec. A host with a very
-  slow gate gets a config knob, never a silent skip.
+- **Cost is accepted by contract.** Each close attempt runs the resolved gate, then the bare
+  `testCommand` — the second run is skipped only when `gateRunsSuite()` (`lib/gate-resolve.js`)
+  proves the gate just ran the whole suite over the same close tree, and the driver prints
+  `close-time suite: reused the gate run (<gate>)`. The gate is the host's own definition of
+  "enforced", and close happens once per spec. A host with a very slow gate gets a config knob,
+  never a silent skip. (specs/20261101/05-the-gate-that-ran-the-suite-is-the-suite.md D3)
 - **The close screen carries an advisory drift signal, never a gate.** After the hygiene
   listing and before the close commit, the driver prints one line naming the repo's current
   count of AC-pin `SHALL CONTINUE TO` bullets no test cites (`ac-drift.js --json` over

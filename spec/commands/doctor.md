@@ -23,11 +23,14 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
    contract file's § Required config keys. `fileShapes` — run
    `node "$(spec-paths init-gen)" shapes-check --root . --json`; exit 3 → one ⚠️ line per
    `unmatchedTestGlobs` entry (a declared glob matching no tracked file) or the `invalid` message.
+   Grammar — run `node "$(spec-paths init-gen)" grammar-check --root . --json` beside it; exit 3 →
+   one ⚠️ line per stderr line (an invalid `failCountPattern`, a declared `trunk` naming no branch,
+   an undeclared or invalid `forge`).
 2. **Contract stamp** — config `contractHash` equals `$(spec-paths contract-hash)`. A
    mismatch is a lead, not a verdict — checks 3–6 test the *current* contract (Read
    `$(spec-paths contract)`) directly and decide whether the drift is real. Also flag an
-   absent `capabilities` block ("CI observation and skip accounting run on assumptions —
-   /spec:init refreshes"), and a declared `forge: "none"` when `git remote -v` shows GitHub
+   absent `capabilities` block or `forge` key ("CI evidence is off until `capabilities.forge` is
+   declared (`github` | `none`) — /spec:init refreshes"), and a declared `forge: "none"` when `git remote -v` shows GitHub
    and `gh` resolves.
 3. **Agent roster** — every non-`default` `agentMap` value has a matching
    `.claude/agents/*.md` whose frontmatter `name:` is exactly that value; no orphan agents

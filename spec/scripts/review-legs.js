@@ -156,7 +156,7 @@ const path = require('path')
 const { spawnSync } = require('child_process')
 const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 const { resolveGate, gateRunsSuite } = require('./lib/gate-resolve')
-const { runAsync } = require('./lib/host-run')
+const { runAsync, withFiles } = require('./lib/host-run')
 const { computeTestsExecuted, computeSkips, isUnobserved } = require('./lib/count-observation')
 const { extractSection, parseAcBullets, parseDisposition } = require('./lib/spec-sections')
 const { fmMap } = require('./lib/frontmatter')
@@ -396,6 +396,10 @@ async function main() {
     // evidence, spawn nothing.
     const g = rows.find(r => r.leg === 'gate')
     appendRow('suite', isUnobserved(g.observed.testsExecuted) ? 1 : g.exit, { ...g.observed, reused: 'gate' })
+  } else if (config.testCommand.includes('{file}')) {
+    // a per-file {file} command has no bare whole-suite form — running it unsubstituted would
+    // hand the runner a literal placeholder; the gate leg is the whole-suite observation.
+    appendRow('suite', 0, { unavailable: 'file-placeholder' })
   } else {
     const sr = await sh(config.testCommand)
     fs.writeFileSync(suiteOutPath, `$ ${config.testCommand}\n\n${sr.out}${sr.err}`)
@@ -471,10 +475,11 @@ async function main() {
         appendRow('at-risk', 1, { malformed: { entries: malformed.length, of: atRisk.length } })
       } else {
         const atRiskFiles = atRisk.map(a => a.file)
-        wave2.push(sh(`${config.testCommand} ${atRiskFiles.map(q).join(' ')}`).then(r => {
+        const atRiskCmd = withFiles(config.testCommand, atRiskFiles)
+        wave2.push(sh(atRiskCmd).then(r => {
           // The leg's finding is contractually "{failing files/digest, session-extracted from
           // runner output}" — discarding the output makes that finding unproducible.
-          fs.writeFileSync(atRiskPath, `$ ${config.testCommand} ${atRiskFiles.map(q).join(' ')}\n\n${r.out}${r.err}`)
+          fs.writeFileSync(atRiskPath, `$ ${atRiskCmd}\n\n${r.out}${r.err}`)
           wroteAtRisk = true
           const testsExecuted = computeTestsExecuted(r.out + r.err, config.capabilities && config.capabilities.testCountPattern)
           // exit is FORCED to 1

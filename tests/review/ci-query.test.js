@@ -35,9 +35,28 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // test can prove the fallback ACTUALLY fired (or didn't) rather than merely matching the final
 // JSON, which for several of these cases is byte-identical whether or not the fallback ran at all.
 
+// specs/20261102/01-the-host-names-its-runner-grammar.md D5/D9: the gh probe runs only when the
+// host config declares `capabilities.forge: "github"`; every other host (no block, no key, "none",
+// any other value) prints the canonical line before `gh` is ever invoked. `githubHost()` writes
+// that declaration into a tmp git repo, so every probe-path test below reaches `gh` the way a
+// real init-written host does.
+
 const SCRIPT = 'scripts/ci-query.js'
+const CANONICAL_NO_ADAPTER = 'unavailable — no supported forge adapter'
 const USAGE_LINE = 'usage: ci-query.js (--branch <name> | --commit <sha>) [--root <dir>]'
 const usageLineRe = new RegExp(USAGE_LINE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+
+function writeHostConfig(dir, config) {
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude', 'spec.config.json'), JSON.stringify(config))
+}
+
+function githubHost(prefix) {
+  const dir = tmpdir(prefix)
+  gitRepo(dir)
+  writeHostConfig(dir, { capabilities: { forge: 'github' } })
+  return dir
+}
 
 function fakeGhDir(body) {
   const dir = tmpdir('fake-gh')
@@ -72,6 +91,7 @@ function makeContainedShaHost() {
   execFileSync('git', ['init', '--bare', '-q', '-b', 'main', bareDir], { encoding: 'utf8' })
   const dir = tmpdir('ci-query-contained')
   const g = gitRepo(dir)
+  writeHostConfig(dir, { capabilities: { forge: 'github' } })
   g('remote', 'add', 'origin', bareDir)
   g('push', '-q', 'origin', 'main')
   const headSha = g('rev-parse', 'HEAD').trim()
@@ -79,8 +99,7 @@ function makeContainedShaHost() {
 }
 
 test('AC-20260805-02-10 / AC-20260810-07-4 / AC-20260830-03-3 (SHALL CONTINUE TO): gh absent from PATH prints available:false, transient:false in --branch mode (unchanged by the --commit addition or by the shaUnseen fallback)', () => {
-  const dir = tmpdir('ci-query')
-  gitRepo(dir)
+  const dir = githubHost('ci-query')
   const r = runNode(SCRIPT, ['--branch', 'main', '--root', dir],
     { env: { PATH: '/nonexistent-bin-dir-for-ci-query-test' } })
   assert.strictEqual(r.status, 0, 'gh being absent is a structural fact, not a usage error — exit 0: ' + r.stderr)
@@ -94,10 +113,9 @@ test('AC-20260805-02-10 / AC-20260810-07-4 / AC-20260830-03-3 (SHALL CONTINUE TO
     'distinguishing it from an auth/network failure: ' + r.stdout)
 })
 
-test('AC-20260805-02-10 / AC-20260810-07-4: a fake gh exiting non-zero prints transient:true in --branch mode (unchanged by the --commit addition)', () => {
+test('AC-20260805-02-10 / AC-20260810-07-4 / AC-20261102-01-13: a fake gh exiting non-zero prints transient:true in --branch mode on a host declaring forge github (unchanged by the --commit addition)', () => {
   const ghDir = fakeGhDir('echo "gh: authentication failed" >&2\nexit 1')
-  const dir = tmpdir('ci-query')
-  gitRepo(dir)
+  const dir = githubHost('ci-query')
   const r = runNode(SCRIPT, ['--branch', 'main', '--root', dir],
     { env: { PATH: ghDir + path.delimiter + process.env.PATH } })
   assert.strictEqual(r.status, 0, 'a transient gh failure is still an answered query, not a usage error: ' + r.stderr)
@@ -113,8 +131,7 @@ test('AC-20260805-02-10 / AC-20260810-07-4: a fake gh printing a completed run p
   const ghDir = fakeGhDir(
     'echo \'[{"status":"completed","conclusion":"success","headSha":"abc123def456","' +
     'url":"https://github.com/x/y/actions/runs/1","updatedAt":"2026-08-06T00:00:00Z"}]\'')
-  const dir = tmpdir('ci-query')
-  gitRepo(dir)
+  const dir = githubHost('ci-query')
   const r = runNode(SCRIPT, ['--branch', 'main', '--root', dir],
     { env: { PATH: ghDir + path.delimiter + process.env.PATH } })
   assert.strictEqual(r.status, 0, 'an answered, completed run must exit 0: ' + r.stderr)
@@ -128,8 +145,7 @@ test('AC-20260805-02-10 / AC-20260810-07-4: a fake gh printing a completed run p
 })
 
 test('AC-20260810-07-1: --commit <sha> invokes gh run list --commit <sha> --limit 1 --json ... and passes a completed run through', () => {
-  const dir = tmpdir('ci-query')
-  gitRepo(dir)
+  const dir = githubHost('ci-query')
   const argsFile = path.join(dir, 'gh-argv.txt')
   const ghDir = fakeGhDir(
     'echo "$@" > "' + argsFile + '"\n' +
@@ -152,8 +168,7 @@ test('AC-20260810-07-1: --commit <sha> invokes gh run list --commit <sha> --limi
 
 test('AC-20260810-07-2 / AC-20260830-03-3 (SHALL CONTINUE TO): --commit <sha> with fake gh printing [] prints {available:false,transient:false} and exits 0 (the unpushed/never-seen-commit case, sha unresolvable so the containment probe itself errors into D3 degradation)', () => {
   const ghDir = fakeGhDir("echo '[]'")
-  const dir = tmpdir('ci-query')
-  gitRepo(dir)
+  const dir = githubHost('ci-query')
   const r = runNode(SCRIPT, ['--commit', 'deadbeef1234', '--root', dir],
     { env: { PATH: ghDir + path.delimiter + process.env.PATH } })
   assert.strictEqual(r.status, 0,
@@ -193,6 +208,7 @@ test('AC-20260810-07-3: passing neither --branch nor --commit prints the exclusi
 test('AC-20260830-03-1: an unpushed commit whose current branch has a real red origin run prints the shaUnseen shape carrying that branch and run, exit 0', () => {
   const dir = tmpdir('ci-query-sha-unseen')
   const g = gitRepo(dir) // no remote at all — HEAD is by construction absent from every origin/* ref
+  writeHostConfig(dir, { capabilities: { forge: 'github' } })
   const headSha = g('rev-parse', 'HEAD').trim()
   const logFile = path.join(dir, 'gh-invocations.log')
   const ghDir = fakeGhBranchingDir(
@@ -250,6 +266,7 @@ test('AC-20260830-03-3: a commit already contained in a remote ref keeps today\'
 test('AC-20260830-03-5: an unpushed sha whose branch fallback query itself fails degrades to today\'s plain unavailable shape, exit 0', () => {
   const dir = tmpdir('ci-query-fallback-fail')
   const g = gitRepo(dir) // no remote — HEAD is unpushed, so the containment probe finds nothing
+  writeHostConfig(dir, { capabilities: { forge: 'github' } })
   const headSha = g('rev-parse', 'HEAD').trim()
   const logFile = path.join(dir, 'gh-invocations.log')
   const ghDir = fakeGhBranchingDir("echo '[]'", 'exit 1', logFile)
@@ -268,4 +285,28 @@ test('AC-20260830-03-5: an unpushed sha whose branch fallback query itself fails
     'D3: the degradation must be reached by actually attempting the --branch fallback and observing it fail ' +
     '— a shim log with no --branch invocation means this assertion would trivially pass against the pre-spec ' +
     'commit-only code path too, proving nothing about the new decision tree: ' + log)
+})
+
+test('AC-20261102-01-11: ci-query.js prints the no-adapter line, exits 0 and never invokes gh when the host config has no capabilities block, no forge key, or forge gitlab', () => {
+  const shapes = {
+    'no capabilities block': {},
+    'capabilities without forge': { capabilities: { ciPoll: { intervalSeconds: 1, timeoutSeconds: 2 } } },
+    'forge gitlab': { capabilities: { forge: 'gitlab' } },
+  }
+  for (const [label, config] of Object.entries(shapes)) {
+    const dir = tmpdir('ci-query-undeclared')
+    gitRepo(dir)
+    writeHostConfig(dir, config)
+    const argsFile = path.join(dir, 'gh-argv.txt')
+    const ghDir = fakeGhDir('echo "$@" >> "' + argsFile + '"\nexit 1')
+    const r = runNode(SCRIPT, ['--branch', 'main', '--root', dir],
+      { env: { PATH: ghDir + path.delimiter + process.env.PATH } })
+    assert.strictEqual(r.status, 0, label + ': an unsupported forge is an answered query, not a usage error: ' + r.stderr)
+    assert.strictEqual(r.stdout.trim(), CANONICAL_NO_ADAPTER,
+      label + ': without a declared github forge the script must print the canonical line, or the review ci leg reads a ' +
+      'gh failure on a non-GitHub remote as retryable and passes with no evidence: ' + r.stdout)
+    assert.ok(!fs.existsSync(argsFile),
+      label + ': gh must never be invoked for an undeclared or unsupported forge — a probe here is the legacy ' +
+      'behaviour this contract retires: ' + (fs.existsSync(argsFile) ? fs.readFileSync(argsFile, 'utf8') : ''))
+  }
 })

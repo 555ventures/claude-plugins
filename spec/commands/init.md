@@ -52,6 +52,12 @@ and how they are named, which extensions its source files carry, and which depen
 keeps; Phase 4 writes them as `config.fileShapes`.
 Profile whether the test runner accepts appended paths (the contract asserts `testCommand` does) and
 whether any test boots a process, builds, or needs a service — Phase 3 asks where the slow tier lives.
+Profile the host's runner grammar from the tree and toolchain, never from a stack name: **forge** =
+`github` iff `git remote get-url origin` is a `github.com` URL and `gh` resolves on PATH, else `none`;
+**trunk** = `git symbolic-ref --short refs/remotes/origin/HEAD` stripped of its `origin/` prefix, else
+the branch checked out now; whether the runner takes its file somewhere other than the end of the
+command (then `{file}` marks the spot); and whether its summary line matches a built-in failure-count
+shape (`ℹ fail N`, `# fail N`, `N failed`) — if not, the regex over that line with group 1 the count.
 Interview the user via `AskUserQuestion` only for what the code cannot answer.
 
 **Author the generated skills' content** from the runtime & observability findings, for
@@ -244,6 +250,17 @@ Field-by-field, tracing each back to the phase that grounds it:
   `scripts/spec-test-cases.sh` and recorded in `manifestExtras`. `generate` exits 2 naming
   `config.testCaseScanner` when it is not a non-empty string, adds the manifest row proving the
   listing prints at least one case, and pre-authorizes the command.
+- **`config.trunk`** — always written: Phase 1's trunk branch; `generate` exits 2 naming
+  `config.trunk` when it is not a non-empty string.
+- **`config.capabilities.forge`** — always written, `github` or `none` per Phase 1; any other value
+  exits 2, and an absent key leaves CI evidence off (`$(spec-paths contract) § Capabilities`).
+- **`config.capabilities.failCountPattern`** — only when the runner's summary line matches neither
+  built-in shape: the regex with group 1 the count, or `"none"` when the runner prints no count
+  (`$(spec-paths contract) § Capabilities`).
+- **`{file}`** — written into `config.testCommand` (and `config.typecheckCommand`) only when the
+  runner takes its file somewhere other than the end of the command; the probe's appended
+  nonexistent path goes through the same substitution
+  (`$(spec-paths contract) § Required config keys`).
 - **`config.fileShapes`** — always written, the three lists Phase 1 observed in the tree:
   `{ "testGlobs": [...], "codeExtensions": [...], "manifests": [...] }` in the syntax
   `$(spec-paths contract) § Required config keys` defines. `generate` validates the block and exits

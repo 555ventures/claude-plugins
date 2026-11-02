@@ -45,8 +45,8 @@ const { makeReviewLegsHost, reviewLegsSpecBody } = require('./review-legs.fixtur
 // tests/review/ci-query.test.js) carrying the current branch's own latest origin conclusion;
 // this leg maps THAT shape to `{"unavailable":"sha-unseen","branch":...,"branchConclusion":...}`
 // at exit 0 — a red branchConclusion must never redden the leg (the never-block ruling).
-// `makeHostForCiLeg` mirrors `makeHost` but omits `capabilities.forge` (legacy dynamic-probe mode,
-// the same pattern release-legs.test.js's AC-20260823-01-7 already uses) and has no remote at all,
+// `makeHostForCiLeg` mirrors `makeHost` but declares `capabilities.forge: 'github'` (the gh probe,
+// the same setup release-legs.test.js's AC-20260823-01-7 already uses) and has no remote at all,
 // so its HEAD is unpushed by construction — a fake `gh` on PATH branching on argv (the
 // ci-query.test.js A5 pattern) answers `--commit` empty and `--branch main` with a real red run.
 //
@@ -460,7 +460,7 @@ test('a missing spec or config is a precondition failure: exit 2, no manifest ro
     'produce a manifest whose greenness means nothing: ' + r.stdout + r.stderr)
 })
 
-// AC-20260830-03-2's own fixture: `capabilities.forge` is omitted (legacy dynamic-probe mode) so
+// AC-20260830-03-2's own fixture: `capabilities.forge` is 'github' so
 // the ci leg actually shells to `gh`, and the fixture repo carries no remote at all — HEAD is
 // unpushed by construction, matching an unpushed-HEAD host shape.
 function makeHostForCiLeg() {
@@ -470,7 +470,7 @@ function makeHostForCiLeg() {
       gateCommand: 'node --test {testDirs}',
       testCommand: 'node --test',
       runtime: { inert: 'plugin repo — nothing boots' },
-      capabilities: { skipReportPattern: 'ℹ skipped (\\d+)' },
+      capabilities: { forge: 'github', skipReportPattern: 'ℹ skipped (\\d+)' },
     },
     testBody: GREEN_TEST,
   })

@@ -1,13 +1,15 @@
 ---
 date: 2026-11-02
-status: hardened
+status: implementing
 tier: critical
 area: host-grounding
 breaking: true
 depends_on: []
 brief: 31
 spiked: 2026-11-02
+build_base: main
 open_markers: 0
+diff_base: 60dff05d657080ce33f1348b31e322873e8272f8
 ---
 
 # The host names its runner's grammar
@@ -40,6 +42,7 @@ evidence is now reported absent rather than assumed, and `cargo test`, `go test 
 | D8 | `node scripts/plugin-bump.js --bump --plugin spec --changelog "…"`. `[no-ac: node scripts/plugin-bump.js --check in the gate is the oracle]` | Behaviour change under `spec/` (pipeline rules § Planning). |
 | D9 | Fixture currency for D5 — every test that reaches the dynamic `gh` probe with no declared forge now declares `capabilities.forge: "github"` in its host config, never weakening what it asserts: `tests/review/ci-query.test.js` gains a `githubHost()` helper that writes `.claude/spec.config.json` with `{"capabilities":{"forge":"github"}}` into the tmp root and every probe-path test (the eight that invoke a fake or absent `gh`) uses it; `tests/review/review-legs.test.js` `makeHostForCiLeg` adds `forge: 'github'` to its `capabilities`; `tests/release-legs/release-legs.test.js` (two sites) and `tests/release-legs/unmeasured.test.js` (one site) replace the `forge: undefined` drop-the-key trick with `forge: 'github'` and reword the comment that explains it. The three `SHALL CONTINUE TO` pins keep their AC tags and their subject (gh absent / `[]` / contained sha). `[no-ac: test-setup repair only — AC-20261102-01-11 covers the new refusal]` | Gotchas seventh trigger: a Decision that adds a refusal where the old behaviour was permissive strands every setup that legally did nothing; the repair makes the fixture do what a real init-written host does. |
 | D10 | Dogfood: this repo's `.claude/spec.config.json` gains `"trunk": "main"` and its `contractHash` is re-stamped to `$(spec-paths contract-hash)` after D1; `capabilities.forge` is already `github`, `failCountPattern` stays absent (node:test is a built-in shape) and `testCommand` keeps its appended form. `[no-ac: config row; tests/consistency/contract-stamp.test.js is the oracle]` | The one grounding-contract edit flags every host stale by design (pipeline rules § Risk Tiers); this host re-stamps in the same build. |
+| D11 | User ruling at build (scripts wave): `spec/scripts/review-legs.js`'s suite leg, when it cannot reuse the gate's whole-suite observation and `testCommand` contains `{file}`, appends the suite row `{"unavailable":"file-placeholder"}` at exit 0 and never runs the unsubstituted command — the gate leg stays the whole-suite observation, and the ledger keeps the absence distinguishable from a pass. `[no-ac: build-time ruling; tests/review/review-legs-at-risk-file-placeholder.test.js's argv log refuses a bare run]` | A `{file}` command has no bare whole-suite form; running it hands the runner a literal placeholder. Rejected: exit 1 (a `{file}` host whose gate does not run the whole suite could never review clean). |
 
 ## File Plan
 
@@ -199,7 +202,7 @@ failCount(text, pattern?) -> number | null
   never `transient` → writes tests/release-legs/release-legs.test.js
 - **AC-20261102-01-13**: WHEN `ci-query.js` runs with `forge: "github"` declared and a fake `gh` that
   exits 1 THE SYSTEM SHALL CONTINUE TO print `{"available":false,"transient":true}`
-  → rewrites tests/review/ci-query.test.js :: AC-20260805-02-10 / AC-20260810-07-4: a fake gh exiting non-zero prints transient:true
+  → reuses tests/review/ci-query.test.js :: AC-20260805-02-10 / AC-20260810-07-4: a fake gh exiting non-zero prints transient:true
 - **AC-20261102-01-14**: WHEN `init-gen generate` reads a profile whose `config.capabilities.forge`
   is `"gitlab"`, or whose `config.trunk` is `""`, or whose `config.capabilities.failCountPattern` is
   `"no group"` or `"(unclosed"` THE SYSTEM SHALL exit 2 with stderr naming the field (e.g.

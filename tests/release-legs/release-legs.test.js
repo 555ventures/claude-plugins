@@ -29,8 +29,7 @@ const {
 // (D4's own text: "literal row identical to the review pin"), so it inherited the same bug — an
 // unpushed HEAD's shaUnseen shape mapped to `{"unavailable":"no-adapter"}`, indistinguishable
 // from "no CI at all". The AC-20260830-03-4 test below reuses AC-7's `capabilities.forge:
-// undefined` trick (JSON.stringify drops the key, so ci-query.js falls through to its dynamic gh
-// probe instead of the forge:"none" short-circuit) and a PATH-stubbed `gh` branching on argv
+// 'github'` declaration (so ci-query.js takes its gh probe instead of the forge:"none" short-circuit) and a PATH-stubbed `gh` branching on argv
 // (--commit empty, --branch <name> a real red run) — the same A5 shim shape ci-query.test.js and
 // review-legs.test.js use to pin the fallback that produces this shape in the first place.
 
@@ -43,7 +42,7 @@ test('AC-20260823-01-1 / AC-20260913-08-5: stage appends substrate, ci, deploy, 
     const r = runNode(SCRIPT, ['stage', '--root', host.dir, '--manifest', runManifest, '--out-dir', path.join(host.dir, 'out')])
     assert.strictEqual(r.status, 1,
       'D3 makes stage exit 1 whenever a row is unmeasured — this fixture\'s ci leg has no ' +
-      'adapter (capabilities.forge is unset), so a 0 here means D3\'s exit-1-on-unmeasured rule ' +
+      'adapter (capabilities.forge is not github), so a 0 here means D3\'s exit-1-on-unmeasured rule ' +
       'silently stopped applying: ' + r.stdout + ' / ' + r.stderr)
     assert.match(r.stdout, /UNMEASURED: ci:unavailable:no-adapter/,
       'D3 requires the UNMEASURED: line naming the unmeasured leg and its reason after the ' +
@@ -205,7 +204,7 @@ test('AC-20260823-01-6: stage appends exactly one ci row {"unavailable":"no-adap
 
 test('AC-20260823-01-7: stage appends exactly ONE ci row with conclusion success — never one row per poll iteration — when a PATH-stubbed gh reports in-progress once then completed', async () => {
   const host = await setupWorkingHost('rl-ac7', {
-    capabilities: { forge: undefined, ciPoll: { intervalSeconds: 1, timeoutSeconds: 30 } },
+    capabilities: { forge: 'github', ciPoll: { intervalSeconds: 1, timeoutSeconds: 30 } },
   })
   try {
     const ghCountFile = path.join(host.dir, 'gh-count')
@@ -457,10 +456,9 @@ test('AC-20260823-01-14: record prints CLEAN and appends exactly one row per inv
 })
 
 test('AC-20260830-03-4: the release ci leg maps ci-query.js\'s shaUnseen shape to the same {"unavailable":"sha-unseen",branch,branchConclusion} row at exit 0 as the review leg', async () => {
-  // capabilities.forge: undefined (JSON.stringify drops it) puts ci-query.js in legacy dynamic-
-  // probe mode, same as AC-20260823-01-7 above; setupWorkingHost's gitRepo(dir) carries no remote
-  // at all, so HEAD is unpushed by construction.
-  const host = await setupWorkingHost('rl-shaunseen', { capabilities: { forge: undefined } })
+  // capabilities.forge: 'github' puts ci-query.js on the gh probe, same as AC-20260823-01-7 above;
+  // setupWorkingHost's gitRepo(dir) carries no remote at all, so HEAD is unpushed by construction.
+  const host = await setupWorkingHost('rl-shaunseen', { capabilities: { forge: 'github' } })
   try {
     const ghScript =
       '#!/usr/bin/env bash\n' +
@@ -481,6 +479,31 @@ test('AC-20260830-03-4: the release ci leg maps ci-query.js\'s shaUnseen shape t
       'release ci leg (the never-block ruling) nor collapse to the pre-spec {"unavailable":"no-adapter"} ' +
       'label that hides the salon-os condition: ' + JSON.stringify(rowFor(rows, 'ci')) +
       ' (stage status ' + r.status + ', stderr ' + r.stderr + ')')
+  } finally {
+    host.kill()
+  }
+})
+
+test('AC-20261102-01-12: stage appends the ci row {"unavailable":"no-adapter"} and prints UNMEASURED: ci:unavailable:no-adapter, never transient, when the capabilities block declares no forge and a PATH-stubbed gh would print a green run', async () => {
+  const host = await setupWorkingHost('rl-noforge', { capabilities: { forge: undefined } })
+  try {
+    const ghScript =
+      '#!/usr/bin/env bash\n' +
+      'echo \'[{"status":"completed","conclusion":"success","headSha":"abc123","url":"http://example.com/run","updatedAt":"2026-08-23T00:00:00Z"}]\'\n' +
+      'exit 0\n'
+    const binDir = makeStubBin(host.dir, 'gh', ghScript)
+    const runManifest = path.join(host.dir, 'run-manifest.jsonl')
+    const r = runNode(SCRIPT, ['stage', '--root', host.dir, '--manifest', runManifest, '--out-dir', path.join(host.dir, 'out')],
+      { env: withStubPath(binDir) })
+    const rows = readRows(runManifest)
+    assert.deepStrictEqual(rowFor(rows, 'ci'), { leg: 'ci', exit: 0, observed: { unavailable: 'no-adapter' } },
+      'a host whose capabilities block names no forge has no adapter — a probed green run here is CI evidence the host ' +
+      'never declared, and a transient row would claim a retryable failure that cannot occur: ' +
+      JSON.stringify(rowFor(rows, 'ci')) + ' (stage status ' + r.status + ', stderr ' + r.stderr + ')')
+    assert.match(r.stdout, /UNMEASURED: ci:unavailable:no-adapter/,
+      'an undeclared forge must surface as an unmeasured ci leg so promotion cannot proceed on assumed CI: ' + r.stdout)
+    assert.doesNotMatch(r.stdout + r.stderr, /transient/,
+      'the transient alternative arises only when forge is github and gh itself fails: ' + r.stdout)
   } finally {
     host.kill()
   }

@@ -23,6 +23,13 @@ the design stage's gate/repair paths run; absent = legacy mode, no preflight),
 regex-escaped, anchored title and appends the fragment to `testCommand` ahead of the file path
 to verify that one declared test rather than its whole file; absent = every file keeps today's
 per-file classification),
+`{file}` (a placeholder inside `testCommand` and `typecheckCommand`, for a runner that takes its file
+somewhere other than the end of the command — where present, the plugin substitutes the file
+path(s) there: one quoted path in `red-check.js`, the quoted space-joined list in the at-risk leg,
+and the `testNameFilter` fragment is appended after the substituted command; absent, the path(s)
+are appended as today, the filter fragment ahead of the path),
+`trunk` (the branch the review stage diffs against when the spec pins neither `diff_base` nor
+`build_base`; absent = the `main`-then-`master` probe, printed as a derived default),
 `testCaseScanner` (a shell command run from the repo root, no placeholders, printing one test case
 per stdout line — `<file> :: <title>` with a repo-relative POSIX file split at the first ` :: `,
 or a JSON object `{"file","title","start"?,"end"?}` whose 1-based inclusive `start`/`end` line
@@ -206,6 +213,9 @@ consume each fact:
 ```jsonc
 "capabilities": {
   "forge": "github",              // or "none" — who runs CI/PRs; read by ci-query.js
+  "failCountPattern": "none",     // regex over the gate log, group 1 = failure count, read ahead of
+                                  // the built-in shapes; "none" = the runner prints no count;
+                                  // absent = the built-ins
   "skipReportPattern": "none",    // regex over test-runner output capturing the skip count (group 1;
                                   // optional group 2 = todos), or "none"
   "testCountPattern": "none",     // regex over test-runner output, group 1 = executed-test count,
@@ -214,11 +224,10 @@ consume each fact:
 }
 ```
 
-**Absent block = legacy mode** — dynamic probing (`ci-query.js` probes `gh` at use time)
-plus `/spec:doctor` check 2's undeclared-capabilities nudge; nothing breaks on
-a host that predates this block. A present block is authoritative: `forge:"none"` makes the CI
-scripts print the canonical line `unavailable — no supported forge adapter` and exit cleanly
-rather than probe; a `skipReportPattern` (or `testCountPattern`) of `"none"` (or no match) makes
+**`forge` is `github` or `none`.** An absent block, an absent key, or any other value is **no forge
+adapter** — the CI scripts print the canonical line `unavailable — no supported forge adapter` and
+never probe `gh`; `/spec:doctor` check 2 nudges. A present block is authoritative: `forge:"none"`
+makes the CI scripts print that line and exit cleanly rather than probe; a `skipReportPattern` (or `testCountPattern`) of `"none"` (or no match) makes
 the corresponding observation slot a typed unavailability object instead of assuming zero —
 `{"unavailable":"no-format-declared"}` when the host declares no pattern (sanctioned) and
 `{"unavailable":"pattern-no-match"}` when a declared pattern misses the output (drift, which

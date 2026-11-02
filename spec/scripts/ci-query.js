@@ -4,7 +4,7 @@
 // answering "what did CI just do?", shared by the review stage's `ci` leg (--commit, per-SHA),
 // /spec:release's `ci` leg (--commit, per-SHA), and observe-ci.js (--branch,
 // trunk latest-run).
-// Owner: specs/20260813/10-host-capabilities.md, specs/20260830/03-ci-leg-honest-absence.md
+// Owner: specs/20260813/10-host-capabilities.md, specs/20260830/03-ci-leg-honest-absence.md, specs/20261102/01-the-host-names-its-runner-grammar.md
 //
 // `gh run list --commit <sha>` returns `[]` exit 0 for a commit CI never saw
 // (executed against the installed `gh` binary).
@@ -24,14 +24,12 @@
 // the current branch, read only inside the sha-unseen fallback below (still --limit 1, never
 // polled or retried).
 //
-// A host with no forge adapter (e.g.
-// GitLab/Bitbucket, or no `gh`) was silently probed as if it were GitHub — `gh` missing already
-// answered `available:false`, but nothing distinguished "this host declares it has no CI forge"
-// from "gh happens to be uninstalled right now." When the host config declares
-// `capabilities.forge:"none"`, this script now short-circuits BEFORE ever invoking `gh`: it
-// prints the canonical line `unavailable — no supported forge adapter` (plain text, not the JSON
-// shape below — a Claude session reads either) and exits 0. `capabilities.forge:"github"` or an
-// absent `capabilities` block (legacy mode) fall through to the unchanged dynamic `gh` probe.
+// Forge is fail-closed: only a host
+// declaring `capabilities.forge:"github"` is probed. Anything else — `"none"`, an absent
+// `capabilities` block, an absent key, any other value — short-circuits BEFORE `gh`: it prints
+// the canonical line `unavailable — no supported forge adapter` (plain text, not the JSON shape
+// below) and exits 0. The `transient` shape therefore arises only when forge is `github` and
+// `gh` itself fails.
 //
 // An unpushed HEAD's empty --commit run list was indistinguishable from "no CI at all" — origin's
 // branch could be red for days while the leg read green (observed: 23 unpushed local commits,
@@ -50,7 +48,7 @@
 // pushed workflows pay nothing extra.
 //
 // Exit codes: 0 = answered (available true or false either way, the shaUnseen shape, OR the
-// forge:"none" canonical line) · 2 = usage error
+// no-forge-adapter canonical line) · 2 = usage error
 
 const { spawnSync } = require('child_process')
 const { declaredForge } = require('./lib/host-config')
@@ -70,10 +68,9 @@ for (let i = 0; i < argv.length; i++) {
 }
 if ((!branch && !commit) || (branch && commit)) { usage(); process.exit(2) }
 
-// capabilities.forge:"none" is a declared, not probed, fact — read it before touching `gh`.
-// A missing/unreadable/unparsable config is legacy mode (dynamic probing continues unchanged);
-// lib/host-config.js is the sole reader of that declaration for both CI scripts.
-if (declaredForge(root) === 'none') {
+// Only a declared `github` forge is probed; lib/host-config.js is the sole reader of that
+// declaration for both CI scripts. Remedy for a host that should be probed: /spec:init.
+if (declaredForge(root) !== 'github') {
   console.log('unavailable — no supported forge adapter')
   process.exit(0)
 }

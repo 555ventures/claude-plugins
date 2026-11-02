@@ -6,6 +6,10 @@
 //
 // Library: quote(value), printable(command, env), run(command, opts), runAsync(command, {cwd, env}).
 //   env is ADDITIONS over process.env; NODE_TEST_CONTEXT is always removed from the final env.
+//   run's maxBuffer defaults to 256 MiB (DEFAULT_MAX_BUFFER) when the caller passes none: spawnSync's
+//   1 MiB default SIGTERM-kills a passing host command that prints more (ENOBUFS, status null), which
+//   every driver reads as "died without an exit code" — niko-hub spec 20261101/12 could never close
+//   (2026-11-02, gate exit 0 at 1.24 MB). An explicit caller maxBuffer still wins.
 //
 // Deliberately does NOT call process.exit (drivers keep their own die-on-no-status discipline via
 // driver-io.runHost), resolve a cwd, retry, or decide what counts as a pass — callers read the
@@ -15,6 +19,7 @@
 const { spawn, spawnSync } = require('child_process')
 
 const SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/
+const DEFAULT_MAX_BUFFER = 256 * 1024 * 1024
 
 // POSIX single-quote form; the one quoting style for any value spliced into a host command.
 function quote(value) {
@@ -38,7 +43,7 @@ function finalEnv(extra) {
 }
 
 function run(command, opts = {}) {
-  return spawnSync('bash', ['-c', command], { ...opts, env: finalEnv(opts.env) })
+  return spawnSync('bash', ['-c', command], { maxBuffer: DEFAULT_MAX_BUFFER, ...opts, env: finalEnv(opts.env) })
 }
 
 function runAsync(command, { cwd, env } = {}) {

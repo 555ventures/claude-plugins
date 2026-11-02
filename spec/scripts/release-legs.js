@@ -112,14 +112,10 @@ function usage() {
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
 
-// The 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in full
-// at spec/scripts/lib/driver-io.js's writeOut.
-// Local to this script: a single fs.writeSync call can itself return short, so the loop below runs
-// until every byte is written.
+const { writeOut: syncWrite } = require('./lib/sync-write')
+// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
 function writeAll(fd, str) {
-  const buf = Buffer.from(str, 'utf8')
-  let written = 0
-  while (written < buf.length) written += fs.writeSync(fd, buf, written)
+  syncWrite(fd, str)
 }
 
 const q = (p) => `"${p}"`

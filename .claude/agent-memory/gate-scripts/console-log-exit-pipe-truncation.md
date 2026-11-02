@@ -20,12 +20,10 @@ became the first programmatic `--json` consumer post-autopilot-deletion. This re
 dashboard JSON is ~75 KB, so real hosts hit it immediately once any script pipes
 spec-status's output instead of redirecting it to a file.
 
-**How to apply:** any gate script with `console.log(...); process.exit(...)` back-to-back
-where the printed payload can be large (JSON dumps especially) needs a synchronous flush
-before exit — a small `writeOut(str)` helper using `fs.writeSync(1, buf, off, len)` in a
-loop (handles partial writes on a pipe) with EAGAIN retry, documented with the dated
-incident per this repo's header-comment convention. Small/bounded prints (a one-line usage
-error, a tiny status report) are not at risk — only apply the helper where it's load-bearing,
-per scoping discipline (don't touch
-exit sites outside what was asked). See specs/20260823/08's repair-round deviation entry for
-the executed proof and fix shape.
+**How to apply:** any gate script whose payload can be large (JSON dumps especially) routes
+stdout through the ONE shared writer, `spec/scripts/lib/sync-write.js`'s `writeOut` (looped for
+partial writes, EAGAIN retried, EPIPE treated as done) — imported as
+`const { writeOut: syncWrite } = require('./lib/sync-write')`, with any local wrapper keeping only
+the framing. Never hand-roll an `fs.writeSync` loop: since specs/20261101/10-one-writer-and-no-copies-left.md
+a standing sweep in `tests/ceiling/sync-write-callers.test.js` fails if `writeSync(` appears in any
+file under `spec/scripts/` other than that library.

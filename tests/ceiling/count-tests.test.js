@@ -490,7 +490,7 @@ function runWithClosedReader(args, closed) {
   })
 }
 
-test('count-tests.js treats a closed stdout (EPIPE) as done: --titles over a >64 KiB payload exits 0 with no stack trace', async () => {
+test('count-tests.js treats a closed stdout (EPIPE) as done: --titles over a >64 KiB payload exits 0 with no stack trace (AC-20261101-10-3)', async () => {
   const dir = tmpdir('count-epipe')
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
   let src = "'use strict'\nconst { test } = require('node:test')\n"
@@ -503,7 +503,7 @@ test('count-tests.js treats a closed stdout (EPIPE) as done: --titles over a >64
   assert.doesNotMatch(r.text, /EPIPE|Error:|at writeOut/, 'stderr must carry no EPIPE stack trace: ' + r.text)
 })
 
-test('count-tests.js keeps its usage exit 2 when stderr is closed (EPIPE on fd 2 never masks die()\'s code)', async () => {
+test('count-tests.js keeps its usage exit 2 when stderr is closed (EPIPE on fd 2 never masks die()\'s code) (AC-20261101-10-3)', async () => {
   const r = await runWithClosedReader(['--root', path.join(tmpdir('count-epipe-err'), 'missing')], 'stderr')
   assert.strictEqual(r.signal, null, 'the script must exit on its own, not die by signal: ' + r.signal)
   assert.strictEqual(r.code, 2,

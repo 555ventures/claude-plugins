@@ -98,19 +98,10 @@ const hostRun = require('./lib/host-run')
 const USAGE = 'expire-tests.js --root <r> (--spec <path> | --all-done | --invariants) [--apply [--keep-on-red]] [--json]'
 const EXPIRY_APPLIES_FROM = '20260911'
 
-// A script that prints a payload and exits routes through a synchronous writer — the 64 KiB pipe
-// truncation this avoids is spelled out at spec/scripts/lib/driver-io.js's writeOut.
+const { writeOut: syncWrite } = require('./lib/sync-write')
+// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
 function writeOut(fd, str) {
-  const buf = Buffer.from(str + '\n', 'utf8')
-  let off = 0
-  while (off < buf.length) {
-    try {
-      off += fs.writeSync(fd, buf, off, buf.length - off)
-    } catch (e) {
-      if (e.code === 'EAGAIN') continue
-      throw e
-    }
-  }
+  syncWrite(fd, str + '\n')
 }
 
 function die(msg) {

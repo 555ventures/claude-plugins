@@ -69,17 +69,10 @@ const AC_REFERENCE_RE = /AC-(?:\\{1,2}d|\[0-9\]|%d|\{8\})|\bAC_ID|\bac_?[Ii]d\b/
 const DONE_LITERAL_RE = /["'`]done["'`]/
 const PIN_RE = /SHALL CONTINUE TO/
 
+const { writeOut: syncWrite } = require('./lib/sync-write')
+
 function writeOut(fd, str) {
-  const buf = Buffer.from(str + '\n', 'utf8')
-  let off = 0
-  while (off < buf.length) {
-    try {
-      off += fs.writeSync(fd, buf, off, buf.length - off)
-    } catch (e) {
-      if (e.code === 'EAGAIN') continue
-      throw e
-    }
-  }
+  syncWrite(fd, str + '\n')
 }
 
 function die(msg) {

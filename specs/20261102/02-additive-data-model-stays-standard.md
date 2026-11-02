@@ -1,12 +1,14 @@
 ---
 date: 2026-11-02
-status: hardened
+status: done
 tier: standard
 area: plan-lock
 breaking: false
 depends_on: []
 brief: n/a
+build_base: main
 open_markers: 0
+diff_base: 262a669e1de8f9c298b9f263cb0f24b24aaafb30
 ---
 
 # An additive-only Data Model stays standard tier
@@ -32,6 +34,8 @@ the files an author reads, and every pre-existing lock behaves as before.
 | D4 | The host's § Risk Tiers triggers and the boot-path trigger still decide critical above the carve-out: a spec adding a nullable column to a surface the host lists as critical is critical by the planner's call, never by this lint. The lint does not read § Risk Tiers for the Data Model check. `[no-ac: planner judgment with no mechanical surface — § Risk Tiers is free prose per host]` | Fuzzy word-matching the section against the host list would refuse honest specs and pass dishonest ones; the tier line is the planner's contract. |
 | D5 | `--json` `counts` gains `additiveDataModel` (1 when the `changes: additive-only` line is present in a non-empty section, else 0); the plain first stdout line keeps its byte shape `decision-lint: restrictions=N deferrals=N findings=N` (AC-20261102-02-4). | plan.md copies the summary line into the ledger; tooling reads counts. |
 | D6 | The `STRUCTURAL_LINT_APPLIES_FROM` date gate is untouched: a pre-cutoff spec still emits nothing; the carve-out only loosens post-cutoff locks (AC-20261102-02-6). | History never reddens; measured A1 shows no post-cutoff spec has a live Data Model, so no existing lock changes either way. |
+| D1a | (build ruling, resolving Behavior step 3 against AC-20261102-02-3) The carve-out in D1 also requires the D2 contradiction predicate to find nothing: a contradicted declaration on `tier: standard` yields both `additive-claim-contradicted` and `data-model-requires-critical` (AC-20261102-02-3). | Behavior's own sentence "a contradicted declaration therefore yields two findings" and AC-3 both state it; step 3's predicate omitted the clause. |
+| D1b | (build ruling, gate line `✖ AC-20261029-07-2 … recommended: park (failures did not shrink: 20 → 20 → 20)`) `tests/build/escalate-choice.test.js`'s counting-gate fixture drops its first line with `tail -n +2` + `mv` instead of `sed -i 1d`, which BSD sed reads as a backup suffix, so the fixture never advanced on macOS. Assertions unchanged. `[no-ac: fixture portability repair, the existing pins are the oracle]` | Pre-existing red on main on macOS; a fixture fix, never a weakening. |
 | D7 | `spec/.claude-plugin/plugin.json` is bumped via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"`; the paragraph names the grammar and the new finding class. Queue item q328 (the ratified decision) is marked done at lock. `[no-ac: version mechanics — plugin-bump.js --check in the gate is the oracle]` | Pipeline rules § Planning version-bump discipline; the queue holds decisions until they are spec'd. |
 
 ## File Plan
@@ -45,6 +49,7 @@ the files an author reads, and every pre-existing lock behaves as before.
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | `node scripts/plugin-bump.js --bump --plugin spec --changelog "…"` (D7) |
 | tests/decision-lint/additive-data-model.test.js | CREATE | tests | AC-20261102-02-1, AC-20261102-02-3, AC-20261102-02-4, AC-20261102-02-7 |
 | tests/consistency/structural-triggers-doctrine.test.js | MODIFY | tests | AC-20261102-02-5 |
+| tests/build/escalate-choice.test.js | MODIFY | tests | D1b — the counting-gate fixture drops its first line portably (`tail -n +2` + `mv`); assertions unchanged |
 | tests/decision-lint/structural-triggers.test.js | MODIFY | tests | AC-20261102-02-2, AC-20261102-02-6 — the two CONTINUE-TO pins gain this spec's AC-IDs in their titles after the resolving prefix; assertions unchanged |
 
 ## Contracts
@@ -131,6 +136,12 @@ heuristic over free text; a wrapped line will miss it, which A3 accepts.
 Collision-closure waives (executes leg): `tests/host-config/file-shapes.test.js` and
 `tests/spec-paths.test.js` execute decision-lint only through its manifest-row and key-resolution
 paths, which D1/D2 leave untouched, so neither is a File Plan row.
+
+Build deviations (2026-11-02, folded at close): AC-20261102-02-5's `rewrites` pointer named a
+case an earlier close's expiry had already removed, so the build recreated it under that title
+carrying only this spec's pins (the § Gotchas expired-MODIFY shape). D1a records that the
+carve-out also requires the contradiction predicate to find nothing, as Behavior's own "two
+findings" sentence and AC-20261102-02-3 state.
 
 ## Canonical Delta
 

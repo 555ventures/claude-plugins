@@ -71,7 +71,10 @@ depends_on: []
 { Persistence changes: tables/columns, constraints, indexes, state shapes, migrations. State
   explicitly whether existing rows/persisted state are affected. Omit if none. A non-empty Data
   Model makes the spec `tier: critical` and must hold one line `existing rows: unaffected` or
-  `existing rows: <what changes>`; lock refuses it otherwise. }
+  `existing rows: <what changes>`; lock refuses it otherwise. A purely additive change (new table,
+  nullable/defaulted column) stays standard when the section holds both lines `changes: additive-only`
+  and `existing rows: unaffected`; a section that contradicts the declaration is refused
+  (`additive-claim-contradicted`). }
 
 ## Behavior
 

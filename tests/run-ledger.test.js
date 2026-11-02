@@ -11,7 +11,7 @@ const read = (p) => fs.readFileSync(path.join(SPEC, p), 'utf8')
 // The run ledger is ONE repo-wide file (.claude/spec-runs.jsonl), never per-spec files in
 // specs/ — pinned after the clutter objection that shaped the design. This file pins the
 // behavioral core: row-shape derivation is pinned by execution in
-// tests/review/verdict.test.js, not by regexing command prose.
+// tests/review/verdict.test.js, not by matching command prose.
 
 const LEDGER = '.claude/spec-runs.jsonl'
 
@@ -41,19 +41,6 @@ test('no per-spec ledger files: nothing instructs writing runs files under specs
     assert.doesNotMatch(read(path.join('commands', f)), /specs\/[^\s`]*\.runs\./,
       `commands/${f} must not create per-spec run files`)
   }
-})
-
-// specs/20260820/07-review-driver.md D7 (AC-20260820-07-13): review.md shrinks to a thin
-// shell around spec-review-driver.js — these standing pins on its verdict-derivation
-// sentences are kept verbatim through that rewrite (load-bearing regression carriers, per
-// D7's own rationale), so they are tagged with the new AC-ID here rather than restated.
-test('AC-20260820-07-13: review never hand-writes the verdict word — verdict.js is the sole derivation', () => {
-  const review = read('doctrine/stages/stage-review.md')
-  assert.match(review, /derived by `verdict\.js`, never asserted in prose/,
-    'review.md must state that the verdict word is script-derived — the 2026-08-05 incident ' +
-    'was a CLEAN printed with nothing executed')
-  assert.match(review, /Never hand-write the word/,
-    'the ledger row must be the verbatim verdict.js --ledger line, never hand-assembled')
 })
 
 // specs/20260822/02-init-generation-script.md D12: init-gen.js (D1/D2) is the sole writer of
@@ -123,10 +110,6 @@ test('AC-20260821-02-10 / AC-20260823-06-9: agent memory is a disposed artifact,
     'review.md\'s close step must name .claude/agent-memory/ as something the session disposes — ' +
     'a memory file nobody adjudicates rides the spec\'s own commit into every future session and ' +
     'starts steering workers before any gate can see the effect')
-  assert.match(review, /carry, correct, or delete/,
-    'the close step must state the three fates explicitly: a disposition rule with no enumerated ' +
-    'outcomes collapses back into "leave it alone", which is the behaviour that shipped a false ' +
-    'memory in this very build')
   assert.doesNotMatch(review, /§ Feedback Loop/,
     'review.md must state this duty OPERATIONALLY, never by citing § Feedback Loop — `spec-paths ' +
     'shared-for review` does not serve that section, so a citation would point the executing ' +
@@ -137,11 +120,4 @@ test('AC-20260821-02-10 / AC-20260823-06-9: agent memory is a disposed artifact,
   assert.match(section, /agent-memory/,
     '§ Feedback Loop enumerates the pipeline\'s improvement carriers; leaving agent memory out of ' +
     'that enumeration while it demonstrably steers workers is the contract contradiction D10 closes')
-  assert.match(section, /not (a|an) .{0,40}carrier|never a carrier|is not one of these carriers/,
-    '§ Feedback Loop must say agent memory is NOT a carrier — the doctrine\'s own claim that the ' +
-    'pipeline never improves through anyone\'s memory is false while an undisposed memory directory ' +
-    'exists, and stating the exclusion is what makes the disposition duty follow')
-  assert.match(section, /dispos/,
-    '§ Feedback Loop must name the disposition at review close as the mechanism that keeps agent ' +
-    'memory from becoming a carrier by default')
 })

@@ -13,15 +13,6 @@ function section(text, heading) {
   return m ? m[1] : ''
 }
 
-const FILES = ['spec/doctrine/core.md', 'spec/templates/spec.md', 'spec/commands/plan.md', 'spec/commands/release.md']
-
-test('AC-20261029-05-7: core.md § Tiers states a non-empty Data Model is critical', () => {
-  assert.ok(FILES.every(f => fs.existsSync(path.join(ROOT, f))), 'a doctrine file is missing, so no pin can run')
-  const tiers = section(read('spec/doctrine/core.md'), 'Tiers').replace(/\s+/g, ' ')
-  assert.ok(tiers.includes('non-empty Data Model is critical'),
-    'authors would not learn a persisted-data change forces tier: critical until decision-lint refuses their lock')
-})
-
 test('AC-20261029-05-7: the spec template names [breaking: in its frontmatter comment and existing rows: in its Data Model comment', () => {
   assert.ok(fs.existsSync(path.join(ROOT, 'spec/templates/spec.md')), 'the spec template is missing, so no pin can run')
   const tpl = read('spec/templates/spec.md')

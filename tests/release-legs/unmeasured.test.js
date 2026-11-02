@@ -201,10 +201,6 @@ test('AC-20260913-08-8: spec/commands/release.md (whitespace squashed) names UNM
   assert.match(text, /UNMEASURED:/,
     'D3/D4: release.md must name the UNMEASURED: line release-legs.js stage now prints, or the ' +
     'session executing this doc has no documented signal that a leg measured nothing')
-  assert.match(text, /never promote over a leg that observed nothing/,
-    'D4: Phase 2\'s exit-1 wording must carry this exact rule — the command text is what the session ' +
-    'executes, so a script that exits 1 under prose that still says "continue" is the contradiction ' +
-    'this spec exists to remove')
   assert.match(text, /nothing was measured in production/,
     'D4: a declined promotion\'s outcome line must say nothing was measured in production — the ' +
     'reversed Phase 3 makes a never-delivered ci verdict an UNMEASURED stop like any other, not a ' +

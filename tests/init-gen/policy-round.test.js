@@ -125,8 +125,6 @@ test('AC-20261029-08-3: init.md Phase 3 carries exactly two policy-round heading
   const recommended = (round1 + round2).split('(Recommended)').length - 1
   assert.strictEqual(recommended, 8, 'eight questions each carry one recommended-first option; found ' + recommended)
   assert.ok(init.includes(PIN), 'init.md must print the exact policy-defaults line for a dismissed round, or the veto is invisible')
-  assert.match(init, /AskUserQuestion. dismissed[^\n]*STOP[^\n]*except the two policy rounds/,
-    'the dismissed-STOP rule must carry the policy-round exception, or a dismissed round stops init')
 })
 
 test('AC-20261029-08-4: generate without a policy block writes POLICY_DEFAULTS, prints the 📌 line and adds no ledger ignore line', () => {

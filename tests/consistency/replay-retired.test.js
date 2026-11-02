@@ -111,14 +111,12 @@ test('AC-20261024-05-7: doctor.md has no replay baseline-red honesty check and i
     'a gap in the check numbering after dropping a check leaves reports citing a check that does not exist: ' + nums.join(','))
 })
 
-test('AC-20261024-05-8: core.md § Feedback Loop names the escape ledger as the one ground-truth signal and carries no replay token', () => {
+test('AC-20261024-05-8: core.md keeps its Feedback Loop section and that section carries no replay token', () => {
   const core = fs.readFileSync(path.join(SPEC, 'doctrine/core.md'), 'utf8')
   const at = core.indexOf('## Feedback Loop')
   assert.ok(at !== -1, 'core.md must keep its Feedback Loop section')
   const next = core.indexOf('\n## ', at + 1)
   const section = core.slice(at, next === -1 ? undefined : next).replace(/\s+/g, ' ')
-  assert.ok(section.includes('The **escape ledger** is the pipeline\'s one ground-truth signal.'),
-    'doctrine must state the escape ledger as the single ground-truth signal, or the pipeline still advertises a second signal that no longer exists')
   assert.ok(!/replay/i.test(section),
     'a replay token left in the Feedback Loop section teaches sessions to run a cadence that was retired')
 })

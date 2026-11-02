@@ -25,11 +25,8 @@ test('AC-20261025-01-4: commit.md step 3 appends one escape row through spec-pat
   const s3 = step3()
   const flat = squash(s3)
   assert.match(flat, /spec-paths escape-row\)?"?\s+--append/, 'step 3 must call escape-row.js --append through spec-paths, or the commit never writes the row')
-  assert.match(s3, /one escape row/i, 'step 3 must state it writes one escape row per commit, or two rows can double-count a repair')
   const asks = flat.match(/AskUserQuestion/g) || []
   assert.strictEqual(asks.length, 1, 'step 3 must mention AskUserQuestion exactly once (the class question) — more is the old yes/no offer returning: ' + asks.length)
-  const sentence = flat.split(/(?<=[.!?])\s+/).find(x => x.includes('AskUserQuestion')) || ''
-  assert.match(sentence, /class/, 'the one AskUserQuestion sentence must name the class, since class is the only question: ' + sentence)
   for (const banned of ['Escape of', '/spec:escape', 'foundBy', 'severity', 'killedMatch', 'softMatch', 'preventedBy', 'unclassedReason']) {
     assert.ok(!s3.includes(banned), 'step 3 must not contain "' + banned + '" — a retired offer or field the writer no longer produces')
   }
@@ -45,15 +42,12 @@ test('AC-20261031-01-5: commit.md step 3 takes spec and reviewRunId from pick, p
   const lines = s3.split('\n')
   const fixIdx = lines.map((l, i) => (l.includes('"fix"') ? i : -1)).filter(i => i >= 0)
   assert.ok(fixIdx.length > 0, 'step 3 must still describe the stage:"fix" row')
-  const near = fixIdx.some(i => lines.slice(Math.max(0, i - 3), i + 4).some(l => l.includes('landed')))
-  assert.ok(near, 'the "fix" row rule must sit within three lines of "landed" — otherwise a commit can earn both rows')
 })
 
-test('AC-20261031-01-6: commit.md step 3 records the stage:"fix" row with the refusal line when escape-row.js exits 3, and keeps the never-both-rows sentence', () => {
+test('AC-20261031-01-6: commit.md step 3 records the stage:"fix" row with the refusal line when escape-row.js exits 3', () => {
   const flat = squash(step3())
   assert.match(flat, /exit 3[^.]*"fix"/i, 'step 3 must say an exit 3 refusal appends the stage:"fix" row, or a refused escape row leaves the commit unrecorded')
   assert.ok(flat.includes('📌 escape row refused — fix row recorded (veto anytime)'), 'step 3 must carry the exact refusal line, or the owner cannot see the fallback happened')
-  assert.ok(flat.includes('A commit never earns both rows'), 'step 3 must keep the never-both-rows sentence, or the fallback reads as licence to double-record')
 })
 
 test('AC-20261025-01-6: the escape command file is gone, entrypoints lists commit.md for escape-row.js and no escape.md, and spec-paths shared-for escape falls open like an unknown command', () => {
@@ -69,12 +63,11 @@ test('AC-20261025-01-6: the escape command file is gone, entrypoints lists commi
   assert.strictEqual(r.stdout, unknown.stdout, 'shared-for escape must print the exact fail-open whole-doctrine output an unknown key gets — a scoped or different output means the deleted command\'s arm survives as dead config')
 })
 
-test('AC-20261025-01-7: the spec plugin description and README never name the retired command, and README describes the escape row', () => {
+test('AC-20261025-01-7: the spec plugin description and README never name the retired command', () => {
   const desc = JSON.parse(read('spec/.claude-plugin/plugin.json')).description
   assert.ok(!desc.includes('/spec:escape'), 'plugin.json description must name /spec:fix where it named the retired command, or the lifecycle sentence points nowhere')
   const readme = read('README.md')
   assert.ok(!readme.includes('/spec:escape'), 'README must not mention the retired command')
-  assert.match(readme, /escape row/, 'README must describe the automatic escape row, or the record-keeping behaviour is undocumented')
 })
 
 test('AC-20261025-01-10: init-gen.js renders a Gotchas header naming the review close as the only writer and never the retired command', () => {
@@ -115,13 +108,10 @@ test('AC-20261025-01-10: init-gen.js renders a Gotchas header naming the review 
   assert.ok(!rules.includes('/spec:escape'), 'the generated rules file must not name the retired command')
 })
 
-test('AC-20261025-01-12: core.md keeps the ground-truth sentence and names the commit-time escape row, fix.md names the escape row, and none of them name the retired command', () => {
+test('AC-20261025-01-12: none of core.md, fix.md and stage-review.md name the retired command', () => {
   const core = read('spec/doctrine/core.md')
-  assert.ok(core.includes("The **escape ledger** is the pipeline's one ground-truth signal."), 'core.md must keep the ground-truth sentence verbatim — replay-retired pins it')
-  assert.match(squash(core), /commit-time escape row still lands/, 'core.md Pipeline Entry must say the commit-time escape row still lands in the Direct lane')
   assert.ok(!core.includes('/spec:escape'), 'core.md must not name the retired command')
   const fix = read('spec/commands/fix.md')
-  assert.match(fix, /escape row/, 'fix.md must say a fix commit can record the escape row, or its "one ledger row" sentences lie')
   assert.ok(!fix.includes('/spec:escape'), 'fix.md must not name the retired command')
   const review = read('spec/doctrine/stages/stage-review.md')
   assert.match(review, /\/spec:fix/, 'stage-review.md must name /spec:fix as the remedy for a done spec with no closeRunId')

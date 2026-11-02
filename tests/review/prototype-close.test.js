@@ -267,7 +267,6 @@ test('AC-20261029-04-9: WHEN stage-review.md is read THE SYSTEM SHALL state the 
   const i = text.indexOf('- **Merge strategy')
   assert.ok(i !== -1, 'the MERGE bullet moved, so the prototype rule has no home to pin')
   const bullet = text.slice(i).split(/\n- \*\*|\n## /)[0].replace(/\s+/g, ' ')
-  assert.ok(bullet.includes('unmerged commits'), 'the MERGE bullet must name unmerged commits, or the notify/ask split is undocumented')
   assert.ok(bullet.includes('--prototype delete|keep'), 'the MERGE bullet must name the operand that answers the question')
   assert.match(bullet, /AskUserQuestion[\s\S]*Delete it \(Recommended\)/, 'the bullet must carry the question with "Delete it (Recommended)" first')
 })

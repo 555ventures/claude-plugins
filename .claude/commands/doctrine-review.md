@@ -8,7 +8,7 @@ argument-hint: [git ref to diff against, optional — default is the last plugin
 This command runs **in the claude-plugins repo only** — dev tooling, deliberately NOT
 shipped in `spec/commands/`. It closes the one review asymmetry in the system: host code
 gets a diff-scaled adversarial panel; doctrine — the highest-replication artifact, where one
-gap poisons every future host — gets `npm test` (regex pins on *past* incidents) and a sole
+gap poisons every future host — gets `npm test` (pins on references and tokens, never on wording) and a sole
 author's read. Natural cadence: after doctrine edits land, before the version bump that
 ships them.
 

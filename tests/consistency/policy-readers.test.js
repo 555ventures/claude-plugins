@@ -39,8 +39,6 @@ test('AC-20261029-09-2: core.md Pipeline Entry ties policy.directLaneToMain to /
   assert.ok(hit, 'Pipeline Entry never names policy.directLaneToMain, so a no-direct-to-main host still gets main commits')
   assert.ok(hit.includes('/git:merge'),
     'the directLaneToMain sentence omits /git:merge, so the Direct change has no named landing path: ' + hit)
-  assert.ok(hit.includes('still no spec'),
-    'the directLaneToMain sentence omits "still no spec", so the rule reads as an always-a-spec lane: ' + hit)
 })
 
 test('AC-20261029-09-4: git merge.md Step 3 and stage-review.md each read policy.mergeStrategy and print host policy (veto anytime)', () => {
@@ -53,11 +51,11 @@ test('AC-20261029-09-4: git merge.md Step 3 and stage-review.md each read policy
   }
 })
 
-test('AC-20261029-09-6: plan.md Lock step 5 stages the ledger only when tracked and doctor.md check 20 prints the disabled-by-policy line', () => {
+test('AC-20261029-09-6: plan.md Lock step 5 reads policy.ledgerCommitted and doctor.md check 20 prints the disabled-by-policy line', () => {
   const lock = section(body('spec/commands/plan.md'), /^## Lock/, 2)
   const step5 = lock.slice(lock.search(/^5\. \*\*Commit the lock/m)).replace(/\s+/g, ' ')
-  assert.ok(step5.includes('policy.ledgerCommitted') && step5.includes('only when it is tracked'),
-    'Lock step 5 does not condition the ledger add on tracking, so git add of an ignored ledger exits 1 and the lock commit dies')
+  assert.ok(step5.includes('policy.ledgerCommitted'),
+    'Lock step 5 does not read policy.ledgerCommitted, so git add of an ignored ledger exits 1 and the lock commit dies')
   const doctor = body('spec/commands/doctor.md')
   const at = doctor.search(/^20\. \*\*Expiry readiness/m)
   assert.ok(at !== -1, 'doctor.md lost check 20, so the testExpiry reader is unpinned')

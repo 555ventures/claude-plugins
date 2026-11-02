@@ -2118,6 +2118,17 @@ function handleMergeStrategy() {
   // fully contained in target. Either way, skip straight to finishMerge (promotion/cleanup, both
   // already idempotent) — the first-merge path and assert_clean_root below are untouched when the
   // merge has NOT yet landed (AC-8: SHALL CONTINUE TO refuse a dirty root on the first attempt).
+  // derive the shipped files this branch deletes while the source branch
+  // still exists; finishMerge appends the rows once the merge sha exists. Never fails a merge.
+  if (marks.supersessions === undefined && !marks.supersessionRowsWritten && branchExists(mainRoot, source)) {
+    const sr = runChild(process.execPath, [path.join(__dirname, 'supersession-rows.js'), '--merge', '--root', mainRoot,
+      '--target', target, '--source', source, '--by', (wt && (path.resolve(resolvedSpecPath) + path.sep).startsWith(path.resolve(wt) + path.sep)) ? path.relative(wt, resolvedSpecPath) : specRel, '--json'], { encoding: 'utf8' }, 'supersession-rows.js --merge')
+    let derived = null
+    if (sr.status === 0) { try { derived = JSON.parse(sr.stdout) } catch { derived = null } }
+    if (Array.isArray(derived)) { marks.supersessions = derived; saveSidecar() }
+    else process.stdout.write('⚠️ supersession rows skipped — exit ' + sr.status + '\n')
+  }
+
   if (!branchExists(mainRoot, source)) {
     process.stdout.write('[spec-review-driver] source branch ' + source + ' no longer exists — ' +
       'the merge already landed; skipping merge-back.sh merge and resuming at promotion/cleanup.\n')
@@ -2359,12 +2370,30 @@ function commitPromotedEvidence(mainRootDir, wt) {
   }
 }
 
+function appendSupersessionRows(mainRootDir) {
+  // append the rows derived before the merge, once, with the landed HEAD sha.
+  if (Array.isArray(marks.supersessions) && !marks.supersessionRowsWritten) {
+    const head = runChild('git', ['-C', mainRootDir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }, 'rev-parse HEAD')
+    const headSha = head.status === 0 ? head.stdout.trim() : null
+    for (const row of marks.supersessions) {
+      const w = runChild(process.execPath, [path.join(__dirname, 'escape-row.js'), '--append', '--root', mainRootDir,
+        '--row', JSON.stringify({ ...row, stage: 'escape', sha: headSha })], { encoding: 'utf8' }, 'escape-row.js --append')
+      if (w.status === 0) process.stdout.write('supersession spec=' + row.spec + ' class=shipped-file-deleted files=' + row.files.length + '\n')
+      else if (w.status === 3) process.stdout.write('already recorded spec=' + row.spec + '\n')
+      else process.stdout.write('⚠️ supersession row for ' + row.spec + ' skipped — exit ' + w.status + '\n')
+    }
+    marks.supersessionRowsWritten = true
+    saveSidecar()
+  }
+}
+
 function finishMerge(mainRootDir, source, wt) {
   if (wt) {
+    appendSupersessionRows(mainRootDir)
     promoteEvidenceAndClean(wt, mainRootDir)
     commitPromotedEvidence(mainRootDir, wt)
     relocateSidecar(wt, mainRootDir)
-  }
+  } else appendSupersessionRows(mainRootDir)
   const cleanupArgs = ['cleanup', '--root', mainRootDir, '--source', source]
   if (wt) cleanupArgs.push('--worktree', wt)
   const c = runChild('bash', [mergeBackBin, ...cleanupArgs], { encoding: 'utf8' }, 'merge-back.sh cleanup')

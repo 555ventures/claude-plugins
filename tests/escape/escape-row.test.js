@@ -62,7 +62,7 @@ test('escape-row.js --append prefixes a newline when the existing ledger does no
   assert.deepStrictEqual(JSON.parse(lines[1]), second, 'line 2 must parse back to the newly appended row — a corrupted merge would lose the appended escape row from the fleet count')
 })
 
-test('AC-20261025-01-1: escape-row.js --check accepts the slim row and a legacy row (dropped fields ignored) and names exactly one closed reason per malformed field on stdout at exit 1', () => {
+test('AC-20261025-01-1: escape-row.js --check accepts the slim row and a legacy row (dropped fields ignored) and names exactly one closed reason per malformed field on stdout at exit 1 (AC-20261101-11-7: via review with a supersededBy key)', () => {
   const slim = check(validEscapeRow())
   assert.strictEqual(slim.status, 0, 'the slim D3 row must validate or the commit-time writer can never append it: ' + slim.stdout + slim.stderr)
   assert.strictEqual(slim.stdout, '', 'a valid row must print nothing — stray output on exit 0 would be parsed as reasons by callers')
@@ -88,6 +88,14 @@ test('AC-20261025-01-1: escape-row.js --check accepts the slim row and a legacy 
 
   const ok = check(validEscapeRow({ sha: 'a'.repeat(40), class: 'silent-fallback', reviewRunId: 'rv_abc', via: 'spec-fix' }))
   assert.strictEqual(ok.status, 0, 'a 40-hex sha, kebab class and spec-fix via are all in contract and must validate: ' + ok.stdout + ok.stderr)
+
+  // specs/20261101/11-a-direction-flip-leaves-a-row.md D1: the merge-back writer's via and its extra key.
+  const review = check(validEscapeRow({ class: 'shipped-file-deleted', via: 'review', supersededBy: 'specs/y.md' }))
+  assert.strictEqual(review.status, 0, 'via review with a supersededBy extra key must validate or the review driver\'s deleted-file row can never be appended: ' + review.stdout + review.stderr)
+  assert.strictEqual(review.stdout, '', 'a valid review row prints no reasons — stray output would be parsed as reasons by the writer')
+  const merge = check(validEscapeRow({ via: 'merge' }))
+  assert.strictEqual(merge.status, 1, 'a via outside the enum must still refuse after review joins it — widening past review lets any writer label slip in: ' + merge.stdout + merge.stderr)
+  assert.deepStrictEqual(merge.stdout.trim().split('\n'), ['via-out-of-enum'], 'the closed reason for an unknown via must stay via-out-of-enum: ' + merge.stdout)
 })
 
 test('AC-20261025-01-2: escape-row.js --amend exits 2 naming --check and --append (never --amend) on stderr and appends nothing', () => {

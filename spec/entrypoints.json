@@ -73,7 +73,14 @@
   },
   "spec/scripts/escape-row.js": {
     "entryPoints": [
-      "git/commands/commit.md"
+      "git/commands/commit.md",
+      "spec/scripts/supersession-rows.js"
+    ]
+  },
+  "spec/scripts/supersession-rows.js": {
+    "entryPoints": [
+      "git/commands/commit.md",
+      "spec/scripts/spec-review-driver.js"
     ]
   },
   "spec/scripts/fleet-reader.js": {

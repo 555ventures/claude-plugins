@@ -145,7 +145,7 @@ test('AC-20260926-03-8: every documented key resolves to an existing path (AC-20
     'worktree-include', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract',
     'design-contract-check', 'design-rules-template', 'workspace-scan',
     'catalog-inventory', 'design-brief-template', 'design-paths-template', 'prototype-driver',
-    'walkthrough', 'walkthrough-contract', 'walkthrough-catalog', 'pictures', 'decision-lint']) {
+    'walkthrough', 'walkthrough-contract', 'walkthrough-catalog', 'pictures', 'decision-lint', 'supersession-rows']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }
@@ -173,6 +173,14 @@ test('AC-20260926-03-8: every documented key resolves to an existing path (AC-20
     'AC-20261002-01-15: `spec-paths mock-contract` must exit non-zero — a surviving key resolves a path to a deleted template and sends a session to a file that is not there')
   assert.ok(!/mock-contract/.test(retired.stderr),
     'AC-20261002-01-15: the usage line must not mention mock-contract — a documented key that resolves nothing misleads the next reader: ' + retired.stderr)
+  // specs/20261101/11-a-direction-flip-leaves-a-row.md D2 (AC-20261101-11-12): the supersession-rows key.
+  const supPath = run('supersession-rows').trim()
+  assert.strictEqual(supPath, path.join(SPEC, 'scripts/supersession-rows.js'),
+    'AC-20261101-11-12: `spec-paths supersession-rows` must print the absolute path of spec/scripts/supersession-rows.js — a wrong key sends the commit command and review driver to the wrong script silently: ' + supPath)
+  assert.ok(require('node:fs').statSync(supPath).mode & 0o111,
+    'AC-20261101-11-12: the resolved script must be executable or the commit step cannot invoke it')
+  assert.match(usage, /(^|[|\[])supersession-rows($|[|\]])/,
+    'AC-20261101-11-12: the usage line must name `supersession-rows` or a session reading it never learns the key exists: ' + usage)
   assert.match(run('version').trim(), /^\d+\.\d+\.\d+$/)
   assert.match(run('contract-hash').trim(), /^[0-9a-f]{12}$/)
 

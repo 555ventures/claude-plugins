@@ -94,6 +94,15 @@ type is `fix`/`hotfix` — otherwise skip with zero output. Never blocks the com
 
 Either line stays uncommitted until the next commit.
 
+## Step 3b: Supersession Rows (every commit)
+
+Runs on every commit when `.claude/spec-runs.jsonl` exists at repo root — otherwise skip with
+zero output. Asks nothing, never blocks the commit.
+
+Run `node "$(spec-paths supersession-rows)" --root . --commit HEAD` and print its stdout
+verbatim. A non-zero exit prints one `⚠️` line naming the exit code, and the commit proceeds.
+Any appended line stays uncommitted until the next commit.
+
 ## Step 4: Report
 
 report contract: spec core.md § Console Output Style — rendered via `spec-paths report-render`

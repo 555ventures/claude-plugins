@@ -117,3 +117,19 @@ test('AC-20261025-01-12: none of core.md, fix.md and stage-review.md name the re
   assert.match(review, /\/spec:fix/, 'stage-review.md must name /spec:fix as the remedy for a done spec with no closeRunId')
   assert.ok(!review.includes('/spec:escape'), 'stage-review.md must not name the retired command')
 })
+
+// specs/20261101/11-a-direction-flip-leaves-a-row.md D3: Step 3b runs the supersession scan on every commit.
+test('AC-20261101-11-11: commit.md carries a Step 3b that runs supersession-rows --commit HEAD when the ledger exists, asks nothing, and never blocks the commit on a non-zero exit', () => {
+  const src = read(COMMIT)
+  const at = src.indexOf('## Step 3b')
+  assert.ok(at !== -1, 'commit.md must carry a "## Step 3b" section — without it no commit records a retired spec')
+  const next = src.indexOf('\n## ', at + 1)
+  const s3b = src.slice(at, next === -1 ? undefined : next)
+  const flat = squash(s3b)
+  assert.ok(flat.includes('node "$(spec-paths supersession-rows)" --root . --commit HEAD'),
+    'Step 3b must invoke the scan through spec-paths on HEAD, or a flip is never recorded: ' + flat)
+  assert.ok(flat.includes('.claude/spec-runs.jsonl'), 'Step 3b must condition on the ledger existing — hosts without one must see nothing')
+  assert.ok(!/AskUserQuestion/.test(s3b), 'Step 3b must never ask — a question on every commit blocks the one hook that sees every flip')
+  assert.ok(flat.includes('\u26a0\ufe0f'), 'Step 3b must print a warning line on a non-zero exit, or a failed scan is silent')
+  assert.ok(src.indexOf('## Step 3\n') < at && at < src.indexOf('## Step 4'), 'Step 3b must sit between Step 3 and Step 4')
+})

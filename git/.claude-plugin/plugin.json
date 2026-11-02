@@ -1,7 +1,7 @@
 {
   "name": "git",
-  "version": "1.15.0",
-  "description": "Git helpers: a fast add-all-and-commit flow, a guided merge with conflict repair and worktree cleanup, and idempotent per-spec worktree entry. Changelog (last 3): 1.15.0 — /git:commit step 3 reads the script's pick, passes --primary for the diagnosed file, and records the stage:fix row when escape-row refuses a duplicate. 1.14.0 — /git:merge Step 3 honours policy.mergeStrategy. 1.13.0 — The merge command now derives its merge strategy from merge-back inspect and offers it as the recommended default in one question, rather than stopping to ask for a strategy with no guidance.",
+  "version": "1.16.0",
+  "description": "Git helpers: a fast add-all-and-commit flow, a guided merge with conflict repair and worktree cleanup, and idempotent per-spec worktree entry. Changelog (last 3): 1.16.0 — /git:commit Step 3b runs supersession-rows.js --commit HEAD when the spec ledger exists, so a commit that flips a spec to status: superseded appends one spec-superseded escape row; a failure prints one warning line and never blocks the commit. 1.15.0 — /git:commit step 3 reads the script's pick, passes --primary for the diagnosed file, and records the stage:fix row when escape-row refuses a duplicate. 1.14.0 — /git:merge Step 3 honours policy.mergeStrategy.",
   "author": {
     "name": "JJ",
     "email": "jj@555.ventures"

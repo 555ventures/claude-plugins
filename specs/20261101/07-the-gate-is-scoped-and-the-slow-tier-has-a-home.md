@@ -1,11 +1,12 @@
 ---
 date: 2026-11-01
-status: draft
+status: hardened
 tier: critical
 area: grounding-contract
 breaking: false
 depends_on: [specs/20261101/05-the-gate-that-ran-the-suite-is-the-suite.md]
 brief: n/a
+open_markers: 0
 ---
 
 # The gate is scoped, and the slow tier has a home
@@ -32,7 +33,7 @@ nothing is byte-for-byte unchanged.
 |----|----------|--------------------|
 | D1 | `spec/templates/grounding-contract.md` gains one optional key, `slowTestCommand` (a shell string, no placeholders: the host's own invocation of the tests it has excluded from `testCommand` by its runner's own mechanism — a marker, a project, a tag; the plugin names none), listed under § Required config keys' optional run and specified in a new section `## Test tiers (optional)` placed after § Test expiry: `testCommand` is the fast tier and the one every gate, suite, at-risk and close-time run executes; `slowTestCommand` runs once per review legs iteration as the blocking `slow` leg and never at close; `gateCommand` carries `{testDirs}` (or `{scopeDirs}`) wherever the runner accepts appended paths, and an unscoped gate is reported by doctor, never refused. (AC-20261101-07-1) | Core § Host Grounding: the repo supplies grounding, the plugin supplies process. Rejected: a per-test speed annotation the plugin parses (stack-shaped), a numeric suite budget (no published source names one; Bazel's size classes are the closest and they are host-declared), and making `{testDirs}` required (breaking for every host whose runner takes no paths). |
 | D2 | `review-legs.js`: when `config.slowTestCommand` is a non-empty string, a new wave 2c runs it bare through `sh()` ALONE, after smoke and before wave 3, writes `<out-dir>/slow-output.txt`, and appends `{"leg":"slow","exit":E,"observed":{"skips":N,"todos":N,"testsExecuted":N|{unavailable}}}` typed exactly like the suite row (`computeSkips`, `computeTestsExecuted`, `isUnobserved` → exit 1), in full and `--fix-delta` scope; `slow` joins the summary's `BLOCKING` list. Absent key → no row, no file, no summary line. (AC-20261101-07-2, AC-20261101-07-3, AC-20261101-07-4) | The slow tier is the one place a boot or integration test may live without being in every gate; once per legs iteration is the prior-art cadence (slow tests run on the change, not on every inner loop), and alone-in-its-wave is the same collision rule smoke already follows. |
-| D3 | `verdict.js`: `slow` is blocking-if-present — `blockingLegs.add('slow')` only when `legRows.has('slow')`; it is never added to `REVIEW_LEGS` (required). `spec-review-driver.js` `BLOCKING_LEGS` gains `'slow'`. (AC-20261101-07-5, AC-20261101-07-6) | A host that declares no slow tier must derive exactly today's verdicts; a host that does must not close on a red slow leg. |
+| D3 | `verdict.js`: `slow` is blocking-if-present — `blockingLegs.add('slow')` only when `legRows.has('slow')`; it is never added to `REVIEW_LEGS` (required). `spec-review-driver.js` `BLOCKING_LEGS` gains `'slow'`. Blocking, not advisory: a red slow row derives `GATE_RED` exactly like a red suite row, never a waivable finding. `[asked: blocking — the owner chose that a review cannot close while the host's own slow tests fail; the advisory alternative (a waivable finding, the at-risk precedent) was rejected]` (AC-20261101-07-5, AC-20261101-07-6) | A host that declares no slow tier must derive exactly today's verdicts; a host that does must not close on a red slow leg. |
 | D4 | `init-gen.js`: `validateProfile` accepts `config.slowTestCommand` when absent or a non-empty string (else exit 2 naming `config.slowTestCommand`); `generate` prints one stderr warning when `config.gateCommand` carries neither `{testDirs}` nor `{scopeDirs}`: `init-gen: gateCommand is unscoped — every build iteration and the review gate run the whole suite; put {testDirs} where the test runner takes its paths, or accept this when the runner takes none` (never a refusal); `deriveAllowEntries` includes `slowTestCommand`; a declared key adds the manifest row `{claim:"slow tier command runs", kind:"exec", target:"<slowTestCommand>"}`. New mode `init-gen gate-check --root <dir> [--json]` prints `{"scoped":bool,"gateRunsSuite":bool,"slowTier":bool}` (`gateRunsSuite` through `lib/gate-resolve.js`'s helper with `resolveGate` over an empty spec text), exit 0 always except usage 2. `lib/invariants.js` `configCommandStrings` includes `slowTestCommand`. (AC-20261101-07-7, AC-20261101-07-8, AC-20261101-07-9, AC-20261101-07-10) | The pattern precedent is `testNameFilter`/`patternsScript`: the plugin names the key, init writes the host's value and proves it runs before stamping; the exec-recall sweep must know every command string the config carries. |
 | D5 | `spec/commands/init.md`: Phase 1 profiles whether the runner accepts appended paths (the contract already asserts `testCommand` does) and whether any test boots a process, builds, or needs a service; Phase 3 gains one interview question — where the slow tier lives: "(Recommended) none — every test is fast enough for the gate" when Phase 1 found no boot/build/service test, else the runner's own exclusion mechanism named with its command (consequence text: slow tests leave the gate and run once per review); Phase 4's `config` guidance names `{testDirs}` at the test segment and `slowTestCommand`. `spec/commands/doctor.md` gains check 25 **Gate scope** (advisory): run `node "$(spec-paths init-gen)" gate-check --root . --json`; `scoped:false` → `⚠️ gate is unscoped: build iterations and the review gate run the whole suite — add {testDirs} to gateCommand`; `scoped:false` and `slowTier:false` → a second line `⚠️ no slow tier declared — boot/integration tests, if any, run in every gate`. `[no-ac: command prose; the script behind it is pinned by AC-20261101-07-9]` | Init is where the owner answers once; doctor is where drift is reported. |
 | D6 | `node scripts/plugin-bump.js --bump --plugin spec --changelog "…"`. `[no-ac: node scripts/plugin-bump.js --check in the gate is the oracle]` | Behaviour change under `spec/`. |
@@ -53,7 +54,8 @@ nothing is byte-for-byte unchanged.
 | tests/review/review-legs-slow-leg.test.js | CREATE | tests | AC-20261101-07-2, AC-20261101-07-3, AC-20261101-07-4 |
 | tests/review/verdict-slow-leg.test.js | CREATE | tests | AC-20261101-07-5, AC-20261101-07-6 |
 | tests/init-gen/gate-check.test.js | CREATE | tests | AC-20261101-07-7, AC-20261101-07-8, AC-20261101-07-9, AC-20261101-07-10 |
-| tests/contract/contract-keys.test.js | CREATE | tests | AC-20261101-07-1 |
+| tests/host-config/contract-keys.test.js | CREATE | tests | AC-20261101-07-1 |
+| tests/review/review-legs.test.js | MODIFY | tests | AC-20261101-07-6 joins the title of the existing CONTINUE-TO case `AC-20260903-02-12 (also, SHALL CONTINUE TO): the green manifest feeds verdict.js to CLEAN` — no assertion changes |
 
 ## Contracts
 
@@ -96,16 +98,13 @@ Fixture (init-gen): a profile JSON whose `config.gateCommand` is `npm run lint &
 the first config → `{"scoped":false,"gateRunsSuite":true,"slowTier":false}`; with the second
 and `slowTestCommand` declared → `{"scoped":true,"gateRunsSuite":false,"slowTier":true}`.
 
-`[NEEDS CLARIFICATION: blocking or advisory — D2/D3 make a red slow leg GATE_RED like a red
-suite. The alternative is a required-but-non-blocking leg whose red is a review finding (the
-at-risk precedent). Decide at lock.]`
 
 ## Acceptance Criteria
 
-- **AC-20261101-07-1**: WHEN `$(spec-paths contract)` is read THE SYSTEM SHALL contain the heading `## Test tiers (optional)` after `## Test expiry (required)`, name `slowTestCommand` in that section and in the § Required config keys optional run, and `$(spec-paths contract-hash)` SHALL differ from the value stamped in this repo's own `.claude/spec.config.json` before this spec (e.g. not `1c783fff201e`) → writes tests/contract/contract-keys.test.js
+- **AC-20261101-07-1**: WHEN `$(spec-paths contract)` is read THE SYSTEM SHALL contain the heading `## Test tiers (optional)` after `## Test expiry (required)`, name `slowTestCommand` in that section and in the § Required config keys optional run, and `$(spec-paths contract-hash)` SHALL differ from the value stamped in this repo's own `.claude/spec.config.json` before this spec (e.g. not `d3216056413e`) → writes tests/host-config/contract-keys.test.js
 - **AC-20261101-07-2**: WHEN review-legs runs full scope over the inert fixture with `slowTestCommand` `bash slow.sh` THE SYSTEM SHALL append `{"leg":"slow","exit":0,"observed":{"skips":0,"todos":0,"testsExecuted":2},"scope":"full"}` positioned after the `smoke` row and before `ac-matrix`, write `slow-output.txt` whose first line is `$ bash slow.sh`, leave 1 line in `slow-counter`, and exit 0 → writes tests/review/review-legs-slow-leg.test.js
 - **AC-20261101-07-3**: WHEN `slow.sh` exits 1 THE SYSTEM SHALL print `RED_BLOCKING: slow` and exit 1; WHEN it exits 0 printing `ℹ tests 0` THE SYSTEM SHALL append the slow row with `exit` `1` and `testsExecuted` `0` → writes tests/review/review-legs-slow-leg.test.js
-- **AC-20261101-07-4**: WHEN the config declares no `slowTestCommand` THE SYSTEM SHALL append no `slow` row, write no `slow-output.txt`, and print no summary line containing `slow` (e.g. the manifest's leg set equals today's eleven) → writes tests/review/review-legs-slow-leg.test.js
+- **AC-20261101-07-4**: WHEN the config declares no `slowTestCommand` THE SYSTEM SHALL append no `slow` row, write no `slow-output.txt`, and print no summary line containing `slow` (e.g. the manifest's leg set is byte-identical to the one the same fixture produces today, and the `outputs:` line does not mention `slow-output.txt`) → writes tests/review/review-legs-slow-leg.test.js
 - **AC-20261101-07-5**: WHEN `verdict.js --manifest <m> --workflow <CLEAN return>` reads a green full-scope manifest plus `{"leg":"slow","exit":1,"observed":{"skips":0,"todos":0,"testsExecuted":17},"scope":"full"}` THE SYSTEM SHALL print `GATE_RED` on stdout line 1; with the slow row's `exit` `0` it SHALL print `CLEAN` → writes tests/review/verdict-slow-leg.test.js
 - **AC-20261101-07-6**: WHEN the same manifest carries no `slow` row THE SYSTEM SHALL CONTINUE TO print `CLEAN` and name no missing leg (e.g. stderr empty) → reuses tests/review/review-legs.test.js :: AC-20260903-02-12
 - **AC-20261101-07-7**: WHEN `init-gen generate` runs over a profile whose `config.gateCommand` is `npm run lint && npm test` THE SYSTEM SHALL exit 0 and print exactly one stderr line equal to the D4 warning; WHEN the gate is `npm run lint && npm test {testDirs}` THE SYSTEM SHALL print no line containing `unscoped` → writes tests/init-gen/gate-check.test.js
@@ -115,12 +114,13 @@ at-risk precedent). Decide at lock.]`
 
 ## Assumptions (escalation triggers)
 
-- A1: `verdict.js` builds `blockingLegs` as a `Set` from `REVIEW_BLOCKING` before the derivation and `legIsRed` reads `legRows.get(leg)` (checked: lines 568-590, 649-650); adding `slow` conditionally touches no required-leg logic — **if false:** the `slow` row's red is folded into the gate check by review-legs (exit forced on the gate row) and verdict stays untouched; D3 is amended.
-- A2: The review driver's `BLOCKING_LEGS` (line 843) is the only driver-side list that decides STOPPED on a red row — **if false:** every such list enters the File Plan row for the driver.
+- A1: `verdict.js` builds `blockingLegs` as a `Set` from `REVIEW_BLOCKING` before the derivation and `legIsRed` reads `legRows.get(leg)` (checked at lock: `REVIEW_BLOCKING` line 561, `blockingLegs` line 569, `legIsRed` lines 578-579, the `GATE_RED` derivation line 642); adding `slow` conditionally touches no required-leg logic — **if false:** the `slow` row's red is folded into the gate check by review-legs (exit forced on the gate row) and verdict stays untouched; D3 is amended.
+- A2: The review driver's `BLOCKING_LEGS` (line 864; its second reader at line 2628 consumes the same `Set`) is the only driver-side list that decides STOPPED on a red row — **if false:** every such list enters the File Plan row for the driver.
 - A3: `init-gen generate` has one validation seam (`validateProfile`) and one allow-list seam (`deriveAllowEntries`), and `manifestExtras`-style rows can be appended programmatically (spec 01 D6 added one the same way) — **if false:** the manifest row is written by the session via `manifestExtras` and D4 drops it.
-- A4: `tests/contract/` may not exist; `tests/host-config/` holds the contract-adjacent tests today — **if false:** the AC-1 test moves to `tests/host-config/contract-keys.test.js`, same assertions.
+- A4: `tests/host-config/` is the home of the contract-adjacent tests (checked at lock: `tests/contract/` does not exist; `tests/host-config/` holds `config-read`, `file-shapes`, `host-config-api`, `policy-block`, `smoke-inert`), so the AC-1 test is created there — **if false:** create it where the other contract pins live, same assertions.
 - A5: Editing the contract changes `spec-paths contract-hash`; this repo's own `.claude/spec.config.json` is re-stamped by the build's existing contract-hash path and every other host reports stale grounding at doctor check 2 until `/spec:init` refresh, as specs/20261101/01 and 02 already accept — **if false:** STOP, ask the user.
-- A6: No existing fixture declares `slowTestCommand` or asserts the exact set of manifest legs by count (grep at lock: `legs.length`, `eleven`, `REVIEW_LEGS.length`) — **if false:** the pin enters the File Plan and is updated in place with this spec's AC-ID.
+- A6: No existing fixture declares `slowTestCommand` or asserts the exact set of manifest legs by count (grepped at lock across `tests/` and `spec/`: zero `slowTestCommand` hits; the `legs.length` hits in `tests/review/verdict.test.js`, `review-legs-gate-reuse.test.js` and `red-fixture-coverage.test.js` are `> 0` / `>=` bounds, not counts; `review-legs.test.js` line 204's title says `now ten` over a fixture that declares no slow tier, so it stays true) — **if false:** the pin enters the File Plan and is updated in place with this spec's AC-ID.
+- A7 (micro-spike, executed at lock): `lib/gate-resolve.js` over an empty spec text answers the D4 `gate-check` derivation without a File Plan — `resolveGate('', {gateCommand:'npm run lint && npm test', testCommand:'npm test'})` returned `{"gate":"npm run lint && npm test"}` and `gateRunsSuite(raw, resolved.gate, testCommand)` returned `true`; with `{testDirs}` appended `resolveGate` returned `{"gate":null,"reason":"no File Plan test rows to resolve {testDirs}"}` and `gateRunsSuite` returned `false` — exactly the AC-9 pair. `/spec:doctor` check 24 (**Policy block**) is the last check today, so 25 is free — **if false:** `gate-check` computes `gateRunsSuite` from the raw strings alone (no `{testDirs}` in the gate and an `&&` segment equal to `testCommand`), same JSON; a taken ordinal moves to the next free one across every mention.
 
 ## Rationale
 
@@ -135,10 +135,10 @@ run once per change (Bazel sizes with their own timeouts), and a scoped fast gat
 loop. It names no tool: `slowTestCommand` is whatever string the host's runner needs, exactly as
 `testCommand` and `runtime.bootCommand` already are.
 
-Blocking was chosen over advisory because the slow tier is the host's own tests over its own tree;
-a red there is a red. The `[NEEDS CLARIFICATION]` stays because the at-risk precedent went the
-other way and the owner should choose with the consequence in view: advisory means a review can
-close with a failing integration test as a waivable finding. The leg does not run at close: close
+Blocking was chosen over advisory (owner's ruling at lock, D3) because the slow tier is the host's
+own tests over its own tree; a red there is a red. The at-risk precedent went the other way, and the
+owner chose with the consequence in view: advisory would have let a review close with a failing
+integration test as a waivable finding. The leg does not run at close: close
 writes a canonical doc and a rules fold, which the fast gate covers, and the slow tier ran over
 the same tree minutes earlier (spec 06 would reuse even that if the tree is unchanged).
 

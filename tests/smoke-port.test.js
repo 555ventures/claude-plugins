@@ -100,7 +100,7 @@ test('AC-20261005-03-3: smoke.sh overrides a PORT already in the caller environm
 
 test('AC-20261005-03-4: smoke.sh sets no PORT for the host commands and prints no port segment when readyCheck does not read PORT', () => {
   const dir = writeHost(tmpdir('smoke-port-fixed'), {
-    bootCommand: 'echo "${PORT-unset}" > boot.port; touch ready; trap "exit 0" TERM; while :; do sleep 0.2; done',
+    bootCommand: 'trap "exit 0" TERM; echo "${PORT-unset}" > boot.port; touch ready; while :; do sleep 0.2; done',
     readyCheck: 'test -f ready',
   })
   const env = { ...process.env }

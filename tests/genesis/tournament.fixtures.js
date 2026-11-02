@@ -220,7 +220,7 @@ function finalist(name, picks, overrides = {}) {
 // "stale-ready" whenever a readyCheck run finds `booted` already present before it has spawned
 // a fresh bootCommand, which is exactly what happens on probe-done's post-race re-boot in the
 // same finalist dir once a prior boot's marker survives its own stop.
-const BOOT_CMD = "touch booted; trap 'rm -f booted; exit 0' TERM; while :; do sleep 1; done"
+const BOOT_CMD = "trap 'rm -f booted; exit 0' TERM; touch booted; while :; do sleep 1; done"
 
 module.exports = {
   SCRIPT, DIM, COVERAGE_KEYS,

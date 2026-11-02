@@ -16,7 +16,7 @@ NOT a findings-count word like the derived FINDINGS/HARD_FINDINGS/CLEAN verdict 
 counts. A workflow return with `verdict:"CLEAN"` can still carry a non-empty `survivors` array —
 that's the normal "ran fine, found N things" case.
 
-**Why:** discovered while fixing replay.js's `--score` (replay.js is since retired; the guard now lives in `verdict.js` ~line 648 and `spec-review-driver.js` ~line 1313, both reading the raw `verdict === 'REVIEWER_FAILED'`) (specs/20260819/02-mutation-replay.md
+**Why:** discovered while fixing replay.js's `--score` (replay.js is since retired; the guard now lives in `verdict.js` ~line 640 and `spec-review-driver.js` ~line 1359, both reading the raw `verdict === 'REVIEWER_FAILED'`) (specs/20260819/02-mutation-replay.md
 review finding F4): a crashed/malformed reviewer return was being scored `missed`, permanently
 deflating catch-rate evidence with something that was never produced. The correct guard is
 `wf.verdict === 'CLEAN' && Array.isArray(wf.survivors)` — gating on the raw two-value field, not

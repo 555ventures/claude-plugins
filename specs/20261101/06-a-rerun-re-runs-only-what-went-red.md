@@ -1,6 +1,7 @@
 ---
 date: 2026-11-01
-status: hardened
+status: done
+build_base: main
 tier: critical
 area: review-legs
 breaking: false
@@ -8,6 +9,7 @@ depends_on: [specs/20261101/05-the-gate-that-ran-the-suite-is-the-suite.md]
 brief: n/a
 open_markers: 0
 spiked: 2026-11-01
+diff_base: 373e8b6d4b3cbc3eba2a4b537a9ae5ee210e4143
 ---
 
 # A rerun re-runs only what went red
@@ -37,6 +39,7 @@ the driver's output and sidecar.
 | D5 | Header comments: `review-legs.js` names `--reuse-from`, `REUSABLE`, and the `reusedFrom` key, and its "there is no flag that skips a leg" sentence becomes "no flag skips a leg; `--reuse-from` copies a prior green row as this run's evidence, provenance-stamped"; the driver header names `legsTree` and `flaky`. `[no-ac: script header prose; the behaviour is pinned by AC-20261101-06-2 and AC-20261101-06-6]` | The header is the script's contract. |
 | D6 | `node scripts/plugin-bump.js --bump --plugin spec --changelog "…"`. `[no-ac: node scripts/plugin-bump.js --check in the gate is the oracle]` | Behaviour change under `spec/`. |
 | D7 | The driver test file builds its own two hosts rather than importing `makeSkipsHost`/`redGateHost` (neither is exported, neither counts runs): a skips host whose tracked `gate.sh` appends one line to a `counter` file and prints `ℹ skipped 1`, and a red-gate host whose tracked `gate.sh` exits 1 while a `flake` file holds `red` and 0 otherwise. Both `counter` and `flake` live OUTSIDE the fixture repo (a `tmpdir()` path baked into the script as an absolute path, the pattern `review-legs-gate-reuse.test.js` already uses for its counter), so flipping `flake` or growing `counter` never moves `snapshotTree()`; the "tree changed" case edits a tracked file. `[no-ac: test-fixture mechanics; exercised by every AC the file writes]` | A flip file inside the repo would have to sit in the sidecar or a gitignored path the fixture host does not carry; outside the repo it is invisible to git by construction (spike S1). |
+| D8 | `runHardStopVerdict` re-records `marks.legsTree[String(n)] = snapshotTree()` after its ledger append and before `saveSidecar()`, so the driver's own STOPPED row — appended to the tracked `.claude/spec-runs.jsonl` when the review runs in place (repoRoot === mainRoot) — never reads as a tree change at `--mark repair-round`. (AC-20261101-06-7) | User ruling 2026-11-01 at build (fix in driver over fix only the test): nothing but the driver's own write runs between the legs snapshot and the hard-stop append, so re-snapshotting there cannot mask an owner edit; without it in-place repair rounds never reuse. |
 
 ## File Plan
 
@@ -148,6 +151,11 @@ header forbids retry/poll by design); reusing across different iterations' scope
 run judges a different question); reusing `ci`.
 
 Collision closure (D5 narrows review-legs.js's "there is no flag that skips a leg" sentence): both literals-leg hits land in `spec/scripts/review-legs.js`, already a File Plan row; no test pins the sentence, so nothing is waived. The `executes` hits are tests that spawn review-legs.js or the driver without `--reuse-from` and without the two marks over an unchanged tree (A3), which this spec leaves byte-identical.
+
+### Advisory debt (review rv_ac0e233e1afd)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/spec-06-a-rerun-re-runs-only-what-went-red/spec/scripts/review-legs.js:389 — When the gate command runs the suite (gateRunsSuite true) and the prior manifest's gate row is green but its suite row is red or missing, the suite leg's gate-derived branch copies the REUSED gate row from `rows` and synthesizes a suite row with no spawn — so a red prior suite row does not 'run exactly as today' in the spawn sense, and the synthesized row inherits `reusedFrom` via the observed spread plus `reused: 'gate'`. Unreachable in practice (a gate-derived suite row is deterministic in the gate row), hence advisory; no executed repro (the scratch-file write was refused by the worktree guard).
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/spec-06-a-rerun-re-runs-only-what-went-red/spec/scripts/spec-review-driver.js:1013 — decideReuse prints 'tree changed since legs N — every leg re-runs' when `marks.legsTree[curN]` is simply absent (an older sidecar); D1 calls that case 'tree unknown — never reused', and the printed cause misstates it.
+- a2 /home/jj/projects/claude-plugins/.claude/worktrees/spec-06-a-rerun-re-runs-only-what-went-red/spec/scripts/spec-review-driver.js:1020 — With an unchanged tree but no green REUSABLE rows in the prior manifest (e.g. every expensive leg red), the ♻️ line prints with an empty tail ('reusing green rows: ') while still passing --reuse-from.
 
 ## Canonical Delta
 

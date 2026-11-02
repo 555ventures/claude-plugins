@@ -9,7 +9,7 @@ metadata:
 specs/20260820/07-review-driver.md's AC-20260820-07-15 (R8) refuses a cold invocation on a
 `status: done` spec whose sidecar "does not record this run's own close" (`marks.closeRunId`
 absent) — but ONLY when the sidecar directory exists. A `done` spec with NO sidecar at all is a
-*different*, unaffected code path (`spec-review-driver.js` lines ~578-580: `if
+*different*, unaffected code path (`spec-review-driver.js` lines ~581-583: `if
 (!sidecarExistsAtStart && status === 'done')` -> printDoneNow — exit 0, prints DONE) — the
 legitimate post-merge fast path, since the sidecar is deleted at DONE/cleanup. The dispatch
 prompt I was given paraphrased the AC as covering "a done spec with no sidecar (and, separately,

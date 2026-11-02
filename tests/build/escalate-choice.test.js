@@ -22,7 +22,7 @@ function escalatedHost(lines, failCountPattern) {
     fs.writeFileSync(cfgPath, JSON.stringify(cfg))
   }
   fs.writeFileSync(path.join(host.root, 'gate.sh'),
-    '#!/usr/bin/env bash\nline=$(head -1 counts.txt)\nsed -i 1d counts.txt\necho "$line"\nexit 1\n')
+    '#!/usr/bin/env bash\nline=$(head -1 counts.txt)\ntail -n +2 counts.txt > counts.next && mv counts.next counts.txt\necho "$line"\nexit 1\n')
   fs.writeFileSync(path.join(host.root, 'counts.txt'), lines.join('\n') + '\n')
   git(host.root, 'add', '-A'); git(host.root, 'commit', '-q', '-m', 'counting gate')
   run(host.root, host.spec)

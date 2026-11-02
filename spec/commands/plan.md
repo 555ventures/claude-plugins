@@ -87,7 +87,9 @@ Write the spec per the template. `status: draft`. While drafting:
    `spec-queue add` for a deferral; `breaking-unasked` (a `breaking: true` spec) by tagging the introducing Decision
    `[breaking: <what breaks for whom>]` or `[asked: …]`; `missing-dependency-names` by naming the packages in
    backticks in the File Plan Summary (or the literal `no dependency change`); `data-model-requires-critical` and
-   `missing-existing-rows-line` by setting `tier: critical` and adding an `existing rows:` line to `## Data Model`;
+   `missing-existing-rows-line` by setting `tier: critical` and adding an `existing rows:` line to `## Data Model` (a purely
+   additive change may instead declare `changes: additive-only` + `existing rows: unaffected` and stay standard);
+   `additive-claim-contradicted` by dropping that declaration and setting `tier: critical`, or removing the migrating change;
    zero findings to lock. Any `📌 adds or changes dependencies — <path> (veto anytime)` notice line is advisory and
    rides step 2b on critical tier. A Decision that retires or narrows prose elsewhere runs
    `node "$(spec-paths collision-closure)" --spec {spec path} --root . --literal <stem>…` and enumerates every

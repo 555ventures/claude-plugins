@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { read, tmpdir, runNode } = require('./helpers')
+const { read, tmpdir, runNode, gitRepo } = require('./helpers')
 
 // /spec:status derivation: brief/spec status is never stored, only derived from
 // spec frontmatter per doctor check 14 — this script is the single shared derivation behind
@@ -1279,4 +1279,119 @@ test('AC-20261007-03-8: WHEN a prototype-open anomaly is listed THE SYSTEM keeps
       'the three action strings are frozen — a prototype close must never become a fourth: ' + JSON.stringify(e))
   }
   assert.ok(!JSON.stringify(next).includes('prototype-open'), 'the anomaly is a hygiene line, never a next entry: ' + JSON.stringify(next))
+})
+
+// specs/20261102/03-one-session-runs-the-lanes.md D1: `--lanes --json` is a third machine mode
+// beside `--next --json` and `--json` — the admitted /spec:run lanes with branch and worktree, the
+// held-back entries with their reason, and the /spec:fix escapes with their queue id.
+
+const LANE_BRIEF = '\nPhase: P0 · Depends on: — · Primary workspaces: api\n'
+const LANE_SPECS = {
+  '20261102/03-x.md': 'date: 2026-11-02\nstatus: hardened\nbrief: 32',
+  '20261102/06-y.md': 'date: 2026-11-02\nstatus: hardened\nbrief: 32',
+  '20261102/04-z.md': 'date: 2026-11-02\nstatus: hardened\nbrief: 33',
+}
+
+// Brief 32 carries 03-x and 06-y (shared brief), brief 33 carries 04-z (independent); 06-y's branch
+// is checked out in a linked worktree. A git repo, because the mode reads `git worktree list`.
+function lanesHost({ extraSpecs = {}, queue = null, ledgerSpec = null } = {}) {
+  const dir = fs.realpathSync(tmpdir('spec-status-lanes'))
+  const git = gitRepo(dir)
+  fs.mkdirSync(path.join(dir, 'docs/roadmap'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'docs/roadmap/00-overview.md'),
+    '# X Roadmap — Overview\n\n## Sequence\n\n| #  | Brief | Phase | Depends on |\n|---|---|---|---|\n')
+  for (const [file, name] of [['31-base.md', 'Base'], ['32-fan.md', 'Fan'], ['33-solo.md', 'Solo']]) {
+    fs.writeFileSync(path.join(dir, 'docs/roadmap', file), '# ' + file.slice(0, 2) + ' — ' + name + '\n' + LANE_BRIEF)
+  }
+  for (const [file, fm] of Object.entries({ ...LANE_SPECS, ...extraSpecs })) {
+    const p = path.join(dir, 'specs', file)
+    fs.mkdirSync(path.dirname(p), { recursive: true })
+    fs.writeFileSync(p, '---\n' + fm + '\n---\n\n# spec\n')
+  }
+  if (queue) fs.writeFileSync(path.join(dir, '.git/spec-queue.json'), JSON.stringify({ version: 1, seq: 107, items: queue }))
+  if (ledgerSpec) writeRedLedger(dir, ledgerSpec)
+  const wt = dir + '-wt-06y'
+  git('worktree', 'add', '-q', '-b', 'spec/06-y', wt)
+  return { dir, wt, git }
+}
+
+test('AC-20261102-03-1: --lanes --json prints the admitted run lanes with branch and worktree, holds back the shared-brief spec with its reason, and resolves a top-ranked spec\'s linked worktree', () => {
+  const h = lanesHost()
+  const r = runNode(SCRIPT, ['--root', h.dir, '--lanes', '--json'])
+  assert.strictEqual(r.status, 0, '--lanes --json must be a mode of spec-status, or the fan-out has no machine surface for the lanes: ' + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.deepStrictEqual(Object.keys(out).sort(), ['fixes', 'lanes', 'serialized'], 'the mode prints exactly lanes, serialized and fixes, or a consumer reads a shape nobody pinned')
+  assert.deepStrictEqual(out.lanes.map(l => [l.path, l.brief, l.branch, l.worktree]), [
+    ['specs/20261102/03-x.md', '32', 'spec/03-x', null],
+    ['specs/20261102/04-z.md', '33', 'spec/04-z', null],
+  ], 'lanes must be the pairwise-admitted /spec:run entries with the spec/<stem> branch, or the fan-out dispatches the wrong set: ' + r.stdout)
+  assert.deepStrictEqual(Object.keys(out.lanes[0]).sort(), ['action', 'branch', 'brief', 'note', 'path', 'status', 'worktree'],
+    'a lane entry carries exactly the seven contract keys, or the driver reads a field that is not there')
+  assert.ok(out.lanes.every(l => l.action === '/spec:run'), 'every lane is a /spec:run entry, or a fix or plan lands in a worker slot')
+  assert.deepStrictEqual(out.serialized, [{ path: 'specs/20261102/06-y.md', brief: '32', reason: 'shared brief 32' }],
+    'the shared-brief spec must be held back with the clash reason, or the fan-out runs two specs on one brief at once: ' + r.stdout)
+
+  fs.writeFileSync(path.join(h.dir, 'specs/20261102/06-y.md'), '---\ndate: 2026-11-02\nstatus: implementing\nbrief: 32\n---\n\n# spec\n')
+  const top = JSON.parse(runNode(SCRIPT, ['--root', h.dir, '--lanes', '--json']).stdout)
+  const y = top.lanes.find(l => l.path === 'specs/20261102/06-y.md')
+  assert.ok(y, 'the in-flight spec ranks first and must be a lane: ' + JSON.stringify(top))
+  assert.strictEqual(y.worktree, h.wt, 'a lane whose branch lives in a linked worktree must name that path, or the parked lane is dispatched into a second worktree')
+  assert.strictEqual(y.branch, 'spec/06-y', 'the branch is spec/<stem> as merge-back derives it')
+})
+
+test('AC-20261102-03-2: --lanes --json lists the queued fix item with its queue id and the red-CI escape with a null queue id under fixes', () => {
+  const h = lanesHost({
+    extraSpecs: { '20261102/01-base.md': 'date: 2026-11-02\nstatus: done\nbrief: 31' },
+    ledgerSpec: 'specs/20261102/01-base.md',
+    queue: [
+      { id: 'q1', kind: 'brief', brief: '32', added: '2026-11-02T10:00:00Z' },
+      { id: 'q2', kind: 'brief', brief: '33', added: '2026-11-02T10:01:00Z' },
+      { id: 'q107', kind: 'prompt', lane: 'fix', payload: 'repair the flaky export', added: '2026-11-02T10:02:00Z' },
+    ],
+  })
+  const r = runNode(SCRIPT, ['--root', h.dir, '--lanes', '--json'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const out = JSON.parse(r.stdout)
+  const fixes = [...out.fixes].sort((a, b) => String(a.queue_id).localeCompare(String(b.queue_id)))
+  assert.strictEqual(fixes.length, 2, 'one queued fix and one CI escape must yield two fixes, or a fix lane is silently dropped: ' + r.stdout)
+  const q = fixes.find(f => f.queue_id === 'q107')
+  assert.ok(q && q.action === '/spec:fix q107' && q.path === null && q.note === 'queue item q107',
+    'the queued item must read {action "/spec:fix q107", path null, queue_id q107}: ' + JSON.stringify(fixes))
+  const ci = fixes.find(f => f.queue_id === null)
+  assert.ok(ci && ci.action === '/spec:fix' && ci.path === 'specs/20261102/01-base.md' && /CI red/.test(ci.note),
+    'the CI escape must read {action "/spec:fix", path the red spec, queue_id null}: ' + JSON.stringify(fixes))
+  assert.ok(out.lanes.every(l => l.action === '/spec:run'), 'a fix entry must never appear among the run lanes: ' + r.stdout)
+})
+
+test('AC-20261102-03-3: --lanes --json run from inside a linked worktree exits 2 naming the main worktree', () => {
+  const h = lanesHost()
+  const r = runNode(SCRIPT, ['--root', h.dir, '--lanes', '--json'], { cwd: h.wt })
+  assert.strictEqual(r.status, 2, 'the mode must refuse outside the main worktree, or a lane derives lanes from its own tree: ' + r.stdout)
+  assert.ok(r.stderr.includes('spec-status: --lanes runs from the main worktree — cd ' + h.dir),
+    'the refusal must name the main root as the remedy: ' + r.stderr)
+})
+
+test('AC-20261102-03-19: --next --json, --json and the bare dashboard keep their shapes and carry no lanes keys or branch and worktree fields', () => {
+  const h = lanesHost({
+    extraSpecs: { '20261102/01-base.md': 'date: 2026-11-02\nstatus: done\nbrief: 31' },
+    ledgerSpec: 'specs/20261102/01-base.md',
+    queue: [
+      { id: 'q1', kind: 'brief', brief: '32', added: '2026-11-02T10:00:00Z' },
+      { id: 'q2', kind: 'brief', brief: '33', added: '2026-11-02T10:01:00Z' },
+      { id: 'q107', kind: 'prompt', lane: 'fix', payload: 'repair the flaky export', added: '2026-11-02T10:02:00Z' },
+    ],
+  })
+  const next = runNode(SCRIPT, ['--root', h.dir, '--next', '--json'])
+  assert.strictEqual(next.status, 0, next.stderr)
+  const j = JSON.parse(next.stdout)
+  assert.deepStrictEqual(Object.keys(j), ['next'], '--next --json stays a single next array, or external readers break')
+  assert.deepStrictEqual(Object.keys(j.next[0]).sort(), ['action', 'blockers', 'brief', 'note', 'parallel', 'parallel_reason', 'path', 'status'],
+    'the first --next entry keeps exactly its eight keys and gains no branch or worktree key, or a frozen consumer sees a new field')
+  const full = runNode(SCRIPT, ['--root', h.dir, '--json'])
+  assert.strictEqual(full.status, 0, full.stderr)
+  const keys = Object.keys(JSON.parse(full.stdout))
+  for (const k of ['lanes', 'serialized', 'fixes']) assert.ok(!keys.includes(k), '--json must not gain the ' + k + ' key: ' + keys.join(','))
+  const bare = runNode(SCRIPT, ['--root', h.dir])
+  assert.strictEqual(bare.status, 0, bare.stderr)
+  assert.match(bare.stdout, /🎯 Next/, 'the bare dashboard still prints its Next block')
 })

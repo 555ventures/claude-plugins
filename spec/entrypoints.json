@@ -83,6 +83,11 @@
       "spec/scripts/spec-review-driver.js"
     ]
   },
+  "spec/scripts/fanout-driver.js": {
+    "entryPoints": [
+      "spec/commands/fanout.md"
+    ]
+  },
   "spec/scripts/fleet-reader.js": {
     "entryPoints": [
       "spec/doctrine/core.md",
@@ -123,7 +128,8 @@
       "spec/commands/doctor.md",
       "spec/scripts/spec-review-driver.js",
       "git/commands/enter-worktree.md",
-      "git/commands/merge.md"
+      "git/commands/merge.md",
+      "spec/scripts/fanout-driver.js"
     ]
   },
   "spec/scripts/mocks-driver.js": {
@@ -214,7 +220,8 @@
       "git/commands/merge.md",
       "git/commands/commit.md",
       "spec/doctrine/core.md",
-      "spec/commands/fix.md"
+      "spec/commands/fix.md",
+      "spec/scripts/fanout-driver.js"
     ]
   },
   "spec/scripts/review-legs.js": {
@@ -255,13 +262,15 @@
       "spec/doctrine/core.md",
       "spec/commands/release.md",
       "spec/scripts/spec-build-driver.js",
-      "spec/scripts/spec-review-driver.js"
+      "spec/scripts/spec-review-driver.js",
+      "spec/scripts/fanout-driver.js"
     ]
   },
   "spec/scripts/spec-review-driver.js": {
     "entryPoints": [
       "spec/doctrine/stages/stage-review.md",
-      "spec/commands/run.md"
+      "spec/commands/run.md",
+      "spec/scripts/fanout-driver.js"
     ]
   },
   "spec/scripts/spec-session-stamp.sh": {
@@ -286,7 +295,8 @@
       "spec/scripts/spec-review-driver.js",
       "spec/scripts/spec-build-driver.js",
       "spec/doctrine/core.md",
-      "spec/commands/fix.md"
+      "spec/commands/fix.md",
+      "spec/scripts/fanout-driver.js"
     ]
   },
   "spec/scripts/coverage-scope.js": {

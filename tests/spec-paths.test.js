@@ -140,7 +140,7 @@ test('AC-20260926-03-8: every documented key resolves to an existing path (AC-20
   for (const key of ['root', 'workflows', 'wf-enforce',
     'wf-research', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
-    'review-driver', 'build-driver', 'promise-sweep', 'red-check',
+    'review-driver', 'build-driver', 'fanout-driver', 'promise-sweep', 'red-check',
     'registry-check', 'genesis-driver', 'escape-row', 'mocks-driver', 'commit-coverage',
     'worktree-include', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract',
     'design-contract-check', 'design-rules-template', 'workspace-scan',
@@ -610,7 +610,7 @@ test('shared-for init: scoped (not fail-open) and strictly smaller than the whol
 // exists to find zero occurrences of elsewhere.
 const RUN_DESIGN_KEY = 'run-' + 'design'
 
-test('shared-for: every scoped command serves § Session Execution (AC-20260926-01-5; AC-20260928-01-2 adds prototype), and the scoped roster has exactly 13 members (AC-20261008-01-1: connect joins; /spec:fix joins; AC-20261024-05-3: replay leaves; AC-20261025-01-6: escape leaves) with neither sketch nor the design-only-delta key among them', () => {
+test('shared-for: every scoped command serves § Session Execution (AC-20260926-01-5; AC-20260928-01-2 adds prototype), and the scoped roster has exactly 14 members (AC-20261008-01-1: connect joins; /spec:fix joins; AC-20261024-05-3: replay leaves; AC-20261025-01-6: escape leaves; spec 20261102/03 D11: fanout joins) with neither sketch nor the design-only-delta key among them', () => {
   const src = read('spec/bin/spec-paths')
   const cmds = [...src.matchAll(/^\s+([a-z-]+)\)\s+SECTIONS="/gm)].map(m => m[1])
   assert.ok(!cmds.includes('sketch'),
@@ -619,8 +619,8 @@ test('shared-for: every scoped command serves § Session Execution (AC-20260926-
   assert.ok(!cmds.includes(RUN_DESIGN_KEY),
     'AC-20260926-01-5/D1: the scoped roster must not include the design-only-delta key — its ' +
     'SECTIONS arm is deleted, falling open to the whole doctrine like every unknown command: ' + cmds.join(','))
-  assert.strictEqual(cmds.length, 13,
-    'AC-20260926-01-5 + AC-20260928-01-2: with the sketch and design-only-delta arms deleted and the prototype arm added, exactly 13 scoped (connect joins, AC-20261008-01-1; fix joins, spec/commands/fix.md; replay leaves, AC-20261024-05-3; escape leaves, AC-20261025-01-6) ' +
+  assert.strictEqual(cmds.length, 14,
+    'AC-20260926-01-5 + AC-20260928-01-2: with the sketch and design-only-delta arms deleted and the prototype arm added, exactly 14 scoped (connect joins, AC-20261008-01-1; fix joins, spec/commands/fix.md; replay leaves, AC-20261024-05-3; escape leaves, AC-20261025-01-6; fanout joins, specs/20261102/03-one-session-runs-the-lanes.md D11) ' +
     'command arms (A1, executed at lock) — got ' + cmds.length + ': ' + cmds.join(','))
   assert.ok(cmds.includes('fix'),
     'spec/commands/fix.md: the scoped roster must include "fix" — otherwise /spec:fix loads both whole doctrine files instead of its nine sections')

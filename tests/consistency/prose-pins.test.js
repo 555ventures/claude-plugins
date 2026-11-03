@@ -65,3 +65,22 @@ test('fix.md names the three delegated question kinds it writes', () => {
     assert.ok(fix.includes(kind), 'fix.md must name kind ' + kind + ', or a parent cannot match its standing answers to that ask')
   }
 })
+
+// specs/20261102/03-one-session-runs-the-lanes.md D11 — the fanout command keeps the driver key,
+// the flags and the two never-lines, and its section list serves the contracts it relies on.
+
+test('fanout.md names the driver key, the three flags and the two never-lines, and the fanout section list in spec-paths serves its contracts', () => {
+  const fanout = whole('spec/commands/fanout.md')
+  assert.match(fanout, phrase('spec-paths fanout-driver'), 'fanout.md must resolve the driver through its spec-paths key, or the command runs a wrong path silently')
+  for (const flag of ['--lanes', '--include-fixes', '--override-serial']) {
+    assert.ok(fanout.includes(flag), 'fanout.md must name ' + flag + ', or the session cannot pass the user\'s cap or overrides on')
+  }
+  assert.match(fanout, phrase("never answer a lane's question yourself", 'i'), 'without the first never-line the session answers a worker\'s question and the user\'s decision is taken from them')
+  assert.match(fanout, phrase("never run a lane's driver except the MERGE step", 'i'), 'without the second never-line the session drives a lane the worker still owns')
+  const paths = whole('spec/bin/spec-paths')
+  const line = paths.split('\n').find((l) => /^\s+fanout\)\s+SECTIONS=/.test(l))
+  assert.ok(line, 'spec-paths must carry a fanout section list, or the command reads no doctrine')
+  for (const sec of ['Host Grounding', 'Pipeline Entry', 'State Machine', 'Model Placement', 'Decisions', 'Delegated Stops', 'Question Style', 'Console Output Style', 'On-Disk Handoff', 'Session Execution']) {
+    assert.ok(line.includes(sec), 'the fanout section list must serve ' + sec + ', or the session never reads it')
+  }
+})

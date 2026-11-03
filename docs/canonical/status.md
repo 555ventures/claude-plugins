@@ -37,3 +37,5 @@ The dashboard prints one line directly under the 🗺️ Roadmap block —
 `design/mocks/ledger.md` via `lib/mocks-ledger.js`; the line is omitted when the ledger is
 absent, unparsable, or holds zero catches. Render only: the `--json` and `--next --json` shapes
 are unchanged (specs/20260902/11-brief-from-approved-set.md).
+
+`--lanes --json` is a third machine mode beside `--next --json` and `--json`: `{lanes, serialized, fixes}` — the admitted `/spec:run` lanes with their `spec/<stem>` branch and the linked worktree holding it (or null), the entries held back with their reason, and the `/spec:fix` escapes and queued fixes with their queue id. Refused outside the main worktree. Consumed by `/spec:fanout`'s driver; the two older shapes are unchanged. (specs/20261102/03-one-session-runs-the-lanes.md)

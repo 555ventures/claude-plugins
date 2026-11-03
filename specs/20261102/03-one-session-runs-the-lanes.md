@@ -1,6 +1,6 @@
 ---
 date: 2026-11-02
-status: hardened
+status: implementing
 tier: critical
 area: fanout
 breaking: false
@@ -8,6 +8,7 @@ depends_on: [specs/20261102/02-a-delegated-driver-stops-on-disk.md]
 brief: 32
 spiked: 2026-11-02
 open_markers: 0
+diff_base: e4dd870f43257bd6e88d86b525ca7ea01c22768b
 ---
 
 # One session runs the lanes
@@ -192,7 +193,7 @@ not merged, a lane id that is not in the table) — stderr names the remedy.
   `shared brief 32` but never an entry whose reason starts `brief 32 depends on`; with `--include-fixes`
   SHALL append lanes `F1` (`fix/q107`) and `F2` (`fix/ci-<sha7>`) with `kind: "fix"`
   → writes tests/fanout/fanout-driver.test.js
-- **AC-20261102-03-21**: WHEN PLAN runs with `--spec specs/…/04-z.md --spec specs/…/03-x.md --spec specs/…/06-y.md --spec specs/…/nope.md` on the AC-1 host THE SYSTEM SHALL admit exactly `L1 = 04-z`, `L2 = 03-x` in that order, print `⛔ specs/…/06-y.md — shared brief 32` and `⛔ specs/…/nope.md — not a startable lane`, record `options.specs` as the four paths given, and with `--spec specs/…/06-y.md --override-serial` SHALL admit `06-y`
+- **AC-20261102-03-21**: WHEN PLAN runs with `--spec specs/…/04-z.md --spec specs/…/03-x.md --spec specs/…/06-y.md --spec specs/…/nope.md` on the AC-1 host THE SYSTEM SHALL admit exactly `L1 = 04-z`, `L2 = 03-x` in that order, table `06-y` `waiting` with `waitingOn: "shared brief 32"` (D4), print `⛔ specs/…/nope.md — not a startable lane`, record `options.specs` as the four paths given, and with `--spec specs/…/06-y.md --override-serial` SHALL admit `06-y`
   → writes tests/fanout/fanout-driver.test.js
 - **AC-20261102-03-22**: WHEN PLAN runs with `--spec specs/…/03-x.md --spec specs/…/06-y.md` (same brief) THE SYSTEM SHALL table `L1 = 03-x` `planned` and `L2 = 06-y` `waiting` with `waitingOn: "shared brief 32"`; after `L1` reaches `merged` (fixture merge, gate green) `--mark merged --lane L1` SHALL flip `L2` to `planned` and the next bare run SHALL print `## Step: dispatch 1 lanes` naming `06-y`; and when instead `L1` is marked `returned --stopped "worker gone"` the next bare run SHALL print `## Step: report` with the bullet `specs/…/06-y.md: not started — waited on specs/…/03-x.md, which stopped`
   → writes tests/fanout/fanout-driver.test.js

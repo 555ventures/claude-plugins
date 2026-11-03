@@ -43,7 +43,7 @@
 // and one validator of the config's optional `policy` block. `policy` deep-merges a host's partial
 // block over the defaults and drops unknown keys; `validatePolicy` is what `init-gen.js generate` and `policy-check` refuse or report with. Neither
 // writes anything, and no reader of a key lives here (the commands that read them are spec 09's) —
-// except `agentCall(root, seat, subagentType)`, the one writer of a printed `Agent {…}` dispatch:
+// except `agentCall(root, seat, subagentType[, {isolation, background}])`, the one writer of a printed `Agent {…}` dispatch:
 // every driver line that dispatches a policy seat is built by it, so none can print without one.
 //
 // `readPipelineRules(root, cfg)` is the one resolver and reader of the file the config's
@@ -121,7 +121,7 @@ const POLICY_ENUMS = Object.freeze({
   reviewService: Object.freeze(['terminal', 'hosted']),
 })
 const POLICY_BOOLEANS = Object.freeze(['worktreePerSpec', 'directLaneToMain', 'ledgerCommitted'])
-const POLICY_SEATS = Object.freeze(['workers', 'reviewer', 'disposer'])
+const POLICY_SEATS = Object.freeze(['workers', 'reviewer', 'disposer', 'lanes'])
 const POLICY_MODELS = Object.freeze(['fable', 'opus', 'sonnet', 'haiku'])
 const POLICY_EFFORTS = Object.freeze(['low', 'medium', 'high', 'xhigh', 'max'])
 
@@ -137,6 +137,7 @@ const POLICY_DEFAULTS = Object.freeze({
     workers: seat('sonnet', 'medium'),
     reviewer: seat('fable', 'low'),
     disposer: seat('opus', 'medium'),
+    lanes: seat('opus', 'medium'),
   }),
   riskTiers: Object.freeze([]),
 })
@@ -164,10 +165,13 @@ function mergePolicy(raw) {
 function policy(root) { return mergePolicy(readConfig(root).policy) }
 
 // `Agent {subagent_type: "<t>", model: <m>, effort: <e>}` (subagent_type omitted when absent) for a
-// policy seat, read from the host's policy at print time.
-function agentCall(root, seatName, subagentType) {
+// policy seat, read from the host's policy at print time. The optional fourth argument
+// `{isolation, background}` renders `, isolation: "<v>"` and `, run_in_background: true` after effort.
+function agentCall(root, seatName, subagentType, extra) {
   const s = policy(root).models[seatName]
-  return `Agent {${subagentType ? `subagent_type: "${subagentType}", ` : ''}model: ${s.model}, effort: ${s.effort}}`
+  const x = extra || {}
+  const tail = (x.isolation ? `, isolation: "${x.isolation}"` : '') + (x.background ? ', run_in_background: true' : '')
+  return `Agent {${subagentType ? `subagent_type: "${subagentType}", ` : ''}model: ${s.model}, effort: ${s.effort}${tail}}`
 }
 
 // [] or one finding string per defect. A partial block is valid (absent keys take defaults).

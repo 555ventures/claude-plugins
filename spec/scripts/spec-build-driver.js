@@ -1042,6 +1042,12 @@ function handleEscalateChoice() {
   if (!['re-arm', 'cold', 'park', 'amend'].includes(choice)) {
     die('--mark escalate-choice needs one of re-arm | cold | park | amend (got ' + JSON.stringify(choice) + ')')
   }
+  // A veto of a derived re-arm arrives at REPAIR (the pick deleted gate-cap): restore the cap so the
+  // choice lands exactly what the explicit mark lands from ESCALATE.
+  if (deriveState() === 'REPAIR') {
+    fs.mkdirSync(sidecarDir, { recursive: true })
+    fs.writeFileSync(gateCapPath, '')
+  }
   if (choice === 're-arm') {
     fs.rmSync(gateCapPath, { force: true })
     delete marks.escalateChoice
@@ -1211,7 +1217,9 @@ const MARK_STATE = {
   'wave-done': (s) => s.startsWith('WAVE:'),   // the label match stays in handleWaveDone (AC-6's message)
   'integrated': (s) => s === 'INTEGRATION',
   'repair-applied': (s) => s === 'REPAIR',
-  'escalate-choice': (s) => s === 'ESCALATE',
+  // REPAIR admits it only inside the window a derived re-arm pick opens (escalateChoice 're-arm'
+  // survives until repair-applied clears it; an explicit re-arm deletes it).
+  'escalate-choice': (s) => s === 'ESCALATE' || (s === 'REPAIR' && marks.escalateChoice === 're-arm' && !!marks.capEverTripped),
   'committed': (s) => s === 'COMMIT',
   'incident': (s) => s !== 'DONE',   // any live step — an incident has no state of its own
   'replayed': (s) => s === 'REPLAY',

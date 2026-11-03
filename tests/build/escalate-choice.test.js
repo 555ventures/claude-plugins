@@ -175,3 +175,16 @@ test('AC-20261103-04-10: an in-session critical-tier unsanctioned-green on a def
     'the known-cause fix must be announced on the critical tier too: ' + step)
   assert.doesNotMatch(step, /AskUserQuestion/, 'a default host must not be asked the red-findings stop: ' + step)
 })
+
+test('AC-20261103-04-6: after a default host auto-picks re-arm, the printed override mark escalate-choice park is admitted and lands the explicit park state', () => {
+  const { host } = escalatedHost(['Failed: 20', 'Failed: 9', 'Failed: 4', 'Failed: 2'], 'Failed:\\s+(\\d+)')
+  const step = run(host.root, host.spec).stdout
+  assert.ok(step.includes('📌 Auto-picked re-arm one more round') && step.includes('--mark escalate-choice <re-arm|cold|park|amend>'),
+    'setup precondition: the bare run must print the re-arm pick and the override mark: ' + step)
+  const m = run(host.root, host.spec, '--mark', 'escalate-choice', 'park')
+  assert.strictEqual(m.status, 0, 'the printed veto mark must be admitted after the auto-pick, or the owner cannot answer differently: ' + m.stdout + m.stderr)
+  const state = readBuildState(host)
+  assert.strictEqual(state.escalateChoice, 'park', 'the vetoing mark must replace the derived re-arm with park: ' + JSON.stringify(state))
+  assert.ok(state.laneExit && state.laneExit.reason === 'build parked at the repair cap',
+    'a vetoed-to-park lane must record why it ended like the explicit park mark: ' + JSON.stringify(state.laneExit))
+})

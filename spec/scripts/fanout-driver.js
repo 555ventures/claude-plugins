@@ -3,7 +3,7 @@
 // fanout-driver.js [--root <dir>] [--spec <path>]… [--lanes N] [--include-fixes] [--override-serial] [--ask <key>]… [--state]
 // fanout-driver.js --root <dir> --mark <planned|dispatched|returned|answered|dismissed|resumed|merged|gate-repaired|reported> [flags]
 //
-// Owner: specs/20261103/04-predictable-stops-become-host-policy.md — the driver behind
+// Owner: specs/20261102/03-one-session-runs-the-lanes.md — the driver behind
 // /spec:fanout: one session dispatches a worktree-isolated sub-agent per lane, relays the questions
 // the lanes write, merges each finished lane one at a time with the host gate re-run on main, and
 // renders one report. State lives in <git-common-dir>/spec-fanout.json; every step is re-derived

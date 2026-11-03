@@ -245,15 +245,13 @@ test('AC-20260904-01-1: spec-paths commit-coverage resolves to spec/scripts/comm
 // `shared-mocks` key resolving to the new spec/doctrine/mocks.md, the way `shared-design` and
 // `shared-genesis` resolve their own doctrine files — a missing key breaks any command that
 // resolves it silently (§ Risk Tiers, spec-paths).
-test('AC-20260902-06-9: spec-paths shared-mocks resolves to an existing spec/doctrine/mocks.md carrying a Provenance Ledger heading', () => {
+test('AC-20260902-06-9: spec-paths shared-mocks resolves to an existing spec/doctrine/mocks.md', () => {
   const fs = require('node:fs')
   const mocksPath = run('shared-mocks').trim()
   assert.ok(mocksPath.endsWith('spec/doctrine/mocks.md'),
     'D7: `spec-paths shared-mocks` must print an absolute path ending in spec/doctrine/mocks.md, not resolve to some other doctrine file or an empty usage line: ' + mocksPath)
   assert.ok(path.isAbsolute(mocksPath), 'the printed path must be absolute — a relative path breaks callers invoked from a different cwd: ' + mocksPath)
   assert.ok(fs.existsSync(mocksPath), 'the resolved mocks.md path must actually exist on disk, or every command that resolves it silently gets nothing: ' + mocksPath)
-  assert.match(read('spec/doctrine/mocks.md'), /^## Provenance Ledger$/m,
-    'D7: mocks.md must carry a "## Provenance Ledger" heading — the section spec 07\'s driver and the ledger grammar doctrine live under')
 })
 
 // specs/20260902/06-mocks-provenance-ledger.md AC-20260902-06-10: the zero-argument default is a

@@ -135,7 +135,6 @@
   "spec/scripts/mocks-driver.js": {
     "entryPoints": [
       "spec/commands/mocks.md",
-      "spec/templates/mocks-ledger.md",
       "spec/templates/mocks-seed.md",
       "spec/scripts/pictures.js"
     ]

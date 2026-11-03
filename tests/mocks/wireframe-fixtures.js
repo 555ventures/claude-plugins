@@ -49,24 +49,6 @@ function writeSeed(root, opts) {
   fs.writeFileSync(path.join(root, 'design/mocks/seed.md'), seedText(opts))
 }
 
-// ---- the ledger -----------------------------------------------------------------------------
-
-function writeLedger(root, rows = []) {
-  fs.mkdirSync(path.join(root, 'design/mocks'), { recursive: true })
-  fs.writeFileSync(path.join(root, 'design/mocks/ledger.md'),
-    '# Provenance ledger — Hearwell\n\n## Assumptions\n\n' +
-    '| id | step | kind | claim | tag | status | rejected | dependents | note |\n' +
-    '| - | - | - | - | - | - | - | - | - |\n' +
-    rows.map((r) => r + '\n').join('') +
-    '\n## Misunderstandings\n\n| id | what | step | cost | note |\n| - | - | - | - | - |\n')
-}
-
-const BLOCKING_ROW = '| A1 | SCREENS | product | x | invented | open | - | - | - |'
-
-function readLedger(root) {
-  return fs.readFileSync(path.join(root, 'design/mocks/ledger.md'), 'utf8')
-}
-
 // ---- the status file ------------------------------------------------------------------------
 
 function defaultStatus(over = {}) {
@@ -103,7 +85,6 @@ function makeRoot(opts = {}) {
   else if (typeof opts.block === 'string' && /^https?:/.test(opts.block)) walk.writeConfig(root, walk.block(opts.block))
   else if (opts.block !== undefined && opts.block !== null) walk.writeConfig(root, opts.block)
   if (opts.seed !== false) writeSeed(root, opts.seed)
-  if (opts.ledger !== false) writeLedger(root, opts.rows)
   return root
 }
 
@@ -212,8 +193,8 @@ function sharedMocks(name) {
 function filesUnder(dir) { return fs.existsSync(dir) ? walk.allFiles(dir) : [] }
 
 module.exports = {
-  DRIVER, TOKEN, H_OWNER, H_OWNER_EDITED, H_TEAM, PERSONA, T, DIGEST, BLOCKING_ROW, KEY,
-  seedText, writeSeed, writeLedger, readLedger, defaultStatus, statusPath, writeStatus, readStatus, journeyEntry,
+  DRIVER, TOKEN, H_OWNER, H_OWNER_EDITED, H_TEAM, PERSONA, T, DIGEST, KEY,
+  seedText, writeSeed, defaultStatus, statusPath, writeStatus, readStatus, journeyEntry,
   makeRoot, fixtureScreens, screenFile, screensDir, writeScreens, readScreen, editScreen,
   roundDir, writeRound, note, journeyThread, approval, writeNotesFile,
   notesAnswer, approvalsAnswer, pushedAnswer, markedAnswer, startStub, runDriver, runDriverIn, sharedMocks, filesUnder,

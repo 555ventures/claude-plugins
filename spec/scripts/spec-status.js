@@ -106,10 +106,6 @@ const {
 // corrupting an unspaced value like `source_url: https://x/p#frag` — the sole shared derivation
 // strips only a whitespace-preceded "#", per YAML unquoted-scalar semantics.
 const { fmMap } = require('./lib/frontmatter')
-// The 🧭 misunderstandings line reads
-// design/mocks/ledger.md through this lib the same way genesis-driver.js's BRIEF precondition
-// check does — never a second ledger parser.
-const mocksLedgerLib = require('./lib/mocks-ledger')
 
 // Brief ids are NN plus an optional letter suffix — ad-hoc briefs slot between neighbors
 // as 04a, 04b, … Normalize any spelling (4b, 04B, 04b-auth) to the canonical zero-padded
@@ -875,23 +871,6 @@ const waitClause = n => `${n} more open`
     const lw = Math.max(...rows.map(r => r.label.length))
     const pw = Math.max(...rows.map(r => r.phase.length))
     for (const r of rows) out.push(`   ${r.icon} ${r.label.padEnd(lw)}  ${r.phase.padEnd(pw)}  ${r.tail}`)
-  }
-
-  // 🧭 misunderstandings — a render-only pipeline-record line read from
-  // design/mocks/ledger.md's own Misunderstandings table (spec 06's grammar), directly under
-  // 🗺️ Roadmap and ahead of 📡 Observation. Any absence or read/parse failure omits the line
-  // silently (Behavior: "a viewer, never a verdict") — never a second derivation surfaced via
-  // --json, which stays byte-for-byte unchanged.
-  {
-    let ledgerText = null
-    try { ledgerText = fs.readFileSync(path.join(root, 'design/mocks/ledger.md'), 'utf8') } catch (e) { ledgerText = null }
-    if (ledgerText !== null) {
-      const ledger = mocksLedgerLib.parseLedger(ledgerText)
-      if (!ledger.errors.length && ledger.catches.length) {
-        const latest = ledger.catches[ledger.catches.length - 1]
-        out.push(`   🧭 misunderstandings: ${ledger.catches.length} caught before build (latest ${latest.id} at ${latest.step})`)
-      }
-    }
   }
 
   // Every open-work row is exactly one line. A queued free-text item's payload runs to

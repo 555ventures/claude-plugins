@@ -143,7 +143,7 @@ gate's own proof that nothing dangles.
 - **AC-20260914-03-4**: WHEN every file under `spec/`, `README.md` and `docs/canonical/` is scanned with the D6 boundary regex THE SYSTEM SHALL report zero occurrences of each D6 literal (e.g. `spec/commands/mocks.md` containing `design-atlas.js check` → one finding naming the file and literal; the post-change tree → none) → writes tests/consistency/atlas-retired.test.js
 - **AC-20260914-03-5**: WHEN `spec-paths shared-mocks` runs THE SYSTEM SHALL CONTINUE TO resolve to `spec/doctrine/mocks.md` carrying a `## Provenance Ledger` heading → reuses tests/spec-paths.test.js :: AC-20260902-06-9
 - **AC-20260914-03-6**: WHEN the repository tree is listed THE SYSTEM SHALL contain none of the paths the File Plan marks DELETE (the list generated from this File Plan at build) and SHALL still contain `spec/scripts/lib/mocks-ledger.js`, `spec/scripts/lib/surfaces.js`, `spec/templates/mocks-ledger.md`, `spec/templates/mocks-seed.md`, `spec/templates/mock/contract.json` → writes tests/consistency/atlas-retired.test.js
-- **AC-20260914-03-7**: WHEN `spec-status.js` runs on a root whose `design/mocks/ledger.md` carries catches THE SYSTEM SHALL CONTINUE TO print the 🧭 misunderstandings line → reuses tests/spec-status.test.js :: AC-20260902-11-6
+- **AC-20260914-03-7**: WHEN `spec-status.js` runs on a root whose `design/mocks/ledger.md` carries catches THE SYSTEM SHALL CONTINUE TO print the 🧭 misunderstandings line → reuses tests/spec-status.test.js :: AC-20260902-11-6 [retired: specs/20261103/02-ceremony-nothing-reads.md]
 
 ## Assumptions (escalation triggers)
 

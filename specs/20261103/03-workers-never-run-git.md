@@ -27,32 +27,32 @@ in a test, and § Worker Git Ban points at the script as its enforcer.
 
 | ID | Decision | One-line rationale |
 |----|----------|--------------------|
-| D1 | A new PreToolUse hook `spec/scripts/block-worker-git.sh`, matcher `Bash`, reads the hook JSON on stdin and exits 2 with a `BLOCKED:` stderr when (a) the private git dir of the payload's `cwd` tree carries the `spec-wave-open` marker and (b) the command contains a git invocation whose verb is outside the read-only allowlist (D3); every other case exits 0 — no marker, cwd outside any repo, no git invocation, `jq` absent (AC-20261103-01-1, AC-20261103-01-2, AC-20261103-01-3, AC-20261103-01-4) `[guards: Hook surfaces (process boundary)]` | Same shape as `block-cross-worktree-writes.sh`: topology-based, fail-open outside its one condition, so it is inert for every ordinary session in every host and bites only inside an open build wave. |
-| D2 | The signal is the file `spec-wave-open` in the tree's PRIVATE git dir (`git rev-parse --git-dir`, absolutized), content `{"spec":"<repo-relative spec path>","state":"<state>"}`. `spec-build-driver.js` syncs it on every step-print and every `--mark` invocation — written when the derived state is `TESTS`, `RED_FINDINGS`, `RED_ATTRIBUTION`, `WAVE:<label>` or `REPAIR`; removed when it exists at any other state (`INTEGRATION`, `COMMIT`, `REPLAY`, `ESCALATE`, terminal). `--state` stays pure and never touches it. The driver header's "what it does NOT do" gains one line: the marker is a file write into the private git dir, not a git operation (AC-20261103-01-5, AC-20261103-01-6, AC-20261103-01-7) | Mirrors core § Delegated Stops: a worker-dispatching step is a plugin-owned fact. Rejected: the hook payload's `agent_type` field — a fan-out lane is also a sub-agent and legitimately commits, the field's presence depends on the harness version (a guard that silently never fires is the authored ≠ activated failure), and the ban's reason (sibling workers' uncommitted edits) binds anyone in the tree mid-wave. Rejected: any environment variable (core § Delegated Stops). |
-| D3 | Verb policy is an allowlist of read-only verbs — `status diff log show rev-parse ls-files ls-tree blame grep describe cat-file name-rev shortlog rev-list merge-base show-ref diff-tree version help`; every other verb is refused, which covers the doctrine's seven (`checkout stash restore reset clean add commit`) and `switch merge rebase push worktree branch` without listing them. Git global options before the verb (`-C <path>`, `-c <k=v>`, `--<flag>[=value]`) are skipped by the extraction grammar in Contracts (AC-20261103-01-2, AC-20261103-01-3) `[guards: Hook surfaces (process boundary)]` | core says "never run git"; the seven are examples, not the rule. A denylist of the seven lets `git switch` (checkout's 2019 split), `merge` and `rebase` through. Reads stay allowed because a worker's scoped self-verification legitimately runs `git diff`/`git status`. |
-| D4 | The block message is `BLOCKED: git <verb> during <state> of <spec> — implementation workers never run git (core § Worker Git Ban); the orchestrator commits at the checkpoint step after this step closes.` followed by `  agent: <agent_type or "session">` and `  stale marker (no build running)? the driver clears it on its next step-print: node <driver path> <spec>` (AC-20261103-01-1) | Host Worker Rules: every error names its remedy. The spec path and state come from the marker, so a stale marker is diagnosable from the message alone. |
-| D5 | core.md § Worker Git Ban is rewritten to: "Implementation workers never run git. Reads (`status`/`diff`/`log` and the other read-only verbs) pass; every writing verb — `checkout`/`switch`/`stash`/`restore`/`reset`/`clean`/`add`/`commit` and the rest — is refused while a worker-dispatching build step is open. Enforced by `block-worker-git.sh` — its header comment is the contract. The orchestrator owns all git and checkpoint-commits after each green phase." (AC-20261103-01-8) | core § Doctrine Authoring: the rule keeps one binding home and now points at its script like the other enforced sections; the prose in grounding-contract.md and stage-build.md is untouched (both are pointers or the worker's own contract text). |
-| D6 | `spec/hooks/hooks.json` gains one PreToolUse entry, matcher `Bash`, command `"${CLAUDE_PLUGIN_ROOT}"/scripts/block-worker-git.sh`, `statusMessage` "Checking worker git ban"; `tests/consistency/red-fixture-coverage.test.js`'s `HOOK_HANDLERS` gains the matching handler (planted marker + `git commit` → 2 with `BLOCKED:`; control `git status` → 0) because that meta-test fails closed on any wired script without a handler (AC-20261103-01-9) | The hook is wired the same way as the four existing ones; the fixture handler is the Falsifiability leg — the guard is tripped on purpose in the suite. |
+| D1 | A new PreToolUse hook `spec/scripts/block-worker-git.sh`, matcher `Bash`, reads the hook JSON on stdin and exits 2 with a `BLOCKED:` stderr when (a) the private git dir of the payload's `cwd` tree carries the `spec-wave-open` marker and (b) the command contains a git invocation whose verb is outside the read-only allowlist (D3); every other case exits 0 — no marker, cwd outside any repo, no git invocation, `jq` absent (AC-20261103-03-1, AC-20261103-03-2, AC-20261103-03-3, AC-20261103-03-4) `[guards: Hook surfaces (process boundary)]` | Same shape as `block-cross-worktree-writes.sh`: topology-based, fail-open outside its one condition, so it is inert for every ordinary session in every host and bites only inside an open build wave. |
+| D2 | The signal is the file `spec-wave-open` in the tree's PRIVATE git dir (`git rev-parse --git-dir`, absolutized), content `{"spec":"<repo-relative spec path>","state":"<state>"}`. `spec-build-driver.js` syncs it on every step-print and every `--mark` invocation — written when the derived state is `TESTS`, `RED_FINDINGS`, `RED_ATTRIBUTION`, `WAVE:<label>` or `REPAIR`; removed when it exists at any other state (`INTEGRATION`, `COMMIT`, `REPLAY`, `ESCALATE`, terminal). `--state` stays pure and never touches it. The driver header's "what it does NOT do" gains one line: the marker is a file write into the private git dir, not a git operation (AC-20261103-03-5, AC-20261103-03-6, AC-20261103-03-7) | Mirrors core § Delegated Stops: a worker-dispatching step is a plugin-owned fact. Rejected: the hook payload's `agent_type` field — a fan-out lane is also a sub-agent and legitimately commits, the field's presence depends on the harness version (a guard that silently never fires is the authored ≠ activated failure), and the ban's reason (sibling workers' uncommitted edits) binds anyone in the tree mid-wave. Rejected: any environment variable (core § Delegated Stops). |
+| D3 | Verb policy is an allowlist of read-only verbs — `status diff log show rev-parse ls-files ls-tree blame grep describe cat-file name-rev shortlog rev-list merge-base show-ref diff-tree version help`; every other verb is refused, which covers the doctrine's seven (`checkout stash restore reset clean add commit`) and `switch merge rebase push worktree branch` without listing them. Git global options before the verb (`-C <path>`, `-c <k=v>`, `--<flag>[=value]`) are skipped by the extraction grammar in Contracts (AC-20261103-03-2, AC-20261103-03-3) `[guards: Hook surfaces (process boundary)]` | core says "never run git"; the seven are examples, not the rule. A denylist of the seven lets `git switch` (checkout's 2019 split), `merge` and `rebase` through. Reads stay allowed because a worker's scoped self-verification legitimately runs `git diff`/`git status`. |
+| D4 | The block message is `BLOCKED: git <verb> during <state> of <spec> — implementation workers never run git (core § Worker Git Ban); the orchestrator commits at the checkpoint step after this step closes.` followed by `  agent: <agent_type or "session">` and `  stale marker (no build running)? the driver clears it on its next step-print: node <driver path> <spec>` (AC-20261103-03-1) | Host Worker Rules: every error names its remedy. The spec path and state come from the marker, so a stale marker is diagnosable from the message alone. |
+| D5 | core.md § Worker Git Ban is rewritten to: "Implementation workers never run git. Reads (`status`/`diff`/`log` and the other read-only verbs) pass; every writing verb — `checkout`/`switch`/`stash`/`restore`/`reset`/`clean`/`add`/`commit` and the rest — is refused while a worker-dispatching build step is open. Enforced by `block-worker-git.sh` — its header comment is the contract. The orchestrator owns all git and checkpoint-commits after each green phase." (AC-20261103-03-8) | core § Doctrine Authoring: the rule keeps one binding home and now points at its script like the other enforced sections; the prose in grounding-contract.md and stage-build.md is untouched (both are pointers or the worker's own contract text). |
+| D6 | `spec/hooks/hooks.json` gains one PreToolUse entry, matcher `Bash`, command `"${CLAUDE_PLUGIN_ROOT}"/scripts/block-worker-git.sh`, `statusMessage` "Checking worker git ban"; `tests/consistency/red-fixture-coverage.test.js`'s `HOOK_HANDLERS` gains the matching handler (planted marker + `git commit` → 2 with `BLOCKED:`; control `git status` → 0) because that meta-test fails closed on any wired script without a handler (AC-20261103-03-9) | The hook is wired the same way as the four existing ones; the fixture handler is the Falsifiability leg — the guard is tripped on purpose in the suite. |
 | D7 | `.claude/rules/spec-pipeline.md` § Risk Tiers hook-surfaces list gains `spec/scripts/block-worker-git.sh` `[no-ac: this repo's own grounding prose, no testable surface]` | A broken hook blocks every Bash call in every host; the list is what makes a future edit to it critical tier. |
 | D8 | `spec/.claude-plugin/plugin.json` is bumped via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` `[no-ac: plugin-bump.js --check in the gate is the oracle]` | Host Planning rules: the description is the changelog surface; no version literal in a spec. |
-| D9 | Two regression pins: the cross-worktree write hook still blocks a write into another working tree (AC-20261103-01-10), and `isDelegated` still reads only the `spec-delegated` marker and the fan-out table (AC-20261103-01-11) | hooks.json is shared by every hook, and the new marker sits beside the lane marker in the same private git dir — both neighbours must demonstrably not move. |
+| D9 | Two regression pins: the cross-worktree write hook still blocks a write into another working tree (AC-20261103-03-10), and `isDelegated` still reads only the `spec-delegated` marker and the fan-out table (AC-20261103-03-11) | hooks.json is shared by every hook, and the new marker sits beside the lane marker in the same private git dir — both neighbours must demonstrably not move. |
 
 ## File Plan
 
 | Path | Action | Layer | Summary |
 |------|--------|-------|---------|
-| spec/scripts/block-worker-git.sh | CREATE | scripts | PreToolUse `Bash` guard (D1, D3, D4); header comment is the contract: usage, owner `specs/20261103/01-workers-never-run-git.md`, what it does NOT do, `Exit codes: 0 allow · 2 block` |
+| spec/scripts/block-worker-git.sh | CREATE | scripts | PreToolUse `Bash` guard (D1, D3, D4); header comment is the contract: usage, owner `specs/20261103/03-workers-never-run-git.md`, what it does NOT do, `Exit codes: 0 allow · 2 block` |
 | spec/scripts/spec-build-driver.js | MODIFY | scripts | `syncWaveMarker(state)` called after state derivation on step-print and mark paths, never on `--state` (D2); header "what it does NOT do" line |
 | spec/hooks/hooks.json | MODIFY | doctrine | PreToolUse entry, matcher `Bash` (D6) |
 | spec/doctrine/core.md | MODIFY | doctrine | § Worker Git Ban rewritten per D5 |
 | .claude/rules/spec-pipeline.md | MODIFY | other | § Risk Tiers hook surfaces list gains the new script (D7) |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | `node scripts/plugin-bump.js --bump --plugin spec --changelog "…"` (D8); no dependency change |
-| tests/worker-git-hook.test.js | CREATE | tests | AC-20261103-01-1, AC-20261103-01-2, AC-20261103-01-3, AC-20261103-01-4, AC-20261103-01-8, AC-20261103-01-9 |
-| tests/build/build-driver-wave-marker.test.js | CREATE | tests | AC-20261103-01-5, AC-20261103-01-6, AC-20261103-01-7 |
-| tests/consistency/red-fixture-coverage.test.js | MODIFY | tests | `HOOK_HANDLERS['block-worker-git.sh']` — fixture mirror of AC-20261103-01-1 / AC-20261103-01-3 (D6) |
+| tests/worker-git-hook.test.js | CREATE | tests | AC-20261103-03-1, AC-20261103-03-2, AC-20261103-03-3, AC-20261103-03-4, AC-20261103-03-8, AC-20261103-03-9 |
+| tests/build/build-driver-wave-marker.test.js | CREATE | tests | AC-20261103-03-5, AC-20261103-03-6, AC-20261103-03-7 |
+| tests/consistency/red-fixture-coverage.test.js | MODIFY | tests | `HOOK_HANDLERS['block-worker-git.sh']` — fixture mirror of AC-20261103-03-1 / AC-20261103-03-3 (D6) |
 | spec/entrypoints.json | MODIFY | other | row `spec/scripts/block-worker-git.sh` → `entryPoints: ["spec/hooks/hooks.json"]`, same shape as the cross-worktree hook's row (D6) |
-| tests/worktree-hook.test.js | MODIFY | tests | AC-20261103-01-10 — append the ID to the title of the `AC-20260820-02-2:` case; assertions unchanged (D9) |
-| tests/delegated/pending-question.test.js | MODIFY | tests | AC-20261103-01-11 — append the ID to the title of the `isDelegated` case and plant `spec-wave-open` beside the probe's tree as the "whatever else" input; assertions unchanged (D9) |
+| tests/worktree-hook.test.js | MODIFY | tests | AC-20261103-03-10 — append the ID to the title of the `AC-20260820-02-2:` case; assertions unchanged (D9) |
+| tests/delegated/pending-question.test.js | MODIFY | tests | AC-20261103-03-11 — append the ID to the title of the `isDelegated` case and plant `spec-wave-open` beside the probe's tree as the "whatever else" input; assertions unchanged (D9) |
 
 ## Contracts
 
@@ -77,7 +77,7 @@ never for the decision (D2).
 `.git` in a main checkout, `/…/.git/worktrees/<name>` in a linked tree). Content:
 
 ```json
-{"spec":"specs/20261103/01-workers-never-run-git.md","state":"WAVE:scripts"}
+{"spec":"specs/20261103/03-workers-never-run-git.md","state":"WAVE:scripts"}
 ```
 
 **Driver sync** (`spec-build-driver.js`): after `const state = forcedState || deriveState()`
@@ -131,48 +131,48 @@ block, stderr per D4.
 
 ## Acceptance Criteria
 
-- **AC-20261103-01-1**: WHEN the marker exists in cwd's private git dir and the Bash command is a
+- **AC-20261103-03-1**: WHEN the marker exists in cwd's private git dir and the Bash command is a
   single writing verb THE SYSTEM SHALL exit 2 with stderr beginning `BLOCKED: git commit during
-  WAVE:scripts of specs/20261103/01-workers-never-run-git.md` (e.g. marker
-  `{"spec":"specs/20261103/01-workers-never-run-git.md","state":"WAVE:scripts"}` +
-  `git commit -m x` → exit 2, stderr matches `/^BLOCKED: git commit during WAVE:scripts of specs\/20261103\/01-workers-never-run-git\.md/` and contains `agent: `) → writes tests/worker-git-hook.test.js
-- **AC-20261103-01-2**: WHEN the marker exists and a writing verb appears behind other text,
+  WAVE:scripts of specs/20261103/03-workers-never-run-git.md` (e.g. marker
+  `{"spec":"specs/20261103/03-workers-never-run-git.md","state":"WAVE:scripts"}` +
+  `git commit -m x` → exit 2, stderr matches `/^BLOCKED: git commit during WAVE:scripts of specs\/20261103\/03-workers-never-run-git\.md/` and contains `agent: `) → writes tests/worker-git-hook.test.js
+- **AC-20261103-03-2**: WHEN the marker exists and a writing verb appears behind other text,
   global options, or an alias of checkout THE SYSTEM SHALL exit 2 naming that verb (e.g.
   `npm test && git add -A` → exit 2 naming `add`; `git -C /x reset --hard` → exit 2 naming
   `reset`; `git switch main` → exit 2 naming `switch`; a two-line command `npm run lint\ngit add -A`
   → exit 2 naming `add`) → writes tests/worker-git-hook.test.js
-- **AC-20261103-01-3**: WHEN the marker exists and every git verb in the command is in the
+- **AC-20261103-03-3**: WHEN the marker exists and every git verb in the command is in the
   read-only allowlist THE SYSTEM SHALL exit 0 with empty stderr (e.g. `git status`,
   `git --no-pager diff --stat`, `git log --oneline | head`, `git rev-parse --show-toplevel`,
   `git -c core.pager=cat log` → exit 0 each) → writes tests/worker-git-hook.test.js
-- **AC-20261103-01-4**: WHEN no marker exists in cwd's private git dir, or cwd is outside any git
+- **AC-20261103-03-4**: WHEN no marker exists in cwd's private git dir, or cwd is outside any git
   repo, or the command has no git invocation THE SYSTEM SHALL exit 0 (e.g. no marker +
   `git commit -m x` → 0; marker + `npm test` → 0; marker + `echo "git commit"` → 0; cwd = an
   empty temp dir + `git commit -m x` → 0) → writes tests/worker-git-hook.test.js
-- **AC-20261103-01-5**: WHEN the build driver prints a step whose derived state is
+- **AC-20261103-03-5**: WHEN the build driver prints a step whose derived state is
   worker-dispatching THE SYSTEM SHALL leave `<private git dir>/spec-wave-open` holding the spec
   path and that state (e.g. the fixture host at its first wave → file content
   `{"spec":"<fixture spec path>","state":"WAVE:doctrine+scripts"}`; the same host at `TESTS`
   → `"state":"TESTS"`) → writes tests/build/build-driver-wave-marker.test.js
-- **AC-20261103-01-6**: WHEN `--mark wave-done` is accepted for the last pending wave THE SYSTEM
+- **AC-20261103-03-6**: WHEN `--mark wave-done` is accepted for the last pending wave THE SYSTEM
   SHALL remove the marker on that invocation (e.g. after the mark → `existsSync(marker)` is
   `false` and the printed step is `## Step: host integration`) → writes tests/build/build-driver-wave-marker.test.js
-- **AC-20261103-01-7**: WHEN the marker exists but the derived state is not worker-dispatching
+- **AC-20261103-03-7**: WHEN the marker exists but the derived state is not worker-dispatching
   THE SYSTEM SHALL remove it on a step-print invocation, and a `--state` invocation SHALL
   neither write nor remove it (e.g. hand-planted marker at `INTEGRATION` + bare run → absent;
   no marker at `WAVE:doctrine+scripts` + `--state` → still absent; marker at `WAVE:…` +
   `--state` → still present) → writes tests/build/build-driver-wave-marker.test.js
-- **AC-20261103-01-8**: WHEN core.md § Worker Git Ban is read THE SYSTEM SHALL name its
+- **AC-20261103-03-8**: WHEN core.md § Worker Git Ban is read THE SYSTEM SHALL name its
   enforcer (e.g. the section text matches ``/Enforced by `block-worker-git\.sh`/`` and still
   contains `checkpoint-commits after each green phase`) → writes tests/worker-git-hook.test.js
-- **AC-20261103-01-9**: WHEN `spec/hooks/hooks.json` is parsed THE SYSTEM SHALL hold a PreToolUse
+- **AC-20261103-03-9**: WHEN `spec/hooks/hooks.json` is parsed THE SYSTEM SHALL hold a PreToolUse
   entry with matcher `Bash` whose command names the script (e.g.
   `hooks.PreToolUse.some(e => e.matcher === 'Bash' && e.hooks.some(h => h.command.includes('scripts/block-worker-git.sh')))`
   → `true`, and the four pre-existing entries are unchanged) → writes tests/worker-git-hook.test.js
-- **AC-20261103-01-10**: WHEN a Write targets another working tree of the same repo THE SYSTEM
+- **AC-20261103-03-10**: WHEN a Write targets another working tree of the same repo THE SYSTEM
   SHALL CONTINUE TO block it through `block-cross-worktree-writes.sh` (e.g. cwd = linked
   worktree, target in the main checkout → exit 2) → reuses tests/worktree-hook.test.js :: AC-20260820-02-2:
-- **AC-20261103-01-11**: WHEN a tree carries no `spec-delegated` marker and is in no fan-out
+- **AC-20261103-03-11**: WHEN a tree carries no `spec-delegated` marker and is in no fan-out
   table THE SYSTEM SHALL CONTINUE TO report `isDelegated` false whatever else its private git
   dir holds (e.g. a tree with only `spec-wave-open` planted → `false`) → reuses tests/delegated/pending-question.test.js :: isDelegated
 

@@ -11,8 +11,8 @@ genesis.md § Genesis: Design Stage) cannot see — the checkable half still sho
 if you miss it.
 
 0. **Write `## Direction` first, from the answers handed in the dispatch.** The session asked the direction round (navigation shell, layout system, color schemes, accessibility baseline, token tiers); copy those answers into `## Direction` after `## Users and context`, never re-decide or re-ask them.
-1. **Users and context come from confirmed ledger rows and the seed, never invented.** A
-   synthetic persona is noise, not grounding — write only what a confirmed row or the seed
+1. **Users and context come from the seed, never invented.** A
+   synthetic persona is noise, not grounding — write only what the seed
    actually says about who uses this and the context they're in.
 2. **One JTBD line per journey, journeys before any entity.** Each `### <journey>` block opens
    with a line in the exact form `JTBD: When <trigger>, I want to <goal>, so I can <outcome>.`

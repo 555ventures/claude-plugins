@@ -148,7 +148,7 @@ price every framework option against these two rows (research contextPaths inclu
   carries 13 catches (fixture from spec 06, latest `M14` at `THEME`) THE SYSTEM SHALL print
   `🧭 misunderstandings: 13 caught before build (latest M14 at THEME)` between the 🗺️
   Roadmap block and the anomalies section; with no ledger, an unparsable ledger, or zero
-  catches it SHALL print no 🧭 line → `tests/spec-status.test.js`
+  catches it SHALL print no 🧭 line → `tests/spec-status.test.js` [retired: specs/20261103/02-ceremony-nothing-reads.md]
 - **AC-20260902-11-7**: WHEN `spec-status.js --json` and `--next --json` run on that root THE
   SYSTEM SHALL CONTINUE TO emit the same top-level keys as before this spec (no
   `misunderstandings` key) → `tests/spec-status.test.js`

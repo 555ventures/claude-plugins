@@ -9,7 +9,7 @@ The standalone design-stage entry point, ahead of `/spec:genesis` and any roadma
 never restated here. **Intended model: Sonnet** (Opus only for a hard-to-reverse product-facts fork).
 
 **Setup:** run `spec-paths shared-for mocks` and read its output; run `spec-paths shared-mocks
---section "Provenance Ledger|State Machine|Checkpoint contract"` too.
+--section "State Machine|Checkpoint contract"` too.
 Run `spec-paths mocks-driver` once, keeping the path as `{driver}`.
 
 **Input:** none required; the driver creates `design/mocks/status.json` at SEED. Never ask the
@@ -20,8 +20,6 @@ user for sample data — invent it, awkward cases included.
 1. Run `node {driver} --root .` and read its printed step and `Read only:` file list.
 2. Do that step and record it with the step's own printed `--mark …` line.
 3. Re-run. Repeat until `APPROVED`.
-
-A `confirm these N assumptions` block before a step is one `AskUserQuestion`; run the printed `ledger set` lines on "all correct".
 
 Every draw step carries `Skill: mock-authoring — load it before the first edit`
 (spec/skills/mock-authoring/SKILL.md).
@@ -49,13 +47,11 @@ journey-approved --journey <j>` line. After the last journey, `round pull` then 
 
 Printed once the driver reaches `APPROVED`. Assemble the slots (shared § Console Output Style):
 `outcome` (`✅ wireframe approved — {N} journeys`), `bullets` (`{journey}: {M} screens` per
-journey; `Chain: /spec:mocks → /spec:genesis → /spec:enforce → /spec:plan`), `warns` (one
-`catch: {what}` per ledger misunderstanding row, dropped if none), `next` (`{kind: 'command',
+journey; `Chain: /spec:mocks → /spec:genesis → /spec:enforce → /spec:plan`), `next` (`{kind: 'command',
 text: '/spec:genesis'}`). Run `node "$(spec-paths report-render)" --slots <file>`; print it
 verbatim.
 
 ## Rules
 
-- The ledger is written only through the driver's `ledger` subcommands — never hand-typed.
 - The token is never printed or written; the driver reaches the service only through
   `walkthrough.js`.

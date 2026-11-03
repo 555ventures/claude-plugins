@@ -135,7 +135,8 @@ depends_on: []
      only `SHALL CONTINUE TO` clauses — every `SHALL` in it is a `SHALL CONTINUE TO`; a bullet
      that mixes a new promise with a pin is refused at lock (`ac-matrix --lint`) and at build
      (red-check `mixed-pin`): split it. Pin tests are
-     expected GREEN against pre-change code (the sanctioned exception to red-first);
+     expected GREEN against pre-change code (the sanctioned exception to red-first) unless the
+     pin ends `→ rewrites`, whose rewritten test is red-first like any other;
      prefer tagging the existing covering test with the AC-ID over duplicating it. Every bullet
      ends with a disposition against the test suite it inherits — the bullet's final `→` run,
      nothing after it: `→ writes <test file>` for a brand-new test, `→ rewrites <test file> ::

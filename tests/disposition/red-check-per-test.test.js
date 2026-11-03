@@ -229,3 +229,42 @@ test('AC-20260911-04-9 / AC-20260911-04-7: WHEN a reuses reference\'s own title 
   assert.deepStrictEqual(out.findings, [],
     'a genuinely-passing, correctly-selected reused case must emit no finding of any class: ' + JSON.stringify(out.findings))
 })
+
+// /spec:fix (prax-app 20261103/01, health.test.ts): a `SHALL CONTINUE TO` pin whose test must
+// move to a new seam declares `→ rewrites`. The whole-file arm read the pin as green-expected
+// while the per-test arm demands the rewritten case red, so the shape was unpassable in both
+// colours — red reported `broken-pin`, green `gutted-rewrite`. A `rewrites` AC is now never
+// sanctioned green at the whole-file level.
+test('red-check: a SHALL CONTINUE TO pin declaring → rewrites is red-expected — its red rewritten case is no broken-pin, and its green one is unsanctioned-green even without testNameFilter', () => {
+  const pinRewrite = '- **AC-20261103-97-1**: WHEN /health runs THE SYSTEM SHALL CONTINUE TO answer 503 ' +
+    '→ rewrites tests/h.test.js :: AC-97-1: reports 503'
+  const row = ['| tests/h.test.js | MODIFY | tests | the pin\'s test drives a new seam |']
+
+  const { dir: dirRed, base: baseRed } = newHost('rcfix-red', FILTER_CONFIG)
+  fs.mkdirSync(path.join(dirRed, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dirRed, 'tests/h.test.js'),
+    "'use strict'\n// AC-20261103-97-1\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-97-1: reports 503', () => { assert.strictEqual('seam missing', 'seam') })\n")
+  const specRed = path.join(dirRed, 'spec.md')
+  fs.writeFileSync(specRed, specMd([pinRewrite], row))
+  const resRed = run(specRed, dirRed, baseRed, ['--json'])
+  const outRed = readJson(resRed)
+  assert.deepStrictEqual(outRed.findings, [],
+    'a pin+rewrites file whose rewritten case is red before the build is exactly what both arms ask for — no broken-pin, no finding: ' + JSON.stringify(outRed.findings))
+  assert.strictEqual(resRed.status, 0, 'stderr: ' + resRed.stderr)
+  assert.strictEqual(outRed.files[0].expected, 'red', 'the rewrites pin must make the file red-expected: ' + JSON.stringify(outRed.files))
+
+  const { dir: dirGreen, base: baseGreen } = newHost('rcfix-green', { testCommand: 'node --test' })
+  fs.mkdirSync(path.join(dirGreen, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dirGreen, 'tests/h.test.js'),
+    "'use strict'\n// AC-20261103-97-1\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-97-1: reports 503', () => { assert.ok(true) })\n")
+  const specGreen = path.join(dirGreen, 'spec.md')
+  fs.writeFileSync(specGreen, specMd([pinRewrite], row))
+  const resGreen = run(specGreen, dirGreen, baseGreen, ['--json'])
+  assert.strictEqual(resGreen.status, 1,
+    'a rewrite that already passes is not a rewrite — without testNameFilter the whole-file arm is the only check, and it must still refuse it (stderr: ' + resGreen.stderr + ')')
+  const outGreen = readJson(resGreen)
+  assert.ok(outGreen.findings.some(f => f.class === 'unsanctioned-green' && f.acs.includes('AC-20261103-97-1')),
+    'a green pin+rewrites file must be unsanctioned-green naming the AC: ' + JSON.stringify(outGreen.findings))
+})

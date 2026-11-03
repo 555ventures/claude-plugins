@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: implementing
+status: done
 tier: critical
 area: build-stage
 breaking: false
@@ -243,6 +243,11 @@ hook-set pin (`HOOK_HANDLERS`) is already a File Plan row.
 Known gap, left open on purpose: a worker that `cd`s into another working tree and commits
 there is not caught (the payload's `cwd` is the session's). That is the cross-worktree hook's
 territory and it has no Bash arm today; this spec does not add one.
+
+### Advisory debt (review rv_0cb72efcf5c9)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-adc386cef8bc45987/spec/scripts/block-worker-git.sh:35 — The extraction grammar only recognises `git` preceded by line start, `;&|(` backtick, or whitespace, so a path-prefixed or backslash-escaped invocation (`/usr/bin/git commit`, `\git commit`) is never extracted and passes under an open wave. This is the grammar the spec's Contracts block locks (A4 lists 16 observed samples, none path-prefixed), so it is a sanctioned gap, not a violation — recorded so the known-gap paragraph in Rationale can name it beside the cd-into-another-tree gap.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-adc386cef8bc45987/spec/scripts/block-worker-git.sh:35 — A `-c key="value with space"` global option breaks the option-skipping alternation at the space, so the next word of the quoted value is extracted as the verb and the BLOCKED line names it (e.g. `git -c user.name="a b" commit` → `BLOCKED: git b …`). Direction is safe (it still blocks) but the remedy line misnames the verb.
+- a2 /home/jj/projects/claude-plugins/.claude/worktrees/agent-adc386cef8bc45987/tests/worker-git-hook.test.js:20 — The marker-path derivation (`git -C <root> rev-parse --git-dir`, absolutize against root when relative, join `spec-wave-open`) is written out four times in this diff — driver `syncWaveMarker`, `tests/worker-git-hook.test.js::fixture`, `tests/consistency/red-fixture-coverage.test.js::hookWorkerGit`, `tests/build/build-driver-wave-marker.test.js::markerOf` — which meets the pipeline rules' three-or-more duplication calibration; a `waveMarkerPath(root)` helper in `tests/helpers.js` is the extraction for the three test copies.
 
 ## Canonical Delta
 

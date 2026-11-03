@@ -3,12 +3,13 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { runNode } = require('../helpers')
+const { runNode, SPEC } = require('../helpers')
 const { fanoutHost, askBlocks, specRel, LANE_AGENT, repairRoundDoc, dispositionsDoc, redFindingsDoc } = require('./fixture')
 
 // specs/20261102/03-one-session-runs-the-lanes.md D3-D10, D4a: AC-20261102-03-5 .. -18, -21, -22; specs/20261103/04 AC-12 .. -15 —
 // fanout-driver.js is driven end to end against a synthetic host (tests/fanout/fixture.js); every
 // state is reached through the driver's own marks and read back from its state file.
+// q28: a lane's laneExit outlives the sidecar delete its own step prints (pending-question.js lane-exit record).
 
 const S03 = specRel('03-x')
 const S04 = specRel('04-z')
@@ -423,6 +424,24 @@ test('AC-20261103-04-14: --mark returned lands a lane stopped on its sidecar\'s 
   h.sidecar('04-z', 'review', { closed: true })
   h.must(['--mark', 'returned', '--lane', 'L2'])
   assert.strictEqual(h.lane('L2').state, 'merge-ready', 'a lane whose sidecars carry no laneExit stays on its normal path: ' + JSON.stringify(h.lane('L2')))
+})
+
+test('q28: --mark returned lands a lane stopped on the laneExit its driver recorded even after the lane deleted the sidecar as its step instructed', () => {
+  const h = fanoutHost()
+  h.dispatchedPair()
+  const wt = h.startLane('03-x')
+  const pq = require(path.join(SPEC, 'scripts/pending-question.js'))
+  assert.ok(pq.isDelegated(wt), 'setup precondition: a lane listed in the fan-out table is delegated')
+  const queued = '03-x: review escalated at the fix cap — 2 open findings'
+  const marks = {}
+  pq.recordLaneExit(wt, marks, { reason: 'review escalated at the fix cap — 2 open findings', queued })
+  h.sidecar('03-x', 'review', marks)
+  fs.rmSync(path.join(wt, 'specs/20261102/03-x.review'), { recursive: true, force: true })
+  h.must(['--mark', 'returned', '--lane', 'L1'])
+  const l = h.lane('L1')
+  assert.deepStrictEqual([l.state, l.stoppedReason], ['stopped', 'review escalated at the fix cap — 2 open findings'],
+    'a lane that followed its own `delete <sidecar>` must still land on its recorded exit, never "without a recognised stop": ' + JSON.stringify(l))
+  assert.ok((h.state().queued || []).includes(queued), 'the queue subject must reach st.queued so the report names the repair: ' + JSON.stringify(h.state().queued))
 })
 
 test('AC-20261102-03-17: with the gate red after a merge and another lane pending on a question, the next bare run relays the question instead of printing MERGE_RED, and a merge-ready lane is still refused until gate-repaired', () => {

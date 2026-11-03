@@ -1051,18 +1051,19 @@ function handleEscalateChoice() {
   if (choice === 're-arm') {
     fs.rmSync(gateCapPath, { force: true })
     delete marks.escalateChoice
-    delete marks.laneExit
+    pq.clearLaneExit(repoRoot, marks)
     saveSidecar()
     return null
   }
   if (choice === 'cold') {
+    pq.clearLaneExit(repoRoot, marks)
     fs.rmSync(sidecarDir, { recursive: true, force: true })
     writeOut(1, 'sidecar removed \u2014 the next run resumes from the tree as it is:\n  node ' + __filename + ' ' + specPath + '\n')
     process.exit(0)
   }
   marks.escalateChoice = choice
   if (choice === 'park') recordParkExit()
-  else delete marks.laneExit
+  else pq.clearLaneExit(repoRoot, marks)
   saveSidecar()
   return null
 }
@@ -1084,8 +1085,7 @@ function parkQueueSubject() {
   return `${specRel}: build parked at the repair cap \u2014 ${lastLog}`
 }
 function recordParkExit() {
-  if (marks.laneExit) return
-  marks.laneExit = { reason: 'build parked at the repair cap', queued: parkQueueSubject(), at: new Date().toISOString() }
+  pq.recordLaneExit(repoRoot, marks, { reason: 'build parked at the repair cap', queued: parkQueueSubject() })
 }
 
 function gitStatusPaths(root) {

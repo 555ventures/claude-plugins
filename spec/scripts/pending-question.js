@@ -4,7 +4,7 @@
 //        pending-question.js show|dismiss|consume|mark|is-delegated --root <dir>
 //        pending-question.js answer --root <dir> --id <qid> --label <label> --by user
 // Also a module: isDelegated, markDelegated, pendingPath, writePending, readPending,
-// consumePending, validate, stopPolicy, policyPick.
+// consumePending, validate, stopPolicy, policyPick, recordLaneExit, clearLaneExit, readLaneExit.
 //
 // Owner: specs/20261102/02-a-delegated-driver-stops-on-disk.md D1 — the one writer and reader
 // of <root>/.claude/pending-question.json, the file a driver running delegated (a lane worker
@@ -21,6 +21,12 @@
 // `stopPolicy(root)` / `policyPick(root, key, labelByValue, marks)` are the
 // one reader of the host's policy.stops overlaid by the fan-out table's `ask` list, and the one
 // builder of the printed auto-pick line; a policy pick never writes a pending file.
+//
+// `recordLaneExit(root, marks, exit)` / `clearLaneExit(root, marks)` / `readLaneExit(root)` are the one
+// writer and reader of a lane's exit: the exit lands on marks.laneExit AND,
+// in a lane, in the lane's private git dir (`spec-lane-exit.json`, beside the marker) — the printed
+// remedy of the very exits that set it deletes the build/review sidecar, so the sidecar copy alone
+// cannot be what the fan-out's `--mark returned` reads.
 //
 // Does NOT decide who may answer (core § Delegated Stops: only the parent writes answers), does
 // NOT relay a question, and never stores state beyond that one file and the marker.
@@ -109,6 +115,41 @@ function markDelegated(root) {
   if (!mp) return null
   fs.writeFileSync(mp, '')
   return mp
+}
+
+const LANE_EXIT = 'spec-lane-exit.json'
+const laneExitPath = (root) => {
+  const gd = gitDir(root)
+  return gd ? path.join(gd, LANE_EXIT) : null
+}
+
+// Set once, never overwritten: the first lane-ending exit is the one the lane ended on. Returns
+// true when marks changed (the caller saves its sidecar).
+function recordLaneExit(root, marks, exit) {
+  if (marks.laneExit) return false
+  marks.laneExit = { ...exit, at: new Date().toISOString() }
+  if (isDelegated(root)) {
+    const p = laneExitPath(root)
+    if (p && !fs.existsSync(p)) fs.writeFileSync(p, JSON.stringify(marks.laneExit) + '\n')
+  }
+  return true
+}
+
+function clearLaneExit(root, marks) {
+  delete marks.laneExit
+  const p = laneExitPath(root)
+  if (p) fs.rmSync(p, { force: true })
+}
+
+function readLaneExit(root) {
+  const p = laneExitPath(root)
+  if (!p) return null
+  try {
+    const x = JSON.parse(fs.readFileSync(p, 'utf8'))
+    return x && typeof x.reason === 'string' ? x : null
+  } catch {
+    return null
+  }
 }
 
 const pendingPath = (root) => path.join(root, '.claude', 'pending-question.json')
@@ -228,7 +269,7 @@ function bareRun(root, marks, keepKinds = [], keyFor = () => null) {
   for (const q of qs) {
     const a = answers[q.id]
     const o = q.options.find((x) => x.label === a.label) || {}
-    if (o.resume === 'stop' && !marks.laneExit) marks.laneExit = { reason: a.label, at: new Date().toISOString() }
+    if (o.resume === 'stop') recordLaneExit(root, marks, { reason: a.label })
   }
   consumePending(root)
   marks.answered = [...(Array.isArray(marks.answered) ? marks.answered : []),
@@ -313,6 +354,6 @@ function main() {
   process.exit(0)
 }
 
-module.exports = { isDelegated, pendingPath, writePending, readPending, consumePending, validate, stopLine, stopKey, bareRun, waitingLine, KINDS, BY, markDelegated, stopPolicy, policyPick }
+module.exports = { isDelegated, pendingPath, writePending, readPending, consumePending, validate, stopLine, stopKey, bareRun, waitingLine, KINDS, BY, markDelegated, stopPolicy, policyPick, recordLaneExit, clearLaneExit, readLaneExit }
 
 if (require.main === module) main()

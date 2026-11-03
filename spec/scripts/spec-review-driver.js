@@ -2586,10 +2586,9 @@ function pickOnce(key, labelByValue) {
   return r
 }
 // The lane-ending exit is recorded once, never guessed.
+// pq owns the write: the lane's copy outlives the `delete <sidecarDir>` the same step prints.
 function setLaneExit(reason, queued) {
-  if (marks.laneExit) return
-  marks.laneExit = { reason, ...(queued ? { queued } : {}), at: new Date().toISOString() }
-  saveSidecar()
+  if (pq.recordLaneExit(repoRoot, marks, { reason, ...(queued ? { queued } : {}) })) saveSidecar()
 }
 
 const repairStopKey = () => pq.stopKey('repair-round', marks.stoppedIteration || liveIteration(), marks.repairRounds || 0)

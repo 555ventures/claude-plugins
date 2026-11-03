@@ -1,6 +1,6 @@
 ---
 date: 2026-11-02
-status: hardened
+status: implementing
 tier: critical
 area: delegated-stops
 breaking: false
@@ -8,6 +8,7 @@ depends_on: []
 brief: 32
 spiked: 2026-11-02
 open_markers: 0
+diff_base: bbbdc63b66bdc8ec0074239ef704d4faf5548962
 ---
 
 # A delegated driver stops on disk
@@ -41,6 +42,7 @@ hand a question up, never answer it.
 | D9 | `tests/helpers.js` `runNode` and `runBash` delete `CLAUDE_CODE_CHILD_SESSION` from the child env unless the caller's `opts.env` sets it (`env: {...process.env, CLAUDE_CODE_CHILD_SESSION: undefined, ...(opts.env \|\| {})}`), so the suite's in-session expectations hold when the gate itself runs inside a lane sub-agent; delegated tests pass `env: {CLAUDE_CODE_CHILD_SESSION: '1'}`. (AC-20261102-02-16) | The build driver runs the gate as a child of a lane worker, where the marker is set (A1); without this every existing "Ask ONE AskUserQuestion" pin reds inside a lane. |
 | D10 | `node scripts/plugin-bump.js --bump --plugin spec --changelog "…"`. `[no-ac: node scripts/plugin-bump.js --check in the gate is the oracle]` | Behaviour change under `spec/` (pipeline rules § Planning). |
 | D11 | `spec/entrypoints.json` gains `"spec/scripts/pending-question.js": {"entryPoints": ["spec/scripts/spec-review-driver.js", "spec/scripts/spec-build-driver.js", "spec/commands/fix.md"]}` and `spec/bin/spec-paths` gains the `pending-question` key. `[no-ac: tests/consistency/entrypoints.test.js and tests/spec-paths.test.js's in-place key list are the oracles]` | New-surface checklist (pipeline rules § Planning). |
+| D12 | `tests/consistency/read-load.test.js`'s `SHARED_FOR.run` row gains `'Delegated Stops'` between `'Decisions'` and `'Question Style'`. User ruling (by user, 2026-11-02, add to scope) on the gate line `not ok AC-20260908-06-3 / AC-20261024-04-5: spec-paths shared-for prints exactly the pinned ## section list` — D7's run-list addition reds that pin. `[no-ac: the pin itself is the oracle]` | The pin exists to make a section-list change a deliberate table edit; D7 is that deliberate change. |
 
 ## File Plan
 
@@ -64,6 +66,7 @@ hand a question up, never answer it.
 | tests/review/delegated-stops.test.js | CREATE | tests | AC-20261102-02-6, AC-20261102-02-7, AC-20261102-02-8, AC-20261102-02-9, AC-20261102-02-10, AC-20261102-02-13, AC-20261102-02-14, AC-20261102-02-15, AC-20261102-02-17, AC-20261102-02-18 |
 | tests/build/delegated-stops.test.js | CREATE | tests | AC-20261102-02-11, AC-20261102-02-12, AC-20261102-02-19 |
 | tests/consistency/prose-pins.test.js | MODIFY | tests | reference pins for D6, D7, D8 (heading, file name, skip line, the three fix kinds) |
+| tests/consistency/read-load.test.js | MODIFY | tests | `SHARED_FOR.run` gains `Delegated Stops` (D12) |
 
 ## Contracts
 

@@ -36,7 +36,7 @@ rewritten red; on `tier: critical` the step asks (remove the AC-ID mention (Reco
 rewrite the test red / pause the build). `skipped-resume` stays a printed, recorded notice, never
 a user diagnosis. The repair-cap `ESCALATE` step prints `recommended: <re-arm|park>` from the
 gate logs' failure-count trend and ONE `AskUserQuestion` (re-arm / restart cold / park and queue
-a `/spec:fix` / amend the spec); record the answer with `--mark escalate-choice
+a `/spec:fix` / amend the spec); in a child session the driver writes the question instead — core § Delegated Stops; record the answer with `--mark escalate-choice
 <re-arm|cold|park|amend>`.
 
 ## Prototype specs

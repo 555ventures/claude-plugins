@@ -14,7 +14,7 @@ function lines(text) { return text.split('\n').length }
 // for every scoped command; a command without a row falls open to the whole doctrine.
 const SHARED_FOR = {
   plan: ['Host Grounding', 'Pipeline Entry', 'Tiers', 'Decomposition', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'MCP Policy', 'Canonical Docs Loop', 'Session Execution'],
-  run: ['Host Grounding', 'Tiers', 'Runtime Verification', 'Incident Policy', 'State Machine', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'On-Disk Handoff', 'Worker Git Ban', 'Read-Only Surfaces', 'MCP Policy', 'Canonical Docs Loop', 'Session Execution'],
+  run: ['Host Grounding', 'Tiers', 'Runtime Verification', 'Incident Policy', 'State Machine', 'Model Placement', 'Decisions', 'Delegated Stops', 'Question Style', 'Console Output Style', 'On-Disk Handoff', 'Worker Git Ban', 'Read-Only Surfaces', 'MCP Policy', 'Canonical Docs Loop', 'Session Execution'],
   release: ['Host Grounding', 'Runtime Verification', 'Release Stage', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Canonical Docs Loop', 'Session Execution'],
   enforce: ['Host Grounding', 'Grounding Drift', 'Rule Enforcement', 'Model Placement', 'Question Style', 'Console Output Style', 'Session Execution', 'Workflows Encode Shape, Not Judgment'],
   genesis: ['Host Grounding', 'Pipeline Entry', 'Model Placement', 'Decisions', 'Question Style', 'Console Output Style', 'Worker Git Ban', 'MCP Policy', 'Session Execution', 'Design Canon', 'Design Authoring Contracts', 'Workflows Encode Shape, Not Judgment'],

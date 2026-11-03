@@ -25,18 +25,22 @@ else runs. The drivers never create, enter, or leave a worktree themselves.
 
 Unless `--in-place`, the loop runs in the spec's own worktree. Execute
 `git/commands/enter-worktree.md`'s Steps 1–3 against `$ARGUMENTS` in this session, and do not
-print its report — its `Next: nothing needs you` line is wrong mid-loop. Two skips, both
+print its report — its `Next: nothing needs you` line is wrong mid-loop. Three skips, all
 derived, each printed as one line:
 
 - `--in-place` → skip.
 - the host's `policy.worktreePerSpec` is `false` (read through the config; `true` or absent keeps
   today's isolation) → skip, printing `📌 Auto-picked in place — host policy worktreePerSpec: false (veto anytime)`.
+- `git rev-parse --show-toplevel` differs from `merge-back.sh root` AND the current branch equals
+  `merge-back.sh branch-for <spec>` → skip, printing `📌 Auto-picked in place — this session already sits in a worktree on the spec's branch (veto anytime)`.
 - `status:` past `hardened` AND `{worktree}` absent from `git worktree list --porcelain` AND no
   `refs/heads/{source}` branch → skip (the build really ran in place; an existing branch is a
   parked worktree build, which Step 3 re-attaches).
 
 A worktree that cannot be created is ONE `AskUserQuestion`, never a bare stop and never a silent
-fall back to in place. Print the failure text, then ask. When the failure text starts `create:
+fall back to in place. Print the failure text, then ask — except when the session is delegated
+(core § Delegated Stops), where a worktree failure is a STOP printing the failure text, never a
+question. When the failure text starts `create:
 run from the main working tree`, the session is inside a different spec's worktree; the options
 are "exit the other worktree and retry (Recommended)" — nothing changes until you have left it
 and re-run — and "abort" — the run ends here, no branch or worktree is created. For any other

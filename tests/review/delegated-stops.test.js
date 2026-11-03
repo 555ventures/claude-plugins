@@ -334,3 +334,46 @@ test('AC-20261102-02-15: a bare run on a dismissed file consumes it, records dis
   assert.match(refused.stderr, /dismissedStop/, 'the refusal must name the mark: ' + refused.stderr)
   assert.match(refused.stderr, /delete \S*\.review\S* to restart/, 'the refusal must name the remedy: ' + refused.stderr)
 })
+
+// specs/20261103/09-an-executed-repro-answers-the-reject.md D5: a repro-backed reject is accepted at the mark in a lane.
+const gate = require('./disposer-gate.fixtures')
+const REPRO_RETURN = (s1) => ({ verdict: 'DISPOSED', tokens: 5, dispositions: [
+  { ref: 's0', recommended: 'reject', reason: 'executed: the pin passes', repro: { command: 'node --test tests/x.test.js', observed: 'ℹ pass 1' } },
+  s1 || { ref: 's1', recommended: 'fix', reason: 'D1' },
+  { ref: 'leg:drift', recommended: 'fix', reason: 'D2' },
+] })
+function poolHost(name, stops) {
+  const host = gate.makeTwoSurvivorPoolHost(name)
+  if (stops) {
+    const cfgPath = path.join(host.root, '.claude/spec.config.json')
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+    cfg.policy = { stops }
+    fs.writeFileSync(cfgPath, JSON.stringify(cfg))
+  }
+  return host
+}
+const markD = (host, body) => runD(host.root, host.spec, '--mark', 'dispositions', '--file', gate.returnFileWith(path.basename(host.root) + '-d', body))
+
+test('AC-20261103-09-6: a delegated dispositions mark on a default host accepts a repro-backed reject with no pending file and the pick line, and a waive beside it asks about s1 only', () => {
+  const host = poolHost('dlg-rwe-accept')
+  const r = markD(host, REPRO_RETURN())
+  assert.strictEqual(r.status, 0, 'the delegated mark must exit 0: ' + r.stdout + r.stderr)
+  assert.ok(!fs.existsSync(pendingOf(host.root)), 'a repro-backed reject must write no pending file, or the lane still waits on the parent for an accepted reject: ' + r.stdout)
+  assert.doesNotMatch(r.stdout, /PENDING_QUESTION/, 'no stop line may print for an accepted reject: ' + r.stdout)
+  assert.ok(r.stdout.includes('📌 Auto-picked accept reject on executed repro: s0 — host policy stops.rejectWithEvidence: accept (veto anytime)'), 'the pick line must print so the REPORT and the user see the accept: ' + r.stdout)
+  assert.strictEqual(gate.stateOf(host.root, host.spec), 'FIX', 'the lane must proceed to FIX')
+  const mixed = poolHost('dlg-rwe-waive')
+  const w = markD(mixed, REPRO_RETURN({ ref: 's1', recommended: 'waive', reason: 'D2 sanctions' }))
+  assert.strictEqual(w.status, 0, 'the delegated mark must hand the waive up with exit 0: ' + w.stdout + w.stderr)
+  assert.deepStrictEqual(readPending(mixed.root).questions.map((q) => q.id), ['s1'], 'only the waive is asked; the repro-backed reject is not')
+})
+
+test('AC-20261103-09-7 (SHALL CONTINUE TO): a delegated dispositions mark under stops.rejectWithEvidence ask still writes a dispositions pending file for s0 and prints PENDING_QUESTION', () => {
+  const host = poolHost('dlg-rwe-ask', { rejectWithEvidence: 'ask' })
+  const r = markD(host, REPRO_RETURN())
+  assert.strictEqual(r.status, 0, 'the delegated mark must exit 0: ' + r.stdout + r.stderr)
+  assert.match(r.stdout, /PENDING_QUESTION/, 'ask must keep the stop line, or the lane never relays the reject: ' + r.stdout)
+  const doc = readPending(host.root)
+  assert.strictEqual(doc.kind, 'dispositions', 'the kind must be dispositions: ' + doc.kind)
+  assert.deepStrictEqual(doc.questions.map((q) => q.id), ['s0'], 'ask must put the reject back to the user: ' + JSON.stringify(doc.questions))
+})

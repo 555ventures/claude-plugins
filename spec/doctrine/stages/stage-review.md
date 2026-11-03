@@ -36,6 +36,8 @@ whose options are, in order: abandon and queue /spec:fix (Recommended) / waive o
 through the disposer / abandon without queuing / re-plan. Every pass's ledger line lands in `.claude/spec-runs.jsonl`,
 appended by the driver, never hand-appended.
 
+At the dispositions mark, policy.stops.rejectWithEvidence accept (the default) accepts a disposer reject whose repro the disposer ran; only the user waives.
+
 When the driver prints `DONE`, report (core § Console Output Style) — printed by
 `report-render.js`; slots `outcome`, `warns`, `queued`, `next` (its captured
 `node "$(spec-paths spec-status)" --next`, verbatim, never hand-applied). Run
@@ -66,6 +68,7 @@ When the driver prints `DONE`, report (core § Console Output Style) — printed
   `waive`/`reject` goes to the user via `AskUserQuestion` (≤4 per call, core § Question
   Style), the disposer's reason quoted and its recommendation first; record the answer as
   `final`, `overriddenBy: "user"` + `overrideReason` when it differs.
+  A reject carrying an executed repro is accepted at the mark by policy.stops.rejectWithEvidence accept (the default), the driver printing the 📌 line; ask sends it to the user as before.
   Waive/Reject land in the spec's Rationale with date + reason; only the user waives.
   `DISPOSER_FAILED` is a failed dispatch, never a disposition — re-dispatch before marking.
   An empty hard pool the driver dispositions itself at `reviewer-returned` — no mark, no disposer.

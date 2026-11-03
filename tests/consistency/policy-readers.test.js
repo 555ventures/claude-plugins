@@ -90,3 +90,17 @@ test('AC-20261103-04-17: core, fanout, stage-build, stage-review and init each n
   assert.ok(has(init, 'policy.stops') && has(init, 'never asked'),
     'init Policy round 2 must say policy.stops is written with defaults and never asked, or init is read as asking a ninth question')
 })
+
+// specs/20261103/09-an-executed-repro-answers-the-reject.md D3/D7/D8 (AC-20261103-09-10): the repro field and the rejectWithEvidence key have prose readers.
+test('AC-20261103-09-10: disposer § Return contract names repro with command and observed, § Recommendation rules says actually ran, and stage-review, fanout and init each name the rejectWithEvidence reader', () => {
+  const has = (text, lit) => phrase(lit).test(text)
+  const disposer = body('spec/agents/disposer.md')
+  const ret = section(disposer, /^## Return contract/, 2)
+  for (const w of ['repro', 'command', 'observed']) assert.ok(has(ret, w), 'disposer § Return contract must name ' + w + ', or the disposer never learns the field a policy accept rests on')
+  assert.ok(has(section(disposer, /^## Recommendation rules/, 2), 'actually ran'), 'disposer § Recommendation rules must say the command was actually run, or a repro is written for a check only reasoned about')
+  const protocol = section(body('spec/doctrine/stages/stage-review.md'), /^## Protocol/, 2)
+  assert.ok(has(protocol, 'policy.stops.rejectWithEvidence'), 'stage-review § Protocol must name policy.stops.rejectWithEvidence, or the review prose disagrees with the driver')
+  assert.ok(has(protocol, 'only the user waives'), 'stage-review § Protocol must keep only the user waives, or the policy accept reads as licence to accept a waive')
+  assert.ok(has(section(body('spec/commands/fanout.md'), /^## Input/, 2), 'rejectWithEvidence'), 'fanout § Input must list rejectWithEvidence for --ask, or the per-run override is undiscoverable')
+  assert.ok(has(section(body('spec/commands/init.md'), /^### Policy round 2/, 3), 'rejectWithEvidence accept'), 'init Policy round 2 must name the rejectWithEvidence default, or init is read as leaving the key unwritten')
+})

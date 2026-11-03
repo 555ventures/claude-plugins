@@ -162,6 +162,11 @@
 // `marks.escalated`, set nowhere but `handleFixApplied`'s own cap refusal, never the raw manifest
 // count (a dispositions mark that lands FIX for what would be the capping cycle stays accepted,
 // SHALL CONTINUE TO) — (names "iteration cap 2"), or
+// an entry carrying `repro` that is not an object with non-blank string `command` and `observed`
+// (names the ref, `repro` and `{ command, observed }`), an entry carrying `acceptedBy` unless it is a
+// recommended `reject` with a `repro` and `final: reject` (names `acceptedBy`; a user veto — a
+// different `final` with overriddenBy:"user" — clears the stamp instead), both refused before any
+// write, or
 // `--skip-independence-check-
 // because` passed at all, on any run (names the flag and ADR-0005 — there is no CHECKPOINT left
 // for it to bypass), or `--mark dispositions`
@@ -1610,6 +1615,47 @@ function handleDispositions() {
           'leg-finding pools for this iteration')
       }
     }
+    // A `repro` is the disposer's attestation of a command it ran: a malformed one fails closed
+    // exactly as a blank reason does, and `acceptedBy` is this driver's own stamp, never the
+    // disposer's. Both are refused before the delegated filter and before any write. A user veto
+    // (final differs from a policy-accepted reject, overriddenBy:"user") clears the stamp.
+    const validRepro = (x) => x !== null && typeof x === 'object' && !Array.isArray(x) &&
+      typeof x.command === 'string' && x.command.trim() !== '' &&
+      typeof x.observed === 'string' && x.observed.trim() !== ''
+    let rewritten = false
+    for (const d of ret.dispositions) {
+      if (d.repro !== undefined && !validRepro(d.repro)) {
+        die('--file ' + file + ' entry ' + d.ref + ' has a malformed repro — it must be an object ' +
+          '{ command, observed } of two non-blank strings (the command the disposer ran and the output ' +
+          'it observed); fix the entry or drop repro, then re-run this mark')
+      }
+      if (d.acceptedBy !== undefined) {
+        const sane = d.recommended === 'reject' && d.repro !== undefined
+        if (sane && d.final !== undefined && d.final !== 'reject' && d.overriddenBy === 'user') {
+          delete d.acceptedBy
+          rewritten = true
+        } else if (!sane || d.final !== 'reject') {
+          die('--file ' + file + ' entry ' + d.ref + ' carries acceptedBy — only this driver stamps it, ' +
+            'and only on a recommended reject with a repro whose final is reject; remove acceptedBy ' +
+            'from the entry and re-run this mark')
+        }
+      }
+    }
+    const rejectPool = ret.dispositions.filter((d) => d.recommended === 'reject' && d.repro !== undefined && d.final === undefined)
+    if (rejectPool.length) {
+      const refs = poolRefs.filter((r) => rejectPool.some((d) => d.ref === r))
+      const pick = pq.policyPick(repoRoot, 'rejectWithEvidence', { accept: 'accept reject on executed repro: ' + refs.join(', ') }, marks)
+      if (pick) {
+        for (const d of rejectPool) { d.final = 'reject'; d.acceptedBy = 'policy' }
+        rewritten = true
+        markPreamble = pick.line + '\n' +
+          'To answer differently: set final to fix or waive on that entry in <file> with overriddenBy "user" and overrideReason, and re-run this mark before the next one.\n'
+      }
+    }
+    if (rewritten) {
+      raw = JSON.stringify(ret, null, 2) + '\n'
+      fs.writeFileSync(file, raw)
+    }
     if (pq.isDelegated(repoRoot)) {
       const open = ret.dispositions.filter((d) => (d.recommended === 'waive' || d.recommended === 'reject') && d.final === undefined)
       if (open.length) {
@@ -2577,6 +2623,7 @@ function handleRepairRound() {
 
 // A policy pick recorded once per key: a bare re-invocation reprints the step but never appends a
 // second record. Saves the sidecar when a new pick lands.
+let markPreamble = '' // the 📌 + veto lines a dispositions mark prints ahead of the next step
 function pickOnce(key, labelByValue) {
   const had = (marks.policyPicks || []).some((x) => x.key === key)
   const r = pq.policyPick(repoRoot, key, labelByValue, marks)
@@ -2950,8 +2997,14 @@ const STEPS = {
       `  outputs: ${outDir}\n` +
       (pq.isDelegated(repoRoot)
         ? `${RIDE_ALONG}\nwrite the return file as the disposer produced it, then:\n`
-        : `Fix recommendations dispatch without a question; waive/reject recommendations go to the ` +
-          `user (AskUserQuestion; record the answer as final with overriddenBy:"user" when it differs). ` +
+        : (pq.stopPolicy(repoRoot).rejectWithEvidence === 'accept'
+          ? `Fix recommendations dispatch without a question; a reject whose repro names the command the ` +
+            `disposer ran and its observed output is accepted at the mark (host policy ` +
+            `stops.rejectWithEvidence: accept — the mark prints the 📌 line); every other waive/reject ` +
+            `recommendation goes to the user (AskUserQuestion; record the answer as final with ` +
+            `overriddenBy:"user" when it differs). `
+          : `Fix recommendations dispatch without a question; waive/reject recommendations go to the ` +
+            `user (AskUserQuestion; record the answer as final with overriddenBy:"user" when it differs). `) +
           `${RIDE_ALONG}\n` +
           `Write the return to a file, then:\n`) +
       `  node ${__filename} ${specPath} --mark dispositions --file <return.json>\n` +
@@ -3108,7 +3161,7 @@ const STEPS = {
   CONFLICTS: () => `## CONFLICTS — resolve then mark conflicts-resolved (see prior output)`,
 }
 
-writeOut(1, `[spec-review-driver] state: ${state}  spec: ${specPath}\n` +
+writeOut(1, markPreamble + `[spec-review-driver] state: ${state}  spec: ${specPath}\n` +
   `(re-run this driver after completing the step; it verifies artifacts and prints the next one)\n\n` +
   STEPS[state]() + '\n')
 process.exit(0)

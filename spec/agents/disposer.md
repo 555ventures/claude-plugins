@@ -68,7 +68,10 @@ For every entry in the pool, return exactly one of:
   sanctioning line verbatim in your `reason`.
 - **`reject`** — only on executed contrary evidence (a repro you ran that contradicts the
   finding) or a demonstrated miscitation (the finding cites a spec line that says something
-  else — quote both). Cite the executed check or the miscitation in your `reason`.
+  else — quote both). Cite the executed check or the miscitation in your `reason`. An executed
+  repro is also written into the entry's `repro` field; a miscitation carries no `repro`. A
+  host's policy may accept a `repro`-bearing `reject` without a question, so write `repro` only
+  for a command you actually ran in this dispatch, never for a check you reasoned about.
 
 `waive` and `reject` are conservative calls reserved for grounded evidence already in hand —
 never a judgment call about whether the finding matters. When in doubt, recommend `fix`; the
@@ -86,7 +89,9 @@ say so.
 
 Return `{"verdict": "DISPOSED" | "DISPOSER_FAILED", "dispositions": [{"ref": "s<i>" |
 "leg:<name>", "recommended": "fix" | "waive" | "reject", "reason": "<quoted spec line or
-executed check>"}], "tokens": <n>}`. `verdict` is exactly one of those two words. `dispositions`
+executed check>", "repro"?: {"command": "<the command you ran, verbatim>", "observed": "<the
+output that contradicts the finding>"}}], "tokens": <n>}`. `repro` is optional, only on a
+`reject` grounded in execution, and both its strings are non-blank. `verdict` is exactly one of those two words. `dispositions`
 covers every survivor and every qualifying leg row exactly once — no omissions, no duplicates,
 no entries for anything outside those two pools. `DISPOSER_FAILED` is a failed dispatch, not a
 disposition; the session re-dispatches rather than marking a failed return.

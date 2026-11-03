@@ -31,7 +31,7 @@ const SELF = __filename
 const DIR = __dirname
 const die = makeDie('fanout-driver')
 const MARKS = ['planned', 'dispatched', 'returned', 'answered', 'dismissed', 'resumed', 'merged', 'gate-repaired', 'reported']
-const ASK_KEYS = ['repairRound', 'buildEscalate', 'reviewEscalate', 'redFindings', 'all']
+const ASK_KEYS = ['repairRound', 'buildEscalate', 'reviewEscalate', 'redFindings', 'rejectWithEvidence', 'all']
 const ACTIVE = ['dispatched', 'pending', 'merge-ready']
 const TERMINAL = ['merged', 'stopped', 'done']
 

@@ -203,7 +203,8 @@ test('AC-20261103-04-3: stopPolicy overlays the fan-out table ask list so policy
   assert.strictEqual(m.policyPick(asked, 'repairRound', REPAIR, marks), null, 'an ask stop must return null so the driver asks')
   assert.ok(!('policyPicks' in marks), 'a null pick must record nothing, or the report lists a pick that was never made')
   const all = policyHost('pq-stops-all', {}, { version: 1, lanes: [], ask: ['all'] })
-  assert.deepStrictEqual(Object.values(m.stopPolicy(all)), ['ask', 'ask', 'ask', 'ask', 'ask'], 'the word all must turn every key to ask')
+  const keys = Object.keys(require(path.join(SPEC, 'scripts/lib/host-config')).POLICY_DEFAULTS.stops)
+  assert.deepStrictEqual(m.stopPolicy(all), Object.fromEntries(keys.map((k) => [k, 'ask'])), 'the word all must turn every stops key to ask')
   const plain = policyHost('pq-stops-plain', { repairRound: 'repair' }, { version: 1, lanes: [] })
   const pm = {}
   const pick = m.policyPick(plain, 'repairRound', REPAIR, pm)
@@ -215,6 +216,20 @@ test('AC-20261103-04-3: stopPolicy overlays the fan-out table ask list so policy
   assert.deepStrictEqual({ key: rec.key, value: rec.value, label: rec.label }, { key: 'repairRound', value: 'repair', label: 'run one in-session repair round' }, 'the record names key, value and label')
   assert.ok(!Number.isNaN(Date.parse(rec.at)), 'the record needs an ISO time: ' + rec.at)
   assert.strictEqual(m.policyPick(plain, 'repairRound', {}, {}), null, 'a value with no label must return null so the driver asks')
+})
+
+test('AC-20261103-09-9: stopPolicy reads rejectWithEvidence as ask when the fan-out table lists it and policyPick returns null, and without it policyPick returns the accept pick line', () => {
+  const m = pq()
+  const REJ = { accept: 'accept reject on executed repro: s0' }
+  const asked = policyHost('pq-rwe-ask', undefined, { version: 1, lanes: [], ask: ['rejectWithEvidence'] })
+  assert.strictEqual(m.stopPolicy(asked).rejectWithEvidence, 'ask', 'a rejectWithEvidence entry in the table ask list must read as ask, or --ask relays nothing')
+  const marks = {}
+  assert.strictEqual(m.policyPick(asked, 'rejectWithEvidence', REJ, marks), null, 'an ask stop must return null so the driver asks')
+  assert.ok(!('policyPicks' in marks), 'a null pick must record nothing')
+  const plain = policyHost('pq-rwe-plain', undefined, { version: 1, lanes: [] })
+  assert.deepStrictEqual(m.policyPick(plain, 'rejectWithEvidence', REJ, {}), { value: 'accept', label: 'accept reject on executed repro: s0',
+    line: '📌 Auto-picked accept reject on executed repro: s0 — host policy stops.rejectWithEvidence: accept (veto anytime)' },
+  'the pick must carry the byte-exact veto line, or the user cannot recognise or veto it')
 })
 
 test('AC-20261103-04-14: bareRun sets marks.laneExit.reason to the chosen label when an answered file resumes with stop', () => {

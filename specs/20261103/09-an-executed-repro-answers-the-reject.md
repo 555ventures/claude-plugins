@@ -1,12 +1,13 @@
 ---
 date: 2026-11-03
-status: hardened
+status: implementing
 tier: critical           # spec/templates/grounding-contract.md gains a policy.stops key (§ Risk Tiers: hash-stamped into every host)
 area: pipeline
 breaking: false
 depends_on: []
 brief: n/a
 open_markers: 0
+diff_base: 4e19cf5b20dabd3019d013a40435546a0426ac27
 ---
 
 # An executed repro answers the reject

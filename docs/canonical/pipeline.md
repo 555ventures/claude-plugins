@@ -170,14 +170,21 @@ stop offers one in-session repair round (`--mark repair-round`, cap 1) before `/
 review's fix-cap stop lists the open findings and recommends abandon-and-queue. Merge strategy
 is derived in every command from `merge-back.sh inspect`'s RECOMMEND line. Only the user
 waives, in every lane — `/spec:fix` included. (specs/20261029/07)
+The predictable stops are answered by the host's `policy.stops` block (`repairRound`, `buildEscalate`,
+`reviewEscalate`, `redFindings`, `prototypeClose`), written with safe defaults at init and shared by solo runs
+and lanes; each pick prints one `📌 Auto-picked <label> — host policy stops.<key>: <value> (veto anytime)` line
+and is listed in the run report; `ask` on a key brings the question back, and deleting a prototype stays a
+question by default. `/spec:fix` no longer asks before committing a dirty tree — `/git:commit`'s own two
+approvals are the stop. (specs/20261103/04)
 In a lane (the private git dir carries the `spec-delegated` marker or the branch is in the fan-out table; sub-agents have no AskUserQuestion) every judgment stop in the
 build and review drivers, `/spec:run` Step 0 and `/spec:fix` writes `.claude/pending-question.json`
 at the lane's repo root and prints `PENDING_QUESTION`; the parent session relays it and records the
-answer (`by: user` or `by: standing`); a bare re-run resumes from the answered file, stops on a
+answer (`by: user`; a stop the host policy answers is never written — the lane's own driver prints the 📌 line and continues); a bare re-run resumes from the answered file, stops on a
 dismissal, and waits otherwise. A delegated review ends at `MERGE_READY`; the parent merges from the
 main root. (specs/20261102/02)
 `/spec:fanout` runs the lanes from one session: `fanout-driver.js` over `<git-common-dir>/spec-fanout.json`,
-worktree-isolated sub-agents on the `lanes` seat, standing answers for `repair-round`/`build-escalate`/`prototype-close`,
+worktree-isolated sub-agents on the `lanes` seat, no standing sheet — the host's `policy.stops` answers the predictable stops and `--ask <key>` relays one for a
+run; a lane's parked build, spent repair round or `stop` answer lands as a recorded `laneExit`,
 serialized merge through the review driver's MERGE step with the gate re-run on main after each. (specs/20261102/03)
 
 ## The question gate asks product facts, never derives them (2026-09-02, specs/20260902/06)

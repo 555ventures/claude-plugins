@@ -13,6 +13,7 @@ const drv = require('./review-driver.fixtures')
 // an AskUserQuestion instruction, resumes from the answered file, and parks at MERGE_READY.
 // specs/20261103/04-predictable-stops-become-host-policy.md D4/D6/D14 — AC-20261103-04-5, -9, -19:
 // a default host auto-picks both stops and writes no file; stops set to ask keep the pending file.
+// q28: the ESCALATE queue pick's laneExit is kept in the lane's git dir, outliving the printed sidecar delete.
 
 const DRIVER = esc.DRIVER
 const DRIVER_ABS = path.join(SPEC, DRIVER)
@@ -207,6 +208,26 @@ test('AC-20261103-04-9: a delegated ESCALATE on a default host writes no pending
     'the lane must print the pick the policy made: ' + r.stdout)
   assert.ok(!fs.existsSync(pendingOf(host.root)), 'a policy pick writes no file, or the parent relays a question the policy already answered')
   assert.doesNotMatch(r.stdout, /PENDING_QUESTION/, 'the stop line must not print for a policy pick: ' + r.stdout)
+})
+
+test('q28: a delegated ESCALATE queue pick keeps its laneExit in the lane\'s git dir, so following the printed `delete <sidecar>` does not lose it', () => {
+  const host = escalateHost('dlg-esc-exit')
+  const r = runD(host.root, host.spec)
+  assert.ok(r.stdout.includes('delete ' + host.sidecar), 'setup precondition: the queue pick prints the sidecar delete: ' + r.stdout)
+  fs.rmSync(host.sidecar, { recursive: true, force: true })
+  const exit = require(path.join(SPEC, 'scripts/pending-question.js')).readLaneExit(host.root)
+  assert.ok(exit && exit.reason === 'review escalated at the fix cap — 2 open findings',
+    'the lane exit must survive the delete its own step prints, or the fan-out returns the lane "without a recognised stop": ' + JSON.stringify(exit))
+  assert.ok(typeof exit.queued === 'string' && exit.queued.endsWith('review escalated at the fix cap — 2 open findings'),
+    'the queue subject must survive too, so the fan-out report names the repair: ' + JSON.stringify(exit))
+})
+
+test('q28: an in-session ESCALATE queue pick writes no lane-exit record outside the sidecar', () => {
+  const host = escalateHost('plain-esc-exit')
+  runPlain(host.root, host.spec)
+  assert.strictEqual(require(path.join(SPEC, 'scripts/pending-question.js')).readLaneExit(host.root), null,
+    'a solo run is not a lane; a record in its git dir would outlive every review on that checkout')
+  assert.ok(readMarks(host).laneExit, 'the sidecar copy is still written for solo runs (D10)')
 })
 
 test('AC-20261103-04-5: a delegated STOPPED with the round unspent on a default host prints the Auto-picked repair line, writes no pending file and prints no PENDING_QUESTION', () => {

@@ -25,6 +25,7 @@ const { makeDie, writeJson, nowIso } = require('./lib/driver-core')
 const { writeOut, runHost } = require('./lib/driver-io')
 const { readConfig, agentCall, policy } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
+const { readLaneExit } = require('./pending-question')
 
 const SELF = __filename
 const DIR = __dirname
@@ -501,7 +502,8 @@ function doMark(st, mark) {
       const base = path.join(l.worktree, l.spec).replace(/\.md$/, '')
       const sides = [readJson(path.join(base + '.build', 'build-state.json')), readJson(path.join(base + '.review', 'review-state.json'))].filter(Boolean)
       l.policyPicks = sides.flatMap((x) => Array.isArray(x.policyPicks) ? x.policyPicks : [])
-      const exit = sides.map((x) => x.laneExit).find((x) => x && typeof x.reason === 'string')
+      // the lane's git-dir record first: the exits that set laneExit print `delete <sidecarDir>`.
+      const exit = readLaneExit(l.worktree) || sides.map((x) => x.laneExit).find((x) => x && typeof x.reason === 'string')
       if (exit && l.state !== 'pending' && l.state !== 'done' && !arg.stopped) {
         l.state = 'stopped'; l.stoppedReason = exit.reason
         if (typeof exit.queued === 'string' && exit.queued) st.queued.push(exit.queued)

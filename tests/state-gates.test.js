@@ -116,8 +116,19 @@ test('narration quoting the BRACKETED form (no colon) does not block', () => {
   assert.strictEqual(res.status, 0, res.stderr)
 })
 
-test('open_markers counter is authoritative: 0 passes even when prose quotes the colon form', () => {
-  const spec = `---\nstatus: hardened\nopen_markers: 0\n---\n# Spec\nRationale: we resolved [NEEDS CLARIFICATION: which tz?] by picking UTC (D4).\n`
+// 2026-11-02 direct fix: the counter is written by the planning session about itself, so a 0
+// is re-verified by a live recount — a self-reported 0 over a live marker no longer unlocks
+// the run (the earlier pin that made the counter authoritative is reversed on purpose).
+test('open_markers: 0 over a live colon-form marker is refused — the gate recounts', () => {
+  const spec = `---\nstatus: hardened\nopen_markers: 0\n---\n# Spec\nD3 | TOTP second factor [NEEDS CLARIFICATION: owner Q7 still open] | pending\n`
+  const res = gate('/spec:run', spec)
+  assert.strictEqual(res.status, 2, 'a self-reported open_markers: 0 must not unlock a spec with a live marker')
+  assert.match(res.stderr, /1 live \[NEEDS CLARIFICATION/)
+  assert.match(res.stderr, /self-reported/)
+})
+
+test('open_markers: 0 with narration in the bare bracketed form passes', () => {
+  const spec = `---\nstatus: hardened\nopen_markers: 0\n---\n# Spec\nRationale: the [NEEDS CLARIFICATION] on timezone was resolved by picking UTC (D4).\n`
   const res = gate('/spec:run', spec)
   assert.strictEqual(res.status, 0, res.stderr)
 })

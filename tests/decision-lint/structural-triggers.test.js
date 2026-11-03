@@ -92,7 +92,7 @@ test('AC-20261029-05-2: --json carries notices and counts.dependencyRows equal t
   assert.strictEqual(j.counts.dependencyRows, 1, 'dependencyRows must equal the number of notices')
 })
 
-test('AC-20261029-05-3: a non-empty Data Model on tier: standard exits 1 with one data-model-requires-critical finding; tier: critical exits 0 with counts.dataModel 1', () => {
+test('AC-20261029-05-3 AC-20261102-04-2: a non-empty Data Model on tier: standard exits 1 with one data-model-requires-critical finding; tier: critical exits 0 with counts.dataModel 1', () => {
   const dir = host()
   const dm = 'tables: orders gains column refunded_at\nexisting rows: unaffected'
   const std = lint(dir, spec(dir, { dataModel: dm, tier: 'standard' }))
@@ -124,7 +124,7 @@ test('AC-20261029-05-4: a placeholder-only or absent Data Model reports neither 
   assert.ok(none.j && none.j.counts.dataModel === 0, 'an absent section means dataModel 0')
 })
 
-test('AC-20261029-05-5: a spec dated before STRUCTURAL_LINT_APPLIES_FROM emits nothing, the same content at specs/20261029/ emits all four classes, and the summary line and counts keys hold', () => {
+test('AC-20261029-05-5 AC-20261102-04-6: a spec dated before STRUCTURAL_LINT_APPLIES_FROM emits nothing, the same content at specs/20261029/ emits all four classes, and the summary line and counts keys hold', () => {
   const sections = require('../../spec/scripts/lib/spec-sections')
   assert.strictEqual(sections.STRUCTURAL_LINT_APPLIES_FROM, '20261029', 'lib/spec-sections.js must export the structural cutoff')
   const dir = host()

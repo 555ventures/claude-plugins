@@ -14,7 +14,8 @@
 // in .claude/rules/spec-pipeline.md, all 16 recorded instances benign. This script IS the
 // reconciliation: it derives each tests-layer File Plan file's expected colour from the spec's AC
 // vocabulary (a `SHALL CONTINUE TO` pin, or a closed-enum `[pre-green: <reason>]` tag — the tag
-// grammar/enum live in lib/spec-sections.js, the single authority), executes `{testCommand}`
+// grammar/enum live in lib/spec-sections.js, the single authority — an AC ending `→ rewrites` is
+// never sanctioned, its rewritten test owing a red whatever else the bullet says), executes `{testCommand}`
 // (+ `{typecheckCommand}` when declared; a `{file}` in either is substituted via
 // lib/host-run.js withFiles, else the path is appended) once per file against the untouched pre-image, and
 // reports every mismatch as a named finding. build.md's classification prose and red-check
@@ -323,7 +324,16 @@ for (const b of wellFormed) {
   preGreenValidity.set(b.id, PRE_GREEN_REASONS.includes(b.preGreen) ? 'valid' : 'invalid')
 }
 
+// A `rewrites` disposition is never sanctioned green, whatever else the bullet says: the per-test
+// arm below expects that rewritten case RED (green = `gutted-rewrite`), so letting a `SHALL
+// CONTINUE TO` pin or a `[pre-green:]` tag flip the whole file to green-expected made a pin whose
+// oracle moves to a new seam unpassable in both colours — red → `broken-pin`, green →
+// `gutted-rewrite` (prax-app 20261103/01, health.test.ts). Pin and disposition are orthogonal:
+// CONTINUE TO says the behaviour outlives the spec, `rewrites` says its test must change and so
+// fails first.
 function isSanctioned(b) {
+  const disposition = parseDisposition(b.raw)
+  if (disposition && disposition.kind === 'rewrites') return false
   if (/SHALL CONTINUE TO/.test(normalizeForPinCheck(b.raw))) return true
   return preGreenValidity.get(b.id) === 'valid'
 }

@@ -23,20 +23,29 @@
 // requirements*.txt, Cargo.toml, Cargo.lock, go.mod, go.sum, Gemfile, Gemfile.lock,
 // composer.json, composer.lock.
 //
+// Additive carve-out: a non-empty ## Data Model holding BOTH `changes: additive-only` and
+// `existing rows: unaffected`, each on its own line and case-exact, with no contradicting line,
+// does not demand tier: critical. `additive-claim-contradicted` (any tier)
+// fires when `changes: additive-only` is declared and a section line is an `existing rows:` value
+// other than `unaffected`, or matches drop / rename / backfill, `type change` / `alter ... type`,
+// or `not null` with no `default` on the same line. The verb list is a floor, never a proof of
+// additivity; it is stated here and nowhere else.
+//
 // Deliberately does NOT: write a manifest or ledger row, render a report, verify an `[asked:]`
-// attestation beyond non-emptiness, read spec-queue.json itself (it spawns spec-queue.js), or
-// accept any allow-list file or failure-class enum.
+// attestation beyond non-emptiness, read spec-queue.json itself (it spawns spec-queue.js), read
+// the host's § Risk Tiers for the Data Model check, infer additivity from prose, or accept any
+// allow-list file or failure-class enum.
 //
 // Stdout: `decision-lint: restrictions=<R> deferrals=<F> findings=<N>` then one
 // `  <class> <Dn>: <detail>` line per finding; --json prints one object
 // { findings: [{ severity, class, id, detail }], counts: { restrictions, deferrals, breaking,
-// dependencyRows, dataModel }, notices: [{ kind: 'dependency-row', path }] }. Dependency notices
+// dependencyRows, dataModel, additiveDataModel }, notices: [{ kind: 'dependency-row', path }] }. Dependency notices
 // (`📌 adds or changes dependencies — <path> (veto anytime)`) print after the finding lines and
 // never change the exit code.
 //
 // Exit codes:
 //   0  no findings (including a not-applicable pre-cutoff spec)
-//   1  findings emitted
+//   1  findings emitted (including data-model-requires-critical and additive-claim-contradicted)
 //   2  usage error, unreadable spec, no Decisions section, or unreadable host rules
 //      (missing config, rules file, or § Risk Tiers section — fail-closed)
 
@@ -157,7 +166,7 @@ for (const row of rows) {
   }
 }
 
-let breaking = 0, dataModel = 0
+let breaking = 0, dataModel = 0, additiveDataModel = 0
 const notices = []
 if (!dateMatch || dateMatch[1] >= STRUCTURAL_LINT_APPLIES_FROM) {
   if (fmValue(specText, 'breaking') === 'true') {
@@ -181,12 +190,29 @@ if (!dateMatch || dateMatch[1] >= STRUCTURAL_LINT_APPLIES_FROM) {
   const dmBody = dm === null ? '' : dm.replace(/\{\s*Persistence changes:[\s\S]*?\}/, '').trim()
   if (dmBody) {
     dataModel = 1
-    if (fmValue(specText, 'tier') !== 'critical') push('data-model-requires-critical', 'Data Model', '## Data Model is non-empty — a persisted-data change is tier: critical (core § Tiers); set tier: critical or remove the section')
+    const lines = dmBody.split('\n').map(l => l.trim())
+    const declared = lines.includes('changes: additive-only')
+    const unaffected = lines.includes('existing rows: unaffected')
+    if (declared) additiveDataModel = 1
+    let offending = null
+    if (declared) {
+      for (const l of lines) {
+        if (!l || l === 'changes: additive-only' || l === 'existing rows: unaffected') continue
+        const er = /^existing rows:\s*(.*)$/.exec(l)
+        if ((er && er[1].trim() !== 'unaffected') || /\b(drop|rename|backfill)\w*\b/i.test(l) ||
+            /\btype change\b|\balter\b[^\n]*\btype\b/i.test(l) || (/\bnot null\b/i.test(l) && !/\bdefault\b/i.test(l))) {
+          offending = l
+          break
+        }
+      }
+      if (offending !== null) push('additive-claim-contradicted', 'Data Model', '## Data Model declares `changes: additive-only` but its own text says otherwise — `' + offending + '`; drop the declaration and set tier: critical, or remove the migrating change')
+    }
+    if (fmValue(specText, 'tier') !== 'critical' && !(declared && unaffected && offending === null)) push('data-model-requires-critical', 'Data Model', '## Data Model is non-empty — a persisted-data change is tier: critical (core § Tiers); set tier: critical, or declare `changes: additive-only` with `existing rows: unaffected` when it only adds a table or a nullable/defaulted column')
     if (!/^existing rows:\s*\S/m.test(dmBody)) push('missing-existing-rows-line', 'Data Model', '## Data Model has no `existing rows:` line — add `existing rows: unaffected` or `existing rows: <what changes>` on its own line')
   }
 }
 
-const counts = { restrictions, deferrals, breaking, dependencyRows: notices.length, dataModel }
+const counts = { restrictions, deferrals, breaking, dependencyRows: notices.length, dataModel, additiveDataModel }
 if (jsonOut) {
   writeOut(1, JSON.stringify({ findings, counts, notices }, null, 2) + '\n')
 } else {

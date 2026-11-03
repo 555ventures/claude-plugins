@@ -112,7 +112,9 @@ Lock reads three structural carriers through `decision-lint`: a `breaking: true`
 `[asked:]` or `[breaking:]` Decision; a dependency manifest or lockfile in the File Plan prints
 `📌 adds or changes dependencies` and must name its packages in the row's Summary (or say `no
 dependency change`); a non-empty Data Model makes the spec critical and must carry an `existing
-rows:` line. Specs dated before 2026-10-29 are exempt (specs/20261029/05). There is no stop
+rows:` line, unless it declares `changes: additive-only` with `existing rows: unaffected` (a new
+table or a nullable/defaulted column); a declaration the section's own text contradicts is refused
+as `additive-claim-contradicted` (specs/20261102/04). Specs dated before 2026-10-29 are exempt (specs/20261029/05). There is no stop
 between the reviewer's return and dispositions. Independence is a fresh-context
 `spec:disposer` agent (read-only, paths only, `opus` at `effort: medium` — the disposer seat in
 core § Model Placement) dispatched at

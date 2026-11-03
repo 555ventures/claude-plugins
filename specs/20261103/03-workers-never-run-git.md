@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: hardened
+status: done
 tier: critical
 area: build-stage
 breaking: false
@@ -8,6 +8,7 @@ depends_on: []
 brief: n/a
 spiked: 2026-11-03
 open_markers: 0
+diff_base: 8d873a5427234959e34ff1ee93082a2455d1dfe2
 ---
 
 # Workers never run git — the ban becomes a hook
@@ -36,6 +37,7 @@ in a test, and § Worker Git Ban points at the script as its enforcer.
 | D7 | `.claude/rules/spec-pipeline.md` § Risk Tiers hook-surfaces list gains `spec/scripts/block-worker-git.sh` `[no-ac: this repo's own grounding prose, no testable surface]` | A broken hook blocks every Bash call in every host; the list is what makes a future edit to it critical tier. |
 | D8 | `spec/.claude-plugin/plugin.json` is bumped via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` `[no-ac: plugin-bump.js --check in the gate is the oracle]` | Host Planning rules: the description is the changelog surface; no version literal in a spec. |
 | D9 | Two regression pins: the cross-worktree write hook still blocks a write into another working tree (AC-20261103-03-10), and `isDelegated` still reads only the `spec-delegated` marker and the fan-out table (AC-20261103-03-11) | hooks.json is shared by every hook, and the new marker sits beside the lane marker in the same private git dir — both neighbours must demonstrably not move. |
+| D10 | `tests/consistency/entrypoints.test.js`'s exhaustive hooks.json script-path pin (the `parseHookScriptPaths extracts exactly the five live hooks.json script paths` case, spec 20260901/02 AC 8) gains `spec/scripts/block-worker-git.sh` in its expected set and its "five" count wording becomes "six"; assertions otherwise unchanged, no AC retag (user ruling at build REPAIR round 1, gate-1.log `not ok 132`: add to this build) `[no-ac: exhaustive live-file pin updated in place; its own case is the oracle]` | pipeline rules § Gotchas: a spec adding a hooks.json member invalidates that exhaustive pin by construction; the pin's own comment says each addition updates the set in place. |
 
 ## File Plan
 
@@ -52,6 +54,7 @@ in a test, and § Worker Git Ban points at the script as its enforcer.
 | tests/consistency/red-fixture-coverage.test.js | MODIFY | tests | `HOOK_HANDLERS['block-worker-git.sh']` — fixture mirror of AC-20261103-03-1 / AC-20261103-03-3 (D6) |
 | spec/entrypoints.json | MODIFY | other | row `spec/scripts/block-worker-git.sh` → `entryPoints: ["spec/hooks/hooks.json"]`, same shape as the cross-worktree hook's row (D6) |
 | tests/worktree-hook.test.js | MODIFY | tests | AC-20261103-03-10 — append the ID to the title of the `AC-20260820-02-2:` case; assertions unchanged (D9) |
+| tests/consistency/entrypoints.test.js | MODIFY | tests | exhaustive hooks.json script-path pin gains `spec/scripts/block-worker-git.sh`; five → six (D10) |
 | tests/delegated/pending-question.test.js | MODIFY | tests | AC-20261103-03-11 — append the ID to the title of the `isDelegated` case and plant `spec-wave-open` beside the probe's tree as the "whatever else" input; assertions unchanged (D9) |
 
 ## Contracts
@@ -240,6 +243,11 @@ hook-set pin (`HOOK_HANDLERS`) is already a File Plan row.
 Known gap, left open on purpose: a worker that `cd`s into another working tree and commits
 there is not caught (the payload's `cwd` is the session's). That is the cross-worktree hook's
 territory and it has no Bash arm today; this spec does not add one.
+
+### Advisory debt (review rv_0cb72efcf5c9)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-adc386cef8bc45987/spec/scripts/block-worker-git.sh:35 — The extraction grammar only recognises `git` preceded by line start, `;&|(` backtick, or whitespace, so a path-prefixed or backslash-escaped invocation (`/usr/bin/git commit`, `\git commit`) is never extracted and passes under an open wave. This is the grammar the spec's Contracts block locks (A4 lists 16 observed samples, none path-prefixed), so it is a sanctioned gap, not a violation — recorded so the known-gap paragraph in Rationale can name it beside the cd-into-another-tree gap.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-adc386cef8bc45987/spec/scripts/block-worker-git.sh:35 — A `-c key="value with space"` global option breaks the option-skipping alternation at the space, so the next word of the quoted value is extracted as the verb and the BLOCKED line names it (e.g. `git -c user.name="a b" commit` → `BLOCKED: git b …`). Direction is safe (it still blocks) but the remedy line misnames the verb.
+- a2 /home/jj/projects/claude-plugins/.claude/worktrees/agent-adc386cef8bc45987/tests/worker-git-hook.test.js:20 — The marker-path derivation (`git -C <root> rev-parse --git-dir`, absolutize against root when relative, join `spec-wave-open`) is written out four times in this diff — driver `syncWaveMarker`, `tests/worker-git-hook.test.js::fixture`, `tests/consistency/red-fixture-coverage.test.js::hookWorkerGit`, `tests/build/build-driver-wave-marker.test.js::markerOf` — which meets the pipeline rules' three-or-more duplication calibration; a `waveMarkerPath(root)` helper in `tests/helpers.js` is the extraction for the three test copies.
 
 ## Canonical Delta
 

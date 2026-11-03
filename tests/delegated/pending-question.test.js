@@ -133,13 +133,15 @@ test('AC-20261102-02-16: runNode starts the child without the child-session mark
 // share one environment, so CLAUDE_CODE_CHILD_SESSION marked the orchestrator as a worker and the
 // merge step from the main root printed MERGE_READY. Delegation is read from the lane's git dir
 // marker or the fan-out table — never from the environment.
-test('isDelegated is false with the child env var set and no lane signal, true with the git-dir marker, true when the fan-out table lists the branch', () => {
+test('isDelegated (AC-20261103-03-11) is false with the child env var set and no lane signal, true with the git-dir marker, true when the fan-out table lists the branch', () => {
   const root = fs.realpathSync(tmpdir('pq-delegated'))
   const git = (...a) => execFileSync('git', ['-C', root, ...a], { encoding: 'utf8' }).trim()
   git('init', '-q', '-b', 'main')
   git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'seed')
   const probe = path.join(root, 'probe.js')
   fs.writeFileSync(probe, `console.log(String(require(${JSON.stringify(path.join(SPEC, SCRIPT))}).isDelegated(process.argv[2])))\n`)
+  // The wave-open marker (specs/20261103/03) sits beside the lane marker in the private git dir; it is no lane signal.
+  fs.writeFileSync(path.join(root, '.git', 'spec-wave-open'), JSON.stringify({ spec: 'specs/x.md', state: 'WAVE:scripts' }))
   const ask = () => runNode(path.relative(SPEC, probe), [root], { env: { CLAUDE_CODE_CHILD_SESSION: '1' } }).stdout.trim()
   assert.strictEqual(ask(), 'false',
     'the parent carries the child env var too — reading it marks the orchestrator as a worker and its merge step prints MERGE_READY')

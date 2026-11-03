@@ -19,8 +19,8 @@ Critical-tier triggers for THIS repo:
   contract genuinely changes, never for wording.
 - **Hook surfaces** (process boundary): `spec/hooks/hooks.json`, `spec/scripts/spec-state-gate.sh`,
   `spec/scripts/genesis-state-gate.sh`, `spec/scripts/question-style-gate.js`,
-  `spec/scripts/block-cross-worktree-writes.sh` — a broken hook blocks or pollutes every
-  session's prompts in every host repo.
+  `spec/scripts/block-cross-worktree-writes.sh`, `spec/scripts/block-worker-git.sh` — a broken
+  hook blocks or pollutes every session's prompts in every host repo.
 - **`spec/scripts/merge-back.sh`** — runs destructive git ops against host repos; exit-code
   alphabet (3 = conflicts, 4 = CWD-inside-worktree refusal) is load-bearing for the review stage.
 - **`spec/scripts/spec-status.js`** — the sole source of "what's next" across all hosts and a

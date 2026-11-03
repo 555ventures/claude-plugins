@@ -114,6 +114,11 @@
 // (`{"port": n}`), allocated the first time the REPLAY step prints or `--mark replayed` runs; the
 // step prints `export PORT=<n>; <bootCommand>` and the resolved address, and the replay joins each route
 // url onto it. A fixed `prototype.url` is joined as-is.
+//
+// Worker git ban: every step-print and --mark
+// invocation (never --state) writes or removes <private git dir>/spec-wave-open to match the
+// derived state. It does NOT run a git write to do so: the marker is a file write into the
+// private git dir, not a git operation.
 
 'use strict'
 const fs = require('fs')
@@ -1265,6 +1270,26 @@ if (!STATE_ONLY) ensureRedCheckAdvanced()
 const state = forcedState || deriveState()
 
 if (STATE_ONLY) { writeOut(1, state + '\n'); process.exit(0) }
+
+// The worker-git-ban signal: a file in the tree's private git dir, present exactly while the
+// derived state dispatches workers. block-worker-git.sh reads it; --state never reaches here.
+function syncWaveMarker(st) {
+  const gdR = runChild('git', ['-C', repoRoot, 'rev-parse', '--git-dir'], { encoding: 'utf8' },
+    'git rev-parse --git-dir')
+  const gd = (gdR.stdout || '').trim()
+  if (gdR.status !== 0 || !gd) die('cannot resolve the private git dir under ' + repoRoot + ' for the spec-wave-open marker')
+  const marker = path.join(path.isAbsolute(gd) ? gd : path.join(repoRoot, gd), 'spec-wave-open')
+  const dispatching = st === 'TESTS' || st === 'RED_FINDINGS' || st === 'RED_ATTRIBUTION' ||
+    st.startsWith('WAVE:') || st === 'REPAIR'
+  try {
+    if (dispatching) fs.writeFileSync(marker, JSON.stringify({ spec: specRel, state: st }))
+    else if (fs.existsSync(marker)) fs.unlinkSync(marker)
+  } catch (e) {
+    die('cannot ' + (dispatching ? 'write' : 'remove') + ' ' + marker + ' (' + e.message +
+      ') — the worker git ban would be inert; fix the path permissions and rerun')
+  }
+}
+syncWaveMarker(state)
 
 // ---- step bodies -------------------------------------------------------------------------------
 function testsStepBody() {

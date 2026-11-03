@@ -16,6 +16,11 @@
       "spec/hooks/hooks.json"
     ]
   },
+  "spec/scripts/block-worker-git.sh": {
+    "entryPoints": [
+      "spec/hooks/hooks.json"
+    ]
+  },
   "spec/scripts/ci-gate-parity.js": {
     "entryPoints": [
       "spec/commands/doctor.md"

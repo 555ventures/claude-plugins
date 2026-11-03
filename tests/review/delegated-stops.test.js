@@ -363,9 +363,19 @@ test('AC-20261103-09-6: a delegated dispositions mark on a default host accepts 
   assert.ok(r.stdout.includes('📌 Auto-picked accept reject on executed repro: s0 — host policy stops.rejectWithEvidence: accept (veto anytime)'), 'the pick line must print so the REPORT and the user see the accept: ' + r.stdout)
   assert.strictEqual(gate.stateOf(host.root, host.spec), 'FIX', 'the lane must proceed to FIX')
   const mixed = poolHost('dlg-rwe-waive')
-  const w = markD(mixed, REPRO_RETURN({ ref: 's1', recommended: 'waive', reason: 'D2 sanctions' }))
+  const mixedRet = gate.returnFileWith('dlg-rwe-waive-d', REPRO_RETURN({ ref: 's1', recommended: 'waive', reason: 'D2 sanctions' }))
+  const w = runD(mixed.root, mixed.spec, '--mark', 'dispositions', '--file', mixedRet)
   assert.strictEqual(w.status, 0, 'the delegated mark must hand the waive up with exit 0: ' + w.stdout + w.stderr)
-  assert.deepStrictEqual(readPending(mixed.root).questions.map((q) => q.id), ['s1'], 'only the waive is asked; the repro-backed reject is not')
+  const pend = readPending(mixed.root)
+  assert.deepStrictEqual(pend.questions.map((q) => q.id), ['s1'], 'only the waive is asked; the repro-backed reject is not')
+  assert.ok(w.stdout.includes('📌 Auto-picked accept reject on executed repro: s0 — host policy stops.rejectWithEvidence: accept (veto anytime)'), 'the pick line must print on the pending-question exit, or the user never sees the auto-accepted reject: ' + w.stdout)
+  const picksOf = () => (readMarks(mixed).policyPicks || []).filter((p) => p.key === 'rejectWithEvidence')
+  assert.deepStrictEqual(picksOf().map((p) => [p.key, p.value, p.label]), [['rejectWithEvidence', 'accept', 'accept reject on executed repro: s0']], 'the pick must be recorded on the pending-question exit, or the REPORT loses the auto-accepted reject: ' + JSON.stringify(readMarks(mixed).policyPicks))
+  pend.answers = { s1: { label: 'accept waive (Recommended)', by: 'user', at: '2026-11-03T10:05:00Z' } }
+  fs.writeFileSync(pendingOf(mixed.root), JSON.stringify(pend))
+  const again = runD(mixed.root, mixed.spec, '--mark', 'dispositions', '--file', mixedRet)
+  assert.strictEqual(again.status, 0, 'the answered mark must proceed: ' + again.stdout + again.stderr)
+  assert.strictEqual(picksOf().length, 1, 'the re-run after the answer must not record the pick twice, or the REPORT double-counts the auto-accept: ' + JSON.stringify(readMarks(mixed).policyPicks))
 })
 
 test('AC-20261103-09-7 (SHALL CONTINUE TO): a delegated dispositions mark under stops.rejectWithEvidence ask still writes a dispositions pending file for s0 and prints PENDING_QUESTION', () => {

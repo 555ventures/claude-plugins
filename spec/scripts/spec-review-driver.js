@@ -1683,7 +1683,10 @@ function handleDispositions() {
                 }
               }),
             })
-          writeOut(1, line + '\n')
+          // The accepting mark may have just recorded the policy pick: persist it before this exit
+          // (the resumed mark finds the entry already final and never records it), and print its lines.
+          if (markPreamble) saveSidecar()
+          writeOut(1, markPreamble + line + '\n')
           process.exit(0)
         }
         for (const d of open) {

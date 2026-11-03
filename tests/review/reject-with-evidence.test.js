@@ -51,7 +51,7 @@ test('AC-20261103-09-3: an in-session dispositions mark on a default host accept
   assert.strictEqual(marks.disposer.overrides, 0, 'a policy accept must not count as an override: ' + JSON.stringify(marks.disposer))
   const p = marks.policyPicks && marks.policyPicks[0]
   assert.ok(p, 'the pick must be recorded in marks.policyPicks or the report has no trail: ' + JSON.stringify(marks))
-  assert.deepStrictEqual({ key: p.key, value: p.value, label: p.label }, { key: 'rejectWithEvidence', value: 'accept', label: 'accept reject on executed repro: s0' }, 'the record names key, value and label')
+  assert.deepStrictEqual({ key: p.key, value: p.value, label: p.label }, { key: 'rejectWithEvidence', value: 'accept', label: 'accept reject on executed repro: s0' }, 'the pick record must name key, value and label, or the REPORT trail cannot say which policy auto-accepted which reject: ' + JSON.stringify(p))
   assert.ok(!Number.isNaN(Date.parse(p.at)), 'the record needs an ISO time: ' + p.at)
   assert.strictEqual(stateOf(host.root, host.spec), 'FIX', 'the run must advance to FIX without a question')
 })

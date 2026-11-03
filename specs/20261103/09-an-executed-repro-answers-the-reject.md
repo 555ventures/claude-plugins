@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: implementing
+status: done
 tier: critical           # spec/templates/grounding-contract.md gains a policy.stops key (§ Risk Tiers: hash-stamped into every host)
 area: pipeline
 breaking: false
@@ -291,6 +291,26 @@ Collision closure (lock, literals `rejectWithEvidence`, `acceptedBy`, `STOP_DEFA
 `genesis.md`'s `go to the user` are about planning forks, unrelated — waived; `spec/commands/fix.md:58`'s
 `waive/reject go to the user` is the out-of-scope fix command — waived; `docs/adr/0005`, `docs/audit/…` and
 `docs/roadmap/18b` are dated records — waived.
+
+Build deviations (folded at close, 2026-11-03; all one-offs):
+- `tests/delegated/pending-question.test.js`'s stopPolicy `all` case compared against a literal five-`ask`
+  list; it now compares against every key of `POLICY_DEFAULTS.stops`, same closed-set strength.
+- `tests/consistency/contract-stamp.test.js` keeps its pre-image title: naming criterion 2 there drew a
+  red-check `unsanctioned-green` (user answered "remove the AC-ID mention"); criterion 2 is covered by the
+  rewritten stops case in `tests/host-config/contract-keys.test.js`.
+- D8: the Dispositions bullet lives under stage-review.md § Rules, so the D8 sentence went there and one short
+  sentence naming `policy.stops.rejectWithEvidence` and `only the user waives` was added to § Protocol for the
+  criterion 10 pin.
+- D4's `acceptedBy` refusal (final not `reject`) yields to a user veto — recommended `reject` with `repro`, a
+  different `final`, `overriddenBy: "user"` — which clears `acceptedBy` and rewrites the return, because
+  criterion 12 requires the veto re-run to succeed.
+- The veto line prints the literal `<file>` placeholder as § Contracts pins it (advisory debt a0 below).
+- Review fix (rv_c9b1210a0f3d iteration 1): a lane mark that stamped a repro-backed reject and then stopped at
+  PENDING_QUESTION for a waive dropped the `policyPicks` record and the 📌 line; the pending exit now saves the
+  sidecar and prints the preamble when a pick was recorded (regression in the criterion 6 case).
+
+### Advisory debt (review rv_c9b1210a0f3d)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-ae4120a09f3cdbadd/spec/scripts/spec-review-driver.js:1652 — The veto line prints the literal placeholder text <file> instead of the return file's path, so the instruction the user is told to follow names no file.
 
 ## Canonical Delta
 

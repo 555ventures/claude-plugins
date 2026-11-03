@@ -84,9 +84,8 @@
   DISCOVERY → BRIEF → MENUS → tournament → DECIDE → SCAFFOLD → SKELETON → GATE → ROADMAP →
   HANDOFF → GROUNDED (`status.json` schemaVersion 3, `brief` record, no `explore`).
   `discovery-done` requires `- archetype: <registry key>` in `## Picks` and hands off to
-  `/spec:mocks` for visual archetypes. BRIEF requires `design/mocks/status.json` APPROVED with
-  an open ledger gate. `--mark brief-written` records `design: "ratified"` once the mocks
-  precondition and the brief's `## Journeys` / `## Non-UI Coverage` checks pass. `backend-api`,
+  `/spec:mocks` for visual archetypes. BRIEF requires `design/mocks/status.json` APPROVED.
+  `--mark brief-written` records `design: "ratified"` once the mocks precondition passes. `backend-api`,
   `data-ml`, `conversational-bot` and `cli-devtool` record `design: "skipped"`. Since
   specs/20260930/01 there is no BRIEF doctrine or rules manifest: the design contract is the
   rules file DESIGN_BRIEF writes, mechanized by `/spec:enforce`'s `kit-discipline` and naming
@@ -114,16 +113,10 @@
   enforce; `/spec:init` is the brownfield entry and the regeneration owner.
   (specs/20260827/04-genesis-conventions-handoff.md, done 2026-08-30)
 
-- **Brief from the approved set (specs/20260902/11).** BRIEF generates `## Journeys` and
-  `## Non-UI Coverage` from `design/mocks/seed.md` and the ledger — `--mark brief-written`
-  checks that every seed journey and label appears under `## Journeys` — which carries one
-  `label -> label` line per seed beat edge, derived, never the seed's own block copied across
-  (specs/20260917/01) — and that the six non-UI
-  keys (`jobs notifications retention integrations admin pricing`) are `covered`/`n/a`, never
-  `dark`; the BRIEF step prints its derivation sources (confirmed `product` ledger rows by id,
-  journey and label counts, unresolved page-note count). MENUS prints the seed's
-  `primary-surface` and `platforms-horizon` rows above the framework dimension and prices every
-  framework option against them (`wf-research` `contextPaths` include the seed).
+- **Brief from the approved set (specs/20260902/11).** The genesis brief carries no
+  `## Journeys` section and brief-written gates neither journeys nor `## Non-UI Coverage`; the
+  BRIEF step prints `seed journeys: N · notes open: N`. MENUS prints no seed rows. ROADMAP runs
+  no parking-lot check (specs/20261103/02).
   `roadmap-written` requires every seed label in exactly one brief's ```surfaces block and
   refuses naming unplaced or double-placed labels, and refuses `first-light-missing` when the
   `01-` brief's header (text before its first `## `) carries no `First light:` line — brief 01
@@ -220,9 +213,13 @@
   `success-metric`) in `round N of 4` groups for pre-filled confirmation; the archetype is a
   printed `📌 Auto-picked archetype` pick before `discovery-done`. MENUS classifies each recorded,
   unpicked dimension `auto` (one rank-1 leader, not minority, `priced` begins `n/a`) or `ask`,
-  printing `📌 Auto-picked <dim>: …` for `auto`. FINALISTS prints a race/skip default from whether
-  `framework` or `language-runtime` was asked; DECIDE prints the eight derivable conventions rows
+  printing `📌 Auto-picked <dim>: …` for `auto`. FINALISTS prints `📌 Auto-picked skip` and asks
+  nothing (specs/20261103/02); DECIDE prints the eight derivable conventions rows
   and reads `success-metric` from `## Picks`; DESIGN_BRIEF prints a `## Direction round` and
   `design-brief-written` requires `## Direction` after `## Users and context`; ROADMAP proceeds
   unless vetoed and asks only milestone gates. Paid services are always asked (JJ, 2026-10-31).
   (specs/20261029/06-the-genesis-question-diet.md, done 2026-10-31)
+- Since specs/20261103/02 the mocks provenance ledger is gone: no `ledger.md`, no gate, no counts
+  line, no exclusion rows; approving a journey by story hash is the only provenance. The ops-ADR
+  derive pass and coverage check are deleted. The mocks driver reads any `status.json` as-is;
+  the retired flow has no move-aside branch.

@@ -62,9 +62,8 @@ approval and never gated later. (specs/20260926/06-the-approval-stop-and-the-roa
 `/spec:prototype <idea in words | brief path | stem>` runs a functional prototype on
 `proto/<stem>` in `.claude/worktrees/proto-<stem>` (the stem is the brief's stem, a slug of the
 words printed as an auto-pick and renamable once with `--stem` before `opened`, or the re-opened
-stem; the idea and the input kind are written into `status.json` at `opened`). A brief's `Lane:`
-field is advisory; running this command is choosing the behaviour lane, and no gate runs on the
-prototype tree. The host declares a `prototype` config block (`url`, `overlay`,
+stem; the idea and the input kind are written into `status.json` at `opened`). Running this
+command is choosing the behaviour lane, and no gate runs on the prototype tree. The host declares a `prototype` config block (`url`, `overlay`,
 `e2eFile` carrying `{stem}`, `e2eList`, `e2eRun`, `picture`, optional `dbCreate`/`dbDestroy`).
 Rounds, pins and declared states live under `design/prototypes/<stem>/` on main. A pin is one
 record with an optional anchor whose id is the keyed owner chain plus an ordinal
@@ -147,6 +146,5 @@ round file with the seed's journeys, and sends it through `walkthrough.js` as a 
 round is always every story of the project. The worklist of `mocks-driver.js round pull` names
 the spot of a note left on a picture.
 
-Since specs/20261029/06 SEED prints the idea from `.claude/genesis/brief.md` when present; every
-mocks step print is preceded by one `confirm these N assumptions` block for blocking `product`
-rows; terminal SCREENS lists every pending journey in one block.
+Since specs/20261029/06 SEED prints the idea from `.claude/genesis/brief.md` when present;
+terminal SCREENS lists every pending journey in one block.

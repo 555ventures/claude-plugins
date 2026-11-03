@@ -32,10 +32,4 @@ overrides). `list` prints an age column and flags `📎 cites done <spec>`, `⏳
 duplicate pairs and the two fate commands, read-only — the session proposes one fate per item
 and asks per item. (specs/20261013/02-queue-hygiene.md)
 
-The dashboard prints one line directly under the 🗺️ Roadmap block —
-`🧭 misunderstandings: N caught before build (latest <id> at <step>)` — read from
-`design/mocks/ledger.md` via `lib/mocks-ledger.js`; the line is omitted when the ledger is
-absent, unparsable, or holds zero catches. Render only: the `--json` and `--next --json` shapes
-are unchanged (specs/20260902/11-brief-from-approved-set.md).
-
 `--lanes --json` is a third machine mode beside `--next --json` and `--json`: `{lanes, serialized, fixes}` — the admitted `/spec:run` lanes with their `spec/<stem>` branch and the linked worktree holding it (or null), the entries held back with their reason, and the `/spec:fix` escapes and queued fixes with their queue id. Refused outside the main worktree. Consumed by `/spec:fanout`'s driver; the two older shapes are unchanged. (specs/20261102/03-one-session-runs-the-lanes.md)

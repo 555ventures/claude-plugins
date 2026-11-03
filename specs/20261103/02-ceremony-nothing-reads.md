@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: implementing
+status: done
 tier: standard           # spec-status.js is touched render-only (one line deleted, --json shapes untouched) — the same shape specs/20261025/02 and specs/20261024/06 shipped at standard; no § Risk Tiers trigger fires
 area: cross-cutting
 breaking: false
@@ -228,6 +228,22 @@ pass` hits outside the File Plan are the English word (`scope-reconcile`, `cover
 `release-legs`), not the ledger kind; `tests/prototype/prototype-driver.test.js` and its
 fixture per A8; `tests/genesis/{design-direction-round,tournament}.test.js` exercise
 `finalists-skipped`, which D7 keeps.
+
+### Advisory debt (review rv_96ed4697fa21)
+- a0 spec/scripts/lib/surfaces.js:9 — Stale header comment in spec/scripts/lib/surfaces.js still names `briefJourneysCheck` as a live reader of `labels`, but D6 deleted that function from genesis-driver.js in this range.
+- a1 tests/spec-status.test.js:1069 — The comment block above the rewritten AC-20261103-02-5 case in tests/spec-status.test.js (lines 1069-1076) still describes the compass line as rendered via lib/mocks-ledger.js and says every case below is red until D6 lands.
+- a2 spec/scripts/mocks-driver.js:393 — Indentation glitch in mocks-driver.js: `recordApproval(journeyArg, hash, 'terminal')` is indented two levels deeper than its siblings after `requireGateOpen()` was deleted above it.
+- a3 spec/scripts/mocks-driver.js:100 — Spec-internal contradiction on D4 resolved in the AC's favour: D4/Behavior say a non-v3 status derives SEED like any status with no seedDone mark, while AC-20261103-02-4's fixture carries marks.seedDone and expects SEED; normalise therefore discards every field of a non-v3 file.
+- a4 specs/20261103/02-ceremony-nothing-reads.md:83 — D9 and the File Plan name specs/20260902/06 AC 9 for a retired tag, but the file is untouched: its citing case in tests/spec-paths.test.js was narrowed rather than deleted, so D9's own condition is not met. Recorded in the deviations sidecar.
+
+### Build deviations (folded at review close, 2026-11-03)
+
+- tests/spec-paths.test.js: the AC-20260902-06-9 case was narrowed (the `## Provenance Ledger` heading assertion dropped), not deleted — specs/20260914/03's AC 5 reuses that case. So D9's retired tag on specs/20260902/06 AC 9 was not applied: its citing case survives and its condition ("only citing test deleted") does not hold. The File Plan row stays, unexecuted.
+- specs/20261029/06 AC 5 got the D9 retired tag as a scope addition: its only test was rewritten under AC-20261103-02-8. The set of AC-IDs cited under tests/ at the base minus those cited after the build was exactly the four tagged.
+- tests/genesis/tournament.fixtures.js: the test wave could not drop the ledger write or the Journeys/Non-UI helper against the pre-image (the old BRIEF gate refused without them); the orchestrator removed both after the scripts wave landed, genesis suite green.
+- tests/genesis/genesis-driver.test.js AC-7 and tests/mocks/no-ledger.test.js AC-3 write a ledger.md inline, because each AC is about a leftover file on disk.
+- mocks-driver.js `normalise`: D4/Behavior say a retired-flow status derives SEED "like any status with no seedDone mark", but AC-4's fixture carries `marks.seedDone` in a schemaVersion 2 file and expects SEED. The build followed the criterion: any status whose schemaVersion is not 3 is read as a fresh status in memory (no marks, journeys or pushed state); nothing is written or moved until the next accepted mark.
+- D11 scope addition: the gate reddened on `spec-number-check: specs/20261103 number 01`, a collision inherited from the branch base and already fixed on main by d6fe8397; the build took main's renumbered file byte-identical.
 
 ## Canonical Delta
 
